@@ -28,7 +28,7 @@ for(const file of ['vehicle.ts','damage-rules.ts','defects.ts']){
 }
 // esbuild names its inputs relative to the working directory, so resolve them before the test.
 const current=metafile=>Object.keys(metafile.inputs).map(path=>resolve(process.cwd(),path)).filter(path=>path.startsWith(`${root}web/src/`));
-const options={bundle:true,platform:'node',format:'esm',logLevel:'silent',alias:{'three/examples':`${root}web/node_modules/three/examples`,three:`${root}web/node_modules/three/build/three.module.js`}};
+const options={bundle:true,platform:'node',format:'esm',logLevel:'silent',alias:{'three/examples':`${root}web/node_modules/three/examples`,'three/addons':`${root}web/node_modules/three/examples/jsm`,three:`${root}web/node_modules/three/build/three.module.js`}};
 const entry=(folder)=>`export {Vehicle} from '${root}${folder}/vehicle.ts'; export {Damage} from '${root}${folder}/damage-rules.ts';`;
 const baseline=await build({...options,metafile:true,stdin:{contents:entry('tools/baseline'),resolveDir:root},outfile:`${out}/baseline.mjs`});
 assert.deepEqual(current(baseline.metafile),[],'baseline must not bundle current game modules');
