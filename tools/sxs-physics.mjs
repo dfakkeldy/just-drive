@@ -62,6 +62,9 @@ const gravelSection=await looseSection(3),trackSection=await looseSection(4);
 function looseAcceleration(spec,section){const car=v(spec),p=at(section.path,section.start);car.place(p.x,p.z,p.heading);let s=section.start,time=0,names=new Set();for(;time<25&&car.speed<80/3.6;time+=dt){s+=drive(car,section.path,s,Infinity);names.add(car.surfaceName);}return {seconds:time,surfaces:[...names],speed:car.speed*3.6};}
 function jump(spec){const car=v(spec),r=SLIP_RAMP,p=yard.world(r.u+47,r.v);car.place(p.x,p.z,yard.heading(-1,0));let launch=null,land=null,maxCompression=0,maxYaw=0,maxVy=0,lastSpeed=0;for(let i=0;i<120*9;i++){step(car,{...coast,throttle:1});const a=r.u-yard.local(car.x,car.z).u;maxVy=Math.max(maxVy,Math.abs(car.vy));maxYaw=Math.max(maxYaw,Math.abs(wrap(car.heading-yard.heading(-1,0))));if(a>r.lead+r.length-2&&car.airborne&&!launch)launch={a,speed:car.speed,y:car.y,time:i*dt};if(launch&&!car.airborne&&!land&&a>r.lead+r.length+spec.halfLength)land={a,speed:car.speed,before:lastSpeed,time:i*dt};maxCompression=Math.max(maxCompression,car.landingCompression);lastSpeed=car.speed;if(land&&i*dt>land.time+.3)break;}
 return {launch,land,distance:land&&launch?land.a-launch.a:0,retained:land?land.speed/land.before:0,maxCompression,maxYaw,maxVy,maxTravel:car.car.maxTravel??0,minTravel:car.car.minTravel??0};}
+// The handbrake flick below now starts a drift (drift-rules.ts; tools/drift-rules-check.mjs holds the side by side's drift).
+// The slide pinned here is the grip model's own lateral momentum, measured with the drift off.
+const GRIP_SXS={...SXS_SPEC,drift:undefined};
 function slide(spec){const car=v(spec),p=at(gravelSection.path,gravelSection.start);car.place(p.x,p.z,p.heading);setSpeed(car,15);let yaw=0,maxSlip=0,minSpeed=Infinity,maxRoadDistance=0,s=gravelSection.start;const surfaces=new Set();for(let i=0;i<120*4;i++){
  if(i<96){step(car,{...coast,throttle:1,steer:i<45?.85:-.18,handbrake:i<30});s+=car.speed*dt;}else s+=drive(car,gravelSection.path,s,Infinity);
  yaw=Math.max(yaw,Math.abs(wrap(car.heading-p.heading)));maxSlip=Math.max(maxSlip,Math.abs(car.vx*Math.cos(car.heading)+car.vz*Math.sin(car.heading)));minSpeed=Math.min(minSpeed,car.speed);maxRoadDistance=Math.max(maxRoadDistance,roads.nearest(car.x,car.z,30)?.dist??30);surfaces.add(car.surfaceName);
@@ -70,7 +73,7 @@ const measured={paved80:Object.fromEntries([['car',CAR_SPEC],['truck',TRUCK_SPEC
  gravel:Object.fromEntries([['car',CAR_SPEC],['truck',TRUCK_SPEC],['sxs',SXS_SPEC]].map(([id,s])=>[id,looseAcceleration(s,gravelSection)])),
  track:Object.fromEntries([['car',CAR_SPEC],['sxs',SXS_SPEC]].map(([id,s])=>[id,looseAcceleration(s,trackSection)])),
  wash40:washboard(SXS_SPEC,40),carWash40:washboard(CAR_SPEC,40),wash60:washboard(SXS_SPEC,60),carWash60:washboard(CAR_SPEC,60),
- jump:jump(SXS_SPEC),carJump:jump(CAR_SPEC),slide:slide(SXS_SPEC),sections:{gravel:{id:gravelSection.r.id,start:gravelSection.start},track:{id:trackSection.r.id,start:trackSection.start}}};
+ jump:jump(SXS_SPEC),carJump:jump(CAR_SPEC),slide:slide(GRIP_SXS),sections:{gravel:{id:gravelSection.r.id,start:gravelSection.start},track:{id:trackSection.r.id,start:trackSection.start}}};
 console.log('SXS MEASURED',JSON.stringify(measured));
 if(process.argv.includes('--explore'))process.exit(0);
 const checks={
@@ -104,7 +107,7 @@ for(const target of [40,60]) {
 }
 reject('ramp launch power',()=>jump({...SXS_SPEC,engineAcceleration:2}),n=>n.distance>measured.carJump.distance*1.2);
 reject('landing scrub',()=>jump({...SXS_SPEC,landingForward:.6}),n=>n.retained>measured.carJump.retained+.04);
-reject('lateral momentum',()=>slide({...SXS_SPEC,lateralInertia:0}),n=>n.maxSlip>.5&&n.yaw<.6&&n.recoveredSlip<.1);
+reject('lateral momentum',()=>slide({...GRIP_SXS,lateralInertia:0}),n=>n.maxSlip>.5&&n.yaw<.6&&n.recoveredSlip<.1);
 const sample=yard.world(230,80),motion=v();motion.place(sample.x,sample.z,0);motion.vy=-6;motion.y+=.4;motion.airborne=true;for(let i=0;i<60;i++)step(motion);assert.ok(motion.car.maxTravel>.05,'production controller calls travel on landing');
 const broken=v();broken.car.setTravel=()=>{};broken.place(sample.x,sample.z,0);broken.vy=-6;broken.y+=.4;broken.airborne=true;for(let i=0;i<60;i++)step(broken);assert.ok(!(broken.car.maxTravel>.05),'mutation rejected: travel adapter disabled');
 const idx=GARAGE.findIndex(e=>e.id==='sxs'),entry=GARAGE.splice(idx,1)[0];try{assert.equal(checks.garage(),false,'mutation rejected: missing garage entry');}finally{GARAGE.splice(idx,0,entry);}

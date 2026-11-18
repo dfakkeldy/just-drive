@@ -7,7 +7,7 @@ const V = (p: P) => new THREE.Vector3(...p);
 const UP = new THREE.Vector3(0, 1, 0);
 /** Shared body/envelope/camera metadata; BikeRide owns the two-wheel solver. */
 export const BIKE_SPEC: VehicleSpec = deepFreeze({
-  ...CAR_SPEC, wheelbase: 1.48, track: 0, rearTrack: 0, wheelRadius: .356, contactPlane: 1,
+  ...CAR_SPEC, drift: undefined, wheelbase: 1.48, track: 0, rearTrack: 0, wheelRadius: .356, contactPlane: 1,
   halfLength: 1.3, halfWidth: .55, height: 2.1, mass: 225,
   envelope: { circles: [-.75, -.375, 0, .375, .75], radius: .55, reach: 1.85, sweepHalfWidth: .56, sweepHalfLength: 1.31,
     overhead: 2.1, grassHalfWidth: .3, grassHalfLength: 1.45, nose: 2.2 },

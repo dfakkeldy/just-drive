@@ -110,13 +110,19 @@ export function engineState(p: EngineProfile, input: EngineInput, gear: number):
 }
 
 export interface TyreState { gain: number; frequency: number; q: number; rate: number; depth: number }
+/** A drift on pavement: a narrow band of the tyre noise, rising with the angle. */
+export const SQUEAL = Object.freeze({ gain: .2, frequency: 1500, rise: 450, q: 7 });
+/** A drift on loose ground: louder, lower, rougher. */
+export const SPRAY = Object.freeze({ gain: 1.1, lower: .2, depth: .5 });
 
 /**
  * The tyre noise for a surface (the names in vehicle.ts SURFACES) at a road speed: filtered noise, opened and shut by a
  * pulse. Asphalt is a soft high hiss; gravel a mid crunch that chatters; washboard a low rattle at the ridge rate
  * (speed over the ridge spacing); grass and brush a low swish. In the air, silence.
+ * `slide` (0 to 1, drift-rules.ts) is how far a drift is open: on a firm surface the hiss narrows into a squeal; on loose
+ * ground the crunch grows louder, lower and rougher. At 0 the numbers are exactly the rolling ones.
  */
-export function tyreState(surface: string, speed: number, airborne: boolean, scale = 1): TyreState {
+export function tyreState(surface: string, speed: number, airborne: boolean, scale = 1, slide = 0): TyreState {
   const v = Math.abs(speed);
   if (airborne || v < .3) return { gain: 0, frequency: 1000, q: .7, rate: 1, depth: 0 };
   let t: TyreState;
@@ -135,6 +141,11 @@ export function tyreState(surface: string, speed: number, airborne: boolean, sca
       t = { gain: .14 * clamp(v / 14), frequency: 620, q: .55, rate: 5 + v * .4, depth: .2 }; break;
     default:
       t = { gain: 0, frequency: 1000, q: .7, rate: 1, depth: 0 };
+  }
+  if (slide > 0 && t.gain > 0) {
+    const s = clamp(slide), firm = surface === 'pavement' || surface === 'concrete';
+    if (firm) t = { gain: t.gain + SQUEAL.gain * s * clamp(v / 12), frequency: SQUEAL.frequency + SQUEAL.rise * s, q: t.q + (SQUEAL.q - t.q) * s, rate: 1, depth: 0 };
+    else t = { gain: t.gain * (1 + SPRAY.gain * s), frequency: t.frequency * (1 - SPRAY.lower * s), q: t.q, rate: t.rate, depth: Math.max(t.depth, SPRAY.depth * s) };
   }
   t.gain *= scale;
   return t;

@@ -19,6 +19,8 @@ export const TRUCK_SPEC: VehicleSpec = deepFreeze({
   pitchGain: 0.003, pitchLimit: 0.022, rollGain: 0.0035, rollLimit: 0.035,
   shakePitch: 0.008, shakeRoll: 0.011, shakeHeight: 0.016,
   washboardYaw: 0.004, washboardSideways: 0.12,
+  // Heavy: slow to rotate, a narrow angle and much speed lost; a hitched trailer halves it again (towed).
+  drift: { angle: .3, maxAngle: .5, rotate: 1.5, carve: 1.0, scrub: .7, looseSpeed: 10, firmSpeed: 16, liftSpeed: 17, towed: .45 },
   chase: { back: 10.8, height: 3.7, lookAhead: 4.1, lookHeight: 1.45, speedBack: 0.06, maxSpeedBack: 2.5 },
   hitch: { back: 3.4, height: 0.43 },
 });

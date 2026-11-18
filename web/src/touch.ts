@@ -7,8 +7,9 @@ import { thumbSteer } from './driving-help';
 
 export interface TouchActions { reset(): void; view(): void; horn(): void }
 export interface TouchControls {
-  /** Read by the driving input every frame. */
-  state: { steer: number; throttle: number };
+  /** Read by the driving input every frame. `handbrake`: GO and BRAKE held together, since `chordAt` (performance.now() ms);
+   * drift-rules.ts phoneHandbrake decides when that chord is the handbrake. */
+  state: { steer: number; throttle: number; handbrake: boolean; chordAt: number };
   show(visible: boolean): void;
   release(): void;
 }
@@ -31,7 +32,7 @@ const CSS = `
 `;
 
 export function createTouchControls(actions: TouchActions): TouchControls {
-  const state = { steer: 0, throttle: 0 };
+  const state = { steer: 0, throttle: 0, handbrake: false, chordAt: 0 };
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
   const make = <K extends keyof HTMLElementTagNameMap>(tag: K, id: string, cls: string, html = ''): HTMLElementTagNameMap[K] => {
     const el = document.createElement(tag);
@@ -81,9 +82,14 @@ export function createTouchControls(actions: TouchActions): TouchControls {
   };
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) steer.addEventListener(type, steerEnd);
 
-  // Pedals: hold to use. Brake wins when both are down.
+  // Pedals: hold to use. Brake wins when both are down; both held a moment at speed are the handbrake instead (main.ts,
+  // drift-rules.ts phoneHandbrake): with a turn the tail swings out; let BRAKE go, keep GO and counter-steer to hold the slide.
   const held = { go: new Set<number>(), brake: new Set<number>() };
-  const pedals = () => { state.throttle = held.brake.size ? -1 : held.go.size ? 1 : 0; };
+  const pedals = () => {
+    const both = held.brake.size > 0 && held.go.size > 0;
+    if (both && !state.handbrake) state.chordAt = performance.now();
+    state.throttle = held.brake.size ? -1 : held.go.size ? 1 : 0; state.handbrake = both;
+  };
   const pedal = (el: HTMLElement, key: 'go' | 'brake') => {
     el.addEventListener('pointerdown', (ev) => { el.setPointerCapture(ev.pointerId); held[key].add(ev.pointerId); el.classList.add('held'); pedals(); ev.preventDefault(); });
     const up = (ev: PointerEvent) => { held[key].delete(ev.pointerId); el.classList.toggle('held', held[key].size > 0); pedals(); };

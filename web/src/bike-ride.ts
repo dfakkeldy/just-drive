@@ -1,3 +1,4 @@
+import { Drift, type DriftFacts } from './drift-rules';
 import { safePlacement } from './placement-pose';
 import * as THREE from 'three';
 import { BIKE_SPEC, type Bike } from './bike';
@@ -30,6 +31,9 @@ export class BikeRide implements Ride {
   airborne = false; sunk = 0; atEdge = false;
   damage: Damage | null = null; damageActive = false; desktopPull = false;
   get activeTouchSpeedLimit(): number { return 0; }
+  /** The dirt bike has its own rear-brake slide below; it never enters the cars' drift (drift-rules.ts). */
+  readonly drift = new Drift(); canDrift = false;
+  takeDrift(): DriftFacts | null { return null; }
   assist = 0; strongHelp = false; touchSpeedLimit = false; helpYaw = 0; lightHelpYaw = 0;
   bounds: [number, number, number, number] | null = null;
   placementGuard: ((pose: VehiclePlacement) => boolean) | null = null;
