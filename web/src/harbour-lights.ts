@@ -12,6 +12,9 @@ export function beaconOn(record: HarbourLight, seconds: number, night: boolean):
 export class HarbourLights {
   readonly group = new THREE.Group();
   readonly sites: { number: string; x: number; z: number; y: number; height: number; beaconY: number }[] = [];
+  /** Game seconds (paused wall time excluded), so beacons hold their phase while the game is paused. */
+  seconds = 0;
+  update(seconds: number): void { this.seconds = seconds; }
   constructor(area: string, village: readonly number[], exag: number, night: boolean, seaLevel: number) {
     const records = LIGHTS.filter(r => r.areas.includes(area));
     this.group.name = 'harbour lights';
@@ -125,7 +128,7 @@ export class HarbourLights {
     mesh.name = 'harbour beacons';
     this.sites.forEach((s, i) => mesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(s.x, s.beaconY, s.z)));
     const viewport = new THREE.Vector2();
-    mesh.onBeforeRender = renderer => { beacon.uniforms.seconds.value = performance.now() / 1000; beacon.uniforms.viewportHeight.value = renderer.getDrawingBufferSize(viewport).y; };
+    mesh.onBeforeRender = renderer => { beacon.uniforms.seconds.value = this.seconds; beacon.uniforms.viewportHeight.value = renderer.getDrawingBufferSize(viewport).y; };
     mesh.computeBoundingSphere(); this.group.add(mesh);
   }
 }
