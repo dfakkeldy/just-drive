@@ -300,6 +300,7 @@ if (process.env.ERA === '1') {
         return { root: mmm.vehicle.car.root.name, fetched: !!model, requests: all.length,
           ...(model ? { modelAskedAtMs: Math.round(model.startTime), modelHereAtMs: Math.round(model.responseEnd), askedBeforeIt: all.filter(e => e.startTime < model.startTime).length,
             lastOtherRequestAtMs: Math.round(Math.max(...all.filter(e => e !== model).map(e => e.startTime))) } : {}) }; })()`);
+      assert.ok(state.requests < 10000, `${label}: ${state.requests} resources fill the raised timing buffer; the model check would be blind`);
       if (state.fetched) assert.ok(state.modelAskedAtMs < state.lastOtherRequestAtMs, `${label}: the model file is asked for while the land still loads (${state.modelAskedAtMs} ms; last other request ${state.lastOtherRequestAtMs} ms)`);
       const shot = await page.c.send('Page.captureScreenshot', { format: 'png' });
       writeFileSync(`${out}/era-${fetched ? 'car' : 'horse'}.png`, Buffer.from(shot.result.data, 'base64'));
