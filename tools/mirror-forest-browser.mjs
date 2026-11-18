@@ -24,7 +24,7 @@ async function open(query, dpr = 1) {
   await send('Page.navigate', { url: `${base}/?hud=0&${query}` });
   let settled = false;
   // Startup deadline only: allow other threads to use this Mac's GPU. No timing threshold is relaxed.
-  for (let i = 0; i < 400; i++) { await sleep(300); if ((await read('document.title')).startsWith('settled')) { settled = true; break; } }
+  for (let i = 0; i < 400; i++) { await sleep(300); if (String(await read('document.title') ?? '').startsWith('settled')) { settled = true; break; } }
   check(settled, `settled: ${query}`);
   await sleep(800);
   check(!errors.length, `no script or shader console errors: ${errors.join(' ').slice(0, 300)}`);
@@ -91,6 +91,7 @@ for(const [name,query] of [
 }
 for(let i=0;i<results.length;i+=2){
  const a=results[i],b=results[i+1];
+ if(!a?.camera||!b?.camera){check(false,'paired stats present: '+(a?.name??'?'));continue;}
  check(a.camera.every((v,j)=>Math.abs(v-b.camera[j])<1e-3),'paired camera is fixed within 1 mm: '+a.name);
  for(const pass of ['mirror','main']){
   const counts=r=>[...new Set(r.rows.filter(x=>x.pass===pass).map(x=>JSON.stringify(x)))].sort();
