@@ -6,7 +6,9 @@
 // loose ground). On loose ground, off the throttle, a flick (the wheel hard one way, then hard the other) arms a slide on
 // the side of the second turn; nothing changes yet. It begins only in order: power on while still steering the flick's way
 // (LIFT_POWER seconds), then the catch with counter-steer, within LIFT_WINDOW of the flick. Counter-steer first (a wobble,
-// a correction of a correction) spoils it. So a lift and a turn-in, an S-bend or a slalom is the ordinary car. After the swing the slide holds only with power and counter-steer: the front
+// a correction of a correction) spoils it. And it opens only after the player's first counted handbrake drift
+// (Drift.learned): until then no input pattern at all, however an S-bend or a lane change falls, can start a slide
+// without the handbrake. After the swing the slide holds only with power and counter-steer: the front
 // wheels aim where the car is going, so more counter-steer holds a wider angle and less a narrower one. Wheel straight,
 // steering into the slide, a lift, a hit or a slow car: the slide ends, and the ordinary tyres take over. A handbrake still
 // held then cannot start another until it is let go.
@@ -78,7 +80,8 @@ export const phoneHandbrake = (spec: DriftSpec, heldSeconds: number, speed: numb
 const G = 9.81;
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
-export interface DriftControls { readonly throttle: number; readonly steer: number; readonly handbrake: boolean }
+/** `held`: the game holds the car (an animal ahead): that handbrake never starts a slide. */
+export interface DriftControls { readonly throttle: number; readonly steer: number; readonly handbrake: boolean; readonly held?: boolean }
 export interface DriftGround {
   /** Speed along the path, m/s. */
   readonly speed: number;
@@ -160,6 +163,11 @@ export class Drift {
   private pending: DriftFacts | null = null;
   private readonly motion: DriftMotion = { angle: 0, pathRate: 0, scrub: 0, target: 0 };
 
+  /**
+   * The lift-off entry opens once the player has made a drift with the handbrake (this page load): a player who never
+   * drifts never meets it, however an S-bend or a lane change falls. Set by finish(); the checks set it as they need.
+   */
+  static learned = false;
   /** A slide shows (the meter, the dust, the tyre sound) for as long as it is active. */
   get shown(): boolean { return this.active; }
   /** 0 to 1: how far the slide is open, for the sound and the dust. */
@@ -186,8 +194,8 @@ export class Drift {
   begins(spec: DriftSpec, c: DriftControls, g: DriftGround): number {
     if (this.active || !(g.speed > 0) || c.steer === 0) return 0;
     const loose = looseSurface(g.surface), slower = g.towed ? 1 / TOWED_SPEED : 1;
-    if (c.handbrake && !this.spent && Math.abs(c.steer) >= HANDBRAKE_STEER && g.speed >= (loose ? spec.looseSpeed : spec.firmSpeed) / slower) return Math.sign(c.steer);
-    if (!loose || c.handbrake || g.speed < spec.liftSpeed / slower) { this.armed = 0; return 0; }
+    if (c.handbrake && !c.held && !this.spent && Math.abs(c.steer) >= HANDBRAKE_STEER && g.speed >= (loose ? spec.looseSpeed : spec.firmSpeed) / slower) return Math.sign(c.steer);
+    if (!Drift.learned || !loose || c.handbrake || g.speed < spec.liftSpeed / slower) { this.armed = 0; return 0; }
     // The flick, off the throttle, arms it on the side of the second turn; nothing changes yet.
     if (this.flick && this.sinceThrottle > 0 && this.sinceThrottle <= LIFT_SECONDS && c.throttle <= LIFT_OFF && c.throttle >= LIFT_BRAKE) {
       this.armed = this.flick; this.armedFor = LIFT_WINDOW; this.powerFor = 0; this.spoiled = false; return 0;
@@ -264,6 +272,7 @@ export class Drift {
       this.pending = { angle: Math.round(this.angleTime / this.seconds * deg * 10) / 10, peak: Math.round(this.peak * deg * 10) / 10,
         length: Math.round(this.length * 10) / 10, seconds: Math.round(this.seconds * 100) / 100, speed: Math.round(this.speedTime / this.seconds * 10) / 10,
         surface, clean: how === 'straightened' || how === 'slowed', x0: this.x0, z0: this.z0, x1: x, z1: z };
+      if (this.entry === 'handbrake') Drift.learned = true;
     }
     return how;
   }

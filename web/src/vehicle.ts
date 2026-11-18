@@ -13,7 +13,8 @@ import type { Surface, Terrain } from './terrain';
 export interface VehiclePlacement { x: number; z: number; heading: number }
 /** The most the touch speed limit brakes beyond taking the engine away, in m/s². */
 export const LIMIT_BRAKE = 1.2;
-export interface Input { throttle: number; steer: number; handbrake: boolean; touch?: boolean }
+/** `held`: the game holds the car (an animal ahead): its handbrake is a brake and never starts a slide. */
+export interface Input { throttle: number; steer: number; handbrake: boolean; touch?: boolean; held?: boolean }
 
 const G = 9.81;
 const STEP = 1 / 120;

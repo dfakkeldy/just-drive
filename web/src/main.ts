@@ -1760,7 +1760,7 @@ function frame(now: number) {
     const refusal = Math.abs(vehicle.speed) < 0.15 && input.throttle < 0 ? 0 : (animals?.influence(vehicle).brake ?? 0);
     if (refusal > 0) {
       input.throttle = Math.abs(vehicle.speed) > 0.15 ? -Math.sign(vehicle.speed) * refusal : 0;
-      input.handbrake = true;
+      input.handbrake = true; input.held = true;   // a stop for an animal, not a drift
     }
     if (input.throttle !== 0 && (!demo || loaded)) waitingToDrive = false;
     // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.

@@ -21,7 +21,8 @@ import { Roads } from '../web/src/roads.ts';
 import { CLOCK_FACTOR } from '../web/src/shift-rules.ts';
 
 let passed = 0;
-const ok = (name, fn) => { fn(); passed++; };
+// Each row starts with the lift-off entry locked (a player who has not drifted yet); rows that need it unlock it.
+const ok = (name, fn) => { Drift.learned = false; fn(); passed++; };
 const DEG = 180 / Math.PI, STEP = 1 / 120;
 const node = () => new Object3D();
 const rig = () => ({ root: node(), body: node(), steer: { fl: node(), fr: node() }, wheels: { fl: node(), fr: node(), rl: node(), rr: node() }, brakeLights: [], driverEye: node() });
@@ -80,6 +81,7 @@ ok('entering: the handbrake with the wheel turned at speed; pavement needs more 
 
 ok('entering: on loose ground a flick off the throttle arms it; power on, then the catch, begins it on the flick side', () => {
   const s = CAR_SPEC.drift, g = (speed, surface = 'gravel') => ({ speed, surface, mu: .7, towed: false, turn: 0 });
+  Drift.learned = true;
   // Lift; the wheel hard to `first`, then (after `gap`) hard to `second` (the flick); `power` seconds of throttle still
   // steering `second`; then the catch. Returns [anything begun before the catch, what the catch begins].
   const flick = ({ surface = 'gravel', first = 1, second = -first, hold = .2, gap = 0, throttle = 0, speed = s.liftSpeed, lift = .1, power = .25, caught = .5 } = {}) => {
@@ -94,6 +96,7 @@ ok('entering: on loose ground a flick off the throttle arms it; power on, then t
     return [seen.slice(0, -1).some(x => x !== 0), seen.at(-1)];
   };
   assert.deepEqual(flick(), [false, -1], 'the flick and the power begin nothing; the catch begins it on the flick side');
+  Drift.learned = false; assert.deepEqual(flick(), [false, 0], 'locked until the first handbrake drift'); Drift.learned = true;
   assert.deepEqual(flick({ first: -1 }), [false, 1]);
   assert.deepEqual(flick({ second: 1 }), [false, 0], 'the same way twice is no flick');
   assert.deepEqual(flick({ second: -LIFT_STEER + .01 }), [false, 0], 'the second turn not hard');
@@ -245,6 +248,7 @@ ok('pavement needs the handbrake and more speed; loose ground drifts easily', ()
   for (const ground of ['gravel', 'track', 'grass']) assert.equal(starts(ground, s.looseSpeed + .5, hb), true, ground);
   assert.equal(starts('pavement', s.looseSpeed + .5, hb), false);
   assert.equal(starts('pavement', s.firmSpeed + .5, hb), true);
+  Drift.learned = true;
   const liftFlick = t => t < .15 ? go(1, 0) : t < .3 ? go(0, -1) : t < .35 ? go(0, 1) : t < .58 ? go(1, 1) : go(1, -.5);
   assert.equal(starts('gravel', s.liftSpeed + 1, liftFlick), true);
   assert.equal(starts('pavement', s.liftSpeed + 3, liftFlick), false);
@@ -293,6 +297,7 @@ ok('a lift and a hard turn-in, with or without the power back, is exactly the ol
 
 ok('the lift-off drift: lift, flick, power back on, counter-steer', () => {
   const v = ride(CAR_SPEC, 'gravel', 18);
+  Drift.learned = true;
   // Lift, a feint right, hard left (the flick), power on still steering left, then the catch to the right: a left-hand drift.
   const flick = (power = .25) => t => t < .5 ? go(1, 0) : t < .7 ? go(0, 1) : t < .75 ? go(0, -1) : t < .75 + power ? go(1, -1) : go(1, HOLD_STEER);
   const run = drive(v, 3, flick());
@@ -312,7 +317,44 @@ ok('the lift-off drift: lift, flick, power back on, counter-steer', () => {
   assert.ok(Math.abs(Math.abs(v.drift.angle) - CAR_SPEC.drift.angle) < 2 / DEG, `${v.drift.angle * DEG}`);
 });
 
-ok('an S-bend, a correction, a slalom off the throttle: exactly the old car (only power then a catch begins a flick)', () => {
+ok('a player who never drifts: no S-bend, lane change, correction or slalom, at any rhythm, begins a slide without the handbrake', () => {
+  // 240 random runs: lifts, full-lock reversals at random lengths, the power back at random moments, on each ride.
+  let seed = 7, unlocked = 0; const rnd = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+  for (let n = 0; n < 240; n++) {
+    const spec = [CAR_SPEC, SXS_SPEC, TRUCK_SPEC][n % 3], ground = ['gravel', 'grass', 'track'][Math.floor(n / 3) % 3], speed = 16 + rnd() * 10;
+    const keys = []; let t = .3;
+    // Each key: the wheel hard one way; the throttle off, on, coming on or going off part way (so power can run into the next key).
+    for (let k = 0; k < 6; k++) { const len = .1 + rnd() * .4; keys.push([t, t + len, k % 2 ? -1 : 1, Math.floor(rnd() * 4), rnd() * len]); t += len; }
+    const power = (mode, into) => mode === 1 || mode === 2 && into >= 0 || mode === 3 && into < 0 ? 1 : 0;
+    const script = time => { if (time < .3) return go(1, 0); const k = keys.find(([a, b]) => time >= a && time < b); if (!k) return go(1, 0);
+      return go(power(k[3], time - k[0] - k[4]), k[2], false, n % 4 === 0); };
+    const a = ride(spec, ground, speed), b = ride({ ...spec, drift: undefined }, ground, speed);
+    const ra = drive(a, t + .5, script), rb = drive(b, t + .5, script);
+    assert.ok(ra.every(r => !r.active), `run ${n}: no slide`);
+    assert.deepEqual(ra.map(r => [r.x, r.z, r.heading]), rb.map(r => [r.x, r.z, r.heading]), `run ${n}: identical`);
+    // The same run once the player has drifted: some of these rhythms are a flick, power and a catch.
+    Drift.learned = true; if (drive(ride(spec, ground, speed), t + .5, script).some(r => r.active)) unlocked++; Drift.learned = false;
+  }
+  assert.ok(unlocked > 0, 'the sweep holds flicks: it would see a lift-off entry that is not locked');
+});
+
+ok('the first counted handbrake drift opens the lift-off entry; a twitch does not', () => {
+  const short = ride(CAR_SPEC); drive(short, .5, t => t < .2 ? go(0, 1, true) : go(1, 0)); short.takeDrift();
+  assert.equal(Drift.learned, false, 'too short to count');
+  const v = ride(CAR_SPEC); drive(v, 6, handbrakeIn()); assert.ok(v.takeDrift()); assert.equal(Drift.learned, true);
+});
+
+ok('an animal stop holds the car with the handbrake: never a slide, whatever the wheel', () => {
+  const s = CAR_SPEC.drift, d = new Drift(), g = { speed: 20, surface: 'gravel', mu: .72, towed: false, turn: 0 };
+  d.watch({ throttle: -1, steer: 1, handbrake: true, held: true }, STEP);
+  assert.equal(d.begins(s, { throttle: -1, steer: 1, handbrake: true, held: true }, g), 0);
+  const v = ride(CAR_SPEC, 'gravel', 18); drive(v, 2, () => ({ ...go(-1, .8, true), held: true })); assert.equal(v.takeDrift(), null);
+  assert.ok(drive(ride(CAR_SPEC, 'gravel', 18), 2, () => ({ ...go(-1, .8, true), held: true })).every(r => !r.active));
+  assert.match(readFileSync('src/main.ts', 'utf8'), /input\.handbrake = true; input\.held = true;/, 'main marks the animal stop');
+});
+
+ok('after the first drift too, an S-bend, a correction, a slalom off the throttle is exactly the old car (only power then a catch begins a flick)', () => {
+  Drift.learned = true;
   const s = CAR_SPEC.drift, noDrift = { ...CAR_SPEC, drift: undefined };
   const scripts = {
     'S-bend, keys': t => t < .5 ? go(1, 0) : t < .8 ? go(0, 1) : go(t < 1.1 ? 0 : 1, -1),
@@ -336,6 +378,7 @@ ok('an S-bend, a correction, a slalom off the throttle: exactly the old car (onl
 });
 
 ok('the flick clocks run in the air: a turn before a jump is no feint after it', () => {
+  Drift.learned = true;
   const v = ride(CAR_SPEC, 'gravel', 20);
   drive(v, .7, t => t < .5 ? go(1, 0) : go(0, 1)); v.y += 2; v.vy = 3;
   const air = drive(v, 1.2, () => go(0, 0)); assert.ok(air.some((_, i) => i > 0) && v.airborne === false, 'landed');
