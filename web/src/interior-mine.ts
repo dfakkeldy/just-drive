@@ -152,11 +152,11 @@ export class MineInterior implements InteriorGame {
     this.headlamp.target.position.copy(pos).addScaledVector(forward, 17); this.headlamp.target.position.y += 1.8;
     for (const module of this.modules) module.group.visible = module.distance > this.drawDistance - 9 && module.distance < this.drawDistance + 40;
   }
-  render(renderer: THREE.WebGLRenderer): void {
+  render(renderer: THREE.WebGLRenderer, draw?: (scene: THREE.Scene, camera: THREE.Camera) => void): void {
     const size = renderer.getSize(new THREE.Vector2()), aspect = size.x / size.y;
     if (this.camera.aspect !== aspect) { this.camera.aspect = aspect; this.camera.fov = aspect < .8 ? 74 : 60; this.camera.updateProjectionMatrix(); }
     const exposure = renderer.toneMappingExposure; renderer.toneMappingExposure = 1.05;
-    renderer.render(this.scene, this.camera); renderer.toneMappingExposure = exposure;
+    try { if (draw) draw(this.scene, this.camera); else renderer.render(this.scene, this.camera); } finally { renderer.toneMappingExposure = exposure; }
   }
   leave(): void { this.run.leave(); }
   dispose(): void { this.art.dispose(); this.headlamp.dispose(); this.scene.clear(); }
