@@ -1,0 +1,1608 @@
+[
+  {
+    "areas": [
+      "pointtupper"
+    ],
+    "e": 630995.94,
+    "n": 5046324.63,
+    "lat": 45.558138888888884,
+    "lon": -61.321555555555555,
+    "ground": {
+      "pointtupper": {
+        "level": 7,
+        "height": -0.6599999999999966,
+        "cover": 0,
+        "roadDistance": 461.31
+      }
+    },
+    "number": "688.2",
+    "name": "Chedabucto Bay light buoy C18",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, pillar, marked \u201cC18\u201d.",
+    "remarks": "Year round. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "pointtupper"
+    ],
+    "e": 630119.15,
+    "n": 5046769.46,
+    "lat": 45.562305555555554,
+    "lon": -61.33266666666667,
+    "ground": {
+      "pointtupper": {
+        "level": 7,
+        "height": -0.7000000000000028,
+        "cover": 0,
+        "roadDistance": 505.63
+      }
+    },
+    "number": "688.4",
+    "name": "Chedabucto Bay light buoy C20",
+    "character": "Q",
+    "colour": "R",
+    "period": "1s",
+    "focalHeight": ".....",
+    "description": "Red, pillar, marked \u201cC20\u201d.",
+    "remarks": "Year round. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "pointtupper"
+    ],
+    "e": 627384.3,
+    "n": 5049013.27,
+    "lat": 45.583000000000006,
+    "lon": -61.367111111111114,
+    "ground": {
+      "pointtupper": {
+        "level": 8,
+        "height": -0.7999999999999972,
+        "cover": 0,
+        "roadDistance": 293.09
+      }
+    },
+    "number": "688.5",
+    "name": "Chedabucto Bay light buoy C21",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Green, pillar, marked \u201cC21\u201d.",
+    "remarks": "Year round. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "pointtupper"
+    ],
+    "e": 628368.8,
+    "n": 5047625.56,
+    "lat": 45.57033333333334,
+    "lon": -61.35486111111111,
+    "ground": {
+      "pointtupper": {
+        "level": 8,
+        "height": 0.5799999999999983,
+        "cover": 20,
+        "roadDistance": 25.88
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "694.4",
+    "name": "Laceys Rocks (Cahil Rock) front range light",
+    "character": "F",
+    "colour": "G",
+    "period": ".....",
+    "focalHeight": "12.9",
+    "description": "Triangular skeleton tower, white daymark with red vertical stripe. / 12.7 /",
+    "remarks": "Year round. / Operates 24 h. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "land-candidate",
+    "towerHeight": 12.7
+  },
+  {
+    "areas": [
+      "pointtupper"
+    ],
+    "e": 628221.49,
+    "n": 5047724.43,
+    "lat": 45.571250000000006,
+    "lon": -61.356722222222224,
+    "ground": {
+      "pointtupper": {
+        "level": 8,
+        "height": 16.769999999999996,
+        "cover": 49,
+        "roadDistance": 21.18
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "694.5",
+    "name": "Laceys Rocks (Cahil Rock) rear range light",
+    "character": "Oc",
+    "colour": "G",
+    "period": "11s",
+    "focalHeight": "27.5",
+    "description": "Triangular skeleton tower, white daymark with red vertical stripe. / 12.3",
+    "remarks": "Year round. / Operates 24 h. / Flash 10 s; eclipse 1 s. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "land-candidate",
+    "towerHeight": 12.3
+  },
+  {
+    "areas": [
+      "pointtupper"
+    ],
+    "e": 626650.44,
+    "n": 5051529.98,
+    "lat": 45.60577777777778,
+    "lon": -61.375861111111114,
+    "ground": {
+      "pointtupper": {
+        "level": 7,
+        "height": -0.769999999999996,
+        "cover": 0,
+        "roadDistance": 347.58
+      }
+    },
+    "number": "695",
+    "name": "Point Tupper light buoy C26",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, pillar, marked \u201cC26\u201d.",
+    "remarks": "Year round. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "pointtupper"
+    ],
+    "e": 626778.44,
+    "n": 5051736.33,
+    "lat": 45.60761111111111,
+    "lon": -61.37416666666667,
+    "ground": {
+      "pointtupper": {
+        "level": 7,
+        "height": -0.7800000000000011,
+        "cover": 136,
+        "roadDistance": 201.78
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "696",
+    "name": "Point Tupper",
+    "character": "F",
+    "colour": "R",
+    "period": ".....",
+    "focalHeight": "29.6",
+    "description": "Mast on small shed.",
+    "remarks": "Private aid. / Year round. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "unverified",
+    "towerHeight": null,
+    "reason": "Tower height not published; structure needs verification."
+  },
+  {
+    "areas": [
+      "pointtupper"
+    ],
+    "e": 627121.18,
+    "n": 5052357.68,
+    "lat": 45.61313888888889,
+    "lon": -61.36961111111111,
+    "ground": {
+      "pointtupper": {
+        "level": 8,
+        "height": -0.730000000000004,
+        "cover": 0,
+        "roadDistance": 392.73
+      }
+    },
+    "number": "696.5",
+    "name": "Premier Shoal light buoy CL4",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, spar, marked \u201cCL4\u201d.",
+    "remarks": "Year round. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "e": 623256.85,
+    "n": 5055818.29,
+    "lat": 45.64497222222222,
+    "lon": -61.418277777777774,
+    "ground": {
+      "cansocauseway": {
+        "level": 8,
+        "height": 4.450000000000003,
+        "cover": 37,
+        "roadDistance": 1.29
+      },
+      "pointtupper": {
+        "level": 8,
+        "height": 4.450000000000003,
+        "cover": 37,
+        "roadDistance": 1.3
+      }
+    },
+    "ns": [],
+    "canvec": {
+      "id": "6c07ced188bc4f20a414430350586f65",
+      "e": 623256.019448139,
+      "n": 5055810.556240662,
+      "accuracy": 14.0,
+      "distance": 7.8
+    },
+    "number": "697",
+    "name": "Cape Porcupine front range light",
+    "character": "F",
+    "colour": "G",
+    "period": ".....",
+    "focalHeight": "9.9",
+    "description": "Triangular skeleton tower, white daymark with red vertical stripe. / 6.1",
+    "remarks": "Seasonal. /",
+    "source": "atl6865",
+    "osm": [
+      {
+        "type": "node",
+        "id": "1965817025",
+        "lat": "45.6449028",
+        "lon": "-61.4182904",
+        "tags": {
+          "fixme": "could be a beacon with a light",
+          "man_made": "lighthouse",
+          "seamark:type": "light_major",
+          "source": "NRCan-CanVec-10.0"
+        }
+      }
+    ],
+    "status": "unverified",
+    "towerHeight": 6.1,
+    "reason": "Source lies 1.29 m from the baked Railroad centreline, within its 2.6 m half-width; position needs verification."
+  },
+  {
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "e": 624215.33,
+    "n": 5054552.97,
+    "lat": 45.63341666666667,
+    "lon": -61.406305555555555,
+    "ground": {
+      "cansocauseway": {
+        "level": 7,
+        "height": 9.040000000000006,
+        "cover": 42,
+        "roadDistance": 180.43
+      },
+      "pointtupper": {
+        "level": 7,
+        "height": 9.040000000000006,
+        "cover": 42,
+        "roadDistance": 180.43
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "698",
+    "name": "Cape Porcupine rear range light",
+    "character": "F",
+    "colour": "G",
+    "period": ".....",
+    "focalHeight": "21.8",
+    "description": "Triangular skeleton tower, white daymark with red vertical stripe. / 13.8",
+    "remarks": "Seasonal. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "land-candidate",
+    "towerHeight": 13.8
+  },
+  {
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "e": 624436.58,
+    "n": 5055514.44,
+    "lat": 45.64202777777778,
+    "lon": -61.40322222222222,
+    "ground": {
+      "cansocauseway": {
+        "level": 8,
+        "height": -0.7800000000000011,
+        "cover": 0,
+        "roadDistance": 269.63
+      },
+      "pointtupper": {
+        "level": 8,
+        "height": -0.7800000000000011,
+        "cover": 0,
+        "roadDistance": 269.63
+      }
+    },
+    "number": "699",
+    "name": "Dixon Rock light buoy C28",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, pillar, marked \u201cC28\u201d.",
+    "remarks": "Year round. /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "e": 623985.6,
+    "n": 5055977.82,
+    "lat": 45.646277777777776,
+    "lon": -61.40888888888889,
+    "ground": {
+      "cansocauseway": {
+        "level": 8,
+        "height": -0.75,
+        "cover": 15,
+        "roadDistance": 111.79
+      },
+      "pointtupper": {
+        "level": 8,
+        "height": -0.75,
+        "cover": 15,
+        "roadDistance": 111.79
+      }
+    },
+    "ns": [],
+    "canvec": {
+      "id": "31f65400027546c197bacc6b8ad0c284",
+      "e": 623542.9439141885,
+      "n": 5056159.558286173,
+      "accuracy": 14.0,
+      "distance": 478.5
+    },
+    "number": "700",
+    "name": "Canso Canal SE.",
+    "character": "Fl",
+    "colour": "Y",
+    "period": "4s",
+    "focalHeight": "4.8",
+    "description": "Cylindrical mast.",
+    "remarks": "Private aid. / Year round. / /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "unverified",
+    "towerHeight": null,
+    "reason": "Tower height not published; structure needs verification."
+  },
+  {
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "e": 623688.66,
+    "n": 5056101.6,
+    "lat": 45.647444444444446,
+    "lon": -61.41266666666667,
+    "ground": {
+      "cansocauseway": {
+        "level": 8,
+        "height": -0.7999999999999972,
+        "cover": 72,
+        "roadDistance": 1.07
+      },
+      "pointtupper": {
+        "level": 8,
+        "height": -0.7999999999999972,
+        "cover": 72,
+        "roadDistance": 1.07
+      }
+    },
+    "ns": [],
+    "canvec": {
+      "id": "31f65400027546c197bacc6b8ad0c284",
+      "e": 623542.9439141885,
+      "n": 5056159.558286173,
+      "accuracy": 14.0,
+      "distance": 156.8
+    },
+    "number": "700.5",
+    "name": "Canso Causeway",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": "16.2",
+    "description": "....................",
+    "remarks": "Private aid. / Year round. / Operates 24 h. / Secondary light: F R. / Secondary light: F W. / Preparing to open bridge. / FR - Bridge completely closed. / FW - Bridge completely open. / /",
+    "source": "atl6865",
+    "osm": [
+      {
+        "type": "node",
+        "id": "1965817793",
+        "lat": "45.6479919",
+        "lon": "-61.4145212",
+        "tags": {
+          "fixme": "could be a beacon with a light",
+          "man_made": "lighthouse",
+          "seamark:type": "light_major",
+          "source": "NRCan-CanVec-10.0",
+          "wikidata": "Q26261141",
+          "wikipedia": "en:Balache Point Lighthouse"
+        }
+      }
+    ],
+    "status": "unverified",
+    "towerHeight": null,
+    "reason": "Tower height not published; structure needs verification."
+  },
+  {
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "e": 623385.75,
+    "n": 5056308.63,
+    "lat": 45.64936111111111,
+    "lon": -61.4165,
+    "ground": {
+      "cansocauseway": {
+        "level": 8,
+        "height": 2.9000000000000057,
+        "cover": 11,
+        "roadDistance": 24.47
+      },
+      "pointtupper": {
+        "level": 8,
+        "height": 2.9000000000000057,
+        "cover": 11,
+        "roadDistance": 24.47
+      }
+    },
+    "ns": [],
+    "canvec": {
+      "id": "31f65400027546c197bacc6b8ad0c284",
+      "e": 623542.9439141885,
+      "n": 5056159.558286173,
+      "accuracy": 14.0,
+      "distance": 216.6
+    },
+    "number": "701",
+    "name": "Balache Point front range light",
+    "character": "Oc",
+    "colour": "R",
+    "period": "11s",
+    "focalHeight": "6.0",
+    "description": "Square skeleton tower, white daymark with red vertical stripe. / 3.5",
+    "remarks": "Seasonal. / Operates 24 h. / Flash 10 s; eclipse 1 s. /",
+    "source": "atl6865",
+    "osm": [
+      {
+        "type": "node",
+        "id": "1965817793",
+        "lat": "45.6479919",
+        "lon": "-61.4145212",
+        "tags": {
+          "fixme": "could be a beacon with a light",
+          "man_made": "lighthouse",
+          "seamark:type": "light_major",
+          "source": "NRCan-CanVec-10.0",
+          "wikidata": "Q26261141",
+          "wikipedia": "en:Balache Point Lighthouse"
+        }
+      }
+    ],
+    "status": "land-candidate",
+    "towerHeight": 3.5
+  },
+  {
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "e": 623553.11,
+    "n": 5056166.83,
+    "lat": 45.64805555555556,
+    "lon": -61.41438888888889,
+    "ground": {
+      "cansocauseway": {
+        "level": 8,
+        "height": 6.960000000000008,
+        "cover": 35,
+        "roadDistance": 13.96
+      },
+      "pointtupper": {
+        "level": 8,
+        "height": 6.960000000000008,
+        "cover": 35,
+        "roadDistance": 13.96
+      }
+    },
+    "ns": [],
+    "canvec": {
+      "id": "31f65400027546c197bacc6b8ad0c284",
+      "e": 623542.9439141885,
+      "n": 5056159.558286173,
+      "accuracy": 14.0,
+      "distance": 12.5
+    },
+    "number": "702",
+    "name": "Balache Point rear range light",
+    "character": "Oc",
+    "colour": "R",
+    "period": "11s",
+    "focalHeight": "13.0",
+    "description": "White pyramid tower with red vertical stripe. / 7.5",
+    "remarks": "Seasonal. / Operates 24 h. / Flash 10 s; eclipse 1 s. /",
+    "source": "atl6865",
+    "osm": [
+      {
+        "type": "node",
+        "id": "1965817793",
+        "lat": "45.6479919",
+        "lon": "-61.4145212",
+        "tags": {
+          "fixme": "could be a beacon with a light",
+          "man_made": "lighthouse",
+          "seamark:type": "light_major",
+          "source": "NRCan-CanVec-10.0",
+          "wikidata": "Q26261141",
+          "wikipedia": "en:Balache Point Lighthouse"
+        }
+      }
+    ],
+    "status": "land-candidate",
+    "towerHeight": 7.5
+  },
+  {
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "e": 623091.76,
+    "n": 5056722.69,
+    "lat": 45.65313888888889,
+    "lon": -61.42016666666667,
+    "ground": {
+      "cansocauseway": {
+        "level": 8,
+        "height": -0.3100000000000023,
+        "cover": 0,
+        "roadDistance": 89.69
+      },
+      "pointtupper": {
+        "level": 8,
+        "height": -0.3100000000000023,
+        "cover": 0,
+        "roadDistance": 89.69
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "703",
+    "name": "Canso Canal NE. mooring berth",
+    "character": "Fl",
+    "colour": "Y",
+    "period": "4s",
+    "focalHeight": "5.5",
+    "description": "Cylindrical mast.",
+    "remarks": "Private aid. / Year round. / /",
+    "source": "atl6865",
+    "osm": [],
+    "status": "unverified",
+    "towerHeight": null,
+    "reason": "Tower height not published; structure needs verification."
+  },
+  {
+    "areas": [
+      "westbay"
+    ],
+    "e": 654835.22,
+    "n": 5075330.82,
+    "lat": 45.814166666666665,
+    "lon": -61.00702777777778,
+    "ground": {
+      "westbay": {
+        "level": 6,
+        "height": 9.120000000000005,
+        "cover": 42,
+        "roadDistance": 659.5
+      }
+    },
+    "ns": [],
+    "canvec": {
+      "id": "6100208062814f37b073b24f23b847d8",
+      "e": 654792.4260023022,
+      "n": 5075441.751204137,
+      "accuracy": 14.0,
+      "distance": 118.9
+    },
+    "number": "838",
+    "name": "Cameron Island",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": "9.3",
+    "description": "White pyramid tower. / 8.4",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [
+      {
+        "type": "node",
+        "id": "2332458991",
+        "lat": "45.8151741",
+        "lon": "-61.0075427",
+        "tags": {
+          "fixme": "could be a beacon with a light",
+          "man_made": "lighthouse",
+          "source": "NRCan-CanVec-10.0"
+        }
+      }
+    ],
+    "status": "land-candidate",
+    "towerHeight": 8.4
+  },
+  {
+    "areas": [
+      "mabou"
+    ],
+    "e": 618721.66,
+    "n": 5110039.86,
+    "lat": 46.13361111111111,
+    "lon": -61.463055555555556,
+    "ground": {
+      "mabou": {
+        "level": 8,
+        "height": 1.9099999999999966,
+        "cover": 2,
+        "roadDistance": 177.92
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "874.4",
+    "name": "Finlay Point",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Pipe swing pole.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified",
+    "towerHeight": null,
+    "reason": "Tower height not published; structure needs verification."
+  },
+  {
+    "areas": [
+      "mabou"
+    ],
+    "e": 616641.37,
+    "n": 5105310.15,
+    "lat": 46.09141666666667,
+    "lon": -61.49113888888889,
+    "ground": {
+      "mabou": {
+        "level": 7,
+        "height": -4,
+        "cover": 0,
+        "roadDistance": 784.23
+      }
+    },
+    "number": "874.51",
+    "name": "Mabou Harbour light buoy VJ",
+    "character": "Mo(A)",
+    "colour": "W",
+    "period": "6s",
+    "focalHeight": ".....",
+    "description": "Red-white, pillar, marked \u201cVJ\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "mabou"
+    ],
+    "e": 617382.47,
+    "n": 5105197.68,
+    "lat": 46.09027777777778,
+    "lon": -61.48158333333333,
+    "ground": {
+      "mabou": {
+        "level": 8,
+        "height": -0.75,
+        "cover": 0,
+        "roadDistance": 383.11
+      }
+    },
+    "number": "874.52",
+    "name": "Mabou Harbour light buoy VJ1",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Green, can, marked \u201cVJ1\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "mabou"
+    ],
+    "e": 617347.14,
+    "n": 5105135.25,
+    "lat": 46.08972222222222,
+    "lon": -61.482055555555554,
+    "ground": {
+      "mabou": {
+        "level": 7,
+        "height": -0.7399999999999949,
+        "cover": 0,
+        "roadDistance": 454.09
+      }
+    },
+    "number": "874.53",
+    "name": "Mabou Harbour light buoy VJ2",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, conical, marked \u201cVJ2\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "mabou"
+    ],
+    "e": 617815.96,
+    "n": 5104996.03,
+    "lat": 46.08838888888889,
+    "lon": -61.47602777777778,
+    "ground": {
+      "mabou": {
+        "level": 8,
+        "height": -0.7599999999999909,
+        "cover": 0,
+        "roadDistance": 262.19
+      }
+    },
+    "number": "874.55",
+    "name": "Mabou Harbour light buoy VJ3",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Green, spar, marked \u201cVJ3\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "mabou"
+    ],
+    "e": 617846.44,
+    "n": 5104975,
+    "lat": 46.08819444444445,
+    "lon": -61.47563888888889,
+    "ground": {
+      "mabou": {
+        "level": 8,
+        "height": -0.769999999999996,
+        "cover": 0,
+        "roadDistance": 271.05
+      }
+    },
+    "number": "874.6",
+    "name": "Mabou Harbour light buoy VJ4",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, spar, marked \u201cVJ4\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "mabou"
+    ],
+    "e": 618254.03,
+    "n": 5104893.29,
+    "lat": 46.08738888888889,
+    "lon": -61.47038888888889,
+    "ground": {
+      "mabou": {
+        "level": 8,
+        "height": -0.730000000000004,
+        "cover": 0,
+        "roadDistance": 279.37
+      }
+    },
+    "number": "874.61",
+    "name": "Mabou Harbour light buoy VJ8",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, pillar, marked \u201cVJ8\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "mabou"
+    ],
+    "e": 618260,
+    "n": 5104918.1,
+    "lat": 46.087611111111116,
+    "lon": -61.470305555555555,
+    "ground": {
+      "mabou": {
+        "level": 8,
+        "height": -0.730000000000004,
+        "cover": 0,
+        "roadDistance": 254.59
+      }
+    },
+    "number": "874.62",
+    "name": "Mabou Harbour light buoy VJ9",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Green, pillar, marked \u201cVJ9\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "mabou"
+    ],
+    "e": 618648.09,
+    "n": 5104734.16,
+    "lat": 46.08588888888889,
+    "lon": -61.465333333333334,
+    "ground": {
+      "mabou": {
+        "level": 7,
+        "height": 1.6800000000000068,
+        "cover": 51,
+        "roadDistance": 15.47
+      }
+    },
+    "ns": [
+      {
+        "code": "STLH60",
+        "e": 618644.51,
+        "n": 5104727.83,
+        "distance": 7.3,
+        "z": "2.7"
+      }
+    ],
+    "canvec": {
+      "id": "f3f578062f394f7ead1bc887b78c60bf",
+      "e": 618648.7206673981,
+      "n": 5104734.739971636,
+      "accuracy": 21.0,
+      "distance": 0.9
+    },
+    "number": "876",
+    "name": "Mabou Harbour",
+    "character": "F",
+    "colour": "G",
+    "period": ".....",
+    "focalHeight": "13.9",
+    "description": "White square tower with red upper portion. / 13.7 /",
+    "remarks": "Private aid. / Seasonal. /",
+    "source": "atl70485",
+    "osm": [
+      {
+        "type": "node",
+        "id": "1324111529",
+        "lat": "46.0858940",
+        "lon": "-61.4653250",
+        "tags": {
+          "fixme": "could be a beacon with a light",
+          "man_made": "lighthouse",
+          "source": "NRCan-CanVec-7.0"
+        }
+      }
+    ],
+    "status": "land-candidate",
+    "towerHeight": 13.7
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612689.21,
+    "n": 5097783.61,
+    "lat": 46.02436111111111,
+    "lon": -61.54402777777778,
+    "ground": {
+      "porthood": {
+        "level": 7,
+        "height": -0.730000000000004,
+        "cover": 0,
+        "roadDistance": 345.14
+      }
+    },
+    "number": "876.3",
+    "name": "Murphy Pond light buoy VX1",
+    "character": "Q",
+    "colour": "G",
+    "period": "1s",
+    "focalHeight": ".....",
+    "description": "Green, spar, marked \u201cVX1\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 610983.87,
+    "n": 5098493.6,
+    "lat": 46.03102777777778,
+    "lon": -61.565888888888885,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -4,
+        "cover": 0,
+        "roadDistance": 1307.28
+      }
+    },
+    "number": "876.5",
+    "name": "Port Hood Fairway light buoy VX",
+    "character": "Mo(A)",
+    "colour": "W",
+    "period": "6s",
+    "focalHeight": ".....",
+    "description": "Red-white, pillar, marked \u201cVX\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612660.25,
+    "n": 5097955.97,
+    "lat": 46.02591666666667,
+    "lon": -61.54436111111111,
+    "ground": {
+      "porthood": {
+        "level": 7,
+        "height": 3.700000000000003,
+        "cover": 6,
+        "roadDistance": 229.81
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "876.8",
+    "name": "Murphy Pond",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": "6.2",
+    "description": "Cylindrical mast. / 3.3",
+    "remarks": "Seasonal. / Flash 1 s; eclipse 3 s. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "land-candidate",
+    "towerHeight": 3.3
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612695.44,
+    "n": 5098030.71,
+    "lat": 46.026583333333335,
+    "lon": -61.54388888888889,
+    "ground": {
+      "porthood": {
+        "level": 8,
+        "height": -0.7099999999999937,
+        "cover": 0,
+        "roadDistance": 150.45
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "876.9",
+    "name": "Murphy Pond Breakwater Light",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": "5.6",
+    "description": "Cylindrical mast. / 3.3",
+    "remarks": "Seasonal. / Flash 1 s; eclipse 3 s. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified",
+    "towerHeight": 3.3,
+    "reason": "Source point is below water in baked terrain; structure needs verification."
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 611735.61,
+    "n": 5096645.55,
+    "lat": 46.01427777777778,
+    "lon": -61.55661111111111,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.8100000000000023,
+        "cover": 0,
+        "roadDistance": 96.66
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "877",
+    "name": "Port Hood Island",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": "4.5",
+    "description": "Skeleton mast, red and white rectangular daymark. / 3.6 /",
+    "remarks": "Private aid. / Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified",
+    "towerHeight": 3.6,
+    "reason": "Source point is below water in baked terrain; structure needs verification."
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 611884.81,
+    "n": 5093400.43,
+    "lat": 45.985055555555554,
+    "lon": -61.55544444444444,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.6499999999999915,
+        "cover": 0,
+        "roadDistance": 723.24
+      }
+    },
+    "number": "879.5",
+    "name": "Portsmouth Point light buoy VK7",
+    "character": "Q",
+    "colour": "G",
+    "period": "1s",
+    "focalHeight": ".....",
+    "description": "Green, spar, marked \u201cVK7\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612487.91,
+    "n": 5094553.7,
+    "lat": 45.995333333333335,
+    "lon": -61.54738888888889,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.6499999999999915,
+        "cover": 0,
+        "roadDistance": 959.91
+      }
+    },
+    "number": "880",
+    "name": "Spithead light buoy VK9",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Green, spar, marked \u201cVK9\u201d.",
+    "remarks": "Seasonal (in place year round). /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612866.63,
+    "n": 5095023.71,
+    "lat": 45.9995,
+    "lon": -61.54238888888889,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.6899999999999977,
+        "cover": 0,
+        "roadDistance": 781.37
+      }
+    },
+    "number": "880.1",
+    "name": "Dean Shoal light buoy VK12",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, spar, marked \u201cVK12\u201d.",
+    "remarks": "Seasonal (in place year round). /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612543.62,
+    "n": 5095981.05,
+    "lat": 46.00816666666667,
+    "lon": -61.54633333333333,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.7099999999999937,
+        "cover": 0,
+        "roadDistance": 1122.35
+      }
+    },
+    "number": "880.2",
+    "name": "Smith Point light buoy VK13",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Green, can, marked \u201cVK13\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612182.52,
+    "n": 5097027.23,
+    "lat": 46.01763888888889,
+    "lon": -61.550749999999994,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.6499999999999915,
+        "cover": 0,
+        "roadDistance": 388.34
+      }
+    },
+    "number": "880.5",
+    "name": "Port Hood Causeway South light buoy VK15",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Green, can, marked \u201cVK15\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612201.71,
+    "n": 5097036.84,
+    "lat": 46.01772222222222,
+    "lon": -61.5505,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.6599999999999966,
+        "cover": 0,
+        "roadDistance": 409.45
+      }
+    },
+    "number": "880.6",
+    "name": "Port Hood Causeway South light buoy VK16",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, conical, marked \u201cVK16\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612153.79,
+    "n": 5097069.93,
+    "lat": 46.018027777777775,
+    "lon": -61.551111111111105,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.6799999999999926,
+        "cover": 0,
+        "roadDistance": 375.65
+      }
+    },
+    "number": "880.7",
+    "name": "Port Hood Causeway North light buoy VK17",
+    "character": "Q",
+    "colour": "G",
+    "period": "1s",
+    "focalHeight": ".....",
+    "description": "Green, can, marked \u201cVK17\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612173.03,
+    "n": 5097076.46,
+    "lat": 46.01808333333333,
+    "lon": -61.55086111111111,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.6799999999999926,
+        "cover": 0,
+        "roadDistance": 395.9
+      }
+    },
+    "number": "880.8",
+    "name": "Port Hood Causeway North light buoy VK18",
+    "character": "Q",
+    "colour": "R",
+    "period": "1s",
+    "focalHeight": ".....",
+    "description": "Red, conical, marked \u201cVK18\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 608462.3,
+    "n": 5092456.37,
+    "lat": 45.977111111111114,
+    "lon": -61.599833333333336,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": 47.120000000000005,
+        "cover": 37,
+        "roadDistance": 59.41
+      }
+    },
+    "ns": [
+      {
+        "code": "STLH60",
+        "e": 608461.32,
+        "n": 5092457.34,
+        "distance": 1.4,
+        "z": "44.1"
+      }
+    ],
+    "canvec": {
+      "id": "b7b5346e56bb4e88975208bdd0678be7",
+      "e": 608453.8883386673,
+      "n": 5092461.002065742,
+      "accuracy": 21.0,
+      "distance": 9.6
+    },
+    "number": "881",
+    "name": "Henry Island",
+    "character": "Fl",
+    "colour": "W",
+    "period": "4s",
+    "focalHeight": "61.0",
+    "description": "Octagonal tower with red top and red and white vertical stripes. / 11.6 /",
+    "remarks": "Year round. / Flash 1 s; eclipse 3 s. /",
+    "source": "atl70485",
+    "osm": [
+      {
+        "type": "node",
+        "id": "1325501766",
+        "lat": "45.9771541",
+        "lon": "-61.5999409",
+        "tags": {
+          "fixme": "could be a beacon with a light",
+          "man_made": "lighthouse",
+          "seamark:light:character": "Fl",
+          "seamark:light:colour": "white",
+          "seamark:light:height": "61",
+          "seamark:light:period": "4",
+          "seamark:light:range": "6",
+          "seamark:light:reference": "H 1222",
+          "seamark:light:sequence": "1+(3)",
+          "seamark:name": "Henry Island",
+          "seamark:type": "light_minor",
+          "source": "NRCan-CanVec-7.0"
+        }
+      }
+    ],
+    "status": "land-candidate",
+    "towerHeight": 11.6
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 614032.05,
+    "n": 5090522.24,
+    "lat": 45.95880555555556,
+    "lon": -61.528416666666665,
+    "ground": {
+      "porthood": {
+        "level": 8,
+        "height": -0.04999999999999716,
+        "cover": 0,
+        "roadDistance": 76.47
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "881.1",
+    "name": "Little Judique Harbour Breakwater",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": "5.3",
+    "description": "Cylindrical mast, green, white and black square daymark. / 3.8 /",
+    "remarks": "Seasonal. / Flash 1 s; eclipse 3 s. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "land-candidate",
+    "towerHeight": 3.8
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 614143.42,
+    "n": 5090437.86,
+    "lat": 45.95802777777778,
+    "lon": -61.527,
+    "ground": {
+      "porthood": {
+        "level": 8,
+        "height": 1.6000000000000085,
+        "cover": 0,
+        "roadDistance": 0.33
+      }
+    },
+    "ns": [],
+    "canvec": null,
+    "number": "881.3",
+    "name": "Little Judique Harbour Wharf Sector",
+    "character": "F",
+    "colour": "R / W / G",
+    "period": ".....",
+    "focalHeight": "8.2",
+    "description": "Square skeleton tower, enclosed lower portion, red and white rectangular daymark.",
+    "remarks": "Seasonal. / R 093\u00b0-121\u00b0; / W 121\u00b0-123\u00b0; / G 123\u00b0-155\u00b0. / /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified",
+    "towerHeight": null,
+    "reason": "Tower height not published; structure needs verification."
+  },
+  {
+    "areas": [
+      "judique"
+    ],
+    "e": 616162.93,
+    "n": 5079317.99,
+    "lat": 45.85763888888889,
+    "lon": -61.50363888888889,
+    "ground": {
+      "judique": {
+        "level": 8,
+        "height": -0.1599999999999966,
+        "cover": 0,
+        "roadDistance": 35.77
+      }
+    },
+    "ns": [],
+    "canvec": {
+      "id": "e3fe1c6db4494d3e826aab6a240dfa65",
+      "e": 616180.5904859155,
+      "n": 5079314.341927771,
+      "accuracy": 21.0,
+      "distance": 18.0
+    },
+    "number": "882",
+    "name": "Judique South Wharf",
+    "character": "LFl",
+    "colour": "R",
+    "period": "6s",
+    "focalHeight": "7.3",
+    "description": "Pipe swing pole, red and white triangular daymark. / 6.7",
+    "remarks": "Seasonal. / Flash 2 s; eclipse 4 s. /",
+    "source": "atl70485",
+    "osm": [
+      {
+        "type": "node",
+        "id": "1325500623",
+        "lat": "45.8577344",
+        "lon": "-61.5035073",
+        "tags": {
+          "fixme": "could be a beacon with a light",
+          "man_made": "lighthouse",
+          "seamark:light:character": "F",
+          "seamark:light:colour": "red",
+          "seamark:light:height": "7",
+          "seamark:light:range": "10",
+          "seamark:light:reference": "H 1228",
+          "seamark:name": "Judique South",
+          "seamark:type": "light_minor",
+          "source": "NRCan-CanVec-7.0"
+        }
+      }
+    ],
+    "status": "unverified",
+    "towerHeight": 6.7,
+    "reason": "Source point is below water in baked terrain; structure needs verification."
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 609499.86,
+    "n": 5094391.87,
+    "lat": 45.99436111111111,
+    "lon": -61.586000000000006,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -4,
+        "cover": 0,
+        "roadDistance": 1639.11
+      }
+    },
+    "number": "882.1",
+    "name": "Henry Point light buoy VM3",
+    "character": "Fl",
+    "colour": "G",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Green, spar, marked \u201cVM3\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 608966.59,
+    "n": 5094005.78,
+    "lat": 45.990972222222226,
+    "lon": -61.59297222222222,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.6499999999999915,
+        "cover": 0,
+        "roadDistance": 1129.47
+      }
+    },
+    "number": "882.2",
+    "name": "Henry Point light buoy VM4",
+    "character": "Fl",
+    "colour": "R",
+    "period": "4s",
+    "focalHeight": ".....",
+    "description": "Red, spar, marked \u201cVM4\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  },
+  {
+    "areas": [
+      "porthood"
+    ],
+    "e": 612099.78,
+    "n": 5095781.55,
+    "lat": 46.00644444444445,
+    "lon": -61.55211111111111,
+    "ground": {
+      "porthood": {
+        "level": 6,
+        "height": -0.7199999999999989,
+        "cover": 0,
+        "roadDistance": 1032.4
+      }
+    },
+    "number": "882.3",
+    "name": "Smith Point South Cardinal light buoy VM",
+    "character": "Q(6) + LFl",
+    "colour": "W",
+    "period": "15s",
+    "focalHeight": ".....",
+    "description": "Yellow-black, spar, marked \u201cVM\u201d.",
+    "remarks": "Seasonal. /",
+    "source": "atl70485",
+    "osm": [],
+    "status": "unverified"
+  }
+]

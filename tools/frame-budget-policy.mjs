@@ -18,6 +18,11 @@ export const scenes = [
   // #214 added the Port Hawkesbury store and plaza to this view; #3 trimmed the phone cost; desktop keeps textures by design (re-pinned 18 Nov 2026)
   // pointtupper-start/phone-explore-truck pinned at 212 calls (re-pinned 18 Nov 2026): just-drive #1 (sidewalks) lowered it to 211 measured on a base
   // without #3, and #3 (Point Tupper phone budget) measured 212 on a base without #1; together main gives 212, equal to the pre-#1 limit (three identical runs)
+  // Harbour lights (just-drive #7) add the five Point Tupper and Causeway lights to this view, measured against main 97100198 in one
+  // session on the M4 host: phone +1 call, +1 geometry, +1 program, +2772 triangles; desktop +2 calls, +1 geometry, +1 program,
+  // +5544 triangles, no textures. The pins carry exactly that share: phone calls 211 -> 212 and geometries 122 -> 123; desktop calls
+  // 988 -> 990, geometries 279 -> 280 and programs 45 -> 46. Triangles and phone programs stay within their pins. On that host main
+  // itself measured desktop 997 calls / 283 geometries / 150 textures / 46 programs, above its own pins; that excess is not pinned here.
   {id:'pointtupper-start',area:'pointtupper',exploreOnly:true,chase:true},
 ];
 // The phone draw cap a whole phone frame must fit: the loosest phone pins once the LOW small-props range landed
