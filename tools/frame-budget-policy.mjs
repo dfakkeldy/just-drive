@@ -14,6 +14,10 @@ export const scenes = [
   // Cow and four-cattle pasture; the bull remains covered by guardrail-browser.
   {id:'animal-home',animal:true,cam:'619012,5109310,3.2,335,-15,80',at:'619093,5109326,0'},
   // Point Tupper's own start (explore only: no mail there), the scripted chase drive as at new-player-start.
+  // pointtupper-start/desktop-explore-truck pinned at 960 calls / 290 geometries / 140 textures / 36 programs (zero margin, three identical runs):
+  // #214 added the Port Hawkesbury store and plaza to this view; #3 trimmed the phone cost; desktop keeps textures by design (re-pinned 18 Nov 2026)
+  // pointtupper-start/phone-explore-truck pinned at 212 calls (re-pinned 18 Nov 2026): just-drive #1 (sidewalks) lowered it to 211 measured on a base
+  // without #3, and #3 (Point Tupper phone budget) measured 212 on a base without #1; together main gives 212, equal to the pre-#1 limit (three identical runs)
   {id:'pointtupper-start',area:'pointtupper',exploreOnly:true,chase:true},
 ];
 // The phone draw cap a whole phone frame must fit: the loosest phone pins once the LOW small-props range landed

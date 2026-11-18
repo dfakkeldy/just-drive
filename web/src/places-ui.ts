@@ -31,6 +31,7 @@ body.tcOn #phoneHint:has(#placeArrival){min-height:0}
 /** Owns only explore UI. The engine supplies pause and placement; no vehicle or area is assumed here. */
 export class PlacesUI {
   readonly marks: MapMark[];
+  readonly places: Place[];
   private readonly button = document.createElement('button');
   private readonly arrival = document.createElement('aside');
   private readonly panel = document.createElement('div');
@@ -39,8 +40,8 @@ export class PlacesUI {
   private previous: Place | undefined;
   private restore: HTMLElement | null = null;
   private inert: { node: HTMLElement; was: boolean }[] = [];
-  constructor(readonly places: readonly Place[], private origin: readonly [number, number], readonly roads: RoadNetwork, private actions: PlacesActions, readonly hikes: readonly Hike[] = []) {
-    this.marks = places.filter(p=>!p.trip).map(place => ({ ...placePosition(place, origin), label: place.name, rank: mapRank(place), radius: place.radius ?? ARRIVAL_RADIUS }));
+  constructor(places: readonly Place[], private origin: readonly [number, number], readonly roads: RoadNetwork, private actions: PlacesActions, readonly hikes: readonly Hike[] = []) {
+    this.places=[];this.marks=[];
     document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
     this.button.id = 'placesButton'; this.button.textContent = 'PLACES'; this.button.type = 'button';
     this.button.setAttribute('aria-controls', 'placesPanel'); this.button.setAttribute('aria-expanded', 'false');
@@ -51,18 +52,7 @@ export class PlacesUI {
     this.panel.id = 'placesPanel'; this.panel.hidden = true; this.panel.setAttribute('role', 'dialog'); this.panel.setAttribute('aria-modal', 'true'); this.panel.setAttribute('aria-labelledby', 'placesHeading');
     this.panel.setAttribute('aria-describedby', 'placesDescription');
     this.panel.innerHTML = `<section id="placesCard"><h2 id="placesHeading">Places</h2><p id="placesDescription">Choose a place to start there, at rest${places.some(place => place.start) ? '' : ' on the nearest road'}.</p><ul id="placesList" role="list"></ul><p id="placesError" role="status" hidden></p><button id="placesClose">Back to driving · Esc</button></section>`;
-    for (const place of places) {
-      const button = document.createElement('button'); button.type = 'button'; button.dataset.place = place.id;
-      button.append(Object.assign(document.createElement('strong'), { textContent: place.name }), Object.assign(document.createElement('span'), { textContent: place.note }));
-      button.addEventListener('click', () => {
-        if(place.trip){startTrip(place.trip);return;}
-        const hit = place.start ? {...placePosition(place.start, origin),heading:place.start.heading} : nearestPlacement(roads, place, origin);
-        if (!hit) { const error = this.panel.querySelector<HTMLElement>('#placesError')!; error.hidden = false; error.textContent = 'No road point is available here.'; return; }
-        this.jumpTo(hit.x, hit.z, hit.heading);
-      });
-      const item = document.createElement('li'); item.appendChild(button);
-      this.panel.querySelector('#placesList')!.appendChild(item);
-    }
+    this.addPlaces(places);this.button.hidden=!places.length;
     if (hikes.length) {
       const section = document.createElement('div'); section.id = 'hikesList';
       section.style.cssText = 'display:grid;gap:10px;margin-top:18px';
@@ -99,6 +89,23 @@ export class PlacesUI {
     document.addEventListener('focusin', ev => { if (this.busy && ev.target instanceof Node && !this.panel.contains(ev.target)) this.panel.querySelector('button')?.focus(); });
     this.attachPhone();
   }
+  /** Places can arrive after boot (sourced turbines load with the far views); each id is added once. */
+  addPlaces(places:readonly Place[]):void {
+    for (const place of places) {
+      if(this.places.some(p=>p.id===place.id))continue;
+      this.places.push(place);if(!place.trip)this.marks.push({...placePosition(place,this.origin),label:place.name,rank:mapRank(place),radius:place.radius??ARRIVAL_RADIUS});
+      const button = document.createElement('button'); button.type = 'button'; button.dataset.place = place.id;
+      button.append(Object.assign(document.createElement('strong'), { textContent: place.name }), Object.assign(document.createElement('span'), { textContent: place.note }));
+      button.addEventListener('click', () => {
+        if(place.trip){startTrip(place.trip);return;}
+        const hit = place.start ? {...placePosition(place.start, this.origin),heading:place.start.heading} : nearestPlacement(this.roads, place, this.origin);
+        if (!hit) { const error = this.panel.querySelector<HTMLElement>('#placesError')!; error.hidden = false; error.textContent = 'No road point is available here.'; return; }
+        this.jumpTo(hit.x, hit.z, hit.heading);
+      });
+      const item = document.createElement('li'); item.appendChild(button);
+      this.panel.querySelector('#placesList')!.appendChild(item);
+    }
+  }
   get busy(): boolean { return !this.panel.hidden; }
   /** A button at the top of the card that leaves Places for the big map (the phone's way in to the map). */
   mapButton(open: () => void): void {
@@ -117,7 +124,7 @@ export class PlacesUI {
   }
   /** opener: the control to refocus on close; null for a pointer open (nothing to refocus); omitted for L (the focus it had). */
   open(opener?: HTMLElement | null): void {
-    if (this.busy || !this.actions.canOpen()) return;
+    if (this.busy || !this.actions.canOpen() || !this.places.length) return;
     this.restore = opener !== undefined ? opener : document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.actions.pause(true); this.button.setAttribute('aria-expanded', 'true'); this.panel.hidden = false; this.arrival.hidden = true;
     this.inert = [...document.body.children].filter((node): node is HTMLElement => node instanceof HTMLElement && node !== this.panel && node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE').map(node => ({ node, was: node.inert }));
@@ -135,7 +142,7 @@ export class PlacesUI {
     if (active instanceof HTMLElement && (!restoreFocus || this.panel.contains(active))) active.blur();
   }
   update(traveller: Traveller, enabled: boolean): void {
-    this.attachPhone(); this.button.hidden = !enabled && !this.busy;
+    this.attachPhone(); this.button.hidden = (!enabled || !this.places.length) && !this.busy;
     const place = enabled && !this.busy ? arrivalAt(this.places, this.origin, traveller.x, traveller.z) : undefined;
     this.arrival.hidden = !place;
     if (place && place !== this.previous) {

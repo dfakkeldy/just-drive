@@ -24,6 +24,8 @@ yellow-turning trees (birch, aspen, larch), both in 25ths per tenth; B = class
 This is the reproducible baseline. The separate ground_classes.py work-root stage
 adds approved open classes 6..13 without rebaking or changing any height tile.
 """
+from far_manifest import preserve_far_manifest
+from pathlib import Path
 import json
 import math
 import os
@@ -205,6 +207,9 @@ def main():
         "height": {"scale": 0.01, "offset": -100.0}, "canopy": {"scale": 0.2},
         "seaFloor": SEA_FLOOR, "village": list(VILLAGE), "levels": {},
     }
+    previous = Path(OUT) / 'manifest.json'
+    if previous.is_file():
+        manifest = preserve_far_manifest(json.loads(previous.read_text()), manifest)
     if not AREA.legacy_manifest:
         manifest["area"] = {"id": AREA.id, "name": AREA.name}
     if AREA.interpolate_coastal_trail:

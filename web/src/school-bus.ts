@@ -87,6 +87,10 @@ export class SchoolBus {
     this.at(this.rules.along + 3, this.nose); this.at(this.rules.along - 3, this.tail);
     const y = this.terrain.heightAt(this.solid.x, this.solid.z), front = this.terrain.heightAt(this.nose.x, this.nose.z), back = this.terrain.heightAt(this.tail.x, this.tail.z);
     if (y === null || front === null || back === null) { this.group.visible = false; return; }
+    // Built on first active/near update, not at boot. The already-attached
+    // group's add watcher hooks these new materials before their first draw.
+    // Lambert/Basic may need first-use programs if uncached; no old program is
+    // recompiled by the hook. BUS.draw is 300 m, safely inside the zero-bend zone.
     if (!this.art) { this.art = schoolBusArt(); this.group.add(this.art.root); }
     this.group.visible = true;
     const a = this.art;

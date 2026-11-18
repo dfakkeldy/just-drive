@@ -8,6 +8,8 @@ const [, first] = process.argv.slice(2);
 const origin = first ? new URL(first).origin : null, port = process.env.CDP_PORT ?? '9538';
 const baselinePath = process.env.FRAME_BUDGET_BASELINE ?? fileURLToPath(new URL('./baseline/frame-budget.json', import.meta.url));
 import { metrics, scenes, modes, allKeys, selectedRows, parseArgs, coverage, assetClass, compare, updateRow, serialize } from './frame-budget-policy.mjs';
+import { farLand, effective, stored } from './frame-budget-far.mjs';
+const FAR_STATE = farLand(); // throws on a half-installed far pack
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Installed before game modules. Pin animation dt to 1/60s, so GPU contention cannot change simulation work.
 // finish() lets real occlusion-query results complete between frames; no visibility result is faked.
@@ -179,6 +181,16 @@ async function openPage(scene, mode, options = {}) {
       assert.ok(settled,'fixture pose and all assets must settle before GPU normalization');
     }
 
+    // FAR_STATE describes the shared land. A caller measuring another tree that has no far views (sidewalks-counts
+    // BASE_URL at a pre-far commit) passes farWait:false; waiting for far objects there would never finish.
+    if(FAR_STATE==='after'&&options.farWait!==false) {
+      // Far views (PR #122) load after Start. Wait for them before GPU normalization, then hold each far query mesh
+      // visible: the game redraws a hidden one five times a second, so its cost is the worst case, not a probe phase.
+      const until=Date.now()+60000;
+      // All four parts: a failed tall or turbine half must not pass (or be folded into the pins by --update).
+      while(!await read('!!(window.mmm&&mmm.farVisibility&&mmm.farLand&&mmm.tall&&mmm.farTurbines)')) { assert.ok(Date.now()<until,`${scene.id}/${mode.id}: far views never loaded on after land`); await sleep(200); }
+      await read(`(() => {const v=mmm.farVisibility;v.update=()=>{};if(!v.records.length)throw Error('far views have no query meshes');for(const r of v.records)r.mesh.visible=true;})()`);
+    }
     if(process.env.FRAME_BUDGET_TRAFFIC === '1') await read(`(() => {
       const m=mmm,t=m.ambientTraffic;if(!t||!t.cars.length)throw Error('traffic pool missing');
       const f=m.camera.getWorldDirection(new (m.camera.position.constructor)());
@@ -372,6 +384,9 @@ export async function run() {
   const updating=options.action==='update'||options.action==='raise';
   let baseline={};
   try {baseline=JSON.parse(readFileSync(baselinePath,'utf8'));} catch(e) {if(!updating||e.code!=='ENOENT')throw e;}
+  // Far views (PR #122): pins mean the land without the far pack; after install each ceiling adds its measured far delta.
+  const land=FAR_STATE;baseline=effective(baseline,land);
+  if(land==='after')console.log('FAR LAND after: ceilings = pins + tools/baseline/frame-budget-far.json; --update/--raise store measured - far delta');
   const selected=selectedRows(options),visited=[];
   const subset=options.phone||options.scenes.length>0||options.modes.length>0;
   if(!subset) assert.deepEqual(selected.map(r=>r.key).sort(),allKeys().sort(),'implicit subset is not allowed');
@@ -400,7 +415,7 @@ export async function run() {
   // Neither deleting a scene/mode nor silently skipping one can leave a full baseline passing.
   failed=coverage(updating?next:baseline,allKeys())||failed;
   assert.deepEqual([...visited].sort(),selected.map(r=>r.key).sort(),'selected script rows were not all measured');
-  if(updating) writeFileSync(baselinePath,serialize(next));
+  if(updating) writeFileSync(baselinePath,serialize(stored(next,land)));
   for(const row of phone.sort((a,b)=>b.calls-a.calls)) console.log(`PHONE TOTAL ${row.key}: calls=${row.calls} triangles=${row.triangles} geometries=${row.geometries} textures=${row.textures} programs=${row.programs}`);
   if(!failed) for(const row of phone.slice(0,3)) console.log(`PHONE TOP ${row.key}: calls=${row.calls} triangles=${row.triangles}; groups=${JSON.stringify(row.groups)}`);
   console.log(`${failed?'FAIL':'PASS'} frame-budget ${subset?'SUBSET':'full'} (${((Date.now()-started)/1000).toFixed(1)}s)`);

@@ -44,6 +44,13 @@ export class WaterReflections {
     if(this.level!==level){this.level=level;this.clip[0].constant=-level;this.invalidate();}
     this.siteWater=visible;
   }
+  /** The optional far patch uses the same mask in colour and occlusion draws. */
+  transformSea(vertex: (source: string) => string, fragment: (source: string) => string): void {
+    const vertexShader=vertex(SEA_VERT),fragmentShader=fragment(SEA_QUERY_FRAG);
+    this.seaQueryMaterial.vertexShader=vertexShader;
+    this.seaQueryMaterial.fragmentShader=fragmentShader;
+    this.seaQueryMaterial.needsUpdate=true;
+  }
   private maskWarm = false;
   private readonly savedScissor = new THREE.Vector4();
   private readonly hidden: THREE.Object3D[] = [];
@@ -268,12 +275,18 @@ export class WaterReflections {
     this.uniforms.tReflection.value = null;
     this.renderer.shadowMap.autoUpdate = this.renderer.shadowMap.needsUpdate = this.renderer.shadowMap.enabled = false;
     this.renderer.toneMapping = THREE.NoToneMapping;
+    // The existing mirror stops at 6 km. Preserve its flat local scenery so
+    // curving a distant reflected hill cannot change water beside the player.
+    // Far land/turbines are not part of this local reflection set.
+    const curve = this.seaQueryMaterial.uniforms.farCurveOn, previousCurve = curve?.value;
+    if (curve) curve.value = 0;
     try {
       this.renderer.setRenderTarget(this.target); this.renderer.setClearColor(0x000000, 0);
       this.renderer.clear(); this.renderer.autoClear = false;   // one clear, not a second one by the render itself
       this.terrain.withReflection(mirror, camera.position, () => this.renderer.render(this.scene, mirror));
       this.projection.copy(camera.projectionMatrix); this.valid = true;
     } finally {
+      if (curve) curve.value = previousCurve;
       this.uniforms.tReflection.value = this.target.texture;
       this.renderer.clippingPlanes = oldClip; this.renderer.autoClear = oldAutoClear; this.nearTrees.visible = false;
       for (const child of this.hidden) child.visible = true; this.hidden.length = 0;
