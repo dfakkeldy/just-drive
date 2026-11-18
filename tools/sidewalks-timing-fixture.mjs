@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {timingStats,replaySchedule,compareReplay,assertReplayTargets} from './sidewalks-timing.mjs';
+assert.deepEqual(timingStats([3,1,2]),{samples:3,min:1,median:2,p95:3,max:3});
+const fixture=(low=false)=>replaySchedule(low?3:7).map(({round,label,variant})=>({round,label,variant,ms:1000+(label==='noise-b'?(low?[-800,0,900]:[-800,-300,-100,0,100,400,900])[round]:label==='fixed'?650:label==='a32'?800:0),maxFrame:1,audit:{startupMs:3},frameStats:{sidewalk:{p95:.4}},milestones:{exposed:100,lastTerrainBusy:600,ready:1000}}));
+const options={area:'test',low:false},loads=fixture(),good=compareReplay(loads,options);assert.equal(good.currentVsMain.median,650);assert.equal(good.settle,'within-noise');assertReplayTargets(good);
+assert.equal(loads.length,42);assert.equal(loads.filter(r=>r.label==='fixed').length,7);
+assert.equal(loads.filter(r=>r.round===0).map(r=>r.label).join(','),'noise-a,noise-b,base-a32,a32,base-fixed,fixed');
+assert.equal(loads.filter(r=>r.round===1).map(r=>r.label).join(','),'base-fixed,fixed,base-a32,a32,noise-a,noise-b');
+assert.throws(()=>compareReplay(loads.slice(0,18),options),/complete seven/,'old three-pair desktop sample is rejected');
+const bad=loads.map(r=>r.label==='fixed'?{...r,ms:2500}:r);assert.throws(()=>assertReplayTargets(compareReplay(bad,options)),/outside main\/main/);
+assert.throws(()=>assertReplayTargets({...good,frameWorst:2.001}),/sidewalk frame/);
+assert.throws(()=>assertReplayTargets({...good,allStartup:{max:20.1}}),/startup/);
+const low=compareReplay(fixture(true),{area:'test',low:true,startupReference:{median:2.5,max:2.6}});assertReplayTargets(low);
+assert.throws(()=>assertReplayTargets({...low,startupMedianDelta:1.1}),/LOW median/);
+assert.throws(()=>assertReplayTargets({...low,startupMaxDelta:1.1}),/LOW max/);
+const diagnostic=replaySchedule(7,true).map(({round,label,variant})=>({round,label,variant,ms:1000+(label==='fixed-counts'?100:label==='fixed'?650:label==='noise-b'?900:0),maxFrame:variant==='fixed-counts'?999:1,audit:{startupMs:3},frameStats:{sidewalk:{p95:.4}},milestones:{exposed:100,lastTerrainBusy:600,ready:1000}}));
+const measured=compareReplay(diagnostic,{...options,diagnostic:true});assert.equal(measured.diagnostic.countsOnlyVsMain.median,100);assert.equal(measured.diagnostic.adjustedClockCost.median,550);assertReplayTargets(measured);assert.equal(measured.frameWorst,1,'counts-only diagnostic never replaces the primary frame gate');
+console.log('PASS interleaved seven/three pairs, observed noise rule, paired spreads, strict frame/startup and LOW +1 ms limits');

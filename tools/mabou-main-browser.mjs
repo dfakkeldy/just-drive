@@ -13,6 +13,57 @@ const CEILING={desktop:{triangles:20400,meshes:10},low:{triangles:10500,meshes:6
 // The car goes to the west end of the street, then to the east end: each cluster must merge there.
 const STOPS={west:[624420,5103352,238],east:[624860,5103568,250]};
 const [out,...urls]=process.argv.slice(2);
+// The camera drone keeps over the roofs that are drawn (drone.ts roofHeights for the surveyed boxes, MabouMain.roofAt
+// for the hand-built street), not over the surveyed boxes the street replaces. A ray straight down through the drawn
+// meshes is the truth: the lookup is never under it on any footprint, and a real flight held down over the hall (whose
+// drawn roof is 3.6 m over its old box, and whose road wall stands 2.5 m nearer the road) stays over it; where the old
+// hall box stood but nothing is drawn now, the drone goes down past the old roof. Pictures: drone-hall-<view>.png.
+const DRONE_FOOT=0.106*1.4,EXAG=1.5,SEA=-0.2;
+async function droneFloor(page,name){
+ const key=async(code,down)=>page.send('Input.dispatchKeyEvent',{type:down?'keyDown':'keyUp',code,key:code==='ShiftLeft'?'Shift':code.slice(3).toLowerCase(),windowsVirtualKeyCode:code==='ShiftLeft'?16:code.charCodeAt(3)});
+ const hold=async(code,ms)=>{await key(code,true);await sleep(ms);await key(code,false);};
+ // Ray straight down at (x, z) through every drawn street mesh: the highest surface, or null.
+ await page.read(`window.qaHit=(x,z)=>{let top=null;mmm.mabouMain.group.traverse(o=>{if(!o.isMesh||!o.visible)return;const p=o.geometry.attributes.position;
+  for(let i=0;i+2<p.count;i+=3){const ax=p.getX(i),az=p.getZ(i),bx=p.getX(i+1),bz=p.getZ(i+1),cx=p.getX(i+2),cz=p.getZ(i+2),d=(bz-cz)*(ax-cx)+(cx-bx)*(az-cz);if(Math.abs(d)<1e-9)continue;
+   const u=((bz-cz)*(x-cx)+(cx-bx)*(z-cz))/d,v=((cz-az)*(x-cx)+(ax-cx)*(z-cz))/d,w=1-u-v;if(u<0||v<0||w<0)continue;const y=u*p.getY(i)+v*p.getY(i+1)+w*p.getY(i+2);if(top===null||y>top)top=y;}});return top;};true`);
+ // Every footprint: the centre and four points halfway to its corners.
+ const probes=JSON.parse(await page.read(`(async()=>{const m=mmm.mabouMain,[VE,VN]=m.site.village,out=[],{MAIN_PLACES}=await import('/src/mabou-main-site.ts');
+  for(const [name,p] of Object.entries(MAIN_PLACES))for(const r of p.rects)for(const [fx,fz] of [[.5,.5],[.25,.25],[.75,.25],[.25,.75],[.75,.75]]){
+   const lx=r[0]+(r[1]-r[0])*fx,lz=r[2]+(r[3]-r[2])*fz,a=p.az*Math.PI/180,e=p.e+lx*Math.sin(a)+lz*Math.cos(a),n=p.n+lx*Math.cos(a)-lz*Math.sin(a),x=e-VE,z=VN-n;
+   let near=-Infinity;for(let dx=-1;dx<=1;dx+=.5)for(let dz=-1;dz<=1;dz+=.5)near=Math.max(near,qaHit(x+dx,z+dz)??-Infinity);
+   out.push({name,x,z,hit:qaHit(x,z),near,roof:m.roofAt(x,z)});}
+  return JSON.stringify(out);})()`));
+ const under=probes.filter(q=>q.hit===null||q.roof===null||q.roof<q.hit-0.01);
+ assert.deepEqual(under,[],'the drone lookup is never under a drawn main street roof');
+ // The lookup counts a footprint a metre larger all round, so the highest drawn surface within a metre bounds it.
+ const over=probes.filter(q=>q.roof-q.near>5.5);
+ assert.deepEqual(over,[],'the drone lookup does not clear a roof that is not drawn (at most a ridge and chimney over the probe)');
+ // The old hall box (EXAG 1.5, sea -0.2, as main.ts) and a point under it that no drawn roof covers now.
+ const old=JSON.parse(await page.read(`(async()=>{const list=(await (await fetch('/terrain/buildings.json')).json()).buildings,m=mmm.mabouMain,[VE,VN]=m.site.village;
+  const b=list.find(b=>Math.hypot(b.x-624457.41,b.y-5103331.6)<6&&(b.buildingId??b.id)===b.id);if(!b)return 'null';
+  const top=(${SEA})+(b.ground-(${SEA}))*${EXAG}+Math.max(b.ridge,b.eave),a=b.axisDeg*Math.PI/180,ux=Math.sin(a),uz=-Math.cos(a);let free=null;
+  for(let u=-b.length/2+1;u<b.length/2-1&&!free;u+=0.5)for(let v=-b.width/2+1;v<b.width/2-1&&!free;v+=0.5){const x=b.x-VE+u*ux-v*uz,z=VN-b.y+u*uz+v*ux,s=mmm.terrain.surfaceAt(x,z);
+   if(!s||s.canopy>0||top-s.ground<4)continue;let near=false;for(let dx=-1;dx<=1&&!near;dx+=0.5)for(let dz=-1;dz<=1&&!near;dz+=0.5)near=m.roofAt(x+dx,z+dz)>-Infinity;
+   if(!near)free={x,z,ground:s.ground};}
+  return JSON.stringify({top,free});})()`));
+ assert.ok(old&&old.free,'a point under the old hall box with no drawn roof');
+ const hall=probes.find(q=>q.name==='hall');
+ // Fly: F lifts the drone off the car; it is set 10 m over the hall's middle and held down onto the drawn roof.
+ await hold('KeyF',60);
+ for(let i=0;i<40&&!await page.read('mmm.drone.active');i++)await sleep(100);
+ assert.ok(await page.read('mmm.drone.active'),'F launches the drone');
+ const fly=async(q,y,ms)=>{await page.read(`Object.assign(mmm.drone.state,{x:${q.x},z:${q.z},y:${y},vx:0,vy:0,vz:0});mmm.drone.pitch=-0.75;true`);await hold('ShiftLeft',ms);await sleep(300);return page.read('mmm.drone.state.y');};
+ const overHall=await fly(hall,hall.hit+10,5000)-DRONE_FOOT;
+ await sleep(600);await page.shot(`${evidence??out}/drone-hall-${name}.png`);
+ const overGone=await fly(old.free,old.top+3,5000)-DRONE_FOOT;
+ await hold('KeyF',60);
+ const result={hallRoof:+hall.hit.toFixed(2),hallOldTop:+old.top.toFixed(2),overHall:+overHall.toFixed(2),goneGround:+old.free.ground.toFixed(2),overGone:+overGone.toFixed(2),probes:probes.length};
+ console.log(name,'drone',JSON.stringify(result));
+ assert.ok(overHall<=hall.hit+4,`held down, the drone comes down to the hall roof's clearance: skids ${overHall.toFixed(2)}, roof ${hall.hit.toFixed(2)}`);
+ assert.ok(overHall>=hall.hit+0.4,`held down over the hall, the drone stays over its drawn roof: skids ${overHall.toFixed(2)}, roof ${hall.hit.toFixed(2)}`);
+ assert.ok(overGone<=old.top-1,`where the old hall box stood the drone goes below its old roof: skids ${overGone.toFixed(2)}, old top ${old.top.toFixed(2)}`);
+ return result;
+}
 // Numbers and pictures go to $MMM_CHECK_OUT/evidence/mabou-main-browser/, which check-all keeps after a pass.
 const evidence=process.env.MMM_CHECK_OUT?join(process.env.MMM_CHECK_OUT,'evidence','mabou-main-browser'):null;
 if(evidence)mkdirSync(evidence,{recursive:true});
@@ -56,6 +107,7 @@ for(const url of urls){
     try{for(const solid of s.solids.filter((_,i)=>i%5===0)){const x=solid.x+Math.sin(solid.heading)*solid.half*.85,z=solid.z-Math.cos(solid.heading)*solid.half*.85;Object.assign(v,{x,z,vx:0,vz:0,speed:0});mmm.mabouMain.resolveSolids(v);if(Math.hypot(v.x-x,v.z-z)<.1)throw Error('a Mabou main street solid did not block the vehicle');tested++;}}
     finally{Object.assign(v,saved);}return tested;})()`);
    assert.ok(contacts>=15);
+   if(level==='desktop')Object.assign(state,{drone:await droneFloor(page,name)});
    console.log(name,JSON.stringify({...state,contacts}));
    if(level==='desktop')writeFileSync(`${out}/desktop.json`,JSON.stringify(state));
    if(evidence)writeFileSync(join(evidence,`${name}.json`),JSON.stringify({...state,contacts},null,1));

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {open,sleep} from './cdp.mjs';
 // Measured on apple-check-host (17 Nov 2026): all five groups about 47,000 triangles in 19 meshes on desktop, 35,000 on LOW (the
-// parked vehicles are instanced and counted apart). About 20 % headroom; raise only with new pictures and a reason.
+// parked vehicles, instanced on desktop and baked on LOW, are counted apart). About 20 % headroom; raise only with new pictures and a reason.
 const CEILING={desktop:{triangles:56000,meshes:24},low:{triangles:42000,meshes:24}};
 // Poses on the road: a map point (snapped to the nearest carriageway) and the azimuth the car faces.
 const POSES=[
@@ -59,8 +59,10 @@ for(const url of urls){
   }
   if(!before){
    const state=await page.read(`(()=>{const h=mmm.hawkesbury,groups={};let meshes=0,triangles=0,cars=0;
-    for(const [n,b] of h.built){let m=0,t=0;b.group.traverse(o=>{if(o.isMesh&&!o.isInstancedMesh){m++;t+=o.geometry.attributes.position.count/3;}});const c=b.parked.list.length;groups[n]={meshes:m,triangles:t,cars:c,solids:b.solids.length,lines:Object.values(b.layouts).reduce((s,l)=>s+l.lines.length,0)};meshes+=m;triangles+=t;cars+=c;}
-    return {groups,meshes,triangles,cars,counted:h.triangles,keepers:h.group.children.filter(c=>c.isMesh).length,solids:h.site.solids.length};})()`);
+    for(const [n,b] of h.built){const m=b.meshes,t=b.triangles,c=b.cars.length;groups[n]={meshes:m,triangles:t,cars:c,solids:b.solids.length,lines:Object.values(b.layouts).reduce((s,l)=>s+l.lines.length,0)};meshes+=m;triangles+=t;cars+=c;}
+    // What is drawn: the clusters' shared meshes (a pattern, the paint, LOW's baked vehicles; desktop's instanced types).
+    const drawn=[];h.group.traverse(o=>{if(o.isMesh&&o.visible&&o.parent.visible)drawn.push({name:o.name,instanced:!!o.isInstancedMesh,count:o.isInstancedMesh?o.count:1,map:!!o.material.map,triangles:o.geometry.attributes.position?.count/3||0});});
+    return {groups,meshes,triangles,cars,counted:h.triangles,keepers:h.group.children.filter(c=>c.isMesh&&c.name.startsWith('ph-keeper')).length,solids:h.site.solids.length,drawn};})()`);
    console.log(name,'measured',JSON.stringify(state));
    const c=CEILING[level];
    assert.deepEqual(Object.keys(state.groups).sort(),[...GROUPS].sort());
@@ -68,6 +70,13 @@ for(const url of urls){
    assert.ok(state.triangles<=c.triangles,`${level} triangles ${state.triangles} > ${c.triangles}`);
    assert.ok(state.meshes<=c.meshes,`${level} meshes ${state.meshes}`);
    assert.equal(state.counted,state.triangles);assert.equal(state.keepers,0,'the shader keepers go once their materials are in use');
+   // Built groups share their cluster's meshes: two clusters, each at most one mesh per pattern, the paint and the vehicles.
+   const plain=state.drawn.filter(d=>!d.instanced);
+   assert.ok(plain.length<=(level==='low'?6:12),`${level}: ${plain.length} shared meshes drawn ${JSON.stringify(plain.map(d=>d.name))}`);
+   assert.ok(plain.every(d=>d.triangles>0),'no empty mesh is drawn');
+   if(level==='low'){assert.ok(state.drawn.every(d=>!d.instanced&&!d.map),'LOW draws no textures and no instanced vehicles');
+    assert.ok(state.drawn.some(d=>d.name.endsWith('-vehicles')&&d.triangles>0),'LOW draws its baked vehicles');}
+   else assert.ok(state.drawn.some(d=>d.instanced&&d.count>0),'desktop draws its instanced vehicles');
    assert.ok(Object.values(state.groups).reduce((n,g)=>n+g.solids,0)>=40,'lot poles and corrals are solid');
    if(level==='low'){const desktop=JSON.parse(readFileSync(`${out}/desktop.json`,'utf8'));
     for(const g of GROUPS){assert.ok(state.groups[g].triangles<desktop.groups[g].triangles,`${g}: LOW is simpler`);assert.ok(state.groups[g].cars<=desktop.groups[g].cars,`${g}: LOW parks fewer`);}}
@@ -82,9 +91,9 @@ for(const url of urls){
     // Only solids with room round them: a car dropped on a pole between two parked cars is pushed both ways and may not
     // move at all, which says nothing about the wiring.
     // (The site's own solids are strips of one wall each and push the same way; they are all kept.)
-    const lotted=[...h.built.values()].flatMap(b=>[...b.solids,...b.parked.solids]);
+    const lotted=[...h.built.values()].flatMap(b=>[...b.solids,...b.parkedSolids]);
     const alone=t=>lotted.every(o=>o===t||Math.hypot(o.x-t.x,o.z-t.z)>o.half+t.half+4.5);
-    const all=[...s.solids.filter((_,i)=>i%4===0),...[...h.built.values()].flatMap(b=>[...b.solids.filter((_,i)=>i%3===0),...b.parked.solids.filter((_,i)=>i%25===0)]).filter(alone)];
+    const all=[...s.solids.filter((_,i)=>i%4===0),...[...h.built.values()].flatMap(b=>[...b.solids.filter((_,i)=>i%3===0),...b.parkedSolids.filter((_,i)=>i%25===0)]).filter(alone)];
     try{for(const solid of all){const x=solid.x+Math.sin(solid.heading)*solid.half*.8,z=solid.z-Math.cos(solid.heading)*solid.half*.8;Object.assign(v,{x,z,vx:0,vz:0,speed:0});h.resolveSolids(v);if(Math.hypot(v.x-x,v.z-z)<.1)throw Error('a Port Hawkesbury solid did not block the vehicle at '+x+','+z);tested++;}}
     finally{Object.assign(v,saved);}return tested;})()`);
    assert.ok(contacts>=15,`contacts ${contacts}`);

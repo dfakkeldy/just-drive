@@ -64,11 +64,11 @@ export function spy(source, ending = false, dev = true, absent = false, override
     // An open pause gate keeps the old clock: dt from `last`, simulation time equal to the frame's time.
     pause: { blocked: false, time: 0, frame(now) { const dt = Math.max(0, (now - context.last) / 1000); context.last = now; this.time = now; return { paused: false, dt }; } },
   };
-  for (const name of ['deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'roads', 'edge', 'mineSite', 'roadScene', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections']) context[name] = update(name);
+  for (const name of ['deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'roads', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections']) context[name] = update(name);
   context.stuntPark=null;
   context.roadScene.setPaused = trace('roadScene.pause');
   context.waterReflections.settle = trace('water.settle'); context.waterReflections.afterRender = trace('water.afterRender');
-  if (absent) for (const name of ['stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections', 'fishing']) context[name] = null;
+  if (absent) for (const name of ['stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections', 'fishing']) context[name] = null;
   if (typeof overrides === 'function') overrides(context, trace);
   else Object.assign(context, overrides);
   if (source.includes('devHooks.')) {
@@ -111,7 +111,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
     world('trees', '@terrain.drawnFine', '@camera.position'), call('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
     call('placesUI', '@vehicle', playing), call('journey', .05, playing), call('relief', dt, playing ? 6 : 0, '@vehicle', playing),
     call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars'), call('radio', playing, false),
-    world('history', '@camera.position', dt), world('roads', '@camera.position'), world('edge', '@camera.position'), world('mineSite', '@camera.position'),
+    world('history', '@camera.position', dt), world('roads', '@camera.position'), world('sidewalks'), world('edge', '@camera.position'), world('mineSite', '@camera.position'),
     world('deckhand', dt, '@vehicle', '@camera.position'), world('fishing', dt, '@camera.position'), world('roadScene', '@camera'), world('schoolBus', '@camera'), world('ambientTraffic', '@camera', '@vehicle', true), world('roadAnimals', dt, '@vehicle', true), world('props', '@camera', dt), call('shift', started ? .05 : 0, '@vehicle'),
     ...(!fly ? [call('shadowFocus', 3, 4, 5), call('sunShadows', .05, '@shadowFocus', 0, paused)] : []),
     world('grass', .05, '@camera', 3, 5, .7, '@vehicleSpec'), call('clipping', !absent), call('multiplayer', .05, '@camera', dt > 0 && !fly),
@@ -124,11 +124,11 @@ export function expectedEnding({ absent = false } = {}) {
     call('quality', .05, true), call('roadScene.pause', true), call('endings', .05), call('pad.show', false), call('radio', false, true),
     call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), world('trees', '@terrain.drawnFine', '@camera.position'),
     world('coast', '@camera.position'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'), world('landmarks', '@camera'), world('roads', '@camera.position'),
-    world('props', '@camera', 0), world('fishing', 0, '@camera.position'), call('clipping', !absent), world('mirror', '@camera'),
+    world('props', '@camera', 0), world('sidewalks'), world('fishing', 0, '@camera.position'), call('clipping', !absent), world('mirror', '@camera'),
     call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'), call('raf', '@function'),
   ];
 }
-const optional = new Set('deckhand yard yardDog home porch porchDog church village hawkesbury mabouMain stockpiles cemeteries trees coast airport quarry culvertMouths landmarks history edge mineSite roadScene schoolBus ambientTraffic roadAnimals roadScene.pause props grass waterReflections water.settle water.afterRender fishing'.split(' '));
+const optional = new Set('deckhand yard yardDog home porch porchDog church village hawkesbury mabouMain stockpiles cemeteries trees coast airport quarry culvertMouths landmarks history sidewalks edge mineSite roadScene schoolBus ambientTraffic roadAnimals roadScene.pause props grass waterReflections water.settle water.afterRender fishing'.split(' '));
 function normalized(values, ctx) {
   return JSON.parse(JSON.stringify(values, (_key, value) => {
     for (const [name, object] of Object.entries(ctx)) if (value === object && typeof object === 'object' && object !== null) return '@' + name;
