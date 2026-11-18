@@ -3,6 +3,7 @@
 Makes the talk station's source audio from tools/radio-talk/scripts.md with ElevenLabs stock voices.
 
     ELEVENLABS_KEY_FILE=/path/to/key python3 tools/radio-talk/make_talk.py [stem ...]
+    python3 tools/radio-talk/make_talk.py --move-line-times <stem> [seconds]     # changes only the take's record: see move_line_times()
 
 No stem means every segment. A segment whose raw voice file exists is not generated again (delete the raw
 file to make a new take). The key is read from the named file and is never written anywhere.
@@ -68,6 +69,10 @@ VOICES = {
 # 16 Nov 2026; speech-to-text wrote the same word for the good and the bad ones). He chose "Mawboo" from four spellings.
 # The button names are in capitals on the screen and in the script; a voice may spell capitals out letter by letter.
 SAY = {'Judique': 'Joodick', 'Mabou': 'Mawboo', 'RESET': 'reset', 'VIEW': 'view', 'GO': 'go'}
+# A spelling is right for a voice, not for every voice. The two British stock voices here say "Mawboo" as "MOR-boo"
+# (speech-to-text wrote "Morbu", 17 Nov 2026) and "Mahboo" with the h. From "Marboo" they say "MAH-boo", with no r:
+# speech-to-text writes "Mabu", and the vowel measures as "ah" (formants near 740 and 1170 Hz for both voices).
+SAY_FOR = {'BERNADETTE': {'Mabou': 'Marboo'}, 'MALCOLM': {'Mabou': 'Marboo'}}
 STUDIO = {'EFFIE', 'ANNOUNCER', 'DEVELOPER'}          # everyone else is on the telephone
 PHONE = 'highpass=f=380,lowpass=f=3100'
 # Song clips for the station promos: title in the script -> (source stem in data/audio/src, start second).
@@ -181,9 +186,10 @@ def song(title: str) -> str:
     return found.pop()
 
 
-def say(text: str) -> str:
-    """The text as it is sent to the voice: place names in their phonetic spelling."""
-    return re.sub('|'.join(rf'\b{re.escape(name)}\b' for name in SAY), lambda m: SAY[m.group()], text)
+def say(text: str, speaker: str = '') -> str:
+    """The text as it is sent to this speaker's voice: place names in their phonetic spelling (SAY, then SAY_FOR)."""
+    table = {**SAY, **SAY_FOR.get(speaker, {})}
+    return re.sub('|'.join(rf'\b{re.escape(name)}\b' for name in table), lambda m: table[m.group()], text)
 
 
 def sfx_file(note: str) -> pathlib.Path:
@@ -200,7 +206,7 @@ def voice(stem: str, says: list) -> tuple:
     """The raw voice of one segment and its record. One dialogue request, so the speakers answer each other."""
     raw, record = MAKE / f'{stem}.voice.mp3', MAKE / f'{stem}.json'
     if not (raw.exists() and record.exists()):
-        inputs = [{'text': say(text), 'voice_id': VOICES[speaker][0]} for _, speaker, text in says]
+        inputs = [{'text': say(text, speaker), 'voice_id': VOICES[speaker][0]} for _, speaker, text in says]
         body, request_id = call('/text-to-dialogue/with-timestamps?output_format=mp3_44100_192', {'model_id': MODEL, 'inputs': inputs})
         got = json.loads(body)
         raw.write_bytes(base64.b64decode(got['audio_base64']))
@@ -208,7 +214,7 @@ def voice(stem: str, says: list) -> tuple:
             'stem': stem, 'date': datetime.date.today().isoformat(), 'tool': 'ElevenLabs text-to-dialogue', 'model': MODEL,
             'request_id': request_id, 'characters': sum(len(i['text']) for i in inputs),
             'voices': sorted({f'{VOICES[s][1]} ({VOICES[s][0]}, premade) as {s.title()}' for _, s, _ in says}),
-            'lines': [{'speaker': s, 'text': t, **({'sent': say(t)} if say(t) != t else {})} for _, s, t in says],
+            'lines': [{'speaker': s, 'text': t, **({'sent': say(t, s)} if say(t, s) != t else {})} for _, s, t in says],
             'voice_segments': got['voice_segments'], 'alignment': got.get('alignment'), 'voice_sha256': sha(raw)}, indent=1) + '\n')
         print(f'  voice: {raw.name}, {seconds(raw):.1f} s')
     return raw, json.loads(record.read_text())
@@ -221,6 +227,98 @@ def spans(record: dict) -> list:
         a, b = out.get(s['dialogue_input_index'], (s['start_time_seconds'], s['end_time_seconds']))
         out[s['dialogue_input_index']] = (min(a, s['start_time_seconds']), max(b, s['end_time_seconds']))
     return [out[i] for i in range(len(record['lines']))]
+
+
+REACH = 0.7   # seconds: how far back snapped() looks for the pause before a line
+
+
+def drift(changes: list, gaps: list, total: float) -> float:
+    """
+    An estimate, for a take that check_talk.py has shown wrong: the seconds to add to its line times when they are
+    all early (or late) by about one amount, else 0.0. `changes` are the times where one line ends and the next
+    starts; `gaps` are the pauses in the audio; `total` is its length.
+    ElevenLabs gave one take line times about a second early (talk-call-mother, 17 Nov 2026): 2 of its 16 changes were
+    in a pause, and 13 were with one second added. snapped() cannot repair that: it reaches REACH seconds back and a
+    third of that forward.
+    NOTHING CALLS THIS FOR A TAKE THAT IS RIGHT, and nothing may: the pauses alone cannot tell an early take from a
+    good take whose lines each have a pause about a second after their start (snapped() places each change by its own
+    pause; this looks for one shift for all). Only the words can tell (check_talk.py). See moved() and move_line_times().
+    The shifts are tried in 0.05 s steps to 1.5 s each way; a change counts when it lies in a pause of 0.2 s or more.
+    The answer is 0.0 unless all of this is true:
+      - the take has 6 changes or more;
+      - the best shift is outside what snapped() reaches, and it puts three quarters of the changes or more in a pause;
+      - it puts at least twice as many changes in a pause as the best shift inside snapped()'s reach does;
+      - the shifts that are equally good are next to each other (two separate answers are no answer);
+      - with it, every change stays inside the audio.
+    """
+    wide = [g for g in gaps if g[1] - g[0] >= 0.2 - 1e-9]   # 1.0 - 0.8 is a little less than 0.2
+    if len(changes) < 6:
+        return 0.0
+    count = {n: sum(any(a <= c + n / 20 <= b for a, b in wide) for c in changes) for n in range(-30, 31)}
+    reach = [n for n in count if -REACH * 20 <= n <= REACH * 20 / 3]
+    near = max(count[n] for n in reach)
+    most = max(count[n] for n in count if n not in reach)
+    best = [n for n in count if n not in reach and count[n] == most]
+    if most * 4 < len(changes) * 3 or most < 2 * near or best[-1] - best[0] != len(best) - 1:
+        return 0.0
+    d = best[len(best) // 2] / 20   # the middle of the shifts that are equally good
+    return d if all(0.0 < c + d < total for c in changes) else 0.0
+
+
+def settled(record: dict, add: float, total: float) -> dict:
+    """The record with its line times moved by `add` seconds, and the amount noted as 'line_times_moved'. No time
+    leaves the audio (0 to `total`). The character times stay as ElevenLabs gave them."""
+    at = lambda t: min(max(t + add, 0.0), total)
+    moved = [{**s, 'start_time_seconds': at(s['start_time_seconds']), 'end_time_seconds': at(s['end_time_seconds'])}
+             for s in record['voice_segments']]
+    return {**record, 'voice_segments': moved, 'line_times_moved': add}
+
+
+def moved(record: dict, amount, gaps: list, total: float) -> dict:
+    """
+    The record of a take with its line times moved (see drift): by `amount` seconds, or by drift()'s estimate when
+    `amount` is None. 'line_times_moved' notes the amount. The new record names no finished file ('final_sha256' and
+    'final_seconds' are gone): the segment must be built again. Raises ValueError, with the reason, for a record
+    that was moved before or has one line, an amount that is 0 or not a number, an amount that puts a line change
+    outside the audio, and a take for which drift() has no clear answer. The record that was given is not changed.
+    """
+    import math
+    if 'line_times_moved' in record:
+        raise ValueError(f'the line times were moved before, by {record["line_times_moved"]} s')
+    changes = [b for _, b in spans(record)[:-1]]
+    if not changes:
+        raise ValueError('a take of one line has no change of line to move')
+    add = drift(changes, gaps, total) if amount is None else amount
+    if amount is None and not add:
+        raise ValueError('no clear shift for the line times (name the seconds to try one)')
+    if not math.isfinite(add) or not add:
+        raise ValueError('the seconds must be a number, and not 0')
+    if not all(0.0 < c + add < total for c in changes):
+        raise ValueError(f'{add:+} s puts a line change outside the audio')
+    return {k: v for k, v in settled(record, add, total).items() if k not in ('final_sha256', 'final_seconds')}
+
+
+def move_line_times(stem: str, amount: str = '') -> int:
+    """
+    The maker's command for a take whose line times are all early or late (see drift). It changes one file, the
+    take's record: see moved(). It makes no audio and calls no service. Use it only when check_talk.py shows the
+    fault (most lines are heard with the end of the line before, or without their own end). Then build the segment
+    again (make_talk.py <stem>) and run check_talk.py again: the move is right only if every line is then heard as
+    written. A refusal changes nothing.
+    """
+    path, raw = MAKE / f'{stem}.json', MAKE / f'{stem}.voice.mp3'
+    if not (path.exists() and raw.exists()):
+        raise SystemExit(f'{stem}: no record and raw voice in {MAKE}; nothing is changed')
+    try:
+        new = moved(json.loads(path.read_text()), float(amount) if amount else None, pauses(raw), seconds(raw))
+    except ValueError as error:
+        raise SystemExit(f'{stem}: {error}; nothing is changed')
+    whole = path.with_name(path.name + '.new')   # the record is replaced in one step
+    whole.write_text(json.dumps(new, indent=1) + '\n')
+    whole.replace(path)
+    print(f'{stem}: line times moved by {new["line_times_moved"]:+} s in its record. Now build the segment again:\n'
+          f'    make_talk.py {stem}\nand then run check_talk.py {stem}')
+    return 0
 
 
 def quiet_spans(x, rate: int = 16000, floor: float = -38.0, least: float = 0.06) -> list:
@@ -256,7 +354,6 @@ def snapped(lines: list, gaps: list, total: float) -> list:
     audio and the last line ends with it (`total`), so a word before a late first time or after an early last time
     is still inside its line.
     """
-    REACH = 0.7
     changes = [lines[i][1] for i in range(len(lines) - 1)]
     def far(t, gap):
         return 0.0 if gap[0] <= t <= gap[1] else t - gap[1] if gap[1] < t else 3 * (gap[0] - t)
@@ -388,6 +485,12 @@ def make(stem: str, items: list, work: pathlib.Path) -> None:
 
 def main() -> int:
     import tempfile
+    if '--move-line-times' in sys.argv[2:]:
+        raise SystemExit('use: make_talk.py --move-line-times <stem> [seconds]  (the option comes first)')
+    if sys.argv[1:2] == ['--move-line-times']:
+        if len(sys.argv) not in (3, 4):
+            raise SystemExit('use: make_talk.py --move-line-times <stem> [seconds]')
+        return move_line_times(*sys.argv[2:])
     MAKE.mkdir(parents=True, exist_ok=True)
     FINAL.mkdir(parents=True, exist_ok=True)
     every = segments()
