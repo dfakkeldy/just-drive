@@ -1,3 +1,4 @@
+import{untoned}from'../finish-shaders';
 import * as THREE from 'three';
 import {Mesher}from'../yard-kit';import{periodProfile}from'./history-art';import{siteHash,type PeriodSite}from'./history-sites';
 interface Owner{site:PeriodSite;node:THREE.Group;active:boolean;ready:boolean}
@@ -10,10 +11,10 @@ export class HistoryEffects{
   for(const owner of owners)if(owner.site.kind==='forge'){
    const p=periodProfile(owner.site),m=new Mesher();
    for(let i=0;i<3;i++){const x=(i-1)*.23;m.tri(x-.18,0,0,x+.18,0,0,x+.05,.42+i*.09,0,[1,.34+i*.14,.035]);m.tri(x-.13,0,.012,x+.13,0,.012,x-.02,.24+i*.06,.012,[1,.75,.15]);}
-   const material=new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide,toneMapped:false});const mesh=new THREE.Mesh(m.geometry(),material);mesh.position.set(0,.74,p.length/2+.46);owner.node.add(mesh);
+   const material=untoned(new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide,toneMapped:false}));const mesh=new THREE.Mesh(m.geometry(),material);mesh.position.set(0,.74,p.length/2+.46);owner.node.add(mesh);
    this.fires.push({owner,mesh,material,phase:siteHash(owner.site.id)*10,profile:p});
   }
-  const smokeMaterial=new THREE.MeshBasicMaterial({color:0x8f8d85,transparent:true,opacity:.16,depthWrite:false,toneMapped:false});
+  const smokeMaterial=untoned(new THREE.MeshBasicMaterial({color:0x8f8d85,transparent:true,opacity:.16,depthWrite:false,toneMapped:false}));
   this.smoke=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,0),smokeMaterial,this.fires.length*3);this.smoke.frustumCulled=false;this.group.add(this.smoke);
  }
  update(dt:number):void{

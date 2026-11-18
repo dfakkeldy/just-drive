@@ -24,7 +24,9 @@ async function open(query, dpr = 1) {
     const [width, height] = JSON.parse(await read('JSON.stringify([innerWidth, innerHeight])'));
     await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: dpr, mobile: false });
   }
-  await send('Page.navigate', { url: `${base}/?hud=0&${query}` });
+  // finish=0: this check counts every draw into a picture as a mirror draw, and the finish pass (finish.ts) draws the
+  // world into a picture of its own. The mirror itself is the same with the pass.
+  await send('Page.navigate', { url: `${base}/?hud=0&finish=0&${query}` });
   let settled = false;
   // Startup deadline only: allow other threads to use this Mac's GPU. No timing threshold is relaxed.
   for (let i = 0; i < 400; i++) { await sleep(300); if ((await read('document.title')).startsWith('settled')) { settled = true; break; } }

@@ -59,6 +59,8 @@ export function spy(source, ending = false, dev = true, absent = false, override
     pendingShot: null, mailRequested: false, photoRequested: false, touchDevice: false, bare: true,
     flySpeed: 20, SHOTS: [], AREA: {}, EXAG: 1.5,
     requestAnimationFrame: trace('raf'),
+    // The old picture, straight to the screen (finish-choice.ts): the fixture's page is at low detail.
+    FINISH: { low: true, mode: null, clouds: false, canvasSamples: false, samples: undefined, oneSample: false, offered: false },
     // The instant replay records without spy calls, so the established call orders stay as they were.
     replay: { active: false, record() {}, frame() {}, afterRender() {} }, quietGround: () => false,
     // An open pause gate keeps the old clock: dt from `last`, simulation time equal to the frame's time.
