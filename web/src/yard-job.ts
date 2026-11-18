@@ -28,7 +28,7 @@ export class YardJob {
     const c = this.vehicle, s = this.yard.site, p = s.local(c.x, c.z);
     const ready = this.judge.step(dt, {
       along: SLIP_RAMP.u - p.u, across: p.v - SLIP_RAMP.v,
-      y: c.y, ground: this.terrain.heightAt(c.x, c.z), obstacleTop: this.yard.jumpTop,
+      y: c.y, ground: this.terrain.heightAt(c.x, c.z,c.y), obstacleTop: this.yard.jumpTop,
       deck: s.deckHeight(c.x, c.z), airborne: c.airborne, pitch: c.pitch, roll: c.roll, speed: c.speed,
       sideways: c.vx * Math.cos(c.heading) + c.vz * Math.sin(c.heading),
       contacts: this.yard.contacts, placement, eligible,
@@ -42,7 +42,7 @@ export class YardJob {
   private takeJob(): void {
     const car = this.vehicle, site = this.yard.site, camera = this.camera;
     const park = site.world(-105, -25);
-    car.place(park.x, park.z, site.heading(-1, 0)); car.vx = car.vz = car.speed = 0;
+    car.place(park.x, park.z, site.heading(-1, 0),car.y); car.vx = car.vz = car.speed = 0;
     if (car.car.beacon) car.car.beacon.visible = false;
     const from = camera.position.clone(), rotation = camera.quaternion.clone();
     const look = new THREE.Vector3(), eye = new THREE.Vector3(), turn = new THREE.PerspectiveCamera();

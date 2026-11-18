@@ -1,0 +1,4 @@
+{
+  "sha256": "907cae323b6cff9e3f2be410bfafce75f29fc616aeffcacb67cbdd53c51b518d",
+  "reason": "Contact-only bridge providers share the no-road texture. Small painted overlays reuse existing fields and allocate a new one only when at least two samples resolve the surface width. Unresolved distant overlays retain land colour; fine paint and terrain height maths are unchanged. Merging main 8866b76b (#85, the stunt kit: LOD-gated site grading, preserveRoads, ground caps, site style program) into #156: the pin is the hash of the merged maths; on main alone the same text hashes to #85's reviewed cb3ff8b3."
+}

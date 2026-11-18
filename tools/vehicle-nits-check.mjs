@@ -171,6 +171,12 @@ function numericState({ v, rig, terrain, roads }) {
     seen.add(v.meshProbe);
   }
   function walk(o, path) {
+    // Saved pose height is new bridge ownership metadata. Its behaviour is pinned by
+    // bridges-underdeck; omit only that extra field to preserve every pre-existing
+    // washboard/mixed physical value and all random-draw digests exactly.
+    if (/^vehicle\.(?:lastSafe|lastGood)\.y$|^vehicle\.(?:trail|roadTrail)\.\d+\.y$/.test(path)) { assert.ok(Number.isFinite(o), 'saved bridge pose height is finite'); return; }
+    // The retry reference height (bridge ownership for a stuck re-place) is the same kind of metadata.
+    if (path === 'vehicle.placeReference') { assert.ok(o === undefined || Number.isFinite(o), 'retry reference height is finite'); return; }
     if (typeof o === 'number') { assert.ok(Number.isFinite(o), `non-finite ${path}`); fields.push(path); values.push(o); }
     else if (o && typeof o === 'object' && !seen.has(o)) {
       seen.add(o);

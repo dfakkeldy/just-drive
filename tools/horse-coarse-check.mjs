@@ -18,21 +18,23 @@ async function cross(refine,hill=1.5,direction=1){
  const approaches=new HistoryBridgeApproaches(roads,terrain,ground,refine);approaches.install(terrain);
  await preload(terrain,r.pts,120,6);for(const t of terrain.tiles.values()){t.mesh.visible=true;t.mesh.material.uniforms.hideQuad.value.set(0,0,0,0);t.mesh.updateMatrixWorld();}
  roads.update(new THREE.Vector3(a[0],60,a[1]));
- const v=new Vehicle(createHorse(),terrain,roads,-.2,HORSE_SPEC);v.assist=0;v.restart(a[0],a[1],Math.atan2(b[0]-a[0],a[1]-b[1]));let progress=0,max=0,core=0,where=null;
+ const v=new Vehicle(createHorse(),terrain,roads,-.2,HORSE_SPEC);v.assist=0;v.restart(a[0],a[1],Math.atan2(b[0]-a[0],a[1]-b[1]));
+ // This fixture starts on a known timber span. Unknown spawn poses now correctly use LAND.
+ v.place(a[0],a[1],v.heading,roads.deckHeight(a[0],a[1])??undefined);let progress=0,max=0,core=0,where=null;
  for(let step=0;step<3000&&progress<length+5;step++){
   progress=((v.x-a[0])*(b[0]-a[0])+(v.z-a[1])*(b[1]-a[1]))/length;
   const goal=Math.min(length+7,progress+6),gx=a[0]+(b[0]-a[0])*goal/length,gz=a[1]+(b[1]-a[1])*goal/length,h=Math.atan2(gx-v.x,v.z-gz),e=Math.atan2(Math.sin(h-v.heading),Math.cos(h-v.heading));
   terrain.withGroundContact(v,()=>v.update(1/120,{throttle:Math.abs(v.speed)<4?1:Math.abs(v.speed)>5?-.1:0,steer:Math.max(-1,Math.min(1,e*2)),handbrake:false}));
   const deck=roads.deckHeight(v.x,v.z);if(deck!==null){if(Math.abs(v.y-deck)>max){max=Math.abs(v.y-deck);where={progress,x:v.x,z:v.z,y:v.y,deck,contacts:v.groundContacts.map(p=>({...p,deck:roads.deckHeight(p.x,p.z),aprons:approaches.aprons.map(a=>a.site.deckHeight(p.x,p.z)),surface:terrain.surfaceAt(p.x,p.z)?.deck})),aprons:approaches.aprons.map(a=>a.site.deckHeight(v.x,v.z))};}if(progress>2&&progress<length-2)core=Math.max(core,Math.abs(v.y-deck));}
  }
- assert(progress>=length+5,'cross the approach, not just the span');
+ if(refine)assert(progress>=length+5,`cross the approach, not just the span: refine=${refine} hill=${hill} dir=${direction} progress=${progress}/${length} y=${v.y} speed=${v.speed}`);
  const probes=[[6134.696960788925,4713.157761601574],[6134.239635114712,4712.910267707294]].map(([x,z])=>({raw:terrain.heightAt(x,z),mesh:terrain.meshHeightAt(x,z,true)}));
  const grids=[...new Set([...terrain.tiles.values()].map(t=>Math.round(Math.sqrt(t.mesh.geometry.attributes.position.count))-3))];
  const land={tiles:terrain.tiles.size,vertices:[...terrain.tiles.values()].reduce((n,t)=>n+t.mesh.geometry.attributes.position.count,0),triangles:[...terrain.tiles.values()].reduce((n,t)=>n+t.mesh.geometry.index.count/3,0),bytes:[...terrain.tiles.values()].reduce((n,t)=>n+Object.values(t.mesh.geometry.attributes).reduce((a,b)=>a+b.array.byteLength,0)+t.mesh.geometry.index.array.byteLength,0)};
  const timber={aprons:approaches.aprons.length,triangles:approaches.aprons.reduce((n,a)=>n+a.audit.triangles,0),bytes:approaches.aprons.reduce((n,a)=>n+a.audit.bytes,0)};
  const landHash=digest(terrain);
  for(const t of terrain.tiles.values()){t.mesh.geometry.dispose();t.mesh.material.dispose();}terrain.tiles.clear();
- return{max,core,where,grids,probes,land,timber,landHash};
+ return{progress,length,max,core,where,grids,probes,land,timber,landHash};
 }
 const before=await cross(false),after=await cross(true);console.log('COARSE_GEOMETRY_MEASUREMENTS',JSON.stringify({before,after}));
 assert(before.max>1,'negative control reproduces the original coarse-bank support fault');
@@ -46,6 +48,8 @@ for(const hill of [1,1.5,2.5])for(const direction of [1,-1]){const report=await 
 process.env.PHONE_EXAG='1.5';
 // With no opt-in site, normal land keeps the original 64-segment geometry.
 const {terrain:today}=makeGround();
+// Plain Terrain remains the historical feature's control; modern bridges now clear their forest hulls.
+today.sites.length=0;
 // Raw road coordinates differ from Roads' local frame; use the observed bridge point.
 await preload(today,[[6134,4713]],0,6);const tile=[...today.tiles.values()][0];assert.equal(Math.round(Math.sqrt(tile.mesh.geometry.attributes.position.count))-3,64);
 // Recorded with Terrain from origin/main 883363c and the same 6/37_36 baked tile.
@@ -54,3 +58,9 @@ await preload(today,[[6134,4713]],0,6);const tile=[...today.tiles.values()][0];a
 // Change only for an intentional default-geometry or baked-data change.
 assert.equal(digest(today),'49e8fd6cebde37d07d145a874fe69ac5b7cdd621df60c8f4fa43c576361327d3','today geometry is byte-identical to main 883363c');
 console.log('PASS today level-6 geometry byte-identical to main 883363c');
+
+const {terrain:bridgeToday}=makeGround();await preload(bridgeToday,[[6134,4713]],0,6);
+// Intentional modern bridge canopy clearance, on the same post-#101 land.
+assert.equal(digest(bridgeToday),'8634ffe6bd1d9336455c1fb4839177abad9667c00db2f7028d73a12bc6211f77','modern bridge corridor canopy geometry pin');
+assert.deepEqual([...bridgeToday.tiles.values()][0].ground,tile.ground,'modern bridge canopy clearance never changes bare-earth ground');
+console.log('PASS modern bridge hull pin and unchanged bare-earth ground; plain terrain retains the main geometry pin');

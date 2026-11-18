@@ -13,7 +13,7 @@ type ContactSite = { resolve(body: Body): void; allows?(body: ContactBody): bool
 export class AreaContacts implements WorldContacts {
   private epoch = 0;
   private readonly guards = new WeakMap<Vehicle, Vehicle['placementGuard']>();
-  private readonly placementHeights = new WeakMap<Vehicle, (pose: {x:number;z:number;heading:number}) => number|null>();
+  private readonly placementHeights = new WeakMap<Vehicle, (pose: {x:number;z:number;heading:number;y?:number}) => number|null>();
   get revision(): number {
     for (const row of this.sites) { const next = row.site.revision?.(); if (!Object.is(next, row.revision)) { row.revision = next; this.epoch++; } }
     return this.epoch;
@@ -26,11 +26,11 @@ export class AreaContacts implements WorldContacts {
     this.sites.push({ site, revision: site.revision?.() }); this.invalidate();
   }
   /** One idempotent placement seam uses the exact provider list used by driving and sweeps. */
-  bindVehicle(vehicle: Vehicle, placementHeight?: (pose: {x:number;z:number;heading:number}) => number|null): void {
+  bindVehicle(vehicle: Vehicle, placementHeight?: (pose: {x:number;z:number;heading:number;y?:number}) => number|null): void {
     if(placementHeight)this.placementHeights.set(vehicle,placementHeight);
     if (this.guards.has(vehicle) && this.guards.get(vehicle) === vehicle.placementGuard) return;
     const previous = vehicle.placementGuard;
-    const allows = (pose: { x: number; z: number; heading: number }) => {
+    const allows = (pose: { x: number; z: number; heading: number; y?: number }) => {
       const read=this.placementHeights.get(vehicle),y=read?read(pose):vehicle.y??0;
       return y!==null&&this.allows({ ...pose, y, spec: vehicle.spec });
     };

@@ -13,7 +13,8 @@ await build({stdin:{contents:`export {makeGround} from '${root}/tools/phone-grou
 await build({entryPoints:[root+'/tools/stunt-lod-check.mjs'],bundle:true,platform:'node',format:'esm',outfile:process.env.WORK+'/check.mjs',logLevel:'silent',plugins:process.env.STUNT_LOD_MUTANT?[{name:'ordinary-terrain-fault',setup(b){b.onLoad({filter:/[/\\]web[/\\]src[/\\]terrain\.ts$/},a=>{
   const source=readFileSync(a.path,'utf8'),anchor='ground[k] = g;';
   if(source.split(anchor).length!==2)throw Error('main-path mutant anchor must be unique');
-  return{contents:source.replace(anchor,'ground[k] = g + (sites.length===0 ? .1 : 0);'),loader:'ts'};
+  // Ordinary tiles: no stunt park (the only site with visualStyle). Not sites.length===0: a modern bridge site (#156) spans each area.
+  return{contents:source.replace(anchor,'ground[k] = g + (sites.some(s=>s.visualStyle) ? 0 : .1);'),loader:'ts'};
 });}}]:[]});
 JS
 STUNT_LOD_MAIN="$WORK/main.mjs" node --expose-gc "$WORK/check.mjs"

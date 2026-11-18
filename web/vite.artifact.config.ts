@@ -1,13 +1,27 @@
 import {quarryLazyBuild} from './quarry-lazy-build';
 import {eraShaderBuild} from './era-shader-build';
 import {modelsBuild} from './models-build';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+
+// The public/Artifact pack copies app.js, not Vite's separate worker assets.
+// Keep the normal URL worker for the dev server and Node source fixtures.
+function inlineRoadCutWorker(): Plugin {
+  const constructor = "new Worker(new URL('./road-cut-worker.ts',import.meta.url),{type:'module'})";
+  return {
+    name: 'inline-road-cut-worker', enforce: 'pre',
+    transform(source, id) {
+      if (!id.split('?')[0].endsWith('/src/road-cuts.ts')) return;
+      if (source.split(constructor).length !== 2) this.error('Bridge worker constructor changed; update flat-build packaging.');
+      return { code: "import FlatRoadCutWorker from './road-cut-worker?worker&inline';\n" + source.replace(constructor, 'new FlatRoadCutWorker()'), map: null };
+    },
+  };
+}
 
 // Build for a host that takes a page plus a flat set of files: one script, no copied tiles.
 // Output: ../data/pack/app.js   (the page is artifact/page.html, the tiles come from tools/pack_terrain.py)
 //         ../data/pack/models/*.glb   (the models of web/public/models, which this build does not copy)
 export default defineConfig({
-  plugins:[eraShaderBuild(),quarryLazyBuild(),modelsBuild()],
+  plugins:[eraShaderBuild(),quarryLazyBuild(),modelsBuild(),inlineRoadCutWorker()],
   base: './',
   publicDir: false,
   // "Drive with others" is part of the published script: this build is one file, so its code (about 20 kB) is

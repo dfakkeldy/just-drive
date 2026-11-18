@@ -46,6 +46,12 @@ const instrumentation = `(fixture => {
         };
       }
       if (!b.uploaded) {
+        // Count the cut pump AND deferred array-texture GL calls in the same frame.
+        // This game uses TEXTURE_2D_ARRAY only for bridge cut atlases.
+        b.cutMainFrame=0;b.cutMainMax=0;
+        const cuts=m.terrain.roadCuts,gl=r.getContext();
+        for(const name of ['step','update']){const call=cuts[name].bind(cuts);cuts[name]=(...args)=>{const start=performance.now();try{return call(...args);}finally{b.cutMainFrame+=performance.now()-start;}};}
+        for(const name of ['texStorage3D','texImage3D','texSubImage3D']){const call=gl[name].bind(gl);gl[name]=(...args)=>{if(args[0]!==gl.TEXTURE_2D_ARRAY)return call(...args);const start=performance.now();try{return call(...args);}finally{b.cutMainFrame+=performance.now()-start;}};}
         b.uploaded=new Set(); b.materials=new Set();
         b.textures=new Set();b.initialTextures=r.info.memory.textures;b.targets=new Set();
         const setTarget=r.setRenderTarget.bind(r);r.setRenderTarget=(target,...args)=>{if(target)b.targets.add(target);return setTarget(target,...args)};
@@ -66,6 +72,8 @@ const instrumentation = `(fixture => {
     callback(time);
     if (game) {
       const r = m.renderer;
+      b.cutMainMax=Math.max(b.cutMainMax,b.cutMainFrame);
+      b.cutMainFrame=0;
       r.getContext().finish();
       if (r.getContext().isContextLost()) throw Error('frame-budget: WebGL context lost');
       b.serial++;
@@ -89,7 +97,7 @@ async function openPage(scene, mode) {
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
   let serial = 0, requests = 0, ignoredDev = 0, ignoredOther = 0, cacheHits = 0, bytes = 0;
   const assets={terrain:0,areas:0,audio:0,models:0}, assetBytes={terrain:0,areas:0,audio:0,models:0}, assetIds=new Map();
-  const pending = new Map(), inflight = new Set(), errors = [];
+  const pending = new Map(), inflight = new Set(), inflightUrls=new Map(), errors = [];
   ws.onmessage = ({data}) => {
     const m = JSON.parse(data);
     if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); }
@@ -100,11 +108,13 @@ async function openPage(scene, mode) {
       if(cls) { requests++; assets[cls]++; assetIds.set(m.params.requestId,cls); }
       else if(/^\/(src\/|@|node_modules\/|\.vite\/)/.test(path)) ignoredDev++;
       else ignoredOther++;
-      inflight.add(m.params.requestId);
+      // Dedicated module-worker entry requests have no loadingFinished event on
+      // this page's CDP session. Their readiness is terrain.pending / worker audit.
+      if(!(path==='/src/road-cut-worker.ts'&&new URL(url).searchParams.has('worker_file'))){inflight.add(m.params.requestId);inflightUrls.set(m.params.requestId,url);}
     }
     if(m.method==='Network.requestServedFromCache') cacheHits++;
     if(m.method==='Network.loadingFinished'&&assetIds.has(m.params.requestId)) {bytes+=m.params.encodedDataLength;assetBytes[assetIds.get(m.params.requestId)]+=m.params.encodedDataLength;}
-    if (m.method === 'Network.loadingFinished' || m.method === 'Network.loadingFailed') inflight.delete(m.params.requestId);
+    if (m.method === 'Network.loadingFinished' || m.method === 'Network.loadingFailed') {inflight.delete(m.params.requestId);inflightUrls.delete(m.params.requestId);}
     if (m.method === 'Network.loadingFailed' && !m.params.canceled) errors.push(m.params.errorText);
     if (m.method === 'Network.responseReceived' && m.params.response.status >= 400) errors.push(`${m.params.response.status} ${m.params.response.url}`);
   };
@@ -146,7 +156,7 @@ async function openPage(scene, mode) {
       if (!inflight.size && await read(`document.title==='settled' && document.readyState==='complete' && !!window.mmm && ${scene.animal?"mmm.animals.residents.some(a=>a.kind==='bull'&&a.rig?.shoulder===1.12&&a.rig.hoofSoles?.length===4)&&mmm.animals.residents.some(a=>a.kind==='cow'&&a.rig&&a.herd.length===4)":'true'}`)) break;
       await sleep(200);
     }
-    assert.equal(await read('document.title'), 'settled', `${scene.id}/${mode.id}: load deadline`);
+    assert.equal(await read('document.title'), 'settled', `${scene.id}/${mode.id}: load deadline inflight=`+JSON.stringify([...inflightUrls.values()])+JSON.stringify(await read(`(()=>{const m=window.mmm,c=m?.terrain?.roadCuts;return {title:document.title,ready:!!m,pending:m?.terrain?.pending,cuts:c?.audit,job:c?.job?{id:c.job.id,workerSent:c.job.workerSent,result:c.job.result===undefined?'waiting':!!c.job.result}:null,queue:c?.queue?.size,rails:m?.roads?.guardrails?.audit}})()`)));
     if(scene.animal) assert.ok(await read("mmm.animals.residents.some(a=>a.kind==='bull'&&a.rig?.shoulder===1.12&&a.rig.hoofSoles?.length===4)&&mmm.animals.residents.some(a=>a.kind==='cow'&&a.rig&&a.herd.length===4)"),'animal home must finish building');
     if(scene.chase) await read(`(() => {
       const m=mmm,b=__budget,v=m.vehicle; b.start={x:v.x,z:v.z};
@@ -241,7 +251,7 @@ async function openPage(scene, mode) {
       };
       b.active = true;
     })()`);
-    const page = {send, read, close, url, errors, inflight, requestCount:() => requests, assetStats:()=>({...assets,ignoredDev,ignoredOther,cacheHits,assetBytes,bytes})};
+    const page = {send, read, close, url, errors, inflight,inflightUrls, requestCount:() => requests, assetStats:()=>({...assets,ignoredDev,ignoredOther,cacheHits,assetBytes,bytes})};
 
     return page;
   } catch (error) { await close(); throw error; }
@@ -271,7 +281,7 @@ async function sample(page) {
     }
     await sleep(250);
   }
-  throw Error('No stable pair of 30-frame post-settle windows: '+JSON.stringify(await page.read('__budget.rows.slice(-2)')));
+  throw Error('No stable pair of 30-frame post-settle windows: '+JSON.stringify({inflight:[...page.inflightUrls.values()],rows:await page.read('__budget.rows.slice(-2)')}));
 }
 export async function measure(scene, mode, mutation) {
   const started=Date.now();
@@ -293,6 +303,29 @@ export async function measure(scene, mode, mutation) {
     }
     // The mail rows are pinned on the Blender car. A page that fell back to the code car must fail, not be measured.
     if (variant && !variant.explore) await assertMailCar(page.read, 'blender', `${scene.id}/${variant.id}`);
+    if(process.env.FRAME_BUDGET_INVENTORY==='1') {
+      result.textureInventory=await page.read(`(() => {
+        const m=mmm,r=m.renderer,b=__budget,found=new Map(),blankRoads=[];
+        const add=(texture,owner)=>{
+          if(!texture?.isTexture)return;const gpu=r.properties.get(texture).__webglTexture;if(!gpu)return;
+          let item=found.get(gpu);if(!item){const im=Array.isArray(texture.image)?texture.image[0]:texture.image;
+            item={kind:texture.constructor.name,width:im?.width,height:im?.height,depth:im?.depth,type:texture.type,format:texture.format,owners:[],ownerCount:0};found.set(gpu,item);}
+          item.ownerCount++;if(item.owners.length<8&&!item.owners.includes(owner))item.owners.push(owner);
+        };
+        const value=(v,owner)=>{if(Array.isArray(v))for(const t of v)add(t,owner);else add(v,owner);};
+        const material=(mat,owner)=>{if(!mat)return;for(const[k,v]of Object.entries(mat))value(v,owner+'.'+k);
+          for(const uniforms of[mat.uniforms,r.properties.get(mat).uniforms])if(uniforms)for(const[k,u]of Object.entries(uniforms))value(u?.value,owner+'.'+k);};
+        b.scene.traverse(o=>{for(const mat of(Array.isArray(o.material)?o.material:[o.material]))material(mat,o.name||o.type);});
+        for(const t of m.terrain.tiles.values())if(t.mesh){const key=t.level+'/'+t.i+'_'+t.j;material(t.mesh.material,'tile '+key);material(t.mirror?.material,'mirror '+key);
+          if(t.road&&!m.terrain.hasRoad.has(key)&&r.properties.get(t.mesh.material.uniforms.tRoad.value).__webglTexture){let painted=0;
+            for(let k=0;k<t.road.length;k+=4)if((t.road[k+2]&15)||t.road[k+3])painted++;
+            blankRoads.push({tile:key,painted,sites:m.terrain.sites.filter(s=>!(s.box[2]<t.x0||s.box[0]>t.x0+t.size||s.box[3]<t.z0||s.box[1]>t.z0+t.size)).map(s=>({kind:s.constructor.name,field:s.roadField??'default'}))});}}
+        let i=0;for(const target of b.targets){add(target.texture,'target '+i+' colour');add(target.depthTexture,'target '+i+' depth');i++;}
+        add(m.terrain.noRoad,'shared no-road');add(m.terrain.roadCuts.empty,'empty cut');
+        return {count:r.info.memory.textures,identified:found.size,textures:[...found.values()],roadFieldsWithoutBake:blankRoads};
+      })()`);
+      console.log('TEXTURE INVENTORY '+scene.id+'/'+mode.id+' '+JSON.stringify(result.textureInventory));
+    }
     if(scene.chase) {
       assert.ok(result.groups.vehicle>0,'chase view must render selected vehicle');
       assert.ok(await page.read("document.getElementById('hud').textContent.includes('km/h')"),'normal chase HUD');
@@ -313,6 +346,14 @@ export async function measure(scene, mode, mutation) {
       assert.ok(framed.cow&&framed.herd===4,'animal-home must frame the road cow and all four pasture cattle, not only the bull');
       assert.ok(result.groups.vehicle>0,'animal-home road must render the selected vehicle too');
     }
+    result.cutWork=await page.read('({...mmm.terrain.roadCuts.audit,mainWithUploadsMs:__budget.cutMainMax})');
+    result.guardrails=await page.read(`(()=>{const r=mmm.roads.guardrails;let spans=0,overlaps=0;for(const c of r?.chunks??[])for(const s of c.spans){spans++;for(const p of [s.a,s.b,{x:(s.a.x+s.b.x)/2,z:(s.a.z+s.b.z)/2}])if(mmm.roads.bridgeArea(p.x,p.z,2))overlaps++;}return {spans,overlaps}})()`);
+    assert.equal(result.guardrails.overlaps,0,'guardrails must skip bridge decks and approaches');
+    assert.equal(result.cutWork.error,'','cut worker has no errors');
+    assert.ok(result.cutWork.maxFrameMs<=8,'cut-field main-thread frame budget: '+JSON.stringify(result.cutWork));
+    assert.ok(result.cutWork.mainWithUploadsMs<=8,'cut-field main-thread frame budget including GL uploads: '+JSON.stringify(result.cutWork));
+    assert.equal(result.cutWork.steps,0,'browser cut raster runs off the main thread');
+    if(result.cutWork.atlases)assert.ok(result.cutWork.workerJobs>0,'browser cut raster uses its worker');
     result.assets=page.assetStats();
     // Exactly one request is neither a counted asset nor a dev-server module: the page itself. A new kind of
     // player download (a new public folder, an imported image) must be classed on purpose in frame-budget-policy.mjs.
@@ -381,7 +422,7 @@ export async function run() {
     for(let i=0;i<(updating?5:1);i++) {
       const result=await measure(scene,mode);measurements.push(result);
       console.log(`${key} run=${i+1} ${JSON.stringify(result.counts)}`);
-      console.log(`DIAGNOSTIC ${key} `+JSON.stringify({url:result.url,seconds:result.seconds,passes:result.passes,groups:result.groups,groupTriangles:result.groupTriangles,frames:result.frameRanges,assets:result.assets,drive:result.drive,trees:result.trees,radio:result.radio}));
+      console.log(`DIAGNOSTIC ${key} `+JSON.stringify({url:result.url,seconds:result.seconds,passes:result.passes,groups:result.groups,groupTriangles:result.groupTriangles,frames:result.frameRanges,assets:result.assets,drive:result.drive,trees:result.trees,radio:result.radio,cutWork:result.cutWork,guardrails:result.guardrails}));
     }
     const result=measurements[0]; visited.push(key);
     if(updating) {

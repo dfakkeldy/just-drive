@@ -23,7 +23,8 @@ for(const low of [false,true])for(const hill of [1,1.5,2,2.5]){
  s.top=s.level;s.toe=s.entrance(-2);
  const roads=new Roads(data,manifest.village,t),c=new Vehicle(car(),t,roads,-.2);
  const tick=input=>t.withGroundContact(c,()=>c.update(1/120,input));
- const place=(u,v,h=Math.PI)=>{c.place(s.x+u,s.z+v,h);c.speed=0;c.assist=0;c.steerAngle=0;c.jolt=0;};
+ // Cap controls start with a known pose. An unreferenced query must remain LAND.
+ const place=(u,v,h=Math.PI)=>{c.place(s.x+u,s.z+v,h,s.deckHeight(s.x+u,s.z+v)??undefined);c.speed=0;c.assist=0;c.steerAngle=0;c.jolt=0;};
  const select=tile=>{for(const a of tiles)a.mesh.visible=a===tile;tile.mesh.material.uniforms.hideQuad.value.set(0,0,0,0);t.group.updateMatrixWorld(true);};
  select(tiles.at(-1));
  const row={mode:low?'phone':'desktop',hill,surfaces:[],rays:[]};
@@ -34,7 +35,7 @@ for(const low of [false,true])for(const hill of [1,1.5,2,2.5]){
    const height=c.groundContacts.map(p=>p.height),sr=Math.atan2((height[1]+height[3]-height[0]-height[2])/2,1.57),sf=Math.atan2((height[0]+height[1]-height[2]-height[3])/2,2.62);
    tick({throttle:0,steer:0,handbrake:false});
    const forward=c.vx*Math.sin(c.heading)-c.vz*Math.cos(c.heading),side=c.vx*Math.cos(c.heading)+c.vz*Math.sin(c.heading);
-   const surface=t.withGroundContact(c,()=>t.surfaceAt(c.x,c.z));
+   const surface=t.withGroundContact(c,()=>t.surfaceAt(c.x,c.z,c.y));
    row.surfaces.push({name,kind:surface.kind,deck:surface.deck===true,surface:c.surfaceName,mu:(Math.abs(2-9.81*Math.sin(sr)/120*.35)-Math.abs(side))/(1.7*9.81/120),rolling:((8-forward)*120-9.81*Math.sin(sf)-.064)/9.81,rough:c.shake/Math.min(Math.abs(forward),20),shake:c.shake});
   }
   const advance=touch=>{place(7,46);c.strongHelp=true;c.assist=.65;c.touchSpeedLimit=true;c.vx=0;c.vz=12;c.speed=12;tick({throttle:1,steer:0,handbrake:false,touch});return {speed:c.speed,strong:c.helpYaw,light:c.lightHelpYaw};};
@@ -53,7 +54,7 @@ for(const low of [false,true])for(const hill of [1,1.5,2,2.5]){
   const cap=row.surfaces[0];
   if(!(cap.kind===9&&cap.deck&&cap.surface==='concrete'&&Math.abs(cap.mu-1)<1e-7&&Math.abs(cap.rolling-.013)<1e-7&&cap.rough===0&&cap.shake===0))failures.push(`surface ${low}/${hill}: ${JSON.stringify(cap)}`);
   if(Math.abs(row.touch.speed-row.keyboard.speed)>1e-10||row.touch.strong!==0||row.touch.light!==0)failures.push(`touch cap ${low}/${hill}: ${JSON.stringify(row.touch)} vs ${JSON.stringify(row.keyboard)}`);
-  const under=t.withGroundContact({y:s.level-.3},()=>t.surfaceAt(s.x+7,s.z+46));if(under.kind===9||under.deck)failures.push(`under deck classified as concrete ${low}/${hill}`);
+  const under=t.withGroundContact({y:s.level-.3},()=>t.surfaceAt(s.x+7,s.z+46,s.level-.3));if(under.kind===9||under.deck)failures.push(`under deck classified as concrete ${low}/${hill}`);
   const beside=row.surfaces[1],approach=row.surfaces[2];
   if(beside.kind===9||beside.deck||beside.surface!=='grass'||Math.abs(beside.mu-.5)>1e-7||Math.abs(beside.rolling-.09)>1e-7||beside.rough!==.04||beside.shake<=0)failures.push(`beside cap ${low}/${hill}`);
   if(approach.kind!==4||approach.deck||approach.surface!=='dirt track'||Math.abs(approach.mu-.62)>1e-7||Math.abs(approach.rough-.03)>1e-7)failures.push(`approach changed ${low}/${hill}`);

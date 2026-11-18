@@ -7,21 +7,22 @@ import {build} from '../web/node_modules/esbuild/lib/main.js';
 const root=resolve(import.meta.dirname,'..'), scratch=mkdtempSync(join(tmpdir(),'mmm-culverts-'));
 async function load(mutant=false){
  const file=join(scratch,mutant?'mutant.mjs':'check.mjs');
- await build({stdin:{contents:`export {streamCrossings,StreamCulverts} from './web/src/stream-culverts.ts'; export {Streams} from './web/src/streams.ts'; export {ArchCulvert} from './web/src/culvert.ts'; export {Vector3,Box3} from './web/node_modules/three/build/three.module.js';`,resolveDir:root},bundle:true,platform:'node',format:'esm',outfile:file,plugins:mutant?[{name:'bridge-mutant',setup(b){b.onLoad({filter:/stream-culverts\.ts$/},({path})=>({contents:readFileSync(path,'utf8').replace('if (!road || road.bridge) continue;','if (!road) continue;').replace('if (bridges.some(', 'if (false && bridges.some('),loader:'ts'}));}}]:[]});
+ await build({stdin:{contents:`export {streamCrossings,StreamCulverts} from './web/src/stream-culverts.ts'; export {Streams} from './web/src/streams.ts'; export {ArchCulvert} from './web/src/culvert.ts'; export {Vector3,Box3,Group} from './web/node_modules/three/build/three.module.js'; export {ModernBridges} from './web/src/modern-bridges.ts';`,resolveDir:root},bundle:true,platform:'node',format:'esm',outfile:file,plugins:mutant?[{name:'bridge-mutant',setup(b){b.onLoad({filter:/stream-culverts\.ts$/},({path})=>({contents:readFileSync(path,'utf8').replace('if (!road || road.bridge) continue;','if (!road) continue;').replace('if (bridges.some(', 'if (false && bridges.some('),loader:'ts'}));}}]:[]});
  return import(file);
 }
 function roadDistance(x,z,road){
  let best=Infinity;for(let k=1;k<road.pts.length;k++){const a=road.pts[k-1],b=road.pts[k],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz||1)));best=Math.min(best,Math.hypot(x-a[0]-t*dx,z-a[1]-t*dz));}return best;
 }
-function bridgeOracle(c,roads,extra=0){
- for(const r of roads.filter(r=>r.bridge))for(let k=1;k<r.pts.length;k++){
+// Flagged bridge roads and the modern bridge spans (#156), which also cover crossings on unflagged map roads.
+function bridgeOracle(c,roads,extra=0,spans=[]){
+ for(const r of [...roads.filter(r=>r.bridge),...spans])for(let k=1;k<r.pts.length;k++){
   const [a,b]=[r.pts[k-1],r.pts[k]],dx=b[0]-a[0],dz=b[1]-a[1];
   const t=Math.min(1,Math.max(0,((c.x-a[0])*dx+(c.z-a[1])*dz)/(dx*dx+dz*dz||1)));
   assert.ok(Math.hypot(c.x-a[0]-t*dx,c.z-a[1]-t*dz)>r.halfWidth+3+extra,`culvert under bridge ${r.id}`);
  }
 }
 try {
- const {streamCrossings,Streams,StreamCulverts,ArchCulvert,Vector3,Box3}=await load();
+ const {streamCrossings,Streams,StreamCulverts,ArchCulvert,Vector3,Box3,Group,ModernBridges}=await load();
  const road={id:1,halfWidth:3,bridge:false,kind:2,name:null,pts:[[-20,0],[20,0]]};
  const data={streams:[{id:1,name:'',half:.5,pts:[[0,-20],[0,0],[0,20]]}],culverts:[{stream:1,road:1,a:[0,-6],b:[0,6],dia:1,mapped:true}]};
  const streams=new Streams(data,[0,0]);
@@ -134,21 +135,25 @@ try {
   const alongside={...road,id:3,halfWidth:.1,pts:[[2.6,-20],[2.6,20]]};
   const c=streamCrossings(wide,[road,alongside])[0];assert.ok(c.cover.some(p=>p.x>2&&Math.abs(p.z)>4),'samples under a road beside the arch');}
  visual.update({x:1000,z:1000});assert.equal(visual.group.children.length,0,'distant resources removed');
- const rows=[];
+ const rows=[],underSpans=[];
  for(const folder of ['terrain',...readdirSync(join(root,'data/baked/areas')).map(x=>'areas/'+x)]){
   const dir=join(root,'data/baked',folder),json=name=>JSON.parse(readFileSync(join(dir,name+'.json'),'utf8'));
   const village=json('manifest').village, s=new Streams(json('streams'),village);
   const roads=json('roads').roads.map(r=>({...r,pts:r.pts.map(([e,n])=>[e-village[0],village[1]-n])}));
-  const crossings=streamCrossings(s,roads);
+  // The same spans the game builds from this roads file (Roads hands ModernBridges the village-frame roads).
+  const spans=new ModernBridges(roads,{manifest:json('manifest')},new Group(),json('roads').bridgeSpans).runs;
+  const crossings=streamCrossings(s,roads,spans),flaggedOnly=streamCrossings(s,roads);
   const raw=json('streams').culverts;
   assert.equal(s.pipes.length,raw.length,'all shipped mouth pairs parsed');
   for(const c of crossings){const pipe=raw.find(p=>Math.hypot((p.a[0]+p.b[0])/2-village[0]-c.x,village[1]-(p.a[1]+p.b[1])/2-c.z)<.01);assert.ok(pipe,'arch at real pipe midpoint');assert.ok(Math.abs(c.length-Math.hypot(pipe.a[0]-pipe.b[0],pipe.a[1]-pipe.b[1]))<.01);assert.ok(Math.abs(Math.sin(c.heading-Math.atan2(pipe.b[0]-pipe.a[0],pipe.b[1]-pipe.a[1])))<1e-6);}
   // Every pair either has one arch, overlaps a bridge, or no longer reaches the current road.
-  for(const pipe of s.pipes){const x=(pipe.x+pipe.endX)/2,z=(pipe.z+pipe.endZ)/2; if(!crossings.some(c=>c.x===x&&c.z===z)){const road=roads.find(r=>r.id===pipe.road),len=Math.hypot(pipe.endX-pipe.x,pipe.endZ-pipe.z); const reachesRoad=road&&Array.from({length:Math.ceil(len)+1},(_,i)=>Math.min(1,i/len)).some(t=>roadDistance(pipe.x+(pipe.endX-pipe.x)*t,pipe.z+(pipe.endZ-pipe.z)*t,road)<=road.halfWidth+.5); if(!reachesRoad)continue; assert.throws(()=>bridgeOracle({x,z},roads,Math.hypot(Math.hypot(pipe.x-pipe.endX,pipe.z-pipe.endZ)/2+.3,6.1*Math.min(1,pipe.dia/4.1))),/culvert under bridge/,'omitted pair must overlap a bridge');}}
-  for(const c of crossings){assert.ok(c.cover.length,'road cover samples at each real pipe');bridgeOracle(c,roads);assert.ok(roads.some(r=>r.id===c.road&&!r.bridge));}
+  for(const pipe of s.pipes){const x=(pipe.x+pipe.endX)/2,z=(pipe.z+pipe.endZ)/2; if(!crossings.some(c=>c.x===x&&c.z===z)){const road=roads.find(r=>r.id===pipe.road),len=Math.hypot(pipe.endX-pipe.x,pipe.endZ-pipe.z); const reachesRoad=road&&Array.from({length:Math.ceil(len)+1},(_,i)=>Math.min(1,i/len)).some(t=>roadDistance(pipe.x+(pipe.endX-pipe.x)*t,pipe.z+(pipe.endZ-pipe.z)*t,road)<=road.halfWidth+.5); if(!reachesRoad)continue; assert.throws(()=>bridgeOracle({x,z},roads,Math.hypot(Math.hypot(pipe.x-pipe.endX,pipe.z-pipe.endZ)/2+.3,6.1*Math.min(1,pipe.dia/4.1)),spans),/culvert under bridge/,'omitted pair must overlap a bridge');}}
+  for(const c of crossings){assert.ok(c.cover.length,'road cover samples at each real pipe');bridgeOracle(c,roads,0,spans);assert.ok(roads.some(r=>r.id===c.road&&!r.bridge));}
   rows.push({area:folder,crossings:crossings.length,first:crossings[0]});
+  underSpans.push({area:folder,count:flaggedOnly.length-crossings.length});
  }
  assert.ok(rows[0].crossings>0 && rows.some(r=>r.area==='areas/judique'&&r.crossings>0));
+ console.log('left out under modern spans',JSON.stringify(underSpans),'now',JSON.stringify(rows.map(r=>({area:r.area,count:r.crossings}))));
  const evidence=JSON.parse(readFileSync(join(root,'assets/culverts/checks.json'),'utf8'));
  assert.deepEqual(evidence.placements,rows.map(r=>({area:r.area,count:r.crossings})),'saved evidence counts match shipped data');
  for(const area of ['mabou','judique'])for(const [view,w,h] of [['desktop',1280,720],['phone',390,844],['upstream-desktop',1280,720]]){
@@ -161,6 +166,11 @@ try {
   const mutant=await load(true);
   assert.throws(()=>{for(const c of mutant.streamCrossings(streams,[{...road,bridge:true}]))bridgeOracle(c,[{...road,bridge:true}]);},/culvert under bridge/,'mutant must be killed by overlap oracle');
   console.log('PASS bridge exclusion source mutant killed');
+  // Without the spans, an arch stands under a modern deck on an unflagged road.
+  const span={pts:[[-20,0],[20,0]],halfWidth:3.45};
+  assert.equal(streamCrossings(streams,[road],[span]).length,0,'a modern span over the crossing leaves no arch');
+  assert.throws(()=>{for(const c of streamCrossings(streams,[road]))bridgeOracle(c,[road],0,[span]);},/culvert under bridge/,'span-blind planner must be killed by the oracle');
+  console.log('PASS modern span exclusion: a span-blind planner is killed');
  }
  console.log('PASS real crossings, bridge exclusion, seating, disposal');
 } finally {rmSync(scratch,{recursive:true,force:true});}

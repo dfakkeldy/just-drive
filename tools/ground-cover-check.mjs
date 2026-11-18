@@ -32,7 +32,8 @@ function cases(api){
 cases({GroundCover,clearsGroundTrees,growsGroundGrass});
 // Exercise the real production Surface reader: mineral adds handling only, never road geometry or height.
 const t=Object.create(Terrain.prototype),tile={x0:0,z0:0,size:256,level:8,ground:new Float32Array(257*257).fill(12),canopy:new Float32Array(257*257),road:null,brook:null};
-t.find=()=>tile;t.withDeck=(_x,_z,h)=>h;t.waterLevelAt=()=>null;t.groundClassAt=()=>6;t.cartRoads=false;
+t.find=()=>tile;t.withDeck=(_x,_z,h)=>h;t.roadCuts={land:(_x,_z,h)=>h};   // #156's bridge road cuts: none here
+t.waterLevelAt=()=>null;t.groundClassAt=()=>6;t.cartRoads=false;
 const s=t.surfaceAt(50,50);assert.equal(s.mineral,true);assert.equal(s.ground,12);assert.equal(s.kind,0);assert.equal(s.roadDist,99);
 t.groundClassAt=()=>8;assert.equal(t.surfaceAt(50,50).mineral,undefined);
 t.groundClassAt=()=>6;t.cartRoads=true;assert.equal(t.surfaceAt(50,50).mineral,undefined);

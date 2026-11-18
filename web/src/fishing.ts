@@ -102,7 +102,7 @@ export class Fishing {
   }
   private takeJob():void {
     const c=this.car;
-    c.place(this.site.x+PARK.u,this.site.z+PARK.v,Math.PI);c.speed=c.vx=c.vz=0;
+    c.place(this.site.x+PARK.u,this.site.z+PARK.v,Math.PI,c.y);c.speed=c.vx=c.vz=0;
     {const r=c.car;if(r.beacon)r.beacon.visible=false;if(r.signLight)r.signLight.visible=false;r.setWindowDown?.(true);}
     this.leaving=true;this.art!.lines.geometry=this.art!.wake;this.art!.lines.material=this.art!.wakeMaterial;this.art!.lines.renderOrder=3;this.art!.lines.visible=true;this.from.copy(this.camera.position);this.rotation.copy(this.camera.quaternion);this.pose(0);
     this.endings.begin({key:'deckhand',title:'You fish now.',lines:DECKHAND_LINES,camera:seconds=>{

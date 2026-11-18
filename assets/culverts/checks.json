@@ -2,30 +2,31 @@
  "codeHead": "6d8d56b8 (pictures and survey from culverts-browser on apple-check-host; 14febb49 and the merge change no production code after 5e614ffd)",
  "base": "origin/main 777ad4f0",
  "bakedSnapshot": "946af682bce77f57 (live Judique data)",
+ "placementsNote": "#156: 46 crossings under modern bridge spans on unflagged roads have no arch (Mabou 11, Canso 1, Judique 3, Point Tupper 3, Port Hood 4, West Bay 24); the pictures are unchanged.",
  "placements": [
   {
    "area": "terrain",
-   "count": 163
+   "count": 152
   },
   {
    "area": "areas/cansocauseway",
-   "count": 75
+   "count": 74
   },
   {
    "area": "areas/judique",
-   "count": 98
+   "count": 95
   },
   {
    "area": "areas/pointtupper",
-   "count": 85
+   "count": 82
   },
   {
    "area": "areas/porthood",
-   "count": 84
+   "count": 80
   },
   {
    "area": "areas/westbay",
-   "count": 188
+   "count": 164
   }
  ],
  "browser": [

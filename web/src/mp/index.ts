@@ -16,8 +16,9 @@ export interface MultiplayerHost {
   ride?: () => import('./wire').Ride;
   /** The player's own car: read only. */
   vehicle: { x: number; y: number; z: number; heading: number; vx: number; vz: number; speed: number; steerAngle: number; airborne: boolean };
-  /** Ground height at a world point, bridge decks included; null where the land has not loaded. */
-  ground: (x: number, z: number) => number | null;
+  /** Ground height at a world point, a deck only with a caller height; null where the land has not loaded. */
+  ground: (x: number, z: number, referenceY?:number) => number | null;
+  heightScale?:number;seaLevel?:number;
   low: boolean;
   /** A picture run (?hud=0): no readout. */
   bare: boolean;
@@ -54,7 +55,7 @@ export class Multiplayer {
     const base = asked ?? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
     // A code is a private room: one address. Without a code the open room, and its overflow rooms when it is full.
     const rooms = code ? [code] : ['world', ...Array.from({ length: 7 }, (_, i) => `world${i + 2}`)];
-    this.net = new Net({ handle: savedHandle(), identity: browserSession(), urls: rooms.map((room) => `${base}/mp/v${VERSION}/${host.area}/${room}`) });
+    this.net = new Net({ handle: savedHandle(), identity: browserSession(), urls: rooms.map((room) => `${base}/mp/v${VERSION}/${host.area}/${room}?heights=1`) });
     this.visibility();
     document.addEventListener('visibilitychange', this.visibility);
     window.addEventListener('pagehide', this.pagehide);
@@ -62,8 +63,10 @@ export class Multiplayer {
     this.heartbeatTimer = setInterval(() => this.net.heartbeat(), 20000);
     this.race = new RaceView(this.net,host);
     // After the race: on a phone both live in Settings, race first.
-    this.social = host.bare ? null : new SocialView(this.net, host.ground, host.touch);
-    this.ghosts = new Ghosts({ ground: host.ground, low: host.low, label: host.label });
+    // A sender's height, in this view's land scale. Ghosts and chat bubbles read decks within reach of it.
+    const sea = host.seaLevel ?? 0, height = (y: number) => y > sea ? sea + (y - sea) * (host.heightScale ?? 1) : y;
+    this.social = host.bare ? null : new SocialView(this.net, host.ground, host.touch, height);
+    this.ghosts = new Ghosts({ ground: host.ground, low: host.low, height, label: host.label });
     host.scene.add(this.ghosts.group);
     this.chip = host.bare || host.touch ? null : document.body.appendChild(Object.assign(document.createElement('div'), { id: 'mpChip' }));
     if (this.chip) {
@@ -86,9 +89,10 @@ export class Multiplayer {
       this.brake = slowing > 2.5 ? 0.25 : Math.max(0, this.brake - dt);
       this.lastSpeed = v.speed;
     }
-    const ground = v.airborne ? this.host.ground(v.x, v.z) : null;
+    const ground = v.airborne ? this.host.ground(v.x, v.z,v.y) : null;
     s.x = v.x; s.z = v.z; s.heading = v.heading; s.vx = running ? v.vx : 0; s.vz = running ? v.vz : 0; s.steer = v.steerAngle;
     s.air = ground !== null ? Math.max(0, v.y - ground) : 0;
+    const sea=this.host.seaLevel??0,support=v.y-s.air;s.y=support>sea?sea+(support-sea)/(this.host.heightScale??1):support;
     s.flags = (v.airborne ? FLAG.air : 0) | (this.brake > 0 ? FLAG.brake : 0);
     const ride = this.host.ride?.(); if (ride) this.net.setRide(ride);
     this.net.report(s, now, !running);

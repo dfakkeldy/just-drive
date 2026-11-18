@@ -235,8 +235,12 @@ function stats(t) {
 function watch(t, tile, audits) {
   if (tile.road) {
     const data = tile.mesh.material.uniforms.tRoad.value.image.data;
-    assert.equal(data.buffer, tile.road.buffer, 'road CPU/texture share bytes');
-    assert.equal(data.byteOffset, tile.road.byteOffset, 'road view offset');
+    const bridgeMask=!t.cartRoads&&data.buffer!==tile.road.buffer;
+    if(bridgeMask){
+      let masked=0;for(let k=0;k<data.length;k++){const bridge=k%4===2&&(tile.road[k]&64)&&(tile.road[k]&15);if(bridge)masked++;assert.equal(data[k],bridge?tile.road[k]&240:tile.road[k],'only bridge-render kind bits differ from CPU road bytes');}
+      assert.ok(masked>0,'private road texture exists only for a bridge paint mask');
+    }else assert.ok(data.buffer===tile.road.buffer,'road CPU/texture share bytes outside bridge paint masks');
+    assert.equal(data.byteOffset, bridgeMask?0:tile.road.byteOffset, 'road view offset');
     assert.equal(data.byteLength, tile.road.byteLength, 'road view length');
   }
   let audit = audits.get(tile);
@@ -551,12 +555,8 @@ async function arrival() {
 if (scenario === 'arrival') await arrival();
 
 async function builds(count) {
-  // The tile maths must not change by accident. The pin was main 883363c (the 1884 era), then 9826d95 (PR #90, the
-  // West Bay quarry paint). PR #85 (the stunt kit) adds LOD-gated site grading and a separately flagged colour
-  // program on purpose; separate stunt-main-* rows compare ordinary meshes, road/canopy samples, normals and programs
-  // with origin/main at every LOD/Hill/quality, and stunt-main-mutant breaks that path. The pin is now the SHA-256
-  // of the reviewed maths text (branch commit 79475f31), so it survives a squash merge and a fresh clone.
-  const MATHS_SHA256='cb3ff8b358b76342d7f029ccb3f4a201b86e63ee7a8dad9cf491e5efa76cb90e';
+  // Portable data pin: no dependency on an unmerged branch commit surviving a squash merge.
+  const pin=JSON.parse(readFileSync(root+'tools/baseline/terrain-tile-maths.json','utf8'));
   // Approved class-mask additions are checked by the real-terrain ground-canopy
   // suite and its three mutants. Strip only those exact additions (every
   // occurrence: the ordinary and STUNT_PARK tile programs both carry the define)
@@ -565,8 +565,8 @@ async function builds(count) {
   const maths=source=>source.slice(source.indexOf('    const sites = this.sites.filter'),source.indexOf('    this.group.add(mesh);')+'    this.group.add(mesh);'.length);
   // PR #163 (reviewed) added two hook lines for the Point Tupper stockpiles: `canopyExcludes` is unset in every area
   // without a stockpile pack, so the maths do not change there. They are the only lines allowed beyond the pin, each
-  // once at most, byte for byte and at its reviewed place (the line before it, the hook, the line after it); a
-  // later PR can move the pin to a main commit that holds them.
+  // once at most, byte for byte and at its reviewed place (the line before it, the hook, the line after it); the pin
+  // hashes the maths without them.
   const HOOKS=[['','      if (this.canopyExcludes?.(t.x0 + (k % S) * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + Math.floor(k / S) * mpp))) { c = 0; px[k * 4 + 2] = 0; }\n','      canopy[k] = c;\n'],
     ['        if(coastal?.quarry && coastField && coastField[k0*4+1]>.5)c=0;\n','        if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;\n',''],
     // PR #147 (reviewed): the AIRPORT shader define for tiles that overlap the airfield site; no maths change. With the
@@ -577,7 +577,7 @@ async function builds(count) {
     // tiles lose its sub-sample paint and the road-canopy fade under it.
     [' || s.box[3] < t.z0 || s.box[1] > t.z0 + t.size)',' && (s.maxTexel === undefined || t.size / T <= s.maxTexel)',');\n']];
   const withoutHooks=source=>HOOKS.reduce((text,[before,hook,after,most=1])=>{const parts=text.split(hook);assert.ok(parts.length-1<=most&&parts.every((part,i)=>(i===parts.length-1||part.endsWith(before))&&(i===0||part.startsWith(after))),'a stockpile, airport or site-texel hook stands at most its allowed number of times in the tile maths, at its reviewed place');return parts.join('');},maths(source));
-  if(!mutations[name])assert.equal(createHash('sha256').update(withoutHooks(groundParts.reduce((s,part)=>s.split(part).join(''),terrainText))).digest('hex'),MATHS_SHA256,'tile maths are byte-identical to the reviewed PR #85 text, but for the stockpile, airport and site-texel hooks and the ground-class lines');
+  if(!mutations[name])assert.equal(createHash('sha256').update(withoutHooks(groundParts.reduce((s,part)=>s.split(part).join(''),terrainText))).digest('hex'),pin.sha256,'tile maths match the portable data pin, but for the stockpile, airport and site-texel hooks and the ground-class lines');
   const c = camera(128,128);
   const fixture = async (cost = 0) => {
     const t = ground(false), built = [], all = [];

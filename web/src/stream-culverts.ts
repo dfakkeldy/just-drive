@@ -4,10 +4,12 @@ import type { Road } from './roads';
 import type { Streams } from './streams';
 
 export interface Crossing { x: number; z: number; heading: number; scale: number; length: number; road: number; cover: { x: number; z: number }[] }
+/** A deck centre line. Modern bridge spans (#156) also cover crossings whose map roads carry no bridge flag. */
+export interface BridgeLine { readonly pts: readonly (readonly [number, number])[]; readonly halfWidth: number }
 /** The bake removes open-water segments beneath roads. Its mouth pairs restore those stream runs.
  * Use the shipped pairs, not open-water intersections, which mostly find unpiped farm tracks. */
-export function streamCrossings(streams: Streams, roads: readonly Road[]): Crossing[] {
-  const bridges = roads.filter(r => r.bridge), byId = new Map(roads.map(r => [r.id, r]));
+export function streamCrossings(streams: Streams, roads: readonly Road[], spans: readonly BridgeLine[] = []): Crossing[] {
+  const bridges: readonly BridgeLine[] = [...roads.filter(r => r.bridge), ...spans], byId = new Map(roads.map(r => [r.id, r]));
   // Bounding boxes of every non-bridge road, so each run tests only the roads near it.
   const boxes = roads.filter(r => !r.bridge && r.pts.length > 1).map(r => {
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
@@ -49,7 +51,7 @@ export function streamCrossings(streams: Streams, roads: readonly Road[]): Cross
   return result;
 }
 
-function nearestRoadPoint(x: number, z: number, road: Road): { x: number; z: number } {
+function nearestRoadPoint(x: number, z: number, road: Pick<BridgeLine, 'pts'>): { x: number; z: number } {
   let best = Infinity, point = { x, z };
   for (let k = 1; k < road.pts.length; k++) {
     const [ax, az] = road.pts[k - 1], dx = road.pts[k][0] - ax, dz = road.pts[k][1] - az;
@@ -59,7 +61,7 @@ function nearestRoadPoint(x: number, z: number, road: Road): { x: number; z: num
   }
   return point;
 }
-function distanceToRoad(x: number, z: number, road: Road): number {
+function distanceToRoad(x: number, z: number, road: Pick<BridgeLine, 'pts'>): number {
   const p = nearestRoadPoint(x, z, road);
   return Math.hypot(p.x - x, p.z - z);
 }
@@ -72,8 +74,8 @@ export class StreamCulverts {
   private graded = new Map<Crossing, number>();
   /** `revision` changes whenever land tiles arrive or leave (terrain.dataRevision). Without it, every frame regrades. */
   constructor(streams: Streams, roads: readonly Road[], private ground: (x: number, z: number) => number | null, private low: boolean,
-    private revision?: () => number) {
-    this.crossings = streamCrossings(streams, roads);
+    private revision?: () => number, spans: readonly BridgeLine[] = []) {
+    this.crossings = streamCrossings(streams, roads, spans);
     this.group.name = 'stream-culverts';
   }
   update(camera: THREE.Vector3): void {

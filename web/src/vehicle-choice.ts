@@ -9,7 +9,7 @@ export function vehicleChoice(kind: string, vehicle: Ride): VehicleChoice {
     if (next === kind || !GARAGE.some(entry => entry.id === next)) return;
     let saved = false;
     try { localStorage.setItem(VEHICLE_KEY, next); saved = localStorage.getItem(VEHICLE_KEY) === next; } catch { /* query fallback */ }
-    try { sessionStorage.setItem(POSE, JSON.stringify({ x: vehicle.x, z: vehicle.z, heading: vehicle.heading, when: Date.now(), area: area() })); } catch { /* no session storage */ }
+    try { sessionStorage.setItem(POSE, JSON.stringify({ x: vehicle.x, z: vehicle.z, heading: vehicle.heading, y:vehicle.y, when: Date.now(), area: area() })); } catch { /* no session storage */ }
     const q = new URLSearchParams(location.search),hadTrip=q.has('trip');q.delete('trip');
     if (q.has('vehicle') || !saved || hadTrip) { q.set('vehicle', next); location.search = q.toString(); } else location.reload();
   } };
@@ -19,9 +19,10 @@ export function restoreVehiclePose(vehicle: Ride): boolean {
     const saved = sessionStorage.getItem(POSE); sessionStorage.removeItem(POSE);
     if (!saved) return false;
     const p = JSON.parse(saved);
+    if (p.y!==undefined&&!Number.isFinite(p.y)) return false;
     if (p.area !== area() || ![p.x, p.z, p.heading, p.when].every(Number.isFinite) || Date.now() - p.when > 60000 || Date.now() < p.when) return false;
     const b = vehicle.bounds; if (b && (p.x < b[0] || p.x > b[2] || p.z < b[1] || p.z > b[3])) return false;
-    vehicle.place(p.x, p.z, p.heading); return true;
+    vehicle.place(p.x, p.z, p.heading,p.y); return true;
   } catch { return false; }
 }
 export function vehicleButtons(choice: VehicleChoice, id = 'vehicleChoice'): HTMLElement {

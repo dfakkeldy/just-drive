@@ -114,6 +114,7 @@ import {createTestPark,testParkPlaces} from './stunt-test-park';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
 import { Drone, createDroneButton, createDroneSticks, roofHeights } from './drone';
 import { DRONE } from './drone-rules';
+import { deckCounts } from './bridge-contact';
 
 // Mabou village, and the game's moment: the second week of October, late afternoon (Atlantic Daylight Time, UTC-3).
 const LAT = 46.0717, LON = -61.392;
@@ -390,7 +391,9 @@ if (waterReflections) {
 
 const roads = new Roads(manifest.roads ? await getJson(manifest.roads.file) : { roads: [] }, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
-  ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW, () => terrain.dataRevision)
+  ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW,
+    // A modern bridge build moves the ground through its road cuts without a dataRevision change (both only grow).
+    () => terrain.dataRevision + roads.bridgeRevision, roads.bridgeRuns())
   : null;
 if (culvertMouths) scene.add(culvertMouths.group);
 scene.add(roads.group);
@@ -433,7 +436,7 @@ if (props) { scene.add(props.group); roads.guardrails?.setObstacles(props.railOb
 const yardDogSite = ERA.modern && AREA.id === 'mabou' && buildingList && props ? YardDogSite.create({
   roads: roads.roads, village: manifest.village, mail: [...props.mail,...props.sites],
   houses: properties.filter(b=>b.kind==='house').map(b=>({x:b.x-manifest.village[0],z:manifest.village[1]-b.y})),
-  excluded: [...terrain.sites.map(s=>s.box), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
+  excluded: [...terrain.sites.flatMap(s=>s.sitingBoxes??[s.box]), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
 }) : null;
 if (yardDogSite) { clear.push(...yardDogSite.clear); terrain.sites.push(yardDogSite); }
 let garageEntry = readVehicle(params, !mailMode), vehicleSpec = garageEntry.spec;
@@ -464,7 +467,7 @@ const night = nightShading ? new Night(nightShading, {
   streets: props?.poleSites.filter(p => p.light) ?? [],
   yards: props ? chooseYardLights(props.poleSites, {
     protectedPlaces: [...properties.map(b => ({ x: b.x - VE, z: VN - b.y })), ...props.mail, ...props.sites],
-    excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : [])], village: { x: 0, z: 0 },
+    excluded: [...terrain.sites.flatMap(s => s.sitingBoxes ?? [s.box]), ...(coast ? [coast.site.box] : [])], village: { x: 0, z: 0 },
   }) : [],
   village: { x: 0, z: 0 }, when, lat, lon,
 }) : null;
@@ -494,7 +497,7 @@ const MULTIPLAYER = (import.meta.env.DEV || import.meta.env.VITE_MP === '1') && 
 const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads, get vehicle() { return vehicle; }, low: LOW, bare, params, area: AREA.id, touch: touchDevice, label: SITE.brand === 'just' ? (_name, id) => `Driver ${id}` : undefined,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as 'car' | 'truck' | 'sxs' | 'bike', trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
-  ground: (x, z) => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; } }) : null;
+  heightScale:EXAG,seaLevel:SEA_LEVEL,ground: (x, z, referenceY) => terrain.heightAt(x,z,referenceY) }) : null;
 const canal = ERA.modern && AREA.id === 'cansocauseway' ? new Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
 if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
@@ -739,7 +742,7 @@ if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.
 const churchRoom = churchSite ? await import('./interior-church') : null;
 const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => shift.interiorResult(receipt), bare)
   : churchRoom ? new Interiors(() => 0, () => '', () => {}, bare) : quietInteriors();
-if(stuntPark)for(const actor of fleet?fleet.members.map(m=>m.vehicle):[vehicle])fleetContacts.bindVehicle(actor,pose=>stuntPark.contains(pose.x,pose.z,actor.spec.envelope.reach)?terrain.heightAt(pose.x,pose.z):actor.y??0);
+if(stuntPark)for(const actor of fleet?fleet.members.map(m=>m.vehicle):[vehicle])fleetContacts.bindVehicle(actor,pose=>stuntPark.contains(pose.x,pose.z,actor.spec.envelope.reach)?terrain.heightAt(pose.x,pose.z,pose.y):actor.y??0);   // pose.y: the placement's own reference (#156), so a deck above or below it is judged where the body will stand
 resets[resetSlot.interiors] = () => interiors.reset();
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
 if (mineSite) scene.add(mineSite.group);
@@ -1078,9 +1081,9 @@ function chase(dt: number) {
   const side = towCamera?.side ?? 0;
   const tx = vehicle.x - Math.sin(camHeading) * back + Math.cos(camHeading) * side, tz = vehicle.z + Math.cos(camHeading) * back + Math.sin(camHeading) * side;
   let ty = vehicle.y + vehicleSpec.chase.height + (towCamera?.height ?? 0);
-  const g = terrain.surfaceAt(tx, tz);
+  const g = terrain.surfaceAt(tx, tz,vehicle.y);
   if (g) ty = towCamera?.followGround && !vehicle.airborne
-    ? Math.max(g.ground, roads.deckHeight(tx, tz) ?? -Infinity) + vehicleSpec.chase.height + towCamera.height
+    ? g.ground + vehicleSpec.chase.height + towCamera.height
     : Math.max(ty, g.ground + g.canopy * 0.5 + 1.3);
   const k = camReady ? Math.min(1, 7 * dt) : 1;
   camPos.lerp(new THREE.Vector3(tx, ty, tz), k);
@@ -1094,7 +1097,8 @@ function chase(dt: number) {
 }
 
 // Instant replay (replay.ts): records the driven ride in every mode; the replay itself runs inside the paused frame.
-const replayGround = (x: number, z: number): number | null => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; };
+// A deck counts only within reach of the body's own height (#156), so a replay under an overpass reads the lower road.
+const replayGround = (x: number, z: number, referenceY?: number): number | null => { const g = terrain.heightAt(x, z, referenceY), deck = roads.deckHeight(x, z); return g === null ? null : deckCounts(deck, referenceY, terrain.cartRoads) ? Math.max(deck, g) : g; };
 let replayResume = false, replayOpener: HTMLElement | null = null;
 const replay = new Replay({
   canvas, camera, ground: replayGround, wheelRadius: () => vehicleSpec.wheelRadius,
@@ -1544,13 +1548,13 @@ function frame(now: number) {
     if (input.throttle !== 0 && (!demo || loaded)) waitingToDrive = false;
     // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.
     if (fleet) { const active = !fleet.busy; driveVehicle(dt, input); if (active && loaded && !animals?.waitingForTerrain) drove += dt; }
-    else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.place(vehicle.x, vehicle.z, vehicle.heading);
+    else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.place(vehicle.x, vehicle.z, vehicle.heading,vehicle.retryHeight);
     else {
-      if ((refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.place(vehicle.x, vehicle.z, vehicle.heading); vehicle.speed = 0; }
+      if ((refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.place(vehicle.x, vehicle.z, vehicle.heading,vehicle.retryHeight); vehicle.speed = 0; }
       else if (waitingToDrive) {
-        const { x, z, heading } = vehicle;
+        const { x, z, heading, y } = vehicle;
         driveVehicle(dt, { ...input, throttle: 0, handbrake: true });
-        vehicle.place(x, z, heading);
+        vehicle.place(x, z, heading,y);
       } else driveVehicle(dt, relief.busy ? { throttle: 0, steer: 0, handbrake: true } : input);
       if ((loaded || lawnDemo?.driving) && !animals?.waitingForTerrain) drove += dt;
     }
@@ -1611,18 +1615,18 @@ function frame(now: number) {
       shadowDir.set(0, 0, -1).applyQuaternion(camera.quaternion);
       for (reach = 20; reach < 1400; reach *= 1.35) {
         shadowFocus.copy(camera.position).addScaledVector(shadowDir, reach);
-        const g = terrain.heightAt(shadowFocus.x, shadowFocus.z);
+        const g = terrain.heightAt(shadowFocus.x, shadowFocus.z,shadowFocus.y);
         if (g !== null && shadowFocus.y <= g) { shadowFocus.y = g; break; }
       }
       if (reach >= 1400) {
         // A high, shallow look meets no ground within reach. Then the box sits on the ground ahead of the camera,
         // as far ahead as the camera is high, and is sized for that height.
-        const under = terrain.heightAt(camera.position.x, camera.position.z) ?? SEA_LEVEL;
+        const under = terrain.heightAt(camera.position.x, camera.position.z,camera.position.y) ?? SEA_LEVEL;
         const height = Math.max(20, camera.position.y - under), flat = Math.hypot(shadowDir.x, shadowDir.z);
         // A look that is nearly straight down has no "ahead": the box then stays under the camera.
         const ahead = flat > 0.2 ? height / flat : 0;
         shadowFocus.set(camera.position.x + shadowDir.x * ahead, 0, camera.position.z + shadowDir.z * ahead);
-        shadowFocus.y = terrain.heightAt(shadowFocus.x, shadowFocus.z) ?? under;
+        shadowFocus.y = terrain.heightAt(shadowFocus.x, shadowFocus.z,camera.position.y) ?? under;
         reach = Math.min(1400, height * 1.5);
       }
     }

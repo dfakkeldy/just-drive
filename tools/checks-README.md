@@ -322,7 +322,8 @@ Delete a folder there when you are done with it. A passing copy holds only
 `evidence/` (about 1 MB for the traffic rows); a failed copy holds everything
 and can be large. INT/TERM, a dropped connection or a broken pipe
 stops the host process group (TERM, then KILL after 20 s), and the checkout lock
-is held until it has stopped.
+is held until it has stopped. Picture rows marked `retain-evidence` keep their
+whole successful folder.
 
 Run rows marked `apple` on apple-check-host (or any Apple silicon Mac); do not hold a
 branch for the MacBook because of that label. Since the 17 Nov follow-up below,

@@ -21,7 +21,7 @@ async function models(overrides={}) {
 async function run(source,model,brand,mailMode=false){
  const expr=calls(source),out={};const roads={deckHeight:()=>null,roads:[{kind:1,name:'Mabou Mines Road',halfWidth:3,pts:[[0,0],[1200,0]]}]};
  const terrain={clear:[],heightAt:()=>0,surfaceAt:()=>({ground:0,level:6})};
- const context={...model,ERA:{modern:true},document,scene:{},LOW:true,bare:false,params:new URLSearchParams(),touchDevice:false,multiplayerSwitch:host=>host,SITE:{brand,area:'mabou'},AREA:{route:true,id:'mabou'},mailMode,roads,terrain,manifest:{mid:[-1000,-1000,1000,1000],village:[0,0]},VE:0,VN:0,EDGE:120,vehicleSpec:{envelope:{nose:3.2}},vehicle:{bounds:[-1000,-1000,1000,1000]},garageEntry:model.GARAGE[0]};
+ const context={...model,ERA:{modern:true},document,scene:{},LOW:true,bare:false,params:new URLSearchParams(),touchDevice:false,multiplayerSwitch:host=>host,SITE:{brand,area:'mabou'},AREA:{route:true,id:'mabou'},EXAG:1.5,SEA_LEVEL:1,mailMode,roads,terrain,manifest:{mid:[-1000,-1000,1000,1000],village:[0,0]},VE:0,VN:0,EDGE:120,vehicleSpec:{envelope:{nose:3.2}},vehicle:{bounds:[-1000,-1000,1000,1000]},garageEntry:model.GARAGE[0]};
  for(const label of ['Edge','MineSite','car']) {
   drawn=[];const code=(await transform('globalThis.result = '+expr[label],{loader:'ts',target:'es2022'})).code;const c=vm.createContext(context);vm.runInContext(code,c);
   if(label!=='car') c.result.update(new model.THREE.Vector3(900,0,0));
@@ -31,8 +31,11 @@ async function run(source,model,brand,mailMode=false){
  for(const entry of model.GARAGE){drawn=[];entry.build(mailMode,brand==='just');out['garage/'+entry.id]=[...drawn];}
  drawn=[];
  const host=vm.runInContext((await transform(expr.multiplayer,{loader:'ts'})).code,vm.createContext(context));
+ if(source===main){assert.equal(host.heightScale,context.EXAG);assert.equal(host.seaLevel,context.SEA_LEVEL);}
  const ghostCall=calls(readFileSync('web/src/mp/index.ts','utf8')).Ghosts;
- const ghosts=vm.runInContext(ghostCall,vm.createContext({...model,host}));
+ // index.ts passes its local sender-height scale (#156); the same rule, from the host the real call built.
+ const sea=host.seaLevel??0,height=y=>y>sea?sea+(y-sea)*(host.heightScale??1):y;
+ const ghosts=vm.runInContext(ghostCall,vm.createContext({...model,host,height}));
  const camera=new model.THREE.PerspectiveCamera(51,1,.1,100);camera.position.set(0,2,4);camera.lookAt(0,0,-6);camera.updateMatrixWorld();
  ghosts.update(1/60,[{id:7,name:'Double Mail 55',x:0,z:-6,heading:0,vx:0,vz:0,air:0,steer:0,hue:0,alpha:1,flags:0}],camera);
  assert.ok(drawn.length,'multiplayer canvas exercised');out.multiplayer=[...drawn];

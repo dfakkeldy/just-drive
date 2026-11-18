@@ -93,7 +93,7 @@ export class Fleet {
     if ((this.bodiesChanged || membersChanged) && this.needsSettling) this.solidsChanged();
   }
   private readonly trailerSupport: FleetSupport;
-  private readonly nativePlace = new Map<Vehicle, (x: number, z: number, heading: number) => boolean>();
+  private readonly nativePlace = new Map<Vehicle, (x: number, z: number, heading: number, referenceY?: number) => boolean>();
   private teleportTrial = false;
   private readonly nativeRespawn = new Map<Vehicle, () => void>();
   teleportAttempts = 0;
@@ -139,13 +139,16 @@ export class Fleet {
   private readonly groundPoint = { y: 0 };
   private gx = 0; private gz = 0;
   private readonly readGround = () => {
-    const ground = this.terrain.heightAt(this.gx, this.gz), deck = this.roads.deckHeight(this.gx, this.gz);
+    // The reference is the 1e6 contact height: any site deck counts, as on main (no overpass rule here yet).
+    const ground = this.terrain.heightAt(this.gx, this.gz, this.groundPoint.y), deck = this.roads.deckHeight(this.gx, this.gz);
     return ground === null ? null : deck === null ? ground : Math.max(ground, deck);
   };
   readonly ground: Ground = (x, z) => {
     this.gx = x; this.gz = z; this.groundPoint.y = 1e6;
     return this.terrain.withGroundContact(this.groundPoint, this.readGround, true);
   };
+  /** A fleet placement stands where fleet ground does (the topmost deck, as on main), so it passes that height on. */
+  private reference(x: number, z: number): number | undefined { return this.ground(x, z) ?? undefined; }
   private readonly changed = (x: number, z: number, size: number) => {
     this.supportRevision++;
     if (this.visitPending && this.visitPending.x + 150 >= x && this.visitPending.x - 150 <= x + size && this.visitPending.z + 150 >= z && this.visitPending.z - 150 <= z + size) this.visitDirty = true;
@@ -193,7 +196,7 @@ export class Fleet {
     if (tow.world.yard) tow.world.yard.coupledBodies = this.worldBodiesProvider;
     for (const member of this.members) {
       const place = member.vehicle.place.bind(member.vehicle); this.nativePlace.set(member.vehicle, place);
-      member.vehicle.place = (x, z, heading) => { return this.teleportTrial ? place(x, z, heading) : this.placeMovement(member, x, z, heading); };
+      member.vehicle.place = (x, z, heading, referenceY) => { return this.teleportTrial ? place(x, z, heading, referenceY ?? this.reference(x, z)) : this.placeMovement(member, x, z, heading); };
       this.nativeRespawn.set(member.vehicle, member.vehicle.respawn.bind(member.vehicle));
       member.vehicle.respawn = () => { this.message = 'Use R or RESET to recover this vehicle'; };
       const prior = member.vehicle.placementGuard;
@@ -1088,7 +1091,7 @@ export class Fleet {
     let parkedPose: FleetPose | null = null;
     const reason = fleetMove({ rollback: () => { before(); undoModel?.(); if (m.id === 'truck') this.writeGates(); }, propose: () => {
       const guard = v.placementGuard; let proposed = false;
-      try { v.placementGuard = p => { proposed = m.id !== 'truck' || this.tow.allowsPose(p); return proposed; }; this.withRampContact(() => this.nativePlace.get(v)!(x, z, heading)); }
+      try { v.placementGuard = p => { proposed = m.id !== 'truck' || this.tow.allowsPose(p); return proposed; }; this.withRampContact(() => this.nativePlace.get(v)!(x, z, heading, this.reference(x, z))); }
       finally { v.placementGuard = guard; }
       if (m.state === 'PARKED' && m.id !== 'truck') { parkedPose = m.support!.fit(v.x,v.z,v.heading,this.ground,m.pose?.spin??0); if (parkedPose) { Object.assign(v,{y:parkedPose.y,pitch:parkedPose.pitch,roll:parkedPose.roll}); m.support!.draw(parkedPose); } else proposed=false; }
       if (m.id === 'truck') this.tow.update();
@@ -1161,7 +1164,7 @@ export class Fleet {
           if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw })) { failure = 'The trailer destination is blocked'; continue; }
           // This loop owns the road/turn search; do not invoke a nested endpoint-searching guard.
           const guard = actor.vehicle.placementGuard;
-          try { actor.vehicle.placementGuard = () => true; actor.vehicle.place(x, z, yaw); }
+          try { actor.vehicle.placementGuard = () => true; actor.vehicle.place(x, z, yaw, height); }
           finally { actor.vehicle.placementGuard = guard; }
           if (Math.hypot(actor.vehicle.x - x, actor.vehicle.z - z) > 125) continue;
           actor.vehicle.vx=actor.vehicle.vz=actor.vehicle.vy=actor.vehicle.speed=0;

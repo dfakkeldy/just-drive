@@ -20,7 +20,8 @@ export class SocialView {
     const id = Number(ev.key)-1;
     if (/^[1-8]$/.test(ev.key) && isPhraseId(id)) { ev.preventDefault(); ev.stopImmediatePropagation(); this.net.chat(id); }
   };
-  constructor(private readonly net: Net, private readonly ground: (x:number,z:number) => number | null, touch = false) {
+  constructor(private readonly net: Net, private readonly ground: (x:number,z:number,referenceY?:number) => number | null, touch = false,
+    private readonly height: (y:number) => number = y => y) {
     this.root.id = 'mpSocial';
     // A phone's screen edges belong to the driving controls, so there the panel lives in Settings, after the race
     // (the way the race panel does). Bubbles over cars stay on the road for everyone: they take no touches.
@@ -70,10 +71,11 @@ export class SocialView {
       let bubble = this.bubbleNodes.get(c.id);
       if (!bubble) { bubble = document.createElement('div'); this.bubbleNodes.set(c.id,bubble); this.bubbles.append(bubble); }
       bubble.hidden = true;
-      const p = c.id === this.net.me?.id ? me : peers.find(p => p.id === c.id);
-      if (!p) continue;
-      const y = 'y' in p ? p.y : (this.ground(p.x,p.z) ?? 0) + p.air;
-      this.point.set(p.x,y+4,p.z).applyMatrix4(camera.matrixWorldInverse);
+      const peer = c.id === this.net.me?.id ? null : peers.find(p => p.id === c.id);
+      if (peer === undefined) continue;
+      // A peer's bubble floats over its ghost, which stands on the deck within reach of the peer's own height.
+      const y = peer ? (this.ground(peer.x,peer.z,peer.y === undefined ? undefined : this.height(peer.y)) ?? 0) + peer.air : me.y;
+      this.point.set(peer ? peer.x : me.x,y+4,peer ? peer.z : me.z).applyMatrix4(camera.matrixWorldInverse);
       if (this.point.z >= 0) continue;
       this.point.applyMatrix4(camera.projectionMatrix);
       if (Math.abs(this.point.x)>1 || Math.abs(this.point.y)>1 || this.point.z>1) continue;

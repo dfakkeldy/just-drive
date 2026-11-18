@@ -358,7 +358,7 @@ export class Props {
       const angle = m.angle + Math.sin(m.rock * 24) * m.rock * .13;
       this.axis.set(m.dz, 0, -m.dx);
       this.rotation.setFromAxisAngle(this.axis, angle);
-      const ground = this.terrain.heightAt(m.x, m.z) ?? y;
+      const ground = this.terrain.heightAt(m.x, m.z,y) ?? y;
       this.fall.makeRotationFromQuaternion(this.rotation);
       this.fall.setPosition(m.x, ground, m.z);
       this.matrix.makeTranslation(-m.x, -ground, -m.z);

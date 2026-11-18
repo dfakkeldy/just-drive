@@ -37,7 +37,7 @@ async function load(query='') {
     ft.fixture=()=>{endings.close();f.judge.reset();ft.place(7,46);ft.stop(240);return endings.busy};
     ft.guard=(u,v,heading,n=1200)=>{endings.close();f.judge.reset();ft.place(u,v,heading);let minU=99,maxU=-99,maxV=-99,minY=99;for(let i=0;i<n;i++){ft.tick({throttle:1,steer:0,handbrake:false});minU=Math.min(minU,c.x-s.x);maxU=Math.max(maxU,c.x-s.x);maxV=Math.max(maxV,c.z-s.z);minY=Math.min(minY,c.y)}return {minU,maxU,maxV,minY,offer:endings.busy}};
     ft.pass=()=>{endings.close();f.judge.reset();ft.place(7,25);let speed=0;for(let i=0;i<1400 && c.z<s.z+58;i++){ft.tick({throttle:1,steer:0,handbrake:false});if(Math.abs(c.z-s.z-46)<.2)speed=c.speed}return {speed,offer:endings.busy}};
-    ft.place=(u,v,heading=Math.PI)=>{c.place(s.x+u,s.z+v,heading);c.speed=0;c.assist=0;c.steerAngle=0};
+    ft.place=(u,v,heading=Math.PI)=>{c.place(s.x+u,s.z+v,heading,s.deckHeight(s.x+u,s.z+v)??undefined);c.speed=0;c.assist=0;c.steerAngle=0};
     ft.stop=(n=400)=>ft.tick({throttle:0,steer:0,handbrake:true},n);
     ft.route=async()=>{
       c.assist=0;const pts=c.roads.roads.find(r=>r.id===922).pts.slice(1).map(([x,z])=>[x,z]);
