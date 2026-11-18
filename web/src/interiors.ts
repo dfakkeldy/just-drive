@@ -7,7 +7,8 @@ export interface InteriorGame {
   readonly result: InteriorResult | null;
   readonly readout: string;
   update(dt: number, input: Input): void;
-  render(renderer: THREE.WebGLRenderer): void;
+  /** `draw`, when given, takes the place of `renderer.render` (finish.ts `EdgeSamples`). */
+  render(renderer: THREE.WebGLRenderer, draw?: (scene: THREE.Scene, camera: THREE.Camera) => void): void;
   leave(): void;
   dispose(): void;
 }
@@ -143,7 +144,7 @@ export class Interiors {
       if (p.game.result) this.passage = { ...p, kind: 'leaving', time: 0 };
     }
   }
-  render(renderer: THREE.WebGLRenderer): void {
-    if (this.passage.kind === 'inside' || this.passage.kind === 'leaving') this.passage.game.render(renderer);
+  render(renderer: THREE.WebGLRenderer, draw?: (scene: THREE.Scene, camera: THREE.Camera) => void): void {
+    if (this.passage.kind === 'inside' || this.passage.kind === 'leaving') this.passage.game.render(renderer, draw);
   }
 }

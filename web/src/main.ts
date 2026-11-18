@@ -37,6 +37,9 @@ import { detailSetting } from './detail';
 import { offlinePlay } from './offline-play';
 import { bindOfflineVersion } from './offline-version';
 import { pictureSetting } from './picture';
+import { EdgeSamples, Finish, type CloudLight } from './finish';
+import { FINISH, finishSetting } from './finish-choice';
+import { cloudReflections } from './finish-shaders';
 import { startHere, placeAtStart } from './start-here';
 import { startKey } from './start-key';
 import { startTouchQuality } from './touch-quality';
@@ -99,7 +102,7 @@ import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
 import { createTouchControls } from './touch';
 import { drivingHelpSetting } from './driving-help';
-import { Trees, crownTest } from './trees';
+import { Trees, crownTest, treeLook } from './trees';
 import { CoastSite } from './coast-site';
 import { Coast } from './coast';
 import { Vehicle, type Input } from './vehicle';
@@ -134,6 +137,9 @@ const baseArea = await siteArea(params);
 const touchDevice = matchMedia('(pointer: coarse)').matches || params.get('touch') === '1';   // ?touch=1 shows the phone controls for a test
 const quality = startTouchQuality(touchDevice, params.get('q'));
 const LOW = quality.low;
+// A test of a richer look (?leaves=1): leaf clumps on the trees.
+treeLook.leafy = params.get('leaves') === '1';
+treeLook.oneSample = FINISH.oneSample;
 const ERA = readEra(params, baseArea.id, SITE.era);
 const AREA = areaInEra(baseArea, ERA);
 const gameMode = ERA.explore ? 'explore' : AREA.mail ? readMode(params, undefined, SITE) : 'explore', mailMode = gameMode === 'mail';
@@ -190,7 +196,9 @@ if (touchDevice) noZoom();   // two quick taps on a button must not zoom the pag
 // Saved touch full detail is guarded by an early start mark (touch-quality.ts).
 // The logarithmic depth buffer keeps far shores clean but makes every pixel cost more, so phone mode goes without it.
 quality.watch(canvas);
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW, logarithmicDepthBuffer: !LOW, powerPreference: 'high-performance' });
+if (FINISH.mode && FINISH.low !== LOW) console.warn('finish: the choice was made for another detail', FINISH.low, LOW);
+if (FINISH.clouds) cloudReflections();
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW && FINISH.canvasSamples, logarithmicDepthBuffer: !LOW, powerPreference: 'high-performance' });
 // Phones have many pixels and less power. On a desktop the player chooses how sharp the picture is (picture.ts).
 // A picture run (hud=0) is drawn at full sharpness, and ?res=<ratio> pins any value: so pictures and frame rate
 // measurements can be compared with each other.
@@ -200,6 +208,7 @@ const chosenPicture = (!LOW || touchDevice) && !bare && !(askedRatio > 0);
 const picture = chosenPicture ? pictureSetting(renderer, document.getElementById('settings'), document.getElementById('startOver'),
   (choice, rate) => { if (rate < 30) detail?.nudge(rate); }, touchDevice, touchDevice && LOW) : null;
 const detail = !bare ? detailSetting(renderer.getContext(), document.getElementById('settings'), document.getElementById('startOver'), LOW, undefined, touchDevice, quality.writable, quality.chosen) : null;
+if (!bare && FINISH.offered && !LOW && !touchDevice) finishSetting(document.getElementById('settings'), document.getElementById('startOver'), FINISH.mode !== null);
 if (!bare) quality.notice(document.getElementById('settings'));
 if (!picture) renderer.setPixelRatio(askedRatio > 0 ? Math.min(askedRatio, 3) : Math.min(devicePixelRatio, LOW ? 1.35 : 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1501,6 +1510,27 @@ function updateWorld(segment: WorldSegment | 'ending' | 'ending-mirror', dt: num
   }
 }
 
+// The finish pass (finish.ts; finish-choice.ts says when). Without it the world is drawn straight to the screen, as before.
+// More cost-check choices (tools/finish-cost.mjs): finishType=byte colour store, finishSmooth=0|1 edge smoothing.
+const finishTest = { samples: FINISH.samples,
+  type: params.get('finishType') === 'byte' ? THREE.UnsignedByteType : undefined, smooth: params.has('finishSmooth') ? params.get('finishSmooth') === '1' : undefined };
+const finish = FINISH.mode ? new Finish(renderer, FINISH.mode, LOW, !!nightLook, FINISH.clouds ? shared as unknown as CloudLight : null, finishTest) : null;
+// The interiors do not go through the pass. On a canvas without edge samples they bring their own.
+const interiorDraw = !LOW && !FINISH.canvasSamples ? new EdgeSamples(renderer).draw : undefined;
+// The cost check times one world draw from here (dev server only).
+const drawProbe: { before?: () => void; after?: () => void } | null = import.meta.env.DEV && finish ? {} : null;
+// The water check reads the depth of the world just drawn: the pass keeps that in its own picture.
+function afterWorld(): void {
+  if (!waterReflections) return;
+  if (finish?.on) finish.onWorld(() => waterReflections.afterRender(camera)); else waterReflections.afterRender(camera);
+}
+function drawWorld(): void {
+  drawProbe?.before?.();
+  if (finish?.on) finish.render(scene, camera); else renderer.render(scene, camera);
+  drawProbe?.after?.();
+}
+if (drawProbe) Object.assign((window as unknown as { mmm?: Record<string, unknown> }).mmm ??= {}, { finish, drawProbe });
+
 const shadowFocus = new THREE.Vector3(), shadowDir = new THREE.Vector3();
 function drawEnding(dt: number): void {
   if (ride.update) updateWorld('ride', 0);
@@ -1514,8 +1544,8 @@ function drawEnding(dt: number): void {
   renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
   farVisibility?.update(camera,performance.now()/1000);
   updateWorld('ending-mirror', 0);
-  try { renderer.render(scene, camera); } finally { farVisibility?.settle(); waterReflections?.settle(); }
-  waterReflections?.afterRender(camera);
+  try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
+  afterWorld();
 }
 
 // Reuse this record: the HUD path allocates no per-frame state object.
@@ -1542,8 +1572,8 @@ function frame(now: number) {
       updateWorld('ending-mirror', 0);
       // The replay camera moves: re-check far visibility as the drive and ending frames do.
       farVisibility?.update(camera,now/1000);
-      try { renderer.render(scene, camera); } finally { farVisibility?.settle(); waterReflections?.settle(); }
-      waterReflections?.afterRender(camera);
+      try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
+      afterWorld();
       replay.afterRender();
       requestAnimationFrame(frame); return;
     }
@@ -1553,8 +1583,8 @@ function frame(now: number) {
       refreshMap(); miniMap.redrawNext();
       miniMap.update(0, vehicle.x, vehicle.z, vehicle.heading, mapStops, mapMarks, mapCars);
     }
-    if (interiors.busy) interiors.render(renderer);
-    else renderer.render(scene, camera);
+    if (interiors.busy) interiors.render(renderer, interiorDraw);
+    else drawWorld();
     requestAnimationFrame(frame); return;
   }
   // Simulation time excludes paused wall time, including shader/animal animation.
@@ -1620,7 +1650,7 @@ function frame(now: number) {
     if (shift.updateIndoors(clockRuns ? clockDt : 0)) { quality.frame(0, false); interiors.closeForDay(); shift.end(); }
     else {
       interiors.update(dt, driveInput(), vehicle, false);
-      interiors.render(renderer);
+      interiors.render(renderer, interiorDraw);
       quality.frame(clockDt, qualityReady);
     }
     // Finish outdoor tile builds on the paused budget while the interior freezes the world.
@@ -1734,8 +1764,8 @@ function frame(now: number) {
   multiplayer?.update(realDt, camera, dt > 0 && driving);
   farVisibility?.update(camera,now/1000);
   updateWorld('mirror', dt, realDt, now);
-  try { renderer.render(scene, camera); } finally { farVisibility?.settle(); waterReflections?.settle(); }
-  waterReflections?.afterRender(camera);
+  try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
+  afterWorld();
   if(started&&!farLoading&&(farKey||tallKey)){farLoading=true;setTimeout(()=>{void loadFarViews();},0);}
   // A photo is evidence of what the driver saw: the free camera takes none.
   if (photoRequested) { if (mode === 'drive') shift.takePhoto(vehicle, camera); photoRequested = false; }

@@ -330,7 +330,8 @@ async function connect(url) {
 // attributable to scene owners and the bounded 96-tile spare cache, never an unreachable terrain resource.
 async function runMode(input) {
   const url=new URL(input), low=url.searchParams.get('q')==='low', mode=low?'phone':'desktop';
-  for(const [k,v]of Object.entries({hud:'0',radio:'0',res:'1',shadows:'1',cam:'624271,5103301,2.2,90,-3,51',camground:'1',at:'624271,5103301,90'}))url.searchParams.set(k,v);
+  // finish=0: the pictures are read from the canvas right after the world draw; the finish pass (finish.ts) draws the world elsewhere first.
+  for(const [k,v]of Object.entries({finish:'0',hud:'0',radio:'0',res:'1',shadows:'1',cam:'624271,5103301,2.2,90,-3,51',camground:'1',at:'624271,5103301,90'}))url.searchParams.set(k,v);
   let p;
   const part=async(label,fn)=>{
     p.phase(label);

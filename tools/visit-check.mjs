@@ -4,8 +4,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { transform } from '../web/node_modules/esbuild/lib/main.js';
 const path = 'web/src/visit.ts';
 // Preview-only model/detail/trim/clean keys, the crowns look test, and the mail car's body (car=blender|code), keep the game's normal title-card policy.
-const players = 'area car clean crowns date detail time driveAt engine era exag mode model mp paved playerDate playerTime poster q radio reception room site start title touch traffic trailer trim trip vehicle view weather'.split(' ');
-const tests = 'aiDriver aiDriverCheck airport animal at break brooks cat cam camground cap church coast damage day demo dir dirt double f fishingCheck trafficCheck wildlife grass hawkesbury home hour hud interior jumpCheck knock lawn low mabou mpserver n name pair park photo porch quarry reflections relief report res road run scene shadows sidewalks shot still stuffed test throw trees village x yard'.split(' ');
+const players = 'area car clean crowns date detail time driveAt engine era exag finish mode model mp paved playerDate playerTime poster q radio reception room site start title touch traffic trailer trim trip vehicle view weather'.split(' ');
+const tests = 'aiDriver aiDriverCheck airport animal at break brooks canvasAA cat cam camground cap church clouds coast damage day demo dir dirt double f finishSamples finishSmooth finishType fishingCheck trafficCheck wildlife grass hawkesbury home hour hud interior jumpCheck knock lawn leaves low mabou mpserver n name pair park photo porch quarry reflections relief report res road run scene shadows sidewalks shot still stuffed test throw trees village x yard'.split(' ');
 async function load(source) {
   const {code} = await transform(source, {loader:'ts', format:'esm'});
   return import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
