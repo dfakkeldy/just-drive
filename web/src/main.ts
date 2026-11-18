@@ -633,7 +633,10 @@ let yaw = 0, pitch = 0, flySpeed = 40, pendingShot: Shot | null = null;
 let waitingToDrive = true;
 const drone = new Drone();
 scene.add(drone.group);
-const roofAt = roofHeights(ERA.modern && buildingList ? buildingList : [], manifest.village, EXAG, SEA_LEVEL);   // 1884 draws other roofs
+// The drone's floor reads the roofs that are drawn: the surveyed boxes less those Mabou's main street replaces, and the
+// hand-built main street's own roofs, measured from its geometry once each place is built. 1884 draws other roofs.
+const boxRoofAt = roofHeights(ERA.modern && buildingList ? mabouSite ? mabouSite.drawn(buildingList) : buildingList : [], manifest.village, EXAG, SEA_LEVEL);
+const roofAt = mabouMain ? (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain.roofAt(x, z)) : boxRoofAt;
 if (import.meta.env.DEV) expose({ drone });
 
 function applyShot(s: Shot) {

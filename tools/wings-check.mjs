@@ -35,10 +35,13 @@ assert.ok(sites.every((b) => b.buildingId === undefined || b.buildingId === b.id
     // The 1884 scene clears trees under every roof: one record per building and the further blocks of a large one, never a wing.
     /new HistoryScene\(terrain, roads, streams, roofSites\(buildingList \?\? \[\]\), ground\)/,
     /^const porchBox = .*\? PorchSite\.find\(buildingList\) : null;$/,
-    // The camera drone keeps over every roof: each wing and block has its own height, and none of them is counted.
-    /^const roofAt = roofHeights\(ERA\.modern && buildingList \? buildingList : \[\], manifest\.village, EXAG, SEA_LEVEL\);/,
+    // The camera drone keeps over every drawn roof: each wing and block has its own height, and none of them is counted.
+    // The boxes Mabou's main street replaces are left out; its own roofs come from mabouMain.roofAt.
+    /^const boxRoofAt = roofHeights\(ERA\.modern && buildingList \? mabouSite \? mabouSite\.drawn\(buildingList\) : buildingList : \[\], manifest\.village, EXAG, SEA_LEVEL\);/,
     // The drawing: less the porch house and the places Mabou's main street models (both stay properties).
     /^const drawnBuildings = buildingList && porchBox \? PorchHouse\.drawn\(buildingList, porchBox\) : buildingList;$/,
+    // The public wharves keep clear of every drawn footprint, wings included (footprints only, nothing is counted).
+    /^const wharves = .*\(buildings \? buildingList \?\? \[\] : \[\]\)\.map\(b => b\.footprint\)\) : null;$/,
     // The yard dog's invented driveway only asks if the list exists. Its houses come from `properties` (next assert).
     /^const yardDogSite = ERA\.modern && AREA\.id === 'mabou' && buildingList && props \? YardDogSite\.create\(\{$/];
   assert.match(main, /YardDogSite\.create\(\{[^}]*houses: properties\.filter\(/, 'the yard dog counts houses from the properties, not from the list with wings');
