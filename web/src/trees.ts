@@ -542,6 +542,7 @@ export class Trees {
       const z = z0 + data.getUint16(o + 2, true) / 65536 * TILE;
       if(this.terrain.groundClassAt(x,z)===6||this.terrain.groundClassAt(x,z)===8)continue;
       if (this.excludes?.(x + m.village[0], m.village[1] - z)) continue;
+      if (this.terrain.sidewalks?.vegetationAt(x,z,Math.min(20,data.getUint8(o+5)*.1))) continue;
       if (pavedTreeCell(pavedMask,x-x0,z-z0)) continue;
       if (clear.some(([left, near, right, far]) => x >= left && x <= right && z >= near && z <= far)) continue;
       if(this.terrain.coast?.contains(x,z)){

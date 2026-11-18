@@ -1,0 +1,37 @@
+{
+  "sourceHead": "b7a712986fe2dd06f806abe7d2416dfd1c7c9be8",
+  "method": "Frozen desktop file bytes and canonical selected LOW graph bytes before the quality transport change",
+  "areas": {
+    "mabou": {
+      "desktopSha256": "5bd6129ce440a0ad5a337e435aa1c6d1d7ebcb612772fa519d8d63c3a71f545e",
+      "low": {
+        "graph": "c7a9fe9a9992928991fd3cfbed5c7c6a2fa08869bd1587bb9637e74e05383e51",
+        "geometry": "24f0016aef9bdf5c1f7f6c65c76fa99df2aa53ae7d2bf57da727fda1c92f634d",
+        "jobs": "4bff2544309ba2e8f1decf2747b2996031fbe3c47dc8b1ec19c51127c2067d36",
+        "masks": "cb08949bce9c195b20a99d2a92492195e69bffd99099b3093944912cd058918f",
+        "dependencies": "0becf25f0361707b4209c3ca577e1c86b073e17ccab1fde3e03f7cc0f79dd406"
+      }
+    },
+    "porthood": {
+      "desktopSha256": "f948657d8c0d42125ea4891d8d3956090211dc66e55e50e67281b1d16913c08e",
+      "low": {
+        "graph": "8713f65e99ffba455d5ce9b5a54c5d40196679f6a9cf1c22884694bae684cc16",
+        "geometry": "c25f1f10ce5f25849d1de706ba429e6fcf61c74fc5ffdca8d4afc3a80f1b2db8",
+        "jobs": "2b60f4a18788e4a2f7712238cc31da8ae4773cb8c6fd52b106cd3d5a6fafd41d",
+        "masks": "4cce9abcbc63266abeafafcb92e9711c626c8836f545a20b95222a5fbbaf2ac6",
+        "dependencies": "e7f617a9151115e1ddd8fcab990dc6413d08d3718a7d6dc1c4d67f5911a49a4d"
+      }
+    },
+    "pointtupper": {
+      "desktopSha256": "6ee348699b50985946694651d0eb9922e6d08c0d8b0043c3528681f5f6cd9730",
+      "low": {
+        "graph": "3a322dc557b9b21d8436216d4b0f656eb08f77addccc88ba9d1987690fe11212",
+        "geometry": "50f5ea38236646816c246b9e788a548cee9226217e5931993fc3bb469c2df8cb",
+        "jobs": "92a50371ad3206e5bf86ce04962a7638b6e38425d8cf202f5bffa6fa73c2d095",
+        "masks": "076328c6d0df5d1d75f8ee5e5e421d0db6425dc3b9f0895e6ca2445bd0c9e1bc",
+        "dependencies": "7a7c38f3e721e7f3da7d30eb2b76b5537ffb5e9afc58cb4c0ddaefff22cae63a"
+      }
+    }
+  },
+  "mabouLand": "Mabou re-pinned 18 Nov 2026 for the #1229 Mabou main-street land (mmm-m4 bake on live + #1227 + #1219 + #1229); Port Hood and Port Hawkesbury keep the b7 bytes"
+}
