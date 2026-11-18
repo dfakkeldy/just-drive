@@ -3,10 +3,10 @@
 // tools/drift-rules-check.mjs holds every rule here (and tools/drift-rules-mutations.mjs proves the check can fail).
 //
 // The rules, in words. The handbrake with the wheel turned at speed swings the tail out (pavement needs more speed than
-// loose ground). On loose ground, off the throttle, a flick (the wheel hard one way, then hard the other) steps the tail
-// out a little on the side of the second turn, and the path keeps turning at least as the wheel asks; a lift and one
-// turn-in, however hard, is the ordinary car. A step that small shows and counts nothing (COUNT_ANGLE); power and
-// counter-steer open it into a drift. After the swing the slide holds only with power and counter-steer: the front
+// loose ground). On loose ground, off the throttle, a flick (the wheel hard one way, then hard the other) arms a slide on
+// the side of the second turn; nothing changes yet. It begins only in order: power on while still steering the flick's way
+// (LIFT_POWER seconds), then the catch with counter-steer, within LIFT_WINDOW of the flick. Counter-steer first (a wobble,
+// a correction of a correction) spoils it. So a lift and a turn-in, an S-bend or a slalom is the ordinary car. After the swing the slide holds only with power and counter-steer: the front
 // wheels aim where the car is going, so more counter-steer holds a wider angle and less a narrower one. Wheel straight,
 // steering into the slide, a lift, a hit or a slow car: the slide ends, and the ordinary tyres take over. A handbrake still
 // held then cannot start another until it is let go.
@@ -47,8 +47,9 @@ export const HANDBRAKE_STEER = .35;
 export const LIFT_FROM = .6, LIFT_OFF = .1, LIFT_BRAKE = -.1, LIFT_SECONDS = 1, LIFT_WINDOW = .45, LIFT_STEER = .85;
 /** After an entry the tail swings for this long whatever the wheel says; then the hold rules apply. */
 export const SWING_SECONDS = .45;
-/** A flick's swing steps the tail out by this share of the angle; power and counter-steer open it from there. */
-export const LIFT_SWING = .15;
+/** An armed flick begins only after the throttle (above LIFT_OFF) has been on this long before any counter-steer (at least
+ * CATCH); then counter-steer of at least CATCH begins it. */
+export const LIFT_POWER = .2, CATCH = .15;
 /** Counter-steer (0 to 1) that holds the spec angle with full power. More holds wider, up to maxAngle. */
 export const HOLD_STEER = .4;
 /** The counter-steer the hold reads follows more counter-steer at once but lets go over this many seconds: a key is on or
@@ -67,7 +68,7 @@ export const END_SPEED = 4, FADE_SPEED = 3;
 /** A slide that leaves the path by more than this past maxAngle (a hit, a wall) has ended. */
 export const LOST_ANGLE = .35;
 /** The least slide reported to the score stream: a twitch is not a drift. */
-export const COUNT_SECONDS = .6, COUNT_ANGLE = .17, COUNT_LENGTH = 6;
+export const COUNT_SECONDS = .6, COUNT_ANGLE = .1, COUNT_LENGTH = 6;
 /** Phone: GO and BRAKE held together are the handbrake once held CHORD_SECONDS at the ride's least drift speed
  * (spec.looseSpeed) or more. Before that, and slower, BRAKE wins as it always did: stopping and reversing are unchanged,
  * and a thumb rolling from one pedal to the other never pulls it. */
@@ -146,6 +147,8 @@ export class Drift {
   private hardSide = 0; private sinceHard = Infinity; private flick = 0;
   /** A slide ended with the handbrake held: no handbrake entry until it is let go. */
   private spent = false;
+  /** A flick armed to this side (+1, -1; 0 none) for armedFor seconds; spoiled when the catch came before the power. */
+  private armed = 0; private armedFor = 0; private spoiled = false; private powerFor = 0;
   private swing = 0;
   /** The counter-steer the hold reads (0 to 1): up at once, down over HANDS seconds. */
   private hands = 0;
@@ -157,10 +160,10 @@ export class Drift {
   private pending: DriftFacts | null = null;
   private readonly motion: DriftMotion = { angle: 0, pathRate: 0, scrub: 0, target: 0 };
 
-  /** A slide wide enough to show: the meter, the dust and the tyre sound. A step under COUNT_ANGLE shows nothing. */
-  get shown(): boolean { return this.active && Math.abs(this.angle) >= COUNT_ANGLE; }
-  /** 0 to 1: how far the slide is open, for the sound and the dust; 0 unless shown. */
-  slide(spec: DriftSpec | undefined): number { return this.shown && spec ? Math.min(1, Math.abs(this.angle) / spec.angle) : 0; }
+  /** A slide shows (the meter, the dust, the tyre sound) for as long as it is active. */
+  get shown(): boolean { return this.active; }
+  /** 0 to 1: how far the slide is open, for the sound and the dust. */
+  slide(spec: DriftSpec | undefined): number { return this.active && spec ? Math.min(1, Math.abs(this.angle) / spec.angle) : 0; }
 
   /** Every grounded step, sliding or not: a lift-off entry needs to know when the throttle was last held. */
   watch(c: DriftControls, dt: number): void {
@@ -170,6 +173,13 @@ export class Drift {
     if (hard) { if (hard !== this.hardSide && this.sinceHard <= LIFT_WINDOW) this.flick = hard; this.hardSide = hard; this.sinceHard = 0; }
     else this.sinceHard += dt;
     if (!c.handbrake) this.spent = false;
+    if (this.armed) {
+      const counter = clamp(-c.steer * this.armed, 0, 1);
+      this.armedFor -= dt;
+      if (this.armedFor <= 0 || c.handbrake) this.armed = 0;
+      else if (counter >= CATCH) { if (this.powerFor < LIFT_POWER) this.spoiled = true; }
+      else if (c.throttle > LIFT_OFF) this.powerFor += dt;
+    }
   }
 
   /** The side (+1 or -1) of a slide that should begin now, or 0. Call after watch(). */
@@ -177,15 +187,21 @@ export class Drift {
     if (this.active || !(g.speed > 0) || c.steer === 0) return 0;
     const loose = looseSurface(g.surface), slower = g.towed ? 1 / TOWED_SPEED : 1;
     if (c.handbrake && !this.spent && Math.abs(c.steer) >= HANDBRAKE_STEER && g.speed >= (loose ? spec.looseSpeed : spec.firmSpeed) / slower) return Math.sign(c.steer);
-    // The flick, off the throttle: the tail steps out on the side of the second turn, the way the wheel now points.
-    if (loose && !c.handbrake && this.flick && g.speed >= spec.liftSpeed / slower && this.sinceThrottle > 0 && this.sinceThrottle <= LIFT_SECONDS
-      && c.throttle <= LIFT_OFF && c.throttle >= LIFT_BRAKE) return this.flick;
+    if (!loose || c.handbrake || g.speed < spec.liftSpeed / slower) { this.armed = 0; return 0; }
+    // The flick, off the throttle, arms it on the side of the second turn; nothing changes yet.
+    if (this.flick && this.sinceThrottle > 0 && this.sinceThrottle <= LIFT_SECONDS && c.throttle <= LIFT_OFF && c.throttle >= LIFT_BRAKE) {
+      this.armed = this.flick; this.armedFor = LIFT_WINDOW; this.powerFor = 0; this.spoiled = false; return 0;
+    }
+    // Power first, then the catch (watch() has spoiled a catch that came first): the tail goes out on the armed side.
+    if (this.armed && !this.spoiled && -c.steer * this.armed >= CATCH) { const side = this.armed; this.armed = 0; return side; }
     return 0;
   }
 
   /** Start a slide on this side. `angle` is the measured slide angle now (about 0 from a grip turn). */
   begin(side: number, how: 'handbrake' | 'lift', angle: number, x: number, z: number, steer = side): void {
-    this.active = true; this.hands = clamp(-steer * side, 0, 1); this.side = side; this.entry = how; this.ended = ''; this.angle = angle; this.swing = SWING_SECONDS;
+    // A handbrake slide swings out on its own; a flick's catch opens it with the driver's power and counter-steer.
+    this.active = true; this.hands = clamp(-steer * side, 0, 1); this.side = side; this.entry = how; this.ended = ''; this.angle = angle;
+    this.swing = how === 'handbrake' ? SWING_SECONDS : 0; this.armed = 0;
     this.seconds = this.length = this.peak = this.angleTime = this.speedTime = 0;
     this.surfaces.clear(); this.x0 = x; this.z0 = z;
   }
@@ -200,9 +216,8 @@ export class Drift {
     this.hands = counter >= this.hands ? counter : this.hands + (counter - this.hands) * (1 - Math.exp(-dt / HANDS));
     let target = holdAngle(spec, c, this.side, g.surface, g.towed, -this.hands * this.side);
     if (this.swing > 0) {
-      // The swing: the tail goes out to the spec angle on its own (a flick only steps it out a little).
-      const swing = spec.angle * (looseSurface(g.surface) ? 1 : FIRM_HOLD) * towed;
-      target = Math.max(target, this.entry === 'lift' ? swing * LIFT_SWING : swing);
+      // The swing: the tail goes out to the spec angle on its own.
+      target = Math.max(target, spec.angle * (looseSurface(g.surface) ? 1 : FIRM_HOLD) * towed);
       this.swing -= dt;
     }
     target *= clamp((g.speed - END_SPEED) / FADE_SPEED, 0, 1);
@@ -254,7 +269,7 @@ export class Drift {
   }
 
   /** A placement, a restart or a respawn: any slide is dropped without a report. */
-  reset(): void { if (this.active) this.finish('reset', 0, 0); this.sinceThrottle = this.sinceHard = Infinity; this.hardSide = this.flick = 0; this.spent = false; this.pending = null; }
+  reset(): void { if (this.active) this.finish('reset', 0, 0); this.sinceThrottle = this.sinceHard = Infinity; this.hardSide = this.flick = this.armed = 0; this.spent = false; this.pending = null; }
 
   /** The last finished drift, once. */
   take(): DriftFacts | null { const p = this.pending; this.pending = null; return p; }

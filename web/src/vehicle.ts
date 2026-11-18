@@ -357,7 +357,7 @@ export class Vehicle {
     const touchLimit = !(input.touch && this.strongHelp && this.touchSpeedLimit) || s.kind >= 8 && s.kind <= 10 ? 0 : !onRoad ? 50 / 3.6 : s.washboard ? 50 / 3.6 : s.kind === 1 ? 100 / 3.6 : s.kind === 2 ? 90 / 3.6 : s.kind === 13 ? 90 / 3.6 : s.kind === 3 ? 75 / 3.6 : s.kind === 5 ? 55 / 3.6 : 50 / 3.6;
     // A drift has its own step (driftStep); every other step is the ordinary grip model below, unchanged.
     let slid = false;
-    if (this.airborne) this.drift.airborne(this.x, this.z);
+    if (this.airborne) { this.drift.airborne(this.x, this.z); this.drift.watch(input, dt); }   // the flick's clocks run in the air too
     else if (this.driftStep(dt, input, surf, slopeF, deepest, vf, vl, touchLimit)) { slid = true; vf = this.slideSpeed.forward; vl = this.slideSpeed.right; }
     if (!this.airborne && !slid) {
       // On washboard the tyres skip from ridge to ridge: the faster the car, the less they hold.

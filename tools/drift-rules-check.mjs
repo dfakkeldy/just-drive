@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { Object3D, PerspectiveCamera } from '../web/node_modules/three/build/three.module.js';
 import { Drift, LOOSE, looseSurface, holdAngle, slideAngle, HANDBRAKE_STEER, LIFT_STEER, LIFT_WINDOW, LIFT_SECONDS, TOWED_SPEED, HOLD_STEER, FIRM_HOLD,
-  SWING_SECONDS, LIFT_SWING, EXIT_ANGLE, END_SPEED, COUNT_SECONDS, COUNT_ANGLE, COUNT_LENGTH, CHORD_SECONDS, phoneHandbrake } from '../web/src/drift-rules.ts';
+  SWING_SECONDS, LIFT_POWER, CATCH, EXIT_ANGLE, END_SPEED, COUNT_SECONDS, COUNT_ANGLE, COUNT_LENGTH, CHORD_SECONDS, phoneHandbrake } from '../web/src/drift-rules.ts';
 import { readFileSync } from 'node:fs';
 import { Vehicle } from '../web/src/vehicle.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
@@ -78,20 +78,24 @@ ok('entering: the handbrake with the wheel turned at speed; pavement needs more 
   assert.equal(d.begins(s, go(0, 1, true), g(s.looseSpeed * TOWED_SPEED, 'gravel', true)), 1);
 });
 
-ok('entering: on loose ground, off the throttle, a flick (hard one way, then hard the other) starts it on the second side', () => {
+ok('entering: on loose ground a flick off the throttle arms it; power on, then the catch, begins it on the flick side', () => {
   const s = CAR_SPEC.drift, g = (speed, surface = 'gravel') => ({ speed, surface, mu: .7, towed: false, turn: 0 });
-  // Lift, the wheel hard to `first` for `hold` seconds, straight for `gap`, then hard to `second`: what each step starts.
-  const flick = ({ surface = 'gravel', first = 1, second = -first, hold = .2, gap = 0, throttle = 0, speed = s.liftSpeed, lift = .1 } = {}) => {
-    const d = new Drift(); d.watch(go(1, 0), STEP); d.watch(go(throttle, 0), lift);
-    const started = [];
-    for (let t = 0; t < hold; t += STEP) { d.watch(go(throttle, first), STEP); started.push(d.begins(s, go(throttle, first), g(speed, surface))); }
+  // Lift; the wheel hard to `first`, then (after `gap`) hard to `second` (the flick); `power` seconds of throttle still
+  // steering `second`; then the catch. Returns [anything begun before the catch, what the catch begins].
+  const flick = ({ surface = 'gravel', first = 1, second = -first, hold = .2, gap = 0, throttle = 0, speed = s.liftSpeed, lift = .1, power = .25, caught = .5 } = {}) => {
+    const d = new Drift(), ground = g(speed, surface), seen = [];
+    const at = c => { d.watch(c, STEP); seen.push(d.begins(s, c, ground)); };
+    d.watch(go(1, 0), STEP); d.watch(go(throttle, 0), lift);
+    for (let t = 0; t < hold; t += STEP) at(go(throttle, first));
     if (gap) d.watch(go(throttle, 0), gap);
-    d.watch(go(throttle, second), STEP);
-    return [started.some(x => x !== 0), d.begins(s, go(throttle, second), g(speed, surface))];
+    at(go(throttle, second));
+    for (let t = 0; t < power - 1e-9; t += STEP) at(go(1, second));
+    at(go(1, -Math.sign(second) * caught));
+    return [seen.slice(0, -1).some(x => x !== 0), seen.at(-1)];
   };
-  assert.deepEqual(flick(), [false, -1], 'one hard turn starts nothing; the flick starts it on the side of the second turn');
+  assert.deepEqual(flick(), [false, -1], 'the flick and the power begin nothing; the catch begins it on the flick side');
   assert.deepEqual(flick({ first: -1 }), [false, 1]);
-  assert.deepEqual(flick({ second: 1 }), [false, 0], 'the same way again is no flick');
+  assert.deepEqual(flick({ second: 1 }), [false, 0], 'the same way twice is no flick');
   assert.deepEqual(flick({ second: -LIFT_STEER + .01 }), [false, 0], 'the second turn not hard');
   assert.deepEqual(flick({ first: .8, second: -.8 }), [false, 0], 'part lock both ways is steering, not a flick');
   assert.deepEqual(flick({ gap: LIFT_WINDOW + .05 }), [false, 0], 'too long between the turns');
@@ -101,6 +105,18 @@ ok('entering: on loose ground, off the throttle, a flick (hard one way, then har
   assert.deepEqual(flick({ throttle: -1 }), [false, 0], 'braking through it is not a lift');
   assert.deepEqual(flick({ surface: 'pavement' }), [false, 0], 'pavement needs the handbrake');
   assert.deepEqual(flick({ speed: s.liftSpeed - .1 }), [false, 0], 'too slow');
+  assert.deepEqual(flick({ power: 0 }), [false, 0], 'the catch before the power: a wobble');
+  assert.deepEqual(flick({ power: .15 }), [false, 0], 'not enough power first');
+  assert.deepEqual(flick({ power: LIFT_WINDOW + .05 }), [false, 0], 'the catch too late');
+  assert.deepEqual(flick({ caught: .1 }), [false, 0], 'a touch of counter-steer is no catch');
+  assert.ok(LIFT_POWER >= .15 && CATCH >= .1);
+  // Once the catch came first it stays spoiled: more power and another catch begin nothing.
+  const d = new Drift(), ground = g(s.liftSpeed);
+  d.watch(go(1, 0), STEP); d.watch(go(0, 0), .1); d.watch(go(0, 1), STEP); d.begins(s, go(0, 1), ground);
+  d.watch(go(0, -1), STEP); assert.equal(d.begins(s, go(0, -1), ground), 0);
+  d.watch(go(1, 1), STEP); assert.equal(d.begins(s, go(1, 1), ground), 0);
+  for (let t = 0; t < .3; t += STEP) { d.watch(go(1, -1), STEP); assert.equal(d.begins(s, go(1, -1), ground), 0); }
+  d.watch(go(1, 1), STEP); assert.equal(d.begins(s, go(1, 1), ground), 0, 'spoiled');
   const never = new Drift(); never.watch(go(0, 1), 1); never.watch(go(0, -1), STEP);
   assert.equal(never.begins(s, go(0, -1), g(30)), 0, 'no throttle before: nothing was lifted');
 });
@@ -146,10 +162,12 @@ ok('leaving: straightened, slowed, airborne, a hit, a reset; only a real drift i
   d = new Drift(); d.begin(1, 'handbrake', 0, 0, 0); a = 0;
   for (let t = 0; t < SWING_SECONDS - STEP; t += STEP) { a = d.step(s, go(1, 1), g, a, STEP).angle; assert.equal(d.check(s, 15, 0, 0), ''); }
   assert.ok(a > s.angle * .6, 'the tail swung out');
-  // A lift-off swing without the throttle back stays a small step of the tail.
-  d = new Drift(); d.begin(1, 'lift', 0, 0, 0); a = 0;
-  for (let t = 0; t < SWING_SECONDS; t += STEP) a = d.step(s, go(0, 1), g, a, STEP).angle;
-  assert.ok(a <= s.angle * LIFT_SWING + 1e-9, `lift swing ${a}`);
+  // A flick has no swing of its own: power and counter-steer open it, and without them it is over at once.
+  d = new Drift(); d.begin(1, 'lift', 0, 0, 0); a = d.step(s, go(0, 1), g, 0, STEP).angle;
+  assert.equal(a, 0); assert.equal(d.check(s, 15, 0, 0), 'straightened');
+  d = new Drift(); d.begin(1, 'lift', 0, 0, 0, -1); a = 0;
+  for (let t = 0; t < 2; t += STEP) a = d.step(s, go(1, -HOLD_STEER), g, a, STEP).angle;
+  assert.ok(Math.abs(a - s.angle) < .02, `the catch opens it to the held angle: ${a * DEG}`);
   // Too short, too narrow or too short a distance: not a drift.
   d = slide(COUNT_SECONDS - .1); d.finish('straightened', 0, 0); assert.equal(d.take(), null, 'too short');
   d = new Drift(); d.begin(1, 'lift', 0, 0, 0); a = 0;
@@ -181,6 +199,13 @@ ok('the real car enters, holds and leaves a drift on a gravel road', () => {
   assert.ok(run.every(r => Math.abs(r.turn) < 2.5 / DEG), 'no jump in heading on any step');
   const f = v.takeDrift();
   assert.ok(f && f.clean && f.surface === 'gravel' && f.angle > 18 && f.length > 40, JSON.stringify(f));
+});
+
+ok('in a slide the front wheels turn as on grip: its lock and its turn-in rate, not at once', () => {
+  const v = ride(CAR_SPEC); drive(v, 1.5, handbrakeIn()); assert.equal(v.drift.active, true);
+  const s = CAR_SPEC, most = (s.steerBaseRate + s.steerSpeedRate) * STEP + 1e-9;
+  for (let i = 0; i < 30; i++) { const before = v.steerAngle; v.update(STEP, go(1, i % 10 < 5 ? 1 : -1)); assert.ok(Math.abs(v.steerAngle - before) <= Math.max(most, s.steerReturnRate * STEP + 1e-9), `step ${i}`); }
+  assert.ok(Math.abs(v.steerAngle) <= s.maxSteer);
 });
 
 ok('the driver widens and tightens the slide: more counter-steer or throttle wider, less narrower', () => {
@@ -220,7 +245,7 @@ ok('pavement needs the handbrake and more speed; loose ground drifts easily', ()
   for (const ground of ['gravel', 'track', 'grass']) assert.equal(starts(ground, s.looseSpeed + .5, hb), true, ground);
   assert.equal(starts('pavement', s.looseSpeed + .5, hb), false);
   assert.equal(starts('pavement', s.firmSpeed + .5, hb), true);
-  const liftFlick = t => t < .2 ? go(1, 0) : t < .4 ? go(0, -1) : go(0, 1);
+  const liftFlick = t => t < .15 ? go(1, 0) : t < .3 ? go(0, -1) : t < .35 ? go(0, 1) : t < .58 ? go(1, 1) : go(1, -.5);
   assert.equal(starts('gravel', s.liftSpeed + 1, liftFlick), true);
   assert.equal(starts('pavement', s.liftSpeed + 3, liftFlick), false);
 });
@@ -268,35 +293,62 @@ ok('a lift and a hard turn-in, with or without the power back, is exactly the ol
 
 ok('the lift-off drift: lift, flick, power back on, counter-steer', () => {
   const v = ride(CAR_SPEC, 'gravel', 18);
-  // Lift, a feint right, hard left (the flick), then power and counter-steer right: a left-hand drift.
-  const run = drive(v, 3, t => t < .5 ? go(1, 0) : t < .7 ? go(0, 1) : t < .9 ? go(0, -1) : go(1, HOLD_STEER));
+  // Lift, a feint right, hard left (the flick), power on still steering left, then the catch to the right: a left-hand drift.
+  const flick = (power = .25) => t => t < .5 ? go(1, 0) : t < .7 ? go(0, 1) : t < .75 ? go(0, -1) : t < .75 + power ? go(1, -1) : go(1, HOLD_STEER);
+  const run = drive(v, 3, flick());
   assert.ok(run.findIndex(r => r.active) >= Math.round(.7 * 120), 'not before the flick');
-  assert.equal(v.drift.active, true); assert.equal(v.drift.entry, 'lift'); assert.equal(Math.sign(v.drift.angle), -1, 'the tail out, the nose into the second turn');
+  assert.ok(run.findIndex(r => r.active) >= Math.round(1 * 120) - 1, 'nothing until the catch');
+  assert.equal(v.drift.active, true); assert.equal(v.drift.shown, true); assert.equal(v.drift.entry, 'lift'); assert.equal(Math.sign(v.drift.angle), -1, 'the tail out, the nose into the second turn');
+  // The catch before the power (a wobble), or the power too late: the step never opens.
+  for (const power of [0, .1, .5]) {
+    const w = ride(CAR_SPEC, 'gravel', 18), r = drive(w, 3, flick(power));
+    assert.ok(r.every(x => !x.active), `power ${power}: never begins`);
+    assert.equal(w.takeDrift(), null);
+  }
+  // A stick: the same order at part throttle and part counter-steer opens it too.
+  const st = ride(CAR_SPEC, 'gravel', 18);
+  drive(st, 2.5, t => t < .5 ? go(1, 0) : t < .7 ? go(0, .9) : t < .75 ? go(0, -.9) : t < 1 ? go(.6, -.9) : go(.8, .35));
+  assert.equal(st.drift.shown, true, 'a stick opens it');
   assert.ok(Math.abs(Math.abs(v.drift.angle) - CAR_SPEC.drift.angle) < 2 / DEG, `${v.drift.angle * DEG}`);
 });
 
-ok('an S-bend or a quick correction off the throttle: at most a small step that shows and counts nothing, never against the wheel', () => {
+ok('an S-bend, a correction, a slalom off the throttle: exactly the old car (only power then a catch begins a flick)', () => {
   const s = CAR_SPEC.drift, noDrift = { ...CAR_SPEC, drift: undefined };
   const scripts = {
     'S-bend, keys': t => t < .5 ? go(1, 0) : t < .8 ? go(0, 1) : go(t < 1.1 ? 0 : 1, -1),
     'S-bend, power back on the second turn': t => t < .5 ? go(1, 0) : t < .8 ? go(0, 1) : go(1, -1),
     'a quick correction': t => t < .5 ? go(1, 0) : t < .75 ? go(0, 1) : t < .9 ? go(0, -1) : go(1, 0),
     'S-bend, stick': t => t < .5 ? go(1, 0) : t < .8 ? go(0, .9) : go(.5, -.9),
+    'a correction of a correction': t => t < .5 ? go(1, 0) : t < .8 ? go(0, 1) : t < 1.1 ? go(0, -1) : go(1, 1),
+    'short taps then straight': t => t < .5 ? go(1, 0) : t < .65 ? go(0, 1) : t < .8 ? go(0, -1) : t < .95 ? go(1, 1) : go(1, 0),
+    'a slalom, power back on': t => t < .5 ? go(1, 0) : go(t < 1.1 ? 0 : 1, Math.floor((t - .5) / .3) % 2 ? -1 : 1),
+    'a coasting slalom': t => t < .5 ? go(1, 0) : go(0, Math.floor((t - .5) / .3) % 2 ? -1 : 1),
   };
-  for (const spec of [CAR_SPEC, SXS_SPEC, TRUCK_SPEC])
+  for (const [spec, tow] of [[CAR_SPEC, false], [SXS_SPEC, false], [TRUCK_SPEC, false], [TRUCK_SPEC, true]])
     for (const speed of [16, 20, 25])
       for (const [name, script] of Object.entries(scripts)) {
-        const a = ride(spec, 'gravel', speed), b = ride({ ...spec, drift: undefined }, 'gravel', speed);
+        const a = ride(spec, 'gravel', speed, { tow }), b = ride({ ...spec, drift: undefined }, 'gravel', speed, { tow });
         const ra = drive(a, 2.5, script), rb = drive(b, 2.5, script), why = `${spec.id ?? spec.name} ${speed} ${name}`;
-        assert.ok(ra.every(r => Math.abs(r.angle) <= spec.drift.angle * LIFT_SWING + 1e-6), `${why}: a small step at most`);
-        assert.ok(ra.every(r => !r.shown), `${why}: the meter, dust and tyre sound show nothing`);
-        assert.equal(a.takeDrift(), null, `${why}: nothing counted`);
-        // Where the driver ends up after 40 to 60 m: within a lane's width of the ordinary car, never off to the other side.
-        const end = Math.hypot(ra.at(-1).x - rb.at(-1).x, ra.at(-1).z - rb.at(-1).z);
-        assert.ok(end < 3.5, `${why}: ${end.toFixed(2)} m from the ordinary car`);
-        for (let i = 0; i < ra.length; i += 6) if (ra[i].active) assert.ok((ra[i].heading - rb[i].heading) * Math.sign(ra[i].angle) > -3 / DEG, `${why}: never turns against the wheel at ${ra[i].t.toFixed(2)}`);
+        assert.ok(ra.every(r => !r.active), `${why}: no slide`); assert.equal(a.takeDrift(), null, `${why}: nothing counted`);
+        assert.deepEqual(ra.map(r => [r.x, r.z, r.heading]), rb.map(r => [r.x, r.z, r.heading]), `${why}: identical`);
       }
-  assert.equal(new Drift().shown, false); assert.ok(s.angle * LIFT_SWING < COUNT_ANGLE, 'a flick step is under what shows and counts');
+  assert.equal(new Drift().shown, false);
+});
+
+ok('the flick clocks run in the air: a turn before a jump is no feint after it', () => {
+  const v = ride(CAR_SPEC, 'gravel', 20);
+  drive(v, .7, t => t < .5 ? go(1, 0) : go(0, 1)); v.y += 2; v.vy = 3;
+  const air = drive(v, 1.2, () => go(0, 0)); assert.ok(air.some((_, i) => i > 0) && v.airborne === false, 'landed');
+  // Hard the other way, power, the catch: in time this would be a flick; after the jump it is nothing.
+  drive(v, .45, t => t < .05 ? go(0, -1) : t < .3 ? go(1, -1) : go(1, .5)); assert.equal(v.drift.active, false);
+});
+
+ok('a trailer resists but its handbrake drift still shows and counts; so does a narrow one on pavement', () => {
+  for (const [spec, ground, tow, counter] of [[TRUCK_SPEC, 'gravel', true, HOLD_STEER], [CAR_SPEC, 'pavement', true, HOLD_STEER], [TRUCK_SPEC, 'pavement', false, .25]]) {
+    const v = ride(spec, ground, spec.drift.firmSpeed * TOWED_SPEED + 2, { tow }), run = drive(v, 5, handbrakeIn(counter, 2.5));
+    const why = `${spec.id ?? spec.name} ${ground} tow ${tow}`;
+    assert.ok(run.filter(r => r.shown).length > 240, `${why}: shows`); assert.ok(v.takeDrift(), `${why}: counts`);
+  }
 });
 
 ok('into the water: the slide ends there and is not clean', () => {
