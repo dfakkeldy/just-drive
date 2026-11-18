@@ -286,3 +286,4 @@ wharves-mutations	portable	no	real baked meshes and broken planner variants; no 
 wharves-browser	apple	no	apple-check-host (Apple M4, Edge 157) PASS 348 s on 73cba0a4 and 522 s on c5af1ffa (receipts in tools/evidence/wharves): real GPU pictures and matched main costs, one browser slot
 lighthouses-browser	unproven	no	Mac M4 / ANGLE Metal / Edge 157 PASS 303 s on 85b0fedc (main 97100198, finish pass on), 18 Nov 2026: eight day/night desktop/phone cases, near and 1 km beacon pixels; tools/lighthouses-proof.md
 mirror-forest-browser	apple	no	apple-check-host (Apple M4, Edge 157) PASS 18 Nov on dca0215f (check-all, 289 s) and 7534a7f7 (direct, finish=0, x2); MMM_MIRROR_TIMING=1 warm GPU timing works there but other threads share the GPU, so compare per-sample floors in forest-cost.json gpuMs, not gpuMedianMs; other hosts unmeasured
+gamepad-browser	unproven	no	not yet run
