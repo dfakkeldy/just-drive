@@ -21,7 +21,8 @@ async function open(query, dpr = 1) {
     const [width, height] = JSON.parse(await read('JSON.stringify([innerWidth, innerHeight])'));
     await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: dpr, mobile: false });
   }
-  await send('Page.navigate', { url: `${base}/?hud=0&${query}` });
+  // finish=0: the desktop finish pass draws the world into a picture of its own, which this fixture would count and time as a mirror pass.
+  await send('Page.navigate', { url: `${base}/?hud=0&finish=0&${query}` });
   let settled = false;
   // Startup deadline only: allow other threads to use this Mac's GPU. No timing threshold is relaxed.
   for (let i = 0; i < 400; i++) { await sleep(300); if (String(await read('document.title') ?? '').startsWith('settled')) { settled = true; break; } }
@@ -67,7 +68,7 @@ for(const [name,query] of [
     const out=render.call(this,scene,camera);
     if(q){gl.endQuery(ext.TIME_ELAPSED_EXT);queries.push(q);}
     rows.push({pass:target?'mirror':'main',calls:r.info.render.calls,triangles:r.info.render.triangles,programs:r.info.programs.length});
-    if(!target&&++main>=20){
+    if(!target&&++main>=24){
      r.render=render;
      const deadline=performance.now()+10000;
      const finish=()=>{
@@ -76,13 +77,14 @@ for(const [name,query] of [
       const gpu=ext&&!disjoint&&!pending?queries.map(q=>gl.getQueryParameter(q,gl.QUERY_RESULT)/1e6).slice(2):null;
       const sorted=gpu?.slice().sort((a,b)=>a-b);
       const gpuMedianMs=sorted?.length?sorted[Math.floor(sorted.length/2)]:null;
-      queries.forEach(q=>gl.deleteQuery(q));resolve({rows,gpuMs:gpu,gpuMedianMs,gpuStatus:gpu?'measured warm':ext?'no result: disjoint or timeout':'no result: timer not enabled or unavailable',timingRequested:!!ext,camera:mmm.camera.position.toArray(),focus:mmm.terrain.mirrorFocus.value.toArray()});
+      queries.forEach(q=>gl.deleteQuery(q));resolve({rows,unswapped:[...mmm.terrain.tiles.values()].filter(t=>t.mirror&&!t.mirror.material.userData.forestOriginal).length,gpuMs:gpu,gpuMedianMs,gpuStatus:gpu?'measured warm':ext?'no result: disjoint or timeout':'no result: timer not enabled or unavailable',timingRequested:!!ext,camera:mmm.camera.position.toArray(),focus:mmm.terrain.mirrorFocus.value.toArray()});
      };setTimeout(finish,100);
     }
     return out;
    };
   })`);
   check(stats?.rows.filter(x=>x.pass==='mirror').length>=18,'completed matched mirror frames');
+  check(stats?.unswapped===0,'no mirror material appeared mid-sample without the '+variant+' shader: '+stats?.unswapped);
   if(process.env.MMM_MIRROR_TIMING==='1')check(stats?.gpuMs?.length>=18,'native GPU timer samples available and not disjoint');
   results.push({name,variant,...stats});
   await p.shot(name+'-'+variant);
@@ -92,7 +94,9 @@ for(const [name,query] of [
 for(let i=0;i<results.length;i+=2){
  const a=results[i],b=results[i+1];
  if(!a?.camera||!b?.camera){check(false,'paired stats present: '+(a?.name??'?'));continue;}
- check(a.camera.every((v,j)=>Math.abs(v-b.camera[j])<1e-3),'paired camera is fixed within 1 mm: '+a.name);
+ // The parked seat view keeps a few mm of chase-camera jitter; fixed cam= poses must match to 1 mm.
+ const tol=a.name==='driving'?1e-2:1e-3;
+ check(a.camera.every((v,j)=>Math.abs(v-b.camera[j])<tol),'paired camera is fixed within '+(tol*1000)+' mm: '+a.name);
  for(const pass of ['mirror','main']){
   const counts=r=>[...new Set(r.rows.filter(x=>x.pass===pass).map(x=>JSON.stringify(x)))].sort();
   check(JSON.stringify(counts(a))===JSON.stringify(counts(b)),'paired draw counts and program count unchanged: '+a.name+' '+pass);
