@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Building } from './buildings';
-import { ParkedVehicles, bakeParked, parkedSolid, pushOut, type Parked, type Pushable, type Solid } from './parked';
+import { ParkedVehicles, bakeParked, parkedMatrix, parkedSolid, pushOut, type Parked, type Pushable, type Solid } from './parked';
 import type { Terrain } from './terrain';
 import { Face, Kit as SiteKit, canvas, grey } from './site-kit';
 import {
@@ -496,6 +496,7 @@ export interface Built {
   decal: THREE.BufferGeometry | null;
   vehicles: THREE.BufferGeometry | null;
   cars: Parked[];
+  /** The heights under the cars, frozen when the group built (desktop seats its instances on them). */
   ground: (x: number, z: number) => number;
   parkedSolids: Solid[];
   /** Surface patterns plus the paint (what used to be this group's own meshes), and their triangles. */
@@ -575,8 +576,17 @@ export function buildGroup(name: GroupName, site: PortHawkesburySite, groundAt: 
   // LOW parks one vehicle in three (a phone draws every one of their triangles).
   const cars = low ? parked.filter((_, i) => i % 3 === 0) : parked;
   const vehicles = low ? bakeParked(cars, groundAt) : null;
+  // Desktop seats its instanced vehicles again whenever the near set changes: on the heights read now, while the finest
+  // land is under the group, not on whatever land is in memory then.
+  const heights = new Map<string, number>(), ground = (x: number, z: number) => {
+    const key = `${x},${z}`;
+    let y = heights.get(key);
+    if (y === undefined) heights.set(key, y = groundAt(x, z));
+    return y;
+  };
+  if (!low) { const o = new THREE.Object3D(); for (const car of cars) parkedMatrix(car, ground, o); }
   const triangles = [...models.values()].reduce((n, g) => n + tris(g), 0) + tris(decal);
-  return { models, decal, vehicles, cars, ground: groundAt, parkedSolids: cars.map(parkedSolid), meshes: models.size + (decal ? 1 : 0), triangles, layouts, solids };
+  return { models, decal, vehicles, cars, ground, parkedSolids: cars.map(parkedSolid), meshes: models.size + (decal ? 1 : 0), triangles, layouts, solids };
 }
 
 function hydrant(k: Kit, [e, n]: P2): void {
@@ -751,13 +761,13 @@ export class PortHawkesbury {
     // Desktop: one instanced mesh per vehicle type for the cluster's near groups.
     if (c.parked) {
       this.group.remove(c.parked.group);
-      c.parked.group.traverse(o => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+      c.parked.group.traverse(o => { if (o instanceof THREE.InstancedMesh) { o.geometry.dispose(); o.dispose(); } });
     }
     c.parked = null;
     const cars = near.flatMap(g => this.built.get(g)!.cars), ground = new Map<Parked, (x: number, z: number) => number>();
     for (const g of near) for (const car of this.built.get(g)!.cars) ground.set(car, this.built.get(g)!.ground);
     if (!cars.length) return;
-    // Each vehicle stands on its own group's ground (which never waits: it falls back to the group's height).
+    // Each vehicle stands on its own group's ground, as read when the group built.
     const parked = new ParkedVehicles(cars, (x, z, car) => ground.get(car)!(x, z), this.carMaterial);
     parked.group.name = `ph-${name}-instanced`;
     parked.seat();
