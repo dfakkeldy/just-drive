@@ -1,3 +1,4 @@
+import { FINISH } from './finish-choice';
 import type { ContactBody } from './parked';
 import type { FlightBounds } from './mail-flight';
 import { entersMailbox, mailboxShape, mailboxDamage, type MailboxDamage } from './mailbox-rules';
@@ -25,9 +26,10 @@ interface SiteTarget extends WorldPosition { served: boolean; customers: number 
 interface Pending { position: WorldPosition; tilt: number; slots: Slot[]; level: number; y: number; motion: Motion | null; mailIndex: number }
 interface Wire { a: number; b?: number; drop?: ServiceDrop; levels: string; vertices: number[] }
 interface Cell { x: number; z: number; mail: number[]; sites: number[]; poles: number[]; wires: Wire[];
-  group: THREE.Group | null; pending: Pending[]; line: THREE.LineSegments | null; low: boolean }
+  group: THREE.Group | null; pending: Pending[]; line: THREE.LineSegments | THREE.Mesh | null; low: boolean }
 interface Template { geometry: THREE.BufferGeometry; material: THREE.MeshLambertMaterial }
 export const RAIL_PROP_RADII = { mailbox: .8, pole: .18, communityModule: .43, communityClear: 1 } as const;
+const WIRE_WIDTH = 0.028, WIRE_MIN_PX = 1.5;   // metres; pixels
 const CELL = 256;
 /** LOW (phone) range for the small parts: mailboxes, community boxes, insulators, transformers and lamps. A 1.3 m
  * mailbox is about 2 px tall at 500 m on a phone. Poles, crossarms and the wires keep the cell range (900 m). */
@@ -97,6 +99,11 @@ export class Props {
   private readonly cells = new Map<string, Cell>();
   private readonly templates = new Map<string, Template>();
   private readonly wireMaterial = new THREE.LineBasicMaterial({ color: 0x252322 });
+  /** Wires as flat strips (see `ribbonMaterial`), for a picture with one sample for each pixel (finish-choice.ts). */
+  private readonly ribbonWires = FINISH.oneSample;
+  private readonly wirePixels = { value: new THREE.Vector2(1, 1) };
+  private ribbon: THREE.MeshBasicMaterial | null = null;
+  private ribbonDepth: THREE.MeshBasicMaterial | null = null;
   private readonly dummy = new THREE.Object3D();
   private readonly zero = new THREE.Matrix4().makeScale(0, 0, 0);
   private readonly inverse = new THREE.Matrix4();
@@ -653,10 +660,79 @@ export class Props {
     if (c.line) { c.group.remove(c.line); c.line.geometry.dispose(); c.line = null; }
     const vertices = c.wires.flatMap(w => w.vertices);
     if (!vertices.length) return;
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    c.line = new THREE.LineSegments(geometry, this.wireMaterial);
+    c.line = this.ribbonWires ? this.wireRibbons(vertices) : new THREE.LineSegments(
+      new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)), this.wireMaterial);
     c.line.name = 'Sagging wires and service drops';
     c.group.add(c.line);
+  }
+
+  /** The same wire pieces as strips that face the camera: four corners for each piece (a, a, b, b). */
+  private wireRibbons(v: number[]): THREE.Mesh {
+    const n = v.length / 6, position = new Float32Array(n * 12), other = new Float32Array(n * 12), side = new Float32Array(n * 4), index: number[] = [];
+    for (let i = 0; i < n; i++) {
+      for (let k = 0; k < 4; k++) for (let j = 0; j < 3; j++) {
+        position[i * 12 + k * 3 + j] = v[i * 6 + (k < 2 ? 0 : 3) + j];
+        other[i * 12 + k * 3 + j] = v[i * 6 + (k < 2 ? 3 : 0) + j];
+      }
+      side.set([1, -1, 2, -2], i * 4);   // the sign is the side of the piece; 2 marks the far end
+      index.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute('wireOther', new THREE.BufferAttribute(other, 3));
+    geometry.setAttribute('wireSide', new THREE.BufferAttribute(side, 1));
+    geometry.setIndex(index);
+    const mesh = new THREE.Mesh(geometry, this.ribbon ??= this.ribbonMaterial(false));
+    // The strips blend, so they leave no depth. The finish pass reads depth to find the sky, and would put cloud
+    // light on a wire. A second draw, with no colour, writes depth where the wire covers most of a pixel.
+    const solid = new THREE.Mesh(geometry, this.ribbonDepth ??= this.ribbonMaterial(true));
+    // Both go before every other see-through thing (glass, a pond, lamp glow), as the plain lines did: so glass in
+    // front of a wire tints it, and water behind a solid wire stays behind it.
+    mesh.renderOrder = -2; solid.renderOrder = -1; mesh.add(solid);
+    // The strip width is in pixels of the picture being drawn now (the canvas, or the finish pass's own target).
+    mesh.onBeforeRender = renderer => {
+      const target = renderer.getRenderTarget();
+      if (target) this.wirePixels.value.set(target.width, target.height); else renderer.getDrawingBufferSize(this.wirePixels.value);
+    };
+    return mesh;
+  }
+
+  /**
+   * A line is always one pixel wide, so a far wire turns into dots when the picture has no edge samples. A strip holds
+   * its true width (WIRE_WIDTH metres) down to WIRE_MIN_PX pixels; under that it keeps the pixels and gives up
+   * strength, so a far wire fades and does not break. Its long edges are soft over one pixel.
+   */
+  private ribbonMaterial(depthOnly: boolean): THREE.MeshBasicMaterial {
+    const m = new THREE.MeshBasicMaterial({ color: 0x252322, transparent: true, depthWrite: depthOnly, colorWrite: !depthOnly, side: THREE.DoubleSide });
+    m.onBeforeCompile = shader => {
+      shader.uniforms.uWirePixels = this.wirePixels;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>
+          attribute vec3 wireOther; attribute float wireSide; uniform vec2 uWirePixels; varying vec3 vWire;`)
+        .replace('#include <project_vertex>', `#include <project_vertex>
+          {
+            vec4 tip = projectionMatrix * modelViewMatrix * vec4(wireOther, 1.0);
+            // An end beside or behind the eye is brought to just in front of it, along the piece. Without this its
+            // width in pixels has no meaning, and the strip would open into a wedge across the picture.
+            vec4 own = gl_Position;
+            if (tip.w < 0.05 && own.w > 0.05) tip = mix(own, tip, (own.w - 0.05) / (own.w - tip.w));
+            else if (own.w < 0.05 && tip.w > 0.05) gl_Position = mix(tip, own, (tip.w - 0.05) / (tip.w - own.w));
+            float w = gl_Position.w;
+            vec2 along = (tip.xy / max(tip.w, 1e-4) - gl_Position.xy / max(w, 1e-4)) * uWirePixels;
+            along = dot(along, along) > 1e-8 ? normalize(along) : vec2(1.0, 0.0);
+            float px = min(${WIRE_WIDTH.toFixed(3)} * projectionMatrix[1][1] * uWirePixels.y * 0.5 / max(w, 0.05), 64.0);
+            float core = max(px, ${WIRE_MIN_PX.toFixed(2)}) * 0.5, reach = core + 1.0;
+            float side = sign(wireSide);
+            vec2 push = vec2(-along.y, along.x) * side * reach - along * 0.5;
+            gl_Position.xy += push * 2.0 / uWirePixels * w;
+            vWire = vec3((abs(wireSide) > 1.5 ? -side : side) * reach, core, min(1.0, px / ${WIRE_MIN_PX.toFixed(2)}));
+          }`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWire;')
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          diffuseColor.a *= vWire.z * clamp(vWire.y + 0.5 - abs(vWire.x), 0.0, 1.0);${depthOnly ? '\n          if (diffuseColor.a < 0.5) discard;' : ''}`);
+    };
+    m.customProgramCacheKey = () => `wire${depthOnly}`;
+    return m;
   }
 }

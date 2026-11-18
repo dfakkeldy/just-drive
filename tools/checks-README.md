@@ -622,6 +622,157 @@ settings insertBefore TypeError. Normal checks need no Git history.
 The browser touch-path fixture is unchanged. A source guard also requires
 the landscape hint to own overflow:hidden so its ellipsis paints inside its
 existing single-line rectangle.
+## Tall landmarks
+
+`tall` reads all six tall bakes, their manifests, roads and building footprints.
+It runs the real instanced renderer in Node and the shared rotation and wire maths.
+Road/building conflicts print their original source positions and fail the check;
+no base is silently moved. `tall-mutations` includes the base cases and fourteen
+negative controls. `tall-browser` proves rotor movement across real drawn frames
+and saves the paired pictures through the shared browser starter.
+
+## Far views
+
+`tools/far-views-fetch.py --data-root <real-data>` reads the federal NS and PEI
+wind-turbine layers and a windowed MRDEM-30 DTM subset. Its `--sentinel-audit`
+reads the recorded 10 m L2A review windows into RAM and retains numerical metadata
+only. Measured pad centres, dates, source scenes and uncertainty live in
+`pipeline/far-views-points.json`. EA positions are search hints, never bake inputs.
+
+`pipeline/34_bake_far_views.py --data-root <real-data> --output-root
+<real-data>/work/bakes/far-views` builds all six work packs. It refuses output
+outside `data/work/bakes`; it never writes promoted terrain or site data. It
+retains neutral provincial masts/lines from the earlier tall bake, omits whole
+conflicting line sections and conflicting masts, and reports those omissions.
+The far mesh uses MRDEM, with local NRCan DTM edge matching. Fine coastline cells
+are 240 m on desktop and 480 m on LOW; simple inland cells can be 1.92 km.
+
+The five `far-*` Node families cover turbine provenance, curvature, sightlines,
+mesh/instance budgets and credits. Each has mutation controls. The ten-row
+`far-views-visibility.json` receipt samples at 20 m to 6 km, then 120 m,
+using each area's local DTM throughout its terrain root and MRDEM beyond it.
+This resolves narrow blocking islands at sea-level viewpoints. It is a clear-air, normal-refraction
+geometry calculation at Hill x1, not a weather or vegetation claim.
+
+`far-views-browser` uses a read-only work overlay for before/after game pictures.
+`far-near-browser` freezes chase/top views in every area, compares A/B/A/B pixels,
+and uses a separate physical-depth pass for opaque interiors within 3 km. Its
+mask excludes two-pixel mixed-coverage edges. Both a displaced camera and an
+actual shader fault that bends the near world must change those pixels; the
+restored shader must return to zero changes. No physical phone FPS is measured.
+
+`far-join-browser` probes the actual sea geometry and shader masks at low Canso,
+low Mabou harbour and a high camera, on desktop and LOW. Independent ray coverage,
+repeat frames, tiny camera jitter and blend state check for cracks and unstable
+overlap. A missing-patch mutant must expose holes. Both sea patches share one
+draw and material; the original near plane remains exact inside 3 km.
+`far-final-browser` serialises these proofs and pictures within one browser lease.
+Its target-removal probe checks physical bare-earth visibility against actual
+depth-tested game meshes, including a narrow FOV for subpixel horizon clearances.
+Pictures also measure actual terrain/sea triangle interpolation gaps at distant shores.
+
+The shared curvature constant is in `far-rules.ts`. The geometric drop is
+`d*d*(1-k)/(2*R)`. Rendering subtracts the 3 km drop and starts smoothly over
+3–5 km. All vertices within 3 km retain their coordinates. Only terrain, sea
+and these new landmarks receive the distant bend. Physics/contact are unchanged.
+The intentional terrain and mirror-terrain vertex programs are fully pinned;
+historical water/era/quarry comparisons remove only the exact approved additions.
+Global fragment pins are unchanged. The six generated far-sea colour/query
+program variants, including their masks and overlap depth, have separate complete pins.
+
+
+### Far views review r1
+
+`far-bake` exercises real road/track/building clearance for both source types,
+immutable positions, exact inventory-removal permissions, and routine manifest
+preservation across a same-root terrain bake. Step 33 delegates to guarded v2
+work output and is excluded from the routine bake. The Python fixture needs GDAL
+and Shapely, like the producer; it creates only tiny temporary synthetic files.
+
+`far-runtime` executes actual late material hooks, inverse-clip reconstruction,
+occlusion-query state, conditional late Places, and promoted/work pack selection.
+The GLSL blend is evaluated at 3/3.5/4/5/30 km against JS, with blend-removal and
+hard-step mutants. The triangle-budget mutant changes only the limit, leaving
+metadata, data and hashes consistent. Budget rows prefer a promoted v2 pack;
+without one they use an explicit/rehearsal pack. On verified before land (no far
+pack anywhere, see `far-delta` below) the pack budgets print NOT MEASURED; the
+data-free far-sea program pins and rewrite checks still run. A missing pack
+anywhere else, or a missing `FAR_VIEWS_BAKE` override, reports CANNOT RUN, exit 2. Pure source rows need
+no bake. Generated far-sea program pins include outer rings and LOW vertex depth.
+
+The widened near proof has standard and lighting variants. Lighting forces
+reflections to redraw for every A/B image, enables desktop shadows, uses Hill
+x1.7 and the Blender car, in every area and chase/top view. LOW keeps its normal
+no-reflection/no-shadow engine path and still tests x1.7. These GPU proofs,
+updated join coverage and high-camera edge pictures require an owner's heavy
+work window; authoring a proof does not mean it passed.
+
+
+### Far views data delta (17 Nov)
+
+The code lands before the main thread installs the far pack. `far-delta`
+accepts land that is all before (no far file and no `farLand` manifest key in
+any area) or all after (the 24 files hashed in `tools/far-views-delta.json` and
+the manifest far keys), never a mix; `FAR_EXPECT=before|after` pins one.
+`far-delta-mutations` runs seven synthetic mutants. The delta folder itself
+(files laid out under `data/baked` paths plus `hashes.json` with before/after
+hashes) is made by `pipeline/34_bake_far_views.py` and `tools/far-promote.mjs`
+outside `data/`; `node tools/far-delta-check.mjs --delta <folder>` checks it.
+
+`tall` lists conflicts in a `tall.json` that is not version 2 as NOT DRAWN: the
+game draws only version 2 (the check asserts the loader line), so the old live
+file's 62 line/mast conflicts cannot reach a player. Version 2 conflicts fail.
+
+Budget pins (`frame-budget.json`, `frame-budget-traffic.json`) always mean the
+land without the far pack. `tools/baseline/frame-budget-far.json` holds each
+row's measured far cost; on verified after land the budget rows compare against
+pin + delta, and `--update`/`--raise` store measured - delta. So before install
+no row has unflagged headroom, and after install no re-pin folds the far cost
+into the pins while the far cost stays as measured. `frame-budget-far` checks
+coverage and the round trip. A new budget scene needs a far row too: measure it
+on a promoted copy (`--raise --scene <id>` there, minus the pin), or write zeros
+before install, in which case that row fails loudly after install until measured.
+On after land the budget waits for all far parts, then holds every far query mesh
+visible (worst case, not a 5 Hz probe phase).
+
+Phone cost after install, an open choice for the owner. Every phone row gets
+the far scenery: +7 draws and +74,198 triangles (+78,030 at the quarry; +10
+draws and +75,278 at the Point Tupper start), +7 geometries, +5 programs and
++3 requests (frame-budget-far.json; apple-check-host, 17 Nov, installed land). So after
+install the far-aware ceilings themselves pass the frozen `PHONE_CAP` (227
+draws, 1,475,392 triangles): new-player-start phone rows 234 draws, works-yard
+phone rows 1,529,678 and 1,549,590 triangles. `point-tupper-driver-budget-low`
+gates on that cap. On apple-check-host's installed land (18 Nov) main itself draws 222 at
+the Point Tupper LOW start with no AI and 227/229/224 with the side by side/
+truck/bike shown (truck already 2 over, without this PR); this branch draws the
+same before install. After install it draws 232 and 237/239/234. Like the
+budget, that check now waits for the far scenery and holds it visible on after
+land, so these numbers do not depend on probe timing. This PR does not raise the cap or change
+the phone far scenery: the owner decides at install (raise `PHONE_CAP`, or
+coarser/no far scenery on phones first).
+
+Traffic pins share the same deltas. The deltas were measured without traffic;
+`traffic-budget` and `traffic-budget-desktop` on the promoted copy check the
+eight traffic rows against pin + delta.
+
+
+### Far views review r2
+
+The material hook installs after initial scene construction, before the first
+frame, with the uniform off. The actual loader fixture proves existing model
+versions/cache keys stay unchanged on activation; only the two sea materials
+change. Necessary first-use programs for newly loaded far content are separate
+from existing-material recompiles. Actual program totals and freeze size still
+need the controlled q=low window. Independent file, binary, constructor and sea
+rewrite failures are executed against the actual loader function.
+
+`far-promotion` uses only synthetic temporary packs. It checks the live-key
+retention mutant, a stale snapshot ignored by the overlay, exact merge bytes,
+all four root invariants, road-change re-screening, no writes on failed hashes,
+and before-hash removal sensitivity. Apply in this fixture touches no real data.
+The producer checks both live and work inventories and keeps audits outside the
+asset tree. Full snapshots are refused, not served. The shared FAR_CREDITS is
+required on title and About pages. No native performance or pixel pass is implied.
 
 
 ## Touch UI suite budgets

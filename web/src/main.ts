@@ -37,10 +37,21 @@ import { detailSetting } from './detail';
 import { offlinePlay } from './offline-play';
 import { bindOfflineVersion } from './offline-version';
 import { pictureSetting } from './picture';
+import { EdgeSamples, Finish, type CloudLight } from './finish';
+import { FINISH, finishSetting } from './finish-choice';
+import { cloudReflections } from './finish-shaders';
 import { startHere, placeAtStart } from './start-here';
 import { startKey } from './start-key';
 import { startTouchQuality } from './touch-quality';
 import { Props } from './props';
+import { TallLandmarks } from './tall';
+import { FarLand, farSeaVertex, farSeaFragment } from './far-land';
+import { FarTurbines } from './far-turbines';
+import { curveSceneMaterials } from './far-materials';
+import { FarVisibility } from './far-visibility';
+import type { FarFile } from './far-rules';
+import type { TallFile } from './tall-rules';
+import { tallPlaces } from './places';
 import { Radio, loadRadio } from './radio';
 import { Mail } from './mail';
 import { Shift } from './shift';
@@ -91,7 +102,7 @@ import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
 import { createTouchControls } from './touch';
 import { drivingHelpSetting } from './driving-help';
-import { Trees, crownTest } from './trees';
+import { Trees, crownTest, treeLook } from './trees';
 import { CoastSite } from './coast-site';
 import { Coast } from './coast';
 import { Vehicle, type Input } from './vehicle';
@@ -127,6 +138,9 @@ const baseArea = await siteArea(params);
 const touchDevice = matchMedia('(pointer: coarse)').matches || params.get('touch') === '1';   // ?touch=1 shows the phone controls for a test
 const quality = startTouchQuality(touchDevice, params.get('q'));
 const LOW = quality.low;
+// A test of a richer look (?leaves=1): leaf clumps on the trees.
+treeLook.leafy = params.get('leaves') === '1';
+treeLook.oneSample = FINISH.oneSample;
 const ERA = readEra(params, baseArea.id, SITE.era);
 const AREA = areaInEra(baseArea, ERA);
 const gameMode = ERA.explore ? 'explore' : AREA.mail ? readMode(params, undefined, SITE) : 'explore', mailMode = gameMode === 'mail';
@@ -183,7 +197,9 @@ if (touchDevice) noZoom();   // two quick taps on a button must not zoom the pag
 // Saved touch full detail is guarded by an early start mark (touch-quality.ts).
 // The logarithmic depth buffer keeps far shores clean but makes every pixel cost more, so phone mode goes without it.
 quality.watch(canvas);
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW, logarithmicDepthBuffer: !LOW, powerPreference: 'high-performance' });
+if (FINISH.mode && FINISH.low !== LOW) console.warn('finish: the choice was made for another detail', FINISH.low, LOW);
+if (FINISH.clouds) cloudReflections();
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW && FINISH.canvasSamples, logarithmicDepthBuffer: !LOW, powerPreference: 'high-performance' });
 // Phones have many pixels and less power. On a desktop the player chooses how sharp the picture is (picture.ts).
 // A picture run (hud=0) is drawn at full sharpness, and ?res=<ratio> pins any value: so pictures and frame rate
 // measurements can be compared with each other.
@@ -193,6 +209,7 @@ const chosenPicture = (!LOW || touchDevice) && !bare && !(askedRatio > 0);
 const picture = chosenPicture ? pictureSetting(renderer, document.getElementById('settings'), document.getElementById('startOver'),
   (choice, rate) => { if (rate < 30) detail?.nudge(rate); }, touchDevice, touchDevice && LOW) : null;
 const detail = !bare ? detailSetting(renderer.getContext(), document.getElementById('settings'), document.getElementById('startOver'), LOW, undefined, touchDevice, quality.writable, quality.chosen) : null;
+if (!bare && FINISH.offered && !LOW && !touchDevice) finishSetting(document.getElementById('settings'), document.getElementById('startOver'), FINISH.mode !== null);
 if (!bare) quality.notice(document.getElementById('settings'));
 if (!picture) renderer.setPixelRatio(askedRatio > 0 ? Math.min(askedRatio, 3) : Math.min(devicePixelRatio, LOW ? 1.35 : 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -234,6 +251,8 @@ const shared: Record<string, THREE.IUniform> = {
   sunDir: { value: sunDir }, sunColor: { value: sunColor }, skyColor: { value: skyColor }, fogColor: { value: fogColor },
   fogDensity: { value: mood?.haze ?? CLEAR_HAZE }, seaLevel: { value: SEA_LEVEL }, time: { value: 0 },
   gulfTint: { value: AREA.gulfTint },
+  farExag: { value: EXAG }, farCurveOn: { value: 0 },
+  tallViewport: { value: new THREE.Vector2(1920,1080) },
 };
 if (nightShading) Object.assign(shared, nightShading.uniforms);   // before the terrain: every land material spreads them
 
@@ -245,9 +264,12 @@ su.sunPosition.value.copy(sunDir);
 if (mood) { su.turbidity.value = mood.turbidity; su.rayleigh.value = mood.rayleigh; su.mieCoefficient.value = mood.mie; su.mieDirectionalG.value = mood.glow; }
 scene.add(sky);
 
-const sea = new THREE.Mesh(
+const sea = new THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>(
   new THREE.PlaneGeometry(600000, 600000).rotateX(-Math.PI / 2),
   new THREE.ShaderMaterial({ vertexShader: SEA_VERT, fragmentShader: SEA_FRAG, defines: LOW ? { LOW: 1 } : { SEA_WATER: 1 }, uniforms: shared }));
+// WaterReflections swaps the mesh material; retain the original colour target.
+const seaColour = sea.material;
+sea.name = 'near-sea';
 sea.position.y = SEA_LEVEL;
 sea.frustumCulled = false;
 if (LOW) {
@@ -255,8 +277,8 @@ if (LOW) {
   // as a backdrop, and the land leaves out everything below sea level.
   sky.renderOrder = -2;
   sea.renderOrder = -1;
-  (sea.material as THREE.ShaderMaterial).depthTest = false;
-  (sea.material as THREE.ShaderMaterial).depthWrite = false;
+  seaColour.depthTest = false;
+  seaColour.depthWrite = false;
 }
 scene.add(sea);
 
@@ -451,6 +473,61 @@ const props = await (async () => {
   catch (e) { console.warn('props', e); return null; }
 })();
 if (props) { scene.add(props.group); roads.guardrails?.setObstacles(props.railObstacles); }
+// Optional scenery starts after a drawn frame and Start; it never delays boot.
+const rootBounds = [manifest.origin[0], manifest.origin[1] - manifest.size, manifest.origin[0] + manifest.size, manifest.origin[1]];
+const sameRoot = (root: readonly number[] | undefined) => Array.isArray(root) && root.length === 4 && root.every((n, i) => n === rootBounds[i]);
+const farKey = (manifest as Manifest & { farLand?: { file: string } }).farLand;
+// Only the far pack's manifest key (it carries a far count) names a version 2 tall.json. The older live key
+// names a file the game never draws, so before install nothing is fetched and no Places UI appears.
+const tallKey = ((t?: { file: string; far?: number }) => (t && Number.isInteger(t.far) ? t : undefined))((manifest as Manifest & { tall?: { file: string; far?: number } }).tall);
+let farLand: FarLand | null = null, tall: TallLandmarks | null = null, farTurbines: FarTurbines | null = null;
+let farVisibility: FarVisibility | null = null, farLoading = false;
+async function loadFarViews(): Promise<void> {
+  const [landResult,tallResult] = await Promise.allSettled([
+    (async()=>{
+      if(!farKey)return null;
+      const data:FarFile=await getJson(farKey.file);
+      if(!sameRoot(data.root)||data.origin?.[0]!==manifest.village[0]||data.origin?.[1]!==manifest.village[1])throw Error('Far land belongs to another terrain pack');
+      const land=await FarLand.load(data,base,LOW,shared);
+      const vertex=farSeaVertex(SEA_VERT),fragment=farSeaFragment(SEA_FRAG);
+      return {land,vertex,fragment};
+    })(),
+    (async()=>{
+      if(!(ERA.modern && tallKey))return null;
+      const data:TallFile=await getJson(tallKey.file);
+      if(data.version!==2||!sameRoot(data.root))return null;
+      return {data,near:new TallLandmarks(data,terrain,LOW,shared,sun.el<0,false)};
+    })(),
+  ]);
+  if(landResult.status==='rejected')console.warn('optional far land',landResult.reason);
+  if(tallResult.status==='rejected')console.warn('optional tall landmarks',tallResult.reason);
+  const landPart=landResult.status==='fulfilled'?landResult.value:null;
+  const tallPart=tallResult.status==='fulfilled'?tallResult.value:null;
+  if(landPart){
+    try{
+      // Check both query rewrites before changing the live sea. This failure
+      // affects only land/water; valid turbines and their solids still attach.
+      waterReflections?.transformSea(farSeaVertex,farSeaFragment);
+      sea.geometry.dispose();sea.geometry=landPart.land.seaGeometry;
+      seaColour.vertexShader=landPart.vertex;seaColour.fragmentShader=landPart.fragment;
+      seaColour.depthTest=seaColour.depthWrite=true;seaColour.needsUpdate=true;
+      shared.farCurveOn.value=1;
+      farLand=landPart.land;scene.add(farLand.group);
+    }catch(e){console.warn('optional far sea',e);}
+  }
+  const near=tallPart?.near??null;
+  if(near){tall=near;scene.add(near.group);}
+  if(tallPart&&near&&farLand){
+    try{farTurbines=new FarTurbines(tallPart.data.far,manifest.village,LOW,shared,sun.el<0);scene.add(farTurbines.group);}
+    catch(e){console.warn('optional far turbines',e);}
+  }
+  const queryMeshes:THREE.Mesh[]=[];
+  if(farLand){farLand.land.renderOrder=3;queryMeshes.push(farLand.land);}
+  if(farTurbines){for(const mesh of farTurbines.group.children)mesh.renderOrder=3;if(sun.el>=0&&farTurbines.count)queryMeshes.push(farTurbines.group.children[0] as THREE.Mesh);}
+  farVisibility=new FarVisibility(renderer,queryMeshes);
+  if(near?.turbineCount&&!history)placesUI?.addPlaces(tallPlaces(AREA.id));
+  if(import.meta.env.DEV)expose({tall,farLand,farTurbines,farVisibility});
+}
 
 // One invented driveway, guarded against all mailboxes, houses and existing site clearings.
 const yardDogSite = ERA.modern && AREA.id === 'mabou' && buildingList && props ? YardDogSite.create({
@@ -533,6 +610,8 @@ if (history) fleetContacts.add({ resolve: body => history.resolve(body as unknow
 if (home) fleetContacts.add({ resolve: body => home.resolveSolids(body) });
 if (porch) fleetContacts.add({ resolve: body => porch.resolveSolids(body) });
 if (church) fleetContacts.add({ resolve: body => church.resolveSolids(body) });
+// The optional pack arrives after boot; the registry must see its new solids.
+if (tallKey) fleetContacts.add({ revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) });
 if (village) fleetContacts.add({ resolve: body => village.resolveSolids(body) });
 if (hawkesbury) fleetContacts.add({ resolve: body => hawkesbury.resolveSolids(body) });
 if (mabouMain) fleetContacts.add({ resolve: body => mabouMain.resolveSolids(body) });
@@ -564,7 +643,7 @@ const resolveYardSolids = () => {
   canal?.resolve(vehicle, canalBeforeX, canalBeforeZ);
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
   if (fleet || quarry || stuntPark) fleetContacts.resolve(vehicle);
-  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); }
+  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
   fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
   yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
@@ -620,7 +699,7 @@ if (import.meta.env.DEV) expose({ vehicle: new Proxy(vehicle, {
       return value.apply(current, args);
     };
   },
-}), era: ERA, history, canal, scene, props, buildings, landmarks, area: AREA, roads, edge, yard, ...(stuntPark ? { stuntPark, sunShadows } : {}), renderer, grass, trees, terrain, camera, driveVehicle, chase, water: waterReflections, detail, quality, picture, coast, culverts: culvertMouths, low: LOW });
+}), era: ERA, history, canal, scene, props, buildings, landmarks, tall, farLand, farTurbines, farVisibility, area: AREA, roads, edge, yard, ...(stuntPark ? { stuntPark, sunShadows } : {}), renderer, grass, trees, terrain, camera, driveVehicle, chase, water: waterReflections, detail, quality, picture, coast, culverts: culvertMouths, low: LOW });
 if (import.meta.env.DEV && multiplayer) expose({ mp: multiplayer });   // for tools/mp-game-check.mjs
 const mail = mailMode ? new Mail(terrain, props, properties, manifest.village, LOW) : new SceneryContact(props);
 scene.add(mail.group);
@@ -1301,7 +1380,7 @@ startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: man
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
 const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...(cemeteries?.places ?? []), ...(stuntPark?testParkPlaces(stuntPark,manifest.village):[])];
-const placesUI = !mailMode && !bare && placeList.length ? new PlacesUI(placeList, manifest.village, history?.placeRoads ?? roads, {
+const placesUI = !mailMode && !bare && (placeList.length || (ERA.modern && !!tallKey)) ? new PlacesUI(placeList, manifest.village, history?.placeRoads ?? roads, {
 
   canOpen: () => started,
   pause: paused => { started = !paused; clearEndingInput(); },
@@ -1393,6 +1472,7 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'ambientTraffic' } : {}), segment: 'after-activities', ending: false, update: () => ambientTraffic?.update(camera, vehicle, !multiplayer?.choice.on) },
   { ...(import.meta.env.DEV ? { name: 'roadAnimals' } : {}), segment: 'after-activities', ending: false, update: dt => roadAnimals?.update(dt, vehicle, !multiplayer?.choice.on) },
   { ...(import.meta.env.DEV ? { name: 'props' } : {}), segment: 'after-activities', ending: true, endingPosition: 7, update: dt => props?.update(camera, dt) },
+  { ...(import.meta.env.DEV ? { name: 'tall' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
   { ...(import.meta.env.DEV ? { name: 'grass' } : {}), segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },
   { ...(import.meta.env.DEV ? { name: 'mirror' } : {}), segment: 'mirror', ending: true, update: () => waterReflections?.update(camera) },
 ];
@@ -1434,6 +1514,27 @@ function updateWorld(segment: WorldSegment | 'ending' | 'ending-mirror', dt: num
   }
 }
 
+// The finish pass (finish.ts; finish-choice.ts says when). Without it the world is drawn straight to the screen, as before.
+// More cost-check choices (tools/finish-cost.mjs): finishType=byte colour store, finishSmooth=0|1 edge smoothing.
+const finishTest = { samples: FINISH.samples,
+  type: params.get('finishType') === 'byte' ? THREE.UnsignedByteType : undefined, smooth: params.has('finishSmooth') ? params.get('finishSmooth') === '1' : undefined };
+const finish = FINISH.mode ? new Finish(renderer, FINISH.mode, LOW, !!nightLook, FINISH.clouds ? shared as unknown as CloudLight : null, finishTest) : null;
+// The interiors do not go through the pass. On a canvas without edge samples they bring their own.
+const interiorDraw = !LOW && !FINISH.canvasSamples ? new EdgeSamples(renderer).draw : undefined;
+// The cost check times one world draw from here (dev server only).
+const drawProbe: { before?: () => void; after?: () => void } | null = import.meta.env.DEV && finish ? {} : null;
+// The water check reads the depth of the world just drawn: the pass keeps that in its own picture.
+function afterWorld(): void {
+  if (!waterReflections) return;
+  if (finish?.on) finish.onWorld(() => waterReflections.afterRender(camera)); else waterReflections.afterRender(camera);
+}
+function drawWorld(): void {
+  drawProbe?.before?.();
+  if (finish?.on) finish.render(scene, camera); else renderer.render(scene, camera);
+  drawProbe?.after?.();
+}
+if (drawProbe) Object.assign((window as unknown as { mmm?: Record<string, unknown> }).mmm ??= {}, { finish, drawProbe });
+
 const shadowFocus = new THREE.Vector3(), shadowDir = new THREE.Vector3();
 function drawEnding(dt: number): void {
   if (ride.update) updateWorld('ride', 0);
@@ -1445,9 +1546,10 @@ function drawEnding(dt: number): void {
   updateWorld('ending', 0);
   // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
   renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
+  farVisibility?.update(camera,performance.now()/1000);
   updateWorld('ending-mirror', 0);
-  try { renderer.render(scene, camera); } finally { waterReflections?.settle(); }
-  waterReflections?.afterRender(camera);
+  try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
+  afterWorld();
 }
 
 // Reuse this record: the HUD path allocates no per-frame state object.
@@ -1472,8 +1574,10 @@ function frame(now: number) {
       updateWorld('ending', 0);
       renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
       updateWorld('ending-mirror', 0);
-      try { renderer.render(scene, camera); } finally { waterReflections?.settle(); }
-      waterReflections?.afterRender(camera);
+      // The replay camera moves: re-check far visibility as the drive and ending frames do.
+      farVisibility?.update(camera,now/1000);
+      try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
+      afterWorld();
       replay.afterRender();
       requestAnimationFrame(frame); return;
     }
@@ -1483,8 +1587,8 @@ function frame(now: number) {
       refreshMap(); miniMap.redrawNext();
       miniMap.update(0, vehicle.x, vehicle.z, vehicle.heading, mapStops, mapMarks, mapCars);
     }
-    if (interiors.busy) interiors.render(renderer);
-    else renderer.render(scene, camera);
+    if (interiors.busy) interiors.render(renderer, interiorDraw);
+    else drawWorld();
     requestAnimationFrame(frame); return;
   }
   // Simulation time excludes paused wall time, including shader/animal animation.
@@ -1550,7 +1654,7 @@ function frame(now: number) {
     if (shift.updateIndoors(clockRuns ? clockDt : 0)) { quality.frame(0, false); interiors.closeForDay(); shift.end(); }
     else {
       interiors.update(dt, driveInput(), vehicle, false);
-      interiors.render(renderer);
+      interiors.render(renderer, interiorDraw);
       quality.frame(clockDt, qualityReady);
     }
     // Finish outdoor tile builds on the paused budget while the interior freezes the world.
@@ -1662,9 +1766,11 @@ function frame(now: number) {
   renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
   aiDriver?.update(camera, vehicle, aiDriverOn(), fleet?.driven.id ?? garageEntry.id);
   multiplayer?.update(realDt, camera, dt > 0 && driving);
+  farVisibility?.update(camera,now/1000);
   updateWorld('mirror', dt, realDt, now);
-  try { renderer.render(scene, camera); } finally { waterReflections?.settle(); }
-  waterReflections?.afterRender(camera);
+  try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
+  afterWorld();
+  if(started&&!farLoading&&(farKey||tallKey)){farLoading=true;setTimeout(()=>{void loadFarViews();},0);}
   // A photo is evidence of what the driver saw: the free camera takes none.
   if (photoRequested) { if (mode === 'drive') shift.takePhoto(vehicle, camera); photoRequested = false; }
   if (devHooks.afterEnabled) devHooks.afterFrame(drove, loaded, mode, vehicle, camera, shift, relief);
@@ -1711,4 +1817,6 @@ function frame(now: number) {
 }
 resize();
 document.getElementById('boot')?.remove();
+// Finalize all initial material hooks before their first compile. Activation only flips a uniform.
+if(farKey)curveSceneMaterials(scene,shared);
 requestAnimationFrame(frame);

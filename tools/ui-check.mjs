@@ -69,7 +69,7 @@ for (const just of [false, true]) for (const area of ['mabou', 'judique']) for (
 // The wharf guide adds deckhand. The Canso Causeway canal (#123) adds canal (null elsewhere).
 // Mabou's main street adds mabouMain. The camera drone adds drone, and freeCamera (the old F camera, for picture tools that hold the car still).
 // The road animals (#118) add roadAnimals (null on test visits without wildlife=1).
-const devKeys = 'aiDriver ambientTraffic animals area buildings camera canal cemeteries chase church coast cost culverts deckhand detail driveVehicle drone edge endings engineSound era fishing freeCamera gameMode grass hawkesbury history home interiors journey landmarks low mabouMain mineSite miniMap mp picture places porch porchDog porchSite props quality quarry radio relief renderer roadAnimals roadScene roads scene schoolBus shift stockpiles terrain trees vehicle vehicleId village water yard yardDog yardDogSite yardJob'.split(' ').sort();
+const devKeys = 'bigMap footpaths hikes drawProbe finish farLand farTurbines farVisibility tall aiDriver ambientTraffic animals area buildings camera canal cemeteries chase church coast cost culverts deckhand detail driveVehicle drone edge endings engineSound era fishing freeCamera gameMode grass hawkesbury history home interiors journey landmarks low mabouMain mineSite miniMap mp picture places porch porchDog porchSite props quality quarry radio relief renderer roadAnimals roadScene roads scene schoolBus shift stockpiles terrain trees vehicle vehicleId village water yard yardDog yardDogSite yardJob'.split(' ').sort();
 const resetOrder = ['interiors', 'relief', 'yardJob', 'fishing', 'roadScene', 'schoolBus'];
 for (const mode of ['mail', 'explore']) {
   const url = new URL(base);

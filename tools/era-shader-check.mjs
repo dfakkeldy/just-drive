@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';import {readFileSync}from'node:fs';import{execFileSync}from'node:child_process';
-import{program,coastPrograms,preprocess,normalized,checkShaderBaseline}from'./coast-programs.mjs';
+import{program,coastPrograms,preprocess,normalized,checkShaderBaseline,withoutFarBend}from'./coast-programs.mjs';
 const source=readFileSync('web/src/shaders.ts','utf8'),base=execFileSync('git',['show','origin/main:web/src/shaders.ts'],{encoding:'utf8'});
 
 // The shared pin checks the intentional modern cut additions too. Era isolation
 // compares all pre-existing programs after removing only those marked modern blocks.
 checkShaderBaseline(source,{report:()=>{}});
 const modernOnly=/\/\* MODERN_ROAD_(?:CUT|PAINT)_BEGIN \*\/[\s\S]*?\/\* MODERN_ROAD_(?:CUT|PAINT)_END \*\//g;
-const original=(s,n)=>program(s,n).replace(modernOnly,'').replaceAll(' * roadPaint','');
+const original=(s,n)=>program(withoutFarBend(s),n).replace(modernOnly,'').replaceAll(' * roadPaint','');
 const names=[...source.matchAll(/(?:const|export const) (\w+) = \/\* glsl \*\/ `/g)].map(m=>m[1]).filter(n=>!['ROAD_CUT_PARS','ROAD_CUT_FRAG'].includes(n));
 for(const name of names){const raw=original(source,name);for(const flags of [[],['LOW'],['COAST_SHORE'],['COAST_SHORE','LOW']])assert.equal(normalized(preprocess(raw,flags)),normalized(preprocess(original(base,name),flags)),name+' unchanged without quarry '+flags);assert(!/ERA_CART|cartMud|cartCrown|cartProgram/.test(raw),name+' contains no era identifier');}
 const variants=coastPrograms();// AIRPORT and GROUND_CLASSES variants are new; tools/baseline/programs.json pins them.

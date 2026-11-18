@@ -33,8 +33,9 @@ const cases=[
  ['animal horn','places','main.ts','animals?.honk(vehicle); roadScene?.honk(vehicle);','roadScene?.honk(vehicle);','bike horn reaches animals'],
  ['eye camera','places','bike-camera.ts',"if (view === 'seat')",'if (false)','bike eye camera stays above land'],
  ['road reset','places','bike-ride.ts','respawn(): void {','respawn(): void { return;','R resets bike to road at rest'],
- ['phone pull target','phone','bike-controls.ts','#tcPull{width:56px}','#tcPull{width:0px}','PULL target and no car steering help'],
- ['phone overlap','phone','bike-controls.ts','body.bikeMode.tcOn #tcPull{display:grid;','body.bikeMode.tcOn #tcPull{position:absolute;left:8px;bottom:8px;display:grid;','clear controls'],
+ // The planner writes PULL's inline rectangle at every phone size, over bike-controls.ts CSS, so mutate the planner.
+ ['phone pull target','phone','phone-controls-layout.ts',"put('tcPull', driveLeft, bottom - pedal, width, pedal)","put('tcPull', driveLeft, bottom - pedal, 0, pedal)",'PULL target and no car steering help'],
+ ['phone overlap','phone','phone-controls-layout.ts',"driveLeft -= width + gap; put('tcPull'","put('tcPull'",'clear controls'],
  ['runtime error collection','places','ride-features.ts','if (!explore) return;',"setTimeout(() => { throw new Error('bike test break'); }, 100); if (!explore) return;",'places animals horn and camera have no runtime errors'],
  ['phone pull input','phone','bike-controls.ts','pull: held || keys.size > 0','pull: false','phone GO plus PULL raises front wheel'],
  ['area yard disabled','area','main.ts','AREA.worksYard ? new YardSite','true ? new YardSite','Judique bike has no yard or animals and keeps its garage choice'],

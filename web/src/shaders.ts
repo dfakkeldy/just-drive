@@ -1,3 +1,5 @@
+import { CURVE_GLSL } from './far-rules';
+
 // GLSL for the terrain and the sea. Colours are linear; three.js applies tone mapping and sRGB at the end.
 
 export const LAND_LIGHT = /* glsl */ `
@@ -227,6 +229,8 @@ float sunShadow(vec3 world) {
 export const TERRAIN_VERT = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
+${CURVE_GLSL}
+uniform float farCurveOn;
 attribute float ground;
 varying vec2 vUv;
 varying vec3 vWorld;
@@ -251,6 +255,8 @@ void main() {
   vec4 w = modelMatrix * vec4(position, 1.0);
   vWorld = w.xyz;
   gl_Position = projectionMatrix * viewMatrix * w;
+  float drop = farDrop(w.xz - cameraPosition.xz) * farCurveOn;
+  if (drop > 0.0) gl_Position -= projectionMatrix * viewMatrix * vec4(0.0,drop,0.0,0.0);
   #include <logdepthbuf_vertex>
 }
 `;
@@ -258,6 +264,8 @@ void main() {
 export const MIRROR_TERRAIN_VERT = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
+${CURVE_GLSL}
+uniform float farCurveOn;
 attribute float ground;
 attribute float mirrorCrown;
 uniform vec2 mirrorFocus;
@@ -285,6 +293,8 @@ void main() {
   w.y += mirrorCrown * smoothstep(280.0, 330.0, length(w.xz - mirrorFocus));
   vWorld = w.xyz;
   gl_Position = projectionMatrix * viewMatrix * w;
+  float drop = farDrop(w.xz - cameraPosition.xz) * farCurveOn;
+  if (drop > 0.0) gl_Position -= projectionMatrix * viewMatrix * vec4(0.0,drop,0.0,0.0);
   #include <logdepthbuf_vertex>
 }
 `;

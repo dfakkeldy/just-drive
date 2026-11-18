@@ -5,7 +5,7 @@ import { AREAS } from './area';
 import { eraAddress, otherGameAddress, readSite } from './site';
 import { TODAY, type Era } from './era';
 import { HISTORY_AREAS, eraAreaId, eraDoorText, historyArea } from './eras/history-areas';
-import { ABOUT_URL, CHANGES_TEXT, CHANGES_URL, COFFEE_TEXT, COFFEE_URL, CONTACT, ENGINE_CREDIT, HELP_URL, LAND_CREDITS, LISTEN_TEXT, LISTEN_URL } from './credits';
+import { ABOUT_URL, CHANGES_TEXT, CHANGES_URL, COFFEE_TEXT, COFFEE_URL, CONTACT, ENGINE_CREDIT, HELP_URL, LAND_CREDITS, FAR_CREDITS, LISTEN_TEXT, LISTEN_URL } from './credits';
 import { KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH } from './controls';
 export { CONTACT } from './credits';
 import { EXPLORE_TITLE, chooseMode, type GameMode } from './mode';
@@ -76,6 +76,7 @@ const PAVED_CREDIT = `<p id="nsPavedCredit"><a href="https://support.novascotia.
 const LEGAL = `
 <p><b>A work of satire.</b> The land, the roads and the mapped buildings are real. The mine site and interiors are fictional. The customers, the complaints, the animals’ opinions and the boss are invented. Not affiliated with any postal service.</p>
 ${LAND_CREDITS}
+${FAR_CREDITS}
 ${MUSIC_CREDIT}
 ${ENGINE_CREDIT}
 <p>Property lines (optional, online only): ${PROPERTY_ATTRIBUTION} <a href="${PROPERTY_LICENSE_URL}" target="_blank" rel="noopener noreferrer">Licence</a></p>`;
@@ -155,7 +156,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     <button id="titleStart">${ride?.kind === 'horse' ? 'Start riding' : explore || areaName ? 'Start driving' : 'Start the shift'}</button>
     ${door ? `<a id="titleEra" href="${door.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">${historical ? 'Back to today →' : eraDoorText(eraWords!.name)}</a>
     ` : ''}<button id="titleCredits" aria-expanded="false">Credits and data</button>
-    <div id="titleLegal" hidden>${CONTACT_LINE}${aboutLine(just)}${historical ? `${(historyArea(eraAreaId(era)) ?? HISTORY_AREAS.mabou).credits}${LAND_CREDITS}${MUSIC_CREDIT}${ENGINE_CREDIT}` : just ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : areaName ? LEGAL.replace(/<p>.*?<\/p>/, '<p>The land, roads and mapped building shapes are real.</p>') : explore ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : LEGAL}${paved ? PAVED_CREDIT : ''}</div>
+    <div id="titleLegal" hidden>${CONTACT_LINE}${aboutLine(just)}${historical ? `${(historyArea(eraAreaId(era)) ?? HISTORY_AREAS.mabou).credits}${LAND_CREDITS}${FAR_CREDITS}${MUSIC_CREDIT}${ENGINE_CREDIT}` : just ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : areaName ? LEGAL.replace(/<p>.*?<\/p>/, '<p>The land, roads and mapped building shapes are real.</p>') : explore ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : LEGAL}${paved ? PAVED_CREDIT : ''}</div>
   </div>`;
   if (explore && ride) { const buttons = vehicleButtons(ride); const modeChoice = root.querySelector('#modeChoice'); if (modeChoice) modeChoice.after(buttons); else root.querySelector('#titleCard')!.prepend(buttons); }
   document.body.appendChild(root);

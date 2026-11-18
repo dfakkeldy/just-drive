@@ -23,6 +23,8 @@ async function page(query,width=1600,height=1000){
  const shot=async name=>{if(process.env.SHOTS==='1'){await sleep(120);const r=await send('Page.captureScreenshot',{format:'png'});writeFileSync(`${out}/${name}.png`,Buffer.from(r.result.data,'base64'));}};
  return {read,send,settle,key,tap,start,shot,errors,close:async()=>{await fetch(`http://127.0.0.1:${port}/json/close/${tab.id}`);ws.close();owned.splice(owned.findIndex(x=>x.id===tab.id),1)}};
 }
+// A ride choice must load a new page. Without one the old page stays unsettled, so name the lost reload instead of timing out.
+async function reloadAfter(p,click,name){await p.read(`window.bikeOldPage=true;${click}`);let fresh=false;for(let i=0;i<75&&!fresh;i++){await sleep(200);try{fresh=await p.read('!window.bikeOldPage')}catch{}}if(!fresh)check(false,name);await p.settle();}
 const isBike=`Object.getPrototypeOf(mmm.vehicle).constructor.name==='BikeRide'&&mmm.vehicle.car.root.getObjectByName('Batched trail bike')?.isSkinnedMesh&&!mmm.vehicle.car.root.getObjectByName('Static car material batch')`;
 const boxes=`ids=>ids.flatMap(id=>{const e=document.getElementById(id);if(!e||e.hidden||getComputedStyle(e).display==='none'||getComputedStyle(e).visibility==='hidden')return[];const r=e.getBoundingClientRect();return r.width&&r.height?[[id,r.left,r.top,r.right,r.bottom]]:[]})`;
 const sizes='320x568 320x640 360x740 375x553 375x667 390x664 390x844 402x874 412x915 414x736 430x932 440x956 568x320 667x375 740x360 781x390 812x375 844x390 874x402 932x430 956x440 768x1024 280x653 344x1000 1024x768 600x400 568x280 320x460'.split(' ').map(x=>x.split('x').map(Number));
@@ -39,18 +41,24 @@ try{
  if(family==='all'||family==='ride'){
   const p=await page('mode=explore&vehicle=bike&title=1');
   check(await p.read(isBike),'explore bike shows bike and rider instead of car');
-  check(await p.read(`document.querySelectorAll('#vehicleChoice button').length===2&&document.querySelector('#vehicleChoice [data-vehicle="bike"]')?.getAttribute('aria-pressed')==='true'&&document.querySelector('#title dl').textContent.includes('Shift')`),'title ride choice and bike keys');
+  check(await p.read(`document.querySelectorAll('#vehicleChoice button').length===2&&document.querySelector('#vehicleChoice [data-vehicle="bike"]')?.getAttribute('aria-pressed')==='true'&&/(?:Shift|⇧) [+] throttle/.test(document.querySelector('#title dl').textContent)`),'title ride choice and bike keys');
   check(await p.read(`(()=>{const card=document.getElementById('titleCard'),choice=card.querySelector('#vehicleChoice').getBoundingClientRect(),tag=card.querySelector('.tag').getBoundingClientRect(),caution=card.querySelector('#exploreCaution').getBoundingClientRect(),keys=card.querySelector('dl').getBoundingClientRect(),mp=card.querySelector('.mpControl')?.getBoundingClientRect(),start=card.querySelector('#titleStart').getBoundingClientRect();return !!mp&&choice.bottom<=tag.top+1&&caution.bottom<=keys.top+1&&Math.max(keys.bottom,mp.bottom)<=start.top+1})()`),'explore title keeps choice and multiplayer controls in order');
   await p.shot('10-explore-bike-title');await p.start();await p.settle();
   const before=await p.read('({x:mmm.vehicle.x,z:mmm.vehicle.z})');await p.key('KeyW');for(let i=0;i<80;i++){if(await p.read(`Math.hypot(mmm.vehicle.x-(${before.x}),mmm.vehicle.z-(${before.z}))>2&&mmm.vehicle.speed>1`))break;await sleep(100);}await p.key('KeyW',false);
   check(await p.read(`Math.hypot(mmm.vehicle.x-(${before.x}),mmm.vehicle.z-(${before.z}))>2&&mmm.vehicle.speed>1`),'W drives the bike');
   await p.key('ShiftLeft');await p.key('KeyW');for(let i=0;i<80;i++){if(await p.read('mmm.vehicle.wheelie>.2'))break;await sleep(100);}await p.key('KeyW',false);await p.key('ShiftLeft',false);check(await p.read('mmm.vehicle.wheelie>.1'),'desktop Shift plus W lifts the front wheel');
-  if(await p.read('!!mmm.bigMap')){await p.key('ShiftLeft');await p.tap('KeyM');await sleep(300);const open=await p.read(`!document.getElementById('bigMap').hidden`);await p.tap('Escape');await sleep(300);await p.key('KeyW');await sleep(2500);const stuck=await p.read('mmm.vehicle.wheelie');await p.key('KeyW',false);await p.key('ShiftLeft',false);check(open&&stuck<.02&&await p.read('mmm.vehicle.speed>2'),'a Shift held through the map needs a fresh press to pull');}
+  // The last wheelie must settle first, and every sample counts: a stuck pull can lift and loop out to 0 before a final read.
+  // A fresh Shift press must then lift, so a ride too slow to pull cannot pass.
+  if(await p.read('!!mmm.bigMap')){for(let i=0;i<60&&await p.read('mmm.vehicle.wheelie>.02');i++)await sleep(100);const crashes=await p.read('mmm.vehicle.crashes');
+   await p.key('ShiftLeft');await p.tap('KeyM');await sleep(300);const open=await p.read(`!document.getElementById('bigMap').hidden`);await p.tap('Escape');await sleep(300);
+   await p.key('KeyW');let stuck=await p.read('mmm.vehicle.wheelie');for(let i=0;i<25;i++){await sleep(100);stuck=Math.max(stuck,await p.read('mmm.vehicle.wheelie'));}const fast=await p.read('mmm.vehicle.speed>3');
+   await p.key('ShiftLeft',false);await sleep(100);await p.key('ShiftLeft');let fresh=false;for(let i=0;i<40&&!fresh;i++){await sleep(100);fresh=await p.read('mmm.vehicle.wheelie>.1');}await p.key('KeyW',false);await p.key('ShiftLeft',false);
+   console.log('MAP PULL',JSON.stringify({open,stuck,fast,fresh}));check(open&&stuck<.02&&fast&&fresh&&await p.read(`mmm.vehicle.crashes===${crashes}`),'a Shift held through the map needs a fresh press to pull');}
   await p.read('mmm.freeCamera()');await p.read(`mmm.vehicle.place(mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.heading)`);const pose=await p.read('({x:mmm.vehicle.x,z:mmm.vehicle.z,heading:mmm.vehicle.heading})');
   check(await p.read(`(()=>{document.getElementById('gear').click();const b=document.querySelector('#settingsVehicleChoice [data-vehicle="car"]');b?.scrollIntoView({block:'nearest'});const r=b?.getBoundingClientRect();return document.getElementById('settings').classList.contains('open')&&!!r&&r.width>0&&r.height>=44&&r.top>=0&&r.bottom<=innerHeight})()`),'settings exposes the ride choice');
-  await p.read(`document.querySelector('#settingsVehicleChoice [data-vehicle="car"]').click()`);await p.settle();
+  await reloadAfter(p,`document.querySelector('#settingsVehicleChoice [data-vehicle="car"]').click()`,'settings switch saves reloads and keeps pose');
   check(await p.read(`localStorage.getItem('mmm.vehicle')==='car'&&new URLSearchParams(location.search).get('vehicle')==='car'&&mmm.vehicleId==='car'&&Math.hypot(mmm.vehicle.x-(${pose.x}),mmm.vehicle.z-(${pose.z}))<.01&&Math.abs(mmm.vehicle.heading-(${pose.heading}))<.001&&mmm.vehicle.speed===0`),'settings switch saves reloads and keeps pose');
-  await p.read(`document.querySelector('#vehicleChoice [data-vehicle="bike"]').click()`);await p.settle();
+  await reloadAfter(p,`document.querySelector('#vehicleChoice [data-vehicle="bike"]').click()`,'title switch saves reloads and keeps pose');
   check(await p.read(`localStorage.getItem('mmm.vehicle')==='bike'&&mmm.vehicleId==='bike'&&Math.hypot(mmm.vehicle.x-(${pose.x}),mmm.vehicle.z-(${pose.z}))<.01`),'title switch saves reloads and keeps pose');
   check(p.errors.length===0,'ride switch has no runtime errors');await p.close();
   const m=await page('mode=mail&title=1');await m.read(`localStorage.setItem('mmm.vehicle','bike')`);await m.send('Page.reload');await m.settle();
