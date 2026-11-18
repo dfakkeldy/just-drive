@@ -23,9 +23,9 @@
 
   "highway19-far-land/phone-mail":{"calls":208,"triangles":1302588,"geometries":90,"textures":74,"programs":15,"readyTiles":92,"requests":220},
 
-  "mines-lookoff-south/desktop-explore-truck":{"calls":558,"triangles":3187713,"geometries":234,"textures":154,"programs":41,"readyTiles":219,"requests":381},
+  "mines-lookoff-south/desktop-explore-truck":{"calls":561,"triangles":3187713,"geometries":235,"textures":154,"programs":42,"readyTiles":219,"requests":381},
 
-  "mines-lookoff-south/desktop-mail":{"calls":596,"triangles":3308644,"geometries":260,"textures":156,"programs":50,"readyTiles":219,"requests":374},
+  "mines-lookoff-south/desktop-mail":{"calls":599,"triangles":3308644,"geometries":261,"textures":156,"programs":51,"readyTiles":219,"requests":374},
 
   "mines-lookoff-south/phone-explore-truck":{"calls":143,"triangles":1172530,"geometries":71,"textures":69,"programs":14,"readyTiles":75,"requests":169},
 
@@ -39,7 +39,7 @@
 
   "new-player-start/phone-mail":{"calls":229,"triangles":1433908,"geometries":112,"textures":83,"programs":18,"readyTiles":74,"requests":154},
 
-  "pointtupper-start/desktop-explore-truck":{"calls":997,"triangles":4745271,"geometries":290,"textures":150,"programs":46,"readyTiles":347,"requests":638},
+  "pointtupper-start/desktop-explore-truck":{"calls":999,"triangles":4750815,"geometries":290,"textures":150,"programs":47,"readyTiles":347,"requests":638},
 
   "pointtupper-start/phone-explore-truck":{"calls":212,"triangles":1283670,"geometries":123,"textures":60,"programs":18,"readyTiles":83,"requests":196},
 
@@ -59,9 +59,9 @@
 
   "village-start/phone-mail":{"calls":191,"triangles":1162200,"geometries":79,"textures":71,"programs":15,"readyTiles":94,"requests":226},
 
-  "works-yard/desktop-explore-truck":{"calls":556,"triangles":3377122,"geometries":123,"textures":123,"programs":32,"readyTiles":297,"requests":551},
+  "works-yard/desktop-explore-truck":{"calls":559,"triangles":3377122,"geometries":124,"textures":123,"programs":33,"readyTiles":297,"requests":551},
 
-  "works-yard/desktop-mail":{"calls":568,"triangles":3473554,"geometries":130,"textures":123,"programs":34,"readyTiles":297,"requests":544},
+  "works-yard/desktop-mail":{"calls":571,"triangles":3473554,"geometries":131,"textures":123,"programs":35,"readyTiles":297,"requests":544},
 
   "works-yard/phone-explore-truck":{"calls":170,"triangles":1455450,"geometries":68,"textures":66,"programs":15,"readyTiles":72,"requests":182},
 
