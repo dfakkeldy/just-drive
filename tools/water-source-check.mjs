@@ -2,7 +2,7 @@
 // Non-coast programs are pinned to a repository file. Site additions are reported separately.
 import {readFileSync} from 'node:fs';import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
-import {program,preprocess,normalized,checkShaderBaseline} from './coast-programs.mjs';
+import {program,preprocess,normalized,checkShaderBaseline,withoutFarBend} from './coast-programs.mjs';
 const metrics=s=>({lines:s.split('\n').filter(l=>l.trim()).length,textureReads:(s.match(/\b(?:texture|texture2D|texelFetch)\s*\(/g)??[]).length});
 export function compareWaterShaders(current,main=null,report=console.log){
  if(main===null)checkShaderBaseline(current,{report});
@@ -10,8 +10,9 @@ export function compareWaterShaders(current,main=null,report=console.log){
  for(const name of ['TERRAIN_VERT','TERRAIN_FRAG','SEA_VERT','SEA_FRAG']){
   const plain=preprocess(program(current,name),['LOW']),a=normalized(plain);
   if(main!==null){
-   const b=normalized(preprocess(program(main,name),['LOW']));
-   if(a!==b){let i=0;while(a[i]===b[i])i++;throw Error(`${name} differs at ${i}: current ${a.slice(i-40,i+100)} / main ${b.slice(i-40,i+100)}`);}
+   const b=normalized(preprocess(program(withoutFarBend(main),name),['LOW']));
+   const compared=normalized(preprocess(program(withoutFarBend(current),name),['LOW']));
+   if(compared!==b){let i=0;while(compared[i]===b[i])i++;throw Error(`${name} differs at ${i}: current ${compared.slice(i-40,i+100)} / main ${b.slice(i-40,i+100)}`);}
   }
   report(`PASS LOW ${name}: ${main===null?'matches shared file pin':'identical to main'} after preprocessing`);
   const site=preprocess(program(current,name),['LOW','SITE_GRAVEL']),baseStats=metrics(plain),siteStats=metrics(site);

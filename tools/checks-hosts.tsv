@@ -122,6 +122,11 @@ light-study-public-browser	unproven	no	public default-brand study flow; hardware
 porch-dog-browser	unproven	no	not yet measured on another host
 start-key-browser	unproven	no	not yet measured on another host
 start-key-browser-mutations	unproven	no	not yet measured on another host
+far-views-browser	mac-only	no	Native Apple Metal game pictures; other hosts unmeasured
+far-near-browser	mac-only	no	Native Apple Metal frozen near-pixel masks; other hosts unmeasured
+tall-browser	mac-only	no	Native Metal game turbine picture and motion; other hosts unmeasured
+far-join-browser	mac-only	no	Native Metal sea-join pixel coverage and image evidence; other hosts unmeasured
+far-final-browser	mac-only	no	Serial native Metal pixel and picture proofs; other hosts unmeasured
 paved-open-browser	unproven	no	WORK-only designated-polygon chase capture and actual GLSL; hardware required; no phone timing claim; its work bake reads data/raw/paved-open (sent by the remote runner since 17 Nov) and the large data/raw/elevation, data/raw/vectors and data/raw/areas inputs (never sent): the row needs them, so a runner host says SKIP with the missing path instead of a FileNotFoundError (PR #221 on apple-check-host)
 blender-models	apple	no	needs the matching Blender 5.2 release (BLENDER override, application path or PATH); absence is SKIP/CANNOT RUN, never PASS; Mac PASS 10 s on 991bd1a; the project brief audit: apple-check-host M4 PASS 9.42 s on 68bc9eb, 2026-11-17 UTC; Blender 5.2.2 LTS; four committed model files rebuilt and byte-equal; needs-only branch change
 blender-models-mutations	apple	no	as blender-models; Mac PASS 16 s on 991bd1a; the project brief audit: apple-check-host M4 PASS 11.10 s on 68bc9eb, 2026-11-17 UTC; Blender 5.2.2 LTS; four files byte-equal and quantizer mutant caught; needs-only branch change
@@ -136,6 +141,9 @@ mail-preview-cost	portable	no	pure Node, no GPU (Node rows default to portable);
 mail-preview-cost-mutations	portable	no	pure Node on the Mabou village delta 4d68356e input (3502ef37 before); apple-check-host PASS 17 Nov 2026, all three mutants killed; no GPU requirement; Linux not yet re-run
 yard-dog	portable	no	real geography and bounded rules, no browser
 yard-dog-browser	portable	no	Mabou behavior and desktop/phone pictures
+far-mini-near-browser	mac-only	no	Paired native Metal control on rented Mac mini; no frame-ms gate
+far-mini-views-browser	mac-only	no	Paired native Metal mini controls; frame timing stays on the MacBook
+far-mini-water-browser	mac-only	no	Native Metal mini water coverage and actual1cm faults; no frame-ms gates
 places-areas	portable	no	baked roads and manifests of four areas, no browser
 places-areas-browser	unproven	no	Places panel and jumps in four areas with desktop/phone pictures; rented M6 mini Chrome 157 PASS 15 Nov; apple-check-host M4 Edge 157 PASS on b3743622, 18 Nov 2026; not yet run on the MacBook or on Linux
 page-access-browser	unproven	no	Production page builder and PlacesUI in an isolated browser fixture; no terrain or game mocks claimed as integration coverage; apple-check-host M4 Edge 157 PASS 195.52 s on fb448b67, 18 Nov 2026 (missing-label, unlabelled-dialog and focus-trap mutants rejected at desktop and phone); not yet run on the MacBook or on Linux
@@ -145,6 +153,13 @@ culverts-browser	unproven	no	apple-check-host M4 Edge 157 PASS 523 s on dca41abb
 deckhand	portable	no	read-only baked land and road placement; motion fixture; apple-check-host PASS on 955bd85f, 17 Nov 2026
 deckhand-browser	unproven	no	Mabou guide and desktop/phone pictures; rented M6 mini PASS 15 Nov; apple-check-host M4 Edge 157 PASS 224 s on 955bd85f, 17 Nov 2026; Linux unmeasured
 night-browser	unproven	no	Mac M1 Pro Metal PASS on the night-look branch; other hosts unmeasured
+far-bake	mac-only	no	Producer guard fixture imports GDAL; run on the native Mac runner
+far-promotion	mac-only	no	Promotion screening imports the GDAL-backed producer; synthetic writes only
+far-delta	portable	no	Node only; reads baked manifests and far files; apple-check-host PASS before (live) and after (rehearsal clone)
+far-delta-mutations	portable	no	Node only; synthetic files; apple-check-host PASS
+frame-budget-far	portable	no	Node only; committed pins and deltas; apple-check-host PASS
+frame-budget-far-mutations	portable	no	Node only; apple-check-host PASS
+far-shader-paths-browser	mac-only	no	Native mini shader/API matrix, no frame-ms gates or physical-phone claim
 paved-pipeline	apple	no	needs the GDAL Python bindings (osgeo): pipeline/paved.py imports osgeo; Linux has none (ModuleNotFoundError in a clean clone of cda5d9c, 14 Nov); the project brief audit: apple-check-host M4 PASS 3.71 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
 big-buildings-mutations	apple	no	needs the GDAL Python bindings (osgeo): pipeline/27_bake_buildings.py imports osgeo; Linux has none (ModuleNotFoundError in a clean clone of cda5d9c, 14 Nov); the project brief audit: apple-check-host M4 PASS 26.15 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
 stunt-browser	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
@@ -185,6 +200,7 @@ mp-race-browser	unproven	no	two local room pages; requires installed Wrangler an
 hikes-browser	unproven	no	New row; verification pending on apple-check-host
 stunt-arch-entry-mutant	unproven	no	New actual coupled-contact mutant; first host will be coordinator-authorised apple-check-host
 mp-liveness-browser	unproven	no	two local room visitors plus a same-browser tab; requires installed Wrangler and hardware browser
+far-macbook-extra	mac-only	no	MacBook only: frame timing in an owner-granted quiet window; not run on the rented mini or Linux
 phone-cold-start	unproven	no	new row (phone cold start, the project brief); first runs on apple-check-host
 terrain-lazy	portable	no	new row (the project brief); first runs on apple-check-host
 terrain-lazy-mutations	portable	no	new row (the project brief); first runs on apple-check-host

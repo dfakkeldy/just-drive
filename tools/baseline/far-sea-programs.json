@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "programs": [
+    {
+      "name": "FAR_SEA_VERT",
+      "flags": [],
+      "sha256": "b19a1e28aa1c599d7ff52a4b8903c211d2368fc4c2965d9dc33b685203c60b3a"
+    },
+    {
+      "name": "FAR_SEA_VERT",
+      "flags": [
+        "LOW"
+      ],
+      "sha256": "b19a1e28aa1c599d7ff52a4b8903c211d2368fc4c2965d9dc33b685203c60b3a"
+    },
+    {
+      "name": "FAR_SEA_VERT",
+      "flags": [
+        "SEA_WATER"
+      ],
+      "sha256": "b19a1e28aa1c599d7ff52a4b8903c211d2368fc4c2965d9dc33b685203c60b3a"
+    },
+    {
+      "name": "FAR_SEA_FRAG",
+      "flags": [
+        "LOW"
+      ],
+      "sha256": "5e1856017b74fd120b1b4a99f78bf5c70207c774635df06bf64ae3e0321f5301"
+    },
+    {
+      "name": "FAR_SEA_FRAG",
+      "flags": [
+        "SEA_WATER"
+      ],
+      "sha256": "e1d28af1e21021f80c1197c9d9b863bfcefafd9c2009d473453ea38ee24c3827"
+    },
+    {
+      "name": "FAR_SEA_QUERY_FRAG",
+      "flags": [],
+      "sha256": "9bede99e86788cd2dd85a9c9fdf2775157dfb3c4ffcec73334123eb163dcd8d3"
+    }
+  ]
+}

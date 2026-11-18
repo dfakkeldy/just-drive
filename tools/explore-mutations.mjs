@@ -46,7 +46,7 @@ const mutations=[
  ['village click jump','explore','touch/click jump village rests on road',[one('places-ui.ts','this.jumpTo(hit.x, hit.z, hit.heading);',"this.jumpTo(hit.x + (place.id === 'village' ? 20 : 0), hit.z, hit.heading);")]],
  ['mail title preservation','mail','mail title keeps its own heading, key rows, start button and satire notice',[one('title.ts','Preview build · a route you cannot win','Broken mail tagline')]],
  ['mail visibility preservation','mail','mail visible elements equal base',[one('main.ts','if (!mailMode) prepareExplore();','prepareExplore();')]],
- ['mail places exclusion','mail','mail has no places UI',[one('main.ts','const placesUI = !mailMode && !bare && placeList.length ?','const placesUI = !bare && placeList.length ?')]],
+ ['mail places exclusion','mail','mail has no places UI',[one('main.ts','const placesUI = !mailMode && !bare && (placeList.length || (ERA.modern && !!tallKey)) ?','const placesUI = !bare && (placeList.length || (ERA.modern && !!tallKey)) ?')]],
  ['mail session preservation','mail','clean profile still starts mail day one',[one('main.ts','const mail = mailMode ?','const mail = false ?')]],
  ['mail clock preservation','mail','mail clock still runs',[one('main.ts','shift.update(clockRuns ? clockDt : 0, vehicle);','shift.update(0, vehicle);')]],
 ];

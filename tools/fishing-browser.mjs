@@ -4,6 +4,7 @@ import { cdp, cdpFetch } from './cdp.mjs';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { assertMailCar } from './mail-car-body.mjs';
+import { parkMainFrame } from './park-frame.mjs';
 const [out, first] = process.argv.slice(2), base = new URL(first).origin, port = process.env.CDP_PORT;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const tab = await (await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
@@ -21,9 +22,9 @@ async function load(query='') {
   assert.ok(ready,'wharf and actual terrain loaded');
   await assertMailCar(read,'blender','fishing');      // these checks read the car's sign, lamp and glass: a fallback car fails them
   await read(`document.getElementById('titleStart').click();document.activeElement?.blur()`);await key('KeyF','f',70);
-  await read(`window.requestAnimationFrame=fn=>{window.nextFrame=fn;return 0}`);await sleep(100);
+  await parkMainFrame(read,sleep);
   await read(`(()=>{
-    const mainFrame=window.nextFrame;
+    const mainFrame=window.nextFrame;if(typeof mainFrame!=='function')throw Error('main frame not parked');
     // Resize/layout callbacks also use rAF. Preserve the actual game loop across emulated phone rotations.
     window.requestAnimationFrame=fn=>{if(fn===mainFrame)window.nextFrame=fn;else setTimeout(()=>fn(performance.now()),0);return 0};
     const {vehicle:c,fishing:f,terrain,camera,endings,shift,renderer:r}=mmm,s=f.site;

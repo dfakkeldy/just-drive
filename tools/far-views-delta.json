@@ -1,0 +1,199 @@
+{
+ "version": 1,
+ "pr": 122,
+ "note": "After-install hashes of the far views pack (tools/far-delta-check.mjs). Manifests are checked by their far keys, not by hash.",
+ "packs": {
+  "terrain": {
+   "files": {
+    "tall.json": {
+     "sha256": "2738aaea877e9b21e63b6cdfc2261343bda7df6ffd50074e75f4a0432c6be966",
+     "bytes": 41155
+    },
+    "far-land.json": {
+     "sha256": "9121ba1583a1ae89dafd4c2592acea65712af028860562605ffe7a8c556d1fe0",
+     "bytes": 873
+    },
+    "far-land-desktop.bin": {
+     "sha256": "cf724c40938a8948ce434fe82b5242c667459715d90a93035f864964a5168813",
+     "bytes": 2799876
+    },
+    "far-land-low.bin": {
+     "sha256": "e91b708bf32ef00929f218b5afbf4321c5dc12f38e315da10b762f81802772e5",
+     "bytes": 1194096
+    }
+   },
+   "manifest": {
+    "tall": {
+     "file": "tall.json",
+     "turbines": 2,
+     "far": 162,
+     "towers": 3,
+     "lines": 1
+    },
+    "farLand": {
+     "file": "far-land.json"
+    }
+   }
+  },
+  "areas/judique": {
+   "files": {
+    "tall.json": {
+     "sha256": "f1f7eda2103afb05549cfee00675017e40b4b4bee541a72d877c1dde7ce99774",
+     "bytes": 39009
+    },
+    "far-land.json": {
+     "sha256": "2290dce9a4be589313cb3020c55e0ba2b8ac59772f2008423157c441f04ec763",
+     "bytes": 881
+    },
+    "far-land-desktop.bin": {
+     "sha256": "ba836a0ff9f4848f35386cee70070cd991213e4e5abd41733cfdfac2132a798f",
+     "bytes": 2835084
+    },
+    "far-land-low.bin": {
+     "sha256": "e48a78407940499be3299b10b6da78a05808f568ea09595594699eaa893c7ce5",
+     "bytes": 1236936
+    }
+   },
+   "manifest": {
+    "tall": {
+     "file": "tall.json",
+     "turbines": 2,
+     "far": 162,
+     "towers": 3,
+     "lines": 0
+    },
+    "farLand": {
+     "file": "far-land.json"
+    }
+   }
+  },
+  "areas/porthood": {
+   "files": {
+    "tall.json": {
+     "sha256": "bc68a6a069f2f398b78e510bf20890dbe9aa4537d121f7f6ce9f5212292cefe6",
+     "bytes": 38827
+    },
+    "far-land.json": {
+     "sha256": "ddf67bdbfe9544f33463dfba7e297685ad5af9f57778b076529e539bf700d57e",
+     "bytes": 881
+    },
+    "far-land-desktop.bin": {
+     "sha256": "8dc67a8d1d7bde732447c163c10cebfc1d8cd2fa2324c29f4d3e71b2d8db6429",
+     "bytes": 2800452
+    },
+    "far-land-low.bin": {
+     "sha256": "ab0c71f6541eb7aeed376de88500bd3ea40e6c94a0f73db138a5fbf91bc71315",
+     "bytes": 1203912
+    }
+   },
+   "manifest": {
+    "tall": {
+     "file": "tall.json",
+     "turbines": 2,
+     "far": 162,
+     "towers": 0,
+     "lines": 0
+    },
+    "farLand": {
+     "file": "far-land.json"
+    }
+   }
+  },
+  "areas/pointtupper": {
+   "files": {
+    "tall.json": {
+     "sha256": "d8ddc76ba6805aedf4deccf9c769b66dd63df99ce06d53b81f778e9c080a0ef6",
+     "bytes": 149059
+    },
+    "far-land.json": {
+     "sha256": "46ffe8014d983f1e6e6d9d6897f8c7b604fcebdf31d360141386545fdc3a89d2",
+     "bytes": 879
+    },
+    "far-land-desktop.bin": {
+     "sha256": "add3334302beb6cc6440e573dde76233457ff3624d029d32c628bd9fdd3ab3d4",
+     "bytes": 2624496
+    },
+    "far-land-low.bin": {
+     "sha256": "f750ec2599645736c3bb49c7361462625945fc8f080cf74b0b127f727d333ffd",
+     "bytes": 1082472
+    }
+   },
+   "manifest": {
+    "tall": {
+     "file": "tall.json",
+     "turbines": 39,
+     "far": 128,
+     "towers": 15,
+     "lines": 32
+    },
+    "farLand": {
+     "file": "far-land.json"
+    }
+   }
+  },
+  "areas/westbay": {
+   "files": {
+    "tall.json": {
+     "sha256": "4c4fd7cffd822e5630c12d8d8bec44a97aa9f181b1f3439df4e01124edb9c97e",
+     "bytes": 97780
+    },
+    "far-land.json": {
+     "sha256": "fecbbe5fc00f97ba768a45dbc55fb0fe14f1d163f390f667b582bc6fcf1381ba",
+     "bytes": 873
+    },
+    "far-land-desktop.bin": {
+     "sha256": "24b22c8be2a700b92e8e156c78d64b646d5a56175838fbf3f3d277c32b7416ff",
+     "bytes": 2929920
+    },
+    "far-land-low.bin": {
+     "sha256": "96a2c1a5469f79841c689d2c7bf3f1b97649338d4c9b00e9927531c59e56851c",
+     "bytes": 1192704
+    }
+   },
+   "manifest": {
+    "tall": {
+     "file": "tall.json",
+     "turbines": 39,
+     "far": 128,
+     "towers": 3,
+     "lines": 9
+    },
+    "farLand": {
+     "file": "far-land.json"
+    }
+   }
+  },
+  "areas/cansocauseway": {
+   "files": {
+    "tall.json": {
+     "sha256": "142a3a21f4d5c0efdf7c37fe26a124c9c47e27606baccfafc3922a9c18c2aeba",
+     "bytes": 81664
+    },
+    "far-land.json": {
+     "sha256": "e9445c860b75bcaeef43ea7ef8f4ca811b6ea5dbe1438fd4f04dde4eb128f366",
+     "bytes": 881
+    },
+    "far-land-desktop.bin": {
+     "sha256": "def4230afeea151c12ab0ddc98b6b5366698195e127ea3e0367904a302b1c84f",
+     "bytes": 2673576
+    },
+    "far-land-low.bin": {
+     "sha256": "a51cdd2fb4e012dd5b5c574d0058b814a335324148877ad4d7f9f06c835979af",
+     "bytes": 1101996
+    }
+   },
+   "manifest": {
+    "tall": {
+     "file": "tall.json",
+     "turbines": 39,
+     "far": 128,
+     "towers": 6,
+     "lines": 18
+    },
+    "farLand": {
+     "file": "far-land.json"
+    }
+   }
+  }
+ }
+}
