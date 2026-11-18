@@ -41,7 +41,7 @@
 
   "pointtupper-start/desktop-explore-truck":{"calls":997,"triangles":4745271,"geometries":290,"textures":150,"programs":46,"readyTiles":347,"requests":638},
 
-  "pointtupper-start/phone-explore-truck":{"calls":212,"triangles":1283670,"geometries":122,"textures":60,"programs":18,"readyTiles":83,"requests":196},
+  "pointtupper-start/phone-explore-truck":{"calls":212,"triangles":1283670,"geometries":123,"textures":60,"programs":18,"readyTiles":83,"requests":196},
 
   "quarry-air/desktop-explore-truck":{"calls":846,"triangles":4398223,"geometries":169,"textures":167,"programs":29,"readyTiles":344,"requests":602},
 
