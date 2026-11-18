@@ -52,7 +52,8 @@ async function load(extra) {
   await sleep(1500);
 }
 async function tapStart(touch) {
-  const box = await read(`JSON.stringify(document.getElementById('titleStart').getBoundingClientRect())`).then(JSON.parse);
+  // The title card scrolls when it is taller than the window (1280x720 is): a player scrolls to the start button first.
+  const box = await read(`(() => { const b = document.getElementById('titleStart'); b.scrollIntoView({ block: 'nearest' }); return JSON.stringify(b.getBoundingClientRect()); })()`).then(JSON.parse);
   const x = box.x + box.width / 2, y = box.y + box.height / 2;
   if (touch) {
     // A phone's tap: the browser counts the lift (touchend, pointerup, click) as the gesture, not the press.
