@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
-import {coastPrograms,program,preprocess as preprocessText,normalized,compareNonCoastPrograms,checkShaderBaseline} from './coast-programs.mjs';
+import {coastPrograms,program,preprocess as preprocessText,normalized,compareNonCoastPrograms,checkShaderBaseline,reviewedMirrorCrown} from './coast-programs.mjs';
 const source=readFileSync(process.env.COAST_SHADER_FILE??new URL('../web/src/shaders.ts',import.meta.url),'utf8');
 const preprocess=(source,flags)=>normalized(preprocessText(source,flags));
 const variants=coastPrograms();
@@ -20,7 +20,8 @@ if(process.env.COAST_BASE_REF){
  const ref=process.env.COAST_BASE_REF,base=execFileSync('git',['show',ref+':web/src/shaders.ts'],{encoding:'utf8'});
  // The reference has no era program. Compare every shared program; CART programs remain separately pinned.
  const shared=variants.filter(v=>!v.name.startsWith('CART_'));
- compareNonCoastPrograms(source,base,shared);
+ // The reviewed mirror crown line is pinned in programs.json; map it to its old text on both sides only here.
+ compareNonCoastPrograms(reviewedMirrorCrown(source),reviewedMirrorCrown(base),shared);
  console.log('PASS all '+shared.length+' shared non-coast programs (including SITE_GRAVEL) match '+ref);
 }
 // The actual land main must call the material exactly once, at top level, in both modes.

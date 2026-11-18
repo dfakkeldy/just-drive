@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';import {readFileSync}from'node:fs';import{execFileSync}from'node:child_process';
-import{program,coastPrograms,preprocess,normalized,withoutFarBend}from'./coast-programs.mjs';
-const source=readFileSync('web/src/shaders.ts','utf8'),base=execFileSync('git',['show','origin/main:web/src/shaders.ts'],{encoding:'utf8'});
+import{program,coastPrograms,preprocess,normalized,withoutFarBend,reviewedMirrorCrown}from'./coast-programs.mjs';
+const source=reviewedMirrorCrown(readFileSync('web/src/shaders.ts','utf8')),base=reviewedMirrorCrown(execFileSync('git',['show','origin/main:web/src/shaders.ts'],{encoding:'utf8'}));
 
 const names=[...source.matchAll(/(?:const|export const) (\w+) = \/\* glsl \*\/ `/g)].map(m=>m[1]);
 for(const name of names){const raw=program(withoutFarBend(source),name);for(const flags of [[],['LOW'],['COAST_SHORE'],['COAST_SHORE','LOW']])assert.equal(normalized(preprocess(raw,flags)),normalized(preprocess(program(withoutFarBend(base),name),flags)),name+' unchanged without quarry '+flags);assert(!/ERA_CART|cartMud|cartCrown|cartProgram/.test(raw),name+' contains no era identifier');}
