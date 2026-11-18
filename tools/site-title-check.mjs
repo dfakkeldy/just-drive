@@ -9,19 +9,29 @@ import {execFileSync} from 'node:child_process';
 import ts from '../web/node_modules/typescript/lib/typescript.js';
 import {build,transform} from '../web/node_modules/esbuild/lib/main.js';
 const source=readFileSync('web/src/main.ts','utf8');
-// A concurrently advanced origin/main can import files absent from this task's base.
+// Keep the title baseline at the common tree when origin/main advances.
 const baselineHead=execFileSync('git',['merge-base','HEAD','origin/main'],{encoding:'utf8'}).trim();
 const original=execFileSync('git',['show',baselineHead+':web/src/title.ts'],{encoding:'utf8'});
-async function load(title, generated, publicApp=false){const r=await build({stdin:{contents:title,resolveDir:process.cwd()+'/web/src',loader:'ts'},bundle:true,write:false,format:'esm',platform:'node',define:{__PUBLIC_APP__:String(publicApp)},plugins:generated===undefined?[]:[{name:'credit-mutant',setup(b){b.onLoad({filter:/radio-credits\.generated\.ts$/},()=>({contents:generated,loader:'ts'}));}}]});return import('data:text/javascript;base64,'+Buffer.from(r.outputFiles[0].text).toString('base64'));}
+async function load(title, generated, publicApp=false, creditSource){
+ const plugins=[];
+ if(generated!==undefined)plugins.push({name:'credit-mutant',setup(b){b.onLoad({filter:/radio-credits\.generated\.ts$/},()=>({contents:generated,loader:'ts'}));}});
+ if(creditSource!==undefined)plugins.push({name:'far-credit-mutant',setup(b){b.onLoad({filter:/[/\\]credits\.ts$/},()=>({contents:creditSource,loader:'ts'}));}});
+ const r=await build({stdin:{contents:title,resolveDir:process.cwd()+'/web/src',loader:'ts'},bundle:true,write:false,format:'esm',platform:'node',define:{__PUBLIC_APP__:String(publicApp)},plugins});return import('data:text/javascript;base64,'+Buffer.from(r.outputFiles[0].text).toString('base64'));
+}
+
+const tallTitleSource=readFileSync('web/src/title.ts','utf8');
+const tallCredits=['<p>Contains modified Copernicus Sentinel data 2026.</p>','<p>Source: Natural Resources Canada, Canadian Wind Turbine Database. Contains information licensed under the Open Government Licence – Canada.</p>','<p>Far land and turbine ground heights: Natural Resources Canada, Medium Resolution Digital Elevation Model (MRDEM-30 DTM). Contains information licensed under the Open Government Licence – Canada.</p>'];
+function withoutTallCredits(text,required=false){for(const row of tallCredits){if(required)assert.equal(text.split(row).length,2,'required tall credit occurs once');text=text.replace(row+'\n','');}return text;}
+
 const before=await load(original),current=await load(readFileSync('web/src/title.ts','utf8'));
 function dom(){const roots=[];const node=()=>({style:{},classList:{add(){}},setAttribute(){},addEventListener(){},focus(){},append(){},after(){},prepend(){},hidden:false,innerHTML:'',textContent:''});globalThis.document={head:{appendChild(){}},body:{appendChild:n=>roots.push(n)},createElement:()=>{const n=node(),parts=new Map();n.querySelector=key=>{if(!parts.has(key))parts.set(key,node());return parts.get(key);};n.parts=parts;return n;}};globalThis.localStorage={getItem:()=>null};return roots;}
 const expressions=text=>{const tree=ts.createSourceFile('main.ts',text,ts.ScriptTarget.Latest,true),out={};function visit(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==='expose')out.expose=n.getText(tree);if(ts.isCallExpression(n)&&n.expression.getText(tree)==='createTitle')out.title=n.getText(tree);if(ts.isIfStatement(n)&&n.expression.getText(tree)==="!bare && params.get('radio') !== '0'")out.radio=n.getText(tree);ts.forEachChild(n,visit);}visit(tree);return out;};
-async function actual(main,query,radio){const roots=dom(),expr=expressions(main);const c=vm.createContext({ERA:{id:'today',title:null,radio:true,modern:true},createTitle:current.createTitle,touchDevice:true,gameMode:'mail',SITE:{brand:'mail'},AREA:{name:'Mabou',mailTitle:true},ride:{choice:{kind:'car'},setRadio(){}},bare:false,started:false,terrain:{paved:new URLSearchParams(query).get('paved')!=='0'?{}:null},params:new URLSearchParams(query),loadRadio:()=>Promise.resolve(radio),siteRadio:()=>({}),title:null,radio:null});
+async function actual(main,query,radio,title=current){const roots=dom(),expr=expressions(main);const c=vm.createContext({ERA:{id:'today',title:null,radio:true,modern:true},createTitle:title.createTitle,touchDevice:true,gameMode:'mail',SITE:{brand:'mail'},AREA:{name:'Mabou',mailTitle:true},ride:{choice:{kind:'car'},setRadio(){}},bare:false,started:false,terrain:{paved:new URLSearchParams(query).get('paved')!=='0'?{}:null},params:new URLSearchParams(query),loadRadio:()=>Promise.resolve(radio),siteRadio:()=>({}),title:null,radio:null});
  const compile=async text=>(await transform(text,{loader:'ts',target:'es2022',define:{'import.meta.env.DEV':'false','import.meta.env.BASE_URL':JSON.stringify('./')}})).code;
  // Include the real dev-only helper now referenced by the extracted radio block.
  if(expr.expose)vm.runInContext(await compile(expr.expose),c);
  vm.runInContext(await compile('title = '+expr.title),c);vm.runInContext(await compile(expr.radio),c);await Promise.resolve();await Promise.resolve();
- const root=roots[0];return root.innerHTML.replace(/<dl>[\s\S]*?<\/dl>/,()=>`<dl>${root.parts.get('dl')?.innerHTML || root.innerHTML.match(/<dl>([\s\S]*?)<\/dl>/)[1]}</dl>`);
+ const root=roots[0];return withoutTallCredits(root.innerHTML.replace(/<dl>[\s\S]*?<\/dl>/,()=>`<dl>${root.parts.get('dl')?.innerHTML || root.innerHTML.match(/<dl>([\s\S]*?)<\/dl>/)[1]}</dl>`),true);
 }
 // Cross-brand navigation uses clean addresses, never a trip, room, or local test query.
 for (const [just, area, era, path, href, words] of [
@@ -58,7 +68,7 @@ const groundCredits=[
 ];
 const noContact=html=>groundCredits.reduce((s,c)=>s.replace(c+'\n',''),html).replace(/<span id="titleOtherGame">[\s\S]*?<\/span>/,'').replace(/<p id="titleMusic">[\s\S]*?<\/p>/,'').replace(/<p id="titleContact">[\s\S]*?<\/p>/,'').replace(/<p id="titleAbout">[\s\S]*?<\/p>/,'').replace(' id="titleMusic"','').replace(/<p id="ns(?:Lidar|Paved)Credit">[\s\S]*?<\/p>\n?/,'');
 // The ground classes (pits, open wetland, rail and quarry ground) name every source they read.
-const OGL_NS=/Roads, railways, water, building locations, forest types, designated areas, and Point Tupper dams, culverts, conveyors and some fences and gates: Province of Nova Scotia\. Contains information licensed under the Open Government Licence – Nova Scotia\./;
+const OGL_NS=/Roads, railways, water, building locations, utility lines and towers, forest types, designated areas, and Point Tupper dams, culverts, conveyors and some fences and gates: Province of Nova Scotia\. Contains information licensed under the Open Government Licence – Nova Scotia\./;
 function groundAttribution(title){
  for(const just of [false,true])for(const historical of [false,true]){
   const roots=dom();title.createTitle(false,()=>{},'explore','Mabou',undefined,just,true,{id:historical?'1884':'today',title:null,radio:true});
@@ -96,11 +106,16 @@ function expected(){const roots=dom();before.createTitle(true,()=>{});const html
  // origin/main holds the credit itself once this change has landed: add it only to a baseline that has none.
  return html.includes(propertyCredit)?html:html.replace(anchor,anchor+'\n'+propertyCredit);}
 assert.equal(noContact(await actual(source,'',null)).split(propertyCredit).length,2,'the current title holds the complete property credit exactly once');
-for(const [label,query,radio] of [['present','',{start(){}}],['disabled','radio=0',null],['missing','',null]])assert.equal(noContact(await actual(source,query,radio)),noContact(expected()),'mail title matches origin/main: '+label);
+for(const [label,query,radio] of [['present','',{start(){}}],['disabled','radio=0',null],['missing','',null]])assert.equal(noContact(await actual(source,query,radio)),noContact(withoutTallCredits(expected())),'mail title matches origin/main: '+label);
 console.log('PASS actual main radio wiring and title HTML match main with reviewed music geography and the exact property credit for present, disabled and missing lists');
 if(process.argv.includes('--mutations')){
+ for(const [i,row] of tallCredits.entries()){
+  const missing=await load(tallTitleSource,undefined,false,readFileSync('web/src/credits.ts','utf8').replace(row,''));
+  await assert.rejects(()=>actual(source,'',null,missing),{name:'AssertionError'},'missing tall credit '+i);
+  console.log('PASS rejected missing tall credit:',i);
+ }
  for(const [label,from,to] of [['initial hints',"ride.choice, SITE.brand === 'just', SITE.brand !== 'just'","ride.choice, SITE.brand === 'just', false"],['shared availability update',"if (SITE.brand === 'just') { title?.setRadio",'if (true) { title?.setRadio']]){
-  assert.ok(source.includes(from));assert.notEqual(noContact(await actual(source.replace(from,to),'',null)),noContact(expected()),label);console.log('PASS rejected title mutation:',label);
+  assert.ok(source.includes(from));assert.notEqual(noContact(await actual(source.replace(from,to),'',null)),noContact(withoutTallCredits(expected())),label);console.log('PASS rejected title mutation:',label);
  }
 }
 
@@ -234,8 +249,8 @@ if(process.argv.includes('--mutations')){
   console.log('PASS rejected catalogue content mutant: '+label);
  }
 
- const anchor='${LAND_CREDITS}${MUSIC_CREDIT}${ENGINE_CREDIT}';assert.ok(title.includes(anchor));
- const eraMutant=await load(title.replace(anchor,'${LAND_CREDITS}${ENGINE_CREDIT}'));
+ const anchor='${LAND_CREDITS}${FAR_CREDITS}${MUSIC_CREDIT}${ENGINE_CREDIT}';assert.ok(title.includes(anchor));
+ const eraMutant=await load(title.replace(anchor,'${LAND_CREDITS}${FAR_CREDITS}${ENGINE_CREDIT}'));
  assert.throws(()=>musicCredits(eraMutant),undefined,'missing era credit');
  console.log('PASS rejected credit mutation: missing era credit');
 

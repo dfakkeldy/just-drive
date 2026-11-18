@@ -6,21 +6,23 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {scenes,modes,metrics,coverage,compare,serialize} from './frame-budget-policy.mjs';
+import {farLand,effective,stored} from './frame-budget-far.mjs';
 export async function mutations({origin,baselinePath,measure}) {
   assert.ok(readFileSync(new URL('./frame-budget-policy.mjs',import.meta.url),'utf8').includes("  {id:'new-player-start',chase:true},\n"),'missing mutation anchor new-player-start in tools/frame-budget-policy.mjs');
-  const shipped=JSON.parse(readFileSync(baselinePath,'utf8'));
-  assert.equal(coverage(shipped),false);
+  // shipped = the stored pins (land without the far pack); ceilings = this land's ceilings (frame-budget-far.mjs).
+  const shipped=JSON.parse(readFileSync(baselinePath,'utf8')),land=farLand(),ceilings=effective(shipped,land);
+  assert.equal(coverage(shipped),false);console.log('FAR LAND '+land);
   console.log('SUBSET live-mutations: village-start/phone-mail; full manifest validated');
   const scene=scenes.find(s=>s.id==='village-start'),mode=modes.find(m=>m.id==='phone-mail'),key=`${scene.id}/${mode.id}`;
   const ordinary=await measure(scene,mode);
   assert.ok(Number.isSafeInteger(ordinary.counts.calls)&&ordinary.counts.calls>0,'the mutation baseline must draw the real scene');
-  assert.equal(compare(key,ordinary.counts,shipped[key],s=>console.log(s)),false,'the ordinary scene must fit the shipped ceilings');
-  console.log('MUTATION ordinary '+JSON.stringify({counts:ordinary.counts,ceiling:shipped[key]}));
+  assert.equal(compare(key,ordinary.counts,ceilings[key],s=>console.log(s)),false,'the ordinary scene must fit the shipped ceilings');
+  console.log('MUTATION ordinary '+JSON.stringify({counts:ordinary.counts,ceiling:ceilings[key]}));
   const extra=await measure(scene,mode,page=>page.read(`(() => {
     let source; mmm.vehicle.car.root.traverse(o=>{if(!source&&o.type==='Mesh'&&!Array.isArray(o.material)&&o.material.visible&&o.geometry.attributes.position.count>0)source=o});
     if(!source)throw Error('No ordinary mesh to clone');
     const perMeshCalls=source.material.transparent&&source.material.side===2&&!source.material.forceSinglePass?2:1;
-    const meshes=Math.max(1,Math.floor((${shipped[key].calls}-${ordinary.counts.calls})/perMeshCalls)+1);
+    const meshes=Math.max(1,Math.floor((${ceilings[key].calls}-${ordinary.counts.calls})/perMeshCalls)+1);
     for(let i=0;i<meshes;i++){
       const mesh=source.clone(false);mesh.name='Frame budget extra mesh';mesh.castShadow=false;mesh.frustumCulled=false;
       mesh.position.copy(mmm.camera.position);mesh.position.z-=10;__budget.scene.add(mesh);
@@ -28,18 +30,19 @@ export async function mutations({origin,baselinePath,measure}) {
     __budget.mutation={side:source.material.side,transparent:source.material.transparent,forceSinglePass:source.material.forceSinglePass,
       meshes,perMeshCalls,expectedCalls:meshes*perMeshCalls};
   })()`));
-  const messages=[];assert.equal(compare(key,extra.counts,shipped[key],s=>{messages.push(s);console.log(s)}),true);
+  const messages=[];assert.equal(compare(key,extra.counts,ceilings[key],s=>{messages.push(s);console.log(s)}),true);
   assert.equal(extra.counts.calls-ordinary.counts.calls,extra.mutation.expectedCalls);
   assert.ok(messages.some(s=>s.includes(' calls=')&&s.includes('tools/check-budget.sh --raise --scene village-start --mode phone-mail')&&s.includes('pull request must say what the player gets')));
   console.log('MUTATION extra-mesh '+JSON.stringify({delta:extra.counts.calls-ordinary.counts.calls,...extra.mutation}));
   const removed=await measure(scene,mode,page=>page.read('void mmm.trees.group.parent.remove(mmm.trees.group)'));
-  const saving=[];assert.equal(compare(key,removed.counts,shipped[key],s=>{saving.push(s);console.log(s)}),false);
+  const saving=[];assert.equal(compare(key,removed.counts,ceilings[key],s=>{saving.push(s);console.log(s)}),false);
   assert.equal(saving.length,1,'all savings combine into one row line');assert.ok(saving[0].startsWith(`SAVING ${key}:`));
-  const nineteen=[];assert.equal(compare(key,{...shipped[key],calls:Math.ceil(shipped[key].calls*.81)},shipped[key],s=>nineteen.push(s)),false);
+  const nineteen=[];assert.equal(compare(key,{...ceilings[key],calls:Math.ceil(ceilings[key].calls*.81)},ceilings[key],s=>nineteen.push(s)),false);
   assert.equal(nineteen.length,1);console.log('MUTATION 19-percent-saving '+nineteen[0]);
   const scratch=mkdtempSync(join(tmpdir(),'mmm-budget-policy-'));
   // Exercise CLI boundaries at the live counts, even when the scene has made valid savings.
-  const baseline={...shipped,[key]:Object.fromEntries(metrics.map(k=>[k,ordinary.counts[k]]))};
+  // live = this land's ceilings with the row at the live counts; the files the child runs read hold stored(live).
+  const live={...ceilings,[key]:Object.fromEntries(metrics.map(k=>[k,ordinary.counts[k]]))},baseline=stored(live,land);
   const cliBaselinePath=join(scratch,'live-ceilings.json');
   const core=fileURLToPath(new URL('./frame-budget-check.mjs',import.meta.url));
   function child(args,file=cliBaselinePath) {
@@ -58,6 +61,8 @@ export async function mutations({origin,baselinePath,measure}) {
     // which is the mutated variant above.
     const siblings=[...readFileSync(core,'utf8').matchAll(/from '\.\/([^'/]+\.mjs)'/g)].map(m=>m[1]).filter(name=>name!=='frame-budget-policy.mjs');
     for(const name of siblings)copyFileSync(fileURLToPath(new URL('./'+name,import.meta.url)),join(scratch,name),constants.COPYFILE_FICLONE);
+    // frame-budget-far.mjs reads the checkout's land and committed files; the scratch copy re-exports the real one.
+    writeFileSync(join(scratch,'frame-budget-far.mjs'),`export * from ${JSON.stringify(new URL('./frame-budget-far.mjs',import.meta.url).href)};\n`);
     const deleted=spawnSync(process.execPath,[deletedCore,scratch,origin+'/?test=1'],{encoding:'utf8',env:{...process.env,FRAME_BUDGET_ARGS:'[]',FRAME_BUDGET_BASELINE:cliBaselinePath}});
     assert.equal(deleted.status,1);assert.match(deleted.stderr,/unexpected baseline row new-player-start/);
     console.log('MUTATION deleted-script-scene exit=1 '+deleted.stderr.trim());
@@ -80,7 +85,8 @@ export async function mutations({origin,baselinePath,measure}) {
     console.log('MUTATION --update cannot raise exit=1 '+refused.text.split('\n').find(s=>s.startsWith(`FAIL ${key}: calls=`)));
     const raised=child(['--raise','--scene',scene.id,'--mode',mode.id],file);
     assert.equal(raised.status,0,raised.text);assert.equal(JSON.parse(readFileSync(file,'utf8'))[key].calls,baseline[key].calls);
-    const expected=`RAISED ${key} calls ${lowered[key].calls} -> ${baseline[key].calls}`;assert.ok(raised.text.includes(expected),raised.text);
+    // RAISED lines print this land's ceilings; the file stores the pin.
+    const expected=`RAISED ${key} calls ${effective(lowered,land)[key].calls} -> ${live[key].calls}`;assert.ok(raised.text.includes(expected),raised.text);
     console.log('MUTATION --raise exit=0 '+expected);
     // Every untouched row remains byte-equivalent under the canonical one-line format.
     const final=JSON.parse(readFileSync(file,'utf8'));for(const k of Object.keys(baseline))assert.deepEqual(final[k],baseline[k]);

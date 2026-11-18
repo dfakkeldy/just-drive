@@ -1,3 +1,4 @@
+import {FAR_CREDITS} from '../web/src/credits.ts';
 // Address identity stays separate from area, room and current driving state.
 import assert from 'node:assert/strict';
 import { readSite, areaAddress, eraAddress, SITE_AREAS } from '../web/src/site.ts';
@@ -116,7 +117,11 @@ function card(make, just, area, era, mode) {
 for(const area of AREAS)for(const era of ERAS)for(const mode of ['mail','explore']){
  const just=card(createTitle,true,area,era,mode);
  assert.equal(just.html.includes('id="titleEra"'),['mabou','judique'].includes(area.id),area.id+' '+era.id+' '+mode);
- assert.deepEqual(card(createTitle,false,area,era,mode),card(oldTitle,false,area,era,mode),'mail card HTML/styles outside reviewed cross-brand changes: '+area.id+' '+era.id+' '+mode);
+ const current=card(createTitle,false,area,era,mode),previous=card(oldTitle,false,area,era,mode);
+ assert.equal(current.html.split(FAR_CREDITS).length,2,'far source credits occur once');
+ // The far-data licence is an intentional addition to the frozen card.
+ for(const c of [current,previous])c.html=c.html.replace(FAR_CREDITS+'\n','').replace(FAR_CREDITS,'');
+ assert.deepEqual(current,previous,'mail card HTML/styles outside reviewed cross-brand changes and far-data credit: '+area.id+' '+era.id+' '+mode);
 }
 for(const k of ['document','localStorage','location'])delete globalThis[k];
 console.log('PASS every area/era/mode visibility; exact cross-brand line and phone CSS; all other mail HTML/styles match branch base');

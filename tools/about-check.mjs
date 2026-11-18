@@ -8,7 +8,7 @@ import { build } from '../web/node_modules/esbuild/lib/main.js';
 process.on('uncaughtException', e => { console.error(e.name + ': ' + e.message); process.exit(1); });
 
 const { outputFiles } = await build({ stdin: { contents: "export { AREAS } from './area'; export * from './credits'; export * from './controls'; export { bikeKeys } from './vehicle-choice';", resolveDir: process.cwd() + '/web/src', loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node' });
-const { AREAS, ABOUT_URL, HELP_URL, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, LAND_CREDITS, ENGINE_CREDIT } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
+const { AREAS, ABOUT_URL, HELP_URL, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, LAND_CREDITS, FAR_CREDITS, ENGINE_CREDIT } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
 
 const out = mkdtempSync(join(tmpdir(), 'mmm-about-'));
 try {
@@ -24,7 +24,7 @@ try {
     assert.ok(html.includes('<script src="/about/page-links.js" defer></script>'), brand + ' keyboard link support');
     assert.ok(existsSync(out + '/about/page-links.js'), 'keyboard script ships');
     // The credits the title card shows, word for word, and the owner's choices of 14 Nov 2026.
-    for (const credit of [LAND_CREDITS, ENGINE_CREDIT]) assert.ok(html.includes(credit), brand + ' credits verbatim');
+    for (const credit of [LAND_CREDITS, FAR_CREDITS, ENGINE_CREDIT]) assert.ok(html.includes(credit), brand + ' credits verbatim');
     assert.match(html, /id="titleMusic"/, brand + ' music credit');
     assert.ok(html.includes(`href="mailto:${CONTACT}"`), brand + ' contact');
     assert.ok(html.includes('href="https://fakkeldy.ca/"'), brand + ' maker link');

@@ -420,7 +420,7 @@
         "GROUND_CLASSES",
         "MIRROR"
       ],
-      "sha256": "343d2e96d5b80e6ac45510456628a484916adf312ff6b2e7dcdebdaff4b1238d"
+      "sha256": "bc45537d2a2ddd10f0725aee79efe00210769e0b59ace9782246e77a902fe274"
     },
     {
       "name": "MIRROR_TERRAIN_VERT",
@@ -430,7 +430,7 @@
         "MIRROR",
         "SITE_GRAVEL"
       ],
-      "sha256": "343d2e96d5b80e6ac45510456628a484916adf312ff6b2e7dcdebdaff4b1238d"
+      "sha256": "bc45537d2a2ddd10f0725aee79efe00210769e0b59ace9782246e77a902fe274"
     },
     {
       "name": "MIRROR_TERRAIN_VERT",
@@ -438,7 +438,7 @@
         "AIRPORT",
         "MIRROR"
       ],
-      "sha256": "343d2e96d5b80e6ac45510456628a484916adf312ff6b2e7dcdebdaff4b1238d"
+      "sha256": "bc45537d2a2ddd10f0725aee79efe00210769e0b59ace9782246e77a902fe274"
     },
     {
       "name": "MIRROR_TERRAIN_VERT",
@@ -447,7 +447,7 @@
         "MIRROR",
         "SITE_GRAVEL"
       ],
-      "sha256": "343d2e96d5b80e6ac45510456628a484916adf312ff6b2e7dcdebdaff4b1238d"
+      "sha256": "bc45537d2a2ddd10f0725aee79efe00210769e0b59ace9782246e77a902fe274"
     },
     {
       "name": "MIRROR_TERRAIN_VERT",
@@ -455,7 +455,7 @@
         "GROUND_CLASSES",
         "MIRROR"
       ],
-      "sha256": "343d2e96d5b80e6ac45510456628a484916adf312ff6b2e7dcdebdaff4b1238d"
+      "sha256": "bc45537d2a2ddd10f0725aee79efe00210769e0b59ace9782246e77a902fe274"
     },
     {
       "name": "MIRROR_TERRAIN_VERT",
@@ -464,14 +464,14 @@
         "MIRROR",
         "SITE_GRAVEL"
       ],
-      "sha256": "343d2e96d5b80e6ac45510456628a484916adf312ff6b2e7dcdebdaff4b1238d"
+      "sha256": "bc45537d2a2ddd10f0725aee79efe00210769e0b59ace9782246e77a902fe274"
     },
     {
       "name": "MIRROR_TERRAIN_VERT",
       "flags": [
         "MIRROR"
       ],
-      "sha256": "343d2e96d5b80e6ac45510456628a484916adf312ff6b2e7dcdebdaff4b1238d"
+      "sha256": "bc45537d2a2ddd10f0725aee79efe00210769e0b59ace9782246e77a902fe274"
     },
     {
       "name": "MIRROR_TERRAIN_VERT",
@@ -479,7 +479,7 @@
         "MIRROR",
         "SITE_GRAVEL"
       ],
-      "sha256": "343d2e96d5b80e6ac45510456628a484916adf312ff6b2e7dcdebdaff4b1238d"
+      "sha256": "bc45537d2a2ddd10f0725aee79efe00210769e0b59ace9782246e77a902fe274"
     },
     {
       "name": "SEA_FRAG",
@@ -929,14 +929,14 @@
     {
       "name": "TERRAIN_VERT",
       "flags": [],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
       "flags": [
         "AIRPORT"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -944,7 +944,7 @@
         "AIRPORT",
         "GROUND_CLASSES"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -953,7 +953,7 @@
         "GROUND_CLASSES",
         "LOW"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -963,7 +963,7 @@
         "LOW",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -972,7 +972,7 @@
         "GROUND_CLASSES",
         "SEA_WATER"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -982,7 +982,7 @@
         "SEA_WATER",
         "SHADOWS"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -993,7 +993,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1003,7 +1003,7 @@
         "SEA_WATER",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1012,7 +1012,7 @@
         "GROUND_CLASSES",
         "SHADOWS"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1022,7 +1022,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1031,7 +1031,7 @@
         "GROUND_CLASSES",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1039,7 +1039,7 @@
         "AIRPORT",
         "LOW"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1048,7 +1048,7 @@
         "LOW",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1056,7 +1056,7 @@
         "AIRPORT",
         "SEA_WATER"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1065,7 +1065,7 @@
         "SEA_WATER",
         "SHADOWS"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1075,7 +1075,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1084,7 +1084,7 @@
         "SEA_WATER",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1092,7 +1092,7 @@
         "AIRPORT",
         "SHADOWS"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1101,7 +1101,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1109,14 +1109,14 @@
         "AIRPORT",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
       "flags": [
         "GROUND_CLASSES"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1124,7 +1124,7 @@
         "GROUND_CLASSES",
         "LOW"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1133,7 +1133,7 @@
         "LOW",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1141,7 +1141,7 @@
         "GROUND_CLASSES",
         "SEA_WATER"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1150,7 +1150,7 @@
         "SEA_WATER",
         "SHADOWS"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1160,7 +1160,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1169,7 +1169,7 @@
         "SEA_WATER",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1177,7 +1177,7 @@
         "GROUND_CLASSES",
         "SHADOWS"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1186,7 +1186,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1194,14 +1194,14 @@
         "GROUND_CLASSES",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
       "flags": [
         "LOW"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1209,14 +1209,14 @@
         "LOW",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
       "flags": [
         "SEA_WATER"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1224,7 +1224,7 @@
         "SEA_WATER",
         "SHADOWS"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1233,7 +1233,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1241,14 +1241,14 @@
         "SEA_WATER",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
       "flags": [
         "SHADOWS"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
@@ -1256,14 +1256,14 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "TERRAIN_VERT",
       "flags": [
         "SITE_GRAVEL"
       ],
-      "sha256": "e14f209b3ad92e46dc7d2ea09682e0ceccc9b48ccdf1456e90b3c626dc102ce4"
+      "sha256": "4d945c7b90751d954032fe3816e8a9b8d5dec23521009d8e025ca49b2a54395d"
     },
     {
       "name": "WATER_MASK_FRAG",

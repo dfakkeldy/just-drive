@@ -80,9 +80,9 @@ test('multiplayer-off',()=>{
 });
 test('raw-shaders',async()=>{
  let now=source('web/src/shaders.ts'),main=execFileSync('git',['show','origin/main:web/src/shaders.ts'],{cwd:root,encoding:'utf8'});
- const {coastPrograms,program,preprocess,normalized,reviewedMirrorCrown}=await import(root+'/tools/coast-programs.mjs');
+ const {coastPrograms,program,preprocess,normalized,withoutFarBend,reviewedMirrorCrown}=await import(root+'/tools/coast-programs.mjs');
  now=reviewedMirrorCrown(now);main=reviewedMirrorCrown(main);
- for(const p of coastPrograms())if(!p.name.startsWith('CART_')&&!p.flags.includes('AIRPORT')&&!(p.name==='TERRAIN_FRAG'&&p.flags.includes('GROUND_CLASSES')))assert.equal(normalized(preprocess(program(now,p.name),p.flags)),normalized(preprocess(program(main,p.name),p.flags)),p.name+' unchanged outside quarry');assert(!now.includes('ERA_CART'),'no era identifiers in original programs');
+ for(const p of coastPrograms())if(!p.name.startsWith('CART_')&&!p.flags.includes('AIRPORT')&&!(p.name==='TERRAIN_FRAG'&&p.flags.includes('GROUND_CLASSES')))assert.equal(normalized(preprocess(program(withoutFarBend(now),p.name),p.flags)),normalized(preprocess(program(withoutFarBend(main),p.name),p.flags)),p.name+' unchanged outside quarry');assert(!now.includes('ERA_CART'),'no era identifiers in original programs');
 });
 test('map-look',()=>{
  const s=source('web/src/minimap.ts');assert.match(s,/cartRoads|cartMap/,'era map has a cart-road palette');
