@@ -1,0 +1,32 @@
+[
+  {
+    "e": 618644.5147898447,
+    "n": 5104727.834482605,
+    "areas": [
+      "mabou"
+    ],
+    "code": "STLH60",
+    "groundElevation": 2.7,
+    "angle": 251.57
+  },
+  {
+    "e": 617732.2124692585,
+    "n": 5060890.342338831,
+    "areas": [
+      "cansocauseway"
+    ],
+    "code": "STLH60",
+    "groundElevation": 25.8,
+    "angle": 0.0
+  },
+  {
+    "e": 608461.31589614,
+    "n": 5092457.3372327695,
+    "areas": [
+      "porthood"
+    ],
+    "code": "STLH60",
+    "groundElevation": 44.1,
+    "angle": 198.43
+  }
+]
