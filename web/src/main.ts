@@ -71,6 +71,8 @@ import { SchoolBus } from './school-bus';
 import { BUS } from './school-bus-rules';
 import { BUS_STOP_RADIUS, churchZones, placeAt } from './score-rules';
 import { FiredRun } from './fired';
+import { YardProps } from './yard-props';
+import { placeYard, scoreKind } from './yard-props-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
 import { noZoom } from './no-zoom';
@@ -643,6 +645,8 @@ let roadsidePlaying = false;
 let hookPlaced = false, jumpPlacement = 0;
 const jumpCheck = import.meta.env.DEV && params.get('jumpCheck') === '1';
 const fishingCheck = import.meta.env.DEV && params.get('fishingCheck') === '1';
+// Breakable yard and field props: built once the shift names its protected places (below).
+let yardProps: YardProps | null = null;
 const resolveYardSolids = () => {
   if (endings.busy) return;
   canal?.resolve(vehicle, canalBeforeX, canalBeforeZ);
@@ -660,6 +664,7 @@ const resolveYardSolids = () => {
   if (!fleet && !quarry && !stuntPark) ambientTraffic?.resolve(vehicle);   // otherwise fleetContacts, above, holds the traffic
   schoolBus?.setPaused(scenePaused());
   schoolBus?.step(1 / 120, vehicle, horse ? roadsidePlaying : vehicle.damageActive, jumpPlacement);
+  yardProps?.step(1 / 120, vehicle, started && !shift.ended && mode === 'drive' && !scenePaused());
   if (fleet) fleet.resolve(); else towing?.step();
 };
 let engineThrottle = 0;   // the pedal the vehicle really got this frame, for the engine sound
@@ -802,7 +807,27 @@ if (shift instanceof Shift) {
   const cemetery = cemeteries ? (x: number, z: number) => cemeteries.excludes(x + manifest.village[0], manifest.village[1] - z) : undefined;
   shift.placeAt = (x, z) => placeAt(x, z, zones, cemetery);
   if (schoolBus) schoolBus.onPass = p => shift.reportScore('schoolBus', p.x, p.z, p.speed);
+  // Breakable yard and field props: mail play and Get Fired only (never Explore or Just Drive); ?yardProps=0 leaves
+  // them out. Their positions are invented by rule from the real building shapes and roads (yard-props-rules.ts).
+  if (ERA.modern && mailMode && params.get('yardProps') !== '0' && properties.length) {
+    const VX = manifest.village[0], VZ = manifest.village[1];
+    const near = (kinds: (k: number) => boolean) => (x: number, z: number, reach: number) => {
+      const h = roads.nearest(x, z, reach, r => kinds(r.kind));
+      return h && { dist: h.dist, x: h.x, z: h.z, heading: h.heading, halfWidth: h.road.halfWidth };
+    };
+    yardProps = new YardProps(placeYard({
+      buildings: properties.map(b => ({ id: b.id, x: b.x - VX, z: VZ - b.y, kind: b.kind, axis: b.axisDeg * Math.PI / 180, length: b.length, width: b.width })),
+      mailboxes: [...props?.mail ?? [], ...props?.sites ?? []],
+      publicRoad: near(k => k >= 1 && k <= 3), anyRoad: near(() => true), place: shift.placeAt,
+      excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]): [number, number, number, number] => [b[0], b[1], b[2], b[3]])],
+    }), terrain, LOW);
+    scene.add(yardProps.group);
+    shift.yard = yardProps; yardProps.reset(shift.career.day);
+    yardProps.onBreak = (p, _speed, byBale) => shift.propBroken(scoreKind(p.kind), p.owner, p.x, p.z, byBale);
+    yardProps.onImpact = speed => { if (vehicle.damageActive) shift.damage.hit('impact', speed); };
+  }
 }
+if (import.meta.env.DEV) expose({ yardProps });
 resets[resetSlot.schoolBus] = () => schoolBus?.reset();
 resets[resetSlot.stuntPark]=()=>stuntPark?.reset();
 if (schoolBus) {
@@ -1509,6 +1534,7 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'ambientTraffic' } : {}), segment: 'after-activities', ending: false, update: () => ambientTraffic?.update(camera, vehicle, !multiplayer?.choice.on) },
   { ...(import.meta.env.DEV ? { name: 'roadAnimals' } : {}), segment: 'after-activities', ending: false, update: dt => roadAnimals?.update(dt, vehicle, !multiplayer?.choice.on) },
   { ...(import.meta.env.DEV ? { name: 'props' } : {}), segment: 'after-activities', ending: true, endingPosition: 7, update: dt => props?.update(camera, dt) },
+  { ...(import.meta.env.DEV ? { name: 'yardProps' } : {}), segment: 'after-activities', ending: false, update: dt => yardProps?.update(camera, dt) },
   { ...(import.meta.env.DEV ? { name: 'harbourLights' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
   { ...(import.meta.env.DEV ? { name: 'tall' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
   { ...(import.meta.env.DEV ? { name: 'grass' } : {}), segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },

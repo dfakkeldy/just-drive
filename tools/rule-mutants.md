@@ -40,7 +40,7 @@ exist only in open PRs and are outside this branch:
 
 `node tools/rule-mutants.mjs <name>` runs the original check without edits,
 then with each mutant separately. Names: `damage`, `jump`, `mine`, `shift`,
-`yard-dog`. `--base` runs only the unmodified check. Mutation anchors must occur
+`yard-dog`, `yard-props`. `--base` runs only the unmodified check. Mutation anchors must occur
 exactly once. Build failures, timeouts, signals and non-assertion errors do not
 count as kills. Every mutant must exit 1 with an assertion failure.
 
@@ -49,7 +49,8 @@ count as kills. Every mutant must exit 1 with an assertion failure.
 | damage | Landing speed, alignment speed, washboard speed, ditch depth |
 | jump | Launch speed, placement continuity, landing roll, settling slide |
 | mine | Bend speed, recovery time, fork direction, signature branch |
-| shift | Suspension count, skipped day, vehicle allowance, double-day union |
+| shift | Suspension count, skipped day, vehicle allowance, double-day union, property damage suspension |
+| yard-props | Protected place, driveway, shoulder, mailbox and overlap clearances; garbage day; break speed; pieces at rest; bale on a slope; bale in woods |
 | yard-dog | Pause gate, trigger range, follow limit, bark event |
 
 The runner uses the existing `mutationSources` helper and an esbuild load

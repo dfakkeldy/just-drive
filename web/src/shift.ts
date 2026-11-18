@@ -8,6 +8,7 @@ import type { Props } from './props';
 import type { Roads } from './roads';
 import { Route, type Run } from './route';
 import { Ruts } from './ruts';
+import { BALE_STRIKE, DAMAGE_COMPLAINT } from './yard-props-rules';
 import { ScoreStream } from './score-events';
 import { CLOCK_FACTOR, DAILY_PAY, VEHICLE_ALLOWANCE, END_TIME, START_TIME, clock, dayType, draw, freshCareer, makeDay, missedCustomers, nextCareer, readCareer, saveCareer, verdict, type Career, type DayDraw } from './shift-rules';
 import type { Terrain } from './terrain';
@@ -33,6 +34,8 @@ export class Shift {
   placeAt: (x: number, z: number) => string = () => 'route';
   /** Get Fired: called once when the run ends, instead of the daily report. */
   onFiredEnd: (() => void) | null = null;
+  /** Breakable yard and field props (yard-props.ts): everything stands again, with the day's bins and laundry. */
+  yard: { reset(day: number): void } | null = null;
   /** Get Fired: each shift step while the day runs, before the 18:00 check (world seconds; 0 while paused). */
   onUpdate: ((dt: number) => void) | null = null;
   private rutMark = 0; private speed = 0;
@@ -149,7 +152,7 @@ export class Shift {
     this.complaints = new Complaints(c => { if (!c.preExisting) this.reportScore(c.kind, c.x, c.z, this.speed, this.landing.set ? this.landing : undefined); }); this.evidence.photos.length = 0;
     this.score.clear(); this.rutMark = this.speed = 0;
     this.tag.hidden = true; this.flash.classList.remove('exposed'); this.report.hidden = true;
-    this.ruts.reset(); this.mail.reset(); this.props?.resetShift();
+    this.ruts.reset(); this.mail.reset(); this.props?.resetShift(); this.yard?.reset(this.career.day);
     this.run = this.route.forDay(this.career.day, this.forcedRun);
     this.passed.clear();
     this.today = makeDay(this.career.day, (this.props?.mail.length ?? 0) + (this.props?.sites.length ?? 0),
@@ -204,6 +207,14 @@ export class Shift {
     if (this.ended) return;
     const place = this.placeAt(x, z);
     this.score.report({ kind, place: place === 'route' && also ? this.placeAt(also.x, also.z) : place, speed: Math.abs(speed), time: this.elapsed / CLOCK_FACTOR });
+  }
+  /** A yard or field prop broke: one score fact, a strike beside it when a rolling bale did it (a combo), and one call
+   *  per property per day. `kind` is the prop's score kind (yard-props-rules.ts scoreKind). */
+  propBroken(kind: string, owner: number, x: number, z: number, byBale = false): void {
+    if (this.ended) return;
+    this.reportScore(kind, x, z, this.speed);
+    if (byBale) this.reportScore(BALE_STRIKE, x, z, this.speed);
+    if (owner >= 0) this.add(DAMAGE_COMPLAINT, owner, x, z, this.elapsed);
   }
   /** A roadside break in view of a house: one call per house per day, and no photo answers it. */
   seenAtRoadside(house: number, x: number, z: number): void { this.add('relief', house, x, z, this.elapsed); }
@@ -348,7 +359,9 @@ export class Shift {
     const stats = document.getElementById('reportStats')!; stats.replaceChildren();
     for (const [label, value] of [['Stops done', `${this.done} / ${this.stops}`], ['Pieces delivered', this.mail.delivered],
       ['Parcels delivered indoors', this.indoorParcels], ['Pieces on ground', this.mail.lawn + this.mail.ditch], ['Mailboxes down', this.mail.down],
-      ['Lawns damaged', this.complaints.all.filter((c) => c.kind === 'lawnDamage').length], ['Photos taken', this.evidence.photos.length],
+      ['Lawns damaged', this.complaints.all.filter((c) => c.kind === 'lawnDamage').length],
+      ...(this.complaints.all.some((c) => c.kind === DAMAGE_COMPLAINT) ? [['Yards damaged', this.complaints.all.filter((c) => c.kind === DAMAGE_COMPLAINT).length]] : []),
+      ['Photos taken', this.evidence.photos.length],
       ...(this.roadsideScore ? [['Roadside score', this.roadsideScore]] : []), ['Last delivery', this.lastDelivery === null ? 'None' : clock(this.lastDelivery)], ['Daily pay', `$${DAILY_PAY}`], ['Vehicle allowance', `$${VEHICLE_ALLOWANCE}`], ['Allowance less repairs', money(VEHICLE_ALLOWANCE - this.damage.total)], ['Day pay', money(DAILY_PAY + VEHICLE_ALLOWANCE - this.damage.total)], ['Total pay', `$${this.next.pay}`]]) {
       const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = String(label); dd.textContent = String(value); stats.append(dt, dd);
     }
@@ -371,7 +384,7 @@ export class Shift {
       const row = document.createElement('li'), customer = document.createElement('strong'), quote = document.createElement('p'), status = document.createElement('small');
       const closed = dismissed(c, this.evidence.photos);
       row.className = closed ? 'closed' : 'upheld'; customer.textContent = c.customer; quote.textContent = `“${c.line}”`;
-      status.textContent = closed ? 'Photo on file. Complaint closed.' : 'UPHELD' + (c.kind === 'late' || c.kind === 'flag' || c.kind === 'indoors' || c.kind === 'relief' ? ' · No defence accepted.' : ' · No earlier photo explains this.');
+      status.textContent = closed ? 'Photo on file. Complaint closed.' : 'UPHELD' + (c.kind === 'late' || c.kind === 'flag' || c.kind === 'indoors' || c.kind === 'relief' || c.kind === DAMAGE_COMPLAINT ? ' · No defence accepted.' : ' · No earlier photo explains this.');
       row.append(customer, quote, status); calls.append(row);
     }
     if (this.complaints.groundOverflow) {

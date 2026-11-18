@@ -3,14 +3,18 @@ import type { ScoreEvent } from './score-events';
 
 /** Base points. A kind with no row scores nothing; later tasks add rows (drift, airtime, nearMiss, broken props). */
 export const POINTS: Readonly<Record<string, number>> = Object.freeze({
-  // Thirteen of the fourteen complaint kinds. sceneAnimal (an animal had to get out of the way) has no row: like a hit
+  // Fourteen of the fifteen complaint kinds. sceneAnimal (an animal had to get out of the way) has no row: like a hit
   // (NEVER), frightening an animal never gives points.
-  lawnMail: 40, ditchMail: 50, lawnDamage: 120, boxDown: 100, missing: 60, stuffed: 50, flag: 30, late: 25,
+  lawnMail: 40, ditchMail: 50, lawnDamage: 120, propertyDamage: 140, boxDown: 100, missing: 60, stuffed: 50, flag: 30, late: 25,
   indoors: 90, relief: 150, sceneHit: 200, sceneHorn: 80, sceneDust: 120,
   // Mailbox damage grades, once per box and grade.
   'box:rock': 10, 'box:lean': 30, 'box:dent': 60, 'box:down': 60,
   // A burst of tyre strips across a lawn.
   rut: 10,
+  // Breakable yard and field props (yard-props-rules.ts), once per prop. A rolling bale that breaks something adds a
+  // strike beside the prop's own kind: two kinds at once, a combo.
+  'prop:fence': 30, 'prop:clothesline': 60, 'prop:ornament': 50, 'prop:woodpile': 50, 'prop:bale': 60, 'prop:bin': 25,
+  'prop:baleStrike': 150,
 });
 /** Fixed points that ignore combo and ladder, and end a combo. The school bus rule stays a penalty here. */
 export const PENALTIES: Readonly<Record<string, number>> = Object.freeze({ schoolBus: -300 });
@@ -47,12 +51,14 @@ export const LADDER: readonly Rung[] = Object.freeze([
 export const CLEAN_RECORD = 'Clean record';
 
 const LABELS: Readonly<Record<string, string>> = Object.freeze({
-  lawnMail: 'Mail on a lawn', ditchMail: 'Mail in a ditch', lawnDamage: 'Lawn ploughed', boxDown: 'Mailbox down, customer called',
+  lawnMail: 'Mail on a lawn', ditchMail: 'Mail in a ditch', lawnDamage: 'Lawn ploughed', propertyDamage: 'Yard damaged, owner called', boxDown: 'Mailbox down, customer called',
   missing: 'Stop skipped', stuffed: 'Old flyers left in', flag: 'Flag moved', late: 'Late again', indoors: 'Indoor parcel refused',
   relief: 'Seen at the roadside', sceneHit: 'Bumped the visitor’s car', sceneHorn: 'Horn at the visitor', sceneDust: 'Dust on a painting',
   sceneAnimal: 'An animal had to get out of the way',
   'box:rock': 'Rocked a mailbox', 'box:lean': 'Leaned a mailbox', 'box:dent': 'Dented a mailbox', 'box:down': 'Flattened a mailbox',
   rut: 'Lawn ruts', schoolBus: 'Passed a flashing school bus',
+  'prop:fence': 'Broke a fence section', 'prop:clothesline': 'Took down a clothesline', 'prop:ornament': 'Flattened a lawn ornament',
+  'prop:woodpile': 'Scattered a woodpile', 'prop:bale': 'Sent a hay bale rolling', 'prop:bin': 'Knocked over a bin', 'prop:baleStrike': 'Bale strike',
 });
 export const offenceLabel = (kind: string): string => LABELS[kind] ?? kind;
 

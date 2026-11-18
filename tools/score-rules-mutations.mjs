@@ -60,6 +60,16 @@ const mutants=[
  ['retry keeps the book','if (this.shift.score.runs !== this.run)','if (false)','fired'],
  ['clear keeps the run','this.reported = 0; this.runs++;','this.reported = 0;','score-events'],
  ['two offences','const top = topOffences(b);','const top = topOffences(b, 2);','fired'],
+ ['yard breaks unreported','    this.reportScore(kind, x, z, this.speed);\n    if (byBale)','    if (byBale)','shift'],
+ ['no bale strike','if (byBale) this.reportScore(BALE_STRIKE, x, z, this.speed);','','shift'],
+ ['no property call','if (owner >= 0) this.add(DAMAGE_COMPLAINT, owner, x, z, this.elapsed);','','shift'],
+ ['yard survives a new day',' this.yard?.reset(this.career.day);','','shift'],
+ ['a break never slows the car','vehicle.vx *= f; vehicle.vz *= f; vehicle.speed *= f;','','yard-props'],
+ ['a slow touch breaks','if (!horse && breaks(k, speed)) {','if (!horse) {','yard-props'],
+ ['bales strike nothing','if (Math.hypot(piece.vx, piece.vz) > 1) this.strike(l, piece);','','yard-props'],
+ ['bins out every day','if (!outToday(l.p, this.day) ||','if (','yard-props'],
+ ['pieces never move','        } else stepPiece(piece, dt, ground);','        }','yard-props'],
+ ['yard props score nothing',"'prop:fence': 30,","'prop:fence': 0,",'score-rules'],
 ];
 try {
  for(const mutant of [null,...(process.argv.includes('--mutations')?mutants:[])]) {
