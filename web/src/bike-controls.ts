@@ -30,7 +30,7 @@ export function bikeControls(): BikeControls {
   if (drive) new MutationObserver(() => { if (!document.body.classList.contains('tcOn')) clear(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   // Paused title/places dialogs own keyboard input. Release pull when either opens.
   new MutationObserver(() => { if (document.querySelector('#title:not([hidden]),#placesPanel:not([hidden]),#bigMap:not([hidden])')) clear(); }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
-  return Object.assign((input: RideInput) => ({ ...input, pull: held || keys.size > 0 }), { reset: clear });
+  return Object.assign((input: RideInput) => ({ ...input, pull: held || keys.size > 0 || !!input.pull }), { reset: clear });
 }
 
 /** A short, light horn. A real key/tap supplies the audio gesture; no sound starts at boot. */

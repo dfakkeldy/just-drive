@@ -45,6 +45,8 @@ export function spy(source, ending = false, dev = true, absent = false, override
     animals: { ...update('animals'), influence: () => ({ brake: 0 }) },
     mail: { update: function (dt, car, requested, eye) { trace('mail')(dt, car, requested, eye); return 1; }, tally: '' },
     shift: { ...update('shift'), updateIndoors: trace('shift.indoors'), ended: false, damage: { windowStuck: false } }, shiftReady: false,
+    // No controller: untraced, so call orders stay as they were.
+    gamepad: { device: 'keyboard', poll() {}, feel() {} },
     pad: { show: trace('pad.show') }, relief: { ...update('relief'), breaks: 0, busy: false },
     miniMap: { ...update('miniMap'), show: trace('miniMap.show') }, mapTimer: 0, refreshMap: trace('refreshMap'), mapStops: [], mapMarks: [], mapCars: [],
     propertyLayer: null, // Default-off ground mode has no per-frame update.

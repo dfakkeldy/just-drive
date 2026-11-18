@@ -11,7 +11,7 @@ import { justIcon } from './site-pages.mjs';
 
 // The game's own credit strings, bundled from its source (property-lines-rules.ts is more than Node can strip).
 const { outputFiles } = await build({ stdin: { contents: "export { AREAS } from './area'; export * from './credits'; export * from './controls'; export { bikeKeys } from './vehicle-choice'; export { PUBLIC_MUSIC_CREDIT } from './radio-credits.generated'; export { PROPERTY_ATTRIBUTION, PROPERTY_LICENSE_URL } from './property-lines-rules';", resolveDir: fileURLToPath(new URL('../web/src', import.meta.url)), loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node' });
-const { AREAS, ABOUT_URL, HELP_URL, LISTEN_URL, LISTEN_TEXT, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, ENGINE_CREDIT, LAND_CREDITS, FAR_CREDITS, PUBLIC_MUSIC_CREDIT, PROPERTY_ATTRIBUTION, PROPERTY_LICENSE_URL } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
+const { AREAS, ABOUT_URL, HELP_URL, LISTEN_URL, LISTEN_TEXT, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, ENGINE_CREDIT, LAND_CREDITS, FAR_CREDITS, PUBLIC_MUSIC_CREDIT, PROPERTY_ATTRIBUTION, PROPERTY_LICENSE_URL } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
 
 const mailIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b1620'/%3E%3Cpath d='M12 22h40v24H12z' fill='%23eef2f6'/%3E%3Cpath d='M12 22l20 15 20-15' fill='none' stroke='%23d0632e' stroke-width='4'/%3E%3C/svg%3E";
 const PICTURES = ['mail.jpg', 'road.jpg', 'village.jpg'];
@@ -240,7 +240,7 @@ const HELP = {
 <section aria-labelledby="controls">
 <span class="label">Controls</span>
 <h2 id="controls">Keys and buttons</h2>
-<div class="controls">${table('Keyboard', KEYS)}${table('Touch screen', TOUCH)}</div>
+<div class="controls">${table('Keyboard', KEYS)}${table('Touch screen', TOUCH)}${table('Controller', padKeys('car', true))}</div>
 </section>
 ${COMMON('mail')}`,
   },
@@ -263,7 +263,7 @@ ${COMMON('mail')}`,
 <section aria-labelledby="controls">
 <span class="label">Controls</span>
 <h2 id="controls">Keys and buttons</h2>
-<div class="controls">${table('Car · keyboard', DRIVING_KEYS)}${table('Car · touch screen', DRIVING_TOUCH)}${table('Dirt bike · keyboard', bikeKeys(false))}${table('Dirt bike · touch screen', bikeKeys(true))}</div>
+<div class="controls">${table('Car · keyboard', DRIVING_KEYS)}${table('Car · touch screen', DRIVING_TOUCH)}${table('Dirt bike · keyboard', bikeKeys(false))}${table('Dirt bike · touch screen', bikeKeys(true))}${table('Car · controller', padKeys('car', false))}${table('Dirt bike · controller', padKeys('bike', false))}</div>
 </section>
 ${COMMON('just')}`,
   },
