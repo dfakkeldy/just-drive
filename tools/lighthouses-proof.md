@@ -17,7 +17,7 @@ Run 18 Nov 2026 on the Mac M4 check host: Microsoft Edge 157 (ANGLE Metal, Apple
 | porthood-phone-day | 81 → 82 | 700482 → 700546 | day: no beacon mesh |
 | porthood-phone-night | 82 → 84 | 700482 → 700786 | 3134 / 3455 |
 
-Counts are from the run at b09dea4c on main af34c758. The row passed again at 877b690b and at 5918439b, after the pause-time change.
+Counts are from the run at b09dea4c on main af34c758. The row passed again at 877b690b and 5918439b, after the pause-time change. It also passed at 85b0fedc on main 97100198, where the desktop finish pass is on by default.
 
 ## Node rows
 
