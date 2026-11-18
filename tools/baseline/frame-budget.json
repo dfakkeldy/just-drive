@@ -39,9 +39,9 @@
 
   "new-player-start/phone-mail":{"calls":229,"triangles":1433908,"geometries":112,"textures":83,"programs":18,"readyTiles":74,"requests":154},
 
-  "pointtupper-start/desktop-explore-truck":{"calls":960,"triangles":4690434,"geometries":290,"textures":140,"programs":36,"readyTiles":347,"requests":638},
+  "pointtupper-start/desktop-explore-truck":{"calls":960,"triangles":4690434,"geometries":290,"textures":140,"programs":37,"readyTiles":347,"requests":638},
 
-  "pointtupper-start/phone-explore-truck":{"calls":212,"triangles":1283670,"geometries":122,"textures":60,"programs":18,"readyTiles":83,"requests":196},
+  "pointtupper-start/phone-explore-truck":{"calls":212,"triangles":1283670,"geometries":123,"textures":60,"programs":18,"readyTiles":83,"requests":196},
 
   "quarry-air/desktop-explore-truck":{"calls":837,"triangles":4398223,"geometries":169,"textures":157,"programs":26,"readyTiles":344,"requests":602},
 

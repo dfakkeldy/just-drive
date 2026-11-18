@@ -1,30 +1,39 @@
 # Lighthouse verification
 
-Native Apple M6 / ANGLE Metal, Chrome for Testing 157.0.8103.78. Main baseline 4adaa588392dfa5f951f35de2ff621617dec9315. Same browser run, identical cameras and settings. The dev-only mutation replays the exact baseline main.ts. Other pre-existing render modules are unchanged. credits.ts changes text only. All eight cases pass. These are counts, not timings.
+Run 18 Nov 2026 on the Mac M4 check host: Microsoft Edge 157 (ANGLE Metal, Apple M4), hardware GL. These are counts, not timings.
 
-| Case | Calls main → branch | Triangles main → branch | Programs main → branch | Near / far night pixel difference |
-|---|---:|---:|---:|---:|
-| mabou-desktop-day | 232 → 235 | 1523310 → 1523466 | 27 → 30 | day: no beacon mesh |
-| mabou-desktop-night | 233 → 237 | 1523310 → 1523546 | 23 → 25 | 9683 / 2825 |
-| porthood-desktop-day | 128 → 129 | 1030826 → 1030890 | 22 → 25 | day: no beacon mesh |
-| porthood-desktop-night | 129 → 131 | 1030826 → 1031130 | 18 → 20 | 9180 / 3458 |
-| mabou-phone-day | 186 → 189 | 1224896 → 1225052 | 13 → 14 | day: no beacon mesh |
-| mabou-phone-night | 187 → 191 | 1224896 → 1225132 | 14 → 16 | 3488 / 3470 |
-| porthood-phone-day | 77 → 78 | 747166 → 747230 | 9 → 10 | day: no beacon mesh |
-| porthood-phone-night | 78 → 80 | 747166 → 747470 | 10 → 12 | 3134 / 3455 |
+## Browser row
 
-The far probe is about 1 km away, with an elevated clear line of sight. Night probes draw with and without the actual beacon and read a 7 × 7 pixel patch. Day builds no beacon geometry or shader.
+`lighthouses-browser` passes all eight cases (Mabou and Port Hood, desktop and phone, day and night). Each case measures the frame with the kit drawn and then hidden in the same page. Night cases also draw the beacon on and off and read a 7 × 7 pixel patch, once from the street camera and once from about 1 km away on a clear sight line. Day builds no beacon geometry or shader.
 
-TypeScript, light placement against baked PNG heights, nine mutants, night rules, and play-flags plus its mutants pass. The placement check uses actual instance matrices and bounding boxes, source distance under 3 m, clear beacon sight lines, and two exaggeration/sea-level pairs.
+| Case | Calls kit off → on | Triangles kit off → on | Near / far night pixel difference |
+|---|---:|---:|---:|
+| mabou-desktop-day | 228 → 231 | 1414007 → 1414163 | day: no beacon mesh |
+| mabou-desktop-night | 229 → 233 | 1414007 → 1414243 | 9683 / 2825 |
+| porthood-desktop-day | 132 → 133 | 984142 → 984206 | day: no beacon mesh |
+| porthood-desktop-night | 133 → 135 | 984142 → 984446 | 9180 / 3458 |
+| mabou-phone-day | 164 → 167 | 1114917 → 1115073 | day: no beacon mesh |
+| mabou-phone-night | 165 → 169 | 1114917 → 1115153 | 3488 / 3470 |
+| porthood-phone-day | 81 → 82 | 700482 → 700546 | day: no beacon mesh |
+| porthood-phone-night | 82 → 84 | 700482 → 700786 | 3134 / 3455 |
 
-Independent Claude Opus 5.5 reviews: three fresh rounds. Final round at 4279c30 found no new blocker for an explicitly incomplete draft. It did not approve completion or merge. Final runtime pass followed that review. Minor remaining model detail: open lanterns and skeleton lamps have no central mounting column.
+Counts are from the run at b09dea4c on main af34c758. The row passed again at 877b690b and at 5918439b, after the pause-time change.
 
-The full request remains incomplete: ten fixed lights are withheld, including Port Hood Island and Judique South; 26 buoys are inventoried but absent; full OSM coverage is unresolved. See lighthouses-sources.md and the PR.
+## Node rows
 
-## Phone budget
+`lighthouses` and `lighthouses-mutations` check the placement against baked PNG heights using the actual instance matrices and bounding boxes. They require a source distance under 3 m and clear beacon sight lines, at two exaggeration/sea-level pairs. Nine mutants are rejected.
 
-`tools/check-budget.sh --phone` exits 1. The intended tower cost exceeds both Mines lookoff phone pins by 3 calls, 156 triangles, 3 geometries and 1 program. An exact-main control of new-player-start and Mines confirms the new-player phone-mail texture failure is shared: 82 textures against 81 on both. Main passes the two Mines pins; the branch alone adds the stated tower cost. Budget pins are unchanged while the full feature is incomplete.
+## Budget
 
-The broad `--changed --quick` suite was listed but not run. Broad fixture verification under the 1 GB scratch cap is still outstanding. The focused registered rows above and the play-flags fixture ran. No broad green claim is made.
+The kit's own cost in the frame-budget scenes is limited to `pointtupper-start`, where five Point Tupper and Causeway lights are in view (694.4, 694.5, 698, 701, 702). Measured against main 2ff427c7 in one session:
 
-All eight final game pictures were opened and inspected. The two Murphy Pond night pictures are captured at the on phase for a readable flashing-light record; the live shader resumes its listed period in normal use.
+| Mode | Calls | Triangles | Geometries | Programs | Textures |
+|---|---|---|---|---|---|
+| phone-explore-truck | 211 → 212 | 1,249,852 → 1,252,624 | 122 → 123 | 16 → 17 | 60 → 60 |
+| desktop-explore-truck | 947 → 949 | 4,682,923 → 4,688,467 | 282 → 283 | 36 → 37 | 140 → 140 |
+
+Only phone geometries (pin 122) and desktop programs (pin 36) crossed a pin, and each is raised by exactly one. The reason is recorded in `tools/frame-budget-policy.mjs`. Every other budget failure on this host is shared with unchanged main.
+
+## What is not built
+
+Ten fixed lights are withheld: missing published heights, structure support that could not be checked, or the Cape Porcupine front light inside the baked rail corridor. Port Hood Island and Judique South are among them. The 26 lighted buoys are inventoried but not modelled. All of these stay in `lighthouses-sources.md` for follow-up work. Open lanterns and skeleton lamps have no central mounting column.
