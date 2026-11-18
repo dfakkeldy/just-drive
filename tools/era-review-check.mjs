@@ -79,9 +79,10 @@ test('multiplayer-off',()=>{
  const s=source('web/src/main.ts');assert.match(s,/const MULTIPLAYER\s*=\s*[^;\n]*&&\s*ERA\.modern;\s*\nconst multiplayer\s*=\s*MULTIPLAYER\s*\?/,'construction is gated before mp code can create settings/title UI');
 });
 test('raw-shaders',async()=>{
- const now=source('web/src/shaders.ts'),main=execFileSync('git',['show','origin/main:web/src/shaders.ts'],{cwd:root,encoding:'utf8'});
- const {coastPrograms,program,preprocess,normalized,checkShaderBaseline,withoutFarBend}=await import(root+'/tools/coast-programs.mjs');
+ let now=source('web/src/shaders.ts'),main=execFileSync('git',['show','origin/main:web/src/shaders.ts'],{cwd:root,encoding:'utf8'});
+ const {coastPrograms,program,preprocess,normalized,checkShaderBaseline,withoutFarBend,reviewedMirrorCrown}=await import(root+'/tools/coast-programs.mjs');
  checkShaderBaseline(now,{report:()=>{}});
+ now=reviewedMirrorCrown(now);main=reviewedMirrorCrown(main);
  const original=text=>text.replace(/\/\* MODERN_ROAD_(?:CUT|PAINT)_BEGIN \*\/[\s\S]*?\/\* MODERN_ROAD_(?:CUT|PAINT)_END \*\//g,'').replaceAll(' * roadPaint','');
  for(const p of coastPrograms())if(!p.name.startsWith('CART_')&&!p.flags.includes('AIRPORT')&&!(p.name==='TERRAIN_FRAG'&&p.flags.includes('GROUND_CLASSES')))assert.equal(normalized(preprocess(original(program(withoutFarBend(now),p.name)),p.flags)),normalized(preprocess(original(program(withoutFarBend(main),p.name)),p.flags)),p.name+' unchanged outside quarry');assert(!now.includes('ERA_CART'),'no era identifiers in original programs');
 });

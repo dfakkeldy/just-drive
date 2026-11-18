@@ -80,6 +80,8 @@ async function open(url, block = [], served = null) {
   await c.send('Runtime.enable'); await c.send('Page.enable'); await c.send('Network.enable'); await c.send('Log.enable');
   if (block.length) await c.send('Network.setBlockedURLs', { urls: block });
   if (served) await c.send('Fetch.enable', { patterns: [{ urlPattern: '*mail-car*.glb', requestStage: 'Request' }] });
+  // The default resource-timing buffer holds 250 entries; a full land load passes that, and the model request would drop out.
+  await c.send('Page.addScriptToEvaluateOnNewDocument', { source: 'performance.setResourceTimingBufferSize(10000)' });
   await c.send('Page.navigate', { url });
   const close = async () => { c.close(); await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`); };
   return { c, read, close, problems, warnings };
@@ -298,6 +300,7 @@ if (process.env.ERA === '1') {
         return { root: mmm.vehicle.car.root.name, fetched: !!model, requests: all.length,
           ...(model ? { modelAskedAtMs: Math.round(model.startTime), modelHereAtMs: Math.round(model.responseEnd), askedBeforeIt: all.filter(e => e.startTime < model.startTime).length,
             lastOtherRequestAtMs: Math.round(Math.max(...all.filter(e => e !== model).map(e => e.startTime))) } : {}) }; })()`);
+      assert.ok(state.requests < 10000, `${label}: ${state.requests} resources fill the raised timing buffer; the model check would be blind`);
       if (state.fetched) assert.ok(state.modelAskedAtMs < state.lastOtherRequestAtMs, `${label}: the model file is asked for while the land still loads (${state.modelAskedAtMs} ms; last other request ${state.lastOtherRequestAtMs} ms)`);
       const shot = await page.c.send('Page.captureScreenshot', { format: 'png' });
       writeFileSync(`${out}/era-${fetched ? 'car' : 'horse'}.png`, Buffer.from(shot.result.data, 'base64'));

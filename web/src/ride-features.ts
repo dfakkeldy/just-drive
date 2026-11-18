@@ -12,6 +12,7 @@ import { BikeCamera } from './bike-camera';
 import { bikeControls, bikeHorn, type BikeControls } from './bike-controls';
 import { vehicleChoice, vehicleButtons, restoreVehiclePose, bikeHelp, horseHelp, horseMailHelp } from './vehicle-choice';
 import { exploreHelp } from './explore';
+import { padHelp } from './controls';
 import type { Ride } from './ride';
 import type { Terrain } from './terrain';
 
@@ -24,6 +25,14 @@ export function rideFeatures(vehicle: Ride, entry: GarageEntry, terrain: Terrain
   let playing = false;
   if (horse) (vehicle.car as HorseRig).onFootfall = () => { if (playing) sound?.footfall(vehicle.surfaceName); };
   let camera = bike ? new BikeCamera(bike, terrain) : null;
+  const airLine = (): string => {
+    const j = bike?.lastJump;
+    if (j && j.airTime > 1) {
+      const flips = j.pitchRotations ? ` · ${Math.abs(j.pitchRotations)} ${j.pitchRotations > 0 ? 'backflip' : 'frontflip'}${Math.abs(j.pitchRotations) > 1 ? 's' : ''}` : '';
+      return `\nAir ${j.airTime.toFixed(1)} s · ${j.distance.toFixed(0)} m${flips} · ${j.clean ? 'clean' : 'tumble'}`;
+    }
+    return '';
+  };
   const choice = { get kind() { return kind; }, choose(next: string) { vehicleChoice(kind, vehicle).choose(next); } };
   let bikeInput: BikeControls | null = null;
   let controls: (input: Input) => Input = input => input;
@@ -68,16 +77,13 @@ export function rideFeatures(vehicle: Ride, entry: GarageEntry, terrain: Terrain
       if (!camera) return false; camera.update(cameraObject, dt, view, reset); return true;
     },
     get help(): string {
-      const j = bike?.lastJump;
       let line = horse ? (explore ? horseHelp : horseMailHelp) : kind === 'bike' ? bikeHelp : exploreHelp;
       if (just && !radio) line = line.replace(' · T: radio', '');
       if (just) line = line.replace(/\bShift\b/g, '⇧');
-      if (j && j.airTime > 1) {
-        const flips = j.pitchRotations ? ` · ${Math.abs(j.pitchRotations)} ${j.pitchRotations > 0 ? 'backflip' : 'frontflip'}${Math.abs(j.pitchRotations) > 1 ? 's' : ''}` : '';
-        line += `\nAir ${j.airTime.toFixed(1)} s · ${j.distance.toFixed(0)} m${flips} · ${j.clean ? 'clean' : 'tumble'}`;
-      }
-      return line;
+      return line + airLine();
     },
+    /** The same help for a controller (controls.ts padHelp), with the bike's last jump. */
+    get padHelp(): string { return padHelp(kind, !explore, radio && !horse) + airLine(); },
     get jumpLine(): string {
       const j = bike?.lastJump;
       const text = !j || j.airTime <= 1 ? '' : `Air ${j.airTime.toFixed(1)} s · ${j.distance.toFixed(0)} m${j.pitchRotations ? ` · ${Math.abs(j.pitchRotations)} ${j.pitchRotations > 0 ? 'backflip' : 'frontflip'}${Math.abs(j.pitchRotations) > 1 ? 's' : ''}` : ''} · ${j.clean ? 'clean' : 'tumble'}`;

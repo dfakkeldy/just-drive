@@ -1,18 +1,17 @@
 import type { RideInput } from './ride';
-/** PULL joins the existing pad and pedals. Hidden/paused controls release every held pull. */
+/** PULL joins the existing pad and pedals. Hidden/paused controls release every held pull.
+ * PULL's position and size are written inline by the phone planner (phone-controls-layout.ts) wherever it is shown. */
 export type BikeControls = ((input: RideInput) => RideInput) & { reset(): void };
 export function bikeControls(): BikeControls {
   document.body.classList.add('bikeMode');
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: `
     body.bikeMode.tcOn #phoneDrive{grid-template-columns:minmax(56px,1fr) auto auto auto;gap:6px}
-    body.bikeMode.tcOn #tcGo,body.bikeMode.tcOn #tcBrake,body.bikeMode.tcOn #tcPull{width:56px}
+    body.bikeMode.tcOn #tcGo,body.bikeMode.tcOn #tcBrake{width:56px}
     #tcPull{display:none}
     #bikeJump{display:none;font:10px/1.3 ui-monospace,monospace;color:#c1ead0;max-width:100%;overflow-wrap:anywhere}
     body.bikeMode.tcOn #bikeJump{display:block}
     #bikeJump[hidden]{display:none!important}
-    body.bikeMode.tcOn #tcPull{display:grid;min-height:56px;height:84px;pointer-events:auto;letter-spacing:0}
-    @media(orientation:landscape){body.bikeMode.tcOn #tcPull{height:72px}}
-    @media(orientation:landscape) and (max-height:319px){body.bikeMode.tcOn #tcPull{height:60px}}
+    body.bikeMode.tcOn #tcPull{display:grid;min-height:56px;pointer-events:auto;letter-spacing:0}
   ` }));
   const keys = new Set<string>(); let held = false;
   const drive = document.getElementById('phoneDrive');
@@ -31,7 +30,7 @@ export function bikeControls(): BikeControls {
   if (drive) new MutationObserver(() => { if (!document.body.classList.contains('tcOn')) clear(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   // Paused title/places dialogs own keyboard input. Release pull when either opens.
   new MutationObserver(() => { if (document.querySelector('#title:not([hidden]),#placesPanel:not([hidden]),#bigMap:not([hidden])')) clear(); }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
-  return Object.assign((input: RideInput) => ({ ...input, pull: held || keys.size > 0 }), { reset: clear });
+  return Object.assign((input: RideInput) => ({ ...input, pull: held || keys.size > 0 || !!input.pull }), { reset: clear });
 }
 
 /** A short, light horn. A real key/tap supplies the audio gesture; no sound starts at boot. */

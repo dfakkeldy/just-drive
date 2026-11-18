@@ -45,17 +45,17 @@ async function page(path,width,height,check){
 }
 for(const [w,h,label]of [[1280,900,'desktop'],[390,844,'phone'],[360,640,'small-phone']]){
  await page('/mabou?site=just&q=low&keep=yes&title=1'+(w<500?'&touch=1':''),w,h,async p=>{
-  await p.inspect('today',label+'-today');await p.click('#titleEra');await p.until(`location.pathname==='/mabou-1884' && window.mmm?.era.id==='1884'`);await p.inspect('1884',label+'-1884');
-  await p.click('#titleEra');await p.until(`location.pathname==='/mabou' && window.mmm?.era.id==='today'`);await p.inspect('today');
+  await p.inspect('today',label+'-today');await p.click('#titleEra');await p.until(`location.pathname==='/mabou-1884' && window.mmm?.era?.id==='1884'`);await p.inspect('1884',label+'-1884');
+  await p.click('#titleEra');await p.until(`location.pathname==='/mabou' && window.mmm?.era?.id==='today'`);await p.inspect('today');
   await p.click('#titleStart');await p.until(`document.getElementById('title').hidden`);assert.equal(await p.read(`document.getElementById('titleEra').getClientRects().length`),0,'era door disappears while driving');
  });
 }
 // Judique has its own door: today to 1884 and back, on desktop and phone.
 for(const [w,h,label]of [[1280,900,'judique-desktop'],[390,844,'judique-phone']]){
  await page('/judique?site=just&q=low&keep=yes&title=1'+(w<500?'&touch=1':''),w,h,async p=>{
-  await p.inspect('today',label+'-today','judique');await p.click('#titleEra');await p.until(`location.pathname==='/judique-1884' && window.mmm?.era.id==='1884'`);await p.inspect('1884',label+'-1884','judique');
+  await p.inspect('today',label+'-today','judique');await p.click('#titleEra');await p.until(`location.pathname==='/judique-1884' && window.mmm?.era?.id==='1884'`);await p.inspect('1884',label+'-1884','judique');
   assert.equal(await p.read('mmm.history.area'),'judique');assert.equal(await p.read('mmm.history.trades.length'),37);
-  await p.click('#titleEra');await p.until(`location.pathname==='/judique' && window.mmm?.era.id==='today'`);await p.inspect('today',undefined,'judique');
+  await p.click('#titleEra');await p.until(`location.pathname==='/judique' && window.mmm?.era?.id==='today'`);await p.inspect('today',undefined,'judique');
  });
 }
 for(const path of ['/judique-1884?site=just&q=low&keep=yes','/judique?site=just&era=1884&q=low&keep=yes'])await page(path,1280,900,p=>p.inspect('1884',undefined,'judique'));
@@ -67,11 +67,11 @@ base.hostname='justdrive.localhost';await page('/mabou-1884?q=low&title=1',1280,
  assert.equal(await p.read('mmm.era.id'),'1884');assert.equal(new URL(await p.read(`document.getElementById('titleEra').href`)).pathname,'/mabou');
  await p.click('#titleStart');await p.click('#gear');
  await p.read(`const area=document.getElementById('siteArea');area.value='porthood';area.dispatchEvent(new Event('change'));`);
- await p.until(`location.pathname==='/porthood' && window.mmm?.era.id==='today' && document.documentElement.dataset.mmmReady==='true'`);
+ await p.until(`location.pathname==='/porthood' && window.mmm?.era?.id==='today' && document.documentElement.dataset.mmmReady==='true'`);
  assert.equal(await p.read(`!!document.getElementById('titleEra')`),false);
  assert.equal(await p.read(`new URLSearchParams(location.search).has('era')`),false,'alias does not become an era query during an area change');
  await p.read(`const area=document.getElementById('siteArea');area.value='mabou';area.dispatchEvent(new Event('change'));`);
- await p.until(`location.pathname==='/mabou' && window.mmm?.era.id==='today' && document.documentElement.dataset.mmmReady==='true'`);
+ await p.until(`location.pathname==='/mabou' && window.mmm?.era?.id==='today' && document.documentElement.dataset.mmmReady==='true'`);
  assert.equal(await p.read(`document.getElementById('titleEra').textContent`),'Go back to Mabou in 1884 →');
 });
 writeFileSync(`${pictures}/rectangles.json`,JSON.stringify(records,null,2));
