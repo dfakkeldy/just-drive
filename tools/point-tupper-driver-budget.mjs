@@ -16,6 +16,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { cdp, cdpFetch, sleep } from './cdp.mjs';
 import { PHONE_CAP } from './frame-budget-policy.mjs';
+import { farLand } from './frame-budget-far.mjs';
+const FAR_STATE = farLand(); // throws on a half-installed far pack
 const [out, first] = process.argv.slice(2), port = process.env.CDP_PORT, LOW = process.env.DRIVER_LOW === '1';
 const mode = LOW ? 'phone' : 'desktop';
 const baseline = JSON.parse(readFileSync(new URL('./baseline/frame-budget.json', import.meta.url)));
@@ -54,6 +56,12 @@ async function openPage(extra) {
   assert.equal(await read('mmm.vehicleId'), 'truck', 'player drives the pickup');
   await read("document.getElementById('titleStart')?.click()");
   await sleep(1500);
+  if (FAR_STATE === 'after') {
+    // As frame-budget-check.mjs: wait for every far part, then hold the far query meshes visible, so both pages
+    // count the frame the game draws whenever a 5 Hz occlusion probe retries (not a probe phase).
+    for (let i = 0; i < 120 && !await read('!!(mmm.farVisibility&&mmm.farLand&&mmm.tall&&mmm.farTurbines)'); i++) await sleep(500);
+    await read('(() => {const v=mmm.farVisibility;if(!v)throw Error("far views never loaded on after land");v.update=()=>{};for(const r of v.records)r.mesh.visible=true;})()');
+  }
   // Count every draw of one animation frame: main, mirror, water mask AND the shadow pass. three.js resets
   // renderer.info after drawing the shadow map (WebGLRenderer.render), so its own per-render counts omit shadow draws;
   // with autoReset off the counters run for the whole frame and this tick resets them once.

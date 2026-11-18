@@ -23,6 +23,7 @@ mkdir -p "$BASE_TREE/data"
 for link in web/node_modules data/baked;do source="$(cd "$ROOT/$link"&&pwd -P)";ln -s "$source" "$BASE_TREE/$link";done
 COUNT_BASE_PORT=$((WEB+1000));COUNT_BASE_AUX_PORT=$((CDP+1000))
 export SIDEWALK_MEASURE_BASE_REF="$(git -C "$BASE_TREE" rev-parse HEAD)" BASE_URL="http://127.0.0.1:$COUNT_BASE_PORT"
+if grep -q loadFarViews "$BASE_TREE/web/src/main.ts";then export SIDEWALK_COUNT_BASE_FAR=1;else export SIDEWALK_COUNT_BASE_FAR=0;fi
 python3 "$ROOT/tools/check-ports.py" --probe "$COUNT_BASE_PORT" "$COUNT_BASE_AUX_PORT"
 start_owned baseline "$BROWSER_LOG_DIR/baseline.log" python3 "$ROOT/tools/check-ports.py" "$COUNT_BASE_PORT" "$COUNT_BASE_AUX_PORT" /bin/bash -c 'cd "$1/web"&&exec ./node_modules/.bin/vite --host 127.0.0.1 --port "$2" --strictPort' _ "$BASE_TREE" "$COUNT_BASE_PORT"
 baseline_ready=0

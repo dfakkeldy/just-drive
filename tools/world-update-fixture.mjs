@@ -35,10 +35,10 @@ export function spy(source, ending = false, dev = true, absent = false, override
     endings: { ...update('endings'), busy: ending }, interiors: { ...update('interiors'), render: trace('interiors.render'), busy: false },
     wharves: null,
     terrain: { ...update('terrain'), drawnFine: new Set(['tile']), surfaceAt: () => ({ level: 8 }), failed: 0 },
-    quality: { frame: trace('quality') }, picture: null, lawnDemo: null, mailMode: true,
+    quality: { frame: trace('quality') }, picture: null, lawnDemo: null, mailMode: true, tall: null, farTurbines: null, farVisibility:null, farLoading:false, farKey:null,tallKey:null,
     demo: 0, demoPhoto: false, drove: 0, reliefTest: 0, waitingToDrive: false, loaded: true, beaconT: 0,
     beaconMat: { set emissiveIntensity(v) { trace('beacon')(v); } },
-    shared: { time: { set value(v) { trace('shared.time')(v); } } },
+    shared: { tallViewport: { value: { set(){} } }, time: { set value(v) { trace('shared.time')(v); } } },
     sky: { position: { copy: trace('sky') } },
     aiDriver: null, horse: false, roadsidePlaying: false, engineSound: null, fleet: null, trafficSignals: null, updateFleetHud: null, ride: {}, car: {}, radio: { ...update('radio'), setWind: trace('radio.wind'), setPlace: trace('radio.place') }, manifest: { village: [1000, 2000] }, params: new URLSearchParams(),
     driveInput: () => ({ throttle: 0, steer: 0, handbrake: true }), driveVehicle: trace('driveVehicle'), chase: trace('chase'), fly: trace('fly'),
@@ -53,7 +53,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
     sunShadows: update('sunShadows'), vehicleSpec: { id: 'car' },
     canal: null, yardJob: null, pitch: .1, yaw: .2,
     fishing: { ...update('fishing'), judge: { cancel: trace('fishing.cancel') }, group: { visible: true } },
-    renderer: { set localClippingEnabled(v) { trace('clipping')(v); }, render: trace('render') },
+    renderer: { domElement: { width:1280, height:720 }, set localClippingEnabled(v) { trace('clipping')(v); }, render: trace('render') },
     multiplayer: { ...update('multiplayer'), choice: { on: false } }, scene: {}, LOW: true, CLOCK_FACTOR: 120, page: { stopped: false, ready: trace('page.ready'), fail: error => { throw error; } },
     document: { hidden: false }, keys: new Set(), mailPointers: new Set(), mailButton: null, mailScore: null, phoneMailHud: update('phoneMailHud'),
     pendingShot: null, mailRequested: false, photoRequested: false, touchDevice: false, bare: true,
@@ -64,11 +64,11 @@ export function spy(source, ending = false, dev = true, absent = false, override
     // An open pause gate keeps the old clock: dt from `last`, simulation time equal to the frame's time.
     pause: { blocked: false, time: 0, frame(now) { const dt = Math.max(0, (now - context.last) / 1000); context.last = now; this.time = now; return { paused: false, dt }; } },
   };
-  for (const name of ['deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'roads', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections']) context[name] = update(name);
+  for (const name of ['tall', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'roads', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections']) context[name] = update(name);
   context.stuntPark=null;
   context.roadScene.setPaused = trace('roadScene.pause');
   context.waterReflections.settle = trace('water.settle'); context.waterReflections.afterRender = trace('water.afterRender');
-  if (absent) for (const name of ['stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections', 'fishing']) context[name] = null;
+  if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections', 'fishing']) context[name] = null;
   if (typeof overrides === 'function') overrides(context, trace);
   else Object.assign(context, overrides);
   if (source.includes('devHooks.')) {
@@ -112,7 +112,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
     call('placesUI', '@vehicle', playing), call('journey', .05, playing), call('relief', dt, playing ? 6 : 0, '@vehicle', playing),
     call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars'), call('radio', playing, false),
     world('history', '@camera.position', dt), world('roads', '@camera.position'), world('sidewalks'), world('edge', '@camera.position'), world('mineSite', '@camera.position'),
-    world('deckhand', dt, '@vehicle', '@camera.position'), world('fishing', dt, '@camera.position'), world('roadScene', '@camera'), world('schoolBus', '@camera'), world('ambientTraffic', '@camera', '@vehicle', true), world('roadAnimals', dt, '@vehicle', true), world('props', '@camera', dt), call('shift', started ? .05 : 0, '@vehicle'),
+    world('deckhand', dt, '@vehicle', '@camera.position'), world('fishing', dt, '@camera.position'), world('roadScene', '@camera'), world('schoolBus', '@camera'), world('ambientTraffic', '@camera', '@vehicle', true), world('roadAnimals', dt, '@vehicle', true), world('props', '@camera', dt), world('tall', '@camera', 1.05), call('shift', started ? .05 : 0, '@vehicle'),
     ...(!fly ? [call('shadowFocus', 3, 4, 5), call('sunShadows', .05, '@shadowFocus', 0, paused)] : []),
     world('grass', .05, '@camera', 3, 5, .7, '@vehicleSpec'), call('clipping', !absent), call('multiplayer', .05, '@camera', dt > 0 && !fly),
     world('mirror', '@camera'), call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'),
@@ -128,7 +128,7 @@ export function expectedEnding({ absent = false } = {}) {
     call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'), call('raf', '@function'),
   ];
 }
-const optional = new Set('deckhand yard yardDog home porch porchDog church village hawkesbury mabouMain stockpiles cemeteries trees coast airport quarry culvertMouths landmarks history sidewalks edge mineSite roadScene schoolBus ambientTraffic roadAnimals roadScene.pause props grass waterReflections water.settle water.afterRender fishing'.split(' '));
+const optional = new Set('tall deckhand yard yardDog home porch porchDog church village hawkesbury mabouMain stockpiles cemeteries trees coast airport quarry culvertMouths landmarks history sidewalks edge mineSite roadScene schoolBus ambientTraffic roadAnimals roadScene.pause props grass waterReflections water.settle water.afterRender fishing'.split(' '));
 function normalized(values, ctx) {
   return JSON.parse(JSON.stringify(values, (_key, value) => {
     for (const [name, object] of Object.entries(ctx)) if (value === object && typeof object === 'object' && object !== null) return '@' + name;
@@ -276,6 +276,14 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   if (mutation !== -1) verify(mutated(current(), process.argv[mutation + 1]));
   console.log(JSON.stringify(verify(current())));
   console.log('PASS ongoing frame regression (no historical comparison)');
+  {
+    const scheduled=[];let loads=0;
+    const actual=spy(current(),false,true,false,{farKey:{file:'far-land.json'},farLoading:false,setTimeout:fn=>{scheduled.push(fn);return 1;},loadFarViews:()=>{loads++;return Promise.resolve();}},frame=>{frame(1050);frame(1067);});
+    assert.ok(actual.calls.includes('render'),'first game frame drawn');assert.equal(loads,0,'no optional request in either frame');assert.equal(scheduled.length,1,'one deferred request');
+    scheduled[0]();assert.equal(loads,1,'request runs after the frame');
+    console.log('PASS actual first frame before optional scenery, scheduled only once');
+  }
+
   if (process.argv.includes('--mutations')) mutations();
   if (process.argv.includes('--experiment')) experiment(current());
   const at = process.argv.indexOf('--audit');

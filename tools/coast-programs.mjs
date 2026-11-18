@@ -1,3 +1,6 @@
+import {withoutFarBend} from './far-shader-compat.mjs';
+export {withoutFarBend};
+import {CURVE_GLSL} from '../web/src/far-rules.ts';
 import {cartProgram} from '../web/src/eras/cart-programs.ts';
 // Enumerate the actual ShaderMaterial constructor define objects, including conditional spreads.
 // Unknown forms fail closed: a new material form needs an explicit reader, never a guessed flag list.
@@ -53,6 +56,7 @@ export function coastPrograms(read=file=>readFileSync(new URL('../web/src/'+file
  return [...rows.values()];
 }
 export function program(source,name){
+ if(name==='CURVE_GLSL')return CURVE_GLSL;
  if(name==='CART_TERRAIN_FRAG')return cartProgram(program(source,'TERRAIN_FRAG'),'terrain');
  if(name==='CART_WATER_MASK_FRAG')return cartProgram(program(source,'WATER_MASK_FRAG'),'mask');
  const m=source.match(new RegExp('(?:const|export const) '+name+' = /\\* glsl \\*/ `([\\s\\S]*?)`;'));
@@ -134,5 +138,5 @@ export function checkShaderBaseline(source,{
 
 /** The explicit-baseline check and its mutation control use this same variant matrix. */
 export function compareNonCoastPrograms(current,baseline,variants=coastPrograms()) {
- for(const {name,flags} of variants)assert.equal(exact(preprocess(program(current,name),flags)),exact(preprocess(program(baseline,name),flags)),name+' outside coast '+flags);
+ for(const {name,flags} of variants)assert.equal(exact(preprocess(program(withoutFarBend(current),name),flags)),exact(preprocess(program(withoutFarBend(baseline),name),flags)),name+' outside coast '+flags);
 }
