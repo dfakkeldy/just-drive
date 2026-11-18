@@ -77,7 +77,7 @@ const BAKED_HEIGHT_MAX: Readonly<Record<string, number>> = {
 const segFor = (level: number) => (level >= 7 ? 128 : 64);   // mesh intervals per tile
 
 class Tile {
-  contactId=0;contactFrame=-1;contactPart=-1;
+  contactId=0;contactFrame=-1;contactPart=-1;walkFrame=-1;walkPart=-2;walkCoverageSerial=-1;walkCoveragePart=-2;
   ready = false;
   failed = false;
   tries = 0;
@@ -96,6 +96,7 @@ class Tile {
   siteChanges: Map<Site,Uint8Array> | null = null;
   ground: Float32Array | null = null;
   canopy: Float32Array | null = null;
+  contactCanopy: Float32Array | null = null;
   road: Uint8ClampedArray | null = null;   // RGBA: distance, half width, kind, visual gravel coverage
   brook: Uint8Array | null = null;         // RGBA: vector to the centre line (x, z), half width, direction of flow (see streams.ts)
   quadSea = [false, false, false, false];
@@ -172,7 +173,7 @@ export class Terrain {
   dataRevision = 0;
   contactRevision = 0;
   private eraSiteCount=-1;private eraDeckSites:Site[]=[];private eraContactSites:Site[]=[];
-  private contactSerial=0;
+  private contactSerial=0;private walkCoverageSerial=0;
   private contactEvents:Float64Array|null=null;
   private contactSelected:Tile[]=[];private contactPrevious:Tile[]=[];
   /** Primary LOD selection includes off-screen tiles; a turn cannot switch them to older cached detail. */
@@ -203,9 +204,16 @@ export class Terrain {
     return true;
   }
   private noteSelection(t:Tile,part:number):void {
+    if(this.sidewalks && (t.walkFrame!==this.frame-1 && t.walkFrame!==this.frame || t.walkPart!==part))this.sidewalks.tileSelected?.(t.level,t.i,t.j,part);
+    t.walkFrame=this.frame;t.walkPart=part;
     if(!this.cartRoads)return;
     if(t.contactFrame!==this.frame-1||t.contactPart!==part)this.contactTile(t);
     t.contactFrame=this.frame;t.contactPart=part;this.contactSelected.push(t);
+  }
+  private noteWalkCoverage(t:Tile,part:number):void {
+    if(!this.sidewalks)return;
+    if(t.walkCoverageSerial!==this.walkCoverageSerial-1&&t.walkCoverageSerial!==this.walkCoverageSerial||t.walkCoveragePart!==part)this.sidewalks.coverageSelected?.(t.level,t.i,t.j,part);
+    t.walkCoverageSerial=this.walkCoverageSerial;t.walkCoveragePart=part;
   }
   readonly sites: Site[] = [];
   private treeOnlyClear=new WeakSet<number[]>();
@@ -231,6 +239,7 @@ export class Terrain {
   }
   readonly uniforms: Record<string, THREE.IUniform>;
   private tiles = new Map<string, Tile>();
+  private walkTiles: (Tile|undefined)[] = [];
   private exists = new Set<string>();
   private hasRoad = new Set<string>();
   private hasTrees = new Set<string>();
@@ -252,6 +261,11 @@ export class Terrain {
   streams: Streams | null = null;
   /** Local paint and vegetation rules; never changes measured ground or road data. */
   coast: RockSite | null = null;
+  /** Modern sidewalk slab and mown buffer; never changes road driving data. */
+  sidewalks: { vegetationAt(x:number,z:number,margin?:number):boolean; terrainMask?(level:number,i:number,j:number):Uint8Array|null;
+    clearCanopy?(level:number,i:number,j:number,canopy:Float32Array,px:Uint8ClampedArray):Float32Array|null;
+    tileReady?(level:number,i:number,j:number):void; tileSelected?(level:number,i:number,j:number,part:number):void;
+    coverageSelected?(level:number,i:number,j:number,part:number):void } | null = null;
   private active = 0;
   private queue: Tile[] = [];
   private builds: DecodedTile[] = [];
@@ -597,6 +611,7 @@ export class Terrain {
     // Where single trees exist, the terrain shows bare ground and the trees stand on it.
     const hull = !(t.level === 8 && this.hasTrees.has(`${t.i}_${t.j}`));
     const mpp = t.size / T;
+    const walkMask=this.sidewalks?.terrainMask?.(t.level,t.i,t.j);
     const ground = new Float32Array(S * S);
     const canopy = new Float32Array(S * S);
     let lo = Infinity, hi = -Infinity;
@@ -642,12 +657,13 @@ export class Terrain {
       if (g < lo) lo = g;
       if (g + c > hi) hi = g + c;
     }
+    const contactCanopy=this.sidewalks?.clearCanopy?.(t.level,t.i,t.j,canopy,px)??null;
     for (const box of this.clear) {
       if(this.treeOnlyClear.has(box))continue;const [bx0,bz0,bx1,bz1]=box;
       if (bx1 < t.x0 || bx0 > t.x0 + t.size || bz1 < t.z0 || bz0 > t.z0 + t.size) continue;
       const a0 = Math.max(0, Math.floor((bx0 - t.x0) / mpp)), a1 = Math.min(T, Math.ceil((bx1 - t.x0) / mpp));
       const b0 = Math.max(0, Math.floor((bz0 - t.z0) / mpp)), b1 = Math.min(T, Math.ceil((bz1 - t.z0) / mpp));
-      for (let b = b0; b <= b1; b++) for (let a = a0; a <= a1; a++) { canopy[b * S + a] = 0; px[(b * S + a) * 4 + 2] = 0; }
+      for (let b = b0; b <= b1; b++) for (let a = a0; a <= a1; a++) { canopy[b * S + a] = 0; if(contactCanopy)contactCanopy[b*S+a]=0; px[(b * S + a) * 4 + 2] = 0; }
     }
     const sea = this.manifest.seaFloor + 0.05;
     for (let q = 0; q < 4; q++) {
@@ -670,6 +686,7 @@ export class Terrain {
         const curvature=coastal.quarry?(h(a+1,b)+h(a-1,b)+h(a,b+1)+h(a,b-1)-4*h(a,b))/(mpp*mpp*this.exag):0;
         coastField.set(coastal.weights(x,z,raw,slope,curvature),k*4);
         if(canopy[k]>0 && !coastal.treeAllowed(x,z,raw,slope)){canopy[k]=0;px[k*4+2]=0;}
+        if(contactCanopy&&contactCanopy[k]>0&&!coastal.treeAllowed(x,z,raw,slope))contactCanopy[k]=0;
       }
     }
 
@@ -736,6 +753,7 @@ export class Terrain {
         }
         if(coastal?.quarry && coastField && coastField[k0*4+1]>.5)c=0;
         if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;
+        if(walkMask?.[k0])c=0;
         if (crowns) crowns[b * n + a] = hull ? 0 : c;
         if (!hull) c = 0;
         const g = ground[k0];
@@ -786,6 +804,7 @@ export class Terrain {
     }
     t.ground = ground;
     t.canopy = canopy;
+    t.contactCanopy=contactCanopy;
     t.road = road;
     t.brook = brook;
     if (!t.ready) this.readyCount++;
@@ -795,6 +814,7 @@ export class Terrain {
     if (t.lastUsed === this.frame) this.use(t);
     this.group.add(mesh);
     this.paved?.applyGround(mat);
+    this.sidewalks?.tileReady?.(t.level,t.i,t.j);
     this.night?.applyGround(mat);
     this.propertyOverlay?.applyGround(mat);
     this.fleetGroundChanged?.(t.x0, t.z0, t.size);
@@ -885,6 +905,38 @@ export class Terrain {
     return ground;
   };
 
+  /** Indexed primary terrain coverage, including off-screen tiles and partial parents. */
+  walkSelectedLevelAt(x:number,z:number):number|null {
+    const m=this.manifest,e=x+m.village[0]-m.origin[0],south=z-(m.village[1]-m.origin[1]);
+    for(let level=this.maxLevel;level>=0;level--){
+      const size=m.size/2**level,t=this.tiles.get(`${level}/${Math.floor(e/size)}_${Math.floor(south/size)}`);
+      if(!t?.ready||!t.mesh||t.walkCoverageSerial!==this.walkCoverageSerial)continue;
+      const q=(x>=t.x0+size/2?1:0)|(z>=t.z0+size/2?2:0);
+      if(t.walkCoveragePart===0||t.walkCoveragePart>0&&(t.walkCoveragePart&(1<<q)))return level;
+    }
+    return null;
+  }
+
+  /** Copy only an eligible walk tile for its height worker; the live geometry is never transferred. */
+  walkTileData(level:number,i:number,j:number,bank=false):{level:number;i:number;j:number;x0:number;z0:number;size:number;positions:Float32Array;ground?:Float32Array}|null {
+    const t=this.tiles.get(`${level}/${i}_${j}`);if(!t?.ready||!t.mesh)return null;
+    const positions=(t.mesh.geometry.getAttribute('position').array as Float32Array).slice();
+    return {level,i,j,x0:t.x0,z0:t.z0,size:t.size,positions,...(bank&&t.ground?{ground:t.ground.slice()}:{})};
+  }
+
+  /** Exact triangle in one indexed terrain level. Construction reads never scan or keep far tiles alive. */
+  walkHeightAt(level:number,x:number,z:number):number|null {
+    const cached=this.walkTiles[level];
+    if(cached?.ready && cached.mesh && cached.level===level && x>=cached.x0 && x<cached.x0+cached.size && z>=cached.z0 && z<cached.z0+cached.size)return this.triangleHeight(cached,x,z);
+    const m=this.manifest,e=x+m.village[0]-m.origin[0],south=z-(m.village[1]-m.origin[1]);
+    for(let l=level;l>=0;l--) {
+      const size=m.size/2**l,key=`${l}/${Math.floor(e/size)}_${Math.floor(south/size)}`,t=this.tiles.get(key);
+      if(t?.ready&&t.mesh){if(l===level)this.walkTiles[level]=t;return this.triangleHeight(t,x,z);}
+      if(this.exists.has(key))return null;
+    }
+    return null;
+  }
+
   /** Short plants need the drawn triangle, not a finer height sample that may sit below it. */
   meshHeightAt(x: number, z: number, drawnOnly = false): number | null {
     let t = this.find(x, z);
@@ -959,7 +1011,7 @@ export class Terrain {
     const lerp = (arr: ArrayLike<number>, stride: number, off: number) =>
       (arr[(b * S + a) * stride + off] * (1 - u) + arr[(b * S + a + 1) * stride + off] * u) * (1 - v) +
       (arr[((b + 1) * S + a) * stride + off] * (1 - u) + arr[((b + 1) * S + a + 1) * stride + off] * u) * v;
-    const out: Surface = { ground: lerp(t.ground!, 1, 0), canopy: lerp(t.canopy!, 1, 0), roadDist: 99, halfWidth: 0, kind: 0, bridge: false, washboard: false, brook: 99, level: t.level };
+    const out: Surface = { ground: lerp(t.ground!, 1, 0), canopy: lerp(t.contactCanopy??t.canopy!, 1, 0), roadDist: 99, halfWidth: 0, kind: 0, bridge: false, washboard: false, brook: 99, level: t.level };
     if (t.brook) {
       const k = Math.min(Math.round(fb), T) * S + Math.min(Math.round(fa), T);
       if (t.brook[k * 4 + 2] > 0) out.brook = Math.min(99, brookBlend(t.brook, S, t.size / T, fa, fb) - t.brook[k * 4 + 2] * 0.02);
@@ -1065,6 +1117,7 @@ export class Terrain {
         cam.x >= t.x0 && cam.x < t.x0 + t.size && cam.z >= t.z0 && cam.z < t.z0 + t.size ||
         body && body.x >= t.x0 && body.x < t.x0 + t.size && body.z >= t.z0 && body.z < t.z0 + t.size)) this.use(t);
     }
+    this.walkCoverageSerial++;
     this.visit(0, 0, 0, camera.position);
     const budgetMs = this.buildMode === 'paused' ? PAUSED_BUILD_BUDGET_MS : this.buildMode === 'burst' ? BURST_BUILD_BUDGET_MS : 0;
     const built = this.buildWaiting(cam, budgetMs);
@@ -1074,6 +1127,7 @@ export class Terrain {
       for (const t of this.tiles.values()) if (t.mesh) t.mesh.visible = false;
       // 1884 era: this second visit replaces the first one's contact selection. A tile keeps the change event it already sent.
       if (this.cartRoads) { for (let i = 0; i < this.contactSelected.length; i++) this.contactSelected[i].contactFrame = this.frame - 1; this.contactSelected.length = 0; }
+      this.walkCoverageSerial++;
       this.visit(0, 0, 0, cam);
     }
     if(this.cartRoads)for(let i=0;i<this.contactPrevious.length;i++){const t=this.contactPrevious[i];if(t.contactFrame!==this.frame)this.contactTile(t);}
@@ -1130,6 +1184,8 @@ export class Terrain {
         // Quarters without finer data, or still waiting for it, make this tile visible; a lazy quarter is out of view.
         const inView=(partial|waiting)&&this.frustum.intersectsBox(t.box);
         const keep = partial | lazy | waiting;
+        // Sidewalk heights follow the same kept quarters, on screen or not.
+        if(!mirror&&this.sidewalks)this.noteWalkCoverage(t,keep||-1);
         if (keep&&(this.cartRoads||inView)) {
           hide.set(keep & 1 ? 0 : 1, keep & 2 ? 0 : 1, keep & 4 ? 0 : 1, keep & 8 ? 0 : 1);
           if(!mirror)this.noteSelection(t,keep);
@@ -1139,6 +1195,7 @@ export class Terrain {
       }
     }
     hide.set(0, 0, 0, 0);
+    if(!mirror&&this.sidewalks)this.noteWalkCoverage(t,0);
     if(!mirror)this.noteSelection(t,0);
     if (this.frustum.intersectsBox(t.box)) { t.mesh!.visible = true; this.drawn++; }
     if (!mirror && level === 8) this.drawnFine.add(`${i}_${j}`);   // also when off screen: its trees may still reach into view
@@ -1235,7 +1292,7 @@ export class Terrain {
       this.tiles.delete(`${t.level}/${t.i}_${t.j}`);this.dataRevision++;if(this.cartRoads)this.contactTile(t);else this.contactRevision++;
       this.readyCount--;
       t.ready = false; t.mesh = null; t.mask = null; t.mirror = null;
-      t.ground = t.canopy = null; t.road = null; t.brook = null;
+      t.ground = t.canopy = t.contactCanopy = null; t.road = null; t.brook = null;
       excess--;
     }
     this.spare.length = 0;

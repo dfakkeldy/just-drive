@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {measureOwnReady,ownReadyExpression,assertMeasuredLayer} from './sidewalks-settle.mjs';
+let time=0,read=0;const commands=[];
+const c={async send(method,args){commands.push(method);if(method==='Page.navigate')return {result:{loaderId:'new'}};assert.equal(method,'Runtime.evaluate');assert.equal(args.expression,ownReadyExpression);return {result:{result:{value:++read===2}}};}};
+const result=await measureOwnReady(c,'http://example.invalid',{now:()=>time,pause:async ms=>{time+=ms;},loader:()=> 'new'});assert.equal(result.ms,500);assert.equal(result.polls,2);assert.deepEqual(commands,['Page.navigate','Runtime.evaluate','Runtime.evaluate']);
+time=0;await assert.rejects(()=>measureOwnReady(c,'http://example.invalid',{now:()=>time,pause:async ms=>{time+=ms;},loader:()=> 'previous',timeoutMs:1000}),/own ready timeout/);
+assert.equal(commands.filter(m=>m==='Runtime.evaluate').length,2,'never read an old document as newly ready');
+assert.ok(!commands.some(m=>m.startsWith('Fetch.')||m==='Page.addScriptToEvaluateOnNewDocument'));
+assertMeasuredLayer(null,false);assertMeasuredLayer({disabled:false,draws:1,triangles:12},true);
+for(const layer of [null,{disabled:true,draws:1,triangles:12},{disabled:false,draws:0,triangles:0}])assert.throws(()=>assertMeasuredLayer(layer,true),/working sidewalk/);
+console.log('PASS probe-free readiness poll, fixed cadence, new-document guard and no injection/interception');

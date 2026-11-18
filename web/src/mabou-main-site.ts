@@ -176,6 +176,8 @@ export class MabouMainSite {
   /** World centre and reach of everything here, for the contact tests. */
   readonly centre: { x: number; z: number };
   readonly reach = 560;
+  /** True when the sidewalk layer (sidewalks.ts) draws the Highway 19 north sidewalk; the street halves then omit their ribbon. */
+  sidewalkLayer = false;
   constructor(readonly village: readonly [number, number]) {
     this.centre = { x: 624530 - village[0], z: village[1] - 5103340 };
     for (const p of Object.values(P)) for (const [i, r] of [...p.rects, ...p.open ?? []].entries()) {

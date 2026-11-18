@@ -45,9 +45,9 @@ function pack(base: string, i: number): Promise<ArrayBuffer> {
   return p;
 }
 
-/** The bytes of one baked file, such as "8/123_456.png". */
-export async function readFile(base: string, path: string): Promise<Blob> {
-  const entry = index?.files[path];
+/** The bytes of one baked file. Direct companions bypass the tile index; tile reads stay strict. */
+export async function readFile(base: string, path: string, direct = false): Promise<Blob> {
+  const entry = direct ? undefined : index?.files[path];
   if (entry) {
     const [n, at, size] = entry;
     if (!Number.isInteger(at) || at < 0 || !Number.isInteger(size) || size < 0) throw new Error(`bad offset or length in the pack index: ${path}`);
@@ -56,7 +56,7 @@ export async function readFile(base: string, path: string): Promise<Blob> {
     if (at + size > buf.byteLength) { if (loaded.get(n) === request) loaded.delete(n); throw new Error(`pack too short, file out of bounds: ${path}`); }
     return new Blob([new Uint8Array(buf, at, size)]);
   }
-  if (index) throw new Error(`not in any pack: ${path}`);
+  if (index && !direct) throw new Error(`not in any pack: ${path}`);
   const res = await fetch(`${base}/${path}`);
   if (!res.ok) throw new Error(`${res.status} ${path}`);
   return res.blob();
