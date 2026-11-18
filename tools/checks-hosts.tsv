@@ -255,3 +255,4 @@ pt-infrastructure-browser	unproven	no	Apple M6 Mac PASS 15 Nov (pre-merge, six b
 wharves	portable	no	real baked meshes; no browser
 wharves-mutations	portable	no	real baked meshes and broken planner variants; no browser
 wharves-browser	apple	no	apple-check-host (Apple M4, Edge 157) PASS 348 s on 73cba0a4 and 522 s on c5af1ffa (receipts in tools/evidence/wharves): real GPU pictures and matched main costs, one browser slot
+mirror-forest-browser	unproven	no	Rented M6 mini (macOS, native Metal) PASS on 95925509, 15 Nov; MMM_MIRROR_TIMING=1 adds warm GPU timing where the timer extension exists; other hosts unmeasured

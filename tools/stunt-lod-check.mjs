@@ -7,6 +7,8 @@ import {makeGround} from './phone-ground.mjs';
 import {YardSite} from '../web/src/yard-site.ts';
 import {StuntPark,PlacedStunt} from '../web/src/stunt-kit.ts';
 import {testParkLayout} from '../web/src/stunt-test-park.ts';
+// PR #144: the mirror crown line is the one reviewed difference from main in these programs (tools/coast-programs.mjs).
+import {reviewedMirrorCrown} from './mirror-crown.mjs';
 const main=await import(pathToFileURL(process.env.STUNT_LOD_MAIN));
 const hill=Number(process.env.STUNT_LOD_HILL??2.5),low=process.env.STUNT_LOD_LOW==='1';
 const identity=process.env.STUNT_LOD_MODE==='identity';
@@ -36,7 +38,7 @@ for(let level=0;level<=8;level++){
     const name=`${key[0]}/${key[1]}_${key[2]}`,a=original.tiles.get(name),b=candidate.tiles.get(name);
     for(const channel of ['ground','canopy','road'])exact(b[channel],a[channel],`MAIN_PATH_REGRESSION: no-park ${name} ${channel}`);
     for(const attribute of Object.keys(a.mesh.geometry.attributes))exact(b.mesh.geometry.attributes[attribute].array,a.mesh.geometry.attributes[attribute].array,`MAIN_PATH_REGRESSION: no-park ${name} ${attribute}`);
-    assert.equal(b.mesh.material.fragmentShader,a.mesh.material.fragmentShader,'ordinary fragment unchanged');
+    assert.equal(reviewedMirrorCrown(b.mesh.material.fragmentShader),reviewedMirrorCrown(a.mesh.material.fragmentShader),'ordinary fragment unchanged');
     assert.deepEqual(b.mesh.material.defines,a.mesh.material.defines,'ordinary material flags unchanged');
     for(const uniform of ['tNormal','tRoad','tBrook'])exact(b.mesh.material.uniforms[uniform].value.image?.data,a.mesh.material.uniforms[uniform].value.image?.data,`MAIN_PATH_REGRESSION: ordinary ${uniform} bytes unchanged`);
     samples+=a.mesh.geometry.attributes.position.count;
@@ -47,7 +49,7 @@ for(let level=0;level<=8;level++){
       exact(b.ground,a.ground,`LOD ${level}: ground samples exact`);
       exact(b.canopy,a.canopy,`LOD ${level}: canopy samples exact`);
       exact(b.mesh.geometry.attributes.position.array,a.mesh.geometry.attributes.position.array,`LOD ${level}: actual drawn triangles exact`);
-      assert.equal(b.mesh.material.fragmentShader,a.mesh.material.fragmentShader,'coarse colour program unchanged');
+      assert.equal(reviewedMirrorCrown(b.mesh.material.fragmentShader),reviewedMirrorCrown(a.mesh.material.fragmentShader),'coarse colour program unchanged');
       assert.deepEqual(b.mesh.material.defines,a.mesh.material.defines,'coarse material flags unchanged');
       if(a.road)exact(b.road,a.road,`LOD ${level}: driving metadata exact`);
       else assert.ok(!b.road||b.road.every(v=>v===0),'empty metadata stays empty');

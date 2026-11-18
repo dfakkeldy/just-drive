@@ -729,7 +729,8 @@ vec3 treeColor(vec2 p, float red, float yel, float dist) {
     + yel * mix(lateGreen, vec3(0.390, 0.260, 0.050), 0.78);
   avg *= 0.80;   // gaps between crowns are in shade
 #if defined(MIRROR)
-  float far = clamp(smoothstep(280.0, 420.0, dist) + step(3.0, texel), 0.0, 1.0);
+  // Keep crown cells as long as the main view. Early averaging reads as bare land across water.
+  float far = clamp(smoothstep(200.0, 1400.0, dist) + step(6.0, texel), 0.0, 1.0);
 #elif defined(LOW)
   float far = clamp(smoothstep(50.0, 200.0, dist) + step(3.0, texel), 0.0, 1.0);
 #else

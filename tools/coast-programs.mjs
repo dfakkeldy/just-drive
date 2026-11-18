@@ -65,6 +65,7 @@ export function preprocess(source,flags){
  return out.join('\n').replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\n]*/g,'');
 }
 export const normalized=s=>s.replace(/\s+/g,'');
+export {reviewedMirrorCrown} from './mirror-crown.mjs';
 const exact=s=>s.replace(/\s+/g,' ').trim(); // retain GLSL token boundaries
 
 // One union for both checks. LOW rows are explicit even if constructors stop using them.
