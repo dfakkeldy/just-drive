@@ -802,6 +802,60 @@ function meshes(name: string, geos: Map<Tex | null, THREE.BufferGeometry>, shado
   return group;
 }
 
+/** A map point in a place's local frame (the inverse of frameToMap). */
+function toLocal(p: MainPlace, e: number, n: number): [number, number] {
+  const a = p.az * Math.PI / 180, s = Math.sin(a), c = Math.cos(a), de = e - p.e, dn = n - p.n;
+  return [de * s + dn * c, de * c - dn * s];
+}
+/** A measured roof: its place's anchor in world metres, the sine and cosine of its azimuth, and its rectangle. */
+interface Roof { x: number; z: number; sin: number; cos: number; rect: [number, number, number, number]; top: number }
+/**
+ * The roof of each footprint rectangle of a place, read from the geometry the renderer draws: every triangle is clipped
+ * to the rectangle (a few centimetres in, so a wall standing on its edge does not count) and the highest point of what
+ * is left is the roof there. A roof plane that overhangs a lower wing counts at its height over the wing, not its ridge.
+ */
+export function roofTops(place: MainPlace, geos: Map<Tex | null, THREE.BufferGeometry>, village: readonly [number, number]): Roof[] {
+  const IN = 0.05, tops = place.rects.map(() => -Infinity);
+  const tri: [number, number, number][] = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (const g of geos.values()) {
+    const pos = g.attributes.position;   // the kit's geometry is not indexed: three vertices per triangle
+    for (let i = 0; i + 2 < pos.count; i += 3) {
+      for (let j = 0; j < 3; j++) {
+        const [lx, lz] = toLocal(place, pos.getX(i + j) + village[0], village[1] - pos.getZ(i + j));
+        tri[j][0] = lx; tri[j][1] = pos.getY(i + j); tri[j][2] = lz;
+      }
+      for (let k = 0; k < place.rects.length; k++) {
+        const r = place.rects[k];
+        const top = clippedTop(tri, r[0] + IN, r[1] - IN, r[2] + IN, r[3] - IN);
+        if (top > tops[k]) tops[k] = top;
+      }
+    }
+  }
+  const a = place.az * Math.PI / 180, anchor = { x: place.e - village[0], z: village[1] - place.n, sin: Math.sin(a), cos: Math.cos(a) };
+  return place.rects.flatMap((rect, k) => Number.isFinite(tops[k]) ? [{ ...anchor, rect, top: tops[k] }] : []);
+}
+/** The highest point of a triangle ([x, y, z] points) over the box x0..x1, z0..z1; -Infinity if it does not reach it. */
+function clippedTop(tri: [number, number, number][], x0: number, x1: number, z0: number, z1: number): number {
+  if (Math.max(tri[0][0], tri[1][0], tri[2][0]) <= x0 || Math.min(tri[0][0], tri[1][0], tri[2][0]) >= x1
+    || Math.max(tri[0][2], tri[1][2], tri[2][2]) <= z0 || Math.min(tri[0][2], tri[1][2], tri[2][2]) >= z1) return -Infinity;
+  let poly: number[][] = tri;
+  // Sutherland-Hodgman against the four sides; height is linear over the triangle, so the clipped corners carry it.
+  for (const [axis, edge, keepAbove] of [[0, x0, true], [0, x1, false], [2, z0, true], [2, z1, false]] as [number, number, boolean][]) {
+    const inside = (p: number[]) => keepAbove ? p[axis] >= edge : p[axis] <= edge;
+    const next: number[][] = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length], ia = inside(a), ib = inside(b);
+      if (ia) next.push(a);
+      if (ia !== ib) { const t = (edge - a[axis]) / (b[axis] - a[axis]); next.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]); }
+    }
+    if (!next.length) return -Infinity;
+    poly = next;
+  }
+  let top = -Infinity;
+  for (const p of poly) if (p[1] > top) top = p[1];
+  return top;
+}
+
 /**
  * Each unit builds once, when the camera comes within reach and the finest land under it is in memory; one unit per
  * update, so no frame builds two. A cluster's units are merged once all are built.
@@ -817,6 +871,8 @@ export class MabouMain {
   private centres = new Map<Unit, { x: number; z: number }>();
   private keepers: THREE.Mesh[] = [];
   private roads: MapRoad[];
+  /** The roof over each footprint rectangle of every built place, measured from its drawn geometry (see roofTops). */
+  private roofs: Roof[] = [];
   constructor(readonly site: MabouMainSite, private terrain: Terrain, private low: boolean, roads: Road[]) {
     this.group.name = 'mabou-main';
     const [VE, VN] = site.village;
@@ -877,6 +933,7 @@ export class MabouMain {
       const geos = buildUnit(item.unit, this.site, (x, z) => this.terrain.constructionHeightAt(x, z) ?? fallback, this.low, this.roads);
       for (const g of geos.values()) this.triangles += g.attributes.position.count / 3;
       this.pending.splice(this.pending.indexOf(item), 1);
+      if (item.unit !== 'streetWest' && item.unit !== 'streetEast') this.roofs.push(...roofTops(MAIN_PLACES[item.unit], geos, this.site.village));
       this.place(item.unit, geos);
       this.waiting = this.pending.some(p => Math.hypot(view.x - p.x, view.z - p.z) <= reach && this.ready(p));
       return;
@@ -913,6 +970,21 @@ export class MabouMain {
     for (const keeper of [...this.keepers]) if (used.has(keeper.material as THREE.Material)) {
       this.group.remove(keeper); keeper.geometry.dispose(); this.keepers.splice(this.keepers.indexOf(keeper), 1);
     }
+  }
+  /**
+   * The highest drawn roof at a world point (the drone's floor), -Infinity off every built place. A footprint counts a
+   * metre larger all round, as the surveyed boxes do (drone.ts roofHeights). A place not yet built has no roof here, as
+   * it has none in the picture.
+   */
+  roofAt(x: number, z: number): number {
+    let top = -Infinity;
+    for (const r of this.roofs) {
+      if (r.top <= top) continue;
+      // toLocal without its allocation (this runs every frame the drone flies): east is +x, north is -z.
+      const de = x - r.x, dn = r.z - z, lx = de * r.sin + dn * r.cos, lz = de * r.cos - dn * r.sin;
+      if (lx > r.rect[0] - 1 && lx < r.rect[1] + 1 && lz > r.rect[2] - 1 && lz < r.rect[3] + 1) top = r.top;
+    }
+    return top;
   }
   /** Built units of each cluster, and whether the cluster is merged (for the checks). */
   state(): Record<Cluster, { merged: boolean; units: number }> {
