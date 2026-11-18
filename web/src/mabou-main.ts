@@ -749,11 +749,12 @@ function festoon(k: Kit, a: readonly [number, number], b: readonly [number, numb
   for (let i = 0; i < N; i++) rail(k, pts[i], pts[i + 1], C.wire, 0);
   for (let i = 1; i < N; i++) k.box(0.09, 0.12, 0.09, pts[i].x, pts[i].y - 0.1, 0, C.bulb);
 }
-function street(k: Kit, half: StreetHalf, roads: MapRoad[]): void {
+function street(k: Kit, half: StreetHalf, roads: MapRoad[], ribbon = true): void {
   const mine = (e: number) => (half === 'streetWest') === (e < STREET_SPLIT);
   for (const [e, n, h] of STREET_LAMPS) if (mine(e)) lampPost(k, e, n, h);
   for (const [a, b] of FESTOONS) if (mine(a[0])) festoon(k, a, b);
-  sidewalk(k, half, roads);
+  // The sidewalk layer's slab lies inside this ribbon's band (3.75-5.35 m); one sidewalk, not two.
+  if (ribbon) sidewalk(k, half, roads);
 }
 
 // ---- build and merge -----------------------------------------------------------------------------------------------
@@ -773,7 +774,7 @@ function materials(): Map<Tex | null, THREE.MeshLambertMaterial> {
 /** Build one unit: its geometry per surface pattern (not yet merged across units). */
 export function buildUnit(unit: Unit, site: MabouMainSite, groundAt: (x: number, z: number) => number, low: boolean, roads: MapRoad[]): Map<Tex | null, THREE.BufferGeometry> {
   const kit = new SiteKit<Tex>(low, site.village, groundAt);
-  if (unit === 'streetWest' || unit === 'streetEast') street(kit, unit, roads);
+  if (unit === 'streetWest' || unit === 'streetEast') street(kit, unit, roads, !site.sidewalkLayer);
   else BUILDERS[unit](kit);
   if (low) for (const tex of TEXES) if (!LOW_TEXES.includes(tex) && kit.parts.has(tex)) {
     const plain = kit.parts.get(null) ?? [];
