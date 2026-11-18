@@ -177,6 +177,8 @@ function numericState({ v, rig, terrain, roads }) {
     if (/^vehicle\.(?:lastSafe|lastGood)\.y$|^vehicle\.(?:trail|roadTrail)\.\d+\.y$/.test(path)) { assert.ok(Number.isFinite(o), 'saved bridge pose height is finite'); return; }
     // The retry reference height (bridge ownership for a stuck re-place) is the same kind of metadata.
     if (path === 'vehicle.placeReference') { assert.ok(o === undefined || Number.isFinite(o), 'retry reference height is finite'); return; }
+    // So is the point a height-free placement keeps asking for its deck at (placeAt).
+    if (path === 'vehicle.inferX' || path === 'vehicle.inferZ') { assert.ok(Number.isFinite(o), 'placement inference point is finite'); return; }
     if (typeof o === 'number') { assert.ok(Number.isFinite(o), `non-finite ${path}`); fields.push(path); values.push(o); }
     else if (o && typeof o === 'object' && !seen.has(o)) {
       seen.add(o);

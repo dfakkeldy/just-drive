@@ -94,6 +94,9 @@ export class Vehicle {
   private placeReference: number | undefined;
   /** placeAt chose the height: a retry while land loads asks again, since an unbuilt deck gave no answer. */
   private placeInfer = false;
+  private inferX = 0; private inferZ = 0;
+  /** Only at the point placeAt used: a car moved since (a refused jump, driving) never asks for a deck again. */
+  private inferring(x: number, z: number): boolean { return this.placeInfer && Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5; }
   /** Where the car has been on the road, one point every 8 m or so, newest last. */
   private trail: VehiclePlacement[] = [];
   /** The playable area in world units [x0, z0, x1, z1]: the fine map data ends just outside it. */
@@ -132,7 +135,7 @@ export class Vehicle {
 
   /** The reference for a re-place at the current pose: the last place's reference while its land is still loading
    *  (this.y is then the old pose's height, which could pick a deck overhead), else the live body height. */
-  get retryHeight(): number | undefined { return this.stuck ? (this.placeInfer ? this.deckReference(this.x, this.z) ?? this.placeReference : this.placeReference) : this.y; }
+  get retryHeight(): number | undefined { return this.stuck ? (this.inferring(this.x, this.z) ? this.deckReference(this.x, this.z) ?? this.placeReference : this.placeReference) : this.y; }
 
   place(x: number, z: number, heading: number, referenceY?:number): boolean {
     if (!safePlacement(x, z, heading, this.bounds) || referenceY!==undefined&&!Number.isFinite(referenceY)) return false;
@@ -189,20 +192,20 @@ export class Vehicle {
    *  only where the point lies on a span that carries its nearest road, the respawn rule; elsewhere it stands on land. */
   placeAt(x: number, z: number, heading: number): boolean {
     const placed = this.place(x, z, heading, this.deckReference(x, z));
-    if (placed && this.placeReference === undefined) this.placeInfer = true;
+    if (placed && this.placeReference === undefined) { this.placeInfer = true; this.inferX = this.x; this.inferZ = this.z; }
     return placed;
   }
   /** Hold the car where it is while it waits for the first pedal. A placeAt placement keeps asking for its deck until
    *  one answers: coarse land arrives (and the car stands on it) before the banks' fine land builds the deck. */
   parkedPlace(x: number, z: number, heading: number, y: number): boolean {
-    const infer = this.placeInfer, deck = infer ? this.deckReference(x, z) : undefined;
+    const infer = this.inferring(x, z), deck = infer ? this.deckReference(x, z) : undefined;
     const placed = this.place(x, z, heading, deck ?? y);
     this.placeInfer = infer && deck === undefined;
     return placed;
   }
   /** Place again where the car is, as while land loads, keeping how the height was chosen. */
   retryPlace(): boolean {
-    const infer = this.placeInfer, deck = infer ? this.deckReference(this.x, this.z) : undefined;
+    const infer = this.inferring(this.x, this.z), deck = infer ? this.deckReference(this.x, this.z) : undefined;
     const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);
     this.placeInfer = infer && deck === undefined;
     return placed;

@@ -1679,7 +1679,7 @@ function frame(now: number) {
     if (fleet) { const active = !fleet.busy; driveVehicle(dt, input); if (active && loaded && !animals?.waitingForTerrain) drove += dt; }
     else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.retryPlace();
     else {
-      if ((refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.place(vehicle.x, vehicle.z, vehicle.heading,vehicle.retryHeight); vehicle.speed = 0; }
+      if ((refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.retryPlace(); vehicle.speed = 0; }
       else if (waitingToDrive) {
         const { x, z, heading, y } = vehicle;
         driveVehicle(dt, { ...input, throttle: 0, handbrake: true });

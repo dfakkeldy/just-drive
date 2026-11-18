@@ -37,6 +37,9 @@ async function ownership(replacements={}){
    ride.stuck=true;ride.ready=false;assert.ok(Math.abs(ride.retryHeight-deck)<.04,label+' cold placement retry asks for the deck again: '+ride.retryHeight);ride.stuck=false;
    ride.parkedPlace(ride.x,ride.z,ride.heading,ride.y);assert.ok(Math.abs(ride.y-deck)<.04,label+' cold placement rises onto the built deck while parked: '+(ride.y-deck));
    ride.parkedPlace(ride.x,ride.z,ride.heading,ride.y);assert.ok(Math.abs(ride.y-deck)<.04,label+' parked on the deck stays there');
+   // A flag left by an earlier land start must not lift a car that was moved since (a refused jump while parked).
+   f.roads.deckHeight=()=>null;try{ride.placeAt(p.x+3,p.z,p.yaw);}finally{f.roads.deckHeight=deckHeight;}ride.x=p.x;ride.z=p.z;ride.y=land;
+   ride.parkedPlace(p.x,p.z,p.yaw,land);assert.ok(Math.abs(ride.y-land)<.2,label+' a moved car never asks for a deck again: '+(ride.y-land));
   }}
  // A road bridge keeps the light road help (a wharf or slip ramp turns it off): a car 0.2 rad off the line steers back.
  {const road=f.roads.nearest(p.x,p.z,9,r=>r.kind<=3);assert.ok(road,'Canso54 deck has a public road for the help');const s=f.terrain.surfaceAt(p.x,p.z,deck);assert.ok(s.deck&&s.roadDeck,'bridge deck surface is a road deck');
@@ -106,13 +109,15 @@ if(process.argv.includes('--mutations')){
  ['web/src/vehicle.ts','this.place(near.x, near.z, this.inward(near.x, near.z, near.heading),this.fallbackReference(near))','this.place(near.x, near.z, this.inward(near.x, near.z, near.heading))','fallback respawn keeps owned deck'],
  ['web/src/vehicle.ts','if (!run.roads.has(hit.road.id)) continue;','','under an overpass stays on land'],
  ['web/src/vehicle.ts','<= DECK_REACH) return','<= Infinity) return','fallback respawn under an overpass stays on land \\(carried elsewhere'],
- ['web/src/vehicle.ts','return this.stuck ? (this.placeInfer','return false ? (this.placeInfer','stale stuck height'],
+ ['web/src/vehicle.ts','return this.stuck ? (this.inferring','return false ? (this.inferring','stale stuck height'],
  ['web/src/vehicle.ts','const placed = this.place(x, z, heading, this.deckReference(x, z));','const placed = this.place(x, z, heading);','height-free placement on Canso54 takes its deck'],
- ['web/src/vehicle.ts','this.placeInfer ? this.deckReference(this.x, this.z) ?? this.placeReference : this.placeReference','this.placeReference','car cold placement retry asks'],
+ ['web/src/vehicle.ts','this.inferring(this.x, this.z) ? this.deckReference(this.x, this.z) ?? this.placeReference : this.placeReference','this.placeReference','car cold placement retry asks'],
  ['web/src/vehicle.ts','    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','    return placed;\n  }\n  private deckReference','car cold placement'],
- ['web/src/vehicle.ts','const infer = this.placeInfer, deck = infer ? this.deckReference(x, z) : undefined;','const infer = this.placeInfer, deck = undefined;','car cold placement rises onto the built deck'],
- ['web/src/bike-ride.ts','const infer = this.placeInfer, deck = infer ? placementDeckReference(this.roads, x, z) : undefined;','const infer = this.placeInfer, deck = undefined;','bike cold placement rises onto the built deck'],
+ ['web/src/vehicle.ts','const infer = this.inferring(x, z), deck = infer ? this.deckReference(x, z) : undefined;','const infer = this.inferring(x, z), deck = undefined;','car cold placement rises onto the built deck'],
+ ['web/src/bike-ride.ts','const infer = this.inferring(x, z), deck = infer ? placementDeckReference(this.roads, x, z) : undefined;','const infer = this.inferring(x, z), deck = undefined;','bike cold placement rises onto the built deck'],
  ['web/src/bike-ride.ts','this.lastJump = null; this.placeAt(x, z, heading); }','this.lastJump = null; this.place(x, z, heading); }','bike restart takes its deck'],
+ ['web/src/vehicle.ts','Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5;','true;','car a moved car never asks'],
+ ['web/src/bike-ride.ts','Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5;','true;','bike a moved car never asks'],
  ['web/src/vehicle.ts','return hit ? spanDeckReference(roads, hit) : undefined;','return roads.deckHeight(x, z) ?? undefined;','height-free placement under an overpass stays on land'],
  ['web/src/vehicle-choice.ts','y:vehicle.y, when:','when:','switch keeps saved'],
  ['web/src/vehicle-choice.ts','vehicle.place(p.x, p.z, p.heading,p.y)','vehicle.place(p.x, p.z, p.heading)','switch keeps saved'],

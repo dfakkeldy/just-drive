@@ -136,22 +136,24 @@ export class BikeRide implements Ride {
     if (known && Math.abs(correction) > 1e-6) { this.y += correction; this.prevGround += correction; }
   }
   /** The reference for a re-place at the current pose (see Vehicle.retryHeight). */
-  get retryHeight(): number | undefined { return this.ready ? this.y : this.placeInfer ? placementDeckReference(this.roads, this.x, this.z) ?? this.placeReference : this.placeReference; }
+  get retryHeight(): number | undefined { return this.ready ? this.y : this.inferring(this.x, this.z) ? placementDeckReference(this.roads, this.x, this.z) ?? this.placeReference : this.placeReference; }
   private placeInfer = false;
+  private inferX = 0; private inferZ = 0;
+  private inferring(x: number, z: number): boolean { return this.placeInfer && Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5; }
   /** See Vehicle.placeAt: a height-free placement stands on the deck it lies on, else on land. */
   placeAt(x: number, z: number, heading: number): boolean {
     const placed = this.place(x, z, heading, placementDeckReference(this.roads, x, z));
-    if (placed && this.placeReference === undefined) this.placeInfer = true;
+    if (placed && this.placeReference === undefined) { this.placeInfer = true; this.inferX = this.x; this.inferZ = this.z; }
     return placed;
   }
   parkedPlace(x: number, z: number, heading: number, y: number): boolean {
-    const infer = this.placeInfer, deck = infer ? placementDeckReference(this.roads, x, z) : undefined;
+    const infer = this.inferring(x, z), deck = infer ? placementDeckReference(this.roads, x, z) : undefined;
     const placed = this.place(x, z, heading, deck ?? y);
     this.placeInfer = infer && deck === undefined;
     return placed;
   }
   retryPlace(): boolean {
-    const infer = this.placeInfer, deck = infer ? placementDeckReference(this.roads, this.x, this.z) : undefined;
+    const infer = this.inferring(this.x, this.z), deck = infer ? placementDeckReference(this.roads, this.x, this.z) : undefined;
     const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);
     this.placeInfer = infer && deck === undefined;
     return placed;
