@@ -4,7 +4,7 @@ import { pushOut, type Solid } from './parked';
 import type { Terrain } from './terrain';
 import type { Vehicle } from './vehicle';
 import { CAR_SPEC } from './vehicle-spec';
-import { SIZE, SECTION, boxDistance, breaks, isField, launch, laundryDay, outToday, rollBale, stepPiece, touches, SLOW,
+import { type CarShape, SIZE, SECTION, boxDistance, breaks, isField, launch, laundryDay, outToday, rollBale, stepPiece, touches, SLOW,
   type Piece, type YardProp } from './yard-props-rules';
 
 /**
@@ -17,7 +17,8 @@ interface Part { shape: Shape; x: number; y: number; z: number; sx: number; sy: 
 interface Live {
   p: YardProp; parts: Part[] | null; broken: boolean; pieces: (Piece & { q: THREE.Quaternion; part: Part })[] | null;
   /** Ground at the centre and the pitch along the prop, once the fine ground is in (null before). */
-  y: number | null; pitch: number;
+  /** Ground height and the terrain detail level it was read at (refined as finer ground loads, as the mailboxes are). */
+  y: number | null; level: number; pitch: number;
   /** Bales: 1 open field, 0 not, -1 not known yet. */
   field: number;
   moving: boolean; slots: [number, number, number];
@@ -62,10 +63,16 @@ export class YardProps {
   private readonly solid: Solid = { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 };
   private readonly solids = [this.solid];
   private readonly cam = new THREE.Vector3();
+  private readonly car: CarShape = { x: 0, z: 0, heading: 0, radius: 0, circles: [], sides: undefined };
+  private readonly slot = [0, 0, 0];
+  private readonly need = [0, 0, 0];
+  private readonly used = [0, 0, 0];
+  /** Which of the three meshes a frame's writes touched (bit per shape). */
+  private touched = 0;
 
   constructor(list: readonly YardProp[], private readonly terrain: Terrain, low: boolean) {
     this.limits = low ? YARD_LIMITS.low : YARD_LIMITS.desktop;
-    this.live = list.map(p => ({ p, parts: null, broken: false, pieces: null, y: null, pitch: 0, field: p.field ? -1 : 1, moving: false, slots: [0, 0, 0] }));
+    this.live = list.map(p => ({ p, parts: null, broken: false, pieces: null, y: null, level: 0, pitch: 0, field: p.field ? -1 : 1, moving: false, slots: [0, 0, 0] }));
     for (const l of this.live) {
       const k = Math.floor(l.p.x / CELL) * 65536 + Math.floor(l.p.z / CELL), cell = this.cells.get(k);
       if (cell) cell.push(l); else this.cells.set(k, [l]);
@@ -97,7 +104,8 @@ export class YardProps {
   step(dt: number, vehicle: Vehicle, live: boolean): void {
     if (!live || dt <= 0) return;
     const spec = vehicle.spec ?? CAR_SPEC, env = spec.envelope, horse = spec.locomotion === 'horse';
-    const car = { x: vehicle.x, z: vehicle.z, heading: vehicle.heading, radius: env.radius, circles: env.circles, sides: env.circleSides };
+    const car = this.car;
+    car.x = vehicle.x; car.z = vehicle.z; car.heading = vehicle.heading; car.radius = env.radius; car.circles = env.circles; car.sides = env.circleSides;
     const speed = Math.hypot(vehicle.vx, vehicle.vz), r = env.reach + 4;
     for (const l of this.active) {
       if (l.broken || l.y === null || Math.abs(l.p.x - vehicle.x) > r + 3 || Math.abs(l.p.z - vehicle.z) > r + 3) continue;
@@ -161,8 +169,10 @@ export class YardProps {
     if (this.dirty) { this.dirty = false; this.drawAll(); }
     else {
       for (const l of this.active) if (!l.broken && l.p.kind === 'whirligig') { this.write(l); moved = true; }
-      if (moved) for (const mesh of this.meshes) mesh.instanceMatrix.needsUpdate = true;
+      // Only the meshes written this frame go back to the GPU.
+      if (moved) this.meshes.forEach((mesh, i) => { if (this.touched & 1 << i) mesh.instanceMatrix.needsUpdate = true; });
     }
+    this.touched = 0;
   }
 
   /** A rolling bale breaks what it reaches: another bale rolls on, a fence or a bin comes apart. */
@@ -184,19 +194,21 @@ export class YardProps {
       for (let cz = Math.floor((cam.z - range) / CELL); cz <= Math.floor((cam.z + range) / CELL); cz++)
         for (const l of this.cells.get(cx * 65536 + cz) ?? []) {
           if (!outToday(l.p, this.day) || (l.p.x - cam.x) ** 2 + (l.p.z - cam.z) ** 2 > range * range) continue;
-          if (l.y === null && !this.ground(l)) continue;
+          if (!l.broken) this.ground(l);
+          if (l.y === null) continue;
           if (l.field < 0) l.field = this.fieldAt(l);
           if (l.field === 0 || l.field < 0) continue;
           near.push(l);
         }
     near.sort((a, b) => (a.p.x - cam.x) ** 2 + (a.p.z - cam.z) ** 2 - ((b.p.x - cam.x) ** 2 + (b.p.z - cam.z) ** 2));
-    const used = [0, 0, 0], next: Live[] = [];
+    const used = this.used, need = this.need, next: Live[] = [];
+    used.fill(0);
     for (const l of near) {
       if (next.length >= props) break;
-      const need = [0, 0, 0];
+      need.fill(0);
       for (const part of this.partsOf(l)) need[part.shape]++;
       if (need.some((n, i) => used[i] + n > this.limits.instances[i])) continue;
-      l.slots = [used[0], used[1], used[2]];
+      if (l.slots[0] !== used[0] || l.slots[1] !== used[1] || l.slots[2] !== used[2]) { l.slots[0] = used[0]; l.slots[1] = used[1]; l.slots[2] = used[2]; this.dirty = true; }
       for (let i = 0; i < 3; i++) used[i] += need[i];
       next.push(l);
     }
@@ -206,15 +218,17 @@ export class YardProps {
     this.dirty = true;
   }
 
-  /** The fine ground under a prop, and its pitch along its length. False while that ground has not loaded. */
+  /** The fine ground under a prop, and its pitch along its length; read again when finer ground has loaded.
+   *  False while no fine ground has loaded or nothing finer has come since the last read. */
   private ground(l: Live): boolean {
     const s = this.terrain.surfaceAt(l.p.x, l.p.z);
-    if (!s || s.level < 6) return false;
+    if (!s || s.level < 6 || s.level <= l.level) return false;
     const y = this.terrain.heightAt(l.p.x, l.p.z), h = SIZE[l.p.kind].half;
     const ax = Math.sin(l.p.yaw) * h, az = -Math.cos(l.p.yaw) * h;
     const a = this.terrain.heightAt(l.p.x + ax, l.p.z + az), b = this.terrain.heightAt(l.p.x - ax, l.p.z - az);
     if (y === null || a === null || b === null) return false;
-    l.y = y; l.pitch = l.p.kind === 'bale' || l.p.kind === 'well' ? 0 : Math.atan2(a - b, 2 * h);
+    l.y = y; l.level = s.level; l.pitch = l.p.kind === 'bale' || l.p.kind === 'well' ? 0 : Math.atan2(a - b, 2 * h);
+    this.dirty = true;
     return true;
   }
   private fieldAt(l: Live): number {
@@ -243,10 +257,12 @@ export class YardProps {
 
   /** One prop's instances: whole, or as its pieces. */
   private write(l: Live, colours = false): void {
-    const parts = this.partsOf(l), slot = [l.slots[0], l.slots[1], l.slots[2]];
+    const parts = this.partsOf(l), slot = this.slot;
+    slot[0] = l.slots[0]; slot[1] = l.slots[1]; slot[2] = l.slots[2];
     if (!l.broken) this.propMatrix(l);
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i], mesh = this.meshes[part.shape], at = slot[part.shape]++;
+      this.touched |= 1 << part.shape;
       if (l.pieces) {
         const piece = l.pieces[i];
         if (l.p.kind === 'bale') {

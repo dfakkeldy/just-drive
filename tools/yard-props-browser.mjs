@@ -166,7 +166,8 @@ try {
         const mate = await read(`mmm.yardProps.live[${toward}].broken`);
         assert.equal(mate, true, 'the rolling bale broke its neighbour');
         assert.ok(facts.some(e => e.kind === 'prop:baleStrike'), 'a bale strike fact');
-        if (state.book) assert.ok(state.book.best.kinds >= 2, 'the strike is a combo');
+        // The car's break alone is two kinds (the bale and the yard call); the strike makes a third.
+        if (state.book) assert.ok(await read('mmm.fired.book.bestChain.kinds') >= 3, 'the strike adds to the combo');
       }
       assert.ok(await restingWithin(id, kind === 'bale' ? 24 : 9), `${kind}: every piece comes to rest`);
       const ground = await read(`(()=>{const {yardProps:y,terrain:t}=mmm;return y.live[${id}].pieces.map(p=>p.y-p.floor-(t.heightAt(p.x,p.z)??p.y-p.floor))})()`);
@@ -180,6 +181,12 @@ try {
       console.log(`PASS ${name} ${kind}: real ${phone ? 'touch' : 'keyboard'} hit at ${fact.speed.toFixed(1)} m/s, ${state.pieces} pieces at rest, ${state.kind} fact, one call, reset`);
     }
     if (group === 'fence') {
+      // Every kind is placed on the real land, and the houses' own clear boxes do not empty the yards
+      // (the oriented building rule keeps props off the walls; woodpiles stand just behind the house).
+      const counts = await read(`(()=>{const c={};for(const l of mmm.yardProps.live)c[l.p.kind]=(c[l.p.kind]??0)+1;return c})()`);
+      for (const [k, min] of Object.entries({ railFence: 15, picketFence: 15, clothesline: 40, whirligig: 15, buoys: 15, traps: 15, well: 15, woodpile: 25, bale: 200, garbageBin: 60, recyclingBin: 60 }))
+        assert.ok((counts[k] ?? 0) >= min, `${name}: at least ${min} ${k} on the real land, got ${counts[k] ?? 0} ${JSON.stringify(counts)}`);
+      console.log(`PASS ${name}: placed on the real land ${JSON.stringify(counts)}`);
       // A slow touch: the fence holds and stops the car, and nothing is reported.
       const ids = await candidates(['railFence']);
       let done = false;

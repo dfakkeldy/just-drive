@@ -664,7 +664,7 @@ const resolveYardSolids = () => {
   if (!fleet && !quarry && !stuntPark) ambientTraffic?.resolve(vehicle);   // otherwise fleetContacts, above, holds the traffic
   schoolBus?.setPaused(scenePaused());
   schoolBus?.step(1 / 120, vehicle, horse ? roadsidePlaying : vehicle.damageActive, jumpPlacement);
-  yardProps?.step(1 / 120, vehicle, started && !shift.ended && mode === 'drive' && !scenePaused());
+  yardProps?.step(1 / 120, vehicle, started && !shift.ended && !demo && mode === 'drive' && !scenePaused());
   if (fleet) fleet.resolve(); else towing?.step();
 };
 let engineThrottle = 0;   // the pedal the vehicle really got this frame, for the engine sound
@@ -810,7 +810,7 @@ if (shift instanceof Shift) {
   // Breakable yard and field props: mail play and Get Fired only (never Explore or Just Drive); ?yardProps=0 leaves
   // them out. Their positions are invented by rule from the real building shapes and roads (yard-props-rules.ts).
   if (ERA.modern && mailMode && params.get('yardProps') !== '0' && properties.length) {
-    const VX = manifest.village[0], VZ = manifest.village[1];
+    const VX = manifest.village[0], VZ = manifest.village[1], houseBoxes = new Set(buildings?.clear ?? []);
     const near = (kinds: (k: number) => boolean) => (x: number, z: number, reach: number) => {
       const h = roads.nearest(x, z, reach, r => kinds(r.kind));
       return h && { dist: h.dist, x: h.x, z: h.z, heading: h.heading, halfWidth: h.road.halfWidth };
@@ -819,15 +819,18 @@ if (shift instanceof Shift) {
       buildings: properties.map(b => ({ id: b.id, x: b.x - VX, z: VZ - b.y, kind: b.kind, axis: b.axisDeg * Math.PI / 180, length: b.length, width: b.width })),
       mailboxes: [...props?.mail ?? [], ...props?.sites ?? []],
       publicRoad: near(k => k >= 1 && k <= 3), anyRoad: near(() => true), place: shift.placeAt,
-      excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]): [number, number, number, number] => [b[0], b[1], b[2], b[3]])],
-    }), terrain, LOW);
+      // Hand-built sites and landmarks stay clear; ordinary buildings are kept clear by the oriented rule instead
+      // (their own clear boxes would push most yard props out of the yards).
+      excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []),
+        ...clear.filter((b: number[]) => !houseBoxes.has(b)).map((b: number[]): [number, number, number, number] => [b[0], b[1], b[2], b[3]])],
+    }), terrain, LOW || touchDevice);
     scene.add(yardProps.group);
     shift.yard = yardProps; yardProps.reset(shift.career.day);
-    yardProps.onBreak = (p, _speed, byBale) => shift.propBroken(scoreKind(p.kind), p.owner, p.x, p.z, byBale);
+    yardProps.onBreak = (p, speed, byBale) => shift.propBroken(scoreKind(p.kind), p.owner, p.x, p.z, speed, byBale);
     yardProps.onImpact = speed => { if (vehicle.damageActive) shift.damage.hit('impact', speed); };
   }
 }
-if (import.meta.env.DEV) expose({ yardProps });
+if (import.meta.env.DEV) expose({ yardProps }, false);   // for tools/yard-props-browser.mjs; not enumerable: ui-check pins the public key set
 resets[resetSlot.schoolBus] = () => schoolBus?.reset();
 resets[resetSlot.stuntPark]=()=>stuntPark?.reset();
 if (schoolBus) {

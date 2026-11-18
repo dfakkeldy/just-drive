@@ -209,11 +209,12 @@ export class Shift {
     this.score.report({ kind, place: place === 'route' && also ? this.placeAt(also.x, also.z) : place, speed: Math.abs(speed), time: this.elapsed / CLOCK_FACTOR });
   }
   /** A yard or field prop broke: one score fact, a strike beside it when a rolling bale did it (a combo), and one call
-   *  per property per day. `kind` is the prop's score kind (yard-props-rules.ts scoreKind). */
-  propBroken(kind: string, owner: number, x: number, z: number, byBale = false): void {
+   *  per property per day. `kind` is the prop's score kind (yard-props-rules.ts scoreKind); `speed` is the hit speed
+   *  (the car's, or the rolling bale's for a strike). */
+  propBroken(kind: string, owner: number, x: number, z: number, speed: number, byBale = false): void {
     if (this.ended) return;
-    this.reportScore(kind, x, z, this.speed);
-    if (byBale) this.reportScore(BALE_STRIKE, x, z, this.speed);
+    this.reportScore(kind, x, z, speed);
+    if (byBale) this.reportScore(BALE_STRIKE, x, z, speed);
     if (owner >= 0) this.add(DAMAGE_COMPLAINT, owner, x, z, this.elapsed);
   }
   /** A roadside break in view of a house: one call per house per day, and no photo answers it. */

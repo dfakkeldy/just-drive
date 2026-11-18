@@ -202,7 +202,7 @@ assert.equal(offers.length, 4); assert.ok(offers[3].lines.includes('No combo: ne
     const sh = new Shift(boxes(), mailStub(), roads, flat, house, [0, 0], true, new URLSearchParams('run=1'), () => {}, true, firedMode);
     const yard = new YardProps(list, flat, true);
     sh.yard = yard; yard.reset(sh.career.day);
-    yard.onBreak = (p, _speed, byBale) => sh.propBroken(scoreKind(p.kind), p.owner, p.x, p.z, byBale);
+    yard.onBreak = (p, speed, byBale) => sh.propBroken(scoreKind(p.kind), p.owner, p.x, p.z, speed, byBale);
     yard.update(camera, .1);
     return { sh, yard };
   };
@@ -248,11 +248,14 @@ assert.equal(offers.length, 4); assert.ok(offers[3].lines.includes('No combo: ne
     const { sh, yard } = make(true);
     const run = new FiredRun(sh, { offer() {}, close() {} }, false, () => {});
     drive(yard, sh, 2, 9, 1, 0);
+    // The car's break alone is two kinds (the bale and the yard call); the strike must add a third.
+    const before = run.book.bestChain.kinds;
+    assert.equal(yard.live[3].broken, false, 'the neighbour still stands before the bale reaches it');
     for (let i = 0; i < 60 * 3 && !yard.live[3].broken; i++) yard.update(camera, 1 / 60);
     assert.equal(yard.live[3].broken, true, 'the rolling bale broke its neighbour');
     const kinds = sh.score.recent.map(e => e.kind);
     assert.ok(kinds.includes('prop:bale') && kinds.includes('prop:baleStrike'), kinds.join());
-    assert.ok(run.book.total > 0 && run.book.bestChain.kinds >= 2, 'a combo in Get Fired');
+    assert.ok(run.book.total > 0 && run.book.bestChain.kinds >= 3 && run.book.bestChain.kinds > before, `the strike adds to the combo (${before} -> ${run.book.bestChain.kinds})`);
     sh.retry(); assert.ok(yard.live.every(l => !l.broken), 'try again stands them up');
   }
   store.set('mmm.shift.v1', store0);
