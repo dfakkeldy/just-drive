@@ -84,7 +84,8 @@ for(const [name,query] of [
    };
   })`);
   check(stats?.rows.filter(x=>x.pass==='mirror').length>=18,'completed matched mirror frames');
-  check(stats?.unswapped===0,'no mirror material appeared mid-sample without the '+variant+' shader: '+stats?.unswapped);
+  // Only 'before' needs the swap; a material built during 'after' already carries the branch shader.
+  if(variant==='before')check(stats?.unswapped===0,'no mirror material appeared mid-sample without the before shader: '+stats?.unswapped);
   if(process.env.MMM_MIRROR_TIMING==='1')check(stats?.gpuMs?.length>=18,'native GPU timer samples available and not disjoint');
   results.push({name,variant,...stats});
   await p.shot(name+'-'+variant);
