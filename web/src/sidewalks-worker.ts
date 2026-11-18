@@ -4,14 +4,13 @@ export {createSidewalkHeights} from './sidewalks-heights';
 export function sidewalkHeightWorker(makeActive:typeof createSidewalkHeights):void {
   type P=[number,number];
   type Surface={refs:number[];tops:number[];lifts:number[];probes:P[];probeBytes?:string};
-  type Job={refs:number[];surfaces:Surface[];bridge:boolean;road?:number};
-  type Tile={level:number;i:number;j:number;size:number;x0:number;z0:number;positions:Float32Array;ground?:Float32Array};
-  type Bridge={id:number;points:P[];banks:P[]};
-  type Init={type:'init';points:P[];jobs:Job[];topCount:number;topOwners:number[][];coverage?:import('./sidewalks-heights').WalkCoverage;manifest:{origin:P;village:P;size:number;levels:Record<string,string[]>};bridges:Bridge[]};
-  type TileMessage={type:'tile';tile:Tile;members:[number[],number[]];pieceCount:number;bridgeJobs:number[]};
+  type Job={refs:number[];surfaces:Surface[];bridge:boolean};
+  type Tile={level:number;i:number;j:number;size:number;x0:number;z0:number;positions:Float32Array};
+  type Init={type:'init';points:P[];jobs:Job[];topCount:number;topOwners:number[][];coverage?:import('./sidewalks-heights').WalkCoverage;manifest:{origin:P;village:P;size:number;levels:Record<string,string[]>};};
+  type TileMessage={type:'tile';tile:Tile;members:[number[],number[]];pieceCount:number};
   type CoverageMessage={type:'coverage';cells:number[]};
   const scope=self as unknown as {onmessage:(event:MessageEvent<Init|TileMessage|CoverageMessage>)=>void;postMessage:(message:unknown,transfer?:Transferable[])=>void};
-  let points:P[]=[],jobs:Job[]=[],topCount=0,manifest:Init['manifest'],bridges:Bridge[]=[],exists=new Set<string>(),reads=0,completed=0;
+  let points:P[]=[],jobs:Job[]=[],topCount=0,manifest:Init['manifest'],exists=new Set<string>(),reads=0,completed=0;
   const tiles=new Map<string,Tile>(),last:(Tile|undefined)[]=[];
   let caches:{ground:Float64Array;top:Float64Array;ready:Uint8Array}[]=[];
   let active:ReturnType<typeof createSidewalkHeights>|null=null;
@@ -23,21 +22,10 @@ export function sidewalkHeightWorker(makeActive:typeof createSidewalkHeights):vo
     const e=x+manifest.village[0]-manifest.origin[0],south=z-(manifest.village[1]-manifest.origin[1]);
     for(let l=level;l>=floor;l--){const size=manifest.size/2**l,key=`${l}/${Math.floor(e/size)}_${Math.floor(south/size)}`,t=tiles.get(key);if(t){if(l===level)last[level]=t;return triangle(t,x,z);}if(exists.has(key))return null;}return null;
   }
-  function bank(p:P):{height:number;level:number}|null {
-    for(let l=8;l>=6;l--){const size=manifest.size/2**l,key=`${l}/${Math.floor((p[0]+manifest.village[0]-manifest.origin[0])/size)}_${Math.floor((p[1]-(manifest.village[1]-manifest.origin[1]))/size)}`,t=tiles.get(key);if(!t?.ground)continue;
-      const fa=(p[0]-t.x0)*256/t.size,fb=(p[1]-t.z0)*256/t.size,a=Math.min(Math.floor(fa),255),b=Math.min(Math.floor(fb),255),u=fa-a,v=fb-b,g=t.ground,i=b*257+a;
-      return {height:(g[i]*(1-u)+g[i+1]*u)*(1-v)+(g[i+257]*(1-u)+g[i+258]*u)*v,level:l};
-    }return null;
-  }
-  function deck(road:number|undefined,p:P):number|null {
-    const r=bridges.find(b=>b.id===road);if(!r)return null;const a=bank(r.banks[0]),b=bank(r.banks[1]);if(!a||!b)return null;
-    let best=Infinity,s=0,cum=0,total=0;
-    for(let i=1;i<r.points.length;i++){const aa=r.points[i-1],bb=r.points[i],dx=bb[0]-aa[0],dz=bb[1]-aa[1],len=Math.hypot(dx,dz),t=Math.max(0,Math.min(1,((p[0]-aa[0])*dx+(p[1]-aa[1])*dz)/(len*len||1))),d=Math.hypot(p[0]-aa[0]-t*dx,p[1]-aa[1]-t*dz);if(d<best){best=d;s=cum+t*len;}cum+=len;total+=len;}
-    return a.height+.05+(b.height-a.height)*s/(total||1);
-  }
   function calculate(id:number,level:number):number[]|null {
     const job=jobs[id],cache=caches[level-6];if(cache.ready[id])return null;const gs:number[]=[],ts:number[]=[],candidates:number[]=[];
-    const sample=(p:P)=>job.bridge?deck(job.road,p):atLevel(level,p[0],p[1]);
+    // Bridge pieces stand on the modern deck mesh, which only the page has: the page computes them (Sidewalks.update).
+    const sample=(p:P)=>job.bridge?null:atLevel(level,p[0],p[1]);
     for(const ref of job.refs){const y=sample(points[ref]);if(y===null)return null;cache.ground[ref]=y;gs.push(ref,y);}
     for(const surface of job.surfaces){const c=surface.refs.map(r=>points[r]),y=surface.refs.map((r,i)=>cache.ground[r]+surface.lifts[i]);let lift=0;
       for(const p of surface.probes){const height=sample(p);if(height===null)return null;lift=Math.max(lift,height+.015-plane(p,c,y));}
@@ -49,12 +37,12 @@ export function sidewalkHeightWorker(makeActive:typeof createSidewalkHeights):vo
   function resolveActive(ids:number[],arrivedLevel?:number):void {
     let batch:number[]=[],count=0;
     const flush=()=>{if(!count)return;const data=new Float64Array(batch);scope.postMessage({type:'active',level:8,data,count},[data.buffer]);batch=[];count=0;};
-    for(const id of ids){if(arrivedLevel!==undefined&&!active?.usesLevel(id,arrivedLevel))continue;const job=jobs[id],result=active?.resolve(id,(level,p)=>job.bridge?deck(job.road,p):atLevel(level,p[0],p[1],0));if(result){completed++;batch.push(...result);if(++count===8)flush();}}
+    for(const id of ids){if(arrivedLevel!==undefined&&!active?.usesLevel(id,arrivedLevel))continue;const job=jobs[id],result=active?.resolve(id,(level,p)=>job.bridge?null:atLevel(level,p[0],p[1],0));if(result){completed++;batch.push(...result);if(++count===8)flush();}}
     flush();
   }
   scope.onmessage=({data})=>{
     if(data.type==='init'){
-      points=data.points;jobs=data.jobs;topCount=data.topCount;manifest=data.manifest;bridges=data.bridges;
+      points=data.points;jobs=data.jobs;topCount=data.topCount;manifest=data.manifest;
       exists=new Set(Object.entries(manifest.levels).flatMap(([level,names])=>names.map(n=>`${level}/${n}`)));
       for(const job of jobs)for(const s of job.surfaces)if(s.probeBytes&&!s.probes.length){const native=(Uint8Array as unknown as {fromBase64?:(s:string)=>Uint8Array}).fromBase64,bytes=native?native(s.probeBytes):Uint8Array.from(atob(s.probeBytes),c=>c.charCodeAt(0)),flat=new Float64Array(bytes.buffer);for(let i=0;i<flat.length;i+=2)s.probes.push([flat[i],flat[i+1]]);}
       active=data.coverage?makeActive({...data,coverage:data.coverage}):null;
@@ -66,12 +54,6 @@ export function sidewalkHeightWorker(makeActive:typeof createSidewalkHeights):vo
     const flush=()=>{if(!count)return;const packed=new Float64Array(batch);scope.postMessage({type:'heights',level:tile.level,data:packed,count},[packed.buffer]);batch=[];count=0;};
     if(tile.level>=6)for(const id of work){const result=calculate(id,tile.level);if(result){batch.push(...result);if(++count===8)flush();}}flush();
     resolveActive(work,tile.level);
-    // A bank upgrade changes the shared deck plane, including pieces in the neighbouring tile.
-    for(const id of data.bridgeJobs)for(let level=6;level<=8;level++){
-      const cache=caches[level-6];cache.ready[id]=0;for(const s of jobs[id].surfaces)for(const t of s.tops)cache.top[t]=NaN;
-    }
-    for(let level=6;level<=8;level++){batch=[];count=0;for(const id of data.bridgeJobs){const result=calculate(id,level);if(result){batch.push(...result);if(++count===8){const packed=new Float64Array(batch);scope.postMessage({type:'heights',level,data:packed,count},[packed.buffer]);batch=[];count=0;}}}if(count){const packed=new Float64Array(batch);scope.postMessage({type:'heights',level,data:packed,count},[packed.buffer]);}}
-    resolveActive(data.bridgeJobs);
     scope.postMessage({type:'done',reads,completed});
   };
 }

@@ -961,10 +961,10 @@ export class Terrain {
   }
 
   /** Copy only an eligible walk tile for its height worker; the live geometry is never transferred. */
-  walkTileData(level:number,i:number,j:number,bank=false):{level:number;i:number;j:number;x0:number;z0:number;size:number;positions:Float32Array;ground?:Float32Array}|null {
+  walkTileData(level:number,i:number,j:number):{level:number;i:number;j:number;x0:number;z0:number;size:number;positions:Float32Array}|null {
     const t=this.tiles.get(`${level}/${i}_${j}`);if(!t?.ready||!t.mesh)return null;
     const positions=(t.mesh.geometry.getAttribute('position').array as Float32Array).slice();
-    return {level,i,j,x0:t.x0,z0:t.z0,size:t.size,positions,...(bank&&t.ground?{ground:t.ground.slice()}:{})};
+    return {level,i,j,x0:t.x0,z0:t.z0,size:t.size,positions};
   }
 
   /** Exact triangle in one indexed terrain level. Construction reads never scan or keep far tiles alive. */

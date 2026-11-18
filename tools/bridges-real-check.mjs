@@ -59,6 +59,20 @@ async function verify(area,replacements={},onlyCase){
  dispose(f);return{profiles,rays,traces:selected.length,maxPeak,maxVy};
 }
 if(!process.argv.includes('--mutation-only'))for(const area of areas)await verify(area);
+// Main's sidewalk layer reserves a 1 m walk on the Mabou Highway 19 bridge (Roads.bridgeWalks, road 28). The modern
+// deck must widen past it, as the old deck's parapet did, or the slab stands outside the rail over the river.
+if(!process.argv.includes('--mutation-only')){
+ const f=await fixture('mabou',1),road=f.roads.roads.find(r=>r.id===28);assert.ok(road?.bridge&&road.name==='Highway 19','Mabou Highway 19 bridge is road 28');
+ const span=f.roads.modern.spans.find(s=>s.members.has(28)),path=line(road),mid=path.at(path.len/2),cam=new THREE.Vector3(mid.x,0,mid.z);
+ const edge=road.halfWidth+.9,at=u=>f.roads.deckHeight(mid.x+Math.cos(mid.heading)*u,mid.z+Math.sin(mid.heading)*u);
+ await f.load([[mid.x,mid.z]]);f.roads.update(cam);const narrow=span.width,centre=at(0);
+ assert.ok(centre!==null&&at(edge)===null&&at(-edge)===null,'without a walk the deck ends inside the walk');
+ f.roads.bridgeWalks.set(28,{side:1,width:1});f.roads.update(cam);
+ assert.ok(Math.abs(span.width-(road.halfWidth+1.3))<1e-9,`walk widens the span: ${narrow} -> ${span.width}`);
+ for(const u of[edge,-edge]){const y=at(u);assert.ok(y!==null&&Math.abs(y-at(0))<.05,`deck under the walk at ${u} m`);}
+ const wide=span.width;f.roads.bridgeWalks.clear();f.roads.update(cam);assert.equal(span.width,wide,'a built deck never narrows again');
+ console.log(`PASS Mabou Highway 19 walk: span ${narrow.toFixed(2)} -> ${span.width.toFixed(2)} m half width`);dispose(f);
+}
 if(process.env.OUT)writeFileSync(process.env.OUT+'/protrusions.json',JSON.stringify(protrusions,null,2)+'\n');
 console.log('Terrain protrusion probes:',protrusions.length);
 if(process.argv.includes('--mutations')){

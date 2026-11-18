@@ -17,6 +17,8 @@ interface Span {
   road:BridgeRoad;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
   x0:number;z0:number;x1:number;z1:number; y0:number;y1:number;outer0:number;outer1:number;level:number;revision:number;serial:number;
   skinBox:Float64Array;ends:Float64Array;cutPath:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
+  /** Half width of each carried road, for a sidewalk reserved on the deck (Roads.bridgeWalks). */
+  halves:readonly (readonly [number,number])[];
   start?:Approach;end?:Approach;
 }
 
@@ -38,7 +40,7 @@ export class ModernBridges {
     return this.runList??=this.spans.map(r=>({pts:r.pts,roads:new Set(r.road.sourceRoad===undefined?r.members:[...r.members,r.road.sourceRoad]),halfWidth:r.width}));
   }
 
-  constructor(roads:readonly Road[],private terrain:Terrain,private group:THREE.Group,bakedSpans?:readonly BridgeRoad[],private nearest?:(x:number,z:number,reach:number,filter:(r:Road)=>boolean)=>RoadHit|null){
+  constructor(roads:readonly Road[],private terrain:Terrain,private group:THREE.Group,bakedSpans?:readonly BridgeRoad[],private nearest?:(x:number,z:number,reach:number,filter:(r:Road)=>boolean)=>RoadHit|null,private walks?:ReadonlyMap<number,{side:number;width:number}>){
     const all:BridgeRoad[]=[...roads],m=terrain.manifest;
     if(m&&bakedSpans)for(const r of bakedSpans)all.push({...r,sourceRoad:r.road,pts:r.pts.map(([e,n]):[number,number]=>[e-m.village[0],m.village[1]-n])});
     const bakedSources=new Set(bakedSpans?.flatMap(r=>r.sources??[])??[]);
@@ -65,7 +67,7 @@ export class ModernBridges {
       const members=new Set(plan.chainKey.split(',').map(Number));
       const width=Math.max(...all.filter(r=>members.has(r.id)).map(r=>r.halfWidth))+.45;
       const timber=road.kind>=4||road.name==='Railroad'||all.some(r=>members.has(r.id)&&r.inferred);
-      const r:Span={road,members,parallel:[],narrowRail:false,forceBuild:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(all.filter(r=>members.has(r.id)).map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),ends:new Float64Array(),cutPath:new Float64Array(),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
+      const r:Span={road,members,halves:all.filter(r=>members.has(r.id)).map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(all.filter(r=>members.has(r.id)).map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),ends:new Float64Array(),cutPath:new Float64Array(),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
       const first=this.at(r,-APPROACH),last=this.at(r,length+APPROACH);r.ends=new Float64Array([first.x,first.z,first.nx,first.nz,last.x,last.z,last.nx,last.nz]);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
@@ -331,8 +333,20 @@ export class ModernBridges {
     return true;
   }
   update(cam:THREE.Vector3):void {
+    if(this.walks&&this.walks.size!==this.walkCount)this.reserveWalks();
     for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(cam.x>r.x0-1500&&cam.x<r.x1+1500&&cam.z>r.z0-1500&&cam.z<r.z1+1500)this.ensure(r);}
     if(this.dirty)this.merge();
+  }
+  private walkCount=0;
+  /** A sidewalk on a bridge (main's sidewalk layer) needs the deck to reach past it, as the old deck's widened parapet
+   *  did: half width + walk + 0.3 m. Both sides widen, and a deck never narrows again, so a sidewalk layer that gives
+   *  up later leaves a wide deck. Spans narrowed beside a railway keep their narrow width. */
+  private reserveWalks():void {
+    this.walkCount=this.walks!.size;
+    for(const r of this.spans){if(r.parallel.length)continue;let need=r.width;
+      for(const [id,half]of r.halves){const walk=this.walks!.get(id);if(walk)need=Math.max(need,half+walk.width+.3);}
+      if(need>r.width){r.width=need;r.forceBuild=true;r.revision=-1;this.runList=null;}
+    }
   }
   private merge():void {
     this.dirty=false;

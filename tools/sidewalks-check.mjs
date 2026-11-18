@@ -63,13 +63,18 @@ async function workerExecution(area,low,m=M){
  try {
   const setup=make(m,area,low,false),t=setup.t;walk=setup.walk;assert.ok(walk.worker,'real worker path selected');
   // Tile transport uses the exact mesh grid including its border padding.
-  t.walkTileData=(level,i,j,bank)=>{const m=t.manifest,size=m.size/2**level,x0=m.origin[0]+i*size-m.village[0],z0=m.village[1]-m.origin[1]+j*size,seg=level>=7?128:64,n=seg+3,positions=new Float32Array(n*n*3);
+  t.walkTileData=(level,i,j)=>{const m=t.manifest,size=m.size/2**level,x0=m.origin[0]+i*size-m.village[0],z0=m.village[1]-m.origin[1]+j*size,seg=level>=7?128:64,n=seg+3,positions=new Float32Array(n*n*3);
    for(let b=0;b<=seg;b++)for(let a=0;a<=seg;a++){const k=((b+1)*n+a+1)*3;positions[k]=x0+a*size/seg;positions[k+1]=30;positions[k+2]=z0+b*size/seg;}
-   return {level,i,j,size,x0,z0,positions,...(bank?{ground:new Float32Array(257*257).fill(30)}:{})};};
-  const keys=new Set([...Object.keys(raw[area].cache.terrain),...walk.bridgeBanks.keys()]);
+   return {level,i,j,size,x0,z0,positions};};
+  const keys=new Set(Object.keys(raw[area].cache.terrain));
   for(const key of keys){const [l,xy]=key.split('/'),[i,j]=xy.split('_').map(Number);if(+l<6)continue;walk.tileReady(+l,i,j);walk.coverageSelected?.(+l,i,j);walk.tileSelected(+l,i,j);}
   const end=Date.now()+120000;while(walk.pending&&Date.now()<end){walk.update();await pause(1);}
-  assert.equal(walk.pending,0,'real worker drains all terrain updates');assert.equal(walk.audit.disabled,false);upAndBudget(walk,low);const sweep=groundSweep(walk,t);assert.equal(sweep.buried,0,'worker slab envelope');assert.ok(sweep.probes>10000);console.log('PASS real worker execution',area,low,sweep.probes,'ground probes');
+  assert.equal(walk.pending,0,'real worker drains all terrain updates');
+  // Bridge pieces read the modern deck (Roads.deckHeight) on the page, and every new deck build re-reads them.
+  if(walk.bridgeJobs.length){const deckRefs=()=>walk.bridgeJobs.flatMap(id=>walk.jobs[id].refs.map(r=>walk.caches[2].ground[r]));
+   assert.ok(deckRefs().every(y=>y===32),'bridge pieces stand on Roads.deckHeight, not a bank plane');
+   walk.network.deckHeight=()=>33.5;walk.network.bridgeRevision=7;const until=Date.now()+20000;while((walk.pending||!deckRefs().every(y=>y===33.5))&&Date.now()<until){walk.update();await pause(1);}
+   assert.ok(deckRefs().every(y=>y===33.5),'a deck rebuild re-reads the bridge pieces');walk.network.deckHeight=()=>32;walk.network.bridgeRevision=8;console.log('PASS bridge pieces follow the modern deck',area,walk.bridgeJobs.length);}assert.equal(walk.audit.disabled,false);upAndBudget(walk,low);const sweep=groundSweep(walk,t);assert.equal(sweep.buried,0,'worker slab envelope');assert.ok(sweep.probes>10000);console.log('PASS real worker execution',area,low,sweep.probes,'ground probes');
  } finally {walk?.dispose();globalThis.Worker=previous;}
 }
 // This oracle works on submitted triangle positions, not the builder's stored corner heights.
@@ -109,7 +114,7 @@ noFrameMaskAllocation(M);
 // Check the real clipped joint faces, including the whole parent diagonal and run ends.
 for(const up of [false,true]){const vertices=M.slabJointTriangles(.2,3.2,up);assert.ok(vertices.length>12);for(const w of vertices){const along=.2+3*(w[1]+w[2]);assert.ok(Math.abs(along/1.5-Math.round(along/1.5))*1.5<=.01200001,'24 mm joints at 1.5 m spacing');}}
 // Visual tree clearing cannot change the brush classification used by driving.
-{const tile={x0:0,z0:0,size:256,level:8,ground:new Float32Array(257*257).fill(30),canopy:new Float32Array(257*257),contactCanopy:new Float32Array(257*257).fill(7),road:null,brook:null};const t=Object.create(M.Terrain.prototype);Object.assign(t,{find:()=>tile,sites:[],cartRoads:false,waterLevelAt:()=>null});assert.equal(t.surfaceAt(20,20).canopy,7,'drawing clearance keeps contact canopy');}
+{const tile={x0:0,z0:0,size:256,level:8,ground:new Float32Array(257*257).fill(30),canopy:new Float32Array(257*257),contactCanopy:new Float32Array(257*257).fill(7),road:null,brook:null};const t=Object.create(M.Terrain.prototype);Object.assign(t,{find:()=>tile,sites:[],cartRoads:false,waterLevelAt:()=>null,withDeck:(_x,_z,h)=>h,roadCuts:{land:(_x,_z,h)=>h}});assert.equal(t.surfaceAt(20,20).canopy,7,'drawing clearance keeps contact canopy');}
 await workerExecution('mabou',false);await workerExecution('porthood',true);await workerExecution('porthood',true,await module({},true));
 // Actual Props drawing moves, while the rail collision policy retains source positions.
 {const d=raw.porthood,t=terrain('porthood'),original=new M.Props(d.props,d.manifest.village,t),moved=new M.Props(d.props,d.manifest.village,t,undefined,d.cache.plans[0].poleMoves);assert.deepEqual(moved.railObstacles,original.railObstacles,'cosmetic poles do not alter road collision openings');assert.notDeepEqual(moved.poles,original.poles,'poles actually move');
