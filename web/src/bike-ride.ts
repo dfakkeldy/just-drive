@@ -91,7 +91,7 @@ export class BikeRide implements Ride {
   }
   resetControlHistory(): void { this.helpYaw = this.lightHelpYaw = 0; this.lastJump = null; }
   resetVisit(): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.jump = { airTime: 0, peakHeight: 0, distance: 0, pitchRotations: 0, clean: false }; this.crashTime = this.sunk = 0; }
-  restart(x: number, z: number, heading: number): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.place(x, z, heading); }
+  restart(x: number, z: number, heading: number): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.placeAt(x, z, heading); }
   respawn(): void {
     let distance = 0;
     while (this.roadTrail.length > 1 && distance < 35) { const a = this.roadTrail.pop()!, b = this.roadTrail[this.roadTrail.length - 1]; distance += Math.hypot(a.x - b.x, a.z - b.z); }
@@ -136,7 +136,7 @@ export class BikeRide implements Ride {
     if (known && Math.abs(correction) > 1e-6) { this.y += correction; this.prevGround += correction; }
   }
   /** The reference for a re-place at the current pose (see Vehicle.retryHeight). */
-  get retryHeight(): number | undefined { return this.ready ? this.y : this.placeReference ?? (this.placeInfer ? placementDeckReference(this.roads, this.x, this.z) : undefined); }
+  get retryHeight(): number | undefined { return this.ready ? this.y : this.placeInfer ? placementDeckReference(this.roads, this.x, this.z) ?? this.placeReference : this.placeReference; }
   private placeInfer = false;
   /** See Vehicle.placeAt: a height-free placement stands on the deck it lies on, else on land. */
   placeAt(x: number, z: number, heading: number): boolean {
@@ -144,9 +144,16 @@ export class BikeRide implements Ride {
     if (placed && this.placeReference === undefined) this.placeInfer = true;
     return placed;
   }
+  parkedPlace(x: number, z: number, heading: number, y: number): boolean {
+    const infer = this.placeInfer, deck = infer ? placementDeckReference(this.roads, x, z) : undefined;
+    const placed = this.place(x, z, heading, deck ?? y);
+    this.placeInfer = infer && deck === undefined;
+    return placed;
+  }
   retryPlace(): boolean {
-    const infer = this.placeInfer, placed = this.place(this.x, this.z, this.heading, this.retryHeight);
-    this.placeInfer = infer && this.placeReference === undefined;
+    const infer = this.placeInfer, deck = infer ? placementDeckReference(this.roads, this.x, this.z) : undefined;
+    const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);
+    this.placeInfer = infer && deck === undefined;
     return placed;
   }
   update(dt: number, input: RideInput, afterStep?: () => void): void {

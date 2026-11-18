@@ -132,7 +132,7 @@ export class Vehicle {
 
   /** The reference for a re-place at the current pose: the last place's reference while its land is still loading
    *  (this.y is then the old pose's height, which could pick a deck overhead), else the live body height. */
-  get retryHeight(): number | undefined { return this.stuck ? this.placeReference ?? (this.placeInfer ? this.deckReference(this.x, this.z) : undefined) : this.y; }
+  get retryHeight(): number | undefined { return this.stuck ? (this.placeInfer ? this.deckReference(this.x, this.z) ?? this.placeReference : this.placeReference) : this.y; }
 
   place(x: number, z: number, heading: number, referenceY?:number): boolean {
     if (!safePlacement(x, z, heading, this.bounds) || referenceY!==undefined&&!Number.isFinite(referenceY)) return false;
@@ -192,10 +192,19 @@ export class Vehicle {
     if (placed && this.placeReference === undefined) this.placeInfer = true;
     return placed;
   }
+  /** Hold the car where it is while it waits for the first pedal. A placeAt placement keeps asking for its deck until
+   *  one answers: coarse land arrives (and the car stands on it) before the banks' fine land builds the deck. */
+  parkedPlace(x: number, z: number, heading: number, y: number): boolean {
+    const infer = this.placeInfer, deck = infer ? this.deckReference(x, z) : undefined;
+    const placed = this.place(x, z, heading, deck ?? y);
+    this.placeInfer = infer && deck === undefined;
+    return placed;
+  }
   /** Place again where the car is, as while land loads, keeping how the height was chosen. */
   retryPlace(): boolean {
-    const infer = this.placeInfer, placed = this.place(this.x, this.z, this.heading, this.retryHeight);
-    this.placeInfer = infer && this.placeReference === undefined;
+    const infer = this.placeInfer, deck = infer ? this.deckReference(this.x, this.z) : undefined;
+    const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);
+    this.placeInfer = infer && deck === undefined;
     return placed;
   }
   private deckReference(x: number, z: number): number | undefined { return placementDeckReference(this.roads, x, z); }

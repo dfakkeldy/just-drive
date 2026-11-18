@@ -1683,7 +1683,7 @@ function frame(now: number) {
       else if (waitingToDrive) {
         const { x, z, heading, y } = vehicle;
         driveVehicle(dt, { ...input, throttle: 0, handbrake: true });
-        vehicle.place(x, z, heading,y);
+        vehicle.parkedPlace(x, z, heading, y);
       } else driveVehicle(dt, relief.busy ? { throttle: 0, steer: 0, handbrake: true } : input);
       if ((loaded || lawnDemo?.driving) && !animals?.waitingForTerrain) drove += dt;
     }

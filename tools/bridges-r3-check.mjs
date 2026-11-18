@@ -22,8 +22,22 @@ async function ownership(replacements={}){
  // A height-free placement (?at=, a visit or mailbox start, restart) stands on the deck its point lies on, but under an
  // overpass, where the nearest road is not one the span carries, it stays on land.
  v.placeAt(p.x,p.z,p.yaw);assert.ok(Math.abs(v.y-deck)<.04,'height-free placement on Canso54 takes its deck: '+(v.y-deck));
+ {const bike=new f.BikeRide({root:new THREE.Group(),pose(){},driverEye:new THREE.Object3D()},f.terrain,f.roads,-1000);bike.restart(p.x,p.z,p.yaw);assert.ok(Math.abs(bike.y-deck)<.04,'bike restart takes its deck: '+(bike.y-deck));}
  {const nearest=f.roads.nearest;f.roads.nearest=(x,z,reach,...args)=>reach===8?{x:p.x,z:p.z,heading:p.yaw,road:{id:-999999,kind:1,bridge:false}}:nearest.call(f.roads,x,z,reach,...args);
   try{v.placeAt(p.x,p.z,p.yaw);assert.ok(Math.abs(v.y-land)<.2,'height-free placement under an overpass stays on land: '+(v.y-land));}finally{f.roads.nearest=nearest;}}
+ // Cold load: the deck is not built yet when the placement is made (coarse land comes first). The car stands on land,
+ // a retry while land loads asks again (and keeps asking), and so does the parked hold before the first pedal, so the
+ // car rises onto the deck once it builds. The bike follows the same rule.
+ {const deckHeight=f.roads.deckHeight;
+  for(const [label,ride] of[['car',v],['bike',new f.BikeRide({root:new THREE.Group(),pose(){},driverEye:new THREE.Object3D()},f.terrain,f.roads,-1000)]]){
+   f.roads.deckHeight=()=>null;
+   try{ride.placeAt(p.x,p.z,p.yaw);assert.ok(Math.abs(ride.y-land)<.2,label+' cold placement stands on land first: '+(ride.y-land));
+    ride.stuck=true;ride.ready=false;ride.retryPlace();ride.parkedPlace(ride.x,ride.z,ride.heading,ride.y);assert.ok(Math.abs(ride.y-land)<.2,label+' no deck yet: still on land');}
+   finally{f.roads.deckHeight=deckHeight;}
+   ride.stuck=true;ride.ready=false;assert.ok(Math.abs(ride.retryHeight-deck)<.04,label+' cold placement retry asks for the deck again: '+ride.retryHeight);ride.stuck=false;
+   ride.parkedPlace(ride.x,ride.z,ride.heading,ride.y);assert.ok(Math.abs(ride.y-deck)<.04,label+' cold placement rises onto the built deck while parked: '+(ride.y-deck));
+   ride.parkedPlace(ride.x,ride.z,ride.heading,ride.y);assert.ok(Math.abs(ride.y-deck)<.04,label+' parked on the deck stays there');
+  }}
  // A road bridge keeps the light road help (a wharf or slip ramp turns it off): a car 0.2 rad off the line steers back.
  {const road=f.roads.nearest(p.x,p.z,9,r=>r.kind<=3);assert.ok(road,'Canso54 deck has a public road for the help');const s=f.terrain.surfaceAt(p.x,p.z,deck);assert.ok(s.deck&&s.roadDeck,'bridge deck surface is a road deck');
   v.place(p.x,p.z,road.heading+.2,deck);v.vx=Math.sin(v.heading)*15;v.vz=-Math.cos(v.heading)*15;v.speed=15;v.update(1/120,{throttle:0,steer:0,handbrake:false});assert.ok(Math.abs(v.lightHelpYaw)>1e-4,'road help on a bridge deck: '+v.lightHelpYaw);}
@@ -86,18 +100,23 @@ await ownership();await approaches();await ghosts();await guardrails();await oth
 if(process.argv.includes('--mutations')){
  const file='web/src/animals.ts',source=read(file);for(const c of calls(source)){await assert.rejects(()=>ownership({[file]:source.replace(c.text,c.short)}),/animal re-place keeps deck/);console.log('KILLED D1 '+c.short);}
  for(const[file,from,to,why]of[
- ['web/src/vehicle.ts','placed = this.place(this.x, this.z, this.heading, this.retryHeight)','placed = this.place(this.x, this.z, this.heading)','stuck re-place'],
- ['web/src/vehicle.ts','placed = this.place(this.x, this.z, this.heading, this.retryHeight)','placed = this.place(this.x, this.z, this.heading,Number.isFinite(this.y)?this.y:undefined)','stale stuck height'],
+ ['web/src/vehicle.ts','const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);\n    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','const placed = this.place(this.x, this.z, this.heading);\n    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','stuck re-place'],
+ ['web/src/vehicle.ts','const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);\n    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','const placed = this.place(this.x, this.z, this.heading,Number.isFinite(this.y)?this.y:undefined);\n    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','stale stuck height'],
  ['web/src/vehicle.ts','this.place(hit.x, hit.z, this.inward(hit.x, hit.z, hit.heading),this.fallbackReference(hit))','this.place(hit.x, hit.z, this.inward(hit.x, hit.z, hit.heading))','fallback respawn keeps owned deck'],
  ['web/src/vehicle.ts','this.place(near.x, near.z, this.inward(near.x, near.z, near.heading),this.fallbackReference(near))','this.place(near.x, near.z, this.inward(near.x, near.z, near.heading))','fallback respawn keeps owned deck'],
  ['web/src/vehicle.ts','if (!run.roads.has(hit.road.id)) continue;','','under an overpass stays on land'],
  ['web/src/vehicle.ts','<= DECK_REACH) return','<= Infinity) return','fallback respawn under an overpass stays on land \\(carried elsewhere'],
- ['web/src/vehicle.ts','return this.stuck ? this.placeReference ??','return false ? this.placeReference ??','stale stuck height'],
+ ['web/src/vehicle.ts','return this.stuck ? (this.placeInfer','return false ? (this.placeInfer','stale stuck height'],
  ['web/src/vehicle.ts','const placed = this.place(x, z, heading, this.deckReference(x, z));','const placed = this.place(x, z, heading);','height-free placement on Canso54 takes its deck'],
+ ['web/src/vehicle.ts','this.placeInfer ? this.deckReference(this.x, this.z) ?? this.placeReference : this.placeReference','this.placeReference','car cold placement retry asks'],
+ ['web/src/vehicle.ts','    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','    return placed;\n  }\n  private deckReference','car cold placement'],
+ ['web/src/vehicle.ts','const infer = this.placeInfer, deck = infer ? this.deckReference(x, z) : undefined;','const infer = this.placeInfer, deck = undefined;','car cold placement rises onto the built deck'],
+ ['web/src/bike-ride.ts','const infer = this.placeInfer, deck = infer ? placementDeckReference(this.roads, x, z) : undefined;','const infer = this.placeInfer, deck = undefined;','bike cold placement rises onto the built deck'],
+ ['web/src/bike-ride.ts','this.lastJump = null; this.placeAt(x, z, heading); }','this.lastJump = null; this.place(x, z, heading); }','bike restart takes its deck'],
  ['web/src/vehicle.ts','return hit ? spanDeckReference(roads, hit) : undefined;','return roads.deckHeight(x, z) ?? undefined;','height-free placement under an overpass stays on land'],
  ['web/src/vehicle-choice.ts','y:vehicle.y, when:','when:','switch keeps saved'],
  ['web/src/vehicle-choice.ts','vehicle.place(p.x, p.z, p.heading,p.y)','vehicle.place(p.x, p.z, p.heading)','switch keeps saved'],
- ['web/src/bike-ride.ts','placed = this.place(this.x, this.z, this.heading, this.retryHeight)','placed = this.place(this.x, this.z, this.heading)','bike not-ready'],
+ ['web/src/bike-ride.ts','const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);','const placed = this.place(this.x, this.z, this.heading);','bike not-ready'],
  ['web/src/vehicle.ts','const helpOff=siteDeck&&s.roadDeck!==true;','const helpOff=siteDeck;','road help on a bridge']]){const s=read(file);assert.equal(s.split(from).length,2);await assert.rejects(()=>ownership({[file]:s.replace(from,to)}),new RegExp(why));console.log('KILLED '+why);}
  const file2='web/src/mp/ghosts.ts',s=read(file2),from="const referenceY=this.references[rank];";assert.equal(s.split(from).length,2);await assert.rejects(()=>ghosts({[file2]:s.replace(from,'const referenceY=fresh?undefined:this.references[rank];')}),/fresh ghost follows sender/);console.log('KILLED D2 fresh height removed');
  const choose='if(peer.y!==undefined){';assert.equal(s.split(choose).length,2);await assert.rejects(()=>ghosts({[file2]:s.replace(choose,'if(false){')}),/ghost selection uses sender height/);console.log('KILLED D2 selection height removed');
