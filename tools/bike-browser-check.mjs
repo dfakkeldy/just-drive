@@ -41,7 +41,7 @@ try{
  if(family==='all'||family==='ride'){
   const p=await page('mode=explore&vehicle=bike&title=1');
   check(await p.read(isBike),'explore bike shows bike and rider instead of car');
-  check(await p.read(`document.querySelectorAll('#vehicleChoice button').length===2&&document.querySelector('#vehicleChoice [data-vehicle="bike"]')?.getAttribute('aria-pressed')==='true'&&document.querySelector('#title dl').textContent.includes('Shift')`),'title ride choice and bike keys');
+  check(await p.read(`document.querySelectorAll('#vehicleChoice button').length===2&&document.querySelector('#vehicleChoice [data-vehicle="bike"]')?.getAttribute('aria-pressed')==='true'&&/(?:Shift|⇧) [+] throttle/.test(document.querySelector('#title dl').textContent)`),'title ride choice and bike keys');
   check(await p.read(`(()=>{const card=document.getElementById('titleCard'),choice=card.querySelector('#vehicleChoice').getBoundingClientRect(),tag=card.querySelector('.tag').getBoundingClientRect(),caution=card.querySelector('#exploreCaution').getBoundingClientRect(),keys=card.querySelector('dl').getBoundingClientRect(),mp=card.querySelector('.mpControl')?.getBoundingClientRect(),start=card.querySelector('#titleStart').getBoundingClientRect();return !!mp&&choice.bottom<=tag.top+1&&caution.bottom<=keys.top+1&&Math.max(keys.bottom,mp.bottom)<=start.top+1})()`),'explore title keeps choice and multiplayer controls in order');
   await p.shot('10-explore-bike-title');await p.start();await p.settle();
   const before=await p.read('({x:mmm.vehicle.x,z:mmm.vehicle.z})');await p.key('KeyW');for(let i=0;i<80;i++){if(await p.read(`Math.hypot(mmm.vehicle.x-(${before.x}),mmm.vehicle.z-(${before.z}))>2&&mmm.vehicle.speed>1`))break;await sleep(100);}await p.key('KeyW',false);
