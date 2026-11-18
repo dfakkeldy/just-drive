@@ -10,6 +10,7 @@ church-interior	tools/check-church-interior.sh	node	tools/check-church-interior.
 picture-first	tools/check-picture.sh	node	tools/check-picture.sh tools/picture-first-check.mjs	check-picture.sh picture-first-check.mjs	-	600	0.14	-
 phone	tools/check-phone.sh	node	tools/phone* tools/baseline/* tools/check-phone.sh tools/phone-check.mjs data/baked/*	check-phone.sh phone-check.mjs	data/baked/terrain/manifest.json	600	21.26	-
 shift	tools/check-shift.sh	node	tools/check-shift.sh tools/route-check.mjs tools/shift-check.mjs tools/damage-check.mjs tools/damage-timing-check.mjs data/baked/*	check-shift.sh route-check.mjs shift-check.mjs damage-check.mjs damage-timing-check.mjs shift-integration.mjs	data/baked/terrain/manifest.json	600	1.25	-
+sharpness	tools/check-sharpness.sh	node	tools/check-sharpness.sh tools/sharpness-check.mjs web/src/sharpness.ts	check-sharpness.sh sharpness-check.mjs	web/node_modules/.bin/esbuild	600	-	the sharpness governor (not wired into the game) against simulated computers
 streams	tools/check-streams.sh	node	tools/check-streams.sh tools/streams-check.mjs data/baked/*	check-streams.sh streams-check.mjs	data/baked/terrain/manifest.json	600	0.42	-
 sxs	tools/check-sxs.sh	node	tools/sxs* tools/check-sxs.sh tools/sxs-check.mjs data/baked/*	check-sxs.sh sxs-check.mjs sxs-physics.mjs	data/baked/terrain/manifest.json	600	11.92	-
 sxs-review	tools/check-sxs-review.sh	node	tools/sxs* tools/check-sxs-review.sh data/baked/* tools/baseline/source/side-by-side/*	check-sxs-review.sh  sxs-review.mjs	data/baked/terrain/manifest.json	600	2.99	-
