@@ -40,7 +40,7 @@ for(const [name,query] of [
 ]){
  const p=await open(query+'&reflections=1&res=1');
  // Park on the tested harbour road and face the water through the driver's window.
- if(name==='driving'){await p.read('mmm.vehicle.heading-=Math.PI/2;mmm.chase(0);mmm.camera.updateMatrixWorld();true');await sleep(1500);}
+ if(name==='driving'){await p.read('mmm.vehicle.heading-=Math.PI/2;mmm.chase(0);mmm.camera.updateMatrixWorld();true');await sleep(5000);}
  for(const variant of ['before','after']){
   check(await p.read(`(()=>{
    let changed=0;
