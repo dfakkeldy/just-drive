@@ -11,15 +11,27 @@ function check(area,desktop,selected){
  const frozen=pins.areas[area];assert.equal(sha(desktop),frozen.desktopSha256,`${area}: desktop bytes changed`);
  const actual=graphHashes(selected);for(const key of ['geometry','jobs','masks','dependencies','graph'])assert.equal(actual[key],frozen.low[key],`${area}: LOW ${key} hash changed`);
 }
+// zlib output differs between platforms (Apple arm64 vs Linux x86): a regenerated LOW companion can hold the same graph in
+// other gzip bytes. Desktop descriptors stay byte-exact; LOW must decode to the pinned graph; the loader then reads the staged descriptor.
+let stagedDescriptor=null;
+const descriptors=text=>JSON.parse(text.slice(text.indexOf('= ')+2,text.lastIndexOf(';')));
 async function module(storeMutation=false,warnMutation=false){
- const built=await build({stdin:{contents:"export {restoreSelectedWalk,loadSidewalkData} from './web/src/sidewalks-cache.ts';export {initStore,readFile} from './web/src/store.ts'",resolveDir:root},bundle:true,write:false,platform:'node',format:'esm',logLevel:'silent',plugins:warnMutation?[{name:'repeated-warning',setup(b){b.onLoad({filter:/\/sidewalks-cache\.ts$/},()=>{const original=readFileSync(root+'/web/src/sidewalks-cache.ts','utf8'),contents=original.replace('if(!unavailable.has(key))','if(true)');assert.notEqual(contents,original);return {contents,loader:'ts'};});}}]:storeMutation?[{name:'wrong-default',setup(b){b.onLoad({filter:/\/store\.ts$/},()=>{const original=readFileSync(root+'/web/src/store.ts','utf8'),contents=original.replace('direct = false','direct = true');assert.notEqual(contents,original);return {contents,loader:'ts'};});}}]:[]});
+ const built=await build({stdin:{contents:"export {restoreSelectedWalk,loadSidewalkData} from './web/src/sidewalks-cache.ts';export {initStore,readFile} from './web/src/store.ts'",resolveDir:root},bundle:true,write:false,platform:'node',format:'esm',logLevel:'silent',plugins:[...(stagedDescriptor?[{name:'staged-descriptor',setup(b){b.onLoad({filter:/\/sidewalks-assets\.ts$/},()=>({contents:stagedDescriptor,loader:'ts'}));}}]:[]),...(warnMutation?[{name:'repeated-warning',setup(b){b.onLoad({filter:/\/sidewalks-cache\.ts$/},()=>{const original=readFileSync(root+'/web/src/sidewalks-cache.ts','utf8'),contents=original.replace('if(!unavailable.has(key))','if(true)');assert.notEqual(contents,original);return {contents,loader:'ts'};});}}]:storeMutation?[{name:'wrong-default',setup(b){b.onLoad({filter:/\/store\.ts$/},()=>{const original=readFileSync(root+'/web/src/store.ts','utf8'),contents=original.replace('direct = false','direct = true');assert.notEqual(contents,original);return {contents,loader:'ts'};});}}]:[])]});
  return import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
 }
 const oldFetch=globalThis.fetch,oldWarn=console.warn;let requests=[],warnings=[],fault='';
 try{
  assert.throws(()=>assertWorkRoot(root),/isolated work root/);assert.throws(()=>assertWorkRoot(resolve(root,'data/baked')),/baked\/site/);
  if(temporary)bakeLow(root,workRoot);
- assert.equal(readFileSync(workRoot+'/web/src/sidewalks-assets.ts','utf8'),readFileSync(root+'/web/src/sidewalks-assets.ts','utf8'),'descriptor source matches reviewed staged data');
+ const staged=readFileSync(workRoot+'/web/src/sidewalks-assets.ts','utf8'),committed=readFileSync(root+'/web/src/sidewalks-assets.ts','utf8');
+ if(staged!==committed){
+  const s=descriptors(staged),c=descriptors(committed);assert.deepEqual(Object.keys(s),Object.keys(c),'descriptor areas');
+  for(const area of areas){
+   assert.deepEqual(s[area].desktop,c[area].desktop,`${area}: desktop descriptor matches reviewed staged data`);assert.equal(s[area].low.file,c[area].low.file);
+   assert.deepEqual(graphHashes(unpack(readFileSync(resolve(workRoot,`data/baked/${areaBase(area)}/sidewalks-low.json`)))),pins.areas[area].low,`${area}: regenerated LOW decodes to the pinned graph`);
+  }
+  stagedDescriptor=staged;oldWarn('NOTE LOW gzip bytes differ from the pins on this platform (zlib); desktop descriptors exact, LOW graphs equal to the pins; loader tested with the staged descriptor');
+ }
  globalThis.fetch=async url=>{
   const path=String(url);if(path.endsWith('/packs.json'))return new Response(JSON.stringify({packs:1,files:{'8/allowed.png':[0,0,1]}}));
   requests.push(path);
