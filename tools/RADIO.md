@@ -1,0 +1,130 @@
+# Change the car radio
+
+Edit **`tools/radio_stations.json`**. Keep the quotes, commas and brackets. One other source file needs an edit, and only when a station is added, removed or gets a new dial: the reception table, and sometimes its check (see Reception below).
+
+- **Rename a station:** change its `name`. To change its dial, change `dial` too. Then change its key in the reception table by hand; `tools/radio.sh` stops until you do. Update `just_start` if it names that dial. Dials and `just_start` are trimmed and lower-cased; duplicates after normalisation and every spelling of `off` are refused.
+- **Add a song:** put its source audio in `data/audio/src/`. Copy a track object into the station's `tracks` list. Set `source` to the filename without its extension, set `title`, and set `credit` to a key in the top-level `credits` map. Use `public: true` to publish it on the public site, and `page: true` for the small private page. Omit either flag to leave it out there; use JSON `true`/`false`, not strings. All songs appear in development.
+- **Move a song:** move its whole track object between `tracks` lists. Its required `credit` key and optional `credit_overrides` travel with it. No credit edit is needed.
+- **Add a station:** copy a station object, give it a unique `dial` and `name`, and fill its `tracks`. Every track needs its own `credit` key. An empty station is left out of the generated lists. Then give it a transmitter (see Reception below): a music station with none comes in everywhere, and `tools/radio.sh` stops on that.
+- **Remove a station:** delete its object. Delete its transmitter from the reception table too. If it was the start, mark another station `start: true`, or leave none to start at the first station. If `just_start` names it, change that value to a remaining dial or remove `just_start`. A player's removed saved dial falls back to the new start.
+
+Then run, from the repository root:
+
+```sh
+tools/radio.sh
+```
+
+This validates the catalogue and source files, builds the playlists and credits card, then runs all radio, site and PWA checks that do not need a browser, including their mutations. Errors name the station, song or missing file to fix. You need Python 3, Node, the installed `web/node_modules`, ffmpeg, ffprobe and the existing baked game data for the site checks. It does not publish anything. With existing encoded audio, this takes about 4.5 minutes. A first build of new audio can take longer; existing encoded audio is reused.
+
+## Credits
+
+The top-level `credits` map holds named credits, such as `suno`, `bach-ishizaka`, `ai-mabou`, `ai-songs` and `ai-tunes`. Every track must name one of these keys:
+
+```json
+{"source": "song-file-stem", "title": "Song title", "credit": "suno", "public": true}
+```
+
+A missing or unknown key stops the command. Stations have no default credit. A track can override individual fields with `credit_overrides`, for example a source URL, song ID or date. Unknown override keys (such as `soruce`) are errors. The resulting credit must have:
+
+| Field | What to enter |
+| --- | --- |
+| `by` | Who made or performed it |
+| `licence` | Its exact licence or permission |
+| `source` | Its source URL or production tool and song ID |
+| `date` | When it was made or obtained |
+| `text` | The exact player-facing attribution, with one `{dials}` placeholder |
+
+Python `validate()` checks each track's own resolved credit before any output is written. JS checks mirror those rules. The reviewed audio filenames have fixed attribution requirements in `tools/radio-attribution-rules.json`: Suno for the author's songs; Kimiko Ishizaka and CC0 for the Bach recordings; Claude, ElevenLabs Music and “around Mabou” for the place songs; Claude and ElevenLabs Music for a song that names no place (`ai-songs`); ElevenLabs Music and Claude for the wordless fiddle tunes (`ai-tunes`); Claude, ElevenLabs, “stock voices” and “not real people” for the talk segments. These requirements cannot be removed by editing `by` or `source` metadata. No rule edits are needed for station, dial or playlist changes.
+
+A NEW audio filename needs an entry in the credit rules file to pin its required attribution words; otherwise its credit is checked only for a maker name.
+
+For a new source filename outside that fixed table, fill `by`, `source` and `licence`, and include the maker from `by` in that track's own `text` (case and repeated whitespace do not matter). Keep `by` as the maker name you want shown. `date` and the `{dials}` placeholder are also required. “On this map” is not allowed in station names, track titles or credit text, in any case.
+
+The generator groups identical `text` values and fills in their dials. Keep required names, tools, licence terms and geography in this text. A song about Mabou must still say Mabou when heard in another area. When a song needs a different attribution, use a different credit key, or override `text` as well as the other fields. The credit names sources and dials, never song titles, so it stays short as songs are added: a mixed station's dial says how many of its songs each credit covers, for example “92.5 (3 of 7)”. The generated credit may be at most 1100 characters (`MUSIC_CREDIT_MAX` in `tools/radio_catalogue.py` and `tools/radio-expectations.mjs`); a longer one stops `tools/radio.sh`, so the credits stay short to read on a phone. This is plain text, not HTML. No song lyrics need to change.
+
+The playable lists contain stations, tracks, a starting dial and `catalogueHash`. The small tracked `web/src/radio-credits.generated.ts` also supplies the title card before any fetch, including offline and 1884. Do not edit it by hand. Module and list files are written to temporary files and then renamed. If any `radio.sh` check fails, the previous module is preserved or restored, so a changed catalogue cannot appear ready for the site build. Site builds reject stale or modified generated credits and stale playlists. Commit the changed catalogue and regenerated module together; do not commit `data/`.
+
+## The talk station
+
+94.9 THE PARTY LINE is a station like any other: a catalogue entry whose tracks are spoken segments (`talk-*`). It plays on both games and in an 1884 car. A station plays its tracks in catalogue order by the clock, so the calls, ads, tips and idents are interleaved in `tracks`.
+
+- It is the starting station on both games (`start: true`, and `just_start`), so a new player hears talk first (the owner's choice, 16 Nov 2026). A saved choice still wins. Like every station it plays by the clock, so the first sound can be the middle of a segment.
+- The words are in `tools/radio-talk/scripts.md`. The Mabou main thread checks every change to them before a voice is made. The word rules: invented first names and invented businesses only; no real people, civic numbers, postal service name or maker badge. The only real things named are the owner's own: two products and his public music video (the `talk-real-*` ads). The developer is never named.
+- `tools/radio-talk/make_talk.py` makes the audio from that file with ElevenLabs stock voices (never a clone of a person): `ELEVENLABS_KEY_FILE=<file> python3 tools/radio-talk/make_talk.py [stem ...]`. It writes `data/audio/src/talk-*.mp3` and, in `data/audio/make/talk/`, each segment's raw voice and its record (date, model, voices, request id, hashes). To make a new take, delete that segment's `.voice.mp3` and run its stem again; then run `tools/radio.sh`. Name the stems you want: with no stem it makes every segment that has no raw voice yet.
+- Place names: the voice is sent a phonetic spelling of some words (the `SAY` table in `make_talk.py`: "Joodick" for Judique, "Mawboo" for Mabou). The script keeps the real spelling. Round 1 was made before the table; a new take of a round 1 segment uses it. Keep an "h" out of a spelling: "Mahboo" made the host and the announcer say "magh-boo" (the owner heard it, 16 Nov 2026).
+- One wrong word does not need a new take of the whole segment. On 17 Nov 2026 the 20 lines with "Mabou" by the host, the announcer and the developer were made again alone, by the same stock voices, and put in the place of the old lines (between the same pauses, at the old loudness). Each of those 13 records has a `retakes` list with the line number, date and request, the track's credit `source` names both requests, and the first raw voice stays as `<stem>.voice.take1.mp3`. The tool that did it is not in the repository yet: its review found faults at the edges of the splice, so it comes in its own pull request.
+- Build and check new takes in a scratch folder: set `TALK_MAKE` (raw voices and records) and `TALK_FINAL` (finished segments) for `make_talk.py` and `check_talk.py`. Copy the files into `data/audio/` only when they are right: another session's radio build reads `data/audio/src`.
+- `python3 tools/radio-talk/check_talk.py [stem ...]` checks takes by machine (it needs `whisper-cli` and a model): it writes down each line of the raw voice and compares it with the script, shows every line with a place name and which syllable is louder, flags a Mabou that was written down with an h ("Mahbu": that matched all 10 takes the owner marked wrong and none of the 3 he marked right), and shows the words in each song clip. It is a help, not a proof: a person should still listen to the place names.
+- `python3 tools/radio-talk/order_talk.py` puts the station's tracks in order: two segments of one kind never follow each other, round 1 and round 2 call-ins alternate, and each kind is spread over the hour. It adds each round 2 segment that is recorded and leaves out one that is not. It never adds a segment in its `HELD` list (pieces that wait for the owner's yes): take a stem out of `HELD` only when he has said yes. When there is nothing to add and the order is good, it changes nothing. `--check` tests the order that is in the catalogue, and also fails for a track that is there twice or a held piece.
+- `python3 tools/radio-talk/test_talk.py` (the `radio-talk` row, run by `tools/radio.sh`) tests the line timing, the `SAY` table, the clip notes and the order rules. It needs no audio and no network.
+- The promos (`talk-promo-*`) name the other stations by dial and name and carry a few seconds of their songs. A round 2 promo names each clip's time in the script: `[CLIP: "Title" at 1:05 for 6]`. When a station's dial, name or songs change, rewrite and remake its promos. A clip of a song about real events ("Phillip's Out", "Put It in Writing") must carry no name and none of its story: use a part with no singing, or the title words only.
+- The player leaves out any track of 5 s or less (`readRadio` in `web/src/radio.ts`), and `radio-check` then fails with “every catalogue track stays in its station”. `make_talk.py` pads a shorter segment to 6 s with a pause.
+- Two donation ads are recorded (`talk-real-donate-a`, `talk-real-donate-b`). Only B is in the catalogue (the owner chose B, 16 Nov 2026). To swap them, change that track's `source`.
+- An ad can carry clips of a song from the game under and around its voice: the `MUSIC` table in `make_talk.py` (`talk-real-word-is-bond`). Its times fit one take of the voice; a new take needs new times, and the maker stops until they are set. The clip times are also noted in `scripts.md`.
+- Every `talk-*` file is in the `talk` group of `tools/radio-attribution-rules.json`: its credit must name Claude, ElevenLabs, “stock voices” and “not real people”.
+
+## The place songs
+
+The songs with credit `ai-mabou` have words by the radio thread and music from ElevenLabs Music. Their makers are not in git: they are in the main checkout at `data/audio/make/` (`songs.py` and `songs_107.py` hold the words and styles; `gen.py` and `gen_107.py` call the music API and write each song's record with its song id). The Mabou main thread checks the words before any music is made, as for the talk.
+
+- 107.3 SECOND DELIVERY has place songs in modern styles. Since 16 Nov 2026 it also has songs about Judique, Port Hood, Port Hawkesbury and Point Tupper (the owner asked for them). They use the `ai-mabou` credit.
+- A singer gets names wrong too: "Judique" was sung "joo-DEEG", and "Ceilidh" was sung "sealer" (it is "KAY-lee"). `gen_107.py` and `gen_say.py` (for the songs of `songs.py`) send the singer phonetic spellings (`SAY`: "Joodick", "Kaylee", "Mawboo"); the words on file keep the real spelling. "Highway Nineteen" and its new-country version were made again on 16 Nov 2026 for "the Ceilidh Trail"; their files are `nineteen-2` and `nineteen-country-2`, and the first takes (`nineteen`, `nineteen-country`) stay on disk. Have each new song written down by a speech-to-text tool and read how it heard the names.
+- Add each new song's filename to the `ai-mabou` group in `tools/radio-attribution-rules.json`. A song that names no place must not say “around Mabou”: give it the `ai-songs` credit and add its filename to the `ai-songs` group. That credit's text says what its one song (`pothole-season`) is about, so change the text when a second song takes the credit.
+- Check the names before a song goes on a station. The 21 songs of 14 Nov 2026 (`songs_five.py`) were made with plain spelling, before the `SAY` spellings. A speech-to-text pass on 17 Nov 2026 heard “Cape Marble” for Cape Mabou in two of them and was unsure about Ceilidh, Whycocomagh, Margaree and Judique in six more. Those eight are held (not in the catalogue) until the owner has heard them or they are made again: `cape-mabou-thunder`, `no-bars-in-the-highlands`, `ceilidh-trail-cruise`, `the-long-light-home`, `low-gear-hill`, `margaree-morning`, `fog-on-the-strait`, `windows-down-in-june`.
+- 96.1 stays at one song: the owner chose to keep the one-song joke (17 Nov 2026). Its three promos on 94.9 (`talk-promo-washboard`, `-2`, `-3`) say “One song”, so a second song would make them false. The three songs of the 21 that were made for 96.1 (`loose-gravel`, `pothole-season`, `northern-gulf`) are on 92.5 THE SHOULDER. The three promos for 92.5 were read against those songs on 17 Nov 2026 and are still true: they give no number of songs, and their clips are from the author's songs. To fill 96.1 later, write and make its promos again first.
+
+## The Shakespeare station
+
+96.7 POST HASTE has the author's own rock songs from Shakespeare's plays (the owner asked for it, 17 Nov 2026). The name is a phrase of Shakespeare's and a mail word, like the names of the other stations. Its credit is `suno`. The first songs are from his album about The Merchant of Venice. The name and the dial are working choices until the owner has said yes to them.
+
+- **Read the words first.** Before a song goes on, read its lyrics. A song that names a real person or business waits for the owner. Add each new filename to the `suno` group in `tools/radio-attribution-rules.json`.
+- **One song on two stations.** “Word Is Bond” is on 88.3 and on 96.7: two track objects with the same `source`. It is the first song like that, and the build and the checks accept it. It stays on 88.3 because one ad and two promos on 94.9 say that it is there (`talk-real-word-is-bond`, `talk-promo-flag-up-2`, `talk-promo-flag-up-3`). Take it off 88.3 only with new words and new takes for those three.
+- **A song that waits stays out of the catalogue.** Do not add a song without `public: true` to hold it for the owner. The check before a site build (`tools/radio-site-preflight.py`) compares only the catalogue hash, and the development folder has the same hash as the public one. `tools/check-listen.sh` serves the development folder too. So a track with no `public` flag is safe only after those two know the public list. One song of the Merchant of Venice album waits for the owner in this way; it is in no file here.
+- **Its transmitter** is at the town place with the ranges of the other town stations. So it comes in toward the Causeway and Point Tupper, and the accepted map does not change: round Mabou one music station, at Port Hood and Judique two, round Glencoe none.
+- **A new dial** must not be the dial of a real station that the area can hear. 96.7 and 90.3 were not in the lists of FM stations in Nova Scotia and in Prince Edward Island on 18 Nov 2026. Check each new dial against the two lists. Seven older dials of the game are in those lists (88.3, 92.5, 94.9, 99.1, 103.5 and 107.3 in Nova Scotia, 96.1 in Prince Edward Island). The owner chose to keep them (18 Nov 2026); every station name is invented.
+- **Still to come:** spoken lines from the plays before some songs, and a few ads for “Word Is Bond” as the station's only ads. The main thread checks those words before a voice is made.
+
+## The canal station
+
+90.3 DELAYED IN TRANSIT has the author's own songs about the wait at the canal, when the bridge is turned for a ship (the owner asked for it, 17 Nov 2026). The name is a mail phrase, and the canal code calls a ship's passage a transit. Its credit is `suno`. The name and the dial are working choices until the owner has said yes to them.
+
+- **One song for now.** More songs for this station wait for the owner, and they are in no file here (see “A song that waits stays out of the catalogue” above). 96.1's promos say “One song” about 96.1 only; they do not say that it is the only station with one song.
+- **Its transmitter** is small and stands at the canal's span: `CANAL` in the table, the place where `web/src/canal.ts` finds the span. The station is whole out to 3 km and gone past 5 km. So it is whole on all of the Causeway's fine land, where the barrier holds the cars, and it is gone at the centre of every other village. Point Tupper is the nearest one: its centre is 5.6 km from the canal, but its near side is inside 5 km, and there the station still comes in weak. The accepted map for Mabou, Port Hood, Judique and Glencoe does not change.
+- **The tie to the barrier is not made.** The owner's idea is that the station's DJ says a line when the barrier drops on the player, or that the radio offers to tune there. Three facts for the one who makes it:
+  - The dial never leaves a station by itself (`next()` in `web/src/radio.ts`), so an offer changes the readout only.
+  - The canal holds its cycle for a car on the span, so do not compute the barrier's state again from the clock. The `Canal` object knows it, but its state is private, and it decides for each arm by itself if that arm drops. The tie needs a new way to read from `Canal` that the barrier has closed for the player.
+  - A station's programme runs on the wall clock that `/listen/` shares. A line at the barrier's time cannot be a piece of the programme: the game must start it at the car.
+
+## Just Listen
+
+`/listen/` on both hosts is the radio alone: one light page with no land and no game (`tools/listen-page.mjs` builds it from `web/src/listen.ts`; `tools/build_site.sh` calls it). It needs no radio edit of its own.
+
+- **One catalogue.** The page reads `audio/radio.json` and the same song files as the car. It holds no station and no song. A catalogue change reaches it with the next site build.
+- **One clock.** The playing engine is `web/src/radio-player.ts`. The car's readout (`web/src/radio.ts`) and the page both stand on it, so a car and the page play the same second of the same piece. Change the clock, the loader or the join in the engine only.
+- **Public songs only.** The page plays what the public site's audio folder holds, which is the songs marked `public: true`. Eras do not apply to it.
+- **Its own saved station.** The page keeps its station and volume under `mmm.radio.listen`. It does not change a game's radio.
+- **The programme list.** A tap on a piece plays it from its start, and the station then goes on in order. LIVE goes back to the clock. A change of station also goes back to the clock.
+- **Locked screen.** The page does not stop when it is hidden (the car's radio does). It fetches the next piece while the present one plays, so no download stands between two pieces. The lock screen shows the title and the station; previous and next are station down and up.
+- **Service worker.** A game saved for offline play has a worker that answers for `/audio/`. The worker never answers for `/listen/` files, and it sends the songs that this page asks for to the network (`resource()` in `web/pwa/sw.js`). It knows the page by its client address, never by a referrer. The page is in no offline download, and it does not work offline.
+- **Checks.** `site-listen` (Node; `tools/radio.sh` runs it) and `listen-browser` (`tools/check-listen.sh`: the built page with the real songs in a real browser, on a server that sends only whole files).
+
+## Reception
+
+The car radio does not hear every station everywhere. `web/src/radio-reception.ts` holds the rules and one table, `RECEPTION`. The table is the only part to edit.
+
+- **A transmitter** is an invented place with two ranges, keyed by the station's dial: `{ e, n, clear, edge }`. The station is whole out to `clear` metres and gone past `edge`. The place is in map metres (east, north), the grid that all the areas share, so one table serves every area.
+- **A hollow** is low land that the hills shut in: `{ e, n, deep, rim }`. No transmitter reaches inside `deep` metres of it. Past `rim` it changes nothing. The Glencoe hollow is the only one.
+- **A station with no transmitter comes in everywhere**, also in a hollow. The talk station (the one marked `start`, or the first station when none is marked) is that station, and the check keeps it so. The `just_start` station must have none either: a new player always starts on a station that plays.
+- **What the player gets.** T (or a tap) is a seek: it passes over each station that does not come in at the car. A station that fades while it is tuned is not changed for the player. A weak one plays lower, under static, and its readout says `WEAK`; a lost one is silent under static and says `NO SIGNAL`, and it keeps its clock. With the radio off, out of the car, on a hidden page or at volume zero there is no static.
+- **The words of the brief are tests.** `radio-reception` reads the real village places from the baked land, and holds the three Glencoe places as its own numbers (from the public place names): round Mabou one music station comes in; at Port Hood and Judique, two; at Glencoe Mills, Glencoe and Upper Glencoe, none; every area's village has music. The canal station (90.3) has its own test: its transmitter is at the place where `web/src/canal.ts` finds the span (the check reads that line), it is whole on all of the Causeway's fine land, half gone at 4 km, weak at 4.6 km, gone past 5 km, and lost at the centre of every other village. A new music station with no transmitter breaks the Mabou test, so each new station needs a table entry.
+- **Just Listen is not changed.** The page uses the engine alone, and the rules are only in the car's readout class. Just Drive uses the car radio, so it has reception.
+- **`?reception=0`** in a game address gives every station everywhere. `tools/pwa-browser-check.mjs` uses it for its walk through the whole published catalogue.
+- **Checks.** `radio-reception` and `radio-reception-mutations` (Node; `tools/radio.sh` runs them) and `radio-reception-browser` (a real browser, a desktop page and a phone page, mostly on a small test map that it puts round the car). The mutation check names lines of the table by their exact text: the 107.3, 103.5, 96.1 and 90.3 transmitters, the hollow, and the `SHORE`, `TOWN` and `CANAL` places. When you change one of those lines, change the same text in `tools/radio-reception-check.mjs`; `tools/radio.sh` stops with the word `anchor` until you do. The check also names the canal station's dial as `CANAL_DIAL`: change it together with that dial.
+
+## Publish order
+
+Run `tools/radio.sh` before `tools/build_site.sh`. The first command includes `python3 tools/build_radio.py`, which must run after catalogue changes and before the site build. Publishing remains a separate step. For an isolated rehearsal, set `AUDIO_OUT` to a separate audio-output directory, and pass its `site` subfolder as `AUDIO_SITE` to the site build. **An `AUDIO_OUT` rehearsal still rewrites the tracked `web/src/radio-credits.generated.ts` in this checkout.** Source audio still comes from this checkout's `data/audio/src/`.
+
+## Check coverage
+
+`tools/radio.sh` runs `site-title-mutations`, including the C1/C3 credit-rendering mutants. `tools/check-all.sh --changed --quick` omits mutation-only rows, so it does not replace that coverage. The reviewed default catalogue also has a fixed comparison with main’s original music paragraph. Intentional catalogue edits use their generated text and the same per-track source rules, so valid wording edits need no second file change. Fixed per-track fixtures also test “around Mabou” and “on this map” separately, and a 3-to-1 mixed playlist tests the “(3 of 4)”/“(1 of 4)” counts even when a genre is removed.

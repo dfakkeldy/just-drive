@@ -1,0 +1,107 @@
+/** Pure roadside story rules. Distances are metres along the road, positive uphill. */
+export const FISH = Object.freeze({ trigger: 85, leave: 180, draw: 320, hornRange: 45, hornCooldown: .65,
+  honks: 3, excessHonks: 9, enterTime: 2.4, shoulder: -4.8, carSpeed: 1.2,
+  bottom: -110, top: 65, speed: 6, acceleration: .85, brake: 3, gap: 2,
+  truckHalf: 4.23, truckWidth: 1.45, carHalf: 2.26, carWidth: 1.06 });
+export const SCENE_TEXT = Object.freeze({
+  approach: 'A fish truck. A parked car. The cows have an audience. HORN to ask for the road.',
+  first: 'The visitor holds up one finger. One more cow, apparently.',
+  second: 'The visitor checks the photograph. The cow has not moved.',
+  entering: 'The visitor puts the camera away. The road has other bookings.',
+  moving: 'The visitor is moving the car to the shoulder.',
+  waiting: 'The fish truck sounds its horn. The hill is not getting any flatter.',
+  climbing: 'The road is clear. The fish truck keeps its momentum.',
+  cleared: 'The road is clear. The truck driver lifts a hand.',
+  unresolved: 'Mabou Mines Road: a fish truck, a parked car and a cow. Nobody knows how it ended.',
+  reportClear: 'Mabou Mines Road: you cleared the road.',
+});
+/** The carrier uses Mines Road every day, even when another run has today's delivery bundle. */
+export function fishDay(day: number, forced: string | null = null): boolean {
+  if (forced === '0') return false;
+  if (forced === 'fish') return true;
+  return day % 3 === 2;
+}
+export const FISH_COWS = [
+  { along: -10, side: -17, turn: .4, kind: 'cow', grazing: true },
+  { along: -4, side: -21, turn: 1.5, kind: 'highland', grazing: false },
+  { along: 2, side: -18, turn: -1, kind: 'cow', grazing: true },
+] as const;
+export interface Point { x: number; z: number }
+export interface Pose extends Point { heading: number }
+export interface Rectangle extends Pose { half: number; halfWidth: number }
+/** Same three-circle footprint as parked.pushOut. Extra margin is for a moving obstacle's brakes. */
+export function touchesPlayer(s: Rectangle, p: Pose, margin = 0): boolean {
+  const ax = Math.sin(s.heading), az = -Math.cos(s.heading), fx = Math.sin(p.heading), fz = -Math.cos(p.heading);
+  for (let i = -1; i <= 1; i++) {
+    const dx = p.x + fx * i * 1.35 - s.x, dz = p.z + fz * i * 1.35 - s.z;
+    const a = dx * ax + dz * az, b = dx * -az + dz * ax;
+    const da = a - Math.max(-s.half, Math.min(s.half, a)), db = b - Math.max(-s.halfWidth, Math.min(s.halfWidth, b));
+    if (da * da + db * db < (.95 + margin) ** 2) return true;
+  }
+  return false;
+}
+/** A baked road polyline; samples write into a caller-owned pose, with no frame allocations. */
+export class SceneRoad {
+  readonly cumulative: number[] = [0];
+  constructor(readonly points: readonly (readonly [number, number])[], readonly centre: number, readonly direction = -1) {
+    for (let i = 1; i < points.length; i++) this.cumulative.push(this.cumulative[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
+  }
+  at(along: number, side: number, out: Pose): void {
+    const s = Math.max(0, Math.min(this.cumulative[this.cumulative.length - 1], this.centre + along * this.direction));
+    let lo = 0, hi = this.points.length - 2;
+    while (lo < hi) { const mid = (lo + hi) >>> 1; if (this.cumulative[mid + 1] < s) lo = mid + 1; else hi = mid; }
+    const a = this.points[lo], b = this.points[lo + 1], d = this.cumulative[lo + 1] - this.cumulative[lo], t = (s - this.cumulative[lo]) / (d || 1);
+    const fx = (b[0] - a[0]) / (d || 1) * this.direction, fz = (b[1] - a[1]) / (d || 1) * this.direction;
+    out.x = a[0] + (b[0] - a[0]) * t - fz * side; out.z = a[1] + (b[1] - a[1]) * t + fx * side;
+    out.heading = Math.atan2(fx, -fz);
+  }
+}
+export class FishRules {
+  enabled = false; seen = false; honks = 0; cooldown = 0; entering = 0;
+  carSide = 0; truckAlong: number = FISH.bottom; speed = 0; waiting = false; horned = false; hornSignal = false;
+  arrived = false; notice = 0; noticeTime = 0;
+  reset(day: number, forced: string | null = null): void {
+    this.enabled = fishDay(day, forced); this.seen = false; this.honks = this.cooldown = this.entering = this.carSide = this.speed = 0;
+    this.truckAlong = FISH.bottom; this.waiting = this.horned = this.hornSignal = this.arrived = false; this.notice = this.noticeTime = 0;
+  }
+  honk(distance: number): boolean {
+    if (!this.enabled || !this.seen || distance > FISH.hornRange || this.cooldown > 0) return false;
+    this.honks++; this.cooldown = FISH.hornCooldown; this.notice = Math.min(this.honks, 3); this.noticeTime = 4;
+    return this.honks === FISH.excessHonks;
+  }
+  get carAlong(): number { return 6 * this.carSide / FISH.shoulder; }
+  get carTurn(): number { return -.7 * Math.sin(Math.PI * this.carSide / FISH.shoulder); }
+  get cleared(): boolean { return this.carSide <= FISH.shoulder; }
+  get reportLine(): string { return !this.seen ? '' : this.cleared ? SCENE_TEXT.reportClear : SCENE_TEXT.unresolved; }
+  get hint(): string {
+    if (!this.seen) return '';
+    if (this.cleared) return this.truckAlong > 4 ? SCENE_TEXT.cleared : SCENE_TEXT.climbing;
+    if (this.honks >= FISH.honks && !this.cleared) return this.entering < FISH.enterTime ? SCENE_TEXT.entering : SCENE_TEXT.moving;
+    if (this.noticeTime > 0) return this.notice === 1 ? SCENE_TEXT.first : this.notice === 2 ? SCENE_TEXT.second : '';
+    return this.waiting ? SCENE_TEXT.waiting : SCENE_TEXT.approach;
+  }
+  /** Clearance gates come from the world adapter. A blocked moving vehicle waits, never pushes. */
+  step(dt: number, distance: number, carCanMove: boolean, truckCanMove: boolean): void {
+    this.hornSignal = false;
+    if (!this.enabled || dt <= 0) return;
+    if (distance <= FISH.trigger) this.seen = true;
+    // Leaving freezes the unresolved story. Returning resumes the same positions and honk count.
+    if (!this.seen || distance > FISH.leave) return;
+    this.cooldown = Math.max(0, this.cooldown - dt); this.noticeTime = Math.max(0, this.noticeTime - dt);
+    if (this.honks >= FISH.honks) {
+      this.entering += dt;
+      if (this.entering >= FISH.enterTime && carCanMove) this.carSide = Math.max(FISH.shoulder, this.carSide - FISH.carSpeed * dt);
+    }
+    const limit = this.cleared ? FISH.top : -FISH.carHalf - FISH.truckHalf - FISH.gap;
+    const gap = limit - this.truckAlong;
+    const target = truckCanMove ? Math.min(FISH.speed, Math.sqrt(2 * FISH.brake * Math.max(0, gap))) : 0;
+    this.speed = target < this.speed ? Math.max(target, this.speed - FISH.brake * dt) : Math.min(target, this.speed + FISH.acceleration * dt);
+    // The geometric gate also caps travel this step; even an unexpected player arrival cannot be swept through.
+    if (truckCanMove) this.truckAlong = Math.min(limit, this.truckAlong + this.speed * dt);
+    else this.speed = 0;
+    this.waiting = !this.cleared && gap < .03;
+    if (this.waiting && !this.horned) { this.horned = this.hornSignal = true; }
+    this.arrived = this.cleared && this.truckAlong >= FISH.top;
+    if (this.waiting || this.arrived) this.speed = 0;
+  }
+}

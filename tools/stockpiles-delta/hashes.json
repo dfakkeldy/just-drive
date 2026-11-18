@@ -1,0 +1,23 @@
+{
+
+  "area": "pointtupper",
+  "key": {
+    "file": "stockpiles.json",
+    "count": 2
+  },
+  "pack": {
+    "file": "stockpiles.json",
+    "sha256": "362d6ec3ac109f54532eeb50d6cfb00395512c9f03165b94b28a076d291182c4",
+    "bytes": 65983
+  },
+  "piles": [
+    {
+      "id": "DAPI40/3718",
+      "kind": "coal"
+    },
+    {
+      "id": "DASA42/1039",
+      "kind": "logs"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "units": "metres",
+  "axes": "+X right, +Y up, forward is -Z (the animal convention of web/src/animals.ts)",
+  "origin": "on the floor, under the middle of the body",
+  "pose": "lying, chest and forelegs on the floor, head up",
+  "nodes": {
+    "root": "root",
+    "neck": "neck",
+    "head": "head",
+    "tail": "tail"
+  },
+  "parents": {
+    "neck": "root",
+    "head": "neck",
+    "tail": "root"
+  },
+  "pivots": {
+    "neck": [0, 0.25, -0.24],
+    "head": [0, 0.25, -0.152],
+    "tail": [0, 0.1, 0.43]
+  },
+  "meshes": {
+    "desktop": {
+      "body-mesh": "root",
+      "neck-mesh": "neck",
+      "head-mesh": "head",
+      "tail-mesh": "tail"
+    },
+    "low": {
+      "body-mesh": "root",
+      "head-mesh": "head"
+    }
+  },
+  "measures": {
+    "headTop": [0.58, 0.68],
+    "noseReach": [-0.66, -0.56],
+    "backHeight": [0.28, 0.38],
+    "length": [1.3, 1.65]
+  },
+  "budgets": {
+    "desktop": {
+      "triangles": 14000,
+      "draws": 4,
+      "bytes": 400000
+    },
+    "low": {
+      "triangles": 2600,
+      "draws": 2,
+      "bytes": 80000
+    }
+  },
+  "snapshot": {
+    "desktop": {
+      "triangles": 13080,
+      "min": [-0.4049, 0.001, -0.6187],
+      "max": [0.2742, 0.6303, 0.9223]
+    },
+    "low": {
+      "triangles": 2394,
+      "min": [-0.4199, 0.001, -0.6187],
+      "max": [0.2614, 0.6296, 0.921]
+    }
+  }
+}

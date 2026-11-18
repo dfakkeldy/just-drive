@@ -1,0 +1,857 @@
+import * as THREE from 'three';
+import { MIRROR_TERRAIN_VERT, TERRAIN_FRAG, TERRAIN_VERT, WATER_MASK_FRAG } from './shaders';
+import { readFile } from './store';
+import { updateCoastView } from './coast-view';
+import { coastRecessUniforms, RECESSES, type CoastSite } from './coast-site';
+import { BROOK_SAMPLE, brookBlend, brookDistance, brookField, Streams } from './streams';
+
+export interface Manifest {
+  area?: { id: string; name: string };
+  origin: [number, number];
+  size: number;
+  tile: number;
+  height: { scale: number; offset: number };
+  canopy: { scale: number };
+  seaFloor: number;
+  /** The box with fine terrain and road data, EPSG:2961 [xmin, ymin, xmax, ymax]. */
+  mid?: [number, number, number, number];
+  village: [number, number];
+  levels: Record<string, string[]>;
+  cover: { file: string; xmin: number; ymin: number; xmax: number; ymax: number; res: number };
+  roads?: { file: string; levels: Record<string, string[]>; encoding: { distance: number; halfWidth: number; signed?: boolean; zero?: number } };
+  trees?: { level: number; record: number; tiles: string[]; count: number };
+  buildings?: { file: string; count: number };
+  buildingStyles?: { file: string; count: number };
+  props?: { file: string; mailboxes: number; poles: number };
+  streams?: { file: string; count: number; culverts: number; km: number };
+}
+
+/** What is under a point: ground height (metres, with exaggeration), tree or roof height, and the nearest road. */
+export interface Surface {
+  ground: number;
+  canopy: number;
+  roadDist: number;     // metres to the nearest road centreline; 99 when no road is near
+  halfWidth: number;    // half of that road's driving surface
+  kind: number;         // 0 none, 1 highway, 2 paved, 3 gravel, 4 track, 5 rail trail
+  bridge: boolean;
+  washboard: boolean;   // a road shaken into ridges
+  brook: number;        // metres from the edge of a brook's water: negative in the water; 99 when none is near
+  /** True only when an accepted hand-built deck supplies the driving surface. */
+  deck?: boolean;
+  level: number;        // detail level the answer came from
+}
+
+const T = 256;          // intervals per tile; a tile has 257 samples per side
+const S = T + 1;
+const MAX_LOADS = 6;
+// A real-paced 1.2 km return needs about 86 spare tiles.
+// Measured wanted land + 96 spares stays below the former 500-record bound.
+const SPARE_CAP = 96;
+const TILE_GRACE = 600, EVICT_INTERVAL = 30;
+const segFor = (level: number) => (level >= 7 ? 128 : 64);   // mesh intervals per tile
+
+class Tile {
+  ready = false;
+  failed = false;
+  tries = 0;
+  retryAt = 0;      // a failed tile is asked for again after this time (ms)
+  loading = false;
+  lastUsed = 0;
+  countedFrame = -1;
+  wanted = -1;     // last frame that requested this tile, including the mirror
+  prio = 0;
+  mesh: THREE.Mesh | null = null;
+  mirror: { geometry: THREE.BufferGeometry; material: THREE.ShaderMaterial } | null = null;
+  mask: THREE.Mesh | null = null;
+  ground: Float32Array | null = null;
+  canopy: Float32Array | null = null;
+  road: Uint8ClampedArray | null = null;   // RGBA: distance, half width, kind, visual gravel coverage
+  brook: Uint8Array | null = null;         // RGBA: vector to the centre line (x, z), half width, direction of flow (see streams.ts)
+  quadSea = [false, false, false, false];
+  box = new THREE.Box3();
+  constructor(readonly level: number, readonly i: number, readonly j: number, readonly size: number,
+    readonly x0: number, readonly z0: number) {}
+}
+
+interface DecodedTile { tile: Tile; px: Uint8ClampedArray; bakedRoad: Uint8ClampedArray | null }
+
+interface Grid { index: THREE.BufferAttribute; uvs: THREE.BufferAttribute }
+
+async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
+  const bmp = await createImageBitmap(await readFile(base, path), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+  const cv = new OffscreenCanvas(S, S);
+  const ctx = cv.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(bmp, 0, 0);
+  bmp.close();
+  return ctx.getImageData(0, 0, S, S).data;
+}
+
+/**
+ * A hand-built place that changes the ground under it: graded pads, and surfaces painted through the road field
+ * (kind 8 yard gravel, 9 concrete, 10 packed sand), so the picture and the wheels agree. Add before the first tile loads.
+ */
+export interface Site {
+  /** World box [x0, z0, x1, z1] outside which the site changes nothing. */
+  box: [number, number, number, number];
+  /** True ground height in metres, given the surveyed one. */
+  height(x: number, z: number, surveyed: number): number;
+  /** The surface at a point: metres from an imaginary centre line, half width in metres, and kind. */
+  surface(x: number, z: number): { dist: number; half: number; kind: number } | null;
+  /** Kind 11 is visual gravel in the unused road alpha channel; RGB driving data stays untouched. */
+  visualGravel?: boolean;
+  /** Local changed ground may use the visible mesh for physical wheel contact. */
+  contactMesh?(x:number,z:number):number;
+  /** Driving metadata is applied only when this same deck passes the body-height gate. */
+  deckDriving?: {kind:number;halfWidth:number};
+  /** Optional exact deck on top of the land. The callback samples land only, without any decks. */
+  deckHeight?(x: number, z: number, ground: (x: number, z: number) => number | null): number | null;
+}
+
+/** Apply a runtime field sample. Kind 11 only paints; it cannot change a mapped road's driving samples. */
+export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:{dist:number;half:number;kind:number},zero:number,dScale:number,wScale:number):void {
+  if(f.kind===11){road[k+3]=Math.max(0,Math.min(255,Math.round((2+f.half-f.dist)*255/4)));return;}
+  const flags=road[k+2];
+  if(flags>0 && (flags&15)<=3 && Math.abs(road[k]-zero)*dScale<road[k+1]*wScale+1.2)return;
+  road[k]=Math.min(255,zero+Math.round(f.dist/dScale));road[k+1]=Math.min(255,Math.round(f.half/wScale));road[k+2]=f.kind;
+}
+
+export class Terrain {
+  readonly group = new THREE.Group();
+  readonly sites: Site[] = [];
+  private groundContact: { y: number } | null = null;
+  private drawnContact = false;
+  private body: { x: number; z: number } | null = null;
+
+  /** Only this body's wheel queries reject decks above its present height. Other ground readers see the full deck. */
+  withGroundContact<T>(body: { y: number; x?: number; z?: number }, read: () => T, drawn = false): T {
+    // Keep the live car position even while a free camera pauses its physics queries.
+    if (body.x !== undefined && body.z !== undefined) this.body = body as { x: number; z: number };
+    const previous = this.groundContact, previousDrawn = this.drawnContact;
+    this.groundContact = body; this.drawnContact = drawn;
+    try { return read(); } finally { this.groundContact = previous; this.drawnContact = previousDrawn; }
+  }
+  /**
+   * Reads the ground as the body in force would have read it at another height of its own (the height it had when it
+   * last sampled its wheels). With no body in force this changes nothing.
+   */
+  withContactHeight<T>(body: { y: number }, read: () => T): T {
+    return this.groundContact ? this.withGroundContact(body, read, this.drawnContact) : read();
+  }
+  readonly uniforms: Record<string, THREE.IUniform>;
+  private tiles = new Map<string, Tile>();
+  private exists = new Set<string>();
+  private hasRoad = new Set<string>();
+  private hasTrees = new Set<string>();
+  /** Level 8 tiles drawn this frame; single trees are shown on exactly these. */
+  readonly drawnFine = new Set<string>();
+  private maxLevel = 0;
+  private grids = new Map<number, Grid>();
+  private mirrorIndices = new Map<number, THREE.BufferAttribute>();
+  private readonly mirrorFocus = { value: new THREE.Vector2() };
+  private readonly maskScene = new THREE.Scene();
+  private noRoad: THREE.DataTexture;
+  private coverReady: Promise<HTMLImageElement | null>;
+  private coverPixels: ImageData | null = null;
+  private coverRead: Promise<void> | null = null;
+  private noBrook: THREE.DataTexture;
+  /** Brooks, when the land data has them. Set before the first tile loads. */
+  streams: Streams | null = null;
+  /** Local paint and vegetation rules; never changes measured ground or road data. */
+  coast: CoastSite | null = null;
+  private active = 0;
+  private queue: Tile[] = [];
+  private builds: DecodedTile[] = [];
+  private frame = 0;
+  private readyCount = 0;
+  private wantedCount = 0;
+  private lastEvict = 0;
+  private spare: Tile[] = [];
+  private frustum = new THREE.Frustum();
+  private m4 = new THREE.Matrix4();
+  drawn = 0;
+  /** A tile splits into finer tiles when the camera is nearer than split x its size. */
+  split = 1.6;
+  /** Phone mode: cheaper shading. Set before the first tile loads. */
+  low = false;
+  /** Desktop only: the land's shader reads the sun's shadow map (the uniforms come in with `shared`). */
+  shadows = false;
+
+  /** exag stretches ground heights about sea level; trees and roofs keep their true height. */
+  constructor(readonly manifest: Manifest, readonly base: string, shared: Record<string, THREE.IUniform>,
+    readonly exag = 1, readonly seaLevel = 0,
+    /** World-space boxes [x0, z0, x1, z1] where the canopy layer is removed, because a model stands there. */
+    readonly clear: number[][] = []) {
+    for (const [level, names] of Object.entries(manifest.levels)) {
+      this.maxLevel = Math.max(this.maxLevel, +level);
+      for (const n of names) this.exists.add(`${level}/${n}`);
+    }
+    for (const [level, names] of Object.entries(manifest.roads?.levels ?? {})) for (const n of names) this.hasRoad.add(`${level}/${n}`);
+    for (const n of manifest.trees?.tiles ?? []) this.hasTrees.add(n);
+    const c = manifest.cover;
+    const [vx, vy] = manifest.village;
+    let coverLoaded!: (image: HTMLImageElement | null) => void;
+    this.coverReady = new Promise((resolve) => { coverLoaded = resolve; });
+    const cover = new THREE.TextureLoader().load(`${base}/${c.file}`,
+      (texture) => coverLoaded(texture.image as HTMLImageElement), undefined, () => coverLoaded(null));
+    cover.magFilter = cover.minFilter = THREE.NearestFilter;
+    cover.generateMipmaps = false;
+    cover.flipY = false;
+    cover.colorSpace = THREE.NoColorSpace;
+    // Full tile size, because the shader reads the road field sample by sample. All zero means no road anywhere.
+    this.noRoad = new THREE.DataTexture(new Uint8Array(S * S * 4), S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.noRoad.needsUpdate = true;
+    // A tile with no brook says so in a uniform and never reads this one sample.
+    this.noBrook = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    this.noBrook.needsUpdate = true;
+    this.uniforms = {
+      ...shared,
+      tCover: { value: cover },
+      grassFocus: { value: new THREE.Vector3() },
+      roadZero: { value: this.zero / 255 },
+      // World x = east - village east; world z = village north - north. The cover image starts at its north-west corner.
+      coverRect: { value: new THREE.Vector4(c.xmin - vx, vy - c.ymax, 1 / (c.xmax - c.xmin), 1 / (c.ymax - c.ymin)) },
+    };
+  }
+
+  /** Desktop plants read the existing cover image once. Phones never make this CPU copy. */
+  readCover(): Promise<void> {
+    return this.coverRead ??= this.coverReady.then(async (image) => {
+      if (!image) throw new Error('land cover did not load');
+      const pixels = new ImageData(image.width, image.height);
+      const canvas = new OffscreenCanvas(image.width, 32);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+      // Small strips keep the one-time readback from stopping the first drive frame.
+      for (let row = 0; row < image.height; row += 32) {
+        const rows = Math.min(32, image.height - row);
+        ctx.drawImage(image, 0, row, image.width, rows, 0, 0, image.width, rows);
+        pixels.data.set(ctx.getImageData(0, 0, image.width, rows).data, row * image.width * 4);
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      }
+      this.coverPixels = pixels;
+      canvas.width = canvas.height = 0;
+    });
+  }
+
+  /** Same nearest-cell lookup as tCover, with unknown land outside its box. */
+  coverAt(x: number, z: number): number {
+    const pixels = this.coverPixels;
+    if (!pixels) return 0;
+    const r = this.uniforms.coverRect.value as THREE.Vector4;
+    const u = (x - r.x) * r.z, v = (z - r.y) * r.w;
+    if (u < 0 || v < 0 || u >= 1 || v >= 1) return 0;
+    return pixels.data[(Math.floor(v * pixels.height) * pixels.width + Math.floor(u * pixels.width)) * 4 + 2];
+  }
+
+  /** One grid per mesh density, with an extra ring that hangs down as a skirt to hide gaps between detail levels. */
+  private grid(seg: number): Grid {
+    let g = this.grids.get(seg);
+    if (g) return g;
+    const n = seg + 3;
+    const idx = new Uint32Array((n - 1) * (n - 1) * 6);
+    const uv = new Float32Array(n * n * 2);
+    let k = 0;
+    for (let b = 0; b < n; b++) {
+      for (let a = 0; a < n; a++) {
+        uv[(b * n + a) * 2] = Math.min(Math.max(a - 1, 0), seg) / seg;
+        uv[(b * n + a) * 2 + 1] = Math.min(Math.max(b - 1, 0), seg) / seg;
+        if (a < n - 1 && b < n - 1) {
+          const p = b * n + a;
+          idx[k++] = p; idx[k++] = p + n; idx[k++] = p + 1;
+          idx[k++] = p + 1; idx[k++] = p + n; idx[k++] = p + n + 1;
+        }
+      }
+    }
+    g = { index: new THREE.BufferAttribute(idx, 1), uvs: new THREE.BufferAttribute(uv, 2) };
+    this.grids.set(seg, g);
+    return g;
+  }
+
+  private tile(level: number, i: number, j: number): Tile | null {
+    const key = `${level}/${i}_${j}`;
+    if (!this.exists.has(key)) return null;
+    let t = this.tiles.get(key);
+    if (!t) {
+      const size = this.manifest.size / 2 ** level;
+      t = new Tile(level, i, j, size,
+        this.manifest.origin[0] + i * size - this.manifest.village[0],
+        this.manifest.village[1] - (this.manifest.origin[1] - j * size));
+      // Until the data arrives, assume a generous height range for culling and distance.
+      t.box.set(new THREE.Vector3(t.x0, -10, t.z0), new THREE.Vector3(t.x0 + size, 400 * this.exag, t.z0 + size));
+      this.tiles.set(key, t);
+    }
+    return t;
+  }
+
+  private request(t: Tile, dist: number) {
+    t.wanted = this.frame;
+    this.use(t);
+    t.prio = dist;
+    if (t.ready || t.loading) return;
+    if (t.failed) { if (performance.now() < t.retryAt) return; t.failed = false; }
+    if (!this.queue.includes(t)) this.queue.push(t);
+  }
+
+  private pump() {
+    if (!this.queue.length || this.active + this.builds.length >= MAX_LOADS) return;
+    this.queue.sort((a, b) => a.prio - b.prio);
+    // Bound decoded bytes plus reads to six tiles; decoded tiles keep their slot until built.
+    while (this.queue.length && this.active + this.builds.length < MAX_LOADS) {
+      const t = this.queue.shift()!;
+      t.loading = true;
+      this.active++;
+      this.load(t).then(
+        (decoded) => { this.active--; this.builds.push(decoded); },
+        (e) => { this.active--; t.loading = false; this.fail(t, e); });
+    }
+  }
+
+  get pending() { return this.queue.length + this.active + this.builds.length; }
+  /** Wanted reads in retry back-off are not queued or active. Old, unwanted failures do not block settling. */
+  get failed() { let n = 0; for (const t of this.tiles.values()) if (t.failed && t.wanted === this.frame) n++; return n; }
+
+  private fail(t: Tile, error: unknown) {
+    t.failed = true;
+    t.retryAt = performance.now() + Math.min(30000, 1000 * 2 ** t.tries++);
+    console.warn('tile', t.level, t.i, t.j, error);
+  }
+
+  /** Node tools may build one idle tile immediately, using exactly the queued path's maths. */
+  async loadNow(level: number, i: number, j: number): Promise<void> {
+    const t = this.tile(level, i, j);
+    if (!t || t.ready) return;
+    if (t.loading || this.queue.includes(t)) throw new Error('tile is already pending');
+    t.loading = true; this.active++;
+    try { this.build(await this.load(t)); t.failed = false; }
+    catch (e) { this.fail(t, e); throw e; }
+    finally { t.loading = false; this.active--; }
+  }
+
+  private buildWaiting(cam: THREE.Vector3, startMode: boolean) {
+    // Driving: build at most one tile per update, even when reads finish together.
+    // Title/paused/hidden: build at least one, then stop after 12 ms of build work.
+    // Keep unwanted decoded tiles: build them last as spares, with no extra wanted count.
+    const started = performance.now();
+    let built = 0;
+    while (this.builds.length) {
+      let best = 0, bestRank = Infinity, bestUnder = false;
+      for (let i = 0; i < this.builds.length; i++) {
+        const t = this.builds[i].tile, body = this.body;
+        const under = cam.z >= t.z0 && cam.z < t.z0 + t.size && cam.x >= t.x0 && cam.x < t.x0 + t.size ||
+          body && body.z >= t.z0 && body.z < t.z0 + t.size && body.x >= t.x0 && body.x < t.x0 + t.size;
+        // Camera/car columns first, current requests next; coarse before fine, then request distance.
+        // Equal ranks keep decode arrival order. Scan in place: no per-update queue arrays.
+        const rank = under ? 0 : t.wanted === this.frame ? 1 : 2;
+        const previous = this.builds[best].tile;
+        if (rank < bestRank || rank === bestRank && (t.level < previous.level || t.level === previous.level && t.prio < previous.prio)) {
+          best = i; bestRank = rank; bestUnder = !!under;
+        }
+      }
+      const decoded = this.builds[best], t = decoded.tile;
+      try {
+        this.build(decoded);
+        // The pin pass ran before this tile was ready; protect a newly built camera/car column too.
+        if (bestUnder) this.use(t);
+      }
+      catch (e) { this.fail(t, e); }
+      finally {
+        this.builds.copyWithin(best, best + 1); this.builds.pop();
+        t.loading = false;
+      }
+      built++;
+      if (!startMode && built >= 1 || startMode && performance.now() - started >= 12) break;
+    }
+  }
+
+  private async load(t: Tile) {
+    const name = `${t.level}/${t.i}_${t.j}`;
+    const withRoad = this.hasRoad.has(`${t.level}/${t.i}_${t.j}`);
+    const [px, bakedRoad] = await Promise.all([readPng(this.base, `${name}.png`), withRoad ? readPng(this.base, `${name}.r.png`) : Promise.resolve(null)]);
+    return { tile: t, px, bakedRoad };
+  }
+
+  private build({ tile: t, px, bakedRoad }: DecodedTile) {
+    const sites = this.sites.filter((s) => !(s.box[2] < t.x0 || s.box[0] > t.x0 + t.size || s.box[3] < t.z0 || s.box[1] > t.z0 + t.size));
+    const gravelOverlay=sites.some(s=>s.visualGravel);
+    const road = bakedRoad ?? (sites.length ? new Uint8ClampedArray(S * S * 4) : null);
+    // Brooks get a field only on the two finest levels (samples 1 m and 2 m apart). Further off a brook is a pixel
+    // wide, and the field's guarantee against seams needs close samples (see BROOK_SAMPLE in streams.ts).
+    const brook = this.streams && t.size / T <= BROOK_SAMPLE ? brookField(this.streams, t.x0, t.z0, t.size, S) : null;
+    const { scale, offset } = this.manifest.height;
+    const cs = this.manifest.canopy.scale;
+    const dScale = this.manifest.roads?.encoding.distance ?? 0.1, wScale = this.manifest.roads?.encoding.halfWidth ?? 0.05;
+    const zero = this.zero;
+    // Where single trees exist, the terrain shows bare ground and the trees stand on it.
+    const hull = !(t.level === 8 && this.hasTrees.has(`${t.i}_${t.j}`));
+    const mpp = t.size / T;
+    const ground = new Float32Array(S * S);
+    const canopy = new Float32Array(S * S);
+    let lo = Infinity, hi = -Infinity;
+    for (let k = 0; k < S * S; k++) {
+      if(road && gravelOverlay)road[k*4+3]=0;
+      let raw = (px[k * 4] * 256 + px[k * 4 + 1]) * scale + offset;
+      for (const site of sites) {
+        const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
+        if (x < site.box[0] || x > site.box[2] || z < site.box[1] || z > site.box[3]) continue;
+        raw = site.height(x, z, raw);
+        const f = site.surface(x, z);
+        if(f && road)paintSiteSurface(road,k*4,f,zero,dScale,wScale);
+      }
+      if (brook && brook[k * 4 + 2] > 0) {
+        // A soft crease along the brook, so the painted water lies in a dip. Not under a road: there it runs in a pipe.
+        const piped = road && road[k * 4 + 2] > 0 && Math.abs(road[k * 4] - zero) * dScale < road[k * 4 + 1] * wScale + 1.5;
+        if (!piped) raw -= Streams.cut(brookDistance(brook, k), brook[k * 4 + 2] * 0.02);
+      }
+      const g = raw > this.seaLevel ? this.seaLevel + (raw - this.seaLevel) * this.exag : raw;
+      ground[k] = g;
+      let c = px[k * 4 + 2] * cs;
+      if (road && road[k * 4 + 2] > 0) {
+        // Nothing stands on a road: fade the tree layer out from the shoulder to the road edge.
+        const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;
+        c *= THREE.MathUtils.smoothstep(d, hw + 0.8, hw + 4.5);
+        px[k * 4 + 2] = Math.round(c / cs);
+      }
+      canopy[k] = c;
+      if (g < lo) lo = g;
+      if (g + c > hi) hi = g + c;
+    }
+    for (const [bx0, bz0, bx1, bz1] of this.clear) {
+      if (bx1 < t.x0 || bx0 > t.x0 + t.size || bz1 < t.z0 || bz0 > t.z0 + t.size) continue;
+      const a0 = Math.max(0, Math.floor((bx0 - t.x0) / mpp)), a1 = Math.min(T, Math.ceil((bx1 - t.x0) / mpp));
+      const b0 = Math.max(0, Math.floor((bz0 - t.z0) / mpp)), b1 = Math.min(T, Math.ceil((bz1 - t.z0) / mpp));
+      for (let b = b0; b <= b1; b++) for (let a = a0; a <= a1; a++) { canopy[b * S + a] = 0; px[(b * S + a) * 4 + 2] = 0; }
+    }
+    const sea = this.manifest.seaFloor + 0.05;
+    for (let q = 0; q < 4; q++) {
+      const a0 = (q & 1) * (T / 2), b0 = (q >> 1) * (T / 2);
+      let all = true;
+      for (let b = b0; b <= b0 + T / 2 && all; b += 4) for (let a = a0; a <= a0 + T / 2; a += 4) if (ground[b * S + a] > sea) { all = false; break; }
+      t.quadSea[q] = all;
+    }
+
+    const coastal = this.coast?.intersects(t.x0, t.z0, t.size) ? this.coast : null;
+    const coastField = coastal ? new Float32Array(S * S * 4) : null;
+    if (coastal && coastField) {
+      const h = (a:number,b:number) => ground[Math.max(0,Math.min(T,b))*S+Math.max(0,Math.min(T,a))];
+      for(let b=0;b<S;b++)for(let a=0;a<S;a++){
+        const k=b*S+a,x=t.x0+a*mpp,z=t.z0+b*mpp;
+        const raw=h(a,b)>this.seaLevel?this.seaLevel+(h(a,b)-this.seaLevel)/this.exag:h(a,b);
+        const dx=(h(a+1,b)-h(a-1,b))/((Math.min(T,a+1)-Math.max(0,a-1))*mpp*this.exag);
+        const dz=(h(a,b+1)-h(a,b-1))/((Math.min(T,b+1)-Math.max(0,b-1))*mpp*this.exag);
+        const slope=Math.hypot(dx,dz);
+        coastField.set(coastal.weights(x,z,raw,slope),k*4);
+        if(canopy[k]>0 && !coastal.treeAllowed(x,z,raw,slope)){canopy[k]=0;px[k*4+2]=0;}
+      }
+    }
+
+    // Lighting detail comes from a normal map at full sample density.
+    const nm = new Uint8Array(S * S * 4);
+    const at = (arr: Float32Array, a: number, b: number) => arr[Math.min(Math.max(b, 0), T) * S + Math.min(Math.max(a, 0), T)];
+    const surf = (a: number, b: number) => at(ground, a, b) + (hull ? 0.6 * at(canopy, a, b) : 0);
+    for (let b = 0; b < S; b++) {
+      for (let a = 0; a < S; a++) {
+        const w = (Math.min(a + 1, T) - Math.max(a - 1, 0)) * mpp, h = (Math.min(b + 1, T) - Math.max(b - 1, 0)) * mpp;
+        let nx = -(surf(a + 1, b) - surf(a - 1, b)) / w, nz = -(surf(a, b + 1) - surf(a, b - 1)) / h;
+        const inv = 1 / Math.hypot(nx, 1, nz);
+        nx *= inv; nz *= inv;
+        const gs = Math.hypot((at(ground, a + 1, b) - at(ground, a - 1, b)) / w, (at(ground, a, b + 1) - at(ground, a, b - 1)) / h);
+        const k = (b * S + a) * 4;
+        nm[k] = Math.round((nx * 0.5 + 0.5) * 255);
+        nm[k + 1] = Math.round((nz * 0.5 + 0.5) * 255);
+        nm[k + 2] = px[k + 2];
+        nm[k + 3] = Math.round(Math.min(gs, 1) * 255);
+      }
+    }
+    const tex = new THREE.DataTexture(nm, S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
+    tex.magFilter = tex.minFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    let roadTex: THREE.DataTexture = this.noRoad;
+    if (road) {
+      // Site paint is finished; CPU samples and the texture only read these same bytes from here.
+      roadTex = new THREE.DataTexture(new Uint8Array(road.buffer, road.byteOffset, road.byteLength), S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
+      roadTex.magFilter = roadTex.minFilter = THREE.NearestFilter;   // the shader blends the samples itself
+      roadTex.needsUpdate = true;
+    }
+    let brookTex: THREE.DataTexture = this.noBrook;
+    if (brook) {
+      brookTex = new THREE.DataTexture(brook, S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
+      brookTex.magFilter = brookTex.minFilter = THREE.NearestFilter;   // the shader blends the samples itself
+      brookTex.needsUpdate = true;
+    }
+
+    const seg = segFor(t.level), step = T / seg, n = seg + 3;
+    const pos = new Float32Array(n * n * 3);
+    const coastAttr = coastal ? new Float32Array(n * n * 4) : null;
+    const gattr = new Float32Array(n * n), crowns = this.low ? null : new Float32Array(n * n);
+    const drop = Math.max(t.size * 0.04, 6);
+    const win = Math.max(2, Math.round(6 / Math.max(mpp, 1))), stride = Math.max(1, Math.round(win / 2));
+    for (let b = 0; b < n; b++) {
+      for (let a = 0; a < n; a++) {
+        const ga = Math.min(Math.max(a - 1, 0), seg) * step, gb = Math.min(Math.max(b - 1, 0), seg) * step;
+        const skirt = a === 0 || b === 0 || a === n - 1 || b === n - 1;
+        // The mesh is coarser than the data, so trees and roofs are averaged into a soft canopy surface.
+        // Single trees come in Stage 1C.
+        let c = 0, cnt = 0;
+        for (let v = -win; v <= win; v += stride) for (let u = -win; u <= win; u += stride) {
+          const aa = ga + u, bb = gb + v;
+          if (aa >= 0 && aa <= T && bb >= 0 && bb <= T) { c += canopy[bb * S + aa]; cnt++; }
+        }
+        c /= cnt;
+        const k0 = gb * S + ga;
+        if (road && road[k0 * 4 + 2] > 0) {
+          // Keep the averaged canopy off the driving surface.
+          const hw = road[k0 * 4 + 1] * wScale;
+          c *= THREE.MathUtils.smoothstep(Math.abs(road[k0 * 4] - zero) * dScale, hw + 0.8, hw + 6);
+        }
+        if (crowns) crowns[b * n + a] = hull ? 0 : c;
+        if (!hull) c = 0;
+        const g = ground[k0];
+        const k = b * n + a;
+        pos[k * 3] = t.x0 + ga * mpp;
+        pos[k * 3 + 1] = g + c - (skirt ? drop : 0);
+        pos[k * 3 + 2] = t.z0 + gb * mpp;
+        gattr[k] = g;
+        if(coastAttr && coastField)coastAttr.set(coastField.subarray(k0*4,k0*4+4),k*4);
+      }
+    }
+    const grid = this.grid(seg);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('ground', new THREE.BufferAttribute(gattr, 1));
+    if(coastAttr)geo.setAttribute('coast',new THREE.BufferAttribute(coastAttr,4));
+    geo.setAttribute('uv', grid.uvs);
+    if (crowns) geo.setAttribute('mirrorCrown', new THREE.BufferAttribute(crowns, 1));
+    geo.setIndex(grid.index);
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: TERRAIN_VERT, fragmentShader: TERRAIN_FRAG, defines: { ...(coastal ? { COAST_SHORE: 1 } : {}), ...(this.low ? { LOW: 1 } : { ...(this.shadows ? { SHADOWS: 1 } : {}), ...(lo <= this.seaLevel + 2 ? { SEA_WATER: 1 } : {}) }), ...(gravelOverlay ? { SITE_GRAVEL: 1 } : {}) },
+      uniforms: { ...this.uniforms, ...(coastal ? {
+        coastOrigin: { value: new THREE.Vector2(this.manifest.village[0]-618000,5109000-this.manifest.village[1]) },
+        coastExag: { value:this.exag }, coastOn: { value:1 }, ...(this.low ? {coastPixelScale:{value:0}} : {}), ...coastRecessUniforms(),
+      } : {}), tNormal: { value: tex }, tRoad: { value: roadTex }, tBrook: { value: brookTex }, brook: { value: brook ? 1 : 0 }, texel: { value: mpp }, hull: { value: hull ? 1 : 0 }, hideQuad: { value: new THREE.Vector4() } },
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    if(coastal && this.low)mesh.onBeforeRender=(renderer,_scene,camera,_geometry,material)=>updateCoastView(renderer,camera,material);
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    mesh.matrixAutoUpdate = false;
+    t.box.set(new THREE.Vector3(t.x0, lo - drop, t.z0), new THREE.Vector3(t.x0 + t.size, hi, t.z0 + t.size));
+    t.mesh = mesh;
+    if (!this.low && lo <= this.seaLevel + 2) {
+      // This mask uses the main mesh depth, including water painted just above the sea plane.
+      t.mask = new THREE.Mesh(geo, new THREE.ShaderMaterial({ vertexShader: TERRAIN_VERT, fragmentShader: WATER_MASK_FRAG,
+        uniforms: mat.uniforms, colorWrite: false, depthWrite: false }));
+      t.mask.frustumCulled = false; t.mask.matrixAutoUpdate = false;
+      this.maskScene.add(t.mask);
+    }
+    t.ground = ground;
+    t.canopy = canopy;
+    t.road = road;
+    t.brook = brook;
+    if (!t.ready) this.readyCount++;
+    t.ready = true;
+    // The request touched an unready tile; count its completion in this frame's wanted set.
+    if (t.lastUsed === this.frame) this.use(t);
+    this.group.add(mesh);
+  }
+
+  /** The finest tile in memory that holds a world position. */
+  private find(x: number, z: number): Tile | null {
+    const m = this.manifest;
+    const e = x + m.village[0] - m.origin[0], s = z - (m.village[1] - m.origin[1]);
+    for (let level = this.maxLevel; level >= 0; level--) {
+      const size = m.size / 2 ** level;
+      const t = this.tiles.get(`${level}/${Math.floor(e / size)}_${Math.floor(s / size)}`);
+      if (t?.ready && t.ground) { this.use(t); return t; }
+    }
+    return null;
+  }
+
+  /** True where the finest land exists at a point, whether it is in memory or not. Outside it, nothing will ever load. */
+  hasFinest(x: number, z: number): boolean {
+    const m = this.manifest, size = m.size / 2 ** this.maxLevel;
+    return this.exists.has(`${this.maxLevel}/${Math.floor((x + m.village[0] - m.origin[0]) / size)}_${Math.floor((z - (m.village[1] - m.origin[1])) / size)}`);
+  }
+
+  /** Ground height in metres at a world position, from the finest tile in memory. */
+  heightAt(x: number, z: number): number | null {
+    const ground = this.landHeightAt(x, z);
+    if (ground === null) return null;
+    return this.withDeck(x, z, ground);
+  }
+
+  private withDeck(x: number, z: number, ground: number, surface?:Surface): number {
+    for (const site of this.sites) {
+      if (x < site.box[0] || x > site.box[2] || z < site.box[1] || z > site.box[3]) continue;
+      const deck = site.deckHeight?.(x, z, this.landHeightAt);
+      // A front wheel may be one axle-half up the slope. A body underneath a deck cannot step onto its top.
+      if (deck != null && (!this.groundContact || deck <= this.groundContact.y + 0.25) && deck>=ground) {
+        ground=deck;
+        if (surface && site.deckDriving) {
+          surface.kind=site.deckDriving.kind;surface.halfWidth=site.deckDriving.halfWidth;surface.roadDist=0;
+          surface.deck=true;surface.canopy=0;surface.washboard=false;surface.bridge=false;
+        }
+      }
+    }
+    return ground;
+  }
+
+  private landHeightAt = (x: number, z: number): number | null => {
+    // An attached trailer samples the visible triangles at its four wheel contacts, once in the fixed step.
+    if (this.drawnContact) { const drawn = this.drawnTile(x, z); if (drawn) return this.triangleHeight(drawn, x, z); }
+    const t = this.find(x,z);
+    if (!t) return null;
+    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
+    const a = Math.min(Math.floor(fa), T - 1), b = Math.min(Math.floor(fb), T - 1);
+    const u = fa - a, v = fb - b, g = t.ground!;
+    let ground=(g[b * S + a] * (1 - u) + g[b * S + a + 1] * u) * (1 - v) + (g[(b + 1) * S + a] * (1 - u) + g[(b + 1) * S + a + 1] * u) * v;
+    if (this.groundContact && this.wantsDrawnContact(x,z)) {
+      const drawn=this.drawnTile(x,z);if(drawn)ground+=(this.triangleHeight(drawn,x,z)-ground)*this.wantsDrawnContact(x,z);
+    }
+    return ground;
+  };
+
+  /** Short plants need the drawn triangle, not a finer height sample that may sit below it. */
+  meshHeightAt(x: number, z: number, drawnOnly = false): number | null {
+    let t = this.find(x, z);
+    if(drawnOnly){
+      t=null;
+      for(const q of this.tiles.values())if(q.mesh?.visible && x>=q.x0 && x<q.x0+q.size && z>=q.z0 && z<q.z0+q.size && (!t || q.level>t.level)){
+        const quarter=(x>=q.x0+q.size/2?1:0)+(z>=q.z0+q.size/2?2:0);
+        if((q.mesh.material as THREE.ShaderMaterial).uniforms.hideQuad.value.getComponent(quarter)<.5)t=q;
+      }
+    }
+    if (!t?.mesh) return null;
+    this.use(t);
+    const seg = segFor(t.level), n = seg + 3;
+    const fa = (x - t.x0) * seg / t.size, fb = (z - t.z0) * seg / t.size;
+    const a = Math.min(Math.floor(fa), seg - 1), b = Math.min(Math.floor(fb), seg - 1);
+    const u = fa - a, v = fb - b, i = (b + 1) * n + a + 1;
+    const p = t.mesh.geometry.getAttribute('position');
+    const h00 = p.getY(i), h10 = p.getY(i + 1), h01 = p.getY(i + n), h11 = p.getY(i + n + 1);
+    return u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v
+      : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
+  }
+  private wantsDrawnContact(x:number,z:number):number {
+    for(const site of this.sites)if(x>=site.box[0]&&x<=site.box[2]&&z>=site.box[1]&&z<=site.box[3]&&site.contactMesh?.(x,z))return site.contactMesh(x,z);
+    return 0;
+  }
+  private drawnTile(x:number,z:number):Tile|null {
+    const m=this.manifest,e=x+m.village[0]-m.origin[0],s=z-(m.village[1]-m.origin[1]);
+    for(let level=this.maxLevel;level>=0;level--){
+      const size=m.size/2**level,t=this.tiles.get(`${level}/${Math.floor(e/size)}_${Math.floor(s/size)}`);
+      if(!t?.ready||!t.mesh?.visible)continue;
+      const q=(x>=t.x0+size/2?1:0)|(z>=t.z0+size/2?2:0),hide=(t.mesh.material as THREE.ShaderMaterial).uniforms.hideQuad?.value as THREE.Vector4|undefined;
+      if(!hide||hide.getComponent(q)<.5){this.use(t);return t;}
+    }
+    return null;
+  }
+  private triangleHeight(t:Tile,x:number,z:number):number {
+    const seg=segFor(t.level),n=seg+3,fa=(x-t.x0)*seg/t.size,fb=(z-t.z0)*seg/t.size;
+    const a=Math.min(Math.floor(fa),seg-1),b=Math.min(Math.floor(fb),seg-1),u=fa-a,v=fb-b,i=(b+1)*n+a+1;
+    const p=t.mesh!.geometry.getAttribute('position'),h00=p.getY(i),h10=p.getY(i+1),h01=p.getY(i+n),h11=p.getY(i+n+1);
+    return u+v<=1?h00+(h10-h00)*u+(h01-h00)*v:h11+(h01-h11)*(1-u)+(h10-h11)*(1-v);
+  }
+
+  surfaceAt(x: number, z: number): Surface | null {
+    const t = this.find(x, z);
+    if (!t) return null;
+    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
+    const a = Math.min(Math.floor(fa), T - 1), b = Math.min(Math.floor(fb), T - 1);
+    const u = fa - a, v = fb - b;
+    const lerp = (arr: ArrayLike<number>, stride: number, off: number) =>
+      (arr[(b * S + a) * stride + off] * (1 - u) + arr[(b * S + a + 1) * stride + off] * u) * (1 - v) +
+      (arr[((b + 1) * S + a) * stride + off] * (1 - u) + arr[((b + 1) * S + a + 1) * stride + off] * u) * v;
+    const out: Surface = { ground: lerp(t.ground!, 1, 0), canopy: lerp(t.canopy!, 1, 0), roadDist: 99, halfWidth: 0, kind: 0, bridge: false, washboard: false, brook: 99, level: t.level };
+    if (t.brook) {
+      const k = Math.min(Math.round(fb), T) * S + Math.min(Math.round(fa), T);
+      if (t.brook[k * 4 + 2] > 0) out.brook = Math.min(99, brookBlend(t.brook, S, t.size / T, fa, fb) - t.brook[k * 4 + 2] * 0.02);
+    }
+    if (t.road) {
+      const k = (Math.min(Math.round(fb), T) * S + Math.min(Math.round(fa), T)) * 4;
+      const raw = t.road[k + 2];
+      if (raw > 0) {
+        const enc = this.manifest.roads!.encoding;
+        // Blend the distance only between samples that all have a road; the "no road" value is not a distance.
+        const r = t.road, k00 = (b * S + a) * 4;
+        const whole = r[k00 + 2] > 0 && r[k00 + 6] > 0 && r[k00 + S * 4 + 2] > 0 && r[k00 + S * 4 + 6] > 0;
+        out.roadDist = Math.abs((whole ? lerp(r, 4, 0) : r[k]) - this.zero) * enc.distance;
+        out.halfWidth = t.road[k + 1] * enc.halfWidth;
+        out.kind = raw & 15;
+        out.bridge = (raw & 16) !== 0;
+        out.washboard = (raw & 32) !== 0;
+      }
+    }
+    // Mail and every other ground reader see the same exact deck as the wheels.
+    if (this.groundContact && this.wantsDrawnContact(x,z)){const drawn=this.drawnTile(x,z);if(drawn)out.ground+=(this.triangleHeight(drawn,x,z)-out.ground)*this.wantsDrawnContact(x,z);}
+    out.ground = this.withDeck(x, z, out.ground,out);
+    return out;
+  }
+
+  /** Surface-painted openings follow the actual selected triangles, including partly submerged cells. */
+  fitCoastRecesses():void {
+    if(!this.coast)return;
+    const sea=this.seaLevel;
+    const heights=RECESSES.map(p=>{
+      const y=this.meshHeightAt(p.e-this.coast!.village[0],this.coast!.village[1]-p.n,true);
+      return y===null?p.h:sea+(y-sea)/this.exag;
+    });
+    for(const tile of this.tiles.values())for(const mat of [tile.mesh?.material,tile.mirror?.material]){
+      const anchor=(mat as THREE.ShaderMaterial|undefined)?.uniforms?.coastRecessAnchor?.value as Float32Array|undefined;
+      if(anchor)for(let i=0;i<heights.length;i++)anchor[i*4+2]=heights[i];
+    }
+  }
+
+  /** The current visible tile identities; local props only refit when a load or LOD switch changes them. */
+  get drawnRevision():string {return [...this.tiles.entries()].filter(([,t])=>t.mesh?.visible).map(([key])=>key).join('|');}
+
+  private use(t: Tile) {
+    t.lastUsed = this.frame;
+    if (t.ready && t.countedFrame !== this.frame) { t.countedFrame = this.frame; this.wantedCount++; }
+  }
+
+  update(camera: THREE.PerspectiveCamera, startMode = false) {
+    this.frame++;
+    this.wantedCount = 0;
+    this.drawn = 0;
+    this.drawnFine.clear();
+    this.frustum.setFromProjectionMatrix(this.m4.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    const cam = camera.position, body = this.body;
+    for (const t of this.tiles.values()) {
+      if (t.mesh) t.mesh.visible = false;
+      if (t.ready && (t.level <= 2 ||
+        cam.x >= t.x0 && cam.x < t.x0 + t.size && cam.z >= t.z0 && cam.z < t.z0 + t.size ||
+        body && body.x >= t.x0 && body.x < t.x0 + t.size && body.z >= t.z0 && body.z < t.z0 + t.size)) this.use(t);
+    }
+    this.visit(0, 0, 0, camera.position);
+    this.buildWaiting(cam, startMode);
+    this.pump();
+    if (this.readyCount - this.wantedCount > SPARE_CAP && this.frame - this.lastEvict >= EVICT_INTERVAL) {
+      this.lastEvict = this.frame;
+      this.evict();
+    }
+  }
+
+  private get zero() { return this.manifest.roads?.encoding.signed ? this.manifest.roads.encoding.zero ?? 128 : 0; }
+
+  private visit(level: number, i: number, j: number, cam: THREE.Vector3, mirror = false): boolean {
+    const t = this.tile(level, i, j);
+    if (!t) return false;
+    if (mirror && !this.frustum.intersectsBox(t.box)) return true;
+    const dist = t.box.distanceToPoint(cam);
+    if (!t.ready) { this.request(t, dist); return false; }
+    this.use(t);
+    const hide = (t.mesh!.material as THREE.ShaderMaterial).uniforms.hideQuad.value as THREE.Vector4;
+    if (level < this.maxLevel && dist < t.size * this.split) {
+      const kids: Tile[] = [];
+      let ok = true, partial = 0;
+      for (let q = 0; q < 4; q++) {
+        const c = this.tile(level + 1, i * 2 + (q & 1), j * 2 + (q >> 1));
+        if (c) { this.use(c); kids.push(c); if (!c.ready) { this.request(c, c.box.distanceToPoint(cam)); ok = false; } }
+        else if (!t.quadSea[q]) partial |= 1 << q;   // finer data stops here: this tile keeps that quarter
+      }
+      if (ok && kids.length) {
+        for (const c of kids) this.visit(c.level, c.i, c.j, cam, mirror);
+        if (partial && this.frustum.intersectsBox(t.box)) {
+          // Finer tiles cover some quarters; draw only the quarters they leave.
+          hide.set(partial & 1 ? 0 : 1, partial & 2 ? 0 : 1, partial & 4 ? 0 : 1, partial & 8 ? 0 : 1);
+          t.mesh!.visible = true; this.drawn++;
+        }
+        return true;
+      }
+    }
+    hide.set(0, 0, 0, 0);
+    if (this.frustum.intersectsBox(t.box)) { t.mesh!.visible = true; this.drawn++; }
+    if (!mirror && level === 8) this.drawnFine.add(`${i}_${j}`);   // also when off screen: its trees may still reach into view
+    return true;
+  }
+
+  /** The colourless query uses only sea-capable tiles currently visible in the main picture. */
+  waterMask(): THREE.Scene | null {
+    let count = 0;
+    for (const t of this.tiles.values()) if (t.mask) {
+      t.mask.visible = !!t.mesh?.visible;
+      if (t.mask.visible) count++;
+    }
+    this.maskScene.name = 'Water visibility';
+    return count ? this.maskScene : null;
+  }
+
+  /** Mirror visibility has its own frustum. Restore the main visibility and quadrant masks even on failure. */
+  withReflection(camera: THREE.PerspectiveCamera, focus: THREE.Vector3, draw: () => void): void {
+    const frustum = this.frustum.clone(), drawn = this.drawn;
+    const saved: { tile: Tile; mesh: THREE.Mesh; visible: boolean; hide: THREE.Vector4; geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[] }[] = [];
+    for (const t of this.tiles.values()) if (t.mesh) {
+      const mesh = t.mesh, hide = (mesh.material as THREE.ShaderMaterial).uniforms.hideQuad.value as THREE.Vector4;
+      saved.push({ tile: t, mesh, visible: mesh.visible, hide: hide.clone(), geometry: mesh.geometry, material: mesh.material });
+      mesh.visible = false;
+    }
+    this.mirrorFocus.value.set(focus.x, focus.z);
+    this.frustum.setFromProjectionMatrix(this.m4.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    try {
+      this.visit(0, 0, 0, focus, true);
+      for (const state of saved) if (state.mesh.visible) {
+        const t = state.tile;
+        if (!t.mirror) {
+          // One coarser grid step, without moving the tile or changing its LOD boundaries.
+          const seg = segFor(t.level), n = seg + 3;
+          let index = this.mirrorIndices.get(seg);
+          if (!index) {
+            const axis = [0]; for (let i = 1; i <= seg + 1; i += 2) axis.push(i); axis.push(seg + 2);
+            const ids: number[] = [];
+            for (let y = 0; y < axis.length - 1; y++) for (let x = 0; x < axis.length - 1; x++) {
+              const a = axis[y] * n + axis[x], b = axis[y + 1] * n + axis[x], c = axis[y] * n + axis[x + 1], d = axis[y + 1] * n + axis[x + 1];
+              ids.push(a, b, c, c, b, d);
+            }
+            index = new THREE.BufferAttribute(new Uint32Array(ids), 1); this.mirrorIndices.set(seg, index);
+          }
+          const geometry = new THREE.BufferGeometry();
+          for (const [name, attribute] of Object.entries(state.geometry.attributes)) geometry.setAttribute(name, attribute);
+          geometry.setIndex(index);
+          const original = state.material as THREE.ShaderMaterial;
+          const material = new THREE.ShaderMaterial({ vertexShader: MIRROR_TERRAIN_VERT, fragmentShader: TERRAIN_FRAG, defines: { MIRROR: 1, ...(original.defines.COAST_SHORE ? { COAST_SHORE: 1 } : {}), ...(original.defines.SITE_GRAVEL ? { SITE_GRAVEL: 1 } : {}) },
+            uniforms: { ...original.uniforms, sourceHull: original.uniforms.hull, mirrorFocus: this.mirrorFocus } });
+          t.mirror = { geometry, material };
+        }
+        state.mesh.geometry = t.mirror.geometry; state.mesh.material = t.mirror.material;
+      }
+      draw();
+    } finally {
+      for (const state of saved) {
+        state.mesh.visible = state.visible; state.mesh.geometry = state.geometry; state.mesh.material = state.material;
+        ((state.material as THREE.ShaderMaterial).uniforms.hideQuad.value as THREE.Vector4).copy(state.hide);
+      }
+      this.frustum.copy(frustum); this.drawn = drawn;
+    }
+  }
+
+  private evict() {
+    let excess = this.readyCount - this.wantedCount - SPARE_CAP;
+    // Reuse only eligible candidates; ordinary frames allocate no eviction array.
+    for (const t of this.tiles.values()) if (t.ready && t.level > 2 && this.frame - t.lastUsed > TILE_GRACE && !t.mesh!.visible) this.spare.push(t);
+    this.spare.sort((a, b) => a.lastUsed - b.lastUsed);
+    for (const t of this.spare) {
+      if (excess <= 0) break;
+      this.group.remove(t.mesh!);
+      if (t.mask) { this.maskScene.remove(t.mask); (t.mask.material as THREE.Material).dispose(); }
+      if (t.mirror) {
+        for (const name of Object.keys(t.mirror.geometry.attributes)) t.mirror.geometry.deleteAttribute(name);
+        t.mirror.geometry.setIndex(null); t.mirror.geometry.dispose(); t.mirror.material.dispose();
+      }
+      // The index and uv buffers are shared by all tiles of a mesh density; free only what this tile owns.
+      const geo = t.mesh!.geometry;
+      geo.deleteAttribute('uv');
+      geo.setIndex(null);
+      geo.dispose();
+      const mat = t.mesh!.material as THREE.ShaderMaterial;
+      (mat.uniforms.tNormal.value as THREE.Texture).dispose();
+      if (mat.uniforms.tRoad.value !== this.noRoad) (mat.uniforms.tRoad.value as THREE.Texture).dispose();
+      if (mat.uniforms.tBrook.value !== this.noBrook) (mat.uniforms.tBrook.value as THREE.Texture).dispose();
+      mat.dispose();
+      this.tiles.delete(`${t.level}/${t.i}_${t.j}`);
+      this.readyCount--;
+      t.ready = false; t.mesh = null; t.mask = null; t.mirror = null;
+      t.ground = t.canopy = null; t.road = null; t.brook = null;
+      excess--;
+    }
+    this.spare.length = 0;
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "transits": 4,
+  "waitFrames": 7967,
+  "waitedCars": 8,
+  "frames": 18000,
+  "spawns": 23,
+  "maxQueueTraffic": 0,
+  "held": true,
+  "shown": 1,
+  "seconds": 330.8166666665301,
+  "bad": [],
+  "pool": 4,
+  "drivers": 4
+}

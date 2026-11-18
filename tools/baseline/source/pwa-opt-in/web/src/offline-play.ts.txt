@@ -1,0 +1,80 @@
+// Called only by the public build. No timers or work in the game's frame loop.
+interface Progress { bytes: number; total: number; count: number; files: number; done: boolean; running: boolean; error?: string }
+const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`;
+export async function offlinePlay(panel: HTMLElement | null, before: HTMLElement | null, pageKey=''): Promise<void> {
+  if (!panel || !isSecureContext || !('serviceWorker' in navigator)) return;
+  const group = Object.assign(document.createElement('section'), { id:'offlinePlay' });
+  group.setAttribute('aria-label','Offline play');
+  group.style.cssText='margin-top:12px;border-top:1px solid #53616b;padding-top:10px;font-size:13px;line-height:1.4;max-width:280px';
+  group.innerHTML=`<b>Play without internet</b><p style="margin:6px 0">On iPhone or iPad, use Share → Add to Home Screen, then download here. Safari tabs can lose saved data after seven days without use; low space can also remove it.</p>
+    <div id="offlineSize">Checking download size…</div><progress id="offlineProgress" max="1" value="0" style="width:100%;height:10px" aria-label="Download progress"></progress>
+    <div id="offlineStatus" role="status" aria-live="polite">Getting ready…</div><div id="offlineStorage" style="color:#b9c3cc;margin:5px 0"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button id="offlineStart" type="button" disabled>Download for offline play</button><button id="offlineStop" type="button" hidden>Stop</button><button id="offlineRemove" type="button" hidden>Remove download</button></div>
+    <div id="offlineConfirm" role="group" aria-label="Remove download" hidden><p>Remove the download? You will need the internet to download it again.</p><div style="display:flex;gap:6px"><button id="offlineConfirmRemove" type="button">Remove</button><button id="offlineCancelRemove" type="button">Cancel</button></div></div>`;
+  for (const button of group.querySelectorAll('button')) button.style.cssText='flex:1;min-height:44px;border-radius:6px;border:1px solid #6b7780;background:none;color:inherit;font:inherit;cursor:pointer;padding:6px';
+  panel.insertBefore(group,before);
+  const get = <T extends HTMLElement>(id: string) => group.querySelector<T>(`#offline${id}`)!;
+  const start=get<HTMLButtonElement>('Start'), stop=get<HTMLButtonElement>('Stop'), remove=get<HTMLButtonElement>('Remove');
+  const text=get('Status'), size=get('Size'), storage=get('Storage'), bar=get<HTMLProgressElement>('Progress');
+  let progress: Progress | undefined, working=false, ownDownload=false, confirming=false, sequence=0;
+  const show=(p: Progress) => {
+    if (p.error) text.textContent=p.error;
+    if (typeof p.total !== 'number') { working=false; ownDownload=false; start.disabled=false; stop.hidden=true; remove.disabled=false; return; }
+    progress=p; working=p.running; if(!p.running) ownDownload=false;
+    size.textContent=`Full download: ${mb(p.total)}`;
+    bar.max=p.total; bar.value=p.bytes;
+    if (!p.error) text.textContent=p.done ? 'Done: this game now works without the internet.' : `${mb(p.bytes)} of ${mb(p.total)}${p.running ? (ownDownload ? ' · Keep this window open.' : ' · Another window is downloading. Reopen Settings for progress.') : p.bytes ? ' · Stopped. Resume when ready.' : ' · Places you drive are saved as you go.'}`;
+    start.hidden=p.done || p.running; start.disabled=false; start.textContent='Download for offline play';
+    stop.hidden=!p.running; remove.hidden=p.bytes===0 || confirming; remove.disabled=p.running;
+  };
+  const talk=(type:string, callback=show, confirmed=false) => {
+    const target=navigator.serviceWorker.controller;
+    if (!target) { text.textContent='Offline play is not ready. Close and open the game online.'; return; }
+    const ticket=++sequence;
+    if(type==='start') {working=true;ownDownload=true;}
+    const channel=new MessageChannel();
+    channel.port1.onmessage=e=>{ const p=e.data as Progress; if(ticket===sequence) callback(p); if (type!=='start' || !p.running) { channel.port1.close(); } };
+    target.postMessage({type,pageKey,confirmed},[channel.port2]);
+  };
+  try {
+    // Probe first: private/blocked storage must never prevent a normal online game.
+    const probe=await caches.open('mmm-offline-probe'); await probe.put('/__probe',new Response('ok')); await caches.delete('mmm-offline-probe');
+    const registration=await navigator.serviceWorker.getRegistration('/') ?? await navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'});
+    void registration.update().catch(()=>{});
+    if (!navigator.serviceWorker.controller) await new Promise<void>((resolve) => {
+      const done=()=>{clearTimeout(timer);navigator.serviceWorker.removeEventListener('controllerchange',done);resolve();};
+      const timer=setTimeout(done,8000); navigator.serviceWorker.addEventListener('controllerchange',done);
+    });
+    // Binding and update preparation never hold up the game's land loading.
+    talk('prepare',()=>talk('status'));
+  } catch { text.textContent='Saving is not available in this window. You can still play online.'; return; }
+  start.addEventListener('click',async()=>{
+    if (working || !progress) return;
+    start.disabled=true;
+    try {
+      const kept=await navigator.storage?.persist?.().catch(()=>false);
+      storage.textContent=kept ? 'The browser agreed to keep this download.' : 'The browser did not agree to keep this download. It may remove it.';
+      const estimate=await navigator.storage?.estimate?.();
+      if (!estimate || estimate.quota===undefined || estimate.usage===undefined) { storage.textContent+=' Free space could not be checked.'; }
+      else if (estimate.quota-estimate.usage < (progress.total-progress.bytes)*1.15+8*1048576) {
+        text.textContent='Not enough room. Free some space, then try again.'; start.disabled=false; return;
+      }
+      talk('start');
+    } catch { text.textContent='Saving failed. Free some space, then try again.'; start.disabled=false; }
+  });
+  stop.addEventListener('click',()=>talk('stop'));
+  remove.addEventListener('click',()=>{
+    confirming=true;remove.hidden=true;
+    const box=get('Confirm');box.hidden=false;get<HTMLButtonElement>('ConfirmRemove').focus();
+  });
+  get<HTMLButtonElement>('CancelRemove')?.addEventListener('click',()=>{
+    confirming=false;get('Confirm').hidden=true;remove.hidden=!progress?.bytes;remove.focus();
+  });
+  get<HTMLButtonElement>('ConfirmRemove')?.addEventListener('click',()=>{
+    confirming=false;get('Confirm').hidden=true;remove.hidden=false;remove.disabled=true;
+    text.textContent='Removing download…';
+    talk('remove',p=>{show(p);if(!p.error) text.textContent='Download removed. Your career and settings are kept.';},true);
+  });
+  // Refresh saved-file counts only when the settings are opened, never while driving.
+  document.getElementById('gear')?.addEventListener('click',()=>{if(!ownDownload) talk('status');});
+}

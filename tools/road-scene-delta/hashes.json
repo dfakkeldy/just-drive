@@ -1,0 +1,291 @@
+{
+  "version": 1,
+
+  "files": [
+    {
+      "file": "areas/judique/5/12_28.r.png",
+      "before": "ca5f05b1f3d129ab7661f7ad837867fd3d9eaff30cbe3c494c487d43a2c4c45b",
+      "sha256": "8290a42dcb0808385a6f74e388b8fea07edc4d3a2753480cba9f8bdf27423e73"
+    },
+    {
+      "file": "areas/judique/5/12_29.r.png",
+      "before": "41b64ab7139f4ecc24035b07cf7f91fd77decf602858ad28757326614ea233d4",
+      "sha256": "57f15767e4c52cdb6d2274875cf02f72a183cc5dae7ce6bf1b95675c58489fe7"
+    },
+    {
+      "file": "areas/judique/5/13_29.r.png",
+      "before": "68f1e01e2cd853fb657a0204ee9ed4dfde0c5967415f902d73c2acb2bd0af037",
+      "sha256": "02fe7ffb7868d58d578abd24b5928ab26a16aeed1e4c5d4e2f5836da608b08cf"
+    },
+    {
+      "file": "areas/judique/6/25_57.r.png",
+      "before": "c225b3f1bde6378692dcf2c7132bf6f996d6a3b2e2b990c9f470e0f6fc6cb16d",
+      "sha256": "444bdc5ed4dbfe749b8545db0e526561e018ded4818bbf7bf2996f371346562c"
+    },
+    {
+      "file": "areas/judique/6/25_59.r.png",
+      "before": "78fa996881f784a438b5be7ce89e2200f715511673d3dcca889be02ec0312c9f",
+      "sha256": "38713308fe76976ff97f9d337fce668aac375695105ffda66aae33dd7001ba27"
+    },
+    {
+      "file": "areas/judique/6/26_59.r.png",
+      "before": "1c511cbee66b69b4c334429aa8202cef093af0f2abe7373a88baab7dee2f0915",
+      "sha256": "e094d52584a9cbda2ddc7c565d0053ab64899ae6e1446976b654522a6379150f"
+    },
+    {
+      "file": "areas/judique/7/51_114.r.png",
+      "before": "72fe21cf475de5576c2a349bfe68cc2ba71d6fad59640109426581fbaff40db5",
+      "sha256": "e261346f0e2a859cd28b4f07437ac8ff402efaba793a611505cb0fbd6dd290ec"
+    },
+    {
+      "file": "areas/judique/7/51_118.r.png",
+      "before": "07a2eff3cbae21d45bc73283b28fde4633589db6433f0574c18ae850eb8093f3",
+      "sha256": "62c0b33443fa8708088c1d646fa5a351c7c82ff65149454c761b62a0976eaa9f"
+    },
+    {
+      "file": "areas/judique/7/52_118.r.png",
+      "before": "adfa76e2e0ce5d21be1556b8b2d2847c77cedd0c11eb9f9736e091e52c980d08",
+      "sha256": "afa090f214e6d8e7536ec821ff2d6848b4d894ef0ad189aea069e900e6b2e1b7"
+    },
+    {
+      "file": "areas/judique/8/102_228.r.png",
+      "before": "4ac3e366825989d070b20c6fd69e020f16753fd82775b75def5131eb03cbe150",
+      "sha256": "7bad0a63a9ec30212ac9bb1a9bde681fbb41001eb35b19ab5bcf1992f5f388e5"
+    },
+    {
+      "file": "areas/judique/8/103_228.r.png",
+      "before": "a9446a344bceb4fae05756ff1eba9c71f7a5cad7c0a461905828bc4f2a63e8ac",
+      "sha256": "ee85aafd696a5cc07d0c0b901f6c2b9df4a2904758f3fbf24c003c6e5233cb10"
+    },
+    {
+      "file": "areas/judique/8/103_236.r.png",
+      "before": "8a71cbe31be5a820cd3f59dc54d4bb54f4e44891372a095e0439fd3716b49b62",
+      "sha256": "fc068335dd53b18a4659bd925a4c47acbaed5d16c8c8caafe023df1653f3d3f9"
+    },
+    {
+      "file": "areas/judique/8/103_237.r.png",
+      "before": "b1d57cc80136805df58e1d17560bb0845172b921a5506106c3f61edb682234d8",
+      "sha256": "85f5de2229e01b86b3da1a381c3c617396edf7b327662e478b5cbaa84029938e"
+    },
+    {
+      "file": "areas/judique/8/104_236.r.png",
+      "before": "940de85218121e7a3fc83ffeeb70686c2e19f65388b4e734079bf42b015ee037",
+      "sha256": "91e3ab91e7078a5a1f23c4201f6b2fc1a3d190bfdbd164d11df34051c33ed9f3"
+    },
+    {
+      "file": "areas/judique/8/104_237.r.png",
+      "before": "050335afe84644175b067e11f703b15a9fbf00c6d24629bfc08f3e84ace81b63",
+      "sha256": "6a5d31607f184c6e6db38c082a3bad34bbf7e1ca23197bff1c4acf2676ccf1bf"
+    },
+    {
+      "file": "areas/judique/buildings.json",
+      "before": "4610c393ebf07189ff8a49bd7301f076613db6199b952dab1958d90b9babad09",
+      "sha256": "bb51fbe87cf55d636db3d284826d42e2d52d9dbc5fbb1452235f0c5a842c0f86"
+    },
+    {
+      "file": "areas/judique/cemeteries.json",
+      "before": "053b404bf19c32cb69e321252ddfd7305d26def219f857aac6e1684351fd0537",
+      "sha256": "b1857205c351aceab3b557cada89313fe5c1cd2ef31b73489f7eb3b043a0ff83"
+    },
+    {
+      "file": "areas/judique/props.json",
+      "before": "8286f6dc02cab8a0ca68ad94bcaa8ef7b8d3f2a3332dbe3e7c869cc1019eeac1",
+      "sha256": "0b1f95a1a22b20f789660573d89cc7880abb0ec2157c70c15180c57dd4f74c74"
+    },
+    {
+      "file": "areas/judique/roads.json",
+      "before": "4b71a193ada0e1b3cd4fa5a136dde1809483b30596b652b01419027fb1735b9d",
+      "sha256": "ca15b47b7d71407f4950944bc16344eb3d9c45addeac917382382cfe67a1eaa4"
+    },
+    {
+      "file": "areas/judique/streams.json",
+      "before": "68b9ecbc5eb8b329e97141198657e220481600c515659b7f569108e13b109372",
+      "sha256": "fbda8345f88f63549ba99731a31a3092bb7daa6307da553f5a05e38352763006"
+    },
+    {
+      "file": "terrain/5/14_17.r.png",
+      "before": "8543efb6d112d3be0dd2331c04ebbf3ba230c13eec4f5cdbc99a8ab683cb6dfc",
+      "sha256": "7be42f0089da11d076fd9c32c38595146b83decf5b42d35cefcc5fa6704a711b"
+    },
+    {
+      "file": "terrain/5/15_18.r.png",
+      "before": "620b5935a86f607158e2ce05b331cbd54c871ba9ceb5b0fe4526b8ed3743234e",
+      "sha256": "3eccb2245b1e6d7f56d219aaa01f52ad69641e59aa16e658febf8d7d062cbf42"
+    },
+    {
+      "file": "terrain/5/16_18.r.png",
+      "before": "5a83b190e2be8ddc18786bb70248386a265b55915bd39dfbc31dc5f9b73444b3",
+      "sha256": "a8756fe273cad9fadf66aa20a565fda9f6098a237502da5e6f01ad45dc8a97e3"
+    },
+    {
+      "file": "terrain/5/16_19.r.png",
+      "before": "8d6a4ae6b06a1c565ff26146ea4982dd36e25f616c9c0354edf8f1fbf823fee1",
+      "sha256": "d36424d9f3f19ed602bbaac7823925b365b4831aa7b8361603ae0f50c77d3812"
+    },
+    {
+      "file": "terrain/5/17_19.r.png",
+      "before": "1ef6792ab86042260b001f11c638915c7e24ad5ef34d19afdc02b8173848a5d8",
+      "sha256": "4a77b91c79822c6672ea97b2c80a1fe21a5515cb848fa5cddd9bd37ff7bb2f39"
+    },
+    {
+      "file": "terrain/6/28_35.r.png",
+      "before": "ebae171128a64ac7f7680df8910b8678d917dcb118761a040036ed4b80ead12a",
+      "sha256": "7b9763edfa61bb89fce78a6722f27c97acb9cf1340370d8aeecb290c9b76e58f"
+    },
+    {
+      "file": "terrain/6/29_35.r.png",
+      "before": "f9b6a916e72b2fa9554c7ada33578b01fb541e13b70e0cf3ee4f2da4c914a969",
+      "sha256": "bbc055ae42b8266ede7a81063055c7df5782a42fabb24113f541f72197a474a8"
+    },
+    {
+      "file": "terrain/6/31_37.r.png",
+      "before": "6eae0aa51802351aa5e8abd136af538569531093d435af0aab82a017cd1a315e",
+      "sha256": "0d62f812d6e735a087b01507feb3f5d368aa3544cca463ab5045b6d5faa7e1a7"
+    },
+    {
+      "file": "terrain/6/32_37.r.png",
+      "before": "293cb5b092ad73deb916b4d47645ae7e8b545c41e4d06a91ff483ae4690d22e9",
+      "sha256": "2a7d6cb5c9bf09660c54f607f3ab3fd750690a536d088b26c4c8353e2cf0017a"
+    },
+    {
+      "file": "terrain/6/33_39.r.png",
+      "before": "b67c5f06a5ff1db5eddae3b52deccf8beff3521b60cb8f8451cb3a289096f60d",
+      "sha256": "5dabe041e96f3457c87e94464b93d400ca4c1cb858515559285a267f8e774816"
+    },
+    {
+      "file": "terrain/6/34_39.r.png",
+      "before": "edf302a155d188032811eac4e0620b4411eb2a2f93b7b57aa80fe15915c65a32",
+      "sha256": "312656dbc619ff362d2fc8015648f1e818e18a95063b36e3915b9a6f3e3df3dd"
+    },
+    {
+      "file": "terrain/7/57_70.r.png",
+      "before": "e628d2d8b270126dc78b862b3f4aeab8890be574ece0fa0d310c33f30b3ce238",
+      "sha256": "292124c142bdf23cd2370cb36209cc267e320c906a2908cc42cfe18c3fa0b261"
+    },
+    {
+      "file": "terrain/7/58_70.r.png",
+      "before": "a7889c66ba76aff2e98687e1bb453a41df0f807be70c930d267038850156573c",
+      "sha256": "2518ba508b510a52bf7d98a60dd8899d577585b6b2532f3c7a78f2339c136694"
+    },
+    {
+      "file": "terrain/7/58_71.r.png",
+      "before": "8aa4b87df6eda5b6bcff2e0b62f733441f5f9e1adf256352140fa33743867872",
+      "sha256": "b869ab72b5ef88e816f7a2169a30b8b2a947a407733d22e637d17abb4df20712"
+    },
+    {
+      "file": "terrain/7/62_74.r.png",
+      "before": "af284bdc93fabd97c1a66653bfdebdeae1663492b9ee608eeb1b332836a3773e",
+      "sha256": "2b94cb0d0332d0017c999926f62fd01c0c0063a0fadf608c6d8cc4cd480a274e"
+    },
+    {
+      "file": "terrain/7/63_74.r.png",
+      "before": "c6b3daaa08472e97ff8a8252b04c718b8b9a50a004d3174aef7f26a1c85cc586",
+      "sha256": "ee9fa5cb2ec058c2a51c7ff635b921d2df1a70619a65dcbdcfe82ecfb3ce7e24"
+    },
+    {
+      "file": "terrain/7/64_74.r.png",
+      "before": "8c197df85289c1e3e2f6ee088c4a0d28a56f8ac5881bade739f0d6c91edc1b11",
+      "sha256": "03acaff762c7e6715e057ff39b300b317ff432bea898d980ffb994c15f99c1e3"
+    },
+    {
+      "file": "terrain/7/67_79.r.png",
+      "before": "b3290ffd6c8d99727feea4eef7d70fa3c57fe41144399f1d38111604468399ae",
+      "sha256": "1d66bf3798f04e58f8ba540537876a0ae435e1bdc3b886149de526639e30109d"
+    },
+    {
+      "file": "terrain/7/68_79.r.png",
+      "before": "dc05cdd47059fea8354938b1f1376e29b4bba82d109d938915f976bc4922825a",
+      "sha256": "d11f702374e4c7b21b4f70fae32420ac557b771fca7c92c04a54aee060ceab0c"
+    },
+    {
+      "file": "terrain/8/115_141.r.png",
+      "before": "0018efc955db08afe7395d2833bd7043ff45225504b079e26e83c8c7d869a12a",
+      "sha256": "c78081cf44cb8d53aaae118f2677d92cbcf58146b8ec0ddf03d89e3e0a8c449b"
+    },
+    {
+      "file": "terrain/8/116_141.r.png",
+      "before": "4a8f43d5b6e8ad9ca60e37dc31560fe330f8becc2da63d5119f3a34cd1ac3475",
+      "sha256": "759cf17168f5c6316163f3a1b980946c3a25227478ec2f228cf8bf41072d7ec0"
+    },
+    {
+      "file": "terrain/8/116_142.r.png",
+      "before": "3f18d0bf30989af59242f682523984ec22487bd5b8f6c4f74ea8736506571f5d",
+      "sha256": "64ff2bcd2fb9bd68bbf8b5643b6ca957776d7f4ccd8db6356484115e3391c437"
+    },
+    {
+      "file": "terrain/8/117_142.r.png",
+      "before": "5b626980aaa832f0b6579683d2155fe3ffe364cb01a856938faeca3ae6c4c4ca",
+      "sha256": "d682ea6117b725552732e2feaa46c9705f8de197e91ad4fffb3f5e248507f323"
+    },
+    {
+      "file": "terrain/8/125_148.r.png",
+      "before": "0ddb5f206a273802cf5dec6f3f126299331246179885691955b9b68825af225f",
+      "sha256": "057c4653d25b442d83c4b8be879d9be8966b0c67dd06a26a07d453b251e541b1"
+    },
+    {
+      "file": "terrain/8/125_149.r.png",
+      "before": "a006544ddd7c83deaa067f236d8f3e718a2732b4aaa8eee3a84e7a137755be6a",
+      "sha256": "d407a6f1b0fbcd3f57c506385e07550bf75b37b407b9323f248a48c6ae1bea01"
+    },
+    {
+      "file": "terrain/8/126_149.r.png",
+      "before": "7fb12fb7c2a6c4d17ba7de521a55e52f5cd0ccce10796e1f41eace8ef9583327",
+      "sha256": "6ee2ffbb8e60bf633f3793cd545782cf222bcd914f224956a46819a6751d5d41"
+    },
+    {
+      "file": "terrain/8/127_149.r.png",
+      "before": "e615b9f7e38e0d194b6a6b85ff80ab91a79186a12ce46029aecf605ef32e89a5",
+      "sha256": "cab27f450197138454cd32859e40111c68fc6584da8e2e30f6fe4aad523f65fc"
+    },
+    {
+      "file": "terrain/8/128_149.r.png",
+      "before": "27c9aa417468457e477f7e9b331101cf9169d99c89b85b93bd61dabf486febf5",
+      "sha256": "dcab3ca1f90cf71cd0d01a3ae2a79fd52c8d24e44511d5b5821a23cc7552f150"
+    },
+    {
+      "file": "terrain/8/129_149.r.png",
+      "before": "76a3e1c22b100cacc8c3fd48b2e908be8f2d341c8dc62097aa1366c0e5885ee5",
+      "sha256": "a9841bdb5bd9cbedb1936aa261e649fdac52e4508508aab1a3297df3da087b8a"
+    },
+    {
+      "file": "terrain/building-styles.json",
+      "before": "9775b0d67451a9bb2c0a846b83fcb01538cfac454d38f8a938b6d790d19b65ee",
+      "sha256": "70e5a303915cf5cb39f3212e529d094821c820b85f4b15d5111988396bee13d3"
+    },
+    {
+      "file": "terrain/buildings.json",
+      "before": "6af28cecd0078ecdb7700f041340328438850bbbbb65378e4b00fe94a5a9240b",
+      "sha256": "1a41baac569936799a9fc1951de464915ae4a5988549edf44444b92c23c01cea"
+    },
+    {
+      "file": "terrain/cemeteries.json",
+      "before": "4e944a02f13051b401b9bc9d33a0c5a25a1047c7ff53b040a49bbcc98d569314",
+      "sha256": "0083be318794bc4bd1083b72958436b4b3fbe54a95aa384b8c01f41b58ea60ce"
+    },
+    {
+      "file": "terrain/manifest.json",
+      "before": "2afe4505fcbd59c588240357497dd929e171702a69134cdae81a82e0f57b1922",
+      "sha256": "412024543a5e1608803d36a1b9b95318f07660ed3c964a14fb295deb9b0edffc",
+      "ownedCounts": {
+        "before": {
+          "buildings": 1059,
+          "buildingStyles": 1040
+        },
+        "after": {
+          "buildings": 1065,
+          "buildingStyles": 1046
+        }
+      }
+    },
+    {
+      "file": "terrain/props.json",
+      "before": "5087b0cd2fe710be011fef6534fd7cb7e50a78794c75cff4e1946844478d3b94",
+      "sha256": "eafc54605536b28777c667907824b3e518117f991fac538e6358dd68cdb447a3"
+    },
+    {
+      "file": "terrain/roads.json",
+      "before": "15e9606043c8679a4958e109c46adc206d07e45cf7c7796180307e6b53d282cc",
+      "sha256": "2a34feac490ceccad35af2b6ffc5fac1315baaa72d3c8795828dfed4cc874f82"
+    }
+  ]
+}

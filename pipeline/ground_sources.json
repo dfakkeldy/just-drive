@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "dates": [
+    "2025-08-07",
+    "2026-08-07"
+  ],
+  "inputs": [
+    {
+      "path": "data/raw/vectors/FOR_Forest_WM84__01_leading_forest_species.geojson",
+      "sha256": "53866e6ef50fd90a89d46629b5a5e24e3240f52faf2111499a861f930152f23c"
+    },
+    {
+      "path": "data/raw/ground-classes/mabou-designated.geojson",
+      "sha256": "f4e959ee417a1f86c11abb6e5e56016f741bb148cb467246f7984882d1fd6681"
+    },
+    {
+      "path": "data/raw/ground-classes/mabou-cnwi.geojson",
+      "sha256": "1f51252d6ed28e329b0e5cead2c4e24b8bcbbae86e5c57c7503eadb2fcc70ba1"
+    },
+    {
+      "path": "data/work/threads/ground-classes/mabou-sentinel-2025-indices.npz",
+      "sha256": "415276e39ceca524bdcf09faab538452dbb4499e62dab34d229aab269ddac1bc"
+    },
+    {
+      "path": "data/work/threads/ground-classes/mabou-sentinel-2026-indices.npz",
+      "sha256": "e1914b98db8ec16c4c9dbaaddffadbf81b3de1f1530df19f5b006b7d3127e051"
+    },
+    {
+      "path": "data/raw/areas/judique/vectors/FOR_Forest_WM84__01_leading_forest_species.geojson",
+      "sha256": "43e0e6179fc5fe40652179d30c90fb87a5e9de16fda1a172c6726ad9d98dc0da"
+    },
+    {
+      "path": "data/raw/ground-classes/judique-designated.geojson",
+      "sha256": "d766d7ee65b5bfa6720746d3dcf7a60b99a94c2bda1bdd293aa506315436cb6f"
+    },
+    {
+      "path": "data/raw/ground-classes/judique-cnwi.geojson",
+      "sha256": "bb3bddd926ebf43c614e888c33ab1f671a256df3f8f2857addac265d159b68a1"
+    },
+    {
+      "path": "data/work/threads/ground-classes/judique-sentinel-2025-indices.npz",
+      "sha256": "ba37e6ee55c79b59ee3eb403e1f265ef5033192b41af319ce728237ee8683b57"
+    },
+    {
+      "path": "data/work/threads/ground-classes/judique-sentinel-2026-indices.npz",
+      "sha256": "c40ae934d04187a2379615c3b2fb163b663a28d10e8e90338d54e4627107cecc"
+    },
+    {
+      "path": "data/raw/areas/porthood/vectors/FOR_Forest_WM84__01_leading_forest_species.geojson",
+      "sha256": "9d83261905168cb29615d0fb88abc62e011a8162cfc2078e3acf132aaf067b29"
+    },
+    {
+      "path": "data/raw/ground-classes/porthood-designated.geojson",
+      "sha256": "a971debfd7e06e4617d9dcbc54b6aa779c5f616233bd575a102d666328e992db"
+    },
+    {
+      "path": "data/raw/ground-classes/porthood-cnwi.geojson",
+      "sha256": "955760348363d7f6c085f0a0e593eecc48be5f19fe20caea832c391ff2254c4f"
+    },
+    {
+      "path": "data/work/threads/ground-classes/porthood-sentinel-2025-indices.npz",
+      "sha256": "482f98815572925451b2581d09b8cef2bc0c5b0cff55e232c12e1327a7852a69"
+    },
+    {
+      "path": "data/work/threads/ground-classes/porthood-sentinel-2026-indices.npz",
+      "sha256": "77e3ddc9412499b94df860600eea7ea6fd684d33c6e107a9b7a1412d818549f4"
+    },
+    {
+      "path": "data/raw/areas/pointtupper/vectors/FOR_Forest_WM84__01_leading_forest_species.geojson",
+      "sha256": "1d8c787feeeae8ca4e3752eed20f3b8e9a384bec70a300b8e7a82b4b512e4c85"
+    },
+    {
+      "path": "data/raw/ground-classes/pointtupper-designated.geojson",
+      "sha256": "bbf4a7b81b409934dffc2ed399b1e3fe97ed4c59adecc0f9f67ae4e318505605"
+    },
+    {
+      "path": "data/raw/ground-classes/pointtupper-cnwi.geojson",
+      "sha256": "aa38588acb5062ffc5b706ae2e0d486420397fbfc380422efe5c1055e108a388"
+    },
+    {
+      "path": "data/work/threads/ground-classes/pointtupper-sentinel-2025-indices.npz",
+      "sha256": "a83cbb86616035ec29ca79fe358f9759e6eecec84060bfced9c3b438c83c84e8"
+    },
+    {
+      "path": "data/work/threads/ground-classes/pointtupper-sentinel-2026-indices.npz",
+      "sha256": "18703afa9b28a2990755b40af7dc5c6ed834ae1c9bd8ceedefc4b681f46a8b7e"
+    },
+    {
+      "path": "data/raw/areas/westbay/vectors/FOR_Forest_WM84__01_leading_forest_species.geojson",
+      "sha256": "a569ee6b2bed0dc5c85277c2d11d3728c57b2928a7ad58ca8d056ff4798850b9"
+    },
+    {
+      "path": "data/raw/ground-classes/westbay-designated.geojson",
+      "sha256": "570fe2652318f4152014810452d4a1e33f812bd511d5eb97b64bce9e267dcffd"
+    },
+    {
+      "path": "data/raw/ground-classes/westbay-cnwi.geojson",
+      "sha256": "82a98152fe6ed64cc9fa959d0fc91f4a53305f673e52dbd79e41d670f6109ec5"
+    },
+    {
+      "path": "data/work/threads/ground-classes/westbay-sentinel-2025-indices.npz",
+      "sha256": "3269fc432a4773cccba6397ceb2647e7dc02a4af31c38984a32dcae725d67778"
+    },
+    {
+      "path": "data/work/threads/ground-classes/westbay-sentinel-2026-indices.npz",
+      "sha256": "9b938bafe8e733513873c5b2ec96ca18d994588c54a06fa144103ff9f3befafb"
+    },
+    {
+      "path": "data/raw/areas/cansocauseway/vectors/FOR_Forest_WM84__01_leading_forest_species.geojson",
+      "sha256": "e6094f7853072ad509f15825eadb7e8f3e2618668d0f2582877654afe62d24e2"
+    },
+    {
+      "path": "data/raw/ground-classes/cansocauseway-designated.geojson",
+      "sha256": "2547c3cf0cd59e1ac9a45a1b5909a391521ad444e9d4dcb56b3dcfae599b7e3f"
+    },
+    {
+      "path": "data/raw/ground-classes/cansocauseway-cnwi.geojson",
+      "sha256": "087d486aa206cf99bebb68e551038b2b4bb7a6264c0ef73e10be9e9ddb3fd169"
+    },
+    {
+      "path": "data/work/threads/ground-classes/cansocauseway-sentinel-2025-indices.npz",
+      "sha256": "f01584cd45df4ecaa82f263f0b92d0ac1a81d1401d2f0f6e6b4414d68009e2e2"
+    },
+    {
+      "path": "data/work/threads/ground-classes/cansocauseway-sentinel-2026-indices.npz",
+      "sha256": "4f4e897ff161b8e254dcd5e4729fb4f1dd4668b1952c6b73f8c78e5cd8cd88fb"
+    }
+  ],
+  "terrain_receipts": {
+    "path": "data/work/threads/ground-classes/quarry-height-tree-input-sha256.json",
+    "sha256": "4422c8bae3e078768fe519e9013dd5d8f8373a3b041ca9c44f1bd09030a70f42"
+  }
+}

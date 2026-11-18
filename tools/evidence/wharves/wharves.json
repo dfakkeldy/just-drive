@@ -1,0 +1,640 @@
+{
+ "main": "8866b76bb31d1cac45e2321b13f7e640fca3094c",
+ "head": "c5af1ffac1aa6b8a877b54a5dbb39c4231373394",
+ "costs": [
+  {
+   "area": "mabou",
+   "mode": "desktop",
+   "label": "main",
+   "calls": 780,
+   "triangles": 3375190,
+   "programs": 39,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "mabou",
+   "mode": "desktop",
+   "label": "branch",
+   "calls": 780,
+   "triangles": 3375190,
+   "programs": 39,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "judique",
+   "mode": "desktop",
+   "label": "main",
+   "calls": 363,
+   "triangles": 1825926,
+   "programs": 31,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "judique",
+   "mode": "desktop",
+   "label": "branch",
+   "calls": 371,
+   "triangles": 1838750,
+   "programs": 32,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 7.9000000059604645,
+   "parts": 137,
+   "visiblePixels": 2126,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "porthood",
+   "mode": "desktop",
+   "label": "main",
+   "calls": 524,
+   "triangles": 2514396,
+   "programs": 32,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "porthood",
+   "mode": "desktop",
+   "label": "branch",
+   "calls": 534,
+   "triangles": 2527784,
+   "programs": 33,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 11.299999982118607,
+   "parts": 242,
+   "visiblePixels": 2702,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "pointtupper",
+   "mode": "desktop",
+   "label": "main",
+   "calls": 600,
+   "triangles": 3568428,
+   "programs": 37,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "pointtupper",
+   "mode": "desktop",
+   "label": "branch",
+   "calls": 610,
+   "triangles": 3572448,
+   "programs": 38,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 8.200000017881393,
+   "parts": 34,
+   "visiblePixels": 1216,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "cansocauseway",
+   "mode": "desktop",
+   "label": "main",
+   "calls": 464,
+   "triangles": 2300714,
+   "programs": 28,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "cansocauseway",
+   "mode": "desktop",
+   "label": "branch",
+   "calls": 466,
+   "triangles": 2300834,
+   "programs": 29,
+   "wharfUpdateMaxMs": 0.10000002384185791,
+   "wharfPlanMs": 1.699999988079071,
+   "parts": 3,
+   "visiblePixels": 17,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "westbay",
+   "mode": "desktop",
+   "label": "main",
+   "calls": 894,
+   "triangles": 5000312,
+   "programs": 34,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "westbay",
+   "mode": "desktop",
+   "label": "branch",
+   "calls": 894,
+   "triangles": 5000312,
+   "programs": 34,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "mabou",
+   "mode": "phone",
+   "label": "main",
+   "calls": 185,
+   "triangles": 905299,
+   "programs": 17,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "mabou",
+   "mode": "phone",
+   "label": "branch",
+   "calls": 185,
+   "triangles": 905299,
+   "programs": 17,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "judique",
+   "mode": "phone",
+   "label": "main",
+   "calls": 67,
+   "triangles": 461489,
+   "programs": 15,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "judique",
+   "mode": "phone",
+   "label": "branch",
+   "calls": 71,
+   "triangles": 467901,
+   "programs": 16,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 8.899999976158142,
+   "parts": 137,
+   "visiblePixels": 1682,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "porthood",
+   "mode": "phone",
+   "label": "main",
+   "calls": 75,
+   "triangles": 653937,
+   "programs": 14,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "porthood",
+   "mode": "phone",
+   "label": "branch",
+   "calls": 77,
+   "triangles": 659913,
+   "programs": 15,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 11,
+   "parts": 242,
+   "visiblePixels": 792,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "pointtupper",
+   "mode": "phone",
+   "label": "main",
+   "calls": 96,
+   "triangles": 1179373,
+   "programs": 18,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "pointtupper",
+   "mode": "phone",
+   "label": "branch",
+   "calls": 98,
+   "triangles": 1180665,
+   "programs": 19,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 5.799999982118607,
+   "parts": 34,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "cansocauseway",
+   "mode": "phone",
+   "label": "main",
+   "calls": 93,
+   "triangles": 753821,
+   "programs": 13,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "cansocauseway",
+   "mode": "phone",
+   "label": "branch",
+   "calls": 94,
+   "triangles": 753881,
+   "programs": 14,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 1,
+   "parts": 3,
+   "visiblePixels": 22,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "westbay",
+   "mode": "phone",
+   "label": "main",
+   "calls": 183,
+   "triangles": 1356717,
+   "programs": 14,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  },
+  {
+   "area": "westbay",
+   "mode": "phone",
+   "label": "branch",
+   "calls": 183,
+   "triangles": 1356717,
+   "programs": 14,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 0,
+   "parts": 0,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL"
+  }
+ ],
+ "pictures": [
+  {
+   "area": "judique",
+   "id": "row-r6gi_w22v_zyq8",
+   "file": "judique-row-r6gi_w22v_zyq8-desktop.png",
+   "calls": 371,
+   "triangles": 1838750,
+   "programs": 32,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 7.9000000059604645,
+   "parts": 137,
+   "visiblePixels": 2126,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 19367
+   }
+  },
+  {
+   "area": "judique",
+   "id": "row-xg8h-byt7_3vfd",
+   "file": "judique-row-xg8h-byt7_3vfd-desktop.png",
+   "calls": 379,
+   "triangles": 1826194,
+   "programs": 32,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 10.400000005960464,
+   "parts": 100,
+   "visiblePixels": 3999,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 22655
+   }
+  },
+  {
+   "area": "porthood",
+   "id": "row-ntv9~cwgp~jddg",
+   "file": "porthood-row-ntv9_cwgp_jddg-desktop.png",
+   "calls": 534,
+   "triangles": 2527784,
+   "programs": 33,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 11.299999982118607,
+   "parts": 242,
+   "visiblePixels": 2702,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 28460
+   }
+  },
+  {
+   "area": "porthood",
+   "id": "row-xqje_8589-tb75",
+   "file": "porthood-row-xqje_8589-tb75-desktop.png",
+   "calls": 279,
+   "triangles": 1573378,
+   "programs": 28,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 14.300000011920929,
+   "parts": 256,
+   "visiblePixels": 2897,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 17121
+   }
+  },
+  {
+   "area": "porthood",
+   "id": "row-dvi7.npiu~bzy8",
+   "file": "porthood-row-dvi7_npiu_bzy8-desktop.png",
+   "calls": 99,
+   "triangles": 757564,
+   "programs": 23,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 18.900000005960464,
+   "parts": 168,
+   "visiblePixels": 1709,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 23537
+   }
+  },
+  {
+   "area": "porthood",
+   "id": "row-prij-vp7i.6rqs",
+   "file": "porthood-row-prij-vp7i_6rqs-desktop.png",
+   "calls": 395,
+   "triangles": 2422182,
+   "programs": 29,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 12.399999976158142,
+   "parts": 132,
+   "visiblePixels": 1507,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 24454
+   }
+  },
+  {
+   "area": "pointtupper",
+   "id": "row-m54w-hjqu~3s76",
+   "file": "pointtupper-row-m54w-hjqu_3s76-desktop.png",
+   "calls": 610,
+   "triangles": 3572448,
+   "programs": 38,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 8.200000017881393,
+   "parts": 34,
+   "visiblePixels": 1216,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 12160
+   }
+  },
+  {
+   "area": "pointtupper",
+   "id": "row-bbyd.cpc3.p3fg",
+   "file": "pointtupper-row-bbyd_cpc3_p3fg-desktop.png",
+   "calls": 586,
+   "triangles": 3452640,
+   "programs": 38,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 18.100000023841858,
+   "parts": 25,
+   "visiblePixels": 382,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 6070
+   }
+  },
+  {
+   "area": "pointtupper",
+   "id": "row-k8yh-suyv_izrt",
+   "file": "pointtupper-row-k8yh-suyv_izrt-desktop.png",
+   "calls": 454,
+   "triangles": 3258446,
+   "programs": 33,
+   "wharfUpdateMaxMs": 0.10000002384185791,
+   "wharfPlanMs": 3.2999999821186066,
+   "parts": 3,
+   "visiblePixels": 17,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 700
+   }
+  },
+  {
+   "area": "cansocauseway",
+   "id": "row-k8yh-suyv_izrt",
+   "file": "cansocauseway-row-k8yh-suyv_izrt-desktop.png",
+   "calls": 466,
+   "triangles": 2300834,
+   "programs": 29,
+   "wharfUpdateMaxMs": 0.10000002384185791,
+   "wharfPlanMs": 1.699999988079071,
+   "parts": 3,
+   "visiblePixels": 17,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 705
+   }
+  },
+  {
+   "area": "judique",
+   "id": "row-r6gi_w22v_zyq8",
+   "file": "judique-row-r6gi_w22v_zyq8-phone.png",
+   "calls": 71,
+   "triangles": 467901,
+   "programs": 16,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 8.899999976158142,
+   "parts": 137,
+   "visiblePixels": 1682,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 12811
+   }
+  },
+  {
+   "area": "judique",
+   "id": "row-xg8h-byt7_3vfd",
+   "file": "judique-row-xg8h-byt7_3vfd-phone.png",
+   "calls": 73,
+   "triangles": 473813,
+   "programs": 16,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 7,
+   "parts": 100,
+   "visiblePixels": 1978,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 10903
+   }
+  },
+  {
+   "area": "porthood",
+   "id": "row-ntv9~cwgp~jddg",
+   "file": "porthood-row-ntv9_cwgp_jddg-phone.png",
+   "calls": 77,
+   "triangles": 659913,
+   "programs": 15,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 11,
+   "parts": 242,
+   "visiblePixels": 792,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 24082
+   }
+  },
+  {
+   "area": "porthood",
+   "id": "row-xqje_8589-tb75",
+   "file": "porthood-row-xqje_8589-tb75-phone.png",
+   "calls": 42,
+   "triangles": 519681,
+   "programs": 13,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 6.5999999940395355,
+   "parts": 256,
+   "visiblePixels": 1379,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 15986
+   }
+  },
+  {
+   "area": "porthood",
+   "id": "row-dvi7.npiu~bzy8",
+   "file": "porthood-row-dvi7_npiu_bzy8-phone.png",
+   "calls": 51,
+   "triangles": 265325,
+   "programs": 13,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 10.900000005960464,
+   "parts": 168,
+   "visiblePixels": 1559,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 6710
+   }
+  },
+  {
+   "area": "porthood",
+   "id": "row-prij-vp7i.6rqs",
+   "file": "porthood-row-prij-vp7i_6rqs-phone.png",
+   "calls": 95,
+   "triangles": 779649,
+   "programs": 14,
+   "wharfUpdateMaxMs": 0.10000002384185791,
+   "wharfPlanMs": 3.0999999940395355,
+   "parts": 132,
+   "visiblePixels": 1206,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 10867
+   }
+  },
+  {
+   "area": "pointtupper",
+   "id": "row-m54w-hjqu~3s76",
+   "file": "pointtupper-row-m54w-hjqu_3s76-phone.png",
+   "calls": 98,
+   "triangles": 1180665,
+   "programs": 19,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 5.799999982118607,
+   "parts": 34,
+   "visiblePixels": 0,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 6297
+   }
+  },
+  {
+   "area": "pointtupper",
+   "id": "row-bbyd.cpc3.p3fg",
+   "file": "pointtupper-row-bbyd_cpc3_p3fg-phone.png",
+   "calls": 132,
+   "triangles": 1191209,
+   "programs": 19,
+   "wharfUpdateMaxMs": 0,
+   "wharfPlanMs": 6.299999982118607,
+   "parts": 25,
+   "visiblePixels": 147,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 5759
+   }
+  },
+  {
+   "area": "pointtupper",
+   "id": "row-k8yh-suyv_izrt",
+   "file": "pointtupper-row-k8yh-suyv_izrt-phone.png",
+   "calls": 94,
+   "triangles": 1084837,
+   "programs": 17,
+   "wharfUpdateMaxMs": 0.10000002384185791,
+   "wharfPlanMs": 0.800000011920929,
+   "parts": 3,
+   "visiblePixels": 23,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 934
+   }
+  },
+  {
+   "area": "cansocauseway",
+   "id": "row-k8yh-suyv_izrt",
+   "file": "cansocauseway-row-k8yh-suyv_izrt-phone.png",
+   "calls": 94,
+   "triangles": 753881,
+   "programs": 14,
+   "wharfUpdateMaxMs": 0.09999999403953552,
+   "wharfPlanMs": 1,
+   "parts": 3,
+   "visiblePixels": 22,
+   "gpu": "WebKit WebGL",
+   "detail": {
+    "pixels": 933
+   }
+  }
+ ]
+}

@@ -1,0 +1,126 @@
+{
+  "conveyor-desktop": {
+    "main": {
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M6, Unspecified Version)",
+      "calls": 429,
+      "triangles": 2838797,
+      "programs": 29,
+      "area": "pointtupper",
+      "renderer": "WebKit WebGL",
+      "width": 1400,
+      "height": 757,
+      "pose": [
+        -31.015999999945052,
+        90,
+        2430.5
+      ],
+      "infrastructureBuildMs": 0,
+      "infrastructure": 0
+    },
+    "branch": {
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M6, Unspecified Version)",
+      "calls": 435,
+      "triangles": 2965827,
+      "programs": 32,
+      "area": "pointtupper",
+      "renderer": "WebKit WebGL",
+      "width": 1400,
+      "height": 757,
+      "pose": [
+        -31.015999999945052,
+        90,
+        2430.5
+      ],
+      "infrastructureBuildMs": 27.399999998509884,
+      "infrastructure": 6
+    }
+  },
+  "dam-desktop": {
+    "main": {
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M6, Unspecified Version)",
+      "calls": 398,
+      "triangles": 3474028,
+      "programs": 21,
+      "area": "pointtupper",
+      "renderer": "WebKit WebGL",
+      "width": 1400,
+      "height": 757,
+      "pose": [
+        2298.984000000055,
+        75,
+        2100.5
+      ],
+      "infrastructureBuildMs": 0,
+      "infrastructure": 0
+    },
+    "branch": {
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M6, Unspecified Version)",
+      "calls": 403,
+      "triangles": 3600638,
+      "programs": 24,
+      "area": "pointtupper",
+      "renderer": "WebKit WebGL",
+      "width": 1400,
+      "height": 757,
+      "pose": [
+        2298.984000000055,
+        75,
+        2100.5
+      ],
+      "infrastructureBuildMs": 27.600000001490116,
+      "infrastructure": 6
+    }
+  },
+  "conveyor-phone": {
+    "main": {
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M6, Unspecified Version)",
+      "calls": 154,
+      "triangles": 1246307,
+      "programs": 15,
+      "area": "pointtupper",
+      "renderer": "WebKit WebGL",
+      "width": 390,
+      "height": 844,
+      "pose": [
+        -31.015999999945052,
+        90,
+        2430.5
+      ],
+      "infrastructureBuildMs": 0,
+      "infrastructure": 0
+    },
+    "branch": {
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M6, Unspecified Version)",
+      "calls": 160,
+      "triangles": 1373337,
+      "programs": 17,
+      "area": "pointtupper",
+      "renderer": "WebKit WebGL",
+      "width": 390,
+      "height": 844,
+      "pose": [
+        -31.015999999945052,
+        90,
+        2430.5
+      ],
+      "infrastructureBuildMs": 28.399999998509884,
+      "infrastructure": 6
+    }
+  },
+  "metadata": {
+    "main": "cda5d9c",
+    "codeHead": "46f3b72",
+    "date": "2026-11-15",
+    "browser": "Chrome 157.0.8103.78",
+    "gridProof": {
+      "beforeMs": 11413.144124999999,
+      "afterMs": 57.12850000000071,
+      "parts": 9785,
+      "capTriangles": 262,
+      "capSha256": "87866532aad2edb46b51d59d6e1a8e5ab7f8c6272a3cf71b2fc1c1a60822df52",
+      "identicalParts": true,
+      "identicalCaps": true
+    },
+    "sourceSha256": "7d9e3f8b8a1f5322df1c8859fdb272a14992c4175b40f669849d00ec7b09cdc2"
+  }
+}

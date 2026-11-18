@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';import{readFileSync}from'node:fs';import{createHash}from'node:crypto';
+import{coastPrograms,preprocess}from'./coast-programs.mjs';
+import{TERRAIN_FRAG}from'../web/src/shaders.ts';import{withSiteStyle,STUNT_TERRAIN_FRAG}from'../web/src/stunt-ground-style.ts';
+import{makeGround,preload}from'./phone-ground.mjs';
+const root=process.env.MMM_ROOT,read=file=>readFileSync(`${root}/web/src/${file}`,'utf8'),baseline=readFileSync(`${root}/tools/baseline/programs.json`),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+assert.equal(STUNT_TERRAIN_FRAG,withSiteStyle(TERRAIN_FRAG));const rows=coastPrograms(read,true).filter(r=>r.flags.includes('STUNT_PARK'));assert.ok(rows.some(r=>r.flags.includes('LOW'))&&rows.some(r=>r.flags.includes('MIRROR'))&&rows.some(r=>r.flags.includes('SHADOWS')));
+for(const row of rows)if(row.name==='STUNT_TERRAIN_FRAG'){const compiled=preprocess(STUNT_TERRAIN_FRAG,row.flags);assert.equal((compiled.match(/uniform sampler2D tSiteStyle/g)??[]).length,1);assert.ok(compiled.includes('siteWorked'));}
+assert.throws(()=>withSiteStyle(TERRAIN_FRAG.replace('  // Shingle and mud at the shore.','')));assert.throws(()=>coastPrograms(file=>read(file).replaceAll('STUNT_PARK:1','UNMARKED_PARK:1')),'an unmarked custom material cannot escape the pin reader');
+for(const low of [false,true]){const a=makeGround(),b=makeGround();a.terrain.low=b.terrain.low=low;b.terrain.sites.push({box:[-25,-25,25,25],height:(_x,_z,h)=>h,surface:()=>null,visualStyle:(_x,_z,out,k)=>{out[k]=255;out[k+3]=255;}});await preload(a.terrain,[[0,0]],0);await preload(b.terrain,[[0,0]],0);
+ const ordinary=[...a.terrain.tiles.values()].filter(t=>t.mesh).map(t=>t.mesh.material),styled=[...b.terrain.tiles.values()].filter(t=>t.mesh).map(t=>t.mesh.material);assert.ok(ordinary.length&&styled.length);assert.ok(ordinary.every(m=>m.fragmentShader===TERRAIN_FRAG&&!m.uniforms.tSiteStyle&&!m.defines.STUNT_PARK));assert.ok(styled.some(m=>m.fragmentShader===STUNT_TERRAIN_FRAG&&m.uniforms.tSiteStyle&&m.defines.STUNT_PARK===1));assert.equal(a.terrain.heightAt(0,0),b.terrain.heightAt(0,0));
+ const level=6,size=b.terrain.manifest.size/2**level,i=Math.floor((b.terrain.manifest.village[0]-b.terrain.manifest.origin[0])/size),j=Math.floor((-b.terrain.manifest.village[1]+b.terrain.manifest.origin[1])/size);
+ assert.ok(b.terrain.manifest.levels[level].includes(`${i}_${j}`));await b.terrain.loadNow(level,i,j);const coarse=b.terrain.tiles.get(`${level}/${i}_${j}`);assert.ok(coarse?.ready&&coarse.mesh,'public immediate tile load publishes the coarse mesh');
+ assert.equal(coarse.mesh.material.fragmentShader,STUNT_TERRAIN_FRAG,'coarse graded land keeps the same worked-ground colour program');assert.ok(coarse.mesh.material.uniforms.tSiteStyle,'LOD changes cannot reveal a square grey pad');
+}
+assert.equal(hash(baseline),hash(readFileSync(`${root}/tools/baseline/programs.json`)));console.log('PASS named park shader matrix, no-park identity, two mutation controls and unchanged existing pins');

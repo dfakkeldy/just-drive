@@ -1,0 +1,338 @@
+// Brooks. The bake (pipeline/31_bake_streams.py) traces each mapped brook along the channel that the LiDAR shows and
+// writes the lines to streams.json. Here the lines become, for each land tile a brook touches, a small field that
+// the land shader paints water from (as it paints roads from the road field), and a shallow cut in the ground.
+// Where a brook goes under a road, the bake gives the two mouths of the culvert: they get a pipe end and a few stones.
+
+import * as THREE from 'three';
+
+export interface StreamFile {
+  streams: { id: number; name: string; half: number; pts: [number, number][] }[];
+  culverts: { stream: number; road: number; a: [number, number]; b: [number, number]; dia: number; mapped: boolean }[];
+}
+
+/** What the nearest brook is at a point. */
+export interface BrookAt {
+  /** Metres from the centre line: negative on the left looking downstream, positive on the right. */
+  side: number;
+  /** From the point to the nearest point of the centre line, in world x and z (metres). */
+  dx: number;
+  dz: number;
+  /** Half the width of the water, metres. */
+  half: number;
+  /** The way the water runs, as a compass heading in radians (0 north, clockwise). */
+  flow: number;
+}
+
+/** How far from a centre line the field of a tile still knows the brook. */
+export const BROOK_REACH = 12.5;
+/**
+ * The furthest from a centre line that anything is painted or cut (the widest water is 2 m to each side, its banks
+ * 3 m more), with a metre to spare. A field is made only for tiles whose samples are at most `BROOK_SAMPLE` apart.
+ * Together with the reach these give a guarantee: when one of the samples round a point has no brook (it is 12.5 m
+ * or more from every line), the point is more than 12.5 - 2.84 x 2 - 0.15 = 6.6 m from a line by the field's own
+ * reckoning, in this tile and in the tile across the edge. So a sample with no brook never changes the picture.
+ */
+export const BROOK_NEAR = 6;
+export const BROOK_SAMPLE = 2;
+/** The most that rounding the two parts of a stored vector to 0.1 m can add to its length: 0.05 x the root of 2. */
+export const BROOK_ROUNDING = 0.071;
+const CELL = 32;
+const MAP = 200000;      // metres from the village: no brook of this map is further away
+const LONGEST = 500;     // metres: no piece of a traced brook is longer than this
+const STRIDE = 5;   // ax, az, bx, bz, half
+
+export class Streams {
+  /** Culvert mouths in world coordinates: `out` points away from the road, along the pipe. */
+  readonly mouths: { x: number; z: number; outX: number; outZ: number; dia: number }[] = [];
+  private readonly seg: Float32Array;
+  private readonly cells = new Map<number, number[]>();
+  readonly km: number;
+
+  constructor(data: StreamFile, village: [number, number]) {
+    const seg: number[] = [];
+    let metres = 0;
+    // A broken file must not stop the game, and must not keep it busy either: every number is checked before it
+    // sets the length of a loop. A real piece is a few metres long and lies within the map.
+    const sane = (v: number) => Number.isFinite(v) && Math.abs(v) < MAP;
+    for (const s of Array.isArray(data?.streams) ? data.streams : []) {
+      if (!s || !Array.isArray(s.pts) || !(s.half > 0) || !(s.half <= 10)) continue;
+      for (let k = 0; k + 1 < s.pts.length; k++) {
+        const p = s.pts[k], q = s.pts[k + 1];
+        if (!Array.isArray(p) || !Array.isArray(q)) continue;
+        const ax = p[0] - village[0], az = village[1] - p[1];
+        const bx = q[0] - village[0], bz = village[1] - q[1];
+        if (!sane(ax) || !sane(az) || !sane(bx) || !sane(bz)) continue;
+        const len = Math.hypot(bx - ax, bz - az);
+        if (!(len > 0.01) || len > LONGEST) continue;
+        metres += len;
+        const i = seg.length / STRIDE;
+        seg.push(ax, az, bx, bz, s.half);
+        // Each piece is listed in every cell its reach touches, so a look-up reads one cell only.
+        const x0 = Math.floor((Math.min(ax, bx) - BROOK_REACH) / CELL), x1 = Math.floor((Math.max(ax, bx) + BROOK_REACH) / CELL);
+        const z0 = Math.floor((Math.min(az, bz) - BROOK_REACH) / CELL), z1 = Math.floor((Math.max(az, bz) + BROOK_REACH) / CELL);
+        for (let cz = z0; cz <= z1; cz++) for (let cx = x0; cx <= x1; cx++) {
+          const key = this.key(cx, cz);
+          const list = this.cells.get(key);
+          if (list) list.push(i); else this.cells.set(key, [i]);
+        }
+      }
+    }
+    this.seg = new Float32Array(seg);
+    this.km = metres / 1000;
+    for (const c of Array.isArray(data?.culverts) ? data.culverts : []) {
+      if (!c || !Array.isArray(c.a) || !Array.isArray(c.b)) continue;
+      const ax = c.a[0] - village[0], az = village[1] - c.a[1], bx = c.b[0] - village[0], bz = village[1] - c.b[1];
+      if (!sane(ax) || !sane(az) || !sane(bx) || !sane(bz)) continue;
+      const len = Math.hypot(bx - ax, bz - az);
+      if (!(len > 1) || len > LONGEST || !(c.dia > 0) || !(c.dia <= 5)) continue;
+      const ux = (ax - bx) / len, uz = (az - bz) / len;
+      this.mouths.push({ x: ax, z: az, outX: ux, outZ: uz, dia: c.dia }, { x: bx, z: bz, outX: -ux, outZ: -uz, dia: c.dia });
+    }
+  }
+
+  private key(cx: number, cz: number): number { return (cx + 4096) * 8192 + (cz + 4096); }
+
+  /** True when a brook comes within reach of a box (world x and z). A cheap test before a tile builds its field. */
+  near(x0: number, z0: number, x1: number, z1: number): boolean {
+    for (let cz = Math.floor(z0 / CELL); cz <= Math.floor(z1 / CELL); cz++) {
+      for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) if (this.cells.has(this.key(cx, cz))) return true;
+    }
+    return false;
+  }
+
+  /** Every piece of brook that may reach into a box, in rising order, each once. */
+  pieces(x0: number, z0: number, x1: number, z1: number): number[] {
+    const found = new Set<number>();
+    for (let cz = Math.floor(z0 / CELL); cz <= Math.floor(z1 / CELL); cz++) {
+      for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
+        const list = this.cells.get(this.key(cx, cz));
+        if (list) for (const i of list) found.add(i);
+      }
+    }
+    return [...found].sort((a, b) => a - b);
+  }
+
+  /** The pieces themselves, five numbers each: ax, az, bx, bz, half width. */
+  get segments(): Float32Array { return this.seg; }
+
+  /** The nearest brook within reach of a point. False when there is none; `out` is then left alone. */
+  at(x: number, z: number, out: BrookAt): boolean {
+    const list = this.cells.get(this.key(Math.floor(x / CELL), Math.floor(z / CELL)));
+    if (!list) return false;
+    const s = this.seg;
+    let best = BROOK_REACH * BROOK_REACH, hit = -1, bt = 0;
+    for (const i of list) {
+      const o = i * STRIDE, ax = s[o], az = s[o + 1], dx = s[o + 2] - ax, dz = s[o + 3] - az;
+      const t = Math.min(1, Math.max(0, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+      const px = x - (ax + t * dx), pz = z - (az + t * dz), d = px * px + pz * pz;
+      // Ties go to the earlier piece, whatever the order of the look-up.
+      if (d < best || (d === best && i < hit)) { best = d; hit = i; bt = t; }
+    }
+    if (hit < 0) return false;
+    const o = hit * STRIDE, ax = s[o], az = s[o + 1], dx = s[o + 2] - ax, dz = s[o + 3] - az;
+    // Right of the direction of flow is positive. World x is east and z is south, so the cross product is turned.
+    const nx = ax + bt * dx - x, nz = az + bt * dz - z;
+    const cross = dz * nx - dx * nz;
+    out.side = (cross > 0 ? 1 : -1) * Math.sqrt(best);
+    out.dx = nx; out.dz = nz;
+    out.half = s[o + 4];
+    out.flow = Math.atan2(dx, -dz);
+    return true;
+  }
+
+  /** How far the bed lies below the surveyed ground, `d` metres from the centre line of a brook of this half width. */
+  static cut(d: number, half: number): number {
+    // The LiDAR already holds the real gully. This adds only a soft crease the width of a few mesh cells, so the
+    // painted water lies in a dip and not on a hillside.
+    const depth = 0.22 + 0.16 * Math.min(half, 2), reach = half + 2.4;
+    if (d >= reach) return 0;
+    const t = 1 - d / reach;
+    return depth * t * t * (3 - 2 * t);
+  }
+}
+
+/**
+ * The field of one tile for the land shader: RGBA for each sample, row by row.
+ *   R, G  from the sample to the nearest point of a centre line, in world x and z: 128 is zero, one step is 0.1 m
+ *   B     half width of the water, one step is 0.02 m; 0 means no brook is near this sample
+ *   A     direction of flow around the compass, 256 steps
+ * Returns null when no sample of the tile is within reach of a brook.
+ * Why a vector and not a distance: the shader blends the four samples round a point. A blended vector passes
+ * through zero on the centre line, so a brook narrower than one sample comes out whole; and the blend needs no
+ * choice between two formulas, so two tiles that share an edge paint the same thing along it.
+ * Each piece of brook marks the samples near it (not each sample looking for its brook): a tile is built while the
+ * game runs, on a phone too, and this way costs about a twentieth.
+ */
+export function brookField(streams: Streams, x0: number, z0: number, size: number, samples: number): Uint8Array | null {
+  const pieces = streams.pieces(x0, z0, x0 + size, z0 + size);
+  if (!pieces.length) return null;
+  const n = samples, step = size / (n - 1), seg = streams.segments;
+  // Whole precision for the distances: where two brooks meet, two pieces are equally near, and a rounded number
+  // would let the later one win.
+  const best = new Float64Array(n * n).fill(BROOK_REACH * BROOK_REACH), hit = new Int32Array(n * n).fill(-1), along = new Float64Array(n * n);
+  // Pieces come in rising order and only a strictly nearer one takes a sample: ties go to the earlier piece, as in `at`.
+  for (const i of pieces) {
+    const o = i * STRIDE, ax = seg[o], az = seg[o + 1], dx = seg[o + 2] - ax, dz = seg[o + 3] - az, ll = dx * dx + dz * dz;
+    const a0 = Math.max(0, Math.ceil((Math.min(ax, ax + dx) - BROOK_REACH - x0) / step)), a1 = Math.min(n - 1, Math.floor((Math.max(ax, ax + dx) + BROOK_REACH - x0) / step));
+    const b0 = Math.max(0, Math.ceil((Math.min(az, az + dz) - BROOK_REACH - z0) / step)), b1 = Math.min(n - 1, Math.floor((Math.max(az, az + dz) + BROOK_REACH - z0) / step));
+    for (let b = b0; b <= b1; b++) {
+      const z = z0 + b * step;
+      for (let a = a0; a <= a1; a++) {
+        const x = x0 + a * step;
+        const t = Math.min(1, Math.max(0, ((x - ax) * dx + (z - az) * dz) / ll));
+        const px = x - (ax + t * dx), pz = z - (az + t * dz), d = px * px + pz * pz, k = b * n + a;
+        if (d < best[k]) { best[k] = d; hit[k] = i; along[k] = t; }
+      }
+    }
+  }
+  const out = new Uint8Array(n * n * 4);
+  const byte = (v: number) => Math.min(255, Math.max(0, Math.round(128 + v * 10)));
+  let any = false;
+  for (let b = 0; b < n; b++) {
+    for (let a = 0; a < n; a++) {
+      const k = b * n + a, q = k * 4;
+      if (hit[k] < 0) continue;   // all four bytes stay 0: no brook near
+      any = true;
+      const o = hit[k] * STRIDE, ax = seg[o], az = seg[o + 1], dx = seg[o + 2] - ax, dz = seg[o + 3] - az;
+      const x = x0 + a * step, z = z0 + b * step, t = along[k];
+      out[q] = byte(ax + t * dx - x);
+      out[q + 1] = byte(az + t * dz - z);
+      out[q + 2] = Math.min(255, Math.max(1, Math.round(seg[o + 4] * 50)));
+      out[q + 3] = Math.round(((Math.atan2(dx, -dz) / (2 * Math.PI)) % 1 + 1) % 1 * 255);
+    }
+  }
+  return any ? out : null;
+}
+
+/**
+ * Metres from any point of a tile to the nearest centre line, read from the tile's field: the same maths as the land
+ * shader (the brook block of TERRAIN_FRAG in shaders.ts), so the wheels and the picture agree. Keep the two alike.
+ * `fa`, `fb`: the point in samples from the tile's north-west corner; `metres`: the size of one sample.
+ * Returns 99 when the point is more than `BROOK_NEAR` from a brook: nothing is painted or cut that far out.
+ *
+ * The four samples round the point each hold the vector to the line; their blend passes through zero on the line.
+ * Between two separate brooks the vectors point opposite ways and would also blend to zero, where there is no water.
+ * So each sample also sets a floor: a sample that is 8 m from every brook proves that a point 2 m from it is at
+ * least 6 m from one (less the rounding of the stored vector, so the floor is never above the truth). On the edge
+ * of a tile only the two edge samples count (the others fade out with their share
+ * of the blend), so the tile next door gets the same answer along that edge.
+ */
+export function brookBlend(field: Uint8Array, n: number, metres: number, fa: number, fb: number): number {
+  const a = Math.min(Math.max(Math.floor(fa), 0), n - 2), b = Math.min(Math.max(Math.floor(fb), 0), n - 2);
+  const u = fa - a, v = fb - b;
+  const at = [b * n + a, b * n + a + 1, (b + 1) * n + a, (b + 1) * n + a + 1];
+  const share = [(1 - u) * (1 - v), u * (1 - v), (1 - u) * v, u * v];
+  const away = [Math.hypot(u, v), Math.hypot(u - 1, v), Math.hypot(u, v - 1), Math.hypot(u - 1, v - 1)];
+  let x = 0, z = 0, floor = -Infinity;
+  for (let i = 0; i < 4; i++) {
+    const q = at[i] * 4;
+    if (field[q + 2] === 0) return 99;
+    const vx = field[q] * 0.1 - 12.8, vz = field[q + 1] * 0.1 - 12.8;
+    x += vx * share[i]; z += vz * share[i];
+    floor = Math.max(floor, Math.hypot(vx, vz) - BROOK_ROUNDING - away[i] * metres - 20 * (1 - Math.min(1, share[i] * 8)));
+  }
+  const d = Math.max(Math.hypot(x, z), floor);
+  return d > BROOK_NEAR ? 99 : d;
+}
+
+/** Metres from a sample of a tile's field to the centre line of its brook; a large number when the sample has none. */
+export function brookDistance(field: Uint8Array, k: number): number {
+  return field[k * 4 + 2] > 0 ? Math.hypot(field[k * 4] - 128, field[k * 4 + 1] - 128) * 0.1 : 99;
+}
+
+/** Pipe ends and stones at the culvert mouths. They stand where the bake found a brook going under a road. */
+export class CulvertMouths {
+  readonly group = new THREE.Group();
+  private readonly pipes: THREE.InstancedMesh;
+  private readonly dark: THREE.InstancedMesh;
+  private readonly stones: THREE.InstancedMesh;
+  private readonly seated: Uint8Array;
+  private next = 0;
+  private static readonly STONES = 7;
+
+  constructor(private readonly streams: Streams, private readonly ground: (x: number, z: number) => number | null) {
+    const n = streams.mouths.length;
+    this.seated = new Uint8Array(n);
+    // A corrugated steel pipe: a short open tube with ribs, one unit across and one unit long along +z.
+    const tube = new THREE.CylinderGeometry(0.5, 0.5, 1, 14, 6, true).rotateX(Math.PI / 2);
+    const pos = tube.getAttribute('position'), shade: number[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      // Ribs: every second ring stands a little proud and catches the light.
+      const ring = Math.round((pos.getZ(i) + 0.5) * 6), proud = ring % 2 === 0 ? 1.035 : 0.985;
+      pos.setXYZ(i, pos.getX(i) * proud, pos.getY(i) * proud, pos.getZ(i));
+      // Old galvanised steel: dull grey, a little rust in the hollows.
+      const v = ring % 2 === 0 ? 0.33 : 0.24;
+      shade.push(v * (ring % 2 === 0 ? 1 : 1.12), v, v * 0.96);
+    }
+    tube.setAttribute('color', new THREE.Float32BufferAttribute(shade, 3));
+    tube.computeVertexNormals();
+    this.pipes = new THREE.InstancedMesh(tube, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), Math.max(n, 1));
+    // The inside is dark: a disc a little way in, so the pipe reads as hollow from the road.
+    this.dark = new THREE.InstancedMesh(new THREE.CircleGeometry(0.49, 14), new THREE.MeshBasicMaterial({ color: 0x07090a }), Math.max(n, 1));
+    const rock = new THREE.IcosahedronGeometry(0.5, 0);
+    const rp = rock.getAttribute('position');
+    for (let i = 0; i < rp.count; i++) rp.setY(i, rp.getY(i) * 0.62);   // flat field stone, not a ball
+    rock.computeVertexNormals();
+    this.stones = new THREE.InstancedMesh(rock, new THREE.MeshLambertMaterial({ color: 0x77726a, flatShading: true }), Math.max(n * CulvertMouths.STONES, 1));
+    const none = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (const mesh of [this.pipes, this.dark, this.stones]) {
+      for (let i = 0; i < mesh.count; i++) mesh.setMatrixAt(i, none);
+      mesh.count = mesh === this.stones ? n * CulvertMouths.STONES : n;
+      mesh.frustumCulled = false;
+      mesh.instanceMatrix.needsUpdate = true;
+      this.group.add(mesh);
+    }
+    this.group.visible = n > 0;
+  }
+
+  /** Call once a frame: stands a few more mouths on the ground as the land near them loads. */
+  update(camera: THREE.Vector3): void {
+    const mouths = this.streams.mouths;
+    if (!mouths.length) return;
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3();
+    let changed = false;
+    for (let step = 0; step < 24; step++) {
+      const i = this.next = (this.next + 1) % mouths.length;
+      if (this.seated[i]) continue;
+      const m = mouths[i];
+      if (Math.abs(m.x - camera.x) > 900 || Math.abs(m.z - camera.z) > 900) continue;
+      // The bed at the mouth, and the bank the pipe comes out of (toward the road).
+      const bed = this.ground(m.x + m.outX * 0.6, m.z + m.outZ * 0.6), bank = this.ground(m.x - m.outX * 2.4, m.z - m.outZ * 2.4);
+      if (bed === null || bank === null) continue;
+      // A pipe may not stand taller than the fill that covers it.
+      const dia = THREE.MathUtils.clamp(bank - bed - 0.12, 0.4, m.dia);
+      // A quarter of the pipe sits in the bed, as a culvert is laid.
+      const y = bed + dia * 0.27;
+      const yaw = Math.atan2(m.outX, m.outZ);
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      // Only the end shows: from 1.1 m inside the bank to 0.55 m out over the bed.
+      const mid = (0.55 - 1.1) / 2, len = 0.55 + 1.1;
+      m4.compose(p.set(m.x + m.outX * mid, y, m.z + m.outZ * mid), q, s.set(dia, dia, len));
+      this.pipes.setMatrixAt(i, m4);
+      m4.compose(p.set(m.x - m.outX * 0.25, y, m.z - m.outZ * 0.25), q, s.set(dia, dia, 1));
+      this.dark.setMatrixAt(i, m4);
+      for (let k = 0; k < CulvertMouths.STONES; k++) {
+        // A rough headwall of field stones, placed from the mouth's number so they never move: two on each side of
+        // the lip, and the rest heaped over the pipe where it goes into the bank.
+        const r1 = hash(i * 7 + k * 13), r2 = hash(i * 11 + k * 5 + 3), r3 = hash(i * 3 + k * 17 + 9);
+        const beside = k < 4;
+        const across = beside ? (k % 2 === 0 ? 1 : -1) * (dia * 0.5 + 0.22 + 0.35 * r1) : (r1 - 0.5) * dia * 1.1;
+        const along = beside ? -0.35 + 0.7 * r2 : -0.55 - 0.7 * r2;
+        const x = m.x + m.outX * along + m.outZ * across, z = m.z + m.outZ * along - m.outX * across;
+        const size = (beside ? 0.42 : 0.5) + 0.4 * r3;
+        const g = Math.max(this.ground(x, z) ?? bed, beside ? bed : y + dia * 0.42);
+        q.setFromEuler(new THREE.Euler(0.3 * (r1 - 0.5), 6.28 * r2, 0.3 * (r3 - 0.5)));
+        m4.compose(p.set(x, g + size * 0.1, z), q, s.set(size, size, size * (0.8 + 0.4 * r1)));
+        this.stones.setMatrixAt(i * CulvertMouths.STONES + k, m4);
+      }
+      this.seated[i] = 1;
+      changed = true;
+    }
+    if (changed) for (const mesh of [this.pipes, this.dark, this.stones]) mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+function hash(n: number): number {
+  const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+  return s - Math.floor(s);
+}

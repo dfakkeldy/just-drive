@@ -1,0 +1,1588 @@
+{
+  "note": "Edit this file, then run tools/radio.sh (about 4.5 minutes with cached audio). Each source is a file stem in data/audio/src. Only public: true goes to the public site; only page: true goes to the private page. Every track MUST name a key from credits in its credit field. Optional credit_overrides replace individual fields. Credits travel with the song: moving the whole track object needs no other edit. Each resolved credit needs by, licence, source, date and text. text is the displayed attribution with one {dials} placeholder; identical texts are grouped. Keep required names, tools, licence terms and geography intact. At most one station has start: true; just_start names the Just Drive starting dial. See tools/RADIO.md.",
+  "credits": {
+    "suno": {
+      "by": "the author",
+      "licence": "the author's own",
+      "source": "made with Suno",
+      "date": "2026-11-10",
+      "text": "The songs on {dials} are the author’s own, made with Suno."
+    },
+    "bach-ishizaka": {
+      "by": "J. S. Bach, played by Kimiko Ishizaka (piano)",
+      "licence": "CC0 1.0 (public domain dedication)",
+      "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_Bach_-_Well-Tempered_Clavier,_Book_1_-_01_Prelude_No._1_in_C_major,_BWV_846.ogg",
+      "date": "2026-11-11",
+      "text": "The piano on {dials} is J. S. Bach, played by Kimiko Ishizaka: the Open Goldberg Variations and the Open Well-Tempered Clavier, given to the public domain (CC0)."
+    },
+    "ai-mabou": {
+      "by": "words by the radio thread (Claude), written for the game; music made with ElevenLabs Music",
+      "licence": "ElevenLabs Music Terms, Creator plan (commercial use; indie game)",
+      "source": "ElevenLabs Music API, model music_v2_5, song id Gnw1NFpeQ7nzeY9WhWs3",
+      "date": "2026-11-11",
+      "text": "The songs on {dials} are about places around Mabou; their words and music were made for the game with AI tools (Claude and ElevenLabs Music)."
+    },
+    "talk": {
+      "by": "words by the radio thread (Claude), written for the game; voices are ElevenLabs stock voices",
+      "licence": "ElevenLabs Terms, Creator plan (commercial use; indie game)",
+      "source": "ElevenLabs text-to-dialogue API, model eleven_v4",
+      "date": "2026-11-15",
+      "text": "The talk on {dials} is invented: its words were written for the game with Claude, and its voices are ElevenLabs stock voices, not real people."
+    },
+    "ai-songs": {
+      "by": "words by the radio thread (Claude), written for the game; music made with ElevenLabs Music",
+      "licence": "ElevenLabs Music Terms, Creator plan (commercial use; indie game)",
+      "source": "ElevenLabs Music (Flows), model eleven_music_v2_5",
+      "date": "2026-11-14",
+      "text": "One song on {dials} is about bad roads in spring; its words and music were made for the game with AI tools (Claude and ElevenLabs Music)."
+    },
+    "ai-tunes": {
+      "by": "ElevenLabs Music",
+      "licence": "ElevenLabs Music Terms, Creator plan (commercial use; indie game)",
+      "source": "ElevenLabs Music (Flows), model eleven_music_v2_5",
+      "date": "2026-11-14",
+      "text": "The fiddle tunes on {dials} are new tunes in the Cape Breton style, made for the game with AI tools (ElevenLabs Music, from prompts by Claude)."
+    }
+  },
+  "stations": [
+    {
+      "dial": "88.3",
+      "name": "FLAG UP FM",
+      "tracks": [
+        {
+          "source": "red-flag-down",
+          "title": "Red Flag Down",
+          "public": true,
+          "page": true,
+          "credit": "suno"
+        },
+        {
+          "source": "causeway-lights",
+          "title": "Causeway Lights",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id vWM7C06KltTXIcscU8xo",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "word-is-bond",
+          "title": "Word Is Bond",
+          "public": true,
+          "page": true,
+          "credit": "suno"
+        },
+        {
+          "source": "gravel-bounce",
+          "title": "Gravel Bounce",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id xj3ZqD1bSQHTsHsX79UP",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "lake-ainslie-afterglow",
+          "title": "Lake Ainslie Afterglow",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id SMy7BdgmgHyeuOxbA33Z",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "the-second-machine",
+          "title": "The Second Machine",
+          "public": true,
+          "page": true,
+          "credit": "suno",
+          "credit_overrides": {
+            "date": "2026-11-17"
+          }
+        }
+      ]
+    },
+    {
+      "dial": "90.3",
+      "name": "DELAYED IN TRANSIT",
+      "tracks": [
+        {
+          "source": "when-the-bridge-wont-turn",
+          "title": "When the Bridge Won't Turn",
+          "public": true,
+          "page": true,
+          "credit": "suno",
+          "credit_overrides": {
+            "date": "2026-11-17"
+          }
+        }
+      ]
+    },
+    {
+      "dial": "92.5",
+      "name": "THE SHOULDER",
+      "tracks": [
+        {
+          "source": "put-it-in-writing-2",
+          "title": "Put It in Writing",
+          "public": true,
+          "page": true,
+          "credit": "suno"
+        },
+        {
+          "source": "loose-gravel",
+          "title": "Loose Gravel",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id 3Dwxje8LiENigIPH1lBv",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "phillips-out",
+          "title": "Phillip's Out",
+          "public": true,
+          "page": true,
+          "credit": "suno",
+          "credit_overrides": {
+            "date": "2026-11-11"
+          }
+        },
+        {
+          "source": "port-hood-sunset",
+          "title": "Port Hood Sunset",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id FxrFHBhKq3yPcdAMGoAG",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "put-it-in-writing-1",
+          "title": "Put It in Writing (first take)",
+          "public": true,
+          "page": true,
+          "credit": "suno"
+        },
+        {
+          "source": "pothole-season",
+          "title": "Pothole Season",
+          "public": true,
+          "credit": "ai-songs",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id 16u6WDZvnDUvxFC04H3f"
+          }
+        },
+        {
+          "source": "northern-gulf",
+          "title": "Northern Gulf",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id 0QNsSu6BQ1OhrJ9kjSmQ",
+            "date": "2026-11-14"
+          }
+        }
+      ]
+    },
+    {
+      "dial": "94.9",
+      "name": "THE PARTY LINE",
+      "start": true,
+      "tracks": [
+        {
+          "source": "talk-ident-1",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request vXJvZTkhPUHm4yvQsIrJ",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-call-parcel-in-hand",
+          "title": "Mail Madness: The Missing Parcel",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 6zVJWyggJWOmjvlCFU7L; one line made again on 2026-11-17, request 4G1YFJbY3hUXigx4GZM4",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-real-echo",
+          "title": "Ad: Echo",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request rkf8Zzrfblk73r9DL7Cn",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-promo-long-way-round",
+          "title": "On the dial: 103.5",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 1mbsLqzB3sBZ91cyIznN",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-interview-land",
+          "title": "The Developer: The Land",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request iXH35pqocgUD4zrf4Aib",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-tip-hill-height",
+          "title": "Tip: Hill Height",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request cfgCODGRlUSdrfbRrJ77",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ad-lawyer",
+          "title": "Ad: Turfwell and Sodd",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request QXupitcsFFCErY4kxROY",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-call-hedge",
+          "title": "Mail Madness: The Hedge",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request Qw2uoN2luojSon7F12sj",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-promo-please-hold",
+          "title": "On the dial: 99.1",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 6y2saBxoOXA3rlyfWAzm",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-weather-washboard",
+          "title": "The Washboard Forecast",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 29eJKu8XGIHKpajSSB55; 2 lines made again on 2026-11-17, requests qAugXmZR1sJdYvjSVt93, AJbDLmDHSnkeeCcJzu8i",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ident-6",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 6M5ur1yatr0V6WFVdXCY",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-tip-offline",
+          "title": "Tip: Play Without Internet",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request yo9pdBSSSPQM7D9Sv1Yh",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-call-fast-and-slow",
+          "title": "Mail Madness: Too Fast, Too Slow",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 6gH4e8u7ffT7cRkeq9LW",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-second-delivery",
+          "title": "On the dial: 107.3",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request uwHELSp9cRfyH7Mvp4hc",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-real-ns-marks-the-spot-2",
+          "title": "Ad: NS Marks The Spot",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request SnPo4sQ2kfcEChkjr27l",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-dog",
+          "title": "Mail Madness: A Dog Calls In",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request TbxLPn2KPfyVp4zN77eB",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-ad-dog-school",
+          "title": "Ad: Sit, Stay, Suspect",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request UECuMuPXu3QWG0TFULBD",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ident-2",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request xjkyctTGmGqlga5Q3fgO",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-interview-traffic",
+          "title": "The Developer: Traffic",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request lDgThbeE7XvkUcMViiuk",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-tip-small-map",
+          "title": "Tip: The Small Map",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request TvXpct5LxiEe72AbWX6o",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-shoulder",
+          "title": "On the dial: 92.5",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request Mt96AGOkESLLQorywzwl",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-call-dog-evidence",
+          "title": "Mail Madness: The Dog Has Evidence",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request KWe7TTjxgu94uvsav6Wi; one line made again on 2026-11-17, request NZKPgXw5NuKMHRKFiDk1",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-washboard",
+          "title": "On the dial: 96.1",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request uUihG8ZvLlvQPVrZZpf7",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-ad-mailbox-repair",
+          "title": "Ad: Upright Again",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request yIfVfjfDUGfTZMMTHk6M",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-sports-room-races",
+          "title": "Sports: Room Races",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request j9SDI6BFt6y0S9S1aKSk",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-tip-photograph",
+          "title": "Tip: Take a Photograph",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request bwQJ5KQvhvoRaQDFUIWg",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-ident-7",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 1T5lJZ2t22NRUOu7tgDT",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-washboard",
+          "title": "Mail Madness: Washboard",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request i94aMEAX9KH27lNdA2Wf",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-real-donate-b",
+          "title": "A Coffee for the Developer",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request Zp1zJYtfGcQGLoN3SwM9",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-interview-fleet",
+          "title": "The Developer: The Fleet",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request HNrbGko6SKvtoUzi8UOf",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-flag-up-2",
+          "title": "On the dial: 88.3",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request iOoJj0SIH0looh1CDpFf",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-tip-reset",
+          "title": "Tip: Back on the Road",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request aXo13h4lfhk35q1bKBBz",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-kid",
+          "title": "Mail Madness: Tessa Wants the Job",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 3flClY4AsN9MgwBYUny0; one line made again on 2026-11-17, request xjgxAxbfa0vsBPvGFYIG",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ad-flyers",
+          "title": "Ad: Inkwater and Sons",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 1uDN9gr1FOHAdBLxGXwb",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-long-way-round-2",
+          "title": "On the dial: 103.5",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request mAYGLFdFZomRA93u7TWX",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-road-report-swap-shop",
+          "title": "Road Report and Swap Shop",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request wcr02DAyEU0dpwgKaIry",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-ident-3",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request c0VZScEIFe2WlrY0QA1c",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-tip-something-wrong",
+          "title": "Tip: Something Wrong?",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 1U9Qw0ZJQGhFXGaOdK2z",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-call-soaked",
+          "title": "Mail Madness: The Soaked Parcel",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request rBvfekPOBBmfVj7iOCfb",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-promo-please-hold-2",
+          "title": "On the dial: 99.1",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request L7Y9kb4cBopiwvtiSQj9",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ad-dry-bag",
+          "title": "Ad: The Parcel Bucket",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request JDPNio2vaI2dlCd2EOVM",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-call-wrong-side",
+          "title": "Mail Madness: Nobody Driving",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request t2W36GGYdLpW8KtipMGa",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-real-echo-2",
+          "title": "Ad: Echo",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request LxVfxPFbVg5PXjtZKkaZ",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-second-delivery-2",
+          "title": "On the dial: 107.3",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request SgRidnXDB2y4kKNAorJL",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-interview-races",
+          "title": "The Developer: Room Races",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request MsjfniH8C7Uw8mYpUS7F",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-tip-driver-seat",
+          "title": "Tip: The Driver’s Seat",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 5B8VSTT706ftvu2cO3B9",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ident-8",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request PR9cTNiashr4p5iDBFfo",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-wave",
+          "title": "Mail Madness: He Waved Back",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request Pg5y83rxqBmM3HMMOxmA",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-shoulder-2",
+          "title": "On the dial: 92.5",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 4iN2xA5sT9pHUIfmqmAQ",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ad-signs",
+          "title": "Ad: Plain Words Signs",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request nqwWxDo3v4d4lsrNnls4",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-lost-and-found",
+          "title": "Lost and Found",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request CjfXXLWEvoJuAzeTQyqB; one line made again on 2026-11-17, request jCmviW78aPtqsckp7jYU",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-tip-fly-camera",
+          "title": "Tip: Fly Camera",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 3ixiDFaxUIffDB3WsLT2",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-promo-washboard-2",
+          "title": "On the dial: 96.1",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request b17QkYOF8wOzlr9owzVX",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-flag",
+          "title": "Mail Madness: The Flag",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request oXkVLwIBNqv0gdeNodR8",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-real-word-is-bond",
+          "title": "Ad: Word Is Bond",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request pHcFPb8yhXa92VJ4BQ68",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-interview-1884",
+          "title": "The Developer: 1884",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request UayNJxJkOhPwWmSvbNHI",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ident-4",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 0OZWd1XZc7yRfkbwbCjY",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-tip-picture",
+          "title": "Tip: A Faster Picture",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request DgcnPr2mzYcBUer7qB4l",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-missed-you",
+          "title": "Mail Madness: Sorry We Missed You",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 0bRu2CbxRgAssjF8TcZ0; one line made again on 2026-11-17, request A2vyo2qqrgCf7o7cWpbK",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ad-hedges",
+          "title": "Ad: Thicket and Daughters",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request xK75ZmxJcJuaicLWw6pq",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-promo-flag-up-3",
+          "title": "On the dial: 88.3",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request Y9vPYDPnQeJrkKvWhkaQ",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-end-of-the-lane",
+          "title": "Mail Madness: The End of the Lane",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request R1hDjyBRWDvPQptdhCJB",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-ident-9",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request JY7JxB2ROSMEHys1N61B; one line made again on 2026-11-17, request cHyyphe9xk9d3CUizYGj",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-tip-1884",
+          "title": "Tip: 1884",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request EBE5rkWPBVhMuakxHdZY",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-quiz-mailbox",
+          "title": "Quiz: Box or Ditch",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request irEENJ7SimL1WxW1n44P; one line made again on 2026-11-17, request OB8sI0t2DEZGeno5ogyK",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-long-way-round-3",
+          "title": "On the dial: 103.5",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 3qd4xg1PpS6iCHlTvaKl",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ad-puzzles",
+          "title": "Ad: Shook Puzzles",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request XEL3eHZ6p5d7kHWRv7rL; one line made again on 2026-11-17, request OK5wCGl7SzZfIKsr9UxO",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-grader",
+          "title": "Mail Madness: The Grader",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 9Qppx5kKEeOsdpRHw6Ns",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-real-donate-c",
+          "title": "A Coffee for the Developer",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request XFAcJtB0IVTJSQyShrlB; one line made again on 2026-11-17, request Vd63PrmYZFxb3750angP",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-please-hold-3",
+          "title": "On the dial: 99.1",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request TcwNLjG1sFPovX7tleH6",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-interview-beyond",
+          "title": "The Developer: Beyond Mabou",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request cFOF5N5ozVUqvjcgStkH; 4 lines made again on 2026-11-17, requests EjK2sIxpBOPE9d3EVNit, U0WyPccjes71YEULsfDr, qI9Xa09xBfaRPjBI5Sqt, 75LSLxmHjFQjiFQ4qXcK",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-tip-haul",
+          "title": "Tip: Haul to Sugar Camp",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request AnkUJFG8580i6pIKw59u",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ident-5",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request RAiIUGCvs9RwRelNy8vz",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-call-horse",
+          "title": "Mail Madness: The Man on the Horse",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request Am31QcbQDH0cHymEoOvG",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-promo-second-delivery-3",
+          "title": "On the dial: 107.3",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request fal9XOQNvf2k8ZbNqC7L",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-road-report-swap-shop-2",
+          "title": "Road Report and Swap Shop, Again",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request UQQiC6NJk2rAA3oWIOSs; 2 lines made again on 2026-11-17, requests 51pYkbaO8JjY3OVTAOdK, wHnBZ4Ahwa22DJa7mE4y",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ad-garage",
+          "title": "Ad: Knock Knock Auto",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request tRXHkRbIrn8J8XubUKo8",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-tip-together",
+          "title": "Tip: Drive with Others",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request Dr3t17AkYkY6p87WMyVJ",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-call-tour",
+          "title": "Mail Madness: The Tour",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request z34s39FN7uygKipM9F7c",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-shoulder-3",
+          "title": "On the dial: 92.5",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request fqpwuN1qO8qP4CbRH2ix",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-real-ns-marks-the-spot",
+          "title": "Ad: NS Marks The Spot",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request mQRlEiwTviY3aPGeSXXD",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-interview-quarry-phones",
+          "title": "The Developer: The Quarry and the Phone",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request vQ0QMvI5idZEuyvAQi9O",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-ident-10",
+          "title": "Station ident",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request X4mpt90JAZ16jMoIF7hT",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ad-tea",
+          "title": "Ad: Culvert Blend",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request NhsQVoGngQN6JDDDIfke",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-concerned-citizen",
+          "title": "Mail Madness: A Concerned Citizen",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 7uKprT45Ji0QUinRyPxI",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-tip-room-race",
+          "title": "Tip: Room Race",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request U4tuvZAt3HglqSxnRaQb",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-promo-washboard-3",
+          "title": "On the dial: 96.1",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request uWcC8ak4Dd2CP6A9YBqE",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-call-wrong-box",
+          "title": "Mail Madness: The Wrong Box",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request jM7RDM1MO4jJNh8jO2C8",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-promo-flag-up",
+          "title": "On the dial: 88.3",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request B8nKgT4EyB7a63nOHSt1",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-tip-places",
+          "title": "Tip: Places",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request zJlbn6O3nVaAtfRmqS8g",
+            "date": "2026-11-15"
+          }
+        },
+        {
+          "source": "talk-news-on-the-hour",
+          "title": "News on the Hour",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request 0fyIitirIPKNX6p2Mxnr; 3 lines made again on 2026-11-17, requests kReNiDriqJwvdwwigWgY, ghQlmFSVQpo9vRlql6oR, nDsB1ftN6lvvo11AAen7",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "talk-ad-lawyer-2",
+          "title": "Ad: Turfwell and Sodd, a New Case",
+          "public": true,
+          "credit": "talk",
+          "credit_overrides": {
+            "source": "ElevenLabs text-to-dialogue API, model eleven_v4, request HP2UWDGCIHAW6QKUvJQY",
+            "date": "2026-11-16"
+          }
+        }
+      ]
+    },
+    {
+      "dial": "96.1",
+      "name": "THE WASHBOARD",
+      "tracks": [
+        {
+          "source": "red-flag-down-reggae",
+          "title": "Red Flag Down (reggae)",
+          "public": true,
+          "page": true,
+          "credit": "suno",
+          "credit_overrides": {
+            "date": "2026-11-11"
+          }
+        }
+      ]
+    },
+    {
+      "dial": "96.7",
+      "name": "POST HASTE",
+      "tracks": [
+        {
+          "source": "all-my-ships-are-out",
+          "title": "All My Ships Are Out",
+          "public": true,
+          "page": true,
+          "credit": "suno",
+          "credit_overrides": {
+            "date": "2026-11-17"
+          }
+        },
+        {
+          "source": "word-is-bond",
+          "title": "Word Is Bond",
+          "public": true,
+          "page": true,
+          "credit": "suno"
+        },
+        {
+          "source": "the-blue-stone",
+          "title": "The Blue Stone",
+          "public": true,
+          "page": true,
+          "credit": "suno",
+          "credit_overrides": {
+            "date": "2026-11-17"
+          }
+        }
+      ]
+    },
+    {
+      "dial": "99.1",
+      "name": "PLEASE HOLD",
+      "tracks": [
+        {
+          "source": "bach-wtc1-prelude-01",
+          "title": "Bach: Prelude No. 1 in C",
+          "public": true,
+          "credit": "bach-ishizaka"
+        },
+        {
+          "source": "bach-goldberg-var-01",
+          "title": "Bach: Goldberg Variation 1",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://archive.org/details/The_Open_Goldberg_Variations-11823"
+          }
+        },
+        {
+          "source": "bach-wtc1-prelude-02",
+          "title": "Bach: Prelude No. 2 in C minor",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_Bach_-_Well-Tempered_Clavier,_Book_1_-_03_Prelude_No._2_in_C_minor,_BWV_847.ogg"
+          }
+        },
+        {
+          "source": "bach-wtc1-fugue-02",
+          "title": "Bach: Fugue No. 2 in C minor",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_Bach_-_Well-Tempered_Clavier,_Book_1_-_04_Fugue_No._2_in_C_minor,_BWV_847.ogg"
+          }
+        },
+        {
+          "source": "bach-goldberg-aria",
+          "title": "Bach: Goldberg Aria",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://archive.org/details/The_Open_Goldberg_Variations-11823"
+          }
+        },
+        {
+          "source": "bach-wtc1-prelude-05",
+          "title": "Bach: Prelude No. 5 in D",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_Bach_-_Well-Tempered_Clavier,_Book_1_-_09_Prelude_No._5_in_D_major,_BWV_850.ogg"
+          }
+        },
+        {
+          "source": "bach-goldberg-var-07",
+          "title": "Bach: Goldberg Variation 7",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://archive.org/details/The_Open_Goldberg_Variations-11823"
+          }
+        },
+        {
+          "source": "bach-wtc1-prelude-11",
+          "title": "Bach: Prelude No. 11 in F",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_Bach_-_Well-Tempered_Clavier,_Book_1_-_21_Prelude_No._11_in_F_major,_BWV_856.ogg"
+          }
+        },
+        {
+          "source": "bach-goldberg-var-18",
+          "title": "Bach: Goldberg Variation 18",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://archive.org/details/The_Open_Goldberg_Variations-11823"
+          }
+        },
+        {
+          "source": "bach-wtc1-prelude-06",
+          "title": "Bach: Prelude No. 6 in D minor",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_Bach_-_Well-Tempered_Clavier,_Book_1_-_11_Prelude_No._6_in_D_minor,_BWV_851.ogg"
+          }
+        },
+        {
+          "source": "bach-goldberg-var-19",
+          "title": "Bach: Goldberg Variation 19",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://archive.org/details/The_Open_Goldberg_Variations-11823"
+          }
+        },
+        {
+          "source": "bach-wtc1-prelude-17",
+          "title": "Bach: Prelude No. 17 in A-flat",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_Bach_-_Well-Tempered_Clavier,_Book_1_-_33_Prelude_No._17_in_A-flat_major,_BWV_862.ogg"
+          }
+        },
+        {
+          "source": "bach-wtc1-prelude-15",
+          "title": "Bach: Prelude No. 15 in G",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_Bach_-_Well-Tempered_Clavier,_Book_1_-_29_Prelude_No._15_in_G_major,_BWV_860.ogg"
+          }
+        },
+        {
+          "source": "bach-goldberg-var-30",
+          "title": "Bach: Goldberg Variation 30 (Quodlibet)",
+          "public": true,
+          "credit": "bach-ishizaka",
+          "credit_overrides": {
+            "source": "https://archive.org/details/The_Open_Goldberg_Variations-11823"
+          }
+        }
+      ]
+    },
+    {
+      "dial": "103.5",
+      "name": "THE LONG WAY ROUND",
+      "tracks": [
+        {
+          "source": "where-two-rivers-meet",
+          "title": "Where Two Rivers Meet",
+          "public": true,
+          "credit": "ai-mabou"
+        },
+        {
+          "source": "washboard",
+          "title": "Washboard",
+          "public": true,
+          "page": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id qQfUfHy3i5RnofmY7gOn"
+          }
+        },
+        {
+          "source": "strathlorne-strathspey",
+          "title": "Strathlorne Strathspey and Reels",
+          "public": true,
+          "credit": "ai-tunes",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id lpJgU8naTSgLOCwRSKFM",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "slack-water",
+          "title": "Slack Water",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id Q17OkfPoVnZpEOftxLEr"
+          }
+        },
+        {
+          "source": "nineteen-2",
+          "title": "Highway Nineteen",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id 0OXnm0slRSmWrlZgzHwG",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "mull-river-jigs",
+          "title": "The Mull River Jigs",
+          "public": true,
+          "credit": "ai-tunes",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id WvYzgQGJwxDCOxUdrbkX",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "coal-under-the-sea",
+          "title": "Coal Under the Sea",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id XEMq01rlhgIKp6FCLz5o"
+          }
+        },
+        {
+          "source": "saturday-at-the-hall",
+          "title": "Saturday at the Hall",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id BsezM9IAo9eS4ipZmPP7"
+          }
+        },
+        {
+          "source": "air-for-cape-mabou",
+          "title": "Air for Cape Mabou",
+          "public": true,
+          "credit": "ai-tunes",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id zx6y0bQbLI6P1kWCNVr4",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "the-train-doesnt-stop-here",
+          "title": "The Train Doesn't Stop Here",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id ciMpEPg8gRKflLmOgjsY"
+          }
+        },
+        {
+          "source": "glenora-falls",
+          "title": "Glenora Falls",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id byD8bwGRcY9dcvH81tNd"
+          }
+        },
+        {
+          "source": "sight-point-medley",
+          "title": "Sight Point March, Strathspey and Reel",
+          "public": true,
+          "credit": "ai-tunes",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id 1SC3xcajMOie2n5LrOK4",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "send-it",
+          "title": "Send It",
+          "public": true,
+          "page": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id 8AlPsrgQpg7VzK4TkoCc"
+          }
+        },
+        {
+          "source": "who-cleared-these-hills",
+          "title": "Who Cleared These Hills",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id rZZi00qr783pG5tpaxIP"
+          }
+        },
+        {
+          "source": "west-mabou-step-dance",
+          "title": "West Mabou Step-Dance Set",
+          "public": true,
+          "credit": "ai-tunes",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id LcLIsei4MHcgA24sKSIP",
+            "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "back-road-roll-call",
+          "title": "Back Road Roll Call",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id ur5bRZkPaopvhTMYRJWJ"
+          }
+        },
+        {
+          "source": "brook-village-reels",
+          "title": "Brook Village Reels",
+          "public": true,
+          "credit": "ai-tunes",
+          "credit_overrides": {
+            "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id 4vzZJDgdqzKWSTKK63oH",
+            "date": "2026-11-14"
+          }
+        }
+      ]
+    },
+    {
+      "dial": "107.3",
+      "name": "SECOND DELIVERY",
+      "tracks": [
+        {
+          "source": "the-tide-in-the-mine",
+          "title": "The Tide in the Mine",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id wocreVy2BvaP0d4gjyVk"
+          }
+        },
+        {
+          "source": "the-judique-flyer",
+          "title": "The Judique Flyer",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id wYZqru2KOZ7hkaGZw7hx",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "saturday-at-the-hall-dance",
+          "title": "Saturday at the Hall (dance mix)",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id nkHBBZdxT8MCMpNX3JUM"
+          }
+        },
+        {
+          "source": "warm-water",
+          "title": "Warm Water",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id vAVrpFQHMypp0lxawOhs",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "ship-harbour",
+          "title": "Ship Harbour",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id OEJRltsCL2r1eecXh8uJ",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "where-two-rivers-meet-beat",
+          "title": "Where Two Rivers Meet (beat group)",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id 1qP5ZGJfpvSeB8Dk8KJR"
+          }
+        },
+        {
+          "source": "the-train-came-over-on-a-boat",
+          "title": "The Train Came Over on a Boat",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id rmpxUgodhyHBWdwYSAqJ",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "judique-on-the-floor",
+          "title": "Judique on the Floor",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id 2ELfvBQInGfDSynXHH7D",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "nineteen-country-2",
+          "title": "Highway Nineteen (new country)",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id Eq3b8ANo2I2UsyfUy1G8",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "the-island-out-the-window",
+          "title": "The Island Out the Window",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id fJNJ3m8Lw6YFTYJ9tC9Q",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "going-to-town",
+          "title": "Going to Town",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id l060PVk5SQfChaho2qGb",
+            "date": "2026-11-16"
+          }
+        },
+        {
+          "source": "night-shift-at-the-point",
+          "title": "Night Shift at the Point",
+          "public": true,
+          "credit": "ai-mabou",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id 5YsfGF5EP7q5ijpVEQQn",
+            "date": "2026-11-16"
+          }
+        }
+      ]
+    }
+  ],
+  "just_start": "94.9"
+}

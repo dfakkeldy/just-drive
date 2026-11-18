@@ -1,0 +1,96 @@
+{
+  "about": "West Bay: rates pooled from filmed rural areas (Judique, Port Hood, Mabou); no West Bay observation. Separate area slot allows later correction. Each field pools conditional rates weighted by the number of buildings in its house or farm sample. Integer weights are exact relative rates, not West Bay observations. Entrance visibility keeps step 30\u2019s existing 35/109 estimate. Other step 30 detail rates remain estimates.",
+  "sourceBuildingCounts": {
+    "judique": {
+      "houses": 77,
+      "farmBuildings": 19
+    },
+    "porthood": {
+      "houses": 126,
+      "farmBuildings": 26
+    },
+    "mabou": {
+      "houses": 109,
+      "farmBuildings": 51
+    }
+  },
+  "landmarks": [],
+  "houses": {
+    "wall": {
+      "blue": 24182,
+      "blue-grey": 59615,
+      "brown": 56777,
+      "cream": 172587,
+      "dark blue": 18423,
+      "dark grey": 16345,
+      "dark red": 8502,
+      "green": 10675,
+      "grey": 166751,
+      "grey-green": 9256,
+      "light grey": 26355,
+      "pale grey": 118666,
+      "pale yellow": 29098,
+      "pink": 4251,
+      "red": 5005,
+      "tan": 9921,
+      "weathered grey": 10675,
+      "white": 530556
+    },
+    "roof": {
+      "black": 112179,
+      "blue": 15372,
+      "brown": 190683,
+      "dark grey": 673648,
+      "green": 31066,
+      "grey": 899433,
+      "light grey": 8008,
+      "red": 40931,
+      "tan": 8008
+    },
+    "roofMaterialKnown": {
+      "asphalt shingle": 3773,
+      "metal": 2155
+    },
+    "trim": {
+      "dark blue": 2507,
+      "dark grey": 9613,
+      "dark red": 2507,
+      "white": 509221
+    },
+    "entranceKnown": {
+      "deck": 2486830,
+      "front porch": 5220389,
+      "small steps": 2153677,
+      "wrap-around": 272864
+    }
+  },
+  "farmBuildings": {
+    "wall": {
+      "blue": 10710,
+      "brown": 23729,
+      "cream": 14987,
+      "dark grey": 7140,
+      "dark red": 4465,
+      "grey": 76018,
+      "grey-green": 7140,
+      "pale grey": 17296,
+      "pale yellow": 4277,
+      "red": 38716,
+      "tan": 3570,
+      "weathered grey": 20535,
+      "white": 87257
+    },
+    "roof": {
+      "black": 817,
+      "brown": 940,
+      "dark grey": 4789,
+      "grey": 12309,
+      "light grey": 1275,
+      "red": 510
+    },
+    "roofMaterialKnown": {
+      "asphalt shingle": 125,
+      "metal": 379
+    }
+  }
+}

@@ -1,0 +1,257 @@
+name	where	software	evidence
+pwa-browser	apple	no	Historical control stored in tools/baseline/source/
+car-check	portable	no	Linux GTX 980M PASS 17 s on df9507d; Mac PASS 26 s on df9507d
+car-mutations	portable	no	Linux GTX 980M / Chrome 157 PASS 24.55 s on pass 4 (six served mounting mutants plus clean/restored controls); Mac M1 Pro / Chrome PASS 16.68 s, 2026-11-14
+church-browser-check	portable	no	Linux GTX 980M PASS 58 s on df9507d; Mac FAIL 105 s on older main (fixed on main since)
+desktop-layout-check	portable	no	Linux GTX 980M PASS 85 s on df9507d; Mac PASS 50 s on df9507d
+detail-check	portable	no	Linux GTX 980M PASS 245 s on 7ef33bb; Mac PASS 149 s on older main
+fishing-check	portable	no	Linux GTX 980M PASS 163 s on 7ef33bb; Mac PASS 66 s on older main
+fishing-course-browser-check	portable	no	Linux GTX 980M PASS 34 s on df9507d; Mac PASS 18 s on df9507d
+fishing-hills-check	portable	no	Linux GTX 980M PASS 201 s on 7ef33bb; Mac PASS 92 s on older main
+fps-check	portable	no	Linux GTX 980M PASS 102 s on 7ef33bb; Mac PASS 95 s on older main
+grass-check	portable	no	Linux GTX 980M PASS 48 s on df9507d; Mac PASS 16 s on df9507d
+jump-check	portable	no	Linux GTX 980M PASS 210 s on df9507d; Mac PASS 64 s on df9507d
+just-drive-check	portable	no	Linux GTX 980M PASS 212 s on 71bb956; same FAIL on both on df9507d (branch behind #84)
+layout-check	portable	no	Linux GTX 980M PASS 700 s on df9507d; Mac PASS 536 s on older main; 17 Nov follow-up (settled atomic reading): apple-check-host M4 PASS 764.35 s on 52d906f; PASS 719.12 s on 19ee246 (merged with main); PASS 789.14 s on 4557489 (merged with main d018348)
+mp-ghosts-check	apple	no	heap sampling sees 12 MB in the warmed ghost module on Linux Chrome, twice; Mac PASS 8 s on df9507d; the project brief audit: apple-check-host M4 PASS 13.06 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60
+picture-check	portable	no	Linux GTX 980M PASS 1106 s on 7ef33bb; Mac PASS 299 s on older main
+pwa-isolation-check	portable	no	Linux GTX 980M PASS 28 s on df9507d; Mac PASS 8 s on df9507d
+radio-check	portable	no	"same verdict: FAIL on both on 71bb956 (""after the last station the radio is off"", a bug on main); Linux 71 s, Mac 43 s"
+listen-browser	unproven	no	rented Mac mini (apple-check-host) M4 / Edge 157 PASS 58 s, 2026-11-16 (the built page, the real songs, no land; needs only data/audio/out); not yet run on the MacBook or on Linux
+radio-reception-browser	unproven	no	new row of 17 Nov 2026; first measured on the rented Mac mini (apple-check-host), see its PR; not yet run on the MacBook or on Linux
+ramp-check	portable	no	Linux GTX 980M PASS 87 s on df9507d; Mac PASS 25 s on df9507d
+relief-check	portable	no	Linux GTX 980M PASS 155 s on 7ef33bb; Mac PASS 152 s on older main
+touch-path-check	portable	no	Linux GTX 980M PASS 51 s on df9507d; Mac PASS 31 s on df9507d
+truck-check	portable	no	Linux GTX 980M PASS 16 s on df9507d; Mac PASS 5 s on df9507d
+ui-check	portable	no	Linux GTX 980M PASS 87 s on 7ef33bb; Mac PASS 107 s on older main
+water-check	portable	no	Linux GTX 980M PASS 363 s on 71bb956 (after the Vite cacheDir fix); Mac PASS 122 s with the same fix
+budget	apple	no	draw-call pins differ on Linux (new-player-start 876 calls vs ceiling 774); Mac PASS 204 s on df9507d; the project brief audit: apple-check-host M4 PASS 529.58 / 346.89 / 536.51 s on 68bc9eb, 2026-11-16 / 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; 3/3 runs; all 32 rows, every pinned metric exactly matches the unchanged MacBook pins (96 rows); power network delta re-pin: apple-check-host Edge 157 five-load --raise (min = max, 32 rows), PASS 414 s on 700208a4, 2026-11-17 UTC; merged wires lower calls/geometries on 22 rows, harbour desktop +1 call/geometry/program; MacBook not re-run; #218 re-pin: apple-check-host Edge 157 five-load --raise --scene quarry-gate (min = max), 2026-11-17 UTC; quarry-gate desktop/phone explore-truck triangles +148 each (the bike head lamp on the trailer display bike), every other metric and row unchanged
+budget-mutations	apple	no	draw-call pins differ on Linux (village-start 203 vs 201); Mac PASS 73 s on df9507d; the project brief audit: apple-check-host M4 PASS 156.05 / 57.50 / 61.69 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; 3/3 runs; clean 201 calls, expected extra mesh 202 (delta 1), scratch-only raise 200 to 201 each run; power network delta: apple-check-host PASS 124 s on 700208a4 against the re-pinned ceilings
+trees	apple	no	picture pins differ on Linux (STOP: small pixel changes at Hill 1); Mac PASS 330 s on df9507d; the project brief audit: apple-check-host M4 PASS 365.78 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; 132 fixed pictures, 380 moving steps, zero pixel differences
+mp-game	unproven	no	needs Wrangler, which Linux does not have (CANNOT RUN); Mac PASS
+bike-browser	portable	no	Linux GTX 980M PASS 683 s on 7ef33bb; Mac PASS 325 s on older main
+explore-browser	portable	no	Linux GTX 980M PASS 485 s on 7ef33bb; Mac PASS 358 s on older main
+explore-browser-mutations	apple	no	times out at 1800 s on the 980M after 46 caught mutants (12 Nov matrix); Mac PASS 1209 s; the project brief audit: apple-check-host M4 PASS 671.51 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; all 52 real-page source mutations caught
+bike-browser-mutations	portable	no	Linux GTX 980M PASS 1418 s on 7ef33bb; Mac PASS 569 s on older main
+browser-real	portable	no	Linux GTX 980M PASS 12 s on df9507d; Mac PASS 7 s on df9507d
+pwa-regressions	portable	no	same verdict: FAIL on both on df9507d (radio sub-check exits 1 on both); Linux 313 s, Mac 194 s
+area-browser	portable	no	Linux GTX 980M PASS 27 s on df9507d; Mac FAIL 15 s on older main (fixed on main since)
+causeway-browser	portable	no	Linux GTX 980M PASS 39 s on df9507d; Mac PASS 15 s on df9507d
+coast-browser	portable	no	Linux GTX 980M PASS 652 s on 7ef33bb; Mac PASS 360 s on older main
+damage-browser	mac-only	no	17 Nov follow-up: cause found on apple-check-host, not host timing: the check set the damage hint and read the text at once, but Shift repaints the hint line only every 0.2 s of game time (uiTimer) and update(0) repaints only when that tick is due, so the read saw 'Nearest stop' with hintTime still 5 (two m4 FAIL runs on 52d906f/ff8b58a, frames 33-67 ms, page visible, Settings closed, no pause); the same symptom as the Linux note below; the check now waits up to 2 s for the game's own paint and still requires the hint gone 5.5 s after it was set; stays mac-only until a fixed run passes on apple-check-host (time-measuring row: load1 below 20); earlier: stop hint shows the nearest stop, not the damage hint, on Linux, twice; cause not found; Mac PASS 103 s on df9507d; the project brief audit: not run on apple-check-host; MacBook timing/HUD oracle; owner documented m4 Edge failure, not rerun
+page-state-browser	portable	no	Linux GTX 980M PASS 115 s on df9507d; Mac PASS 89 s on older main
+phone-help-browser	portable	no	Linux GTX 980M PASS 57 s on df9507d; Mac PASS 22 s on df9507d
+road-scene-browser	apple	no	photo ground does not settle on the 980M (grass 116 pending), twice; MacBook M1 Pro Metal PASS 122.02 s for corrected real-rail cow witness (20034578); the project brief audit: apple-check-host M4 PASS 140.41 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60
+road-scene-regression-browser	portable	no	Linux GTX 980M PASS 125 s on 7ef33bb; no same-commit Mac run
+touch-quality-browser	portable	no	Linux GTX 980M PASS 1130 s on 7ef33bb; no same-commit Mac run
+sxs-browser	portable	no	Linux GTX 980M PASS 430 s and Mac M1 Pro PASS 197 s on the same commit (3-quiet-update settle)
+truck-browser	portable	no	Linux GTX 980M PASS 384 s on 7ef33bb; no same-commit Mac run
+trailer-browser	portable	no	Linux GTX 980M PASS 408 s on 7ef33bb; no same-commit Mac run
+trailer-review-browser	portable	no	Linux GTX 980M PASS 23 s on 7ef33bb; no same-commit Mac run
+touch-quality-ui-suite	apple	no	not yet measured off macOS after split; MacBook M1 Pro Metal PASS 1189.97 s at 68c7fb98; apple-check-host M4 PASS 1068.26 s; radio=0 needs no catalogue; the project brief audit: apple-check-host M4 PASS 1130.29 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; full registered quality/Explore suite
+touch-controls-ui-suite	apple	no	not yet measured off macOS after split; MacBook M1 Pro Metal PASS 576.14 s at 68c7fb98; radio.json and radio-just.json required; radio-less m4 prerequisite probe SKIP 16 Nov; the project brief audit: apple-check-host M4 PASS 669.31 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; all seven registered UI jobs; both public radio catalogues present
+animals	portable	no	Linux GTX 980M PASS 234 s on df9507d; no same-commit Mac run
+terrain-browser	portable	no	Linux GTX 980M PASS 551 s on 7ef33bb; no same-commit Mac run
+mine-shots	portable	no	Linux GTX 980M PASS 144 s on 7ef33bb; no same-commit Mac run
+church-interior-shots	portable	no	apple-check-host M4 PASS 53.64 s on its first branch, 2026-11-17 UTC; not yet measured on Linux
+shift-shots	portable	no	Linux GTX 980M PASS 84 s on 7ef33bb; no same-commit Mac run
+era-browser	portable	no	Linux GTX 980M PASS 1208 s on 7ef33bb; no same-commit Mac run
+era-pass3-browser	portable	no	Linux GTX 980M PASS 766 s on 7ef33bb; no same-commit Mac run
+era-final-browser	portable	no	Linux GTX 980M PASS 237 s on 7ef33bb; no same-commit Mac run
+era-fps-browser	portable	no	Linux GTX 980M PASS 110 s on 7ef33bb; no same-commit Mac run
+era-density-boot-browser	portable	no	Linux GTX 980M PASS 83 s on df9507d; no same-commit Mac run
+era-density-pass4-browser	portable	no	Linux GTX 980M PASS 173 s on df9507d; no same-commit Mac run
+era-density-startup-browser	portable	no	Linux GTX 980M PASS 58 s on df9507d; no same-commit Mac run
+phone-hud-browser	portable	no	Linux GTX 980M PASS 704 s on df9507d; no same-commit Mac run
+start-here-browser	portable	no	Linux GTX 980M PASS 206 s on df9507d; no same-commit Mac run
+mp-rides-browser	unproven	no	needs Wrangler, which Linux does not have (CANNOT RUN on df9507d)
+church	mac-only	no	reads data/work/areas/church/church.json, and data/work never leaves the Mac; the project brief audit: not run on apple-check-host; private data/work never transfers
+wings	apple	no	needs the GDAL Python bindings (osgeo); Linux has none, and adding them needs rpm-ostree layering (ask Dan); the project brief audit: apple-check-host M4 PASS 0.85 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
+bridge-source-check	apple	no	needs the GDAL Python bindings (osgeo); Linux has none, and adding them needs rpm-ostree layering (ask Dan); the project brief audit: apple-check-host M4 PASS 0.11 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
+building-wing-check	apple	no	needs the GDAL Python bindings (osgeo); Linux has none, and adding them needs rpm-ostree layering (ask Dan); the project brief audit: apple-check-host M4 PASS 0.23 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
+utility-mask-check	apple	no	needs the GDAL Python bindings (osgeo); Linux has none, and adding them needs rpm-ostree layering (ask Dan); the project brief audit: apple-check-host M4 PASS 0.43 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
+canso-trail-check	apple	no	needs the GDAL Python bindings (osgeo); Linux has none, and adding them needs rpm-ostree layering (ask Dan); the project brief audit: apple-check-host M4 PASS 0.32 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
+vehicle-nits	apple	no	pins a SHA-256 of raw Float64 car state; Node 26 sin/cos/tan/atan/atan2/exp/pow differ between arm64 macOS and x86-64 Linux, so the digest differs on Linux (13 Nov); the project brief audit: apple-check-host M4 PASS 22.87 s on 68bc9eb, 2026-11-16 UTC; unchanged raw state/draw digests
+vehicle-nits-mutations	apple	no	same raw-state digest as vehicle-nits (platform libm differences); the project brief audit: apple-check-host M4 PASS 16.97 s on 68bc9eb, 2026-11-16 UTC; unchanged digests and mutation assertions
+fishing-rules	apple	no	Historical control stored in tools/baseline/source/
+road-scene-prior	apple	no	Historical control stored in tools/baseline/source/
+site-worker	portable	no	baseline is 3c63a8c^ on main (was unreachable 140d3fd); rented M6 mini PASS on 833ad00, 2026-11-15; Mac PASS
+site-worker-mutations	portable	no	baseline is 3c63a8c^ on main (was unreachable 140d3fd); rented M6 mini PASS on 833ad00, 2026-11-15; Mac PASS
+touch-quality	apple	no	Historical control stored in tools/baseline/source/
+remote-runner	apple	no	13 Nov Linux and 17 Nov m4 FAIL (link-dest did not reuse unchanged data) had one cause: GNU rsync (3.2.4 and later) backslash-escapes option values at RSYNC_OLD_ARGS=1, so the pre-quoted --link-dest reached the host with literal quotes whenever the host path needs quoting (the fixture host is 'host with spaces'); openrsync, the MacBook's rsync, passes values raw; fixed with RSYNC_OLD_ARGS=2; 17 Nov follow-up: apple-check-host M4 PASS 170.91 s with GNU rsync 3.5.2 on 52d906f, and PASS 192.34 s with openrsync on an earlier commit with the same runner, 45 mutants caught; not yet run on Linux; PASS 319.01 s on 039e7b8 (merged with main; paved-open snapshot added); PASS 273.24 s on 4557489; earlier: its local fixture fails on Linux, where GNU rsync 3.5.1 is both sender and receiver: link-dest did not reuse unchanged data (13 Nov); real Mac-to-Linux snapshots do share inodes; the runner is driven from the Mac; the project brief audit: apple-check-host M4 FAIL 18.06 s on 68bc9eb, 2026-11-17 UTC; AssertionError: link-dest did not reuse unchanged data (unchanged-file inode equality failed; the earlier cannot-reach-host text is an expected negative fixture)
+mp	unproven	no	needs Wrangler, which Linux does not have (CANNOT RUN on df9507d)
+mp-mutations	unproven	no	needs Wrangler, as mp; stops the local room runtime with SIGSTOP; apple-check-host PASS 167 s, 2026-11-17
+site-http	unproven	no	needs Wrangler, which Linux does not have (CANNOT RUN on df9507d)
+quarry-browser	unproven	no	local hardware browser passed; not measured on another host
+quarry-published-browser	unproven	no	local public-build browser passed; not measured on another host
+quarry-load-browser	unproven	no	not yet measured on another host
+quarry-waterline-browser	unproven	no	not yet measured on another host
+quarry-toe-browser	unproven	no	not yet measured on another host
+quarry-low-browser	unproven	no	not yet measured on another host
+quarry-trip-layout-browser	unproven	no	not yet measured on another host
+quarry-looks-browser	unproven	no	not yet measured on another host
+quarry-offline-browser	unproven	no	not yet measured on another host
+fleet-browser	unproven	no	Mac merge-pass family checks passed; unproven on other hosts
+fleet-browser-suite	unproven	no	Mac initial suite exited 1 on dev-key enumeration; unchanged UI retake exited 0 after fix; other 18 children passed; unproven on other hosts
+fleet-layout	unproven	no	Mac merge-pass 28 sizes passed with and without prompt; unproven on other hosts
+fleet-page	unproven	no	proven on this Mac at 8959e3e; unproven on other hosts
+fleet-round2-browser	unproven	no	Mac merge-pass check passed; unproven on other hosts
+fleet-quarry-functional	unproven	no	Hardware Mac policy requires sixteen completed cases and plain exact/parked contacts; receipt under data/work/west-bay/fleet/checks/quarry-trip; other hosts unproven
+fleet-quarry-contact-debt	unproven	no	Known natural-road contact debt on main; real exit 1, sixteen cases; see fleet-main-contact comparison and review-merge.md section 6; unproven elsewhere
+fleet-quarry-presets	unproven	no	Mac four HIGH/LOW preset boots passed loaded and hitched; unproven on other hosts
+blender-car-browser	unproven	no	Mac M1 Pro Metal / Edge 157 PASS; cross-host execution not yet measured
+blender-car-game	unproven	no	Mac M1 Pro Metal / Edge 157 PASS; cross-host execution not yet measured
+mail-demo	portable	no	G18 public demo URL check; uses the existing mail screenshot runner
+lawn-demo	portable	no	G18 lawn demo URL check; uses the existing shift screenshot runner
+photo-demo	portable	no	G18 photo/report demo URL check; uses the existing shift screenshot runner
+property-lines-browser	unproven	no	Mac-only execution so far; blocked-network property overlay and main-versus-branch phone geometry proof
+property-lines-areas-browser	unproven	no	apple-check-host Edge 157 line-pixel and area-origin proof; native Brave/Linux not measured
+property-lines-visibility-browser	unproven	no	apple-check-host Edge 157 CSS scaling and font proof; native Brave/Linux not measured
+property-lines-ground-browser	unproven	no	apple-check-host Edge 157 opt-in HIGH ground shader, movement and LOW gate proof; native Brave/Linux not measured
+horse-browser	unproven	no	1884 horse browser check; not measured on another host
+horse-coarse-browser	unproven	no	1884 horse browser check; not measured on another host
+horse-offline-browser	unproven	no	1884 horse browser check; not measured on another host
+horse-pass2-browser	unproven	no	1884 horse browser check; not measured on another host
+fleet-path	unproven	no	Mac Node check passed; unproven on other hosts
+guardrail-browser	portable	no	Mac M1 Pro PASS corrected eight-view row; prior Linux GTX 980M PASS before ground-truth tuning
+guardrail-look-browser	unproven	no	Mac M1 Pro PASS; not yet measured on another host
+guardrail-night-browser	unproven	no	Mac M1 Pro PASS; not yet measured on another host
+guardrail-fix-browser	unproven	no	Mac M1 Pro Metal, observed terminal and restored-herd views; other hosts unmeasured
+light-study-browser	unproven	no	Mac M1 Pro Metal PASS; safe-area, position reload and night direction; other hosts unmeasured
+light-study-public-browser	unproven	no	public default-brand study flow; hardware Mac execution only, other hosts unmeasured
+porch-dog-browser	unproven	no	not yet measured on another host
+start-key-browser	unproven	no	not yet measured on another host
+start-key-browser-mutations	unproven	no	not yet measured on another host
+paved-open-browser	unproven	no	WORK-only designated-polygon chase capture and actual GLSL; hardware required; no phone timing claim; its work bake reads data/raw/paved-open (sent by the remote runner since 17 Nov) and the large data/raw/elevation, data/raw/vectors and data/raw/areas inputs (never sent): the row needs them, so a runner host says SKIP with the missing path instead of a FileNotFoundError (PR #221 on apple-check-host)
+blender-models	apple	no	needs the matching Blender 5.2 release (BLENDER override, application path or PATH); absence is SKIP/CANNOT RUN, never PASS; Mac PASS 10 s on 991bd1a; the project brief audit: apple-check-host M4 PASS 9.42 s on 68bc9eb, 2026-11-17 UTC; Blender 5.2.2 LTS; four committed model files rebuilt and byte-equal; needs-only branch change
+blender-models-mutations	apple	no	as blender-models; Mac PASS 16 s on 991bd1a; the project brief audit: apple-check-host M4 PASS 11.10 s on 68bc9eb, 2026-11-17 UTC; Blender 5.2.2 LTS; four files byte-equal and quantizer mutant caught; needs-only branch change
+guardrail-r3-browser	unproven	no	West Bay seam/opening and crash-bike witnesses; other hosts unmeasured
+quarry-lifecycle-browser	unproven	no	Hardware Mac lifecycle regression covers both trip links, rejected replacement pose and expanded reload; other hosts unproven
+era-door-browser	unproven	no	Mac PASS; rented M6 mini (macOS) PASS 165 s on 271f04d, 2026-11-15; Linux unmeasured
+about	portable	no	pure Node: builds both About pages into a temporary folder
+paved-colour-browser	unproven	no	Native material/noise and colour proof; physical-phone performance unmeasured; same work bake as paved-open-browser: needs data/raw/paved-open and the large data/raw/elevation, vectors and areas inputs, so a runner host says SKIP with the missing path
+school-bus-browser	unproven	no	Linux desktop and phone pass before review fixes; Mac unmeasured
+mail-stage2-browser	portable	no	Linux GTX 980M / Chrome 157; desktop and phone rule/picture row
+mail-preview-cost	portable	no	pure Node, no GPU (Node rows default to portable); apple-check-host PASS 17 Nov 2026 on the Mabou village delta land (4d68356e: two community sites; digest and counters equal to 3502ef37, #179's step-29 rebake; was #101's b0acc9db); frozen 5d678ed counters kept from b0acc9db because 5d678ed cannot read styles 6/7; unchanged cost limits; flight digest measured on arm64 only, Linux not yet re-run on 3502ef37
+mail-preview-cost-mutations	portable	no	pure Node on the Mabou village delta 4d68356e input (3502ef37 before); apple-check-host PASS 17 Nov 2026, all three mutants killed; no GPU requirement; Linux not yet re-run
+yard-dog	portable	no	real geography and bounded rules, no browser
+yard-dog-browser	portable	no	Mabou behavior and desktop/phone pictures
+places-areas	portable	no	baked roads and manifests of four areas, no browser
+places-areas-browser	unproven	no	Places panel and jumps in four areas with desktop/phone pictures; rented M6 mini Chrome 157 PASS 15 Nov; apple-check-host M4 Edge 157 PASS on b3743622, 18 Nov 2026; not yet run on the MacBook or on Linux
+page-access-browser	unproven	no	Production page builder and PlacesUI in an isolated browser fixture; no terrain or game mocks claimed as integration coverage; apple-check-host M4 Edge 157 PASS 195.52 s on fb448b67, 18 Nov 2026 (missing-label, unlabelled-dialog and focus-trap mutants rejected at desktop and phone); not yet run on the MacBook or on Linux
+canal-browser	unproven	no	apple-check-host M4 Edge 157 PASS 656 s on bdcbfe51, 17 Nov 2026 (canal step removed: FAIL as required); not yet run on the MacBook or on Linux
+canal-traffic-browser	unproven	no	new in #123; apple-check-host M4 Edge 157 PASS 296 s on the merged head, 17 Nov 2026; not yet run on the MacBook or on Linux
+culverts-browser	unproven	no	apple-check-host M4 Edge 157 PASS 523 s on dca41abb, 17 Nov 2026: Mabou and Judique drawn crown under every road sample, shown/hidden drive identical, 16-crossing seat survey, desktop/phone pictures; Linux unmeasured
+deckhand	portable	no	read-only baked land and road placement; motion fixture; apple-check-host PASS on 955bd85f, 17 Nov 2026
+deckhand-browser	unproven	no	Mabou guide and desktop/phone pictures; rented M6 mini PASS 15 Nov; apple-check-host M4 Edge 157 PASS 224 s on 955bd85f, 17 Nov 2026; Linux unmeasured
+night-browser	unproven	no	Mac M1 Pro Metal PASS on the night-look branch; other hosts unmeasured
+paved-pipeline	apple	no	needs the GDAL Python bindings (osgeo): pipeline/paved.py imports osgeo; Linux has none (ModuleNotFoundError in a clean clone of cda5d9c, 14 Nov); the project brief audit: apple-check-host M4 PASS 3.71 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
+big-buildings-mutations	apple	no	needs the GDAL Python bindings (osgeo): pipeline/27_bake_buildings.py imports osgeo; Linux has none (ModuleNotFoundError in a clean clone of cda5d9c, 14 Nov); the project brief audit: apple-check-host M4 PASS 26.15 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
+stunt-browser	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-dressing-browser	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-gallery	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-boards	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-car-1-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-car-1-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-car-1_5-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-car-1_5-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-car-2-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-car-2-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-car-2_5-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-car-2_5-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-truck-1-desktop	unproven	no	First measured rented Mac mini Metal at a015c5f0: PASS 467.65s incl FIFO wait; Linux hardware measurement pending
+stunt-contact-truck-1-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-truck-1_5-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-truck-1_5-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-truck-2-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-truck-2-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-truck-2_5-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-truck-2_5-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-sxs-1-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-sxs-1-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-sxs-1_5-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-sxs-1_5-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-sxs-2-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-sxs-2-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-sxs-2_5-desktop	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-contact-sxs-2_5-low	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+stunt-features	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
+cemeteries-browser	unproven	no	rented Mac mini PASS 36 s on 076a41c8 (the five families); not yet run on the MacBook or on Linux
+cemeteries-browser-mutations	unproven	no	rented Mac mini PASS 32 s on 076a41c8 (5 served mutants); not yet run on the MacBook or on Linux
+era-density-judique	unproven	no	Judique 1884 regeneration; not measured on another host
+era-judique-browser	unproven	no	Judique 1884 browser check; not measured on another host
+traffic-signals-browser	unproven	no	apple-check-host PASS 8.52 s on 38c41cdc (desktop and LOW: 5 draws, 924 triangles, lit lamps); not yet run on the MacBook or on Linux
+mp-race-browser	unproven	no	two local room pages; requires installed Wrangler and hardware browser
+hikes-browser	unproven	no	New row; verification pending on apple-check-host
+stunt-arch-entry-mutant	unproven	no	New actual coupled-contact mutant; first host will be coordinator-authorised apple-check-host
+mp-liveness-browser	unproven	no	two local room visitors plus a same-browser tab; requires installed Wrangler and hardware browser
+phone-cold-start	unproven	no	new row (phone cold start, the project brief); first runs on apple-check-host
+terrain-lazy	portable	no	new row (the project brief); first runs on apple-check-host
+terrain-lazy-mutations	portable	no	new row (the project brief); first runs on apple-check-host
+stunt-start-browser	unproven	no	NEW kit row first measured apple-check-host; no Linux proof yet
+stunt-arch-crossing	unproven	no	NEW real-key kit row, first measurement apple-check-host; no Linux proof yet
+stunt-arch-trace	unproven	no	NEW contact diagnostic, first intended host apple-check-host; not a complete matrix
+stunt-start-photos	unproven	no	NEW cleared-start photo row, first measurement apple-check-host; no Linux proof yet
+stunt-arch-hill-1_5	unproven	no	NEW measured ordinary Hill profile; first host apple-check-host, no Linux proof yet
+stunt-arch-hill-2	unproven	no	NEW measured ordinary Hill profile; first host apple-check-host, no Linux proof yet
+stunt-arch-hill-2_5	unproven	no	NEW measured ordinary Hill profile; first host apple-check-host, no Linux proof yet
+stunt-hard-arch-photo	unproven	no	NEW Hill1 raised-frame chase photograph; first host apple-check-host; no Linux proof yet
+touch-layout-mp0-dpr1-low	apple	no	not yet measured off macOS after split; MacBook M1 Pro Metal PASS 450.31 s at 68c7fb98; full 28 sizes; radio.json required; radio-less m4 prerequisite probe SKIP 16 Nov; the project brief audit: apple-check-host M4 PASS 426.71 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; full 28-size variant; public radio catalogue present
+touch-layout-mp0-dpr1-high	apple	no	not yet measured off macOS after split; MacBook M1 Pro Metal PASS 600.40 s at 68c7fb98; full 28 sizes; radio.json required; radio-less m4 prerequisite probe SKIP 16 Nov; the project brief audit: apple-check-host M4 PASS 559.05 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; full 28-size variant; public radio catalogue present
+touch-layout-mp0-dpr2-low	apple	no	not yet measured off macOS after split; MacBook M1 Pro Metal PASS 451.64 s at 68c7fb98; full 28 sizes; radio.json required; radio-less m4 prerequisite probe SKIP 16 Nov; the project brief audit: apple-check-host M4 PASS 437.43 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; full 28-size variant; public radio catalogue present
+touch-layout-mp0-dpr2-high	apple	no	not yet measured off macOS after split; MacBook M1 Pro Metal PASS 600.04 s at 68c7fb98; full 28 sizes; radio.json required; radio-less m4 prerequisite probe SKIP 16 Nov; the project brief audit: apple-check-host M4 FAIL 595.17 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; FAIL: 1 of 28 sizes have a layout fault; 320x640 narrow safe initial: MISSING miniMap radio relief; the project brief single authorized recheck: apple-check-host M4 PASS 646.35 s on ff1d4ee3, 2026-11-17 UTC; full 28 sizes, 320x640 clear; hardware Metal / Edge 157.0.4341.60; intermittent on m4 (one FAIL, one PASS); cause not established; a FAIL on any host is still a FAIL; 17 Nov follow-up: layout-check.mjs now judges one settled, atomic reading (boxes and readouts-menu state together); apple-check-host PASS 1053.99 s on 52d906f, all 28 sizes, load1 26.7 at start; PASS 942.76 s on 19ee246 (merged with main); PASS 1317.83 s on 4557489 (merged with main d018348), load1 39 at start, up to 70 during
+touch-layout-mp1-dpr1-low	apple	no	not yet measured off macOS after split; MacBook M1 Pro Metal PASS 451.31 s at 68c7fb98; full 28 sizes; radio.json required; radio-less m4 prerequisite probe SKIP 16 Nov; the project brief audit: apple-check-host M4 PASS 423.69 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; full 28-size variant; public radio catalogue present
+touch-layout-mp1-dpr1-high	apple	no	not yet measured off macOS after split; MacBook M1 Pro Metal PASS 601.09 s at 68c7fb98; full 28 sizes; radio.json required; radio-less m4 prerequisite probe SKIP 16 Nov; the project brief audit: apple-check-host M4 PASS 601.30 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; full 28-size variant; public radio catalogue present
+touch-layout-mp1-dpr2-low	apple	no	not yet measured off macOS after split; MacBook M1 Pro Metal PASS 453.15 s at 68c7fb98; full 28 sizes; radio.json required; radio-less m4 prerequisite probe SKIP 16 Nov; the project brief audit: apple-check-host M4 PASS 439.53 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; full 28-size variant; public radio catalogue present
+touch-layout-mp1-dpr2-high	apple	no	17 Nov follow-up: the m4 FAIL '390x664 wide safe initial: MISSING miniMap radio relief' (and the mp0 row's 320x640 one) fits a check race: the check read the boxes and the phoneReadoutsMenu class in two evaluations 150 ms after a safe-area change, while the phone layout (phone-controls-layout.ts, observers; phoneReadoutsInSettings depends on hint height) can move the map and radio into the closed settings menu between them; layout-check.mjs now judges one settled, atomic reading (a layout that never settles is a fault); apple-check-host M4 / Edge 157 PASS 1186.38 s on 52d906f, all 28 sizes, load1 22.5 at start; PASS 948.57 s on 6cd5556 (one 150 ms wait per inspection), load1 36.3 at start; runs take longer than the MacBook's 602 s under the m4 load, inside the 1800 s limit; cause not proven by a reproduction; PASS 720.30 s on 19ee246 (merged with main); PASS 743.35 s on 4557489 (merged with main d018348); earlier: not yet measured off macOS after split; MacBook M1 Pro Metal PASS 602.04 s at 68c7fb98; full 28 sizes; radio.json required; radio-less m4 prerequisite probe SKIP 16 Nov; the project brief audit: apple-check-host M4 FAIL 595.23 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; FAIL: 1 of 28 sizes have a layout fault; 390x664 wide safe initial: MISSING miniMap radio relief
+ambient-traffic-browser	unproven	no	rented Mac mini (apple-check-host) PASS about 28 s in PR #155 (pinned pool cost, real Mabou roads and picture, main.ts gates); not yet run on the MacBook or on Linux
+ambient-traffic	portable	no	Node only, no data; PASS on apple-check-host; the same cases run inside ambient-traffic-mutations, which passed on the Linux CI runner
+ambient-traffic-mutations	portable	no	Node only, no data; PASS on apple-check-host and on the Linux CI runner (clean clone) in PR #155
+race-layout-browser	unproven	no	phone RaceView in Settings; first hardware browser run on apple-check-host
+traffic-budget	apple	no	wraps check-budget.sh (pins and the radio fixture are Mac-only, as for budget); traffic-on LOW and desktop whole-frame counts; the project brief audit: apple-check-host M4 PASS 73.62 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; all 8 selected rows exactly match every traffic-baseline metric; power network delta re-pin: five-load --update on apple-check-host (8 rows, calls/geometries lowered), PASS 112 s on 700208a4
+traffic-frame-time	unproven	no	rented Mac mini (apple-check-host) PASS about 78 s in PR #155 (hardware WebGL, active traffic timing); not yet run on the MacBook or on Linux
+traffic-budget-desktop	apple	no	wraps check-budget.sh (pins and the radio fixture are Mac-only, as for budget); traffic-on desktop counts; the project brief audit: apple-check-host M4 PASS 64.98 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; all 4 selected rows exactly match every traffic-baseline metric; power network delta: apple-check-host PASS 75 s on 700208a4 against the re-pinned traffic ceilings
+traffic-signals-pictures	unproven	no	apple-check-host PASS 116.16 s on 38c41cdc (16 pictures); writes data/work/traffic-signals-1175, which stays on the host that ran it; not yet run on the MacBook or on Linux
+weather	portable	no	Node only, no data: Halifax time through Intl; PASS on apple-check-host and on the MacBook (Node 26.13.1); Linux first runs in hosted CI
+weather-pictures	unproven	no	pictures only; rented Mac mini (apple-check-host) PASS 145 s on ed632d1e (22 views, hardware WebGL); not yet run on the MacBook or on Linux
+weather-settings-browser	unproven	no	rented Mac mini (apple-check-host) PASS 46 s on ed632d1e (two desktop and two phone sizes, Apply round trip); not yet run on the MacBook or on Linux
+road-scene-delta-browser	portable	no	apple-check-host hardware PASS 33.69 s, 16 Nov 2026; generic fixture (no host pixel pins); no Linux proof
+paved-open-land	portable	no	Python fixture plus baked manifest/paved reads; no GDAL; before/after land receipt; reads data/raw/paved-open/corrections.json beside data/baked: the remote runner now sends data/raw/paved-open (208 KB, open data) as a fingerprinted snapshot like baked/audio, and the row needs it (SKIP with the path when absent); PR #221 remote-check on apple-check-host had failed for lack of it (17 Nov); a run local to apple-check-host reads the host's own data, which lagged the MacBook land on 17 Nov (land is before / unknown paved file bytes)
+point-tupper-delta-land	portable	no	Python fixture plus baked manifest/building/props/paved reads; no GDAL; before/after land receipt; reads data/raw/paved-open/corrections.json beside data/baked: the remote runner now sends data/raw/paved-open as a snapshot, and the row needs it (SKIP with the path when absent); a run local to apple-check-host reads the host's own, older land
+mabou-village-delta-land	portable	no	Python fixture plus baked manifest/building/props/paved reads; no GDAL; before/after land receipt; reads data/raw/paved-open/corrections.json beside data/baked, which the remote runner sends as a snapshot since 17 Nov; the row needs it (SKIP with the path when absent)
+paved-lot-pictures	unproven	no	initial paving delta Judique/Port Hood/Point Tupper default-on pictures; rented Mac mini M4 Edge 157 Metal on a scratch installed clone; MacBook unmeasured
+pause-browser	unproven	no	rented Mac mini (apple-check-host) PENDING
+power-network-browser	unproven	no	apple-check-host Edge only so far; reads installed land (no delta folder)
+judique-village	portable	no	no browser; apple-check-host PASS on the Judique lots delta branch
+judique-village-browser	unproven	no	apple-check-host Edge PASS on the Judique lots delta branch (desktop 16,230 triangles in 18 meshes, LOW 8,794); counts are deterministic; not yet run on the MacBook or on Linux
+mp-social-browser	unproven	no	two local room pages; requires installed Wrangler and hardware browser (M4 Edge 157 PASS)
+point-tupper-driver-browser	unproven	no	rented Mac mini (apple-check-host) M4 PASS in PR #164; not yet run on the MacBook or on Linux
+point-tupper-driver-browser-low	unproven	no	LOW display-model AI since the project brief: apple-check-host M4 / Edge 157 PASS 69 s (pickup, side by side, dirt bike: drive, right lane, stop, hidden spawn); not yet run on the MacBook or on Linux
+point-tupper-driver-budget	unproven	no	rented Mac mini (apple-check-host) M4 PASS in PR #164; not yet run on the MacBook or on Linux
+point-tupper-driver-budget-low	unproven	no	LOW display-model AI since the project brief: apple-check-host M4 / Edge 157 PASS 25 s (start without and with each kind fits PHONE_CAP (tools/frame-budget-policy.mjs: 227 calls, 1,475,392 triangles)); not yet run on the MacBook or on Linux
+engine-sound-browser	unproven	no	new in the project brief; first runs on apple-check-host (headless Edge plays into a silent output; reads the graph state, not heard sound)
+port-hawkesbury	portable	no	no browser; apple-check-host PASS on the Point Tupper delta branch
+port-hawkesbury-browser	unproven	no	apple-check-host Edge PASS on the Point Tupper delta branch; not yet run on the MacBook or on Linux
+highland-browser	portable	no	Apple M4 Metal / Chrome 157 PASS during the project brief; Blender rebuilds deferred to MacBook
+highland-live-browser	portable	no	live cliff game check on apple-check-host
+highland-budget	portable	no	all four animal-home modes on apple-check-host; named per-mode evidence
+stockpiles-browser	unproven	no	rented Mac mini apple-check-host (M4, Metal) PASS 105 s on f219f25e with the committed pack served through the manifest key (the land had no pack yet); not yet run on the MacBook or on Linux
+stockpiles-pictures	unproven	no	rented Mac mini apple-check-host (M4, Metal) PASS 130 s on f219f25e (452 s on a cold cache), 24 pictures with the committed pack served; not yet run on the MacBook or on Linux
+map-labels	portable	no	pure Node (no browser, no land); rented Mac mini (apple-check-host) PASS
+map-labels-mutations	portable	no	pure Node (no browser, no land); rented Mac mini (apple-check-host) PASS
+map-labels-browser	unproven	no	rented Mac mini (apple-check-host) only so far; not yet run on the MacBook or on Linux
+drone-browser	unproven	no	apple-check-host PASS on the drone-mode branch (desktop keyboard-only flight, phone portrait and landscape); not yet run on the MacBook or on Linux
+painter-browser	apple	no	apple-check-host M4 PASS on e860ece0 (204 s via check-all on the tree before its last hint fix; final tree via yard-shots), 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; desktop and phone seat/chase; one draw and 384 triangles each; #1147 hint in the real HUD on desktop 1400x950 and phone 390x844 and 844x390, no control overlapped, none with scene=0, approach grade 3.9%; pictures inspected; earlier PASS on cf29cc4
+airport-browser	unproven	no	rented Mac mini (apple-check-host) run in PR #147; not yet run on the MacBook or on Linux
+road-animals-browser	apple	no	apple-check-host M4 PASS on the merged tree after 7af0ab5d (582 s via check-all, slot wait included), 2026-11-18 UTC; ANGLE Metal / Edge 157.0.4341.60; real Mabou Mines Road drive at 14 m/s: real HUD hint 11-12 s before one near-miss complaint, body gap 10 m, H key, one draw per species and no new program, gates; deer/fox/moose desktop and phone seat pictures inspected
+sugar-camp-browser	unproven	no	new alias desktop phone row; first run apple-check-host
+ground-browser	portable	no	native-GPU capture against local read-only work-root rehearsal server; no software GL
+ground-classes	apple	no	needs the GDAL Python bindings (osgeo) and shapely: pipeline/ground_classes.py imports both; clean-clone CI has neither (ModuleNotFoundError); apple-check-host M4 PASS 0.29 s on 3a05a54b, 18 Nov
+ground-classes-mutations	apple	no	as ground-classes; apple-check-host M4 PASS 0.64 s (21 mutants KILLED) on 3a05a54b, 18 Nov
+mabou-main	portable	no	no browser; apple-check-host PASS on the Mabou village delta branch
+mabou-main-browser	unproven	no	apple-check-host Edge PASS on the Mabou village delta branch (desktop 17,742 triangles in 9 meshes, LOW 9,084 in 6); counts are deterministic; not yet run on the MacBook or on Linux
+replay-browser	unproven	no	apple-check-host M4 PASS 152 s on f2d2abf9 (with main's Mabou main street), 2026-11-18 UTC; earlier PASS 912 s on 3000a109 and 260 s on 55fc99f4; hardware Metal / Edge 157.0.4341.60; desktop car, phone car (LOW, touch) and bike: drawn ride within 16 mm of the driven path, 0.25x at the mark, ride and mark in frame, every rig node, lamp and the camera restored, MP4 clips with the caption; not yet run on the MacBook or on Linux
+pt-infrastructure-browser	unproven	no	Apple M6 Mac PASS 15 Nov (pre-merge, six batches); apple-check-host M4 Edge 157 PASS 852 s on 97133dd1, 18 Nov 2026 (three batches on desktop, none on phone LOW or in Judique); Linux unmeasured
+wharves	portable	no	real baked meshes; no browser
+wharves-mutations	portable	no	real baked meshes and broken planner variants; no browser
+wharves-browser	apple	no	apple-check-host (Apple M4, Edge 157) PASS 348 s on 73cba0a4 and 522 s on c5af1ffa (receipts in tools/evidence/wharves): real GPU pictures and matched main costs, one browser slot

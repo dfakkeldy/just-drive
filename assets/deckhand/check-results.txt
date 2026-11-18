@@ -1,0 +1,36 @@
+Deckhand check receipt, 17 Nov 2026 (replaces the earlier 15 Nov receipt).
+Head under test: 955bd85f (deckhand merged with origin/main 1afc4909).
+Host: rented Mac mini apple-check-host, Apple M4, Edge 157.0.4341.60, ANGLE Metal, hardware WebGL.
+Code review: fresh independent Claude Opus 5.5 review (high effort) of the merged diff, VERDICT: approve;
+its minor notes are fixed in 55fb2e37 (350 m camera cutoff test, independent feet height, importlib loader, repo-root paths).
+
+tools/check-all.sh --only, on 955bd85f:
+tsc                          PASS
+deckhand                     PASS  (motion fixture incl. 350 m camera cutoff; placement: water, road and old in-shed stop rejected)
+dev-hooks                    PASS
+dev-hooks-mutations          PASS
+pause-map                    PASS
+horse-pass2                  PASS  (world-update fixture order incl. deckhand)
+coast                        PASS
+explore                      PASS
+mail-preview-cost            PASS
+mail-preview-cost-mutations  PASS
+deckhand-browser             PASS  224 s
+ui-check                     PASS  614 s  (dev API keys incl. deckhand and main's stockpiles)
+budget                       PASS  629 s  (every pinned scene/mode metric exact against main's current pins; no re-pin)
+
+deckhand-browser facts (Mabou): game-loop feet height 2.200; placement survey ground 1.390-1.428 m
+lifted by exag 1.5 about sea -0.2 gives 2.185-2.242; nearest road 31.2 m; 40 m turn inclusive, 40.1 m rests;
+1884 Mabou has no deckhand.
+
+Known red on unchanged origin/main 777ad4f0, same host, same failing line (not caused by this PR):
+coast-browser    FAIL  no added active coast samplers
+explore-browser  FAIL  mail title keeps its own heading, key rows, start button and satire notice
+church           FAIL  needs private data/work (MacBook only)
+radio-edit       FAIL  same traceback on main
+remote-runner    FAIL  remote-check: cannot reach host
+
+The wider covering run (190 rows PASS on 712bc0df) had mp and site-http CANNOT RUN because another
+agent's local server held port 5262.
+
+Pictures: assets/deckhand/deckhand-{desktop,phone,wharf}.png, generated game pictures only, from this run.

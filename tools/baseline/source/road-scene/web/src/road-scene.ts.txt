@@ -1,0 +1,180 @@
+import * as THREE from 'three';
+import { complaintLine } from './complaints';
+import { fishArt } from './road-scene-art';
+import { FISH, FISH_COWS, FishRules, SceneRoad, touchesPlayer, type Pose } from './road-scene-rules';
+import { pushOut, type Solid } from './parked';
+import type { Roads } from './roads';
+import type { Shift } from './shift';
+import type { Terrain } from './terrain';
+import type { Vehicle } from './vehicle';
+
+/** One self-contained roadside scene. Future scenes can supply the same reset/step/update/solids/report hooks. */
+export class RoadScene {
+  readonly group = new THREE.Group();
+  readonly rules = new FishRules();
+  readonly solids: Solid[] = [];
+  readonly road: SceneRoad | null;
+  readonly centre: Pose = { x: 0, z: 0, heading: 0 };
+  private readonly visitorCar: Solid = { x: 0, z: 0, heading: 0, half: FISH.carHalf, halfWidth: FISH.carWidth };
+  private readonly truck: Solid = { x: 0, z: 0, heading: 0, half: FISH.truckHalf, halfWidth: FISH.truckWidth };
+  private readonly candidate: Solid = { x: 0, z: 0, heading: 0, half: 0, halfWidth: 0 };
+  private readonly front: Pose = { x: 0, z: 0, heading: 0 };
+  private readonly back: Pose = { x: 0, z: 0, heading: 0 };
+  private readonly carSolids = [this.visitorCar];
+  private readonly truckSolids = [this.truck];
+  private art: ReturnType<typeof fishArt> | null = null;
+  readonly pasture: Pose[] = FISH_COWS.map(() => ({ x: 0, z: 0, heading: 0 }));
+  private readonly cowHeights = FISH_COWS.map(() => 0);
+  private distance = Infinity;
+  private placed = false;
+  private sound: AudioContext | null = null;
+  private hornGain: GainNode | null = null;
+  private paused = false;
+  private readonly forced: string | null;
+  private roadId = -1;
+
+  constructor(roads: Roads, private readonly terrain: Terrain, private readonly shift: Shift, params: URLSearchParams) {
+    this.forced = params.get('scene');
+    const village = terrain.manifest.village;
+    // Public road geometry near the existing cow; this point is 60 m uphill from it.
+    const hit = roads.nearest(618982.72 - village[0], village[1] - 5109266.90, 20, r => r.name === 'Mabou Mines Road');
+    if (hit) {
+      let along = 0;
+      for (let i = 0; i < hit.seg; i++) along += Math.hypot(hit.road.pts[i + 1][0] - hit.road.pts[i][0], hit.road.pts[i + 1][1] - hit.road.pts[i][1]);
+      along += Math.hypot(hit.road.pts[hit.seg + 1][0] - hit.road.pts[hit.seg][0], hit.road.pts[hit.seg + 1][1] - hit.road.pts[hit.seg][1]) * hit.t;
+      this.road = new SceneRoad(hit.road.pts, along); this.roadId = hit.road.id; this.road.at(0, 0, this.centre);
+    } else this.road = null;
+    this.reset();
+    shift.roadside.push(this);
+    // A short generated truck horn, unlocked by the first real input. No fetched audio or frame work.
+    const unlock = () => {
+      if (!this.sound) this.sound = new AudioContext();
+      void this.sound.resume().catch(() => {});
+    };
+    // Touch activation is granted on release; pointerdown alone leaves mobile audio suspended.
+    addEventListener('pointerup', unlock, { once: true });
+    addEventListener('keydown', unlock, { once: true });
+  }
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (paused) { this.hornGain?.disconnect(); this.hornGain = null; }
+  }
+  reset(): void {
+    this.setPaused(false);
+    this.rules.reset(this.shift.career.day, this.forced);
+    if (!this.road) this.rules.enabled = false;
+    this.distance = Infinity; this.placed = false; this.solids.length = 0; this.group.visible = false;
+    this.place();
+  }
+  get hint(): string { return this.distance < 60 ? this.rules.hint : ''; }
+  reportLine(): string { return this.rules.reportLine; }
+  /** Set both collider poses from the same path as the art. Nothing exists on a no-scene day. */
+  place(): void {
+    if (!this.rules.enabled || !this.road) return;
+    this.road.at(this.rules.carAlong, this.rules.carSide, this.visitorCar); this.visitorCar.heading += Math.PI + this.rules.carTurn;
+    this.road.at(this.rules.truckAlong, 0, this.truck);
+  }
+  honk(player: Vehicle): void {
+    if (this.paused || this.shift.ended || !this.rules.enabled) return;
+    const d = Math.hypot(player.x - this.centre.x, player.z - this.centre.z);
+    if (this.rules.honk(d)) this.complain('sceneHorn');
+  }
+  private complain(kind: 'sceneHit' | 'sceneHorn'): void {
+    this.shift.complaints.add({ kind, target: -55, at: this.shift.elapsed, x: this.centre.x, z: this.centre.z,
+      road: this.roadId, customer: 'the visitor on Mabou Mines Road',
+      line: complaintLine(kind, this.shift.career.day, -55) });
+  }
+  /** Called after each 1/120 s player physics step, alongside the yard's solids. */
+  step(dt: number, player: Vehicle, playing = true): void {
+    if (this.paused || !this.rules.enabled || !this.road) return;
+    this.distance = Math.hypot(player.x - this.centre.x, player.z - this.centre.z);
+    if (this.distance > FISH.draw) { this.solids.length = 0; this.placed = false; return; }
+    // Wait for loaded ground before adding solids; invisible/unplaced obstacles cannot bill the player.
+    if (this.terrain.heightAt(this.visitorCar.x, this.visitorCar.z) === null || this.terrain.heightAt(this.truck.x, this.truck.z) === null) { this.solids.length = 0; this.placed = false; return; }
+    this.placed = true;
+    if (!this.solids.length) this.solids.push(this.visitorCar, this.truck);
+    const hit = pushOut(player, this.carSolids);
+    if (hit >= 2 && playing && !this.shift.ended) this.complain('sceneHit');
+    pushOut(player, this.truckSolids);
+    if (!playing || this.shift.ended) return;
+    const c = this.candidate;
+    const nextSide = Math.max(FISH.shoulder, this.rules.carSide - FISH.carSpeed * dt);
+    this.road.at(6 * nextSide / FISH.shoulder, nextSide, c);
+    c.heading += Math.PI - .7 * Math.sin(Math.PI * nextSide / FISH.shoulder); c.half = FISH.carHalf; c.halfWidth = FISH.carWidth;
+    const carCanMove = !touchesPlayer(c, player, .35);
+    // Check the entire next swept advance plus 2 m braking room, including rotated player circles.
+    this.road.at(this.rules.truckAlong + FISH.speed * dt, 0, c);
+    c.half = FISH.truckHalf + FISH.gap; c.halfWidth = FISH.truckWidth;
+    const truckCanMove = !touchesPlayer(c, player, .1);
+    this.rules.step(dt, this.distance, carCanMove, truckCanMove); this.place();
+    if (this.rules.hornSignal) this.horn();
+  }
+  private horn(): void {
+    const audio = this.sound;
+    if (this.paused || !audio || audio.state !== 'running') return;
+    this.hornGain?.disconnect();
+    const gain = this.hornGain = audio.createGain(); gain.gain.setValueAtTime(.035, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .9); gain.connect(audio.destination);
+    for (const hz of [110, 165]) { const tone = audio.createOscillator(); tone.type = 'sawtooth'; tone.frequency.value = hz; tone.connect(gain); tone.start(); tone.stop(audio.currentTime + .9); }
+  }
+  /** Visual updates and distance culling. No per-frame geometry, arrays, vectors or DOM nodes. */
+  update(camera: THREE.Camera): void {
+    if (this.paused) return;
+    if (!this.rules.enabled || !this.road || Math.hypot(camera.position.x - this.centre.x, camera.position.z - this.centre.z) > FISH.draw) { this.group.visible = false; return; }
+    if (!this.art) { this.art = fishArt(); this.initializeCows(); this.group.add(this.art.group); this.art.group.visible = true; }
+    const a = this.art;
+    if (!this.pose(a.car, this.rules.carAlong, this.rules.carSide, Math.PI + this.rules.carTurn) || !this.pose(a.truck, this.rules.truckAlong, 0, 0)) { this.group.visible = false; return; }
+    this.group.visible = true;
+    this.seatCows();
+    const entering = Math.min(1, this.rules.entering / FISH.enterTime);
+    const side = -3.65 * (1 - entering);
+    this.road.at(1.5 * (1 - entering), side, this.front);
+    const y = this.terrain.heightAt(this.front.x, this.front.z);
+    a.visitor.visible = entering < 1 && y !== null;
+    a.visitor.position.set(this.front.x, y ?? 0, this.front.z);
+    // The lens points at the close herd in the pasture, with the camera to the eye.
+    this.road.at(-4, -21, this.back);
+    a.visitor.rotation.y = -Math.atan2(this.back.x - this.front.x, -(this.back.z - this.front.z)) + (this.rules.noticeTime > 0 ? -.15 : 0);
+    a.hand.visible = this.rules.cleared && this.rules.truckAlong > 4 && this.rules.truckAlong < 30;
+  }
+  private initializeCows(): void {
+    const art = this.art!, positions = art.cows.geometry.attributes.position, normals = art.cows.geometry.attributes.normal;
+    art.cows.position.set(this.centre.x, 0, this.centre.z);
+    for (let i = 0; i < FISH_COWS.length; i++) {
+      const spec = FISH_COWS[i], p = this.pasture[i]; this.road!.at(spec.along, spec.side, p);
+      const angle = -p.heading - spec.turn, c = Math.cos(angle), s = Math.sin(angle);
+      for (let v = art.cowOffsets[i]; v < art.cowOffsets[i + 1]; v++) {
+        const x = positions.getX(v), z = positions.getZ(v), nx = normals.getX(v), nz = normals.getZ(v);
+        positions.setXYZ(v, x * c + z * s + p.x - this.centre.x, positions.getY(v), -x * s + z * c + p.z - this.centre.z);
+        normals.setXYZ(v, nx * c + nz * s, normals.getY(v), -nx * s + nz * c);
+      }
+    }
+    positions.needsUpdate = normals.needsUpdate = true;
+  }
+  private seatCows(): void {
+    const art = this.art!, positions = art.cows.geometry.attributes.position;
+    art.cows.visible = true;
+    for (let i = 0; i < this.pasture.length; i++) {
+      const p = this.pasture[i], height = this.terrain.heightAt(p.x, p.z);
+      if (height === null) { art.cows.visible = false; continue; }
+      const delta = height - this.cowHeights[i];
+      if (Math.abs(delta) < .001) continue;
+      for (let v = art.cowOffsets[i]; v < art.cowOffsets[i + 1]; v++) positions.setY(v, positions.getY(v) + delta);
+      this.cowHeights[i] = height; positions.needsUpdate = true;
+    }
+  }
+  private pose(root: THREE.Object3D, along: number, side: number, turn: number): boolean {
+    this.road!.at(along, side, this.front); this.road!.at(along + 2, side, this.back);
+    const y = this.terrain.heightAt(this.front.x, this.front.z), y2 = this.terrain.heightAt(this.back.x, this.back.z);
+    if (y === null) return false;
+    root.position.set(this.front.x, y + .04, this.front.z);
+    const heading = this.front.heading;
+    this.road!.at(along, side + .8, this.back);
+    const right = this.terrain.heightAt(this.back.x, this.back.z);
+    this.road!.at(along, side - .8, this.back);
+    const left = this.terrain.heightAt(this.back.x, this.back.z);
+    root.rotation.set(Math.atan2((y2 ?? y) - y, 2) * Math.cos(turn), -heading - turn, right !== null && left !== null ? Math.atan2(right - left, 1.6) * Math.cos(turn) : 0, 'YXZ');
+    return true;
+  }
+  /** Inspectable without exposing mutable colliders to tests. */
+  get ready(): boolean { return this.placed; }
+}

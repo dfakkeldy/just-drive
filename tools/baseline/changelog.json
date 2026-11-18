@@ -1,0 +1,598 @@
+[
+  {
+    "date": "2026-11-17T12:00:00-04:00",
+    "title": "Power buildings with service drops and poles on built-up named roads"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "107.3 SECOND DELIVERY: eight new songs for Judique, Port Hood, Port Hawkesbury and Point Tupper"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Talk station round 2: 50 new pieces on 94.9 THE PARTY LINE, and Judique and Mabou said right"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Add sourced junction signals with night lamps and traffic hook"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Just Listen: a radio-only page at /listen/"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Player Atlantic date/time and uniform weather moods"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Road, building and mailbox corrections"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Give West Bay borrowed rural building style rates"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Move phone Room race controls into Settings"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Talk station: 94.9 THE PARTY LINE (call-in show, developer interview, ads and tips)"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Raise strong-help phone mail speed caps"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Add light ambient traffic on mapped highways"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Surface audit: Industrial Park Road (Point Tupper) becomes paved, as an isolated delta"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Bake terrain height bounds and check them against all ground PNGs"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Repair terrain browser cache and geometry witnesses"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Fix unread phone terrain bounds for highlands and skirts"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Phone lazy land: do not draw a whole coarse tile for out-of-view quarters (main's budget +1)"
+  },
+  {
+    "date": "2026-11-16T12:00:00-04:00",
+    "title": "Race wording: 'course', not 'route', so Just Drive passes its word check"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Cemeteries: anonymous walled grounds in all six areas"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Phone cold start: far land out of view waits for the first pedal (39.6 → 24.5 MB)"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "First room races: road checkpoints, synced starts and shared times"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Add observed building palette counts for four Strait areas"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Judique 1884: the 1884 era for a second area"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Browser slots: reaching the wait cap fails by default"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Fleet: unload, load and switch between the truck, the side by side and the dirt bike"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Checks: the wings and big-buildings rows know the yard dog's driveway"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Era door: go back to Mabou in 1884, and back"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Props: no roadside box for the hand-built house site (Judique), with a check and pinned Judique counts"
+  },
+  {
+    "date": "2026-11-15T12:00:00-04:00",
+    "title": "Add the MIT licence for the code and say what it does not cover"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Night and twilight look for the light study"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Make the Blender mail car the default car"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Add a morning school bus loop and stop-arm score rule"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Add an unnamed yard dog at an invented route driveway"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "feat: deliver mail through openings and retain mailbox damage"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Large buildings as blocks and tanks, measured from open heights (switch off in every area)"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Help pages for Just Drive and Mabou Mail Madness"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "About pages for Just Drive and Mabou Mail Madness"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Mail car: an optional Blender-made car (off by default, ?car=blender) with a safe fallback to the code car"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Guard rails in every area, by rule from the land, with real collision (Mabou Mines cliff rail and the Highland bull)"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Mail car: tail lamps seated in body sockets (no paint notch over the lens)"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Radio: one file to rename stations and change their playlists, checked before any write"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Roadside story starts again for motor rides (the #103 play flag, with a real frame-loop check)"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Porch dog at the end of Beaton Road, and a start link (?start=<road>) behind the title card"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Light study: a dated Halifax sun for drive-around mode, with shareable places (and safe placement)"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Mabou road-shaped ground: checks and land-made files for the new land (the copy is done)"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Radio: every station in every area, both brands and 1884 (the horse stays silent)"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Point Tupper: an opt-in hard-paved ground layer (off by default, no data shipped)"
+  },
+  {
+    "date": "2026-11-14T12:00:00-04:00",
+    "title": "Mailboxes: decide on the road lines before the bed move, place on the moved lines; keep box for porch-site"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Horse checks: green again on main (fixed-commit comparisons, hud-text anchor, audio polling)"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "1884 era: a rideable horse for Mabou 1884 (gaits, tack, sound, timber bridge banks); today's game unchanged"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "bake.sh: check the area name before any file is touched"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Property lines: a live map layer from the Province, off by default"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Road-shaped ground: keep boxes round hand-built places, one move per junction (off by default)"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "main.ts G19a: the slow-computer shadow guard counts only play frames"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "main.ts slice 4 (G18): demo and test switches leave the frame"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "main.ts slice 3 (G17): named play flags for the drive frame"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Checks: move two text pins to PR #90's reviewed lines, so main is green again"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "main.ts slice 2 (G14): one world-update registry for the drive frame and the endings"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "sxs-browser: wait for quiet land (3 updates, no failed tile) and fail with a setup timeout, not a CDP timeout"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "main.ts slice 1 (G13): one expose() for the dev API and an ordered resets list"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "West Bay: off-road driving and a quarry trip"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "check-all: print each row's verdict as it ends, so a killed run keeps its results"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Radio check: test the chip's state class as a token, so the phone HUD's 'expanded' class no longer hides OFF"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Host classes: 50 of 61 browser rows run on Linux, with evidence"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Phone speed cap: off in Just Drive, shown in the mail game, paved streets 70"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Title card: a contact line for corrections and removals"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Phone HUD that leaves the road clear, and a throw-now cue that makes mail land"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Start where I am: begin the drive at a safe road near your location"
+  },
+  {
+    "date": "2026-11-13T12:00:00-04:00",
+    "title": "Multiplayer: show each player's real vehicle, fade nearby players"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Remote checks over SSH: send the allow-listed tree, run on Linux, keep exit codes"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "1884 era: period house density for Mabou, trades kept on safe ground and at water, period road names and tab title"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Four checks that were red on main repaired: area, church, side-by-side and the mutation watcher (the game was right)"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Browser start-up: NVIDIA GPU mode for Linux, and a GPU proof on every start"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Road-shaped ground: an optional bake step that puts roads on their real bed (off by default)"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "One helper builds the Shadows, Grass and Water reflections settings rows"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Grass and water browser checks green again through the runner"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Terrain check: a test for the 1884 era during a loading burst, and a faster run"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Tiles are built one per frame while you drive; a jump or a start builds within a time budget"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Mabou, 1884: a history era for the driving game (cart roads, timber bridges, 48 trades, no modern layer)"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Coast check: the stand-in terrain gets the method that the tile cache added"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "One check runner; mutation runs no longer rewrite source files"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Tiles: a bounded cache, trees only on fine ground, and an honest ready signal for tools"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Vehicle clean-ups: a seedable shake, frozen specs, one unread field removed"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "A check for the packed land files, and two faults it found in the reader"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "The HUD text is written only when it changes"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Browser checks own their ports and their processes; a page that throws fails the run; at most two check browsers at once"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Just Drive address: justdrive.fakkeldy.ca/<place> opens the drive-around game with no mail content"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Road queries make no key strings; a small bridge grid answers deck lookups"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Full detail switch and Picture choice for phones and tablets (waits for Dan: one question)"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Add Canso Causeway and Troy land with a bounded coastal trail estimate"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Radio: a second list for the drive-around game, with nothing about the mail"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Trees outside the view are not drawn: a phone's worst scene goes from 836 to 264 draw calls, with the same picture"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Judique: the old church on River Denys Mountain, from the owner's hand-built model"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Areas: West Bay, one area round the whole bay"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "The tab keeps the game's name, a stopped game says so, and extra link keys no longer skip the title card"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Home: neutral wording on what a player reads (the place name, its note and the HUD word no longer say who lives there)"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Frame budget: a check that counts one whole frame at fixed places and fails when a count grows"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "A trailer for the pickup: towing, sway, a jackknife limit and reversing help behind ?trailer=1"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Home-screen app and offline play: add the site to a home screen, and save Mabou for play with no network"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Keyboard baseline: frozen in the repository, with a progress floor and three frame rates"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Shader pin: take in the lawn surface of the Judique house (PR 47)"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Phone pedals: a pedal stays down while any finger still holds it"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Driving mode: a dirt bike with its own two-wheel physics"
+  },
+  {
+    "date": "2026-11-12T12:00:00-04:00",
+    "title": "Judique: the Red Roof by the Brook house on Old Chisholm Mill Road"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Require explicit vehicle specs for scenery APIs"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Shader pin: always on, from a baseline file in the repository"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "A side by side: a sport buggy with long-travel suspension behind ?vehicle=sxs"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "The site rehearsal runs on a site of any size"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "The coast at Mabou Coal Mines: gypsum cliffs, tilted rock, a beach, and the dark recesses on Finlay Point"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Areas: full Judique box with the River Denys Mountain road, Port Hood, named extra 1 m roads, and a hairpin fix for new areas"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Add Point Tupper land and correct utility trees and movable bridges"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Driving Mabou: a drive-around mode with no mail, and 15 places to visit"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Multiplayer check: it can run against the live address (MP_ORIGIN), and waits for real joins"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Multiplayer for players: the Drive with others switch, room codes, and the live Cloudflare configuration (no deploy)"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Truck looks, second pass: a modern dually body, LED lamps and gloss paint"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Vehicle seam: a spec and a rig for every vehicle, and a heavy pickup behind ?vehicle=truck"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Area packs: the bake and the engine take an area; first piece of Judique"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Radio: a new player starts on 107.3 SECOND DELIVERY"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "The fishing ending: a wharf at Mabou Harbour, a deckhand job, a boat out to sea"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Multiplayer, first version, switched off: other players' cars behind ?mp=1 (local room server only)"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Radio: 107.3 SECOND DELIVERY, the story of the mines and three place songs in other kinds of music"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "More songs about places on the map"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Radio: a classical station, a credit for every song, and a list for the private page"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "The road scene on Mabou Mines Road: a visitor, a cow and a fish truck"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Phone driving help: steering help that works under a thumb, and a soft top speed"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "The jump job: a clean jump off the slipway gets a job offer, and an ending"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Gentle car damage: a repair bill, a stuck window, a steering pull"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "The yard's slipway as a ramp you can drive up and jump off"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Low detail on desktops, and a line that says what the browser draws with"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "The mail car: a rounder, prettier body"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Phones: two quick taps no longer zoom the page"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "The Picture setting is measured once at a first visit"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Buildings from wings where the mapped outline is not a rectangle"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Water that mirrors the shore, with a shore band and sun glitter (desktop)"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Phone HUD in one grid, so controls cannot overlap"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "A Picture setting on desktops: Sharp, Balanced or Fast"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Grass on fields, lawns and verges (desktop)"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Fuller trees near the camera"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Brooks, traced on the LiDAR channel, and culvert mouths"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "A frame rate check that counts the frames the game really draws"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Tools run on macOS as well as Linux"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Phone layout: no overlapping controls, END SHIFT in settings, and a layout check"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "More radio stations and songs"
+  },
+  {
+    "date": "2026-11-11T12:00:00-04:00",
+    "title": "Radio: \"Red Flag Down\", a public song list, and songs played from memory"
+  },
+  {
+    "date": "2026-11-10T12:00:00-04:00",
+    "title": "Desktop quality: real shadows from the low sun"
+  },
+  {
+    "date": "2026-11-10T12:00:00-04:00",
+    "title": "A car radio: stations on a wall clock, key T, songs as data"
+  },
+  {
+    "date": "2026-11-10T12:00:00-04:00",
+    "title": "Stage 2: the shift, complaints, animals, the mine, the rail trail and the works yard"
+  },
+  {
+    "date": "2026-11-10T12:00:00-04:00",
+    "title": "Stage 1: real Mabou terrain, roads, trees, buildings and a drivable mail car"
+  },
+  {
+    "date": "2026-11-09T12:00:00-04:00",
+    "title": "Initial commit"
+  }
+]

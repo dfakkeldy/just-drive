@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { cdp, cdpFetch, sleep } from './cdp.mjs';
+const port = process.env.CDP_PORT, base = new URL(process.argv[3]).origin;
+const out = join(process.env.MMM_CHECK_OUT ?? process.argv[2], 'evidence/pause');
+mkdirSync(out, { recursive: true });
+for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',393,852,true],['phone-wide',844,390,true]]) {
+ const tab = await (await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
+ const c = await cdp(tab.webSocketDebuggerUrl);
+ const read = async expression => (await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result.result.value;
+ const key = async (code,key) => { await c.send('Input.dispatchKeyEvent',{type:'keyDown',code,key}); await c.send('Input.dispatchKeyEvent',{type:'keyUp',code,key}); };
+ const click = async id => { const r = await read(`(()=>{const r=document.getElementById('${id}').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`); await c.send('Input.dispatchMouseEvent',{type:'mousePressed',...r,button:'left',clickCount:1}); await c.send('Input.dispatchMouseEvent',{type:'mouseReleased',...r,button:'left',clickCount:1}); };
+ const snapshot = () => read(`(()=>{const v=mmm.vehicle;return [v.x,v.y,v.z,v.speed,v.vx,v.vz,mmm.shift.elapsed,document.getElementById('shiftHud').textContent]})()`);
+ try {
+  await c.send('Page.enable');
+  await c.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:touch});
+  await c.send('Page.navigate',{url:`${base}/?test=1&vehicle=bike&road=Mabou%20Harbour%20Road&hud=1&radio=0&q=low${touch?'&touch=1':''}`});
+  let ready = false;
+  for(let i=0;i<240;i++){ await sleep(500); if(await read(`document.title.startsWith('settled') && !!window.mmm?.vehicle`)){ready=true;break;} }
+  assert.ok(ready,`${name} settled`);
+  // Real pedal input releases daily-start parking. Then let the bike roll without a pedal.
+  await c.send('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyW',key:'w'}); await sleep(1800);
+  await c.send('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyW',key:'w'});
+  assert.ok(Math.abs((await snapshot())[3])>.3,`${name}: bike rolling`);
+  await click('gear'); await sleep(200); const frozen = await snapshot(); await sleep(1200);
+  assert.deepEqual(await snapshot(),frozen,`${name}: Settings freezes bike and shift`);
+  await click('gear'); await sleep(500); assert.notDeepEqual((await snapshot()).slice(0,3),frozen.slice(0,3),`${name}: bike resumes`);
+  await key('KeyP','p'); await sleep(100); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),false);
+  const paused=await snapshot(); await sleep(700); assert.deepEqual(await snapshot(),paused);
+  await click('pauseSettings'); assert.equal(await read(`document.getElementById('settings').classList.contains('open')`),true);
+  await click('gear'); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),false,'Settings returns to pause');
+  await key('KeyP','p'); await sleep(300); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),true);
+  const geometry=await read(`(()=>{const b=document.getElementById('pauseButton'),r=b.getBoundingClientRect();return {w:r.width,h:r.height,visible:r.x>=0&&r.right<=innerWidth&&r.y>=0&&r.bottom<=innerHeight,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===b}})()`);
+  assert.ok(geometry.w>=44&&geometry.h>=44&&geometry.visible&&geometry.hit,JSON.stringify(geometry));
+  await click('pauseButton'); await sleep(150); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),false);
+  const screen = await read(`(()=>{const r=document.querySelector('#pauseScreen section').getBoundingClientRect();return r.x>=0&&r.right<=innerWidth&&r.y>=0&&r.bottom<=innerHeight})()`); assert.ok(screen);
+  const shot=await c.send('Page.captureScreenshot',{format:'png'}); writeFileSync(join(out,`${name}.png`),Buffer.from(shot.result.data,'base64'));
+  await key('Escape','Escape'); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),true);
+  // Exercise the document visibility boundary, including its latched return screen.
+  await read(`Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))`);
+  await sleep(150); const hiddenState=await snapshot(); await sleep(500); assert.deepEqual(await snapshot(),hiddenState);
+  await read(`delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))`);
+  assert.equal(await read(`document.getElementById('pauseScreen').hidden`),false,'return remains paused');
+  await click('resumeGame');
+  // Controls that close the panel themselves (END SHIFT on a phone, Enlarge map, Start over) end the Settings pause too.
+  await click('gear'); await sleep(200); const held = await snapshot();
+  await read(`document.getElementById('settings').classList.remove('open')`); await sleep(150);
+  assert.equal(await read(`document.getElementById('pauseScreen').hidden`),true,`${name}: no pause screen after a direct close`);
+  await c.send('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyW',key:'w'}); await sleep(900);
+  await c.send('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyW',key:'w'});
+  assert.notDeepEqual((await snapshot()).slice(0,3),held.slice(0,3),`${name}: a panel closed by another control resumes the game`);
+  console.log(`PASS ${name}: rolling bike Settings freeze/resume, P, Esc, phone target, pause screen, Settings nesting and direct panel close`);
+ } finally { c.close(); await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`); }
+}

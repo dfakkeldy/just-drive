@@ -1,0 +1,26 @@
+// Real boot/reload paths, using production saved records and the actual switched SXS footprint.
+import assert from 'node:assert/strict';
+import{writeFileSync}from'node:fs';
+import{open,sleep,exitCheck}from'./cdp.mjs';
+const[out,first]=process.argv.slice(2),origin=new URL(first).origin,p=await open(origin+'/?trip=quarry-gate&area=westbay&mode=explore&vehicle=truck&trailer=1&q=low&touch=1&radio=0&mp=0&res=1'),results=[];
+const ready=async()=>{for(let i=0;i<1000;i++){if(await p.read("document.documentElement.dataset.mmmReady==='true'&&!!window.mmm?.fleet?.spawned"))return;await sleep(100)}throw Error('Page did not finish fleet placement')};
+async function documentChange(method,params={}){const marker=await p.read('window.__lcDocument=Math.random()');await p.send(method,params);for(let i=0;i<1000;i++){if(await p.read('window.__lcDocument!=='+marker+"&&document.documentElement.dataset.mmmReady==='true'&&!!window.mmm?.fleet?.spawned"))return;await sleep(100)}throw Error('Navigation did not finish fleet placement')}
+const reload=()=>documentChange('Page.reload'),navigate=url=>documentChange('Page.navigate',{url});
+async function apron(){await p.read(`(async()=>{const T=await import('/node_modules/three/build/three.module.js'),{APRON}=await import('/src/quarry-site.ts');window.requestAnimationFrame=()=>0;window.lc={...mmm,T,f:mmm.fleet};const x=APRON.e-mmm.terrain.manifest.village[0],z=mmm.terrain.manifest.village[1]-APRON.n;lc.camera.position.set(x+15,180,z+20);lc.camera.lookAt(x,60,z);for(let i=0;i<100;i++){lc.camera.updateMatrixWorld();lc.terrain.update(lc.camera);lc.trees?.update(lc.terrain.drawnFine,lc.camera.position);lc.roads.update(lc.camera.position);lc.quarry.update(lc.camera.position,lc.f.driven.vehicle);await new Promise(r=>setTimeout(r,20));if(i>30&&!lc.terrain.pending&&!(lc.trees?.pending??0))break}lc.f.startVisit(x,z,-.467);lc.step=n=>{for(let i=0;i<n;i++){mmm.driveVehicle(1/120,{throttle:0,steer:0,handbrake:true});lc.f.refresh(1/120);lc.f.assertDriven()}};lc.step(240);lc.use=(kind,id)=>{lc.f.refresh(1);lc.f.actionIndex=lc.f.actions.findIndex(a=>a.kind===kind&&a.id===id);if(lc.f.actionIndex<0||!lc.f.activate())throw Error(lc.f.message);for(let i=0;i<3600&&lc.f.busy;i++)lc.step(1);if(lc.f.busy)throw Error('Lifecycle sequence stuck')};lc.journey.update(1.2,true);if(!lc.journey.arrived)throw Error('Apron did not complete journey');})()`)}
+try{
+ for(const id of['quarry','quarry-gate']){
+  const expanded=origin+'/?trip='+id+'&area=westbay&mode=explore&vehicle=truck&trailer=1&q=low&touch=1&radio=0&mp=0&res=1';
+  try{
+   await navigate(expanded);await ready();await apron();
+   const before=await p.read(`(()=>{lc.use('unload','bike');lc.use('unload','sxs');lc.use('drive','sxs');const v=lc.f.driven.vehicle,[ve,vn]=lc.terrain.manifest.village,pose={x:631990.288835-ve,z:vn-5061900.059997,heading:1.1780972451};if(!lc.quarry.allowPlacement(pose,v.spec)||lc.quarry.allowPlacement(pose,lc.f.truck.spec))throw Error('Reproduction must be SXS-clear and pickup-blocked');lc.f.nativePlace.get(v)(pose.x,pose.z,pose.heading);if(Math.hypot(v.x-pose.x,v.z-pose.z)>.01)throw Error('SXS setup pose was refused');lc.f.assertDriven();lc.journey.update(1.2,true);return{driver:lc.f.driven.id,record:JSON.parse(sessionStorage.getItem('mmm.trip.${id}')),expanded:location.href}})()`);assert.equal(before.driver,'sxs');assert.equal(before.record.arrived,true);
+   await reload();const after=await p.read(`({arrived:mmm.journey.arrived,remaining:mmm.journey.remaining,driver:mmm.fleet.driven.id,x:mmm.vehicle.x,z:mmm.vehicle.z,safe:mmm.fleet.contacts.allows(mmm.vehicle)})`);assert.equal(after.arrived,true,'B1 completed reload survives larger replacement envelope');assert.equal(after.remaining,0);assert.equal(after.driver,'truck');assert.ok(Math.hypot(after.x-(631920-642342),after.z-(5063327-5062068))<10,'B1 fallback is on safe apron');assert.equal(after.safe,true);results.push({case:'B1',id,exit:0,before,after});
+  }catch(e){results.push({case:'B1',id,exit:1,error:String(e)});console.error('FAIL B1',id,String(e))}
+  try{
+   await navigate(expanded);await ready();await apron();await p.read(`mmm.journey.update(1.2,true)`);
+   await navigate(origin+'/?trip='+id+'&q=low&touch=1&radio=0&mp=0&res=1');await ready();const fresh=await p.read(`({arrived:mmm.journey.arrived,remaining:mmm.journey.remaining,distance:Math.hypot(mmm.vehicle.x-mmm.journey.start.x,mmm.vehicle.z-mmm.journey.start.z),expanded:location.href})`);assert.equal(fresh.arrived,false,'B2 bare link starts a new approach');assert.ok(fresh.remaining>0);assert.ok(fresh.distance<10);
+   await apron();const canonical=await p.read('location.href');await reload();const resumed=await p.read(`({arrived:mmm.journey.arrived,remaining:mmm.journey.remaining,url:location.href})`);assert.equal(resumed.arrived,true,'B2 expanded reload keeps completion');assert.equal(resumed.remaining,0);assert.equal(resumed.url,canonical);results.push({case:'B2',id,exit:0,fresh,reload:resumed});
+  }catch(e){results.push({case:'B2',id,exit:1,error:String(e)});console.error('FAIL B2',id,String(e))}
+ }
+ writeFileSync(out+'/lifecycle-results.json',JSON.stringify(results,null,2));for(const r of results)console.log('LIFECYCLE',r.case,r.id,'exit',r.exit);
+}finally{await p.close()}
+exitCheck(results.some(r=>r.exit)?1:0);

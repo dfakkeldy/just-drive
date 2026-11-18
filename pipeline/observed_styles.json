@@ -1,0 +1,46 @@
+{
+  "about": "What the buildings along the route look like, counted by eye from the owner's own video of the route (10 Nov 2026: 473 stills, 208 buildings; about half were only glimpsed). Counts and looks only: no addresses, names or numbers. The stills themselves are private and are not in the repository.",
+  "houses": {
+    "note": "houses and mobile homes, 109 seen",
+    "wall": { "white": 41, "cream": 22, "grey": 16, "brown": 7, "blue-grey": 5, "dark blue": 3, "pale yellow": 3, "dark red": 2, "blue": 2, "pale grey": 1, "pink": 1, "grey-green": 1, "tan": 1 },
+    "roof": { "grey": 53, "dark grey": 32, "brown": 11, "red": 5, "black": 3 },
+    "roofMaterialKnown": { "asphalt shingle": 13, "metal": 6 },
+    "trim": { "white": 69, "dark grey": 2, "dark red": 1, "dark blue": 1 },
+    "storeys": { "1": 35, "1.5": 30, "2": 22, "2.5": 1 },
+    "roofShape": { "gable end to the road": 63, "gable, ridge along the road": 32, "complex": 38, "hip": 6, "flat": 8 },
+    "entranceKnown": { "front porch": 17, "small steps": 11, "deck": 5, "wrap-around": 2 },
+    "siding": "clapboard or vinyl siding in 48 of 49 known; cedar shingle once"
+  },
+  "farmBuildings": {
+    "note": "barns, sheds and garages, 51 seen",
+    "wall": { "grey": 14, "white": 11, "red": 6, "blue": 3, "brown": 3, "cream": 3, "grey-green": 2, "dark grey": 2, "weathered grey": 2, "tan": 1 },
+    "roof": { "grey": 25, "dark grey": 9, "light grey": 5, "red": 2, "brown": 2 },
+    "roofMaterialKnown": { "metal": 15 }
+  },
+  "seenOften": ["satellite dishes", "dormers", "dark shutters", "white skirting on mobile homes", "brick chimneys", "flags", "woodpiles", "wooden access ramps", "arched fabric storage roofs at work yards"],
+  "mailboxes": {
+    "note": "28 seen",
+    "type": { "single rural box": 20, "community cabinets": 6, "row on a shared frame": 1, "parcel box": 1 },
+    "colour": { "white": 5, "dark grey": 5, "dark green": 3, "black": 3, "grey": 2, "light grey with red tops": 2 },
+    "post": { "wood post": 11, "frame": 6, "metal pipe": 1 },
+    "fromRoadEdge": { "at the edge": 12, "about 1 m": 10, "2 m or more": 6 },
+    "lean": "27 of 28 stand straight"
+  },
+  "landmarks": [
+    { "what": "village post office", "east": 624453, "north": 5103395, "within": 45, "kind": "large", "wall": "red brick", "roof": "light grey", "roofShape": "flat", "trim": "white", "storeys": 1 },
+    { "what": "seniors' apartments, a single-storey L-shaped building with an open inner corner", "east": 623789, "north": 5103515, "within": 70, "kind": "large", "wall": "cream", "roof": "red", "roofShape": "gable", "trim": "white", "storeys": 1 },
+    { "what": "general store in Brook Village", "east": 631521, "north": 5101180, "within": 40, "kind": "large", "wall": "weathered cedar", "roof": "green", "roofMaterial": "metal", "trim": "pale yellow", "storeys": 1.5 },
+    {"what": "Mabou main street landmark: the grocery store: olive-green siding, red-brown trim, dark charcoal roof", "east": 624878.67, "north": 5103595.55, "within": 3, "kind": "large", "wall": "olive green", "roof": "charcoal", "trim": "maroon", "storeys": 1},
+    {"what": "Mabou main street landmark: the gas station: dark grey-brown metal siding and roof, a deep blue fascia band", "east": 624797.1, "north": 5103548.86, "within": 3, "kind": "large", "wall": "dark grey-brown", "roof": "dark grey-brown", "roofMaterial": "metal", "trim": "dark blue", "storeys": 1},
+    {"what": "Mabou main street landmark: the white hall across from the post office building: white clapboard, white trim, dark grey shingles", "east": 624457.41, "north": 5103331.6, "within": 3, "kind": "large", "wall": "white", "roof": "dark grey", "roofMaterial": "shingle", "trim": "white", "storeys": 1.5},
+    {"what": "Mabou main street landmark: the museum at the junction: blue-grey clapboard, white trim", "east": 624348.5, "north": 5103315.0, "within": 3, "kind": "house", "wall": "blue-grey", "trim": "white", "storeys": 2.5},
+    {"what": "Mabou main street landmark: the turquoise café west of the plaza: turquoise clapboard, white trim", "east": 624288.81, "north": 5103268.17, "within": 3, "kind": "house", "wall": "turquoise", "trim": "white", "storeys": 1},
+    {"what": "Mabou main street landmark: the pub west of the post office: white clapboard, bright red trim, dark grey shingles", "east": 624403.5, "north": 5103344.0, "within": 3, "kind": "house", "wall": "white", "roof": "dark grey", "roofMaterial": "shingle", "trim": "red", "storeys": 1.5},
+    {"what": "Mabou main street landmark: the pub's rear part, or the next building back: painted as the pub", "east": 624420.44, "north": 5103364.43, "within": 3, "kind": "house", "wall": "white", "roof": "dark grey", "roofMaterial": "shingle", "trim": "red", "storeys": 1.5},
+    {"what": "Mabou main street landmark: the dark red one-storey shop beside the post office lane: oxblood siding, white trim", "east": 624433.71, "north": 5103377.14, "within": 3, "kind": "shed", "wall": "dark red", "trim": "white", "storeys": 1},
+    {"what": "Mabou main street landmark: the small bank branch beside the grocery: greige vinyl siding, white trim, grey shingles", "east": 624929.72, "north": 5103605.14, "within": 3, "kind": "large", "wall": "greige", "roof": "grey", "roofMaterial": "shingle", "trim": "white", "storeys": 1},
+    {"what": "Mabou main street landmark: the pale green-grey Victorian east of the bridge, with an ornate front porch", "east": 624262.75, "north": 5103203.25, "within": 3, "kind": "house", "wall": "grey-green", "trim": "white", "storeys": 2.5, "entrance": "front porch"},
+    {"what": "Mabou main street landmark: the olive-green sheds behind the gas station", "east": 624806.43, "north": 5103584.92, "within": 3, "kind": "shed", "wall": "olive green", "storeys": 1},
+    {"what": "Mabou main street landmark: the white and pale grey mobile home west of the gas station apron", "east": 624776.27, "north": 5103557.12, "within": 3, "kind": "shed", "wall": "white", "storeys": 1}
+  ]
+}

@@ -1,0 +1,40 @@
+// Bundle with web/node_modules/.bin/esbuild, then run with Node. No browser or map fetches.
+import assert from 'node:assert/strict';
+import { MineRun, mineLayout } from '../web/src/mine-rules.ts';
+import { complaintLine, dismissed } from '../web/src/complaints.ts';
+const step = 1 / 60;
+const careful = (run) => ({ brake: run.speed > (run.stage === 3 && run.progress > 18 ? .95 : 3.65), lean: run.layout[Math.min(run.stage, 2)].direction });
+assert.deepEqual(mineLayout(17), mineLayout(17), 'same day keeps the bright boards');
+assert.notDeepEqual(mineLayout(17), mineLayout(18), 'another day moves the crew');
+for (const day of [1, 2, 3, 17, 90]) {
+  const run = new MineRun(day);
+  for (let t = 0; t < 100 && !run.result; t += step) run.update(step, careful(run));
+  assert.equal(run.result?.delivered, true, `careful day ${day} delivers`);
+  assert.equal(run.tips, 0, 'careful run does not tip');
+  assert.ok(run.elapsed >= 60 && run.elapsed <= 90, `clean run takes 60-90 seconds: ${run.elapsed}`);
+}
+const fast = new MineRun(1);
+while (fast.phase === 'rolling' && fast.elapsed < 30) fast.update(step, { brake: false, lean: 1 });
+assert.equal(fast.phase, 'tipped', 'no brake tips at the first tight bend');
+assert.equal(fast.stage, 0); assert.equal(fast.tips, 1);
+const before = fast.elapsed;
+for (let i = 0; i < 479; i++) fast.update(step, { brake: true, lean: 0 });
+assert.equal(fast.phase, 'tipped', 'tip costs eight seconds, cannot skip recovery');
+fast.update(step * 2, { brake: true, lean: 0 });
+assert.equal(fast.phase, 'rolling'); assert.ok(fast.elapsed - before >= 8);
+const wrong = new MineRun(1);
+while (wrong.phase === 'rolling' && wrong.elapsed < 40) wrong.update(step, { ...careful(wrong), lean: -wrong.layout[0].direction });
+assert.equal(wrong.phase, 'deadEnd', 'old board leads to a dead end');
+assert.match(wrong.message, /Moved/);
+for (let i = 0; i < 600 && wrong.phase !== 'rolling'; i++) wrong.update(step, careful(wrong));
+assert.equal(wrong.stage, 0); assert.equal(wrong.phase, 'rolling'); assert.ok(wrong.progress <= 43, 'winch returns to same fork');
+for (let i = 0; i < 6000 && !wrong.result; i++) wrong.update(step, careful(wrong));
+assert.equal(wrong.result?.delivered, true, 'wrong turn can be corrected');
+const out = new MineRun(3); out.leave(); assert.equal(out.result?.delivered, false);
+const signed = new MineRun(4);
+for(let i=0;i<6000 && signed.phase!=='signed';i++) signed.update(step,careful(signed));
+signed.leave(); assert.equal(signed.result?.delivered,true,'leaving after signature preserves delivery');
+const indoors = {kind:'indoors',at:10,target:1,x:0,z:0,road:-1};
+assert.equal(dismissed(indoors,[{at:0,facts:[{kind:'indoors',target:1}],caption:'A door'}]),false);
+assert.equal(new Set([1,2,3,4].map(day=>complaintLine('indoors',day,1))).size,4);
+console.log('PASS: seeded boards; five clean 60-90s deliveries; first-bend tip; eight-second recovery; wrong-branch winch and retry; walking out; signature; four photo-proof complaints.');

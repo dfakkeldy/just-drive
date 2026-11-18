@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
+import {decodeHistoryLayout,getHistoryLayoutData,historyLayoutState} from '../web/src/eras/history-layout.ts';
+import {MABOU_1884_LAYOUT_JSON} from '../web/src/eras/mabou-1884-layout.ts';
+import {historyRoadName,historyRoadText} from '../web/src/eras/history-road-names.ts';
+import {TRADE_POLICY,tradeSideRules,assertTradePoses,assertWaterTrades} from './era-density-trades.mjs';
+import {getDensityAuditData} from './era-density-data.mjs';
+import {periodBaseHeight,MAX_BANK_FOUNDATION} from '../web/src/eras/history-art.ts';
+import {Roads} from '../web/src/roads.ts';
+const root=process.env.MMM_ROOT??process.cwd();
+assert.deepEqual(historyLayoutState(),{decodes:0,hasLayout:false});const raw=JSON.parse(MABOU_1884_LAYOUT_JSON),parse=JSON.parse;
+const faults=[d=>d.version=999,d=>delete d.boards,d=>d.trades[0].e=NaN,d=>d.farms[0].barn={},d=>delete d.trades.find(t=>t.water).water,d=>d.boards[0].id='missing',d=>d.audit={},d=>d.trades[1].id=d.trades[0].id];
+for(const fault of faults){JSON.parse=(s,...args)=>{const d=parse.call(JSON,s,...args);if(d?.farms&&d?.trades)fault(d);return d;};try{assert.throws(()=>getHistoryLayoutData(),/Invalid 1884 layout/);assert.deepEqual(historyLayoutState(),{decodes:0,hasLayout:false},'failed data must not poison the cache');}finally{JSON.parse=parse;}}
+assert.throws(()=>decodeHistoryLayout('{'),/Invalid 1884 layout: invalid JSON/);const valid=getHistoryLayoutData();assert.equal(valid,getHistoryLayoutData());assert.deepEqual(historyLayoutState(),{decodes:1,hasLayout:true});assert.deepEqual(Object.keys(valid).sort(),['boards','farms','trades','version']);console.log('PASS invalid versions/structure fail before cache; valid era data decodes once; runtime excludes audit/fingerprints');
+for(const [name,want]of [['Highway 19','Post Road'],['Highway 252','Road to Whycocomagh'],['Highway 104','cart road'],['Trans Canada Highway','cart road'],['Trans Canada Trail','cart road'],['Highway 105 Service Road','cart road'],['rail trail','cart road'],['Mabou Rivers Trail','cart road'],['Mabou Mines Road','Mabou Mines Road']])assert.equal(historyRoadName(name),want);
+assert.equal(historyRoadText('Highway 19 meets Highway 252 near a rail trail.'),'Post Road meets Road to Whycocomagh near a cart road.');console.log('PASS one period naming table for readout, minimap marks, list and arrivals');
+const network=new Roads({roads:[{id:1,name:'fixture',kind:3,halfWidth:2,bridge:false,pts:[[0,-200],[0,200]]}]},[0,0],{cartRoads:true}),streams={streams:[{half:1,pts:[[-200,30],[200,30]]}]},old={x:-20,z:0};assert(tradeSideRules(old,{x:20,z:0},network,streams,[0,0]).includes('opposite road side'));assert(tradeSideRules(old,{x:-20,z:-50},network,streams,[0,0]).includes('brook/river crossing'));assert.deepEqual(tradeSideRules(old,{x:-25,z:10},network,streams,[0,0]),[]);console.log('PASS opposite road side and brook crossing fixtures fail');
+const data=getDensityAuditData(),origin=JSON.parse(readFileSync(root+'/data/baked/terrain/manifest.json')).village,poses=data.trades.map(r=>({...r,x:r.e-origin[0],z:origin[1]-r.n,...(r.water?{water:{x:r.water.e-origin[0],z:origin[1]-r.water.n,half:r.water.half,yaw:r.water.yaw}}:{})}));assertTradePoses(poses,data.trades,origin);assertTradePoses(poses,valid.trades,origin);const bad=structuredClone(data.trades);bad[0].e+=.001;assert.throws(()=>assertTradePoses(poses,bad,origin),/committed pose/);assert.equal(data.header.tradeAudit.filter(r=>r.waterKept===true).length,7);assert(data.header.tradeAudit.every(r=>r.waterKept!==false));assert.deepEqual(data.header.tradePolicy,TRADE_POLICY);console.log('PASS exact pose, all seven water trades and one recorded sampled-surface rule');
+
+assert.equal(MAX_BANK_FOUNDATION,6);assert(periodBaseHeight({water:{}},15,0,6.4)+.12<=6,'retained steep bank stone base is capped');console.log('PASS a retained steep mill bank has at most 6 m of exposed stone base');
+
+assertWaterTrades(poses,poses);for(const water of poses.filter(s=>s.method==='water')){const bad=structuredClone(poses),s=bad.find(s=>s.id===water.id);s.method='label';delete s.water;assert.throws(()=>assertWaterTrades(poses,bad),/generation would lose water/);}console.log('PASS losing any of the seven water attachments makes generation fail');
+
+const extraBarn=structuredClone(data.trades);extraBarn[0].barn={x:20,z:0};assert.throws(()=>assertTradePoses(poses,extraBarn,origin),/committed pose/);for(const record of [...Object.values(data.header.fingerprints.files),...data.header.fingerprints.terrain.files])assert(!MABOU_1884_LAYOUT_JSON.includes(record.sha256),'input hashes must not ship');console.log('PASS exact trade barn absence and all input hashes excluded from player layout');

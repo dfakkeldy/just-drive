@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {Vector3} from '../web/node_modules/three/build/three.module.js';
+import {Guardrails} from '../web/src/guardrails.ts';
+import {Roads} from '../web/src/roads.ts';
+const road={id:1,name:'stream fixture',kind:3,halfWidth:3,bridge:false,pts:[[-700,0],[700,0]]};
+const h=(x,z)=>100-Math.max(0,z-4)*.8;
+let queries=0,maxQueries=0;
+const terrain={dataRevision:1,cartRoads:false,low:false,exag:1,seaLevel:0,surfaceAt:(x,z)=>{queries++;return {ground:h(x,z),level:8};},heightAt:(x,z)=>{queries++;return h(x,z);}};
+const rails=new Guardrails({roads:[road],nearest:()=>null},terrain),camera=new Vector3(0,0,0);
+function drain(){let frames=0,total=0;do{queries=0;rails.update(camera);maxQueries=Math.max(maxQueries,queries);assert.ok(queries<=1536,`real terrain-query work bounded: ${queries}`);assert.ok(rails.audit.planned<=1,'at most one chunk per frame, including tile changes');total+=rails.audit.planned;assert.ok(rails.audit.queries<=(rails.audit.planned?1536:572),'advancement stops within one station of 512 queries; completion includes one bounded mesh');assert.ok(rails.audit.samples<=48,'at most 48 station steps per update');assert.ok(++frames<2000,'pending work drains');}while(rails.audit.pending);return {frames,total};}
+const initial=drain();assert.ok(initial.total>8,'fixture covers many near chunks');
+const retained=rails.chunks.map(c=>[c,c.solids.length]);
+terrain.dataRevision++;rails.update(camera);
+assert.equal(rails.audit.planned,0,'revision starts a yielded re-plan');
+for(const [chunk,length]of retained)assert.equal(chunk.solids.length,length,'live colliders survive while replacement is pending');
+const load=drain();assert.equal(load.total,initial.total,'revision does not lose pending chunks');
+terrain.dataRevision++;const unload=drain();assert.equal(unload.total,initial.total);
+rails.update(camera);assert.equal(rails.audit.planned,0,'stable view has zero planning work');
+terrain.low=true;drain();
+assert.ok(rails.chunks.some(c=>c.mesh?.visible&&c.low===true&&c.mesh.material.customProgramCacheKey().includes('low')),'switch to LOW rebuilds material and geometry');
+terrain.low=false;drain();assert.ok(rails.chunks.filter(c=>c.mesh?.visible).every(c=>c.low===false&&!c.mesh.material.customProgramCacheKey().includes('low')),'full material restored');
+const historic=new Guardrails({roads:[road],nearest:()=>null}, {...terrain,cartRoads:true});for(let i=0;i<2000;i++){historic.update(camera);if(!historic.audit.pending)break;}assert.equal(historic.group.children.length,0,'1884 builds zero rails');
+assert.equal(new Roads({roads:[road]},[0,0],{...terrain,cartRoads:true}).guardrails,null,'1884 has no physics hook');
+console.log('PASS bounded planning',JSON.stringify({initial,load,unload,maxQueries}));

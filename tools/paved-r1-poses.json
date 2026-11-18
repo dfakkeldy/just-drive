@@ -1,0 +1,32 @@
+[
+  {
+    "name": "mabou3-chase",
+    "area": "mabou",
+    "on": 1,
+    "url": "http://127.0.0.1:5893/?area=mabou&at=624141,5103347,270&paved=1&mode=explore&hud=0&radio=0&shadows=1&exag=1&sun=original"
+  },
+  {
+    "name": "pt-hwy4-top",
+    "area": "pointtupper",
+    "on": 1,
+    "url": "http://127.0.0.1:5893/?area=pointtupper&at=625972,5055120,0&cam=625972,5055138,20,0,-89,50&camground=1&paved=1&mode=explore&hud=0&radio=0&shadows=1&exag=1&sun=original"
+  },
+  {
+    "name": "pt-hwy4-chase",
+    "area": "pointtupper",
+    "on": 1,
+    "url": "http://127.0.0.1:5893/?area=pointtupper&at=625990,5055120,315&paved=1&mode=explore&hud=0&radio=0&shadows=1&exag=1&sun=original"
+  },
+  {
+    "name": "pt2-chase",
+    "area": "pointtupper",
+    "on": 1,
+    "url": "http://127.0.0.1:5893/?area=pointtupper&at=625665,5051609,0&paved=1&mode=explore&hud=0&radio=0&shadows=1&exag=1&sun=original"
+  },
+  {
+    "name": "mabou4-top",
+    "area": "mabou",
+    "on": 1,
+    "url": "http://127.0.0.1:5893/?area=mabou&at=625568,5101986,315&cam=625569,5101986,30,0,-89,50&camground=1&paved=1&mode=explore&hud=0&radio=0&shadows=1&exag=1&sun=original"
+  }
+]

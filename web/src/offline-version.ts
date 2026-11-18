@@ -1,0 +1,43 @@
+const MESSAGE = 'A new version of the game is ready. Start again to get it.';
+
+/** No automatic reload: a drive in progress belongs to its player. */
+export function showGameUpdate(): void {
+  if (document.getElementById('offlineUpdate')) return;
+  document.getElementById('boot')?.remove();
+  const notice = document.createElement('aside');
+  notice.id = 'offlineUpdate'; notice.setAttribute('role', 'status');
+  notice.style.cssText = 'position:fixed;z-index:100;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));top:calc(68px + env(safe-area-inset-top));max-width:620px;margin:0 auto;padding:12px;background:#0b1620;color:#eef2f6;border:1px solid #d0632e;border-radius:8px;font:14px/1.4 system-ui;display:flex;gap:12px;align-items:center;flex-wrap:wrap';
+  const text = Object.assign(document.createElement('span'), { textContent: MESSAGE });
+  const button = Object.assign(document.createElement('button'), { type:'button', textContent:'Start again', id:'offlineReload' });
+  button.style.cssText = 'min-width:100px;min-height:44px;padding:8px 12px;background:#d0632e;color:white;border:0;border-radius:6px;font:inherit;cursor:pointer';
+  button.addEventListener('click', () => location.reload());
+  notice.append(text, button); document.body.appendChild(notice);
+}
+
+/** Every data request carries the identity delivered in this HTML, even before first setup replies. */
+export function bindOfflineVersion(area='mabou'): string {
+  if (area!=='mabou' || !isSecureContext || !('serviceWorker' in navigator)) return '';
+  const pageKey = document.querySelector<HTMLMetaElement>('meta[name="mmm-page"]')?.content ?? '';
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type === 'version-unavailable' || event.data?.type === 'update-ready') showGameUpdate();
+  });
+  if (!pageKey) return '';
+  const network = window.fetch.bind(window);
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+    if (!navigator.serviceWorker.controller) return network(input, init);
+    if (url.pathname === '/mp' || url.pathname.startsWith('/mp/')) return network(input, init);
+    if (url.origin === location.origin && /^\/(terrain|audio|models|areas)\//.test(url.pathname)) {
+      url.searchParams.set('mmm-page', pageKey);
+      const request = input instanceof Request ? new Request(url, input) : url;
+      const response = await network(request, init);
+      if (response.status === 409 && response.headers.get('X-MMM-Update') === '1') {
+        showGameUpdate(); throw Object.assign(new Error(MESSAGE), { name:'GameUpdateRequired' });
+      }
+      return response;
+    }
+    return network(input, init);
+  };
+  addEventListener('pagehide', () => navigator.serviceWorker.controller?.postMessage({type:'collect'}));
+  return pageKey;
+}

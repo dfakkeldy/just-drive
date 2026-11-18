@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "epsg": 2961,
+  "features": [
+    {
+      "id": "example-harbour-west",
+      "enabled": false,
+      "area": "mabou",
+      "kind": "road",
+      "surface": "paved",
+      "width": 6,
+      "source": "owner public-safe footage brief, 12\u201313 Nov 2026",
+      "date": "2026-11-14",
+      "roadHint": "Mabou Harbour Road west part",
+      "condition": "unknown",
+      "note": "EXAMPLE ONLY. Road-bake task owns exact geometry, width and application. No effect while enabled=false.",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            618300,
+            5105100
+          ],
+          [
+            618800,
+            5105180
+          ]
+        ]
+      }
+    },
+    {
+      "id": "example-macleods-farm",
+      "enabled": false,
+      "area": "mabou",
+      "kind": "road",
+      "surface": "gravel",
+      "width": 5.4,
+      "source": "owner public-safe footage brief, 12\u201313 Nov 2026",
+      "date": "2026-11-14",
+      "roadHint": "MacLeods Road past the farm",
+      "condition": "unknown",
+      "note": "EXAMPLE ONLY. Road-bake task owns exact geometry, width and application. No effect while enabled=false.",
+      "geometry": null
+    },
+    {
+      "id": "example-meadow",
+      "enabled": false,
+      "area": "mabou",
+      "kind": "road",
+      "surface": "gravel",
+      "width": 5,
+      "source": "owner public-safe footage brief, 12\u201313 Nov 2026",
+      "date": "2026-11-14",
+      "roadHint": "Meadow Road",
+      "condition": "unknown",
+      "note": "EXAMPLE ONLY. Road-bake task owns exact geometry, width and application. No effect while enabled=false.",
+      "geometry": null
+    },
+    {
+      "id": "example-weaver",
+      "enabled": false,
+      "area": "mabou",
+      "kind": "road",
+      "surface": "paved",
+      "width": 5.5,
+      "source": "owner public-safe footage brief, 12\u201313 Nov 2026",
+      "date": "2026-11-14",
+      "roadHint": "Weaver Lane",
+      "condition": "patched_asphalt",
+      "note": "EXAMPLE ONLY. Road-bake task owns exact geometry, width and application. No effect while enabled=false.",
+      "geometry": null
+    }
+  ]
+}

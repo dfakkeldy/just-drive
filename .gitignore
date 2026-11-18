@@ -1,0 +1,16 @@
+# Survey data and baked output are large and rebuilt by scripts; never commit them.
+data
+# Private reference material (photos, video, route notes).
+reference
+node_modules
+dist/
+__pycache__/
+.vite
+# Local state of the Cloudflare tools (never commit: it can name the account).
+.wrangler
+.cloudflare
+# Private notes and briefs (the M4 runner refuses any docs/ path in history; see tools/remote_runner.py).
+/docs/
+
+# Local SSH host aliases and audio trust settings.
+/tools/remote-hosts.local.tsv

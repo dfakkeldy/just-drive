@@ -1,0 +1,142 @@
+{
+ "version": 1,
+ "files": [
+  {
+   "file": "areas/cansocauseway/paved/index.json",
+   "before": "4fa425c6cb61a198fe6d6218fb1c06f60339fd541049a4a41b798983d3a9d39f",
+   "sha256": "b949de07b5522f7efddfec3cf420b19ce5e1ed8cffe78023187887d54e842579",
+   "bytes": 1356
+  },
+  {
+   "file": "areas/judique/paved/index.json",
+   "before": "c71458dad0d13b01fea51d9723de45be58c5b0274a63509da45c82842c2ee5ba",
+   "sha256": "2d0910f3a8e87ef69e0794bde3825ebfc13fc2f19f7b8a99dc25c47216e5d10d",
+   "bytes": 1889
+  },
+  {
+   "file": "areas/pointtupper/paved/index.json",
+   "before": "650cf27182702a93b4e2f8e53a64950875a198913152755b76016d968cd8776a",
+   "sha256": "fc3eb40500b5e3819c91205b158e1f5c912fbe9d02b5315a969a25d33d6b044f",
+   "bytes": 2885
+  },
+  {
+   "file": "areas/porthood/paved/index.json",
+   "before": "96fe776bbcc3a8295e0384ec7b4d9cee541d6243fc3f8f6ec0e06673efad2abb",
+   "sha256": "1620420da0d2745d20579a9065bfad74dd4f2e5edc198968492aed0d188165df",
+   "bytes": 1431
+  },
+  {
+   "file": "areas/westbay/paved/index.json",
+   "before": "15469fa99d7096d4c80edec397b2e8fd8e57bc6c36be5759f730dac9ced2e5b9",
+   "sha256": "2039d9393d693ad71369b8421d65efb6f9589c4b269740acc1873b02ebd183e7",
+   "bytes": 1459
+  },
+  {
+   "file": "terrain/building-styles.json",
+   "before": "70e5a303915cf5cb39f3212e529d094821c820b85f4b15d5111988396bee13d3",
+   "sha256": "77e80c24f70d3f4bb7d2623955229fad9b22a41e07ce52e67029b5d1577e7383",
+   "bytes": 271890
+  },
+  {
+   "file": "terrain/buildings.json",
+   "before": "1a41baac569936799a9fc1951de464915ae4a5988549edf44444b92c23c01cea",
+   "sha256": "2dedcbdb985707f9834606dc9e75266fb8e893107e2e90bd342806f292d3c9d8",
+   "bytes": 352740
+  },
+  {
+   "file": "terrain/paved/128_127.r8",
+   "before": "e3f10c16bc10be0247857f865d0136955196237885cc53645aa6fd3ef3b029ee",
+   "sha256": "e20122805946f555a0f4d98043f86a90ff47ec2c25bac4b0810c7215a4bc17bc",
+   "bytes": 16384
+  },
+  {
+   "file": "terrain/paved/128_128.r8",
+   "before": null,
+   "sha256": "c220db7fa51c8e16434c204217afb4dc9be8b5eef1ac6da1176387652b3705b4",
+   "bytes": 16384
+  },
+  {
+   "file": "terrain/paved/129_127.r8",
+   "before": null,
+   "sha256": "e49a4e7bee8ed4fe75f058f886ec70e2a2f5c15778a1c2b89f3869f51a86e9fb",
+   "bytes": 16384
+  },
+  {
+   "file": "terrain/paved/130_126.r8",
+   "before": "3395c3ba92598398897d5da5053e014bc57c29beeac617b76b28a081a82a3fe2",
+   "sha256": "a41ea8b08413152b31f3bdf23152acdfbea085380b88c3a9066d8b18ea64acab",
+   "bytes": 16384
+  },
+  {
+   "file": "terrain/paved/130_127.r8",
+   "before": "22cf7b08c96dc4cf857ab2b3cb326aa8f7049da7a9a064035258f43ba9557e7c",
+   "sha256": "a7f2adaca2a6869d2d5333bdc730225d8aa778b85ff0c9079afc0f79fea34a59",
+   "bytes": 16384
+  },
+  {
+   "file": "terrain/paved/index.json",
+   "before": "b4a604b52e33e9b88d3a4345f546896fe7e97217a39363e5f1f15ce54544fb10",
+   "sha256": "d4c0e17ae8b67a872f780fb6bfc8c2e2b525895f67fb7548145ecefdb4fed55f",
+   "bytes": 1544
+  },
+  {
+   "file": "terrain/props.json",
+   "before": "0e6ffd59d18768113ff88b06f5c01b7bd009aa777da92cfa07474c0a5721541f",
+   "sha256": "ca7da064f529c57a47d51cc456a1d97b899a401741bb03d870332ed58f105f4e",
+   "bytes": 365034
+  }
+ ],
+ "manifests": [
+  {
+   "folder": "terrain",
+   "before": {
+    "buildings": {
+     "file": "buildings.json",
+     "count": 1065
+    },
+    "buildingStyles": {
+     "file": "building-styles.json",
+     "count": 1046
+    },
+    "props": {
+     "file": "props.json",
+     "mailboxes": 469,
+     "poles": 2789,
+     "serviceDrops": 282
+    },
+    "paved": {
+     "file": "paved/index.json",
+     "tiles": 41,
+     "source": "nstdb-designated-open-v1"
+    }
+   },
+   "after": {
+    "buildings": {
+     "file": "buildings.json",
+     "count": 1067
+    },
+    "buildingStyles": {
+     "file": "building-styles.json",
+     "count": 1046
+    },
+    "props": {
+     "file": "props.json",
+     "mailboxes": 469,
+     "poles": 2789,
+     "serviceDrops": 283
+    },
+    "paved": {
+     "file": "paved/index.json",
+     "tiles": 43,
+     "source": "nstdb-designated-open-v1"
+    }
+   }
+  }
+ ],
+ "mirror": {
+  "file": "data/raw/paved-open/corrections.json",
+  "before": "ca0acc3368c87ab328ff913b05b03d6a08d3b6fc5effb29cbcd6347a2b685469",
+  "sha256": "663f207030ed0fff85a6ff44b0bcbe9f405a93c1916d268890ab32c50a1e2dd5"
+ },
+ "pavedReceiptSha256": "2588e1ba9f41eb0d53c6a848b38d6f3b17c0abc09a20a4c9582f25fd6d2b7f0a"
+}

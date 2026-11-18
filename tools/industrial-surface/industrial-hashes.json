@@ -1,0 +1,264 @@
+{
+  "road": 107,
+  "kindBefore": 4,
+  "kindAfter": 2,
+  "pixels": 120299,
+  "files": [
+    {
+      "file": "roads.json",
+      "before": "da44777a23a237ee82dcdb3f36ac280d2e444e1d2c9c975817a3fbc99b5c0dc8",
+      "sha256": "9e1c5660a308ca5732cb16ab72b668941022ad32e14059a76241e64282191cc0"
+    },
+    {
+      "file": "cemeteries.json",
+      "before": "26ebdd4c8fd0aacf96b9037b61a93b76b88dc52e69544363e38c11b52723b19f",
+      "sha256": "47c709d6d48a9b74f4a1cdd3388d59c702b9b108dc319a4a600daffa9fec8b16"
+    },
+    {
+      "file": "5/18_25.r.png",
+      "before": "c94c7b811140e1335b5b2943d91bcd0a1943f424a68939b52a421a96c6bef13d",
+      "sha256": "310bf31ec8a83a0227cca67a699a18bf121deb7acf11e60585d6a2f95bb5eeaa",
+      "pixels": 584
+    },
+    {
+      "file": "5/18_26.r.png",
+      "before": "a654dc9e908dba440d12018601092bdadd2f36c8cfb2cc712d14e4e38bc48430",
+      "sha256": "dbf4f70323fc5a4f5a8b0b9f0ee7bc311686fc3139667a12dea40416e79e7dd5",
+      "pixels": 843
+    },
+    {
+      "file": "5/18_27.r.png",
+      "before": "2c6d3c2f39d8b02515031a5970b449e73085e396c0a52b6798511ecd64f604e8",
+      "sha256": "5a54ef9afdaafad07c8e3f62744c6133ad1d966d8e7eba6cf191cb135dcce232",
+      "pixels": 57
+    },
+    {
+      "file": "6/36_50.r.png",
+      "before": "8ca785293b0d7d07ac0ae29a96eda515f70742bc5ae33129f0f0ea4802029da8",
+      "sha256": "125abf8babd4725d65d6ab8190d3c772599ba566227bd0829ae5ebe1e0f8d5a1",
+      "pixels": 988
+    },
+    {
+      "file": "6/36_51.r.png",
+      "before": "c4c43209d612ca8bb1b931f8e7512991e96ad3f6cb7380fb3c29bb3136dd5a34",
+      "sha256": "4dc03148faef43dc99904b5c432a66896db707037e4f0247177ff3041f9447ec",
+      "pixels": 1357
+    },
+    {
+      "file": "6/36_52.r.png",
+      "before": "d187c8b83955bca12ccb5e5f9e7573d48b2612a47ede6229536d08dafb1b8c7d",
+      "sha256": "97077da996c254c76817331eab6b4552bca0d7186f1d1bdd1b7435da7414bd9d",
+      "pixels": 1665
+    },
+    {
+      "file": "6/36_53.r.png",
+      "before": "c84a949d10c99893b4a3f0b28f8ac2954f086f565f8b11670e50816146dda01a",
+      "sha256": "3ad70afa54219683adb67cb0d564165fd55d229d7d5198d33d453f1fa7ce0433",
+      "pixels": 283
+    },
+    {
+      "file": "6/37_53.r.png",
+      "before": "c1abcd8051bdecf4ff82a7de80d44f1c777d07127d6f8f1e4cd93447ffe272f7",
+      "sha256": "e0a4dd8aefdcac83005ecb5e971e11893f40ca75675eb59950ab4ae4555f70b0",
+      "pixels": 1460
+    },
+    {
+      "file": "6/37_54.r.png",
+      "before": "11b2788853fcd231b8e44b192748bbca009a448dbd3705546f884ac0b3de842b",
+      "sha256": "00b0fbc41d62c7295212edeb31eba80f5a8d75f3cc9f7ef7469fd87655b9cea6",
+      "pixels": 227
+    },
+    {
+      "file": "7/72_100.r.png",
+      "before": "7339eb3a10a5b9b49e1e1cde95cde6399c6750ccab9a0f188393386179f15d0e",
+      "sha256": "382d9c3cad2985b8c86e38ebaae067e2f21a1ecef1325f95422630077a807338",
+      "pixels": 767
+    },
+    {
+      "file": "7/72_101.r.png",
+      "before": "b1517ddc522a65f6dcad833ae8ae961a4c9ee9ab61302cf3a16288baa133e065",
+      "sha256": "2fb30811d47d8d2be3c64698309384a9c34d088a1b28f736b269c69a94536840",
+      "pixels": 3184
+    },
+    {
+      "file": "7/72_102.r.png",
+      "before": "dbff816286fcff552690cfba3cf9a21cc1a75513efe360a63ec6335a14ec9fb2",
+      "sha256": "73833d7bcdf0a45c6742bb633e3a19ce462c62e035ac0ed3f7a568fe433a5e35",
+      "pixels": 2829
+    },
+    {
+      "file": "7/72_103.r.png",
+      "before": "820719469d439fe0b7b05bfa2610aa5399a1f44fd97a847690c8715c62d6801e",
+      "sha256": "95294e3cb07116e5d4b459e87eda9c45e1752a54c943123f30fb7bd66cc57ff1",
+      "pixels": 2628
+    },
+    {
+      "file": "7/72_104.r.png",
+      "before": "220ab7e14546071722d33396c97b053b8544bf7797ad4c7eb8c0700b6d67cc2a",
+      "sha256": "4eb30ecfde8bacea502f281443ab995d68e714f98e0d1c767f900a4546444e29",
+      "pixels": 1161
+    },
+    {
+      "file": "7/73_104.r.png",
+      "before": "b2106ed50d66f335d11af17b6540112e7c027c70e800b7d957ec4f03c41f32c0",
+      "sha256": "2bb07cb868b65ba6224a6f6b0d3781feaff481f3866ea87247ac9bbbee7df327",
+      "pixels": 1883
+    },
+    {
+      "file": "7/73_105.r.png",
+      "before": "80db9ee1da45afeeaeb8b8586a2a8fe960471a405b517c92af356a5d81ad1b85",
+      "sha256": "d81701e628cd27843bd636922e5c6cbb35b982d3d1ea622155c513f3def29258",
+      "pixels": 3620
+    },
+    {
+      "file": "7/73_106.r.png",
+      "before": "2c5c36e98c5a70a8fd0c1e87ad1dd125645a3c0b26530ea6bda68802767df0ab",
+      "sha256": "18feef12dbdd589c9790b9e50eb6783651d2d5961f9f24d70fad225c11135b85",
+      "pixels": 1095
+    },
+    {
+      "file": "7/74_106.r.png",
+      "before": "ba8a17b126a8d4b19887f5705c7d7d187f688f5c172fd6d8a5d9565c194d24af",
+      "sha256": "d95523a5a59d1bccde649c20cd5b579e4860efbbfe5990d6dcd3980a148addef",
+      "pixels": 2358
+    },
+    {
+      "file": "7/74_107.r.png",
+      "before": "2ccb35822c1a277219aa569901e1d0816ed511b59ca1edff532d25b92681824d",
+      "sha256": "5c341aeb8aaec64dbbc881cff2956316013a432c48136981414e37f53325ac84",
+      "pixels": 3383
+    },
+    {
+      "file": "7/74_108.r.png",
+      "before": "0b9d31ba003f1b59c36f843961bab50347021e75396846871663a35bc2f64850",
+      "sha256": "959d3dd5050bf3f0fafef950297a1174d1b030773e37d01127847133df6370b3",
+      "pixels": 901
+    },
+    {
+      "file": "8/144_201.r.png",
+      "before": "bca15c48df6283cf757088dad02568571c7e2f8055c60f5248d3946ca15ed3ae",
+      "sha256": "d27dfe5a867e8dedd3c3368ab273bf63a03eb3492d9dd3763f5e776eaaebd1a1",
+      "pixels": 3069
+    },
+    {
+      "file": "8/144_202.r.png",
+      "before": "69aa8903996ba95ede6274b9c2dd1408b0d01b7427dce21b5149422393ab93c1",
+      "sha256": "cd1feeb91b2dc0358f3485d414da52a16368b16c4dc223e9bcc76e4fae843ef3",
+      "pixels": 6344
+    },
+    {
+      "file": "8/144_203.r.png",
+      "before": "91c9bfb798b211dd5bd0d643edaa04fa846e987b7a33d75296e61dd937ec64ed",
+      "sha256": "eeb5e34b93010fb73925947796da3b5ee38442fbb1999545d8776163ccefab49",
+      "pixels": 5886
+    },
+    {
+      "file": "8/145_203.r.png",
+      "before": "ca94718034acc446cbe87cd4bcb0f4e98d21e03b24166d08883612aa53f2cfc3",
+      "sha256": "6b805d96330a16d0fc65492f7ed6904374a699704fb7fc305f0333667ba589bb",
+      "pixels": 537
+    },
+    {
+      "file": "8/145_204.r.png",
+      "before": "adc11a58d51823e9dea776eef6e7400b615260645942ea171a3f0aba11381d59",
+      "sha256": "88361ab589aa1cae8cf219a452f0525befe0834a776633deceaa84ae6d900aa4",
+      "pixels": 6047
+    },
+    {
+      "file": "8/145_205.r.png",
+      "before": "913276e5568637675f4aab0c67a5db97fc1d717c2995d8ef2560d751eecd8ee1",
+      "sha256": "7e96b3e4fe3e362430da3f3daaff8a379bade118118e9172a08bfc3b4c7c6ac9",
+      "pixels": 5295
+    },
+    {
+      "file": "8/145_206.r.png",
+      "before": "b8a9f2b809004660d275fcd4033f224414c17fbbbc96f6bebf663f7e7b3edd0d",
+      "sha256": "b7d4cabf6a52ea5c4dfa5e4284a082386bcf1d56f09af0f4f4cf6439070333a1",
+      "pixels": 5265
+    },
+    {
+      "file": "8/145_207.r.png",
+      "before": "9e76d8cbcd82a08e3b424c6e5b1ccdda827bb4d5f1341159dc3ab6b0ad4ff941",
+      "sha256": "77d2d8a025a599a137e4e3ef5aaac3638cd2956b488747783c2894bd7d453690",
+      "pixels": 5258
+    },
+    {
+      "file": "8/145_208.r.png",
+      "before": "e6a3643fc847276d038b18d0c83b0a67781dc6a28eb71c0457d834029c10c2cb",
+      "sha256": "048d234d36096fc1e0d3631d3c2c7bbb012aa84ef978ae9da05ce1cf3faae0aa",
+      "pixels": 4622
+    },
+    {
+      "file": "8/146_208.r.png",
+      "before": "1cf17e4f1e569972be601fb5187fec67e06b059823003dcbd8b0bdaf0f33e746",
+      "sha256": "c56d23a43b8133e53c57195e4b2b4ee80def2be69fd83816d8175f4986928b5d",
+      "pixels": 1786
+    },
+    {
+      "file": "8/146_209.r.png",
+      "before": "d46530028eadf0aaf156b1753464ae907e61badfbabda6e9c9414379643596a9",
+      "sha256": "3efcc32c3e80b4657f151fce95ad7ffdaea5a324b291a8856f23b0770b712324",
+      "pixels": 5744
+    },
+    {
+      "file": "8/146_210.r.png",
+      "before": "d2c27740a6fad700ce59625939d13e1b40800c767df5d06a7f75a99b7d5ba942",
+      "sha256": "b1037ebb134e6b237a78151f628fb672521bccef6412d1876532bcf0d3ff8ecb",
+      "pixels": 3261
+    },
+    {
+      "file": "8/147_210.r.png",
+      "before": "66b2bdd1b57c7dfacfc418fa38cdebd862ca59cfd1064148c4074d826fa6167f",
+      "sha256": "b9d5a8a099236e2cbeb6607e0390c30fcf5a6e27539bffc474588f6940a780a2",
+      "pixels": 3418
+    },
+    {
+      "file": "8/147_211.r.png",
+      "before": "21983f337391bcf16fcce9feca9b0b224d1870c2834253b0f10f64b9ccb5e768",
+      "sha256": "be0ceb97d4cd5c9f9852aa34993d928c1a387d4c8438a4344889e482db145a36",
+      "pixels": 7870
+    },
+    {
+      "file": "8/147_212.r.png",
+      "before": "580672b387b09ffe878547c4cb8992d3dea5593e321eb4e868f811d058ae7b81",
+      "sha256": "7f56f4388adb90778c85342dd0ead486bc38043b5fc297fd02d61c4ca5c484cc",
+      "pixels": 4297
+    },
+    {
+      "file": "8/148_212.r.png",
+      "before": "d8878f6100529ffd65d9e1b9bc8682fde7d3f81f144e83aaae90f0334b667a22",
+      "sha256": "3712c5a2e41eff2469f08b892f0185bccc4e2407d73326d6e2bfa20d0e9fd093",
+      "pixels": 2637
+    },
+    {
+      "file": "8/148_213.r.png",
+      "before": "c64d5a38778fe7b35d2946a3201df41c795f8f9de7f5af57cfba7ddcca7f40e1",
+      "sha256": "cbec701731713944d4357a478f77518101c4c82c4170418f8ec2a7271d9a7d0f",
+      "pixels": 6659
+    },
+    {
+      "file": "8/148_215.r.png",
+      "before": "dd40eb8d99b819e1b5104b2e4508da7b89ad3e312ecc143b9118d5ebd50994f2",
+      "sha256": "7ebf23f7aeec145ba562cee56aee5179b416648a70c796fa4ad37501ffa47a7d",
+      "pixels": 7381
+    },
+    {
+      "file": "8/149_215.r.png",
+      "before": "c55890c7b1ba381ebdcbf4f5911c1a80d708a9ba1b86fa353752f6e26e5ba625",
+      "sha256": "8ea6f73c7fc77608277670c1ec608f8fdc4f9bf6a4160187915d5f420934801e",
+      "pixels": 18
+    },
+    {
+      "file": "8/148_216.r.png",
+      "before": "440292b45a21f56d65e75eb566f712e670d1e462250d47bf139875822f8a6982",
+      "sha256": "9325bddf779e5f28124e6afea64adff309fbb28ba4da0d1935740b64f471d401",
+      "pixels": 500
+    },
+    {
+      "file": "8/149_216.r.png",
+      "before": "1f45a4c729a0b157630120fc5b90ea05a64c6f28d5e2fc0fac78fd99c05eeb94",
+      "sha256": "f95bb81aacc71f6a3bc7521e0f674ed4d15b426aa2e0e0d3b67a6b580024d7a6",
+      "pixels": 3132
+    }
+  ]
+}

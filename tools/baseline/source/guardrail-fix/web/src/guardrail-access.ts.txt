@@ -1,0 +1,21 @@
+import type { Roads } from './roads';
+import { RAIL, railPoint, type Access, type Ground } from './guardrail-rules';
+import { surveyedOpenings } from './surveyed-road-openings';
+/** Mapped track lines sometimes end down the bank: require an actual driveable shoulder ramp. */
+export function railAccess(roads: Roads, ground: Ground, village?: readonly [number, number], surveyed = true): Access {
+  const openings = surveyed && village ? surveyedOpenings(roads, village) : [];
+  return (road, p) => {
+    if (openings.some(o => o.road === road && Math.abs(p.along - o.along) <= o.width / 2)) return true;
+    const hit = roads.nearest(p.x, p.z, 30, r => r !== road && (r.bridge || r.kind <= 4));
+    if (!hit || hit.dist > hit.road.halfWidth + (hit.road.kind <= 3 ? RAIL.junction : RAIL.clearance)) return false;
+    if (hit.road.kind <= 3 || hit.road.bridge) return true;
+    const side = Math.sign((p.x - hit.x) * Math.cos(p.heading) + (p.z - hit.z) * Math.sin(p.heading)) || 1;
+    // The rail point already identifies its own side, independent of the crossing track's heading.
+    const centre = roads.nearest(p.x, p.z, 20, r => r === road);
+    if (!centre) return false;
+    const ownSide = Math.sign((p.x - centre.x) * Math.cos(p.heading) + (p.z - centre.z) * Math.sin(p.heading)) || side;
+    const a = railPoint(road, p.along, ownSide * road.halfWidth), b = railPoint(road, p.along, ownSide * (road.halfWidth + 8));
+    const h = ground(a.x, a.z), f = ground(b.x, b.z);
+    return h !== null && f !== null && Math.abs(h - f) <= 1.6;
+  };
+}

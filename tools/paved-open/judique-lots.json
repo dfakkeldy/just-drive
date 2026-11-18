@@ -1,0 +1,359 @@
+{
+ "version": 1,
+ "source": "nstdb-designated-open-v1",
+ "replaces": {
+  "receipt": "tools/paved-open/hashes.json"
+ },
+ "area": {
+  "area": "judique",
+  "folder": "areas/judique",
+  "manifestKey": {
+   "file": "paved/index.json",
+   "tiles": 33,
+   "source": "nstdb-designated-open-v1"
+  },
+  "files": [
+   {
+    "file": "areas/judique/paved/100_212.r8",
+    "bytes": 16384,
+    "sha256": "56be5232f7f2b333bde2979caf2078ead3832c0c10eb6ec412ca99eb90f71df4"
+   },
+   {
+    "file": "areas/judique/paved/100_213.r8",
+    "bytes": 16384,
+    "sha256": "a74289a74486aa7568ef674daef58e92e6736b81140261f002fddfe671b48baf"
+   },
+   {
+    "file": "areas/judique/paved/100_214.r8",
+    "bytes": 16384,
+    "sha256": "fe2626af4383107f80e4d7b9451494cee7d9b84de7f42c2ddda96f49eed62d20"
+   },
+   {
+    "file": "areas/judique/paved/100_216.r8",
+    "bytes": 16384,
+    "sha256": "66afc98e5d86c78f16cfe64a7e6eef159c675ecbdd96c27a43ac6d429cc52849"
+   },
+   {
+    "file": "areas/judique/paved/100_220.r8",
+    "bytes": 16384,
+    "sha256": "d24bfd580423086e316427251c88e91a1a9a36511a5c857a47f5f02606f8f73b"
+   },
+   {
+    "file": "areas/judique/paved/100_221.r8",
+    "bytes": 16384,
+    "sha256": "50cd111eb95070c431c4d93dccc4300fd960e20eb87d72435f50eec408e86d50"
+   },
+   {
+    "file": "areas/judique/paved/100_223.r8",
+    "bytes": 16384,
+    "sha256": "7da5f8667624dae9b45b337eed58f1868b0ab9431e5ae7521f52ada446dc0ce9"
+   },
+   {
+    "file": "areas/judique/paved/102_228.r8",
+    "bytes": 16384,
+    "sha256": "12c068772d852ca94af1578ffc921c36d207484be11616d9937a744ecbc5e1bb"
+   },
+   {
+    "file": "areas/judique/paved/103_228.r8",
+    "bytes": 16384,
+    "sha256": "1fbab458bafc87a3b8b9da1c26e137f6da7d9c24bb46594779c21e524ad4cabd"
+   },
+   {
+    "file": "areas/judique/paved/103_236.r8",
+    "bytes": 16384,
+    "sha256": "48acccbeb7b32d2914770ee3973d53dae69bf2d0bf3b851253d8f4768ffac0b9"
+   },
+   {
+    "file": "areas/judique/paved/103_237.r8",
+    "bytes": 16384,
+    "sha256": "1cb93835a306819eed3dc9bbb37c33d0a501392d808d5219c245499ea4741827"
+   },
+   {
+    "file": "areas/judique/paved/104_238.r8",
+    "bytes": 16384,
+    "sha256": "d12af62a6d52da782fe8c83964ed24860dc7161e0c4dcb20b29858e30cb0f478"
+   },
+   {
+    "file": "areas/judique/paved/104_239.r8",
+    "bytes": 16384,
+    "sha256": "9f1fc3d06876138729ee50a6dc6beefac1d5e9ee79fdca6830c0bf241383ec4a"
+   },
+   {
+    "file": "areas/judique/paved/105_241.r8",
+    "bytes": 16384,
+    "sha256": "c996918b76d44594cfcbc614859ba4962d77e43a8923dbee6503e050f14a493a"
+   },
+   {
+    "file": "areas/judique/paved/106_195.r8",
+    "bytes": 16384,
+    "sha256": "9e4121aa9077294e26821db64fe863bb915ba4a1078e7eb9ca1eaaa9623c22e0"
+   },
+   {
+    "file": "areas/judique/paved/106_213.r8",
+    "bytes": 16384,
+    "sha256": "9ae7e338195c7af4f7af29ff5237aef13d459bf575b33db77e76f10fd5d5a955"
+   },
+   {
+    "file": "areas/judique/paved/108_199.r8",
+    "bytes": 16384,
+    "sha256": "0445212548ede104e6bf4780749ba4b9061610a75d64bbfc7bde4bc98524ccf9"
+   },
+   {
+    "file": "areas/judique/paved/108_204.r8",
+    "bytes": 16384,
+    "sha256": "932ac0d9a8beb9ebb6674b5d133dda8c290dc21a861d18743b6f0364ff1d0d79"
+   },
+   {
+    "file": "areas/judique/paved/108_236.r8",
+    "bytes": 16384,
+    "sha256": "8593589dec87529ee7847234fe60941c77068a2bb21b4137ad5a7568e24beffc"
+   },
+   {
+    "file": "areas/judique/paved/108_238.r8",
+    "bytes": 16384,
+    "sha256": "88be2ecda575f2b87627eac2709cb893b705821b084b6617a689eb680956eee5"
+   },
+   {
+    "file": "areas/judique/paved/109_192.r8",
+    "bytes": 16384,
+    "sha256": "1f3bc755e8eb12d9a83119fb7f02578b5bdd07e7ce3d73603a83156413ef4951"
+   },
+   {
+    "file": "areas/judique/paved/109_240.r8",
+    "bytes": 16384,
+    "sha256": "5af5200bc37fc0830920b29bd9bbb38fc205fc03eeed1a2ef157a624e5f3778f"
+   },
+   {
+    "file": "areas/judique/paved/144_237.r8",
+    "bytes": 16384,
+    "sha256": "5a3c26592118e07f70051a3cb3ed015af069149324d3226626fa3fd8441f4d7c"
+   },
+   {
+    "file": "areas/judique/paved/148_242.r8",
+    "bytes": 16384,
+    "sha256": "8eb0f877b2790a3ddb51e0eaa6688075cdae51b60ca839d23b207fb175c01552"
+   },
+   {
+    "file": "areas/judique/paved/151_241.r8",
+    "bytes": 16384,
+    "sha256": "22aecc5f52538b66b6e950b46d67293b5a1489a384fa8d3eb06797a416412e25"
+   },
+   {
+    "file": "areas/judique/paved/151_253.r8",
+    "bytes": 16384,
+    "sha256": "42c9b43ae03f3d878641ccf887e1b44a65315b93da601acbee526f26899e9c2c"
+   },
+   {
+    "file": "areas/judique/paved/152_253.r8",
+    "bytes": 16384,
+    "sha256": "d1c7da89ff345861738949b6a489d80dd0393232f43618b7197fa6f880831e41"
+   },
+   {
+    "file": "areas/judique/paved/153_239.r8",
+    "bytes": 16384,
+    "sha256": "4e459c4105aa852e1e1f616125216c22c9a06ad68382831b0a3aac3aa8c97591"
+   },
+   {
+    "file": "areas/judique/paved/153_253.r8",
+    "bytes": 16384,
+    "sha256": "6d9f0dac61a9b04226f89dcc6a522d072ee73fcea37195dab42e0038998f3833"
+   },
+   {
+    "file": "areas/judique/paved/155_233.r8",
+    "bytes": 16384,
+    "sha256": "403c47e8b414856b72deb882219866fb661cd5410b1a3f7ad43b6f32efe81a98"
+   },
+   {
+    "file": "areas/judique/paved/94_198.r8",
+    "bytes": 16384,
+    "sha256": "a7a53007d2d8fdf86e8e74984e672b9c08c30ea2593b41000640d229dba25a3f"
+   },
+   {
+    "file": "areas/judique/paved/99_212.r8",
+    "bytes": 16384,
+    "sha256": "3a94ec92361374b203a59b10e5eba510c884744a40e92dd07946e45510a7f867"
+   },
+   {
+    "file": "areas/judique/paved/99_213.r8",
+    "bytes": 16384,
+    "sha256": "affabba64d5c39c045b83682f55c35f03c3cc7ea23f899adba864b2ad5fbaee7"
+   },
+   {
+    "file": "areas/judique/paved/index.json",
+    "bytes": 1889,
+    "sha256": "c71458dad0d13b01fea51d9723de45be58c5b0274a63509da45c82842c2ee5ba"
+   }
+  ],
+  "inputs": [
+   {
+    "file": "areas/judique/8/100_212.t.bin",
+    "sha256": "5ede2e22b8afc2100d5b66df35d6618418d3d10ac42816b3b9496c557daeb956"
+   },
+   {
+    "file": "areas/judique/8/100_213.t.bin",
+    "sha256": "513a24a7a773ae05b0fa4d1fc5ef58571bcf01c2c6a0477c809a65ee42ddb89e"
+   },
+   {
+    "file": "areas/judique/8/100_214.t.bin",
+    "sha256": "9b6f092aa4e286130f16461ae365582f11195d46a34ea8651ec0d15bdf6da25c"
+   },
+   {
+    "file": "areas/judique/8/100_216.t.bin",
+    "sha256": "7057cc99f52806a549cde450e63e7c102ea3b88f271639376944c9e0e9f6e553"
+   },
+   {
+    "file": "areas/judique/8/100_220.t.bin",
+    "sha256": "31fe84a07ebf0cd0afe27577602f9d19199d33fbc911a1766fe159a3d7c3a157"
+   },
+   {
+    "file": "areas/judique/8/100_221.t.bin",
+    "sha256": "7fc2523b4c5bd22ca20d27bbccd875277825d62e016bcfaf23f5438787a480bf"
+   },
+   {
+    "file": "areas/judique/8/100_223.t.bin",
+    "sha256": "e39296379653715e43f16d78d15ca71a466650de59dcfec9124928d927930c5a"
+   },
+   {
+    "file": "areas/judique/8/102_228.t.bin",
+    "sha256": "9bd85aabaf39eac8ea52330e14848af22fc5edd6485cc8aaaca1b8a5cb09cb8b"
+   },
+   {
+    "file": "areas/judique/8/103_228.t.bin",
+    "sha256": "ca69c6c32ed2d16ebfcc16d44b45c66e1541223eceb42fdb7723ce690f465db9"
+   },
+   {
+    "file": "areas/judique/8/103_236.t.bin",
+    "sha256": "6c630854a5cda56289531d3cfc901816882185bbe12d774e9317e131fc8e2265"
+   },
+   {
+    "file": "areas/judique/8/103_237.t.bin",
+    "sha256": "f965b6938f408f3cc129c74f413f12f2f8ae74dd434aa649e8158bc23ca39457"
+   },
+   {
+    "file": "areas/judique/8/104_238.t.bin",
+    "sha256": "e9adfc4294d275d663b7549ce5f9ed272506237f2d29bdeaca7939a650c3fab7"
+   },
+   {
+    "file": "areas/judique/8/104_239.t.bin",
+    "sha256": "a4ae15903b5fdbcf7202bed8ac026157e9fb51cb6e20a267ad2454585c518850"
+   },
+   {
+    "file": "areas/judique/8/105_241.t.bin",
+    "sha256": "8b714e067e0ce933a3fc5fa1751342ff98b77e2265faca8ceec5dfedbb29ccea"
+   },
+   {
+    "file": "areas/judique/8/106_195.t.bin",
+    "sha256": "0a5bbdfcd68c6d79c2162ae6df7b2f04fa3bec868e301e080c6b9b17d2f668ac"
+   },
+   {
+    "file": "areas/judique/8/106_213.t.bin",
+    "sha256": "a22df2018c046fcb4d4cf4d64638aae142bf7cea926676eb5decc5a47b10a05d"
+   },
+   {
+    "file": "areas/judique/8/108_199.t.bin",
+    "sha256": "0c396167ad126862304b35018ddbfb082a5f8718fcffb81ab9319706eadfba44"
+   },
+   {
+    "file": "areas/judique/8/108_204.t.bin",
+    "sha256": "118741db2ee8ebf300e71feeb5891999f1031526e7ff09e395a7db41032bb5a3"
+   },
+   {
+    "file": "areas/judique/8/108_236.t.bin",
+    "sha256": "c9507232cdf0a61720a469a1cf752364f3666cdcf018b476564c2e2480201939"
+   },
+   {
+    "file": "areas/judique/8/108_238.t.bin",
+    "sha256": "7763f65d28fbc63308b50cc0bece3bed3a78e5c5c2722afa8b45f4a023599db9"
+   },
+   {
+    "file": "areas/judique/8/109_192.t.bin",
+    "sha256": "d1cb55b5a929f105065cd4bc55cd9d604137172564f74a39c3a7c24c4a132c5f"
+   },
+   {
+    "file": "areas/judique/8/109_240.t.bin",
+    "sha256": "1e21dc533d17179d1e1c353b88bc86acf7050708eaa14c46aa6cf9ab21570d5d"
+   },
+   {
+    "file": "areas/judique/8/144_237.t.bin",
+    "sha256": "03b88f0c741004c1d1e108e5cd5ef16489c60d5b47eda142ad1de5f7e477267e"
+   },
+   {
+    "file": "areas/judique/8/148_242.t.bin",
+    "sha256": "543df3899a5f20bac9f54a05e33ffa9fa434a34afb449664137d78cb428b949b"
+   },
+   {
+    "file": "areas/judique/8/151_241.t.bin",
+    "sha256": "62aa0f7950940b9ebda2106cf7e5b5ad92fb6772ee936677ae2f700241f17f61"
+   },
+   {
+    "file": "areas/judique/8/151_253.t.bin",
+    "sha256": "c65b4a9860415dd0fcc1d85ba9af52cac7895df47c20a50609192c238351811e"
+   },
+   {
+    "file": "areas/judique/8/152_253.t.bin",
+    "sha256": "32811cd279816717fb0c8bb10125eff1974b01b4b24b1502bacb8e7ce51c2aea"
+   },
+   {
+    "file": "areas/judique/8/153_239.t.bin",
+    "sha256": "ab4ad2ef540153b131ea4dfbd0409499f39e1304323815a4b59a796f7eb648cd"
+   },
+   {
+    "file": "areas/judique/8/153_253.t.bin",
+    "sha256": "b7360a9e17b6f9784ff67fb16121f4a66adfb36c2b78cf969c4917cca05be7aa"
+   },
+   {
+    "file": "areas/judique/8/155_233.t.bin",
+    "sha256": "eb4547603fb8e49e31a493fa1af9119d5ed0296d76019d4aadb3734bba44df75"
+   },
+   {
+    "file": "areas/judique/8/94_198.t.bin",
+    "sha256": "2997fa3e18d25ec8c5ec9b42c80e41e1104da246ed9911ea86ddab9013ea0313"
+   },
+   {
+    "file": "areas/judique/8/99_212.t.bin",
+    "sha256": "72ed1f00d9ae9228526fa27f1f5ce7761d9a2d577751aaea936f90f9d61d6fe0"
+   },
+   {
+    "file": "areas/judique/8/99_213.t.bin",
+    "sha256": "afe5bdacf3670203db8cc2a66b4df05744434bb88961bf08130517fdc12215eb"
+   },
+   {
+    "file": "areas/judique/buildings.json",
+    "sha256": "bb51fbe87cf55d636db3d284826d42e2d52d9dbc5fbb1452235f0c5a842c0f86"
+   },
+   {
+    "file": "areas/judique/manifest.json",
+    "lattice": true,
+    "sha256": "4bd814f028c69d2617945ba10b20645946eab5f60569a0adf4bafe013b048c02"
+   },
+   {
+    "file": "areas/judique/roads.json",
+    "sha256": "ca15b47b7d71407f4950944bc16344eb3d9c45addeac917382382cfe67a1eaa4"
+   },
+   {
+    "file": "terrain/buildings.json",
+    "sha256": "1a41baac569936799a9fc1951de464915ae4a5988549edf44444b92c23c01cea"
+   },
+   {
+    "file": "terrain/manifest.json",
+    "lattice": true,
+    "sha256": "636297e4cd615a710ecbcd6e86ebffb16a40a4f6c1aee452f172284070917e7b"
+   },
+   {
+    "file": "terrain/roads.json",
+    "sha256": "2a34feac490ceccad35af2b6ffc5fac1315baaa72d3c8795828dfed4cc874f82"
+   }
+  ],
+  "lots_m2": 7100,
+  "apron_m2": 3352,
+  "gravel_m2": 1016,
+  "stalls": 5
+ },
+ "mirror": [
+  {
+   "file": "data/raw/paved-open/corrections.json",
+   "before": "0811d34927a137c3248214e68e961a1315a1b3098530a7daec876983a5d32cc9",
+   "sha256": "ca0acc3368c87ab328ff913b05b03d6a08d3b6fc5effb29cbcd6347a2b685469"
+  }
+ ]
+}

@@ -1,0 +1,45 @@
+// Run the production dev-expose helper without booting the renderer.
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {transformSync} from '../web/node_modules/esbuild/lib/main.js';
+const source=readFileSync(new URL('../web/src/main.ts',import.meta.url),'utf8');
+const helper=source.match(/^function expose\(.*?\n\}/ms)?.[0];
+assert.ok(helper,'production expose helper is present');
+const code=transformSync(helper.replaceAll('import.meta.env.DEV','true'),{loader:'ts'}).code;
+const window={mmm:{}},expose=new Function('window',code+';return expose')(window);
+let pinned=null,calls=0;
+Object.defineProperty(window.mmm,'radio',{configurable:true,enumerable:true,get:()=>pinned,set(value){pinned=value;calls++;value.live=()=>({track:0,at:0});}});
+const radio={live:()=>({track:2,at:31})};
+expose({radio});
+assert.equal(calls,1,'exposing a data value must preserve an installed instrumentation setter');
+assert.equal(window.mmm.radio,radio);
+assert.deepEqual(radio.live(),{track:0,at:0});
+const driven={id:'truck'};
+expose({get vehicleId(){return driven.id;}});
+driven.id='sxs';assert.equal(window.mmm.vehicleId,'sxs','driven accessors stay live');
+const frame=()=>{},ride={};expose({frame,ride},false);
+assert.equal(window.mmm.frame,frame);assert.equal(window.mmm.ride,ride);
+assert.deepEqual(Object.keys(window.mmm).sort(),['radio','vehicleId'],'internal probes preserve the public key set');
+console.log('PASS production dev API: live getters, installed setters and internal probes');
+// Main's startup adapters keep new start/position links inside Fleet's checked teleport path.
+const adapters=source.slice(source.indexOf('const placeVisit ='),source.indexOf('// The daily run supplies'));
+assert.ok(adapters.includes('const startPlacement ='));
+const adapterCode=transformSync(adapters,{loader:'ts'}).code;
+const adapterFactory=new Function('vehicle','fleet',adapterCode+';return {placeVisit,urlPlacement,startPlacement,select(next){vehicle=next}}');
+const pose={x:3,z:4,heading:1},car={...pose,bounds:[-10,-10,10,10],place:()=>true,placementGuard:p=>p.x===3};
+const ordinary=adapterFactory(car,null);assert.equal(ordinary.urlPlacement,car);assert.equal(ordinary.startPlacement,car);
+let visits=0,accepted=null;const pair={startVisit(x,z,heading,accepts){visits++;accepted=accepts?.({x,z,heading});return accepted!==false}};
+const fleetAdapters=adapterFactory(car,pair);assert.equal(fleetAdapters.urlPlacement.place(3,4,1),true);assert.equal(visits,1);
+fleetAdapters.startPlacement.restart(3,4,1);assert.equal(accepted,true);fleetAdapters.startPlacement.restart(8,4,1);assert.equal(accepted,false,'exact start predicate reaches the checked Fleet transaction');
+const bike={...car,x:8,placementGuard:p=>p.x===8};fleetAdapters.select(bike);assert.equal(fleetAdapters.startPlacement.x,8);fleetAdapters.startPlacement.restart(8,4,1);assert.equal(accepted,true,'adapter follows the selected controller and its guard');assert.equal(visits,4);
+console.log('PASS startup adapters: ordinary identity, pair transaction, exact predicate and selected controller');
+const coldPair={visitQueued:true,startVisit(){return false}};
+const cold=adapterFactory(car,coldPair);
+assert.equal(cold.urlPlacement.place(3,4,1),true,'queued cold fleet URL placement must not fall through to the normal start');
+console.log('PASS cold URL placement retains its requested starting pose while land loads');
+
+let later;const pendingActor={...car,placementGuard:()=>false};
+const pendingAdapter=adapterFactory(pendingActor,{startVisit(_x,_z,_h,accepts){later=accepts;return false}});
+pendingAdapter.startPlacement.restart(3,4,1);pendingActor.placementGuard=()=>true;
+assert.equal(later(pose),false,'a deferred start retains its temporary exact-start guard after the caller restores the normal guard');
+console.log('PASS deferred startup adapter retains the guard used for its request');

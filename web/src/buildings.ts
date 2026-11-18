@@ -1,0 +1,418 @@
+import * as THREE from 'three';
+
+export interface Building {
+  /** A split group shares one identity; only its largest wing carries the original site. */
+  buildingId?: number; site?: Building;
+  id: number; x: number; y: number; ground: number; footprint: [number, number][];
+  axisDeg: number; length: number; width: number; eave: number; ridge: number;
+  roof: 'gable' | 'flat' | 'shed'; kind: 'house' | 'barn' | 'shed' | 'large'; confidence: number;
+  /** A large building measured as blocks (pipeline/big_buildings.py): each block has its own height. A tank is round:
+   *  `length` is its diameter, `eave` the top of its shell, `ridge` the top of its roof, and `footprint` is points
+   *  on its circle (the box round them is the square round the tank). */
+  shape?: 'block' | 'tank';
+}
+
+/** One property per mapped building, at its unchanged pre-split position. */
+export const buildingSites = (list: Building[]): Building[] => list
+  .filter((b) => b.buildingId === undefined || b.buildingId === b.id)
+  .map((b) => b.site ?? b);
+
+/** Everything with a roof today, for a scene that removes the tree layer under the roofs and does not draw them: one
+ *  record per building (buildingSites), and every further block of a large building. */
+export const roofSites = (list: Building[]): Building[] => [...buildingSites(list),
+  ...list.filter((b) => b.shape !== undefined && b.buildingId !== undefined && b.buildingId !== b.id)];
+
+/** World boxes [x0, z0, x1, z1] under one building, each grown by `margin`, so the terrain's tree layer is removed
+ *  there. A tank: the square round its circle. A block can be 300 m long and turned, and one box round it would clear
+ *  a square of forest beside it, so a block is cleared in cells of at most 12 m. Any other building: the box of its
+ *  footprint, and that of its site. */
+export function clearBoxes(b: Building, origin: [number, number], margin: number): number[][] {
+  const cx = b.x - origin[0], cz = origin[1] - b.y;
+  if (b.shape === 'tank') { const radius = b.length / 2; return [[cx - radius - margin, cz - radius - margin, cx + radius + margin, cz + radius + margin]]; }
+  const boxes: number[][] = [];
+  if (b.shape === 'block') {
+    const a = THREE.MathUtils.degToRad(b.axisDeg);
+    const ux = Math.sin(a), uz = -Math.cos(a), vx = Math.cos(a), vz = Math.sin(a), L = b.length / 2, W = b.width / 2;
+    const nu = Math.ceil(b.length / 12), nv = Math.ceil(b.width / 12);
+    for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+      const cell = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].map(([p, q]) => { const u = -L + p * b.length / nu, v = -W + q * b.width / nv; return [cx + ux * u + vx * v, cz + uz * u + vz * v]; });
+      boxes.push([Math.min(...cell.map((c) => c[0])) - margin, Math.min(...cell.map((c) => c[1])) - margin, Math.max(...cell.map((c) => c[0])) + margin, Math.max(...cell.map((c) => c[1])) + margin]);
+    }
+  } else for (const footprint of [b.footprint, ...(b.site ? [b.site.footprint] : [])]) {
+    const xs = footprint.map((p) => p[0] - origin[0]), zs = footprint.map((p) => origin[1] - p[1]);
+    boxes.push([Math.min(...xs) - margin, Math.min(...zs) - margin, Math.max(...xs) + margin, Math.max(...zs) + margin]);
+  }
+  return boxes;
+}
+
+export interface BuildingStyle {
+  wall: string; roof: string; trim: string;
+  roofMaterial: 'shingle' | 'metal';
+  entrance: 'none' | 'small steps' | 'front porch' | 'deck' | 'wrap-around';
+  chimney: boolean; dormer: boolean; shutters: boolean; satelliteDish: boolean; skirting: boolean; silo: boolean;
+  roofShape?: 'flat' | 'gable' | 'hip' | 'gambrel';
+  front?: { end: boolean; side: -1 | 1 };
+  siloPosition?: { u: number; v: number; diameter: number; height: number };
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+const isStyle = (s: unknown): s is BuildingStyle => {
+  if (!isRecord(s)) return false;
+  if (![s.wall, s.roof, s.trim].every((c) => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c))) return false;
+  if (s.roofMaterial !== 'shingle' && s.roofMaterial !== 'metal') return false;
+  if (!['none', 'small steps', 'front porch', 'deck', 'wrap-around'].includes(String(s.entrance))) return false;
+  if (!['chimney', 'dormer', 'shutters', 'satelliteDish', 'skirting', 'silo'].every((k) => typeof s[k] === 'boolean')) return false;
+  if (s.roofShape !== undefined && !['flat', 'gable', 'hip', 'gambrel'].includes(String(s.roofShape))) return false;
+  if (s.front !== undefined && (!isRecord(s.front) || typeof s.front.end !== 'boolean' || (s.front.side !== -1 && s.front.side !== 1))) return false;
+  if (s.siloPosition !== undefined) {
+    const p = s.siloPosition;
+    if (!isRecord(p) || !['u', 'v', 'diameter', 'height'].every((k) => typeof p[k] === 'number' && Number.isFinite(p[k]))) return false;
+    if (typeof p.diameter !== 'number' || typeof p.height !== 'number' || p.diameter <= 0 || p.height <= 0) return false;
+  }
+  return !s.silo || s.siloPosition !== undefined;
+};
+
+/** Parse the optional scenery file once at the network boundary. */
+export function readBuildingStyles(data: unknown): Record<string, BuildingStyle> {
+  if (!isRecord(data) || data.version !== 1 || !isRecord(data.styles)) throw new Error('Invalid building styles file');
+  const result: Record<string, BuildingStyle> = {};
+  for (const [id, style] of Object.entries(data.styles)) {
+    if (!isStyle(style)) throw new Error(`Invalid building style ${id}`);
+    result[id] = style;
+  }
+  return result;
+}
+
+type RGB = [number, number, number];
+
+const WALLS: Record<Building['kind'], RGB[]> = {
+  house: [[0.78, 0.77, 0.71], [0.69, 0.66, 0.53], [0.48, 0.53, 0.54], [0.72, 0.64, 0.40], [0.42, 0.46, 0.47], [0.36, 0.29, 0.22], [0.50, 0.45, 0.36], [0.66, 0.66, 0.62]],
+  barn: [[0.34, 0.08, 0.06], [0.40, 0.37, 0.33], [0.30, 0.28, 0.26], [0.55, 0.52, 0.46]],
+  shed: [[0.45, 0.43, 0.40], [0.62, 0.61, 0.57], [0.34, 0.10, 0.08], [0.36, 0.34, 0.30]],
+  large: [[0.66, 0.63, 0.56], [0.55, 0.36, 0.28], [0.70, 0.70, 0.68]],
+};
+const TANKS: RGB[] = [[0.80, 0.80, 0.77], [0.71, 0.73, 0.73], [0.62, 0.65, 0.63]];
+const ROOFS: [number, number, number][] = [[0.11, 0.11, 0.12], [0.16, 0.15, 0.14], [0.20, 0.13, 0.10], [0.13, 0.20, 0.16], [0.30, 0.09, 0.07], [0.30, 0.31, 0.32]];
+
+const hash = (n: number) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+
+/** Measured LiDAR envelopes with stable, inexpensive rural facade details. */
+export class Buildings {
+  readonly mesh: THREE.Mesh;
+  readonly triangles: number;
+  /** World boxes [x0, z0, x1, z1] under the buildings, so the terrain's tree layer is removed there. */
+  readonly clear: number[][] = [];
+
+  constructor(list: Building[], village: [number, number], exag: number, seaLevel: number, styles: Record<string, BuildingStyle> = {}) {
+    const pos: number[] = [], col: number[] = [];
+    const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, k: [number, number, number], shade = 1) => {
+      pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+      for (let i = 0; i < 3; i++) col.push(k[0] * shade, k[1] * shade, k[2] * shade);
+    };
+    const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3, k: [number, number, number], shade = 1) => { tri(a, b, c, k, shade); tri(a, c, d, k, shade); };
+
+    for (const b of list) {
+      const cx = b.x - village[0], cz = village[1] - b.y;
+      const base = seaLevel + (b.ground - seaLevel) * exag;
+      const a = THREE.MathUtils.degToRad(b.axisDeg);
+      const ux = Math.sin(a), uz = -Math.cos(a), vx = Math.cos(a), vz = Math.sin(a);   // along the ridge, across it
+      const L = b.length / 2, W = b.width / 2;
+      // u along the ridge, v across, h above the ground at the building.
+      const P = (u: number, v: number, h: number) => new THREE.Vector3(cx + ux * u + vx * v, base + h, cz + uz * u + vz * v);
+      if (b.shape === 'tank') {
+        // A storage tank: a steel shell up to the measured rim, and a low cone up to the measured top.
+        const radius = b.length / 2, shell = TANKS[Math.floor(hash(b.id) * TANKS.length)];
+        const cap: RGB = [shell[0] * 0.86, shell[1] * 0.86, shell[2] * 0.86], top = new THREE.Vector3(cx, base + b.ridge, cz);
+        const segments = 32;
+        const ring = (i: number, h: number) => { const t = i * Math.PI * 2 / segments; return new THREE.Vector3(cx + Math.cos(t) * radius, base + h, cz + Math.sin(t) * radius); };
+        for (let i = 0; i < segments; i++) {
+          quad(ring(i, -3), ring(i + 1, -3), ring(i + 1, b.eave), ring(i, b.eave), shell, 0.8 + 0.2 * Math.cos((i + 0.5) * Math.PI * 2 / segments));
+          tri(ring(i, b.eave), ring(i + 1, b.eave), top, cap);
+        }
+        this.clear.push(...clearBoxes(b, village, 2.5));
+        continue;
+      }
+      const identity = b.buildingId ?? b.id;
+      const primary = identity === b.id;
+      const paint = styles[identity];
+      // Wing joints use simple roofs. Property accessories are never multiplied,
+      // and uncertain porches/dormers are omitted rather than put on an inner wall.
+      const style = b.buildingId !== undefined && paint ? { ...paint,
+        entrance: 'none' as const, dormer: false, satelliteDish: false,
+        chimney: primary && paint.chimney, silo: primary && paint.silo,
+        roofShape: paint.roofShape === 'flat' || b.roof === 'flat' ? 'flat' as const : 'gable' as const,
+      } : paint;
+      // THREE.Color converts sRGB hex paint to the linear vertex colours expected by the material.
+      const rgb = (hex: string): RGB => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
+      const wall = style ? rgb(style.wall) : WALLS[b.kind][Math.floor(hash(identity) * WALLS[b.kind].length)];
+      const roofPalette = b.kind === 'barn' ? [ROOFS[3], ROOFS[4], ROOFS[5]] : ROOFS;
+      const roof = style ? rgb(style.roof) : roofPalette[Math.floor(hash(identity + 0.5) * roofPalette.length)];
+      const foot = -3;   // walls run below the ground line, so a slope never shows a gap
+      const shape = style?.roofShape ?? (b.buildingId !== undefined && b.roof !== 'flat' ? 'gable' : b.roof);
+      const flat = shape === 'flat';
+      const shed = shape === 'shed';
+      const e = b.eave, r = b.ridge;
+      // Walls. The two long walls are a little darker so the corners read.
+      quad(P(-L, -W, foot), P(L, -W, foot), P(L, -W, e), P(-L, -W, e), wall, 0.92);
+      quad(P(L, W, foot), P(-L, W, foot), P(-L, W, e), P(L, W, e), wall, 0.92);
+      quad(P(L, -W, foot), P(L, W, foot), P(L, W, e), P(L, -W, e), wall);
+      quad(P(-L, W, foot), P(-L, -W, foot), P(-L, -W, e), P(-L, W, e), wall);
+      const trim: RGB = style ? rgb(style.trim) : b.kind === 'house' ? [0.79, 0.77, 0.69] : [0.56, 0.54, 0.47];
+      const foundation: RGB = style?.skirting ? rgb('#dddeda') : [0.23, 0.23, 0.21];
+      const glass: RGB = [0.065, 0.105, 0.13];
+      const door: RGB = b.kind === 'house' ? (hash(identity + 3) > 0.5 ? [0.17, 0.22, 0.20] : [0.29, 0.12, 0.09]) : [wall[0] * 0.52, wall[1] * 0.52, wall[2] * 0.52];
+      // Facade rectangles use a local horizontal coordinate and an outward offset.
+      const panel = (end: boolean, side: number, u0: number, u1: number, y0: number, y1: number, colour: RGB, offset = 0.025) => {
+        const F = (u: number, h: number) => end ? P(side * (L + offset), u, h) : P(u, side * (W + offset), h);
+        quad(F(u0, y0), F(u1, y0), F(u1, y1), F(u0, y1), colour);
+      };
+      const box = (u0: number, u1: number, v0: number, v1: number, y0: number, y1: number, colour: RGB) => {
+        quad(P(u0, v0, y0), P(u1, v0, y0), P(u1, v0, y1), P(u0, v0, y1), colour, 0.9);
+        quad(P(u1, v1, y0), P(u0, v1, y0), P(u0, v1, y1), P(u1, v1, y1), colour, 0.9);
+        quad(P(u1, v0, y0), P(u1, v1, y0), P(u1, v1, y1), P(u1, v0, y1), colour);
+        quad(P(u0, v1, y0), P(u0, v0, y0), P(u0, v0, y1), P(u0, v1, y1), colour);
+        quad(P(u0, v0, y1), P(u1, v0, y1), P(u1, v1, y1), P(u0, v1, y1), colour);
+      };
+      const opening = (end: boolean, side: number, u: number, bottom: number, width: number, height: number, isDoor = false) => {
+        const half = width / 2, t = isDoor ? 0.105 : 0.09;
+        panel(end, side, u - half - t, u + half + t, bottom - t, bottom + height + t, trim, 0.035);
+        panel(end, side, u - half, u + half, bottom, bottom + height, isDoor ? door : glass, 0.05);
+        if (!isDoor) {
+          if (style?.shutters) for (const sign of [-1, 1]) {
+            const edge = u + sign * (half + t + 0.04);
+            panel(end, side, Math.min(edge, edge + sign * width * 0.28), Math.max(edge, edge + sign * width * 0.28), bottom - 0.03, bottom + height + 0.03, rgb('#394548'), 0.045);
+          }
+          if (b.kind !== 'large' || !style) {
+            panel(end, side, u - 0.025, u + 0.025, bottom, bottom + height, trim, 0.065);
+            panel(end, side, u - half, u + half, bottom + height * 0.52, bottom + height * 0.52 + 0.035, trim, 0.065);
+          }
+        }
+      };
+      // Blocks of one building stand wall to wall: an eave that hangs over would cut into the next block's roof.
+      const over = b.shape === 'block' ? 0 : flat ? 0.20 : 0.30;
+      const roofFace = (u0: number, u1: number, v0: number, v1: number, h0: number, h1: number, shade = 1) => {
+        quad(P(u0, v0, h0), P(u1, v0, h0), P(u1, v1, h1), P(u0, v1, h1), roof, shade);
+        if (style?.roofMaterial === 'metal' || (!style && b.kind === 'barn')) {
+          const seam: RGB = [Math.min(1, roof[0] * 1.17 + 0.012), Math.min(1, roof[1] * 1.17 + 0.012), Math.min(1, roof[2] * 1.17 + 0.012)];
+          // Sparse standing seams read from the road without subpixel strips across every 0.5 m panel.
+          for (let u = u0 + 0.65; u < u1 - 0.1; u += 1.5) {
+            quad(P(u, v0, h0 + 0.025), P(u + 0.035, v0, h0 + 0.025), P(u + 0.035, v1, h1 + 0.025), P(u, v1, h1 + 0.025), seam, shade);
+          }
+        }
+      };
+      if (flat) {
+        roofFace(-L - over, L + over, -W - over, W + over, r, r);
+        for (const side of [-1, 1]) {
+          panel(false, side, -L - over, L + over, e, r, wall);
+          panel(true, side, -W - over, W + over, e, r, wall);
+        }
+      } else if (shape === 'hip') {
+        const inset = Math.min(L * 0.55, W);
+        roofFace(-L + inset, L - inset, -W, 0, e, r);
+        roofFace(-L + inset, L - inset, 0, W, r, e, 0.85);
+        for (const side of [-1, 1]) {
+          const tip = side * (L - inset);
+          tri(P(side * L, -W, e), P(side * L, W, e), P(tip, 0, r), roof);
+          tri(P(side * L, -W, e), P(tip, 0, r), P(tip, -W, e), roof);
+          tri(P(side * L, W, e), P(tip, W, e), P(tip, 0, r), roof, 0.85);
+        }
+      } else if (shape === 'gambrel') {
+        const bend = W * 0.62, h = e + (r - e) * 0.72;
+        for (const side of [-1, 1]) {
+          roofFace(-L - over, L + over, side * (W + over), side * bend, e - 0.1, h, side === 1 ? 0.85 : 1);
+          roofFace(-L - over, L + over, side * bend, 0, h, r, side === 1 ? 0.85 : 1);
+          const u = side * L;
+          quad(P(u, -W, e), P(u, W, e), P(u, bend, h), P(u, -bend, h), wall);
+          tri(P(u, -bend, h), P(u, bend, h), P(u, 0, r), wall);
+        }
+      } else if (shed) {
+        const slope = (r - e) / (2 * W);
+        roofFace(-L - over, L + over, -W - over, W, e - over * slope, r);
+        panel(false, 1, -L, L, e, r, wall);
+        for (const side of [-1, 1]) tri(P(side * L, -W, e), P(side * L, W, e), P(side * L, W, r), wall);
+      } else {
+        tri(P(L, -W, e), P(L, W, e), P(L, 0, r), wall);
+        tri(P(-L, W, e), P(-L, -W, e), P(-L, 0, r), wall);
+        const drop = (over * (r - e)) / W;
+        roofFace(-L - over, L + over, -W - over, 0, e - drop, r);
+        roofFace(-L - over, L + over, W + over, 0, e - drop, r, 0.85);
+      }
+      for (const side of [-1, 1]) {
+        panel(false, side, -L, L, foot, Math.min(0.38, e * 0.15), foundation, 0.016);
+        panel(true, side, -W, W, foot, Math.min(0.38, e * 0.15), foundation, 0.016);
+        for (const corner of [-1, 1]) {
+          const u = corner * L, v = corner * W;
+          panel(false, side, u - (corner === 1 ? 0.14 : 0), u + (corner === -1 ? 0.14 : 0), 0.38, e, trim, 0.04);
+          panel(true, side, v - (corner === 1 ? 0.14 : 0), v + (corner === -1 ? 0.14 : 0), 0.38, e, trim, 0.04);
+        }
+        // Fascia follows the measured roof slope, including both rake edges.
+        const edgeHeight = flat ? r : shed && side === 1 ? r : e - over * (r - e) / (shed ? 2 * W : W);
+        panel(false, side, -L - over, L + over, edgeHeight - 0.14, edgeHeight, trim, shed && side === 1 ? 0.01 : over + 0.01);
+        if (!flat && shape !== 'hip' && shape !== 'gambrel') {
+          const v = L + over + 0.01;
+          const rake = (v0: number, v1: number, y0: number, y1: number) => quad(P(side * v, v0, y0), P(side * v, v1, y1), P(side * v, v1, y1 - 0.14), P(side * v, v0, y0 - 0.14), trim);
+          if (shed) rake(-W - over, W, e - over * (r - e) / (2 * W), r);
+          else {
+            const low = e - over * (r - e) / W;
+            rake(-W - over, 0, low, r); rake(0, W + over, r, low);
+          }
+        }
+      }
+      // Shallow clapboard courses, kept behind openings and corner trim.
+      // Muted bands suggest weathered shingles without adding a texture or draw call.
+      if (b.kind === 'house' || b.kind === 'barn') {
+        for (let y = 0.65; y < e - 0.15; y += style ? 0.64 : b.kind === 'barn' ? 0.44 : 0.32) {
+          const course: RGB = [wall[0] * 0.95, wall[1] * 0.95, wall[2] * 0.95];
+          // Spend siding detail on one long wall and one end wall. The other walls
+          // keep their paint; this pays for porches and windows without more draw calls.
+          const sides = style && b.kind === 'house' ? [style.front?.side ?? 1] : [-1, 1];
+          for (const side of sides) {
+            panel(false, side, -L + 0.14, L - 0.14, y, y + 0.018, course, 0.022);
+            panel(true, side, -W + 0.14, W - 0.14, y, y + 0.018, course, 0.022);
+          }
+        }
+      }
+      if (b.kind === 'house') {
+        const front = style?.front?.side ?? (hash(identity + 2) > 0.5 ? 1 : -1);
+        const frontEnd = style?.front?.end ?? false;
+        const span = frontEnd ? W : L;
+        const depth = frontEnd ? L : W;
+        const doorU = span > 4 ? -span * 0.25 : 0;
+        const F = (u: number, v: number, h: number) => frontEnd ? P(v, u, h) : P(u, v, h);
+        const frontBox = (u0: number, u1: number, v0: number, v1: number, y0: number, y1: number, colour: RGB) => {
+          if (frontEnd) box(v0, v1, u0, u1, y0, y1, colour);
+          else box(u0, u1, v0, v1, y0, y1, colour);
+        };
+        const dh = Math.min(2.05, e - 0.35), dw = Math.min(0.95, b.length * 0.22);
+        if (dh > 1.1) opening(frontEnd, front, doorU, 0.22, dw, dh, true);
+        const storeys = Math.max(1, Math.min(3, Math.floor((e + 0.3) / 2.65)));
+        const floor = e / storeys, wh = Math.min(1.25, floor * 0.43);
+        const columns = Math.max(1, Math.min(9, Math.floor((b.length - 1.5) / 2.7)));
+        for (const side of [-1, 1]) for (let row = 0; row < storeys; row++) {
+          const y = row * floor + Math.max(0.65, (floor - wh) * 0.48);
+          for (let c = 0; c < columns; c++) {
+            const u = -L + (c + 0.5) * b.length / columns;
+            if (!frontEnd && side === front && row === 0 && Math.abs(u - doorU) < 1.2) continue;
+            opening(false, side, u, y, Math.min(1.1, b.length / columns * 0.48), wh);
+          }
+        }
+        for (const side of [-1, 1]) {
+          if (W > 2) for (const v of [-W * 0.48, W * 0.48]) {
+            if (frontEnd && side === front && Math.abs(v - doorU) < 1.2) continue;
+            opening(true, side, v, 0.85, Math.min(0.95, W * 0.35), Math.min(1.2, e * 0.38));
+          }
+          if ((shape === 'gable' || shape === 'gambrel') && r - e > 1.5) opening(true, side, 0, e + 0.25, 0.6, Math.min(0.7, (r - e) * 0.3));
+        }
+        const entrance = b.buildingId !== undefined ? 'none' : style?.entrance ?? (hash(identity + 6) > 0.4 ? 'small steps' : 'none');
+        if (dh > 1.1 && entrance !== 'none') {
+          const steps = entrance === 'small steps';
+          const half = steps ? 0.85 : Math.min(span - 0.4, entrance === 'wrap-around' ? span * 0.85 : 2.5);
+          const reach = steps ? 0.85 : 2.2;
+          const v0 = front === 1 ? depth : -depth - reach, v1 = front === 1 ? depth + reach : -depth;
+          const u0 = Math.max(-span, doorU - half), u1 = Math.min(span, doorU + half);
+          frontBox(u0, u1, v0, v1, -0.3, 0.23, steps ? foundation : rgb('#857c68'));
+          frontBox(doorU - 0.65, doorU + 0.65, front * (depth + reach + 0.35) - 0.18, front * (depth + reach + 0.35) + 0.18, -0.2, 0.1, foundation);
+          if (entrance === 'wrap-around') frontBox(-span - 1.8, -span, -depth, depth + (front === 1 ? reach : 0), -0.3, 0.23, rgb('#857c68'));
+          if (entrance === 'deck') {
+            const v = front * (depth + reach - 0.12);
+            for (const u of [u0 + 0.12, u1 - 0.12]) frontBox(u - 0.06, u + 0.06, v - 0.06, v + 0.06, 0.23, 1.1, trim);
+            frontBox(u0 + 0.12, u1 - 0.12, v - 0.045, v + 0.045, 1.02, 1.1, trim);
+          }
+          if (entrance === 'front porch' || entrance === 'wrap-around') {
+            const top = Math.min(2.65, e - 0.22);
+            for (const u of [u0 + 0.12, u1 - 0.12]) {
+              const v = front * (depth + reach - 0.12);
+              frontBox(u - 0.07, u + 0.07, v - 0.07, v + 0.07, 0.23, top, trim);
+            }
+            quad(F(u0 - 0.15, front * depth, top + 0.23), F(u1 + 0.15, front * depth, top + 0.23), F(u1 + 0.15, front * (depth + reach + 0.15), top), F(u0 - 0.15, front * (depth + reach + 0.15), top), roof);
+          }
+        }
+        if (style?.dormer && !flat && !shed && shape !== 'hip' && span > 3) {
+          const v = front * W * 0.58, d = Math.min(1.2, W * 0.28);
+          const y = r - (r - e) * 0.58, top = Math.min(r - 0.32, y + 1.25);
+          box(-0.9, 0.9, Math.min(v, v - front * d), Math.max(v, v - front * d), y - 0.15, top, wall);
+          panel(false, front, -0.65, 0.65, y + 0.12, top - 0.12, trim, Math.abs(v) - W + 0.035);
+          panel(false, front, -0.48, 0.48, y + 0.22, top - 0.21, glass, Math.abs(v) - W + 0.05);
+          const peak = Math.min(r, top + 0.4);
+          tri(P(-1, v, top), P(1, v, top), P(0, v, peak), wall);
+          for (const side of [-1, 1]) quad(P(side, v + front * 0.15, top), P(side, v - front * d, top), P(0, v - front * d, peak), P(0, v + front * 0.15, peak), roof);
+        }
+        if (style?.satelliteDish) {
+          const u = doorU + 1.4, v = front * (depth + 0.35), y = Math.min(e - 0.3, 2.5);
+          frontBox(u - 0.035, u + 0.035, v - 0.04, v + 0.04, y - 0.5, y, foundation);
+          const centre = F(u, v - front * 0.12, y);
+          for (let i = 0; i < 8; i++) {
+            const a0 = i * Math.PI / 4, a1 = (i + 1) * Math.PI / 4;
+            tri(centre, F(u + Math.cos(a0) * 0.38, v, y + Math.sin(a0) * 0.32), F(u + Math.cos(a1) * 0.38, v, y + Math.sin(a1) * 0.32), rgb('#a3aaa9'));
+          }
+          tri(F(u, v, y - 0.28), F(u + 0.04, v, y - 0.28), F(u, v + front * 0.4, y - 0.08), foundation);
+        }
+        if (primary && (style?.chimney ?? (hash(identity + 4) > 0.45)) && L > 3 && W > 2) {
+          const u = L * 0.45, v = W * 0.3;
+          const roofY = flat ? r : shed ? e + (r - e) * 0.65 : r - (r - e) * 0.3;
+          box(u - 0.28, u + 0.28, v - 0.26, v + 0.26, roofY - 0.4, roofY + 1.05, [0.27, 0.18, 0.14]);
+          box(u - 0.34, u + 0.34, v - 0.32, v + 0.32, roofY + 1.05, roofY + 1.16, foundation);
+        }
+      } else if (b.kind === 'barn') {
+        const wide = Math.min(4.5, b.width * 0.55), tall = Math.min(3.3, e - 0.2);
+        if (tall > 0.8) {
+          opening(true, 1, 0, 0.05, wide, tall, true);
+          panel(true, 1, -0.035, 0.035, 0.05, tall, trim, 0.067);
+          panel(true, 1, -wide * 0.65, wide * 0.65, tall + 0.2, tall + 0.28, foundation, 0.07);
+        }
+        for (const side of [-1, 1]) for (const u of [-L * 0.55, L * 0.55]) if (e > 2.2) opening(false, side, u, e * 0.5, 0.7, 0.65);
+      } else if (b.kind === 'large' && style) {
+        // Low apartments and village shops need a readable rhythm of doors and windows too.
+        const rows = Math.max(1, Math.min(3, Math.floor((e + 0.3) / 2.65)));
+        const floor = e / rows;
+        const columns = Math.max(1, Math.min(14, Math.floor(b.length / 3.6)));
+        for (const side of [-1, 1]) for (let row = 0; row < rows; row++) {
+          for (let c = 0; c < columns; c++) {
+            const u = -L + (c + 0.5) * b.length / columns;
+            if (row === 0 && c % 4 === 1) opening(false, side, u, 0.18, 0.95, Math.min(2.05, floor - 0.3), true);
+            else opening(false, side, u, row * floor + 0.8, 1.25, Math.min(1.2, floor - 1));
+          }
+        }
+        for (const side of [-1, 1]) for (const v of [-W * 0.5, W * 0.5]) {
+          if (e > 2) opening(true, side, v, 0.85, 1.2, Math.min(1.2, e - 1.1));
+        }
+      } else {
+        if (e > 1.3) opening(true, hash(identity + 1) > 0.5 ? 1 : -1, 0, 0.12, Math.min(b.width * 0.45, b.kind === 'large' ? 3 : 1.15), Math.min(2.2, e - 0.25), true);
+      }
+      if (primary && style?.silo && style.siloPosition) {
+        const site = b.site ?? b, angle = site.axisDeg * Math.PI / 180;
+        const S = (u: number, v: number, h: number) => new THREE.Vector3(
+          site.x - village[0] + Math.sin(angle) * u + Math.cos(angle) * v, base + h,
+          village[1] - site.y - Math.cos(angle) * u + Math.sin(angle) * v);
+        const { u, v, diameter, height } = style.siloPosition;
+        const radius = diameter / 2, cap = height - 2;
+        const concrete = rgb('#c3c5bf'), red = rgb('#a04438'), white = rgb('#e2e1d8');
+        const segments = 16;
+        for (let i = 0; i < segments; i++) {
+          const a0 = i * Math.PI * 2 / segments, a1 = (i + 1) * Math.PI * 2 / segments;
+          const ring = (a: number, radius: number, y: number) => S(u + Math.cos(a) * radius, v + Math.sin(a) * radius, y);
+          quad(ring(a0, radius, -1), ring(a1, radius, -1), ring(a1, radius, cap), ring(a0, radius, cap), concrete, 0.83 + 0.17 * Math.cos(a0));
+          const colour = i % 2 === 0 ? red : white;
+          // Three latitude bands form a rounded striped dome, 14 m total height.
+          for (let j = 0; j < 3; j++) {
+            const t0 = j * Math.PI / 6, t1 = (j + 1) * Math.PI / 6;
+            const p0 = ring(a0, radius * Math.cos(t0), cap + 2 * Math.sin(t0));
+            const p1 = ring(a1, radius * Math.cos(t0), cap + 2 * Math.sin(t0));
+            if (j === 2) tri(p0, p1, S(u, v, height), colour);
+            else quad(p0, p1, ring(a1, radius * Math.cos(t1), cap + 2 * Math.sin(t1)), ring(a0, radius * Math.cos(t1), cap + 2 * Math.sin(t1)), colour);
+          }
+        }
+        const corners = [S(u - radius - 1, v - radius - 1, 0), S(u + radius + 1, v + radius + 1, 0), S(u - radius - 1, v + radius + 1, 0), S(u + radius + 1, v - radius - 1, 0)];
+        this.clear.push([Math.min(...corners.map((p) => p.x)), Math.min(...corners.map((p) => p.z)), Math.max(...corners.map((p) => p.x)), Math.max(...corners.map((p) => p.z))]);
+      }
+      this.clear.push(...clearBoxes(b, village, 2.5));
+    }
+    this.triangles = pos.length / 9;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.computeVertexNormals();
+    this.mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    this.mesh.frustumCulled = false;
+  }
+}

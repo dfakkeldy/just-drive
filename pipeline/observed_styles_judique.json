@@ -1,0 +1,67 @@
+{
+  "about": "Derived palette counts from the owner\u2019s 12 November 2026 dash cam catalogue. One resolved game-building match per sample; houses include cottages and mobile homes, farm buildings include sheds and garages. Unknown and mixed colours are excluded. Only spelling aliases are normalized. A group with no known roof materials uses the pooled house and farm roof-material counts from this area. These are area distributions, not per-building paint matches. Existing step 30 detail rates remain estimates.",
+  "sampleCounts": {
+    "matched": 110,
+    "houses": 77,
+    "farmBuildings": 19
+  },
+  "houses": {
+    "wall": {
+      "blue": 2,
+      "blue-grey": 2,
+      "brown": 2,
+      "cream": 9,
+      "dark grey": 1,
+      "green": 1,
+      "grey": 5,
+      "grey-green": 1,
+      "light grey": 3,
+      "pale grey": 7,
+      "pale yellow": 1,
+      "red": 1,
+      "weathered grey": 1,
+      "white": 27
+    },
+    "roof": {
+      "brown": 7,
+      "dark grey": 23,
+      "green": 1,
+      "grey": 28,
+      "light grey": 1,
+      "tan": 1
+    },
+    "roofMaterialKnown": {
+      "asphalt shingle": 10,
+      "metal": 1
+    },
+    "trim": {
+      "white": 33
+    },
+    "entranceKnown": {
+      "deck": 10,
+      "front porch": 15,
+      "small steps": 7
+    }
+  },
+  "farmBuildings": {
+    "wall": {
+      "brown": 1,
+      "dark red": 1,
+      "grey": 2,
+      "pale grey": 1,
+      "red": 1,
+      "weathered grey": 3,
+      "white": 5
+    },
+    "roof": {
+      "black": 1,
+      "dark grey": 2,
+      "grey": 2
+    },
+    "roofMaterialKnown": {
+      "asphalt shingle": 2,
+      "metal": 1
+    }
+  },
+  "landmarks": []
+}

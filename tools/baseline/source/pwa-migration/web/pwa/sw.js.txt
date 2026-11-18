@@ -1,0 +1,171 @@
+/* Public host only. No dependencies, frame work, polling, or per-hit inventory scans. */
+const PREFIX = 'mmm-offline-', META = PREFIX + 'meta-v1', KEY = '/__mmm_offline_state';
+let state, loading, job, disabled = false, generation = 0;
+const full = response => response && response.status === 200 && response.type !== 'opaque' && !response.headers.has('Content-Range');
+const hex = bytes => Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2, '0')).join('');
+const digest = async bytes => hex(await crypto.subtle.digest('SHA-256', bytes));
+const shellName = s => PREFIX + 'shell-' + s.version.revision;
+const dataName = s => PREFIX + 'data-' + s.version.dataRevision;
+function prepare(s) { s.entries = new Map([...s.index.shell, ...s.index.files].map(f => [f.url, f])); return s; }
+async function stored() {
+  if (state) return state;
+  const r = await (await caches.open(META)).match(KEY);
+  if (r) state = prepare(await r.json());
+  return state;
+}
+async function checked(entry, signal) {
+  const r = await fetch(entry.url, { cache: 'no-store', signal });
+  if (!full(r)) throw Error('Download failed. Try again online.');
+  const bytes = await r.arrayBuffer();
+  if (bytes.byteLength !== entry.bytes || await digest(bytes) !== entry.hash) throw Error('The game changed. Close and open it to try again.');
+  // Store complete, decoded bytes. An HTTP encoding/length header must not describe compressed bytes here.
+  const headers = new Headers(r.headers); headers.delete('Content-Encoding'); headers.set('Content-Length', String(bytes.byteLength));
+  return new Response(bytes, { status: 200, headers });
+}
+async function kill() {
+  disabled = true; generation++; job?.controller.abort();
+  if (job) await job.done.catch(() => {});
+  await Promise.all((await caches.keys()).filter(n => n.startsWith(PREFIX)).map(n => caches.delete(n)));
+  state = undefined;
+  await self.registration.unregister();
+}
+async function latest() {
+  if (disabled) return null;
+  if (loading) return loading;
+  loading = (async () => {
+    const old = await stored();
+    try {
+      const r = await fetch('/version.json', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+      if (!full(r)) throw Error('version unavailable');
+      const v = await r.json();
+      if (v.disabled === true) { await kill(); return null; }
+      if (v.schema !== 1 || !/^[a-f0-9]{64}$/.test(v.revision) || !/^[a-f0-9]{64}$/.test(v.dataRevision) || v.index !== `/offline/files.${v.revision}.json`) throw Error('bad version');
+      if (old?.version.revision === v.revision) return old;
+      const ir = await fetch(v.index, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+      if (!full(ir)) throw Error('inventory unavailable');
+      const bytes = await ir.arrayBuffer();
+      if (await digest(bytes) !== v.revision) throw Error('bad inventory');
+      const index = JSON.parse(new TextDecoder().decode(bytes));
+      if (index.schema !== 1 || !index.shell.some(f => f.url === index.page)) throw Error('bad shell');
+      for (const f of [...index.shell, ...index.files]) if (!/^\/(offline|terrain|audio)\/[\w./-]+$/.test(f.url) && f.url !== '/manifest.webmanifest') throw Error('bad path');
+      const next = prepare({ version:v, index });
+      const cache = await caches.open(shellName(next));
+      for (const f of index.shell) {
+        if (!await cache.match(f.url)) await cache.put(f.url, await checked(f, AbortSignal.timeout(30000)));
+      }
+      // Commit only after the whole shell exists. A failed or interrupted update leaves the last shell usable.
+      await (await caches.open(META)).put(KEY, new Response(JSON.stringify({version:v,index}), {headers:{'Content-Type':'application/json'}}));
+      generation++; job?.controller.abort();
+      if (job) await job.done.catch(() => {});
+      state = next;
+      // Hashed scripts from live older pages still load from the server; keep the last complete shell as fallback.
+      const keep = [META,shellName(next),dataName(next),...(old ? [shellName(old)] : [])];
+      await Promise.all((await caches.keys()).filter(n=>n.startsWith(PREFIX) && !keep.includes(n)).map(n=>caches.delete(n)));
+      return next;
+    } catch { return old; } // Network, storage refusal, a partial deployment: play the last complete game.
+  })();
+  try { return await loading; } finally { loading = undefined; }
+}
+self.addEventListener('install', event => { event.waitUntil(self.skipWaiting()); });
+self.addEventListener('activate', event => { event.waitUntil(self.clients.claim()); });
+
+// Single RFC byte ranges, including suffix/open-ended ranges. Multiple ranges may legally receive a full 200.
+async function range(response, header) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header);
+  if (!match) return response;
+  const bytes = await response.arrayBuffer(), size = bytes.byteLength;
+  let start = match[1] ? Number(match[1]) : Math.max(0,size-Number(match[2]));
+  let end = match[1] ? (match[2] ? Math.min(Number(match[2]),size-1) : size-1) : size-1;
+  const headers = new Headers(response.headers); headers.set('Accept-Ranges','bytes');
+  if ((!match[1] && !Number(match[2])) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= size) {
+    headers.set('Content-Range',`bytes */${size}`); headers.set('Content-Length','0'); return new Response(null,{status:416,headers});
+  }
+  headers.set('Content-Range',`bytes ${start}-${end}/${size}`); headers.set('Content-Length',String(end-start+1));
+  return new Response(bytes.slice(start,end+1),{status:206,headers});
+}
+async function resource(request, path, event) {
+  const ticket = generation;
+  const s = await stored();
+  if (!s || disabled) return fetch(request);
+  const entry = s.entries.get(path);
+  if (!entry) {
+    // Old live tabs may still ask for their immutable script after another tab updates.
+    const old = path.startsWith('/offline/') ? await caches.match(path) : null;
+    return old || fetch(request);
+  }
+  const isData = path.startsWith('/terrain/') || path.startsWith('/audio/');
+  const cache = await caches.open(isData ? dataName(s) : shellName(s));
+  let r = await cache.match(path);
+  if (!r) {
+    // Always fetch the whole song, even if Safari asks for its first two bytes.
+    r = await checked(entry);
+    event.waitUntil((async () => { if (ticket === generation && !disabled) await cache.put(path, r.clone()); })().catch(() => {}));
+  }
+  const ifRange = request.headers.get('If-Range');
+  const rangeAllowed = !ifRange || ifRange === r.headers.get('ETag') || ifRange === r.headers.get('Last-Modified');
+  return rangeAllowed && request.headers.has('Range') ? range(r,request.headers.get('Range')) : r;
+}
+self.addEventListener('fetch', event => {
+  const r = event.request, url = new URL(r.url);
+  if (r.method !== 'GET' || url.origin !== self.location.origin || disabled) return;
+  if (r.mode === 'navigate' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    event.respondWith((async () => {
+      const s = await latest();
+      return s ? (await (await caches.open(shellName(s))).match(s.index.page)) : fetch(r,{cache:'no-store'});
+    })());
+  } else if (/^\/(terrain|audio|offline)\//.test(url.pathname) || url.pathname === '/manifest.webmanifest') {
+    event.respondWith(resource(r,url.pathname,event));
+  }
+});
+async function status(s) {
+  const keys = new Set((await (await caches.open(dataName(s))).keys()).map(r => new URL(r.url).pathname));
+  let bytes = 0, count = 0;
+  for (const f of s.index.files) if (keys.has(f.url)) { bytes += f.bytes; count++; }
+  return { bytes, count, total:s.index.files.reduce((n,f)=>n+f.bytes,0), files:s.index.files.length, done:count===s.index.files.length, running:!!job, revision:s.version.revision };
+}
+async function download(s, port) {
+  if (job) { port.postMessage({error:'A download is already running. Stop it in the other window first.'}); return; }
+  const controller = new AbortController(), token = generation;
+  const current = {controller,done:null}; job = current;
+  current.done = (async () => {
+    const cache = await caches.open(dataName(s));
+    const keys = new Set((await cache.keys()).map(r => new URL(r.url).pathname));
+    const missing = s.index.files.filter(f=>!keys.has(f.url));
+    let i=0, last=0, error;
+    let progress = await status(s); port.postMessage(progress);
+    const worker = async () => {
+      while (i < missing.length && !controller.signal.aborted) {
+        const f = missing[i++];
+        try {
+          const response = await checked(f,controller.signal);
+          if (token !== generation || controller.signal.aborted) break;
+          await cache.put(f.url,response); progress.bytes += f.bytes; progress.count++;
+          if (Date.now()-last > 200) { last=Date.now(); port.postMessage({...progress, running:true}); }
+        } catch (e) { if (!controller.signal.aborted) error = e.name === 'QuotaExceededError' ? 'Not enough room. Free some space, then resume.' : e.message; controller.abort(); }
+      }
+    };
+    await Promise.all(Array.from({length:4},worker));
+    if (job===current) job=undefined;
+    port.postMessage({...await status(s),running:false,...(error?{error}:{}),stopped:controller.signal.aborted}); port.close();
+  })();
+  return current.done;
+}
+self.addEventListener('message', event => {
+  const port = event.ports[0]; if (!port) return;
+  event.waitUntil((async () => {
+    const s = event.data.type === 'prepare' ? await latest() : await stored(); if (!s || disabled) throw Error('Offline play is not ready. Open the game online once.');
+    if (event.data.type === 'start') return download(s,port);
+    if (event.data.type === 'stop' || event.data.type === 'remove') {
+      generation++; job?.controller.abort(); if (job) await job.done;
+    }
+    if (event.data.type === 'remove') {
+      for (const name of (await caches.keys()).filter(n => n.startsWith(PREFIX+'data-'))) {
+        // Clear entries before dropping the container. Live Cache handles can otherwise retain its disk charge.
+        const cache = await caches.open(name), keys = await cache.keys();
+        for (let i=0; i<keys.length; i+=32) await Promise.all(keys.slice(i,i+32).map(key=>cache.delete(key)));
+        await caches.delete(name);
+      }
+    }
+    port.postMessage(await status(s)); port.close();
+  })().catch(e=>{ port.postMessage({error:e.message}); port.close(); }));
+});

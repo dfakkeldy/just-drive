@@ -1,0 +1,30 @@
+{
+  // Mabou Mail Madness: the public site. Static files (the game page, one script, the baked land, the songs) and,
+  // for "Drive with others", a small script (the door) with one Durable Object class (the rooms): server/src/.
+  //
+  // Publish from the repository's main checkout, which holds the built site in data/site (tools/build_site.sh):
+  //   wrangler deploy -c deploy/wrangler.jsonc
+  // The paths below are relative to this file. The old way (a copy of this file beside a copy of the site, in a
+  // folder of its own) no longer works: a deploy from a config without the room class is refused by Cloudflare.
+  //
+  // To close every room at once without a new build:   wrangler deploy -c deploy/wrangler.jsonc --var MP:off
+  // To take the rooms away for good:                   wrangler deploy -c deploy/wrangler.no-rooms.jsonc
+  "name": "mabou-mail-madness",
+  "main": "../server/src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // A request for a file is answered from the files and never runs the script (it costs nothing and has no limit).
+  // The exact root also runs the script to select the brand; all other real files win first.
+  "assets": { "directory": "../data/site", "binding": "ASSETS", "not_found_handling": "none", "run_worker_first": ["/mp/*", "/"] },
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
+  // The free plan allows only the SQLite kind of object. The rooms store nothing.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "vars": {
+    // Only the game's own page may join a room.
+    "ORIGINS": "https://mmm.fakkeldy.ca,http://mmm.fakkeldy.ca,https://justdrive.fakkeldy.ca,http://justdrive.fakkeldy.ca",
+    "BOUNDS": "60000"
+  },
+  // Custom domains only. No workers.dev copy and no preview links.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "mmm.fakkeldy.ca", "custom_domain": true }, { "pattern": "justdrive.fakkeldy.ca", "custom_domain": true }]
+}

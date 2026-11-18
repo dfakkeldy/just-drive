@@ -1,0 +1,17 @@
+{
+  // LOCAL TESTS ONLY: `wrangler dev` runs this on the developer's machine (tools/check-mp.sh).
+  // Do NOT run `wrangler deploy` here. The live site is deploy/wrangler.jsonc (files only), and it changes only
+  // after the owner's explicit yes. This file has no route and no address on purpose.
+  "name": "mmm-multiplayer-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
+  // The free plan allows only the SQLite kind of object. The room stores nothing.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "vars": {
+    "ORIGINS": "http://localhost:*,http://127.0.0.1:*",
+    "BOUNDS": "60000"
+  }
+}

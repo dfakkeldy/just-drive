@@ -1,0 +1,61 @@
+# Clean-clone checks: every CPU row of tools/checks.tsv that can run without data/ and without the Mac.
+# Rows that need data/baked or are mac-only in tools/checks-hosts.tsv SKIP here and still run locally
+# (tools/check-all.sh on the Mac, tools/remote-check.sh on Linux). Read-only: no secrets, no writes.
+#
+# Hosted minutes are billed, so a draft PR runs nothing: its pushes report this job as
+# skipped. Marking the PR ready (gh pr ready) starts the full run on the merge ref. land_pr.py reads a
+# head whose only check is skipped as red, so wait until this job shows pending before running it.
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Clean-clone checks
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    # A full run takes 10-12 minutes; a hang should not bill 45.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Branch-comparison checks use the merge base with main. Historical controls are files.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.1
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.15'
+
+      # The Mac's versions of the Python packages the CPU checks import (GDAL rows are mac-only).
+      - name: Install Python packages
+        run: python -m pip install --disable-pip-version-check numpy==2.5.4 pillow==13.0.0 shapely==2.2.0
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+
+      # The multiplayer row runs the room server locally (wrangler dev --local). No login, no deploy.
+      - name: Install Wrangler
+        run: npm install --global --no-audit --no-fund wrangler@4.162.0
+
+      # --full adds the four stand-in start-up proofs (browser-runtime and friends): no land, no Mac, about 4 minutes.
+      - name: Checks
+        run: tools/check-all.sh --ci --full

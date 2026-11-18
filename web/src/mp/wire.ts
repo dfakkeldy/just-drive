@@ -1,0 +1,178 @@
+import { isPhraseId, type PhraseId } from './social';
+// The multiplayer wire format, shared by the game (web/src/mp) and the room server (server/src).
+// No DOM, no three.js: this file must load in a browser, in a Cloudflare Worker and in node.
+//
+// A car's state travels as 22 bytes (the "body"), little-endian:
+//   0  u8   flags           (FLAG.*)
+//   1  i8   steer           front wheel angle, -127..127 = -0.6..0.6 rad
+//   2  u16  heading         0..65535 = 0..2 pi; 0 = north, clockwise
+//   4  u32  t               the sender's own clock, in ms since its page loaded; it only ever grows
+//                           (it would wrap after 49 days on one page load; such a page must reload)
+//   8  i32  x               world east, cm
+//   12 i32  z               world south, cm
+//   16 i16  vx              cm/s
+//   18 i16  vz              cm/s
+//   20 i16  air             height of the wheels above the ground, cm (players may stretch the hills differently,
+//                           so a height above sea would mean nothing to the receiver)
+// Game to room:  [u8 TYPE.state][u8 VERSION][body]                      = 24 bytes
+// Room to game:  [u8 TYPE.snapshot][u8 count] then count x [u16 id][body] = 2 + 24 n bytes
+// Rare events (hello, join, leave) are small JSON texts: see ServerText.
+
+export const VERSION = 1;
+export const TYPE = { state: 1, snapshot: 2 } as const;
+export const BODY = 22, STATE_BYTES = 2 + BODY, ENTRY_BYTES = 2 + BODY;
+export const FLAG = { air: 1, brake: 2, horn: 4, parked: 8, teleport: 16, window: 32 } as const;
+
+/** The most a room accepts. A car in the game tops out near 45 m/s; a jump is a few metres high. */
+export const LIMIT = { speed: 100, air: 200, steer: 0.6 } as const;
+/** Rooms: the most players in one, and how often a moving car reports. */
+export const ROOM_CAP = 24, SEND_HZ = 5;
+/** A game that hears "ping" answers nothing; the room answers "pong" without waking (see the server). */
+export const PING = 'ping', PONG = 'pong';
+export const CLOSE = { inactive: 4006, replaced: 4005, version: 4000, full: 4001, rate: 4002, bad: 4003 } as const;
+
+export interface CarState {
+  flags: number; steer: number; heading: number; t: number;
+  x: number; z: number; vx: number; vz: number; air: number;
+}
+export type RideKind = 'car' | 'truck' | 'sxs' | 'bike';
+export interface Ride { kind: RideKind; trailer: boolean }
+/** Missing/invalid metadata is the legacy generic car. Never forward arbitrary strings. */
+export function readRide(value: unknown): Ride | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const r = value as Record<string, unknown>;
+  if (!['car', 'truck', 'sxs', 'bike'].includes(r.kind as string) || typeof r.trailer !== 'boolean') return undefined;
+  return { kind: r.kind as RideKind, trailer: r.kind === 'truck' && r.trailer };
+}
+export function parseRideChange(text: string): Ride | undefined {
+  if (text.length > 128) return undefined;
+  try { const m = JSON.parse(text); return m?.t === 'ride' ? readRide(m.ride) : undefined; } catch { return undefined; }
+}
+export interface PeerInfo { id: number; name: string; hue: number; ride?: Ride }
+/** Only hello.rides === true permits client ride announcements, hello.chat === true quick chat, and hello.heartbeat === true liveness texts; an absent flag denotes an older server. */
+export type ServerText =
+  | { t: 'hello'; v: number; id: number; name: string; hue: number; ride?: Ride; room: string; cap: number; rides?: boolean; chat?: boolean; heartbeat?: boolean; peers: PeerInfo[] }
+  | { t: 'join'; id: number; name: string; hue: number; ride?: Ride }
+  | { t: 'ride'; id: number; ride?: Ride }
+  | { t: 'leave'; id: number }
+  | { t: 'chat'; id: number; phrase: PhraseId }
+  | { t: 'full' };
+
+const TAU = Math.PI * 2;
+const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
+
+export function writeBody(view: DataView, at: number, s: CarState): void {
+  view.setUint8(at, s.flags & 255);
+  view.setInt8(at + 1, Math.round(clamp(s.steer / LIMIT.steer, -1, 1) * 127));
+  view.setUint16(at + 2, Math.round((((s.heading % TAU) + TAU) % TAU) / TAU * 65536) & 65535, true);
+  view.setUint32(at + 4, s.t >>> 0, true);
+  view.setInt32(at + 8, Math.round(s.x * 100), true);
+  view.setInt32(at + 12, Math.round(s.z * 100), true);
+  view.setInt16(at + 16, Math.round(clamp(s.vx * 100, -32767, 32767)), true);
+  view.setInt16(at + 18, Math.round(clamp(s.vz * 100, -32767, 32767)), true);
+  view.setInt16(at + 20, Math.round(clamp(s.air * 100, 0, 32767)), true);
+}
+
+export function readBody(view: DataView, at: number): CarState {
+  return {
+    flags: view.getUint8(at),
+    steer: view.getInt8(at + 1) / 127 * LIMIT.steer,
+    heading: view.getUint16(at + 2, true) / 65536 * TAU,
+    t: view.getUint32(at + 4, true),
+    x: view.getInt32(at + 8, true) / 100,
+    z: view.getInt32(at + 12, true) / 100,
+    vx: view.getInt16(at + 16, true) / 100,
+    vz: view.getInt16(at + 18, true) / 100,
+    air: view.getInt16(at + 20, true) / 100,
+  };
+}
+
+export function encodeState(s: CarState): ArrayBuffer {
+  const buf = new ArrayBuffer(STATE_BYTES), view = new DataView(buf);
+  view.setUint8(0, TYPE.state); view.setUint8(1, VERSION);
+  writeBody(view, 2, s);
+  return buf;
+}
+
+/** Half the side of the square a room accepts positions in, in metres from the area's origin. */
+export type Bounds = number;
+
+/**
+ * The room's check of a state message. It returns the 22 body bytes, or null for anything a real game would not
+ * send: a wrong size, type or version, a place off the map, an impossible speed or height.
+ */
+export function checkState(data: ArrayBuffer, bounds: Bounds): Uint8Array | null {
+  if (data.byteLength !== STATE_BYTES) return null;
+  const view = new DataView(data);
+  if (view.getUint8(0) !== TYPE.state || view.getUint8(1) !== VERSION) return null;
+  const s = readBody(view, 2);
+  if (Math.abs(s.x) > bounds || Math.abs(s.z) > bounds) return null;
+  if (Math.hypot(s.vx, s.vz) > LIMIT.speed) return null;
+  if (s.air < 0 || s.air > LIMIT.air) return null;
+  if (view.getUint8(2) & ~63) return null;   // flag bits this version does not know
+  return new Uint8Array(data, 2, BODY);
+}
+
+export function encodeSnapshot(entries: { id: number; body: Uint8Array }[]): ArrayBuffer {
+  const buf = new ArrayBuffer(2 + entries.length * ENTRY_BYTES), view = new DataView(buf), bytes = new Uint8Array(buf);
+  view.setUint8(0, TYPE.snapshot); view.setUint8(1, entries.length);
+  entries.forEach((e, i) => {
+    const at = 2 + i * ENTRY_BYTES;
+    view.setUint16(at, e.id, true);
+    bytes.set(e.body, at + 2);
+  });
+  return buf;
+}
+
+/** The game's reading of a snapshot. A malformed one gives an empty list: the room is ours, but a game never trusts the wire. */
+export function decodeSnapshot(data: ArrayBuffer): { id: number; state: CarState }[] {
+  if (data.byteLength < 2) return [];
+  const view = new DataView(data);
+  if (view.getUint8(0) !== TYPE.snapshot) return [];
+  const count = view.getUint8(1);
+  if (data.byteLength !== 2 + count * ENTRY_BYTES) return [];
+  const out: { id: number; state: CarState }[] = [];
+  for (let i = 0; i < count; i++) {
+    const at = 2 + i * ENTRY_BYTES;
+    out.push({ id: view.getUint16(at, true), state: readBody(view, at + 2) });
+  }
+  return out;
+}
+
+export function parseServerText(text: string): ServerText | null {
+  if (text.length > 8192) return null;
+  let m: unknown;
+  try { m = JSON.parse(text); } catch { return null; }
+  if (typeof m !== 'object' || m === null) return null;
+  const o = m as Record<string, unknown>;
+  const peer = (p: unknown): p is PeerInfo => typeof p === 'object' && p !== null
+    && Number.isInteger((p as PeerInfo).id) && typeof (p as PeerInfo).name === 'string' && (p as PeerInfo).name.length <= 40
+    && Number.isInteger((p as PeerInfo).hue);
+  if (o.t === 'hello' && peer(o) && typeof o.v === 'number' && typeof o.room === 'string' && typeof o.cap === 'number'
+    && Array.isArray(o.peers) && o.peers.every(peer)) return { ...o, rides: o.rides === true, chat: o.chat === true, heartbeat: o.heartbeat === true, ride: readRide(o.ride),
+      peers: o.peers.map(p => ({ ...p, ride: readRide(p.ride) })) } as unknown as ServerText;
+  if (o.t === 'join' && peer(o)) return { ...o, ride: readRide(o.ride) } as unknown as ServerText;
+  if (o.t === 'ride' && Number.isInteger(o.id)) {
+    const ride = readRide(o.ride);
+    // An unknown ride also resets a previously known model to the generic fallback.
+    return { t: 'ride', id: o.id, ride } as unknown as ServerText;
+  }
+  if (o.t === 'leave' && Number.isInteger(o.id)) return o as unknown as ServerText;
+  if (o.t === 'chat' && Number.isInteger(o.id) && isPhraseId(o.phrase)) return { t: 'chat', id: Number(o.id), phrase: o.phrase };
+  if (o.t === 'full') return { t: 'full' };
+  return null;
+}
+
+/** What the drawing code gets for each other car, once the network code has smoothed it. */
+export interface PeerView {
+  id: number; name: string; hue: number; ride?: Ride;
+  x: number; z: number; heading: number;
+  /** Forward speed in m/s (negative in reverse), for wheel spin and body lean. */
+  speed: number;
+  steer: number; air: number; flags: number;
+  /** 1 = fresh; falls to 0 while a car that should be moving has not been heard from. */
+  alpha: number;
+}
+
+// Application liveness wakes the room; auto-response ping is transport-only.
+export const HEARTBEAT = 'heartbeat', PEER_TIMEOUT_MS = 60000;

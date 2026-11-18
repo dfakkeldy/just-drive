@@ -1,0 +1,320 @@
+{
+  "version": 1,
+  "epsg": 2961,
+  "features": [
+    {
+      "id": "mabou-main-lot-1",
+      "enabled": true,
+      "area": "mabou",
+      "kind": "lot",
+      "surface": "paved",
+      "source": "dash cam 12/13/16 Nov 2026 (Highway 19 through Mabou village), baked roads/footprints; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "confidence": "medium; outline medium-low",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              624852.8,
+              5103554.6
+            ],
+            [
+              624912.0,
+              5103574.5
+            ],
+            [
+              624922.0,
+              5103582.0
+            ],
+            [
+              624935.18,
+              5103591.23
+            ],
+            [
+              624914.9,
+              5103607.08
+            ],
+            [
+              624924.25,
+              5103619.04
+            ],
+            [
+              624920.0,
+              5103630.0
+            ],
+            [
+              624894.0,
+              5103624.0
+            ],
+            [
+              624896.17,
+              5103613.84
+            ],
+            [
+              624900.56,
+              5103601.76
+            ],
+            [
+              624894.58,
+              5103599.58
+            ],
+            [
+              624897.0,
+              5103592.95
+            ],
+            [
+              624867.55,
+              5103582.23
+            ],
+            [
+              624865.14,
+              5103588.87
+            ],
+            [
+              624857.07,
+              5103585.93
+            ],
+            [
+              624852.0,
+              5103584.0
+            ],
+            [
+              624852.8,
+              5103554.6
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "mabou-main-lot-2",
+      "enabled": true,
+      "area": "mabou",
+      "kind": "lot",
+      "surface": "paved",
+      "source": "dash cam 12/13/16 Nov 2026 (Highway 19 through Mabou village), baked roads/footprints; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "confidence": "medium; outline medium",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              624766.1,
+              5103520.9
+            ],
+            [
+              624810.1,
+              5103537.7
+            ],
+            [
+              624806.91,
+              5103543.52
+            ],
+            [
+              624791.27,
+              5103539.33
+            ],
+            [
+              624772.0,
+              5103534.0
+            ],
+            [
+              624766.1,
+              5103520.9
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "mabou-main-lot-3",
+      "enabled": true,
+      "area": "mabou",
+      "kind": "lot",
+      "surface": "paved",
+      "source": "dash cam 12/13/16 Nov 2026 (Highway 19 through Mabou village), baked roads/footprints; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "confidence": "medium; outline low",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              624437.5,
+              5103362.0
+            ],
+            [
+              624446.0,
+              5103367.0
+            ],
+            [
+              624448.69,
+              5103384.12
+            ],
+            [
+              624442.38,
+              5103396.49
+            ],
+            [
+              624451.64,
+              5103401.2
+            ],
+            [
+              624450.0,
+              5103410.0
+            ],
+            [
+              624432.0,
+              5103402.0
+            ],
+            [
+              624434.1,
+              5103386.0
+            ],
+            [
+              624441.5,
+              5103373.0
+            ],
+            [
+              624437.5,
+              5103362.0
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "mabou-main-lot-4",
+      "enabled": true,
+      "area": "mabou",
+      "kind": "lot",
+      "surface": "paved",
+      "source": "dash cam 12/13/16 Nov 2026 (Highway 19 through Mabou village), baked roads/footprints; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "confidence": "medium; outline low",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              624428.3,
+              5103341.4
+            ],
+            [
+              624463.3,
+              5103363.7
+            ],
+            [
+              624458.22,
+              5103348.76
+            ],
+            [
+              624440.84,
+              5103336.14
+            ],
+            [
+              624448.0,
+              5103325.0
+            ],
+            [
+              624430.0,
+              5103318.0
+            ],
+            [
+              624422.0,
+              5103335.0
+            ],
+            [
+              624428.3,
+              5103341.4
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "mabou-main-lot-5",
+      "enabled": false,
+      "area": "mabou",
+      "kind": "lot",
+      "surface": "paved",
+      "source": "dash cam 12/13/16 Nov 2026 (Highway 19 through Mabou village), baked roads/footprints; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "confidence": "low: position of the shop against game building 29 not checked",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              624234.0,
+              5103205.0
+            ],
+            [
+              624248.0,
+              5103217.5
+            ],
+            [
+              624255.5,
+              5103222.8
+            ],
+            [
+              624240.8,
+              5103237.5
+            ],
+            [
+              624226.0,
+              5103224.0
+            ],
+            [
+              624234.0,
+              5103205.0
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "id": "mabou-main-lot-6",
+      "enabled": false,
+      "area": "mabou",
+      "kind": "lot",
+      "surface": "gravel",
+      "source": "dash cam 12/13/16 Nov 2026 (Highway 19 through Mabou village), baked roads/footprints; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "confidence": "low",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              624336.0,
+              5103296.0
+            ],
+            [
+              624348.8,
+              5103306.0
+            ],
+            [
+              624340.7,
+              5103319.5
+            ],
+            [
+              624330.0,
+              5103320.0
+            ],
+            [
+              624327.0,
+              5103303.0
+            ],
+            [
+              624336.0,
+              5103296.0
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

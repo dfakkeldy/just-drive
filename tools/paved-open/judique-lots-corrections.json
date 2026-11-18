@@ -1,0 +1,301 @@
+{
+  "version": 1,
+  "epsg": 2961,
+  "features": [
+    {
+      "id": "judique-brief-lot-2",
+      "enabled": true,
+      "area": "judique",
+      "kind": "lot",
+      "surface": "gravel",
+      "source": "owner note 17 Nov 2026 (the project brief: store lot gravel, the others asphalt); shapes from baked roads/footprints, the village model and open HRDEM surface; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "confidence": "medium",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              617095,
+              5081455
+            ],
+            [
+              617125,
+              5081455
+            ],
+            [
+              617125,
+              5081500
+            ],
+            [
+              617089,
+              5081500
+            ],
+            [
+              617089,
+              5081482
+            ],
+            [
+              617095,
+              5081482
+            ],
+            [
+              617095,
+              5081455
+            ]
+          ]
+        ]
+      },
+      "meetsRoad": true
+    },
+    {
+      "id": "judique-brief-lot-4",
+      "area": "judique",
+      "kind": "lot",
+      "surface": "paved",
+      "source": "owner note 17 Nov 2026 (the project brief: store lot gravel, the others asphalt); shapes from baked roads/footprints, the village model and open HRDEM surface; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "confidence": "low: asphalt or packed gravel",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              617060,
+              5081510
+            ],
+            [
+              617110,
+              5081510
+            ],
+            [
+              617110,
+              5081525
+            ],
+            [
+              617060,
+              5081525
+            ],
+            [
+              617060,
+              5081510
+            ]
+          ]
+        ]
+      },
+      "meetsRoad": true
+    },
+    {
+      "id": "judique-brief-lot-5",
+      "area": "judique",
+      "kind": "lot",
+      "surface": "paved",
+      "source": "owner note 17 Nov 2026 (the project brief: store lot gravel, the others asphalt); shapes from baked roads/footprints, the village model and open HRDEM surface; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              617091.9,
+              5081640.8
+            ],
+            [
+              617108.3,
+              5081642.1
+            ],
+            [
+              617115.0,
+              5081646.1
+            ],
+            [
+              617131.8,
+              5081652.0
+            ],
+            [
+              617112.0,
+              5081652.0
+            ],
+            [
+              617112.0,
+              5081673.0
+            ],
+            [
+              617147.0,
+              5081673.0
+            ],
+            [
+              617147.0,
+              5081653.0
+            ],
+            [
+              617150.1,
+              5081651.5
+            ],
+            [
+              617133.0,
+              5081651.5
+            ],
+            [
+              617133.0,
+              5081647.1
+            ],
+            [
+              617120.5,
+              5081642.9
+            ],
+            [
+              617115.4,
+              5081640.6
+            ],
+            [
+              617125.2,
+              5081637.9
+            ],
+            [
+              617133.0,
+              5081636.2
+            ],
+            [
+              617133.0,
+              5081631.1
+            ],
+            [
+              617124.0,
+              5081633.0
+            ],
+            [
+              617108.9,
+              5081637.1
+            ],
+            [
+              617092.3,
+              5081635.8
+            ],
+            [
+              617091.9,
+              5081640.8
+            ]
+          ]
+        ]
+      },
+      "meetsRoad": true,
+      "coversTracks": true
+    },
+    {
+      "id": "judique-brief-stalls-1",
+      "area": "judique",
+      "kind": "stalls",
+      "surface": "paved",
+      "depth": 5.5,
+      "spacing": 2.75,
+      "source": "owner note 17 Nov 2026 (the project brief: store lot gravel, the others asphalt); shapes from baked roads/footprints, the village model and open HRDEM surface; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            617061.5,
+            5081622
+          ],
+          [
+            617083.5,
+            5081622
+          ]
+        ]
+      }
+    },
+    {
+      "id": "judique-brief-stalls-2",
+      "area": "judique",
+      "kind": "stalls",
+      "surface": "paved",
+      "depth": 5.5,
+      "spacing": 2.75,
+      "source": "owner note 17 Nov 2026 (the project brief: store lot gravel, the others asphalt); shapes from baked roads/footprints, the village model and open HRDEM surface; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            617053.5,
+            5081592.5
+          ],
+          [
+            617086.5,
+            5081592.5
+          ]
+        ]
+      }
+    },
+    {
+      "id": "judique-brief-stalls-3",
+      "area": "judique",
+      "kind": "stalls",
+      "surface": "paved",
+      "depth": 5.5,
+      "spacing": 2.75,
+      "source": "owner note 17 Nov 2026 (the project brief: store lot gravel, the others asphalt); shapes from baked roads/footprints, the village model and open HRDEM surface; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            617086.5,
+            5081603.5
+          ],
+          [
+            617053.5,
+            5081603.5
+          ]
+        ]
+      }
+    },
+    {
+      "id": "judique-brief-stalls-4",
+      "area": "judique",
+      "kind": "stalls",
+      "surface": "paved",
+      "depth": 5.5,
+      "spacing": 2.75,
+      "source": "owner note 17 Nov 2026 (the project brief: store lot gravel, the others asphalt); shapes from baked roads/footprints, the village model and open HRDEM surface; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            617097,
+            5081567
+          ],
+          [
+            617053,
+            5081567
+          ]
+        ]
+      }
+    },
+    {
+      "id": "judique-brief-stalls-5",
+      "area": "judique",
+      "kind": "stalls",
+      "surface": "paved",
+      "depth": 5.5,
+      "spacing": 2.75,
+      "source": "owner note 17 Nov 2026 (the project brief: store lot gravel, the others asphalt); shapes from baked roads/footprints, the village model and open HRDEM surface; not traced from aerial imagery",
+      "date": "2026-11-17",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            617104.5,
+            5081518
+          ],
+          [
+            617066,
+            5081518
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,218 @@
+{
+ "version": 1,
+ "files": [
+  {
+   "file": "areas/cansocauseway/paved/index.json",
+   "before": "857b9d8235c0d3a71d25cce31d0cb6d356576b76e67dbcbf7674a341f3c2b602",
+   "sha256": "4fa425c6cb61a198fe6d6218fb1c06f60339fd541049a4a41b798983d3a9d39f",
+   "bytes": 1333
+  },
+  {
+   "file": "areas/judique/paved/index.json",
+   "before": "dceb180ac787858b280b55b9a2a68efa653d13c77cc0d9b449091b0710e3be5b",
+   "sha256": "5493a636da99197132e03c11e76b6741bfcf45e9d2af1d69b09e4d7621210c6b",
+   "bytes": 1325
+  },
+  {
+   "file": "areas/pointtupper/buildings.json",
+   "before": "375c1b9c6b6a6973214f331fb5a75b4e810ef08f497f438d4b2e6bc16f3b6e73",
+   "sha256": "20f8a48216e7b47fc34723339f38807c5b23cdc4043656078379786bb83cf55f",
+   "bytes": 949451
+  },
+  {
+   "file": "areas/pointtupper/paved/130_196.r8",
+   "before": "a6b93a0b0b620b016cc411821f0070535def9e868570e4adc72ba8f1978b81a4",
+   "sha256": "9bbd7efa6d85e54267cfd7ba8c118ad4c0a31dcb13eb7a5077a6d345e7b4f9fe",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/130_197.r8",
+   "before": "1e4310a2cfad18089b66018037ba414835b1254bc77e6d57ab40d259a92827fa",
+   "sha256": "833f6f8b66019bcc831ce46ce8b3b16358e7bd50d68bb21af71b87b9f7bf386f",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/131_196.r8",
+   "before": "cd703763af6b4bd573b27546e8e4accac1ff91182544dfc88297aed0901c99ed",
+   "sha256": "6a04c77a1f4cb5069ec4f4dfd0b18739df8ac0acaa85b100c24493432d0fbc9d",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/131_197.r8",
+   "before": "770f4bb5e9c0efeac5ff44522e74f96003fac757ba01177fe30dd2bea901e3b8",
+   "sha256": "f9b4dfee52e55cf5e4cc225332f4d964efe527b4fafcb579570d75ea23e37e44",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/132_203.r8",
+   "before": "238e2d6a44b9ab61ea0f8a7b9e0117f519078ef16dae393854a89cb0ac71632e",
+   "sha256": "034e31867b502184265b5c8d8ae36e7d8a3f6da187c960d4e462cdf7ceeba869",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/140_198.r8",
+   "before": "6416aa9ffe10e045a906b16d48e6c38101e575f07e79163212a441b53cc77b73",
+   "sha256": "220e02c9affe46601545945c116835b4f0bb4c048ecfaf345c8804784ebd65be",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/140_202.r8",
+   "before": "05051077fb72faa1efcd4ef63608cb1017c697c5ce43cd28809d93deec44c07c",
+   "sha256": "0ee68e92617232ccad96b70dfd053fc9870bf8f5e053143a31d17bfc5a2f4977",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/141_198.r8",
+   "before": "28c78bd74082332cc0a58c404e5c848b6341e2a317c2885c255a5507fe98aa81",
+   "sha256": "b649419f07d72963c02d5419b691309957fb3a86bef3eb1a8af9346c52995f86",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/143_197.r8",
+   "before": "73859c0c62534635dc72f17fb554a02ff9d61e17ae87457202b86efb7726fbb9",
+   "sha256": "96834e650b939b21c4b6f03805f285565b1fec7c1144a8c05bbf49d51a3f1502",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/143_199.r8",
+   "before": "c4ea44709dbdfe41501df2f2f8962fd471cf7a93d70e8499c7a07af3033b9bd2",
+   "sha256": "ae748f8f7fbaaa3945778f8159bf7885e553c434faa94aff79d9ff3b88f47a3e",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/144_197.r8",
+   "before": "bd4f50f7080c5d353434a02b6fc416f25e2dc264171d87603ad367fb1f316869",
+   "sha256": "e26785dde89f6a073f716b0bf9e9cf2f7a0039dfacfce21db5da4372183a46ac",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/144_198.r8",
+   "before": "2e2a32908bf94e7b623f23eb46cb64baa9ca4a269bd50d3f6bd9c034009fab3a",
+   "sha256": "df9882527a95f954d64e6fc53c74ae840a48ad925f872d6cd967e2c3fa547f82",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/145_198.r8",
+   "before": "0cbafb93f7804d6afd38220c2fec3f972e94482246fc495fdaf8bd64387e6dfb",
+   "sha256": "9bdce1b0ba51836135679a8043b743e48ccc28c03f2978d08df9896162436db4",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/146_200.r8",
+   "before": "07ac36d7b02f0020ebc4b30ba641d336a2b8baa290b6f23d88a1285d392a7cef",
+   "sha256": "c86f69e88f62dc1633bc1643fa171f3465e99ac587fc206434ec81a9eda2306f",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/147_199.r8",
+   "before": "7738230d5feca8c2583dd1f9abe5e49890694ecfcbe2a3defa302e8cd8907909",
+   "sha256": "b23096d38f837ec345c44a54bcfb158f9246c5d31d5a7532dc3fa57b7663907d",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/148_199.r8",
+   "before": "10b028f3135d28e72145d3d198ec71ecb80fb28971120c1914246cd7083884b6",
+   "sha256": "396aebe71c6258e3ae3ee91fb0d9a25f26823398d8a6644dc20e7ad9c3bc79a9",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/149_196.r8",
+   "before": "09f42e411f3545b5633b4ac386e56c2f41587aa58e476bc57048a0dcbb2ee0b4",
+   "sha256": "088073efca2c9a8b343259230f01d7d6322dc6f69fd82cb259383a11bef02b74",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/149_197.r8",
+   "before": "579776835c5a555e3864863a5673303ffe643e0f5ff978d8bb0273624044019c",
+   "sha256": "e185d4d4110e83c6ae90e49e7e5e64976dbd01485f6a119f694782ae28e7ba50",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/150_196.r8",
+   "before": "71a0e74b3c38f2da64f5d115d09762fdfce159f74f52bc94acfba01b54634f58",
+   "sha256": "04413ac0872340da15f25d65b30405724d345ae80ab03ec41316ca61ef64591e",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/150_197.r8",
+   "before": "5da5f4b36fd558c0afedd301ec0fbcf844fe2599f620722ae8c16804d747db0e",
+   "sha256": "8a713e728694481480a562aa788a68ad9f1249e1f789787ac9a8865f01f251bd",
+   "bytes": 16384
+  },
+  {
+   "file": "areas/pointtupper/paved/index.json",
+   "before": "c0cbe34d08230baad5aa022f564d0baf9b3befbf5ca3773051d88dd54c3dbfdb",
+   "sha256": "650cf27182702a93b4e2f8e53a64950875a198913152755b76016d968cd8776a",
+   "bytes": 2862
+  },
+  {
+   "file": "areas/pointtupper/props.json",
+   "before": "1230c54741c635afc1309677cc6167cd2a1d6fa6257079d6042806e25f855da5",
+   "sha256": "2e16f95e6f213b867c80a720d0d7b5e1753bf19fc9d590f0182d505d9ff58492",
+   "bytes": 618834
+  },
+  {
+   "file": "areas/porthood/paved/index.json",
+   "before": "ecd07d88e3eff1a7a925c8e32346866d538970453f5df7557aa8ae956ea4ad05",
+   "sha256": "96fe776bbcc3a8295e0384ec7b4d9cee541d6243fc3f8f6ec0e06673efad2abb",
+   "bytes": 1408
+  },
+  {
+   "file": "areas/westbay/paved/index.json",
+   "before": "e0b2712fbd1cc955f5fcb51cbb906da8aaffc4f6e499692064aab47721ab8970",
+   "sha256": "15469fa99d7096d4c80edec397b2e8fd8e57bc6c36be5759f730dac9ced2e5b9",
+   "bytes": 1436
+  },
+  {
+   "file": "terrain/paved/index.json",
+   "before": "f1e5e62b11664e784757e115d70f1ae3aab6127c56c24eba354731a42845a8a2",
+   "sha256": "b4a604b52e33e9b88d3a4345f546896fe7e97217a39363e5f1f15ce54544fb10",
+   "bytes": 1485
+  }
+ ],
+ "manifests": [
+  {
+   "folder": "areas/pointtupper",
+   "before": {
+    "buildings": {
+     "file": "buildings.json",
+     "count": 2576
+    },
+    "props": {
+     "file": "props.json",
+     "mailboxes": 1361,
+     "poles": 2725,
+     "serviceDrops": 1526
+    },
+    "paved": {
+     "file": "paved/index.json",
+     "tiles": 117,
+     "source": "nstdb-designated-open-v1"
+    }
+   },
+   "after": {
+    "buildings": {
+     "file": "buildings.json",
+     "count": 2753
+    },
+    "props": {
+     "file": "props.json",
+     "mailboxes": 1361,
+     "poles": 2725,
+     "serviceDrops": 1544
+    },
+    "paved": {
+     "file": "paved/index.json",
+     "tiles": 117,
+     "source": "nstdb-designated-open-v1"
+    }
+   }
+  }
+ ],
+ "mirror": {
+  "file": "data/raw/paved-open/corrections.json",
+  "before": "61e396ec730303e6f72d5b078e9898793f7a5e6f0f2ec114d155f0628a0a1215",
+  "sha256": "0811d34927a137c3248214e68e961a1315a1b3098530a7daec876983a5d32cc9"
+ },
+ "pavedReceiptSha256": "10076c1968d117dd2d20447780481be0a24c8241f82e9042ee3bc833010d3027"
+}

@@ -1,0 +1,7 @@
+<!doctype html><meta charset="utf-8"><title>settled</title>
+<h1>checkout-alpha</h1>
+<script>
+const mode = new URL(location).searchParams.get('mode');
+if (mode === 'stall') document.title = 'loading forever';
+if (mode === 'throw') throw Error('g4 fixture page exception');
+</script>

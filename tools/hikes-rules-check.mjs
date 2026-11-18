@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { hikesFor, playableBox, clipLine, lineLength, HIGHLANDS_LINES } from '../web/src/hikes';
+import { placesFor } from '../web/src/places';
+import { Roads } from '../web/src/roads';
+const root = process.env.MMM_ROOT ?? process.cwd();
+const m = JSON.parse(readFileSync(`${root}/web/public/terrain/manifest.json`));
+const data = JSON.parse(readFileSync(`${root}/web/public/terrain/${m.roads.file}`));
+const roads = new Roads(data, m.village, {}), box = playableBox(m), hikes = hikesFor('mabou', roads.roads, m.village, box), places = placesFor(m.village);
+const check = (name, fn) => { fn(); console.log('PASS ' + name); };
+check('every hike has an existing trailhead', () => { assert.equal(hikes.length, 3); assert.equal(new Set(hikes.map(h => h.id)).size, 3); assert.ok(hikes.every(h => places.some(p => p.id === h.trailhead))); });
+check('all hike line points stay inside playable box', () => { assert.deepEqual(box, [616196, 5095260, 632340, 5111404]); assert.ok(hikes.flatMap(h => h.line ?? []).flatMap(l => l.pts).every(([e,n]) => e >= box[0] && e <= box[2] && n >= box[1] && n <= box[3])); });
+check('clipping retains crossings without joining gaps', () => { assert.deepEqual(clipLine([[-2,5],[12,5]], [0,0,10,10]), [[[0,5],[10,5]]]); assert.deepEqual(clipLine([[-2,11],[12,11]], [0,0,10,10]), []); assert.equal(clipLine([[5,5],[15,5],[15,6],[5,6]], [0,0,10,10]).length, 2); });
+check('rail line comes only from named kind-5 roads and exceeds 10 km', () => {
+  const rail = hikes.find(h => h.id === 'rail-trail').line;
+  assert.ok(lineLength(rail) > 10000, String(lineLength(rail)));
+  assert.deepEqual(hikesFor('mabou', roads.roads.map(r => ({...r,kind:1})), m.village, box)[0].line, []);
+  assert.deepEqual(hikesFor('mabou', [{kind:5,name:'unrelated',pts:[[0,0],[100,0]]}], m.village, box)[0].line, []);
+  const one = [{kind:5,name:'Mabou Rivers Trail',pts:[[0,0],[100,0]]}]; assert.equal(lineLength(hikesFor('mabou',one,m.village,box)[0].line),100);
+  console.log('RAIL metres ' + lineLength(rail).toFixed(2));
+});
+check('only authorised OSM paths are used with Beaton name', () => { assert.deepEqual(HIGHLANDS_LINES.map(l => l.osm), [117656340,537781826]); const h = hikes.find(h => h.id === 'highlands'); assert.deepEqual([...new Set(h.line.map(l => l.osm))],[117656340,537781826]); assert.equal(h.line[0].name,null); assert.ok(h.line.filter(l=>l.osm===537781826).every(l=>l.name==='Beaton Trail')); assert.ok(h.note.includes('no bicycles')); assert.equal(hikes.find(h => h.id === 'west-mabou').line,undefined); });
+check('other areas have no hikes', () => { assert.deepEqual(hikesFor('judique',roads.roads,m.village,box),[]); });

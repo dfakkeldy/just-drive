@@ -1,0 +1,21 @@
+{
+  "provenance": "dash cam 12/13/16 Nov, approximate position",
+  "roads": {
+    "judique": [
+      {"name": "Walkers Cove Road", "mouth": [617906.21, 5077645.44], "cut": [617781.44, 5077670.49], "kind": 2, "confidence": "first climb crest from terrain; approximate pavement limit"},
+      {"name": "James MacDonald Road", "mouth": [618202.61, 5075438.84], "cut": [618108.28, 5075426.05], "kind": 2, "confidence": "medium; first bend, conservative limit"}
+    ],
+    "mabou": [
+      {"name": "Whycocomagh Port Hood Road", "mouth": [626282.06, 5095298.95], "start": [626295.37, 5095290.16], "cut": [626364.0, 5095254.0], "washboard": true, "confidence": "short stretch east of bridge; approximate limits"}
+    ]
+  },
+  "guardrail": {"name": "Southwest Ridge Road", "point": [624360, 5100100], "halfLength": 30, "side": 1, "posts": "metal", "note": "16 Nov dash cam; west side (left in the northbound pass), approximate 60 m run"},
+  "buildings": [
+    {"id": 900001, "x": 624065, "y": 5100475, "length": 12, "width": 8, "axisDeg": 6, "eave": 2.9, "ridge": 5.0, "kind": "house", "wall": "cream"},
+    {"id": 900002, "x": 624042, "y": 5100500, "length": 6, "width": 4, "axisDeg": 6, "eave": 2.3, "ridge": 3.3, "kind": "shed", "wall": "pale yellow"},
+    {"id": 900003, "x": 624100, "y": 5100378, "length": 13, "width": 9, "axisDeg": 6, "eave": 2.9, "ridge": 5.2, "kind": "house", "wall": "dark red"},
+    {"id": 900004, "x": 624076, "y": 5100388, "length": 8, "width": 6, "axisDeg": 6, "eave": 2.5, "ridge": 4.0, "kind": "shed", "wall": "dark red", "role": "garage"},
+    {"id": 900005, "x": 624052, "y": 5100400, "length": 5, "width": 4, "axisDeg": 6, "eave": 2.1, "ridge": 3.1, "kind": "shed", "wall": "weathered grey"},
+    {"id": 900006, "x": 624055, "y": 5100360, "length": 5, "width": 3, "axisDeg": 6, "eave": 2.1, "ridge": 3.1, "kind": "shed", "wall": "dark red"}
+  ]
+}

@@ -1,0 +1,45 @@
+/
+  Cache-Control: no-store
+/index.html
+  Cache-Control: no-store
+/sw.js
+  Cache-Control: no-store
+  Content-Type: text/javascript; charset=utf-8
+  Service-Worker-Allowed: /
+/version.json
+  Cache-Control: no-store
+/manifest.webmanifest
+  Cache-Control: no-cache
+  Content-Type: application/manifest+json; charset=utf-8
+/offline/app.*
+  Cache-Control: public, max-age=31536000, immutable
+/offline/page.*
+  Cache-Control: public, max-age=31536000, immutable
+/offline/files.*
+  Cache-Control: public, max-age=31536000, immutable
+/offline/start.*
+  Cache-Control: public, max-age=31536000, immutable
+/offline/icons/*
+  Cache-Control: no-cache
+/terrain/*
+  Cache-Control: no-cache
+/audio/*
+  Cache-Control: no-cache
+/models/*
+  Cache-Control: no-cache
+  Content-Type: model/gltf-binary
+/app.js
+  Cache-Control: no-cache
+/version-just.json
+  Cache-Control: no-store
+/manifest-just.webmanifest
+  Cache-Control: no-cache
+  Content-Type: application/manifest+json; charset=utf-8
+/just/*
+  Cache-Control: no-store
+/about/*
+  Cache-Control: no-cache
+/help/*
+  Cache-Control: no-cache
+/listen/*
+  Cache-Control: no-cache

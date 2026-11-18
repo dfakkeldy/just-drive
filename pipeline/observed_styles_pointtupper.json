@@ -1,0 +1,49 @@
+{
+  "about": "Derived palette counts from the owner\u2019s 12 November 2026 dash cam catalogue. One resolved game-building match per sample; houses include cottages and mobile homes, farm buildings include sheds and garages. Unknown and mixed colours are excluded. Only spelling aliases are normalized. A group with no known roof materials uses the pooled house and farm roof-material counts from this area. These are area distributions, not per-building paint matches. Existing step 30 detail rates remain estimates.",
+  "sampleCounts": {
+    "matched": 40,
+    "houses": 20,
+    "farmBuildings": 2
+  },
+  "houses": {
+    "wall": {
+      "blue": 1,
+      "blue-grey": 1,
+      "brown": 1,
+      "cream": 3,
+      "dark blue": 1,
+      "dark grey": 1,
+      "grey": 1,
+      "tan": 1,
+      "white": 6
+    },
+    "roof": {
+      "brown": 1,
+      "dark grey": 5,
+      "grey": 10
+    },
+    "roofMaterialKnown": {
+      "asphalt shingle": 2
+    },
+    "trim": {
+      "white": 11
+    },
+    "entranceKnown": {
+      "deck": 1,
+      "front porch": 3
+    }
+  },
+  "farmBuildings": {
+    "wall": {
+      "grey": 1,
+      "white": 1
+    },
+    "roof": {
+      "grey": 2
+    },
+    "roofMaterialKnown": {
+      "asphalt shingle": 2
+    }
+  },
+  "landmarks": []
+}

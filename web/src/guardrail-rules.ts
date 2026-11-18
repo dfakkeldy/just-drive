@@ -1,0 +1,158 @@
+import type { Road } from './roads';
+import { railwayRoad } from './railway-road';
+
+/** Metres, surveyed heights (never the Hill height multiplier). */
+export const RAIL = { pitch: 1.9, postPitch: 3.8, chunk: 121.6, shoulder: 1.2,
+  nearDrop: 2.5, nearProbe: 20, seedDrop: 17, seedProbe: 50, broadDrop: 28, broadProbe: 120,
+  extendDrop: 18, extendProbe: 80, woodedCanopy: 4, woodedRelief: 25,
+  coastReach: 500, join: 11.4, minimum: 15.2, clearance: 4, junction: 18 } as const;
+export interface RailPoint { x: number; z: number; heading: number; along: number }
+export interface RailSpan { a: RailPoint; b: RailPoint; road: Road; side: number; runStart: number; runEnd: number }
+export type Ground = (x: number, z: number, broad?: boolean) => number | null;
+export interface RailContext { canopy?: Ground; coast?: (road: Road, along: number, side: number) => boolean }
+/** A coastal overlook can turn around a headland: inspect its whole outward half-plane. */
+export function nearCoast(road: Road, along: number, side: number, ground: Ground): boolean {
+  const p = railPoint(road, Math.round(along / 30) * 30);
+  for (let d = 50; d <= RAIL.coastReach; d += 50) for (const turn of [-Math.PI / 2, -Math.PI / 4, 0, Math.PI / 4, Math.PI / 2]) {
+    const a = p.heading + turn, h = ground(p.x + side * Math.cos(a) * d, p.z + side * Math.sin(a) * d, true);
+    if (h !== null && h < 1.5) return true;
+  }
+  return false;
+}
+export function railStation(road: Road, seg: number, t: number): number {
+  const c = cumulative(road); return c[seg] + (c[seg + 1] - c[seg]) * t;
+}
+// Road polylines are immutable after load. Binary search avoids walking thousands of LiDAR points per post.
+const distances = new WeakMap<Road, number[]>();
+function cumulative(road: Road): number[] {
+  let cum = distances.get(road);
+  if (!cum) {
+    cum = [0];
+    for (let i = 1; i < road.pts.length; i++) cum.push(cum[i - 1] + Math.hypot(road.pts[i][0] - road.pts[i - 1][0], road.pts[i][1] - road.pts[i - 1][1]));
+    distances.set(road, cum);
+  }
+  return cum;
+}
+export function roadLength(road: Road): number { return cumulative(road).at(-1) ?? 0; }
+export function railPoint(road: Road, along: number, offset = 0): RailPoint {
+  const cum = cumulative(road), total = cum.at(-1) ?? 0, station = Math.max(0, Math.min(total, along));
+  let lo = 1, hi = cum.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >>> 1; if (cum[mid] < station) lo = mid + 1; else hi = mid; }
+  while (lo < cum.length - 1 && cum[lo] === cum[lo - 1]) lo++;
+  const a = road.pts[lo - 1] ?? road.pts[0], b = road.pts[lo] ?? a, dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz);
+  const t = len ? (station - cum[lo - 1]) / len : 0;
+  return { x: a[0] + dx * t - (len ? dz / len : 0) * offset, z: a[1] + dz * t + (len ? dx / len : 0) * offset, heading: Math.atan2(dx, -dz), along };
+}
+/** null is a hard break: bridge, access, missing survey. false is a joinable shallow patch. */
+export function railRuns(states: readonly (boolean | null)[]): [number, number][] {
+  const on = states.map(s => s === true);
+  for (let i = 0; i < states.length; i++) {
+    if (states[i] !== false) continue;
+    let j = i;
+    while (states[j] === false && j < states.length) j++;
+    if (i > 0 && on[i - 1] && states[j] === true && (j - i) * RAIL.pitch <= RAIL.join)
+      for (let k = i; k < j; k++) on[k] = true;
+    i = j - 1;
+  }
+  const runs: [number, number][] = [];
+  for (let i = 0; i < on.length; i++) {
+    if (!on[i]) continue;
+    let j = i; while (on[j + 1]) j++;
+    if ((j - i) * RAIL.pitch >= RAIL.minimum) runs.push([i, j]);
+    i = j;
+  }
+  return runs;
+}
+export type Access = (road: Road, p: RailPoint) => boolean;
+/** Follow any run crossing the window to a real break. Seed and terminal decisions match a whole-road pass. */
+export function* planRailSteps(road: Road, ground: Ground, access: Access, start = 0, end = roadLength(road), context: RailContext = {}): Generator<void, RailSpan[], void> {
+  if (road.bridge || road.kind > 3 || railwayRoad(road) || road.pts.length < 2) return [];
+  const halo = RAIL.broadProbe + RAIL.minimum + RAIL.join;
+  const lo = Math.max(0, Math.floor((start - halo) / RAIL.pitch)), hi = Math.floor(Math.min(roadLength(road), end + halo) / RAIL.pitch);
+  const out: RailSpan[] = [];
+  for (const side of [-1, 1]) {
+    const points: RailPoint[] = [], states: (boolean | null)[] = [], seeds: boolean[] = [];
+    // Sample the window first, then extend each open edge until a hard break or an
+    // unjoinable shallow interval. No finite halo can contain every seeded run.
+    const last = Math.floor(roadLength(road) / RAIL.pitch), join = Math.floor(RAIL.join / RAIL.pitch);
+    let left = lo, right = hi, phase = 0;
+    const open = (atStart: boolean): boolean => {
+      let shallow = 0;
+      for (let k = atStart ? 0 : states.length - 1; k >= 0 && k < states.length; k += atStart ? 1 : -1) {
+        if (states[k] === null) return false;
+        if (states[k]) return true;
+        if (++shallow > join) return false;
+      }
+      return true;
+    };
+    for (let i = lo; ; ) {
+      const s = i * RAIL.pitch, p = railPoint(road, s, side * (road.halfWidth + RAIL.shoulder));
+      let state: boolean | null = null, seeded = false;
+      yield; // One bounded station of planning; synchronous callers exhaust this iterator.
+      station: {
+        if (access(road, p)) break station;
+        const edge = railPoint(road, s, side * road.halfWidth), h = ground(edge.x, edge.z), post = ground(p.x, p.z);
+        const at = (d: number) => { const q = railPoint(road, s, side * (road.halfWidth + d)); return ground(q.x, q.z, true); };
+        const h20 = at(RAIL.nearProbe), h50 = at(RAIL.seedProbe), h80 = at(RAIL.extendProbe), h120 = at(RAIL.broadProbe);
+        if (h === null || post === null || h20 === null || h50 === null || h80 === null || h120 === null) break station;
+        // An observed run keeps ground/access gates, overriding the inferred canopy/drop/coast tests.
+        const observed = road.guardrailRuns?.some(r => r.side === side && s >= r.start && s <= r.end);
+        if (observed) { state = true; seeded = true; break station; }
+        const canopy = (sign: number) => {
+          const a = railPoint(road, s, sign * (road.halfWidth + 20)), b = railPoint(road, s, sign * (road.halfWidth + 30));
+          return ((context.canopy?.(a.x, a.z, true) ?? 0) + (context.canopy?.(b.x, b.z, true) ?? 0)) / 2;
+        };
+        const wooded = Math.min(canopy(side), canopy(-side)) > RAIL.woodedCanopy && h - h80 < RAIL.woodedRelief;
+        if (wooded) break station;
+        const seed = h - h50 >= RAIL.seedDrop || h - h120 >= RAIL.broadDrop;
+        const on = h - h20 >= RAIL.nearDrop && (seed || h - h80 >= RAIL.extendDrop) && (context.coast?.(road, s, side) ?? true);
+        state = on; seeded = on && seed;
+      }
+      if (phase === 1) { points.unshift(p); states.unshift(state); seeds.unshift(seeded); }
+      else { points.push(p); states.push(state); seeds.push(seeded); }
+      if (phase === 0 && i < hi) { i++; continue; }
+      if (phase <= 1 && left > 0 && open(true)) { phase = 1; i = --left; continue; }
+      phase = 2;
+      if (right < last && open(false)) { i = ++right; continue; }
+      break;
+    }
+    for (const [a, b] of railRuns(states)) {
+      if (!seeds.slice(a, b + 1).some(Boolean)) continue;
+      for (let i = a; i < b; i++) if (points[i].along >= start - 1e-7 && points[i].along < end - 1e-7)
+        out.push({ a: points[i], b: points[i + 1], road, side, runStart: points[a].along, runEnd: points[b].along });
+    }
+  }
+  return out;
+}
+
+/** The complete rule for audits and offline surveys. Runtime advances the same rule in small batches. */
+export function planRails(road: Road, ground: Ground, access: Access, start = 0, end = roadLength(road), context: RailContext = {}): RailSpan[] {
+  const work = planRailSteps(road, ground, access, start, end, context);
+  let result = work.next();
+  while (!result.done) result = work.next();
+  return result.value;
+}
+
+const offsetLengths = new WeakMap<Road, Map<number, Float64Array>>();
+/** Uniform physical rail distance, rather than road-centre distance around a bend. */
+function railLine(road: Road, side: number): Float64Array {
+  let sides=offsetLengths.get(road);if(!sides)offsetLengths.set(road,sides=new Map());
+  let cum=sides.get(side);
+  if(!cum){
+    const count=Math.floor(roadLength(road)/RAIL.pitch)+1;cum=new Float64Array(count);
+    let a=railPoint(road,0,side*(road.halfWidth+RAIL.shoulder));
+    for(let i=1;i<count;i++){const b=railPoint(road,i*RAIL.pitch,side*(road.halfWidth+RAIL.shoulder));cum[i]=cum[i-1]+Math.hypot(b.x-a.x,b.z-a.z);a=b;}
+    sides.set(side,cum);
+  }
+  return cum;
+}
+/** Metres along the rail itself at both ends of a span. Posts, and the splices drawn at them, sit at whole post pitches. */
+export function railMetres(span: RailSpan): [number, number] {
+  const cum=railLine(span.road,span.side),i=Math.round(span.a.along/RAIL.pitch);
+  return [cum[i],cum[i+1]];
+}
+export function railPosts(span: RailSpan): number[] {
+  const [a,b]=railMetres(span),out:number[]=[];
+  for(let n=Math.ceil((a-1e-7)/RAIL.postPitch);n*RAIL.postPitch<b-1e-7;n++)out.push(Math.max(0,(n*RAIL.postPitch-a)/(b-a)));
+  return out;
+}

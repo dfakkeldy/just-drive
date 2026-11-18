@@ -1,0 +1,375 @@
+// Frozen from 7138b170ef360a7eb5d4b2efebdf629fcc6a5f13:web/src/vehicle.ts. Never edit this snapshot.
+import * as THREE from 'three';
+import type { Car } from './car';
+import { type Damage, steeringPull } from './damage-rules';
+import { potholeDensity, potholeDepth, washboard } from './defects';
+import type { Roads } from './roads';
+import type { Surface, Terrain } from './terrain';
+
+export interface Input { throttle: number; steer: number; handbrake: boolean }
+
+const G = 9.81;
+const WHEELBASE = 2.62, TRACK = 1.57, WHEEL_R = 0.35;
+const STEP = 1 / 120;
+// Cornering grip, as a multiple of what real tyres give. At 1 the car was calm but could not take a bend at
+// speed (the owner's second drive, 10 Nov 2026); this is a game, so the tyres hold harder than life.
+// Washboard keeps real grip: that road is meant to be miserable.
+const CORNER = 1.7;
+
+// Grip, rolling resistance and roughness for each surface.
+const SURFACES = {
+  paved: { mu: 1.0, roll: 0.013, rough: 0.0, name: 'pavement' },
+  gravel: { mu: 0.72, roll: 0.03, rough: 0.012, name: 'gravel' },
+  track: { mu: 0.62, roll: 0.05, rough: 0.03, name: 'dirt track' },
+  trail: { mu: 0.8, roll: 0.02, rough: 0.004, name: 'rail trail' },   // fine crusher dust, graded: the best surface off the pavement
+  washboard: { mu: 0.6, roll: 0.06, rough: 0.09, name: 'washboard' },
+  grass: { mu: 0.5, roll: 0.09, rough: 0.04, name: 'grass' },
+  brush: { mu: 0.42, roll: 0.5, rough: 0.07, name: 'brush' },
+};
+
+/**
+ * Arcade driving on the terrain height field. The car is one body with a forward and a sideways speed;
+ * tyres remove sideways speed up to the grip of the surface, so loose surfaces slide.
+ * Heading: 0 = north, clockwise positive. World: +x east, -z north.
+ */
+export class Vehicle {
+  x = 0; z = 0; y = 0; heading = 0;
+  vx = 0; vz = 0; vy = 0;
+  pitch = 0; roll = 0;
+  steerAngle = 0;
+  speed = 0;                 // forward speed, m/s
+  airborne = false;
+  damage: Damage | null = null;
+  damageActive = false;
+  desktopPull = false;
+  onSolidImpact(speed: number): void { if (this.damageActive) this.damage?.hit('impact', speed); }
+  surfaceName = '';
+  roadName: string | null = null;
+  sunk = 0;                  // seconds spent in water
+  private lean = new THREE.Vector2();
+  private spin = 0;
+  private lastGood: { x: number; z: number; heading: number } | null = null;
+  /** Where the car has been on the road, one point every 8 m or so, newest last. */
+  private trail: { x: number; z: number; heading: number }[] = [];
+  /** The playable area in world units [x0, z0, x1, z1]: the fine map data ends just outside it. */
+  bounds: [number, number, number, number] | null = null;
+  /** True while the car is pressed against the edge of the map. */
+  atEdge = false;
+  private prevGround = 0;
+  // Keep the positions actually sampled, so a new tile can be distinguished from car movement.
+  private readonly groundContacts = Array.from({ length: 4 }, () => ({ x: 0, z: 0, height: null as number | null }));
+  private contactsReady = false;
+  private readonly contactBody = { y: 0 };   // the body's height when the wheel contacts were last sampled
+  private stuck = false;
+  private acc = 0;
+  /** Steering help, per second: how fast the car straightens along its road with hands off. 0 turns it off. */
+  assist = 0.9;
+  private roadHeading: number | null = null;
+  private shake = 0;
+  private jolt = 0;         // a pothole hit, fading        // how hard rough ground rattles the body, for the eye only
+
+  constructor(readonly car: Car, private terrain: Terrain, private roads: Roads, private seaLevel: number) {
+    car.root.rotation.order = 'YXZ';
+  }
+
+  place(x: number, z: number, heading: number) {
+    this.x = x; this.z = z; this.heading = heading;
+    this.vx = this.vz = this.vy = 0; this.sunk = 0; this.airborne = false;
+    const g = this.groundAt(x, z);
+    if (g !== null) { this.y = this.prevGround = g; this.stuck = false; } else this.stuck = true;   // wait for the ground to load
+    this.captureGround();
+    this.sync(0);
+  }
+
+  /** A new start (a new day): where the car went before no longer counts, so R cannot lead back to yesterday's road. */
+  restart(x: number, z: number, heading: number) {
+    this.trail.length = 0; this.lastGood = null;
+    this.place(x, z, heading);
+  }
+
+  /**
+   * Put the car back on the road it came along, a good way back from where it went wrong. Each further call goes
+   * further back, so one bad spot cannot trap the car. (The first version put the car on the nearest road point:
+   * at the end of a road that was the end itself, and the car fell straight off again.)
+   */
+  respawn() {
+    let back = 0;
+    while (this.trail.length > 1 && back < 45) {
+      const a = this.trail.pop()!, b = this.trail[this.trail.length - 1];
+      back += Math.hypot(a.x - b.x, a.z - b.z);
+    }
+    const crumb = this.trail[this.trail.length - 1];
+    if (crumb && this.inside(crumb.x, crumb.z, 30)) { this.place(crumb.x, crumb.z, this.inward(crumb.x, crumb.z, crumb.heading)); return; }
+    // No trail yet: the nearest public road that is well inside the map.
+    const hit = this.roads.nearest(this.x, this.z, 900, (r) => r.kind <= 3 && !r.bridge) ?? null;
+    if (hit && this.inside(hit.x, hit.z, 60)) this.place(hit.x, hit.z, this.inward(hit.x, hit.z, hit.heading));
+    else if (this.lastGood) this.place(this.lastGood.x, this.lastGood.z, this.inward(this.lastGood.x, this.lastGood.z, this.lastGood.heading));
+    else if (this.bounds) {
+      const cx = THREE.MathUtils.clamp(this.x, this.bounds[0] + 300, this.bounds[2] - 300), cz = THREE.MathUtils.clamp(this.z, this.bounds[1] + 300, this.bounds[3] - 300);
+      const near = this.roads.nearest(cx, cz, 2000, (r) => r.kind <= 3 && !r.bridge);
+      if (near) this.place(near.x, near.z, this.inward(near.x, near.z, near.heading));
+    }
+  }
+
+  private inside(x: number, z: number, margin: number): boolean {
+    const b = this.bounds;
+    return !b || (x > b[0] + margin && x < b[2] - margin && z > b[1] + margin && z < b[3] - margin);
+  }
+
+  /** Near the edge of the map, face the car back toward the middle. */
+  private inward(x: number, z: number, heading: number): number {
+    const b = this.bounds;
+    if (!b || this.inside(x, z, 350)) return heading;
+    const toX = (b[0] + b[2]) / 2 - x, toZ = (b[1] + b[3]) / 2 - z;
+    return Math.sin(heading) * toX - Math.cos(heading) * toZ < 0 ? heading + Math.PI : heading;
+  }
+
+  private groundAt(x: number, z: number): number | null {
+    const deck = this.roads.deckHeight(x, z);
+    const g = this.terrain.heightAt(x, z);
+    if (g === null) return null;
+    return deck !== null ? Math.max(deck, g) : g;
+  }
+
+  private captureGround(): void {
+    const fx = Math.sin(this.heading), fz = -Math.cos(this.heading), rx = Math.cos(this.heading), rz = Math.sin(this.heading);
+    this.groundContacts.forEach((p, i) => {
+      const a = (i < 2 ? 1 : -1) * WHEELBASE / 2, b = (i % 2 ? 1 : -1) * TRACK / 2;
+      p.x = this.x + fx * a + rx * b; p.z = this.z + fz * a + rz * b;
+      p.height = this.groundAt(p.x, p.z);
+    });
+    this.contactBody.y = this.y;
+    this.contactsReady = true;
+  }
+
+  private correctGround(): void {
+    if (this.contactsReady) {
+      let correction = 0, known = true;
+      // Asked again as the body stood when it sampled: a deck counts as ground only for a body near its height, so
+      // the same spot reads differently once the car has risen or fallen. That is the car's motion, not new land.
+      this.terrain.withContactHeight(this.contactBody, () => {
+        for (const p of this.groundContacts) {
+          const now = this.groundAt(p.x, p.z);
+          if (now === null || p.height === null) known = false;
+          else correction += (now - p.height) / 4;
+        }
+      });
+      // Heights changed at the SAME world positions. This is new ground data, not velocity.
+      // Rebase both the body and its previous contact height, preserving any real flight velocity.
+      if (known && Math.abs(correction) > 1e-6) { this.y += correction; this.prevGround += correction; }
+    }
+    this.captureGround();
+  }
+
+  update(dt: number, input: Input, afterStep?: () => void) {
+    if (this.stuck) { this.place(this.x, this.z, this.heading); return; }
+    // Whole fixed steps only: a tiny leftover step makes the vertical speed estimate blow up.
+    const here = this.roads.nearest(this.x, this.z, 9, (r) => r.kind <= 3);
+    this.roadHeading = here && here.dist < here.road.halfWidth + 1 ? here.heading : null;
+    this.acc = Math.min(this.acc + dt, 0.1);
+    while (this.acc >= STEP) { this.step(STEP, input); afterStep?.(); this.acc -= STEP; }
+    this.sync(dt);
+  }
+
+  private step(dt: number, input: Input) {
+    const fx = Math.sin(this.heading), fz = -Math.cos(this.heading);   // forward
+    const rx = Math.cos(this.heading), rz = Math.sin(this.heading);    // right
+    const s: Surface | null = this.terrain.surfaceAt(this.x, this.z);
+    if (!s) return;
+    const onDeck = this.roads.deckHeight(this.x, this.z) !== null;
+    this.correctGround();
+
+    // Wheel contact heights give the attitude of the body.
+    const hw = TRACK / 2, hl = WHEELBASE / 2;
+    // Each wheel sits in whatever the road has under it: a pothole, or the trough of a washboard ridge.
+    const along = s.washboard ? this.roads.nearest(this.x, this.z, 14)?.heading ?? this.heading : 0;
+    const ax = Math.sin(along), az = -Math.cos(along);
+    let deepest = 0;
+    let contact = 0;
+    const h = (a: number, b: number) => {
+      const wx = this.x + fx * a + rx * b, wz = this.z + fz * a + rz * b;
+      const g = this.groundContacts[contact++].height;
+      if (g === null) return this.y;
+      const sw = this.terrain.surfaceAt(wx, wz);
+      if (!sw || sw.kind === 0 || sw.roadDist > sw.halfWidth - 0.2) return g;
+      let d = potholeDepth(wx, wz, potholeDensity(sw.kind, sw.washboard));
+      if (d > deepest) deepest = d;
+      if (sw.washboard) d += washboard(wx * ax + wz * az);
+      return g - d;
+    };
+    const fl = h(hl, -hw), fr = h(hl, hw), rl = h(-hl, -hw), rr = h(-hl, hw);
+    const ground = (fl + fr + rl + rr) / 4;
+    const slopeF = Math.atan2((fl + fr) / 2 - (rl + rr) / 2, WHEELBASE);   // nose up is positive
+    const slopeR = Math.atan2((fr + rr) / 2 - (fl + rl) / 2, TRACK);       // right side up is positive
+
+    const onRoad = onDeck || (s.kind > 0 && s.roadDist <= s.halfWidth + 0.4);
+    const surf = onRoad ? (onDeck || s.kind <= 2 || s.kind === 9 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 3 || s.kind >= 8 ? SURFACES.gravel : s.kind === 5 ? SURFACES.trail : SURFACES.track)
+      : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
+    this.surfaceName = surf.name;
+
+    let vf = this.vx * fx + this.vz * fz, vl = this.vx * rx + this.vz * rz;
+
+    // Vertical: follow the ground, or fall when it drops away faster than gravity.
+    const groundVel = (ground - this.prevGround) / dt;
+    this.prevGround = ground;
+    const free = this.y + this.vy * dt - 0.5 * G * dt * dt;
+    if (free > ground + 0.05) {
+      this.airborne = true;
+      this.y = free;
+      this.vy -= G * dt;
+    } else {
+      if (this.airborne && this.vy < -3) {
+        if (this.damageActive) this.damage?.hit('landing', -this.vy);
+        vf *= 0.92; vl *= 0.6;   // a hard landing scrubs speed
+      }
+      this.airborne = false;
+      this.y = ground;
+      this.vy = THREE.MathUtils.clamp(groundVel, -30, 30);
+    }
+
+    if (!this.airborne) {
+      // On washboard the tyres skip from ridge to ridge: the faster the car, the less they hold.
+      const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
+      const mu = surf.mu * skip, t = input.throttle;
+      let a = 0;
+      if (t > 0 && vf > -0.5) a += t * Math.min(4.8, 95 / (Math.abs(vf) + 1), mu * G * 0.62);       // power, then traction
+      else if (t < 0 && vf < 0.5) a += t * (vf > -9 ? 2.6 : 0);                                      // reverse
+      else if (t !== 0) a -= Math.sign(vf) * Math.abs(t) * 9.5 * mu;                                 // brake
+      if (input.handbrake) a -= Math.sign(vf) * Math.min(5.5 * mu, Math.abs(vf) / dt);
+      a -= G * Math.sin(slopeF);
+      const hard = Math.abs(input.steer);
+      if (hard > 0.6 && Math.abs(vf) > 13) a -= Math.sign(vf) * 3.2 * ((hard - 0.6) / 0.4) * Math.min(1, (Math.abs(vf) - 13) / 10);
+      const drag = surf.roll * G + 0.001 * vf * vf + (surf === SURFACES.brush ? 0.9 * Math.abs(vf) : 0)
+        + deepest * 45 * Math.min(1, Math.abs(vf) / 3);   // a wheel in a pothole drags hard
+      // Resistance cannot reverse the car: it only brings it to rest.
+      if (Math.abs(vf) > 0.05 || Math.abs(a) > drag) a -= Math.sign(vf || a) * Math.min(drag, Math.abs(vf) / dt + Math.abs(a));
+      vf += a * dt;
+      if (Math.abs(vf) < 0.03 && t === 0 && Math.abs(G * Math.sin(slopeF)) < surf.roll * G + 0.6) vf = 0;   // parked
+
+      // Tyres take sideways speed away, up to their grip. A cross slope pulls the car downhill.
+      vl -= G * Math.sin(slopeR) * dt * 0.35;
+      const corner = surf === SURFACES.washboard ? 1 : CORNER;
+      const grip = corner * mu * G * dt * (input.handbrake ? 0.3 : 1);
+      vl -= THREE.MathUtils.clamp(vl, -grip, grip);
+      this.lean.set(a, 0);
+
+      // Steering: less lock at speed.
+      // A key or a thumb asks for full lock at once. The front wheels turn only as far as the tyres can hold at
+      // this speed (a little past it, so the car can still be made to slide), and they turn in more slowly the
+      // faster the car goes. Before this limit, full lock at highway speed asked for several g of cornering:
+      // the car swung from side to side and was "all over the road".
+      const v = Math.abs(vf);
+      const gripLock = Math.atan((WHEELBASE * 1.15 * corner * mu * G) / Math.max(v * v, 4));
+      const maxSteer = Math.min(0.6, gripLock);
+      const ask = THREE.MathUtils.clamp(input.steer, -1, 1);
+      const pull = steeringPull(this.damageActive && !!this.damage?.pulls, v, this.desktopPull);
+      const target = THREE.MathUtils.clamp(ask * maxSteer + pull, -maxSteer, maxSteer);
+      const away = Math.abs(target) > Math.abs(this.steerAngle) && target * this.steerAngle >= 0;
+      const rate = away ? 0.5 + 2.2 / (1 + v / 7) : 3.2;   // quick back to centre, gentle turn-in
+      this.steerAngle += THREE.MathUtils.clamp(target - this.steerAngle, -rate * dt, rate * dt);
+      this.steerAngle = THREE.MathUtils.clamp(this.steerAngle, -maxSteer, maxSteer);
+      const yaw = (vf * Math.tan(this.steerAngle)) / WHEELBASE;
+      this.heading += yaw * dt;
+      // Steering help: with hands off, the car eases itself straight along the road it is on. It does not take
+      // corners at junctions and it gives way the moment the driver steers.
+      if (this.assist > 0 && ask === 0 && this.roadHeading !== null && v > 2) {
+        let err = Math.atan2(Math.sin(this.roadHeading - this.heading), Math.cos(this.roadHeading - this.heading));
+        if (Math.abs(err) > Math.PI / 2) err -= Math.sign(err) * Math.PI;   // a road runs both ways
+        if (Math.abs(err) < 0.4) this.heading += err * this.assist * dt;
+      }
+      if (surf === SURFACES.washboard) {
+        // The car wanders by itself, more with speed, and the wheel rate of the ridges shakes everything.
+        this.heading += (Math.random() - 0.5) * 0.02 * Math.abs(vf) * (1.2 - skip) * dt * 6;
+        vl += (Math.random() - 0.5) * 0.5 * Math.abs(vf) * (1.1 - skip) * dt * 4;
+      }
+      if (deepest > 0.03 && Math.abs(vf) > 2) this.jolt = Math.max(this.jolt, deepest * 6);
+      this.lean.y = vf * yaw;
+
+      this.shake = surf.rough * Math.min(Math.abs(vf), 20) + this.jolt;
+      this.jolt *= Math.max(0, 1 - 9 * dt);
+    }
+
+    // Rebuild the world velocity along the new heading.
+    const nfx = Math.sin(this.heading), nfz = -Math.cos(this.heading), nrx = Math.cos(this.heading), nrz = Math.sin(this.heading);
+    this.vx = nfx * vf + nrx * vl; this.vz = nfz * vf + nrz * vl;
+    this.x += this.vx * dt; this.z += this.vz * dt;
+    // The edge of the map is a wall the car cannot pass: beyond it there is no road data to drive on.
+    this.atEdge = false;
+    if (this.bounds) {
+      const [x0, z0, x1, z1] = this.bounds;
+      if (this.x < x0) { this.x = x0; this.atEdge = this.vx < 0; this.vx = Math.max(this.vx, 0); }
+      if (this.x > x1) { this.x = x1; this.atEdge = this.atEdge || this.vx > 0; this.vx = Math.min(this.vx, 0); }
+      if (this.z < z0) { this.z = z0; this.atEdge = this.atEdge || this.vz < 0; this.vz = Math.max(this.vz, 0); }
+      if (this.z > z1) { this.z = z1; this.atEdge = this.atEdge || this.vz > 0; this.vz = Math.min(this.vz, 0); }
+      // Hitting the wall stops the car, as a barricade would: it does not slide along it.
+      if (this.atEdge) { this.vx *= 0.2; this.vz *= 0.2; }
+    }
+    if (this.damageActive && this.damage) {
+      let depth = 0;
+      if (!onDeck && !onRoad && s.level >= 7 && s.roadDist < s.halfWidth + 6) {
+        const road = this.roads.nearest(this.x, this.z, 16, r => r.kind <= 3 && !r.bridge);
+        if (road) depth = (this.groundAt(road.x, road.z) ?? ground) - ground;
+      }
+      this.damage.drive(dt, Math.abs(vf), surf.name, depth, this.airborne);
+    }
+    this.speed = vf;
+    this.spin += (vf * dt) / WHEEL_R;
+
+    const k = this.airborne ? 2 : 14;
+    this.pitch += (slopeF - this.pitch) * Math.min(1, k * dt);
+    this.roll += (slopeR - this.roll) * Math.min(1, k * dt);
+
+    // Water: the car is lost after a moment, then it comes back on the road.
+    if (!onDeck && s.ground < this.seaLevel - 0.25) {
+      this.sunk += dt;
+      this.vx *= 1 - Math.min(1, 3 * dt); this.vz *= 1 - Math.min(1, 3 * dt);
+      if (this.sunk > 1.4) this.respawn();
+    } else {
+      this.sunk = 0;
+      if (onRoad && !onDeck && Math.abs(vf) > 2) {
+        this.lastGood = { x: this.x, z: this.z, heading: this.heading };
+        const tip = this.trail[this.trail.length - 1];
+        if (!tip || Math.hypot(tip.x - this.x, tip.z - this.z) > 8) {
+          this.trail.push({ x: this.x, z: this.z, heading: vf < 0 ? this.heading + Math.PI : this.heading });
+          if (this.trail.length > 80) this.trail.shift();
+        }
+      }
+    }
+  }
+
+  private bodyLean = new THREE.Vector2();
+
+  private sync(dt: number) {
+    const c = this.car;
+    c.root.position.set(this.x, this.y, this.z);
+    c.root.rotation.set(this.pitch, -this.heading, this.roll);
+    // The body leans on its springs: back under power, out of a corner.
+    const k = Math.min(1, 6 * dt);
+    this.bodyLean.x += (THREE.MathUtils.clamp(this.lean.x * 0.006, -0.035, 0.035) - this.bodyLean.x) * k;
+    this.bodyLean.y += (THREE.MathUtils.clamp(this.lean.y * 0.007, -0.06, 0.06) - this.bodyLean.y) * k;
+    c.body.rotation.set(this.bodyLean.x + (Math.random() - 0.5) * this.shake * 0.02, 0, this.bodyLean.y + (Math.random() - 0.5) * this.shake * 0.03);
+    c.body.position.y = (Math.random() - 0.5) * this.shake * 0.04;
+    c.steer.fl.rotation.y = c.steer.fr.rotation.y = -this.steerAngle;
+    for (const w of [c.wheels.fl, c.wheels.fr, c.wheels.rl, c.wheels.rr]) w.rotation.x = -this.spin;
+    if (dt > 0) {
+      const hit = this.roads.nearest(this.x, this.z, 14);
+      this.roadName = hit ? hit.road.name : null;
+    }
+  }
+}
+
+/** Drives along the nearest road: used for demos and for screenshots of the car in motion. */
+export function autopilot(v: Vehicle, roads: Roads, cruise = 16): Input {
+  const hit = roads.nearest(v.x, v.z, 40, (r) => r.kind <= 3);
+  if (!hit) return { throttle: 0, steer: 0, handbrake: false };
+  let want = hit.heading;
+  // A road line has two directions; take the one closer to where the car points.
+  let err = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
+  if (Math.abs(err) > Math.PI / 2) { want += Math.PI; err = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading)); }
+  // Keep to the right-hand lane: aim a little right of the centre line.
+  const rx = Math.cos(want), rz = Math.sin(want);
+  const side = (v.x - hit.x) * rx + (v.z - hit.z) * rz - Math.min(hit.road.halfWidth * 0.5, 1.6);
+  const steer = THREE.MathUtils.clamp(err * 1.6 - side * 0.12, -1, 1);
+  const target = cruise * (1 - 0.6 * Math.min(1, Math.abs(err) * 2));
+  return { throttle: THREE.MathUtils.clamp((target - v.speed) * 0.5, -1, 1), steer, handbrake: false };
+}

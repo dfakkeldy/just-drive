@@ -1,0 +1,106 @@
+[
+ {
+  "area": "judique",
+  "lot": "judique-brief-lot-1",
+  "m2": 3339,
+  "road": "Highway 19",
+  "roadKind": 1,
+  "metres": 31,
+  "at": [
+   617100,
+   5081601.5,
+   256
+  ]
+ },
+ {
+  "area": "judique",
+  "lot": "judique-0",
+  "m2": 2959,
+  "road": "Highway 19",
+  "roadKind": 1,
+  "metres": 30,
+  "at": [
+   617098.7,
+   5081607,
+   256
+  ]
+ },
+ {
+  "area": "judique",
+  "lot": "judique-brief-lot-3",
+  "m2": 2025,
+  "road": "Highway 19",
+  "roadKind": 1,
+  "metres": 25,
+  "at": [
+   617148,
+   5081285.7,
+   86
+  ]
+ },
+ {
+  "area": "porthood",
+  "lot": "porthood-0",
+  "m2": 3021,
+  "road": "Main Street",
+  "roadKind": 2,
+  "metres": 19,
+  "at": [
+   613753.1,
+   5096575,
+   85
+  ]
+ },
+ {
+  "area": "porthood",
+  "lot": "porthood-1",
+  "m2": 2355,
+  "road": "Wharf Road",
+  "roadKind": 2,
+  "metres": 17,
+  "at": [
+   613366,
+   5096983.8,
+   158
+  ]
+ },
+ {
+  "area": "porthood",
+  "lot": "porthood-3",
+  "m2": 2029,
+  "road": "Highway 19",
+  "roadKind": 1,
+  "metres": 14,
+  "at": [
+   613987.8,
+   5096014.3,
+   138
+  ]
+ },
+ {
+  "area": "pointtupper",
+  "lot": "pointtupper-0",
+  "m2": 38728,
+  "road": "Main Street",
+  "roadKind": 2,
+  "metres": 65,
+  "at": [
+   625593.4,
+   5051626.6,
+   57
+  ]
+ },
+ {
+  "area": "pointtupper",
+  "lot": "pointtupper-3",
+  "m2": 26196,
+  "road": "Paint Street",
+  "roadKind": 2,
+  "metres": 61,
+  "at": [
+   629417.7,
+   5052294,
+   215
+  ]
+ }
+]

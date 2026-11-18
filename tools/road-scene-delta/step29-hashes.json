@@ -1,0 +1,38 @@
+{
+
+  "note": "Step 29 output after the the project brief delta, as public poles (road kind 1-3, file order) and both box arrays: canonical JSON (sorted keys, no spaces) SHA-256. Measured from the main thread's post-step29 files (whole-file SHA-256 in measuredFrom). Power poles and service drops are not pinned here.",
+  "measuredFrom": {
+    "terrain/props.json": "0cb0ff9260bba58f02e20c262f6cd690a29a3022d4f1dd3a032f50342fe72261",
+    "areas/judique/props.json": "8bc8a27e1f503aa9f20878aa0449b4aff8484b8d95e15f0e4c14bd1ced72fcbb"
+  },
+  "files": {
+    "terrain/props.json": {
+      "publicPoles": {
+        "count": 2523,
+        "sha256": "5bfa3736c564a06e4e0f8bce11577c6e0c2e273c2d708ce3f21b9a1363b6261e"
+      },
+      "mailboxes": {
+        "count": 469,
+        "sha256": "b6761f1efabb79e30c863b2a1e25d16421355874269161ee29b4cc8c31af2caa"
+      },
+      "communityBoxes": {
+        "count": 6,
+        "sha256": "63f3f28ddcc01dca5600c9a7ee51c74d47cd4b75377d5f36cd22734a422fdc87"
+      }
+    },
+    "areas/judique/props.json": {
+      "publicPoles": {
+        "count": 1534,
+        "sha256": "31567df97b8c23001c79564034de0fb9e27b32a9e537e5f2bbf5b8413be24fa7"
+      },
+      "mailboxes": {
+        "count": 340,
+        "sha256": "970c41517ea2e41656c6397c55051096a715a6928a122953b9a545515d76b83b"
+      },
+      "communityBoxes": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    }
+  }
+}

@@ -1,0 +1,1472 @@
+{
+ "codeHead": "6d8d56b8 (pictures and survey from culverts-browser on apple-check-host; 14febb49 and the merge change no production code after 5e614ffd)",
+ "base": "origin/main 777ad4f0",
+ "bakedSnapshot": "946af682bce77f57 (live Judique data)",
+ "placements": [
+  {
+   "area": "terrain",
+   "count": 163
+  },
+  {
+   "area": "areas/cansocauseway",
+   "count": 75
+  },
+  {
+   "area": "areas/judique",
+   "count": 98
+  },
+  {
+   "area": "areas/pointtupper",
+   "count": 85
+  },
+  {
+   "area": "areas/porthood",
+   "count": 84
+  },
+  {
+   "area": "areas/westbay",
+   "count": 188
+  }
+ ],
+ "browser": [
+  {
+   "facts": {
+    "area": "mabou",
+    "count": 163,
+    "visible": true,
+    "crown": 5.341077952268647,
+    "ground": 9.535000085830688,
+    "level": 8,
+    "failed": 0
+   },
+   "drive": {
+    "finite": true,
+    "travel": 12.581434896597388
+   }
+  },
+  {
+   "facts": {
+    "area": "judique",
+    "count": 98,
+    "visible": true,
+    "crown": 14.405074411149553,
+    "ground": 14.800000190734863,
+    "level": 8,
+    "failed": 0
+   },
+   "drive": {
+    "finite": true,
+    "travel": 12.23331123617258
+   }
+  }
+ ],
+ "survey": {
+  "note": "eight crossings nearest each village; per mouth: invertBelow = own bed minus invert (m), open = clear crown minus bed (m), legCover = ground minus leg bottom (m); lowSunk = how far thin road fill sinks the low mouth; fullGrade = the run reaches 5 cm under the high bed. Before the grade fix (729dfaef) 9 of 16 upstream mouths were buried, up to 5.18 m; now 2 remain buried (0.07 m and 0.26 m; 0.04 m and 0.25 m at 93d2aae5, before samples beside the axis and under every road were added in 5e614ffd) where 0.55 m of fill under the road caps the grade.",
+  "mabou": [
+   {
+    "dia": 0.9,
+    "len": 27,
+    "sy": 0.22,
+    "pitch": -0.172,
+    "ends": [
+     {
+      "bed": 2.096,
+      "invertBelow": 0.05,
+      "open": 0.837,
+      "legCover": [
+       1.528,
+       1.469
+      ]
+     },
+     {
+      "bed": 6.776,
+      "invertBelow": 0.05,
+      "open": 0.837,
+      "legCover": [
+       1.403,
+       1.194
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.6,
+    "len": 14.1,
+    "sy": 0.092,
+    "pitch": 0.004,
+    "ends": [
+     {
+      "bed": 28.343,
+      "invertBelow": 0.449,
+      "open": -0.072,
+      "legCover": [
+       1.17,
+       1.005
+      ]
+     },
+     {
+      "bed": 27.893,
+      "invertBelow": 0.05,
+      "open": 0.327,
+      "legCover": [
+       0.748,
+       0.667
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": false
+   },
+   {
+    "dia": 0.9,
+    "len": 15.3,
+    "sy": 0.086,
+    "pitch": -0.374,
+    "ends": [
+     {
+      "bed": 7.736,
+      "invertBelow": 0.05,
+      "open": 0.277,
+      "legCover": [
+       0.806,
+       0.91
+      ]
+     },
+     {
+      "bed": 13.765,
+      "invertBelow": 0.094,
+      "open": 0.233,
+      "legCover": [
+       0.185,
+       0.559
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": false
+   },
+   {
+    "dia": 0.6,
+    "len": 23.2,
+    "sy": 0.092,
+    "pitch": -0.099,
+    "ends": [
+     {
+      "bed": 43.884,
+      "invertBelow": 0.05,
+      "open": 0.323,
+      "legCover": [
+       0.734,
+       0.682
+      ]
+     },
+     {
+      "bed": 46.329,
+      "invertBelow": 0.194,
+      "open": 0.179,
+      "legCover": [
+       0.71,
+       0.869
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": false
+   },
+   {
+    "dia": 0.6,
+    "len": 15.3,
+    "sy": 0.146,
+    "pitch": -0.187,
+    "ends": [
+     {
+      "bed": 44.505,
+      "invertBelow": 0.05,
+      "open": 0.54,
+      "legCover": [
+       1.956,
+       0.445
+      ]
+     },
+     {
+      "bed": 47.4,
+      "invertBelow": 0.05,
+      "open": 0.54,
+      "legCover": [
+       0.994,
+       0.963
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.6,
+    "len": 13.6,
+    "sy": 0.146,
+    "pitch": -0.039,
+    "ends": [
+     {
+      "bed": 55.059,
+      "invertBelow": 0.05,
+      "open": 0.55,
+      "legCover": [
+       1.096,
+       1.523
+      ]
+     },
+     {
+      "bed": 55.584,
+      "invertBelow": 0.05,
+      "open": 0.55,
+      "legCover": [
+       1.096,
+       1.43
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.6,
+    "len": 22.8,
+    "sy": 0.146,
+    "pitch": 0.073,
+    "ends": [
+     {
+      "bed": 7.389,
+      "invertBelow": 0.05,
+      "open": 0.548,
+      "legCover": [
+       1.043,
+       0.882
+      ]
+     },
+     {
+      "bed": 5.724,
+      "invertBelow": 0.05,
+      "open": 0.548,
+      "legCover": [
+       1.116,
+       1.068
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.6,
+    "len": 22.6,
+    "sy": 0.146,
+    "pitch": -0.085,
+    "ends": [
+     {
+      "bed": 8.334,
+      "invertBelow": 0.05,
+      "open": 0.548,
+      "legCover": [
+       1.068,
+       1.103
+      ]
+     },
+     {
+      "bed": 10.254,
+      "invertBelow": 0.05,
+      "open": 0.548,
+      "legCover": [
+       1.237,
+       0.677
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   }
+  ],
+  "judique": [
+   {
+    "dia": 0.9,
+    "len": 16.1,
+    "sy": 0.194,
+    "pitch": -0.037,
+    "ends": [
+     {
+      "bed": 13.313,
+      "invertBelow": 0.05,
+      "open": 0.743,
+      "legCover": [
+       1.533,
+       1.074
+      ]
+     },
+     {
+      "bed": 13.913,
+      "invertBelow": 0.05,
+      "open": 0.743,
+      "legCover": [
+       1.319,
+       1.284
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.6,
+    "len": 19.1,
+    "sy": 0.146,
+    "pitch": 0.015,
+    "ends": [
+     {
+      "bed": 9.36,
+      "invertBelow": 0.05,
+      "open": 0.55,
+      "legCover": [
+       0.919,
+       1.142
+      ]
+     },
+     {
+      "bed": 9.075,
+      "invertBelow": 0.05,
+      "open": 0.55,
+      "legCover": [
+       1.002,
+       1.088
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.6,
+    "len": 10,
+    "sy": 0.136,
+    "pitch": 0.043,
+    "ends": [
+     {
+      "bed": 12.493,
+      "invertBelow": 0.05,
+      "open": 0.506,
+      "legCover": [
+       1.097,
+       0.723
+      ]
+     },
+     {
+      "bed": 12.058,
+      "invertBelow": 0.05,
+      "open": 0.506,
+      "legCover": [
+       1.195,
+       0.609
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.9,
+    "len": 13,
+    "sy": 0.092,
+    "pitch": 0,
+    "ends": [
+     {
+      "bed": 0.803,
+      "invertBelow": 0.062,
+      "open": 0.315,
+      "legCover": [
+       1.032,
+       1.007
+      ]
+     },
+     {
+      "bed": 1.373,
+      "invertBelow": 0.632,
+      "open": -0.255,
+      "legCover": [
+       1.251,
+       1.544
+      ]
+     }
+    ],
+    "lowSunk": 0.012,
+    "fullGrade": false
+   },
+   {
+    "dia": 0.9,
+    "len": 20,
+    "sy": 0.22,
+    "pitch": -0.064,
+    "ends": [
+     {
+      "bed": 10.195,
+      "invertBelow": 0.05,
+      "open": 0.848,
+      "legCover": [
+       1.659,
+       1.473
+      ]
+     },
+     {
+      "bed": 11.485,
+      "invertBelow": 0.05,
+      "open": 0.848,
+      "legCover": [
+       1.431,
+       1.502
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.6,
+    "len": 12,
+    "sy": 0.097,
+    "pitch": 0.016,
+    "ends": [
+     {
+      "bed": 17.263,
+      "invertBelow": 0.05,
+      "open": 0.348,
+      "legCover": [
+       0.816,
+       0.696
+      ]
+     },
+     {
+      "bed": 17.068,
+      "invertBelow": 0.05,
+      "open": 0.348,
+      "legCover": [
+       0.814,
+       0.764
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.6,
+    "len": 12.1,
+    "sy": 0.133,
+    "pitch": -0.024,
+    "ends": [
+     {
+      "bed": 38.158,
+      "invertBelow": 0.05,
+      "open": 0.496,
+      "legCover": [
+       0.954,
+       1.03
+      ]
+     },
+     {
+      "bed": 38.443,
+      "invertBelow": 0.05,
+      "open": 0.496,
+      "legCover": [
+       1.051,
+       0.875
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   },
+   {
+    "dia": 0.9,
+    "len": 15.3,
+    "sy": 0.22,
+    "pitch": -0.021,
+    "ends": [
+     {
+      "bed": 1.866,
+      "invertBelow": 0.05,
+      "open": 0.85,
+      "legCover": [
+       1.582,
+       1.381
+      ]
+     },
+     {
+      "bed": 2.181,
+      "invertBelow": 0.05,
+      "open": 0.85,
+      "legCover": [
+       1.756,
+       1.564
+      ]
+     }
+    ],
+    "lowSunk": 0,
+    "fullGrade": true
+   }
+  ]
+ },
+ "earlier": {
+  "note": "evidence at 939daaa, before the grade and footing fix; kept for history",
+  "pictures": "replaced",
+  "fields": {
+   "judiqueDataStatus": "old Judique data (props 8286f6dc not used)",
+   "codeHead": "939daaac0df9f8790d8f149a81342150243c19c8",
+   "base": "c6df652942a7ba2c655c3baa60c9b8dadec5cdda",
+   "checks": {
+    "tsc": "PASS",
+    "streams": "PASS",
+    "culverts": "PASS including bridge source mutant",
+    "playFlags": "PASS: 2073 cases, 25 frames, 7 mutants",
+    "vehicleNits": "PASS: unchanged state/draw/spec digests, mutants rejected"
+   },
+   "browser": [
+    {
+     "facts": {
+      "area": "mabou",
+      "count": 163,
+      "visible": true,
+      "crown": 3.001078038099336,
+      "ground": 9.535000085830688,
+      "level": 8,
+      "failed": 0
+     },
+     "drive": {
+      "finite": true,
+      "travel": 12.519324062119772
+     }
+    },
+    {
+     "facts": {
+      "area": "judique",
+      "count": 98,
+      "visible": true,
+      "crown": 14.21807804572873,
+      "ground": 14.800000190734863,
+      "level": 8,
+      "failed": 0
+     },
+     "drive": {
+      "finite": true,
+      "travel": 12.23331123617258
+     }
+    }
+   ],
+   "phoneBudget": {
+    "rows": 16,
+    "failures": [
+     {
+      "scene": "new-player-start/phone-mail",
+      "metric": "textures",
+      "observed": 83,
+      "ceiling": 82,
+      "originMainObserved": 83
+     }
+    ],
+    "baseCalls": 261,
+    "branchCalls": 258,
+    "ceilingsChanged": false
+   },
+   "independentReview": {
+    "model": "Claude Opus 5.5",
+    "round": 3,
+    "verdict": "APPROVE",
+    "codeHead": "939daaac0df9f8790d8f149a81342150243c19c8"
+   },
+   "wideCpu": {
+    "verdict": "NOT GREEN",
+    "totals": {
+     "CANNOT RUN": 2,
+     "FAIL": 13,
+     "PASS": 108,
+     "SKIP": 1
+    },
+    "rows": [
+     {
+      "check": "tsc",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 2.23,
+      "detail": ""
+     },
+     {
+      "check": "area",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.33,
+      "detail": ""
+     },
+     {
+      "check": "bike",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.55,
+      "detail": ""
+     },
+     {
+      "check": "church",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 0.28,
+      "detail": "Error: ENOENT: no such file or directory, open 'data/work/areas/church/church.json'"
+     },
+     {
+      "check": "explore",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 0.45,
+      "detail": "AssertionError [ERR_ASSERTION]: truck post contact at 1.1 m"
+     },
+     {
+      "check": "jump",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.29,
+      "detail": ""
+     },
+     {
+      "check": "mine",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.48,
+      "detail": ""
+     },
+     {
+      "check": "picture-first",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.41,
+      "detail": ""
+     },
+     {
+      "check": "phone",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 30.41,
+      "detail": ""
+     },
+     {
+      "check": "shift",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 2.37,
+      "detail": ""
+     },
+     {
+      "check": "streams",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.28,
+      "detail": ""
+     },
+     {
+      "check": "sxs",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 13.75,
+      "detail": ""
+     },
+     {
+      "check": "sxs-review",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 2.53,
+      "detail": ""
+     },
+     {
+      "check": "sxs-round2",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 5.8,
+      "detail": ""
+     },
+     {
+      "check": "truck",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 6.48,
+      "detail": ""
+     },
+     {
+      "check": "trailer",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 18.43,
+      "detail": ""
+     },
+     {
+      "check": "water-state",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.21,
+      "detail": ""
+     },
+     {
+      "check": "wings",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 0.79,
+      "detail": "AssertionError [ERR_ASSERTION]: main.ts passes the list with wings only to the drawing, the animals and the tree clearing of 1884 (roofSites)"
+     },
+     {
+      "check": "road-scene",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 1.2,
+      "detail": ""
+     },
+     {
+      "check": "mp",
+      "result": "CANNOT RUN",
+      "exit": 2,
+      "seconds": 0.13,
+      "detail": "Cannot run Wrangler: no installed version; versions found: none"
+     },
+     {
+      "check": "coast",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 16.27,
+      "detail": ""
+     },
+     {
+      "check": "fishing-rules",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 31.41,
+      "detail": "Error: Command failed: git show 51ed2ec:web/src/shaders.ts"
+     },
+     {
+      "check": "road-scene-prior",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 0.06,
+      "detail": "Error: Command failed: git show 2d9ab43b852fbb265a1e6dd9d60c209853635ee3:web/src/road-scene.ts"
+     },
+     {
+      "check": "roads-key",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 3.5,
+      "detail": ""
+     },
+     {
+      "check": "visit",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.26,
+      "detail": ""
+     },
+     {
+      "check": "pwa-area",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.07,
+      "detail": ""
+     },
+     {
+      "check": "pwa-shell",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.07,
+      "detail": ""
+     },
+     {
+      "check": "pwa-prime",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.08,
+      "detail": ""
+     },
+     {
+      "check": "pwa-complete",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.14,
+      "detail": ""
+     },
+     {
+      "check": "pwa-opt-in",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.14,
+      "detail": ""
+     },
+     {
+      "check": "pwa-worker",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.11,
+      "detail": ""
+     },
+     {
+      "check": "pwa-ui",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.17,
+      "detail": ""
+     },
+     {
+      "check": "pwa-migration",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 5.87,
+      "detail": ""
+     },
+     {
+      "check": "pwa-headers",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.11,
+      "detail": ""
+     },
+     {
+      "check": "about",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.25,
+      "detail": ""
+     },
+     {
+      "check": "site",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.12,
+      "detail": ""
+     },
+     {
+      "check": "site-title",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 6.03,
+      "detail": ""
+     },
+     {
+      "check": "site-worker",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 0.16,
+      "detail": "Error: Command failed: git show 140d3fd:server/src/index.ts"
+     },
+     {
+      "check": "site-world",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 3.2,
+      "detail": ""
+     },
+     {
+      "check": "touch-quality-storage",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.22,
+      "detail": ""
+     },
+     {
+      "check": "site-offline",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.77,
+      "detail": ""
+     },
+     {
+      "check": "touch-quality-policy",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.12,
+      "detail": ""
+     },
+     {
+      "check": "cdp",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.83,
+      "detail": ""
+     },
+     {
+      "check": "touch-quality",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 4.29,
+      "detail": "<stdin>:1:14: ERROR: [plugin: quality-sources] Command failed: git show ba39f7b:web/src/touch-quality.ts"
+     },
+     {
+      "check": "pwa-build",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 32.43,
+      "detail": ""
+     },
+     {
+      "check": "site-http",
+      "result": "CANNOT RUN",
+      "exit": 2,
+      "seconds": 25.21,
+      "detail": "Cannot run Wrangler: no installed version supporting --infer-origin-from-routes; versions found: none"
+     },
+     {
+      "check": "car-construction",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 15.28,
+      "detail": ""
+     },
+     {
+      "check": "runner-contract",
+      "result": "FAIL",
+      "exit": 130,
+      "seconds": 12.61,
+      "detail": "interrupted by SIGINT"
+     },
+     {
+      "check": "mutation-plugin",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.32,
+      "detail": ""
+     },
+     {
+      "check": "hud-text",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 2.22,
+      "detail": ""
+     },
+     {
+      "check": "store",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.23,
+      "detail": ""
+     },
+     {
+      "check": "bridge-source-check",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.35,
+      "detail": ""
+     },
+     {
+      "check": "big-buildings",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 1.04,
+      "detail": "AssertionError [ERR_ASSERTION]: a hand-built site was added or removed: teach tools/big-buildings-check.mjs its zones"
+     },
+     {
+      "check": "building-wing-check",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.17,
+      "detail": ""
+     },
+     {
+      "check": "building-styles",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.06,
+      "detail": ""
+     },
+     {
+      "check": "utility-mask-check",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.23,
+      "detail": ""
+     },
+     {
+      "check": "canso-trail-check",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.19,
+      "detail": ""
+     },
+     {
+      "check": "check_area_paths",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.61,
+      "detail": ""
+     },
+     {
+      "check": "browser-identity",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.14,
+      "detail": ""
+     },
+     {
+      "check": "gpu-proof",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 3.78,
+      "detail": ""
+     },
+     {
+      "check": "browser-runtime",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 140.52,
+      "detail": ""
+     },
+     {
+      "check": "browser-listeners",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 5.25,
+      "detail": ""
+     },
+     {
+      "check": "browser-ownership",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 54.73,
+      "detail": ""
+     },
+     {
+      "check": "browser-kill-everything",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 5.19,
+      "detail": ""
+     },
+     {
+      "check": "terrain-edges-mabou",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 4.33,
+      "detail": ""
+     },
+     {
+      "check": "terrain-edges-judique",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 3.79,
+      "detail": ""
+     },
+     {
+      "check": "terrain-edges-porthood",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 3.08,
+      "detail": ""
+     },
+     {
+      "check": "terrain-edges-pointtupper",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 2.9,
+      "detail": ""
+     },
+     {
+      "check": "terrain-edges-westbay",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 6.77,
+      "detail": ""
+     },
+     {
+      "check": "terrain-edges-cansocauseway",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 2.8,
+      "detail": ""
+     },
+     {
+      "check": "wrangler-contract",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.6,
+      "detail": ""
+     },
+     {
+      "check": "mail",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.25,
+      "detail": ""
+     },
+     {
+      "check": "art-stats",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.69,
+      "detail": ""
+     },
+     {
+      "check": "vehicle-nits",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 5.14,
+      "detail": ""
+     },
+     {
+      "check": "terrain-lifecycle",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 149.74,
+      "detail": ""
+     },
+     {
+      "check": "quarry",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 2.66,
+      "detail": ""
+     },
+     {
+      "check": "era",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 26.1,
+      "detail": ""
+     },
+     {
+      "check": "era-density-generated",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 57.12,
+      "detail": ""
+     },
+     {
+      "check": "era-density-fine",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 14.25,
+      "detail": ""
+     },
+     {
+      "check": "era-density-review",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.59,
+      "detail": ""
+     },
+     {
+      "check": "era-density-allocation",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 22.2,
+      "detail": ""
+     },
+     {
+      "check": "era-density-inputs",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.12,
+      "detail": ""
+     },
+     {
+      "check": "era-density-trades",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 15.36,
+      "detail": ""
+     },
+     {
+      "check": "era-density-round3",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.64,
+      "detail": ""
+     },
+     {
+      "check": "settings-toggle",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.25,
+      "detail": ""
+     },
+     {
+      "check": "quarry-review",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.62,
+      "detail": ""
+     },
+     {
+      "check": "era-density-round4",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.13,
+      "detail": ""
+     },
+     {
+      "check": "road-ground",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 1.12,
+      "detail": ""
+     },
+     {
+      "check": "mail-places",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.22,
+      "detail": ""
+     },
+     {
+      "check": "remote-runner",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 11.34,
+      "detail": "remote-check: cannot reach host"
+     },
+     {
+      "check": "mail-help",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 1.02,
+      "detail": ""
+     },
+     {
+      "check": "phone-mail-hud",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.16,
+      "detail": ""
+     },
+     {
+      "check": "phone-controls-layout",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.31,
+      "detail": ""
+     },
+     {
+      "check": "mail-preview-cost",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 0.12,
+      "detail": "AssertionError [ERR_ASSERTION]: benchmark inputs changed: explicitly regenerate the 5d678ed baseline"
+     },
+     {
+      "check": "start-here",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.48,
+      "detail": ""
+     },
+     {
+      "check": "mp-rides",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.24,
+      "detail": ""
+     },
+     {
+      "check": "mp-models",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 1.94,
+      "detail": ""
+     },
+     {
+      "check": "phone-speed-cap",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.16,
+      "detail": ""
+     },
+     {
+      "check": "blender-car",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.12,
+      "detail": ""
+     },
+     {
+      "check": "blender-car-switch",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 2.61,
+      "detail": ""
+     },
+     {
+      "check": "blender-models",
+      "result": "SKIP",
+      "exit": 2,
+      "seconds": 0.0,
+      "detail": "missing /Applications/Blender.app/Contents/MacOS/Blender"
+     },
+     {
+      "check": "dev-hooks",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.66,
+      "detail": ""
+     },
+     {
+      "check": "property-lines",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.17,
+      "detail": ""
+     },
+     {
+      "check": "horse",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 1.64,
+      "detail": ""
+     },
+     {
+      "check": "horse-pass2",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.47,
+      "detail": ""
+     },
+     {
+      "check": "guardrails",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.16,
+      "detail": ""
+     },
+     {
+      "check": "guardrail-ground-truth",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.47,
+      "detail": ""
+     },
+     {
+      "check": "guardrail-survey",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 17.12,
+      "detail": ""
+     },
+     {
+      "check": "guardrail-physics",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.16,
+      "detail": ""
+     },
+     {
+      "check": "guardrail-stream",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.16,
+      "detail": ""
+     },
+     {
+      "check": "guardrail-props",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.18,
+      "detail": ""
+     },
+     {
+      "check": "paved-pipeline",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 0.15,
+      "detail": "Missing Python shapely module."
+     },
+     {
+      "check": "paved-web",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.89,
+      "detail": ""
+     },
+     {
+      "check": "guardrail-cow",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 17.21,
+      "detail": ""
+     },
+     {
+      "check": "guardrail-railway",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 24.87,
+      "detail": ""
+     },
+     {
+      "check": "radio-edit",
+      "result": "FAIL",
+      "exit": 1,
+      "seconds": 0.06,
+      "detail": "Missing data/audio/site/radio.json. No radio bake was run."
+     },
+     {
+      "check": "light-study",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.6,
+      "detail": ""
+     },
+     {
+      "check": "porch-dog-model",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.11,
+      "detail": ""
+     },
+     {
+      "check": "start-key",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 7.99,
+      "detail": ""
+     },
+     {
+      "check": "guardrail-seams",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 19.13,
+      "detail": ""
+     },
+     {
+      "check": "guardrail-allocation",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.14,
+      "detail": ""
+     },
+     {
+      "check": "mail-stage2",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.85,
+      "detail": ""
+     },
+     {
+      "check": "yard-dog",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.47,
+      "detail": ""
+     },
+     {
+      "check": "culverts",
+      "result": "PASS",
+      "exit": 0,
+      "seconds": 0.6,
+      "detail": ""
+     }
+    ],
+    "runnerContract": "Interrupted when scratch exceeded 1 GB; scratch deleted. Not rerun.",
+    "baselineEvidence": {
+     "explore": "Same truck post-contact assertion reproduced on isolated origin/main.",
+     "wings": "Identical offending YardDogSite buildingList source line on origin/main.",
+     "big-buildings": "origin/main already has yard-dog-site.ts, absent from the unchanged known-site inventory."
+    }
+   }
+  }
+ }
+}

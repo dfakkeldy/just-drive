@@ -1,0 +1,17 @@
+{
+  // The way back: the site with the multiplayer rooms removed.
+  //   wrangler deploy -c deploy/wrangler.no-rooms.jsonc
+  // It keeps a script of three lines (server/src/files-only.ts) that only hands every request to the files. That
+  // script is needed: Cloudflare takes the migration that deletes the room class only from an upload with a script,
+  // and it refuses a deploy that merely leaves the class out.
+  // (Written from Cloudflare's documentation and checked with a dry run; not yet run against the live account.)
+  // To bring multiplayer back after this, deploy/wrangler.jsonc needs a third migration that creates the class again.
+  "name": "mabou-mail-madness",
+  "main": "../server/src/files-only.ts",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "../data/site", "binding": "ASSETS", "not_found_handling": "none" },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }, { "tag": "v2", "deleted_classes": ["Room"] }],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "mmm.fakkeldy.ca", "custom_domain": true }]
+}

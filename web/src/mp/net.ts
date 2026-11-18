@@ -1,0 +1,323 @@
+import { isPhraseId, CHAT_COOLDOWN, type PhraseId } from './social';
+import { readRace, type RaceState } from './race-wire';
+// The game's end of the multiplayer connection: it reports this car, and turns what it hears of the other cars
+// into smooth motion. No DOM and no three.js here, so tools/mp-check.mjs can run many of these in node.
+//
+// The caller drives report()/views() each frame and heartbeat() every 20 seconds while visible.
+// Hidden tabs send nothing; the room expires their seats after 60 seconds.
+import {
+  CLOSE, FLAG, HEARTBEAT, PING, ROOM_CAP, SEND_HZ, decodeSnapshot, encodeState, parseServerText,
+  readRide, type Ride, type CarState, type PeerInfo, type PeerView,
+} from './wire';
+
+export interface SocketLike {
+  binaryType: string;
+  readyState: number;
+  send(data: string | ArrayBuffer): void;
+  close(code?: number): void;
+  onopen: ((ev: unknown) => void) | null;
+  onmessage: ((ev: { data: unknown }) => void) | null;
+  onclose: ((ev: { code: number }) => void) | null;
+  onerror: ((ev: unknown) => void) | null;
+}
+export interface NetOptions {
+  /** Rooms to try, in order. A full room sends the game to the next one. */
+  urls: string[];
+  handle?: string;
+  identity?: { browserId: string; sessionKey: string };
+  socket?: (url: string) => SocketLike;
+  /** The clock, in ms. It stamps each message as it arrives, also while no frames are drawn. */
+  now?: () => number;
+}
+/** connecting: first try. on: in a room. retry: lost, trying again. full: every room is full. off: no server answers. */
+export type Status = 'connecting' | 'on' | 'retry' | 'full' | 'off';
+export type Local = Omit<CarState, 't'>;
+
+const SEND_MS = 1000 / SEND_HZ;
+// Five moving states plus at most one ride event per second stay below the room's eight-message rate.
+const RIDE_SEND_MS = 1000;
+const DELAY_MIN = SEND_MS * 1.25, DELAY_MAX = 900;   // how far in the past the other cars are shown
+const AHEAD_MS = 500;                                // the longest guess past the last report
+const STALE_MS = 1500, FADE_MS = 1500;               // a moving car that falls silent fades after this long
+const PING_MS = 25000, DEAD_MS = 60000;
+const JOIN_MS = 15000;                               // the longest wait for the room's hello
+
+const angle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
+
+class Peer {
+  readonly buf: CarState[] = [];
+  /** Local clock minus the sender's clock, for the quickest message seen: the two clocks never agree, so it is measured. */
+  offset = NaN;
+  jitter = 0; delay = DELAY_MIN; heard = 0; drawn = false;
+  private landed = -1;   // the stamp of the last teleport that was shown
+  readonly view: PeerView;
+  constructor(info: PeerInfo) {
+    this.view = { ...info, x: 0, z: 0, heading: 0, speed: 0, steer: 0, air: 0, flags: 0, alpha: 0 };
+  }
+
+  hear(s: CarState, now: number): void {
+    const newest = this.buf[this.buf.length - 1];
+    if (newest && s.t <= newest.t) return;
+    const d = now - s.t;
+    // The quickest trip sets the offset. It may creep up slowly, so a drifting clock or a route change is followed.
+    this.offset = Number.isNaN(this.offset) || d < this.offset ? d : this.offset + Math.min(d - this.offset, (now - this.heard) * 0.002);
+    this.jitter += (d - this.offset - this.jitter) * 0.1;
+    this.heard = now;
+    this.buf.push(s);
+    if (this.buf.length > 16) this.buf.shift();
+  }
+
+  /** Where the car is drawn now. dt is the frame time in seconds. */
+  show(now: number, dt: number): PeerView {
+    const v = this.view, buf = this.buf;
+    if (!buf.length) { v.alpha = 0; return v; }
+    // A rough connection is shown further in the past, so its late reports still arrive before they are needed.
+    const want = clamp(DELAY_MIN + 2 * this.jitter, DELAY_MIN, DELAY_MAX);
+    this.delay += clamp(want - this.delay, -50 * dt, 250 * dt);
+    const T = now - this.offset - this.delay;
+    let i = buf.length - 1;
+    while (i > 0 && buf[i].t > T) i--;
+    const a = buf[i], b = buf[i + 1] as CarState | undefined;
+    let x: number, z: number, heading: number, vx = a.vx, vz = a.vz, steer = a.steer, air = a.air, flags = a.flags, jump = false;
+    if (b && T >= a.t) {
+      // Between two reports: a curve through both places that leaves and arrives at the reported velocities.
+      // After a long silence (a parked car that drives off) the move belongs to the last moments before b.
+      const from = b.t - a.t > 3 * SEND_MS ? b.t - 1.5 * SEND_MS : a.t;
+      const span = (b.t - from) / 1000, u = clamp((T - from) / (b.t - from), 0, 1);
+      if (b.flags & FLAG.teleport || Math.hypot(b.x - a.x, b.z - a.z) > 40) {
+        x = a.x; z = a.z; heading = a.heading; jump = true;   // a reset or a new day: stay, then appear at b
+      } else {
+        const u2 = u * u, u3 = u2 * u;
+        const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+        x = h00 * a.x + h10 * span * a.vx + h01 * b.x + h11 * span * b.vx;
+        z = h00 * a.z + h10 * span * a.vz + h01 * b.z + h11 * span * b.vz;
+        heading = a.heading + angle(b.heading - a.heading) * u;
+        vx = a.vx + (b.vx - a.vx) * u; vz = a.vz + (b.vz - a.vz) * u;
+        steer = a.steer + (b.steer - a.steer) * u; air = a.air + (b.air - a.air) * u;
+        if (u > 0.5) flags = b.flags;
+      }
+    } else if (T < a.t) {
+      x = a.x; z = a.z; heading = a.heading;   // older than anything heard: the first report
+    } else {
+      // Past the last report: carry on along its velocity for a moment, then hold.
+      const ahead = a.flags & FLAG.parked ? 0 : Math.min(T - a.t, AHEAD_MS) / 1000;
+      x = a.x + a.vx * ahead; z = a.z + a.vz * ahead; heading = a.heading;
+    }
+    // The moment the timeline reaches a reset, the car is there at once, however short the hop.
+    // (Also when no frame was drawn while that report was the current one: the timeline may step over it.)
+    for (const s of buf) if (s.flags & FLAG.teleport && s.t > this.landed && s.t <= T) { this.landed = s.t; jump = true; }
+    const silent = now - this.heard;
+    const newest = buf[buf.length - 1];
+    v.alpha = newest.flags & FLAG.parked ? 1 : clamp(1 - (silent - STALE_MS) / FADE_MS, 0, 1);
+    // A guess that proved wrong, or a stall that ended, is closed gently: the drawn car eases to its true place and
+    // never moves at more than about twice its real speed. Past 40 m there is nothing to gain by driving there.
+    const gap = Math.hypot(x - v.x, z - v.z);
+    const far = gap > 40;
+    let k = !this.drawn || far || jump ? 1 : 1 - Math.exp(-18 * dt);
+    if (k < 1 && gap > 0) k = Math.min(k, (2 * Math.hypot(vx, vz) + 5) * dt / gap);
+    v.x += (x - v.x) * k; v.z += (z - v.z) * k;
+    v.heading = this.drawn && !far ? v.heading + angle(heading - v.heading) * k : heading;
+    v.speed = vx * Math.sin(v.heading) - vz * Math.cos(v.heading);
+    v.steer = steer; v.air = air; v.flags = flags;
+    this.drawn = true;
+    return v;
+  }
+}
+
+export class Net {
+  status: Status = 'connecting';
+  race: RaceState | null = null;
+  readonly names = new Map<number, string>();
+  readonly chats: { id: number; phrase: PhraseId; at: number }[] = [];
+  readonly bubbles = new Map<number, { id: number; phrase: PhraseId; at: number }>();
+  private lastChat = -Infinity;
+  /** The room said it relays quick chat. An older room counts any other text as a strike, so nothing is sent to it. */
+  chatSupported = false;
+  get canChat(): boolean { return this.chatSupported && this.status === 'on' && this.ws?.readyState === 1; }
+  get roster(): PeerInfo[] { return [...(this.me ? [this.me] : []), ...Array.from(this.peers.values(), p => p.view)]; }
+  chat(phrase: PhraseId): void {
+    const now = this.clock();
+    if (!isPhraseId(phrase) || !this.canChat || now-this.lastChat < CHAT_COOLDOWN) return;
+    this.lastChat = now; this.ws!.send(JSON.stringify({t:'chat',phrase}));
+  }
+  private serverOffset = 0;
+  private lastSync = -Infinity;
+  private syncSent = -Infinity;
+  serverNow(): number { return this.clock() + this.serverOffset; }
+  raceCommand(action: 'select' | 'start' | 'cancel', route?: import('./race-wire').RaceRoute): void {
+    if (this.status === 'on' && this.race && this.ws?.readyState === 1) this.ws.send(JSON.stringify({t:'race-control',action,route}));
+  }
+  me: PeerInfo | null = null;
+  room = '';
+  /** Messages sent and heard, for the readout and the checks. */
+  sent = 0; heard = 0;
+  private readonly peers = new Map<number, Peer>();
+  private readonly out: PeerView[] = [];
+  private ws: SocketLike | null = null;
+  private readonly make: (url: string) => SocketLike;
+  private readonly clock: () => number;
+  private opened = 0;
+  private room_i = 0; private fails = 0; private next = 0; private stopped = false;
+  private lastSend = -1e9; private lastHeard = 0; private lastPing = 0; private lastShow = 0;
+  private epoch = NaN;
+  private told: Local | null = null; private prev: { x: number; z: number } | null = null;
+  private ride?: Ride;
+  private sentRide?: Ride;
+  private rideSupported = false;
+  private lastRideSend = -Infinity;
+  /** Keep only the latest desired ride. An advertised server gets at most one update per second. */
+  setRide(value: Ride): void {
+    const ride = readRide(value);
+    if (ride?.kind !== this.ride?.kind || ride?.trailer !== this.ride?.trailer) { this.ride = ride; }
+  }
+
+  private pending = 0;   // flags that must go out with the next report (horn, teleport)
+
+  constructor(private readonly options: NetOptions) {
+    this.make = options.socket ?? ((url) => new WebSocket(url) as unknown as SocketLike);
+    this.clock = options.now ?? (() => performance.now());
+  }
+
+  get count(): number { return this.peers.size; }
+  teleport(): void { this.pending |= FLAG.teleport; }
+  horn(): void { this.pending |= FLAG.horn; }
+  private visible = true;
+  private heartbeatSupported = false;
+  setVisible(visible: boolean): void {
+    const back = visible && !this.visible && !this.stopped;
+    this.visible = visible;
+    if (!back) return;
+    // A short switch away keeps the seat (and a race entry): renew it at once. A seat the room expired rejoins now.
+    if (this.ws && !this.closed && this.ws.readyState === 1) { this.heartbeat(); return; }
+    this.drop(); this.closed = ''; this.peers.clear(); this.me = null; this.told = null;
+    this.status = 'connecting'; this.next = 0;
+  }
+  /** Only a room that advertised hello.heartbeat hears it: an older room counts unknown text as a strike. */
+  heartbeat(): void {
+    if (this.visible && !this.stopped && this.heartbeatSupported && this.status === 'on' && this.ws?.readyState === 1) this.ws.send(HEARTBEAT);
+  }
+  stop(): void { this.stopped = true; this.drop(); this.peers.clear(); this.status = 'off'; }
+
+  private drop(): void {
+    const ws = this.ws;
+    this.ws = null; this.rideSupported = false; this.chatSupported = false; this.heartbeatSupported = false; this.race = null; this.names.clear(); this.chats.length = 0; this.bubbles.clear(); this.lastChat = -Infinity; this.lastSync = -Infinity;
+    if (ws) { ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null; try { ws.close(); } catch { /* already gone */ } }
+  }
+
+  private lost(now: number, full: boolean): void {
+    this.drop();
+    this.peers.clear(); this.me = null; this.told = null;
+    if (full) {
+      // The next room; when all are full, wait a minute and start again at the first.
+      this.room_i++;
+      if (this.room_i >= this.options.urls.length) { this.room_i = 0; this.status = 'full'; this.next = now + 60000; } else this.next = now;
+      return;
+    }
+    this.fails++;
+    // No answer five times in a row: the server is not there (or today's allowance is used). Ask only now and then.
+    this.status = this.fails >= 5 ? 'off' : 'retry';
+    const wait = this.fails >= 5 ? 300000 : Math.min(30000, 1000 * 2 ** (this.fails - 1));
+    this.next = now + wait * (0.7 + 0.6 * Math.random());
+  }
+
+  private open(now: number): void {
+    let ws: SocketLike;
+    const { handle, identity } = this.options;
+    const query = [
+      handle ? 'handle=' + encodeURIComponent(handle) : '',
+      identity ? `browser=${encodeURIComponent(identity.browserId)}&session=${encodeURIComponent(identity.sessionKey)}` : '',
+    ].filter(Boolean).join('&');
+    try { ws = this.make(this.options.urls[this.room_i] + (query ? '?' + query : '')); } catch { this.lost(now, false); return; }
+    this.ws = ws;
+    ws.binaryType = 'arraybuffer';
+    this.lastHeard = this.lastPing = this.opened = now;
+    ws.onmessage = (ev) => { if (this.ws === ws) this.message(ev.data); };
+    ws.onclose = (ev) => { if (this.ws !== ws) return; if (ev.code === CLOSE.replaced) { this.stop(); } else this.closed = ev.code === CLOSE.full ? 'full' : 'lost'; };
+    ws.onerror = () => { if (this.ws === ws && !this.closed) this.closed = 'lost'; };
+  }
+  /** Set by the socket's events, acted on in the next frame: connecting and leaving happen in one place. */
+  private closed: '' | 'lost' | 'full' = '';
+
+  /**
+   * A message is taken in as it arrives, with the time it arrived. Nothing waits for a frame: a tab in the
+   * background draws none, and a queue would grow there without end and come back as stale news.
+   * What is kept is bounded: one short buffer for each car in the room.
+   */
+  private message(data: unknown): void {
+    const now = this.clock();
+    this.lastHeard = now;
+    if (typeof data === 'string') {
+      const race = readRace(data);
+      if (race) { if (this.race?.serial !== race.state.serial || this.race?.startAt !== race.state.startAt) this.lastSync = -Infinity; if (!this.race) this.serverOffset = race.now - now; this.race = race.state; return; }
+      if (data.length < 256) {
+        try { const sync = JSON.parse(data); if (sync.t === 'race-sync' && sync.echo === this.syncSent && Number.isFinite(sync.now) && now-sync.echo < 2000) { this.serverOffset = sync.now - (now+sync.echo)/2; return; } } catch { /* pong is plain text */ }
+      }
+      const m = parseServerText(data);
+      if (!m) return;
+      if (m.t === 'hello') {
+        this.me = { id: m.id, name: m.name, hue: m.hue }; this.room = m.room;
+        this.status = 'on'; this.fails = 0;
+        this.rideSupported = m.rides === true; this.chatSupported = m.chat === true; this.heartbeatSupported = m.heartbeat === true; this.sentRide = undefined; this.lastRideSend = -Infinity;
+        this.names.set(m.id, m.name); for (const p of m.peers) this.names.set(p.id, p.name);
+        this.peers.clear();
+        for (const p of m.peers.slice(0, ROOM_CAP)) this.peers.set(p.id, new Peer(p));
+      } else if (m.t === 'chat') {
+        if (m.id === this.me?.id || this.peers.has(m.id)) { this.bubbles.set(m.id, { id: m.id, phrase: m.phrase, at: now }); this.chats.push({ id: m.id, phrase: m.phrase, at: now }); if (this.chats.length > 6) this.chats.shift(); }
+      } else if (m.t === 'join') { this.names.set(m.id, m.name); if (m.id !== this.me?.id && (this.peers.size < ROOM_CAP || this.peers.has(m.id))) this.peers.set(m.id, new Peer(m)); }
+      else if (m.t === 'ride') { const peer = this.peers.get(m.id); if (peer) peer.view.ride = m.ride; }
+      else if (m.t === 'leave') { this.peers.delete(m.id); this.bubbles.delete(m.id); }
+      else if (m.t === 'full') this.closed = 'full';
+    } else if (data instanceof ArrayBuffer) {
+      for (const e of decodeSnapshot(data)) { this.heard++; this.peers.get(e.id)?.hear(e.state, now); }
+    }
+  }
+
+  /**
+   * Call every frame with this car and the time in ms (performance.now()). A moving car is reported five times a
+   * second. A car that stands is reported once, marked as parked, and then only the visible-page heartbeat keeps its seat alive.
+   * `held` says the game is not moving the car at all just now.
+   */
+  report(s: Local, now: number, held = false): void {
+    if (this.stopped || !this.visible) return;
+    if (Number.isNaN(this.epoch)) this.epoch = now;
+    if (this.closed) { const full = this.closed === 'full'; this.closed = ''; this.lost(now, full); }
+    if (!this.ws) { if (now >= this.next) { if (this.status !== 'retry' && this.status !== 'off' && this.status !== 'full') this.status = 'connecting'; this.open(now); } return; }
+    // A join that hangs (no answer, no error) is given up, like any other failure.
+    if (this.status !== 'on' && now - this.opened > JOIN_MS) { this.lost(now, false); return; }
+    if (this.ws.readyState !== 1) { if (this.ws.readyState !== 0) this.lost(now, false); return; }
+    if (now - this.lastHeard > DEAD_MS) { this.lost(now, false); return; }
+    if (now - this.lastPing > PING_MS) { this.lastPing = now; this.ws.send(PING); }
+    if (this.status !== 'on') return;
+    if (this.race && (this.lastSync === -Infinity || this.race.startAt > 0 && this.serverNow() - this.race.startAt < 600000 && this.race.racers.some(r=>!r.out && r.time===null) && now - this.lastSync > 5000)) { this.lastSync = this.syncSent = now; this.ws.send(JSON.stringify({t:'race-sync',echo:now})); }
+    if (this.rideSupported && this.ride && now - this.lastRideSend >= RIDE_SEND_MS
+      && (this.ride.kind !== this.sentRide?.kind || this.ride.trailer !== this.sentRide?.trailer)) {
+      this.ws.send(JSON.stringify({ t: 'ride', ride: this.ride }));
+      this.sentRide = this.ride; this.lastRideSend = now;
+    }
+
+    if (this.prev && Math.hypot(s.x - this.prev.x, s.z - this.prev.z) > 15) this.pending |= FLAG.teleport;   // R, or a new day
+    this.prev = { x: s.x, z: s.z };
+    // A car the game holds still (a pause, even in mid-air) counts as parked: one report, then silence.
+    const moving = !held && (Math.hypot(s.vx, s.vz) > 0.3 || s.air > 0.05);
+    const t = this.told;
+    const changed = !t || Math.hypot(s.x - t.x, s.z - t.z) > 0.05 || Math.abs(angle(s.heading - t.heading)) > 0.01
+      || ((s.flags ^ t.flags) & ~FLAG.parked) !== 0 || this.pending !== 0 || !(t.flags & FLAG.parked);
+    if (!(moving || changed)) return;
+    if (now - this.lastSend < (this.pending & FLAG.teleport ? 50 : SEND_MS)) return;
+    const flags = (s.flags & ~FLAG.parked) | this.pending | (moving ? 0 : FLAG.parked);
+    const state: CarState = { ...s, flags, t: Math.round(now - this.epoch) };
+    this.ws.send(encodeState(state));
+    this.sent++; this.lastSend = now; this.pending = 0;
+    this.told = { ...s, flags };
+  }
+
+  /** The other cars, as they should be drawn at this moment. The list and its items are reused between calls. */
+  views(now: number): PeerView[] {
+    const dt = clamp((now - this.lastShow) / 1000, 0, 0.25);
+    this.lastShow = now;
+    this.out.length = 0;
+    for (const p of this.peers.values()) { const v = p.show(now, dt); if (v.alpha > 0) this.out.push(v); }
+    return this.out;
+  }
+}

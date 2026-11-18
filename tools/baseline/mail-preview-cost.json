@@ -1,0 +1,84 @@
+{
+  "source": "5d678ed05e27a6d38669f36243840a3b139f62da",
+  "dataHash": "4d68356e080d94cd5504c265a8d9720cf59bd01700ab3c1fb7c3962d84268db3",
+  "mailboxes": 469,
+  "sites": 6,
+  "digest": "71536fa375ea080d5388ee246cc520181a7d40baf01cd346ad837e47aec8e127",
+  "profiles": {
+    "moving": {
+      "frames": 256,
+      "ticks": {
+        "mean": 55.19921875,
+        "max": 127
+      },
+      "boxes": {
+        "mean": 25682.046875,
+        "max": 58878
+      },
+      "selection": {
+        "mean": 467,
+        "max": 467
+      },
+      "filter": {
+        "mean": 0,
+        "max": 0
+      },
+      "hits": {
+        "mean": 0,
+        "max": 0
+      }
+    },
+    "unchanged-warm": {
+      "frames": 256,
+      "ticks": {
+        "mean": 53.125,
+        "max": 127
+      },
+      "boxes": {
+        "mean": 24694.8125,
+        "max": 58878
+      },
+      "selection": {
+        "mean": 467,
+        "max": 467
+      },
+      "filter": {
+        "mean": 0,
+        "max": 0
+      },
+      "hits": {
+        "mean": 0,
+        "max": 0
+      }
+    },
+    "same-frame-repeat": {
+      "frames": 256,
+      "ticks": {
+        "mean": 110.3984375,
+        "max": 254
+      },
+      "boxes": {
+        "mean": 51364.09375,
+        "max": 117756
+      },
+      "selection": {
+        "mean": 934,
+        "max": 934
+      },
+      "filter": {
+        "mean": 0,
+        "max": 0
+      },
+      "hits": {
+        "mean": 0,
+        "max": 0
+      }
+    }
+  },
+  "stage2Digest": "837ed89453fddf539a3364d796cf6a1400075bf874cf76afe364fdfcdda78773",
+  "frozenInput": {
+    "dataHash": "b0acc9dba8ff6f9df1b66a4fe85541ab28cc2dfd12ac1228a04ab2872cf8b7dd",
+    "mailboxes": 467
+  },
+  "reason": "Mabou land after the Mabou village delta install (4d68356e): the grocery community bank moves 8.6 m to the store wall (heading 76 to 70) and the post office site has 2 modules, not 3; mailboxes, the opening-engine digest and every counter are unchanged from 3502ef37. Before that, #179's step-29 rebake (3502ef37): 14 single-box sites drew the new styles 6/7, two boxes serve #179's hand-placed houses, and two boxes moved about 0.35 m with the narrower MacKillop gravel. 5d678ed cannot parse styles 6/7, so digest and profiles stay its unmodified run on #101's b0acc9db land (frozenInput); #119 opening contacts intentionally change flights, not the frozen 5d678ed cost limits."
+}

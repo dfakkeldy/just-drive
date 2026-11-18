@@ -1,0 +1,142 @@
+<title>Mabou Mail Madness</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: one full-screen driving view; small readouts sit in the corners, clear of the phone's system bars. */
+  :root {
+    color-scheme: dark;
+    --sky-night: #0b1620;      /* shown while the land loads */
+    --ink: #eef2f6;            /* readout text */
+    --ink-dim: #b9c3cc;
+    --panel: rgba(8, 14, 20, 0.72);
+    --panel-solid: #0c141c;
+    --maple: #d0632e;          /* the one accent: October maple */
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --text: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--sky-night); color: var(--ink); overflow: hidden;
+    font: 13px/1.4 var(--mono);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #hud {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(10px, env(safe-area-inset-left, 0px));
+    max-width: calc(100% - 80px); background: var(--panel); padding: 6px 9px; border-radius: 4px;
+    white-space: pre-wrap; pointer-events: none; font-variant-numeric: tabular-nums;
+  }
+  #gear {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
+    width: 40px; height: 40px; border: 0; border-radius: 6px; background: var(--panel); color: var(--ink);
+    font-size: 20px; cursor: pointer;
+  }
+  #gear:focus-visible, #settings input:focus-visible { outline: 2px solid var(--maple); outline-offset: 2px; }
+  #settings {
+    position: fixed; top: calc(58px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px));
+    background: var(--panel-solid); padding: 12px 14px; border-radius: 6px; min-width: 230px; max-width: calc(100% - 32px);
+    display: none; font-family: var(--text);
+  }
+  #settings.open { display: block; z-index: 8; background: var(--panel-solid); }
+  #settings label { display: block; margin-bottom: 6px; }
+  #settings input { width: 100%; accent-color: var(--maple); }
+  #settings small { color: var(--ink-dim); }
+  #credit {
+    position: fixed; right: max(8px, env(safe-area-inset-right, 0px)); bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    left: max(8px, env(safe-area-inset-left, 0px)); font: 10.5px/1.3 var(--text); color: var(--ink-dim);
+    text-align: right; pointer-events: none; text-shadow: 0 1px 2px #000;
+  }
+  #boot {
+    position: fixed; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none;
+    font: 15px/1.5 var(--text); color: var(--ink-dim); padding: 24px;
+  }
+  #boot b { display: block; color: var(--ink); font-size: 22px; letter-spacing: 0.02em; }
+
+
+  /* Keep the dev carrier's existing desktop chrome; phone placement comes from phone-layout.ts. */
+  :where(html.devPage),:where(html.devPage) body{margin:0;background:#0b1620;color:#eef;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+  :where(html.devPage){color-scheme:normal}
+  :where(html.devPage) body{padding:0}
+  :where(html.devPage) canvas{display:block;width:100vw;height:100vh;touch-action:none}
+  :where(html.devPage) canvas#c{position:static;inset:auto;width:100vw;height:100vh}
+  :where(html.devPage body:not(.tcOn)) #hud{left:10px;top:10px;max-width:none;background:#0009;white-space:pre;font-variant-numeric:normal}
+  :where(html.devPage body:not(.tcOn)) #gear{right:10px;top:10px;background:#0009;color:#eef}
+  :where(html.devPage body:not(.tcOn)) #settings{right:10px;top:58px;background:#000c;max-width:none;font-family:inherit}
+  :where(html.devPage body:not(.tcOn)) #settings input{accent-color:auto}
+  :where(html.devPage body:not(.tcOn)) #settings small{color:inherit;opacity:.7}
+  :where(html.devPage body:not(.tcOn)) #gear:focus-visible,:where(html.devPage body:not(.tcOn)) #settings input:focus-visible{outline:revert;outline-offset:revert}
+  :where(html.devPage body:not(.tcOn)) #credit{right:8px;bottom:6px;left:auto;font:10.5px/1.4 ui-monospace,Menlo,Consolas,monospace;color:inherit;opacity:.75}
+
+  #mailButton{position:fixed;z-index:4;right:max(14px,env(safe-area-inset-right,0px));bottom:calc(38% - 34px + env(safe-area-inset-bottom,0px));width:68px;height:68px;border:2px solid #ebdfba;border-radius:50%;background:#b45a29e6;color:#fff8e6;font:bold 13px ui-monospace,monospace;letter-spacing:.08em;touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer;box-shadow:0 3px 10px #0006}
+  #mailButton.held,#mailButton:active{background:#f4d698;color:#49301e;transform:scale(.94)}
+  #mailButton:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  #mailButton[hidden]{display:none}
+  #mailScore{position:fixed;z-index:3;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(28px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 38px);padding:7px 10px;border-radius:4px;background:#07131bd9;color:#fff3d5;font:12px/1.5 ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:pre-wrap;pointer-events:none}
+  @media(pointer:fine){#mailButton{left:auto;right:24px;bottom:96px}}
+  @media(max-width:600px){#mailScore{bottom:calc(64px + env(safe-area-inset-bottom,0px))}#hud{font-size:10px;max-width:calc(100% - 75px);white-space:pre-wrap}#mailScore{font-size:11px}}
+
+  :root{--sky-night:#0b1620;--ink:#eef2f6;--ink-dim:#b9c3cc;--panel:rgba(8,14,20,.82);--panel-solid:#0c141c;--maple:#d0632e;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--text:system-ui,-apple-system,"Segoe UI",sans-serif}
+  #shiftHud{position:fixed;z-index:3;top:calc(112px + env(safe-area-inset-top,0px));left:max(10px,env(safe-area-inset-left,0px));padding:8px 10px;background:var(--panel);border-left:3px solid var(--maple);white-space:pre-wrap;font:13px/1.6 var(--mono);font-variant-numeric:tabular-nums;pointer-events:none;max-width:calc(100% - 120px)}
+  #stopHint{position:fixed;z-index:3;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(88px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 120px);background:var(--panel);padding:6px 10px;font:12px/1.5 var(--mono);pointer-events:none}
+  #cameraButton{position:fixed;z-index:4;right:max(14px,env(safe-area-inset-right,0px));bottom:calc(38% + 44px + env(safe-area-inset-bottom,0px));width:68px;height:60px;border:1px solid var(--ink-dim);border-radius:9px;background:var(--panel-solid);color:var(--ink);font:bold 11px var(--mono);touch-action:none;cursor:pointer}
+  #endShift{position:fixed;z-index:4;top:calc(64px + env(safe-area-inset-top,0px));right:max(10px,env(safe-area-inset-right,0px));width:94px;min-height:56px;border:1px solid var(--ink-dim);border-radius:6px;background:var(--panel-solid);color:var(--ink);font:12px var(--mono);touch-action:none;cursor:pointer}
+  #startOver{display:block;margin-top:15px;width:100%;min-height:56px;background:var(--panel-solid);border:1px solid var(--ink-dim);border-radius:6px;color:var(--ink);font:13px var(--text);cursor:pointer}
+  #photoFlash{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:0;border:14px solid #fff;box-sizing:border-box}
+  #photoFlash.exposed{animation:shutter .5s ease-out}
+  @keyframes shutter{0%{opacity:1;background:#fff}18%{opacity:.9;background:transparent}100%{opacity:0;background:transparent}}
+  #photoTag{position:fixed;z-index:4;right:max(14px,env(safe-area-inset-right,0px));top:calc(138px + env(safe-area-inset-top,0px));max-width:220px;padding:7px;background:var(--panel-solid);border:1px solid var(--ink-dim);border-radius:4px;pointer-events:none}
+  #photoThumb{width:80px;height:45px;float:left;margin-right:8px;object-fit:cover}
+  #photoCaption{display:block;font:11px/1.45 var(--mono);color:var(--ink);min-height:45px}
+  #shiftReport{position:fixed;inset:0;z-index:20;background:#03090ecc;display:grid;place-items:center;padding:max(14px,env(safe-area-inset-top,0px)) max(14px,env(safe-area-inset-right,0px)) max(14px,env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px));box-sizing:border-box;touch-action:pan-y}
+  #reportPanel{width:min(670px,100%);max-height:100%;overflow-y:auto;overscroll-behavior:contain;background:var(--panel-solid);border:1px solid #6b746c;border-radius:12px;box-shadow:0 20px 80px #0008;font:15px/1.5 var(--text);color:var(--ink);box-sizing:border-box}
+  #reportPanel:focus{outline:none}
+  .reportBody{padding:26px 28px 12px}
+  #reportDay{font:12px var(--mono);color:var(--ink-dim);letter-spacing:.12em}
+  #reportPanel h1{font-size:27px;line-height:1.15;margin:10px 0 22px;font-weight:650;letter-spacing:-.02em}
+  #reportVerdict{color:#f2b980;font-size:20px;font-weight:650;margin:8px 0}
+  #reportConsequence{font-size:14px;color:var(--ink-dim)}
+  #reportRepairs{padding-left:20px;margin:8px 0;font-variant-numeric:tabular-nums}#repairTotal{font-size:14px;color:var(--ink-dim)}
+  #reportStats{display:grid;grid-template-columns:1fr auto;gap:7px 20px;padding:15px 0;border-top:1px solid #42505a;border-bottom:1px solid #42505a;font-variant-numeric:tabular-nums}
+  #reportStats dt{color:var(--ink-dim)}#reportStats dd{margin:0;font:600 15px var(--mono)}
+  #reportPanel h2{font-size:18px;margin:24px 0 2px}#callCount{font:12px var(--mono);color:var(--ink-dim)}
+  #reportCalls{list-style:none;padding:0;margin:16px 0}#reportCalls li{padding:16px 0;border-top:1px solid #35434d}#reportCalls strong{font-size:13px;font-weight:500;color:var(--ink-dim)}#reportCalls p{margin:5px 0 9px}#reportCalls small{font:11px/1.5 var(--mono);color:#e2a677}#reportCalls .closed small{color:#a8c5a3}
+  .reportFooter{position:sticky;bottom:0;background:var(--panel-solid);border-top:1px solid #42505a;padding:12px 28px}
+  #nextDay{width:100%;min-height:56px;background:var(--maple);color:#fff;border:0;border-radius:6px;font:600 15px var(--text);cursor:pointer}
+  #shiftReport[hidden],#cameraButton[hidden],#endShift[hidden],#photoTag[hidden]{display:none}
+  @media(pointer:fine){#cameraButton{right:24px;bottom:174px}}
+  @media(max-width:600px){#shiftHud{top:calc(112px + env(safe-area-inset-top,0px));font-size:11px;max-width:calc(100% - 120px)}#stopHint{bottom:calc(131px + env(safe-area-inset-bottom,0px));font-size:11px}#photoTag{top:calc(193px + env(safe-area-inset-top,0px));max-width:190px}.reportBody{padding:20px 19px 8px}#reportPanel h1{font-size:25px}#reportPanel{font-size:15px}.reportFooter{padding:12px 19px}#gear{width:56px;height:56px}#settings{top:calc(72px + env(safe-area-inset-top,0px))}}
+</style>
+<div id="boot"><div><b>Mabou Mail Madness</b>Loading the land around Mabou. The first load is about 15 MB.</div></div>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="shiftHud" aria-label="Today’s route"></div>
+<div id="stopHint" role="status"></div>
+<button id="cameraButton" aria-label="Take evidence photo. P.">CAMERA</button>
+<button id="endShift" hidden aria-label="End the shift. Enter.">END SHIFT</button>
+<div id="photoFlash" aria-hidden="true"></div>
+<div id="photoTag" hidden><canvas id="photoThumb" width="160" height="90" aria-hidden="true"></canvas><span id="photoCaption" role="status"></span></div>
+<div id="shiftReport" hidden role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+  <section id="reportPanel" tabindex="-1">
+    <div class="reportBody">
+      <div id="reportDay"></div><h1 id="reportTitle">The day’s work.<br>The office has had calls.</h1>
+      <p id="reportVerdict"></p><p id="reportConsequence"></p>
+      <h2>Repairs</h2><ul id="reportRepairs"></ul><p id="repairTotal"></p>
+      <dl id="reportStats"></dl>
+      <p id="reportMissed"></p>
+      <h2>Calls to the post office</h2><div id="callCount"></div><ol id="reportCalls"></ol>
+    </div>
+    <div class="reportFooter"><button id="nextDay">Start next day</button></div>
+  </section>
+</div>
+
+<button id="mailButton" aria-label="Throw mail. Hold to keep throwing.">MAIL</button>
+<div id="mailScore" role="status" aria-label="Mail service tally"></div>
+<button id="gear" aria-label="Settings">&#9881;</button>
+<div id="settings">
+  <label for="exag">Hill height: x<span id="exagValue">1.5</span></label>
+  <input id="exag" type="range" min="1" max="2.5" step="0.1">
+  <small>1.0 is true scale. Trees and buildings keep their real height.</small>
+  <button id="startOver">Start over from day 1</button>
+</div>
+<div id="credit">Elevation: Natural Resources Canada HRDEM, from Province of Nova Scotia LiDAR · Forest and base data © Province of Nova Scotia · © OpenStreetMap contributors · A private test build</div>
+<script type="module" src="app.js"></script>

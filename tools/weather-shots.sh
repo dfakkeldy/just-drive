@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Pictures of the weather moods, for a person to judge: nothing here measures the look.
+# The first six are one fixed view (shot 2) at noon and near sunset in the three moods. The others show the same
+# moods from the road (shot 1) and from the car on a desktop and a phone, and the night of a chosen clock.
+# check-all keeps $MMM_CHECK_OUT/evidence/weather-pictures/ after a pass, and remote-check brings it back.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="${MMM_CHECK_OUT:+$MMM_CHECK_OUT/evidence/weather-pictures}"; export OUT="${OUT:-$ROOT/data/work/weather-pictures-1171}"
+mkdir -p "$OUT"
+export VIEWS='clear-noon|shot=2&playerDate=2026-10-10&hour=12&weather=clear overcast-noon|shot=2&playerDate=2026-10-10&hour=12&weather=overcast fog-noon|shot=2&playerDate=2026-10-10&hour=12&weather=fog clear-sunset|shot=2&playerDate=2026-10-10&hour=18.2&weather=clear overcast-sunset|shot=2&playerDate=2026-10-10&hour=18.2&weather=overcast fog-sunset|shot=2&playerDate=2026-10-10&hour=18.2&weather=fog clear-road-noon|shot=1&playerDate=2026-10-10&hour=12&weather=clear overcast-road-noon|shot=1&playerDate=2026-10-10&hour=12&weather=overcast fog-road-noon|shot=1&playerDate=2026-10-10&hour=12&weather=fog overcast-road-sunset|shot=1&playerDate=2026-10-10&hour=18.2&weather=overcast fog-road-sunset|shot=1&playerDate=2026-10-10&hour=18.2&weather=fog fog-drive-noon|test=1&playerDate=2026-10-10&hour=12&weather=fog fog-drive-phone|test=1&playerDate=2026-10-10&hour=12&weather=fog&q=low&touch=1 overcast-drive-noon|test=1&playerDate=2026-10-10&hour=12&weather=overcast clear-drive-night|test=1&playerDate=2026-12-21&playerTime=22:00 fog-drive-night|test=1&playerDate=2026-12-21&playerTime=22:00&weather=fog overcast-drive-night|test=1&playerDate=2026-12-21&playerTime=22:00&weather=overcast clear-drive-dusk|test=1&playerDate=2026-12-21&playerTime=16:50 fog-road-dusk|shot=1&playerDate=2026-12-21&playerTime=16:50&weather=fog clear-road-night|shot=1&playerDate=2026-12-21&playerTime=22:00 fog-road-winter-noon|shot=1&playerDate=2026-12-21&playerTime=12:00&weather=fog clear-road-summer|shot=1&playerDate=2026-06-21&playerTime=12:00'
+exec bash "$ROOT/tools/yard-shots.sh" 1400 950

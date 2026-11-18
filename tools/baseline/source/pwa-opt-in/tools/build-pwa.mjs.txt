@@ -1,0 +1,32 @@
+// Finish one immutable shell and the content inventory. Never modifies hard-linked inputs.
+import { createHash } from 'node:crypto';
+import { readFileSync as read, writeFileSync as write, readdirSync, statSync, copyFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+const site = resolve(process.argv[2]);
+const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+const file = url => { const b = read(site + url); return { url, bytes: b.length, hash: hash(b) }; };
+const files = [];
+function walk(dir) { for (const e of readdirSync(site + dir, { withFileTypes: true })) { const p = `${dir}/${e.name}`; if (statSync(site+p).isDirectory()) walk(p); else files.push(file(p)); } }
+walk('/terrain'); try { walk('/areas'); } catch(e) { if(e.code !== 'ENOENT') throw e; }
+try { walk('/audio'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+files.sort((a,b) => a.url.localeCompare(b.url));
+const dataRevision = hash(JSON.stringify(files));
+const app = read(site + '/app.js');
+const appUrl = `/offline/app.${hash(app)}.js`; write(site + appUrl, app);
+const manifest = { id: '/', name: 'Mabou Mail Madness', short_name: 'Mabou Mail', start_url: '/', scope: '/', display: 'standalone', orientation: 'any', theme_color: '#0b1620', background_color: '#0b1620', description: 'Drive the October hills.', icons: [ { src:'/offline/icons/icon-192.png',sizes:'192x192',type:'image/png',purpose:'any'}, {src:'/offline/icons/icon-512.png',sizes:'512x512',type:'image/png',purpose:'any'},{src:'/offline/icons/maskable-512.png',sizes:'512x512',type:'image/png',purpose:'maskable'}] };
+write(site + '/manifest.webmanifest', JSON.stringify(manifest));
+let page = read(site + '/index.html','utf8').replace(/src="(?:(?:\.\/)?app\.js|\/offline\/app\.[a-f0-9]+\.js)"/, `src="${appUrl}"`).replace(/<(?:meta name="(?:mmm-build|mmm-page|apple-mobile-web-app-[^"]+)"|link rel="(?:manifest|apple-touch-icon)")[^>]*>\n?/g,'');
+const pageKey = hash(JSON.stringify({ page, dataRevision, app:hash(app), manifest, icons:shellIconHashes() }));
+function shellIconHashes() { return ['180','192','512'].map(n=>file(`/offline/icons/icon-${n}.png`).hash).concat(file('/offline/icons/maskable-512.png').hash); }
+page = page.replace('</head>', `<link rel="manifest" href="/manifest.webmanifest">\n<link rel="apple-touch-icon" sizes="180x180" href="/offline/icons/icon-180.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="Mabou Mail">\n<meta name="mmm-page" content="${pageKey}">\n<meta name="mmm-build" content="${hash(app).slice(0,16)}">\n</head>`);
+const pageUrl = `/offline/page.${hash(page)}.html`; write(site + pageUrl,page); write(site + '/index.html',page);
+copyFileSync(new URL('../web/pwa/sw.js',import.meta.url),site+'/sw.js');
+const shell = [pageUrl,appUrl,'/manifest.webmanifest',...['180','192','512'].map(s=>`/offline/icons/icon-${s}.png`),'/offline/icons/maskable-512.png'].map(file);
+const inventory = { schema:1, pageKey, page:pageUrl, shell, files, totalBytes: [...shell,...files].reduce((n,f)=>n+f.bytes,0) };
+const encoded = JSON.stringify(inventory), revision = hash(encoded), indexUrl = `/offline/files.${revision}.json`;
+write(site+indexUrl, encoded);
+const version = { schema:1, revision, dataRevision, pageKey, index:indexUrl, disabled:process.env.OFFLINE_DISABLED==='1' };
+write(site+'/version.json',JSON.stringify(version));
+// This address describes an immutable build; only version.json carries the live kill switch.
+write(site+`/offline/start.${pageKey}.json`,JSON.stringify({...version,disabled:false}));
+console.log(`offline: ${files.length} data files; ${inventory.totalBytes} bytes; shell ${shell.reduce((n,f)=>n+f.bytes,0)} bytes; inventory ${encoded.length} bytes; worker ${statSync(site+'/sw.js').size} bytes`);

@@ -1,0 +1,859 @@
+import * as THREE from 'three';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { Buildings, buildingSites, readBuildingStyles, type Building } from './buildings';
+import { Animals } from './animals';
+import { loadAreaManifest, readArea, roadStart, utm20ToLatLon } from './area';
+import { areaScreen } from './area-screen';
+import { readVehicle } from './garage';
+import { Landmarks } from './landmarks';
+import { Roads } from './roads';
+import { detailSetting, savedLowDetail } from './detail';
+import { offlinePlay } from './offline-play';
+import { bindOfflineVersion } from './offline-version';
+import { pictureSetting } from './picture';
+import { Props } from './props';
+import { Radio, readRadio, readStart } from './radio';
+import { Mail } from './mail';
+import { Shift } from './shift';
+import { readMode } from './mode';
+import { FreeDrive, SceneryContact, quietInteriors, quietRelief, quietEndings, prepareExplore, exploreKey, exploreHelp } from './explore';
+import { placesFor } from './places';
+import { PlacesUI } from './places-ui';
+import { RoadScene } from './road-scene';
+import { noZoom } from './no-zoom';
+import { multiplayerSwitch } from './mp/switch';
+import { MiniMap, type MapMark, type MapStop } from './minimap';
+import { Relief } from './relief';
+import { CLOCK_FACTOR, clock } from './shift-rules';
+import { Interiors } from './interiors';
+import { MineSite } from './mine-site';
+import { MineInterior } from './interior-mine';
+import { LawnDemo } from './shift-demo';
+import { Route } from './route';
+import { SEA_FRAG, SEA_VERT } from './shaders';
+import { SunShadows } from './shadows';
+import { CulvertMouths, Streams, type StreamFile } from './streams';
+import { WaterReflections } from './water';
+import { initStore } from './store';
+import { Edge } from './edge';
+import { directionFromAngles, sunAngles } from './sun';
+import { Terrain, type Manifest } from './terrain';
+import { createTitle } from './title';
+import { Endings } from './ending';
+import { YardJob } from './yard-job';
+import { FishingSite } from './fishing-site';
+import { Fishing } from './fishing';
+import { createTouchControls } from './touch';
+import { drivingHelpSetting } from './driving-help';
+import { Trees } from './trees';
+import { autopilot, Vehicle, type Input } from './vehicle';
+import { Yard } from './yard';
+import { YardSite, yardMode } from './yard-site';
+
+// Mabou village, and the game's moment: the second week of October, late afternoon (Atlantic Daylight Time, UTC-3).
+const LAT = 46.0717, LON = -61.392;
+const SEA_LEVEL = -0.2;   // metres CGVD2013; the surveyed harbour surface is at about -0.3 to -0.7
+
+const params = new URLSearchParams(location.search);
+const gameMode = readMode(params), mailMode = gameMode === 'mail';
+if (!mailMode) prepareExplore();
+const AREA = readArea(params);
+const hour = parseFloat(params.get('hour') ?? '16.75');
+// Vertical exaggeration of the land. 1 is true scale; Dan prefers a stretched look (9 Nov 2026).
+// It is a game setting: the address bar wins, then the saved choice, then the default of 1.5.
+const stored = (() => { try { return localStorage.getItem('mmm.exag'); } catch { return null; } })();
+const exagAsked = parseFloat(params.get('exag') ?? stored ?? '1.5');
+const EXAG = THREE.MathUtils.clamp(Number.isFinite(exagAsked) ? exagAsked : 1.5, 1, 3);
+const when = new Date(Date.UTC(2026, 9, 10, 3, 0, 0) + hour * 3600e3);
+
+// Fixed views for match shots: east and north in EPSG:2961, eye height above ground (or an absolute height),
+// heading from north, pitch, vertical field of view.
+interface Shot { name: string; e: number; n: number; eye?: number; abs?: number; heading: number; pitch: number; fov: number }
+const SHOTS: Shot[] = AREA.fixedShots ? [
+  { name: 'Mabou Harbour Road, toward the harbour mouth', e: 622951.3, n: 5104332.1, eye: 2.2, heading: 270, pitch: -3, fov: 51 },
+  { name: 'Over Mabou village, toward the highlands', e: 624500, n: 5102900, abs: 90, heading: 318, pitch: -7, fov: 51 },
+  { name: 'Above the harbour, toward the village', e: 619062.3, n: 5104643.4, abs: 420, heading: 105, pitch: -13, fov: 45 },
+  { name: 'Above Glenora Falls, toward the sea', e: 627900, n: 5108200, abs: 520, heading: 250, pitch: -16, fov: 50 },
+  { name: 'Mabou River bridge, long lens on the church', e: 624095.0, n: 5103049.8, eye: 2.2, heading: 9, pitch: -0.6, fov: 7 },
+  { name: 'Near the church', e: 624230, n: 5103300, abs: 45, heading: 325, pitch: -8, fov: 51 },
+] : [];
+
+// If the start fails (a file that does not load, a browser without WebGL 2), say so on the loading screen.
+const startFailed = (why: unknown) => {
+  const boot = document.getElementById('boot');
+  if (boot) boot.textContent = `Mabou Mail Madness could not start: ${why instanceof Error ? why.message : String(why)}. Reload to try again.`;
+};
+addEventListener('error', (ev) => startFailed(ev.error ?? ev.message));
+addEventListener('unhandledrejection', (ev) => startFailed(ev.reason));
+
+const base = `${import.meta.env.BASE_URL}${AREA.base}`;
+if (__PUBLIC_APP__) await offlinePlay(document.getElementById('settings'), document.getElementById('startOver'), bindOfflineVersion());
+const manifest = await loadAreaManifest<Manifest>(AREA, base).catch(error => {
+  if (__PUBLIC_APP__ && error instanceof Error && error.name === 'GameUpdateRequired') return new Promise<never>(() => {});
+  return areaScreen(error instanceof Error ? error.message : String(error));
+});
+const getJson = async (name: string) => (await fetch(`${base}/${name}`)).json();
+await initStore(base);
+
+const canvas = document.getElementById('c') as HTMLCanvasElement;
+const hud = document.getElementById('hud')!;
+const bare = params.get('hud') === '0';
+if (bare) for (const id of ['hud', 'credit', 'gear', 'touch', 'mailButton', 'mailScore', 'shiftHud', 'cameraButton', 'endShift', 'stopHint', 'photoTag', 'photoFlash']) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+
+const touchDevice = matchMedia('(pointer: coarse)').matches || params.get('touch') === '1';   // ?touch=1 shows the phone controls for a test
+if (touchDevice) noZoom();   // two quick taps on a button must not zoom the page (no-zoom.ts)
+// Phone mode trades detail for speed (first measured on an iPhone 12: 20 fps before this mode existed).
+// ?q=low or ?q=high forces it either way.
+// A desktop can choose it too, for a slow computer (the "Low detail" switch in the settings panel: detail.ts).
+const LOW = params.get('q') ? params.get('q') === 'low' : touchDevice || savedLowDetail();
+// The logarithmic depth buffer keeps far shores clean but makes every pixel cost more, so phone mode goes without it.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW, logarithmicDepthBuffer: !LOW, powerPreference: 'high-performance' });
+// Phones have many pixels and less power. On a desktop the player chooses how sharp the picture is (picture.ts).
+// A picture run (hud=0) is drawn at full sharpness, and ?res=<ratio> pins any value: so pictures and frame rate
+// measurements can be compared with each other.
+const askedRatio = Number(params.get('res'));
+const chosenPicture = !LOW && !bare && !(askedRatio > 0);
+// A first-visit measurement that ends under 30 frames a second, at whatever choice, points the player at Low detail.
+const picture = chosenPicture ? pictureSetting(renderer, document.getElementById('settings'), document.getElementById('startOver'),
+  (choice, rate) => { if (rate < 30) detail?.nudge(rate); }) : null;
+const detail = !touchDevice && !bare ? detailSetting(renderer.getContext(), document.getElementById('settings'), document.getElementById('startOver'), LOW) : null;
+if (!picture) renderer.setPixelRatio(askedRatio > 0 ? Math.min(askedRatio, 3) : Math.min(devicePixelRatio, LOW ? 1.35 : 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.55;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(51, 1, LOW ? 0.45 : 0.3, LOW ? 150000 : 400000);
+camera.rotation.order = 'YXZ';
+
+const { lat, lon } = AREA.fixedSun ? { lat: LAT, lon: LON } : utm20ToLatLon(...manifest.village);
+const sun = sunAngles(when, lat, lon);
+const sunDir = directionFromAngles(sun.az, sun.el);
+// Low sun is warmer and weaker; the sky fill grows in share as the sun drops.
+const low = THREE.MathUtils.clamp(sun.el / 35, 0, 1);
+const sunColor = new THREE.Color().setRGB(1.0, 0.62 + 0.3 * low, 0.36 + 0.5 * low).multiplyScalar(2.2 + 2.3 * low);
+const skyColor = new THREE.Color().setRGB(0.30, 0.44, 0.72).multiplyScalar(0.55 + 0.5 * low);
+const fogColor = new THREE.Color().setRGB(0.62, 0.66, 0.72).multiplyScalar(0.75 + 0.35 * low);
+
+const shared: Record<string, THREE.IUniform> = {
+  sunDir: { value: sunDir }, sunColor: { value: sunColor }, skyColor: { value: skyColor }, fogColor: { value: fogColor },
+  fogDensity: { value: 0.000032 }, seaLevel: { value: SEA_LEVEL }, time: { value: 0 },
+  gulfTint: { value: AREA.gulfTint },
+};
+
+const sky = new Sky();
+sky.scale.setScalar(300000);
+const su = sky.material.uniforms;
+su.turbidity.value = 5.5; su.rayleigh.value = 1.7; su.mieCoefficient.value = 0.006; su.mieDirectionalG.value = 0.82;
+su.sunPosition.value.copy(sunDir);
+scene.add(sky);
+
+const sea = new THREE.Mesh(
+  new THREE.PlaneGeometry(600000, 600000).rotateX(-Math.PI / 2),
+  new THREE.ShaderMaterial({ vertexShader: SEA_VERT, fragmentShader: SEA_FRAG, defines: LOW ? { LOW: 1 } : { SEA_WATER: 1 }, uniforms: shared }));
+sea.position.y = SEA_LEVEL;
+sea.frustumCulled = false;
+if (LOW) {
+  // Without the fine depth buffer the sea and the sea floor would flicker far away. So the sea is painted first,
+  // as a backdrop, and the land leaves out everything below sea level.
+  sky.renderOrder = -2;
+  sea.renderOrder = -1;
+  (sea.material as THREE.ShaderMaterial).depthTest = false;
+  (sea.material as THREE.ShaderMaterial).depthWrite = false;
+}
+scene.add(sea);
+
+const landmarkList = AREA.landmarks ? await getJson('landmarks.json') : [];
+const clear = landmarkList.map((lm: { footprint: [number, number][] }) => {
+  const xs = lm.footprint.map((p) => p[0] - manifest.village[0]), zs = lm.footprint.map((p) => manifest.village[1] - p[1]);
+  return [Math.min(...xs) - 4, Math.min(...zs) - 4, Math.max(...xs) + 4, Math.max(...zs) + 4];
+});
+// The works yard on Highway 19: its own model replaces the measured boxes there, unless the owners said no.
+const yardSite = AREA.worksYard ? new YardSite(manifest.village, yardMode(params)) : null;
+const buildingList: Building[] | null = manifest.buildings ? await getJson(manifest.buildings.file).then((data: { buildings: Building[] }) =>
+  yardSite ? Yard.buildings(data.buildings, yardSite, manifest.village) : data.buildings) : null;
+const buildingStyles = manifest.buildingStyles
+  ? await getJson(manifest.buildingStyles.file).then(readBuildingStyles).catch((e: unknown) => { console.warn('building styles', e); return undefined; })
+  : undefined;
+const buildings = buildingList ? new Buildings(buildingList, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
+// A building drawn from wings is still one property, at its place from before the split. Everything that counts
+// houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
+const properties = buildingSites(buildingList ?? []);
+if (buildings) clear.push(...buildings.clear);
+if (yardSite) clear.push(...yardSite.clear);
+const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
+if (fishingSite) clear.push(...fishingSite.clear);
+const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear);
+if (yardSite) terrain.sites.push(yardSite);
+if (fishingSite) terrain.sites.push(fishingSite);
+// Brooks are scenery: when their file is missing or broken, the game still starts, without them.
+// ?brooks=0 leaves them out (to time one build both ways).
+terrain.streams = manifest.streams && params.get('brooks') !== '0'
+  ? await getJson(manifest.streams.file).then((d: StreamFile) => new Streams(d, manifest.village)).catch((e: unknown) => { console.warn('streams', e); return null; })
+  : null;
+// A mouth is stood on the ground only when the finest land is there: on coarse land it would hang in the air.
+const culvertMouths = terrain.streams
+  ? new CulvertMouths(terrain.streams, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; })
+  : null;
+if (LOW) { terrain.split = 1.15; terrain.low = true; }   // fine tiles and single trees reach less far
+else if (params.get('shadows') !== '0') terrain.shadows = true;
+if (buildings) scene.add(buildings.mesh);
+const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far') : null;
+if (trees) scene.add(trees.group);
+if (culvertMouths) scene.add(culvertMouths.group);
+scene.add(terrain.group);
+const [VE, VN] = manifest.village;
+const toWorld = (e: number, n: number) => new THREE.Vector3(e - VE, 0, VN - n);
+
+// Models use the standard materials, so they need scene lights that agree with the terrain shader.
+const sunLight = new THREE.DirectionalLight(sunColor, 1.0);
+sunLight.position.copy(sunDir);
+scene.add(sunLight, new THREE.HemisphereLight(skyColor, new THREE.Color(0.22, 0.20, 0.15), 3.2));
+// Desktop quality: real shadows from the low sun. The phone build keeps its speed and goes without.
+// ?shadows=0 turns them off; ?shadows=1 keeps them on even on a slow computer (pictures are taken that way).
+const sunShadows = terrain.shadows ? new SunShadows(renderer, scene, sunLight, sunDir, params.get('shadows') === '1') : null;
+if (sunShadows) Object.assign(terrain.uniforms, sunShadows.uniforms);   // every land tile made from here on reads the map
+// Phones do not load the grass module or read the cover image back to the CPU.
+const grass = LOW ? null : new (await import('./grass')).Grass(terrain, params.get('grass'));
+if (grass) scene.add(grass.group);
+const landmarks = AREA.landmarks ? new Landmarks(landmarkList, manifest.village, EXAG, SEA_LEVEL) : null;
+if (landmarks) scene.add(landmarks.group);
+const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea, SEA_LEVEL,
+  new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
+  terrain, trees?.group ?? null, params.get('reflections'));
+if (waterReflections) {
+  Object.assign(shared, waterReflections.uniforms);
+  Object.assign(terrain.uniforms, waterReflections.uniforms);
+}
+
+const roads = new Roads(manifest.roads ? await getJson(manifest.roads.file) : { roads: [] }, manifest.village, terrain);
+scene.add(roads.group);
+// Roadside props are scenery: when their file is missing or broken, the game still starts.
+const props = await (async () => {
+  if (!manifest.props) return null;
+  try { const data = await getJson(manifest.props.file); return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain); }
+  catch (e) { console.warn('props', e); return null; }
+})();
+if (props) scene.add(props.group);
+const garageEntry = readVehicle(params), vehicleSpec = garageEntry.spec;
+const car = garageEntry.build(mailMode);   // off duty when there is no mail: no roof sign, lamp or mail plate
+scene.add(car.root);
+const vehicle = new Vehicle(car, terrain, roads, SEA_LEVEL, vehicleSpec);
+// The playable area stops 120 m inside the box of fine map data. Past it the roads are not in the data.
+const EDGE = 120;
+const edge = manifest.mid ? new Edge(roads, terrain, [manifest.mid[0] - VE + EDGE, VN - manifest.mid[3] + EDGE, manifest.mid[2] - VE - EDGE, VN - manifest.mid[1] - EDGE], AREA.route, vehicleSpec.envelope.nose) : null;
+if (edge) { vehicle.bounds = edge.bounds; scene.add(edge.group); }
+const yard = yardSite ? new Yard(yardSite, terrain, LOW) : null;
+if (yard) scene.add(yard.group);
+// The small switch loads other players' cars only after consent.
+// A build made with VITE_MP=0 has the code compiled out (web/vite.artifact.config.ts sets the default, which is on).
+const MULTIPLAYER = import.meta.env.DEV || import.meta.env.VITE_MP === '1';
+const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, vehicle, low: LOW, bare, params, area: AREA.id, touch: touchDevice,
+  settings: document.getElementById('settings'), before: document.getElementById('startOver'),
+  ground: (x, z) => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; } }) : null;
+let hookPlaced = false, jumpPlacement = 0;
+const jumpCheck = import.meta.env.DEV && params.get('jumpCheck') === '1';
+const fishingCheck = import.meta.env.DEV && params.get('fishingCheck') === '1';
+const resolveYardSolids = () => {
+  if (endings.busy) return;
+  yard?.resolveSolids(vehicle);
+  fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
+  yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
+  syncRoadScenePause();
+  if (!scenePaused()) roadScene?.step(1 / 120, vehicle, vehicle.damageActive);
+};
+function driveVehicle(dt: number, input: Input): void {
+  syncRoadScenePause();
+  if (scenePaused()) return;
+  terrain.withGroundContact(vehicle, () => vehicle.update(dt, input, resolveYardSolids));
+}
+// For test scripts on the dev server only: tools/yard-drive.mjs moves the car through this, and tools/fps-check.mjs
+// reads from the renderer how many frames it has really drawn.
+if (import.meta.env.DEV) Object.assign(window, { mmm: { vehicle: new Proxy(vehicle, {
+  set(target, key, value) {
+    if (['x', 'z', 'y', 'heading', 'vx', 'vz', 'vy', 'speed', 'airborne'].includes(String(key))) { hookPlaced = true; jumpPlacement++; }
+    return Reflect.set(target, key, value);
+  },
+  get(target, key) {
+    const value = Reflect.get(target, key);
+    if (typeof value !== 'function') return value;
+    return (...args: unknown[]) => {
+      if (key === 'place' || key === 'restart' || key === 'respawn') { hookPlaced = true; jumpPlacement++; }
+      return value.apply(target, args);
+    };
+  },
+}), area: AREA, roads, edge, yard, renderer, grass, trees, terrain, camera, driveVehicle, water: waterReflections, detail, low: LOW } });
+if (import.meta.env.DEV && multiplayer) Object.assign((window as unknown as { mmm: object }).mmm, { mp: multiplayer });   // for tools/mp-game-check.mjs
+const mail = mailMode ? new Mail(terrain, props, properties, manifest.village, LOW) : new SceneryContact(props);
+scene.add(mail.group);
+const mailScore = document.getElementById('mailScore');
+const mailButton = document.getElementById('mailButton');
+const mailPointers = new Set<number>();
+let mailRequested = false, photoRequested = false;
+mailButton?.addEventListener('pointerdown', (ev) => {
+  ev.preventDefault(); ev.stopPropagation();
+  mailButton.setPointerCapture(ev.pointerId); mailPointers.add(ev.pointerId); mailRequested = true;
+  mailButton.classList.add('held');
+});
+const releaseMail = (ev: PointerEvent) => {
+  mailPointers.delete(ev.pointerId);
+  if (!mailPointers.size) mailButton?.classList.remove('held');
+};
+mailButton?.addEventListener('pointerup', releaseMail);
+mailButton?.addEventListener('pointercancel', releaseMail);
+mailButton?.addEventListener('lostpointercapture', releaseMail);
+addEventListener('blur', () => { mailRequested = false; mailPointers.clear(); mailButton?.classList.remove('held'); });
+const animals = AREA.animals ? new Animals(roads, terrain, buildingList, manifest.village) : null;
+await animals?.ready;
+if (animals) scene.add(animals.group);
+
+// ---- modes --------------------------------------------------------------------------------
+// drive: behind the car. fly: a free camera, also used by the fixed views.
+let mode: 'drive' | 'fly' = AREA.fixedShots && params.has('shot') || params.has('cam') ? 'fly' : 'drive';
+let view: 'chase' | 'seat' = params.get('view') === 'seat' ? 'seat' : 'chase';
+const demo = params.has('demo') ? parseFloat(params.get('demo')!) || 8 : 0;   // seconds of self-driving, for screenshots
+let yaw = 0, pitch = 0, flySpeed = 40, pendingShot: Shot | null = null;
+let waitingToDrive = true;
+
+function applyShot(s: Shot) {
+  mode = 'fly';
+  const p = toWorld(s.e, s.n);
+  yaw = -THREE.MathUtils.degToRad(s.heading);
+  pitch = THREE.MathUtils.degToRad(s.pitch);
+  camera.fov = s.fov;
+  camera.position.set(p.x, s.abs !== undefined ? s.abs * EXAG : 80, p.z);
+  pendingShot = s.eye !== undefined ? s : null;   // settle on the ground once it has loaded
+  resize();
+}
+
+function placeFirstStop(): void {
+  const start = AREA.route ? shift.run.start : roadStart(roads.roads);
+  if (start) vehicle.restart(start.x, start.z, start.heading);
+  else vehicle.restart(0, 0, Math.PI / 4);
+}
+// Boxes within 12 m of the wall, or past it, are left to the next carrier.
+if (edge) { const [bx0, bz0, bx1, bz1] = edge.bounds; Route.reachable = (x, z) => x > bx0 + 12 && x < bx1 - 12 && z > bz0 + 12 && z < bz1 - 12; }
+const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, properties, manifest.village, LOW, params, () => {
+  interiors.reset(); relief.reset(); yardJob?.reset(); fishing?.reset(); roadScene?.reset(); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
+  touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; demoPhoto = false;
+}, AREA.route) : new FreeDrive(roads, manifest.village);
+const roadScene = AREA.roadScene && shift instanceof Shift ? new RoadScene(roads, terrain, shift, params) : null;
+if (roadScene) { scene.add(roadScene.group); vehicle.placementGuard = pose => roadScene.allowPlacement(pose, vehicleSpec); }
+if (touchDevice && !bare) drivingHelpSetting(document.getElementById('settings'), document.getElementById('startOver'), strong => { vehicle.strongHelp = strong; });
+vehicle.damage = shift.damage; vehicle.desktopPull = !touchDevice && !LOW;
+if (import.meta.env.DEV) Object.assign((window as unknown as { mmm: object }).mmm, { shift, roadScene, animals });
+const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => shift.interiorResult(receipt), bare) : quietInteriors();
+const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village) : null;
+if (mineSite) scene.add(mineSite.group);
+if (mineSite?.roadPoint) interiors.register({ id: 'mine', name: 'Mabou Mines', position: mineSite.roadPoint, radius: 14,
+  prompt: 'Parcel for the night shift. Signature required.', create: day => new MineInterior(day) });
+if (AREA.colliery && params.get('interior') === 'mine') interiors.enter('mine');
+// The mini map and the bladder gauge build their own parts of the page.
+const miniMap = bare ? null : new MiniMap(roads, !mailMode);
+const mapStops: MapStop[] = [], mapMarks: MapMark[] = [], mapCars: { x: number; z: number }[] = [];
+let mapTimer = 0;
+function refreshMap(): void {
+  mapStops.length = mapMarks.length = 0;
+  multiplayer?.marks(mapCars);
+  if (placesUI) mapMarks.push(...placesUI.marks);
+  if (props) for (const stop of shift.run.stops) {
+    const i = stop.index, p = i < props.mail.length ? props.mail[i] : props.sites[i - props.mail.length];
+    if (p) mapStops.push({ x: p.x, z: p.z, due: shift.remaining[i] > 0 });
+  }
+  for (const door of interiors.doors.values()) mapMarks.push({ x: door.position.x, z: door.position.z, label: door.name });
+}
+const relief = mailMode ? new Relief(properties.filter((b) => b.kind === 'house').map((b) => ({ x: b.x - manifest.village[0], z: manifest.village[1] - b.y })),
+  terrain, (o) => { if (o.seen) shift.seenAtRoadside(o.house, o.x, o.z); if (params.has('relief')) console.log(`[relief] ${JSON.stringify(o)} calls ${shift.complaints.all.length}`); }, bare) : quietRelief();
+// The car radio plays the author's own songs when the build carries them (audio/radio.json). ?radio=0 leaves it out.
+// It is fetched further down, once the title card exists.
+let radio: Radio | null = null;
+// Test links: ?relief=0.9 sets the gauge (and shows it in a demo drive); ?break=1 steps out as soon as the car has stopped.
+const reliefTest = Number(params.get('relief'));
+if (reliefTest > 0) relief.level = Math.min(1, reliefTest);
+// The daily run supplies the start unless the address bar supplies: ?at=east,north,heading
+{
+  const at = params.get('at')?.split(',').map(Number);
+  // ?road=Mabou Harbour Road&f=0.4 puts the car on a named road, at a fraction of its longest piece.
+  const named = params.get('road');
+  const piece = named ? roads.roads.filter((r) => r.name?.toLowerCase() === named.toLowerCase() && !r.bridge).sort((a, b) => b.pts.length - a.pts.length)[0] : undefined;
+  if (import.meta.env.DEV && (params.get('at') === 'wharf' || params.get('at') === 'wharf-road')) {
+    const roadStart = params.get('at') === 'wharf-road';
+    const p = toWorld(roadStart ? 618800.52 : 618657.9, roadStart ? 5105101.83 : 5104815.8);
+    vehicle.place(p.x, p.z, THREE.MathUtils.degToRad(roadStart ? 168 : 165));
+    hookPlaced = true; jumpPlacement++;
+  } else if (piece) {
+    const k = Math.min(piece.pts.length - 2, Math.floor(THREE.MathUtils.clamp(parseFloat(params.get('f') ?? '0.5'), 0, 1) * (piece.pts.length - 1)));
+    const [ax, az] = piece.pts[k], [bx, bz] = piece.pts[k + 1];
+    const flip = params.get('dir') === 'back' ? Math.PI : 0;
+    vehicle.place(ax, az, Math.atan2(bx - ax, -(bz - az)) + flip);
+  } else if (at && at.length >= 2) {
+    const p = toWorld(at[0], at[1]);
+    vehicle.place(p.x, p.z, THREE.MathUtils.degToRad(at[2] ?? 0));
+  } else {
+    placeFirstStop();
+  }
+}
+
+scene.add(shift.group);
+animals?.registerEvidence(shift.evidence);
+document.getElementById('cameraButton')!.addEventListener('click', () => { photoRequested = true; });
+for (const id of ['cameraButton', 'endShift', 'shiftReport', 'settings']) {
+  for (const event of ['pointerdown', 'pointerup', 'pointermove']) document.getElementById(id)?.addEventListener(event, (ev) => ev.stopPropagation());
+}
+// ?stuffed=first (or a stable props index) gives a close inspection of today's old flyers.
+if (mailMode && params.has('stuffed') && props) {
+  const asked = Number(params.get('stuffed'));
+  const i = Number.isInteger(asked) && asked >= 0 && shift.today.stuffed[asked] ? asked : shift.today.stuffed.findIndex(Boolean);
+  const p = props.mail[i];
+  if (p) {
+    const road = roads.nearest(p.x, p.z, 40);
+    if (road) {
+      let heading = road.heading;
+      if ((p.x - road.x) * Math.cos(heading) + (p.z - road.z) * Math.sin(heading) < 0) heading += Math.PI;
+      vehicle.place(road.x - Math.sin(heading) * 3, road.z + Math.cos(heading) * 3, heading);
+    }
+  }
+}
+
+const lawnHouse = mailMode && params.has('lawn') ? properties.find((b) => b.id === Number(params.get('lawn')) && b.kind === 'house') : null;
+const lawnDemo = lawnHouse ? new LawnDemo(lawnHouse, manifest.village, vehicle) : null;
+
+// ---- input --------------------------------------------------------------------------------
+const keys = new Set<string>();
+// Enter or Space on a control that has the focus (Tab, then the key) belongs to that control, not to the game.
+// The one exception is Space on the mail button, which throws mail by design.
+const ownedByControl = (ev: KeyboardEvent) => (ev.code === 'Enter' || ev.code === 'Space') && ev.target instanceof HTMLElement
+  && !(ev.code === 'Space' && ev.target === mailButton) && ev.target.closest('button, input, select, textarea, a[href]') !== null;
+// A mouse click or a tap leaves the focus on the button it hit. Hand the focus back, so Space stays the brake.
+addEventListener('click', (ev) => { if (ev.detail > 0 && ev.target instanceof HTMLElement) ev.target.closest('button')?.blur(); });
+addEventListener('keydown', (ev) => {
+  if (!started || endings.busy) return;   // a modal owns input
+  if (shift.ended) return;
+  if (ownedByControl(ev)) return;
+  if (!mailMode && exploreKey(ev.code)) return;
+  if (interiors.busy) {
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight', 'Space'].includes(ev.code)) { ev.preventDefault(); keys.add(ev.code); }
+    if (ev.code === 'Escape' && !ev.repeat) { ev.preventDefault(); interiors.leave(); }
+    return;
+  }
+  if (ev.code === 'KeyG' && !ev.repeat) { ev.preventDefault(); interiors.enter(); keys.clear(); touch.steer = touch.throttle = 0; return; }
+  keys.add(ev.code);
+  if (ev.code === 'KeyP' && !ev.repeat) { ev.preventDefault(); photoRequested = true; }
+  if (ev.code === 'Enter' && !ev.repeat) { ev.preventDefault(); shift.end(); return; }
+  if (mode === 'drive' && !ev.repeat && (ev.code === 'KeyM' || ev.code === 'KeyE')) { ev.preventDefault(); mailRequested = true; }
+  const n = parseInt(ev.key, 10);
+  if (n >= 1 && n <= SHOTS.length) applyShot(SHOTS[n - 1]);
+  if (ev.code === 'KeyF') { yardJob?.judge.cancel(); mode = mode === 'drive' ? 'fly' : 'drive'; if (mode === 'fly') { camera.fov = 51; resize(); } }
+  if (ev.code === 'KeyV') view = view === 'chase' ? 'seat' : 'chase';
+  if (ev.code === 'KeyR') vehicle.respawn();
+  if (ev.code === 'KeyH' && !ev.repeat && mode === 'drive') honk();
+  if (ev.code === 'KeyB' && !ev.repeat && mode === 'drive') relief.request();
+  if (ev.code === 'KeyT' && !ev.repeat && mode === 'drive') radio?.next();
+});
+addEventListener('keyup', (ev) => keys.delete(ev.code));
+addEventListener('blur', () => keys.clear());
+addEventListener('wheel', (ev) => { flySpeed = THREE.MathUtils.clamp(flySpeed * (ev.deltaY < 0 ? 1.25 : 0.8), 2, 4000); }, { passive: true });
+
+const pointers = new Map<number, { x: number; y: number; sx: number; sy: number }>();
+let flyTouch = 0;
+// On a phone the visible pad and pedals own the driving input; with a mouse the old drag on the picture still works.
+const honk = () => { if (started && !shift.ended && !endings.busy && !document.hidden && !interiors.busy && mode === 'drive') { animals?.honk(vehicle); roadScene?.honk(vehicle); multiplayer?.horn(); } };
+const pad = touchDevice && !bare ? createTouchControls({
+  reset: () => vehicle.respawn(),
+  view: () => { view = view === 'chase' ? 'seat' : 'chase'; },
+  horn: honk,
+}) : null;
+const touch = pad?.state ?? { steer: 0, throttle: 0 };
+shift.phone = pad !== null;
+canvas.addEventListener('pointerdown', (ev) => {
+  canvas.setPointerCapture(ev.pointerId);
+  pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, sx: ev.clientX, sy: ev.clientY });
+  readTouch();
+});
+const release = (ev: PointerEvent) => { pointers.delete(ev.pointerId); if (pointers.size < 2) flyTouch = 0; readTouch(); };
+canvas.addEventListener('pointerup', release);
+canvas.addEventListener('pointercancel', release);
+canvas.addEventListener('pointermove', (ev) => {
+  const p = pointers.get(ev.pointerId);
+  if (!p) return;
+  const dx = ev.clientX - p.x, dy = ev.clientY - p.y;
+  p.x = ev.clientX; p.y = ev.clientY;
+  if (mode === 'drive') { readTouch(); return; }
+  if (pointers.size >= 2) { flyTouch = THREE.MathUtils.clamp(flyTouch - dy * 0.02, -1, 1); return; }   // two fingers: drag up to fly forward
+  const k = (camera.fov / 51) * 0.0032;
+  yaw -= dx * k;
+  pitch = THREE.MathUtils.clamp(pitch - dy * k, -1.5, 1.5);
+  pendingShot = null;
+});
+
+/** Touch driving: the left half of the screen steers by sideways drag; the right half is the pedals (top: go, bottom: brake and reverse). */
+function readTouch() {
+  if (pad) return;
+  touch.steer = 0; touch.throttle = 0;
+  if (mode !== 'drive') return;
+  for (const p of pointers.values()) {
+    if (p.sx < innerWidth / 2) touch.steer = THREE.MathUtils.clamp((p.x - p.sx) / 70, -1, 1);
+    else touch.throttle = p.y < innerHeight * 0.62 ? 1 : -1;
+  }
+}
+
+function driveInput(): Input {
+  const k = (a: string, b: string) => (keys.has(a) || keys.has(b) ? 1 : 0);
+  return {
+    throttle: THREE.MathUtils.clamp(k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown') + touch.throttle, -1, 1),
+    steer: THREE.MathUtils.clamp(k('KeyD', 'ArrowRight') - k('KeyA', 'ArrowLeft') + touch.steer, -1, 1),
+    handbrake: keys.has('Space') && document.activeElement !== mailButton,
+    touch: touchDevice && k('KeyW', 'ArrowUp') + k('KeyS', 'ArrowDown') + k('KeyA', 'ArrowLeft') + k('KeyD', 'ArrowRight') === 0,
+  };
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+
+function fly(dt: number) {
+  const f = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) + flyTouch;
+  const r = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
+  const u = (keys.has('KeyE') || keys.has('Space') ? 1 : 0) - (keys.has('KeyQ') || keys.has('KeyC') ? 1 : 0);
+  if (f || r || u) pendingShot = null;
+  const v = flySpeed * (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 5 : 1) * dt;
+  camera.rotation.set(pitch, yaw, 0);
+  const dir = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
+  const right = new THREE.Vector3(1, 0, 0).applyEuler(camera.rotation);
+  camera.position.addScaledVector(dir, f * v).addScaledVector(right, r * v);
+  camera.position.y += u * v;
+  const g = terrain.heightAt(camera.position.x, camera.position.z);
+  if (g !== null) {
+    const floor = Math.max(g, SEA_LEVEL) + 1.2;
+    if (pendingShot) camera.position.y = Math.max(g, SEA_LEVEL) + pendingShot.eye!;
+    else if (camera.position.y < floor) camera.position.y = floor;
+  }
+}
+
+// The chase camera trails the car's direction of travel and never dips under the ground.
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+let camHeading = 0, camReady = false;
+function chase(dt: number) {
+  if (view === 'seat') {
+    car.driverEye.getWorldPosition(camera.position);
+    camera.rotation.set(vehicle.pitch * 0.8, -vehicle.heading, 0);
+    if (camera.fov !== 68) { camera.fov = 68; camera.updateProjectionMatrix(); }
+    return;
+  }
+  if (camera.fov !== 58) { camera.fov = 58; camera.updateProjectionMatrix(); }
+  const moving = Math.hypot(vehicle.vx, vehicle.vz) > 2 && vehicle.speed > 0;
+  const want = moving ? Math.atan2(vehicle.vx, -vehicle.vz) : vehicle.heading;
+  if (!camReady) camHeading = want;
+  camHeading += Math.atan2(Math.sin(want - camHeading), Math.cos(want - camHeading)) * Math.min(1, 3.5 * dt);
+  const back = vehicleSpec.chase.back + Math.min(Math.abs(vehicle.speed) * vehicleSpec.chase.speedBack, vehicleSpec.chase.maxSpeedBack);
+  const tx = vehicle.x - Math.sin(camHeading) * back, tz = vehicle.z + Math.cos(camHeading) * back;
+  let ty = vehicle.y + vehicleSpec.chase.height;
+  const g = terrain.surfaceAt(tx, tz);
+  if (g) ty = Math.max(ty, g.ground + g.canopy * 0.5 + 1.3);
+  const k = camReady ? Math.min(1, 7 * dt) : 1;
+  camPos.lerp(new THREE.Vector3(tx, ty, tz), k);
+  camLook.lerp(new THREE.Vector3(vehicle.x + Math.sin(vehicle.heading) * vehicleSpec.chase.lookAhead, vehicle.y + vehicleSpec.chase.lookHeight, vehicle.z - Math.cos(vehicle.heading) * vehicleSpec.chase.lookAhead), k);
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+  camReady = true;
+}
+
+// ---- settings -----------------------------------------------------------------------------
+{
+  const slider = document.getElementById('exag') as HTMLInputElement, label = document.getElementById('exagValue')!;
+  const panel = document.getElementById('settings')!;
+  slider.value = String(EXAG);
+  label.textContent = EXAG.toFixed(1);
+  slider.addEventListener('input', () => { label.textContent = (+slider.value).toFixed(1); });
+  // The land is rebuilt from the tiles, so a new value reloads the view.
+  slider.addEventListener('change', () => {
+    try { localStorage.setItem('mmm.exag', slider.value); } catch { /* private window: the choice lasts for this visit only */ }
+    // Some hosts drop the address bar's query, so the saved value is the main way; the query is the fallback.
+    const q = new URLSearchParams(location.search);
+    if (q.has('exag') || stored === null && (() => { try { return localStorage.getItem('mmm.exag') === null; } catch { return true; } })()) {
+      q.set('exag', slider.value);
+      location.search = q.toString();
+    } else location.reload();
+  });
+  document.getElementById('gear')!.addEventListener('click', () => {
+    panel.classList.toggle('open');
+    // A short phone can scroll this panel; each visit starts with END SHIFT in reach.
+    if (panel.classList.contains('open')) panel.scrollTop = 0;
+  });
+}
+
+// ---- loop ---------------------------------------------------------------------------------
+// ?cam=east,north,height above sea,heading,pitch,field of view: a free fixed view, for pictures.
+// With &camground=1 the height is above the ground, and the view settles on the ground as it loads.
+if (params.has('cam')) {
+  const c = params.get('cam')!.split(',').map(Number);
+  const at = { name: 'cam', e: c[0], n: c[1], heading: c[3] ?? 0, pitch: c[4] ?? -20, fov: c[5] ?? 45 };
+  applyShot(params.get('camground') === '1' ? { ...at, eye: c[2] ?? 2 } : { ...at, abs: (c[2] ?? 100) / EXAG });
+}
+if (SHOTS.length && params.has('shot')) applyShot(SHOTS[THREE.MathUtils.clamp(parseInt(params.get('shot')!, 10) || 1, 1, SHOTS.length) - 1]);
+const clearEndingInput = () => {
+  last = performance.now();
+  keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
+  touch.steer = touch.throttle = 0;
+  document.getElementById('settings')?.classList.remove('open');
+};
+const endings = mailMode ? new Endings(clearEndingInput, () => { shift.startOver(); last = performance.now(); }) : quietEndings();
+const yardJob = yard && endings instanceof Endings ? new YardJob(yard, vehicle, terrain, camera, endings) : null;
+const fishing = fishingSite && endings instanceof Endings ? new Fishing(fishingSite, terrain, vehicle, camera, endings, SEA_LEVEL, LOW) : null;
+if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
+if (import.meta.env.DEV) Object.assign((window as unknown as { mmm: object }).mmm, { yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite });
+
+let last = performance.now(), fps = 60, quiet = 0, drove = 0, beaconT = 0;
+let demoPhoto = false, shiftReady = false;
+const beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined;
+// The title card holds the game still until the player starts. Test links (any placement or demo parameter)
+// skip it; ?title=1 shows it in a test.
+const plainVisit = [...params.keys()].every((k) => k === 'exag' || k === 'q' || k === 'touch' || k === 'title' || k === 'mode' || k === 'area' || k === 'mp' || k === 'room');
+let started = bare || (!plainVisit && !params.has('room') && params.get('title') !== '1');
+const title = started ? null : createTitle(touchDevice, () => { started = true; last = performance.now(); radio?.start(); }, gameMode, AREA.mailTitle ? undefined : AREA.name);   // runs each time the card closes
+const placesUI = !mailMode && !bare && AREA.id === 'mabou' ? new PlacesUI(placesFor(manifest.village), manifest.village, roads, {
+  canOpen: () => started,
+  pause: paused => { started = !paused; clearEndingInput(); },
+  jump: (x, z, heading) => { vehicle.restart(x, z, heading); vehicle.vx = vehicle.vz = vehicle.vy = vehicle.speed = 0; mail.reset(); waitingToDrive = true; camReady = false; mode = 'drive'; pendingShot = null; hookPlaced = false; jumpPlacement++; },
+}) : null;
+if (import.meta.env.DEV) Object.assign((window as unknown as { mmm: object }).mmm, { gameMode, places: placesUI, miniMap });
+if (title) {
+  const more = Object.assign(document.createElement('button'), { textContent: 'Controls, credits and data' });
+  more.style.cssText = 'margin-top:12px;width:100%;min-height:40px;border-radius:6px;border:1px solid #6b7780;background:none;color:inherit;font:inherit;cursor:pointer';
+  // Reading the card stops the clock, the car and the gauge until it closes.
+  more.addEventListener('click', () => { started = false; roadScene?.setPaused(true); keys.clear(); touch.steer = touch.throttle = 0; document.getElementById('settings')?.classList.remove('open'); title.open(); });
+  document.getElementById('settings')?.appendChild(more);
+}
+if (!bare && params.get('radio') !== '0') {
+  const audioBase = `${import.meta.env.BASE_URL}audio`;
+  fetch(`${audioBase}/radio.json`).then((r) => (r.ok ? r.json() : null)).then((json) => {
+    const stations = readRadio(json);
+    if (!stations.length) return;
+    radio = new Radio(stations, audioBase, readStart(json));
+    if (import.meta.env.DEV) Object.assign((window as unknown as { mmm?: object }).mmm ?? {}, { radio });   // for tools/radio-check.mjs
+    if (started) radio.start();
+  }).catch(() => { /* no songs in this build: no radio */ });
+}
+
+function scenePaused(): boolean { return !started || shift.ended || endings.busy || document.hidden || interiors.busy; }
+function syncRoadScenePause(): void { roadScene?.setPaused(scenePaused()); }
+document.addEventListener('visibilitychange', () => { syncRoadScenePause(); last = performance.now(); });
+
+const shadowFocus = new THREE.Vector3(), shadowDir = new THREE.Vector3();
+function drawEnding(dt: number): void {
+  roadScene?.setPaused(true);
+  endings.update(dt);
+  pad?.show(false); radio?.update(false, true);
+  camera.updateMatrixWorld(); sky.position.copy(camera.position);
+  terrain.update(camera); trees?.update(terrain.drawnFine, camera.position);
+  landmarks?.update(camera); roads.update(camera.position); props?.update(camera, 0);
+  fishing?.update(0, camera.position);
+  // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
+  renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
+  waterReflections?.update(camera);
+  try { renderer.render(scene, camera); } finally { waterReflections?.settle(); }
+  waterReflections?.afterRender(camera);
+}
+
+function frame(now: number) {
+  const clockDt = Math.max(0, (now - last) / 1000);
+  const realDt = Math.min(clockDt, 0.1);
+  const dt = shift.ended || !started || endings.busy || document.hidden ? 0 : realDt;
+  if (!started) camReady = false;   // behind the title card the camera snaps to the car as the ground arrives
+  if (shift.ended) vehicle.vx = vehicle.vz = vehicle.speed = 0;
+  last = now;
+  fps += (1 / Math.max(realDt, 1e-3) - fps) * 0.05;
+  if (endings.busy) {
+    drawEnding(realDt); requestAnimationFrame(frame); return;
+  }
+  syncRoadScenePause();
+  if (mode === 'fly') { yardJob?.judge.cancel(); fishing?.judge.cancel(); }
+  const loaded = terrain.pending === 0;
+  // The one measurement of the picture at a first visit (picture.ts): only frames of real play count.
+  if (picture?.measuring) picture.frame(clockDt, !started || !loaded || document.hidden || shift.ended || interiors.busy);
+  if (lawnDemo?.prepare(terrain, vehicle)) { camReady = false; drove = 0; }
+  vehicle.damageActive = mailMode && started && !shift.ended && !interiors.busy && mode === 'drive' && !demo && !waitingToDrive;
+  car.setWindowDown?.(shift.damage.windowStuck);
+  radio?.setWind(shift.damage.windowStuck, mode === 'drive' ? vehicle.speed : 0);
+  if (interiors.busy) {
+    radio?.update(false, true);
+    pad?.show(!shift.ended);
+    if (shift.updateIndoors(started && !shift.ended ? clockDt : 0)) { interiors.closeForDay(); shift.end(); }
+    else {
+      interiors.update(dt, driveInput(), vehicle, false);
+      interiors.render(renderer);
+    }
+    // Interior scenes have no loading assets. The frozen world resumes on the next frame.
+    quiet++; document.title = quiet > 20 ? 'settled' : 'loading';
+    mailRequested = photoRequested = false;
+    if (!interiors.busy) { keys.clear(); touch.steer = touch.throttle = 0; camReady = false; }
+    requestAnimationFrame(frame); return;
+  }
+  interiors.update(realDt, driveInput(), vehicle, started && !shift.ended && mode === 'drive');
+  pad?.show(mode === 'drive' && !shift.ended && !placesUI?.busy);
+  if (mode === 'drive') {
+    const input = demo && drove < demo ? autopilot(vehicle, roads, params.get('throw') === '1' ? 8 : 16) : demo ? { throttle: Math.abs(vehicle.speed) > 0.15 ? -Math.sign(vehicle.speed) : 0, steer: 0, handbrake: true } : driveInput();
+    if (demo && drove < demo && params.get('knock') === '1') {
+      const road = roads.nearest(vehicle.x, vehicle.z, 40, (r) => r.kind <= 3);
+      if (road) {
+        let heading = road.heading;
+        if (Math.cos(heading - vehicle.heading) < 0) heading += Math.PI;
+        const rx = Math.cos(heading), rz = Math.sin(heading);
+        let shoulder = road.road.halfWidth + .7, nearest = 55;
+        // Follow the right shoulder, then line up on an upright post ahead.
+        if (props) for (const box of props.mail) {
+          if (box.motion.down) continue;
+          const dx = box.x - vehicle.x, dz = box.z - vehicle.z;
+          const ahead = dx * Math.sin(heading) - dz * Math.cos(heading);
+          const across = (box.x - road.x) * rx + (box.z - road.z) * rz;
+          if (ahead > -2 && ahead < nearest && across > 0 && across < road.road.halfWidth + 4) { nearest = ahead; shoulder = across; }
+        }
+        const side = (vehicle.x - road.x) * rx + (vehicle.z - road.z) * rz - shoulder;
+        const err = Math.atan2(Math.sin(heading - vehicle.heading), Math.cos(heading - vehicle.heading));
+        input.steer = THREE.MathUtils.clamp(err * 1.8 - side * .3, -1, 1);
+      }
+    }
+    if (mailMode && params.has('lawn') && demo && drove < demo) { input.throttle = 1; input.steer = 0; input.handbrake = false; }
+    if (lawnDemo && !lawnDemo.driving) { input.throttle = 0; input.handbrake = true; }
+    if (params.has('stuffed') && demo) { input.throttle = 0; input.handbrake = true; }
+    const refusal = Math.abs(vehicle.speed) < 0.15 && input.throttle < 0 ? 0 : (animals?.influence(vehicle).brake ?? 0);
+    if (refusal > 0) {
+      input.throttle = Math.abs(vehicle.speed) > 0.15 ? -Math.sign(vehicle.speed) * refusal : 0;
+      input.handbrake = true;
+    }
+    if (input.throttle !== 0 && (!demo || loaded)) waitingToDrive = false;
+    // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.
+    if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.place(vehicle.x, vehicle.z, vehicle.heading);
+    else {
+      if ((refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.place(vehicle.x, vehicle.z, vehicle.heading); vehicle.speed = 0; }
+      else if (waitingToDrive) {
+        const { x, z, heading } = vehicle;
+        driveVehicle(dt, { ...input, throttle: 0, handbrake: true });
+        vehicle.place(x, z, heading);
+      } else driveVehicle(dt, relief.busy ? { throttle: 0, steer: 0, handbrake: true } : input);
+      if ((loaded || lawnDemo?.driving) && !animals?.waitingForTerrain) drove += dt;
+    }
+    animals?.update(dt, vehicle, camera);
+    chase(dt);
+  } else {
+    fly(dt);
+    animals?.update(dt, vehicle, camera);
+    camera.rotation.set(pitch, yaw, 0);
+  }
+  if (endings.busy) { drawEnding(0); requestAnimationFrame(frame); return; }
+  const impactSpeed = Math.hypot(vehicle.vx, vehicle.vz);
+  const impact = shift.ended ? 1 : mail.update(dt, vehicle,
+    !shift.ended && mode === 'drive' && (mailRequested || keys.has('KeyM') || keys.has('KeyE') ||
+      keys.has('Space') && document.activeElement === mailButton ||
+      mailPointers.size > 0 || !!(demo && drove < demo && loaded && params.get('throw') === '1')), camera);
+  mailRequested = false;
+  if (impact < 1 && vehicle.damageActive) shift.damage.hit('impact', impactSpeed);
+  vehicle.vx *= impact; vehicle.vz *= impact; vehicle.speed *= impact;
+  yard?.update(dt, vehicle, camera.position);
+  camera.updateMatrixWorld();
+  sky.position.copy(camera.position);
+  shared.time.value = now / 1000;
+  beaconT += dt;
+  if (beaconMat) beaconMat.emissiveIntensity = !mailMode ? 0 : Math.abs(vehicle.speed) < 8 ? (Math.sin(beaconT * 9) > 0.3 ? 2.2 : 0.15) : 0.15;   // flashes while it creeps between boxes
+  terrain.update(camera);
+  trees?.update(terrain.drawnFine, camera.position);
+  culvertMouths?.update(camera.position);
+  landmarks?.update(camera);
+  {
+    placesUI?.update(vehicle, started && mode === 'drive');
+    const playing = mode === 'drive' && started && !shift.ended;
+    if (params.get('break') === '1' && relief.breaks === 0 && (!demo || drove >= demo)) relief.request();
+    relief.update(dt, playing ? clockDt * CLOCK_FACTOR : 0, vehicle, playing && (!demo || reliefTest > 0));
+    if (miniMap) {
+      miniMap.show(playing);
+      mapTimer -= realDt;
+      if (mapTimer <= 0) { mapTimer = 0.25; refreshMap(); }
+      miniMap.update(realDt, vehicle.x, vehicle.z, vehicle.heading, mapStops, mapMarks, mapCars);
+    }
+    radio?.update(playing, false);
+  }
+  roads.update(camera.position);
+  edge?.update(camera.position);
+  mineSite?.update(camera.position);
+  fishing?.update(dt, camera.position);
+  roadScene?.update(camera);
+  props?.update(camera, dt);
+  if (loaded) shiftReady = true;
+  if (shiftReady) shift.update(shift.ended || !started ? 0 : clockDt, vehicle);
+  if (sunShadows) {
+    // The shadow box follows the car; with the free camera it sits a little ahead of the lens.
+    let reach = 0;
+    if (mode === 'drive') shadowFocus.set(vehicle.x, vehicle.y, vehicle.z);
+    else {
+      // Walk down the line of sight to the ground, in coarse steps: that is what the picture is of.
+      shadowDir.set(0, 0, -1).applyQuaternion(camera.quaternion);
+      for (reach = 20; reach < 1400; reach *= 1.35) {
+        shadowFocus.copy(camera.position).addScaledVector(shadowDir, reach);
+        const g = terrain.heightAt(shadowFocus.x, shadowFocus.z);
+        if (g !== null && shadowFocus.y <= g) { shadowFocus.y = g; break; }
+      }
+      if (reach >= 1400) {
+        // A high, shallow look meets no ground within reach. Then the box sits on the ground ahead of the camera,
+        // as far ahead as the camera is high, and is sized for that height.
+        const under = terrain.heightAt(camera.position.x, camera.position.z) ?? SEA_LEVEL;
+        const height = Math.max(20, camera.position.y - under), flat = Math.hypot(shadowDir.x, shadowDir.z);
+        // A look that is nearly straight down has no "ahead": the box then stays under the camera.
+        const ahead = flat > 0.2 ? height / flat : 0;
+        shadowFocus.set(camera.position.x + shadowDir.x * ahead, 0, camera.position.z + shadowDir.z * ahead);
+        shadowFocus.y = terrain.heightAt(shadowFocus.x, shadowFocus.z) ?? under;
+        reach = Math.min(1400, height * 1.5);
+      }
+    }
+    sunShadows.update(realDt, shadowFocus, reach);
+  }
+  grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec);
+  // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
+  renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
+  multiplayer?.update(realDt, camera, dt > 0 && mode === 'drive');
+  waterReflections?.update(camera);
+  try { renderer.render(scene, camera); } finally { waterReflections?.settle(); }
+  waterReflections?.afterRender(camera);
+  // A photo is evidence of what the driver saw: the free camera takes none.
+  if (photoRequested) { if (mode === 'drive') shift.takePhoto(vehicle, camera); photoRequested = false; }
+  if (params.get('photo') === '1' && demo && !demoPhoto && loaded && mode === 'drive') {
+    // Only press the shutter once something is in range and inside the camera or front cone.
+    for (const s of shift.evidence.subjects.values()) if (s.active && Math.hypot(s.x - vehicle.x, s.z - vehicle.z) <= 43) {
+      if (shift.takePhoto(vehicle, camera)) demoPhoto = true;
+      break;
+    }
+  }
+  if (params.get('report') === '1' && loaded && (!demo || drove >= demo) && Math.abs(vehicle.speed) < .15
+    && !relief.busy && (params.get('break') !== '1' || relief.breaks > 0)) shift.end();
+
+  // A page is "settled" when nothing has been loading for a while; screenshots wait for this.
+  const waiting = !loaded || (grass?.pending ?? 0) > 0 || (trees?.pending ?? 0) > 0 || (mode === 'fly' && pendingShot !== null && terrain.heightAt(camera.position.x, camera.position.z) === null)
+    || (mode === 'drive' && demo > 0 && (drove < demo || Math.abs(vehicle.speed) > 0.15)) || relief.busy;
+  quiet = waiting ? 0 : quiet + 1;
+  document.title = quiet > 20 ? 'settled' : 'loading';
+  if (mailButton) mailButton.hidden = mode !== 'drive' || shift.ended;
+  if (mailScore && !bare && mailScore.textContent !== mail.tally) mailScore.textContent = mail.tally;
+  if (!bare) {
+    // Behind the title card the readout said "0 km/h off the map" while the land was still loading: keep it out of sight.
+    hud.style.visibility = started ? '' : 'hidden';
+    if (mode === 'drive') {
+      hud.textContent = `${Math.abs(vehicle.speed * 3.6).toFixed(0)} km/h   ${vehicle.roadName ?? (yardSite?.surface(vehicle.x, vehicle.z) ? 'works yard' : 'off the map')}   ${vehicle.surfaceName}${vehicle.airborne ? '   AIR' : ''}` +
+        (touchDevice ? `   ${fps.toFixed(0)} fps`
+          : !mailMode ? exploreHelp : `\nWASD/arrows: drive · space: brake · M/E: mail · P: photo · Enter: end shift\nH: horn · R: road · V: seat · F: fly · ${fps.toFixed(0)} fps`);
+    } else {
+      const e = camera.position.x + VE, n = VN - camera.position.z;
+      hud.textContent = `E ${e.toFixed(0)}  N ${n.toFixed(0)}  h ${camera.position.y.toFixed(1)} m   hills x${EXAG}\n` +
+        `sun az ${sun.az.toFixed(0)} el ${sun.el.toFixed(0)}  tiles ${terrain.drawn}  load ${terrain.pending}  ${fps.toFixed(0)} fps\n` +
+        `drag: look · WASD: fly · ${mailMode ? 'Q/E' : 'Q/space'}: down/up · wheel: speed ${flySpeed.toFixed(0)} m/s${SHOTS.length ? ` · 1-${SHOTS.length}: views` : ''} · F: drive`;
+    }
+    if (mailMode && mode === 'drive' && !touchDevice) hud.textContent += `\n${shift.done}/${shift.stops} stops · ${mail.delivered} pieces delivered · ${mail.lawn + mail.ditch} on ground`;
+  }
+  if (vehicle.atEdge && mode === 'drive' && !bare) hud.textContent += !mailMode ? '\nThe map ends here.' : AREA.route ? '\nEnd of your route. Somebody else delivers past here.' : '\nEnd of this map.';
+  if (mailMode && params.has('lawn') && !bare) hud.textContent += `\nTyre strips: ${shift.ruts.count} · Lawns damaged: ${shift.ruts.lawns}`;
+  requestAnimationFrame(frame);
+}
+resize();
+document.getElementById('boot')?.remove();
+requestAnimationFrame(frame);

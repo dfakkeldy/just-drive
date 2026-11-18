@@ -1,0 +1,325 @@
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildingSites, type Building } from './buildings';
+import type { Props } from './props';
+import type { Terrain } from './terrain';
+import type { Vehicle } from './vehicle';
+import { launchMail, stepMail, advanceMail, planMail, FLIGHT_STEP, MAIL_CYCLE, MAIL_SIZES as SIZES, type Flight } from './mail-flight';
+
+export interface MailService {
+  condition(index: number): 'ready' | 'stuffed' | 'preExisting' | 'none';
+  deliver(index: number): boolean;
+  ground(x: number, z: number, lawn: boolean): void;
+}
+interface Piece {
+  state: 'unused' | 'flying' | 'litter'; kind: number; rejected: boolean;
+  fixedFlight: boolean; flightTime: number;
+  x: number; y: number; z: number; vx: number; vy: number; vz: number;
+  originX: number; originZ: number; age: number; spin: number;
+  rotation: THREE.Euler; resting: THREE.Quaternion;
+}
+interface Ding { x: number; y: number; z: number; life: number; size: number }
+const DELIVERED = ['Delivered. Roughly.', 'Service has occurred.', 'Close enough to official.', 'The flag believes in us.'];
+const LAWN = ['Lawn delivery.', 'A doorstep, broadly speaking.', 'Express to the grass.'];
+const DITCH = ['In the ditch.', 'Filed under drainage.', 'The scenic delivery option.'];
+
+/** Four instanced batches, a bounded ring of pieces, and a short preview near the next due box. */
+export class Mail {
+  readonly group = new THREE.Group();
+  readonly capacity: number;
+  service: MailService | null = null;
+  throwHelp = true;
+  cue = false;
+  cueIndex = -1;
+  private readonly cueMarker = new THREE.Mesh(new THREE.RingGeometry(.22, .32, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffdf70, side: THREE.DoubleSide, depthTest: false, depthWrite: false }));
+  thrown = 0;
+  delivered = 0;
+  lawn = 0;
+  ditch = 0;
+  customers = 0;
+  activeCount = 0;
+  status = 'Mail service. More or less.';
+  private statusTime = 2;
+  private cooldown = 0;
+  private cursor = 0;
+  private readonly pieces: Piece[];
+  private readonly meshes: THREE.InstancedMesh[];
+  private readonly houses: { x: number; z: number }[];
+  private readonly dummy = new THREE.Object3D();
+  private readonly zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  private readonly window = new THREE.Vector3();
+  private readonly normal = new THREE.Vector3();
+  private readonly up = new THREE.Vector3(0, 1, 0);
+  private readonly yaw = new THREE.Quaternion();
+  private readonly dings: Ding[] = Array.from({ length: 8 }, () => ({ x: 0, y: 0, z: 0, life: 0, size: 1 }));
+  private readonly flash: THREE.InstancedMesh;
+  private flashCursor = 0;
+  private oldX = NaN;
+  private oldZ = NaN;
+  private groundTimer = 0;
+
+  constructor(private readonly terrain: Terrain, private readonly props: Props | null,
+    buildings: Building[], village: [number, number], low: boolean) {
+    this.capacity = low ? 120 : 300;
+    this.houses = buildingSites(buildings).filter((b) => b.kind === 'house').map((b) => ({ x: b.x - village[0], z: village[1] - b.y }));
+    this.pieces = Array.from({ length: this.capacity }, () => ({ state: 'unused', kind: 0, rejected: false, fixedFlight: false, flightTime: 0,
+      x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, originX: 0, originZ: 0, age: 0, spin: 0,
+      rotation: new THREE.Euler(), resting: new THREE.Quaternion() }));
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+    this.meshes = SIZES.map((size, kind) => {
+      const parts: THREE.BufferGeometry[] = [];
+      const box = (x: number, y: number, z: number, sx: number, sy: number, sz: number, color: number) => {
+        const g = new THREE.BoxGeometry(sx, sy, sz).translate(x, y, z);
+        const c = new THREE.Color(color), colors = new Float32Array(g.getAttribute('position').count * 3);
+        for (let j = 0; j < colors.length; j += 3) { colors[j] = c.r; colors[j + 1] = c.g; colors[j + 2] = c.b; }
+        g.setAttribute('color', new THREE.BufferAttribute(colors, 3)); parts.push(g);
+      };
+      const [x, y, z] = size;
+      box(0, 0, 0, x, y, z, kind === 0 ? 0xf5efdc : kind === 1 ? 0x168ea5 : 0xb58149);
+      if (kind === 0) {
+        box(0, y / 2 + .003, 0, x, .006, z, 0xffffff);
+        box(0, y / 2 + .008, 0, .027, .008, z + .007, 0xb24d38);
+        box(x * .3, y / 2 + .008, -z * .3, .045, .009, .04, 0x4b7884);
+      } else if (kind === 1) {
+        box(-.03, y / 2 + .003, -.04, x * .72, .006, z * .4, 0xf1c257);
+        box(.02, y / 2 + .006, .07, x * .8, .006, .025, 0xf8f1d4);
+      } else {
+        box(0, 0, 0, .065, y + .008, z + .008, 0xdac395);
+        box(x * .26, y / 2 + .006, .02, x * .22, .008, z * .4, 0xf4ebd4);
+      }
+      const geometry = mergeGeometries(parts);
+      for (const g of parts) g.dispose();
+      const mesh = new THREE.InstancedMesh(geometry, material, this.capacity);
+      mesh.name = ['Elastic letter bundles', 'Glossy flyer wads', 'Small parcels', 'Awkward large boxes'][kind];
+      mesh.frustumCulled = false;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      for (let i = 0; i < this.capacity; i++) mesh.setMatrixAt(i, this.zero);
+      this.group.add(mesh);
+      return mesh;
+    });
+    this.flash = new THREE.InstancedMesh(new THREE.RingGeometry(.65, 1, 12),
+      new THREE.MeshBasicMaterial({ color: 0xffdf70, side: THREE.DoubleSide, depthWrite: false }), this.dings.length);
+    this.flash.name = 'Delivery dings'; this.flash.frustumCulled = false;
+    this.flash.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    for (let i = 0; i < this.dings.length; i++) this.flash.setMatrixAt(i, this.zero);
+    this.group.add(this.flash);
+    this.cueMarker.name = 'Throw now'; this.cueMarker.visible = false; this.cueMarker.renderOrder = 5;
+    this.group.add(this.cueMarker);
+    this.group.name = 'Mail and delivery dings';
+  }
+
+  get down(): number { return this.props?.downCount ?? 0; }
+  get total(): number { return this.props?.totalCustomers ?? 0; }
+  get tally(): string {
+    return `Delivered ${this.delivered} · Lawn ${this.lawn} · Ditch ${this.ditch} · Boxes down ${this.down}\nCustomers ${this.customers}/${this.total}${this.status ? ` · ${this.status}` : ''}`;
+  }
+
+  reset(): void {
+    this.cue = false; this.cueIndex = -1; this.cueMarker.visible = false;
+    this.thrown = this.delivered = this.lawn = this.ditch = this.customers = this.activeCount = 0;
+    this.oldX = this.oldZ = NaN; this.cooldown = this.groundTimer = this.cursor = 0;
+    for (const p of this.pieces) p.state = 'unused';
+    for (const mesh of this.meshes) {
+      for (let i = 0; i < this.capacity; i++) mesh.setMatrixAt(i, this.zero);
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    for (const d of this.dings) d.life = 0;
+    this.say('Mail service. More or less.');
+  }
+
+  private say(text: string): void { this.status = text; this.statusTime = 2; }
+
+  private throwPiece(v: Vehicle): void {
+    const i = this.cursor, p = this.pieces[i];
+    if (p.state !== 'unused') { this.meshes[p.kind].setMatrixAt(i, this.zero); this.meshes[p.kind].instanceMatrix.needsUpdate = true; }
+    else this.activeCount++;
+    p.kind = MAIL_CYCLE[this.thrown % MAIL_CYCLE.length];
+    Object.assign(p, this.prepareThrow(v, p.kind));
+    p.originX = v.x; p.originZ = v.z;
+    p.rotation.set(.1, v.heading, .1); p.spin = 3 + (this.thrown % 5) * .7;
+    p.age = 0; p.state = 'flying'; p.rejected = false;
+    p.fixedFlight = this.throwHelp; p.flightTime = 0;
+    this.writePiece(i, p);
+    this.thrown++; this.cursor = (i + 1) % this.capacity;
+  }
+
+  /** Only shift targets still due, upright and ahead on the window side can attract help. */
+  private nextDue(v: Vehicle): number {
+    if (!this.props || !this.service) return -1;
+    let best = Infinity, index = -1;
+    const rx = Math.cos(v.heading), rz = Math.sin(v.heading);
+    for (let i = 0; i < this.props.mail.length; i++) {
+      const p = this.props.mail[i], dx = p.x - v.x, dz = p.z - v.z;
+      const ahead = dx * rz - dz * rx, right = dx * rx + dz * rz;
+      if (ahead < 0 || ahead > 35 || right < .5 || right > 9 || ahead >= best) continue;
+      if (p.motion.down || this.service.condition(i) !== 'ready') continue;
+      best = ahead; index = i;
+    }
+    return index;
+  }
+
+  private prepareThrow(v: Vehicle, kind: number): Flight {
+    // driverEye includes suspension and body lean, for prediction as well as the actual throw.
+    v.car.driverEye.updateWorldMatrix(true, false);
+    v.car.driverEye.getWorldPosition(this.window);
+    const start = launchMail({ x: this.window.x, y: this.window.y, z: this.window.z,
+      vx: v.vx, vz: v.vz, heading: v.heading, kind, thrown: this.thrown });
+    this.cue = false; this.cueIndex = -1;
+    if (!this.throwHelp) return start;
+    const index = this.nextDue(v), target = index < 0 ? null : this.props!.mail[index];
+    if (!target || (kind === 3 && (v.x - target.x) ** 2 + (v.z - target.z) ** 2 < 12 ** 2)) return start;
+    const origin = { kind, originX: v.x, originZ: v.z, rejected: false };
+    const plan = planMail(start, kind, v.heading, target, (x, z) => this.terrain.heightAt(x, z),
+      (a, b, landed) => this.props!.mailHit(a.x, a.y, a.z, b.x, b.y, b.z, landed, true),
+      index => ['ready', 'preExisting'].includes(this.reception(origin, index)), index);
+    this.cue = plan.hit; this.cueIndex = plan.hit ? index : -1;
+    return plan.flight;
+  }
+
+  private writePiece(i: number, p: Piece): void {
+    this.dummy.position.set(p.x, p.y, p.z); this.dummy.scale.set(1, 1, 1);
+    if (p.state === 'litter') this.dummy.quaternion.copy(p.resting);
+    else this.dummy.rotation.copy(p.rotation);
+    this.dummy.updateMatrix();
+    this.meshes[p.kind].setMatrixAt(i, this.dummy.matrix);
+    this.meshes[p.kind].instanceMatrix.needsUpdate = true;
+  }
+
+  private rest(p: Piece, ground: number): void {
+    const e = .25;
+    const gx = (this.terrain.heightAt(p.x - e, p.z) ?? ground) - (this.terrain.heightAt(p.x + e, p.z) ?? ground);
+    const gz = (this.terrain.heightAt(p.x, p.z - e) ?? ground) - (this.terrain.heightAt(p.x, p.z + e) ?? ground);
+    this.normal.set(gx, e * 2, gz).normalize();
+    p.resting.setFromUnitVectors(this.up, this.normal);
+    this.yaw.setFromAxisAngle(this.up, p.rotation.y);
+    p.resting.multiply(this.yaw);
+    // Extra clearance keeps wide boxes above a sloping height field.
+    p.y = ground + SIZES[p.kind][1] / 2 + .018 + (Math.abs(this.normal.x) * SIZES[p.kind][0] + Math.abs(this.normal.z) * SIZES[p.kind][2]) * .5;
+  }
+
+  private miss(p: Piece): void {
+    const s = this.terrain.surfaceAt(p.x, p.z);
+    let lawn = false;
+    if (!s || s.roadDist > s.halfWidth + .3) for (const house of this.houses) {
+      if ((p.x - house.x) ** 2 + (p.z - house.z) ** 2 <= 40 ** 2) { lawn = true; break; }
+    }
+    this.service?.ground(p.x, p.z, lawn);
+    if (lawn) { this.lawn++; this.say(LAWN[this.lawn % LAWN.length]); }
+    else { this.ditch++; this.say(DITCH[this.ditch % DITCH.length]); }
+  }
+
+  /** Side-effect-free receive decision, shared with the ordered preview. */
+  private reception(p: Pick<Piece, 'kind' | 'originX' | 'originZ' | 'rejected'>, index: number):
+    'ignore' | 'none' | 'stuffed' | 'down' | 'oversize' | 'ready' | 'preExisting' {
+    if (!this.props || index < 0 || p.rejected) return 'ignore';
+    const condition = this.service?.condition(index) ?? 'ready';
+    if (condition === 'none' || condition === 'stuffed') return condition;
+    if (index < this.props.mail.length) {
+      const target = this.props.mail[index];
+      if (target.motion.down && condition !== 'preExisting') return 'down';
+      if (!target.motion.down && p.kind === 3 && (p.originX - target.x) ** 2 + (p.originZ - target.z) ** 2 < 12 ** 2) return 'oversize';
+    }
+    return condition;
+  }
+
+  private receive(p: Piece, index: number): boolean {
+    const condition = this.reception(p, index);
+    if (condition === 'ignore' || condition === 'down') return false;
+    if (condition === 'none') { p.rejected = true; this.say('Nothing due at this stop today.'); return false; }
+    if (condition === 'stuffed') {
+      p.rejected = true; p.vx *= -.4; p.vz *= -.4; p.vy = .8;
+      this.say('Two months of flyers. No room.'); return false;
+    }
+    if (condition === 'oversize') {
+      this.props!.knockMailbox(index, p.vx, p.vz); this.say('Parcel exceeds mailbox.'); return false;
+    }
+    if (!this.props) return false;
+    const complete = this.service?.deliver(index) ?? true;
+    const served = complete ? this.props.serve(index, condition === 'preExisting') : 0;
+    this.customers += served; this.delivered++;
+    this.say(served > 1 ? `Bulk delivery. ${served} customers. One throw.` : DELIVERED[this.delivered % DELIVERED.length]);
+    const target = index < this.props.mail.length ? this.props.mail[index] : this.props.sites[index - this.props.mail.length];
+    const ding = this.dings[this.flashCursor]; this.flashCursor = (this.flashCursor + 1) % this.dings.length;
+    ding.x = target.x; ding.z = target.z; ding.y = (this.terrain.heightAt(target.x, target.z) ?? p.y) + 1.6;
+    ding.life = .65; ding.size = served > 1 ? .75 : .32;
+    return true;
+  }
+
+  /** Called from the drive loop. The returned body impact slows vx/vz in main.ts. */
+  update(dt: number, v: Vehicle, held: boolean, camera?: THREE.Camera): number {
+    this.statusTime -= dt;
+    if (this.statusTime <= 0) this.status = '';
+    const downBefore = this.down;
+    const factor = this.props?.hitCar(v.x, v.z, v.heading, v.vx, v.vz,
+      Number.isFinite(this.oldX) ? this.oldX : v.x, Number.isFinite(this.oldZ) ? this.oldZ : v.z, v.spec) ?? 1;
+    this.oldX = v.x; this.oldZ = v.z;
+    if (this.down > downBefore) this.say('That was a mailbox.');
+    if (this.throwHelp) this.prepareThrow(v, MAIL_CYCLE[this.thrown % MAIL_CYCLE.length]);
+    else { this.cue = false; this.cueIndex = -1; }
+    this.cueMarker.visible = this.cue;
+    if (this.cue && this.props) {
+      const box = this.props.mail[this.cueIndex];
+      this.cueMarker.position.set(box.x, (this.terrain.heightAt(box.x, box.z) ?? 0) + 2, box.z);
+      if (camera) this.cueMarker.quaternion.copy(camera.quaternion);
+    }
+    this.cooldown = held ? Math.max(-.25, this.cooldown - dt) : Math.max(0, this.cooldown - dt);
+    if (held && this.cooldown <= 0) { this.throwPiece(v); this.cooldown += .25; }
+    this.groundTimer += dt;
+    const settle = this.groundTimer >= 1;
+    if (settle) this.groundTimer = 0;
+    for (let i = 0; i < this.capacity; i++) {
+      const p = this.pieces[i];
+      if (p.state === 'unused') continue;
+      if (p.state === 'litter') {
+        if (settle) {
+          const ground = this.terrain.heightAt(p.x, p.z);
+          if (ground !== null) { this.rest(p, ground); this.writePiece(i, p); }
+        }
+        continue;
+      }
+      // Only assisted launches use accumulated fixed ticks. Off retains the exact legacy arithmetic.
+      const fixed = p.fixedFlight;
+      if (fixed) p.flightTime += dt;
+      const steps = fixed ? Math.floor((p.flightTime + 1e-10) / FLIGHT_STEP) : Math.max(1, Math.ceil(dt * 60));
+      const step = fixed ? FLIGHT_STEP : dt / steps;
+      if (fixed) p.flightTime = Math.max(0, p.flightTime - steps * FLIGHT_STEP);
+      for (let k = 0; k < steps; k++) {
+        const ax = p.x, ay = p.y, az = p.z;
+        p.age += step;
+        const contact = fixed ? advanceMail(p, p.kind, step, (x, z) => this.terrain.heightAt(x, z),
+          (a, b, landed) => this.props?.mailHit(a.x, a.y, a.z, b.x, b.y, b.z, landed, true) ?? -1) : null;
+        Object.assign(p, contact ? contact.flight : stepMail(p, p.kind, step));
+        p.rotation.x += p.spin * step; p.rotation.y += step * 1.8;
+        p.rotation.z = p.kind === 1 ? Math.sin(p.age * 19) * .9 : p.rotation.z + step * 2;
+        const ground = contact ? contact.ground : this.terrain.heightAt(p.x, p.z);
+        const landed = contact ? contact.landed : ground !== null && p.y - SIZES[p.kind][1] / 2 <= ground;
+        const hit = contact ? contact.hit : this.props?.mailHit(ax, ay, az, p.x, p.y, p.z, landed, false) ?? -1;
+        if (this.receive(p, hit)) {
+          // Successful mail disappears into the service. Misses remain physical litter.
+          p.state = 'unused'; this.activeCount--; this.meshes[p.kind].setMatrixAt(i, this.zero);
+          this.meshes[p.kind].instanceMatrix.needsUpdate = true;
+          break;
+        }
+        if (landed && ground !== null) {
+          p.state = 'litter'; this.rest(p, ground); this.miss(p); break;
+        }
+        // No ground outside loaded terrain: retire rather than keep a falling piece forever.
+        if (p.age > 12) { p.state = 'unused'; this.activeCount--; this.meshes[p.kind].setMatrixAt(i, this.zero); this.meshes[p.kind].instanceMatrix.needsUpdate = true; break; }
+      }
+      if (p.state !== 'unused') this.writePiece(i, p);
+    }
+    for (let i = 0; i < this.dings.length; i++) {
+      const d = this.dings[i]; d.life = Math.max(0, d.life - dt);
+      if (d.life <= 0) this.flash.setMatrixAt(i, this.zero);
+      else {
+        this.dummy.position.set(d.x, d.y + (.65 - d.life), d.z);
+        if (camera) this.dummy.quaternion.copy(camera.quaternion); else this.dummy.rotation.set(0, 0, 0);
+        this.dummy.scale.setScalar(d.size * (.7 + (.65 - d.life)) * Math.min(1, d.life * 6));
+        this.dummy.updateMatrix(); this.flash.setMatrixAt(i, this.dummy.matrix);
+      }
+    }
+    this.flash.instanceMatrix.needsUpdate = true;
+    return factor;
+  }
+}

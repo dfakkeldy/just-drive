@@ -1,0 +1,51 @@
+/** On-only program transform: today's exported shaders remain byte-identical. */
+export const PAVED_SAMPLE = /* glsl */ `
+uniform highp sampler2D tPaved;
+uniform vec4 pavedRect; // world xmin,zmin and width,depth (metres)
+uniform vec2 pavedCar;
+float pavedCoverage(vec2 p) {
+  vec2 local=p-pavedRect.xy;
+  if(any(lessThan(local,vec2(0.0)))||any(greaterThanEqual(local,pavedRect.zw)))return 0.0;
+  float v=texture2D(tPaved,local/pavedRect.zw).r;
+  float edge=smoothstep(0.0,1.0,v+.3*(vnoise(p*.6)-.5)*4.0*v*(1.0-v));
+  return edge;
+}
+vec3 pavedLotAsphalt(vec2 p) {
+  float speck=vnoise(p*23.0);
+  vec3 road=mix(vec3(.045,.046,.050),vec3(.070,.070,.072),fbm(p*.35))*(.85+.3*speck);
+  road=mix(road,vec3(.030,.030,.033),step(.72,vnoise(p*.11))*.6);
+  return mix(road,vec3(dot(road,vec3(.2126,.7152,.0722))),.30)*1.15;
+}
+float pavedCarFade(vec2 p) {
+  float dx=p.x-pavedCar.x, dz=p.y-pavedCar.y;
+  return 1.0-smoothstep(380.0,480.0,sqrt(dx*dx+dz*dz));
+}
+float pavedWeight(vec2 p) {
+  return pavedCoverage(p)*pavedCarFade(p);
+}
+`;
+function replace(source:string,anchor:string,value:string):string {
+  if(!source.includes(anchor))throw Error('Paved shader anchor changed: '+anchor);
+  return source.replace(anchor,value);
+}
+export function pavedGroundShader(source:string):string {
+  let out=replace(source,'void main() {',PAVED_SAMPLE+'\nvoid main() {');
+  out=replace(out,'  // ---- roads: painted',`  float hardPaved=cls==4.0?0.0:pavedWeight(p);
+  if(hardPaved>0.0){
+    albedo=mix(albedo,pavedLotAsphalt(p),hardPaved);
+  }
+  canopy *= 1.0-hardPaved;
+  // ---- roads: painted`);
+  out=replace(out,'    albedo = mix(albedo, surface, onRoad);',`    // PAVED_APRON: only selected short gravel/driveway mouths; native paved lanes retain their paint.
+    if(rkind>2.5&&rkind<4.5)surface=mix(surface,pavedLotAsphalt(p),hardPaved);
+    albedo = mix(albedo, surface, onRoad);`);
+  out=replace(out,'    albedo = mix(albedo, gravel, shoulder * 0.85',`    shoulder *= 1.0-hardPaved;
+    albedo = mix(albedo, gravel, shoulder * 0.85`);
+  return replace(out,'    albedo *= 1.0 - ring *',`    ring *= 1.0-hardPaved;
+    albedo *= 1.0 - ring *`);
+}
+export function pavedGrassShader(source:string):string {
+  let out=replace(source,'void main() {',PAVED_SAMPLE+'\nvoid main() {');
+  return replace(out,'  vec2 toCar =',`  fade *= 1.0-step(0.01,pavedCoverage(base.xz));
+  vec2 toCar =`);
+}

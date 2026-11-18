@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "source": "Owner public-safe footage rules, 12-13 November 2026",
+  "junction_length_m": 20,
+  "junction_mouth_width_m": 12,
+  "junction_flare_length_m": 8,
+  "driveway_rate_asphalt": 0.16,
+  "driveway_rate_patched": 0.21,
+  "driveway_road_change_m": 8,
+  "lot_max_median_slope": 0.08,
+  "lot_tall_height_m": 2.5,
+  "lot_max_tall_fraction": 0.2
+}

@@ -1,0 +1,21 @@
+{
+  "provenance": "Mabou main street brief (the project brief): dash cam 12/13 Nov 2026, public-safe; heights from the open elevation model (DSM minus DTM, 1 m); not traced from aerial imagery",
+  "kinds": [
+    {"id": 150, "x": 624450.16, "y": 5103392.66, "from": "shed", "to": "large", "what": "post office building: one storey, brick, flat roof; a public building, not a shed"},
+    {"id": 169, "x": 624797.1, "y": 5103548.86, "from": "house", "to": "large", "what": "gas station: one storey, metal siding and a stone front; not a house"}
+  ],
+  "replace": [
+    {
+      "id": 3, "x": 624457.41, "y": 5103331.6, "kind": "large", "confidence": 0.5,
+      "what": "white hall across from the post office building: 1.5 storeys, gable end to the road, a lower wing on the east side, a rear wing",
+      "frame": {"origin": [624440.84, 5103336.14], "u": 144.0, "v": 54.0,
+                "note": "origin: the west corner of the map outline (on the road-facing end); u runs away from the road along the old long axis, v along the road toward the east"},
+      "blocks": [
+        {"part": "main", "u": [-2.5, 17.5], "v": [5.5, 18.0], "ridgeAlong": "u", "eave": 4.0, "ridge": 7.2},
+        {"part": "east wing", "u": [3.0, 15.5], "v": [18.0, 22.5], "ridgeAlong": "u", "eave": 2.8, "ridge": 3.9},
+        {"part": "rear wing", "u": [15.5, 26.8], "v": [1.5, 22.0], "ridgeAlong": "v", "eave": 3.9, "ridge": 6.6}
+      ],
+      "measured": "DSM minus DTM across the old outline: the gable ridge runs away from the road at v 12 (6.8-7.3 m), the walls at v 5.5 and 18 (4.0-4.4 m at the eaves); the road-facing wall stands about 2.5 m nearer the road than the map outline; a lower roof at v 18-22.5 (2.6-4.3 m); a roof across the whole back from u 15.5 (7.5 m) falling to 3.9 m at u 26"
+    }
+  ]
+}

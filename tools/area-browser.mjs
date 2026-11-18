@@ -1,0 +1,156 @@
+// Area acceptance check, or ordinary settled pictures when area= is absent.
+// Optional &viewport=390,844 captures a phone-sized page in the same browser job.
+// RUN=area-browser.mjs VIEWS="judique|area=judique&demo=3" tools/yard-shots.sh
+import assert from 'node:assert/strict';
+import { mkdirSync, writeFileSync } from 'node:fs';
+const [out, ...urls] = process.argv.slice(2), port = process.env.CDP_PORT ?? '9452';
+mkdirSync(out, { recursive: true });
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+for (const url of urls) {
+  const tab = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, {method: 'PUT'})).json();
+  const ws = new WebSocket(tab.webSocketDebuggerUrl), pending = new Map(), errors = [], requests = [], failedRequests = [];
+  await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
+  let serial = 0, transferredBytes = 0;
+  ws.onmessage = event => {
+    const data = JSON.parse(event.data);
+    if (data.id && pending.has(data.id)) { pending.get(data.id)(data); pending.delete(data.id); }
+    if (data.method === 'Runtime.exceptionThrown') errors.push(data.params.exceptionDetails.exception?.description ?? data.params.exceptionDetails.text);
+    if (data.method === 'Runtime.consoleAPICalled' && data.params.type === 'error') errors.push(data.params.args.map(a => a.value ?? a.description).join(' '));
+    if (data.method === 'Log.entryAdded' && data.params.entry.level === 'error') errors.push(`${data.params.entry.text} [${data.params.entry.url ?? data.params.entry.source}]`);
+    if (data.method === 'Network.loadingFinished') transferredBytes += data.params.encodedDataLength;
+    if (data.method === 'Network.loadingFailed' && !data.params.canceled) failedRequests.push(data.params.errorText);
+    if (data.method === 'Network.responseReceived' && data.params.response.status >= 400) failedRequests.push(`${data.params.response.status} ${data.params.response.url}`);
+    if (data.method === 'Network.requestWillBeSent') requests.push(data.params.request.url);
+  };
+  const send = (method, params = {}) => new Promise((resolve, reject) => {
+    const id = ++serial;
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 20000);
+    pending.set(id, data => { clearTimeout(timer); data.error ? reject(new Error(JSON.stringify(data.error))) : resolve(data.result); });
+    ws.send(JSON.stringify({id, method, params}));
+  });
+  const evaluate = async expression => {
+    const result = await send('Runtime.evaluate', {expression, returnByValue: true, awaitPromise: true});
+    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
+    return result.result.value;
+  };
+  const query = new URL(url).searchParams, name = query.get('name') ?? 'area';
+  let afterShot = async () => {};
+  try {
+    await send('Runtime.enable'); await send('Page.enable'); await send('Network.enable'); await send('Log.enable');
+    if (query.has('viewport')) {
+      const size=query.get('viewport').split(',').map(Number);
+      assert.ok(size.length===2 && size.every(n=>Number.isInteger(n)&&n>=240&&n<=4000), 'viewport width,height');
+      await send('Emulation.setDeviceMetricsOverride', {width:size[0],height:size[1],deviceScaleFactor:1,mobile:query.get('touch')==='1'});
+    }
+    if (query.get('check') === 'saved-mode') await send('Page.addScriptToEvaluateOnNewDocument', {source: "localStorage.setItem('mmm.mode','mail')"});
+    // The dev shell has no favicon; prevent its unrelated automatic favicon.ico 404.
+    await send('Page.addScriptToEvaluateOnNewDocument', {source: `document.addEventListener('DOMContentLoaded',()=>{
+      if(!document.querySelector('link[rel="icon"]')) document.head.append(Object.assign(document.createElement('link'),
+        {rel:'icon',href:'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22/%3E'}));
+    },{once:true});`});
+    await send('Page.navigate', {url});
+    const deadline = Date.now() + 180000;
+    let state, initial = null;
+    do {
+      await sleep(200);
+      state = await evaluate(`({title:document.title, message:document.getElementById('areaMessage')?.textContent,
+        start:window.mmm?.endings ? {x:mmm.vehicle.x,z:mmm.vehicle.z,heading:mmm.vehicle.heading} : null})`);
+      initial ??= state.start;
+      assert.equal(errors.length, 0, errors.join('\n'));
+      if (state.message || state.title === 'settled') break;
+    } while (Date.now() < deadline);
+    if (query.get('check') === 'missing') {
+      assert.ok(state.message?.includes('Port Hood is not ready yet.'));
+      assert.equal(await evaluate(`document.querySelector('#areaMessage a').getAttribute('href')`), '/');
+      assert.equal(await evaluate('!!window.mmm'), false);
+      let readyState;
+      for (let i=0;i<20;i++) { readyState=await evaluate('document.readyState'); if(readyState==='complete') break; await sleep(250); }
+      assert.equal(readyState,'complete','terminal screen must finish the page load');
+      writeFileSync(`${out}/${name}.json`,JSON.stringify({message:state.message,readyState,errors},null,2));
+    } else {
+      assert.equal(state.title, 'settled', JSON.stringify(state));
+      if (query.has('area')) assert.equal(await evaluate('mmm.area.id'), query.get('area'), 'requested area loaded');
+      if (query.has('area') && query.get('area') !== 'mabou') {
+        const result = await evaluate(`(() => {
+          const m = mmm, v = m.vehicle, road = m.roads.nearest(v.x,v.z,1000,r=>r.kind>=1&&r.kind<=3);
+          return {area:m.area.id, gameMode:m.gameMode, day:m.shift.career.day, elapsed:m.shift.elapsed,
+            mailControlVisible:!!document.getElementById('mailButton')&&getComputedStyle(document.getElementById('mailButton')).display!=='none', absent:['yard','yardJob','animals','landmarks','mineSite'].every(k=>m[k]===null),
+            sites:m.terrain.sites.length, otherSites:m.terrain.sites.filter(s=>s!==m.home?.site&&s!==m.church?.site&&s!==m.quarry?.site&&s!==m.airport?.site).length, quarrySite:!!m.quarry&&m.terrain.sites.includes(m.quarry.site), homeSite:!!m.home&&m.terrain.sites.includes(m.home.site), churchSite:!!m.church&&m.terrain.sites.includes(m.church.site), ground:m.terrain.heightAt(v.x,v.z), pending:m.terrain.pending, stops:m.shift.stops, run:m.shift.run.name, x:v.x,z:v.z, heading:v.heading,
+            roadDistance:road?.dist, bounds:v.bounds, edge:!!m.edge, draws:m.renderer.info.render.calls, triangles:m.renderer.info.render.triangles,
+            hud:document.getElementById('hud').textContent, shiftHud:document.getElementById('shiftHud').textContent};
+        })()`);
+        assert.equal(failedRequests.length, 0, failedRequests.join('\n'));
+        result.transferredBytes=transferredBytes; result.requestCount=requests.length;
+        assert.equal(result.area, query.get('area')); assert.equal(result.absent, true);
+        // Judique owns its home and church; West Bay owns the invented quarry park.
+        assert.equal(result.otherSites, 0, 'no mail-route site outside Mabou');
+        const ownSites = ({pointtupper:query.get('airport')==='0'?0:1,judique:2,westbay:query.get('quarry')==='0'?0:1})[result.area]??0;
+        assert.equal(result.sites, ownSites, JSON.stringify({sites:result.sites,home:result.homeSite,church:result.churchSite,quarry:result.quarrySite}));
+        if(result.area==='judique')assert.ok(result.homeSite&&result.churchSite,'Judique loads its home and church sites');
+        if(result.area==='westbay'&&ownSites)assert.ok(result.quarrySite,'West Bay loads its own quarry site');
+        assert.ok(Number.isFinite(result.ground) && result.ground >= 0, 'land under the spawn');
+        assert.equal(result.pending, 0, 'land downloads settled');
+        assert.equal(result.gameMode, 'explore', 'non-mail areas force explore mode');
+        assert.equal(result.day,0); assert.equal(result.elapsed,0); assert.equal(result.mailControlVisible,false);
+        assert.equal(result.stops, 0); assert.equal(result.edge, true);
+        assert.equal(requests.some(path => path.endsWith('/landmarks.json')), false);
+        if (query.has('demo')) {
+          assert.ok(initial, 'initial car state');
+          const startRoad = await evaluate(`(() => { const p=${JSON.stringify(initial)}; const r=mmm.roads.nearest(p.x,p.z,1000,r=>r.kind>=1&&r.kind<=3); const centre=mmm.roads.nearest(0,0,1000,r=>r.kind>=1&&r.kind<=3); return {distance:r?.dist, heading:r?.heading, centre, ground:mmm.terrain.heightAt(p.x,p.z)}; })()`);
+          assert.ok(startRoad.distance < 1, JSON.stringify(startRoad));
+          assert.ok(Number.isFinite(startRoad.ground) && startRoad.ground >= 0, 'land under initial spawn');
+          assert.ok(Math.hypot(initial.x, initial.z) < 1000, JSON.stringify(initial));
+          assert.ok(Math.hypot(initial.x-startRoad.centre.x,initial.z-startRoad.centre.z)<1, 'nearest public road to village');
+          assert.ok(Math.abs(Math.sin(initial.heading-startRoad.heading))<.15, 'heading along the public road');
+          result.startRoadDistance=startRoad.distance; result.travel=Math.hypot(result.x-initial.x,result.z-initial.z);
+          assert.ok(Math.hypot(result.x-initial.x,result.z-initial.z) > 3, 'demo car moved');
+          // Probe after the picture, so the temporary placement cannot alter the photographed HUD.
+          afterShot = async () => {
+            const edge = await evaluate(`(() => {const v=mmm.vehicle, b=v.bounds;
+              const mx=(b[0]+b[2])/2, mz=(b[1]+b[3])/2;
+              return [ ['west',b[0]-10,mz,-Math.PI/2,-10,0], ['east',b[2]+10,mz,Math.PI/2,10,0],
+                ['north',mx,b[1]-10,0,0,-10], ['south',mx,b[3]+10,Math.PI,0,10] ].map(([side,x,z,heading,vx,vz])=>{
+                  v.place(x,z,heading);v.vx=vx;v.vz=vz;v.speed=10;
+                  mmm.driveVehicle(1/120,{throttle:0,steer:0,handbrake:false});
+                  return {side,stopped:v.x>=b[0]&&v.x<=b[2]&&v.z>=b[1]&&v.z<=b[3]&&v.atEdge};
+                });})()`);
+            assert.ok(edge.every(row=>row.stopped), 'all four edges stop the car: '+JSON.stringify(edge));
+            result.edgeTests=edge; result.edgeStopsCar=true;
+            writeFileSync(`${out}/${name}.json`, JSON.stringify({initial, ...result, errors}, null, 2));
+          };
+        }
+        writeFileSync(`${out}/${name}.json`, JSON.stringify({initial, ...result, errors}, null, 2));
+      }
+    }
+    if (query.get('check') === 'reload') {
+      const waitReload = async predicate => {
+        const until = Date.now()+120000;
+        while (Date.now()<until) {
+          await sleep(300);
+          try { if (await evaluate(`document.title==='settled' && window.mmm?.area.id==='fixture' && (${predicate})`)) return; }
+          catch (error) { if (!String(error).includes('context')) throw error; }
+        }
+        throw new Error('The settings reload did not retain the fixture area');
+      };
+      await evaluate(`(() => {const slider=document.getElementById('exag');slider.value='2';slider.dispatchEvent(new Event('change'));return true;})()`);
+      await waitReload(`new URLSearchParams(location.search).get('area')==='fixture' && mmm.terrain.exag===2`);
+      await evaluate(`(() => {const input=document.querySelector('#detail input');input.checked=true;input.dispatchEvent(new Event('change'));return true;})()`);
+      await waitReload(`new URLSearchParams(location.search).get('area')==='fixture' && mmm.low===true`);
+      writeFileSync(`${out}/${name}-reload.json`,JSON.stringify(await evaluate(`({search:location.search,area:mmm.area.id,low:mmm.low})`),null,2));
+    }
+    // Pin animated water for visual comparisons. This is a test-only renderer hook, never game code.
+    if (query.has('cam')) await evaluate(`(() => { const r=mmm.renderer, render=r.render; r.render=function(scene,camera) {
+      scene.traverse(object=>{ for (const material of object.material ? (Array.isArray(object.material)?object.material:[object.material]) : [])
+        if(material.uniforms?.time) material.uniforms.time.value=120; }); return render.call(this,scene,camera);
+    }; })()`);
+    await sleep(200);
+    const shot = await send('Page.captureScreenshot', {format:'png'});
+    writeFileSync(`${out}/${name}.png`, Buffer.from(shot.data, 'base64'));
+    await afterShot();
+    if (query.get('check') !== 'missing') assert.equal(failedRequests.length, 0, failedRequests.join('\n'));
+    assert.equal(errors.length, 0, errors.join('\n'));
+    console.log(`PASS ${name}: ${state.message ?? state.title}; ${errors.length} console errors`);
+  } finally {
+    await fetch(`http://127.0.0.1:${port}/json/close/${tab.id}`).catch(() => {}); ws.close();
+  }
+}
