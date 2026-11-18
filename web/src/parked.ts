@@ -1,5 +1,6 @@
 import { CAR_SPEC, type VehicleSpec } from './vehicle-spec';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Mesher, seeded, type RGB } from './yard-kit';
 
 /**
@@ -61,15 +62,56 @@ export function vehicleShape(m: Mesher, type: 0 | 1 | 2, frame: THREE.Matrix4 | 
   }
 }
 
+/** The solid a parked vehicle stands in. */
+export function parkedSolid(p: Parked): Solid {
+  return { x: p.x, z: p.z, half: PARKED_SIZE[p.type][0] / 2, halfWidth: PARKED_SIZE[p.type][1] / 2, heading: p.heading };
+}
+
+/** The height under a point near parked vehicle `p`, or null while that ground has not loaded. */
+export type ParkedGround = (x: number, z: number, p: Parked) => number | null;
+
+/** Pose `o` so one parked vehicle stands on the ground (its matrix updated). False while that ground has not loaded. */
+export function parkedMatrix(p: Parked, ground: ParkedGround, o: THREE.Object3D): boolean {
+  const fx = Math.sin(p.heading), fz = -Math.cos(p.heading);
+  const y = ground(p.x, p.z, p), nose = ground(p.x + fx * 1.4, p.z + fz * 1.4, p), tail = ground(p.x - fx * 1.4, p.z - fz * 1.4, p);
+  if (y === null || nose === null || tail === null) return false;
+  o.position.set(p.x, y, p.z);
+  o.rotation.set(0, Math.PI / 2 - p.heading, Math.atan2(nose - tail, 2.8), 'YXZ');   // local +x is the nose
+  o.updateMatrix();
+  return true;
+}
+
+/**
+ * Parked vehicles that never move, baked into one plain geometry in world coordinates (each body colour multiplied in,
+ * as an instance colour would be): drawn with a vertex-coloured material, they join one mesh with other static parts
+ * instead of one instanced draw per type. Null for an empty list; throws while some ground is still missing.
+ */
+export function bakeParked(list: Parked[], ground: ParkedGround): THREE.BufferGeometry | null {
+  if (!list.length) return null;
+  const shapes = new Map<number, THREE.BufferGeometry>(), parts: THREE.BufferGeometry[] = [], o = new THREE.Object3D();
+  for (const p of list) {
+    let shape = shapes.get(p.type);
+    if (!shape) { const m = new Mesher(); vehicleShape(m, p.type); shape = m.geometry(); shapes.set(p.type, shape); }
+    if (!parkedMatrix(p, ground, o)) throw new Error('bakeParked: the ground under a parked vehicle has not loaded');
+    const g = shape.clone().applyMatrix4(o.matrix), col = g.attributes.color, c = new THREE.Color(p.colour);
+    for (let i = 0; i < col.count; i++) col.setXYZ(i, col.getX(i) * c.r, col.getY(i) * c.g, col.getZ(i) * c.b);
+    parts.push(g);
+  }
+  const merged = mergeGeometries(parts);
+  for (const g of [...parts, ...shapes.values()]) g.dispose();
+  if (!merged) throw new Error('bakeParked: geometry could not be merged');
+  return merged;
+}
+
 export class ParkedVehicles {
   readonly group = new THREE.Group();
   readonly solids: Solid[] = [];
   private meshes: THREE.InstancedMesh[] = [];
   private dummy = new THREE.Object3D();
 
-  /** `ground` gives the height under a point, or null while that ground has not loaded. */
-  constructor(readonly list: Parked[], private ground: (x: number, z: number) => number | null) {
-    const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  /** `ground` gives the height under a point near a vehicle, or null while that ground has not loaded. */
+  /** `material` lets several sets share one (it must be vertex-coloured); by default each set makes its own. */
+  constructor(readonly list: Parked[], private ground: ParkedGround, material: THREE.Material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })) {
     for (const type of [0, 1, 2] as const) {
       const mine = list.filter((p) => p.type === type);
       const m = new Mesher();
@@ -82,7 +124,7 @@ export class ParkedVehicles {
       this.meshes.push(mesh);
       this.group.add(mesh);
     }
-    for (const p of list) this.solids.push({ x: p.x, z: p.z, half: PARKED_SIZE[p.type][0] / 2, halfWidth: PARKED_SIZE[p.type][1] / 2, heading: p.heading });
+    for (const p of list) this.solids.push(parkedSolid(p));
     this.group.visible = false;
   }
 
@@ -91,12 +133,7 @@ export class ParkedVehicles {
     for (const mesh of this.meshes) {
       const mine = mesh.userData.list as Parked[];
       for (let i = 0; i < mine.length; i++) {
-        const p = mine[i], fx = Math.sin(p.heading), fz = -Math.cos(p.heading);
-        const y = this.ground(p.x, p.z), nose = this.ground(p.x + fx * 1.4, p.z + fz * 1.4), tail = this.ground(p.x - fx * 1.4, p.z - fz * 1.4);
-        if (y === null || nose === null || tail === null) return false;
-        this.dummy.position.set(p.x, y, p.z);
-        this.dummy.rotation.set(0, Math.PI / 2 - p.heading, Math.atan2(nose - tail, 2.8), 'YXZ');   // local +x is the nose
-        this.dummy.updateMatrix();
+        if (!parkedMatrix(mine[i], this.ground, this.dummy)) return false;
         mesh.setMatrixAt(i, this.dummy.matrix);
       }
       mesh.instanceMatrix.needsUpdate = true;

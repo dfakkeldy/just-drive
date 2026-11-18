@@ -1,3 +1,5 @@
+import { Sidewalks } from './sidewalks';
+import { loadSidewalkData } from './sidewalks-cache';
 import { StreamCulverts } from './stream-culverts';
 import { sugarCampStart } from './sugar-camp-start';
 import { PointTupperDriver, driverEnabled, driverLive } from './point-tupper-driver';
@@ -162,6 +164,7 @@ if (ERA.title) page.setTitle(ERA.title, true);
 const base = `${import.meta.env.BASE_URL}${AREA.base}`;
 const localJust = SITE.brand === 'just' && location.hostname === 'localhost';
 const offlinePageKey = __PUBLIC_APP__ && !localJust ? bindOfflineVersion(AREA.id) : '';
+const sidewalkDataReady = ERA.modern && params.get('sidewalks') !== '0' ? loadSidewalkData(AREA.id, base, LOW) : Promise.resolve(null);
 const manifest = await loadAreaManifest<Manifest>(AREA, base).catch(error => {
   if (__PUBLIC_APP__ && error instanceof Error && error.name === 'GameUpdateRequired') return new Promise<never>(() => {});
   return areaScreen(error instanceof Error ? error.message : String(error));
@@ -391,7 +394,8 @@ if (waterReflections) {
   Object.assign(terrain.uniforms, waterReflections.uniforms);
 }
 
-const roads = new Roads(manifest.roads ? await getJson(manifest.roads.file) : { roads: [] }, manifest.village, terrain);
+const roadData = manifest.roads ? await getJson(manifest.roads.file) : { roads: [] };
+const roads = new Roads(roadData, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
   ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW, () => terrain.dataRevision)
   : null;
@@ -420,6 +424,21 @@ const history = ERA.id === '1884' ? await (async () => {
   return new HistoryScene(terrain, roads, streams, roofSites(buildingList ?? []), ground);
 })() : null;
 if (history) { scene.add(history.group); waterReflections?.include(history.group); }
+const sidewalkData = await sidewalkDataReady;
+// The checked offline plan contains the current site reservations and source road geometry.
+// An optional layer: a failure or a refused budget warns once and leaves the town as main draws it (no clearing, no pole moves).
+const sidewalks = (() => {
+  if (!ERA.modern || !sidewalkData) return null;
+  const bridgeWalks = new Map(roads.bridgeWalks);   // the layer widens bridge parapets while it builds
+  try {
+    const layer = new Sidewalks(sidewalkData, manifest.village, terrain, roads, LOW);
+    if (!layer.audit.disabled) return layer;
+    layer.dispose();
+  } catch (error) { console.warn('Sidewalks failed to start; skipping sidewalks', error); }
+  roads.bridgeWalks.clear(); for (const [id, walk] of bridgeWalks) roads.bridgeWalks.set(id, walk);
+  return null;
+})();
+if (sidewalks) { terrain.sidewalks=sidewalks; scene.add(sidewalks.group); if (mabouSite) mabouSite.sidewalkLayer = true; }
 // Roadside props are scenery: when their file is missing or broken, the game still starts.
 const props = await (async () => {
   if (!ERA.modern || !manifest.props) return null;
@@ -428,10 +447,11 @@ const props = await (async () => {
     // The service drops of the boxes Port Hawkesbury and Mabou's main street replace end on their models, not in the air.
     const placed = hawkesburySite && Array.isArray(read.serviceDrops) ? { ...read, serviceDrops: aimDrops(read.serviceDrops) } : read;
     const data = mabouSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: aimMabouDrops(placed.serviceDrops) } : placed;
-    return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes); }
+    return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined); }
   catch (e) { console.warn('props', e); return null; }
 })();
 if (props) { scene.add(props.group); roads.guardrails?.setObstacles(props.railObstacles); }
+
 // One invented driveway, guarded against all mailboxes, houses and existing site clearings.
 const yardDogSite = ERA.modern && AREA.id === 'mabou' && buildingList && props ? YardDogSite.create({
   roads: roads.roads, village: manifest.village, mail: [...props.mail,...props.sites],
@@ -636,7 +656,10 @@ let yaw = 0, pitch = 0, flySpeed = 40, pendingShot: Shot | null = null;
 let waitingToDrive = true;
 const drone = new Drone();
 scene.add(drone.group);
-const roofAt = roofHeights(ERA.modern && buildingList ? buildingList : [], manifest.village, EXAG, SEA_LEVEL);   // 1884 draws other roofs
+// The drone's floor reads the roofs that are drawn: the surveyed boxes less those Mabou's main street replaces, and the
+// hand-built main street's own roofs, measured from its geometry once each place is built. 1884 draws other roofs.
+const boxRoofAt = roofHeights(ERA.modern && buildingList ? mabouSite ? mabouSite.drawn(buildingList) : buildingList : [], manifest.village, EXAG, SEA_LEVEL);
+const roofAt = mabouMain ? (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain.roofAt(x, z)) : boxRoofAt;
 if (import.meta.env.DEV) expose({ drone });
 
 function applyShot(s: Shot) {
@@ -744,7 +767,7 @@ if (roadAnimals && towing) roadAnimals.towed = towing;
 if (touchDevice && !bare && !horse && ride.drivingHelp) drivingHelpSetting(document.getElementById('settings'), document.getElementById('startOver'), strong => { vehicle.strongHelp = strong; if (fleet) for (const m of fleet.members) m.vehicle.strongHelp = strong; });
 if (horse) shift.damage.reset();
 vehicle.damage = horse ? null : shift.damage; vehicle.desktopPull = !touchDevice && !LOW;
-if (import.meta.env.DEV) expose({ shift, roadScene, schoolBus, animals, aiDriver });
+if (import.meta.env.DEV) expose({ shift, roadScene, schoolBus, animals, sidewalks, aiDriver });
 if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.mjs and the guard rail night pictures
 // Outside the mail game a door is only a place to look: no shift, no receipt. Mabou has no such door, so it stays quiet.
 const churchRoom = churchSite ? await import('./interior-church') : null;
@@ -1369,6 +1392,7 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'landmarks' } : {}), segment: 'landmarks', ending: true, update: () => landmarks?.update(camera) },
   { ...(import.meta.env.DEV ? { name: 'history' } : {}), segment: 'after-activities', ending: false, update: dt => history?.update(camera.position, dt) },
   { ...(import.meta.env.DEV ? { name: 'roads' } : {}), segment: 'after-activities', ending: true, update: () => { roads.update(camera.position); canal?.update(0, vehicle, !multiplayer?.choice.on); } },
+  { ...(import.meta.env.DEV ? { name: 'sidewalks' } : {}), segment: 'after-activities', ending: true, update: () => sidewalks?.update() },
   ...(trafficSignals ? [{ ...(import.meta.env.DEV ? { name: 'trafficSignals' } : {}), segment: 'after-activities' as const, ending: false, update: (dt: number, realDt: number) => trafficSignals!.update(dt, camera.position, realDt) }] : []),
   { ...(import.meta.env.DEV ? { name: 'edge' } : {}), segment: 'after-activities', ending: false, update: () => edge?.update(camera.position) },
   { ...(import.meta.env.DEV ? { name: 'mineSite' } : {}), segment: 'after-activities', ending: false, update: () => mineSite?.update(camera.position) },
@@ -1541,7 +1565,8 @@ function frame(now: number) {
     }
     // Finish outdoor tile builds on the paused budget while the interior freezes the world.
     terrain.update(camera, true);
-    quiet = loaded && terrain.pending === 0 ? quiet + 1 : 0; page.ready(quiet > 20 && terrain.failed === 0 && terrain.pending === 0);
+    sidewalks?.update();
+    quiet = loaded && terrain.pending === 0 ? quiet + 1 : 0; page.ready(quiet > 20 && terrain.failed === 0 && terrain.pending === 0 && (sidewalks?.pending ?? 0) === 0);
     mailRequested = photoRequested = false;
     if (!interiors.busy) { keys.clear(); touch.steer = touch.throttle = 0; camReady = false; }
     requestAnimationFrame(frame); return;
@@ -1659,7 +1684,7 @@ function frame(now: number) {
     || (mode === 'drive' && demo > 0 && (drove < demo || Math.abs(vehicle.speed) > 0.15)) || relief.busy
     || !!porch?.waiting || porchDog?.state === 'loading' || !!mabouMain?.waiting;
   quiet = waiting ? 0 : quiet + 1;
-  page.ready(quiet > 20 && terrain.failed === 0 && terrain.pending === 0);
+  page.ready(quiet > 20 && terrain.failed === 0 && terrain.pending === 0 && (sidewalks?.pending ?? 0) === 0);
   // The clock or report can end the shift above: these final HUD reads must use the new state.
   if (mailButton) mailButton.hidden = mode !== 'drive' || shift.ended;
   phoneMailHud?.update(shift, vehicle, mode === 'drive' && !scenePaused());

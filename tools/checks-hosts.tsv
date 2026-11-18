@@ -126,6 +126,10 @@ paved-open-browser	unproven	no	WORK-only designated-polygon chase capture and ac
 blender-models	apple	no	needs the matching Blender 5.2 release (BLENDER override, application path or PATH); absence is SKIP/CANNOT RUN, never PASS; Mac PASS 10 s on 991bd1a; the project brief audit: apple-check-host M4 PASS 9.42 s on 68bc9eb, 2026-11-17 UTC; Blender 5.2.2 LTS; four committed model files rebuilt and byte-equal; needs-only branch change
 blender-models-mutations	apple	no	as blender-models; Mac PASS 16 s on 991bd1a; the project brief audit: apple-check-host M4 PASS 11.10 s on 68bc9eb, 2026-11-17 UTC; Blender 5.2.2 LTS; four files byte-equal and quantizer mutant caught; needs-only branch change
 guardrail-r3-browser	unproven	no	West Bay seam/opening and crash-bike witnesses; other hosts unmeasured
+sidewalks-runtime	apple	no	native paired settle (main/main control spread vs main/current), hardware Metal, no software GL; mmm-m4 Apple M4 / Edge 157 PASS on f7d25206, 18 Nov 2026 07:40 UTC, started at load1 < 20: all six town/quality cases within their own main/main spread (e.g. Mabou desktop +38 ms in -826..+996); an earlier try under load rising 19 -> 43 failed Mabou desktop by 28 ms (+686 vs spread max +658) and is not counted; 17 Nov PASS 1272 s on 925e2d49; MacBook M1 Pro PASS at ebb0f5c (historical)
+sidewalks-live	apple	no	hardware GPU ground/grass/drive/era proof, no CPU timing gate; mmm-m4 (Apple M4, Edge 157, hardware Metal) PASS 704 s on 1a98a0cc and 227 s on 2114f060, 18/17 Nov 2026, canonical land overlay with the six companions; earlier M6 checkpoint PASS
+sidewalks-frames	apple	no	clocked sidewalk frame <= 2 ms, startup <= 20 ms, LOW startup <= +1 ms over the M1 Pro ebb0f5c reference; mmm-m4 Apple M4 / Edge 157 PASS on f7d25206, 18 Nov 2026 07:17 UTC, started at load1 < 15: worst measured frame 1.6 ms (Port Hood desktop), p95 0.6-0.7 ms, LOW startup median delta Mabou -0.9 ms, Port Hood +0.4 ms; the M4 is faster per core than the M1 Pro reference, so its pass is a weaker bound; a 17 Nov try under load rising past 40 failed on single-frame spikes and is not counted
+sidewalks-counts	apple	no	same-host paired render deltas, no absolute pins or CPU timing; mmm-m4 M4 / Edge 157 PASS 2897 s on bf4f8750, 18 Nov 2026: 22 views/modes x 5 pairs against the same tree at ?sidewalks=0, every pair equal to the delta table
 quarry-lifecycle-browser	unproven	no	Hardware Mac lifecycle regression covers both trip links, rejected replacement pose and expanded reload; other hosts unproven
 era-door-browser	unproven	no	Mac PASS; rented M6 mini (macOS) PASS 165 s on 271f04d, 2026-11-15; Linux unmeasured
 about	portable	no	pure Node: builds both About pages into a temporary folder
@@ -178,6 +182,14 @@ stunt-contact-sxs-2_5-low	unproven	no	Linux authorized by coordinator 15 Nov; si
 stunt-features	unproven	no	Linux authorized by coordinator 15 Nov; single hardware slot; host result/control pending
 cemeteries-browser	unproven	no	rented Mac mini PASS 36 s on 076a41c8 (the five families); not yet run on the MacBook or on Linux
 cemeteries-browser-mutations	unproven	no	rented Mac mini PASS 32 s on 076a41c8 (5 served mutants); not yet run on the MacBook or on Linux
+sidewalks-diagnostic	mac-only	no	paired phase diagnostic on native MacBook or mini; mini deltas identify work only, never Mac timing gates or pins; diagnostic only, no verdict; not run on mmm-m4 in the 18 Nov pass
+sidewalks-quality-browser	apple	no	selected-request functional row (work-root fixture); mmm-m4 M4 / Edge 157 PASS 141 s on 1a98a0cc and 380 s on 2114f060; earlier M6 PASS
+sidewalks-flat-audit	mac-only	no	native mini diagnostic of exact flat public builds; no performance verdict; diagnostic only, no verdict; not run on mmm-m4 in the 18 Nov pass
+sidewalks-flat-site	apple	no	flat public boot functional row (work-root data); mmm-m4 M4 / Edge 157 PASS 406 s on 1a98a0cc and 525 s on 2114f060; earlier M6 PASS
+sidewalks-flat-working-audit	mac-only	no	native mini diagnostic of held flat working build; no application or performance PASS; diagnostic only, no verdict; not run on mmm-m4 in the 18 Nov pass
+sidewalks-inventory	apple	no	CPU site-build inventory row (no browser); mmm-m4 PASS 18 s on bf4f8750 against the canonical land clone with the six companions
+sidewalks-installed-browser	apple	no	installed-companion selected-request row; mmm-m4 M4 / Edge 157 PASS 201 s on 1a98a0cc and on 2114f060, on an APFS clone of the canonical land with the six companions installed
+sidewalks-installed-flat	apple	no	installed-companion flat public boot row; mmm-m4 M4 / Edge 157 PASS 232 s on 1a98a0cc and 74 s on 2114f060, canonical land clone with the six companions
 era-density-judique	unproven	no	Judique 1884 regeneration; not measured on another host
 era-judique-browser	unproven	no	Judique 1884 browser check; not measured on another host
 traffic-signals-browser	unproven	no	apple-check-host PASS 8.52 s on 38c41cdc (desktop and LOW: 5 draws, 924 triangles, lit lamps); not yet run on the MacBook or on Linux

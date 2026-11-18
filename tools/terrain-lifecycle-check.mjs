@@ -291,7 +291,7 @@ async function retry() {
   try {
     await tick(t, c); assert.equal(t.pending, 0); assert.equal(t.failed, 1, 'back-off count');
     const main = readFileSync(`${root}web/src/main.ts`, 'utf8');
-    const context = { loaded: true, terrain: t, grass: null, trees: null, mode: 'drive', demo: 0, drove: 0, pendingShot: null, camera: c, vehicle: { speed: 0 }, relief: { busy: false }, porch: null, porchDog: null, mabouMain: null, quiet: 21 };
+    const context = { loaded: true, terrain: t, sidewalks: null, grass: null, trees: null, mode: 'drive', demo: 0, drove: 0, pendingShot: null, camera: c, vehicle: { speed: 0 }, relief: { busy: false }, porch: null, porchDog: null, mabouMain: null, quiet: 21 };
     const evaluate = expression => Function(...Object.keys(context), `return (${expression});`)(...Object.values(context));
     assert.equal(evaluate(main.match(/const waiting = ([\s\S]*?);/)[1]), false, 'network failure must not reset quiet');
     assert.equal(evaluate(main.match(/const qualityReady = ([^;]+);/)[1]), true, 'network failure must not blame the Full detail trial');
@@ -562,7 +562,17 @@ async function builds(count) {
   // occurrence: the ordinary and STUNT_PARK tile programs both carry the define)
   // before hashing; every other byte stays pinned.
   const groundParts=["      // Both tree representations use the same approved class cell. Heights remain measured.\n      if(this.groundCover){\n        const x=t.x0+(k%S)*mpp,z=t.z0+Math.floor(k/S)*mpp;\n        if(clearsGroundTrees(this.groundClassAt(x,z))){c=0;px[k*4+2]=0;}\n      }\n", "        // Averaging must not grow the neighbouring forest hull back over a cleared cell.\n        if(this.groundCover&&clearsGroundTrees(this.groundClassAt(t.x0+ga*mpp,t.z0+gb*mpp)))c=0;\n", "...(this.groundCover ? { GROUND_CLASSES: 1 } : {}), "];
-  const maths=source=>source.slice(source.indexOf('    const sites = this.sites.filter'),source.indexOf('    this.group.add(mesh);')+'    this.group.add(mesh);'.length);
+  // Sidewalks deliberately clear vegetation only. The new sidewalk row checks that mask;
+  // keep the existing arithmetic pin for every other operation, including the no-sidewalk path.
+  const sidewalkClears = [
+    '    const walkMask=this.sidewalks?.terrainMask?.(t.level,t.i,t.j);\n',
+    '    const contactCanopy=this.sidewalks?.clearCanopy?.(t.level,t.i,t.j,canopy,px)??null;\n',
+    ' if(contactCanopy)contactCanopy[b*S+a]=0;',
+    '    t.contactCanopy=contactCanopy;\n',
+    '        if(walkMask?.[k0])c=0;\n',
+    '        if(contactCanopy&&contactCanopy[k]>0&&!coastal.treeAllowed(x,z,raw,slope))contactCanopy[k]=0;\n',
+  ];
+  const maths=source=>sidewalkClears.reduce((text,line)=>text.split(line).join(''),source.slice(source.indexOf('    const sites = this.sites.filter'),source.indexOf('    this.group.add(mesh);')+'    this.group.add(mesh);'.length));
   // PR #163 (reviewed) added two hook lines for the Point Tupper stockpiles: `canopyExcludes` is unset in every area
   // without a stockpile pack, so the maths do not change there. They are the only lines allowed beyond the pin, each
   // once at most, byte for byte and at its reviewed place (the line before it, the hook, the line after it); a
@@ -762,9 +772,9 @@ async function jumpDrive() {
 if(scenario==='jump-drive')await jumpDrive();
 
 function interiorQuiet() {
-  const match=mainText.match(/terrain.update\(camera, true\);\s*([^;]+);\s*page.ready\(([^;]+)\);/);
+  const match=mainText.match(/terrain.update\(camera, true\);([\s\S]*?)page.ready\(([^;]+)\);/);
   assert.ok(match,'interior update keeps its own readiness gate');
-  const advance=Function('quiet','loaded','terrain',`${match[1]};return {quiet,ready:(${match[2]})};`);
+  const advance=Function('quiet','loaded','terrain','sidewalks',`${match[1]};return {quiet,ready:(${match[2]})};`);
   let quiet=21;
   // Last sibling completes with pending=0; the next update discovers its finer children.
   for(const [before,after]of [[1,1],[1,0],[0,4],[4,0]]) {
@@ -773,6 +783,8 @@ function interiorQuiet() {
   }
   for(let i=1;i<=21;i++){const result=advance(quiet,true,{pending:0,failed:0});quiet=result.quiet;assert.equal(result.ready,i>20);}
   assert.equal(advance(quiet,true,{pending:0,failed:1}).ready,false,'failed reads still block tools');
+  assert.equal(advance(quiet,true,{pending:0,failed:0},{pending:1,update(){}}).ready,false,'a pending visual layer still blocks readiness');
+  assert.equal(advance(quiet,true,{pending:0,failed:0},{pending:0,update(){}}).ready,true,'completed visual work permits readiness');
   console.log('PASS interior quiet resets while land loads and across sibling completion; failed back-off unchanged');
 }
 async function carOrder() {
