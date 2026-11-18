@@ -1,9 +1,10 @@
 import { readSite, type Site } from './site';
-export type GameMode = 'mail' | 'explore';
+/** 'fired' is Get Fired: the mail shift's route and clock, where complaints score. Never offered in Just Drive. */
+export type GameMode = 'mail' | 'explore' | 'fired';
 export const EXPLORE_TITLE = 'Driving Mabou';
 const KEY = 'mmm.mode';
 type ModeStore = Pick<Storage, 'getItem'>;
-const valid = (value: string | null): value is GameMode => value === 'mail' || value === 'explore';
+const valid = (value: string | null): value is GameMode => value === 'mail' || value === 'explore' || value === 'fired';
 
 /** Called once at boot. Invalid queries do not erase a saved choice. Storage can be blocked. */
 export function readMode(params: URLSearchParams, storage: () => ModeStore = () => localStorage, site?: Site): GameMode {

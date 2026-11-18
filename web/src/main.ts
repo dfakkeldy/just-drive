@@ -68,6 +68,9 @@ import { typing, hikesFor, playableBox, worldHikeLines } from './hikes';
 import { Footpaths } from './footpaths';
 import { RoadScene } from './road-scene';
 import { SchoolBus } from './school-bus';
+import { BUS } from './school-bus-rules';
+import { BUS_STOP_RADIUS, churchZones, placeAt } from './score-rules';
+import { FiredRun } from './fired';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
 import { noZoom } from './no-zoom';
@@ -145,7 +148,7 @@ treeLook.leafy = params.get('leaves') === '1';
 treeLook.oneSample = FINISH.oneSample;
 const ERA = readEra(params, baseArea.id, SITE.era);
 const AREA = areaInEra(baseArea, ERA);
-const gameMode = ERA.explore ? 'explore' : AREA.mail ? readMode(params, undefined, SITE) : 'explore', mailMode = gameMode === 'mail';
+const gameMode = ERA.explore ? 'explore' : AREA.mail ? readMode(params, undefined, SITE) : 'explore', firedMode = gameMode === 'fired', mailMode = gameMode === 'mail' || firedMode;
 if (!mailMode) prepareExplore();
 // A vehicle whose model is a file starts its download now, beside the land. The game waits for it once, just before
 // the vehicle is built (below); the entry's own time limit counts from that wait, not from here.
@@ -775,7 +778,7 @@ const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, prop
   multiplayer?.reset();
   resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; devHooks.reset();
-}, AREA.route) : new FreeDrive(roads, manifest.village);
+}, AREA.route, firedMode) : new FreeDrive(roads, manifest.village);
 const roadScene = AREA.roadScene && shift instanceof Shift ? new RoadScene(roads, terrain, shift, params) : null;
 resets[resetSlot.roadScene] = () => roadScene?.reset();
 if (roadScene) { scene.add(roadScene.group, roadScene.painter.group); vehicle.placementGuard = pose => roadScene.allowPlacement(pose, vehicleSpec); }
@@ -795,6 +798,14 @@ if (aiDriver) {
 }
 if (import.meta.env.DEV) expose({ ambientTraffic });
 const schoolBus = ERA.modern && AREA.id === 'mabou' && shift instanceof Shift ? new SchoolBus(roads, terrain, shift) : null;
+if (shift instanceof Shift) {
+  // The score stream names real places where nothing scores: church grounds, cemeteries and the school bus stop.
+  const stop = { x: 0, z: 0, heading: 0 }; schoolBus?.road?.at(BUS.stop, BUS.lane, stop);
+  const zones = [...churchZones(landmarkList, manifest.village), ...schoolBus?.road ? [{ place: 'busStop', ...stop, radius: BUS_STOP_RADIUS }] : []];
+  const cemetery = cemeteries ? (x: number, z: number) => cemeteries.excludes(x + manifest.village[0], manifest.village[1] - z) : undefined;
+  shift.placeAt = (x, z) => placeAt(x, z, zones, cemetery);
+  if (schoolBus) schoolBus.onPass = p => shift.reportScore('schoolBus', p.x, p.z, p.speed);
+}
 resets[resetSlot.schoolBus] = () => schoolBus?.reset();
 resets[resetSlot.stuntPark]=()=>stuntPark?.reset();
 if (schoolBus) {
@@ -1371,6 +1382,9 @@ const clearEndingInput = () => {
   document.getElementById('settings')?.classList.remove('open');
 };
 const endings = mailMode ? new Endings(clearEndingInput, () => { shift.startOver(); pause.resetClock(); }) : quietEndings();
+// Built with hud=0 too: a fired Shift ends through it. Only its panel follows the bare HUD.
+const fired = firedMode && shift instanceof Shift && endings instanceof Endings ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock()) : null;
+if (fired && bare) document.getElementById('firedHud')!.style.display = 'none';
 const yardJob = yard && endings instanceof Endings ? ride.yardJob?.(yard) ?? new YardJob(yard, vehicle, terrain, camera, endings) : null;
 resets[resetSlot.yardJob] = () => yardJob?.reset();
 const deckhand = AREA.coast && ERA.modern ? new Deckhand(manifest.village, terrain) : null;
@@ -1378,6 +1392,8 @@ if (deckhand) { scene.add(deckhand.group); waterReflections?.include(deckhand.gr
 const fishing = fishingSite && endings instanceof Endings ? new Fishing(fishingSite, terrain, vehicle, camera, endings, SEA_LEVEL, LOW) : null;
 resets[resetSlot.fishing] = () => fishing?.reset();
 if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
+// Hidden from Object.keys(mmm): ui-check pins the public dev key set.
+if (import.meta.env.DEV) expose({ fired }, false);
 if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
