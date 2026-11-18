@@ -4,10 +4,16 @@ import {writeFileSync,readFileSync} from 'node:fs';
 import {open,sleep} from './cdp.mjs';
 import {execFileSync} from 'node:child_process';
 const mutation=process.env.MMM_MUTATION;
-const baseline=execFileSync('git',['merge-base','HEAD','origin/main'],{encoding:'utf8',cwd:new URL('..',import.meta.url)}).trim();
-const changed=execFileSync('git',['diff',baseline,'--name-only','--','web/src'],{encoding:'utf8',cwd:new URL('..',import.meta.url)}).trim().split('\n');
-assert.ok(changed.every(p=>p==='web/src/main.ts'||p==='web/src/credits.ts'||p.startsWith('web/src/harbour-light')),'main replay requires unchanged existing render modules');
-const currentMain=readFileSync(new URL('../web/src/main.ts',import.meta.url),'utf8'),baseMain=execFileSync('git',['show',baseline+':web/src/main.ts'],{encoding:'utf8',cwd:new URL('..',import.meta.url)});
+// The kit-absent replay (MMM_MUTATION only) swaps in main's main.ts, so it needs a branch whose other render
+// modules equal main's. Plain runs, including runs on main after landing, need no git history at all.
+const git=args=>execFileSync('git',args,{encoding:'utf8',cwd:new URL('..',import.meta.url)});
+const baseline=mutation?git(['merge-base','HEAD','origin/main']).trim():null;
+if(mutation){
+ const changed=git(['diff',baseline,'--name-only','--','web/src']).split('\n').filter(Boolean);
+ assert.ok(changed.includes('web/src/main.ts'),'the kit-absent replay needs a branch that changes main.ts');
+ assert.ok(changed.every(p=>p==='web/src/main.ts'||p==='web/src/credits.ts'||p.startsWith('web/src/harbour-light')),'main replay requires unchanged existing render modules');
+}
+const currentMain=readFileSync(new URL('../web/src/main.ts',import.meta.url),'utf8'),baseMain=mutation?git(['show',baseline+':web/src/main.ts']):null;
 const [out,first]=process.argv.slice(2),origin=new URL(first).origin,results=[];
 for(const size of [{id:'desktop',w:1280,h:720,q:'high'},{id:'phone',w:844,h:390,q:'low'}])for(const area of ['mabou','porthood'])for(const night of [false,true]){
  const caseName=`${area}-${size.id}-${night?'night':'day'}`;

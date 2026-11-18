@@ -89,7 +89,7 @@ The point comparisons above are per feature in `web/src/harbour-light-sources.js
 | 881.3 | None | none | none | none | Tower height not published; structure needs verification. |
 | 882 | 6.7 | none | 18.0 | 1325500623 | Source point is below water in baked terrain; structure needs verification. |
 
-The game follows the requested day-off rule even for records marked operates 24 h. Flash length defaults to 1 s for Fl where the record gives only the period. Night runs only on light-study pages, below the existing sun-elevation gate. Ten fixed records are withheld. The 26 lighted buoys are inventoried but not built by the fixed-light kit. This is incomplete against the full request.
+The game follows the requested day-off rule even for records marked operates 24 h. Flash length defaults to 1 s for Fl where the record gives only the period. Beacons are built only when the game's night look is active (the same sun-elevation gate as the rest of the night scene), and they keep their phase while the game is paused. The kit builds the ten fixed lights above. Ten fixed records are withheld and the 26 lighted buoys are inventoried but not modelled; both are left for follow-up work and are not part of this kit.
 
 ## Other government candidates
 
