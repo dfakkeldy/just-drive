@@ -194,6 +194,18 @@ def test_order() -> None:
             for stem, record in (('moved', {'line_times_moved': 1.0}), ('built', {'line_times_moved': 1.0, 'final_sha256': 'x'}), ('plain', {})):
                 (order.MAKE / f'{stem}.json').write_text(json.dumps(record))
             assert order.unbuilt(['moved', 'built', 'plain', 'absent']) == ['moved']
+            # The check stops on it too, for a round 1 track as well (the catalogue is only read).
+            first = next(t['source'] for s in json.loads(order.CATALOGUE.read_text())['stations'] if s['dial'] == order.DIAL
+                         for t in s['tracks'] if t['source'] not in order.TITLES)
+            (order.MAKE / f'{first}.json').write_text(json.dumps({'line_times_moved': 1.0}))
+            argv, sys.argv = sys.argv, ['order_talk.py', '--check']
+            try:
+                order.main()
+                raise AssertionError('the check passed a take that was not built again')
+            except SystemExit as stop:
+                assert first in str(stop), stop
+            finally:
+                sys.argv = argv
         finally:
             order.MAKE = was
 

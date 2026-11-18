@@ -181,6 +181,9 @@ def main() -> int:
     catalogue = json.loads(CATALOGUE.read_text())
     station = next(s for s in catalogue['stations'] if s['dial'] == DIAL)
     listed = [t['source'] for t in station['tracks']]   # the list as it is: a dict would hide a track that is there twice
+    waiting = unbuilt(dict.fromkeys(listed + list(TITLES)))   # every talk track, round 1 too
+    if waiting:   # its mp3 was cut at the old line times
+        raise SystemExit('line times moved but not built again: ' + ', '.join(waiting) + '; run make_talk.py for each first')
     if '--check' in sys.argv:
         wrong = faults(listed)
         print('\n'.join(wrong) or f'{len(listed)} tracks in order')
@@ -189,9 +192,6 @@ def main() -> int:
     if twice:
         raise SystemExit('in the station more than once: ' + ', '.join(twice))
     have = {t['source']: t for t in station['tracks']}
-    waiting = unbuilt(TITLES)
-    if waiting:   # its mp3 was cut at the old line times
-        raise SystemExit('line times moved but not built again: ' + ', '.join(waiting) + '; run make_talk.py for each first')
     old = [s for s in have if s not in TITLES]
     new = [s for s in TITLES if s not in HELD and (s in have or ((SRC / f'{s}.mp3').exists() and (MAKE / f'{s}.json').exists()))]
     if set(old + new) == set(have) and not faults(listed):
