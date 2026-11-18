@@ -91,7 +91,7 @@ const instrumentation = `(fixture => {
     document.head.append(Object.assign(document.createElement('link'), {rel:'icon', href:'data:,'}));
   }, {once:true});
 })`;
-async function openPage(scene, mode) {
+async function openPage(scene, mode, options = {}) {
   const tab = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, {method:'PUT'})).json();
   const ws = new WebSocket(tab.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
@@ -142,7 +142,9 @@ async function openPage(scene, mode) {
   if(scene.animal) params.set('animal','cow');
   if (mode.phone) params.set('touch', '1');
   if (mode.explore) { params.set('mode','explore'); params.set('vehicle','truck'); }
-  const url = `${origin}/?${params}`;
+  if(options.radioOff)params.set('radio','0');
+  for(const [key,value] of Object.entries(options.query??{}))params.set(key,value);
+  const url = `${options.origin??origin}/?${params}`;
   try {
     await send('Runtime.enable'); await send('Page.enable'); await send('Network.enable');
     await send('Network.setCacheDisabled', {cacheDisabled:process.env.FRAME_BUDGET_COLD==='1'});
@@ -283,9 +285,9 @@ async function sample(page) {
   }
   throw Error('No stable pair of 30-frame post-settle windows: '+JSON.stringify({inflight:[...page.inflightUrls.values()],rows:await page.read('__budget.rows.slice(-2)')}));
 }
-export async function measure(scene, mode, mutation) {
+export async function measure(scene, mode, mutation, options = {}) {
   const started=Date.now();
-  const page = await openPage(scene, mode);
+  const page = await openPage(scene, mode, options);
   try {
     if (mutation) await mutation(page);
     const result = await sample(page);
@@ -354,12 +356,14 @@ export async function measure(scene, mode, mutation) {
     assert.ok(result.cutWork.mainWithUploadsMs<=8,'cut-field main-thread frame budget including GL uploads: '+JSON.stringify(result.cutWork));
     assert.equal(result.cutWork.steps,0,'browser cut raster runs off the main thread');
     if(result.cutWork.atlases)assert.ok(result.cutWork.workerJobs>0,'browser cut raster uses its worker');
+    if(options.programInventory) result.programKeys=await page.read('mmm.renderer.info.programs.map(p=>p.cacheKey).sort()');
     result.assets=page.assetStats();
     // Exactly one request is neither a counted asset nor a dev-server module: the page itself. A new kind of
     // player download (a new public folder, an imported image) must be classed on purpose in frame-budget-policy.mjs.
     if(result.assets.ignoredOther!==1) throw Error(`${scene.id}/${typeof mode==='string'?mode:mode.id}: ${result.assets.ignoredOther} requests are neither counted assets nor dev modules (1 expected: the page). Class the new download in tools/frame-budget-policy.mjs so that it is counted or named as ignored.`);
     result.radio=await page.read('mmm.radio?({station:mmm.radio.station,defaultStation:mmm.radio.first,track:mmm.radio.track,clock:mmm.radio.live(),loop:mmm.radio.audio.loop}):null');
-    assert.ok(result.radio&&result.radio.station===result.radio.defaultStation&&result.radio.track===0&&result.radio.clock.at===0&&result.radio.loop,'default radio fixture must stay on track 0 at fixed station clock');
+    if(options.radioOff){assert.equal(result.radio,null,'radio disabled on both count-comparison sides');assert.equal(result.assets.audio,0,'no songs or radio manifest transferred');}
+    else assert.ok(result.radio&&result.radio.station===result.radio.defaultStation&&result.radio.track===0&&result.radio.clock.at===0&&result.radio.loop,'default radio fixture must stay on track 0 at fixed station clock');
 
     if(scene.id==='village-start'&&mode.phone) { result.trees=await treeFrustum(page); assert.equal(result.trees.calls,result.groups.trees??0,'tree graph and submitted draws must agree');assert.equal(result.trees.triangles,result.groupTriangles.trees??0,'tree graph and submitted triangles must agree'); }
     if(mutation) result.mutation=await page.read('__budget.mutation ?? null');
@@ -373,7 +377,7 @@ export async function measure(scene, mode, mutation) {
     const device=await page.read(`(() => {const gl=mmm.renderer.getContext(),e=gl.getExtension('WEBGL_debug_renderer_info');return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)})()`);
     assert.ok(!/swiftshader|llvmpipe|software/i.test(device),'hardware GPU required: '+device);
     if (!mode.phone && scene.id==='harbour-water') assert.ok(result.passes.some(p=>p.label==='mirror' && p.calls>0),'harbour must include a real water mirror pass');
-    return {...result, seconds:(Date.now()-started)/1000, url:page.url.replace(origin,''), viewport:mode.phone ? [390,844] : [1400,950]};
+    return {...result, seconds:(Date.now()-started)/1000, url:page.url.replace(options.origin??origin,''), viewport:mode.phone ? [390,844] : [1400,950]};
   } finally { await page.close(); }
 }
 // Graph-only diagnostic: test the same object sphere the renderer uses, against all six planes.

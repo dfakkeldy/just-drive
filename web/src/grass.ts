@@ -250,6 +250,7 @@ export class Grass {
       const i = p.cursor++, gx = p.x * p.side / CELL + i % p.side, gz = p.z * p.side / CELL + Math.floor(i / p.side);
       const r = random(gx, gz, 31), r2 = random(gx, gz, 971);
       const x = (gx + 0.15 + 0.7 * r) * CELL / p.side, z = (gz + 0.15 + 0.7 * r2) * CELL / p.side;
+      if (this.terrain.sidewalks?.vegetationAt(x,z)) continue;
       if (this.excludes?.(x + this.terrain.manifest.village[0], this.terrain.manifest.village[1] - z)) continue;
       const surface = this.terrain.surfaceAt(x, z);
       if (!surface || surface.level < 8) {

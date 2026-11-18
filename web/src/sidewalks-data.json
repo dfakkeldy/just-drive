@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "crs": "EPSG:2961",
+  "source": "Public-safe owner observations of road stretches on 12–13 November 2026. Side means compass side, independent of source-line direction. Unmeasured grass strips use a 1 m estimate.",
+  "runs": [
+    {"id":"mabou-village","area":"mabou","road":"Highway 19","side":"north-west","start":[624114,5103078],"end":[624769,5103523],"width":1.5,"material":"concrete","curb":"raised","buffer":0,"confidence":"high"},
+    {"id":"mabou-bridge","area":"mabou","road":"Highway 19","side":"north-west","start":[624072,5103034],"end":[624114,5103073],"width":1,"material":"concrete","curb":"raised","buffer":0,"confidence":"high","bridge":true},
+    {"id":"harbour-corner","area":"mabou","road":"Mabou Harbour Road","side":"north-east","start":[624332,5103300],"end":[624106,5103383],"width":1.5,"material":"asphalt","curb":"rolled","buffer":0,"confidence":"high","note":"North to north-east as the road curves; last 8 m at the Highway 19 corner is concrete."},
+    {"id":"harbour-west","area":"mabou","road":"Mabou Harbour Road","side":"north-east","start":[624094,5103400],"end":[623689,5103737],"width":1.5,"material":"asphalt","curb":"rolled","buffer":0,"confidence":"high"},
+    {"id":"reeves-ne","area":"pointtupper","road":"Reeves Street","side":"north-east","start":[627975,5053000],"end":[628440,5052621],"width":1.5,"material":"concrete","curb":"raised","buffer":1,"confidence":"medium"},
+    {"id":"reeves-sw","area":"pointtupper","road":"Reeves Street","side":"south-west","start":[627966,5052993],"end":[628439,5052610],"width":1.5,"material":"concrete","curb":"raised","buffer":2,"confidence":"medium","note":"Disputed material: owner selected concrete 1.5 m behind a 2 m grass strip."},
+    {"id":"reeves-sw-west","area":"pointtupper","road":"Reeves Street","side":"south-west","start":[627783,5053214],"end":[627926,5053048],"width":1.5,"material":"concrete","curb":"raised","buffer":2,"confidence":"medium","note":"Separate western stretch of the same disputed south-west run; same owner-selected treatment."},
+    {"id":"porthood-high","area":"porthood","road":"High Road","side":"north-east","start":[613741,5096885],"end":[614445,5096481],"width":1.5,"material":"concrete","curb":"raised","buffer":1,"confidence":"high"},
+    {"id":"porthood-main","area":"porthood","road":"Main Street","side":"west","start":[613795,5096081],"end":[613724,5096869],"width":1.5,"material":"concrete","curb":"raised","buffer":1,"confidence":"high"},
+    {"id":"porthood-waterfront","area":"porthood","road":"Main Street","side":"south-west","start":[613841,5095902],"end":[613827,5095932],"width":1.5,"material":"asphalt","curb":"none","buffer":1.5,"confidence":"medium","note":"Short waterfront path below road level, behind the guard rail. Excludes the low-confidence continuation."}
+  ]
+}

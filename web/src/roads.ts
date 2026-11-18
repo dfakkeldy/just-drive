@@ -31,6 +31,8 @@ const NO_SEGMENTS: [number, number][] = [];   // one shared empty bucket: a quer
 export class Roads {
   readonly group = new THREE.Group();
   readonly roads: Road[] = [];
+  /** Modern bridge walks reserve space inside the parapet, before any deck is built. */
+  readonly bridgeWalks = new Map<number, { side:number; width:number }>();
   private rails: Guardrails | null = null;
   get guardrails(): Guardrails | null {
     if (this.terrain.cartRoads || !this.roads.length) return null;

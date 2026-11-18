@@ -93,6 +93,7 @@ export class Props {
   private readonly rotation = new THREE.Quaternion();
   private readonly cam = new THREE.Vector3();
   private readonly poles: WorldPosition[];
+  private readonly sourcePoles: WorldPosition[];
   private readonly cells = new Map<string, Cell>();
   private readonly templates = new Map<string, Template>();
   private readonly wireMaterial = new THREE.LineBasicMaterial({ color: 0x252322 });
@@ -112,14 +113,20 @@ export class Props {
     return this.poles.map((p, i) => ({ ...p, light: this.data.poles[i].light, transformer: this.data.poles[i].transformer }));
   }
   get railObstacles(): readonly (WorldPosition & { radius: number })[] {
-    return [...this.mail.map(p => ({ ...p, radius: RAIL_PROP_RADII.mailbox })), ...this.sites.map((p, i) => ({ ...p, radius: this.data.communityBoxes[i].modules * RAIL_PROP_RADII.communityModule + RAIL_PROP_RADII.communityClear })), ...this.poles.map(p => ({ ...p, radius: RAIL_PROP_RADII.pole }))];
+    return [...this.mail.map(p => ({ ...p, radius: RAIL_PROP_RADII.mailbox })), ...this.sites.map((p, i) => ({ ...p, radius: this.data.communityBoxes[i].modules * RAIL_PROP_RADII.communityModule + RAIL_PROP_RADII.communityClear })), ...this.sourcePoles.map(p => ({ ...p, radius: RAIL_PROP_RADII.pole }))];
   }
 
-  constructor(data: unknown, private readonly village: [number, number], private readonly terrain: Terrain, excludes?: (east: number, north: number) => boolean) {
+  constructor(data: unknown, private readonly village: [number, number], private readonly terrain: Terrain, excludes?: (east: number, north: number) => boolean, poleMoves: readonly {index:number;from?:readonly number[];to:readonly number[]}[] = []) {
     const parsed = parse(data);
     // New packs cannot put roadside clutter or mail targets inside these quiet places.
     // The cemetery check reports conflicts in the baked source; no coordinates are moved.
     const keep = (p: Position) => !excludes?.(p.x, p.y);
+    // Sidewalk pole moves name source pole indices, so pair each move with its pole before the quiet-place filter.
+    // A move applies only to the pole it was baked for: a land change without a sidewalk rebake leaves poles in place.
+    const fits=(m:{index:number;from?:readonly number[]})=>{const p=parsed.poles[m.index];return !!p&&(!m.from||Math.hypot(p.x-m.from[0],p.y-m.from[1])<=.01);};
+    const stale=poleMoves.filter(m=>!fits(m));if(stale.length)console.warn(`Sidewalk pole moves skipped: ${stale.length} no longer match their source pole`);
+    const moved=new Map(poleMoves.filter(fits).map(p=>[p.index,p.to]));
+    const shown=parsed.poles.map((p,i)=>{const q=moved.get(i);return q?{...p,x:q[0],y:q[1]}:p;}).filter((_,i)=>keep(parsed.poles[i]));
     this.data = { mailboxes: parsed.mailboxes.filter(keep), communityBoxes: parsed.communityBoxes.filter(keep), poles: parsed.poles.filter(keep), serviceDrops: parsed.serviceDrops };
     const world = (p: Position): WorldPosition => ({ x: p.x - village[0], z: village[1] - p.y, heading: p.heading });
     const frames = new Map<number, Motion>();
@@ -140,7 +147,9 @@ export class Props {
     }
     this.sites = this.data.communityBoxes.map((p) => ({ ...world(p), served: false, customers: p.modules * 15 }));
     this.totalCustomers = this.mail.length + this.sites.reduce((sum, p) => sum + p.customers, 0);
-    this.poles = this.data.poles.map(world);
+    // These are cosmetic relocations. Rail collision openings keep the original source positions.
+    this.sourcePoles = this.data.poles.map(world);
+    this.poles = shown.map(world);
     this.mail.forEach((p, i) => this.cell(p).mail.push(i));
     this.sites.forEach((p, i) => this.cell(p).sites.push(i));
     this.poles.forEach((p, i) => this.cell(p).poles.push(i));
