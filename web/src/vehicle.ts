@@ -496,6 +496,7 @@ export class Vehicle {
     // Water: the car is lost after a moment, then it comes back on the road.
     if (!onDeck && ((s.water && this.y < (s.waterLimit ?? s.ground+.25)) || s.ground < this.seaLevel - 0.25)) {
       this.sunk += dt;
+      this.drift.hit(this.x, this.z);   // into the water: a slide ends here and is not clean
       this.vx *= 1 - Math.min(1, 3 * dt); this.vz *= 1 - Math.min(1, 3 * dt);
       if (this.sunk > 1.4) this.respawn();
     } else {
@@ -530,10 +531,15 @@ export class Vehicle {
       d.begin(side, input.handbrake ? 'handbrake' : 'lift', slideAngle(vf, vl), this.x, this.z, input.steer);
     }
     if (!(vf > 0)) { d.finish('lost', this.x, this.z); return false; }
-    // The yaw the grip model's steering would give now (its lock limit included), without its rate limit.
+    // The front wheels turn as the grip model turns them (its lock at this speed, its turn-in and return rates), and the yaw
+    // they would give on grip is the least the path turns into the slide: a slide never runs wide of the wheel.
     const corner = surf === SURFACES.washboard ? 1 : this.spec.cornering;
     const lock = Math.min(this.spec.maxSteer, Math.atan((this.spec.wheelbase * this.spec.gripLock * corner * g.mu * G) / Math.max(v * v, 4)));
-    g.turn = vf * Math.tan(THREE.MathUtils.clamp(input.steer, -1, 1) * lock) / this.spec.wheelbase;
+    const ask = THREE.MathUtils.clamp(input.steer, -1, 1), wheel = ask * lock;
+    const away = Math.abs(wheel) > Math.abs(this.steerAngle) && wheel * this.steerAngle >= 0;
+    const steerRate = away ? this.spec.steerBaseRate + this.spec.steerSpeedRate / (1 + v / this.spec.steerSpeedScale) : this.spec.steerReturnRate;
+    this.steerAngle = THREE.MathUtils.clamp(this.steerAngle + THREE.MathUtils.clamp(wheel - this.steerAngle, -steerRate * dt, steerRate * dt), -lock, lock);
+    g.turn = vf * Math.tan(this.steerAngle) / this.spec.wheelbase;
     // Along the path: the engine and brakes as in the grip model, less what the slide scrubs off.
     const t = input.throttle, mu = g.mu;
     let a = 0;
@@ -557,9 +563,6 @@ export class Vehicle {
     // The path turns; the nose leads it by the new slide angle.
     this.heading = this.heading - measured + m.pathRate * dt + m.angle;
     this.slideSpeed.forward = v * Math.cos(m.angle); this.slideSpeed.right = -v * Math.sin(m.angle);
-    // The front wheels show the driver's hands (counter-steer); they do not turn the body here.
-    const ask = THREE.MathUtils.clamp(input.steer, -1, 1);
-    this.steerAngle += THREE.MathUtils.clamp(ask * this.spec.maxSteer - this.steerAngle, -4 * dt, 4 * dt);
     this.lean.set(a, v * m.pathRate);
     if (deepest > 0.03 && v > 2) this.jolt = Math.max(this.jolt, deepest * 6);
     this.shake = surf.rough * Math.min(v, 20) + this.jolt;

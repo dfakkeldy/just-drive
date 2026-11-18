@@ -1117,8 +1117,9 @@ function driveInput(): RideInput {
   const k = (a: string, b: string) => (keys.has(a) || keys.has(b) ? 1 : 0), g = gamepad.state;
   // GO and BRAKE held together a moment at speed are the handbrake, with no brake under it, only on a ride that drifts (the
   // bike and the horse keep their pedals) and not on the fleet's pickup, whose handbrake is its parking latch (fleet.ts).
-  const chord = touch.handbrake && !!vehicle.spec.drift && fleet?.driven.id !== 'truck'
-    && phoneHandbrake((performance.now() - touch.chordAt) / 1000, vehicle.speed);
+  const drift = vehicle.spec.drift;
+  const chord = touch.handbrake && !!drift && fleet?.driven.id !== 'truck'
+    && phoneHandbrake(drift, (performance.now() - touch.chordAt) / 1000, vehicle.speed);
   const input: RideInput = {
     throttle: THREE.MathUtils.clamp(k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown') + (chord ? 0 : touch.throttle) + g.throttle, -1, 1),
     steer: THREE.MathUtils.clamp(k('KeyD', 'ArrowRight') - k('KeyA', 'ArrowLeft') + touch.steer + g.steer, -1, 1),

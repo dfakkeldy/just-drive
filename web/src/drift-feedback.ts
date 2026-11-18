@@ -12,7 +12,7 @@ import type { DriftSpec } from './drift-rules';
 export interface Sliding {
   x: number; y: number; z: number; heading: number; airborne: boolean; surfaceName: string;
   readonly spec: { readonly wheelbase: number; readonly track: number; readonly rearTrack?: number; readonly drift?: DriftSpec };
-  readonly drift: { readonly active: boolean; readonly angle: number; readonly seconds: number; readonly length: number; slide(spec: DriftSpec | undefined): number };
+  readonly drift: { readonly active: boolean; readonly shown: boolean; readonly angle: number; readonly seconds: number; readonly length: number; slide(spec: DriftSpec | undefined): number };
 }
 
 /** Puff colours by surface (vehicle.ts SURFACES names); pavement and concrete give pale tyre smoke. */
@@ -88,7 +88,7 @@ export class DriftFeedback {
 
   /** Once a frame after the camera moved. `driving`: the player drives now (not the title card, the fly view or indoors). */
   update(dt: number, v: Sliding, camera: THREE.Camera, driving: boolean): void {
-    const spec = v.spec.drift, sliding = driving && v.drift.active && !v.airborne && !!spec;
+    const spec = v.spec.drift, sliding = driving && v.drift.shown && !v.airborne && !!spec;
     this.showMeter(sliding, v, spec);
     if (dt <= 0) return;
     if (sliding) this.emit(dt, v, spec!);
