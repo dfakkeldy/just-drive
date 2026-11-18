@@ -8,7 +8,7 @@ import { build } from '../web/node_modules/esbuild/lib/main.js';
 process.on('uncaughtException', e => { console.error(e.name + ': ' + e.message); process.exit(1); });
 
 const { outputFiles } = await build({ stdin: { contents: "export { AREAS } from './area'; export * from './credits'; export * from './controls'; export { bikeKeys } from './vehicle-choice';", resolveDir: process.cwd() + '/web/src', loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node' });
-const { AREAS, ABOUT_URL, HELP_URL, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, LAND_CREDITS, FAR_CREDITS, ENGINE_CREDIT } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
+const { AREAS, ABOUT_URL, HELP_URL, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, LAND_CREDITS, FAR_CREDITS, ENGINE_CREDIT } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
 
 const out = mkdtempSync(join(tmpdir(), 'mmm-about-'));
 try {
@@ -54,7 +54,7 @@ try {
   const help = brand => readFileSync(`${out}/help/${brand}/index.html`, 'utf8');
   const esc = t => t.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
   const rows = list => list.map(([k, v]) => `<div class="row"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
-  for (const [brand, lists] of [['mail', [KEYS, TOUCH]], ['just', [DRIVING_KEYS, DRIVING_TOUCH, bikeKeys(false), bikeKeys(true)]]]) {
+  for (const [brand, lists] of [['mail', [KEYS, TOUCH, padKeys('car', true)]], ['just', [DRIVING_KEYS, DRIVING_TOUCH, bikeKeys(false), bikeKeys(true), padKeys('car', false), padKeys('bike', false)]]]) {
     const html = help(brand), words = text(html);
     for (const list of lists) assert.ok(html.includes(`<dl>${rows(list)}</dl>`), brand + ' help control table matches the title card');
     assert.ok(html.includes(`<link rel="canonical" href="${HELP_URL[brand]}">`), brand + ' help canonical');

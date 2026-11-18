@@ -6,7 +6,7 @@ import { eraAddress, otherGameAddress, readSite } from './site';
 import { TODAY, type Era } from './era';
 import { HISTORY_AREAS, eraAreaId, eraDoorText, historyArea } from './eras/history-areas';
 import { ABOUT_URL, CHANGES_TEXT, CHANGES_URL, COFFEE_TEXT, COFFEE_URL, CONTACT, ENGINE_CREDIT, HELP_URL, LAND_CREDITS, FAR_CREDITS, LISTEN_TEXT, LISTEN_URL } from './credits';
-import { KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH } from './controls';
+import { KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys } from './controls';
 export { CONTACT } from './credits';
 import { EXPLORE_TITLE, chooseMode, type GameMode } from './mode';
 import { horseKeys, bikeKeys, vehicleButtons, type VehicleChoice } from './vehicle-choice';
@@ -84,7 +84,7 @@ ${ENGINE_CREDIT}
 /** Links out to the brand's About and Help pages and to Just Listen (the radio alone), in a new tab, so the game keeps its place. */
 const aboutLine = (just: boolean) => `<p id="titleAbout"><a href="${ABOUT_URL[just ? 'just' : 'mail']}" target="_blank" rel="noopener">About ${just ? 'Just Drive' : 'Mabou Mail Madness'}: who made it and how</a> · <a id="titleChanges" href="${CHANGES_URL[just ? 'just' : 'mail']}" target="_blank" rel="noopener">${CHANGES_TEXT}</a> · <a id="titleHelp" href="${HELP_URL[just ? 'just' : 'mail']}" target="_blank" rel="noopener">Help</a> · <a id="titleListen" href="${LISTEN_URL[just ? 'just' : 'mail']}" target="_blank" rel="noopener">${LISTEN_TEXT}</a> · <a id="titleCoffee" href="${COFFEE_URL}" target="_blank" rel="noopener">${COFFEE_TEXT}</a></p>`;
 
-export interface Title { open(): void; setRadio(available: boolean): void }
+export interface Title { open(): void; setRadio(available: boolean): void; /** Controller rows while a controller is the device used last. */ setDevice(pad: boolean): void }
 
 /**
  * Shows the title card. `onStart` runs each time the player closes it with the button: at the start, and again after
@@ -102,9 +102,10 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   root.setAttribute('aria-label', name);
   const drivingKeys = DRIVING_KEYS, drivingTouch = DRIVING_TOUCH;
   const areaRows = (touch ? TOUCH : KEYS).filter(([key]) => touch ? !['MAIL', 'CAMERA', 'BLADDER', '\u2699'].includes(key) : !['M or E', 'P', 'B', 'Enter'].includes(key)).map(([k, v]): [string, string] => [k, k === 'H' ? 'Horn.' : v]);
-  let radioAvailable = radio;
+  let radioAvailable = radio, padRows = false;
   const rows = (available: boolean) => {
     radioAvailable = available;
+    if (padRows) return padKeys(ride?.kind, !explore && !areaName, available).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   let keys = explore ? (ride?.kind === 'bike' ? bikeKeys(touch) : touch ? drivingTouch : drivingKeys) : areaName ? areaRows : touch ? TOUCH : KEYS;
   if (ride?.kind === 'horse') { keys = horseKeys(touch, !explore && !areaName); available = false; }
   if(historical&&ride?.kind !== 'horse'&&touch&&!keys.some(([key])=>key.includes('HORN')))keys=keys.concat([['HORN','Honk.']]);
@@ -182,6 +183,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   start.focus();
   return {
     setRadio(available) { root.querySelector('dl')!.innerHTML = rows(available); },
+    setDevice(pad) { if (pad !== padRows) { padRows = pad; root.querySelector('dl')!.innerHTML = rows(radioAvailable); } },
     open() {
       if (explore) root.querySelector('dl')!.innerHTML = rows(radioAvailable);
       refreshWays();

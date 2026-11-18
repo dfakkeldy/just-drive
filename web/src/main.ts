@@ -29,7 +29,7 @@ import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
 import { areaScreen } from './area-screen';
 import { readVehicle } from './garage';
 import { rideFeatures } from './ride-features';
-import { legacyVehicle } from './ride';
+import { legacyVehicle, type RideInput } from './ride';
 import { Canal } from './canal';
 import { Landmarks } from './landmarks';
 import { Roads } from './roads';
@@ -102,6 +102,7 @@ import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
 import { createTouchControls } from './touch';
+import { createGamepad } from './gamepad';
 import { drivingHelpSetting } from './driving-help';
 import { Trees, crownTest, treeLook } from './trees';
 import { CoastSite } from './coast-site';
@@ -1019,6 +1020,22 @@ if (pad) {
   const top = document.getElementById('phoneTop'), button = createDroneButton(() => { if (live() && !fleet?.busy && !interiors.busy && mode === 'drive') { yardJob?.judge.cancel(); launchDrone(); } });
   top?.insertBefore(button, document.getElementById('gear'));
 }
+// A controller (gamepad.ts): the same values and the same actions as the keys. Nothing runs until one is used.
+const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
+const gamepad = createGamepad({
+  horn: honk,
+  mail: padAct(() => { if (mailMode) mailRequested = true; }),
+  // B changes the view; inside a building (where every other driving button rests) it climbs out, as Esc does.
+  view: () => { if (interiors.busy) interiors.leave(); else if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
+  pause: () => { if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
+  reset: padAct(() => { multiplayer?.reset(); if (fleet) fleet.respawn(); else vehicle.respawn(); }),
+  radio: padAct(() => radio?.next()),
+  photo: padAct(() => { if (mailMode) photoRequested = true; }),
+  relief: padAct(() => relief.request()),
+  places: padAct(() => placesUI?.open()),
+  back: () => { if (replay.active) replay.close(); else if (placesUI?.busy) placesUI.close(); else if (bigMap?.busy) bigMap.close(); else if (pause.blocked && pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
+}, touchDevice, () => mode === 'drive' && live());
+if (import.meta.env.DEV) expose({ gamepad });   // for tools/gamepad-browser.mjs
 ride.configure(!fleet);
 if (fleet) shift.startOver = () => { if (drone.active) landDrone(); placeFirstStop(); waitingToDrive = true; camReady = false; };
 if (fleet && !bare) {
@@ -1060,15 +1077,17 @@ function readTouch() {
   }
 }
 
-function driveInput(): Input {
+function driveInput(): RideInput {
   if (pause.blocked) return { throttle: 0, steer: 0, handbrake: true };
-  const k = (a: string, b: string) => (keys.has(a) || keys.has(b) ? 1 : 0);
-  return {
-    throttle: THREE.MathUtils.clamp(k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown') + touch.throttle, -1, 1),
-    steer: THREE.MathUtils.clamp(k('KeyD', 'ArrowRight') - k('KeyA', 'ArrowLeft') + touch.steer, -1, 1),
-    handbrake: keys.has('Space') && document.activeElement !== mailButton,
+  const k = (a: string, b: string) => (keys.has(a) || keys.has(b) ? 1 : 0), g = gamepad.state;
+  const input: RideInput = {
+    throttle: THREE.MathUtils.clamp(k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown') + touch.throttle + g.throttle, -1, 1),
+    steer: THREE.MathUtils.clamp(k('KeyD', 'ArrowRight') - k('KeyA', 'ArrowLeft') + touch.steer + g.steer, -1, 1),
+    handbrake: keys.has('Space') && document.activeElement !== mailButton || g.handbrake,
     touch: touchDevice && k('KeyW', 'ArrowUp') + k('KeyS', 'ArrowDown') + k('KeyA', 'ArrowLeft') + k('KeyD', 'ArrowRight') === 0,
   };
+  if (g.pull) input.pull = true;   // the dirt bike's PULL from a bumper; bike-controls.ts adds Shift and the PULL button
+  return input;
 }
 
 function resize() {
@@ -1405,6 +1424,8 @@ if (title) {
   more.addEventListener('click', () => { pause.resume(); syncPauseUI(); started = false; roadScene?.setPaused(true); keys.clear(); touch.steer = touch.throttle = 0; document.getElementById('settings')?.classList.remove('open'); title.open(); });
   document.getElementById('settings')?.appendChild(more);
 }
+// The title card's rows and the body's padMode follow the device used last (gamepad.ts).
+gamepad.onDevice(device => { title?.setDevice(device === 'gamepad'); document.body.classList.toggle('padMode', device === 'gamepad'); });
 if (!bare && params.get('radio') !== '0') {
   if (ERA.radio && ride.kind !== 'horse') {
   const audioBase = `${import.meta.env.BASE_URL}audio`;
@@ -1563,6 +1584,7 @@ const hudState: HudState = {
 function frame(now: number) {
   if (page.stopped) return;
   try {
+  gamepad.poll(now);
   const pauseFrame = pause.frame(now, !!multiplayer?.choice.on);
   if (pauseFrame.paused) {
     syncRoadScenePause(true);
@@ -1651,7 +1673,7 @@ function frame(now: number) {
   }
   if (interiors.busy) {
     radio?.update(false, true);
-    pad?.show(!shift.ended);
+    pad?.show(!shift.ended && gamepad.device !== 'gamepad');
     if (shift.updateIndoors(clockRuns ? clockDt : 0)) { quality.frame(0, false); interiors.closeForDay(); shift.end(); }
     else {
       interiors.update(dt, driveInput(), vehicle, false);
@@ -1667,7 +1689,7 @@ function frame(now: number) {
     requestAnimationFrame(frame); return;
   }
   interiors.update(realDt, driveInput(), vehicle, playing);
-  pad?.show(padVisible);
+  pad?.show(padVisible && gamepad.device !== 'gamepad');   // a controller in use hides the phone pad; a touch brings it back
   if (mode === 'drive') {
     const input = pause.blocked ? driveInput() : devHooks.inputEnabled ? devHooks.demoInput(drove, vehicle, roads, props, lawnDemo, mailMode, driveInput) : driveInput();
     const refusal = Math.abs(vehicle.speed) < 0.15 && input.throttle < 0 ? 0 : (animals?.influence(vehicle).brake ?? 0);
@@ -1707,6 +1729,7 @@ function frame(now: number) {
   // The replay recorder reads the ride and its drawn rig once the frame's motion (and any mailbox knock) is final.
   // The clock's own step (not the 0.1 s physics cap): a long frame on a busy phone still follows the one before it.
   if (dt > 0 && driving) replay.record(vehicle, car, horse ? 'horse' : ride.kind, now / 1000, clockDt, quietGround);
+  gamepad.feel(vehicle, dt, playing && mode === 'drive' && !interiors.busy, now);
   updateWorld('before-camera', dt, realDt, now);
   camera.updateMatrixWorld();
   sky.position.copy(camera.position);
@@ -1783,6 +1806,7 @@ function frame(now: number) {
   quiet = waiting ? 0 : quiet + 1;
   page.ready(quiet > 20 && terrain.failed === 0 && terrain.pending === 0 && (sidewalks?.pending ?? 0) === 0);
   // The clock or report can end the shift above: these final HUD reads must use the new state.
+  hudState.padHelp = !touchDevice && mode === 'drive' && gamepad.device === 'gamepad' ? ride.padHelp : '';
   if (mailButton) mailButton.hidden = mode !== 'drive' || shift.ended;
   phoneMailHud?.update(shift, vehicle, mode === 'drive' && !scenePaused());
   if (mailScore && !bare && mailScore.textContent !== mail.tally) mailScore.textContent = mail.tally;
