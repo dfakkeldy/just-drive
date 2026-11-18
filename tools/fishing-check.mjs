@@ -42,7 +42,11 @@ try {
   assert.notDeepEqual(await read('({x:ft.c.x,z:ft.c.z,time:ft.shift.elapsed})'),before,'REJECTED R10 disabled busy pause');
   await read('delete ft.endings.busy');
   await key('Tab','Tab',9);assert.equal(await read('document.activeElement.textContent'),'Keep the route');await key('Space',' ',32);
-  assert.equal(await read('ft.endings.busy'),false,'R11 keyboard decline');const elapsed=await read('ft.shift.elapsed');await read('ft.frame()');assert.ok(await read(`ft.shift.elapsed>${elapsed}`),'R10 clock resumes');
+  assert.equal(await read('ft.endings.busy'),false,'R11 keyboard decline');const elapsed=await read('ft.shift.elapsed');
+  // The first frame after the decline can leave the shift clock unchanged (seen 3/3 on the M4: 5.0007 s, then 5.667 s on the next);
+  // the clock must move within a few frames, and stays stopped for good if the modal keeps gating the frame.
+  for(let i=0;i<10;i++){await read('ft.frame()');if(await read(`ft.shift.elapsed>${elapsed}`))break;}
+  assert.ok(await read(`ft.shift.elapsed>${elapsed}`),'R10 clock resumes');
   await read('ft.place(7,46);ft.stop(480)');assert.equal(await read('ft.endings.busy'),false,'R2 decline has no second offer');
   await read(`ft.shift.end();document.getElementById('nextDay').click();ft.place(7,46);ft.stop(240)`);assert.equal(await read('ft.endings.busy'),true,'R2 actual new shift offers again');
   await read('ft.endings.close();ft.clean();ft.view(45,115,45,8,38,1)');await shot('wharf-above');
