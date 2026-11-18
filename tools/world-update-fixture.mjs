@@ -188,9 +188,9 @@ export function verify(source, { drive = expectedDrive, ending = expectedEnding 
   if(source.includes("name: 'trafficSignals'")){
     const checkSignals = code => {
       const result=spy(code,false,true,false,(context,trace)=>{ context.trafficSignals={update:trace('trafficSignals'),group:{}}; });
-      // After roads in the after-activities segment; other road-side updates (sidewalks) may sit between them.
+      // Right after roads in the after-activities segment; only the sidewalks update may sit between them.
       const at=result.calls.indexOf('roads'),signals=result.calls.indexOf('trafficSignals');
-      assert.ok(at>=0&&signals>at,'traffic signals follow roads after the activities: '+JSON.stringify(result.calls));
+      assert.ok(at>=0&&signals>at&&result.calls.slice(at+1,signals).every(name=>name==='sidewalks'),'traffic signals follow roads after the activities: '+JSON.stringify(result.calls));
       assert.deepEqual(result.args.trafficSignals[0],[.05,result.context.camera.position,.05],'signals take the world clock, the camera and the real clock');
       const ending=spy(code,true,true,false,(context,trace)=>{ context.trafficSignals={update:trace('trafficSignals'),group:{}}; });
       assert.ok(!ending.calls.includes('trafficSignals'),'signals stand still in an ending');
