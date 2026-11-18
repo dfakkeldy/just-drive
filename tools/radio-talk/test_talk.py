@@ -185,6 +185,17 @@ def test_order() -> None:
     assert order.made(take) == 'ElevenLabs text-to-dialogue API, model eleven_v4, request aaa'
     assert order.made({**take, 'retakes': [{'date': '2026-11-17', 'request_id': 'bbb'}]}).endswith('request aaa; one line made again on 2026-11-17, request bbb')
     assert order.made({**take, 'retakes': [{'date': '2026-11-17', 'request_id': r} for r in ('bbb', 'ccc')]}).endswith('; 2 lines made again on 2026-11-17, requests bbb, ccc')
+    # A take whose line times were moved is not catalogued until it is built again.
+    import tempfile
+    was = order.MAKE
+    with tempfile.TemporaryDirectory() as folder:
+        order.MAKE = pathlib.Path(folder)
+        try:
+            for stem, record in (('moved', {'line_times_moved': 1.0}), ('built', {'line_times_moved': 1.0, 'final_sha256': 'x'}), ('plain', {})):
+                (order.MAKE / f'{stem}.json').write_text(json.dumps(record))
+            assert order.unbuilt(['moved', 'built', 'plain', 'absent']) == ['moved']
+        finally:
+            order.MAKE = was
 
 
 if __name__ == '__main__':

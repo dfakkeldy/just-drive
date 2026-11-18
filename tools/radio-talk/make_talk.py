@@ -485,6 +485,8 @@ def make(stem: str, items: list, work: pathlib.Path) -> None:
 
 def main() -> int:
     import tempfile
+    if '--move-line-times' in sys.argv[2:]:
+        raise SystemExit('use: make_talk.py --move-line-times <stem> [seconds]  (the option comes first)')
     if sys.argv[1:2] == ['--move-line-times']:
         if len(sys.argv) not in (3, 4):
             raise SystemExit('use: make_talk.py --move-line-times <stem> [seconds]')

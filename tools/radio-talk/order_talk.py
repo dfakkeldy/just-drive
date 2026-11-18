@@ -171,6 +171,12 @@ def entry(stem: str) -> dict:
     return {'source': stem, 'title': TITLES[stem], 'public': True, 'credit': 'talk', 'credit_overrides': {'source': made(record), 'date': record['date']}}
 
 
+def unbuilt(stems) -> list:
+    """The stems whose record had its line times moved (make_talk.py --move-line-times) and was not built again since."""
+    records = [(s, MAKE / f'{s}.json') for s in stems]
+    return [s for s, p in records if p.exists() and 'line_times_moved' in (r := json.loads(p.read_text())) and 'final_sha256' not in r]
+
+
 def main() -> int:
     catalogue = json.loads(CATALOGUE.read_text())
     station = next(s for s in catalogue['stations'] if s['dial'] == DIAL)
@@ -183,6 +189,9 @@ def main() -> int:
     if twice:
         raise SystemExit('in the station more than once: ' + ', '.join(twice))
     have = {t['source']: t for t in station['tracks']}
+    waiting = unbuilt(TITLES)
+    if waiting:   # its mp3 was cut at the old line times
+        raise SystemExit('line times moved but not built again: ' + ', '.join(waiting) + '; run make_talk.py for each first')
     old = [s for s in have if s not in TITLES]
     new = [s for s in TITLES if s not in HELD and (s in have or ((SRC / f'{s}.mp3').exists() and (MAKE / f'{s}.json').exists()))]
     if set(old + new) == set(have) and not faults(listed):

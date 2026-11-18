@@ -13,7 +13,7 @@ with the script. It prints:
     ("magh-boo") and 3 as right; the listener had written "Mahbu" for all 10 and "Mabu" for all 3;
   - every line where Mabou was not written down as "Mabu", "Mabou" or "Maboo" at all (a British voice said "Mawboo"
     as "MOR-boo", and the listener wrote "Morbu": the rest of the line was right, so its score did not show it);
-  - for a take with three or more such lines, the shift of its line times that make_talk.drift() estimates, if any
+  - for a take with three or more lines heard differently, the shift of its line times that make_talk.drift() estimates, if any
     (one take came with every line time a second early; make_talk.py --move-line-times repairs the record), and a
     take whose record was repaired that way but whose segment was not built again;
   - for a segment with song clips, what was heard in each clip, cut again from its song (so a clip's words can be read).
