@@ -11,7 +11,8 @@ export const LAND_CREDITS = `<p>Elevation, trees and building shapes: Natural Re
 <p>Contains modified Copernicus Sentinel data 2025, 2026. Only derived ground classes are used.</p>
 <p>Airport runway, taxiways and apron, other Point Tupper fences and gates and the small piers, plus some building outlines, road details and wharf source comparisons: © OpenStreetMap contributors, available under the Open Database Licence. Airport way IDs and source choices are retained in the airport source file.</p>
 <p>Airport source comparison, wharf source comparisons and Point Tupper above-ground pipeline routes: Natural Resources Canada, CanVec. Contains information licensed under the Open Government Licence – Canada.</p>
-<p>Airport dimensions and lighting types: NAV CANADA, Canada Flight Supplement, November 2025 edition. Model lamp spacing, taxiway widths and windsock position are approximate.</p>`;
+<p>Airport dimensions and lighting types: NAV CANADA, Canada Flight Supplement, November 2025 edition. Model lamp spacing, taxiway widths and windsock position are approximate.</p>
+<p>Harbour lights: Canadian Coast Guard List of Lights; Mabou tower form: Canadian Register of Historic Places. Cross-checks: NSTDB (Open Government Licence – Nova Scotia), NRCan CanVec (Open Government Licence – Canada), and OpenStreetMap (Open Database Licence).</p>`;
 
 export const ENGINE_CREDIT = `<p>Built with three.js (MIT licence).</p>`;
 

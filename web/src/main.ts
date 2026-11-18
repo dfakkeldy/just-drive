@@ -79,6 +79,7 @@ import { directionFromAngles, sunAngles } from './sun';
 import { readLightStudy, studyScale, studyLightingElevation, lightStudyUI, readDrivePosition } from './light-study';
 import { chooseYardLights, nightPalette } from './night-rules';
 import { Night, NightShading } from './night';
+import { HarbourLights } from './harbour-lights';
 import { Terrain, type Manifest } from './terrain';
 import { createTitle } from './title';
 import { Endings } from './ending';
@@ -379,6 +380,9 @@ if (wharves) { scene.add(wharves.group); if (import.meta.env.DEV) expose({ wharv
 
 const landmarks = AREA.landmarks ? new Landmarks(landmarkList, manifest.village, EXAG, SEA_LEVEL) : null;
 if (landmarks) scene.add(landmarks.group);
+const harbourLights = ERA.modern ? new HarbourLights(AREA.id, manifest.village, EXAG, nightLook !== null, SEA_LEVEL) : null;
+if (harbourLights) scene.add(harbourLights.group);
+if (import.meta.env.DEV) expose({ harbourLights });
 const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea, SEA_LEVEL,
   new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
   terrain, trees?.group ?? null, params.get('reflections'));

@@ -255,3 +255,4 @@ pt-infrastructure-browser	unproven	no	Apple M6 Mac PASS 15 Nov (pre-merge, six b
 wharves	portable	no	real baked meshes; no browser
 wharves-mutations	portable	no	real baked meshes and broken planner variants; no browser
 wharves-browser	apple	no	apple-check-host (Apple M4, Edge 157) PASS 348 s on 73cba0a4 and 522 s on c5af1ffa (receipts in tools/evidence/wharves): real GPU pictures and matched main costs, one browser slot
+lighthouses-browser	unproven	no	Apple M6 / ANGLE Metal / Chrome 157 native PASS: eight day/night desktop/phone cases, near and 1 km beacon pixels; tools/lighthouses-proof.md
