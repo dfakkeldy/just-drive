@@ -341,10 +341,12 @@ export class Sidewalks {
   update():void {
     const start=performance.now();if(!this.checkBudget())return;
     // Bridge pieces read the modern deck (Roads.deckHeight) on this thread. A deck builds or rebuilds when its banks'
-    // land arrives, so each new build queues them again at every level; until their deck exists they stay unready.
+    // land arrives, so each new build queues them again at every level and in the active cache (resolve() replaces
+    // a piece's old contribution); until their deck exists they stay unready. No slab corner is shared with a street
+    // piece (sidewalks-check), so a worker packet never overwrites a deck height.
     const deckRevision=this.network.bridgeRevision??0;
     if(deckRevision!==this.deckRevision){this.deckRevision=deckRevision;
-      for(const id of this.bridgeJobs)for(let l=6;l<=8;l++){const cache=this.caches[l-6];cache.ready[id]=0;for(const s of this.jobs[id].surfaces)for(const top of s.tops)cache.top[top]=NaN;this.queue(id,l);}
+      for(const id of this.bridgeJobs){for(let l=6;l<=8;l++){const cache=this.caches[l-6];cache.ready[id]=0;for(const s of this.jobs[id].surfaces)for(const top of s.tops)cache.top[top]=NaN;this.queue(id,l);}this.queueActive(id);}
     }
     const end=start+.35;
     while(performance.now()<end&&(this.taskAt<this.tasks.length||this.dirtyAt<this.dirtyWrite||this.selectionAt<this.selections.length||this.incomingAt<this.incoming.length||this.activeAt<this.activeTasks.length)) {

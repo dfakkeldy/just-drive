@@ -805,7 +805,7 @@ let radio: Radio | null = null;
 // Test links: ?relief=0.9 sets the gauge (and shows it in a demo drive); ?break=1 steps out as soon as the car has stopped.
 const reliefTest = Number(params.get('relief'));
 if (reliefTest > 0) relief.level = Math.min(1, reliefTest);
-const placeVisit = (x: number, z: number, heading: number) => fleet ? fleet.startVisit(x, z, heading) || fleet.visitQueued : vehicle.place(x, z, heading);
+const placeVisit = (x: number, z: number, heading: number) => fleet ? fleet.startVisit(x, z, heading) || fleet.visitQueued : vehicle.placeAt(x, z, heading);
 const urlPlacement = fleet ? { bounds: vehicle.bounds, place: placeVisit } : vehicle;
 const startPlacement = fleet ? {
   get x() { return vehicle.x; }, get z() { return vehicle.z; }, get heading() { return vehicle.heading; },
@@ -858,7 +858,7 @@ if (mailMode && params.has('stuffed') && props) {
     if (road) {
       let heading = road.heading;
       if ((p.x - road.x) * Math.cos(heading) + (p.z - road.z) * Math.sin(heading) < 0) heading += Math.PI;
-      vehicle.place(road.x - Math.sin(heading) * 3, road.z + Math.cos(heading) * 3, heading);
+      vehicle.placeAt(road.x - Math.sin(heading) * 3, road.z + Math.cos(heading) * 3, heading);
     }
   }
 }
@@ -1573,7 +1573,7 @@ function frame(now: number) {
     if (input.throttle !== 0 && (!demo || loaded)) waitingToDrive = false;
     // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.
     if (fleet) { const active = !fleet.busy; driveVehicle(dt, input); if (active && loaded && !animals?.waitingForTerrain) drove += dt; }
-    else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.place(vehicle.x, vehicle.z, vehicle.heading,vehicle.retryHeight);
+    else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.retryPlace();
     else {
       if ((refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.place(vehicle.x, vehicle.z, vehicle.heading,vehicle.retryHeight); vehicle.speed = 0; }
       else if (waitingToDrive) {

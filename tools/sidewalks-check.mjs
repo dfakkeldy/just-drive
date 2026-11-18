@@ -71,6 +71,7 @@ async function workerExecution(area,low,m=M){
   const end=Date.now()+120000;while(walk.pending&&Date.now()<end){walk.update();await pause(1);}
   assert.equal(walk.pending,0,'real worker drains all terrain updates');
   // Bridge pieces read the modern deck (Roads.deckHeight) on the page, and every new deck build re-reads them.
+  {const bridge=new Set(walk.bridgeJobs);for(const owners of walk.topOwners)assert.ok(owners.every(o=>bridge.has(o))||!owners.some(o=>bridge.has(o)),'no slab corner is shared by a bridge piece and a street piece');}
   if(walk.bridgeJobs.length){const deckRefs=()=>walk.bridgeJobs.flatMap(id=>walk.jobs[id].refs.map(r=>walk.caches[2].ground[r]));
    assert.ok(deckRefs().every(y=>y===32),'bridge pieces stand on Roads.deckHeight, not a bank plane');
    walk.network.deckHeight=()=>33.5;walk.network.bridgeRevision=7;const until=Date.now()+20000;while((walk.pending||!deckRefs().every(y=>y===33.5))&&Date.now()<until){walk.update();await pause(1);}

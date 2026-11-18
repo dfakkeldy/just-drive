@@ -42,6 +42,28 @@ const SURFACES = {
 /** How far from a bridge span's centre line a respawn road point still counts as on that span (half a wide deck). */
 const DECK_REACH = 8;
 
+// A road that is not a bridge piece can still be a deck: a span recovered from the map carries a highway that is not
+// flagged as a bridge. Only where the hit lies on such a span (within DECK_REACH of its centre line) does the
+// placement take that deck; anywhere else the road stands on land, so a deck overhead cannot take the car. A road id
+// alone is not enough: a source road runs for kilometres past the few metres a span carries.
+export function spanDeckReference(roads: Pick<Roads, 'deckHeight'> & { bridgeRuns?: Roads['bridgeRuns'] }, hit: Pick<RoadHit, 'x' | 'z' | 'road'>): number | undefined {
+  for (const run of roads.bridgeRuns?.() ?? []) {
+    if (!run.roads.has(hit.road.id)) continue;
+    const p = run.pts;
+    for (let i = 1; i < p.length; i++) {
+      const ax = p[i - 1][0], az = p[i - 1][1], dx = p[i][0] - ax, dz = p[i][1] - az, len2 = dx * dx + dz * dz;
+      const t = len2 > 0 ? Math.max(0, Math.min(1, ((hit.x - ax) * dx + (hit.z - az) * dz) / len2)) : 0;
+      if (Math.hypot(hit.x - ax - dx * t, hit.z - az - dz * t) <= DECK_REACH) return roads.deckHeight(hit.x, hit.z) ?? undefined;
+    }
+  }
+  return undefined;
+}
+/** A height-free placement's reference: the deck only where the point lies on a span carrying its nearest road. */
+export function placementDeckReference(roads: Pick<Roads, 'deckHeight' | 'nearest'> & { bridgeRuns?: Roads['bridgeRuns'] }, x: number, z: number): number | undefined {
+  const hit = roads.nearest(x, z, DECK_REACH);
+  return hit ? spanDeckReference(roads, hit) : undefined;
+}
+
 export class Vehicle {
   /** Per-instance washboard/shake stream; the default retains the global draw order. */
   private random: () => number = () => Math.random();
@@ -70,6 +92,8 @@ export class Vehicle {
   private lastGood: VehiclePlacement | null = null;
   /** The reference height of the last placement. A retry while land loads keeps it, never the height of the old place. */
   private placeReference: number | undefined;
+  /** placeAt chose the height: a retry while land loads asks again, since an unbuilt deck gave no answer. */
+  private placeInfer = false;
   /** Where the car has been on the road, one point every 8 m or so, newest last. */
   private trail: VehiclePlacement[] = [];
   /** The playable area in world units [x0, z0, x1, z1]: the fine map data ends just outside it. */
@@ -108,7 +132,7 @@ export class Vehicle {
 
   /** The reference for a re-place at the current pose: the last place's reference while its land is still loading
    *  (this.y is then the old pose's height, which could pick a deck overhead), else the live body height. */
-  get retryHeight(): number | undefined { return this.stuck ? this.placeReference : this.y; }
+  get retryHeight(): number | undefined { return this.stuck ? this.placeReference ?? (this.placeInfer ? this.deckReference(this.x, this.z) : undefined) : this.y; }
 
   place(x: number, z: number, heading: number, referenceY?:number): boolean {
     if (!safePlacement(x, z, heading, this.bounds) || referenceY!==undefined&&!Number.isFinite(referenceY)) return false;
@@ -117,7 +141,7 @@ export class Vehicle {
     x = pose.x; z = pose.z; heading = pose.heading;
     if (!safePlacement(x, z, heading, this.bounds) || pose.y!==undefined&&!Number.isFinite(pose.y)) return false;
     this.#heldTouchSpeedLimit = 0;
-    this.x = x; this.z = z; this.heading = heading; this.placeReference = pose.y;
+    this.x = x; this.z = z; this.heading = heading; this.placeReference = pose.y; this.placeInfer = false;
     this.vx = this.vz = this.vy = 0; this.sunk = 0; this.airborne = false;
     if (this.spec.locomotion === 'horse') { this.speed = 0; this.car.resetPose?.(); }
     const land=this.terrain.heightAt(x,z),g=land===null?null:this.groundAt(x,z,pose.y??land);
@@ -158,8 +182,23 @@ export class Vehicle {
 
   restart(x: number, z: number, heading: number) {
     this.trail.length = 0; this.lastGood = null;
-    this.place(x, z, heading);
+    this.placeAt(x, z, heading);
   }
+
+  /** A placement that gives no height (a ?at= link, a visit start, a mailbox start, a restart). The car takes a deck
+   *  only where the point lies on a span that carries its nearest road, the respawn rule; elsewhere it stands on land. */
+  placeAt(x: number, z: number, heading: number): boolean {
+    const placed = this.place(x, z, heading, this.deckReference(x, z));
+    if (placed && this.placeReference === undefined) this.placeInfer = true;
+    return placed;
+  }
+  /** Place again where the car is, as while land loads, keeping how the height was chosen. */
+  retryPlace(): boolean {
+    const infer = this.placeInfer, placed = this.place(this.x, this.z, this.heading, this.retryHeight);
+    this.placeInfer = infer && this.placeReference === undefined;
+    return placed;
+  }
+  private deckReference(x: number, z: number): number | undefined { return placementDeckReference(this.roads, x, z); }
 
   /**
    * Put the car back on the road it came along, a good way back from where it went wrong. Each further call goes
@@ -185,22 +224,7 @@ export class Vehicle {
     }
   }
 
-  // A road that is not a bridge piece can still be a deck: a span recovered from the map carries a highway that is not
-  // flagged as a bridge. Only where the hit lies on such a span (within DECK_REACH of its centre line) does the
-  // placement take that deck; anywhere else the road stands on land, so a deck overhead cannot take the car. A road id
-  // alone is not enough: a source road runs for kilometres past the few metres a span carries.
-  private fallbackReference(hit: RoadHit): number | undefined {
-    for (const run of this.roads.bridgeRuns?.() ?? []) {
-      if (!run.roads.has(hit.road.id)) continue;
-      const p = run.pts;
-      for (let i = 1; i < p.length; i++) {
-        const ax = p[i - 1][0], az = p[i - 1][1], dx = p[i][0] - ax, dz = p[i][1] - az, len2 = dx * dx + dz * dz;
-        const t = len2 > 0 ? Math.max(0, Math.min(1, ((hit.x - ax) * dx + (hit.z - az) * dz) / len2)) : 0;
-        if (Math.hypot(hit.x - ax - dx * t, hit.z - az - dz * t) <= DECK_REACH) return this.roads.deckHeight(hit.x, hit.z) ?? undefined;
-      }
-    }
-    return undefined;
-  }
+  private fallbackReference(hit: RoadHit): number | undefined { return spanDeckReference(this.roads, hit); }
 
   private inside(x: number, z: number, margin: number): boolean {
     const b = this.bounds;
@@ -292,7 +316,7 @@ export class Vehicle {
 
   update(dt: number, input: Input, afterStep?: () => void) {
     if (!input.touch || !this.strongHelp || !this.touchSpeedLimit || input.throttle <= 0 || this.airborne || this.stuck) this.#heldTouchSpeedLimit = 0;
-    if (this.stuck) { this.place(this.x, this.z, this.heading,this.placeReference); return; }
+    if (this.stuck) { this.retryPlace(); return; }
     // Whole fixed steps only: a tiny leftover step makes the vertical speed estimate blow up.
     const here = this.roads.nearest(this.x, this.z, 9, (r) => r.kind <= 3);
     this.roadHeading = here && here.dist < here.road.halfWidth + 1 ? here.heading : null;

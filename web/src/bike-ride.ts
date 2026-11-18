@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { BIKE_SPEC, type Bike } from './bike';
 import type { VehicleSpec } from './vehicle-spec';
 import type { Ride, RideInput, JumpRecord } from './ride';
-import type { VehiclePlacement } from './vehicle';
+import { placementDeckReference, type VehiclePlacement } from './vehicle';
 import type { Terrain, Surface } from './terrain';
 import type { Roads } from './roads';
 import type { Damage } from './damage-rules';
@@ -65,7 +65,7 @@ export class BikeRide implements Ride {
     const pose:VehiclePlacement = { x, z, heading, y:referenceY };
     if (this.placementGuard && !this.placementGuard(pose)) return false;
     if (!safePlacement(pose.x, pose.z, pose.heading, this.bounds) || pose.y!==undefined&&!Number.isFinite(pose.y)) return false;
-    this.x = pose.x; this.z = pose.z; this.heading = pose.heading;this.placeReference=pose.y;
+    this.x = pose.x; this.z = pose.z; this.heading = pose.heading;this.placeReference=pose.y;this.placeInfer=false;
     this.vx = this.vz = this.vy = this.speed = this.pitchRate = this.wheelie = this.wheelieRate = this.whip = 0;
     this.pitch = this.roll = this.steerAngle = this.compression = this.crashTime = this.sunk = 0;
     if (!this.stepping) this.acc = 0;
@@ -136,11 +136,23 @@ export class BikeRide implements Ride {
     if (known && Math.abs(correction) > 1e-6) { this.y += correction; this.prevGround += correction; }
   }
   /** The reference for a re-place at the current pose (see Vehicle.retryHeight). */
-  get retryHeight(): number | undefined { return this.ready ? this.y : this.placeReference; }
+  get retryHeight(): number | undefined { return this.ready ? this.y : this.placeReference ?? (this.placeInfer ? placementDeckReference(this.roads, this.x, this.z) : undefined); }
+  private placeInfer = false;
+  /** See Vehicle.placeAt: a height-free placement stands on the deck it lies on, else on land. */
+  placeAt(x: number, z: number, heading: number): boolean {
+    const placed = this.place(x, z, heading, placementDeckReference(this.roads, x, z));
+    if (placed && this.placeReference === undefined) this.placeInfer = true;
+    return placed;
+  }
+  retryPlace(): boolean {
+    const infer = this.placeInfer, placed = this.place(this.x, this.z, this.heading, this.retryHeight);
+    this.placeInfer = infer && this.placeReference === undefined;
+    return placed;
+  }
   update(dt: number, input: RideInput, afterStep?: () => void): void {
     if (!Number.isFinite(dt) || dt < 0) return;
     const safeInput = { throttle: Number.isFinite(input.throttle) ? clamp(input.throttle, -1, 1) : 0, steer: Number.isFinite(input.steer) ? clamp(input.steer, -1, 1) : 0, handbrake: !!input.handbrake, pull: !!input.pull };
-    if (!this.ready) { this.place(this.x, this.z, this.heading,this.placeReference); return; }
+    if (!this.ready) { this.retryPlace(); return; }
     this.acc = Math.min(.1, this.acc + dt);
     while (this.acc + 1e-10 >= BIKE_STEP) {
       const safeBefore = this.lastSafe;
