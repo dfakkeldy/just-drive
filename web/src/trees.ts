@@ -4,6 +4,11 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { readFile } from './store';
 import type { Terrain } from './terrain';
 
+/** Set by main.ts before the trees are made. `leafy` is a test (?leaves=1): crowns get light and dark leaf clumps, and a
+ * warm glow where the sun is behind them. `oneSample`: the picture has one sample for each pixel (finish-choice.ts).
+ * (Not an import of that choice: tools/art-shots.sh --stats runs this file alone.) */
+export const treeLook = { leafy: false, oneSample: false };
+
 const TILE = 256;   // metres: tree tiles match the level 8 terrain tiles
 const RECORD = 8;
 
@@ -341,7 +346,10 @@ export class Trees {
   }
 
   private prepare(material: THREE.Material, near: boolean, depth = false) {
-    if (!depth) (material as THREE.MeshLambertMaterial).alphaToCoverage = true;
+    // The near and far shapes fade into each other through the picture's edge samples. A picture with one sample for
+    // each pixel (finish-choice.ts) has none: there a fine screen pattern drops the pixels, and the edge smoothing softens it.
+    const oneSample = treeLook.oneSample;
+    if (!depth) (material as THREE.MeshLambertMaterial).alphaToCoverage = !oneSample;
     material.onBeforeCompile = shader => {
       shader.uniforms.treeEye = this.eye;
       const varying = 'varying vec3 vTreeWorld; varying float vTreeFade;';
@@ -366,10 +374,41 @@ export class Trees {
       `);
       if (!depth) {
         // Overlap the fades: one crown stays opaque, so shared pixels never become see-through.
-        shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `
+        shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', oneSample ? `
+          float treeCoverage = ${coverage};
+          if (treeCoverage < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= treeCoverage) discard;
+          #include <opaque_fragment>
+        ` : `
           diffuseColor.a *= ${coverage};
           #include <opaque_fragment>
         `);
+        if (treeLook.leafy) {
+          shader.fragmentShader = `
+            float leafHash(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+            float leafNoise(vec3 p) {
+              vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+              return mix(mix(mix(leafHash(i), leafHash(i + vec3(1, 0, 0)), f.x), mix(leafHash(i + vec3(0, 1, 0)), leafHash(i + vec3(1, 1, 0)), f.x), f.y),
+                mix(mix(leafHash(i + vec3(0, 0, 1)), leafHash(i + vec3(1, 0, 1)), f.x), mix(leafHash(i + vec3(0, 1, 1)), leafHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+            }
+          ` + shader.fragmentShader.replace('#include <lights_fragment_begin>', `
+            if (vLeaf > 0.5) {
+              // Clumps of leaves, fixed to the tree. They fade out far away, where they would only flicker.
+              float leafSeen = 1.0 - smoothstep(160.0, 480.0, distance(cameraPosition, vTreeWorld));
+              float clump = 0.6 * leafNoise(vTreeWorld * 1.15) + 0.4 * leafNoise(vTreeWorld * 3.3 + 5.0);
+              diffuseColor.rgb *= mix(1.0, 0.62 + 0.76 * clump, leafSeen);
+            }
+            #include <lights_fragment_begin>
+          `).replace('#include <lights_fragment_end>', `
+            #include <lights_fragment_end>
+            #if NUM_DIR_LIGHTS > 0
+            if (vLeaf > 0.5) {
+              // Leaves let some sun through: the side away from the sun is not dead, it glows a little, and warmer.
+              float through = max(dot(-normal, directionalLights[0].direction), 0.0);
+              reflectedLight.directDiffuse += diffuseColor.rgb * directionalLights[0].color * through * 0.15 * vec3(1.15, 1.0, 0.55);
+            }
+            #endif
+          `);
+        }
         shader.vertexShader = 'attribute float leafTint; varying float vLeaf; varying vec3 vCrown;\n' + shader.vertexShader;
         shader.fragmentShader = 'varying float vLeaf; varying vec3 vCrown;\n' + shader.fragmentShader;
         shader.vertexShader = shader.vertexShader.replace('#include <color_vertex>',

@@ -35,7 +35,7 @@ function verify(source) {
 const source = current();
 verify(source);
 // Mutants: each must make the check fail.
-const block = source.slice(source.indexOf('    if (miniMap && mapCars.length) {'), source.indexOf('    if (interiors.busy) interiors.render(renderer);'));
+const block = source.slice(source.indexOf('    if (miniMap && mapCars.length) {'), source.indexOf('    if (interiors.busy) interiors.render(renderer, interiorDraw);'));
 assert.ok(block.includes('redrawNext'), 'the paused map redraw is where this check expects it');
 const mutants = {
   'no paused map redraw': source.replace(block, ''),

@@ -1,3 +1,4 @@
+import { untoned } from './finish-shaders';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { AirportSite } from './airport-site';
@@ -23,7 +24,7 @@ export class Airport {
     }
     // No point lights or textures. Small emissive heads remain visible at night.
     for(const [color,points] of [[0xfff1cd,white],[0x42ff87,green],[0xff4835,red]] satisfies [number,[number,number][]][]){
-      const mesh=new THREE.InstancedMesh(new THREE.SphereGeometry(night?.32:.16,6,4),new THREE.MeshBasicMaterial({color,toneMapped:false}),points.length);
+      const mesh=new THREE.InstancedMesh(new THREE.SphereGeometry(night?.32:.16,6,4),untoned(new THREE.MeshBasicMaterial({color,toneMapped:false})),points.length);
       mesh.count=0;this.group.add(mesh);this.lamps.push({mesh,points});
     }
     // One merged windsock (pole and five stripes, vertex colours): one draw call, not six.
