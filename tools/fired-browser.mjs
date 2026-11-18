@@ -102,7 +102,8 @@ try {
     assert.equal(card.hidden, false); assert.equal(card.lines[0], 'Get Fired'); assert.equal(card.title, ['Clean record', 'Coaching chat', 'Verbal warning', 'Written warning', 'One-day suspension', 'Three-day suspension', 'Hearing', 'Fired'][await read('mmm.fired.book.step')]);
     assert.ok(card.lines.some(l => /^1\. /.test(l)), 'top offences'); assert.ok(card.lines.some(l => /^Best combo: /.test(l)));
     assert.ok(card.lines.some(l => /^Your (best run|first run)/.test(l)));
-    assert.deepEqual(card.buttons, ['Try again']); assert.equal(card.report, true, 'no daily report in Get Fired');
+    // Main's shared ending frame adds its replay button to every ending once a replay is ready.
+    assert.equal(card.buttons[0], 'Try again'); assert.ok(card.buttons.slice(1).every(b => b === 'Watch replay'), JSON.stringify(card.buttons)); assert.equal(card.report, true, 'no daily report in Get Fired');
     assert.ok(card.best && JSON.parse(card.best).total > 0); assert.equal(card.career, career, 'mmm.shift.v1 untouched');
     assert.equal(card.fits, true, 'the end card fits');
     await shot(`fired-${name}-end`);

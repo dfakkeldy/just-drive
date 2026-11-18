@@ -1276,7 +1276,9 @@ const clearEndingInput = () => {
   document.getElementById('settings')?.classList.remove('open');
 };
 const endings = mailMode ? new Endings(clearEndingInput, () => { shift.startOver(); pause.resetClock(); }) : quietEndings();
-const fired = firedMode && shift instanceof Shift && endings instanceof Endings && !bare ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock()) : null;
+// Built with hud=0 too: a fired Shift ends through it. Only its panel follows the bare HUD.
+const fired = firedMode && shift instanceof Shift && endings instanceof Endings ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock()) : null;
+if (fired && bare) document.getElementById('firedHud')!.style.display = 'none';
 const yardJob = yard && endings instanceof Endings ? ride.yardJob?.(yard) ?? new YardJob(yard, vehicle, terrain, camera, endings) : null;
 resets[resetSlot.yardJob] = () => yardJob?.reset();
 const deckhand = AREA.coast && ERA.modern ? new Deckhand(manifest.village, terrain) : null;

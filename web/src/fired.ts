@@ -112,14 +112,14 @@ export class FiredRun {
     const b = this.book, timeLeft = Math.max(0, END_TIME - START_TIME - this.shift.elapsed);
     const run: BestRun = { step: b.step, total: b.total, timeLeft, chain: b.bestChain.points };
     const before = this.best;
-    this.best = saveBest(run);
+    this.best = saveBest(run, undefined, this.best);
     const isBest = this.best === run;
     const top = topOffences(b);
     const lines = [
       `${fmt(b.total)} points · ${timeLeft > 0 ? timeLeftText(timeLeft) : 'the clock reached 18:00'}.`,
       b.step > 0 ? LADDER[b.step - 1].steward : 'Not one call on file. The union is worried about you.',
       ...(top.length ? top.map((o, i) => `${i + 1}. ${o.label} ×${o.count}: ${fmt(o.points)}`) : ['No offences on file.']),
-      `Best combo: ${b.bestChain.kinds} kinds of offence, ${fmt(b.bestChain.points)} points.`,
+      b.bestChain.kinds > 1 ? `Best combo: ${b.bestChain.kinds} kinds of offence, ${fmt(b.bestChain.points)} points.` : 'No combo: never two kinds of offence at once.',
       isBest ? (before ? 'Your best run yet.' : 'Your first run on file.')
         : `Your best run: ${stepName(this.best!.step)} · ${fmt(this.best!.total)} points · ${timeLeftText(this.best!.timeLeft)}.`,
     ];

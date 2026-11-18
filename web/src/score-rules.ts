@@ -156,9 +156,10 @@ export function readBest(storage: () => Store = () => localStorage): BestRun | n
   } catch { /* A sandbox may refuse storage, or the value is not ours. */ }
   return null;
 }
-/** Saves only a better run. Returns the best run after the save (which may be this one). */
-export function saveBest(run: BestRun, storage: () => Store = () => localStorage): BestRun {
-  const best = readBest(storage);
+/** Saves only a better run. Returns the best run after the save (which may be this one). `held` is the best run this
+ * page already knows: when storage is blocked or was cleared, a weaker run still does not replace it. */
+export function saveBest(run: BestRun, storage: () => Store = () => localStorage, held: BestRun | null = null): BestRun {
+  const stored = readBest(storage), best = held && better(held, stored) ? held : stored;
   if (!better(run, best)) return best!;
   try { storage().setItem(BEST_KEY, JSON.stringify(run)); } catch { /* Memory still shows it. */ }
   return run;

@@ -153,8 +153,13 @@ assert.equal(best.total, fired.book.total);
 // Try again: the same day, a fresh book.
 card.choices[0].action(); tick(.016);
 // A run with no offence at all still ends with a card, and the next run still scores (the stream counts runs).
+// Ending at once, with every stop still due, files no end-of-day calls into the run: quitting earns no step.
+for (let i = 0; i < 8; i++) shift.remaining[i] = 1;   // eight stops still due: the mail verdict would file two skipped stops
+const quit = shift.score.reported, calls = shift.complaints.all.length;
 document.getElementById('endShift').click();
+assert.equal(shift.score.reported, quit, 'the end-of-day sweep never scores in Get Fired'); assert.equal(shift.complaints.all.length, calls);
 assert.equal(offers.length, 2); assert.equal(offers[1].title, 'Clean record'); assert.match(offers[1].lines[1], /Not one call on file/);
+assert.ok(offers[1].lines.includes('No combo: never two kinds of offence at once.'), offers[1].lines.join('|'));
 offers[1].choices[0].action(); tick(.016);
 assert.equal(agains, 2); assert.equal(restarts, 2); assert.equal(shift.ended, false); assert.ok(shift.elapsed < 1, 'the clock starts again at 10:00');
 assert.equal(fired.book.total, 0); assert.equal(fired.ended, false); assert.equal(shift.career.day, 4);

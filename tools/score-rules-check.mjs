@@ -189,6 +189,8 @@ ok('best run: its own key, a better run replaces it, blocked or bad storage is h
   }
   assert.equal(readBest(() => { throw Error('blocked'); }), null);
   assert.equal(saveBest(a, () => { throw Error('blocked'); }), a);
+  // Blocked storage: the best run this page already holds still beats a weaker run, and a better run still wins.
+  assert.equal(saveBest(worse, () => { throw Error('blocked'); }, a), a); assert.equal(saveBest(higher, () => { throw Error('blocked'); }, a), higher);
   assert.equal(timeLeftText(0), 'no time left'); assert.equal(timeLeftText(3 * 3600 + 5 * 60 + 9), '3 h 05 min left');
 });
 

@@ -311,6 +311,13 @@ export class Shift {
   }
   end(): void {
     if (this.ended) return;
+    if (this.fired) {
+      // No verdict, no pay and no career: Get Fired never touches the saved shift. The end-of-day sweep (stops
+      // skipped, flyers left, the late call) is the verdict's: it never scores, so ending at once earns no step.
+      this.ended = true; for (const scene of this.roadside) scene.setPaused?.(true);
+      this.endButton.hidden = true; this.cameraButton.hidden = true;
+      this.onFiredEnd?.(); return;
+    }
     const at = this.elapsed + .001;
     if (this.props) {
       for (const i of missedCustomers(this.career.day, this.remaining)) {
@@ -326,12 +333,6 @@ export class Shift {
       if (this.run.rural.includes(this.route.late)) {
         const p = this.props.mail[this.route.late]; this.add('late', this.route.late, p.x, p.z, at);
       }
-    }
-    if (this.fired) {
-      // No verdict, no pay and no career: Get Fired never touches the saved shift.
-      this.ended = true; for (const scene of this.roadside) scene.setPaused?.(true);
-      this.endButton.hidden = true; this.cameraButton.hidden = true;
-      this.onFiredEnd?.(); return;
     }
     const upheld = this.complaints.all.filter((c) => !dismissed(c, this.evidence.photos));
     const outcome = verdict(upheld); this.next = nextCareer(this.career, outcome, this.damage.total);
