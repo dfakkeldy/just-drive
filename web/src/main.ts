@@ -411,7 +411,6 @@ const landmarks = AREA.landmarks ? new Landmarks(landmarkList, manifest.village,
 if (landmarks) scene.add(landmarks.group);
 const harbourLights = ERA.modern ? new HarbourLights(AREA.id, manifest.village, EXAG, nightLook !== null, SEA_LEVEL) : null;
 if (harbourLights) scene.add(harbourLights.group);
-if (import.meta.env.DEV) expose({ harbourLights });
 const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea, SEA_LEVEL,
   new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
   terrain, trees?.group ?? null, params.get('reflections'));
@@ -704,7 +703,7 @@ if (import.meta.env.DEV) expose({ vehicle: new Proxy(vehicle, {
       return value.apply(current, args);
     };
   },
-}), era: ERA, history, canal, scene, props, buildings, landmarks, tall, farLand, farTurbines, farVisibility, area: AREA, roads, edge, yard, ...(stuntPark ? { stuntPark, sunShadows } : {}), renderer, grass, trees, terrain, camera, driveVehicle, chase, water: waterReflections, detail, quality, picture, coast, culverts: culvertMouths, low: LOW });
+}), era: ERA, history, canal, scene, props, buildings, landmarks, harbourLights, tall, farLand, farTurbines, farVisibility, area: AREA, roads, edge, yard, ...(stuntPark ? { stuntPark, sunShadows } : {}), renderer, grass, trees, terrain, camera, driveVehicle, chase, water: waterReflections, detail, quality, picture, coast, culverts: culvertMouths, low: LOW });
 if (import.meta.env.DEV && multiplayer) expose({ mp: multiplayer });   // for tools/mp-game-check.mjs
 const mail = mailMode ? new Mail(terrain, props, properties, manifest.village, LOW) : new SceneryContact(props);
 scene.add(mail.group);
