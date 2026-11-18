@@ -29,6 +29,8 @@ const NO_SEGMENTS: [number, number][] = [];   // one shared empty bucket: a quer
 export class Roads {
   readonly group = new THREE.Group();
   readonly roads: Road[] = [];
+  /** Modern bridge walks reserve space inside the parapet, before any deck is built. */
+  readonly bridgeWalks = new Map<number, { side:number; width:number }>();
   private rails: Guardrails | null = null;
   get guardrails(): Guardrails | null {
     if (this.terrain.cartRoads || !this.roads.length) return null;
@@ -223,7 +225,8 @@ export class Roads {
     const len = cum[n - 1] || 1, y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
     const w = road.halfWidth + 0.9, pos: number[] = [], idx: number[] = [];
     // Cross-section: deck top, thick sides, and a low rail on each edge.
-    const profile: [number, number][] = [[-w, -0.9], [-w, 0.75], [-w + 0.18, 0.75], [-w + 0.18, 0], [w - 0.18, 0], [w - 0.18, 0.75], [w, 0.75], [w, -0.9]];
+    const walk=this.bridgeWalks.get(road.id), left=walk && walk.side<0?Math.max(w,road.halfWidth+walk.width+.3):w, right=walk && walk.side>0?Math.max(w,road.halfWidth+walk.width+.3):w;
+    const profile: [number, number][] = [[-left, -0.9], [-left, 0.75], [-left + 0.18, 0.75], [-left + 0.18, 0], [right - 0.18, 0], [right - 0.18, 0.75], [right, 0.75], [right, -0.9]];
     for (let i = 0; i < n; i++) {
       const a = p[Math.max(i - 1, 0)], b = p[Math.min(i + 1, n - 1)];
       const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
