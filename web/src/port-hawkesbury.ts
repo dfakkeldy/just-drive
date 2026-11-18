@@ -4,15 +4,17 @@
  *
  * Five groups (the Reeves St hardware store and its lot, the Reeves St plaza lot and gas bar, the east plaza north and
  * south of Paint St, the corner garage) each build once, when the camera is near and the finest land under them is in
- * memory. A group is one mesh per surface pattern, plus one for the lot paint and one instanced mesh per vehicle type.
- * LOW leaves out the small parts (carts, shrubs, pot lights, rooftop units, the accessible symbols' figures) and parks
- * a third as many vehicles.
+ * memory. Built groups that stand together (the Reeves St side with the garage, the east plaza) share one mesh per
+ * surface pattern, one for the lot paint and one for the parked vehicles (baked: they never move), so a second group in
+ * view costs no extra draw. LOW leaves out the small parts (carts, shrubs, pot lights, rooftop units, the accessible
+ * symbols' figures), parks a third as many vehicles and draws the patterns as their mean tone (no textures).
  */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Building } from './buildings';
-import { ParkedVehicles, pushOut, type Parked, type Pushable, type Solid } from './parked';
+import { ParkedVehicles, bakeParked, parkedMatrix, parkedSolid, pushOut, type Parked, type Pushable, type Solid } from './parked';
 import type { Terrain } from './terrain';
-import { Face, Kit as SiteKit, canvas, grey, mergeKit } from './site-kit';
+import { Face, Kit as SiteKit, canvas, grey } from './site-kit';
 import {
   CANOPY_POSTS, CART_BAY_POSTS, GARAGE_APRON, GAS_COLUMNS, GAS_ISLANDS, GAS_TREES, PH_GROUPS, PH_ITEMS, PH_LOTS, PH_PADS, PH_PLACES, PH_SIGNS, PLACE_VEHICLES,
   STALL_D, layoutLot, lotBox, lotSolids, lotToMap, parkedPose, pavedKeys, pavedTest, toMap,
@@ -57,12 +59,33 @@ function textures(): Record<Exclude<Tex, 'decal'>, THREE.Texture> {
   return { panel, glass, seam };
 }
 
+/**
+ * LOW draws each pattern as its mean tone: the patterned walls, glass and roofs are a few boxes each, the ribs and
+ * mullions are a pixel or less on a phone, and three textures, their meshes and their draws are a phone's whole margin.
+ * The mean is taken in linear light, as the GPU's smallest mip level would average it.
+ */
+let tones: Record<'panel' | 'glass' | 'seam', number> | null = null;
+function patternTones(): Record<'panel' | 'glass' | 'seam', number> {
+  if (tones) return tones;
+  const tex = textures(), mean = (t: THREE.Texture) => {
+    const c = t.image as HTMLCanvasElement, d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+    const c3 = new THREE.Color();
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += c3.setRGB(d[i] / 255, d[i] / 255, d[i] / 255, THREE.SRGBColorSpace).r;
+    return sum / (d.length / 4);
+  };
+  tones = { panel: mean(tex.panel), glass: mean(tex.glass), seam: mean(tex.seam) };
+  for (const t of Object.values(tex)) t.dispose();
+  return tones;
+}
+
 let shared: Map<Tex | null, THREE.MeshLambertMaterial> | null = null;
-function materials(): Map<Tex | null, THREE.MeshLambertMaterial> {
+/** One material per surface pattern (LOW: no patterns), and the decal material for the ground paint. */
+function materials(low: boolean): Map<Tex | null, THREE.MeshLambertMaterial> {
   if (shared) return shared;
-  const tex = textures(), mats = new Map<Tex | null, THREE.MeshLambertMaterial>();
-  for (const key of [null, 'panel', 'glass', 'seam'] as (Tex | null)[]) {
-    const map = key && key !== 'decal' ? tex[key] : null;
+  const tex = low ? null : textures(), mats = new Map<Tex | null, THREE.MeshLambertMaterial>();
+  for (const key of (low ? [null] : [null, 'panel', 'glass', 'seam']) as (Tex | null)[]) {
+    const map = key && key !== 'decal' && tex ? tex[key] : null;
     mats.set(key, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map }));
   }
   // Lot paint and forecourt pads lie on the ground: drawn a little toward the camera so they never flicker in it.
@@ -463,9 +486,36 @@ function garage(k: Kit): void {
 }
 
 // ---- building a group ------------------------------------------------------------------------------------------------
-export interface Built { group: THREE.Group; parked: ParkedVehicles; layouts: Partial<Record<string, LotLayout>>; solids: Solid[] }
+export interface Built {
+  /** The models' geometry, one per surface pattern (the runner merges it into its cluster's meshes, then disposes it). */
+  models: Map<Tex | null, THREE.BufferGeometry>;
+  /**
+   * The lot paint and pads, and on LOW the parked vehicles baked in place (desktop instances `cars` on `ground`, as
+   * ~600 baked vehicles would hold ~15 MB): kept, as the cluster shows them only while near.
+   */
+  decal: THREE.BufferGeometry | null;
+  vehicles: THREE.BufferGeometry | null;
+  cars: Parked[];
+  /** The heights under the cars, frozen when the group built (desktop seats its instances on them). */
+  ground: (x: number, z: number) => number;
+  parkedSolids: Solid[];
+  /** Surface patterns plus the paint (what used to be this group's own meshes), and their triangles. */
+  meshes: number;
+  triangles: number;
+  layouts: Partial<Record<string, LotLayout>>;
+  solids: Solid[];
+}
 
-/** Build one group: the models into one mesh per surface pattern, the paint and pads into one decal mesh. */
+const tris = (g: THREE.BufferGeometry | null | undefined) => g ? g.attributes.position.count / 3 : 0;
+/** One new geometry from several (the inputs are left as they are), with its bounds for culling. */
+function merged(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const g = mergeGeometries(parts);
+  if (!g) throw new Error('Port Hawkesbury: geometry could not be merged');
+  g.computeBoundingSphere();
+  return g;
+}
+
+/** Build one group: the models into one geometry per surface pattern, the paint and pads into one decal geometry. */
 export function buildGroup(name: GroupName, site: PortHawkesburySite, groundAt: (x: number, z: number) => number, low: boolean,
   roads: MapRoad[], buildings: Building[], paved: (p: P2) => boolean, laid: Partial<Record<string, LotLayout>> = {}): Built {
   const kit: Kit = new SiteKit(low, site.village, groundAt), decals = new Decals(site, groundAt, low ? 3 : 1.5), parked: Parked[] = [];
@@ -499,20 +549,44 @@ export function buildGroup(name: GroupName, site: PortHawkesburySite, groundAt: 
     if (place === 'dealerB') { dealerB(kit); bigBoxPylon(kit, PH_SIGNS.bigBoxPylon); }
     if (place === 'garage') garage(kit);
   }
-  const mats = materials();
-  const group = mergeKit(kit, `ph-${name}`, tex => mats.get(tex)!);
-  const paint = decals.geometry();
-  if (paint) {
-    paint.computeBoundingSphere();
-    const mesh = new THREE.Mesh(paint, mats.get('decal')!);
-    mesh.name = `ph-${name}-decal`; mesh.receiveShadow = true;
-    group.add(mesh);
+  if (low) {
+    // LOW: each pattern becomes its mean tone, multiplied into the vertex colour; the parts join the plain ones.
+    const tone = patternTones(), plain = kit.parts.get(null) ?? [];
+    for (const [tex, parts] of [...kit.parts]) {
+      if (!tex || tex === 'decal') continue;
+      for (const g of parts) {
+        const col = g.attributes.color, t = tone[tex];
+        for (let i = 0; i < col.count; i++) col.setXYZ(i, col.getX(i) * t, col.getY(i) * t, col.getZ(i) * t);
+        g.deleteAttribute('uv');
+        plain.push(g);
+      }
+      kit.parts.delete(tex);
+    }
+    kit.parts.set(null, plain);
   }
-  // LOW parks one vehicle in three (a phone draws every one as instanced triangles).
-  const kept = low ? parked.filter((_, i) => i % 3 === 0) : parked;
-  const vehicles = new ParkedVehicles(kept, groundAt);
-  vehicles.group.name = `ph-${name}-vehicles`;
-  return { group, parked: vehicles, layouts, solids };
+  const models = new Map<Tex | null, THREE.BufferGeometry>();
+  for (const [tex, parts] of kit.parts) {
+    if (!parts.length) continue;
+    const geometry = mergeGeometries(parts);
+    if (!geometry) throw new Error(`ph-${name}: geometry could not be merged`);
+    for (const p of parts) p.dispose();
+    models.set(tex, geometry);
+  }
+  const decal = decals.geometry();
+  // LOW parks one vehicle in three (a phone draws every one of their triangles).
+  const cars = low ? parked.filter((_, i) => i % 3 === 0) : parked;
+  const vehicles = low ? bakeParked(cars, groundAt) : null;
+  // Desktop seats its instanced vehicles again whenever the near set changes: on the heights read now, while the finest
+  // land is under the group, not on whatever land is in memory then.
+  const heights = new Map<string, number>(), ground = (x: number, z: number) => {
+    const key = `${x},${z}`;
+    let y = heights.get(key);
+    if (y === undefined) heights.set(key, y = groundAt(x, z));
+    return y;
+  };
+  if (!low) { const o = new THREE.Object3D(); for (const car of cars) parkedMatrix(car, ground, o); }
+  const triangles = [...models.values()].reduce((n, g) => n + tris(g), 0) + tris(decal);
+  return { models, decal, vehicles, cars, ground, parkedSolids: cars.map(parkedSolid), meshes: models.size + (decal ? 1 : 0), triangles, layouts, solids };
 }
 
 function hydrant(k: Kit, [e, n]: P2): void {
@@ -540,6 +614,14 @@ function bigBoxPylon(k: Kit, sign: Sign): void {
 }
 
 // ---- the runner ------------------------------------------------------------------------------------------------------
+/**
+ * Groups that stand together share their meshes: the Reeves St side with the corner garage (within 600 m of each
+ * other) and the east plaza north and south of Paint St. A cluster's meshes stay small enough to be culled as a whole.
+ */
+export const PH_CLUSTER: Record<GroupName, 'west' | 'east'> = { reeves: 'west', plaza: 'west', garage: 'west', eastNorth: 'east', eastSouth: 'east' };
+type ClusterName = (typeof PH_CLUSTER)[GroupName];
+interface Cluster { models: Map<Tex | null, THREE.Mesh>; decal: THREE.Mesh; vehicles: THREE.Mesh; parked: ParkedVehicles | null; near: string }
+
 /** Each group builds once, when the camera comes within reach and the finest land under it is in memory. */
 export class PortHawkesbury {
   readonly group = new THREE.Group();
@@ -562,7 +644,7 @@ export class PortHawkesbury {
     });
     // The materials exist from the start, with one empty mesh each in the picture, so their shaders build with the
     // scene and not mid-drive (as judique-village.ts). A keeper goes once a built mesh uses its material.
-    for (const [tex, material] of materials()) {
+    for (const [tex, material] of materials(low)) {
       const g = new THREE.BufferGeometry();
       for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3], ...(tex && tex !== 'decal' ? [['uv', 2]] : [])] as [string, number][]) g.setAttribute(name, new THREE.Float32BufferAttribute([], size));
       const keeper = new THREE.Mesh(g, material);
@@ -576,13 +658,8 @@ export class PortHawkesbury {
   update(view: { x: number; z: number }, now: number): void {
     if (now < this.nextLook) return;
     this.nextLook = now + 400;
-    // The paint and the parked vehicles of a far group are hidden (the models stay, like every building).
-    for (const [name, b] of this.built) {
-      const item = this.boxes.get(name)!, far = Math.max(item[0] - view.x, view.x - item[2], item[1] - view.z, view.z - item[3]);
-      const near = far < (this.low ? 350 : 600);
-      b.parked.group.visible = near;
-      const decal = b.group.getObjectByName(`ph-${name}-decal`); if (decal) decal.visible = near;
-    }
+    // The paint and the parked vehicles of a far group are left out (the models stay, like every building).
+    for (const name of this.clusters.keys()) this.showNear(name, view);
     if (!this.pending.length || this.loading || now < this.nextProbe) return;
     const reach = this.low ? 380 : 520;
     for (const item of [...this.pending]) {
@@ -614,18 +691,25 @@ export class PortHawkesbury {
         return;
       }
       const built = buildGroup(item.name, this.site, (x, z) => this.terrain.constructionHeightAt(x, z) ?? fallback, this.low, this.roads, this.buildings, pavedAt, item.laid);
-      built.parked.seat();
-      built.group.add(built.parked.group);
-      built.group.traverse(o => { if (o instanceof THREE.Mesh && !(o instanceof THREE.InstancedMesh)) this.triangles += o.geometry.attributes.position.count / 3; });
-      this.group.add(built.group);
+      this.triangles += built.triangles;
       this.built.set(item.name, built);
       const [e0, n0, e1, n1] = item.box, a = this.site.world(e0, n1), b = this.site.world(e1, n0);
       this.boxes.set(item.name, [a.x, a.z, b.x, b.z]);
-      this.solids.push(...built.solids, ...built.parked.solids);
+      this.solids.push(...built.solids, ...built.parkedSolids);
       this.pending.splice(this.pending.indexOf(item), 1);
+      // The models join their cluster's mesh per pattern; the paint and vehicles are shown with the cluster's near groups.
+      const cluster = this.cluster(PH_CLUSTER[item.name]), used = new Set<THREE.Material>();
+      for (const [tex, geometry] of built.models) {
+        const mesh = cluster.models.get(tex)!, old = mesh.geometry;
+        mesh.geometry = old.attributes.position?.count ? merged([old, geometry]) : merged([geometry]);
+        old.dispose(); geometry.dispose();
+        mesh.visible = true; used.add(mesh.material as THREE.Material);
+      }
+      built.models.clear();
+      cluster.near = '?';
+      this.showNear(PH_CLUSTER[item.name], view);
+      if (cluster.decal.visible) used.add(cluster.decal.material as THREE.Material);
       // A keeper goes once a built mesh uses its material (its shader is then in every picture of the place).
-      const used = new Set<THREE.Material>();
-      built.group.traverse(o => { if (o instanceof THREE.Mesh && !(o instanceof THREE.InstancedMesh)) used.add(o.material as THREE.Material); });
       for (const keeper of this.keepers.filter(k => used.has(k.material as THREE.Material))) {
         this.keepers.splice(this.keepers.indexOf(keeper), 1); this.group.remove(keeper); keeper.geometry.dispose();
       }
@@ -634,6 +718,63 @@ export class PortHawkesbury {
     }
   }
   private boxes = new Map<GroupName, number[]>();
+  private clusters = new Map<ClusterName, Cluster>();
+  /** Desktop's instanced vehicles share one material for good, so a new near set never builds its shader again. */
+  private carMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  /** A cluster's meshes, made empty and hidden the first time one of its groups builds. */
+  private cluster(name: ClusterName): Cluster {
+    let c = this.clusters.get(name);
+    if (c) return c;
+    const mats = materials(this.low), mesh = (part: string, material: THREE.Material) => {
+      const m = new THREE.Mesh(new THREE.BufferGeometry(), material);
+      m.name = `ph-${name}-${part}`; m.visible = false;
+      this.group.add(m);
+      return m;
+    };
+    const models = new Map<Tex | null, THREE.Mesh>();
+    for (const [tex, material] of mats) if (tex !== 'decal') {
+      const m = mesh(tex ?? 'paint', material); m.castShadow = m.receiveShadow = true; models.set(tex, m);
+    }
+    const decal = mesh('decal', mats.get('decal')!); decal.receiveShadow = true;
+    // LOW's baked vehicles are plain vertex-coloured triangles, like the models' paint.
+    const vehicles = mesh('vehicles', mats.get(null)!);
+    this.clusters.set(name, c = { models, decal, vehicles, parked: null, near: '' });
+    return c;
+  }
+  /** Show the paint and parked vehicles of the cluster's groups within reach of the view; rebuilt only when that set changes. */
+  private showNear(name: ClusterName, view: { x: number; z: number }): void {
+    // A near group stays near until 50 m past the reach, so a car waiting on the line does not rebuild them over and over.
+    const c = this.clusters.get(name)!, reach = this.low ? 350 : 600, was = new Set(c.near.split(' '));
+    const near = [...this.built.keys()].filter(g => PH_CLUSTER[g] === name).filter(g => {
+      const item = this.boxes.get(g)!;
+      return Math.max(item[0] - view.x, view.x - item[2], item[1] - view.z, view.z - item[3]) < reach + (was.has(g) ? 50 : 0);
+    });
+    const key = near.join(' ');
+    if (key === c.near) return;
+    c.near = key;
+    for (const [mesh, part] of [[c.decal, 'decal'], [c.vehicles, 'vehicles']] as const) {
+      const parts = near.map(g => this.built.get(g)![part]).filter((g): g is THREE.BufferGeometry => !!g);
+      mesh.geometry.dispose();
+      mesh.geometry = parts.length ? merged(parts) : new THREE.BufferGeometry();
+      mesh.visible = parts.length > 0;
+    }
+    if (this.low) return;
+    // Desktop: one instanced mesh per vehicle type for the cluster's near groups.
+    if (c.parked) {
+      this.group.remove(c.parked.group);
+      c.parked.group.traverse(o => { if (o instanceof THREE.InstancedMesh) { o.geometry.dispose(); o.dispose(); } });
+    }
+    c.parked = null;
+    const cars = near.flatMap(g => this.built.get(g)!.cars), ground = new Map<Parked, (x: number, z: number) => number>();
+    for (const g of near) for (const car of this.built.get(g)!.cars) ground.set(car, this.built.get(g)!.ground);
+    if (!cars.length) return;
+    // Each vehicle stands on its own group's ground, as read when the group built.
+    const parked = new ParkedVehicles(cars, (x, z, car) => ground.get(car)!(x, z), this.carMaterial);
+    parked.group.name = `ph-${name}-instanced`;
+    parked.seat();
+    this.group.add(parked.group);
+    c.parked = parked;
+  }
   /** The site's fixed solids, and each built group's poles, corrals and parked vehicles (the towed trailer reads this list too). */
   readonly solids: Solid[] = [];
   resolveSolids(car: Pushable): void {
