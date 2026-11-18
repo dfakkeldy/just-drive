@@ -121,7 +121,7 @@ def check(stem: str, work: pathlib.Path) -> int:
         if rough:
             print(f'  MABOU HEARD WITH AN H ("{rough.group()}"): listen to this one, or make it again')
         if other:
-            print('  MABOU NOT HEARD AS MABOU: listen to this one, or make it again')
+            print('  MABOU NOT HEARD AS MABOU: listen to this one, or make it again (if LINE TIMES shows below, move the line times first)')
         if score < .8 or named:
             print(f'  {"HEARD DIFFERENTLY" if score < .8 else "place name"} ({score:.2f}) {line["speaker"]}: {want}\n      heard: {got}')
     if differently >= 3 and 'line_times_moved' not in record:   # the pattern of line times that are all early or late

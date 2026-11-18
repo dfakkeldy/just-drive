@@ -158,6 +158,9 @@ def test_heard_with_an_h() -> None:
     assert check.unheard('From Mabou to Mabou Harbour.', 'From Mabu to my boo harbour.')
     assert not check.unheard('It is to a Theresa, in Mabou.', "It's to a Teresa in Mabu.")
     assert not check.unheard('From Mabou to Mabou Harbour.', 'From Mabou to Maboo Harbour.') and not check.unheard('In Judique.', 'In Judick.')
+    # The syllable check measures every spelling a voice is sent for a place name: a new spelling needs its place in SYLLABLE.
+    sent = {talk.SAY[p] for p in check.PLACES if p in talk.SAY} | {v for table in talk.SAY_FOR.values() for p, v in table.items() if p in check.PLACES}
+    assert sent <= set(check.SYLLABLE), sent - set(check.SYLLABLE)
 
 
 def test_order() -> None:
