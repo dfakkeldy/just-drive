@@ -61,7 +61,7 @@ for(const url of urls){
    const state=await page.read(`(()=>{const h=mmm.hawkesbury,groups={};let meshes=0,triangles=0,cars=0;
     for(const [n,b] of h.built){const m=b.meshes,t=b.triangles,c=b.cars.length;groups[n]={meshes:m,triangles:t,cars:c,solids:b.solids.length,lines:Object.values(b.layouts).reduce((s,l)=>s+l.lines.length,0)};meshes+=m;triangles+=t;cars+=c;}
     // What is drawn: the clusters' shared meshes (a pattern, the paint, LOW's baked vehicles; desktop's instanced types).
-    const drawn=[];h.group.traverse(o=>{if(o.isMesh&&o.visible&&o.parent.visible)drawn.push({name:o.name,instanced:!!o.isInstancedMesh,map:!!o.material.map,triangles:o.geometry.attributes.position?.count/3||0});});
+    const drawn=[];h.group.traverse(o=>{if(o.isMesh&&o.visible&&o.parent.visible)drawn.push({name:o.name,instanced:!!o.isInstancedMesh,count:o.isInstancedMesh?o.count:1,map:!!o.material.map,triangles:o.geometry.attributes.position?.count/3||0});});
     return {groups,meshes,triangles,cars,counted:h.triangles,keepers:h.group.children.filter(c=>c.isMesh&&c.name.startsWith('ph-keeper')).length,solids:h.site.solids.length,drawn};})()`);
    console.log(name,'measured',JSON.stringify(state));
    const c=CEILING[level];
@@ -76,6 +76,7 @@ for(const url of urls){
    assert.ok(plain.every(d=>d.triangles>0),'no empty mesh is drawn');
    if(level==='low'){assert.ok(state.drawn.every(d=>!d.instanced&&!d.map),'LOW draws no textures and no instanced vehicles');
     assert.ok(state.drawn.some(d=>d.name.endsWith('-vehicles')&&d.triangles>0),'LOW draws its baked vehicles');}
+   else assert.ok(state.drawn.some(d=>d.instanced&&d.count>0),'desktop draws its instanced vehicles');
    assert.ok(Object.values(state.groups).reduce((n,g)=>n+g.solids,0)>=40,'lot poles and corrals are solid');
    if(level==='low'){const desktop=JSON.parse(readFileSync(`${out}/desktop.json`,'utf8'));
     for(const g of GROUPS){assert.ok(state.groups[g].triangles<desktop.groups[g].triangles,`${g}: LOW is simpler`);assert.ok(state.groups[g].cars<=desktop.groups[g].cars,`${g}: LOW parks fewer`);}}

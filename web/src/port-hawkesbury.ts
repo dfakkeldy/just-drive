@@ -743,10 +743,11 @@ export class PortHawkesbury {
   }
   /** Show the paint and parked vehicles of the cluster's groups within reach of the view; rebuilt only when that set changes. */
   private showNear(name: ClusterName, view: { x: number; z: number }): void {
-    const c = this.clusters.get(name)!, reach = this.low ? 350 : 600;
+    // A near group stays near until 50 m past the reach, so a car waiting on the line does not rebuild them over and over.
+    const c = this.clusters.get(name)!, reach = this.low ? 350 : 600, was = new Set(c.near.split(' '));
     const near = [...this.built.keys()].filter(g => PH_CLUSTER[g] === name).filter(g => {
       const item = this.boxes.get(g)!;
-      return Math.max(item[0] - view.x, view.x - item[2], item[1] - view.z, view.z - item[3]) < reach;
+      return Math.max(item[0] - view.x, view.x - item[2], item[1] - view.z, view.z - item[3]) < reach + (was.has(g) ? 50 : 0);
     });
     const key = near.join(' ');
     if (key === c.near) return;
