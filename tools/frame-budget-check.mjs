@@ -181,7 +181,9 @@ async function openPage(scene, mode, options = {}) {
       assert.ok(settled,'fixture pose and all assets must settle before GPU normalization');
     }
 
-    if(FAR_STATE==='after') {
+    // FAR_STATE describes this tree. A page served from another tree (sidewalks-counts BASE_URL, e.g. a commit
+    // before far views) is measured as that tree draws it; waiting for far objects there would never finish.
+    if(FAR_STATE==='after'&&(options.origin??origin)===origin) {
       // Far views (PR #122) load after Start. Wait for them before GPU normalization, then hold each far query mesh
       // visible: the game redraws a hidden one five times a second, so its cost is the worst case, not a probe phase.
       const until=Date.now()+60000;
