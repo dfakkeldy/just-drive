@@ -62,11 +62,11 @@ export class ChurchInterior implements InteriorGame {
     this.parts.groups.loft.visible = this.eye.y > 2.3;
     this.parts.letter.visible = visit.letter;
   }
-  render(renderer: THREE.WebGLRenderer): void {
+  render(renderer: THREE.WebGLRenderer, draw?: (scene: THREE.Scene, camera: THREE.Camera) => void): void {
     const size = renderer.getSize(this.size), aspect = size.x / size.y;
     if (this.camera.aspect !== aspect) { this.camera.aspect = aspect; this.camera.fov = aspect < .8 ? 80 : 68; this.camera.updateProjectionMatrix(); }
     const exposure = renderer.toneMappingExposure; renderer.toneMappingExposure = 1;
-    renderer.render(this.scene, this.camera); renderer.toneMappingExposure = exposure;
+    try { if (draw) draw(this.scene, this.camera); else renderer.render(this.scene, this.camera); } finally { renderer.toneMappingExposure = exposure; }
   }
   leave(): void { this.visit.leave(); }
   dispose(): void { this.art.dispose(); this.scene.clear(); }

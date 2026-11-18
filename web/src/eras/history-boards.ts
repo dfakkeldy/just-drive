@@ -1,3 +1,4 @@
+import{untoned}from'../finish-shaders';
 import {planHistoryBoards,type BoardPlan} from './history-board-sites';
 import * as THREE from 'three';
 import type {Roads} from '../roads';import type {Terrain} from '../terrain';
@@ -15,7 +16,7 @@ export class HistoryBoards {
  private posts:THREE.InstancedMesh;
  constructor(terrain:Terrain,roads:Roads,owners:readonly BoardOwner[],material:THREE.Material,groundContacts:HistoryContacts,storedPlans?:readonly BoardPlan[]){
   const words=owners.filter(o=>o.site.word).map(o=>o.site.word),atlas=historySignAtlas(words);
-  const face=new THREE.MeshBasicMaterial({map:atlas.texture,side:THREE.FrontSide,toneMapped:false});
+  const face=untoned(new THREE.MeshBasicMaterial({map:atlas.texture,side:THREE.FrontSide,toneMapped:false}));
   const plans=storedPlans??planHistoryBoards(owners.map(o=>o.site),roads,(x,z)=>terrain.coverAt(x,z));
   for(const owner of owners){
    const s=owner.site;if(!s.word)continue;const plan=plans.find(p=>p.id===s.id);if(!plan)throw Error('Missing trade board '+s.id);

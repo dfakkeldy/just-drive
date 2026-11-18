@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Roads } from './roads';
 import type { Terrain } from './terrain';
+import { untoned } from './finish-shaders';
 import { SIGNAL_JUNCTIONS, signalLamp, signalStopDistance, type SignalStop } from './traffic-signal-rules';
 
 const LAMP_NAMES = ['red', 'amber', 'green'] as const;
@@ -46,7 +47,7 @@ export class TrafficSignals {
     this.housings = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.15, 0.24), new THREE.MeshLambertMaterial({ color: 0x242622 }), count);
     // Basic materials remain visible at night. Instance colours switch only on phase changes.
     this.lamps = [0xff3020, 0xffb820, 0x28ff70].map(() => new THREE.InstancedMesh(
-      new THREE.CircleGeometry(0.145, 10), new THREE.MeshBasicMaterial({ toneMapped: false }), count));
+      new THREE.CircleGeometry(0.145, 10), untoned(new THREE.MeshBasicMaterial({ toneMapped: false })), count));
     const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
     for (const mesh of [this.poles, this.housings, ...this.lamps]) {
       mesh.frustumCulled = false; mesh.castShadow = false; mesh.receiveShadow = false;

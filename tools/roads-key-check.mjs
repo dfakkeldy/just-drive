@@ -14,7 +14,7 @@ assert.ok(frozen['roads-old.ts'], 'old roads must have a frozen hash');
 assert.equal(createHash('sha256').update(read('tools/baseline/roads-old.ts')).digest('hex'), frozen['roads-old.ts'],
   'roads-old.ts was edited; frozen files are never edited (tools/baseline/README.md)');
 const options = { bundle: true, platform: 'node', format: 'esm', write: false, metafile: true, logLevel: 'silent',
-  alias: { three: resolve(root, 'web/node_modules/three/build/three.module.js') } };
+  alias: { 'three/examples': resolve(root, 'web/node_modules/three/examples'), 'three/addons': resolve(root, 'web/node_modules/three/examples/jsm'), three: resolve(root, 'web/node_modules/three/build/three.module.js') } };
 async function bundle(entry, replacement) {
   const result = await build({ ...options, stdin: { contents: entry, resolveDir: root }, plugins: replacement === undefined ? [] : [{
     name: 'roads-in-memory', setup(b) { b.onLoad({ filter: /[/\\]web[/\\]src[/\\]roads\.ts$/ }, () => ({ contents: replacement, loader: 'ts' })); }

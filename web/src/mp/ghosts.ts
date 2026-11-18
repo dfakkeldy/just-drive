@@ -1,3 +1,4 @@
+import { untoned } from '../finish-shaders';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FLAG, type PeerView, type Ride } from './wire';
@@ -171,6 +172,7 @@ export class Ghosts {
       shader.fragmentShader = 'varying float vFade;\n' + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\n' + FADE);
     };
+    untoned(labelMaterial);
     this.labels = new THREE.InstancedMesh(plane, labelMaterial, this.cap);
     this.labels.frustumCulled = false; this.labels.count = 0;
     this.labels.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
