@@ -93,7 +93,7 @@ export interface Title { open(): void; setRadio(available: boolean): void; /** C
 export function createTitle(touch: boolean, onStart: () => void, mode: GameMode = 'mail', areaName?: string, ride?: VehicleChoice, just = false, radio = true, era: Era = TODAY, paved = false): Title {
   // Three cards: the mail game; an area that has no mail game yet (areaName, mail mode); and the driving mode of any area.
   const historical = era.id !== 'today';
-  const explore = mode === 'explore', name = era.title ?? (just ? `Just Drive: ${areaName ?? 'Mabou'}` : explore ? (areaName ? `Driving ${areaName}` : EXPLORE_TITLE) : areaName ? `Drive around ${areaName}` : 'Mabou Mail Madness');
+  const explore = mode === 'explore', fired = mode === 'fired', name = era.title ?? (just ? `Just Drive: ${areaName ?? 'Mabou'}` : explore ? (areaName ? `Driving ${areaName}` : EXPLORE_TITLE) : areaName ? `Drive around ${areaName}` : 'Mabou Mail Madness');
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS + (just && !historical ? JUST_CSS : '') }));
   const root = document.createElement('div');
   root.id = 'title';
@@ -147,10 +147,10 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
  #title.justDrive #titleCard:has(>#titleEra):has(>#startHere)>#titleLegal{grid-row:10!important}
 }` }));
   root.innerHTML = `<div id="titleCard">
-    ${historical || just || areaName ? '' : `<div id="modeChoice" role="group" aria-label="How to play"><button id="modeMail" aria-pressed="${!explore}">Deliver the mail</button><button id="modeExplore" aria-pressed="${explore}">Just drive</button></div>`}
-    <p class="tag">${historical ? 'A fictional journey · Cape Breton' : explore ? 'Preview build · the land at your own pace' : areaName ? 'Preview build · real land and roads' : 'Preview build · a route you cannot win'}</p>
+    ${historical || just || areaName ? '' : `<div id="modeChoice" role="group" aria-label="How to play"><button id="modeMail" aria-pressed="${!explore && !fired}">Deliver the mail</button><button id="modeExplore" aria-pressed="${explore}">Just drive</button><button id="modeFired" aria-pressed="${fired}">Get fired</button></div>`}
+    <p class="tag">${historical ? 'A fictional journey · Cape Breton' : explore ? 'Preview build · the land at your own pace' : areaName ? 'Preview build · real land and roads' : fired ? 'Get Fired · a job you cannot lose' : 'Preview build · a route you cannot win'}</p>
     <h1>${explore ? name : areaName ? `Drive around <span>${areaName}</span>` : 'Mabou <span>Mail</span> Madness'}</h1>
-    <p>${historical ? "A work of fiction, based on an 1884 survey sheet. Places are approximate. It shows no person's land." : explore ? `Drive around the real land near ${place}, Cape Breton, and find places at your own pace.` : areaName ? `Explore the real land and roads around ${areaName}, Cape Breton.` : 'Deliver the day’s run around Mabou, Cape Breton. Stay off the lawns. Somebody will phone the post office anyway.'}${otherLine}</p>
+    <p>${historical ? "A work of fiction, based on an 1884 survey sheet. Places are approximate. It shows no person's land." : explore ? `Drive around the real land near ${place}, Cape Breton, and find places at your own pace.` : fired ? 'Same route, same clock. Today every complaint counts for you. Climb the discipline ladder to Fired before 18:00. The union grieves every step.' : areaName ? `Explore the real land and roads around ${areaName}, Cape Breton.` : 'Deliver the day’s run around Mabou, Cape Breton. Stay off the lawns. Somebody will phone the post office anyway.'}${otherLine}</p>
     ${explore ? '<p id="exploreCaution">A toy for getting a feel for the place. It is not a map for navigation or for safety. Roads and trails can differ on the day.</p>' : ''}
     <p id="waysOut" hidden></p>
     <dl>${rows(radio)}</dl>
@@ -161,7 +161,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   </div>`;
   if (explore && ride) { const buttons = vehicleButtons(ride); const modeChoice = root.querySelector('#modeChoice'); if (modeChoice) modeChoice.after(buttons); else root.querySelector('#titleCard')!.prepend(buttons); }
   document.body.appendChild(root);
-  for (const [id, choice] of [['modeMail', 'mail'], ['modeExplore', 'explore']] as const) root.querySelector('#' + id)?.addEventListener('click', () => { if (choice !== mode) chooseMode(choice); });
+  for (const [id, choice] of [['modeMail', 'mail'], ['modeExplore', 'explore'], ['modeFired', 'fired']] as const) root.querySelector('#' + id)?.addEventListener('click', () => { if (choice !== mode) chooseMode(choice); });
   const start = root.querySelector<HTMLButtonElement>('#titleStart')!;
   const credits = root.querySelector<HTMLButtonElement>('#titleCredits')!;
   const legal = root.querySelector<HTMLElement>('#titleLegal')!;

@@ -50,6 +50,8 @@ export class Complaints {
   private readonly keys = new Set<string>();
   private readonly groundProperties = new Set<number>();
   get groundOverflow(): number { return Math.max(0, this.groundProperties.size - 5); }
+  /** Hears each complaint once, as it is accepted (Get Fired scores it). */
+  constructor(private readonly onAdd?: (c: Complaint) => void) {}
   add(c: Complaint): void {
     if (c.kind === 'lawnMail' || c.kind === 'ditchMail') {
       if (this.groundProperties.has(c.target)) return;
@@ -58,6 +60,6 @@ export class Complaints {
     }
     const key = `${c.kind}:${c.target}`;
     if (this.keys.has(key)) return;
-    this.keys.add(key); this.all.push(c);
+    this.keys.add(key); this.all.push(c); this.onAdd?.(c);
   }
 }

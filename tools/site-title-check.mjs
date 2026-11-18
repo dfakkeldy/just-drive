@@ -102,9 +102,13 @@ assert.match(credit,/https:\/\/support\.novascotia\.ca\/services\/open-data-port
 assert.doesNotMatch(credit,/LiDAR|unrestricted|201602/);
 // The one intentional addition to the frozen title: pin the complete licence credit independently.
 const propertyCredit='<p>Property lines (optional, online only): Contains information obtained under license from the Province of Nova Scotia which is provided without warranty or liability for errors or omissions. <a href="https://nsgiwa.novascotia.ca/documents/licenses/MapService/Restricted%20Map%20Services%20License%20-%20NSPRD%20v1.pdf" target="_blank" rel="noopener noreferrer">Licence</a></p>';
-function expected(){const roots=dom();before.createTitle(true,()=>{});const html=roots[0].innerHTML,anchor='<p>Built with three.js (MIT licence).</p>';assert.equal(html.split(anchor).length,2);
- // origin/main holds the credit itself once this change has landed: add it only to a baseline that has none.
+// The second intentional addition: the Get Fired choice beside the two modes, pinned here too.
+const firedChoice='<button id="modeFired" aria-pressed="false">Get fired</button>';
+function expected(){const roots=dom();before.createTitle(true,()=>{});let html=roots[0].innerHTML;const anchor='<p>Built with three.js (MIT licence).</p>';assert.equal(html.split(anchor).length,2);
+ // origin/main holds each addition itself once it has landed: add it only to a baseline that has none.
+ if(!html.includes(firedChoice)){assert.equal(html.split('>Just drive</button></div>').length,2);html=html.replace('>Just drive</button></div>','>Just drive</button>'+firedChoice+'</div>');}
  return html.includes(propertyCredit)?html:html.replace(anchor,anchor+'\n'+propertyCredit);}
+assert.equal(noContact(await actual(source,'',null)).split(firedChoice).length,2,'the mail title offers Get Fired exactly once');
 assert.equal(noContact(await actual(source,'',null)).split(propertyCredit).length,2,'the current title holds the complete property credit exactly once');
 for(const [label,query,radio] of [['present','',{start(){}}],['disabled','radio=0',null],['missing','',null]])assert.equal(noContact(await actual(source,query,radio)),noContact(withoutTallCredits(expected())),'mail title matches origin/main: '+label);
 console.log('PASS actual main radio wiring and title HTML match main with reviewed music geography and the exact property credit for present, disabled and missing lists');
