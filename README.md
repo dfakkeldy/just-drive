@@ -152,6 +152,71 @@ The old vegetation and prop exclusion also stays in place, so opening a corner a
 
 Change station names, dials, playlists and credits in `tools/radio_stations.json`, then run `tools/radio.sh`. See [the radio how-to](tools/RADIO.md) for adding, moving and removing songs or stations. Run this before `tools/build_site.sh`; publishing is separate.
 
+### Far horizons (work bake)
+
+Wind points and the far terrain ring are optional versioned pack data. Fetch inputs
+and bake them into a work folder before any separate promotion:
+
+```sh
+python3 tools/far-views-fetch.py --data-root "$PWD/data"
+python3 pipeline/34_bake_far_views.py --data-root "$PWD/data" --output-root "$PWD/data/work/bakes/far-views"
+```
+
+In a worktree, pass the original data directory by absolute path. The optional
+bake writes no `data/baked` or `data/site` files. Step 33 is excluded from routine
+bakes; its explicit CLI delegates to the guarded version-2 work bake. Routine
+terrain bakes preserve `tall` and `farLand` manifest keys when their root and
+origin stay unchanged, and refuse to keep a pack on a different root.
+
+A rerun compares the previous candidate inventory (or the promoted inventory on
+a first run). An omitted or moved item stops the bake before tall packs change.
+Inspect the separate `data/work/threads/<task>/bake-audit/removal-review.json`.
+Both the live and prior work inventory are checked. Intentional removals need
+the exact hash and item list for each baseline via `--allow-removals <ledger>`. Road,
+track and building clearance uses the physical turbine base plus 2 m, for both
+sources. A conflict in any area omits the point from every pack; positions never
+move. Full Sentinel provenance stays in `pipeline/far-views-points.json`, while
+runtime points carry source/date/confidence and compact source references.
+
+A legacy `tall.json` without version 2 is ignored by the game and adds no turbine
+Places entry. Promotion needs a separate go: provide the four asset hashes per
+area and the two manifest-key patches, preserving every other manifest key.
+Optional scenery loads after the first frame and Start. Distant material bends
+also cover later buildings, trees, props and multiplayer ghosts. Existing draws
+provide conservative occlusion probes; hidden daytime far meshes retry at 2 Hz.
+Night lights retain depth testing without relying on a subpixel body query.
+
+The game uses derived geometry and points only, with no aerial image textures or
+wind-farm/owner names. Earth curvature and normal refraction share one constant.
+The distant terrain and sea bend begins beyond 3 km. The selected Hill scale also
+applies to far ground; the physical visibility receipt uses Hill x1.
+
+The work asset tree contains four runtime files and `manifest-patch.json` per
+area. It never contains a full manifest snapshot or review ledgers. The preview
+overlay reads the current live manifest on every request, then merges only the
+two patch keys. New road-ground keys therefore survive both preview and promotion.
+
+After code landing and a separate data go, main can use the merge tool:
+
+```sh
+nice -n 15 node tools/far-promote.mjs prepare --data-root REAL_DATA --pack-root REAL_DATA/work/bakes/far-views --out REAL_DATA/work/threads/far-views/promotion-review.json
+nice -n 15 node tools/far-promote.mjs verify --plan REVIEW_JSON --plan-sha256 PRINTED_SHA
+# Main copies only the 24 approved asset files, then:
+nice -n 15 node tools/far-promote.mjs apply --plan REVIEW_JSON --plan-sha256 PRINTED_SHA
+```
+
+Prepare re-screens all current roads/tracks/buildings with the producer's actual
+clearance rules and discloses removals against live tall data. It verifies crs,
+origin, size and village. Verify/apply stop on changed source, road, building,
+patch, asset or manifest hashes. Apply writes exact planned bytes to manifests
+only. If a screen finds a conflict, rerun the guarded work bake first. Both far
+terrain detail files enter Mabou's offline PWA inventory: about 4 MB raw growth.
+
+Occlusion skipping mainly helps while stationary: 1 cm camera motion restores
+visibility. Stationary scene changes can take up to the 0.5 s probe interval.
+The square turbine solid can extend about 1.1 m beyond a circular base at its
+corners; the 2 m road clearance accounts for it. These are disclosed limits.
+
 Mail throws use M or E and the phone mail button. The throw follows the right window and inherits the car's speed.
 An upright rural delivery must enter the road-facing opening. Throw help can lower or raise launch speed by at most 3 m/s to reach it from the lane centre. A missed throw stays on the ground and counts in the shift report. A box marked as down before the shift accepts a ground drop within 1 m of its post, as the stop hint requests. Player-knocked boxes do not accept that drop.
 Car impacts at 2, 8 and 20 km/h leave a lean, dent or fall. A slower touch only rocks the box.

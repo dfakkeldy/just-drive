@@ -105,3 +105,13 @@ export function westBayPlaces():Place[]{
     {...p('near-sugar-camp','Start near the gate',632400,5062000,'Start the loaded rig 600 m before the gate, on Long Stretch Road.'),trip:'quarry-gate'},
   ];
 }
+
+/** Neutral locations from the federal turbine database, with no project or owner identity. */
+export function tallPlaces(area: string): Place[] {
+  const source = 'https://open.canada.ca/data/en/dataset/79fdad93-9025-49ad-ba16-c26d718cc070';
+  if (area === 'mabou') return [{ id: 'mabou-high-turbines', area: 'mabou', name: 'Wind turbine above Mabou', kind: 'view',
+    e: 625021.44, n: 5112048.40, radius: 1500, note: 'A wind turbine stands on the high ground north of Mabou.', sources: [source] }];
+  if (area === 'pointtupper') return [{ id: 'point-tupper-turbines', area: 'pointtupper', name: 'Wind turbines, Point Tupper', kind: 'view',
+    e: 631372.62, n: 5048039.64, radius: 1000, note: 'Wind turbines stand on the high ground at Point Tupper.', sources: [source] }];
+  return [];
+}

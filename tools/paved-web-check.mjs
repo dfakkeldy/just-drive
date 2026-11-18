@@ -1,3 +1,4 @@
+import {withoutFarBend} from './far-shader-compat.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {execFileSync,spawnSync} from 'node:child_process';
@@ -79,9 +80,9 @@ const shaderTools=await import(pathToFileURL(root+'/tools/coast-programs.mjs').h
 const currentShader=readFileSync(root+'/web/src/shaders.ts','utf8');
 shaderTools.checkShaderBaseline(currentShader,{report:()=>{}});
 for(const {name,flags}of shaderTools.coastPrograms().filter(p=>!p.flags.includes('GROUND_CLASSES')&&!p.flags.includes('AIRPORT'))){
- assert.equal(shaderTools.normalized(shaderTools.preprocess(shaderTools.program(currentShader,name),flags)),
-              shaderTools.normalized(shaderTools.preprocess(shaderTools.program(source,name),flags)),
-              'off compiled shader equals merge base: '+name+' '+flags);
+ assert.equal(shaderTools.normalized(shaderTools.preprocess(shaderTools.program(shaderTools.withoutFarBend(currentShader),name),flags)),
+              shaderTools.normalized(shaderTools.preprocess(shaderTools.program(shaderTools.withoutFarBend(source),name),flags)),
+              'off compiled shader equals merge base except the pinned distant bend: '+name+' '+flags);
 }
 const on=pavedGroundShader(TERRAIN_FRAG);assert.ok(on.indexOf('float hardPaved=')>on.indexOf('groundColor(p'));
 assert.ok(on.indexOf('float hardPaved=')<on.indexOf('// ---- roads: painted'));assert.ok(on.includes('ring *= 1.0-hardPaved;'));
