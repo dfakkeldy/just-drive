@@ -4,6 +4,7 @@ import { BUS, BusRules, BusPass } from './school-bus-rules';
 import { SceneRoad, touchesPlayer, type Pose } from './road-scene-rules';
 import { pushOut, type Solid, type ContactBody } from './parked';
 import { START_TIME } from './shift-rules';
+import { PENALTIES } from './score-rules';
 import type { Roads } from './roads';
 import type { Terrain } from './terrain';
 import type { Shift } from './shift';
@@ -19,6 +20,8 @@ export class SchoolBus {
   private readonly solids = [this.solid];
   private readonly noSolids: readonly Solid[] = [];
   coupledBody: { x: number; z: number; heading: number; spec: VehicleSpec } | null = null;
+  /** Each unsafe pass, for the score stream. */
+  onPass: ((player: Vehicle) => void) | null = null;
   get placementSolids(): readonly Solid[] { return this.active ? this.solids : this.noSolids; }
   captureTowMotion(bodies: readonly ContactBody[]): () => void {
     const { along, wait, stops } = this.rules;
@@ -48,7 +51,7 @@ export class SchoolBus {
   get score(): number { return this.violations ? -this.violations * BUS.penalty : 0; }
   get active(): boolean { return !!this.road && this.rules.active(START_TIME + this.shift.elapsed) && !this.shift.ended; }
   get hint(): string {
-    if (this.active && this.notice > 0) return 'Passed a flashing school bus: -100 points.';
+    if (this.active && this.notice > 0) return `Passed a flashing school bus: ${this.shift.fired ? PENALTIES.schoolBus : -BUS.penalty} points.`;
     return this.active && this.distance < 65 && this.rules.flashing ? 'STOP. School bus red lights. Wait for the stop arm to fold.' : '';
   }
   reportLine(): string { return this.violations ? `School bus: ${this.violations} unsafe ${this.violations === 1 ? 'pass' : 'passes'}, ${this.score} points.` : ''; }
@@ -76,7 +79,7 @@ export class SchoolBus {
     this.place(); this.flashTime += dt;
     if (!wasFlashing || !this.rules.flashing) this.pass.reset();
     if (this.pass.sample(player, this.solid, this.rules.flashing, placement)) {
-      this.violations++; this.notice = 6;
+      this.violations++; this.notice = 6; this.onPass?.(player);
     }
   }
   update(camera: THREE.Camera): void {

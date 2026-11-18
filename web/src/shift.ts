@@ -8,6 +8,7 @@ import type { Props } from './props';
 import type { Roads } from './roads';
 import { Route, type Run } from './route';
 import { Ruts } from './ruts';
+import { ScoreStream } from './score-events';
 import { CLOCK_FACTOR, DAILY_PAY, VEHICLE_ALLOWANCE, END_TIME, START_TIME, clock, dayType, draw, freshCareer, makeDay, missedCustomers, nextCareer, readCareer, saveCareer, verdict, type Career, type DayDraw } from './shift-rules';
 import type { Terrain } from './terrain';
 import type { InteriorReceipt } from './interiors';
@@ -26,6 +27,17 @@ export class Shift {
     return false;
   }
   readonly evidence = new Evidence();
+  /** Plain facts for Get Fired. In mail play it records and nobody listens: it shows and changes nothing. */
+  readonly score = new ScoreStream();
+  /** Names the place of a point: 'route', or a protected place where nothing scores. main.ts sets it. */
+  placeAt: (x: number, z: number) => string = () => 'route';
+  /** Get Fired: called once when the run ends, instead of the daily report. */
+  onFiredEnd: (() => void) | null = null;
+  /** Get Fired: each shift step while the day runs, before the 18:00 check (world seconds; 0 while paused). */
+  onUpdate: ((dt: number) => void) | null = null;
+  private rutMark = 0; private speed = 0;
+  /** Where thrown mail landed, while its complaint is filed: a protected place there scores nothing either. */
+  private readonly landing = { x: 0, z: 0, set: false };
   readonly group = new THREE.Group();
   readonly ruts: Ruts;
   career: Career;
@@ -63,7 +75,7 @@ export class Shift {
 
   constructor(private readonly props: Props | null, private readonly mail: Mail, private readonly roads: Roads,
     private readonly terrain: Terrain, buildings: Building[], village: [number, number], private readonly low: boolean,
-    params: URLSearchParams, private readonly restart: () => void, private readonly routeEnabled = true) {
+    params: URLSearchParams, private readonly restart: () => void, private readonly routeEnabled = true, readonly fired = false) {
     this.roadsideReport.hidden = true;
     document.getElementById('reportMissed')!.after(this.roadsideReport);
     this.career = this.routeEnabled ? readCareer() : freshCareer();   // an area with no route never touches the saved Mabou career
@@ -88,6 +100,10 @@ export class Shift {
       props.onKnock = (index) => {
         const p = props.mail[index]; this.add('boxDown', index, p.x, p.z, this.elapsed);
       };
+      // Props reports each grade once per box per day, and a rock on each fresh touch.
+      props.onBump = (index, grade, speed) => {
+        const p = props.mail[index]; this.reportScore(['box:rock', 'box:lean', 'box:dent', 'box:down'][grade], p.x, p.z, speed);
+      };
     }
     mail.service = {
       condition: (index) => !this.remaining[index] ? 'none' : this.today.stuffed[index] ? 'stuffed' : this.today.down[index] ? 'preExisting' : 'ready',
@@ -100,7 +116,10 @@ export class Shift {
           const s = props.sites[i], d = Math.hypot(s.x - x, s.z - z);
           if (d <= best) { best = d; p = { x: s.x, z: s.z, index: props.mail.length + i }; }
         }
-        if (p) this.add(lawn ? 'lawnMail' : 'ditchMail', p.index, p.x, p.z, this.elapsed);
+        if (p) {
+          this.landing.x = x; this.landing.z = z; this.landing.set = true;
+          this.add(lawn ? 'lawnMail' : 'ditchMail', p.index, p.x, p.z, this.elapsed); this.landing.set = false;
+        }
       },
     };
     this.endButton.addEventListener('click', () => this.end());
@@ -116,7 +135,9 @@ export class Shift {
 
   /** The settings button and every ending use the same complete career reset. */
   startOver(): void {
-    this.career = freshCareer(); if (this.routeEnabled) saveCareer(this.career); this.start(); this.restart();
+    // Get Fired keeps the day's route and never writes the career.
+    if (!this.fired) { this.career = freshCareer(); if (this.routeEnabled) saveCareer(this.career); }
+    this.start(); this.restart();
     document.getElementById('settings')!.classList.remove('open');
   }
 
@@ -124,7 +145,9 @@ export class Shift {
     this.elapsed = this.done = this.indoorParcels = 0; this.indoorVisits.clear(); this.ended = false; this.lastDelivery = null;
     this.cleanIndex = -1; this.cleanTime = this.uiTimer = this.paperTimer = this.flashTimer = this.photoCooldown = 0;
     this.damage.reset();
-    this.complaints = new Complaints(); this.evidence.photos.length = 0;
+    // A box that was down before the shift is not the player's offence.
+    this.complaints = new Complaints(c => { if (!c.preExisting) this.reportScore(c.kind, c.x, c.z, this.speed, this.landing.set ? this.landing : undefined); }); this.evidence.photos.length = 0;
+    this.score.clear(); this.rutMark = this.speed = 0;
     this.tag.hidden = true; this.flash.classList.remove('exposed'); this.report.hidden = true;
     this.ruts.reset(); this.mail.reset(); this.props?.resetShift();
     this.run = this.route.forDay(this.career.day, this.forcedRun);
@@ -174,6 +197,14 @@ export class Shift {
     }
     return this.remaining[index] === 0;
   }
+  /** Get Fired: the same day again, on the same route. */
+  retry(): void { this.start(); this.restart(); }
+  /** One plain fact for the score stream. Each source reports a fact once; a new touch can rock a box again. */
+  reportScore(kind: string, x: number, z: number, speed: number, also?: { x: number; z: number }): void {
+    if (this.ended) return;
+    const place = this.placeAt(x, z);
+    this.score.report({ kind, place: place === 'route' && also ? this.placeAt(also.x, also.z) : place, speed: Math.abs(speed), time: this.elapsed / CLOCK_FACTOR });
+  }
   /** A roadside break in view of a house: one call per house per day, and no photo answers it. */
   seenAtRoadside(house: number, x: number, z: number): void { this.add('relief', house, x, z, this.elapsed); }
   /** The one result hook used by every interior. Duplicate receipts cannot count twice. */
@@ -216,6 +247,9 @@ export class Shift {
     this.photoCooldown = Math.max(0, this.photoCooldown - dt);
     this.flashTimer -= dt; if (this.flashTimer <= 0) this.flash.classList.remove('exposed');
     this.ruts.update(vehicle, this.elapsed);
+    this.speed = Math.hypot(vehicle.vx, vehicle.vz);
+    // About three metres of fresh ruts make one fact; ruts.reset() sets its count back to 0.
+    if (this.ruts.count - this.rutMark >= 8) { this.rutMark = this.ruts.count; this.reportScore('rut', vehicle.x, vehicle.z, this.speed); }
     for (const s of this.boxSubjects) if ((s.x - vehicle.x) ** 2 + (s.z - vehicle.z) ** 2 <= 60 ** 2) this.passed.add(s.target!);
     let nearby = -1, distance = 2.5 * 2.5;
     if (this.props && Math.hypot(vehicle.vx, vehicle.vz) < .15) for (const i of this.stuffedIndices) {
@@ -236,6 +270,7 @@ export class Shift {
     if (this.paperTimer <= 0) { this.paintFlyers(); this.paperTimer = .4; }
     this.uiTimer -= dt;
     if (this.uiTimer <= 0) { this.refreshUI(vehicle); this.uiTimer = .2; }
+    this.onUpdate?.(dt);
     if (this.elapsed >= END_TIME - START_TIME) this.end();
   }
   private paintFlyers(): void {
@@ -260,7 +295,7 @@ export class Shift {
   }
   private refreshUI(v?: Vehicle): void {
     const type = this.career.double ? 'DOUBLE MAIL' : dayType(this.career.day) === 'flyers' ? 'FLYER DAY' : dayType(this.career.day) === 'light' ? 'LIGHT MAIL' : 'DAILY MAIL';
-    this.hud.textContent = `DAY ${this.career.day} · ${this.done}/${this.stops} STOPS · ${clock(this.elapsed)}\n${this.run.short} · ${type}${this.roadsideScore ? ` · Roadside score ${this.roadsideScore}` : ''}`;
+    this.hud.textContent = `DAY ${this.career.day} · ${this.done}/${this.stops} STOPS · ${clock(this.elapsed)}\n${this.run.short} · ${this.fired ? 'GET FIRED' : type}${this.roadsideScore && !this.fired ? ` · Roadside score ${this.roadsideScore}` : ''}`;
     this.endButton.hidden = this.ended;
     this.cameraButton.hidden = false;
     if (this.damage.hintTime > 0) this.progress.textContent = (this.phone || this.low) && this.damage.hint.includes('pulls left')
@@ -291,6 +326,12 @@ export class Shift {
       if (this.run.rural.includes(this.route.late)) {
         const p = this.props.mail[this.route.late]; this.add('late', this.route.late, p.x, p.z, at);
       }
+    }
+    if (this.fired) {
+      // No verdict, no pay and no career: Get Fired never touches the saved shift.
+      this.ended = true; for (const scene of this.roadside) scene.setPaused?.(true);
+      this.endButton.hidden = true; this.cameraButton.hidden = true;
+      this.onFiredEnd?.(); return;
     }
     const upheld = this.complaints.all.filter((c) => !dismissed(c, this.evidence.photos));
     const outcome = verdict(upheld); this.next = nextCareer(this.career, outcome, this.damage.total);

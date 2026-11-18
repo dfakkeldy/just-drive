@@ -264,6 +264,8 @@ export class Props {
   }
 
   onKnock: ((index: number) => void) | null = null;
+  /** The player's body touched a box: 0 rock, 1 lean, 2 dent, 3 down. Only grades it has not had yet, and rocks. */
+  onBump: ((index: number, grade: MailboxDamage, speed: number) => void) | null = null;
 
   resetShift(): void {
     this.mailRevision++;
@@ -319,7 +321,7 @@ export class Props {
         if (Math.abs(px * rx + pz * rz) <= spec.envelope.sweepHalfWidth && Math.abs(px * rz - pz * rx) <= spec.envelope.sweepHalfLength) { touched = true; break; }
       }
       if (!touched) continue;
-      const damage = mailboxDamage(speed);
+      const damage = mailboxDamage(speed), was = m.damage, fresh = m.contact <= 0;
       if (damage === 3) {
         this.knockMailbox(i, vx, vz);
         factor *= .91;
@@ -328,6 +330,8 @@ export class Props {
         m.dx = speed > .01 ? vx / speed : 1; m.dz = speed > .01 ? vz / speed : 0;
         m.dirty = true; this.mailRevision++;
       }
+      // Each grade once per box: a rock on each fresh touch, then lean, dent and down as they first happen.
+      if (damage === 3 || damage > was || damage === 0 && fresh) this.onBump?.(i, damage, speed);
       if (!m.down && m.contact <= 0) m.rock = 1;
       m.contact = .6;
     }
