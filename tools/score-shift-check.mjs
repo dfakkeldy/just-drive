@@ -55,7 +55,9 @@ const vehicleAt = (x, z, vx = 0) => ({ x, z, vx, vz: 0, heading: Math.PI / 2, ai
   assert.deepEqual(shift.score.recent.map(e => e.kind).sort(), ['box:down', 'boxDown']);
   shift.update(.1, vehicleAt(0, 0));
   assert.doesNotMatch(document.getElementById('shiftHud').textContent, /FIRED|pts/);
+  for (let i = 0; i < 8; i++) shift.remaining[i] = 1;   // eight stops still due
   shift.end();
+  assert.ok(shift.complaints.all.some(c => c.kind === 'missing'), 'mail play still files skipped stops at the end of the day');
   assert.equal(document.getElementById('shiftReport').hidden, false, 'mail play keeps its daily report');
   assert.notEqual(store.get('mmm.shift.v1'), career, 'mail play saves its career as before');
   assert.equal(store.has(BEST_KEY), false, 'mail play never writes a Get Fired best run');
@@ -174,4 +176,7 @@ assert.match(offers[2].lines.at(-1), /^Your best run: Fired · [\d,]+ points · 
 assert.equal(JSON.parse(store.get(BEST_KEY)).total, best.total);
 shift.startOver(); assert.equal(store.get('mmm.shift.v1'), career, 'start over in Get Fired leaves the career alone');
 assert.equal(shift.career.day, 4, 'and keeps the day and its route'); assert.equal(shift.ended, false);
+// One kind of offence only is no combo, whatever its points.
+tick(.016); shift.reportScore('relief', 0, 0, 3); tick(); document.getElementById('endShift').click();
+assert.equal(offers.length, 4); assert.ok(offers[3].lines.includes('No combo: never two kinds of offence at once.'), offers[3].lines.join('|'));
 console.log('score shift: real Shift, Props, Ruts and FiredRun; mail play unchanged; ladder, school bus, Fired, 18:00, retry, storage.');
