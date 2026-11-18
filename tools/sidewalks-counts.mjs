@@ -10,6 +10,8 @@ const programs=async page=>page.read(`(()=>{
   if(p){const key=p.cacheKey+'|'+o.uuid;b.programObjects.set(key,{key:p.cacheKey,name:o.name,parent:o.parent?.name,type:o.type,count:o.count,instanceColor:!!o.instanceColor,material:m.type,side:m.side});}return result;};
  Object.defineProperty(b,'mutation',{get(){return {programs:r.info.programs.map(p=>({id:p.id,key:p.cacheKey})),objects:[...b.programObjects.values()],materials:[...b.materials].map(m=>({type:m.type,name:m.name,side:m.side,colors:m.vertexColors,programs:[...(r.properties.get(m).programs?.values()??[])].map(p=>p.id)}))}}});return true;
 })()`);
+// A separate base checkout without far views (SIDEWALK_COUNT_BASE_FAR=0, set by sidewalks-counts.sh) never shows them.
+const baseFar=!process.env.BASE_URL||process.env.SIDEWALK_COUNT_BASE_FAR!=='0';
 const proven=process.env.SIDEWALK_COUNT_EXPECT_PROVEN==='1'&&!zero?JSON.parse(readFileSync(new URL('./baseline/sidewalks-count-deltas.json',import.meta.url),'utf8')):null;
 // pointtupper-start (main's Port Hawkesbury scene) has explore modes only; SIDEWALK_COUNT_VIEWS measures a subset.
 const all=['new-player-start','village-start','harbour-water','mines-lookoff-south','highway19-far-land','pointtupper-start'];
@@ -20,7 +22,7 @@ try{
  for(const scene of scenes.filter(s=>diagnostic?s.id==='highway19-far-land':wanted.includes(s.id)))for(const mode of modes.filter(m=>(!scene.exploreOnly||m.explore)&&(!diagnostic||m.id==='desktop-mail'))){
   const row={view:scene.id,mode:mode.id,low:mode.phone,pairs:[]};report.rows.push(row);
   for(let n=0;n<(diagnostic?1:5);n++){
-   const main=await measure(scene,mode,diagnostic?programs:undefined,{origin:base,query:baseQuery,radioOff:true,programInventory:true}),current=await measure(scene,mode,diagnostic?programs:undefined,{origin,radioOff:true,programInventory:true});
+   const main=await measure(scene,mode,diagnostic?programs:undefined,{origin:base,query:baseQuery,radioOff:true,programInventory:true,farWait:baseFar}),current=await measure(scene,mode,diagnostic?programs:undefined,{origin,radioOff:true,programInventory:true});
    const delta=countDelta(main.counts,current.counts);row.pairs.push({main,current,delta});save();console.log('PAIRED COUNT',JSON.stringify({view:scene.id,mode:mode.id,run:n+1,main:main.counts,current:current.counts,delta}));
    try{if(proven)checkProvenCountDelta(delta,proven[scene.id+'/'+mode.id]);if(zero)checkUnchangedCounts(delta,main.programKeys,current.programKeys);checkCountDelta(delta,mode.phone,current.groups,{view:scene.id,mode:mode.id,addedPrograms:current.programKeys.filter(k=>!main.programKeys.includes(k)),removedPrograms:main.programKeys.filter(k=>!current.programKeys.includes(k))});}catch(error){row.failure=error.message;failed=true;console.error('FAIL COUNT DELTA',scene.id,mode.id,error.message);}
   }
