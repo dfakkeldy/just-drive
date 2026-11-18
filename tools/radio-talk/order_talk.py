@@ -9,6 +9,7 @@ A segment is in the station when it is already in the catalogue, or when it has 
 record exist (data/audio/src/<stem>.mp3, data/audio/make/talk/<stem>.json). So a segment that is not recorded yet is
 left out, and running this again after it is recorded puts it in. Entries already in the catalogue are kept as they are.
 A segment in HELD is never added, recorded or not: it waits for the owner's yes. Take its stem out of HELD only then.
+A new entry's credit names the take's request and the request of each line that was made again alone (the record's 'retakes').
 
 The rules of the order (the station plays its tracks in this order, round and round):
   1. Two segments of the same kind never follow each other. An invented ad and a real ad count as the same kind here.
@@ -68,9 +69,10 @@ TITLES = {
     'talk-real-echo-2': 'Ad: Echo',
     'talk-real-donate-c': 'A Coffee for the Developer',
 }
-# On hold: the three pieces with Bernadette, who is clearly the carrier's mother. The Mabou main thread asked the
-# owner on 16 Nov 2026. This script never adds a held piece. Remove a stem here only when the owner has said yes.
-HELD = ('talk-call-mother', 'talk-call-marks', 'talk-call-letters')
+# On hold: pieces that wait for the owner's yes. This script never adds a held piece. Remove a stem here only when he
+# has said yes. The three pieces with Bernadette, who is clearly the carrier's mother, were here from 16 Nov 2026; the
+# owner said "Yes to the mother" on 17 Nov 2026.
+HELD = ()
 SHOW = {'road', 'news', 'weather', 'sports', 'lost', 'quiz'}   # the small formats of the show
 LONG = ('call', 'show', 'interview')
 
@@ -153,10 +155,20 @@ def faults(stems: list) -> list:
     return out
 
 
+def made(record: dict) -> str:
+    """The credit's `source` for a take: its request, and the requests of the lines that were made again alone."""
+    source = f'ElevenLabs text-to-dialogue API, model {record["model"]}, request {record["request_id"]}'
+    again = record.get('retakes', [])
+    if not again:
+        return source
+    count = 'one line' if len(again) == 1 else f'{len(again)} lines'
+    days = ' and '.join(sorted({r['date'] for r in again}))
+    return f'{source}; {count} made again on {days}, request{"s" * (len(again) > 1)} {", ".join(r["request_id"] for r in again)}'
+
+
 def entry(stem: str) -> dict:
     record = json.loads((MAKE / f'{stem}.json').read_text())
-    return {'source': stem, 'title': TITLES[stem], 'public': True, 'credit': 'talk', 'credit_overrides': {
-        'source': f'ElevenLabs text-to-dialogue API, model {record["model"]}, request {record["request_id"]}', 'date': record['date']}}
+    return {'source': stem, 'title': TITLES[stem], 'public': True, 'credit': 'talk', 'credit_overrides': {'source': made(record), 'date': record['date']}}
 
 
 def main() -> int:

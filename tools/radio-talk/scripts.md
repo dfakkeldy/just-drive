@@ -844,8 +844,8 @@ Music in this ad (the owner asked for clips of the song, 16 Nov 2026). The song 
 More of every kind (the owner asked, 16 Nov 2026; the project brief). Words approved by the Mabou main thread on 16 Nov 2026, with the changes it asked for. The round 1 rules apply. New in round 2:
 
 - **Regulars.** Theresa, Hughie, Sandy and the dog call back. The "concerned citizen" (the carrier) plays the quiz.
-- **Bernadette** praises the carrier and is clearly his mother. She never says so.
-- **Place names.** The voice is sent a phonetic spelling of some place names (the `SAY` table in `make_talk.py`). The text here keeps the real spelling. Judique is said "JOO-dik". Mabou is said "MAH-boo".
+- **Bernadette** praises the carrier and is clearly his mother. She never says so. Her three pieces waited for the owner; he said "Yes to the mother" on 17 Nov 2026.
+- **Place names.** The voice is sent a phonetic spelling of some place names (the `SAY` table in `make_talk.py`). The text here keeps the real spelling. Judique is said "JOO-dik". Mabou is said "MAH-boo". A voice can have its own spelling (`SAY_FOR`).
 - **Song clips with a time.** `[CLIP: "Title" at 1:05]` starts the clip at that time in the song. A promo can have more than one clip.
 
 ## Part 8: Mail Madness, round 2 (call-in)
