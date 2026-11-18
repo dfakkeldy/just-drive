@@ -11,6 +11,11 @@ with the script. It prints:
     ("JOO-dik" and "MAH-boo" have the first syllable louder);
   - every line where Mabou was written down with an h ("Mahbu"). On 16 Nov 2026 the owner marked 10 takes as wrong
     ("magh-boo") and 3 as right; the listener had written "Mahbu" for all 10 and "Mabu" for all 3;
+  - every line where Mabou was not written down as "Mabu", "Mabou" or "Maboo" at all (a British voice said "Mawboo"
+    as "MOR-boo", and the listener wrote "Morbu": the rest of the line was right, so its score did not show it);
+  - for a take with three or more lines heard differently, the shift of its line times that make_talk.drift() estimates, if any
+    (one take came with every line time a second early; make_talk.py --move-line-times repairs the record), and a
+    take whose record was repaired that way but whose segment was not built again;
   - for a segment with song clips, what was heard in each clip, cut again from its song (so a clip's words can be read).
 It needs `whisper-cli` and a model (WHISPER_MODEL, default ~/.cache/whisper-cpp/ggml-large-v3-turbo.bin). It is a help
 for the person who checks, not a proof: a speech-to-text model can mishear, and it knows how "Mabou" is spelled.
@@ -30,7 +35,7 @@ from order_talk import TITLES     # noqa: E402
 
 MODEL = os.environ.get('WHISPER_MODEL', str(pathlib.Path.home() / '.cache/whisper-cpp/ggml-large-v3-turbo.bin'))
 PLACES = ('Mabou', 'Judique', 'Canso', 'Hawkesbury')
-SYLLABLE = {'Mawboo': 3, 'Mahboo': 3, 'Joodick': 3}   # where the second syllable starts in the spelling that was sent
+SYLLABLE = {'Mawboo': 3, 'Marboo': 3, 'Mahboo': 3, 'Joodick': 3}   # where the second syllable starts in the spelling that was sent
 RATE = 16000
 
 
@@ -51,6 +56,13 @@ def words(text: str) -> list:
 
 # Mabou written down with an h ("Mahbu", "Mahbou", "Mahpu", "Mahgu"): the voice said "magh-boo". Not "mahogany".
 ROUGH = re.compile(r'\bmah[a-z]{0,2}(?:u|ou|oo)\b')
+# Mabou as the listener writes it when it is said right.
+RIGHT = re.compile(r'\bmab(?:u|ou|oo)\b')
+
+
+def unheard(want: str, got: str) -> bool:
+    """The script line names Mabou more often than the listener wrote it down in a right spelling."""
+    return len(re.findall(r'\bMabou\b', want)) > len(RIGHT.findall(got.lower()))
 
 
 def short(text: str) -> bool:
@@ -94,7 +106,7 @@ def check(stem: str, work: pathlib.Path) -> int:
         files.append(work / f'{stem}.{n:02d}.wav')
         pad = .4 if short(record['lines'][n]['text']) else .05   # a line of a word or two is too short to write down alone
         talk.ff('-i', str(raw), '-ss', f'{max(0, a - pad):.3f}', '-to', f'{b + pad:.3f}', '-ar', str(RATE), '-ac', '1', str(files[-1]))
-    faults = 0
+    faults = differently = 0
     for line, got in zip(record['lines'], heard(files)):
         want = line['text']
         score = difflib.SequenceMatcher(None, words(want), words(got)).ratio()
@@ -102,12 +114,24 @@ def check(stem: str, work: pathlib.Path) -> int:
             score = sum(w in words(got) for w in words(want)) / len(words(want)) if words(want) else 1.0
         named = [p for p in PLACES if p in want]
         rough = 'Mabou' in want and ROUGH.search(got.lower())
-        if score < .8 or rough:
+        other = not rough and unheard(want, got)
+        if score < .8 or rough or other:
             faults += 1
+        differently += score < .8
         if rough:
             print(f'  MABOU HEARD WITH AN H ("{rough.group()}"): listen to this one, or make it again')
+        if other:
+            print('  MABOU NOT HEARD AS MABOU: listen to this one, or make it again (if LINE TIMES shows below, move the line times first)')
         if score < .8 or named:
             print(f'  {"HEARD DIFFERENTLY" if score < .8 else "place name"} ({score:.2f}) {line["speaker"]}: {want}\n      heard: {got}')
+    if differently >= 3 and 'line_times_moved' not in record:   # the pattern of line times that are all early or late
+        shift = talk.drift([b for _, b in talk.spans(record)[:-1]], talk.pauses(raw), talk.seconds(raw))
+        if shift:
+            print(f'  LINE TIMES: {shift:+} s would put the line changes in pauses. If the lines above are heard with the end of the line\n'
+                  f'      before (or without their own end), run: make_talk.py --move-line-times {stem}   and then this check again')
+    if 'line_times_moved' in record and 'final_sha256' not in record:
+        faults += 1
+        print(f'  NOT BUILT AGAIN since its line times were moved: run make_talk.py {stem}')
     for name, at, first, second in stress(record, raw):
         mark = 'first syllable louder' if first >= second - 1 else 'SECOND SYLLABLE LOUDER: listen to this one'
         faults += first < second - 1
