@@ -48,17 +48,18 @@ async function droneFloor(page,name){
   return JSON.stringify({top,free});})()`));
  assert.ok(old&&old.free,'a point under the old hall box with no drawn roof');
  const hall=probes.find(q=>q.name==='hall');
- // Fly: F lifts the drone off the car; it is set over the hall's middle, inside its drawn roof, and held down.
+ // Fly: F lifts the drone off the car; it is set 10 m over the hall's middle and held down onto the drawn roof.
  await hold('KeyF',60);
  for(let i=0;i<40&&!await page.read('mmm.drone.active');i++)await sleep(100);
  assert.ok(await page.read('mmm.drone.active'),'F launches the drone');
  const fly=async(q,y,ms)=>{await page.read(`Object.assign(mmm.drone.state,{x:${q.x},z:${q.z},y:${y},vx:0,vy:0,vz:0});mmm.drone.pitch=-0.75;true`);await hold('ShiftLeft',ms);await sleep(300);return page.read('mmm.drone.state.y');};
- const overHall=await fly(hall,hall.hit-1,2500)-DRONE_FOOT;
+ const overHall=await fly(hall,hall.hit+10,5000)-DRONE_FOOT;
  await sleep(600);await page.shot(`${evidence??out}/drone-hall-${name}.png`);
  const overGone=await fly(old.free,old.top+3,5000)-DRONE_FOOT;
  await hold('KeyF',60);
  const result={hallRoof:+hall.hit.toFixed(2),hallOldTop:+old.top.toFixed(2),overHall:+overHall.toFixed(2),goneGround:+old.free.ground.toFixed(2),overGone:+overGone.toFixed(2),probes:probes.length};
  console.log(name,'drone',JSON.stringify(result));
+ assert.ok(overHall<=hall.hit+4,`held down, the drone comes down to the hall roof's clearance: skids ${overHall.toFixed(2)}, roof ${hall.hit.toFixed(2)}`);
  assert.ok(overHall>=hall.hit+0.4,`held down over the hall, the drone stays over its drawn roof: skids ${overHall.toFixed(2)}, roof ${hall.hit.toFixed(2)}`);
  assert.ok(overGone<=old.top-1,`where the old hall box stood the drone goes below its old roof: skids ${overGone.toFixed(2)}, old top ${old.top.toFixed(2)}`);
  return result;

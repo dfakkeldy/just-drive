@@ -40,7 +40,7 @@ assert.ok(sites.every((b) => b.buildingId === undefined || b.buildingId === b.id
     /^const boxRoofAt = roofHeights\(ERA\.modern && buildingList \? mabouSite \? mabouSite\.drawn\(buildingList\) : buildingList : \[\], manifest\.village, EXAG, SEA_LEVEL\);/,
     // The drawing: less the porch house and the places Mabou's main street models (both stay properties).
     /^const drawnBuildings = buildingList && porchBox \? PorchHouse\.drawn\(buildingList, porchBox\) : buildingList;$/,
-    // The public wharves keep clear of every drawn footprint, wings included (footprints only, nothing is counted).
+    // The public wharves keep clear of every surveyed footprint, wings included (footprints only, nothing is counted).
     /^const wharves = .*\(buildings \? buildingList \?\? \[\] : \[\]\)\.map\(b => b\.footprint\)\) : null;$/,
     // The yard dog's invented driveway only asks if the list exists. Its houses come from `properties` (next assert).
     /^const yardDogSite = ERA\.modern && AREA\.id === 'mabou' && buildingList && props \? YardDogSite\.create\(\{$/];

@@ -806,7 +806,8 @@ function toLocal(p: MainPlace, e: number, n: number): [number, number] {
   const a = p.az * Math.PI / 180, s = Math.sin(a), c = Math.cos(a), de = e - p.e, dn = n - p.n;
   return [de * s + dn * c, de * c - dn * s];
 }
-interface Roof { place: MainPlace; rect: [number, number, number, number]; top: number }
+/** A measured roof: its place's anchor in world metres, the sine and cosine of its azimuth, and its rectangle. */
+interface Roof { x: number; z: number; sin: number; cos: number; rect: [number, number, number, number]; top: number }
 /**
  * The roof of each footprint rectangle of a place, read from the geometry the renderer draws: every triangle is clipped
  * to the rectangle (a few centimetres in, so a wall standing on its edge does not count) and the highest point of what
@@ -829,7 +830,8 @@ export function roofTops(place: MainPlace, geos: Map<Tex | null, THREE.BufferGeo
       }
     }
   }
-  return place.rects.flatMap((rect, k) => Number.isFinite(tops[k]) ? [{ place, rect, top: tops[k] }] : []);
+  const a = place.az * Math.PI / 180, anchor = { x: place.e - village[0], z: village[1] - place.n, sin: Math.sin(a), cos: Math.cos(a) };
+  return place.rects.flatMap((rect, k) => Number.isFinite(tops[k]) ? [{ ...anchor, rect, top: tops[k] }] : []);
 }
 /** The highest point of a triangle ([x, y, z] points) over the box x0..x1, z0..z1; -Infinity if it does not reach it. */
 function clippedTop(tri: [number, number, number][], x0: number, x1: number, z0: number, z1: number): number {
@@ -977,7 +979,8 @@ export class MabouMain {
     let top = -Infinity;
     for (const r of this.roofs) {
       if (r.top <= top) continue;
-      const [lx, lz] = toLocal(r.place, x + this.site.village[0], this.site.village[1] - z);
+      // toLocal without its allocation (this runs every frame the drone flies): east is +x, north is -z.
+      const de = x - r.x, dn = r.z - z, lx = de * r.sin + dn * r.cos, lz = de * r.cos - dn * r.sin;
       if (lx > r.rect[0] - 1 && lx < r.rect[1] + 1 && lz > r.rect[2] - 1 && lz < r.rect[3] + 1) top = r.top;
     }
     return top;
