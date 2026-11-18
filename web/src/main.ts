@@ -95,6 +95,7 @@ import { directionFromAngles, sunAngles } from './sun';
 import { readLightStudy, studyScale, studyLightingElevation, lightStudyUI, readDrivePosition } from './light-study';
 import { chooseYardLights, nightPalette } from './night-rules';
 import { Night, NightShading } from './night';
+import { HarbourLights } from './harbour-lights';
 import { Terrain, type Manifest } from './terrain';
 import { createTitle } from './title';
 import { Endings } from './ending';
@@ -407,6 +408,9 @@ if (wharves) { scene.add(wharves.group); if (import.meta.env.DEV) expose({ wharv
 
 const landmarks = AREA.landmarks ? new Landmarks(landmarkList, manifest.village, EXAG, SEA_LEVEL) : null;
 if (landmarks) scene.add(landmarks.group);
+const harbourLights = ERA.modern ? new HarbourLights(AREA.id, manifest.village, EXAG, nightLook !== null, SEA_LEVEL) : null;
+if (harbourLights) scene.add(harbourLights.group);
+if (import.meta.env.DEV) expose({ harbourLights });
 const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea, SEA_LEVEL,
   new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
   terrain, trees?.group ?? null, params.get('reflections'));
@@ -1484,6 +1488,7 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'ambientTraffic' } : {}), segment: 'after-activities', ending: false, update: () => ambientTraffic?.update(camera, vehicle, !multiplayer?.choice.on) },
   { ...(import.meta.env.DEV ? { name: 'roadAnimals' } : {}), segment: 'after-activities', ending: false, update: dt => roadAnimals?.update(dt, vehicle, !multiplayer?.choice.on) },
   { ...(import.meta.env.DEV ? { name: 'props' } : {}), segment: 'after-activities', ending: true, endingPosition: 7, update: dt => props?.update(camera, dt) },
+  { ...(import.meta.env.DEV ? { name: 'harbourLights' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
   { ...(import.meta.env.DEV ? { name: 'tall' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
   { ...(import.meta.env.DEV ? { name: 'grass' } : {}), segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },
   { ...(import.meta.env.DEV ? { name: 'mirror' } : {}), segment: 'mirror', ending: true, update: () => waterReflections?.update(camera) },

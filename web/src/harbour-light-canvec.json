@@ -1,0 +1,103 @@
+[
+  {
+    "id": "31f65400027546c197bacc6b8ad0c284",
+    "e": 623542.9439141885,
+    "n": 5056159.558286173,
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "description": "Navigation Light",
+    "accuracy": 14.0,
+    "date": "1980"
+  },
+  {
+    "id": "9eec557deffd43669f2d2913e978f8bd",
+    "e": 617722.0347783903,
+    "n": 5060898.31092578,
+    "areas": [
+      "cansocauseway"
+    ],
+    "description": "Navigation Light",
+    "accuracy": 14.0,
+    "date": "1980"
+  },
+  {
+    "id": "6c07ced188bc4f20a414430350586f65",
+    "e": 623256.019448139,
+    "n": 5055810.556240662,
+    "areas": [
+      "cansocauseway",
+      "pointtupper"
+    ],
+    "description": "Navigation Light",
+    "accuracy": 14.0,
+    "date": "1980"
+  },
+  {
+    "id": "87a897ac25094c9fa94d939503af5f14",
+    "e": 652320.6970519917,
+    "n": 5075946.729381291,
+    "areas": [
+      "westbay"
+    ],
+    "description": "Navigation Light",
+    "accuracy": 14.0,
+    "date": "1979"
+  },
+  {
+    "id": "6100208062814f37b073b24f23b847d8",
+    "e": 654792.4260023022,
+    "n": 5075441.751204137,
+    "areas": [
+      "westbay"
+    ],
+    "description": "Navigation Light",
+    "accuracy": 14.0,
+    "date": "1979"
+  },
+  {
+    "id": "f3f578062f394f7ead1bc887b78c60bf",
+    "e": 618648.7206673981,
+    "n": 5104734.739971636,
+    "areas": [
+      "mabou"
+    ],
+    "description": "Navigation Light",
+    "accuracy": 21.0,
+    "date": "1979"
+  },
+  {
+    "id": "e02f40b3fca04fa6864606721724b94c",
+    "e": 618041.9271812299,
+    "n": 5104889.380728951,
+    "areas": [
+      "mabou"
+    ],
+    "description": "Navigation Light",
+    "accuracy": 21.0,
+    "date": "1979"
+  },
+  {
+    "id": "e3fe1c6db4494d3e826aab6a240dfa65",
+    "e": 616180.5904859155,
+    "n": 5079314.341927771,
+    "areas": [
+      "judique"
+    ],
+    "description": "Navigation Light",
+    "accuracy": 21.0,
+    "date": "1979"
+  },
+  {
+    "id": "b7b5346e56bb4e88975208bdd0678be7",
+    "e": 608453.8883386673,
+    "n": 5092461.002065742,
+    "areas": [
+      "porthood"
+    ],
+    "description": "Navigation Light",
+    "accuracy": 21.0,
+    "date": "1979"
+  }
+]
