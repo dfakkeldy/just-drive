@@ -121,6 +121,13 @@ export class Room extends DurableObject<Env> {
     }
   }
 
+  /** A car's report goes to each other seat in the shape that seat negotiated: with or without its height. */
+  private reportToOthers(from: WebSocket, id: number, body: Uint8Array): void {
+    for (const other of this.seats(from)) {
+      try { other.ws.send(encodeSnapshot([{ id, body }], other.seat.heights)); } catch { /* that socket is closing; its own close event follows */ }
+    }
+  }
+
   private async scheduleAlarm(): Promise<void> {
     const peers = this.seats();
     if (peers.length) await this.ctx.storage.setAlarm(Math.min(...peers.map(p => (p.seat.lastReal ?? 0) + PEER_TIMEOUT_MS)));
@@ -217,7 +224,7 @@ export class Room extends DurableObject<Env> {
     else if ('ride' in verdict) seat.ride = verdict.ride;
     else { seat.lastReal = Date.now(); seat.last = verdict.body; if (this.race.position(seat.id,verdict.body,Date.now())) this.raceChanged(); }
     ws.serializeAttachment(seat);
-    if('body'in verdict){for(const other of this.seats(ws))try{other.ws.send(encodeSnapshot([{id:seat.id,body:verdict.body}],other.seat.heights));}catch{/* closing */}}
+    if ('body' in verdict) this.reportToOthers(ws, seat.id, verdict.body);
     else this.toOthers(ws, verdict.relay);
   }
 
