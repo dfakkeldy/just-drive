@@ -25,14 +25,16 @@ Counts are from the run at b09dea4c on main af34c758. The row passed again at 87
 
 ## Budget
 
-The kit's own cost in the frame-budget scenes is limited to `pointtupper-start`, where five Point Tupper and Causeway lights are in view (694.4, 694.5, 698, 701, 702). Measured against main 2ff427c7 in one session:
+The kit crosses a budget pin only at `pointtupper-start`, where five Point Tupper and Causeway lights are in view (694.4, 694.5, 698, 701, 702). Measured against main 97100198 in one session:
 
 | Mode | Calls | Triangles | Geometries | Programs | Textures |
 |---|---|---|---|---|---|
 | phone-explore-truck | 211 → 212 | 1,249,852 → 1,252,624 | 122 → 123 | 16 → 17 | 60 → 60 |
-| desktop-explore-truck | 947 → 949 | 4,682,923 → 4,688,467 | 282 → 283 | 36 → 37 | 140 → 140 |
+| desktop-explore-truck | 997 → 999 | 4,745,271 → 4,750,815 | 283 → 284 | 46 → 47 | 150 → 150 |
 
-Only phone geometries (pin 122) and desktop programs (pin 36) crossed a pin, and each is raised by exactly one. The reason is recorded in `tools/frame-budget-policy.mjs`. Every other budget failure on this host is shared with unchanged main.
+The pins are raised by exactly this share: phone calls 211 → 212 and geometries 122 → 123; desktop calls 988 → 990, geometries 279 → 280 and programs 45 → 46. The reason is recorded in `tools/frame-budget-policy.mjs`. On this host unchanged main is already above its own desktop pins here (997 calls, 283 geometries, 150 textures, 46 programs against 988 / 279 / 148 / 45). That excess belongs to main and is not pinned here, so this desktop row still fails on this host on main and on the branch alike.
+
+Elsewhere the kit has a small cost that stays under every pin. Mabou light 876 is in view from `mines-lookoff-south`, which takes up to +5 calls, +5 geometries and +1 program on desktop, and +3 calls, +3 geometries and +1 program on phone. `harbour-water` and other Mabou scenes take about +2 calls and +2 geometries. The full `tools/check-budget.sh` passed on this branch at c0a07e5a, before main's 97100198 desktop re-pin: 34 scene/mode rows, 312 s, load1 under 20. The PR records the result on the current base.
 
 ## What is not built
 
