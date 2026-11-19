@@ -73,7 +73,7 @@
   },
   "highway19-far-land/desktop-explore-truck": {
     "calls": -3,
-    "triangles": 10361,
+    "triangles": 12281,
     "geometries": -2,
     "textures": 0,
     "programs": 0,
@@ -82,7 +82,7 @@
   },
   "highway19-far-land/desktop-mail": {
     "calls": -3,
-    "triangles": 10361,
+    "triangles": 12281,
     "geometries": -2,
     "textures": 0,
     "programs": 0,
@@ -91,7 +91,7 @@
   },
   "highway19-far-land/phone-explore-truck": {
     "calls": 2,
-    "triangles": 3218,
+    "triangles": 4178,
     "geometries": 2,
     "textures": 0,
     "programs": 0,
@@ -100,7 +100,7 @@
   },
   "highway19-far-land/phone-mail": {
     "calls": 2,
-    "triangles": 3218,
+    "triangles": 4178,
     "geometries": 2,
     "textures": 0,
     "programs": 0,
@@ -144,8 +144,8 @@
     "requests": 1
   },
   "new-player-start/desktop-explore-truck": {
-    "calls": -5,
-    "triangles": 5680,
+    "calls": -2,
+    "triangles": 9726,
     "geometries": 1,
     "textures": 0,
     "programs": 0,
@@ -163,7 +163,7 @@
   },
   "new-player-start/phone-explore-truck": {
     "calls": 1,
-    "triangles": 2792,
+    "triangles": 3752,
     "geometries": 2,
     "textures": 0,
     "programs": 0,
@@ -217,7 +217,7 @@
   },
   "village-start/desktop-explore-truck": {
     "calls": -6,
-    "triangles": 5656,
+    "triangles": 7576,
     "geometries": 2,
     "textures": 0,
     "programs": 0,
@@ -226,7 +226,7 @@
   },
   "village-start/desktop-mail": {
     "calls": -6,
-    "triangles": 5656,
+    "triangles": 7576,
     "geometries": 2,
     "textures": 0,
     "programs": 0,
@@ -235,7 +235,7 @@
   },
   "village-start/phone-explore-truck": {
     "calls": 2,
-    "triangles": 3922,
+    "triangles": 4882,
     "geometries": 2,
     "textures": 0,
     "programs": 0,
@@ -244,7 +244,7 @@
   },
   "village-start/phone-mail": {
     "calls": 2,
-    "triangles": 3922,
+    "triangles": 4882,
     "geometries": 2,
     "textures": 0,
     "programs": 0,
