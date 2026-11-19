@@ -123,7 +123,7 @@ const MADE = (brand) => `<section aria-labelledby="made">
 <h2 id="contact">Something wrong?</h2>
 <p>A road in the wrong place, or you want a place removed? Write to <a href="mailto:${CONTACT}">${CONTACT}</a>.</p>
 <p class="dim">No ads and no accounts. Your settings stay in your own browser. When you drive with others, the server passes car positions between players. A room retains its current race course, player IDs, checkpoint progress and times until the last driver leaves. It keeps no position history.</p>
-</section>
+${brand === 'mail' ? `<p class="dim" id="boardData">Today’s board keeps only what you post with <b>Post my result</b> at the end of Today’s run: the name you chose, your points, discipline step, time, bingo squares and vehicle, and a number your device makes from its own random secret for that one board, so a device posts once a day. The number for one day cannot be matched to the number for another (the name you choose can, if you keep it). That number stays with the day’s board even if your row drops out of the top 100. No account, no email and no network address. Each day’s board keeps its top 100, and the whole board is deleted after 60 days.</p>\n` : ''}</section>
 <section aria-labelledby="credits" class="credits">
 <span class="label">Credits and data</span>
 <h2 id="credits" class="sr">Credits and data</h2>

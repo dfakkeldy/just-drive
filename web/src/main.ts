@@ -1413,12 +1413,13 @@ const endings = mailMode ? new Endings(clearEndingInput, () => { shift.startOver
 let daily: DailyRun | null = null;
 // The card holds only what the area can supply today: the painter or the fish truck only when the scene is really there.
 // If a layer failed to load and nine squares cannot be drawn, this is a plain Get Fired run: no short card, no record.
-const drawn: Square[] | null = DAILY ? drawCard(DAILY.seed, supplyFor(DAILY, { boxes: !!props?.mail.length,
-  lawns: properties.some(b => b.kind === 'house'), relief: relief instanceof Relief, painter: !!roadScene?.painter.enabled, fish: !!roadScene?.rules.enabled })) : null;
+const dailySupply = DAILY ? supplyFor(DAILY, { boxes: !!props?.mail.length,
+  lawns: properties.some(b => b.kind === 'house'), relief: relief instanceof Relief, painter: !!roadScene?.painter.enabled, fish: !!roadScene?.rules.enabled }) : null;
+const drawn: Square[] | null = DAILY && dailySupply ? drawCard(DAILY.seed, dailySupply) : null;
 const dailySquares = drawn?.length === CARD_SIZE ? drawn : null;
 const fired = firedMode && shift instanceof Shift && endings instanceof Endings ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock(),
   DAILY && dailySquares ? { limit: DAILY.limit, onEnd: end => daily?.finish(end) } : {}) : null;
-if (fired && DAILY && dailySquares && shift instanceof Shift && endings instanceof Endings) daily = new DailyRun(DAILY, dailySquares, AREA.name, shift, fired, endings, () => pause.resetClock());
+if (fired && DAILY && dailySquares && shift instanceof Shift && endings instanceof Endings) daily = new DailyRun(DAILY, dailySquares, AREA.name, shift, fired, endings, () => pause.resetClock(), dailySupply);
 if (fired && bare) document.getElementById('firedHud')!.style.display = 'none';
 const yardJob = yard && endings instanceof Endings ? ride.yardJob?.(yard) ?? new YardJob(yard, vehicle, terrain, camera, endings) : null;
 resets[resetSlot.yardJob] = () => yardJob?.reset();
