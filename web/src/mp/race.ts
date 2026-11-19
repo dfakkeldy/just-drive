@@ -58,7 +58,7 @@ export class RaceView {
     const now=this.net.serverNow(), racer=s.racers.find(r=>r.id===me.id), host=s.host===me.id;
     const active=!!s.startAt && now-s.startAt<RACE_LIMIT && s.racers.some(r=>r.time===null&&!r.out);
     this.group.visible=!!s.route;
-    this.select.disabled=!host || active;this.start.disabled=!host || !s.route || !!s.startAt || Math.hypot(this.host.vehicle.x-s.route.gates[0].x,this.host.vehicle.z-s.route.gates[0].z)>GATE_RADIUS || Math.abs(this.host.vehicle.speed)>=1;
+    this.select.disabled=!host || active;this.start.disabled=!host || !s.route || !!s.startAt || this.net.game?.phase===1 || this.net.game?.phase===2 || Math.hypot(this.host.vehicle.x-s.route.gates[0].x,this.host.vehicle.z-s.route.gates[0].z)>GATE_RADIUS || Math.abs(this.host.vehicle.speed)>=1;
     this.cancel.disabled=!host || !s.route;
     if(host && !s.route && (!this.choiceOrigin || Math.hypot(this.host.vehicle.x-this.choiceOrigin.x,this.host.vehicle.z-this.choiceOrigin.z)>=50)){
       this.choiceOrigin={x:this.host.vehicle.x,z:this.host.vehicle.z};
@@ -81,6 +81,7 @@ export class RaceView {
     }
     const target=s.route?.gates[next];
     if(target && !racer?.out && racer?.time==null){const dx=target.x-this.host.vehicle.x,dz=target.z-this.host.vehicle.z,distance=Math.hypot(dx,dz);const direction=['N','NE','E','SE','S','SW','W','NW'][Math.round((Math.atan2(dx,-dz)+Math.PI*2)/(Math.PI/4))%8];say+=` ${Math.round(distance)} m ${direction} to the gold ring.`;}
+    if(this.net.game?.phase===1||this.net.game?.phase===2)say+=' A room game is on: races wait for it.';
     if(!host)say+=' Host controls the race.';
     const summary=this.panel?.querySelector('summary');if(summary)summary.textContent=s.startAt&&s.startAt>now?`Race starts in ${Math.ceil((s.startAt-now)/1000)}`:racer?.time!==null&&racer?.time!==undefined?'Race finished · results':active&&racer&&!racer.out?`Race · ${((now-s.startAt)/1000).toFixed(1)} s`:'Room race';
     if(this.readout){

@@ -62,16 +62,18 @@ for(const bad of [undefined,false,1,'true',{},[]]){
   assert.equal(parseServerText(JSON.stringify(message)).rides,false,'only literal true advertises rides');
 }
 function judgedClient(api){
-  let at=0,ws;const meter=new api.Meter(),seat=api.takeSeat([]),received=[],closed=[];
+  let at=0,ws;const meter=new api.Meter(),seat=api.takeSeat([]),received=[],closed=[],games=[];
   const client=new Net({urls:['ws://judged'],now:()=>at,socket:()=>ws={readyState:1,binaryType:'',onopen:null,onclose:null,onerror:null,onmessage:null,close(){this.readyState=3;},send(data){
     if(data==='ping'){this.onmessage?.({data:'pong'});return;} // Worker auto-response, before judge.
+    // Room-game texts are taken by the Room before judge, on the same meter (server/src/index.ts).
+    if(typeof data==="string"&&data==='{"t":"game-sync"}'){games.push(at);meter.allow(at);return;}
     received.push({at,data});const verdict=api.judge(seat,meter,data,at,10000);
     if(verdict.close){closed.push(verdict.close);this.readyState=3;this.onclose?.({code:verdict.close});}
     if('ride' in verdict)seat.ride=verdict.ride;else if('body' in verdict)seat.last=verdict.body;
   }}});
   const state={...local,vx:2};client.setRide({kind:'truck',trailer:false});client.report(state,at);
   ws.onmessage({data:api.hello(seat,'mabou/compat',[])});client.report(state,at);
-  return {client,meter,received,closed,tick(time,trailer){at=time;client.setRide({kind:'truck',trailer});client.report(state,at);}};
+  return {client,meter,received,closed,games,tick(time,trailer){at=time;client.setRide({kind:'truck',trailer});client.report(state,at);}};
 }
 {
   const old=judgedClient(legacyRoom);
@@ -90,6 +92,7 @@ function judgedClient(api){
   const events=current.received.filter(e=>typeof e.data==='string').map(e=>({at:e.at,ride:JSON.parse(e.data).ride}));
   assert.deepEqual(current.closed,[],'new server never disconnects rapid toggles plus moving state');
   assert.equal(current.meter.strikes,0,'coalesced ride changes plus five-Hz states stay inside the real meter');
+  assert.equal(current.games.length,1,'one game-sync per connection');
   assert.ok(events.length>10&&events.length<=23,'ride changes are bounded and continue after a burst');
   for(let i=1;i<events.length;i++)assert.ok(events[i].at-events[i-1].at>=1000,'ride sends have at least one-second spacing');
   assert.deepEqual(events.at(-1).ride,{kind:'truck',trailer:true},'coalescing sends the final trailer state');
@@ -97,24 +100,26 @@ function judgedClient(api){
   assert.equal(current.received.slice(before).filter(e=>typeof e.data==='string').length,0,'a burst back to the last sent ride needs no redundant event');
   current.client.stop();console.log('PASS real new-server meter: 2000 toggles, bounded/coalesced changes, final state retained and zero strikes');
 }
+// A room that runs games is asked once for their state: not a ride text (server/src/index.ts).
+const GAME_SYNC='{"t":"game-sync"}';
 let socket,clock=0;
 const net=new Net({urls:['ws://local'],now:()=>clock,socket:()=>socket={readyState:1,binaryType:'',send(data){this.sent.push(data)},sent:[],close(){},onopen:null,onclose:null,onerror:null,onmessage:null}});
 net.setRide(car);net.report(local,clock);
 socket.onmessage({data:hello(takeSeat([]),'mabou/test',[])});net.report(local,clock);
-assert.deepEqual(JSON.parse(socket.sent.find(d=>typeof d==='string')).ride,car);
+assert.deepEqual(JSON.parse(socket.sent.find(d=>typeof d==='string'&&d!==GAME_SYNC)).ride,car);
 for(let i=0;i<100;i++)net.report(local,clock+=200);
-assert.equal(socket.sent.filter(d=>typeof d==='string'&&d.startsWith('{')).length,1,'ride never enters per-frame traffic');
+assert.equal(socket.sent.filter(d=>typeof d==='string'&&d.startsWith('{')&&d!==GAME_SYNC).length,1,'ride never enters per-frame traffic');
 net.setRide(truck);net.report(local,clock+=1000);assert.deepEqual(JSON.parse(socket.sent.at(-1)).ride,truck,'trailer attached change');
 net.setRide({kind:'truck',trailer:false});net.report(local,clock+=1000);assert.deepEqual(JSON.parse(socket.sent.at(-1)).ride,{kind:'truck',trailer:false},'trailer detach change');
 socket.onmessage({data:join(car)});socket.onmessage({data:JSON.stringify({t:'ride',id:2,ride:truck})});
 socket.onmessage({data:encodeSnapshot([{id:2,body:new Uint8Array(encodeState({...local,t:1}),2)}])});
 assert.deepEqual(net.views(clock)[0].ride,truck,'change preserves trailer in peer view');
-socket.onclose({code:1006});net.report(local,clock+=1);net.report(local,clock+=40000);socket.onmessage({data:hello(takeSeat([]),'mabou/test',[])});net.report(local,clock+=1);assert.equal(socket.sent.filter(d=>typeof d==='string'&&d.startsWith('{')).length,1,'reconnect announces again');
+socket.onclose({code:1006});net.report(local,clock+=1);net.report(local,clock+=40000);socket.onmessage({data:hello(takeSeat([]),'mabou/test',[])});net.report(local,clock+=1);assert.equal(socket.sent.filter(d=>typeof d==='string'&&d.startsWith('{')&&d!==GAME_SYNC).length,1,'reconnect announces again');
 // A retry into an older server must not retain the previous server's capability.
 socket.onclose({code:1006});net.report(local,clock+=1);net.report(local,clock+=40000);
 socket.onmessage({data:legacyRoom.hello(legacyRoom.takeSeat([]),'mabou/old',[])});net.report(local,clock+=1);
 for(let i=0;i<16;i++){net.setRide({kind:'truck',trailer:i%2===0});net.report(local,clock+=1000);}
-assert.equal(socket.sent.filter(d=>typeof d==='string'&&d.startsWith('{')).length,0,'reconnect to old server clears ride support');net.stop();
+assert.equal(socket.sent.filter(d=>typeof d==='string'&&d.startsWith('{')&&d!==GAME_SYNC).length,0,'reconnect to old server clears ride support');net.stop();
 assert.equal(nearbyOpacity(10),1);assert.equal(nearbyOpacity(3),.35);assert.equal(nearbyOpacity(0),.35);assert.equal(nearbyOpacity(10,true),.35);assert.equal(nearbyOpacity(5),.675);
 assert.equal(easeOpacity(.35,1,0),.35);assert.ok(easeOpacity(1,.35,1/60)<1);
 assert.ok(footprintsOverlap({x:0,z:0,heading:0},{x:0,z:-10,heading:0},truck),'trailer overlap beyond centre fade radius');

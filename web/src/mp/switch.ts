@@ -124,7 +124,7 @@ export function multiplayerSwitch(host: Host) {
     group.className = 'mpControl'; group.dataset.mp = title ? 'title' : 'settings';
     group.setAttribute('aria-label', 'Drive with others');
     group.innerHTML = `<div class="mpHeading"><span>Drive with others</span><button type="button" role="switch" aria-label="Drive with others" class="mpToggle"></button></div>
-      <small>Others see your car and handle. Use an invented name, never a real person’s name. Room races also share a road course, checkpoint progress and times.</small>
+      <small>Others see your car and handle. Use an invented name, never a real person’s name. Room races also share a road course, checkpoint progress and times; room games share who holds the parcel and the scores.</small>
       <small class="mpInvite"></small>
       <div class="mpRooms"><label>Your name<div class="mpNameRow"><input class="mpName" aria-label="Your name" maxlength="14" autocomplete="off" spellcheck="false" style="text-transform:none;letter-spacing:normal"><button type="button" class="mpDice" aria-label="Pick an invented name">⚄</button></div></label><small class="mpNameHint" role="status">3–14 letters, digits, spaces or hyphens. Invalid names use a call sign.</small>
         <div class="mpChoices"><button type="button" class="mpOpen">Open road</button><button type="button" class="mpPrivate">Private room</button></div>
@@ -240,6 +240,8 @@ export function multiplayerSwitch(host: Host) {
       if (next !== status) { status = next; blocks.forEach(b => b.say(status)); }
     },
     marks(out: { x: number; z: number }[]): void { out.length = 0; current?.marks(out); },
+    /** Adds the room game's parcel to the small map's marks (nothing outside a game). */
+    gameMarks(out: { x: number; z: number; label: string; rank?: number; colour?: string }[]): void { current?.gameMarks(out); },
     reset(): void { current?.net.teleport(); },
     horn(): void { current?.net.horn(); },
   };

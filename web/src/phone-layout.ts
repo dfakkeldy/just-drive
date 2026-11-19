@@ -98,10 +98,10 @@ body.tcOn #settings{top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-t
 }
 /* Both brands keep readouts at the edge and share one compact utility/action row. */
 #phoneLine{display:none}
-#raceReadout{display:none;pointer-events:none;order:1;flex:none;min-width:0;max-width:100%;
+#raceReadout,#gameReadout{display:none;pointer-events:none;order:1;flex:none;min-width:0;max-width:100%;
   box-sizing:border-box;font-size:10px;line-height:18px;padding:2px 5px;
   background:var(--panel);border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-body.tcOn #raceReadout:not([hidden]){display:block}
+body.tcOn :is(#raceReadout,#gameReadout):not([hidden]){display:block}
 body.tcOn.compactPhone #phoneLine{display:block;font-size:10px;line-height:18px;padding:2px 5px;
   background:var(--panel);border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.tcOn.mailPhone :is(#hud,#shiftHud){display:none}
