@@ -422,7 +422,6 @@ export class Vehicle {
 
     // The touch speed limit for this ground, m/s (0: none): the grip model and a slide both keep to it.
     // No limiter on works-yard surfaces (8/9/10): the slipway needs its full run-up.
-    // No limiter on works-yard surfaces (8/9/10): the slipway needs its full run-up.
     // A road bridge deck limits as the road it carries (its own kind 9 is the concrete works-yard surface).
     const limitKind = siteDeck && s.deckRoadKind !== undefined ? s.deckRoadKind : s.kind;
     const touchLimit = !(input.touch && this.strongHelp && this.touchSpeedLimit) || limitKind >= 8 && limitKind <= 10 ? 0 : !onRoad ? 50 / 3.6 : s.washboard ? 50 / 3.6 : limitKind === 1 ? 100 / 3.6 : limitKind === 2 ? 90 / 3.6 : limitKind === 13 ? 90 / 3.6 : limitKind === 3 ? 75 / 3.6 : limitKind === 5 ? 55 / 3.6 : 50 / 3.6;

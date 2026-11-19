@@ -188,7 +188,8 @@ export class PointTupperDriver {
         const v = this.vehicle;
         if (turnRound(v, goal)) {
           const { x, z, heading } = v, y = v.y, pose = { x, z, heading: heading + Math.PI, y, spec: v.spec };
-          if (this.contacts.allows(pose)) v.place(x, z, heading + Math.PI);
+          // At the body height, like every re-place: with none it would stand on land under a deck it waits on.
+          if (this.contacts.allows(pose)) v.place(x, z, heading + Math.PI, y);
           this.steerRoad = null;
         }
       }

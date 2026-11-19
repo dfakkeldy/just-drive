@@ -255,6 +255,15 @@ for(const allows of [true,false,'stray']) {
  PointTupperDriver.prototype.step.call(actor,1/120,{...ai,x:500,z:500});
  assert.deepEqual(refs,[allows===true?12.6:12.5],allows===true?'lane keeping re-places at the body height':`a rollback (${allows}) re-places at the old pose height`);
 }
+// The Boss's hidden turn round (update) re-places at the body height too, so a wait on a deck keeps it on the deck.
+{
+ const refs=[],camera=new THREE.PerspectiveCamera(60,1,.1,2000);camera.position.set(300,10,0);camera.lookAt(1000,10,0);camera.updateMatrixWorld();
+ const v={x:0,z:0,y:12.5,heading:0,spec,place(x,z,heading,ref){refs.push(ref);Object.assign(this,{x,z,heading});return true;}};
+ const actor={active:true,vehicle:v,parked:0,leaving:false,turnCheck:0,steerRoad:null,entry:{id:'boss'},matrix:new THREE.Matrix4(),frustum:new THREE.Frustum(),sphere:new THREE.Sphere(new THREE.Vector3(),3),
+  tune:{kind:'car',goal:()=>({x:0,z:500})},contacts:{allows:()=>true},hide:()=>{throw new Error('hidden');}};
+ PointTupperDriver.prototype.update.call(actor,camera,{...ai,x:300,z:0},true,'truck');
+ assert.deepEqual(refs,[12.5],'the hidden turn round re-places at the body height');
+}
 // A tuned driver (the Boss) keeps a closer gap to bodies, but still stops short of a red line, not in the junction.
 {
  const { followSpeed } = await import('../web/src/boss-rules.ts');

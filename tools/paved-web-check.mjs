@@ -85,7 +85,7 @@ const source=execFileSync('git',['show',base+':web/src/shaders.ts'],{cwd:root,en
 const shaderTools=await import(pathToFileURL(root+'/tools/coast-programs.mjs').href);
 const unmarked=text=>text.replace(/\/\* MODERN_ROAD_(?:CUT|PAINT)_BEGIN \*\/[\s\S]*?\/\* MODERN_ROAD_(?:CUT|PAINT)_END \*\//g,'').replaceAll(' * roadPaint','');
 const currentShader=readFileSync(root+'/web/src/shaders.ts','utf8');
-for(const {name,flags}of shaderTools.coastPrograms().filter(p=>!p.flags.includes('GROUND_CLASSES')&&!p.flags.includes('AIRPORT')&&!p.flags.includes('ROAD_PAVEMENT')&&!['ROAD_CUT_PARS','ROAD_CUT_FRAG'].includes(p.name))){
+for(const {name,flags}of shaderTools.coastPrograms().filter(p=>!p.flags.includes('GROUND_CLASSES')&&!p.flags.includes('AIRPORT')&&!p.flags.includes('ROAD_PAVEMENT'))){
  assert.equal(shaderTools.normalized(shaderTools.preprocess(unmarked(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(currentShader)),name)),flags)),
               shaderTools.normalized(shaderTools.preprocess(unmarked(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(source)),name)),flags)),
               'off compiled shader equals merge base except the pinned distant bend and the marked bridge blocks: '+name+' '+flags);
