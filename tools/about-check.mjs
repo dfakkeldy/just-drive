@@ -50,7 +50,8 @@ try {
   assert.equal(mail.split('id="boardData"').length, 2, 'one board paragraph');
   assert.match(text(mail), /Today’s board keeps only what you post .* points, discipline step, time, bingo squares and vehicle, and a number your device makes from its own random secret .* No account, no email and no network address\. Each day’s board keeps its top 100, and the whole board is deleted after 60 days\./, 'board data paragraph');
   assert.ok(!just.includes('boardData'), 'Just Drive has no board');
-  assert.match(text(mail), /drives a rural mail route around Mabou/, 'the true story');
+  assert.match(text(mail), /Deliver the day’s run/, 'the game section');
+  assert.doesNotMatch(text(mail), /real route|drives a rural mail route/i, 'no real-route framing (Dan, 19 Nov: it is implied)');
   assert.ok(mail.includes('<a class="button" href="/">'), 'mail plays at its root');
   assert.ok(just.includes('<a class="button" href="/mabou">'), 'Just Drive plays at /mabou');
   assert.match(text(just), /not a map for navigation/, 'Just Drive caution');
