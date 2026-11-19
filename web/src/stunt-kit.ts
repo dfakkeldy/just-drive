@@ -199,6 +199,11 @@ export class PlacedStunt {
 
 /** Surface and vegetation only. A run-up never grades or supplies a raised contact deck. */
 export interface StuntRunup {x:number;z:number;heading:number;from:number;to:number;halfWidth:number;canopyMargin:number}
+/** Optional shared grade for neighboring lanes on a reserved course bench. */
+interface CourseGround {
+  contains(x:number,z:number,margin:number):boolean;
+  height(x:number,z:number,surveyed:number):number;
+}
 export class StuntPark implements Site {
   readonly visualStyleLevels=[8];
   readonly group=new THREE.Group();readonly preserveRoads=true;readonly exclusions:readonly StuntExclusion[];readonly dressing:PlacedDressing[];readonly pieces:PlacedStunt[];readonly box:[number,number,number,number];
@@ -207,8 +212,8 @@ export class StuntPark implements Site {
   private selected:StuntDeck|null=null;private loading=false;
   private readonly runups:readonly (StuntRunup&{sin:number;cos:number})[];
   get hudLine():string{return this.loading?'Park: loading ground':this.lastLine;}
-  contains(x:number,z:number,margin=0):boolean{return inside(this.box,x,z,margin);}
-  constructor(readonly terrain:Terrain,placements:readonly StuntPlacement[],readonly low=false,exclusions:readonly StuntExclusion[]=[],dressing:readonly DressingPlacement[]=[],runups:readonly StuntRunup[]=[]){
+  contains(x:number,z:number,margin=0):boolean{return inside(this.box,x,z,margin)&&(this.courseGround?.contains(x,z,margin)??true);}
+  constructor(readonly terrain:Terrain,placements:readonly StuntPlacement[],readonly low=false,exclusions:readonly StuntExclusion[]=[],dressing:readonly DressingPlacement[]=[],runups:readonly StuntRunup[]=[],private readonly courseGround?:CourseGround){
     if(!placements.length)throw Error('A park needs at least one piece');
     if(placements.some(p=>'bank' in p.piece||p.piece.decks.some(d=>d.polar)))throw Error('Banked turns are not supported by this kit');
     this.runups=runups.map(p=>({...p,sin:Math.sin(p.heading),cos:Math.cos(p.heading)}));
@@ -224,7 +229,7 @@ export class StuntPark implements Site {
   }
   /** Call before the first terrain update. The survey sets pad datums; structures later read drawn triangles. */
   async prepare():Promise<void> {
-    for(const p of this.pieces){const b=p.placement.piece.gradingFootprint??p.placement.piece.footprint,w=p.world((b[0]+b[2])/2,(b[1]+b[3])/2);p.pad=await this.terrain.surveyHeightAt(w.x,w.z);}
+    if(!this.courseGround)for(const p of this.pieces){const b=p.placement.piece.gradingFootprint??p.placement.piece.footprint,w=p.world((b[0]+b[2])/2,(b[1]+b[3])/2);p.pad=await this.terrain.surveyHeightAt(w.x,w.z);}
     // Fine oriented cells remove real trees without clearing terrain samples outside their own footprint.
     const step=2,x0=Math.floor(this.box[0]/step)*step,x1=Math.ceil(this.box[2]/step)*step;
     for(let z=Math.floor(this.box[1]/step)*step;z<this.box[3];z+=step){let start:number|null=null;
@@ -248,6 +253,15 @@ export class StuntPark implements Site {
 
   height(x:number,z:number,surveyed:number,level=8):number {
     if(level!==8)return surveyed;
+    if(this.courseGround){
+      const protection=this.protection(x,z);
+      if(!protection)return surveyed;
+      let height=this.courseGround.height(x,z,surveyed);
+      for(const p of this.pieces)if(p.placement.piece.ground&&p.near(x,z)){
+        height+=p.placement.piece.ground(p.u(x,z),p.v(x,z))/this.terrain.exag;
+      }
+      return surveyed+(height-surveyed)*protection;
+    }
     let weight=0,total=0,weighted=0,chosen:PlacedStunt|null=null;
     for(const p of this.pieces){if(p.pad===null||!p.near(x,z,28))continue;const b=p.placement.piece.gradingFootprint??p.placement.piece.footprint,u=p.u(x,z),v=p.v(x,z);
       const outside=Math.max(b[0]-(p.placement.piece.runup??10)-u,u-b[2],b[1]-v,v-b[3],0),t=Math.max(0,Math.min(1,(18-outside)/17));let w=t*t*(3-2*t);
@@ -259,6 +273,7 @@ export class StuntPark implements Site {
     const protection=this.protection(x,z);return surveyed+(raw-surveyed)*protection;
   }
   private protection(x:number,z:number):number {
+    if(this.courseGround&&!this.courseGround.contains(x,z,0))return 0;
     let weight=1;for(const e of this.exclusions){const t=Math.max(0,Math.min(1,(Math.hypot(x-e.x,z-e.z)-e.radius)/8));weight=Math.min(weight,t*t*(3-2*t));if(!weight)break;}return weight;
   }
   visualStyle(x:number,z:number,out:Uint8Array,k:number,level=8):void {
@@ -303,7 +318,7 @@ export class StuntPark implements Site {
   private driving=new Map<Deck,{kind:number;halfWidth:number}>();private fallback={kind:8,halfWidth:3.5};
   update(dt:number,ride:StuntRide,cam:THREE.Vector3):void {
     if(this.lineTime>0){this.lineTime-=dt;if(this.lineTime<=0)this.lastLine='';}
-    if(!inside(this.box,ride.x,ride.z,250)&&!inside(this.box,cam.x,cam.z,250)){this.group.visible=false;this.loading=false;return;}
+    if(!this.contains(ride.x,ride.z,250)&&!this.contains(cam.x,cam.z,250)){this.group.visible=false;this.loading=false;return;}
     this.group.visible=true;this.loading=false;
     if(!this.material){this.material=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});if(typeof document!=='undefined'){this.atlas=new SignAtlas(this.low?1024:2048,1024);this.signMaterial=new THREE.MeshBasicMaterial({map:this.atlas.texture,side:THREE.DoubleSide});}}
     for(const p of this.pieces){
@@ -333,6 +348,7 @@ export class StuntPark implements Site {
     const ride=body as StuntRide; ride.pitch??=0;ride.roll??=0; this.resolveSolids(ride);
   },allows:(body:import('./parked').ContactBody)=>this.allowsBody(body)};}
   allowsBody(body:import('./parked').ContactBody):boolean {
+    if(!this.contains(body.x,body.z,body.spec.envelope.reach))return true;
     const probe=this.probe;probe.x=body.x;probe.z=body.z;probe.y=body.y;probe.heading=body.heading;probe.spec=body.spec;probe.pitch=probe.roll=probe.vx=probe.vz=probe.speed=0;
     for(const owners of this.owners)for(const owner of owners)if(owner.ready&&owner.group.visible)for(const solid of owner.solids){
       probe.x=body.x;probe.z=body.z;

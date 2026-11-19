@@ -397,7 +397,11 @@ if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get
   terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id)).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
-const stuntPark=await createTestPark(params, terrain, yardSite, LOW, buildingList ?? []);
+const testPark = await createTestPark(params, terrain, yardSite, LOW, buildingList ?? []);
+const quarryStuntPark = quarryFeature && quarrySite && ERA.modern
+  ? quarryFeature.createQuarryStuntPark(terrain, LOW) : null;
+if (quarryStuntPark) await quarryStuntPark.prepare();
+const stuntPark = testPark ?? quarryStuntPark;
 if(stuntPark)scene.add(stuntPark.group);
 if (fishingSite) terrain.sites.push(fishingSite);
 if (homeSite) terrain.sites.push(homeSite);
@@ -1579,7 +1583,9 @@ const title = started ? null : createTitle(touchDevice, () => { started = true; 
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
-const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...(cemeteries?.places ?? []), ...(stuntPark?testParkPlaces(stuntPark,manifest.village):[])];
+const stuntPlaces = testPark ? testParkPlaces(testPark, manifest.village)
+  : quarryStuntPark ? quarryFeature?.quarryCoursePlaces() ?? [] : [];
+const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...(cemeteries?.places ?? []), ...stuntPlaces];
 const placesUI = !mailMode && !bare && (placeList.length || (ERA.modern && !!tallKey)) ? new PlacesUI(placeList, manifest.village, history?.placeRoads ?? roads, {
 
   canOpen: () => started,
