@@ -34,7 +34,7 @@ for (const url of urls) {
     const both = await page.read(`(()=>{const y=mmm.yardProps,l=mmm.lotProps;if(!y)return null;
       return {yard:y.live.map(v=>({kind:v.p.kind,x:v.p.x,z:v.p.z,heading:v.p.yaw})),
         lot:l.items.filter(i=>!l.near.dropped.has(i)).map(i=>({kind:i.prop.kind,x:i.x,z:i.z,heading:i.prop.heading,half:i.prop.half,halfWidth:i.prop.halfWidth})),
-        left:l.near.dropped.size};})()`);
+        left:l.near.dropped.size,cleared:l.cleared};})()`);
     if (name === 'desktop') assert.ok(both, 'the desktop view is mail play, where the breakable yard props stand');
     if (both) {
       // The breakable props' sizes, read from their own rules file so the two never drift apart.
@@ -58,7 +58,9 @@ for (const url of urls) {
         worst = Math.min(worst, d);
         assert.ok(d >= 1 - 0.1, `a ${a.kind} at ${a.x.toFixed(1)},${a.z.toFixed(1)} stands ${d.toFixed(2)} m from a ${b.kind}`);
       }
-      console.log(name, 'yard props', JSON.stringify({ yard: yard.length, lot: both.lot.length, left: both.left, pairsChecked: near, closest: +worst.toFixed(2) }));
+      console.log(name, 'yard props', JSON.stringify({ yard: yard.length, lot: both.lot.length, left: both.left, cleared: both.cleared, pairsChecked: near, closest: +worst.toFixed(2) }));
+      assert.ok(near > 0, 'lot props and yard props stand near each other somewhere, so the clearance was measured');
+      assert.ok(both.cleared > 0, 'some lot props gave way to yard props (clearOf ran)');
     }
     assert.equal(census.area, 'mabou');
     assert.equal(census.low, params.get('q') === 'low', 'LOW detail follows the page');

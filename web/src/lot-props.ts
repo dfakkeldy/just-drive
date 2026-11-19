@@ -73,6 +73,8 @@ export class LotProps {
   private near: NearInstances<Item>;
   private cells = new Map<number, Solid[]>();
   private dogs: Item[];
+  /** How many props gave way to another system's footprints (clearOf). */
+  cleared = 0;
   private material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
 
   /** `sea`: the game's sea level; a prop never stands below it, in a brook, on a road the land knows, or on a steep bank. */
@@ -134,6 +136,7 @@ export class LotProps {
   clearOf(others: readonly Footprint[]): number {
     const gone = overlapping(this.items.map((i) => i.prop), others);
     for (const k of gone) { const item = this.items[k]; this.drop(item); this.near.remove(item); }
+    this.cleared += gone.length;
     return gone.length;
   }
 

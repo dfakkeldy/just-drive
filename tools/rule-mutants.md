@@ -15,7 +15,7 @@ Base: `f965706`, current `origin/main` when this branch started on 15 November 2
 | school-bus-rules.ts | school-bus | school-bus, embedded --mutations | Covered |
 | shift-rules.ts | shift | shift-rules-mutations | Added four mutants |
 | yard-dog-rules.ts | yard-dog, yard-dog-rules | yard-dog-rules-mutations | Existing yard-dog row mutates placement only. Added a pure-rule check and four rule mutants |
-| lot-props-rules.ts | lot-props-rules | lot-props-rules-mutations | New module (lot props at houses, 19 Nov 2026): pure check on a made-up street and every Mabou house, four rule mutants |
+| lot-props-rules.ts | lot-props-rules | lot-props-rules-mutations | New module (lot props at houses, 19 Nov 2026): pure check on a made-up street and every Mabou house, five rule mutants |
 
 Open PR audit used `gh pr diff --name-only` for each open PR: #11, #85,
 #99, #118, #122, #123, #124, #125, #126 and #127. None changes the eleven

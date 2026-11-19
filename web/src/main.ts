@@ -602,7 +602,9 @@ const lotPropList = ERA.modern && buildingList && params.get('lotprops') !== '0'
   excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...[villageSite, hawkesburySite, mabouSite].flatMap(s => s?.clear ?? [])],
 }) : [];
 // No single tree stands in a parked car; the canopy is left as it is.
-for (const p of lotPropList) { const r = Math.hypot(p.half, p.halfWidth) + 0.6; terrain.addTreeClear([p.x - r, p.z - r, p.x + r, p.z + r]); }
+// Kept apart: these only clear trees. Mail play's breakable yard props must not give way to them (they give way to those).
+const lotTreeClear = new Set<number[]>();
+for (const p of lotPropList) { const r = Math.hypot(p.half, p.halfWidth) + 0.6, box: [number, number, number, number] = [p.x - r, p.z - r, p.x + r, p.z + r]; lotTreeClear.add(box); terrain.addTreeClear(box); }
 const lotProps = lotPropList.length ? new LotProps(lotPropList, terrain, LOW, SEA_LEVEL) : null;
 if (lotProps) scene.add(lotProps.group);
 let garageEntry = readVehicle(params, !mailMode), vehicleSpec = garageEntry.spec;
@@ -905,7 +907,7 @@ if (shift instanceof Shift) {
       // Hand-built sites and landmarks stay clear; ordinary buildings are kept clear by the oriented rule instead
       // (their own clear boxes would push most yard props out of the yards).
       excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []),
-        ...clear.filter((b: number[]) => !houseBoxes.has(b)).map((b: number[]): [number, number, number, number] => [b[0], b[1], b[2], b[3]])],
+        ...clear.filter((b: number[]) => !houseBoxes.has(b) && !lotTreeClear.has(b)).map((b: number[]): [number, number, number, number] => [b[0], b[1], b[2], b[3]])],
     });
     yardProps = new YardProps(yardList, terrain, LOW || touchDevice);
     // No parked car or mower stands in a fence, a clothesline or a woodpile: where these are out, a lot prop on one is left out.
