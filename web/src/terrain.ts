@@ -1048,7 +1048,8 @@ export class Terrain {
         out.kind = raw & 15;
         out.bridge = (raw & 16) !== 0;
         out.washboard = (raw & 32) !== 0;
-        if ((raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
+        // A gravel driveway, drawn as a gravel road (drawnRoadBytes); in 1884 it is drawn and driven as the track it is.
+        if (!this.cartRoads && (raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
       }
     }
     // Mail and every other ground reader see the same exact deck as the wheels.

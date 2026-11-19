@@ -5,6 +5,7 @@ import { BIKE_SPEC, createBike } from '../web/src/bike.ts';
 import { GARAGE, readVehicle } from '../web/src/garage.ts';
 import { SceneryContact } from '../web/src/explore.ts';
 import { pushOut } from '../web/src/parked.ts';
+import { potholeDepth, potholeDensity } from '../web/src/defects.ts';
 const only = process.env.BIKE_CASE;
 const results = [];
 function test(name, fn) { if(only && only!==name)return; fn(); results.push(name); console.log('PASS '+name); }
@@ -25,6 +26,13 @@ test('a gravel driveway rides as gravel, a plain track as dirt',()=>{
  for(const [opts,name] of [[{kind:4,gravel:true},'gravel'],[{kind:4},'dirt track'],[{kind:3},'gravel']]){const {v}=world(opts);run(v,.1,go);assert.equal(v.surfaceName,name,JSON.stringify(opts));}
  // The 1884 cart roads have no gravel driveways: a track is a track there, as for the car.
  const {v,terrain}=world({kind:4,gravel:true});terrain.cartRoads=true;run(v,.1,go);assert.equal(v.surfaceName,'dirt track','1884 track');
+ // Its potholes are a gravel road's, as it is drawn: where a gravel road has a hole and a track has none, the bike's
+ // fork takes it as on the gravel road.
+ const fork=(opts,x)=>{const {v}=world(opts);v.place(x,1.5,Math.PI/2);run(v,1/60,idle);return v.frontTravel;};
+ let x=0;while(x<3000&&!(potholeDepth(x,1.5,potholeDensity(3,false))>.03&&potholeDepth(x,1.5,potholeDensity(4,false))===0))x+=.37;
+ assert.ok(x<3000,'a spot with a gravel road hole and no track hole');
+ assert.ok(fork({kind:3},x)>fork({kind:4},x),'the bike feels the gravel road hole there');
+ assert.equal(fork({kind:4,gravel:true},x),fork({kind:3},x),'a gravel driveway holds a gravel road\'s potholes');
 });
 test('garage choice precedence and mail defaults',()=>{
  const store=v=>()=>({getItem:()=>v});

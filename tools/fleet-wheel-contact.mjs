@@ -8,5 +8,5 @@ export function wheelPothole(member,index,terrain,potholeDepth,potholeDensity){
  const station=member.id==='bike'?v:{x:v.x+Math.sin(v.heading)*along+Math.cos(v.heading)*side,z:v.z-Math.cos(v.heading)*along+Math.sin(v.heading)*side};
  const s=terrain.surfaceAt(station.x,station.z);
  if(!s||s.kind===0||s.roadDist>(member.id==='bike'?s.halfWidth:s.halfWidth-.2))return 0;
- return potholeDepth(station.x,station.z,potholeDensity(s.kind,s.washboard));
+ return potholeDepth(station.x,station.z,potholeDensity(s.kind,s.washboard,s.gravel));
 }

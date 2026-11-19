@@ -312,7 +312,7 @@ export class Vehicle {
       if (this.spec.locomotion === 'horse') return g;
       const sw = this.terrain.surfaceAt(wx, wz);
       if (!sw || sw.kind === 0 || sw.roadDist > sw.halfWidth - 0.2) return g;
-      let d = potholeDepth(wx, wz, potholeDensity(sw.kind, sw.washboard));
+      let d = potholeDepth(wx, wz, potholeDensity(sw.kind, sw.washboard, sw.gravel));
       if (d > deepest) deepest = d;
       if (sw.washboard) d += washboard(wx * ax + wz * az);
       return g - d;

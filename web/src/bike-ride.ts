@@ -242,7 +242,7 @@ export class BikeRide implements Ride {
       // Real ridges remain. Deterministic vibration and small lateral skips are less harsh than the car.
       const phase = this.x * Math.sin(this.heading) - this.z * Math.cos(this.heading);
       const ridge = s.washboard ? washboard(phase) : 0;
-      const hole = s.kind > 0 && s.roadDist < s.halfWidth ? potholeDepth(this.x, this.z, potholeDensity(s.kind, s.washboard)) : 0;
+      const hole = s.kind > 0 && s.roadDist < s.halfWidth ? potholeDepth(this.x, this.z, potholeDensity(s.kind, s.washboard, s.gravel)) : 0;
       const rough = Math.sin(phase * 4.1) * surf.rough * Math.min(speed / 10, 1);
       this.frontTravel = clamp(rough + ridge * .6 + hole * .4 + this.compression + (t < 0 ? .08 : 0), -.09, .24);
       this.rearTravel = clamp(-rough * .7 + ridge * .4 + this.compression * .7, -.09, .20);
