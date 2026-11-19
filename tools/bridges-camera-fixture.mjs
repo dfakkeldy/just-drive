@@ -16,7 +16,7 @@ export async function cameraFixture(source=readFileSync(root+'web/src/main.ts','
  if(start<0||end<0)throw Error('production parked placement block missing');
  const hold=source.slice(start,end)+'\n    }';
  const code=`import * as THREE from ${JSON.stringify(pathToFileURL(root+'web/node_modules/three/build/three.module.js').href)};
- export function makeChase(vehicle,terrain,roads){const camera=new THREE.PerspectiveCamera(),car=vehicle.car,vehicleSpec=vehicle.spec,ride={chase:()=>false},view='chase',started=true,towing=null,fleet=null,drone={active:false},landDrone=()=>{};const camPos=new THREE.Vector3(),camLook=new THREE.Vector3();let camHeading=0,camReady=false;${node.getText(ast)}return{camera,chase};}
+ export function makeChase(vehicle,terrain,roads){const camera=new THREE.PerspectiveCamera(),car=vehicle.car,vehicleSpec=vehicle.spec,ride={chase:()=>false},view='chase',started=true,towing=null,fleet=null,drone={active:false},landDrone=()=>{},astra=null,garageEntry={id:'car'};const camPos=new THREE.Vector3(),camLook=new THREE.Vector3();let camHeading=0,camReady=false;${node.getText(ast)}return{camera,chase};}
  export function hold(vehicle,terrain,waitingToDrive,refusal){const input={throttle:0,steer:0,handbrake:true},demo=0,dt=1/120,relief={busy:false};let drove=0;const driveVehicle=(dt,input)=>vehicle.update(dt,input);${hold}}
  `;
  const built=await transform(code,{loader:'ts',format:'esm',target:'es2022'}),mod=await import('data:text/javascript;base64,'+Buffer.from(built.code).toString('base64'));cache.set(source,mod);return mod;
