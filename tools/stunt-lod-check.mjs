@@ -9,6 +9,7 @@ import {StuntPark,PlacedStunt} from '../web/src/stunt-kit.ts';
 import {testParkLayout} from '../web/src/stunt-test-park.ts';
 // PR #144: the mirror crown line is the one reviewed difference from main in these programs (tools/coast-programs.mjs).
 import {reviewedMirrorCrown} from './mirror-crown.mjs';
+import {drawnRoadBytes} from '../web/src/terrain.ts';
 // PR #27: ROAD_PAVEMENT (Mabou pavement flags) is new #ifdef text in TERRAIN_FRAG. Without that define, resolve only its
 // own #ifdef/#else/#endif lines (keeping the #else side) and compare everything else as written.
 export function withoutPavement(source){
@@ -25,7 +26,16 @@ export function withoutPavement(source){
   return out.join('\n');
 }
 assert.equal(withoutPavement('a\n#ifdef ROAD_PAVEMENT\nb\n#ifdef X\nc\n#endif\n#else\nd\n#endif\n#ifdef ROAD_PAVEMENT\ne\n#endif\nf'),'a\nd\nf');
-const compiled=material=>{const source=reviewedMirrorCrown(material.fragmentShader);return material.defines?.ROAD_PAVEMENT?source:withoutPavement(source);};
+const compiled=(material,defines=material.defines)=>{const source=reviewedMirrorCrown(material.fragmentShader);return defines?.ROAD_PAVEMENT?source:withoutPavement(source);};
+// The gravel driveways' program fix: on the main this compares with, a tile whose only paint bits were a gravel
+// driveway's (a track, kind 4, with bit 64) took ROAD_PAVEMENT and its texture held the raw track byte. Here such a tile
+// takes no ROAD_PAVEMENT and its texture draws the driveway as a gravel road (drawnRoadBytes). Map main's tile to that,
+// then compare as before. On a tile without a gravel driveway, and on a main that has the fix, this changes nothing.
+export function drawnHere(tile){
+  const material=tile.mesh.material,defines={...material.defines},road=tile.road,data=material.uniforms.tRoad.value.image?.data;
+  if(defines.ROAD_PAVEMENT&&road&&!road.some((v,k)=>k%4===2&&(v&192)!==0&&(v&15)!==4))delete defines.ROAD_PAVEMENT;
+  return {defines,source:compiled(material,defines),road:road&&data&&data.buffer===road.buffer?drawnRoadBytes(data):data};
+}
 const main=await import(pathToFileURL(process.env.STUNT_LOD_MAIN));
 const hill=Number(process.env.STUNT_LOD_HILL??2.5),low=process.env.STUNT_LOD_LOW==='1';
 const identity=process.env.STUNT_LOD_MODE==='identity';
@@ -55,9 +65,11 @@ for(let level=0;level<=8;level++){
     const name=`${key[0]}/${key[1]}_${key[2]}`,a=original.tiles.get(name),b=candidate.tiles.get(name);
     for(const channel of ['ground','canopy','road'])exact(b[channel],a[channel],`MAIN_PATH_REGRESSION: no-park ${name} ${channel}`);
     for(const attribute of Object.keys(a.mesh.geometry.attributes))exact(b.mesh.geometry.attributes[attribute].array,a.mesh.geometry.attributes[attribute].array,`MAIN_PATH_REGRESSION: no-park ${name} ${attribute}`);
-    assert.equal(compiled(b.mesh.material),compiled(a.mesh.material),'ordinary fragment unchanged');
-    assert.deepEqual(b.mesh.material.defines,a.mesh.material.defines,'ordinary material flags unchanged');
-    for(const uniform of ['tNormal','tRoad','tBrook'])exact(b.mesh.material.uniforms[uniform].value.image?.data,a.mesh.material.uniforms[uniform].value.image?.data,`MAIN_PATH_REGRESSION: ordinary ${uniform} bytes unchanged`);
+    const here=drawnHere(a);
+    assert.equal(compiled(b.mesh.material),here.source,'ordinary fragment unchanged');
+    assert.deepEqual(b.mesh.material.defines,here.defines,'ordinary material flags unchanged');
+    for(const uniform of ['tNormal','tBrook'])exact(b.mesh.material.uniforms[uniform].value.image?.data,a.mesh.material.uniforms[uniform].value.image?.data,`MAIN_PATH_REGRESSION: ordinary ${uniform} bytes unchanged`);
+    exact(b.mesh.material.uniforms.tRoad.value.image?.data,here.road,'MAIN_PATH_REGRESSION: ordinary tRoad bytes unchanged');
     samples+=a.mesh.geometry.attributes.position.count;
   }
   else if(level<8){
@@ -66,8 +78,9 @@ for(let level=0;level<=8;level++){
       exact(b.ground,a.ground,`LOD ${level}: ground samples exact`);
       exact(b.canopy,a.canopy,`LOD ${level}: canopy samples exact`);
       exact(b.mesh.geometry.attributes.position.array,a.mesh.geometry.attributes.position.array,`LOD ${level}: actual drawn triangles exact`);
-      assert.equal(compiled(b.mesh.material),compiled(a.mesh.material),'coarse colour program unchanged');
-      assert.deepEqual(b.mesh.material.defines,a.mesh.material.defines,'coarse material flags unchanged');
+      const here=drawnHere(a);
+      assert.equal(compiled(b.mesh.material),here.source,'coarse colour program unchanged');
+      assert.deepEqual(b.mesh.material.defines,here.defines,'coarse material flags unchanged');
       if(a.road)exact(b.road,a.road,`LOD ${level}: driving metadata exact`);
       else assert.ok(!b.road||b.road.every(v=>v===0),'empty metadata stays empty');
       samples+=a.mesh.geometry.attributes.position.count;
