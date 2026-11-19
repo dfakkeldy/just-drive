@@ -81,13 +81,14 @@ for (const url of urls) {
       for(const o of [-1.35,0,1.35]){const cx=v.x+Math.sin(v.heading)*o-t.x,cz=v.z-Math.cos(v.heading)*o-t.z,a=cx*ax+cz*az,b=-cx*az+cz*ax;
         const out=Math.hypot(Math.max(Math.abs(a)-t.half,0),Math.max(Math.abs(b)-t.halfWidth,0));deepest=Math.max(deepest,0.95-out);}
       return {deepest,gap:Math.hypot(v.x-t.x,v.z-t.z)};})()`;
-    await page.read(`(()=>{const v=mmm.vehicle,t=${JSON.stringify(target)},ax=Math.sin(t.heading),az=-Math.cos(t.heading),back=${touch}-0.3;
-      v.place(t.x-ax*back,t.z-az*back,t.heading);v.vx=ax*3;v.vz=az*3;v.speed=3;return true;})()`);
+    const start = await page.read(`(()=>{const v=mmm.vehicle,t=${JSON.stringify(target)},ax=Math.sin(t.heading),az=-Math.cos(t.heading),back=${touch}-0.3;
+      const placed=v.place(t.x-ax*back,t.z-az*back,t.heading);v.vx=ax*3;v.vz=az*3;v.speed=3;return {placed,...${inside}};})()`);
+    assert.ok(start.placed && start.deepest > 0.2, `the car starts 0.3 m inside the ${target.kind} (placed ${start.placed}, ${start.deepest} m in)`);
     await page.send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'ArrowUp', key: 'ArrowUp', windowsVirtualKeyCode: 38 });
     const samples = [];
     try { for (let i = 0; i < 30; i++) { samples.push(await page.read(inside)); await sleep(50); } }
     finally { await page.send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'ArrowUp', key: 'ArrowUp', windowsVirtualKeyCode: 38 }); }
-    const settled = samples.slice(10), drive = { start: +samples[0].deepest.toFixed(3), deepest: +Math.max(...settled.map(s => s.deepest)).toFixed(3), gap: +settled.at(-1).gap.toFixed(2), touch: +touch.toFixed(2) };
+    const settled = samples.slice(10), drive = { start: +start.deepest.toFixed(3), deepest: +Math.max(...settled.map(s => s.deepest)).toFixed(3), gap: +settled.at(-1).gap.toFixed(2), touch: +touch.toFixed(2) };
     console.log(name, 'drive', JSON.stringify(drive));
     assert.ok(drive.deepest < 0.05, `the ${target.kind} pushes the car out to its bumper and holds it there (deepest ${drive.deepest} m)`);
     assert.ok(drive.gap < touch + 1.5, 'the car stays at the bumper, not thrown off');
