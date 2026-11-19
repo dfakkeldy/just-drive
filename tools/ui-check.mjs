@@ -69,7 +69,7 @@ for (const just of [false, true]) for (const area of ['mabou', 'judique']) for (
 // The wharf guide adds deckhand. The Canso Causeway canal (#123) adds canal (null elsewhere).
 // Mabou's main street adds mabouMain. The camera drone adds drone, and freeCamera (the old F camera, for picture tools that hold the car still).
 // The road animals (#118) add roadAnimals (null on test visits without wildlife=1).
-const devKeys = 'bigMap footpaths gamepad sidewalks hikes drawProbe finish farLand farTurbines farVisibility tall aiDriver ambientTraffic animals area buildings camera canal cemeteries chase church coast cost culverts deckhand detail driveVehicle drone edge endings engineSound era fishing freeCamera gameMode grass harbourLights hawkesbury history home interiors journey landmarks low mabouMain mineSite miniMap mp picture places porch porchDog porchSite props quality quarry radio relief renderer roadAnimals roadScene roads scene schoolBus shift stockpiles terrain trees vehicle vehicleId village water yard yardDog yardDogSite yardJob'.split(' ').sort();
+const devKeys = 'bigMap footpaths gamepad driftFeedback sidewalks hikes drawProbe finish farLand farTurbines farVisibility tall aiDriver ambientTraffic animals area buildings camera canal cemeteries chase church coast cost culverts deckhand detail driveVehicle drone edge endings engineSound era fishing freeCamera gameMode grass harbourLights hawkesbury history home interiors journey landmarks low mabouMain mineSite miniMap mp picture places porch porchDog porchSite props quality quarry radio relief renderer roadAnimals roadScene roads scene schoolBus shift stockpiles terrain trees vehicle vehicleId village water yard yardDog yardDogSite yardJob'.split(' ').sort();
 const resetOrder = ['interiors', 'relief', 'yardJob', 'fishing', 'roadScene', 'schoolBus'];
 for (const mode of ['mail', 'explore']) {
   const url = new URL(base);
@@ -84,7 +84,7 @@ for (const mode of ['mail', 'explore']) {
     }
     const keys = await p.read('Object.keys(mmm).sort()');
     console.log(`MMM_KEYS ${mode} ${JSON.stringify(keys)}`);
-    check(JSON.stringify(keys) === JSON.stringify(devKeys), `${mode}: full-boot dev API keeps main 9826d95 keys plus G14 cost, porch, yard-dog, cemeteries, ambient traffic, Judique village, Port Hawkesbury, Mabou main street, engine sound, fleet driver, stockpiles, deckhand, drone, road animal inspection, sidewalks and gamepad keys`);
+    check(JSON.stringify(keys) === JSON.stringify(devKeys), `${mode}: full-boot dev API keeps main 9826d95 keys plus G14 cost, porch, yard-dog, cemeteries, ambient traffic, Judique village, Port Hawkesbury, Mabou main street, engine sound, fleet driver, stockpiles, deckhand, drone, road animal inspection, sidewalks, gamepad and drift feedback keys`);
     check(await p.read('mmm.gameMode') === (mode === 'explore' ? 'explore' : 'mail'), `${mode}: intended game mode booted`);
     if (mode === 'explore') {
       check(await p.read(`['yardJob', 'fishing', 'roadScene', 'schoolBus'].every(name => mmm[name] === null)`), 'Just Drive keeps optional mail features absent');

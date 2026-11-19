@@ -14,9 +14,10 @@ const COMPLAINTS = ['lawnDamage', 'boxDown', 'lawnMail', 'ditchMail', 'missing',
 const UNSCORED = ['sceneAnimal'];
 const GRADES = ['box:rock', 'box:lean', 'box:dent', 'box:down'];
 
-ok('every complaint kind but an animal scare, mailbox grade and lawn ruts score; nothing else does yet', () => {
-  for (const kind of [...COMPLAINTS, ...GRADES, 'rut']) assert.ok(POINTS[kind] > 0, kind);
-  assert.equal(Object.keys(POINTS).length, COMPLAINTS.length + GRADES.length + 1);
+ok('every complaint kind but an animal scare, mailbox grade, lawn ruts and a drift score; nothing else does yet', () => {
+  // A drift (grok-bots#1245, drift-rules.ts) is the newest kind; tools/drift-rules-check.mjs holds its size and bonus.
+  for (const kind of [...COMPLAINTS, ...GRADES, 'rut', 'drift']) assert.ok(POINTS[kind] > 0, kind);
+  assert.equal(Object.keys(POINTS).length, COMPLAINTS.length + GRADES.length + 2);
   // Frightening an animal is a complaint but, like a hit (NEVER), it never scores.
   for (const kind of UNSCORED) { assert.equal(POINTS[kind], undefined, kind); assert.equal(new ScoreBook().add(ev(kind, 1)).points, 0, kind); }
   // The complaint file names exactly these fourteen kinds.
@@ -156,7 +157,7 @@ ok('the school bus stays a penalty: negative, anywhere, at any step, and it ends
 ok('the stream stays open: an unknown kind is recorded and scores nothing', () => {
   const s = new ScoreStream(), heard = [], b = new ScoreBook();
   const stop = s.listen(e => heard.push(b.add(e)));
-  s.report(ev('drift', 1)); s.report(ev('lawnMail', 2));
+  s.report(ev('airtime', 1)); s.report(ev('lawnMail', 2));   // airtime: not a kind yet (a drift now is: drift-rules.ts)
   assert.equal(heard.length, 2, 'every listener hears every fact'); assert.equal(heard[0].points, 0); assert.ok(heard[1].points > 0); assert.equal(s.reported, 2);
   stop(); s.report(ev('flag', 3)); assert.equal(heard.length, 2, 'unsubscribed');
   for (let i = 0; i < KEEP + 10; i++) s.report(ev('rut', i));
