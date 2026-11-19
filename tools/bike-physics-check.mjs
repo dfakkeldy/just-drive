@@ -23,6 +23,8 @@ function launch(speed=20){ const {v}=world({height:ramp});v.place(-4,0,Math.PI/2
  for(let i=0;i<2000;i++){v.update(BIKE_STEP,idle);if(v.airborne){take={x:v.x,y:v.y,vx:v.vx,vy:v.vy};break;}}assert.ok(take,'ramp must launch');return {v,take}; }
 test('a gravel driveway rides as gravel, a plain track as dirt',()=>{
  for(const [opts,name] of [[{kind:4,gravel:true},'gravel'],[{kind:4},'dirt track'],[{kind:3},'gravel']]){const {v}=world(opts);run(v,.1,go);assert.equal(v.surfaceName,name,JSON.stringify(opts));}
+ // The 1884 cart roads have no gravel driveways: a track is a track there, as for the car.
+ const {v,terrain}=world({kind:4,gravel:true});terrain.cartRoads=true;run(v,.1,go);assert.equal(v.surfaceName,'dirt track','1884 track');
 });
 test('garage choice precedence and mail defaults',()=>{
  const store=v=>()=>({getItem:()=>v});

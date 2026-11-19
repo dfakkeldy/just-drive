@@ -153,7 +153,7 @@ export class BikeRide implements Ride {
     if (s.deck) return SURFACES.concrete;
     if (this.roads.deckHeight(this.x, this.z) !== null) return SURFACES.paved;
     if (s.kind === 0 || s.roadDist > s.halfWidth + .4) return s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
-    return s.kind === 9 ? SURFACES.concrete : s.kind <= 2 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 5 ? SURFACES.trail : s.kind === 4 && !s.gravel ? SURFACES.track : SURFACES.gravel;
+    return s.kind === 9 ? SURFACES.concrete : s.kind <= 2 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 5 ? SURFACES.trail : s.kind === 4 && (!s.gravel || this.terrain.cartRoads) ? SURFACES.track : SURFACES.gravel;
   }
   private beginJump(): void {
     this.airborne = true; this.launchX = this.x; this.launchZ = this.z; this.airPitch = 0;

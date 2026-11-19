@@ -598,7 +598,7 @@ async function builds(count) {
   const HOOKS=[['','      if (this.canopyExcludes?.(t.x0 + (k % S) * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + Math.floor(k / S) * mpp))) { c = 0; px[k * 4 + 2] = 0; }\n','      canopy[k] = c;\n'],
     ['        if(coastal?.quarry && coastField && coastField[k0*4+1]>.5)c=0;\n','        if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;\n',''],
     // PR #27 (reviewed): the ROAD_PAVEMENT define on tiles whose road flags carry Mabou's double-yellow or worn bits
-    // (64/128): a flag read and a colour define; no ground, canopy or road maths change. Once each, ordinary program only.
+    // (64/128; 64 on a track is a gravel driveway): a flag read and a colour define; no ground, canopy or road maths change. Once each, ordinary program only.
     ['    let lo = Infinity, hi = -Infinity',', roadPavement = false',';\n'],
     ['      if (road && road[k * 4 + 2] > 0) {\n','        roadPavement ||= (road[k * 4 + 2] & 192) !== 0;\n','        // Nothing stands on a road'],
     ['...(airportMarkings ? { AIRPORT: 1 } : {})',', ...(roadPavement && !this.cartRoads ? { ROAD_PAVEMENT: 1 } : {})',' },uniforms:tileUniforms}'],

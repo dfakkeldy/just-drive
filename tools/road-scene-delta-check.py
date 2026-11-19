@@ -87,7 +87,7 @@ def november18_driveways():
     assert after[2]['pts'] == drive['pieces'][0]['pts'] and not after[2]['bridge'] and not after[2]['washboard']
     # A house beside its own driveway is fine; a track still is not (november18_rules above).
     ground = lambda x, y: 53
-    near_drive = dict(NOV18, buildings=[dict(NOV18['buildings'][0], x=80, y=125)])
+    near_drive = dict(NOV18, buildings=[dict(NOV18['buildings'][0], x=80, y=120)])
     assert len(hand_buildings([], 'mabou', ground, after, observations=near_drive)) == 1
     refused = {
         'a mouth off its road': dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[5, 100], [60, 100]])]),
