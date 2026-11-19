@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import {
   KINDS, SIZE, SECTION, BREAK_SPEED, SLOW,
-  PIECE_LIFE, BALE_LIFE, GARBAGE_WEEKDAY, placeYard, garbageDay, recyclingDay, laundryDay, outToday, isField, breaks, scoreKind,
+  PIECE_LIFE, BALE_LIFE, GARBAGE_WEEKDAY, placeYard, garbageDay, recyclingDay, laundryDay, outToday, isField, isDry, breaks, scoreKind,
   touches, launch, stepPiece, rollBale, boxDistance, segmentDistance, along, across, BALE_STRIKE, DAMAGE_COMPLAINT,
 } from '../web/src/yard-props-rules.ts';
 
@@ -117,6 +117,12 @@ const open = { canopy: 0, roadDist: 40, halfWidth: 3, brook: 99, slope: .05 };
 assert.equal(isField(open), true);
 for (const [change, why] of [[{ canopy: 3 }, 'trees'], [{ water: true }, 'water'], [{ mineral: true }, 'mineral ground'],
   [{ brook: 5 }, 'a brook'], [{ roadDist: 3 + FIELD_SETBACK - .1 }, 'the road'], [{ slope: .35 }, 'steep']]) assert.equal(isField({ ...open, ...change }), false, why);
+
+// Dry yard ground: no prop in mapped water, a brook or at the shore (literal clearances: brook 2 m, 0.6 m above the sea).
+const dry = { brook: 99, height: 12, seaLevel: 0 };
+assert.equal(isDry(dry), true); assert.equal(isDry({ ...dry, brook: 2.1 }), true); assert.equal(isDry({ ...dry, height: .61 }), true);
+for (const [change, why] of [[{ water: true }, 'mapped water'], [{ brook: -1 }, 'in a brook'], [{ brook: 2 }, 'at a brook edge'],
+  [{ height: .6 }, 'the shore'], [{ height: -.4 }, 'below the sea'], [{ seaLevel: 11.5 }, 'a raised sea level']]) assert.equal(isDry({ ...dry, ...change }), false, why);
 
 // Break grades: below the threshold a solid touch, at it a break. The car keeps most of its speed.
 for (const k of KINDS) {

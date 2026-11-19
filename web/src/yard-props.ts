@@ -4,7 +4,7 @@ import { pushOut, type Solid } from './parked';
 import type { Terrain } from './terrain';
 import type { Vehicle } from './vehicle';
 import { CAR_SPEC } from './vehicle-spec';
-import { type CarShape, SIZE, SECTION, boxDistance, breaks, isField, launch, laundryDay, outToday, rollBale, stepPiece, touches, SLOW,
+import { type CarShape, SIZE, SECTION, isDry, boxDistance, breaks, isField, launch, laundryDay, outToday, rollBale, stepPiece, touches, SLOW,
   type Piece, type YardProp } from './yard-props-rules';
 
 /**
@@ -19,6 +19,8 @@ interface Live {
   /** Ground at the centre and the pitch along the prop, once the fine ground is in (null before). */
   /** Ground height and the terrain detail level it was read at (refined as finer ground loads, as the mailboxes are). */
   y: number | null; level: number; pitch: number;
+  /** Its fine ground is water, a brook or the shore (yard-props-rules.ts isDry): never drawn or hit. */
+  wet: boolean;
   /** Bales: 1 open field, 0 not, -1 not known yet. */
   field: number;
   moving: boolean; slots: [number, number, number];
@@ -72,7 +74,7 @@ export class YardProps {
 
   constructor(list: readonly YardProp[], private readonly terrain: Terrain, low: boolean) {
     this.limits = low ? YARD_LIMITS.low : YARD_LIMITS.desktop;
-    this.live = list.map(p => ({ p, parts: null, broken: false, pieces: null, y: null, level: 0, pitch: 0, field: p.field ? -1 : 1, moving: false, slots: [0, 0, 0] }));
+    this.live = list.map(p => ({ p, parts: null, broken: false, pieces: null, y: null, level: 0, pitch: 0, wet: false, field: p.field ? -1 : 1, moving: false, slots: [0, 0, 0] }));
     for (const l of this.live) {
       const k = Math.floor(l.p.x / CELL) * 65536 + Math.floor(l.p.z / CELL), cell = this.cells.get(k);
       if (cell) cell.push(l); else this.cells.set(k, [l]);
@@ -195,7 +197,7 @@ export class YardProps {
         for (const l of this.cells.get(cx * 65536 + cz) ?? []) {
           if (!outToday(l.p, this.day) || (l.p.x - cam.x) ** 2 + (l.p.z - cam.z) ** 2 > range * range) continue;
           if (!l.broken) this.ground(l);
-          if (l.y === null) continue;
+          if (l.y === null || l.wet) continue;
           if (l.field < 0) l.field = this.fieldAt(l);
           if (l.field === 0 || l.field < 0) continue;
           near.push(l);
@@ -227,6 +229,7 @@ export class YardProps {
     const ax = Math.sin(l.p.yaw) * h, az = -Math.cos(l.p.yaw) * h;
     const a = this.terrain.heightAt(l.p.x + ax, l.p.z + az), b = this.terrain.heightAt(l.p.x - ax, l.p.z - az);
     if (y === null || a === null || b === null) return false;
+    l.wet = !isDry({ water: s.water, brook: s.brook, height: y, seaLevel: this.terrain.seaLevel });
     l.y = y; l.level = s.level; l.pitch = l.p.kind === 'bale' || l.p.kind === 'well' ? 0 : Math.atan2(a - b, 2 * h);
     this.dirty = true;
     return true;

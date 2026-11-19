@@ -119,6 +119,15 @@ export function isField(s: FieldSample): boolean {
   return s.canopy < .4 && !s.water && !s.mineral && s.brook > 8 && s.roadDist - s.halfWidth > FIELD_SETBACK && s.slope < .3;
 }
 
+/** Dry yard ground for any prop, read once the fine ground has loaded: not mapped inland water, not in or at the edge of
+ *  a brook, and above the sea (salt marsh and shore stay bare). Positions are invented from building shapes and roads,
+ *  which do not know where the water is; this keeps an invented fence or bin out of it. */
+export const BROOK_CLEAR = 2, SEA_CLEAR = .6;
+export interface GroundSample { water?: boolean; brook: number; height: number; seaLevel: number }
+export function isDry(s: GroundSample): boolean {
+  return !s.water && s.brook > BROOK_CLEAR && s.height > s.seaLevel + SEA_CLEAR;
+}
+
 /**
  * Every yard and field prop for one land. Houses get, by seeded chance, a front fence run (rail or picket, with a gap
  * for the driveway), a clothesline behind, one lawn ornament in front, a woodpile at the side, and bins at the road

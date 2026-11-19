@@ -204,6 +204,11 @@ try {
         console.log(`PASS ${name}: a slow touch holds (speed after ${r.speed.toFixed(2)} m/s)`); done = true; break;
       }
       assert.ok(done, 'a slow-touch case ran');
+      // Nothing drawn stands in water, a brook or at the shore; count the wet ones that were left out.
+      const wet = await read(`(()=>{const {yardProps:y,terrain:t}=mmm;const bad=y.active.filter(l=>{const s=t.surfaceAt(l.p.x,l.p.z);return !s||s.water||s.brook<=2||(t.heightAt(l.p.x,l.p.z)??99)<=t.seaLevel+.6;}).length;
+        return {bad,wet:y.live.filter(l=>l.wet).length,read:y.live.filter(l=>l.y!==null).length,active:y.active.length}})()`);
+      assert.equal(wet.bad, 0, `${name}: a drawn prop on wet ground ${JSON.stringify(wet)}`);
+      console.log(`PASS ${name}: every drawn prop on dry ground ${JSON.stringify(wet)}`);
     }
   }
   if (group === 'fence') {

@@ -50,7 +50,7 @@ count as kills. Every mutant must exit 1 with an assertion failure.
 | jump | Launch speed, placement continuity, landing roll, settling slide |
 | mine | Bend speed, recovery time, fork direction, signature branch |
 | shift | Suspension count, skipped day, vehicle allowance, double-day union, property damage suspension |
-| yard-props | Protected place, driveway, shoulder, mailbox and overlap clearances; garbage day; break speed; pieces at rest; bale on a slope; bale in woods |
+| yard-props | Protected place, driveway, shoulder, mailbox and overlap clearances; garbage day; break speed; pieces at rest; bale on a slope; bale in woods; props in water; props at the shore |
 | yard-dog | Pause gate, trigger range, follow limit, bark event |
 
 The runner uses the existing `mutationSources` helper and an esbuild load

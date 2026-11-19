@@ -21,6 +21,8 @@ const suites = {
       ['pieces never rest', 'if (p.age >= PIECE_LIFE) { p.y = floor; settle(p); }', ''],
       ['bale stops on a slope', 'if (speed < .15 && !steep || p.age >= BALE_LIFE) settle(p);', 'if (speed < .15 || p.age >= BALE_LIFE) settle(p);'],
       ['bale in woods', 's.canopy < .4 && ', ''],
+      ['props in water', 'return !s.water && s.brook > BROOK_CLEAR', 'return s.brook > BROOK_CLEAR'],
+      ['props at the shore', 's.height > s.seaLevel + SEA_CLEAR', 's.height > s.seaLevel - SEA_CLEAR'],
     ],
   },
   'yard-dog': {
