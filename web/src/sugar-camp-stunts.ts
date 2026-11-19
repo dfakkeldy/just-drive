@@ -22,12 +22,16 @@ export function sugarCampFrame(village: readonly [number, number]): StuntFrame {
 }
 
 /** Builds the park in normal modern West Bay play while the quarry park itself is shown. */
-export async function createSugarCampStunts(terrain: Terrain, village: readonly [number, number], low: boolean, buildings: readonly Building[] = []): Promise<StuntPark> {
+export async function createSugarCampStunts(terrain: Terrain, village: readonly [number, number], low: boolean, buildings: readonly Building[] = []): Promise<StuntPark | null> {
   const frame = sugarCampFrame(village);
   const exclusions = buildings.map(b => ({ x: b.x - village[0], z: village[1] - b.y, radius: 60 + Math.hypot(b.length, b.width) / 2 }));
   const dressing = testParkDressing(frame, 'SUGAR CAMP');
   const park = new StuntPark(terrain, testParkLayout(frame), low, exclusions, dressing, testParkRunups(dressing));
-  await park.prepare();
+  // A failed survey read leaves the area playable without the park, rather than stopping West Bay from starting.
+  try { await park.prepare(); } catch (error) {
+    const i = terrain.sites.indexOf(park); if (i >= 0) terrain.sites.splice(i, 1);
+    console.warn('Sugar Camp stunt park unavailable', error); return null;
+  }
   terrain.addTreeClear(sugarCampClearing(village));
   return park;
 }

@@ -950,7 +950,7 @@ if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.
 const churchRoom = churchSite ? await import('./interior-church') : null;
 const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => shift.interiorResult(receipt), bare)
   : churchRoom ? new Interiors(() => 0, () => '', () => {}, bare) : quietInteriors();
-if(stuntPark)for(const actor of fleet?fleet.members.map(m=>m.vehicle):[vehicle])fleetContacts.bindVehicle(actor,pose=>stuntPark.contains(pose.x,pose.z,actor.spec.envelope.reach)?terrain.heightAt(pose.x,pose.z):actor.y??0);
+if(stuntPark)for(const actor of fleet?fleet.members.map(m=>m.vehicle):[vehicle])fleetContacts.bindVehicle(actor,pose=>stuntPark.contains(pose.x,pose.z,actor.spec.envelope.reach)?terrain.heightAt(pose.x,pose.z)??actor.y??0:actor.y??0);   // unloaded ground: judge as outside, so a cold start link is not refused
 resets[resetSlot.interiors] = () => interiors.reset();
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
 if (mineSite) scene.add(mineSite.group);

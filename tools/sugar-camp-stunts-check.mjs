@@ -15,6 +15,9 @@ import {CAR_SPEC} from '../web/src/vehicle-spec.ts';
 const WEST_BAY='../data/baked/areas/westbay';
 const rel=(a,b)=>{const dx=b.x-a.x,dz=b.z-a.z,c=Math.cos(-a.heading),s=Math.sin(-a.heading);return [dx*c-dz*s,dx*s+dz*c,b.heading-a.heading];};
 const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
+/** Pieces whose visual footprint, plus 5 m, touches a pit lake. One scan for the real layout and the mutant. */
+const wetPieces=(placements,village)=>placements.filter(p=>{const piece=p.piece,b=piece.visualFootprint??piece.footprint,s=Math.sin(p.heading),c=Math.cos(p.heading);
+  for(let u=b[0]-5;u<=b[2]+5;u+=3)for(let v=b[1]-5;v<=b[3]+5;v+=3){const x=p.x+u*s+v*c,z=p.z-u*c+v*s;if(lakeAt(x+village[0],village[1]-z))return true;}return false;}).map(p=>p.piece.id);
 
 // 1. Rigid copy: every piece and fitting keeps its position and heading relative to the easy start arch.
 {
@@ -41,8 +44,7 @@ for(const low of [false,true])for(const exag of hills){
   process.env.PHONE_EXAG=String(exag);
   const {terrain,roads}=makeGround(WEST_BAY),village=terrain.manifest.village;terrain.low=low;
   const site=new QuarrySite(village);
-  const corners=[];for(let e=632200;e<=632480;e+=40)for(let n=5064150;n<=5064700;n+=40)corners.push([e-village[0],village[1]-n]);
-  await preload(terrain,corners,60);
+  // Production order: both Sites exist before any tile is built (prepare reads the survey PNGs, not tiles).
   const before=terrain.sites.length,park=await createSugarCampStunts(terrain,village,low);
   assert.equal(terrain.sites.length,before+1,'the park registers one Site');
   terrain.sites.push(site);   // main.ts order: stunt park first, then the quarry
@@ -53,6 +55,9 @@ for(const low of [false,true])for(const exag of hills){
   const rig=()=>{const root=new THREE.Group(),body=new THREE.Group();root.add(body);const g=()=>new THREE.Group();return {root,body,wheels:{fl:g(),fr:g(),rl:g(),rr:g()},steer:{fl:g(),fr:g()}};};
   const car=new Vehicle(rig(),terrain,roads,-.2,CAR_SPEC),p0=park.pieces[0].world(0,0);car.place(p0.x,p0.z,park.pieces[0].placement.heading);
   park.update(0,car,new THREE.Vector3(p0.x,(car.y??0)+10,p0.z));
+  let graded=0,sampled=0;
+  for(const p of park.pieces){const b=p.placement.piece.gradingFootprint??p.placement.piece.footprint;for(const [u,v] of [[(b[0]+b[2])/2,(b[1]+b[3])/2],[b[0],0],[b[2],0],[(b[0]+b[2])/2,b[1]],[(b[0]+b[2])/2,b[3]]]){const w=p.world(u,v);sampled++;if(terrain.siteGroundChangedAt(park,w.x,w.z))graded++;}}
+  assert.ok(graded>=sampled*.9,`built tiles carry the park grading (${graded} of ${sampled} sampled points)`);
   assert.ok(park.pieces.every(p=>p.ready),'all pieces seat on finest baked land');
   assert.ok(park.dressing.every(p=>p.ready),'all fittings seat');
   assert.ok(park.triangles+(park.pieces.length+2)*4<=(low?30000:90000),'same whole-park triangle budget as the works-yard park');
@@ -67,9 +72,9 @@ for(const low of [false,true])for(const exag of hills){
     for(let u=g[0]-(piece.runup??10);u<=g[2];u+=2)for(let v=g[1];v<=g[3];v+=2){const w=p.world(u,v),h=await terrain.surveyHeightAt(w.x,w.z);lo=Math.min(lo,h);hi=Math.max(hi,h);}   // surveyed land, before any grading
     worst=Math.max(worst,hi-lo);
     for(let u=vis[0]-5;u<=vis[2]+5;u+=3)for(let v=vis[1]-5;v<=vis[3]+5;v+=3){const w=p.world(u,v);
-      assert.equal(lakeAt(w.x+village[0],village[1]-w.z),undefined,`${piece.id} clear of the pit lakes`);
       const near=roads.nearest(w.x,w.z,40);if(near)minRoad=Math.min(minRoad,near.dist-near.road.halfWidth);}
   }
+  assert.deepEqual(wetPieces(park.pieces.map(p=>p.placement),village),[],'every piece clear of the pit lakes');
   assert.ok(worst<3,`grading per piece stays under 3 m (got ${worst.toFixed(2)} m)`);
   assert.ok(minRoad>3,`park tracks stay 3 m clear of every piece (got ${minRoad.toFixed(1)} m)`);
 
@@ -89,8 +94,16 @@ for(const low of [false,true])for(const exag of hills){
 {
   const {terrain}=makeGround(WEST_BAY),village=terrain.manifest.village,frame=sugarCampFrame(village);
   const shifted={world:(u,v)=>{const w=frame.world(u,v);return {x:w.x-330,z:w.z};},heading:frame.heading};
-  const wet=testParkLayout(shifted).some(p=>{const b=p.piece.footprint;for(let u=b[0];u<=b[2];u+=3)for(let v=b[1];v<=b[3];v+=3){const w=(()=>{const s=Math.sin(p.heading),c=Math.cos(p.heading);return {x:p.x+u*s+v*c,z:p.z-u*c+v*s};})();if(lakeAt(w.x+village[0],village[1]-w.z))return true;}return false;});
-  assert.ok(wet,'mutant: a layout moved into the pit lake is caught');
+  assert.ok(wetPieces(testParkLayout(shifted),village).length>0,'mutant: a layout moved into the pit lake is caught by the same scan');
   console.log('MUTANT caught; frame centre',SUGAR_CAMP_STUNTS.e,SUGAR_CAMP_STUNTS.n);
+}
+// 4. A failed survey read leaves West Bay playable: no park, no Site left behind.
+{
+  const {terrain}=makeGround(WEST_BAY),village=terrain.manifest.village,before=terrain.sites.length;
+  terrain.surveyHeightAt=async()=>{throw Error('503 for a pad survey tile');};
+  const warn=console.warn;console.warn=()=>{};
+  const park=await createSugarCampStunts(terrain,village,false);console.warn=warn;
+  assert.equal(park,null,'failed survey: no park');assert.equal(terrain.sites.length,before,'failed survey: its Site is removed');
+  console.log('SURVEY FAILURE handled');
 }
 console.log('PASS sugar-camp-stunts');
