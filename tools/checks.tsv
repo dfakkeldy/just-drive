@@ -44,6 +44,7 @@ pwa-migration	node tools/pwa-migration-check.mjs	node	tools/pwa* tools/build-pwa
 pwa-migration-mutations	node tools/pwa-migration-check.mjs --mutations	node-mutations	tools/pwa* tools/build-pwa.mjs tools/pwa-migration-check.mjs tools/mutation-source.mjs tools/baseline/source/pwa-migration/web/pwa/sw.js.txt	pwa-migration-check.mjs	-	600	7.22	-
 pwa-headers	node tools/pwa-headers-check.mjs	node	tools/pwa* tools/build-pwa.mjs tools/pwa-headers-check.mjs	pwa-headers-check.mjs	-	600	0.09	-
 about	node tools/about-check.mjs	node	tools/about-pages.mjs tools/about-check.mjs tools/page-links.js web/src/credits.ts web/src/controls.ts web/src/vehicle-choice.ts assets/about/* tools/build_site.sh	about-check.mjs about-pages.mjs	-	600	-	-
+just-home	node tools/just-home-check.mjs	node	tools/just-home* pipeline/just-map.json web/src/area.ts web/src/eras/history-areas.ts tools/site-pages.mjs tools/build_site.sh	just-home-check.mjs just-home.mjs	-	600	-	The Just Drive front page: a card, pin and Drive link per area; mail and 1884 links only where they belong; no script
 site	node tools/site-check.mjs	node	tools/build-pwa.mjs tools/site-check.mjs	site-check.mjs	-	600	0.20	-
 site-mutations	node tools/site-check.mjs --mutations	node-mutations	tools/build-pwa.mjs tools/site-check.mjs tools/mutation-source.mjs	site-check.mjs	-	600	0.21	-
 site-title	node tools/site-title-check.mjs	node	tools/build-pwa.mjs tools/site-title-check.mjs	site-title-check.mjs	-	600	0.61	-
