@@ -107,7 +107,8 @@ async function openPage(scene, mode, options = {}) {
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map(a => a.value ?? a.description).join(' '));
     if (m.method === 'Network.requestWillBeSent' && /^https?:/.test(m.params.request.url)) {
       const url=m.params.request.url, cls=assetClass(url), path=new URL(url).pathname;
-      if(/\/(far-land[^/]*|tall\.json)$/.test(path)) farPaths.push(path);
+      // Game data only (terrain/areas), never the dev server's /src/far-land.ts module.
+      if((cls==='terrain'||cls==='areas')&&/\/(far-land[^/]*\.(json|bin)|tall\.json)$/.test(path)) farPaths.push(path);
       if(cls) { requests++; assets[cls]++; assetIds.set(m.params.requestId,cls); }
       else if(/^\/(src\/|@|node_modules\/|\.vite\/)/.test(path)) ignoredDev++;
       else ignoredOther++;
