@@ -35,6 +35,16 @@ export async function loadRadio(base: string, options: RadioOptions = {}): Promi
   }
 }
 
+/** A call to the talk show, played into a pause of its station (party-line.ts). */
+export interface CallIn {
+  /** The files to play in turn, as addresses in memory: the call, and the nickname that ends it. */
+  readonly urls: readonly string[];
+  /** The readout's song line while it plays. */
+  readonly line: string;
+  /** Called once, when the call is over or cut off. */
+  done(): void;
+}
+
 const STATIC_TRIM = 0.12;   // how loud full static is beside a song
 const STATIC_SECONDS = 2;   // the length of the static that goes round and round
 const GESTURES = ['pointerup', 'touchend', 'click', 'keydown'] as const;
@@ -56,6 +66,9 @@ const CSS = `
 #radio.lost b{color:var(--ink-dim,#b9c3cc)}
 #radio.lost span{letter-spacing:.08em}
 body.indoorOn #radio{display:none}
+/* A call about the run: its line (the player's name) is shown whole, on a line of its own under the station. */
+#radio.call{flex-wrap:wrap;row-gap:1px;padding:3px 8px}
+#radio.call span{flex:1 0 100%;text-align:left;white-space:normal;overflow-wrap:anywhere;color:var(--ink,#eef2f6);opacity:1}
 #radioVolume{display:block;margin-top:12px}
 `;
 
@@ -88,6 +101,10 @@ export class Radio extends RadioPlayer {
   };
   private layout = 1;
   private expandedUntil = 0;
+  /** The song line while a call plays ('' when none). */
+  private callLine = '';
+  /** Asked at the end of each piece, before the next: a call to play into that gap, or null (party-line.ts). */
+  onEnd: (() => CallIn | null) | null = null;
 
   /** `storageKey`: where this radio keeps the player's station and volume. A second radio list (another game on the same site) takes its own. */
   constructor(stations: RadioStation[], base: string, start?: string, storageKey = 'mmm.radio') {
@@ -114,6 +131,39 @@ export class Radio extends RadioPlayer {
     }
     document.addEventListener('visibilitychange', () => this.hold());
     for (const type of GESTURES) document.addEventListener(type, this.wake, { capture: true, passive: true });
+  }
+
+  /** The dial and name of a station, by dial; null when the list has no such station. */
+  stationNamed(dial: string): string | null {
+    const s = this.stations.find((x) => x.dial === dial);
+    return s ? `${s.dial} ${s.name}` : null;
+  }
+
+  /** The dial the radio is on, when that station comes in here; null when it is off or lost. */
+  get tunedDial(): string | null { return this.station >= 0 && this.band !== 'lost' ? this.stations[this.station].dial : null; }
+
+  /** The tuned station and where its piece is now, while it really sounds here (not off, lost, loading or in a call). */
+  position(): { dial: string; file: string; at: number } | null {
+    const heard = this.heard();
+    return heard && this.band !== 'lost' ? { dial: this.stations[this.station].dial, ...heard } : null;
+  }
+
+  /** Plays a call now, into the pause the station is in. False when the radio cannot (off, held, not on its own piece). */
+  callIn(call: CallIn): boolean { return this.startCall(call, false); }
+
+  protected override atEnd(): boolean {
+    const call = this.station >= 0 && this.band !== 'lost' ? this.onEnd?.() : null;
+    if (!call) return false;
+    if (this.startCall(call, true)) return true;
+    call.done();
+    return false;
+  }
+
+  private startCall(call: CallIn, ended: boolean): boolean {
+    // The board hears first: whatever the words do, the call is over.
+    const started = this.interject(call.urls, () => { this.callLine = ''; call.done(); this.label(); }, ended);
+    if (started) { this.callLine = call.line; this.label(); }
+    return started;
   }
 
   /** The wind through a stuck window takes some of the volume, and a weak signal takes some of the music. */
@@ -156,7 +206,12 @@ export class Radio extends RadioPlayer {
     const band = bandOf(this.signal, fresh ? undefined : this.band);
     const heard = mix(flutter(this.signal, this.e, this.n), band);
     this.music = heard.music; this.crackle = heard.hiss;
-    if (band !== this.band) { this.band = band; this.label(); this.sounding(this.playing); }
+    if (band !== this.band) {
+      this.band = band;
+      // Out of range during a call: nobody hears the rest of it, so it ends (a muted call would still end as played).
+      if (band === 'lost') this.endCall();
+      this.label(); this.sounding(this.playing);
+    }
     this.sound();
   }
 
@@ -240,10 +295,12 @@ export class Radio extends RadioPlayer {
     this.chip.classList.toggle('off', off);
     this.chip.classList.toggle('lost', lost);
     this.chip.classList.toggle('weak', weak);
+    this.chip.classList.toggle('call', !off && !lost && !!this.callLine);
     // The station's name keeps its place when the signal goes, so the readout keeps its size; only the song's line changes.
     this.dial.textContent = off ? '♪ RADIO OFF' : `♪ ${this.stations[this.station].dial} ${this.stations[this.station].name}`;
-    const title = off ? '' : this.stations[this.station].tracks[this.track].title;
-    this.song.textContent = lost ? 'NO SIGNAL' : weak ? `WEAK · ${title}` : title;
+    const title = off ? '' : this.callLine || this.stations[this.station].tracks[this.track].title;
+    // A call line is shown as it is: the player's name has the room.
+    this.song.textContent = lost ? 'NO SIGNAL' : weak && !this.callLine ? `WEAK · ${title}` : title;
     this.chip.setAttribute('aria-label', off ? 'Radio is off. Press for the first station.'
       : lost ? `Radio: ${this.stations[this.station].name} does not come in here. Press for the next station.`
         : `Radio: ${this.stations[this.station].name}, ${weak ? 'weak signal, ' : ''}playing ${title}. Press for the next station.`);

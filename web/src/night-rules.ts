@@ -11,10 +11,12 @@ import { HORIZON } from './light-study';
 export const NIGHT_FULL = -12;
 export type RGB = readonly [number, number, number];
 
-/** The colours of the game's light just at sunset (main.ts with the sun at the horizon), linear. */
+/** The colours of the game's light just at sunset (main.ts with the sun at the horizon), linear. The sky fill is not
+ *  main.ts's day blue at the horizon, (.165, .242, .396): once the sun is down it is the grey green-blue of the upper
+ *  sky in the owner's dash cam at Mabou at dusk on 18 Nov 2026. A page's clock is fixed, so no frame shows the step. */
 export const SUNSET = {
   sun: [2.2, 1.364, .792] as RGB,
-  sky: [.165, .242, .396] as RGB,
+  sky: [.178, .250, .283] as RGB,
   fog: [.465, .495, .54] as RGB,
   ground: [.22, .20, .15] as RGB,
 };
@@ -23,7 +25,21 @@ export const NIGHT = {
   sky: [.050, .078, .172] as RGB,
   fog: [.016, .024, .046] as RGB,
   ground: [.010, .011, .016] as RGB,
+  /** The top of the night sky dome. */
+  zenith: [.004, .008, .024] as RGB,
 };
+/**
+ * The dusk sky dome, from the owner's dash cam at Mabou on 18 Nov 2026. The camera's exposure moved its colours, so
+ * these keep what it showed between them, not its values: just after sunset a warm horizon band, a pink band above it
+ * and a grey green-blue upper sky; late in dusk a deep blue-grey top over a dull orange horizon, the pink gone.
+ * The bands are strongest on the sun's side. From `LATE` on they fade into the night sky, which is unchanged.
+ */
+export const DUSK = {
+  early: { zenith: [.145, .215, .235] as RGB, band: [.330, .200, .205] as RGB, horizon: [.600, .300, .086] as RGB },
+  late: { zenith: [.022, .048, .098] as RGB, band: [.080, .062, .070] as RGB, horizon: [.140, .082, .056] as RGB },
+};
+/** The palette level of the late dusk look (about 7° below the horizon). */
+export const LATE = .55;
 
 export interface NightPalette {
   /** 0 just below the horizon (the sunset look), 1 from the end of nautical twilight. */
@@ -35,12 +51,28 @@ export interface NightPalette {
   glow: number;
   /** How bright the stars are before towns wash them out. */
   stars: number;
+  /** The sky dome: its top, the pink band and the warm horizon band (night.ts), linear. */
+  zenith: RGB; band: RGB; horizon: RGB;
+  /** How strong the warm horizon band is (1 through dusk, gone at full night), and the pink band above it. */
+  warm: number; pink: number;
 }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const smooth = (a: number, b: number, v: number) => { const t = clamp01((v - a) / (b - a)); return t * t * (3 - 2 * t); };
 /** Geometric blend: light falls by orders of magnitude at dusk, and a straight mix would stay bright too long. */
 const blend = (a: RGB, b: RGB, t: number): RGB => [0, 1, 2].map(i => a[i] ** (1 - t) * b[i] ** t) as unknown as RGB;
+
+/** The dome's colours at a palette level: early dusk to late dusk, then late dusk to the night's top. */
+function duskDome(level: number): Pick<NightPalette, 'zenith' | 'band' | 'horizon' | 'warm' | 'pink'> {
+  const { early, late } = DUSK, t = clamp01(level / LATE), night = clamp01((level - LATE) / (1 - LATE));
+  return {
+    zenith: level <= LATE ? blend(early.zenith, late.zenith, t) : blend(late.zenith, NIGHT.zenith, night),
+    band: blend(early.band, late.band, t),
+    horizon: blend(early.horizon, late.horizon, t),
+    warm: 1 - smooth(LATE, 1, level),
+    pink: 1 - smooth(.1, LATE, level),
+  };
+}
 
 /** `null` (no night look at all) unless a clock was chosen (the light study's or the player's) and its sun is below the horizon. */
 export function nightPalette(elevation: number, studyActive: boolean): NightPalette | null {
@@ -54,6 +86,7 @@ export function nightPalette(elevation: number, studyActive: boolean): NightPale
     ground: blend(SUNSET.ground, NIGHT.ground, level),
     glow: (1 - level) ** 1.5,
     stars: smooth(.35, .95, level),
+    ...duskDome(level),
   };
 }
 

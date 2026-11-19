@@ -217,10 +217,12 @@ ok('mode: ?mode=fired and a saved fired choice; Just Drive never offers it', () 
   assert.equal(readMode(new URLSearchParams(), () => ({ getItem: () => 'fired' }), { brand: 'just' }), 'explore');
   assert.equal(readMode(new URLSearchParams('mode=fire'), () => ({ getItem: () => null })), 'mail');
   const title = readFileSync('src/title.ts', 'utf8');
-  assert.match(title, /<button id="modeFired" aria-pressed="\$\{fired\}">Get fired<\/button>/);
+  // Get fired is pressed in Get Fired, and not in Today's run (which is a Get Fired run with its own button).
+  assert.match(title, /<button id="modeFired" aria-pressed="\$\{fired && !daily\}">Get fired<\/button>/);
   assert.match(title, /\['modeFired', 'fired'\]/);
   // The mode chooser sits only on the mail card: never in Just Drive, an area card or 1884.
-  assert.match(title, /\$\{historical \|\| just \|\| areaName \? '' : `<div id="modeChoice"/);
+  assert.match(title, /const mailCard = !\(historical \|\| just \|\| areaName\);/);
+  assert.match(title, /\$\{mailCard \? `<div id="modeChoice"/);
 });
 
 ok('complaints report once each to a listener', () => {

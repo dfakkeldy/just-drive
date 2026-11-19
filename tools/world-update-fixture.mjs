@@ -40,7 +40,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
     beaconMat: { set emissiveIntensity(v) { trace('beacon')(v); } },
     shared: { tallViewport: { value: { set(){} } }, time: { set value(v) { trace('shared.time')(v); } } },
     sky: { position: { copy: trace('sky') } },
-    aiDriver: null, horse: false, roadsidePlaying: false, engineSound: null, fleet: null, trafficSignals: null, updateFleetHud: null, ride: {}, car: {}, radio: { ...update('radio'), setWind: trace('radio.wind'), setPlace: trace('radio.place') }, manifest: { village: [1000, 2000] }, params: new URLSearchParams(),
+    aiDriver: null, horse: false, roadsidePlaying: false, engineSound: null, fleet: null, trafficSignals: null, updateFleetHud: null, ride: {}, car: {}, radio: { ...update('radio'), setWind: trace('radio.wind'), setPlace: trace('radio.place') }, partyLine: null /* Get Fired call-ins: absent in mail play */, manifest: { village: [1000, 2000] }, params: new URLSearchParams(),
     driveInput: () => ({ throttle: 0, steer: 0, handbrake: true }), driveVehicle: trace('driveVehicle'), chase: trace('chase'), fly: trace('fly'),
     animals: { ...update('animals'), influence: () => ({ brake: 0 }) },
     mail: { update: function (dt, car, requested, eye) { trace('mail')(dt, car, requested, eye); return 1; }, tally: '' },

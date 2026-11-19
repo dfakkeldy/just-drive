@@ -75,7 +75,7 @@ export class Shift {
 
   constructor(private readonly props: Props | null, private readonly mail: Mail, private readonly roads: Roads,
     private readonly terrain: Terrain, buildings: Building[], village: [number, number], private readonly low: boolean,
-    params: URLSearchParams, private readonly restart: () => void, private readonly routeEnabled = true, readonly fired = false) {
+    params: URLSearchParams, private readonly restart: () => void, private readonly routeEnabled = true, readonly fired = false, fixedDay = 0) {
     this.roadsideReport.hidden = true;
     document.getElementById('reportMissed')!.after(this.roadsideReport);
     this.career = this.routeEnabled ? readCareer() : freshCareer();   // an area with no route never touches the saved Mabou career
@@ -83,6 +83,8 @@ export class Shift {
     if (Number.isSafeInteger(requested) && requested > 0) {
       this.career = { ...freshCareer(), day: requested };
     }
+    // Today's run fixes the day for every player (daily-rules.ts). Get Fired never writes the career, so nothing is saved.
+    if (fired && Number.isSafeInteger(fixedDay) && fixedDay > 0) this.career = { ...freshCareer(), day: fixedDay };
     if (params.get('double') === '1') this.career.double = true;
     this.route = new Route(roads, props, routeEnabled);
     const forced = Number(params.get('run'));
