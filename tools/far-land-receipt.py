@@ -5,7 +5,7 @@ The same rule as tools/far-delta-check.mjs landState(): every area is BEFORE (no
 (every file of tools/far-views-delta.json at its committed hash, manifest far keys equal to the committed patch),
 never a mix.
 
-  python3 tools/far-land-receipt.py [--baked DIR] [--expect before|after]
+  python3 tools/far-land-receipt.py [--baked DIR] [--expect before|after]   # FAR_EXPECT=before|after does what --expect does
   python3 tools/far-land-receipt.py --plan DIR      # print the install plan for a staged pack (data/work/bakes/far-views)
   python3 tools/far-land-receipt.py --mutations     # synthetic land: before/after accepted, seven mutants refused
 
@@ -14,6 +14,7 @@ Exit 0 with "PASS far land receipt: <state>", else exit 1 with the first differe
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -144,7 +145,7 @@ def mutations():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--baked', default=str(ROOT / 'data/baked'))
-    ap.add_argument('--expect', choices=['before', 'after'])
+    ap.add_argument('--expect', choices=['before', 'after'], default=os.environ.get('FAR_EXPECT') or None)  # as far-delta-check.mjs
     ap.add_argument('--plan', metavar='BAKE')
     ap.add_argument('--mutations', action='store_true')
     args = ap.parse_args()
