@@ -1580,7 +1580,7 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'schoolBus' } : {}), segment: 'after-activities', ending: false, update: () => schoolBus?.update(camera) },
   { ...(import.meta.env.DEV ? { name: 'ambientTraffic' } : {}), segment: 'after-activities', ending: false, update: () => ambientTraffic?.update(camera, vehicle, !multiplayer?.choice.on) },
   { ...(import.meta.env.DEV ? { name: 'roadAnimals' } : {}), segment: 'after-activities', ending: false, update: dt => roadAnimals?.update(dt, vehicle, !multiplayer?.choice.on) },
-  { ...(import.meta.env.DEV ? { name: 'props' } : {}), segment: 'after-activities', ending: true, endingPosition: 7, update: dt => props?.update(camera, dt) },
+  { ...(import.meta.env.DEV ? { name: 'props' } : {}), segment: 'after-activities', ending: true, endingPosition: 8, update: dt => props?.update(camera, dt) },
   { ...(import.meta.env.DEV ? { name: 'harbourLights' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
   { ...(import.meta.env.DEV ? { name: 'tall' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
   { ...(import.meta.env.DEV ? { name: 'grass' } : {}), segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },

@@ -73,28 +73,24 @@ for (const url of urls) {
       finally{Object.assign(v,saved);}return tested;})()`);
     assert.ok(contacts >= 3, `solids tested near the car: ${contacts}`);
 
-    // Drive the real car into the parked vehicle's tail: it must stop at the bumper, never pass into it.
+    // The game's own frame loop keeps the real car out: set 0.3 m into the vehicle's tail, rolling into it at 3 m/s with the
+    // throttle held, the car is pushed back to the bumper within a few frames and never gets deeper. (Driving up from
+    // rest tests a yard's banks, which can stall a car short of the bumper, not the solid.)
+    const touch = target.half + 0.95 + 1.35;
     const inside = `(()=>{const v=mmm.vehicle,t=${JSON.stringify(target)},ax=Math.sin(t.heading),az=-Math.cos(t.heading);let deepest=-Infinity;
       for(const o of [-1.35,0,1.35]){const cx=v.x+Math.sin(v.heading)*o-t.x,cz=v.z-Math.cos(v.heading)*o-t.z,a=cx*ax+cz*az,b=-cx*az+cz*ax;
         const out=Math.hypot(Math.max(Math.abs(a)-t.half,0),Math.max(Math.abs(b)-t.halfWidth,0));deepest=Math.max(deepest,0.95-out);}
-      return {deepest,speed:v.speed,gap:Math.hypot(v.x-t.x,v.z-t.z)};})()`;
+      return {deepest,gap:Math.hypot(v.x-t.x,v.z-t.z)};})()`;
+    await page.read(`(()=>{const v=mmm.vehicle,t=${JSON.stringify(target)},ax=Math.sin(t.heading),az=-Math.cos(t.heading),back=${touch}-0.3;
+      v.place(t.x-ax*back,t.z-az*back,t.heading);v.vx=ax*3;v.vz=az*3;v.speed=3;return true;})()`);
     await page.send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'ArrowUp', key: 'ArrowUp', windowsVirtualKeyCode: 38 });
-    // Touching: the nose circle (1.35 m ahead, 0.95 m round) against the tail. The car is still for a moment on a loaded
-    // machine, so it may take some seconds to get there.
-    const touch = target.half + 0.95 + 1.35;
-    let deepest = -Infinity, closest = Infinity;
-    try {
-      // Up to 20 s (a loaded machine runs few frames); once at the bumper, keep pushing for another 1.5 s.
-      for (let i = 0, after = -1; i < 330 && after !== 0; i++, after--) {
-        const s = await page.read(inside); deepest = Math.max(deepest, s.deepest); closest = Math.min(closest, s.gap);
-        if (after < 0 && closest < touch + 0.25) after = 25;
-        await sleep(60);
-      }
-    } finally { await page.send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'ArrowUp', key: 'ArrowUp', windowsVirtualKeyCode: 38 }); }
-    const drive = { deepest: +deepest.toFixed(3), closest: +closest.toFixed(2) };
+    const samples = [];
+    try { for (let i = 0; i < 30; i++) { samples.push(await page.read(inside)); await sleep(50); } }
+    finally { await page.send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'ArrowUp', key: 'ArrowUp', windowsVirtualKeyCode: 38 }); }
+    const settled = samples.slice(10), drive = { start: +samples[0].deepest.toFixed(3), deepest: +Math.max(...settled.map(s => s.deepest)).toFixed(3), gap: +settled.at(-1).gap.toFixed(2), touch: +touch.toFixed(2) };
     console.log(name, 'drive', JSON.stringify(drive));
-    assert.ok(closest < touch + 0.25, `the car drove up to the ${target.kind}'s tail: ${closest.toFixed(2)} m (touching at ${touch.toFixed(2)})`);
-    assert.ok(deepest < 0.25, `the car's body stays out of the ${target.kind} (deepest ${deepest.toFixed(3)} m)`);
+    assert.ok(drive.deepest < 0.05, `the ${target.kind} pushes the car out to its bumper and holds it there (deepest ${drive.deepest} m)`);
+    assert.ok(drive.gap < touch + 1.5, 'the car stays at the bumper, not thrown off');
 
     // A dog is never solid: with the car on top of it, it slips away and nothing pushes the car.
     const dog = await page.read(`(()=>{const y=mmm.yardProps,v=mmm.vehicle,d=y.items.filter(i=>!i.solid).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z))[0];
