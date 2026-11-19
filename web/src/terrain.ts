@@ -126,6 +126,8 @@ async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
 export interface Site {
   /** World box [x0, z0, x1, z1] outside which the site changes nothing. */
   box: [number, number, number, number];
+  /** Restrict tile construction for a site with separated footprints inside its world box. */
+  affectsTile?(x: number, z: number, size: number, level: number): boolean;
   /** True ground height in metres, given the surveyed one. */
   height(x: number, z: number, surveyed: number, level?:number): number;
   /** The surface at a point: metres from an imaginary centre line, half width in metres, and kind. */
@@ -597,7 +599,8 @@ export class Terrain {
   }
 
   private build({ tile: t, px, bakedRoad }: DecodedTile) {
-    const sites = this.sites.filter((s) => !(s.box[2] < t.x0 || s.box[0] > t.x0 + t.size || s.box[3] < t.z0 || s.box[1] > t.z0 + t.size) && (s.maxTexel === undefined || t.size / T <= s.maxTexel));
+    const sites = this.sites.filter((s) => !(s.box[2] < t.x0 || s.box[0] > t.x0 + t.size || s.box[3] < t.z0 || s.box[1] > t.z0 + t.size) && (s.maxTexel === undefined || t.size / T <= s.maxTexel)
+      && (s.affectsTile?.(t.x0, t.z0, t.size, t.level) ?? true));
     const gravelOverlay=sites.some(s=>s.visualGravel);
     const airportMarkings=sites.some(s=>s.airportMarkings);
     const road = bakedRoad ?? (sites.length ? new Uint8ClampedArray(S * S * 4) : null);

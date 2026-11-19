@@ -606,11 +606,13 @@ async function builds(count) {
     // park's two tile programs (ordinary and STUNT_PARK) the define stands in each, so twice at most.
     ['    const gravelOverlay=sites.some(s=>s.visualGravel);\n','    const airportMarkings=sites.some(s=>s.airportMarkings);\n',''],
     ['...(gravelOverlay ? { SITE_GRAVEL: 1 } : {})',', ...(airportMarkings ? { AIRPORT: 1 } : {})',' },uniforms:tileUniforms}',2],
+    // Sugar Camp keeps the space between the benches out of the site's tile work.
+    ['t.size / T <= s.maxTexel)','\n      && (s.affectsTile?.(t.x0, t.z0, t.size, t.level) ?? true)',');\n'],
     // PR #150: a site with maxTexel is left out of coarser tiles; no maths change on tiles that keep it (site-texel). Coarser
     // tiles lose its sub-sample paint and the road-canopy fade under it.
     [' || s.box[3] < t.z0 || s.box[1] > t.z0 + t.size)',' && (s.maxTexel === undefined || t.size / T <= s.maxTexel)',');\n']];
-  const withoutHooks=source=>HOOKS.reduce((text,[before,hook,after,most=1])=>{const parts=text.split(hook);assert.ok(parts.length-1<=most&&parts.every((part,i)=>(i===parts.length-1||part.endsWith(before))&&(i===0||part.startsWith(after))),'a stockpile, pavement, airport or site-texel hook stands at most its allowed number of times in the tile maths, at its reviewed place');return parts.join('');},maths(source));
-  if(!mutations[name])assert.equal(createHash('sha256').update(withoutHooks(groundParts.reduce((s,part)=>s.split(part).join(''),terrainText))).digest('hex'),MATHS_SHA256,'tile maths are byte-identical to the reviewed PR #85 text, but for the stockpile, pavement, airport and site-texel hooks and the ground-class lines');
+  const withoutHooks=source=>HOOKS.reduce((text,[before,hook,after,most=1])=>{const parts=text.split(hook);assert.ok(parts.length-1<=most&&parts.every((part,i)=>(i===parts.length-1||part.endsWith(before))&&(i===0||part.startsWith(after))),'a stockpile, pavement, airport, site-tile or site-texel hook stands at most its allowed number of times in the tile maths, at its reviewed place');return parts.join('');},maths(source));
+  if(!mutations[name])assert.equal(createHash('sha256').update(withoutHooks(groundParts.reduce((s,part)=>s.split(part).join(''),terrainText))).digest('hex'),MATHS_SHA256,'tile maths are byte-identical to the reviewed PR #85 text, but for the stockpile, pavement, airport, site-tile and site-texel hooks and the ground-class lines');
   const c = camera(128,128);
   const fixture = async (cost = 0) => {
     const t = ground(false), built = [], all = [];

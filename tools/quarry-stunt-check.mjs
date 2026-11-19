@@ -40,6 +40,11 @@ for (const p of [...park.pieces, ...park.dressing]) {
 }
 await preload(terrain, COURSE_PADS.map(p => world(p.e,p.n)), 180);
 for (const tile of terrain.tiles.values()) if (tile.mesh) {
+  const e = tile.x0 + origin[0], n = origin[1] - tile.z0;
+  const overlapsPad = tile.level === 8 && COURSE_PADS.some(p =>
+    e < p.e+p.halfE && e+tile.size > p.e-p.halfE && n > p.n-p.halfN && n-tile.size < p.n+p.halfN);
+  assert.equal('tSiteStyle' in tile.mesh.material.uniforms, overlapsPad,
+    'lane texture only on the fine tiles touching a course pad');
   tile.mesh.visible = true;
   tile.mesh.material.uniforms.hideQuad.value.set(0,0,0,0);
 }

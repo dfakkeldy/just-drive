@@ -202,6 +202,7 @@ export interface StuntRunup {x:number;z:number;heading:number;from:number;to:num
 /** Optional shared grade for neighboring lanes on a reserved course bench. */
 interface CourseGround {
   contains(x:number,z:number,margin:number):boolean;
+  intersectsTile(x:number,z:number,size:number):boolean;
   height(x:number,z:number,surveyed:number):number;
 }
 export class StuntPark implements Site {
@@ -213,6 +214,9 @@ export class StuntPark implements Site {
   private readonly runups:readonly (StuntRunup&{sin:number;cos:number})[];
   get hudLine():string{return this.loading?'Park: loading ground':this.lastLine;}
   contains(x:number,z:number,margin=0):boolean{return inside(this.box,x,z,margin)&&(this.courseGround?.contains(x,z,margin)??true);}
+  affectsTile(x:number,z:number,size:number,level:number):boolean {
+    return !this.courseGround || level===8 && this.courseGround.intersectsTile(x,z,size);
+  }
   constructor(readonly terrain:Terrain,placements:readonly StuntPlacement[],readonly low=false,exclusions:readonly StuntExclusion[]=[],dressing:readonly DressingPlacement[]=[],runups:readonly StuntRunup[]=[],private readonly courseGround?:CourseGround){
     if(!placements.length)throw Error('A park needs at least one piece');
     if(placements.some(p=>'bank' in p.piece||p.piece.decks.some(d=>d.polar)))throw Error('Banked turns are not supported by this kit');

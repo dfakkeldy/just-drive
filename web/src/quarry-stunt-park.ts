@@ -90,6 +90,11 @@ export function createQuarryStuntPark(terrain: Terrain, low: boolean): StuntPark
 
   const park = new StuntPark(terrain, pieces, low, [], dressing, runups, {
     contains: (x, z, margin) => onCoursePad(x + originE, originN - z, margin),
+    intersectsTile(x, z, size) {
+      const west = x + originE, north = originN - z;
+      return COURSE_PADS.some(pad => west < pad.e + pad.halfE && west + size > pad.e - pad.halfE
+        && north > pad.n - pad.halfN && north - size < pad.n + pad.halfN);
+    },
     height(x, z, surveyed) {
       const e = x + originE, n = originN - z;
       // Follow the upper bench's fall across the park. The lower bench needs only a light skim.
