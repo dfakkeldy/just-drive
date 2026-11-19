@@ -50,7 +50,8 @@ export interface YardInput {
 }
 /** One prop: its centre, the heading of its nose (forward is (sin h, -cos h)), half its length and width, the house
  *  it stands at, and a number in [0, 1) that picks its paint. */
-export interface YardProp { kind: YardPropKind; x: number; z: number; heading: number; half: number; halfWidth: number; house: number; tone: number }
+/** A chosen prop. `house` is the house's map id; `hx`, `hz` its centre (where a view stands to see the prop with the house behind). */
+export interface YardProp { kind: YardPropKind; x: number; z: number; heading: number; half: number; halfWidth: number; house: number; hx: number; hz: number; tone: number }
 
 /** A small repeatable hash of (seed, id) into a 32-bit state. */
 export function yardHash(seed: number, id: number): number {
@@ -287,7 +288,7 @@ export function chooseYardProps(input: YardInput): YardProp[] {
     for (const kind of kinds) {
       const tone = rnd(), spot = spots(kind, house, nearDrives, toward, rnd).find(fits);
       if (!spot) continue;
-      const prop: YardProp = { kind, x: spot.x, z: spot.z, heading: Math.atan2(Math.sin(spot.heading), Math.cos(spot.heading)), half: spot.half, halfWidth: spot.halfWidth, house: house.id, tone };
+      const prop: YardProp = { kind, x: spot.x, z: spot.z, heading: Math.atan2(Math.sin(spot.heading), Math.cos(spot.heading)), half: spot.half, halfWidth: spot.halfWidth, house: house.id, hx: house.x, hz: house.z, tone };
       placed.push(prop); placedGrid.add(prop, rectBox(prop));
     }
   }

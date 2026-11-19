@@ -102,15 +102,17 @@ for (const url of urls) {
     assert.ok(dog.pushed < 1e-6 && !dog.solid, 'a dog is never solid');
     assert.ok(dog.away && dog.back, 'a dog slips away from a car beside it and comes back when it has gone');
 
-    // Pictures: the nearest of each sort in the game's own chase view, the car stopped 14 m off with the prop to one side.
+    // Pictures: the nearest of each sort in the game's own chase view, the car stopped 14 m off on the far side of the prop
+    // from its house, facing it with the prop just to one side, so the house stands behind the prop and not in front.
     // Desktop size on the desktop view, phone size on LOW.
     const [width, height, mobile, size] = params.get('q') === 'low' ? [390, 844, true, 'phone'] : [1280, 720, false, 'desktop'];
     await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
     const pictures = [];
     for (const sort of [['pickup', 'suv', 'car'], ['trailer'], ['motorhome'], ['mower'], ['dog-lying', 'dog-sitting']]) {
       const at = await page.read(`(()=>{const v=mmm.vehicle,sort=${JSON.stringify(sort)},t=mmm.yardProps.items.filter(i=>sort.includes(i.prop.kind)&&!mmm.yardProps.near.dropped.has(i)).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z))[0];
-        if(!t)return null;const h=t.heading+Math.PI*0.7,ax=Math.sin(h),az=-Math.cos(h),side=t.prop.kind.startsWith('dog')?2.2:3.2,far=t.prop.kind.startsWith('dog')?9:14;
-        const x=t.x-ax*far-az*side,z=t.z-az*far+ax*side;v.place(x,z,h);v.speed=0;v.vx=0;v.vz=0;return {kind:t.prop.kind,house:t.prop.house,x:t.x,z:t.z};})()`);
+        if(!t)return null;const dog=t.prop.kind.startsWith('dog'),side=dog?2.6:3.2,far=dog?6:t.prop.kind==='mower'?10:14;const r=Math.hypot(t.x-t.prop.hx,t.z-t.prop.hz)||1,dx=(t.x-t.prop.hx)/r,dz=(t.z-t.prop.hz)/r;
+        const h=Math.atan2(-dx,dz),rx=Math.cos(h),rz=Math.sin(h);
+        v.place(t.x+dx*far+rx*side,t.z+dz*far+rz*side,h);v.speed=0;v.vx=0;v.vz=0;return {kind:t.prop.kind,house:t.prop.house,x:t.x,z:t.z};})()`);
       if (!at) continue;
       for (let i = 0; i < 120 && !await page.read(`mmm.yardProps.counts.drawn[${JSON.stringify(at.kind)}]>0`); i++) await sleep(500);
       await sleep(2000);
