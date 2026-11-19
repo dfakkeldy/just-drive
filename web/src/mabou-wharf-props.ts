@@ -191,13 +191,13 @@ export const WHARF_FIXTURES: readonly Fixture[] = [
   fixture(-9.6, 17.4, .45, .60, tub),
   fixture(-7.9, 8.6, .45, .60, tub, .28),
   fixture(20.4, -3.6, .31, .89, crates),
-  fixture(65, 14, .16, .16, lamp(7.1)),
-  fixture(73, 32, .16, .16, lamp(6.5)),
-  fixture(76, 59, .16, .16, lamp(7.4)),
+  fixture(67, 15, .16, .16, lamp(7.1)),
+  fixture(79, 32, .16, .16, lamp(6.5)),
+  fixture(82, 59, .16, .16, lamp(7.4)),
   fixture(7, -6, .16, .16, lamp(7.7)),
 ];
 
-const gangways = [{ u: 71, v: 27 }, { u: 71, v: 47 }];
+const gangways = [{ u: 80, v: 27 }, { u: 77, v: 47 }];
 export const WHARF_ANCHORS = [...WHARF_FIXTURES, ...gangways];
 
 export function addWharfProps(m: Mesher, ground: readonly number[], deck: number, sea: number, low: boolean): void {
@@ -220,11 +220,13 @@ export function addWharfProps(m: Mesher, ground: readonly number[], deck: number
 
   for (const [i, { u, v }] of gangways.entries()) {
     const land = ground[WHARF_FIXTURES.length + i] + .10, float = sea + .33;
-    const near = u - 6.2, deckWidth = 1.13;
+    const near = u - 8, deckWidth = 1.13;
     m.at(near - .13, sea + .135, v + 2.2);
     m.box(0, .04, 0, 2.04, .31, 9.2, timber);
     m.box(0, -.14, 0, 1.98, .20, 9.0, rubber);
     for (const z of [-3.9, -1.9, .1, 2.1, 4.1]) m.box(0, .202, z, 1.98, .012, .045, [.47, .37, .26]);
+    m.at(u, land - .09, v);
+    m.box(.25, 0, 0, .72, .18, 1.55, zinc);
     const slope = (land - float) / (u - near);
     m.at((near + u) / 2, (float + land) / 2, v, 0, 0, Math.atan(slope));
     m.box(0, -.04, 0, Math.hypot(u - near, land - float), .08, deckWidth, zinc);

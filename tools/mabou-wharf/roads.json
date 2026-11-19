@@ -10,7 +10,7 @@
   {
    "file": "terrain/5/13_15.r.png",
    "before": "016dc8313436b37c34a95da71802f292da2ca5a814114ebfb4ee748bdc7eeef1",
-   "sha256": "2a97a8bcca7f2dce41ad6e6a4a781a10bf74b5e566b2ed0c853b9b01ec776499"
+   "sha256": "fc2786864580e07910f2425163c691bf89340656d0be3f5892600a05746096f5"
   },
   {
    "file": "terrain/6/25_30.r.png",
@@ -20,7 +20,7 @@
   {
    "file": "terrain/6/26_30.r.png",
    "before": "1d21ed426d459683ea8655a919b883dbcee2d86bcf8de76f0806640b6abd1c5a",
-   "sha256": "6aa0e183b7d20e8a9fc37f52110f543fb5d0d5467ff25c2af1ff4cbec2c2e9a5"
+   "sha256": "2db2288fb3b8bbe531101f2f6f05cbddf2ea13470bd48d5083beabb71acbfbda"
   },
   {
    "file": "terrain/7/51_60.r.png",
@@ -35,12 +35,12 @@
   {
    "file": "terrain/7/53_60.r.png",
    "before": "f19a7021a4f736159c51d1a8cb0e0e7c82843a551ca44cd4b2e41821618e9043",
-   "sha256": "5652db7768352bc4d88707db28aff8eaa80174a2d6eeeb435fcedbe985293824"
+   "sha256": "c7605b4c59ebe5f937a2bd27f2cb6ef03055894f29269d7af850d39d203c79e5"
   },
   {
    "file": "terrain/7/53_61.r.png",
    "before": "9731484872813a432d855705acc5553e89968cb2912c87df9fc27095c28fc65b",
-   "sha256": "ed19e93569a77a0637efebdb8db7d0c79226f9d3034ccfc5ed215b820d79fb48"
+   "sha256": "99d8683b91dfa56a6cae95e227930fd2fe737b22819d73a8e9f884b9a1d4878f"
   },
   {
    "file": "terrain/8/103_120.r.png",
@@ -55,7 +55,7 @@
   {
    "file": "terrain/8/106_121.r.png",
    "before": "efc1e315ddd2f36136f411cc64d5add3a83170d4483223fea75366001ee6e303",
-   "sha256": "a130efb41313ff8470f674ae8fbc960a92e1e53dc4afa132753954e9eb2642ce"
+   "sha256": "8d5b8f984f0ef65ffd980c97f010a2a9193a908d2ce670f6573bf721f145bc71"
   },
   {
    "file": "terrain/buildings.json",
@@ -65,7 +65,7 @@
   {
    "file": "terrain/cemeteries.json",
    "before": "9895b32dd401ddf9619ee809e3cad5f1bc500321cf2c4d6172e5878b16f66203",
-   "sha256": "40a3257050c3508c23bc08f0e650142c0b7954af010ce075d5572c9d8c93b968"
+   "sha256": "2c88a9b4f94b483288bacf5407ec91b4a5898bffe035751f41844acc514ad40f"
   },
   {
    "file": "terrain/props.json",
@@ -75,7 +75,7 @@
   {
    "file": "terrain/roads.json",
    "before": "d16a758871a4a7fd42ef23d8fa5255bb2b8b420a2fdff67d71cf9f1ce075216a",
-   "sha256": "2f2854e5eba69fb4dd0d39ab552f0b3bf181ea5ccd8a78cc14988f590a5b0d31"
+   "sha256": "5da2b7c97ea66619fbe0f9293aa812d065990d4bdda0e9788e7f9d76c4ec5611"
   }
  ],
  "manifests": [
@@ -109,9 +109,7 @@
   "poles": {
    "994": 987
   },
-  "kinds": {
-   "922": 4
-  },
+  "kinds": {},
   "driveways": []
  }
 }

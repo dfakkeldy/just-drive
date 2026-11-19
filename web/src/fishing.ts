@@ -52,6 +52,8 @@ export class Fishing {
     const end=this.terrain.surfaceAt(this.site.x+7,this.site.z+60);
     if (!toe || !end || toe.level<7 || end.level<7) return;
     const top=this.site.level;
+    // The anchors share the same level-7 tile as the cap; no additional
+    // terrain tile has to load before the deck can open.
     const ground: number[] = [];
     for (const { u, v } of WHARF_ANCHORS) {
       const s = this.terrain.surfaceAt(this.site.x + u, this.site.z + v);

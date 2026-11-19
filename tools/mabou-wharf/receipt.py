@@ -27,10 +27,12 @@ def verify(source, stage, pins):
     after = json.loads((stage / 'roads.json').read_bytes())['roads']
     paved, gravel = [r for r in after if r.get('correction') == '19nov:Mabou Harbour Road']
     old = next(r for r in before if r['id'] == paved['id'])
-    lane, = [r for r in after if str(r['id']) in pins['undo']['kinds']]
+    old_by_id = {r['id']: r for r in before}
+    lanes = [r for r in after if r.get('pavement') == 'gravel' and r != old_by_id.get(r['id'])]
     assert paved['pts'] + gravel['pts'][1:] == old['pts'] and paved['pts'][-1] == gravel['pts'][0]
     assert paved['kind'] == 2 and paved['pavement'] == 'double-yellow'
-    assert gravel['kind'] == lane['kind'] == 3 and 'pavement' not in gravel and 'pavement' not in lane
+    assert gravel['kind'] == 3 and 'pavement' not in gravel
+    assert len(lanes) == 2 and all(r['kind'] == 4 and r['pts'] == old_by_id[r['id']]['pts'] for r in lanes)
     print(f'PASS wharf road staging: {len(pins["files"])} files and continuous centrelines')
 
 

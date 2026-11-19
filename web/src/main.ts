@@ -368,7 +368,10 @@ const ordinaryBuildings = useWharfBuildings ? drawnBuildings.filter(b => !isWhar
 const buildings = ERA.modern && ordinaryBuildings ? new Buildings(mabouSite ? mabouSite.drawn(ordinaryBuildings) : ordinaryBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
 const wharf = useWharfBuildings ? new Buildings(wharfBuildings(drawnBuildings), manifest.village, EXAG, SEA_LEVEL,
   buildingAppearance(astra, LOW, sunDir, wharfBuildingStyles)) : null;
-if (wharf) wharf.mesh.frustumCulled = true;
+if (wharf) {
+  wharf.mesh.name = 'Wharf buildings';
+  wharf.mesh.frustumCulled = true;
+}
 const buildingClear = [...(buildings?.clear ?? []), ...(wharf?.clear ?? [])];
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
