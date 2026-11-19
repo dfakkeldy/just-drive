@@ -62,11 +62,12 @@ export default {
       && (url.pathname === '/' || /^\/[^/]+\/?$/.test(url.pathname))) {
       // The bare root is the map of places (tools/just-home.mjs). A root with a game query is an old link: it keeps its
       // query and goes where the root used to start: a trip to its own area, anything else to /mabou. Tracking tags
-      // that social sites add (utm_*, fbclid, gclid) are not a game query.
+      // that social sites add (utm_*, fbclid, gclid) are not a game query. The trip names are tripId's (web/src/quarry-trip.ts,
+      // which needs the DOM, so the Worker cannot import it).
       const home = url.pathname === '/';
       if (home && gameQuery(url.searchParams)) {
-        const trip = url.searchParams.has('trip') ? readSite(url.hostname, '/' + (url.searchParams.get('area') || 'westbay'), url.searchParams).area : null;
-        url.pathname = '/' + (trip ?? (url.searchParams.has('trip') ? 'westbay' : 'mabou'));
+        const trip = ['quarry', 'quarry-gate'].includes(url.searchParams.get('trip') ?? '') && (readSite(url.hostname, '/' + (url.searchParams.get('area') || 'westbay'), url.searchParams).area ?? 'westbay');
+        url.pathname = '/' + (trip || 'mabou');
         return Response.redirect(url.href, 308);
       }
       if (site.area && !home && url.pathname.endsWith('/')) {
