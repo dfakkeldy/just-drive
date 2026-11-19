@@ -39,8 +39,10 @@ export const DEVICE = /^[A-Za-z0-9_-]{22,64}$/;
 export const BOARD_PATH = /^\/board\/v(\d+)\/([a-z0-9-]{1,24})\/(\d{4}-\d{2}-\d{2})$/;
 export const boardPath = (area: string, date: string): string => `/board/v${BOARD_VERSION}/${area}/${date}`;
 
+/** Paid kinds that cannot happen in Today's run: the Boss (boss.ts) is not in it. A post that carries one is refused. */
+export const NOT_DAILY: readonly string[] = Object.freeze(['lostBoss']);
 /** The facts that change a Today's run score: the paid kinds and the penalties. Nothing else is sent. */
-export const SENT_KINDS: readonly string[] = Object.freeze([...Object.keys(POINTS), ...Object.keys(PENALTIES)]);
+export const SENT_KINDS: readonly string[] = Object.freeze([...Object.keys(POINTS).filter(k => !NOT_DAILY.includes(k)), ...Object.keys(PENALTIES)]);
 /** True for a fact the run sends with its result. A fact that cannot score (a protected place, an animal, a person, an
  * unpaid kind) changes neither the points nor the card, so it stays on the device. */
 export const sendsEvent = (e: ScoreEvent): boolean => PENALTIES[e.kind] !== undefined || scores(e);
@@ -110,7 +112,8 @@ const TOP = COMBO_CAP * ladderFactor(LADDER.length);
 /** Every fact a run could ever be paid for, best first: each kind's first and its fading repeats, at the full combo on
  * the top rung. No run can beat the best n of these with n facts. */
 const BIGGEST: Readonly<Record<string, number>> = { drift: DRIFT_MARKS.most * DRIFT_MARKS.clean };
-const BEST_FACTS: readonly number[] = Object.freeze(Object.entries(POINTS).flatMap(([kind, base]) => {
+// Only what a Today's run can send counts: the Boss's bonus would loosen the bound for nothing.
+const BEST_FACTS: readonly number[] = Object.freeze(Object.entries(POINTS).filter(([kind]) => !NOT_DAILY.includes(kind)).flatMap(([kind, base]) => {
   const out: number[] = [];
   for (let k = 0; k < MAX_EVENTS; k++) { const v = Math.round(base * (BIGGEST[kind] ?? 1) * novelty(k) * TOP); if (v <= 0) break; out.push(v); }
   return out;

@@ -19,6 +19,11 @@ export interface ScoreEvent {
   readonly subject?: string;
   /** A finished drift (kind 'drift'): its angle, length, seconds, surface and whether it ended without a hit. */
   readonly drift?: DriftFacts;
+  /** Where, in game metres, when it is known (the Boss heads for the newest complaint). */
+  readonly x?: number;
+  readonly z?: number;
+  /** The Boss saw it happen (Get Fired): it scores double. */
+  readonly witnessed?: boolean;
 }
 export type ScoreListener = (event: ScoreEvent) => void;
 

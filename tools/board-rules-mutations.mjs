@@ -27,6 +27,7 @@ const mutants=[
  ['events out of order','time < last ||','','board-rules'],
  ['events after the end','|| time > played + SLACK) return no(\'events\');',') return no(\'events\');','board-rules'],
  ['any kind sent','if (!SENT_KINDS.includes(kind) ||','if (','board-rules'],
+ ['a Boss bonus sent','Object.keys(POINTS).filter(k => !NOT_DAILY.includes(k))','Object.keys(POINTS)','board-rules'],
  ['run longer than the limit','if (played < 0 || played > plan.limit) return no(\'events\');','','board-rules'],
  ['no event cap','if (body.events.length > MAX_EVENTS) return no(\'events\');','','board-rules'],
  ['card not paid on the server','    if (heard.lines) book.award(\'bingo:line\', heard.lines * LINE_BONUS);\n','','board-rules'],
