@@ -44,6 +44,12 @@ for(const desktop of [true,false]){const v=makeVehicle();v.damage.seed('alignmen
 const parked=makeVehicle();parked.x=1;parked.vx=-8;pushOut(parked,[{x:0,z:0,heading:0,half:4,halfWidth:1}]);assert.equal(parked.damage.items[0].id,'bumper');
 const immune=makeVehicle({kind:3,washboard:true});immune.damageActive=false;immune.y=2;immune.vy=-8;immune.airborne=true;for(let i=0;i<120;i++)immune.update(1/120,{throttle:0,steer:0,handbrake:false});assert.equal(immune.damage.total,0);
 // A gravel driveway (kind 4 with the gravel bit, terrain.surfaceAt's `gravel`) drives as gravel; a plain track stays dirt.
+// Its potholes are a gravel road's, as it is drawn: where a gravel road has a hole and a track has none, a car on a
+// gravel driveway drops as on the gravel road.
+{const drop=(surface,x)=>{const v=makeVehicle({halfWidth:3,...surface});v.place(x,0,0);v.update(1/120,{throttle:0,steer:0,handbrake:false});return v.y;};
+ let x=0;while(x<3000&&drop({kind:3},x)===drop({kind:4},x))x+=1.3;
+ assert.ok(x<3000,'a spot where gravel road and track potholes differ');
+ assert.equal(drop({kind:4,gravel:true},x),drop({kind:3},x),'a gravel driveway holds a gravel road\'s potholes');}
 for(const [surface,name] of [[{kind:4,halfWidth:1.5,gravel:true},'gravel'],[{kind:4,halfWidth:1.5},'dirt track'],[{kind:3},'gravel']]){const v=makeVehicle(surface);v.update(1/120,{throttle:0,steer:0,handbrake:false});assert.equal(v.surfaceName,name,JSON.stringify(surface));}
 seeded.reset();assert.equal(seeded.total,0);assert.equal(seeded.windowStuck,false);assert.equal(seeded.hintTime,0);
 console.log('PASS: careful $0, careless $70, wild $293, capped repairs, rough/slow/airborne/ditch/cooldown, pay and suspension, legacy saves, fixtures, wind, actual fixed-step landings/rough/ditch/pull and solid hits.');

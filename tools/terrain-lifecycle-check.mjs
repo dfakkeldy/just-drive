@@ -154,13 +154,13 @@ if (mutations[name]) {
     terrainText=terrainText.replace(firstVisit,`${firstVisit}\n    ${selectionGone}`);
   }
 }
-const bundle = await build({ stdin: { contents: "export {Terrain} from './web/src/terrain.ts'; export {Trees} from './web/src/trees.ts'; export {Streams} from './web/src/streams.ts';", resolveDir: root },
+const bundle = await build({ stdin: { contents: "export {Terrain} from './web/src/terrain.ts'; export {Trees} from './web/src/trees.ts'; export {Streams} from './web/src/streams.ts'; export {potholeDensity} from './web/src/defects.ts';", resolveDir: root },
   bundle: true, write: false, platform: 'node', format: 'esm', logLevel: 'silent', plugins: [{ name: 'in-memory-source', setup(b) {
     b.onResolve({ filter: /^three$/ }, () => ({ path: pathToFileURL(`${root}web/node_modules/three/build/three.module.js`).href, external: true }));
     b.onLoad({ filter: /\/terrain\.ts$/ }, () => ({ contents: terrainText, loader: 'ts' }));
     b.onLoad({ filter: /\/trees\.ts$/ }, () => ({ contents: treesText, loader: 'ts' }));
   } }] });
-const { Terrain, Trees, Streams } = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const { Terrain, Trees, Streams, potholeDensity } = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 let now = 0, failedReads = new Set(), heldTrees = false, heldPaths = new Set(), reads = new Map(), releases = [], real = false;
 Object.defineProperty(globalThis, 'performance', { configurable: true, value: { now: () => now } });
 THREE.TextureLoader.prototype.load = () => new THREE.Texture();
@@ -236,9 +236,19 @@ function stats(t) {
 function watch(t, tile, audits) {
   if (tile.road) {
     const data = tile.mesh.material.uniforms.tRoad.value.image.data;
-    assert.equal(data.buffer, tile.road.buffer, 'road CPU/texture share bytes');
-    assert.equal(data.byteOffset, tile.road.byteOffset, 'road view offset');
-    assert.equal(data.byteLength, tile.road.byteLength, 'road view length');
+    if (data.buffer === tile.road.buffer) {
+      assert.equal(data.byteOffset, tile.road.byteOffset, 'road view offset');
+      assert.equal(data.byteLength, tile.road.byteLength, 'road view length');
+    } else {
+      // Only a tile with a gravel driveway draws a copy, and only those texels differ: drawn as a gravel road (kind 3).
+      assert.equal(data.length, tile.road.length, 'drawn road copy length');
+      let drawn = 0;
+      for (let k = 0; k < data.length; k++) if (data[k] !== tile.road[k]) {
+        assert.ok(k % 4 === 2 && (tile.road[k] & 207) === 68 && data[k] === ((tile.road[k] & 48) | 3), 'only a gravel driveway texel is drawn differently, as a gravel road');
+        drawn++;
+      }
+      assert.ok(drawn > 0, 'road CPU/texture share bytes unless the tile draws a gravel driveway');
+    }
   }
   let audit = audits.get(tile);
   if (!audit) {
@@ -434,20 +444,28 @@ async function siteTexel() {
   console.log('PASS site maxTexel: no road texture on 32/8/4 m tiles, painted on 2/1 m tiles; unlimited sites unchanged');
 }
 async function gravelDriveway() {
-  // A gravel driveway is a track (kind 4) with flag bit 64: surfaceAt says gravel and the tile takes ROAD_PAVEMENT. The
-  // same bit on a paved lane (2) is its double yellow, never gravel; a plain track is neither.
-  for (const [flag, gravel, pavement] of [[68, true, true], [4, false, false], [66, false, true], [84, true, true]]) {
+  // A gravel driveway is a track (kind 4) with flag bit 64: surfaceAt says gravel, and the tile draws it as a gravel
+  // road (kind 3, bridge and washboard bits kept) without ROAD_PAVEMENT, so no new program. The same bit on a paved
+  // lane (2) is its double yellow: never gravel, and it takes ROAD_PAVEMENT. A plain track is neither. In 1884 (cart
+  // roads) the driveway is drawn and driven as the track it is. Wherever it is drawn, the wheels meet the drawn holes.
+  for (const [flag, gravel, pavement, drawn, cart] of [[68, true, false, 3, false], [4, false, false, 4, false], [66, false, true, 66, false],
+    [84, true, false, 19, false], [100, true, false, 35, false], [116, true, false, 51, false], [68, false, false, 68, true]]) {
     roadFlag = flag;
-    const t = ground(false), q = t.tile(5, 1, 0); await load(t, q);
+    const t = ground(false); t.cartRoads = cart; const q = t.tile(5, 1, 0); await load(t, q);
     assert.ok(q.ready && !!q.road, 'the synthetic road tile 5/1_0 is built');
     const s = t.surfaceAt(300, 29);
     assert.equal(s?.kind, flag & 15, `flag ${flag} keeps its kind`);
     assert.equal(s?.gravel === true, gravel, `flag ${flag} gravel`);
     assert.equal('gravel' in s, gravel, `flag ${flag}: no gravel key unless it is gravel`);
     assert.equal(q.mesh.material.defines.ROAD_PAVEMENT === 1, pavement, `flag ${flag} ROAD_PAVEMENT`);
+    const data = q.mesh.material.uniforms.tRoad.value.image.data, k = [...q.road.keys()].find(i => i % 4 === 2 && q.road[i] === flag);
+    assert.ok(k !== undefined && q.road[k] === flag, `flag ${flag}: surfaceAt's bytes keep the flag`);
+    assert.equal(data[k], drawn, `flag ${flag}${cart ? ' (1884)' : ''} is drawn as ${drawn}`);
+    assert.equal(data.buffer === q.road.buffer, drawn === flag, `flag ${flag}: a copy only when a gravel driveway is drawn`);
+    assert.equal(potholeDensity(s.kind, s.washboard, s.gravel), potholeDensity(drawn & 15, (drawn & 32) !== 0), `flag ${flag}${cart ? ' (1884)' : ''}: the wheels meet the drawn potholes`);
   }
   roadFlag = 3;
-  console.log('PASS gravel driveway: kind 4 with bit 64 reads gravel and takes ROAD_PAVEMENT; a plain track and a double yellow lane do not read gravel');
+  console.log('PASS gravel driveway: kind 4 with bit 64 reads gravel and is drawn as a gravel road, with its potholes, without ROAD_PAVEMENT (a track in 1884); a plain track and a double yellow lane do not read gravel');
 }
 async function treeWait() {
   const m = manifest(0); m.size = 65536; m.levels[8] = ['0_0']; m.trees = { level: 8, record: 8, tiles: ['0_0'], count: 1 };
@@ -598,9 +616,15 @@ async function builds(count) {
   const HOOKS=[['','      if (this.canopyExcludes?.(t.x0 + (k % S) * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + Math.floor(k / S) * mpp))) { c = 0; px[k * 4 + 2] = 0; }\n','      canopy[k] = c;\n'],
     ['        if(coastal?.quarry && coastField && coastField[k0*4+1]>.5)c=0;\n','        if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;\n',''],
     // PR #27 (reviewed): the ROAD_PAVEMENT define on tiles whose road flags carry Mabou's double-yellow or worn bits
-    // (64/128; 64 on a track is a gravel driveway): a flag read and a colour define; no ground, canopy or road maths change. Once each, ordinary program only.
+    // (64/128 on a paved lane; a gravel driveway's 64 on a track does not take it): a flag read and a colour define; no
+    // ground, canopy or road maths change. Once each, ordinary program only.
     ['    let lo = Infinity, hi = -Infinity',', roadPavement = false',';\n'],
-    ['      if (road && road[k * 4 + 2] > 0) {\n','        roadPavement ||= (road[k * 4 + 2] & 192) !== 0;\n','        // Nothing stands on a road'],
+    ['      if (road && road[k * 4 + 2] > 0) {\n','        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) !== 4;\n','        // Nothing stands on a road'],
+    // The gravel driveways' fix: the texture draws a gravel driveway as a gravel road (drawnRoadBytes); the CPU
+    // samples keep their bytes. On such a tile the texture holds a copy, despite the pinned comment above the hook
+    // ("CPU samples and the texture only read these same bytes"); watch() checks the only bytes that differ. No ground,
+    // canopy or road maths change. Once, ordinary program only.
+    ['      roadTex = new THREE.DataTexture(new Uint8Array(road.buffer, road.byteOffset, road.byteLength), S, S, THREE.RGBAFormat, THREE.UnsignedByteType);\n','      if (!this.cartRoads) roadTex.image.data = drawnRoadBytes(roadTex.image.data as Uint8Array);\n','      roadTex.magFilter'],
     ['...(airportMarkings ? { AIRPORT: 1 } : {})',', ...(roadPavement && !this.cartRoads ? { ROAD_PAVEMENT: 1 } : {})',' },uniforms:tileUniforms}'],
     // PR #147 (reviewed): the AIRPORT shader define for tiles that overlap the airfield site; no maths change. With the
     // park's two tile programs (ordinary and STUNT_PARK) the define stands in each, so twice at most.

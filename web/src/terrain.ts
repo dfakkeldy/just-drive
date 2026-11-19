@@ -170,6 +170,19 @@ export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:{dist:number;
   road[k]=Math.min(255,zero+Math.round(f.dist/dScale));road[k+1]=Math.min(255,Math.round(f.half/wScale));road[k+2]=f.kind;
 }
 
+/** The road bytes a tile draws. A gravel driveway or pad is a track (kind 4) with the gravel bit (64); it is drawn exactly
+ *  as a gravel road (kind 3), by the programs that already draw gravel roads, so it needs no shader variant of its own.
+ *  Only the texture's copy changes: surfaceAt keeps reading the track and its gravel bit, and a tile without a gravel
+ *  driveway keeps sharing its bytes. The bridge and washboard bits stay. */
+export function drawnRoadBytes(road: Uint8Array): Uint8Array {
+  let out = road;
+  for (let k = 2; k < road.length; k += 4) if ((road[k] & 207) === 68) {
+    if (out === road) out = road.slice();
+    out[k] = (road[k] & 48) | 3;
+  }
+  return out;
+}
+
 export class Terrain {
   readonly group = new THREE.Group();
   bridgeApproaches:HistoryBridgeApproaches|null=null;
@@ -650,7 +663,7 @@ export class Terrain {
         if(clearsGroundTrees(this.groundClassAt(x,z))){c=0;px[k*4+2]=0;}
       }
       if (road && road[k * 4 + 2] > 0) {
-        roadPavement ||= (road[k * 4 + 2] & 192) !== 0;
+        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) !== 4;
         // Nothing stands on a road: fade the tree layer out from the shoulder to the road edge.
         const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;
         c *= THREE.MathUtils.smoothstep(d, hw + 0.8, hw + 4.5);
@@ -720,6 +733,7 @@ export class Terrain {
     if (road) {
       // Site paint is finished; CPU samples and the texture only read these same bytes from here.
       roadTex = new THREE.DataTexture(new Uint8Array(road.buffer, road.byteOffset, road.byteLength), S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
+      if (!this.cartRoads) roadTex.image.data = drawnRoadBytes(roadTex.image.data as Uint8Array);
       roadTex.magFilter = roadTex.minFilter = THREE.NearestFilter;   // the shader blends the samples itself
       roadTex.needsUpdate = true;
     }
@@ -1034,7 +1048,8 @@ export class Terrain {
         out.kind = raw & 15;
         out.bridge = (raw & 16) !== 0;
         out.washboard = (raw & 32) !== 0;
-        if ((raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
+        // A gravel driveway, drawn as a gravel road (drawnRoadBytes); in 1884 it is drawn and driven as the track it is.
+        if (!this.cartRoads && (raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
       }
     }
     // Mail and every other ground reader see the same exact deck as the wheels.
