@@ -144,11 +144,10 @@ const PAGES = {
 <p class="lead">A rural mail route you cannot win, on the real roads around Mabou. The madness is only a little exaggerated.</p>
 <p><b>Two games, one island.</b> Mabou Mail Madness gives you a mail route. <a href="https://justdrive.fakkeldy.ca/">Just Drive</a> has every area, no mail.</p>
 <div class="actions"><a class="button" href="/">Start the shift</a><a class="button second" href="https://justdrive.fakkeldy.ca/mabou">Just drive instead</a></div>
-<section aria-labelledby="true">
-<span class="label">The true part</span>
-<h2 id="true">Based on a real route</h2>
-<p>Dan Fakkeldy drives a rural mail route around Mabou, on Cape Breton Island. The days have a pattern: washboard gravel, mailboxes at the ends of long lanes, a dog who chases the car, a cat who sleeps in the middle of the road, and a phone call to the post office when a wheel touches a lawn.</p>
-<p>This game is that route, played for laughs. Deliver the day’s run, stay off the lawns, and keep the complaints down. Somebody will phone the post office anyway.</p>
+<section aria-labelledby="game">
+<span class="label">The game</span>
+<h2 id="game">Deliver the day’s run</h2>
+<p>Washboard gravel, mailboxes at the ends of long lanes, a dog who chases the car and a cat who sleeps in the middle of the road. Deliver the day’s run, stay off the lawns, and keep the complaints down. Somebody will phone the post office anyway.</p>
 <ul role="list" class="features">
 <li><b>Complaints and a camera</b><span>Customers phone in. A photo you took first is your defence.</span></li>
 <li><b>A bladder gauge</b><span>There is no washroom on the route. Look for houses first.</span></li>
