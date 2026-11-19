@@ -114,6 +114,61 @@ def correct_nov18_roads(roads, area):
     return result
 
 
+DRIVEWAY = '18nov'
+
+
+def nov18_driveways(roads, area, observations=NOV18):
+    """Append each observed driveway as unnamed kind-4 gravel pieces (no name, mailbox or number), after every other
+    road, so raster ties at the mouth keep the public road. Pieces join end to start; a wider piece is a turnaround or
+    parking pad. The mouth lies on the named road it joins and nothing else comes near another road. Idempotent."""
+    drives = observations.get('driveways', []) if area == 'mabou' else []
+    if not drives:
+        return roads
+    if any(r.get('driveway') == DRIVEWAY for r in roads):
+        return roads
+    result = list(roads)
+    next_id = max(r['id'] for r in roads) + 1
+    boxes = [(r, min(q[0] for q in r['pts'])-30, min(q[1] for q in r['pts'])-30, max(q[0] for q in r['pts'])+30,
+              max(q[1] for q in r['pts'])+30) for r in roads]
+    for drive in drives:
+        pieces = drive['pieces']
+        if any(len(p['pts']) < 2 or not 1.5 <= p['halfWidth'] <= 3.5 for p in pieces):
+            raise ValueError('Driveway pieces need two points and a half width of 1.5 to 3.5 m')
+        if any(a['pts'][-1] != b['pts'][0] for a, b in zip(pieces, pieces[1:])):
+            raise ValueError('Driveway pieces must join end to start')
+        mouth = pieces[0]['pts'][0]
+        gap, rid, _ = project(roads, mouth, drive['road'])
+        road = next(r for r in roads if r['id'] == rid)
+        if gap > road['halfWidth']:
+            raise ValueError(f'Driveway mouth is {gap:.1f} m off {drive["road"]}')
+        for piece in pieces:
+            for p in along(piece['pts'], 1.0):
+                # Only the mouth may come near a road: there the driveway leaves its own road.
+                if math.dist(p, mouth) <= road['halfWidth'] + piece['halfWidth'] + 2:
+                    continue
+                near = [r for r, x0, y0, x1, y1 in boxes if x0 <= p[0] <= x1 and y0 <= p[1] <= y1]
+                if not near:
+                    continue
+                other_gap, other, _ = project(near, p)
+                width = next(r['halfWidth'] for r in near if r['id'] == other)
+                if other_gap <= width + piece['halfWidth'] + 1:
+                    raise ValueError(f'Driveway to {drive["road"]} comes within {other_gap:.1f} m of road {other}')
+        for piece in pieces:
+            result.append(dict(id=next_id, name=None, kind=4, halfWidth=piece['halfWidth'], bridge=False,
+                               pts=[list(p) for p in piece['pts']], washboard=False, pavement='gravel', driveway=DRIVEWAY))
+            next_id += 1
+    return result
+
+
+def along(pts, step):
+    """Points every `step` metres or less along a line, with its vertices."""
+    out = [tuple(pts[0])]
+    for a, b in zip(pts, pts[1:]):
+        n = max(1, math.ceil(math.dist(a, b) / step))
+        out += [(a[0]+(b[0]-a[0])*k/n, a[1]+(b[1]-a[1])*k/n) for k in range(1, n+1)]
+    return out
+
+
 def hand_building_specs():
     for observations in (INPUT, NOV18):
         for building in observations['buildings']:
@@ -143,6 +198,8 @@ def hand_buildings(kept, area, ground, roads=None, observations=INPUT):
         return kept
     ids = {b['id'] for b in kept}
     result = list(kept)
+    # A property's own driveway runs up to its buildings; the clearance below is from the mapped network.
+    roads = [r for r in roads if r.get('driveway') != DRIVEWAY] if roads else roads
     for source in observations['buildings']:
         if source['id'] in ids:
             old = next(b for b in kept if b['id'] == source['id'])

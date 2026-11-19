@@ -9,9 +9,10 @@ land:   python3 tools/mabou-dashcam-18nov/receipt.py land [BAKED]           (ins
 
 SOURCE is the Mabou terrain pack the bake read (data/baked/terrain) and STAGE the bake's --output folder.
 hashes.json pins, for every file the bake writes except manifest.json, the bytes it replaces (`before`) and
-its bytes (`sha256`), relative to data/baked. The manifest is pinned by the two counts the bake owns, because
-other bakes own every other manifest key. `undo` rebuilds the bake's before props and road kinds from its after
-files: tools/road-scene-delta-check.py reads it to judge step-29 props on promoted land, and `record` proves that
+its bytes (`sha256`), relative to data/baked. The manifest is pinned by the three counts the bake owns (buildings,
+building styles and trees: the driveways drop the trees on them), because other bakes own every other manifest key.
+`undo` rebuilds the bake's before props, road list and road kinds from its after files (it drops the split pieces
+and the driveway pieces): tools/road-scene-delta-check.py reads it to judge step-29 props on promoted land, and `record` proves that
 it reproduces the before props byte for byte.
 """
 import copy
@@ -25,7 +26,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 RECEIPT = HERE/'hashes.json'
 FOLDER = 'terrain'
-COUNTS = ('buildings', 'buildingStyles')
+COUNTS = ('buildings', 'buildingStyles', 'trees')
 
 
 def sha(data): return hashlib.sha256(data).hexdigest()
@@ -38,10 +39,11 @@ def undo(props, roads, rule):
     """The props and roads of the land before the bake, from its after props and roads."""
     pieces = {int(k): v for k, v in rule['poles'].items()}
     kinds = {int(k): v for k, v in rule['kinds'].items()}
+    added = set(pieces) | set(rule.get('driveways', []))
     props = copy.deepcopy(props)
     for record in props['poles'] + props.get('serviceDrops', []):
         record['road'] = pieces.get(record['road'], record['road'])
-    return props, [dict(r, kind=kinds.get(r['id'], r['kind'])) for r in roads if r['id'] not in pieces]
+    return props, [dict(r, kind=kinds.get(r['id'], r['kind'])) for r in roads if r['id'] not in added]
 
 
 def counts(manifest): return {k: dict(count=manifest[k]['count']) for k in COUNTS}
@@ -57,13 +59,16 @@ def record(source, stage):
     old = {r['id']: r for r in json.loads((source/'roads.json').read_bytes())['roads']}
     new = json.loads((stage/'roads.json').read_bytes())['roads']
     added = [r for r in new if r['id'] not in old]
+    drives = [r['id'] for r in added if r.get('driveway')]
+    if new[len(new)-len(drives):] != [r for r in added if r.get('driveway')]: raise ValueError('driveway pieces must come last')
     pieces = {}
     for r in added:
+        if r.get('driveway'): continue
         kept = [o for o in new if o['id'] in old and o.get('correction') == r.get('correction')]
         if not r.get('correction') or len(kept) != 1: raise ValueError(f'road {r["id"]} is not one piece of a split road')
         pieces[str(r['id'])] = kept[0]['id']
     kinds = {str(r['id']): old[r['id']]['kind'] for r in new if r['id'] in old and r['kind'] != old[r['id']]['kind']}
-    rule = dict(poles=pieces, kinds=kinds)
+    rule = dict(poles=pieces, kinds=kinds, driveways=drives)
     before = json.loads((source/'props.json').read_bytes())
     rebuilt, _ = undo(json.loads((stage/'props.json').read_bytes()), new, rule)
     if compact(rebuilt) != (source/'props.json').read_bytes() or rebuilt != before:
@@ -96,7 +101,7 @@ def state(baked, report):
 
 
 def install(stage, baked, report=None):
-    """Copy the staged files over BAKED/terrain and set only the two owned manifest counts: other bakes own every other
+    """Copy the staged files over BAKED/terrain and set only the three owned manifest counts: other bakes own every other
     manifest key, so the staged manifest is never copied. Refuses before writing on staged bytes or land that are not
     this receipt's. Replaced bytes are kept in STAGE.before/ so the install can be undone. Run again: it does nothing."""
     report = report or json.loads(RECEIPT.read_text())
@@ -133,15 +138,15 @@ def write(target, data):
 
 
 def set_counts(live, side):
-    """Only the two counts this bake owns; every other manifest key stays as other bakes left it."""
+    """Only the counts this bake owns; every other manifest key stays as other bakes left it."""
     manifest = json.loads((live/'manifest.json').read_bytes())
     for key, value in side.items(): manifest[key]['count'] = value['count']
     write(live/'manifest.json', compact(manifest))
 
 
 def uninstall(stage, baked, report=None):
-    """Undo install: put back each pinned file from STAGE.before/ (checked against its before hash) and set the two
-    counts back. Refuses before writing on land or kept bytes that are not this receipt's. Run again: it does nothing."""
+    """Undo install: put back each pinned file from STAGE.before/ (checked against its before hash) and set the
+    owned counts back. Refuses before writing on land or kept bytes that are not this receipt's. Run again: it does nothing."""
     report = report or json.loads(RECEIPT.read_text())
     live, keep = Path(baked)/FOLDER, Path(stage).with_name(Path(stage).name + '.before')
     names = {f['file'][len(FOLDER)+1:]: f for f in report['files']}
@@ -216,9 +221,11 @@ def fixture():
             else: raise AssertionError(f'{action.__name__} used tampered kept bytes')
             assert snapshot() == was, f'{action.__name__} wrote before refusing'
         props = dict(poles=[dict(road=9, n=0), dict(road=5, n=1)], serviceDrops=[dict(road=9, n=0)])
-        rebuilt, roads = undo(props, [dict(id=5, kind=3), dict(id=9, kind=2), dict(id=6, kind=2)], dict(poles={'9': 5}, kinds={'6': 4}))
+        rebuilt, roads = undo(props, [dict(id=5, kind=3), dict(id=9, kind=2), dict(id=6, kind=2), dict(id=10, kind=4), dict(id=11, kind=4)],
+                              dict(poles={'9': 5}, kinds={'6': 4}, driveways=[10, 11]))
         assert [q['road'] for q in rebuilt['poles'] + rebuilt['serviceDrops']] == [5, 5, 5] and props['poles'][0]['road'] == 9
-        assert roads == [dict(id=5, kind=3), dict(id=6, kind=4)]
+        assert roads == [dict(id=5, kind=3), dict(id=6, kind=4)], 'undo drops the split and driveway pieces'
+        assert undo(props, [dict(id=5, kind=3)], dict(poles={}, kinds={}))[1] == [dict(id=5, kind=3)], 'a rule without driveways' 
 
 
 def land(baked):

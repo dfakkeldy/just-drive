@@ -10,8 +10,8 @@ const results = [];
 function test(name, fn) { if(only && only!==name)return; fn(); results.push(name); console.log('PASS '+name); }
 const idle = {throttle:0,steer:0,handbrake:false};
 const go = {...idle,throttle:1};
-function world({kind=1, height=()=>0, canopy=0, washboard=false}={}) {
- const terrain={heightAt:height, surfaceAt:(x,z)=>({ground:height(x,z),canopy,kind,roadDist:kind?0:99,halfWidth:kind?8:0,bridge:false,washboard,brook:99,level:8}),withContactHeight:(_b,read)=>read()};
+function world({kind=1, height=()=>0, canopy=0, washboard=false, gravel=false}={}) {
+ const terrain={heightAt:height, surfaceAt:(x,z)=>({ground:height(x,z),canopy,kind,roadDist:kind?0:99,halfWidth:kind?8:0,bridge:false,washboard,brook:99,level:8,...(gravel?{gravel}:{})}),withContactHeight:(_b,read)=>read()};
  const road={id:1,kind,bridge:false,name:'Test road',halfWidth:8,pts:[[-10000,0],[10000,0]]};
  const roads={deckHeight:()=>null,nearest:(x,z,d,pred)=>!pred||pred(road)?{x,z:0,heading:Math.PI/2,dist:Math.abs(z),road,seg:0,t:.5}:null};
  const car={root:new THREE.Group(),pose(){},driverEye:new THREE.Object3D()};
@@ -21,6 +21,11 @@ function run(v,seconds,input=go,fps=60,step) { for(let i=0;i<Math.round(seconds*
 const ramp=x=>x<0?0:x<=20?x*.25:0;
 function launch(speed=20){ const {v}=world({height:ramp});v.place(-4,0,Math.PI/2);v.vx=v.speed=speed;let take;
  for(let i=0;i<2000;i++){v.update(BIKE_STEP,idle);if(v.airborne){take={x:v.x,y:v.y,vx:v.vx,vy:v.vy};break;}}assert.ok(take,'ramp must launch');return {v,take}; }
+test('a gravel driveway rides as gravel, a plain track as dirt',()=>{
+ for(const [opts,name] of [[{kind:4,gravel:true},'gravel'],[{kind:4},'dirt track'],[{kind:3},'gravel']]){const {v}=world(opts);run(v,.1,go);assert.equal(v.surfaceName,name,JSON.stringify(opts));}
+ // The 1884 cart roads have no gravel driveways: a track is a track there, as for the car.
+ const {v,terrain}=world({kind:4,gravel:true});terrain.cartRoads=true;run(v,.1,go);assert.equal(v.surfaceName,'dirt track','1884 track');
+});
 test('garage choice precedence and mail defaults',()=>{
  const store=v=>()=>({getItem:()=>v});
  assert.equal(readVehicle(new URLSearchParams(),false,store('bike')).id,'car');
