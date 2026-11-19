@@ -147,7 +147,7 @@ const PAGES = {
 <section aria-labelledby="game">
 <span class="label">The game</span>
 <h2 id="game">Deliver the day’s run</h2>
-<p>Washboard gravel, mailboxes at the ends of long lanes, a dog who chases the car and a cat who sleeps in the middle of the road. Deliver the day’s run, stay off the lawns, and keep the complaints down. Somebody will phone the post office anyway.</p>
+<p>Washboard gravel, mailboxes at the ends of long lanes, a dog who chases the car and a cat who sleeps in the middle of the road. Stay off the lawns and keep the complaints down. Somebody will phone the post office anyway.</p>
 <ul role="list" class="features">
 <li><b>Complaints and a camera</b><span>Customers phone in. A photo you took first is your defence.</span></li>
 <li><b>A bladder gauge</b><span>There is no washroom on the route. Look for houses first.</span></li>
