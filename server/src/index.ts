@@ -15,6 +15,10 @@ import { DurableObject } from 'cloudflare:workers';
 import { CLOSE, HEARTBEAT, PEER_TIMEOUT_MS, PING, PONG, VERSION } from '../../web/src/mp/wire';
 import { Meter, STRIKES_OUT, hello, judge, lastKnown, takeSeat, text, type Seat } from './room';
 import { Board, boardDoor, type BoardEnv } from './board';
+
+// A query key that changes what the game starts with; the site key and link-tracking tags do not.
+const gameQuery = (params: URLSearchParams): boolean =>
+  [...params.keys()].some(key => key !== 'site' && key !== 'fbclid' && key !== 'gclid' && !key.startsWith('utm_'));
 export { Board };
 
 export interface Env extends BoardEnv {
@@ -56,12 +60,14 @@ export default {
     }
     if ((request.method === 'GET' || request.method === 'HEAD') && env.ASSETS && site.brand === 'just'
       && (url.pathname === '/' || /^\/[^/]+\/?$/.test(url.pathname))) {
-      // The bare root is the map of places (tools/just-home.mjs). A root with a query is an old Mabou link: it keeps
-      // its query and goes to /mabou, where the root used to start.
+      // The bare root is the map of places (tools/just-home.mjs). A root with a game query is an old link: it keeps its
+      // query and goes where the root used to start: a trip to its own area, anything else to /mabou. Tracking tags
+      // that social sites add (utm_*, fbclid, gclid) are not a game query.
       const home = url.pathname === '/';
-      if (home) {
-        const query = new URLSearchParams(url.searchParams); query.delete('site');
-        if (query.size) { url.pathname = '/mabou'; return Response.redirect(url.href, 308); }
+      if (home && gameQuery(url.searchParams)) {
+        const trip = url.searchParams.has('trip') ? readSite(url.hostname, '/' + (url.searchParams.get('area') || 'westbay'), url.searchParams).area : null;
+        url.pathname = '/' + (trip ?? (url.searchParams.has('trip') ? 'westbay' : 'mabou'));
+        return Response.redirect(url.href, 308);
       }
       if (site.area && !home && url.pathname.endsWith('/')) {
         url.pathname = url.pathname.slice(0, -1); return Response.redirect(url.href, 308);

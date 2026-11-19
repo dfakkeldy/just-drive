@@ -10,8 +10,9 @@
  */
 const JUST = new URL(self.location.origin).hostname.split('.')[0].toLowerCase() === 'justdrive';
 const areaPath = url => { const id = url.pathname.split('/').filter(Boolean)[0]?.toLowerCase(); return typeof JUST_ALIASES !== 'undefined' && Object.hasOwn(JUST_ALIASES, id) ? JUST_ALIASES[id] : id; };
-// The Just Drive bare root is the map of places (tools/just-home.mjs), a network page. A root with a query is an old Mabou link.
-const justHome = url => JUST && url.pathname==='/' && !url.search;
+// The Just Drive bare root is the map of places (tools/just-home.mjs), a network page. A root with a game query is an old
+// game link; the site key and link-tracking tags (as in server/src/index.ts) do not count.
+const justHome = url => JUST && url.pathname==='/' && ![...url.searchParams.keys()].some(k => k!=='site' && k!=='fbclid' && k!=='gclid' && !k.startsWith('utm_'));
 const gameNavigation = url => (url.pathname==='/' && !justHome(url)) || url.pathname==='/index.html' || (JUST && /^\/[^/]+\/?$/.test(url.pathname) && (typeof JUST_AREAS === 'undefined' ? [] : JUST_AREAS).includes(url.pathname.split('/').filter(Boolean)[0]?.toLowerCase()));
 const listenPath = path => path==='/listen' || path.startsWith('/listen/');
 const PREFIX = 'mmm-offline-', META = PREFIX + 'meta-v1', KEY = '/__mmm_offline_state', READY = '/__mmm_offline_ready', COMPLETE = '/__mmm_offline_complete', FILL = '/__mmm_offline_fill';

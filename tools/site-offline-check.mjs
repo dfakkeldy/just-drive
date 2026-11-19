@@ -80,6 +80,7 @@ try {
  const slash=await h.nav('slash','mabou/?touch=1');assert.equal(slash.response.status,308);assert.equal(slash.response.headers.get('location'),'https://justdrive.localhost/mabou?touch=1');
  const root=await h.nav('root','?area=judique');assert.equal(root.response.status,200);assert.ok(root.body.includes(just.pageKey),'root ignores area query in offline worker');
  const home=await h.nav('home','');assert.equal(home.response.status,503,'the bare root is the map of places, a network page');assert.ok(!home.body.includes(just.pageKey),'the map of places never starts the game');assert.match(home.body,/<title>Just Drive<\/title>/);assert.match(home.body,/The map of places needs a connection/);assert.match(home.body,/href="\/mabou\?title=1"/);
+ for(const tagged of ['?utm_source=x','?fbclid=y']){const t=await h.nav('home-tag',tagged);assert.equal(t.response.status,503,'a tracking tag still opens the map of places '+tagged);assert.ok(!t.body.includes(just.pageKey));}
  const other=await h.nav('other','judique?area=mabou');assert.equal(other.response.status,503);assert.match(other.body,/Just Drive: Judique/);assert.match(other.body,/href="\/mabou\?title=1"/);assert.doesNotMatch(other.body,/\b(mail|post|route|shift|carrier|delivery)\b/i);
  checkHead(other.body,'Just Drive: Judique');
  const otherEra=await h.nav('other-era','judique-1884');assert.equal(otherEra.response.status,503,'Judique 1884 shares the Judique connection page while only Mabou is saved');assert.match(otherEra.body,/Just Drive: Judique/);

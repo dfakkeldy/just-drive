@@ -7,7 +7,7 @@ import {AREAS} from '../web/src/area.ts';
 const [base,site,out]=process.argv.slice(2),table=[];
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const request=(host,path,extra={})=>new Promise((resolve,reject)=>{http.get(base+path,{headers:{Host:host,...extra}},response=>{const chunks=[];response.on('data',b=>chunks.push(b));response.on('end',()=>resolve({status:response.statusCode,headers:response.headers,body:Buffer.concat(chunks)}));}).on('error',reject);});
-const paths=['/sugar-camp-quarry','/','/mabou','/mabou/','/mabou-1884','/mabou-1884/','/mabou-1885','/mabou-1884/x','/judique-1884','/judique-1884/','/judique','/nowhere','/?area=judique','/app.js','/sw.js','/mp/v1/mabou/world','/about','/about/','/help','/help/'];
+const paths=['/sugar-camp-quarry','/','/mabou','/mabou/','/mabou-1884','/mabou-1884/','/mabou-1885','/mabou-1884/x','/judique-1884','/judique-1884/','/judique','/nowhere','/?area=judique','/?utm_source=x','/app.js','/sw.js','/mp/v1/mabou/world','/about','/about/','/help','/help/'];
 for(const host of ['mmm.fakkeldy.ca','justdrive.fakkeldy.ca','localhost'])for(const path of [...paths,...(host==='justdrive.fakkeldy.ca'?AREAS.map(a=>'/'+a.id):[])]){
  const asked=path+(host==='localhost'?(path.includes('?')?'&':'?')+'site=just':'');const r=await request(host,asked),just=host!=='mmm.fakkeldy.ca',u=new URL(path,'https://example.test');
  let expected=200,asset;
@@ -20,7 +20,7 @@ for(const host of ['mmm.fakkeldy.ca','justdrive.fakkeldy.ca','localhost'])for(co
  else if(u.pathname==='/mabou-1884/x')expected=404;
  else if(u.pathname==='/sugar-camp-quarry')asset=site+'/just/westbay/index.html';
  else if(['/mabou-1884','/judique-1884'].includes(u.pathname))asset=site+'/just'+u.pathname+'/index.html';
- else if(u.pathname==='/'&&u.search)expected=308;
+ else if(u.pathname==='/'&&u.search&&!u.searchParams.has('utm_source'))expected=308;
  else if(u.pathname==='/')asset=site+'/just/home/index.html';
  else {const id=u.pathname.split('/').filter(Boolean)[0]?.toLowerCase()??'mabou',area=AREAS.find(a=>a.id===id);asset=site+'/just/'+(area?.id??'unknown')+'/index.html';if(!area)expected=404;}
  assert.equal(r.status,expected,host+asked);
