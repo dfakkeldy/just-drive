@@ -11,8 +11,12 @@ const LAST = ['Tire', 'Gravel', 'Culvert', 'Window', 'Pothole', 'Mirror'];
 export function inventedName(random = Math.random): string {
   return `${FIRST[Math.floor(random()*FIRST.length)]} ${LAST[Math.floor(random()*LAST.length)]}`;
 }
-export const PHRASES = ['Race you!', 'Nice!', 'Wait up', 'Follow me', 'Look at this', 'Wrong way', 'Thanks', 'Bye'] as const;
-export type PhraseId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+// The last three are for room games: a game sends them only to a room that said hello.games (an older room would count
+// them as a strike), and an older game ignores them.
+export const PHRASES = ['Race you!', 'Nice!', 'Wait up', 'Follow me', 'Look at this', 'Wrong way', 'Thanks', 'Bye',
+  'Who has the parcel?', 'Return to sender', 'Signed for'] as const;
+export type PhraseId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export const GAME_PHRASES = 8;
 export const isPhraseId = (value: unknown): value is PhraseId => typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < PHRASES.length;
 export function readChat(text: string): PhraseId | null {
   if (text.length > 64) return null;

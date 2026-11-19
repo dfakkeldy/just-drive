@@ -1,5 +1,6 @@
 import { SocialView, savedHandle } from './social-view';
 import { RaceView } from './race';
+import { GameView } from './games';
 // Multiplayer, first version: other players' cars are drawn on this player's roads. They are pictures only: no
 // collisions, and each player's mail game stays their own. The game loads this file only when the player
 // consents to Drive with others; an Off visit neither downloads it nor opens a connection.
@@ -27,11 +28,14 @@ export interface MultiplayerHost {
   area: string;
   /** Optional display-only label; room identities and names on the wire stay unchanged. */
   label?: (name: string, id: number) => string;
+  /** Real places where nothing scores (church grounds, cemeteries, the school bus stop), for room games. */
+  quiet?: () => readonly import('./game-field').QuietPlace[];
 }
 
 export class Multiplayer {
   readonly net: Net;
   readonly race: RaceView;
+  readonly games: GameView;
   private readonly social: SocialView | null;
   readonly ghosts: Ghosts;
   readonly horns = new Horns();
@@ -63,6 +67,8 @@ export class Multiplayer {
     this.race = new RaceView(this.net,host);
     // After the race: on a phone both live in Settings, race first.
     this.social = host.bare ? null : new SocialView(this.net, host.ground, host.touch);
+    // Room games: on a phone, in Settings between the race and the drivers.
+    this.games = new GameView(this.net, host);
     this.ghosts = new Ghosts({ ground: host.ground, low: host.low, label: host.label });
     host.scene.add(this.ghosts.group);
     this.chip = host.bare || host.touch ? null : document.body.appendChild(Object.assign(document.createElement('div'), { id: 'mpChip' }));
@@ -94,6 +100,7 @@ export class Multiplayer {
     this.net.report(s, now, !running);
     this.race.update();
     this.peers = this.net.views(now);
+    this.games.update(dt, this.peers, camera);
     this.social?.update(camera, this.peers, v);
     this.ghosts.update(dt, this.peers, camera, v, ride);
     this.horns.update(this.peers, v.x, v.z, now);
@@ -136,6 +143,8 @@ export class Multiplayer {
   marks(out: { x: number; z: number }[]): void {
     for (const v of this.peers) out.push({ x: v.x, z: v.z });
   }
+  /** The room game's parcel, for the small map. */
+  gameMarks(out: { x: number; z: number; label: string; rank?: number; colour?: string }[]): void { this.games.marks(out); }
 
   dispose(): void {
     clearInterval(this.heartbeatTimer);
@@ -144,6 +153,7 @@ export class Multiplayer {
     window.removeEventListener('pageshow', this.pageshow);
     this.social?.dispose();
     this.race.dispose();
+    this.games.dispose();
     this.net.stop();
     this.horns.dispose();
     this.peers = [];

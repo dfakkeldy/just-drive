@@ -69,6 +69,7 @@ import { Footpaths } from './footpaths';
 import { RoadScene } from './road-scene';
 import { SchoolBus } from './school-bus';
 import { BUS } from './school-bus-rules';
+import { SceneRoad } from './road-scene-rules';
 import { BUS_STOP_RADIUS, churchZones, placeAt } from './score-rules';
 import { FiredRun } from './fired';
 import { DailyRun } from './daily';
@@ -623,7 +624,20 @@ if (quarry) quarry.attach(scene, waterReflections);
 // A build made with VITE_MP=0 has the code compiled out (web/vite.artifact.config.ts sets the default, which is on).
 // Off in a history era: rooms are per area, not per era, so two eras would meet in one room.
 const MULTIPLAYER = (import.meta.env.DEV || import.meta.env.VITE_MP === '1') && ERA.modern;
-const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads, get vehicle() { return vehicle; }, low: LOW, bare, params, area: AREA.id, touch: touchDevice, label: SITE.brand === 'just' ? (_name, id) => `Driver ${id}` : undefined,
+// Room games keep off the real places where nothing scores: church grounds, cemeteries and the school bus stop.
+let quietPlaces: { x: number; z: number; radius: number }[] | null = null;
+const roomQuiet = () => quietPlaces ??= [
+  ...churchZones(landmarkList, manifest.village).map(({ x, z, radius }) => ({ x, z, radius })),
+  ...cemeteries?.zones() ?? [],
+  ...(() => {
+    if (AREA.id !== 'mabou') return [];
+    const loop = roads.roads.find(r => r.name === BUS.road && r.pts.length > 2 && Math.hypot(r.pts[0][0] - r.pts[r.pts.length - 1][0], r.pts[0][1] - r.pts[r.pts.length - 1][1]) < 1);
+    if (!loop) return [];
+    const stop = { x: 0, z: 0, heading: 0 }; new SceneRoad(loop.pts, 0, 1).at(BUS.stop, BUS.lane, stop);
+    return [{ x: stop.x, z: stop.z, radius: BUS_STOP_RADIUS }];
+  })(),
+];
+const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads, quiet: roomQuiet, get vehicle() { return vehicle; }, low: LOW, bare, params, area: AREA.id, touch: touchDevice, label: SITE.brand === 'just' ? (_name, id) => `Driver ${id}` : undefined,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as 'car' | 'truck' | 'sxs' | 'bike', trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
   ground: (x, z) => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; } }) : null;
@@ -910,6 +924,7 @@ function refreshMap(): void {
   mapStops.length = mapMarks.length = 0;
   multiplayer?.marks(mapCars);
   if (placesUI) mapMarks.push(...placesUI.marks);
+  multiplayer?.gameMarks(mapMarks);
   if (props) for (const stop of shift.run.stops) {
     const i = stop.index, p = i < props.mail.length ? props.mail[i] : props.sites[i - props.mail.length];
     if (p) mapStops.push({ x: p.x, z: p.z, due: shift.remaining[i] > 0 });
