@@ -49,9 +49,8 @@ that is not live yet, follow "Checks on a land that is not live yet" in
 - Open every PR as a **draft** (`gh pr create --draft`). An automated steward
   lands any ready PR that has a `Reviewed-by:` line, so a ready PR with open
   gates can merge too early.
-- CI skips draft PRs. When every gate has passed, run `gh pr ready <N>`, wait
-  until `gh pr checks <N>` shows `Clean-clone checks` as pending, and only then
-  start the landing script. Started earlier, it reads the skipped check as red.
+- CI runs on draft PRs too. When every gate has passed, run `gh pr ready <N>`
+  and start the landing script at once.
 - The PR body has Testing, Risk, How to revert and a `Reviewed-by:` line.
 
 ## Privacy and licences
