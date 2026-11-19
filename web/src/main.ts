@@ -144,6 +144,7 @@ import { MabouMainSite, MAIN_ITEMS, aimDrops as aimMabouDrops } from './mabou-ma
 import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
 import {createTestPark,testParkPlaces} from './stunt-test-park';
+import {createSugarCampStunts,sugarCampStuntPlaces} from './sugar-camp-stunts';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
 import { Drone, createDroneButton, createDroneSticks, roofHeights } from './drone';
 import { DRONE } from './drone-rules';
@@ -395,7 +396,8 @@ if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get
   terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id)).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
-const stuntPark=await createTestPark(params, terrain, yardSite, LOW, buildingList ?? []);
+// The quarry park carries the same tested layout on its East Top bench; the works-yard copy stays a test address.
+const stuntPark=await createTestPark(params, terrain, yardSite, LOW, buildingList ?? [])??(quarrySite&&ERA.modern?await createSugarCampStunts(terrain, manifest.village, LOW, buildingList ?? []):null);
 if(stuntPark)scene.add(stuntPark.group);
 if (fishingSite) terrain.sites.push(fishingSite);
 if (homeSite) terrain.sites.push(homeSite);
@@ -1553,7 +1555,7 @@ const title = started ? null : createTitle(touchDevice, () => { started = true; 
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
-const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...(cemeteries?.places ?? []), ...(stuntPark?testParkPlaces(stuntPark,manifest.village):[])];
+const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...(cemeteries?.places ?? []), ...(stuntPark?(quarrySite?sugarCampStuntPlaces:testParkPlaces)(stuntPark,manifest.village):[])];
 const placesUI = !mailMode && !bare && (placeList.length || (ERA.modern && !!tallKey)) ? new PlacesUI(placeList, manifest.village, history?.placeRoads ?? roads, {
 
   canOpen: () => started,

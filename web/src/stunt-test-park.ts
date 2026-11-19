@@ -2,6 +2,9 @@ import type { Place } from './places';
 import type { Building } from './buildings';
 import type { Terrain } from './terrain';
 import type { YardSite } from './yard-site';
+
+/** Metres along u and v, as in the works yard; any rigid frame with the same handedness keeps the tested layout. */
+export type StuntFrame = Pick<YardSite,'world'|'heading'>;
 import { StuntPark,type StuntPlacement,type StuntRunup } from './stunt-kit';
 import {type DressingPlacement,startArch,lineFurniture,lineMarker,laneArrow,timingHut,pitArea,floodMast,edgeStacks} from './stunt-dressing';
 import { archTunnel,footbridge,gapPair,slipKicker,stepDown,tableTop,tankRow,whoops } from './stunt-pieces';
@@ -10,7 +13,7 @@ import { archTunnel,footbridge,gapPair,slipKicker,stepDown,tableTop,tankRow,whoo
 export const HARD_ARCH_RISE=8.05;
 
 /** Fourteen test pieces on the Mabou field. Banked turns are excluded. */
-export function testParkLayout(yard:YardSite):StuntPlacement[]{
+export function testParkLayout(yard:StuntFrame):StuntPlacement[]{
   const put=(piece:StuntPlacement['piece'],u:number,v:number,du=0,dv=1):StuntPlacement=>({...yard.world(u,v),piece,heading:yard.heading(du,dv)});
   return[
     // The easy line follows the open field east of the works yard, clear of its jump and all its stock.
@@ -43,9 +46,9 @@ export function testParkPlaces(park:StuntPark,origin:readonly[number,number]):Pl
   start:{e,n,heading:s.heading}};});
 }
 /** Decorative pieces are separate from the frozen graded and driving footprints. */
-export function testParkDressing(yard:YardSite):DressingPlacement[]{
+export function testParkDressing(yard:StuntFrame,name='TEST PARK'):DressingPlacement[]{
  const put=(piece:DressingPlacement['piece'],u:number,v:number,du=0,dv=1):DressingPlacement=>({...yard.world(u,v),piece,heading:yard.heading(du,dv)}),out:DressingPlacement[]=[];
- out.push(put(startArch(),650,25),put(startArch('TEST PARK',HARD_ARCH_RISE),615,350,0,-1),put(timingHut(),662,24),put(pitArea(),645.8,35));
+ out.push(put(startArch(name),650,25),put(startArch(name,HARD_ARCH_RISE),615,350,0,-1),put(timingHut(),662,24),put(pitArea(),645.8,35));
  for(const start of [42,82,122,162,202])out.push(put(lineFurniture(34,7,true),650,start));
  out.push(put(lineFurniture(58,8,false),615,332,0,-1),put(lineFurniture(45,8,false),615,258,0,-1));
  for(const [u,v,easy]of [[657,26,true],[623,344,false],[657,118,true],[623,270,false]] as const)out.push(put(lineMarker(easy),u,v));
