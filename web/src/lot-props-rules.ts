@@ -295,6 +295,21 @@ export function chooseLotProps(input: LotInput): LotProp[] {
   return placed;
 }
 
+/** Another system's footprint a lot prop must keep clear of: the breakable yard props of mail play (yard-props-rules.ts),
+ *  which stand only in some modes and so are not an input to the seeded choice. `heading`: the game's heading of its length. */
+export interface Footprint { x: number; z: number; heading: number; half: number; halfWidth: number }
+/** The indices of `props` closer than `margin` to any footprint: those are left out where the footprints stand. */
+export function overlapping(props: readonly LotProp[], others: readonly Footprint[], margin: number = LOT_PROPS.apart): number[] {
+  const grid = new Grid<Footprint>();
+  for (const o of others) grid.add(o, rectBox(o));
+  const out: number[] = [];
+  props.forEach((p, i) => {
+    const b = rectBox(p);
+    for (const o of grid.near([b[0] - margin, b[1] - margin, b[2] + margin, b[3] + margin])) if (rectRect(p, o) < margin) { out.push(i); return; }
+  });
+  return out;
+}
+
 /** Whether a dog stays out of sight: it slips away once a car's body is within ANIMAL.shy of it (as a waiting roadside
  *  animal does) and comes back only when the car is `back` metres off. `gap` is metres from the dog to the car's body. */
 export const DOG_BACK = 12;

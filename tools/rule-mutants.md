@@ -15,7 +15,7 @@ Base: `f965706`, current `origin/main` when this branch started on 15 November 2
 | school-bus-rules.ts | school-bus | school-bus, embedded --mutations | Covered |
 | shift-rules.ts | shift | shift-rules-mutations | Added four mutants |
 | yard-dog-rules.ts | yard-dog, yard-dog-rules | yard-dog-rules-mutations | Existing yard-dog row mutates placement only. Added a pure-rule check and four rule mutants |
-| lot-props-rules.ts | lot-props-rules | lot-props-rules-mutations | New module (yard props at houses, 19 Nov 2026): pure check on a made-up street and every Mabou house, four rule mutants |
+| lot-props-rules.ts | lot-props-rules | lot-props-rules-mutations | New module (lot props at houses, 19 Nov 2026): pure check on a made-up street and every Mabou house, four rule mutants |
 
 Open PR audit used `gh pr diff --name-only` for each open PR: #11, #85,
 #99, #118, #122, #123, #124, #125, #126 and #127. None changes the eleven
@@ -41,7 +41,7 @@ exist only in open PRs and are outside this branch:
 
 `node tools/rule-mutants.mjs <name>` runs the original check without edits,
 then with each mutant separately. Names: `damage`, `jump`, `mine`, `shift`,
-`yard-dog`, `lot-props`. `--base` runs only the unmodified check. Mutation anchors must occur
+`yard-dog`, `yard-props`, `lot-props`. `--base` runs only the unmodified check. Mutation anchors must occur
 exactly once. Build failures, timeouts, signals and non-assertion errors do not
 count as kills. Every mutant must exit 1 with an assertion failure.
 
@@ -50,9 +50,10 @@ count as kills. Every mutant must exit 1 with an assertion failure.
 | damage | Landing speed, alignment speed, washboard speed, ditch depth |
 | jump | Launch speed, placement continuity, landing roll, settling slide |
 | mine | Bend speed, recovery time, fork direction, signature branch |
-| shift | Suspension count, skipped day, vehicle allowance, double-day union |
+| shift | Suspension count, skipped day, vehicle allowance, double-day union, property damage suspension |
+| yard-props | Protected place, driveway, shoulder, mailbox and overlap clearances; garbage day; break speed; pieces at rest; bale on a slope; bale in woods; props in water; props at the shore |
 | yard-dog | Pause gate, trigger range, follow limit, bark event |
-| lot-props | Vehicle share, public road clearance, own lot, driveway mouth |
+| lot-props | Vehicle share, public road clearance, own lot, driveway mouth, clear of yard props |
 
 The runner uses the existing `mutationSources` helper and an esbuild load
 plugin. Each child check runs in a separate Node process. One temporary bundle

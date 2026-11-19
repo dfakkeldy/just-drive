@@ -316,6 +316,10 @@ export class NearInstances<T extends Placed> {
   }
 
   /** Items drawn this frame, by kind. */
+  /** Leave one item out for good (as a dropped one): it is never posed or drawn again. */
+  remove(item: T): void {
+    for (const set of this.sets) { const k = set.kind.items.indexOf(item); if (k >= 0) { set.posed[k] = -2; this.dropped.add(item); return; } }
+  }
   get counts(): number[] { return this.sets.map((s) => s.mesh.count); }
   dispose(): void { for (const s of this.sets) s.mesh.dispose(); }
 }

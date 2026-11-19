@@ -1,5 +1,5 @@
 import { draw } from './shift-rules';
-export type ComplaintKind = 'lawnDamage' | 'boxDown' | 'lawnMail' | 'ditchMail' | 'missing' | 'stuffed' | 'flag' | 'late' | 'indoors' | 'relief' | 'sceneHit' | 'sceneHorn' | 'sceneDust' | 'sceneAnimal';
+export type ComplaintKind = 'lawnDamage' | 'propertyDamage' | 'boxDown' | 'lawnMail' | 'ditchMail' | 'missing' | 'stuffed' | 'flag' | 'late' | 'indoors' | 'relief' | 'sceneHit' | 'sceneHorn' | 'sceneDust' | 'sceneAnimal';
 export interface Complaint {
   kind: ComplaintKind; customer: string; target: number; at: number; x: number; z: number;
   road: number; preExisting?: boolean; line: string;
@@ -19,6 +19,10 @@ const LINES: Record<ComplaintKind, readonly string[]> = {
   indoors: ['The parcel came to the door. It appears to have stopped there.', 'We moved the crew. The delivery has not caught up.', 'A signature was required. Daylight was apparently preferred.', 'The carrier returned with our parcel. A round trip was not requested.'],
   relief: ['I looked out the window at the wrong moment. So did the carrier.', 'There is a mail car at the end of my lane, and the carrier is beside it. I will say no more.', 'I pay for home delivery. That is not what was delivered.', 'My hedge is not a public convenience.'],
   lawnDamage: ['There are two new lanes in my lawn. Neither was requested.', 'The grass is now a through road, apparently.', 'I mow that lawn. The carrier has helpfully ploughed it.', 'The tyre tracks do not match the landscaping plan.'],
+  propertyDamage: ['Whatever was standing in my yard this morning is now lying in it.',
+    'The mail car left the road and took some of my property with it.',
+    'I have a list of what was broken. The carrier is at the top of it.',
+    'It took years to get the yard looking like that. It took the carrier one second.'],
   boxDown: ['My mailbox now receives mail at ground level.', 'The post was upright when I last approved it.', 'The mailbox is lying down on the job.', 'I would prefer the mailbox attached to the post.'],
   lawnMail: ['The lawn received my mail. I did not.', 'The grass does not read circulars.', 'My letter was delivered to the mowing area.', 'The envelope is taking root.'],
   ditchMail: ['The ditch has received another statement.', 'My mail is travelling by drainage.', 'I checked the mailbox. Then I checked the culvert.', 'The wet envelope was not an improvement.'],
@@ -33,7 +37,8 @@ export function complaintLine(kind: ComplaintKind, day: number, target: number):
   return kind === 'late' ? `${text} Year ${12 + Math.floor((day - 1) / 365)} of this complaint.` : text;
 }
 export function dismissed(c: Complaint, photos: readonly Photo[]): boolean {
-  if (c.kind === 'late' || c.kind === 'flag' || c.kind === 'indoors' || c.kind === 'relief') return false;
+  // A broken fence, line, ornament, woodpile, bale or bin was the car's doing: no photo explains it.
+  if (c.kind === 'late' || c.kind === 'flag' || c.kind === 'indoors' || c.kind === 'relief' || c.kind === 'propertyDamage') return false;
   for (const p of photos) {
     if (p.at >= c.at) continue;
     for (const f of p.facts) {

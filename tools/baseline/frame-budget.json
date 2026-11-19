@@ -17,11 +17,11 @@
 
   "highway19-far-land/desktop-explore-truck":{"calls":714,"triangles":3496876,"geometries":193,"textures":158,"programs":34,"readyTiles":358,"requests":673},
 
-  "highway19-far-land/desktop-mail":{"calls":705,"triangles":3534896,"geometries":179,"textures":158,"programs":35,"readyTiles":358,"requests":675},
+  "highway19-far-land/desktop-mail":{"calls":711,"triangles":3534896,"geometries":182,"textures":158,"programs":35,"readyTiles":358,"requests":675},
 
   "highway19-far-land/phone-explore-truck":{"calls":201,"triangles":1282676,"geometries":83,"textures":74,"programs":13,"readyTiles":92,"requests":218},
 
-  "highway19-far-land/phone-mail":{"calls":208,"triangles":1302588,"geometries":90,"textures":74,"programs":15,"readyTiles":92,"requests":220},
+  "highway19-far-land/phone-mail":{"calls":211,"triangles":1302588,"geometries":93,"textures":74,"programs":15,"readyTiles":92,"requests":220},
 
   "mines-lookoff-south/desktop-explore-truck":{"calls":561,"triangles":3187713,"geometries":235,"textures":154,"programs":42,"readyTiles":219,"requests":381},
 
@@ -33,7 +33,7 @@
 
   "new-player-start/desktop-explore-truck":{"calls":861,"triangles":4140256,"geometries":289,"textures":197,"programs":38,"readyTiles":366,"requests":696},
 
-  "new-player-start/desktop-mail":{"calls":624,"triangles":3044248,"geometries":227,"textures":154,"programs":40,"readyTiles":170,"requests":280},
+  "new-player-start/desktop-mail":{"calls":628,"triangles":3044248,"geometries":229,"textures":154,"programs":40,"readyTiles":170,"requests":280},
 
   "new-player-start/phone-explore-truck":{"calls":231,"triangles":1240388,"geometries":123,"textures":79,"programs":18,"readyTiles":104,"requests":237},
 
@@ -53,7 +53,7 @@
 
   "village-start/desktop-explore-truck":{"calls":906,"triangles":4259417,"geometries":234,"textures":165,"programs":41,"readyTiles":366,"requests":696},
 
-  "village-start/desktop-mail":{"calls":897,"triangles":4297437,"geometries":220,"textures":165,"programs":43,"readyTiles":366,"requests":698},
+  "village-start/desktop-mail":{"calls":897,"triangles":4297437,"geometries":223,"textures":165,"programs":43,"readyTiles":366,"requests":698},
 
   "village-start/phone-explore-truck":{"calls":184,"triangles":1142288,"geometries":72,"textures":71,"programs":13,"readyTiles":94,"requests":225},
 

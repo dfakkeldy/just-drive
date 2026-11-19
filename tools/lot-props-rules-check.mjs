@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ANIMAL } from '../web/src/road-animal-rules.ts';
-import { chooseLotProps, dogAway, DOG_BACK, lotPropSolid, lotWants, LOT_PROPS, LOT_PROP_KINDS, LOT_PROP_SIZE } from '../web/src/lot-props-rules.ts';
+import { chooseLotProps, dogAway, DOG_BACK, lotPropSolid, lotWants, LOT_PROPS, LOT_PROP_KINDS, LOT_PROP_SIZE, overlapping } from '../web/src/lot-props-rules.ts';
 
 // ---- Shares, from the seeded hash of the id alone. ----
 const N = 30000, tally = { vehicle: 0, other: 0, dog: 0 };
@@ -130,6 +130,23 @@ assert.ok(placed.some(p => ['car', 'suv', 'pickup'].includes(p.kind)) && placed.
 // Beside a drive where the house has one: a vehicle parallel to it.
 const besideDrive = placed.filter(p => ['car', 'suv', 'pickup'].includes(p.kind) && roads.some(r => r.kind === 4 && Math.abs(r.pts[0][0] - p.x) < 5));
 assert.ok(besideDrive.length >= 3, `vehicles beside their drives: ${besideDrive.length}`);
+// ---- Clear of the breakable yard props of mail play: a lot prop closer than `apart` to one is left out there. ----
+{
+  // A car 4.5 m long facing north at the origin; a 3 m fence section east of it, along it, at a set gap from its side.
+  const car = { kind: 'car', x: 0, z: 0, heading: 0, half: 2.25, halfWidth: 0.9, house: 1, hx: 0, hz: 10, tone: 0 };
+  const fence = gap => ({ x: 0.9 + gap + 0.12, z: 0, heading: 0, half: 1.5, halfWidth: 0.12 });
+  assert.deepEqual(overlapping([car], [fence(-0.5)]), [0], 'a fence through the car leaves the car out');
+  assert.deepEqual(overlapping([car], [fence(0.5)]), [0], 'a fence half a metre from its side leaves it out');
+  assert.deepEqual(overlapping([car], [fence(LOT_PROPS.apart + 0.05)]), [], 'a fence just over a metre off keeps it');
+  // Across, at its nose: a clothesline 6.1 m long turned east-west, its middle 0.6 m ahead of the bumper.
+  const line = { x: 1, z: -2.25 - 0.6 - 0.35, heading: Math.PI / 2, half: 3.05, halfWidth: 0.35 };
+  assert.deepEqual(overlapping([car], [line]), [0], 'a clothesline just ahead of its nose leaves it out');
+  // Turned: a woodpile at 45 degrees whose corner reaches 0.2 m from the car's corner (not its centre).
+  const c = Math.SQRT1_2, wood = { x: 0.9 + 0.2 + 1.25 * c + 0.3 * c, z: -2.25 - 0.2 - 1.25 * c + 0.3 * c, heading: Math.PI / 4, half: 1.25, halfWidth: 0.3 };
+  assert.deepEqual(overlapping([car], [wood]), [0], 'a turned woodpile near its corner leaves it out');
+  assert.deepEqual(overlapping([car, { ...car, x: 40 }], [fence(0)]), [0], 'only the prop beside it is left out');
+  assert.deepEqual(overlapping([car], []), [], 'nothing else standing: nothing left out');
+}
 console.log(`PASS lot-props rules: shares vehicle ${share('vehicle').toFixed(3)}, other ${share('other').toFixed(3)}, dog ${share('dog').toFixed(3)}; street ${placed.length} props, ${besideDrive.length} beside drives`);
 
 // ---- Every Mabou house, when the baked land is here. ----

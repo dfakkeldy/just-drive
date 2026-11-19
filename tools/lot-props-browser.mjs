@@ -4,7 +4,7 @@
 // from a car beside it, no prop stands on a road the land knows, and 1884 has none. Pictures, desktop and phone, of the
 // nearest vehicle, trailer, motorhome, mower and dog: lot-props-desktop-<kind>.png and, on LOW, lot-props-phone-<kind>.png.
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { open, sleep } from './cdp.mjs';
 
@@ -28,6 +28,38 @@ for (const url of urls) {
       return {total:y.items.length,kinds:c,solids:y.solids.length,droppedSolid:y.items.filter(i=>!i.solid&&!i.prop.kind.startsWith('dog')).length,
       unaccounted:y.items.filter(i=>!i.prop.kind.startsWith('dog')&&!i.solid&&!y.near.dropped.has(i)).length,dogSolids:y.items.filter(i=>i.prop.kind.startsWith('dog')&&i.solid).length,low:y.low,area:mmm.area.id};})()`);
     console.log(name, 'census', JSON.stringify(census));
+
+    // Clear of mail play's breakable yard props: no lot prop still standing comes within 1 m of a fence, clothesline,
+    // ornament, woodpile, bale or bin. Measured here on points along both outlines, not with the module's geometry.
+    const both = await page.read(`(()=>{const y=mmm.yardProps,l=mmm.lotProps;if(!y)return null;
+      return {yard:y.live.map(v=>({kind:v.p.kind,x:v.p.x,z:v.p.z,heading:v.p.yaw})),
+        lot:l.items.filter(i=>!l.near.dropped.has(i)).map(i=>({kind:i.prop.kind,x:i.x,z:i.z,heading:i.prop.heading,half:i.prop.half,halfWidth:i.prop.halfWidth})),
+        left:l.near.dropped.size};})()`);
+    if (name === 'desktop') assert.ok(both, 'the desktop view is mail play, where the breakable yard props stand');
+    if (both) {
+      // The breakable props' sizes, read from their own rules file so the two never drift apart.
+      const source = readFileSync(new URL('../web/src/yard-props-rules.ts', import.meta.url), 'utf8');
+      const size = Object.fromEntries([...source.match(/export const SIZE[\s\S]*?\n\}\);/)[0].matchAll(/(\w+): \{ half: ([\d.]+), halfWidth: ([\d.]+)/g)].map(m => [m[1], [+m[2], +m[3]]]));
+      assert.ok(Object.keys(size).length >= 10, 'the yard props sizes are read');
+      const dims = k => { assert.ok(size[k], `size of ${k}`); return size[k]; };
+      const outline = (r, step = 0.1) => { const pts = [[r.x, r.z]], s = Math.sin(r.heading), c = Math.cos(r.heading);
+        for (const [a0, b0, a1, b1] of [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1]]) {
+          const n = Math.max(1, Math.ceil(Math.hypot((a1 - a0) * r.half, (b1 - b0) * r.halfWidth) / step));
+          for (let i = 0; i < n; i++) { const a = (a0 + (a1 - a0) * i / n) * r.half, b = (b0 + (b1 - b0) * i / n) * r.halfWidth; pts.push([r.x + s * a + c * b, r.z - c * a + s * b]); } }
+        return pts; };
+      const toRect = (r, x, z) => { const dx = x - r.x, dz = z - r.z, u = dx * Math.sin(r.heading) - dz * Math.cos(r.heading), v = dx * Math.cos(r.heading) + dz * Math.sin(r.heading);
+        return Math.hypot(Math.max(Math.abs(u) - r.half, 0), Math.max(Math.abs(v) - r.halfWidth, 0)); };
+      const yard = both.yard.map(p => { const [half, halfWidth] = dims(p.kind); return { ...p, half, halfWidth }; });
+      let worst = Infinity, near = 0;
+      for (const a of both.lot) for (const b of yard) {
+        if (Math.hypot(a.x - b.x, a.z - b.z) > Math.hypot(a.half, a.halfWidth) + Math.hypot(b.half, b.halfWidth) + 2) continue;
+        near++;
+        const d = Math.min(...outline(a).map(([x, z]) => toRect(b, x, z)), ...outline(b).map(([x, z]) => toRect(a, x, z)));
+        worst = Math.min(worst, d);
+        assert.ok(d >= 1 - 0.1, `a ${a.kind} at ${a.x.toFixed(1)},${a.z.toFixed(1)} stands ${d.toFixed(2)} m from a ${b.kind}`);
+      }
+      console.log(name, 'yard props', JSON.stringify({ yard: yard.length, lot: both.lot.length, left: both.left, pairsChecked: near, closest: +worst.toFixed(2) }));
+    }
     assert.equal(census.area, 'mabou');
     assert.equal(census.low, params.get('q') === 'low', 'LOW detail follows the page');
     assert.ok(census.total > 120, 'Mabou has lot props at a share of its houses');

@@ -5,7 +5,7 @@ import type { Terrain } from './terrain';
 import type { VehicleSpec } from './vehicle-spec';
 import { dogBlob } from './yard-dog';
 import { Mesher } from './yard-kit';
-import { dogAway, lotPropSolid, LOT_PROP_KINDS, type LotProp, type LotPropKind } from './lot-props-rules';
+import { dogAway, lotPropSolid, LOT_PROP_KINDS, overlapping, type Footprint, type LotProp, type LotPropKind } from './lot-props-rules';
 
 /**
  * The lot props at houses (placed by lot-props-rules.ts): parked cars, SUVs and pickups, utility trailers,
@@ -127,6 +127,14 @@ export class LotProps {
     const l = this.cells.get(this.key(item.x, item.z)), i = l?.indexOf(item.solid) ?? -1;
     if (l && i >= 0) l.splice(i, 1);
     item.solid = null;
+  }
+
+  /** Leave out every prop that stands on another system's footprint (the breakable yard props of mail play, which are
+   *  not in every mode): it is dropped with its solid. Returns how many were left out. */
+  clearOf(others: readonly Footprint[]): number {
+    const gone = overlapping(this.items.map((i) => i.prop), others);
+    for (const k of gone) { const item = this.items[k]; this.drop(item); this.near.remove(item); }
+    return gone.length;
   }
 
   /** Every frame, after the camera: fill the meshes, and let a dog slip away from a car right beside it. */
