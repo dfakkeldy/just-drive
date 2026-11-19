@@ -9,7 +9,7 @@ const TEST_KEYS = new Set([
   'aiDriver', 'aiDriverCheck', 'airport', 'demo', 'dir', 'dirt', 'double', 'f', 'fishingCheck', 'trafficCheck', 'wildlife', 'grass', 'hawkesbury', 'home', 'hour', 'hud', 'interior',
   'jumpCheck', 'knock', 'lawn', 'low', 'mabou', 'mpserver', 'n', 'name', 'pair', 'park', 'photo', 'porch', 'reflections',
   'relief', 'report', 'res', 'road', 'run', 'scene', 'shadows', 'sidewalks', 'shot', 'still', 'stuffed', 'test',
-  'quarry', 'throw', 'trees', 'village', 'x', 'yard',
+  'quarry', 'throw', 'trees', 'village', 'x', 'yard', 'yardProps',
   'canvasAA', 'clouds', 'finishSamples', 'finishSmooth', 'finishType', 'leaves',
 ]);
 export function isTestVisit(params: URLSearchParams): boolean {
