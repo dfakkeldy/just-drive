@@ -29,7 +29,8 @@ try{
  }
  for(const vehicle of ['car','bike']){
   await visit('/?trip=quarry-gate&title=1&q=low&radio=0');
-  await check('Published quarry initializes all nine implementation modules',"globalThis.__quarryEvaluations.length===9&&!!document.getElementById('tripHud')");
+  await check('Published quarry initializes all ten implementation modules',"globalThis.__quarryEvaluations.length===10&&globalThis.__quarryEvaluations.includes('quarry-stunt-park.ts')&&!!document.getElementById('tripHud')");
+  await check('Published quarry offers both course starts',"!!document.querySelector('[data-place=sugar-camp-upper]')&&!!document.querySelector('[data-place=sugar-camp-lower]')");
   await read(`document.querySelector('#vehicleChoice [data-vehicle="${vehicle}"]').click()`);
   await until(`${settled}&&new URLSearchParams(location.search).get('vehicle')==='${vehicle}'&&!new URLSearchParams(location.search).has('trip')`);
   await check('Actual '+vehicle+' control cancels route and HUD',"!document.getElementById('tripHud')&&document.querySelector('#vehicleChoice [aria-pressed=true]')?.dataset.vehicle==="+JSON.stringify(vehicle));

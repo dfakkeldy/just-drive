@@ -7,33 +7,33 @@
 
   "animal-home/phone-mail":{"calls":183,"triangles":731543,"geometries":144,"textures":27,"programs":22,"readyTiles":45,"requests":113},
 
-  "harbour-water/desktop-explore-truck":{"calls":427,"triangles":2745004,"geometries":208,"textures":155,"programs":41,"readyTiles":248,"requests":444},
+  "harbour-water/desktop-explore-truck":{"calls":427,"triangles":2745004,"geometries":208,"textures":155,"programs":44,"readyTiles":248,"requests":444},
 
-  "harbour-water/desktop-mail":{"calls":412,"triangles":2774310,"geometries":180,"textures":152,"programs":37,"readyTiles":248,"requests":437},
+  "harbour-water/desktop-mail":{"calls":412,"triangles":2774310,"geometries":180,"textures":152,"programs":40,"readyTiles":248,"requests":437},
 
   "harbour-water/phone-explore-truck":{"calls":76,"triangles":929944,"geometries":83,"textures":54,"programs":17,"readyTiles":65,"requests":146},
 
   "harbour-water/phone-mail":{"calls":60,"triangles":890290,"geometries":58,"textures":51,"programs":14,"readyTiles":65,"requests":139},
 
-  "highway19-far-land/desktop-explore-truck":{"calls":714,"triangles":3496876,"geometries":193,"textures":158,"programs":34,"readyTiles":358,"requests":673},
+  "highway19-far-land/desktop-explore-truck":{"calls":714,"triangles":3496876,"geometries":193,"textures":158,"programs":35,"readyTiles":358,"requests":673},
 
-  "highway19-far-land/desktop-mail":{"calls":711,"triangles":3534896,"geometries":182,"textures":158,"programs":35,"readyTiles":358,"requests":675},
+  "highway19-far-land/desktop-mail":{"calls":711,"triangles":3534896,"geometries":182,"textures":158,"programs":36,"readyTiles":358,"requests":675},
 
   "highway19-far-land/phone-explore-truck":{"calls":201,"triangles":1282676,"geometries":83,"textures":74,"programs":13,"readyTiles":92,"requests":218},
 
   "highway19-far-land/phone-mail":{"calls":211,"triangles":1302588,"geometries":93,"textures":74,"programs":15,"readyTiles":92,"requests":220},
 
-  "mines-lookoff-south/desktop-explore-truck":{"calls":561,"triangles":3187713,"geometries":235,"textures":154,"programs":42,"readyTiles":219,"requests":381},
+  "mines-lookoff-south/desktop-explore-truck":{"calls":561,"triangles":3187713,"geometries":235,"textures":154,"programs":44,"readyTiles":219,"requests":381},
 
-  "mines-lookoff-south/desktop-mail":{"calls":599,"triangles":3308644,"geometries":261,"textures":156,"programs":51,"readyTiles":219,"requests":374},
+  "mines-lookoff-south/desktop-mail":{"calls":599,"triangles":3308644,"geometries":261,"textures":156,"programs":53,"readyTiles":219,"requests":374},
 
   "mines-lookoff-south/phone-explore-truck":{"calls":143,"triangles":1172530,"geometries":71,"textures":69,"programs":14,"readyTiles":75,"requests":169},
 
   "mines-lookoff-south/phone-mail":{"calls":173,"triangles":1198599,"geometries":95,"textures":71,"programs":21,"readyTiles":75,"requests":162},
 
-  "new-player-start/desktop-explore-truck":{"calls":861,"triangles":4140256,"geometries":289,"textures":197,"programs":38,"readyTiles":366,"requests":696},
+  "new-player-start/desktop-explore-truck":{"calls":861,"triangles":4140256,"geometries":289,"textures":197,"programs":40,"readyTiles":366,"requests":696},
 
-  "new-player-start/desktop-mail":{"calls":628,"triangles":3044248,"geometries":229,"textures":154,"programs":40,"readyTiles":170,"requests":280},
+  "new-player-start/desktop-mail":{"calls":628,"triangles":3044248,"geometries":229,"textures":154,"programs":41,"readyTiles":170,"requests":280},
 
   "new-player-start/phone-explore-truck":{"calls":231,"triangles":1240388,"geometries":123,"textures":79,"programs":18,"readyTiles":104,"requests":237},
 
@@ -43,7 +43,7 @@
 
   "pointtupper-start/phone-explore-truck":{"calls":212,"triangles":1283670,"geometries":123,"textures":60,"programs":18,"readyTiles":83,"requests":196},
 
-  "quarry-air/desktop-explore-truck":{"calls":846,"triangles":4398223,"geometries":169,"textures":167,"programs":29,"readyTiles":344,"requests":602},
+  "quarry-air/desktop-explore-truck":{"calls":846,"triangles":4398223,"geometries":169,"textures":168,"programs":31,"readyTiles":344,"requests":602},
 
   "quarry-air/phone-explore-truck":{"calls":97,"triangles":927911,"geometries":54,"textures":51,"programs":14,"readyTiles":72,"requests":147},
 
@@ -51,17 +51,17 @@
 
   "quarry-gate/phone-explore-truck":{"calls":133,"triangles":1325613,"geometries":98,"textures":56,"programs":22,"readyTiles":194,"requests":336},
 
-  "village-start/desktop-explore-truck":{"calls":906,"triangles":4259417,"geometries":234,"textures":165,"programs":41,"readyTiles":366,"requests":696},
+  "village-start/desktop-explore-truck":{"calls":906,"triangles":4259417,"geometries":234,"textures":165,"programs":43,"readyTiles":366,"requests":696},
 
-  "village-start/desktop-mail":{"calls":897,"triangles":4297437,"geometries":223,"textures":165,"programs":43,"readyTiles":366,"requests":698},
+  "village-start/desktop-mail":{"calls":897,"triangles":4297437,"geometries":223,"textures":165,"programs":45,"readyTiles":366,"requests":698},
 
   "village-start/phone-explore-truck":{"calls":184,"triangles":1142288,"geometries":72,"textures":71,"programs":13,"readyTiles":94,"requests":225},
 
   "village-start/phone-mail":{"calls":191,"triangles":1162200,"geometries":79,"textures":71,"programs":15,"readyTiles":94,"requests":226},
 
-  "works-yard/desktop-explore-truck":{"calls":559,"triangles":3377122,"geometries":124,"textures":123,"programs":33,"readyTiles":297,"requests":551},
+  "works-yard/desktop-explore-truck":{"calls":559,"triangles":3377122,"geometries":124,"textures":123,"programs":34,"readyTiles":297,"requests":551},
 
-  "works-yard/desktop-mail":{"calls":571,"triangles":3473554,"geometries":131,"textures":123,"programs":35,"readyTiles":297,"requests":544},
+  "works-yard/desktop-mail":{"calls":571,"triangles":3473554,"geometries":131,"textures":123,"programs":36,"readyTiles":297,"requests":544},
 
   "works-yard/phone-explore-truck":{"calls":170,"triangles":1455450,"geometries":68,"textures":66,"programs":15,"readyTiles":72,"requests":182},
 

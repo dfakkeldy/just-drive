@@ -24,7 +24,7 @@ try{
   globalThis.__quarryEvaluations=[];const feature=await import(pathToFileURL(file));
   if(eager){assert.throws(()=>assert.deepEqual(globalThis.__quarryEvaluations,[]));console.log('REJECTED '+(eager==='leaked-module'?'a quarry module imported outside its deferred factory':'eager initialization in the published flat build'));continue;}
   assert.deepEqual(globalThis.__quarryEvaluations,[],'Mabou mail path evaluates no quarry implementation module');
-  const loaded=await feature.load();assert.equal(typeof loaded.Quarry,'function');assert.ok(globalThis.__quarryEvaluations.includes('quarry-lakes.ts'));assert.ok(globalThis.__quarryEvaluations.includes('quarry-site.ts'));assert.ok(globalThis.__quarryEvaluations.includes('quarry.ts'));assert.equal(globalThis.__quarryEvaluations.length,9);
+  const loaded=await feature.load();assert.equal(typeof loaded.Quarry,'function');assert.ok(globalThis.__quarryEvaluations.includes('quarry-lakes.ts'));assert.ok(globalThis.__quarryEvaluations.includes('quarry-site.ts'));assert.ok(globalThis.__quarryEvaluations.includes('quarry.ts'));assert.ok(globalThis.__quarryEvaluations.includes('quarry-stunt-park.ts'));assert.equal(typeof loaded.createQuarryStuntPark,'function');assert.equal(globalThis.__quarryEvaluations.length,10);
   const count=globalThis.__quarryEvaluations.length;assert.equal(await feature.load(),loaded);assert.equal(globalThis.__quarryEvaluations.length,count);console.log('PASS flat build defers',count,'quarry modules until the area flag calls load; initializes once');
  }
  globalThis.fetch=savedFetch;
