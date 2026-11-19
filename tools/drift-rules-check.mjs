@@ -351,6 +351,14 @@ ok('an animal stop holds the car with the handbrake: never a slide, whatever the
   const v = ride(CAR_SPEC, 'gravel', 18); drive(v, 2, () => ({ ...go(-1, .8, true), held: true })); assert.equal(v.takeDrift(), null);
   assert.ok(drive(ride(CAR_SPEC, 'gravel', 18), 2, () => ({ ...go(-1, .8, true), held: true })).every(r => !r.active));
   assert.match(readFileSync('src/main.ts', 'utf8'), /input\.handbrake = true; input\.held = true;/, 'main marks the animal stop');
+  // Mid-slide, the hold ends it at once, not clean, and the held handbrake starts no other.
+  const mid = ride(CAR_SPEC, 'gravel', 18), pull = handbrakeIn();
+  const run = drive(mid, 4, t => t < 2 ? pull(t) : { ...go(-.5, -HOLD_STEER, true), held: true });
+  assert.ok(run.some(r => r.t < 2 && r.active), 'a slide first');
+  const after = run.filter(r => r.t >= 2);
+  assert.ok(after.every(r => !r.active), 'the hold ends the slide that step');
+  const f = mid.takeDrift(); assert.ok(f && f.clean === false, `reported, not clean: ${JSON.stringify(f)}`);
+  assert.equal(mid.drift.ended, 'held');
 });
 
 ok('after the first drift too, an S-bend, a correction, a slalom off the throttle is exactly the old car (only power then a catch begins a flick)', () => {
@@ -466,16 +474,21 @@ ok('touch: neither steering help fights a slide; both still help outside one', (
   assert.ok(sliding.length > 200 && sliding.every(r => r.help === 0 && r.light === 0));
 });
 
-ok('the phone handbrake: GO and BRAKE held a moment at speed; a quick roll between pedals, or slow, is the brake as before', () => {
-  const s = CAR_SPEC.drift;
-  assert.equal(phoneHandbrake(s, .1, 20), false, 'a thumb rolling between the pedals');
-  assert.equal(phoneHandbrake(s, CHORD_SECONDS, 20), true); assert.equal(phoneHandbrake(s, .2, 20), true);
-  assert.equal(phoneHandbrake(s, 2, s.looseSpeed - .1), false, 'below the least drift speed: brake and reverse as before');
-  assert.equal(phoneHandbrake(s, 2, 0), false); assert.equal(phoneHandbrake(s, 2, s.looseSpeed), true);
-  assert.equal(phoneHandbrake(TRUCK_SPEC.drift, 2, s.looseSpeed), false, 'each ride its own speed');
+ok('the phone handbrake: GO and BRAKE held a moment at speed with the wheel turned; a roll between pedals, slow, or a straight panic stop is the brake as before', () => {
+  const s = CAR_SPEC.drift, turned = HANDBRAKE_STEER;
+  assert.equal(phoneHandbrake(s, .1, 20, 1), false, 'a thumb rolling between the pedals');
+  assert.equal(phoneHandbrake(s, CHORD_SECONDS, 20, turned), true); assert.equal(phoneHandbrake(s, .2, 20, -1), true);
+  assert.equal(phoneHandbrake(s, 2, s.looseSpeed - .1, 1), false, 'below the least drift speed: brake and reverse as before');
+  assert.equal(phoneHandbrake(s, 2, 0, 1), false); assert.equal(phoneHandbrake(s, 2, s.looseSpeed, 1), true);
+  assert.equal(phoneHandbrake(TRUCK_SPEC.drift, 2, s.looseSpeed, 1), false, 'each ride its own speed');
+  assert.equal(phoneHandbrake(s, 2, 25, 0), false, 'a panic stop with the wheel straight is the full brake');
+  assert.equal(phoneHandbrake(s, 2, 25, turned - .01), false, 'and nearly straight');
+  assert.equal(phoneHandbrake(s, 2, 25, .1, true), true, 'once on, the counter-steer keeps it on');
+  assert.equal(phoneHandbrake(s, .1, 25, .1, true), false, 'a new chord starts again');
+  assert.equal(phoneHandbrake(s, 2, s.looseSpeed - .1, .1, true), false, 'slow, it is the brake again');
   assert.ok(CHORD_SECONDS <= .2, 'quick enough to use');
   const main = readFileSync('src/main.ts', 'utf8'), touch = readFileSync('src/touch.ts', 'utf8');
-  assert.match(main, /phoneHandbrake\(drift, \(performance\.now\(\) - touch\.chordAt\) \/ 1000, vehicle\.speed\)/, 'main asks the rule');
+  assert.match(main, /chordOn = touch\.handbrake && [^;]*phoneHandbrake\(drift, \(performance\.now\(\) - touch\.chordAt\) \/ 1000, vehicle\.speed, touch\.steer \+ g\.steer, chordOn\);/, 'main asks the rule, with the wheel and last frame');
   assert.match(main, /\(chord \? 0 : touch\.throttle\)/, 'no brake under the chord handbrake');
   assert.match(main, /fleet\?\.driven\.id !== 'truck'/, "not the fleet pickup's parking latch");
   assert.match(touch, /if \(both && !state\.handbrake\) state\.chordAt = performance\.now\(\);/);

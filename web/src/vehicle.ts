@@ -522,6 +522,7 @@ export class Vehicle {
     const spec = this.spec.drift, d = this.drift;
     if (!spec || !this.canDrift || this.spec.locomotion === 'horse') return false;
     d.watch(input, dt);
+    if (input.held) d.held(this.x, this.z);   // a stop for an animal ends a slide, never scores it
     const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
     const g = this.driftGround;
     let v = Math.hypot(vf, vl);

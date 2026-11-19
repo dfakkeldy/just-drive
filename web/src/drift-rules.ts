@@ -72,10 +72,13 @@ export const LOST_ANGLE = .35;
 /** The least slide reported to the score stream: a twitch is not a drift. */
 export const COUNT_SECONDS = .6, COUNT_ANGLE = .1, COUNT_LENGTH = 6;
 /** Phone: GO and BRAKE held together are the handbrake once held CHORD_SECONDS at the ride's least drift speed
- * (spec.looseSpeed) or more. Before that, and slower, BRAKE wins as it always did: stopping and reversing are unchanged,
- * and a thumb rolling from one pedal to the other never pulls it. */
+ * (spec.looseSpeed) or more with the wheel turned at least HANDBRAKE_STEER. Before that, slower, or with the wheel near
+ * straight, BRAKE wins as it always did: a panic stop, stopping and reversing are unchanged, and a thumb rolling from one
+ * pedal to the other never pulls it. `on`: it was the handbrake last frame and both pedals are still down; it stays so,
+ * and the counter-steer that holds the slide does not turn it back into the brake. */
 export const CHORD_SECONDS = .15;
-export const phoneHandbrake = (spec: DriftSpec, heldSeconds: number, speed: number): boolean => heldSeconds >= CHORD_SECONDS && speed >= spec.looseSpeed;
+export const phoneHandbrake = (spec: DriftSpec, heldSeconds: number, speed: number, steer: number, on = false): boolean =>
+  heldSeconds >= CHORD_SECONDS && speed >= spec.looseSpeed && (on || Math.abs(steer) >= HANDBRAKE_STEER);
 
 const G = 9.81;
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -121,7 +124,7 @@ export interface DriftFacts {
   /** Where it began and ended (world x, z). */
   readonly x0: number; readonly z0: number; readonly x1: number; readonly z1: number;
 }
-export type DriftEnd = 'straightened' | 'slowed' | 'airborne' | 'hit' | 'lost' | 'reset';
+export type DriftEnd = 'straightened' | 'slowed' | 'airborne' | 'hit' | 'held' | 'lost' | 'reset';
 
 /** Signed slide angle of a body moving with forward speed `forward` and rightward speed `right` (vehicle.ts vf, vl). */
 export const slideAngle = (forward: number, right: number): number => Math.atan2(-right, forward);
@@ -260,6 +263,8 @@ export class Drift {
   airborne(x: number, z: number): void { if (this.active) this.finish('airborne', x, z); }
   /** The body hit something: the slide ends here and is not clean. Outside a slide, nothing. */
   hit(x: number, z: number): void { if (this.active) this.finish('hit', x, z); }
+  /** The game holds the car (an animal ahead): the slide ends here and is not clean. */
+  held(x: number, z: number): void { if (this.active) this.finish('held', x, z); }
 
   /** End the slide. A real drift (long, wide and far enough) leaves its facts for take(). */
   finish(how: DriftEnd, x: number, z: number): DriftEnd {
