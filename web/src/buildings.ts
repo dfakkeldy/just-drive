@@ -434,8 +434,9 @@ export class Buildings {
           panel(true, 1, -wide * 0.65, wide * 0.65, tall + 0.2, tall + 0.28, foundation, 0.07);
         }
         for (const side of [-1, 1]) for (const u of [-L * 0.55, L * 0.55]) if (e > 2.2) opening(false, side, u, e * 0.5, 0.7, 0.65);
-      } else if (b.kind === 'large' && style) {
-        // Low apartments and village shops need a readable rhythm of doors and windows too.
+      } else if (b.kind === 'large' && style && b.shape !== 'block') {
+        // Low apartments and village shops need a readable rhythm of doors and windows too. A block is one part of a
+        // large mapped hall (big_buildings.py: plants, malls, arenas; some over 60 m high): it keeps the plain end door below.
         const rows = Math.max(1, Math.min(3, Math.floor((e + 0.3) / 2.65)));
         const floor = e / rows;
         const columns = Math.max(1, Math.min(14, Math.floor(b.length / 3.6)));
