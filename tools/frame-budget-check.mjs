@@ -12,6 +12,10 @@ const baselinePath = process.env.FRAME_BUDGET_BASELINE ?? fileURLToPath(new URL(
 import { metrics, scenes, modes, allKeys, selectedRows, parseArgs, coverage, assetClass, compare, updateRow, serialize } from './frame-budget-policy.mjs';
 import { farLand, effective, stored } from './frame-budget-far.mjs';
 const FAR_STATE = farLand(); // throws on a half-installed far pack
+// Phone detail's "Far views on phone" choice (web/src/far-choice.ts). Unset: the game's default, Off, which the pins
+// mean; coarse or full sample the far scene on phone rows (they are measured, not pinned: Settings > Advanced).
+const FAR_PHONE = process.env.FRAME_BUDGET_FAR ?? '';
+if(!['','off','coarse','full'].includes(FAR_PHONE)) throw Error('FRAME_BUDGET_FAR must be off, coarse or full');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Installed before game modules. Pin animation dt to 1/60s, so GPU contention cannot change simulation work.
 // finish() lets real occlusion-query results complete between frames; no visibility result is faked.
@@ -137,6 +141,7 @@ async function openPage(scene, mode, options = {}) {
   if (mode.phone) params.set('touch', '1');
   if (mode.explore) { params.set('mode','explore'); params.set('vehicle','truck'); }
   if(options.radioOff)params.set('radio','0');
+  if(FAR_PHONE)params.set('far',FAR_PHONE);
   for(const [key,value] of Object.entries(options.query??{}))params.set(key,value);
   const url = `${options.origin??origin}/?${params}`;
   try {
@@ -185,7 +190,13 @@ async function openPage(scene, mode, options = {}) {
 
     // FAR_STATE describes the shared land. A caller measuring another tree that has no far views (sidewalks-counts
     // BASE_URL at a pre-far commit) passes farWait:false; waiting for far objects there would never finish.
-    if(FAR_STATE==='after'&&options.farWait!==false) {
+    const farOn=!mode.phone||(FAR_PHONE!==''&&FAR_PHONE!=='off');
+    if(FAR_STATE==='after'&&options.farWait!==false&&!farOn) {
+      // Phone Off: the far views pack must stay out of the frame entirely, so the phone pins keep their meaning.
+      await sleep(1000);
+      assert.ok(!await read('!!(mmm.farLand||mmm.tall||mmm.farTurbines)'),`${scene.id}/${mode.id}: far views loaded on a phone with Far views on phone Off`);
+    }
+    if(FAR_STATE==='after'&&options.farWait!==false&&farOn) {
       // Far views (PR #122) load after Start. Wait for them before GPU normalization, then hold each far query mesh
       // visible: the game redraws a hidden one five times a second, so its cost is the worst case, not a probe phase.
       const until=Date.now()+60000;

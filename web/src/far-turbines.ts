@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { LAND_LIGHT } from './shaders';
 import { CURVE_GLSL, FAR_RADIUS } from './far-rules';
-import { WIND_HEADING, rotorPhase, rotorRate, type Turbine } from './tall-rules';
+import { WIND_HEADING, rotorPhase, rotorRate, type Turbine, type TallFile } from './tall-rules';
 
 export const FAR_TURBINE_VERT = /* glsl */ `
 #include <common>
@@ -67,13 +67,23 @@ export function farmPhase(id: string): number {
   for (let i=0;i<id.length;i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
   return (h >>> 0) / 4294967296;
 }
-/** One body+rotor instanced draw; a second draw only for night beacons. */
+/** Coarse far views (far-choice.ts): the near turbines join the one far draw. Each is seated once, at load, on the
+ * drawn near land where it is loaded (the far shader stretches its ground by the hill height again), else on its
+ * baked ground. Near turbines keep their solids in TallLandmarks, which draws nothing in coarse. */
+export function coarseTurbines(data: Pick<TallFile, 'turbines' | 'far'>, village: readonly number[], heightAt: (x: number, z: number) => number | null, seaLevel: number, exag: number): Turbine[] {
+  const near = data.turbines.filter(p => p.ground !== null).map(p => {
+    const h = heightAt(p.e - village[0], village[1] - p.n);
+    return h === null || !Number.isFinite(h) ? p : { ...p, ground: h > seaLevel ? seaLevel + (h - seaLevel) / exag : h };
+  });
+  return [...near, ...data.far];
+}
+/** One body+rotor instanced draw; a second draw only for night beacons. Coarse leaves the shaft's end caps off. */
 export class FarTurbines {
   readonly group = new THREE.Group();
   readonly time = { value: 0 };
   readonly viewport = { value: new THREE.Vector2(1920,1080) };
   readonly count: number;
-  constructor(points: readonly Turbine[], origin: readonly number[], low: boolean, shared: Record<string, THREE.IUniform>, dark: boolean) {
+  constructor(points: readonly Turbine[], origin: readonly number[], low: boolean, shared: Record<string, THREE.IUniform>, dark: boolean, coarse = false) {
     const list = points.filter(p => p.ground !== null); this.count = list.length;
     const pos: number[] = [], parts: number[] = [];
     const append = (g: THREE.BufferGeometry, part: number) => {
@@ -81,7 +91,7 @@ export class FarTurbines {
       for(let k=0;k<(index?.count??p.count);k++) { const i=index?index.getX(k):k; pos.push(p.getX(i),p.getY(i),p.getZ(i));parts.push(part); }
       g.dispose();
     };
-    append(new THREE.CylinderGeometry(.012,.023,1,low?3:5,1,false).translate(0,.5,0),0);
+    append(new THREE.CylinderGeometry(.012,.023,1,low?3:5,1,coarse).translate(0,.5,0),0);
     append(new THREE.BoxGeometry(3,2.4,5),1);
     const blades: number[]=[];
     for(let i=0;i<3;i++) {

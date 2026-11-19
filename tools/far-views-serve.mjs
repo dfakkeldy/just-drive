@@ -15,7 +15,7 @@ const server=await createServer({root:root+'/web',server:{host:'127.0.0.1',port:
   const url=new URL(req.url,'http://localhost');
   if(url.pathname==='/__far-views-source'){mainSource=url.searchParams.get('mode')==='main';s.moduleGraph.invalidateAll();res.setHeader('Content-Type','application/json');res.end(JSON.stringify({source:mainSource?'f965706':'head'}));return;}
   if(url.pathname==='/__far-views-mode'){before=url.searchParams.get('mode')==='before';res.setHeader('Content-Type','application/json');res.end(JSON.stringify({before}));return;}
-  const match=url.pathname.match(/^\/(terrain|areas\/(?:judique|porthood|pointtupper|westbay|cansocauseway))\/(manifest\.json|tall\.json|far-land\.json|far-land-(?:desktop|low)\.bin)$/);
+  const match=url.pathname.match(/^\/(terrain|areas\/(?:judique|porthood|pointtupper|westbay|cansocauseway))\/(manifest\.json|tall\.json|far-land\.json|far-land-(?:desktop|low|coarse)\.bin)$/);
   if(!match)return next();
   try{
    if(match[2]==='manifest.json'){

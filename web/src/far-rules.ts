@@ -35,5 +35,7 @@ export interface FarLevel { file: string; cell: number; vertices: number; indice
 export interface FarFile {
   crs: string; root: [number, number, number, number]; origin: [number, number]; radius: number;
   anchor: [number, number];
-  source: string; sourceDate: string; sourceUrl: string; levels: { desktop: FarLevel; low: FarLevel };
+  source: string; sourceDate: string; sourceUrl: string;
+  /** coarse: the phone's "Coarse" far views (tools/far-pack.mjs --coarse); packs baked before it have only two levels. */
+  levels: { desktop: FarLevel; low: FarLevel; coarse?: FarLevel };
 }
