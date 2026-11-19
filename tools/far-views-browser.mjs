@@ -24,7 +24,7 @@ try{
   const [name,area,e,n,h,yaw,pitch,fov,hour]=v;const fileName=name+(process.env.FAR_LOW==='1'?'-LOW':'');if(selected&&!selected.includes(name))continue;
   for(const mode of process.env.FAR_MODES?.split(',')??['before','after']){
    await fetch(`${base}/__far-views-mode?mode=${mode}`);
-   const url=`${base}/?area=${area}&cam=${e},${n},${h},${yaw},${pitch},${fov}&hour=${hour}&mode=explore&bare=1&res=1&hud=0&exag=1&shadows=0&q=${process.env.FAR_LOW==='1'?'low':'high'}`;
+   const url=`${base}/?area=${area}&cam=${e},${n},${h},${yaw},${pitch},${fov}&hour=${hour}&mode=explore&bare=1&res=1&hud=0&exag=1&shadows=0&q=${process.env.FAR_LOW==='1'?'low':'high'}&far=full`;
    await c.send('Page.navigate',{url});const since=Date.now();
    for(;;){if(await read(mode==='after'?"document.title==='settled'&&!!window.mmm?.farLand":"document.title==='settled'&&!!window.mmm"))break;assert.ok(Date.now()-since<240000,'settled '+name);await sleep(500);}
    await sleep(500);assert.equal(await read('mmm.renderer.getContext().isContextLost()'),false);

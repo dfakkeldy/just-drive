@@ -50,6 +50,9 @@ import { FarTurbines } from './far-turbines';
 import { curveSceneMaterials } from './far-materials';
 import { FarVisibility } from './far-visibility';
 import type { FarFile } from './far-rules';
+import { farPhoneChoice, farPlan, readFarPhone } from './far-choice';
+import { advancedSection, farPhoneSetting } from './advanced-settings';
+import { coarseTurbines } from './far-turbines';
 import type { TallFile } from './tall-rules';
 import { tallPlaces } from './places';
 import { Radio, loadRadio } from './radio';
@@ -511,10 +514,14 @@ if (props) { scene.add(props.group); roads.guardrails?.setObstacles(props.railOb
 // Optional scenery starts after a drawn frame and Start; it never delays boot.
 const rootBounds = [manifest.origin[0], manifest.origin[1] - manifest.size, manifest.origin[0] + manifest.size, manifest.origin[1]];
 const sameRoot = (root: readonly number[] | undefined) => Array.isArray(root) && root.length === 4 && root.every((n, i) => n === rootBounds[i]);
-const farKey = (manifest as Manifest & { farLand?: { file: string } }).farLand;
+const farPack = (manifest as Manifest & { farLand?: { file: string } }).farLand;
+// Phone detail draws the far views only when the player asks (Settings > Advanced, or ?far=): far-choice.ts.
+// Off (the default) leaves both keys unset, so a phone fetches, hooks and draws exactly what it did before the pack.
+const farPhone = farPhoneChoice(params, readFarPhone()), farUse = farPlan(LOW, farPhone.choice);
+const farKey = farUse ? farPack : undefined;
 // Only the far pack's manifest key (it carries a far count) names a version 2 tall.json. The older live key
 // names a file the game never draws, so before install nothing is fetched and no Places UI appears.
-const tallKey = ((t?: { file: string; far?: number }) => (t && Number.isInteger(t.far) ? t : undefined))((manifest as Manifest & { tall?: { file: string; far?: number } }).tall);
+const tallKey = farUse ? ((t?: { file: string; far?: number }) => (t && Number.isInteger(t.far) ? t : undefined))((manifest as Manifest & { tall?: { file: string; far?: number } }).tall) : undefined;
 let farLand: FarLand | null = null, tall: TallLandmarks | null = null, farTurbines: FarTurbines | null = null;
 let farVisibility: FarVisibility | null = null, farLoading = false;
 async function loadFarViews(): Promise<void> {
@@ -523,7 +530,7 @@ async function loadFarViews(): Promise<void> {
       if(!farKey)return null;
       const data:FarFile=await getJson(farKey.file);
       if(!sameRoot(data.root)||data.origin?.[0]!==manifest.village[0]||data.origin?.[1]!==manifest.village[1])throw Error('Far land belongs to another terrain pack');
-      const land=await FarLand.load(data,base,LOW,shared);
+      const land=await FarLand.load(data,base,farUse!.level,shared);
       const vertex=farSeaVertex(SEA_VERT),fragment=farSeaFragment(SEA_FRAG);
       return {land,vertex,fragment};
     })(),
@@ -531,7 +538,7 @@ async function loadFarViews(): Promise<void> {
       if(!(ERA.modern && tallKey))return null;
       const data:TallFile=await getJson(tallKey.file);
       if(data.version!==2||!sameRoot(data.root))return null;
-      return {data,near:new TallLandmarks(data,terrain,LOW,shared,sun.el<0,false)};
+      return {data,near:new TallLandmarks(data,terrain,LOW,shared,sun.el<0,false,farUse!.coarse)};
     })(),
   ]);
   if(landResult.status==='rejected')console.warn('optional far land',landResult.reason);
@@ -550,12 +557,18 @@ async function loadFarViews(): Promise<void> {
       farLand=landPart.land;scene.add(farLand.group);
     }catch(e){console.warn('optional far sea',e);}
   }
-  const near=tallPart?.near??null;
-  if(near){tall=near;scene.add(near.group);}
+  let near=tallPart?.near??null;
   if(tallPart&&near&&farLand){
-    try{farTurbines=new FarTurbines(tallPart.data.far,manifest.village,LOW,shared,sun.el<0);scene.add(farTurbines.group);}
+    // Coarse: the near turbines join this one draw, first in its list (TallLandmarks keeps only their solids).
+    const coarse=farUse!.coarse,heightAt=(x:number,z:number)=>terrain.heightAt(x,z);
+    const points=coarse?coarseTurbines(tallPart.data,manifest.village,heightAt,terrain.seaLevel,terrain.exag):tallPart.data.far;
+    const seat=coarse?{count:points.length-tallPart.data.far.length,heightAt,seaLevel:terrain.seaLevel,exag:terrain.exag}:undefined;
+    try{farTurbines=new FarTurbines(points,manifest.village,LOW,shared,sun.el<0,coarse,seat);scene.add(farTurbines.group);}
     catch(e){console.warn('optional far turbines',e);}
   }
+  // Coarse without its far draw (far land or turbines failed): no turbine is drawn, so none may be solid.
+  if(farUse!.coarse&&!farTurbines)near=null;
+  if(near){tall=near;scene.add(near.group);}
   const queryMeshes:THREE.Mesh[]=[];
   if(farLand){farLand.land.renderOrder=3;queryMeshes.push(farLand.land);}
   if(farTurbines){for(const mesh of farTurbines.group.children)mesh.renderOrder=3;if(sun.el>=0&&farTurbines.count)queryMeshes.push(farTurbines.group.children[0] as THREE.Mesh);}
@@ -1974,6 +1987,8 @@ function frame(now: number) {
   requestAnimationFrame(frame);
   } catch (error) { page.fail(error); }
 }
+// Settings > Advanced: on phone detail, once the far views pack is installed (desktop always draws it).
+if (!bare && LOW && farPack) farPhoneSetting(advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice), farPhone.choice, farPhone.fromUrl, touchDevice);
 resize();
 document.getElementById('boot')?.remove();
 // Finalize all initial material hooks before their first compile. Activation only flips a uniform.
