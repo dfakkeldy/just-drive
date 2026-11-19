@@ -32,6 +32,8 @@ export class Shift {
   readonly score = new ScoreStream();
   /** Names the place of a point: 'route', or a protected place where nothing scores. main.ts sets it. */
   placeAt: (x: number, z: number) => string = () => 'route';
+  /** Get Fired: true when the Boss sees this point (boss.ts sets it). */
+  witness: (x: number, z: number) => boolean = () => false;
   /** Get Fired: called once when the run ends, instead of the daily report. */
   onFiredEnd: (() => void) | null = null;
   /** Get Fired: each shift step while the day runs, before the 18:00 check (world seconds; 0 while paused). */
@@ -209,7 +211,8 @@ export class Shift {
   reportScore(kind: string, x: number, z: number, speed: number, also?: { x: number; z: number }): void {
     if (this.ended) return;
     const place = this.placeAt(x, z);
-    this.score.report({ kind, place: place === 'route' && also ? this.placeAt(also.x, also.z) : place, speed: Math.abs(speed), time: this.elapsed / CLOCK_FACTOR });
+    this.score.report({ kind, place: place === 'route' && also ? this.placeAt(also.x, also.z) : place, speed: Math.abs(speed), time: this.elapsed / CLOCK_FACTOR,
+      x, z, witnessed: this.witness(x, z) });
   }
   /** A finished drift (drift-rules.ts) as one fact. Its place is the first protected place it touched (start, end or any
    * frame between); an animal that had to get out of the way while it lasted makes it an animal's event, which never scores. */
@@ -218,7 +221,9 @@ export class Shift {
     const time = this.elapsed / CLOCK_FACTOR, end = this.placeAt(d.x1, d.z1), start = this.placeAt(d.x0, d.z0);
     const place = this.driftPlace || (start !== 'route' ? start : end);
     this.driftPlace = '';
-    this.score.report({ kind: 'drift', place, speed: d.speed, time, drift: d, ...(this.animalAt >= time - d.seconds - 1 ? { subject: 'animal' } : {}) });
+    // Where it ended: the Boss heads there, and doubles it when it saw the slide end.
+    this.score.report({ kind: 'drift', place, speed: d.speed, time, drift: d, ...(this.animalAt >= time - d.seconds - 1 ? { subject: 'animal' } : {}),
+      x: d.x1, z: d.z1, witnessed: this.witness(d.x1, d.z1) });
   }
   /** A roadside break in view of a house: one call per house per day, and no photo answers it. */
   seenAtRoadside(house: number, x: number, z: number): void { this.add('relief', house, x, z, this.elapsed); }
