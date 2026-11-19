@@ -557,14 +557,18 @@ async function loadFarViews(): Promise<void> {
       farLand=landPart.land;scene.add(farLand.group);
     }catch(e){console.warn('optional far sea',e);}
   }
-  const near=tallPart?.near??null;
-  if(near){tall=near;scene.add(near.group);}
+  let near=tallPart?.near??null;
   if(tallPart&&near&&farLand){
-    // Coarse: the near turbines join this one draw (TallLandmarks keeps only their solids).
-    const points=farUse!.coarse?coarseTurbines(tallPart.data,manifest.village,(x,z)=>terrain.heightAt(x,z),terrain.seaLevel,terrain.exag):tallPart.data.far;
-    try{farTurbines=new FarTurbines(points,manifest.village,LOW,shared,sun.el<0,farUse!.coarse);scene.add(farTurbines.group);}
+    // Coarse: the near turbines join this one draw, first in its list (TallLandmarks keeps only their solids).
+    const coarse=farUse!.coarse,heightAt=(x:number,z:number)=>terrain.heightAt(x,z);
+    const points=coarse?coarseTurbines(tallPart.data,manifest.village,heightAt,terrain.seaLevel,terrain.exag):tallPart.data.far;
+    const seat=coarse?{count:points.length-tallPart.data.far.length,heightAt,seaLevel:terrain.seaLevel,exag:terrain.exag}:undefined;
+    try{farTurbines=new FarTurbines(points,manifest.village,LOW,shared,sun.el<0,coarse,seat);scene.add(farTurbines.group);}
     catch(e){console.warn('optional far turbines',e);}
   }
+  // Coarse without its far draw (far land or turbines failed): no turbine is drawn, so none may be solid.
+  if(farUse!.coarse&&!farTurbines)near=null;
+  if(near){tall=near;scene.add(near.group);}
   const queryMeshes:THREE.Mesh[]=[];
   if(farLand){farLand.land.renderOrder=3;queryMeshes.push(farLand.land);}
   if(farTurbines){for(const mesh of farTurbines.group.children)mesh.renderOrder=3;if(sun.el>=0&&farTurbines.count)queryMeshes.push(farTurbines.group.children[0] as THREE.Mesh);}

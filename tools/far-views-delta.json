@@ -10,7 +10,7 @@
      "bytes": 41155
     },
     "far-land.json": {
-     "sha256": "9cc4c8feb714b4838409e0384d0dbe4c39ee64d41326a848b5fb0506da6ae5a5",
+     "sha256": "f7dc085df8eac2efc061647b276cf8fa7f92f7679ccd2941a33f357526492bec",
      "bytes": 1065
     },
     "far-land-desktop.bin": {
@@ -22,8 +22,8 @@
      "bytes": 1194096
     },
     "far-land-coarse.bin": {
-     "sha256": "8c9ebe54ca13b82e0ed8278c9513e154be5a0adb465813b1b712e6c555b33ddc",
-     "bytes": 194244
+     "sha256": "064116f6b734db3ada2f380f2c8bd920f3e620144185dc6b784880684bc5d288",
+     "bytes": 193440
     }
    },
    "manifest": {
@@ -46,7 +46,7 @@
      "bytes": 39009
     },
     "far-land.json": {
-     "sha256": "e5de367f0a9bedf4b7a5132820a48831ce4750d9782e25f79b0c9884dd6ca6de",
+     "sha256": "83afdb75c67c1b8f65f6d816ddcc64e5324e96c80cba9e6846c97594cfeff5e2",
      "bytes": 1074
     },
     "far-land-desktop.bin": {
@@ -58,8 +58,8 @@
      "bytes": 1236936
     },
     "far-land-coarse.bin": {
-     "sha256": "abc834a9cb301d008999de0c0373bcc65ed800c685ba8972c09a5d9e088a4f7d",
-     "bytes": 202524
+     "sha256": "5c0798734ccdcbfc94d16cffe99fb7faa25e5d29e1665b63c316bcab510e9e42",
+     "bytes": 201492
     }
    },
    "manifest": {
@@ -82,7 +82,7 @@
      "bytes": 38827
     },
     "far-land.json": {
-     "sha256": "cf050309afb50b3bf3090b6b7569ebf797d552eeb5af47d928ea47ee3f5ce23f",
+     "sha256": "d1a896098b21932ec66711ecadbf9e350d176b5d945b6fedb7504b8160904229",
      "bytes": 1074
     },
     "far-land-desktop.bin": {
@@ -94,8 +94,8 @@
      "bytes": 1203912
     },
     "far-land-coarse.bin": {
-     "sha256": "0c87ae443b865df5eca88ec3cbc1d9c8a1b7cc583de9d92dc865014774122b67",
-     "bytes": 200436
+     "sha256": "9d3661b08abbe0bb441e3730d6a6432c24b038f2cbf09763e849ffb718a6ef43",
+     "bytes": 199860
     }
    },
    "manifest": {
@@ -118,7 +118,7 @@
      "bytes": 149059
     },
     "far-land.json": {
-     "sha256": "29809f9862203ccf9b795c240355e802bea9c95c6f1946244e2bd22c66dfee93",
+     "sha256": "a10c6e914983705ce7b20ad05d27e43e2a30303680f6a14373e4a2d66b77edce",
      "bytes": 1071
     },
     "far-land-desktop.bin": {
@@ -130,8 +130,8 @@
      "bytes": 1082472
     },
     "far-land-coarse.bin": {
-     "sha256": "03299fc9f6e49002a53ba99cbf0f46db8da2632217d48f502305681f20d0e50b",
-     "bytes": 177060
+     "sha256": "65c5ce98549d4c2cf0322975c8d70a435c9c0ce77827d3ebe9a4d24dda2df13b",
+     "bytes": 176268
     }
    },
    "manifest": {
@@ -154,7 +154,7 @@
      "bytes": 97780
     },
     "far-land.json": {
-     "sha256": "9188fdfbec0ad5f225b38bcbcad1378a70de235a01bb5dbef191a0926e9e0610",
+     "sha256": "ca9e898ddfa9ca6d625b961d8b44dc9c05a4ee6e08b837e9ced0dac41ce3d467",
      "bytes": 1065
     },
     "far-land-desktop.bin": {
@@ -166,8 +166,8 @@
      "bytes": 1192704
     },
     "far-land-coarse.bin": {
-     "sha256": "43102d2157bf15760c15a61273ddea7f53f52e3140ec3d8aaa3e6185972cf088",
-     "bytes": 187152
+     "sha256": "a1746f7146ad2ad26654333aa299ee4a888d01b39f0af764ca55136b7d7d51b5",
+     "bytes": 186408
     }
    },
    "manifest": {
@@ -190,7 +190,7 @@
      "bytes": 81664
     },
     "far-land.json": {
-     "sha256": "6c8c8db1fd459331609895127e695203a6b944109c94c0e9c4a219ffd9deda37",
+     "sha256": "572c077a94a5216253d8d44d80b1d530d43411229a151e0485c663159da4a30e",
      "bytes": 1073
     },
     "far-land-desktop.bin": {
@@ -202,8 +202,8 @@
      "bytes": 1101996
     },
     "far-land-coarse.bin": {
-     "sha256": "2547a58ebf1043ba53b9543b7140834c85a033db43f16613e465bcadb61de66f",
-     "bytes": 181032
+     "sha256": "8d845185c005ad4168ebde9b756acda8f124aeae6af9fdf200a16fb50ef8ba56",
+     "bytes": 180456
     }
    },
    "manifest": {

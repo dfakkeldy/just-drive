@@ -79,12 +79,14 @@ async function loadCase(fail={},text=main){
  if(!fail.land)assert.equal(calls.level,plan.level,'far land level follows the plan');
  if(!fail.tall){assert.equal(calls.nearCoarse,plan.coarse,'near landmarks draw nothing in coarse');assert.equal(calls.showFar,false,'near landmarks never draw far turbines');}
  if(state.farTurbines){assert.equal(calls.points,plan.coarse?2:1,'coarse: near and far turbines in the one far draw');assert.equal(calls.farCoarse,plan.coarse);assert.equal(!!calls.merged,plan.coarse);}
- assert.equal(!!state.farLand,landOK,'independent land success');assert.equal(!!state.tall,nearOK,'independent near success');assert.equal(state.tall?.solids.length??0,nearOK?1:0,'draws and solids consistent');assert.equal(places.length,nearOK?1:0,'only drawn turbine place');assert.equal(!!state.farTurbines,landOK&&nearOK&&!fail.distant,'outside-root turbines require real land');assert.equal(shared.farCurveOn.value,landOK?1:0);
+ assert.equal(!!state.farLand,landOK,'independent land success');// Coarse draws its near turbines only in the far draw: without that draw, no near solids or Places either.
+ const nearShown=nearOK&&(!plan.coarse||(landOK&&!fail.distant));
+ assert.equal(!!state.tall,nearShown,'independent near success');assert.equal(state.tall?.solids.length??0,nearShown?1:0,'draws and solids consistent');assert.equal(places.length,nearShown?1:0,'only drawn turbine place');assert.equal(!!state.farTurbines,landOK&&nearOK&&!fail.distant,'outside-root turbines require real land');assert.equal(shared.farCurveOn.value,landOK?1:0);
  models.forEach((m,i)=>{assert.equal(m.version,versions[i],'far load recompiles no existing model');assert.equal(m.customProgramCacheKey(),keys[i],'existing model cache key stable');});
  if(landOK){assert.equal(seaColour.vertexShader,'vertex curved','stable colour vertex target');assert.equal(seaColour.fragmentShader,'fragment curved','stable colour fragment target');if(!state.LOW){assert.equal(query.fragmentShader,'query fragment curved','query keeps the query fragment');assert.equal(query.depthWrite,false,'query depth flags stay unchanged');assert.equal(query.colorWrite,false,'query stays colourless');}}
  const changed=(seaColour.version-seaVersion)+(query.version-queryVersion);assert.equal(changed,landOK?(state.LOW?1:2):0,'only sea colour/query programs change');if(!landOK)assert.equal(sea.geometry,initialGeometry);
 }
-for(const fail of [{},{low:true},{coarse:true},{coarse:true,tall:true},{coarse:true,binary:true},{queryActive:true},{queryActive:true,tall:true},{queryActive:true,binary:true},{tall:true},{land:true},{binary:true},{near:true},{distant:true},{rewrite:true},{query:true}])await loadCase(fail);
+for(const fail of [{},{low:true},{coarse:true},{coarse:true,tall:true},{coarse:true,binary:true},{coarse:true,land:true},{coarse:true,distant:true},{queryActive:true},{queryActive:true,tall:true},{queryActive:true,binary:true},{tall:true},{land:true},{binary:true},{near:true},{distant:true},{rewrite:true},{query:true}])await loadCase(fail);
 console.log('PASS actual far-load fixture: zero existing-model program changes, at most two sea programs; independent optional failures');
 if(process.argv.includes('--mutations')){
  for(const[label,path,a,b,test]of [
@@ -98,6 +100,7 @@ if(process.argv.includes('--mutations')){
   ['stale occlusion accepted','web/src/far-visibility.ts','if(r.version===this.pose)','if(true)',visibility],
  ]){const text=source(path);assert.equal(text.split(a).length,2);assert.throws(()=>test(moduleAt(path,text.replace(a,b))),{name:'AssertionError'});console.log('KILLED',label);}
 }
+if(process.argv.includes('--mutations')){const orphan=main.replace('if(farUse!.coarse&&!farTurbines)near=null;','');assert.notEqual(orphan,main);await assert.rejects(()=>loadCase({coarse:true,distant:true},orphan),{name:'AssertionError'});console.log('KILLED coarse near solids without the far draw');}
 if(process.argv.includes('--mutations')){const changed=main.replace('shared.farCurveOn.value=1;','shared.farCurveOn.value=1;curveSceneMaterials(scene,shared);');await assert.rejects(()=>loadCase({},changed),{name:'AssertionError'});console.log('KILLED mid-drive material reinstall');}
 if(process.argv.includes('--mutations')){const wrongTarget=main.replaceAll('seaColour.','sea.material.');await assert.rejects(()=>loadCase({queryActive:true},wrongTarget),{name:'AssertionError'});console.log('KILLED query-active colour rewrite on mesh material');}
 

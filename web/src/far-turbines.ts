@@ -67,13 +67,17 @@ export function farmPhase(id: string): number {
   for (let i=0;i<id.length;i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
   return (h >>> 0) / 4294967296;
 }
-/** Coarse far views (far-choice.ts): the near turbines join the one far draw. Each is seated once, at load, on the
- * drawn near land where it is loaded (the far shader stretches its ground by the hill height again), else on its
- * baked ground. Near turbines keep their solids in TallLandmarks, which draws nothing in coarse. */
+/** The ground to give the far shader for a drawn world height: it stretches ground above the sea by the hill height. */
+export function farGround(h: number, seaLevel: number, exag: number): number { return h > seaLevel ? seaLevel + (h - seaLevel) / exag : h; }
+/** The near turbines in the coarse far draw, kept on the drawn near land as its tiles stream in (FarTurbines.update). */
+export interface NearSeat { count: number; heightAt: (x: number, z: number) => number | null; seaLevel: number; exag: number }
+/** Coarse far views (far-choice.ts): the near turbines join the one far draw, first in the list. Each starts on the
+ * drawn near land where it is loaded, else on its baked ground. Near turbines keep their solids in TallLandmarks,
+ * which draws nothing in coarse. */
 export function coarseTurbines(data: Pick<TallFile, 'turbines' | 'far'>, village: readonly number[], heightAt: (x: number, z: number) => number | null, seaLevel: number, exag: number): Turbine[] {
   const near = data.turbines.filter(p => p.ground !== null).map(p => {
     const h = heightAt(p.e - village[0], village[1] - p.n);
-    return h === null || !Number.isFinite(h) ? p : { ...p, ground: h > seaLevel ? seaLevel + (h - seaLevel) / exag : h };
+    return h === null || !Number.isFinite(h) ? p : { ...p, ground: farGround(h, seaLevel, exag) };
   });
   return [...near, ...data.far];
 }
@@ -83,8 +87,11 @@ export class FarTurbines {
   readonly time = { value: 0 };
   readonly viewport = { value: new THREE.Vector2(1920,1080) };
   readonly count: number;
-  constructor(points: readonly Turbine[], origin: readonly number[], low: boolean, shared: Record<string, THREE.IUniform>, dark: boolean, coarse = false) {
-    const list = points.filter(p => p.ground !== null); this.count = list.length;
+  private readonly list: Turbine[];
+  private readonly grounds: number[];
+  private nextSeat = 0;
+  constructor(points: readonly Turbine[], private readonly origin: readonly number[], low: boolean, shared: Record<string, THREE.IUniform>, dark: boolean, coarse = false, private readonly near?: NearSeat) {
+    const list = points.filter(p => p.ground !== null); this.count = list.length; this.list = list; this.grounds = list.map(p => p.ground!);
     const pos: number[] = [], parts: number[] = [];
     const append = (g: THREE.BufferGeometry, part: number) => {
       const p=g.getAttribute('position'), index=g.index;
@@ -106,8 +113,8 @@ export class FarTurbines {
       geometry.setAttribute('turbine',new THREE.InstancedBufferAttribute(sizes,4));geometry.setAttribute('farmPhase',new THREE.InstancedBufferAttribute(phases,1));
       const vert=beacon?FAR_TURBINE_VERT.replace('uniform float tallTime;','uniform float tallTime;\nuniform vec2 beaconViewport;').replace('vec3 p = position;','vec3 p = vec3(0.0);'):FAR_TURBINE_VERT;
       const mat=new THREE.ShaderMaterial({vertexShader:vert,fragmentShader:FRAG,defines:beacon?{BEACON:1}:{},uniforms:{...shared,tallTime:this.time,beaconViewport:this.viewport},side:THREE.DoubleSide});
-      const mesh=new THREE.InstancedMesh(geometry,mat,list.length),d=new THREE.Object3D();
-      list.forEach((p,i)=>{d.position.set(p.e-origin[0],p.ground!,origin[1]-p.n);d.rotation.set(0,Math.PI-WIND_HEADING,0);d.updateMatrix();mesh.setMatrixAt(i,d.matrix);});
+      const mesh=new THREE.InstancedMesh(geometry,mat,list.length);
+      list.forEach((p,i)=>this.place(mesh,i,p.ground!));
       mesh.frustumCulled=false;mesh.name=beacon?'far-turbine-beacons':'far-turbines';this.group.add(mesh);
     };
     if(list.length) {
@@ -115,5 +122,20 @@ export class FarTurbines {
       if(dark) { const light=new THREE.PlaneGeometry(1,1).toNonIndexed();light.setAttribute('part',new THREE.Float32BufferAttribute(new Float32Array(6),1));setup(light,true); }
     }
   }
-  update(seconds: number, width: number, height: number): void { this.time.value=seconds;this.viewport.value.set(width,height); }
+  private readonly dummy = new THREE.Object3D();
+  private place(mesh: THREE.InstancedMesh, i: number, ground: number): void {
+    const p=this.list[i],d=this.dummy;d.position.set(p.e-this.origin[0],ground,this.origin[1]-p.n);d.rotation.set(0,Math.PI-WIND_HEADING,0);d.updateMatrix();mesh.setMatrixAt(i,d.matrix);mesh.instanceMatrix.needsUpdate=true;
+  }
+  update(seconds: number, width: number, height: number): void {
+    this.time.value=seconds;this.viewport.value.set(width,height);
+    // Twice a second, as TallLandmarks seats its near turbines: no per-frame CPU transform.
+    if(!this.near||seconds<this.nextSeat)return;
+    this.nextSeat=seconds+.5;
+    for(let i=0;i<Math.min(this.near.count,this.count);i++){
+      const p=this.list[i],h=this.near.heightAt(p.e-this.origin[0],this.origin[1]-p.n);
+      if(h===null||!Number.isFinite(h))continue;
+      const ground=farGround(h,this.near.seaLevel,this.near.exag);if(ground===this.grounds[i])continue;this.grounds[i]=ground;
+      for(const mesh of this.group.children)this.place(mesh as THREE.InstancedMesh,i,ground);
+    }
+  }
 }

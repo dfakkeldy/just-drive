@@ -15,7 +15,9 @@ export function farPack(root,override=process.env.FAR_VIEWS_BAKE){
 // The phone's "Coarse" far views (Settings > Advanced): a third far-land level, re-meshed from the pack's own
 // desktop level (cell 240), so it needs no raw DEM and stays the same surface as the other two levels. It uses the
 // bake's rules (pipeline/34_bake_far_views.py mesh()): independent cells aligned to the root, the coast interpolated on
-// the zero contour, and root-edge samples (128 m here, 64 m in the bake) tying the seam to the near land. Every 1920 m
+// the zero contour, and root-edge samples (128 m here, 64 m in the bake) tying the seam to the near land. Where a cell
+// edge crosses the coast, the crossing is found on the desktop surface itself (bisection), not interpolated between a
+// -0.5 m sea corner and a land corner, which on 1920 m cells would push headlands up to a cell out to sea. Every 1920 m
 // block is one cell. Measured on the terrain pack: cell 1920 = 9,754 triangles; cell 960 (40 m relief) = 22,512, most
 // of them coast fans, which leaves no room on works-yard/phone-explore-truck (19,942 triangles under the phone cap).
 export const COARSE=Object.freeze({name:'coarse',file:'far-land-coarse.bin',cell:1920,block:1920,tolerance:40,edge:128});
@@ -77,9 +79,16 @@ export function coarseMesh(meta,height,o=COARSE){
  for(const x of [root[0],root[2]])if(vertical.has(x))add(vertical,x,edgeSamples(root[1],root[3]));
  const sorted=(m,k,reverse)=>[...m.get(k)].sort((p,q)=>reverse?q-p:p-q);
  const positions=[];
+ // The zero crossing between a dry and a wet point, on the surface: 1 m along the edge is enough for 1920 m cells.
+ const coast=(a,b)=>{
+  let dry=a[2]>=0?a:b,wet=dry===a?b:a,lo=0,hi=1;const at=t=>[dry[0]+t*(wet[0]-dry[0]),dry[1]+t*(wet[1]-dry[1])];
+  const length=Math.hypot(wet[0]-dry[0],wet[1]-dry[1]);
+  while((hi-lo)*length>1){const mid=(lo+hi)/2,[e,n]=at(mid);if(height(e,n)>=0)lo=mid;else hi=mid;}
+  const [e,n]=at(lo);return [e,n,0];
+ };
  const emit=poly=>{
   const clipped=[];
-  for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];if(a[2]>=0)clipped.push(a);if((a[2]>=0)!==(b[2]>=0)){const t=a[2]/(a[2]-b[2]);clipped.push([a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1]),0]);}}
+  for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];if(a[2]>=0)clipped.push(a);if((a[2]>=0)!==(b[2]>=0))clipped.push(coast(a,b));}
   for(let k=1;k+1<clipped.length;k++)for(const [e,n,z] of [clipped[0],clipped[k],clipped[k+1]])positions.push(e-origin[0],z+.5,origin[1]-n);
  };
  for(const [a,c,b,d] of leaves){

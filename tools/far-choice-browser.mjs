@@ -2,10 +2,11 @@
 // "Far views on phone" in the real game, through the far views work overlay (tools/check-far-views-browser.sh):
 // phone detail with touch, the choice takes effect AFTER A RELOAD (the switch reloads the page itself).
 //  1. Off by default: no far land, tall pack or far turbines, and the Advanced section starts closed.
-//  2. Touch: tap the gear, tap "Advanced" (open state remembered), tap Coarse: the page reloads into the coarse
-//     scene (coarse far-land level, one far turbine draw, no near tall draws).
-//  3. Keyboard: arrow from Coarse to Full: the page reloads into the LOW far scene (LOW level, near tall draws).
-//  4. Tap Off: the page reloads with no far views. ?far=coarse overrides the saved choice and says so.
+//  2. Touch: tap the gear, tap "Advanced" (open state remembered), tap Coarse (nothing reloads yet), tap Apply: the page
+//     reloads into the coarse scene (coarse far-land level, one far turbine draw, no near tall draws).
+//  3. Keyboard: arrow from Coarse to Full moves the choice only; Tab to Apply and Enter: the page reloads into the LOW far
+//     scene (LOW level, near tall draws).
+//  4. Tap Off, Apply: the page reloads with no far views. ?far=coarse overrides the saved choice and says so.
 //  5. Desktop detail: no Advanced section, and the desktop far scene as before.
 // FAR_CHOICE_PICTURES=1 instead saves the pictures for the pull request: the Point Tupper start and a Mabou hill view
 // at Off, Coarse and Full on a phone, and one desktop view (OUT folder).
@@ -40,7 +41,8 @@ async function centre(selector){
  assert.ok(box&&box.w>0&&box.h>0,selector+' is on screen');return box;
 }
 async function tap(selector){const p=await centre(selector);await c.send('Input.synthesizeTapGesture',{x:p.x,y:p.y,gestureSourceType:'touch'});await sleep(400);return p;}
-async function key(name,code){for(const type of ['rawKeyDown','keyUp'])await c.send('Input.dispatchKeyEvent',{type,key:name,code:name,windowsVirtualKeyCode:code});await sleep(300);}
+async function key(name,code,text){await c.send('Input.dispatchKeyEvent',{type:text?'keyDown':'rawKeyDown',key:name,code:name,windowsVirtualKeyCode:code,...(text?{text}:{})});await c.send('Input.dispatchKeyEvent',{type:'keyUp',key:name,code:name,windowsVirtualKeyCode:code});await sleep(300);}
+const stillHere=async()=>{try{return await read('!!window.__farChoiceMarker');}catch{return false;}};
 async function page(viewport,url,options){
  await c.send('Emulation.setDeviceMetricsOverride',viewport);await c.send('Emulation.setTouchEmulationEnabled',{enabled:viewport.mobile});
  await c.send('Page.navigate',{url});await settle(url,options);
@@ -56,17 +58,25 @@ async function check(){
  await openPanel();await tap('#advanced > summary');
  s=await scene();assert.deepEqual([s.advancedOpen,s.openSaved],[true,'1'],'a tap opens Advanced and it is remembered');
  const label=await centre('#farPhone label:nth-of-type(2)');assert.ok(label.h>=44,'touch target at least 44 px tall');
- await tap('#farPhone label:nth-of-type(2)');await settle('after Coarse',{far:true});
+ assert.equal(await read('document.getElementById("farPhoneApply").disabled'),true,'Apply waits for a new choice');
+ await tap('#farPhone label:nth-of-type(2)');await sleep(1500);assert.ok(await stillHere(),'choosing alone does not reload');
+ assert.equal(await read('document.getElementById("farPhoneApply").disabled'),false,'Apply offered for a new choice');
+ const apply=await centre('#farPhoneApply');assert.ok(apply.h>=44,'Apply touch target at least 44 px tall');
+ await tap('#farPhoneApply');await settle('after Coarse',{far:true});
  const coarse=await scene();console.log('COARSE',JSON.stringify(coarse));
  assert.deepEqual([coarse.farLand,coarse.farTurbineDraws,coarse.tallDraws,coarse.checked,coarse.saved,coarse.advancedOpen],['coarse',1,0,'coarse','coarse',true],'Coarse after the reload');
  assert.ok(coarse.farTurbines>0&&coarse.tallSolids>0,'coarse: every turbine in the one far draw; near solids kept');
- await openPanel();await read("document.querySelector('#farPhone input[value=coarse]').focus()");await key('ArrowRight',39);await settle('after Full',{far:true});
+ await openPanel();await read("document.querySelector('#farPhone input[value=coarse]').focus()");await key('ArrowRight',39);await sleep(1500);
+ assert.ok(await stillHere(),'arrow keys move the choice without reloading');
+ assert.equal(await read("document.querySelector('#farPhone input:checked').value"),'full','ArrowRight chose Full');
+ await key('Tab',9);assert.equal(await read('document.activeElement?.id'),'farPhoneApply','Tab reaches Apply');
+ await key('Enter',13,'\r');await settle('after Full',{far:true});
  const full=await scene();console.log('FULL',JSON.stringify(full));
  assert.deepEqual([full.farLand,full.checked,full.saved],['low','full','full'],'keyboard Full after the reload');
  assert.ok(full.tallDraws>0&&full.farTurbineDraws===1,'Full is the LOW far scene: near tall draws and far turbines');
  assert.ok(coarse.seaTriangles<full.seaTriangles/2,'coarse sea is lighter');
  assert.ok(coarse.farTurbines>full.farTurbines,'coarse far draw also holds the near turbines');
- await openPanel();await tap('#farPhone label:nth-of-type(1)');await settle('after Off',{far:false});
+ await openPanel();await tap('#farPhone label:nth-of-type(1)');await tap('#farPhoneApply');await settle('after Off',{far:false});
  s=await scene();console.log('OFF AGAIN',JSON.stringify(s));
  assert.deepEqual([s.farLand,s.tallDraws,s.checked,s.saved],[null,0,'off','off'],'Off after the reload');
  await page(PHONE,phone+'&far=coarse',{far:true});
@@ -76,7 +86,7 @@ async function check(){
  assert.deepEqual([s.low,s.farLand,s.advanced],[false,'desktop',false],'desktop: no Advanced section, desktop far scene');
  assert.ok(s.tallDraws>0&&s.farTurbineDraws===1);
  writeFileSync(out+'/far-choice.json',JSON.stringify({off:true,coarse,full,desktop:s,logs:c.logs},null,2));
- console.log('PASS far views on phone: Off default; touch and keyboard switch, each after a reload; ?far= override; desktop unchanged');
+ console.log('PASS far views on phone: Off default; touch and keyboard choice + Apply, each in force after the page reloads; ?far= override; desktop unchanged');
 }
 async function pictures(){
  const views=[['pointtupper-start','area=pointtupper&mode=explore&vehicle=truck&hour=16.75'],['mabou-hills',MABOU_HILLS+'&mode=explore&vehicle=truck']];

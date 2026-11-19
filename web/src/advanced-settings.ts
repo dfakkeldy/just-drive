@@ -2,6 +2,7 @@
 // Space to open; touch: one tap), remembered open or closed between visits like the other switches.
 // Its first switch is "Far views on phone" (far-choice.ts). A choice loads the page again, as Low/Full detail does:
 // the far views pack hooks the scene's materials before the first frame, so it is not switched under a running drive.
+// The radio buttons only choose; the Apply button loads the page, so arrow keys can move through the choices freely.
 
 import { FAR_PHONE_CHOICES, saveFarPhone, type FarPhone } from './far-choice';
 
@@ -13,7 +14,8 @@ export function advancedSection(panel: HTMLElement | null, before: HTMLElement |
   details.style.cssText = 'margin-top:12px';
   try { details.open = localStorage.getItem(OPEN_KEY) === '1'; } catch { /* private mode */ }
   const summary = Object.assign(document.createElement('summary'), { textContent: 'Advanced' });
-  summary.style.cssText = 'cursor:pointer;display:flex;align-items:center;gap:6px' + (touch ? ';min-height:44px' : ';min-height:28px');
+  // Keep the native disclosure marker (display stays list-item); padding makes a 44 px touch target.
+  summary.style.cssText = 'cursor:pointer;padding:' + (touch ? '12px 0' : '4px 0');
   details.append(summary);
   details.addEventListener('toggle', () => { try { localStorage.setItem(OPEN_KEY, details.open ? '1' : '0'); } catch { /* private mode */ } });
   panel.insertBefore(details, before);
@@ -22,7 +24,7 @@ export function advancedSection(panel: HTMLElement | null, before: HTMLElement |
 
 const LABELS: Record<FarPhone, string> = { off: 'Off', coarse: 'Coarse', full: 'Full' };
 
-/** Three radio buttons; a change saves the choice and loads the page again (`go`, replaceable in a test). */
+/** Three radio buttons and Apply, which saves the choice and loads the page again (`go`, replaceable in a test). */
 export function farPhoneSetting(section: HTMLElement | null, current: FarPhone, fromUrl: boolean, touch: boolean,
   go: (search: string) => void = search => { location.search = search; }): HTMLFieldSetElement | null {
   if (!section) return null;
@@ -31,6 +33,10 @@ export function farPhoneSetting(section: HTMLElement | null, current: FarPhone, 
   const legend = Object.assign(document.createElement('legend'), { textContent: 'Far views on phone' });
   legend.style.cssText = 'padding:0;margin-bottom:4px';
   set.append(legend);
+  const apply = Object.assign(document.createElement('button'), { id: 'farPhoneApply', type: 'button', textContent: 'Apply', disabled: true });
+  apply.style.cssText = 'margin-top:6px;padding:0 16px;border-radius:6px;font:inherit;background:var(--panel-solid);border:1px solid var(--ink-dim);color:var(--ink);cursor:pointer' + (touch ? ';min-height:44px' : ';min-height:28px');
+  const dim = () => { apply.style.opacity = apply.disabled ? '0.5' : '1'; }; dim();
+  const chosen = () => (set.querySelector('input:checked') as HTMLInputElement | null)?.value as FarPhone | undefined;
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
   for (const choice of FAR_PHONE_CHOICES) {
@@ -38,21 +44,23 @@ export function farPhoneSetting(section: HTMLElement | null, current: FarPhone, 
     label.style.cssText = 'display:flex;align-items:center;gap:6px;margin:0;padding:0 10px 0 0' + (touch ? ';min-height:44px' : ';min-height:28px');
     const radio = Object.assign(document.createElement('input'), { type: 'radio', name: 'farPhone', value: choice, checked: choice === current });
     radio.style.width = 'auto';
-    radio.addEventListener('change', () => {
-      if (!radio.checked) return;
-      const query = new URLSearchParams(location.search);
-      query.delete('far');
-      // Without storage, the address carries the choice, as Low detail does with ?q=.
-      if (!saveFarPhone(choice)) query.set('far', choice);
-      go(query.toString());
-    });
+    radio.addEventListener('change', () => { apply.disabled = chosen() === current; dim(); });
     label.append(radio, LABELS[choice]);
     row.append(label);
   }
   const note = Object.assign(document.createElement('small'), {
     textContent: 'Distant hills, the curved sea and far wind turbines. Coarse is lighter; Full may slow a phone. The page loads again.' });
   note.style.cssText = 'display:block;margin-top:2px';
-  set.append(row, note);
+  apply.addEventListener('click', () => {
+    const choice = chosen();
+    if (!choice || choice === current) return;
+    const query = new URLSearchParams(location.search);
+    query.delete('far');
+    // Without storage, the address carries the choice, as Low detail does with ?q=.
+    if (!saveFarPhone(choice)) query.set('far', choice);
+    go(query.toString());
+  });
+  set.append(row, apply, note);
   if (fromUrl) {
     const typed = Object.assign(document.createElement('small'), { textContent: 'Set by the page address (far=' + current + ').' });
     typed.style.cssText = 'display:block;margin-top:2px';

@@ -110,7 +110,8 @@ export class TallLandmarks {
     const turbines = [...data.turbines, ...(showFar ? data.far : [])].filter(p => p.ground !== null);
     this.turbineCount = turbines.length;
     if (coarse) {
-      for (const p of turbines) { const radius = p.hub * .023; this.solids.push({x:p.e-village[0],z:village[1]-p.n,half:radius,halfWidth:radius,heading:0}); }
+      // FarTurbines' shaft scales with the rotor diameter: the solid is as wide as the drawn base.
+      for (const p of turbines) { const radius = Math.max(p.hub, p.diameter) * .023; this.solids.push({x:p.e-village[0],z:village[1]-p.n,half:radius,halfWidth:radius,heading:0}); }
       this.low = low;
       return;
     }

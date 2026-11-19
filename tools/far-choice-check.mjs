@@ -108,6 +108,7 @@ function coarseDraws(mods){
   assert.ok(draws(full.group)>=5,'full LOW near landmarks draw turbines, masts and wires');
   assert.equal(draws(coarse.group),0,'coarse near landmarks draw nothing');
   assert.equal(coarse.solids.length,data.turbines.length,'coarse keeps the near turbines\' solids, and only theirs');
+  coarse.solids.forEach((solid,i)=>assert.equal(solid.half,Math.max(data.turbines[i].hub,data.turbines[i].diameter)*.023,'coarse solid as wide as the far shaft (scaled by the larger of hub and diameter)'));
   assert.equal(coarse.turbineCount,full.turbineCount,'Places still offered for the turbines');
   const points=coarseTurbines(data,terrain.manifest.village,(x,z)=>terrain.heightAt(x,z),terrain.seaLevel,terrain.exag);
   assert.equal(points.length,data.turbines.length+data.far.length,'coarse: near and far turbines in the far list');
@@ -116,6 +117,13 @@ function coarseDraws(mods){
   const far=new FarTurbines(points,terrain.manifest.village,true,shared,dark,true);
   assert.equal(far.count,4,'unknown ground is never drawn');
   assert.equal(draws(far.group),dark?2:1,'coarse turbines: one draw by day, a second only for night beacons');
+  // Near turbines follow the drawn near land as its tiles stream in (twice a second), far ones never move.
+  let land=40;const seat={count:2,heightAt:(x,z)=>x===-400?land:null,seaLevel:0,exag:1.5};
+  const seated=new FarTurbines(points,terrain.manifest.village,true,shared,dark,true,seat),y=i=>{const m=new T.Matrix4();seated.group.children[0].getMatrixAt(i,m);return m.elements[13];};
+  const far0=y(2);seated.update(0,390,844);assert.ok(Math.abs(y(0)-40/1.5)<1e-4,'near turbine re-seated on loaded land');
+  land=70;seated.update(.3,390,844);assert.ok(Math.abs(y(0)-40/1.5)<1e-4,'no re-seat within half a second');
+  seated.update(.6,390,844);assert.ok(Math.abs(y(0)-70/1.5)<1e-4,'re-seated after half a second');assert.equal(y(1),30,'unloaded near land keeps the baked ground');assert.equal(y(2),far0,'far turbines never re-seated');
+  for(const mesh of seated.group.children){const m=new T.Matrix4();mesh.getMatrixAt(0,m);assert.ok(Math.abs(m.elements[13]-70/1.5)<1e-4,'every draw of the turbine moves together');}
   const fullFar=new FarTurbines(data.far,terrain.manifest.village,true,shared,dark,false);
   const tris=g=>g.children[0].geometry.getAttribute('position').count/3;
   assert.ok(tris(far.group)<tris(fullFar.group),'coarse turbine template is lighter');
@@ -132,6 +140,9 @@ function pack(){
  assert.deepEqual(levelBytes(a),levelBytes(b),'coarse level is deterministic');
  assert.ok(a.indices.length>0&&a.indices.length%3===0);
  for(let i=0;i<a.vertices.length;i+=3){const e=a.vertices[i],n=-a.vertices[i+2];assert.ok(!(Math.abs(e)<3840-1e-3&&Math.abs(n)<3840-1e-3),'nothing inside the near root');}
+ // The coast follows the surface's own zero line: the island (land where r < 10 km) minus the near root square.
+ const area=m=>{let sum=0;const v=m.vertices,ix=m.indices;for(let t=0;t<ix.length;t+=3){const p=ix[t]*3,q=ix[t+1]*3,r=ix[t+2]*3;sum+=Math.abs((v[q]-v[p])*(v[r+2]-v[p+2])-(v[r]-v[p])*(v[q+2]-v[p+2]))/2;}return sum;};
+ const island=Math.PI*10000**2-7680**2;assert.ok(Math.abs(area(a)/island-1)<.02,'coarse coast within 2% of the true land area: '+(area(a)/island).toFixed(4));
  const fine=coarseMesh(meta,height,{...COARSE,cell:960,block:1920,tolerance:0});
  assert.ok(a.indices.length<fine.indices.length,'1920 m cells are coarser than 960 m');
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'far-choice-')));
@@ -163,9 +174,12 @@ if(process.argv.includes('--mutations')){
   ['no fallback without a coarse level','web/src/far-land.ts',"const name: FarLevelName = want === 'coarse' && !data.levels?.coarse ? 'low' : want","const name: FarLevelName = want"],
   ['coarse sea not coarse','web/src/far-land.ts','const rings=coarse?24:low?48:96','const rings=low?48:96'],
   ['coarse near landmarks still draw','web/src/tall.ts','    if (coarse) {\n','    if (false) {\n'],
-  ['coarse drops near solids','web/src/tall.ts',"for (const p of turbines) { const radius = p.hub * .023; this.solids.push(","for (const p of turbines.slice(1)) { const radius = p.hub * .023; this.solids.push("],
+  ['coarse drops near solids','web/src/tall.ts',"for (const p of turbines) { const radius = Math.max(p.hub, p.diameter) * .023;","for (const p of turbines.slice(1)) { const radius = Math.max(p.hub, p.diameter) * .023;"],
+  ['coarse solids narrower than the drawn shaft','web/src/tall.ts',"const radius = Math.max(p.hub, p.diameter) * .023;","const radius = p.hub * .023;"],
   ['coarse near turbines left out','web/src/far-turbines.ts','  return [...near, ...data.far];','  return [...data.far];'],
   ['coarse near turbines stretched twice','web/src/far-turbines.ts','seaLevel + (h - seaLevel) / exag','h'],
+  ['coarse near turbines never re-seated','web/src/far-turbines.ts','    if(!this.near||seconds<this.nextSeat)return;','    return;'],
+  ['coarse re-seat every frame','web/src/far-turbines.ts','this.nextSeat=seconds+.5;','this.nextSeat=seconds;'],
  ];
  for(const [label,path,a,b] of mutants){
   const text=source(path);assert.equal(text.split(a).length,2,'mutant anchor: '+label);
@@ -175,6 +189,7 @@ if(process.argv.includes('--mutations')){
  for(const [label,a,b] of [
   ['coarse level written into data/baked',"if(!dir.startsWith(work))throw","if(false)throw"],
   ['coarse cell 960',"cell:1920,block:1920","cell:960,block:1920"],
+  ['coast interpolated from the sea corner',"const [e,n]=at(lo);return [e,n,0];","const t=dry[2]/(dry[2]-wet[2]);const [e,n]=at(t);return [e,n,0];"],
  ]){
   const text=source('tools/far-pack.mjs');assert.equal(text.split(a).length,2,'mutant anchor: '+label);
   const copy=root+'tools/.far-pack-mutant.mjs';writeFileSync(copy,text.replace(a,b));
@@ -182,6 +197,8 @@ if(process.argv.includes('--mutations')){
    assert.throws(()=>{
     const meta={root:[-3840,-3840,3840,3840],anchor:[0,0],origin:[0,0],radius:20000},height=(e,n)=>{const r=Math.hypot(e,n);return r<12000?Math.max(-.5,200-r/50):-.5;};
     assert.equal(m.COARSE.cell,1920,'coarse cell');
+    const area=x=>{let sum=0;const v=x.vertices,ix=x.indices;for(let t=0;t<ix.length;t+=3){const p=ix[t]*3,q=ix[t+1]*3,r=ix[t+2]*3;sum+=Math.abs((v[q]-v[p])*(v[r+2]-v[p+2])-(v[r]-v[p])*(v[q+2]-v[p+2]))/2;}return sum;};
+    assert.ok(Math.abs(area(m.coarseMesh(meta,height))/(Math.PI*10000**2-7680**2)-1)<.02,'coast on the zero line');
     assert.deepEqual(levelBytes(m.coarseMesh(meta,height)),levelBytes(coarseMesh(meta,height)),'same coarse level');
     const dir=realpathSync(mkdtempSync(join(tmpdir(),'far-choice-')));
     try{const data=dir+'/data';mkdirSync(data+'/baked/terrain',{recursive:true});writeFileSync(data+'/baked/terrain/far-land.json','{}');
