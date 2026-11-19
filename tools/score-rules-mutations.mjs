@@ -47,7 +47,7 @@ const mutants=[
  ['no place',"const place = this.placeAt(x, z);","const place = 'route';",'shift'],
  ['fired saves career','if (!this.fired) { this.career = freshCareer();','{ this.career = freshCareer();','shift'],
  ['landing ignored',"place === 'route' && also ? this.placeAt(also.x, also.z) : place",'place','shift'],
- ['pre-existing box scores','if (!c.preExisting) this.reportScore','this.reportScore','shift'],
+ ['pre-existing box scores','      if (c.preExisting) return;\n','','shift'],
  ['fired shows the report','    if (this.fired) {\n','    if (false) {\n','shift'],
  ['stream survives a new day','this.score.clear(); this.rutMark','this.rutMark','shift'],
  ['grades survive a new day',' m.damage = 0;',' m.damage = m.damage;','props'],

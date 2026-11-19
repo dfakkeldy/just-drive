@@ -166,6 +166,8 @@ export class PointTupperDriver {
       .filter(p => p.cumulative.at(-1)! > 120);
   }
   hide(): void { this.active = this.group.visible = this.leaving = false; this.onRoad.length = 0; this.steerRoad = null; }
+  /** On the road where its owner just placed it (the ride-along Boss at its post), instead of a hidden start. */
+  show(): void { this.parked = 0; this.active = this.group.visible = true; this.leaving = false; this.onRoad[0] = this.vehicle; this.steerRoad = null; }
   /** `playerKind` is the kind the player drives now (the fleet member after a switch), not the boot vehicle. */
   update(camera: THREE.Camera, player: Vehicle, enabled: boolean, playerKind: string): void {
     if (!enabled) { this.hide(); return; }

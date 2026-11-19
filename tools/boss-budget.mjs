@@ -1,4 +1,5 @@
 // What the Boss's car costs to draw in Get Fired, at the Mabou start: desktop (HIGH) or phone (BOSS_LOW=1, LOW).
+// BOSS_MAIL=1: the same in mail play on a ride-along day (ride-along.ts, ?rideAlong=1), the same car at its post.
 // Only run through tools/yard-shots.sh. The fixture is tools/point-tupper-driver-budget.mjs's (hour, exag, shadows,
 // res, quality, viewport, touch; no radio). The real game loop runs; the page's own Boss is held still in view, 30 m
 // along the camera's forward line.
@@ -13,8 +14,8 @@ import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { cdp, cdpFetch, sleep } from './cdp.mjs';
 import { PHONE_CAP } from './frame-budget-policy.mjs';
-const [out, first] = process.argv.slice(2), port = process.env.CDP_PORT, LOW = process.env.BOSS_LOW === '1';
-const mode = LOW ? 'phone' : 'desktop';
+const [out, first] = process.argv.slice(2), port = process.env.CDP_PORT, LOW = process.env.BOSS_LOW === '1', MAIL = process.env.BOSS_MAIL === '1';
+const mode = `${MAIL ? 'ride-along-' : ''}${LOW ? 'phone' : 'desktop'}`;
 
 async function openPage(extra) {
   const tab = await (await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
@@ -25,7 +26,7 @@ async function openPage(extra) {
     return r.result.result.value;
   };
   const close = async () => { await c.send('Page.close').catch(() => {}); c.close?.(); };
-  const params = new URLSearchParams({ mode: 'fired', mp: '0', radio: '0', run: '1', day: '1', scene: '0',
+  const params = new URLSearchParams({ mode: MAIL ? 'mail' : 'fired', ...MAIL ? { rideAlong: '1' } : {}, mp: '0', radio: '0', run: '1', day: '1', scene: '0',
     hour: '16.75', exag: '1.5', hud: '1', shadows: '1', res: '1', q: LOW ? 'low' : 'high', ...extra });
   if (LOW) params.set('touch', '1');
   await c.send('Page.enable');
@@ -39,7 +40,7 @@ async function openPage(extra) {
     LOW ? [390, 844, 390, 844] : [1400, 950, 1400, 950], 'fixed CSS viewport and drawing buffer');
   assert.equal(await read('mmm.low'), LOW, 'quality');
   assert.equal(await read('mmm.renderer.shadowMap.enabled'), !LOW, 'desktop shadows / LOW has no shadow pass');
-  assert.equal(await read('mmm.gameMode'), 'fired');
+  assert.equal(await read('mmm.gameMode'), MAIL ? 'mail' : 'fired');
   await read("document.getElementById('titleStart')?.click()");
   await sleep(1500);
   await read(`(()=>{const r=mmm.renderer,b=window.__boss={rows:[],acc:{calls:0,triangles:0,mirror:0},own:{calls:0,triangles:0}};
@@ -75,7 +76,7 @@ const results = { mode, cap: PHONE_CAP };
 let spot;
 const page = await openPage({});
 try {
-  assert.ok(await page.read('!!mmm.boss'), 'Get Fired builds the Boss');
+  assert.ok(await page.read(MAIL ? '!!mmm.boss?.today' : '!!mmm.boss?.pursuit'), MAIL ? 'a ride-along day builds the Boss' : 'Get Fired builds the Boss');
   await sleep(3000);
   spot = await page.read(VIEW);
   // Hold the page's Boss: the game keeps calling update/step on it every frame.
@@ -141,6 +142,6 @@ writeFileSync(`${out}/boss-budget-${mode}.json`, JSON.stringify(results, null, 2
 if (LOW) {
   const over = ['calls', 'triangles'].filter(k => results.shown[k] > PHONE_CAP[k]).map(k => `${k} ${results.shown[k]} > ${PHONE_CAP[k]}`);
   console.log(`LOW: cap ${PHONE_CAP.calls} calls, ${PHONE_CAP.triangles} triangles; boss=0 ${results.off.calls}/${results.off.triangles}; Boss shown ${results.shown.calls}/${results.shown.triangles}`);
-  assert.deepEqual(over, [], 'the Get Fired LOW start with the Boss in view fits the phone cap (frame-budget-policy.mjs PHONE_CAP)');
+  assert.deepEqual(over, [], `the ${MAIL ? 'ride-along mail' : 'Get Fired'} LOW start with the Boss in view fits the phone cap (frame-budget-policy.mjs PHONE_CAP)`);
 }
 console.log(`PASS Boss frame cost, ${mode}${LOW ? ' (within PHONE_CAP)' : ''}`);

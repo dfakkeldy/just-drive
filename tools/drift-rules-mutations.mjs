@@ -70,7 +70,7 @@ const mutants = [
   ['pavement worth no more', '(looseSurface(d.surface) ? 1 : m.firm)', '1', 'score-rules'],
   ['drifts not reported', '    if (drift) this.reportDrift(drift);\n', '', 'shift'],
   ['protected ground unsampled', "if (here !== 'route') this.driftPlace = here;", '', 'shift'],
-  ['animals ignored', "if (c.kind === 'sceneAnimal') this.animalAt = c.at / CLOCK_FACTOR; ", '', 'shift'],
+  ['animals ignored', "if (c.kind === 'sceneAnimal') this.animalAt = c.at / CLOCK_FACTOR;", '', 'shift'],
   ['drifts after the end', '  reportDrift(d: DriftFacts): void {\n    if (this.ended) return;\n', '  reportDrift(d: DriftFacts): void {\n', 'shift'],
   ['no squeal', 'if (firm) t = {', 'if (false) t = {', 'engine-sound-rules'],
   ['rolling tyres change', 'if (slide > 0 && t.gain > 0)', 'if (t.gain > 0)', 'engine-sound-rules'],

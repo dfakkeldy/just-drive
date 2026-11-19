@@ -76,11 +76,11 @@ try {
     roofMap:b.signLight.material.map?.image?.width,roofOwn:b.signLight.material!==p.signLight.material}})()`);
   console.log(name, 'car', JSON.stringify(car));
   if (PHONE) {
-    // LOW: the same car merged into a handful of draws (boss-car.ts mergeForLow); the door words stay their own strip.
+    // LOW: the same car merged into two draws (boss-car.ts mergeForLow); the door words are left off, the roof box says it.
     const low = await read("(()=>{let n=0;mmm.boss.vehicle.car.root.traverseVisible(o=>{if(o.isMesh)n++});return n})()");
     assert.ok(low <= 9, `LOW Boss car: ${low} meshes`);
   } else assert.equal(car.same, true, 'the same model as the player\'s mail car');
-  assert.equal(car.door, true, 'THE BOSS on the doors'); assert.equal(car.roofOwn, true);
+  assert.equal(car.door, !PHONE, PHONE ? 'LOW: no door words (the roof box says it)' : 'THE BOSS on the doors'); assert.equal(car.roofOwn, true);
   await read("document.getElementById('titleStart').click();document.activeElement?.blur()"); await sleep(1500);
   assert.equal(await read('mmm.boss.driver.active'), false, 'no Boss at the start');
   assert.equal(await read('mmm.boss.line()'), '');
@@ -176,8 +176,9 @@ try {
   console.log(`PASS Boss ${name}`);
   if (CASE === 'pullover' && !PHONE) {
     // Mail play and Just Drive build none.
-    await page('mode=mail'); assert.equal(await read('mmm.boss'), null, 'no Boss in mail play');
-    assert.equal(await read("!!document.getElementById('bossGlow')"), false);
+    // Mail play has only the ride-along Boss (ride-along.ts), and day 1 is never a ride-along day.
+    await page('mode=mail'); assert.equal(await read('!!mmm.boss?.pursuit'), false, 'no Get Fired Boss in mail play');
+    assert.equal(await read('!!(mmm.boss?.today || mmm.boss?.driver.active)'), false, 'no Boss on the road on day 1');
     await page('mode=fired&boss=0'); assert.equal(await read('mmm.boss'), null, '?boss=0');
     await page('site=just&mode=fired', 'localhost'); assert.equal(await read('mmm.boss'), null, 'no Boss in Just Drive');
     // Today's run is Get Fired on a five-minute shift clock, which a pull-over would jump: no Boss there either.

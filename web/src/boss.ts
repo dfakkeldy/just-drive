@@ -33,6 +33,34 @@ const CARD_SECONDS = 7;
 const GLOW_CSS = `#bossGlow{position:fixed;inset:0;z-index:2;pointer-events:none;box-shadow:inset 0 -46px 60px -30px #ffa526d0,inset 0 0 80px -40px #ffa52690}
 #bossGlow[hidden]{display:none}body.indoorOn #bossGlow{display:none}`;
 
+/** The amber screen-edge glow, made once per page (Get Fired's Boss or the ride-along Boss: never both). */
+export function bossGlow(): HTMLDivElement {
+  document.head.appendChild(Object.assign(document.createElement('style'), { textContent: GLOW_CSS }));
+  const glow = document.createElement('div');
+  glow.id = 'bossGlow'; glow.hidden = true; document.body.appendChild(glow);
+  return glow;
+}
+/** Two short low notes, quieter far away. A tap or key started the game, so audio may play. Returns the context to reuse. */
+export function bossHorn(audio: AudioContext | null, distance: number): AudioContext | null {
+  let a = audio;
+  try {
+    a ??= new AudioContext();
+    const gain = a.createGain(), level = .07 * Math.max(.2, 1 - distance / 80), now = a.currentTime;
+    gain.connect(a.destination);
+    for (const [start, length] of [[0, .22], [.32, .38]]) {
+      for (const hz of [349, 440]) {
+        const o = a.createOscillator(); o.type = 'sawtooth'; o.frequency.value = hz;
+        const g = a.createGain(); g.gain.setValueAtTime(0, now + start);
+        g.gain.linearRampToValueAtTime(level, now + start + .02); g.gain.setValueAtTime(level, now + start + length - .04);
+        g.gain.linearRampToValueAtTime(0, now + start + length);
+        o.connect(g); g.connect(gain); o.start(now + start); o.stop(now + start + length + .02);
+      }
+    }
+    void a.resume().catch(() => {});
+    return a;
+  } catch { return a; /* no audio: the flash still says it (and a context made here is kept, not made again) */ }
+}
+
 export class Boss {
   readonly driver: PointTupperDriver;
   readonly pursuit = new Pursuit();
@@ -54,7 +82,7 @@ export class Boss {
   private audio: AudioContext | null = null;
   /** Honks so far (checks count them; the sound itself cannot be heard by a check). */
   honks = 0;
-  private readonly glow = document.createElement('div');
+  private readonly glow = bossGlow();
   /** The road kind under the Boss, looked up with its sight (its speed limit on a phone). */
   private kind = 1;
   constructor(private readonly roads: Roads, private readonly terrain: Terrain, contacts: AreaContacts, sea: number, low: boolean,
@@ -83,8 +111,6 @@ export class Boss {
       // A car, not a log truck: close behind the chase camera after a pull-over it is out of sight, so it can go.
       radius: 3.5,
     });
-    document.head.appendChild(Object.assign(document.createElement('style'), { textContent: GLOW_CSS }));
-    this.glow.id = 'bossGlow'; this.glow.hidden = true; document.body.appendChild(this.glow);
     this.run = shift.score.runs;
     // The newest scoring offence is its lead; witnessed or not.
     shift.score.listen(e => this.hear(e));
@@ -163,23 +189,5 @@ export class Boss {
   /** The HUD line under the score. */
   line(): string { return this.live ? bossLine(this.pursuit) : ''; }
   summary(): string { return bossSummary(this.pursuit.pulledOver, this.pursuit.escaped, this.met); }
-  /** Two short low notes, quieter far away. A tap or key started the game, so audio may play. */
-  private horn(distance: number): void {
-    this.honks++;
-    try {
-      this.audio ??= new AudioContext();
-      const a = this.audio, gain = a.createGain(), level = .07 * Math.max(.2, 1 - distance / 80), now = a.currentTime;
-      gain.connect(a.destination);
-      for (const [start, length] of [[0, .22], [.32, .38]]) {
-        for (const hz of [349, 440]) {
-          const o = a.createOscillator(); o.type = 'sawtooth'; o.frequency.value = hz;
-          const g = a.createGain(); g.gain.setValueAtTime(0, now + start);
-          g.gain.linearRampToValueAtTime(level, now + start + .02); g.gain.setValueAtTime(level, now + start + length - .04);
-          g.gain.linearRampToValueAtTime(0, now + start + length);
-          o.connect(g); g.connect(gain); o.start(now + start); o.stop(now + start + length + .02);
-        }
-      }
-      void a.resume().catch(() => {});
-    } catch { /* no audio: the flash still says it */ }
-  }
+  private horn(distance: number): void { this.honks++; this.audio = bossHorn(this.audio, distance); }
 }

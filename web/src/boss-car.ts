@@ -221,8 +221,9 @@ function wordsPicture(): THREE.CanvasTexture {
  * LOW (phones): the same car in a handful of draws. Every mesh is baked into its place on the body and merged with
  * the others of its material; every plain material (paint, trim, glass, wheels) becomes one vertex-coloured mesh.
  * The mud film is left off. The roof box keeps its material, so the flash still works, and every other part painted
- * from the same atlas (plates, lamps) joins it; the door words keep theirs. The beacon and brake lamps become plain
- * paint: on a phone the roof box alone flashes. Three draws in all.
+ * from the same atlas (plates, lamps) joins it. The door words are left off: at a phone's size the lit roof box says
+ * THE BOSS, and a third draw would put the start over the phone cap (frame-budget-policy.mjs PHONE_CAP). The beacon
+ * and brake lamps become plain paint: on a phone the roof box alone flashes. Two draws in all.
  * The wheels stop turning (their meshes are in the body); at a phone's size and distance nobody sees it.
  */
 export function mergeForLow(car: Car): void {
@@ -235,7 +236,7 @@ export function mergeForLow(car: Car): void {
   for (const mesh of meshes) {
     const m = mesh.material as THREE.MeshStandardMaterial;
     // The mud film: a see-through picture over the paint (named on the Blender car, unnamed on the code car).
-    if (m.name === 'Mud overlay' || (m.transparent && m.map && !m.depthWrite)) { mesh.removeFromParent(); continue; }
+    if (m.name === 'Mud overlay' || (m.transparent && m.map && !m.depthWrite) || m.name === 'Boss door words') { mesh.removeFromParent(); continue; }
     const key = roof && (m === roof || (atlas && m.map?.image === atlas)) ? roof : m.map ? m : 'plain';
     const list = groups.get(key);
     if (list) list.push(mesh); else groups.set(key, [mesh]);
