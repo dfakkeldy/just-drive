@@ -351,6 +351,7 @@ ok('an animal stop holds the car with the handbrake: never a slide, whatever the
   const v = ride(CAR_SPEC, 'gravel', 18); drive(v, 2, () => ({ ...go(-1, .8, true), held: true })); assert.equal(v.takeDrift(), null);
   assert.ok(drive(ride(CAR_SPEC, 'gravel', 18), 2, () => ({ ...go(-1, .8, true), held: true })).every(r => !r.active));
   assert.match(readFileSync('src/main.ts', 'utf8'), /input\.handbrake = true; input\.held = true;/, 'main marks the animal stop');
+  assert.match(readFileSync('src/fleet.ts', 'utf8'), /this\.stoppedInput\.held = input\.held;/, "the fleet pickup's own input keeps the mark");
   // Mid-slide, the hold ends it at once, not clean, and the held handbrake starts no other.
   const mid = ride(CAR_SPEC, 'gravel', 18), pull = handbrakeIn();
   const run = drive(mid, 4, t => t < 2 ? pull(t) : { ...go(-.5, -HOLD_STEER, true), held: true });
