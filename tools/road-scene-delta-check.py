@@ -18,7 +18,96 @@ sys.path.insert(0,str(ROOT/'pipeline'))
 from dashcam_corrections import INPUT, correct_roads, hand_buildings, hand_styles, project, attach_guardrails, measured_root_id_limit, nearest
 
 
+def november18_rules():
+    from dashcam_corrections import NOV18, correct_nov18_roads
+    harbour = NOV18['harbour']
+    mouth, cut = harbour['mouth'], harbour['cut']
+    west = [cut[0]-100, cut[1]]
+    old = [
+        dict(id=51, name=harbour['name'], pts=[mouth, cut, west], kind=3, halfWidth=2.6, bridge=False),
+        dict(id=116, name=NOV18['lane'], pts=[[625653,5103495],[626051,5103687]], kind=4, halfWidth=1.5, bridge=False),
+    ]
+    unchanged = copy.deepcopy(old)
+    extended, gravel, lane = after = correct_nov18_roads(old, 'mabou')
+    assert old == unchanged and correct_nov18_roads(after, 'mabou') == after
+    assert correct_nov18_roads(old, 'judique') == old
+    assert extended['pts'] == [mouth, cut] and extended['id'] == 117
+    assert (extended['kind'], extended['halfWidth'], extended['pavement']) == (2, 3, 'double-yellow')
+    assert gravel['pts'] == [cut, west] and gravel['id'] == 51 and gravel['kind'] == 3
+    assert lane == dict(old[1], kind=2, pavement='worn')
+    stale = [dict(old[0], pts=[mouth, west]), old[1]]
+    try:
+        correct_nov18_roads(stale, 'mabou')
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('Faraway pavement limit accepted')
+
+    ground = lambda x,y: 53
+    buildings = hand_buildings([], 'mabou', ground, old, observations=NOV18)
+    assert len(buildings) == 6 and all(b['ground'] == 53 and b['nearRoad'] is None for b in buildings)
+    assert buildings == hand_buildings(buildings, 'mabou', ground, old, observations=NOV18)
+    styles = hand_styles(dict(styles={}), buildings, observations=NOV18)['styles']
+    home, garage, shed = buildings[:3]
+    assert home['roof'] == garage['roof'] == 'shed' and shed['x'] < home['x']
+    assert home['axisDeg'] == 135 and styles['900007']['front'] == dict(end=False, side=1)
+    assert styles['900007']['entrance'] == 'deck' and styles['900007']['steppedShed'] and styles['900007']['windowWall']
+    assert styles['900008']['rollUpDoor'] and styles['900008']['doorWindows']
+    assert styles['900009']['door'] == '#9d2923'
+    assert styles['900010']['solarSide'] == 1 and styles['900010']['roofMaterial'] == 'metal'
+    assert styles['900011']['rollUpDoor'] and styles['900011']['door'] == '#eeede6'
+    assert styles['900010']['boardAndBatten'] and styles['900011']['boardAndBatten']
+    house = buildings[0]
+    track = dict(id=33, name=None, kind=4, halfWidth=1.5, bridge=False,
+                 pts=[[house['x']-30, house['y']], [house['x']+30, house['y']]])
+    try:
+        hand_buildings([], 'mabou', ground, [track], observations=NOV18)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('New house on unnamed track accepted')
+    november18_driveways()
+
+
+def november18_driveways():
+    from dashcam_corrections import NOV18, DRIVEWAY, nov18_driveways
+    assert [d['road'] for d in NOV18['driveways']] == ['Mabou Mines Road', 'Meadow Road']
+    road = dict(id=40, name='Public Road', kind=3, halfWidth=2.6, bridge=False, pts=[[0, 0], [0, 400]])
+    other = dict(id=41, name=None, kind=4, halfWidth=1.5, bridge=False, pts=[[200, 0], [200, 400]])
+    drive = dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[0, 100], [60, 100], [90, 110]]),
+                                             dict(halfWidth=3.0, pts=[[90, 110], [100, 110]])])
+    seen = dict(driveways=[drive])
+    roads = [road, other]
+    frozen = copy.deepcopy(roads)
+    after = nov18_driveways(roads, 'mabou', seen)
+    assert roads == frozen and after[:2] == roads and nov18_driveways(after, 'mabou', seen) == after
+    assert nov18_driveways(roads, 'judique', seen) == roads and nov18_driveways(roads, 'mabou', dict()) == roads
+    assert [(r['id'], r['name'], r['kind'], r['halfWidth'], r['pavement'], r['driveway']) for r in after[2:]] == [
+        (42, None, 4, 1.5, 'gravel', DRIVEWAY), (43, None, 4, 3.0, 'gravel', DRIVEWAY)]
+    assert after[2]['pts'] == drive['pieces'][0]['pts'] and not after[2]['bridge'] and not after[2]['washboard']
+    # A house beside its own driveway is fine; a track still is not (november18_rules above).
+    ground = lambda x, y: 53
+    near_drive = dict(NOV18, buildings=[dict(NOV18['buildings'][0], x=80, y=120)])
+    assert len(hand_buildings([], 'mabou', ground, after, observations=near_drive)) == 1
+    refused = {
+        'a mouth off its road': dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[5, 100], [60, 100]])]),
+        'a mouth on another road': dict(road='Other Road', pieces=drive['pieces']),
+        'pieces that do not join': dict(road='Public Road', pieces=[drive['pieces'][0], dict(halfWidth=3.0, pts=[[91, 110], [100, 110]])]),
+        'a line over another road': dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[0, 100], [220, 100]])]),
+        'a line along its own road': dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[0, 100], [3, 140]])]),
+        'a half width wider than a pad': dict(road='Public Road', pieces=[dict(halfWidth=4.0, pts=[[0, 100], [60, 100]])]),
+        'a single point': dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[0, 100]])]),
+    }
+    for label, bad in refused.items():
+        try:
+            nov18_driveways(roads, 'mabou', dict(driveways=[bad]))
+        except (ValueError, StopIteration):
+            continue
+        raise AssertionError(label + ' accepted')
+
+
 def rules():
+    november18_rules()
     for area, rules in INPUT['roads'].items():
         roads = []
         for i, rule in enumerate(rules):
@@ -217,31 +306,54 @@ def owned_counts(manifest):
     return {key:manifest[key]['count'] for key in ('buildings','buildingStyles')}
 
 
-# Later land deltas that replace files of this receipt. A file holding exactly a later delta's pinned after bytes
-# counts as the bytes that delta replaced; a manifest whose owned counts are the later delta's after counts counts as its
-# before counts. So this receipt stays one complete state across the later install. Each file is mapped on its own: a
-# half-done later install is caught by that delta's own row (mabou-village-delta-land), not here.
-LATER = (ROOT/'tools/mabou-village-delta/hashes.json',)
+# Later land deltas that replace files of this receipt, in install order. A file holding exactly a later delta's pinned
+# after bytes counts as the bytes that delta replaced; a manifest whose owned counts are the later delta's after counts
+# counts as its before counts. The latest delta is undone first, so a file replaced twice walks back through both. So
+# this receipt stays one complete state across the later installs. Each file is mapped on its own: a half-done later
+# install is caught by that delta's own row (mabou-village-delta-land, or tools/mabou-dashcam-18nov/receipt.py verify
+# before the 18 Nov promotion), not here.
+VILLAGE = ROOT/'tools/mabou-village-delta/hashes.json'
+NOV18 = ROOT/'tools/mabou-dashcam-18nov/hashes.json'
+LATER = (VILLAGE, NOV18)
 
 
-def superseded(root, entries, hashes):
-    """Rewrite `hashes` in place for files of a later delta; returns the names rewritten."""
-    names = set()
+def superseded(root, entries, hashes, later=LATER):
+    """Rewrite `hashes` in place for files of later deltas; returns {name: the deltas that replaced it}."""
+    names = collections.defaultdict(list)
     ours = {f['file']: f for f in entries}
-    for path in LATER:
+    now = {name: hashlib.sha256((root/name).read_bytes()).hexdigest() for name, f in ours.items() if 'ownedCounts' not in f}
+    owned = {name: owned_counts(json.loads((root/name).read_bytes())) for name, f in ours.items() if 'ownedCounts' in f}
+    for path in reversed(later):
         report = json.loads(path.read_text())
         for f in report['files']:
-            if f['file'] in ours and f['sha256'] and hashlib.sha256((root/f['file']).read_bytes()).hexdigest() == f['sha256']:
-                hashes[f['file']] = f['before']; names.add(f['file'])
+            if f['file'] in now and f['sha256'] and now[f['file']] == f['sha256']:
+                now[f['file']] = f['before']; names[f['file']].append(path)
         for m in report['manifests']:
             name = m['folder']+'/manifest.json'
-            if name in ours and 'ownedCounts' in ours[name]:
-                now = owned_counts(json.loads((root/name).read_bytes()))
-                if now == {k: m['after'][k]['count'] for k in now if k in m['after']} | {k: v for k, v in now.items() if k not in m['after']}:
-                    was = {k: (m['before'][k]['count'] if k in m['before'] else v) for k, v in now.items()}
-                    match = next((s for s in ('before', 'after') if was == ours[name]['ownedCounts'][s]), None)
-                    if match: hashes[name] = ours[name]['before' if match == 'before' else 'sha256']; names.add(name)
-    return names
+            if name in owned and owned[name] == {k: m['after'][k]['count'] for k in owned[name] if k in m['after']} | {k: v for k, v in owned[name].items() if k not in m['after']}:
+                owned[name] = {k: (m['before'][k]['count'] if k in m['before'] else v) for k, v in owned[name].items()}
+                names[name].append(path)
+    for name in names:
+        if name in now: hashes[name] = now[name]
+        else:
+            match = next((s for s in ('before', 'after') if owned[name] == ours[name]['ownedCounts'][s]), None)
+            if match: hashes[name] = ours[name]['before' if match == 'before' else 'sha256']
+    return dict(names)
+
+
+def step29_view(root, name, later):
+    """A props file and its roads as step 29 left them: the 18 Nov bake moved poles onto a split piece and paved
+    Weaver Lane, so its receipt's undo is applied when that bake replaced this file."""
+    props = json.loads((root/name).read_bytes())
+    roads = json.loads((root/Path(name).with_name('roads.json')).read_bytes())['roads']
+    if NOV18 in later.get(name, ()):
+        spec = importlib.util.spec_from_file_location('nov18_receipt', ROOT/'tools/mabou-dashcam-18nov/receipt.py')
+        receipt = importlib.util.module_from_spec(spec); spec.loader.exec_module(receipt)
+        report = json.loads(NOV18.read_text())
+        props, roads = receipt.undo(props, roads, report['undo'])
+        before = next(f['before'] for f in report['files'] if f['file'] == name)
+        assert hashlib.sha256(receipt.compact(props)).hexdigest() == before, f'{name}: the 18 Nov undo does not rebuild its before props'
+    return props, roads
 
 
 def land(root=None):
@@ -268,9 +380,9 @@ def land(root=None):
     powers, expect29 = {}, dict(step29)
     for name in step29:
         if hashes[name] not in {f[k] for f in entries if f['file']==name for k in ('before','sha256')}:
-            props, roads = read_json(name), read_json(str(Path(name).with_name('roads.json')))['roads']
+            props, roads = step29_view(root, name, later)
             expected = step29[name]
-            if name in later:
+            if VILLAGE in later.get(name, ()):
                 # Mabou village delta changes two community sites (and drops), never a mailbox or public pole (its maker checks
                 # that); the file is its exact pinned after bytes, so its own community digest is the receipt's.
                 expected = dict(expected, communityBoxes=canonical_digest(props['communityBoxes']))
@@ -304,7 +416,7 @@ def land(root=None):
         # without drops, or a power pole off a named kind-4 road must leave the receipt. Controls: the same props
         # with power taken out, and with one power pole added on a named kind-4 road, stay at the receipt.
         for name in step29:
-            props, roads = read_json(name), read_json(str(Path(name).with_name('roads.json')))['roads']
+            props, roads = step29_view(root, name, later)
             by_id = {r['id']: r for r in roads}
             named = lambda r: bool((r.get('name') or '').strip())
             public_at = next(i for i, q in enumerate(props['poles']) if by_id[q['road']]['kind'] <= 3)

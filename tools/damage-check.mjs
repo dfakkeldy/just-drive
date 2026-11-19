@@ -43,5 +43,7 @@ const deep=makeVehicle({roadDist:5},(x)=>x===0?1:0);deep.place(5,0,0);for(let i=
 for(const desktop of [true,false]){const v=makeVehicle();v.damage.seed('alignment');v.desktopPull=desktop;v.vz=-18;v.update(.05,{throttle:0,steer:0,handbrake:false});assert.equal(v.steerAngle<0,desktop);}
 const parked=makeVehicle();parked.x=1;parked.vx=-8;pushOut(parked,[{x:0,z:0,heading:0,half:4,halfWidth:1}]);assert.equal(parked.damage.items[0].id,'bumper');
 const immune=makeVehicle({kind:3,washboard:true});immune.damageActive=false;immune.y=2;immune.vy=-8;immune.airborne=true;for(let i=0;i<120;i++)immune.update(1/120,{throttle:0,steer:0,handbrake:false});assert.equal(immune.damage.total,0);
+// A gravel driveway (kind 4 with the gravel bit, terrain.surfaceAt's `gravel`) drives as gravel; a plain track stays dirt.
+for(const [surface,name] of [[{kind:4,halfWidth:1.5,gravel:true},'gravel'],[{kind:4,halfWidth:1.5},'dirt track'],[{kind:3},'gravel']]){const v=makeVehicle(surface);v.update(1/120,{throttle:0,steer:0,handbrake:false});assert.equal(v.surfaceName,name,JSON.stringify(surface));}
 seeded.reset();assert.equal(seeded.total,0);assert.equal(seeded.windowStuck,false);assert.equal(seeded.hintTime,0);
 console.log('PASS: careful $0, careless $70, wild $293, capped repairs, rough/slow/airborne/ditch/cooldown, pay and suspension, legacy saves, fixtures, wind, actual fixed-step landings/rough/ditch/pull and solid hits.');

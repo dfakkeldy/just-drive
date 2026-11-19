@@ -197,6 +197,7 @@ function png(bytes) {
   for(let i=0;i<w*h;i++){pixels[i*4]=decoded[i*channels];pixels[i*4+1]=decoded[i*channels+1];pixels[i*4+2]=decoded[i*channels+2];pixels[i*4+3]=channels===4?decoded[i*channels+3]:255;}
   return {pixels,width:w,height:h,close(){}};
 }
+let roadFlag = 3;   // the synthetic road fields' kind and flag byte (gravelDriveway changes it)
 globalThis.createImageBitmap = async blob => {
   if (real) return png(Buffer.from(await blob.arrayBuffer()));
   const { path } = blob, road = path.endsWith('.r.png');
@@ -204,7 +205,7 @@ globalThis.createImageBitmap = async blob => {
   for (let y = 0; y < 257; y++) for (let x = 0; x < 257; x++) {
     const k = (y * 257 + x) * 4;
     pixels[k] = road ? 12 : 0; pixels[k + 1] = road ? 30 : 10 + (x + y) % 9;
-    pixels[k + 2] = road ? 3 : 10 + (x * 3 + y) % 40; pixels[k + 3] = 255;
+    pixels[k + 2] = road ? roadFlag : 10 + (x * 3 + y) % 40; pixels[k + 3] = 255;
   }
   return { pixels, close() {} };
 };
@@ -436,6 +437,22 @@ async function siteTexel() {
   assert.ok(!!coarse.road && coarse.mesh.material.uniforms.tRoad.value !== open.noRoad, 'a site without maxTexel still paints coarse tiles');
   console.log('PASS site maxTexel: no road texture on 32/8/4 m tiles, painted on 2/1 m tiles; unlimited sites unchanged');
 }
+async function gravelDriveway() {
+  // A gravel driveway is a track (kind 4) with flag bit 64: surfaceAt says gravel and the tile takes ROAD_PAVEMENT. The
+  // same bit on a paved lane (2) is its double yellow, never gravel; a plain track is neither.
+  for (const [flag, gravel, pavement] of [[68, true, true], [4, false, false], [66, false, true], [84, true, true]]) {
+    roadFlag = flag;
+    const t = ground(false), q = t.tile(5, 1, 0); await load(t, q);
+    assert.ok(q.ready && !!q.road, 'the synthetic road tile 5/1_0 is built');
+    const s = t.surfaceAt(300, 29);
+    assert.equal(s?.kind, flag & 15, `flag ${flag} keeps its kind`);
+    assert.equal(s?.gravel === true, gravel, `flag ${flag} gravel`);
+    assert.equal('gravel' in s, gravel, `flag ${flag}: no gravel key unless it is gravel`);
+    assert.equal(q.mesh.material.defines.ROAD_PAVEMENT === 1, pavement, `flag ${flag} ROAD_PAVEMENT`);
+  }
+  roadFlag = 3;
+  console.log('PASS gravel driveway: kind 4 with bit 64 reads gravel and takes ROAD_PAVEMENT; a plain track and a double yellow lane do not read gravel');
+}
 async function treeWait() {
   const m = manifest(0); m.size = 65536; m.levels[8] = ['0_0']; m.trees = { level: 8, record: 8, tiles: ['0_0'], count: 1 };
   const t = ground(true, m); await load(t, t.tile(0, 0, 0)); const fine = t.tile(8, 0, 0); await load(t, fine);
@@ -527,6 +544,7 @@ if (scenario === 'synthetic' || scenario === 'cache') { await cache(true); await
 if (scenario === 'synthetic') { await pathReload(true); await pathReload(false); }
 if (scenario === 'synthetic' || scenario === 'site-texel') await siteTexel();
 if (scenario === 'synthetic' || scenario === 'tree-wait') await treeWait();
+if (scenario === 'synthetic' || scenario === 'gravel-driveway') await gravelDriveway();
 if (scenario === 'synthetic' || scenario === 'interior-quiet') interiorQuiet();
 if (scenario === 'laps') { await laps(true); await laps(false); }
 if (scenario.startsWith('trees-')) await realTrees(Number(scenario.split('-')[2]), scenario.split('-')[1] === 'low');
@@ -579,6 +597,11 @@ async function builds(count) {
   // hashes the maths without them.
   const HOOKS=[['','      if (this.canopyExcludes?.(t.x0 + (k % S) * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + Math.floor(k / S) * mpp))) { c = 0; px[k * 4 + 2] = 0; }\n','      canopy[k] = c;\n'],
     ['        if(coastal?.quarry && coastField && coastField[k0*4+1]>.5)c=0;\n','        if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;\n',''],
+    // PR #27 (reviewed): the ROAD_PAVEMENT define on tiles whose road flags carry Mabou's double-yellow or worn bits
+    // (64/128; 64 on a track is a gravel driveway): a flag read and a colour define; no ground, canopy or road maths change. Once each, ordinary program only.
+    ['    let lo = Infinity, hi = -Infinity',', roadPavement = false',';\n'],
+    ['      if (road && road[k * 4 + 2] > 0) {\n','        roadPavement ||= (road[k * 4 + 2] & 192) !== 0;\n','        // Nothing stands on a road'],
+    ['...(airportMarkings ? { AIRPORT: 1 } : {})',', ...(roadPavement && !this.cartRoads ? { ROAD_PAVEMENT: 1 } : {})',' },uniforms:tileUniforms}'],
     // PR #147 (reviewed): the AIRPORT shader define for tiles that overlap the airfield site; no maths change. With the
     // park's two tile programs (ordinary and STUNT_PARK) the define stands in each, so twice at most.
     ['    const gravelOverlay=sites.some(s=>s.visualGravel);\n','    const airportMarkings=sites.some(s=>s.airportMarkings);\n',''],
@@ -586,8 +609,8 @@ async function builds(count) {
     // PR #150: a site with maxTexel is left out of coarser tiles; no maths change on tiles that keep it (site-texel). Coarser
     // tiles lose its sub-sample paint and the road-canopy fade under it.
     [' || s.box[3] < t.z0 || s.box[1] > t.z0 + t.size)',' && (s.maxTexel === undefined || t.size / T <= s.maxTexel)',');\n']];
-  const withoutHooks=source=>HOOKS.reduce((text,[before,hook,after,most=1])=>{const parts=text.split(hook);assert.ok(parts.length-1<=most&&parts.every((part,i)=>(i===parts.length-1||part.endsWith(before))&&(i===0||part.startsWith(after))),'a stockpile, airport or site-texel hook stands at most its allowed number of times in the tile maths, at its reviewed place');return parts.join('');},maths(source));
-  if(!mutations[name])assert.equal(createHash('sha256').update(withoutHooks(groundParts.reduce((s,part)=>s.split(part).join(''),terrainText))).digest('hex'),pin.sha256,'tile maths match the portable data pin, but for the stockpile, airport and site-texel hooks and the ground-class lines');
+  const withoutHooks=source=>HOOKS.reduce((text,[before,hook,after,most=1])=>{const parts=text.split(hook);assert.ok(parts.length-1<=most&&parts.every((part,i)=>(i===parts.length-1||part.endsWith(before))&&(i===0||part.startsWith(after))),'a stockpile, pavement, airport or site-texel hook stands at most its allowed number of times in the tile maths, at its reviewed place');return parts.join('');},maths(source));
+  if(!mutations[name])assert.equal(createHash('sha256').update(withoutHooks(groundParts.reduce((s,part)=>s.split(part).join(''),terrainText))).digest('hex'),pin.sha256,'tile maths match the portable data pin, but for the stockpile, pavement, airport and site-texel hooks and the ground-class lines');
   const c = camera(128,128);
   const fixture = async (cost = 0) => {
     const t = ground(false), built = [], all = [];

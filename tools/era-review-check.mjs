@@ -84,7 +84,7 @@ test('raw-shaders',async()=>{
  checkShaderBaseline(now,{report:()=>{}});
  now=reviewedMirrorCrown(now);main=reviewedMirrorCrown(main);
  const original=text=>text.replace(/\/\* MODERN_ROAD_(?:CUT|PAINT)_BEGIN \*\/[\s\S]*?\/\* MODERN_ROAD_(?:CUT|PAINT)_END \*\//g,'').replaceAll(' * roadPaint','');
- for(const p of coastPrograms())if(!p.name.startsWith('CART_')&&!p.flags.includes('AIRPORT')&&!(p.name==='TERRAIN_FRAG'&&p.flags.includes('GROUND_CLASSES')))assert.equal(normalized(preprocess(original(program(withoutFarBend(now),p.name)),p.flags)),normalized(preprocess(original(program(withoutFarBend(main),p.name)),p.flags)),p.name+' unchanged outside quarry');assert(!now.includes('ERA_CART'),'no era identifiers in original programs');
+ for(const p of coastPrograms())if(!p.name.startsWith('CART_')&&!p.flags.includes('AIRPORT')&&!p.flags.includes('ROAD_PAVEMENT')&&!(p.name==='TERRAIN_FRAG'&&p.flags.includes('GROUND_CLASSES')))assert.equal(normalized(preprocess(original(program(withoutFarBend(now),p.name)),p.flags)),normalized(preprocess(original(program(withoutFarBend(main),p.name)),p.flags)),p.name+' unchanged outside quarry');assert(!now.includes('ERA_CART'),'no era identifiers in original programs');
 });
 test('map-look',()=>{
  const s=source('web/src/minimap.ts');assert.match(s,/cartRoads|cartMap/,'era map has a cart-road palette');

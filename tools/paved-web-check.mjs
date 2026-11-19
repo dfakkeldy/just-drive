@@ -1,7 +1,7 @@
 import {withoutFarBend} from './far-shader-compat.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
-import {spawnSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {glslRule} from './paved-glsl.mjs';
 import {build} from '../web/node_modules/esbuild/lib/main.js';
@@ -78,6 +78,18 @@ assert.ok(readFileSync(root+'/web/src/trees.ts','utf8').includes('if (pavedTreeC
 // coast-source-check). The patch below must leave the native lane block byte-identical.
 const {checkShaderBaseline}=await import(pathToFileURL(root+'/tools/coast-programs.mjs').href);
 checkShaderBaseline(readFileSync(root+'/web/src/shaders.ts','utf8'),{report:()=>{}});
+// Main's off-mode comparison against the merge base, with this PR's marked modern road blocks removed from both
+// sides (the merge base has none), as the era and quarry checks do.
+const base=execFileSync('git',['merge-base','HEAD','origin/main'],{cwd:root,encoding:'utf8'}).trim();
+const source=execFileSync('git',['show',base+':web/src/shaders.ts'],{cwd:root,encoding:'utf8'});
+const shaderTools=await import(pathToFileURL(root+'/tools/coast-programs.mjs').href);
+const unmarked=text=>text.replace(/\/\* MODERN_ROAD_(?:CUT|PAINT)_BEGIN \*\/[\s\S]*?\/\* MODERN_ROAD_(?:CUT|PAINT)_END \*\//g,'').replaceAll(' * roadPaint','');
+const currentShader=readFileSync(root+'/web/src/shaders.ts','utf8');
+for(const {name,flags}of shaderTools.coastPrograms().filter(p=>!p.flags.includes('GROUND_CLASSES')&&!p.flags.includes('AIRPORT')&&!p.flags.includes('ROAD_PAVEMENT')&&!['ROAD_CUT_PARS','ROAD_CUT_FRAG'].includes(p.name))){
+ assert.equal(shaderTools.normalized(shaderTools.preprocess(unmarked(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(currentShader)),name)),flags)),
+              shaderTools.normalized(shaderTools.preprocess(unmarked(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(source)),name)),flags)),
+              'off compiled shader equals merge base except the pinned distant bend and the marked bridge blocks: '+name+' '+flags);
+}
 const on=pavedGroundShader(TERRAIN_FRAG);assert.ok(on.indexOf('float hardPaved=')>on.indexOf('groundColor(p'));
 assert.ok(on.indexOf('float hardPaved=')<on.indexOf('// ---- roads: painted'));assert.ok(on.includes('ring *= 1.0-hardPaved;'));
 const canopyOp=on.match(/canopy \*= [^;]*hardPaved;/)?.[0]??'';

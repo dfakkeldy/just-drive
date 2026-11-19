@@ -3,7 +3,7 @@ import { readChat, CHAT_COOLDOWN } from '../../web/src/mp/social';
 import { CLOSE, ROOM_CAP, parseRideChange, checkState, encodeSnapshot, type PeerInfo, type ServerText } from '../../web/src/mp/wire';
 
 /** What the room remembers about one connection. It is small: it rides on the socket through a sleep. */
-export interface Seat extends PeerInfo { last: Uint8Array | null; races?: boolean; lastChat?: number }
+export interface Seat extends PeerInfo { last: Uint8Array | null; races?: boolean; games?: boolean; lastChat?: number }
 
 // Fallback call signs are invented by the room from the game's own words.
 const SIGNS = ['Loose Gravel', 'Flag Up', 'Flag Down', 'Late Flyer', 'Washboard', 'Muddy Culvert', 'Sleepy Cat', 'Stuck Window',
@@ -31,7 +31,7 @@ export function takeSeat(taken: Seat[], random: () => number = Math.random): Sea
 
 export const text = (m: ServerText) => JSON.stringify(m);
 export const hello = (seat: Seat, room: string, others: Seat[]): string => text({
-  t: 'hello', v: 1, id: seat.id, name: seat.name, hue: seat.hue, ride: seat.ride, room, cap: ROOM_CAP, rides: true, heights: true, chat: true, heartbeat: true,
+  t: 'hello', v: 1, id: seat.id, name: seat.name, hue: seat.hue, ride: seat.ride, room, cap: ROOM_CAP, rides: true, heights: true, chat: true, heartbeat: true, games: true,
   peers: others.map(({ id, name, hue, ride }) => ({ id, name, hue, ride })),
 });
 /** Where everybody was last heard: a newcomer sees parked cars at once. */

@@ -11,7 +11,8 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/mmm-mp-game-XXXXXX")"
 SERVER_PID=""
 cleanup() { [[ -n "$SERVER_PID" ]] && kill "$SERVER_PID" 2>/dev/null || true; rm -rf "$WORK"; }
 trap cleanup EXIT
-(cd "$ROOT/server" && WRANGLER_SEND_METRICS=false exec "$WRANGLER" dev --local --ip 127.0.0.1 --port "$PORT" --persist-to "$WORK/state") > "$WORK/server.log" 2>&1 &
+# GAME_ROUND_S (default unset: 3-minute rounds): a browser row may ask for a short room-game round.
+(cd "$ROOT/server" && WRANGLER_SEND_METRICS=false exec "$WRANGLER" dev --local --ip 127.0.0.1 --port "$PORT" --persist-to "$WORK/state" ${GAME_ROUND_S:+--var GAME_ROUND_S:$GAME_ROUND_S}) > "$WORK/server.log" 2>&1 &
 SERVER_PID=$!
 for _ in $(seq 1 120); do
   grep -q "Ready on" "$WORK/server.log" && break

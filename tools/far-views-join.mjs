@@ -12,7 +12,7 @@ for(const low of [false,true])for(const[name,area,e,n,h,yaw]of views){
  try{
   tab=await(await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();c=await cdp(tab.webSocketDebuggerUrl);await c.send('Page.enable');await c.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
   const read=async expression=>{const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.result.exceptionDetails)throw Error(JSON.stringify(r.result.exceptionDetails));return r.result.result.value;};
-  await fetch(base+'/__far-views-mode?mode=after');await c.send('Page.navigate',{url:`${base}/?area=${area}&cam=${e},${n},${h},${yaw},0,60&mode=explore&bare=1&res=1&hud=0&shadows=0&exag=1&q=${low?'low':'high'}`});const since=Date.now();
+  await fetch(base+'/__far-views-mode?mode=after');await c.send('Page.navigate',{url:`${base}/?area=${area}&cam=${e},${n},${h},${yaw},0,60&mode=explore&bare=1&res=1&hud=0&shadows=0&exag=1&q=${low?'low':'high'}&far=full`});const since=Date.now();
   while(!await read(baseline?"document.title==='settled'&&!!window.mmm":"document.title==='settled'&&!!window.mmm?.farLand")){assert.ok(Date.now()-since<240000,'settled join view');await sleep(300);}
   await read('window.requestAnimationFrame=()=>0');await sleep(100);
   const result=await read(`(async()=>{const T=await import('/node_modules/three/build/three.module.js'),{farSeaFragment}=await import('/src/far-land.ts');const{scene:s,camera:c,renderer:r}=mmm,sea=s.getObjectByName('near-sea')??s.children.find(o=>o.geometry?.parameters?.width===600000&&o.geometry?.parameters?.height===600000),W=1280,H=720;

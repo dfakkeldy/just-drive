@@ -10,7 +10,7 @@ import { LABEL_HEIGHT, labelCap, placeLabels, type LabelBox, type LabelCandidate
 
 export interface MapStop { x: number; z: number; due: boolean }
 /** `rank` orders the names (0 first, 2 when unset); `radius` is the place's arrival radius in metres. */
-export interface MapMark { x: number; z: number; label: string; rank?: number; radius?: number }
+export interface MapMark { x: number; z: number; label: string; rank?: number; radius?: number; colour?: string }
 export interface MapBounds { x0: number; z0: number; x1: number; z1: number; range: number }
 export interface MapUnderlay { draw(g: CanvasRenderingContext2D, bounds: MapBounds): void; idle(): void }
 
@@ -51,6 +51,11 @@ export class MiniMap {
   private home: Comment | null = null;
   private creditSpace = 0;
   private idle = false;
+  /** Get Fired: the Boss's car while it has seen the player (boss.ts), else null. An amber diamond, or an arrow on
+   * the rim when it is off the map. */
+  boss: { readonly x: number; readonly z: number } | null = null;
+  /** Where the last drawing put the Boss, for checks: 'spot', 'arrow' or ''. */
+  bossDrawn = '';
   /** The names the last drawing wrote and the boxes they kept clear (car arrow, N), in on-screen pixels (for checks). */
   labels: readonly PlacedLabel[] = [];
   labelKeep: readonly LabelBox[] = [];
@@ -237,10 +242,12 @@ export class MiniMap {
       g.fillStyle = st.due ? '#ff8a3d' : 'rgba(150,170,150,.55)';
       g.beginPath(); g.arc(st.x, st.z, st.due ? dot : dot * 0.7, 0, 6.283); g.fill();
     }
-    g.fillStyle = '#7fd4ff';
     for (const m of marks) {
       if (Math.abs(m.x - x) > pad || Math.abs(m.z - z) > pad) continue;
-      g.fillRect(m.x - dot, m.z - dot, dot * 2, dot * 2);
+      // A coloured mark (the room game's parcel) is drawn larger, so it reads at a glance.
+      const r = m.colour ? dot * 1.8 : dot;
+      g.fillStyle = m.colour ?? '#7fd4ff';
+      g.fillRect(m.x - r, m.z - r, r * 2, r * 2);
     }
     if (cars?.length) {
       g.fillStyle = '#e18bff';
@@ -284,5 +291,22 @@ export class MiniMap {
     g.fill(); g.stroke();
     g.fillStyle = '#ff5a4a'; g.font = '700 11px ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText('N', nx, ny);
+    // The Boss last, over the car's own arrow: close behind, it would hide under it.
+    this.bossDrawn = '';
+    if (this.boss) {
+      const dx = this.boss.x - x, dz = this.boss.z - z, cos = Math.cos(heading), sin = Math.sin(heading), cy = half * 1.25;
+      let px = half + (cos * dx + sin * dz) * k, py = cy + (-sin * dx + cos * dz) * k;
+      const edge = 9, off = px < edge || px > s - edge || py < edge || py > s - edge;
+      if (off) {
+        // Clamp along the line from the car, then point the arrow along it.
+        const ux = px - half, uy = py - cy, t = Math.min(ux ? ((ux > 0 ? s - edge : edge) - half) / ux : Infinity, uy ? ((uy > 0 ? s - edge : edge) - cy) / uy : Infinity);
+        px = half + ux * t; py = cy + uy * t;
+      }
+      g.save(); g.translate(px, py); g.fillStyle = '#ffa526'; g.strokeStyle = '#10181f'; g.lineWidth = 1.5; g.beginPath();
+      if (off) { g.rotate(Math.atan2(py - cy, px - half)); g.moveTo(8, 0); g.lineTo(-5, 6); g.lineTo(-5, -6); }
+      else { g.moveTo(0, -6); g.lineTo(6, 0); g.lineTo(0, 6); g.lineTo(-6, 0); }
+      g.closePath(); g.fill(); g.stroke(); g.restore();
+      this.bossDrawn = off ? 'arrow' : 'spot';
+    }
   }
 }

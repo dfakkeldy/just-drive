@@ -19,7 +19,7 @@ checkShaderBaseline(source,{update:process.argv.includes('--update')});
 if(process.env.COAST_BASE_REF){
  const ref=process.env.COAST_BASE_REF,base=execFileSync('git',['show',ref+':web/src/shaders.ts'],{encoding:'utf8'});
  // The reference has no era program. Compare every shared program; CART programs remain separately pinned.
- const shared=variants.filter(v=>!v.name.startsWith('CART_'));
+ const shared=variants.filter(v=>!v.name.startsWith('CART_')&&!v.flags.includes('ROAD_PAVEMENT'));
  // The reviewed mirror crown line is pinned in programs.json; map it to its old text on both sides only here.
  compareNonCoastPrograms(reviewedMirrorCrown(source),reviewedMirrorCrown(base),shared);
  console.log('PASS all '+shared.length+' shared non-coast programs (including SITE_GRAVEL) match '+ref);

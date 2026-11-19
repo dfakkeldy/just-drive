@@ -202,7 +202,9 @@ exact same-tree paired loads each on mmm-m4 at d74d0b50: the Mabou views add the
 rebaked slabs (desktop 9412, LOW 4816 triangles, +2 calls/geometries where drawn);
 `pointtupper-start` desktop -8 calls, -23807 triangles, -7 geometries (roadside trees
 cleared beside the slabs) and phone -1 call, +1290 triangles, +1 geometry; every
-modern Mabou/Point Tupper row adds one request. The twelve unmeasured rows
+modern Mabou/Point Tupper row adds one request. Since #12 made the finish pass the desktop
+default, `new-player-start/desktop-explore-truck` is -2 calls, +7806 triangles (was -5,
++5680), re-measured on the M4 at 261dd03c (PR #25). The twelve unmeasured rows
 (animal-home, works-yard, the two West Bay quarry views) keep their request-only or
 zero deltas. The proven-delta gate checks every pair against that table. Lost-SSH measurements
 remain incomplete evidence; only a clean remote-check completion releases timing.

@@ -13,6 +13,7 @@ import { CLOCK_FACTOR, DAILY_PAY, VEHICLE_ALLOWANCE, END_TIME, START_TIME, clock
 import type { Terrain } from './terrain';
 import type { InteriorReceipt } from './interiors';
 import type { Vehicle } from './vehicle';
+import type { DriftFacts } from './drift-rules';
 
 export class Shift {
   readonly damage = new Damage();
@@ -31,11 +32,15 @@ export class Shift {
   readonly score = new ScoreStream();
   /** Names the place of a point: 'route', or a protected place where nothing scores. main.ts sets it. */
   placeAt: (x: number, z: number) => string = () => 'route';
+  /** Get Fired: true when the Boss sees this point (boss.ts sets it). */
+  witness: (x: number, z: number) => boolean = () => false;
   /** Get Fired: called once when the run ends, instead of the daily report. */
   onFiredEnd: (() => void) | null = null;
   /** Get Fired: each shift step while the day runs, before the 18:00 check (world seconds; 0 while paused). */
   onUpdate: ((dt: number) => void) | null = null;
   private rutMark = 0; private speed = 0;
+  /** Play seconds of the last frightened animal; a protected place a drift passed through ('' when none). */
+  private animalAt = -Infinity; private driftPlace = '';
   /** Where thrown mail landed, while its complaint is filed: a protected place there scores nothing either. */
   private readonly landing = { x: 0, z: 0, set: false };
   readonly group = new THREE.Group();
@@ -75,7 +80,7 @@ export class Shift {
 
   constructor(private readonly props: Props | null, private readonly mail: Mail, private readonly roads: Roads,
     private readonly terrain: Terrain, buildings: Building[], village: [number, number], private readonly low: boolean,
-    params: URLSearchParams, private readonly restart: () => void, private readonly routeEnabled = true, readonly fired = false) {
+    params: URLSearchParams, private readonly restart: () => void, private readonly routeEnabled = true, readonly fired = false, fixedDay = 0) {
     this.roadsideReport.hidden = true;
     document.getElementById('reportMissed')!.after(this.roadsideReport);
     this.career = this.routeEnabled ? readCareer() : freshCareer();   // an area with no route never touches the saved Mabou career
@@ -83,6 +88,8 @@ export class Shift {
     if (Number.isSafeInteger(requested) && requested > 0) {
       this.career = { ...freshCareer(), day: requested };
     }
+    // Today's run fixes the day for every player (daily-rules.ts). Get Fired never writes the career, so nothing is saved.
+    if (fired && Number.isSafeInteger(fixedDay) && fixedDay > 0) this.career = { ...freshCareer(), day: fixedDay };
     if (params.get('double') === '1') this.career.double = true;
     this.route = new Route(roads, props, routeEnabled);
     const forced = Number(params.get('run'));
@@ -146,8 +153,9 @@ export class Shift {
     this.cleanIndex = -1; this.cleanTime = this.uiTimer = this.paperTimer = this.flashTimer = this.photoCooldown = 0;
     this.damage.reset();
     // A box that was down before the shift is not the player's offence.
-    this.complaints = new Complaints(c => { if (!c.preExisting) this.reportScore(c.kind, c.x, c.z, this.speed, this.landing.set ? this.landing : undefined); }); this.evidence.photos.length = 0;
+    this.complaints = new Complaints(c => { if (c.kind === 'sceneAnimal') this.animalAt = c.at / CLOCK_FACTOR; if (!c.preExisting) this.reportScore(c.kind, c.x, c.z, this.speed, this.landing.set ? this.landing : undefined); }); this.evidence.photos.length = 0;
     this.score.clear(); this.rutMark = this.speed = 0;
+    this.animalAt = -Infinity; this.driftPlace = '';
     this.tag.hidden = true; this.flash.classList.remove('exposed'); this.report.hidden = true;
     this.ruts.reset(); this.mail.reset(); this.props?.resetShift();
     this.run = this.route.forDay(this.career.day, this.forcedRun);
@@ -203,7 +211,19 @@ export class Shift {
   reportScore(kind: string, x: number, z: number, speed: number, also?: { x: number; z: number }): void {
     if (this.ended) return;
     const place = this.placeAt(x, z);
-    this.score.report({ kind, place: place === 'route' && also ? this.placeAt(also.x, also.z) : place, speed: Math.abs(speed), time: this.elapsed / CLOCK_FACTOR });
+    this.score.report({ kind, place: place === 'route' && also ? this.placeAt(also.x, also.z) : place, speed: Math.abs(speed), time: this.elapsed / CLOCK_FACTOR,
+      x, z, witnessed: this.witness(x, z) });
+  }
+  /** A finished drift (drift-rules.ts) as one fact. Its place is the first protected place it touched (start, end or any
+   * frame between); an animal that had to get out of the way while it lasted makes it an animal's event, which never scores. */
+  reportDrift(d: DriftFacts): void {
+    if (this.ended) return;
+    const time = this.elapsed / CLOCK_FACTOR, end = this.placeAt(d.x1, d.z1), start = this.placeAt(d.x0, d.z0);
+    const place = this.driftPlace || (start !== 'route' ? start : end);
+    this.driftPlace = '';
+    // Where it ended: the Boss heads there, and doubles it when it saw the slide end.
+    this.score.report({ kind: 'drift', place, speed: d.speed, time, drift: d, ...(this.animalAt >= time - d.seconds - 1 ? { subject: 'animal' } : {}),
+      x: d.x1, z: d.z1, witnessed: this.witness(d.x1, d.z1) });
   }
   /** A roadside break in view of a house: one call per house per day, and no photo answers it. */
   seenAtRoadside(house: number, x: number, z: number): void { this.add('relief', house, x, z, this.elapsed); }
@@ -250,6 +270,11 @@ export class Shift {
     this.speed = Math.hypot(vehicle.vx, vehicle.vz);
     // About three metres of fresh ruts make one fact; ruts.reset() sets its count back to 0.
     if (this.ruts.count - this.rutMark >= 8) { this.rutMark = this.ruts.count; this.reportScore('rut', vehicle.x, vehicle.z, this.speed); }
+    // A drift: sample the ground under it while it lasts, so a slide through a protected place scores nothing.
+    if (vehicle.drift?.active && !this.driftPlace) { const here = this.placeAt(vehicle.x, vehicle.z); if (here !== 'route') this.driftPlace = here; }
+    const drift = vehicle.takeDrift?.();
+    if (drift) this.reportDrift(drift);
+    if (!vehicle.drift?.active) this.driftPlace = '';
     for (const s of this.boxSubjects) if ((s.x - vehicle.x) ** 2 + (s.z - vehicle.z) ** 2 <= 60 ** 2) this.passed.add(s.target!);
     let nearby = -1, distance = 2.5 * 2.5;
     if (this.props && Math.hypot(vehicle.vx, vehicle.vz) < .15) for (const i of this.stuffedIndices) {

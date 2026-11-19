@@ -10,6 +10,9 @@ import {execFileSync} from 'node:child_process';
 import {mergeFarManifest,manifestBytes} from './far-manifest.mjs';
 export const PACKS=['terrain','areas/judique','areas/porthood','areas/pointtupper','areas/westbay','areas/cansocauseway'];
 export const ASSETS=['tall.json','far-land.json','far-land-desktop.bin','far-land-low.bin'];
+/** The phone's Coarse far views level (tools/far-pack.mjs --coarse) ships when the pack's far-land.json names it. */
+export const COARSE_ASSET='far-land-coarse.bin';
+export const packAssets=far=>far?.levels?.coarse?[...ASSETS,COARSE_ASSET]:ASSETS;
 export const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const digest=path=>existsSync(path)?hash(readFileSync(path)):null;
 const read=path=>JSON.parse(readFileSync(path));
@@ -18,8 +21,9 @@ export function packRootFields(far,tall){
  assert.equal(x1-x,y1-y,'square terrain root');return {crs:far.crs,origin:[x,y1],size:x1-x,village:far.origin};
 }
 export function checkLevelFiles(meta,folder){
- assert.deepEqual(Object.keys(meta.levels).sort(),['desktop','low'],'two far terrain levels');
- for(const name of ['desktop','low']){const level=meta.levels[name];assert.equal(level.file,'far-land-'+name+'.bin');const bytes=readFileSync(resolve(folder,level.file));assert.equal(hash(bytes),level.sha256,'level binary SHA256 mismatch: '+name);assert.equal(bytes.length,level.bytes,'level binary size mismatch: '+name);}
+ const names=Object.keys(meta.levels).sort();
+ assert.ok(['desktop,low','coarse,desktop,low'].includes(names.join(',')),'two far terrain levels, or three with coarse');
+ for(const name of names){const level=meta.levels[name];assert.equal(level.file,'far-land-'+name+'.bin');const bytes=readFileSync(resolve(folder,level.file));assert.equal(hash(bytes),level.sha256,'level binary SHA256 mismatch: '+name);assert.equal(bytes.length,level.bytes,'level binary size mismatch: '+name);}
 }
 export function checkRoot(live,expected){for(const key of ['crs','origin','size','village'])assert.deepEqual(live[key],expected[key],'root identity changed: '+key);}
 export function preparePlan(dataRoot,packRoot){
@@ -31,7 +35,7 @@ export function preparePlan(dataRoot,packRoot){
   const tall=read(source+'/tall.json');for(const key of ['turbines','far','towers','lines'])assert.equal(patch.tall[key],tall[key].length,'patch count mismatch: '+key);
   const after=manifestBytes(mergeFarManifest(current,patch));
   plan.manifests.push({area,target:manifest,before:hash(before),after:hash(after),patch:patchPath,patchHash:digest(patchPath),expected});
-  for(const name of ASSETS){const from=resolve(source,name),target=resolve(base,name),bytes=readFileSync(from);plan.assets.push({source:from,target,sha256:hash(bytes),before:digest(target),bytes:bytes.length});if(area==='terrain')plan.offlineMabouRawAdded+=bytes.length-(existsSync(target)?readFileSync(target).length:0);}
+  for(const name of packAssets(far)){const from=resolve(source,name),target=resolve(base,name),bytes=readFileSync(from);plan.assets.push({source:from,target,sha256:hash(bytes),before:digest(target),bytes:bytes.length});if(area==='terrain')plan.offlineMabouRawAdded+=bytes.length-(existsSync(target)?readFileSync(target).length:0);}
   for(const name of ['roads.json','buildings.json']){const path=resolve(base,name);plan.inputs.push({path,sha256:digest(path)});}
   screen.push({area,base,candidate:resolve(source,'tall.json')});
  }

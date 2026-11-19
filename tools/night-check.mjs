@@ -48,6 +48,37 @@ function palette(api) {
   for (const key of ['sky', 'fog']) dusk[key].forEach((v, i) => assert.ok(Math.abs(v - api.SUNSET[key][i] ** (1 - dusk.level) * api.NIGHT[key][i] ** dusk.level) < 1e-12, `${key} geometric`));
 }
 
+/** The dusk dome (night-rules.ts DUSK): a warm horizon band under a pink one and a grey green-blue top just after sunset;
+ * a deep blue-grey top over a dull orange horizon late in dusk; the night sky itself as it was. */
+function dome(api) {
+  const lum = c => .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+  const early = api.nightPalette(HORIZON - 1e-6, true), late = api.nightPalette(-7, true);
+  assert.ok(Math.abs(late.level - api.LATE) < .06, 'about 7° down is the late dusk look');
+  // Early: the bands show at full strength; warm under pink under the top, brightest at the bottom.
+  assert.ok(early.warm === 1 && early.pink > .999, 'both bands at sunset');
+  const [hr, hg, hb] = early.horizon, [br, bg, bb] = early.band, [zr, zg, zb] = early.zenith;
+  assert.ok(hr > hg && hg > hb && hb / hr < .25, 'the horizon band is warm (orange, not pink)');
+  assert.ok(br > bg && br > bb && bb / bg > .8 && bb / bg > hb / hg, 'the band above is pink (less orange than the horizon)');
+  assert.ok(lum(early.horizon) > lum(early.band) && lum(early.band) > lum(early.zenith), 'bright at the horizon, dimmer upward');
+  assert.ok(zb >= zg && zg > zr && zb / zr < 2 && zg / zb > .8, 'the upper dusk sky is grey green-blue, not the day\'s blue');
+  // Late: the pink is gone; a deep blue-grey top over a dull orange horizon.
+  assert.ok(late.pink < .02 && late.warm > .95, 'late dusk keeps the warm band and loses the pink');
+  const [lr, lg, lb] = late.zenith, [or, og, ob] = late.horizon;
+  assert.ok(lb > lg && lg > lr && lum(late.zenith) < lum(early.zenith) / 4, 'late top: deep blue-grey');
+  assert.ok(or > og && og > ob && lum(late.horizon) > 1.5 * lum(late.zenith) && lum(late.horizon) < lum(early.horizon) / 3, 'late horizon: dull orange, brighter than the top');
+  // Night: the dome is the old night sky (top .004 .008 .024, no bands), from the end of nautical twilight down.
+  for (const el of [-12, -20, -40]) {
+    const p = api.nightPalette(el, true);
+    assert.deepEqual([...p.zenith], [.004, .008, .024], `night top at ${el}`); assert.equal(p.warm, 0); assert.equal(p.pink, 0);
+  }
+  let last = early;
+  for (let el = HORIZON - .5; el > -40; el -= .5) {
+    const p = api.nightPalette(el, true);
+    assert.ok(p.warm <= last.warm && p.pink <= last.pink && p.zenith.every((v, i) => v <= last.zenith[i] + 1e-12), `dome darker at ${el}`);
+    last = p;
+  }
+}
+
 function town(api) {
   assert.deepEqual(api.townLight(100, 0), { stars: 1, glow: 0 }, 'no street lamps, no town light');
   const near = api.townLight(0, 12), far = api.townLight(10000, 12);
@@ -145,6 +176,14 @@ function wiring() {
   assert.match(read('web/src/terrain.ts'), /this\.paved\?\.applyGround\(material\);\n\s*this\.night\?\.applyGround\(material\);/, 'the land seen in the water is lit too');
   assert.match(read('web/src/grass.ts'), /terrain\.night\?\.applyGrass\(this\.material\);/);
   assert.match(read('web/src/coast.ts'), /terrain\.night\?\.applyCoast\(mat\);/);
+  // The dome takes the palette's dusk colours and bands; cloud hides the bands as it hides the stars.
+  assert.ok(nightSource.includes('nightZenith: { value: new THREE.Color().setRGB(...palette.zenith) }'), 'dome top from the palette');
+  assert.ok(nightSource.includes('nightBands: { value: new THREE.Vector2(palette.warm, palette.pink) }'), 'dome bands from the palette');
+  // The bands are weighted by their strengths, so at full night (both 0) the sky is the old one.
+  assert.ok(nightSource.includes('col = mix(col, nightBand, nightBands.y * side *'), 'pink band weighted by its strength');
+  assert.ok(nightSource.includes('col = mix(col, nightHorizon, nightBands.x * side *'), 'warm band weighted by its strength');
+  assert.ok(nightSource.includes('nightBands.y * side * exp(-above * above)'), 'the band shape squares itself: pow of a negative base is undefined in GLSL');
+  assert.match(main, /nightLook\.warm \*= 1 - mood\.flat; nightLook\.pink \*= 1 - mood\.flat;/);
 }
 
 /** The bike's batched head lamp: one beam on the turning fork (desktop and phone), its lens lit only while ridden. */
@@ -200,8 +239,8 @@ function bikeLamp({ Night, NightShading } = night) {
   assert.throws(() => bike.bikeMesh.material.onBeforeCompile({ uniforms: {}, vertexShader: 'void main() {}', fragmentShader: 'void main() {}' }), /anchor/);
 }
 
-palette(rules); town(rules); nearest(rules); yards(rules); headGuard(rules); shaders(); wiring(); bikeLamp();
-console.log('PASS night look: palette gate and sunset continuity, town stars, nearest lamps, yard-lamp privacy on every baked area, shader anchors, wiring, the bike head lamp.');
+palette(rules); dome(rules); town(rules); nearest(rules); yards(rules); headGuard(rules); shaders(); wiring(); bikeLamp();
+console.log('PASS night look: palette gate and sunset continuity, the dusk bands, town stars, nearest lamps, yard-lamp privacy on every baked area, shader anchors, wiring, the bike head lamp.');
 
 if (process.argv.includes('--mutations')) {
   const load = async source => {
@@ -219,6 +258,10 @@ if (process.argv.includes('--mutations')) {
     ['N7 lamp heads on the wrong side', 'z: pole.z - out * Math.cos(h)', 'z: pole.z + out * Math.cos(h)', nearest],
     ['N8 town keeps every star', 'out.stars = 1 - .8 * near * size', 'out.stars = 1', town],
     ['N9 lamp head not guarded', ' || !clear(lampHead(pole))', '', headGuard],
+    ['N15 no warm band at dusk', 'warm: 1 - smooth(LATE, 1, level),', 'warm: 0,', dome],
+    ['N16 night top changed', ': blend(late.zenith, NIGHT.zenith, night),', ': late.zenith,', dome],
+    ['N17 the day\'s blue at dusk', 'early: { zenith: [.145, .215, .235] as RGB', 'early: { zenith: [.104, .198, .444] as RGB', dome],
+    ['N18 pink all night', 'pink: 1 - smooth(.1, LATE, level),', 'pink: 1,', dome],
   ];
   // night.ts itself: the bike's batched lamp.
   const lampMutants = [

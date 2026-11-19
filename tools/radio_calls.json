@@ -1,0 +1,7 @@
+{
+  "note": "The Party Line's call-ins for Get Fired: short calls about the player's own run, played into a pause of the station named by dial (web/src/party-line-rules.ts). They are not station tracks. tools/radio-talk/calls_talk.py adds each call and nickname of tools/radio-talk/scripts.md Part 16 once it is recorded; tools/build_radio.py makes audio/calls.json from this list. See tools/RADIO.md.",
+  "dial": "94.9",
+  "credit": "talk",
+  "calls": [],
+  "nicknames": []
+}

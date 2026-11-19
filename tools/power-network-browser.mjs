@@ -10,7 +10,7 @@ try{
  for(let i=0;i<120&&!await page.read('mmm.church?.triangles>0');i++)await sleep(500);
  // Wires build once both poles stand on fine land (level >= 6); let the loaded cells settle first.
  // Before the bake no pole stands near the church, so only a pack with drops waits for a wire draw.
- const wired=`!mmm.props.data.serviceDrops.length||[...mmm.props.cells.values()].some(c=>c.group&&c.group.children.some(o=>o.isLineSegments))`;
+ const wired=`!mmm.props.data.serviceDrops.length||[...mmm.props.cells.values()].some(c=>c.group&&c.group.children.some(o=>o.isLineSegments||o===c.line))`;
  for(let i=0;i<120&&!await page.read(wired);i++)await sleep(500);
  const result=await page.read(`(async()=>{
  const data=await(await fetch('/areas/judique/props.json')).json();
@@ -18,7 +18,8 @@ try{
  const drop=after?data.serviceDrops.find(d=>d.building===-1):null;if(after&&!drop)throw Error('church drop missing');
  const props=mmm.props;let cells=0,lines=0,churchLine=false,dropWires=0;
  for(const c of props.cells.values())if(c.group){
-  const batch=c.group.children.filter(o=>o.isLineSegments);if(batch.length>1)throw Error('multiple wire draws in a cell');
+  // The cell's wire draw: LineSegments, or with the finish pass's one-sample canvas (FINISH.oneSample) a ribbon Mesh.
+  const batch=c.group.children.filter(o=>o.isLineSegments||o===c.line);if(batch.length>1)throw Error('multiple wire draws in a cell');
   cells++;lines+=batch.length;dropWires+=c.wires.filter(w=>w.drop).length;
   if(c.wires.some(w=>w.drop?.building===-1))churchLine=batch.length===1&&c.wires.some(w=>w.drop?.building===-1&&w.vertices.length===60);
  }

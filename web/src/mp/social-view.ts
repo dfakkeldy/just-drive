@@ -1,7 +1,7 @@
 import { Vector3, type Camera } from 'three';
 import type { Net } from './net';
 import type { PeerView } from './wire';
-import { PHRASES, CHAT_MS, isPhraseId, readHandle } from './social';
+import { PHRASES, CHAT_MS, GAME_PHRASES, isPhraseId, readHandle } from './social';
 export function savedHandle(): string | undefined {
   try { return readHandle(localStorage.getItem('mmm.mp.handle')) ?? undefined; } catch { return undefined; }
 }
@@ -15,10 +15,12 @@ export class SocialView {
   private readonly chatButton = document.createElement('button');
   private readonly grid = document.createElement('div');
   private readonly bubbleNodes = new Map<number, HTMLElement>();
+  private readonly gameButtons: HTMLButtonElement[] = [];
   private readonly key = (ev: KeyboardEvent) => {
     if (!this.net.canChat || ev.repeat || ev.altKey || ev.ctrlKey || ev.metaKey || (ev.target instanceof HTMLElement && (ev.target.closest('input,textarea,select') || ev.target.isContentEditable))) return;
-    const id = Number(ev.key)-1;
-    if (/^[1-8]$/.test(ev.key) && isPhraseId(id)) { ev.preventDefault(); ev.stopImmediatePropagation(); this.net.chat(id); }
+    // 1-8 the road phrases; 9 and 0 the first two game phrases, in a room that runs games.
+    const id = ev.key === '0' ? GAME_PHRASES + 1 : Number(ev.key)-1;
+    if (/^[0-9]$/.test(ev.key) && isPhraseId(id) && (id < GAME_PHRASES || this.net.gamesSupported)) { ev.preventDefault(); ev.stopImmediatePropagation(); this.net.chat(id); }
   };
   constructor(private readonly net: Net, private readonly ground: (x:number,z:number,referenceY?:number) => number | null, touch = false,
     private readonly height: (y:number) => number = y => y) {
@@ -41,7 +43,8 @@ export class SocialView {
     button.onclick = () => { grid.hidden = !grid.hidden; grid.style.display = grid.hidden ? 'none' : 'grid'; button.setAttribute('aria-expanded',String(!grid.hidden)); };
     PHRASES.forEach((phrase, id) => {
       if (!isPhraseId(id)) return;
-      const b = document.createElement('button'); style(b); b.textContent = `${id+1} ${phrase}`;
+      const b = document.createElement('button'); style(b); b.textContent = id < GAME_PHRASES + 2 ? `${(id+1) % 10} ${phrase}` : phrase;
+      if (id >= GAME_PHRASES) { b.hidden = true; b.dataset.game = '1'; this.gameButtons.push(b); }
       b.onclick = () => { this.net.chat(id); grid.hidden = true; grid.style.display = 'none'; button.setAttribute('aria-expanded','false'); }; grid.append(b);
     });
     this.log.id = 'mpChatLog'; this.log.setAttribute('role','log'); this.log.setAttribute('aria-label','Quick chat');
@@ -55,6 +58,7 @@ export class SocialView {
   update(camera: Camera, peers: readonly PeerView[], me: {x:number;y:number;z:number}): void {
     const now = performance.now();
     // No chat control at all until the room says it relays phrases (an older room, or between rooms).
+    for (const b of this.gameButtons) if (b.hidden === this.net.gamesSupported) b.hidden = !this.net.gamesSupported;
     if (this.chatButton.hidden === this.net.canChat) {
       this.chatButton.hidden = !this.net.canChat;
       if (!this.net.canChat) { this.grid.hidden = true; this.grid.style.display = 'none'; this.chatButton.setAttribute('aria-expanded','false'); }

@@ -170,6 +170,12 @@ function numericState({ v, rig, terrain, roads }) {
     assert.deepEqual(v.meshProbe, { height: 0, source: 0, drawn: false }, 'inactive horse mesh probe stays zero for motors');
     seen.add(v.meshProbe);
   }
+  // The drift state (drift-rules.ts, grok-bots#1245) came after these goldens. These scripts never pull the handbrake with
+  // the wheel turned nor flick on loose ground, so no slide may begin; the grip model they pin stays exact without its fields.
+  if (v.drift) {
+    assert.equal(v.drift.active, false, 'no drift begins in the motor oracle scripts');
+    for (const o of [v.drift, v.driftGround, v.slideSpeed]) seen.add(o);
+  }
   function walk(o, path) {
     // Saved pose height is new bridge ownership metadata. Its behaviour is pinned by
     // bridges-underdeck; omit only that extra field to preserve every pre-existing
@@ -262,8 +268,11 @@ function frozenSpecs(mod) {
   }
   for (const entry of mod.GARAGE) walk(entry.spec, `${entry.id}.spec`);
 }
+// The drift block (VehicleSpec.drift, grok-bots#1245) came after these goldens and is pinned by tools/drift-rules-check.mjs;
+// every older field still hashes exactly as recorded.
+const legacySpec = spec => { const { drift: _drift, ...rest } = spec; return rest; };
 function verifySpec(entry) {
-  assert.equal(specHash(entry.spec), GOLDEN[entry.id].specAfterLeansRemoval ?? GOLDEN[entry.id].spec, `${entry.id} full spec JSON digest`);
+  assert.equal(specHash(legacySpec(entry.spec)), GOLDEN[entry.id].specAfterLeansRemoval ?? GOLDEN[entry.id].spec, `${entry.id} full spec JSON digest`);
 }
 function verify(mod, seams = false, report = false) {
   // Grounded mounts have their own gait/footing/repair suite (check-horse.sh); this frozen motor
@@ -299,7 +308,7 @@ try {
     const inputs = cleanBundleInputs(), commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
     const golden = {};
     for (const entry of mod.GARAGE.filter(e => e.spec.locomotion !== 'horse')) {
-      const row = { spec: specHash(entry.spec) };
+      const row = { spec: specHash(legacySpec(entry.spec)) };
       // Base 61b6083 contains the approved, unread bike flag removed by G20c L31.
       // Record both full base JSON and the exact approved deletion, from base data.
       if (entry.id === 'bike' && Object.hasOwn(entry.spec, 'leans')) {

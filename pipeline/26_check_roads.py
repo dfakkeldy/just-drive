@@ -143,7 +143,7 @@ def main():
             absent=a[2]==0
             assert (a[0,absent]==255).all() and (a[1,absent]==0).all()
             assert (a[0,~absent]>=1).all()
-            assert np.isin(a[2,~absent],[k+f for k in (1,2,3,4,5) for f in (0,16,32,48)]).all()
+            assert f.flags_valid(a[2,~absent]).all()
     actual={os.path.relpath(os.path.join(root,p),b.OUT) for root,_,files in os.walk(b.OUT)
             for p in files if p.endswith('.png') and os.path.basename(root).isdigit()}
     assert expected==actual,dict(missing=sorted(expected-actual),unlisted=sorted(actual-expected))

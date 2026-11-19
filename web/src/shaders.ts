@@ -990,6 +990,13 @@ void main() {
       float worn = smoothstep(0.5, 0.15, abs(rdist - rhalf * 0.45));
       surface = mix(dust, dust * 0.88, worn);
     } else if (rkind > 3.5) {
+#ifdef ROAD_PAVEMENT
+      if (rflags >= 64.0) {
+        // A gravel driveway or its pad (the gravel bit on a track): packed wheel paths in loose stone, like a gravel road.
+        float track = smoothstep(0.55, 0.15, abs(rdist - rhalf * 0.5));
+        surface = mix(gravel, gravel * 0.72, track);
+      } else {
+#endif
       // Track: dirt ruts with grass in the middle.
       float rut = smoothstep(0.45, 0.2, abs(rdist - 0.75));
 #ifdef SITE_GRAVEL
@@ -997,14 +1004,33 @@ void main() {
 #else
       surface = mix(mix(albedo, vec3(0.160, 0.170, 0.060), 0.5), vec3(0.170, 0.130, 0.090), rut);
 #endif
+#ifdef ROAD_PAVEMENT
+      }
+#endif
+#ifdef ROAD_PAVEMENT
+    } else if (rkind < 1.5 || (rkind == 2.0 && mod(rflags, 128.0) >= 64.0)) {
+#else
     } else if (rkind < 1.5) {
+#endif
       // Highway paint: a double yellow centre line and white edge lines, worn in places.
       float wear = 0.55 + 0.45 * step(0.25, vnoise(p * 0.7));
       float yellow = smoothstep(0.045, 0.065 + aa, rdist) * (1.0 - smoothstep(0.165, 0.185 + aa, rdist)) * (1.0 - jump);
       float white = smoothstep(rhalf - 0.34 - aa, rhalf - 0.32, rdist) * (1.0 - smoothstep(rhalf - 0.22, rhalf - 0.20 + aa, rdist));
       float fade = 1.0 - smoothstep(60.0, 260.0, dist) * 0.6;
       surface = mix(surface, vec3(0.550, 0.400, 0.040), yellow * wear * fade);
+#ifdef ROAD_PAVEMENT
+      if (rkind < 1.5)
+#endif
       surface = mix(surface, vec3(0.550, 0.550, 0.520), white * wear * fade);
+#ifdef ROAD_PAVEMENT
+    } else if (rkind == 2.0 && rflags >= 128.0) {
+      // Faded asphalt with irregular, broken cracks. Keep the fine lines near the camera.
+      vec2 seam = p * vec2(0.18, 0.47) + vec2(vnoise(p * 0.34), vnoise(p * 0.41 + 17.0)) * 0.7;
+      vec2 edge = abs(fract(seam + 0.5) - 0.5);
+      float crack = 1.0 - smoothstep(0.008, 0.026, min(edge.x, edge.y));
+      crack *= smoothstep(0.32, 0.62, vnoise(p * 0.25)) * (1.0 - smoothstep(22.0, 80.0, dist));
+      surface = mix(asphalt * (1.18 + 0.32 * grit), asphalt * 0.43, crack);
+#endif
     }
     if (wash > 0.5) {
       // Washboard: ridges across the road. The road's direction is at right angles to the slope of the distance field.

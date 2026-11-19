@@ -6,7 +6,8 @@ only it) builds the public site without a radio, so a check that needs the publi
 writes the same folder without ffmpeg and without the song sources: the songs are the files build_radio.py links
 into data/audio/site, the lists come from the tracked catalogue's "public" marks and the seconds in out/radio.json,
 and they are written by build_radio.py's own listing() and folder(). An out folder made from another catalogue (its
-catalogueHash differs) is refused. With no public song there is no folder, as with build_radio.py.
+catalogueHash differs) is refused. With no public song there is no folder, as with build_radio.py. The Party Line's calls
+(calls.json) come the same way, from out/calls.json and the public marks of tools/radio_calls.json.
 
 For checks only; it never writes data/audio/site. Usage: radio-public-from-out.py <out folder> <new folder>
 """
@@ -17,6 +18,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'tools'))
 
 
 class InputError(ValueError):
@@ -30,7 +32,29 @@ def build_radio():
     return module
 
 
-def public_folder(out: pathlib.Path, where: pathlib.Path, catalogue_path=ROOT / 'tools/radio_stations.json') -> bool:
+def public_calls(out: pathlib.Path, plan: dict, calls_path: pathlib.Path):
+    """The calls part of the public folder, as build_radio.folder() takes it, or None when the catalogue lists no call."""
+    import radio_catalogue
+    calls = radio_catalogue.read_calls(plan, calls_path)
+    if not calls or not (calls['calls'] or calls['nicknames']):
+        return None
+    calls_hash = hashlib.sha256(calls_path.read_bytes()).hexdigest()
+    try:
+        every = json.loads((out / 'calls.json').read_text())
+    except (OSError, ValueError) as error:
+        raise InputError(f'{out / "calls.json"}: missing or unreadable ({error})') from error
+    if every.get('catalogueHash') != calls_hash:
+        raise InputError(f'{out / "calls.json"}: made from another calls catalogue; run python3 tools/build_radio.py')
+    seconds = {c['file']: c['seconds'] for c in every['calls'] + every['nicknames']}
+    chosen = [c for c in calls['calls'] + calls['nicknames'] if c.get('public') is True]
+    for c in chosen:
+        if c['source'] + '.mp3' not in seconds or not (out / (c['source'] + '.mp3')).is_file():
+            raise InputError(f'{out / (c["source"] + ".mp3")}: a public call that out/calls.json does not hold')
+    return calls, chosen, seconds, every.get('gaps', {}), calls_hash
+
+
+def public_folder(out: pathlib.Path, where: pathlib.Path, catalogue_path=ROOT / 'tools/radio_stations.json',
+                  calls_path=None) -> bool:
     """Writes the folder; returns False when no song is public (no folder, as build_radio.py leaves it)."""
     radio = build_radio()
     catalogue = catalogue_path.read_bytes()
@@ -56,9 +80,10 @@ def public_folder(out: pathlib.Path, where: pathlib.Path, catalogue_path=ROOT / 
             raise InputError(f'{out / name}: listed in radio.json but missing')
     if where.exists():
         raise InputError(f'{where}: already exists')
+    calls = public_calls(out, plan, pathlib.Path(calls_path or catalogue_path.with_name('radio_calls.json')))
     radio.OUT = out
     radio.folder(where, {'radio.json': (public, radio.starting(wanted, 'station')),
-                         'radio-just.json': (public, plan.get('just_start'))}, catalogue_hash)
+                         'radio-just.json': (public, plan.get('just_start'))}, catalogue_hash, calls)
     return where.is_dir()
 
 

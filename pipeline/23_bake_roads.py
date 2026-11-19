@@ -352,8 +352,9 @@ def main():
         # its saved lines and point counts must describe the final split inventory for step 29.
         for road in roads:
             road['washboard'] = (road.get('name') or '') in WASHBOARD
-        from dashcam_corrections import correct_roads, attach_guardrails
+        from dashcam_corrections import correct_roads, correct_nov18_roads, nov18_driveways, attach_guardrails
         roads = correct_roads(roads, AREA.id, guardrails=False)
+        roads = correct_nov18_roads(roads, AREA.id)
         # Bridge spans name road ids, so they are recovered on the final split inventory.
         from bridge_spans import source_bridges, recover_bridge_spans, inferred_bridge_spans, bridge_keep_boxes
         bridge_spans = recover_bridge_spans(roads, source_bridges(
@@ -372,6 +373,8 @@ def main():
             # The mailboxes are decided on the lines as they were (29_bake_props.py); keep those lines for it.
             marks['bed'] = road_ground.keep_lines_before(terrain.OVERVIEW, before, roads)
         # <<< road-ground trial
+        # Observed driveways come after the bed move: their lines are final, and they join the moved public road.
+        roads = nov18_driveways(roads, AREA.id)
         roads = attach_guardrails(roads, AREA.id)
         json.dump(dict(crs='EPSG:2961', roads=roads, **marks), f, separators=(',',':'))
 

@@ -9,8 +9,8 @@ WORK   a rehearsed copy of LIVE after step 27 for pointtupper with MMM_BIG_BUILD
        step 29 for pointtupper with power_only=True (tools/point-tupper-delta/README.md): the installed mailboxes and poles stay,
        and only the service drops follow the new buildings. It may differ from LIVE only in pointtupper's
        buildings.json, props.json (service drops only) and the buildings and props keys of that manifest; the
-       maker compares every file of both trees and refuses anything else. Step 30 is not run: no modern area has
-       baked styles yet (buildingStyles.count is 0 everywhere), and baking them would repaint every building.
+       maker compares every file of both trees and refuses anything else. Step 30 is not run here: Point Tupper's
+       colours are their own delta (grok-bots #1288), which owns building-styles.json and the buildingStyles key.
 PAVED  a six-area output of pipeline/32_bake_paved.py on WORK, read with the corrections that compose() makes: LIVE's
        corrections file plus the features of tools/point-tupper-delta/corrections.json.
 

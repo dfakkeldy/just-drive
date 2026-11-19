@@ -5,7 +5,7 @@ import { sugarCampStart } from './sugar-camp-start';
 import { PointTupperDriver, driverEnabled, driverLive } from './point-tupper-driver';
 import { PauseGate } from './pause';
 import { TrafficSignals } from './traffic-signals';
-import { CLEAR_HAZE, moodLook, weatherMoment, weatherSettings, weatherUI } from './weather';
+import { CLEAR_HAZE, MOODS, moodLook, weatherMoment, weatherSettings, weatherUI } from './weather';
 import { placeUrlPose } from './placement-pose';
 import { bootTripParams, tripId } from './quarry-trip';
 import {historyRoadName} from './eras/history-road-names';
@@ -23,11 +23,11 @@ import { fleetEnabled, fleetRig } from './fleet-models';
 import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { Buildings, buildingSites, readBuildingStyles, roofSites, type Building } from './buildings';
+import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
 import { areaScreen } from './area-screen';
-import { readVehicle } from './garage';
+import { GARAGE, readVehicle } from './garage';
 import { rideFeatures } from './ride-features';
 import { legacyVehicle, type RideInput } from './ride';
 import { Canal } from './canal';
@@ -43,13 +43,16 @@ import { cloudReflections } from './finish-shaders';
 import { startHere, placeAtStart } from './start-here';
 import { startKey } from './start-key';
 import { startTouchQuality } from './touch-quality';
-import { Props } from './props';
+import { Props, splitRoadLines } from './props';
 import { TallLandmarks } from './tall';
 import { FarLand, farSeaVertex, farSeaFragment } from './far-land';
 import { FarTurbines } from './far-turbines';
 import { curveSceneMaterials } from './far-materials';
 import { FarVisibility } from './far-visibility';
 import type { FarFile } from './far-rules';
+import { farPhoneChoice, farPlan, readFarPhone } from './far-choice';
+import { advancedSection, farPhoneSetting } from './advanced-settings';
+import { coarseTurbines } from './far-turbines';
 import type { TallFile } from './tall-rules';
 import { tallPlaces } from './places';
 import { Radio, loadRadio } from './radio';
@@ -69,8 +72,18 @@ import { Footpaths } from './footpaths';
 import { RoadScene } from './road-scene';
 import { SchoolBus } from './school-bus';
 import { BUS } from './school-bus-rules';
+import { SceneRoad } from './road-scene-rules';
 import { BUS_STOP_RADIUS, churchZones, placeAt } from './score-rules';
 import { FiredRun } from './fired';
+import { DailyRun } from './daily';
+import { atlanticDate, CARD_SIZE, dailyArea, dailyPlan, drawCard, supplyFor, type Square } from './daily-rules';
+import { PartyLine, fetchCalls } from './party-line';
+import { callSign } from './party-line-rules';
+import { inventedName } from './mp/social';
+import { DriftFeedback } from './drift-feedback';
+import { phoneHandbrake } from './drift-rules';
+import { Boss, bossEnabled } from './boss';
+import { Occluders } from './boss-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
 import { noZoom } from './no-zoom';
@@ -139,6 +152,7 @@ const LAT = 46.0717, LON = -61.392;
 const SEA_LEVEL = -0.2;   // metres CGVD2013; the surveyed harbour surface is at about -0.3 to -0.7
 
 const params = bootTripParams();
+const astra = params.get('astra');
 const baseArea = await siteArea(params);
 const touchDevice = matchMedia('(pointer: coarse)').matches || params.get('touch') === '1';   // ?touch=1 shows the phone controls for a test
 const quality = startTouchQuality(touchDevice, params.get('q'));
@@ -148,6 +162,15 @@ treeLook.leafy = params.get('leaves') === '1';
 treeLook.oneSample = FINISH.oneSample;
 const ERA = readEra(params, baseArea.id, SITE.era);
 const AREA = areaInEra(baseArea, ERA);
+// Today's run (?daily=1, daily-rules.ts): one seeded Get Fired run a day, the same for everybody. Only on the mail game's own
+// land today; Just Drive, 1884 and the areas without a route ignore it. The seed sets the player keys it fixes, in memory:
+// the address keeps ?daily=1, so a reload is still today's run.
+const DAILY = params.get('daily') === '1' && SITE.brand !== 'just' && ERA.modern && !ERA.explore && AREA.mail && dailyArea(AREA.id)
+  ? dailyPlan(atlanticDate(new Date()), AREA.id) : null;
+if (DAILY) {
+  params.set('mode', 'fired'); params.set('vehicle', DAILY.vehicle); params.set('weather', DAILY.mood); params.set('start', DAILY.start);
+  for (const key of ['playerDate', 'playerTime', 'driveAt']) params.delete(key);
+}
 const gameMode = ERA.explore ? 'explore' : AREA.mail ? readMode(params, undefined, SITE) : 'explore', firedMode = gameMode === 'fired', mailMode = gameMode === 'mail' || firedMode;
 if (!mailMode) prepareExplore();
 // A vehicle whose model is a file starts its download now, beside the land. The game waits for it once, just before
@@ -248,13 +271,20 @@ if (mood) {
   const dusk = mood.dusk * (1 - low) * (1 - (nightLook?.level ?? 0));
   fogColor.lerp(new THREE.Color().setRGB(1.0, 0.62 + 0.3 * low, 0.36 + 0.5 * low).multiplyScalar(fogColor.r), 0.5 * dusk).multiplyScalar(1 - 0.38 * dusk);
   sunColor.multiplyScalar(mood.sun); skyColor.lerp(fogColor, mood.flat);
-  if (nightLook) nightLook.stars *= mood.stars;
+  // Cloud hides the dusk bands as it hides the stars.
+  if (nightLook) { nightLook.stars *= mood.stars; nightLook.warm *= 1 - mood.flat; nightLook.pink *= 1 - mood.flat; }
+}
+// Clear-day maritime air: cool skylight on nearby slopes and more extinction across the harbour.
+const coastalAir = astra === 'coastal-air' && sun.el > 0 && !nightLook && !lightStudy.active && !mood;
+if (coastalAir) {
+  skyColor.setRGB(0.38, 0.54, 0.76).multiplyScalar(0.55 + 0.5 * low);
+  fogColor.setRGB(0.52, 0.67, 0.79).multiplyScalar(0.75 + 0.35 * low);
 }
 const nightShading = nightLook ? new NightShading(nightLook, LOW) : null;
 
 const shared: Record<string, THREE.IUniform> = {
   sunDir: { value: sunDir }, sunColor: { value: sunColor }, skyColor: { value: skyColor }, fogColor: { value: fogColor },
-  fogDensity: { value: mood?.haze ?? CLEAR_HAZE }, seaLevel: { value: SEA_LEVEL }, time: { value: 0 },
+  fogDensity: { value: mood?.haze ?? (coastalAir ? 0.000115 : CLEAR_HAZE) }, seaLevel: { value: SEA_LEVEL }, time: { value: 0 },
   gulfTint: { value: AREA.gulfTint },
   farExag: { value: EXAG }, farCurveOn: { value: 0 },
   tallViewport: { value: new THREE.Vector2(1920,1080) },
@@ -265,6 +295,9 @@ const sky = new Sky();
 sky.scale.setScalar(300000);
 const su = sky.material.uniforms;
 su.turbidity.value = 5.5; su.rayleigh.value = 1.7; su.mieCoefficient.value = 0.006; su.mieDirectionalG.value = 0.82;
+if (coastalAir) {
+  su.turbidity.value = 3.4; su.rayleigh.value = 2.25; su.mieCoefficient.value = 0.0038;
+}
 su.sunPosition.value.copy(sunDir);
 if (mood) { su.turbidity.value = mood.turbidity; su.rayleigh.value = mood.rayleigh; su.mieCoefficient.value = mood.mie; su.mieDirectionalG.value = mood.glow; }
 scene.add(sky);
@@ -318,8 +351,9 @@ const buildingList: Building[] | null = manifest.buildings ? await getJson(manif
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
 const buildingStyles = ERA.modern && manifest.buildingStyles
 
-  ? await getJson(manifest.buildingStyles.file).then(readBuildingStyles).catch((e: unknown) => { console.warn('building styles', e); return undefined; })
-  : undefined;
+  ? buildingAppearance(astra, LOW, sunDir, await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
+    .catch((e: unknown) => { console.warn('building styles', e); return undefined; }))
+  : buildingAppearance(astra, LOW, sunDir);
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
 const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
@@ -412,7 +446,6 @@ const landmarks = AREA.landmarks ? new Landmarks(landmarkList, manifest.village,
 if (landmarks) scene.add(landmarks.group);
 const harbourLights = ERA.modern ? new HarbourLights(AREA.id, manifest.village, EXAG, nightLook !== null, SEA_LEVEL) : null;
 if (harbourLights) scene.add(harbourLights.group);
-if (import.meta.env.DEV) expose({ harbourLights });
 const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea, SEA_LEVEL,
   new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
   terrain, trees?.group ?? null, params.get('reflections'));
@@ -477,17 +510,21 @@ const props = await (async () => {
     // The service drops of the boxes Port Hawkesbury and Mabou's main street replace end on their models, not in the air.
     const placed = hawkesburySite && Array.isArray(read.serviceDrops) ? { ...read, serviceDrops: aimDrops(read.serviceDrops) } : read;
     const data = mabouSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: aimMabouDrops(placed.serviceDrops) } : placed;
-    return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined); }
+    return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined, splitRoadLines(roadData)); }
   catch (e) { console.warn('props', e); return null; }
 })();
 if (props) { scene.add(props.group); roads.guardrails?.setObstacles(props.railObstacles); }
 // Optional scenery starts after a drawn frame and Start; it never delays boot.
 const rootBounds = [manifest.origin[0], manifest.origin[1] - manifest.size, manifest.origin[0] + manifest.size, manifest.origin[1]];
 const sameRoot = (root: readonly number[] | undefined) => Array.isArray(root) && root.length === 4 && root.every((n, i) => n === rootBounds[i]);
-const farKey = (manifest as Manifest & { farLand?: { file: string } }).farLand;
+const farPack = (manifest as Manifest & { farLand?: { file: string } }).farLand;
+// Phone detail draws the far views only when the player asks (Settings > Advanced, or ?far=): far-choice.ts.
+// Off (the default) leaves both keys unset, so a phone fetches, hooks and draws exactly what it did before the pack.
+const farPhone = farPhoneChoice(params, readFarPhone()), farUse = farPlan(LOW, farPhone.choice);
+const farKey = farUse ? farPack : undefined;
 // Only the far pack's manifest key (it carries a far count) names a version 2 tall.json. The older live key
 // names a file the game never draws, so before install nothing is fetched and no Places UI appears.
-const tallKey = ((t?: { file: string; far?: number }) => (t && Number.isInteger(t.far) ? t : undefined))((manifest as Manifest & { tall?: { file: string; far?: number } }).tall);
+const tallKey = farUse ? ((t?: { file: string; far?: number }) => (t && Number.isInteger(t.far) ? t : undefined))((manifest as Manifest & { tall?: { file: string; far?: number } }).tall) : undefined;
 let farLand: FarLand | null = null, tall: TallLandmarks | null = null, farTurbines: FarTurbines | null = null;
 let farVisibility: FarVisibility | null = null, farLoading = false;
 async function loadFarViews(): Promise<void> {
@@ -496,7 +533,7 @@ async function loadFarViews(): Promise<void> {
       if(!farKey)return null;
       const data:FarFile=await getJson(farKey.file);
       if(!sameRoot(data.root)||data.origin?.[0]!==manifest.village[0]||data.origin?.[1]!==manifest.village[1])throw Error('Far land belongs to another terrain pack');
-      const land=await FarLand.load(data,base,LOW,shared);
+      const land=await FarLand.load(data,base,farUse!.level,shared);
       const vertex=farSeaVertex(SEA_VERT),fragment=farSeaFragment(SEA_FRAG);
       return {land,vertex,fragment};
     })(),
@@ -504,7 +541,7 @@ async function loadFarViews(): Promise<void> {
       if(!(ERA.modern && tallKey))return null;
       const data:TallFile=await getJson(tallKey.file);
       if(data.version!==2||!sameRoot(data.root))return null;
-      return {data,near:new TallLandmarks(data,terrain,LOW,shared,sun.el<0,false)};
+      return {data,near:new TallLandmarks(data,terrain,LOW,shared,sun.el<0,false,farUse!.coarse)};
     })(),
   ]);
   if(landResult.status==='rejected')console.warn('optional far land',landResult.reason);
@@ -523,12 +560,18 @@ async function loadFarViews(): Promise<void> {
       farLand=landPart.land;scene.add(farLand.group);
     }catch(e){console.warn('optional far sea',e);}
   }
-  const near=tallPart?.near??null;
-  if(near){tall=near;scene.add(near.group);}
+  let near=tallPart?.near??null;
   if(tallPart&&near&&farLand){
-    try{farTurbines=new FarTurbines(tallPart.data.far,manifest.village,LOW,shared,sun.el<0);scene.add(farTurbines.group);}
+    // Coarse: the near turbines join this one draw, first in its list (TallLandmarks keeps only their solids).
+    const coarse=farUse!.coarse,heightAt=(x:number,z:number)=>terrain.heightAt(x,z);
+    const points=coarse?coarseTurbines(tallPart.data,manifest.village,heightAt,terrain.seaLevel,terrain.exag):tallPart.data.far;
+    const seat=coarse?{count:points.length-tallPart.data.far.length,heightAt,seaLevel:terrain.seaLevel,exag:terrain.exag}:undefined;
+    try{farTurbines=new FarTurbines(points,manifest.village,LOW,shared,sun.el<0,coarse,seat);scene.add(farTurbines.group);}
     catch(e){console.warn('optional far turbines',e);}
   }
+  // Coarse without its far draw (far land or turbines failed): no turbine is drawn, so none may be solid.
+  if(farUse!.coarse&&!farTurbines)near=null;
+  if(near){tall=near;scene.add(near.group);}
   const queryMeshes:THREE.Mesh[]=[];
   if(farLand){farLand.land.renderOrder=3;queryMeshes.push(farLand.land);}
   if(farTurbines){for(const mesh of farTurbines.group.children)mesh.renderOrder=3;if(sun.el>=0&&farTurbines.count)queryMeshes.push(farTurbines.group.children[0] as THREE.Mesh);}
@@ -599,7 +642,20 @@ if (quarry) quarry.attach(scene, waterReflections);
 // A build made with VITE_MP=0 has the code compiled out (web/vite.artifact.config.ts sets the default, which is on).
 // Off in a history era: rooms are per area, not per era, so two eras would meet in one room.
 const MULTIPLAYER = (import.meta.env.DEV || import.meta.env.VITE_MP === '1') && ERA.modern;
-const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads, get vehicle() { return vehicle; }, low: LOW, bare, params, area: AREA.id, touch: touchDevice, label: SITE.brand === 'just' ? (_name, id) => `Driver ${id}` : undefined,
+// Room games keep off the real places where nothing scores: church grounds, cemeteries and the school bus stop.
+let quietPlaces: { x: number; z: number; radius: number }[] | null = null;
+const roomQuiet = () => quietPlaces ??= [
+  ...churchZones(landmarkList, manifest.village).map(({ x, z, radius }) => ({ x, z, radius })),
+  ...cemeteries?.zones() ?? [],
+  ...(() => {
+    if (AREA.id !== 'mabou') return [];
+    const loop = roads.roads.find(r => r.name === BUS.road && r.pts.length > 2 && Math.hypot(r.pts[0][0] - r.pts[r.pts.length - 1][0], r.pts[0][1] - r.pts[r.pts.length - 1][1]) < 1);
+    if (!loop) return [];
+    const stop = { x: 0, z: 0, heading: 0 }; new SceneRoad(loop.pts, 0, 1).at(BUS.stop, BUS.lane, stop);
+    return [{ x: stop.x, z: stop.z, radius: BUS_STOP_RADIUS }];
+  })(),
+];
+const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads, quiet: roomQuiet, get vehicle() { return vehicle; }, low: LOW, bare, params, area: AREA.id, touch: touchDevice, label: SITE.brand === 'just' ? (_name, id) => `Driver ${id}` : undefined,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as 'car' | 'truck' | 'sxs' | 'bike', trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
   heightScale:EXAG,seaLevel:SEA_LEVEL,ground: (x, z, referenceY) => terrain.heightAt(x,z,referenceY) }) : null;
@@ -636,11 +692,14 @@ fleetContacts.add({ resolve: () => {}, allows: body => { const b = vehicle.bound
 // LOW (phones) builds the AI from the parked display models, without the car.
 const aiDriver = driverEnabled(AREA.id, ERA.modern, params, import.meta.env.DEV) ? new PointTupperDriver(roads, terrain, fleetContacts, garageEntry.id, SEA_LEVEL, Math.random, undefined, LOW) : null;
 if (aiDriver) scene.add(aiDriver.group);
+// Get Fired's Boss (boss.ts) is built further down, with the run it watches; the physics below already serve it.
+let boss: Boss | null = null;
 // Time-travel seam: read the live era every call, so a runtime swap to 1884 hides the AI.
 const aiDriverOn = () => driverLive(ERA.modern, !!multiplayer?.choice.on);
 let towing: Towing | null = null;
 let fleet: Fleet | null = null, updateFleetHud: (() => void) | null = null;
-if (aiDriver) aiDriver.obstacles = () => [...(towing?.bodies() ?? []), ...(fleet?.members.filter(m => m.state === 'PARKED' || m.state === 'DRIVEN').map(m => m.vehicle) ?? [])];
+const aiObstacles = () => [...(towing?.bodies() ?? []), ...(fleet?.members.filter(m => m.state === 'PARKED' || m.state === 'DRIVEN').map(m => m.vehicle) ?? [])];
+if (aiDriver) aiDriver.obstacles = () => [...aiObstacles(), ...(boss?.driver.onRoad ?? [])];
 let drivenChanged: (() => void) | null = null;
 let roadsidePlaying = false;
 let hookPlaced = false, jumpPlacement = 0;
@@ -650,6 +709,7 @@ const resolveYardSolids = () => {
   if (endings.busy) return;
   canal?.resolve(vehicle, canalBeforeX, canalBeforeZ);
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
+  boss?.driver.resolve(vehicle);
   if (fleet || quarry || stuntPark) fleetContacts.resolve(vehicle);
   else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
@@ -666,7 +726,7 @@ const resolveYardSolids = () => {
   if (fleet) fleet.resolve(); else towing?.step();
 };
 let engineThrottle = 0;   // the pedal the vehicle really got this frame, for the engine sound
-const engineMoment: DrivingMoment = { kind: '', speed: 0, throttle: 0, surface: '', airborne: false, grade: 0, towing: false, radio: false };
+const engineMoment: DrivingMoment = { kind: '', speed: 0, throttle: 0, surface: '', airborne: false, grade: 0, towing: false, radio: false, slide: 0 };
 function driveVehicle(dt: number, input: Input): void {
   engineThrottle = input.throttle;
   syncRoadScenePause();
@@ -675,6 +735,7 @@ function driveVehicle(dt: number, input: Input): void {
   terrain.withGroundContact(vehicle, () => fleet ? fleet.drive(dt, ride.input(input), resolveYardSolids) : vehicle.update(dt, ride.input(input), resolveYardSolids));
   if (!fleet) towing?.update();
   if (aiDriverOn()) aiDriver?.step(dt, vehicle);
+  boss?.step(dt);
 }
 // For test scripts on the dev server only. Each call is guarded by import.meta.env.DEV so a production build drops the
 // whole statement, arguments included. tools/yard-drive.mjs moves the car through this, and tools/fps-check.mjs
@@ -707,7 +768,7 @@ if (import.meta.env.DEV) expose({ vehicle: new Proxy(vehicle, {
       return value.apply(current, args);
     };
   },
-}), era: ERA, history, canal, scene, props, buildings, landmarks, tall, farLand, farTurbines, farVisibility, area: AREA, roads, edge, yard, ...(stuntPark ? { stuntPark, sunShadows } : {}), renderer, grass, trees, terrain, camera, driveVehicle, chase, water: waterReflections, detail, quality, picture, coast, culverts: culvertMouths, low: LOW });
+}), era: ERA, history, canal, scene, props, buildings, landmarks, harbourLights, tall, farLand, farTurbines, farVisibility, area: AREA, roads, edge, yard, ...(stuntPark ? { stuntPark, sunShadows } : {}), renderer, grass, trees, terrain, camera, driveVehicle, chase, water: waterReflections, detail, quality, picture, coast, culverts: culvertMouths, low: LOW });
 if (import.meta.env.DEV && multiplayer) expose({ mp: multiplayer });   // for tools/mp-game-check.mjs
 const mail = mailMode ? new Mail(terrain, props, properties, manifest.village, LOW) : new SceneryContact(props);
 scene.add(mail.group);
@@ -761,10 +822,12 @@ function applyShot(s: Shot) {
   resize();
 }
 
+// Today's run starts every try at its seeded place, not at the first stop of the route.
+const dailyPose = DAILY ? startKey(DAILY.start, roads.roads, vehicle.bounds) : null;
 function placeFirstStop(kind: 'start-over' | 'new-visit' = 'start-over'): void {
   const start = AREA.route ? shift.run.start : roadStart(roads.roads);
   const namedStart = AREA.id === 'westbay' && ERA.modern && params.get('poster') === 'sugar-camp-quarry' ? sugarCampStart(roads.roads, manifest.village, vehicle.bounds!) : undefined;
-  const pose = namedStart ?? start ?? { x: 0, z: 0, heading: Math.PI / 4 };
+  const pose = namedStart ?? dailyPose ?? start ?? { x: 0, z: 0, heading: Math.PI / 4 };
   // The poster start always faces south, toward the quarry, on Start over too.
   const southward = namedStart ? (candidate: { heading: number }) => Math.cos(candidate.heading) < 0 : undefined;
   if (fleet) { if (kind === 'new-visit') fleet.startVisit(pose.x, pose.z, pose.heading, southward); else fleet.restart(pose.x, pose.z, pose.heading, 'start-over', southward); } else vehicle.restart(pose.x, pose.z, pose.heading);
@@ -778,7 +841,7 @@ const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, prop
   multiplayer?.reset();
   resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; devHooks.reset();
-}, AREA.route, firedMode) : new FreeDrive(roads, manifest.village);
+}, AREA.route, firedMode, DAILY?.day ?? 0) : new FreeDrive(roads, manifest.village);
 const roadScene = AREA.roadScene && shift instanceof Shift ? new RoadScene(roads, terrain, shift, params) : null;
 resets[resetSlot.roadScene] = () => roadScene?.reset();
 if (roadScene) { scene.add(roadScene.group, roadScene.painter.group); vehicle.placementGuard = pose => roadScene.allowPlacement(pose, vehicleSpec); }
@@ -884,6 +947,7 @@ function refreshMap(): void {
   mapStops.length = mapMarks.length = 0;
   multiplayer?.marks(mapCars);
   if (placesUI) mapMarks.push(...placesUI.marks);
+  multiplayer?.gameMarks(mapMarks);
   if (props) for (const stop of shift.run.stops) {
     const i = stop.index, p = i < props.mail.length ? props.mail[i] : props.sites[i - props.mail.length];
     if (p) mapStops.push({ x: p.x, z: p.z, due: shift.remaining[i] > 0 });
@@ -897,6 +961,8 @@ resets[resetSlot.relief] = () => relief.reset();
 // The car radio plays the author's own songs when the build carries them (audio/radio.json). ?radio=0 leaves it out.
 // It is fetched further down, once the title card exists.
 let radio: Radio | null = null;
+// Get Fired only: callers phone 94.9 about the run (party-line.ts), when the build carries recorded calls.
+let partyLine: PartyLine | null = null;
 // Test links: ?relief=0.9 sets the gauge (and shows it in a demo drive); ?break=1 steps out as soon as the car has stopped.
 const reliefTest = Number(params.get('relief'));
 if (reliefTest > 0) relief.level = Math.min(1, reliefTest);
@@ -938,6 +1004,10 @@ const startPlacement = fleet ? {
 }
 
 scene.add(shift.group);
+// Dust from the rear wheels and the small meter, only while the ride drifts (drift-rules.ts).
+const driftFeedback = new DriftFeedback(LOW, !bare);
+scene.add(driftFeedback.mesh);
+if (import.meta.env.DEV) expose({ driftFeedback });
 animals?.registerEvidence(shift.evidence);
 document.getElementById('cameraButton')!.addEventListener('click', () => { if (live()) photoRequested = true; });
 for (const id of ['cameraButton', 'endShift', 'shiftReport', 'settings']) {
@@ -1027,7 +1097,7 @@ const pad = touchDevice && !bare ? createTouchControls({
   view: () => { if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
   horn: honk,
 }) : null;
-const touch = pad?.state ?? { steer: 0, throttle: 0 };
+const touch = pad?.state ?? { steer: 0, throttle: 0, handbrake: false, chordAt: 0 };
 // The drone on a phone: DRONE beside Pause launches it; two sticks and RETURN fly it.
 const droneSticks = touchDevice && !bare ? createDroneSticks(() => droneHome()) : null;
 if (pad) {
@@ -1091,13 +1161,20 @@ function readTouch() {
   }
 }
 
+let chordOn = false;   // the phone's two-pedal handbrake was on last frame
 function driveInput(): RideInput {
   if (pause.blocked) return { throttle: 0, steer: 0, handbrake: true };
   const k = (a: string, b: string) => (keys.has(a) || keys.has(b) ? 1 : 0), g = gamepad.state;
+  // GO and BRAKE held together a moment at speed are the handbrake, with no brake under it, only on a ride that drifts (the
+  // bike and the horse keep their pedals) and not on the fleet's pickup, whose handbrake is its parking latch (fleet.ts).
+  const drift = vehicle.spec.drift;
+  chordOn = touch.handbrake && !!drift && fleet?.driven.id !== 'truck'
+    && phoneHandbrake(drift, (performance.now() - touch.chordAt) / 1000, vehicle.speed, touch.steer + g.steer, chordOn);
+  const chord = chordOn;
   const input: RideInput = {
-    throttle: THREE.MathUtils.clamp(k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown') + touch.throttle + g.throttle, -1, 1),
+    throttle: THREE.MathUtils.clamp(k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown') + (chord ? 0 : touch.throttle) + g.throttle, -1, 1),
     steer: THREE.MathUtils.clamp(k('KeyD', 'ArrowRight') - k('KeyA', 'ArrowLeft') + touch.steer + g.steer, -1, 1),
-    handbrake: keys.has('Space') && document.activeElement !== mailButton || g.handbrake,
+    handbrake: keys.has('Space') && document.activeElement !== mailButton || g.handbrake || chord,
     touch: touchDevice && k('KeyW', 'ArrowUp') + k('KeyS', 'ArrowDown') + k('KeyA', 'ArrowLeft') + k('KeyD', 'ArrowRight') === 0,
   };
   if (g.pull) input.pull = true;   // the dirt bike's PULL from a bumper; bike-controls.ts adds Shift and the PULL button
@@ -1225,6 +1302,17 @@ function chase(dt: number) {
   camPos.lerp(new THREE.Vector3(tx, ty, tz), k);
   const lookAhead = towCamera ? -towCamera.lookBack : vehicleSpec.chase.lookAhead;
   const target = new THREE.Vector3(vehicle.x + Math.sin(vehicle.heading) * lookAhead + Math.cos(camHeading) * (towCamera?.lookSide ?? 0), vehicle.y + vehicleSpec.chase.lookHeight, vehicle.z - Math.cos(vehicle.heading) * lookAhead + Math.sin(camHeading) * (towCamera?.lookSide ?? 0));
+  if (astra === 'bend-camera' && garageEntry.id === 'car' && vehicle.speed > 2 && !vehicle.airborne) {
+    // Aim into the next fraction of a second of the turn. Keep the horizon level and the right shoulder in view.
+    const pace = THREE.MathUtils.smoothstep(vehicle.speed, 2, 14);
+    const yawRate = vehicle.speed * Math.tan(vehicle.steerAngle) / vehicleSpec.wheelbase;
+    const sideLead = pace * THREE.MathUtils.clamp(0.5 * vehicle.speed * yawRate * 0.65 ** 2, -1.8, 1.8);
+    const forwardLead = pace * 3.2;
+    const sin = Math.sin(vehicle.heading), cos = Math.cos(vehicle.heading);
+    target.x += sin * forwardLead + cos * sideLead;
+    target.z += -cos * forwardLead + sin * sideLead;
+    target.y += 0.32 * pace;
+  }
   if (towCamera?.drop !== undefined) target.y = camPos.y - Math.hypot(target.x - camPos.x, target.z - camPos.z) * towCamera.drop;
   camLook.lerp(target, k);
   camera.position.copy(camPos);
@@ -1383,8 +1471,28 @@ const clearEndingInput = () => {
 };
 const endings = mailMode ? new Endings(clearEndingInput, () => { shift.startOver(); pause.resetClock(); }) : quietEndings();
 // Built with hud=0 too: a fired Shift ends through it. Only its panel follows the bare HUD.
-const fired = firedMode && shift instanceof Shift && endings instanceof Endings ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock()) : null;
+let daily: DailyRun | null = null;
+// The card holds only what the area can supply today: the painter or the fish truck only when the scene is really there.
+// If a layer failed to load and nine squares cannot be drawn, this is a plain Get Fired run: no short card, no record.
+const dailySupply = DAILY ? supplyFor(DAILY, { boxes: !!props?.mail.length,
+  lawns: properties.some(b => b.kind === 'house'), relief: relief instanceof Relief, painter: !!roadScene?.painter.enabled, fish: !!roadScene?.rules.enabled }) : null;
+const drawn: Square[] | null = DAILY && dailySupply ? drawCard(DAILY.seed, dailySupply) : null;
+const dailySquares = drawn?.length === CARD_SIZE ? drawn : null;
+const fired = firedMode && shift instanceof Shift && endings instanceof Endings ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock(),
+  DAILY && dailySquares ? { limit: DAILY.limit, onEnd: end => daily?.finish(end) } : {}) : null;
+if (fired && DAILY && dailySquares && shift instanceof Shift && endings instanceof Endings) daily = new DailyRun(DAILY, dailySquares, AREA.name, shift, fired, endings, () => pause.resetClock(), dailySupply);
 if (fired && bare) document.getElementById('firedHud')!.style.display = 'none';
+// The Boss: Get Fired only, one car, single player only (bossLive); ?boss=0 leaves it out. Buildings block its sight.
+boss = fired && bossEnabled(firedMode, ERA.modern, params, !!DAILY)
+  ? new Boss(roads, terrain, fleetContacts, SEA_LEVEL, LOW, shift as Shift, fired, buildings ? new Occluders(buildings.clear as [number, number, number, number][]) : null, vehicle, touchDevice) : null;
+// The traffic keeps its distance from every AI car on the road; one shared list, refilled each frame.
+const aiCars: Vehicle[] = [];
+if (boss) {
+  scene.add(boss.group);
+  boss.driver.signals = trafficSignals;
+  boss.driver.obstacles = () => [...aiObstacles(), ...(aiDriverOn() ? aiDriver?.onRoad ?? [] : [])];
+  if (ambientTraffic) { boss.driver.traffic = ambientTraffic.cars; if (!canal) ambientTraffic.others = aiCars; }
+}
 const yardJob = yard && endings instanceof Endings ? ride.yardJob?.(yard) ?? new YardJob(yard, vehicle, terrain, camera, endings) : null;
 resets[resetSlot.yardJob] = () => yardJob?.reset();
 const deckhand = AREA.coast && ERA.modern ? new Deckhand(manifest.village, terrain) : null;
@@ -1393,7 +1501,7 @@ const fishing = fishingSite && endings instanceof Endings ? new Fishing(fishingS
 resets[resetSlot.fishing] = () => fishing?.reset();
 if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
-if (import.meta.env.DEV) expose({ fired }, false);
+if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
 if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
@@ -1414,7 +1522,10 @@ const beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined
 // skip it; ?title=1 shows it in a test.
 const plainVisit = !isTestVisit(params);
 let started = bare || (!plainVisit && !params.has('room') && params.get('title') !== '1');
-const title = started ? null : createTitle(touchDevice, () => { started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved);   // runs each time the card closes
+// Today's run shows its card, vehicle and weather on the title card.
+const titleDaily = DAILY && dailySquares ? { date: DAILY.date, squares: dailySquares, vehicle: GARAGE.find(g => g.id === DAILY.vehicle)?.name ?? 'Mail car',
+  mood: MOODS.find(([m]) => m === DAILY.mood)?.[1] ?? 'Clear' } : undefined;
+const title = started ? null : createTitle(touchDevice, () => { started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
@@ -1454,6 +1565,13 @@ if (!bare && params.get('radio') !== '0') {
     if (params.get('reception') === '0') radio?.useReception(null);   // every station everywhere, as on the Just Listen page
     if (import.meta.env.DEV) expose({ radio });   // for tools/radio-check.mjs
     if (started) radio?.start();
+    if (fired && next) void fetchCalls(audioBase).then(list => {
+      if (!list || radio !== next) return;
+      const stored = (() => { try { return localStorage.getItem('mmm.mp.handle'); } catch { return null; } })();
+      partyLine = new PartyLine(next, list, audioBase, callSign(stored, inventedName()));
+      fired.calls = partyLine;
+      if (import.meta.env.DEV) expose({ partyLine });   // for tools/party-line-browser.mjs
+    });
   });
   }
 }
@@ -1583,7 +1701,8 @@ function drawEnding(dt: number): void {
   engineSound?.update(dt, null);
   roadScene?.setPaused(true);
   endings.update(dt);
-  pad?.show(false); radio?.update(false, true);
+  // A call about the run that waits or plays keeps the radio up under the end card (the Fired call comes here).
+  pad?.show(false); radio?.update(false, !partyLine?.wantsAir); partyLine?.update();
   camera.updateMatrixWorld(); sky.position.copy(camera.position);
   updateWorld('ending', 0);
   // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
@@ -1689,6 +1808,7 @@ function frame(now: number) {
     m.kind = ride.kind; m.speed = vehicle.speed; m.throttle = engineThrottle; m.surface = vehicle.surfaceName; m.airborne = vehicle.airborne;
     // A fleet keeps the trailer on the truck while another member drives: only the truck pulls it.
     m.grade = vehicle.pitch; m.towing = !!towing?.attached && ride.kind === 'truck'; m.radio = !!radio?.audible;
+    m.slide = vehicle.drift.slide(vehicle.spec.drift);
     engineSound.update(realDt, playing && mode === 'drive' && !interiors.busy && !document.hidden ? m : null);
   }
   if (interiors.busy) {
@@ -1715,7 +1835,7 @@ function frame(now: number) {
     const refusal = Math.abs(vehicle.speed) < 0.15 && input.throttle < 0 ? 0 : (animals?.influence(vehicle).brake ?? 0);
     if (refusal > 0) {
       input.throttle = Math.abs(vehicle.speed) > 0.15 ? -Math.sign(vehicle.speed) * refusal : 0;
-      input.handbrake = true;
+      input.handbrake = true; input.held = true;   // a stop for an animal, not a drift
     }
     if (input.throttle !== 0 && (!demo || loaded)) waitingToDrive = false;
     // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.
@@ -1745,11 +1865,13 @@ function frame(now: number) {
       mailPointers.size > 0 || !!(demo && drove < demo && loaded && devHooks.throwMail)), camera);
   mailRequested = false;
   if (impact < 1 && vehicle.damageActive) shift.damage.hit('impact', impactSpeed);
+  if (impact < 1) vehicle.drift.hit(vehicle.x, vehicle.z);   // a mailbox knock ends a drift, not clean
   vehicle.vx *= impact; vehicle.vz *= impact; vehicle.speed *= impact;
   // The replay recorder reads the ride and its drawn rig once the frame's motion (and any mailbox knock) is final.
   // The clock's own step (not the 0.1 s physics cap): a long frame on a busy phone still follows the one before it.
   if (dt > 0 && driving) replay.record(vehicle, car, horse ? 'horse' : ride.kind, now / 1000, clockDt, quietGround);
   gamepad.feel(vehicle, dt, playing && mode === 'drive' && !interiors.busy, now);
+  driftFeedback.update(dt, vehicle, camera, playing && mode === 'drive' && !interiors.busy);
   updateWorld('before-camera', dt, realDt, now);
   camera.updateMatrixWorld();
   sky.position.copy(camera.position);
@@ -1770,11 +1892,13 @@ function frame(now: number) {
       miniMap.show(playing);
       mapTimer -= realDt;
       if (mapTimer <= 0) { mapTimer = 0.25; refreshMap(); }
+      miniMap.boss = boss?.mapSpot ?? null;
       miniMap.update(realDt, vehicle.x, vehicle.z, vehicle.heading, mapStops, mapMarks, mapCars);
     }
     // Paused frames return early, but a multiplayer room keeps running them: ground property lines still stop while Settings is open.
     propertyLayer?.update?.(vehicle.x, vehicle.z, playing && !pause.blocked && !interiors.busy);
     radio?.update(playing, false);
+    partyLine?.update();
   }
   updateWorld('after-activities', dt, realDt, now);
   if (loaded) shiftReady = true;
@@ -1809,6 +1933,13 @@ function frame(now: number) {
   // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
   renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
   aiDriver?.update(camera, vehicle, aiDriverOn(), fleet?.driven.id ?? garageEntry.id);
+  if (boss) {
+    // Held, not hidden, while the player is out of the car (a drone flight, indoors) or the tab is away.
+    boss.update(camera, dt, !!multiplayer?.choice.on, clockRuns && frameLive, !driving || interiors.busy || document.hidden);
+    aiCars.length = 0;
+    if (aiDriverOn() && aiDriver) for (const c of aiDriver.onRoad) aiCars.push(c);
+    for (const c of boss.driver.onRoad) aiCars.push(c);
+  }
   multiplayer?.update(realDt, camera, dt > 0 && driving);
   farVisibility?.update(camera,now/1000);
   updateWorld('mirror', dt, realDt, now);
@@ -1860,6 +1991,8 @@ function frame(now: number) {
   requestAnimationFrame(frame);
   } catch (error) { page.fail(error); }
 }
+// Settings > Advanced: on phone detail, once the far views pack is installed (desktop always draws it).
+if (!bare && LOW && farPack) farPhoneSetting(advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice), farPhone.choice, farPhone.fromUrl, touchDevice);
 resize();
 document.getElementById('boot')?.remove();
 // Finalize all initial material hooks before their first compile. Activation only flips a uniform.

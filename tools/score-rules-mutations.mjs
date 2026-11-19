@@ -18,7 +18,7 @@ const mutants=[
  ['combo never ends','if (e.time - this.lastTime > COMBO_WINDOW) this.endChain();','','score-rules'],
  ['no combo','const combo = comboFactor(this.chain);','const combo = 1;','score-rules'],
  ['flat ladder','1 + STEP_BONUS * step','1','score-rules'],
- ['ladder steps down','this.step = Math.max(this.step, stepFor(this.total));','this.step = stepFor(this.total);','score-rules'],
+ ['ladder steps down','this.step = Math.max(this.step, stepFor(this.total));\n    return { points','this.step = stepFor(this.total);\n    return { points','score-rules'],
  ['scores at protected places','!PROTECTED.includes(e.place) && ','','score-rules'],
  ['animals score','!(e.subject !== undefined && NEVER.includes(e.subject)) && ','','score-rules'],
  ['bus is a bonus','schoolBus: -300','schoolBus: 300','score-rules'],
@@ -51,7 +51,7 @@ const mutants=[
  ['fired shows the report','    if (this.fired) {\n','    if (false) {\n','shift'],
  ['stream survives a new day','this.score.clear(); this.rutMark','this.rutMark','shift'],
  ['grades survive a new day',' m.damage = 0;',' m.damage = m.damage;','props'],
- ['ends inside the event','if (this.book.fired) this.pendingEnd = true;','if (this.book.fired) this.shift.end();','fired'],
+ ['ends inside the event','if (this.book.fired) { this.pendingEnd = true;','if (this.book.fired) { this.shift.end();','fired'],
  ['never ends at Fired','if (this.pendingEnd && !this.shift.ended) { this.pendingEnd = false; this.shift.end(); }','','fired'],
  ['shift never ticks the run','    this.onUpdate?.(dt);\n','','shift'],
  ['run not hooked','    shift.onUpdate = dt => this.update(dt);\n','','fired'],
@@ -60,6 +60,12 @@ const mutants=[
  ['retry keeps the book','if (this.shift.score.runs !== this.run)','if (false)','fired'],
  ['clear keeps the run','this.reported = 0; this.runs++;','this.reported = 0;','score-events'],
  ['two offences','const top = topOffences(b);','const top = topOffences(b, 2);','fired'],
+ ['fact has no place','x, z, witnessed: this.witness(x, z) });','});','shift'],
+ ['nobody witnesses','witnessed: this.witness(x, z)','witnessed: false','shift'],
+ ['a drift is never witnessed','witnessed: this.witness(d.x1, d.z1)','witnessed: false','shift'],
+ ['no Boss line',"const boss = this.boss?.line() ?? '';","const boss = '';",'fired'],
+ ['no Boss summary','      ...this.boss ? [this.boss.summary()] : [],\n','','fired'],
+ ['card too short','this.noteTime = seconds;','this.noteTime = 2;','fired'],
 ];
 try {
  for(const mutant of [null,...(process.argv.includes('--mutations')?mutants:[])]) {

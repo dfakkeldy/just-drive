@@ -2,11 +2,14 @@ import { setHud } from './hud-text';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createCar } from './car';
+import { BOSS_PAINTS, makeBossCar } from './boss-car';
 
 const params = new URLSearchParams(location.search);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xb7cbd2);
-scene.fog = new THREE.Fog(0xb7cbd2, 45, 120);
+// ?night=1: a dark evening, lit only a little (the Boss car's colour study).
+const night = params.get('night') === '1', sky = night ? 0x0c1118 : 0xb7cbd2;
+scene.background = new THREE.Color(sky);
+scene.fog = new THREE.Fog(sky, 45, 120);
 const low = params.get('detail') === 'low';
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, low ? 1 : 1.5));
@@ -22,8 +25,8 @@ controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * .495;
 controls.minDistance = 2.7;
 controls.maxDistance = 40;
-scene.add(new THREE.HemisphereLight(0xe0f0ff, 0x665d48, 2.1));
-const sun = new THREE.DirectionalLight(0xffe2b5, 3.1);
+scene.add(new THREE.HemisphereLight(night ? 0x34465e : 0xe0f0ff, night ? 0x16130e : 0x665d48, night ? .45 : 2.1));
+const sun = new THREE.DirectionalLight(night ? 0xffd9a0 : 0xffe2b5, night ? .9 : 3.1);
 sun.position.set(-6, 4, 5); scene.add(sun);
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x8d9387, roughness: 1 }));
 ground.rotation.x = -Math.PI / 2; ground.position.y = -.008; scene.add(ground);
@@ -43,11 +46,14 @@ const makeBlender = async () => (await (await import('./car-model')).loadBlender
 const car = model === 'blender' ? await makeBlender() : createCar(); scene.add(car.root);
 const cars = [car];
 const shadows = [shadow];
-if (model === 'both') {
-  const second = await makeBlender(); cars.push(second); scene.add(second.root);
+// ?boss=oxblood|bottle|mustard: the left car is the Boss's car in that colour, the right one the mail car beside it.
+const bossPaint = BOSS_PAINTS[params.get('boss') ?? ''], boss = bossPaint !== undefined ? makeBossCar(car, bossPaint) : null;
+const pair = model === 'both' || !!boss;
+if (pair) {
+  const second = model === 'blender' || model === 'both' ? await makeBlender() : createCar(); cars.push(second); scene.add(second.root);
   const secondShadow = shadow.clone(); shadows.push(secondShadow); scene.add(secondShadow);
 }
-if (model === 'both' && params.get('view') === 'driver') { cars[1].root.position.x = 3.5; shadows[1].position.x = 3.5; }
+if (pair && params.get('view') === 'driver') { cars[1].root.position.x = 3.5; shadows[1].position.x = 3.5; }
 // Preserve pilot selection and dirt when changing views through the existing navigation.
 if (model === 'blender' || model === 'both') for (const link of document.querySelectorAll<HTMLAnchorElement>('nav a')) {
   const url = new URL(link.href); url.searchParams.set('model', model);
@@ -71,7 +77,7 @@ switch (view) {
   case 'far': camera.position.set(18, 8, -23); break;
   default: camera.position.set(5.1, 2.7, -6.5);
 }
-if (model === 'both' && view !== 'driver') {
+if (pair && view !== 'driver') {
   const across = camera.position.clone().sub(controls.target).cross(camera.up).normalize().negate();
   cars.forEach((c, i) => {
     c.root.position.copy(across).multiplyScalar(i === 0 ? -2.5 : 2.5);
@@ -99,7 +105,7 @@ car.root.traverse(node => {
 // Preview-only inspection handle for repeatable geometry and motion checks.
 Object.assign(window, { carPreview: { car, scene, camera, controls, renderer, cars, low, model: model ?? 'original', triangles, materials: materials.size } });
 const hud = document.getElementById('hud');
-if (triangles >= 40000 || materials.size >= 12) throw new Error('The car exceeds its geometry or material budget.');
+if (!boss && (triangles >= 40000 || materials.size >= 12)) throw new Error('The car exceeds its geometry or material budget.');
 if (hud) setHud(hud, `${Math.round(triangles).toLocaleString()} triangles · ${materials.size} materials · right-hand drive`);
 const viewLabel = document.getElementById('view'); if (viewLabel) viewLabel.textContent = `${view} view${model === 'both' ? ' · original left / Blender right' : model === 'blender' ? ' · Blender pilot' : ''}`;
 const dirt = document.querySelector('input');
@@ -118,6 +124,8 @@ function animate(): void {
     const beaconMaterial = c.beacon.material;
     if (beaconMaterial instanceof THREE.MeshStandardMaterial) beaconMaterial.emissiveIntensity = params.has('still') ? .8 : Math.sin(t * 9) > .45 ? 3.2 : .25;
   }
+  // ?flash=1 holds the Boss's roof box in the bright half of its amber flash.
+  boss?.flash(params.get('flash') === '1', params.get('flash') === '1' ? 0 : t);
   controls.update(); renderer.render(scene, camera);
   if (++frames === 8) document.title = 'settled';
 }

@@ -326,7 +326,7 @@ export class Fleet {
       if (wasBrake !== this.handbrake) { this.promptTime = 0; this.rampDirty = true; this.message = this.handbrake ? 'Handbrake on' : `Driving: ${this.driven.entry.name}`; }
       this.stoppedInput.throttle = this.handbrake ? 0 : input.throttle;
       this.stoppedInput.steer = this.handbrake ? 0 : input.steer;
-      this.stoppedInput.handbrake = this.handbrake || input.handbrake; this.stoppedInput.touch = input.touch;
+      this.stoppedInput.handbrake = this.handbrake || input.handbrake; this.stoppedInput.touch = input.touch; this.stoppedInput.held = input.held;   // an animal stop stays one (drift-rules)
       input = this.stoppedInput;
     }
     const m = this.driven, before = this.physicsFrames.get(v)!(), undoModel = m.rig.checkpointPose?.();

@@ -1,5 +1,6 @@
 /** Pure rules for Get Fired: score-stream events in, points, combo and the discipline ladder out. No DOM, no three.js. */
 import type { ScoreEvent } from './score-events';
+import { looseSurface } from './drift-rules';
 
 /** Base points. A kind with no row scores nothing; later tasks add rows (drift, airtime, nearMiss, broken props). */
 export const POINTS: Readonly<Record<string, number>> = Object.freeze({
@@ -11,7 +12,24 @@ export const POINTS: Readonly<Record<string, number>> = Object.freeze({
   'box:rock': 10, 'box:lean': 30, 'box:dent': 60, 'box:down': 60,
   // A burst of tyre strips across a lawn.
   rut: 10,
+  // A drift (drift-rules.ts), sized by driftSize.
+  drift: 60,
+  // The Boss followed you, then lost you (boss-rules.ts). Fades with each repeat like any kind.
+  lostBoss: 150,
 });
+/** A drift's points: its base row times its length, mean angle and speed against these marks (each clamped), more on a firm
+ * surface (it needs the handbrake and more speed), at most `most` times the base, then the clean bonus when it ended on its
+ * own without a hit. The biggest clean drift (60 x 3 x 1.5) is near a scene hit (200), not far beyond everything else. */
+export const DRIFT_MARKS = Object.freeze({ length: 30, angle: 25, speed: 12, firm: 1.25, most: 3, clean: 1.5 });
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+/** How big this event was: 1 for every kind but a drift. */
+export function eventSize(e: ScoreEvent): number {
+  const d = e.drift;
+  if (e.kind !== 'drift' || !d) return 1;
+  const m = DRIFT_MARKS;
+  return Math.min(m.most, clamp(d.length / m.length, .5, 3) * clamp(d.angle / m.angle, .6, 1.6) * clamp(e.speed / m.speed, .6, 1.5)
+    * (looseSurface(d.surface) ? 1 : m.firm)) * (d.clean ? m.clean : 1);
+}
 /** Fixed points that ignore combo and ladder, and end a combo. The school bus rule stays a penalty here. */
 export const PENALTIES: Readonly<Record<string, number>> = Object.freeze({ schoolBus: -300 });
 /** Real places where nothing scores: no points, no combo. */
@@ -30,6 +48,8 @@ export const COMBO_FRESH = 3;
  * fades to nothing, so no kind pays forever (a rut every three metres of one lawn, all day, stays near zero). */
 export const NEW_KIND = 2;
 export const REPEAT = .75;
+/** An offence the Boss saw (ScoreEvent.witnessed) is worth this many times its points. Penalties are not. */
+export const WITNESSED = 2;
 /** Each ladder step reached raises the multiplier by this much. */
 export const STEP_BONUS = .25;
 
@@ -52,7 +72,8 @@ const LABELS: Readonly<Record<string, string>> = Object.freeze({
   relief: 'Seen at the roadside', sceneHit: 'Bumped the visitor’s car', sceneHorn: 'Horn at the visitor', sceneDust: 'Dust on a painting',
   sceneAnimal: 'An animal had to get out of the way',
   'box:rock': 'Rocked a mailbox', 'box:lean': 'Leaned a mailbox', 'box:dent': 'Dented a mailbox', 'box:down': 'Flattened a mailbox',
-  rut: 'Lawn ruts', schoolBus: 'Passed a flashing school bus',
+  rut: 'Lawn ruts', schoolBus: 'Passed a flashing school bus', 'bingo:line': 'Bingo lines', 'bingo:card': 'Full bingo card',
+  drift: 'Sideways down the road', lostBoss: 'Lost the Boss',
 });
 export const offenceLabel = (kind: string): string => LABELS[kind] ?? kind;
 
@@ -109,7 +130,7 @@ export class ScoreBook {
     if (e.time - this.lastTime > COMBO_WINDOW) this.endChain();
     if (before < COMBO_FRESH && !this.chainKinds.has(e.kind)) { this.chainKinds.add(e.kind); this.chain = this.chainKinds.size; this.lastTime = e.time; }
     const combo = comboFactor(this.chain);
-    const points = Math.round(POINTS[e.kind] * novelty(before) * combo * this.multiplier);
+    const points = Math.round(POINTS[e.kind] * eventSize(e) * novelty(before) * combo * this.multiplier * (e.witnessed ? WITNESSED : 1));
     this.total += points; this.tally(e.kind, points);
     this.chainPoints += points;
     if (this.chainPoints > this.bestChain.points) this.bestChain = { kinds: this.chain, points: this.chainPoints };
@@ -117,10 +138,21 @@ export class ScoreBook {
     this.step = Math.max(this.step, stepFor(this.total));
     return { points, combo, stepUp: this.step > was ? this.step : 0, firstOfKind: before === 0 };
   }
+  /** A flat bonus (Today's run bingo): no combo, no novelty, no ladder factor. It can raise the ladder like any points.
+   * Returns the rung newly reached (0 when none). */
+  award(kind: string, points: number): number {
+    if (!(points > 0)) return 0;
+    this.total += points; this.tally(kind, points);
+    const was = this.step;
+    this.step = Math.max(this.step, stepFor(this.total));
+    return this.step > was ? this.step : 0;
+  }
   private tally(kind: string, points: number): void {
     const t = this.kinds.get(kind);
     if (t) { t.count++; t.points += points; } else this.kinds.set(kind, { count: 1, points });
   }
+  /** A pull-over ends the combo. Points and the ladder step stay. */
+  breakCombo(): void { this.endChain(); }
   private endChain(): void { this.chain = 0; this.chainPoints = 0; this.chainKinds.clear(); this.lastTime = -Infinity; }
 }
 

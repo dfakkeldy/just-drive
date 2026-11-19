@@ -22,6 +22,14 @@ export function chooseMode(mode: GameMode): void {
   try { localStorage.setItem(KEY, mode); saved = localStorage.getItem(KEY) === mode; } catch { /* query fallback */ }
   const query = new URLSearchParams(location.search);
   const hadTrip=query.has('trip');query.delete('trip');
-  if (query.has('mode') || !saved || hadTrip) { query.set('mode', mode); location.search = query.toString(); }
+  // Leaving Today's run (?daily=1) for a mode is a new address too.
+  const hadDaily = query.has('daily'); query.delete('daily');
+  if (query.has('mode') || !saved || hadTrip || hadDaily) { query.set('mode', mode); location.search = query.toString(); }
   else location.reload();
+}
+
+/** The title card's "Today's run": the same page with ?daily=1. Nothing is saved: the next plain visit keeps the mode. */
+export function chooseDaily(): void {
+  const query = new URLSearchParams(location.search);
+  query.delete('trip'); query.set('daily', '1'); location.search = query.toString();
 }

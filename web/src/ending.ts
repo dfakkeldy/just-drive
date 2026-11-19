@@ -42,9 +42,11 @@ export class Endings {
     this.root.addEventListener('keydown', ev => {
       ev.stopPropagation();
       if (ev.code !== 'Tab') return;
-      const buttons = [...this.root.querySelectorAll('button')];
-      const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      ev.preventDefault(); buttons[(i + (ev.shiftKey ? buttons.length - 1 : 1)) % buttons.length]?.focus();
+      // Buttons and text fields (Today's board name), skipping any that are hidden.
+      const buttons = [...this.root.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button, input')].filter(b => !b.closest('[hidden]') && !b.disabled);
+      const i = buttons.indexOf(document.activeElement as HTMLButtonElement), n = buttons.length;
+      // Focus on none of them (the one it was on just became disabled): Tab goes to the first, Shift+Tab to the last.
+      ev.preventDefault(); buttons[i < 0 ? (ev.shiftKey ? n - 1 : 0) : (i + (ev.shiftKey ? n - 1 : 1)) % n]?.focus();
     });
     // The card owns new pointer input. The caller clears held pedals when it pauses.
     for (const event of ['pointerdown', 'pointerup', 'pointermove', 'click', 'wheel']) this.root.addEventListener(event, ev => ev.stopPropagation());
@@ -54,8 +56,9 @@ export class Endings {
   }
   get busy(): boolean { return !this.root.hidden; }
   get finished(): boolean { return this.ended; }
-  offer(tag: string, title: string, lines: readonly string[], choices: readonly Choice[]): void {
-    this.show(tag, title, lines, choices);
+  /** `body` (Today's run share card) goes under the lines and above the choices. */
+  offer(tag: string, title: string, lines: readonly string[], choices: readonly Choice[], body?: HTMLElement): void {
+    this.show(tag, title, lines, choices, body);
   }
   begin(spec: EndingSpec): void {
     const found = foundEndings();
@@ -67,7 +70,7 @@ export class Endings {
     } }]);
   }
   update(dt: number): void { if (this.finished) { this.seconds += dt; this.move?.(this.seconds); } }
-  private show(tag: string, title: string, lines: readonly string[], choices: readonly Choice[]): void {
+  private show(tag: string, title: string, lines: readonly string[], choices: readonly Choice[], body?: HTMLElement): void {
     if (!this.busy) {
       this.restore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       this.inert = [...document.body.children].filter((n): n is HTMLElement => n instanceof HTMLElement && n !== this.root).map(node => ({ node, was: node.inert }));
@@ -79,6 +82,7 @@ export class Endings {
     const heading = Object.assign(document.createElement('h1'), { id: 'endingTitle', textContent: title });
     card.append(label, heading);
     for (const line of lines) card.appendChild(Object.assign(document.createElement('p'), { textContent: line }));
+    if (body) card.appendChild(body);
     const buttons = document.createElement('div'); buttons.id = 'endingChoices';
     for (const choice of choices) {
       const button = Object.assign(document.createElement('button'), { textContent: choice.label, type: 'button' });

@@ -47,6 +47,7 @@ export interface Surface {
   kind: number;         // 0 none, 1 highway, 2 paved, 3 gravel, 4 track, 5 rail trail
   bridge: boolean;
   washboard: boolean;   // a road shaken into ridges
+  gravel?: boolean;     // a gravel driveway or pad: a track (4) carrying the gravel bit; drives as gravel. Absent otherwise
   brook: number;        // metres from the edge of a brook's water: negative in the water; 99 when none is near
   /** True only when an accepted hand-built deck supplies the driving surface. */
   deck?: boolean;
@@ -637,7 +638,7 @@ export class Terrain {
     const walkMask=this.sidewalks?.terrainMask?.(t.level,t.i,t.j);
     const ground = new Float32Array(S * S);
     const canopy = new Float32Array(S * S);
-    let lo = Infinity, hi = -Infinity;
+    let lo = Infinity, hi = -Infinity, roadPavement = false;
     const tracked=sites.filter(site=>site.preserveRoads&&site.contactMesh);
     t.siteChanges=tracked.length?new Map(tracked.map(site=>[site,new Uint8Array(S*S)])):null;
     for (let k = 0; k < S * S; k++) {
@@ -671,6 +672,7 @@ export class Terrain {
         if(clearsGroundTrees(this.groundClassAt(x,z))){c=0;px[k*4+2]=0;}
       }
       if (road && road[k * 4 + 2] > 0) {
+        roadPavement ||= (road[k * 4 + 2] & 192) !== 0;
         // Nothing stands on a road: fade the tree layer out from the shoulder to the road edge.
         const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;
         c *= THREE.MathUtils.smoothstep(d, hw + 0.8, hw + 4.5);
@@ -820,7 +822,7 @@ export class Terrain {
         ...(coastal.quarry ? {quarryBox:{value:new THREE.Vector4(...coastal.box)}} : {}),
         coastExag: { value:this.exag }, coastOn: { value:1 }, ...(this.low ? {coastPixelScale:{value:0}} : {}), ...coastRecessUniforms(),
       } : {}), tRoadCut:{value:null},roadCutRect:{value:new THREE.Vector4()},roadCutLayout:{value:new THREE.Vector4()},roadCuts:{value:0},tNormal: { value: tex }, tRoad: { value: roadTex }, tBrook: { value: brookTex }, brook: { value: brook ? 1 : 0 }, texel: { value: mpp }, hull: { value: hull ? 1 : 0 }, hideQuad: { value: new THREE.Vector4() } };
-    const mat=!styleTex?new THREE.ShaderMaterial({vertexShader: TERRAIN_VERT,fragmentShader: this.cartRoads ? CART_TERRAIN_FRAG : TERRAIN_FRAG,defines: { ...(this.groundCover ? { GROUND_CLASSES: 1 } : {}), ...(coastal ? { COAST_SHORE: 1, ...(coastal.quarry ? { QUARRY: 1 } : {}) } : {}), ...(this.low ? { LOW: 1 } : { ...(this.shadows ? { SHADOWS: 1 } : {}), ...(lo <= this.seaLevel + 2 ? { SEA_WATER: 1 } : {}) }), ...(gravelOverlay ? { SITE_GRAVEL: 1 } : {}), ...(airportMarkings ? { AIRPORT: 1 } : {}) },uniforms:tileUniforms}):new THREE.ShaderMaterial({vertexShader: TERRAIN_VERT,fragmentShader: STUNT_TERRAIN_FRAG,defines: {STUNT_PARK:1, ...(this.groundCover ? { GROUND_CLASSES: 1 } : {}), ...(coastal ? { COAST_SHORE: 1, ...(coastal.quarry ? { QUARRY: 1 } : {}) } : {}), ...(this.low ? { LOW: 1 } : { ...(this.shadows ? { SHADOWS: 1 } : {}), ...(lo <= this.seaLevel + 2 ? { SEA_WATER: 1 } : {}) }), ...(gravelOverlay ? { SITE_GRAVEL: 1 } : {}), ...(airportMarkings ? { AIRPORT: 1 } : {}) },uniforms:tileUniforms});
+    const mat=!styleTex?new THREE.ShaderMaterial({vertexShader: TERRAIN_VERT,fragmentShader: this.cartRoads ? CART_TERRAIN_FRAG : TERRAIN_FRAG,defines: { ...(this.groundCover ? { GROUND_CLASSES: 1 } : {}), ...(coastal ? { COAST_SHORE: 1, ...(coastal.quarry ? { QUARRY: 1 } : {}) } : {}), ...(this.low ? { LOW: 1 } : { ...(this.shadows ? { SHADOWS: 1 } : {}), ...(lo <= this.seaLevel + 2 ? { SEA_WATER: 1 } : {}) }), ...(gravelOverlay ? { SITE_GRAVEL: 1 } : {}), ...(airportMarkings ? { AIRPORT: 1 } : {}), ...(roadPavement && !this.cartRoads ? { ROAD_PAVEMENT: 1 } : {}) },uniforms:tileUniforms}):new THREE.ShaderMaterial({vertexShader: TERRAIN_VERT,fragmentShader: STUNT_TERRAIN_FRAG,defines: {STUNT_PARK:1, ...(this.groundCover ? { GROUND_CLASSES: 1 } : {}), ...(coastal ? { COAST_SHORE: 1, ...(coastal.quarry ? { QUARRY: 1 } : {}) } : {}), ...(this.low ? { LOW: 1 } : { ...(this.shadows ? { SHADOWS: 1 } : {}), ...(lo <= this.seaLevel + 2 ? { SEA_WATER: 1 } : {}) }), ...(gravelOverlay ? { SITE_GRAVEL: 1 } : {}), ...(airportMarkings ? { AIRPORT: 1 } : {}) },uniforms:tileUniforms});
     const mesh = new THREE.Mesh(geo, mat);
     if(coastal && this.low)mesh.onBeforeRender=(renderer,_scene,camera,_geometry,material)=>updateCoastView(renderer,camera,material);
     coastal?.prepareMesh?.(mesh);
@@ -1078,6 +1080,7 @@ export class Terrain {
         out.kind = raw & 15;
         out.bridge = (raw & 16) !== 0;
         out.washboard = (raw & 32) !== 0;
+        if ((raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
       }
     }
     // Mail and every other ground reader see the same exact deck as the wheels.
@@ -1298,7 +1301,7 @@ export class Terrain {
           const original = state.material as THREE.ShaderMaterial;
           const MIRROR_COAST=original.defines.COAST_SHORE;
           const mirrorUniforms={ ...original.uniforms, sourceHull: original.uniforms.hull, mirrorFocus: this.mirrorFocus };
-          const material=!original.defines.STUNT_PARK?new THREE.ShaderMaterial({vertexShader: MIRROR_TERRAIN_VERT,fragmentShader: this.cartRoads ? CART_TERRAIN_FRAG : TERRAIN_FRAG,defines: { MIRROR: 1, ...(original.defines.GROUND_CLASSES ? { GROUND_CLASSES: 1 } : {}), ...(MIRROR_COAST ? { COAST_SHORE: 1, ...(original.defines.QUARRY ? { QUARRY: 1 } : {}) } : {}), ...(original.defines.SITE_GRAVEL ? { SITE_GRAVEL: 1 } : {}), ...(original.defines.AIRPORT ? { AIRPORT: 1 } : {}) },uniforms:mirrorUniforms}):new THREE.ShaderMaterial({vertexShader: MIRROR_TERRAIN_VERT,fragmentShader: STUNT_TERRAIN_FRAG,defines: {STUNT_PARK:1, MIRROR: 1, ...(original.defines.GROUND_CLASSES ? { GROUND_CLASSES: 1 } : {}), ...(MIRROR_COAST ? { COAST_SHORE: 1, ...(original.defines.QUARRY ? { QUARRY: 1 } : {}) } : {}), ...(original.defines.SITE_GRAVEL ? { SITE_GRAVEL: 1 } : {}), ...(original.defines.AIRPORT ? { AIRPORT: 1 } : {}) },uniforms:mirrorUniforms});
+          const material=!original.defines.STUNT_PARK?new THREE.ShaderMaterial({vertexShader: MIRROR_TERRAIN_VERT,fragmentShader: this.cartRoads ? CART_TERRAIN_FRAG : TERRAIN_FRAG,defines: { MIRROR: 1, ...(original.defines.GROUND_CLASSES ? { GROUND_CLASSES: 1 } : {}), ...(MIRROR_COAST ? { COAST_SHORE: 1, ...(original.defines.QUARRY ? { QUARRY: 1 } : {}) } : {}), ...(original.defines.SITE_GRAVEL ? { SITE_GRAVEL: 1 } : {}), ...(original.defines.AIRPORT ? { AIRPORT: 1 } : {}), ...(original.defines.ROAD_PAVEMENT ? { ROAD_PAVEMENT: 1 } : {}) },uniforms:mirrorUniforms}):new THREE.ShaderMaterial({vertexShader: MIRROR_TERRAIN_VERT,fragmentShader: STUNT_TERRAIN_FRAG,defines: {STUNT_PARK:1, MIRROR: 1, ...(original.defines.GROUND_CLASSES ? { GROUND_CLASSES: 1 } : {}), ...(MIRROR_COAST ? { COAST_SHORE: 1, ...(original.defines.QUARRY ? { QUARRY: 1 } : {}) } : {}), ...(original.defines.SITE_GRAVEL ? { SITE_GRAVEL: 1 } : {}), ...(original.defines.AIRPORT ? { AIRPORT: 1 } : {}) },uniforms:mirrorUniforms});
           this.paved?.applyGround(material);
           this.night?.applyGround(material);
           t.mirror = { geometry, material };

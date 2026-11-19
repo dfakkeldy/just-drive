@@ -1,8 +1,11 @@
 /**
  * The shared score stream. Game code reports plain facts here and never decides points; score-rules.ts turns the
  * facts into points. New kinds (a drift, airtime, a near miss, a broken prop) are new `kind` strings and new rows in
- * the rules' tables: the stream itself does not change. In normal mail play the stream records and nobody listens.
+ * the rules' tables. A kind whose points depend on how big it was carries its own facts (a drift: `drift`). In normal mail
+ * play the stream records and nobody listens.
  */
+import type { DriftFacts } from './drift-rules';
+
 export interface ScoreEvent {
   /** What happened: a complaint kind ('lawnMail', 'boxDown'...), a mailbox grade ('box:rock'...'box:down'), 'rut', 'schoolBus'. */
   readonly kind: string;
@@ -14,6 +17,13 @@ export interface ScoreEvent {
   readonly time: number;
   /** Who or what was involved, when that matters: an 'animal' or a 'person' never scores. */
   readonly subject?: string;
+  /** A finished drift (kind 'drift'): its angle, length, seconds, surface and whether it ended without a hit. */
+  readonly drift?: DriftFacts;
+  /** Where, in game metres, when it is known (the Boss heads for the newest complaint). */
+  readonly x?: number;
+  readonly z?: number;
+  /** The Boss saw it happen (Get Fired): it scores double. */
+  readonly witnessed?: boolean;
 }
 export type ScoreListener = (event: ScoreEvent) => void;
 

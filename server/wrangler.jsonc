@@ -7,9 +7,10 @@
   "compatibility_date": "2026-10-01",
   "workers_dev": false,
   "preview_urls": false,
-  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
-  // The free plan allows only the SQLite kind of object. The room stores nothing.
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }, { "name": "BOARDS", "class_name": "Board" }] },
+  // The free plan allows only the SQLite kind of object. The room stores nothing; a board (Today's board) stores its
+  // rows for 60 days (server/src/board.ts).
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }, { "tag": "v2", "new_sqlite_classes": ["Board"] }],
   "vars": {
     "ORIGINS": "http://localhost:*,http://127.0.0.1:*",
     "BOUNDS": "60000"

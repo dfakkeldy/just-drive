@@ -9,12 +9,14 @@ import { potholeDensity, potholeDepth, washboard } from './defects';
 import type { Road, RoadHit, Roads } from './roads';
 import { horseSpeedLimit } from './horse-motion';
 import { DrivingHelp, forwardTangent } from './driving-help';
+import { Drift, slideAngle, type DriftFacts } from './drift-rules';
 import type { Surface, Terrain } from './terrain';
 
 export interface VehiclePlacement { x: number; z: number; heading: number; y?:number }
 /** The most the touch speed limit brakes beyond taking the engine away, in m/s². */
 export const LIMIT_BRAKE = 1.2;
-export interface Input { throttle: number; steer: number; handbrake: boolean; touch?: boolean }
+/** `held`: the game holds the car (an animal ahead): its handbrake is a brake and never starts a slide. */
+export interface Input { throttle: number; steer: number; handbrake: boolean; touch?: boolean; held?: boolean }
 
 const G = 9.81;
 const STEP = 1 / 120;
@@ -83,7 +85,15 @@ export class Vehicle {
   /** Every teleport, restart and respawn passes here before changing ground contacts. */
   placementGuard: ((pose: VehiclePlacement) => boolean) | null = null;
   private readonly placementPose: VehiclePlacement = { x: 0, z: 0, heading: 0 };
-  onSolidImpact(speed: number): void { if (this.spec.locomotion !== 'horse' && this.damageActive) this.damage?.hit('impact', speed); }
+  onSolidImpact(speed: number): void { this.drift.hit(this.x, this.z); if (this.spec.locomotion !== 'horse' && this.damageActive) this.damage?.hit('impact', speed); }
+  /** The slide state (drift-rules.ts). A spec without `drift` never slides. */
+  readonly drift = new Drift();
+  /** False for a computer driver: only the player's ride slides. */
+  canDrift = true;
+  private readonly driftGround = { speed: 0, surface: '', mu: 0, towed: false, turn: 0 };
+  private readonly slideSpeed = { forward: 0, right: 0 };
+  /** The last finished drift, once (Shift reports it to the score stream). */
+  takeDrift(): DriftFacts | null { return this.drift.take(); }
   surfaceName = '';
   roadName: string | null = null;
   sunk = 0;                  // seconds spent in water
@@ -144,6 +154,7 @@ export class Vehicle {
     x = pose.x; z = pose.z; heading = pose.heading;
     if (!safePlacement(x, z, heading, this.bounds) || pose.y!==undefined&&!Number.isFinite(pose.y)) return false;
     this.#heldTouchSpeedLimit = 0;
+    this.drift.reset();
     this.x = x; this.z = z; this.heading = heading; this.placeReference = pose.y; this.placeInfer = false;
     this.vx = this.vz = this.vy = 0; this.sunk = 0; this.airborne = false;
     if (this.spec.locomotion === 'horse') { this.speed = 0; this.car.resetPose?.(); }
@@ -381,7 +392,7 @@ export class Vehicle {
     const slopeR = Math.atan2((fr + rr) / 2 - (fl + rl) / 2, (this.spec.rearTrack === undefined ? this.spec.track : (this.spec.track + this.spec.rearTrack) / 2));       // right side up is positive
 
     const onRoad = onDeck || (s.kind > 0 && s.roadDist <= s.halfWidth + 0.4);
-    const surf = this.terrain.cartRoads && onRoad ? (s.washboard ? SURFACES.washboard : s.kind === 4 ? SURFACES.track : SURFACES.gravel) : siteDeck && s.kind===9 ? SURFACES.concrete : onRoad ? (s.kind <= 2 || s.kind === 9 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 12 ? SURFACES.grass : s.kind === 3 || s.kind >= 8 ? SURFACES.gravel : s.kind === 5 ? SURFACES.trail : SURFACES.track)
+    const surf = this.terrain.cartRoads && onRoad ? (s.washboard ? SURFACES.washboard : s.kind === 4 ? SURFACES.track : SURFACES.gravel) : siteDeck && s.kind===9 ? SURFACES.concrete : onRoad ? (s.kind <= 2 || s.kind === 9 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 12 ? SURFACES.grass : s.kind === 3 || s.kind >= 8 || s.gravel ? SURFACES.gravel : s.kind === 5 ? SURFACES.trail : SURFACES.track)
       : s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
     this.surfaceName = surf.name;
 
@@ -409,7 +420,17 @@ export class Vehicle {
       this.vy = THREE.MathUtils.clamp(groundVel, -30, MAX_GROUND_RISE_SPEED);
     }
 
-    if (!this.airborne) {
+    // The touch speed limit for this ground, m/s (0: none): the grip model and a slide both keep to it.
+    // No limiter on works-yard surfaces (8/9/10): the slipway needs its full run-up.
+    // No limiter on works-yard surfaces (8/9/10): the slipway needs its full run-up.
+    // A road bridge deck limits as the road it carries (its own kind 9 is the concrete works-yard surface).
+    const limitKind = siteDeck && s.deckRoadKind !== undefined ? s.deckRoadKind : s.kind;
+    const touchLimit = !(input.touch && this.strongHelp && this.touchSpeedLimit) || limitKind >= 8 && limitKind <= 10 ? 0 : !onRoad ? 50 / 3.6 : s.washboard ? 50 / 3.6 : limitKind === 1 ? 100 / 3.6 : limitKind === 2 ? 90 / 3.6 : limitKind === 13 ? 90 / 3.6 : limitKind === 3 ? 75 / 3.6 : limitKind === 5 ? 55 / 3.6 : 50 / 3.6;
+    // A drift has its own step (driftStep); every other step is the ordinary grip model below, unchanged.
+    let slid = false;
+    if (this.airborne) { this.drift.airborne(this.x, this.z); this.drift.watch(input, dt); }   // the flick's clocks run in the air too
+    else if (this.driftStep(dt, input, surf, slopeF, deepest, vf, vl, touchLimit)) { slid = true; vf = this.slideSpeed.forward; vl = this.slideSpeed.right; }
+    if (!this.airborne && !slid) {
       // On washboard the tyres skip from ridge to ridge: the faster the car, the less they hold.
       const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
       const horse = this.spec.locomotion === 'horse';
@@ -420,10 +441,7 @@ export class Vehicle {
       else if (t < 0 && vf < 0.5) a += t * (vf > -this.spec.reverseSpeed ? this.spec.reverseAcceleration : 0);                                      // reverse
       else if (t !== 0) a -= Math.sign(vf) * Math.abs(t) * this.spec.brake * hoofGrip;                                 // brake
       if (input.touch && this.strongHelp && this.touchSpeedLimit && t > 0 && vf > 0) {
-        // No limiter on works-yard surfaces (8/9/10): the slipway needs its full run-up.
-        // A road bridge deck limits as the road it carries (its own kind 9 is the concrete works-yard surface).
-        const kind = siteDeck && s.deckRoadKind !== undefined ? s.deckRoadKind : s.kind;
-        const limit = kind >= 8 && kind <= 10 ? 0 : !onRoad ? 50 / 3.6 : s.washboard ? 50 / 3.6 : kind === 1 ? 100 / 3.6 : kind === 2 ? 90 / 3.6 : kind === 13 ? 90 / 3.6 : kind === 3 ? 75 / 3.6 : kind === 5 ? 55 / 3.6 : 50 / 3.6;
+        const limit = touchLimit;
         // Leave ALL engine power below the band, including on hills. Above it the limiter eases the engine off.
         // Far above it (the surface changed under the car, or the help was switched on at speed) it takes the
         // engine away and adds only a light brake: the car slows as if the driver had lifted, never as a hard stop.
@@ -506,7 +524,7 @@ export class Vehicle {
       this.jolt *= Math.max(0, 1 - 9 * dt);
     }
 
-    if (this.spec.lateralInertia !== undefined) {
+    if (this.spec.lateralInertia !== undefined && !slid) {
       // Change coordinates, not energy: carry the same momentum into the new heading, then dissipate slip.
       const angle = (this.heading - headingBefore) * this.spec.lateralInertia;
       const cos = Math.cos(angle), sin = Math.sin(angle), forward = vf;
@@ -527,7 +545,7 @@ export class Vehicle {
       if (this.z < z0) { this.z = z0; this.atEdge = this.atEdge || this.vz < 0; this.vz = Math.max(this.vz, 0); }
       if (this.z > z1) { this.z = z1; this.atEdge = this.atEdge || this.vz > 0; this.vz = Math.min(this.vz, 0); }
       // Hitting the wall stops the car, as a barricade would: it does not slide along it.
-      if (this.atEdge) { this.vx *= 0.2; this.vz *= 0.2; }
+      if (this.atEdge) { this.drift.hit(this.x, this.z); this.vx *= 0.2; this.vz *= 0.2; }
     }
     if (this.spec.locomotion !== 'horse' && this.damageActive && this.damage) {
       let depth = 0;
@@ -549,6 +567,7 @@ export class Vehicle {
     // Water: the car is lost after a moment, then it comes back on the road.
     if (!onDeck && ((s.water && this.y < (s.waterLimit ?? s.ground+.25)) || s.ground < this.seaLevel - 0.25)) {
       this.sunk += dt;
+      this.drift.hit(this.x, this.z);   // into the water: a slide ends here and is not clean
       this.vx *= 1 - Math.min(1, 3 * dt); this.vz *= 1 - Math.min(1, 3 * dt);
       if (this.sunk > 1.4) this.respawn();
     } else {
@@ -562,6 +581,66 @@ export class Vehicle {
         }
       }
     }
+  }
+
+  /**
+   * One grounded step of a slide (drift-rules.ts), or false when the body is not sliding and the grip model drives it.
+   * The body keeps one speed along its path; the rules turn the path and set the slide angle between path and heading.
+   * No driving help acts here: the light and the strong help would pull the nose back to the road and fight the slide.
+   */
+  private driftStep(dt: number, input: Input, surf: (typeof SURFACES)[keyof typeof SURFACES], slopeF: number, deepest: number, vf: number, vl: number, touchLimit: number): boolean {
+    const spec = this.spec.drift, d = this.drift;
+    if (!spec || !this.canDrift || this.spec.locomotion === 'horse') return false;
+    d.watch(input, dt);
+    if (input.held) d.held(this.x, this.z);   // a stop for an animal ends a slide, never scores it
+    const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
+    const g = this.driftGround;
+    let v = Math.hypot(vf, vl);
+    g.speed = vf > 0 ? v : 0; g.surface = surf.name; g.mu = surf.mu * skip; g.towed = !!this.towLoad;
+    if (!d.active) {
+      const side = d.begins(spec, input, g);
+      if (!side) return false;
+      d.begin(side, input.handbrake ? 'handbrake' : 'lift', slideAngle(vf, vl), this.x, this.z, input.steer);
+    }
+    if (!(vf > 0)) { d.finish('lost', this.x, this.z); return false; }
+    // The front wheels turn as the grip model turns them (its lock at this speed, its turn-in and return rates), and the yaw
+    // they would give on grip is the least the path turns into the slide: a slide never runs wide of the wheel.
+    const corner = surf === SURFACES.washboard ? 1 : this.spec.cornering;
+    const lock = Math.min(this.spec.maxSteer, Math.atan((this.spec.wheelbase * this.spec.gripLock * corner * g.mu * G) / Math.max(v * v, 4)));
+    const ask = THREE.MathUtils.clamp(input.steer, -1, 1), wheel = ask * lock;
+    const away = Math.abs(wheel) > Math.abs(this.steerAngle) && wheel * this.steerAngle >= 0;
+    const steerRate = away ? this.spec.steerBaseRate + this.spec.steerSpeedRate / (1 + v / this.spec.steerSpeedScale) : this.spec.steerReturnRate;
+    this.steerAngle = THREE.MathUtils.clamp(this.steerAngle + THREE.MathUtils.clamp(wheel - this.steerAngle, -steerRate * dt, steerRate * dt), -lock, lock);
+    g.turn = vf * Math.tan(this.steerAngle) / this.spec.wheelbase;
+    // Along the path: the engine and brakes as in the grip model, less what the slide scrubs off.
+    const t = input.throttle, mu = g.mu;
+    let a = 0;
+    if (t > 0) a += t * Math.min(this.spec.engineAcceleration, this.spec.enginePower / (v + 1), mu * G * this.spec.tractionShare);
+    else if (t < 0) a += t * this.spec.brake * mu;
+    // The touch speed limit eases the engine off in a slide as on grip.
+    if (touchLimit > 0 && t > 0) {
+      if (v >= touchLimit - 1) this.#heldTouchSpeedLimit = touchLimit;
+      a -= Math.min(Math.max(0, v - touchLimit + 1) * 4, a + LIMIT_BRAKE);
+    }
+    if (input.handbrake) a -= this.spec.handbrake * mu;
+    if (this.towLoad && this.spec.mass) {
+      const load = this.towLoad, total = this.spec.mass + load.mass;
+      a *= t < 0 || input.handbrake ? (this.spec.mass + load.mass * load.brakeShare) / total : this.spec.mass / (this.spec.mass + load.mass * load.driveMassShare);
+    }
+    a -= G * Math.sin(slopeF);
+    const measured = slideAngle(vf, vl), m = d.step(spec, input, g, measured, dt);
+    const aero = this.towLoad && this.spec.mass ? this.spec.aeroDrag * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag;
+    const drag = surf.roll * G + aero * v * v + (surf === SURFACES.brush ? .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + m.scrub;
+    v = Math.max(0, v + (a - drag) * dt);
+    // The path turns; the nose leads it by the new slide angle.
+    this.heading = this.heading - measured + m.pathRate * dt + m.angle;
+    this.slideSpeed.forward = v * Math.cos(m.angle); this.slideSpeed.right = -v * Math.sin(m.angle);
+    this.lean.set(a, v * m.pathRate);
+    if (deepest > 0.03 && v > 2) this.jolt = Math.max(this.jolt, deepest * 6);
+    this.shake = surf.rough * Math.min(v, 20) + this.jolt;
+    this.jolt *= Math.max(0, 1 - 9 * dt);
+    d.check(spec, v, this.x, this.z);
+    return true;
   }
 
   private bodyLean = new THREE.Vector2();
@@ -642,13 +721,14 @@ export class Vehicle {
 }
 
 /** Drives along the nearest road: used for demos and for screenshots of the car in motion. */
-export function autopilot(v: Vehicle, roads: Roads, cruise = 16, eligible?: (road: Road) => boolean): Input {
+/** `toward`: a heading to choose the road's direction by (a turn at a junction); the car's own heading when omitted. */
+export function autopilot(v: Vehicle, roads: Roads, cruise = 16, eligible?: (road: Road) => boolean, toward?: number): Input {
   const hit = roads.nearest(v.x, v.z, 40, (r) => r.kind <= 3 && (!eligible || eligible(r)));
   if (!hit) return { throttle: 0, steer: 0, handbrake: false };
   let want = hit.heading;
-  // A road line has two directions; take the one closer to where the car points.
-  let err = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
-  if (Math.abs(err) > Math.PI / 2) { want += Math.PI; err = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading)); }
+  // A road line has two directions; take the one closer to where the car points (or to `toward`).
+  if (Math.cos(want - (toward ?? v.heading)) < 0) want += Math.PI;
+  const err = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
   if (v.towLoad && v.spec.envelope !== CAR_SPEC.envelope) return wideDemo(v, hit, want, cruise);
   // Keep to the right-hand lane: aim a little right of the centre line.
   const rx = Math.cos(want), rz = Math.sin(want);

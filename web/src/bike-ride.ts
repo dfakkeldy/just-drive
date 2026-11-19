@@ -1,5 +1,6 @@
 import {deckCounts} from './bridge-contact';
 import {MAX_GROUND_RISE_SPEED} from './ground-motion';
+import { Drift, type DriftFacts } from './drift-rules';
 import { safePlacement } from './placement-pose';
 import * as THREE from 'three';
 import { BIKE_SPEC, type Bike } from './bike';
@@ -32,6 +33,9 @@ export class BikeRide implements Ride {
   airborne = false; sunk = 0; atEdge = false;
   damage: Damage | null = null; damageActive = false; desktopPull = false;
   get activeTouchSpeedLimit(): number { return 0; }
+  /** The dirt bike has its own rear-brake slide below; it never enters the cars' drift (drift-rules.ts). */
+  readonly drift = new Drift(); canDrift = false;
+  takeDrift(): DriftFacts | null { return null; }
   assist = 0; strongHelp = false; touchSpeedLimit = false; helpYaw = 0; lightHelpYaw = 0;
   bounds: [number, number, number, number] | null = null;
   placementGuard: ((pose: VehiclePlacement) => boolean) | null = null;
@@ -177,7 +181,7 @@ export class BikeRide implements Ride {
     if (s.deck) return s.washboard?SURFACES.washboard:s.kind===9?SURFACES.concrete:s.kind<=2?SURFACES.paved:s.kind===5?SURFACES.trail:s.kind===4?SURFACES.track:SURFACES.gravel;
     if (!s.deck && deckCounts(this.roads.deckHeight(this.x, this.z),this.y,this.terrain.cartRoads)) return SURFACES.paved;
     if (s.kind === 0 || s.roadDist > s.halfWidth + .4) return s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
-    return s.kind === 9 ? SURFACES.concrete : s.kind <= 2 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 5 ? SURFACES.trail : s.kind === 4 ? SURFACES.track : SURFACES.gravel;
+    return s.kind === 9 ? SURFACES.concrete : s.kind <= 2 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 5 ? SURFACES.trail : s.kind === 4 && (!s.gravel || this.terrain.cartRoads) ? SURFACES.track : SURFACES.gravel;
   }
   private beginJump(): void {
     this.airborne = true; this.launchX = this.x; this.launchZ = this.z; this.airPitch = 0;

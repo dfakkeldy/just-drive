@@ -8,7 +8,8 @@ import { SceneRoad } from './road-scene-rules';
 import { bendOffset } from './ambient-traffic';
 import { bodyGap, pushOutBodies, type ContactBody } from './parked';
 import { deckCounts } from './bridge-contact';
-import type { Roads } from './roads';
+import { bearing, branchGain, turnRound, type Spot } from './boss-rules';
+import type { Road, Roads } from './roads';
 import type { Terrain } from './terrain';
 import type { AreaContacts } from './world-contacts';
 
@@ -69,6 +70,31 @@ export function signalGap(signals: SignalHook | null, x: number, z: number, head
   return stop >= speed * speed / 16 ? stop : Infinity;
 }
 export type DriverRig = { rig: { root: THREE.Object3D }, vehicle: Vehicle };
+/**
+ * Hooks for a driver with a purpose (the Boss in Get Fired). Without them the driver is the Point Tupper AI, unchanged.
+ * The same steering, physics, lane keeping, gaps, contacts and hidden spawns serve both.
+ */
+export interface DriverTune {
+  /** Always this garage kind: it never swaps, and it stays when the player drives the same kind. */
+  kind?: string;
+  /** Cruise for a gap (metres, bumper to bumper) to whatever is ahead; `aheadSpeed` is that body's speed along the
+   * driver's heading (0 for a traffic queue or a stop line). Default: the Point Tupper crawl. */
+  speed?: (gap: number, aheadSpeed: number) => number;
+  /** Under this gap it brakes hard (default 16 m). */
+  stopGap?: number;
+  /** A place to head for: at a junction it takes the branch toward it, and out of sight it turns round for it. */
+  goal?: () => Spot | null;
+  /** True while it must stay on the road even when parked (it is following the player). */
+  keep?: () => boolean;
+  /** How far from the player a hidden start may be (default 120 to 550 m). */
+  spawnRange?: () => readonly [number, number];
+  /** Road half width it needs beyond its own (default 1.8 m: two lanes of Point Tupper road; Mabou's gravel is 2.6 m). */
+  roadMargin?: number;
+  /** Hidden starts tried per frame (default 1). */
+  tries?: number;
+  /** Radius of the sphere that says whether the camera can see it (default 12 m, enough for the longest rig). */
+  radius?: number;
+}
 /** Free one AI rig's GPU buffers: geometry, instance buffers, skeletons and materials. Textures stay, because some are
  * shared between rigs (the pickup's reflection map). The game swaps only fleet kinds (pickup, side by side, dirt bike),
  * whose builders make fresh geometry; a Blender car clone shares geometry, which three.js would simply upload again. */
@@ -92,7 +118,7 @@ export class PointTupperDriver {
   readonly onRoad: Vehicle[] = [];
   private cursor = 0;
   private parked = 0;
-  private readonly eligible = (r: Roads['roads'][number]) => r.kind <= 3 && r.halfWidth >= this.vehicle.spec.halfWidth + 1.8;
+  private readonly eligible = (r: Roads['roads'][number]) => r.kind <= 3 && r.halfWidth >= this.vehicle.spec.halfWidth + (this.tune?.roadMargin ?? 1.8);
   obstacles: () => readonly ContactBody[] = () => [];
   /** Ambient traffic cars: main.ts passes the pool itself, so reading it adds no allocation. The AI keeps its
    * distance behind one in its lane; one in the other lane is not in the way. */
@@ -109,61 +135,95 @@ export class PointTupperDriver {
   /** `low`: LOW quality builds the parked display models (drivableDisplay) and leaves the car out. */
   constructor(private readonly roads: Roads, private readonly terrain: Terrain,
     private readonly contacts: AreaContacts, playerId: string, private readonly sea: number, private readonly random = Math.random,
-    make?: (entry: Entry) => DriverRig, readonly low = false) {
+    make?: (entry: Entry) => DriverRig, readonly low = false, readonly tune: DriverTune = {}) {
     this.make = make ?? (entry => {
       if (low && !isDisplayKind(entry.id)) throw new Error(`No LOW display model for ${entry.id}`);
       const rig = low ? drivableDisplay(entry.id as DisplayKind) : entry.build(false, true);
       return { rig, vehicle: entry.ride ? legacyVehicle(entry.ride(rig, this.terrain, this.roads, this.sea, entry.spec))
         : new Vehicle(rig, this.terrain, this.roads, this.sea, entry.spec) };
     });
+    this.sphere.radius = tune.radius ?? 12;
     const self = this; this.contact = { get y() { return self.vehicle.y; } };
     this.group.visible = false;
-    this.mount(chooseDriver(playerId, random, low));
+    this.mount(tune.kind ? GARAGE.find(e => e.id === tune.kind)! : chooseDriver(playerId, random, low));
   }
+  /** Leaves the road as soon as nobody can see it (the Boss driving off after a pull-over). */
+  leaving = false;
+  private steerRoad: Road | null = null;
+  private steerToward = 0;
+  private steerTime = 0;
+  private steerCheck = 0;
+  private turnCheck = 0;
   /** Build a kind. Only called at boot and on a hidden swap, never while the rig can be seen. */
   private mount(entry: Entry): void {
     if (this.rig) { this.group.remove(this.rig.root); disposeRig(this.rig.root); }
     const { rig, vehicle } = this.make(entry);
     this.entry = entry; this.rig = rig; this.vehicle = vehicle; this.builds++;
+    // Its stops use the handbrake with the wheel turned: a computer driver never slides (only the player's ride drifts).
+    vehicle.canDrift = false;
     this.group.add(rig.root);
-    this.paths = this.roads.roads.filter(r => !r.bridge && r.kind <= 3 && r.halfWidth >= entry.spec.halfWidth + 1.8)
+    this.paths = this.roads.roads.filter(r => !r.bridge && r.kind <= 3 && r.halfWidth >= entry.spec.halfWidth + (this.tune?.roadMargin ?? 1.8))
       .flatMap(r => [new SceneRoad(r.pts, 0, 1), new SceneRoad([...r.pts].reverse(), 0, 1)])
       .filter(p => p.cumulative.at(-1)! > 120);
   }
-  hide(): void { this.active = this.group.visible = false; this.onRoad.length = 0; }
+  hide(): void { this.active = this.group.visible = this.leaving = false; this.onRoad.length = 0; this.steerRoad = null; }
   /** `playerKind` is the kind the player drives now (the fleet member after a switch), not the boot vehicle. */
   update(camera: THREE.Camera, player: Vehicle, enabled: boolean, playerKind: string): void {
     if (!enabled) { this.hide(); return; }
     this.matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.matrix);
+    const [near, far] = this.tune?.spawnRange?.() ?? [120, 550];
     if (this.active) {
       this.sphere.center.set(this.vehicle.x, this.vehicle.y + 2, this.vehicle.z);
+      const seen = this.frustum.intersectsSphere(this.sphere), away = Math.hypot(this.vehicle.x - player.x, this.vehicle.z - player.z);
       // The same kind as the player stays while seen, then leaves; it never vanishes in view.
-      if ((playerKind === this.entry.id || Math.hypot(this.vehicle.x - player.x, this.vehicle.z - player.z) > 650 || this.parked > 3) && !this.frustum.intersectsSphere(this.sphere)) this.hide();
+      if ((!this.tune?.kind && playerKind === this.entry.id) || away > far + 100 || this.leaving || (this.parked > 3 && !this.tune?.keep?.()) || this.parked > 12) {
+        if (!seen) this.hide();
+        return;
+      }
+      // A goal behind it: it cannot reverse, so it turns round where nobody can see it (and never near the player).
+      const goal = this.tune?.goal?.();
+      if (goal && !seen && away > 60 && this.turnCheck <= 0) {
+        this.turnCheck = 2;
+        const v = this.vehicle;
+        if (turnRound(v, goal)) {
+          const { x, z, heading } = v, y = v.y, pose = { x, z, heading: heading + Math.PI, y, spec: v.spec };
+          if (this.contacts.allows(pose)) v.place(x, z, heading + Math.PI);
+          this.steerRoad = null;
+        }
+      }
       return;
     }
-    if (playerKind === this.entry.id) this.mount(chooseDriver(playerKind, this.random, this.low));
+    if (!this.tune?.kind && playerKind === this.entry.id) this.mount(chooseDriver(playerKind, this.random, this.low));
     if (!this.paths.length) return;
-    const n = this.cursor++, path = this.paths[n % this.paths.length];
-    const pose = { x: 0, z: 0, heading: 0 };
-    path.at(30 + n * 97 % Math.max(1, path.cumulative.at(-1)! - 80), 1.6, pose);
-    const y = this.terrain.heightAt(pose.x, pose.z), distance = Math.hypot(pose.x - player.x, pose.z - player.z);
-    // Never at a deck or under one: a place with no reference stands on land, which would drop a spawn on a span into
-    // the channel. The cursor moves on, so the next try is elsewhere on the path.
-    if (y === null || distance < 120 || distance > 550 || this.roads.deckHeight(pose.x, pose.z) !== null) return;
-    this.sphere.center.set(pose.x, y + 2, pose.z);
-    if (this.frustum.intersectsSphere(this.sphere)) return;
-    const v = this.vehicle;
-    if (!this.contacts.allows({ ...pose, y, spec: v.spec }) || !v.place(pose.x, pose.z, pose.heading)) return;
-    this.sphere.center.set(v.x,v.y+2,v.z);
-    if (this.frustum.intersectsSphere(this.sphere)) return;
-    if ([player, ...this.obstacles()].some(b => bodyGap(v,b)<30)) return;
-    // Nor right in front of (or behind) a traffic car doing 12 m/s.
-    for (const c of this.traffic) if (c.active && Math.hypot(c.solid.x - v.x, c.solid.z - v.z) < 35) return;
-    this.parked = 0; this.active = this.group.visible = true; this.onRoad[0] = v;
+    // One hidden start on one sampled road point per try; the active flag says whether it took.
+    const spawnTry = (): void => {
+      const n = this.cursor++, path = this.paths[n % this.paths.length];
+      const pose = { x: 0, z: 0, heading: 0 };
+      path.at(30 + n * 97 % Math.max(1, path.cumulative.at(-1)! - 80), 1.6, pose);
+      const y = this.terrain.heightAt(pose.x, pose.z), distance = Math.hypot(pose.x - player.x, pose.z - player.z);
+      // Never at a deck or under one: a place with no reference stands on land, which would drop a spawn on a span into
+      // the channel. The cursor moves on, so the next try is elsewhere on the path.
+      if (y === null || distance < near || distance > far || this.roads.deckHeight(pose.x, pose.z) !== null) return;
+      // A driver with a goal starts on a road that does not point away from it.
+      const goal = this.tune?.goal?.();
+      if (goal && Math.cos(bearing(pose, goal) - pose.heading) < -.2) return;
+      this.sphere.center.set(pose.x, y + 2, pose.z);
+      if (this.frustum.intersectsSphere(this.sphere)) return;
+      const v = this.vehicle;
+      if (!this.contacts.allows({ ...pose, y, spec: v.spec }) || !v.place(pose.x, pose.z, pose.heading)) return;
+      this.sphere.center.set(v.x,v.y+2,v.z);
+      if (this.frustum.intersectsSphere(this.sphere)) return;
+      if ([player, ...this.obstacles()].some(b => bodyGap(v,b)<30)) return;
+      // Nor right in front of (or behind) a traffic car doing 12 m/s.
+      for (const c of this.traffic) if (c.active && Math.hypot(c.solid.x - v.x, c.solid.z - v.z) < 35) return;
+      this.parked = 0; this.active = this.group.visible = true; this.leaving = false; this.onRoad[0] = v;
+    };
+    for (let attempt = 0; attempt < (this.tune?.tries ?? 1) && !this.active; attempt++) spawnTry();
   }
   step(dt: number, player: Vehicle): void {
     if (!this.active) return;
+    this.turnCheck -= dt;   // the hidden turn round (update) is tried every 2 s of play, at any frame rate
     const v = this.vehicle, old = { x: v.x, z: v.z, heading: v.heading, y: v.y };
     const hit = this.roads.nearest(v.x, v.z, 12, this.eligible);
     // Only a genuine dead end ahead needs a stop. Connected pieces use demo steering.
@@ -173,12 +233,21 @@ export class PointTupperDriver {
     });
     const bodies = [player, ...this.obstacles()];
     // The gap to a traffic car ahead is bumper to bumper, like bodyGap. A stop line counts as a body 13 m past it less
-    // the AI's half length, so its nose rolls to a stop 1 m short of the line and it brakes hard inside 3 m.
-    const queue = Math.min(trafficGap(v.x, v.z, v.heading, v.spec.halfWidth, v.spec.halfLength, this.traffic), signalGap(this.signals, v.x, v.z, v.heading, v.speed) + 13 - v.spec.halfLength);
-    let gap = queue;
-    for (const b of bodies) gap = Math.min(gap, bodyInWay(v, b));
-    const input = autopilot(v, this.roads, end ? 0 : Math.min(8, Math.max(0, (gap - 14) * .4)), this.eligible);
-    if (gap < 16 || end) { input.throttle = v.speed > .1 ? -1 : 0; input.handbrake = true; }
+    // the AI's half length, so its nose rolls to a stop 1 m short of the line and it brakes hard inside 3 m. A tuned
+    // driver keeps closer gaps (the Boss: 6 m, hard under 3 m), so for it the line is a body 1 m past: it eases to a stop
+    // 5 m short and brakes hard 2 m short, never inside the junction.
+    const line = signalGap(this.signals, v.x, v.z, v.heading, v.speed) + (this.tune?.speed ? 1 : 13) - v.spec.halfLength;
+    const queue = Math.min(trafficGap(v.x, v.z, v.heading, v.spec.halfWidth, v.spec.halfLength, this.traffic), line);
+    let gap = queue, aheadSpeed = 0;
+    for (const b of bodies) {
+      const g = bodyInWay(v, b);
+      if (g < gap) { gap = g; aheadSpeed = (b.vx ?? 0) * Math.sin(v.heading) - (b.vz ?? 0) * Math.cos(v.heading); }
+    }
+    const steer = this.tune?.goal ? this.steering(dt, v, hit) : null;
+    let cruise = end ? 0 : this.tune?.speed ? this.tune.speed(gap, aheadSpeed) : Math.min(8, Math.max(0, (gap - 14) * .4));
+    if (steer) cruise = Math.min(cruise, 7);   // a turn onto another road is taken slowly
+    const input = autopilot(v, this.roads, cruise, steer ? steer.filter : this.eligible, steer?.toward);
+    if (gap < (this.tune?.stopGap ?? 16) || end) { input.throttle = v.speed > .1 ? -1 : 0; input.handbrake = true; }
     this.terrain.withGroundContact(this.contact, () => v.update(Math.min(dt, .05), input, () => {
       this.contacts.resolve(v); pushOutBodies(v, bodies);
     }));
@@ -199,6 +268,32 @@ export class PointTupperDriver {
     } else if (!next || next.dist + v.spec.halfWidth > next.road.halfWidth || bodyGap(v, player) < .1) {
       v.place(old.x, old.z, old.heading, old.y); v.vx = v.vz = v.speed = 0;
     }
+  }
+  /** With a goal: at a road joining ahead, turn onto it when it heads nearer the goal. Null keeps to the road. */
+  private steering(dt: number, v: Vehicle, hit: ReturnType<Roads['nearest']>): { filter: (r: Road) => boolean; toward: number } | null {
+    const goal = this.tune?.goal?.();
+    if (!goal || !hit) { this.steerRoad = null; return null; }
+    if (this.steerRoad) {
+      this.steerTime += dt;
+      // On the new road and lined up with it, or too long at it: the turn is done.
+      if ((hit.road === this.steerRoad && Math.cos(hit.heading - this.steerToward) ** 2 > .9) || this.steerTime > 6) this.steerRoad = null;
+    } else if ((this.steerCheck -= dt) <= 0) {
+      this.steerCheck = .25;
+      const fx = Math.sin(v.heading), fz = -Math.cos(v.heading), toGoal = bearing(v, goal);
+      for (const ahead of [10, 20]) {
+        const branch = this.roads.nearest(v.x + fx * ahead, v.z + fz * ahead, 8, r => r !== hit.road && this.eligible(r));
+        if (!branch) continue;
+        if (branchGain(v.heading, toGoal, branch.heading) > .35) {
+          const h = branch.heading, back = Math.cos(h - v.heading) < -.3, other = Math.cos(h + Math.PI - v.heading) < -.3;
+          // The direction of the branch that heads nearer the goal and does not point back at the car.
+          this.steerToward = back ? h + Math.PI : other ? h : Math.cos(toGoal - h) >= Math.cos(toGoal - h - Math.PI) ? h : h + Math.PI;
+          this.steerRoad = branch.road; this.steerTime = 0;
+          break;
+        }
+      }
+    }
+    const road = this.steerRoad;
+    return road ? { filter: r => r === road, toward: this.steerToward } : null;
   }
   resolve(body: Vehicle): void {
     if (!this.active || body === this.vehicle) return;

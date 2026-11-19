@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import make_talk as talk     # noqa: E402
 import order_talk as order   # noqa: E402
+import calls_talk as calls   # noqa: E402
 
 
 def in_order(spans: list, first: float, last: float) -> bool:
@@ -210,7 +211,43 @@ def test_order() -> None:
             order.MAKE = was
 
 
+def test_calls() -> None:
+    # The Get Fired calls of Part 16: 40 calls and 24 nicknames, all fit for the game, no new voice.
+    got, names = calls.pieces()
+    assert (len(got), len(names)) == (40, 24), (len(got), len(names))
+    assert calls.faults(got, names) == [], calls.faults(got, names)
+    assert {c['about'] for c in got} == set(calls.ABOUTS), 'a call for every offence kind and every ladder step'
+    for c in got:
+        # 5 to 12 seconds as said: about 2.7 words a second, a breath between lines, and the nickname after.
+        words = sum(len(t.split()) for _, _, t in c['lines'])
+        said = words / 2.7 + 0.4 * (len(c['lines']) - 1) + (1.3 if c['name'] else 0)
+        assert 5 <= said <= 12, (c['source'], round(said, 1))
+    assert {c['caller'] for c in got if c['name']} == {n['caller'] for n in names} == {'angus', 'theresa'}
+    assert all(len(n['lines'][0][2].split()) <= 7 for n in names), 'a nickname is short'
+    # Each fault the check names, on a copy of the words.
+    one = lambda pick, **change: [{**p, **change} if p is pick else p for p in (got if 'about' in pick else names)]
+    name_call = next(c for c in got if c['name'])
+    cut = [*name_call['lines'][:-1], ('say', name_call['lines'][-1][1], name_call['lines'][-1][2] + '.')]
+    assert any('it was' in f for f in calls.faults(one(name_call, lines=cut), names))
+    assert any('more than one caller' in f for f in calls.faults(one(got[0], callers=['ANGUS', 'THERESA']), names))
+    assert any('about' in f for f in calls.faults(one(got[0], about='hedge'), names))
+    assert any('no voice' in f for f in calls.faults(one(got[0], lines=[('say', 'GERTRUDE', 'Effie!')]), names))
+    assert any('kind lawn' in f for f in calls.faults(got, [n for n in names if not (n['caller'] == 'angus' and n['kind'] == 'lawn')]))
+    assert any('does not start with' in f for f in calls.faults(got, one(names[0], name='Mailbox Muncher')))
+    # The words and the list must agree.
+    assert calls.disagree({'calls': [{'source': got[0]['source'], 'about': 'lawn', 'caller': got[0]['caller'], 'name': False}],
+                           'nicknames': [{'source': 'talk-nick-nobody-box-9'}]}, got + names) == [
+        f'{got[0]["source"]}: radio_calls.json says about \'lawn\', the words say \'box\'',
+        'talk-nick-nobody-box-9 is in radio_calls.json but not in scripts.md Part 16']
+    # The list that is in git agrees with the words, and is a valid calls catalogue.
+    assert calls.disagree(json.loads(calls.CALLS_PATH.read_text()), got + names) == []
+    calls.validate_calls(json.loads(calls.CALLS_PATH.read_text()), calls.read_catalogue())
+    # They are never station tracks, and never padded to a track's length.
+    assert not [t for t in order.TITLES if t.startswith(talk.CALL_PIECES)]
+    assert all(talk.call_piece(p['source']) for p in got + names) and not talk.call_piece('talk-ident-1')
+
+
 if __name__ == '__main__':
-    for test in (test_snapped, test_say_and_clip, test_drift, test_heard_with_an_h, test_order):
+    for test in (test_snapped, test_say_and_clip, test_drift, test_heard_with_an_h, test_order, test_calls):
         test()
         print('PASS', test.__name__)
