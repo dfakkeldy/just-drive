@@ -9,9 +9,15 @@ import { assertMailCar } from './mail-car-body.mjs';
 const [, first] = process.argv.slice(2);
 const origin = first ? new URL(first).origin : null, port = process.env.CDP_PORT ?? '9538';
 const baselinePath = process.env.FRAME_BUDGET_BASELINE ?? fileURLToPath(new URL('./baseline/frame-budget.json', import.meta.url));
-import { metrics, scenes, modes, allKeys, selectedRows, parseArgs, coverage, assetClass, compare, updateRow, serialize } from './frame-budget-policy.mjs';
+import { metrics, scenes, modes, allKeys, selectedRows, parseArgs, coverage, assetClass, compare, updateRow, serialize, PHONE_CAP } from './frame-budget-policy.mjs';
 import { farLand, effective, stored } from './frame-budget-far.mjs';
 const FAR_STATE = farLand(); // throws on a half-installed far pack
+// Phone detail's "Far views on phone" choice (web/src/far-choice.ts). Unset: the game's default, Off, which the pins
+// mean; coarse or full sample the far scene on phone rows (they are measured, not pinned: Settings > Advanced).
+const FAR_PHONE = process.env.FRAME_BUDGET_FAR ?? '';
+if(!['','off','coarse','full'].includes(FAR_PHONE)) throw Error('FRAME_BUDGET_FAR must be off, coarse or full');
+const FAR_SAMPLE = FAR_PHONE==='coarse'||FAR_PHONE==='full';
+const farOn = mode => !mode.phone||FAR_SAMPLE;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Installed before game modules. Pin animation dt to 1/60s, so GPU contention cannot change simulation work.
 // finish() lets real occlusion-query results complete between frames; no visibility result is faked.
@@ -92,7 +98,7 @@ async function openPage(scene, mode, options = {}) {
   const ws = new WebSocket(tab.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
   let serial = 0, requests = 0, ignoredDev = 0, ignoredOther = 0, cacheHits = 0, bytes = 0;
-  const assets={terrain:0,areas:0,audio:0,models:0}, assetBytes={terrain:0,areas:0,audio:0,models:0}, assetIds=new Map();
+  const assets={terrain:0,areas:0,audio:0,models:0}, assetBytes={terrain:0,areas:0,audio:0,models:0}, assetIds=new Map(), farPaths=[];
   const pending = new Map(), inflight = new Set(), errors = [];
   ws.onmessage = ({data}) => {
     const m = JSON.parse(data);
@@ -101,6 +107,8 @@ async function openPage(scene, mode, options = {}) {
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map(a => a.value ?? a.description).join(' '));
     if (m.method === 'Network.requestWillBeSent' && /^https?:/.test(m.params.request.url)) {
       const url=m.params.request.url, cls=assetClass(url), path=new URL(url).pathname;
+      // Game data only (terrain/areas), never the dev server's /src/far-land.ts module.
+      if((cls==='terrain'||cls==='areas')&&/\/(far-land[^/]*\.(json|bin)|tall\.json)$/.test(path)) farPaths.push(path);
       if(cls) { requests++; assets[cls]++; assetIds.set(m.params.requestId,cls); }
       else if(/^\/(src\/|@|node_modules\/|\.vite\/)/.test(path)) ignoredDev++;
       else ignoredOther++;
@@ -137,6 +145,7 @@ async function openPage(scene, mode, options = {}) {
   if (mode.phone) params.set('touch', '1');
   if (mode.explore) { params.set('mode','explore'); params.set('vehicle','truck'); }
   if(options.radioOff)params.set('radio','0');
+  if(FAR_PHONE)params.set('far',FAR_PHONE);
   for(const [key,value] of Object.entries(options.query??{}))params.set(key,value);
   const url = `${options.origin??origin}/?${params}`;
   try {
@@ -185,7 +194,7 @@ async function openPage(scene, mode, options = {}) {
 
     // FAR_STATE describes the shared land. A caller measuring another tree that has no far views (sidewalks-counts
     // BASE_URL at a pre-far commit) passes farWait:false; waiting for far objects there would never finish.
-    if(FAR_STATE==='after'&&options.farWait!==false) {
+    if(FAR_STATE==='after'&&options.farWait!==false&&farOn(mode)) {
       // Far views (PR #122) load after Start. Wait for them before GPU normalization, then hold each far query mesh
       // visible: the game redraws a hidden one five times a second, so its cost is the worst case, not a probe phase.
       const until=Date.now()+60000;
@@ -257,7 +266,7 @@ async function openPage(scene, mode, options = {}) {
       };
       b.active = true;
     })()`);
-    const page = {send, read, close, url, errors, inflight, requestCount:() => requests, assetStats:()=>({...assets,ignoredDev,ignoredOther,cacheHits,assetBytes,bytes})};
+    const page = {send, read, close, url, errors, inflight, farPaths, requestCount:() => requests, assetStats:()=>({...assets,ignoredDev,ignoredOther,cacheHits,assetBytes,bytes})};
 
     return page;
   } catch (error) { await close(); throw error; }
@@ -350,6 +359,12 @@ export async function measure(scene, mode, mutation, options = {}) {
     const device=await page.read(`(() => {const gl=mmm.renderer.getContext(),e=gl.getExtension('WEBGL_debug_renderer_info');return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)})()`);
     assert.ok(!/swiftshader|llvmpipe|software/i.test(device),'hardware GPU required: '+device);
     if (!mode.phone && scene.id==='harbour-water') assert.ok(result.passes.some(p=>p.label==='mirror' && p.calls>0),'harbour must include a real water mirror pass');
+    // Phone Off (after land): the far views pack stays out of the frame entirely, so the phone pins keep their
+    // meaning. Checked at the end of the measurement, against every request the page made.
+    if(FAR_STATE==='after'&&options.farWait!==false&&!farOn(mode)) {
+      assert.deepEqual(page.farPaths,[],`${scene.id}/${mode.id}: far views requested on a phone with Far views on phone Off`);
+      assert.ok(!await page.read('!!(mmm.farLand||mmm.tall||mmm.farTurbines)'),`${scene.id}/${mode.id}: far views drawn on a phone with Far views on phone Off`);
+    }
     return {...result, seconds:(Date.now()-started)/1000, url:page.url.replace(options.origin??origin,''), viewport:mode.phone ? [390,844] : [1400,950]};
   } finally { await page.close(); }
 }
@@ -384,6 +399,9 @@ export async function run(astra, studyCounts) {
     return mutations({origin,port,baselinePath,measure});
   }
   const updating=options.action==='update'||options.action==='raise';
+  // Coarse and Full are sampled, never pinned: the pins mean phone Off (tools/baseline/frame-budget-far.json phone rows are 0).
+  assert.ok(!(FAR_SAMPLE&&updating),'FRAME_BUDGET_FAR='+FAR_PHONE+' samples the phone far scene; it never updates or raises the pins');
+  if(FAR_SAMPLE)console.log(`FAR SAMPLE ${FAR_PHONE}: phone rows are measured against the phone cap (PHONE_CAP), not the pins`);
   let baseline={};
   try {baseline=JSON.parse(readFileSync(baselinePath,'utf8'));} catch(e) {if(!updating||e.code!=='ENOENT')throw e;}
   // Far views (PR #122): pins mean the land without the far pack; after install each ceiling adds its measured far delta.
@@ -412,7 +430,10 @@ export async function run(astra, studyCounts) {
       for(const k of metrics) assert.equal(spreads[k][0],spreads[k][1],`${key}: ${k} is not exact over five fresh loads; fix settlement`);
       next[key]=updateRow(key,result.counts,baseline[key],options.action==='raise');
     }
-    failed=compare(key,result.counts,updating?next[key]:baseline[key])||failed;
+    if(FAR_SAMPLE&&mode.phone){
+      const fits=result.counts.calls<=PHONE_CAP.calls&&result.counts.triangles<=PHONE_CAP.triangles;
+      console.log(`CAP ${key} far=${FAR_PHONE}: calls=${result.counts.calls}/${PHONE_CAP.calls} triangles=${result.counts.triangles}/${PHONE_CAP.triangles} ${fits?'FITS':'OVER'}; pin calls=${baseline[key].calls} triangles=${baseline[key].triangles}`);
+    } else failed=compare(key,result.counts,updating?next[key]:baseline[key])||failed;
     if(mode.phone) phone.push({key,...result.counts,groups:result.groups});
   }
   // Neither deleting a scene/mode nor silently skipping one can leave a full baseline passing.

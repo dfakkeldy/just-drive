@@ -14,16 +14,16 @@ const COMPLAINTS = ['lawnDamage', 'boxDown', 'lawnMail', 'ditchMail', 'missing',
 const UNSCORED = ['sceneAnimal'];
 const GRADES = ['box:rock', 'box:lean', 'box:dent', 'box:down'];
 
-ok('every complaint kind but an animal scare, mailbox grade, lawn ruts and a drift score; nothing else does yet', () => {
-  // A drift (grok-bots#1245, drift-rules.ts) is the newest kind; tools/drift-rules-check.mjs holds its size and bonus.
-  for (const kind of [...COMPLAINTS, ...GRADES, 'rut', 'drift']) assert.ok(POINTS[kind] > 0, kind);
-  assert.equal(Object.keys(POINTS).length, COMPLAINTS.length + GRADES.length + 2);
+ok('every complaint kind but an animal scare, mailbox grade, lawn ruts, a drift and losing the Boss score; nothing else does yet', () => {
+  // A drift (drift-rules.ts) is a newer kind; tools/drift-rules-check.mjs holds its size and bonus.
+  for (const kind of [...COMPLAINTS, ...GRADES, 'rut', 'drift', 'lostBoss']) assert.ok(POINTS[kind] > 0, kind);
+  assert.equal(Object.keys(POINTS).length, COMPLAINTS.length + GRADES.length + 3, 'complaints, grades, ruts, drift and lostBoss');
   // Frightening an animal is a complaint but, like a hit (NEVER), it never scores.
   for (const kind of UNSCORED) { assert.equal(POINTS[kind], undefined, kind); assert.equal(new ScoreBook().add(ev(kind, 1)).points, 0, kind); }
   // The complaint file names exactly these fourteen kinds.
   const declared = readFileSync('src/complaints.ts', 'utf8').match(/export type ComplaintKind = ([^;]+);/)[1].match(/'(\w+)'/g).map(s => s.slice(1, -1));
   assert.deepEqual(declared.sort(), [...COMPLAINTS, ...UNSCORED].sort());
-  for (const kind of [...COMPLAINTS, ...UNSCORED, ...GRADES, 'rut', 'schoolBus']) assert.notEqual(offenceLabel(kind), kind, `label for ${kind}`);
+  for (const kind of [...COMPLAINTS, ...UNSCORED, ...GRADES, 'rut', 'schoolBus', 'lostBoss']) assert.notEqual(offenceLabel(kind), kind, `label for ${kind}`);
 });
 
 ok('the ladder: seven named steps, each needs more points and a wider gap than the last', () => {

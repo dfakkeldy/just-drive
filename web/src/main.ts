@@ -50,6 +50,9 @@ import { FarTurbines } from './far-turbines';
 import { curveSceneMaterials } from './far-materials';
 import { FarVisibility } from './far-visibility';
 import type { FarFile } from './far-rules';
+import { farPhoneChoice, farPlan, readFarPhone } from './far-choice';
+import { advancedSection, farPhoneSetting } from './advanced-settings';
+import { coarseTurbines } from './far-turbines';
 import type { TallFile } from './tall-rules';
 import { tallPlaces } from './places';
 import { Radio, loadRadio } from './radio';
@@ -79,6 +82,8 @@ import { callSign } from './party-line-rules';
 import { inventedName } from './mp/social';
 import { DriftFeedback } from './drift-feedback';
 import { phoneHandbrake } from './drift-rules';
+import { Boss, bossEnabled } from './boss';
+import { Occluders } from './boss-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
 import { noZoom } from './no-zoom';
@@ -511,10 +516,14 @@ if (props) { scene.add(props.group); roads.guardrails?.setObstacles(props.railOb
 // Optional scenery starts after a drawn frame and Start; it never delays boot.
 const rootBounds = [manifest.origin[0], manifest.origin[1] - manifest.size, manifest.origin[0] + manifest.size, manifest.origin[1]];
 const sameRoot = (root: readonly number[] | undefined) => Array.isArray(root) && root.length === 4 && root.every((n, i) => n === rootBounds[i]);
-const farKey = (manifest as Manifest & { farLand?: { file: string } }).farLand;
+const farPack = (manifest as Manifest & { farLand?: { file: string } }).farLand;
+// Phone detail draws the far views only when the player asks (Settings > Advanced, or ?far=): far-choice.ts.
+// Off (the default) leaves both keys unset, so a phone fetches, hooks and draws exactly what it did before the pack.
+const farPhone = farPhoneChoice(params, readFarPhone()), farUse = farPlan(LOW, farPhone.choice);
+const farKey = farUse ? farPack : undefined;
 // Only the far pack's manifest key (it carries a far count) names a version 2 tall.json. The older live key
 // names a file the game never draws, so before install nothing is fetched and no Places UI appears.
-const tallKey = ((t?: { file: string; far?: number }) => (t && Number.isInteger(t.far) ? t : undefined))((manifest as Manifest & { tall?: { file: string; far?: number } }).tall);
+const tallKey = farUse ? ((t?: { file: string; far?: number }) => (t && Number.isInteger(t.far) ? t : undefined))((manifest as Manifest & { tall?: { file: string; far?: number } }).tall) : undefined;
 let farLand: FarLand | null = null, tall: TallLandmarks | null = null, farTurbines: FarTurbines | null = null;
 let farVisibility: FarVisibility | null = null, farLoading = false;
 async function loadFarViews(): Promise<void> {
@@ -523,7 +532,7 @@ async function loadFarViews(): Promise<void> {
       if(!farKey)return null;
       const data:FarFile=await getJson(farKey.file);
       if(!sameRoot(data.root)||data.origin?.[0]!==manifest.village[0]||data.origin?.[1]!==manifest.village[1])throw Error('Far land belongs to another terrain pack');
-      const land=await FarLand.load(data,base,LOW,shared);
+      const land=await FarLand.load(data,base,farUse!.level,shared);
       const vertex=farSeaVertex(SEA_VERT),fragment=farSeaFragment(SEA_FRAG);
       return {land,vertex,fragment};
     })(),
@@ -531,7 +540,7 @@ async function loadFarViews(): Promise<void> {
       if(!(ERA.modern && tallKey))return null;
       const data:TallFile=await getJson(tallKey.file);
       if(data.version!==2||!sameRoot(data.root))return null;
-      return {data,near:new TallLandmarks(data,terrain,LOW,shared,sun.el<0,false)};
+      return {data,near:new TallLandmarks(data,terrain,LOW,shared,sun.el<0,false,farUse!.coarse)};
     })(),
   ]);
   if(landResult.status==='rejected')console.warn('optional far land',landResult.reason);
@@ -550,12 +559,18 @@ async function loadFarViews(): Promise<void> {
       farLand=landPart.land;scene.add(farLand.group);
     }catch(e){console.warn('optional far sea',e);}
   }
-  const near=tallPart?.near??null;
-  if(near){tall=near;scene.add(near.group);}
+  let near=tallPart?.near??null;
   if(tallPart&&near&&farLand){
-    try{farTurbines=new FarTurbines(tallPart.data.far,manifest.village,LOW,shared,sun.el<0);scene.add(farTurbines.group);}
+    // Coarse: the near turbines join this one draw, first in its list (TallLandmarks keeps only their solids).
+    const coarse=farUse!.coarse,heightAt=(x:number,z:number)=>terrain.heightAt(x,z);
+    const points=coarse?coarseTurbines(tallPart.data,manifest.village,heightAt,terrain.seaLevel,terrain.exag):tallPart.data.far;
+    const seat=coarse?{count:points.length-tallPart.data.far.length,heightAt,seaLevel:terrain.seaLevel,exag:terrain.exag}:undefined;
+    try{farTurbines=new FarTurbines(points,manifest.village,LOW,shared,sun.el<0,coarse,seat);scene.add(farTurbines.group);}
     catch(e){console.warn('optional far turbines',e);}
   }
+  // Coarse without its far draw (far land or turbines failed): no turbine is drawn, so none may be solid.
+  if(farUse!.coarse&&!farTurbines)near=null;
+  if(near){tall=near;scene.add(near.group);}
   const queryMeshes:THREE.Mesh[]=[];
   if(farLand){farLand.land.renderOrder=3;queryMeshes.push(farLand.land);}
   if(farTurbines){for(const mesh of farTurbines.group.children)mesh.renderOrder=3;if(sun.el>=0&&farTurbines.count)queryMeshes.push(farTurbines.group.children[0] as THREE.Mesh);}
@@ -694,11 +709,14 @@ fleetContacts.add({ resolve: () => {}, allows: body => { const b = vehicle.bound
 // LOW (phones) builds the AI from the parked display models, without the car.
 const aiDriver = driverEnabled(AREA.id, ERA.modern, params, import.meta.env.DEV) ? new PointTupperDriver(roads, terrain, fleetContacts, garageEntry.id, SEA_LEVEL, Math.random, undefined, LOW) : null;
 if (aiDriver) scene.add(aiDriver.group);
+// Get Fired's Boss (boss.ts) is built further down, with the run it watches; the physics below already serve it.
+let boss: Boss | null = null;
 // Time-travel seam: read the live era every call, so a runtime swap to 1884 hides the AI.
 const aiDriverOn = () => driverLive(ERA.modern, !!multiplayer?.choice.on);
 let towing: Towing | null = null;
 let fleet: Fleet | null = null, updateFleetHud: (() => void) | null = null;
-if (aiDriver) aiDriver.obstacles = () => [...(towing?.bodies() ?? []), ...(fleet?.members.filter(m => m.state === 'PARKED' || m.state === 'DRIVEN').map(m => m.vehicle) ?? [])];
+const aiObstacles = () => [...(towing?.bodies() ?? []), ...(fleet?.members.filter(m => m.state === 'PARKED' || m.state === 'DRIVEN').map(m => m.vehicle) ?? [])];
+if (aiDriver) aiDriver.obstacles = () => [...aiObstacles(), ...(boss?.driver.onRoad ?? [])];
 let drivenChanged: (() => void) | null = null;
 let roadsidePlaying = false;
 let hookPlaced = false, jumpPlacement = 0;
@@ -708,6 +726,7 @@ const resolveYardSolids = () => {
   if (endings.busy) return;
   canal?.resolve(vehicle, canalBeforeX, canalBeforeZ);
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
+  boss?.driver.resolve(vehicle);
   if (fleet || quarry || stuntPark) fleetContacts.resolve(vehicle);
   else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); yardProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
@@ -733,6 +752,7 @@ function driveVehicle(dt: number, input: Input): void {
   terrain.withGroundContact(vehicle, () => fleet ? fleet.drive(dt, ride.input(input), resolveYardSolids) : vehicle.update(dt, ride.input(input), resolveYardSolids));
   if (!fleet) towing?.update();
   if (aiDriverOn()) aiDriver?.step(dt, vehicle);
+  boss?.step(dt);
 }
 // For test scripts on the dev server only. Each call is guarded by import.meta.env.DEV so a production build drops the
 // whole statement, arguments included. tools/yard-drive.mjs moves the car through this, and tools/fps-check.mjs
@@ -1478,6 +1498,17 @@ const fired = firedMode && shift instanceof Shift && endings instanceof Endings 
   DAILY && dailySquares ? { limit: DAILY.limit, onEnd: end => daily?.finish(end) } : {}) : null;
 if (fired && DAILY && dailySquares && shift instanceof Shift && endings instanceof Endings) daily = new DailyRun(DAILY, dailySquares, AREA.name, shift, fired, endings, () => pause.resetClock(), dailySupply);
 if (fired && bare) document.getElementById('firedHud')!.style.display = 'none';
+// The Boss: Get Fired only, one car, single player only (bossLive); ?boss=0 leaves it out. Buildings block its sight.
+boss = fired && bossEnabled(firedMode, ERA.modern, params, !!DAILY)
+  ? new Boss(roads, terrain, fleetContacts, SEA_LEVEL, LOW, shift as Shift, fired, buildings ? new Occluders(buildings.clear as [number, number, number, number][]) : null, vehicle, touchDevice) : null;
+// The traffic keeps its distance from every AI car on the road; one shared list, refilled each frame.
+const aiCars: Vehicle[] = [];
+if (boss) {
+  scene.add(boss.group);
+  boss.driver.signals = trafficSignals;
+  boss.driver.obstacles = () => [...aiObstacles(), ...(aiDriverOn() ? aiDriver?.onRoad ?? [] : [])];
+  if (ambientTraffic) { boss.driver.traffic = ambientTraffic.cars; if (!canal) ambientTraffic.others = aiCars; }
+}
 const yardJob = yard && endings instanceof Endings ? ride.yardJob?.(yard) ?? new YardJob(yard, vehicle, terrain, camera, endings) : null;
 resets[resetSlot.yardJob] = () => yardJob?.reset();
 const deckhand = AREA.coast && ERA.modern ? new Deckhand(manifest.village, terrain) : null;
@@ -1486,7 +1517,7 @@ const fishing = fishingSite && endings instanceof Endings ? new Fishing(fishingS
 resets[resetSlot.fishing] = () => fishing?.reset();
 if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
-if (import.meta.env.DEV) expose({ fired, daily }, false);
+if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
 if (import.meta.env.DEV) expose({ yardProps }, false);   // for tools/yard-props-browser.mjs; not enumerable: ui-check pins the public key set
 if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
@@ -1879,6 +1910,7 @@ function frame(now: number) {
       miniMap.show(playing);
       mapTimer -= realDt;
       if (mapTimer <= 0) { mapTimer = 0.25; refreshMap(); }
+      miniMap.boss = boss?.mapSpot ?? null;
       miniMap.update(realDt, vehicle.x, vehicle.z, vehicle.heading, mapStops, mapMarks, mapCars);
     }
     // Paused frames return early, but a multiplayer room keeps running them: ground property lines still stop while Settings is open.
@@ -1919,6 +1951,13 @@ function frame(now: number) {
   // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
   renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
   aiDriver?.update(camera, vehicle, aiDriverOn(), fleet?.driven.id ?? garageEntry.id);
+  if (boss) {
+    // Held, not hidden, while the player is out of the car (a drone flight, indoors) or the tab is away.
+    boss.update(camera, dt, !!multiplayer?.choice.on, clockRuns && frameLive, !driving || interiors.busy || document.hidden);
+    aiCars.length = 0;
+    if (aiDriverOn() && aiDriver) for (const c of aiDriver.onRoad) aiCars.push(c);
+    for (const c of boss.driver.onRoad) aiCars.push(c);
+  }
   multiplayer?.update(realDt, camera, dt > 0 && driving);
   farVisibility?.update(camera,now/1000);
   updateWorld('mirror', dt, realDt, now);
@@ -1970,6 +2009,8 @@ function frame(now: number) {
   requestAnimationFrame(frame);
   } catch (error) { page.fail(error); }
 }
+// Settings > Advanced: on phone detail, once the far views pack is installed (desktop always draws it).
+if (!bare && LOW && farPack) farPhoneSetting(advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice), farPhone.choice, farPhone.fromUrl, touchDevice);
 resize();
 document.getElementById('boot')?.remove();
 // Finalize all initial material hooks before their first compile. Activation only flips a uniform.

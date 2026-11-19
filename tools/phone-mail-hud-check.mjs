@@ -69,7 +69,7 @@ const roads={roads:[],nearest:()=>null,deckHeight:()=>null}, v=new Vehicle(rig,t
 v.strongHelp=true; v.place(0,0,0);
 let updates=0; const update=v.update; v.update=function(...args){updates++;return update.apply(this,args);};
 const ctx={started:true,mode:'drive',shift:{ended:false,elapsed:0,career:{day:1},done:0,stops:80,run:{short:'HILL LOOP'}},endings:{busy:false},interiors:{busy:false},document,
-  touch:{steer:0,throttle:1},keys:new Set(['KeyW']),roadScene:{setPaused(){}},title:{open(){}},terrain,vehicle:v,ride:{input:input=>input},resolveYardSolids:()=>{},fleet:null,towing:null,aiDriver:null,aiDriverOn:()=>false,multiplayer:null,syncRoadScenePause:()=>{},pause:{blocked:false,resume(){}},syncPauseUI:()=>{},phoneMailHud:ui,
+  touch:{steer:0,throttle:1},keys:new Set(['KeyW']),roadScene:{setPaused(){}},title:{open(){}},terrain,vehicle:v,ride:{input:input=>input},resolveYardSolids:()=>{},fleet:null,towing:null,aiDriver:null,aiDriverOn:()=>false,boss:null,multiplayer:null,syncRoadScenePause:()=>{},pause:{blocked:false,resume(){}},syncPauseUI:()=>{},phoneMailHud:ui,
   hudState:{mode:'drive',mailMode:true,touchDevice:true,fps:60,speed:90/3.6,roadName:'Paved street',surfaceName:'asphalt',airborne:false,jumpLine:'',atEdge:false,showRuts:false}};
 const body=(pattern,label)=>{const match=main.match(pattern);assert.ok(match,'production '+label+' found');return match[1];};
 const live=body(/function live\(\): boolean \{ ([^\n]+) \}/,'live predicate');

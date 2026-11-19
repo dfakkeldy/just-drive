@@ -11,7 +11,7 @@ for(const low of [false,true])for(const baseline of [true,false]){
   tab=await(await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();c=await cdp(tab.webSocketDebuggerUrl);await c.send('Page.enable');await c.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
   await c.send('Page.addScriptToEvaluateOnNewDocument',{source:`window.__holdBus=true;const raf=requestAnimationFrame;window.__nativeRAF=raf;window.requestAnimationFrame=f=>{window.__busMainFrame=f;return raf(t=>{if(window.__holdBus&&window.mmm?.shift)mmm.shift.elapsed=-60;f(t);});};`});
   const read=async expression=>{const r=await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.error||r.result.exceptionDetails)throw Error(JSON.stringify(r));return r.result.result.value;};
-  await c.send('Page.navigate',{url:`${base}/?area=mabou&at=623766,5103484,45&scene=0&res=1&hud=0&radio=0&shadows=1&q=${low?'low':'high'}`});
+  await c.send('Page.navigate',{url:`${base}/?area=mabou&at=623766,5103484,45&scene=0&res=1&hud=0&radio=0&shadows=1&q=${low?'low':'high'}&far=full`});
   let since=Date.now();while(!await read("document.documentElement.dataset.mmmReady==='true'&&!!window.mmm?.schoolBus")){assert.ok(Date.now()-since<240000,'bus boot');await sleep(300);}
   await read("document.getElementById('titleStart')?.click();document.activeElement?.blur();");
   if(!baseline){since=Date.now();while(!await read('!!mmm.farLand')){assert.ok(Date.now()-since<240000,'far content load');await sleep(300);}}

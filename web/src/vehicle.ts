@@ -651,13 +651,14 @@ export class Vehicle {
 }
 
 /** Drives along the nearest road: used for demos and for screenshots of the car in motion. */
-export function autopilot(v: Vehicle, roads: Roads, cruise = 16, eligible?: (road: Road) => boolean): Input {
+/** `toward`: a heading to choose the road's direction by (a turn at a junction); the car's own heading when omitted. */
+export function autopilot(v: Vehicle, roads: Roads, cruise = 16, eligible?: (road: Road) => boolean, toward?: number): Input {
   const hit = roads.nearest(v.x, v.z, 40, (r) => r.kind <= 3 && (!eligible || eligible(r)));
   if (!hit) return { throttle: 0, steer: 0, handbrake: false };
   let want = hit.heading;
-  // A road line has two directions; take the one closer to where the car points.
-  let err = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
-  if (Math.abs(err) > Math.PI / 2) { want += Math.PI; err = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading)); }
+  // A road line has two directions; take the one closer to where the car points (or to `toward`).
+  if (Math.cos(want - (toward ?? v.heading)) < 0) want += Math.PI;
+  const err = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
   if (v.towLoad && v.spec.envelope !== CAR_SPEC.envelope) return wideDemo(v, hit, want, cruise);
   // Keep to the right-hand lane: aim a little right of the centre line.
   const rx = Math.cos(want), rz = Math.sin(want);

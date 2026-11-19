@@ -33,7 +33,7 @@ function makePost(events, { date = DATE, area = 'mabou', supply = ALL, played = 
   return { v: 1, area, date, seed: plan.seed, supply, events, played,
     claim: claim ?? { points: r.total, step: r.step, time: r.firedAt ?? played, squares: r.filled }, handle, device: dev };
 }
-const KINDS = Object.keys(POINTS);
+const KINDS = Object.keys(POINTS).filter(k => SENT_KINDS.includes(k));
 /** A busy honest run: a fact every so often, now and then a burst, up to the time limit. */
 function honest(random, count = 200, until = DAILY_LIMIT - 1) {
   const out = []; let t = 1 + random() * 3;
@@ -160,7 +160,9 @@ await ok('the event list: only kinds that score, in order, inside the run, no mo
   assert.deepEqual(judge(makePost(base, { played: DAILY_LIMIT + 5 })), { ok: false, error: 'events' }, 'a run longer than the limit');
   const flood = Array.from({ length: MAX_EVENTS + 1 }, (_, i) => ['rut', i * .1]);
   assert.deepEqual(judge({ ...makePost([]), events: flood }), { ok: false, error: 'events' }, 'more facts than any run');
-  assert.deepEqual(new Set(SENT_KINDS), new Set([...Object.keys(POINTS), ...Object.keys(PENALTIES)]));
+  assert.deepEqual(new Set(SENT_KINDS), new Set([...Object.keys(POINTS).filter(k => k !== 'lostBoss'), ...Object.keys(PENALTIES)]));
+  assert.deepEqual(judge({ ...makePost(base), events: [...makePost(base).events, ['lostBoss', 30]] }), { ok: false, error: 'events' },
+    'no Boss in Today\'s run: a post that lost one is made up');
   // On the device: what cannot score stays there.
   assert.equal(sendsEvent({ kind: 'box:rock', place: 'route', speed: 4, time: 1 }), true);
   assert.equal(sendsEvent({ kind: 'schoolBus', place: 'route', speed: 4, time: 1 }), true, 'a penalty changes the score');

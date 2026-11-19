@@ -60,6 +60,12 @@ const mutants=[
  ['retry keeps the book','if (this.shift.score.runs !== this.run)','if (false)','fired'],
  ['clear keeps the run','this.reported = 0; this.runs++;','this.reported = 0;','score-events'],
  ['two offences','const top = topOffences(b);','const top = topOffences(b, 2);','fired'],
+ ['fact has no place','x, z, witnessed: this.witness(x, z) });','});','shift'],
+ ['nobody witnesses','witnessed: this.witness(x, z)','witnessed: false','shift'],
+ ['a drift is never witnessed','witnessed: this.witness(d.x1, d.z1)','witnessed: false','shift'],
+ ['no Boss line',"const boss = this.boss?.line() ?? '';","const boss = '';",'fired'],
+ ['no Boss summary','      ...this.boss ? [this.boss.summary()] : [],\n','','fired'],
+ ['card too short','this.noteTime = seconds;','this.noteTime = 2;','fired'],
 ];
 try {
  for(const mutant of [null,...(process.argv.includes('--mutations')?mutants:[])]) {

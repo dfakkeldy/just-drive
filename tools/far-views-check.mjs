@@ -107,7 +107,7 @@ async function budgets(){
    assert.equal(body.material.depthTest,true);assert.equal(body.material.depthWrite,true);assert.match(body.material.vertexShader,/w.y -= farDrop/);assert.match(body.material.vertexShader,/cos\(angle\)/);assert.match(beacons.material.fragmentShader,/if \(vFlash < 0.5\) discard/);
    const phases=body.geometry.getAttribute('farmPhase');t.far.forEach((p,i)=>assert.ok(Math.abs(phases.getX(i)-farmPhase(p.farm))<1e-7,'farm-synchronised phase'));
    const oldFetch=globalThis.fetch;globalThis.fetch=async()=>({ok:true,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)});
-   let land;try{land=await FarLand.load(m,'http://fixture',low,{});}finally{globalThis.fetch=oldFetch;}
+   let land;try{land=await FarLand.load(m,'http://fixture',low?'low':'desktop',{});}finally{globalThis.fetch=oldFetch;}
    assert.equal(land.group.children.length,1);assert.equal(land.land.material.depthTest,true);assert.equal(land.land.material.depthWrite,true);assert.match(land.land.material.vertexShader,/w.y -= farDrop/);
    const seaTriangles=land.seaGeometry.index.count/3;assert.equal(seaTriangles,low?7170:26626);
    const original=new THREE.PlaneGeometry(600000,600000).rotateX(-Math.PI/2);assert.deepEqual(Array.from(land.seaGeometry.attributes.position.array.slice(0,12)),Array.from(original.attributes.position.array),'exact original plane vertices');assert.deepEqual(Array.from(land.seaGeometry.index.array.slice(0,6)),Array.from(original.index.array),'exact original plane indices');original.dispose();
@@ -118,6 +118,19 @@ async function budgets(){
    }
    summary.push({area,detail:low?'LOW':'desktop',nearLandmarksAtVillage:local,landTriangles:l.triangles,landBytes:l.bytes,seaTriangles,seaBytes:bytesFor(land.seaGeometry),turbines:t.far.length,turbineTriangles:t.far.length*((low?27:38)+2),turbineBytes:turbines.group.children.reduce((s,c)=>s+bytesFor(c.geometry)+c.instanceMatrix.array.byteLength,0),draws:{land:1,seaIncludingNear:1,additionalSeaDraws:0,turbinesDay:1,turbinesNight:2}});
    land.seaGeometry.dispose();for(const g of [...land.group.children,...turbines.group.children]){g.geometry.dispose();g.material.dispose();}
+  }
+  // The phone's Coarse far views (Settings > Advanced): the third level, a coarser sea, and every turbine in one draw.
+  if(m.levels.coarse){
+   const l=m.levels.coarse,bytes=readFileSync(dir+'/'+l.file);
+   assert.equal(l.file,'far-land-coarse.bin');assert.equal(l.cell,1920);assert.equal(l.bytes,bytes.length);assert.equal(l.bytes,l.vertices*12+l.indices*4);assert.equal(l.indices,l.triangles*3);
+   assert.equal(createHash('sha256').update(bytes).digest('hex'),l.sha256,'coarse level hash');assert.ok(l.triangles<=12000,'coarse far land triangle budget');assert.ok(l.bytes<=260000,'coarse far land byte budget');
+   const oldFetch=globalThis.fetch;globalThis.fetch=async()=>({ok:true,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)});
+   let land;try{land=await FarLand.load(m,'http://fixture','coarse',{});}finally{globalThis.fetch=oldFetch;}
+   assert.equal(land.level,'coarse');const seaTriangles=land.seaGeometry.index.count/3;assert.equal(seaTriangles,3074,'coarse sea');
+   const all=[...t.turbines,...t.far];
+   for(const dark of [false,true]){const turbines=new FarTurbines(all,m.origin,true,{},dark,true);assert.equal(turbines.group.children.length,dark?2:1,'coarse: one turbine draw, a second only at night');assert.equal(turbines.count,all.filter(p=>p.ground!==null).length);for(const g of turbines.group.children){g.geometry.dispose();g.material.dispose();}}
+   summary.push({area,detail:'LOW coarse',landTriangles:l.triangles,landBytes:l.bytes,seaTriangles,turbines:all.length,draws:{land:1,turbinesDay:1,turbinesNight:2,nearLandmarks:0}});
+   land.seaGeometry.dispose();land.land.geometry.dispose();land.land.material.dispose();
   }
  }
  console.log(JSON.stringify(summary));return summary;

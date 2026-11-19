@@ -56,7 +56,8 @@ async function openPage(extra) {
   assert.equal(await read('mmm.vehicleId'), 'truck', 'player drives the pickup');
   await read("document.getElementById('titleStart')?.click()");
   await sleep(1500);
-  if (FAR_STATE === 'after') {
+  // Phone detail draws no far views unless asked (Settings > Advanced, far-choice.ts): LOW waits for none.
+  if (FAR_STATE === 'after' && !LOW) {
     // As frame-budget-check.mjs: wait for every far part, then hold the far query meshes visible, so both pages
     // count the frame the game draws whenever a 5 Hz occlusion probe retries (not a probe phase).
     for (let i = 0; i < 120 && !await read('!!(mmm.farVisibility&&mmm.farLand&&mmm.tall&&mmm.farTurbines)'); i++) await sleep(500);

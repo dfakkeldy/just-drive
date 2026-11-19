@@ -91,7 +91,8 @@ export class TallLandmarks {
   private nextSeat = 0;
   readonly turbineCount: number;
 
-  constructor(data: TallFile, private terrain: Terrain, low: boolean, shared: Record<string, THREE.IUniform>, dark: boolean, showFar = FAR_TURBINES) {
+  /** `coarse` (the phone's Coarse far views): no draws at all. The turbines' solids stay; FarTurbines draws them. */
+  constructor(data: TallFile, private terrain: Terrain, low: boolean, shared: Record<string, THREE.IUniform>, dark: boolean, showFar = FAR_TURBINES, coarse = false) {
     const village = terrain.manifest.village;
     const material = (colour: number, defines: Record<string, number> = {}) => new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG, defines, uniforms: { ...shared, tallTime: this.time, tallColour: { value: new THREE.Color(colour) } }, side: THREE.DoubleSide,
@@ -108,6 +109,12 @@ export class TallLandmarks {
     // Unknown far ground is retained as null in data; do not float a turbine on a guessed sea-level base.
     const turbines = [...data.turbines, ...(showFar ? data.far : [])].filter(p => p.ground !== null);
     this.turbineCount = turbines.length;
+    if (coarse) {
+      // FarTurbines' shaft scales with the rotor diameter: the solid is as wide as the drawn base.
+      for (const p of turbines) { const radius = Math.max(p.hub, p.diameter) * .023; this.solids.push({x:p.e-village[0],z:village[1]-p.n,half:radius,halfWidth:radius,heading:0}); }
+      this.low = low;
+      return;
+    }
     if (turbines.length) {
       const shafts = make(new THREE.CylinderGeometry(.012, .023, 1, low ? 5 : 8).translate(0, .5, 0), white, turbines.length);
       const nacelles = make(new THREE.BoxGeometry(1, 1, 1), white, turbines.length);

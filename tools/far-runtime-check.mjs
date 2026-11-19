@@ -61,25 +61,32 @@ async function loadCase(fail={},text=main){
  const scene=new T.Scene(),models=[new T.MeshLambertMaterial(),new T.MeshStandardMaterial(),new T.MeshBasicMaterial()];for(const m of models)scene.add(new T.Mesh(new T.BoxGeometry(),m));
  const sea=new T.Mesh(new T.PlaneGeometry(),new T.ShaderMaterial({vertexShader:'vertex before',fragmentShader:'colour before'})),query=new T.ShaderMaterial({vertexShader:'query vertex before',fragmentShader:'query before',depthTest:true,depthWrite:false,colorWrite:false}),seaColour=sea.material;scene.add(sea);const initialGeometry=sea.geometry,root=[0,0,100,100],shared={farCurveOn:{value:0}};
  const curve=moduleAt('web/src/far-materials.ts').curveSceneMaterials;curve(scene,shared);
- const versions=models.map(m=>m.version),keys=models.map(m=>m.customProgramCacheKey()),seaVersion=seaColour.version,queryVersion=query.version,places=[];
- const state={scene,sea,seaColour,shared,farKey:{file:'land'},tallKey:{file:'tall'},ERA:{modern:true},manifest:{village:[50,50]},sameRoot:r=>JSON.stringify(r)===JSON.stringify(root),base:'fixture',LOW:false,terrain:{},sun:{el:1},history:null,AREA:{id:'mabou'},placesUI:{addPlaces:p=>places.push(...p)},tallPlaces:()=>[{}],renderer:{},farLand:null,tall:null,farTurbines:null,farVisibility:null,console:{warn(){}},curveSceneMaterials:curve,
+ const versions=models.map(m=>m.version),keys=models.map(m=>m.customProgramCacheKey()),seaVersion=seaColour.version,queryVersion=query.version,places=[],calls={};
+ const plan=fail.coarse?{level:'coarse',coarse:true}:fail.low?{level:'low',coarse:false}:{level:'desktop',coarse:false};
+ const state={scene,sea,seaColour,shared,farUse:plan,coarseTurbines:(d,village)=>{calls.merged=village;return [...d.turbines,...d.far];},terrain:{seaLevel:0,exag:1.5,heightAt:()=>null},farKey:{file:'land'},tallKey:{file:'tall'},ERA:{modern:true},manifest:{village:[50,50]},sameRoot:r=>JSON.stringify(r)===JSON.stringify(root),base:'fixture',LOW:false,sun:{el:1},history:null,AREA:{id:'mabou'},placesUI:{addPlaces:p=>places.push(...p)},tallPlaces:()=>[{}],renderer:{},farLand:null,tall:null,farTurbines:null,farVisibility:null,console:{warn(){}},curveSceneMaterials:curve,
   SEA_VERT:'vertex',SEA_FRAG:'fragment',farSeaVertex:s=>{if(fail.rewrite)throw Error('rewrite');return s+' curved';},farSeaFragment:s=>s+' curved',
   getJson:async name=>{if(fail[name])throw Error(name);return name==='land'?{root,origin:[50,50]}:{version:2,root,turbines:[{}],far:[{}]};},
-  FarLand:{load:async()=>{if(fail.binary)throw Error('binary');const land=new T.Mesh();const group=new T.Group();group.add(land);return{land,group,seaGeometry:new T.BufferGeometry()};}},
-  TallLandmarks:class{constructor(d){if(fail.near)throw Error('near');this.group=new T.Group();this.turbineCount=d.turbines.length;this.solids=d.turbines.map(()=>({}));}},
-  FarTurbines:class{constructor(){if(fail.distant)throw Error('distant');this.group=new T.Group();this.group.add(new T.Mesh());this.count=1;}},FarVisibility:class{},
+  FarLand:{load:async(_data,_base,level)=>{calls.level=level;if(fail.binary)throw Error('binary');const land=new T.Mesh();const group=new T.Group();group.add(land);return{land,group,seaGeometry:new T.BufferGeometry()};}},
+  TallLandmarks:class{constructor(d,_t,_low,_s,_dark,showFar,coarse){calls.nearCoarse=coarse;calls.showFar=showFar;if(fail.near)throw Error('near');this.group=new T.Group();this.turbineCount=d.turbines.length;this.solids=d.turbines.map(()=>({}));}},
+  FarTurbines:class{constructor(points,_o,_low,_s,_dark,coarse){calls.points=points.length;calls.farCoarse=coarse;if(fail.distant)throw Error('distant');this.group=new T.Group();this.group.add(new T.Mesh());this.count=1;}},FarVisibility:class{},
   waterReflections:{transformSea(vertex,fragment){if(fail.query)throw Error('query');query.vertexShader=vertex('vertex');query.fragmentShader=fragment('query fragment');query.needsUpdate=true;}},
  };
- if(fail.low){state.LOW=true;state.waterReflections=null;}
+ if(fail.low||fail.coarse){state.LOW=true;state.waterReflections=null;}
  if(fail.queryActive&&!fail.low)sea.material=query;
  const load=new Function('state',`with(state){${code};return loadFarViews;}`)(state);await load();
  const landOK=!(fail.land||fail.binary||fail.rewrite||fail.query),nearOK=!(fail.tall||fail.near);
- assert.equal(!!state.farLand,landOK,'independent land success');assert.equal(!!state.tall,nearOK,'independent near success');assert.equal(state.tall?.solids.length??0,nearOK?1:0,'draws and solids consistent');assert.equal(places.length,nearOK?1:0,'only drawn turbine place');assert.equal(!!state.farTurbines,landOK&&nearOK&&!fail.distant,'outside-root turbines require real land');assert.equal(shared.farCurveOn.value,landOK?1:0);
+ // The plan picks the level; coarse sends near and far turbines to one far draw and keeps the near solids only.
+ if(!fail.land)assert.equal(calls.level,plan.level,'far land level follows the plan');
+ if(!fail.tall){assert.equal(calls.nearCoarse,plan.coarse,'near landmarks draw nothing in coarse');assert.equal(calls.showFar,false,'near landmarks never draw far turbines');}
+ if(state.farTurbines){assert.equal(calls.points,plan.coarse?2:1,'coarse: near and far turbines in the one far draw');assert.equal(calls.farCoarse,plan.coarse);assert.equal(!!calls.merged,plan.coarse);}
+ assert.equal(!!state.farLand,landOK,'independent land success');// Coarse draws its near turbines only in the far draw: without that draw, no near solids or Places either.
+ const nearShown=nearOK&&(!plan.coarse||(landOK&&!fail.distant));
+ assert.equal(!!state.tall,nearShown,'independent near success');assert.equal(state.tall?.solids.length??0,nearShown?1:0,'draws and solids consistent');assert.equal(places.length,nearShown?1:0,'only drawn turbine place');assert.equal(!!state.farTurbines,landOK&&nearOK&&!fail.distant,'outside-root turbines require real land');assert.equal(shared.farCurveOn.value,landOK?1:0);
  models.forEach((m,i)=>{assert.equal(m.version,versions[i],'far load recompiles no existing model');assert.equal(m.customProgramCacheKey(),keys[i],'existing model cache key stable');});
- if(landOK){assert.equal(seaColour.vertexShader,'vertex curved','stable colour vertex target');assert.equal(seaColour.fragmentShader,'fragment curved','stable colour fragment target');if(!fail.low){assert.equal(query.fragmentShader,'query fragment curved','query keeps the query fragment');assert.equal(query.depthWrite,false,'query depth flags stay unchanged');assert.equal(query.colorWrite,false,'query stays colourless');}}
- const changed=(seaColour.version-seaVersion)+(query.version-queryVersion);assert.equal(changed,landOK?(fail.low?1:2):0,'only sea colour/query programs change');if(!landOK)assert.equal(sea.geometry,initialGeometry);
+ if(landOK){assert.equal(seaColour.vertexShader,'vertex curved','stable colour vertex target');assert.equal(seaColour.fragmentShader,'fragment curved','stable colour fragment target');if(!state.LOW){assert.equal(query.fragmentShader,'query fragment curved','query keeps the query fragment');assert.equal(query.depthWrite,false,'query depth flags stay unchanged');assert.equal(query.colorWrite,false,'query stays colourless');}}
+ const changed=(seaColour.version-seaVersion)+(query.version-queryVersion);assert.equal(changed,landOK?(state.LOW?1:2):0,'only sea colour/query programs change');if(!landOK)assert.equal(sea.geometry,initialGeometry);
 }
-for(const fail of [{},{low:true},{queryActive:true},{queryActive:true,tall:true},{queryActive:true,binary:true},{tall:true},{land:true},{binary:true},{near:true},{distant:true},{rewrite:true},{query:true}])await loadCase(fail);
+for(const fail of [{},{low:true},{coarse:true},{coarse:true,tall:true},{coarse:true,binary:true},{coarse:true,land:true},{coarse:true,distant:true},{queryActive:true},{queryActive:true,tall:true},{queryActive:true,binary:true},{tall:true},{land:true},{binary:true},{near:true},{distant:true},{rewrite:true},{query:true}])await loadCase(fail);
 console.log('PASS actual far-load fixture: zero existing-model program changes, at most two sea programs; independent optional failures');
 if(process.argv.includes('--mutations')){
  for(const[label,path,a,b,test]of [
@@ -93,6 +100,7 @@ if(process.argv.includes('--mutations')){
   ['stale occlusion accepted','web/src/far-visibility.ts','if(r.version===this.pose)','if(true)',visibility],
  ]){const text=source(path);assert.equal(text.split(a).length,2);assert.throws(()=>test(moduleAt(path,text.replace(a,b))),{name:'AssertionError'});console.log('KILLED',label);}
 }
+if(process.argv.includes('--mutations')){const orphan=main.replace('if(farUse!.coarse&&!farTurbines)near=null;','');assert.notEqual(orphan,main);await assert.rejects(()=>loadCase({coarse:true,distant:true},orphan),{name:'AssertionError'});console.log('KILLED coarse near solids without the far draw');}
 if(process.argv.includes('--mutations')){const changed=main.replace('shared.farCurveOn.value=1;','shared.farCurveOn.value=1;curveSceneMaterials(scene,shared);');await assert.rejects(()=>loadCase({},changed),{name:'AssertionError'});console.log('KILLED mid-drive material reinstall');}
 if(process.argv.includes('--mutations')){const wrongTarget=main.replaceAll('seaColour.','sea.material.');await assert.rejects(()=>loadCase({queryActive:true},wrongTarget),{name:'AssertionError'});console.log('KILLED query-active colour rewrite on mesh material');}
 
