@@ -3,6 +3,8 @@ export type ComplaintKind = 'lawnDamage' | 'propertyDamage' | 'boxDown' | 'lawnM
 export interface Complaint {
   kind: ComplaintKind; customer: string; target: number; at: number; x: number; z: number;
   road: number; preExisting?: boolean; line: string;
+  /** The Boss saw it happen (a ride-along day, ride-along.ts): on file at once, and no photo dismisses it. */
+  seen?: boolean;
 }
 export interface PhotoFact {
   id: string; kind: string; x: number; z: number; radius: number; road?: number; target?: number; blocking?: boolean;
@@ -38,7 +40,7 @@ export function complaintLine(kind: ComplaintKind, day: number, target: number):
 }
 export function dismissed(c: Complaint, photos: readonly Photo[]): boolean {
   // A broken fence, line, ornament, woodpile, bale or bin was the car's doing: no photo explains it.
-  if (c.kind === 'late' || c.kind === 'flag' || c.kind === 'indoors' || c.kind === 'relief' || c.kind === 'propertyDamage') return false;
+  if (c.seen || c.kind === 'late' || c.kind === 'flag' || c.kind === 'indoors' || c.kind === 'relief' || c.kind === 'propertyDamage') return false;
   for (const p of photos) {
     if (p.at >= c.at) continue;
     for (const f of p.facts) {

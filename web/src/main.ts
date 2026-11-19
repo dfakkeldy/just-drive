@@ -85,6 +85,7 @@ import { inventedName } from './mp/social';
 import { DriftFeedback } from './drift-feedback';
 import { phoneHandbrake } from './drift-rules';
 import { Boss, bossEnabled } from './boss';
+import { RideAlong, rideAlongEnabled } from './ride-along';
 import { Occluders } from './boss-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
@@ -717,8 +718,9 @@ fleetContacts.add({ resolve: () => {}, allows: body => { const b = vehicle.bound
 // LOW (phones) builds the AI from the parked display models, without the car.
 const aiDriver = driverEnabled(AREA.id, ERA.modern, params, import.meta.env.DEV) ? new PointTupperDriver(roads, terrain, fleetContacts, garageEntry.id, SEA_LEVEL, Math.random, undefined, LOW) : null;
 if (aiDriver) scene.add(aiDriver.group);
-// Get Fired's Boss (boss.ts) is built further down, with the run it watches; the physics below already serve it.
-let boss: Boss | null = null;
+// Get Fired's Boss (boss.ts), or in mail play the ride-along Boss (ride-along.ts), is built further down, with the run
+// it watches; the physics below already serve it.
+let boss: Boss | RideAlong | null = null;
 // Time-travel seam: read the live era every call, so a runtime swap to 1884 hides the AI.
 const aiDriverOn = () => driverLive(ERA.modern, !!multiplayer?.choice.on);
 let towing: Towing | null = null;
@@ -1536,8 +1538,13 @@ const fired = firedMode && shift instanceof Shift && endings instanceof Endings 
 if (fired && DAILY && dailySquares && shift instanceof Shift && endings instanceof Endings) daily = new DailyRun(DAILY, dailySquares, AREA.name, shift, fired, endings, () => pause.resetClock(), dailySupply);
 if (fired && bare) document.getElementById('firedHud')!.style.display = 'none';
 // The Boss: Get Fired only, one car, single player only (bossLive); ?boss=0 leaves it out. Buildings block its sight.
+// Mail play (not Get Fired, so not Today's run; never Just Drive): the Boss rides along on about one day in four, the
+// same days for everybody (ride-along-rules.ts); on other days it stays hidden and sees nothing. ?boss=0 or ?rideAlong=0.
+const bossSight = () => buildings ? new Occluders(buildings.clear as [number, number, number, number][]) : null;
 boss = fired && bossEnabled(firedMode, ERA.modern, params, !!DAILY)
-  ? new Boss(roads, terrain, fleetContacts, SEA_LEVEL, LOW, shift as Shift, fired, buildings ? new Occluders(buildings.clear as [number, number, number, number][]) : null, vehicle, touchDevice) : null;
+  ? new Boss(roads, terrain, fleetContacts, SEA_LEVEL, LOW, shift as Shift, fired, bossSight(), vehicle, touchDevice)
+  : !firedMode && shift instanceof Shift && AREA.route && rideAlongEnabled(gameMode === 'mail', ERA.modern, SITE.brand === 'just', params)
+    ? new RideAlong(roads, terrain, fleetContacts, SEA_LEVEL, LOW, shift, bossSight(), vehicle, touchDevice, params, props) : null;
 // The traffic keeps its distance from every AI car on the road; one shared list, refilled each frame.
 const aiCars: Vehicle[] = [];
 if (boss) {
@@ -1580,6 +1587,8 @@ let started = bare || (!plainVisit && !params.has('room') && params.get('title')
 const titleDaily = DAILY && dailySquares ? { date: DAILY.date, squares: dailySquares, vehicle: GARAGE.find(g => g.id === DAILY.vehicle)?.name ?? 'Mail car',
   mood: MOODS.find(([m]) => m === DAILY.mood)?.[1] ?? 'Clear' } : undefined;
 const title = started ? null : createTitle(touchDevice, () => { started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
+// A ride-along day says so on the start card.
+if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
