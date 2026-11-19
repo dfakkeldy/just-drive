@@ -27,6 +27,8 @@ export const YARD_PROP_RANGE: Readonly<Record<YardPropKind, readonly [number, nu
   car: [420, 220], suv: [420, 220], pickup: [420, 220], trailer: [280, 150], motorhome: [520, 260], mower: [200, 110],
   'dog-lying': [140, 80], 'dog-sitting': [140, 80],
 });
+/** Height in metres of each kind, for the view test. */
+const HEIGHT: Readonly<Record<YardPropKind, number>> = { car: 1.5, suv: 1.75, pickup: 1.95, trailer: 0.9, motorhome: 3.2, mower: 1.25, 'dog-lying': 0.55, 'dog-sitting': 0.85 };
 /** The ground detail a prop waits for before it is stood on it (the porch house waits for the same). */
 const MIN_LEVEL = 7;
 
@@ -94,7 +96,7 @@ export class YardProps {
       if (type !== undefined) { const m = new Mesher(); parkedShape(m, type); geometry = m.geometry(); }
       else geometry = farmDog(kind as 'dog-lying' | 'dog-sitting', low ? 0 : 1);
       const [length, width] = [items[0].prop.half * 2, items[0].prop.halfWidth * 2];
-      kinds.push({ name: kind, geometry, items, range: YARD_PROP_RANGE[kind][low ? 1 : 0], radius: Math.hypot(length, width) / 2 + 0.5,
+      kinds.push({ name: kind, geometry, items, range: YARD_PROP_RANGE[kind][low ? 1 : 0], radius: Math.hypot(length, width, HEIGHT[kind]) / 2 + 0.5, lift: HEIGHT[kind] / 2,
         level: (p) => this.terrain.levelAt(p.x, p.z), pose: (p, o) => this.pose(p, o),
         ...(type === undefined ? { shown: (p: Item) => !p.away } : {}) });
     }
@@ -146,6 +148,8 @@ export class YardProps {
     }
   }
 
+  /** How many props were dropped: a contact revision (a dropped prop's solid is gone). */
+  get dropped(): number { return this.near.dropped.size; }
   /** Solids still standing (a dropped prop has none). */
   get solids(): Solid[] { return [...this.cells.values()].flat(); }
   /** Props drawn this frame, by kind, and how many were dropped. */

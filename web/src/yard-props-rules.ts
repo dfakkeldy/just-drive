@@ -26,10 +26,10 @@ export const yardPropSolid = (kind: YardPropKind): boolean => kind !== 'dog-lyin
  * public: metres a prop keeps past a public road's edge: its shoulder, ditch and mailboxes, and any sidewalk (a walk
  *   and its buffer reach at most 3.5 m, sidewalk-layout.ts). drive: past the edge of a track, drive or trail.
  * mouth: metres from where a track or drive leaves a public road. wall: from any building's walls.
- * apart: between two props. reach: the lot, at most this far from the house's own walls.
+ * apart: between two props. reach: the lot, at most this far from the house's own walls. obstacle: from a pole or a box.
  */
 export const YARD_PROPS = Object.freeze({ seed: 0x5a4d17, vehicle: 1 / 3, other: 1 / 15, dog: 1 / 24,
-  public: 5.5, drive: 1.2, mouth: 9, wall: 1.2, apart: 1, reach: 14 });
+  public: 5.5, drive: 1.2, mouth: 9, wall: 1.2, apart: 1, reach: 14, obstacle: 0.8 });
 
 type XZ = readonly [number, number];
 /** A mapped house in world metres: centre, the heading of its long axis (as Building.axisDeg, in radians), its sizes
@@ -42,6 +42,8 @@ export interface YardInput {
    *  building drawn as wings share the id of the house they make up (Building.buildingId). */
   buildings: readonly { id: number; footprint: readonly XZ[] }[];
   roads: readonly YardRoad[];
+  /** Drawn things a prop keeps `obstacle` metres from (poles, mailboxes): avoided only, never a reason to pick a house. */
+  obstacles?: readonly XZ[];
   /** World boxes [x0, z0, x1, z1] of hand-built sites: nothing is placed in or at a house inside one. */
   excluded: readonly (readonly number[])[];
   seed?: number;
@@ -129,7 +131,8 @@ const rectRect = (a: Rect, b: Rect): number => {
   const c = rectCorners(a);
   let d = Infinity;
   for (let i = 0; i < 4; i++) d = Math.min(d, rectSegment(b, c[i][0], c[i][1], c[(i + 1) % 4][0], c[(i + 1) % 4][1]));
-  return Math.abs(inRect(b, a.x, a.z)[0]) <= b.half && Math.abs(inRect(b, a.x, a.z)[1]) <= b.halfWidth ? 0 : d;
+  const within = (p: Rect, q: Rect) => { const [u, v] = inRect(q, p.x, p.z); return Math.abs(u) <= q.half && Math.abs(v) <= q.halfWidth; };
+  return within(a, b) || within(b, a) ? 0 : d;
 };
 function rectBox(r: Rect): [number, number, number, number] {
   const c = rectCorners(r);
@@ -138,17 +141,20 @@ function rectBox(r: Rect): [number, number, number, number] {
 
 // ---- A coarse grid, so a house reads only the roads and buildings near it. ----
 const CELL = 64;
+const cellKey = (i: number, j: number) => (i + 0x8000) * 0x10000 + (j + 0x8000);
 class Grid<T> {
-  private cells = new Map<string, T[]>();
+  private cells = new Map<number, T[]>();
   add(item: T, box: readonly number[]): void {
     for (let i = Math.floor(box[0] / CELL); i <= Math.floor(box[2] / CELL); i++) for (let j = Math.floor(box[1] / CELL); j <= Math.floor(box[3] / CELL); j++) {
-      const key = `${i},${j}`, list = this.cells.get(key);
+      const key = cellKey(i, j), list = this.cells.get(key);
       if (list) list.push(item); else this.cells.set(key, [item]);
     }
   }
+  /** What is in the one cell under a point. */
+  at(x: number, z: number): readonly T[] { return this.cells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL))) ?? []; }
   near(box: readonly number[]): Set<T> {
     const out = new Set<T>();
-    for (let i = Math.floor(box[0] / CELL); i <= Math.floor(box[2] / CELL); i++) for (let j = Math.floor(box[1] / CELL); j <= Math.floor(box[3] / CELL); j++) for (const t of this.cells.get(`${i},${j}`) ?? []) out.add(t);
+    for (let i = Math.floor(box[0] / CELL); i <= Math.floor(box[2] / CELL); i++) for (let j = Math.floor(box[1] / CELL); j <= Math.floor(box[3] / CELL); j++) for (const t of this.cells.get(cellKey(i, j)) ?? []) out.add(t);
     return out;
   }
 }
@@ -203,16 +209,28 @@ export function chooseYardProps(input: YardInput): YardProp[] {
   const roads = new Grid<Segment>(), drives: Segment[] = [], mouths: XZ[] = [], publics: Segment[] = [];
   for (const r of input.roads) for (let i = 1; i < r.pts.length; i++) {
     const [ax, az] = r.pts[i - 1], [bx, bz] = r.pts[i], s: Segment = { ax, az, bx, bz, halfWidth: r.halfWidth, isPublic: isPublic(r.kind) };
-    roads.add(s, [Math.min(ax, bx) - r.halfWidth, Math.min(az, bz) - r.halfWidth, Math.max(ax, bx) + r.halfWidth, Math.max(az, bz) + r.halfWidth]);
+    // Along a long diagonal segment, piece by piece: its whole bounding box would fill many cells it never crosses.
+    const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / (CELL / 2)));
+    for (let k = 0; k < steps; k++) {
+      const x0 = ax + ((bx - ax) * k) / steps, z0 = az + ((bz - az) * k) / steps, x1 = ax + ((bx - ax) * (k + 1)) / steps, z1 = az + ((bz - az) * (k + 1)) / steps, m = r.halfWidth + 1;
+      roads.add(s, [Math.min(x0, x1) - m, Math.min(z0, z1) - m, Math.max(x0, x1) + m, Math.max(z0, z1) + m]);
+    }
     (s.isPublic ? publics : drives).push(s);
   }
   // A driveway mouth: where a track or drive comes to a public road's edge.
   const pubGrid = new Grid<Segment>();
-  for (const s of publics) pubGrid.add(s, [Math.min(s.ax, s.bx) - 8, Math.min(s.az, s.bz) - 8, Math.max(s.ax, s.bx) + 8, Math.max(s.az, s.bz) + 8]);
+  for (const s of publics) {
+    const steps = Math.max(1, Math.ceil(Math.hypot(s.bx - s.ax, s.bz - s.az) / (CELL / 2)));
+    for (let k = 0; k < steps; k++) {
+      const x0 = s.ax + ((s.bx - s.ax) * k) / steps, z0 = s.az + ((s.bz - s.az) * k) / steps, x1 = s.ax + ((s.bx - s.ax) * (k + 1)) / steps, z1 = s.az + ((s.bz - s.az) * (k + 1)) / steps, m = s.halfWidth + 7;
+      pubGrid.add(s, [Math.min(x0, x1) - m, Math.min(z0, z1) - m, Math.max(x0, x1) + m, Math.max(z0, z1) + m]);
+    }
+  }
   for (const r of input.roads) if (!isPublic(r.kind)) for (const [x, z] of r.pts)
-    for (const s of pubGrid.near([x, z, x, z])) if (pointSegment(x, z, s.ax, s.az, s.bx, s.bz) < s.halfWidth + 6) { mouths.push([x, z]); break; }
-  const mouthGrid = new Grid<XZ>();
+    if (pubGrid.at(x, z).some((s) => pointSegment(x, z, s.ax, s.az, s.bx, s.bz) < s.halfWidth + 6)) mouths.push([x, z]);
+  const mouthGrid = new Grid<XZ>(), things = new Grid<XZ>();
   for (const m of mouths) mouthGrid.add(m, [m[0], m[1], m[0], m[1]]);
+  for (const o of input.obstacles ?? []) things.add(o, [o[0], o[1], o[0], o[1]]);
   const buildings = new Grid<{ id: number; footprint: readonly XZ[] }>();
   for (const b of input.buildings) { const f = b.footprint; if (f.length >= 3) buildings.add(b, [Math.min(...f.map((p) => p[0])), Math.min(...f.map((p) => p[1])), Math.max(...f.map((p) => p[0])), Math.max(...f.map((p) => p[1]))]); }
   const placed: YardProp[] = [], placedGrid = new Grid<YardProp>();
@@ -250,6 +268,10 @@ export function chooseYardProps(input: YardInput): YardProp[] {
       for (const m of mouthGrid.near([box[0] - YARD_PROPS.mouth, box[1] - YARD_PROPS.mouth, box[2] + YARD_PROPS.mouth, box[3] + YARD_PROPS.mouth])) {
         const [a, b] = inRect(r, m[0], m[1]);
         if (Math.hypot(Math.max(Math.abs(a) - r.half, 0), Math.max(Math.abs(b) - r.halfWidth, 0)) < YARD_PROPS.mouth) return false;
+      }
+      for (const o of things.near([box[0] - 1, box[1] - 1, box[2] + 1, box[3] + 1])) {
+        const [a, b] = inRect(r, o[0], o[1]);
+        if (Math.hypot(Math.max(Math.abs(a) - r.half, 0), Math.max(Math.abs(b) - r.halfWidth, 0)) < YARD_PROPS.obstacle) return false;
       }
       if (rectPolygon(r, own) < YARD_PROPS.wall) return false;
       for (const f of [...wings, ...others]) if (rectPolygon(r, f) < YARD_PROPS.wall) return false;

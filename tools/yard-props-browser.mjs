@@ -25,14 +25,17 @@ for (const url of urls) {
     }
     for (let i = 0; i < 120 && !await page.read('!!window.mmm?.yardProps'); i++) await sleep(500);
     const census = await page.read(`(()=>{const y=mmm.yardProps,c={};for(const i of y.items)c[i.prop.kind]=(c[i.prop.kind]??0)+1;
-      return {total:y.items.length,kinds:c,solids:y.solids.length,droppedSolid:y.items.filter(i=>!i.solid&&!i.prop.kind.startsWith('dog')).length,low:y.low,area:mmm.area.id};})()`);
+      return {total:y.items.length,kinds:c,solids:y.solids.length,droppedSolid:y.items.filter(i=>!i.solid&&!i.prop.kind.startsWith('dog')).length,
+      unaccounted:y.items.filter(i=>!i.prop.kind.startsWith('dog')&&!i.solid&&!y.near.dropped.has(i)).length,dogSolids:y.items.filter(i=>i.prop.kind.startsWith('dog')&&i.solid).length,low:y.low,area:mmm.area.id};})()`);
     console.log(name, 'census', JSON.stringify(census));
     assert.equal(census.area, 'mabou');
     assert.equal(census.low, params.get('q') === 'low', 'LOW detail follows the page');
     assert.ok(census.total > 120, 'Mabou has yard props at a share of its houses');
     for (const k of KINDS) assert.ok(census.kinds[k] > 0, `Mabou has ${k}`);
     const dogs = (census.kinds['dog-lying'] ?? 0) + (census.kinds['dog-sitting'] ?? 0);
-    assert.equal(census.solids + census.droppedSolid, census.total - dogs, 'every prop but a dog is solid (until the land shows it cannot stand there)');
+    assert.equal(census.unaccounted, 0, 'every prop but a dog is solid, unless the land showed it cannot stand there (dropped)');
+    assert.equal(census.dogSolids, 0, 'no dog is solid');
+    assert.equal(census.solids + census.droppedSolid, census.total - dogs);
     assert.ok(census.droppedSolid <= census.total * 0.1, 'few props dropped by the land check');
 
     // The car goes beside the nearest yard with a vehicle; the camera follows it, and every prop near it is posed.

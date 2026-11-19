@@ -567,6 +567,9 @@ const yardPropList = ERA.modern && buildingList && params.get('yardprops') !== '
     length: b.length, width: b.width, footprint: b.footprint.map(([e, n]): [number, number] => [e - VE, VN - n]) })),
   buildings: buildingList.map(b => ({ id: b.buildingId ?? b.id, footprint: b.footprint.map(([e, n]): [number, number] => [e - VE, VN - n]) })),
   roads: roads.roads,
+  // Drawn things a prop must not stand in: power poles, mailboxes and community boxes. Only ever a reason to stand
+  // elsewhere, never a reason to choose a house.
+  obstacles: props ? [...props.poleSites, ...props.mail, ...props.sites].map(p => [p.x, p.z] as [number, number]) : [],
   excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...[villageSite, hawkesburySite, mabouSite].flatMap(s => s?.clear ?? [])],
 }) : [];
 // No single tree stands in a parked car; the canopy is left as it is.
@@ -646,7 +649,7 @@ if (yard) fleetContacts.add({ revision: () => yard.collisionVersion(), resolve: 
 if (history) fleetContacts.add({ resolve: body => history.resolve(body as unknown as Vehicle) });
 if (home) fleetContacts.add({ resolve: body => home.resolveSolids(body) });
 if (porch) fleetContacts.add({ resolve: body => porch.resolveSolids(body) });
-if (yardProps) fleetContacts.add({ resolve: body => yardProps.resolveSolids(body) });
+if (yardProps) fleetContacts.add({ revision: () => yardProps.dropped, resolve: body => yardProps.resolveSolids(body) });
 if (church) fleetContacts.add({ resolve: body => church.resolveSolids(body) });
 // The optional pack arrives after boot; the registry must see its new solids.
 if (tallKey) fleetContacts.add({ revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) });
@@ -1447,7 +1450,8 @@ resets[resetSlot.fishing] = () => fishing?.reset();
 if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
 if (import.meta.env.DEV) expose({ fired, daily }, false);
-if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardProps, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
+if (import.meta.env.DEV) expose({ yardProps }, false);   // for tools/yard-props-browser.mjs; not enumerable: ui-check pins the public key set
+if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
   const report = document.getElementById('shiftReport'), footer = report?.querySelector('.reportFooter');

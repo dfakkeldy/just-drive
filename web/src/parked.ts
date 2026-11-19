@@ -240,18 +240,19 @@ export class ParkedVehicles {
 export interface Placed { x: number; z: number; heading: number; colour: number }
 /**
  * One kind of thing to draw many times. `range`: metres from the camera it is drawn within. `radius`: of a sphere
- * round one, for the view test. `pose` stands one on the ground (o's matrix updated): true when done, false while its
+ * round one, centred `lift` metres over its ground point, for the view test (half its height, so a tall roof is in it). `pose` stands one on the ground (o's matrix updated): true when done, false while its
  * ground has not loaded, null when it can never stand there (it is dropped). `level` is the detail of the ground under
  * one (higher is finer): an item is posed again when finer ground comes.
  */
 export interface NearKind<T extends Placed> {
-  geometry: THREE.BufferGeometry; items: T[]; range: number; radius: number; name?: string;
+  geometry: THREE.BufferGeometry; items: T[]; range: number; radius: number; lift: number; name?: string;
   pose(item: T, o: THREE.Object3D): boolean | null; level(item: T): number;
   /** False while an item is out of sight for its own reasons (a dog that has slipped away). */
   shown?(item: T, index: number): boolean;
 }
 
 const NEAR_CELL = 128;
+const nearKey = (i: number, j: number) => (i + 0x8000) * 0x10000 + (j + 0x8000);
 /**
  * Things spread over a whole area but drawn only near the camera: one instanced mesh per kind, however many there are.
  * Every frame each mesh holds just the items within its range and inside the view, so a kind costs one draw call while
@@ -262,7 +263,7 @@ export class NearInstances<T extends Placed> {
   readonly meshes: THREE.InstancedMesh[] = [];
   /** Items dropped because they can never stand where they are (see NearKind.pose). */
   readonly dropped = new Set<T>();
-  private sets: { kind: NearKind<T>; mesh: THREE.InstancedMesh; cells: Map<string, number[]>; matrices: Float32Array; posed: Int8Array; y: Float32Array }[] = [];
+  private sets: { kind: NearKind<T>; mesh: THREE.InstancedMesh; cells: Map<number, number[]>; matrices: Float32Array; posed: Int8Array; y: Float32Array }[] = [];
   private frustum = new THREE.Frustum(); private view = new THREE.Matrix4(); private sphere = new THREE.Sphere();
   private dummy = new THREE.Object3D(); private colour = new THREE.Color();
   private frame = 0;
@@ -274,8 +275,8 @@ export class NearInstances<T extends Placed> {
       mesh.frustumCulled = false;   // each instance is tested against the view here
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.setColorAt(0, this.colour.setHex(0xffffff));
-      const cells = new Map<string, number[]>();
-      kind.items.forEach((p, i) => { const key = `${Math.floor(p.x / NEAR_CELL)},${Math.floor(p.z / NEAR_CELL)}`; const l = cells.get(key); if (l) l.push(i); else cells.set(key, [i]); });
+      const cells = new Map<number, number[]>();
+      kind.items.forEach((p, i) => { const key = nearKey(Math.floor(p.x / NEAR_CELL), Math.floor(p.z / NEAR_CELL)); const l = cells.get(key); if (l) l.push(i); else cells.set(key, [i]); });
       this.sets.push({ kind, mesh, cells, matrices: new Float32Array(kind.items.length * 16), posed: new Int8Array(kind.items.length).fill(-1), y: new Float32Array(kind.items.length) });
       this.meshes.push(mesh); this.group.add(mesh);
     }
@@ -292,7 +293,7 @@ export class NearInstances<T extends Placed> {
       const { kind, mesh, cells, matrices, posed, y } = set, range = kind.range * scale;
       let n = 0;
       for (let i = Math.floor((cx - range) / NEAR_CELL); i <= Math.floor((cx + range) / NEAR_CELL); i++) for (let j = Math.floor((cz - range) / NEAR_CELL); j <= Math.floor((cz + range) / NEAR_CELL); j++) {
-        const list = cells.get(`${i},${j}`);
+        const list = cells.get(nearKey(i, j));
         if (list) for (const k of list) {
           const p = kind.items[k];
           if (posed[k] === -2 || (p.x - cx) ** 2 + (p.z - cz) ** 2 > range * range) continue;
@@ -302,8 +303,9 @@ export class NearInstances<T extends Placed> {
             if (done) { this.dummy.matrix.toArray(matrices, k * 16); y[k] = this.dummy.position.y; posed[k] = Math.max(0, level); }
           }
           if (posed[k] < 0 || (kind.shown && !kind.shown(p, k))) continue;
-          if (!this.frustum.intersectsSphere(this.sphere.set(this.dummy.position.set(p.x, y[k], p.z), kind.radius))) continue;
-          mesh.instanceMatrix.array.set(matrices.subarray(k * 16, k * 16 + 16), n * 16);
+          if (!this.frustum.intersectsSphere(this.sphere.set(this.dummy.position.set(p.x, y[k] + kind.lift, p.z), kind.radius))) continue;
+          const to = mesh.instanceMatrix.array as Float32Array;
+          for (let e = 0; e < 16; e++) to[n * 16 + e] = matrices[k * 16 + e];
           mesh.setColorAt(n, this.colour.setHex(p.colour));
           n++;
         }

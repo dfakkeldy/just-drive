@@ -66,6 +66,8 @@ function audit(input, props, label) {
     assert.deepEqual([p.half * 2, p.halfWidth * 2], [...YARD_PROP_SIZE[p.kind]], `${where}: its own size`);
     assert.ok(yardWants(h.id, input.seed).kinds.includes(p.kind), `${where}: chosen from the house id alone`);
     assert.ok(!input.excluded.some(e => h.x >= e[0] && h.x <= e[2] && h.z >= e[1] && h.z <= e[3]), `${where}: not at a hand-built site`);
+    const obstacles = (input.obstacles ?? []).filter(([ox, oz]) => Math.hypot(ox - p.x, oz - p.z) < 12);
+    for (const [ox, oz] of obstacles) assert.ok(!inside(p, ox, oz), `${where}: a pole or box stands in it`);
     const segs = segments.filter(r => Math.min(r.a[0], r.b[0]) < p.x + 60 && Math.max(r.a[0], r.b[0]) > p.x - 60 && Math.min(r.a[1], r.b[1]) < p.z + 60 && Math.max(r.a[1], r.b[1]) > p.z - 60);
     const pts = [...outline(p), [p.x, p.z]], others = near(p, input.buildings.filter(b => b.id !== h.id), 80), wings = near(p, input.buildings.filter(b => b.id === h.id), 80);
     for (const [x, z] of pts) {
@@ -76,6 +78,7 @@ function audit(input, props, label) {
       for (const [mx, mz] of mouths) assert.ok(Math.hypot(x - mx, z - mz) >= YARD_PROPS.mouth - 0.01, `${where}: ${Math.hypot(x - mx, z - mz).toFixed(2)} m from a driveway mouth`);
       for (const b of [{ footprint: h.footprint }, ...wings, ...others]) assert.ok(toPoly(x, z, b.footprint) >= YARD_PROPS.wall - 0.01, `${where}: ${toPoly(x, z, b.footprint).toFixed(2)} m from a building`);
       for (const e of input.excluded) assert.ok(!(x >= e[0] && x <= e[2] && z >= e[1] && z <= e[3]), `${where}: inside a hand-built site`);
+      for (const [ox, oz] of obstacles) assert.ok(Math.hypot(x - ox, z - oz) >= YARD_PROPS.obstacle - 0.01, `${where}: ${Math.hypot(x - ox, z - oz).toFixed(2)} m from a pole or box`);
     }
     // The lot: corners and centre nearer this house than any other building, and within reach of its walls.
     for (const [x, z] of [...box(p.x, p.z, p.heading, p.half * 2, p.halfWidth * 2), [p.x, p.z]]) {
@@ -99,7 +102,7 @@ function audit(input, props, label) {
 
 // ---- A made-up street: houses 16 m apart on both sides of a paved road, set back 16 to 30 m, every third with a drive
 // from the road's edge beside it, a shed behind every fourth, and three houses inside a hand-built site. ----
-const houses = [], buildings = [], roads = [{ kind: 2, halfWidth: 3.5, pts: [[-700, 0], [0, 0.4], [700, 0]] }];
+const houses = [], buildings = [], poles = [], roads = [{ kind: 2, halfWidth: 3.5, pts: [[-700, 0], [0, 0.4], [700, 0]] }];
 let id = 4100;
 for (let i = 0; i < 80; i++) for (const side of [-1, 1]) {
   const x = -640 + i * 16, z = side * [16, 22, 30][i % 3], axis = Math.PI / 2 + (i % 5 - 2) * 0.03, l = 10, w = 8;
@@ -108,11 +111,20 @@ for (let i = 0; i < 80; i++) for (const side of [-1, 1]) {
   if (i % 3 === 0) roads.push({ kind: 4, halfWidth: 1.5, pts: [[x + 7.2, side * 3.5], [x + 7.2, side * 34]] });
   if (i % 4 === 1) buildings.push({ id: id + 1, footprint: box(x - 2, z + side * 9, axis, 4, 3) });
 }
-const street = { houses, buildings, roads, excluded: [[-640 + 10 * 16 - 4, -40, -640 + 12 * 16 + 4, 40]], seed: YARD_PROPS.seed };
+const bare = { houses, buildings, roads, excluded: [[-640 + 10 * 16 - 4, -40, -640 + 12 * 16 + 4, 40]], seed: YARD_PROPS.seed };
+// A pole stands where five of the vehicles chosen without poles would be: those must move or go.
+const free = chooseYardProps(bare);
+poles.push(...free.filter(p => ['car', 'suv', 'pickup'].includes(p.kind)).filter((_, i) => i % 7 === 0).slice(0, 5).map(p => [p.x, p.z]));
+assert.equal(poles.length, 5);
+const street = { ...bare, obstacles: poles };
 const placed = chooseYardProps(street);
 assert.deepEqual(chooseYardProps(street), placed, 'the same street gives the same props');
 assert.deepEqual(chooseYardProps({ ...street, houses: [...houses].reverse(), buildings: [...buildings].reverse() }), placed, 'the order of the lists does not matter');
 assert.notDeepEqual(chooseYardProps({ ...street, seed: YARD_PROPS.seed + 1 }), placed, 'another seed, another street');
+// Obstacles only ever move or remove a prop: they never give a house a kind it did not have without them.
+const kindsAt = list => new Set(list.map(p => `${p.house}:${p.kind}`));
+for (const k of kindsAt(placed)) assert.ok(kindsAt(free).has(k), `obstacles never add a prop (${k})`);
+assert.notDeepEqual(placed, free, 'the poles moved some props');
 assert.ok(audit(street, placed, 'street') >= 40, `the street has props: ${placed.length}`);
 assert.ok(placed.some(p => ['car', 'suv', 'pickup'].includes(p.kind)) && placed.some(p => p.kind.startsWith('dog')), 'vehicles and a dog on the street');
 // Beside a drive where the house has one: a vehicle parallel to it.
@@ -130,6 +142,7 @@ if (land) {
     houses: sites.filter(b => b.kind === 'house').map(b => ({ id: b.buildingId ?? b.id, x: b.x - VE, z: VN - b.y, axis: b.axisDeg * Math.PI / 180, length: b.length, width: b.width, footprint: b.footprint.map(w) })),
     buildings: list.map(b => ({ id: b.buildingId ?? b.id, footprint: b.footprint.map(w) })),
     roads: roadList.map(r => ({ kind: r.kind, halfWidth: r.halfWidth, pts: r.pts.map(w) })), excluded: [], seed: YARD_PROPS.seed,
+    obstacles: m.props && existsSync(`${land}/${m.props.file}`) ? (({ poles, mailboxes, communityBoxes }) => [...poles, ...mailboxes, ...communityBoxes].map(p => w([p.x, p.y])))(JSON.parse(readFileSync(`${land}/${m.props.file}`, 'utf8'))) : [],
   };
   const props = chooseYardProps(input), n = input.houses.length;
   const count = f => new Set(props.filter(f).map(p => p.house)).size;
@@ -138,5 +151,6 @@ if (land) {
   assert.ok(vehicles / n > 0.25 && vehicles / n < 0.4, `Mabou: about one house in three with a vehicle (${vehicles} of ${n})`);
   assert.ok(others / n > 0.04 && others / n < 0.09, `Mabou: about one in fifteen with a trailer, motorhome or mower (${others} of ${n})`);
   assert.ok(dogs < others && dogs > 0, `Mabou: dogs rarer (${dogs})`);
-  console.log(`PASS yard-props Mabou: ${n} houses, ${vehicles} with a vehicle, ${others} with a trailer, motorhome or mower, ${dogs} with a dog; every prop audited`);
+  assert.ok(input.obstacles.length > 100, 'Mabou poles and mailboxes are obstacles');
+  console.log(`PASS yard-props Mabou: ${input.obstacles.length} poles and boxes avoided; ${n} houses, ${vehicles} with a vehicle, ${others} with a trailer, motorhome or mower, ${dogs} with a dog; every prop audited`);
 } else console.log('SKIP yard-props Mabou land: data/baked/terrain is not here');
