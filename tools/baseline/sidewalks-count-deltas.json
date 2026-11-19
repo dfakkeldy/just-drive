@@ -144,8 +144,8 @@
     "requests": 1
   },
   "new-player-start/desktop-explore-truck": {
-    "calls": -5,
-    "triangles": 5680,
+    "calls": -2,
+    "triangles": 7806,
     "geometries": 1,
     "textures": 0,
     "programs": 0,
