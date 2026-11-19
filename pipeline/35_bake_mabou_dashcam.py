@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Stage the 18 Nov Mabou correction on a copy of an existing terrain pack: the Harbour Road pavement limit, Weaver
 Lane, six hand footprints and the two properties' gravel driveways with their pads (unnamed kind-4 pieces). Trees on
-a driveway are dropped by step 28's own rule (half width + 0.7 m of the line).
+a driveway are dropped from the packed level-8 tree tiles by step 28's road rule (top within half width + 0.7 m of the
+line). The other trees keep their packed records; a full step 28 re-bake, which detects afresh, can size a dozen
+neighbouring crowns differently and needs a new receipt, like any step-28 re-bake.
 
 Only changed files are emitted. Review them against the source pack before
 promotion. The source terrain and its existing roads are read-only.
@@ -180,7 +182,7 @@ RECORD = np.dtype([('x', '<u2'), ('y', '<u2'), ('height', 'u1'), ('crown', 'u1')
 
 def drop_trees(source, manifest, field, first, windows, bounds):
     """Step 28's road rule on the driveway segments (field segment rows from `first` on): a tree whose top lies within the half
-    width + 0.7 m is dropped. Returns {path: kept records} for the tiles that change, and how many were dropped."""
+    width + 0.7 m is dropped from the packed tile; the kept records stay byte for byte. Returns {path: kept records} for the tiles that change, and how many were dropped."""
     info = manifest['trees']
     if info['level'] != 8 or info['record'] != RECORD.itemsize:
         raise ValueError('Unexpected tree tiles')

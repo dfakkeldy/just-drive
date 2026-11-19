@@ -15,7 +15,7 @@
   {
    "file": "terrain/5/14_15.r.png",
    "before": "5fe36377d711bc2c0957218221437da6dcb68054fc483d5454510d2acd40ca50",
-   "sha256": "619f38c6daee8de40215012cf13fc676b89d283359d29f19d4d7fd03f60e1b0f"
+   "sha256": "ea93d11a35d09e3999c6b244f4fe18e9095faaf78dbcf01aacaae7dabbedc11f"
   },
   {
    "file": "terrain/5/14_17.r.png",
@@ -40,7 +40,7 @@
   {
    "file": "terrain/6/28_30.r.png",
    "before": "7483087ab5bafea3381261f7b35a7f10a2da2d5ec9bedcf0769db64c5957e0c6",
-   "sha256": "96e7657b0d895aee483f047cf28d8927ac3a99a2dff1afb837c9b2f61651836e"
+   "sha256": "227fbf4894a6ca154f6660413d2aa8da09975017c8b36652a9793249a7b1caf1"
   },
   {
    "file": "terrain/6/28_34.r.png",
@@ -80,7 +80,7 @@
   {
    "file": "terrain/7/56_60.r.png",
    "before": "1220a91187376b756cc094330b615cc9a8e3d35950122017aada91ae7c1ec4a1",
-   "sha256": "f49c36b4efc34dafca5784e53e9bdf5e211a2f12981a777f18bb83572b65402b"
+   "sha256": "61da12c4eb00f95f19ae8942d8b68a9f00d7d6324272974b4c429ed5ab0cdbc4"
   },
   {
    "file": "terrain/7/57_69.r.png",
@@ -140,12 +140,12 @@
   {
    "file": "terrain/8/112_120.r.png",
    "before": "0d5bf20c6dabd371dad6dcb1a9a94fb1725c100eb666eaeb54418c4b3b1f5878",
-   "sha256": "162201a68a5033960defb329696402d8cb4ef53018523d90aa92141b642c1361"
+   "sha256": "08d9e0791218dd3beee20c4183c9c0a4cd59f493a1fdacf1e9563ca3b6e39aaf"
   },
   {
    "file": "terrain/8/113_120.r.png",
    "before": "06825453981aed474899ba7d18876b152cb171b21566204d06e58091f7456c2e",
-   "sha256": "70b9be36ada436bab88b4141639a1bceb1965851a7f94cd00e1945470a55d5fa"
+   "sha256": "0df0f01c286561ac35fbc608bca278b99cf7df82ba3ed999ff6eea5c3fdfe239"
   },
   {
    "file": "terrain/8/115_139.r.png",
@@ -205,7 +205,7 @@
   {
    "file": "terrain/cemeteries.json",
    "before": "0083be318794bc4bd1083b72958436b4b3fbe54a95aa384b8c01f41b58ea60ce",
-   "sha256": "9393e7ca6e9ef3e29b7d21f3cd1bdbfe853e2235cae5de478e8ef6f5ef37cd77"
+   "sha256": "9895b32dd401ddf9619ee809e3cad5f1bc500321cf2c4d6172e5878b16f66203"
   },
   {
    "file": "terrain/props.json",
@@ -215,7 +215,7 @@
   {
    "file": "terrain/roads.json",
    "before": "2a34feac490ceccad35af2b6ffc5fac1315baaa72d3c8795828dfed4cc874f82",
-   "sha256": "95b9b9653e23ba4b3d2b062010253ab27e64c5d491bd4b2cba172321947afcad"
+   "sha256": "d16a758871a4a7fd42ef23d8fa5255bb2b8b420a2fdff67d71cf9f1ce075216a"
   },
   {
    "file": "terrain/streams.json",
