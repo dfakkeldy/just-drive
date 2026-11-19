@@ -939,22 +939,12 @@ void main() {
       float worn = smoothstep(0.5, 0.15, abs(rdist - rhalf * 0.45));
       surface = mix(dust, dust * 0.88, worn);
     } else if (rkind > 3.5) {
-#ifdef ROAD_PAVEMENT
-      if (rflags >= 64.0) {
-        // A gravel driveway or its pad (the gravel bit on a track): packed wheel paths in loose stone, like a gravel road.
-        float track = smoothstep(0.55, 0.15, abs(rdist - rhalf * 0.5));
-        surface = mix(gravel, gravel * 0.72, track);
-      } else {
-#endif
       // Track: dirt ruts with grass in the middle.
       float rut = smoothstep(0.45, 0.2, abs(rdist - 0.75));
 #ifdef SITE_GRAVEL
       surface = mix(mix(albedo, vec3(0.160, 0.170, 0.060), 0.5*(1.0-gravelOverlay)), vec3(0.170, 0.130, 0.090), rut);
 #else
       surface = mix(mix(albedo, vec3(0.160, 0.170, 0.060), 0.5), vec3(0.170, 0.130, 0.090), rut);
-#endif
-#ifdef ROAD_PAVEMENT
-      }
 #endif
 #ifdef ROAD_PAVEMENT
     } else if (rkind < 1.5 || (rkind == 2.0 && mod(rflags, 128.0) >= 64.0)) {
