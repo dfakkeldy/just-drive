@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Run through check-budget.sh / yard-shots.sh. Uses the real game loop, not a substitute render.
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
+import { loadavg } from 'node:os';
+import { mkdirSync, readFileSync, writeFileSync, realpathSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertMailCar } from './mail-car-body.mjs';
 const [, first] = process.argv.slice(2);
@@ -375,7 +377,7 @@ async function treeFrustum(page) {
     return {calls,triangles,outsideCalls,outsideTriangles,culledCalls,culledTriangles,withoutNearCalls,withoutNearTriangles,bounds:'world-space instance bounding spheres; six camera frustum planes'};
   })()`);
 }
-export async function run() {
+export async function run(astra, studyCounts) {
   const options=parseArgs(JSON.parse(process.env.FRAME_BUDGET_ARGS??'[]'));
   if(options.action==='mutations') {
     const {mutations}=await import('./frame-budget-mutations.mjs');
@@ -398,11 +400,12 @@ export async function run() {
   for(const {scene,mode,key} of selected) {
     const measurements=[];
     for(let i=0;i<(updating?5:1);i++) {
-      const result=await measure(scene,mode);measurements.push(result);
+      const result=await measure(scene,mode,undefined,astra?{query:{astra}}:{});measurements.push(result);
       console.log(`${key} run=${i+1} ${JSON.stringify(result.counts)}`);
       console.log(`DIAGNOSTIC ${key} `+JSON.stringify({url:result.url,seconds:result.seconds,passes:result.passes,groups:result.groups,groupTriangles:result.groupTriangles,frames:result.frameRanges,assets:result.assets,drive:result.drive,trees:result.trees,radio:result.radio}));
     }
     const result=measurements[0]; visited.push(key);
+    if (studyCounts) studyCounts[key] = result.counts;
     if(updating) {
       const spreads=Object.fromEntries(metrics.map(k=>[k,[Math.min(...measurements.map(r=>r.counts[k])),Math.max(...measurements.map(r=>r.counts[k]))]]));
       console.log(`SPREAD ${key} ${JSON.stringify(spreads)}`);
@@ -421,8 +424,35 @@ export async function run() {
   console.log(`${failed?'FAIL':'PASS'} frame-budget ${subset?'SUBSET':'full'} (${((Date.now()-started)/1000).toFixed(1)}s)`);
   return failed?1:0;
 }
+// Reuse the owned hardware browser for paired study runs. Each scene still gets a fresh tab.
+async function runStudy(flags) {
+  const names = flags.split(',').map(name => name === 'off' ? '' : name);
+  assert.ok(names.every(name => ['', 'bend-camera', 'coastal-air', 'window-light', 'wall-shadows'].includes(name)), 'unknown study flag');
+  const args = JSON.parse(process.env.FRAME_BUDGET_ARGS ?? '[]');
+  const options = parseArgs(args);
+  assert.equal(options.action, 'check', 'a proposal measures the committed pins');
+  let status = 0;
+  for (const name of names) {
+    let load;
+    while ((load = loadavg()[0]) >= 40) await sleep(5000);
+    const started = new Date().toISOString(), flag = name || 'off', counts = {};
+    console.log(`ASTRA budget start ${started} load1=${load.toFixed(2)} flag=${flag}`);
+    const code = await run(name, counts);
+    status = code || status;
+    if (process.env.MMM_CHECK_OUT) {
+      const folder = join(process.env.MMM_CHECK_OUT, 'evidence/astra-budget');
+      mkdirSync(folder, { recursive: true });
+      const fixture = [basename(baselinePath, '.json'), ...(options.phone ? ['phone'] : []), ...options.scenes, ...options.modes].join('-');
+      writeFileSync(join(folder, fixture + '-' + flag + '.json'), JSON.stringify({ flag, args, started, load, code, counts }, null, 2) + '\n');
+    }
+  }
+  return status;
+}
 let entry=false;
 try {entry=realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url));} catch { /* imported module or stdin */ }
 if(entry) {
-  try {process.exitCode=await run();} catch(error) {console.error('FAIL frame-budget: '+error.stack);process.exitCode=1;}
+  try {
+    const flags = process.env.ASTRA_BUDGET_VARIANT;
+    process.exitCode = flags === undefined ? await run() : await runStudy(flags);
+  } catch(error) {console.error('FAIL frame-budget: '+error.stack);process.exitCode=1;}
 }

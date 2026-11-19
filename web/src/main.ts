@@ -23,7 +23,7 @@ import { fleetEnabled, fleetRig } from './fleet-models';
 import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { Buildings, buildingSites, readBuildingStyles, roofSites, type Building } from './buildings';
+import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
 import { areaScreen } from './area-screen';
@@ -145,6 +145,7 @@ const LAT = 46.0717, LON = -61.392;
 const SEA_LEVEL = -0.2;   // metres CGVD2013; the surveyed harbour surface is at about -0.3 to -0.7
 
 const params = bootTripParams();
+const astra = params.get('astra');
 const baseArea = await siteArea(params);
 const touchDevice = matchMedia('(pointer: coarse)').matches || params.get('touch') === '1';   // ?touch=1 shows the phone controls for a test
 const quality = startTouchQuality(touchDevice, params.get('q'));
@@ -266,11 +267,17 @@ if (mood) {
   // Cloud hides the dusk bands as it hides the stars.
   if (nightLook) { nightLook.stars *= mood.stars; nightLook.warm *= 1 - mood.flat; nightLook.pink *= 1 - mood.flat; }
 }
+// Clear-day maritime air: cool skylight on nearby slopes and more extinction across the harbour.
+const coastalAir = astra === 'coastal-air' && sun.el > 0 && !nightLook && !lightStudy.active && !mood;
+if (coastalAir) {
+  skyColor.setRGB(0.38, 0.54, 0.76).multiplyScalar(0.55 + 0.5 * low);
+  fogColor.setRGB(0.52, 0.67, 0.79).multiplyScalar(0.75 + 0.35 * low);
+}
 const nightShading = nightLook ? new NightShading(nightLook, LOW) : null;
 
 const shared: Record<string, THREE.IUniform> = {
   sunDir: { value: sunDir }, sunColor: { value: sunColor }, skyColor: { value: skyColor }, fogColor: { value: fogColor },
-  fogDensity: { value: mood?.haze ?? CLEAR_HAZE }, seaLevel: { value: SEA_LEVEL }, time: { value: 0 },
+  fogDensity: { value: mood?.haze ?? (coastalAir ? 0.000115 : CLEAR_HAZE) }, seaLevel: { value: SEA_LEVEL }, time: { value: 0 },
   gulfTint: { value: AREA.gulfTint },
   farExag: { value: EXAG }, farCurveOn: { value: 0 },
   tallViewport: { value: new THREE.Vector2(1920,1080) },
@@ -281,6 +288,9 @@ const sky = new Sky();
 sky.scale.setScalar(300000);
 const su = sky.material.uniforms;
 su.turbidity.value = 5.5; su.rayleigh.value = 1.7; su.mieCoefficient.value = 0.006; su.mieDirectionalG.value = 0.82;
+if (coastalAir) {
+  su.turbidity.value = 3.4; su.rayleigh.value = 2.25; su.mieCoefficient.value = 0.0038;
+}
 su.sunPosition.value.copy(sunDir);
 if (mood) { su.turbidity.value = mood.turbidity; su.rayleigh.value = mood.rayleigh; su.mieCoefficient.value = mood.mie; su.mieDirectionalG.value = mood.glow; }
 scene.add(sky);
@@ -334,8 +344,9 @@ const buildingList: Building[] | null = manifest.buildings ? await getJson(manif
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
 const buildingStyles = ERA.modern && manifest.buildingStyles
 
-  ? await getJson(manifest.buildingStyles.file).then(readBuildingStyles).catch((e: unknown) => { console.warn('building styles', e); return undefined; })
-  : undefined;
+  ? buildingAppearance(astra, LOW, sunDir, await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
+    .catch((e: unknown) => { console.warn('building styles', e); return undefined; }))
+  : buildingAppearance(astra, LOW, sunDir);
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
 const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
@@ -1253,6 +1264,17 @@ function chase(dt: number) {
   camPos.lerp(new THREE.Vector3(tx, ty, tz), k);
   const lookAhead = towCamera ? -towCamera.lookBack : vehicleSpec.chase.lookAhead;
   const target = new THREE.Vector3(vehicle.x + Math.sin(vehicle.heading) * lookAhead + Math.cos(camHeading) * (towCamera?.lookSide ?? 0), vehicle.y + vehicleSpec.chase.lookHeight, vehicle.z - Math.cos(vehicle.heading) * lookAhead + Math.sin(camHeading) * (towCamera?.lookSide ?? 0));
+  if (astra === 'bend-camera' && garageEntry.id === 'car' && vehicle.speed > 2 && !vehicle.airborne) {
+    // Aim into the next fraction of a second of the turn. Keep the horizon level and the right shoulder in view.
+    const pace = THREE.MathUtils.smoothstep(vehicle.speed, 2, 14);
+    const yawRate = vehicle.speed * Math.tan(vehicle.steerAngle) / vehicleSpec.wheelbase;
+    const sideLead = pace * THREE.MathUtils.clamp(0.5 * vehicle.speed * yawRate * 0.65 ** 2, -1.8, 1.8);
+    const forwardLead = pace * 3.2;
+    const sin = Math.sin(vehicle.heading), cos = Math.cos(vehicle.heading);
+    target.x += sin * forwardLead + cos * sideLead;
+    target.z += -cos * forwardLead + sin * sideLead;
+    target.y += 0.32 * pace;
+  }
   if (towCamera?.drop !== undefined) target.y = camPos.y - Math.hypot(target.x - camPos.x, target.z - camPos.z) * towCamera.drop;
   camLook.lerp(target, k);
   camera.position.copy(camPos);
