@@ -2,15 +2,14 @@
 # Rows that need data/baked or are mac-only in tools/checks-hosts.tsv SKIP here and still run locally
 # (tools/check-all.sh on the Mac, tools/remote-check.sh on Linux). Read-only: no secrets, no writes.
 #
-# Hosted minutes are billed, so a draft PR runs nothing: its pushes report this job as
-# skipped. Marking the PR ready (gh pr ready) starts the full run on the merge ref. land_pr.py reads a
-# head whose only check is skipped as red, so wait until this job shows pending before running it.
+# The repository is public, so hosted minutes are free: draft PRs run the full job too.
+# Marking a PR ready starts no second run; the run on its latest push still counts.
 name: CI
 
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened]
   push:
     branches: [main]
 
@@ -24,7 +23,6 @@ concurrency:
 jobs:
   checks:
     name: Clean-clone checks
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     # A full run takes 10-12 minutes; a hang should not bill 45.
     timeout-minutes: 25
