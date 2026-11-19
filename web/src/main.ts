@@ -43,7 +43,7 @@ import { cloudReflections } from './finish-shaders';
 import { startHere, placeAtStart } from './start-here';
 import { startKey } from './start-key';
 import { startTouchQuality } from './touch-quality';
-import { Props } from './props';
+import { Props, splitRoadLines } from './props';
 import { TallLandmarks } from './tall';
 import { FarLand, farSeaVertex, farSeaFragment } from './far-land';
 import { FarTurbines } from './far-turbines';
@@ -488,7 +488,7 @@ const props = await (async () => {
     // The service drops of the boxes Port Hawkesbury and Mabou's main street replace end on their models, not in the air.
     const placed = hawkesburySite && Array.isArray(read.serviceDrops) ? { ...read, serviceDrops: aimDrops(read.serviceDrops) } : read;
     const data = mabouSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: aimMabouDrops(placed.serviceDrops) } : placed;
-    return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined); }
+    return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined, splitRoadLines(roadData)); }
   catch (e) { console.warn('props', e); return null; }
 })();
 if (props) { scene.add(props.group); roads.guardrails?.setObstacles(props.railObstacles); }

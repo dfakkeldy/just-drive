@@ -579,6 +579,11 @@ async function builds(count) {
   // later PR can move the pin to a main commit that holds them.
   const HOOKS=[['','      if (this.canopyExcludes?.(t.x0 + (k % S) * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + Math.floor(k / S) * mpp))) { c = 0; px[k * 4 + 2] = 0; }\n','      canopy[k] = c;\n'],
     ['        if(coastal?.quarry && coastField && coastField[k0*4+1]>.5)c=0;\n','        if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;\n',''],
+    // PR #27 (reviewed): the ROAD_PAVEMENT define on tiles whose road flags carry Mabou's double-yellow or worn bits
+    // (64/128): a flag read and a colour define; no ground, canopy or road maths change. Once each, ordinary program only.
+    ['    let lo = Infinity, hi = -Infinity',', roadPavement = false',';\n'],
+    ['      if (road && road[k * 4 + 2] > 0) {\n','        roadPavement ||= (road[k * 4 + 2] & 192) !== 0;\n','        // Nothing stands on a road'],
+    ['...(airportMarkings ? { AIRPORT: 1 } : {})',', ...(roadPavement && !this.cartRoads ? { ROAD_PAVEMENT: 1 } : {})',' },uniforms:tileUniforms}'],
     // PR #147 (reviewed): the AIRPORT shader define for tiles that overlap the airfield site; no maths change. With the
     // park's two tile programs (ordinary and STUNT_PARK) the define stands in each, so twice at most.
     ['    const gravelOverlay=sites.some(s=>s.visualGravel);\n','    const airportMarkings=sites.some(s=>s.airportMarkings);\n',''],
@@ -586,8 +591,8 @@ async function builds(count) {
     // PR #150: a site with maxTexel is left out of coarser tiles; no maths change on tiles that keep it (site-texel). Coarser
     // tiles lose its sub-sample paint and the road-canopy fade under it.
     [' || s.box[3] < t.z0 || s.box[1] > t.z0 + t.size)',' && (s.maxTexel === undefined || t.size / T <= s.maxTexel)',');\n']];
-  const withoutHooks=source=>HOOKS.reduce((text,[before,hook,after,most=1])=>{const parts=text.split(hook);assert.ok(parts.length-1<=most&&parts.every((part,i)=>(i===parts.length-1||part.endsWith(before))&&(i===0||part.startsWith(after))),'a stockpile, airport or site-texel hook stands at most its allowed number of times in the tile maths, at its reviewed place');return parts.join('');},maths(source));
-  if(!mutations[name])assert.equal(createHash('sha256').update(withoutHooks(groundParts.reduce((s,part)=>s.split(part).join(''),terrainText))).digest('hex'),MATHS_SHA256,'tile maths are byte-identical to the reviewed PR #85 text, but for the stockpile, airport and site-texel hooks and the ground-class lines');
+  const withoutHooks=source=>HOOKS.reduce((text,[before,hook,after,most=1])=>{const parts=text.split(hook);assert.ok(parts.length-1<=most&&parts.every((part,i)=>(i===parts.length-1||part.endsWith(before))&&(i===0||part.startsWith(after))),'a stockpile, pavement, airport or site-texel hook stands at most its allowed number of times in the tile maths, at its reviewed place');return parts.join('');},maths(source));
+  if(!mutations[name])assert.equal(createHash('sha256').update(withoutHooks(groundParts.reduce((s,part)=>s.split(part).join(''),terrainText))).digest('hex'),MATHS_SHA256,'tile maths are byte-identical to the reviewed PR #85 text, but for the stockpile, pavement, airport and site-texel hooks and the ground-class lines');
   const c = camera(128,128);
   const fixture = async (cost = 0) => {
     const t = ground(false), built = [], all = [];

@@ -1,4 +1,4 @@
-"""Bounded, public-safe inputs from Dan's 16 Nov pass. No imagery or network access."""
+"""Bounded corrections from dash-cam observations. No imagery or network access."""
 import copy
 import json
 import math
@@ -7,10 +7,13 @@ from pathlib import Path
 INPUT = json.loads(Path(__file__).with_name('dashcam_20261116.json').read_text())
 
 
-def project(roads, point, name):
+NOV18 = json.loads(Path(__file__).with_name('dashcam_20261118.json').read_text())
+
+
+def project(roads, point, name=None):
     hits = []
     for road in roads:
-        if road['name'] != name or road['bridge']:
+        if name is not None and (road['name'] != name or road['bridge']):
             continue
         along = 0
         for a, b in zip(road['pts'], road['pts'][1:]):
@@ -78,6 +81,45 @@ def correct_roads(roads, area, guardrails=True):
     return roads
 
 
+def correct_nov18_roads(roads, area):
+    """Keep the original centreline and tie order while splitting at the track junction."""
+    if area != 'mabou':
+        return roads
+    rule = NOV18['harbour']
+    key = '18nov:' + rule['name']
+    if any(r.get('correction') == key for r in roads):
+        return roads
+    mouths = [(i, r) for i, r in enumerate(roads)
+              if r['name'] == rule['name'] and r['kind'] == 3 and not r['bridge']
+              and math.dist(r['pts'][0], rule['mouth']) <= 5]
+    lanes = [(i, r) for i, r in enumerate(roads)
+             if r['name'] == NOV18['lane'] and r['kind'] == 4 and not r['bridge']]
+    if len(mouths) != 1 or len(lanes) != 1:
+        raise ValueError('Expected one Harbour Road gravel mouth and one Weaver Lane track')
+    index, harbour = mouths[0]
+    lane_index, lane = lanes[0]
+    pts = harbour['pts']
+    cut = min(range(len(pts)), key=lambda i: math.dist(pts[i], rule['cut']))
+    if cut in (0, len(pts)-1) or math.dist(pts[cut], rule['cut']) > 5:
+        raise ValueError('Harbour Road cut must be at the track junction')
+    result = list(roads)
+    result[lane_index] = dict(lane, kind=2, pavement='worn')
+    # Keep the gravel ID on the western remainder. Insert its paved prefix in
+    # place so raster ties at junctions still favour the original centreline.
+    next_id = max(r['id'] for r in roads) + 1
+    result[index:index+1] = [
+        dict(harbour, id=next_id, kind=2, halfWidth=3.0, pts=pts[:cut+1], pavement='double-yellow', correction=key),
+        dict(harbour, pts=pts[cut:], correction=key),
+    ]
+    return result
+
+
+def hand_building_specs():
+    for observations in (INPUT, NOV18):
+        for building in observations['buildings']:
+            yield building, observations['provenance']
+
+
 def attach_guardrails(roads, area):
     """Project observed run bounds onto the FINAL line, after any optional bed move. Metadata only."""
     if area != 'mabou':
@@ -95,16 +137,16 @@ def measured_root_id_limit(buildings):
     return max((b['id'] for b in buildings if b.get('source') != 'hand' and b.get('buildingId',b['id']) == b['id']),default=0)
 
 
-def hand_buildings(kept, area, ground, roads=None):
+def hand_buildings(kept, area, ground, roads=None, observations=INPUT):
     """Generic gable boxes; source terrain gives ground only, never invented roof measurements."""
     if area != 'mabou':
         return kept
     ids = {b['id'] for b in kept}
     result = list(kept)
-    for source in INPUT['buildings']:
+    for source in observations['buildings']:
         if source['id'] in ids:
             old = next(b for b in kept if b['id'] == source['id'])
-            if old.get('source') != 'hand' or old.get('provenance') != INPUT['provenance']:
+            if old.get('source') != 'hand' or old.get('provenance') != observations['provenance']:
                 raise ValueError('Hand-building ID collision')
             continue
         x, y, length, width = (source[k] for k in ('x', 'y', 'length', 'width'))
@@ -117,26 +159,34 @@ def hand_buildings(kept, area, ground, roads=None):
         h = float(ground(x,y))
         if not math.isfinite(h) or h < -100:
             raise ValueError('Missing source ground for hand building')
-        gap, rid, _ = project(roads, (x,y), 'Southwest Ridge Road') if roads else (None, None, None)
-        if roads:
+        gap, rid = None, None
+        if roads and observations is INPUT:
+            gap, rid, _ = project(roads, (x,y), 'Southwest Ridge Road')
             half = next(r['halfWidth'] for r in roads if r['id'] == rid)
             if any(project(roads, p, 'Southwest Ridge Road')[0] <= half+2 for p in footprint):
                 raise ValueError('Hand-building footprint is too close to road')
+        elif roads:
+            # These properties are well back from the mapped network. Include room
+            # for the deck/overhang and check tracks as well as public roads.
+            clearance = project(roads, (x,y))[0]
+            if clearance <= math.hypot(length, width)/2 + max(r['halfWidth'] for r in roads) + 3:
+                raise ValueError('Hand-building footprint is too close to road')
         result.append(dict(**{k:source[k] for k in ('id','x','y','length','width','axisDeg','eave','ridge','kind')},
-                           ground=round(h,2), footprint=footprint, roof='gable', source='hand', confidence=.4,
-                           provenance=INPUT['provenance'], nearRoad=rid, roadDist=round(gap,2) if gap is not None else None))
+                           ground=round(h,2), footprint=footprint, roof=source.get('roof', 'gable'), source='hand', confidence=.4,
+                           provenance=observations['provenance'], nearRoad=rid, roadDist=round(gap,2) if gap is not None else None))
     return sorted(result, key=lambda b:b['id'])
 
 
-def hand_styles(data, buildings, roads=()):
-    paints = {'cream':'#e1d8be', 'pale yellow':'#e6d9a6', 'dark red':'#7b3937', 'weathered grey':'#85857a'}
+def hand_styles(data, buildings, roads=(), observations=INPUT):
+    paints = {'cream':'#e1d8be', 'pale yellow':'#e6d9a6', 'dark red':'#7b3937', 'weathered grey':'#85857a', 'grey':'#858b8d', 'pale grey':'#aeb3b7'}
     present = {b['id']:b for b in buildings if b.get('source') == 'hand'}
-    for b in INPUT['buildings']:
+    for b in observations['buildings']:
         if b['id'] in present:
             data['styles'][str(b['id'])] = dict(wall=paints[b['wall']], wallName=b['wall'], roof='#515657',
                 roofName='dark grey', trim='#dedfd8', roofMaterial='shingle', entrance='none', chimney=False,
                 dormer=False, shutters=False, satelliteDish=False, skirting=False, silo=False)
-            if b['kind'] == 'house' and roads:
+            data['styles'][str(b['id'])].update(b.get('style', {}))
+            if b['kind'] == 'house' and roads and observations is INPUT:
                 actual = present[b['id']]
                 gap, rid, station = project(roads,(actual['x'],actual['y']),'Southwest Ridge Road')
                 road = next(r for r in roads if r['id']==rid)
@@ -184,8 +234,14 @@ def remap_road_references(data, kind, roads):
             point = [(a+b)/2 for a,b in zip(c['a'], c['b'])]
             c['road'] = moved(c['road'], point)
     elif kind == 'props':
+        moved_poles = {}
         for p in result['poles']:
-            p['road'] = moved(p['road'], (p['x'], p['y']))
+            rid = p['road']
+            p['road'] = moved(rid, (p['x'], p['y']))
+            if p['road'] != rid:
+                moved_poles[rid, p['n']] = p['road']
+        for drop in result.get('serviceDrops', []):
+            drop['road'] = moved_poles.get((drop['road'], drop['n']), drop['road'])
     else:
         raise ValueError('Unknown road-reference schema: '+kind)
     return result

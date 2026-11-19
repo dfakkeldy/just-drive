@@ -1125,12 +1125,13 @@ def main():
     if BIG:
         # Everything above is as it was: the same records and the same ids. The large buildings come last.
         kept, rejected, big_counts = add_big(kept, rejected, seed_by_id, heights, roads, landmarks, mid, audit)
-    from dashcam_corrections import hand_buildings
+    from dashcam_corrections import NOV18, hand_buildings
     def hand_ground(x, y):
         cells = heights.warp(heights.dtm, (x-1, y-1, x+1, y+1))
         return float(np.median(cells[cells != NODATA]))
     hand_roads = json.loads((OUT / "roads.json").read_text())["roads"] if AREA.id == 'mabou' else []
     kept = hand_buildings(kept, AREA.id, hand_ground, hand_roads)
+    kept = hand_buildings(kept, AREA.id, hand_ground, hand_roads, observations=NOV18)
     # Mabou main street (the project brief): two kinds and the hall's measured blocks, on exact ids. Idempotent.
     from mabou_main import correct_buildings
     kept = correct_buildings(kept, AREA.id, audit)

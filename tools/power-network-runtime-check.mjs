@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
-import {Props} from '../web/src/props.ts';
+import {Props, splitRoadLines} from '../web/src/props.ts';
 import {readFileSync} from 'node:fs';
 const terrain={low:false,exag:2,seaLevel:10,heightAt:()=>30,surfaceAt:()=>({level:8})};
 const pole=(x,y,n=0,road=1)=>({x,y,n,road,heading:0,transformer:false,light:false});
@@ -31,6 +31,15 @@ terrain.surfaceAt=()=>({level:8});tick(pending);assert.equal(lines(pending).leng
 // Church uses its model-origin terrain, rather than the removed survey envelope's datum.
 const church=make([pole(0,0)],[{...drop,ground:null,groundX:10,groundY:10}]);tick(church);
 assert.equal(Array.from(lines(church)[0].geometry.attributes.position.array).at(-2),34);
+// A split that kept the old road's pole numbers (18 Nov pavement limit) stays one wired line over the cut;
+// split pieces whose poles were placed afresh (numbers restart) and plain neighbouring roads never join.
+const split=(poles,roads,excludes)=>{const p=new Props({crs:'EPSG:2961',mailboxes:[],communityBoxes:[],poles,serviceDrops:[]},[0,0],terrain,excludes,undefined,splitRoadLines({roads}));tick(p);return lines(p).reduce((sum,l)=>sum+l.geometry.attributes.position.count,0);};
+const pieces=[{id:7,correction:'18nov:x'},{id:9,correction:'18nov:x'}];
+assert.equal(split([pole(0,0,0,7),pole(0,60,1,9)],pieces),80,'n-preserving split pieces keep the span over the cut');
+assert.equal(split([pole(0,0,0,7),pole(0,60,1,9)],[{id:7},{id:9}]),0,'unsplit neighbouring roads stay apart');
+assert.equal(split([pole(0,0,0,7),pole(0,60,0,9)],pieces),0,'pieces numbered afresh stay apart');
+assert.equal(split([pole(0,-60,0,7),pole(0,0,1,7),pole(0,60,0,9)],pieces,(x,y)=>y<-30),0,'a quiet place removing a pole never joins pieces numbered afresh');
+assert.deepEqual([...splitRoadLines({roads:[{id:1,correction:'a'},{id:2},{id:'3',correction:'b'}]})],[[1,'a']]);
 const legacy=new Props({crs:'EPSG:2961',mailboxes:[],communityBoxes:[],poles:[]},[0,0],terrain);tick(legacy);
 assert.equal(lines(legacy).length,0,'before-install packs remain readable');
 if(process.argv.includes('--delta')){
