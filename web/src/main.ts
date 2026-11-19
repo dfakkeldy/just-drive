@@ -5,7 +5,7 @@ import { sugarCampStart } from './sugar-camp-start';
 import { PointTupperDriver, driverEnabled, driverLive } from './point-tupper-driver';
 import { PauseGate } from './pause';
 import { TrafficSignals } from './traffic-signals';
-import { CLEAR_HAZE, moodLook, weatherMoment, weatherSettings, weatherUI } from './weather';
+import { CLEAR_HAZE, MOODS, moodLook, weatherMoment, weatherSettings, weatherUI } from './weather';
 import { placeUrlPose } from './placement-pose';
 import { bootTripParams, tripId } from './quarry-trip';
 import {historyRoadName} from './eras/history-road-names';
@@ -27,7 +27,7 @@ import { Buildings, buildingSites, readBuildingStyles, roofSites, type Building 
 import { Animals } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
 import { areaScreen } from './area-screen';
-import { readVehicle } from './garage';
+import { GARAGE, readVehicle } from './garage';
 import { rideFeatures } from './ride-features';
 import { legacyVehicle, type RideInput } from './ride';
 import { Canal } from './canal';
@@ -71,6 +71,8 @@ import { SchoolBus } from './school-bus';
 import { BUS } from './school-bus-rules';
 import { BUS_STOP_RADIUS, churchZones, placeAt } from './score-rules';
 import { FiredRun } from './fired';
+import { DailyRun } from './daily';
+import { atlanticDate, dailyArea, dailyPlan, drawCard, supplyFor, type Square } from './daily-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
 import { noZoom } from './no-zoom';
@@ -147,6 +149,15 @@ treeLook.leafy = params.get('leaves') === '1';
 treeLook.oneSample = FINISH.oneSample;
 const ERA = readEra(params, baseArea.id, SITE.era);
 const AREA = areaInEra(baseArea, ERA);
+// Today's run (?daily=1, daily-rules.ts): one seeded Get Fired run a day, the same for everybody. Only on the mail game's own
+// land today; Just Drive, 1884 and the areas without a route ignore it. The seed sets the player keys it fixes, in memory:
+// the address keeps ?daily=1, so a reload is still today's run.
+const DAILY = params.get('daily') === '1' && SITE.brand !== 'just' && ERA.modern && !ERA.explore && AREA.mail && dailyArea(AREA.id)
+  ? dailyPlan(atlanticDate(new Date()), AREA.id) : null;
+if (DAILY) {
+  params.set('mode', 'fired'); params.set('vehicle', DAILY.vehicle); params.set('weather', DAILY.mood); params.set('start', DAILY.start);
+  for (const key of ['playerDate', 'playerTime', 'driveAt']) params.delete(key);
+}
 const gameMode = ERA.explore ? 'explore' : AREA.mail ? readMode(params, undefined, SITE) : 'explore', firedMode = gameMode === 'fired', mailMode = gameMode === 'mail' || firedMode;
 if (!mailMode) prepareExplore();
 // A vehicle whose model is a file starts its download now, beside the land. The game waits for it once, just before
@@ -757,10 +768,12 @@ function applyShot(s: Shot) {
   resize();
 }
 
+// Today's run starts every try at its seeded place, not at the first stop of the route.
+const dailyPose = DAILY ? startKey(DAILY.start, roads.roads, vehicle.bounds) : null;
 function placeFirstStop(kind: 'start-over' | 'new-visit' = 'start-over'): void {
   const start = AREA.route ? shift.run.start : roadStart(roads.roads);
   const namedStart = AREA.id === 'westbay' && ERA.modern && params.get('poster') === 'sugar-camp-quarry' ? sugarCampStart(roads.roads, manifest.village, vehicle.bounds!) : undefined;
-  const pose = namedStart ?? start ?? { x: 0, z: 0, heading: Math.PI / 4 };
+  const pose = namedStart ?? dailyPose ?? start ?? { x: 0, z: 0, heading: Math.PI / 4 };
   // The poster start always faces south, toward the quarry, on Start over too.
   const southward = namedStart ? (candidate: { heading: number }) => Math.cos(candidate.heading) < 0 : undefined;
   if (fleet) { if (kind === 'new-visit') fleet.startVisit(pose.x, pose.z, pose.heading, southward); else fleet.restart(pose.x, pose.z, pose.heading, 'start-over', southward); } else vehicle.restart(pose.x, pose.z, pose.heading);
@@ -774,7 +787,7 @@ const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, prop
   multiplayer?.reset();
   resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; devHooks.reset();
-}, AREA.route, firedMode) : new FreeDrive(roads, manifest.village);
+}, AREA.route, firedMode, DAILY?.day ?? 0) : new FreeDrive(roads, manifest.village);
 const roadScene = AREA.roadScene && shift instanceof Shift ? new RoadScene(roads, terrain, shift, params) : null;
 resets[resetSlot.roadScene] = () => roadScene?.reset();
 if (roadScene) { scene.add(roadScene.group, roadScene.painter.group); vehicle.placementGuard = pose => roadScene.allowPlacement(pose, vehicleSpec); }
@@ -1378,7 +1391,13 @@ const clearEndingInput = () => {
 };
 const endings = mailMode ? new Endings(clearEndingInput, () => { shift.startOver(); pause.resetClock(); }) : quietEndings();
 // Built with hud=0 too: a fired Shift ends through it. Only its panel follows the bare HUD.
-const fired = firedMode && shift instanceof Shift && endings instanceof Endings ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock()) : null;
+let daily: DailyRun | null = null;
+const fired = firedMode && shift instanceof Shift && endings instanceof Endings ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock(),
+  DAILY ? { limit: DAILY.limit, onEnd: end => daily?.finish(end) } : {}) : null;
+// The card holds only what the area can supply today: the painter or the fish truck only when the scene is really there.
+const dailySquares: Square[] | null = DAILY ? drawCard(DAILY.seed, supplyFor(DAILY, { boxes: !!props?.mail.length,
+  lawns: properties.some(b => b.kind === 'house'), relief: relief instanceof Relief, painter: !!roadScene?.painter.enabled, fish: !!roadScene?.rules.enabled })) : null;
+if (fired && DAILY && dailySquares && shift instanceof Shift && endings instanceof Endings) daily = new DailyRun(DAILY, dailySquares, AREA.name, shift, fired, endings, () => pause.resetClock());
 if (fired && bare) document.getElementById('firedHud')!.style.display = 'none';
 const yardJob = yard && endings instanceof Endings ? ride.yardJob?.(yard) ?? new YardJob(yard, vehicle, terrain, camera, endings) : null;
 resets[resetSlot.yardJob] = () => yardJob?.reset();
@@ -1388,7 +1407,7 @@ const fishing = fishingSite && endings instanceof Endings ? new Fishing(fishingS
 resets[resetSlot.fishing] = () => fishing?.reset();
 if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
-if (import.meta.env.DEV) expose({ fired }, false);
+if (import.meta.env.DEV) expose({ fired, daily }, false);
 if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
@@ -1409,7 +1428,10 @@ const beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined
 // skip it; ?title=1 shows it in a test.
 const plainVisit = !isTestVisit(params);
 let started = bare || (!plainVisit && !params.has('room') && params.get('title') !== '1');
-const title = started ? null : createTitle(touchDevice, () => { started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved);   // runs each time the card closes
+// Today's run shows its card, vehicle and weather on the title card.
+const titleDaily = DAILY && dailySquares ? { date: DAILY.date, squares: dailySquares, vehicle: GARAGE.find(g => g.id === DAILY.vehicle)?.name ?? 'Mail car',
+  mood: MOODS.find(([m]) => m === DAILY.mood)?.[1] ?? 'Clear' } : undefined;
+const title = started ? null : createTitle(touchDevice, () => { started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.

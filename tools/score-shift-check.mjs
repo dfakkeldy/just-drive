@@ -116,7 +116,9 @@ assert.ok(kinds.includes('lawnDamage') && kinds.filter(k => k === 'rut').length 
 assert.equal(fired.ended, false);
 assert.match(document.getElementById('shiftHud').textContent, /GET FIRED/);
 const line = document.getElementById('phoneStatus').children.find(c => c.id === 'firedLine');
-assert.match(line.textContent, /^[\d,]+ pts( ×[\d.]+)? · [A-Za-z -]+ \d\/7( · [+−][\d,]+ .+)?$/, line.textContent);
+// The words sit in their own span: Today's run puts its small bingo card before them.
+const lineText = line.children.map(c => c.textContent).join('');
+assert.match(lineText, /^[\d,]+ pts( ×[\d.]+)? · [A-Za-z -]+ \d\/7( · [+−][\d,]+ .+)?$/, lineText);
 assert.match(line.style.getPropertyValue('--fill'), /^\d+%$/, 'the phone line is the ladder bar');
 
 // Step up: the steward grieves it and you keep the job.
