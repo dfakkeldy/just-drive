@@ -25,6 +25,17 @@ export const scenes = [
   // itself measured desktop 997 calls / 283 geometries / 150 textures / 46 programs, above its own pins; that excess is not pinned here.
   {id:'pointtupper-start',area:'pointtupper',exploreOnly:true,chase:true},
 ];
+// Breakable yard and field props (mail play and Get Fired; yard-props.ts: three instanced meshes, one shared Lambert material)
+// measured in one session on the M4 host against the same tree with the props switched off: mail views with yards in
+// range gain at most 3 geometries and no programs or textures; calls +6/+4/+6 on desktop (highway19-far-land,
+// new-player-start, village-start) and +3/+2/+2 on the phone; triangles +12888 desktop and +3312 phone at most.
+// Pins carry exactly that share where the measured count went over: highway19-far-land/desktop-mail calls 703 -> 709,
+// geometries 178 -> 181; highway19-far-land/phone-mail calls 208 -> 211, geometries 90 -> 93; new-player-start/desktop-mail
+// calls 618 -> 622, geometries 225 -> 227; village-start/desktop-mail geometries 220 -> 223 (19 Nov 2026). The traffic
+// pins (frame-budget-traffic.json) carry the same share: highway19-far-land/desktop-mail calls 708 -> 714, geometries
+// 182 -> 185; highway19-far-land/phone-mail calls 209 -> 212, geometries 91 -> 94; new-player-start/desktop-mail calls
+// 625 -> 629, geometries 229 -> 231. Triangles stay
+// within their pins; phone rows stay under PHONE_CAP. Explore, Just Drive and the explore-truck rows are unchanged.
 // The phone draw cap a whole phone frame must fit: the loosest phone pins once the LOW small-props range landed
 // (new-player-start 227 calls, works-yard/phone-mail 1,475,392 triangles), frozen so a later saving elsewhere does not
 // tighten it. tools/point-tupper-driver-budget.mjs holds the Point Tupper LOW start, AI and all, to it. Raise on purpose only.

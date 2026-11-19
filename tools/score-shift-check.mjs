@@ -7,6 +7,8 @@ import { Roads } from '../web/src/roads.ts';
 import { FiredRun } from '../web/src/fired.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
 import { LADDER, BEST_KEY, PENALTIES } from '../web/src/score-rules.ts';
+import { YardProps } from '../web/src/yard-props.ts';
+import { scoreKind, SLOW, garbageDay } from '../web/src/yard-props-rules.ts';
 
 class Element {
   constructor(tag = 'div') { this.tagName = tag.toUpperCase(); }
@@ -211,4 +213,83 @@ offers.at(-1).choices[0].action(); tick(.016);
   assert.equal(offers.at(-1).lines.at(-2), 'Pulled over once · lost the Boss never.', offers.at(-1).lines.join('|'));
   fired.boss = null; shift.witness = () => false;
 }
-console.log('score shift: real Shift, Props, Ruts and FiredRun; mail play unchanged; ladder, school bus, Fired, 18:00, retry, storage; Boss hooks.');
+// Breakable yard and field props: the real YardProps, hooked to the Shift as main.ts hooks it, hit by a car stand-in.
+{
+  const field = { ground: 0, canopy: 0, roadDist: 60, halfWidth: 3, kind: 2, level: 7, brook: 99 };
+  const flat = { heightAt() { return 0; }, surfaceAt() { return field; }, seaLevel: -10 };   // dry ground well above the sea
+  const camera = { getWorldPosition: v => v.set(500, 3, 80) };
+  // Invented test props round x 500, z 80: two fence sections, a bale with its neighbour 3.4 m on, a bin, a second
+  // owner's woodpile. Owners are building ids.
+  const list = [
+    { id: 0, kind: 'railFence', x: 500, z: 80, yaw: Math.PI / 2, owner: 7, look: .2 },
+    { id: 1, kind: 'railFence', x: 503, z: 80, yaw: Math.PI / 2, owner: 7, look: .2, end: true },
+    { id: 2, kind: 'bale', x: 520, z: 100, yaw: 0, owner: 8, look: .5, field: true },
+    { id: 3, kind: 'bale', x: 523.4, z: 100, yaw: 0, owner: 8, look: .6, field: true },
+    { id: 4, kind: 'garbageBin', x: 540, z: 80, yaw: Math.PI / 2, owner: 7, look: .1, daily: true },
+    { id: 5, kind: 'woodpile', x: 560, z: 80, yaw: 0, owner: 9, look: .3 },
+  ];
+  const day = [1, 2, 3, 4, 5, 6, 7].find(garbageDay), store0 = store.get('mmm.shift.v1');
+  const make = firedMode => {
+    store.set('mmm.shift.v1', JSON.stringify({ day, pay: 0, warnings: 0, double: false, suspended: false, carryover: [] }));
+    const sh = new Shift(boxes(), mailStub(), roads, flat, house, [0, 0], true, new URLSearchParams('run=1'), () => {}, true, firedMode);
+    const yard = new YardProps(list, flat, true);
+    sh.yard = yard; yard.reset(sh.career.day);
+    yard.onBreak = (p, speed, byBale) => sh.propBroken(scoreKind(p.kind), p.owner, p.x, p.z, speed, byBale);
+    yard.update(camera, .1);
+    return { sh, yard };
+  };
+  // The car 4 m short of a prop, driving at it.
+  const drive = (yard, sh, id, speed, dx = 0, dz = -1) => {
+    const p = list[id], v = { x: p.x - dx * 4, z: p.z - dz * 4, y: 0, heading: Math.atan2(dx, -dz), vx: dx * speed, vz: dz * speed, speed, spec: CAR_SPEC, airborne: false };
+    for (let i = 0; i < 240 && !yard.live[id].broken; i++) { v.x += v.vx / 120; v.z += v.vz / 120; yard.step(1 / 120, v, true); sh.update(1 / 120, v); }
+    return v;
+  };
+  // Mail play: a hard hit breaks it, slows the car a little, reports the fact and one call for the property.
+  {
+    const { sh, yard } = make(false);
+    assert.deepEqual(yard.active.map(l => l.p.id), [0, 1, 2, 3, 4, 5], 'all drawn on garbage day');
+    const v = drive(yard, sh, 0, 8);
+    assert.equal(yard.live[0].broken, true); assert.ok(yard.live[0].pieces.length >= 3, 'in pieces');
+    assert.ok(Math.abs(Math.hypot(v.vx, v.vz) - 8 * SLOW.railFence) < 1e-9, 'the car slows a little');
+    assert.deepEqual(sh.score.recent.slice(-2).map(e => e.kind), ['prop:fence', 'propertyDamage']);
+    assert.equal(sh.complaints.all.filter(c => c.kind === 'propertyDamage').length, 1);
+    // The neighbouring section of the same yard: a second fact, but the owner has already called today.
+    drive(yard, sh, 1, 8); assert.equal(yard.live[1].broken, true);
+    assert.equal(sh.score.recent.at(-1).kind, 'prop:fence'); assert.equal(sh.complaints.all.filter(c => c.kind === 'propertyDamage').length, 1);
+    // A slow touch on the woodpile: solid, not broken, nothing reported.
+    const n = sh.score.reported, slow = drive(yard, sh, 5, 1);
+    assert.equal(yard.live[5].broken, false); assert.equal(sh.score.reported, n); assert.ok(Math.hypot(slow.vx, slow.vz) < .5, 'stopped by it');
+    // Pieces come to rest on the ground; they stay broken for the shift.
+    for (let i = 0; i < 60 * 8; i++) yard.update(camera, 1 / 60);
+    assert.ok(yard.live[0].pieces.every(p => p.resting && Math.abs(p.y - p.floor) < 1e-9), 'pieces at rest on the ground');
+    assert.equal(yard.live[0].broken, true);
+    // A second property: the day's verdict is a suspension, and the report counts the yards.
+    drive(yard, sh, 5, 8); assert.equal(yard.live[5].broken, true);
+    sh.end();
+    assert.equal(document.getElementById('reportVerdict').textContent, 'One-day suspension. Without pay.');
+    assert.ok(document.getElementById('reportStats').children.some(c => c.textContent === 'Yards damaged'), 'the report names the damage');
+    assert.ok(document.getElementById('reportCalls').children.some(row => row.text.includes('No defence accepted')));
+    document.getElementById('shiftReport').hidden = true;
+    // A new day stands it all up; bins go out only on garbage day.
+    sh.retry(); assert.equal(yard.broken, 0); assert.ok(yard.live.every(l => !l.broken && !l.pieces));
+    yard.reset(day + 1); yard.update(camera, .5);
+    assert.ok(!yard.active.some(l => l.p.kind === 'garbageBin'), 'no bins the day after');
+  }
+  // Get Fired: points, and a rolling bale that breaks its neighbour is a combo.
+  {
+    const { sh, yard } = make(true);
+    const run = new FiredRun(sh, { offer() {}, close() {} }, false, () => {});
+    drive(yard, sh, 2, 9, 1, 0);
+    // The car's break alone is two kinds (the bale and the yard call); the strike must add a third.
+    const before = run.book.bestChain.kinds;
+    assert.equal(yard.live[3].broken, false, 'the neighbour still stands before the bale reaches it');
+    for (let i = 0; i < 60 * 3 && !yard.live[3].broken; i++) yard.update(camera, 1 / 60);
+    assert.equal(yard.live[3].broken, true, 'the rolling bale broke its neighbour');
+    const kinds = sh.score.recent.map(e => e.kind);
+    assert.ok(kinds.includes('prop:bale') && kinds.includes('prop:baleStrike'), kinds.join());
+    assert.ok(run.book.total > 0 && run.book.bestChain.kinds >= 3 && run.book.bestChain.kinds > before, `the strike adds to the combo (${before} -> ${run.book.bestChain.kinds})`);
+    sh.retry(); assert.ok(yard.live.every(l => !l.broken), 'try again stands them up');
+  }
+  store.set('mmm.shift.v1', store0);
+}
+console.log('score shift: real Shift, Props, Ruts, YardProps and FiredRun; mail play unchanged; ladder, school bus, Fired, 18:00, retry, storage; Boss hooks; yard breaks.');

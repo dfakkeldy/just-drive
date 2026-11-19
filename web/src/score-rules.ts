@@ -4,9 +4,9 @@ import { looseSurface } from './drift-rules';
 
 /** Base points. A kind with no row scores nothing; later tasks add rows (drift, airtime, nearMiss, broken props). */
 export const POINTS: Readonly<Record<string, number>> = Object.freeze({
-  // Thirteen of the fourteen complaint kinds. sceneAnimal (an animal had to get out of the way) has no row: like a hit
+  // Fourteen of the fifteen complaint kinds. sceneAnimal (an animal had to get out of the way) has no row: like a hit
   // (NEVER), frightening an animal never gives points.
-  lawnMail: 40, ditchMail: 50, lawnDamage: 120, boxDown: 100, missing: 60, stuffed: 50, flag: 30, late: 25,
+  lawnMail: 40, ditchMail: 50, lawnDamage: 120, propertyDamage: 140, boxDown: 100, missing: 60, stuffed: 50, flag: 30, late: 25,
   indoors: 90, relief: 150, sceneHit: 200, sceneHorn: 80, sceneDust: 120,
   // Mailbox damage grades, once per box and grade.
   'box:rock': 10, 'box:lean': 30, 'box:dent': 60, 'box:down': 60,
@@ -16,6 +16,10 @@ export const POINTS: Readonly<Record<string, number>> = Object.freeze({
   drift: 60,
   // The Boss followed you, then lost you (boss-rules.ts). Fades with each repeat like any kind.
   lostBoss: 150,
+  // Breakable yard and field props (yard-props-rules.ts), once per prop. A rolling bale that breaks something adds a
+  // strike beside the prop's own kind: two kinds at once, a combo.
+  'prop:fence': 30, 'prop:clothesline': 60, 'prop:ornament': 50, 'prop:woodpile': 50, 'prop:bale': 60, 'prop:bin': 25,
+  'prop:baleStrike': 150,
 });
 /** A drift's points: its base row times its length, mean angle and speed against these marks (each clamped), more on a firm
  * surface (it needs the handbrake and more speed), at most `most` times the base, then the clean bonus when it ended on its
@@ -67,13 +71,15 @@ export const LADDER: readonly Rung[] = Object.freeze([
 export const CLEAN_RECORD = 'Clean record';
 
 const LABELS: Readonly<Record<string, string>> = Object.freeze({
-  lawnMail: 'Mail on a lawn', ditchMail: 'Mail in a ditch', lawnDamage: 'Lawn ploughed', boxDown: 'Mailbox down, customer called',
+  lawnMail: 'Mail on a lawn', ditchMail: 'Mail in a ditch', lawnDamage: 'Lawn ploughed', propertyDamage: 'Yard damaged, owner called', boxDown: 'Mailbox down, customer called',
   missing: 'Stop skipped', stuffed: 'Old flyers left in', flag: 'Flag moved', late: 'Late again', indoors: 'Indoor parcel refused',
   relief: 'Seen at the roadside', sceneHit: 'Bumped the visitor’s car', sceneHorn: 'Horn at the visitor', sceneDust: 'Dust on a painting',
   sceneAnimal: 'An animal had to get out of the way',
   'box:rock': 'Rocked a mailbox', 'box:lean': 'Leaned a mailbox', 'box:dent': 'Dented a mailbox', 'box:down': 'Flattened a mailbox',
   rut: 'Lawn ruts', schoolBus: 'Passed a flashing school bus', 'bingo:line': 'Bingo lines', 'bingo:card': 'Full bingo card',
   drift: 'Sideways down the road', lostBoss: 'Lost the Boss',
+  'prop:fence': 'Broke a fence section', 'prop:clothesline': 'Took down a clothesline', 'prop:ornament': 'Flattened a lawn ornament',
+  'prop:woodpile': 'Scattered a woodpile', 'prop:bale': 'Sent a hay bale rolling', 'prop:bin': 'Knocked over a bin', 'prop:baleStrike': 'Bale strike',
 });
 export const offenceLabel = (kind: string): string => LABELS[kind] ?? kind;
 

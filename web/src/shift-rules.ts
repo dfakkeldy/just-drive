@@ -50,10 +50,13 @@ export function clock(seconds: number): string {
   const minute = Math.floor(Math.min(END_TIME, START_TIME + seconds) / 60);
   return `${Math.floor(minute / 60).toString().padStart(2, '0')}:${(minute % 60).toString().padStart(2, '0')}`;
 }
+/** Property damage (a broken yard or field prop) is avoidable: one property is a warning, two in a day a suspension. */
+export const PROPERTY_SUSPENSION = 2;
 export function verdict(upheld: { kind: string }[]): 'clear' | 'warning' | 'suspension' {
   const avoidable = upheld.filter((c) => c.kind !== 'late' && c.kind !== 'flag');
   if (avoidable.length === 0) return 'clear';
-  if (avoidable.some((c) => c.kind === 'lawnDamage') || avoidable.length >= 3) return 'suspension';
+  if (avoidable.some((c) => c.kind === 'lawnDamage') || avoidable.length >= 3 ||
+    avoidable.filter((c) => c.kind === 'propertyDamage').length >= PROPERTY_SUSPENSION) return 'suspension';
   return avoidable.length ? 'warning' : 'clear';
 }
 export function nextCareer(career: Career, outcome: ReturnType<typeof verdict>, repairs = 0): Career {

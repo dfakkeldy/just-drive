@@ -8,6 +8,23 @@ import { build } from '../web/node_modules/esbuild/lib/main.js';
 import { mutationSources } from './mutation-source.mjs';
 
 const suites = {
+  'yard-props': {
+    check: 'yard-props-rules-check.mjs',
+    mutants: [
+      ['protected place', " || input.place(px, pz) !== 'route') return false;", ') return false;'],
+      ['driveway clearance', 'DRIVEWAY_CLEAR = 3.5', 'DRIVEWAY_CLEAR = 1'],
+      ['bins on the shoulder', 'SHOULDER = 1.8', 'SHOULDER = .3'],
+      ['mailbox clearance', 'boxDistance(m.x, m.z, x, z, yaw, half, halfWidth) < MAILBOX_CLEAR', 'boxDistance(m.x, m.z, x, z, yaw, half, halfWidth) < 1'],
+      ['props overlap', 'Math.hypot(p.x - x, p.z - z) < r + reach(p.kind) + .4', 'Math.hypot(p.x - x, p.z - z) < .2'],
+      ['garbage every day', '((day - 1) % 7 + 7) % 7 === GARBAGE_WEEKDAY', 'day > 0'],
+      ['break threshold', 'speed >= BREAK_SPEED[kind]', 'speed > BREAK_SPEED[kind] * 2'],
+      ['pieces never rest', 'if (p.age >= PIECE_LIFE) { p.y = floor; settle(p); }', ''],
+      ['bale stops on a slope', 'if (speed < .15 && !steep || p.age >= BALE_LIFE) settle(p);', 'if (speed < .15 || p.age >= BALE_LIFE) settle(p);'],
+      ['bale in woods', 's.canopy < .4 && ', ''],
+      ['props in water', 'return !s.water && s.brook > BROOK_CLEAR', 'return s.brook > BROOK_CLEAR'],
+      ['props at the shore', 's.height > s.seaLevel + SEA_CLEAR', 's.height > s.seaLevel - SEA_CLEAR'],
+    ],
+  },
   'yard-dog': {
     check: 'yard-dog-rules-check.mjs',
     mutants: [
@@ -51,11 +68,12 @@ const suites = {
       ['suspension day', '(suspended ? 2 : 1)', '(suspended ? 1 : 1)'],
       ['vehicle allowance', 'VEHICLE_ALLOWANCE = 135', 'VEHICLE_ALLOWANCE = 134'],
       ['double delivery', '2 * Math.max(a, b)', '2 * Math.min(a, b)'],
+      ['property damage suspension', ".length >= PROPERTY_SUSPENSION) return 'suspension';", ".length >= PROPERTY_SUSPENSION + 1) return 'suspension';"],
     ],
   },
 };
 const name = process.argv[2], suite = suites[name];
-assert.ok(suite, 'usage: node tools/rule-mutants.mjs damage|jump|mine|shift|yard-dog [--base]');
+assert.ok(suite, 'usage: node tools/rule-mutants.mjs damage|jump|mine|shift|yard-dog|yard-props [--base]');
 assert.ok(process.argv.slice(3).every(arg => arg === '--base'), 'unknown argument');
 const root = resolve(import.meta.dirname, '..');
 const cases = suite.mutants.map(([name, from, to]) => ({ name, edits: [{ file: `web/src/${process.argv[2]}-rules.ts`, from, to }] }));
