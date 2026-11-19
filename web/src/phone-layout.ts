@@ -131,6 +131,10 @@ body.tcOn.compactPhone #radio:not(.expanded) span{display:none}
 body.tcOn.compactPhone #radio{height:56px;overflow:hidden;flex-direction:column;align-items:flex-start;justify-content:center;flex-wrap:nowrap;gap:2px}
 body.tcOn.compactPhone #radio b{display:block;-webkit-line-clamp:unset}
 body.tcOn.compactPhone #radio b,body.tcOn.compactPhone #radio span{flex:none;width:100%;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:14px}
+/* A call: the readout gives its two lines (four, smaller) to the call line, so the player's name is never cut short,
+   down to a 360px-wide phone: "Caller about:" takes at most two lines, a name of up to 14 letters at most two. */
+body.tcOn.compactPhone #radio.call b{display:none}
+body.tcOn.compactPhone #radio.call span{display:block;white-space:normal;overflow-wrap:anywhere;text-overflow:clip;font-size:8px;line-height:11px;max-height:44px}
 body.tcOn.compactPhone #mailButton{width:72px;height:72px}
 body.tcOn.compactPhone #cameraButton{width:64px;height:64px}
 @media(orientation:landscape){

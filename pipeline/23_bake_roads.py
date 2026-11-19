@@ -352,8 +352,9 @@ def main():
         # its saved lines and point counts must describe the final split inventory for step 29.
         for road in roads:
             road['washboard'] = (road.get('name') or '') in WASHBOARD
-        from dashcam_corrections import correct_roads, attach_guardrails
+        from dashcam_corrections import correct_roads, correct_nov18_roads, attach_guardrails
         roads = correct_roads(roads, AREA.id, guardrails=False)
+        roads = correct_nov18_roads(roads, AREA.id)
         marks = {}
         # >>> road-ground trial (off unless asked for): move each line onto the road bed that the LiDAR shows.
         if os.environ.get('MMM_ROAD_BED') == '1':

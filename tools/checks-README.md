@@ -435,9 +435,11 @@ contains 8 m data, so coarser areas cannot be accepted as building footprints.
 Publisher: run `tools/check-era-density.sh --fingerprints` before publishing after
 any re-bake; on mismatch run `tools/check-era-density.sh --write`, then
 `tools/check-era-density.sh --validate`.
-The `manifest.json` fingerprint leaves out the `props` key. Only step 29 writes
-it (prop, pole and drop counts) and no 1884 input reads it, so a prop or power
-bake does not stale the layout. Every other manifest key is still fingerprinted.
+The `manifest.json` fingerprint leaves out the `props`, `paved` and `buildingStyles`
+keys (`MANIFEST_UNREAD` in `tools/era-density-inputs.mjs`). Step 29, the paved install
+and step 30 write them, and no 1884 input reads them, so a prop, power, paved or
+building-colour bake does not stale the layout. Every other manifest key is still
+fingerprinted.
 
 
 Density final trade rules: `--trades` regenerates exact committed poses, rechecks the shipped rows against source-label distance (building centre <=250 m), original road side, no road/stream centreline crossing, water-bank attachment, approaches, playable wall and board geometry. All seven PR70 water trades keep water. One production `Terrain.heightAt` surface at true scale is sampled every 0.5 m; both old and replacement pass at rise <=65% of eave height. The best legal replacement must also improve rise by at least 0.25 m. With no such candidate, the original is retained and listed; a water trade may never fall back to a label-only site. Retained mill-bank stone bases have a 6 m visible cap. `--round4` covers schema rejection before cache, all seven water-loss faults, exact poses, side/crossing fixtures and period names. The actual browser row covers both highway readouts, list/arrival/minimap agreement, normal `Mabou, 1884` title and legacy tool `settled` handling, all seven wheel objects and the Weaving Mills wheel/axle/sluice.

@@ -155,6 +155,86 @@ def validate(plan):
     return plan
 
 
+# The Party Line's call-ins for Get Fired (tools/radio_calls.json): short recorded calls the game plays into a pause of
+# one station. They are not tracks: no station lists them and the credits card does not change for them. The words of
+# ABOUTS, NICK_KINDS and the length limit are web/src/party-line-rules.ts's (the party-line row compares them).
+CALLS_PATH = ROOT / 'tools/radio_calls.json'
+CALLS_KEYS = ('note', 'dial', 'credit', 'calls', 'nicknames')
+CALL_KEYS = ('source', 'about', 'caller', 'name', 'public', 'credit_overrides')
+NICKNAME_KEYS = ('source', 'kind', 'caller', 'name', 'public', 'credit_overrides')
+ABOUTS = ('box', 'lawn', 'mail', 'horn', 'dust', 'missing', 'late', 'flag', *(f'step{n}' for n in range(1, 8)))
+NICK_KINDS = ('box', 'lawn', 'mail', 'painter', 'general')
+
+
+def validate_calls(calls, plan):
+    """The calls catalogue, against the station catalogue `plan` (already validated). Raises ValueError with the fix."""
+    if not isinstance(calls, dict):
+        raise ValueError('radio_calls.json must be an object')
+    allowed_keys(calls, CALLS_KEYS, 'radio_calls.json')
+    dial = dial_value(calls.get('dial', '')) if isinstance(calls.get('dial'), str) else ''
+    station = next((s for s in plan['stations'] if s['dial'] == dial), None)
+    if station is None:
+        raise ValueError('radio_calls.json: dial must name a station of radio_stations.json')
+    calls['dial'] = dial
+    # The credits card names the station's credits by dial: the calls' credit must be one the station's tracks have.
+    if calls.get('credit') not in {t['credit'] for t in station['tracks']}:
+        raise ValueError(f'radio_calls.json: credit must be a credit key that a track of {dial} uses')
+    seen = set()
+
+    def entry(item, keys, prefix, label):
+        if not isinstance(item, dict):
+            raise ValueError(f'radio_calls.json: each of {label} must be an object')
+        allowed_keys(item, keys, f'radio_calls.json {label}')
+        source = item.get('source')
+        if not isinstance(source, str) or not re.fullmatch(r'[\w-]+', source) or not source.startswith(prefix):
+            raise ValueError(f'radio_calls.json {label}: source must be a file stem that starts with {prefix}')
+        if source in seen:
+            raise ValueError(f'radio_calls.json: {source} is listed twice')
+        seen.add(source)
+        if not isinstance(item.get('caller'), str) or not re.fullmatch(r'[a-z]+', item['caller']):
+            raise ValueError(f'radio_calls.json {source}: caller must be a first name in small letters')
+        boolean_fields(item, ('public',), f'radio_calls.json {source}')
+        overrides = item.get('credit_overrides', {})
+        if not isinstance(overrides, dict) or set(overrides) - set(CREDIT):
+            raise ValueError(f'radio_calls.json {source}: credit_overrides takes only {", ".join(CREDIT)}')
+
+    for key, keys, prefix in (('calls', CALL_KEYS, 'talk-react-'), ('nicknames', NICKNAME_KEYS, 'talk-nick-')):
+        if not isinstance(calls.get(key), list):
+            raise ValueError(f'radio_calls.json: {key} must be a list')
+        for item in calls[key]:
+            entry(item, keys, prefix, key)
+    callers = {n['caller'] for n in calls['nicknames']}
+    public_callers = {n['caller'] for n in calls['nicknames'] if n.get('public') is True}
+    for call in calls['calls']:
+        if call.get('about') not in ABOUTS:
+            raise ValueError(f'radio_calls.json {call["source"]}: about must be one of {", ".join(ABOUTS)}')
+        if not isinstance(call.get('name'), bool):
+            raise ValueError(f'radio_calls.json {call["source"]}: name must be true or false (JSON booleans)')
+        if call['name'] and call['caller'] not in callers:
+            raise ValueError(f'radio_calls.json {call["source"]}: it ends on a name, and {call["caller"]} has no nickname')
+        # The public site gets only public pieces: a public call that ends on a name needs a public nickname to follow it.
+        if call['name'] and call.get('public') is True and call['caller'] not in public_callers:
+            raise ValueError(f'radio_calls.json {call["source"]}: it is public and ends on a name, and {call["caller"]} has no public nickname')
+    for nick in calls['nicknames']:
+        if nick.get('kind') not in NICK_KINDS:
+            raise ValueError(f'radio_calls.json {nick["source"]}: kind must be one of {", ".join(NICK_KINDS)}')
+        if not isinstance(nick.get('name'), str) or not nick['name'].strip() or len(nick['name']) > 40:
+            raise ValueError(f'radio_calls.json {nick["source"]}: name must be the nickname as the screen shows it (40 characters at most)')
+    return calls
+
+
+def read_calls(plan, path=None):
+    """The validated calls catalogue, or None when there is no such file."""
+    path = pathlib.Path(path or CALLS_PATH)
+    if not path.is_file():
+        return None
+    try:
+        calls = json.loads(path.read_text())
+    except json.JSONDecodeError as error:
+        raise ValueError(f'{path.name}: JSON error at line {error.lineno}, column {error.colno}: {error.msg}') from error
+    return validate_calls(calls, plan)
+
+
 def parse_catalogue(catalogue, label='radio_stations.json'):
     try:
         return validate(json.loads(catalogue))

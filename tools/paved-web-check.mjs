@@ -79,7 +79,7 @@ const source=execFileSync('git',['show',base+':web/src/shaders.ts'],{cwd:root,en
 const shaderTools=await import(pathToFileURL(root+'/tools/coast-programs.mjs').href);
 const currentShader=readFileSync(root+'/web/src/shaders.ts','utf8');
 shaderTools.checkShaderBaseline(currentShader,{report:()=>{}});
-for(const {name,flags}of shaderTools.coastPrograms().filter(p=>!p.flags.includes('GROUND_CLASSES')&&!p.flags.includes('AIRPORT'))){
+for(const {name,flags}of shaderTools.coastPrograms().filter(p=>!p.flags.includes('GROUND_CLASSES')&&!p.flags.includes('AIRPORT')&&!p.flags.includes('ROAD_PAVEMENT'))){
  assert.equal(shaderTools.normalized(shaderTools.preprocess(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(currentShader)),name),flags)),
               shaderTools.normalized(shaderTools.preprocess(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(source)),name),flags)),
               'off compiled shader equals merge base except the pinned distant bend: '+name+' '+flags);

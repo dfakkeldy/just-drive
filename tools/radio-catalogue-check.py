@@ -184,4 +184,83 @@ with tempfile.TemporaryDirectory(prefix='mmm-radio-catalogue-') as folder:
     assert failure.returncode == 1 and 'radio-just.json: stale radio catalogue' in failure.stderr
     assert (destination / 'index.html').read_text() == 'existing site must survive'
     print('PASS actual build_site stale-list rejection: exit 1, previous output untouched')
+    # The Party Line's calls (tools/radio_calls.json): a mail-game list of its own, never in radio-just.json.
+    for kind in ['out', 'site', 'page']:
+        assert not (root / 'audio' / kind / 'calls.json').exists(), f'{kind}: no calls catalogue, no calls list'
+    talk = next(s for s in plan['stations'] if any(t['credit'] == 'talk' for t in s['tracks']))
+    calls_plan = {'dial': talk['dial'], 'credit': 'talk',
+                  'calls': [{'source': 'talk-react-box-1', 'about': 'box', 'caller': 'theresa', 'name': False, 'public': True},
+                            {'source': 'talk-react-lawn-4', 'about': 'lawn', 'caller': 'theresa', 'name': True, 'public': True},
+                            {'source': 'talk-react-step1-a', 'about': 'step1', 'caller': 'effie', 'name': False}],
+                  'nicknames': [{'source': 'talk-nick-theresa-lawn-1', 'kind': 'lawn', 'caller': 'theresa', 'name': 'the Lawnmower', 'public': True}]}
+    calls_file = root / 'tools/radio_calls.json'
+    calls_file.write_text(json.dumps(calls_plan))
+    stems = [c['source'] for c in calls_plan['calls'] + calls_plan['nicknames']]
+    for stem in stems:
+        (root / 'src' / (stem + '.mp3')).write_bytes(b'authored call fixture')
+    media.write_bytes(b'authored audio fixture')
+    encoded = []
+    def run_calls(args, **kwargs):
+        encoded.append(args)
+        return run(args, **kwargs)
+    module['pauses'] = lambda path: [[1.0, 1.6], [4.25, 5.0]] if path.name.startswith('talk-') else []
+    with patch.object(subprocess, 'run', run_calls):
+        assert module['main']() == 0
+    calls_hash = hashlib.sha256(calls_file.read_bytes()).hexdigest()
+    talk_files = {t['source'] + '.mp3' for t in talk['tracks']}
+    for kind, wanted in [('out', stems), ('site', ['talk-react-box-1', 'talk-react-lawn-4', 'talk-nick-theresa-lawn-1'])]:
+        got = json.loads((root / 'audio' / kind / 'calls.json').read_text())
+        assert got['catalogueHash'] == calls_hash and got['dial'] == talk['dial']
+        assert [c['file'] for c in got['calls'] + got['nicknames']] == [s + '.mp3' for s in wanted], f'{kind}: calls filter'
+        assert all((root / 'audio' / kind / c['file']).is_file() for c in got['calls'] + got['nicknames'])
+        assert got['nicknames'][0] == {'file': 'talk-nick-theresa-lawn-1.mp3', 'seconds': got['nicknames'][0]['seconds'], 'kind': 'lawn',
+                                      'caller': 'theresa', 'name': 'the Lawnmower'}
+        assert set(got['gaps']) <= talk_files and got['gaps'], f'{kind}: pauses only for the calls station'
+        assert set(got['gaps']) <= {t['file'] for s in json.loads((root / 'audio' / kind / 'radio.json').read_text())['stations'] for t in s['tracks']}
+        for name in ['radio.json', 'radio-just.json']:
+            assert 'calls' not in json.loads((root / 'audio' / kind / name).read_text()), 'the playable lists keep their schema'
+    assert not (root / 'audio/site/talk-react-step1-a.mp3').exists(), 'a call not marked public stays off the public site'
+    assert not (root / 'audio/page/calls.json').exists(), 'the private page has no calls'
+    speech = [a for a in encoded if a[0] == 'ffmpeg' and any(str(x).endswith(('talk-react-box-1.part', 'talk-nick-theresa-lawn-1.part')) for x in a)]
+    assert len(speech) == 2 and all(a[a.index('-ac') + 1] == '1' and a[a.index('-b:a') + 1] == '64k' for a in speech), 'calls are mono speech'
+    songs = [a for a in encoded if a[0] == 'ffmpeg' and '-ac' in a and not any('talk-react' in str(x) or 'talk-nick' in str(x) for x in a)]
+    assert all(a[a.index('-ac') + 1] == '2' and a[a.index('-b:a') + 1] == '128k' for a in songs), 'songs keep their encoding'
+    print('PASS calls: out lists every call, site only the public ones with their files, pauses only for the calls station, mono speech')
+    shutil = __import__('shutil')
+    shutil.rmtree(root / 'derived-calls', ignore_errors=True)
+    assert derive.public_folder(root / 'audio/out', root / 'derived-calls', root / 'tools/radio_stations.json')
+    assert {p.name: p.read_bytes() for p in (root / 'derived-calls').iterdir()} == {p.name: p.read_bytes() for p in (root / 'audio/site').iterdir()}
+    print('PASS public radio with calls made from audio/out equals the generator\'s audio/site')
+    preflight['check_site'](root / 'audio/site', catalogue)
+    calls_file.write_text(json.dumps({**calls_plan, 'note': 'changed'}))
+    rejected('changed calls catalogue')
+    calls_file.write_text(json.dumps(calls_plan))
+    (root / 'src/talk-react-box-1.mp3').unlink()
+    errors = io.StringIO()
+    before_calls = (root / 'audio/out/calls.json').read_bytes()
+    with contextlib.redirect_stderr(errors):
+        assert module['main']() == 1
+    assert 'missing call source(s)' in errors.getvalue() and 'talk-react-box-1' in errors.getvalue()
+    assert (root / 'audio/out/calls.json').read_bytes() == before_calls
+    print('PASS missing call source: exit 1, clear file stem, previous lists untouched')
+    for label, change, words in [
+        ('name call without nicknames', lambda c: c['nicknames'].clear(), 'has no nickname'),
+        ('public name call, private nickname', lambda c: c['nicknames'][0].pop('public'), 'has no public nickname'),
+        ('unknown about', lambda c: c['calls'][0].update(about='hedge'), 'about must be one of'),
+        ('call not on a station', lambda c: c.update(dial='999.9'), 'dial must name a station'),
+        ('credit the station does not have', lambda c: c.update(credit='suno'), 'credit must be a credit key'),
+        ('call named like a track', lambda c: c['calls'][0].update(source='talk-call-hedge'), 'starts with talk-react-'),
+        ('twice', lambda c: c['calls'].append(dict(c['calls'][0])), 'listed twice'),
+        ('string public', lambda c: c['calls'][0].update(public='yes'), 'must be true or false'),
+    ]:
+        bad = copy.deepcopy(calls_plan)
+        change(bad)
+        calls_file.write_text(json.dumps(bad))
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            assert module['main']() == 1, label
+        assert words in errors.getvalue(), (label, errors.getvalue())
+        assert (root / 'audio/out/calls.json').read_bytes() == before_calls
+    calls_file.unlink()
+    print('PASS bad calls catalogues: exit 1 with the fix, before any output changes')
     print('PASS real generator: shared catalogues, every catalogue track, strict public/page filters and start dials')

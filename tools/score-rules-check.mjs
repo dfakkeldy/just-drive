@@ -15,9 +15,10 @@ const UNSCORED = ['sceneAnimal'];
 const GRADES = ['box:rock', 'box:lean', 'box:dent', 'box:down'];
 const PROPS = ['prop:fence', 'prop:clothesline', 'prop:ornament', 'prop:woodpile', 'prop:bale', 'prop:bin', 'prop:baleStrike'];
 
-ok('every complaint kind but an animal scare, mailbox grade, lawn ruts and yard prop break score; nothing else does yet', () => {
-  for (const kind of [...COMPLAINTS, ...GRADES, 'rut', ...PROPS]) assert.ok(POINTS[kind] > 0, kind);
-  assert.equal(Object.keys(POINTS).length, COMPLAINTS.length + GRADES.length + 1 + PROPS.length);
+ok('every complaint kind but an animal scare, mailbox grade, lawn ruts, a drift and yard prop breaks score; nothing else does yet', () => {
+  // A drift (drift-rules.ts) is a newer kind; tools/drift-rules-check.mjs holds its size and bonus.
+  for (const kind of [...COMPLAINTS, ...GRADES, 'rut', 'drift', ...PROPS]) assert.ok(POINTS[kind] > 0, kind);
+  assert.equal(Object.keys(POINTS).length, COMPLAINTS.length + GRADES.length + 2 + PROPS.length);
   // Frightening an animal is a complaint but, like a hit (NEVER), it never scores.
   for (const kind of UNSCORED) { assert.equal(POINTS[kind], undefined, kind); assert.equal(new ScoreBook().add(ev(kind, 1)).points, 0, kind); }
   // The complaint file names exactly these fifteen kinds.
@@ -167,7 +168,7 @@ ok('the school bus stays a penalty: negative, anywhere, at any step, and it ends
 ok('the stream stays open: an unknown kind is recorded and scores nothing', () => {
   const s = new ScoreStream(), heard = [], b = new ScoreBook();
   const stop = s.listen(e => heard.push(b.add(e)));
-  s.report(ev('drift', 1)); s.report(ev('lawnMail', 2));
+  s.report(ev('airtime', 1)); s.report(ev('lawnMail', 2));   // airtime: not a kind yet (a drift now is: drift-rules.ts)
   assert.equal(heard.length, 2, 'every listener hears every fact'); assert.equal(heard[0].points, 0); assert.ok(heard[1].points > 0); assert.equal(s.reported, 2);
   stop(); s.report(ev('flag', 3)); assert.equal(heard.length, 2, 'unsubscribed');
   for (let i = 0; i < KEEP + 10; i++) s.report(ev('rut', i));
@@ -228,10 +229,12 @@ ok('mode: ?mode=fired and a saved fired choice; Just Drive never offers it', () 
   assert.equal(readMode(new URLSearchParams(), () => ({ getItem: () => 'fired' }), { brand: 'just' }), 'explore');
   assert.equal(readMode(new URLSearchParams('mode=fire'), () => ({ getItem: () => null })), 'mail');
   const title = readFileSync('src/title.ts', 'utf8');
-  assert.match(title, /<button id="modeFired" aria-pressed="\$\{fired\}">Get fired<\/button>/);
+  // Get fired is pressed in Get Fired, and not in Today's run (which is a Get Fired run with its own button).
+  assert.match(title, /<button id="modeFired" aria-pressed="\$\{fired && !daily\}">Get fired<\/button>/);
   assert.match(title, /\['modeFired', 'fired'\]/);
   // The mode chooser sits only on the mail card: never in Just Drive, an area card or 1884.
-  assert.match(title, /\$\{historical \|\| just \|\| areaName \? '' : `<div id="modeChoice"/);
+  assert.match(title, /const mailCard = !\(historical \|\| just \|\| areaName\);/);
+  assert.match(title, /\$\{mailCard \? `<div id="modeChoice"/);
 });
 
 ok('complaints report once each to a listener', () => {

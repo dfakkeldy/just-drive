@@ -7,7 +7,8 @@
  *  - The land, the grass and the coast rocks have their own shaders, which know no three.js lights. They get the same
  *    two cones and the lamp pools through one small GLSL function, added to their programs only on a night page (the
  *    same way paved.ts adds its layer). Daytime programs are never changed.
- *  - The sky dome swaps to a twilight and star material: one draw, as before.
+ *  - The sky dome swaps to a twilight and star material: one draw, as before. At dusk it carries the warm horizon band
+ *    and the pink band of night-rules.ts DUSK.
  */
 import * as THREE from 'three';
 import type { Rig } from './vehicle-spec';
@@ -152,6 +153,9 @@ uniform vec3 nightZenith;
 uniform vec3 nightSun;       // the real sun, below the horizon
 uniform vec3 nightGlowColour;
 uniform float nightGlow;
+uniform vec3 nightBand;      // the pink band above the horizon (night-rules.ts DUSK)
+uniform vec3 nightHorizon;   // the warm band on the horizon
+uniform vec2 nightBands;     // their strengths: warm, pink
 uniform float nightStars;
 uniform vec3 nightGalaxy;    // galactic north pole
 uniform vec3 nightCentre;    // galactic centre
@@ -179,11 +183,14 @@ void main() {
   vec3 d = normalize(vDir);
   float h = max(d.y, 0.0);
   vec3 col = mix(fogColor, nightZenith, pow(h, 0.55));
-  // Twilight: the warm band where the sun went down, fading upward and around the sky.
   vec2 across = normalize(d.xz + 1e-5), sunFlat = normalize(nightSun.xz + 1e-5);
   float toward = max(dot(across, sunFlat), 0.0);
-  col += nightGlowColour * nightGlow * (0.25 + 0.75 * pow(toward, 3.0)) * exp(-h * 7.0);
-  col += nightGlowColour * nightGlow * 0.08 * exp(-h * 2.0);
+  // Dusk: a warm band on the horizon and a pink band above it, all around the sky but strongest on the sun's side.
+  float side = 0.4 + 0.6 * toward * toward, above = (h - 0.15) / 0.09;   // no pow: its base is negative low down
+  col = mix(col, nightBand, nightBands.y * side * exp(-above * above));
+  col = mix(col, nightHorizon, nightBands.x * side * exp(-h * 18.0));
+  // Twilight: the bright glow where the sun went down.
+  col += nightGlowColour * nightGlow * 0.6 * pow(toward, 3.0) * exp(-h * 9.0);
   // Town: a faint orange-grey dome over the street lights.
   float townward = max(dot(across, normalize(nightTown.xy + 1e-5)), 0.0);
   col += vec3(0.060, 0.042, 0.026) * nightTown.z * pow(townward, 2.0) * exp(-h * 9.0);
@@ -314,10 +321,13 @@ export class Night {
     const galaxy = milkyWay(parts.when, parts.lat, parts.lon);
     this.skyUniforms = {
       fogColor: parts.fog,
-      nightZenith: { value: new THREE.Color().setRGB(.10 * (1 - palette.level) + .004, .19 * (1 - palette.level) + .008, .42 * (1 - palette.level) + .024) },
+      nightZenith: { value: new THREE.Color().setRGB(...palette.zenith) },
       nightSun: { value: parts.sunDir.clone() },
       nightGlowColour: { value: new THREE.Color(.95, .42, .16) },
       nightGlow: { value: palette.glow },
+      nightBand: { value: new THREE.Color().setRGB(...palette.band) },
+      nightHorizon: { value: new THREE.Color().setRGB(...palette.horizon) },
+      nightBands: { value: new THREE.Vector2(palette.warm, palette.pink) },
       nightStars: { value: palette.stars },
       nightGalaxy: { value: directionFromAngles(galaxy.pole.az, galaxy.pole.el) },
       nightCentre: { value: directionFromAngles(galaxy.centre.az, galaxy.centre.el) },

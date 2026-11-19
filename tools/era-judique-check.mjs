@@ -24,7 +24,8 @@ const root=process.env.MMM_ROOT??process.cwd(),sha=file=>createHash('sha256').up
 // The pins live here because this change is what could move Mabou; era-density-generated regenerates it.
 const MABOU_FROZEN={
  'web/src/eras/mabou-1884-layout.ts':'c679f1dc15adf756717d923ff04603d1d9c371b9d6bfc24d191e3b8dc4aa889d',
- 'tools/era-density-layout.json':'108eab71a997f0bc59d083b74548bb0c026d8120dcd0e9ec6c87f5b0e40e7ee6',
+ // The audit's manifest fingerprint leaves out buildingStyles since grok-bots #1288 (no 1884 input reads it); the layout is unchanged.
+ 'tools/era-density-layout.json':'e9220bcbdc5464bc455740f8d3628e9b9d3639e79f7d80020d796158ae2de9f8',
  'web/src/eras/mabou-1884-density.ts':'d334407249308e3ac893c34f0217fdbdb2bd2bdc4dbff0347f7386a2443204c0',
  'web/src/eras/mabou-1884-trades.ts':'0b70423528df61a4976cd2b1b471db9f4b6cb170e2e87f091c93bc8dac99202a',
 };

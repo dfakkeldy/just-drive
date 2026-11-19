@@ -1,0 +1,17 @@
+{
+  "provenance": "dash cam 18 Nov, approximate position",
+  "harbour": {
+    "name": "Mabou Harbour Road",
+    "mouth": [618800.52, 5105101.83],
+    "cut": [618084.85, 5105202.78]
+  },
+  "lane": "Weaver Lane",
+  "buildings": [
+    {"id": 900007, "x": 620448, "y": 5105348, "length": 13, "width": 9, "axisDeg": 135, "eave": 4.5, "ridge": 7.8, "kind": "house", "wall": "pale grey", "style": {"entrance": "deck", "trim": "#f2f1eb", "roofMaterial": "metal", "steppedShed": true, "windowWall": true, "front": {"end": false, "side": 1}}, "roof": "shed"},
+    {"id": 900008, "x": 620456, "y": 5105366, "length": 8, "width": 6.5, "axisDeg": 135, "eave": 2.6, "ridge": 3.75, "kind": "shed", "wall": "pale grey", "style": {"trim": "#f2f1eb", "door": "#eeede6", "rollUpDoor": true, "doorWindows": true, "front": {"end": false, "side": 1}}, "roof": "shed"},
+    {"id": 900009, "x": 620436, "y": 5105340, "length": 4, "width": 3, "axisDeg": 135, "eave": 2.1, "ridge": 3, "kind": "shed", "wall": "grey", "style": {"door": "#9d2923", "front": {"end": true, "side": -1}}},
+    {"id": 900010, "x": 621108, "y": 5100301, "length": 12, "width": 8.5, "axisDeg": 82, "eave": 3.45, "ridge": 6.7, "kind": "house", "wall": "weathered grey", "style": {"roofMaterial": "metal", "entrance": "small steps", "boardAndBatten": true, "solarSide": 1, "front": {"end": false, "side": 1}}},
+    {"id": 900011, "x": 621123, "y": 5100307, "length": 8, "width": 7, "axisDeg": 82, "eave": 2.8, "ridge": 4.5, "kind": "shed", "wall": "weathered grey", "style": {"roofMaterial": "metal", "boardAndBatten": true, "door": "#eeede6", "rollUpDoor": true, "front": {"end": false, "side": 1}}},
+    {"id": 900012, "x": 621127, "y": 5100294, "length": 4.5, "width": 3.5, "axisDeg": 82, "eave": 2.2, "ridge": 3.25, "kind": "shed", "wall": "weathered grey", "style": {"roofMaterial": "metal", "boardAndBatten": true, "front": {"end": false, "side": 1}}}
+  ]
+}

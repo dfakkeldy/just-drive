@@ -18,7 +18,7 @@ export const KEYS: [string, string][] = [
 export const TOUCH: [string, string][] = [
   ['PAUSE', 'Pause or resume. Room games do not pause.'],
   ['Left thumb', 'Slide the pad to steer.'],
-  ['Right thumb', 'GO and BRAKE. Hold BRAKE when stopped to reverse.'],
+  ['Right thumb', 'GO and BRAKE. Hold BRAKE when stopped to reverse. Both at once: handbrake.'],
   ['MAIL', 'Throw mail from the driver’s window, on the right.'],
   ['CAMERA', 'A photo taken before the damage is your only defence.'],
   ['RESET', 'Back on the road.'],
@@ -30,7 +30,7 @@ export const TOUCH: [string, string][] = [
 
 /** Just driving (no mail) on a keyboard and on a touch screen: the mail rows out, the driving rows in. */
 export const DRIVING_KEYS: [string, string][] = KEYS.filter(([key]) => !['M or E', 'C', 'B', 'Enter'].includes(key))
-  .concat([['Space', 'Brake.'], ['L / M', 'Places / the map (today).']]);
+  .concat([['Space', 'Handbrake. Pull it in a turn at speed to slide.'], ['L / M', 'Places / the map (today).']]);
 export const DRIVING_TOUCH: [string, string][] = TOUCH.filter(([key]) => !['MAIL', 'CAMERA', 'BLADDER', '\u2699'].includes(key))
   .concat([['PLACES', 'Choose a place, or the map.'], ['\u2699', 'Settings.']]);
 

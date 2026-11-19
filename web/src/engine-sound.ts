@@ -23,6 +23,8 @@ export interface DrivingMoment {
   speed: number; throttle: number; surface: string; airborne: boolean; grade: number; towing: boolean;
   /** The radio is sounding now, and turned up. */
   radio: boolean;
+  /** How far a drift is open, 0 to 1 (drift-rules.ts): the tyres squeal or spray. Absent or 0: rolling. */
+  slide?: number;
 }
 
 interface Graph {
@@ -159,7 +161,7 @@ export class EngineSound {
       g.raspFilter.frequency.setTargetAtTime(Math.min(5000, e.frequency * 6), t, GLIDE);
       g.rasp.gain.setTargetAtTime(p.level * .12 * e.load * e.load, t, .05);
     }
-    const ty = tyreState(moment.surface, moment.speed, moment.airborne, p.tyres);
+    const ty = tyreState(moment.surface, moment.speed, moment.airborne, p.tyres, moment.slide ?? 0);
     g.tyreFilter.frequency.setTargetAtTime(ty.frequency, t, .08);
     g.tyreFilter.Q.setTargetAtTime(ty.q, t, .08);
     g.lfo.frequency.setTargetAtTime(ty.rate, t, .05);

@@ -118,7 +118,9 @@ assert.ok(kinds.includes('lawnDamage') && kinds.filter(k => k === 'rut').length 
 assert.equal(fired.ended, false);
 assert.match(document.getElementById('shiftHud').textContent, /GET FIRED/);
 const line = document.getElementById('phoneStatus').children.find(c => c.id === 'firedLine');
-assert.match(line.textContent, /^[\d,]+ pts( ×[\d.]+)? · [A-Za-z -]+ \d\/7( · [+−][\d,]+ .+)?$/, line.textContent);
+// The words sit in their own span: Today's run puts its small bingo card before them.
+const lineText = line.children.map(c => c.textContent).join('');
+assert.match(lineText, /^[\d,]+ pts( ×[\d.]+)? · [A-Za-z -]+ \d\/7( · [+−][\d,]+ .+)?$/, lineText);
 assert.match(line.style.getPropertyValue('--fill'), /^\d+%$/, 'the phone line is the ladder bar');
 
 // Step up: the steward grieves it and you keep the job.
@@ -184,7 +186,7 @@ assert.equal(offers.length, 4); assert.ok(offers[3].lines.includes('No combo: ne
 // Breakable yard and field props: the real YardProps, hooked to the Shift as main.ts hooks it, hit by a car stand-in.
 {
   const field = { ground: 0, canopy: 0, roadDist: 60, halfWidth: 3, kind: 2, level: 7, brook: 99 };
-  const flat = { heightAt() { return 0; }, surfaceAt() { return field; } };
+  const flat = { heightAt() { return 0; }, surfaceAt() { return field; }, seaLevel: -10 };   // dry ground well above the sea
   const camera = { getWorldPosition: v => v.set(500, 3, 80) };
   // Invented test props round x 500, z 80: two fence sections, a bale with its neighbour 3.4 m on, a bin, a second
   // owner's woodpile. Owners are building ids.

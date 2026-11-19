@@ -22,13 +22,21 @@ spec.loader.exec_module(corridor)
 b = corridor.b
 
 
+# The low nibble stays the physical surface kind. The two high bits are
+# presentation only, with bridge and washboard bits left in place.
+PAVEMENT_FLAGS = {'double-yellow': 64, 'worn': 128}
+
+
 class Field:
     def __init__(self, network):
         entries = []
         for road in network:
+            flags = road['kind'] | (16 if road['bridge'] else 0) | (32 if road.get('washboard') else 0)
+            if 'pavement' in road:
+                flags |= PAVEMENT_FLAGS[road['pavement']]
             for a,c in zip(road['pts'][:-1],road['pts'][1:]):
                 if a!=c:
-                    entries.append([*a,*c,road['halfWidth'],road['kind']+16*road['bridge']+32*bool(road.get('washboard'))])
+                    entries.append([*a,*c,road['halfWidth'],flags])
         self.a = np.array(entries,dtype=np.float64)
         self.lo = np.minimum(self.a[:,:2],self.a[:,2:4])
         self.hi = np.maximum(self.a[:,:2],self.a[:,2:4])

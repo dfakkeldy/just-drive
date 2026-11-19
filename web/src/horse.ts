@@ -4,7 +4,7 @@ import { deepFreeze, CAR_SPEC, type Rig, type VehicleSpec } from './vehicle-spec
 import { gaitAt, hoofCycle, strideAdvance, contactTravel } from './horse-motion';
 
 export const HORSE_SPEC: VehicleSpec = deepFreeze({
-  ...CAR_SPEC, hitch: undefined, locomotion: 'horse',
+  ...CAR_SPEC, hitch: undefined, drift: undefined, locomotion: 'horse',
   wheelbase: 1.5, track: .52, wheelRadius: .12, contactPlane: 1,
   halfLength: 1.65, halfWidth: .48, height: 2.95, mass: 590,
   envelope: { circles: [-.8, 0, .85], radius: .48, reach: 2.4, sweepHalfWidth: .48, sweepHalfLength: 1.55,

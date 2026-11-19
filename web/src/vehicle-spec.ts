@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import type { DriftSpec } from './drift-rules';
 
 /** Shared specs contain only plain data; copied variants remain legal inputs. */
 export type DeepReadonly<T> = T extends object ? { readonly [K in keyof T]: DeepReadonly<T[K]> } : T;
@@ -55,6 +56,8 @@ export type VehicleSpec = DeepReadonly<{
   chase: { back: number; height: number; lookAhead: number; lookHeight: number; speedBack: number; maxSpeedBack: number };
   /** Coupler point, positive back from the root, used only by an attached towing body. */
   hitch?: { back: number; height: number };
+  /** How this ride slides (drift-rules.ts). Absent: it never drifts (the dirt bike and the horse). */
+  drift?: DriftSpec;
 }>;
 
 /** A replaceable visual body. Wheel spin is local X; each front wheel has its own Y steering parent. */
@@ -97,5 +100,7 @@ export const CAR_SPEC: VehicleSpec = deepFreeze({
   pitchGain: 0.006, pitchLimit: 0.035, rollGain: 0.007, rollLimit: 0.06, leanRate: 6,
   shakePitch: 0.02, shakeRoll: 0.03, shakeHeight: 0.04, washboardYaw: 0.02, washboardSideways: 0.5,
   hardSteerDrag: 3.2,
+  // Loose and playful: a light car that swings out easily on gravel and holds a lively angle.
+  drift: { angle: .42, maxAngle: .75, rotate: 3.2, carve: 1.15, scrub: .55, looseSpeed: 8, firmSpeed: 13, liftSpeed: 15, towed: .5 },
   chase: { back: 7.4, height: 2.9, lookAhead: 3.5, lookHeight: 1.25, speedBack: 0.06, maxSpeedBack: 2.5 },
 });

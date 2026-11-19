@@ -41,7 +41,10 @@ export function coastPrograms(read=file=>readFileSync(new URL('../web/src/'+file
       assert.equal(park,names[1]==='STUNT_TERRAIN_FRAG','park fragment requires its explicit constructor flag');
       if(park)assert.ok(['TERRAIN_VERT','MIRROR_TERRAIN_VERT'].includes(names[0]));
       if((includeCoast||!flags.includes('COAST_SHORE'))&&(!park||includeStunts))for(const name of names){
-      const sorted=[...new Set(flags)].sort(),key=name+':'+sorted.join(',');
+      // Road pavement changes the modern colour fragment only. Cart materials
+      // never set the flag, and vertex programs are identical either way.
+      const programFlags=name==='TERRAIN_FRAG'?flags:flags.filter(flag=>flag!=='ROAD_PAVEMENT');
+      const sorted=[...new Set(programFlags)].sort(),key=name+':'+sorted.join(',');
       const row=rows.get(key)??{name,flags:sorted,constructors:[]};row.constructors.push(file+':'+(ast.getLineAndCharacterOfPosition(node.getStart(ast)).line+1));rows.set(key,row);
      }}
     }
