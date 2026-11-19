@@ -10,11 +10,13 @@ import { historyArea } from '../../web/src/eras/history-areas';
 import { DurableObject } from 'cloudflare:workers';
 import { CLOSE, HEARTBEAT, PEER_TIMEOUT_MS, PING, PONG, VERSION } from '../../web/src/mp/wire';
 import { Meter, STRIKES_OUT, hello, judge, lastKnown, takeSeat, text, type Seat } from './room';
+import { Board, boardDoor, type BoardEnv } from './board';
+export { Board };
 
-export interface Env {
+export interface Env extends BoardEnv {
   ROOMS: DurableObjectNamespace<Room>;
   ASSETS?: Fetcher;
-  /** Pages that may join, comma separated: "https://mmm.fakkeldy.ca". "http://localhost:*" allows any local port. */
+  /** Pages that may join a room or post to Today's board, comma separated: "https://mmm.fakkeldy.ca". "http://localhost:*" allows any local port. */
   ORIGINS: string;
   /**
    * Half the side, in metres, of the square around an area's origin in which a car may be. Every area the game has
@@ -65,6 +67,8 @@ export default {
       }
       return new Response(body, { status: site.area ? page.status : 404, headers });
     }
+    // Today's board (server/src/board.ts): post a Today's run result, read a board.
+    if (url.pathname.startsWith('/board/')) return boardDoor(request, env, (origin) => originAllowed(origin, env.ORIGINS));
     if (!url.pathname.startsWith('/mp/')) return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });
     const m = PATH.exec(url.pathname);
     if (!m) return new Response('Not found', { status: 404 });

@@ -42,9 +42,11 @@ export class Endings {
     this.root.addEventListener('keydown', ev => {
       ev.stopPropagation();
       if (ev.code !== 'Tab') return;
-      const buttons = [...this.root.querySelectorAll('button')];
-      const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      ev.preventDefault(); buttons[(i + (ev.shiftKey ? buttons.length - 1 : 1)) % buttons.length]?.focus();
+      // Buttons and text fields (Today's board name), skipping any that are hidden.
+      const buttons = [...this.root.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button, input')].filter(b => !b.closest('[hidden]') && !b.disabled);
+      const i = buttons.indexOf(document.activeElement as HTMLButtonElement), n = buttons.length;
+      // Focus on none of them (the one it was on just became disabled): Tab goes to the first, Shift+Tab to the last.
+      ev.preventDefault(); buttons[i < 0 ? (ev.shiftKey ? n - 1 : 0) : (i + (ev.shiftKey ? n - 1 : 1)) % n]?.focus();
     });
     // The card owns new pointer input. The caller clears held pedals when it pauses.
     for (const event of ['pointerdown', 'pointerup', 'pointermove', 'click', 'wheel']) this.root.addEventListener(event, ev => ev.stopPropagation());
