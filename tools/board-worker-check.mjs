@@ -56,13 +56,19 @@ if (phase === 'main') {
   const low = run(20, 4, 'Cold Coffee'); low.claim = { points: 1, step: 0, time: 1, squares: 0 };
   const lowed = await post(low);
   assert.equal(lowed.status, 200); assert.equal(lowed.json.board.rows.find(r => r.id === lowed.json.id).points, replay(squares, low.events).total);
+  // A drift carries its size, and the Worker pays it as the game does.
+  const drifty = run(6, 3, 'Side Slip'); drifty.events.splice(2, 0, ['drift', 6.5, 42.5, 31.25, 14.1, 0, 1]);
+  const dr = replay(squares, drifty.events); drifty.claim = { points: dr.total, step: dr.step, time: dr.firedAt ?? DAILY_LIMIT_SECONDS, squares: dr.filled };
+  const drifted = await post(drifty);
+  assert.equal(drifted.status, 200, drifted.text); assert.equal(drifted.json.board.rows.find(r => r.id === drifted.json.id).points, dr.total);
+  assert.ok(dr.total > replay(squares, drifty.events.map(([k, t]) => [k, t])).total, 'the size is paid');
   const high = run(20, 4); high.claim.points += 1;
   refused(await post(high), 'above');
   // One post per device.
   refused(await post({ ...run(10), device: mine.device }), 'posted');
   // The same result again from the same device (its answer was lost on the way): its place again, not a second row.
   const lost = await post(mine);
-  assert.equal(lost.status, 200, lost.text); assert.deepEqual({ id: lost.json.id, rank: lost.json.rank, posts: lost.json.posts }, { id: 1, rank: 1, posts: 2 });
+  assert.equal(lost.status, 200, lost.text); assert.deepEqual({ id: lost.json.id, rank: lost.json.rank, posts: lost.json.posts }, { id: 1, rank: 1, posts: 3 });
   // Another day, another area, another seed; the events; the shape; a rude handle.
   refused(await post({ ...run(10), date: dayBefore(dayBefore(date)) }, { day: dayBefore(dayBefore(date)) }), 'day');
   const tomorrow = new Date(Date.parse(`${date}T12:00:00Z`) + 86400e3).toISOString().slice(0, 10);
@@ -104,7 +110,7 @@ if (phase === 'main') {
   }
   const full = await read();
   assert.equal(full.board.rows.length, BOARD_KEEP, 'the top hundred');
-  assert.equal(full.board.posts, 3 + 4 + 110, 'every taken post counted');
+  assert.equal(full.board.posts, 4 + 4 + 110, 'every taken post counted');
   assert.ok(ranks.some(r => r === null), 'a row that falls outside the top hundred has no rank');
   for (let i = 1; i < full.board.rows.length; i++) {
     const a = full.board.rows[i - 1], b = full.board.rows[i];

@@ -65,7 +65,10 @@ await ok('an honest run is taken, scored again by the rules, and its row holds o
 });
 
 await ok('the server stores its own score: a lower claim is taken at the rules’ points; a higher one, or a faster Fired, is refused', () => {
-  const events = honest(rng(2)), post = makePost(events), r = judge(post).result;
+  // A run that leaves a square open (so a claim of an extra square means something).
+  let n = 2; while (judge(makePost(honest(rng(n)))).result.filled === 511) n++;
+  const events = honest(rng(n)), post = makePost(events), r = judge(post).result;
+  assert.notEqual(r.filled, 511);
   const low = judge({ ...post, claim: { ...post.claim, points: 1, step: 0, squares: 0 } });
   assert.equal(low.ok, true); assert.equal(low.row.points, r.total, 'the computed points, not the claim');
   for (const claim of [{ points: r.total + 1 }, { step: r.step + 1 }, { squares: post.claim.squares | (~r.filled & 511) }])
@@ -86,7 +89,11 @@ await ok('the ceiling: the score rules’ most for a run of that length, which n
   // Greedy runs that try hardest: every kind in a burst at the top rung, repeated as fast as the burst rule allows.
   for (let s = 0; s < 40; s++) {
     const random = rng(100 + s), events = []; let t = 0;
-    while (events.length < MAX_EVENTS && t < DAILY_LIMIT) { events.push([KINDS[Math.floor(random() * KINDS.length)], t]); if (events.length % BURST === 0) t += 1.001; }
+    // Every drift as big as the rules pay one (long, wide, fast, firm and clean).
+    while (events.length < MAX_EVENTS && t < DAILY_LIMIT) {
+      const kind = KINDS[Math.floor(random() * KINDS.length)];
+      events.push(kind === 'drift' ? [kind, t, 500, 80, 40, 0, 1] : [kind, t]); if (events.length % BURST === 0) t += 1.001;
+    }
     const plan = dailyPlan(DATE, 'mabou'), r = replay(drawCard(plan.seed, supplyFor(plan, ALL)), events);
     assert.ok(r.total <= ceiling(Math.min(DAILY_LIMIT, t)), `${r.total} within ${ceiling(t)}`);
   }
@@ -139,6 +146,13 @@ await ok('the event list: only kinds that score, in order, inside the run, no mo
     'a burst': [...base.filter(e => e[1] < 10), ...Array.from({ length: BURST + 1 }, (_, i) => ['rut', 10 + i * .9 / BURST]), ...base.filter(e => e[1] > 12)],
   };
   for (const [name, events] of Object.entries(bad)) assert.deepEqual(judge({ ...makePost(base), events }), { ok: false, error: 'events' }, name);
+  // A drift is paid by its size, which it carries; nothing else carries one, and a size is numbers of at least 0.
+  const drifts = [['drift', 3, 42.5, 31.25, 14.1, 0, 1], ['drift', 9, 12, 18, 7.5, 1, 0], ['rut', 12]];
+  const dv = judge(makePost(drifts)), plain = judge(makePost(drifts.map(([k, t]) => [k, t])));
+  assert.equal(dv.ok, true); assert.ok(dv.row.points > plain.row.points, 'the size is paid');
+  for (const [name, e] of Object.entries({ 'a size on another kind': ['rut', 3, 42.5, 31.25, 14.1, 0, 1], 'a negative length': ['drift', 3, -1, 31.25, 14.1, 0, 1],
+    'a flag of 2': ['drift', 3, 42.5, 31.25, 14.1, 2, 1], 'a short size': ['drift', 3, 42.5, 31.25], 'a text angle': ['drift', 3, 42.5, '31', 14.1, 0, 1] }))
+    assert.deepEqual(judge({ ...makePost(base), events: [e] }), { ok: false, error: 'shape' }, name);
   // Exactly the burst inside one second is a real busy moment, and is taken.
   const busy = [...Array.from({ length: BURST }, (_, i) => ['rut', 10 + i * .9 / BURST])];
   assert.equal(judge(makePost(busy)).ok, true);
@@ -359,6 +373,12 @@ function play(g, random, pace = 1) {
     if (roll > .95) g.shift.score.report({ kind, place: 'route', speed: 5, time: t, subject: random() < .5 ? 'animal' : 'person' });
     else if (roll > .9) { g.shift.placeAt = () => ['cemetery', 'church', 'busStop'][Math.floor(random() * 3)]; g.shift.reportScore(kind, 0, 0, 5); g.shift.placeAt = () => 'route'; }
     else if (roll > .87) g.shift.score.report({ kind: 'sceneAnimal', place: 'route', speed: 5, time: t });
+    else if (roll > .8) {
+      // A real drift, as the vehicle reports it: its size (length, angle, speed, surface, a clean end) is paid and sent.
+      const length = 4 + random() * 120, angle = 8 + random() * 50;
+      g.shift.reportDrift({ angle, peak: angle * 1.3, length, seconds: length / 9, speed: 3 + random() * 25,
+        surface: ['asphalt', 'gravel', 'grass', 'dirt track', 'washboard'][Math.floor(random() * 5)], clean: random() < .6, x0: 100, z0: 0, x1: 100 + length, z1: 0 });
+    }
     else g.shift.reportScore(kind, 0, 0, 5);
     if (random() < .3) g.tick(.016);
     t += random() < .25 / pace ? .03 + random() * .05 : random() * pace * (random() < .5 ? 1.5 : 6);
@@ -371,7 +391,7 @@ const clearDevice = () => { store.delete(DAILY_KEY); store.delete(BOARD_KEY); st
 
 await ok('the game and the server agree: two hundred random runs, scored live by the game and again from the sent facts', async () => {
   const dates = ['2026-11-17', '2026-11-11', '2026-11-03', '2026-10-28', '2026-10-21'];
-  let fired = 0, protectedFacts = 0;
+  let fired = 0, protectedFacts = 0, sizedDrifts = 0;
   for (let i = 0; i < 200; i++) {
     clearDevice();
     const date = dates[i % dates.length], g = game(date), random = rng(500 + i);
@@ -387,12 +407,14 @@ await ok('the game and the server agree: two hundred random runs, scored live by
     assert.deepEqual({ points: v.row.points, step: v.row.step, squares: v.row.squares, firedAt: v.result.firedAt },
       { points: Math.round(book.total), step: book.step, squares: packFilled(g.daily.card.filled), firedAt: result.firedAt }, `run ${i}: the server's score is the game's`);
     assert.ok(entry.post.events.length <= MAX_EVENTS && entry.post.events.every(([k]) => SENT_KINDS.includes(k)));
+    sizedDrifts += entry.post.events.filter(e => e.length === 7).length;
     protectedFacts += g.shift.score.reported - entry.post.events.length;
     if (book.fired) fired++;
     assert.equal(g.daily.board?.root.find('boardPost')?.textContent, 'Post my result');
   }
   assert.ok(fired >= 10 && fired <= 190, `both fired and not-fired runs: ${fired}`);
   assert.ok(protectedFacts > 200, 'facts that cannot score stayed on the device');
+  assert.ok(sizedDrifts > 200, `drifts sent with their size: ${sizedDrifts}`);
 });
 
 await ok('the end card: "Post my result" waits for the tap; away or offline it says to try later; posted, the board marks the row and the share card gains the rank', async () => {

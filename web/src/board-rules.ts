@@ -8,7 +8,8 @@ import {
   BingoCard, CARD_BONUS, CARD_SIZE, DAILY_LIMIT, LINES, LINE_BONUS, atlanticDate, betterDaily, bingoBonus, dailyArea, dailyPlan, drawCard,
   packFilled, supplyFor, type DailyPlan, type DailyResult, type Square, type Supply,
 } from './daily-rules';
-import { COMBO_CAP, LADDER, PENALTIES, POINTS, ScoreBook, ladderFactor, novelty, scores } from './score-rules';
+import { COMBO_CAP, DRIFT_MARKS, LADDER, PENALTIES, POINTS, ScoreBook, ladderFactor, novelty, scores } from './score-rules';
+import { LOOSE, looseSurface } from './drift-rules';
 import type { ScoreEvent } from './score-events';
 import { inventedName, readHandle } from './mp/social';
 
@@ -43,9 +44,22 @@ export const SENT_KINDS: readonly string[] = Object.freeze([...Object.keys(POINT
 /** True for a fact the run sends with its result. A fact that cannot score (a protected place, an animal, a person, an
  * unpaid kind) changes neither the points nor the card, so it stays on the device. */
 export const sendsEvent = (e: ScoreEvent): boolean => PENALTIES[e.kind] !== undefined || scores(e);
-/** One sent fact: its kind and its play seconds, exactly as the game had them. */
-export type WireEvent = [kind: string, time: number];
-export const wireEvent = (e: ScoreEvent): WireEvent => [e.kind, e.time];
+/** One sent fact: its kind and its play seconds, exactly as the game had them. A drift is paid by its size, so it also
+ * carries what score-rules' eventSize reads: metres, mean angle (degrees), mean speed (m/s), a loose surface (1) or a
+ * firm one (0), and a clean end (1). Nothing else of it (no place, no position) is sent. */
+export type WireEvent = [kind: string, time: number] | [kind: string, time: number, length: number, angle: number, speed: number, loose: number, clean: number];
+export const wireEvent = (e: ScoreEvent): WireEvent => e.kind === 'drift' && e.drift
+  ? [e.kind, e.time, e.drift.length, e.drift.angle, e.speed, looseSurface(e.drift.surface) ? 1 : 0, e.drift.clean ? 1 : 0] : [e.kind, e.time];
+/** A sent fact as the score rules hear it: on the route (a protected place is never sent), with a drift's size facts. */
+function asEvent(w: WireEvent): ScoreEvent {
+  if (w.length === 2) return { kind: w[0], place: 'route', speed: 0, time: w[1] };
+  const [kind, time, length, angle, speed, loose, clean] = w;
+  return { kind, place: 'route', speed, time, drift: { angle, peak: angle, length, seconds: 0, speed, surface: loose ? LOOSE[0] : 'paved',
+    clean: clean === 1, x0: 0, z0: 0, x1: 0, z1: 0 } };
+}
+/** A well-formed sent fact: a kind and a time; a drift's five size facts, each a number of at least 0 (flags 0 or 1). */
+const wellFormed = (e: unknown): boolean => Array.isArray(e) && typeof e[0] === 'string' && finite(e[1]) && (e.length === 2
+  || e.length === 7 && e[0] === 'drift' && e.slice(2, 5).every(v => finite(v) && v >= 0) && (e[5] === 0 || e[5] === 1) && (e[6] === 0 || e[6] === 1));
 
 /** What the game says its run scored. The server scores the facts again and never stores a claim. */
 export interface Claim { points: number; step: number; time: number; squares: number }
@@ -79,8 +93,8 @@ export interface Posted { id: number; rank: number | null; posts: number; board:
 export function replay(squares: readonly Square[], events: readonly WireEvent[]): DailyResult {
   const book = new ScoreBook(), card = new BingoCard(squares);
   let firedAt: number | null = null;
-  for (const [kind, time] of events) {
-    const e: ScoreEvent = { kind, place: 'route', speed: 0, time };
+  for (const w of events) {
+    const e = asEvent(w), time = e.time;
     book.add(e);
     if (book.fired) firedAt ??= time;
     const heard = card.hear(e);
@@ -94,9 +108,10 @@ export function replay(squares: readonly Square[], events: readonly WireEvent[])
 const TOP = COMBO_CAP * ladderFactor(LADDER.length);
 /** Every fact a run could ever be paid for, best first: each kind's first and its fading repeats, at the full combo on
  * the top rung. No run can beat the best n of these with n facts. */
-const BEST_FACTS: readonly number[] = Object.freeze(Object.values(POINTS).flatMap(base => {
+const BIGGEST: Readonly<Record<string, number>> = { drift: DRIFT_MARKS.most * DRIFT_MARKS.clean };
+const BEST_FACTS: readonly number[] = Object.freeze(Object.entries(POINTS).flatMap(([kind, base]) => {
   const out: number[] = [];
-  for (let k = 0; k < MAX_EVENTS; k++) { const v = Math.round(base * novelty(k) * TOP); if (v <= 0) break; out.push(v); }
+  for (let k = 0; k < MAX_EVENTS; k++) { const v = Math.round(base * (BIGGEST[kind] ?? 1) * novelty(k) * TOP); if (v <= 0) break; out.push(v); }
   return out;
 }).sort((a, b) => b - a));
 /** The most points the score rules allow a run of this many play seconds: at most BURST facts a second, each paid as
@@ -155,7 +170,7 @@ export function judgePost(body: unknown, area: string, date: string, now: number
   if (!finite(c.points) || !Number.isSafeInteger(c.step) || !finite(c.time) || !Number.isSafeInteger(c.squares)) return no('shape');
   const claim = c as unknown as Claim;
   if (body.events.length > MAX_EVENTS) return no('events');
-  if (!body.events.every((e: unknown) => Array.isArray(e) && e.length === 2 && typeof e[0] === 'string' && finite(e[1]))) return no('shape');
+  if (!body.events.every(wellFormed)) return no('shape');
   if (!dailyArea(area)) return no('area');
   if (!postDay(date, now)) return no('day');
   const plan = dailyPlan(date, area);
