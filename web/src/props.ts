@@ -34,6 +34,15 @@ const CELL = 256;
 /** LOW (phone) range for the small parts: mailboxes, community boxes, insulators, transformers and lamps. A 1.3 m
  * mailbox is about 2 px tall at 500 m on a phone. Poles, crossarms and the wires keep the cell range (900 m). */
 export const LOW_SMALL_RANGE = 500;
+/** Road id to the correction that split it, for roads.json pieces that carry one. */
+export function splitRoadLines(roadData: unknown): Map<number, string> {
+  const roads = (roadData as { roads?: unknown } | null)?.roads;
+  const lines = new Map<number, string>();
+  if (Array.isArray(roads)) for (const r of roads as { id?: unknown; correction?: unknown }[]) {
+    if (typeof r?.id === 'number' && typeof r.correction === 'string') lines.set(r.id, r.correction);
+  }
+  return lines;
+}
 const TALL = new Set(['pole', 'crossarm']);
 const rad = THREE.MathUtils.degToRad;
 
@@ -123,7 +132,7 @@ export class Props {
     return [...this.mail.map(p => ({ ...p, radius: RAIL_PROP_RADII.mailbox })), ...this.sites.map((p, i) => ({ ...p, radius: this.data.communityBoxes[i].modules * RAIL_PROP_RADII.communityModule + RAIL_PROP_RADII.communityClear })), ...this.sourcePoles.map(p => ({ ...p, radius: RAIL_PROP_RADII.pole }))];
   }
 
-  constructor(data: unknown, private readonly village: [number, number], private readonly terrain: Terrain, excludes?: (east: number, north: number) => boolean, poleMoves: readonly {index:number;from?:readonly number[];to:readonly number[]}[] = []) {
+  constructor(data: unknown, private readonly village: [number, number], private readonly terrain: Terrain, excludes?: (east: number, north: number) => boolean, poleMoves: readonly {index:number;from?:readonly number[];to:readonly number[]}[] = [], splitLines: ReadonlyMap<number, string> = new Map()) {
     const parsed = parse(data);
     // New packs cannot put roadside clutter or mail targets inside these quiet places.
     // The cemetery check reports conflicts in the baked source; no coordinates are moved.
@@ -160,10 +169,20 @@ export class Props {
     this.mail.forEach((p, i) => this.cell(p).mail.push(i));
     this.sites.forEach((p, i) => this.cell(p).sites.push(i));
     this.poles.forEach((p, i) => this.cell(p).poles.push(i));
-    const runs = new Map<number, number[]>();
+    // A road split that kept the old road's pole numbers (the 18 Nov Harbour Road pavement limit) leaves one wired
+    // line on two road pieces: join their runs so the span over the cut stays. Pieces whose poles were placed
+    // afresh number from 0 each and keep separate runs.
+    const numbers = new Map<string, number[]>();
+    for (const p of this.data.poles) {
+      const line = splitLines.get(p.road);
+      if (line !== undefined) (numbers.get(line) ?? numbers.set(line, []).get(line)!).push(p.n);
+    }
+    const joined = new Set([...numbers].filter(([, ns]) => new Set(ns).size === ns.length).map(([line]) => line));
+    const runs = new Map<number | string, number[]>();
     this.data.poles.forEach((p, i) => {
-      let run = runs.get(p.road);
-      if (!run) runs.set(p.road, run = []);
+      const line = splitLines.get(p.road), key = line !== undefined && joined.has(line) ? line : p.road;
+      let run = runs.get(key);
+      if (!run) runs.set(key, run = []);
       run.push(i);
     });
     for (const run of runs.values()) {

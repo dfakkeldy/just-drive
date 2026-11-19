@@ -358,7 +358,7 @@ def main():
             assert item["provenance"] == provenance
             for field in ('x','y','length','width','axisDeg','eave','ridge','kind'):
                 assert item[field] == stated[field], (item['id'],field,'hand input changed')
-            assert item['roof'] == 'gable' and item['confidence'] == .4
+            assert item['roof'] == stated.get('roof', 'gable') and item['confidence'] == .4
         if item["nearRoad"] is not None:
             assert item["roadDist"] >= 0 and math.isfinite(item["roadDist"])
         pts = np.array(item["footprint"])

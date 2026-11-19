@@ -337,7 +337,8 @@ export class Buildings {
         if (dh > 1.1) opening(frontEnd, front, doorU, tallFront ? deckHeight : 0.22, dw, dh, true);
         if (tallFront) {
           const wood = rgb('#ad8c69');
-          panel(false, front, -L + 0.2, split - 0.18, deckHeight + 0.22, r - 0.32, wood);
+          // Off the upper wall's own plane (0.025), under the glass (0.05): the two would z-fight.
+          panel(false, front, -L + 0.2, split - 0.18, deckHeight + 0.22, r - 0.32, wood, 0.035);
           const start = -L + 0.51, step = (split - 0.34 - start) / 4;
           for (let i = 0; i < 4; i++) {
             const u = start + i * step;

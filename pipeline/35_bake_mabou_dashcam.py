@@ -45,6 +45,17 @@ def bake(source, output):
     changed = [r for r in new if r != old_by_id.get(r['id'])]
     if not changed:
         raise ValueError('Source already has the 18 Nov road correction')
+    if 'bed' in network:
+        # Step 29 reads the lines before the road-bed move and stops on a road that no longer fits them. The split
+        # shortens Harbour Road, so refuse here rather than leave that failure for a later bake.
+        road_ground = importlib.import_module('road_ground')
+        if (Path(area.overview)/road_ground.BEFORE_BED).is_file():
+            try:
+                road_ground.lines_before(dict(network, roads=new), area.overview)
+            except RuntimeError as error:
+                raise ValueError(f'The split no longer fits the lines before the road-bed move: {error}') from None
+        else:
+            print(f'NOTE: roads.json is marked bed-moved but {road_ground.BEFORE_BED} is not here; a later step 29 needs it')
 
     buildings = remap_road_references(read('buildings.json'), 'buildings', new)
     buildings_step = importlib.import_module('27_bake_buildings')

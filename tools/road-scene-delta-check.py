@@ -268,31 +268,54 @@ def owned_counts(manifest):
     return {key:manifest[key]['count'] for key in ('buildings','buildingStyles')}
 
 
-# Later land deltas that replace files of this receipt. A file holding exactly a later delta's pinned after bytes
-# counts as the bytes that delta replaced; a manifest whose owned counts are the later delta's after counts counts as its
-# before counts. So this receipt stays one complete state across the later install. Each file is mapped on its own: a
-# half-done later install is caught by that delta's own row (mabou-village-delta-land), not here.
-LATER = (ROOT/'tools/mabou-village-delta/hashes.json',)
+# Later land deltas that replace files of this receipt, in install order. A file holding exactly a later delta's pinned
+# after bytes counts as the bytes that delta replaced; a manifest whose owned counts are the later delta's after counts
+# counts as its before counts. The latest delta is undone first, so a file replaced twice walks back through both. So
+# this receipt stays one complete state across the later installs. Each file is mapped on its own: a half-done later
+# install is caught by that delta's own row (mabou-village-delta-land, or tools/mabou-dashcam-18nov/receipt.py verify
+# before the 18 Nov promotion), not here.
+VILLAGE = ROOT/'tools/mabou-village-delta/hashes.json'
+NOV18 = ROOT/'tools/mabou-dashcam-18nov/hashes.json'
+LATER = (VILLAGE, NOV18)
 
 
-def superseded(root, entries, hashes):
-    """Rewrite `hashes` in place for files of a later delta; returns the names rewritten."""
-    names = set()
+def superseded(root, entries, hashes, later=LATER):
+    """Rewrite `hashes` in place for files of later deltas; returns {name: the deltas that replaced it}."""
+    names = collections.defaultdict(list)
     ours = {f['file']: f for f in entries}
-    for path in LATER:
+    now = {name: hashlib.sha256((root/name).read_bytes()).hexdigest() for name, f in ours.items() if 'ownedCounts' not in f}
+    owned = {name: owned_counts(json.loads((root/name).read_bytes())) for name, f in ours.items() if 'ownedCounts' in f}
+    for path in reversed(later):
         report = json.loads(path.read_text())
         for f in report['files']:
-            if f['file'] in ours and f['sha256'] and hashlib.sha256((root/f['file']).read_bytes()).hexdigest() == f['sha256']:
-                hashes[f['file']] = f['before']; names.add(f['file'])
+            if f['file'] in now and f['sha256'] and now[f['file']] == f['sha256']:
+                now[f['file']] = f['before']; names[f['file']].append(path)
         for m in report['manifests']:
             name = m['folder']+'/manifest.json'
-            if name in ours and 'ownedCounts' in ours[name]:
-                now = owned_counts(json.loads((root/name).read_bytes()))
-                if now == {k: m['after'][k]['count'] for k in now if k in m['after']} | {k: v for k, v in now.items() if k not in m['after']}:
-                    was = {k: (m['before'][k]['count'] if k in m['before'] else v) for k, v in now.items()}
-                    match = next((s for s in ('before', 'after') if was == ours[name]['ownedCounts'][s]), None)
-                    if match: hashes[name] = ours[name]['before' if match == 'before' else 'sha256']; names.add(name)
-    return names
+            if name in owned and owned[name] == {k: m['after'][k]['count'] for k in owned[name] if k in m['after']} | {k: v for k, v in owned[name].items() if k not in m['after']}:
+                owned[name] = {k: (m['before'][k]['count'] if k in m['before'] else v) for k, v in owned[name].items()}
+                names[name].append(path)
+    for name in names:
+        if name in now: hashes[name] = now[name]
+        else:
+            match = next((s for s in ('before', 'after') if owned[name] == ours[name]['ownedCounts'][s]), None)
+            if match: hashes[name] = ours[name]['before' if match == 'before' else 'sha256']
+    return dict(names)
+
+
+def step29_view(root, name, later):
+    """A props file and its roads as step 29 left them: the 18 Nov bake moved poles onto a split piece and paved
+    Weaver Lane, so its receipt's undo is applied when that bake replaced this file."""
+    props = json.loads((root/name).read_bytes())
+    roads = json.loads((root/Path(name).with_name('roads.json')).read_bytes())['roads']
+    if NOV18 in later.get(name, ()):
+        spec = importlib.util.spec_from_file_location('nov18_receipt', ROOT/'tools/mabou-dashcam-18nov/receipt.py')
+        receipt = importlib.util.module_from_spec(spec); spec.loader.exec_module(receipt)
+        report = json.loads(NOV18.read_text())
+        props, roads = receipt.undo(props, roads, report['undo'])
+        before = next(f['before'] for f in report['files'] if f['file'] == name)
+        assert hashlib.sha256(receipt.compact(props)).hexdigest() == before, f'{name}: the 18 Nov undo does not rebuild its before props'
+    return props, roads
 
 
 def land(root=None):
@@ -319,9 +342,9 @@ def land(root=None):
     powers, expect29 = {}, dict(step29)
     for name in step29:
         if hashes[name] not in {f[k] for f in entries if f['file']==name for k in ('before','sha256')}:
-            props, roads = read_json(name), read_json(str(Path(name).with_name('roads.json')))['roads']
+            props, roads = step29_view(root, name, later)
             expected = step29[name]
-            if name in later:
+            if VILLAGE in later.get(name, ()):
                 # Mabou village delta changes two community sites (and drops), never a mailbox or public pole (its maker checks
                 # that); the file is its exact pinned after bytes, so its own community digest is the receipt's.
                 expected = dict(expected, communityBoxes=canonical_digest(props['communityBoxes']))
@@ -355,7 +378,7 @@ def land(root=None):
         # without drops, or a power pole off a named kind-4 road must leave the receipt. Controls: the same props
         # with power taken out, and with one power pole added on a named kind-4 road, stay at the receipt.
         for name in step29:
-            props, roads = read_json(name), read_json(str(Path(name).with_name('roads.json')))['roads']
+            props, roads = step29_view(root, name, later)
             by_id = {r['id']: r for r in roads}
             named = lambda r: bool((r.get('name') or '').strip())
             public_at = next(i for i, q in enumerate(props['poles']) if by_id[q['road']]['kind'] <= 3)
