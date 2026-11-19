@@ -1,4 +1,5 @@
-import { isPhraseId, CHAT_COOLDOWN, type PhraseId } from './social';
+import { isPhraseId, CHAT_COOLDOWN, GAME_PHRASES, type PhraseId } from './social';
+import { decodeGame, type Field, type GameFrame, type GameName } from './game-wire';
 import { readRace, type RaceState } from './race-wire';
 // The game's end of the multiplayer connection: it reports this car, and turns what it hears of the other cars
 // into smooth motion. No DOM and no three.js here, so tools/mp-check.mjs can run many of these in node.
@@ -6,7 +7,7 @@ import { readRace, type RaceState } from './race-wire';
 // The caller drives report()/views() each frame and heartbeat() every 20 seconds while visible.
 // Hidden tabs send nothing; the room expires their seats after 60 seconds.
 import {
-  CLOSE, FLAG, HEARTBEAT, PING, ROOM_CAP, SEND_HZ, decodeSnapshot, encodeState, parseServerText,
+  CLOSE, FLAG, HEARTBEAT, PING, ROOM_CAP, SEND_HZ, TYPE, decodeSnapshot, encodeState, parseServerText,
   readRide, type Ride, type CarState, type PeerInfo, type PeerView,
 } from './wire';
 
@@ -138,7 +139,7 @@ export class Net {
   get roster(): PeerInfo[] { return [...(this.me ? [this.me] : []), ...Array.from(this.peers.values(), p => p.view)]; }
   chat(phrase: PhraseId): void {
     const now = this.clock();
-    if (!isPhraseId(phrase) || !this.canChat || now-this.lastChat < CHAT_COOLDOWN) return;
+    if (!isPhraseId(phrase) || !this.canChat || now-this.lastChat < CHAT_COOLDOWN || phrase >= GAME_PHRASES && !this.gamesSupported) return;
     this.lastChat = now; this.ws!.send(JSON.stringify({t:'chat',phrase}));
   }
   private serverOffset = 0;
@@ -147,6 +148,18 @@ export class Net {
   serverNow(): number { return this.clock() + this.serverOffset; }
   raceCommand(action: 'select' | 'start' | 'cancel', route?: import('./race-wire').RaceRoute): void {
     if (this.status === 'on' && this.race && this.ws?.readyState === 1) this.ws.send(JSON.stringify({t:'race-control',action,route}));
+  }
+  /** The room said it runs room games (hello.games). An older room hears no game text and no game phrase. */
+  gamesSupported = false;
+  /** What the room is playing, as last heard, with the local time it arrived (its `left` counts from then). */
+  game: (GameFrame & { at: number }) | null = null;
+  /** Ms left in the game's current phase, by this machine's clock. */
+  gameLeft(): number { return this.game ? Math.max(0, this.game.left - (this.clock() - this.game.at)) : 0; }
+  gameCommand(action: 'start', game: GameName, field: Field): void;
+  gameCommand(action: 'stop'): void;
+  gameCommand(action: 'start' | 'stop', game?: GameName, field?: Field): void {
+    if (this.status !== 'on' || !this.gamesSupported || this.ws?.readyState !== 1) return;
+    this.ws.send(JSON.stringify(action === 'start' ? { t: 'game-control', action, game, field } : { t: 'game-control', action }));
   }
   me: PeerInfo | null = null;
   room = '';
@@ -201,7 +214,7 @@ export class Net {
 
   private drop(): void {
     const ws = this.ws;
-    this.ws = null; this.rideSupported = false; this.chatSupported = false; this.heartbeatSupported = false; this.race = null; this.names.clear(); this.chats.length = 0; this.bubbles.clear(); this.lastChat = -Infinity; this.lastSync = -Infinity;
+    this.ws = null; this.rideSupported = false; this.chatSupported = false; this.heartbeatSupported = false; this.gamesSupported = false; this.game = null; this.race = null; this.names.clear(); this.chats.length = 0; this.bubbles.clear(); this.lastChat = -Infinity; this.lastSync = -Infinity;
     if (ws) { ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null; try { ws.close(); } catch { /* already gone */ } }
   }
 
@@ -259,6 +272,9 @@ export class Net {
         this.me = { id: m.id, name: m.name, hue: m.hue }; this.room = m.room;
         this.status = 'on'; this.fails = 0;
         this.rideSupported = m.rides === true; this.chatSupported = m.chat === true; this.heartbeatSupported = m.heartbeat === true; this.sentRide = undefined; this.lastRideSend = -Infinity;
+        // A room that runs games sends their state only to a game that asks once: an older game never hears a game frame.
+        this.gamesSupported = m.games === true; this.game = null;
+        if (this.gamesSupported && this.ws?.readyState === 1) this.ws.send('{"t":"game-sync"}');
         this.names.set(m.id, m.name); for (const p of m.peers) this.names.set(p.id, p.name);
         this.peers.clear();
         for (const p of m.peers.slice(0, ROOM_CAP)) this.peers.set(p.id, new Peer(p));
@@ -269,6 +285,7 @@ export class Net {
       else if (m.t === 'leave') { this.peers.delete(m.id); this.bubbles.delete(m.id); }
       else if (m.t === 'full') this.closed = 'full';
     } else if (data instanceof ArrayBuffer) {
+      if (data.byteLength && new Uint8Array(data, 0, 1)[0] === TYPE.game) { const g = this.gamesSupported ? decodeGame(data) : null; if (g) this.game = { ...g, at: now }; return; }
       for (const e of decodeSnapshot(data)) { this.heard++; this.peers.get(e.id)?.hear(e.state, now); }
     }
   }

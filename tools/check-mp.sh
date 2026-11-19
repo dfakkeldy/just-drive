@@ -38,7 +38,8 @@ JSON
 "$ROOT/web/node_modules/.bin/tsc" -p "$WORK/tsconfig.json"
 # The server's state folder is kept out of the repository folder.
 serve() {  # serve <server folder> <port> <log>: starts a room server; its pid is in SERVED
-  (cd "$1" && exec env WRANGLER_SEND_METRICS=false "$WRANGLER" dev --local --ip 127.0.0.1 --port "$2" --persist-to "$WORK/state-$2") > "$3" 2>&1 &
+  # GAME_ROUND_S: a 20-second room-game round, for this check only (the live room plays 3 minutes).
+  (cd "$1" && exec env WRANGLER_SEND_METRICS=false "$WRANGLER" dev --local --ip 127.0.0.1 --port "$2" --persist-to "$WORK/state-$2" --var GAME_ROUND_S:20) > "$3" 2>&1 &
   SERVED=$!; SERVERS="$SERVERS $SERVED"
   for _ in $(seq 1 120); do
     grep -q "Ready on" "$3" && return 0
@@ -85,7 +86,7 @@ if [[ $MUTATIONS == 1 ]]; then
   # A copy of the room and the game to change.
   M="$WORK/mutant"; mkdir -p "$M/server" "$M/web" "$M/tools"
   cp -R "$ROOT/server/src" "$M/server/src"; cp "$ROOT/server/wrangler.jsonc" "$M/server/"; cp -R "$ROOT/web/src" "$M/web/src"
-  ln -s "$ROOT/web/node_modules" "$M/web/node_modules"; cp "$ROOT/tools/mp-check.mjs" "$ROOT/tools/mp-race-check.mjs" "$M/tools/"
+  ln -s "$ROOT/web/node_modules" "$M/web/node_modules"; cp "$ROOT/tools/mp-check.mjs" "$ROOT/tools/mp-race-check.mjs" "$ROOT/tools/mp-tag-check.mjs" "$M/tools/"
   # 3. A room that holds every car's report back for 0.6 s before it passes it on. Its runtime answers pings at
   #    once, so nothing is excused: the cars are drawn too far in the past.
   perl -0pi -e 's/  private toOthers\(from: WebSocket, data: string \| ArrayBuffer\): void \{\n/  private toOthers(from: WebSocket, data: string | ArrayBuffer): void {\n    if (data instanceof ArrayBuffer) { setTimeout(() => this.passOn(from, data), 600); return; }\n    this.passOn(from, data);\n  }\n  private passOn(from: WebSocket, data: string | ArrayBuffer): void {\n/' "$M/server/src/index.ts"

@@ -33,12 +33,14 @@ try {
   await a.until('document.getElementById("mpRoster").textContent.includes("Foggy Window")');
   const front=await a.read('({x:mmm.vehicle.x+Math.sin(mmm.vehicle.heading)*12,z:mmm.vehicle.z-Math.cos(mmm.vehicle.heading)*12})');
   await pose(b,front.x,front.z); await sleep(700);
-  // A phone keeps the panel in Settings after the race, never over the driving controls at the screen edges.
-  assert.ok(await b.read('(()=>{const s=document.getElementById("mpSocial");return !!s.closest("#settings")&&s.previousElementSibling?.id==="racePanel"&&getComputedStyle(s).position!=="fixed"})()'),'phone social panel lives in Settings after the race');
+  // A phone keeps the panel in Settings after the race (and the room games beside it), never over the driving controls at the screen edges.
+  assert.ok(await b.read('(()=>{const s=document.getElementById("mpSocial");return !!s.closest("#settings")&&(s.previousElementSibling?.id==="racePanel"||s.previousElementSibling?.id==="gamePanel"&&s.previousElementSibling.previousElementSibling?.id==="racePanel")&&getComputedStyle(s).position!=="fixed"})()'),'phone social panel lives in Settings after the race');
   assert.ok(await a.read('getComputedStyle(document.getElementById("mpSocial")).position==="fixed"'),'desktop social panel floats');
   await b.read('document.getElementById("settings").classList.add("open")');
   await b.read('document.getElementById("mpChatButton").click()');
-  assert.equal(await b.read('document.querySelectorAll("#mpChatGrid button").length'),8);
+  // Eight road phrases, and the three game phrases in a room that runs games (this one does).
+  assert.equal(await b.read('[...document.querySelectorAll("#mpChatGrid button")].filter(e=>!e.hidden).length'),11);
+  assert.equal(await b.read('[...document.querySelectorAll("#mpChatGrid button")].filter(e=>!e.hidden&&e.dataset.game).length'),3);
   await b.read('document.querySelectorAll("#mpChatGrid button")[4].click()');
   await a.until('document.getElementById("mpChatLog").textContent.includes("Foggy Window: Look at this")');
   await b.until('document.getElementById("mpChatLog").textContent.includes("Look at this")');

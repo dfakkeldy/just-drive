@@ -19,7 +19,8 @@ import { isPhraseId, type PhraseId } from './social';
 // Rare events (hello, join, leave) are small JSON texts: see ServerText.
 
 export const VERSION = 1;
-export const TYPE = { state: 1, snapshot: 2 } as const;
+// TYPE.game: a room-game frame (game-wire.ts), with its own version byte. Only a game that sent game-sync hears one.
+export const TYPE = { state: 1, snapshot: 2, game: 3 } as const;
 export const BODY = 22, STATE_BYTES = 2 + BODY, ENTRY_BYTES = 2 + BODY;
 export const FLAG = { air: 1, brake: 2, horn: 4, parked: 8, teleport: 16, window: 32 } as const;
 
@@ -49,9 +50,9 @@ export function parseRideChange(text: string): Ride | undefined {
   try { const m = JSON.parse(text); return m?.t === 'ride' ? readRide(m.ride) : undefined; } catch { return undefined; }
 }
 export interface PeerInfo { id: number; name: string; hue: number; ride?: Ride }
-/** Only hello.rides === true permits client ride announcements, hello.chat === true quick chat, and hello.heartbeat === true liveness texts; an absent flag denotes an older server. */
+/** Only hello.rides === true permits client ride announcements, hello.chat === true quick chat, hello.heartbeat === true liveness texts, and hello.games === true room games and their phrases; an absent flag denotes an older server. */
 export type ServerText =
-  | { t: 'hello'; v: number; id: number; name: string; hue: number; ride?: Ride; room: string; cap: number; rides?: boolean; chat?: boolean; heartbeat?: boolean; peers: PeerInfo[] }
+  | { t: 'hello'; v: number; id: number; name: string; hue: number; ride?: Ride; room: string; cap: number; rides?: boolean; chat?: boolean; heartbeat?: boolean; games?: boolean; peers: PeerInfo[] }
   | { t: 'join'; id: number; name: string; hue: number; ride?: Ride }
   | { t: 'ride'; id: number; ride?: Ride }
   | { t: 'leave'; id: number }
@@ -149,7 +150,7 @@ export function parseServerText(text: string): ServerText | null {
     && Number.isInteger((p as PeerInfo).id) && typeof (p as PeerInfo).name === 'string' && (p as PeerInfo).name.length <= 40
     && Number.isInteger((p as PeerInfo).hue);
   if (o.t === 'hello' && peer(o) && typeof o.v === 'number' && typeof o.room === 'string' && typeof o.cap === 'number'
-    && Array.isArray(o.peers) && o.peers.every(peer)) return { ...o, rides: o.rides === true, chat: o.chat === true, heartbeat: o.heartbeat === true, ride: readRide(o.ride),
+    && Array.isArray(o.peers) && o.peers.every(peer)) return { ...o, rides: o.rides === true, chat: o.chat === true, heartbeat: o.heartbeat === true, games: o.games === true, ride: readRide(o.ride),
       peers: o.peers.map(p => ({ ...p, ride: readRide(p.ride) })) } as unknown as ServerText;
   if (o.t === 'join' && peer(o)) return { ...o, ride: readRide(o.ride) } as unknown as ServerText;
   if (o.t === 'ride' && Number.isInteger(o.id)) {

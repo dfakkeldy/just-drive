@@ -1,9 +1,13 @@
 import { readHandle } from '../../web/src/mp/social';
 import { Race } from './race';
+import { RoomGame } from './game';
+import { CONTROL_MAX } from '../../web/src/mp/game-wire';
+import { RACE_LIMIT } from '../../web/src/mp/race-wire';
 import { readSite } from '../../web/src/site';
 import { historyArea } from '../../web/src/eras/history-areas';
 // The multiplayer server for Mabou Mail Madness: a door (the Worker's fetch) and rooms (one Durable Object each).
-// It relays car positions between the players of a room. It retains the current race until the room empties, keeps no log of positions,
+// It relays car positions between the players of a room. It retains the current race and room game until the room empties
+// (a game keeps its players' last places only while it runs), keeps no log of positions,
 // and never reads or forwards a network address.
 //
 // Verify locally with tools/check-mp.sh. The Mabou main thread owns Worker deployment.
@@ -25,6 +29,8 @@ export interface Env extends BoardEnv {
   BOUNDS: string;
   /** "off" closes every room at once, without a new build: `wrangler deploy --var MP:off` (and without it to open). */
   MP?: string;
+  /** Local checks only (wrangler dev --var GAME_ROUND_S:20): a shorter room-game round. Never set for the live site. */
+  GAME_ROUND_S?: string;
 }
 
 const OPEN = 1;   // WebSocket.readyState of a live socket
@@ -92,6 +98,24 @@ export class Room extends DurableObject<Env> {
   // Rate meters live in memory only. A room that slept has forgotten them; a flood keeps it awake, so that is safe.
   private meters = new Map<WebSocket, Meter>();
   private race = new Race();
+  private game = new RoomGame();
+  private readonly roundMs = Number(this.env.GAME_ROUND_S) >= 10 ? Number(this.env.GAME_ROUND_S) * 1000 : undefined;
+  private alarmFor = 0;
+  private raceBusy(now: number): boolean {
+    const s = this.race.state;
+    return !!s.startAt && now - s.startAt < RACE_LIMIT && s.racers.some(r => r.time === null && !r.out);
+  }
+  /**
+   * Every game-capable player hears the new state, and the room keeps it: a quiet room may sleep at any moment, and
+   * wakes with what it kept (about one write a second while a round is scored, as the race keeps each change).
+   */
+  private gameChanged(): void {
+    const now = Date.now(), frame = this.game.frame(now), seats = this.seats();
+    for (const { ws, seat } of seats) if (seat.games) { try { ws.send(frame); } catch { /* closing */ } }
+    this.ctx.waitUntil(seats.length ? this.ctx.storage.put('game', this.game.state) : this.ctx.storage.delete('game'));
+    // The end of a countdown, a round or a table wakes the room even when nobody drives.
+    if (this.game.deadline() !== this.alarmFor) { this.alarmFor = this.game.deadline(); this.ctx.waitUntil(this.scheduleAlarm()); }
+  }
   private saveRace(): void { this.ctx.waitUntil(this.seats().length ? this.ctx.storage.put('race', this.race.state) : this.ctx.storage.delete('race')); }
   private raceChanged(): void {
     this.saveRace();
@@ -101,7 +125,11 @@ export class Room extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    ctx.blockConcurrencyWhile(async () => { this.race = new Race(await ctx.storage.get('race')); });
+    ctx.blockConcurrencyWhile(async () => {
+      this.race = new Race(await ctx.storage.get('race'));
+      this.game = new RoomGame(await ctx.storage.get('game'), this.roundMs);
+      this.alarmFor = this.game.deadline();
+    });
     // A game says "ping" twice a minute to learn that its connection lives. The answer costs the room no waking.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
@@ -126,7 +154,8 @@ export class Room extends DurableObject<Env> {
 
   private async scheduleAlarm(): Promise<void> {
     const peers = this.seats();
-    if (peers.length) await this.ctx.storage.setAlarm(Math.min(...peers.map(p => (p.seat.lastReal ?? 0) + PEER_TIMEOUT_MS)));
+    const game = this.game.deadline();
+    if (peers.length) await this.ctx.storage.setAlarm(Math.min(...peers.map(p => (p.seat.lastReal ?? 0) + PEER_TIMEOUT_MS), game || Infinity));
     else await this.ctx.storage.deleteAlarm();
   }
 
@@ -140,6 +169,7 @@ export class Room extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     this.expire();
+    if (this.game.tick(Date.now())) this.gameChanged();
     await this.scheduleAlarm();
   }
 
@@ -170,7 +200,10 @@ export class Room extends DurableObject<Env> {
     const mine: Attachment = { ...seat, bounds: Number(request.headers.get('x-bounds')) || 0, browserId, sessionKey, lastReal: Date.now() };
     server.serializeAttachment(mine);
     await this.scheduleAlarm();
-    if (!others.length) this.race = new Race();
+    if (!others.length) {
+      this.race = new Race(); this.game = new RoomGame(undefined, this.roundMs); this.alarmFor = 0;
+      this.ctx.waitUntil(this.ctx.storage.delete('game'));   // a sleep before the first game-sync must not bring the old game back
+    }
     this.raceChanged();
     server.send(this.race.message(Date.now()));
     server.send(hello(seat, request.headers.get('x-room') ?? '', others.map((o) => o.seat)));
@@ -193,11 +226,28 @@ export class Room extends DurableObject<Env> {
       } else if (meter.strikes > STRIKES_OUT) { this.gone(ws); ws.close(CLOSE.rate, 'refused'); }
       return;
     }
-    if (typeof message === 'string' && message.length <= 4096) {
+    if (typeof message === 'string' && message.length <= CONTROL_MAX) {
       let m: Record<string, unknown> | null = null;
       try { m = JSON.parse(message); } catch { /* normal judge handles invalid text */ }
-      if (m?.t === 'race-control' || m?.t === 'race-sync') {
+      // Room games: only a game that read hello.games sends these. The room judges the game from position reports.
+      if (m?.t === 'game-sync' || m?.t === 'game-control') {
+        const now = Date.now();
+        const strike = () => { meter.strikes += 4; if (meter.strikes > STRIKES_OUT) { this.gone(ws); ws.serializeAttachment(null); ws.close(CLOSE.bad, 'refused'); } };
+        if (!meter.allow(now)) { if (meter.strikes > STRIKES_OUT) { this.gone(ws); ws.close(CLOSE.rate,'refused'); } return; }
+        if (m.t === 'game-sync') {
+          if (Object.keys(m).length !== 1) { strike(); return; }
+          // The first sync joins: everyone hears of it (a first player becomes host). A repeat is answered to the sender only.
+          if (!seat.games) { seat.games = true; ws.serializeAttachment(seat); this.game.join(seat.id); this.game.tick(now); this.gameChanged(); }
+          else { if (this.game.tick(now)) this.gameChanged(); else ws.send(this.game.frame(now)); }
+        } else if (!seat.games) strike();
+        else if (this.game.command(seat.id, m, this.seats().filter(p => p.seat.games).map(p => p.seat), seat.bounds, now, this.raceBusy(now))) this.gameChanged();
+        else ws.send(this.game.frame(now));   // refused: the host's page hears the unchanged state, and stops waiting
+        return;
+      }
+      if (message.length <= 4096 && (m?.t === 'race-control' || m?.t === 'race-sync')) {
         if (!meter.allow(Date.now())) { if (meter.strikes > STRIKES_OUT) { this.gone(ws); ws.close(CLOSE.rate,'refused'); } return; }
+        // A race does not start while a room game counts down or plays.
+        if (m.t === 'race-control' && m.action === 'start' && this.game.busy()) return;
         if (m.t === 'race-sync' && typeof m.echo === 'number' && Number.isFinite(m.echo)) {
           if (!seat.races) { seat.races = true; ws.serializeAttachment(seat); this.race.join(seat.id); this.raceChanged(); }
           ws.send(JSON.stringify({t:'race-sync',echo:m.echo,now:Date.now()}));
@@ -218,7 +268,10 @@ export class Room extends DurableObject<Env> {
     }
     if ('chat' in verdict) { ws.send(verdict.relay); }
     else if ('ride' in verdict) seat.ride = verdict.ride;
-    else { seat.lastReal = Date.now(); seat.last = verdict.body; if (this.race.position(seat.id,verdict.body,Date.now())) this.raceChanged(); }
+    else {
+      seat.lastReal = Date.now(); seat.last = verdict.body; if (this.race.position(seat.id,verdict.body,Date.now())) this.raceChanged();
+      if (seat.games && this.game.position(seat.id, verdict.body, Date.now())) this.gameChanged();
+    }
     ws.serializeAttachment(seat);
     this.toOthers(ws, verdict.relay);
   }
@@ -229,7 +282,10 @@ export class Room extends DurableObject<Env> {
     if (seat && !this.seats(ws).some((o) => o.seat.id === seat.id)) this.toOthers(ws, text({ t: 'leave', id: seat.id }));
     // The seat is given up now. A newcomer must never be told of this car, even if the socket lingers in the list.
     try { ws.serializeAttachment(null); } catch { /* already closed */ }
-    if (seat) { this.race.leave(seat.id,this.seats(ws).filter(p=>p.seat.races).map(p=>p.seat.id)); this.raceChanged(); }
+    if (seat) {
+      this.race.leave(seat.id,this.seats(ws).filter(p=>p.seat.races).map(p=>p.seat.id)); this.raceChanged();
+      if (this.game.leave(seat.id, this.seats(ws).filter(p => p.seat.games).map(p => p.seat.id), Date.now())) this.gameChanged();
+    }
   }
   webSocketClose(ws: WebSocket): void {
     this.gone(ws);

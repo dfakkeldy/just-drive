@@ -96,6 +96,10 @@ export class Cemeteries {
   }
   /** Reuse the grass and props boundary hooks; trees do not read this predicate. Map coordinates. */
   /** Within `margin` metres of a burial ground's bounding circle (map coordinates): instant-replay marks there stay quiet. */
+  /** Each cemetery as a circle in world x, z round its whole ground, with a margin: where room games score nothing. */
+  zones(margin = 10): { x: number; z: number; radius: number }[] {
+    return this.sites.map(s => ({ x: s.center[0] - this.origin[0], z: this.origin[1] - s.center[1], radius: s.radius + margin }));
+  }
   readonly near = (east: number, north: number, margin: number): boolean => this.sites.some(s => Math.hypot(east - s.center[0], north - s.center[1]) <= s.radius * Math.SQRT2 + margin);
   readonly excludes = (east: number, north: number): boolean => this.sites.some(s => Math.abs(east - s.center[0]) <= s.radius && Math.abs(north - s.center[1]) <= s.radius && inside([east, north], s.cemetery.ring));
 

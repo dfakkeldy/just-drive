@@ -10,7 +10,7 @@ import { LABEL_HEIGHT, labelCap, placeLabels, type LabelBox, type LabelCandidate
 
 export interface MapStop { x: number; z: number; due: boolean }
 /** `rank` orders the names (0 first, 2 when unset); `radius` is the place's arrival radius in metres. */
-export interface MapMark { x: number; z: number; label: string; rank?: number; radius?: number }
+export interface MapMark { x: number; z: number; label: string; rank?: number; radius?: number; colour?: string }
 export interface MapBounds { x0: number; z0: number; x1: number; z1: number; range: number }
 export interface MapUnderlay { draw(g: CanvasRenderingContext2D, bounds: MapBounds): void; idle(): void }
 
@@ -237,10 +237,12 @@ export class MiniMap {
       g.fillStyle = st.due ? '#ff8a3d' : 'rgba(150,170,150,.55)';
       g.beginPath(); g.arc(st.x, st.z, st.due ? dot : dot * 0.7, 0, 6.283); g.fill();
     }
-    g.fillStyle = '#7fd4ff';
     for (const m of marks) {
       if (Math.abs(m.x - x) > pad || Math.abs(m.z - z) > pad) continue;
-      g.fillRect(m.x - dot, m.z - dot, dot * 2, dot * 2);
+      // A coloured mark (the room game's parcel) is drawn larger, so it reads at a glance.
+      const r = m.colour ? dot * 1.8 : dot;
+      g.fillStyle = m.colour ?? '#7fd4ff';
+      g.fillRect(m.x - r, m.z - r, r * 2, r * 2);
     }
     if (cars?.length) {
       g.fillStyle = '#e18bff';
