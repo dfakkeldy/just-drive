@@ -6,8 +6,10 @@ import type { Shift } from './shift';
 import { LADDER, stepName } from './score-rules';
 import {
   BingoCard, CARD_BONUS, DAILY_ADDRESS, GAME_NAME, LINE_BONUS, clockText, headline, packFilled, readDaily, resultText, saveDaily, shortDate,
-  unpackFilled, type DailyPlan, type DailyRecord, type DailyResult, type Square,
+  unpackFilled, type DailyPlan, type DailyRecord, type DailyResult, type Square, type Supply,
 } from './daily-rules';
+import { BOARD_VERSION, MAX_EVENTS, rankText, sendsEvent, wireEvent, type WireEvent } from './board-rules';
+import { BoardPanel, boardBase, saveEntry, savedEntry, type Entry } from './board';
 
 const CSS = `
 #bingoGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:6px;white-space:normal}
@@ -33,11 +35,20 @@ export class DailyRun {
   record: DailyRecord | null;
   /** The last share text, for the Copy button and the checks. */
   text = '';
+  /** The facts of this try that can change its score, as sent to Today's board (board-rules sendsEvent). */
+  log: WireEvent[] = [];
+  /** More facts than the board checks (MAX_EVENTS): this try cannot be posted. */
+  private overflow = false;
+  /** The board block on the last end card, for the checks. */
+  board: BoardPanel | null = null;
   private run: number;
+  private share: ((rank: string) => void) | null = null;
   private readonly cells: HTMLElement[] = [];
   private readonly minis: HTMLElement[] = [];
   constructor(readonly plan: DailyPlan, readonly squares: readonly Square[], private readonly areaName: string, private readonly shift: Shift,
-    private readonly fired: FiredRun, private readonly endings: Endings, private readonly again: () => void) {
+    private readonly fired: FiredRun, private readonly endings: Endings, private readonly again: () => void,
+    /** What the area supplied to the card (main.ts): sent with a posted result so the server draws the same card. */
+    private readonly supply: Supply | null = null) {
     document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
     this.card = new BingoCard(squares);
     this.record = readDaily(plan.area);
@@ -55,6 +66,7 @@ export class DailyRun {
     shift.score.listen(e => {
       this.sync();
       if (this.fired.ended) return;
+      if (sendsEvent(e)) { if (this.log.length < MAX_EVENTS) this.log.push(wireEvent(e)); else this.overflow = true; }
       const heard = this.card.hear(e);
       if (!heard.filled.length) return;
       this.paint();
@@ -68,7 +80,7 @@ export class DailyRun {
   }
   private sync(): void {
     if (this.shift.score.runs === this.run) return;
-    this.run = this.shift.score.runs; this.card = new BingoCard(this.squares); this.paint();
+    this.run = this.shift.score.runs; this.card = new BingoCard(this.squares); this.log = []; this.overflow = false; this.paint();
   }
   private paint(): void {
     this.card.filled.forEach((on, i) => { this.cells[i].classList.toggle('on', on); this.minis[i].classList.toggle('on', on); });
@@ -83,7 +95,15 @@ export class DailyRun {
     // A tab left open from an earlier day: a newer day is on file, so this try is practice and shares nothing.
     const stale = record.date !== this.plan.date;
     const first = record.first, squares = this.card.done, lines = this.card.lines;
-    if (!stale) this.text = resultText(first, this.plan.date, this.areaName);
+    // Today's board: the first finished try is kept on this device until it is posted; a practice card may still post it.
+    const base = stale || !this.supply ? null : boardBase();
+    if (base !== null && !practice) saveEntry(this.plan.area, { date: this.plan.date, posted: null, post: { v: BOARD_VERSION, area: this.plan.area, date: this.plan.date,
+      seed: this.plan.seed, supply: this.supply!, events: [...this.log], played: end.played,
+      claim: { points: result.total, step: result.step, time: result.firedAt ?? Math.round(end.played * 10) / 10, squares: result.filled }, handle: '', device: '' },
+      ...this.overflow ? { refused: `This run made more offences than the board checks (over ${MAX_EVENTS.toLocaleString('en-CA')}). It stays on your card and your share line.` } : {} });
+    const entry: Entry | null = base !== null ? savedEntry(this.plan.area, this.plan.date) : null;
+    const rank = entry?.posted ? rankText(entry.posted.rank, entry.posted.posts) : '';
+    if (!stale) this.text = resultText(first, this.plan.date, this.areaName, '', rank);
     const bingo = `Bingo ${squares} of ${this.squares.length}${lines ? `, ${lines} ${lines === 1 ? 'line' : 'lines'}` : ''}${this.card.full ? ' and the full card' : ''}.`;
     const out = [
       practice ? `Practice: ${headline(result)}. ${bingo}` : `${headline(result)}. ${bingo}`,
@@ -95,13 +115,17 @@ export class DailyRun {
         : `Your first finished run today: this is today’s card.${end.played < this.plan.limit && result.step < LADDER.length ? ` Ended at ${clockText(end.played)}.` : ''}`,
       `${record.streak === 1 ? 'Streak: 1 day' : `Streak: ${record.streak} days in a row`}. Best: ${headline(record.best)} (${shortDate(record.best.date)}).`,
     ];
+    const share = stale ? undefined : this.shareCard(first, rank);
+    // Never automatic: the board block offers "Post my result" and waits for the tap.
+    this.board = share && base !== null ? new BoardPanel({ plan: this.plan, entry, base, first: !practice, onRank: (r, posts) => this.share?.(rankText(r, posts)) }) : null;
+    if (share && this.board) share.appendChild(this.board.root);
     this.endings.offer(`Today’s run · ${shortDate(this.plan.date)}`, practice ? 'Practice' : stepName(result.step), out, [
       { label: 'Try again (practice)', action: () => { this.endings.close(); this.shift.retry(); this.again(); } },
-    ], stale ? undefined : this.shareCard(first));
+    ], share);
   }
-  private shareCard(result: DailyResult): HTMLElement {
+  private shareCard(result: DailyResult, rank: string): HTMLElement {
     const box = document.createElement('div'); box.id = 'dailyShare';
-    const canvas = drawShare(result, this.plan.date, this.areaName, this.squares);
+    let canvas = drawShare(result, this.plan.date, this.areaName, this.squares, rank);
     const img = Object.assign(document.createElement('img'), { alt: this.text.split('\n')[0] });
     try { img.src = canvas.toDataURL('image/png'); } catch { /* a canvas that cannot export: the text still shares */ }
     const buttons = document.createElement('div'); buttons.id = 'dailyShareButtons';
@@ -112,10 +136,22 @@ export class DailyRun {
     const pre = Object.assign(document.createElement('pre'), { id: 'dailyText', textContent: this.text, hidden: true });
     pre.style.cssText = 'white-space:pre-wrap;user-select:text;-webkit-user-select:text;font:12px/1.4 ui-monospace,Menlo,monospace;margin:8px 0 0';
     const showText = () => { pre.hidden = false; };
-    if (typeof navigator.share === 'function') {
-      // The picture file is made now, not on the tap: Safari only shares straight from the tap, with nothing awaited first.
-      let file: File | null = null;
+    // The picture file is made now, not on the tap: Safari only shares straight from the tap, with nothing awaited first.
+    let file: File | null = null;
+    const makeFile = () => {
+      if (typeof navigator.share !== 'function') return;
       try { canvas.toBlob(blob => { if (blob) file = new File([blob], 'mabou-mail-madness-today.png', { type: 'image/png' }); }, 'image/png'); } catch { /* text only */ }
+    };
+    makeFile();
+    // Posted to the board: the text, the picture and its file gain the rank.
+    this.share = rankLine => {
+      this.text = resultText(result, this.plan.date, this.areaName, '', rankLine);
+      pre.textContent = this.text; img.alt = this.text.split('\n')[0];
+      canvas = drawShare(result, this.plan.date, this.areaName, this.squares, rankLine);
+      try { img.src = canvas.toDataURL('image/png'); } catch { /* the text still shares */ }
+      makeFile();
+    };
+    if (typeof navigator.share === 'function') {
       const share = Object.assign(document.createElement('button'), { type: 'button', id: 'dailyShareButton', textContent: 'Share' });
       share.addEventListener('click', () => { void shareResult(this.text, file).then(note => { status.textContent = note; }); });
       buttons.appendChild(share);
@@ -141,7 +177,7 @@ async function shareResult(text: string, file: File | null): Promise<string> {
 }
 
 /** The share picture: 1200 by 630, drawn once at the end. Area, date, the rung, points or time, the card, the game's name and address. */
-export function drawShare(result: DailyResult, date: string, areaName: string, squares: readonly Square[]): HTMLCanvasElement {
+export function drawShare(result: DailyResult, date: string, areaName: string, squares: readonly Square[], rank = ''): HTMLCanvasElement {
   const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 630;
   const g = canvas.getContext('2d');
   if (!g) return canvas;
@@ -159,6 +195,8 @@ export function drawShare(result: DailyResult, date: string, areaName: string, s
   g.fillText(`Bingo ${done} of ${filled.length}${result.firedAt !== null && result.step >= LADDER.length ? ` · ${fmt(result.total)} points` : ''}`, 60, 345);
   // The ladder, as on the HUD.
   for (let i = 0; i < LADDER.length; i++) { g.fillStyle = i < result.step ? '#d0632e' : '#ffffff26'; g.fillRect(60 + i * 72, 380, 64, 14); }
+  // Posted to Today's board: its rank, under the ladder.
+  if (rank) { g.fillStyle = '#e5a16c'; g.font = `700 28px ${sans}`; g.fillText(rank, 60, 446, 580); }
   g.fillStyle = '#eef2f6'; g.font = `800 44px ${sans}`; g.fillText(GAME_NAME, 60, 520);
   g.fillStyle = '#b9c3cc'; g.font = `400 28px ${sans}`; g.fillText(DAILY_ADDRESS.replace(/^https:\/\//, ''), 60, 566);
   // The card: three by three, labels in the squares.

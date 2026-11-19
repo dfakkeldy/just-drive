@@ -94,6 +94,66 @@ export function readBuildingStyles(data: unknown): Record<string, BuildingStyle>
   return result;
 }
 
+type BuildingPaint = Record<string, BuildingStyle>;
+type FacadeStudy = { study: 'window-light' | 'wall-shadows'; low: boolean; sunDir: THREE.Vector3; styles?: BuildingPaint };
+
+export function buildingAppearance(flag: string | null, low: boolean, sunDir: THREE.Vector3, styles?: BuildingPaint): BuildingPaint | FacadeStudy | undefined {
+  return flag === 'window-light' || flag === 'wall-shadows' ? { study: flag, low, sunDir, styles } : styles;
+}
+
+function isFacadeStudy(paint: BuildingPaint | FacadeStudy): paint is FacadeStudy {
+  return typeof paint.study === 'string';
+}
+
+type FacadeRange = { x: number; z: number; first: number; end: number };
+const facadeCellSize = 128;
+
+// Keep one draw and the original primitive order. Near-coplanar glass must still draw after its
+// backing. Crossing a cell selects a precomputed full or reduced sequence for each part of the mesh.
+function streamFacadeDetail(mesh: THREE.Mesh, ranges: FacadeRange[]): void {
+  if (!ranges.length) return;
+  const geo = mesh.geometry, count = geo.getAttribute('position').count;
+  const source = new Uint32Array(count);
+  for (let i = 0; i < count; i++) source[i] = i;
+  const parts: Array<{ x: number; z: number; full: Uint32Array; far: Uint32Array }> = [];
+  let vertex = 0, span = 0;
+  while (span < ranges.length) {
+    const { x, z } = ranges[span], begin = vertex, far: number[] = [];
+    do {
+      const { first, end } = ranges[span++];
+      while (vertex < first) far.push(vertex++);
+      vertex = end;
+    } while (span < ranges.length && ranges[span].x === x && ranges[span].z === z);
+    parts.push({ x, z, full: source.subarray(begin, vertex), far: Uint32Array.from(far) });
+  }
+  const tail = source.subarray(vertex);
+  const indices = source.slice();
+  const index = new THREE.BufferAttribute(indices, 1).setUsage(THREE.DynamicDrawUsage);
+  geo.setIndex(index);
+  let lastX = NaN, lastZ = NaN;
+  mesh.onBeforeRender = (_renderer, _scene, camera) => {
+    // Only the driver's view picks the cell. A directional shadow camera sits far up the sun line.
+    if ((camera as THREE.OrthographicCamera).isOrthographicCamera) return;
+    const world = camera.matrixWorld.elements;
+    const x = Math.floor(world[12] / facadeCellSize), z = Math.floor(world[14] / facadeCellSize);
+    if (x === lastX && z === lastZ) return;
+    lastX = x; lastZ = z;
+    let used = 0;
+    for (const part of parts) {
+      const near = Math.abs(part.x - x) <= 2 && Math.abs(part.z - z) <= 2;
+      const selected = near ? part.full : part.far;
+      indices.set(selected, used);
+      used += selected.length;
+    }
+    indices.set(tail, used);
+    used += tail.length;
+    geo.setDrawRange(0, used);
+    index.clearUpdateRanges();
+    index.addUpdateRange(0, used);
+    index.needsUpdate = true;
+  };
+}
+
 type RGB = [number, number, number];
 
 const WALLS: Record<Building['kind'], RGB[]> = {
@@ -114,16 +174,45 @@ export class Buildings {
   /** World boxes [x0, z0, x1, z1] under the buildings, so the terrain's tree layer is removed there. */
   readonly clear: number[][] = [];
 
-  constructor(list: Building[], village: [number, number], exag: number, seaLevel: number, styles: Record<string, BuildingStyle> = {}) {
+  constructor(list: Building[], village: [number, number], exag: number, seaLevel: number, paint: BuildingPaint | FacadeStudy = {}) {
+    const { styles = {}, study, low, sunDir } = isFacadeStudy(paint) ? paint : { styles: paint, study: undefined, low: false, sunDir: undefined };
     const pos: number[] = [], col: number[] = [];
-    const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, k: [number, number, number], shade = 1) => {
+    const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, colourA: RGB, shade = 1, colourB = colourA, colourC = colourA) => {
       pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
-      for (let i = 0; i < 3; i++) col.push(k[0] * shade, k[1] * shade, k[2] * shade);
+      col.push(
+        colourA[0] * shade, colourA[1] * shade, colourA[2] * shade,
+        colourB[0] * shade, colourB[1] * shade, colourB[2] * shade,
+        colourC[0] * shade, colourC[1] * shade, colourC[2] * shade,
+      );
     };
-    const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3, k: [number, number, number], shade = 1) => { tri(a, b, c, k, shade); tri(a, c, d, k, shade); };
+    const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3, k: RGB, shade = 1, top = k) => {
+      tri(a, b, c, k, shade, k, top);
+      tri(a, c, d, k, shade, top, top);
+    };
 
+    const windowLight = study === 'window-light';
+    const simpleWindows = low && windowLight;
+    const simpleSiding = low && study === 'wall-shadows';
+    const facadeRanges: FacadeRange[] | undefined = simpleSiding ? [] : undefined;
+    const wallShadows = !low && study === 'wall-shadows';
+    const closedWallRanges: number[] | undefined = wallShadows ? [] : undefined;
+    // The two-sided paint hides an inward face, but the shadow lookup still offsets along its normal.
+    // Keep the same diagonal and vertices. Swap the winding so a wall receives the sun from outside.
+    const reverseQuad: typeof quad = (a, b, c, d, k, shade = 1, top = k) => {
+      tri(a, c, b, k, shade, top, k);
+      tri(a, d, c, k, shade, top, top);
+    };
+    const shellWall = wallShadows ? reverseQuad : quad;
+    const shellEnd = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, colour: RGB) =>
+      wallShadows ? tri(a, c, b, colour) : tri(a, b, c, colour);
+
+    // The game's Lambert material interpolates these six existing pane vertices in linear light.
+    const upperPane: RGB = [0.19, 0.30, 0.37], lowerPane: RGB = [0.027, 0.046, 0.045];
     for (const b of list) {
       const cx = b.x - village[0], cz = village[1] - b.y;
+      const nearPaint = facadeRanges && Math.max(b.length, b.width) <= facadeCellSize ? (first: number, end = pos.length / 3) => {
+        if (end > first) facadeRanges.push({ x: Math.floor(cx / facadeCellSize), z: Math.floor(cz / facadeCellSize), first, end });
+      } : undefined;
       const base = seaLevel + (b.ground - seaLevel) * exag;
       const a = THREE.MathUtils.degToRad(b.axisDeg);
       const ux = Math.sin(a), uz = -Math.cos(a), vx = Math.cos(a), vz = Math.sin(a);   // along the ridge, across it
@@ -166,10 +255,12 @@ export class Buildings {
       const stepped = shed && !!style?.steppedShed;
       const split = L * 0.23, upperEave = e + 1.0, lowerHigh = e + 1.1;
       // Walls. The two long walls are a little darker so the corners read.
-      quad(P(-L, -W, foot), P(L, -W, foot), P(L, -W, e), P(-L, -W, e), wall, 0.92);
-      quad(P(L, W, foot), P(-L, W, foot), P(-L, W, e), P(L, W, e), wall, 0.92);
-      quad(P(L, -W, foot), P(L, W, foot), P(L, W, e), P(L, -W, e), wall);
-      quad(P(-L, W, foot), P(-L, -W, foot), P(-L, -W, e), P(-L, W, e), wall);
+      const wallStart = pos.length / 3;
+      shellWall(P(-L, -W, foot), P(L, -W, foot), P(L, -W, e), P(-L, -W, e), wall, 0.92);
+      shellWall(P(L, W, foot), P(-L, W, foot), P(-L, W, e), P(L, W, e), wall, 0.92);
+      shellWall(P(L, -W, foot), P(L, W, foot), P(L, W, e), P(L, -W, e), wall);
+      shellWall(P(-L, W, foot), P(-L, -W, foot), P(-L, -W, e), P(-L, W, e), wall);
+      closedWallRanges?.push(wallStart, pos.length / 3);
       const trim: RGB = style ? rgb(style.trim) : b.kind === 'house' ? [0.79, 0.77, 0.69] : [0.56, 0.54, 0.47];
       const foundation: RGB = style?.skirting ? rgb('#dddeda') : [0.23, 0.23, 0.21];
       const glass: RGB = [0.065, 0.105, 0.13];
@@ -177,7 +268,9 @@ export class Buildings {
       // Facade rectangles use a local horizontal coordinate and an outward offset.
       const panel = (end: boolean, side: number, u0: number, u1: number, y0: number, y1: number, colour: RGB, offset = 0.025) => {
         const F = (u: number, h: number) => end ? P(side * (L + offset), u, h) : P(u, side * (W + offset), h);
-        quad(F(u0, y0), F(u1, y0), F(u1, y1), F(u0, y1), colour);
+        const pane = windowLight && colour === glass;
+        const face = wallShadows && (end ? side > 0 : side < 0) ? reverseQuad : quad;
+        face(F(u0, y0), F(u1, y0), F(u1, y1), F(u0, y1), pane ? lowerPane : colour, 1, pane ? upperPane : colour);
       };
       const box = (u0: number, u1: number, v0: number, v1: number, y0: number, y1: number, colour: RGB) => {
         quad(P(u0, v0, y0), P(u1, v0, y0), P(u1, v0, y1), P(u0, v0, y1), colour, 0.9);
@@ -188,29 +281,38 @@ export class Buildings {
       };
       const opening = (end: boolean, side: number, u: number, bottom: number, width: number, height: number, isDoor = false) => {
         const half = width / 2, t = isDoor ? 0.105 : 0.09;
+        const trimStart = pos.length / 3;
         panel(end, side, u - half - t, u + half + t, bottom - t, bottom + height + t, trim, 0.035);
+        nearPaint?.(trimStart);
+        // The door or pane remains in the distant facade; only the raised trim leaves.
         panel(end, side, u - half, u + half, bottom, bottom + height, isDoor ? door : glass, 0.05);
+        const sashStart = pos.length / 3;
         if (!isDoor) {
           if (style?.shutters) for (const sign of [-1, 1]) {
             const edge = u + sign * (half + t + 0.04);
             panel(end, side, Math.min(edge, edge + sign * width * 0.28), Math.max(edge, edge + sign * width * 0.28), bottom - 0.03, bottom + height + 0.03, rgb('#394548'), 0.045);
           }
+          // In the small drawing buffer the 5 cm upright dwindles to a pixel. The horizontal sash still reads
+          // from the road at delivery distance, so LOW keeps it with the perimeter and shutters.
           if (b.kind !== 'large' || !style) {
-            panel(end, side, u - 0.025, u + 0.025, bottom, bottom + height, trim, 0.065);
+            if (!simpleWindows) panel(end, side, u - 0.025, u + 0.025, bottom, bottom + height, trim, 0.065);
             panel(end, side, u - half, u + half, bottom + height * 0.52, bottom + height * 0.52 + 0.035, trim, 0.065);
           }
         }
+        nearPaint?.(sashStart);
       };
       // Blocks of one building stand wall to wall: an eave that hangs over would cut into the next block's roof.
       const over = b.shape === 'block' ? 0 : flat ? 0.20 : 0.30;
       const roofFace = (u0: number, u1: number, v0: number, v1: number, h0: number, h1: number, shade = 1) => {
         quad(P(u0, v0, h0), P(u1, v0, h0), P(u1, v1, h1), P(u0, v1, h1), roof, shade);
         if (style?.roofMaterial === 'metal' || (!style && b.kind === 'barn')) {
+          const seamStart = pos.length / 3;
           const seam: RGB = [Math.min(1, roof[0] * 1.17 + 0.012), Math.min(1, roof[1] * 1.17 + 0.012), Math.min(1, roof[2] * 1.17 + 0.012)];
           // Sparse standing seams read from the road without subpixel strips across every 0.5 m panel.
           for (let u = u0 + 0.65; u < u1 - 0.1; u += 1.5) {
             quad(P(u, v0, h0 + 0.025), P(u + 0.035, v0, h0 + 0.025), P(u + 0.035, v1, h1 + 0.025), P(u, v1, h1 + 0.025), seam, shade);
           }
+          nearPaint?.(seamStart);
         }
       };
       if (flat) {
@@ -257,8 +359,10 @@ export class Buildings {
         panel(false, 1, -L, L, e, r, wall);
         for (const side of [-1, 1]) tri(P(side * L, -W, e), P(side * L, W, e), P(side * L, W, r), wall);
       } else {
-        tri(P(L, -W, e), P(L, W, e), P(L, 0, r), wall);
-        tri(P(-L, W, e), P(-L, -W, e), P(-L, 0, r), wall);
+        const gableStart = pos.length / 3;
+        shellEnd(P(L, -W, e), P(L, W, e), P(L, 0, r), wall);
+        shellEnd(P(-L, W, e), P(-L, -W, e), P(-L, 0, r), wall);
+        closedWallRanges?.push(gableStart, pos.length / 3);
         const drop = (over * (r - e)) / W;
         roofFace(-L - over, L + over, -W - over, 0, e - drop, r);
         roofFace(-L - over, L + over, W + over, 0, e - drop, r, 0.85);
@@ -277,6 +381,7 @@ export class Buildings {
           }
         }
       }
+      const cornerStart = pos.length / 3;
       for (const side of [-1, 1]) {
         panel(false, side, -L, L, foot, Math.min(0.38, e * 0.15), foundation, 0.016);
         panel(true, side, -W, W, foot, Math.min(0.38, e * 0.15), foundation, 0.016);
@@ -298,6 +403,7 @@ export class Buildings {
           }
         }
       }
+      nearPaint?.(cornerStart);
       // Shallow clapboard courses, kept behind openings and corner trim.
       // Muted bands suggest weathered shingles without adding a texture or draw call.
       if (style?.boardAndBatten) {
@@ -308,7 +414,7 @@ export class Buildings {
             panel(end, side, u, u + 0.046, 0.38, e, raised, 0.022);
           }
         }
-      } else if (b.kind === 'house' || b.kind === 'barn') {
+      } else if (!simpleSiding && (b.kind === 'house' || b.kind === 'barn')) {
         for (let y = 0.65; y < e - 0.15; y += style ? 0.64 : b.kind === 'barn' ? 0.44 : 0.32) {
           const course: RGB = [wall[0] * 0.95, wall[1] * 0.95, wall[2] * 0.95];
           // Spend siding detail on one long wall and one end wall. The other walls
@@ -434,8 +540,9 @@ export class Buildings {
           panel(true, 1, -wide * 0.65, wide * 0.65, tall + 0.2, tall + 0.28, foundation, 0.07);
         }
         for (const side of [-1, 1]) for (const u of [-L * 0.55, L * 0.55]) if (e > 2.2) opening(false, side, u, e * 0.5, 0.7, 0.65);
-      } else if (b.kind === 'large' && style) {
-        // Low apartments and village shops need a readable rhythm of doors and windows too.
+      } else if (b.kind === 'large' && style && b.shape !== 'block') {
+        // Low apartments and village shops need a readable rhythm of doors and windows too. A block is one part of a
+        // large mapped hall (big_buildings.py: plants, malls, arenas; some over 60 m high): it keeps the plain end door below.
         const rows = Math.max(1, Math.min(3, Math.floor((e + 0.3) / 2.65)));
         const floor = e / rows;
         const columns = Math.max(1, Math.min(14, Math.floor(b.length / 3.6)));
@@ -499,9 +606,37 @@ export class Buildings {
     this.triangles = pos.length / 9;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    // The LOW paint stays in linear light. A normalized byte retains the ramp at a quarter of the colour bandwidth.
+    geo.setAttribute('color', low
+      ? new THREE.BufferAttribute(Uint8Array.from(col, c => Math.round(255 * THREE.MathUtils.clamp(c, 0, 1))), 3, true)
+      : new THREE.Float32BufferAttribute(col, 3));
     geo.computeVertexNormals();
+    if (low) {
+      const normals = geo.getAttribute('normal');
+      geo.setAttribute('normal', new THREE.BufferAttribute(Int8Array.from(normals.array, n => Math.round(n * 127)), 3, true));
+    }
     this.mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    if (closedWallRanges && sunDir) {
+      // The world-space mesh and the directional sun stay fixed for this load. Each marked flat face
+      // gets one depth decision. The shadow camera follows the driver along this same sun direction.
+      const normals = geo.getAttribute('normal');
+      const wall = new Uint8Array(normals.count);
+      for (let r = 0; r < closedWallRanges.length; r += 2) {
+        for (let i = closedWallRanges[r]; i < closedWallRanges[r + 1]; i += 3) {
+          const facing = normals.getX(i) * sunDir.x + normals.getY(i) * sunDir.y + normals.getZ(i) * sunDir.z;
+          wall.fill(facing > 0 ? 2 : 1, i, i + 3);
+        }
+      }
+      geo.setAttribute('closedWall', new THREE.BufferAttribute(wall, 1));
+      const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+      depth.onBeforeCompile = shader => {
+        // Zero is an open surface, one is a back face, and two faces the sun. Clip only the last case.
+        shader.vertexShader = 'attribute float closedWall;\n' + shader.vertexShader.replace('#include <project_vertex>',
+          '#include <project_vertex>\nif (closedWall > 1.5) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);');
+      };
+      this.mesh.customDepthMaterial = depth;
+    }
+    if (facadeRanges) streamFacadeDetail(this.mesh, facadeRanges);
     this.mesh.frustumCulled = false;
   }
 }

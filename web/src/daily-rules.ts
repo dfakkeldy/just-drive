@@ -66,7 +66,7 @@ const weighted = <T>(r: number, table: readonly (readonly [T, number])[]): T => 
   return table[table.length - 1][0];
 };
 /** Areas that can hold Today's run: a Get Fired route and its start list. */
-export const dailyArea = (area: string): boolean => area in DAILY_STARTS;
+export const dailyArea = (area: string): boolean => Object.hasOwn(DAILY_STARTS, area);
 
 export function dailyPlan(date: string, area: string): DailyPlan {
   const seed = dailySeed(date, area), r = (salt: number) => draw(seed, 0, salt);
@@ -168,11 +168,12 @@ export function headline(r: DailyResult): string {
   return r.step >= LADDER.length && r.firedAt !== null ? `Fired in ${clockText(r.firedAt)}` : `${stepName(r.step)}, ${Math.round(r.total).toLocaleString('en-CA')} points`;
 }
 export const FILLED_SQUARE = '🟧', EMPTY_SQUARE = '⬜';
-/** The share line: plain text, the same result as the picture. A handle goes in only when the player gave one. */
-export function resultText(r: DailyResult, date: string, areaName: string, handle = ''): string {
+/** The share line: plain text, the same result as the picture. A handle goes in only when the player gave one; the
+ * board rank (board-rules rankText) only once the run was posted. */
+export function resultText(r: DailyResult, date: string, areaName: string, handle = '', rank = ''): string {
   const filled = unpackFilled(r.filled), name = handle.trim().slice(0, 32);
   const rows = [0, 3, 6].map(i => filled.slice(i, i + 3).map(f => f ? FILLED_SQUARE : EMPTY_SQUARE).join(''));
-  return [`${GAME_NAME}, ${shortDate(date)}, ${areaName}: ${headline(r)}, bingo ${count(r.filled)} of ${CARD_SIZE}${name ? ` (${name})` : ''}`, ...rows, DAILY_ADDRESS].join('\n');
+  return [`${GAME_NAME}, ${shortDate(date)}, ${areaName}: ${headline(r)}, bingo ${count(r.filled)} of ${CARD_SIZE}${rank ? `, ${rank}` : ''}${name ? ` (${name})` : ''}`, ...rows, DAILY_ADDRESS].join('\n');
 }
 
 /** Its own key: never the shift career, never the Get Fired best. */

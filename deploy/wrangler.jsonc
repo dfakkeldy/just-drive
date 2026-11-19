@@ -1,6 +1,7 @@
 {
   // Mabou Mail Madness: the public site. Static files (the game page, one script, the baked land, the songs) and,
-  // for "Drive with others", a small script (the door) with one Durable Object class (the rooms): server/src/.
+  // for "Drive with others" and Today's board, a small script (the door) with two Durable Object classes (the rooms and
+  // the boards): server/src/.
   //
   // Publish from the repository's main checkout, which holds the built site in data/site (tools/build_site.sh):
   //   wrangler deploy -c deploy/wrangler.jsonc
@@ -8,18 +9,22 @@
   // folder of its own) no longer works: a deploy from a config without the room class is refused by Cloudflare.
   //
   // To close every room at once without a new build:   wrangler deploy -c deploy/wrangler.jsonc --var MP:off
+  // To close Today's board the same way:              wrangler deploy -c deploy/wrangler.jsonc --var BOARD:off
   // To take the rooms away for good:                   wrangler deploy -c deploy/wrangler.no-rooms.jsonc
   "name": "mabou-mail-madness",
   "main": "../server/src/index.ts",
   "compatibility_date": "2026-10-01",
   // A request for a file is answered from the files and never runs the script (it costs nothing and has no limit).
-  // The exact root also runs the script to select the brand; all other real files win first.
+  // The exact root also runs the script to select the brand; all other real files win first. Today's board
+  // (/board/...) names no file, so it reaches the script without a place in this list.
   "assets": { "directory": "../data/site", "binding": "ASSETS", "not_found_handling": "none", "run_worker_first": ["/mp/*", "/"] },
-  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
-  // The free plan allows only the SQLite kind of object. The rooms store nothing.
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }, { "name": "BOARDS", "class_name": "Board" }] },
+  // The free plan allows only the SQLite kind of object. The rooms store nothing. A board keeps one area's Today's run
+  // results for one day (handle, points, step, time, bingo squares, vehicle, a random device id), its top 100, and
+  // deletes itself after 60 days. Owner's yes to storing daily scores on Cloudflare: 17 Nov 2026 (grok-bots#1240).
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }, { "tag": "v2", "new_sqlite_classes": ["Board"] }],
   "vars": {
-    // Only the game's own page may join a room.
+    // Only the game's own page may join a room or post to a board.
     "ORIGINS": "https://mmm.fakkeldy.ca,http://mmm.fakkeldy.ca,https://justdrive.fakkeldy.ca,http://justdrive.fakkeldy.ca",
     "BOUNDS": "60000"
   },
