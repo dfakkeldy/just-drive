@@ -30,7 +30,7 @@ const fmt = (n: number): string => Math.round(n).toLocaleString('en-CA');
 const minutes = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 /** How a run ended, for Today's run (daily.ts), which writes its own end card instead of the Get Fired one. */
-export interface FiredEnd { book: ScoreBook; firedAt: number | null; played: number }
+export interface FiredEnd { book: ScoreBook; firedAt: number | null; played: number; /** The Party Line's end card line, if any. */ calls?: string | null }
 export interface FiredOptions {
   /** Real seconds of play before the run ends by itself (Today's run); 0 for none: the shift clock's 18:00 ends it. */
   limit?: number;
@@ -49,6 +49,8 @@ export class FiredRun {
   private readonly limit: number;
   /** Called when a new run begins (a retry, start over or a new day), before it hears anything: Today's run clears its card. */
   onNewRun: (() => void) | null = null;
+  /** The Party Line's call-ins (party-line.ts), when the radio carries them: they hear each event and add a line to the end card. */
+  calls: { hear(e: ScoreEvent, stepUp: number): void; reset(): void; endLine(): string | null } | null = null;
   private run: number;
   private pendingEnd = false;
   private noteTime = 0;
@@ -88,11 +90,13 @@ export class FiredRun {
   private reset(): void {
     this.book = new ScoreBook(); this.ended = this.pendingEnd = false; this.firedAt = null; this.last = null; this.noteTime = this.paintTime = 0; this.note.hidden = true;
     this.onNewRun?.();
+    this.calls?.reset();
   }
   private hear(e: ScoreEvent): void {
     this.sync();
     if (this.ended) return;
     const r = this.book.add(e);
+    this.calls?.hear(e, r.stepUp);
     if (r.points) this.last = { text: `${r.points > 0 ? '+' : '−'}${fmt(Math.abs(r.points))} ${offenceLabel(e.kind)}${r.firstOfKind ? ' · new' : ''}`, time: this.now };
     this.paintTime = 0;
     this.stepped(r.stepUp);
@@ -111,6 +115,8 @@ export class FiredRun {
     this.sync();
     if (this.ended || !(points > 0)) return;
     const stepUp = this.book.award(kind, points);
+    // A step reached by a bonus is a step too: the Party Line may take a call about it (the bonus itself is no offence).
+    if (stepUp) this.calls?.hear({ kind, place: 'route', speed: 0, time: this.now }, stepUp);
     this.last = { text: `+${fmt(points)} ${text}`, time: this.now }; this.paintTime = 0;
     this.stepped(stepUp);
   }
@@ -150,7 +156,8 @@ export class FiredRun {
   private finish(): void {
     if (this.ended) return;
     this.ended = true; this.pendingEnd = false; this.note.hidden = true;
-    if (this.options.onEnd) { this.options.onEnd({ book: this.book, firedAt: this.firedAt, played: Math.min(this.now, this.limit || Infinity) }); return; }
+    const callLine = this.calls?.endLine() ?? null;
+    if (this.options.onEnd) { this.options.onEnd({ book: this.book, firedAt: this.firedAt, calls: callLine, played: Math.min(this.now, this.limit || Infinity) }); return; }
     const b = this.book, timeLeft = Math.max(0, END_TIME - START_TIME - this.shift.elapsed);
     const run: BestRun = { step: b.step, total: b.total, timeLeft, chain: b.bestChain.points };
     const before = this.best;
@@ -162,6 +169,7 @@ export class FiredRun {
       b.step > 0 ? LADDER[b.step - 1].steward : 'Not one call on file. The union is worried about you.',
       ...(top.length ? top.map((o, i) => `${i + 1}. ${o.label} ×${o.count}: ${fmt(o.points)}`) : ['No offences on file.']),
       b.bestChain.kinds > 1 ? `Best combo: ${b.bestChain.kinds} kinds of offence, ${fmt(b.bestChain.points)} points.` : 'No combo: never two kinds of offence at once.',
+      ...(callLine ? [callLine] : []),
       isBest ? (before ? 'Your best run yet.' : 'Your first run on file.')
         : `Your best run: ${stepName(this.best!.step)} · ${fmt(this.best!.total)} points · ${timeLeftText(this.best!.timeLeft)}.`,
     ];

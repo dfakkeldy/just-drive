@@ -1643,3 +1643,283 @@ The claims in the two product ads are from each product's App Store description.
 ### talk-real-donate-c
 
 **ANNOUNCER:** Just Drive and Mabou Mail Madness are free. One person makes them, and he runs on coffee. If you'd like to buy him one, use the coffee link on the title card. Please do not leave a coffee in your mailbox. He will hit it.
+
+## Part 16: Get Fired call-ins (short calls about the player's own run)
+
+These are not station tracks. In Get Fired mode, with 94.9 on, the game plays one of them into a pause of the station a few seconds after the player does the thing the call is about, then the station goes on from where it stopped (`web/src/party-line-rules.ts` chooses; `tools/radio_calls.json` lists the recorded ones). Each call is 5 to 12 seconds, and its first words carry the joke, because a saved clip of the run may hold only the start.
+
+- **Who calls:** only names the station already uses (Effie and the callers of rounds 1 and 2). Nobody new, no new voice.
+- **The player's name is never spoken.** The screen shows it as text (`Caller about: <name>` on the radio line, and on the end card). The callers say only a nickname.
+- **A call that ends on a name** (`· ends on a name` in its heading) stops on "it was", and the game adds one of that caller's recorded nicknames, chosen by the kind of thing the player has done most in the run ("...and I'm telling you, it was" + "the Lawnmower. Again!"). Only Angus and Theresa have nicknames, so only they make such calls.
+- **The heading** says what the call is about: `talk-react-<what>-<n>`, where `<what>` is `box` (a mailbox knocked down or into the ditch), `lawn` (ruts on a lawn), `mail` (mail in a hedge, a ditch or on a lawn), `horn` (the horn at a visitor stopped at the roadside), `dust` (dust on the painter), `missing` (a stop skipped), `late` or `flag`; or `step1` to `step7` for each step of the discipline ladder, from the coaching chat to Fired. A nickname's heading is `talk-nick-<caller>-<kind>-<n> · <the nickname as the screen shows it>`.
+- Nothing here is said about a cemetery, a church, the school bus or a hit animal: the game never makes a call about those.
+
+### talk-react-box-1
+
+**THERESA:** My mailbox is in the ditch, Effie! Lying on its back with the flag up, like it's waving for help.
+
+**EFFIE:** It still takes mail, Theresa. Just lower.
+
+### talk-react-box-2
+
+**HUGHIE:** Effie, the post is standing and the box is gone. I found it in the next field, facing the cows.
+
+**EFFIE:** Rural delivery, Hughie.
+
+### talk-react-box-3
+
+**SANDY:** Effie, I am standing over my mailbox. Over it! That box used to be at chin height.
+
+### talk-react-box-4 · ends on a name
+
+**ANGUS:** Mailbox in the ditch, post in the air, and I'm telling you, Effie, it was
+
+### talk-react-box-5 · ends on a name
+
+**THERESA:** Bang, crunch, and the box is in the ditch with my seed catalogue, and I'm telling you, it was
+
+### talk-react-lawn-1
+
+**RORY:** There are tyre tracks on my lawn, Effie, and they go in a circle. That's not a delivery. That's a dance.
+
+### talk-react-lawn-2
+
+**FLORA:** My lawn has ruts in it you could plant potatoes in!
+
+**EFFIE:** Then plant them, Flora. That's free ploughing.
+
+### talk-react-lawn-3
+
+**COLLEEN:** Effie, the mail car just did a lap of my lawn. A whole lap! It waved going by.
+
+### talk-react-lawn-4 · ends on a name
+
+**THERESA:** Two muddy stripes, right across the good grass, and I'm telling you, it was
+
+### talk-react-lawn-5 · ends on a name
+
+**ANGUS:** My lawn looks like a ploughing match, Effie, and I'm telling you, it was
+
+### talk-react-mail-1
+
+**ISABEL:** There's a letter in my hedge, Effie. Halfway up. Like a bird brought it.
+
+**EFFIE:** It's off the ground, Isabel. That's service.
+
+### talk-react-mail-2
+
+**ARCHIE:** My bank statement's in the ditch, Effie. It's floating toward the harbour.
+
+**EFFIE:** Most interest it's earned all year, Archie.
+
+### talk-react-mail-3
+
+**HUGHIE:** The flyers are all over the lawn, Effie, and the wind has them. They're delivering themselves to the neighbours now.
+
+### talk-react-mail-4 · ends on a name
+
+**ANGUS:** A whole envelope, stuck in my hedge like a little flag, and I'm telling you, it was
+
+### talk-react-mail-5 · ends on a name
+
+**THERESA:** My mail's in the hedge again. The hedge reads more than I do. And I'm telling you, it was
+
+### talk-react-horn-1
+
+**TESSA:** Effie! The mail car honked at a visitor by the road, and the visitor jumped so high they saw the next village.
+
+### talk-react-horn-2
+
+**SANDY:** Somebody pulls over to enjoy the view, Effie, nice and quiet, and the mail car leans on the horn like it's a wedding.
+
+**EFFIE:** Maybe it was happy for them, Sandy.
+
+### talk-react-horn-3
+
+**COLLEEN:** A long horn, Effie. A long one. The cows looked up. The cows never look up.
+
+### talk-react-horn-4 · ends on a name
+
+**THERESA:** Honked right at the poor visitor, they nearly dropped the camera, and I'm telling you, it was
+
+### talk-react-dust-1
+
+**FLORA:** Effie, the mail car went by the painter at full tilt. The painting's called "Dust, with Hill" now.
+
+### talk-react-dust-2
+
+**MALCOLM:** A cloud of dust, right over the painter's easel. Technical merit, eight. Manners, nil.
+
+### talk-react-dust-3
+
+**RORY:** That painter waited all week on the shoulder for the right light, Effie. The mail car brought the road instead.
+
+### talk-react-dust-4 · ends on a name
+
+**ANGUS:** The painter's grey from head to toe, the painting's gone brown, and I'm telling you, it was
+
+### talk-react-missing-1
+
+**MORAG:** The mail car went right past my box, Effie! Didn't even slow down. I was standing there holding my letter out like a hitchhiker.
+
+### talk-react-late-1
+
+**DUNCAN:** Effie, it's past noon and no mail. I've had lunch. I'm thinking about second lunch.
+
+**EFFIE:** Have it, Duncan. It's on its way.
+
+### talk-react-flag-1
+
+**GRETA:** My flag's up, then it's down, then it's up again. Effie, my mailbox is doing semaphore, and I think it's saying help.
+
+### talk-react-step1-a
+
+**EFFIE:** News in from the depot: the carrier's been called in for a coaching chat. A chat! With tea, I hope.
+
+### talk-react-step1-b
+
+**HUGHIE:** A coaching chat, Effie? I've been chatting about that carrier for years, and nobody gave me a title.
+
+### talk-react-step2-a
+
+**EFFIE:** Word from the depot, folks. A verbal warning. Nothing written down. So officially, it never happened.
+
+### talk-react-step2-b
+
+**COLLEEN:** Only a verbal warning, Effie? Say it louder. I'll hold the phone out the window so the mail car hears it.
+
+### talk-react-step3-a
+
+**EFFIE:** It's official, folks. A written warning, on paper. Now somebody has to deliver it.
+
+### talk-react-step3-b
+
+**SANDY:** A written warning! Effie, who's going to deliver it? I'll tell you who. Nobody. It'll be in a hedge by Tuesday.
+
+### talk-react-step4-a
+
+**EFFIE:** Folks, the carrier is suspended. One day. The mailboxes can stand easy. The ones still standing.
+
+### talk-react-step4-b
+
+**MORAG:** One day off? For that? Effie, I'd like a day off too, and all I ever did was complain.
+
+### talk-react-step5-a
+
+**EFFIE:** Three days' suspension. The union says nobody signed the form. To be fair, the form was in the ditch.
+
+### talk-react-step5-b
+
+**RORY:** Three days, Effie! Three whole days of mail in the actual box. I won't know what to do with myself.
+
+### talk-react-step6-a
+
+**EFFIE:** There's going to be a hearing. The carrier's allowed one witness. I'll go. Somebody has to take that side.
+
+### talk-react-step6-b
+
+**ISABEL:** A hearing, Effie! Archie and I are going. He'll say too fast, and I'll say too slow.
+
+### talk-react-step7-a
+
+**EFFIE:** Well, folks. The carrier has been fired. Line one is cheering. Line two wants to know who brings the mail tomorrow. Line three is Bernadette, and she's bringing a plate.
+
+### talk-react-step7-b
+
+**BERNADETTE:** Fired? Effie, as an ordinary listener, I'd like to say the mailboxes were asking for it. And there's a plate in the oven.
+
+### talk-nick-theresa-box-1 · Box Basher
+
+**THERESA:** Box Basher. Again!
+
+### talk-nick-theresa-box-2 · the Post Popper
+
+**THERESA:** The Post Popper. Again!
+
+### talk-nick-theresa-lawn-1 · the Lawnmower
+
+**THERESA:** The Lawnmower. Again!
+
+### talk-nick-theresa-lawn-2 · the Rototiller
+
+**THERESA:** The Rototiller. Again!
+
+### talk-nick-theresa-mail-1 · the Hedge Express
+
+**THERESA:** The Hedge Express. Again!
+
+### talk-nick-theresa-mail-2 · the Ditch Express
+
+**THERESA:** The Ditch Express. Again!
+
+### talk-nick-theresa-painter-1 · Honky Tonk
+
+**THERESA:** Honky Tonk. Again!
+
+### talk-nick-theresa-painter-2 · the Dust Devil
+
+**THERESA:** The Dust Devil. Again!
+
+### talk-nick-theresa-general-1 · that one in the mail car
+
+**THERESA:** That one in the mail car. Again!
+
+### talk-nick-theresa-general-2 · you-know-who
+
+**THERESA:** You-know-who. Again!
+
+### talk-nick-theresa-general-3 · Wrong-Side Wheels
+
+**THERESA:** Wrong-Side Wheels. Again!
+
+### talk-nick-theresa-general-4 · Trouble on Wheels
+
+**THERESA:** Trouble on Wheels. Again!
+
+### talk-nick-angus-box-1 · the Mailbox Menace
+
+**ANGUS:** The Mailbox Menace. Again!
+
+### talk-nick-angus-box-2 · Knock-Knock
+
+**ANGUS:** Knock-Knock. Again!
+
+### talk-nick-angus-lawn-1 · the Sod Buster
+
+**ANGUS:** The Sod Buster. Again!
+
+### talk-nick-angus-lawn-2 · the Plough
+
+**ANGUS:** The Plough. Again!
+
+### talk-nick-angus-mail-1 · the Hedge Thrower
+
+**ANGUS:** The Hedge Thrower. Again!
+
+### talk-nick-angus-mail-2 · Captain Envelope
+
+**ANGUS:** Captain Envelope. Again!
+
+### talk-nick-angus-painter-1 · the Horn Section
+
+**ANGUS:** The Horn Section. Again!
+
+### talk-nick-angus-painter-2 · the Cloud Maker
+
+**ANGUS:** The Cloud Maker. Again!
+
+### talk-nick-angus-general-1 · that one in the mail car
+
+**ANGUS:** That one in the mail car. Again!
+
+### talk-nick-angus-general-2 · the grey car
+
+**ANGUS:** The grey car. Again!
+
+### talk-nick-angus-general-3 · Right-Hand Drive
+
+**ANGUS:** Right-Hand Drive. Again!
+
+### talk-nick-angus-general-4 · Speedy Delivery
+
+**ANGUS:** Speedy Delivery. Again!

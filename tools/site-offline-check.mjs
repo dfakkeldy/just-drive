@@ -26,8 +26,11 @@ try {
    assert.deepEqual(siteRadio({brand,area:area.id}),brand==='just'?{list:'radio-just.json',storageKey:'mmm.radio.just'}:{});
  }
  console.log('PASS radio policy for every area and requested era in both brands (unsupported eras fall back to today)');
+ // The Party Line's calls for Get Fired (audio/calls.json, made by build_radio.py): the mail game's offline download holds them.
+ const calls={dial:START_DIAL,calls:[{file:'talk-react-box-1.mp3',seconds:7,about:'box',caller:'theresa',name:false}],nicknames:[{file:'talk-nick-theresa-box-1.mp3',seconds:1.4,kind:'box',caller:'theresa',name:'Box Basher'}],gaps:{}};
+ const callFiles=calls.calls.concat(calls.nicknames).map(c=>'/audio/'+c.file);
  for(const part of ['terrain','audio','offline/icons']) mkdirSync(join(dir,part),{recursive:true});
- for(const [path,body] of [['app.js','globalThis.game=true'],['index.html','<html><head><title>Mabou Mail Madness</title><meta name="description" content="A rural mail route"><link rel="icon" href="old-icon"></head><body><div id="boot"><div><b>Mabou Mail Madness</b>Loading</div></div><script src="./app.js"></script></body></html>'],['terrain/manifest.json','{}'],['audio/radio.json',JSON.stringify({stations,start:START_DIAL})],['audio/radio-just.json',JSON.stringify({stations,start:plan.just_start})],...stations.flatMap(s=>s.tracks.map(t=>['audio/'+t.file,'authored audio'])),...['180','192','512'].map(n=>[`offline/icons/icon-${n}.png`,'icon']),['offline/icons/maskable-512.png','icon']]) writeFileSync(join(dir,path),body);
+ for(const [path,body] of [['app.js','globalThis.game=true'],['index.html','<html><head><title>Mabou Mail Madness</title><meta name="description" content="A rural mail route"><link rel="icon" href="old-icon"></head><body><div id="boot"><div><b>Mabou Mail Madness</b>Loading</div></div><script src="./app.js"></script></body></html>'],['terrain/manifest.json','{}'],['audio/radio.json',JSON.stringify({stations,start:START_DIAL})],['audio/radio-just.json',JSON.stringify({stations,start:plan.just_start})],['audio/calls.json',JSON.stringify(calls)],...calls.calls.concat(calls.nicknames).map(c=>['audio/'+c.file,'authored call']),...stations.flatMap(s=>s.tracks.map(t=>['audio/'+t.file,'authored audio'])),...['180','192','512'].map(n=>[`offline/icons/icon-${n}.png`,'icon']),['offline/icons/maskable-512.png','icon']]) writeFileSync(join(dir,path),body);
  execFileSync(process.execPath,['tools/build-pwa.mjs',dir]);
  const json=path=>JSON.parse(readFileSync(dir+path));
  const ordinary=json('/version.json'),just=json('/version-just.json');
@@ -35,7 +38,12 @@ try {
  assert.ok(normalFiles.files.some(f=>f.url==='/audio/radio.json'),'ordinary radio inventory unchanged');
  assert.ok(!justFiles.files.some(f=>f.url==='/audio/radio.json'),'Just Drive uses its own list');
  assert.ok(justFiles.files.some(f=>f.url==='/audio/radio-just.json'));
- assert.deepEqual(justFiles.files.filter(f=>f.url.endsWith('.mp3')),normalFiles.files.filter(f=>f.url.endsWith('.mp3')),'all shared songs are in both offline inventories');
+ assert.deepEqual(justFiles.files.filter(f=>f.url.endsWith('.mp3')),normalFiles.files.filter(f=>f.url.endsWith('.mp3')&&!callFiles.includes(f.url)),'all shared songs are in both offline inventories');
+ for(const url of ['/audio/calls.json',...callFiles]){
+  assert.ok(normalFiles.files.some(f=>f.url===url),'the mail game plays Get Fired offline with its calls: '+url);
+  assert.ok(!justFiles.files.some(f=>f.url===url),'Just Drive has no Get Fired and saves no calls: '+url);
+ }
+ console.log('PASS offline: the mail game saves calls.json and every call file; Just Drive saves neither');
  checkStations(json('/audio/radio-just.json').stations,PUBLIC_STATIONS);
  assert.equal(json('/manifest-just.webmanifest').name,'Just Drive: Mabou');
  assert.equal(json('/manifest-just.webmanifest').start_url,'/mabou');

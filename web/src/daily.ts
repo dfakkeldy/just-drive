@@ -88,6 +88,8 @@ export class DailyRun {
     const out = [
       practice ? `Practice: ${headline(result)}. ${bingo}` : `${headline(result)}. ${bingo}`,
       result.step > 0 ? LADDER[result.step - 1].steward : 'Not one call on file. The union is worried about you.',
+      // The Party Line's line names the player on this screen only: never in the shared text or picture.
+      ...(end.calls ? [end.calls] : []),
       stale ? `A newer day’s run is on file (${shortDate(record.date)}). Reload for that day’s card.`
         : practice ? `Today’s card keeps your first finished run: ${headline(first)}, bingo ${unpackFilled(first.filled).filter(Boolean).length} of ${this.squares.length}.`
         : `Your first finished run today: this is today’s card.${end.played < this.plan.limit && result.step < LADDER.length ? ` Ended at ${clockText(end.played)}.` : ''}`,
