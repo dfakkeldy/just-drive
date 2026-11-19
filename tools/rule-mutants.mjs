@@ -34,6 +34,16 @@ const suites = {
       ['bark event', 'this.bark=true;', 'this.bark=false;'],
     ],
   },
+  'lot-props': {
+    check: 'lot-props-rules-check.mjs',
+    mutants: [
+      ['vehicle share', 'vehicle: 1 / 3,', 'vehicle: 1 / 2,'],
+      ['public road clearance', 's.halfWidth + (s.isPublic ? LOT_PROPS.public : LOT_PROPS.drive)', 's.halfWidth + (s.isPublic ? LOT_PROPS.drive : LOT_PROPS.drive)'],
+      ['own lot', 'if (pointPolygon(x, z, f) <= mine) return false;', 'if (pointPolygon(x, z, f) <= mine - 3) return false;'],
+      ['driveway mouth', '< LOT_PROPS.mouth) return false;', '< LOT_PROPS.mouth / 3) return false;'],
+      ['clear of yard props', 'if (rectRect(p, o) < margin) { out.push(i); return; }', 'if (rectRect(p, o) < 0) { out.push(i); return; }'],
+    ],
+  },
   damage: {
     check: 'damage-check.mjs',
     mutants: [
@@ -73,7 +83,7 @@ const suites = {
   },
 };
 const name = process.argv[2], suite = suites[name];
-assert.ok(suite, 'usage: node tools/rule-mutants.mjs damage|jump|mine|shift|yard-dog|yard-props [--base]');
+assert.ok(suite, 'usage: node tools/rule-mutants.mjs damage|jump|mine|shift|yard-dog|yard-props|lot-props [--base]');
 assert.ok(process.argv.slice(3).every(arg => arg === '--base'), 'unknown argument');
 const root = resolve(import.meta.dirname, '..');
 const cases = suite.mutants.map(([name, from, to]) => ({ name, edits: [{ file: `web/src/${process.argv[2]}-rules.ts`, from, to }] }));

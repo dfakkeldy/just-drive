@@ -5,6 +5,15 @@ import type { Vehicle } from './vehicle';
 import { YardDogRules } from './yard-dog-rules';
 import type { YardDogSite } from './yard-dog-site';
 
+/** One rounded part of a dog: a unit ball of flat facets in one coat colour, every facet a little lighter or darker
+ *  than the next. The yard dog and the farm dogs at houses (yard-props.ts) are built of these. */
+export function dogBlob(colour:number,detail=1):THREE.BufferGeometry {
+  const geometry=new THREE.IcosahedronGeometry(1,detail),c=new THREE.Color(colour),colours=[];
+  for(let i=0;i<geometry.attributes.position.count;i++){const shade=.91+(Math.floor(i/3)%5)*.035;colours.push(c.r*shade,c.g*shade,c.b*shade);}
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colours,3));
+  return geometry;
+}
+
 /** One unnamed tan yard dog. No downloaded model, image or recording. Local forward is -Z. */
 export class YardDog {
   readonly group=new THREE.Group();
@@ -22,10 +31,7 @@ export class YardDog {
     addEventListener('pointerup',this.unlock,{once:true});addEventListener('keydown',this.unlock,{once:true});
   }
   private shape(parent:THREE.Group,colour:number,x:number,y:number,z:number,sx:number,sy:number,sz:number):void {
-    const geometry=new THREE.IcosahedronGeometry(1,1),c=new THREE.Color(colour),colours=[];
-    for(let i=0;i<geometry.attributes.position.count;i++){const shade=.91+(Math.floor(i/3)%5)*.035;colours.push(c.r*shade,c.g*shade,c.b*shade);}
-    geometry.setAttribute('color',new THREE.Float32BufferAttribute(colours,3));
-    const mesh=new THREE.Mesh(geometry,this.material);mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);parent.add(mesh);
+    const mesh=new THREE.Mesh(dogBlob(colour),this.material);mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);parent.add(mesh);
   }
   private build():void {
     const dog=new THREE.Group();dog.rotation.order='YXZ';this.rig=dog;this.group.add(dog);
