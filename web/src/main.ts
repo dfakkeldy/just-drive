@@ -76,6 +76,8 @@ import { atlanticDate, CARD_SIZE, dailyArea, dailyPlan, drawCard, supplyFor, typ
 import { PartyLine, fetchCalls } from './party-line';
 import { callSign } from './party-line-rules';
 import { inventedName } from './mp/social';
+import { DriftFeedback } from './drift-feedback';
+import { phoneHandbrake } from './drift-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
 import { noZoom } from './no-zoom';
@@ -677,7 +679,7 @@ const resolveYardSolids = () => {
   if (fleet) fleet.resolve(); else towing?.step();
 };
 let engineThrottle = 0;   // the pedal the vehicle really got this frame, for the engine sound
-const engineMoment: DrivingMoment = { kind: '', speed: 0, throttle: 0, surface: '', airborne: false, grade: 0, towing: false, radio: false };
+const engineMoment: DrivingMoment = { kind: '', speed: 0, throttle: 0, surface: '', airborne: false, grade: 0, towing: false, radio: false, slide: 0 };
 function driveVehicle(dt: number, input: Input): void {
   engineThrottle = input.throttle;
   syncRoadScenePause();
@@ -953,6 +955,10 @@ const startPlacement = fleet ? {
 }
 
 scene.add(shift.group);
+// Dust from the rear wheels and the small meter, only while the ride drifts (drift-rules.ts).
+const driftFeedback = new DriftFeedback(LOW, !bare);
+scene.add(driftFeedback.mesh);
+if (import.meta.env.DEV) expose({ driftFeedback });
 animals?.registerEvidence(shift.evidence);
 document.getElementById('cameraButton')!.addEventListener('click', () => { if (live()) photoRequested = true; });
 for (const id of ['cameraButton', 'endShift', 'shiftReport', 'settings']) {
@@ -1042,7 +1048,7 @@ const pad = touchDevice && !bare ? createTouchControls({
   view: () => { if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
   horn: honk,
 }) : null;
-const touch = pad?.state ?? { steer: 0, throttle: 0 };
+const touch = pad?.state ?? { steer: 0, throttle: 0, handbrake: false, chordAt: 0 };
 // The drone on a phone: DRONE beside Pause launches it; two sticks and RETURN fly it.
 const droneSticks = touchDevice && !bare ? createDroneSticks(() => droneHome()) : null;
 if (pad) {
@@ -1106,13 +1112,20 @@ function readTouch() {
   }
 }
 
+let chordOn = false;   // the phone's two-pedal handbrake was on last frame
 function driveInput(): RideInput {
   if (pause.blocked) return { throttle: 0, steer: 0, handbrake: true };
   const k = (a: string, b: string) => (keys.has(a) || keys.has(b) ? 1 : 0), g = gamepad.state;
+  // GO and BRAKE held together a moment at speed are the handbrake, with no brake under it, only on a ride that drifts (the
+  // bike and the horse keep their pedals) and not on the fleet's pickup, whose handbrake is its parking latch (fleet.ts).
+  const drift = vehicle.spec.drift;
+  chordOn = touch.handbrake && !!drift && fleet?.driven.id !== 'truck'
+    && phoneHandbrake(drift, (performance.now() - touch.chordAt) / 1000, vehicle.speed, touch.steer + g.steer, chordOn);
+  const chord = chordOn;
   const input: RideInput = {
-    throttle: THREE.MathUtils.clamp(k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown') + touch.throttle + g.throttle, -1, 1),
+    throttle: THREE.MathUtils.clamp(k('KeyW', 'ArrowUp') - k('KeyS', 'ArrowDown') + (chord ? 0 : touch.throttle) + g.throttle, -1, 1),
     steer: THREE.MathUtils.clamp(k('KeyD', 'ArrowRight') - k('KeyA', 'ArrowLeft') + touch.steer + g.steer, -1, 1),
-    handbrake: keys.has('Space') && document.activeElement !== mailButton || g.handbrake,
+    handbrake: keys.has('Space') && document.activeElement !== mailButton || g.handbrake || chord,
     touch: touchDevice && k('KeyW', 'ArrowUp') + k('KeyS', 'ArrowDown') + k('KeyA', 'ArrowLeft') + k('KeyD', 'ArrowRight') === 0,
   };
   if (g.pull) input.pull = true;   // the dirt bike's PULL from a bumper; bike-controls.ts adds Shift and the PULL button
@@ -1722,6 +1735,7 @@ function frame(now: number) {
     m.kind = ride.kind; m.speed = vehicle.speed; m.throttle = engineThrottle; m.surface = vehicle.surfaceName; m.airborne = vehicle.airborne;
     // A fleet keeps the trailer on the truck while another member drives: only the truck pulls it.
     m.grade = vehicle.pitch; m.towing = !!towing?.attached && ride.kind === 'truck'; m.radio = !!radio?.audible;
+    m.slide = vehicle.drift.slide(vehicle.spec.drift);
     engineSound.update(realDt, playing && mode === 'drive' && !interiors.busy && !document.hidden ? m : null);
   }
   if (interiors.busy) {
@@ -1748,7 +1762,7 @@ function frame(now: number) {
     const refusal = Math.abs(vehicle.speed) < 0.15 && input.throttle < 0 ? 0 : (animals?.influence(vehicle).brake ?? 0);
     if (refusal > 0) {
       input.throttle = Math.abs(vehicle.speed) > 0.15 ? -Math.sign(vehicle.speed) * refusal : 0;
-      input.handbrake = true;
+      input.handbrake = true; input.held = true;   // a stop for an animal, not a drift
     }
     if (input.throttle !== 0 && (!demo || loaded)) waitingToDrive = false;
     // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.
@@ -1778,11 +1792,13 @@ function frame(now: number) {
       mailPointers.size > 0 || !!(demo && drove < demo && loaded && devHooks.throwMail)), camera);
   mailRequested = false;
   if (impact < 1 && vehicle.damageActive) shift.damage.hit('impact', impactSpeed);
+  if (impact < 1) vehicle.drift.hit(vehicle.x, vehicle.z);   // a mailbox knock ends a drift, not clean
   vehicle.vx *= impact; vehicle.vz *= impact; vehicle.speed *= impact;
   // The replay recorder reads the ride and its drawn rig once the frame's motion (and any mailbox knock) is final.
   // The clock's own step (not the 0.1 s physics cap): a long frame on a busy phone still follows the one before it.
   if (dt > 0 && driving) replay.record(vehicle, car, horse ? 'horse' : ride.kind, now / 1000, clockDt, quietGround);
   gamepad.feel(vehicle, dt, playing && mode === 'drive' && !interiors.busy, now);
+  driftFeedback.update(dt, vehicle, camera, playing && mode === 'drive' && !interiors.busy);
   updateWorld('before-camera', dt, realDt, now);
   camera.updateMatrixWorld();
   sky.position.copy(camera.position);

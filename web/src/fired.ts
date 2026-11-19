@@ -97,7 +97,7 @@ export class FiredRun {
     if (this.ended) return;
     const r = this.book.add(e);
     this.calls?.hear(e, r.stepUp);
-    if (r.points) this.last = { text: `${r.points > 0 ? '+' : '−'}${fmt(Math.abs(r.points))} ${offenceLabel(e.kind)}${r.firstOfKind ? ' · new' : ''}`, time: this.now };
+    if (r.points) this.last = { text: `${r.points > 0 ? '+' : '−'}${fmt(Math.abs(r.points))} ${offenceLabel(e.kind)}${e.drift?.clean ? ' · clean' : ''}${r.firstOfKind ? ' · new' : ''}`, time: this.now };
     this.paintTime = 0;
     this.stepped(r.stepUp);
   }

@@ -124,6 +124,8 @@ export class PointTupperDriver {
     if (this.rig) { this.group.remove(this.rig.root); disposeRig(this.rig.root); }
     const { rig, vehicle } = this.make(entry);
     this.entry = entry; this.rig = rig; this.vehicle = vehicle; this.builds++;
+    // Its stops use the handbrake with the wheel turned: a computer driver never slides (only the player's ride drifts).
+    vehicle.canDrift = false;
     this.group.add(rig.root);
     this.paths = this.roads.roads.filter(r => !r.bridge && r.kind <= 3 && r.halfWidth >= entry.spec.halfWidth + 1.8)
       .flatMap(r => [new SceneRoad(r.pts, 0, 1), new SceneRoad([...r.pts].reverse(), 0, 1)])

@@ -53,7 +53,9 @@ check('contact_tracks_tyre_mesh_motion',Math.abs((moved[0].deepest??moved[0].gap
 // The main-line controller is the durable oracle. Baseline mode also proves 38bf76d matches that same oracle.
 function oracleTrace(Type,spec){const terrain=ground(),v=new Type(tiny(),terrain,roads,-10000,spec);v.assist=0;v.place(0,0,0);let seed=0x434152;Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/2**32;};const hash=createHash('sha256');
  for(let i=0;i<3600;i++){v.update(dt,{throttle:i%1200<900?1:-1,steer:Math.sin(i*.007),handbrake:i%600>550});hash.update(JSON.stringify([v.x,v.z,v.y,v.heading,v.vx,v.vz,v.vy,v.speed,v.pitch,v.roll,v.car.body.rotation.toArray(),v.car.body.position.y]));}return hash.digest('hex');}
-for(const [name,spec]of [['car',CAR_SPEC],['truck',TRUCK_SPEC]]){const previous=oracleTrace(PreviousVehicle,spec),current=oracleTrace(Vehicle,spec);check(`${name}_bit_identical_legacy`,current===previous,{previous,current});}
+// The trace pulls the handbrake with the wheel turned, which now starts a drift (drift-rules.ts, tools/drift-rules-check.mjs):
+// with the drift off the controller stays bit-identical to the oracle.
+for(const [name,spec]of [['car',CAR_SPEC],['truck',TRUCK_SPEC]]){const previous=oracleTrace(PreviousVehicle,spec),current=oracleTrace(Vehicle,{...spec,drift:undefined});check(`${name}_bit_identical_legacy`,current===previous,{previous,current});}
 check('oracle_rejects_changed_power',oracleTrace(Vehicle,{...CAR_SPEC,enginePower:0})!==oracleTrace(PreviousVehicle,CAR_SPEC),{});
 const model=createSxs();model.root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(model.root,true),e=SXS_SPEC.envelope,ends=[Math.max(...e.circles)+e.radius+box.min.z,e.radius-Math.min(...e.circles)-box.max.z];
 check('envelope_nose_tail_overreach',ends.every(n=>n<=.15+1e-6),{nose:ends[0],tail:ends[1]});

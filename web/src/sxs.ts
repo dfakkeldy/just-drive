@@ -16,6 +16,8 @@ export const SXS_SPEC: VehicleSpec = deepFreeze({
   pitchGain: .004, pitchLimit: .045, rollGain: .006, rollLimit: .065, leanRate: 5,
   shakePitch: .004, shakeRoll: .006, shakeHeight: .008,
   washboardYaw: .002, washboardSideways: .055, hardSteerDrag: 1.8,
+  // The drift toy: low speeds to start, wide angles, a quick tail and little speed lost.
+  drift: { angle: .55, maxAngle: .95, rotate: 4.5, carve: 1.25, scrub: .42, looseSpeed: 6, firmSpeed: 11, liftSpeed: 11, towed: .5 },
   chase: { back: 6.3, height: 2.35, lookAhead: 3.9, lookHeight: .95, speedBack: .095, maxSpeedBack: 3.5 },
 });
 type P = [number, number, number];

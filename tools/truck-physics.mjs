@@ -62,7 +62,8 @@ assert.ok(measured.wash.seconds>20&&measured.wash.nearForty>5&&measured.wash.max
 assert.ok(measured.wash.meanShake<measured.carWash.meanShake,'calmer body on the same seeded gravel drive');
 // All original tunable numbers are checked independently of CAR_SPEC and of Vehicle's implementation.
 const original={wheelbase:2.62,track:1.57,wheelRadius:.35,contactPlane:0,halfLength:2.3,halfWidth:.95,height:1.955,envelope:{circles:[-1.35,0,1.35],radius:.95,reach:3.4,sweepHalfWidth:.96,sweepHalfLength:2.31,overhead:1.3,grassHalfWidth:1.35,grassHalfLength:2.8,nose:3.2},engineAcceleration:4.8,enginePower:95,tractionShare:.62,reverseSpeed:9,reverseAcceleration:2.6,brake:9.5,handbrake:5.5,aeroDrag:.001,cornering:1.7,maxSteer:.6,steerBaseRate:.5,steerSpeedRate:2.2,steerSpeedScale:7,steerReturnRate:3.2,gripLock:1.15,landingForward:.92,landingSideways:.6,pitchGain:.006,pitchLimit:.035,rollGain:.007,rollLimit:.06,leanRate:6,shakePitch:.02,shakeRoll:.03,shakeHeight:.04,washboardYaw:.02,washboardSideways:.5,hardSteerDrag:3.2,chase:{back:7.4,height:2.9,lookAhead:3.5,lookHeight:1.25,speedBack:.06,maxSpeedBack:2.5}};
-assert.deepEqual(CAR_SPEC,original,'CAR_SPEC exactly equals original constants');
+// The drift numbers (CAR_SPEC.drift) came later; tools/drift-rules-check.mjs holds them. Every original number is unchanged.
+const {drift:carDrift,...carLegacy}=CAR_SPEC;assert.ok(carDrift);assert.deepEqual(carLegacy,original,'CAR_SPEC exactly equals original constants');
 assert.equal(readVehicle(new URLSearchParams()).id,'car','default garage entry is car');
 assert.equal(readVehicle(new URLSearchParams('vehicle=unknown')).id,'car','unknown garage id falls back to car');
 assert.equal(readVehicle(new URLSearchParams('vehicle=truck')).spec,TRUCK_SPEC,'truck garage entry carries its spec');
