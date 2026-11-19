@@ -45,6 +45,7 @@ export interface Surface {
   kind: number;         // 0 none, 1 highway, 2 paved, 3 gravel, 4 track, 5 rail trail
   bridge: boolean;
   washboard: boolean;   // a road shaken into ridges
+  gravel?: boolean;     // a gravel driveway or pad: a track (4) carrying the gravel bit; drives as gravel. Absent otherwise
   brook: number;        // metres from the edge of a brook's water: negative in the water; 99 when none is near
   /** True only when an accepted hand-built deck supplies the driving surface. */
   deck?: boolean;
@@ -1030,6 +1031,7 @@ export class Terrain {
         out.kind = raw & 15;
         out.bridge = (raw & 16) !== 0;
         out.washboard = (raw & 32) !== 0;
+        if ((raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
       }
     }
     // Mail and every other ground reader see the same exact deck as the wheels.

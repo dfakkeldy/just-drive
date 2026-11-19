@@ -249,6 +249,7 @@ paved-open-land	portable	no	Python fixture plus baked manifest/paved reads; no G
 point-tupper-delta-land	portable	no	Python fixture plus baked manifest/building/props/paved reads; no GDAL; before/after land receipt; reads data/raw/paved-open/corrections.json beside data/baked: the remote runner now sends data/raw/paved-open as a snapshot, and the row needs it (SKIP with the path when absent); a run local to apple-check-host reads the host's own, older land
 mabou-village-delta-land	portable	no	Python fixture plus baked manifest/building/props/paved reads; no GDAL; before/after land receipt; reads data/raw/paved-open/corrections.json beside data/baked, which the remote runner sends as a snapshot since 17 Nov; the row needs it (SKIP with the path when absent)
 mabou-dashcam-18nov-land	portable	no	Python receipt check over baked terrain JSON, road field tiles and manifest counts; no GDAL; before/after land receipt of pipeline/35_bake_mabou_dashcam.py (18 Nov)
+road-field-flags	apple	no	needs the GDAL Python bindings (osgeo) to import step 25; M4 PASS 2026-11-19
 paved-lot-pictures	unproven	no	initial paving delta Judique/Port Hood/Point Tupper default-on pictures; rented Mac mini M4 Edge 157 Metal on a scratch installed clone; MacBook unmeasured
 pause-browser	unproven	no	rented Mac mini (apple-check-host) PENDING
 power-network-browser	unproven	no	apple-check-host Edge only so far; reads installed land (no delta folder)

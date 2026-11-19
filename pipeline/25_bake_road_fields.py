@@ -12,6 +12,7 @@ import importlib.util
 import json
 import math
 import os
+import sys
 
 import numpy as np
 from osgeo import gdal
@@ -23,8 +24,18 @@ b = corridor.b
 
 
 # The low nibble stays the physical surface kind. The two high bits are
-# presentation only, with bridge and washboard bits left in place.
-PAVEMENT_FLAGS = {'double-yellow': 64, 'worn': 128}
+# presentation only, with bridge and washboard bits left in place. They are
+# read with the kind: on a paved lane (2) 64 is a double yellow line and 128
+# worn asphalt; on a driveway (4) 64 is gravel rather than dirt ruts.
+PAVEMENT_FLAGS = {'double-yellow': 64, 'worn': 128, 'gravel': 64}
+PAVEMENT_KINDS = {'double-yellow': 2, 'worn': 2, 'gravel': 4}
+
+
+def flags_valid(flags):
+    """Which flag bytes of road samples are allowed (26_check_roads): a kind of 1..5, and a high bit only as a paved
+    lane's double yellow or worn asphalt, or a driveway's gravel."""
+    kind, high = flags & 15, flags & 192
+    return np.isin(kind, (1, 2, 3, 4, 5)) & ((high == 0) | ((kind == 2) & np.isin(high, (64, 128))) | ((kind == 4) & (high == 64)))
 
 
 class Field:
@@ -33,6 +44,8 @@ class Field:
         for road in network:
             flags = road['kind'] | (16 if road['bridge'] else 0) | (32 if road.get('washboard') else 0)
             if 'pavement' in road:
+                if road['kind'] != PAVEMENT_KINDS[road['pavement']]:
+                    raise ValueError(f"Road {road.get('id')}: {road['pavement']} needs kind {PAVEMENT_KINDS[road['pavement']]}")
                 flags |= PAVEMENT_FLAGS[road['pavement']]
             for a,c in zip(road['pts'][:-1],road['pts'][1:]):
                 if a!=c:
@@ -153,5 +166,25 @@ def main():
     print(f'Road field total: {total:,} bytes',flush=True)
 
 
+def self_test():
+    """The pavement flags on one sample beside a 10 m road, and the kinds each flag refuses."""
+    def road(kind, pavement=None, **extra):
+        return dict(id=1, kind=kind, halfWidth=1.5, bridge=False, pts=[[0, 0], [10, 0]], **extra,
+                    **({'pavement': pavement} if pavement else {}))
+    xs, ys = np.array([5.0]), np.array([0.5])
+    for args, flag in [((4, 'gravel'), 68), ((2, 'double-yellow'), 66), ((2, 'worn'), 130), ((4,), 4), ((3,), 3),
+                       ((4, 'gravel', dict(washboard=True)), 100)]:
+        sample = Field([road(*args[:2], **(args[2] if len(args) > 2 else {}))]).raster(xs, ys)[2]
+        assert sample[0, 0] == flag and flags_valid(sample).all(), (args, sample)
+    for kind, pavement in [(2, 'gravel'), (3, 'gravel'), (4, 'double-yellow'), (4, 'worn')]:
+        try:
+            Field([road(kind, pavement)])
+        except ValueError:
+            continue
+        raise AssertionError(f'{pavement} accepted on kind {kind}')
+    assert not flags_valid(np.array([4 | 128, 3 | 64, 2 | 192, 4 | 192, 6, 1 | 64], dtype=np.uint8)).any()
+    print('PASS road field flags: gravel only on kind 4 (68), double yellow and worn only on kind 2; step 26 refuses the rest')
+
+
 if __name__=='__main__':
-    main()
+    self_test() if '--self-test' in sys.argv else main()
