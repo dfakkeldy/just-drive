@@ -1,5 +1,5 @@
 // Imported by mp-check: a short round of parcel tag between real local WebSockets and the room server (wrangler dev,
-// started by tools/check-mp.sh with GAME_ROUND_S set so the round lasts seconds, not minutes).
+// started by tools/check-mp.sh or tools/rehearse-site.sh with GAME_ROUND_S set so the round lasts seconds, not minutes).
 import assert from 'node:assert/strict';
 import { encodeState, FLAG, TYPE } from '../web/src/mp/wire.ts';
 import { decodeGame, PHASE } from '../web/src/mp/game-wire.ts';
