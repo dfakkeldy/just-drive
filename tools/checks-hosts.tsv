@@ -310,3 +310,5 @@ boss-escape-browser	unproven	no	apple-check-host M4 / Edge 157 PASS 233 s (seen,
 boss-escape-browser-phone	unproven	no	apple-check-host M4 / Edge 157 PASS 64 s (phone LOW escape); not yet run on the MacBook or on Linux
 boss-budget	unproven	no	apple-check-host M4 / Edge 157 PASS 88 s (Boss in view +45 draws, +44,768 triangles; hidden 0); not yet run on the MacBook or on Linux
 boss-budget-low	unproven	no	apple-check-host M4 / Edge 157 PASS 44 s (LOW start with the Boss in view 226 of 227 calls (tools/frame-budget-policy.mjs PHONE_CAP); the Boss 3 draws); on the yard props branch after merging main 557378ff, 2026-11-19: FAIL, Boss shown 235 calls; the same tree with the yard props switched off 233 (over the cap already: main grew 7 calls since the Boss row was proven), so the yard props' share is +2 calls, +120 triangles; not yet run on the MacBook or on Linux
+sugar-camp-stunts	portable	no	Mac M1 Pro PASS 51 s, 2026-11-19
+sugar-camp-stunts-browser	unproven	no	local hardware browser; not measured on another host
