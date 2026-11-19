@@ -41,13 +41,16 @@ async function droneFloor(page,name){
  // The old hall box (EXAG 1.5, sea -0.2, as main.ts) and a point under it that no drawn roof covers now. Once
  // pipeline/mabou_main.py has replaced the hall with measured blocks, the old surveyed box is the main block's `site`.
  const old=JSON.parse(await page.read(`(async()=>{const list=(await (await fetch('/terrain/buildings.json')).json()).buildings,m=mmm.mabouMain,[VE,VN]=m.site.village;
-  const hall=list.find(b=>{const o=b.site??b;return Math.hypot(o.x-624457.41,o.y-5103331.6)<6&&(b.buildingId??b.id)===b.id;});if(!hall)return 'null';const b=hall.site??hall;
+  const {MAIN_PLACES}=await import('/src/mabou-main-site.ts'),[HE,HN]=MAIN_PLACES.hall.replaces;
+  const rec=list.find(b=>{const o=b.site??b;return Math.hypot(o.x-HE,o.y-HN)<=6&&(b.buildingId??b.id)===b.id;});if(!rec)return 'null';
+  if(rec.correction&&!rec.site)return JSON.stringify({error:'corrected hall record '+rec.id+' has no site'});const b=rec.site??rec;
   const top=(${SEA})+(b.ground-(${SEA}))*${EXAG}+Math.max(b.ridge,b.eave),a=b.axisDeg*Math.PI/180,ux=Math.sin(a),uz=-Math.cos(a);let free=null;
   for(let u=-b.length/2+1;u<b.length/2-1&&!free;u+=0.5)for(let v=-b.width/2+1;v<b.width/2-1&&!free;v+=0.5){const x=b.x-VE+u*ux-v*uz,z=VN-b.y+u*uz+v*ux,s=mmm.terrain.surfaceAt(x,z);
    if(!s||s.canopy>0||top-s.ground<4)continue;let near=false;for(let dx=-1;dx<=1&&!near;dx+=0.5)for(let dz=-1;dz<=1&&!near;dz+=0.5)near=m.roofAt(x+dx,z+dz)>-Infinity;
    if(!near)free={x,z,ground:s.ground};}
   return JSON.stringify({top,free});})()`));
- assert.ok(old&&old.free,'a point under the old hall box with no drawn roof');
+ assert.ok(old&&!old.error,old?.error??'the old hall box is in the bake');
+ assert.ok(old.free,'a point under the old hall box with no drawn roof');
  const hall=probes.find(q=>q.name==='hall');
  // Fly: F lifts the drone off the car; it is set 10 m over the hall's middle and held down onto the drawn roof.
  await hold('KeyF',60);
