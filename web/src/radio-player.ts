@@ -99,6 +99,11 @@ export class RadioPlayer {
   private readonly songs = new Map<string, Promise<string>>();   // file name to its address in memory
   protected volume = 0.7;
   private noise: AudioContext | null = null;
+  /** A call played into a pause of the station (see interject): what is left to play, and where the piece waits. */
+  private cut: { urls: string[]; now: string; at: number; ended: boolean; ticket: number; done: () => void } | null = null;
+  /** A call has played: the station is a little behind its clock, so its pieces go on in order, each from the top,
+   * until the radio joins the clock again (the dial moves, the radio comes back from a hold). */
+  private behind = false;
 
   /** `storageKey`: where this radio keeps the listener's station and volume. A second radio (another game or page on the same site) takes its own. */
   constructor(protected readonly stations: RadioStation[], protected readonly base: string, start?: string, protected readonly storageKey = 'mmm.radio') {
@@ -110,12 +115,11 @@ export class RadioPlayer {
     if (vol >= 0 && vol <= 1) this.volume = vol;
     this.audio.preload = 'none';
     this.audio.volume = this.volume;
-    // At the end of a song the station clock decides what comes next, so the playlist never drifts from it.
-    // If the clock says this same song is still on (the file was shorter than the list says), the next one starts.
+    // At the end of a song the station clock decides what comes next (advance). At the end of a call's piece, the next.
     this.audio.addEventListener('ended', () => {
+      if (this.cut) { if (this.audio.src === this.cut.now) this.cutNext(); return; }
       if (this.station < 0 || !this.mine()) return;
-      const live = this.live();
-      if (this.plain.has(this.station) || live.track === this.track) this.tune(this.track + 1, 0); else this.tune(live.track, live.at);
+      if (!this.atEnd()) this.advance();
     });
     // One listener for every tune: it joins the song at the wanted second, never past the song's real end.
     this.audio.addEventListener('loadedmetadata', () => {
@@ -142,6 +146,7 @@ export class RadioPlayer {
     });
     // Sound is really coming out, or it is not: the page shows which.
     this.audio.addEventListener('playing', () => {
+      if (this.cut) { this.sounding(true); return; }
       if (!this.mine()) return;
       this.sounding(true);
       if (this.background && this.station >= 0) {
@@ -151,7 +156,64 @@ export class RadioPlayer {
     });
     for (const type of ['pause', 'waiting', 'emptied', 'error'] as const) this.audio.addEventListener(type, () => this.sounding(false));
     // A song that will not play: try the next one, a few seconds later, and not in a tight loop.
-    this.audio.addEventListener('error', () => { if (this.mine()) this.skipSoon(this.ticket); });
+    this.audio.addEventListener('error', () => { if (this.cut) this.cutEnd(true); else if (this.mine()) this.skipSoon(this.ticket); });
+  }
+
+  /** The next piece after the end of one: the station clock decides, so the playlist never drifts from it. */
+  protected advance(): void {
+    // If the clock says this same song is still on (the file was shorter than the list says), the next one starts.
+    const live = this.live();
+    if (this.behind || this.plain.has(this.station) || live.track === this.track) this.tune(this.track + 1, 0); else this.tune(live.track, live.at);
+  }
+  /** At the end of a piece, before the next: true when the page plays something into that gap (it then goes on by itself). */
+  protected atEnd(): boolean { return false; }
+
+  /** Where the station's own piece is now, while it really sounds: not while it loads, waits, or a call plays. */
+  protected heard(): { file: string; at: number } | null {
+    // Not before the join: until the browser has the piece's length, the player is at 0, not at the clock's second.
+    if (this.cut || this.station < 0 || this.held || !this.mine() || this.audio.paused || this.seek || this.audio.readyState < 1) return null;
+    return { file: this.songFile, at: this.audio.currentTime };
+  }
+
+  /**
+   * Plays short pieces (a call to the talk show) into a pause of the station. The piece that was on waits, and goes on
+   * from the same second after; `ended`: the pause is the end of a piece, so the station goes on by its clock after.
+   * The radio's own <audio> element plays them: a phone that lets the radio play lets these play too, and anything that
+   * hears the radio hears them. Refused (false) while the radio is off, held, not started, or not on its own piece.
+   * `done` is called once, when the last piece ends or the call is cut off (the dial moves, the radio is held).
+   */
+  protected interject(urls: readonly string[], done: () => void, ended = false): boolean {
+    if (this.cut || !urls.length || this.station < 0 || this.held || !this.on || !this.mine()) return false;
+    this.cut = { urls: [...urls], now: '', at: this.audio.currentTime, ended, ticket: this.ticket, done };
+    this.cutNext();
+    return true;
+  }
+  private cutNext(): void {
+    const cut = this.cut;
+    if (!cut) return;
+    const url = cut.urls.shift();
+    if (url === undefined) { this.cutEnd(true); return; }
+    cut.now = url;
+    this.audio.src = url;
+    this.audio.play().catch(() => { if (this.cut === cut && cut.now === url) this.cutEnd(true); });
+  }
+
+  /** A call that plays stops here, and the station's piece goes on (the page has lost the station, say). */
+  protected endCall(): void { this.cutEnd(true); }
+
+  /** `resume`: the call is over, so the station's piece goes on. Otherwise the dial moved or the radio is held, and that owns the player. */
+  private cutEnd(resume: boolean): void {
+    const cut = this.cut;
+    if (!cut) return;
+    this.cut = null;
+    cut.done();
+    if (!resume || cut.ticket !== this.ticket || this.station < 0 || this.held) return;
+    this.behind = true;
+    if (cut.ended) { this.advance(); return; }
+    // Back to the same second of the same piece: the one 'loadedmetadata' listener joins it there.
+    this.seek = { ticket: this.ticket, at: cut.at };
+    this.audio.src = this.songUrl;
+    this.play();
   }
 
   /** The page's words for the station and the song have changed. */
@@ -214,6 +276,8 @@ export class RadioPlayer {
 
   /** Moves the dial to a station (-1 is off), keeps the choice, and joins the station where its clock is. */
   protected turnTo(station: number): void {
+    // A call that plays is over, while the old station is still the one on the dial (its end puts the station's words back).
+    this.cutEnd(false);
     this.station = station;
     try { localStorage.setItem(this.storageKey, this.station < 0 ? 'off' : this.stations[this.station].dial); } catch { /* private mode */ }
     this.on = true;
@@ -237,7 +301,7 @@ export class RadioPlayer {
   protected setHeld(held: boolean): void {
     if (held === this.held) return;
     this.held = held;
-    if (held) this.audio.pause();
+    if (held) { this.cutEnd(false); this.audio.pause(); }
     else if (this.on && this.station >= 0) this.tuneLive();
   }
 
@@ -246,6 +310,7 @@ export class RadioPlayer {
 
   /** Joins the station where its own clock says it is. */
   protected tuneLive(): void {
+    this.behind = false;
     const live = this.live();
     this.tune(live.track, live.at, true);
   }
@@ -253,6 +318,7 @@ export class RadioPlayer {
   /** `live`: join at the clock's second as it is when the song has arrived, not as it was when the download began. */
   protected tune(track: number, at: number, live = false): void {
     if (this.station < 0) return;
+    this.cutEnd(false);   // a new tune (a skip, a retry) owns the player: a call that plays is over
     const tracks = this.stations[this.station].tracks;
     this.track = ((track % tracks.length) + tracks.length) % tracks.length;
     const ticket = ++this.ticket;

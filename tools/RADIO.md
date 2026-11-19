@@ -64,6 +64,25 @@ The playable lists contain stations, tracks, a starting dial and `catalogueHash`
 - An ad can carry clips of a song from the game under and around its voice: the `MUSIC` table in `make_talk.py` (`talk-real-word-is-bond`). Its times fit one take of the voice; a new take needs new times, and the maker stops until they are set. The clip times are also noted in `scripts.md`.
 - Every `talk-*` file is in the `talk` group of `tools/radio-attribution-rules.json`: its credit must name Claude, ElevenLabs, “stock voices” and “not real people”.
 
+## The Get Fired call-ins
+
+In Get Fired, callers phone 94.9 about the player's own run: a mailbox in the ditch, ruts on a lawn, mail in a hedge, the horn at a visitor by the road, dust on the painter, a skipped stop, the mail late, the flag, and each step of the discipline ladder. They are short recorded calls, not station tracks. Normal mail play and Just Drive never have them.
+
+- **The words** are Part 16 of `tools/radio-talk/scripts.md`. There are 40 calls of 5 to 12 seconds and 24 nicknames. The main thread checks them before a voice is made, as for every talk piece. Only names the station already uses call in, and each one keeps the stock voice it already has. The heading of a call says what it is about (`talk-react-<about>-<n>`).
+- **Nicknames.** A call marked `· ends on a name` stops on "it was". The game then plays one of that caller's nicknames ("the Lawnmower. Again!"), chosen by the kind of thing the player has done most in the run. Only Angus and Theresa have nicknames, 12 each: two for each kind and four general ones.
+- **The player's name is never spoken.** The radio line shows "Caller about: <name>" while a call plays, and the end card names the player too. The name is the multiplayer handle when it passes the word filter (`readHandle`), else an invented call sign.
+- **Make them** like any talk piece: `make_talk.py <stem ...>` with the key, in scratch folders first (`TALK_MAKE`, `TALK_FINAL`). A call or nickname is never padded to 6 s. Its quiet ends are cut to a breath, so a nickname follows its call at once.
+- **List them:** `python3 tools/radio-talk/calls_talk.py` adds each recorded call and nickname to `tools/radio_calls.json`, as public, with its request in the credit `source`. `--check` tests the words and the list (the `radio-talk` row does too). Then run `tools/radio.sh`.
+- **The build:** `tools/build_radio.py` makes the calls as mono speech at 64 kbit/s. It writes `audio/calls.json` with the calls, the nicknames and the pauses of every piece on 94.9 (`silencedetect`, 0.3 s at -38 dB, kept in `out/pauses.json` by file). The public site gets only the calls marked public, and `radio-just.json` never names them. With no call listed, there is no `calls.json` and the game has no call-ins. The calls use the station's own `talk` credit, so the credits card does not change.
+- **Offline:** the mail game's offline download saves the whole audio folder, so `calls.json` and every call file come with it. Just Drive's download saves only its own list's songs, and so no call.
+- **When a call plays** (`web/src/party-line-rules.ts`, the `party-line` row):
+  - only in Get Fired, with the radio on 94.9;
+  - only for an event that scores: nothing at a cemetery, a church ground or the school bus stop, nothing with an animal or a person, and no call about the school bus, a hit, an animal or the roadside break;
+  - within 6 s of the thing it is about, or never (12 s for a ladder step). It starts at the next pause of the piece on 94.9, or at the end of the piece;
+  - one call at a time, and 20 s from the end of one call to the next (4 s before a ladder step). A step outranks an offence, and a newer offence takes an older one's place;
+  - never the same call twice in a run.
+- **How it plays:** on the radio's own player (`interject` in `radio-player.ts`), so a phone that lets the radio play lets the call play. The piece on 94.9 waits and goes on from the same second after. The dial, a hold (indoors, a hidden page) or the radio going off cuts the call short. At the end card the radio stays up while a call waits or plays, so the Fired call is heard there.
+
 ## The place songs
 
 The songs with credit `ai-mabou` have words by the radio thread and music from ElevenLabs Music. Their makers are not in git: they are in the main checkout at `data/audio/make/` (`songs.py` and `songs_107.py` hold the words and styles; `gen.py` and `gen_107.py` call the music API and write each song's record with its song id). The Mabou main thread checks the words before any music is made, as for the talk.

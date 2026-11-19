@@ -73,6 +73,9 @@ import { BUS_STOP_RADIUS, churchZones, placeAt } from './score-rules';
 import { FiredRun } from './fired';
 import { DailyRun } from './daily';
 import { atlanticDate, CARD_SIZE, dailyArea, dailyPlan, drawCard, supplyFor, type Square } from './daily-rules';
+import { PartyLine, fetchCalls } from './party-line';
+import { callSign } from './party-line-rules';
+import { inventedName } from './mp/social';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
 import { noZoom } from './no-zoom';
@@ -906,6 +909,8 @@ resets[resetSlot.relief] = () => relief.reset();
 // The car radio plays the author's own songs when the build carries them (audio/radio.json). ?radio=0 leaves it out.
 // It is fetched further down, once the title card exists.
 let radio: Radio | null = null;
+// Get Fired only: callers phone 94.9 about the run (party-line.ts), when the build carries recorded calls.
+let partyLine: PartyLine | null = null;
 // Test links: ?relief=0.9 sets the gauge (and shows it in a demo drive); ?break=1 steps out as soon as the car has stopped.
 const reliefTest = Number(params.get('relief'));
 if (reliefTest > 0) relief.level = Math.min(1, reliefTest);
@@ -1473,6 +1478,13 @@ if (!bare && params.get('radio') !== '0') {
     if (params.get('reception') === '0') radio?.useReception(null);   // every station everywhere, as on the Just Listen page
     if (import.meta.env.DEV) expose({ radio });   // for tools/radio-check.mjs
     if (started) radio?.start();
+    if (fired && next) void fetchCalls(audioBase).then(list => {
+      if (!list || radio !== next) return;
+      const stored = (() => { try { return localStorage.getItem('mmm.mp.handle'); } catch { return null; } })();
+      partyLine = new PartyLine(next, list, audioBase, callSign(stored, inventedName()));
+      fired.calls = partyLine;
+      if (import.meta.env.DEV) expose({ partyLine });   // for tools/party-line-browser.mjs
+    });
   });
   }
 }
@@ -1602,7 +1614,8 @@ function drawEnding(dt: number): void {
   engineSound?.update(dt, null);
   roadScene?.setPaused(true);
   endings.update(dt);
-  pad?.show(false); radio?.update(false, true);
+  // A call about the run that waits or plays keeps the radio up under the end card (the Fired call comes here).
+  pad?.show(false); radio?.update(false, !partyLine?.wantsAir); partyLine?.update();
   camera.updateMatrixWorld(); sky.position.copy(camera.position);
   updateWorld('ending', 0);
   // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
@@ -1794,6 +1807,7 @@ function frame(now: number) {
     // Paused frames return early, but a multiplayer room keeps running them: ground property lines still stop while Settings is open.
     propertyLayer?.update?.(vehicle.x, vehicle.z, playing && !pause.blocked && !interiors.busy);
     radio?.update(playing, false);
+    partyLine?.update();
   }
   updateWorld('after-activities', dt, realDt, now);
   if (loaded) shiftReady = true;

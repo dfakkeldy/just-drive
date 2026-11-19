@@ -26,7 +26,7 @@ function withoutTallCredits(text,required=false){for(const row of tallCredits){i
 const before=await load(original),current=await load(readFileSync('web/src/title.ts','utf8'));
 function dom(){const roots=[];const node=()=>({style:{},classList:{add(){}},setAttribute(){},addEventListener(){},focus(){},append(){},after(){},prepend(){},hidden:false,innerHTML:'',textContent:''});globalThis.document={head:{appendChild(){}},body:{appendChild:n=>roots.push(n)},createElement:()=>{const n=node(),parts=new Map();n.querySelector=key=>{if(!parts.has(key))parts.set(key,node());return parts.get(key);};n.parts=parts;return n;}};globalThis.localStorage={getItem:()=>null};return roots;}
 const expressions=text=>{const tree=ts.createSourceFile('main.ts',text,ts.ScriptTarget.Latest,true),out={};function visit(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==='expose')out.expose=n.getText(tree);if(ts.isCallExpression(n)&&n.expression.getText(tree)==='createTitle')out.title=n.getText(tree);if(ts.isIfStatement(n)&&n.expression.getText(tree)==="!bare && params.get('radio') !== '0'")out.radio=n.getText(tree);ts.forEachChild(n,visit);}visit(tree);return out;};
-async function actual(main,query,radio,title=current){const roots=dom(),expr=expressions(main);const c=vm.createContext({ERA:{id:'today',title:null,radio:true,modern:true},createTitle:title.createTitle,touchDevice:true,gameMode:'mail',SITE:{brand:'mail'},AREA:{name:'Mabou',mailTitle:true},ride:{choice:{kind:'car'},setRadio(){}},titleDaily:undefined,bare:false,started:false,terrain:{paved:new URLSearchParams(query).get('paved')!=='0'?{}:null},params:new URLSearchParams(query),loadRadio:()=>Promise.resolve(radio),siteRadio:()=>({}),title:null,radio:null});
+async function actual(main,query,radio,title=current){const roots=dom(),expr=expressions(main);const c=vm.createContext({ERA:{id:'today',title:null,radio:true,modern:true},createTitle:title.createTitle,touchDevice:true,gameMode:'mail',SITE:{brand:'mail'},AREA:{name:'Mabou',mailTitle:true},ride:{choice:{kind:'car'},setRadio(){}},titleDaily:undefined,bare:false,started:false,terrain:{paved:new URLSearchParams(query).get('paved')!=='0'?{}:null},params:new URLSearchParams(query),loadRadio:()=>Promise.resolve(radio),siteRadio:()=>({}),title:null,radio:null,fired:null});
  const compile=async text=>(await transform(text,{loader:'ts',target:'es2022',define:{'import.meta.env.DEV':'false','import.meta.env.BASE_URL':JSON.stringify('./')}})).code;
  // Include the real dev-only helper now referenced by the extracted radio block.
  if(expr.expose)vm.runInContext(await compile(expr.expose),c);
@@ -282,7 +282,7 @@ async function vehicleRadioGate(main){
  const compiled=(await transform(block,{loader:'ts',target:'es2022',define:{'import.meta.env.DEV':'false','import.meta.env.BASE_URL':JSON.stringify('./')}})).code;
  for(const kind of ['car','bike','horse']){
   const requests=[];
-  const context=vm.createContext({bare:false,params:new URLSearchParams('era=1884'),ERA:{radio:true},ride:{kind},SITE:{brand:'mail'},started:false,radio:null,siteRadio:()=>({}),loadRadio:(...a)=>{requests.push(a);return Promise.resolve(null);}});
+  const context=vm.createContext({bare:false,params:new URLSearchParams('era=1884'),ERA:{radio:true},ride:{kind},SITE:{brand:'mail'},started:false,radio:null,fired:null,siteRadio:()=>({}),loadRadio:(...a)=>{requests.push(a);return Promise.resolve(null);}});
   vm.runInContext(compiled,context);await Promise.resolve();
   assert.equal(requests.length,kind==='horse'?0:1,'radio load for '+kind);
  }

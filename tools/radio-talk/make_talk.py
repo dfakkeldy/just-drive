@@ -99,6 +99,15 @@ MUSIC = {
 }
 MUSIC_UNDER = -15   # dB: the song under the voice, against the song alone
 MIN_SECONDS = 6.0   # see make(): web/src/radio.ts reads only tracks longer than 5 s
+# A Get Fired call (talk-react-*) or nickname (talk-nick-*) is not a station track: the game plays it into a pause of the
+# station, and a nickname straight after its call. So it is never padded, and the quiet at each end is cut to a breath.
+CALL_PIECES = ('talk-react-', 'talk-nick-')
+TIGHT = ('silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.04,areverse,'
+         'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.08,areverse')
+
+
+def call_piece(stem: str) -> bool:
+    return stem.startswith(CALL_PIECES)
 # Sound effects, by the words in the script's [SFX: ...] note. (prompt, seconds)
 DOG = 'A medium-sized farm dog, recorded close and dry, no room echo, no other sound: '
 SFX = {
@@ -467,7 +476,11 @@ def make(stem: str, items: list, work: pathlib.Path) -> None:
     else:
         ff(*[a for f in files for a in ('-i', str(f))], '-filter_complex', ''.join(f'[{i}:a]' for i in range(len(files))) + f'concat=n={len(files)}:v=0:a=1', str(joined))
     final = FINAL / f'{stem}.mp3'
-    short = MIN_SECONDS - seconds(joined)
+    short = 0.0 if call_piece(stem) else MIN_SECONDS - seconds(joined)
+    if call_piece(stem):
+        tight = work / f'{stem}.tight.wav'
+        ff('-i', str(joined), '-af', TIGHT, str(tight))
+        joined = tight
     if short > 0:   # the player leaves out a track of 5 s or less (radio.ts): a short ident gets a pause before and after
         padded = work / f'{stem}.padded.wav'
         ff('-i', str(joined), '-af', f'adelay={round(short * 350)},apad=pad_dur={short * 0.65:.3f}', str(padded))

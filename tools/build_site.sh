@@ -54,6 +54,8 @@ if [ "${RADIO:-1}" != "0" ] && { [ -f "$AUDIO_SITE/radio.json" ] || [ -f "$AUDIO
   if [ -f "$AUDIO_SITE/radio.json" ]; then cp "$AUDIO_SITE/radio.json" "$SITE/audio/"; fi
   # The same stations, with the drive-around game's own starting dial. It shares the song files.
   if [ -f "$AUDIO_SITE/radio-just.json" ]; then cp "$AUDIO_SITE/radio-just.json" "$SITE/audio/"; fi
+  # The Party Line's call-ins for Get Fired (only the mail game reads it; its files are among the .mp3 below).
+  if [ -f "$AUDIO_SITE/calls.json" ]; then cp "$AUDIO_SITE/calls.json" "$SITE/audio/"; fi
   cp -l "$AUDIO_SITE"/*.mp3 "$SITE/audio/"
 fi
 # The page: the same markup as the test build, inside a full document. Search engines are asked to stay away
