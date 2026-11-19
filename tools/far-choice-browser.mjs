@@ -50,7 +50,7 @@ async function page(viewport,url,options){
 async function openPanel(){if(!await read("document.getElementById('settings').classList.contains('open')"))await tap('#gear');assert.ok(await read("document.getElementById('settings').classList.contains('open')"),'settings open');}
 async function check(){
  const phone=`${base}/?${MABOU_HILLS}&mode=explore&vehicle=truck&res=1&q=low&touch=1&radio=0`;
- await c.send('Page.navigate',{url:base+'/favicon.ico'});await read('localStorage.clear()');
+ await c.send('Storage.clearDataForOrigin',{origin:new URL(base).origin,storageTypes:'local_storage'});
  await page(PHONE,phone,{far:false});
  let s=await scene();console.log('OFF',JSON.stringify(s));
  assert.deepEqual([s.low,s.farLand,s.farTurbineDraws,s.tallDraws,s.tallSolids],[true,null,0,0,0],'default phone draws no far views');
