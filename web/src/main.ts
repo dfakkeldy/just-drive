@@ -117,6 +117,7 @@ import { createTitle } from './title';
 import { Endings } from './ending';
 import { YardJob } from './yard-job';
 import { FishingSite } from './fishing-site';
+import { isWharfBuilding, wharfBuildings, wharfBuildingStyles } from './mabou-wharf-buildings';
 import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
@@ -353,20 +354,26 @@ const buildingList: Building[] | null = manifest.buildings ? await getJson(manif
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
-const buildingStyles = ERA.modern && manifest.buildingStyles
-
-  ? buildingAppearance(astra, LOW, sunDir, await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
-    .catch((e: unknown) => { console.warn('building styles', e); return undefined; }))
-  : buildingAppearance(astra, LOW, sunDir);
+const bakedBuildingStyles = ERA.modern && manifest.buildingStyles
+  ? await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
+    .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
+  : undefined;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir, bakedBuildingStyles);
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
 const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
-const buildings = ERA.modern && drawnBuildings ? new Buildings(mabouSite ? mabouSite.drawn(drawnBuildings) : drawnBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
+const useWharfBuildings = ERA.modern && AREA.fishing && drawnBuildings;
+const ordinaryBuildings = useWharfBuildings ? drawnBuildings.filter(b => !isWharfBuilding(b)) : drawnBuildings;
+const buildings = ERA.modern && ordinaryBuildings ? new Buildings(mabouSite ? mabouSite.drawn(ordinaryBuildings) : ordinaryBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
+const wharf = useWharfBuildings ? new Buildings(wharfBuildings(drawnBuildings), manifest.village, EXAG, SEA_LEVEL,
+  buildingAppearance(astra, LOW, sunDir, wharfBuildingStyles)) : null;
+if (wharf) wharf.mesh.frustumCulled = true;
+const buildingClear = [...(buildings?.clear ?? []), ...(wharf?.clear ?? [])];
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
-if (buildings) clear.push(...buildings.clear);
+clear.push(...buildingClear);
 if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
@@ -427,6 +434,7 @@ else if (params.get('shadows') !== '0') terrain.shadows = true;
 if (LOW) terrain.lazyRange = 600;
 if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
+if (wharf) scene.add(wharf.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
 const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far', stockpiles?.excludes) : null;
 if (trees) scene.add(trees.group);
@@ -455,7 +463,7 @@ if (landmarks) scene.add(landmarks.group);
 const harbourLights = ERA.modern ? new HarbourLights(AREA.id, manifest.village, EXAG, nightLook !== null, SEA_LEVEL) : null;
 if (harbourLights) scene.add(harbourLights.group);
 const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea, SEA_LEVEL,
-  new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
+  new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(wharf ? [wharf.mesh] : []), ...(trees ? [trees.group] : [])]),
   terrain, trees?.group ?? null, params.get('reflections'));
 if (coast) waterReflections?.include(coast.group);
 if (waterReflections) {
@@ -901,7 +909,7 @@ if (shift instanceof Shift) {
   // Breakable yard and field props: mail play and Get Fired only (never Explore or Just Drive); ?yardProps=0 leaves
   // them out. Their positions are invented by rule from the real building shapes and roads (yard-props-rules.ts).
   if (ERA.modern && mailMode && params.get('yardProps') !== '0' && properties.length) {
-    const VX = manifest.village[0], VZ = manifest.village[1], houseBoxes = new Set(buildings?.clear ?? []);
+    const VX = manifest.village[0], VZ = manifest.village[1], houseBoxes = new Set(buildingClear);
     const near = (kinds: (k: number) => boolean) => (x: number, z: number, reach: number) => {
       const h = roads.nearest(x, z, reach, r => kinds(r.kind));
       return h && { dist: h.dist, x: h.x, z: h.z, heading: h.heading, halfWidth: h.road.halfWidth };
@@ -1589,7 +1597,7 @@ const titleDaily = DAILY && dailySquares ? { date: DAILY.date, squares: dailySqu
 const title = started ? null : createTitle(touchDevice, () => { started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
 // A ride-along day says so on the start card.
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
-startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
+startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildingClear, bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
 const stuntPlaces = testPark ? testParkPlaces(testPark, manifest.village)

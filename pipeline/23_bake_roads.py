@@ -352,7 +352,7 @@ def main():
         # its saved lines and point counts must describe the final split inventory for step 29.
         for road in roads:
             road['washboard'] = (road.get('name') or '') in WASHBOARD
-        from dashcam_corrections import correct_roads, correct_nov18_roads, nov18_driveways, attach_guardrails
+        from dashcam_corrections import correct_roads, correct_nov18_roads, correct_nov19_roads, nov18_driveways, attach_guardrails
         roads = correct_roads(roads, AREA.id, guardrails=False)
         roads = correct_nov18_roads(roads, AREA.id)
         marks = {}
@@ -367,10 +367,22 @@ def main():
                   f"({moved['junctions']['nodes']:,} nodes, ends apart by at most {moved['junctions']['endsApart']} m); "
                   f"{len(moved['junctionsHeld'])} odd junctions held", flush=True)
             # The mailboxes are decided on the lines as they were (29_bake_props.py); keep those lines for it.
-            marks['bed'] = road_ground.keep_lines_before(terrain.OVERVIEW, before, roads)
+
         # <<< road-ground trial
         # Observed driveways come after the bed move: their lines are final, and they join the moved public road.
         roads = nov18_driveways(roads, AREA.id)
+        corrected = correct_nov19_roads(roads, AREA.id)
+        if os.environ.get('MMM_ROAD_BED') == '1':
+            # Split the saved pre-move line at the same vertex. The new gravel piece keeps the rest.
+            for road in roads:
+                before.setdefault(road['id'], road['pts'])
+            if corrected is not roads:
+                paved, gravel = [r for r in corrected if r.get('correction') == '19nov:Mabou Harbour Road']
+                line = before[paved['id']]
+                cut = len(paved['pts']) - 1
+                before[paved['id']], before[gravel['id']] = line[:cut+1], line[cut:]
+            marks['bed'] = road_ground.keep_lines_before(terrain.OVERVIEW, before, corrected)
+        roads = corrected
         roads = attach_guardrails(roads, AREA.id)
         json.dump(dict(crs='EPSG:2961', roads=roads, **marks), f, separators=(',',':'))
     stats = {}

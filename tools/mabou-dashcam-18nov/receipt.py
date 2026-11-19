@@ -86,14 +86,18 @@ def verify(source, stage):
     print(f'PASS staged bake is the receipt: {len(report["files"])} files and the manifest counts; undo rebuilds the before props')
 
 
-def state(baked, report):
+def state(baked, report, later=()):
     """'before' or 'after' when every pinned file and the owned manifest counts are one side of the receipt."""
     seen = set()
     for f in report['files']:
         now = sha((Path(baked)/f['file']).read_bytes())
+        for delta in reversed(later):
+            now = next((e['before'] for e in delta['files'] if e['file'] == f['file'] and e['sha256'] == now), now)
         seen.add('before' if now == f['before'] else 'after' if now == f['sha256'] else f'unknown bytes {f["file"]}')
     for m in report['manifests']:
         now = counts(json.loads((Path(baked)/m['folder']/'manifest.json').read_bytes()))
+        if m['before'] == m['after'] == now:
+            continue
         seen.add('before' if now == m['before'] else 'after' if now == m['after'] else f'unknown counts {m["folder"]}/manifest.json')
     if len(seen) != 1 or not seen <= {'before', 'after'}:
         raise AssertionError('18 Nov land is mixed or unknown: ' + ', '.join(sorted(seen)))
@@ -231,7 +235,9 @@ def fixture():
 def land(baked):
     fixture()
     report = json.loads(RECEIPT.read_text())
-    mode = state(baked, report)
+    later = HERE.parent / 'mabou-wharf' / 'roads.json'
+    followups = [json.loads(later.read_text())] if later.exists() else []
+    mode = state(baked, report, followups)
     print(f'PASS 18 Nov Mabou land is {mode} ({len(report["files"])} files and the manifest counts); fixture: half install, counts left behind and unknown bytes refused; install/uninstall refusals write nothing, kept keys and bytes, idempotent')
 
 

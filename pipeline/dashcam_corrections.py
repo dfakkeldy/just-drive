@@ -302,3 +302,28 @@ def remap_road_references(data, kind, roads):
     else:
         raise ValueError('Unknown road-reference schema: '+kind)
     return result
+
+
+def correct_nov19_roads(roads, area):
+    """Move the pavement limit on the installed centreline and grade the wharf access."""
+    if area != 'mabou':
+        return roads
+    key = '19nov:Mabou Harbour Road'
+    if any(r.get('correction') == key for r in roads):
+        return roads
+    old_key = '18nov:Mabou Harbour Road'
+    index, road = next((i, r) for i, r in enumerate(roads)
+                       if r.get('correction') == old_key and r['kind'] == 2)
+    cut = min(range(len(road['pts'])), key=lambda i: math.dist(road['pts'][i], (618290, 5105172)))
+    if not 0 < cut < len(road['pts']) - 1 or math.dist(road['pts'][cut], (618290, 5105172)) > 6:
+        raise ValueError('No centreline vertex at the 19 Nov pavement limit')
+    lane_index, lane = next((i, r) for i, r in enumerate(roads)
+                            if r['name'] is None and not r['bridge'] and r['kind'] == 4
+                            and math.dist(r['pts'][0], NOV18['harbour']['mouth']) < 5
+                            and math.dist(r['pts'][-1], (618663, 5104796)) < 5)
+    gravel = dict(road, id=max(r['id'] for r in roads) + 1, kind=3, pts=road['pts'][cut:], correction=key)
+    del gravel['pavement']
+    result = list(roads)
+    result[lane_index] = dict(lane, kind=3)
+    result[index:index+1] = [dict(road, pts=road['pts'][:cut+1], correction=key), gravel]
+    return result

@@ -5,6 +5,7 @@ import { sampleDeparture, departureDuration, type BoatCourseSample } from './fis
 import { FishingJudge, type FishingSample } from './fishing-rules';
 import { BOARD, FishingSite, PARK, WHARF } from './fishing-site';
 import { pushOut, type Solid } from './parked';
+import { WHARF_ANCHORS, WHARF_FIXTURES } from './mabou-wharf-props';
 import type { Terrain } from './terrain';
 import type { Vehicle } from './vehicle';
 
@@ -26,6 +27,7 @@ export class Fishing {
   readonly judge = new FishingJudge();
   private art: FishingArt | null = null;
   private solids: Solid[] = [];
+  private shoreSolids: Array<{ ground: number; bounds: Solid[] }> = [];
   readonly departureDuration = departureDuration;
   private course:BoatCourseSample={e:0,n:0,de:0,dn:-1,speed:0,distance:0};
   private phase = 0;
@@ -50,11 +52,20 @@ export class Fishing {
     const end=this.terrain.surfaceAt(this.site.x+7,this.site.z+60);
     if (!toe || !end || toe.level<7 || end.level<7) return;
     const top=this.site.level;
-    const art=buildFishing(top,this.sea,this.low);
+    const ground: number[] = [];
+    for (const { u, v } of WHARF_ANCHORS) {
+      const s = this.terrain.surfaceAt(this.site.x + u, this.site.z + v);
+      if (!s || s.level < 7) return;
+      ground.push(s.ground);
+    }
+    const art=buildFishing(top,this.sea,this.low,ground);
     this.art=art;this.triangles=art.triangles;this.group.add(art.fixed,art.boat,art.crew,art.lines);
     const solid=(u:number,v:number,half:number,halfWidth:number,heading:number)=>this.solids.push({x:this.site.x+u,z:this.site.z+v,half,halfWidth,heading});
     // The low timber guards are real solids at every physics substep, not a painted edge.
     solid(2,37,27,.145,Math.PI);solid(12,37,27,.145,Math.PI);solid(7,64,5,.145,Math.PI/2);
+    this.shoreSolids = WHARF_FIXTURES.map(({u,v,half,halfWidth,yaw}, i) => ({
+      ground: ground[i], bounds: [{ x: this.site.x + u, z: this.site.z + v, half, halfWidth, heading: yaw }],
+    }));
     this.site.toe=this.site.entrance(-2);this.site.top=top;
     this.pose(0);
   }
@@ -92,6 +103,9 @@ export class Fishing {
     if(!this.art || this.endings.busy || !this.near(this.car.x,this.car.z,95))return;
     const c=this.car;
     if(this.site.top!==null && c.y>=this.site.top-.25 && c.y<=this.site.top+1)pushOut(c,this.solids);
+    for (const { ground, bounds } of this.shoreSolids) {
+      if (c.y >= ground - .45 && c.y <= ground + 1.25) pushOut(c, bounds);
+    }
     const s=this.sample;
     s.x=c.x;s.z=c.z;s.y=c.y;s.distance=Math.hypot(c.x-this.site.x-BOARD.u,c.z-this.site.z-BOARD.v);
     s.deck=this.site.deckHeight(c.x,c.z);s.speed=c.speed;s.sideways=c.vx*Math.cos(c.heading)+c.vz*Math.sin(c.heading);

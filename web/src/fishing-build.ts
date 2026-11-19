@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Mesher, SignAtlas, letters, type RGB } from './yard-kit';
 import { BERTH, BOARD } from './fishing-site';
+import { addWharfProps } from './mabou-wharf-props';
 
 const WHITE: RGB = [.76,.77,.72], WOOD: RGB = [.25,.17,.10], DARK: RGB = [.025,.032,.037];
 const METAL: RGB = [.24,.28,.28], GLASS: RGB = [.035,.09,.12], ROPE: RGB = [.49,.36,.17];
@@ -98,7 +99,7 @@ export interface FishingArt {
   fixed:THREE.Mesh;boat:THREE.Mesh;crew:THREE.InstancedMesh;lines:THREE.Mesh;triangles:number;
   mooring:THREE.BufferGeometry;wake:THREE.BufferGeometry;wakeMaterial:THREE.Material;mooringMaterial:THREE.Material;
 }
-export function buildFishing(top:number,sea:number,low:boolean):FishingArt {
+export function buildFishing(top:number,sea:number,low:boolean,ground:readonly number[]):FishingArt {
   const atlas=new SignAtlas(1024,512);atlas.add(8,8,(g,w,h)=>{g.fillStyle='#fff';g.fillRect(0,0,w,h);});
   const material=new THREE.MeshLambertMaterial({vertexColors:true,map:atlas.texture,side:THREE.DoubleSide});
   if(low)material.clippingPlanes=[new THREE.Plane(new THREE.Vector3(0,1,0),-sea)];
@@ -135,6 +136,7 @@ export function buildFishing(top:number,sea:number,low:boolean):FishingArt {
   m.box(BOARD.u,top+1.2,BOARD.v,.95,1.4,.06,WOOD);m.box(BOARD.u,top+.45,BOARD.v,.13,.9,.13,WOOD);
   const board=atlas.add(256,256,(g,w,h)=>letters(g,w,h,['DECKHAND','WANTED'],'#242926','#d8cda6',{font:'cursive',weights:[1,1.1]})).cell;
   m.at(BOARD.u,top+1.2,BOARD.v-.043,Math.PI);stamp(m,.90,1.30,board);m.at(0,0,0);
+  addWharfProps(m,ground,top,sea,low);
   const other=new Mesher();boat(other,atlas,'POSTAGE DUE',BLUE,low);fillUV(other);
   const geo=other.geometry();geo.translate(16.2,sea,22);
   const pos=geo.getAttribute('position'),col=geo.getAttribute('color'),uv=geo.getAttribute('uv');fillUV(m);
