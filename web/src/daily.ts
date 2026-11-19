@@ -80,19 +80,22 @@ export class DailyRun {
       filled: packFilled(this.card.filled) };
     const { record, practice } = saveDaily(this.plan.area, this.plan.date, result, undefined, this.record);
     this.record = record;
+    // A tab left open from an earlier day: a newer day is on file, so this try is practice and shares nothing.
+    const stale = record.date !== this.plan.date;
     const first = record.first, squares = this.card.done, lines = this.card.lines;
-    this.text = resultText(first, this.plan.date, this.areaName);
+    if (!stale) this.text = resultText(first, this.plan.date, this.areaName);
     const bingo = `Bingo ${squares} of ${this.squares.length}${lines ? `, ${lines} ${lines === 1 ? 'line' : 'lines'}` : ''}${this.card.full ? ' and the full card' : ''}.`;
     const out = [
       practice ? `Practice: ${headline(result)}. ${bingo}` : `${headline(result)}. ${bingo}`,
       result.step > 0 ? LADDER[result.step - 1].steward : 'Not one call on file. The union is worried about you.',
-      practice ? `Today’s card keeps your first finished run: ${headline(first)}, bingo ${unpackFilled(first.filled).filter(Boolean).length} of ${this.squares.length}.`
+      stale ? `A newer day’s run is on file (${shortDate(record.date)}). Reload for that day’s card.`
+        : practice ? `Today’s card keeps your first finished run: ${headline(first)}, bingo ${unpackFilled(first.filled).filter(Boolean).length} of ${this.squares.length}.`
         : `Your first finished run today: this is today’s card.${end.played < this.plan.limit && result.step < LADDER.length ? ` Ended at ${clockText(end.played)}.` : ''}`,
       `${record.streak === 1 ? 'Streak: 1 day' : `Streak: ${record.streak} days in a row`}. Best: ${headline(record.best)} (${shortDate(record.best.date)}).`,
     ];
     this.endings.offer(`Today’s run · ${shortDate(this.plan.date)}`, practice ? 'Practice' : stepName(result.step), out, [
       { label: 'Try again (practice)', action: () => { this.endings.close(); this.shift.retry(); this.again(); } },
-    ], this.shareCard(first));
+    ], stale ? undefined : this.shareCard(first));
   }
   private shareCard(result: DailyResult): HTMLElement {
     const box = document.createElement('div'); box.id = 'dailyShare';
@@ -108,8 +111,11 @@ export class DailyRun {
     pre.style.cssText = 'white-space:pre-wrap;user-select:text;-webkit-user-select:text;font:12px/1.4 ui-monospace,Menlo,monospace;margin:8px 0 0';
     const showText = () => { pre.hidden = false; };
     if (typeof navigator.share === 'function') {
+      // The picture file is made now, not on the tap: Safari only shares straight from the tap, with nothing awaited first.
+      let file: File | null = null;
+      try { canvas.toBlob(blob => { if (blob) file = new File([blob], 'mabou-mail-madness-today.png', { type: 'image/png' }); }, 'image/png'); } catch { /* text only */ }
       const share = Object.assign(document.createElement('button'), { type: 'button', id: 'dailyShareButton', textContent: 'Share' });
-      share.addEventListener('click', () => { void shareResult(this.text, canvas).then(note => { status.textContent = note; }); });
+      share.addEventListener('click', () => { void shareResult(this.text, file).then(note => { status.textContent = note; }); });
       buttons.appendChild(share);
     }
     box.append(img, buttons, status, pre);
@@ -125,13 +131,9 @@ async function copyText(text: string): Promise<boolean> {
     const done = document.execCommand('copy'); area.remove(); return done;
   } catch { return false; }
 }
-async function shareResult(text: string, canvas: HTMLCanvasElement): Promise<string> {
+async function shareResult(text: string, file: File | null): Promise<string> {
   const data: ShareData = { title: GAME_NAME, text };
-  try {
-    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-    const file = blob ? new File([blob], 'mabou-mail-madness-today.png', { type: 'image/png' }) : null;
-    if (file && navigator.canShare?.({ files: [file] })) data.files = [file];
-  } catch { /* text only */ }
+  try { if (file && navigator.canShare?.({ files: [file] })) data.files = [file]; } catch { /* text only */ }
   try { await navigator.share(data); return data.files ? 'Shared, with the picture.' : 'Shared.'; }
   catch (error) { return error instanceof DOMException && error.name === 'AbortError' ? '' : 'Sharing did not work here. Copy instead.'; }
 }
@@ -152,7 +154,7 @@ export function drawShare(result: DailyResult, date: string, areaName: string, s
   const filled = unpackFilled(result.filled), done = filled.filter(Boolean).length;
   g.font = `400 30px ${sans}`; g.fillStyle = '#cbd2d8';
   g.fillText(`Discipline step ${result.step} of ${LADDER.length}`, 60, 300);
-  g.fillText(`${fmt(result.total)} points · bingo ${done} of ${filled.length}`, 60, 345);
+  g.fillText(`Bingo ${done} of ${filled.length}${result.firedAt !== null && result.step >= LADDER.length ? ` · ${fmt(result.total)} points` : ''}`, 60, 345);
   // The ladder, as on the HUD.
   for (let i = 0; i < LADDER.length; i++) { g.fillStyle = i < result.step ? '#d0632e' : '#ffffff26'; g.fillRect(60 + i * 72, 380, 64, 14); }
   g.fillStyle = '#eef2f6'; g.font = `800 44px ${sans}`; g.fillText(GAME_NAME, 60, 520);

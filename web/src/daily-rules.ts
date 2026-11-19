@@ -97,7 +97,7 @@ export const POOL: readonly SquareSpec[] = Object.freeze([
   // A rut fact is about three metres of fresh tyre strips (shift.ts).
   { kind: 'rut', needs: 'lawns', counts: [8, 12, 16], label: n => `${n * 3} m of lawn ruts` },
   { kind: 'relief', needs: 'relief', counts: [1], label: () => 'Seen at the roadside' },
-  { kind: 'sceneDust', needs: 'painter', counts: [1], label: () => 'Dust the painter' },
+  { kind: 'sceneDust', needs: 'painter', counts: [1], label: () => 'Dust a painting' },
   { kind: 'sceneHorn', needs: 'fish', counts: [1], label: () => 'Horn at the visitor' },
   { kind: 'sceneHit', needs: 'fish', counts: [1], label: () => 'Bump the visitor’s car' },
 ]);
@@ -199,8 +199,10 @@ export function readDaily(area: string, storage: () => Store = () => localStorag
   } catch { /* A sandbox may refuse storage, or the value is not ours. */ }
   return null;
 }
-/** The record after one more finished try. A later try on the same date is practice: the first try stands. */
+/** The record after one more finished try. A later try on the same date is practice: the first try stands. A tab left
+ * open from an earlier day finishes as practice too, and leaves a newer day's record and streak alone. */
 export function nextRecord(prev: DailyRecord | null, date: string, result: DailyResult): { record: DailyRecord; practice: boolean } {
+  if (prev && prev.date > date) return { record: prev, practice: true };
   if (prev && prev.date === date) return { record: { ...prev, tries: prev.tries + 1 }, practice: true };
   const streak = prev && prev.date === dayBefore(date) ? prev.streak + 1 : 1;
   const best = prev && !betterDaily(result, prev.best) ? prev.best : { ...result, date };

@@ -72,7 +72,7 @@ import { BUS } from './school-bus-rules';
 import { BUS_STOP_RADIUS, churchZones, placeAt } from './score-rules';
 import { FiredRun } from './fired';
 import { DailyRun } from './daily';
-import { atlanticDate, dailyArea, dailyPlan, drawCard, supplyFor, type Square } from './daily-rules';
+import { atlanticDate, CARD_SIZE, dailyArea, dailyPlan, drawCard, supplyFor, type Square } from './daily-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
 import { noZoom } from './no-zoom';
@@ -1392,11 +1392,13 @@ const clearEndingInput = () => {
 const endings = mailMode ? new Endings(clearEndingInput, () => { shift.startOver(); pause.resetClock(); }) : quietEndings();
 // Built with hud=0 too: a fired Shift ends through it. Only its panel follows the bare HUD.
 let daily: DailyRun | null = null;
-const fired = firedMode && shift instanceof Shift && endings instanceof Endings ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock(),
-  DAILY ? { limit: DAILY.limit, onEnd: end => daily?.finish(end) } : {}) : null;
 // The card holds only what the area can supply today: the painter or the fish truck only when the scene is really there.
-const dailySquares: Square[] | null = DAILY ? drawCard(DAILY.seed, supplyFor(DAILY, { boxes: !!props?.mail.length,
+// If a layer failed to load and nine squares cannot be drawn, this is a plain Get Fired run: no short card, no record.
+const drawn: Square[] | null = DAILY ? drawCard(DAILY.seed, supplyFor(DAILY, { boxes: !!props?.mail.length,
   lawns: properties.some(b => b.kind === 'house'), relief: relief instanceof Relief, painter: !!roadScene?.painter.enabled, fish: !!roadScene?.rules.enabled })) : null;
+const dailySquares = drawn?.length === CARD_SIZE ? drawn : null;
+const fired = firedMode && shift instanceof Shift && endings instanceof Endings ? new FiredRun(shift, endings, touchDevice, () => pause.resetClock(),
+  DAILY && dailySquares ? { limit: DAILY.limit, onEnd: end => daily?.finish(end) } : {}) : null;
 if (fired && DAILY && dailySquares && shift instanceof Shift && endings instanceof Endings) daily = new DailyRun(DAILY, dailySquares, AREA.name, shift, fired, endings, () => pause.resetClock());
 if (fired && bare) document.getElementById('firedHud')!.style.display = 'none';
 const yardJob = yard && endings instanceof Endings ? ride.yardJob?.(yard) ?? new YardJob(yard, vehicle, terrain, camera, endings) : null;

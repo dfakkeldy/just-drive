@@ -32,21 +32,31 @@ async function page(phone, query, host = '127.0.0.1') {
   await waitReady();
 }
 const settle = async () => { for (let i = 0; i < 120; i++) { await sleep(500); if (await read("document.documentElement.dataset.mmmReady === 'true'")) return; } throw Error('no settle'); };
-// The nearest upright mailbox on open road, and a pose 7 m before it along its road (as fired-browser does).
-const aim = `(()=>{const {shift:s,props:p,roads:r,vehicle:v}=mmm;
-  // A box close beside a straight piece of public road, so the 7 m run-up is open road, not trees.
-  const ids=p.mail.map((_,i)=>i).filter(i=>{const b=p.mail[i];if(b.motion.down||s.placeAt(b.x,b.z)!=='route')return false;const h=r.nearest(b.x,b.z,25,x=>x.kind>=1&&x.kind<=3);if(!h||h.dist>8)return false;
-    const q=h.road.pts,len=Math.hypot(q[h.seg+1][0]-q[h.seg][0],q[h.seg+1][1]-q[h.seg][1]);return len>30&&h.t*len>12;});
+// The nearest upright mailbox on open road, and a pose on the road 8 m before it, aimed at the box.
+const aim = `(()=>{const {shift:s,props:p,roads:r,vehicle:v}=mmm,pub=x=>x.kind>=1&&x.kind<=3;
+  // A box close beside a straight stretch of public road (the road heading agrees at the box and 10 m back), so the
+  // 7 m run-up is open road, not trees. Roads are stored in short pieces: test the heading, not a piece's length.
+  const runUp=i=>{const b=p.mail[i];if(b.motion.down||s.placeAt(b.x,b.z)!=='route')return null;const h=r.nearest(b.x,b.z,25,pub);if(!h||h.dist>8)return null;
+    const x=b.x-10*Math.sin(h.heading),z=b.z+10*Math.cos(h.heading),k=r.nearest(x,z,25,pub);
+    if(!k||k.road!==h.road||Math.abs(Math.sin(k.heading-h.heading))>.1||Math.cos(k.heading-h.heading)<0||k.dist>8)return null;return h.heading;};
+  const tried=window.dailyTried??[],ids=p.mail.map((_,i)=>i).filter(i=>!tried.includes(i)&&runUp(i)!==null);
   ids.sort((a,b)=>Math.hypot(p.mail[a].x-v.x,p.mail[a].z-v.z)-Math.hypot(p.mail[b].x-v.x,p.mail[b].z-v.z));
-  const i=ids[0],b=p.mail[i],h=r.nearest(b.x,b.z,25,x=>x.kind>=1&&x.kind<=3),q=h.road.pts,dx=q[h.seg+1][0]-q[h.seg][0],dz=-(q[h.seg+1][1]-q[h.seg][1]),l=Math.hypot(dx,dz);
-  const heading=Math.atan2(dx/l,-(dz/l)),x=b.x-7*Math.sin(heading),z=b.z+7*Math.cos(heading);
-  window.dailyQA={index:i,x,z,heading};return {index:i,box:{x:b.x,z:b.z},road:h.road.name};})()`;
-async function knock() {
+  // Start on the road's centreline 8 m back (not on the verge beside the box) and steer straight at the box.
+  const i=ids[0],b=p.mail[i],h=r.nearest(b.x,b.z,25,pub),along=runUp(i),x=h.x-8*Math.sin(along),z=h.z+8*Math.cos(along),heading=Math.atan2(b.x-x,-(b.z-z));
+  window.dailyTried=[...tried,i];window.dailyQA={index:i,x,z,heading};return {index:i,box:{x:b.x,z:b.z},road:r.nearest(b.x,b.z,25,pub).road.name,candidates:ids.length};})()`;
+async function knock(attempt = 0) {
+  if (attempt === 0) await read('window.dailyTried=[]');
   const target = await read(aim);
   await read('mmm.vehicle.restart(dailyQA.x,dailyQA.z,dailyQA.heading)'); await settle();
   await read('mmm.vehicle.restart(dailyQA.x,dailyQA.z,dailyQA.heading);mmm.vehicle.speed=9;mmm.vehicle.vx=9*Math.sin(dailyQA.heading);mmm.vehicle.vz=-9*Math.cos(dailyQA.heading)');
-  await key('keyDown', 'ArrowUp'); await sleep(1600); await key('keyUp', 'ArrowUp');
-  return { ...target, down: await read('mmm.props.mail[dailyQA.index].motion.down'), speed: await read('Math.hypot(mmm.vehicle.vx,mmm.vehicle.vz)'),
+  await key('keyDown', 'ArrowUp');
+  const trace = [];
+  for (let i = 0; i < 8; i++) { await sleep(200); trace.push(await read("[Math.hypot(mmm.vehicle.x-dailyQA.x,mmm.vehicle.z-dailyQA.z).toFixed(1),Math.hypot(mmm.vehicle.vx,mmm.vehicle.vz).toFixed(1)].join('/')")); }
+  await key('keyUp', 'ArrowUp');
+  const recent = await read("mmm.shift.score.recent.map(e=>e.kind+'@'+e.place)");
+  // A box on the verge can hide behind a tree or a post: try the next one (up to three).
+  if (!recent.some(k => /^box:\w+@route$/.test(k)) && attempt < 2) { console.log('knock missed', JSON.stringify({ ...target, trace })); return knock(attempt + 1); }
+  return { ...target, trace, down: await read('mmm.props.mail[dailyQA.index].motion.down'), speed: await read('Math.hypot(mmm.vehicle.vx,mmm.vehicle.vz)'),
     recent: await read("mmm.shift.score.recent.map(e=>e.kind+'@'+e.place)"),
     probe: await read("({elapsed:mmm.shift.elapsed,title:document.getElementById('title')?.hidden,ending:document.getElementById('endingFrame')?.hidden,at:Math.hypot(mmm.vehicle.x-dailyQA.x,mmm.vehicle.z-dailyQA.z),paused:document.body.className,active:document.activeElement?.id})") };
 }
@@ -65,7 +75,10 @@ try {
     const career = await read("localStorage.getItem('mmm.shift.v1')");
     const mailOrder = await read(`(()=>{const y=s=>document.querySelector(s).getBoundingClientRect();return {mode:y('#modeChoice').bottom,daily:y('#dailyChoice').top,dailyEnd:y('#dailyChoice').bottom,tag:y('#title .tag').top,h1:y('#title h1').bottom,start:y('#titleStart').top,keys:y('#title dl').top};})()`);
     assert.ok(mailOrder.mode <= mailOrder.daily && mailOrder.dailyEnd <= mailOrder.tag && mailOrder.h1 < mailOrder.keys && mailOrder.keys < mailOrder.start, `mail title order: ${JSON.stringify(mailOrder)}`);
+    await read("document.getElementById('modeChoice').scrollIntoView({block:'start'})"); await sleep(200);
     await shot(`daily-${name}-mail-title`);
+    // The phone card scrolls (it opens at its start button): bring the choice into view, as a thumb would.
+    await read("document.getElementById('modeDaily').scrollIntoView({block:'center'})"); await sleep(200);
     const offer = await box('#modeDaily');
     assert.ok(offer?.shown && offer.inside && offer.height >= 44, `the title offers Today's run, touch-sized: ${JSON.stringify(offer)}`);
     assert.equal(await read("document.getElementById('modeDaily').getAttribute('aria-pressed')"), 'false');
@@ -98,6 +111,7 @@ try {
       tag:y('#title .tag').top,text:y('#titleCard>p:nth-of-type(2)').top,bingo:y('#titleBingo').top,bingoEnd:y('#titleBingo').bottom,start:y('#titleStart').top};})()`);
     assert.ok(order.mode <= order.daily && order.dailyEnd <= order.tag && order.tag < order.text && order.text < order.bingo && order.bingoEnd <= order.start,
       `title order: modes, today's run, tag, words, card, start: ${JSON.stringify(order)}`);
+    await read("document.getElementById('titleBingo').scrollIntoView({block:'center'})"); await sleep(200);
     await shot(`daily-${name}-title`);
     await read("document.getElementById('titleStart').click();document.activeElement?.blur()"); await sleep(600);
     // The seeded start: the car is on the start road, near the start-key place.
@@ -130,7 +144,8 @@ try {
     const kinds = hit.recent.filter(k => k.endsWith('@route')).map(k => k.split('@')[0]);
     rules.card.forEach((sq, i) => assert.equal(live.counts[i], Math.min(sq.need, kinds.filter(k => k === sq.kind).length), `${sq.label}: ${JSON.stringify(live)}`));
     assert.ok(rules.card.some((sq, i) => sq.kind.startsWith('box:') && live.counts[i] > 0) || !rules.card.some(sq => kinds.includes(sq.kind)), 'a box square on the card counted the knock');
-    assert.deepEqual(live.on, live.mini, 'the panel and the phone card agree');
+    // The panel card is built on both; the small card is in the page only on a phone (in its status line).
+    assert.deepEqual(live.mini, phone ? live.on : [], 'the panel and the phone card agree');
     assert.deepEqual(live.on, rules.card.map((s, i) => live.counts[i] >= s.need), 'filled squares show');
     await shot(`daily-${name}-hud`);
     // Run out the clock: three seconds before the limit, then real frames to the end.
@@ -140,7 +155,7 @@ try {
     assert.equal(ended, true, 'the run ends by itself at its time limit');
     await sleep(400);
     const card = await read(`(()=>{const f=document.getElementById('endingFrame'),img=f.querySelector('#dailyShare img');return {hidden:f.hidden,tag:f.querySelector('.endingTag')?.textContent,
-      title:document.getElementById('endingTitle')?.textContent,lines:[...f.querySelectorAll('#endingCard>p')].map(p=>p.textContent),
+      title:document.getElementById('endingTitle')?.textContent,lines:[...f.querySelectorAll('#endingCard>p:not(.endingTag)')].map(p=>p.textContent),
       buttons:[...f.querySelectorAll('button')].map(b=>b.textContent),img:img&&{w:img.naturalWidth,h:img.naturalHeight,alt:img.alt},
       across:(()=>{const r=document.getElementById('endingCard').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})(),
       daily:localStorage.getItem('mmm.daily.v1'),best:localStorage.getItem('mmm.fired.best.v1'),career:localStorage.getItem('mmm.shift.v1')}})()`);
@@ -182,7 +197,7 @@ try {
     const again = await read(`(async()=>{const {startKey}=await import('/src/start-key.ts');const p=startKey(mmm.daily.plan.start,mmm.roads.roads,mmm.vehicle.bounds);return Math.hypot(mmm.vehicle.x-p.x,mmm.vehicle.z-p.z);})()`);
     assert.ok(again < 60, `the practice try starts at the same place (${again.toFixed(1)} m)`);
     await read("document.getElementById('endShift').click()"); await sleep(500);
-    const practice = await read(`({title:document.getElementById('endingTitle')?.textContent,lines:[...document.querySelectorAll('#endingCard>p')].map(p=>p.textContent),
+    const practice = await read(`({title:document.getElementById('endingTitle')?.textContent,lines:[...document.querySelectorAll('#endingCard>p:not(.endingTag)')].map(p=>p.textContent),
       record:JSON.parse(localStorage.getItem('mmm.daily.v1')).mabou,text:mmm.daily.text})`);
     assert.equal(practice.title, 'Practice'); assert.match(practice.lines[0], /^Practice: /); assert.match(practice.lines[2], /^Today’s card keeps your first finished run/);
     assert.equal(practice.record.tries, 2); assert.deepEqual(practice.record.first, record.first); assert.equal(practice.text, expected);

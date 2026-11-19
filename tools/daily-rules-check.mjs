@@ -214,6 +214,9 @@ ok('the first finished try of the day stands; later ones are practice; the strea
   assert.equal(r.record.streak, 3); assert.deepEqual(r.record.best.date, '2026-11-18', 'a weaker day keeps the best');
   r = saveDaily('mabou', '2026-11-21', weak, storage);
   assert.equal(r.record.streak, 1, 'a missed day starts the streak again');
+  // A tab left open from an earlier day finishes as practice and leaves the newer record alone.
+  const stale = saveDaily('mabou', '2026-11-20', strong, storage);
+  assert.equal(stale.practice, true); assert.deepEqual(stale.record, r.record); assert.deepEqual(readDaily('mabou', storage), r.record);
   assert.equal(store.get('mmm.shift.v1'), 'career'); assert.equal(store.get('mmm.fired.best.v1'), 'best');
   assert.deepEqual([...store.keys()].sort(), [DAILY_KEY, 'mmm.fired.best.v1', 'mmm.shift.v1'].sort());
   assert.equal(DAILY_KEY, 'mmm.daily.v1');

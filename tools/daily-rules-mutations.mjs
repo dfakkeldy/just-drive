@@ -29,6 +29,7 @@ const mutants=[
  ['UTC date',"timeZone: 'America/Halifax'","timeZone: 'UTC'",'daily-rules'],
  ['no AST fallback','new Date(+now - 4 * 3600e3)','new Date(+now)','daily-rules'],
  ['practice replaces the first','if (prev && prev.date === date) return { record: { ...prev, tries: prev.tries + 1 }, practice: true };','','daily-rules'],
+ ['an old tab replaces a newer day','  if (prev && prev.date > date) return { record: prev, practice: true };\n','','daily-rules'],
  ['streak never breaks','prev && prev.date === dayBefore(date) ? prev.streak + 1 : 1','prev ? prev.streak + 1 : 1','daily-rules'],
  ['shared key',"DAILY_KEY = 'mmm.daily.v1'","DAILY_KEY = 'mmm.fired.best.v1'",'daily-rules'],
  ['other areas dropped','storage().setItem(DAILY_KEY, JSON.stringify({ ...all, [area]: next.record }));','storage().setItem(DAILY_KEY, JSON.stringify({ [area]: next.record }));','daily-rules'],

@@ -133,15 +133,16 @@ export class FiredRun {
   private paint(): void {
     const b = this.book, now = this.now, p = progress(b.total, b.step), combo = b.comboAt(now);
     const comboText = combo > 1 ? `combo ×${combo.toFixed(2).replace(/0$/, '')} ${b.comboLeft(now).toFixed(1)} s` : 'no combo';
-    const left = this.limit > 0 ? ` · ${minutes(Math.max(0, Math.ceil(this.limit - now)))} left` : '';
-    setHud(this.text, `${fmt(b.total)} pts · ${comboText}\n${stepName(b.step)} · ladder ×${b.multiplier.toFixed(2).replace(/0$/, '')}${left}`);
+    // A run with a time limit (Today's run) shows the clock on a line of its own: the panel is narrow.
+    const left = this.limit > 0 ? minutes(Math.max(0, Math.ceil(this.limit - now))) : '';
+    setHud(this.text, `${left ? `Today’s run · ${left} left\n` : ''}${fmt(b.total)} pts · ${comboText}\n${stepName(b.step)} · ladder ×${b.multiplier.toFixed(2).replace(/0$/, '')}`);
     const live = this.last && now - this.last.time < LAST_SECONDS ? this.last.text : '';
     setHud(this.status, b.fired ? 'Fired.' : `${fmt(p.need)} to ${p.next}${live ? `\n${live}` : ''}`);
     this.bars.forEach((bar, i) => {
       const width = i < b.step ? '100%' : i === b.step ? `${Math.round(p.fraction * 100)}%` : '0%';
       if (bar.style.width !== width) bar.style.width = width;
     });
-    setHud(this.lineText, `${left ? `${left.slice(3, -5)} · ` : ''}${fmt(b.total)} pts${combo > 1 ? ` ×${combo.toFixed(2).replace(/0$/, '')}` : ''} · ${stepName(b.step)} ${b.step}/${LADDER.length}${live ? ` · ${live}` : ''}`);
+    setHud(this.lineText, `${left ? `${left} · ` : ''}${fmt(b.total)} pts${combo > 1 ? ` ×${combo.toFixed(2).replace(/0$/, '')}` : ''} · ${stepName(b.step)} ${b.step}/${LADDER.length}${live ? ` · ${live}` : ''}`);
     const fill = `${Math.round((b.step + p.fraction) / LADDER.length * 100)}%`;
     if (this.line.style.getPropertyValue('--fill') !== fill) this.line.style.setProperty('--fill', fill);
   }
