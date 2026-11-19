@@ -95,10 +95,17 @@ export function createQuarryStuntPark(terrain: Terrain, low: boolean): StuntPark
       // Follow the upper bench's fall across the park. The lower bench needs only a light skim.
       for (const pad of COURSE_PADS) {
         const offset = n - pad.n;
-        const inset = Math.min(pad.halfE - Math.abs(e - pad.e), pad.halfN - Math.abs(offset));
-        if (inset <= 0) continue;
+        const side = e - pad.e;
+        const insetE = pad.halfE - Math.abs(side), insetN = pad.halfN - Math.abs(offset);
+        if (insetE <= 0 || insetN <= 0) continue;
         const grade = pad === upper ? 72.4 - .034 * offset : 60.05;
-        return surveyed + (grade - surveyed) * smooth(0, 15, inset);
+        // The ground rises beyond the tunnel. Taper the grade before the north-west bank.
+        const blendE = pad === upper && side < 0 ? 30 : 15;
+        const blendN = pad === upper && offset > 0 ? 39 : 15;
+        const blend = pad === upper
+          ? smooth(0, blendE, insetE) * smooth(0, blendN, insetN)
+          : smooth(0, 15, Math.min(insetE, insetN));
+        return surveyed + (grade - surveyed) * blend;
       }
       return surveyed;
     },

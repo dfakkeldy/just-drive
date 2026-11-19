@@ -14,9 +14,17 @@ import { createQuarryStuntPark, quarryCoursePlaces } from '../web/src/quarry-stu
 const { terrain, roads } = makeGround('../data/baked/areas/westbay');
 const origin = terrain.manifest.village;
 const world = (e, n) => [e - origin[0], origin[1] - n];
-terrain.sites.push(new QuarrySite(origin));
 const park = createQuarryStuntPark(terrain, true);
 await park.prepare();
+terrain.sites.push(new QuarrySite(origin));
+const [upper] = COURSE_PADS;
+// The bench falls back into the surveyed land beyond the tunnel's north ramp.
+for (const [e,n] of [[-67,92],[-59,85],[-55,94]]) {
+  const [x,z] = world(upper.e+e,upper.n+n);
+  const surveyed = await terrain.surveyHeightAt(x,z);
+  assert.ok(surveyed !== null && Math.abs(park.height(x,z,surveyed)-surveyed) < 2.2,
+    `grade blends into the surveyed bench at ${e},${n}`);
+}
 assert.deepEqual(park.pieces.map(p => p.placement.piece.id).sort(), [
   'drop-0.8', 'drop-1.6', 'drop-2.4', 'footbridge', 'gap-4', 'gap-tanks', 'rollers',
   'slip-large', 'slip-medium', 'slip-small', 'tabletop', 'tanks', 'tunnel', 'whoops',
