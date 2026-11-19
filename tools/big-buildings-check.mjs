@@ -163,7 +163,7 @@ const round = (id, e, n, diameter, eave, ridge, roof) => block(id, e, n, diamete
   }
   assert.ok(Math.abs(covered - 12000) < 400 && cleared < 1.9 * covered, `the hall clears ${cleared} m2 for ${covered} m2 of roof`);
   roofed(block(3, V[0], V[1], 60, 30, 110, 6, 11, 'gable'), V, .8);
-  // A baked colour (step 30) repaints a block but gives it no doors or windows: a block is one part of a large mapped
+  // A baked colour (step 30) repaints a block but gives it no door and window grid: a block is one part of a large mapped
   // hall (plants, malls, arenas), and the house-scale window grid is only for a large building without a shape (#1288).
   // The paint is shingle on purpose: a metal roof adds seams, which is not what this pins.
   {
