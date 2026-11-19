@@ -27,6 +27,16 @@ body.tcOn #firedNote b{font-size:14px}
 `;
 const NOTE_SECONDS = 5, LAST_SECONDS = 3;
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-CA');
+const minutes = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** How a run ended, for Today's run (daily.ts), which writes its own end card instead of the Get Fired one. */
+export interface FiredEnd { book: ScoreBook; firedAt: number | null; played: number }
+export interface FiredOptions {
+  /** Real seconds of play before the run ends by itself (Today's run); 0 for none: the shift clock's 18:00 ends it. */
+  limit?: number;
+  /** Writes the end card; the Get Fired best run is then left alone. */
+  onEnd?: (end: FiredEnd) => void;
+}
 
 /** One run of Get Fired on top of a Shift. Reads the score stream; never touches career pay or the saved shift. */
 export class FiredRun {
@@ -34,26 +44,35 @@ export class FiredRun {
   /** The newest run saved as best, or the stored best when this run did not beat it. */
   best: BestRun | null = readBest();
   ended = false;
+  /** Play seconds when the ladder reached Fired. */
+  firedAt: number | null = null;
+  private readonly limit: number;
+  /** Called when a new run begins (a retry, start over or a new day), before it hears anything: Today's run clears its card. */
+  onNewRun: (() => void) | null = null;
   private run: number;
   private pendingEnd = false;
   private noteTime = 0;
   private paintTime = 0;
   private readonly bars: HTMLElement[] = [];
   private last: { text: string; time: number } | null = null;
-  private readonly hud = document.createElement('div');
+  /** The desktop panel and the phone status line: Today's run adds its bingo card to both. */
+  readonly hud = document.createElement('div');
   private readonly text = document.createElement('div');
   private readonly ladder = document.createElement('div');
   private readonly status = document.createElement('div');
-  private readonly line = document.createElement('div');
+  readonly line = document.createElement('div');
+  private readonly lineText = document.createElement('span');
   private readonly note = document.createElement('div');
-  constructor(private readonly shift: Shift, private readonly endings: Endings, phone: boolean, private readonly again: () => void) {
+  constructor(private readonly shift: Shift, private readonly endings: Endings, phone: boolean, private readonly again: () => void,
+    private readonly options: FiredOptions = {}) {
+    this.limit = options.limit ?? 0;
     document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
     this.hud.id = 'firedHud'; this.hud.setAttribute('aria-label', 'Get Fired score');
     this.ladder.id = 'firedLadder';
     for (let i = 0; i < LADDER.length; i++) this.bars.push(this.ladder.appendChild(document.createElement('i')).appendChild(document.createElement('b')));
     this.hud.append(this.text, this.ladder, this.status);
     this.note.id = 'firedNote'; this.note.hidden = true; this.note.setAttribute('role', 'status');
-    this.line.id = 'firedLine';
+    this.line.id = 'firedLine'; this.line.appendChild(this.lineText);
     document.body.append(this.hud, this.note);
     if (phone) (document.getElementById('phoneStatus') ?? document.body).appendChild(this.line);
     this.run = shift.score.runs;
@@ -64,9 +83,11 @@ export class FiredRun {
   }
   /** Shift.start() clears the stream for each new day: a new run, whether or not the last one scored. */
   private sync(): void { if (this.shift.score.runs !== this.run) { this.run = this.shift.score.runs; this.reset(); } }
-  private get now(): number { return this.shift.elapsed / CLOCK_FACTOR; }
+  /** Play seconds of this run. */
+  get now(): number { return this.shift.elapsed / CLOCK_FACTOR; }
   private reset(): void {
-    this.book = new ScoreBook(); this.ended = this.pendingEnd = false; this.last = null; this.noteTime = this.paintTime = 0; this.note.hidden = true;
+    this.book = new ScoreBook(); this.ended = this.pendingEnd = false; this.firedAt = null; this.last = null; this.noteTime = this.paintTime = 0; this.note.hidden = true;
+    this.onNewRun?.();
   }
   private hear(e: ScoreEvent): void {
     this.sync();
@@ -74,18 +95,36 @@ export class FiredRun {
     const r = this.book.add(e);
     if (r.points) this.last = { text: `${r.points > 0 ? '+' : '−'}${fmt(Math.abs(r.points))} ${offenceLabel(e.kind)}${r.firstOfKind ? ' · new' : ''}`, time: this.now };
     this.paintTime = 0;
-    if (r.stepUp) {
-      const rung = LADDER[r.stepUp - 1];
+    this.stepped(r.stepUp);
+  }
+  private stepped(stepUp: number): void {
+    if (stepUp) {
+      const rung = LADDER[stepUp - 1];
       this.note.replaceChildren(Object.assign(document.createElement('b'), { textContent: rung.name }), rung.steward);
       this.note.hidden = false; this.noteTime = NOTE_SECONDS;
     }
     // The shift ends from the frame, never from inside the physics step that knocked the last box.
-    if (this.book.fired) this.pendingEnd = true;
+    if (this.book.fired) { this.pendingEnd = true; this.firedAt ??= this.now; }
+  }
+  /** A flat bonus (a bingo line or card): shown like an offence, and it climbs the ladder like one. */
+  award(kind: string, points: number, text: string): void {
+    this.sync();
+    if (this.ended || !(points > 0)) return;
+    const stepUp = this.book.award(kind, points);
+    this.last = { text: `+${fmt(points)} ${text}`, time: this.now }; this.paintTime = 0;
+    this.stepped(stepUp);
+  }
+  /** Shows a short line in the steward's place (a bingo square) unless the steward is speaking. */
+  notice(title: string, text: string): void {
+    if (this.ended || !this.note.hidden && this.noteTime > NOTE_SECONDS - 2) return;
+    this.note.replaceChildren(Object.assign(document.createElement('b'), { textContent: title }), text);
+    this.note.hidden = false; this.noteTime = 3;
   }
   /** Each shift step (Shift.onUpdate), so it pauses with the world; the note fades on that time. */
   update(realDt: number): void {
     this.sync();
     if (this.pendingEnd && !this.shift.ended) { this.pendingEnd = false; this.shift.end(); }
+    if (this.limit > 0 && !this.shift.ended && this.now >= this.limit) this.shift.end();
     if (this.noteTime > 0) { this.noteTime -= realDt; if (this.noteTime <= 0) this.note.hidden = true; }
     // Five times a second, like the shift panel: the HUD costs no layout on most frames.
     this.paintTime -= realDt;
@@ -94,14 +133,16 @@ export class FiredRun {
   private paint(): void {
     const b = this.book, now = this.now, p = progress(b.total, b.step), combo = b.comboAt(now);
     const comboText = combo > 1 ? `combo ×${combo.toFixed(2).replace(/0$/, '')} ${b.comboLeft(now).toFixed(1)} s` : 'no combo';
-    setHud(this.text, `${fmt(b.total)} pts · ${comboText}\n${stepName(b.step)} · ladder ×${b.multiplier.toFixed(2).replace(/0$/, '')}`);
+    // A run with a time limit (Today's run) shows the clock on a line of its own: the panel is narrow.
+    const left = this.limit > 0 ? minutes(Math.max(0, Math.ceil(this.limit - now))) : '';
+    setHud(this.text, `${left ? `Today’s run · ${left} left\n` : ''}${fmt(b.total)} pts · ${comboText}\n${stepName(b.step)} · ladder ×${b.multiplier.toFixed(2).replace(/0$/, '')}`);
     const live = this.last && now - this.last.time < LAST_SECONDS ? this.last.text : '';
     setHud(this.status, b.fired ? 'Fired.' : `${fmt(p.need)} to ${p.next}${live ? `\n${live}` : ''}`);
     this.bars.forEach((bar, i) => {
       const width = i < b.step ? '100%' : i === b.step ? `${Math.round(p.fraction * 100)}%` : '0%';
       if (bar.style.width !== width) bar.style.width = width;
     });
-    setHud(this.line, `${fmt(b.total)} pts${combo > 1 ? ` ×${combo.toFixed(2).replace(/0$/, '')}` : ''} · ${stepName(b.step)} ${b.step}/${LADDER.length}${live ? ` · ${live}` : ''}`);
+    setHud(this.lineText, `${left ? `${left} · ` : ''}${fmt(b.total)} pts${combo > 1 ? ` ×${combo.toFixed(2).replace(/0$/, '')}` : ''} · ${stepName(b.step)} ${b.step}/${LADDER.length}${live ? ` · ${live}` : ''}`);
     const fill = `${Math.round((b.step + p.fraction) / LADDER.length * 100)}%`;
     if (this.line.style.getPropertyValue('--fill') !== fill) this.line.style.setProperty('--fill', fill);
   }
@@ -109,6 +150,7 @@ export class FiredRun {
   private finish(): void {
     if (this.ended) return;
     this.ended = true; this.pendingEnd = false; this.note.hidden = true;
+    if (this.options.onEnd) { this.options.onEnd({ book: this.book, firedAt: this.firedAt, played: Math.min(this.now, this.limit || Infinity) }); return; }
     const b = this.book, timeLeft = Math.max(0, END_TIME - START_TIME - this.shift.elapsed);
     const run: BestRun = { step: b.step, total: b.total, timeLeft, chain: b.bestChain.points };
     const before = this.best;

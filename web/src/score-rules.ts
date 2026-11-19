@@ -52,7 +52,7 @@ const LABELS: Readonly<Record<string, string>> = Object.freeze({
   relief: 'Seen at the roadside', sceneHit: 'Bumped the visitor’s car', sceneHorn: 'Horn at the visitor', sceneDust: 'Dust on a painting',
   sceneAnimal: 'An animal had to get out of the way',
   'box:rock': 'Rocked a mailbox', 'box:lean': 'Leaned a mailbox', 'box:dent': 'Dented a mailbox', 'box:down': 'Flattened a mailbox',
-  rut: 'Lawn ruts', schoolBus: 'Passed a flashing school bus',
+  rut: 'Lawn ruts', schoolBus: 'Passed a flashing school bus', 'bingo:line': 'Bingo lines', 'bingo:card': 'Full bingo card',
 });
 export const offenceLabel = (kind: string): string => LABELS[kind] ?? kind;
 
@@ -116,6 +116,15 @@ export class ScoreBook {
     const was = this.step;
     this.step = Math.max(this.step, stepFor(this.total));
     return { points, combo, stepUp: this.step > was ? this.step : 0, firstOfKind: before === 0 };
+  }
+  /** A flat bonus (Today's run bingo): no combo, no novelty, no ladder factor. It can raise the ladder like any points.
+   * Returns the rung newly reached (0 when none). */
+  award(kind: string, points: number): number {
+    if (!(points > 0)) return 0;
+    this.total += points; this.tally(kind, points);
+    const was = this.step;
+    this.step = Math.max(this.step, stepFor(this.total));
+    return this.step > was ? this.step : 0;
   }
   private tally(kind: string, points: number): void {
     const t = this.kinds.get(kind);
