@@ -18,6 +18,8 @@ const CSS = `
  box-sizing:border-box;width:max-content;max-width:min(520px,calc(100% - 24px));padding:10px 14px;background:rgba(12,20,28,.94);
  border:1px solid #69747c;border-top:3px solid var(--maple);border-radius:8px;font:14px/1.45 system-ui,sans-serif;text-align:center;pointer-events:none}
 #firedNote b{display:block;font-size:17px;letter-spacing:.02em}
+#firedNote p{margin:4px 0 0}
+#firedNote.boss{border-top-color:#ffa526;text-align:left;width:min(440px,calc(100% - 24px))}
 body.tcOn #firedHud,body.indoorOn #firedHud,body.indoorOn #firedNote{display:none}
 #firedLine{display:none}
 body.tcOn #firedLine{display:block;font-size:10px;line-height:18px;padding:2px 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -51,6 +53,8 @@ export class FiredRun {
   onNewRun: (() => void) | null = null;
   /** The Party Line's call-ins (party-line.ts), when the radio carries them: they hear each event and add a line to the end card. */
   calls: { hear(e: ScoreEvent, stepUp: number): void; reset(): void; endLine(): string | null } | null = null;
+  /** The Boss (boss.ts), when this page has one: its HUD line and its end-card line. */
+  boss: { line(): string; summary(): string } | null = null;
   private run: number;
   private pendingEnd = false;
   private noteTime = 0;
@@ -97,7 +101,7 @@ export class FiredRun {
     if (this.ended) return;
     const r = this.book.add(e);
     this.calls?.hear(e, r.stepUp);
-    if (r.points) this.last = { text: `${r.points > 0 ? '+' : '−'}${fmt(Math.abs(r.points))} ${offenceLabel(e.kind)}${e.drift?.clean ? ' · clean' : ''}${r.firstOfKind ? ' · new' : ''}`, time: this.now };
+    if (r.points) this.last = { text: `${r.points > 0 ? '+' : '−'}${fmt(Math.abs(r.points))} ${offenceLabel(e.kind)}${e.drift?.clean ? ' · clean' : ''}${r.points > 0 && e.witnessed ? ' · witnessed ×2' : r.firstOfKind ? ' · new' : ''}`, time: this.now };
     this.paintTime = 0;
     this.stepped(r.stepUp);
   }
@@ -105,7 +109,7 @@ export class FiredRun {
     if (stepUp) {
       const rung = LADDER[stepUp - 1];
       this.note.replaceChildren(Object.assign(document.createElement('b'), { textContent: rung.name }), rung.steward);
-      this.note.hidden = false; this.noteTime = NOTE_SECONDS;
+      this.note.classList.remove('boss'); this.note.hidden = false; this.noteTime = NOTE_SECONDS;
     }
     // The shift ends from the frame, never from inside the physics step that knocked the last box.
     if (this.book.fired) { this.pendingEnd = true; this.firedAt ??= this.now; }
@@ -123,8 +127,14 @@ export class FiredRun {
   /** Shows a short line in the steward's place (a bingo square) unless the steward is speaking. */
   notice(title: string, text: string): void {
     if (this.ended || !this.note.hidden && this.noteTime > NOTE_SECONDS - 2) return;
-    this.note.replaceChildren(Object.assign(document.createElement('b'), { textContent: title }), text);
+    this.note.classList.remove('boss'); this.note.replaceChildren(Object.assign(document.createElement('b'), { textContent: title }), text);
     this.note.hidden = false; this.noteTime = 3;
+  }
+  /** A short card in the note's place (the Boss at the window), for `seconds` of play. */
+  card(title: string, lines: readonly string[], seconds: number): void {
+    this.note.replaceChildren(Object.assign(document.createElement('b'), { textContent: title }),
+      ...lines.map(line => Object.assign(document.createElement('p'), { textContent: line })));
+    this.note.classList.add('boss'); this.note.hidden = false; this.noteTime = seconds; this.paintTime = 0;
   }
   /** Each shift step (Shift.onUpdate), so it pauses with the world; the note fades on that time. */
   update(realDt: number): void {
@@ -143,12 +153,13 @@ export class FiredRun {
     const left = this.limit > 0 ? minutes(Math.max(0, Math.ceil(this.limit - now))) : '';
     setHud(this.text, `${left ? `Today’s run · ${left} left\n` : ''}${fmt(b.total)} pts · ${comboText}\n${stepName(b.step)} · ladder ×${b.multiplier.toFixed(2).replace(/0$/, '')}`);
     const live = this.last && now - this.last.time < LAST_SECONDS ? this.last.text : '';
-    setHud(this.status, b.fired ? 'Fired.' : `${fmt(p.need)} to ${p.next}${live ? `\n${live}` : ''}`);
+    const boss = this.boss?.line() ?? '';
+    setHud(this.status, b.fired ? 'Fired.' : `${fmt(p.need)} to ${p.next}${live ? `\n${live}` : ''}${boss ? `\n${boss}` : ''}`);
     this.bars.forEach((bar, i) => {
       const width = i < b.step ? '100%' : i === b.step ? `${Math.round(p.fraction * 100)}%` : '0%';
       if (bar.style.width !== width) bar.style.width = width;
     });
-    setHud(this.lineText, `${left ? `${left} · ` : ''}${fmt(b.total)} pts${combo > 1 ? ` ×${combo.toFixed(2).replace(/0$/, '')}` : ''} · ${stepName(b.step)} ${b.step}/${LADDER.length}${live ? ` · ${live}` : ''}`);
+    setHud(this.lineText, `${left ? `${left} · ` : ''}${fmt(b.total)} pts${combo > 1 ? ` ×${combo.toFixed(2).replace(/0$/, '')}` : ''} · ${boss ? `${b.step}/${LADDER.length} · ${boss}` : `${stepName(b.step)} ${b.step}/${LADDER.length}`}${live ? ` · ${live}` : ''}`);
     const fill = `${Math.round((b.step + p.fraction) / LADDER.length * 100)}%`;
     if (this.line.style.getPropertyValue('--fill') !== fill) this.line.style.setProperty('--fill', fill);
   }
@@ -170,6 +181,7 @@ export class FiredRun {
       ...(top.length ? top.map((o, i) => `${i + 1}. ${o.label} ×${o.count}: ${fmt(o.points)}`) : ['No offences on file.']),
       b.bestChain.kinds > 1 ? `Best combo: ${b.bestChain.kinds} kinds of offence, ${fmt(b.bestChain.points)} points.` : 'No combo: never two kinds of offence at once.',
       ...(callLine ? [callLine] : []),
+      ...this.boss ? [this.boss.summary()] : [],
       isBest ? (before ? 'Your best run yet.' : 'Your first run on file.')
         : `Your best run: ${stepName(this.best!.step)} · ${fmt(this.best!.total)} points · ${timeLeftText(this.best!.timeLeft)}.`,
     ];

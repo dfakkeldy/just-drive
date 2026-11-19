@@ -183,6 +183,36 @@ assert.equal(shift.career.day, 4, 'and keeps the day and its route'); assert.equ
 // One kind of offence only is no combo, whatever its points.
 tick(.016); shift.reportScore('relief', 0, 0, 3); tick(); document.getElementById('endShift').click();
 assert.equal(offers.length, 4); assert.ok(offers[3].lines.includes('No combo: never two kinds of offence at once.'), offers[3].lines.join('|'));
+// The Boss (boss.ts) hooks: a fact carries where it happened and whether the Boss saw it; seen, it scores double.
+offers.at(-1).choices[0].action(); tick(.016);
+{
+  const seen = new Set();
+  shift.witness = (x, z) => seen.has(`${x},${z}`);
+  shift.reportScore('relief', 10, 20, 3); tick();
+  const plain = fired.book.kinds.get('relief').points, e = shift.score.recent.at(-1);
+  assert.deepEqual([e.x, e.z, e.witnessed], [10, 20, false], 'a fact says where it happened and that nobody saw it');
+  offers.length = 0; document.getElementById('endShift').click(); offers[0].choices[0].action(); tick(.016);
+  seen.add('10,20'); shift.reportScore('relief', 10, 20, 3); tick();
+  assert.equal(shift.score.recent.at(-1).witnessed, true);
+  assert.equal(fired.book.kinds.get('relief').points, plain * 2, 'witnessed: double the points');
+  // A drift reports where it ended, and is witnessed there like any other fact.
+  seen.add('30,40');
+  shift.reportDrift({ angle: 25, peak: 30, length: 30, seconds: 2, speed: 12, surface: 'gravel', clean: false, x0: 0, z0: 0, x1: 30, z1: 40 });
+  const slide = shift.score.recent.at(-1);
+  assert.deepEqual([slide.kind, slide.x, slide.z, slide.witnessed], ['drift', 30, 40, true], 'a drift ends where the Boss can see it');
+  // The HUD line, the card and the end-card line come from the Boss when the page has one.
+  fired.boss = { line: () => 'The Boss is on its way.', summary: () => 'Pulled over once · lost the Boss never.' };
+  for (let i = 0; i < 3; i++) tick(.25);
+  const said = line.children.map(c => c.textContent).join('');
+  assert.match(said, /The Boss is on its way\./, said);
+  fired.card('Pulled over', ['The Boss at the window.', 'Suspended.', 'The steward grieves it.'], 7);
+  assert.equal(note.hidden, false); assert.match(note.text, /Pulled over .*The Boss at the window\. .*The steward grieves it\./);
+  for (let i = 0; i < 6; i++) tick(1); assert.equal(note.hidden, false, 'the card stays its seven seconds');
+  for (let i = 0; i < 2; i++) tick(1); assert.equal(note.hidden, true);
+  document.getElementById('endShift').click();
+  assert.equal(offers.at(-1).lines.at(-2), 'Pulled over once · lost the Boss never.', offers.at(-1).lines.join('|'));
+  fired.boss = null; shift.witness = () => false;
+}
 // Breakable yard and field props: the real YardProps, hooked to the Shift as main.ts hooks it, hit by a car stand-in.
 {
   const field = { ground: 0, canopy: 0, roadDist: 60, halfWidth: 3, kind: 2, level: 7, brook: 99 };
@@ -262,4 +292,4 @@ assert.equal(offers.length, 4); assert.ok(offers[3].lines.includes('No combo: ne
   }
   store.set('mmm.shift.v1', store0);
 }
-console.log('score shift: real Shift, Props, Ruts, YardProps and FiredRun; mail play unchanged; ladder, school bus, Fired, 18:00, retry, storage, yard breaks.');
+console.log('score shift: real Shift, Props, Ruts, YardProps and FiredRun; mail play unchanged; ladder, school bus, Fired, 18:00, retry, storage; Boss hooks; yard breaks.');

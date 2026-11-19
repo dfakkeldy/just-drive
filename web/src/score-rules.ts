@@ -14,6 +14,8 @@ export const POINTS: Readonly<Record<string, number>> = Object.freeze({
   rut: 10,
   // A drift (drift-rules.ts), sized by driftSize.
   drift: 60,
+  // The Boss followed you, then lost you (boss-rules.ts). Fades with each repeat like any kind.
+  lostBoss: 150,
   // Breakable yard and field props (yard-props-rules.ts), once per prop. A rolling bale that breaks something adds a
   // strike beside the prop's own kind: two kinds at once, a combo.
   'prop:fence': 30, 'prop:clothesline': 60, 'prop:ornament': 50, 'prop:woodpile': 50, 'prop:bale': 60, 'prop:bin': 25,
@@ -50,6 +52,8 @@ export const COMBO_FRESH = 3;
  * fades to nothing, so no kind pays forever (a rut every three metres of one lawn, all day, stays near zero). */
 export const NEW_KIND = 2;
 export const REPEAT = .75;
+/** An offence the Boss saw (ScoreEvent.witnessed) is worth this many times its points. Penalties are not. */
+export const WITNESSED = 2;
 /** Each ladder step reached raises the multiplier by this much. */
 export const STEP_BONUS = .25;
 
@@ -73,7 +77,7 @@ const LABELS: Readonly<Record<string, string>> = Object.freeze({
   sceneAnimal: 'An animal had to get out of the way',
   'box:rock': 'Rocked a mailbox', 'box:lean': 'Leaned a mailbox', 'box:dent': 'Dented a mailbox', 'box:down': 'Flattened a mailbox',
   rut: 'Lawn ruts', schoolBus: 'Passed a flashing school bus', 'bingo:line': 'Bingo lines', 'bingo:card': 'Full bingo card',
-  drift: 'Sideways down the road',
+  drift: 'Sideways down the road', lostBoss: 'Lost the Boss',
   'prop:fence': 'Broke a fence section', 'prop:clothesline': 'Took down a clothesline', 'prop:ornament': 'Flattened a lawn ornament',
   'prop:woodpile': 'Scattered a woodpile', 'prop:bale': 'Sent a hay bale rolling', 'prop:bin': 'Knocked over a bin', 'prop:baleStrike': 'Bale strike',
 });
@@ -132,7 +136,7 @@ export class ScoreBook {
     if (e.time - this.lastTime > COMBO_WINDOW) this.endChain();
     if (before < COMBO_FRESH && !this.chainKinds.has(e.kind)) { this.chainKinds.add(e.kind); this.chain = this.chainKinds.size; this.lastTime = e.time; }
     const combo = comboFactor(this.chain);
-    const points = Math.round(POINTS[e.kind] * eventSize(e) * novelty(before) * combo * this.multiplier);
+    const points = Math.round(POINTS[e.kind] * eventSize(e) * novelty(before) * combo * this.multiplier * (e.witnessed ? WITNESSED : 1));
     this.total += points; this.tally(e.kind, points);
     this.chainPoints += points;
     if (this.chainPoints > this.bestChain.points) this.bestChain = { kinds: this.chain, points: this.chainPoints };
@@ -153,6 +157,8 @@ export class ScoreBook {
     const t = this.kinds.get(kind);
     if (t) { t.count++; t.points += points; } else this.kinds.set(kind, { count: 1, points });
   }
+  /** A pull-over ends the combo. Points and the ladder step stay. */
+  breakCombo(): void { this.endChain(); }
   private endChain(): void { this.chain = 0; this.chainPoints = 0; this.chainKinds.clear(); this.lastTime = -Infinity; }
 }
 

@@ -70,6 +70,12 @@ const mutants=[
  ['bins out every day','if (!outToday(l.p, this.day) ||','if (','yard-props'],
  ['pieces never move','        } else stepPiece(piece, dt, ground);','        }','yard-props'],
  ['yard props score nothing',"'prop:fence': 30,","'prop:fence': 0,",'score-rules'],
+ ['fact has no place','x, z, witnessed: this.witness(x, z) });','});','shift'],
+ ['nobody witnesses','witnessed: this.witness(x, z)','witnessed: false','shift'],
+ ['a drift is never witnessed','witnessed: this.witness(d.x1, d.z1)','witnessed: false','shift'],
+ ['no Boss line',"const boss = this.boss?.line() ?? '';","const boss = '';",'fired'],
+ ['no Boss summary','      ...this.boss ? [this.boss.summary()] : [],\n','','fired'],
+ ['card too short','this.noteTime = seconds;','this.noteTime = 2;','fired'],
 ];
 try {
  for(const mutant of [null,...(process.argv.includes('--mutations')?mutants:[])]) {

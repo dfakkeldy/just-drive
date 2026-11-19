@@ -199,9 +199,9 @@ assert.equal(signalGap(null,1.6,0,0,8),Infinity,'no signals');
 stops[0].z=0;assert.equal(signalGap(hook(30),1.6,0,0,0),0,'stopped on the line at a red: stays');stops[0].z=-20;
 // In a step: a traffic car or a near red line brakes the AI; the same car in the other lane does not.
 const straightRoad={kind:2,halfWidth:5,pts:[[1.6,100],[1.6,-500]]};
-const stepWith=(traffic,signals,player={...ai,x:500,z:500})=>{
+const stepWith=(traffic,signals,player={...ai,x:500,z:500},tune)=>{
  let seen;const v={x:1.6,z:0,y:0,heading:0,spec,speed:6,vx:0,vz:-6,update:(_dt,input)=>{seen=input;},place(x,z,heading){Object.assign(this,{x,z,heading});return true;}};
- const actor={active:true,vehicle:v,parked:0,contact:{y:0},obstacles:()=>[],traffic,signals,eligible:()=>true,
+ const actor={active:true,vehicle:v,parked:0,contact:{y:0},obstacles:()=>[],traffic,signals,eligible:()=>true,tune,
   contacts:{resolve:()=>{},allows:()=>true},terrain:{withGroundContact:(_c,run)=>run()},
   roads:{nearest:(x,z)=>({road:straightRoad,x:1.6,z,dist:Math.abs(x-1.6),heading:0})}};
  PointTupperDriver.prototype.step.call(actor,1/120,player);return seen;
@@ -225,6 +225,17 @@ assert.equal(stepWith([car(-1.6,-18,true,Math.PI)],null).handbrake,false,'oncomi
 stops[0].z=-4;
 assert.equal(stepWith([],hook(30)).handbrake,true,'red line 4 m ahead: brake');
 assert.equal(stepWith([],hook(5)).handbrake,false,'green line 4 m ahead: no brake');
+// A tuned driver (the Boss) keeps a closer gap to bodies, but still stops short of a red line, not in the junction.
+{
+ const { followSpeed } = await import('../web/src/boss-rules.ts');
+ const boss={kind:'car',speed:(gap,ahead)=>followSpeed(gap,ahead,20),stopGap:3};
+ assert.equal(stepWith([],hook(30),undefined,boss).handbrake,true,'tuned: red line 4 m ahead: brake');
+ assert.equal(stepWith([],hook(5),undefined,boss).handbrake,false,'tuned: green line 4 m ahead: no brake');
+ stops[0].z=-8;
+ const near=stepWith([],hook(30),undefined,boss);
+ assert.ok(near.handbrake||near.throttle<=0,'tuned: red line 8 m ahead: no more throttle');
+ stops[0].z=-4;
+}
 console.log('PASS ambient traffic gap in the own line only; red and amber stop lines from the real signal rule');
 }
 

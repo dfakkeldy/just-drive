@@ -301,3 +301,11 @@ party-line-browser	apple	no	apple-check-host M4 Edge 157.0.4341.60 hardware Meta
 drift-browser	apple	no	apple-check-host M4 Edge 157.0.4341.60 hardware Metal: PASS 57.75 s on 057e92e9 and 557.19 s on 2c271776 (shared load), 2026-11-19 UTC (gravel road near the start, desktop 1280x800 and phone 390x844 LOW)
 board-worker	unproven	no	needs Wrangler (CI installs it); M4 PASS with wrangler 4.162.0, 2026-11-19 UTC
 board-browser	apple	no	apple-check-host M4 PASS on the PR branch (yard-shots, gated at load1 < 20), 2026-11-19 UTC; ANGLE Metal / Edge 157.0.4341.60; desktop 1280x800 (away as Cloudflare's 1027 page, then posted #14 of 15) and phone 390x844 LOW (offline, then posted #15 of 16 with touch taps); row marked, rank on share line and picture, area and day buttons, yesterday, practice, fits the card; nothing in mail play, Get Fired or Just Drive; pictures inspected
+boss-rules	portable	no	Node only
+boss-rules-mutations	portable	no	Node only
+boss-browser	unproven	no	apple-check-host M4 / Edge 157 PASS 164 s (hidden arrival, witnessed ×2, flash, glow and horn, pull-over card and clock cost, drives off; none in mail play, boss=0, Just Drive or Today's run); not yet run on the MacBook or on Linux
+boss-browser-phone	unproven	no	apple-check-host M4 / Edge 157 PASS 222 s (phone LOW: the same pull-over, phone line and card fit); not yet run on the MacBook or on Linux
+boss-escape-browser	unproven	no	apple-check-host M4 / Edge 157 PASS 233 s (seen, map spot, lost after 20 s, Lost the Boss bonus, end card); not yet run on the MacBook or on Linux
+boss-escape-browser-phone	unproven	no	apple-check-host M4 / Edge 157 PASS 64 s (phone LOW escape); not yet run on the MacBook or on Linux
+boss-budget	unproven	no	apple-check-host M4 / Edge 157 PASS 88 s (Boss in view +45 draws, +44,768 triangles; hidden 0); not yet run on the MacBook or on Linux
+boss-budget-low	unproven	no	apple-check-host M4 / Edge 157 PASS 44 s (LOW start with the Boss in view 226 of 227 calls (tools/frame-budget-policy.mjs PHONE_CAP); the Boss 3 draws); not yet run on the MacBook or on Linux

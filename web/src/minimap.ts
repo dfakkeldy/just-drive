@@ -51,6 +51,11 @@ export class MiniMap {
   private home: Comment | null = null;
   private creditSpace = 0;
   private idle = false;
+  /** Get Fired: the Boss's car while it has seen the player (boss.ts), else null. An amber diamond, or an arrow on
+   * the rim when it is off the map. */
+  boss: { readonly x: number; readonly z: number } | null = null;
+  /** Where the last drawing put the Boss, for checks: 'spot', 'arrow' or ''. */
+  bossDrawn = '';
   /** The names the last drawing wrote and the boxes they kept clear (car arrow, N), in on-screen pixels (for checks). */
   labels: readonly PlacedLabel[] = [];
   labelKeep: readonly LabelBox[] = [];
@@ -286,5 +291,22 @@ export class MiniMap {
     g.fill(); g.stroke();
     g.fillStyle = '#ff5a4a'; g.font = '700 11px ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText('N', nx, ny);
+    // The Boss last, over the car's own arrow: close behind, it would hide under it.
+    this.bossDrawn = '';
+    if (this.boss) {
+      const dx = this.boss.x - x, dz = this.boss.z - z, cos = Math.cos(heading), sin = Math.sin(heading), cy = half * 1.25;
+      let px = half + (cos * dx + sin * dz) * k, py = cy + (-sin * dx + cos * dz) * k;
+      const edge = 9, off = px < edge || px > s - edge || py < edge || py > s - edge;
+      if (off) {
+        // Clamp along the line from the car, then point the arrow along it.
+        const ux = px - half, uy = py - cy, t = Math.min(ux ? ((ux > 0 ? s - edge : edge) - half) / ux : Infinity, uy ? ((uy > 0 ? s - edge : edge) - cy) / uy : Infinity);
+        px = half + ux * t; py = cy + uy * t;
+      }
+      g.save(); g.translate(px, py); g.fillStyle = '#ffa526'; g.strokeStyle = '#10181f'; g.lineWidth = 1.5; g.beginPath();
+      if (off) { g.rotate(Math.atan2(py - cy, px - half)); g.moveTo(8, 0); g.lineTo(-5, 6); g.lineTo(-5, -6); }
+      else { g.moveTo(0, -6); g.lineTo(6, 0); g.lineTo(0, 6); g.lineTo(-6, 0); }
+      g.closePath(); g.fill(); g.stroke(); g.restore();
+      this.bossDrawn = off ? 'arrow' : 'spot';
+    }
   }
 }
