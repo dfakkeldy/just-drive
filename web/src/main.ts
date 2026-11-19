@@ -127,6 +127,8 @@ import { HomeSite } from './home-site';
 import { PorchDog } from './porch-dog';
 import { YardDogSite } from './yard-dog-site';
 import { YardDog } from './yard-dog';
+import { YardProps } from './yard-props';
+import { chooseYardProps } from './yard-props-rules';
 import { PorchHouse } from './porch-house';
 import { PorchSite } from './porch-site';
 import { ChurchSite } from './church-site';
@@ -557,6 +559,20 @@ const yardDogSite = ERA.modern && AREA.id === 'mabou' && buildingList && props ?
   excluded: [...terrain.sites.map(s=>s.box), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
 }) : null;
 if (yardDogSite) { clear.push(...yardDogSite.clear); terrain.sites.push(yardDogSite); }
+// Yard props at houses: parked cars, SUVs and pickups, now and then a trailer, a motorhome or a ride-on mower, and a few
+// farm dogs. Chosen by a seeded rule from the map's house ids alone (yard-props-rules.ts), never from what stands at a
+// real house; each on its own house's lot, clear of roads, drives and the hand-built sites. ?yardprops=0 leaves them out.
+const yardPropList = ERA.modern && buildingList && params.get('yardprops') !== '0' ? chooseYardProps({
+  houses: properties.filter(b => b.kind === 'house').map(b => ({ id: b.buildingId ?? b.id, x: b.x - VE, z: VN - b.y, axis: THREE.MathUtils.degToRad(b.axisDeg),
+    length: b.length, width: b.width, footprint: b.footprint.map(([e, n]): [number, number] => [e - VE, VN - n]) })),
+  buildings: buildingList.map(b => ({ id: b.buildingId ?? b.id, footprint: b.footprint.map(([e, n]): [number, number] => [e - VE, VN - n]) })),
+  roads: roads.roads,
+  excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...[villageSite, hawkesburySite, mabouSite].flatMap(s => s?.clear ?? [])],
+}) : [];
+// No single tree stands in a parked car; the canopy is left as it is.
+for (const p of yardPropList) { const r = Math.hypot(p.half, p.halfWidth) + 0.6; terrain.addTreeClear([p.x - r, p.z - r, p.x + r, p.z + r]); }
+const yardProps = yardPropList.length ? new YardProps(yardPropList, terrain, LOW, SEA_LEVEL) : null;
+if (yardProps) scene.add(yardProps.group);
 let garageEntry = readVehicle(params, !mailMode), vehicleSpec = garageEntry.spec;
 // A vehicle whose model is a file (the mail car): its download began at the top of this file. A load that fails must
 // never stop the game: the entry builds its fallback, and a rejection is swallowed here.
@@ -630,6 +646,7 @@ if (yard) fleetContacts.add({ revision: () => yard.collisionVersion(), resolve: 
 if (history) fleetContacts.add({ resolve: body => history.resolve(body as unknown as Vehicle) });
 if (home) fleetContacts.add({ resolve: body => home.resolveSolids(body) });
 if (porch) fleetContacts.add({ resolve: body => porch.resolveSolids(body) });
+if (yardProps) fleetContacts.add({ resolve: body => yardProps.resolveSolids(body) });
 if (church) fleetContacts.add({ resolve: body => church.resolveSolids(body) });
 // The optional pack arrives after boot; the registry must see its new solids.
 if (tallKey) fleetContacts.add({ revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) });
@@ -664,7 +681,7 @@ const resolveYardSolids = () => {
   canal?.resolve(vehicle, canalBeforeX, canalBeforeZ);
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
   if (fleet || quarry || stuntPark) fleetContacts.resolve(vehicle);
-  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
+  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); yardProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
   fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
   yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
@@ -1430,7 +1447,7 @@ resets[resetSlot.fishing] = () => fishing?.reset();
 if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
 if (import.meta.env.DEV) expose({ fired, daily }, false);
-if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
+if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardProps, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
   const report = document.getElementById('shiftReport'), footer = report?.querySelector('.reportFooter');
@@ -1541,6 +1558,7 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'terrain' } : {}), segment: 'landscape', ending: true, update: () => { terrain.update(camera, scenePaused()); wharves?.update(camera.position); } },
   ...(fleet ? [{ ...(import.meta.env.DEV ? { name: 'fleet' } : {}), segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { ...(import.meta.env.DEV ? { name: 'coast' } : {}), segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
+  { ...(import.meta.env.DEV ? { name: 'yardProps' } : {}), segment: 'landscape', ending: true, update: () => yardProps?.update(camera, vehicle) },
   { ...(import.meta.env.DEV ? { name: 'airport' } : {}), segment: 'landscape', ending: true, update: () => airport?.update(camera.position) },
   { ...(import.meta.env.DEV ? { name: 'quarry' } : {}), segment: 'landscape', ending: true, update: () => quarry?.update(camera.position, vehicle) },
   ...(stuntPark ? [{ ...(import.meta.env.DEV ? { name: 'stuntPark' } : {}), segment: 'landscape' as const, ending: true, update: (dt:number) => stuntPark.update(dt,vehicle,camera.position) }] : []),
