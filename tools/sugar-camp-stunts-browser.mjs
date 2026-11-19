@@ -1,23 +1,31 @@
-// The two Places starts of the Sugar Camp stunt park, chosen from the normal West Bay start, put the vehicle
-// (car, or the truck with its loaded trailer) on its run-up. Views: name easy-* or hard-*, and click=<place id>.
-// A cold driveAt link into the park is refused and falls back to the area start, as at the works-yard park=test.
-import { open } from './cdp.mjs';
+// The Sugar Camp stunt park's ways in, on the real page from the normal West Bay start.
+// Views are named <case>-<line>-<rig>:
+//   click-easy-car, click-hard-truck ...: click=<place id> picks the Places start; the vehicle lands on that run-up.
+//     A truck view must still be the truck with its loaded trailer attached.
+//   cold-easy-car, cold-easy-truck ...: a typed driveAt start inside the park is ignored; the vehicle stays outside the park.
+import { open, exitCheck } from './cdp.mjs';
 const [, ...urls] = process.argv.slice(2);
 const V = [642342, 5063327];
 const want = { easy: [632309, 5064233], hard: [632344, 5064608] };
+const PARK = [632200, 5064120, 632480, 5064760];   // east,north box around the whole park and its margins
 let bad = 0;
+const fail = (name, why) => { console.log(name, 'FAIL', why); bad++; };
 for (const url of urls) {
-  const name = new URL(url).searchParams.get('name'), page = await open(url);
-  const click = new URL(url).searchParams.get('click');
+  const params = new URL(url).searchParams, name = params.get('name'), [kind, line, rig] = name.split('-');
+  const page = await open(url);
+  const click = params.get('click');
   if (click) {
     await page.read(`document.querySelector('[data-place="${click}"]').click()`);
     for (let i = 0; i < 120; i++) { await new Promise(r => setTimeout(r, 1000)); if (await page.read('document.title') === 'settled') break; }
     await new Promise(r => setTimeout(r, 4000));
   }
-  const p = await page.read('(() => { const v = mmm.vehicle; return { x: v.x, z: v.z }; })()');
-  const e = p.x + V[0], n = V[1] - p.z, [we, wn] = want[name.split('-')[0]], d = Math.hypot(e - we, n - wn);
-  console.log(name, 'vehicle at', e.toFixed(1), n.toFixed(1), 'distance from start', d.toFixed(1), 'm', d < 25 ? 'OK' : 'REFUSED');
-  if (d >= 25) bad++;
+  const s = await page.read('(() => { const v = mmm.vehicle, t = mmm.towing; return { x: v.x, z: v.z, id: mmm.vehicleId, attached: t ? t.attached : null, loaded: t ? t.loaded : null }; })()');
+  const e = s.x + V[0], n = V[1] - s.z;
+  console.log(name, 'vehicle', s.id, 'at', e.toFixed(1), n.toFixed(1), 'trailer attached', s.attached, 'loaded', s.loaded);
+  if (rig === 'truck' && !(s.id === 'truck' && s.attached === true && s.loaded === true)) fail(name, 'not the truck with its loaded trailer attached');
+  if (kind === 'click') { const d = Math.hypot(e - want[line][0], n - want[line][1]); if (d >= 25) fail(name, `${d.toFixed(1)} m from the ${line} start`); }
+  if (kind === 'cold' && e > PARK[0] && e < PARK[2] && n > PARK[1] && n < PARK[3]) fail(name, 'a typed start inside the park was used');
+  if (page.errors.length) fail(name, 'page errors: ' + page.errors.join(' | '));
   await page.close();
 }
-process.exit(bad ? 1 : 0);
+exitCheck(bad ? 1 : 0);

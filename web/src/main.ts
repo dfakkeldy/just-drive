@@ -1019,7 +1019,10 @@ const startPlacement = fleet ? {
     placeVisit(ax, az, Math.atan2(bx - ax, -(bz - az)) + flip);
   } else {
     const pose = at && at.length >= 2 ? at : driveAt;
-    if (!pose || !placeUrlPose(urlPlacement, manifest.village, pose)) {
+    // A typed start inside the Sugar Camp stunt park cannot be judged before its colliders exist (the fleet retries on
+    // coarse ground): use the area start. Its Places starts are the way in.
+    const inStuntPark = !!(pose && quarrySite && stuntPark?.contains(pose[0] - manifest.village[0], manifest.village[1] - pose[1], 6));
+    if (!pose || inStuntPark || !placeUrlPose(urlPlacement, manifest.village, pose)) {
       if (journey) journey.place(placeVisit);
       else {
         // ?start=mabou-harbour-road is a player's link: the title card stays, and only this first place changes.
