@@ -10,7 +10,10 @@
  */
 const JUST = new URL(self.location.origin).hostname.split('.')[0].toLowerCase() === 'justdrive';
 const areaPath = url => { const id = url.pathname.split('/').filter(Boolean)[0]?.toLowerCase(); return typeof JUST_ALIASES !== 'undefined' && Object.hasOwn(JUST_ALIASES, id) ? JUST_ALIASES[id] : id; };
-const gameNavigation = url => url.pathname==='/' || url.pathname==='/index.html' || (JUST && /^\/[^/]+\/?$/.test(url.pathname) && (typeof JUST_AREAS === 'undefined' ? [] : JUST_AREAS).includes(url.pathname.split('/').filter(Boolean)[0]?.toLowerCase()));
+// The Just Drive bare root is the map of places (tools/just-home.mjs), a network page. A root with a game query is an old
+// game link; the site key and link-tracking tags (as in server/src/index.ts) do not count.
+const justHome = url => JUST && url.pathname==='/' && ![...url.searchParams.keys()].some(k => k!=='site' && k!=='fbclid' && k!=='gclid' && !k.startsWith('utm_'));
+const gameNavigation = url => (url.pathname==='/' && !justHome(url)) || url.pathname==='/index.html' || (JUST && /^\/[^/]+\/?$/.test(url.pathname) && (typeof JUST_AREAS === 'undefined' ? [] : JUST_AREAS).includes(url.pathname.split('/').filter(Boolean)[0]?.toLowerCase()));
 const listenPath = path => path==='/listen' || path.startsWith('/listen/');
 const PREFIX = 'mmm-offline-', META = PREFIX + 'meta-v1', KEY = '/__mmm_offline_state', READY = '/__mmm_offline_ready', COMPLETE = '/__mmm_offline_complete', FILL = '/__mmm_offline_fill';
 const NAVIGATION_BUDGET_MS = 1000, BACKGROUND_BUDGET_MS = 30000;
@@ -290,9 +293,11 @@ async function deliveredPage(response,s) {
 function mabouURL(url) {return (JUST ? (areaPath(url)==='index.html' ? 'mabou' : areaPath(url) || 'mabou') : url.searchParams.get('area') || 'mabou')==='mabou';}
 async function connectionNavigation(request) {
   try {const r=await fetch(request,{cache:'no-store'});if(r.ok)return r;}catch { /* The selected area has no saved copy. */ }
-  const meta=JUST && typeof JUST_META!=='undefined' ? JUST_META[areaPath(new URL(request.url)) || 'mabou'] ?? JUST_META.unknown : null;
+  const home=justHome(new URL(request.url));
+  const meta=JUST && !home && typeof JUST_META!=='undefined' ? JUST_META[areaPath(new URL(request.url)) || 'mabou'] ?? JUST_META.unknown : null;
   const name=meta?.title ?? (JUST ? 'Just Drive' : 'Mabou Mail Madness'), head=meta?.head ?? `<title>${name}</title>`, href=JUST ? '/mabou?title=1' : '/?area=mabou&amp;title=1';
-  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">${head}<body style="margin:0;background:#0b1620;color:#eef2f6;font:18px/1.5 system-ui;padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left))"><main><h1>${name}</h1><p id="offlineAreaConnection" role="status">This area needs a connection.</p><a href="${href}" style="display:inline-flex;align-items:center;min-height:44px;padding:8px 16px;border-radius:6px;background:#d0632e;color:white;text-decoration:none">Play Mabou offline</a></main></body></html>`,{status:503,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+  const words=home ? 'The map of places needs a connection.' : 'This area needs a connection.';
+  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">${head}<body style="margin:0;background:#0b1620;color:#eef2f6;font:18px/1.5 system-ui;padding:max(24px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left))"><main><h1>${name}</h1><p id="offlineAreaConnection" role="status">${words}</p><a href="${href}" style="display:inline-flex;align-items:center;min-height:44px;padding:8px 16px;border-radius:6px;background:#d0632e;color:white;text-decoration:none">Play Mabou offline</a></main></body></html>`,{status:503,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
 }
 async function navigation(event) {
   const request=event.request, id=event.resultingClientId || event.clientId;
@@ -403,6 +408,7 @@ self.addEventListener('fetch',event=>{
   if(r.method!=='GET' || url.origin!==self.location.origin) return;
   if(url.pathname.startsWith('/areas/')) return;
   if(JUST && r.mode==='navigate' && gameNavigation(url) && url.pathname!=='/' && url.pathname.endsWith('/')) {url.pathname=url.pathname.slice(0,-1);event.respondWith(Response.redirect(url.href,308));return;}
+  if(r.mode==='navigate' && justHome(url)) {event.respondWith(connectionNavigation(r));return;}
   if(r.mode==='navigate' && gameNavigation(url) && !mabouURL(url)) {event.respondWith(connectionNavigation(r));return;}
   if(disabled) {if(/^\/(terrain|audio|models|areas)\//.test(url.pathname)) event.respondWith(resetResource(r,url.pathname,event));return;}
   if(r.mode==='navigate' && gameNavigation(url)) event.respondWith(navigation(event));

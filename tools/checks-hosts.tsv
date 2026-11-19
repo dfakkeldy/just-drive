@@ -139,6 +139,7 @@ sidewalks-counts	apple	no	same-host paired render deltas, no absolute pins or CP
 quarry-lifecycle-browser	unproven	no	Hardware Mac lifecycle regression covers both trip links, rejected replacement pose and expanded reload; other hosts unproven
 era-door-browser	unproven	no	Mac PASS; rented M6 mini (macOS) PASS 165 s on 271f04d, 2026-11-15; Linux unmeasured
 about	portable	no	pure Node: builds both About pages into a temporary folder
+just-home	portable	no	pure Node: builds the Just Drive front page into a temporary folder
 paved-colour-browser	unproven	no	Native material/noise and colour proof; physical-phone performance unmeasured; same work bake as paved-open-browser: needs data/raw/paved-open and the large data/raw/elevation, vectors and areas inputs, so a runner host says SKIP with the missing path
 school-bus-browser	unproven	no	Linux desktop and phone pass before review fixes; Mac unmeasured
 mail-stage2-browser	portable	no	Linux GTX 980M / Chrome 157; desktop and phone rule/picture row
