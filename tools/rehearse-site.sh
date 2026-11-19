@@ -12,7 +12,9 @@
 # land and song folders (terrain/, areas/, audio/), and from those folders a few sample files, so that "a land file
 # is served" still means something. What is rehearsed is the script, the routing, the 404 rule and the headers;
 # those do not depend on how many land files there are. REHEARSE_FULL=1 serves the whole folder (small sites only).
-# Only the list of pages that may join differs from the live one (the live list names the real address).
+# Only two things differ from the live configuration: the list of pages that may join (the live list names the real
+# address) and, while the simulated players run, GAME_ROUND_S:20: a 20-second parcel-tag round as in tools/check-mp.sh
+# (the live round plays 3 minutes, longer than the players wait for it to end). The live config must not set it.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PORT="${MP_PORT:-5262}"
@@ -21,6 +23,8 @@ mmm_select_wrangler --require-origin-flag || exit $?
 SITE_PATH="${SITE_OUT:-${SITE:-$ROOT/data/site}}"
 SITE_PATH="$(python3 -c 'import os,sys;print(os.path.abspath(sys.argv[1]))' "$SITE_PATH")"
 [[ -f "$SITE_PATH/index.html" ]] || { echo "No built site in $SITE_PATH. Run tools/build_site.sh first." >&2; exit 2; }
+# The short round is the rehearsal's own: a live config that shortened the round would be a fault.
+if grep -qE '"GAME_ROUND_S"[[:space:]]*:' "$ROOT/deploy/wrangler.jsonc"; then echo "FAIL deploy/wrangler.jsonc sets GAME_ROUND_S; it is for local checks only" >&2; exit 1; fi
 WORK="$(mktemp -d "${REHEARSAL_WORK_ROOT:-${TMPDIR:-/tmp}}/mmm-rehearse-XXXXXX")"
 WORK="$(cd "$WORK" && pwd -P)"   # absolute: the steps below change folder
 LIVE_ORIGINS="$(python3 - "$ROOT/deploy/wrangler.jsonc" <<'PY_ORIGINS'
@@ -101,7 +105,7 @@ count() { find "$1" -type f | wc -l | tr -d ' '; }
 if [[ "$SERVED" == "$SITE_PATH" ]]; then echo "serving the whole site: $SITE_PATH ($(count "$SITE_PATH") files)"
 else echo "serving a reduced copy of $SITE_PATH: $(count "$SERVED") of its $(find -L "$SITE_PATH" -type f | wc -l | tr -d ' ') files (all but terrain/, areas/ and audio/, plus $(wc -l < "$WORK/samples" | tr -d ' ') samples from those)"; fi
 (cd "$ROOT" && WRANGLER_SEND_METRICS=false exec "$WRANGLER" dev -c deploy/wrangler.jsonc --assets "$SERVED" --local --infer-origin-from-routes=false --ip 127.0.0.1 --port "$PORT" \
-  --persist-to "$WORK/state" --var "ORIGINS:$REHEARSAL_ORIGINS") > "$WORK/server.log" 2>&1 &
+  --persist-to "$WORK/state" --var "ORIGINS:$REHEARSAL_ORIGINS" --var GAME_ROUND_S:20) > "$WORK/server.log" 2>&1 &
 SERVER_PID=$!
 for _ in $(seq 1 240); do
   grep -q "Ready on" "$WORK/server.log" && break
