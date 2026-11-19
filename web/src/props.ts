@@ -171,9 +171,9 @@ export class Props {
     this.poles.forEach((p, i) => this.cell(p).poles.push(i));
     // A road split that kept the old road's pole numbers (the 18 Nov Harbour Road pavement limit) leaves one wired
     // line on two road pieces: join their runs so the span over the cut stays. Pieces whose poles were placed
-    // afresh number from 0 each and keep separate runs.
+    // afresh number from 0 each and keep separate runs. Judge on the source poles, before quiet places remove any.
     const numbers = new Map<string, number[]>();
-    for (const p of this.data.poles) {
+    for (const p of parsed.poles) {
       const line = splitLines.get(p.road);
       if (line !== undefined) (numbers.get(line) ?? numbers.set(line, []).get(line)!).push(p.n);
     }

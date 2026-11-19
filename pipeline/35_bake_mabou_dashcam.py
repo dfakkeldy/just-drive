@@ -3,6 +3,10 @@
 
 Only changed files are emitted. Review them against the source pack before
 promotion. The source terrain and its existing roads are read-only.
+Check the output with `tools/mabou-dashcam-18nov/receipt.py verify SOURCE OUTPUT`
+and promote it with `receipt.py install OUTPUT data/baked` (main thread only),
+which sets only the manifest counts this bake owns. The paved-lot layer is not
+re-baked here: the moved pavement limit leaves terrain/paved stale.
 """
 import argparse
 import hashlib
