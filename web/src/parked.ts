@@ -2,7 +2,7 @@ import { CAR_SPEC, type VehicleSpec } from './vehicle-spec';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Mesher, seeded, type RGB } from './yard-kit';
-import { YARD_PROP_SIZE } from './yard-props-rules';
+import { LOT_PROP_SIZE } from './lot-props-rules';
 
 /**
  * Parked vehicles for any lot in the game: cars, SUVs and pickups in the muted colours of a staff car park, and for a
@@ -19,7 +19,7 @@ export interface Solid { x: number; z: number; half: number; halfWidth: number; 
 /** Body colours, weighted toward what stands in a rural lot: white, silver, grey, black, with some blue and red. */
 export const PARKED_COLOURS = [0xd9d9d4, 0xd9d9d4, 0xb4b7b9, 0xb4b7b9, 0x6f7376, 0x6f7376, 0x1b1c1e, 0x1b1c1e, 0x24364f, 0x7a1f1c, 0x4f5b4a, 0x8a8271, 0x2f3a45];
 /** Length, width in metres by type: car, SUV, pickup, utility trailer (with its tongue), motorhome, ride-on mower. */
-export const PARKED_SIZE: (readonly [number, number])[] = [YARD_PROP_SIZE.car, YARD_PROP_SIZE.suv, YARD_PROP_SIZE.pickup, YARD_PROP_SIZE.trailer, YARD_PROP_SIZE.motorhome, YARD_PROP_SIZE.mower];
+export const PARKED_SIZE: (readonly [number, number])[] = [LOT_PROP_SIZE.car, LOT_PROP_SIZE.suv, LOT_PROP_SIZE.pickup, LOT_PROP_SIZE.trailer, LOT_PROP_SIZE.motorhome, LOT_PROP_SIZE.mower];
 
 const GLASS: RGB = [0.06, 0.09, 0.11], TYRE: RGB = [0.035, 0.035, 0.038], WHITE: RGB = [1, 1, 1], LAMP: RGB = [0.9, 0.9, 0.82], TAIL: RGB = [0.5, 0.04, 0.03], TRIM: RGB = [0.16, 0.16, 0.17];
 

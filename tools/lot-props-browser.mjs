@@ -1,15 +1,15 @@
-// RUN=yard-props-browser.mjs VIEWS="desktop|x=1&at=624400,5103300,0 low|x=1&q=low&at=624400,5103300,0 era|era=1884&x=1&at=624400,5103300,0" tools/yard-shots.sh 1280 720
-// Yard props at houses (yard-props.ts): in Mabou today they appear, each kind is one instanced mesh, the real car is
+// RUN=lot-props-browser.mjs VIEWS="desktop|x=1&at=624400,5103300,0 low|x=1&q=low&at=624400,5103300,0 era|era=1884&x=1&at=624400,5103300,0" tools/yard-shots.sh 1280 720
+// Lot props at houses (lot-props.ts): in Mabou today they appear, each kind is one instanced mesh, the real car is
 // stopped by a parked vehicle, trailer, mower or motorhome when it drives into one, a dog is never solid and slips away
 // from a car beside it, no prop stands on a road the land knows, and 1884 has none. Pictures, desktop and phone, of the
-// nearest vehicle, trailer, motorhome, mower and dog: yard-props-desktop-<kind>.png and, on LOW, yard-props-phone-<kind>.png.
+// nearest vehicle, trailer, motorhome, mower and dog: lot-props-desktop-<kind>.png and, on LOW, lot-props-phone-<kind>.png.
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { open, sleep } from './cdp.mjs';
 
 const [out, ...urls] = process.argv.slice(2);
-const evidence = process.env.MMM_CHECK_OUT ? join(process.env.MMM_CHECK_OUT, 'evidence', 'yard-props-browser') : out;
+const evidence = process.env.MMM_CHECK_OUT ? join(process.env.MMM_CHECK_OUT, 'evidence', 'lot-props-browser') : out;
 mkdirSync(evidence, { recursive: true });
 const KINDS = ['car', 'suv', 'pickup', 'trailer', 'motorhome', 'mower', 'dog-lying', 'dog-sitting'];
 
@@ -19,18 +19,18 @@ for (const url of urls) {
     await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
     const params = new URL(url).searchParams, name = params.get('name');
     if (params.get('era') === '1884') {
-      assert.equal(await page.read('window.mmm.yardProps'), null, 'no yard props in 1884');
-      console.log('PASS no yard props in 1884');
+      assert.equal(await page.read('window.mmm.lotProps'), null, 'no lot props in 1884');
+      console.log('PASS no lot props in 1884');
       continue;
     }
-    for (let i = 0; i < 120 && !await page.read('!!window.mmm?.yardProps'); i++) await sleep(500);
-    const census = await page.read(`(()=>{const y=mmm.yardProps,c={};for(const i of y.items)c[i.prop.kind]=(c[i.prop.kind]??0)+1;
+    for (let i = 0; i < 120 && !await page.read('!!window.mmm?.lotProps'); i++) await sleep(500);
+    const census = await page.read(`(()=>{const y=mmm.lotProps,c={};for(const i of y.items)c[i.prop.kind]=(c[i.prop.kind]??0)+1;
       return {total:y.items.length,kinds:c,solids:y.solids.length,droppedSolid:y.items.filter(i=>!i.solid&&!i.prop.kind.startsWith('dog')).length,
       unaccounted:y.items.filter(i=>!i.prop.kind.startsWith('dog')&&!i.solid&&!y.near.dropped.has(i)).length,dogSolids:y.items.filter(i=>i.prop.kind.startsWith('dog')&&i.solid).length,low:y.low,area:mmm.area.id};})()`);
     console.log(name, 'census', JSON.stringify(census));
     assert.equal(census.area, 'mabou');
     assert.equal(census.low, params.get('q') === 'low', 'LOW detail follows the page');
-    assert.ok(census.total > 120, 'Mabou has yard props at a share of its houses');
+    assert.ok(census.total > 120, 'Mabou has lot props at a share of its houses');
     for (const k of KINDS) assert.ok(census.kinds[k] > 0, `Mabou has ${k}`);
     const dogs = (census.kinds['dog-lying'] ?? 0) + (census.kinds['dog-sitting'] ?? 0);
     assert.equal(census.unaccounted, 0, 'every prop but a dog is solid, unless the land showed it cannot stand there (dropped)');
@@ -39,14 +39,14 @@ for (const url of urls) {
     assert.ok(census.droppedSolid <= census.total * 0.1, 'few props dropped by the land check');
 
     // The car goes beside the nearest yard with a vehicle; the camera follows it, and every prop near it is posed.
-    const target = await page.read(`(()=>{const y=mmm.yardProps,v=mmm.vehicle;
+    const target = await page.read(`(()=>{const y=mmm.lotProps,v=mmm.vehicle;
       const cars=y.items.filter(i=>i.solid&&['car','suv','pickup'].includes(i.prop.kind)).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z));
       const t=cars[0],h=t.heading,back=t.prop.half+9;
       v.place(t.x-Math.sin(h)*back,t.z+Math.cos(h)*back,h);v.speed=0;v.vx=0;v.vz=0;
       return {x:t.x,z:t.z,heading:h,half:t.prop.half,halfWidth:t.prop.halfWidth,kind:t.prop.kind,house:t.prop.house};})()`);
     let drawn = null;
     for (let i = 0; i < 240; i++) {
-      drawn = await page.read(`(()=>{const y=mmm.yardProps,meshes=[];y.group.traverse(o=>{if(o.isMesh)meshes.push({name:o.name,instanced:!!o.isInstancedMesh,count:o.count,visible:o.visible});});return meshes;})()`);
+      drawn = await page.read(`(()=>{const y=mmm.lotProps,meshes=[];y.group.traverse(o=>{if(o.isMesh)meshes.push({name:o.name,instanced:!!o.isInstancedMesh,count:o.count,visible:o.visible});});return meshes;})()`);
       if (drawn.some(m => m.name === target.kind && m.count > 0)) break;
       await sleep(500);
     }
@@ -58,7 +58,7 @@ for (const url of urls) {
     assert.ok(drawn.every(m => m.visible === m.count > 0), 'a kind with nothing in view costs no draw');
 
     // No drawn prop stands on a road the land knows (the baked road field) or in the sea.
-    const ground = await page.read(`(()=>{const y=mmm.yardProps,t=mmm.terrain,bad=[];let checked=0;
+    const ground = await page.read(`(()=>{const y=mmm.lotProps,t=mmm.terrain,bad=[];let checked=0;
       for(const i of y.items){const s=t.surfaceAt(i.x,i.z);if(!s||s.level<8)continue;checked++;
         if(!y.near.dropped.has(i)&&s.roadDist<s.halfWidth)bad.push({kind:i.prop.kind,x:i.x,z:i.z,roadDist:s.roadDist,half:s.halfWidth});}
       return {checked,bad,dropped:y.near.dropped.size};})()`);
@@ -67,9 +67,9 @@ for (const url of urls) {
     assert.deepEqual(ground.bad, [], 'no prop on a road');
 
     // Every solid near the car: the car set just inside its end is pushed out (the same contact path the game runs).
-    const contacts = await page.read(`(()=>{const y=mmm.yardProps,v=mmm.vehicle,saved={x:v.x,z:v.z,heading:v.heading,vx:v.vx,vz:v.vz,speed:v.speed};let tested=0;
+    const contacts = await page.read(`(()=>{const y=mmm.lotProps,v=mmm.vehicle,saved={x:v.x,z:v.z,heading:v.heading,vx:v.vx,vz:v.vz,speed:v.speed};let tested=0;
       try{for(const s of y.solids.filter(s=>Math.hypot(s.x-v.x,s.z-v.z)<400)){const x=s.x+Math.sin(s.heading)*s.half*.85,z=s.z-Math.cos(s.heading)*s.half*.85;
-        Object.assign(v,{x,z,vx:0,vz:0,speed:0});y.resolveSolids(v);if(Math.hypot(v.x-x,v.z-z)<.1)throw Error('a yard prop did not block the car');tested++;}}
+        Object.assign(v,{x,z,vx:0,vz:0,speed:0});y.resolveSolids(v);if(Math.hypot(v.x-x,v.z-z)<.1)throw Error('a lot prop did not block the car');tested++;}}
       finally{Object.assign(v,saved);}return tested;})()`);
     assert.ok(contacts >= 3, `solids tested near the car: ${contacts}`);
 
@@ -94,7 +94,7 @@ for (const url of urls) {
     assert.ok(drive.gap < touch + 1.5, 'the car stays at the bumper, not thrown off');
 
     // A dog is never solid: with the car on top of it, it slips away and nothing pushes the car.
-    const dog = await page.read(`(()=>{const y=mmm.yardProps,v=mmm.vehicle,d=y.items.filter(i=>!i.solid).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z))[0];
+    const dog = await page.read(`(()=>{const y=mmm.lotProps,v=mmm.vehicle,d=y.items.filter(i=>!i.solid).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z))[0];
       const saved={x:v.x,z:v.z,heading:v.heading,vx:v.vx,vz:v.vz,speed:v.speed};
       try{Object.assign(v,{x:d.x,z:d.z,vx:0,vz:0,speed:0});y.resolveSolids(v);const pushed=Math.hypot(v.x-d.x,v.z-d.z);
         y.update(mmm.camera,v);const away=d.away;Object.assign(v,{x:d.x+40,z:d.z});y.update(mmm.camera,v);return {pushed,away,back:!d.away,solid:y.solids.some(s=>s.x===d.x&&s.z===d.z)};}
@@ -110,22 +110,22 @@ for (const url of urls) {
     await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
     const pictures = [];
     for (const sort of [['pickup', 'suv', 'car'], ['trailer'], ['motorhome'], ['mower'], ['dog-lying', 'dog-sitting']]) {
-      const at = await page.read(`(()=>{const v=mmm.vehicle,sort=${JSON.stringify(sort)},t=mmm.yardProps.items.filter(i=>sort.includes(i.prop.kind)&&!mmm.yardProps.near.dropped.has(i)).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z))[0];
+      const at = await page.read(`(()=>{const v=mmm.vehicle,sort=${JSON.stringify(sort)},t=mmm.lotProps.items.filter(i=>sort.includes(i.prop.kind)&&!mmm.lotProps.near.dropped.has(i)).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z))[0];
         if(!t)return null;const dog=t.prop.kind.startsWith('dog'),side=dog?2.6:3.2,far=dog?6:t.prop.kind==='mower'?10:14;const r=Math.hypot(t.x-t.prop.hx,t.z-t.prop.hz)||1,dx=(t.x-t.prop.hx)/r,dz=(t.z-t.prop.hz)/r;
         const h=Math.atan2(-dx,dz),rx=Math.cos(h),rz=Math.sin(h);
         v.place(t.x+dx*far+rx*side,t.z+dz*far+rz*side,h);v.speed=0;v.vx=0;v.vz=0;return {kind:t.prop.kind,house:t.prop.house,x:t.x,z:t.z};})()`);
       if (!at) continue;
-      for (let i = 0; i < 120 && !await page.read(`mmm.yardProps.counts.drawn[${JSON.stringify(at.kind)}]>0`); i++) await sleep(500);
+      for (let i = 0; i < 120 && !await page.read(`mmm.lotProps.counts.drawn[${JSON.stringify(at.kind)}]>0`); i++) await sleep(500);
       await sleep(2000);
-      const file = `yard-props-${size}-${at.kind}.png`;
+      const file = `lot-props-${size}-${at.kind}.png`;
       await page.shot(join(evidence, file)); pictures.push(file);
     }
     console.log(name, 'pictures', pictures.join(' '));
     assert.ok(pictures.length >= 4, 'pictures of at least four sorts of prop');
     const facts = { census, target, drawn, ground, contacts, drive, dog, pictures };
-    writeFileSync(join(evidence, `yard-props-${name}.json`), JSON.stringify(facts, null, 1));
+    writeFileSync(join(evidence, `lot-props-${name}.json`), JSON.stringify(facts, null, 1));
     assert.deepEqual(page.errors, []);
-    console.log(`PASS yard props ${name}`);
+    console.log(`PASS lot props ${name}`);
   } finally { await page.close(); }
 }
-console.log('PASS yard-props-browser');
+console.log('PASS lot-props-browser');

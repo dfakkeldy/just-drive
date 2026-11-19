@@ -1,25 +1,25 @@
 import { ANIMAL } from './road-animal-rules';
 
 /**
- * Where the yard props stand: a parked car, SUV or pickup, a small utility trailer, a motorhome, a ride-on mower and a
+ * Where the lot props stand: a parked car, SUV or pickup, a small utility trailer, a motorhome, a ride-on mower and a
  * black-and-white farm dog, at some of the mapped houses. Pure: no three.js, no DOM, no land data.
  *
  * The choice is a seeded hash of the house's map id, and nothing else: the same houses get the same things on every
  * run, and nothing here reads an observation of a real yard (no dash cam, no reference file, no building style, no
  * mailbox). A prop stands on its own house's lot: nearer that house than any other building, within `reach` of its
  * walls, and clear of every road, track and drive, every driveway mouth, every other building and every hand-built
- * site. No people, no badges and no lettering: the shapes are drawn in parked.ts and yard-props.ts.
+ * site. No people, no badges and no lettering: the shapes are drawn in parked.ts and lot-props.ts.
  */
-export type YardPropKind = 'car' | 'suv' | 'pickup' | 'trailer' | 'motorhome' | 'mower' | 'dog-lying' | 'dog-sitting';
-export const YARD_PROP_KINDS: readonly YardPropKind[] = Object.freeze(['car', 'suv', 'pickup', 'trailer', 'motorhome', 'mower', 'dog-lying', 'dog-sitting']);
+export type LotPropKind = 'car' | 'suv' | 'pickup' | 'trailer' | 'motorhome' | 'mower' | 'dog-lying' | 'dog-sitting';
+export const LOT_PROP_KINDS: readonly LotPropKind[] = Object.freeze(['car', 'suv', 'pickup', 'trailer', 'motorhome', 'mower', 'dog-lying', 'dog-sitting']);
 /** Length and width in metres. The first three are the parked car, SUV and pickup of parked.ts (its PARKED_SIZE reads these). */
-export const YARD_PROP_SIZE: Readonly<Record<YardPropKind, readonly [number, number]>> = Object.freeze({
+export const LOT_PROP_SIZE: Readonly<Record<LotPropKind, readonly [number, number]>> = Object.freeze({
   car: [4.5, 1.8], suv: [4.7, 1.9], pickup: [5.7, 2.0], trailer: [3.6, 1.8], motorhome: [7.4, 2.4], mower: [1.8, 1.1],
   'dog-lying': [1.0, 0.5], 'dog-sitting': [0.75, 0.45],
 });
 /** A dog is never solid and never scores (score-rules.ts NEVER): when a car comes close it slips away, as a waiting
  *  roadside animal does (road-animal-rules.ts ANIMAL.shy). Everything else stops the car like a parked car. */
-export const yardPropSolid = (kind: YardPropKind): boolean => kind !== 'dog-lying' && kind !== 'dog-sitting';
+export const lotPropSolid = (kind: LotPropKind): boolean => kind !== 'dog-lying' && kind !== 'dog-sitting';
 
 /**
  * vehicle, other, dog: the share of houses that get a car, SUV or pickup; a trailer, motorhome or mower; a dog.
@@ -28,20 +28,20 @@ export const yardPropSolid = (kind: YardPropKind): boolean => kind !== 'dog-lyin
  * mouth: metres from where a track or drive leaves a public road. wall: from any building's walls.
  * apart: between two props. reach: the lot, at most this far from the house's own walls. obstacle: from a pole or a box.
  */
-export const YARD_PROPS = Object.freeze({ seed: 0x5a4d17, vehicle: 1 / 3, other: 1 / 15, dog: 1 / 24,
+export const LOT_PROPS = Object.freeze({ seed: 0x5a4d17, vehicle: 1 / 3, other: 1 / 15, dog: 1 / 24,
   public: 5.5, drive: 1.2, mouth: 9, wall: 1.2, apart: 1, reach: 14, obstacle: 0.8 });
 
 type XZ = readonly [number, number];
 /** A mapped house in world metres: centre, the heading of its long axis (as Building.axisDeg, in radians), its sizes
  *  and its footprint. `id` is the map's identity for the house: the only thing the seeded choice reads. */
-export interface YardHouse { id: number; x: number; z: number; axis: number; length: number; width: number; footprint: readonly XZ[] }
-export interface YardRoad { kind: number; halfWidth: number; pts: readonly XZ[] }
-export interface YardInput {
-  houses: readonly YardHouse[];
+export interface LotHouse { id: number; x: number; z: number; axis: number; length: number; width: number; footprint: readonly XZ[] }
+export interface LotRoad { kind: number; halfWidth: number; pts: readonly XZ[] }
+export interface LotInput {
+  houses: readonly LotHouse[];
   /** Every building's footprint in world metres, houses included. `id` is the building's identity: the wings of a
    *  building drawn as wings share the id of the house they make up (Building.buildingId). */
   buildings: readonly { id: number; footprint: readonly XZ[] }[];
-  roads: readonly YardRoad[];
+  roads: readonly LotRoad[];
   /** Drawn things a prop keeps `obstacle` metres from (poles, mailboxes): avoided only, never a reason to pick a house. */
   obstacles?: readonly XZ[];
   /** World boxes [x0, z0, x1, z1] of hand-built sites: nothing is placed in or at a house inside one. */
@@ -51,10 +51,10 @@ export interface YardInput {
 /** One prop: its centre, the heading of its nose (forward is (sin h, -cos h)), half its length and width, the house
  *  it stands at, and a number in [0, 1) that picks its paint. */
 /** A chosen prop. `house` is the house's map id; `hx`, `hz` its centre (where a view stands to see the prop with the house behind). */
-export interface YardProp { kind: YardPropKind; x: number; z: number; heading: number; half: number; halfWidth: number; house: number; hx: number; hz: number; tone: number }
+export interface LotProp { kind: LotPropKind; x: number; z: number; heading: number; half: number; halfWidth: number; house: number; hx: number; hz: number; tone: number }
 
 /** A small repeatable hash of (seed, id) into a 32-bit state. */
-export function yardHash(seed: number, id: number): number {
+export function lotHash(seed: number, id: number): number {
   let h = Math.imul((seed ^ 0x9e3779b9) >>> 0, 0x85ebca6b) ^ Math.imul(id >>> 0, 0xc2b2ae35) ^ Math.imul(Math.floor(id / 4294967296), 0x27d4eb2f);
   h ^= h >>> 16; h = Math.imul(h, 0x7feb352d); h ^= h >>> 15; h = Math.imul(h, 0x846ca68b); h ^= h >>> 16;
   return h >>> 0;
@@ -65,12 +65,12 @@ function random(state: number): () => number {
 }
 
 /** What a house gets, from its id alone: at most one vehicle, one of the rarer things and one dog. */
-export function yardWants(id: number, seed: number = YARD_PROPS.seed): { kinds: YardPropKind[]; rnd: () => number } {
-  const rnd = random(yardHash(seed, id)), kinds: YardPropKind[] = [];
+export function lotWants(id: number, seed: number = LOT_PROPS.seed): { kinds: LotPropKind[]; rnd: () => number } {
+  const rnd = random(lotHash(seed, id)), kinds: LotPropKind[] = [];
   const vehicle = rnd(), which = rnd(), other = rnd(), whichOther = rnd(), dog = rnd(), pose = rnd();
-  if (vehicle < YARD_PROPS.vehicle) kinds.push(which < 0.36 ? 'pickup' : which < 0.68 ? 'suv' : 'car');
-  if (other < YARD_PROPS.other) kinds.push((['trailer', 'motorhome', 'mower'] as const)[Math.min(2, Math.floor(whichOther * 3))]);
-  if (dog < YARD_PROPS.dog) kinds.push(pose < 0.5 ? 'dog-lying' : 'dog-sitting');
+  if (vehicle < LOT_PROPS.vehicle) kinds.push(which < 0.36 ? 'pickup' : which < 0.68 ? 'suv' : 'car');
+  if (other < LOT_PROPS.other) kinds.push((['trailer', 'motorhome', 'mower'] as const)[Math.min(2, Math.floor(whichOther * 3))]);
+  if (dog < LOT_PROPS.dog) kinds.push(pose < 0.5 ? 'dog-lying' : 'dog-sitting');
   return { kinds, rnd };
 }
 
@@ -163,8 +163,8 @@ interface Segment { ax: number; az: number; bx: number; bz: number; halfWidth: n
 const isPublic = (kind: number) => kind >= 1 && kind <= 3;
 
 /** The places to try for one prop at one house, best first: beside a mapped drive, then beside the house, then in front. */
-function spots(kind: YardPropKind, house: YardHouse, drives: Segment[], toward: number, rnd: () => number): Rect[] {
-  const [length, width] = YARD_PROP_SIZE[kind], half = length / 2, halfWidth = width / 2, out: Rect[] = [];
+function spots(kind: LotPropKind, house: LotHouse, drives: Segment[], toward: number, rnd: () => number): Rect[] {
+  const [length, width] = LOT_PROP_SIZE[kind], half = length / 2, halfWidth = width / 2, out: Rect[] = [];
   const dog = kind === 'dog-lying' || kind === 'dog-sitting', small = dog || kind === 'mower';
   // The house's axis nearest the road is its front: f along it (toward the road), s across.
   const axes = [house.axis, house.axis + Math.PI / 2, house.axis + Math.PI, house.axis - Math.PI / 2];
@@ -178,10 +178,10 @@ function spots(kind: YardPropKind, house: YardHouse, drives: Segment[], toward: 
   if (!dog) for (const d of drives) {
     // Beside a mapped drive near the house, parallel to it, on either side.
     const len = Math.hypot(d.bx - d.ax, d.bz - d.az), heading = Math.atan2(d.bx - d.ax, -(d.bz - d.az));
-    const off = d.halfWidth + YARD_PROPS.drive + halfWidth + 0.3;
+    const off = d.halfWidth + LOT_PROPS.drive + halfWidth + 0.3;
     for (let t = half; t <= len - half; t += 2.5) {
       const px = d.ax + ((d.bx - d.ax) * t) / len, pz = d.az + ((d.bz - d.az) * t) / len;
-      if (Math.hypot(px - house.x, pz - house.z) > hf + hs + YARD_PROPS.reach) continue;
+      if (Math.hypot(px - house.x, pz - house.z) > hf + hs + LOT_PROPS.reach) continue;
       for (const s of [side, -side]) out.push({ x: px + Math.cos(heading) * off * s, z: pz + Math.sin(heading) * off * s, heading: heading + (rnd() < 0.5 ? 0 : Math.PI) + turn, half, halfWidth });
     }
   }
@@ -202,11 +202,11 @@ function spots(kind: YardPropKind, house: YardHouse, drives: Segment[], toward: 
 }
 
 /**
- * Choose every yard prop of an area. Stable: the result depends only on the inputs and the seed, never on time or on
+ * Choose every lot prop of an area. Stable: the result depends only on the inputs and the seed, never on time or on
  * the order of `houses`. Each house gets at most one vehicle, one trailer, motorhome or mower, and one dog.
  */
-export function chooseYardProps(input: YardInput): YardProp[] {
-  const seed = input.seed ?? YARD_PROPS.seed, reach = YARD_PROPS.reach;
+export function chooseLotProps(input: LotInput): LotProp[] {
+  const seed = input.seed ?? LOT_PROPS.seed, reach = LOT_PROPS.reach;
   const roads = new Grid<Segment>(), drives: Segment[] = [], mouths: XZ[] = [], publics: Segment[] = [];
   for (const r of input.roads) for (let i = 1; i < r.pts.length; i++) {
     const [ax, az] = r.pts[i - 1], [bx, bz] = r.pts[i], s: Segment = { ax, az, bx, bz, halfWidth: r.halfWidth, isPublic: isPublic(r.kind) };
@@ -234,12 +234,12 @@ export function chooseYardProps(input: YardInput): YardProp[] {
   for (const o of input.obstacles ?? []) things.add(o, [o[0], o[1], o[0], o[1]]);
   const buildings = new Grid<{ id: number; footprint: readonly XZ[] }>();
   for (const b of input.buildings) { const f = b.footprint; if (f.length >= 3) buildings.add(b, [Math.min(...f.map((p) => p[0])), Math.min(...f.map((p) => p[1])), Math.max(...f.map((p) => p[0])), Math.max(...f.map((p) => p[1]))]); }
-  const placed: YardProp[] = [], placedGrid = new Grid<YardProp>();
+  const placed: LotProp[] = [], placedGrid = new Grid<LotProp>();
   const overlaps = (b: readonly number[], e: readonly number[]) => b[0] <= e[2] && b[2] >= e[0] && b[1] <= e[3] && b[3] >= e[1];
 
   for (const house of [...input.houses].sort((a, b) => a.id - b.id)) {
     if (house.footprint.length < 3 || input.excluded.some((e) => overlaps([house.x, house.z, house.x, house.z], e))) continue;
-    const { kinds, rnd } = yardWants(house.id, seed);
+    const { kinds, rnd } = lotWants(house.id, seed);
     if (!kinds.length) continue;
     const span = Math.hypot(house.length, house.width) / 2 + reach + 4, area = [house.x - span, house.z - span, house.x + span, house.z + span];
     const nearRoads = [...roads.near([area[0] - 60, area[1] - 60, area[2] + 60, area[3] + 60])];
@@ -261,34 +261,34 @@ export function chooseYardProps(input: YardInput): YardProp[] {
       if (input.excluded.some((e) => overlaps(box, e))) return false;
       const round = Math.hypot(r.half, r.halfWidth);
       for (const s of fitRoads) {
-        const clear = s.halfWidth + (s.isPublic ? YARD_PROPS.public : YARD_PROPS.drive);
+        const clear = s.halfWidth + (s.isPublic ? LOT_PROPS.public : LOT_PROPS.drive);
         // The circle round the prop first: a segment past it by the clearance cannot be nearer the rectangle.
         if (pointSegment(r.x, r.z, s.ax, s.az, s.bx, s.bz) - round >= clear) continue;
         if (rectSegment(r, s.ax, s.az, s.bx, s.bz) < clear) return false;
       }
-      for (const m of mouthGrid.near([box[0] - YARD_PROPS.mouth, box[1] - YARD_PROPS.mouth, box[2] + YARD_PROPS.mouth, box[3] + YARD_PROPS.mouth])) {
+      for (const m of mouthGrid.near([box[0] - LOT_PROPS.mouth, box[1] - LOT_PROPS.mouth, box[2] + LOT_PROPS.mouth, box[3] + LOT_PROPS.mouth])) {
         const [a, b] = inRect(r, m[0], m[1]);
-        if (Math.hypot(Math.max(Math.abs(a) - r.half, 0), Math.max(Math.abs(b) - r.halfWidth, 0)) < YARD_PROPS.mouth) return false;
+        if (Math.hypot(Math.max(Math.abs(a) - r.half, 0), Math.max(Math.abs(b) - r.halfWidth, 0)) < LOT_PROPS.mouth) return false;
       }
       for (const o of things.near([box[0] - 1, box[1] - 1, box[2] + 1, box[3] + 1])) {
         const [a, b] = inRect(r, o[0], o[1]);
-        if (Math.hypot(Math.max(Math.abs(a) - r.half, 0), Math.max(Math.abs(b) - r.halfWidth, 0)) < YARD_PROPS.obstacle) return false;
+        if (Math.hypot(Math.max(Math.abs(a) - r.half, 0), Math.max(Math.abs(b) - r.halfWidth, 0)) < LOT_PROPS.obstacle) return false;
       }
-      if (rectPolygon(r, own) < YARD_PROPS.wall) return false;
-      for (const f of [...wings, ...others]) if (rectPolygon(r, f) < YARD_PROPS.wall) return false;
+      if (rectPolygon(r, own) < LOT_PROPS.wall) return false;
+      for (const f of [...wings, ...others]) if (rectPolygon(r, f) < LOT_PROPS.wall) return false;
       // On this house's lot: every corner and the centre nearer this house than any other building, and within reach.
       for (const [x, z] of [...rectCorners(r), [r.x, r.z]]) {
         const mine = pointPolygon(x, z, own);
         if (mine > reach) return false;
         for (const f of others) if (pointPolygon(x, z, f) <= mine) return false;
       }
-      for (const p of placedGrid.near([box[0] - 2, box[1] - 2, box[2] + 2, box[3] + 2])) if (rectRect(r, p) < YARD_PROPS.apart) return false;
+      for (const p of placedGrid.near([box[0] - 2, box[1] - 2, box[2] + 2, box[3] + 2])) if (rectRect(r, p) < LOT_PROPS.apart) return false;
       return true;
     };
     for (const kind of kinds) {
       const tone = rnd(), spot = spots(kind, house, nearDrives, toward, rnd).find(fits);
       if (!spot) continue;
-      const prop: YardProp = { kind, x: spot.x, z: spot.z, heading: Math.atan2(Math.sin(spot.heading), Math.cos(spot.heading)), half: spot.half, halfWidth: spot.halfWidth, house: house.id, hx: house.x, hz: house.z, tone };
+      const prop: LotProp = { kind, x: spot.x, z: spot.z, heading: Math.atan2(Math.sin(spot.heading), Math.cos(spot.heading)), half: spot.half, halfWidth: spot.halfWidth, house: house.id, hx: house.x, hz: house.z, tone };
       placed.push(prop); placedGrid.add(prop, rectBox(prop));
     }
   }

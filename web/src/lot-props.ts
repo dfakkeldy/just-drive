@@ -5,30 +5,30 @@ import type { Terrain } from './terrain';
 import type { VehicleSpec } from './vehicle-spec';
 import { dogBlob } from './yard-dog';
 import { Mesher } from './yard-kit';
-import { dogAway, yardPropSolid, YARD_PROP_KINDS, type YardProp, type YardPropKind } from './yard-props-rules';
+import { dogAway, lotPropSolid, LOT_PROP_KINDS, type LotProp, type LotPropKind } from './lot-props-rules';
 
 /**
- * The yard props at houses (placed by yard-props-rules.ts): parked cars, SUVs and pickups, utility trailers,
+ * The lot props at houses (placed by lot-props-rules.ts): parked cars, SUVs and pickups, utility trailers,
  * motorhomes and ride-on mowers, drawn with the parked vehicles' shapes (parked.ts), and black-and-white farm dogs
  * lying or sitting, built like the yard dog (yard-dog.ts). One instanced mesh per kind, filled each frame with the ones
  * near the camera and in view. Every vehicle, trailer and mower is solid. A dog is never solid and never scores: it
  * slips away from a car that comes right up to it, and is back when the car has gone.
  */
-const TYPE: Partial<Record<YardPropKind, ParkedType>> = { car: 0, suv: 1, pickup: 2, trailer: 3, motorhome: 4, mower: 5 };
+const TYPE: Partial<Record<LotPropKind, ParkedType>> = { car: 0, suv: 1, pickup: 2, trailer: 3, motorhome: 4, mower: 5 };
 /** Paint by kind, picked by the prop's tone. Trailers galvanised or black; motorhomes white or cream; mowers plain red,
  *  charcoal or white (no maker's colour scheme). Dogs keep their own coat. */
-const PAINT: Record<YardPropKind, readonly number[]> = {
+const PAINT: Record<LotPropKind, readonly number[]> = {
   car: PARKED_COLOURS, suv: PARKED_COLOURS, pickup: PARKED_COLOURS,
   trailer: [0x8d9194, 0x8d9194, 0x26272a, 0x4c4f4c], motorhome: [0xebe9e2, 0xe2dccd, 0xf2f1ec], mower: [0x962a22, 0x3a3e42, 0xd9d7d0],
   'dog-lying': [0xffffff], 'dog-sitting': [0xffffff],
 };
 /** Metres a kind is drawn within: on a computer, and on a phone (LOW). Past these it is a few pixels at most. */
-export const YARD_PROP_RANGE: Readonly<Record<YardPropKind, readonly [number, number]>> = Object.freeze({
+export const LOT_PROP_RANGE: Readonly<Record<LotPropKind, readonly [number, number]>> = Object.freeze({
   car: [420, 220], suv: [420, 220], pickup: [420, 220], trailer: [280, 150], motorhome: [520, 260], mower: [200, 110],
   'dog-lying': [140, 80], 'dog-sitting': [140, 80],
 });
 /** Height in metres of each kind, for the view test. */
-const HEIGHT: Readonly<Record<YardPropKind, number>> = { car: 1.5, suv: 1.75, pickup: 1.95, trailer: 0.9, motorhome: 3.2, mower: 1.25, 'dog-lying': 0.55, 'dog-sitting': 0.85 };
+const HEIGHT: Readonly<Record<LotPropKind, number>> = { car: 1.5, suv: 1.75, pickup: 1.95, trailer: 0.9, motorhome: 3.2, mower: 1.25, 'dog-lying': 0.55, 'dog-sitting': 0.85 };
 /** The ground detail a prop waits for before it is stood on it (the porch house waits for the same). */
 const MIN_LEVEL = 7;
 
@@ -63,11 +63,11 @@ export function farmDog(pose: 'dog-lying' | 'dog-sitting', detail: number): THRE
   return merged;
 }
 
-interface Item extends Placed { prop: YardProp; solid: Solid | null; away: boolean }
+interface Item extends Placed { prop: LotProp; solid: Solid | null; away: boolean }
 const SOLID_CELL = 32;
 const cellKey = (i: number, j: number) => (i + 0x8000) * 0x10000 + (j + 0x8000);
 
-export class YardProps {
+export class LotProps {
   readonly group = new THREE.Group();
   readonly items: Item[];
   private near: NearInstances<Item>;
@@ -76,9 +76,9 @@ export class YardProps {
   private material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
 
   /** `sea`: the game's sea level; a prop never stands below it, in a brook, on a road the land knows, or on a steep bank. */
-  constructor(list: readonly YardProp[], private terrain: Terrain, readonly low: boolean, private sea: number) {
+  constructor(list: readonly LotProp[], private terrain: Terrain, readonly low: boolean, private sea: number) {
     this.items = list.map((prop) => {
-      const paint = PAINT[prop.kind], solid = yardPropSolid(prop.kind)
+      const paint = PAINT[prop.kind], solid = lotPropSolid(prop.kind)
         ? { x: prop.x, z: prop.z, half: prop.half, halfWidth: prop.halfWidth, heading: prop.heading } : null;
       return { x: prop.x, z: prop.z, heading: prop.heading, colour: paint[Math.min(paint.length - 1, Math.floor(prop.tone * paint.length))], prop, solid, away: false };
     });
@@ -88,7 +88,7 @@ export class YardProps {
     }
     this.dogs = this.items.filter((i) => !i.solid);
     const kinds: NearKind<Item>[] = [];
-    for (const kind of YARD_PROP_KINDS) {
+    for (const kind of LOT_PROP_KINDS) {
       const items = this.items.filter((i) => i.prop.kind === kind);
       if (!items.length) continue;
       const type = TYPE[kind];
@@ -96,7 +96,7 @@ export class YardProps {
       if (type !== undefined) { const m = new Mesher(); parkedShape(m, type); geometry = m.geometry(); }
       else geometry = farmDog(kind as 'dog-lying' | 'dog-sitting', low ? 0 : 1);
       const [length, width] = [items[0].prop.half * 2, items[0].prop.halfWidth * 2];
-      kinds.push({ name: kind, geometry, items, range: YARD_PROP_RANGE[kind][low ? 1 : 0], radius: Math.hypot(length, width, HEIGHT[kind]) / 2 + 0.5, lift: HEIGHT[kind] / 2,
+      kinds.push({ name: kind, geometry, items, range: LOT_PROP_RANGE[kind][low ? 1 : 0], radius: Math.hypot(length, width, HEIGHT[kind]) / 2 + 0.5, lift: HEIGHT[kind] / 2,
         level: (p) => this.terrain.levelAt(p.x, p.z), pose: (p, o) => this.pose(p, o),
         ...(type === undefined ? { shown: (p: Item) => !p.away } : {}) });
     }

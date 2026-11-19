@@ -43,7 +43,7 @@ function verifyPauseWiring(main) {
   const body = main.match(/const resolveYardSolids = \(\) => \{([\s\S]*?)\n\};/)[1];
   for (const [paused, aiOn] of [[false, false], [true, false], [false, true]]) {
     let received, aiResolved = 0;
-    const context = { aiDriver: { resolve() { aiResolved++; } }, aiDriverOn: () => aiOn, boss: null, multiplayer: null, endings: { busy: false }, yard: null, history: null, home: null, porch: null, yardProps: null,
+    const context = { aiDriver: { resolve() { aiResolved++; } }, aiDriverOn: () => aiOn, boss: null, multiplayer: null, endings: { busy: false }, yard: null, history: null, home: null, porch: null, lotProps: null,
       ambientTraffic: null, roadAnimals: null, canal: null, canalBeforeX: 0, canalBeforeZ: 0, church: null, village: null, hawkesbury: null, mabouMain: null, quarry: null, tall: null, fleet: null, stuntPark: null, cemeteries: null, fishing: null, yardJob: null, roadScene: null, towing: null,
       vehicle: { damageActive: true }, horse: false, roadsidePlaying: false, jumpPlacement: 0,
       syncRoadScenePause() {}, scenePaused: () => paused,
