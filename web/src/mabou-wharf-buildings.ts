@@ -23,8 +23,6 @@ export const wharfBuildingStyles: Record<string, BuildingStyle> = {
 };
 
 /** Use the survey footprints for both large buildings. The small shed is scenery. */
-export const isWharfBuilding = ({id}: Building): boolean => id === 8 || id === 73;
-
 export function wharfBuildings(list: Building[]): Building[] {
-  return [...list.filter(isWharfBuilding).map(building => building.id === 73 ? { ...building, ridge: 4.55 } : building), shed];
+  return [...list.map(building => building.id === 73 ? { ...building, ridge: 4.55 } : building), shed];
 }
