@@ -9,7 +9,6 @@ import {StuntPark,PlacedStunt} from '../web/src/stunt-kit.ts';
 import {testParkLayout} from '../web/src/stunt-test-park.ts';
 // PR #144: the mirror crown line is the one reviewed difference from main in these programs (tools/coast-programs.mjs).
 import {reviewedMirrorCrown} from './mirror-crown.mjs';
-import {drawnRoadBytes} from '../web/src/terrain.ts';
 // PR #27: ROAD_PAVEMENT (Mabou pavement flags) is new #ifdef text in TERRAIN_FRAG. Without that define, resolve only its
 // own #ifdef/#else/#endif lines (keeping the #else side) and compare everything else as written.
 export function withoutPavement(source){
@@ -29,12 +28,12 @@ assert.equal(withoutPavement('a\n#ifdef ROAD_PAVEMENT\nb\n#ifdef X\nc\n#endif\n#
 const compiled=(material,defines=material.defines)=>{const source=reviewedMirrorCrown(material.fragmentShader);return defines?.ROAD_PAVEMENT?source:withoutPavement(source);};
 // The gravel driveways' program fix: on the main this compares with, a tile whose only paint bits were a gravel
 // driveway's (a track, kind 4, with bit 64) took ROAD_PAVEMENT and its texture held the raw track byte. Here such a tile
-// takes no ROAD_PAVEMENT and its texture draws the driveway as a gravel road (drawnRoadBytes). Map main's tile to that,
-// then compare as before. On a tile without a gravel driveway, and on a main that has the fix, this changes nothing.
+// takes no ROAD_PAVEMENT and its texture draws the driveway as a gravel road (kind 3, bridge and washboard bits kept).
+// Map main's tile to that with this file's own expression, not terrain.ts's, so a fault there still shows, then compare. On a tile without a gravel driveway, and on a main that has the fix, this changes nothing.
 export function drawnHere(tile){
   const material=tile.mesh.material,defines={...material.defines},road=tile.road,data=material.uniforms.tRoad.value.image?.data;
   if(defines.ROAD_PAVEMENT&&road&&!road.some((v,k)=>k%4===2&&(v&192)!==0&&(v&15)!==4))delete defines.ROAD_PAVEMENT;
-  return {defines,source:compiled(material,defines),road:road&&data&&data.buffer===road.buffer?drawnRoadBytes(data):data};
+  return {defines,source:compiled(material,defines),road:road&&data&&data.buffer===road.buffer?data.map((v,k)=>k%4===2&&(v&207)===68?(v&48)|3:v):data};
 }
 const main=await import(pathToFileURL(process.env.STUNT_LOD_MAIN));
 const hill=Number(process.env.STUNT_LOD_HILL??2.5),low=process.env.STUNT_LOD_LOW==='1';

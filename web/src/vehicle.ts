@@ -132,7 +132,7 @@ export class Vehicle {
       for(const p of this.groundContacts){
         if(p.height===null){known=false;break;}
         let h=p.height;const sw=this.terrain.surfaceAt(p.x,p.z);
-        if(this.spec.locomotion !== 'horse'&&sw&&sw.kind>0&&sw.roadDist<=sw.halfWidth-.2){h-=potholeDepth(p.x,p.z,potholeDensity(sw.kind,sw.washboard));if(sw.washboard)h-=washboard(p.x*ax+p.z*az);}
+        if(this.spec.locomotion !== 'horse'&&sw&&sw.kind>0&&sw.roadDist<=sw.halfWidth-.2){h-=potholeDepth(p.x,p.z,potholeDensity(sw.kind,sw.washboard,sw.gravel));if(sw.washboard)h-=washboard(p.x*ax+p.z*az);}
         sum+=h;
       }
       if(known){this.y=this.prevGround=sum/4;this.vy=0;this.captureGround();}
