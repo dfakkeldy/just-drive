@@ -353,9 +353,9 @@ def main():
             assert item["source"] != "lidar" and item["eave"] == 3 and item["ridge"] == 5
         assert item["nearRoad"] is None or road_kinds[item["nearRoad"]] in (1, 2, 3)
         if item.get("source") == "hand":
-            from dashcam_corrections import INPUT
-            assert item["provenance"] == INPUT["provenance"]
-            stated = next(b for b in INPUT['buildings'] if b['id'] == item['id'])
+            from dashcam_corrections import hand_building_specs
+            stated, provenance = next((b, p) for b, p in hand_building_specs() if b["id"] == item["id"])
+            assert item["provenance"] == provenance
             for field in ('x','y','length','width','axisDeg','eave','ridge','kind'):
                 assert item[field] == stated[field], (item['id'],field,'hand input changed')
             assert item['roof'] == 'gable' and item['confidence'] == .4

@@ -18,7 +18,58 @@ sys.path.insert(0,str(ROOT/'pipeline'))
 from dashcam_corrections import INPUT, correct_roads, hand_buildings, hand_styles, project, attach_guardrails, measured_root_id_limit, nearest
 
 
+def november18_rules():
+    from dashcam_corrections import NOV18, correct_nov18_roads
+    harbour = NOV18['harbour']
+    mouth, cut = harbour['mouth'], harbour['cut']
+    west = [cut[0]-100, cut[1]]
+    old = [
+        dict(id=51, name=harbour['name'], pts=[mouth, cut, west], kind=3, halfWidth=2.6, bridge=False),
+        dict(id=116, name=NOV18['lane'], pts=[[625653,5103495],[626051,5103687]], kind=4, halfWidth=1.5, bridge=False),
+    ]
+    unchanged = copy.deepcopy(old)
+    extended, gravel, lane = after = correct_nov18_roads(old, 'mabou')
+    assert old == unchanged and correct_nov18_roads(after, 'mabou') == after
+    assert correct_nov18_roads(old, 'judique') == old
+    assert extended['pts'] == [mouth, cut] and extended['id'] == 117
+    assert (extended['kind'], extended['halfWidth'], extended['pavement']) == (2, 3, 'double-yellow')
+    assert gravel['pts'] == [cut, west] and gravel['id'] == 51 and gravel['kind'] == 3
+    assert lane == dict(old[1], kind=2, pavement='worn')
+    stale = [dict(old[0], pts=[mouth, west]), old[1]]
+    try:
+        correct_nov18_roads(stale, 'mabou')
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('Faraway pavement limit accepted')
+
+    ground = lambda x,y: 53
+    buildings = hand_buildings([], 'mabou', ground, old, observations=NOV18)
+    assert len(buildings) == 6 and all(b['ground'] == 53 and b['nearRoad'] is None for b in buildings)
+    assert buildings == hand_buildings(buildings, 'mabou', ground, old, observations=NOV18)
+    styles = hand_styles(dict(styles={}), buildings, observations=NOV18)['styles']
+    home, garage, shed = buildings[:3]
+    assert home['roof'] == garage['roof'] == 'shed' and shed['x'] < home['x']
+    assert home['axisDeg'] == 135 and styles['900007']['front'] == dict(end=False, side=1)
+    assert styles['900007']['entrance'] == 'deck' and styles['900007']['steppedShed'] and styles['900007']['windowWall']
+    assert styles['900008']['rollUpDoor'] and styles['900008']['doorWindows']
+    assert styles['900009']['door'] == '#9d2923'
+    assert styles['900010']['solarSide'] == 1 and styles['900010']['roofMaterial'] == 'metal'
+    assert styles['900011']['rollUpDoor'] and styles['900011']['door'] == '#eeede6'
+    assert styles['900010']['boardAndBatten'] and styles['900011']['boardAndBatten']
+    house = buildings[0]
+    track = dict(id=33, name=None, kind=4, halfWidth=1.5, bridge=False,
+                 pts=[[house['x']-30, house['y']], [house['x']+30, house['y']]])
+    try:
+        hand_buildings([], 'mabou', ground, [track], observations=NOV18)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('New house on unnamed track accepted')
+
+
 def rules():
+    november18_rules()
     for area, rules in INPUT['roads'].items():
         roads = []
         for i, rule in enumerate(rules):

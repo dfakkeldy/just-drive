@@ -182,11 +182,12 @@ def bake(buildings, roads, observed):
         u, v = dx * math.sin(a) + dy * math.cos(a), dx * math.cos(a) - dy * math.sin(a)
         end = abs(u) / b['length'] > abs(v) / b['width']
         styles[str(b['id'])]['front'] = dict(end=end, side=1 if (u if end else v) >= 0 else -1)
-    from dashcam_corrections import hand_styles
-    return hand_styles(dict(version=1, styles=styles, landmarks=matches,
+    from dashcam_corrections import NOV18, hand_styles
+    data = hand_styles(dict(version=1, styles=styles, landmarks=matches,
                 neighbours=dict(radius=30, eligible=eligible, inherited=inherited),
                 notes='Detail probabilities are estimates. Landmark storeys and roof shapes do not change measured envelopes.'
                 + (' ' + observed['about'] if 'sourceBuildingCounts' in observed else '')), hand, roads)
+    return hand_styles(data, hand, observations=NOV18)
 
 
 def report(data, buildings, observed):
