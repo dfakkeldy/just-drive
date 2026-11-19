@@ -325,7 +325,7 @@ export class Vehicle {
     const slopeR = Math.atan2((fr + rr) / 2 - (fl + rl) / 2, (this.spec.rearTrack === undefined ? this.spec.track : (this.spec.track + this.spec.rearTrack) / 2));       // right side up is positive
 
     const onRoad = onDeck || (s.kind > 0 && s.roadDist <= s.halfWidth + 0.4);
-    const surf = this.terrain.cartRoads && onRoad ? (s.washboard ? SURFACES.washboard : s.kind === 4 ? SURFACES.track : SURFACES.gravel) : siteDeck && s.kind===9 ? SURFACES.concrete : onRoad ? (onDeck || s.kind <= 2 || s.kind === 9 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 12 ? SURFACES.grass : s.kind === 3 || s.kind >= 8 ? SURFACES.gravel : s.kind === 5 ? SURFACES.trail : SURFACES.track)
+    const surf = this.terrain.cartRoads && onRoad ? (s.washboard ? SURFACES.washboard : s.kind === 4 ? SURFACES.track : SURFACES.gravel) : siteDeck && s.kind===9 ? SURFACES.concrete : onRoad ? (onDeck || s.kind <= 2 || s.kind === 9 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 12 ? SURFACES.grass : s.kind === 3 || s.kind >= 8 || s.gravel ? SURFACES.gravel : s.kind === 5 ? SURFACES.trail : SURFACES.track)
       : s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
     this.surfaceName = surf.name;
 

@@ -316,8 +316,9 @@ def bake():
     return result
 
 # The 18 Nov Mabou bake (tools/mabou-dashcam-18nov) leaves every sidewalk output byte for byte the same: re-baked on its
-# promoted land on 19 Nov, only these input digests moved. So a land file at exactly that receipt's after bytes stands for
-# the bytes it replaced, and its manifest (only two counts change) for the same manifest with the counts set back.
+# promoted land on 19 Nov (houses), and again with its two driveways, only these input digests moved. So a land file at
+# exactly that receipt's after bytes stands for the bytes it replaced, and its manifest (only the counts the receipt owns
+# change) for the same manifest with those counts set back.
 NOV18=ROOT/'tools/mabou-dashcam-18nov/hashes.json'
 
 def nov18_stands_for(file,digest,cached,root=ROOT,report=None):
