@@ -1,4 +1,5 @@
 import { raceCheck } from './mp-race-check.mjs';
+import { tagCheck } from './mp-tag-check.mjs';
 // Multiplayer check: simulated games against the local room server (tools/check-mp.sh starts it).
 // It proves what each player sees of the others, on a clean connection and on a bad one, and that the room
 // refuses what a real game would not send. Judge it by its exit code.
@@ -85,6 +86,7 @@ const until = async (ready, what, ms = 30000) => {
   }
 };
 if (process.argv.includes('--race-only')) { await raceCheck(raw); process.exit(0); }
+if (process.argv.includes('--tag-only')) { await tagCheck(raw); process.exit(0); }
 // --motion-only: the rules, the door and three players on a clean connection (tools/check-mp.sh --mutations).
 const motionOnly = process.argv.includes('--motion-only');
 const results = [];
@@ -123,7 +125,7 @@ if (!motionOnly) {
     // rare try that the room itself took longer than the cooldown, the second may rightly pass, so the pair is sent again.
     let got = [], span = Infinity, last = 0, tries = 0;
     a.ws.send(JSON.stringify({t:'chat',phrase:0,id:b.hello.id})); // extra fields refused
-    a.ws.send(JSON.stringify({t:'chat',phrase:8}));
+    a.ws.send(JSON.stringify({t:'chat',phrase:11}));
     a.ws.send(JSON.stringify({t:'chat',text:'arbitrary text'}));
     while (span >= CHAT_COOLDOWN) {
       assert.ok(tries++ < 3, `the room took ${span} ms for two messages, three times running`);
@@ -771,6 +773,7 @@ if (!motionOnly) {
 }
 
 if (!motionOnly) await raceCheck(raw);
+if (!motionOnly) await tagCheck(raw);
 
 // A ping in flight while this process stalls is answered late too: count only the room's stalls that are not that.
 process.exit(0);

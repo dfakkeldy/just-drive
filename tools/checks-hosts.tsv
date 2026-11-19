@@ -209,6 +209,7 @@ era-density-judique	unproven	no	Judique 1884 regeneration; not measured on anoth
 era-judique-browser	unproven	no	Judique 1884 browser check; not measured on another host
 traffic-signals-browser	unproven	no	apple-check-host PASS 8.52 s on 38c41cdc (desktop and LOW: 5 draws, 924 triangles, lit lamps); not yet run on the MacBook or on Linux
 mp-race-browser	unproven	no	two local room pages; requires installed Wrangler and hardware browser
+mp-tag-browser	unproven	no	two local room pages (desktop host, touch phone guest) in six areas; requires installed Wrangler and hardware browser
 hikes-browser	unproven	no	New row; verification pending on apple-check-host
 stunt-arch-entry-mutant	unproven	no	New actual coupled-contact mutant; first host will be coordinator-authorised apple-check-host
 mp-liveness-browser	unproven	no	two local room visitors plus a same-browser tab; requires installed Wrangler and hardware browser
