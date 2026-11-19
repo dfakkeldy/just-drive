@@ -18,7 +18,8 @@ try{
  const drop=after?data.serviceDrops.find(d=>d.building===-1):null;if(after&&!drop)throw Error('church drop missing');
  const props=mmm.props;let cells=0,lines=0,churchLine=false,dropWires=0;
  for(const c of props.cells.values())if(c.group){
-  const batch=c.group.children.filter(o=>o.isLineSegments);if(batch.length>1)throw Error('multiple wire draws in a cell');
+  // The cell's wire draw: LineSegments, or with the finish pass's one-sample canvas (FINISH.oneSample) a ribbon Mesh.
+  const batch=c.group.children.filter(o=>o.isLineSegments||o===c.line);if(batch.length>1)throw Error('multiple wire draws in a cell');
   cells++;lines+=batch.length;dropWires+=c.wires.filter(w=>w.drop).length;
   if(c.wires.some(w=>w.drop?.building===-1))churchLine=batch.length===1&&c.wires.some(w=>w.drop?.building===-1&&w.vertices.length===60);
  }
