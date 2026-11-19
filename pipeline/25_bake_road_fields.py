@@ -23,8 +23,11 @@ b = corridor.b
 
 
 # The low nibble stays the physical surface kind. The two high bits are
-# presentation only, with bridge and washboard bits left in place.
-PAVEMENT_FLAGS = {'double-yellow': 64, 'worn': 128}
+# presentation only, with bridge and washboard bits left in place. They are
+# read with the kind: on a paved lane (2) 64 is a double yellow line and 128
+# worn asphalt; on a driveway (4) 64 is gravel rather than dirt ruts.
+PAVEMENT_FLAGS = {'double-yellow': 64, 'worn': 128, 'gravel': 64}
+PAVEMENT_KINDS = {'double-yellow': 2, 'worn': 2, 'gravel': 4}
 
 
 class Field:
@@ -33,6 +36,8 @@ class Field:
         for road in network:
             flags = road['kind'] | (16 if road['bridge'] else 0) | (32 if road.get('washboard') else 0)
             if 'pavement' in road:
+                if road['kind'] != PAVEMENT_KINDS[road['pavement']]:
+                    raise ValueError(f"Road {road.get('id')}: {road['pavement']} needs kind {PAVEMENT_KINDS[road['pavement']]}")
                 flags |= PAVEMENT_FLAGS[road['pavement']]
             for a,c in zip(road['pts'][:-1],road['pts'][1:]):
                 if a!=c:

@@ -66,6 +66,44 @@ def november18_rules():
         pass
     else:
         raise AssertionError('New house on unnamed track accepted')
+    november18_driveways()
+
+
+def november18_driveways():
+    from dashcam_corrections import NOV18, DRIVEWAY, nov18_driveways
+    assert [d['road'] for d in NOV18['driveways']] == ['Mabou Mines Road', 'Meadow Road']
+    road = dict(id=40, name='Public Road', kind=3, halfWidth=2.6, bridge=False, pts=[[0, 0], [0, 400]])
+    other = dict(id=41, name=None, kind=4, halfWidth=1.5, bridge=False, pts=[[200, 0], [200, 400]])
+    drive = dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[0, 100], [60, 100], [90, 110]]),
+                                             dict(halfWidth=3.0, pts=[[90, 110], [100, 110]])])
+    seen = dict(driveways=[drive])
+    roads = [road, other]
+    frozen = copy.deepcopy(roads)
+    after = nov18_driveways(roads, 'mabou', seen)
+    assert roads == frozen and after[:2] == roads and nov18_driveways(after, 'mabou', seen) == after
+    assert nov18_driveways(roads, 'judique', seen) == roads and nov18_driveways(roads, 'mabou', dict()) == roads
+    assert [(r['id'], r['name'], r['kind'], r['halfWidth'], r['pavement'], r['driveway']) for r in after[2:]] == [
+        (42, None, 4, 1.5, 'gravel', DRIVEWAY), (43, None, 4, 3.0, 'gravel', DRIVEWAY)]
+    assert after[2]['pts'] == drive['pieces'][0]['pts'] and not after[2]['bridge'] and not after[2]['washboard']
+    # A house beside its own driveway is fine; a track still is not (november18_rules above).
+    ground = lambda x, y: 53
+    near_drive = dict(NOV18, buildings=[dict(NOV18['buildings'][0], x=80, y=125)])
+    assert len(hand_buildings([], 'mabou', ground, after, observations=near_drive)) == 1
+    refused = {
+        'a mouth off its road': dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[5, 100], [60, 100]])]),
+        'a mouth on another road': dict(road='Other Road', pieces=drive['pieces']),
+        'pieces that do not join': dict(road='Public Road', pieces=[drive['pieces'][0], dict(halfWidth=3.0, pts=[[91, 110], [100, 110]])]),
+        'a line over another road': dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[0, 100], [220, 100]])]),
+        'a line along its own road': dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[0, 100], [3, 140]])]),
+        'a half width wider than a pad': dict(road='Public Road', pieces=[dict(halfWidth=4.0, pts=[[0, 100], [60, 100]])]),
+        'a single point': dict(road='Public Road', pieces=[dict(halfWidth=1.5, pts=[[0, 100]])]),
+    }
+    for label, bad in refused.items():
+        try:
+            nov18_driveways(roads, 'mabou', dict(driveways=[bad]))
+        except (ValueError, StopIteration):
+            continue
+        raise AssertionError(label + ' accepted')
 
 
 def rules():

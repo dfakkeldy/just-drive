@@ -147,7 +147,7 @@ def main():
             kind = flags & 15
             assert np.isin(kind, (1,2,3,4,5)).all()
             assert np.isin(flags & 192, (0, *f.PAVEMENT_FLAGS.values())).all()
-            assert ((flags & 192 == 0) | (kind == 2)).all()
+            assert ((flags & 192 == 0) | (kind == 2) | ((kind == 4) & (flags & 192 == 64))).all()
     actual={os.path.relpath(os.path.join(root,p),b.OUT) for root,_,files in os.walk(b.OUT)
             for p in files if p.endswith('.png') and os.path.basename(root).isdigit()}
     assert expected==actual,dict(missing=sorted(expected-actual),unlisted=sorted(actual-expected))

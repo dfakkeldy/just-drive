@@ -13,6 +13,16 @@
    "sha256": "016dc8313436b37c34a95da71802f292da2ca5a814114ebfb4ee748bdc7eeef1"
   },
   {
+   "file": "terrain/5/14_15.r.png",
+   "before": "5fe36377d711bc2c0957218221437da6dcb68054fc483d5454510d2acd40ca50",
+   "sha256": "619f38c6daee8de40215012cf13fc676b89d283359d29f19d4d7fd03f60e1b0f"
+  },
+  {
+   "file": "terrain/5/14_17.r.png",
+   "before": "7be42f0089da11d076fd9c32c38595146b83decf5b42d35cefcc5fa6704a711b",
+   "sha256": "feb86c71c4a6992af2e52f9e81f2426e3ae6a437119de1352f4aa5ea8703a994"
+  },
+  {
    "file": "terrain/5/16_15.r.png",
    "before": "559348e7732043f36f42a7493fc7a7ffd79f4b8fe6109864ab9635bb2d43da5f",
    "sha256": "7ebc7409de5c882c1921709b85ea411520c232d192a553d8369d3112f4a1457e"
@@ -26,6 +36,26 @@
    "file": "terrain/6/26_30.r.png",
    "before": "9d09cef630907eb6433fcc5eb85ae39132b81bb87be14f39639cc2a50e773bd4",
    "sha256": "1d21ed426d459683ea8655a919b883dbcee2d86bcf8de76f0806640b6abd1c5a"
+  },
+  {
+   "file": "terrain/6/28_30.r.png",
+   "before": "7483087ab5bafea3381261f7b35a7f10a2da2d5ec9bedcf0769db64c5957e0c6",
+   "sha256": "96e7657b0d895aee483f047cf28d8927ac3a99a2dff1afb837c9b2f61651836e"
+  },
+  {
+   "file": "terrain/6/28_34.r.png",
+   "before": "fccb166aea430a79e3a974f5c80011dae42151cb802e93fb351a5b04af76783a",
+   "sha256": "87eb50156d31408f41657363ead4df6e6b1c95d353f09bec1044481e796de304"
+  },
+  {
+   "file": "terrain/6/29_34.r.png",
+   "before": "ad0d9cc08aee5c36c9b56c23b6e24bbae2ee04de95857196675bf1ab395c27f6",
+   "sha256": "908efbfea84d59126e5817d19eaa4328a8f016e0564b2f35cb0e67602c78dbec"
+  },
+  {
+   "file": "terrain/6/29_35.r.png",
+   "before": "bbc055ae42b8266ede7a81063055c7df5782a42fabb24113f541f72197a474a8",
+   "sha256": "db72fd8a2f7d1f0c87a69e60f393feff391f215eaad02672ee4a00b52dd7880c"
   },
   {
    "file": "terrain/6/33_31.r.png",
@@ -46,6 +76,26 @@
    "file": "terrain/7/53_60.r.png",
    "before": "601574c4c9b7fc8541a29b782137d10376f1b13fded712e59d8728e95c3daf4f",
    "sha256": "f19a7021a4f736159c51d1a8cb0e0e7c82843a551ca44cd4b2e41821618e9043"
+  },
+  {
+   "file": "terrain/7/56_60.r.png",
+   "before": "1220a91187376b756cc094330b615cc9a8e3d35950122017aada91ae7c1ec4a1",
+   "sha256": "f49c36b4efc34dafca5784e53e9bdf5e211a2f12981a777f18bb83572b65402b"
+  },
+  {
+   "file": "terrain/7/57_69.r.png",
+   "before": "53cdb0f67095bc42ba8928f420ba22059e32d6d2c5c32d1071eee31cc5a971d9",
+   "sha256": "e3f5ecb4449e7026fe76295cd90af48fb7e9054a7d33c345ff8aab0077927df7"
+  },
+  {
+   "file": "terrain/7/58_69.r.png",
+   "before": "b1c10d366a1a673f53ea6931f7e73018c31808df69fc30d84fea9638d6c52870",
+   "sha256": "f678f20e0b9c52e108659ce1ea9901dbfa5457f3a37f532599971cdae1d13483"
+  },
+  {
+   "file": "terrain/7/58_70.r.png",
+   "before": "2518ba508b510a52bf7d98a60dd8899d577585b6b2532f3c7a78f2339c136694",
+   "sha256": "e238f7be384fd61a1f5e77871bcaec49c415562049d2e33d220e66859d963d6e"
   },
   {
    "file": "terrain/7/66_63.r.png",
@@ -88,6 +138,46 @@
    "sha256": "efc1e315ddd2f36136f411cc64d5add3a83170d4483223fea75366001ee6e303"
   },
   {
+   "file": "terrain/8/112_120.r.png",
+   "before": "0d5bf20c6dabd371dad6dcb1a9a94fb1725c100eb666eaeb54418c4b3b1f5878",
+   "sha256": "162201a68a5033960defb329696402d8cb4ef53018523d90aa92141b642c1361"
+  },
+  {
+   "file": "terrain/8/113_120.r.png",
+   "before": "06825453981aed474899ba7d18876b152cb171b21566204d06e58091f7456c2e",
+   "sha256": "70b9be36ada436bab88b4141639a1bceb1965851a7f94cd00e1945470a55d5fa"
+  },
+  {
+   "file": "terrain/8/115_139.r.png",
+   "before": "630c48beeb31e414fdd63d538fc2e18554a52cd29cb7ea472438a615fd20ef6e",
+   "sha256": "40c94ac2154e52eec5fafcb8daec65b01a1300c0c1270511f79eea4e1d5abff8"
+  },
+  {
+   "file": "terrain/8/115_139.t.bin",
+   "before": "7449e37977ded4302cc5cd0c791d4ccf68e49f66f553568c9e279a57905c8fd4",
+   "sha256": "bbd8017da967066e2d84210f65a811b9dd374ad98c68e4029ee8b9e3d2471ebb"
+  },
+  {
+   "file": "terrain/8/116_139.r.png",
+   "before": "2ad0d012ae8e1b3ec9a5beac713c7c0bfda07bae9bd61782b503ef0b573e8a10",
+   "sha256": "755269d4f1a36abddc19fe292f7b306de91672bfc7087a77be4a5db50fab385a"
+  },
+  {
+   "file": "terrain/8/116_139.t.bin",
+   "before": "471901ae2ee6d88ea5725c2afea3745b886b6a6725e013c36251cfc30b728663",
+   "sha256": "dfb17ce2657607c879f4a832344e0d36111bea27ad55a7df9eabc92c37022af6"
+  },
+  {
+   "file": "terrain/8/116_140.r.png",
+   "before": "b4cd9ac12772b231d03ccad8fc176d26353677c449b9b2c29dcad883137c5048",
+   "sha256": "4131e8014c06bdcb440c90499843dd7805fa8ea64cceb691d26de30c7023b82f"
+  },
+  {
+   "file": "terrain/8/116_140.t.bin",
+   "before": "70c7761a9f5c91017652012b7f359010b58577f82d6f258dadf2a204cef98524",
+   "sha256": "4465028cf85d675c5e39b5d3cca42ed2d87a1ec15948ba11b54ce145da86d7d3"
+  },
+  {
    "file": "terrain/8/133_126.r.png",
    "before": "63be31669e6778214858d0413781b4eb205b73e7c325a13aa2c3d579a2ae9218",
    "sha256": "f9edd9795537ecad4bd8af8f7ab3403e7669416f3b51c68d3cb2ad427e8df153"
@@ -115,7 +205,7 @@
   {
    "file": "terrain/cemeteries.json",
    "before": "0083be318794bc4bd1083b72958436b4b3fbe54a95aa384b8c01f41b58ea60ce",
-   "sha256": "30a2fc8cb99c64483f36d7197537839569c5b3a009bb4598642a17868bac2512"
+   "sha256": "9393e7ca6e9ef3e29b7d21f3cd1bdbfe853e2235cae5de478e8ef6f5ef37cd77"
   },
   {
    "file": "terrain/props.json",
@@ -125,7 +215,7 @@
   {
    "file": "terrain/roads.json",
    "before": "2a34feac490ceccad35af2b6ffc5fac1315baaa72d3c8795828dfed4cc874f82",
-   "sha256": "858b1aa16d8ccf42cbec7e70abf0091db371910a50ff08bacb0f372bf3323069"
+   "sha256": "95b9b9653e23ba4b3d2b062010253ab27e64c5d491bd4b2cba172321947afcad"
   },
   {
    "file": "terrain/streams.json",
@@ -142,6 +232,9 @@
     },
     "buildingStyles": {
      "count": 1046
+    },
+    "trees": {
+     "count": 1058189
     }
    },
    "after": {
@@ -150,6 +243,9 @@
     },
     "buildingStyles": {
      "count": 1052
+    },
+    "trees": {
+     "count": 1058173
     }
    }
   }
@@ -160,6 +256,14 @@
   },
   "kinds": {
    "116": 4
-  }
+  },
+  "driveways": [
+   988,
+   989,
+   990,
+   991,
+   992,
+   993
+  ]
  }
 }
