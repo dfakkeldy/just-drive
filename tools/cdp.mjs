@@ -85,6 +85,9 @@ export async function open(url) {
       return response.result.result.value;
     };
     await send('Runtime.enable'); await send('Page.enable');
+    // Checks find requests in performance.getEntriesByType('resource'); the default buffer keeps only 250, and a full land
+    // load passes that, so later requests (paved tiles, models) would silently drop out.
+    await send('Page.addScriptToEvaluateOnNewDocument', { source: 'performance.setResourceTimingBufferSize(10000)' });
     const navigate = async next => {
       const ready = await waitForSettled(read, next);
       assert.ok(ready, 'page settled: ' + errors.join(' | ')); c.assertHealthy();
