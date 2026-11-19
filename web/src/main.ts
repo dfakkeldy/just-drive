@@ -261,7 +261,8 @@ if (mood) {
   const dusk = mood.dusk * (1 - low) * (1 - (nightLook?.level ?? 0));
   fogColor.lerp(new THREE.Color().setRGB(1.0, 0.62 + 0.3 * low, 0.36 + 0.5 * low).multiplyScalar(fogColor.r), 0.5 * dusk).multiplyScalar(1 - 0.38 * dusk);
   sunColor.multiplyScalar(mood.sun); skyColor.lerp(fogColor, mood.flat);
-  if (nightLook) nightLook.stars *= mood.stars;
+  // Cloud hides the dusk bands as it hides the stars.
+  if (nightLook) { nightLook.stars *= mood.stars; nightLook.warm *= 1 - mood.flat; nightLook.pink *= 1 - mood.flat; }
 }
 const nightShading = nightLook ? new NightShading(nightLook, LOW) : null;
 
