@@ -10,7 +10,7 @@ try{
  for(let i=0;i<120&&!await page.read('mmm.church?.triangles>0');i++)await sleep(500);
  // Wires build once both poles stand on fine land (level >= 6); let the loaded cells settle first.
  // Before the bake no pole stands near the church, so only a pack with drops waits for a wire draw.
- const wired=`!mmm.props.data.serviceDrops.length||[...mmm.props.cells.values()].some(c=>c.group&&c.group.children.some(o=>o.isLineSegments))`;
+ const wired=`!mmm.props.data.serviceDrops.length||[...mmm.props.cells.values()].some(c=>c.group&&c.group.children.some(o=>o.isLineSegments||o===c.line))`;
  for(let i=0;i<120&&!await page.read(wired);i++)await sleep(500);
  const result=await page.read(`(async()=>{
  const data=await(await fetch('/areas/judique/props.json')).json();
