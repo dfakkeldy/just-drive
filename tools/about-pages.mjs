@@ -138,7 +138,7 @@ const PAGES = {
   mail: {
     title: 'About Mabou Mail Madness',
     description: 'A driving game about a rural mail route around Mabou, Cape Breton, on the real roads. Who made it and how.',
-    picture: ['mail.jpg', 'The mail car after a short cut across a lawn. The parcels did not stay on the seat.'],
+    picture: ['mail.jpg', 'The mail car after a short cut across a lawn. The parcels did not stay on the seat.', '50% 44%'],  // the car sits about 40% of the way down; keep it above the title on wide, short screens
     body: `<p class="kicker">A driving game · Mabou, Cape Breton</p>
 <h1>Mabou <span>Mail</span> Madness</h1>
 <p class="lead">A rural mail route you cannot win, on the real roads around Mabou. The madness is only a little exaggerated.</p>
@@ -300,8 +300,9 @@ export function helpPage(brand) {
   return shell(brand, { ...page, body: page.body(), url: HELP_URL[brand] });
 }
 
-/** The frame both page kinds share. `picture` puts a tall game picture beside (desktop) or above (phone) the text. */
-function shell(brand, { title, description, url, picture, caption, body }) {
+/** The frame both page kinds share. `picture` puts a tall game picture beside (desktop) or above (phone) the text; `focus` is the
+ * part of it that must stay in view when a wide frame crops it (CSS object-position; default 50% 70%). */
+function shell(brand, { title, description, url, picture, caption, focus, body }) {
   const origin = new URL(url).origin, other = url === ABOUT_URL[brand] ? ['Help', '/help'] : ['About', '/about'];
   return `<!doctype html>
 <html lang="en">
@@ -324,7 +325,7 @@ function shell(brand, { title, description, url, picture, caption, body }) {
 </head>
 <body class="${brand}">
 <div class="page${picture ? '' : ' plain'}">
-${picture ? `<figure class="picture" style="margin:0"><img src="/about/img/${picture}" alt="" width="1080" height="1440"><figcaption>${caption}</figcaption></figure>\n` : ''}<main class="text">
+${picture ? `<figure class="picture" style="margin:0"><img src="/about/img/${picture}" alt="" width="1080" height="1440"${focus ? ` style="object-position:${focus}"` : ''}><figcaption>${caption}</figcaption></figure>\n` : ''}<main class="text">
 ${body}
 <footer><span>© ${new Date().getFullYear()} Dan Fakkeldy</span><a href="${brand === 'just' ? '/mabou' : '/'}">Play</a><a href="${other[1]}">${other[0]}</a><a href="/changes/">What's new</a><a href="${LISTEN_URL[brand]}">Just Listen</a><a href="https://fakkeldy.ca/">fakkeldy.ca</a><a href="mailto:${CONTACT}">${CONTACT}</a></footer>
 </main>
@@ -336,8 +337,8 @@ ${body}
 
 export function aboutPage(brand) {
   const page = PAGES[brand];
-  const [picture, caption] = page.picture;
-  return shell(brand, { ...page, url: ABOUT_URL[brand], picture, caption });
+  const [picture, caption, focus] = page.picture;
+  return shell(brand, { ...page, url: ABOUT_URL[brand], picture, caption, focus });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
