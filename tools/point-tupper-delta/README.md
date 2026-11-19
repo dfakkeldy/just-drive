@@ -106,8 +106,9 @@ That refresh follows from the current roads, but it is a separate change from Po
 The switch is on in this branch before the data is installed. Until the install, a routine step-27 bake of
 pointtupper would add the blocks outside this reviewed delta. So bake pointtupper only through this delta until it is installed.
 
-Step 30 is not part of this change. No modern area has baked styles yet (`buildingStyles.count` is 0 everywhere), and
-baking them would repaint every building in the area.
+Step 30 is not part of this change. When it was made no modern area had baked styles (`buildingStyles.count` was 0
+everywhere), and baking them repaints every building in the area. Point Tupper's colours came later as their own delta
+(grok-bots #1288); they change only `building-styles.json` and the manifest's `buildingStyles` key, which this delta does not own.
 
 To make the delta again (refuses stale or extra changes; compares with both committed receipts):
 
