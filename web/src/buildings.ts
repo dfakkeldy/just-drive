@@ -132,6 +132,8 @@ function streamFacadeDetail(mesh: THREE.Mesh, ranges: FacadeRange[]): void {
   geo.setIndex(index);
   let lastX = NaN, lastZ = NaN;
   mesh.onBeforeRender = (_renderer, _scene, camera) => {
+    // Only the driver's view picks the cell. A directional shadow camera sits far up the sun line.
+    if ((camera as THREE.OrthographicCamera).isOrthographicCamera) return;
     const world = camera.matrixWorld.elements;
     const x = Math.floor(world[12] / facadeCellSize), z = Math.floor(world[14] / facadeCellSize);
     if (x === lastX && z === lastZ) return;
