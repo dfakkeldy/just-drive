@@ -57,7 +57,8 @@ function asEvent(w: WireEvent): ScoreEvent {
   return { kind, place: 'route', speed, time, drift: { angle, peak: angle, length, seconds: 0, speed, surface: loose ? LOOSE[0] : 'paved',
     clean: clean === 1, x0: 0, z0: 0, x1: 0, z1: 0 } };
 }
-/** A well-formed sent fact: a kind and a time; a drift's five size facts, each a number of at least 0 (flags 0 or 1). */
+/** A well-formed sent fact: a kind and a time; for a drift, also its five size facts, each a number of at least 0 (flags 0
+ * or 1). A drift sent without them is paid at size 1, as the game pays one it has no facts for. */
 const wellFormed = (e: unknown): boolean => Array.isArray(e) && typeof e[0] === 'string' && finite(e[1]) && (e.length === 2
   || e.length === 7 && e[0] === 'drift' && e.slice(2, 5).every(v => finite(v) && v >= 0) && (e[5] === 0 || e[5] === 1) && (e[6] === 0 || e[6] === 1));
 
