@@ -6,20 +6,20 @@ import { Route, ROUTE_ROADS } from '../web/src/route.ts';
 import { makeDay, missedCustomers } from '../web/src/shift-rules.ts';
 import { village, terrain, roads, propsData } from './shift-fixture.mjs';
 const props = new Props(propsData, village, terrain), route = new Route(roads, props);
-// The 18 Nov road bake (#27) made Weaver Lane public. Two boxes now resolve to it instead of Highway 252.
-assert.deepEqual(route.runs.map((r) => [r.rural.length, r.sites.length]), [[56,0],[36,0],[40,0],[49,1],[27,1],[48,2],[57,1],[50,1]]);
-assert.equal(route.rural.length, 363); assert.equal(route.members.size,369);
-assert.equal(props.mail.length - route.rural.length,106);
+assert.deepEqual(route.runs.map((r) => [r.rural.length, r.sites.length]), [[56,0],[36,0],[40,0],[51,1],[27,1],[48,2],[57,1],[50,1]]);
+assert.equal(route.rural.length, 365); assert.equal(route.members.size,371);
+assert.equal(props.mail.length - route.rural.length,104);
 assert.equal(route.forDay(1), route.forDay(9)); assert.equal(route.forDay(3),route.runs[2]);
 assert.equal(route.forDay(1,4),route.runs[3]); assert.ok(route.runs[7].rural.includes(route.late));
-const scenery = new Set();
+const moved = [];
 for (const [i,p] of [...props.mail,...props.sites].entries()) {
   const nearest=roads.nearest(p.x,p.z,256,r=>r.kind>=1&&r.kind<=3);
   assert.ok(nearest,'every target has a nearby public road');
-  assert.equal(route.members.has(i), ROUTE_ROADS.includes(nearest.road.name));
-  if (!route.members.has(i)) scenery.add(i);
-  else assert.equal(route.members.get(i).hit.road.id,nearest.road.id);
+  const stop = route.members.get(i);
+  if (ROUTE_ROADS.includes(nearest.road.name)) assert.equal(stop?.hit.road.id, nearest.road.id);
+  else if (stop) moved.push([i, nearest.road.name, stop.hit.road.name]);
 }
+assert.deepEqual(moved, [[165, 'Weaver Lane', 'Highway 252'], [166, 'Weaver Lane', 'Highway 252']]);
 for (const run of route.runs) {
   assert.ok(run.start); const first=run.stops[0];
   const stop=[...props.mail,...props.sites][first.index];
@@ -47,14 +47,23 @@ for(let day=1;day<=64;day++){
   assert.equal(allFlags.length,5);
   assert.ok(missedCustomers(day,d.pieces).length<=3);
 }
-// The closest public road wins, even when a private track or a route road is nearby.
+// A junction can move a rural box to its route road. Parallel roads, boxes farther
+// along the side road, and sites retain their nearest public road.
 const fixtureRoads = new Roads({roads:[
   {id:1,name:'Highway 252',kind:1,halfWidth:3,bridge:false,pts:[[0,0],[100,0]]},
   {id:2,name:'Hunters Road',kind:3,halfWidth:3,bridge:false,pts:[[0,10],[100,10]]},
   {id:3,name:'Private',kind:4,halfWidth:1,bridge:false,pts:[[0,4],[100,4]]},
+  {id:4,name:'Side Lane',kind:2,halfWidth:1.5,bridge:false,pts:[[50,0],[50,10]]},
+  {id:5,name:'Other Lane',kind:2,halfWidth:1.5,bridge:false,pts:[[80,10],[80,0]]},
+  {id:6,name:'Parallel Lane',kind:2,halfWidth:1.5,bridge:false,pts:[[10,5],[18,5]]},
 ]},[0,0],terrain);
 const fake=(x,z)=>({x,z,motion:{}});
-const synthetic=new Route(fixtureRoads,{mail:[fake(20,-4),fake(20,-9)],sites:[fake(30,-4),fake(30,-9)]});
-assert.deepEqual([...synthetic.members.keys()],[0,2]);
-console.log('PASS: baked counts, nearest-public-road ownership, sites, Highway 19 split, eight ordered runs, road starts, run cycle/override, 64 daily draws, fixed flag customers.');
+const synthetic = new Route(fixtureRoads, {
+  mail: [fake(30,-4), fake(30,-9), fake(54,-4.3), fake(84,-4.3), fake(54,-5), fake(50.5,-4), fake(10,-5)],
+  sites: [fake(30,-4), fake(54,-4.3)],
+});
+assert.deepEqual([...synthetic.members.keys()], [0, 2, 3, 7]);
+assert.ok(synthetic.runs[3].stops.every((stop) => stop.hit.road.id === 1));
+console.log('PASS: baked counts, lane-mouth ownership, sites, Highway 19 split, eight ordered runs, road starts, run cycle/override, 64 daily draws, fixed flag customers.');
+for (const [i, from, to] of moved) console.log(`Moved box ${i}: ${from} -> ${to}.`);
 for(const [i,r]of route.runs.entries())console.log(`Run ${i+1}: ${r.name}: ${r.rural.length} boxes, ${r.sites.length} sites.`);
