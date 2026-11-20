@@ -343,6 +343,9 @@ function pantherSign(): THREE.Group {
   return group;
 }
 
+/** A land tile the cat's place needs could not be read, even with a retry: the land did not load (main.ts shows Retry). */
+export class CatTileUnread extends Error {}
+
 /** Invented residents. The data supplies geography, never names or ownership. */
 export class Animals {
   readonly group = new THREE.Group();
@@ -476,28 +479,49 @@ export class Animals {
   }
 
   private async catSpot(road: Road): Promise<RoadHit> {
-    // Read only the small set of metre-resolution tiles along this road, sequentially.
+    // Read only the small set of metre-resolution tiles along this road: all of them first, a few at a time.
     // The live terrain is camera-lazy; using its current cache alone would move the cat between visits.
     const m = this.terrain.manifest, size = m.size / 256;
     const cache = new Map<string, Uint8ClampedArray>();
-    const ground = async (x: number, z: number): Promise<number | null> => {
+    const cell = (x: number, z: number) => {
       const east = x + m.village[0] - m.origin[0], south = z - (m.village[1] - m.origin[1]);
-      const i = Math.floor(east / size), j = Math.floor(south / size), key = `${i}_${j}`;
+      const i = Math.floor(east / size), j = Math.floor(south / size);
+      return { east, south, i, j, key: `${i}_${j}` };
+    };
+    const ground = (x: number, z: number): number | null => {
+      const { east, south, i, j, key } = cell(x, z);
       if (!m.levels['8']?.includes(key)) return null;
-      let px = cache.get(key);
-      if (!px) {
-        const bmp = await createImageBitmap(await readFile(this.terrain.base, `8/${key}.png`), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
-        const cv = new OffscreenCanvas(257, 257), ctx = cv.getContext('2d', { willReadFrequently: true })!;
-        ctx.drawImage(bmp, 0, 0); bmp.close(); px = ctx.getImageData(0, 0, 257, 257).data; cache.set(key, px);
-      }
+      const px = cache.get(key)!;
       const u = (east / size - i) * 256, v = (south / size - j) * 256, a = Math.min(255, Math.floor(u)), b = Math.min(255, Math.floor(v));
       const h = (xx: number, zz: number) => { const k = (zz * 257 + xx) * 4; return (px[k] * 256 + px[k + 1]) * m.height.scale + m.height.offset; };
       return THREE.MathUtils.lerp(THREE.MathUtils.lerp(h(a, b), h(a + 1, b), u - a), THREE.MathUtils.lerp(h(a, b + 1), h(a + 1, b + 1), u - a), v - b);
     };
-    let best = roadPoint(road, length(road) / 2), score = -Infinity;
+    // The same three points per step as the scoring below: left bank, right bank, centre.
+    const steps: { p: RoadHit; points: [number, number][] }[] = [];
     for (let s = 312; s <= length(road) - 312; s += 12) {
       const p = roadPoint(road, s), rx = Math.cos(p.heading), rz = Math.sin(p.heading), reach = road.halfWidth + 7;
-      const l = await ground(p.x - rx * reach, p.z - rz * reach), r = await ground(p.x + rx * reach, p.z + rz * reach), c = await ground(p.x, p.z);
+      steps.push({ p, points: [[p.x - rx * reach, p.z - rz * reach], [p.x + rx * reach, p.z + rz * reach], [p.x, p.z]] });
+    }
+    const keys = [...new Set(steps.flatMap(step => step.points.map(([x, z]) => cell(x, z).key)))].filter(key => m.levels['8']?.includes(key));
+    const decode = async (key: string) => {
+      const bmp = await createImageBitmap(await readFile(this.terrain.base, `8/${key}.png`), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+      const cv = new OffscreenCanvas(257, 257), ctx = cv.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(bmp, 0, 0); bmp.close(); return ctx.getImageData(0, 0, 257, 257).data;
+    };
+    // Four reads at a time. A failed read gets one more try; a second failure stops the start (main.ts shows Retry),
+    // and no reader starts another read after it.
+    let next = 0, failed = false;
+    const reader = async () => {
+      while (!failed && next < keys.length) {
+        const key = keys[next++];
+        cache.set(key, await decode(key).catch(() => decode(key)).catch((error: unknown) => { failed = true; throw new CatTileUnread(`8/${key}.png`, { cause: error }); }));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, keys.length) }, reader));
+    let best = roadPoint(road, length(road) / 2), score = -Infinity;
+    for (const { p, points: [[lx, lz], [rx, rz], [cx, cz]] } of steps) {
+      const reach = road.halfWidth + 7;
+      const l = ground(lx, lz), r = ground(rx, rz), c = ground(cx, cz);
       if (l === null || r === null || c === null) continue;
       // Prefer a cross slope with a high bank and a lower ditch, rather than a hill on both sides.
       const slope = Math.abs(l - r) / (reach * 2) + (Math.min(l, r) < c - 0.8 ? 0.15 : 0);

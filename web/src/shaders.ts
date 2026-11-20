@@ -1075,10 +1075,11 @@ void main() {
 #endif
 #ifdef QUARRY
     // The grass patch builder leaves exposed gypsum bare at this fill and canopy cutoff.
+    float exposedGypsum = mineralFill;
 #ifdef STUNT_PARK
-    if (siteStyle.a <= 0.001)
+    exposedGypsum *= 1.0 - siteStyle.a;
 #endif
-    if (canopy <= 1.6) ring *= 1.0 - step(0.25, mineralFill);
+    if (canopy <= 1.6) ring *= 1.0 - step(0.25, exposedGypsum);
 #endif
     albedo *= 1.0 - ring * (0.20 + 0.12 * vnoise(p * 11.0));
   }

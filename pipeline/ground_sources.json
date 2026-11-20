@@ -127,7 +127,7 @@
     }
   ],
   "terrain_receipts": {
-    "path": "data/work/threads/ground-classes/quarry-height-tree-input-sha256.json",
-    "sha256": "4422c8bae3e078768fe519e9013dd5d8f8373a3b041ca9c44f1bd09030a70f42"
+    "path": "pipeline/ground_canopy_pins.json",
+    "sha256": "33c6a208fd91e1227ec20635c97f80c92ec510155e204b7b59bd2b34269826a8"
   }
 }
