@@ -145,7 +145,7 @@
   },
   "new-player-start/desktop-explore-truck": {
     "calls": -2,
-    "triangles": 7806,
+    "triangles": 9726,
     "geometries": 1,
     "textures": 0,
     "programs": 0,
@@ -288,8 +288,8 @@
     "requests": 1
   },
   "pointtupper-start/desktop-explore-truck": {
-    "calls": -8,
-    "triangles": -23807,
+    "calls": -7,
+    "triangles": -23117,
     "geometries": -7,
     "textures": 0,
     "programs": 0,
