@@ -11,6 +11,8 @@ from pathlib import Path
 import random
 import sys
 
+from land_receipt_pins import previous_digest
+
 ROOT = Path(__file__).resolve().parents[1]
 # Installed on the MacBook by the main thread on 17 Nov 2026 (55 delta files + the step-29 pins): only 'after' land passes.
 EXPECT = 'after'
@@ -326,9 +328,11 @@ def superseded(root, entries, hashes, later=LATER):
     owned = {name: owned_counts(json.loads((root/name).read_bytes())) for name, f in ours.items() if 'ownedCounts' in f}
     for path in reversed(later):
         report = json.loads(path.read_text())
-        for f in report['files']:
-            if f['file'] in now and f['sha256'] and now[f['file']] == f['sha256']:
-                now[f['file']] = f['before']; names[f['file']].append(path)
+        for name, digest in now.items():
+            before = previous_digest(report, name, digest)
+            if before is not None:
+                now[name] = before
+                names[name].append(path)
         for m in report['manifests']:
             name = m['folder']+'/manifest.json'
             if name in owned and owned[name] == {k: m['after'][k]['count'] for k in owned[name] if k in m['after']} | {k: v for k, v in owned[name].items() if k not in m['after']}:

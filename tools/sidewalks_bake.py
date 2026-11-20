@@ -11,6 +11,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 from shapely import STRtree, Polygon, Point, LineString, box, unary_union
 
+from land_receipt_pins import previous_digest
+
 ROOT=Path(__file__).absolute().parents[1]
 OUTPUT=ROOT/'web/src/sidewalks-plan.json'
 DIRECTIONS={'north-west':(-1,1),'north-east':(1,1),'south-west':(-1,-1),'west':(-1,0)}
@@ -321,15 +323,16 @@ def bake():
 # change) for the same manifest with those counts set back.
 NOV18=ROOT/'tools/mabou-dashcam-18nov/hashes.json'
 NOV19=ROOT/'tools/mabou-wharf/roads.json'
+CHECK_SOURCE=ROOT/'tools/sidewalks-check-source.json'
 
 def nov18_stands_for(file,digest,cached,root=ROOT,report=None):
     reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, NOV18) if p.exists()]
     for current in reports:
-        for f in current['files']:
-            if file == 'data/baked/' + f['file'] and digest == f['sha256']:
-                digest = f['before']
-                if digest == cached:
-                    return True
+        before = previous_digest(current, file.removeprefix('data/baked/'), digest, cached=cached) if file.startswith('data/baked/') else None
+        if before is not None:
+            digest = before
+            if digest == cached:
+                return True
         for m in current['manifests']:
             if file != f"data/baked/{m['folder']}/manifest.json" or m['before'] == m['after']:
                 continue
@@ -347,12 +350,15 @@ def nov18_cases():
         root=Path(tmp);(root/'data/baked/terrain').mkdir(parents=True)
         compact=lambda d:(json.dumps(d,separators=(',',':'))+'\n').encode();sha=lambda b:hashlib.sha256(b).hexdigest()
         before=compact({'buildings':{'count':1},'other':'x'});after=compact({'buildings':{'count':2},'other':'x'})
-        report={'files':[{'file':'terrain/roads.json','before':'b'*64,'sha256':'a'*64}],'manifests':[{'folder':'terrain','before':{'buildings':{'count':1}},'after':{'buildings':{'count':2}}}]}
+        report={'files':[{'file':'terrain/roads.json','before':'b'*64,'sha256':'a'*64}],'manifests':[{'folder':'terrain','before':{'buildings':{'count':1}},'after':{'buildings':{'count':2}}}],
+                'roadBed':{'files':[{'file':'terrain/roads.json','sha256':'d'*64}]}}
         name='data/baked/terrain/manifest.json'
         (root/name).write_bytes(after);assert nov18_stands_for(name,sha(after),sha(before),root,report),'manifest at the receipt counts'
         (root/name).write_bytes(compact({'buildings':{'count':2},'other':'y'}));assert not nov18_stands_for(name,'',sha(before),root,report),'another manifest key changed'
         (root/name).write_bytes(compact({'buildings':{'count':3},'other':'x'}));assert not nov18_stands_for(name,'',sha(before),root,report),'unknown counts'
         assert nov18_stands_for('data/baked/terrain/roads.json','a'*64,'b'*64,root,report),'roads at the receipt'
+        assert nov18_stands_for('data/baked/terrain/roads.json','d'*64,'b'*64,root,report),'roads at the repaired receipt'
+        assert nov18_stands_for('data/baked/terrain/roads.json','d'*64,'a'*64,root,report),'cache on the original after roads'
         assert not nov18_stands_for('data/baked/terrain/roads.json','c'*64,'b'*64,root,report),'unknown roads'
         assert not nov18_stands_for('data/baked/terrain/roads.json','a'*64,'c'*64,root,report),'a plan made on other land'
         assert not nov18_stands_for('web/src/terrain.ts','a'*64,'b'*64,root,report),'source files never map'
@@ -387,8 +393,14 @@ if __name__=='__main__':
     OUTPUT=work_root/'web/src/sidewalks-plan.json'
     if args.check:
         cached=json.loads(OUTPUT.read_text());current=fingerprints(load_inputs()['sources'],work_root)
+        # The receipt-only edit changes the script hash. Keep the plan's original bake provenance.
+        check_source=json.loads(CHECK_SOURCE.read_text())
         for file,digest in current.items():
-            if cached['inputs'].get(file)!=digest and not nov18_stands_for(file,digest,cached['inputs'].get(file)):raise SystemExit(f'Stale sidewalk bake: {file}; run python3 tools/sidewalks_bake.py')
+            prior=cached['inputs'].get(file)
+            if prior==digest or (prior and previous_digest(check_source,file,digest)==prior):
+                continue
+            if not nov18_stands_for(file,digest,prior):
+                raise SystemExit(f'Stale sidewalk bake: {file}; run python3 tools/sidewalks_bake.py')
         outputs=cached.get('outputs',{});land=[f for f in outputs if f.startswith('data/baked/')]
         # The six companions arrive as a separate data install: all absent (before) or all present (after), never a mix.
         present=[f for f in land if (work_root/f).exists()]

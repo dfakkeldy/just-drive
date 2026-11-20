@@ -5,8 +5,8 @@ a driveway are dropped from the packed level-8 tree tiles by step 28's road rule
 line). The other trees keep their packed records; a full step 28 re-bake, which detects afresh, can size a dozen
 neighbouring crowns differently and needs a new receipt, like any step-28 re-bake.
 
-Only changed files are emitted. Review them against the source pack before
-promotion. The source terrain and its existing roads are read-only.
+Only changed files are emitted, plus the updated pre-bed lines for a road-bed pack.
+The source terrain and its pre-bed lines are read-only.
 Check the output with `tools/mabou-dashcam-18nov/receipt.py verify SOURCE OUTPUT`
 and promote it with `receipt.py install OUTPUT data/baked` (main thread only),
 which sets only the manifest counts this bake owns (buildings, building styles, trees). The paved-lot layer is not
@@ -23,9 +23,25 @@ from osgeo import gdal
 
 from areas import AREAS
 from dashcam_corrections import NOV18, correct_nov18_roads, nov18_driveways, hand_buildings, hand_styles, remap_road_references
+import road_ground
 
 
-def bake(source, output):
+def before_split(network, split, overview):
+    """Carry the pre-bed vertices through the same cut as the moved line."""
+    before = road_ground.lines_before(network, overview)
+    old = {road['id']: road['pts'] for road in network['roads']}
+    prefix, = (road for road in split if road['id'] not in old)
+    suffix, = (road for road in split if road.get('correction') == prefix['correction'] and road['id'] in old)
+    rid = suffix['id']
+    if prefix['pts'] + suffix['pts'][1:] != old[rid] or prefix['pts'][-1] != suffix['pts'][0]:
+        raise ValueError('The Harbour Road split must preserve the centreline')
+    cut = len(prefix['pts']) - 1
+    line = before.pop(rid, old[rid])
+    before[prefix['id']], before[rid] = line[:cut+1], line[cut:]
+    return before
+
+
+def bake(source, output, overview=AREAS['mabou'].overview):
     source, output = source.resolve(), output.resolve()
     if output.exists() or output.is_relative_to(source) or source.is_relative_to(output):
         raise ValueError('Output must be a new folder separate from the source terrain')
@@ -53,17 +69,7 @@ def bake(source, output):
     changed = [r for r in new if r != old_by_id.get(r['id'])]
     if not changed:
         raise ValueError('Source already has the 18 Nov road correction')
-    if 'bed' in network:
-        # Step 29 reads the lines before the road-bed move and stops on a road that no longer fits them. The split
-        # shortens Harbour Road, so refuse here rather than leave that failure for a later bake.
-        road_ground = importlib.import_module('road_ground')
-        if (Path(area.overview)/road_ground.BEFORE_BED).is_file():
-            try:
-                road_ground.lines_before(dict(network, roads=new), area.overview)
-            except RuntimeError as error:
-                raise ValueError(f'The split no longer fits the lines before the road-bed move: {error}') from None
-        else:
-            print(f'NOTE: roads.json is marked bed-moved but {road_ground.BEFORE_BED} is not here; a later step 29 needs it')
+    before_bed = before_split(network, new, overview) if 'bed' in network else None
 
     buildings = remap_road_references(read('buildings.json'), 'buildings', new)
     buildings_step = importlib.import_module('27_bake_buildings')
@@ -134,6 +140,10 @@ def bake(source, output):
     manifest['trees']['count'] -= dropped
 
     output.mkdir(parents=True)
+    if before_bed is not None:
+        # Added driveways use their final geometry. They have no pre-bed shift.
+        lines = {road['id']: before_bed.get(road['id'], road['pts']) for road in drives}
+        network['bed'] = road_ground.keep_lines_before(output, lines, drives)
     for path, rgb in tiles.items():
         (output/path).parent.mkdir(exist_ok=True)
         fields.b.write_png(str(output/path), rgb)
@@ -210,5 +220,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True, help='existing Mabou terrain pack')
     parser.add_argument('--output', type=Path, required=True, help='new directory for changed files')
+    parser.add_argument('--overview', type=Path, default=AREAS['mabou'].overview, help='folder with the source pre-bed lines')
     args = parser.parse_args()
-    bake(args.source, args.output)
+    bake(args.source, args.output, args.overview)
