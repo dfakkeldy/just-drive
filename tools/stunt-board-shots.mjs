@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {writeFileSync} from 'node:fs';
 import {open,sleep} from './truck-cdp.mjs';
-const [out,url]=process.argv.slice(2),suffix=process.env.STUNT_SHOT_SUFFIX??'',p=await open(`${new URL(url).origin}/?exag=1.5&hud=0&scene=0&radio=0&mode=explore&shadows=1`),receipts=[];
+const [out,url]=process.argv.slice(2),suffix=process.env.STUNT_SHOT_SUFFIX??'',selection=process.env.STUNT_PHOTO_ONLY,p=await open(`${new URL(url).origin}/?exag=1.5&hud=0&scene=0&radio=0&mode=explore&shadows=1`),receipts=[];
 try{
  await p.read(`(async()=>{const THREE=await import('/node_modules/three/build/three.module.js'),{stuntPark:park,terrain,trees,water,vehicle:v,yard,camera,renderer,sunShadows}=mmm,scene=park.group.parent;window.requestAnimationFrame=()=>0;
  window.sb={park,terrain,THREE,camera};sb.view=async(eye,target,frames=65)=>{camera.position.copy(eye);camera.lookAt(target);camera.updateMatrixWorld();for(let i=0;i<frames;i++){terrain.update(camera);trees?.update(terrain.drawnFine,camera.position);yard?.update(0,v,camera.position);park.update(0,v,camera.position);sunShadows?.update(1/60,target,eye.distanceTo(target));water?.update(camera);try{renderer.render(scene,camera);}finally{water?.settle();}water?.afterRender(camera);await new Promise(r=>setTimeout(r,20));}};
@@ -26,19 +26,31 @@ try{
  const clear=grid(1)&&grid(-1),front=face(1),back=face(-1),sign=piece.group.children.find(n=>n.name.endsWith(' board'));sign.position.z=-.03;const mutant=face(1);sign.position.z=0;piece.group.updateMatrixWorld(true);
  return{id:piece.placement.piece.id,text:piece.placement.piece.board,clear,front,back,mutant};};})()`);
  const count=await p.read('sb.park.pieces.length');assert.equal(count,14);
- for(let i=0;i<count;i++){const id=await p.read(`sb.park.pieces[${i}].placement.piece.id`);if(process.env.STUNT_PHOTO_ONLY&&!process.env.STUNT_PHOTO_ONLY.split(',').includes(id))continue;const wide=await p.read(`sb.wide(${i})`);await p.shot(`${out}/piece-${wide.id}${suffix}.png`);const receipt=await p.read(`sb.board(${i})`);assert.equal(receipt.clear,true,'posts and rails leave the text clear');assert.equal(receipt.front,receipt.id+' board');assert.equal(receipt.back,receipt.id+' board');assert.notEqual(receipt.mutant,receipt.id+' board','occluded lettering mutation rejected');await p.shot(`${out}/board-${receipt.id}${suffix}.png`);receipts.push(receipt);}
- if(!process.env.STUNT_PHOTO_ONLY){
+ for(let i=0;i<count;i++){const id=await p.read(`sb.park.pieces[${i}].placement.piece.id`);if(selection&&!selection.split(',').includes(id))continue;const wide=await p.read(`sb.wide(${i})`);await p.shot(`${out}/piece-${wide.id}${suffix}.png`);const receipt=await p.read(`sb.board(${i})`);assert.equal(receipt.clear,true,'posts and rails leave the text clear');assert.equal(receipt.front,receipt.id+' board');assert.equal(receipt.back,receipt.id+' board');assert.notEqual(receipt.mutant,receipt.id+' board','occluded lettering mutation rejected');await p.shot(`${out}/board-${receipt.id}${suffix}.png`);receipts.push(receipt);}
+ if(!selection||selection==='field'){
    await p.read(`(async()=>{
      const {park,terrain,camera,THREE}=sb,[x0,z0,x1,z1]=park.box,x=(x0+x1)/2,z=(z0+z1)/2;
-     const target=new THREE.Vector3(x,terrain.meshHeightAt(x,z)??mmm.vehicle.y,z);
+     const target=new THREE.Vector3(x,terrain.meshHeightAt(x,z)??0,z);
+     const offset=new THREE.Vector3(0,385,100);
      camera.fov=63;camera.up.set(0,1,0);camera.updateProjectionMatrix();
-     await sb.view(target.clone().add(new THREE.Vector3(0,310,135)),target,100);
+     await sb.view(target.clone().add(offset),target,100);
+     target.y=terrain.meshHeightAt(x,z)??target.y;
+     await sb.view(target.clone().add(offset),target,100);
      if(park.pieces.some(p=>!p.ready||!p.group.visible))throw Error('field overview must show all fourteen pieces');
+     for(const p of [...park.pieces,...park.dressing]){
+       for(const x of [p.box[0],p.box[2]])for(const z of [p.box[1],p.box[3]]){
+         const point=new THREE.Vector3(x,terrain.meshHeightAt(x,z)??target.y,z).project(camera);
+         if(Math.max(Math.abs(point.x),Math.abs(point.y))>.98)throw Error('field overview crops '+p.group.name);
+       }
+     }
    })()`);
    await p.shot(`${out}/park-field${suffix}.png`);
+   console.log('PASS field overview frames all fourteen pieces');
+ }
+ if(!selection){
    for(const [file,id]of [['park-pit','pit-area'],['park-start','start-arch']]){await p.read(`(async()=>{const {park,terrain,camera,THREE}=sb,p=park.dressing.find(p=>p.placement.piece.id==='${id}'),c=p.world(0,0),eye=p.world(6,${id==='pit-area'?-8:8}),h=terrain.meshHeightAt(c.x,c.z)??0;camera.fov=55;camera.up.set(0,1,0);camera.updateProjectionMatrix();await sb.view(new THREE.Vector3(eye.x,Math.max(h+4,(terrain.meshHeightAt(eye.x,eye.z)??h)+3),eye.z),new THREE.Vector3(c.x,h+${id==='start-arch'?3:1.7},c.z));if(!p.ready)throw Error('dressing photograph is not ready');})()`);await p.shot(`${out}/${file}${suffix}.png`);}
    for(const [name,id,far]of [['line-easy','slip-small',110],['line-hard','gap-tanks',85]]){await p.read(`(async()=>{const {park,camera,THREE}=sb,piece=park.pieces.find(p=>p.placement.piece.id==='${id}'),eye=piece.world(-25,-16),target=piece.world(${far},0);camera.up.set(0,1,0);camera.fov=55;camera.updateProjectionMatrix();await sb.view(new THREE.Vector3(eye.x,piece.seat(0,0)+36,eye.z),new THREE.Vector3(target.x,piece.seat(0,0),target.z));})()`);await p.shot(`${out}/${name}${suffix}.png`);}
  }
  assert.ok(await p.read('mmm.renderer.info.programs.every(p=>!p.diagnostics||p.diagnostics.runnable)'),'all photographic shader programs compile');
- writeFileSync(`${out}/${process.env.STUNT_PHOTO_ONLY?'board-shots-selection':'board-shots'}${suffix}.json`,JSON.stringify(receipts,null,2)+'\n');console.log('PASS',receipts.length,'fitted three-quarter pictures and readable board close-ups');
+ writeFileSync(`${out}/${selection?'board-shots-selection':'board-shots'}${suffix}.json`,JSON.stringify(receipts,null,2)+'\n');console.log('PASS',receipts.length,'fitted three-quarter pictures and readable board close-ups');
 }finally{await p.close();await sleep(2500);}
