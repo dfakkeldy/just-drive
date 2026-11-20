@@ -61,7 +61,7 @@ try {
   await a.until('document.getElementById("mpRoster").textContent.includes("Foggy Window")');
   const front=await a.read('({x:mmm.vehicle.x+Math.sin(mmm.vehicle.heading)*12,z:mmm.vehicle.z-Math.cos(mmm.vehicle.heading)*12})');
   await pose(b,front.x,front.z); await sleep(700);
-  assert.ok(await b.read('(()=>{const s=document.getElementById("settings"),g=document.getElementById("mpRoom");return s.firstElementChild.id==="settingsHeader"&&g.previousElementSibling.id==="settingsHeader"&&g.querySelector("h3").textContent==="Room"&&[...g.querySelectorAll(":scope>details")].map(e=>e.id).join() === "mpSocial,racePanel,gamePanel"})()'),'phone Room group follows the Settings header in a fixed order');
+  assert.ok(await b.read('(()=>{const s=document.getElementById("settings"),g=document.getElementById("mpRoom");return s.firstElementChild.id==="settingsHeader"&&(g.previousElementSibling.id==="settingsHeader"||g.previousElementSibling.id==="endShift"&&g.previousElementSibling.classList.contains("inPanel")&&g.previousElementSibling.previousElementSibling.id==="settingsHeader")&&g.querySelector("h3").textContent==="Room"&&[...g.querySelectorAll(":scope>details")].map(e=>e.id).join() === "mpSocial,racePanel,gamePanel"})()'),'phone Room group follows the Settings header (and END SHIFT on a shift) in a fixed order');
   assert.ok(await a.read('document.getElementById("mpSocial").parentElement.id==="mpCards"&&getComputedStyle(document.getElementById("mpCards")).position==="fixed"'),'desktop cards share one fixed column');
   assert.equal(await a.read('document.getElementById("mpSocial").open'),true,'desktop drivers and chat starts open');
   assert.equal(await b.read('document.getElementById("mpSocial").open'),false,'phone card starts folded');
