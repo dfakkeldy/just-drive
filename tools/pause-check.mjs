@@ -47,12 +47,13 @@ for (const nested of [false,true]) {
 }
 const title=main.match(/document\.getElementById\('pauseTitle'\)!\.textContent = ([\s\S]*?);/);
 assert.ok(title,'pause title expression found');
-const pauseTitle=new Function('mode','interiors','ride','vehicle',`return ${title[1]};`);
-for (const kind of ['car','bike','truck','sxs','horse']) for (const mode of ['drive','fly']) for (const busy of [false,true]) {
- const expected=kind==='car'&&mode==='drive'&&!busy?'Pulled over on Track':'Paused';
- assert.equal(pauseTitle(mode,{busy},{kind},{roadName:'Track'}),expected);
+const pauseTitle=new Function('mode','interiors','ride','vehicle','room',`return ${title[1]};`);
+// In a room the car keeps rolling while the pause card shows, so it is never "Pulled over" there.
+for (const kind of ['car','bike','truck','sxs','horse']) for (const mode of ['drive','fly']) for (const busy of [false,true]) for (const room of [false,true]) {
+ const expected=kind==='car'&&mode==='drive'&&!busy&&!room?'Pulled over on Track':'Paused';
+ assert.equal(pauseTitle(mode,{busy},{kind},{roadName:'Track'},room),expected);
 }
-assert.equal(pauseTitle('drive',{busy:false},{kind:'car'},{}),'Pulled over');
+assert.equal(pauseTitle('drive',{busy:false},{kind:'car'},{},false),'Pulled over');
 console.log('PASS live Settings capture restores gear focus; pause title follows ride and foot/free-camera mode');
 
 const pauseMarkup = main.match(/pauseScreen.innerHTML = '([^']+)';/)[1];
@@ -60,5 +61,5 @@ assert.match(pauseMarkup, /<details id="pauseKeys"><summary>Keys<\/summary>/);
 assert.doesNotMatch(pauseMarkup, /<pre|<details[^>]* open/);
 assert.match(pauseMarkup, /id="resumeGame">Resume · Esc/);
 assert.match(main, /pauseButton.hidden = !started \|\| bare/);
-assert.match(main, /querySelectorAll<HTMLElement>\('button:not\(\[disabled\]\):not\(\[hidden\]\), summary'\)/);
+assert.match(main, /querySelectorAll<HTMLElement>\('button:not\(\[disabled\]\):not\(\[hidden\]\), a\[href\], summary'\)/);
 console.log('PASS pause card: closed Keys, Resume key, no HUD dump, start gate and disclosure in the Tab trap');

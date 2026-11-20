@@ -1489,7 +1489,7 @@ function syncPauseUI(): void {
     const watch = document.getElementById('pauseReplay') as HTMLButtonElement;
     watch.hidden = room; watch.disabled = !replay.available;
     const station = radio?.tunedDial;
-    document.getElementById('pauseTitle')!.textContent = mode === 'drive' && !interiors.busy && ride.kind === 'car'
+    document.getElementById('pauseTitle')!.textContent = mode === 'drive' && !room && !interiors.busy && ride.kind === 'car'
       ? `Pulled over${vehicle.roadName ? ' on ' + vehicle.roadName : ''}` : 'Paused';
     document.getElementById('pauseState')!.textContent = DAILY ? 'Today’s run' : firedMode ? 'Get fired' : mailMode ? 'Deliver the mail' : 'Free drive';
     document.getElementById('pauseRadio')!.textContent = station ? `On the radio: ${radio!.stationNamed(station)!}` : 'Radio quiet';

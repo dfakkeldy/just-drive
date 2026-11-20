@@ -1,10 +1,15 @@
 // Today's run on the real Shift, Props, FiredRun and DailyRun, in node with a small DOM stand-in.
 // Imported by daily-rules-check.mjs; bundled by tools/daily-rules-mutations.mjs.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Pin the production decision, then use that same statement in the daily fixture.
-const mainSource = readFileSync(new URL('../web/src/main.ts', import.meta.url), 'utf8');
+// daily-rules-mutations bundles this file into a temp folder and runs it from web/, so also look from the working folder.
+const mainPath = [fileURLToPath(new URL('../web/src/main.ts', import.meta.url)), resolve(process.cwd(), 'src/main.ts'), resolve(process.cwd(), 'web/src/main.ts')].find(path => existsSync(path));
+assert.ok(mainPath, 'web/src/main.ts is readable');
+const mainSource = readFileSync(mainPath, 'utf8');
 const endTimeWiring = 'if (shift instanceof Shift) shift.endsAtSix = !DAILY;';
 const checkEndTimeWiring = source => assert.equal(source.split(endTimeWiring).length, 2, 'main wires the shift end time to !DAILY exactly once');
 checkEndTimeWiring(mainSource);
