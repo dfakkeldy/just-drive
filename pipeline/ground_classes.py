@@ -49,11 +49,11 @@ def sources(root, area):
     for item in relevant:
         if sha(root/item['path']) != item['sha256']: raise ValueError('Ground source drift: '+item['path'])
     receipt=pin['terrain_receipts']
-    if sha(root/receipt['path'])!=receipt['sha256']: raise ValueError('Terrain receipt snapshot drift')
+    receipt_path=REPO/receipt['path']
+    if sha(receipt_path)!=receipt['sha256']: raise ValueError('Terrain receipt snapshot drift')
     global CANOPY_PINS
-    CANOPY_PINS={path.split('/data/baked/',1)[1]:digest for path,digest in
-                 json.loads((root/receipt['path']).read_text()).items() if '/data/baked/' in path}
-    return relevant
+    CANOPY_PINS=json.loads(receipt_path.read_text())
+    return relevant, receipt_path
 
 
 def rows(path, bounds):
@@ -120,12 +120,20 @@ def coarse_cells(cells, bounds, width, height):
 
 
 def open_wetland(wet, canopy10, bounds):
-    """CNWI bog, fen and marsh are open wetland (8) only where every overlapped 10m
-    cell has a known baked canopy of 2m or less. A treed stand inside the polygon
-    (black spruce on a bog) stays wooded wetland (9) and keeps its trees."""
+    """Class 8 requires known baked canopy of 2m or less in every overlapped 10m cell."""
     open5=refine_support(canopy10<=2,bounds,wet.shape[1],wet.shape[0])
     result=wet.copy(); result[(wet==8)&~open5]=9
     return result
+
+
+def overlay_wetlands(root, area, bounds, forest, cnwi):
+    """Apply CNWI priority and qualify open wetland from either source."""
+    proposed=np.where(cnwi>0,cnwi,forest)
+    candidates=proposed==8
+    if not candidates.any(): return proposed
+    height,width=proposed.shape
+    targets=coarse_cells(candidates,bounds,width,height)
+    return open_wetland(proposed,canopy_cells(root,area,bounds,targets),bounds)
 
 
 def baseline_cover(meta):
@@ -266,27 +274,35 @@ def validate_output_files(output):
         raise ValueError('Unexpected ground output: class bytes and metadata only')
 
 
+def input_receipt(path, root):
+    """Keep esbuild's real dependency paths portable across linked worktrees."""
+    relative=path.relative_to(root if path.is_relative_to(root) else REPO)
+    if '..' in relative.parts:
+        modules=REPO/'web/node_modules'
+        relative=modules.relative_to(REPO)/path.resolve().relative_to(modules.resolve())
+    return {'path':relative.as_posix(), 'sha256':sha(path)}
+
+
 def bake(root, area_id, output):
     root=Path(root).absolute(); output=Path(output).absolute(); area=AREAS[area_id]
     for forbidden in (root/'data/baked',root/'data/site',REPO/'data/baked',REPO/'data/site'):
         if output.resolve().is_relative_to(forbidden.resolve()): raise ValueError('Ground output must be a work root')
-    pinned=sources(root,area_id)
+    pinned, canopy_pin_path=sources(root,area_id)
     CANOPY_USED.clear(); tile.cache_clear()
     baked=root/('data/baked/terrain' if area_id=='mabou' else 'data/baked/areas/'+area_id)
     raw=root/('data/raw' if area_id=='mabou' else 'data/raw/areas/'+area_id)
     manifest=json.loads((baked/'manifest.json').read_text()); meta=manifest['cover']; baseline_cover(meta)
     bounds=(meta['xmin'],meta['ymin'],meta['xmax'],meta['ymax'])
     if tuple(bounds)!=tuple(area.mid): raise ValueError('Ground box drift: '+area_id)
-    rgb=np.array(Image.open(baked/'cover.png')); today=rgb[:,:,2]; h,w=today.shape
+    rgb=np.array(Image.open(baked/'cover.png')); today=rgb[:,:,2].copy(); h,w=today.shape
     forest=rows(raw/'vectors/FOR_Forest_WM84__01_leading_forest_species.geojson',bounds)
     designated=rows(root/f'data/raw/ground-classes/{area_id}-designated.geojson',bounds)
     wetlands=rows(root/f'data/raw/ground-classes/{area_id}-cnwi.geojson',bounds)
-    proposed=raster(forest,bounds,w,h,forest_class)
+    forest_cover=raster(forest,bounds,w,h,forest_class)
     wet=raster(wetlands,bounds,w,h,wet_class)
-    cnwi_open=wet==8
-    if cnwi_open.any(): wet=open_wetland(wet,canopy_cells(root,area,bounds,coarse_cells(cnwi_open,bounds,w,h)),bounds)
-    cnwi_wooded=cnwi_open&(wet==9)
-    proposed[wet>0]=wet[wet>0]
+    proposed=overlay_wetlands(root,area,bounds,forest_cover,wet)
+    cnwi_wooded=(wet==8)&(proposed==9)
+    forest_wooded=(wet==0)&(forest_cover==8)&(proposed==9)
     # Rail bed only where a mapped rail/trail centreline intersects its source corridor.
     corridors=unary_union([g for g,p in forest if p.get('FORNON')==99])
     road_file=json.loads((baked/'roads.json').read_text())
@@ -353,15 +369,16 @@ def bake(root, area_id, output):
     input_paths += extra_inputs
     input_paths += sorted(CANOPY_USED)
     input_paths += hand_sites.ground_source_files(root)+hand_sites.catalog_inputs(root)
-    input_paths += [REPO/'pipeline/ground_classes.py',REPO/'pipeline/hand_sites.py',REPO/'pipeline/ground_sources.json']
-    receipts=[{'path':str(p.relative_to(root)) if p.is_relative_to(root) else str(p.relative_to(REPO)), 'sha256':sha(p)} for p in input_paths]
+    input_paths += [REPO/'pipeline/ground_classes.py',REPO/'pipeline/hand_sites.py',REPO/'pipeline/ground_sources.json',canopy_pin_path]
+    receipts=[input_receipt(path,root) for path in input_paths]
     promotion={'version':1,'area':area_id,'crs':'EPSG:2961','bounds':bounds,'promoted':False,
         'classes':manifest['cover']['classes'],'class_m2':{str(k):round(float(np.count_nonzero(after==k))*pixel_area,2) for k in LEGEND},
         'before_cover_bytes':(baked/'cover.png').stat().st_size,'after_cover_bytes':(output/'cover.png').stat().st_size,
         'ground_runs_bytes':(output/'cover-ground.bin').stat().st_size,'class_bytes_per_pixel':1,'new_draw_calls':0,
         'source_snapshot':pinned,'input_hashes':receipts,'quarry_clearing':sites,
-        'wetland_rule':'CNWI bog, fen or marsh is open wetland (8) only where every overlapped 10m cell has a known baked canopy <=2m; otherwise wooded wetland (9), trees kept',
+        'wetland_rule':'Forest inventory and CNWI open-wetland candidates become class 8 only where every overlapped 10m cell has a known baked canopy <=2m; otherwise wooded wetland (9), trees kept',
         'cnwi_wooded_m2':round(float(np.count_nonzero(cnwi_wooded))*pixel_area,2),
+        'forest_wooded_m2':round(float(np.count_nonzero(forest_wooded))*pixel_area,2),
         'mineral_rule':'both summers bare OR one summer bare plus maximum known baked canopy <=2m; subtractive 10m smoothing; each displayed 5m cell fully supported and contained in the mapped envelope',
         'water_unchanged':bool(np.array_equal(today[today==4],after[today==4])),
         'hand_sites_unchanged':bool(np.array_equal(rgb[protected],np.array(Image.open(baked/'cover.png'))[protected])),

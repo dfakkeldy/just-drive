@@ -2,15 +2,16 @@
 // (no recordings). The numbers come from engine-sound-rules.ts; this file only builds the graph and glides it.
 //
 // The graph, built once at the first tap or key (a browser lets sound start only inside one):
-//   voice (saw or square at the firing frequency) + upper (an octave up, full detail only: a phone speaker cannot play
-//   the low firing note itself, so this carries it) -> lowpass -> engine gain
+//   voice (saw or square at the firing frequency; for the truck a periodic wave of one whole engine cycle, its uneven
+//   pulses heard as the V8's lope) + upper (an octave up, full detail only: a phone speaker cannot play the low firing
+//   note itself, so this carries it; the truck has none) -> lowpass -> engine gain
 //   noise -> bandpass -> engine rasp gain (full detail only; it follows the load)
 //   noise -> bandpass -> pulse gain (opened and shut by a square LFO: gravel chatter, washboard rattle) -> tyre gain
 //   all -> master (the "Engine sound" volume times OUTPUT_TRIM, ducked under the radio) -> speakers
 // LOW detail drops the upper voice and the rasp: two sources and two filters in all.
 // The context is suspended (no CPU, no sound) while the page is hidden, off the road, indoors or at an ending.
 
-import { ENGINES, OUTPUT_TRIM, RADIO_DUCK, engineKind, engineState, tyreState, type EngineKind } from './engine-sound-rules';
+import { ENGINES, OUTPUT_TRIM, RADIO_DUCK, UPPER, engineKind, engineState, engineWave, tyreState, voicePulses, type EngineKind } from './engine-sound-rules';
 
 const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
 const KEY = 'mmm.engine.vol';
@@ -28,7 +29,7 @@ export interface DrivingMoment {
 }
 
 interface Graph {
-  voice: OscillatorNode; upper: OscillatorNode | null; tone: BiquadFilterNode; engine: GainNode;
+  voice: OscillatorNode; upper: OscillatorNode | null; upperGain: GainNode | null; tone: BiquadFilterNode; engine: GainNode;
   rasp: GainNode | null; raspFilter: BiquadFilterNode | null;
   tyreFilter: BiquadFilterNode; pulse: GainNode; lfo: OscillatorNode; lfoDepth: GainNode; tyre: GainNode;
   master: GainNode;
@@ -55,6 +56,7 @@ export class EngineSound {
   private graph: Graph | null = null;
   private gear = 1;
   private kind: EngineKind | null = null;
+  private waves = new Map<EngineKind, PeriodicWave>();   // the pulse-train voices, made once per context
   private quiet = 0;        // seconds the master has been silent
   private live = false;     // the last update asked for sound
   private unlocked = false; // the context has really run once (a phone allows that only inside a tap's release)
@@ -101,10 +103,10 @@ export class EngineSound {
     const engine = a.createGain(); engine.gain.value = 0; engine.connect(master);
     const tone = a.createBiquadFilter(); tone.type = 'lowpass'; tone.Q.value = 1.2; tone.connect(engine);
     const voice = a.createOscillator(); voice.connect(tone);
-    let upper: OscillatorNode | null = null, rasp: GainNode | null = null, raspFilter: BiquadFilterNode | null = null;
+    let upper: OscillatorNode | null = null, upperGain: GainNode | null = null, rasp: GainNode | null = null, raspFilter: BiquadFilterNode | null = null;
     if (!this.low) {
       upper = a.createOscillator(); upper.type = 'triangle';
-      const upperGain = a.createGain(); upperGain.gain.value = .35; upper.connect(upperGain).connect(tone);
+      upperGain = a.createGain(); upperGain.gain.value = UPPER; upper.connect(upperGain).connect(tone);
       raspFilter = a.createBiquadFilter(); raspFilter.type = 'bandpass'; raspFilter.Q.value = 1.4;
       rasp = a.createGain(); rasp.gain.value = 0;
       noise.connect(raspFilter).connect(rasp).connect(master);
@@ -117,7 +119,7 @@ export class EngineSound {
     const lfoDepth = a.createGain(); lfoDepth.gain.value = 0; lfo.connect(lfoDepth).connect(pulse.gain);
 
     noise.start(); voice.start(); upper?.start(); lfo.start();
-    return { voice, upper, tone, engine, rasp, raspFilter, tyreFilter, pulse, lfo, lfoDepth, tyre, master };
+    return { voice, upper, upperGain, tone, engine, rasp, raspFilter, tyreFilter, pulse, lfo, lfoDepth, tyre, master };
   }
 
   /** Silences at once and suspends: the page is hidden, or the game has stopped driving. */
@@ -149,16 +151,27 @@ export class EngineSound {
     this.parked = false;
     if (a.state === 'suspended') void a.resume().catch(() => {});
     this.quiet = 0;
-    const p = ENGINES[kind], t = a.currentTime;
-    if (kind !== this.kind) { this.kind = kind; this.gear = 1; g.voice.type = p.wave; }
+    const p = ENGINES[kind], t = a.currentTime, fresh = kind !== this.kind;
+    if (fresh) {
+      this.kind = kind; this.gear = 1;
+      // A pulse train is a periodic wave; the type 'custom' itself cannot be set (the browser throws).
+      if (p.wave === 'custom') {
+        let wave = this.waves.get(kind);
+        if (!wave) { const w = engineWave(p); wave = a.createPeriodicWave(w.real, w.imag); this.waves.set(kind, wave); }
+        g.voice.setPeriodicWave(wave);
+      } else g.voice.type = p.wave;
+      g.upperGain?.gain.setValueAtTime(p.upper ?? UPPER, t);
+    }
     const e = engineState(p, moment, this.gear);
     this.gear = e.gear;
-    g.voice.frequency.setTargetAtTime(e.frequency, t, GLIDE);
-    g.upper?.frequency.setTargetAtTime(e.frequency * 2, t, GLIDE);
+    // A new vehicle starts on its own note at once: a pulse train's voice runs eight times lower than a plain wave's.
+    const glide = (param: AudioParam, value: number) => fresh ? param.setValueAtTime(value, t) : param.setTargetAtTime(value, t, GLIDE);
+    glide(g.voice.frequency, e.voice);
+    if (g.upper) glide(g.upper.frequency, e.frequency * 2);
     g.tone.frequency.setTargetAtTime(e.cutoff, t, GLIDE);
     g.engine.gain.setTargetAtTime(e.gain, t, .05);
     if (g.rasp && g.raspFilter) {
-      g.raspFilter.frequency.setTargetAtTime(Math.min(5000, e.frequency * 6), t, GLIDE);
+      g.raspFilter.frequency.setTargetAtTime(e.rasp, t, GLIDE);
       g.rasp.gain.setTargetAtTime(p.level * .12 * e.load * e.load, t, .05);
     }
     const ty = tyreState(moment.surface, moment.speed, moment.airborne, p.tyres, moment.slide ?? 0);
@@ -182,7 +195,9 @@ export class EngineSound {
   /** For the dev checks: what the sound is doing now. Not proof that a person heard it. */
   get snapshot() {
     return { context: this.ctx?.state ?? 'none', built: !!this.graph, unlocked: this.unlocked, low: this.low, kind: this.kind, live: this.live, volume: this.volume,
-      master: this.graph ? +this.graph.master.gain.value.toFixed(3) : 0, frequency: this.graph ? +this.graph.voice.frequency.value.toFixed(1) : 0,
+      master: this.graph ? +this.graph.master.gain.value.toFixed(3) : 0, wave: this.graph?.voice.type ?? '',
+      // The firing frequency the voice plays now: a pulse train's oscillator runs once per engine cycle.
+      frequency: this.graph ? +(this.graph.voice.frequency.value * (this.kind ? voicePulses(ENGINES[this.kind]) : 1)).toFixed(1) : 0,
       rpm: Math.round(this.last.rpm), gear: this.last.gear, load: +this.last.load.toFixed(3), tyre: +this.last.tyre.toFixed(3), surface: this.last.surface };
   }
 }

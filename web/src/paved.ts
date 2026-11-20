@@ -116,8 +116,9 @@ export class Paved {
     }
   }
 }
-export async function loadPaved(base:string,village:readonly [number,number],area:string):Promise<Paved> {
-  const index=JSON.parse(await (await readFile(base,'paved/index.json')).text()) as Index;
+/** `indexRead` is the index read main.ts started beside the other boot reads; without it, the index is read here. */
+export async function loadPaved(base:string,village:readonly [number,number],area:string,indexRead?:Promise<Blob>):Promise<Paved> {
+  const index=JSON.parse(await (await (indexRead??readFile(base,'paved/index.json'))).text()) as Index;
   if(index.area!==area||index.source!=='nstdb-designated-open-v1')throw Error('Paved source/area mismatch');
   return new Paved(index,base,village);
 }
