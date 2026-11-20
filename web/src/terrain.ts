@@ -8,7 +8,7 @@ import { eraRoadField } from './era';
 import { MIRROR_TERRAIN_VERT, TERRAIN_FRAG, TERRAIN_VERT, WATER_MASK_FRAG } from './shaders';
 import { readFile } from './store';
 import { updateCoastView } from './coast-view';
-import { coastRecessUniforms, RECESSES, type RockSite } from './coast-site';
+import { coastRecessUniforms, quarryGypsumFill, QUARRY_GRAVEL_FILL, RECESSES, type RockSite } from './coast-site';
 import { BROOK_SAMPLE, brookBlend, brookDistance, brookField, Streams } from './streams';
 import { GroundCover, type GroundMeta, clearsGroundTrees } from './ground-cover';
 
@@ -1053,13 +1053,18 @@ export class Terrain {
     return u+v<=1?h00+(h10-h00)*u+(h01-h00)*v:h11+(h01-h11)*(1-u)+(h10-h11)*(1-v);
   }
 
-  private quarryMineral(t:Tile,x:number,z:number,surface:Surface):boolean {
+  private quarryMineral(t:Tile,x:number,z:number,surface:Surface,lerp:(arr:ArrayLike<number>,stride:number,off:number)=>number):boolean {
     const site=this.coast;
-    if(!site?.quarryFloorAllowsMineral || !site.contains(x,z) || surface.kind>=8
+    // The renderer uses individual trees near the player. Their ground keeps the existing brush boundary.
+    if(!site?.quarryFloorAllowsMineral || surface.canopy>1.6 || surface.kind>=8
       || (surface.kind>0 && surface.roadDist<=surface.halfWidth+.4))return false;
     const paint=t.mesh?.geometry.getAttribute('coast');
-    // Use the two rendered triangle weights at mineralFill's onset. A trace of edge tint still drives as ground.
-    if(!paint || Math.max(this.triangleValue(t,x,z,paint,0),this.triangleValue(t,x,z,paint,3))<=.05)return false;
+    if(!paint)return false;
+    const weight=Math.max(this.triangleValue(t,x,z,paint,0),this.triangleValue(t,x,z,paint,3));
+    const uniforms=(t.mesh!.material as THREE.ShaderMaterial).uniforms;
+    // tNormal.b is linearly sampled in the shader at the same grid coordinates. Each canopy byte is 0.2 m.
+    const renderCanopy=clearsGroundTrees(this.groundClassAt(x,z))?0:lerp(uniforms.tNormal.value.image.data,4,2)*.2;
+    if(quarryGypsumFill(weight,renderCanopy,uniforms.hull.value)<QUARRY_GRAVEL_FILL)return false;
     const h=this.seaLevel+(surface.ground-this.seaLevel)/this.exag;
     return site.quarryFloorAllowsMineral(x,z,h);
   }
@@ -1100,7 +1105,10 @@ export class Terrain {
     out.ground = this.withDeck(x, z, out.ground,out);
     const waterLevel=out.deck?null:this.waterLevelAt(x,z,out.ground);
     if (waterLevel!==null) {out.water=true;out.waterLimit=Math.max(waterLevel,out.ground)+.25;}
-    if(!this.cartRoads&&!out.deck&&!out.water&&(this.groundClassAt(x,z)===6||this.quarryMineral(t,x,z,out)))out.mineral=true;
+    if(!this.cartRoads&&!out.deck&&!out.water){
+      const quarry=this.coast?.quarry&&this.coast.contains(x,z);
+      if(quarry ? this.quarryMineral(t,x,z,out,lerp) : this.groundClassAt(x,z)===6)out.mineral=true;
+    }
     return out;
   }
 
