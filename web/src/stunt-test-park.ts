@@ -9,7 +9,9 @@ import { archTunnel,footbridge,gapPair,slipKicker,stepDown,tableTop,tankRow,whoo
 // Hard-frame height follows ordinary loaded-rig clearance tests; terrain and feet stay fixed.
 export const HARD_ARCH_RISE=8.05;
 
-/** Fourteen test pieces on the Mabou field. Banked turns are excluded. */
+const PARK_NAME = 'Kicker Field';
+
+/** Fourteen stunt pieces on the Mabou field. Banked turns are excluded. */
 export function testParkLayout(yard:YardSite):StuntPlacement[]{
   const put=(piece:StuntPlacement['piece'],u:number,v:number,du=0,dv=1):StuntPlacement=>({...yard.world(u,v),piece,heading:yard.heading(du,dv)});
   return[
@@ -26,7 +28,7 @@ const STARTS=[{lead:15,lateral:0},{lead:35,lateral:-2}] as const;
 export function testParkStarts(park:StuntPark){
  return park.dressing.filter(d=>d.placement.piece.id==='start-arch').map((arch,index)=>{
   const {lead,lateral}=STARTS[index];
-  return{id:index===0?'stunt-easy':'stunt-hard',name:index===0?'Test park: easy start':'Test park: hard start',
+  return{id:index===0?'stunt-easy':'stunt-hard',name:PARK_NAME+(index===0?' Easy Start':' Hard Start'),
    ...arch.world(-lead,lateral),heading:arch.placement.heading+Math.atan2(-lateral,lead),lead,lateral};
  });
 }
@@ -45,7 +47,7 @@ export function testParkPlaces(park:StuntPark,origin:readonly[number,number]):Pl
 /** Decorative pieces are separate from the frozen graded and driving footprints. */
 export function testParkDressing(yard:YardSite):DressingPlacement[]{
  const put=(piece:DressingPlacement['piece'],u:number,v:number,du=0,dv=1):DressingPlacement=>({...yard.world(u,v),piece,heading:yard.heading(du,dv)}),out:DressingPlacement[]=[];
- out.push(put(startArch(),650,25),put(startArch('TEST PARK',HARD_ARCH_RISE),615,350,0,-1),put(timingHut(),662,24),put(pitArea(),645.8,35));
+ out.push(put(startArch(PARK_NAME.toUpperCase()),650,25),put(startArch(PARK_NAME.toUpperCase(),HARD_ARCH_RISE),615,350,0,-1),put(timingHut(),662,24),put(pitArea(),645.8,35));
  for(const start of [42,82,122,162,202])out.push(put(lineFurniture(34,7,true),650,start));
  out.push(put(lineFurniture(58,8,false),615,332,0,-1),put(lineFurniture(45,8,false),615,258,0,-1));
  for(const [u,v,easy]of [[657,26,true],[623,344,false],[657,118,true],[623,270,false]] as const)out.push(put(lineMarker(easy),u,v));
@@ -55,11 +57,11 @@ export function testParkDressing(yard:YardSite):DressingPlacement[]{
  return out;
 }
 /** This check precedes definitions, Site registration, materials and model construction. */
-export async function createTestPark(params:URLSearchParams,terrain:Terrain,yard:YardSite|null,low:boolean,buildings:readonly Building[]=[]):Promise<StuntPark|null> {
-  if(params.get('park')!=='test'||!yard||yard.mode==='closed')return null;
+export async function createTestPark(terrain:Terrain,yard:YardSite|null,low:boolean,buildings:readonly Building[]=[]):Promise<StuntPark|null> {
+  if(!yard||yard.mode==='closed')return null;
   const exclusions=buildings.map(b=>({x:b.x-terrain.manifest.village[0],z:terrain.manifest.village[1]-b.y,radius:60+Math.hypot(b.length,b.width)/2}));
   const dressing=testParkDressing(yard);
   const park=new StuntPark(terrain,testParkLayout(yard),low,exclusions,dressing,testParkRunups(dressing));
-  await park.prepare();
+  await park.prepare({deferSurvey:true});
   return park;
 }

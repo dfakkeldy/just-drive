@@ -14,7 +14,7 @@ const settled=r=>assert.ok(r.maxLastHalf<15&&Math.abs(r.truckPitch)<15&&Math.abs
 for(const hill of (process.env.STUNT_START_HILLS??'1,1.5,2,2.5').split(',').map(Number))for(const low of [false,true]){
  process.env.PHONE_EXAG=String(hill);const {terrain,roads}=makeGround();terrain.low=low;
  const yard=new YardSite(terrain.manifest.village,'invented');terrain.sites.push(yard);
- const park=await createTestPark(new URLSearchParams('park=test'),terrain,yard,low,[]);
+ const park=await createTestPark(terrain,yard,low,[]);
  const arches=park.dressing.filter(d=>d.placement.piece.id==='start-arch');
  await preload(terrain,arches.flatMap(d=>[-60,0,30].map(u=>Object.values(d.world(u,0)))),65);
  for(const tile of terrain.tiles.values())if(tile.mesh){tile.mesh.visible=true;tile.mesh.material.uniforms.hideQuad.value.set(0,0,0,0);}

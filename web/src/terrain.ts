@@ -135,6 +135,8 @@ export interface Site {
   box: [number, number, number, number];
   /** Restrict tile construction for a site with separated footprints inside its world box. */
   affectsTile?(x: number, z: number, size: number, level: number): boolean;
+  /** Load survey data before building a tile that this site can grade. */
+  prepareTile?(tile: { level: number; x0: number; z0: number; size: number }): Promise<void> | undefined;
   /** True ground height in metres, given the surveyed one. */
   height(x: number, z: number, surveyed: number, level?:number): number;
   /** The surface at a point: metres from an imaginary centre line, half width in metres, and kind. */
@@ -545,16 +547,29 @@ export class Terrain {
   /** Optional sleeping-fleet notification. It does not change the land or ordinary visits. */
   fleetGroundChanged: ((x: number, z: number, size: number) => void) | null = null;
   private readonly fleetMasks = new WeakMap<Tile, number>();
-  /** Survey datum for a graded site, before any tiles are built. Does not include sites, decks or exaggeration. */
-  async surveyHeightAt(x:number,z:number):Promise<number|null> {
-    const m=this.manifest,e=x+m.village[0]-m.origin[0],s=z-(m.village[1]-m.origin[1]);
-    for(let level=this.maxLevel;level>=0;level--){
-      const size=m.size/2**level,i=Math.floor(e/size),j=Math.floor(s/size),key=`${level}/${i}_${j}`;
-      if(!this.exists.has(key))continue;
-      const px=await readPng(this.base,`${key}.png`),a=Math.min(T,Math.max(0,Math.round((e/size-i)*T))),b=Math.min(T,Math.max(0,Math.round((s/size-j)*T))),k=(b*S+a)*4;
-      return (px[k]*256+px[k+1])*m.height.scale+m.height.offset;
-    }
-    return null;
+  /** Survey datums before any tiles are built, without sites, decks or exaggeration. */
+  surveyHeightsAt(points: readonly { x: number; z: number }[]): Promise<(number | null)[]> {
+    const m = this.manifest, pages = new Map<string, Promise<Uint8ClampedArray>>();
+    return Promise.all(points.map(async ({ x, z }) => {
+      const e = x + m.village[0] - m.origin[0], s = z - (m.village[1] - m.origin[1]);
+      for (let level = this.maxLevel; level >= 0; level--) {
+        const size = m.size / 2 ** level, i = Math.floor(e / size), j = Math.floor(s / size), key = `${level}/${i}_${j}`;
+        if (!this.exists.has(key)) continue;
+        let page = pages.get(key);
+        if (!page) { page = readPng(this.base, `${key}.png`); pages.set(key, page); }
+        const px = await page;
+        const a = Math.min(T, Math.max(0, Math.round((e / size - i) * T)));
+        const b = Math.min(T, Math.max(0, Math.round((s / size - j) * T)));
+        const k = (b * S + a) * 4;
+        return (px[k] * 256 + px[k + 1]) * m.height.scale + m.height.offset;
+      }
+      return null;
+    }));
+  }
+
+  async surveyHeightAt(x: number, z: number): Promise<number | null> {
+    const [height] = await this.surveyHeightsAt([{ x, z }]);
+    return height;
   }
 
   private finishBurst() {
@@ -618,7 +633,11 @@ export class Terrain {
   private async load(t: Tile) {
     const name = `${t.level}/${t.i}_${t.j}`;
     const withRoad = this.hasRoad.has(`${t.level}/${t.i}_${t.j}`);
-    const [px, bakedRoad] = await Promise.all([readPng(this.base, `${name}.png`), withRoad ? readPng(this.base, `${name}.r.png`) : Promise.resolve(null)]);
+    const [px, bakedRoad] = await Promise.all([
+      readPng(this.base, `${name}.png`),
+      withRoad ? readPng(this.base, `${name}.r.png`) : Promise.resolve(null),
+      ...this.sites.map(s => s.prepareTile?.(t)),
+    ]);
     return { tile: t, px, bakedRoad };
   }
 
