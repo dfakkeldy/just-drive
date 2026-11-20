@@ -246,12 +246,15 @@ export class Grass {
 
   private populate(p: Patch, deadline: number): void {
     const boxes = this.terrain.clear.filter((b) => b[0] < p.x + CELL && b[2] > p.x && b[1] < p.z + CELL && b[3] > p.z);
+    const quarry = this.terrain.coast?.quarry ? this.terrain.coast : null;
     while (p.cursor < p.side * p.side) {
       // Check often enough that a newly loaded terrain tile cannot turn this into a long frame.
       if (performance.now() >= deadline) return;
       const i = p.cursor++, gx = p.x * p.side / CELL + i % p.side, gz = p.z * p.side / CELL + Math.floor(i / p.side);
       const r = random(gx, gz, 31), r2 = random(gx, gz, 971);
-      const x = (gx + 0.15 + 0.7 * r) * CELL / p.side, z = (gz + 0.15 + 0.7 * r2) * CELL / p.side;
+      let x = (gx + 0.15 + 0.7 * r) * CELL / p.side, z = (gz + 0.15 + 0.7 * r2) * CELL / p.side;
+      // Test the position stored in the Float32 root buffer at a quarry paint edge.
+      if (quarry?.contains(x,z)) { x = Math.fround(x); z = Math.fround(z); }
       if (this.terrain.sidewalks?.vegetationAt(x,z)) continue;
       if (this.excludes?.(x + this.terrain.manifest.village[0], this.terrain.manifest.village[1] - z)) continue;
       const surface = this.terrain.surfaceAt(x, z);

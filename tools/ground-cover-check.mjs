@@ -77,10 +77,11 @@ quarryPainting(Terrain);console.log('PASS quarry paint triangles feed contact wh
 
 function quarryGrass(GrassClass){
  const grass=Object.create(GrassClass.prototype);
- let mineral=false;
+ let mineral=false,checkRootPrecision=false;
  const surface={level:8,ground:30,canopy:0,brook:99,kind:0,roadDist:99,halfWidth:0};
  Object.assign(grass,{group:new THREE.Group(),geometry:new THREE.BufferGeometry(),clock:{value:0},material:new THREE.ShaderMaterial(),terrain:{
-  clear:[],seaLevel:0,coverAt:()=>5,heightAt:()=>30,meshHeightAt:()=>30,surfaceAt:()=>({...surface,mineral}),
+  clear:[],seaLevel:0,coverAt:()=>5,heightAt:()=>30,meshHeightAt:()=>30,
+  surfaceAt:(x,z)=>({...surface,mineral:mineral||(checkRootPrecision&&x===Math.fround(x)&&z===Math.fround(z))}),
  }});
  grass.blades();
  const before=grass.patch(0,0);grass.populate(before,Infinity);
@@ -88,6 +89,10 @@ function quarryGrass(GrassClass){
  mineral=true;
  const after=grass.patch(0,0);grass.populate(after,Infinity);
  assert.equal(after.count,0,'gypsum contact suppresses old-cover tufts');
+ mineral=false;checkRootPrecision=true;
+ grass.terrain.coast={quarry:true,contains:()=>true,weights:()=>[0,0,0,0]};
+ const edge=grass.patch(-10720,48);grass.populate(edge,Infinity);
+ assert.equal(edge.count,0,'paint is checked where the GPU stores the grass root');
  before.mesh.geometry.dispose();grass.geometry.dispose();grass.material.dispose();
 }
 quarryGrass(Grass);console.log('PASS production grass leaves painted mineral bare');
@@ -190,17 +195,18 @@ if(process.argv.includes('--mutations')){
  const bikeApi=await import('data:text/javascript;base64,'+Buffer.from(bikeBundle.outputFiles[0].text).toString('base64'));
  assert.throws(()=>bikeDriving(bikeApi.BikeRide),{message:/confirmed mineral uses the bike gravel response/});
  console.log('KILLED bike mineral gravel feel removed');
- for(const [filename,exportName,anchor,replacement,check,expected] of [
-  ['terrain','Terrain','||this.quarryMineral(t,x,z,out)','',quarryPainting,/authored gypsum supplies off-road mineral/],
-  ['grass','Grass','surface.mineral || ','',quarryGrass,/gypsum contact suppresses old-cover tufts/],
+ for(const [name,filename,exportName,anchor,check,expected] of [
+  ['quarry paint contact','terrain','Terrain','||this.quarryMineral(t,x,z,out)',quarryPainting,/authored gypsum supplies off-road mineral/],
+  ['grass mineral exclusion','grass','Grass','surface.mineral || ',quarryGrass,/gypsum contact suppresses old-cover tufts/],
+  ['quarry grass root precision','grass','Grass','if (quarry?.contains(x,z)) { x = Math.fround(x); z = Math.fround(z); }',quarryGrass,/paint is checked where the GPU stores the grass root/],
  ]){
   const source=readFileSync(`web/src/${filename}.ts`,'utf8');
   assert(source.includes(anchor),`${filename} mineral mutation anchor`);
   const bundle=await build({entryPoints:[`web/src/${filename}.ts`],bundle:true,write:false,platform:'node',format:'esm',logLevel:'silent',plugins:[{
-   name:'quarry-mineral-mutant',setup(b){b.onLoad({filter:new RegExp(`/${filename}\\.ts$`)},()=>({contents:source.replace(anchor,replacement),loader:'ts',resolveDir:process.cwd()+'/web/src'}));},
+   name:'quarry-mineral-mutant',setup(b){b.onLoad({filter:new RegExp(`/${filename}\\.ts$`)},()=>({contents:source.replace(anchor,''),loader:'ts',resolveDir:process.cwd()+'/web/src'}));},
   }]});
   const mutant=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
   assert.throws(()=>check(mutant[exportName]),{message:expected});
-  console.log('KILLED quarry mineral branch removed from '+filename);
+  console.log('KILLED '+name);
  }
 }
