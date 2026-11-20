@@ -22,10 +22,10 @@ spec = importlib.util.spec_from_file_location('judique_1219', ROOT/'tools/paved-
 judique = importlib.util.module_from_spec(spec); spec.loader.exec_module(judique)
 
 
-def with_1219(baked, report):
+def with_1219(baked, report, refreshed=False):
     """Judique lots delta (Judique lots, installed after Point Tupper delta) replaces Judique's paved/index.json and composes the corrections file.
     Once it is installed, those two entries are checked against its receipt; every other Point Tupper delta entry is unchanged."""
-    if judique.state(baked) != 'after': return report
+    if not refreshed and judique.state(baked) != 'after': return report
     after = json.loads(judique.RECEIPT.read_text())
     index = next(f for f in after['area']['files'] if f['file'] == 'areas/judique/paved/index.json')
     report = copy.deepcopy(report)
@@ -222,19 +222,24 @@ LATER = (ROOT/'tools/mabou-village-delta/hashes.json',)
 
 
 def land(baked):
-    report = with_1219(baked, json.loads(patch.RECEIPT.read_text()))
+    refreshed = patch.paved_patch.refresh_installed(baked)
+    report = with_1219(baked, json.loads(patch.RECEIPT.read_text()), refreshed)
     later = [json.loads(p.read_text()) for p in LATER]
+    if refreshed:
+        later.append(patch.paved_patch.refresh_delta())
     mode = patch.state(baked, report, later)
     if EXPECT is not None and mode != EXPECT: raise AssertionError(f'land is {mode}, expected {EXPECT}')
     corr = Path(baked).parent/patch.MIRROR[len('data/'):]
     now = sha(corr.read_bytes()) if corr.is_file() else None
     for r in later:
-        if now == r['mirror']['sha256']: now = r['mirror']['before']
+        mirror = r.get('mirror')
+        if mirror and now == mirror['sha256']: now = mirror['before']
     if now != report['mirror']['before' if mode == 'before' else 'sha256']:
         raise AssertionError(f'land is {mode} but the corrections file is not the {mode} one (install refuses it)')
     paved = patch.PAVED_RECEIPT.read_bytes()
     if sha(paved) != report['pavedReceiptSha256']: raise AssertionError('tools/paved-open/hashes-point-tupper.json is not the Point Tupper delta paved receipt')
-    stale = patch.stale_inputs(baked, report, json.loads(paved), later)
+    # The full refresh already checked the current pavement against its own inputs.
+    stale = [] if refreshed else patch.stale_inputs(baked, report, json.loads(paved), later)
     if stale and mode == 'after': raise AssertionError('installed Point Tupper delta tiles are STALE against: '+', '.join(stale[:8]))
     for line in stale: print('WARNING: the delta is stale against', line, '- install refuses it; re-bake and review a new delta')
     kept = [f for f in report['files'] if f['sha256']]

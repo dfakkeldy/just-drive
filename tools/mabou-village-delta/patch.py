@@ -290,7 +290,7 @@ def make(work, paved, live, output, verify=True, receipt=RECEIPT, paved_receipt=
     return report
 
 
-def entries(live, report):
+def entries(live, report, later=()):
     """'before' or 'after' for every receipt file and owned manifest key set; AssertionError for unknown bytes."""
     live = Path(live)
     seen = []
@@ -298,21 +298,23 @@ def entries(live, report):
         if f['before'] == f['sha256']: raise AssertionError(f'receipt entry without a change: {f["file"]}')
         p = live/f['file']
         now = sha(p.read_bytes()) if p.is_file() else None
+        now = paved_patch.before_file(f['file'], now, later)
         if now == f['before']: seen.append('before')
         elif now == f['sha256']: seen.append('after')
         else: raise AssertionError(f'unknown bytes in {f["file"]}')
     for m in report['manifests']:
         area = next(a for a in AREAS if area_folder(a) == m['folder'])
         now = keys((live/m['folder']/'manifest.json').read_bytes(), area)
+        now = paved_patch.before_keys(m['folder'], now, later)
         if now == m['before']: seen.append('before')
         elif now == m['after']: seen.append('after')
         else: raise AssertionError(f'unknown owned manifest keys in {m["folder"]}')
     return seen
 
 
-def state(live, report):
+def state(live, report, later=()):
     """'before' or 'after' for the whole receipt; AssertionError for a mixed or unknown land."""
-    seen = set(entries(live, report))
+    seen = set(entries(live, report, later))
     if len(seen) != 1: raise AssertionError('mixed land: some files before Mabou village delta, some after')
     return seen.pop()
 

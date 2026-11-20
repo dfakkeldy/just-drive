@@ -206,6 +206,9 @@ def with_1219(receipt, after):
 
 
 def land(root):
+    if patch.refresh_installed(root):
+        print('PASS refreshed pavement and current inputs match the receipt in all six areas')
+        return
     receipt = json.loads(patch.RECEIPT.read_text())
     previous = json.loads(PREVIOUS.read_text())
     for r in (receipt, previous):

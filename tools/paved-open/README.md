@@ -218,6 +218,29 @@ delivery path. The install PR sets `EXPECT = 'after'` in the land check.
 The default-on gate is pinned by `paved-web` (`OPTIN`, `NOOFF` and `NODATA`
 mutants), the credit by `site-title`, and the receipt by `paved-open-land`.
 
+## Refresh on the 18 Nov road-bed land
+
+The pavement from the Mabou village delta predates the 18 Nov road and
+building changes. Step 32 refreshes all six areas from the installed land
+and its existing corrections. `hashes-refresh.json` pins the new payload
+and baked inputs. The older receipts record the original installs.
+
+Run these from a real checkout with its own `data/`. First rehearse the
+install on an APFS clone as described in [checks-README.md](../checks-README.md).
+Use the merged code before installing on live land.
+
+```sh
+python3 tools/paved-open/refresh.py verify "$STAGE" data/baked
+python3 tools/paved-open/refresh.py install "$STAGE" data/work/pavement-before
+```
+
+The installer holds `data/work/install.lock`, checks the stage against the
+receipt, and clones each file it will replace into the new backup directory.
+It changes the pavement files and the `paved` key only. If the receipt or
+any required land check fails after the swap, it restores the backup before
+it releases the lock. To roll back a successful install, use
+`python3 tools/paved-open/refresh.py rollback data/work/pavement-before`.
+
 ## Judique lots delta (Judique lots delta)
 
 The owner (17 Nov): the store lot is gravel, the other village lots asphalt; parking lots must read as lots.

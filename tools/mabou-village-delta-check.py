@@ -331,7 +331,10 @@ def fixture():
 def land(baked):
     baked = Path(baked)
     report = json.loads(patch.RECEIPT.read_text())
-    mode = patch.state(baked, report)
+    refreshed = patch.paved_patch.refresh_installed(baked)
+    nov18 = json.loads((ROOT/'tools/mabou-dashcam-18nov/hashes.json').read_text())
+    later = [nov18, patch.paved_patch.refresh_delta()] if refreshed else [nov18]
+    mode = patch.state(baked, report, later)
     if EXPECT is not None and mode != EXPECT: raise AssertionError(f'land is {mode}, expected {EXPECT}')
     corr = baked.parent/patch.MIRROR[len('data/'):]
     now = sha(corr.read_bytes()) if corr.is_file() else None
@@ -341,13 +344,18 @@ def land(baked):
         raise AssertionError('the before corrections file plus tools/mabou-village-delta/corrections.json is not the receipt mirror')
     paved = patch.PAVED_RECEIPT.read_bytes()
     if sha(paved) != report['pavedReceiptSha256']: raise AssertionError('tools/paved-open/hashes.json is not the Mabou village delta paved receipt')
-    stale = patch.stale_inputs(baked, report, json.loads(paved))
+    stale = [] if refreshed else patch.stale_inputs(baked, report, json.loads(paved))
     if stale and mode == 'after': raise AssertionError('installed Mabou village delta tiles are STALE against: '+', '.join(stale[:8]))
     for line in stale: print('WARNING: the delta is stale against', line, '- install refuses it; re-bake and review a new delta')
     # The committed corrections give the receipt's buildings.json: from the before land, or unchanged on the after land.
-    doc = json.loads((baked/'terrain/buildings.json').read_bytes())
+    building_file = 'terrain/buildings.json'
+    current = (baked/building_file).read_bytes()
+    doc = json.loads(current)
     made = patch.compact(dict(doc, buildings=mabou_main.correct_buildings(doc['buildings'], 'mabou')))
-    want = next(f['sha256'] for f in report['files'] if f['file'] == 'terrain/buildings.json')
+    want = next(f['sha256'] for f in report['files'] if f['file'] == building_file)
+    digest = sha(current)
+    if mode == 'after' and patch.paved_patch.before_file(building_file, digest, [nov18]) == want:
+        want = digest
     if sha(made) != want: raise AssertionError('pipeline/mabou_main.py does not give the receipt buildings.json from this land')
     props = json.loads((baked/'terrain/props.json').read_bytes())['communityBoxes']
     grocery = dict(x=624896.85, y=5103595.12, heading=70.0, modules=4) if mode == 'after' else dict(x=624905.26, y=5103596.84, heading=76.0, modules=4)
