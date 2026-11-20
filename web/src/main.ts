@@ -16,7 +16,7 @@ import { siteRadio } from './site';
 import { isTestVisit } from './visit';
 import { pageState } from './page-state';
 import { Towing, trailerHelpSetting } from './towing';
-import { AreaContacts } from './world-contacts';
+import { AreaContacts, type ContactSite } from './world-contacts';
 import { pushOut } from './parked';
 import { Fleet } from './fleet';
 import { fleetEnabled, fleetRig } from './fleet-models';
@@ -720,7 +720,8 @@ const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads,
 const canal = ERA.modern && AREA.id === 'cansocauseway' ? new Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
 if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
-// A site registers here once. Fleet sweeps and fixed-step driving use this same list.
+// Each solid site's contact row is written once, here. The registry (fleet sweeps, fleet driving and the quarry) adds
+// the park, the quarry and then these rows in this order. Solo driving and a solo trailer use soloContacts (below).
 const fleetContacts = new AreaContacts();
 const parkContacts = stuntPark?.contactProvider();
 if (parkContacts) fleetContacts.add(parkContacts);
@@ -728,19 +729,27 @@ if (quarry) {
   fleetContacts.add(quarry.contactProvider());
   if (!fleetEnabled(garageEntry, params, !mailMode, ERA.modern)) quarry.bindVehicle(vehicle, fleetContacts);
 }
-if (yard) fleetContacts.add({ revision: () => yard.collisionVersion(), resolve: body => yard.resolveSolids(body), allows: body => yard.allowsBody(body, body.spec, body.y) });
-if (history) fleetContacts.add({ resolve: body => history.resolve(body as unknown as Vehicle) });
-if (home) fleetContacts.add({ resolve: body => home.resolveSolids(body) });
-if (porch) fleetContacts.add({ resolve: body => porch.resolveSolids(body) });
-if (lotProps) fleetContacts.add({ revision: () => lotProps.dropped, resolve: body => lotProps.resolveSolids(body) });
-if (church) fleetContacts.add({ resolve: body => church.resolveSolids(body) });
-// The optional pack arrives after boot; the registry must see its new solids.
-if (tallKey) fleetContacts.add({ revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) });
-if (village) fleetContacts.add({ resolve: body => village.resolveSolids(body) });
-if (hawkesbury) fleetContacts.add({ resolve: body => hawkesbury.resolveSolids(body) });
-if (mabouMain) fleetContacts.add({ resolve: body => mabouMain.resolveSolids(body) });
-if (novemberBuildings) fleetContacts.add({ resolve: body => novemberBuildings.resolveSolids(body) });
-if (cemeteries) fleetContacts.add({ resolve: body => cemeteries.resolveSolids(body) });
+const siteContacts: [string, ContactSite | null][] = [
+  ['yard', yard && { revision: () => yard.collisionVersion(), resolve: body => yard.resolveSolids(body), allows: body => yard.allowsBody(body, body.spec, body.y) }],
+  ['history', history && { resolve: body => history.resolve(body as unknown as Vehicle) }],
+  ['home', home && { resolve: body => home.resolveSolids(body) }],
+  ['porch', porch && { resolve: body => porch.resolveSolids(body) }],
+  ['lotProps', lotProps && { revision: () => lotProps.dropped, resolve: body => lotProps.resolveSolids(body) }],
+  ['church', church && { resolve: body => church.resolveSolids(body) }],
+  // The optional pack arrives after boot; the registry must see its new solids.
+  ['tall', tallKey ? { revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) } : null],
+  ['village', village && { resolve: body => village.resolveSolids(body) }],
+  ['hawkesbury', hawkesbury && { resolve: body => hawkesbury.resolveSolids(body) }],
+  ['mabouMain', mabouMain && { resolve: body => mabouMain.resolveSolids(body) }],
+  ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
+  ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
+];
+for (const [, row] of siteContacts) if (row) fleetContacts.add(row);
+// Solo driving (no fleet, no quarry) keeps its own order of the same rows (#57): tall moves after every other site,
+// and the park after tall. A new site row lands in both lists.
+const soloContacts = new AreaContacts();
+for (const [, row] of [...siteContacts.filter(([name]) => name !== 'tall'), ...siteContacts.filter(([name]) => name === 'tall')]) if (row) soloContacts.add(row);
+if (parkContacts) soloContacts.add(parkContacts);
 if (props) fleetContacts.add({ revision: () => props.downCount, resolve: () => {}, allows: body => props.allowsFleetBody(body) });
 if (roads.guardrails) {
   const rails = roads.guardrails, probe = { x: 0, z: 0, y: 0, heading: 0, spec: vehicleSpec, vx: 0, vz: 0, speed: 0 };
@@ -775,10 +784,7 @@ const resolveYardSolids = () => {
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
   boss?.driver.resolve(vehicle);
   if (fleet || quarry) fleetContacts.resolve(vehicle);
-  else {
-    yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); novemberBuildings?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle);
-    parkContacts?.resolve(vehicle);
-  }
+  else soloContacts.resolve(vehicle);
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
   fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
   yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
@@ -995,8 +1001,8 @@ if (roadAnimals) scene.add(roadAnimals.group);
 if (import.meta.env.DEV) expose({ roadAnimals });
 if (ERA.modern && garageEntry.id === 'truck' && ['1', 'empty'].includes(params.get('trailer') ?? '')) {
   if (!mailMode && roadScene) fleetContacts.add({ resolve: body => { if (roadScene.rules.enabled) pushOut(body, roadScene.placementSolids, true); } });
-  const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts
-    : parkContacts && { allows: parkContacts.allows, resolve: parkContacts.resolve };
+  // Without the fleet the trailer meets the same solid sites as the truck: soloContacts.
+  const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts : soloContacts;
   towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? hawkesbury.solids : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts }, true, LOW);
   if (towing.attached) scene.add(towing.trailer.root);
   trailerHelpSetting(towing, document.getElementById('settings'), document.getElementById('startOver'));
