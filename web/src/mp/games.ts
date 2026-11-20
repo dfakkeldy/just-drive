@@ -112,7 +112,7 @@ export class GameView {
     if (!on || !f || !me) { this.countdown.update(null); this.group.visible = false; this.where = null; if (this.readout) this.readout.hidden = true; if (this.results) this.results.hidden = true; return; }
     const left = this.net.gameLeft(), host = f.host === me.id, game = gameName(f.kind), title = game ? GAMES[game].name : 'Room games';
     if (f.phase === PHASE.play && this.phase === PHASE.countdown) this.goAt = performance.now();
-    const cue = this.countdown.update(f.phase === PHASE.countdown ? left : f.phase === PHASE.play ? -(performance.now() - this.goAt) : null);
+    this.countdown.update(f.phase === PHASE.countdown ? left : f.phase === PHASE.play ? -(performance.now() - this.goAt) : null);
     if (f.serial !== this.serial || f.phase !== this.phase) {
       // A new countdown opens the desktop panel, so the table is in sight; a phone keeps Settings closed.
       if (f.phase === PHASE.countdown && this.panel && !this.host.touch) this.panel.open = true;
@@ -138,7 +138,7 @@ export class GameView {
     const reach = TAG.startReachM;
     if (f.phase === PHASE.free) say = host ? (this.net.count < 1 ? 'Room games need one more driver in the room.' : raceBusy ? 'A race is on. Games wait for it.'
       : this.refused ? `No game. It needs another driver within ${reach} m of you on this version of the game, and a road nearby.` : `Pick a game. Drivers within ${reach} m of you play.`) : 'The room host starts games.';
-    else if (f.phase === PHASE.countdown) say = `${title} in ${cue}. The parcel waits on the road.`;
+    else if (f.phase === PHASE.countdown) say = 'The parcel waits on the road until GO.';
     else if (f.phase === PHASE.play) {
       const where = target && !mine ? ` ${this.toward(target).text}.` : '';
       say = `${clock(left)} left. ` + (mine ? (tag!.immune > 0 ? 'You signed for the parcel. Nobody can take it for a moment.' : 'You have the parcel. Keep moving, keep to the roads.')
@@ -147,9 +147,8 @@ export class GameView {
       const best = Math.max(0, ...f.table.map(r => r.score)), winners = f.table.filter(r => r.score === best && best > 0).map(r => this.name(r.id));
       say = winners.length ? `Round over. ${winners.join(' and ')} ${winners.length > 1 || winners[0] === 'You' ? 'win' : 'wins'} with ${best}.` : 'Round over. Nobody held the parcel long enough to count.';
     }
-    if (cue === 'GO') say = 'GO';
     if (say !== this.shown) this.status.textContent = this.shown = say;
-    const summary = f.phase === PHASE.free ? 'Room games' : f.phase === PHASE.countdown ? `${title} in ${Math.ceil(left / 1000)}` : f.phase === PHASE.play ? `${title} · ${clock(left)}` : `${title} · results`;
+    const summary = f.phase === PHASE.free ? 'Room games' : f.phase === PHASE.countdown ? `${title} in ${Math.min(5, Math.ceil(left / 1000))}` : f.phase === PHASE.play ? `${title} · ${clock(left)}` : `${title} · results`;
     if (summary !== this.summaryText) this.summary.textContent = this.summaryText = summary;
     // The table, highest first: live while playing, final after.
     const rows = [...f.table].sort((a, b) => b.score - a.score || a.id - b.id);
@@ -158,7 +157,7 @@ export class GameView {
     if (text !== this.tableText) { this.tableText = text; this.table.replaceChildren(...lines.map(t => Object.assign(document.createElement('li'), { textContent: t }))); }
     const place = rows.findIndex(r => r.id === me.id), myScore = place >= 0 ? rows[place].score : 0;
     if (this.readout) {
-      const r = f.phase === PHASE.free ? '' : f.phase === PHASE.countdown ? `${title} in ${Math.ceil(left / 1000)}${target ? ` · ${this.toward(target).text}` : ''}`
+      const r = f.phase === PHASE.free ? '' : f.phase === PHASE.countdown ? `${title} in ${Math.min(5, Math.ceil(left / 1000))}${target ? ` · ${this.toward(target).text}` : ''}`
         // Where the parcel is comes first: a narrow phone cuts the end of the line.
         : f.phase === PHASE.play ? `Tag ${clock(left)}${mine ? ' · parcel!' : target ? ` · ${this.toward(target).text}` : ''}${place >= 0 ? ` · #${place + 1}` : ''} · ${myScore} pts`
         : `Tag over · ${myScore} pts${place >= 0 ? ` · #${place + 1}` : ''}`;

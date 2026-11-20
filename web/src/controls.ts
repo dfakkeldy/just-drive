@@ -65,3 +65,15 @@ export function padHelp(kind = 'car', mail = true, radio = true): string {
   const second = `${horse ? 'X: whinny' : 'X: horn'}${radio && !horse ? ' · ↑: radio' : ''} · B: ${horse || bike ? 'eyes' : 'seat'} · Back: road${mail ? '' : ' · →: places'} · Start: pause`;
   return `\n${first}${mailPart}\n${second}`;
 }
+
+/** Each keyboard key has its own cap. Joiners keep their original text. */
+export function keyCaps(label: string, escape: (text: string) => string = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;')): string {
+  const isKey = (token: string) => /^[A-Za-z←→↑↓⇧⚙]$/.test(token) || ['WASD', 'Esc', 'Enter', 'Space', 'Shift', 'arrows'].includes(token);
+  const join = (text: string) => `<span class="keyJoin">${escape(text)}</span>`;
+  return label.split(/( \/ | or | \+ )/).map((part, i) => {
+    if (i % 2) return join(part);
+    const tokens = part.split('/');
+    if (tokens.length > 1 && tokens.every(isKey)) return tokens.map(t => `<kbd>${escape(t)}</kbd>`).join(join('/'));
+    return isKey(part) ? `<kbd>${escape(part)}</kbd>` : escape(part);
+  }).join('');
+}

@@ -73,6 +73,11 @@
 
   :root{--sky-night:#0b1620;--ink:#eef2f6;--ink-dim:#b9c3cc;--panel:rgba(8,14,20,.82);--panel-solid:#0c141c;--line:rgba(238,242,246,.22);--maple:#d0632e;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--text:system-ui,-apple-system,"Segoe UI",sans-serif}
   #shiftHud{position:fixed;z-index:3;top:calc(112px + env(safe-area-inset-top,0px));left:max(10px,env(safe-area-inset-left,0px));padding:8px 10px;background:var(--panel);border-left:3px solid var(--maple);white-space:pre-wrap;font:13px/1.6 var(--mono);font-variant-numeric:tabular-nums;pointer-events:none;max-width:calc(100% - 120px)}
+  #mailCard{position:fixed;z-index:3;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(28px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;width:min(460px,calc(100% - 120px));pointer-events:none}
+  @media(max-width:600px){#mailCard{bottom:calc(64px + env(safe-area-inset-bottom,0px))}}
+  body:not(.tcOn) #mailCard>:is(#stopHint,#mailScore){position:static;max-width:none;box-sizing:border-box;margin:0;background:var(--panel);border-left:3px solid var(--maple);border-radius:0;padding:8px 10px;color:var(--ink);font:12px/1.5 var(--mono);font-variant-numeric:tabular-nums}
+  body:not(.tcOn):not(.droneOn) #mailCard>#stopHint:not(:empty)+#mailScore{padding-top:0}
+  body:not(.tcOn) #stopHint:empty{display:none}
   #stopHint{position:fixed;z-index:3;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(88px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 120px);background:var(--panel);padding:6px 10px;font:12px/1.5 var(--mono);pointer-events:none}
   #cameraButton{position:fixed;z-index:4;right:max(14px,env(safe-area-inset-right,0px));bottom:calc(38% + 44px + env(safe-area-inset-bottom,0px));width:68px;height:60px;border:1px solid var(--ink-dim);border-radius:9px;background:var(--panel-solid);color:var(--ink);font:bold 11px var(--mono);touch-action:none;cursor:pointer}
   #endShift{position:fixed;z-index:4;top:calc(64px + env(safe-area-inset-top,0px));right:max(10px,env(safe-area-inset-right,0px));width:94px;min-height:56px;border:1px solid var(--ink-dim);border-radius:6px;background:var(--panel-solid);color:var(--ink);font:12px var(--mono);touch-action:none;cursor:pointer}
@@ -108,8 +113,9 @@ body #settings.open[aria-labelledby]{max-height:calc(100dvh - var(--settings-top
 body.tcOn{--settings-top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-top,env(safe-area-inset-top,0px)))}
 body #settings{width:320px;min-width:0;max-width:calc(100% - 32px);overflow-y:auto;overscroll-behavior:contain;border-radius:10px;box-sizing:border-box;font-family:var(--text)}
 #settings>*{box-sizing:border-box;max-width:100%}
+#pauseHome{display:flex;align-items:center;min-height:44px;font:13px var(--text);color:var(--ink-dim)}
 #settingsHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
-#settingsHeader h2{font-size:20px;margin:0}
+#settingsHeader h2{font:600 20px/1.15 "Iowan Old Style",Palatino,Georgia,serif;margin:0}
 #settings #settingsClose{min-width:60px;min-height:44px!important;height:44px;border:1px solid var(--ink-dim);border-radius:6px;background:var(--panel-solid);color:var(--ink);font:inherit;cursor:pointer}
 body.exploreMode{--settings-accent:#a7d9bc}#settings input{accent-color:var(--settings-accent,var(--maple))}
 #credit{left:auto;width:fit-content;max-width:calc(100% - 32px);padding:4px 8px;background:#0c141c;border-radius:4px;font:12px/1.4 var(--text);opacity:1;text-shadow:none}
@@ -130,7 +136,9 @@ body:not(.tcOn):not(.droneSticks) #pauseButton{right:calc(62px + env(safe-area-i
 body:not(.tcOn):not(.droneSticks):not(.indoorOn):has(#placesButton:not([hidden])) #pauseButton{right:calc(156px + env(safe-area-inset-right,0px))}
 body:not(.tcOn):not(.droneSticks) #bigMapButton{right:calc(150px + env(safe-area-inset-right,0px));width:70px}
 body:not(.tcOn):not(.droneSticks):not(.indoorOn):has(#placesButton:not([hidden])) #bigMapButton{right:calc(244px + env(safe-area-inset-right,0px))}
-body:is(.tcOn,.droneSticks) :is(#placesButton,#gear){border:1px solid rgba(238,242,246,.3);background:var(--panel);border-radius:10px;color:var(--ink);font-family:var(--mono)}
+body:is(.tcOn,.droneSticks) :is(#placesButton,#pauseButton,#gear){border:1px solid rgba(238,242,246,.3);background:var(--panel);border-radius:10px;color:var(--ink);font-family:var(--mono)}
+body:not(.gameStarted) #droneButton,body.tcOn:not(.gameStarted) #phoneHint #stopHint{visibility:hidden}
+body:is(.tcOn,.droneSticks) :is(#placesButton,#pauseButton){font:700 12px var(--mono);letter-spacing:.08em}
 body.droneSticks :is(#gear,#pauseButton){min-width:56px;min-height:56px}
 body:not(.gameStarted) :is(#cameraButton,#mailButton){display:none!important}
 #settings input[type=checkbox]{outline:1px solid #8a99a6;outline-offset:1px}
@@ -155,7 +163,10 @@ body.tcOn #pauseButton{position:static;min-height:56px;pointer-events:auto;flex:
 <canvas id="c"></canvas>
 <div id="hud"></div>
 <div id="shiftHud" aria-label="Today’s route"></div>
+<div id="mailCard">
 <div id="stopHint" role="status"></div>
+<div id="mailScore" role="status" aria-label="Mail service tally"></div>
+</div>
 <button id="cameraButton" aria-label="Camera: take evidence photo. C">CAMERA</button>
 <button id="endShift" hidden aria-label="End shift. Enter">END SHIFT</button>
 <div id="photoFlash" aria-hidden="true"></div>
@@ -175,7 +186,6 @@ body.tcOn #pauseButton{position:static;min-height:56px;pointer-events:auto;flex:
 </div>
 
 <button id="mailButton" aria-label="Throw mail. Hold to keep throwing.">MAIL</button>
-<div id="mailScore" role="status" aria-label="Mail service tally"></div>
 <button id="gear" aria-label="Settings">&#9881;</button>
 <div id="settings" role="region" aria-labelledby="settingsHeading">
   <header id="settingsHeader"><h2 id="settingsHeading">Settings</h2><button id="settingsClose" type="button">Close</button></header>

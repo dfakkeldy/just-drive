@@ -88,6 +88,11 @@ if(family==='all'||family==='explore'){
  await p.key('KeyW');await sleep(700);await p.key('KeyW',false);const comparison=await p.read(`({x:mmm.vehicle.x,z:mmm.vehicle.z,heading:mmm.vehicle.heading})`);await p.shot('03-explore-village');await p.read(`mmm.vehicle.restart(${start.x},${start.z},${start.heading});mmm.vehicle.speed=0`);await sleep(300);
  check(await p.read(`document.getElementById('placeArrival').innerText.includes('Mabou village')&&!document.getElementById('placeArrival').hidden`),'arrival card appears at village');await p.shot('04-arrival');
  check(await p.read(`document.querySelector('[data-place="village"]').getAttribute('aria-current')==='location'&&document.querySelector('[data-place="village"] .youAreHere').textContent==='You are here'`),'Places marks the current village');
+ await p.tap('KeyL');await p.read(`new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
+ check(await p.read(`!document.getElementById('placesPanel').hidden&&document.querySelector('[data-place="village"]').getAttribute('aria-current')==='location'&&document.querySelector('[data-place="village"] .youAreHere')?.textContent==='You are here'`),'open Places keeps the current village');
+ check(await p.read(`document.getElementById('placeArrival').hidden||getComputedStyle(document.getElementById('placeArrival')).display==='none'`),'open Places hides the arrival toast');
+ check(await p.read(`(()=>{const map=getComputedStyle(document.getElementById('placesMap')),close=getComputedStyle(document.getElementById('placesClose')),row=getComputedStyle(document.querySelector('#placesList button'));return map.backgroundColor==='rgba(0, 0, 0, 0)'&&map.borderTopColor!==row.borderTopColor&&close.backgroundColor==='rgba(0, 0, 0, 0)'&&close.borderTopColor===map.borderTopColor;})()`),'Places map and Close use quiet outlines distinct from place rows');
+ await p.tap('Escape');
  for(const id of ['settings','pauseScreen','bigMap']){
   await p.read(`(()=>{const e=document.getElementById('${id}');if('${id}'==='settings')e.classList.add('open');else e.hidden=false;})()`);
   check(await p.read(`getComputedStyle(document.getElementById('placeArrival')).display==='none'`),'arrival stays hidden under '+id);
@@ -99,7 +104,8 @@ if(family==='all'||family==='explore'){
  // Observe the actual arguments entering the existing MiniMap, plus its real 2D label drawing.
  await p.read(`window.markLabels=[];window.marksSeen=[];const old=mmm.miniMap.update.bind(mmm.miniMap);mmm.miniMap.update=(...a)=>{window.marksSeen=a[5];return old(...a)};const c=document.getElementById('miniMapCanvas').getContext('2d'),text=c.fillText.bind(c);c.fillText=(...a)=>{window.markLabels.push(a[0]);return text(...a)};document.getElementById('miniMapCanvas').click();document.getElementById('miniMapCanvas').click()`);await sleep(900);
  check(await p.read(`window.marksSeen.length===mmm.places.places.length&&mmm.places.places.every(p=>marksSeen.some(m=>m.label===p.name))`),'all place marks reach minimap');
- check(await p.read(`markLabels.includes('Mabou village')&&markLabels.every(l=>!mmm.places.places.every(p=>p.name!==l)||/^[0-9 mk.N]+$/.test(l))&&mmm.miniMap.labels.length>=2&&mmm.miniMap.labels.length<=4`),'minimap draws a few place labels');await p.shot('06-place-map');
+ check(await p.read(`markLabels.includes('Mabou village')&&markLabels.every(l=>!mmm.places.places.every(p=>p.name!==l)||/^(?:[0-9 mk.N]+|[ESW])$/.test(l))&&mmm.miniMap.labels.length>=2&&mmm.miniMap.labels.length<=4`),'minimap draws a few place labels');await p.shot('06-place-map');
+ check(await p.read(`['N','E','S','W'].every(letter=>markLabels.includes(letter))`),'minimap draws all four compass letters');
  await p.key('KeyW');await sleep(1800);
  check(await p.read(`Math.hypot(mmm.vehicle.x-${start.x},mmm.vehicle.z-${start.z})>1&&Math.abs(mmm.vehicle.speed)>0.5`),'W drives in explore');
  // W stays held from before the list opens until after it closes: the pause itself must clear the held key.

@@ -77,12 +77,13 @@ innerWidth=1440;innerHeight=900;
 const pill=Object.assign(new Element(),{id:'mpChip',rect:{bottom:66,height:44}});body.append(pill);
 const count=new RoomCountdown('testCountdown',false),countNode=document.getElementById('testCountdown');
 assert.equal(countNode.getAttribute('aria-hidden'),'true');
+const countSay=body.children.find(n=>n.className==='roomCountdownSay');assert.equal(countSay.getAttribute('role'),'status');
 for(const [ms,visual,spoken] of [[5000,'5','5'],[4000,'4','5'],[3000,'3','3'],[2000,'2','3'],[1000,'1','3'],[0,'GO','GO'],[-999,'GO','GO']]){
- assert.equal(count.update(ms),spoken);assert.equal(countNode.textContent,visual);assert.equal(countNode.hidden,false);
+ assert.equal(count.update(ms),spoken);assert.equal(countSay.textContent,spoken==='GO'?'GO':`Start in ${spoken}`);assert.equal(countNode.textContent,visual);assert.equal(countNode.hidden,false);
 }
 const pillReads=pill.reads;for(let i=0;i<20;i++)count.update(-500);
 assert.equal(pill.reads,pillReads,'same count reuses the pill position');assert.equal(countNode.style.top,'76px');
-count.update(-1000);assert.equal(countNode.hidden,true,'GO leaves after one second');count.update(5000);count.update(null);assert.equal(countNode.hidden,true,'disconnect clears the count');count.dispose();pill.remove();
+count.update(-1000);assert.equal(countNode.hidden,true,'GO leaves after one second');count.update(5000);count.update(null);assert.equal(countNode.hidden,true,'disconnect clears the count');assert.equal(countSay.textContent,'');count.dispose();assert.equal(countSay.parentElement,null);pill.remove();
 // Run the actual social view. A stable phrase needs no layout reads on later frames.
 const camera=new PerspectiveCamera(60,innerWidth/innerHeight,.1,1000);camera.updateMatrixWorld();
 const net={canChat:true,gamesSupported:true,roster:[],chats:[],names:new Map(),bubbles:new Map(),me:{id:1}};
@@ -145,6 +146,8 @@ assert.equal(root.classList.contains('folded'),true);map.setFlight(true);assert.
 assert.equal(document.getElementById('miniMapCanvas').style.width,'96px');
 const parked={x:8,z:9};paint.length=0;map.update(1,10,20,Math.PI/2,[],[],[],parked);
 assert.ok(paint.some(([op,x])=>op==='rotate'&&x===-Math.PI/2));assert.ok(paint.some(([op,x,z])=>op==='translate'&&x===-10&&z===-20));
+for(const letter of ['N','E','S','W'])assert.ok(paint.some(([op,text])=>op==='fillText'&&text===letter),'compass paints '+letter);
+assert.ok(paint.some(([op,x,y,r])=>op==='arc'&&x===0&&y===0&&r===41),'96px compass ring is inset seven pixels');
 const north=paint.find(([op,text])=>op==='fillText'&&text==='N');assert.ok(north&&north[2]<48&&Math.abs(north[3]-48)<1e-6,'north moves left when heading east');
 assert.ok(paint.some(([op,x,z])=>op==='arc'&&x===8&&z===9),'parked car gets its own marker');map.setFlight(false);assert.equal(root.parentElement,original);assert.equal(root.classList.contains('folded'),true,'landing restores the map preference and parent');
 // An explicit fold choice during flight persists on landing and in storage.
@@ -165,18 +168,40 @@ for(const touch of [false,true]){
  const racer={id:1,next:0,time:null,out:false};
  const net={status:'on',me:{id:1},names:new Map([[1,'Dusty Tire']]),roster:[{id:1}],count:1,gamesSupported:true,race:{serial:1,host:1,startAt:10000,route:{roadId:1,gates:[{x:0,z:0},{x:10,z:0}]},racers:[racer]},game:null,serverNow:()=>countdownNow};
  const race=new RaceView(net,host),spoken=[];
- for(const now of [5000,6000,7000,8000,9000,10000]){countdownNow=now;race.update();spoken.push(document.getElementById('racePanel').querySelector('p').textContent);}
- assert.deepEqual(spoken,['Start in 5 · stay inside the start ring.','Start in 5 · stay inside the start ring.','Start in 3 · stay inside the start ring.','Start in 3 · stay inside the start ring.','Start in 3 · stay inside the start ring.','GO']);
+ const racePanel=document.getElementById('racePanel'),raceSay=body.children.find(n=>n.className==='roomCountdownSay');
+ for(const now of [5000,6000,7000,8000,9000,10000]){
+  countdownNow=now;race.update();spoken.push(raceSay.textContent);
+  assert.equal(racePanel.querySelector('p').textContent,now<10000?'Stay inside the start ring until GO.':'GO · checkpoint 1/2 · 0.0 s You are at the gold ring.');
+  if(now===5000){assert.equal(racePanel.open,touch,'only touch opens at countdown');racePanel.open=false;}
+  else assert.equal(racePanel.open,false,'closing a countdown card stays closed');
+ }
+ assert.deepEqual(spoken,['Start in 5','Start in 5','Start in 3','Start in 3','Start in 3','GO']);
+ assert.equal(document.getElementById('raceStatus').id,racePanel.querySelector('button').getAttribute('aria-describedby'));
+
  assert.equal(document.getElementById('raceCountdown').textContent,'GO');
  racer.out=true;countdownNow=10500;race.update();assert.match(document.getElementById('racePanel').querySelector('p').textContent,/^Out · left start early/,'GO does not hide disqualification');
  countdownNow=11000;race.update();assert.equal(document.getElementById('raceCountdown').hidden,true);
- if(touch)assert.equal(document.getElementById('raceReadout').hidden,false,'phone keeps its race strip');race.dispose();
+ if(touch){
+  const strip=document.getElementById('raceReadout');
+  assert.equal(strip.hidden,false,'phone keeps its race strip');
+  racer.out=false;racer.next=1;race.update();assert.equal(strip.textContent,'Race · ring 2/2 · 1.0 s');
+  racer.time=1200;race.update();assert.equal(strip.textContent,'Finished · 1.20 s');
+  racer.time=null;racer.out=true;race.update();assert.equal(strip.textContent,'Race · out');
+  racer.out=false;countdownNow=net.race.startAt+600000;race.update();assert.equal(strip.textContent,'Race timed out.');
+  net.race.racers=[];countdownNow=11000;race.update();assert.equal(strip.textContent,'Race · 1.0 s','spectator keeps its old strip');
+ }
+ net.race.route=null;net.race.startAt=0;race.update();
+ assert.equal(document.getElementById('raceStatus').textContent,'Pick a course to start.');
+ assert.equal(document.getElementById('raceStatus').style.color,'var(--ink-dim)');
+ assert.equal(racePanel.querySelector('button').disabled,true);
+ net.race.host=2;race.update();assert.equal(document.getElementById('raceStatus').textContent,'The room host picks the course. Host controls the race.');
+ assert.equal(document.getElementById('raceStatus').style.color,'');race.dispose();
  let gameLeft=5000;net.race=null;net.game={kind:1,phase:1,serial:1,host:1,table:[],tag:null};net.gameLeft=()=>gameLeft;net.game.tag={holder:0,parcel:{x:120,z:0}};
  const game=new GameView(net,host),cues=[];
- for(const left of [5000,4000,3000,2000,1000]){gameLeft=left;game.update(.1,[],camera);cues.push(document.getElementById('gamePanel').querySelector('p').textContent);}
+ for(const left of [5000,4000,3000,2000,1000]){gameLeft=left;game.update(.1,[],camera);cues.push(body.children.find(n=>n.className==='roomCountdownSay').textContent);assert.equal(document.getElementById('gamePanel').querySelector('p').textContent,'The parcel waits on the road until GO.');}
  if(touch)assert.match(document.getElementById('gameReadout').textContent,/Parcel tag in 1 · 120 m E/,'countdown readout points to the parcel');
- assert.deepEqual(cues,['Parcel tag in 5. The parcel waits on the road.','Parcel tag in 5. The parcel waits on the road.','Parcel tag in 3. The parcel waits on the road.','Parcel tag in 3. The parcel waits on the road.','Parcel tag in 3. The parcel waits on the road.']);
- net.game.phase=2;gameLeft=180000;countdownNow=20000;game.update(.1,[],camera);assert.equal(document.getElementById('gameCountdown').textContent,'GO');assert.equal(document.getElementById('gamePanel').querySelector('p').textContent,'GO');
+ assert.deepEqual(cues,['Start in 5','Start in 5','Start in 3','Start in 3','Start in 3']);
+ net.game.phase=2;gameLeft=180000;countdownNow=20000;game.update(.1,[],camera);assert.equal(document.getElementById('gameCountdown').textContent,'GO');assert.match(document.getElementById('gamePanel').querySelector('p').textContent,/^3:00 left\./);assert.equal(body.children.find(n=>n.className==='roomCountdownSay').textContent,'GO');
  countdownNow=21000;game.update(.1,[],camera);assert.equal(document.getElementById('gameCountdown').hidden,true);game.dispose();strip.remove();
 }
 globalThis.performance=savedPerformance;
@@ -210,6 +235,8 @@ for(const touchDevice of [false,true])for(const active of [false,true])for(const
 }
 const a=readFileSync(new URL('../web/index.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];
 const b=readFileSync(new URL('../artifact/page.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];assert.equal(a,b,'page style blocks remain identical');
+assert.ok(a.includes('body:not(.tcOn):not(.droneOn) #mailCard>#stopHint:not(:empty)+#mailScore{padding-top:0}'),'tally removes top padding only below a nonempty hint outside drone flight');
+assert.doesNotMatch(a,/body:not\(\.tcOn\) #mailCard>#mailScore\{padding-top:0\}/,'no unconditional zero top padding on a lone tally');
 assert.ok(a.includes(':not(.indoorOn):has(#placesButton:not([hidden])) #pauseButton'),'indoor controls close the chip gap');
 assert.ok(a.includes(':not(.indoorOn):has(#placesButton:not([hidden])) #bigMapButton'),'indoor map closes the chip gap');
 console.log('PASS lower HUD and photo clearance, short-column fallback, desktop chat default, cached bubble sizes, pooled label boxes, touch and desktop pause execution, flight fold persistence; room order, header, scroll bounds, disconnect cleanup, 12 px names, drone keycaps and hint timer, phone metrics, flight map parent, fold, north, heading, parked car and actual frame wiring; page CSS parity');

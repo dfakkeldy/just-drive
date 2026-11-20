@@ -285,8 +285,11 @@ export class MiniMap {
       g.beginPath(); g.arc(parked.x, parked.z, 4 / k, 0, Math.PI * 2); g.fill(); g.stroke();
     }
     g.restore();
-    // North, on the rim; drawn last, but its box is known now so no name covers it.
-    const nx = half + Math.sin(-heading) * (half - 11), ny = half * 1.0 - Math.cos(-heading) * (half - 11);
+    // The compass turns with north. Its letters stay upright.
+    const R = half - 7;
+    const compass = ['N', 'E', 'S', 'W'].map((letter, i) => ({ letter,
+      x: half + Math.sin(i * Math.PI / 2 - heading) * R,
+      y: half - Math.cos(i * Math.PI / 2 - heading) * R }));
     const cy = half * 1.25;
     if (this.labelled) {
       // Placed and drawn in on-screen pixels: a phone shows this canvas smaller than it is laid out, and names
@@ -303,9 +306,9 @@ export class MiniMap {
         candidates.push({ label: mark.label, px: px * f, py: py * f, rank: mark.rank ?? 2, distance, here: mark.radius !== undefined && distance <= mark.radius });
       }
       this.labelKeep = [{ x0: (half - 8) * f, y0: (cy - 10) * f, x1: (half + 8) * f, y1: (cy + 8) * f },
-        { x0: nx * f - 22, y0: ny * f - 22, x1: nx * f + 22, y1: ny * f + 22 }];
+        ...compass.map(({letter, x, y}) => { const pad = letter === 'N' ? 22 : 10; return { x0: x * f - pad, y0: y * f - pad, x1: x * f + pad, y1: y * f + pad }; })];
       this.labels = placeLabels(candidates, { size: shown, cap: labelCap(shown, reach), measure: text => g.measureText(text).width,
-        keep: this.labelKeep, previous: this.labelSlots });
+        circle: {cx: half*f, cy: half*f, r: R*f - 6}, keep: this.labelKeep, previous: this.labelSlots });
       this.labelSlots = new Map(this.labels.map(l => [l.label, l.slot]));
       // A dark rim round the letters, not a filled box, so the roads under a name still show.
       g.lineJoin = 'round'; g.lineWidth = 3; g.strokeStyle = 'rgba(11,22,32,.9)'; g.fillStyle = '#bceaff';
@@ -320,13 +323,20 @@ export class MiniMap {
     // The rim and its ticks turn with north. Letters stay upright.
     g.save(); g.translate(half, half); g.rotate(-heading);
     g.strokeStyle = '#b9c3cc'; g.lineWidth = 1;
-    g.beginPath(); g.arc(0, 0, half - 4, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.stroke();
     for (let i = 0; i < 16; i++) {
-      g.rotate(Math.PI / 8); g.beginPath(); g.moveTo(0, -half + 4); g.lineTo(0, -half + 7); g.stroke();
+      g.rotate(Math.PI / 8); g.beginPath(); g.moveTo(0, -R); g.lineTo(0, -R + 3); g.stroke();
     }
     g.restore();
-    g.fillStyle = '#ff5a4a'; g.font = '700 11px ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('N', nx, ny);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const {letter, x: px, y: py} of compass) {
+      g.fillStyle = 'rgba(11,22,32,.9)';
+      if (letter === 'N') { g.beginPath(); g.arc(px, py, 7, 0, Math.PI * 2); g.fill(); }
+      g.font = `700 ${letter === 'N' ? 11 : 10}px ui-monospace,Menlo,monospace`;
+      g.lineWidth = 3; g.strokeStyle = 'rgba(11,22,32,.9)';
+      if (letter !== 'N') g.strokeText(letter, px, py);
+      g.fillStyle = letter === 'N' ? '#ff5a4a' : '#8a99a6'; g.fillText(letter, px, py);
+    }
     // The Boss last, over the car's own arrow: close behind, it would hide under it.
     this.bossDrawn = '';
     if (this.boss) {

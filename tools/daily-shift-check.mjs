@@ -1,6 +1,16 @@
 // Today's run on the real Shift, Props, FiredRun and DailyRun, in node with a small DOM stand-in.
 // Imported by daily-rules-check.mjs; bundled by tools/daily-rules-mutations.mjs.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+// Pin the production decision, then use that same statement in the daily fixture.
+const mainSource = readFileSync(new URL('../web/src/main.ts', import.meta.url), 'utf8');
+const endTimeWiring = 'if (shift instanceof Shift) shift.endsAtSix = !DAILY;';
+const checkEndTimeWiring = source => assert.equal(source.split(endTimeWiring).length, 2, 'main wires the shift end time to !DAILY exactly once');
+checkEndTimeWiring(mainSource);
+for (const replacement of ['if (shift instanceof Shift) shift.endsAtSix = true;', '']) {
+ assert.throws(() => checkEndTimeWiring(mainSource.replace(endTimeWiring, replacement)), { name: 'AssertionError' }, 'reject changed or missing daily end-time wiring');
+}
 import { Shift } from '../web/src/shift.ts';
 import { Props } from '../web/src/props.ts';
 import { Roads } from '../web/src/roads.ts';
@@ -60,6 +70,9 @@ const offers = [];
 let agains = 0;
 const endings = { offer(tag, title, lines, choices, body) { offers.push({ tag, title, lines, choices, body }); }, close() {} };
 const shift = new Shift(props, mailStub(), roads, terrain, house, [0, 0], true, new URLSearchParams('run=1'), () => {}, true, true, plan.day);
+new Function('shift', 'Shift', 'DAILY', endTimeWiring)(shift, Shift, true);
+shift.update(0, vehicleAt(0, 0));
+assert.doesNotMatch(document.getElementById('shiftHud').textContent, / · ENDS /);
 assert.equal(shift.career.day, plan.day, 'Today’s run fixes the shift day');
 let daily = null;
 const fired = new FiredRun(shift, endings, true, () => { agains++; }, { limit: plan.limit, onEnd: end => daily.finish(end) });
@@ -112,6 +125,7 @@ assert.equal(copied, daily.text, 'Copy puts the share line on the clipboard');
 // Practice: a fresh card and book; the first try stands on the card and in the text.
 card.choices[0].action(); tick(.016);
 assert.equal(agains, 1); assert.equal(shift.ended, false); assert.equal(daily.card.done, 0); assert.equal(fired.book.total, 0);
+assert.doesNotMatch(document.getElementById('shiftHud').textContent, / · ENDS /);
 assert.equal(shift.career.day, plan.day, 'the same day again');
 assert.ok(!grid.children[0].classes.has('on'), 'the HUD card is clear again');
 for (const s of squares.slice(0, 8)) shift.reportScore(s.kind, 0, 0, 3);

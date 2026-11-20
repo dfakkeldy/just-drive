@@ -11,7 +11,7 @@ import { justIcon } from './site-pages.mjs';
 
 // The game's own credit strings, bundled from its source (property-lines-rules.ts is more than Node can strip).
 const { outputFiles } = await build({ stdin: { contents: "export { AREAS } from './area'; export * from './credits'; export * from './controls'; export { bikeKeys } from './vehicle-choice'; export { PUBLIC_MUSIC_CREDIT } from './radio-credits.generated'; export { PROPERTY_ATTRIBUTION, PROPERTY_LICENSE_URL } from './property-lines-rules';", resolveDir: fileURLToPath(new URL('../web/src', import.meta.url)), loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node' });
-const { AREAS, ABOUT_URL, HELP_URL, LISTEN_URL, LISTEN_TEXT, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, ENGINE_CREDIT, LAND_CREDITS, FAR_CREDITS, PUBLIC_MUSIC_CREDIT, PROPERTY_ATTRIBUTION, PROPERTY_LICENSE_URL } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
+const { AREAS, ABOUT_URL, HELP_URL, LISTEN_URL, LISTEN_TEXT, keyCaps, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, ENGINE_CREDIT, LAND_CREDITS, FAR_CREDITS, PUBLIC_MUSIC_CREDIT, PROPERTY_ATTRIBUTION, PROPERTY_LICENSE_URL } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
 
 const mailIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b1620'/%3E%3Cpath d='M12 22h40v24H12z' fill='%23eef2f6'/%3E%3Cpath d='M12 22l20 15 20-15' fill='none' stroke='%23d0632e' stroke-width='4'/%3E%3C/svg%3E";
 const PICTURES = ['mail.jpg', 'road.jpg', 'village.jpg'];
@@ -38,6 +38,7 @@ h1 span{color:var(--accent)}
 .actionCaption{font-size:13px;color:var(--dim)}
 .actions{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 8px}
 .button{display:inline-flex;align-items:center;min-height:48px;padding:0 20px;border-radius:8px;background:var(--accent);color:#0b1620;font-weight:700;text-decoration:none}
+.mail .button:not(.second){background:var(--strong)}
 .button.second{background:transparent;color:var(--ink);border:1px solid var(--line)}
 section{margin-top:56px}
 h2{margin:0 0 12px;font-size:30px;line-height:1.15}
@@ -71,6 +72,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-si
 .toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0;padding:0;list-style:none}
 .toc a{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:99px;color:var(--ink);text-decoration:none;font-size:15px}
 .toc a:is(:hover,:focus-visible){border-color:var(--accent);background:var(--accent);color:#0b1620}
+.totop a{display:inline-flex;align-items:center;min-height:44px;font-size:15px}
 .controls{display:grid;gap:16px;margin-top:16px}
 .controls h3{margin:0 0 6px;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
 .controls dl{margin:0}
@@ -82,7 +84,8 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-si
 .qa li{padding:8px 0}
 .qa b{display:block}
 .qa span{color:var(--dim)}
-kbd{font:700 .9em ui-monospace,Menlo,Consolas,monospace;padding:2px 6px;border:1px solid #71818e;border-bottom-color:#0b1620;border-radius:4px;background:#20303b;color:var(--ink)}
+.keyJoin{color:var(--dim)}
+kbd{font:700 max(12px,.9em) ui-monospace,Menlo,Consolas,monospace;padding:2px 6px;border:1px solid #71818e;border-bottom:2px solid #46566a;border-radius:4px;background:#20303b;color:var(--ink)}
 @media (min-width:960px){
  .page.plain .text{padding:64px 16px}
  .controls{grid-template-columns:1fr 1fr}
@@ -126,7 +129,7 @@ const MADE = (brand) => `<section aria-labelledby="made">
 <p class="dim">No ads and no accounts. Your settings stay in your own browser. When you drive with others, the server passes car positions between players. A room retains its current race course, player IDs, checkpoint progress and times until the last driver leaves. It keeps no position history.</p>
 ${brand === 'mail' ? `<p class="dim" id="boardData">Today’s board keeps only what you post with <b>Post my result</b> at the end of Today’s run: the name you chose, your points, discipline step, time, bingo squares and vehicle, and a number your device makes from its own random secret for that one board, so a device posts once a day. The number for one day cannot be matched to the number for another (the name you choose can, if you keep it). That number stays with the day’s board even if your row drops out of the top 100. No account, no email and no network address. Each day’s board keeps its top 100, and the whole board is deleted after 60 days.</p>\n` : ''}</section>
 <h2 id="credits">Credits and data</h2>
-<details open class="credits" aria-labelledby="credits"><summary>Show credits and data</summary>
+<details open class="credits" aria-labelledby="credits"><summary>Sources and licences</summary>
 ${LAND_CREDITS}
 ${FAR_CREDITS}
 ${PUBLIC_MUSIC_CREDIT}
@@ -195,7 +198,7 @@ ${MADE('just')}`,
 // ---- Help ----
 const html = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
 /** One control table, rows exactly as the title card shows them. */
-const table = (heading, rows) => `<div><h3>${heading}</h3><dl>${rows.map(([key, what]) => `<div class="row"><dt>${/touch screen/i.test(heading) ? '<b>' : '<kbd>'}${html(key.replace("W A S D", "WASD"))}${/touch screen/i.test(heading) ? '</b>' : '</kbd>'}</dt><dd>${html(what)}</dd></div>`).join('')}</dl></div>`;
+const table = (heading, rows) => `<div><h3>${heading}</h3><dl>${rows.map(([key, what]) => `<div class="row"><dt>${/touch screen|controller/i.test(heading) ? `<b>${html(key.replace("W A S D", "WASD"))}</b>` : keyCaps(key.replace("W A S D", "WASD"), html)}</dt><dd>${html(what)}</dd></div>`).join('')}</dl></div>`;
 const qa = items => `<ul role="list" class="qa">${items.map(([q, a]) => `<li><b>${q}</b><span>${a}</span></li>`).join('')}</ul>`;
 
 const SETTINGS = (brand) => qa([
@@ -224,7 +227,7 @@ const HELP = {
     body: () => `<p class="kicker">Mabou Mail Madness</p>
 <h1>Help</h1>
 <p class="lead">How to deliver the day’s run, and what to do when the day goes wrong.</p>
-<ul role="list" class="toc"><li><a href="#shift">The shift</a></li><li><a href="#controls">Controls</a></li><li><a href="#settings">Settings</a></li><li><a href="#offline">Offline</a></li><li><a href="#others">Drive with others</a></li><li><a href="#trouble">Problems</a></li></ul>
+<ul role="list" class="toc" id="contents"><li><a href="#shift">The shift</a></li><li><a href="#controls">Controls</a></li><li><a href="#settings">Settings</a></li><li><a href="#offline">Offline</a></li><li><a href="#others">Drive with others</a></li><li><a href="#trouble">Problems</a></li></ul>
 <section aria-labelledby="shift">
 <span class="label">How to play</span>
 <h2 id="shift">The shift</h2>
@@ -236,11 +239,13 @@ const HELP = {
 <li><b>End the shift.</b> <span class="dim">Press <kbd>Enter</kbd>, or END SHIFT in the settings on a phone, and read the calls.</span></li>
 </ol>
 <p>Prefer no mail at all? Choose <b>Just drive</b> on the title card, or go to <a href="https://justdrive.fakkeldy.ca/mabou">Just Drive</a>.</p>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="controls">
 <span class="label">Controls</span>
 <h2 id="controls">Keys and buttons</h2>
 <div class="controls">${table('Keyboard', KEYS)}${table('Touch screen', TOUCH)}${table('Controller', padKeys('car', true))}</div>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 ${COMMON('mail')}`,
   },
@@ -250,7 +255,7 @@ ${COMMON('mail')}`,
     body: () => `<p class="kicker">Just Drive</p>
 <h1>Help</h1>
 <p class="lead">How to drive, find places and get the best picture from your device.</p>
-<ul role="list" class="toc"><li><a href="#start">Start</a></li><li><a href="#controls">Controls</a></li><li><a href="#settings">Settings</a></li><li><a href="#offline">Offline</a></li><li><a href="#others">Drive with others</a></li><li><a href="#trouble">Problems</a></li></ul>
+<ul role="list" class="toc" id="contents"><li><a href="#start">Start</a></li><li><a href="#controls">Controls</a></li><li><a href="#settings">Settings</a></li><li><a href="#offline">Offline</a></li><li><a href="#others">Drive with others</a></li><li><a href="#trouble">Problems</a></li></ul>
 <section aria-labelledby="start">
 <span class="label">Start</span>
 <h2 id="start">Choose a place and go</h2>
@@ -259,11 +264,13 @@ ${COMMON('mail')}`,
 <li><b>Choose a ride.</b> <span class="dim">Car or Dirt bike, on the title card.</span></li>
 <li><b>Start driving.</b> <span class="dim">In Mabou, Judique and West Bay, open PLACES (<kbd>L</kbd>) for a list of places to see. Choose one to go straight there. The other places have no list yet: just drive.</span></li>
 </ol>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="controls">
 <span class="label">Controls</span>
 <h2 id="controls">Keys and buttons</h2>
 <div class="controls">${table('Car · keyboard', DRIVING_KEYS)}${table('Car · touch screen', DRIVING_TOUCH)}${table('Dirt bike · keyboard', bikeKeys(false))}${table('Dirt bike · touch screen', bikeKeys(true))}${table('Car · controller', padKeys('car', false))}${table('Dirt bike · controller', padKeys('bike', false))}</div>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 ${COMMON('just')}`,
   },
@@ -274,6 +281,7 @@ const COMMON = (brand) => `<section aria-labelledby="settings">
 <h2 id="settings">The ⚙ button</h2>
 <p class="dim">Your choices are saved in this browser only.</p>
 ${SETTINGS(brand)}
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="offline">
 <span class="label">Offline</span>
@@ -283,16 +291,27 @@ ${SETTINGS(brand)}
 <li><b>Download.</b> <span class="dim">In ⚙, under Play Mabou without internet, press Download for offline play.</span></li>
 <li><b>Play.</b> <span class="dim">Mabou now works without a connection. The other places need the internet.</span></li>
 </ol>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="others">
 <span class="label">Together</span>
 <h2 id="others">Drive with others</h2>
-<p>Turn on <b>Drive with others</b> on the title card, then start. Choose <b>Open road</b> to meet anyone on the same land, or <b>Private room</b> to drive with friends only: press <b>Copy invitation link</b> and send them the link. The first driver with race support is the room host. Open <b>Room race</b>, pick a short road course, then drive to the gold start ring. Stop inside it before the host presses <b>Start</b>. The countdown lasts five seconds. Stay inside the ring until GO, then visit each gold checkpoint in order. Times use the room clock and include network delay. Late arrivals spectate until the next race. A reset or leaving the start early marks you out. Races time out after ten minutes; the host can clear the race and pick another course. If the host leaves, the race clears and another driver becomes host. The room retains its current race course, player IDs, progress and times until the last driver leaves. It keeps no position history.</p>
+<ol role="list" class="steps">
+<li>Turn on <b>Drive with others</b>, then start.</li>
+<li>Choose <b>Open road</b> or <b>Private room</b>.</li>
+<li>For a private room, press <b>Copy invitation link</b> and send the link.</li>
+<li>The host opens <b>Room race</b> and picks a course.</li>
+<li>Drive to the gold start ring and stop inside it before the host presses <b>Start</b>.</li>
+<li>Stay inside until GO, then visit each gold checkpoint in order.</li>
+</ol>
+<p class="dim">Drive with others is on the title card. Open road meets anyone on the same land; Private room is for friends only. Courses are short road courses. The first driver with race support is the room host. The countdown lasts five seconds. Times use the room clock and include network delay. Late arrivals spectate until the next race. A reset or leaving the start early marks you out. Races time out after ten minutes; the host can clear the race and pick another course. If the host leaves, the race clears and another driver becomes host. The room retains its current race course, player IDs, progress and times until the last driver leaves. It keeps no position history.</p>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="trouble">
 <span class="label">Problems</span>
 <h2 id="trouble">When something goes wrong</h2>
 ${TROUBLE(brand)}
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>`;
 
 export function helpPage(brand) {

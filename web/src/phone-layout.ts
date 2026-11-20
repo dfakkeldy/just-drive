@@ -12,6 +12,9 @@ body.tcOn #phoneHud{display:grid}
 #phoneHud .phoneFlow{pointer-events:none;min-width:0;min-height:0}
 #phoneTop{grid-area:1/1/2/3;display:flex;align-items:start;gap:6px}
 #phoneStatus{flex:1;max-width:440px;display:flex;flex-direction:column;gap:3px}
+body.tcOn #phoneStatus{align-items:flex-start}
+body.tcOn #phoneStatus>*{max-width:100%}
+body.tcOn #firedLine{align-self:stretch}
 #phoneTop #gear{margin-left:auto}
 #phoneHint{grid-area:2/1/3/3}
 #phoneMiddle{grid-area:3/1/4/3;display:flex;justify-content:space-between;gap:6px}

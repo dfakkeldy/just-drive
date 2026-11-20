@@ -5,7 +5,7 @@ import { cdp, cdpFetch, sleep } from './cdp.mjs';
 const port = process.env.CDP_PORT, base = new URL(process.argv[3]).origin;
 const out = join(process.env.MMM_CHECK_OUT ?? process.argv[2], 'evidence/pause');
 mkdirSync(out, { recursive: true });
-for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',393,852,true],['phone-wide',844,390,true]]) {
+for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',393,852,true],['phone-wide',844,390,true],['just-desktop',1280,900,false]]) {
  const tab = await (await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
  const c = await cdp(tab.webSocketDebuggerUrl);
  const read = async expression => (await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result.result.value;
@@ -16,7 +16,8 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
  try {
   await c.send('Page.enable');
   await c.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:touch});
-  await c.send('Page.navigate',{url:`${base}/?test=1&vehicle=bike&road=Mabou%20Harbour%20Road&hud=1&radio=0&q=low${touch?'&touch=1':''}`});
+  const origin = new URL(base); if(name.startsWith('just-')) origin.hostname = 'localhost';
+  await c.send('Page.navigate',{url:`${origin.origin}/?test=1&vehicle=bike&road=Mabou%20Harbour%20Road&hud=1&radio=0&q=low${name.startsWith('just-')?'&site=just&mode=explore':''}${touch?'&touch=1':''}`});
   let ready = false;
   for(let i=0;i<240;i++){ await sleep(500); if(await read(`document.title.startsWith('settled') && !!window.mmm?.vehicle`)){ready=true;break;} }
   assert.ok(ready,`${name} settled`);
@@ -35,6 +36,10 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
   assert.equal(await read(`document.getElementById('pauseRadio').textContent`),'Radio quiet','quiet radio line');
   assert.equal(await read(`document.getElementById('pauseRace').hidden`),true,'no idle race line');
   await read(`document.getElementById('pauseSettings').focus()`);
+  if(name.startsWith('just-')) {
+   assert.equal(await read(`document.getElementById('pauseHome')?.href`),'https://justdrive.fakkeldy.ca/','Just Drive links its front page');
+   await key('Tab','Tab');assert.equal(await read(`document.activeElement.id`),'pauseHome','Tab from Settings reaches All places');
+  } else assert.equal(await read(`document.getElementById('pauseHome')`),null,'mail has no front-page link');
   await key('Tab','Tab'); assert.equal(await read(`document.activeElement.tagName`),'SUMMARY','Tab wraps to Keys');
   await key('Enter','Enter'); assert.equal(await read(`document.querySelector('#pauseKeys').open`),true,'keyboard opens Keys');
   assert.ok(await read(`document.querySelectorAll('#pauseKeys dt').length>=8`),'full key list');
@@ -45,7 +50,7 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
   await key('KeyP','p'); await sleep(300); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),true);
   const geometry=await read(`(()=>{const b=document.getElementById('pauseButton'),r=b.getBoundingClientRect();return {w:r.width,h:r.height,visible:r.x>=0&&r.right<=innerWidth&&r.y>=0&&r.bottom<=innerHeight,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===b}})()`);
   assert.ok(geometry.w>=44&&geometry.h>=44&&geometry.visible&&geometry.hit,JSON.stringify(geometry));
-  if(width>1000)assert.deepEqual(await read(`(()=>{const ids=['bigMapButton','pauseButton','placesButton','gear'].filter(id=>{const e=document.getElementById(id);return e&&!e.hidden&&e.getBoundingClientRect().width>0});return ids.slice(1).map((id,i)=>{const a=document.getElementById(ids[i]).getBoundingClientRect(),b=document.getElementById(id).getBoundingClientRect();return {gap:b.left-a.right,height:b.height,top:b.top===a.top}})})()`),[{gap:8,height:44,top:true}],'mail PAUSE and gear share an eight-pixel row');
+  if(width>1000)assert.deepEqual(await read(`(()=>{const ids=['bigMapButton','pauseButton','placesButton','gear'].filter(id=>{const e=document.getElementById(id);return e&&!e.hidden&&e.getBoundingClientRect().width>0});return ids.slice(1).map((id,i)=>{const a=document.getElementById(ids[i]).getBoundingClientRect(),b=document.getElementById(id).getBoundingClientRect();return {gap:b.left-a.right,height:b.height,top:b.top===a.top}})})()`),Array.from({length:name.startsWith('just-')?3:1},()=>({gap:8,height:44,top:true})),'desktop chips share an eight-pixel row');
   await click('pauseButton'); await sleep(150); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),false);
   const screen = await read(`(()=>{const r=document.querySelector('#pauseScreen section').getBoundingClientRect();return r.x>=0&&r.right<=innerWidth&&r.y>=0&&r.bottom<=innerHeight})()`); assert.ok(screen);
   const shot=await c.send('Page.captureScreenshot',{format:'png'}); writeFileSync(join(out,`${name}.png`),Buffer.from(shot.result.data,'base64'));

@@ -47,7 +47,7 @@ async function inspectReadout(p,w,h,insets,expected) {
     const clips=[];let painted=!!e.getClientRects().length&&r.width>0&&r.height>0;
     for(let a=e;a;a=a.parentElement){const c=getComputedStyle(a);painted&&=!a.hidden&&c.display!=='none'&&c.visibility==='visible'&&Number(c.opacity)>0;
       const b=a.getBoundingClientRect();if(a!==e&&['hidden','clip','auto','scroll'].some(v=>[c.overflowX,c.overflowY].includes(v)))clips.push([b.left,b.top,b.right,b.bottom]);}
-    return {rect:[e.id,r.left,r.top,r.right,r.bottom],painted,text:e.textContent,pointerEvents:s.pointerEvents,whiteSpace:s.whiteSpace,overflow:s.overflow,textOverflow:s.textOverflow,lineHeight:parseFloat(s.lineHeight),padding:parseFloat(s.paddingTop)+parseFloat(s.paddingBottom),clips};
+    return {rect:[e.id,r.left,r.top,r.right,r.bottom],painted,text:e.textContent,fits:e.scrollWidth<=e.clientWidth+1,pointerEvents:s.pointerEvents,whiteSpace:s.whiteSpace,overflow:s.overflow,textOverflow:s.textOverflow,lineHeight:parseFloat(s.lineHeight),padding:parseFloat(s.paddingTop)+parseFloat(s.paddingBottom),clips};
   })()`);
   assert.ok(readout?.painted,'race readout is painted: positive rect, visible styles and ancestors');
   assert.equal(readout.text,expected,'visible countdown/time/result text');
@@ -56,6 +56,7 @@ async function inspectReadout(p,w,h,insets,expected) {
   const controls=await p.read(rectangles);
   // No hit-test/occlusion filter: EVERY visible id counts, including controls under an overlay.
   for(const b of controls)assert.deepEqual(layoutFaults([readout.rect,b],w,h,[],insets),[],'race readout clears '+b[0]);
+  assert.ok(readout.fits,'full race strip text fits its bar');
   const [,left,top,right,bottom]=readout.rect;
   assert.ok(bottom-top<=readout.lineHeight+readout.padding+.1,'readout stays on one line');
   for(const [l,t,r,b] of readout.clips)assert.ok(left>=l-.1&&top>=t-.1&&right<=r+.1&&bottom<=b+.1,'readout is not clipped by an ancestor');
@@ -123,11 +124,13 @@ export async function raceLayoutCheck({open,safeArea,sizes,outDir}) {
           for(const state of ['countdown','running','finished']) {
             await p.read(`(()=>{const m=mmm.mp.current,s=m.net.race;s.serial++;s.route={roadId:m.host?.roads?.[0]?.id??1,gates:[{x:mmm.vehicle.x,z:mmm.vehicle.z},{x:mmm.vehicle.x+50,z:mmm.vehicle.z},{x:mmm.vehicle.x+100,z:mmm.vehicle.z}]};
               s.startAt=${state==='countdown'?25000:7600};s.racers=[{id:m.net.me.id,next:1,time:${state==='finished'?2000:'null'},out:false}];m.race.update();})()`);
-            const expected=state==='countdown'?'Race starts in 5':state==='running'?'Race · 12.4 s':'Finished · 2.00 s';
+            const expected=state==='countdown'?'Race starts in 5':state==='running'?'Race · ring 2/3 · 12.4 s':'Finished · 2.00 s';
             if(process.env.RACE_LAYOUT_MUTANT==='go')await p.read(overGoMutant);
             const measured=await inspectReadout(p,w,h,insets,expected);states.push({state,...measured});
             if(property&&!folded)await shot(`${name}-${state}`);
             if(state==='countdown'){
+              const cues=await p.read(`(()=>{const m=mmm.mp.current,s=m.net.race,cues=[];for(const left of [5000,4000,3000,2000,1000,0]){s.startAt=m.net.serverNow()+left;m.race.update();cues.push([...document.querySelectorAll('body > .roomCountdownSay')].map(e=>e.textContent).filter(Boolean).join(''));}s.startAt=25000;m.race.update();return cues;})()`);
+              assert.deepEqual(cues,['Start in 5','Start in 5','Start in 3','Start in 3','Start in 3','GO'],'body countdown voice remains available with Settings closed');
               const saved=await p.read(`document.getElementById('raceReadout').style.cssText`);
               await p.read(overGoMutant);
               try{await assert.rejects(()=>inspectReadout(p,w,h,insets,expected),{message:/raceReadout\+tcGo/},'GO-overlap mutant must fail the SAME painted-layout assertions');}
@@ -136,7 +139,7 @@ export async function raceLayoutCheck({open,safeArea,sizes,outDir}) {
             }
             // Keep the full Settings status regression too; hidden text is never the driving proof.
             const text=await p.read(`document.getElementById('racePanel').textContent`);
-            assert.match(text,state==='countdown'?/Race starts in 5[\s\S]*Start in 5/:state==='running'?/Race · 12\.4 s[\s\S]*GO · checkpoint 2\/3 · 12\.4 s/:/Race finished · results[\s\S]*Finished · 2\.00 s/);
+            assert.match(text,state==='countdown'?/Race starts in 5[\s\S]*Stay inside the start ring until GO\./:state==='running'?/Race · 12\.4 s[\s\S]*GO · checkpoint 2\/3 · 12\.4 s/:/Race finished · results[\s\S]*Finished · 2\.00 s/);
           }
           await p.read(`document.getElementById('gear').click()`);
           for(const selector of ['summary','select','button:first-of-type','button:last-of-type']) {

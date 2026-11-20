@@ -25,6 +25,7 @@ import { Fleet } from './fleet';
 import { fleetEnabled, fleetRig } from './fleet-models';
 import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
+import { ABOUT_URL } from './credits';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals } from './animals';
@@ -875,6 +876,7 @@ const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, prop
   resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; devHooks.reset();
 }, AREA.route, firedMode, DAILY?.day ?? 0) : new FreeDrive(roads, manifest.village);
+if (shift instanceof Shift) shift.endsAtSix = !DAILY;
 const roadScene = AREA.roadScene && shift instanceof Shift ? new RoadScene(roads, terrain, shift, params) : null;
 resets[resetSlot.roadScene] = () => roadScene?.reset();
 if (roadScene) { scene.add(roadScene.group, roadScene.painter.group); vehicle.placementGuard = pose => roadScene.allowPlacement(pose, vehicleSpec); }
@@ -1435,6 +1437,7 @@ const pauseScreen = document.createElement('div');
 pauseScreen.id = 'pauseScreen';
 pauseScreen.hidden = true;
 pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>A room keeps going when you pause.</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button></section>';
+if (SITE.brand === 'just') pauseScreen.querySelector('section')!.insertAdjacentHTML('beforeend', `<a id="pauseHome" href="${new URL(ABOUT_URL.just).origin}/">All places (front page)</a>`);
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
@@ -1492,7 +1495,7 @@ addEventListener('keydown', ev => {
     }
   } else if (ev.code === 'Tab' && !pauseScreen.hidden) {
     ev.preventDefault();
-    const list = [...pauseScreen.querySelectorAll<HTMLElement>('button:not([disabled]):not([hidden]), summary')];
+    const list = [...pauseScreen.querySelectorAll<HTMLElement>('button:not([disabled]):not([hidden]), a[href], summary')];
     const at = list.indexOf(document.activeElement as HTMLElement);
     list[(at + (ev.shiftKey ? list.length - 1 : 1) + list.length) % list.length]?.focus();
   }

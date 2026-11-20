@@ -277,7 +277,7 @@ export class Ghosts {
       const ctx = this.ctx, top = at * ROW;
       ctx.clearRect(0, top, WIDTH, ROW);
       ctx.fillStyle = '#16262eef'; ctx.beginPath(); ctx.roundRect(4, top + 4, WIDTH - 8, ROW - 8, 14); ctx.fill();
-      ctx.strokeStyle = '#' + this.palette[((peer.hue % 8) + 8) % 8 | 0].getHexString(); ctx.lineWidth = 5; ctx.stroke();
+      ctx.strokeStyle = '#' + this.palette[((peer.hue % 8) + 8) % 8 | 0].getHexString() + '99'; ctx.lineWidth = 2; ctx.stroke();
       ctx.fillStyle = '#f5f3e6'; ctx.font = '600 32px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(name, WIDTH / 2, top + ROW / 2, WIDTH - 36);
       this.atlas.needsUpdate = true;

@@ -5,14 +5,14 @@ const CSS = `
   display:flex;flex-direction:column;gap:8px;scrollbar-gutter:stable}
 #mpCards>*{flex:none;width:100%;box-sizing:border-box;margin:0}
 #mpCards:empty{display:none}
-#mpRoom{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+#mpRoom{border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
 #mpRoom>h3{margin:0;font:700 13px system-ui;color:var(--ink-dim,#b9c5cb)}
 #mpRoom>*{flex:none;width:100%;box-sizing:border-box;margin:0}
 #mpRoom>.roomCaption{margin:0 0 4px;color:var(--ink-dim);font:13px/1.4 system-ui}
 :is(#mpCards,#mpRoom)>details{background:var(--panel-solid);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font:14px/1.4 system-ui}
 :is(#mpCards,#mpRoom) :is(button,select){box-sizing:border-box;font:inherit;max-width:100%;min-height:44px;margin:4px 0;color:inherit;background:transparent;border:1px solid #6b7780;border-radius:6px;padding:6px 10px}
 :is(#mpCards,#mpRoom) button{cursor:pointer}
-:is(#mpCards,#mpRoom) :is(button,select):disabled{opacity:.5;border-style:dashed;cursor:default}
+:is(#mpCards,#mpRoom) :is(button,select):disabled{opacity:.45;cursor:not-allowed}
 :is(#mpCards,#mpRoom) select{appearance:none;width:100%;padding-right:28px;background:var(--panel-solid) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='12'%3E%3Cpath d='m3 4 5 5 5-5' fill='none' stroke='%23b9c3cc'/%3E%3C/svg%3E") no-repeat right 8px center}
 :is(#mpCards,#mpRoom) :is(button,select):focus-visible{outline:3px solid #fff;outline-offset:2px}
 #mpSocial h4{font:700 13px system-ui;margin:12px 0 6px;color:var(--ink-dim)}
@@ -21,11 +21,12 @@ const CSS = `
 #mpRoster i{width:8px;height:8px;flex:none;border-radius:50%}
 #mpChatLog{font-size:13px;color:var(--ink-dim)}
 #mpChatButton{width:100%;text-align:left}
-#mpChatButton::after{content:'▸';float:right;transition:transform .15s}
+#mpChatButton::after{content:'';float:right;width:12px;height:12px;margin-top:.25em;background:currentColor;clip-path:polygon(25% 8%,85% 50%,25% 92%);transition:transform .15s}
 #mpChatButton[aria-expanded="true"]::after{transform:rotate(90deg)}
-.roomCountdown{position:fixed;left:50%;top:calc(72px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:7;pointer-events:none;color:#ffca64;text-shadow:0 2px 6px #000;font:800 56px/1 var(--mono);font-variant-numeric:tabular-nums}
+.roomCountdown{position:fixed;left:50%;top:calc(72px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:7;pointer-events:none;color:#ffca64;text-shadow:2px 0 #0b1620,-2px 0 #0b1620,0 2px #0b1620,0 -2px #0b1620;font:800 96px/1 var(--mono);font-variant-numeric:tabular-nums}
 .roomCountdown[hidden]{display:none}
-body.tcOn .roomCountdown{font-size:44px}
+body.tcOn .roomCountdown{font-size:72px}
+.roomCountdownSay{position:fixed;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 :is(#mpCards,#mpRoom)>details[hidden]{display:none}
 :is(#mpCards,#mpRoom) summary{cursor:pointer}
 #mpRoom>details{border:0;border-radius:0;border-top:1px solid var(--line);background:none;padding:0}
@@ -108,8 +109,11 @@ export function fitRoomCards(): void {
 /** One visual count and three spoken cues for either room start. */
 export class RoomCountdown {
   private readonly node: HTMLElement | null;
+  private readonly spoken: HTMLElement | null;
   constructor(id: string, bare: boolean) {
     this.node = bare ? null : Object.assign(document.createElement('div'), { id, className: 'roomCountdown', hidden: true });
+    this.spoken = bare ? null : Object.assign(document.createElement('div'), { className: 'roomCountdownSay' });
+    if (this.spoken) { this.spoken.setAttribute('role', 'status'); document.body.append(this.spoken); }
     if (this.node) { this.node.setAttribute('aria-hidden', 'true'); document.body.append(this.node); }
   }
   update(untilStart: number | null): string {
@@ -126,7 +130,10 @@ export class RoomCountdown {
         }
       }
     }
-    return untilStart === null ? '' : untilStart > 3000 ? '5' : untilStart > 0 ? '3' : untilStart > -1000 ? 'GO' : '';
+    const cue = untilStart === null ? '' : untilStart > 3000 ? '5' : untilStart > 0 ? '3' : untilStart > -1000 ? 'GO' : '';
+    const say = cue && cue !== 'GO' ? `Start in ${cue}` : cue;
+    if (this.spoken && this.spoken.textContent !== say) this.spoken.textContent = say;
+    return cue;
   }
-  dispose(): void { this.node?.remove(); }
+  dispose(): void { this.node?.remove(); this.spoken?.remove(); }
 }

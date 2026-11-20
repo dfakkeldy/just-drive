@@ -488,7 +488,7 @@ if(process.argv.includes('--mutations'))for(const [name,from,to] of [
   ['accuracy ignored','accuracy > 2000','accuracy > 20000'],
   ['point retained','store?.removeItem(START_HERE_KEY);','/* deletion removed */'],
   ['late answer moves car',"if (token !== generation) return;\n      if ('message' in result)","if ('message' in result)"],
-  ['era link splits button and hint', 'if (eraDoor) hint.after(eraDoor);', 'if (eraDoor) button.after(eraDoor);'],
+  ['era link splits button and hint', 'if (eraDoor) { hint.after(eraDoor);', 'if (eraDoor) { button.after(eraDoor);'],
   ['mail mode asks',"options.mode !== 'explore'","false"],
 ]){
   assert.equal(source.split(from).length,2,'unique mutation anchor: '+name);

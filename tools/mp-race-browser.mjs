@@ -72,11 +72,15 @@ try{
   await a.until('mmm.mp.current.race.group.children.every(p=>mmm.mp.current.host.ground(p.position.x,p.position.z)!==null)');
   receipt.markers=await a.read('mmm.mp.current.race.group.children.map(p=>({x:p.position.x,z:p.position.z,y:p.position.y,ground:mmm.mp.current.host.ground(p.position.x,p.position.z),visible:p.visible}))');
   assert.ok(receipt.markers.every((p,i)=>p.x===route.gates[i].x&&p.z===route.gates[i].z&&Math.abs(p.y-p.ground-.5)<.01&&p.visible),'start and checkpoint rings stand on the loaded ground');
+  await a.read(`(()=>{window.countdownCues=[];window.countdownObserver=new MutationObserver(()=>{for(const e of document.querySelectorAll('body > .roomCountdownSay'))if(e.textContent&&countdownCues.at(-1)!==e.textContent)countdownCues.push(e.textContent);});countdownObserver.observe(document.body,{subtree:true,childList:true,characterData:true});})()`);
   await a.read('document.querySelector("#racePanel button").click()');await b.until('mmm.mp.current.net.race.startAt>0');
   const start=await a.read('mmm.mp.current.net.race.startAt');assert.equal(await b.read('mmm.mp.current.net.race.startAt'),start);
   assert.equal(await a.read('mmm.mp.current.net.race.racers.length'),2);
-  await a.until('/Start in [1-5]/.test(document.querySelector("#racePanel p").textContent)');await a.shot('race-countdown');
+  await a.until('document.querySelector("#racePanel p").textContent.startsWith("Stay inside the start ring until GO.") && [...document.querySelectorAll("body > .roomCountdownSay")].some(e=>e.textContent==="Start in 5")');await a.shot('race-countdown');
   await sleep(Math.max(0,start-Date.now()+300));
+  await a.until('countdownCues.includes("GO")');
+  assert.deepEqual(await a.read('countdownCues'),['Start in 5','Start in 3','GO'],'body live region speaks only 5, 3 and GO');
+  await a.read('countdownObserver.disconnect()');
   for(let i=1;i<route.gates.length;i++){
     await drive(a,route.gates[i-1],route.gates[i]);await drive(b,route.gates[i-1],route.gates[i]);
     for(const p of [a,b])await p.until(`mmm.mp.current.net.race.racers.every(r=>r.next>=${i+1})`);

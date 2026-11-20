@@ -96,7 +96,14 @@ async function flightMap(p, phone) {
   check(await p.until('mmm.drone.active'), 'F launches the drone');
   await sleep(1600);
   await flightMap(p, false);
-  check(await p.read(`!document.getElementById('droneHints').hidden&&document.querySelectorAll('#droneHints kbd').length===7&&document.querySelector('#droneHints').textContent.includes('Mouse wheel')`),'grouped desktop keycaps appear at launch');
+  check(await p.read(`!document.getElementById('droneHints').hidden&&document.querySelectorAll('#droneHints kbd').length===12&&!([...document.querySelectorAll('#droneHints kbd')].some(e=>e.textContent==='Mouse wheel'))&&document.querySelector('#droneHints').textContent.includes('Mouse wheel')`),'grouped desktop keycaps appear at launch');
+  check(await p.read(`(()=>{const dl=document.querySelector('#droneHints dl'),terms=[...dl.querySelectorAll('dt')];return terms.every((dt,i)=>{const a=dt.getBoundingClientRect(),b=dt.nextElementSibling.getBoundingClientRect();return Math.abs(a.top-b.top)<4&&b.left-a.right>=0&&b.left-a.right<=12&&(!i||a.top>terms[i-1].nextElementSibling.getBoundingClientRect().top);});})()`),'drone keys and labels share one close pair per row');
+  for(const [width,height] of [[1280,720],[844,390]]){
+    await p.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await sleep(250);
+    check(await p.read(`(()=>{const r=document.getElementById('droneHints').getBoundingClientRect();return r.width<=270&&r.left>=0&&r.right<=innerWidth;})()`),`keyboard drone help fits the 270px reserve at ${width}x${height}`);
+  }
+  await p.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});await sleep(250);
+
   check(await p.read(`(()=>{const e=document.getElementById('shiftHud'),h=document.getElementById('droneHints'),a=e.getBoundingClientRect(),b=h.getBoundingClientRect();return mmm.gameMode==='mail'&&!e.hidden&&!h.hidden&&a.width>0&&a.height>0&&b.width>0&&b.height>0&&(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom)})()`),'mail day card and drone hints are visible and clear of each other');
   await p.read(`document.getElementById('pauseButton').click();document.querySelector('#pauseKeys summary').click()`);
   check(await p.read(`document.querySelector('#pauseKeys dl').textContent.includes('Mouse wheelTop speed')&&document.querySelector('#pauseKeys dl').textContent.includes('RFly back')`),'pause Keys lists drone controls');
@@ -229,7 +236,7 @@ for (const [w, h, name, mode] of [[390, 844, 'portrait', 'mail'], [844, 390, 'la
   check(hudClear.length === 0, `${name}: the readout clears Pause and the gear ${JSON.stringify(hudClear)}`);
   await p.shot(`11-phone-${name}-flying`);
   const ret = await p.centre('droneReturn');
-  const sticksClear = await p.read(`(()=>{const ids=['droneLeft','droneRight','droneReturn','gear','pauseButton','miniMap','placesButton','bigMapButton'].filter(id=>!['placesButton','bigMapButton'].includes(id)||mmm.gameMode==='explore');const r=ids.map(i=>document.getElementById(i).getBoundingClientRect());const out=[];for(let i=0;i<r.length;i++)for(let j=i+1;j<r.length;j++)if(r[i].left<r[j].right&&r[i].right>r[j].left&&r[i].top<r[j].bottom&&r[i].bottom>r[j].top)out.push(ids[i]+'/'+ids[j]);for(const x of r)if(x.left<0||x.top<0||x.right>innerWidth||x.bottom>innerHeight)out.push('off screen');return out})()`);
+  const sticksClear = await p.read(`(()=>{const ids=['droneLeft','droneRight','droneReturn','gear','pauseButton','miniMap','placesButton','bigMapButton'].filter(id=>!['placesButton','bigMapButton'].includes(id)||mmm.gameMode==='explore');const r=ids.map(i=>document.getElementById(i).getBoundingClientRect());const out=[];for(let i=0;i<r.length;i++)for(let j=i+1;j<r.length;j++)if(r[i].left<r[j].right&&r[i].right>r[j].left&&r[i].top<r[j].bottom&&r[i].bottom>r[j].top)out.push(ids[i]+'/'+ids[j]);const chips=[document.querySelector('#droneLeft span'),document.querySelector('#droneRight span')].map(e=>e.getBoundingClientRect());for(const chip of chips)for(const id of ['droneReturn','miniMap','gear','pauseButton']){const b=document.getElementById(id).getBoundingClientRect();if(chip.left<b.right&&chip.right>b.left&&chip.top<b.bottom&&chip.bottom>b.top)out.push('label/'+id);}for(const x of [...r,...chips])if(x.left<0||x.top<0||x.right>innerWidth||x.bottom>innerHeight)out.push('off screen');return out})()`);
   check(sticksClear.length === 0, `${name}: sticks, RETURN, gear, Pause, PLACES and MAP do not overlap and stay on screen ${JSON.stringify(sticksClear)}`);
   await p.touchAt('touchStart', [ret]); await p.touchAt('touchEnd', []);
   check(await p.until('mmm.drone.returning'), `${name}: RETURN flies it home`);

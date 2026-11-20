@@ -27,7 +27,7 @@ const CSS = `
 #tcSteer.held #tcKnob{background:var(--maple,#d0632e);color:#fff}
 .tcPedal{display:grid;place-items:center;border-radius:14px;border:2px solid rgba(238,242,246,.3);background:var(--panel,rgba(8,14,20,.72));text-align:center;line-height:1.25}
 .tcPedal.held{background:var(--maple,#d0632e);border-color:#fff}
-.tcSmall{border-radius:10px;border:1px solid rgba(238,242,246,.3);background:var(--panel,rgba(8,14,20,.72));font-size:10.5px;padding:0;color:inherit}
+.tcSmall{border-radius:10px;border:1px solid rgba(238,242,246,.3);background:var(--panel,rgba(8,14,20,.72));padding:0;color:inherit}
 .tcSmall:active{background:var(--maple,#d0632e)}
 `;
 

@@ -21,6 +21,7 @@ export class RaceView {
   private readonly geometry = new THREE.CylinderGeometry(GATE_RADIUS,GATE_RADIUS,.18,24,1,true);
   private readonly nextMat = new THREE.MeshBasicMaterial({color:0xffca64,side:THREE.DoubleSide,depthWrite:false});
   private readonly otherMat = new THREE.MeshBasicMaterial({color:0x53bfd5,side:THREE.DoubleSide,depthWrite:false});
+  private openedFor=0;
   private serial = -1; private next = -1; private text = '';
   constructor(private net: Net, private host: MultiplayerHost) {
     host.scene.add(this.group);
@@ -39,7 +40,8 @@ export class RaceView {
     this.start.textContent='Start · 5 seconds';this.cancel.textContent='Clear race';
 
     if (settings) this.select.style.minHeight='56px';
-    this.status.setAttribute('role','status');
+    this.status.id='raceStatus';this.status.setAttribute('role','status');
+    this.start.setAttribute('aria-describedby','raceStatus');
     this.panel.append(summary,label,this.start,this.cancel,this.status,this.results);
     this.select.onchange=()=>{ if(this.select.value==='')return; const route=this.choices[Number(this.select.value)];if(route)this.net.raceCommand('select',route); };
     this.start.onclick=()=>this.net.raceCommand('start');this.cancel.onclick=()=>this.net.raceCommand('cancel');
@@ -53,7 +55,8 @@ export class RaceView {
     if(this.readout)this.readout.hidden=!s?.route || !me || this.net.status!=='on';
     if(!s || !me || this.net.status!=='on'){this.countdown.update(null);this.group.visible=false;return;}
     const now=this.net.serverNow(), racer=s.racers.find(r=>r.id===me.id), host=s.host===me.id;
-    const cue=this.countdown.update(s.route && s.startAt ? s.startAt-now : null);
+    this.countdown.update(s.route && s.startAt ? s.startAt-now : null);
+    if(this.panel && this.host.touch && s.startAt>now && this.openedFor!==s.startAt){this.openedFor=s.startAt;this.panel.open=true;}
     const active=!!s.startAt && now-s.startAt<RACE_LIMIT && s.racers.some(r=>r.time===null&&!r.out);
     this.group.visible=!!s.route;
     this.select.disabled=!host || active;this.start.disabled=!host || !s.route || !!s.startAt || this.net.game?.phase===1 || this.net.game?.phase===2 || Math.hypot(this.host.vehicle.x-s.route.gates[0].x,this.host.vehicle.z-s.route.gates[0].z)>GATE_RADIUS || Math.abs(this.host.vehicle.speed)>=1;
@@ -72,24 +75,25 @@ export class RaceView {
     }
     // Terrain can load after the race message.
     for(const marker of this.group.children){const y=this.host.ground(marker.position.x,marker.position.z);if(y!==null)marker.position.y=y+.5;}
-    let say=!s.route ? (host?'':'The room host picks the course.') : `${this.roadName(s.route)} · drive to the gold start ring; stop inside it.`;
+    let say=!s.route ? (host?'Pick a course to start.':'The room host picks the course.') : `${this.roadName(s.route)} · drive to the gold start ring; stop inside it.`;
     if(s.startAt){
       const left=Math.ceil((s.startAt-now)/1000);
-      say=left>0?`Start in ${cue} · stay inside the start ring.`:racer?.out?'Out · left start early, reset or disconnected.':racer?.time!==null&&racer?.time!==undefined?`Finished · ${(racer.time/1000).toFixed(2)} s`:now-s.startAt>=RACE_LIMIT?'Race timed out.':racer?`GO · checkpoint ${Math.min(next+1,s.route?.gates.length??0)}/${s.route?.gates.length} · ${((now-s.startAt)/1000).toFixed(1)} s`:'Spectating · join the next race.';
+      say=left>0?'Stay inside the start ring until GO.':racer?.out?'Out · left start early, reset or disconnected.':racer?.time!==null&&racer?.time!==undefined?`Finished · ${(racer.time/1000).toFixed(2)} s`:now-s.startAt>=RACE_LIMIT?'Race timed out.':racer?`GO · checkpoint ${Math.min(next+1,s.route?.gates.length??0)}/${s.route?.gates.length} · ${((now-s.startAt)/1000).toFixed(1)} s`:'Spectating · join the next race.';
     }
     const target=s.route?.gates[next];
     if(target && !racer?.out && racer?.time==null){const dx=target.x-this.host.vehicle.x,dz=target.z-this.host.vehicle.z,distance=Math.hypot(dx,dz);const direction=['north','north-east','east','south-east','south','south-west','west','north-west'][Math.round((Math.atan2(dx,-dz)+Math.PI*2)/(Math.PI/4))%8];if(!s.startAt || s.startAt<=now) say+=distance<5?' You are at the gold ring.':` ${Math.round(distance)} m ${direction} to the gold ring.`;}
     if(this.net.game?.phase===1||this.net.game?.phase===2)say+=' A room game is on: races wait for it.';
     if(!host)say+=' Host controls the race.';
-    const summary=this.panel?.querySelector('summary');if(summary)summary.textContent=s.startAt&&s.startAt>now?`Race starts in ${Math.ceil((s.startAt-now)/1000)}`:racer?.time!==null&&racer?.time!==undefined?'Race finished · results':active&&racer&&!racer.out?`Race · ${((now-s.startAt)/1000).toFixed(1)} s`:'Room race';
+    const summary=this.panel?.querySelector('summary');if(summary)summary.textContent=s.startAt&&s.startAt>now?`Race starts in ${Math.min(5,Math.ceil((s.startAt-now)/1000))}`:racer?.time!==null&&racer?.time!==undefined?'Race finished · results':active&&racer&&!racer.out?`Race · ${((now-s.startAt)/1000).toFixed(1)} s`:'Room race';
     if(this.readout){
-      const text=s.startAt>now?`Race starts in ${Math.ceil((s.startAt-now)/1000)}`
+      const text=s.startAt>now?`Race starts in ${Math.min(5,Math.ceil((s.startAt-now)/1000))}`
         :racer?.time!==null&&racer?.time!==undefined?`Finished · ${(racer.time/1000).toFixed(2)} s`
         :racer?.out?'Race · out':s.startAt&&now-s.startAt>=RACE_LIMIT?'Race timed out.'
+        :racer && racer.time==null && !racer.out && s.startAt && s.startAt<=now?`Race · ring ${Math.min(next+1,s.route?.gates.length??0)}/${s.route?.gates.length} · ${((now-s.startAt)/1000).toFixed(1)} s`
         :s.startAt?`Race · ${((now-s.startAt)/1000).toFixed(1)} s`:'Room race';
       if(this.readout.textContent!==text)this.readout.textContent=text;
     }
-    if(cue==='GO' && !racer?.out)say='GO';
+    this.status.style.color = host && !s.route ? 'var(--ink-dim)' : '';
     if(say!==this.text){this.status.textContent=this.text=say;}
     const rows=s.racers.map(r=>({r,name:this.host.label?.(this.net.names.get(r.id) ?? `Driver ${r.id}`,r.id) ?? this.net.names.get(r.id) ?? `Driver ${r.id}`})).sort((a,b)=>(a.r.time??Infinity)-(b.r.time??Infinity));
     const text=rows.map(({r,name})=>`${name}: ${r.time!==null?(r.time/1000).toFixed(2)+' s':r.out?'out':now-s.startAt>=RACE_LIMIT?'timed out':s.startAt>now?'on grid':'racing'}`);

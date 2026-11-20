@@ -62,10 +62,26 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
             dress(${JSON.stringify(current)}, ${JSON.stringify(carrier === 'dev' ? 'devPage' : '')}); const after = measure();
             still.remove();
             return { before, after }; })()`);
-          // The sheet, credit and gear have new pins below. All other paint stays pinned.
+          // The sheet, credit, gear and stop hint have new pins below. All other paint stays pinned.
           assert.deepEqual(both.after.gear.paint,['rgb(238, 242, 246)','rgb(12, 20, 28)','ui-monospace, "SF Mono", Menlo, Consolas, monospace','20px','normal','1','normal','6px','auto','block'],'shared gear paint');
-          for(const id of ['settings','credit','gear']){delete both.before[id];delete both.after[id];}
+          for(const id of ['settings','credit','gear','stopHint']){delete both.before[id];delete both.after[id];}
           assert.deepEqual(both.after, both.before, `${carrier} ${size} unchanged desktop boxes and paint`);
+          if(await read(`mmm.gameMode==='mail'`)) assert.deepEqual(await read(`(()=>{
+            const card=document.getElementById('mailCard'),hint=document.getElementById('stopHint'),score=document.getElementById('mailScore');
+            const saved={text:hint.textContent,style:hint.style.cssText,hidden:hint.hidden,drone:document.body.classList.contains('droneOn')};
+            try {
+              document.body.classList.remove('droneOn');hint.hidden=false;hint.style.display='';hint.textContent='Next: roadside box.';
+              const h=hint.getBoundingClientRect(),m=score.getBoundingClientRect(),hs=getComputedStyle(hint),ms=getComputedStyle(score);
+              const result={inside:hint.parentElement===card&&score.parentElement===card&&hint.nextElementSibling===score,
+                stacked:h.height>0&&m.height>0&&Math.abs(h.bottom-m.top)<.1,
+                aligned:Math.abs(h.left-m.left)<.1&&Math.abs(h.width-m.width)<.1,
+                paint:[hs,ms].map(s=>[s.backgroundColor,s.borderLeftWidth,s.borderLeftStyle,s.borderLeftColor]),joinedPadding:ms.paddingTop};
+              hint.textContent='';result.emptyPadding=getComputedStyle(score).paddingTop;result.emptyHidden=getComputedStyle(hint).display==='none';
+              hint.textContent='Next: roadside box.';document.body.classList.add('droneOn');hint.style.display='none';
+              result.flightPadding=getComputedStyle(score).paddingTop;
+              return result;
+            } finally {hint.textContent=saved.text;hint.style.cssText=saved.style;hint.hidden=saved.hidden;document.body.classList.toggle('droneOn',saved.drone);}
+          })()`),{inside:true,stacked:true,aligned:true,paint:Array.from({length:2},()=>['rgba(8, 14, 20, 0.82)','3px','solid','rgb(208, 99, 46)']),joinedPadding:'0px',emptyPadding:'8px',emptyHidden:true,flightPadding:'8px'},'mail hint and tally form one aligned panel; a lone tally keeps top padding');
           assert.deepEqual(await read(`(()=>{const e=document.getElementById('gear'),r=e.getBoundingClientRect(),s=getComputedStyle(e);return {w:r.width,h:r.height,right:innerWidth-r.right,top:r.top,fill:s.backgroundColor,rim:s.borderTopWidth,radius:s.borderRadius,font:s.fontSize,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===e}})()`),{w:44,h:44,right:10,top:10,fill:'rgb(12, 20, 28)',rim:'1px',radius:'6px',font:'20px',hit:true},'gear uses the shared desktop chip rule');
           assert.deepEqual(await read(`(()=>{const e=document.getElementById('credit'),s=getComputedStyle(e),r=e.getBoundingClientRect();return {size:s.fontSize,opacity:s.opacity,background:s.backgroundColor,radius:s.borderRadius,clear:r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight};})()`),{size:'12px',opacity:'1',background:'rgb(12, 20, 28)',radius:'4px',clear:true},'solid readable credit chip');
         }

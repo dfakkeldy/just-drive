@@ -17,7 +17,7 @@ try {
   const text = html => html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   for (const brand of ['mail', 'just']) {
     const html = page(brand), words = text(html);
-    assert.match(html, /<h2 id="credits">Credits and data<\/h2>\s*<details open class="credits" aria-labelledby="credits"><summary>Show credits and data<\/summary>/);
+    assert.match(html, /<h2 id="credits">Credits and data<\/h2>\s*<details open class="credits" aria-labelledby="credits"><summary>Sources and licences<\/summary>/);
     assert.doesNotMatch(html, /<summary>\s*<h[1-6]/);
     const credits = html.match(/<details open class="credits"[^>]*>([\s\S]*?)<\/details>/)[1];
     assert.match(html, /<\/details>\s*<p class="signoff">[^<]+<\/p>/);
@@ -48,6 +48,7 @@ try {
     assert.doesNotMatch(words, /\b\d{1,5} [A-Z][a-z]+(?: [A-Z][a-z]+)* (?:Rd|Road|Lane|Street|St)\b/, brand + ' no civic address');
   }
   const just = page('just'), mail = page('mail');
+  assert.ok(mail.includes('.mail .button:not(.second){background:var(--strong)}'));
   assert.doesNotMatch(just.match(/<title>([^<]+)<\/title>/)[1], /\b(mail|post|route|shift|carrier|delivery)\b/i, 'Just Drive title has no mail words');
   for (const area of AREAS) assert.ok(just.includes(`<a href="/${area.id}">${area.name}</a>`), 'place link ' + area.id);
   assert.ok(!just.includes('href="/fixture"'), 'no development area');
@@ -68,10 +69,20 @@ try {
   // Help: the control rows are the title card's own, in order, and each page links its partner.
   const help = brand => readFileSync(`${out}/help/${brand}/index.html`, 'utf8');
   const esc = t => t.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
-  const rows = (list, touch) => list.map(([k, v]) => `<div class="row"><dt>${touch ? '<b>' : '<kbd>'}${esc(k.replace("W A S D", "WASD"))}${touch ? '</b>' : '</kbd>'}</dt><dd>${esc(v)}</dd></div>`).join('');
+  // Independent expected caps keep the builder's helper under test.
+  const expectedCaps = key => key.split(/( \/ | or | \+ |(?<=[A-Z←→↑↓])\/(?=[A-Z←→↑↓]))/).map(part =>
+    /^( \/ | or | \+ |\/)$/.test(part) ? `<span class="keyJoin">${part}</span>` :
+    /^(?:[A-Za-z←→↑↓⇧⚙]|WASD|Esc|Enter|Space|Shift|arrows)$/.test(part) ? `<kbd>${esc(part)}</kbd>` : esc(part)).join('');
+  const rows = (list, plain) => list.map(([k, v]) => `<div class="row"><dt>${plain ? `<b>${esc(k.replace("W A S D", "WASD"))}</b>` : expectedCaps(k.replace("W A S D", "WASD"))}</dt><dd>${esc(v)}</dd></div>`).join('');
   for (const [brand, lists] of [['mail', [KEYS, TOUCH, padKeys('car', true)]], ['just', [DRIVING_KEYS, DRIVING_TOUCH, bikeKeys(false), bikeKeys(true), padKeys('car', false), padKeys('bike', false)]]]) {
     const html = help(brand), words = text(html);
-    for (const [index, list] of lists.entries()) assert.ok(html.includes(`<dl>${rows(list, index === 1 || brand === 'just' && index === 3)}</dl>`), brand + ' help control table matches the title card');
+    assert.ok(html.includes('<kbd>Esc</kbd><span class="keyJoin"> / </span><kbd>P</kbd>'));
+    if(brand==='just')assert.ok(html.includes('<kbd>Shift</kbd><span class="keyJoin"> + </span>throttle'));
+    for(const [,key] of html.matchAll(/<kbd>(.*?)<\/kbd>/g))assert.doesNotMatch(key,/ \/ | or | \+ |Left stick|Menus|In the air/);
+
+    for (const [index, list] of lists.entries()) assert.ok(html.includes(`<dl>${rows(list, index === 1 || brand === 'mail' && index === 2 || brand === 'just' && index >= 3)}</dl>`), brand + ' help control table matches the title card');
+    assert.equal((html.match(/class="totop"/g)??[]).length,6,'each Help section has a return link');
+    assert.match(html,/<h2 id="others">Drive with others<\/h2>\s*<ol role="list" class="steps">/);
     assert.ok(html.includes(`<link rel="canonical" href="${HELP_URL[brand]}">`), brand + ' help canonical');
     assert.ok(html.includes('<script src="/about/page-links.js" defer></script>'), brand + ' Help keyboard link support');
     assert.ok(html.includes('<a href="/about">About</a>') && page(brand).includes('<a href="/help">Help</a>'), brand + ' About and Help link each other');

@@ -14,6 +14,12 @@ const out = mkdtempSync(join(tmpdir(), 'mmm-just-home-'));
 try {
   execFileSync('node', ['tools/just-home.mjs', out], { stdio: 'pipe' });
   const html = readFileSync(`${out}/just/home/index.html`, 'utf8');
+  assert.match(html,/\.legend\{position:absolute;[^}]*pointer-events:none/);
+  assert.doesNotMatch(html.match(/\.legend\{[^}]*\}/)[0],/background/);
+  assert.match(html,/<figure class="map">[\s\S]*?<figcaption class="legend">[\s\S]*?<\/figcaption><\/figure>/);
+  assert.ok(html.includes('viewBox="180 80 520 680"'));
+  assert.match(html,/@media\(max-width:599px\)\{footer nav\{display:grid;grid-template-columns:1fr 1fr/);
+  assert.match(html,/@media\(min-width:600px\)\{\.roadPicture img\{object-position:50% 52%\}/);
   const areas = AREAS.filter(a => a.id !== 'fixture');
   assert.equal([...html.matchAll(/<title>/g)].length, 1, 'one title');
   assert.match(html, /<title>Just Drive: a free 3D driving game on the real roads of Cape Breton<\/title>/);

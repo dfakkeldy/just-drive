@@ -23,6 +23,7 @@ const mutations=[
  ['beacon','explore','explore beacon is off',[one('main.ts','!mailMode ? 0 : Math.abs','!mailMode ? 2.2 : Math.abs')]],
  ['paper','explore','explore has no paper meshes',[one('main.ts','const mail = mailMode ?','const mail = true ?')]],
  ['arrival enter','explore','arrival card appears at village',[one('places.ts','ARRIVAL_RADIUS = 85','ARRIVAL_RADIUS = 0')]],
+ ['open current place','explore','open Places keeps the current village',[one('places-ui.ts','    if (this.busy) return;','')]],
  ['arrival leave','explore','arrival card leaves with player',[one('places.ts','ARRIVAL_RADIUS = 85','ARRIVAL_RADIUS = 100000')]],
  ['map marks','explore','all place marks reach minimap',[one('main.ts','if (placesUI) mapMarks.push(...placesUI.marks);','if (placesUI) mapMarks.push();')]],
  ['map labels','explore','minimap draws a few place labels',[one('main.ts','new MiniMap(roads, !mailMode,','new MiniMap(roads, false,')]],

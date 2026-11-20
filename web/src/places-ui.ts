@@ -19,11 +19,12 @@ body:has(#settings.open) #placeArrival,body:has(#pauseScreen:not([hidden])) #pla
 #placesPanel{position:fixed;inset:0;z-index:21;display:grid;place-items:center;padding:16px;box-sizing:border-box;background:#071016ad;color:var(--ink);font:15px/1.5 var(--text);touch-action:pan-y}
 #placesCard{box-sizing:border-box;width:min(100%,560px);max-height:100%;overflow:hidden;display:flex;flex-direction:column;border:1px solid #89afa2;border-radius:10px;background:var(--panel-solid);padding:22px}
 #placesHeader{flex:none}#placesBody{overflow:auto;min-height:0;overscroll-behavior:contain}
-#placesCard h2{margin:0;font-size:28px}#placesCard p{color:var(--ink-dim);margin:6px 0 16px}#placesList{display:grid;gap:10px;list-style:none;margin:0;padding:0}#placesList button{width:100%}
+#placesCard h2{margin:0;font:600 28px/1.15 "Iowan Old Style",Palatino,Georgia,serif}#placesCard p{color:var(--ink-dim);margin:6px 0 16px}#placesList{display:grid;gap:10px;list-style:none;margin:0;padding:0}#placesList button{width:100%}
 #placesCard button{cursor:pointer;font:inherit;color:inherit;min-height:56px;border:1px solid #71897e;border-radius:6px;background:#20362e;padding:12px;text-align:left}
 #placesList button strong,#placesList button span{display:block}#placesList button span{color:var(--ink-dim);font-size:13px;margin-top:4px}
+#placesCard #placesMap{background:transparent;border-color:var(--ink-dim)}
 #placesMap{width:100%;margin:0 0 12px;text-align:center!important}
-#placesClose{flex:none;margin-top:14px;width:100%;text-align:center!important;background:#20362e!important}
+#placesCard #placesClose{flex:none;margin-top:14px;width:100%;text-align:center!important;background:transparent!important;border-color:var(--ink-dim)}
 #placesCard button:focus-visible,#placesButton:focus-visible{outline:3px solid #fff;outline-offset:2px}
 #placesList button:focus-visible{outline-offset:-3px}
 #placesPanel[hidden],#placeArrival[hidden],#placesButton[hidden]{display:none}
@@ -154,6 +155,8 @@ export class PlacesUI {
       this.head.textContent = place.name; this.note.textContent = place.note;
       for (const hike of this.hikes.filter(h => h.trailhead === place.id)) this.note.append(document.createElement('br'), document.createTextNode(hikeFacts(hike)));
     }
+    // the list keeps the marks from the last arrival while it shows
+    if (this.busy) return;
     if (place !== this.previous) for (const button of this.panel.querySelectorAll<HTMLButtonElement>('[data-place]')) {
       const here = button.dataset.place === place?.id;
       if (here) button.setAttribute('aria-current', 'location'); else button.removeAttribute('aria-current');

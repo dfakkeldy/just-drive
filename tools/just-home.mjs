@@ -24,7 +24,7 @@ export const PLACES = {
 };
 // North to south, as the land runs.
 const ORDER = ['mabou', 'porthood', 'judique', 'westbay', 'cansocauseway', 'pointtupper'];
-const VIEW = [180, 80, 520, 640];
+const VIEW = [180, 80, 520, 680];
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 
 /** The public areas in page order. Every area needs words and a pin, and every pin an area. */
@@ -87,7 +87,7 @@ h1{margin:.1em 0 .25em;font-size:clamp(44px,9vw,72px);line-height:1}
 .pin.mail:hover .dot,.pin.mail:focus-visible .dot{fill:var(--maple)}
 .pin:focus-visible{outline:none}.pin:focus-visible .halo{stroke:#fff;stroke-width:3;opacity:1;fill:transparent;vector-effect:non-scaling-stroke}
 .pin:is(:hover,:focus-visible) text{fill:var(--accent);text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:4px}
-.legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin:0;padding:8px 14px;color:var(--dim);font-size:13px;background:var(--sea)}
+.legend{position:absolute;left:12px;bottom:12px;display:flex;gap:16px;margin:0;padding:0;white-space:nowrap;pointer-events:none;color:var(--dim);font-size:13px}
 .legend i{display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:50%;border:3px solid var(--accent);vertical-align:-1px}
 .legend i.mail{border-color:var(--maple);background:var(--maple)}
 .places{display:grid;gap:12px;margin:0;padding:0;list-style:none}
@@ -110,10 +110,11 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);color:v
 footer nav{display:flex;flex-wrap:wrap;gap:6px 20px;margin-bottom:12px}
 footer nav a{display:inline-flex;align-items:center;min-height:44px}
 footer p{margin:0 0 6px}
-@media(max-width:599px){footer nav{flex-direction:column;gap:16px;margin-bottom:32px}.button.second{width:100%;justify-content:center}}
+@media(max-width:599px){footer nav{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-bottom:32px}.button.second{width:100%;justify-content:center}}
+@media(min-width:600px){.roadPicture img{object-position:50% 52%}}
 @media (min-width:900px){.layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}.map{position:sticky;top:20px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-@media print{body{background:#fff;color:#000}.map{position:static}.button{border:1px solid #000}}
+@media print{.legend{position:static}body{background:#fff;color:#000}.map{position:static}.button{border:1px solid #000}}
 `;
 
 export function justHome() {

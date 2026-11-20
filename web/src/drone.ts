@@ -1,3 +1,4 @@
+import { keyCaps } from './controls';
 // The camera drone (F, or DRONE on a phone): it lifts off the vehicle's roof, the vehicle stays where it was, and the
 // camera follows a little behind it. F again sets it back on the roof at once; R (or RETURN) flies it home first.
 // The flying is in drone-rules.ts; this file is the model, the camera and the phone sticks.
@@ -236,8 +237,8 @@ function createDroneHelp(): HTMLElement {
   help.append(Object.assign(document.createElement('h3'), { textContent: 'Drone keys' }), rows);
   help.setAttribute('aria-label', 'Drone keys');
   for (const [key, action] of DRONE_HELP) {
-    const term = document.createElement('dt'), text = document.createElement('dd'), cap = document.createElement('kbd');
-    cap.textContent = key; if (key === 'Mouse wheel') term.textContent = key; else term.append(cap);
+    const term = document.createElement('dt'), text = document.createElement('dd');
+    term.innerHTML = keyCaps(key);
     text.textContent = action; rows.append(term, text);
   }
   document.body.append(help); return help;
@@ -246,8 +247,10 @@ const CSS = `
 #droneHints{position:fixed;right:10px;top:64px;z-index:3;margin:0;padding:10px 12px;border-radius:8px;
   max-width:calc(100vw - 32px);background:var(--panel-solid,#0c141c);color:var(--ink,#eef2f6);font:13px/1.4 system-ui;transition:opacity .4s}
 #droneHints h3{font:700 13px system-ui;margin:0 0 8px;color:var(--ink-dim)}
-#droneHints dl{display:grid;grid-template-columns:auto auto auto auto;align-items:baseline;gap:7px 10px;margin:0}
-#droneHints dd{margin:0}#droneHints kbd{display:inline-block;background:#20303b;border:1px solid #71818e;border-bottom-color:#0b1620;border-radius:4px;padding:2px 6px;font:700 12px var(--mono,monospace)}
+#droneHints dl{display:grid;grid-template-columns:auto auto;align-items:baseline;gap:5px 8px;margin:0}
+#droneHints .keyJoin{color:var(--ink-dim)}
+#droneHints dt{justify-self:end}
+#droneHints dd{margin:0}#droneHints kbd{display:inline-block;background:#20303b;border:1px solid #71818e;border-bottom:2px solid #46566a;border-radius:4px;padding:2px 6px;font:700 12px var(--mono,monospace)}
 #droneHints[hidden],body.droneSticks #droneHints{display:none}
 body.droneOn #hud{max-width:calc(100vw - 270px);white-space:pre-wrap}
 body.droneOn.droneSticks #hud{max-width:calc(100vw - 170px);box-sizing:border-box;white-space:pre;font-size:10px;line-height:14px}
@@ -255,15 +258,15 @@ body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-righ
 
 .droneStick{position:fixed;z-index:6;bottom:calc(14px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));
   width:var(--stick);height:var(--stick);--stick:min(132px,34vw,42vh);border-radius:50%;box-sizing:border-box;
-  background:var(--panel,rgba(8,14,20,.6));border:2px solid rgba(238,242,246,.3);touch-action:none;user-select:none;-webkit-user-select:none}
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23eef2f6' fill-opacity='.4' d='M50 10l-4 6h8zM50 90l-4-6h8zM10 50l6-4v8zM90 50l-6-4v8z'/%3E%3C/svg%3E") center/100% 100% no-repeat,var(--panel,rgba(8,14,20,.6));border:2px solid rgba(238,242,246,.3);touch-action:none;user-select:none;-webkit-user-select:none}
 .droneStick[hidden],#droneReturn[hidden]{display:none}
 #droneLeft{left:calc(14px + env(safe-area-inset-left,0px))}
 #droneRight{right:calc(14px + env(safe-area-inset-right,0px))}
 .droneStick b{position:absolute;left:50%;top:50%;width:46%;height:46%;margin:-23% 0 0 -23%;border-radius:50%;
   background:rgba(238,242,246,.9);box-shadow:0 2px 8px rgba(0,0,0,.45);pointer-events:none}
 .droneStick.held b{background:var(--maple,#d0632e)}
-.droneStick span{position:absolute;inset:auto 0 calc(100% + 3px);text-align:center;font:700 10px ui-monospace,Menlo,Consolas,monospace;
-  letter-spacing:.08em;color:var(--ink,#eef2f6);text-shadow:0 1px 2px #000;pointer-events:none}
+.droneStick span{position:absolute;bottom:calc(100% + 3px);left:0;right:0;width:max-content;margin:0 auto;white-space:nowrap;padding:1px 6px;border:1px solid rgba(238,242,246,.4);border-radius:6px;background:var(--panel-solid,#0b1219);text-align:center;font:700 10px ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.08em;color:var(--ink,#eef2f6);pointer-events:none}
 #droneReturn{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));
   min-width:112px;height:56px;padding:0 8px;border-radius:10px;border:1px solid rgba(238,242,246,.4);background:var(--panel-solid,#0b1219);
   color:var(--ink,#eef2f6);font:700 12px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em}
