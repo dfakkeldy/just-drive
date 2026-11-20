@@ -92,7 +92,7 @@ try {
  await value(observer,`document.getElementById('gear').click();document.getElementById('gear').click()`);await until(observer,`/Done:/.test(document.getElementById('offlineStatus').textContent)&&document.getElementById('offlineStop').hidden`,'observer refreshes completion');ok(true,'second real tab refreshes running to Done on reopening settings');await shot(observer,'migration-observer-done');
  // A complete B must outlive an incomplete online C, even after B's last tab closes.
  const cRoot=out+'/migration-c';if(existsSync(cRoot))rmSync(cRoot,{recursive:true});mkdirSync(cRoot+'/offline',{recursive:true});
- symlinkSync(bRoot+'/offline/icons',cRoot+'/offline/icons');symlinkSync(bRoot+'/audio',cRoot+'/audio');if(existsSync(bRoot+'/areas'))symlinkSync(bRoot+'/areas',cRoot+'/areas');
+ symlinkSync(bRoot+'/offline/icons',cRoot+'/offline/icons');symlinkSync(bRoot+'/audio',cRoot+'/audio');if(existsSync(bRoot+'/areas'))symlinkSync(bRoot+'/areas',cRoot+'/areas');if(existsSync(bRoot+'/chunks'))symlinkSync(bRoot+'/chunks',cRoot+'/chunks');
  linkTree(bRoot+'/terrain',cRoot+'/terrain',new Set([bRoot+'/terrain/manifest.json',bRoot+unseen]));
  write(cRoot+'/app.js',read(bRoot+'/app.js','utf8')+'\nglobalThis.__pwaBuild="C";');write(cRoot+'/index.html',read(bRoot+'/index.html'));write(cRoot+'/_headers',read(bRoot+'/_headers'));execFileSync(process.execPath,['tools/build-pwa.mjs',cRoot]);
  write(rootFile,cRoot);await load(observer);await until(observer,`window.__pwaBuild==='C'`,'new online C');await close(b);await message(observer,'status');
