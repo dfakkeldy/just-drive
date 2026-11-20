@@ -7,6 +7,21 @@ export function inMask(m:CellMask,x:number,z:number):boolean {
   const i=Math.floor((x-m.x0)/m.size),j=Math.floor((z-m.z0)/m.size);
   return i>=0&&j>=0&&i<m.w&&j<m.h&&m.bits[j*m.w+i]===1;
 }
+/** Returns true if any populated cell touches the inclusive world rectangle. */
+export function maskTouches(m: CellMask, x0: number, z0: number, x1: number, z1: number): boolean {
+  const left = Math.max(0, Math.floor((x0 - m.x0) / m.size));
+  const right = Math.min(m.w - 1, Math.floor((x1 - m.x0) / m.size));
+  const top = Math.max(0, Math.floor((z0 - m.z0) / m.size));
+  const bottom = Math.min(m.h - 1, Math.floor((z1 - m.z0) / m.size));
+  if (left > right || top > bottom) return false;
+  for (let row = top; row <= bottom; row++) {
+    for (let col = left; col <= right; col++) {
+      if (m.bits[row * m.w + col] === 1) return true;
+    }
+  }
+  return false;
+}
+
 export interface RoadCutSource {
   /** Outside these cells every query below, and a site's deck contact, returns null. */
   mask?:CellMask;

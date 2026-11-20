@@ -1,4 +1,4 @@
-import {RoadCuts,inMask,type RoadCutSource} from './road-cuts';
+import {RoadCuts,inMask,maskTouches,type RoadCutSource} from './road-cuts';
 import type { Paved } from './paved';
 import type { NightShading } from './night';
 import type {HistoryBridgeApproaches} from './eras/history-approaches';
@@ -677,8 +677,8 @@ export class Terrain {
     const gravelOverlay=sites.some(s=>s.visualGravel);
     const airportMarkings=sites.some(s=>s.airportMarkings);
     const terrainSites = sites.filter(site => site.samplesTerrain !== false);
-    const deckPaintSites = this.cartRoads ? [] : sites.filter(site => site.deckMask);
-    const deckClearSites = sites.filter(site => site.deckClear);
+    const deckPaintSites = this.cartRoads ? [] : sites.filter(site => site.deckMask
+      && (!site.mask || maskTouches(site.mask, t.x0, t.z0, t.x0 + t.size, t.z0 + t.size)));
     let bridgePaint: Uint8Array | undefined;
     let road = bakedRoad ?? (sites.some(s=>s.roadField!==false&&s.roadField!=='painted') ? new Uint8ClampedArray(S * S * 4) : null);
     // Brooks get a field only on the two finest levels (samples 1 m and 2 m apart). Further off a brook is a pixel
@@ -822,6 +822,9 @@ export class Terrain {
     }
 
     const seg = segFor(t.level), step = T / seg, n = seg + 3;
+    const deckClearPad = mpp * step * 1.5;
+    const deckClearSites = hull ? sites.filter(site => site.deckClear && (!site.mask || maskTouches(site.mask,
+      t.x0 - deckClearPad, t.z0 - deckClearPad, t.x0 + t.size + deckClearPad, t.z0 + t.size + deckClearPad))) : [];
     const pos = new Float32Array(n * n * 3);
     const coastAttr = coastal ? new Float32Array(n * n * 4) : null;
     const gattr = new Float32Array(n * n), crowns = this.low ? null : new Float32Array(n * n);
@@ -851,7 +854,7 @@ export class Terrain {
         if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;
         // A coarse forest hull can cross a narrow bridge even when its vertex misses the road field.
         // Clear the vertices that feed that triangle, rather than using the hull as an abutment height.
-        if(c>0&&deckClearSites.length&&deckClearSites.some(site=>site.deckClear?.(t.x0+ga*mpp,t.z0+gb*mpp,mpp*step*1.5)))c=0;
+        if(c>0&&deckClearSites.length&&deckClearSites.some(site=>site.deckClear?.(t.x0+ga*mpp,t.z0+gb*mpp,deckClearPad)))c=0;
         if(walkMask?.[k0])c=0;
         if (crowns) crowns[b * n + a] = hull ? 0 : c;
         if (!hull) c = 0;
