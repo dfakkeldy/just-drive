@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
-import {readFileSync as read,readdirSync,statSync} from 'node:fs';
+import {existsSync,readFileSync as read,readdirSync,statSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {offlineModel} from './offline-models.mjs';
 const root=process.argv.slice(2).find(a=>!a.startsWith('--'))??'data/work/pwa/site';
 const privatePack=process.env.MMM_PRIVATE_BUILD??'data/work/pwa/artifact-test',privateBuild=privatePack+'/app.js';
 const models=readdirSync('web/public/models').filter(name=>name.endsWith('.glb')).sort();
+// The published build is app.js and its chunks (web/area-chunks-build.ts).
+const chunksOf=dir=>existsSync(dir+'/chunks')?readdirSync(dir+'/chunks').filter(name=>name.endsWith('.js')).sort():[];
+const siteChunks=chunksOf(root),privateChunks=chunksOf(privatePack);
 function check(read) {
 const dev=read('web/index.html','utf8'),privatePage=read('artifact/page.html','utf8');
 assert.equal(dev.match(/<style>([\s\S]*?)<\/style>/)[1],privatePage.match(/<style>([\s\S]*?)<\/style>/)[1],'shell style blocks remain byte-identical');
-assert.doesNotMatch(read(privateBuild,'utf8'),/serviceWorker|sw\.js|manifest\.webmanifest|offlinePlay/,'private code compiled out');
+for(const script of [privateBuild,...privateChunks.map(name=>privatePack+'/chunks/'+name)])assert.doesNotMatch(read(script,'utf8'),/serviceWorker|sw\.js|manifest\.webmanifest|offlinePlay/,'private code compiled out of '+script);
 assert.doesNotMatch(privatePage,/sw\.js|manifest\.webmanifest/,'private markup inert');
 const m=JSON.parse(read(root+'/manifest.webmanifest'));for(const i of m.icons){assert.equal(statSync(root+i.src).isFile(),true);const png=read(root+i.src);const size=Number(i.sizes.split('x')[0]);assert.equal(png.readUInt32BE(16),size);assert.equal(png.readUInt32BE(20),size);}
 const page=read(root+'/index.html','utf8');assert.match(page,/<script[^>]*src="\/app\.js"/,'ordinary visitor uses the main-site script address');
@@ -31,8 +34,27 @@ for(const name of models) {
   assert.equal(entry.bytes,bytes.length);assert.equal(entry.hash,createHash('sha256').update(bytes).digest('hex'),'offline inventory has the bytes of '+name);
 }
 assert.ok(headers.includes('/models/*\n  Cache-Control: no-cache\n  Content-Type: model/gltf-binary\n'),'models are served as glTF and revalidated');
+// The chunks: in the site and the offline shell byte for byte, never importing app.js back (main.ts would wait on
+// itself), preloaded with integrity where app.js imports them at its top, and cached as the immutable files they are.
+assert.ok(siteChunks.some(name=>/^core-[\w-]+\.js$/.test(name)),'the site carries the shared core chunk');
+assert.ok(privateChunks.some(name=>/^core-[\w-]+\.js$/.test(name)),'the private pack carries its own core chunk');
+const appText=read(root+'/app.js','utf8'),staticImports=[...appText.matchAll(/(?:\bfrom|\bimport)\s*"\.\/chunks\/([\w-]+\.js)"/g)].map(m=>m[1]);
+assert.ok(staticImports.length>0,'app.js imports its core chunk');
+for(const name of siteChunks) {
+  const bytes=read(root+'/chunks/'+name),entry=index.shell.find(f=>f.url==='/offline/chunks/'+name);
+  assert.ok(appText.includes('./chunks/'+name),'app.js names the chunk '+name);
+  assert.doesNotMatch(bytes.toString('utf8'),/["'`]\.\.?\/app\.js["'`]/,'chunk '+name+' does not import app.js');
+  assert.ok(entry,'offline shell lists the chunk '+name);
+  assert.equal(entry.bytes,bytes.length);assert.equal(entry.hash,createHash('sha256').update(bytes).digest('hex'),'offline shell has the bytes of '+name);
+  assert.ok(bytes.equals(read(root+'/offline/chunks/'+name)),'offline copy of '+name+' is byte-identical');
+  const preload=new RegExp('<link rel="modulepreload" href="/chunks/'+name.replace(/[.-]/g,'\\$&')+'" integrity="(sha256-[A-Za-z0-9+/=]+)">').exec(page);
+  if(staticImports.includes(name)) {assert.ok(preload,'page preloads '+name);assert.equal(preload[1],'sha256-'+createHash('sha256').update(bytes).digest('base64'),'preload integrity of '+name);}
+  else assert.ok(!preload,'page does not preload the lazy chunk '+name);
 }
-check(read);console.log('PASS private isolation, byte-identical styles, icon PNG dimensions, viewport, iOS tags, deploy headers, models in the site, the pack and the offline inventory (the mail car\'s only when it is the default)');
+assert.equal(index.shell.filter(f=>f.url.startsWith('/offline/chunks/')).length,siteChunks.length,'offline shell holds no other chunk');
+for(const p of ['/chunks/*','/offline/chunks/*'])assert.ok(headers.includes(p+'\n  Cache-Control: public, max-age=31536000, immutable\n'),'chunks are immutable files: '+p);
+}
+check(read);console.log('PASS private isolation, byte-identical styles, icon PNG dimensions, viewport, iOS tags, deploy headers, models in the site, the pack and the offline inventory (the mail car\'s only when it is the default), chunks in the site and the offline shell with core preloaded');
 if(process.argv.includes('--mutations')) {
   for(const [name,path,change] of [
     ['preview omits shell',root+'/index.html',s=>s.replace(/(name="mmm-offline-bytes" content=")[0-9]+/, '$11')],
@@ -51,6 +73,14 @@ if(process.argv.includes('--mutations')) {
     ['public site carries another model',root+'/models/'+models[0],s=>Buffer.concat([Buffer.from(s),Buffer.from([0])])],
     ['private pack carries another model',privatePack+'/models/'+models[0],s=>Buffer.concat([Buffer.from(s),Buffer.from([0])])],
     ['model type header removed',root+'/_headers',s=>s.replace('  Content-Type: model/gltf-binary\n','')],
+    ['chunk missing from the offline shell',root+JSON.parse(read(root+'/version.json')).index,s=>{const i=JSON.parse(s);i.shell=i.shell.filter(f=>!f.url.startsWith('/offline/chunks/grass-'));return JSON.stringify(i);}],
+    ['offline chunk copy differs',root+'/offline/chunks/'+siteChunks.find(n=>n.startsWith('grass-')),s=>Buffer.concat([Buffer.from(s),Buffer.from(';')])],
+    ['core preload removed',root+'/index.html',s=>s.replace(/<link rel="modulepreload"[^>]*>/,'')],
+    ['core preload integrity wrong',root+'/index.html',s=>s.replace(/(<link rel="modulepreload"[^>]*integrity="sha256-)./,'$1_')],
+    ['lazy chunk preloaded',root+'/index.html',s=>s.replace('</head>',`<link rel="modulepreload" href="/chunks/${siteChunks.find(n=>n.startsWith('grass-'))}" integrity="sha256-x">\n</head>`)],
+    ['chunk imports app.js back',root+'/chunks/'+siteChunks.find(n=>n.startsWith('grass-')),s=>'import"../app.js";'+s],
+    ['chunk headers removed',root+'/_headers',s=>s.replace('/chunks/*\n  Cache-Control: public, max-age=31536000, immutable\n','')],
+    ['private chunk worker leak',privatePack+'/chunks/'+privateChunks.find(n=>n.startsWith('core-')),s=>s+';serviceWorker;'],
     ['wrong PNG dimensions',root+'/offline/icons/icon-192.png',s=>{s=Buffer.from(s);s.writeUInt32BE(48,16);return s;}]
   ]) {let caught=false;try{check((p,encoding)=>p===path?change(read(p,encoding)):read(p,encoding));}catch{caught=true;}assert.ok(caught,'escaped '+name);console.log('caught mutation:',name);}
 }

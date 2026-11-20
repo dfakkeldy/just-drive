@@ -45,7 +45,7 @@ const aRoot=out+'/site',vA=JSON.parse(read(aRoot+'/version.json')),iA=JSON.parse
 const bRoot=out+'/migration-b';if(existsSync(bRoot))rmSync(bRoot,{recursive:true});
 function buildB(marker,unseen) {
  if(!existsSync(bRoot)) {
-  mkdirSync(bRoot+'/offline',{recursive:true});symlinkSync(aRoot+'/offline/icons',bRoot+'/offline/icons');symlinkSync(aRoot+'/audio',bRoot+'/audio');if(existsSync(aRoot+'/areas'))symlinkSync(aRoot+'/areas',bRoot+'/areas');
+  mkdirSync(bRoot+'/offline',{recursive:true});symlinkSync(aRoot+'/offline/icons',bRoot+'/offline/icons');symlinkSync(aRoot+'/audio',bRoot+'/audio');if(existsSync(aRoot+'/areas'))symlinkSync(aRoot+'/areas',bRoot+'/areas');if(existsSync(aRoot+'/chunks'))symlinkSync(aRoot+'/chunks',bRoot+'/chunks');
   linkTree(aRoot+'/terrain',bRoot+'/terrain',new Set([aRoot+'/terrain/manifest.json',aRoot+unseen]));
  }
  write(bRoot+'/app.js',read(aRoot+'/app.js','utf8')+`\nglobalThis.__pwaBuild=${JSON.stringify(marker)};\n`);write(bRoot+'/index.html',read(aRoot+'/index.html'));write(bRoot+'/_headers',read(aRoot+'/_headers'));execFileSync(process.execPath,['tools/build-pwa.mjs',bRoot]);return JSON.parse(read(bRoot+'/version.json'));

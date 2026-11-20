@@ -1,4 +1,4 @@
-// Real published single-file build: deferred initialization and actual player controls.
+// Real published build (app.js and its chunks): deferred initialization and actual player controls.
 import assert from 'node:assert/strict';
 import {quarryFailure} from './quarry-failure-browser.mjs';
 import {publishedPotholeHook} from './fleet-published-hook-check.mjs';

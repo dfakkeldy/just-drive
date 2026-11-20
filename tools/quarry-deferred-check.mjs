@@ -1,4 +1,4 @@
-// Execute the actual flat-build wrapper: module initializers stay deferred even with inlineDynamicImports.
+// Execute the actual published-build wrapper: module initializers stay deferred until the area flag calls load().
 import assert from 'node:assert/strict';
 import {build} from '../web/node_modules/esbuild/lib/main.js';
 import {mkdtempSync,writeFileSync,rmSync,readFileSync} from 'node:fs';

@@ -141,7 +141,7 @@ try {
   const estimateAfter=await value('navigator.storage.estimate()');console.log('storage after remove',estimateAfter);good(estimateAfter.usage<estimateBefore.usage-100000000,'remove frees more than 100MB of browser storage');
   // Versioned update and fail-closed shell: B is built with a changed script and same-address changed JSON.
   const aRoot=out+'/site',bRoot=out+'/site-b';if(existsSync(bRoot))rmSync(bRoot,{recursive:true});mkdirSync(bRoot+'/offline',{recursive:true});
-  for(const d of ['terrain','audio',...(existsSync(aRoot+'/areas')?['areas']:[])]){if(!existsSync(bRoot+'/'+d))symlinkSync(aRoot+'/'+d,bRoot+'/'+d);}
+  for(const d of ['terrain','audio',...(existsSync(aRoot+'/areas')?['areas']:[]),...(existsSync(aRoot+'/chunks')?['chunks']:[])]){if(!existsSync(bRoot+'/'+d))symlinkSync(aRoot+'/'+d,bRoot+'/'+d);}
   if(!existsSync(bRoot+'/offline/icons'))symlinkSync(aRoot+'/offline/icons',bRoot+'/offline/icons');
   write(bRoot+'/app.js',read(aRoot+'/app.js','utf8')+'\nglobalThis.__pwaBuild="B";\n');write(bRoot+'/index.html',read(aRoot+'/index.html'));write(bRoot+'/_headers',read(aRoot+'/_headers'));
   execFileSync(process.execPath,['tools/build-pwa.mjs',bRoot]);
