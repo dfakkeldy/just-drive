@@ -4,6 +4,8 @@ import * as THREE from 'three';
  * moving/turning the camera immediately restores it. There is no proxy draw,
  * terrain guess, GPU readback wait or per-instance loop.
  */
+/** Seconds between probes of a hidden mesh. */
+const RETRY=.2;
 export class FarVisibility {
   private readonly records: {mesh:THREE.Mesh;query:WebGLQuery|null;pending:boolean;active:boolean;visible:boolean;retry:number;version:number}[]=[];
   private pose=0;
@@ -43,8 +45,10 @@ export class FarVisibility {
         if(r.version===this.pose)r.visible=!!gl.getQueryParameter(r.query,gl.QUERY_RESULT);r.pending=false;
       }
       if(moved)r.visible=true;
+      // Replay and endings pass wall time; driving passes drive time. A deadline from the other clock waits at most RETRY.
+      if(r.retry>seconds+RETRY)r.retry=seconds+RETRY;
       r.mesh.visible=r.visible||seconds>=r.retry;
-      if(r.mesh.visible&&!r.visible)r.retry=seconds+.2;
+      if(r.mesh.visible&&!r.visible)r.retry=seconds+RETRY;
     }
   }
 }
