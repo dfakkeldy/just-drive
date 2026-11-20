@@ -67,7 +67,7 @@ a{color:var(--amber-soft);text-underline-offset:3px}
 .band{position:relative;height:44px;margin:10px 4px 0;cursor:pointer;text-shadow:none}
 .band svg{position:absolute;inset:0 0 auto 0;width:100%;height:18px;overflow:visible}
 .band line{stroke:var(--amber-dim);stroke-width:1;vector-effect:non-scaling-stroke}
-.band .num{position:absolute;top:21px;transform:translateX(-50%);font:500 10px/1 var(--mono);color:var(--amber-low)}
+.band .num{position:absolute;top:21px;transform:translateX(-50%);font:500 12px/1 var(--mono);color:var(--amber-low)}
 .band .mark{position:absolute;top:0;width:7px;height:7px;margin:-1px 0 0 -3.5px;border-radius:50%;background:var(--amber-dim)}
 .band .mark.on{background:var(--amber);box-shadow:0 0 8px var(--amber)}
 .needle{position:absolute;top:-4px;bottom:6px;left:50%;width:2px;margin-left:-1px;border-radius:1px;background:var(--needle);box-shadow:0 0 8px var(--needle);transition:left .38s cubic-bezier(.3,1.3,.5,1)}
@@ -88,8 +88,9 @@ a{color:var(--amber-soft);text-underline-offset:3px}
 .preset span{font:600 12px/1.25 var(--mono);letter-spacing:.06em;color:var(--dim);overflow-wrap:anywhere}
 .preset[aria-pressed=true]{border-color:var(--amber-dim);box-shadow:inset 0 0 0 1px rgba(255,178,63,.35),inset 0 0 18px rgba(255,178,63,.12),0 2px 0 #06080a}
 .preset[aria-pressed=true] b{color:var(--amber)}
+[data-state=silent] .preset[aria-pressed=true]::after,[data-state=tuning] .preset[aria-pressed=true]::after{content:"Tuned";font:600 12px/1.3 var(--mono);color:var(--amber)}
 [data-state=sound] .preset[aria-pressed=true]::after{content:"▶ Playing";font:600 12px/1.3 var(--mono);color:var(--amber)}
-.volume{display:flex;align-items:center;gap:12px;margin:12px 2px 0;font:700 12px/1 var(--mono);letter-spacing:.16em;color:var(--dim)}
+.volume{display:flex;align-items:center;gap:12px;margin:16px 2px;font:700 12px/1 var(--mono);letter-spacing:.16em;color:var(--dim)}
 .volume input{flex:1;min-width:0;accent-color:var(--amber)}
 
 /* Below the unit: the programme, the credits and the ways on. */
@@ -108,10 +109,13 @@ summary span{color:var(--amber-soft);letter-spacing:.06em;text-transform:none;mi
 #programme time{flex:none;font:500 12px/1 var(--mono);color:var(--quiet)}
 #programme [aria-current] span{color:var(--amber)}
 #programme [aria-current] span::before{content:"▸ "}
+.card.credits{border:0;background:transparent;padding:14px 0}
+.way::after{content:"→";color:var(--amber);grid-column:2;grid-row:1/3}
+.way:is(:hover,:focus-visible){background:#263d34}
 .credits p{margin:8px 0 0;font-size:14px;line-height:1.55;color:var(--dim)}
 .ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:10px}
-.way{display:grid;gap:2px;min-height:64px;align-content:center;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);text-decoration:none;font-weight:700}
-.way span{font-weight:400;font-size:14px;color:var(--dim)}
+.way{display:grid;grid-template-columns:1fr auto;gap:2px;min-height:64px;align-content:center;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);text-decoration:none;font-weight:700}
+.way span{grid-column:1;font-weight:400;font-size:14px;color:var(--dim)}
 .way:hover{border-color:var(--amber-dim)}
 .foot{display:flex;flex-wrap:wrap;gap:6px 20px;margin:0;font-size:15px}
 .foot a{display:inline-flex;align-items:center;min-height:44px}

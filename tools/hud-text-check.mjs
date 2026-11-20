@@ -35,7 +35,10 @@ const expectedSource = oldSource
 const speedSite = '${Math.abs(vehicle.speed * 3.6).toFixed(0)} km/h';
 assert.equal(expectedSource.split(speedSite).length, 2);
 const capExpectedSource = expectedSource.replace(speedSite, speedSite + '${touchDevice && mailMode && !scenePaused() && vehicle.activeTouchSpeedLimit > 0 ? ` ▸ LIMIT ${(vehicle.activeTouchSpeedLimit * 3.6).toFixed(0)}` : ""}');
-const expectedFrame = new Function('context', `with(context) { ${capExpectedSource} }`);
+// The day card and tally own these counts in all mail modes. Keep the frozen source intact.
+const countLine = capExpectedSource.split('\n').find(line => line.includes('pieces delivered'));
+assert.ok(countLine, 'frozen count row found');
+const expectedFrame = new Function('context', `with(context) { ${capExpectedSource.replace(countLine, '')} }`);
 const main = readFileSync(new URL('../web/src/main.ts', import.meta.url), 'utf8');
 const source = readFileSync(new URL('../web/src/hud-text.ts', import.meta.url), 'utf8');
 const start = main.indexOf('  if (!bare) {', main.indexOf('if (mailScore && !bare'));
@@ -146,6 +149,9 @@ function sequence(module, frame) {
       if (rnd() < .1) { const v = rnd() < .5; set(c => { c.started = v; }); }
       for (const c of [old, now]) for (const edit of edits) edit(c);   // about one frame in ten repeats the state exactly
       expectedFrame(old); frame(now); frames++;
+      // Counts moved off the hint text. The shared adapter must still track every live value.
+      if (!bare) assert.deepEqual([now.hudState.done, now.hudState.stops, now.hudState.delivered, now.hudState.lawn, now.hudState.ditch],
+        [now.shift.done, now.shift.stops, now.mail.delivered, now.mail.lawn, now.mail.ditch], 'live counter adapter');
       const want = old.hud.inspect().text, got = now.hud.inspect().text;
       if (got !== want) assert.equal(got, want, `frame ${f} of session ${session}: ${JSON.stringify({ mailMode: s.mailMode, touchDevice: s.touchDevice, mode: now.mode })}`);
       if (now.hud.style.visibility !== old.hud.style.visibility) assert.fail('HUD visibility differs');

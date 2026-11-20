@@ -74,7 +74,7 @@ export function moodLook(mood: Mood): MoodLook | null {
 }
 
 const CSS = `
-#weatherSet{border-bottom:1px solid #71897e;padding:0 0 10px;margin:0 0 12px;font:13px/1.4 var(--text);max-width:300px}
+#weatherSet{border-bottom:1px solid #71897e;padding:0 0 10px;margin:0 0 12px;font:13px/1.4 var(--text)}
 #weatherSet summary{cursor:pointer;font-weight:700;min-height:32px;display:list-item}
 #weatherSet form{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 #settings #weatherSet label{flex:1 1 120px;min-width:120px;margin:0}
@@ -85,7 +85,6 @@ const CSS = `
 body.tcOn #weatherSet{max-width:none}
 body.tcOn #weatherSet summary{min-height:56px;box-sizing:border-box;padding:16px 0}
 body.tcOn #settings #weatherSet :is(input,select){min-height:56px;font-size:16px}
-body:not(.tcOn) #settings:has(#weatherSet){box-sizing:border-box;max-height:calc(100% - 84px - var(--map-credit-space,0px) - var(--test-safe-top,env(safe-area-inset-top,0px)) - var(--test-safe-bottom,env(safe-area-inset-bottom,0px)));overflow-y:auto;overscroll-behavior:contain}
 `;
 /** The address Apply loads: the three player keys, and no tool or light-study clock beside them.
  * With a finite pose (drive around) the player's place goes along as `driveAt`, a player key. */
@@ -116,5 +115,6 @@ export function weatherUI(weather: Weather, getPosition?: () => StudyPosition): 
     location.assign(weatherAddress(location.href, day.value, time.value.slice(0, 5), select.value, pose));
   });
   control.open = weather.mood !== 'clear' || weather.date !== DEFAULT_DATE || !!weather.time;
-  panel.insertBefore(control, panel.querySelector('label[for="exag"]'));
+  // Light study is installed first. Keep the clock block above it.
+  panel.insertBefore(control, panel.querySelector('#lightStudy') ?? panel.querySelector('label[for="exag"]'));
 }

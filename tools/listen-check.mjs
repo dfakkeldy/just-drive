@@ -45,6 +45,9 @@ try {
 
   assert.match(html, /\.state\{[^}]*12px/);
   assert.match(html, /\.progress\{[^}]*12px/);
+  assert.match(html, /\.band \.num\{[^}]*12px/);
+  assert.match(html, /\[data-state=silent\] \.preset\[aria-pressed=true\]::after,[^}]*content:"Tuned"/);
+  assert.match(html, /\.volume\{[^}]*margin:16px 2px/);
   assert.match(html, /\.preset span\{[^}]*12px/);
   assert.match(html, /\[data-state=sound\] \.preset\[aria-pressed=true\]::after\{content:"▶ Playing"/);
   // One catalogue: the page asks for the car radio's lists, in the car radio's folder, and holds no station of its own.

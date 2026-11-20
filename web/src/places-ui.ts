@@ -22,6 +22,7 @@ const CSS = `
 #placesMap{width:100%;margin:0 0 12px;text-align:center!important}
 #placesClose{flex:none;margin-top:14px;width:100%;text-align:center!important;background:#20362e!important}
 #placesCard button:focus-visible,#placesButton:focus-visible{outline:3px solid #fff;outline-offset:2px}
+#placesList button:focus-visible{outline-offset:-3px}
 #placesPanel[hidden],#placeArrival[hidden],#placesButton[hidden]{display:none}
 body.tcOn #placesButton{position:static;min-height:56px;flex:none;pointer-events:auto;margin:0}
 body.tcOn #placeArrival{position:static;width:100%;max-width:360px;margin:0;font-size:11px;padding:6px 8px;pointer-events:none}

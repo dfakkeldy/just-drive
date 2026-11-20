@@ -17,18 +17,21 @@ import { horseKeys, bikeKeys, vehicleButtons, type VehicleChoice } from './vehic
 
 const CSS = `
 #title{--title-accent:var(--maple,#d0632e);box-sizing:border-box;align-items:safe center}
-body.exploreMode #title,#title.justDrive{--title-accent:#a7d9bc}
+body.exploreMode #title,#title.justDrive{--title-accent:#a7d9bc;--title-overline:#a7d9bc}
 #title #titleCard{display:block!important;box-sizing:border-box;width:min(680px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}
-#title #titleCard h1{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
-#title .tag{font:600 15px/1.4 system-ui,sans-serif;letter-spacing:0;text-transform:none;color:var(--ink)}
+#title #titleCard h1{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;font-weight:600}
+#title .tag{font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--title-overline,#edb486)}
 body.exploreMode #title #titleStart,#title.justDrive #titleStart{background:#a7d9bc;color:#0b1620}
 #title :is(#modeChoice,#dailyChoice,#vehicleChoice) button[aria-pressed="true"]{border:2px solid var(--title-accent)!important}
 #title :is(#modeChoice,#dailyChoice,#vehicleChoice) button[aria-pressed="true"]::before{content:'✓ ';font-weight:800}
-#titleControls summary{min-height:44px;display:flex;align-items:center;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+#titleControls summary{min-height:44px;display:list-item;align-content:center;cursor:pointer}
 #titleControls kbd{display:inline-block;background:#20303b;border:1px solid #71818e;border-radius:4px;padding:1px 4px;font:inherit;white-space:normal}
 #titleControls dl{grid-template-columns:minmax(90px,auto) minmax(0,1fr)}
-#title .titleFooter{margin-top:16px;font-size:12px}
-@media(max-width:759px){#title #titleStart{position:sticky;bottom:-8px;z-index:2;padding:12px;box-shadow:0 -10px 14px var(--panel-solid,#0c141c)}#title #titleCard{scroll-padding-bottom:120px}}
+#title .titleFooter{display:flex;flex-wrap:wrap;align-items:center;gap:0 4px;margin-top:16px;font-size:13px}
+#title .titleFooter #titleCredits{margin:0;min-height:44px}
+#title :is(#titleOtherGame,#exploreCaution,.titleFooter){font:13px/1.4 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
+#title :is(#modeChoice,#vehicleChoice){margin-top:18px!important}
+@media(max-width:759px){#title #titleStart{position:sticky;bottom:-8px;z-index:2;padding:12px;box-shadow:0 -10px 14px var(--panel-solid,#0c141c)}#title #titleCard{scroll-padding-bottom:80px;padding-bottom:80px!important}}
 
 #title{position:fixed;inset:0;z-index:20;display:grid;place-items:center;overflow:auto;
   padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
@@ -36,12 +39,13 @@ body.exploreMode #title #titleStart,#title.justDrive #titleStart{background:#a7d
 #title[hidden]{display:none}
 #modeChoice{display:flex;gap:6px;margin:0 0 18px}
 #modeChoice button{flex:1;min-height:44px;border:1px solid #6b7780;border-radius:6px;background:transparent;color:var(--ink);font:700 13px system-ui,sans-serif;cursor:pointer;padding:8px}
-#modeChoice button[aria-pressed="true"]{background:#31463a;border-color:#a7d9bc}
+#modeChoice button[aria-pressed="true"]{background:#493124;border-color:var(--title-accent)}
+body.exploreMode #modeChoice button[aria-pressed="true"],#title.justDrive #modeChoice button[aria-pressed="true"]{background:#31463a}
 #modeChoice button:focus-visible{outline:3px solid white;outline-offset:2px}
 #titleCard{width:min(100%,560px);background:var(--panel-solid,#0c141c);border:1px solid rgba(238,242,246,.18);border-radius:10px;padding:26px 24px 20px}
 #title h1{margin:0;font:800 clamp(30px,8vw,46px)/1.02 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:-.01em;text-wrap:balance}
 #title h1 span{color:var(--maple,#d0632e)}
-#title .tag{font:600 15px/1.4 system-ui,sans-serif;letter-spacing:0;color:var(--ink);margin:0 0 10px}
+#title .tag{margin:0 0 10px}
 #title p{margin:12px 0 0;color:var(--ink-dim,#b9c3cc)}
 #titleOtherGame{display:block;font-size:13px;line-height:1.4;margin-top:8px}
 #titleOtherGame a{color:inherit;text-underline-offset:3px}
@@ -49,7 +53,7 @@ body.exploreMode #title #titleStart,#title.justDrive #titleStart{background:#a7d
 #title dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:18px 0 0;font-size:14px}
 #title dt{font:700 12px ui-monospace,Menlo,Consolas,monospace;color:var(--ink,#eef2f6);white-space:nowrap}
 #title dd{margin:0;color:var(--ink-dim,#b9c3cc)}
-#titleStart{margin-top:22px;width:100%;min-height:54px;border:0;border-radius:8px;background:var(--maple,#d0632e);color:#fff;font:800 17px system-ui,sans-serif;cursor:pointer}
+#titleStart{margin-top:22px;width:100%;min-height:54px;border:0;border-radius:8px;background:var(--maple,#d0632e);color:#0b1620;font:800 17px system-ui,sans-serif;cursor:pointer}
 #titleStart:focus-visible,#titleCredits:focus-visible{outline:3px solid #fff;outline-offset:3px}
 #titleCredits{margin-top:12px;background:none;border:0;color:var(--ink-dim,#b9c3cc);font:13px system-ui,sans-serif;text-decoration:underline;cursor:pointer;padding:6px 0}
 #titleLegal{font-size:12.5px;line-height:1.55}
@@ -58,29 +62,15 @@ body.exploreMode #title #titleStart,#title.justDrive #titleStart{background:#a7d
 #titleLegal a{color:inherit}
 /* content-box 100% plus padding overflowed narrow screens on cards without a multiplayer control (1884): */
 @media(max-width:719px){#titleCard{box-sizing:border-box}}
-@media(min-width:760px){
- #titleCard:has(>#vehicleChoice):has(>.mpControl)>dl,#titleCard:has(>#vehicleChoice)>.mpControl{grid-row:7}
- #titleCard:has(>#vehicleChoice):has(>.mpControl)>#titleStart{grid-row:8}
- #titleCard:has(>#vehicleChoice):has(>.mpControl)>#titleCredits{grid-row:9}
- #titleCard:has(>#vehicleChoice):has(>.mpControl)>#titleLegal{grid-row:10}
-}
+
 `;
 
 const JUST_CSS = `
 #title.justDrive,#title.justDrive #titleCard{box-sizing:border-box}
 @media(max-height:500px) and (min-width:650px){
  #title.justDrive{padding:10px}
- #title.justDrive #titleCard{padding:12px 18px;display:grid;grid-template-columns:1fr 1fr;column-gap:20px;width:min(800px,100%)}
- #title.justDrive #titleCard>*{grid-column:1!important;grid-row:auto!important}
- #title.justDrive #titleCard>dl{grid-column:2!important;grid-row:1/6!important;margin:0;font-size:12px;gap:4px 10px}
- #title.justDrive #titleCard>.mpControl{grid-column:2!important;grid-row:6/9!important;margin:4px 0 0;padding-top:5px}
+ #title.justDrive #titleCard{padding:12px 18px;max-height:calc(100dvh - 20px)}
  #title.justDrive h1{font-size:30px}
- #title.justDrive p{font-size:12px;line-height:1.3;margin:4px 0 0}
- #title.justDrive #titleOtherGame{font-size:12px;line-height:1.3;margin-top:2px}
- #title.justDrive #titleStart{margin-top:6px;min-height:44px}
- #title.justDrive #titleCredits{margin-top:2px;padding:3px}
- #title.justDrive #vehicleChoice{margin-bottom:6px}
- #title.justDrive #titleLegal{grid-column:1/-1!important}
 }`;
 
 
@@ -109,18 +99,6 @@ const DAILY_CSS = `
 #titleBingo{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:14px 0 0}
 #titleBingo span{display:flex;align-items:center;justify-content:center;min-height:38px;padding:3px;box-sizing:border-box;border:1px solid #ffffff2e;border-radius:4px;
  background:#ffffff0d;font:12px/1.2 system-ui,sans-serif;text-align:center;color:var(--ink,#eef2f6)}
-/* The two-column desktop card (mp/switch.ts) pins rows from the keys down: one more row above them for #dailyChoice,
-   and one more for Today's card above the start button. */
-@media(min-width:760px){
- #titleCard:has(>#dailyChoice):has(.mpControl)>dl,#titleCard:has(>#dailyChoice)>.mpControl{grid-row:6}
- #titleCard:has(>#dailyChoice):has(.mpControl)>#titleStart{grid-row:7}
- #titleCard:has(>#dailyChoice):has(.mpControl)>#titleCredits{grid-row:8}
- #titleCard:has(>#dailyChoice):has(.mpControl)>#titleLegal{grid-row:9}
- #titleCard:has(>#titleBingo):has(.mpControl)>#titleBingo{grid-row:7;margin-top:10px}
- #titleCard:has(>#titleBingo):has(.mpControl)>#titleStart{grid-row:8}
- #titleCard:has(>#titleBingo):has(.mpControl)>#titleCredits{grid-row:9}
- #titleCard:has(>#titleBingo):has(.mpControl)>#titleLegal{grid-row:10}
-}
 `;
 
 export interface Title { open(): void; setRadio(available: boolean): void; /** Controller rows while a controller is the device used last. */ setDevice(pad: boolean): void }
@@ -153,7 +131,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     if (!available && k === 'H / T') [k, v] = ['H', historical ? 'Horn.' : 'Small horn.'];
     if(!available&&historical&&k==='H'&&ride?.kind !== 'horse')v='Horn.';
     // Just Drive says no "shift" (a mail word): the key column already shows ⇧; the drone row (#219) names it in its text.
-    return `<dt><kbd>${(just ? k.replace('Shift', '⇧') : k).replace('W A S D', 'WASD')}</kbd></dt><dd>${just ? v.replaceAll('Shift', '⇧') : v}</dd>`;
+    return `<dt>${touch ? '<b>' : '<kbd>'}${(just ? k.replace('Shift', '⇧') : k).replace('W A S D', 'WASD')}${touch ? '</b>' : '</kbd>'}</dt><dd>${just ? v.replaceAll('Shift', '⇧') : v}</dd>`;
   }).join('');
   };
   const controls = () => {
@@ -177,19 +155,8 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   if (door) document.head.appendChild(Object.assign(document.createElement('style'), { textContent: `
 #titleEra{display:block;color:var(--ink-dim,#b9c3cc);font:13px/1.4 system-ui,sans-serif;text-align:center;padding:10px 0;min-height:24px;box-sizing:content-box}
 #titleEra:focus-visible{outline:3px solid #fff;outline-offset:2px}
-@media(min-width:760px){
- #title.justDrive #titleCard:has(>#titleEra):has(>.mpControl)>#titleEra{grid-row:9}
- #title.justDrive #titleCard:has(>#titleEra):has(>.mpControl)>#titleCredits{grid-row:10}
- #title.justDrive #titleCard:has(>#titleEra):has(>.mpControl)>#titleLegal{grid-row:11}
- #title.justDrive #titleCard:has(>#titleEra):has(>.mpControl):has(>#startHere)>#titleEra{grid-row:10}
- #title.justDrive #titleCard:has(>#titleEra):has(>.mpControl):has(>#startHere)>#titleCredits{grid-row:11}
- #title.justDrive #titleCard:has(>#titleEra):has(>.mpControl):has(>#startHere)>#titleLegal{grid-row:12}
-}
-@media(max-height:500px) and (min-width:650px){
- #title.justDrive #titleCard:has(>#titleEra):has(>#startHere)>#titleEra{grid-column:1/3!important;grid-row:8!important}
- #title.justDrive #titleCard:has(>#titleEra):has(>#startHere)>#titleCredits{grid-row:9!important}
- #title.justDrive #titleCard:has(>#titleEra):has(>#startHere)>#titleLegal{grid-row:10!important}
-}` }));
+
+` }));
   const mailCard = !(historical || just || areaName);
   if (mailCard) document.head.appendChild(Object.assign(document.createElement('style'), { textContent: DAILY_CSS }));
   const dailyText = daily ? `One Get Fired run a day, the same for everybody: the start, the ${daily.vehicle.toLowerCase()} and the ${daily.mood.toLowerCase()} weather. Five minutes on the clock. Fill the complaint bingo card: a line pays ${LINE_BONUS}, the full card ${CARD_BONUS}. Your first finished try is today’s card; later tries are practice.` : '';
@@ -206,9 +173,8 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     <button id="titleStart">${ride?.kind === 'horse' ? 'Start riding' : explore || areaName ? 'Start driving' : daily ? 'Start today’s run' : 'Start the shift'}</button>
     ${explore ? '<p id="exploreCaution">A toy for getting a feel for the place. It is not a map for navigation or for safety. Roads and trails can differ on the day.</p>' : ''}
     ${otherLine}
-    <p class="titleFooter">Preview build · Cape Breton, Nova Scotia</p>
     ${door ? `<a id="titleEra" href="${door.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">${historical ? 'Back to today →' : eraDoorText(eraWords!.name)}</a>
-    ` : ''}<button id="titleCredits" aria-expanded="false">Credits and data</button>
+    ` : ''}<p class="titleFooter">Preview build · Cape Breton, Nova Scotia · <button id="titleCredits" aria-expanded="false">Credits and data</button></p>
     <div id="titleLegal" hidden>${CONTACT_LINE}${aboutLine(just)}${historical ? `${(historyArea(eraAreaId(era)) ?? HISTORY_AREAS.mabou).credits}${LAND_CREDITS}${FAR_CREDITS}${MUSIC_CREDIT}${ENGINE_CREDIT}` : just ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : areaName ? LEGAL.replace(/<p>.*?<\/p>/, '<p>The land, roads and mapped building shapes are real.</p>') : explore ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : LEGAL}${paved ? PAVED_CREDIT : ''}</div>
   </div>`;
   if (explore && ride) { const buttons = vehicleButtons(ride); const modeChoice = root.querySelector('#modeChoice'); if (modeChoice) modeChoice.after(buttons); else root.querySelector('#titleControls')!.before(buttons); }

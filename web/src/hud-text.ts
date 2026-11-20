@@ -39,7 +39,6 @@ export function hudLine(s: HudState): string {
       `sun az ${s.sunAz.toFixed(0)} el ${s.sunEl.toFixed(0)}  tiles ${s.drawn}  load ${s.pending}  ${s.fps.toFixed(0)} fps\n` +
       `drag: look · WASD: fly · ${s.mailMode ? 'Q/E' : 'Q/space'}: down/up · wheel: speed ${s.flySpeed.toFixed(0)} m/s${s.views ? ` · 1-${s.views}: views` : ''} · F: drive`;
   }
-  if (s.mailMode && s.mode === 'drive' && !s.touchDevice) text += `\n${s.done}/${s.stops} stops · ${s.delivered} pieces delivered · ${s.lawn + s.ditch} on ground`;
   if (s.trailerReason && s.mode === 'drive') text += `\nTrailer: ${s.trailerReason}`;
   if (s.fleetLine && s.mode === 'drive') text = s.touchDevice
     ? `${Math.abs(s.speed * 3.6).toFixed(0)} km/h · ${s.fleetLine}` : `${text}\n${s.fleetLine}`;

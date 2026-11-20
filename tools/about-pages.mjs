@@ -35,6 +35,7 @@ h1,h2,.serif{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,
 h1{margin:.15em 0 .3em;font-size:clamp(42px,9vw,68px);line-height:1.02}
 h1 span{color:var(--accent)}
 .lead{margin:0;font-size:20px;line-height:1.5;color:var(--ink)}
+.actionCaption{font-size:13px;color:var(--dim)}
 .actions{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 8px}
 .button{display:inline-flex;align-items:center;min-height:48px;padding:0 20px;border-radius:8px;background:var(--accent);color:#0b1620;font-weight:700;text-decoration:none}
 .button.second{background:transparent;color:var(--ink);border:1px solid var(--line)}
@@ -44,7 +45,7 @@ h2{margin:0 0 12px;font-size:30px;line-height:1.15}
 p{margin:0 0 14px}
 .dim{color:var(--dim)}
 .features{display:grid;gap:12px;margin:20px 0 0;padding:0;list-style:none}
-.features li{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.features li{padding:8px 0}
 .features b{display:block;color:var(--ink)}
 .features span{color:var(--dim)}
 .places{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr));gap:10px;margin:16px 0 0;padding:0;list-style:none}
@@ -69,7 +70,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-si
 .plain .text{max-width:880px;margin:0 auto;padding-top:40px}
 .toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0;padding:0;list-style:none}
 .toc a{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:99px;color:var(--ink);text-decoration:none;font-size:15px}
-.toc a:hover{border-color:var(--accent);text-decoration:underline}
+.toc a:is(:hover,:focus-visible){border-color:var(--accent);background:var(--accent);color:#0b1620}
 .controls{display:grid;gap:16px;margin-top:16px}
 .controls h3{margin:0 0 6px;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
 .controls dl{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -78,7 +79,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-si
 .controls dt{font:700 14px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--ink)}
 .controls dd{margin:0;color:var(--dim)}
 .qa{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:12px}
-.qa li{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.qa li{padding:8px 0}
 .qa b{display:block}
 .qa span{color:var(--dim)}
 kbd{font:700 .9em ui-monospace,Menlo,Consolas,monospace;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--panel);color:var(--ink)}
@@ -143,7 +144,7 @@ const PAGES = {
 <h1>Mabou <span>Mail</span> Madness</h1>
 <p class="lead">A rural mail route you cannot win, on the real roads around Mabou. The madness is only a little exaggerated.</p>
 <p><b>Two games, one island.</b> Mabou Mail Madness gives you a mail route. <a href="https://justdrive.fakkeldy.ca/">Just Drive</a> has every area, no mail.</p>
-<div class="actions"><a class="button" href="/">Start the shift</a><span>Free. No download.</span><a class="button second" href="https://justdrive.fakkeldy.ca/mabou">Just drive instead</a><span>Free. No download.</span></div>
+<div class="actions"><a class="button" href="/">Start the shift</a><a class="button second" href="https://justdrive.fakkeldy.ca/mabou">Just drive instead</a></div><p class="actionCaption">Free. No download.</p>
 <section aria-labelledby="game">
 <span class="label">The game</span>
 <h2 id="game">Deliver the day’s run</h2>
@@ -166,7 +167,7 @@ ${MADE('mail')}`,
 <h1>Just Drive</h1>
 <p class="lead">Drive the real land of Cape Breton. No missions and no clock: choose a place, choose a car or a dirt bike, and go.</p>
 <p><b>Two games, one island.</b> Just Drive has every area, no mail. <a href="https://mmm.fakkeldy.ca/">Mabou Mail Madness</a> is the same land, with a mail route.</p>
-<div class="actions"><a class="button" href="/mabou">Start in Mabou</a><span>Free. No download.</span><a class="button second" href="#places">Choose a place</a></div>
+<div class="actions"><a class="button" href="/mabou">Start in Mabou</a><a class="button second" href="#places">Choose a place</a></div><p class="actionCaption">Free. No download.</p>
 <section aria-labelledby="places">
 <span class="label">Places</span>
 <h2 id="places">Where you can drive</h2>
@@ -194,7 +195,7 @@ ${MADE('just')}`,
 // ---- Help ----
 const html = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
 /** One control table, rows exactly as the title card shows them. */
-const table = (heading, rows) => `<div><h3>${heading}</h3><dl>${rows.map(([key, what]) => `<div class="row"><dt><kbd>${html(key.replace("W A S D", "WASD"))}</kbd></dt><dd>${html(what)}</dd></div>`).join('')}</dl></div>`;
+const table = (heading, rows) => `<div><h3>${heading}</h3><dl>${rows.map(([key, what]) => `<div class="row"><dt>${/touch screen/i.test(heading) ? '<b>' : '<kbd>'}${html(key.replace("W A S D", "WASD"))}${/touch screen/i.test(heading) ? '</b>' : '</kbd>'}</dt><dd>${html(what)}</dd></div>`).join('')}</dl></div>`;
 const qa = items => `<ul role="list" class="qa">${items.map(([q, a]) => `<li><b>${q}</b><span>${a}</span></li>`).join('')}</ul>`;
 
 const SETTINGS = (brand) => qa([

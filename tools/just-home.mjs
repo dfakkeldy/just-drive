@@ -53,8 +53,8 @@ function pin(place) {
 function card(place) {
   const actions = [`<a class="button" href="/${place.id}" aria-label="Drive in ${escape(place.name)}">Drive</a>`];
   if (place.mail) actions.push(`<a class="button mail" href="${MAIL_URL}">Deliver the mail</a>`);
-  if (place.era) actions.push(`<a class="button second" href="/${place.era.address}">Drive in 1884</a>`);
-  return `<li class="place" id="place-${place.id}"><h2>${escape(place.name)}</h2><p>${escape(place.blurb)}</p>`
+  if (place.era) actions.push(`<a class="button second" href="/${place.era.address}" aria-label="Drive in ${escape(place.name)}, 1884">Drive in 1884</a>`);
+  return `<li class="place" id="place-${place.id}"><h2>${escape(place.name)}</h2><p>${escape(place.blurb)}</p>${place.mail ? '<p class="mailCaption">Mabou Mail Madness: the same roads, with a mail route you cannot win.</p>' : ''}`
     + `<ul class="tags">${place.tags.map(t => `<li>${escape(t)}</li>`).join('')}</ul><div class="actions">${actions.join('')}</div></li>`;
 }
 
@@ -72,10 +72,10 @@ header{max-width:640px}
 h1{margin:.1em 0 .25em;font-size:clamp(44px,9vw,72px);line-height:1}
 .lead{margin:0;font-size:19px;color:var(--dim)}
 .layout{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;margin-top:24px}
-.map{margin:0;position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--sea)}
+.map{margin:0;position:relative;border-radius:14px;overflow:hidden;background:var(--sea)}
 .map svg{display:block;width:100%;height:auto;max-height:72vh}
 .land{fill:var(--land);stroke:var(--shore);stroke-width:1.2;stroke-linejoin:round}
-.water-label{fill:#5f7a8e;font:italic 15px Georgia,serif;letter-spacing:.18em;text-transform:uppercase}
+.water-label{fill:#9fb3c3;font:italic 15px Georgia,serif;letter-spacing:.18em;text-transform:uppercase}
 .pin{cursor:pointer;text-decoration:none}
 .pin .hit{fill:transparent;stroke:transparent;stroke-width:44px;vector-effect:non-scaling-stroke;pointer-events:all}
 .pin .halo{fill:var(--accent);opacity:0;transition:opacity .15s}
@@ -86,8 +86,8 @@ h1{margin:.1em 0 .25em;font-size:clamp(44px,9vw,72px);line-height:1}
 .pin:hover .dot,.pin:focus-visible .dot{fill:var(--accent)}
 .pin.mail:hover .dot,.pin.mail:focus-visible .dot{fill:var(--maple)}
 .pin:focus-visible{outline:none}.pin:focus-visible .halo{stroke:#fff;stroke-width:3;opacity:1;fill:transparent;vector-effect:non-scaling-stroke}
-.pin:focus-visible text{fill:var(--accent)}
-.legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin:0;padding:10px 14px;border-top:1px solid var(--line);color:var(--quiet);font-size:13px}
+.pin:is(:hover,:focus-visible) text{fill:var(--accent);text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:4px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin:0;padding:8px 14px;color:var(--quiet);font-size:13px}
 .legend i{display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:50%;border:3px solid var(--accent);vertical-align:-1px}
 .legend i.mail{border-color:var(--maple)}
 .places{display:grid;gap:12px;margin:0;padding:0;list-style:none}
@@ -99,15 +99,17 @@ h1{margin:.1em 0 .25em;font-size:clamp(44px,9vw,72px);line-height:1}
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .button{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border-radius:8px;background:var(--accent);color:#0b1620;font-weight:700;text-decoration:none}
 .button.mail{background:var(--maple);color:#0b1620}
-.button.second{background:#352d23;color:#e9d2ad}
+.button.second{background:transparent;border:1px solid #e9d2ad;color:#e9d2ad}
 .button:hover{filter:brightness(1.08)}
 ${ORDER.map(id => `body:has(#place-${id}:is(:hover,:focus-within)) #pin-${id} .halo{opacity:.28}body:has(#pin-${id}:hover) #place-${id},body:has(#pin-${id}:focus-visible) #place-${id}{box-shadow:inset 3px 0 var(--accent)}`).join('\n')}
-.signoff{margin:32px 0 0;color:var(--dim)}
+.signoff{margin:32px 0 0;color:var(--dim);font:22px/1.4 "Iowan Old Style",Palatino,Georgia,serif}
+header>p:last-child{margin:25px 0}
+.place .mailCaption{margin-top:8px;font-size:14px}
 footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);color:var(--quiet);font-size:14px}
 footer nav{display:flex;flex-wrap:wrap;gap:6px 20px;margin-bottom:12px}
 footer nav a{display:inline-flex;align-items:center;min-height:44px}
 footer p{margin:0 0 6px}
-@media(max-width:599px){footer nav{flex-direction:column;gap:0}}
+@media(max-width:599px){footer nav{flex-direction:column;gap:16px;margin-bottom:32px}.button.second{width:100%;justify-content:center}}
 @media (min-width:900px){.layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}.map{position:sticky;top:20px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{body{background:#fff;color:#000}.map{position:static}.button{border:1px solid #000}}
@@ -115,8 +117,8 @@ footer p{margin:0 0 6px}
 
 export function justHome() {
   const list = places();
-  const title = 'Just Drive';
-  const description = 'Drive the real land of western Cape Breton. Choose a place on the map.';
+  const title = 'Just Drive: a free 3D driving game on the real roads of Cape Breton';
+  const description = 'A free 3D driving game on the real roads of Cape Breton. Play in your browser, on a phone too. No download.';
   const [vx, vy, vw, vh] = VIEW;
   const svg = `<svg viewBox="${VIEW.join(' ')}" role="group" aria-labelledby="mapTitle" xmlns="http://www.w3.org/2000/svg">`
     + `<title id="mapTitle">Map of western Cape Breton with the places you can drive</title>`
@@ -145,12 +147,12 @@ export function justHome() {
 <div class="page">
 <header><p class="kicker">Cape Breton, Nova Scotia</p><h1>Just Drive</h1><p class="lead">A free 3D driving game on the real roads of Cape Breton. Play in your browser, on a phone too. No download.</p><p><a class="button" href="/mabou">Start in Mabou</a></p></header>
 <main class="layout">
-<figure class="map">${svg}<figcaption class="legend"><span><i></i>A place to drive</span><span><i class="mail"></i>Mail route too</span></figcaption></figure>
+<figure class="map">${svg}<figcaption class="legend"><span><i></i>Choose a pin to drive</span><span><i class="mail"></i>Mail route too</span></figcaption></figure>
 <ul class="places" aria-label="Places">${list.map(card).join('')}</ul>
 </main>
 <p class="signoff">I made these roads for a slow drive. Take your time.</p>
 <footer>
-<nav aria-label="More"><a href="/about">About</a><a href="/help">Help and controls</a><a href="/listen/">Just Listen (the radio)</a><a href="${MAIL_URL}">Mabou Mail Madness</a></nav>
+<nav aria-label="More"><a href="/about">About</a><a href="/changes/">What's new</a><a href="/help">Help and controls</a><a href="/listen/">Just Listen (the radio)</a><a href="${MAIL_URL}">Mabou Mail Madness</a></nav>
 <p>Map: coastline from Natural Resources Canada, Medium Resolution Digital Elevation Model (MRDEM-30 DTM). Contains information licensed under the Open Government Licence – Canada.</p>
 </footer>
 </div>

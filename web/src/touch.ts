@@ -44,10 +44,12 @@ export function createTouchControls(actions: TouchActions): TouchControls {
   const knob = steer.querySelector<HTMLElement>('#tcKnob')!, track = steer.querySelector<HTMLElement>('#tcTrack')!;
   const brake = make('div', 'tcBrake', 'tc tcPedal', 'BRAKE<br>REVERSE');
   const go = make('div', 'tcGo', 'tc tcPedal', 'GO');
+  go.setAttribute('role', 'button'); go.setAttribute('aria-label', 'Go');
+  brake.setAttribute('role', 'button'); brake.setAttribute('aria-label', 'Brake, hold to reverse');
   const reset = make('button', 'tcReset', 'tc tcSmall', 'RESET');
   const view = make('button', 'tcView', 'tc tcSmall', 'VIEW');
   const horn = make('button', 'tcHorn', 'tc tcSmall', 'HORN');
-  reset.setAttribute('aria-label', 'Put the car back on the road');
+  reset.setAttribute('aria-label', 'Reset: put the car back on the road');
   view.setAttribute('aria-label', 'Change the camera view');
   const all = [steer, brake, go, reset, view, horn];
   // END SHIFT moves into the settings panel: among the phone controls it overlapped something at most screen sizes.

@@ -153,7 +153,8 @@ async function panelCheck(p, name) {
     for (const button of document.querySelectorAll('#settings button')) {
       if (!button.getClientRects().length) continue;
       const r = button.getBoundingClientRect();
-      if (r.width < 56 || r.height < 56) out.push('small settings button: ' + button.textContent);
+      const badSize = button.id === 'settingsClose' ? r.width < 56 || r.height !== 44 : r.width < 56 || r.height < 56;
+      if (badSize) out.push('wrong settings button size: ' + button.textContent);
     }
     if(document.body.classList.contains('phoneReadoutsMenu')) for(const id of ['miniMapHead','radio','relief']) {
       const e=document.getElementById(id);if(!e||!e.closest('#settings')||e.hidden){out.push('missing readout in settings: '+id);continue;}

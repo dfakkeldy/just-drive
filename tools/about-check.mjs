@@ -55,13 +55,17 @@ try {
   assert.ok(mail.includes('<a class="button" href="/">'), 'mail plays at its root');
   assert.ok(just.includes('<a class="button" href="/mabou">'), 'Just Drive plays at /mabou');
   assert.match(text(just), /not a map for navigation/, 'Just Drive caution');
+  for (const page of [mail, just]) {
+    assert.equal((page.match(/Free\. No download\./g) ?? []).length, 1);
+    assert.match(page, /<\/div><p class="actionCaption">Free\. No download\.<\/p>/);
+  }
   // Help: the control rows are the title card's own, in order, and each page links its partner.
   const help = brand => readFileSync(`${out}/help/${brand}/index.html`, 'utf8');
   const esc = t => t.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
-  const rows = list => list.map(([k, v]) => `<div class="row"><dt><kbd>${esc(k.replace("W A S D", "WASD"))}</kbd></dt><dd>${esc(v)}</dd></div>`).join('');
+  const rows = (list, touch) => list.map(([k, v]) => `<div class="row"><dt>${touch ? '<b>' : '<kbd>'}${esc(k.replace("W A S D", "WASD"))}${touch ? '</b>' : '</kbd>'}</dt><dd>${esc(v)}</dd></div>`).join('');
   for (const [brand, lists] of [['mail', [KEYS, TOUCH, padKeys('car', true)]], ['just', [DRIVING_KEYS, DRIVING_TOUCH, bikeKeys(false), bikeKeys(true), padKeys('car', false), padKeys('bike', false)]]]) {
     const html = help(brand), words = text(html);
-    for (const list of lists) assert.ok(html.includes(`<dl>${rows(list)}</dl>`), brand + ' help control table matches the title card');
+    for (const [index, list] of lists.entries()) assert.ok(html.includes(`<dl>${rows(list, index === 1 || brand === 'just' && index === 3)}</dl>`), brand + ' help control table matches the title card');
     assert.ok(html.includes(`<link rel="canonical" href="${HELP_URL[brand]}">`), brand + ' help canonical');
     assert.ok(html.includes('<script src="/about/page-links.js" defer></script>'), brand + ' Help keyboard link support');
     assert.ok(html.includes('<a href="/about">About</a>') && page(brand).includes('<a href="/help">Help</a>'), brand + ' About and Help link each other');

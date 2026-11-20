@@ -73,18 +73,28 @@ function placementRead(api) {
 }
 function leaveVisibility(api) {
   class Element {
-    children=[];hidden=false;value='';style={};open=false;
-    append(...nodes){this.children.push(...nodes);}appendChild(node){this.append(node);return node;}
+    children=[];nodes={};hidden=false;value='';style={};open=false;
+    append(...nodes){for(const node of nodes){this.children.push(node);node.parent=this;}}appendChild(node){this.append(node);return node;}
     insertBefore(node){this.children.unshift(node);}get firstChild(){return this.children[0]??null;}
+    after(node){const at=this.parent.children.indexOf(this);this.parent.children.splice(at+1,0,node);node.parent=this.parent;}
     addEventListener(){} replaceChildren(...nodes){this.children=nodes;}
     set innerHTML(_html){this.nodes={'[type=date]':new Element(),'[type=time]':new Element(),button:new Element(),'.lightLeave':new Element(),output:new Element(),'.lightClock':new Element()};}
     querySelector(key){return this.nodes[key];}
   }
   const names=['document','HTMLInputElement'],old=names.map(name=>Object.getOwnPropertyDescriptor(globalThis,name));
   try{
-    const panel=new Element();globalThis.document={head:new Element(),createElement:()=>new Element(),getElementById:id=>id==='settings'?panel:null};globalThis.HTMLInputElement=Element;
-    api.lightStudyUI(api.readLightStudy(new URLSearchParams(),true),new Date('2026-10-10T19:45:00Z'),46.07,-61.39);
-    assert.equal(panel.firstChild.querySelector('.lightLeave').hidden,true,'Leave must be hidden in plain play');
+    for (const hasWeather of [false,true]) {
+      const panel=new Element(),header=new Element(),weather=new Element();
+      panel.nodes['#settingsHeader']=header;panel.append(header);
+      if (hasWeather) {panel.nodes['#weatherSet']=weather;panel.append(weather);}
+      globalThis.document={head:new Element(),createElement:()=>new Element(),getElementById:id=>id==='settings'?panel:null};globalThis.HTMLInputElement=Element;
+      api.lightStudyUI(api.readLightStudy(new URLSearchParams(),true),new Date('2026-10-10T19:45:00Z'),46.07,-61.39);
+      const control=panel.children.at(-1);
+      assert.equal(control.id,'lightStudy','study follows header and weather');
+      assert.equal(panel.firstChild,header,'header stays first');
+      assert.equal(panel.children.indexOf(control),hasWeather?2:1);
+      assert.equal(control.querySelector('.lightLeave').hidden,true,'Leave must be hidden in plain play');
+    }
   }finally{names.forEach((name,i)=>{if(old[i])Object.defineProperty(globalThis,name,old[i]);else delete globalThis[name];});}
 }
 const ZONES = ['UTC', 'America/Halifax', 'Europe/Berlin'];
@@ -164,11 +174,12 @@ assert.equal(study.readLightStudy(new URLSearchParams('date=2026-03-08&time=02:3
 // This checks the observable storage/reload contract without a renderer or copied UI implementation.
 {
   class Element {
-    listeners = []; children = []; textContent = ''; value = ''; open = false;
+    listeners = []; children = []; nodes = {}; textContent = ''; value = ''; open = false;
     constructor(tag) { this.tag = tag; }
     addEventListener(name, callback, capture = false) { this.listeners.push({name,callback,capture}); }
-    append(...nodes) { this.children.push(...nodes); }
+    append(...nodes) { for (const node of nodes) { this.children.push(node); node.parent=this; } }
     appendChild(node) { this.append(node); return node; }
+    after(node) { const at=this.parent.children.indexOf(this); this.parent.children.splice(at+1,0,node); node.parent=this.parent; }
     insertBefore(node, before) { this.children.splice(before ? this.children.indexOf(before) : 0, 0, node); }
     get firstChild() { return this.children[0] ?? null; }
     replaceChildren(...nodes) { this.children = nodes; }
@@ -187,6 +198,7 @@ assert.equal(study.readLightStudy(new URLSearchParams('date=2026-03-08&time=02:3
       const api=scenario==='unavailable'?await import(await moduleUrl(source+'\n// unavailable UI fixture')):study;
       if(scenario==='unavailable')Object.defineProperty(globalThis,'Intl',{configurable:true,value:undefined});
       const panel = new Element('div'), slider = new Input('range'); slider.id='exag';
+      const header = new Element('header'); panel.nodes['#settingsHeader']=header; panel.append(header);
       const nodes = {settings:panel,exag:slider,exagValue:new Element('span'),gear:new Element('button')};
       let search=scenario==='hour-only'?'?date=2026-12-21&hour=22&radio=off':'?date=2026-12-21&time=16:30&hour=4&radio=off&road=old&cam=old&shot=1&title=1', saved='2.3', writes=0;
       const doc = {head:new Element('head'),createElement:tag=>new Element(tag),getElementById:id=>nodes[id]??null};
@@ -196,7 +208,7 @@ assert.equal(study.readLightStudy(new URLSearchParams('date=2026-03-08&time=02:3
       Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:()=>saved,setItem:(_key,value)=>{saved=value;writes++;}}});
       const state=api.readLightStudy(new URLSearchParams(scenario==='hour-only'?'date=2026-12-21&hour=22':scenario==='invalid'?'date=9999-12-31':scenario==='bad-hour'?'date=2026-12-21&hour=-2':scenario==='plain'?'':'date=2026-12-21&time=16:30'),true,()=>{});
       api.lightStudyUI(state, active?state.when:new Date('2026-10-10T19:45:00Z'),46.07,-61.39,()=>({e:624321.125,n:5103210.5,heading:217.25}));
-      const mounted=panel.firstChild;assert.equal(mounted.open,active||!!state.message,'active studies and boot errors open the section');
+      const mounted=panel.children.at(-1);assert.equal(mounted.open,active||!!state.message,'active studies and boot errors open the section');
       assert.match(mounted.querySelector('.lightClock').textContent,/24-hour/);
       assert.equal(mounted.querySelector('.lightLeave').hidden,!state.active&&!state.message,'Leave visibility follows study state');
       if(scenario==='bad-hour') {assert.equal(mounted.querySelector('[type=date]').value,'2026-12-21');assert.match(state.message,/invalid hour/);}
@@ -205,7 +217,8 @@ assert.equal(study.readLightStudy(new URLSearchParams('date=2026-03-08&time=02:3
         continue;
       }
       const legacy=(await transform(main.slice(main.indexOf('// ---- settings '),main.indexOf('// ---- loop ')),{loader:'ts'})).code;
-      new Function('EXAG','stored',legacy)(active?1:2.3, active?null:saved);
+      // The slider contract runs with the separate Settings shell outside this fixture.
+      new Function('EXAG','stored','installSettings',legacy)(active?1:2.3, active?null:saved,()=>{});
       const fire=(target,name,ancestors=[])=>{
         const event={target,stopped:false,stopImmediatePropagation(){this.stopped=true;},stopPropagation(){this.stopped=true;}};
         for(const ancestor of ancestors) for(const entry of ancestor.listeners.filter(l=>l.name===name&&l.capture)) { entry.callback(event); if(event.stopped)return event; }
@@ -217,7 +230,7 @@ assert.equal(study.readLightStudy(new URLSearchParams('date=2026-03-08&time=02:3
       assert.equal(saved,active?'2.3':'1.7');
       if(scenario==='hour-only')assert.equal(new URLSearchParams(search).get('time'),'22:00','slider canonicalizes legacy hour without changing study time');
       if(active) { assert.equal(new URLSearchParams(search).get('exag'),'1.7'); assert.equal(new URLSearchParams(search).get('mode'),'explore'); }
-      const control=panel.firstChild; control.open=true; fire(control,'toggle');
+      const control=panel.children.at(-1); control.open=true; fire(control,'toggle');
       control.querySelector('[type=date]').value='1884-06-21';fire(control.querySelector('[type=date]'),'change');
       assert.ok(control.querySelector('output').children.some(p=>p.textContent==='Before 15 June 1902 Halifax kept local mean time (GMT−4:14:24).'));
       for(const [dateValue,shown] of [['1902-06-14',true],['1902-06-15',false]]){control.querySelector('[type=date]').value=dateValue;fire(control.querySelector('[type=date]'),'change');assert.equal(control.querySelector('output').children.some(p=>p.textContent.startsWith('Before 15 June 1902')),shown);}

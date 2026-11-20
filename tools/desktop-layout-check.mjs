@@ -82,7 +82,7 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
         })()`);
         if (phase === 'after') {
           assert.ok(await panelTop(), `${carrier}: open settings cover END SHIFT`);
-          assert.equal(await read(`(()=>{const p=document.getElementById('settings'),r=p.getBoundingClientRect(),c=document.getElementById('credit').getBoundingClientRect(),s=getComputedStyle(p);return document.getElementById('settingsHeading').textContent==='Settings'&&document.getElementById('settingsClose').getBoundingClientRect().height>=44&&s.borderRadius==='10px'&&s.overflowY==='auto'&&r.width===320&&r.bottom<=c.top-8;})()`),true,'one sheet width, title, close, scroll and room above credit');
+          assert.equal(await read(`(()=>{const p=document.getElementById('settings'),r=p.getBoundingClientRect(),c=document.getElementById('credit').getBoundingClientRect(),s=getComputedStyle(p);return document.getElementById('settingsHeading').textContent==='Settings'&&document.getElementById('settingsClose').getBoundingClientRect().height===44&&s.borderRadius==='10px'&&s.overflowY==='auto'&&r.width===320&&r.bottom<=c.top-8;})()`),true,'one sheet width, title, close, scroll and room above credit');
           await read(`document.getElementById('settingsClose').click()`);
           assert.equal(await read(`document.getElementById('settings').classList.contains('open')`),false,'visible Close closes Settings');
           await read(`document.getElementById('gear').click()`);

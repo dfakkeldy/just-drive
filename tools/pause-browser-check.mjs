@@ -28,6 +28,16 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
   await key('Escape','Escape'); assert.equal(await read(`document.activeElement.id`),'gear','Escape restores gear focus'); await sleep(500); assert.notDeepEqual((await snapshot()).slice(0,3),frozen.slice(0,3),`${name}: bike resumes`);
   await key('KeyP','p'); await sleep(100); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),false);
   assert.equal(await read(`document.getElementById('pauseTitle').textContent`),'Paused','bike pause title');
+  assert.equal(await read(`document.activeElement.id`),'resumeGame','pause focuses Resume');
+  assert.equal(await read(`document.querySelector('#pauseKeys').open`),false,'keys start closed');
+  assert.equal(await read(`document.querySelector('#pauseScreen pre')`),null,'no HUD dump');
+  assert.equal(await read(`document.getElementById('pauseRadio').textContent`),'Radio quiet','quiet radio line');
+  assert.equal(await read(`document.getElementById('pauseRace').hidden`),true,'no idle race line');
+  await read(`document.getElementById('pauseSettings').focus()`);
+  await key('Tab','Tab'); assert.equal(await read(`document.activeElement.tagName`),'SUMMARY','Tab wraps to Keys');
+  await key('Enter','Enter'); assert.equal(await read(`document.querySelector('#pauseKeys').open`),true,'keyboard opens Keys');
+  assert.ok(await read(`document.querySelectorAll('#pauseKeys dt').length>=8`),'full key list');
+  await key('Tab','Tab'); assert.equal(await read(`document.activeElement.id`),'resumeGame','Tab reaches Resume');
   const paused=await snapshot(); await sleep(700); assert.deepEqual(await snapshot(),paused);
   await click('pauseSettings'); assert.equal(await read(`document.getElementById('settings').classList.contains('open')`),true);
   await click('gear'); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),false,'Settings returns to pause');

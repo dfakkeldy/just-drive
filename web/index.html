@@ -107,12 +107,14 @@
   @media(max-width:600px){#shiftHud{top:calc(112px + env(safe-area-inset-top,0px));font-size:11px;max-width:calc(100% - 120px)}#stopHint{bottom:calc(131px + env(safe-area-inset-bottom,0px));font-size:11px}#photoTag{top:calc(193px + env(safe-area-inset-top,0px));max-width:190px}.reportBody{padding:20px 19px 8px}#reportPanel h1{font-size:25px}#reportPanel{font-size:15px}.reportFooter{padding:12px 19px}#gear{width:56px;height:56px}#settings{top:calc(72px + env(safe-area-inset-top,0px))}}
 
 /* Sheets use one content width and leave the credit chip clear. */
-body:not(.tcOn) #settings.open[aria-labelledby]{max-height:calc(100dvh - 134px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
-body #settings{width:320px;min-width:0;max-width:calc(100% - 32px);max-height:calc(100dvh - 134px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain;border-radius:10px;box-sizing:border-box;font-family:var(--text)}
+body #settings.open[aria-labelledby]{max-height:calc(100dvh - var(--settings-top,calc(58px + env(safe-area-inset-top,0px))) - max(76px,var(--settings-credit-height,0px)) - var(--map-credit-space,0px) - var(--test-safe-bottom,env(safe-area-inset-bottom,0px)))}
+@media(max-width:600px){body{--settings-top:calc(72px + env(safe-area-inset-top,0px))}}
+body.tcOn{--settings-top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-top,env(safe-area-inset-top,0px)))}
+body #settings{width:320px;min-width:0;max-width:calc(100% - 32px);overflow-y:auto;overscroll-behavior:contain;border-radius:10px;box-sizing:border-box;font-family:var(--text)}
 #settings>*{box-sizing:border-box;max-width:100%}
 #settingsHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
 #settingsHeader h2{font-size:20px;margin:0}
-#settingsClose{min-width:56px;min-height:56px;border:1px solid var(--ink-dim);border-radius:6px;background:var(--panel-solid);color:var(--ink);font:inherit;cursor:pointer}
+#settings #settingsClose{min-width:60px;min-height:44px!important;height:44px;border:1px solid var(--ink-dim);border-radius:6px;background:var(--panel-solid);color:var(--ink);font:inherit;cursor:pointer}
 body.exploreMode{--settings-accent:#a7d9bc}#settings input{accent-color:var(--settings-accent,var(--maple))}
 #credit{left:auto;width:fit-content;max-width:calc(100% - 32px);padding:4px 8px;background:#0c141c;border-radius:4px;font:12px/1.4 var(--text);opacity:1;text-shadow:none}
 @media(orientation:portrait) and (min-height:600px){body.tcOn.compactPhone #phoneHud #phoneHint{width:calc(100% - 62px)}}
@@ -125,12 +127,17 @@ body.tcOn.compactPhone #phoneHud #radio b{width:auto;white-space:normal;overflow
 @media(orientation:landscape) and (max-height:319px){body.tcOn.compactPhone #phoneHud:not([hidden]){grid-template-rows:56px auto minmax(0,1fr) 64px 60px}}
 </style>
 <style>
-#pauseButton{position:fixed;right:170px;top:calc(10px + env(safe-area-inset-top,0px));z-index:6;min-width:56px;min-height:40px;border:1px solid #a3b9b3;border-radius:6px;background:var(--panel);color:var(--ink);font:700 12px var(--mono);padding:0 14px;cursor:pointer}
+#pauseButton{position:fixed;right:170px;top:calc(10px + env(safe-area-inset-top,0px));z-index:6;min-width:56px;min-height:44px;border:1px solid #a3b9b3;border-radius:6px;background:var(--panel);color:var(--ink);font:700 12px var(--mono);text-transform:uppercase;padding:0 14px;cursor:pointer}
 #pauseScreen{position:fixed;inset:0;z-index:9;display:grid;place-items:center;background:#0009;padding:16px;box-sizing:border-box}
-#pauseScreen[hidden]{display:none}
-#pauseScreen section{background:var(--panel-solid);color:var(--ink);border:1px solid var(--ink-dim);border-radius:10px;padding:20px;width:min(320px,100%);max-height:90dvh;overflow:auto;box-sizing:border-box}
-#pauseScreen h2{margin-top:0}#pauseScreen pre{white-space:pre-wrap;font:inherit}
-#pauseScreen button{display:block;min-height:48px;width:100%;margin-top:10px;font:inherit;cursor:pointer}
+#pauseScreen [hidden],#pauseScreen[hidden],#pauseButton[hidden],body:not(.gameStarted) #endShift{display:none!important}
+#pauseScreen section{font:15px/1.5 var(--text);background:var(--panel-solid);color:var(--ink);border:1px solid var(--ink-dim);border-radius:10px;padding:20px;width:min(600px,100%);max-height:90dvh;overflow:auto;box-sizing:border-box}
+#pauseScreen h2{margin:0 0 16px;font:600 clamp(26px,4vw,34px)/1.15 "Iowan Old Style",Palatino,Georgia,serif}
+#pauseScreen p{margin:8px 0;color:var(--ink-dim)}
+#pauseKeys summary{cursor:pointer;min-height:44px;line-height:44px}
+#pauseKeys dl{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px}#pauseKeys dd{margin:0}
+#pauseScreen button{display:block;min-height:48px;width:100%;margin-top:10px;border:1px solid var(--ink-dim);border-radius:6px;background:transparent;color:var(--ink);font:inherit;cursor:pointer}
+#pauseScreen #resumeGame{background:var(--maple);color:#0b1620;border-color:transparent;font-weight:700}
+body.exploreMode #pauseScreen #resumeGame{background:#a7d9bc}
 body.tcOn #pauseButton{position:static;min-height:56px;pointer-events:auto;flex:none}
 </style>
 

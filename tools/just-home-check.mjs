@@ -16,7 +16,7 @@ try {
   const html = readFileSync(`${out}/just/home/index.html`, 'utf8');
   const areas = AREAS.filter(a => a.id !== 'fixture');
   assert.equal([...html.matchAll(/<title>/g)].length, 1, 'one title');
-  assert.match(html, /<title>Just Drive<\/title>/);
+  assert.match(html, /<title>Just Drive: a free 3D driving game on the real roads of Cape Breton<\/title>/);
   assert.match(html, /<meta name="viewport"/);
   for (const tag of ['title', 'description', 'type', 'url']) assert.match(html, new RegExp(`property="og:${tag}"`), 'og:' + tag);
   assert.match(html, /property="og:url" content="https:\/\/justdrive\.fakkeldy\.ca\/"/);
@@ -46,8 +46,15 @@ try {
   assert.match(html, /\.pin:focus-visible \.halo\{[^}]*stroke:#fff;stroke-width:3/);
   assert.match(html, /\.button.mail\{background:var\(--maple\);color:#0b1620/);
   assert.equal((html.match(/>Drive in 1884<\/a>/g) ?? []).length, Object.keys(HISTORY_AREAS).length);
+  for (const place of ['Mabou', 'Judique']) assert.ok(html.includes(`aria-label="Drive in ${place}, 1884"`));
+  assert.match(html, /Mabou Mail Madness: the same roads, with a mail route you cannot win\./);
+  assert.match(html, /Choose a pin to drive/);
+  assert.match(html, /\.button.second\{background:transparent;border:1px solid #e9d2ad/);
+  for (const background of ['0e1d29', '1d3140']) assert.ok((luminance('9fb3c3')+.05)/(luminance(background)+.05)>=4.5, 'water labels contrast on sea and land');
+  const lead = html.match(/<p class="lead">([^<]+)<\/p>/)[1];
+  for (const tag of ['name="description"', 'property="og:description"']) assert.ok(html.includes(`<meta ${tag} content="${lead}">`));
   // Every same-site link is an address the Worker serves; nothing names a home, a civic number or a private path.
-  const known = new Set(['/about', '/help', '/listen/', '/manifest-just.webmanifest', ...areas.map(a => '/' + a.id), ...Object.values(HISTORY_AREAS).map(e => '/' + e.address)]);
+  const known = new Set(['/changes/', '/about', '/help', '/listen/', '/manifest-just.webmanifest', ...areas.map(a => '/' + a.id), ...Object.values(HISTORY_AREAS).map(e => '/' + e.address)]);
   for (const [, href] of html.matchAll(/href="(\/[^"]*)"/g)) assert.ok(known.has(href), 'unknown link ' + href);
   assert.doesNotMatch(html, /red roof|\/Users\/|\b\d{3,5} [A-Z][a-z]+ (Road|Rd|Street|St)\b/i);
   console.log(`PASS Just Drive front page: ${areas.length} areas with card, pin and Drive link; mail link on ${areas.filter(a => a.mail).map(a => a.id)}; 1884 links on ${Object.keys(HISTORY_AREAS)}; no script; known links only`);

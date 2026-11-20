@@ -58,11 +58,11 @@ body.tcOn #tcTrack{position:relative;inset:auto;width:100%;height:100%;box-sizin
 body.tcOn #tcKnob{width:52px;height:52px;margin:-26px 0 0 -26px}
 body.tcOn #tcGo,body.tcOn #tcBrake{width:76px;height:84px}
 body.tcOn #tcGo{height:100px}
-#settings{z-index:8;box-sizing:border-box;max-height:calc(100% - 84px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+#settings{z-index:8;box-sizing:border-box;
   overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 body.tcOn #settings{top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-top,env(safe-area-inset-top,0px)));
   right:calc(8px + var(--test-safe-right,env(safe-area-inset-right,0px)));min-width:0;width:min(300px,calc(100% - 16px - var(--test-safe-left,env(safe-area-inset-left,0px)) - var(--test-safe-right,env(safe-area-inset-right,0px))));
-  max-height:calc(100% - 70px - var(--phone-top-gap,6px) - var(--test-safe-top,env(safe-area-inset-top,0px)) - var(--test-safe-bottom,env(safe-area-inset-bottom,0px)))}
+}
 /* The credits button has an inline desktop height. The phone keeps a full touch target. */
 #settings button{min-height:56px!important}
 #endShift.inPanel{position:static;width:100%;margin:0 0 12px}
@@ -76,6 +76,8 @@ body.tcOn #settings{top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-t
   body.tcOn #miniMap{grid-area:1/1/3/2;width:min(96px,100%,max(58px,calc(100cqh - 58px)))}
   body.tcOn #miniMap.folded{width:58px}
   body.tcOn #relief{grid-area:1/2}body.tcOn #radio{grid-area:1/3}
+  body.tcOn #radio span{display:none!important}
+  body.tcOn #radio b{white-space:normal;overflow-wrap:anywhere}
   body.tcOn #photoTag{grid-area:2/2/3/4}
   body.tcOn #photoCaption{-webkit-line-clamp:2}
   body.tcOn #tcGo,body.tcOn #tcBrake,body.tcOn #tcSteer{height:72px}
@@ -183,6 +185,7 @@ body.tcOn #settings #photoCaption{-webkit-line-clamp:unset}
 body.tcOn #settings #placeArrival{height:auto;max-height:none;white-space:normal;font-size:11px;line-height:15px;padding:6px 8px}
 @media(orientation:landscape){body.tcOn.compactPhone #placeArrival{height:14px;max-height:14px;min-height:0;padding:0 4px;border:0;overflow:hidden;white-space:nowrap;font-size:10px;line-height:14px}}
 body.tcOn #settings :is(#radio,#relief,#photoTag){width:100%;max-width:none}
+@media(orientation:landscape){body.tcOn #radio span{display:none!important}body.tcOn #radio b,body.tcOn.compactPhone #radio b{display:block!important;white-space:normal;overflow-wrap:anywhere}}
 #phoneReadoutsPanel[hidden]{display:none}
 `;
 

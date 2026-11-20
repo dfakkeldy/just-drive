@@ -1,9 +1,11 @@
+import { bikeKeys, horseKeys } from './vehicle-choice';
 import { installSettings } from './settings';
 import { Sidewalks } from './sidewalks';
 import { loadSidewalkData } from './sidewalks-cache';
 import { StreamCulverts } from './stream-culverts';
 import { sugarCampStart } from './sugar-camp-start';
 import { PointTupperDriver, driverEnabled, driverLive } from './point-tupper-driver';
+import { KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys } from './controls';
 import { PauseGate } from './pause';
 import { TrafficSignals } from './traffic-signals';
 import { CLEAR_HAZE, MOODS, moodLook, weatherMoment, weatherSettings, weatherUI } from './weather';
@@ -1428,11 +1430,11 @@ const replayButton = (id: string): HTMLButtonElement => {
 const pause = new PauseGate();
 // The title card, an ending and the places panel are their own modals and keep their own keys.
 const pauseAllowed = (): boolean => started && !endings.busy && !placesUI?.busy && !bigMap?.busy;
-const pauseButton = Object.assign(document.createElement('button'), { id: 'pauseButton', textContent: 'Pause', ariaLabel: 'Pause game. Esc or P' });
+const pauseButton = Object.assign(document.createElement('button'), { id: 'pauseButton', hidden: true, textContent: 'Pause', ariaLabel: 'Pause game. Esc or P' });
 const pauseScreen = document.createElement('div');
 pauseScreen.id = 'pauseScreen';
 pauseScreen.hidden = true;
-pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>Room games do not pause</p><pre id="pauseState"></pre><button id="resumeGame">Resume</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button></section>';
+pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>Room games do not pause</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button></section>';
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
@@ -1453,7 +1455,22 @@ function syncPauseUI(): void {
     const station = radio?.tunedDial;
     document.getElementById('pauseTitle')!.textContent = mode === 'drive' && !interiors.busy && ride.kind === 'car'
       ? `Pulled over${vehicle.roadName ? ' on ' + vehicle.roadName : ''}` : 'Paused';
-    document.getElementById('pauseState')!.textContent = [document.getElementById('shiftHud')?.textContent || (mailMode ? 'Shift ready' : 'Free drive'), document.querySelector('#racePanel [role=status]')?.textContent || 'No active race', station ? radio!.stationNamed(station)! : 'Radio quiet', hudLine({ ...hudState, hintsHidden: false })].join('\n');
+    document.getElementById('pauseState')!.textContent = DAILY ? 'Today’s run' : firedMode ? 'Get fired' : mailMode ? 'Deliver the mail' : 'Free drive';
+    document.getElementById('pauseRadio')!.textContent = station ? `On the radio: ${radio!.stationNamed(station)!}` : 'Radio quiet';
+    const race = document.querySelector('#racePanel [role=status]')?.textContent;
+    const raceLine = document.getElementById('pauseRace')!;
+    raceLine.hidden = !multiplayer?.current?.net.race?.startAt || !race || /no active race/i.test(race);
+    raceLine.textContent = raceLine.hidden ? '' : race!;
+    const hints = gamepad.device === 'gamepad' ? padKeys(ride.kind, mailMode, !!radio)
+      : ride.kind === 'horse' ? horseKeys(touchDevice, mailMode) : ride.kind === 'bike' ? bikeKeys(touchDevice)
+      : touchDevice ? (mailMode ? TOUCH : DRIVING_TOUCH) : (mailMode ? KEYS : DRIVING_KEYS);
+    document.querySelector<HTMLDetailsElement>('#pauseKeys')!.open = false;
+    const list = document.querySelector('#pauseKeys dl')!;
+    list.replaceChildren(...hints.flatMap(([key, help]) => {
+      const term = document.createElement('dt'), text = document.createElement('dd');
+      term.textContent = key; text.textContent = help;
+      return [term, text];
+    }));
     document.getElementById('resumeGame')!.focus();
   }
   syncRoadScenePause();
@@ -1474,8 +1491,8 @@ addEventListener('keydown', ev => {
     }
   } else if (ev.code === 'Tab' && !pauseScreen.hidden) {
     ev.preventDefault();
-    const list = [...pauseScreen.querySelectorAll<HTMLButtonElement>('button:not([disabled]):not([hidden])')];
-    const at = list.indexOf(document.activeElement as HTMLButtonElement);
+    const list = [...pauseScreen.querySelectorAll<HTMLElement>('button:not([disabled]):not([hidden]), summary')];
+    const at = list.indexOf(document.activeElement as HTMLElement);
     list[(at + (ev.shiftKey ? list.length - 1 : 1) + list.length) % list.length]?.focus();
   }
 }, { capture: true });
@@ -1493,6 +1510,11 @@ for (const element of [pauseScreen, pauseButton]) for (const event of ['pointerd
 
 // ---- settings -----------------------------------------------------------------------------
 installSettings();
+// Reserve the credit chip's full height, including when it wraps beside property lines.
+const creditChip = document.getElementById('credit');
+if (creditChip) new ResizeObserver(() => {
+  settingsPanel.style.setProperty('--settings-credit-height', `${creditChip.getBoundingClientRect().height + 24}px`);
+}).observe(creditChip);
 {
   const slider = document.getElementById('exag') as HTMLInputElement, label = document.getElementById('exagValue')!;
   const panel = document.getElementById('settings')!;
@@ -1798,6 +1820,8 @@ const hudState: HudState = {
   showRuts: params.has('lawn'), ruts: 0, lawns: 0, drone: '',
 };
 function frame(now: number) {
+  pauseButton.hidden = !started || bare;
+  document.body.classList.toggle('gameStarted', started);
   if (page.stopped) return;
   try {
   gamepad.poll(now);
@@ -2074,6 +2098,8 @@ function frame(now: number) {
 }
 // Settings > Advanced: on phone detail, once the far views pack is installed (desktop always draws it).
 if (!bare && LOW && farPack) farPhoneSetting(advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice), farPhone.choice, farPhone.fromUrl, touchDevice);
+const graphics = document.getElementById('graphics');
+if (graphics) (document.getElementById('advanced') ?? advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice))?.append(graphics);
 resize();
 document.getElementById('boot')?.remove();
 // Finalize all initial material hooks before their first compile. Activation only flips a uniform.

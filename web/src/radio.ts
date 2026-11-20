@@ -297,7 +297,7 @@ export class Radio extends RadioPlayer {
     this.chip.classList.toggle('weak', weak);
     this.chip.classList.toggle('call', !off && !lost && !!this.callLine);
     // The station's name keeps its place when the signal goes, so the readout keeps its size; only the song's line changes.
-    this.dial.textContent = off ? '♪ RADIO OFF' : `${this.stations[this.station].dial} ${this.stations[this.station].name}`;
+    this.dial.textContent = off ? '♪ RADIO OFF' : `${this.stations[this.station].dial} ${this.stations[this.station].name}${document.body.classList.contains('tcOn') ? ' ♪' : ''}`;
     const title = off ? '' : this.callLine || this.stations[this.station].tracks[this.track].title;
     // A call line is shown as it is: the player's name has the room.
     this.song.textContent = lost ? 'NO SIGNAL' : weak && !this.callLine ? `WEAK · ${title}` : title;

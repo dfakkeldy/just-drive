@@ -54,3 +54,11 @@ for (const kind of ['car','bike','truck','sxs','horse']) for (const mode of ['dr
 }
 assert.equal(pauseTitle('drive',{busy:false},{kind:'car'},{}),'Pulled over');
 console.log('PASS live Settings capture restores gear focus; pause title follows ride and foot/free-camera mode');
+
+const pauseMarkup = main.match(/pauseScreen.innerHTML = '([^']+)';/)[1];
+assert.match(pauseMarkup, /<details id="pauseKeys"><summary>Keys<\/summary>/);
+assert.doesNotMatch(pauseMarkup, /<pre|<details[^>]* open/);
+assert.match(pauseMarkup, /id="resumeGame">Resume · Esc/);
+assert.match(main, /pauseButton.hidden = !started \|\| bare/);
+assert.match(main, /querySelectorAll<HTMLElement>\('button:not\(\[disabled\]\):not\(\[hidden\]\), summary'\)/);
+console.log('PASS pause card: closed Keys, Resume key, no HUD dump, start gate and disclosure in the Tab trap');

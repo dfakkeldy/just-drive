@@ -139,7 +139,7 @@ async function ui(m) {
       let starts=0, asks=0, answer;
       start.addEventListener('click',()=>{starts++;});if(scenario!=='no-title') body.append(start);
       const find=(node,id)=>node.id===id?node:node.children.map(n=>find(n,id)).find(Boolean);
-      globalThis.document={body,head,createElement:()=>new Element(),querySelector:s=>find(body,s.slice(1))};
+      globalThis.document={body,head,createElement:()=>new Element(),getElementById:id=>find(body,id),querySelector:s=>find(body,s.slice(1))};
       globalThis.setTimeout=(fn)=>{const id=timers.size+1;timers.set(id,fn);return id;};globalThis.clearTimeout=id=>timers.delete(id);
       globalThis.queueMicrotask=fn=>microtasks.push(fn);globalThis.addEventListener=()=>{};
       const just=scenario==='cross-just';
