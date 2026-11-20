@@ -131,6 +131,44 @@ async function lastSecond(Player, fileSeconds) {
   console.log('PASS a join in a song\'s last second keeps the station on its clock; a wrong list length still plays in order');
 }
 
+// ---- A song that does not arrive ----
+// Offline, only the songs the download saved arrive, and the clock is mostly on one it did not save. The engine must
+// try the next songs at once, round the whole station, and play a saved one. A station with no saved song at all is
+// tried once round, and then only every few seconds (no tight loop).
+async function missingSongs(Player, saved) {
+  const keep = Object.fromEntries(['Audio', 'document', 'localStorage', 'fetch'].map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
+  let radio;
+  try {
+    globalThis.Audio = class { constructor() { this.paused = true; this.src = ''; this.currentTime = 0; } addEventListener() {}
+      play() { this.paused = false; return Promise.resolve(); } pause() { this.paused = true; } };
+    globalThis.document = { hidden: false };
+    globalThis.localStorage = { getItem: () => null, setItem() {} };
+    const asked = [];
+    globalThis.fetch = async (url) => {
+      asked.push(url.slice('/audio/'.length));
+      await new Promise(r => setTimeout(r, 0));   // an answer comes later, as from a network or a worker
+      if (!saved.includes(url.slice('/audio/'.length))) throw new TypeError('Failed to fetch');
+      return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+    };
+    const tracks = ['a', 'b', 'c', 'd', 'e'].map(name => ({ file: name + '.mp3', title: name, seconds: 60 }));
+    radio = new Player([{ dial: '88.1', name: 'A', tracks }], '/audio', '88.1', 'test.radio');
+    radio.live = () => ({ track: 2, at: 10 });   // the clock is on c.mp3
+    radio.start();
+    for (let n = 0; n < 20; n++) await new Promise(r => setTimeout(r, 0));   // well inside the few seconds of a slow retry
+    return { track: radio.track, playing: radio.mine(), asked };
+  } finally {
+    if (radio) radio.station = -1;   // a retry that is still waiting does nothing
+    for (const [key, descriptor] of Object.entries(keep)) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; }
+  }
+}
+{
+  assert.deepEqual(await missingSongs(RadioPlayer, ['b.mp3']), { track: 1, playing: true, asked: ['c.mp3', 'd.mp3', 'e.mp3', 'a.mp3', 'b.mp3'] },
+    'a clock on a song that is not saved goes on at once, round the station, to the saved song');
+  assert.deepEqual(await missingSongs(RadioPlayer, []), { track: 1, playing: false, asked: ['c.mp3', 'd.mp3', 'e.mp3', 'a.mp3', 'b.mp3'] },
+    'a station with no song that arrives is tried once round, then waits');
+  console.log('PASS a song that does not arrive: the radio goes on at once to a saved song, and tries a station with none only once round');
+}
+
 // ---- The links to the page ----
 {
   const title = readFileSync('web/src/title.ts', 'utf8');
@@ -220,4 +258,17 @@ if (process.argv.includes('--mutations')) {
   const old = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
   assert.deepEqual(await lastSecond(old.RadioPlayer, 100), { plain: true, track: 0, moved: false, seek: 0 }, 'the check must fail without the last-second rule');
   console.log('PASS the last-second mutant is rejected');
+  // The engine as it was: a song that did not arrive was followed by one try every few seconds.
+  const missedAnchor = 'if (++this.missed < tracks.length) this.tune(this.track + 1, 0); else this.skipSoon(ticket);';
+  assert.ok(engine.includes(missedAnchor), 'mutation anchor: the turn of tries');
+  const slow = await build({ stdin: { contents: ENGINE, resolveDir: process.cwd() + '/web/src', loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node',
+    plugins: [{ name: 'slow-skip-mutant', setup(b) { b.onLoad({ filter: /radio-player\.ts$/ }, () => ({ contents: engine.replace(missedAnchor, 'this.skipSoon(ticket);'), loader: 'ts' })); } }] });
+  const slowEngine = await import('data:text/javascript;base64,' + Buffer.from(slow.outputFiles[0].text).toString('base64'));
+  assert.notDeepEqual(await missingSongs(slowEngine.RadioPlayer, ['b.mp3']), { track: 1, playing: true, asked: ['c.mp3', 'd.mp3', 'e.mp3', 'a.mp3', 'b.mp3'] }, 'the check must fail with one try every few seconds');
+  // Without a limit, a station with no song that arrives would be asked round and round without a pause.
+  const endless = await build({ stdin: { contents: ENGINE, resolveDir: process.cwd() + '/web/src', loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node',
+    plugins: [{ name: 'endless-turn-mutant', setup(b) { b.onLoad({ filter: /radio-player\.ts$/ }, () => ({ contents: engine.replace(missedAnchor, 'this.tune(this.track + 1, 0);'), loader: 'ts' })); } }] });
+  const endlessEngine = await import('data:text/javascript;base64,' + Buffer.from(endless.outputFiles[0].text).toString('base64'));
+  assert.notDeepEqual(await missingSongs(endlessEngine.RadioPlayer, []), { track: 1, playing: false, asked: ['c.mp3', 'd.mp3', 'e.mp3', 'a.mp3', 'b.mp3'] }, 'the check must fail when the tries never stop');
+  console.log('PASS the slow-skip and endless-turn mutants are rejected');
 }

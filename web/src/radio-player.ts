@@ -88,6 +88,7 @@ export class RadioPlayer {
    */
   protected background = false;
   private ticket = 0;               // a newer tune cancels the work of an older one
+  private missed = 0;               // songs in a row that did not arrive since the radio last joined its clock (see tune)
   private seek: { ticket: number; at: number } | null = null;   // where to join the song once the browser knows its length
   protected readonly plain = new Set<number>();   // stations that leave the clock: these play their songs in order, each from the top
   private waiting = false;          // the browser refused to play before a tap or a key
@@ -311,6 +312,7 @@ export class RadioPlayer {
   /** Joins the station where its own clock says it is. */
   protected tuneLive(): void {
     this.behind = false;
+    this.missed = 0;
     const live = this.live();
     this.tune(live.track, live.at, true);
   }
@@ -326,6 +328,7 @@ export class RadioPlayer {
     if (this.held || !this.on) return;
     this.sounding(false);
     this.fetchSong(tracks[this.track].file).then((url) => {
+      this.missed = 0;
       if (ticket !== this.ticket || this.held || this.station < 0) return;
       if (live && !this.plain.has(this.station)) {
         const now = this.live();
@@ -336,7 +339,13 @@ export class RadioPlayer {
       this.songUrl = url; this.songFile = tracks[this.track].file; this.songTicket = ticket;
       this.audio.src = url;
       this.play();
-    }).catch(() => { if (ticket === this.ticket) this.skipSoon(ticket); });
+    }).catch(() => {
+      if (ticket !== this.ticket) return;
+      // A song that does not arrive: the next one is tried at once, for one full turn of the station. Offline, only the
+      // songs the download saved arrive, and the clock is mostly on one it did not save. One try every few seconds
+      // walked on past the saved songs and left the radio silent. After a full turn with none, one try every few seconds.
+      if (++this.missed < tracks.length) this.tune(this.track + 1, 0); else this.skipSoon(ticket);
+    });
   }
 
   protected play(): void {
