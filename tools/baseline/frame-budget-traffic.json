@@ -15,13 +15,13 @@
 
   "harbour-water/phone-mail":{"calls":60,"triangles":889764,"geometries":58,"textures":50,"programs":14,"readyTiles":65,"requests":135},
 
-  "highway19-far-land/desktop-explore-truck":{"calls":717,"triangles":3498016,"geometries":196,"textures":158,"programs":33,"readyTiles":358,"requests":673},
+  "highway19-far-land/desktop-explore-truck":{"calls":717,"triangles":3498016,"geometries":196,"textures":159,"programs":33,"readyTiles":358,"requests":673},
 
-  "highway19-far-land/desktop-mail":{"calls":714,"triangles":3536036,"geometries":185,"textures":158,"programs":35,"readyTiles":358,"requests":675},
+  "highway19-far-land/desktop-mail":{"calls":714,"triangles":3536036,"geometries":185,"textures":159,"programs":35,"readyTiles":358,"requests":675},
 
-  "highway19-far-land/phone-explore-truck":{"calls":202,"triangles":1282904,"geometries":84,"textures":74,"programs":14,"readyTiles":92,"requests":218},
+  "highway19-far-land/phone-explore-truck":{"calls":202,"triangles":1282904,"geometries":84,"textures":75,"programs":14,"readyTiles":92,"requests":218},
 
-  "highway19-far-land/phone-mail":{"calls":212,"triangles":1302816,"geometries":94,"textures":74,"programs":16,"readyTiles":92,"requests":220},
+  "highway19-far-land/phone-mail":{"calls":212,"triangles":1302816,"geometries":94,"textures":75,"programs":16,"readyTiles":92,"requests":220},
 
   "mines-lookoff-south/desktop-explore-truck":{"calls":542,"triangles":3186135,"geometries":239,"textures":144,"programs":35,"readyTiles":219,"requests":371},
 
@@ -31,11 +31,11 @@
 
   "mines-lookoff-south/phone-mail":{"calls":175,"triangles":1198073,"geometries":97,"textures":70,"programs":21,"readyTiles":75,"requests":160},
 
-  "new-player-start/desktop-explore-truck":{"calls":868,"triangles":4141852,"geometries":293,"textures":197,"programs":37,"readyTiles":366,"requests":696},
+  "new-player-start/desktop-explore-truck":{"calls":868,"triangles":4141852,"geometries":293,"textures":198,"programs":37,"readyTiles":366,"requests":696},
 
   "new-player-start/desktop-mail":{"calls":629,"triangles":3045844,"geometries":231,"textures":154,"programs":39,"readyTiles":170,"requests":280},
 
-  "new-player-start/phone-explore-truck":{"calls":233,"triangles":1240844,"geometries":125,"textures":79,"programs":19,"readyTiles":104,"requests":237},
+  "new-player-start/phone-explore-truck":{"calls":233,"triangles":1240844,"geometries":125,"textures":80,"programs":19,"readyTiles":104,"requests":237},
 
   "new-player-start/phone-mail":{"calls":231,"triangles":1434364,"geometries":114,"textures":83,"programs":19,"readyTiles":74,"requests":154},
 
