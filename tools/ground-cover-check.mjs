@@ -98,6 +98,10 @@ function quarryPainting(TerrainClass,QuarryClass=QuarrySite){
  // 16/255 in the northwest texel gives about .041 blended alpha, as on the north rim transect.
  style[alphaByte]=16;
  assert.equal(relocate(632241.25,5064594.25,73,191.25,83.125).mineral,true,'faded north rim supplies gravel');
+ style[alphaByte]=255;
+ // A quarter texel north of the opaque texel blends to .55 alpha, so .661 fill leaves .30 visible gypsum: gravel. A nearest
+ // read (alpha 1), or a fade applied to the paint weight before the fill curve, would give grass here.
+ assert.equal(relocate(632234.5,5064414.5,76,191.25,83.267).mineral,true,'half-faded style keeps gravel where the gypsum still shows');
  paint.array.fill(0);paint.setW(opposite,.7);
  style.fill(255);
  assert.equal(relocate(632269,5064428,74).mineral,undefined,'opaque off-road run-up keeps its surface');
@@ -128,7 +132,10 @@ quarryPainting(Terrain);console.log('PASS quarry paint triangles feed contact wh
 assert.match(TERRAIN_FRAG,/mineralFill=smoothstep\(\.05,\.60,max\(vCoast\.x,vCoast\.w\)\)\*\(1\.0-tree\)/);
 assert.match(TERRAIN_FRAG,/float tree = smoothstep\(1\.8, 3\.5, canopy\) \* hull/);
 assert.ok(TERRAIN_FRAG.includes(`ring *= 1.0 - step(${QUARRY_GRAVEL_FILL}, exposedGypsum);`),'grass root shading uses the visible gypsum cutoff');
-assert.match(TERRAIN_FRAG,/#ifdef STUNT_PARK\s*exposedGypsum \*= 1\.0 - siteStyle\.a;\s*#endif\s*if \(canopy <= 1\.6\) ring/,'park style fades exposed gypsum only in the park shader');
+assert.match(TERRAIN_FRAG,/float exposedGypsum = mineralFill;\s*#ifdef STUNT_PARK\s*exposedGypsum \*= 1\.0 - siteStyle\.a;\s*#endif\s*if \(canopy <= 1\.6\) ring/,'park style fades exposed gypsum only in the park shader');
+// The CPU style read above is bilinear at the grid's texel centres; these two GPU facts make that true.
+assert.ok(readFileSync('web/src/terrain.ts','utf8').includes('styleTex.minFilter=styleTex.magFilter=THREE.LinearFilter'),'the park style texture is filtered linearly, as the CPU style read assumes');
+assert.ok(readFileSync('web/src/stunt-ground-style.ts','utf8').includes('texture2D(tSiteStyle,(vUv*256.0+0.5)/257.0)'),'the park shader samples style at the terrain grid texel centres');
 assert.equal(quarryGypsumFill(.6,1.8,1),1);
 assert.equal(quarryGypsumFill(.6,3.5,1),0);
 assert.equal(QUARRY_GRAVEL_FILL,.25);
