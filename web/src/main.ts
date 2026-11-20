@@ -115,7 +115,7 @@ import { readLightStudy, studyScale, studyLightingElevation, lightStudyUI, readD
 import { chooseYardLights, nightPalette } from './night-rules';
 import { Night, NightShading } from './night';
 import { HarbourLights } from './harbour-lights';
-import { Terrain, prefetchGroundCover, type Manifest } from './terrain';
+import { Terrain, type Manifest } from './terrain';
 import { createTitle } from './title';
 import { Endings } from './ending';
 import { YardJob } from './yard-job';
@@ -222,10 +222,10 @@ const getJson = async (name: string) => (await fetch(`${base}/${name}`)).json();
 await initStore(base);
 // Every boot read below needs only the manifest, so all start now, under the same conditions as before. Each line that used
 // to start its read now waits for it there (boot-tasks.ts), so the build order and the failures stay as they were.
+// The ground class read stays in terrain.ts: that file is an input of the installed sidewalk bake (tools/sidewalks_bake.py).
 const landmarksRead = AREA.landmarks ? early(getJson('landmarks.json')) : null;
 const buildingsRead = manifest.buildings ? early(getJson(manifest.buildings.file)) : null;
 const stylesRead = ERA.modern && manifest.buildingStyles ? early(getJson(manifest.buildingStyles.file)) : null;
-if (ERA.modern) prefetchGroundCover(manifest, base);
 const pavedRead = ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1') ? early(readFile(base, 'paved/index.json')) : null;
 const cemeteryEntry = (manifest as Manifest & { cemeteries?: { file: string } }).cemeteries;
 const cemeteriesRead = ERA.modern && cemeteryEntry ? early(getJson(cemeteryEntry.file)) : null;

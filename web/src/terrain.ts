@@ -11,7 +11,6 @@ import { updateCoastView } from './coast-view';
 import { coastRecessUniforms, RECESSES, type RockSite } from './coast-site';
 import { BROOK_SAMPLE, brookBlend, brookDistance, brookField, Streams } from './streams';
 import { GroundCover, type GroundMeta, clearsGroundTrees } from './ground-cover';
-import { early, inTask } from './boot-tasks';
 
 export interface Manifest {
   area?: { id: string; name: string };
@@ -195,20 +194,6 @@ export function drawnRoadBytes(road: Uint8Array): Uint8Array {
     out[k] = (road[k] & 48) | 3;
   }
   return out;
-}
-
-// The ground class bytes, read once. main.ts starts the read beside the other boot reads, before the Terrain exists;
-// readGroundCover takes it from here.
-const groundReads = new Map<string, Promise<ArrayBuffer>>();
-async function groundBytes(url: string): Promise<ArrayBuffer> {
-  const response = await fetch(url);
-  if (!response.ok) throw Error('Ground classes unavailable');
-  return response.arrayBuffer();
-}
-/** Starts the read readGroundCover will wait for, under the same rules: nothing without version 1 ground classes. */
-export function prefetchGroundCover(manifest: Manifest, base: string): void {
-  const m = manifest.cover.ground;
-  if (m && m.version === 1) groundReads.set(`${base}/${m.file}`, early(groundBytes(`${base}/${m.file}`)));
 }
 
 export class Terrain {
@@ -399,8 +384,9 @@ export class Terrain {
       const m=this.manifest.cover.ground;if(!m)return;
       if(m.version!==1)throw Error('Unsupported ground classes');
       // Root files are copied beside packs.json, not listed inside terrain packs.
-      const url=`${this.base}/${m.file}`,started=groundReads.get(url);groundReads.delete(url);
-      this.groundCover=new GroundCover(await (started?inTask(started):groundBytes(url)),m.width,m.height);
+      const response=await fetch(`${this.base}/${m.file}`);
+      if(!response.ok)throw Error('Ground classes unavailable');
+      this.groundCover=new GroundCover(await response.arrayBuffer(),m.width,m.height);
     })();
   }
   /** True once the class runs are read. Modern land only: main.ts skips the read in the 1884 era. */
