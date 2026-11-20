@@ -8,7 +8,7 @@ import { eraRoadField } from './era';
 import { MIRROR_TERRAIN_VERT, TERRAIN_FRAG, TERRAIN_VERT, WATER_MASK_FRAG } from './shaders';
 import { readFile } from './store';
 import { updateCoastView } from './coast-view';
-import { coastRecessUniforms, RECESSES, type RockSite } from './coast-site';
+import { coastRecessUniforms, quarryGypsumFill, QUARRY_GRAVEL_FILL, RECESSES, type RockSite } from './coast-site';
 import { BROOK_SAMPLE, brookBlend, brookDistance, brookField, Streams } from './streams';
 import { GroundCover, type GroundMeta, clearsGroundTrees } from './ground-cover';
 
@@ -51,7 +51,7 @@ export interface Surface {
   deck?: boolean;
   water?: boolean;     // mapped inland water; its LiDAR return is the surface, not a measured bed
   waterLimit?: number; // drawn water/return height plus contact tolerance; airborne bodies above it stay dry
-  mineral?: boolean;  // confirmed class-6 cell; handling only, never a road, grading or invented collision
+  mineral?: boolean;  // confirmed class 6 or authored quarry paint; never a road, grading or collision
   level: number;        // detail level the answer came from
 }
 
@@ -1004,14 +1004,7 @@ export class Terrain {
     }
     if (!t?.mesh) return null;
     this.use(t);
-    const seg = segFor(t.level), n = seg + 3;
-    const fa = (x - t.x0) * seg / t.size, fb = (z - t.z0) * seg / t.size;
-    const a = Math.min(Math.floor(fa), seg - 1), b = Math.min(Math.floor(fb), seg - 1);
-    const u = fa - a, v = fb - b, i = (b + 1) * n + a + 1;
-    const p = t.mesh.geometry.getAttribute('position');
-    const h00 = p.getY(i), h10 = p.getY(i + 1), h01 = p.getY(i + n), h11 = p.getY(i + n + 1);
-    return u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v
-      : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
+    return this.triangleHeight(t,x,z);
   }
   /** Mapped driving data only; this never enters a ground or deck query. */
   protectedRoadAt(x:number,z:number):boolean {
@@ -1050,10 +1043,36 @@ export class Terrain {
     return null;
   }
   private triangleHeight(t:Tile,x:number,z:number):number {
+    return this.triangleValue(t,x,z,t.mesh!.geometry.getAttribute('position'),1);
+  }
+
+  private triangleValue(t:Tile,x:number,z:number,attr:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,component:number):number {
     const seg=segFor(t.level),n=seg+3,fa=(x-t.x0)*seg/t.size,fb=(z-t.z0)*seg/t.size;
     const a=Math.min(Math.floor(fa),seg-1),b=Math.min(Math.floor(fb),seg-1),u=fa-a,v=fb-b,i=(b+1)*n+a+1;
-    const p=t.mesh!.geometry.getAttribute('position'),h00=p.getY(i),h10=p.getY(i+1),h01=p.getY(i+n),h11=p.getY(i+n+1);
+    const h00=attr.getComponent(i,component),h10=attr.getComponent(i+1,component),h01=attr.getComponent(i+n,component),h11=attr.getComponent(i+n+1,component);
     return u+v<=1?h00+(h10-h00)*u+(h01-h00)*v:h11+(h01-h11)*(1-u)+(h10-h11)*(1-v);
+  }
+
+  private quarryMineral(t:Tile,x:number,z:number,surface:Surface,lerp:(arr:ArrayLike<number>,stride:number,off:number)=>number):boolean {
+    const site=this.coast;
+    // The renderer uses individual trees near the player. Their ground keeps the existing brush boundary.
+    if(!site?.quarryFloorAllowsMineral || surface.canopy>1.6
+      || (surface.kind>0 && surface.roadDist<=surface.halfWidth+.4))return false;
+    const paint=t.mesh?.geometry.getAttribute('coast');
+    if(!paint)return false;
+    const weight=Math.max(this.triangleValue(t,x,z,paint,0),this.triangleValue(t,x,z,paint,3));
+    const uniforms=(t.mesh!.material as THREE.ShaderMaterial).uniforms;
+    const style=uniforms.tSiteStyle?.value.image.data;
+    if(style){
+      // Sample the same nearest style texel as STUNT_TERRAIN_FRAG, including off-road run-ups.
+      const a=Math.round((x-t.x0)*T/t.size),b=Math.round((z-t.z0)*T/t.size);
+      if(style[(b*S+a)*4+3]>0)return false;
+    }
+    // tNormal.b is linearly sampled in the shader at the same grid coordinates. Each canopy byte is 0.2 m.
+    const renderCanopy=clearsGroundTrees(this.groundClassAt(x,z))?0:lerp(uniforms.tNormal.value.image.data,4,2)*.2;
+    if(quarryGypsumFill(weight,renderCanopy,uniforms.hull.value)<QUARRY_GRAVEL_FILL)return false;
+    const h=this.seaLevel+(surface.ground-this.seaLevel)/this.exag;
+    return site.quarryFloorAllowsMineral(x,z,h);
   }
 
   surfaceAt(x: number, z: number): Surface | null {
@@ -1092,7 +1111,10 @@ export class Terrain {
     out.ground = this.withDeck(x, z, out.ground,out);
     const waterLevel=out.deck?null:this.waterLevelAt(x,z,out.ground);
     if (waterLevel!==null) {out.water=true;out.waterLimit=Math.max(waterLevel,out.ground)+.25;}
-    if(!this.cartRoads&&!out.deck&&!out.water&&this.groundClassAt(x,z)===6)out.mineral=true;
+    if(!this.cartRoads&&!out.deck&&!out.water){
+      const quarry=this.coast?.quarry&&this.coast.contains(x,z);
+      if(quarry ? this.quarryMineral(t,x,z,out,lerp) : this.groundClassAt(x,z)===6)out.mineral=true;
+    }
     return out;
   }
 

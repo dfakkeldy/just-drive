@@ -263,6 +263,7 @@ point-tupper-driver-browser-low	unproven	no	LOW display-model AI since the proje
 point-tupper-driver-budget	unproven	no	rented Mac mini (apple-check-host) M4 PASS in PR #164; not yet run on the MacBook or on Linux
 point-tupper-driver-budget-low	unproven	no	LOW display-model AI since the project brief: apple-check-host M4 / Edge 157 PASS 25 s (start without and with each kind fits PHONE_CAP (tools/frame-budget-policy.mjs: 227 calls, 1,475,392 triangles)); not yet run on the MacBook or on Linux
 engine-sound-browser	unproven	no	new in the project brief; first runs on apple-check-host (headless Edge plays into a silent output; reads the graph state, not heard sound)
+engine-sound-listen	unproven	no	new 20 Nov 2026; renders audio offline and reads the samples (no land, no heard sound); first runs on a Mac M1 Pro with Edge 157
 port-hawkesbury	portable	no	no browser; apple-check-host PASS on the Point Tupper delta branch
 port-hawkesbury-browser	unproven	no	apple-check-host Edge PASS on the Point Tupper delta branch; not yet run on the MacBook or on Linux
 highland-browser	portable	no	Apple M4 Metal / Chrome 157 PASS during the project brief; Blender rebuilds deferred to MacBook

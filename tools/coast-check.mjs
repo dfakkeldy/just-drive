@@ -35,8 +35,12 @@ c.enabled=false;c.update(cam);assert.equal(c.group.visible,false,'A/B switch');
 console.log('PASS coast zones, bench/highland/away guards, sea/beach/cliff vegetation, shallow recesses, one instanced draw, drawn-mesh placement and local CPU gate');
 
 // `use` marks a tile as used for the tile cache (terrain.ts); this stand-in has no cache, so it is a no-op.
-const hide=new THREE.Vector4(1,0,0,0),fake={use(){},find:()=>null,tiles:new Map([['8/0_0',{level:8,x0:0,z0:0,size:256,mesh:{visible:true,material:{uniforms:{hideQuad:{value:hide}}},geometry:{getAttribute:()=>({getY:()=>10})}}}]])};
-assert.equal(Terrain.prototype.meshHeightAt.call(fake,32,32,true),null,'discarded parent quadrant is not drawn land');assert.equal(Terrain.prototype.meshHeightAt.call(fake,192,192,true),10,'retained parent quadrant is drawn land');
+const hide=new THREE.Vector4(1,0,0,0);
+const fake=Object.assign(Object.create(Terrain.prototype),{use(){},find:()=>null,tiles:new Map([['8/0_0',{
+  level:8,x0:0,z0:0,size:256,mesh:{visible:true,material:{uniforms:{hideQuad:{value:hide}}},
+    geometry:{getAttribute:()=>({getComponent:(_i,component)=>{assert.equal(component,1);return 10;}})}},
+}]])});
+assert.equal(fake.meshHeightAt(32,32,true),null,'discarded parent quadrant is not drawn land');assert.equal(fake.meshHeightAt(192,192,true),10,'retained parent quadrant is drawn land');
 
 const perspective=new THREE.PerspectiveCamera(55,390/844,.3,10000),material={uniforms:{coastPixelScale:{value:0}}};
 const expected=2*Math.tan(55*Math.PI/360)/844;assert.ok(Math.abs(coastPixelScale(perspective,844)-expected)<1e-12);

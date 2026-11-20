@@ -188,6 +188,11 @@ export class QuarrySite implements Site,RockSite {
     const shelf=smooth(.015,.12,Math.abs(curvature))*(1-smooth(.30,.55,slope))*smooth(.10,.22,slope)*boundary;
     return [Math.max(face,spoil),wet?1:-foot,shoreLevel/100,Math.max(shore,shelf*.65)];
   }
+  quarryFloorAllowsMineral(x:number,z:number,h:number):boolean {
+    const e=x+this.village[0],n=this.village[1]-z;
+    return e>=QUARRY_BOX[0]&&e<=QUARRY_BOX[2]&&n>=QUARRY_BOX[1]&&n<=QUARRY_BOX[3]
+      &&!lakeAt(e,n)&&talusPaint(e,n,h)*.92<=.001;
+  }
   treeAllowed(x:number,z:number,h:number,slope:number):boolean{
     if(!this.contains(x,z))return true;
     const level=this.waterLevel(x,z);
