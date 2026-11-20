@@ -202,7 +202,7 @@ export function lightStudyUI(study: LightStudy, when: Date, lat: number, lon: nu
   control.open = study.active || !!study.message;
   render();
   const weather = panel.querySelector('#weatherSet');
-  (weather ?? panel.querySelector('#settingsHeader'))?.after(control);
+  (weather ?? panel.querySelector('#endShift.inPanel') ?? panel.querySelector('#settingsHeader'))?.after(control);
   if (study.active) {
     // Capture before the game's existing slider listener, which remembers ordinary game preferences.
     panel.addEventListener('change', event => {

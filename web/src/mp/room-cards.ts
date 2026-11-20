@@ -43,7 +43,8 @@ export function mountRoomCard(card: HTMLElement, touch: boolean): void {
     home.setAttribute('aria-label', 'Room');
     if (settings) {
       home.append(Object.assign(document.createElement('h3'), { textContent: 'Room' }), Object.assign(document.createElement('p'), { className: 'roomCaption', textContent: 'A room keeps going when you pause.' }));
-      const header = settings.querySelector('#settingsHeader');
+      // Below the header and the phone's END SHIFT, which stay at the top of the sheet.
+      const header = settings.querySelector('#endShift.inPanel') ?? settings.querySelector('#settingsHeader');
       if (header) header.after(home); else settings.append(home);
     } else document.body.append(home);
   }
