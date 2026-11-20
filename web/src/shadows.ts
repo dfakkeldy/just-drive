@@ -110,6 +110,34 @@ export class SunShadows {
   }
 }
 
+const lookDir = new THREE.Vector3();
+/**
+ * The free camera's shadow focus: the ground the camera looks at. Writes it into `focus` and returns the reach,
+ * the distance that sizes the box (SunShadows.update's `distance`).
+ */
+export function lookFocus(camera: THREE.Camera, terrain: { heightAt(x: number, z: number): number | null }, seaLevel: number, focus: THREE.Vector3): number {
+  // Walk down the line of sight to the ground, in coarse steps: that is what the picture is of.
+  let reach: number;
+  lookDir.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  for (reach = 20; reach < 1400; reach *= 1.35) {
+    focus.copy(camera.position).addScaledVector(lookDir, reach);
+    const g = terrain.heightAt(focus.x, focus.z);
+    if (g !== null && focus.y <= g) { focus.y = g; break; }
+  }
+  if (reach >= 1400) {
+    // A high, shallow look meets no ground within reach. Then the box sits on the ground ahead of the camera,
+    // as far ahead as the camera is high, and is sized for that height.
+    const under = terrain.heightAt(camera.position.x, camera.position.z) ?? seaLevel;
+    const height = Math.max(20, camera.position.y - under), flat = Math.hypot(lookDir.x, lookDir.z);
+    // A look that is nearly straight down has no "ahead": the box then stays under the camera.
+    const ahead = flat > 0.2 ? height / flat : 0;
+    focus.set(camera.position.x + lookDir.x * ahead, 0, camera.position.z + lookDir.z * ahead);
+    focus.y = terrain.heightAt(focus.x, focus.z) ?? under;
+    reach = Math.min(1400, height * 1.5);
+  }
+  return reach;
+}
+
 /** Solid lit models cast and receive. Flat decals on the ground only receive. Shader-drawn things (land, sea, sky) do neither here. */
 function flag(o: THREE.Object3D): void {
   const mesh = o as THREE.Mesh;

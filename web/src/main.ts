@@ -104,7 +104,7 @@ import { MineInterior } from './interior-mine';
 import { LawnDemo } from './shift-demo';
 import { Route } from './route';
 import { SEA_FRAG, SEA_VERT } from './shaders';
-import { SunShadows } from './shadows';
+import { SunShadows, lookFocus } from './shadows';
 import { Streams, type StreamFile } from './streams';
 import { WaterReflections } from './water';
 import { initStore } from './store';
@@ -1814,7 +1814,7 @@ function drawWorld(): void {
 }
 if (drawProbe) Object.assign((window as unknown as { mmm?: Record<string, unknown> }).mmm ??= {}, { finish, drawProbe });
 
-const shadowFocus = new THREE.Vector3(), shadowDir = new THREE.Vector3();
+const shadowFocus = new THREE.Vector3();
 function drawEnding(dt: number): void {
   if (ride.update) updateWorld('ride', 0);
   engineSound?.update(dt, null);
@@ -2025,26 +2025,7 @@ function frame(now: number) {
     // The shadow box follows the car; with the free camera it sits a little ahead of the lens.
     let reach = 0;
     if (mode === 'drive') shadowFocus.set(vehicle.x, vehicle.y, vehicle.z);
-    else {
-      // Walk down the line of sight to the ground, in coarse steps: that is what the picture is of.
-      shadowDir.set(0, 0, -1).applyQuaternion(camera.quaternion);
-      for (reach = 20; reach < 1400; reach *= 1.35) {
-        shadowFocus.copy(camera.position).addScaledVector(shadowDir, reach);
-        const g = terrain.heightAt(shadowFocus.x, shadowFocus.z);
-        if (g !== null && shadowFocus.y <= g) { shadowFocus.y = g; break; }
-      }
-      if (reach >= 1400) {
-        // A high, shallow look meets no ground within reach. Then the box sits on the ground ahead of the camera,
-        // as far ahead as the camera is high, and is sized for that height.
-        const under = terrain.heightAt(camera.position.x, camera.position.z) ?? SEA_LEVEL;
-        const height = Math.max(20, camera.position.y - under), flat = Math.hypot(shadowDir.x, shadowDir.z);
-        // A look that is nearly straight down has no "ahead": the box then stays under the camera.
-        const ahead = flat > 0.2 ? height / flat : 0;
-        shadowFocus.set(camera.position.x + shadowDir.x * ahead, 0, camera.position.z + shadowDir.z * ahead);
-        shadowFocus.y = terrain.heightAt(shadowFocus.x, shadowFocus.z) ?? under;
-        reach = Math.min(1400, height * 1.5);
-      }
-    }
+    else reach = lookFocus(camera, terrain, SEA_LEVEL, shadowFocus);
     sunShadows.update(realDt, shadowFocus, reach, pictureBusy);
   }
   updateWorld('grass', dt, realDt, now);
