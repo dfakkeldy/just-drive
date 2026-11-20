@@ -1,0 +1,115 @@
+{
+ "version": 1,
+ "bake": "pipeline/36_stage_mabou_wharf.py",
+ "files": [
+  {
+   "file": "terrain/5/12_15.r.png",
+   "before": "778aae0102a18c31174b52c84c1be9b6608890774f5cc64933c2b71359263239",
+   "sha256": "254d413d4202f273a20f06481b58d4419343fce792fae1bf2e89b38415ddaa29"
+  },
+  {
+   "file": "terrain/5/13_15.r.png",
+   "before": "016dc8313436b37c34a95da71802f292da2ca5a814114ebfb4ee748bdc7eeef1",
+   "sha256": "fc2786864580e07910f2425163c691bf89340656d0be3f5892600a05746096f5"
+  },
+  {
+   "file": "terrain/6/25_30.r.png",
+   "before": "07259aea0225e85f97d907fe7757ee54adeeb62a0be5218c1d017bc1223c0659",
+   "sha256": "5660b24827b021b20408909a2c9baa9048d4e6752eea54e61e00a1d62f6bf0d7"
+  },
+  {
+   "file": "terrain/6/26_30.r.png",
+   "before": "1d21ed426d459683ea8655a919b883dbcee2d86bcf8de76f0806640b6abd1c5a",
+   "sha256": "2db2288fb3b8bbe531101f2f6f05cbddf2ea13470bd48d5083beabb71acbfbda"
+  },
+  {
+   "file": "terrain/7/51_60.r.png",
+   "before": "7c937186e299970e546c447509865236a3e820197e35bea431c418f2ed3dbb17",
+   "sha256": "fb4f5874f46e8caa54bdd9cc0c7060429fae6e78834304e4b493531a6726cc7b"
+  },
+  {
+   "file": "terrain/7/52_60.r.png",
+   "before": "551af67ecf9a5950453574bb48f6f6ccd08782d66816bc01ced0e32340a21632",
+   "sha256": "22ff039ca27cdd79c551ed7a1254007ea90016687ecff7b9872b0f6eb958f885"
+  },
+  {
+   "file": "terrain/7/53_60.r.png",
+   "before": "f19a7021a4f736159c51d1a8cb0e0e7c82843a551ca44cd4b2e41821618e9043",
+   "sha256": "c7605b4c59ebe5f937a2bd27f2cb6ef03055894f29269d7af850d39d203c79e5"
+  },
+  {
+   "file": "terrain/7/53_61.r.png",
+   "before": "9731484872813a432d855705acc5553e89968cb2912c87df9fc27095c28fc65b",
+   "sha256": "99d8683b91dfa56a6cae95e227930fd2fe737b22819d73a8e9f884b9a1d4878f"
+  },
+  {
+   "file": "terrain/8/103_120.r.png",
+   "before": "31f648b936b43139618739436f35461dd4a67326622f694a2fd5b5e44e83044a",
+   "sha256": "3dd86c7f52c5d3cc4e642f056eaf8c41a69089375ec2e8a6efc0b3004d9c350c"
+  },
+  {
+   "file": "terrain/8/104_120.r.png",
+   "before": "cccf141e5e61a817a56315711a84e64a5a3307c6a222b0b5404f93fef9bd5c46",
+   "sha256": "5739e2467663bddc3605a5e6a5bb780082cb658f87a342c6a6bcecc6834d2f11"
+  },
+  {
+   "file": "terrain/8/106_121.r.png",
+   "before": "efc1e315ddd2f36136f411cc64d5add3a83170d4483223fea75366001ee6e303",
+   "sha256": "8d5b8f984f0ef65ffd980c97f010a2a9193a908d2ce670f6573bf721f145bc71"
+  },
+  {
+   "file": "terrain/buildings.json",
+   "before": "2e6c321f544fabaa589f94b81e2b853140432cf84d40ca18f9081dff8919f7fc",
+   "sha256": "08c8b8e8e4c00e00951b628af27b59289bb76877a544b80ffef1ccb57b3936dd"
+  },
+  {
+   "file": "terrain/cemeteries.json",
+   "before": "9895b32dd401ddf9619ee809e3cad5f1bc500321cf2c4d6172e5878b16f66203",
+   "sha256": "2c88a9b4f94b483288bacf5407ec91b4a5898bffe035751f41844acc514ad40f"
+  },
+  {
+   "file": "terrain/props.json",
+   "before": "9b5c6c22d0de2b8b9163c572bd1af0ed01c680b5fa904721c2c8e5935c5fb0e8",
+   "sha256": "022fa63d463326771f930388f9564ca009027a8d2d6d19ab10b8563f51de5834"
+  },
+  {
+   "file": "terrain/roads.json",
+   "before": "d16a758871a4a7fd42ef23d8fa5255bb2b8b420a2fdff67d71cf9f1ce075216a",
+   "sha256": "5da2b7c97ea66619fbe0f9293aa812d065990d4bdda0e9788e7f9d76c4ec5611"
+  }
+ ],
+ "manifests": [
+  {
+   "folder": "terrain",
+   "before": {
+    "buildings": {
+     "count": 1073
+    },
+    "buildingStyles": {
+     "count": 1052
+    },
+    "trees": {
+     "count": 1058173
+    }
+   },
+   "after": {
+    "buildings": {
+     "count": 1073
+    },
+    "buildingStyles": {
+     "count": 1052
+    },
+    "trees": {
+     "count": 1058173
+    }
+   }
+  }
+ ],
+ "undo": {
+  "poles": {
+   "994": 987
+  },
+  "kinds": {},
+  "driveways": []
+ }
+}

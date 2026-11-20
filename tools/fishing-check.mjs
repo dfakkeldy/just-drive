@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import {assert,writeFileSync,out,base,port,sleep,tab,ws,errors,send,read,shot,key,load} from './fishing-browser.mjs';
 const stats=[];
+// The four original batches now carry the working boats, gear, hoist, lights and floats.
+const triangleCap = { desktop: 36000, phone: 12000 };
 const buttonsFit=async(w,h)=>{
   const buttons=await read(`(()=>[...document.querySelectorAll('#endingChoices button')].map(b=>{const r=b.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,top:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===b}}))()`);
   assert.ok(buttons.length>0);for(const b of buttons)assert.ok(b.h>=56&&b.x>=24&&b.y>=20&&b.x+b.w<=w-24+.1&&b.y+b.h<=h-20+.1&&b.top,`${w}x${h}: full safe button ${JSON.stringify(b)}`);
@@ -10,7 +12,7 @@ async function budgets(label,departing=false){
   for(let i=0;i<8;i++){await read('ft.draw(true)');await sleep(80)}
   const on=await read('ft.draw(true)');await sleep(80);const off=await read('ft.draw(false)');await read('ft.f.group.visible=true;ft.r.info.autoReset=true');
   const row={mode:label,phase:departing?'departure':'quay',on,off,extraCalls:on.calls-off.calls,extraTriangles:on.triangles-off.triangles,geometry:await read('ft.f.triangles')};stats.push(row);console.log('BUDGET',JSON.stringify(row));
-  assert.ok(row.extraCalls>0&&row.extraCalls<= (label==='phone'?4:8),'R13 draw budget');assert.ok(row.extraTriangles>0&&row.extraTriangles<=(label==='phone'?12500:25000),'R13 triangle budget');
+  assert.ok(row.extraCalls>0&&row.extraCalls<= (label==='phone'?4:8),'R13 draw budget');assert.ok(row.extraTriangles>0&&row.extraTriangles<=triangleCap[label],'R13 triangle budget');
   if(label==='desktop')assert.equal(await read('mmm.water.reflected.has(ft.f.group)'),true,'R13 existing mirror includes site');
 }
 async function wakeBreak(label){

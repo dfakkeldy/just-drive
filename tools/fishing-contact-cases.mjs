@@ -8,6 +8,11 @@ const pixels=new Map();
 globalThis.__fishingReadPng=(base,path)=>{if(!pixels.has(path))pixels.set(path,execFileSync('python3',['-c','from PIL import Image;import sys;sys.stdout.buffer.write(Image.open(sys.argv[1]).convert("RGBA").tobytes())',join(base,path)],{maxBuffer:1024*1024}));return new Uint8ClampedArray(pixels.get(path));};
 THREE.TextureLoader.prototype.load=()=>new THREE.Texture();
 const manifest=JSON.parse(readFileSync(join(base,'manifest.json'))),data=JSON.parse(readFileSync(join(base,'roads.json'))),rows=[],failures=[];
+const accessRoad = data.roads.find(road => road.id === 922);
+assert.ok(accessRoad, 'The Mabou wharf access road is in the terrain');
+const approachSurface = accessRoad.pavement === 'gravel'
+ ? { name: 'gravel', mu: .72, rough: .012 }
+ : { name: 'dirt track', mu: .62, rough: .03 };
 const poses=[];
 for(const u of [-4,12])for(const v of [-20,-12,-4,4,8,9.5,12,20])poses.push([u,v,Math.PI]);
 for(const v of [-26,-18,10,24,66,74])for(const u of [-4,0,7,13])poses.push([u,v,Math.PI]);
@@ -56,7 +61,7 @@ for(const low of [false,true])for(const hill of [1,1.5,2,2.5]){
   const under=t.withGroundContact({y:s.level-.3},()=>t.surfaceAt(s.x+7,s.z+46));if(under.kind===9||under.deck)failures.push(`under deck classified as concrete ${low}/${hill}`);
   const beside=row.surfaces[1],approach=row.surfaces[2];
   if(beside.kind===9||beside.deck||beside.surface!=='grass'||Math.abs(beside.mu-.5)>1e-7||Math.abs(beside.rolling-.09)>1e-7||beside.rough!==.04||beside.shake<=0)failures.push(`beside cap ${low}/${hill}`);
-  if(approach.kind!==4||approach.deck||approach.surface!=='dirt track'||Math.abs(approach.mu-.62)>1e-7||Math.abs(approach.rough-.03)>1e-7)failures.push(`approach changed ${low}/${hill}`);
+  if(approach.kind!==4||approach.deck||approach.surface!==approachSurface.name||Math.abs(approach.mu-approachSurface.mu)>1e-7||Math.abs(approach.rough-approachSurface.rough)>1e-7)failures.push(`approach changed ${low}/${hill}`);
  }
  if(mode!=='surface'){
   const ray=new THREE.Raycaster(new THREE.Vector3(),new THREE.Vector3(0,-1,0));
