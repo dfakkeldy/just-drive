@@ -1694,47 +1694,64 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Segments keep the drive frame's camera, activity and render work between the same updates.
-// Endings keep two explicit positions where shared terrain state prevents an independence proof.
+// Endings move two entries right after a named entry, where shared terrain state prevents an independence proof.
 type WorldSegment = 'ride' | 'before-camera' | 'landscape' | 'landmarks' | 'after-activities' | 'grass' | 'mirror';
-const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolean; endingPosition?: number; update: (dt: number, realDt: number, now: number) => void }> = [
-  ...(ride.update ? [{ ...(import.meta.env.DEV ? { name: 'ride' } : {}), segment: 'ride' as const, ending: false, update: (_dt: number, realDt: number) => ride.update!(realDt, !scenePaused() && mode === 'drive') }] : []),
-  { ...(import.meta.env.DEV ? { name: 'yard' } : {}), segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'yardDog' } : {}), segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'home' } : {}), segment: 'before-camera', ending: false, update: () => home?.update(camera.position, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'porch' } : {}), segment: 'before-camera', ending: false, update: (dt, _realDt, now) => { porch?.update(camera.position, vehicle); porchDog?.update(dt, vehicle, now / 1000); } },
-  { ...(import.meta.env.DEV ? { name: 'church' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => church?.update(camera.position, now) },
-  { ...(import.meta.env.DEV ? { name: 'village' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => village?.update(camera.position, now) },
-  { ...(import.meta.env.DEV ? { name: 'hawkesbury' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => hawkesbury?.update(camera.position, now) },
-  { ...(import.meta.env.DEV ? { name: 'mabouMain' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => mabouMain?.update(camera.position, now) },
-  { ...(import.meta.env.DEV ? { name: 'stockpiles' } : {}), segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'cemeteries' } : {}), segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'terrain' } : {}), segment: 'landscape', ending: true, update: () => { terrain.update(camera, scenePaused()); wharves?.update(camera.position); novemberRoads?.update(terrain, camera.position); } },
-  ...(fleet ? [{ ...(import.meta.env.DEV ? { name: 'fleet' } : {}), segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
-  { ...(import.meta.env.DEV ? { name: 'coast' } : {}), segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'lotProps' } : {}), segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'airport' } : {}), segment: 'landscape', ending: true, update: () => airport?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'quarry' } : {}), segment: 'landscape', ending: true, update: () => quarry?.update(camera.position, vehicle) },
-  ...(stuntPark ? [{ ...(import.meta.env.DEV ? { name: 'stuntPark' } : {}), segment: 'landscape' as const, ending: true, update: (dt:number) => stuntPark.update(dt,vehicle,camera.position) }] : []),
-  { ...(import.meta.env.DEV ? { name: 'trees' } : {}), segment: 'landscape', ending: true, endingPosition: 1, update: () => trees?.update(terrain.drawnFine, camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'landmarks' } : {}), segment: 'landmarks', ending: true, update: () => landmarks?.update(camera) },
-  { ...(import.meta.env.DEV ? { name: 'history' } : {}), segment: 'after-activities', ending: false, update: dt => history?.update(camera.position, dt) },
-  { ...(import.meta.env.DEV ? { name: 'roads' } : {}), segment: 'after-activities', ending: true, update: () => { roads.update(camera.position); canal?.update(0, vehicle, !multiplayer?.choice.on); } },
-  { ...(import.meta.env.DEV ? { name: 'sidewalks' } : {}), segment: 'after-activities', ending: true, update: () => sidewalks?.update() },
-  ...(trafficSignals ? [{ ...(import.meta.env.DEV ? { name: 'trafficSignals' } : {}), segment: 'after-activities' as const, ending: false, update: (dt: number, realDt: number) => trafficSignals!.update(dt, camera.position, realDt) }] : []),
-  { ...(import.meta.env.DEV ? { name: 'edge' } : {}), segment: 'after-activities', ending: false, update: () => edge?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'mineSite' } : {}), segment: 'after-activities', ending: false, update: () => mineSite?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'deckhand' } : {}), segment: 'after-activities', ending: false, update: dt => deckhand?.update(dt, vehicle, camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'fishing' } : {}), segment: 'after-activities', ending: true, update: dt => fishing?.update(dt, camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'roadScene' } : {}), segment: 'after-activities', ending: false, update: () => roadScene?.update(camera) },
-  { ...(import.meta.env.DEV ? { name: 'schoolBus' } : {}), segment: 'after-activities', ending: false, update: () => schoolBus?.update(camera) },
-  { ...(import.meta.env.DEV ? { name: 'ambientTraffic' } : {}), segment: 'after-activities', ending: false, update: () => ambientTraffic?.update(camera, vehicle, !multiplayer?.choice.on) },
-  { ...(import.meta.env.DEV ? { name: 'roadAnimals' } : {}), segment: 'after-activities', ending: false, update: dt => roadAnimals?.update(dt, vehicle, !multiplayer?.choice.on) },
-  { ...(import.meta.env.DEV ? { name: 'props' } : {}), segment: 'after-activities', ending: true, endingPosition: 8, update: dt => props?.update(camera, dt) },
-  { ...(import.meta.env.DEV ? { name: 'yardProps' } : {}), segment: 'after-activities', ending: false, update: dt => yardProps?.update(camera, dt) },
-  { ...(import.meta.env.DEV ? { name: 'harbourLights' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
-  { ...(import.meta.env.DEV ? { name: 'tall' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
-  { ...(import.meta.env.DEV ? { name: 'grass' } : {}), segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },
-  { ...(import.meta.env.DEV ? { name: 'mirror' } : {}), segment: 'mirror', ending: true, update: () => waterReflections?.update(camera) },
+// The frame's own flags at the mirror segment, for the updates there that read them. One reused record.
+const mirrorFlags = { driving: false, bossClock: false, bossHeld: false };
+const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean; endingAfter?: string; update: (dt: number, realDt: number, now: number) => void }> = [
+  ...(ride.update ? [{ name: 'ride', segment: 'ride' as const, ending: false, update: (_dt: number, realDt: number) => ride.update!(realDt, !scenePaused() && mode === 'drive') }] : []),
+  { name: 'yard', segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
+  { name: 'yardDog', segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
+  { name: 'home', segment: 'before-camera', ending: false, update: () => home?.update(camera.position, vehicle) },
+  { name: 'porch', segment: 'before-camera', ending: false, update: (dt, _realDt, now) => { porch?.update(camera.position, vehicle); porchDog?.update(dt, vehicle, now / 1000); } },
+  { name: 'church', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => church?.update(camera.position, now) },
+  { name: 'village', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => village?.update(camera.position, now) },
+  { name: 'hawkesbury', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => hawkesbury?.update(camera.position, now) },
+  { name: 'mabouMain', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => mabouMain?.update(camera.position, now) },
+  { name: 'stockpiles', segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
+  { name: 'cemeteries', segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
+  { name: 'terrain', segment: 'landscape', ending: true, update: () => terrain.update(camera, scenePaused()) },
+  { name: 'wharves', segment: 'landscape', ending: true, update: () => wharves?.update(camera.position) },
+  { name: 'novemberRoads', segment: 'landscape', ending: true, update: () => novemberRoads?.update(terrain, camera.position) },
+  ...(fleet ? [{ name: 'fleet', segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
+  { name: 'coast', segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
+  { name: 'lotProps', segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
+  { name: 'airport', segment: 'landscape', ending: true, update: () => airport?.update(camera.position) },
+  { name: 'quarry', segment: 'landscape', ending: true, update: () => quarry?.update(camera.position, vehicle) },
+  ...(stuntPark ? [{ name: 'stuntPark', segment: 'landscape' as const, ending: true, update: (dt:number) => stuntPark.update(dt,vehicle,camera.position) }] : []),
+  { name: 'trees', segment: 'landscape', ending: true, endingAfter: 'novemberRoads', update: () => trees?.update(terrain.drawnFine, camera.position) },
+  { name: 'culvertMouths', segment: 'landscape', ending: false, update: () => culvertMouths?.update(camera.position) },
+  { name: 'landmarks', segment: 'landmarks', ending: true, update: () => landmarks?.update(camera) },
+  { name: 'history', segment: 'after-activities', ending: false, update: dt => history?.update(camera.position, dt) },
+  { name: 'roads', segment: 'after-activities', ending: true, update: () => roads.update(camera.position) },
+  { name: 'canal', segment: 'after-activities', ending: true, update: () => canal?.update(0, vehicle, !multiplayer?.choice.on) },
+  { name: 'sidewalks', segment: 'after-activities', ending: true, update: () => sidewalks?.update() },
+  ...(trafficSignals ? [{ name: 'trafficSignals', segment: 'after-activities' as const, ending: false, update: (dt: number, realDt: number) => trafficSignals!.update(dt, camera.position, realDt) }] : []),
+  { name: 'edge', segment: 'after-activities', ending: false, update: () => edge?.update(camera.position) },
+  { name: 'mineSite', segment: 'after-activities', ending: false, update: () => mineSite?.update(camera.position) },
+  { name: 'deckhand', segment: 'after-activities', ending: false, update: dt => deckhand?.update(dt, vehicle, camera.position) },
+  { name: 'fishing', segment: 'after-activities', ending: true, update: dt => fishing?.update(dt, camera.position) },
+  { name: 'roadScene', segment: 'after-activities', ending: false, update: () => roadScene?.update(camera) },
+  { name: 'schoolBus', segment: 'after-activities', ending: false, update: () => schoolBus?.update(camera) },
+  { name: 'ambientTraffic', segment: 'after-activities', ending: false, update: () => ambientTraffic?.update(camera, vehicle, !multiplayer?.choice.on) },
+  { name: 'roadAnimals', segment: 'after-activities', ending: false, update: dt => roadAnimals?.update(dt, vehicle, !multiplayer?.choice.on) },
+  { name: 'props', segment: 'after-activities', ending: true, endingAfter: 'canal', update: dt => props?.update(camera, dt) },
+  { name: 'yardProps', segment: 'after-activities', ending: false, update: dt => yardProps?.update(camera, dt) },
+  { name: 'harbourLights', segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
+  { name: 'tall', segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
+  { name: 'grass', segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },
+  { name: 'aiDriver', segment: 'mirror', ending: false, update: () => aiDriver?.update(camera, vehicle, aiDriverOn(), fleet?.driven.id ?? garageEntry.id) },
+  { name: 'boss', segment: 'mirror', ending: false, update: dt => {
+    if (!boss) return;
+    // Held, not hidden, while the player is out of the car (a drone flight, indoors) or the tab is away.
+    boss.update(camera, dt, !!multiplayer?.choice.on, mirrorFlags.bossClock, mirrorFlags.bossHeld);
+    aiCars.length = 0;
+    if (aiDriverOn() && aiDriver) for (const c of aiDriver.onRoad) aiCars.push(c);
+    for (const c of boss.driver.onRoad) aiCars.push(c);
+  } },
+  { name: 'multiplayer', segment: 'mirror', ending: false, update: (dt, realDt) => multiplayer?.update(realDt, camera, dt > 0 && mirrorFlags.driving) },
+  { name: 'farVisibility', segment: 'mirror', ending: false, update: (_dt, _realDt, now) => farVisibility?.update(camera, now / 1000) },
+  { name: 'mirror', segment: 'mirror', ending: true, update: () => waterReflections?.update(camera) },
 ];
 // Build the plain segment arrays once. Frame calls visit only their segment's entries.
 const worldSegments: Record<WorldSegment | 'ending' | 'ending-mirror', typeof worldUpdates> = {
@@ -1747,13 +1764,15 @@ for (let i = 0; i < worldUpdates.length; i++) {
   worldSegments[entry.segment].push(entry);
   if (entry.ending) endingWorldUpdates.push(entry);
 }
-// Positions are zero-based among ending entries: trees follows terrain; props precedes fishing.
+// Anchors are entry names: trees follows the terrain updates (after novemberRoads); props follows roads and canal.
+// They hold whichever optional entries (fleet, stunt park) are present. A missing anchor stops the boot.
 for (let i = 0; i < worldUpdates.length; i++) {
   const entry = worldUpdates[i];
-  if (entry.ending && entry.endingPosition !== undefined) {
-    endingWorldUpdates.splice(endingWorldUpdates.indexOf(entry), 1);
-    endingWorldUpdates.splice(entry.endingPosition, 0, entry);
-  }
+  if (!entry.ending || entry.endingAfter === undefined) continue;
+  endingWorldUpdates.splice(endingWorldUpdates.indexOf(entry), 1);
+  const anchor = endingWorldUpdates.findIndex(other => other.name === entry.endingAfter);
+  if (anchor < 0) throw new Error(`ending anchor '${entry.endingAfter}' for '${entry.name}' is missing`);
+  endingWorldUpdates.splice(anchor + 1, 0, entry);
 }
 for (let i = 0; i < endingWorldUpdates.length; i++) {
   const entry = endingWorldUpdates[i];
@@ -1769,7 +1788,7 @@ function updateWorld(segment: WorldSegment | 'ending' | 'ending-mirror', dt: num
     if (import.meta.env.DEV) {
       const start = performance.now();
       entry.update(dt, realDt, now);
-      worldCost[entry.name!] = performance.now() - start;
+      worldCost[entry.name] = performance.now() - start;
     } else entry.update(dt, realDt, now);
   }
 }
@@ -1979,7 +1998,6 @@ function frame(now: number) {
   beaconT += dt;
   if (beaconMat) beaconMat.emissiveIntensity = !mailMode ? 0 : Math.abs(vehicle.speed) < 8 ? (Math.sin(beaconT * 9) > 0.3 ? 2.2 : 0.15) : 0.15;   // flashes while it creeps between boxes
   updateWorld('landscape', dt, realDt, now);
-  culvertMouths?.update(camera.position);
   updateWorld('landmarks', dt, realDt, now);
   {
     placesUI?.update(vehicle, placesEnabled);
@@ -2032,16 +2050,7 @@ function frame(now: number) {
   updateWorld('grass', dt, realDt, now);
   // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
   renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
-  aiDriver?.update(camera, vehicle, aiDriverOn(), fleet?.driven.id ?? garageEntry.id);
-  if (boss) {
-    // Held, not hidden, while the player is out of the car (a drone flight, indoors) or the tab is away.
-    boss.update(camera, dt, !!multiplayer?.choice.on, clockRuns && frameLive, !driving || interiors.busy || document.hidden);
-    aiCars.length = 0;
-    if (aiDriverOn() && aiDriver) for (const c of aiDriver.onRoad) aiCars.push(c);
-    for (const c of boss.driver.onRoad) aiCars.push(c);
-  }
-  multiplayer?.update(realDt, camera, dt > 0 && driving);
-  farVisibility?.update(camera,now/1000);
+  mirrorFlags.driving = driving; mirrorFlags.bossClock = clockRuns && frameLive; mirrorFlags.bossHeld = !driving || interiors.busy || document.hidden;
   updateWorld('mirror', dt, realDt, now);
   try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
   afterWorld();
