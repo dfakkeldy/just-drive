@@ -219,6 +219,15 @@ const manifest = await loadAreaManifest<Manifest>(AREA, base).catch(error => {
 });
 if (__PUBLIC_APP__) offlinePlay(document.getElementById('settings'), document.getElementById('startOver'), offlinePageKey, AREA.id, SITE.brand === 'just', localJust);
 const getJson = async (name: string) => (await fetch(`${base}/${name}`)).json();
+// These inputs describe the selected area and can load while the rest of the scene starts.
+const roadDataReady = manifest.roads ? getJson(manifest.roads.file) : Promise.resolve({ roads: [] });
+// A road read failure still stops startup when roadDataReady is awaited.
+void roadDataReady.catch(() => {});
+// Brooks are optional. A missing or broken file leaves the scene without them.
+const streamsReady = manifest.streams && params.get('brooks') !== '0'
+  ? getJson(manifest.streams.file).then((d: StreamFile) => new Streams(d, manifest.village))
+    .catch((e: unknown) => { console.warn('streams', e); return null; })
+  : Promise.resolve(null);
 await initStore(base);
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -428,11 +437,7 @@ if (stockpiles) { scene.add(stockpiles.group); terrain.canopyExcludes = stockpil
 // The coast at Mabou Coal Mines is Mabou's own: another area gets none of it.
 const coast = !AREA.coast || params.get('coast') === '0' ? null : new Coast(new CoastSite(manifest.village), terrain, LOW);
 if (coast) { terrain.coast = coast.site; scene.add(coast.group); }
-// Brooks are scenery: when their file is missing or broken, the game still starts, without them.
-// ?brooks=0 leaves them out (to time one build both ways).
-terrain.streams = manifest.streams && params.get('brooks') !== '0'
-  ? await getJson(manifest.streams.file).then((d: StreamFile) => new Streams(d, manifest.village)).catch((e: unknown) => { console.warn('streams', e); return null; })
-  : null;
+terrain.streams = await streamsReady;
 if (LOW) { terrain.split = AREA.quarry ? 1 : 1.15; terrain.low = true; }   // fine tiles and single trees reach less far
 else if (params.get('shadows') !== '0') terrain.shadows = true;
 // Phone cold start: past 600 m, land outside the view is read later, in the background (terrain.ts lazyRange).
@@ -440,7 +445,7 @@ if (LOW) terrain.lazyRange = 600;
 if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
-const roadData = manifest.roads ? await getJson(manifest.roads.file) : { roads: [] };
+const roadData = await roadDataReady;
 const novemberRoads = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
 if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
@@ -482,7 +487,7 @@ if (waterReflections) {
   Object.assign(terrain.uniforms, waterReflections.uniforms);
 }
 
-const roads = new Roads(novemberRoads?.added.length ? { roads: [...roadData.roads, ...novemberRoads.added] } : roadData, manifest.village, terrain);
+const roads = new Roads(novemberRoads?.added.length ? { ...roadData, roads: [...roadData.roads, ...novemberRoads.added] } : roadData, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
   ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW,
     // A modern bridge build moves the ground through its road cuts without a dataRevision change (both only grow).
