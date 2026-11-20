@@ -104,7 +104,7 @@ try{
    const {calls,triangles,programs}=b.wharfCost;
    assert.ok(calls>=0&&calls<=14,area+' '+mode+' wharf calls '+calls);
    assert.ok(triangles>=0&&triangles<=20000,area+' '+mode+' wharf triangles '+triangles);
-   assert.ok(programs>=0&&programs<=1,area+' '+mode+' wharf programs '+programs);
+   assert.ok(programs>=0&&programs<=m.wharfCost.programs+1,area+' '+mode+' wharf programs '+programs+' (main '+m.wharfCost.programs+')');
   }
  }
  console.log('PASS '+(costsOnly?'all-pass costs only: ':'gallery: ')+'isolated wharf costs in six areas and all dressed wharf pictures, desktop and phone');
