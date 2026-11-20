@@ -146,11 +146,27 @@ expect 404 /packs.json "(an address that is no file)"
 expect 404 /no/such/file.png
 expect 404 /mp/ "(a room address that is not one)"
 expect 426 /mp/v1/mabou/world "(a room address asked for as a page)"
-# The cache rule that the site's own _headers file gives for /app.js must be the one that is served.
-WANT="$(tr -d '\r' < "$SITE_PATH/_headers" | awk '$1 == "/app.js" { hit = 1; next } hit && /^[^ \t]/ { hit = 0 } hit && tolower($1) == "cache-control:" { sub(/^[ \t]*[^ \t]+[ \t]+/, ""); print; exit }')"
-[[ -n "$WANT" ]] || { echo "FAIL no Cache-Control rule for /app.js in $SITE_PATH/_headers"; fail=1; }
-GOT="$(curl -sI "$BASE/app.js" | tr -d '\r' | awk 'tolower($1) == "cache-control:" { sub(/^[^ ]+ /, ""); print; exit }')"
-[[ -n "$WANT" && "$GOT" == "$WANT" ]] && echo "ok   the _headers file still rules the cache ($GOT)" || { echo "FAIL /app.js is served with cache-control '$GOT', the _headers file says '$WANT'"; fail=1; }
+# The cache rule that the site's own _headers file gives for a file must be the one that is served.
+cache_rule() {   # cache_rule <_headers rule> <path>
+  local want got
+  want="$(tr -d '\r' < "$SITE_PATH/_headers" | awk -v rule="$1" '$1 == rule { hit = 1; next } hit && /^[^ \t]/ { hit = 0 } hit && tolower($1) == "cache-control:" { sub(/^[ \t]*[^ \t]+[ \t]+/, ""); print; exit }')"
+  [[ -n "$want" ]] || { echo "FAIL no Cache-Control rule for $1 in $SITE_PATH/_headers"; fail=1; }
+  got="$(curl -sI "$BASE$2" | tr -d '\r' | awk 'tolower($1) == "cache-control:" { sub(/^[^ ]+ /, ""); print; exit }')"
+  [[ -n "$want" && "$got" == "$want" ]] && echo "ok   the _headers file still rules the cache of $2 ($got)" || { echo "FAIL $2 is served with cache-control '$got', the _headers file says '$want'"; fail=1; }
+}
+cache_rule /app.js /app.js
+# The published script is app.js and its chunks (web/area-chunks-build.ts): the core chunk and one offline copy of a
+# chunk, each byte for byte and with its folder's cache rule.
+CORE="$(cd "$SITE_PATH" && find chunks -maxdepth 1 -name 'core-*.js' 2>/dev/null | sort | head -1)"
+OFFLINE_CHUNK="$(cd "$SITE_PATH" && find offline/chunks -maxdepth 1 -name '*.js' 2>/dev/null | sort | head -1)"
+if [[ -n "$CORE" && -n "$OFFLINE_CHUNK" ]]; then
+  for rel in "$CORE" "$OFFLINE_CHUNK"; do
+    expect 200 "/$rel"
+    cmp -s "$WORK/body" "$SITE_PATH/$rel" && echo "ok   /$rel is the built chunk, byte for byte" || { echo "FAIL /$rel differs from $SITE_PATH/$rel"; fail=1; }
+  done
+  cache_rule '/chunks/*' "/$CORE"
+  cache_rule '/offline/chunks/*' "/$OFFLINE_CHUNK"
+else echo "FAIL $SITE_PATH has no chunks/core-*.js or no offline/chunks/*.js"; fail=1; fi
 cd "$ROOT/web"
 node_modules/.bin/esbuild "$ROOT/tools/mp-check.mjs" --bundle --platform=node --format=esm --log-level=warning --outfile="$WORK/check.mjs"
 # The simulated players have time limits. A very busy machine can miss one without a real fault, so a failed run is
