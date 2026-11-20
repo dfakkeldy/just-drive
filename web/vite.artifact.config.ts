@@ -1,4 +1,4 @@
-import {quarryLazyBuild} from './quarry-lazy-build';
+import {quarryEvalProbe} from './quarry-probe-build';
 import {eraShaderBuild} from './era-shader-build';
 import {modelsBuild} from './models-build';
 import {areaChunksBuild,CHUNK_FOLDER,sharedCore} from './area-chunks-build';
@@ -9,7 +9,7 @@ import { defineConfig } from 'vite';
 //         ../data/pack/chunks/*.js   (the shared core and the code each import() loads: area-chunks-build.ts)
 //         ../data/pack/models/*.glb   (the models of web/public/models, which this build does not copy)
 export default defineConfig({
-  plugins:[eraShaderBuild(),quarryLazyBuild(),modelsBuild(),areaChunksBuild('app.js')],
+  plugins:[eraShaderBuild(),quarryEvalProbe(),modelsBuild(),areaChunksBuild('app.js')],
   base: './',
   publicDir: false,
   // "Drive with others" is part of the published build: its code is a chunk of its own, downloaded only when a

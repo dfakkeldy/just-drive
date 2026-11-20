@@ -28,7 +28,6 @@ cp "$BUNDLE/app.js" "$SITE/app.js"
 cp -R "$BUNDLE/chunks" "$SITE/chunks"
 mkdir -p "$SITE/changes"
 cp "$BUNDLE/changes/index.html" "$SITE/changes/index.html"
-cp "$BUNDLE/quarry-feature.json" "$SITE/quarry-feature.json"
 # The models (web/public/models): small site files beside the land. The game goes on without one that is missing.
 if [ -d "$BUNDLE/models" ]; then cp -R "$BUNDLE/models" "$SITE/models"; fi
 cp -al "$ROOT/data/baked/terrain" "$SITE/terrain"

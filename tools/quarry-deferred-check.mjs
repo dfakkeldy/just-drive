@@ -1,31 +1,49 @@
-// Execute the actual published-build wrapper: module initializers stay deferred until the area flag calls load().
+// The real published build (web/vite.artifact.config.ts) keeps the park out of every other area: all its modules are in
+// the quarry-feature chunk, no other chunk holds one, and only main.ts's West Bay import() loads that chunk. A module
+// in a chunk that is never fetched never runs (quarry-published-browser sees that in the browser). Two mutants: a park
+// module imported by main.ts, and the park chunk imported at once.
 import assert from 'node:assert/strict';
-import {build} from '../web/node_modules/esbuild/lib/main.js';
-import {mkdtempSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
+import {mkdtempSync,readdirSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
-import {pathToFileURL} from 'node:url';
-const root=process.cwd(),work=mkdtempSync(join(tmpdir(),'quarry-deferred-'));
+const root=process.cwd(),web=resolve(root,'web'),work=mkdtempSync(join(tmpdir(),'quarry-deferred-'));
+const {build}=await import(resolve(web,'node_modules/vite/dist/node/index.js'));
+const {parkModule}=await import('data:text/javascript;base64,'+Buffer.from((await import(resolve(web,'node_modules/esbuild/lib/main.js'))).buildSync({entryPoints:[resolve(web,'quarry-probe-build.ts')],bundle:true,write:false,format:'esm',platform:'node',packages:'external',logLevel:'silent'}).outputFiles[0].text).toString('base64'));
+const park=readdirSync(web+'/src').filter(parkModule).map(name=>resolve(web,'src',name)).sort();
+assert.equal(park.length,10,'the park is ten modules (web/src/quarry*.ts without quarry-trip.ts)');
+const feature=resolve(web,'src/quarry-feature.ts'),main=resolve(web,'src/main.ts');
+// mutate: a transform of main.ts, as a mutant would edit it.
+async function published(mutate){
+  const saved={ARTIFACT_OUT:process.env.ARTIFACT_OUT,MMM_PUBLIC:process.env.MMM_PUBLIC};process.env.ARTIFACT_OUT=work;process.env.MMM_PUBLIC='1';
+  process.chdir(web);   // the config's input is relative, as for tools/build_site.sh
+  try{
+    const result=await build({root:web,configFile:resolve(web,'vite.artifact.config.ts'),logLevel:'silent',build:{write:false},
+      plugins:mutate?[{name:'quarry-deferred-mutant',enforce:'pre',transform(code,id){return id===main?mutate(code):null;}}]:[]});
+    return (Array.isArray(result)?result[0]:result).output.filter(file=>file.type==='chunk');
+  }finally{process.chdir(root);for(const [key,value] of Object.entries(saved)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
+}
+function deferred(chunks){
+  const parkChunk=chunks.find(chunk=>chunk.facadeModuleId===feature);
+  assert.ok(parkChunk&&!parkChunk.isEntry&&parkChunk.isDynamicEntry,'the park is a chunk that only an import() loads');
+  assert.match(parkChunk.fileName,/^chunks\/quarry-feature-[\w-]+\.js$/);
+  for(const file of park){
+    assert.ok(file in parkChunk.modules,'the park chunk holds '+file.slice(web.length+1));
+    for(const chunk of chunks)if(chunk!==parkChunk)assert.ok(!(file in chunk.modules),chunk.fileName+' holds the park module '+file.slice(web.length+1));
+  }
+  for(const chunk of chunks)assert.ok(!chunk.imports.includes(parkChunk.fileName),chunk.fileName+' imports the park chunk at once');
+  assert.deepEqual(chunks.filter(chunk=>chunk.dynamicImports.includes(parkChunk.fileName)).map(chunk=>chunk.fileName),['app.js'],'only app.js (main.ts) loads the park chunk');
+  return parkChunk;
+}
 try{
- const modulePath=join(work,'plugin.mjs');await build({entryPoints:['web/quarry-lazy-build.ts'],bundle:true,platform:'node',format:'esm',outfile:modulePath,packages:'external',logLevel:'silent'});
- // Resolve the installed build tool from the plugin's original location.
- let pluginSource=(await import('node:fs')).readFileSync(modulePath,'utf8');pluginSource=pluginSource.replace('from "esbuild"','from '+JSON.stringify(root+'/web/node_modules/esbuild/lib/main.js'));
- writeFileSync(modulePath,pluginSource);
- const {quarryLazyBuild}=await import(pathToFileURL(modulePath));process.env.QUARRY_EVAL_PROBE='1';
- // import.meta.url belongs to the original config in production; the bundled test plugin points to scratch.
- const plugin=quarryLazyBuild(),entry=resolve('web/src/quarry-feature.ts');
- // Build a second copy with the factory's entry path pinned to its real source.
- pluginSource=pluginSource.replace('new URL("./src/quarry-feature.ts", import.meta.url)',JSON.stringify(pathToFileURL(entry).href));writeFileSync(join(work,'pinned.mjs'),pluginSource);
- const pinned=await import(pathToFileURL(join(work,'pinned.mjs'))),active=pinned.quarryLazyBuild();
- let data;const source=await active.load.call({emitFile(asset){data=JSON.parse(asset.source);}},entry);
- const savedFetch=globalThis.fetch;globalThis.fetch=async()=>({ok:true,json:async()=>data});assert.ok(source,'actual flat-build loader handles quarry feature');
- for(const eager of [false,true,'leaked-module']){
-  const file=join(work,String(eager)+'.mjs');await build({stdin:{contents:(eager==='leaked-module'?`import ${JSON.stringify(root+'/web/src/quarry.ts')};\n`:'')+source+(eager===true?'\nawait load();':''),resolveDir:root+'/web'},bundle:true,platform:'node',format:'esm',define:{'import.meta.env.BASE_URL':'"./"'},outfile:file,logLevel:'silent',plugins:[{name:'observe-external-quarry-evaluation',setup(b){b.onLoad({filter:/web\/src\/quarry(?:-[^/]+)?\.ts$/},args=>args.path.endsWith('/quarry-trip.ts')?null:({contents:`(globalThis.__quarryEvaluations??=[]).push(${JSON.stringify('outside factory:')}+${JSON.stringify(args.path)});\n`+readFileSync(args.path,'utf8'),loader:'ts',resolveDir:args.path.slice(0,args.path.lastIndexOf('/'))}));}}]});
-  globalThis.__quarryEvaluations=[];const feature=await import(pathToFileURL(file));
-  if(eager){assert.throws(()=>assert.deepEqual(globalThis.__quarryEvaluations,[]));console.log('REJECTED '+(eager==='leaked-module'?'a quarry module imported outside its deferred factory':'eager initialization in the published flat build'));continue;}
-  assert.deepEqual(globalThis.__quarryEvaluations,[],'Mabou mail path evaluates no quarry implementation module');
-  const loaded=await feature.load();assert.equal(typeof loaded.Quarry,'function');assert.ok(globalThis.__quarryEvaluations.includes('quarry-lakes.ts'));assert.ok(globalThis.__quarryEvaluations.includes('quarry-site.ts'));assert.ok(globalThis.__quarryEvaluations.includes('quarry.ts'));assert.ok(globalThis.__quarryEvaluations.includes('quarry-stunt-park.ts'));assert.equal(typeof loaded.createQuarryStuntPark,'function');assert.equal(globalThis.__quarryEvaluations.length,10);
-  const count=globalThis.__quarryEvaluations.length;assert.equal(await feature.load(),loaded);assert.equal(globalThis.__quarryEvaluations.length,count);console.log('PASS flat build defers',count,'quarry modules until the area flag calls load; initializes once');
- }
- globalThis.fetch=savedFetch;
-}finally{delete process.env.QUARRY_EVAL_PROBE;rmSync(work,{recursive:true,force:true});}
+  const parkChunk=deferred(await published());
+  console.log('PASS published build keeps all',park.length,'park modules in',parkChunk.fileName,'and only main.ts imports it, on demand');
+  const mutants={
+    'a park module imported by main.ts':code=>"import './quarry';\n"+code,
+    'the park chunk imported at once':code=>"import './quarry-feature';\n"+code,
+  };
+  for(const [name,mutate] of Object.entries(mutants)){
+    const chunks=await published(mutate);
+    assert.throws(()=>deferred(chunks),undefined,'the check must reject '+name);
+    console.log('REJECTED',name);
+  }
+}finally{rmSync(work,{recursive:true,force:true});}
