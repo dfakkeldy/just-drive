@@ -40,7 +40,26 @@ async function contracts(replacements={}){
  for(const grid of[roads.modern.cells,...roads.modern.spans.map(r=>r.cells)]){const get=grid.get.bind(grid);grid.get=k=>{assert.equal(typeof k,'number','wheel queries use numeric keys');return get(k);};}
  for(let i=0;i<100;i++)assert.notEqual(roads.deckHeight(.4,-20),null);
  assert.equal(roads.modern.audit.builds,builds,'cached wheel reads allocate no new geometry');
- return{middle,maxRise,draws:roads.group.children.length};
+ // Real Mabou spans, no land needed. at() takes the segment the old linear scan took: the first i with
+ // s<=cum[i+1], clamped to the last segment, segment 0 for NaN. At an exact joint the direction shows the tie.
+ const real=mod.roads.modern;let atInputs=0;
+ for(const r of real.spans){const last=r.pts.length-2;
+  for(const s of[0,r.length,NaN,...r.cum,...r.cum.map(c=>c+1e-9),...r.cum.map(c=>c-1e-9)]){
+   if(s<0&&r.start||s>r.length&&r.end)continue;
+   let i=0;while(i<last&&s>r.cum[i+1])i++;
+   const a=r.pts[i],b=r.pts[i+1],n=r.cum[i+1]-r.cum[i]||1,p=real.at(r,s);
+   assert.ok(Object.is(p.nx,-(b[1]-a[1])/n)&&Object.is(p.nz,(b[0]-a[0])/n)&&Object.is(p.x,a[0]+(b[0]-a[0])*((s-r.cum[i])/n)),`at() segment rule: span ${r.road.id} s=${s}`);atInputs++;
+  }}
+ // update() builds a span only when its deck line is within 1500 m of the camera (main: pts[0] within 1500 m).
+ // At the Mabou start pose some spans lie inside the old 1500 m box but farther than 1500 m from their deck line.
+ const village=mod.manifest.village,cam=new THREE.Vector3(624450-village[0],20,village[1]-5103340),eager=[];
+ real.ensure=r=>{eager.push(real.spans.indexOf(r));};try{real.update(cam);}finally{delete real.ensure;}
+ const line=r=>Math.min(...r.pts.slice(1).map((b,j)=>{const a=r.pts[j],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((cam.x-a[0])*dx+(cam.z-a[1])*dz)/(dx*dx+dz*dz||1)));return Math.hypot(cam.x-a[0]-dx*t,cam.z-a[1]-dz*t);}));
+ const index=real.spans.map((_,i)=>i),near=index.filter(i=>line(real.spans[i])<1500);
+ const box=index.filter(i=>{const r=real.spans[i];return cam.x>r.x0-1500&&cam.x<r.x1+1500&&cam.z>r.z0-1500&&cam.z<r.z1+1500;});
+ assert.deepEqual(eager,near,'update() builds only the spans whose deck line is within 1500 m');
+ assert.ok(near.length>0&&box.length>near.length,`the start pose has near spans and far spans in the box: ${near}/${box}`);
+ return{middle,maxRise,draws:roads.group.children.length,atInputs,eager:eager.length,farInBox:box.length-near.length};
 }
 console.log('PASS',await contracts());
 if(process.argv.includes('--mutations')){
@@ -48,4 +67,12 @@ if(process.argv.includes('--mutations')){
  assert.equal(s.split(anchor).length,2,'one deck plane mutation');
  await assert.rejects(()=>contracts({[file]:s.replace(anchor,'if(along>=0&&along<=r.length)return this.land(x,z)??0;')}),/external abutments/,'terrain-draped deck must fail production support assertion');
  console.log('KILLED deck height taken from channel terrain');
+ for(const [name,from,to,error] of[
+  ['at() segment tie rule','if(s>cum[mid+1])lo=mid+1','if(s>=cum[mid+1])lo=mid+1',/at\(\) segment rule/],
+  ['far spans in the box build eagerly','&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);',')this.ensure(r);',/deck line is within 1500 m/],
+ ]){
+  assert.equal(s.split(from).length,2,'one mutation anchor: '+name);
+  await assert.rejects(()=>contracts({[file]:s.replace(from,to)}),error,name+' must fail');
+  console.log('KILLED '+name);
+ }
 }

@@ -11,12 +11,25 @@ const APPROACH = 16, MAX_APPROACH = 96, CELL = 64, TRI_CELL = 2;
 const EMPTY: readonly number[] = [];
 // Signed Cantor pairing avoids row-wrap aliases, including raw-UTM fixtures. Wheel queries allocate no strings.
 const key = (x:number,z:number,size:number) => {const cx=Math.floor(x/size),cz=Math.floor(z/size),a=cx>=0?2*cx:-2*cx-1,b=cz>=0?2*cz:-2*cz-1;return(a+b)*(a+b+1)/2+b;};
+/** The segment of a polyline that holds distance s: the first i whose end cum[i+1] is not below s, else the last
+ *  segment (at most `last`). It is a binary search for the old scan `while(i<last&&s>cum[i+1])i++`. cum never
+ *  decreases, so `s>cum[i+1]` holds on a prefix; a NaN s fails every test and gives segment 0, as the scan did. */
+const segmentAt = (cum:readonly number[],last:number,s:number):number => {let lo=0,hi=last;while(lo<hi){const mid=(lo+hi)>>1;if(s>cum[mid+1])lo=mid+1;else hi=mid;}return lo;};
+/** Spans whose deck line comes this close to the camera build each frame (main drew a deck within 1500 m of pts[0]). */
+const DRAW = 1500;
+/** True when (x,z) is within `reach` of the polyline. pts[0] comes first with main's own distance formula. */
+const nearLine = (pts:readonly (readonly [number,number])[],x:number,z:number,reach:number):boolean => {
+  if(Math.hypot(pts[0][0]-x,pts[0][1]-z)<reach)return true;
+  for(let j=1;j<pts.length;j++){const a=pts[j-1],b=pts[j],dx=b[0]-a[0],dz=b[1]-a[1],n=dx*dx+dz*dz,t=n>0?Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/n)):0;
+    if(Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t)<reach)return true;}
+  return false;
+};
 interface BridgeRoad extends Road {inferred?:boolean;sources?:readonly string[];road?:number;sourceRoad?:number}
 interface Approach {road:Road;cum:number[];distance:number;direction:number;offsetX:number;offsetZ:number}
 interface Span {
   road:BridgeRoad;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
   x0:number;z0:number;x1:number;z1:number; y0:number;y1:number;outer0:number;outer1:number;level:number;revision:number;serial:number;
-  skinBox:Float64Array;ends:Float64Array;cutPath:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
+  skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
   /** Half width of each carried road, for a sidewalk reserved on the deck (Roads.bridgeWalks). */
   halves:readonly (readonly [number,number])[];
   start?:Approach;end?:Approach;
@@ -34,6 +47,8 @@ export class ModernBridges {
   private readonly hidden=new Set<number>();
   private readonly driving={kind:9,halfWidth:6,washboard:false,road:true,roadKind:1};
   private sampling=false;
+  /** Cumulative lengths of each road an approach follows, made once per road. */
+  private readonly roadCum=new Map<Road,number[]>();
   private dirty=false;
   readonly audit={builds:0,merges:0,heightTrianglesMax:0};
   private runList:{pts:readonly (readonly [number,number])[];roads:ReadonlySet<number>;halfWidth:number}[]|null=null;
@@ -46,34 +61,45 @@ export class ModernBridges {
     const all:BridgeRoad[]=[...roads],m=terrain.manifest;
     if(m&&bakedSpans)for(const r of bakedSpans)all.push({...r,sourceRoad:r.road,pts:r.pts.map(([e,n]):[number,number]=>[e-m.village[0],m.village[1]-n])});
     const bakedSources=new Set(bakedSpans?.flatMap(r=>r.sources??[])??[]);
-    if(m)for(let i=0;i<BRIDGE_CROSSINGS.length;i++){
-      const c=BRIDGE_CROSSINGS[i];if(c.area!==(m.area?.id??'mabou'))continue;
-      if(c.sources.every(source=>bakedSources.has(source)))continue;
-      const pts=c.pts.map(([e,n]):[number,number]=>[e-m.village[0],m.village[1]-n]);
-      // A future corrected bake wins. Do not lay a duplicate deck over an already flagged span.
-      let covered=0;
-      for(const p of pts)if(all.some(r=>r.bridge&&r.kind===c.kind&&r.pts.slice(1).some((b,j)=>{
-        const a=r.pts[j],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dz)/(dx*dx+dz*dz||1)));
-        return Math.hypot(p[0]-a[0]-dx*t,p[1]-a[1]-dz*t)<2;
-      })))covered++;
-      if(covered>=pts.length*.8)continue;
-      all.push({id:-100000-i,name:c.name,kind:c.kind,halfWidth:c.halfWidth,bridge:true,pts,inferred:c.inferred,sourceRoad:c.road});
+    if(m){
+      // Bridge roads by kind for the cover test. A crossing added below joins its list, so it covers later crossings.
+      const decks=new Map<number,BridgeRoad[]>(),deck=(r:BridgeRoad)=>{let list=decks.get(r.kind);if(!list)decks.set(r.kind,list=[]);list.push(r);};
+      for(const r of all)if(r.bridge)deck(r);
+      for(let i=0;i<BRIDGE_CROSSINGS.length;i++){
+        const c=BRIDGE_CROSSINGS[i];if(c.area!==(m.area?.id??'mabou'))continue;
+        if(c.sources.every(source=>bakedSources.has(source)))continue;
+        const pts=c.pts.map(([e,n]):[number,number]=>[e-m.village[0],m.village[1]-n]),same=decks.get(c.kind);
+        // A future corrected bake wins. Do not lay a duplicate deck over an already flagged span.
+        let covered=0;
+        if(same)for(const p of pts)if(same.some(r=>{for(let j=1;j<r.pts.length;j++){
+          const a=r.pts[j-1],b=r.pts[j],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dz)/(dx*dx+dz*dz||1)));
+          if(Math.hypot(p[0]-a[0]-dx*t,p[1]-a[1]-dz*t)<2)return true;
+        }return false;}))covered++;
+        if(covered>=pts.length*.8)continue;
+        const crossing:BridgeRoad={id:-100000-i,name:c.name,kind:c.kind,halfWidth:c.halfWidth,bridge:true,pts,inferred:c.inferred,sourceRoad:c.road};
+        all.push(crossing);deck(crossing);
+      }
     }
     // Survey records change from track to rail-trail at some internal joins. They still share one deck.
     const connectivity=all.map(r=>({...r,kind:r.name==='Railroad'?6:r.kind<=3?1:4}));
-    prepareTimberPlans(connectivity);const seen=new Set<string>();
+    // Plans join only bridge roads, in array order, so the bridge records alone give the same plans. The plans are
+    // keyed by array identity: both calls take this one array. timberPlan reads only the road's id.
+    const spanRoads=connectivity.filter(r=>r.bridge);
+    prepareTimberPlans(spanRoads);const seen=new Set<string>();
+    // Indices into `all` by road id, so a span collects its carried roads in `all` order without a full scan.
+    const byId=new Map<number,number[]>();for(let i=0;i<all.length;i++){let list=byId.get(all[i].id);if(!list)byId.set(all[i].id,list=[]);list.push(i);}
     for(const road of all){
-      if(!road.bridge)continue;const plan=timberPlan(connectivity.find(r=>r.id===road.id)!,connectivity);if(seen.has(plan.chainKey))continue;seen.add(plan.chainKey);
+      if(!road.bridge)continue;const plan=timberPlan(road,spanRoads);if(seen.has(plan.chainKey))continue;seen.add(plan.chainKey);
       const pts=plan.path,cum=[0];for(let i=1;i<pts.length;i++)cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
       const length=cum[cum.length-1];if(length<.01)continue;
       const members=new Set(plan.chainKey.split(',').map(Number));
-      const width=Math.max(...all.filter(r=>members.has(r.id)).map(r=>r.halfWidth))+.45;
-      const timber=road.kind>=4||road.name==='Railroad'||all.some(r=>members.has(r.id)&&r.inferred);
-      const r:Span={road,members,halves:all.filter(r=>members.has(r.id)).map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(all.filter(r=>members.has(r.id)).map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),ends:new Float64Array(),cutPath:new Float64Array(),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
+      const found:number[]=[];for(const id of members){const list=byId.get(id);if(list)found.push(...list);}
+      const carried=found.sort((a,b)=>a-b).map(i=>all[i]);
+      const width=Math.max(...carried.map(r=>r.halfWidth))+.45;
+      const timber=road.kind>=4||road.name==='Railroad'||carried.some(r=>r.inferred);
+      const r:Span={road,members,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
-      const first=this.at(r,-APPROACH),last=this.at(r,length+APPROACH);r.ends=new Float64Array([first.x,first.z,first.nx,first.nz,last.x,last.z,last.nx,last.nz]);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
-      const cuts:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s++){const end=Math.min(s+1,length+APPROACH),a=this.at(r,s),b=this.at(r,end);cuts.push(a.x,a.z,b.x,b.z,s,end);}r.cutPath=new Float64Array(cuts);
       const probes:number[]=[];
       for(let s=-MAX_APPROACH;s<length+MAX_APPROACH+8;s+=8){const p=this.at(r,Math.min(s,length+MAX_APPROACH));for(const u of[-width,0,width]){
         const x=p.x+p.nx*u,z=p.z+p.nz*u;probes.push(x,z,NaN);r.x0=Math.min(r.x0,x);r.z0=Math.min(r.z0,z);r.x1=Math.max(r.x1,x);r.z1=Math.max(r.z1,z);
@@ -175,7 +201,9 @@ export class ModernBridges {
     if(!hit)return;
     const a=hit.road.pts[hit.seg],b=hit.road.pts[hit.seg+1],sx=b[0]-a[0],sz=b[1]-a[1],dot=dx*sx+dz*sz;
     if(Math.abs(dot)<Math.hypot(dx,dz)*Math.hypot(sx,sz)*.35)return;
-    const cum=[0];for(let i=1;i<hit.road.pts.length;i++)cum.push(cum[i-1]+Math.hypot(hit.road.pts[i][0]-hit.road.pts[i-1][0],hit.road.pts[i][1]-hit.road.pts[i-1][1]));
+    // Spans that meet the same road share one length table (in Mabou, 98 approaches follow 54 roads).
+    let cum=this.roadCum.get(hit.road);
+    if(!cum){cum=[0];for(let i=1;i<hit.road.pts.length;i++)cum.push(cum[i-1]+Math.hypot(hit.road.pts[i][0]-hit.road.pts[i-1][0],hit.road.pts[i][1]-hit.road.pts[i-1][1]));this.roadCum.set(hit.road,cum);}
     return{road:hit.road,cum,distance:cum[hit.seg]+(cum[hit.seg+1]-cum[hit.seg])*hit.t,direction:Math.sign(dot),offsetX:p[0]-hit.x,offsetZ:p[1]-hit.z};
   }
 
@@ -183,14 +211,14 @@ export class ModernBridges {
     const approach=s<0?r.start:s>r.length?r.end:undefined;
     if(approach){
       const d=s<0?-s:s-r.length,along=approach.distance+approach.direction*d,p=approach.road.pts,cum=approach.cum;
-      let i=0;while(i<p.length-2&&along>cum[i+1])i++;
+      const i=segmentAt(cum,p.length-2,along);
       const a=p[i],b=p[i+1],n=cum[i+1]-cum[i]||1,t=(along-cum[i])/n,sign=approach.direction*(s<0?-1:1),dx=(b[0]-a[0])/n*sign,dz=(b[1]-a[1])/n*sign;
       const u=Math.min(1,d/(s<0?r.startLength:r.endLength)),blend=1-u*u*(3-2*u);
       const edge=s<0?0:r.pts.length-2,ca=r.pts[edge],cb=r.pts[edge+1],cn=Math.hypot(cb[0]-ca[0],cb[1]-ca[1])||1,turn=Math.min(1,d/4);
       const tx=(cb[0]-ca[0])/cn*(1-turn)+dx*turn,tz=(cb[1]-ca[1])/cn*(1-turn)+dz*turn,tn=Math.hypot(tx,tz)||1;
       return{x:a[0]+(b[0]-a[0])*t+approach.offsetX*blend,z:a[1]+(b[1]-a[1])*t+approach.offsetZ*blend,nx:-tz/tn,nz:tx/tn,yaw:Math.atan2(tx,tz)};
     }
-    let i=0;while(i<r.pts.length-2&&s>r.cum[i+1])i++;
+    const i=segmentAt(r.cum,r.pts.length-2,s);
     const a=r.pts[i],b=r.pts[i+1],n=r.cum[i+1]-r.cum[i]||1,t=(s-r.cum[i])/n,dx=(b[0]-a[0])/n,dz=(b[1]-a[1])/n;
     return{x:a[0]+(b[0]-a[0])*t,z:a[1]+(b[1]-a[1])*t,nx:-dz,nz:dx,yaw:Math.atan2(dx,dz)};
   }
@@ -234,11 +262,9 @@ export class ModernBridges {
     }return best;
   }
   private prepareCorridor(r:Span):void {
-    const a=this.at(r,-r.startLength),b=this.at(r,r.length+r.endLength);r.ends=new Float64Array([a.x,a.z,a.nx,a.nz,b.x,b.z,b.nx,b.nz]);
-    const path:number[]=[],cuts:number[]=[];
+    const path:number[]=[];
     for(let s=-r.startLength;s<r.length+r.endLength;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,r.length+r.endLength));path.push(a.x,a.z,b.x,b.z);}
-    for(let s=-r.startLength;s<r.length+r.endLength;s++){const e=Math.min(s+1,r.length+r.endLength),a=this.at(r,s),b=this.at(r,e);cuts.push(a.x,a.z,b.x,b.z,s,e);}
-    r.corridor=new Float64Array(path);r.cutPath=new Float64Array(cuts);
+    r.corridor=new Float64Array(path);
   }
   private widthAt(r:Span,s:number):number {
     if(r.narrowRail)return 1.25;
@@ -353,7 +379,9 @@ export class ModernBridges {
   }
   update(cam:THREE.Vector3):void {
     if(this.walks&&this.walks.size!==this.walkCount)this.reserveWalks();
-    for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(cam.x>r.x0-1500&&cam.x<r.x1+1500&&cam.z>r.z0-1500&&cam.z<r.z1+1500)this.ensure(r);}
+    // The box is a cheap prefilter. Only a deck line within DRAW builds here; a query (contact, deck height or
+    // placement) still builds any span on demand.
+    for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(cam.x>r.x0-DRAW&&cam.x<r.x1+DRAW&&cam.z>r.z0-DRAW&&cam.z<r.z1+DRAW&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);}
     if(this.dirty)this.merge();
   }
   private walkCount=0;
