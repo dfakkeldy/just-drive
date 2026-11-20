@@ -364,15 +364,15 @@ const buildingStyles = ERA.modern && manifest.buildingStyles
 const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
-const novemberBuildings = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
-  ? new NovemberBuildings(AREA.id, buildingList ?? [], manifest.village, EXAG, SEA_LEVEL, LOW) : null;
-const finalBuildings = novemberBuildings && AREA.id === 'mabou' ? drawnBuildings?.filter(b => !isHillsideBuilding(b)) : drawnBuildings;
-const buildings = ERA.modern && finalBuildings ? new Buildings(mabouSite ? mabouSite.drawn(finalBuildings) : finalBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
+const novemberBuildings = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+  ? new NovemberBuildings(AREA.id, properties, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
+const finalBuildings = novemberBuildings && AREA.id === 'mabou' ? drawnBuildings?.filter(b => !isHillsideBuilding(b)) : drawnBuildings;
+const buildings = ERA.modern && finalBuildings ? new Buildings(mabouSite ? mabouSite.drawn(finalBuildings) : finalBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles, novemberBuildings?.drawing) : null;
 if (buildings) clear.push(...buildings.clear);
-if (novemberBuildings) { clear.push(...novemberBuildings.clear); scene.add(novemberBuildings.group); }
+if (novemberBuildings) clear.push(...novemberBuildings.clear);
 if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
@@ -471,7 +471,6 @@ const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea,
   new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
   terrain, trees?.group ?? null, params.get('reflections'));
 if (coast) waterReflections?.include(coast.group);
-if (novemberBuildings) waterReflections?.include(novemberBuildings.group);
 if (waterReflections) {
   Object.assign(shared, waterReflections.uniforms);
   Object.assign(terrain.uniforms, waterReflections.uniforms);

@@ -119,10 +119,6 @@ async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
   return ctx.getImageData(0, 0, S, S).data;
 }
 
-/**
- * A hand-built place that changes the ground under it: graded pads, and surfaces painted through the road field
- * (kind 8 yard gravel, 9 concrete, 10 packed sand), so the picture and the wheels agree. Add before the first tile loads.
- */
 export interface SiteSurface {
   dist: number; half: number; kind: number; coverage?: number;
   gravelDrive?: boolean;
@@ -130,6 +126,10 @@ export interface SiteSurface {
   paveGravel?: boolean;
 }
 
+/**
+ * A hand-built place that changes the ground under it: graded pads, and surfaces painted through the road field
+ * (kind 8 yard gravel, 9 concrete, 10 packed sand), so the picture and the wheels agree. Add before the first tile loads.
+ */
 export interface Site {
   /** World box [x0, z0, x1, z1] outside which the site changes nothing. */
   box: [number, number, number, number];

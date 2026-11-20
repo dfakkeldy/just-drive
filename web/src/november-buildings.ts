@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { clearBoxes, type Building } from './buildings';
 import { pushOut, type Solid } from './parked';
-import { strips } from './site-solids';
 import { frameToMap } from './site-kit';
 import { Mesher, type RGB } from './yard-kit';
 
@@ -177,19 +176,26 @@ function hillsideShed(m: Mesher, b: Model, low: boolean) {
   for (const x of [-.68,0,.68]) opening(m,false,z,x,2.27,.55,.34,trim);
 }
 
-function riverPark(m: Mesher, place: (e: number, n: number, y: number, az?: number) => void, exag: number, sea: number) {
+type Footprint = { e: number; n: number; az: number; length: number; width: number };
+
+function riverPark(m: Mesher, place: (e: number, n: number, y: number, az?: number) => void,
+  solid: (b: Footprint) => void, exag: number, sea: number) {
   const y = sea + (1.4-sea)*exag;
   place(624138.7,5103130,y);
   const ring = Array.from({ length: 8 }, (_, i) => [2.95*Math.cos(i*Math.PI/4),2.95*Math.sin(i*Math.PI/4)]);
   m.cyl(0,.16,0,2.96,.44,greyCedar,'y',8);
   m.cyl(0,3.12,0,3.2,1.22,roof,'y',8,.04);
-  for (const [x,z] of ring) m.box(.94*x,1.41,.94*z,.16,2.4,.16,greyCedar);
+  for (const [x,z] of ring) {
+    m.box(.94*x,1.41,.94*z,.16,2.4,.16,greyCedar);
+    solid({ e:624138.7+.94*x, n:5103130-.94*z, az:90, length:.16, width:.16 });
+  }
   for (let i=1;i<ring.length;i++) {
     const [x,z]=ring[i], [a,b]=ring[(i+1)%ring.length];
     m.quad([[.94*x,.99,.94*z],[.94*a,.99,.94*b],[.94*a,1.11,.94*b],[.94*x,1.11,.94*z]],greyCedar);
   }
   for (const [e,n,height] of [[624144,5103133,1.32],[624141,5103125,1.39],[624148,5103129,1.47]]) {
     place(e,n,sea+(height-sea)*exag,22);
+    solid({ e, n, az:22, length:1.9, width:1.55 });
     m.box(0,.76,0,1.9,.11,.77,timber);
     for (const x of [-.67,.67]) {
       m.box(x,.36,0,.11,.7,.71,timber);
@@ -208,75 +214,62 @@ function riverPark(m: Mesher, place: (e: number, n: number, y: number, az?: numb
 }
 
 export class NovemberBuildings {
-  readonly group = new THREE.Group();
+  readonly drawing = new Mesher();
   readonly clear: number[][] = [];
   readonly solids: Solid[] = [];
 
   resolveSolids(body: Parameters<typeof pushOut>[0]): void { pushOut(body, this.solids, true); }
 
   constructor(area: string, mapped: readonly Building[], village: [number, number], exag: number, sea: number, low: boolean) {
-    this.group.name = 'November buildings and river park';
-    const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const m = this.drawing;
     const place = (m: Mesher, e: number, n: number, y: number, az = 90) =>
       m.at(e-village[0],y,village[1]-n,Math.PI/2-THREE.MathUtils.degToRad(az));
-    const batch = (name: string, build: (m: Mesher) => void) => {
-      const m = new Mesher();
-      build(m);
-      if (m.triangles === 0) return;
-      const mesh = new THREE.Mesh(m.geometry(),material);
-      mesh.name = name;
-      mesh.castShadow = mesh.receiveShadow = true;
-      this.group.add(mesh);
-    };
-    const build = (m: Mesher, b: Model, draw: (m: Mesher,b: Model,low: boolean) => void) => {
+    const solid = ({ e, n, az, length, width }: Footprint) => this.solids.push({
+      x:e-village[0], z:village[1]-n, half:length/2, halfWidth:width/2, heading:THREE.MathUtils.degToRad(az),
+    });
+    const build = (b: Model, draw: (m: Mesher, b: Model, low: boolean) => void) => {
       place(m,b.x,b.y,sea+(b.ground-sea)*exag,b.axisDeg);
       draw(m,b,low);
       const frame = { e:b.x,n:b.y,az:b.axisDeg };
       const footprint = [[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,z]) => frameToMap(frame,x*b.length/2,z*b.width/2));
-      this.solids.push(...strips({ x:b.x-village[0], z:village[1]-b.y, half:b.length/2, halfWidth:b.width/2,
-        heading:THREE.MathUtils.degToRad(b.axisDeg) }));
+      solid({ ...frame, length:b.length, width:b.width });
       this.clear.push(...clearBoxes({ ...b, footprint, roof:'gable', kind:'house',confidence:.4 },village,2.5));
     };
     if (area === 'porthood') {
-      batch('Dunmore shop', m => build(m,DUNMORE,(m,b,low) => {
+      build(DUNMORE, (m, b, low) => {
         shell(m,b,greyCedar); siding(m,b,greyCedar,true,low);
-        const front=b.length/2;
+        const front = b.length / 2;
         opening(m,true,front,0,1.33,3.35,2.46,trim,stone);
         for (let y=.36;y<2.45;y+=.27) wallPanel(m,true,front+.094,-1.6,1.6,y,y+.028,greyCedar);
-      }));
+      });
+      return;
     }
     if (area !== 'mabou') return;
-    batch('Harbour drive house and barn',m => {
-      build(m,VILLAGE_HOUSE,villageHouse);
-      build(m,VILLAGE_BARN,(m,b,low) => {
-        shell(m,b,barnBoard); siding(m,b,barnBoard,true,low);
-        opening(m,true,-b.length/2,0,1.31,3.1,2.5,barnBoard,stone);
-        opening(m,false,-b.width/2,0,1.42,2.75,2.35,barnBoard,stone);
-      });
+    build(VILLAGE_HOUSE, villageHouse);
+    build(VILLAGE_BARN, (m, b, low) => {
+      shell(m,b,barnBoard); siding(m,b,barnBoard,true,low);
+      opening(m,true,-b.length/2,0,1.31,3.1,2.5,barnBoard,stone);
+      opening(m,false,-b.width/2,0,1.42,2.75,2.35,barnBoard,stone);
     });
-    batch('Mines Road upper house',m => build(m,NORTH_HOUSE,(m,b,low) => {
+    build(NORTH_HOUSE, (m, b, low) => {
       shell(m,b,greyCedar); siding(m,b,greyCedar,false,low); houseWindows(m,b,2);
-    }));
-    batch('Mines Road valley house and shed',m => {
-      build(m,VALLEY_HOUSE,(m,b,low) => {
-        shell(m,b,cream,blueGrey); siding(m,b,blueGrey,false,low,2.68); houseWindows(m,b,1);
-        opening(m,true,b.length/2,0,4.65,1.25,1.55);
-        opening(m,true,-b.length/2,0,4.65,1.25,1.55);
-        deck(m,b.length*.8,b.width/2,2.3,.64);
-      });
-      build(m,VALLEY_SHED,(m,b,low) => {
-        shell(m,b,stone); siding(m,b,stone,true,low);
-        opening(m,true,b.length/2,0,1.03,1.25,1.85,timber);
-      });
     });
-    batch('Mines Road hillside property',m => {
-      const builders = new Map([[900007,hillsideHouse],[900008,hillsideGarage],[900009,hillsideShed]]);
-      for (const b of mapped) {
-        const draw = builders.get(b.id);
-        if (draw) build(m,b,draw);
-      }
+    build(VALLEY_HOUSE, (m, b, low) => {
+      shell(m,b,cream,blueGrey); siding(m,b,blueGrey,false,low,2.68); houseWindows(m,b,1);
+      opening(m,true,b.length/2,0,4.65,1.25,1.55);
+      opening(m,true,-b.length/2,0,4.65,1.25,1.55);
+      deck(m,b.length*.8,b.width/2,2.3,.64);
     });
-    batch('Mabou river gazebo and float',m => riverPark(m,(e,n,y,az) => place(m,e,n,y,az),exag,sea));
+    build(VALLEY_SHED, (m, b, low) => {
+      shell(m,b,stone); siding(m,b,stone,true,low);
+      opening(m,true,b.length/2,0,1.03,1.25,1.85,timber);
+    });
+    const builders = new Map([[900007,hillsideHouse],[900008,hillsideGarage],[900009,hillsideShed]]);
+    for (const b of mapped) {
+      const draw = builders.get(b.id);
+      if (draw) build(b,draw);
+    }
+    riverPark(m,(e,n,y,az) => place(m,e,n,y,az),solid,exag,sea);
     this.clear.push([624135.6-village[0],village[1]-5103134.5,624142-village[0],village[1]-5103126.7]);
   }
 }

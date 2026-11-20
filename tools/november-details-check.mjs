@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Buildings } from '../web/src/buildings.ts';
 import { NovemberBuildings, novemberFootprints } from '../web/src/november-buildings.ts';
 import { NovemberRoadDetails } from '../web/src/november-road-details.ts';
 import { areaPlaces, nearestPlacement, placesFor } from '../web/src/places.ts';
@@ -18,6 +19,7 @@ for (const area of ['mabou', 'porthood']) {
   const { village, mid } = read(dir, 'manifest'), data = read(dir, 'roads');
   const [east, north] = village, world = ([e,n]) => [e-east,north-n];
   const details = new NovemberRoadDetails(data.roads, area, village);
+  const roads = new Roads(data, village, {});
   assert.equal(details.bars.length, 2, `${area} displays both Highway 19 stop lines`);
   for (const [i, name] of ['Hunters Road', 'New Rocky Ridge Road'].entries()) {
     const road = data.roads.find(r => r.name === name && r.kind === 3 && details.sites.some(s => s.surface(...world(r.pts[1]))?.paveGravel));
@@ -28,15 +30,18 @@ for (const area of ['mabou', 'porthood']) {
     assert.deepEqual([...byte(apron, 1)], [128,52,1,0], 'highway paint remains');
     assert.deepEqual([...byte(apron, 35)], [128,52,35,0], 'washboard stays washboard');
     assert.equal(site.surface(...world(road.pts[5])), null, 'no asphalt 20 m from the junction');
-    for (const [x,z] of details.bars[i].points) assert.ok(site.surface(x,z)?.paveGravel, 'stop line on its own apron');
+    for (const [x,z] of details.bars[i].points) {
+      assert.ok(site.surface(x,z)?.paveGravel, 'stop line on its own apron');
+      const hit = roads.nearest(x,z,4,r => r.id === road.id);
+      assert.ok(hit && (x-hit.x)*Math.cos(hit.heading)+(z-hit.z)*Math.sin(hit.heading) < 0, 'bar is on the incoming lane');
+    }
   }
 
   if (area === 'mabou') {
     const [drive] = details.added, [site] = details.sites;
     assert.ok(!data.roads.some(r => r.id === drive.id), 'driveway id is free');
     assert.deepEqual([drive.name, drive.kind, drive.bridge], [null, 4, false]);
-    const network = new Roads(data, village, {});
-    const entry = network.nearest(...world(drive.pts[0]), 2, r => r.name === 'Mabou Harbour Road');
+    const entry = roads.nearest(...world(drive.pts[0]), 2, r => r.name === 'Mabou Harbour Road');
     assert.ok(entry && entry.dist < .5, 'drive connects to Harbour Road');
     for (const p of drive.pts) {
       const sample = site.surface(...world(p));
@@ -57,15 +62,20 @@ for (const area of ['mabou', 'porthood']) {
   }
   for (const low of [true, false]) {
     const models = new NovemberBuildings(area, mapped, village, 1.5, 0, low);
-    assert.equal(models.group.children.length, area === 'mabou' ? 5 : 1);
-    for (const mesh of models.group.children) {
-      assert.ok(mesh.geometry.attributes.position.array.every(Number.isFinite));
-      assert.ok(mesh.geometry.boundingSphere.radius < 35, 'draw batches can be culled per cluster');
+    assert.ok(models.drawing.pos.every(Number.isFinite));
+    assert.equal(models.solids.length, area === 'mabou' ? 19 : 1);
+    const batch = new Buildings([], village, 1.5, 0, {}, models.drawing);
+    assert.equal(batch.triangles, models.drawing.triangles, 'built details use the existing building mesh');
+    assert.ok(batch.triangles < 3500, `added details stay within a small triangle envelope: ${batch.triangles}`);
+    for (const solid of models.solids) {
+      const radius = Math.hypot(solid.half,solid.halfWidth);
+      const hit = roads.nearest(solid.x,solid.z,radius+8,r => r.kind <= 3);
+      assert.ok(!hit || hit.dist > radius+hit.road.halfWidth, 'new solids stay clear of through roads');
     }
   }
 
   const want = area === 'mabou' ? [['coal-mines-valley', 55, 270], ['harbour-wharf-view', 922, 199]] : [['marble-hill-view', 56, 225]];
-  const list = area === 'mabou' ? placesFor(village) : areaPlaces(area), roads = new Roads(data, village, {});
+  const list = area === 'mabou' ? placesFor(village) : areaPlaces(area);
   for (const [id, roadId, bearing] of want) {
     const place = list.find(p => p.id === id);
     assert.ok(place?.spawn && place.kind === 'view', id);

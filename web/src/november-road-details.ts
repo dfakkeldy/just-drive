@@ -114,7 +114,7 @@ export class NovemberRoadDetails {
         continue;
       }
       const stamp = terrain.drawnOver(...bar.box);
-      if (!stamp) continue;
+      if (!stamp) { if (bar.mesh) bar.mesh.visible = false; continue; }
       if (bar.mesh) bar.mesh.visible = true;
       if (stamp === bar.stamp) continue;
       const ground = bar.points.map(([x, z]) => terrain.meshHeightAt(x, z, true));
