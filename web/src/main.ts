@@ -1331,6 +1331,7 @@ function flyDrone(dt: number) {
   if (landed) landDrone();
 }
 
+const flyDir = new THREE.Vector3(), flyRight = new THREE.Vector3();
 function fly(dt: number) {
   if (drone.active) { flyDrone(dt); return; }
   if (pause.blocked) return;
@@ -1340,8 +1341,8 @@ function fly(dt: number) {
   if (f || r || u) pendingShot = null;
   const v = flySpeed * (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 5 : 1) * dt;
   camera.rotation.set(pitch, yaw, 0);
-  const dir = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
-  const right = new THREE.Vector3(1, 0, 0).applyEuler(camera.rotation);
+  const dir = flyDir.set(0, 0, -1).applyEuler(camera.rotation);
+  const right = flyRight.set(1, 0, 0).applyEuler(camera.rotation);
   camera.position.addScaledVector(dir, f * v).addScaledVector(right, r * v);
   camera.position.y += u * v;
   const g = terrain.heightAt(camera.position.x, camera.position.z);
@@ -1353,7 +1354,7 @@ function fly(dt: number) {
 }
 
 // The chase camera trails the car's direction of travel and never dips under the ground.
-const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), camAim = new THREE.Vector3(), camTarget = new THREE.Vector3();
 let camHeading = 0, camReady = false;
 drivenChanged = () => { ride.resetInput(); animals?.resetVehicleHistory(); mail.reset(); camReady = false; waitingToDrive = false; keys.clear(); pointers.clear(); mailPointers.clear(); pad?.release(); touch.steer = touch.throttle = 0; };
 if (fleet) fleet.releaseInput = drivenChanged;
@@ -1388,9 +1389,9 @@ function chase(dt: number) {
     ? Math.max(g.ground, roads.deckHeight(tx, tz) ?? -Infinity) + vehicleSpec.chase.height + towCamera.height
     : Math.max(ty, g.ground + g.canopy * 0.5 + 1.3);
   const k = camReady ? Math.min(1, 7 * dt) : 1;
-  camPos.lerp(new THREE.Vector3(tx, ty, tz), k);
+  camPos.lerp(camAim.set(tx, ty, tz), k);
   const lookAhead = towCamera ? -towCamera.lookBack : vehicleSpec.chase.lookAhead;
-  const target = new THREE.Vector3(vehicle.x + Math.sin(vehicle.heading) * lookAhead + Math.cos(camHeading) * (towCamera?.lookSide ?? 0), vehicle.y + vehicleSpec.chase.lookHeight, vehicle.z - Math.cos(vehicle.heading) * lookAhead + Math.sin(camHeading) * (towCamera?.lookSide ?? 0));
+  const target = camTarget.set(vehicle.x + Math.sin(vehicle.heading) * lookAhead + Math.cos(camHeading) * (towCamera?.lookSide ?? 0), vehicle.y + vehicleSpec.chase.lookHeight, vehicle.z - Math.cos(vehicle.heading) * lookAhead + Math.sin(camHeading) * (towCamera?.lookSide ?? 0));
   if (astra === 'bend-camera' && garageEntry.id === 'car' && vehicle.speed > 2 && !vehicle.airborne) {
     // Aim into the next fraction of a second of the turn. Keep the horizon level and the right shoulder in view.
     const pace = THREE.MathUtils.smoothstep(vehicle.speed, 2, 14);
