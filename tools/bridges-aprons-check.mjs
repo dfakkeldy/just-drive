@@ -44,6 +44,18 @@ for(const area of only?[only]:areas){
   for(const s of[-12,-4,r.length/2,r.length+4,r.length+12]){const p=M.at(r,s),h=f.roads.deckHeight(p.x,p.z),surface=f.terrain.surfaceAt(p.x,p.z,h);assert.equal(surface.kind,3,'Mabou Mines Road bridge57 kind');assert.equal(surface.washboard,true,'Mabou Mines Road washboard is never softened');assert.equal(f.BikeRide.prototype.surface.call({terrain:f.terrain,roads:f.roads,x:p.x,z:p.z,y:h},surface).name,'washboard','Mabou Mines Road bike remains on washboard');}
  }
  if(area==='mabou'){const r=spans.find(r=>r.road.id===954);for(let s=-12;s<=r.length+12;s+=2){const p=M.at(r,s),land=f.terrain.landHeightAt(p.x,p.z),drawn=rawMesh(f.terrain,p.x,p.z);assert.ok(drawn<=land+.5,'Mabou954 averaged canopy does not cover the bridge');}}
+ // Hull clearing asks the deck site once per vertex position, as a grid (deckClearGrid). On every built tile, with the
+ // decks built above, each grid answer must equal the per-point corridor test (deckClear) at that vertex.
+ const site=f.terrain.sites.find(s=>s.deckClearGrid);let points=0,cleared=0;
+ for(const t of f.terrain.tiles.values())if(t.mesh){
+  // build()'s own grid: T sample intervals, seg mesh intervals, vertices at t.x0 + i * step * mpp.
+  const T=t.mesh.material.uniforms.tNormal.value.image.width-1,seg=Math.round(Math.sqrt(t.mesh.geometry.getAttribute('position').count))-3,step=T/seg,mpp=t.size/T,pad=mpp*step*1.5;
+  const xs=new Float64Array(seg+1),zs=new Float64Array(seg+1);for(let i=0;i<=seg;i++){const g=i*step;xs[i]=t.x0+g*mpp;zs[i]=t.z0+g*mpp;}
+  const grid=site.deckClearGrid(xs,zs,pad);
+  for(let b=0;b<=seg;b++)for(let a=0;a<=seg;a++){const want=site.deckClear(xs[a],zs[b],pad);points++;if(want)cleared++;
+   if(!!grid?.[b*(seg+1)+a]!==want)assert.fail(`hull clearing grid matches the per-point corridor test (${t.level}/${t.i}_${t.j} vertex ${a},${b})`);}
+ }
+ assert.ok(cleared>0,'real hull clearing vertices were checked');console.log(area,'scale',scale,'hull clearing grid = per-point test at',points,'vertex positions,',cleared,'cleared');
  dispose(f);
 }
 rows.sort((a,b)=>b.worst-a.worst);
@@ -80,8 +92,10 @@ if(process.argv.includes('--mutations')){
  const terrainFile='web/src/terrain.ts',terrain=readFileSync(root+terrainFile,'utf8');
  const mask='if (bridgePaint?.[k >> 2]) drawn = flags & 240;';assert.equal(terrain.split(mask).length,2);
  await assert.rejects(()=>verify({[terrainFile]:terrain.replace(mask,'if (bridgePaint?.[k >> 2]) drawn = flags;')},'mabou'),/rendered bare-earth road/,'road paint mask removed must fail');console.log('KILLED under-deck road paint mask removed');
- const canopy='if(c>0&&deckClearSites.length&&deckClearSites.some(site=>site.deckClear?.(t.x0+ga*mpp,t.z0+gb*mpp,deckClearPad)))c=0;';assert.equal(terrain.split(canopy).length,2);
+ const canopy='if(c>0&&deckClear?.[k0])c=0;';assert.equal(terrain.split(canopy).length,2);
  await assert.rejects(()=>verify({[terrainFile]:terrain.replace(canopy,'')},'mabou'),/canopy does not cover/,'coarse canopy clearance removed must fail');console.log('KILLED coarse canopy clearance removed');
+ const reachBox='const a0=first(xs,ax+Math.min(0,dx)-reach-slack),a1=first(xs,ax+Math.max(0,dx)+reach+slack)-1;';assert.equal(source.split(reachBox).length,2);
+ await assert.rejects(()=>verify({[file]:source.replace(reachBox,'const a0=first(xs,ax+Math.min(0,dx)-reach/2-slack),a1=first(xs,ax+Math.max(0,dx)+reach/2+slack)-1;')},'mabou'),/hull clearing grid matches the per-point corridor test/,'grid that visits half the reach box must fail');console.log('KILLED hull clearing grid visits half the reach box');
  const kind='this.driving.kind=wash?road.kind:deck?(r.timber?5:9):road.kind;';assert.equal(source.split(kind).length,2);
  await assert.rejects(()=>verify({[file]:source.replace(kind,'this.driving.kind=wash?road.kind:deck?(r.timber?5:9):9;')},'mabou'),/every apron keeps its own mapped road kind/,'non-washboard aprons concrete must fail');console.log('KILLED non-washboard aprons concrete');
 

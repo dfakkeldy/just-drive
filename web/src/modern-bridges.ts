@@ -26,8 +26,9 @@ interface Span {
 export class ModernBridges {
   private readonly spans:Span[]=[];
   private readonly cells=new Map<number,number[]>();
-  // The existing span lists in row order, so a padded hull query can skip the empty cells outside the map.
-  private clearanceGrid?: {x:number;z:number;w:number;h:number;members:(readonly number[]|undefined)[]};
+  // The existing span lists in row order, so a padded hull query can skip the empty cells outside the map. `spans` holds
+  // each span's listed cell rectangle (x0, z0, x1, z1 per span index), for the grid form of the same query.
+  private clearanceGrid?: {x:number;z:number;w:number;h:number;members:(readonly number[]|undefined)[];spans:Int32Array};
   private readonly material=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
   private mesh:THREE.Mesh|null=null;
   /** Road ids whose spans are left out of the drawn mesh (the canal swing span while a vessel passes). */
@@ -102,7 +103,7 @@ export class ModernBridges {
       const mask=this.mask();
       terrain.sites?.push({mask,box:[Math.min(...this.spans.map(r=>r.x0)),Math.min(...this.spans.map(r=>r.z0)),Math.max(...this.spans.map(r=>r.x1)),Math.max(...this.spans.map(r=>r.z1))],
         sitingBoxes:this.spans.map(r=>[r.x0,r.z0,r.x1,r.z1] as const),
-        roadField:false,samplesTerrain:false,height:(_x,_z,h)=>h,surface:()=>null,deckDriving:this.driving,deckMask:(x,z,kind)=>this.maskPaint(x,z,kind),deckClear:(x,z,pad)=>this.clearCorridor(x,z,pad),roadBedHeight:(x,z)=>this.roadBedHeight(x,z),roadCutHeight:(x,z)=>this.query(x,z,true,false,undefined,false,0,false),roadCutRevision:(x0,z0,x1,z1)=>this.cutRevision(x0,z0,x1,z1),roadCutTriangles:(x0,z0,x1,z1)=>this.cutTriangles(x0,z0,x1,z1),deckContactHeight:(x,z,referenceY)=>this.contactHeightAt(x,z,referenceY)});
+        roadField:false,samplesTerrain:false,height:(_x,_z,h)=>h,surface:()=>null,deckDriving:this.driving,deckMask:(x,z,kind)=>this.maskPaint(x,z,kind),deckClear:(x,z,pad)=>this.clearCorridor(x,z,pad),deckClearGrid:(xs,zs,pad)=>this.clearGrid(xs,zs,pad),roadBedHeight:(x,z)=>this.roadBedHeight(x,z),roadCutHeight:(x,z)=>this.query(x,z,true,false,undefined,false,0,false),roadCutRevision:(x0,z0,x1,z1)=>this.cutRevision(x0,z0,x1,z1),roadCutTriangles:(x0,z0,x1,z1)=>this.cutTriangles(x0,z0,x1,z1),deckContactHeight:(x,z,referenceY)=>this.contactHeightAt(x,z,referenceY)});
     }
   }
 
@@ -121,19 +122,20 @@ export class ModernBridges {
   }
 
   /** The 64 m cells of the span grid: outside them query() and isSpan() are null or false, and so are the deck and
-   *  contact callbacks the site builds on them. (overlaps() and the deckClear callback also scan neighbouring cells within their
-   *  pad, so they can be true just outside; nothing gates them on the mask.) */
+   *  contact callbacks the site builds on them. (overlaps() and the deckClear and deckClearGrid callbacks also scan
+   *  neighbouring cells within their pad, so they can be true just outside; nothing gates them on the mask.) */
   private mask():CellMask {
     let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;
     for(const r of this.spans){x0=Math.min(x0,Math.floor(r.x0/CELL));z0=Math.min(z0,Math.floor(r.z0/CELL));x1=Math.max(x1,Math.floor(r.x1/CELL));z1=Math.max(z1,Math.floor(r.z1/CELL));}
-    const w=x1-x0+1,h=z1-z0+1,bits=new Uint8Array(w*h),members=new Array<readonly number[]|undefined>(w*h);
+    const w=x1-x0+1,h=z1-z0+1,bits=new Uint8Array(w*h),members=new Array<readonly number[]|undefined>(w*h),spans=new Int32Array(this.spans.length*4);
+    for(let s=0;s<this.spans.length;s++){const r=this.spans[s];spans.set([Math.floor(r.x0/CELL),Math.floor(r.z0/CELL),Math.floor(r.x1/CELL),Math.floor(r.z1/CELL)],s*4);}
     for(const r of this.spans)for(let z=Math.floor(r.z0/CELL);z<=Math.floor(r.z1/CELL);z++)for(let x=Math.floor(r.x0/CELL);x<=Math.floor(r.x1/CELL);x++){
       const i=(z-z0)*w+x-x0;
       if(bits[i]===1)continue;
       bits[i]=1;
       members[i]=this.cells.get(key(x*CELL,z*CELL,CELL));
     }
-    this.clearanceGrid={x:x0,z:z0,w,h,members};
+    this.clearanceGrid={x:x0,z:z0,w,h,members,spans};
     return {x0:x0*CELL,z0:z0*CELL,size:CELL,w,h,bits};
   }
   /** Footprint only: safe while terrain tiles are being decoded, before deck heights exist. */
@@ -165,6 +167,43 @@ export class ModernBridges {
         }
       }
     }return false;
+  }
+  /** clearCorridor at every point of a grid (Site.deckClearGrid: xs and zs ascending), or null when it is false at all of
+   *  them. clearCorridor reads a span only from the cells listed for it, so a point can match a span only when its padded
+   *  cell range meets the span's cell rectangle. Each corridor piece visits only the points inside its reach box, and
+   *  each point keeps clearCorridor's own tests, on the live corridor and width. */
+  private clearGrid(xs:Float64Array,zs:Float64Array,pad:number):Uint8Array|null {
+    const grid=this.clearanceGrid,nx=xs.length,nz=zs.length;
+    if(!grid||!nx||!nz)return null;
+    // Each point's padded cell range, as clearCorridor computes it (before its clamp to the map, which holds every span).
+    const lx=new Float64Array(nx),hx=new Float64Array(nx),lz=new Float64Array(nz),hz=new Float64Array(nz);
+    for(let a=0;a<nx;a++){lx[a]=Math.floor((xs[a]-pad)/CELL);hx[a]=Math.floor((xs[a]+pad)/CELL);}
+    for(let b=0;b<nz;b++){lz[b]=Math.floor((zs[b]-pad)/CELL);hz[b]=Math.floor((zs[b]+pad)/CELL);}
+    // First index whose coordinate is at least v. The slack keeps every point the box test could accept.
+    const first=(v:Float64Array,at:number)=>{let lo=0,hi=v.length;while(lo<hi){const m=(lo+hi)>>1;if(v[m]<at)lo=m+1;else hi=m;}return lo;};
+    const slack=1e-3;let out:Uint8Array|null=null;
+    for(let s=0;s<this.spans.length;s++){
+      const cx0=grid.spans[s*4],cz0=grid.spans[s*4+1],cx1=grid.spans[s*4+2],cz1=grid.spans[s*4+3];
+      if(lx[0]>cx1||hx[nx-1]<cx0||lz[0]>cz1||hz[nz-1]<cz0)continue;
+      const r=this.spans[s],c=r.corridor,reach=Math.max(r.width,r.road.halfWidth+.45)+pad;
+      for(let i=0;i<c.length;i+=4){
+        const ax=c[i],az=c[i+1],dx=c[i+2]-ax,dz=c[i+3]-az;
+        const a0=first(xs,ax+Math.min(0,dx)-reach-slack),a1=first(xs,ax+Math.max(0,dx)+reach+slack)-1;
+        const b0=first(zs,az+Math.min(0,dz)-reach-slack),b1=first(zs,az+Math.max(0,dz)+reach+slack)-1;
+        for(let b=b0;b<=b1;b++){
+          if(lz[b]>cz1||hz[b]<cz0)continue;
+          const pz=zs[b]-az;
+          for(let a=a0;a<=a1;a++){
+            if(out?.[b*nx+a]||lx[a]>cx1||hx[a]<cx0)continue;
+            const px=xs[a]-ax;
+            if(px-Math.max(0,dx)>reach||Math.min(0,dx)-px>reach||pz-Math.max(0,dz)>reach||Math.min(0,dz)-pz>reach)continue;
+            const n=dx*dx+dz*dz||1,t=Math.max(0,Math.min(1,(px*dx+pz*dz)/n));
+            if(Math.hypot(px-dx*t,pz-dz*t)<=reach)(out??=new Uint8Array(nx*nz))[b*nx+a]=1;
+          }
+        }
+      }
+    }
+    return out;
   }
 
   private approach(r:Span,end:boolean):Approach|undefined {

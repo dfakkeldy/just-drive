@@ -182,6 +182,9 @@ export interface Site extends RoadCutSource {
   deckMask?(x:number,z:number,kind:number):boolean;
   /** Remove the averaged canopy hull over a deck corridor, without changing bare-earth contact. */
   deckClear?(x:number,z:number,pad:number):boolean;
+  /** deckClear's answer at every point of a grid (xs and zs ascending; row b, column a at index b * xs.length + a), or
+   *  null when no point is cleared. It must match deckClear point for point; it only skips points no corridor reaches. */
+  deckClearGrid?(xs:Float64Array,zs:Float64Array,pad:number):Uint8Array|null;
   /** True water elevation for a mapped inland pool; null outside its polygon. */
   waterLevel?(x:number,z:number):number|null;
   /** Optional exact deck on top of the land. The callback samples land only, without any decks. `ceiling` is the highest
@@ -677,10 +680,6 @@ export class Terrain {
     const gravelOverlay=sites.some(s=>s.visualGravel);
     const airportMarkings=sites.some(s=>s.airportMarkings);
     const terrainSites = sites.filter(site => site.samplesTerrain !== false);
-    const canopySites = sites.filter(site => site.clearCanopy);
-    const deckPaintSites = this.cartRoads ? [] : sites.filter(site => site.deckMask
-      && (!site.mask || maskTouches(site.mask, t.x0, t.z0, t.x0 + t.size, t.z0 + t.size)));
-    let bridgePaint: Uint8Array | undefined;
     let road = bakedRoad ?? (sites.some(s=>s.roadField!==false&&s.roadField!=='painted') ? new Uint8ClampedArray(S * S * 4) : null);
     // Brooks get a field only on the two finest levels (samples 1 m and 2 m apart). Further off a brook is a pixel
     // wide, and the field's guarantee against seams needs close samples (see BROOK_SAMPLE in streams.ts).
@@ -715,19 +714,6 @@ export class Terrain {
         if(f&&!road&&site.roadField==='painted'&&mpp<=f.half)road=new Uint8ClampedArray(S*S*4);
         if(f && road)paintSiteSurface(road,k*4,f,zero,dScale,wScale);
       }
-      if (road && deckPaintSites.length > 0) {
-        const kind = road[k * 4 + 2] & 15;
-        if (kind > 0) {
-          const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
-          for (const site of deckPaintSites) {
-            if (site.mask && !inMask(site.mask, x, z)) continue;
-            if (site.deckMask?.(x, z, kind)) {
-              (bridgePaint ??= new Uint8Array(S * S))[k] = 1;
-              break;
-            }
-          }
-        }
-      }
       if (brook && brook[k * 4 + 2] > 0) {
         // A soft crease along the brook, so the painted water lies in a dip. Not under a road: there it runs in a pipe.
         const piped = road && road[k * 4 + 2] > 0 && Math.abs(road[k * 4] - zero) * dScale < road[k * 4 + 1] * wScale + 1.5;
@@ -748,13 +734,7 @@ export class Terrain {
         c *= THREE.MathUtils.smoothstep(d, hw + 0.8, hw + 4.5);
         px[k * 4 + 2] = Math.round(c / cs);
       }
-      if (canopySites.length) for (const site of canopySites) {
-        const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
-        const kind = road ? road[k * 4 + 2] & 15 : 0;
-        const protectedRoad = site.preserveRoads && road && kind > 0 && kind <= 5
-          && Math.abs(road[k * 4] - zero) * dScale < road[k * 4 + 1] * wScale + 2 * t.size / segFor(t.level) + 2;
-        if (!protectedRoad && site.clearCanopy?.(x, z, t.level)) { c = 0; px[k * 4 + 2] = 0; }
-      }
+      for(const site of sites)if(site.clearCanopy){const x=t.x0+(k%S)*mpp,z=t.z0+Math.floor(k/S)*mpp;const rk=road?(road[k*4+2]&15):0,protectedRoad=site.preserveRoads&&road&&rk>0&&rk<=5&&Math.abs(road[k*4]-zero)*dScale<road[k*4+1]*wScale+2*t.size/segFor(t.level)+2;if(!protectedRoad&&site.clearCanopy(x,z,t.level)){c=0;px[k*4+2]=0;}}
       if (this.canopyExcludes?.(t.x0 + (k % S) * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + Math.floor(k / S) * mpp))) { c = 0; px[k * 4 + 2] = 0; }
       canopy[k] = c;
       if (g < lo) lo = g;
@@ -818,7 +798,7 @@ export class Terrain {
     if (road) {
       // Keep the CPU flags intact. The texture omits draped paint under decks.
       let drawn = new Uint8Array(road.buffer, road.byteOffset, road.byteLength);
-      if (!this.cartRoads) drawn = drawnRoadBytes(drawn, bridgePaint);
+      if (!this.cartRoads) drawn = drawnRoadBytes(drawn, this.deckPaint(t, sites, road, mpp));
       roadTex = new THREE.DataTexture(drawn, S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
       roadTex.magFilter = roadTex.minFilter = THREE.NearestFilter;   // the shader blends the samples itself
       roadTex.needsUpdate = true;
@@ -831,9 +811,7 @@ export class Terrain {
     }
 
     const seg = segFor(t.level), step = T / seg, n = seg + 3;
-    const deckClearPad = mpp * step * 1.5;
-    const deckClearSites = hull ? sites.filter(site => site.deckClear && (!site.mask || maskTouches(site.mask,
-      t.x0 - deckClearPad, t.z0 - deckClearPad, t.x0 + t.size + deckClearPad, t.z0 + t.size + deckClearPad))) : [];
+    const deckClear = hull ? this.deckClearMask(t, sites, seg, step, mpp) : null;
     const pos = new Float32Array(n * n * 3);
     const coastAttr = coastal ? new Float32Array(n * n * 4) : null;
     const gattr = new Float32Array(n * n), crowns = this.low ? null : new Float32Array(n * n);
@@ -863,7 +841,7 @@ export class Terrain {
         if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;
         // A coarse forest hull can cross a narrow bridge even when its vertex misses the road field.
         // Clear the vertices that feed that triangle, rather than using the hull as an abutment height.
-        if(c>0&&deckClearSites.length&&deckClearSites.some(site=>site.deckClear?.(t.x0+ga*mpp,t.z0+gb*mpp,deckClearPad)))c=0;
+        if(c>0&&deckClear?.[k0])c=0;
         if(walkMask?.[k0])c=0;
         if (crowns) crowns[b * n + a] = hull ? 0 : c;
         if (!hull) c = 0;
@@ -930,6 +908,67 @@ export class Terrain {
     this.night?.applyGround(mat);
     this.propertyOverlay?.applyGround(mat);
     this.fleetGroundChanged?.(t.x0, t.z0, t.size);
+  }
+
+  /** Samples whose road paint lies under a structural deck (Site.deckMask), for drawnRoadBytes; the CPU flags keep it.
+   *  build() calls this after its sample loop, which has then finished every sample's road bytes. A sample passes a
+   *  site's mask only inside a populated cell, so a site with a mask visits only those samples. Each sample keeps the
+   *  same tests, in the same site order, as one scan over all samples. */
+  private deckPaint(t: Tile, sites: Site[], road: Uint8ClampedArray, mpp: number): Uint8Array | undefined {
+    let paint: Uint8Array | undefined;
+    for (const site of sites) {
+      if (!site.deckMask) continue;
+      const m = site.mask;
+      if (!m) {
+        for (let k = 0; k < S * S; k++) {
+          const kind = road[k * 4 + 2] & 15;
+          if (kind === 0 || paint?.[k]) continue;
+          if (site.deckMask(t.x0 + (k % S) * mpp, t.z0 + Math.floor(k / S) * mpp, kind)) (paint ??= new Uint8Array(S * S))[k] = 1;
+        }
+        continue;
+      }
+      if (!maskTouches(m, t.x0, t.z0, t.x0 + t.size, t.z0 + t.size)) continue;
+      // Mask columns near the tile, one spare each side. The sample's own column test below is inMask's test.
+      const i0 = Math.max(0, Math.floor((t.x0 - m.x0) / m.size) - 1), i1 = Math.min(m.w - 1, Math.floor((t.x0 + t.size - m.x0) / m.size) + 1);
+      for (let b = 0; b < S; b++) {
+        const z = t.z0 + b * mpp, j = Math.floor((z - m.z0) / m.size);
+        if (j < 0 || j >= m.h) continue;
+        for (let i = i0; i <= i1; i++) {
+          if (m.bits[j * m.w + i] !== 1) continue;
+          const cx = m.x0 + i * m.size;
+          const a0 = Math.max(0, Math.floor((cx - t.x0) / mpp) - 1), a1 = Math.min(T, Math.ceil((cx + m.size - t.x0) / mpp) + 1);
+          for (let a = a0; a <= a1; a++) {
+            const k = b * S + a, kind = road[k * 4 + 2] & 15;
+            if (kind === 0 || paint?.[k]) continue;
+            const x = t.x0 + a * mpp;
+            if (Math.floor((x - m.x0) / m.size) !== i) continue;
+            if (site.deckMask(x, z, kind)) (paint ??= new Uint8Array(S * S))[k] = 1;
+          }
+        }
+      }
+    }
+    return paint;
+  }
+
+  /** The hull vertices a deck corridor clears (Site.deckClear), indexed by sample like build()'s k0, or null when none.
+   *  Each distinct vertex position is asked once, as a grid, before build()'s vertex loop. */
+  private deckClearMask(t: Tile, sites: Site[], seg: number, step: number, mpp: number): Uint8Array | null {
+    const pad = mpp * step * 1.5;
+    let clear: Uint8Array | null = null, xs: Float64Array | null = null, zs: Float64Array | null = null;
+    for (const site of sites) {
+      if (!site.deckClear || site.mask && !maskTouches(site.mask, t.x0 - pad, t.z0 - pad, t.x0 + t.size + pad, t.z0 + t.size + pad)) continue;
+      if (!xs || !zs) {
+        // The positions build() gives the vertices: t.x0 + ga * mpp, with ga = 0, step, ..., seg * step.
+        xs = new Float64Array(seg + 1); zs = new Float64Array(seg + 1);
+        for (let i = 0; i <= seg; i++) { const g = i * step; xs[i] = t.x0 + g * mpp; zs[i] = t.z0 + g * mpp; }
+      }
+      const grid = site.deckClearGrid ? site.deckClearGrid(xs, zs, pad) : undefined;
+      if (grid === null) continue;
+      for (let b = 0; b <= seg; b++) for (let a = 0; a <= seg; a++) {
+        if (grid ? grid[b * (seg + 1) + a] : site.deckClear(xs[a], zs[b], pad)) (clear ??= new Uint8Array(S * S))[b * step * S + a * step] = 1;
+      }
+    }
+    return clear;
   }
 
   /** The level of the finest tile in memory at a world position (-1: none). Lighter than surfaceAt, and unlike find it
