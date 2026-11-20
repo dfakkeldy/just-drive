@@ -13,7 +13,7 @@ export const BIKE_SPEC: VehicleSpec = deepFreeze({
     overhead: 2.1, grassHalfWidth: .3, grassHalfLength: 1.45, nose: 2.2 },
   engineAcceleration: 6.4, reverseSpeed: 5, reverseAcceleration: 3, brake: 10, handbrake: 5,
   cornering: 1.35, maxSteer: .65,
-  chase: { back: 5.1, height: 2.15, lookAhead: 2, lookHeight: 1.1, speedBack: .045, maxSpeedBack: 1.5 },
+  chase: { back: 5.1, height: 2.15, lookAhead: 2, lookHeight: 1.1, speedBack: .045, maxSpeedBack: 1.9 },
 });
 const BIKE_AXLE_HEIGHT = BIKE_SPEC.wheelRadius;
 const TEAL = 0x568b87, DARK = 0x252b2d, TYRE = 0x171c1c, METAL = 0xafb8b4, CREAM = 0xe8e1c9;
