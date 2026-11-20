@@ -34,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT/'pipeline'))
 from paved_provenance import validate  # role-scoped path patterns and the denied historical payload hashes
 RECEIPT = ROOT/'tools/paved-open/hashes.json'
+REFRESH = ROOT/'tools/paved-open/hashes-refresh.json'
 AREAS = ('mabou', 'judique', 'porthood', 'westbay', 'pointtupper', 'cansocauseway')
 SOURCE = 'nstdb-designated-open-v1'
 FORBIDDEN = ('intensity', 'lidar', '.laz', '.las', '/data/work/threads/paved/', '/data/work/bakes/paved-layer', 'osm.json')
@@ -78,11 +79,76 @@ def receipt_entries(receipt):
             yield area, f
 
 
-def make(work, baked, output, verify=True, receipt=RECEIPT, areas_=AREAS, live=ROOT/'data'):
-    work, baked, output = work.resolve(), baked.resolve(), output.resolve()
-    live = Path(live).resolve()
-    if output.exists() or output.is_relative_to(baked) or baked.is_relative_to(output) or output.is_relative_to(live) or output.is_relative_to(work):
-        raise ValueError('Output must be NEW, outside data/, and separate from the work and baked roots')
+def area_matches(baked, area):
+    folder = baked/area['folder']/'paved'
+    files = {f['file']: f['sha256'] for f in area['files']}
+    return (folder.is_dir()
+            and {p.relative_to(baked).as_posix() for p in folder.iterdir()} == files.keys()
+            and all(sha((baked/name).read_bytes()) == digest for name, digest in files.items()))
+
+
+def refresh_installed(baked):
+    """Recognize the full refreshed pavement, and check its current inputs."""
+    report = json.loads(REFRESH.read_text())
+    for area in report['areas']:
+        path = baked/area['folder']/'manifest.json'
+        if not path.is_file():
+            return False
+        manifest = json.loads(path.read_bytes())
+        if manifest.get('paved') != area['manifestKey'] or not area_matches(baked, area):
+            return False
+    stale = stale_inputs(report, baked)
+    if stale:
+        raise AssertionError('refreshed pavement is STALE against: '+', '.join(stale))
+    for m in report['mirror']:
+        if sha((baked.parent.parent/m['file']).read_bytes()) != m['sha256']:
+            raise AssertionError('corrections file differs from the refreshed pavement receipt')
+    return True
+
+
+def refresh_delta():
+    """The exact transition from the Mabou village pavement to the refresh."""
+    before = json.loads(RECEIPT.read_text())
+    after = json.loads(REFRESH.read_text())
+    assert before['mirror'] == after['mirror']
+    old = {f['file']: f['sha256'] for _, f in receipt_entries(before)}
+    new = {f['file']: f['sha256'] for _, f in receipt_entries(after)}
+    files = [dict(file=name, before=old.get(name), sha256=new.get(name))
+             for name in sorted(old.keys() | new.keys()) if old.get(name) != new.get(name)]
+    keys = {a['folder']: a['manifestKey'] for a in before['areas']}
+    manifests = [dict(folder=a['folder'], before={'paved': keys[a['folder']]}, after={'paved': a['manifestKey']})
+                 for a in after['areas'] if keys[a['folder']] != a['manifestKey']]
+    return dict(files=files, manifests=manifests)
+
+
+def before_file(name, digest, later):
+    """Walk back exact file pins through later receipts, newest first."""
+    for report in reversed(later):
+        for f in report['files']:
+            if name == f['file'] and digest == f['sha256']:
+                digest = f['before']
+                break
+    return digest
+
+
+def before_keys(folder, doc, later):
+    """Walk back the manifest keys or counts that later receipts own."""
+    doc = dict(doc)
+    for report in reversed(later):
+        for m in report['manifests']:
+            if folder != m['folder']:
+                continue
+            for key in doc.keys() & m['before'].keys() & m['after'].keys():
+                after, before = m['after'][key], m['before'][key]
+                if doc[key] == after:
+                    doc[key] = before
+                elif after.keys() == {'count'} and doc[key].get('count') == after['count']:
+                    doc[key] = dict(doc[key], count=before['count'])
+    return doc
+
+
+def record(work, baked, areas_=AREAS):
+    """Read a work bake and record its checked payload and baked inputs."""
     areas = []
     for area in areas_:
         bake = json.loads((work/area/'bake.json').read_text())
@@ -106,21 +172,14 @@ def make(work, baked, output, verify=True, receipt=RECEIPT, areas_=AREAS, live=R
         names = ['index.json', *index['tiles']]
         promotion = {Path(p['source']).name: p['sha256'] for p in json.loads((work/area/'promotion.json').read_text())}
         if sorted(promotion) != sorted(names): raise ValueError(f'{area}: promotion receipt names differ from the index')
-        manifest = json.loads((baked/folder(area)/'manifest.json').read_bytes())
-        if 'paved' in manifest: raise ValueError(f'{area}: live manifest already lists paved; nothing to make')
-        if (baked/folder(area)/'paved').exists(): raise ValueError(f'{area}: live paved/ already exists')
+        if {p.name for p in src.iterdir()} != set(names): raise ValueError(f'{area}: extra or missing paved files')
         files = []
         for name in sorted(names):
             data = (src/name).read_bytes()
             if sha(data) != promotion[name]: raise ValueError(f'{area}: {name} differs from its promotion hash')
             if name != 'index.json' and (len(data) != 128*128 or any(b > 2 for b in data)): raise ValueError(f'{area}: {name} is not a 0/1/2 class tile')
-            target = output/folder(area)/'paved'/name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
             files.append(dict(file=(folder(area)/'paved'/name).as_posix(), bytes=len(data), sha256=sha(data)))
         key = manifest_key(index)
-        (output/folder(area)).mkdir(parents=True, exist_ok=True)
-        (output/folder(area)/'manifest-key.json').write_text(json.dumps(dict(paved=key), separators=(',', ':'))+'\n')
         areas.append(dict(area=area, folder=folder(area).as_posix(), manifestKey=key, files=files, inputs=[inputs[k] for k in sorted(inputs)],
                           lots_m2=bake['lots_m2'], apron_m2=bake['apron_m2'], omitted=sorted(int(o['id'].rsplit('-', 1)[1]) for o in bake['lot_eligibility'] if o['drop'])))
     # Owner lot corrections are a bake input in raw/: copy them so the main thread mirrors the exact file.
@@ -133,14 +192,36 @@ def make(work, baked, output, verify=True, receipt=RECEIPT, areas_=AREAS, live=R
     for path, value in mirror.items():
         data = (baked.parent.parent/path).read_bytes()
         if sha(data) != value: raise ValueError(f'STALE WORK BAKE: {path} changed since the bake')
-        (output/'raw-mirror'/path).parent.mkdir(parents=True, exist_ok=True); (output/'raw-mirror'/path).write_bytes(data)
-    report = dict(version=1, source=SOURCE, licence='https://support.novascotia.ca/services/open-data-portal-licence', areas=areas,
-                  mirror=[dict(file=p, sha256=v) for p, v in sorted(mirror.items())])
-    (output/'hashes.json').write_text(json.dumps(report, indent=1)+'\n')
+    return dict(version=1, source=SOURCE, licence='https://support.novascotia.ca/services/open-data-portal-licence', areas=areas,
+                mirror=[dict(file=p, sha256=v) for p, v in sorted(mirror.items())])
+
+
+def make(work, baked, output, verify=True, receipt=RECEIPT, areas_=AREAS, live=ROOT/'data'):
+    work, baked, output = work.resolve(), baked.resolve(), output.resolve()
+    live = Path(live).resolve()
+    if output.exists() or output.is_relative_to(baked) or baked.is_relative_to(output) or output.is_relative_to(live) or output.is_relative_to(work):
+        raise ValueError('Output must be NEW, outside data/, and separate from the work and baked roots')
+    for area in areas_:
+        manifest = json.loads((baked/folder(area)/'manifest.json').read_bytes())
+        if 'paved' in manifest: raise ValueError(f'{area}: live manifest already lists paved; nothing to make')
+        if (baked/folder(area)/'paved').exists(): raise ValueError(f'{area}: live paved/ already exists')
+    report = record(work, baked, areas_)
     if verify:
         committed = json.loads(Path(receipt).read_text())
         if report != committed:
             raise ValueError('STALE RECEIPT: generated files differ from tools/paved-open/hashes.json. Do not install; review a new delta.')
+    for area, f in receipt_entries(report):
+        target = output/f['file']
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(work/area['area']/'paved'/target.name, target)
+    for area in report['areas']:
+        (output/area['folder']/'manifest-key.json').write_text(json.dumps(dict(paved=area['manifestKey']), separators=(',', ':'))+'\n')
+    for m in report['mirror']:
+        target = output/'raw-mirror'/m['file']
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(baked.parent.parent/m['file'], target)
+    (output/'hashes.json').write_text(json.dumps(report, indent=1)+'\n')
+    areas = report['areas']
     total = sum(f['bytes'] for _, f in receipt_entries(report))
     print(f'{sum(len(a["files"]) for a in areas)} files, {total:,} bytes in {output}')
     return report

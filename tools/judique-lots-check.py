@@ -247,7 +247,7 @@ def delta(folder):
 
 
 def land(root):
-    mode = judique.state(root)
+    mode = 'after' if judique.patch.refresh_installed(Path(root)) else judique.state(root)
     if mode == 'pre-1227':
         if EXPECT is not None: raise AssertionError(f'Judique lots delta land is pre-1227, expected {EXPECT}')
         print('NOTE: this land is from before Point Tupper delta; the Judique lots delta installs after it'); return

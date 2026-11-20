@@ -212,38 +212,21 @@ def make(work, paved, live, output, verify=True, receipt=RECEIPT, paved_receipt=
     return report
 
 
-def _later(later):
-    """Later deltas that replace files of this one: file -> (their after sha, their before sha), and per manifest
-    folder the (after, before) keys they own. A file at a later delta's exact after bytes counts as its before bytes."""
-    files, manifests = {}, {}
-    for r in later:
-        for f in r['files']:
-            if f['sha256']: files[f['file']] = (f['sha256'], f['before'])
-        for m in r['manifests']: manifests[m['folder']] = (m['after'], m['before'])
-    return files, manifests
-
-
-def _undo_later(doc, folder, manifests):
-    after, before = manifests.get(folder, ({}, {}))
-    return {k: (before[k] if k in after and v == after[k] and k in before else v) for k, v in doc.items()}
-
-
 def entries(live, report, later=()):
     """'before' or 'after' for every receipt file and owned manifest key set; AssertionError for unknown bytes."""
     live = Path(live)
-    files, manifests = _later(later)
     seen = []
     for f in report['files']:
         if f['before'] == f['sha256']: raise AssertionError(f'receipt entry without a change: {f["file"]}')
         p = live/f['file']
         now = sha(p.read_bytes()) if p.is_file() else None
-        if f['file'] in files and now == files[f['file']][0]: now = files[f['file']][1]
+        now = paved_patch.before_file(f['file'], now, later)
         if now == f['before']: seen.append('before')
         elif now == f['sha256']: seen.append('after')
         else: raise AssertionError(f'unknown bytes in {f["file"]}')
     for m in report['manifests']:
         area = next(a for a in AREAS if area_folder(a) == m['folder'])
-        now = _undo_later(keys((live/m['folder']/'manifest.json').read_bytes(), area), m['folder'], manifests)
+        now = paved_patch.before_keys(m['folder'], keys((live/m['folder']/'manifest.json').read_bytes(), area), later)
         if now == m['before']: seen.append('before')
         elif now == m['after']: seen.append('after')
         else: raise AssertionError(f'unknown owned manifest keys in {m["folder"]}')
@@ -265,7 +248,6 @@ def stale_inputs(live, report, paved_report, later=()):
     business (its receipt pins it), and a manifest is read with the later delta's owned keys undone.
     """
     live, ours, stale = Path(live), {f['file'] for f in report['files']}, []
-    files, manifests = _later(later)
     after = {m['folder']: m['after'] for m in report['manifests']}
     for area in paved_report['areas']:
         for entry in area['inputs']:
@@ -273,12 +255,13 @@ def stale_inputs(live, report, paved_report, later=()):
             path = live/entry['file']
             if not path.is_file(): stale.append(entry['file']); continue
             data = path.read_bytes()
-            if entry['file'] in files and sha(data) == files[entry['file']][0]: continue
             if entry.get('lattice'):
                 folder = entry['file'].rsplit('/', 1)[0]
-                doc = _undo_later(json.loads(data), folder, manifests); doc.update(after.get(folder, {}))
+                doc = paved_patch.before_keys(folder, json.loads(data), later); doc.update(after.get(folder, {}))
                 value = paved_patch.lattice(json.dumps(doc).encode())
-            else: value = sha(data)
+            else:
+                value = sha(data)
+                if paved_patch.before_file(entry['file'], value, later) != value: continue
             if value != entry['sha256']: stale.append(entry['file'])
     return sorted(set(stale))
 
