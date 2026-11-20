@@ -21,10 +21,10 @@ const ROW = 64, WIDTH = 320;
 
 export interface TagBox { id: number; left: number; right: number; top: number; bottom: number }
 
-/** Phone names use 10 CSS px of ink through 60 m, then shrink. */
+/** Phone names use 12 CSS px of ink through 60 m, then shrink. */
 export function callSignHeight(depth: number, projection: number, cssHeight: number, low: boolean, distance: number): number {
   const height = Math.max(.01, Math.min(6, .060 * depth / projection));
-  return low ? 40 * depth / (Math.max(1, cssHeight) * projection) * Math.min(1, 60 / Math.max(.001, distance)) : height;
+  return low ? 48 * depth / (Math.max(1, cssHeight) * projection) * Math.min(1, 60 / Math.max(.001, distance)) : height;
 }
 
 

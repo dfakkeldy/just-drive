@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import * as R from '../web/src/gamepad-rules.ts';
 import { padKeys, padHelp } from '../web/src/controls.ts';
 import { hudLine } from '../web/src/hud-text.ts';
+import { Shift } from '../web/src/shift.ts';
+import { Mail } from '../web/src/mail.ts';
 
 const near = (a, b, msg, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${msg}: ${a} != ${b}`);
 const B = R.BUTTON;
@@ -187,7 +189,22 @@ const hud = { mode: 'drive', mailMode: true, touchDevice: false, fps: 60, speed:
   e: 0, n: 0, height: 0, exag: 1.5, sunAz: 0, sunEl: 0, drawn: 0, pending: 0, flySpeed: 40, views: 0, done: 1, stops: 9, delivered: 3, lawn: 0, ditch: 0, trailerReason: '', atEdge: false, route: false, showRuts: false, ruts: 0, lawns: 0 };
 assert.match(hudLine(hud), /WASD\/arrows: drive/, 'keys: the keyboard line');
 const padLine = hudLine({ ...hud, padHelp: padHelp('car', true) });
-assert.match(padLine, /RT\/LT: go\/brake/); assert.doesNotMatch(padLine, /WASD/); assert.match(padLine, /1\/9 stops/, 'the stop count stays');
+assert.match(padLine, /RT\/LT: go\/brake/); assert.doesNotMatch(padLine, /WASD/);
+// Counts live in the day card and tally alongside the controller help. Use their real writers.
+const shiftHud = { id: 'shiftHud', textContent: '' }, mailScore = { id: 'mailScore', textContent: '' };
+const shift = {
+  hud: shiftHud, career: { day: 1, double: false }, done: hud.done, stops: hud.stops,
+  elapsed: 0, run: { short: 'Test route' }, fired: false, ended: false,
+  endButton: {}, cameraButton: {}, damage: { hintTime: 0 }, roadside: [], cleanIndex: -1,
+  progress: { textContent: '', classList: { add() {}, remove() {} } }, idleHint: '', roadsideScore: 0,
+};
+const mailCounts = Object.assign(Object.create(Mail.prototype), {
+  delivered: hud.delivered, lawn: hud.lawn, ditch: hud.ditch, customers: hud.done,
+  props: { totalCustomers: hud.stops, downCount: 0 }, status: '',
+});
+Shift.prototype.refreshUI.call(shift); mailScore.textContent = mailCounts.tally;
+assert.match(shiftHud.textContent, /\b1\/9 STOPS\b/, 'the day card keeps the stop count beside controller help');
+assert.match(mailScore.textContent, /^Delivered 3 · Lawn 0 · Ditch 0 · Boxes down 0\nCustomers 1\/9$/, 'the tally keeps deliveries and customer counts');
 assert.match(hudLine({ ...hud, mailMode: false, padHelp: padHelp('car', false) }), /^36 km\/h   Main Street   pavement\nstick: steer/, 'explore: the controller line without FPS');
 assert.equal(hudLine({ ...hud, touchDevice: true, padHelp: padHelp('car', true) }), hudLine({ ...hud, touchDevice: true }), 'a phone line has no room for it');
 assert.match(hudLine({ ...hud, driveHelp: '\nhorse keys', padHelp: padHelp('horse', true) }), /whinny/, 'the controller line wins over a ride line');

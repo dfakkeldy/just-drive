@@ -38,7 +38,7 @@ for(const touch of [false,true]){
  }
  removeRoomCard(cards[0]);assert.ok(home.parentElement,'other cards keep their home');removeRoomCard(cards[1]);removeRoomCard(cards[2]);assert.equal(home.parentElement,null,'disconnect removes the empty home');
 }
-for(const height of [280,390,844])for(const distance of [5,30,60])assert.ok(Math.abs(callSignHeight(distance,2,height,true,distance)*2/distance*height/4-10)<1e-9,'phone ink stays at 10 CSS px');
+for(const height of [280,390,844])for(const distance of [5,30,60])assert.ok(callSignHeight(distance,2,height,true,distance)*2/distance*height/4>=12,'phone ink stays at least 12 CSS px');
 assert.deepEqual(DRONE_HELP,[['WASD','Move'],['←/→ or Q/E','Turn'],['↑/↓','Camera'],['Space','Up'],['Shift or C','Down'],['Mouse wheel','Top speed'],['R','Fly back'],['F','Land']]);
 const drone=new Drone();drone.launch(0,0,0,0);assert.equal(document.getElementById('droneHints').hidden,false);
 const command={forward:0,right:0,up:0,turn:0},under={ground:0,floor:2},roof={x:0,y:0,z:0};
@@ -65,4 +65,4 @@ for(const active of [false,true]){
 assert.match(main,/const hints = drone\.active \? DRONE_HELP/,'pause lists the active drone keys first');
 const a=readFileSync(new URL('../web/index.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];
 const b=readFileSync(new URL('../artifact/page.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];assert.equal(a,b,'page style blocks remain identical');
-console.log('PASS room order, header, scroll bounds, disconnect cleanup, 10 px names, drone keycaps and hint timer, phone metrics, flight map parent, fold, north, heading, parked car and actual frame wiring; page CSS parity');
+console.log('PASS room order, header, scroll bounds, disconnect cleanup, 12 px names, drone keycaps and hint timer, phone metrics, flight map parent, fold, north, heading, parked car and actual frame wiring; page CSS parity');

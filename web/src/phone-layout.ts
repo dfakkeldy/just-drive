@@ -76,7 +76,7 @@ body.tcOn #settings{top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-t
   body.tcOn #miniMap{grid-area:1/1/3/2;width:min(96px,100%,max(58px,calc(100cqh - 58px)))}
   body.tcOn #miniMap.folded{width:58px}
   body.tcOn #relief{grid-area:1/2}body.tcOn #radio{grid-area:1/3}
-  body.tcOn #radio span{display:none!important}
+  body.tcOn #radio:not(.lost):not(.weak):not(.call) span{display:none!important}
   body.tcOn #radio b{white-space:normal;overflow-wrap:anywhere}
   body.tcOn #photoTag{grid-area:2/2/3/4}
   body.tcOn #photoCaption{-webkit-line-clamp:2}
@@ -185,7 +185,7 @@ body.tcOn #settings #photoCaption{-webkit-line-clamp:unset}
 body.tcOn #settings #placeArrival{height:auto;max-height:none;white-space:normal;font-size:11px;line-height:15px;padding:6px 8px}
 @media(orientation:landscape){body.tcOn.compactPhone #placeArrival{height:14px;max-height:14px;min-height:0;padding:0 4px;border:0;overflow:hidden;white-space:nowrap;font-size:10px;line-height:14px}}
 body.tcOn #settings :is(#radio,#relief,#photoTag){width:100%;max-width:none}
-@media(orientation:landscape){body.tcOn #radio span{display:none!important}body.tcOn #radio b,body.tcOn.compactPhone #radio b{display:block!important;white-space:normal;overflow-wrap:anywhere}}
+@media(orientation:landscape){body.tcOn #radio:not(.lost):not(.weak):not(.call) span{display:none!important}body.tcOn #radio b,body.tcOn.compactPhone #radio b{display:block!important;white-space:normal;overflow-wrap:anywhere}}
 #phoneReadoutsPanel[hidden]{display:none}
 `;
 

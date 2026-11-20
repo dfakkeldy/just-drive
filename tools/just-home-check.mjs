@@ -50,7 +50,17 @@ try {
   assert.match(html, /Mabou Mail Madness: the same roads, with a mail route you cannot win\./);
   assert.match(html, /Choose a pin to drive/);
   assert.match(html, /\.button.second\{background:transparent;border:1px solid #e9d2ad/);
-  for (const background of ['0e1d29', '1d3140']) assert.ok((luminance('9fb3c3')+.05)/(luminance(background)+.05)>=4.5, 'water labels contrast on sea and land');
+  const colour = pattern => {
+    const match = html.match(pattern);
+    assert.ok(match, `built page colour: ${pattern}`);
+    return match[1];
+  };
+  const waterLabel = colour(/\.water-label\{fill:#([0-9a-f]{6})\b/i);
+  for (const name of ['sea', 'land']) {
+    const background = colour(new RegExp(`--${name}:#([0-9a-f]{6})\\b`, 'i'));
+    const values = [luminance(waterLabel), luminance(background)];
+    assert.ok((Math.max(...values)+.05)/(Math.min(...values)+.05)>=4.5, `water labels contrast on ${name}`);
+  }
   const lead = html.match(/<p class="lead">([^<]+)<\/p>/)[1];
   for (const tag of ['name="description"', 'property="og:description"']) assert.ok(html.includes(`<meta ${tag} content="${lead}">`));
   // Every same-site link is an address the Worker serves; nothing names a home, a civic number or a private path.

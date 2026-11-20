@@ -123,13 +123,13 @@ async function refusals(m) {
 async function ui(m) {
   const original = Object.getOwnPropertyDescriptors(globalThis);
   try {
-    for(const scenario of ['success','far','edge-far','empty-roads','blocked-road','denied','timeout','unavailable','missing','uncertain','outside','cross-mail','cross-just','blocked-cross','blocked-same','normal-first','pending','mail','1884','query-1884','no-title']) {
+    for(const scenario of ['success','era-door','far','edge-far','empty-roads','blocked-road','denied','timeout','unavailable','missing','uncertain','outside','cross-mail','cross-just','blocked-cross','blocked-same','normal-first','pending','mail','1884','query-1884','no-title']) {
       const store = storage(), timers = new Map(), microtasks = [], navigations = [], placed = [];
       class Element {
         children=[];listeners={};disabled=false;id='';textContent='';attributes={};
         append(...nodes){for(const n of nodes){this.children.push(n);n.parent=this;}}
         appendChild(node){this.append(node);return node;}
-        after(node){const i=this.parent.children.indexOf(this);this.parent.children.splice(i+1,0,node);node.parent=this.parent;}
+        after(node){if(node.parent){const old=node.parent.children.indexOf(node);node.parent.children.splice(old,1);}const i=this.parent.children.indexOf(this);this.parent.children.splice(i+1,0,node);node.parent=this.parent;}
         before(node){const i=this.parent.children.indexOf(this);this.parent.children.splice(i,0,node);node.parent=this.parent;}
         setAttribute(k,v){this.attributes[k]=v;}
         addEventListener(k,fn){(this.listeners[k]??=[]).push(fn);}
@@ -138,6 +138,7 @@ async function ui(m) {
       const body=new Element(), head=new Element(), start=new Element();start.id='titleStart';
       let starts=0, asks=0, answer;
       start.addEventListener('click',()=>{starts++;});if(scenario!=='no-title') body.append(start);
+      if(scenario==='era-door'){const door=new Element();door.id='titleEra';body.append(door);}
       const find=(node,id)=>node.id===id?node:node.children.map(n=>find(n,id)).find(Boolean);
       globalThis.document={body,head,createElement:()=>new Element(),getElementById:id=>find(body,id),querySelector:s=>find(body,s.slice(1))};
       globalThis.setTimeout=(fn)=>{const id=timers.size+1;timers.set(id,fn);return id;};globalThis.clearTimeout=id=>timers.delete(id);
@@ -158,6 +159,8 @@ async function ui(m) {
       const button=find(body,'titleStartHere');
       if(['mail','1884','query-1884','no-title'].includes(scenario)){assert.equal(button,undefined,scenario);continue;}
       assert.match(find(body,'startHereHint').textContent,/^Use your location to start on a nearby public road\. Other players see your car if you drive with others\.$/);
+      assert.equal(button.attributes['aria-describedby'], 'startHereHint');
+      if(scenario==='era-door')assert.deepEqual(button.parent.children.map(n=>n.id), ['titleStartHere','startHereHint','titleEra'], 'location hint stays beside its button before the era link');
       if(scenario==='pending'){assert.equal(store.values.size,0);microtasks.forEach(fn=>fn());}
       else button.click();
       if(scenario==='normal-first'){button.click();assert.equal(asks,1,'double tap one request');start.click();answer();}
@@ -169,7 +172,7 @@ async function ui(m) {
         assert.equal(store.values.size,1);assert.equal(m.takePoint(store,'judique')?.e>617000,true);
       } else {
         assert.equal(navigations.length,0);assert.equal(starts,1,scenario+': normal start exactly once');
-        assert.equal(placed.length,['success','far','edge-far','blocked-same','pending'].includes(scenario)?1:0,scenario+': snapped or usual');
+        assert.equal(placed.length,['success','era-door','far','edge-far','blocked-same','pending'].includes(scenario)?1:0,scenario+': snapped or usual');
         if(scenario==='far'||scenario==='edge-far')assert.match(message,/over 500 m/);
         if(scenario==='edge-far')assert.ok(placed[0].x>=1002,'outside-playable GPS starts on the clipped road, not at the boundary off road');
         if(scenario==='outside')assert.equal(message,m.OUTSIDE);
@@ -485,6 +488,7 @@ if(process.argv.includes('--mutations'))for(const [name,from,to] of [
   ['accuracy ignored','accuracy > 2000','accuracy > 20000'],
   ['point retained','store?.removeItem(START_HERE_KEY);','/* deletion removed */'],
   ['late answer moves car',"if (token !== generation) return;\n      if ('message' in result)","if ('message' in result)"],
+  ['era link splits button and hint', 'if (eraDoor) hint.after(eraDoor);', 'if (eraDoor) button.after(eraDoor);'],
   ['mail mode asks',"options.mode !== 'explore'","false"],
 ]){
   assert.equal(source.split(from).length,2,'unique mutation anchor: '+name);

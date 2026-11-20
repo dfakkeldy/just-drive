@@ -31,7 +31,7 @@ body.exploreMode #title #titleStart,#title.justDrive #titleStart{background:#a7d
 #title .titleFooter #titleCredits{margin:0;min-height:44px}
 #title :is(#titleOtherGame,#exploreCaution,.titleFooter){font:13px/1.4 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
 #title :is(#modeChoice,#vehicleChoice){margin-top:18px!important}
-@media(max-width:759px){#title #titleStart{position:sticky;bottom:-8px;z-index:2;padding:12px;box-shadow:0 -10px 14px var(--panel-solid,#0c141c)}#title #titleCard{scroll-padding-bottom:80px;padding-bottom:80px!important}}
+@media(max-width:759px){#title #titleStart{position:sticky;bottom:-8px;z-index:2;padding:12px;box-shadow:0 -10px 14px var(--panel-solid,#0c141c)}#title #titleCard{scroll-padding-block:80px;padding-bottom:80px!important}}
 
 #title{position:fixed;inset:0;z-index:20;display:grid;place-items:center;overflow:auto;
   padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
@@ -62,6 +62,19 @@ body.exploreMode #modeChoice button[aria-pressed="true"],#title.justDrive #modeC
 #titleLegal a{color:inherit}
 /* content-box 100% plus padding overflowed narrow screens on cards without a multiplayer control (1884): */
 @media(max-width:719px){#titleCard{box-sizing:border-box}}
+@media(max-width:759px),(max-height:500px){#title .mpControl{scroll-margin-block:80px}}
+@media(max-height:500px){
+ #title{padding:10px}
+ #title #titleCard{padding:12px 18px;max-height:calc(100dvh - 20px);scroll-padding-block:64px;padding-bottom:64px!important}
+ #title h1{font-size:30px}
+ #title p{font-size:12px;line-height:1.3;margin:4px 0 0}
+ #title #titleOtherGame{font-size:12px;line-height:1.3;margin-top:2px}
+ #title #titleStart{position:sticky;bottom:-8px;z-index:2;padding:12px;box-shadow:0 -10px 14px var(--panel-solid,#0c141c);margin-top:6px;min-height:44px}
+ #title #titleCredits{margin-top:2px;padding:3px}
+ #title #vehicleChoice{margin-top:6px!important;margin-bottom:6px}
+ #title #modeChoice{margin-top:6px!important}
+ #title dl{font-size:12px;gap:4px 10px;margin-top:8px}
+}
 
 `;
 

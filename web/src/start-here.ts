@@ -243,7 +243,7 @@ export function startHere(options: StartHereOptions): void {
   button.setAttribute('aria-describedby', hint.id);
   group.append(button, hint); start.after(group);
   const eraDoor = document.getElementById('titleEra');
-  if (eraDoor) button.after(eraDoor);
+  if (eraDoor) hint.after(eraDoor);
   const status = Object.assign(document.createElement('p'), { id: 'startHereStatus' });
   status.setAttribute('role', 'status'); document.body.appendChild(status);
   let generation = 0, messageTimer: ReturnType<typeof setTimeout> | undefined;

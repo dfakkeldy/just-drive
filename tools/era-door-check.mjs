@@ -113,7 +113,7 @@ function card(make, just, area, era, mode) {
   // Remove only these exact approved rules. Other CSS changes still fail the frozen comparison.
   for (let i = 0; i < styles.length; i++) for (const css of crossBrandStyles) styles[i] = styles[i].replace(css, '');
  }
- return {html,styles:styles.map(priorTitleStyle)};
+ return {html,styles:styles.map(css => priorTitleStyle(css, make === createTitle))};
 }
 for(const area of AREAS)for(const era of ERAS)for(const mode of ['mail','explore']){
  const just=card(createTitle,true,area,era,mode);
@@ -122,7 +122,7 @@ for(const area of AREAS)for(const era of ERAS)for(const mode of ['mail','explore
  assert.equal(current.html.split(FAR_CREDITS).length,2,'far source credits occur once');
  // The far-data licence is an intentional addition to the frozen card.
  for(const c of [current,previous])c.html=c.html.replace(FAR_CREDITS+'\n','').replace(FAR_CREDITS,'');
- assert.deepEqual({...current,html:priorTitleMarkup(current.html)},{...previous,html:priorTitleMarkup(previous.html)},'mail card HTML/styles outside reviewed UI/cross-brand changes and far-data credit: '+area.id+' '+era.id+' '+mode);
+ assert.deepEqual({...current,html:priorTitleMarkup(current.html,true)},{...previous,html:priorTitleMarkup(previous.html,true)},'mail card HTML/styles outside reviewed UI/cross-brand changes and far-data credit: '+area.id+' '+era.id+' '+mode);
 }
 for(const k of ['document','localStorage','location'])delete globalThis[k];
 console.log('PASS every area/era/mode visibility; exact cross-brand line and phone CSS; all other mail HTML/styles match branch base');
