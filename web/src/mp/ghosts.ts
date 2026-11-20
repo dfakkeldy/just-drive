@@ -19,10 +19,12 @@ const PALETTE = [0x305b83, 0x8f2935, 0x326052, 0xe6e5df, 0x303842, 0xb17a32, 0x7
 const WB = 2.62, TRACK = 1.57;
 const ROW = 64, WIDTH = 320;
 
-/** World height of a call-sign plane. Phone text keeps about 12 px of ink through 60 m, then shrinks. */
+export interface TagBox { id: number; left: number; right: number; top: number; bottom: number }
+
+/** Phone names use 10 CSS px of ink through 60 m, then shrink. */
 export function callSignHeight(depth: number, projection: number, cssHeight: number, low: boolean, distance: number): number {
   const height = Math.max(.01, Math.min(6, .060 * depth / projection));
-  return low ? Math.max(height, 64 * depth / (Math.max(1, cssHeight) * projection) * Math.min(1, 60 / Math.max(.001, distance))) : height;
+  return low ? 40 * depth / (Math.max(1, cssHeight) * projection) * Math.min(1, 60 / Math.max(.001, distance)) : height;
 }
 
 
@@ -92,6 +94,7 @@ export class Ghosts {
   readonly group = new THREE.Group();
   drawn = 0;
   private labelCount = 0;
+  readonly tagBoxes: TagBox[] = [];
   private blend = 0;
   private readonly cap: number;
   private readonly low: boolean;
@@ -209,7 +212,7 @@ export class Ghosts {
       const slot = this.slots[i]; slot.used = false;
       for (let j = 0; j < this.cap; j++) if (this.chosen[j]?.id === slot.id) { slot.used = true; break; }
     }
-    this.drawn = this.labelCount = 0;
+    this.drawn = this.labelCount = 0; this.tagBoxes.length = 0;
     this.blend = 1 - Math.exp(-10 * Math.max(0, Math.min(dt, .1)));
     for (let i = 0; i < this.cap; i++) {
       const peer = this.chosen[i]; if (!peer) break;
@@ -283,14 +286,14 @@ export class Ghosts {
     const height = callSignHeight(depth, Math.abs(camera.projectionMatrix.elements[5]), innerHeight, this.low, distance);
     this.billboard.position.set(peer.x, y + roof + .25 + height / 2, peer.z);
     this.billboard.quaternion.copy(this.cameraRotation); this.billboard.scale.set(height * WIDTH / ROW, height, 1);
-    this.arrangeLabel(camera);
+    this.arrangeLabel(camera, peer.id);
     this.billboard.updateMatrix(); this.labels.setMatrixAt(this.labelCount, this.billboard.matrix);
     this.rows.setX(this.labelCount, this.cap - 1 - at);
     this.labelFades.setX(this.labelCount, Math.min(1, peer.alpha) * Math.min(1, (150 - distance) / 20));
     this.labelCount++;
   }
 
-  private arrangeLabel(camera: THREE.Camera): void {
+  private arrangeLabel(camera: THREE.Camera, id: number): void {
     const height = this.billboard.scale.y;
     // Lift a crowded label above earlier ones, without hiding any names.
     this.labelPosition.copy(this.billboard.position).applyMatrix4(camera.matrixWorldInverse);
@@ -312,6 +315,8 @@ export class Ghosts {
     const b = this.labelCount * 4;
     this.labelBounds[b] = left; this.labelBounds[b + 1] = right;
     this.labelBounds[b + 2] = bottom + lift; this.labelBounds[b + 3] = top + lift;
+    this.tagBoxes.push({ id, left: (left + 1) * innerWidth / 2, right: (right + 1) * innerWidth / 2,
+      top: (1 - top - lift) * innerHeight / 2, bottom: (1 - bottom - lift) * innerHeight / 2 });
   }
 
   dispose(): void {

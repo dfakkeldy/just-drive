@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mountRoomCard, removeRoomCard } from './room-cards';
 import { GAMES, PHASE, gameName, type GameName } from './game-wire';
 import { RACE_LIMIT } from './race-wire';
 import { TAG } from './tag-rules';
@@ -34,7 +35,7 @@ export class GameView {
   private shown = ''; private tableText = ''; private readoutText = ''; private resultText = ''; private summaryText = '';
   /** The room answers a refused start with the same state: after a moment the host is told what a start needs. */
   private refused = false;
-  private serial = -1; private phase = -1; private overAt = 0; private fit = 0; private asked = 0;
+  private serial = -1; private phase = -1; private overAt = 0; private asked = 0;
   /** Where the parcel is drawn, for the small map. */
   private where: { x: number; z: number } | null = null;
 
@@ -63,13 +64,7 @@ export class GameView {
     if (!this.panel) return;
     const panel = this.panel;
     panel.id = 'gamePanel'; panel.hidden = true;
-    panel.style.cssText = 'position:fixed;right:10px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:7;background:#102531ed;color:#fff;border:1px solid #70939e;border-radius:10px;padding:10px;max-width:min(310px,80vw);max-height:40vh;overflow:auto;font:13px/1.4 system-ui;box-sizing:border-box';
-    if (settings) {
-      const race = settings.querySelector('#racePanel');
-      if (race) race.after(panel); else settings.prepend(panel);
-      panel.style.position = 'static'; panel.style.maxWidth = '100%'; panel.style.maxHeight = 'none'; panel.style.marginBottom = '12px'; panel.style.overflow = 'visible';
-      this.summary.style.cssText = 'min-height:56px;box-sizing:border-box;padding:16px 0;cursor:pointer';
-    } else document.body.appendChild(panel);
+    mountRoomCard(panel, host.touch);
     this.summary.textContent = 'Room games';
     const label = document.createElement('label'); label.textContent = 'Game ';
     this.select.setAttribute('aria-label', 'Room game');
@@ -190,20 +185,13 @@ export class GameView {
       this.arrow.position.set(this.host.vehicle.x, this.host.vehicle.y + 2.6, this.host.vehicle.z);
       this.arrow.rotation.y = -to.angle;
     }
-    // On a desktop the panel stands above the race panel, never over it.
-    this.fit -= dt;
-    if (this.panel && !this.host.touch && this.fit <= 0) {
-      this.fit = .5;
-      const race = document.getElementById('racePanel'), r = race && !race.hidden ? race.getBoundingClientRect() : null;
-      this.panel.style.bottom = r && r.height ? `${Math.max(80, innerHeight - r.top + 8)}px` : 'calc(80px + env(safe-area-inset-bottom,0px))';
-    }
   }
   /** The parcel on the small map. */
   marks(out: { x: number; z: number; label: string; rank?: number; colour?: string }[]): void {
     if (this.where) out.push({ x: this.where.x, z: this.where.z, label: 'Parcel', rank: 0, colour: '#ffca64' });
   }
   dispose(): void {
-    this.panel?.remove(); this.readout?.remove(); this.results?.remove();
+    removeRoomCard(this.panel); this.readout?.remove(); this.results?.remove();
     this.host.scene.remove(this.group); this.group.clear();
     for (const d of this.disposables) d.dispose();
   }

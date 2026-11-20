@@ -32,8 +32,7 @@ export function hudLine(s: HudState): string {
     text = `${speedReadout(s.speed, s.touchDevice && s.mailMode ? s.activeTouchSpeedLimit : 0)}   ${s.roadName}${s.touchDevice ? '' : `   ${s.surfaceName}`}${s.airborne ? '   AIR' : ''}` +
       (s.touchDevice ? `${rate}${s.jumpLine}` : rate + hints + (s.airLine || ''));
   } else if (s.drone) {
-    text = s.touchDevice ? s.drone : `${s.drone}${rate}\n` +
-      'WASD: fly · ←/→ or Q/E: turn · ↑/↓: camera · space: up · shift/C: down · wheel: top speed · R: fly back · F: land';
+    text = s.drone + (s.touchDevice ? '' : rate);
   } else {
     text = `E ${s.e.toFixed(0)}  N ${s.n.toFixed(0)}  h ${s.height.toFixed(1)} m   hills x${s.exag}\n` +
       `sun az ${s.sunAz.toFixed(0)} el ${s.sunEl.toFixed(0)}  tiles ${s.drawn}  load ${s.pending}  ${s.fps.toFixed(0)} fps\n` +

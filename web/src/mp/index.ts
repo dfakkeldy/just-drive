@@ -1,3 +1,4 @@
+import { fitRoomCards } from './room-cards';
 import { SocialView, savedHandle } from './social-view';
 import { RaceView } from './race';
 import { GameView } from './games';
@@ -65,9 +66,9 @@ export class Multiplayer {
     window.addEventListener('pageshow', this.pageshow);
     this.heartbeatTimer = setInterval(() => this.net.heartbeat(), 20000);
     this.race = new RaceView(this.net,host);
-    // After the race: on a phone both live in Settings, race first.
+    // All room cards share one ordered column.
     this.social = host.bare ? null : new SocialView(this.net, host.ground, host.touch);
-    // Room games: on a phone, in Settings between the race and the drivers.
+    // The phone uses the Room group in Settings.
     this.games = new GameView(this.net, host);
     this.ghosts = new Ghosts({ ground: host.ground, low: host.low, label: host.label });
     host.scene.add(this.ghosts.group);
@@ -101,8 +102,8 @@ export class Multiplayer {
     this.race.update();
     this.peers = this.net.views(now);
     this.games.update(dt, this.peers, camera);
-    this.social?.update(camera, this.peers, v);
     this.ghosts.update(dt, this.peers, camera, v, ride);
+    this.social?.update(camera, this.peers, v, this.ghosts.tagBoxes);
     this.horns.update(this.peers, v.x, v.z, now);
     {
       const n = this.net.count, st = this.net.status;
@@ -114,7 +115,7 @@ export class Multiplayer {
       this.status = say;
       if (this.chip && say !== this.shown) this.chip.textContent = this.shown = say;
       this.chipFit -= dt;
-      if (this.chipFit <= 0) { this.chipFit = .5; this.fitChip(); }
+      if (this.chipFit <= 0) { this.chipFit = .5; this.fitChip(); if (!this.host.bare) fitRoomCards(); }
     }
   }
 
@@ -125,7 +126,7 @@ export class Multiplayer {
     this.chip.style.top = 'calc(env(safe-area-inset-top,0px) + 6px)';
     const box = this.chip.getBoundingClientRect();
     let top = box.top;
-    const readouts = ['hud', 'gear', 'shiftHud', 'stopHint', 'miniMap', 'radio', 'photoTag'];
+    const readouts = ['hud', 'gear', 'shiftHud', 'stopHint', 'miniMap', 'radio', 'photoTag', 'pauseButton', 'placesButton', 'endShift', 'gameResults'];
     // A wide development HUD can reach past the centre. Keep the chip centred, below that HUD.
     for (let pass = 0; pass < readouts.length; pass++) {
       let next = top;

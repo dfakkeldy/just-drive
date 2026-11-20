@@ -31,6 +31,8 @@ body.tcOn #miniMap.enlarged #miniMapCanvas{max-height:none}
 #miniMap.folded #miniMapHead span{display:none}   /* a folded map is its name only: its width never changes */
 #miniMap[hidden]{display:none}
 body.indoorOn #miniMap{display:none}
+body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(100px + env(safe-area-inset-top,0px));pointer-events:auto}
+@media(max-height:450px){body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(80px + env(safe-area-inset-top,0px))}}
 `;
 
 const RANGES = [450, 1200, 3200];                 // metres from the car to the edge of the map
@@ -48,6 +50,9 @@ export class MiniMap {
   private since = 1;
   private folded: boolean;
   private large = false;
+  private flight = false;
+  private flightHome: Comment | null = null;
+  private flightFolded = false;
   private home: Comment | null = null;
   private creditSpace = 0;
   private idle = false;
@@ -126,6 +131,20 @@ export class MiniMap {
     }).observe(this.canvas);
   }
 
+  /** Flight uses the same map outside the hidden phone driving HUD. */
+  setFlight(on: boolean): void {
+    if (this.flight === on) return;
+    if (this.large) this.setLarge(false);
+    this.flight = on;
+    if (on) {
+      this.flightFolded = this.folded; this.folded = false;
+      this.flightHome = document.createComment('flight map home'); this.root.before(this.flightHome); document.body.append(this.root);
+    } else {
+      this.folded = this.flightFolded; this.flightHome?.replaceWith(this.root); this.flightHome = null;
+    }
+    this.root.classList.toggle('folded', this.folded); this.fit();
+  }
+
   reserveCredit(pixels: number): void { this.creditSpace = pixels; if (this.large) this.fit(); }
   invalidate(): void {
     this.ctx.save(); this.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -144,7 +163,7 @@ export class MiniMap {
   }
 
   private fit() {
-    const small = Math.min(innerWidth, innerHeight) < 520 ? 124 : 176;
+    const small = this.flight && document.body.classList.contains('droneSticks') && innerHeight < 450 ? 96 : Math.min(innerWidth, innerHeight) < 520 ? 124 : 176;
     const phone = document.body.classList.contains('tcOn');
     const safe = (side: string) => parseFloat(getComputedStyle(document.getElementById('phoneHud') ?? document.body).getPropertyValue(`--safe-${side}`)) || 0;
     const css = this.large ? Math.max(1, Math.min(600, innerWidth - 24 - safe('left') - safe('right'),
@@ -176,7 +195,7 @@ export class MiniMap {
   }
 
   /** Call every frame; it redraws about eight times a second. `heading` is the car's (0 = north, clockwise). */
-  update(dt: number, x: number, z: number, heading: number, stops: readonly MapStop[], marks: readonly MapMark[], cars?: readonly { x: number; z: number }[]) {
+  update(dt: number, x: number, z: number, heading: number, stops: readonly MapStop[], marks: readonly MapMark[], cars?: readonly { x: number; z: number }[], parked: { x: number; z: number } | null = null) {
     this.since += dt;
     if (this.folded || this.root.hidden || document.hidden || document.body.classList.contains('indoorOn')) {
       if (!this.idle) { this.underlay?.idle(); this.idle = true; } return;
@@ -255,6 +274,10 @@ export class MiniMap {
         if (Math.abs(car.x - x) > pad || Math.abs(car.z - z) > pad) continue;
         g.beginPath(); g.arc(car.x, car.z, 2.5 / k, 0, 6.283); g.fill();
       }
+    }
+    if (parked) {
+      g.fillStyle = '#ffca64'; g.strokeStyle = '#10181f'; g.lineWidth = 1.5 / k;
+      g.beginPath(); g.arc(parked.x, parked.z, 4 / k, 0, Math.PI * 2); g.fill(); g.stroke();
     }
     g.restore();
     // North, on the rim; drawn last, but its box is known now so no name covers it.

@@ -72,6 +72,14 @@ const state = `JSON.stringify({active:mmm.drone.active,returning:mmm.drone.retur
   car:{x:mmm.vehicle.x,z:mmm.vehicle.z,y:mmm.vehicle.y,speed:mmm.vehicle.speed},hud:document.getElementById('hud').textContent,
   tcOn:document.body.classList.contains('tcOn'),delivered:mmm.shift?.mail?.delivered??null,mail:document.getElementById('mailButton')?.hidden??null})`;
 
+async function flightMap(p, phone) {
+  const sample=await p.read(`(()=>{const e=document.getElementById('miniMap'),r=e.getBoundingClientRect(),c=document.getElementById('miniMapCanvas'),g=c.getContext('2d');window.flightMapSample=null;const map=mmm.miniMap,original=map.update.bind(map);map.update=(...args)=>{window.flightMapSample=args;return original(...args)};const fill=g.fillText.bind(g);window.flightNorth=0;g.fillText=(text,...args)=>{if(text==='N')flightNorth++;return fill(text,...args)};return {visible:!e.hidden&&r.width>0&&r.height>0,parent:e.parentElement===document.body,folded:e.classList.contains('folded')}})()`);
+  check(sample.visible&&sample.parent&&!sample.folded,'flight map is open and painted outside the hidden driving HUD');
+  await sleep(400);
+  check(await p.read(`flightNorth>0&&Math.abs(flightMapSample[1]-mmm.drone.state.x)<2&&Math.abs(flightMapSample[2]-mmm.drone.state.z)<2&&Math.abs(flightMapSample[3]+mmm.drone.state.yaw)<.1&&flightMapSample[7]===mmm.vehicle`),'map follows drone position and heading, paints north and marks the parked car');
+  if(phone)check(await p.read(`(()=>{const b=document.getElementById('miniMap').getBoundingClientRect();return ['droneLeft','droneRight','droneReturn','hud','gear','pauseButton'].every(id=>{const r=document.getElementById(id).getBoundingClientRect();return b.right<=r.left||b.left>=r.right||b.bottom<=r.top||b.top>=r.bottom})})()`),'phone flight map clears sticks, Return, chip, Pause and gear');
+}
+
 // ---- desktop, keyboard only -------------------------------------------------------------------------
 {
   const p = await page(1280, 720, false);
@@ -86,6 +94,11 @@ const state = `JSON.stringify({active:mmm.drone.active,returning:mmm.drone.retur
   await p.tap('KeyF');
   check(await p.until('mmm.drone.active'), 'F launches the drone');
   await sleep(1600);
+  await flightMap(p, false);
+  check(await p.read(`!document.getElementById('droneHints').hidden&&document.querySelectorAll('#droneHints kbd').length===8`),'grouped desktop keycaps appear at launch');
+  await p.read(`document.getElementById('pauseButton').click();document.querySelector('#pauseKeys summary').click()`);
+  check(await p.read(`document.querySelector('#pauseKeys dl').textContent.includes('Mouse wheelTop speed')&&document.querySelector('#pauseKeys dl').textContent.includes('RFly back')`),'pause Keys lists drone controls');
+  await p.read(`document.getElementById('resumeGame').click()`);
   let a = await s();
   check(a.y > parked.car.y + 3 && Math.hypot(a.x - parked.car.x, a.z - parked.car.z) < 0.5, `it lifts straight off the roof: ${(a.y - parked.car.y).toFixed(1)} m over the car`);
   // ↓ tilts the camera down: the drone and the car below it.
@@ -182,6 +195,8 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   check(await p.until('mmm.drone.active'), `${name}: DRONE launches it`);
   check(await p.until(`!document.body.classList.contains('tcOn') && !document.getElementById('droneLeft').hidden && !document.getElementById('droneRight').hidden && !document.getElementById('droneReturn').hidden`), `${name}: driving controls give way to the two sticks and RETURN`);
   await sleep(1500);
+  await flightMap(p, true);
+  check(await p.read(`document.querySelector('#droneLeft span').textContent==='Climb · turn'&&document.getElementById('droneReturn').textContent==='Return to car'`),'touch labels explain climb, turn and return');
   // Left stick up: climb.
   const left = await p.centre('droneLeft'), right = await p.centre('droneRight');
   const push = async (c, dx, dy, ms) => {
@@ -207,7 +222,7 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   check(hudClear.length === 0, `${name}: the readout clears Pause and the gear ${JSON.stringify(hudClear)}`);
   await p.shot(`11-phone-${name}-flying`);
   const ret = await p.centre('droneReturn');
-  const sticksClear = await p.read(`(()=>{const ids=['droneLeft','droneRight','droneReturn','gear','pauseButton'];const r=ids.map(i=>document.getElementById(i).getBoundingClientRect());const out=[];for(let i=0;i<r.length;i++)for(let j=i+1;j<r.length;j++)if(r[i].left<r[j].right&&r[i].right>r[j].left&&r[i].top<r[j].bottom&&r[i].bottom>r[j].top)out.push(ids[i]+'/'+ids[j]);for(const x of r)if(x.left<0||x.top<0||x.right>innerWidth||x.bottom>innerHeight)out.push('off screen');return out})()`);
+  const sticksClear = await p.read(`(()=>{const ids=['droneLeft','droneRight','droneReturn','gear','pauseButton','miniMap'];const r=ids.map(i=>document.getElementById(i).getBoundingClientRect());const out=[];for(let i=0;i<r.length;i++)for(let j=i+1;j<r.length;j++)if(r[i].left<r[j].right&&r[i].right>r[j].left&&r[i].top<r[j].bottom&&r[i].bottom>r[j].top)out.push(ids[i]+'/'+ids[j]);for(const x of r)if(x.left<0||x.top<0||x.right>innerWidth||x.bottom>innerHeight)out.push('off screen');return out})()`);
   check(sticksClear.length === 0, `${name}: sticks, RETURN, gear and Pause do not overlap and stay on screen ${JSON.stringify(sticksClear)}`);
   await p.touchAt('touchStart', [ret]); await p.touchAt('touchEnd', []);
   check(await p.until('mmm.drone.returning'), `${name}: RETURN flies it home`);

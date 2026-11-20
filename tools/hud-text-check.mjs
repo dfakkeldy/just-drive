@@ -299,14 +299,16 @@ fleetFrames(module, frame);
 function droneFrames(module, frame) {
   for (const touchDevice of [false, true]) for (const mailMode of [false, true]) {
     const ctx = context({ ...base, mode: 'fly', mailMode, touchDevice }, module);
-    let line = 'DRONE   height 12 m   distance 85 m   9 m/s (max 15)';
+    let line = 'DRONE · Height 12 m  |  Distance 85 m  |  Speed 9 m/s (max 15)';
     ctx.drone = { active: true, readout: () => line };
     frame(ctx);
     const text = ctx.hud.inspect().text;
     assert.ok(text.startsWith(line), 'drone readout: ' + text);
-    assert.equal(text.includes('R: fly back · F: land'), !touchDevice, 'desktop drone keys');
+    assert.equal(text, line, 'drone chip contains metrics only; keys have their own grouped block');
     assert.doesNotMatch(text, /sun az|tiles/, 'no free camera lines while the drone flies');
-    line = 'DRONE   height 3 m   distance 0 m   returning'; frame(ctx);
+    ctx.drove = 60; frame(ctx);
+    assert.equal(ctx.hud.inspect().text, line, 'metrics remain after hints hide');
+    line = 'DRONE · Height 3 m  |  Distance 0 m  |  Speed 0 m/s (max 15) · returning'; frame(ctx);
     assert.ok(ctx.hud.inspect().text.startsWith(line), 'the readout follows the drone');
     ctx.drone.active = false; frame(ctx);
     assert.match(ctx.hud.inspect().text, /^E -?\d+  N/, 'a fixed view after the drone shows the free camera lines');

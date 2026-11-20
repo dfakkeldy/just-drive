@@ -116,6 +116,9 @@ export class Drone {
   height: number | null = null;
   distance = 0;
 
+  private hintTime = 0;
+  private readonly help: HTMLElement | null = typeof document === 'undefined' ? null : createDroneHelp();
+  get hintsHidden(): boolean { return this.hintTime >= 20; }
   constructor() {
     if (typeof document !== 'undefined') style();
     const m = model();
@@ -125,6 +128,7 @@ export class Drone {
   /** Lifts off a roof at (x, roof, z), facing the vehicle's way (`yaw` in the camera's convention). */
   launch(x: number, roof: number, z: number, yaw: number): void {
     document.body.classList.add('droneOn');
+    this.hintTime = 0; if (this.help) this.help.hidden = false;
     Object.assign(this.state, { x, y: roof + DRONE_FOOT, z, vx: 0, vy: 0, vz: 0, yaw, yawRate: 0 });
     this.active = true; this.returning = false; this.lift = roof + DRONE_FOOT + LIFT; this.pitch = -0.3; this.tilt.rate = 0;
     this.maxSpeed = DRONE.speed;
@@ -132,7 +136,7 @@ export class Drone {
   }
 
   /** Back on the roof: the drone is put away. */
-  stow(): void { this.active = false; this.returning = false; this.group.visible = false; document.body.classList.remove('droneOn'); }
+  stow(): void { this.active = false; this.returning = false; this.group.visible = false; document.body.classList.remove('droneOn'); if (this.help) this.help.hidden = true; }
 
   /**
    * The gimbal for one frame: `tilt` from the held arrow keys (-1 down, 1 up), after `dragged`, the pitch a mouse or
@@ -158,6 +162,7 @@ export class Drone {
    * `look` turns the drone with the mouse or a finger (radians this frame).
    */
   update(dt: number, cmd: DroneCommand, under: DroneGround, roof: { x: number; y: number; z: number }, look: number): boolean {
+    this.hintTime += dt; if (this.help) this.help.hidden = this.hintsHidden;
     const s = this.state;
     if (this.returning) look = 0;
     s.yaw += look;
@@ -186,13 +191,14 @@ export class Drone {
     if (ground !== null) camera.position.y = Math.max(camera.position.y, ground + 0.6);
   }
 
-  /** The HUD line; on a phone a shorter one in two lines, clear of Pause and the gear. */
+  /** The phone keeps each metric on a short line beside Pause. */
   readout(phone = false): string {
     const speed = Math.hypot(this.state.vx, this.state.vz);
-    if (!phone) return droneReadout(this.height, this.distance, speed, this.maxSpeed, this.returning);
-    const height = this.height === null ? '–' : `${Math.max(0, this.height).toFixed(0)} m`;
-    const state = this.returning ? ' · returning' : this.distance >= DRONE.range - 1 ? ' · at range limit' : '';
-    return `DRONE height ${height}\ndistance ${this.distance.toFixed(0)} m${state}`;
+    const line = droneReadout(this.height, this.distance, speed, this.maxSpeed, this.returning);
+    if (!phone) return line;
+    const [height, distance, motion] = line.split('  |  ');
+    const [speedLine, state] = motion.split(' · ');
+    return `${height}\n${distance}\n${speedLine}${state ? `\n${state}` : ''}`;
   }
 }
 
@@ -200,7 +206,30 @@ export class Drone {
 // Two thumbsticks as on a drone's remote ("mode 2"): left climbs and turns, right flies. Both spring back to the
 // middle, so letting go hovers. RETURN flies home; a second tap lands at once.
 
+export const DRONE_HELP = [
+  ['WASD', 'Move'], ['←/→ or Q/E', 'Turn'], ['↑/↓', 'Camera'],
+  ['Space', 'Up'], ['Shift or C', 'Down'], ['Mouse wheel', 'Top speed'],
+  ['R', 'Fly back'], ['F', 'Land'],
+] as const;
+function createDroneHelp(): HTMLElement {
+  const help = Object.assign(document.createElement('dl'), { id: 'droneHints', hidden: true });
+  help.setAttribute('aria-label', 'Drone keys');
+  for (const [key, action] of DRONE_HELP) {
+    const term = document.createElement('dt'), text = document.createElement('dd'), cap = document.createElement('kbd');
+    cap.textContent = key; term.append(cap); text.textContent = action; help.append(term, text);
+  }
+  document.body.append(help); return help;
+}
 const CSS = `
+#droneHints{position:fixed;left:200px;top:100px;z-index:3;margin:0;padding:10px 12px;border-radius:6px;
+  display:grid;grid-template-columns:auto auto auto auto;gap:7px 10px;max-width:calc(100vw - 240px);
+  background:var(--panel,rgba(8,14,20,.72));color:var(--ink,#eef2f6);font:12px/1.4 system-ui}
+#droneHints dd{margin:0}#droneHints kbd{display:inline-block;background:#20303b;border:1px solid #71818e;border-radius:4px;padding:1px 4px;font:inherit}
+#droneHints[hidden],body.droneSticks #droneHints{display:none}
+body.droneOn #hud{max-width:calc(100vw - 270px);white-space:pre-wrap}
+body.droneOn.droneSticks #hud{max-width:calc(100vw - 170px);box-sizing:border-box;white-space:pre;font-size:10px;line-height:14px}
+body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-right,0px))}
+
 .droneStick{position:fixed;z-index:6;bottom:calc(14px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));
   width:var(--stick);height:var(--stick);--stick:min(132px,34vw,42vh);border-radius:50%;box-sizing:border-box;
   background:var(--panel,rgba(8,14,20,.6));border:2px solid rgba(238,242,246,.3);touch-action:none;user-select:none;-webkit-user-select:none}
@@ -213,7 +242,7 @@ const CSS = `
 .droneStick span{position:absolute;inset:auto 0 calc(100% + 3px);text-align:center;font:700 10px ui-monospace,Menlo,Consolas,monospace;
   letter-spacing:.06em;color:var(--ink,#eef2f6);text-shadow:0 1px 2px #000;pointer-events:none}
 #droneReturn{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));
-  min-width:96px;height:56px;border-radius:10px;border:1px solid rgba(238,242,246,.4);background:var(--panel-solid,#0b1219);
+  min-width:112px;height:56px;padding:0 8px;border-radius:10px;border:1px solid rgba(238,242,246,.4);background:var(--panel-solid,#0b1219);
   color:var(--ink,#eef2f6);font:700 12px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em}
 #droneReturn:active{background:var(--maple,#d0632e)}
 @media (max-width:420px){#droneReturn{bottom:calc(14px + min(132px,34vw,42vh) + 24px + env(safe-area-inset-bottom,0px))}}
@@ -271,9 +300,9 @@ export function createDroneSticks(home: () => void): DroneSticks {
     document.body.appendChild(el);
     return { el, end };
   };
-  const left = stick('droneLeft', 'UP · TURN', (x, y) => { command.turn = -x; command.up = y; });
-  const right = stick('droneRight', 'FLY', (x, y) => { command.right = x; command.forward = y; });
-  const ret = Object.assign(document.createElement('button'), { id: 'droneReturn', textContent: 'RETURN', hidden: true });
+  const left = stick('droneLeft', 'Climb · turn', (x, y) => { command.turn = -x; command.up = y; });
+  const right = stick('droneRight', 'Fly', (x, y) => { command.right = x; command.forward = y; });
+  const ret = Object.assign(document.createElement('button'), { id: 'droneReturn', textContent: 'Return to car', hidden: true });
   ret.setAttribute('aria-label', 'Fly the drone back to the vehicle. Tap again to land at once');
   ret.addEventListener('pointerdown', (ev) => ev.stopPropagation());
   ret.addEventListener('click', () => home());

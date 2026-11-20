@@ -73,8 +73,8 @@ function suite(m) {
   // The wheel and the readout.
   assert.equal(m.wheelSpeed(15, -1), 18.75); assert.equal(m.wheelSpeed(15, 1), 12);
   assert.equal(m.wheelSpeed(D.maxSpeed, -1), D.maxSpeed); assert.equal(m.wheelSpeed(D.minSpeed, 1), D.minSpeed);
-  assert.equal(m.droneReadout(12.4, 85.2, 9.04, 15, false), 'DRONE   height 12 m   distance 85 m   9 m/s (max 15)');
-  assert.equal(m.droneReadout(null, 10, 0, 15, true), 'DRONE   height –   distance 10 m   returning');
+  assert.equal(m.droneReadout(12.4, 85.2, 9.04, 15, false), 'DRONE · Height 12 m  |  Distance 85 m  |  Speed 9 m/s (max 15)');
+  assert.equal(m.droneReadout(null, 10, 0, 15, true), 'DRONE · Height –  |  Distance 10 m  |  Speed 0 m/s (max 15) · returning');
   assert.match(m.droneReadout(5, D.range, 0, 15, false), /at range limit$/);
   assert.match(m.droneReadout(D.ceiling, 10, 0, 15, false), /at height limit$/);
   // The gimbal on held arrow keys: smooth start, about 60 degrees a second, stops at straight down and just above level.

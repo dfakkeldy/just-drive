@@ -24,6 +24,25 @@ async function open(name,touch=false){
   return p;
 }
 async function pose(p,x,z){await p.read(`mmm.vehicle.place(${x},${z},0);mmm.vehicle.vx=mmm.vehicle.vz=mmm.vehicle.speed=0`);}
+const bubblesClear = `(()=>{const tags=mmm.mp.current.ghosts.tagBoxes;return tags.length>0&&[...document.querySelectorAll('#mpChatBubbles [data-sender]')].filter(e=>!e.hidden).every(e=>{const b=e.getBoundingClientRect();return tags.every(t=>b.right<=t.left||b.left>=t.right||b.bottom<=t.top-7||b.top>=t.bottom+7)})})()`;
+async function roomCardsLayout(p) {
+  await p.read(`window.savedRoomRoster=document.getElementById('mpRoster').innerHTML;document.querySelector('#mpSocial details').open=true;document.getElementById('mpRoster').replaceChildren(...Array.from({length:24},(_,i)=>Object.assign(document.createElement('li'),{textContent:'Dusty Window '+i})))`);
+  for (const [width,height] of [[1440,900],[1280,720],[720,480]]) {
+    await p.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
+    await p.read(`document.querySelectorAll('#mpCards>details').forEach(e=>e.open=true);document.getElementById('mpChatButton').click()`);
+    await sleep(700);
+    const measured=await p.read(`(()=>{const home=document.getElementById('mpCards'),h=home.getBoundingClientRect(),cards=[...home.children].filter(e=>!e.hidden).map(e=>{const r=e.getBoundingClientRect();return [e.id,r.left,r.top,r.right,r.bottom]});return {cards,scroll:getComputedStyle(home).overflowY,box:[h.left,h.top,h.right,h.bottom],blockers:['hud','miniMap','radio','pauseButton','placesButton','gear','endShift','credit','mpChip','gameResults'].flatMap(id=>{const e=document.getElementById(id),r=e?.getBoundingClientRect();return !e||e.hidden||!r.width||!r.height?[]:[[id,r.left,r.top,r.right,r.bottom]]})}})()`);
+    assert.deepEqual(measured.cards.map(b=>b[0]),['mpSocial','racePanel','gamePanel']);
+    assert.equal(measured.scroll,'auto');
+    const [l,t,r,b]=measured.box; assert.ok(l>=0&&t>=0&&r<=width&&b<=height);
+    for(let i=0;i<measured.cards.length;i++) {const c=measured.cards[i];assert.equal(c[1],l);assert.ok(c[3]<=r);if(i)assert.ok(c[2]>=measured.cards[i-1][4]+7);}
+    for(const [id,x,y,z,q] of measured.blockers) assert.ok(r<=x||l>=z||b<=y||t>=q,`column clears ${id} at ${width}x${height}`);
+    await p.read(`(()=>{const e=document.querySelector('#gamePanel button:last-of-type');e.scrollIntoView({block:'nearest'})})()`);
+    assert.ok(await p.read(`(()=>{const e=document.querySelector('#gamePanel button:last-of-type'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return at===e||e.contains(at)})()`),'last card remains reachable through the column scroll');
+  }
+  await p.read(`document.getElementById('mpRoster').innerHTML=savedRoomRoster;document.querySelector('#mpSocial details').open=false`);
+  await p.send('Emulation.setDeviceMetricsOverride',{width:1280,height:800,deviceScaleFactor:1,mobile:false});
+}
 let failed;
 try {
   const a=await open('Dusty Tire'), b=await open('Foggy Window',true);
@@ -33,11 +52,12 @@ try {
   await a.until('document.getElementById("mpRoster").textContent.includes("Foggy Window")');
   const front=await a.read('({x:mmm.vehicle.x+Math.sin(mmm.vehicle.heading)*12,z:mmm.vehicle.z-Math.cos(mmm.vehicle.heading)*12})');
   await pose(b,front.x,front.z); await sleep(700);
-  // A phone keeps the panel in Settings after the race (and the room games beside it), never over the driving controls at the screen edges.
-  assert.ok(await b.read('(()=>{const s=document.getElementById("mpSocial");return !!s.closest("#settings")&&(s.previousElementSibling?.id==="racePanel"||s.previousElementSibling?.id==="gamePanel"&&s.previousElementSibling.previousElementSibling?.id==="racePanel")&&getComputedStyle(s).position!=="fixed"})()'),'phone social panel lives in Settings after the race');
-  assert.ok(await a.read('getComputedStyle(document.getElementById("mpSocial")).position==="fixed"'),'desktop social panel floats');
+  assert.ok(await b.read('(()=>{const s=document.getElementById("settings"),g=document.getElementById("mpRoom");return s.firstElementChild.id==="settingsHeader"&&g.previousElementSibling.id==="settingsHeader"&&g.querySelector("h3").textContent==="Room"&&[...g.querySelectorAll(":scope>details")].map(e=>e.id).join() === "mpSocial,racePanel,gamePanel"})()'),'phone Room group follows the Settings header in a fixed order');
+  assert.ok(await a.read('document.getElementById("mpSocial").parentElement.id==="mpCards"&&getComputedStyle(document.getElementById("mpCards")).position==="fixed"'),'desktop cards share one fixed column');
+  for (const p of [a,b]) await p.read('document.getElementById("mpSocial").open=true');
+  await roomCardsLayout(a);
   await b.read('document.getElementById("settings").classList.add("open")');
-  await b.read('document.getElementById("mpChatButton").click()');
+  await b.read('document.getElementById("mpChatButton").click();document.getElementById("mpChatGrid").scrollIntoView({block:"center"})');
   // Eight road phrases, and the three game phrases in a room that runs games (this one does).
   assert.equal(await b.read('[...document.querySelectorAll("#mpChatGrid button")].filter(e=>!e.hidden).length'),11);
   assert.equal(await b.read('[...document.querySelectorAll("#mpChatGrid button")].filter(e=>!e.hidden&&e.dataset.game).length'),3);
@@ -49,14 +69,26 @@ try {
   await a.send('Input.dispatchKeyEvent',{type:'keyUp',key:'1',code:'Digit1',windowsVirtualKeyCode:49});
   await b.until('document.getElementById("mpChatLog").textContent.includes("Dusty Tire: Race you!")');
   await a.until('Array.from(document.querySelectorAll("#mpChatBubbles [data-sender]")).some(e=>!e.hidden)');
+  assert.ok(await a.read(bubblesClear),'desktop bubbles clear all drawn name tags');
   await a.shot('social-desktop');
   await sleep(4300); await a.until('document.getElementById("mpChatBubbles").children.length===0');
   await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
-  await b.read('document.getElementById("mpChatButton").click()');
+  await b.read('document.getElementById("mpChatButton").click();document.getElementById("mpChatGrid").scrollIntoView({block:"center"})');
   await b.read('document.getElementById("mpChatGrid").scrollIntoView({block:"nearest"})');
   assert.ok(await b.read('(()=>{const r=document.getElementById("mpChatGrid").getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight})()'),'phone phrase grid fits on screen');
   assert.ok(await b.read('Array.from(document.querySelectorAll("#mpChatGrid button")).every(e=>{const r=e.getBoundingClientRect();return r.height>=44&&r.right<=innerWidth})'),'phone phrase buttons are full touch size');
   await b.shot('social-phone');
+  await b.read('document.getElementById("settings").classList.remove("open")');
+  await b.send('Emulation.setDeviceMetricsOverride',{width:844,height:390,deviceScaleFactor:1,mobile:true});
+  const ahead=await b.read('({x:mmm.vehicle.x+Math.sin(mmm.vehicle.heading)*12,z:mmm.vehicle.z-Math.cos(mmm.vehicle.heading)*12})');
+  await pose(a,ahead.x,ahead.z);await sleep(700);
+  await a.read('mmm.mp.current.net.chat(4)');
+  await b.until('mmm.mp.current.ghosts.tagBoxes.length>0&&[...document.querySelectorAll("#mpChatBubbles [data-sender]")].some(e=>!e.hidden)');
+  assert.ok(await b.read(bubblesClear),'landscape phone bubbles clear every drawn name tag');
+  assert.ok(await b.read('mmm.mp.current.ghosts.tagBoxes.every(t=>t.bottom-t.top>=19.9&&t.bottom-t.top<=20.1)'),'landscape phone name planes have 10 px ink in a 20 px plane');
+  await b.shot('social-phone-landscape');
+  await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await b.read('document.getElementById("settings").classList.add("open")');
   // Names in races are the same validated handles.
   await a.until('document.querySelector("#racePanel select").options.length>1');
   await a.read('(()=>{const e=document.querySelector("#racePanel select");e.value="0";e.dispatchEvent(new Event("change"));})()');

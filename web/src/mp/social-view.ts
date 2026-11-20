@@ -1,4 +1,6 @@
 import { Vector3, type Camera } from 'three';
+import { mountRoomCard, removeRoomCard } from './room-cards';
+import type { TagBox } from './ghosts';
 import type { Net } from './net';
 import type { PeerView } from './wire';
 import { PHRASES, CHAT_MS, GAME_PHRASES, isPhraseId, readHandle } from './social';
@@ -6,7 +8,7 @@ export function savedHandle(): string | undefined {
   try { return readHandle(localStorage.getItem('mmm.mp.handle')) ?? undefined; } catch { return undefined; }
 }
 export class SocialView {
-  private readonly root = document.createElement('div');
+  private readonly root = document.createElement('details');
   private readonly bubbles = document.createElement('div');
   private readonly roster = document.createElement('ul');
   private readonly log = document.createElement('div');
@@ -24,15 +26,8 @@ export class SocialView {
   };
   constructor(private readonly net: Net, private readonly ground: (x:number,z:number) => number | null, touch = false) {
     this.root.id = 'mpSocial';
-    // A phone's screen edges belong to the driving controls, so there the panel lives in Settings, after the race
-    // (the way the race panel does). Bubbles over cars stay on the road for everyone: they take no touches.
-    const settings = touch ? document.getElementById('settings') : null;
-    this.root.style.cssText = settings
-      ? 'color:#eef2f6;font:13px system-ui;background:#16262eee;border-radius:8px;padding:6px;margin-bottom:12px;box-sizing:border-box'
-      // On a desktop it sits beside the left column (map, relief gauge, radio up to 300 px wide), so a short window
-      // cannot lift it over them; 160 px up keeps the stop hint and the mail score below it free, and 100 px at the
-      // top keeps an open Chat off the text panel on a very short window.
-      : 'position:fixed;left:calc(max(10px,env(safe-area-inset-left,0px)) + 310px);bottom:calc(env(safe-area-inset-bottom,0px) + 160px);z-index:6;max-width:min(300px,calc(100vw - 330px));color:#eef2f6;font:13px system-ui;background:#16262eee;border-radius:8px;padding:6px;max-height:min(35vh,calc(100vh - 260px));overflow:auto';
+    mountRoomCard(this.root, touch);
+    const title = document.createElement('summary'); title.textContent = 'Room drivers and chat';
     const people = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = 'Room drivers'; people.append(summary, this.roster);
     this.roster.id = 'mpRoster'; this.roster.style.cssText = 'padding-left:20px;margin:4px';
     const button = this.chatButton; button.id = 'mpChatButton'; button.textContent = 'Chat'; button.setAttribute('aria-expanded','false');
@@ -47,14 +42,12 @@ export class SocialView {
       b.onclick = () => { this.net.chat(id); grid.hidden = true; grid.style.display = 'none'; button.setAttribute('aria-expanded','false'); }; grid.append(b);
     });
     this.log.id = 'mpChatLog'; this.log.setAttribute('role','log'); this.log.setAttribute('aria-label','Quick chat');
-    this.root.append(people, button, grid, this.log);
+    this.root.append(title, people, button, grid, this.log);
     this.root.addEventListener('keydown', ev => ev.stopPropagation());
     this.bubbles.id = 'mpChatBubbles'; this.bubbles.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:5;overflow:hidden';
-    const race = settings?.querySelector('#racePanel');
-    if (race) race.after(this.root); else if (settings) settings.prepend(this.root); else document.body.append(this.root);
     document.body.append(this.bubbles); addEventListener('keydown', this.key, true);
   }
-  update(camera: Camera, peers: readonly PeerView[], me: {x:number;y:number;z:number}): void {
+  update(camera: Camera, peers: readonly PeerView[], me: {x:number;y:number;z:number}, tags: readonly TagBox[] = []): void {
     const now = performance.now();
     // No chat control at all until the room says it relays phrases (an older room, or between rooms).
     for (const b of this.gameButtons) if (b.hidden === this.net.gamesSupported) b.hidden = !this.net.gamesSupported;
@@ -82,8 +75,15 @@ export class SocialView {
       this.point.applyMatrix4(camera.projectionMatrix);
       if (Math.abs(this.point.x)>1 || Math.abs(this.point.y)>1 || this.point.z>1) continue;
       bubble.hidden = false; bubble.textContent = PHRASES[c.phrase]; bubble.dataset.sender = String(c.id);
-      bubble.style.cssText = `position:absolute;left:${(this.point.x+1)*50}%;top:${(1-this.point.y)*50}%;transform:translate(-50%,-100%);background:#fff;color:#16262e;border-radius:12px;padding:6px 10px;font:600 14px system-ui;white-space:nowrap`;
+      bubble.style.cssText = `position:absolute;left:${(this.point.x+1)*50}%;top:${(1-this.point.y)*50}%;transform:translate(-50%,-100%);background:#fff;color:#16262e;border-radius:12px;padding:6px 10px;font:600 ${document.body.classList.contains('tcOn') ? 11 : 14}px system-ui;white-space:nowrap`;
+      const rect = bubble.getBoundingClientRect();
+      const ownTag = tags.find(tag => tag.id === c.id);
+      let bottom = Math.min(rect.bottom, ownTag ? ownTag.top - 8 : rect.bottom);
+      for (const tag of [...tags].sort((a,b) => b.bottom - a.bottom)) {
+        if (rect.left < tag.right && rect.right > tag.left && bottom > tag.top - 8 && bottom - rect.height < tag.bottom + 8) bottom = tag.top - 8;
+      }
+      bubble.style.top = `${bottom}px`;
     }
   }
-  dispose(): void { removeEventListener('keydown',this.key,true); this.root.remove(); this.bubbles.remove(); }
+  dispose(): void { removeEventListener('keydown',this.key,true); removeRoomCard(this.root); this.bubbles.remove(); }
 }

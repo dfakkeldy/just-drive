@@ -120,6 +120,6 @@ export function stepDrone(s: DroneState, cmd: DroneCommand, dt: number, speed: n
 /** The readout: height over the ground under the drone and distance from the vehicle, whole metres. */
 export function droneReadout(heightAboveGround: number | null, distance: number, speed: number, maxSpeed: number, returning: boolean): string {
   const h = heightAboveGround === null ? '–' : `${Math.max(0, heightAboveGround).toFixed(0)} m`;
-  const state = returning ? 'returning' : distance >= DRONE.range - 1 ? 'at range limit' : heightAboveGround !== null && heightAboveGround >= DRONE.ceiling - 1 ? 'at height limit' : `${speed.toFixed(0)} m/s (max ${maxSpeed.toFixed(0)})`;
-  return `DRONE   height ${h}   distance ${distance.toFixed(0)} m   ${state}`;
+  const state = returning ? 'returning' : distance >= DRONE.range - 1 ? 'at range limit' : heightAboveGround !== null && heightAboveGround >= DRONE.ceiling - 1 ? 'at height limit' : '';
+  return `DRONE · Height ${h}  |  Distance ${distance.toFixed(0)} m  |  Speed ${speed.toFixed(0)} m/s (max ${maxSpeed.toFixed(0)})${state ? ` · ${state}` : ''}`;
 }

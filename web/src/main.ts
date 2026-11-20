@@ -151,7 +151,7 @@ import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
 import {createTestPark,testParkPlaces} from './stunt-test-park';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
-import { Drone, createDroneButton, createDroneSticks, roofHeights } from './drone';
+import { Drone, createDroneButton, createDroneSticks, roofHeights, DRONE_HELP } from './drone';
 import { DRONE } from './drone-rules';
 
 // Mabou village, and the game's moment: the second week of October, late afternoon (Atlantic Daylight Time, UTC-3).
@@ -1439,7 +1439,7 @@ document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
 const roomPauseNote = Object.assign(document.createElement('p'), { textContent: 'Room games do not pause', hidden: true });
-settingsPanel.prepend(roomPauseNote);
+document.getElementById('settingsHeader')!.after(roomPauseNote);
 function syncPauseUI(): void {
   keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = flyTouch = 0;
@@ -1461,7 +1461,7 @@ function syncPauseUI(): void {
     const raceLine = document.getElementById('pauseRace')!;
     raceLine.hidden = !multiplayer?.current?.net.race?.startAt || !race || /no active race/i.test(race);
     raceLine.textContent = raceLine.hidden ? '' : race!;
-    const hints = gamepad.device === 'gamepad' ? padKeys(ride.kind, mailMode, !!radio)
+    const hints = drone.active ? DRONE_HELP : gamepad.device === 'gamepad' ? padKeys(ride.kind, mailMode, !!radio)
       : ride.kind === 'horse' ? horseKeys(touchDevice, mailMode) : ride.kind === 'bike' ? bikeKeys(touchDevice)
       : touchDevice ? (mailMode ? TOUCH : DRIVING_TOUCH) : (mailMode ? KEYS : DRIVING_KEYS);
     document.querySelector<HTMLDetailsElement>('#pauseKeys')!.open = false;
@@ -1990,11 +1990,13 @@ function frame(now: number) {
     footpaths?.update(realDt, camera.position);
     relief.update(dt, playing ? clockDt * CLOCK_FACTOR : 0, vehicle, playing && (!demo || reliefTest > 0));
     if (miniMap) {
-      miniMap.show(playing);
+      miniMap.setFlight(drone.active);
+      miniMap.show(playing || drone.active && clockRuns);
       mapTimer -= realDt;
       if (mapTimer <= 0) { mapTimer = 0.25; refreshMap(); }
       miniMap.boss = boss?.mapSpot ?? null;
-      miniMap.update(realDt, vehicle.x, vehicle.z, vehicle.heading, mapStops, mapMarks, mapCars);
+      const focus = drone.active ? drone.state : vehicle;
+      miniMap.update(realDt, focus.x, focus.z, drone.active ? -drone.state.yaw : vehicle.heading, mapStops, mapMarks, mapCars, drone.active ? vehicle : null);
     }
     // Paused frames return early, but a multiplayer room keeps running them: ground property lines still stop while Settings is open.
     propertyLayer?.update?.(vehicle.x, vehicle.z, playing && !pause.blocked && !interiors.busy);

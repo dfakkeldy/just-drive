@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mountRoomCard, removeRoomCard } from './room-cards';
 import { GATE_RADIUS, RACE_LIMIT, type RaceRoute } from './race-wire';
 import { raceRoutes } from './race-routes';
 import type { MultiplayerHost } from './index';
@@ -24,18 +25,12 @@ export class RaceView {
     host.scene.add(this.group);
     // Phone race controls belong to the scrollable settings panel, outside the driving surface.
     const settings = host.touch ? document.getElementById('settings') : null;
-    this.panel = host.bare ? null : (settings ?? document.body).appendChild(document.createElement('details'));
+    this.panel = host.bare ? null : document.createElement('details');
     const phoneStatus = host.touch && !host.bare ? document.getElementById('phoneStatus') : null;
     this.readout = phoneStatus?.appendChild(Object.assign(document.createElement('div'), { id:'raceReadout', hidden:true })) ?? null;
     if (!this.panel) return;
     this.panel.id='racePanel';this.panel.hidden=true;
-    this.panel.style.cssText='position:fixed;right:10px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:7;background:#102531ed;color:#fff;border:1px solid #70939e;border-radius:10px;padding:10px;max-width:min(310px,80vw);max-height:45vh;overflow:auto;font:13px/1.4 system-ui';
-    if (settings) {
-      settings.prepend(this.panel);
-      this.panel.style.position='static';this.panel.style.maxWidth='100%';
-      this.panel.style.maxHeight='none';this.panel.style.marginBottom='12px';
-      this.panel.style.overflow='visible';this.panel.style.boxSizing='border-box';
-    }
+    mountRoomCard(this.panel, host.touch);
     const summary=document.createElement('summary');summary.textContent='Room race';
     if (settings) summary.style.cssText='min-height:56px;box-sizing:border-box;padding:16px 0;cursor:pointer';
     const label=document.createElement('label');label.textContent='Short road course ';this.select.setAttribute('aria-label','Short road course');label.append(this.select);
@@ -96,5 +91,5 @@ export class RaceView {
     const text=rows.map(({r,name})=>`${name}: ${r.time!==null?(r.time/1000).toFixed(2)+' s':r.out?'out':now-s.startAt>=RACE_LIMIT?'timed out':s.startAt>now?'on grid':'racing'}`);
     if(this.results.textContent!==text.join(''))this.results.replaceChildren(...text.map(t=>Object.assign(document.createElement('li'),{textContent:t})));
   }
-  dispose():void{this.panel?.remove();this.readout?.remove();this.host.scene.remove(this.group);this.group.clear();this.geometry.dispose();this.nextMat.dispose();this.otherMat.dispose();}
+  dispose():void{removeRoomCard(this.panel);this.readout?.remove();this.host.scene.remove(this.group);this.group.clear();this.geometry.dispose();this.nextMat.dispose();this.otherMat.dispose();}
 }

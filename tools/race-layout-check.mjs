@@ -1,6 +1,6 @@
 // Uses layout-check's real page, multiplayer fixture, phone sizes and safe-area harness.
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { layoutFaults } from './hud-layout-geometry.mjs';
 
@@ -67,8 +67,7 @@ export async function raceLayoutCheck({open,safeArea,sizes,outDir}) {
   const pictures=resolve(outDir,'../../race-layout-r2');mkdirSync(pictures,{recursive:true});
   const receipt=[];
   // Capture the exact pre-fix placement, not a guessed rectangle or a second copy of the physics.
-  const source=readFileSync(new URL('../web/src/mp/race.ts',import.meta.url),'utf8');
-  const oldStyle=source.match(/this\.panel\.style\.cssText='([^']+)'/)[1];
+  const oldStyle='position:fixed;right:10px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:7;background:#102531ed;color:#fff;border:1px solid #70939e;border-radius:10px;padding:10px;max-width:min(310px,80vw);max-height:45vh;overflow:auto;font:13px/1.4 system-ui';
   for(const [w,h,plain] of sizes) {
     const p=await open(w,h,'mode=mail');
     const shot=async name=>writeFileSync(`${pictures}/${name}.png`,Buffer.from((await p.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).result.data,'base64'));
@@ -107,7 +106,8 @@ export async function raceLayoutCheck({open,safeArea,sizes,outDir}) {
             return !(at===e||e.contains(at));})`),[],'all visible touch controls and HUD receive their own hit');
           if(!safe&&!folded)await shot(`${name}-after-driving`);
           assert.equal(await p.read(`!!document.getElementById('racePanel').closest('#settings')`),true,'phone race lives inside Settings');
-          assert.equal(await p.read(`document.getElementById('settings').firstElementChild.id`),'racePanel','course controls are first when Settings opens at scrollTop zero');
+          assert.equal(await p.read(`document.getElementById('settings').firstElementChild.id`),'settingsHeader','Settings header is first when the sheet opens');
+          assert.equal(await p.read(`document.getElementById('racePanel').parentElement.id`),'mpRoom','race lives in the labelled Room group below the header');
           await p.read(`document.getElementById('gear').click();document.getElementById('racePanel').scrollIntoView({block:'center'})`);
           const summary=await p.read(`(()=>{const e=document.querySelector('#racePanel summary'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {height:r.height,reachable:at===e||e.contains(at)};})()`);
           assert.ok(summary.height>=56&&summary.reachable,'Room race is a reachable full-size Settings target');
