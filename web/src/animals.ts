@@ -344,6 +344,9 @@ function pantherSign(): THREE.Group {
 }
 
 /** Invented residents. The data supplies geography, never names or ownership. */
+/** A land tile the cat's place needs could not be read, even with a retry: the land did not load (main.ts shows Retry). */
+export class CatTileUnread extends Error {}
+
 export class Animals {
   readonly group = new THREE.Group();
   readonly places: Place[] = [];
@@ -511,7 +514,7 @@ export class Animals {
     const reader = async () => {
       while (!failed && next < keys.length) {
         const key = keys[next++];
-        cache.set(key, await decode(key).catch(() => decode(key)).catch((error: unknown) => { failed = true; throw error; }));
+        cache.set(key, await decode(key).catch(() => decode(key)).catch((error: unknown) => { failed = true; throw new CatTileUnread(`8/${key}.png`, { cause: error }); }));
       }
     };
     await Promise.all(Array.from({ length: Math.min(4, keys.length) }, reader));

@@ -26,7 +26,7 @@ import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { isHillsideBuilding, NovemberBuildings } from './november-buildings';
 import { NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
-import { Animals } from './animals';
+import { Animals, CatTileUnread } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
 import { areaScreen } from './area-screen';
 import { GARAGE, readVehicle } from './garage';
@@ -108,7 +108,7 @@ import { SunShadows, lookFocus } from './shadows';
 import { Streams, type StreamFile } from './streams';
 import { WaterReflections } from './water';
 import { initStore, readFile } from './store';
-import { early, inTask } from './boot-tasks';
+import { early } from './boot-tasks';
 import { Edge } from './edge';
 import { directionFromAngles, sunAngles } from './sun';
 import { readLightStudy, studyScale, studyLightingElevation, lightStudyUI, readDrivePosition } from './light-study';
@@ -222,7 +222,7 @@ const getJson = async (name: string) => (await fetch(`${base}/${name}`)).json();
 await initStore(base);
 // Every boot read below needs only the manifest, so all start now, under the same conditions as before. Each line that used
 // to start its read now waits for it there (boot-tasks.ts), so the build order and the failures stay as they were.
-// The ground class read stays in terrain.ts: that file is an input of the installed sidewalk bake (tools/sidewalks_bake.py).
+// The ground class read still starts in terrain.ts (readGroundCover); moving it here is left for a later change.
 const landmarksRead = AREA.landmarks ? early(getJson('landmarks.json')) : null;
 const buildingsRead = manifest.buildings ? early(getJson(manifest.buildings.file)) : null;
 const stylesRead = ERA.modern && manifest.buildingStyles ? early(getJson(manifest.buildingStyles.file)) : null;
@@ -231,7 +231,8 @@ const cemeteryEntry = (manifest as Manifest & { cemeteries?: { file: string } })
 const cemeteriesRead = ERA.modern && cemeteryEntry ? early(getJson(cemeteryEntry.file)) : null;
 const stockpilesRead = ERA.modern && manifest.stockpiles ? early(getJson(manifest.stockpiles.file)) : null;
 // The 1884 land reads the brook file too, even with ?brooks=0: both lines share this one read.
-const streamsRead = manifest.streams && (params.get('brooks') !== '0' || ERA.id === '1884') ? early(getJson(manifest.streams.file)) : null;
+const streamUses = (params.get('brooks') !== '0' ? 1 : 0) + (ERA.id === '1884' ? 1 : 0);
+const streamsRead = manifest.streams && streamUses ? early(getJson(manifest.streams.file), streamUses) : null;
 const roadsRead = manifest.roads ? early(getJson(manifest.roads.file)) : null;
 const propsRead = ERA.modern && manifest.props ? early(getJson(manifest.props.file)) : null;
 
@@ -342,7 +343,7 @@ if (LOW) {
 }
 scene.add(sea);
 
-const landmarkList = landmarksRead ? await inTask(landmarksRead) : [];
+const landmarkList = landmarksRead ? await landmarksRead.take() : [];
 const clear = landmarkList.map((lm: { footprint: [number, number][] }) => {
   const xs = lm.footprint.map((p) => p[0] - manifest.village[0]), zs = lm.footprint.map((p) => manifest.village[1] - p[1]);
   return [Math.min(...xs) - 4, Math.min(...zs) - 4, Math.max(...xs) + 4, Math.max(...zs) + 4];
@@ -365,14 +366,14 @@ let mappedBuildings: Building[] = [];
 // group, the pub, the bank branch, lamp posts, sidewalk, string lights): built by hand from the dash cam brief. The boxes
 // it replaces leave the drawing only; they stay properties. ?mabou=0 leaves the surveyed boxes.
 const mabouSite = ERA.modern && AREA.id === 'mabou' && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
-const buildingList: Building[] | null = buildingsRead ? await inTask(buildingsRead).then((data: { buildings: Building[] }) => {
+const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then((data: { buildings: Building[] }) => {
   mappedBuildings = data.buildings;
   const list = homeSite ? Home.buildings(data.buildings, homeSite, manifest.village) : yardSite ? Yard.buildings(data.buildings, yardSite, manifest.village) : data.buildings;
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
 const bakedBuildingStyles = stylesRead
-  ? await inTask(stylesRead).then(readBuildingStyles)
+  ? await stylesRead.take().then(readBuildingStyles)
     .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
   : undefined;
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
@@ -421,7 +422,7 @@ terrain.cartRoads = ERA.cartRoads;
 // Open designated pavement (NSTDB lots): on by default in an area whose bake lists it.
 // paved=0 turns it off; paved=1 forces a load (work-bake previews). Absent data means no request.
 if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1')) {
-  terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id, pavedRead ? inTask(pavedRead) : undefined)).catch(e => { console.warn('Paved layer unavailable', e); return null; });
+  terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id, pavedRead?.take())).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
 const testPark = await createTestPark(terrain, yardSite, LOW, buildingList ?? []);
@@ -435,9 +436,9 @@ if (homeSite) terrain.sites.push(homeSite);
 if (porchSite) terrain.sites.push(porchSite);
 if (churchSite) terrain.sites.push(churchSite);
 if (quarrySite) { terrain.sites.push(quarrySite); terrain.coast=quarrySite; }
-const cemeteries = ERA.modern ? await Cemeteries.load(manifest, name => cemeteriesRead ? inTask(cemeteriesRead) : getJson(name), terrain, LOW, AREA.id) : null;
+const cemeteries = ERA.modern ? await Cemeteries.load(manifest, name => cemeteriesRead?.take() ?? getJson(name), terrain, LOW, AREA.id) : null;
 if (cemeteries) scene.add(cemeteries.group);
-const stockpiles = ERA.modern ? await Stockpiles.load(manifest, name => stockpilesRead ? inTask(stockpilesRead) : getJson(name), terrain, LOW, AREA.id) : null;
+const stockpiles = ERA.modern ? await Stockpiles.load(manifest, name => stockpilesRead?.take() ?? getJson(name), terrain, LOW, AREA.id) : null;
 if (stockpiles) { scene.add(stockpiles.group); terrain.canopyExcludes = stockpiles.excludes; }
 // The coast at Mabou Coal Mines is Mabou's own: another area gets none of it.
 const coast = !AREA.coast || params.get('coast') === '0' ? null : new Coast(new CoastSite(manifest.village), terrain, LOW);
@@ -445,7 +446,7 @@ if (coast) { terrain.coast = coast.site; scene.add(coast.group); }
 // Brooks are scenery: when their file is missing or broken, the game still starts, without them.
 // ?brooks=0 leaves them out (to time one build both ways).
 terrain.streams = streamsRead && params.get('brooks') !== '0'
-  ? await inTask(streamsRead).then((d: StreamFile) => new Streams(d, manifest.village)).catch((e: unknown) => { console.warn('streams', e); return null; })
+  ? await streamsRead.take().then((d: StreamFile) => new Streams(d, manifest.village)).catch((e: unknown) => { console.warn('streams', e); return null; })
   : null;
 if (LOW) { terrain.split = AREA.quarry ? 1 : 1.15; terrain.low = true; }   // fine tiles and single trees reach less far
 else if (params.get('shadows') !== '0') terrain.shadows = true;
@@ -454,7 +455,7 @@ if (LOW) terrain.lazyRange = 600;
 if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
-const roadData = roadsRead ? await inTask(roadsRead) : { roads: [] };
+const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
 const novemberRoads = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
 if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
@@ -519,7 +520,7 @@ if (ERA.modern && AREA.id === 'pointtupper' && !LOW) {
 
 const history = ERA.id === '1884' ? await (async () => {
   await terrain.readCover();
-  const streams = streamsRead ? await inTask(streamsRead) as StreamFile : null;
+  const streams = streamsRead ? await streamsRead.take() as StreamFile : null;
   const ground=await historyGround(manifest,base,roads.roads.filter(r=>r.bridge).flatMap(r=>r.pts.map(([x,z]):[number,number]=>[x+manifest.village[0],manifest.village[1]-z])));
   new HistoryBridgeApproaches(roads,terrain,ground).install(terrain);
   return new HistoryScene(terrain, roads, streams, roofSites(buildingList ?? []), ground);
@@ -544,7 +545,7 @@ if (sidewalks) { terrain.sidewalks=sidewalks; scene.add(sidewalks.group); if (ma
 const props = await (async () => {
   if (!propsRead) return null;
   try {
-    const read = await inTask(propsRead);
+    const read = await propsRead.take();
     // The service drops of the boxes Port Hawkesbury and Mabou's main street replace end on their models, not in the air.
     const placed = hawkesburySite && Array.isArray(read.serviceDrops) ? { ...read, serviceDrops: aimDrops(read.serviceDrops) } : read;
     const data = mabouSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: aimMabouDrops(placed.serviceDrops) } : placed;
@@ -859,7 +860,12 @@ mailButton?.addEventListener('lostpointercapture', releaseMail);
 addEventListener('blur', () => { mailRequested = false; mailPointers.clear(); mailButton?.classList.remove('held'); });
 const animals = AREA.animals ? new Animals(roads, terrain, buildingList, manifest.village) : null;
 // The cat's place is read from land tiles; a failed read is a land that could not load (area-screen.ts).
-await animals?.ready.catch(() => areaScreen('The land could not load. Retry this area.', true));
+// Any other fault in choosing the animals' places still stops the start with its own message (page-state.ts).
+await animals?.ready.catch((error: unknown) => {
+  if (!(error instanceof CatTileUnread)) throw error;
+  console.error(error);
+  return areaScreen('The land could not load. Retry this area.', true);
+});
 if (animals) scene.add(animals.group);
 
 // ---- modes --------------------------------------------------------------------------------
