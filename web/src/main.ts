@@ -405,18 +405,19 @@ if (quarrySite) clear.push(...quarrySite.clear);
 // Modern Point Tupper only; airport=0 turns it off. The module (and its source extract) loads only here.
 const airportModule = ERA.modern && AREA.airport && params.get('airport') !== '0' ? await import('./airport').catch(e => { console.warn('Airport unavailable', e); return null; }) : null;
 const airportSite = airportModule ? new airportModule.AirportSite(manifest.village) : null;
-const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear);
+// Known before the first tile. Phones: fine tiles and single trees reach less far, and past 600 m, land outside the view is
+// read later, in the background (terrain.ts lazyRange). Desktop: sun shadows, unless ?shadows=0 or a night (it has no sun).
+const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear, { night: nightShading, cartRoads: ERA.cartRoads,
+  ...(LOW ? { split: AREA.quarry ? 1 : 1.15, low: true, lazyRange: 600 } : {}), shadows: !LOW && params.get('shadows') !== '0' && !nightLook });
 // Complete the approved CPU class mask before any terrain canopy or individual tree is built.
 // Modern land only: the 1884 era keeps today's cover handling, like other modern features.
 if (ERA.modern) await terrain.readGroundCover().catch(() => areaScreen('The land could not load. Retry this area.', true));
-terrain.night = nightShading;
 if (airportSite) terrain.sites.push(airportSite);
 const airport = airportModule && airportSite ? new airportModule.Airport(airportSite, terrain, !!nightLook) : null;
 if (airport) {
   scene.add(airport.group);
   if (import.meta.env.DEV) expose({ airport });   // only where the airfield stands, like fleet: the pinned dev keys stay
 }
-terrain.cartRoads = ERA.cartRoads;
 // Open designated pavement (NSTDB lots): on by default in an area whose bake lists it.
 // paved=0 turns it off; paved=1 forces a load (work-bake previews). Absent data means no request.
 if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1')) {
@@ -446,11 +447,6 @@ if (coast) { terrain.coast = coast.site; scene.add(coast.group); }
 terrain.streams = streamsRead && params.get('brooks') !== '0'
   ? await streamsRead.take().then((d: StreamFile) => new Streams(d, manifest.village)).catch((e: unknown) => { console.warn('streams', e); return null; })
   : null;
-if (LOW) { terrain.split = AREA.quarry ? 1 : 1.15; terrain.low = true; }   // fine tiles and single trees reach less far
-else if (params.get('shadows') !== '0') terrain.shadows = true;
-// Phone cold start: past 600 m, land outside the view is read later, in the background (terrain.ts lazyRange).
-if (LOW) terrain.lazyRange = 600;
-if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
 const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
