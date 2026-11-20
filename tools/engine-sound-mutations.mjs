@@ -42,6 +42,9 @@ const mutants = [
   ['the octave-up gain stays', '      g.upperGain?.gain.setValueAtTime(p.upper ?? UPPER, t);\n', '', G],
   ['the rasp at six times', 'g.raspFilter.frequency.setTargetAtTime(e.rasp, t, GLIDE);', 'g.raspFilter.frequency.setTargetAtTime(Math.min(5000, e.frequency * 6), t, GLIDE);', G],
   ['the snapshot reports the cycle rate', ' * (this.kind ? voicePulses(ENGINES[this.kind]) : 1)', '', G],
+  ['always glide, even on a new vehicle', 'fresh ? param.setValueAtTime(value, t) : param.setTargetAtTime(value, t, GLIDE)', 'param.setTargetAtTime(value, t, GLIDE)', G],
+  ['jump only on the first drive', 'fresh = kind !== this.kind;', 'fresh = !this.kind;', G],
+  ['only the truck sets its octave-up gain', '      g.upperGain?.gain.setValueAtTime(p.upper ?? UPPER, t);\n', "      if (p.wave === 'custom') g.upperGain?.gain.setValueAtTime(p.upper ?? UPPER, t);\n", G],
   ['a sub oscillator', "upper = a.createOscillator(); upper.type = 'triangle';", "upper = a.createOscillator(); upper.type = 'triangle'; a.createOscillator();", G],
 ];
 const source = file => resolve(root, `web/src/${file}.ts`);

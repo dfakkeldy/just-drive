@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ENGINES, engineKind, engineState, engineWave, gearFor, tyreState, voicePulses, RADIO_DUCK, OUTPUT_TRIM, RASP, UPPER } from '../web/src/engine-sound-rules.ts';
 import { WASHBOARD_WAVE } from '../web/src/defects.ts';
+import { EngineSound } from '../web/src/engine-sound.ts';
 
 const root = process.env.MMM_ROOT ?? process.cwd();
 const read = file => readFileSync(resolve(root, file), 'utf8');
@@ -246,6 +247,54 @@ ok(RADIO_DUCK > 0 && RADIO_DUCK < 1, 'the radio ducks the driving sound, never m
   ok(/g\.raspFilter\.frequency\.setTargetAtTime\(e\.rasp, t, GLIDE\)/.test(sound), 'the rasp follows the profile\'s centre');
   ok(/frequency: this\.graph \? \+\(this\.graph\.voice\.frequency\.value \* \(this\.kind \? voicePulses\(ENGINES\[this\.kind\]\) : 1\)\)/.test(sound), 'the snapshot reports the firing rate');
   ok((sound.match(/createOscillator\(/g) ?? []).length === 3, 'no extra oscillators: voice, upper, and the tyre pulse');
+}
+
+// The graph in a fake audio context: a new vehicle (the first drive, or a fleet change) starts on its own note at once and
+// sets its own octave-up gain; the same vehicle glides. Only the fleet changes vehicle inside one visit: truck, sxs, bike.
+{
+  const param = value => ({ value, log: [], setValueAtTime(v) { this.log.push(['set', v]); this.value = v; }, setTargetAtTime(v) { this.log.push(['glide', v]); }, cancelScheduledValues() {} });
+  const node = extra => ({ connect: target => target, start() {}, ...extra });
+  class FakeContext {
+    state = 'suspended'; currentTime = 0; sampleRate = 64; destination = node({});
+    addEventListener() {}
+    resume() { this.state = 'running'; return Promise.resolve(); }
+    suspend() { this.state = 'suspended'; return Promise.resolve(); }
+    createGain() { return node({ gain: param(1) }); }
+    createBiquadFilter() { return node({ type: '', Q: param(1), frequency: param(350) }); }
+    createOscillator() { return node({ type: 'sine', frequency: param(440), setPeriodicWave(w) { this.type = 'custom'; this.wave = w; } }); }
+    createBuffer(_c, n) { return { getChannelData: () => new Float32Array(n) }; }
+    createBufferSource() { return node({ buffer: null, loop: false }); }
+    createPeriodicWave(real, imag) { return { real, imag }; }
+  }
+  const taps = [];
+  globalThis.addEventListener = (_type, fn) => taps.push(fn);
+  globalThis.document = { hidden: false, addEventListener() {} };
+  globalThis.window = { AudioContext: FakeContext };
+  // Newer Node has its own localStorage that warns when read without a file.
+  Object.defineProperty(globalThis, 'localStorage', { value: { getItem: () => null, setItem() {} }, configurable: true });
+  const es = new EngineSound(false);
+  taps[0]();
+  const g = es.graph, last = p => p.log.at(-1);
+  ok(g && g.upper && g.upperGain, 'the fake context builds the full graph');
+  const at = (kind, speed) => ({ kind, speed, throttle: 1, surface: 'gravel', airborne: false, grade: 0, towing: false, radio: false });
+  const drive = (kind, speed, fresh) => {
+    es.update(1 / 60, at(kind, speed));
+    const e = engineState(ENGINES[kind], { ...flat, speed, throttle: 1 }, 1), how = fresh ? 'set' : 'glide';
+    if (fresh) {
+      ok(last(g.voice.frequency)[0] === 'set' && Math.abs(last(g.voice.frequency)[1] - e.voice) < 1e-9, `${kind} starts on its own note at once`);
+      ok(last(g.upper.frequency)[0] === 'set', `${kind} starts its octave-up voice at once`);
+      ok(last(g.upperGain.gain)[0] === 'set' && last(g.upperGain.gain)[1] === (ENGINES[kind].upper ?? UPPER), `${kind} sets its own octave-up gain`);
+    } else ok(last(g.voice.frequency)[0] === how && last(g.upper.frequency)[0] === how, `${kind} glides while it keeps driving`);
+  };
+  drive('truck', 20, true);
+  ok(g.voice.type === 'custom', 'the truck voice is its periodic wave');
+  drive('truck', 21, false);
+  drive('bike', 20, true);
+  ok(g.voice.type === ENGINES.bike.wave, 'the bike voice is a plain wave again');
+  drive('bike', 21, false);
+  drive('sxs', 20, true);
+  drive('truck', 20, true);
+  delete globalThis.addEventListener; delete globalThis.document; delete globalThis.window;
 }
 
 console.log(`PASS engine-sound: ${checks} checks`);
