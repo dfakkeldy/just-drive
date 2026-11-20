@@ -6,9 +6,10 @@ import { Route, ROUTE_ROADS } from '../web/src/route.ts';
 import { makeDay, missedCustomers } from '../web/src/shift-rules.ts';
 import { village, terrain, roads, propsData } from './shift-fixture.mjs';
 const props = new Props(propsData, village, terrain), route = new Route(roads, props);
-assert.deepEqual(route.runs.map((r) => [r.rural.length, r.sites.length]), [[56,0],[36,0],[40,0],[51,1],[27,1],[48,2],[57,1],[50,1]]);
-assert.equal(route.rural.length, 365); assert.equal(route.members.size,371);
-assert.equal(props.mail.length - route.rural.length,104);
+// The 18 Nov road bake (#27) made Weaver Lane public. Two boxes now resolve to it instead of Highway 252.
+assert.deepEqual(route.runs.map((r) => [r.rural.length, r.sites.length]), [[56,0],[36,0],[40,0],[49,1],[27,1],[48,2],[57,1],[50,1]]);
+assert.equal(route.rural.length, 363); assert.equal(route.members.size,369);
+assert.equal(props.mail.length - route.rural.length,106);
 assert.equal(route.forDay(1), route.forDay(9)); assert.equal(route.forDay(3),route.runs[2]);
 assert.equal(route.forDay(1,4),route.runs[3]); assert.ok(route.runs[7].rural.includes(route.late));
 const scenery = new Set();
