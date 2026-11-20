@@ -63,7 +63,7 @@ if(process.argv.includes('--mutations')) {
     ['private worker leak',privateBuild,s=>s+';serviceWorker;'],
     ['style drift','web/index.html',s=>s.replace('<style>','<style>body{color:red}')],
     ['ordinary visitor hashed script',root+'/index.html',s=>s.replace('src="/app.js"','src="/offline/app.bad.js"')],
-    ['ordinary script integrity removed',root+'/index.html',s=>s.replace(/integrity="[^"]+"/,'')],
+    ['ordinary script integrity removed',root+'/index.html',s=>s.replace(/(<script[^>]*?) integrity="[^"]+"/,'$1')],
     ['viewport fit removed',root+'/index.html',s=>s.replace('viewport-fit=cover','')],
     ['iOS icon removed',root+'/index.html',s=>s.replaceAll('apple-touch-icon','gone')],
     ['stale built headers',root+'/_headers',s=>s.replaceAll('no-store','max-age=3600')],
