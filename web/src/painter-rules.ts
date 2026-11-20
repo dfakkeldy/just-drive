@@ -4,7 +4,7 @@ import { fishDay, type Pose, SceneRoad } from './road-scene-rules';
  *  and the side-by-side (the fastest) at washboard top speed there can see the hint, take a second to read it
  *  and still brake under `speed` before `range`: painter-check proves that with the real Vehicle, and
  *  painter-browser measures the grade on the real land. A higher hill-height setting gives less room. */
-export const PAINTER = Object.freeze({ along: 38, side: -7.5, radius: 1.9, draw: 250, speed: 8, range: 13, hint: 160 });
+export const PAINTER = Object.freeze({ along: 38, side: -7.5, radius: 1.9, draw: 250, speed: 8, range: 13, hint: 220 });
 /** Same voice and HUD line as the fish scene's SCENE_TEXT; the instruction comes first, because a landscape
  *  phone shows the hint on one clipped line. */
 export const PAINTER_TEXT = Object.freeze({

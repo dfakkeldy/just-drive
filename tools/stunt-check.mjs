@@ -15,7 +15,7 @@ import {StuntPark,PlacedStunt} from '../web/src/stunt-kit.ts';
 import {gapPair} from '../web/src/stunt-pieces.ts';
 import {TrickJudge} from '../web/src/stunt-rules.ts';
 import {STUNT_GUIDANCE} from '../web/src/stunt-guidance.ts';
-const implementationDigest=createHash('sha256').update(['stunt-kit','stunt-pieces','stunt-rules','stunt-test-park','stunt-guidance','stunt-visuals','stunt-dressing','stunt-ground-style','stunt-solids','terrain','vehicle','main',...readdirSync('src/stunts').filter(n=>n.endsWith('.ts')).sort().map(n=>'stunts/'+n.slice(0,-3))].map(n=>readFileSync(`src/${n}.ts`,'utf8')).join('\n')).digest('hex');
+const implementationDigest=createHash('sha256').update(['stunt-kit','stunt-pieces','stunt-rules','stunt-test-park','stunt-guidance','stunt-visuals','stunt-dressing','stunt-ground-style','stunt-solids','terrain','vehicle','vehicle-spec','truck','main',...readdirSync('src/stunts').filter(n=>n.endsWith('.ts')).sort().map(n=>'stunts/'+n.slice(0,-3))].map(n=>readFileSync(`src/${n}.ts`,'utf8')).join('\n')).digest('hex');
 const dt=1/120,results=[],mutations=[];
 const reject=(name,fn)=>{assert.throws(fn,undefined,name);mutations.push(name);};
 function rig(){const root=new THREE.Group(),body=new THREE.Group();root.add(body);const wheels={fl:new THREE.Group(),fr:new THREE.Group(),rl:new THREE.Group(),rr:new THREE.Group()};return {root,body,wheels,steer:{fl:new THREE.Group(),fr:new THREE.Group()},driverEye:new THREE.Group(),brakeLights:[]};}

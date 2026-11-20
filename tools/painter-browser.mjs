@@ -63,9 +63,9 @@ try {
   await c.send('Page.captureScreenshot',{format:'png'}).then(r=>writeFileSync(`${out}/painter-hint-${device}-${w}x${h}.png`,Buffer.from(r.result.data,'base64')));
   if(device==='desktop'){
    // painter-check brakes on a steady 6% descent; the real approach over the whole hint distance must be no steeper.
-   const grade=await read(`(()=>{const s=mmm.roadScene,t=mmm.terrain,p={x:0,z:0,heading:0},at=a=>{s.road.at(a,0,p);return t.heightAt(p.x,p.z);},h=at(38),steep=[];
-     for(let a=38-160;a<38+160;a+=20)steep.push(Math.abs(at(a+20)-at(a))/20);
-     return {heights:[at(38-160),h,at(38+160)],fromBelow:(at(38-160)-h)/160,fromAbove:(at(38+160)-h)/160,steepest20m:Math.max(...steep)};})()`);
+   const grade=await read(`(async()=>{const {PAINTER}=await import('/src/painter-rules.ts');const {along,hint}=PAINTER,s=mmm.roadScene,t=mmm.terrain,p={x:0,z:0,heading:0},at=a=>{s.road.at(a,0,p);return t.heightAt(p.x,p.z);},h=at(along),steep=[];
+     for(let a=along-hint;a<along+hint;a+=20)steep.push(Math.abs(at(a+20)-at(a))/20);
+     return {heights:[at(along-hint),h,at(along+hint)],fromBelow:(at(along-hint)-h)/hint,fromAbove:(at(along+hint)-h)/hint,steepest20m:Math.max(...steep)};})()`);
    result.push({grade});console.log('road grade towards the painter over the hint distance',JSON.stringify(grade));
    assert.ok(grade.heights.every(Number.isFinite)&&Number.isFinite(grade.steepest20m),'land loaded for the grade');
    assert.ok(Math.max(grade.fromAbove,grade.fromBelow)<=.06,'the approach is no steeper than the 6% descent painter-check brakes on');}
