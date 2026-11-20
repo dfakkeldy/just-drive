@@ -18,7 +18,7 @@ This validates the catalogue and source files, builds the playlists and credits 
 
 ## Credits
 
-The top-level `credits` map holds named credits, such as `suno`, `bach-ishizaka`, `ai-mabou`, `ai-songs` and `ai-tunes`. Every track must name one of these keys:
+The top-level `credits` map holds named credits, such as `suno`, `bach-ishizaka`, `ai-mabou`, `ai-songs`, `ai-tunes` and `author-ai`. Every track must name one of these keys:
 
 ```json
 {"source": "song-file-stem", "title": "Song title", "credit": "suno", "public": true}
@@ -34,7 +34,7 @@ A missing or unknown key stops the command. Stations have no default credit. A t
 | `date` | When it was made or obtained |
 | `text` | The exact player-facing attribution, with one `{dials}` placeholder |
 
-Python `validate()` checks each track's own resolved credit before any output is written. JS checks mirror those rules. The reviewed audio filenames have fixed attribution requirements in `tools/radio-attribution-rules.json`: Suno for the author's songs; Kimiko Ishizaka and CC0 for the Bach recordings; Claude, ElevenLabs Music and “around Mabou” for the place songs; Claude and ElevenLabs Music for a song that names no place (`ai-songs`); ElevenLabs Music and Claude for the wordless fiddle tunes (`ai-tunes`); Claude, ElevenLabs, “stock voices” and “not real people” for the talk segments. These requirements cannot be removed by editing `by` or `source` metadata. No rule edits are needed for station, dial or playlist changes.
+Python `validate()` checks each track's own resolved credit before any output is written. JS checks mirror those rules. The reviewed audio filenames have fixed attribution requirements in `tools/radio-attribution-rules.json`: Suno for the author's songs; Kimiko Ishizaka and CC0 for the Bach recordings; Claude, ElevenLabs Music and “around Mabou” for the place songs; Claude and ElevenLabs Music for a song that names no place (`ai-songs`); ElevenLabs Music and Claude for the wordless fiddle tunes (`ai-tunes`); the author, Claude and ElevenLabs Music for the author's words set to music by ElevenLabs (`author-ai`); Claude, ElevenLabs, “stock voices” and “not real people” for the talk segments. These requirements cannot be removed by editing `by` or `source` metadata. No rule edits are needed for station, dial or playlist changes.
 
 A NEW audio filename needs an entry in the credit rules file to pin its required attribution words; otherwise its credit is checked only for a maker name.
 
@@ -114,6 +114,13 @@ The songs with credit `ai-mabou` have words by the radio thread and music from E
   - The dial never leaves a station by itself (`next()` in `web/src/radio.ts`), so an offer changes the readout only.
   - The canal holds its cycle for a car on the span, so do not compute the barrier's state again from the clock. The `Canal` object knows it, but its state is private, and it decides for each arm by itself if that arm drops. The tie needs a new way to read from `Canal` that the barrier has closed for the player.
   - A station's programme runs on the wall clock that `/listen/` shares. A line at the barrier's time cannot be a piece of the programme: the game must start it at the car.
+
+## One song in seven styles
+
+92.5 THE SHOULDER has "Fresh Set of Eyes", the author's own song, in seven styles: electro, disco, ska, beat group, hip-hop, talking blues and Cape Breton folk (the owner asked for them and chose the station, 19 Nov 2026). One version follows each of the station's other songs. The words are the author's, edited with Claude; the music is from ElevenLabs Music. Their credit is `author-ai`, and the `author-ai` group in `tools/radio-attribution-rules.json` holds their filenames.
+
+- The maker is in the main checkout, like the place songs: `data/audio/make/songs_eyes.py` holds the words and styles, and `gen_eyes.py` makes them with `gen.py`. Each song's record (with its song id) is in `data/audio/make/eyes/`.
+- A speech-to-text pass on 19 Nov 2026 found some lines left out: the spoken joke in the talking blues, the end of verse 1 and of verse 3 in the electro, the last four rap lines in the hip-hop, and part of the middle eight in the beat group. The owner chose all seven with this known.
 
 ## Just Listen
 

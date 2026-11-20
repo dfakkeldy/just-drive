@@ -12,7 +12,10 @@ export const MAX_DECK_ABOVE_WATER = 2.8;
 export const ENTRY = { start:-18, end:10, bedding:3.275, fall:.0975 } as const;
 export const PARK = { u: 7, v: 43 } as const;
 
-const SERVICE_GRAVEL=[[-3,-3],[4,-5],[14,-2],[30,-1],[47,3],[43,8],[29,10],[19,8],[8,9],[1,5]] as const;
+const SERVICE_GRAVEL = [
+  [-3, -3], [4, -5], [12, -5], [13, -8], [36, -9], [43, -8], [48, -18],
+  [62, -20], [68, -16], [69, 4], [62, 10], [43, 10], [29, 10], [19, 8], [8, 9], [1, 5],
+] as const;
 
 export class FishingSite implements Site {
   readonly x: number; readonly z: number;

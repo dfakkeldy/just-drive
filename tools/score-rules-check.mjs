@@ -10,20 +10,31 @@ import { Complaints } from '../web/src/complaints.ts';
 let passed = 0;
 const ok = (name, fn) => { fn(); passed++; };
 const ev = (kind, time, extra = {}) => ({ kind, place: 'route', speed: 8, time, ...extra });
-const COMPLAINTS = ['lawnDamage', 'boxDown', 'lawnMail', 'ditchMail', 'missing', 'stuffed', 'flag', 'late', 'indoors', 'relief', 'sceneHit', 'sceneHorn', 'sceneDust'];
+const COMPLAINTS = ['lawnDamage', 'propertyDamage', 'boxDown', 'lawnMail', 'ditchMail', 'missing', 'stuffed', 'flag', 'late', 'indoors', 'relief', 'sceneHit', 'sceneHorn', 'sceneDust'];
 const UNSCORED = ['sceneAnimal'];
 const GRADES = ['box:rock', 'box:lean', 'box:dent', 'box:down'];
+const PROPS = ['prop:fence', 'prop:clothesline', 'prop:ornament', 'prop:woodpile', 'prop:bale', 'prop:bin', 'prop:baleStrike'];
 
-ok('every complaint kind but an animal scare, mailbox grade, lawn ruts, a drift and losing the Boss score; nothing else does yet', () => {
+ok('every complaint kind but an animal scare, mailbox grade, lawn ruts, a drift, losing the Boss and yard prop breaks score; nothing else does yet', () => {
   // A drift (drift-rules.ts) is a newer kind; tools/drift-rules-check.mjs holds its size and bonus.
-  for (const kind of [...COMPLAINTS, ...GRADES, 'rut', 'drift', 'lostBoss']) assert.ok(POINTS[kind] > 0, kind);
-  assert.equal(Object.keys(POINTS).length, COMPLAINTS.length + GRADES.length + 3, 'complaints, grades, ruts, drift and lostBoss');
+  for (const kind of [...COMPLAINTS, ...GRADES, 'rut', 'drift', 'lostBoss', ...PROPS]) assert.ok(POINTS[kind] > 0, kind);
+  assert.equal(Object.keys(POINTS).length, COMPLAINTS.length + GRADES.length + 3 + PROPS.length, 'complaints, grades, ruts, drift, lostBoss and yard props');
   // Frightening an animal is a complaint but, like a hit (NEVER), it never scores.
   for (const kind of UNSCORED) { assert.equal(POINTS[kind], undefined, kind); assert.equal(new ScoreBook().add(ev(kind, 1)).points, 0, kind); }
-  // The complaint file names exactly these fourteen kinds.
+  // The complaint file names exactly these fifteen kinds.
   const declared = readFileSync('src/complaints.ts', 'utf8').match(/export type ComplaintKind = ([^;]+);/)[1].match(/'(\w+)'/g).map(s => s.slice(1, -1));
   assert.deepEqual(declared.sort(), [...COMPLAINTS, ...UNSCORED].sort());
-  for (const kind of [...COMPLAINTS, ...UNSCORED, ...GRADES, 'rut', 'schoolBus', 'lostBoss']) assert.notEqual(offenceLabel(kind), kind, `label for ${kind}`);
+  for (const kind of [...COMPLAINTS, ...UNSCORED, ...GRADES, 'rut', 'schoolBus', 'lostBoss', ...PROPS]) assert.notEqual(offenceLabel(kind), kind, `label for ${kind}`);
+});
+
+ok('a broken yard prop scores once; a rolling bale that breaks something is a combo; never at a protected place', () => {
+  const b = new ScoreBook();
+  const bale = b.add(ev('prop:bale', 10)), strike = b.add(ev('prop:baleStrike', 11.5)), hit = b.add(ev('prop:fence', 11.5));
+  assert.equal(bale.combo, 1); assert.ok(strike.combo > 1, 'the strike joins the bale: two kinds at once');
+  assert.ok(hit.combo > strike.combo, 'and what it broke a third');
+  for (const place of ['cemetery', 'church', 'busStop']) for (const kind of PROPS) assert.equal(new ScoreBook().add(ev(kind, 1, { place })).points, 0, `${kind} at ${place}`);
+  assert.equal(new ScoreBook().add(ev('prop:fence', 1, { subject: 'animal' })).points, 0, 'an animal never scores');
+  assert.ok(POINTS['prop:baleStrike'] > POINTS['prop:bale'], 'the strike is the prize');
 });
 
 ok('the ladder: seven named steps, each needs more points and a wider gap than the last', () => {

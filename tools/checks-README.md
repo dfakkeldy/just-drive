@@ -34,14 +34,9 @@ A starter change also prints `browser start-up changed: run --browser`.
 
 `.github/workflows/ci.yml` runs `tools/check-all.sh --ci --full` on Ubuntu with no
 `data/` (`--full` adds the four stand-in start-up proofs, which need neither).
-It runs on pushes to `main` and on PRs that are ready for review. On a draft PR
-(opened, reopened or pushed) the job reports as skipped, because hosted minutes
-are billed; run rows on the Mac or the rented mini while a PR is a draft. A
-re-run of a skipped run skips again: only `gh pr ready`, or a push to a ready PR,
-starts the run. Wait until the job shows pending before `land_pr.py`. Started
-earlier, it reads the skipped check as red, and on a branch behind `main` it
-pushes an update commit that cancels the new run. "Every check was skipped" on a
-draft is expected; it is not a reason to make the job run.
+It runs on pushes to `main` and on every PR push, drafts included: the
+repository is public, so hosted minutes are free. `gh pr ready` starts no second
+run; the run on the PR's latest push is the one `land_pr.py` waits for.
 The `--ci` flag changes two things. A row marked `mac-only` or `apple` in
 `checks-hosts.tsv` prints `SKIP` without running. A row whose missing `needs`
 all lie inside `data/` prints `SKIP` as usual. Neither kind fails the run; the

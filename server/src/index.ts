@@ -15,6 +15,10 @@ import { DurableObject } from 'cloudflare:workers';
 import { CLOSE, HEARTBEAT, PEER_TIMEOUT_MS, PING, PONG, encodeSnapshot, VERSION } from '../../web/src/mp/wire';
 import { Meter, STRIKES_OUT, hello, judge, lastKnown, takeSeat, text, type Seat } from './room';
 import { Board, boardDoor, type BoardEnv } from './board';
+
+// A query key that changes what the game starts with; the site key and link-tracking tags do not.
+const gameQuery = (params: URLSearchParams): boolean =>
+  [...params.keys()].some(key => key !== 'site' && key !== 'fbclid' && key !== 'gclid' && !key.startsWith('utm_'));
 export { Board };
 
 export interface Env extends BoardEnv {
@@ -56,22 +60,32 @@ export default {
     }
     if ((request.method === 'GET' || request.method === 'HEAD') && env.ASSETS && site.brand === 'just'
       && (url.pathname === '/' || /^\/[^/]+\/?$/.test(url.pathname))) {
-      if (site.area && url.pathname !== '/' && url.pathname.endsWith('/')) {
+      // The bare root is the map of places (tools/just-home.mjs). A root with a game query is an old link: it keeps its
+      // query and goes where the root used to start: a trip to its own area, anything else to /mabou. Tracking tags
+      // that social sites add (utm_*, fbclid, gclid) are not a game query. The trip names are tripId's (web/src/quarry-trip.ts,
+      // which needs the DOM, so the Worker cannot import it).
+      const home = url.pathname === '/';
+      if (home && gameQuery(url.searchParams)) {
+        const trip = ['quarry', 'quarry-gate'].includes(url.searchParams.get('trip') ?? '') && (readSite(url.hostname, '/' + (url.searchParams.get('area') || 'westbay'), url.searchParams).area ?? 'westbay');
+        url.pathname = '/' + (trip || 'mabou');
+        return Response.redirect(url.href, 308);
+      }
+      if (site.area && !home && url.pathname.endsWith('/')) {
         url.pathname = url.pathname.slice(0, -1); return Response.redirect(url.href, 308);
       }
       // Only navigation addresses reach this branch. Existing files retain asset-first routing.
-      url.pathname = `/just/${site.era ? historyArea(site.area)?.address ?? 'unknown' : site.area ?? 'unknown'}/`;
+      url.pathname = home ? '/just/home/' : `/just/${site.era ? historyArea(site.area)?.address ?? 'unknown' : site.area ?? 'unknown'}/`;
       const asked = new Request(url, request);
       // "Not modified" has no meaning for a 404: the place list must come with its body each time.
       if (!site.area) for (const name of ['If-None-Match', 'If-Modified-Since']) asked.headers.delete(name);
       const page = await env.ASSETS.fetch(asked);
       const headers = new Headers(page.headers); headers.set('Cache-Control', 'no-store');
       let body: BodyInit | null = page.body;
-      if (!site.area && url.hostname === 'localhost') {
+      if ((home || !site.area) && url.hostname === 'localhost' && page.status === 200) {
         body = (await page.text()).replace(/(<a\b[^>]*href="\/[^"?]+)(")/g, '$1?site=just$2');
         headers.delete('Content-Length'); headers.delete('ETag');
       }
-      return new Response(body, { status: site.area ? page.status : 404, headers });
+      return new Response(body, { status: home || site.area ? page.status : 404, headers });
     }
     // Today's board (server/src/board.ts): post a Today's run result, read a board.
     if (url.pathname.startsWith('/board/')) return boardDoor(request, env, (origin) => originAllowed(origin, env.ORIGINS));

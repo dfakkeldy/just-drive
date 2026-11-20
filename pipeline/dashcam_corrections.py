@@ -302,3 +302,51 @@ def remap_road_references(data, kind, roads):
     else:
         raise ValueError('Unknown road-reference schema: '+kind)
     return result
+
+
+def correct_nov19_roads(roads, area):
+    """Move the pavement limit on the installed centreline and grade the wharf access."""
+    if area != 'mabou':
+        return roads
+    key = '19nov:Mabou Harbour Road'
+    if any(r.get('correction') == key for r in roads):
+        return roads
+    old_key = '18nov:Mabou Harbour Road'
+    paved = [(i, r) for i, r in enumerate(roads) if r.get('correction') == old_key and r['kind'] == 2]
+    if len(paved) != 1:
+        raise ValueError('Expected the paved Harbour Road piece')
+    index, road = paved[0]
+    cut = min(range(len(road['pts'])), key=lambda i: math.dist(road['pts'][i], (618290, 5105172)))
+    if not 0 < cut < len(road['pts']) - 1 or math.dist(road['pts'][cut], (618290, 5105172)) > 6:
+        raise ValueError('No centreline vertex at the 19 Nov pavement limit')
+    ends = [(NOV18['harbour']['mouth'], (618663, 5104796)), ((618654, 5104748), (618751, 5104773))]
+    gravel = dict(road, id=max(r['id'] for r in roads) + 1, kind=3, pts=road['pts'][cut:], correction=key)
+    del gravel['pavement']
+    result = list(roads)
+    for start, end in ends:
+        lanes = [(i, r) for i, r in enumerate(roads) if r['name'] is None and not r['bridge'] and r['kind'] == 4
+                 and math.dist(r['pts'][0], start) < 5 and math.dist(r['pts'][-1], end) < 5]
+        if len(lanes) != 1:
+            raise ValueError('Expected one approach or apron lane at the wharf')
+        i, lane = lanes[0]
+        # Gravel for the wheels and renderer. Keep the service lanes out of public mail routes.
+        result[i] = dict(lane, pavement='gravel')
+    result[index:index+1] = [dict(road, pts=road['pts'][:cut+1], correction=key), gravel]
+    return result
+
+
+
+def finish_observed_roads(roads, area, before=None):
+    """Apply final surveyed lines and preserve the corresponding pre-move stations."""
+    # Observed driveways use final lines that join the moved public road.
+    roads = nov18_driveways(roads, area)
+    corrected = correct_nov19_roads(roads, area)
+    if before is not None:
+        for road in roads:
+            before.setdefault(road['id'], road['pts'])
+        if corrected is not roads:
+            paved, gravel = [r for r in corrected if r.get('correction') == '19nov:Mabou Harbour Road']
+            line = before[paved['id']]
+            cut = len(paved['pts']) - 1
+            before[paved['id']], before[gravel['id']] = line[:cut+1], line[cut:]
+    return corrected

@@ -42,6 +42,13 @@
       "source": "ElevenLabs Music (Flows), model eleven_music_v2_5",
       "date": "2026-11-14",
       "text": "The fiddle tunes on {dials} are new tunes in the Cape Breton style, made for the game with AI tools (ElevenLabs Music, from prompts by Claude)."
+    },
+    "author-ai": {
+      "by": "words by the author, edited with Claude; music made with ElevenLabs Music",
+      "licence": "ElevenLabs Music Terms, Creator plan (commercial use; indie game)",
+      "source": "ElevenLabs Music API, model music_v2_5",
+      "date": "2026-11-19",
+      "text": "One song on {dials}, in seven styles, has the author’s words, edited with Claude; its music was made with ElevenLabs Music."
     }
   },
   "stations": [
@@ -133,6 +140,15 @@
           "credit": "suno"
         },
         {
+          "source": "fresh-eyes-electro",
+          "title": "Fresh Set of Eyes (electro)",
+          "public": true,
+          "credit": "author-ai",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id ViDXBxNo93hHR8RUxkgR"
+          }
+        },
+        {
           "source": "loose-gravel",
           "title": "Loose Gravel",
           "public": true,
@@ -140,6 +156,15 @@
           "credit_overrides": {
             "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id 3Dwxje8LiENigIPH1lBv",
             "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "fresh-eyes-disco",
+          "title": "Fresh Set of Eyes (disco)",
+          "public": true,
+          "credit": "author-ai",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id 7WiUAjQAVyXVSlpvgAMn"
           }
         },
         {
@@ -153,6 +178,15 @@
           }
         },
         {
+          "source": "fresh-eyes-ska",
+          "title": "Fresh Set of Eyes (ska)",
+          "public": true,
+          "credit": "author-ai",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id RKjum167o0tbFwZcwRQ1"
+          }
+        },
+        {
           "source": "port-hood-sunset",
           "title": "Port Hood Sunset",
           "public": true,
@@ -163,11 +197,29 @@
           }
         },
         {
+          "source": "fresh-eyes-beat",
+          "title": "Fresh Set of Eyes (beat group)",
+          "public": true,
+          "credit": "author-ai",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id YP4TdDElW93ozD12c5fa"
+          }
+        },
+        {
           "source": "put-it-in-writing-1",
           "title": "Put It in Writing (first take)",
           "public": true,
           "page": true,
           "credit": "suno"
+        },
+        {
+          "source": "fresh-eyes-hiphop",
+          "title": "Fresh Set of Eyes (hip-hop)",
+          "public": true,
+          "credit": "author-ai",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id w6Nt2tddFPkuz7YPqX6O"
+          }
         },
         {
           "source": "pothole-season",
@@ -179,6 +231,15 @@
           }
         },
         {
+          "source": "fresh-eyes-talking-blues",
+          "title": "Fresh Set of Eyes (talking blues)",
+          "public": true,
+          "credit": "author-ai",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id VRtGKkxy10dozypbLBM5"
+          }
+        },
+        {
           "source": "northern-gulf",
           "title": "Northern Gulf",
           "public": true,
@@ -186,6 +247,15 @@
           "credit_overrides": {
             "source": "ElevenLabs Music (Flows), model eleven_music_v2_5, song id 0QNsSu6BQ1OhrJ9kjSmQ",
             "date": "2026-11-14"
+          }
+        },
+        {
+          "source": "fresh-eyes-folk",
+          "title": "Fresh Set of Eyes (Cape Breton folk)",
+          "public": true,
+          "credit": "author-ai",
+          "credit_overrides": {
+            "source": "ElevenLabs Music API, model music_v2_5, song id kZzeya59sUirjhBCi76C"
           }
         }
       ]

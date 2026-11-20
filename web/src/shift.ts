@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { Damage } from './damage-rules';
 import type { Building } from './buildings';
-import { Complaints, complaintLine, dismissed, type ComplaintKind } from './complaints';
+import { Complaints, complaintLine, dismissed, type Complaint, type ComplaintKind } from './complaints';
 import { Evidence, type Subject } from './evidence';
 import type { Mail } from './mail';
 import type { Props } from './props';
 import type { Roads } from './roads';
 import { Route, type Run } from './route';
 import { Ruts } from './ruts';
+import { BALE_STRIKE, DAMAGE_COMPLAINT } from './yard-props-rules';
 import { ScoreStream } from './score-events';
 import { CLOCK_FACTOR, DAILY_PAY, VEHICLE_ALLOWANCE, END_TIME, START_TIME, clock, dayType, draw, freshCareer, makeDay, missedCustomers, nextCareer, readCareer, saveCareer, verdict, type Career, type DayDraw } from './shift-rules';
 import type { Terrain } from './terrain';
@@ -15,9 +16,20 @@ import type { InteriorReceipt } from './interiors';
 import type { Vehicle } from './vehicle';
 import type { DriftFacts } from './drift-rules';
 
+/** Mail play on a ride-along day (ride-along.ts): the Boss sees complaints as they come, and adds to the verdict and the
+ * daily report. */
+export interface ShiftWatcher {
+  /** A new complaint (and where thrown mail landed): true when the Boss saw it, which puts it on file as seen. */
+  saw(c: Complaint, landing?: { x: number; z: number }): boolean;
+  verdict(base: ReturnType<typeof verdict>): ReturnType<typeof verdict>;
+  /** The report's lines about the Boss; none on other days. */
+  report(): string[];
+}
+
 export class Shift {
   readonly damage = new Damage();
   private readonly roadsideReport = document.createElement('p');
+  private readonly bossReport = document.createElement('p');
   readonly roadside: { reportLine(): string; readonly hint: string; readonly score?: number; setPaused?(paused: boolean): void }[] = [];
   get roadsideScore(): number { return this.roadside.reduce((score, scene) => score + (scene.score ?? 0), 0); }
   /** True when the HUD line shows this roadside scene's hint now: no damage hint, and no earlier scene with a hint first.
@@ -34,8 +46,12 @@ export class Shift {
   placeAt: (x: number, z: number) => string = () => 'route';
   /** Get Fired: true when the Boss sees this point (boss.ts sets it). */
   witness: (x: number, z: number) => boolean = () => false;
+  /** Mail play: the Boss on a ride-along day (ride-along.ts sets it). */
+  watcher: ShiftWatcher | null = null;
   /** Get Fired: called once when the run ends, instead of the daily report. */
   onFiredEnd: (() => void) | null = null;
+  /** Breakable yard and field props (yard-props.ts): everything stands again, with the day's bins and laundry. */
+  yard: { reset(day: number): void } | null = null;
   /** Get Fired: each shift step while the day runs, before the 18:00 check (world seconds; 0 while paused). */
   onUpdate: ((dt: number) => void) | null = null;
   private rutMark = 0; private speed = 0;
@@ -81,8 +97,9 @@ export class Shift {
   constructor(private readonly props: Props | null, private readonly mail: Mail, private readonly roads: Roads,
     private readonly terrain: Terrain, buildings: Building[], village: [number, number], private readonly low: boolean,
     params: URLSearchParams, private readonly restart: () => void, private readonly routeEnabled = true, readonly fired = false, fixedDay = 0) {
-    this.roadsideReport.hidden = true;
-    document.getElementById('reportMissed')!.after(this.roadsideReport);
+    this.roadsideReport.hidden = this.bossReport.hidden = true;
+    this.bossReport.id = 'reportBoss';
+    document.getElementById('reportMissed')!.after(this.roadsideReport, this.bossReport);
     this.career = this.routeEnabled ? readCareer() : freshCareer();   // an area with no route never touches the saved Mabou career
     const requested = Number(params.get('day'));
     if (Number.isSafeInteger(requested) && requested > 0) {
@@ -153,11 +170,17 @@ export class Shift {
     this.cleanIndex = -1; this.cleanTime = this.uiTimer = this.paperTimer = this.flashTimer = this.photoCooldown = 0;
     this.damage.reset();
     // A box that was down before the shift is not the player's offence.
-    this.complaints = new Complaints(c => { if (c.kind === 'sceneAnimal') this.animalAt = c.at / CLOCK_FACTOR; if (!c.preExisting) this.reportScore(c.kind, c.x, c.z, this.speed, this.landing.set ? this.landing : undefined); }); this.evidence.photos.length = 0;
+    this.complaints = new Complaints(c => {
+      if (c.kind === 'sceneAnimal') this.animalAt = c.at / CLOCK_FACTOR;
+      if (c.preExisting) return;
+      const landing = this.landing.set ? this.landing : undefined;
+      if (this.watcher?.saw(c, landing)) c.seen = true;
+      this.reportScore(c.kind, c.x, c.z, this.speed, landing);
+    }); this.evidence.photos.length = 0;
     this.score.clear(); this.rutMark = this.speed = 0;
     this.animalAt = -Infinity; this.driftPlace = '';
     this.tag.hidden = true; this.flash.classList.remove('exposed'); this.report.hidden = true;
-    this.ruts.reset(); this.mail.reset(); this.props?.resetShift();
+    this.ruts.reset(); this.mail.reset(); this.props?.resetShift(); this.yard?.reset(this.career.day);
     this.run = this.route.forDay(this.career.day, this.forcedRun);
     this.passed.clear();
     this.today = makeDay(this.career.day, (this.props?.mail.length ?? 0) + (this.props?.sites.length ?? 0),
@@ -213,6 +236,15 @@ export class Shift {
     const place = this.placeAt(x, z);
     this.score.report({ kind, place: place === 'route' && also ? this.placeAt(also.x, also.z) : place, speed: Math.abs(speed), time: this.elapsed / CLOCK_FACTOR,
       x, z, witnessed: this.witness(x, z) });
+  }
+  /** A yard or field prop broke: one score fact, a strike beside it when a rolling bale did it (a combo), and one call
+   *  per property per day. `kind` is the prop's score kind (yard-props-rules.ts scoreKind); `speed` is the hit speed
+   *  (the car's, or the rolling bale's for a strike). */
+  propBroken(kind: string, owner: number, x: number, z: number, speed: number, byBale = false): void {
+    if (this.ended) return;
+    this.reportScore(kind, x, z, speed);
+    if (byBale) this.reportScore(BALE_STRIKE, x, z, speed);
+    if (owner >= 0) this.add(DAMAGE_COMPLAINT, owner, x, z, this.elapsed);
   }
   /** A finished drift (drift-rules.ts) as one fact. Its place is the first protected place it touched (start, end or any
    * frame between); an animal that had to get out of the way while it lasted makes it an animal's event, which never scores. */
@@ -360,7 +392,9 @@ export class Shift {
       }
     }
     const upheld = this.complaints.all.filter((c) => !dismissed(c, this.evidence.photos));
-    const outcome = verdict(upheld); this.next = nextCareer(this.career, outcome, this.damage.total);
+    // What the Boss saw on a ride-along day adds to the verdict; the career rules stay the verdict's.
+    const base = verdict(upheld), outcome = this.watcher ? this.watcher.verdict(base) : base;
+    this.next = nextCareer(this.career, outcome, this.damage.total);
     // Other runs retain their undelivered bundles until that customer's next visit.
     for (const stop of this.run.stops) this.next.carryover[stop.index] = this.remaining[stop.index];
     // Dense arrays survive JSON round trips and storage validation.
@@ -373,7 +407,9 @@ export class Shift {
     const stats = document.getElementById('reportStats')!; stats.replaceChildren();
     for (const [label, value] of [['Stops done', `${this.done} / ${this.stops}`], ['Pieces delivered', this.mail.delivered],
       ['Parcels delivered indoors', this.indoorParcels], ['Pieces on ground', this.mail.lawn + this.mail.ditch], ['Mailboxes down', this.mail.down],
-      ['Lawns damaged', this.complaints.all.filter((c) => c.kind === 'lawnDamage').length], ['Photos taken', this.evidence.photos.length],
+      ['Lawns damaged', this.complaints.all.filter((c) => c.kind === 'lawnDamage').length],
+      ...(this.complaints.all.some((c) => c.kind === DAMAGE_COMPLAINT) ? [['Yards damaged', this.complaints.all.filter((c) => c.kind === DAMAGE_COMPLAINT).length]] : []),
+      ['Photos taken', this.evidence.photos.length],
       ...(this.roadsideScore ? [['Roadside score', this.roadsideScore]] : []), ['Last delivery', this.lastDelivery === null ? 'None' : clock(this.lastDelivery)], ['Daily pay', `$${DAILY_PAY}`], ['Vehicle allowance', `$${VEHICLE_ALLOWANCE}`], ['Allowance less repairs', money(VEHICLE_ALLOWANCE - this.damage.total)], ['Day pay', money(DAILY_PAY + VEHICLE_ALLOWANCE - this.damage.total)], ['Total pay', `$${this.next.pay}`]]) {
       const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = String(label); dd.textContent = String(value); stats.append(dt, dd);
     }
@@ -385,6 +421,8 @@ export class Shift {
     document.getElementById('repairTotal')!.textContent = `Repairs total: ${money(this.damage.total)} · Allowance left: ${money(VEHICLE_ALLOWANCE - this.damage.total)}`;
     this.roadsideReport.textContent = this.roadside.map(s => s.reportLine()).filter(Boolean).join(' ');
     this.roadsideReport.hidden = !this.roadsideReport.textContent;
+    this.bossReport.textContent = this.watcher?.report().join(' ') ?? '';
+    this.bossReport.hidden = !this.bossReport.textContent;
     const missed = document.getElementById('reportMissed')!;
     missed.textContent = `Stops missed: ${this.remaining.filter((n) => n > 0).length} · carried over to tomorrow`;
     document.getElementById('reportConsequence')!.textContent = (outcome === 'suspension'
@@ -396,7 +434,7 @@ export class Shift {
       const row = document.createElement('li'), customer = document.createElement('strong'), quote = document.createElement('p'), status = document.createElement('small');
       const closed = dismissed(c, this.evidence.photos);
       row.className = closed ? 'closed' : 'upheld'; customer.textContent = c.customer; quote.textContent = `“${c.line}”`;
-      status.textContent = closed ? 'Photo on file. Complaint closed.' : 'UPHELD' + (c.kind === 'late' || c.kind === 'flag' || c.kind === 'indoors' || c.kind === 'relief' ? ' · No defence accepted.' : ' · No earlier photo explains this.');
+      status.textContent = closed ? 'Photo on file. Complaint closed.' : 'UPHELD' + (c.seen ? ' · Seen by the Boss. No photo accepted.' : c.kind === 'late' || c.kind === 'flag' || c.kind === 'indoors' || c.kind === 'relief' || c.kind === DAMAGE_COMPLAINT ? ' · No defence accepted.' : ' · No earlier photo explains this.');
       row.append(customer, quote, status); calls.append(row);
     }
     if (this.complaints.groundOverflow) {

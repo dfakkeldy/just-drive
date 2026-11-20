@@ -24,6 +24,11 @@ assert.equal(verdict([{ kind: 'missing' }, ...Array(6).fill({kind:'flag'}), {kin
 assert.equal(verdict([{ kind: 'missing' }, {kind:'stuffed'}, {kind:'late'}, {kind:'flag'}]), 'warning');
 assert.equal(verdict([{ kind: 'missing' }, { kind: 'boxDown' }, { kind: 'ditchMail' }]), 'suspension');
 assert.equal(verdict([{ kind: 'lawnDamage' }]), 'suspension');
+// Property damage (a broken yard or field prop): avoidable; one property is a warning, two in a day a suspension; no photo answers it.
+assert.equal(verdict([{ kind: 'propertyDamage' }, { kind: 'late' }, { kind: 'flag' }]), 'warning');
+assert.equal(verdict([{ kind: 'propertyDamage' }, { kind: 'propertyDamage' }]), 'suspension');
+assert.equal(verdict([{ kind: 'propertyDamage' }, { kind: 'missing' }]), 'warning');
+assert.equal(dismissed({ ...lawn, kind: 'propertyDamage' }, [photo(90), photo(90, { ...cat, kind: 'obstacle' })]), false);
 const next = nextCareer(freshCareer(), 'suspension');
 assert.equal(next.day, 3); assert.equal(next.double, true); assert.equal(next.pay, 345); assert.equal(next.suspended, true);
 assert.equal(nextCareer(next, 'clear').pay, 690); assert.equal(nextCareer(next, 'clear').day, 4);
@@ -45,7 +50,7 @@ for(let n=0;n<=60;n++){
 const complaints=new Complaints();
 for(let target=0;target<12;target++) for(const kind of ['lawnMail','ditchMail']) complaints.add({...lawn,target,kind});
 assert.equal(complaints.all.length,5);assert.equal(complaints.groundOverflow,7);
-for (const kind of ['lawnDamage', 'boxDown', 'lawnMail', 'ditchMail', 'missing', 'stuffed', 'flag', 'late']) {
+for (const kind of ['lawnDamage', 'propertyDamage', 'boxDown', 'lawnMail', 'ditchMail', 'missing', 'stuffed', 'flag', 'late']) {
   assert.equal(new Set(Array.from({ length: 4 }, (_, i) => complaintLine(kind, i + 1, 8))).size >= (kind === 'flag' ? 2 : 4), true);
 }
 assert.equal(clock(0), '10:00'); assert.equal(clock(8 * 3600), '18:00');

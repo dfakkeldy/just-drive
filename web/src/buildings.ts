@@ -53,6 +53,9 @@ export interface BuildingStyle {
   door?: string;
   rollUpDoor?: boolean;
   boardAndBatten?: boolean;
+  metalCladding?: boolean;
+  bareEnd?: { side: -1 | 1; wall: string };
+  barnDoors?: number;
   solarSide?: -1 | 1;
   steppedShed?: boolean;
   windowWall?: boolean;
@@ -72,6 +75,10 @@ const isStyle = (s: unknown): s is BuildingStyle => {
   if (!['chimney', 'dormer', 'shutters', 'satelliteDish', 'skirting', 'silo'].every((k) => typeof s[k] === 'boolean')) return false;
   if (s.door !== undefined && !isPaint(s.door)) return false;
   if (![s.rollUpDoor, s.boardAndBatten, s.steppedShed, s.windowWall, s.doorWindows].every((value) => value === undefined || typeof value === 'boolean')) return false;
+  if (s.metalCladding !== undefined && typeof s.metalCladding !== 'boolean') return false;
+  if (s.bareEnd !== undefined && (!isRecord(s.bareEnd) || !isPaint(s.bareEnd.wall) ||
+      (s.bareEnd.side !== -1 && s.bareEnd.side !== 1))) return false;
+  if (s.barnDoors !== undefined && (typeof s.barnDoors !== 'number' || ![1, 2, 3, 4, 5].includes(s.barnDoors))) return false;
   if (s.solarSide !== undefined && s.solarSide !== -1 && s.solarSide !== 1) return false;
   if (s.roofShape !== undefined && !['flat', 'gable', 'hip', 'gambrel'].includes(String(s.roofShape))) return false;
   if (s.front !== undefined && (!isRecord(s.front) || typeof s.front.end !== 'boolean' || (s.front.side !== -1 && s.front.side !== 1))) return false;
@@ -174,7 +181,8 @@ export class Buildings {
   /** World boxes [x0, z0, x1, z1] under the buildings, so the terrain's tree layer is removed there. */
   readonly clear: number[][] = [];
 
-  constructor(list: Building[], village: [number, number], exag: number, seaLevel: number, paint: BuildingPaint | FacadeStudy = {}) {
+  constructor(list: Building[], village: [number, number], exag: number, seaLevel: number, paint: BuildingPaint | FacadeStudy = {},
+    details?: { pos: readonly number[]; col: readonly number[] }) {
     const { styles = {}, study, low, sunDir } = isFacadeStudy(paint) ? paint : { styles: paint, study: undefined, low: false, sunDir: undefined };
     const pos: number[] = [], col: number[] = [];
     const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, colourA: RGB, shade = 1, colourB = colourA, colourC = colourA) => {
@@ -245,6 +253,7 @@ export class Buildings {
       // THREE.Color converts sRGB hex paint to the linear vertex colours expected by the material.
       const rgb = (hex: string): RGB => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
       const wall = style ? rgb(style.wall) : WALLS[b.kind][Math.floor(hash(identity) * WALLS[b.kind].length)];
+      const endWall = (side: number) => style?.bareEnd?.side === side ? rgb(style.bareEnd.wall) : wall;
       const roofPalette = b.kind === 'barn' ? [ROOFS[3], ROOFS[4], ROOFS[5]] : ROOFS;
       const roof = style ? rgb(style.roof) : roofPalette[Math.floor(hash(identity + 0.5) * roofPalette.length)];
       const foot = -3;   // walls run below the ground line, so a slope never shows a gap
@@ -258,8 +267,8 @@ export class Buildings {
       const wallStart = pos.length / 3;
       shellWall(P(-L, -W, foot), P(L, -W, foot), P(L, -W, e), P(-L, -W, e), wall, 0.92);
       shellWall(P(L, W, foot), P(-L, W, foot), P(-L, W, e), P(L, W, e), wall, 0.92);
-      shellWall(P(L, -W, foot), P(L, W, foot), P(L, W, e), P(L, -W, e), wall);
-      shellWall(P(-L, W, foot), P(-L, -W, foot), P(-L, -W, e), P(-L, W, e), wall);
+      shellWall(P(L, -W, foot), P(L, W, foot), P(L, W, e), P(L, -W, e), endWall(1));
+      shellWall(P(-L, W, foot), P(-L, -W, foot), P(-L, -W, e), P(-L, W, e), endWall(-1));
       closedWallRanges?.push(wallStart, pos.length / 3);
       const trim: RGB = style ? rgb(style.trim) : b.kind === 'house' ? [0.79, 0.77, 0.69] : [0.56, 0.54, 0.47];
       const foundation: RGB = style?.skirting ? rgb('#dddeda') : [0.23, 0.23, 0.21];
@@ -360,8 +369,8 @@ export class Buildings {
         for (const side of [-1, 1]) tri(P(side * L, -W, e), P(side * L, W, e), P(side * L, W, r), wall);
       } else {
         const gableStart = pos.length / 3;
-        shellEnd(P(L, -W, e), P(L, W, e), P(L, 0, r), wall);
-        shellEnd(P(-L, W, e), P(-L, -W, e), P(-L, 0, r), wall);
+        shellEnd(P(L, -W, e), P(L, W, e), P(L, 0, r), endWall(1));
+        shellEnd(P(-L, W, e), P(-L, -W, e), P(-L, 0, r), endWall(-1));
         closedWallRanges?.push(gableStart, pos.length / 3);
         const drop = (over * (r - e)) / W;
         roofFace(-L - over, L + over, -W - over, 0, e - drop, r);
@@ -406,12 +415,15 @@ export class Buildings {
       nearPaint?.(cornerStart);
       // Shallow clapboard courses, kept behind openings and corner trim.
       // Muted bands suggest weathered shingles without adding a texture or draw call.
-      if (style?.boardAndBatten) {
+      if (style?.boardAndBatten || style?.metalCladding) {
         for (const side of [-1, 1]) for (const end of [false, true]) {
           const span = end ? W : L;
-          for (let u = -span + 0.28; u < span - 0.14; u += 0.42) {
-            const raised: RGB = [wall[0] * 1.15, wall[1] * 1.14, wall[2] * 1.12];
-            panel(end, side, u, u + 0.046, 0.38, e, raised, 0.022);
+          const base = end ? endWall(side) : wall;
+          const raised: RGB = [base[0] * 1.15, base[1] * 1.14, base[2] * 1.12];
+          const spacing = style.metalCladding ? 0.65 : 0.42;
+          for (let u = -span + 0.28; u < span - 0.14; u += spacing) {
+            const high = end && style.metalCladding && shape === 'gable' ? e + (r - e) * (1 - Math.abs(u) / W) - 0.06 : e;
+            panel(end, side, u, u + 0.046, 0.38, high, raised, 0.022);
           }
         }
       } else if (!simpleSiding && (b.kind === 'house' || b.kind === 'barn')) {
@@ -533,13 +545,23 @@ export class Buildings {
           box(u - 0.34, u + 0.34, v - 0.32, v + 0.32, roofY + 1.05, roofY + 1.16, foundation);
         }
       } else if (b.kind === 'barn') {
-        const wide = Math.min(4.5, b.width * 0.55), tall = Math.min(3.3, e - 0.2);
-        if (tall > 0.8) {
-          opening(true, 1, 0, 0.05, wide, tall, true);
-          panel(true, 1, -0.035, 0.035, 0.05, tall, trim, 0.067);
-          panel(true, 1, -wide * 0.65, wide * 0.65, tall + 0.2, tall + 0.28, foundation, 0.07);
+        const doorCount = style?.barnDoors ?? 1;
+        const frontEnd = style?.barnDoors ? style.front?.end ?? true : true;
+        const front = style?.barnDoors ? style.front?.side ?? 1 : 1;
+        const span = frontEnd ? b.width : b.length;
+        const stride = span / doorCount;
+        const wide = Math.min(4.5, stride * (style?.barnDoors && frontEnd ? 0.25 : 0.55));
+        const tall = Math.min(3.3, e - 0.2);
+        for (let i = 0; i < doorCount && tall > 0.8; i++) {
+          const u = stride * (i + 0.5) - span / 2;
+          opening(frontEnd, front, u, 0.05, wide, tall, true);
+          if (!style?.barnDoors || wide > 2) panel(frontEnd, front, u - 0.035, u + 0.035, 0.05, tall, trim, 0.067);
+          panel(frontEnd, front, u - wide * 0.65, u + wide * 0.65, tall + 0.2, tall + 0.28, foundation, 0.07);
         }
-        for (const side of [-1, 1]) for (const u of [-L * 0.55, L * 0.55]) if (e > 2.2) opening(false, side, u, e * 0.5, 0.7, 0.65);
+        for (const side of [-1, 1]) {
+          if (!frontEnd && side === front) continue;
+          for (const u of [-L * 0.55, L * 0.55]) if (e > 2.2) opening(false, side, u, e * 0.5, 0.7, 0.65);
+        }
       } else if (b.kind === 'large' && style && b.shape !== 'block') {
         // Low apartments and village shops need a readable rhythm of doors and windows too. A block is one part of a
         // large mapped hall (big_buildings.py: plants, malls, arenas; some over 60 m high): it keeps the plain end door below.
@@ -602,6 +624,11 @@ export class Buildings {
         this.clear.push([Math.min(...corners.map((p) => p.x)), Math.min(...corners.map((p) => p.z)), Math.max(...corners.map((p) => p.x)), Math.max(...corners.map((p) => p.z))]);
       }
       this.clear.push(...clearBoxes(b, village, 2.5));
+    }
+    // Hand-built roofs and park props share the ordinary building draws and their water reflection.
+    if (details) {
+      for (const value of details.pos) pos.push(value);
+      for (const value of details.col) col.push(value);
     }
     this.triangles = pos.length / 9;
     const geo = new THREE.BufferGeometry();

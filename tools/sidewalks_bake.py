@@ -320,17 +320,25 @@ def bake():
 # exactly that receipt's after bytes stands for the bytes it replaced, and its manifest (only the counts the receipt owns
 # change) for the same manifest with those counts set back.
 NOV18=ROOT/'tools/mabou-dashcam-18nov/hashes.json'
+NOV19=ROOT/'tools/mabou-wharf/roads.json'
 
 def nov18_stands_for(file,digest,cached,root=ROOT,report=None):
-    report=report or json.loads(NOV18.read_text())
-    for f in report['files']:
-        if file=='data/baked/'+f['file']:return digest==f['sha256'] and cached==f['before']
-    for m in report['manifests']:
-        if file!=f"data/baked/{m['folder']}/manifest.json":continue
-        manifest=json.loads((root/file).read_bytes())
-        if any(manifest[k]['count']!=v['count'] for k,v in m['after'].items()):return False
-        for k,v in m['before'].items():manifest[k]['count']=v['count']
-        return hashlib.sha256((json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()).hexdigest()==cached
+    reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, NOV18) if p.exists()]
+    for current in reports:
+        for f in current['files']:
+            if file == 'data/baked/' + f['file'] and digest == f['sha256']:
+                digest = f['before']
+                if digest == cached:
+                    return True
+        for m in current['manifests']:
+            if file != f"data/baked/{m['folder']}/manifest.json" or m['before'] == m['after']:
+                continue
+            manifest = json.loads((root/file).read_bytes())
+            if any(manifest[k]['count'] != v['count'] for k,v in m['after'].items()):
+                return False
+            for k,v in m['before'].items():
+                manifest[k]['count'] = v['count']
+            return hashlib.sha256((json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()).hexdigest() == cached
     return False
 
 def nov18_cases():

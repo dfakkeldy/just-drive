@@ -21,7 +21,7 @@ async function models(overrides={}) {
 async function run(source,model,brand,mailMode=false){
  const expr=calls(source),out={};const roads={deckHeight:()=>null,roads:[{kind:1,name:'Mabou Mines Road',halfWidth:3,pts:[[0,0],[1200,0]]}]};
  const terrain={clear:[],heightAt:()=>0,surfaceAt:()=>({ground:0,level:6})};
- const context={...model,ERA:{modern:true},document,scene:{},LOW:true,bare:false,params:new URLSearchParams(),touchDevice:false,multiplayerSwitch:host=>host,SITE:{brand,area:'mabou'},AREA:{route:true,id:'mabou'},EXAG:1.5,SEA_LEVEL:1,mailMode,roads,terrain,manifest:{mid:[-1000,-1000,1000,1000],village:[0,0]},VE:0,VN:0,EDGE:120,vehicleSpec:{envelope:{nose:3.2}},vehicle:{bounds:[-1000,-1000,1000,1000]},garageEntry:model.GARAGE[0]};
+ const context={...model,ERA:{modern:true},document,scene:{},LOW:true,bare:false,params:new URLSearchParams(),touchDevice:false,multiplayerSwitch:host=>host,roomQuiet:()=>[],SITE:{brand,area:'mabou'},AREA:{route:true,id:'mabou'},EXAG:1.5,SEA_LEVEL:1,mailMode,roads,terrain,manifest:{mid:[-1000,-1000,1000,1000],village:[0,0]},VE:0,VN:0,EDGE:120,vehicleSpec:{envelope:{nose:3.2}},vehicle:{bounds:[-1000,-1000,1000,1000]},garageEntry:model.GARAGE[0]};
  for(const label of ['Edge','MineSite','car']) {
   drawn=[];const code=(await transform('globalThis.result = '+expr[label],{loader:'ts',target:'es2022'})).code;const c=vm.createContext(context);vm.runInContext(code,c);
   if(label!=='car') c.result.update(new model.THREE.Vector3(900,0,0));

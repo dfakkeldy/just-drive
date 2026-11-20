@@ -9,6 +9,3 @@ export function deckWithinReach(deck:number|null, referenceY?:number):deck is nu
 export function deckCounts(deck:number|null, referenceY:number|undefined, cartRoads:boolean|undefined):deck is number {
   return cartRoads ? deck!==null : deckWithinReach(deck,referenceY);
 }
-
-/** Runtime-only paint mask. Bit 16 remains the source bridge flag; bit 32 is washboard. */
-export const BRIDGE_PAINT_MASK = 64;

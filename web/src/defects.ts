@@ -13,9 +13,10 @@ export function setDiagnosticPotholes(enabled: boolean): void {
   diagnosticPotholes = enabled;
 }
 
-/** Share of cells that hold a pothole, by road kind (1 highway, 2 paved, 3 gravel, 4 track). */
-export function potholeDensity(kind: number, washboard: boolean): number {
-  const base = kind === 1 ? 0.17 : kind === 2 ? 0.28 : kind === 3 ? 0.42 : kind === 4 ? 0.36 : 0;
+/** Share of cells that hold a pothole, by road kind (1 highway, 2 paved, 3 gravel, 4 track). A gravel driveway (a track
+ *  that surfaceAt marks gravel) is drawn as a gravel road (terrain.ts drawnRoadBytes), so it holds a gravel road's holes. */
+export function potholeDensity(kind: number, washboard: boolean, gravel = false): number {
+  const base = kind === 1 ? 0.17 : kind === 2 ? 0.28 : kind === 3 || (kind === 4 && gravel) ? 0.42 : kind === 4 ? 0.36 : 0;
   return base + (washboard ? 0.2 : 0);
 }
 

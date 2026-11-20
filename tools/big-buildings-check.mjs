@@ -163,6 +163,22 @@ const round = (id, e, n, diameter, eave, ridge, roof) => block(id, e, n, diamete
   }
   assert.ok(Math.abs(covered - 12000) < 400 && cleared < 1.9 * covered, `the hall clears ${cleared} m2 for ${covered} m2 of roof`);
   roofed(block(3, V[0], V[1], 60, 30, 110, 6, 11, 'gable'), V, .8);
+  // A baked colour (step 30) repaints a block but gives it no door and window grid: a block is one part of a large mapped
+  // hall (plants, malls, arenas), and the house-scale window grid is only for a large building without a shape (#1288).
+  // The paint is shingle on purpose: a metal roof adds seams, which is not what this pins.
+  {
+    const paint = { wall: '#5f6f7a', roof: '#8e9493', trim: '#e5e5dd', roofMaterial: 'shingle', entrance: 'none', chimney: false, dormer: false,
+      shutters: false, satelliteDish: false, skirting: false, silo: false };
+    const positions = (b, styles) => {
+      const model = new Buildings([b], V, 1, 0, styles), out = [...model.mesh.geometry.getAttribute('position').array];
+      dispose(model);
+      return out;
+    };
+    const hallBlock = block(6, V[0] + 40, V[1] - 60, 80, 30, 20, 9, 9, 'flat');
+    assert.deepEqual(positions(hallBlock, { 6: paint }), positions(hallBlock, {}), 'a styled block gets no door and window grid: it draws the same shape as an unstyled one');
+    const { shape, ...shop } = hallBlock;
+    assert.ok(positions(shop, { 6: paint }).length > positions(shop, {}).length, 'a styled large building without a shape gets its doors and windows');
+  }
   // The 1884 scene. A large building of two long turned blocks, a tank, and a house with a wing. Each block clears
   // its own cells. (Before, the scene got one record per building and cleared the square round the first block: the
   // second block stayed under trees, and forest beside the first was cleared.)

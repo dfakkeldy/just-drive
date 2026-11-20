@@ -24,7 +24,7 @@ export const PARK_BOARDS:Board[]=[
       {e:632124,n:5064100,width:3,height:1.1,yaw:Math.PI/2,lines:['EAST TOP  ↑','SOUTH PIT  ↓']},
     ];
 
-/** Invented park fixtures. Course pads are deliberately reserved for the separate stunt kit. */
+/** Invented park fixtures. Course pads sit clear of the quarry fixtures. */
 export class Quarry {
   readonly group=new THREE.Group();
   readonly fixtures=new THREE.Group();

@@ -170,7 +170,7 @@ export class Vehicle {
       for(const p of this.groundContacts){
         if(p.height===null){known=false;break;}
         let h=p.height;const sw=this.terrain.surfaceAt(p.x,p.z,this.y);
-        if(this.spec.locomotion !== 'horse'&&sw&&sw.kind>0&&sw.roadDist<=sw.halfWidth-.2){h-=potholeDepth(p.x,p.z,potholeDensity(sw.kind,sw.washboard));if(sw.washboard)h-=washboard(p.x*ax+p.z*az);}
+        if(this.spec.locomotion !== 'horse'&&sw&&sw.kind>0&&sw.roadDist<=sw.halfWidth-.2){h-=potholeDepth(p.x,p.z,potholeDensity(sw.kind,sw.washboard,sw.gravel));if(sw.washboard)h-=washboard(p.x*ax+p.z*az);}
         sum+=h;
       }
       if(known){this.y=this.prevGround=sum/4;this.vy=0;this.captureGround();}
@@ -379,7 +379,7 @@ export class Vehicle {
       if (this.spec.locomotion === 'horse') return g;
       const sw = this.terrain.surfaceAt(wx, wz,this.y);
       if (!sw || sw.kind === 0 || sw.roadDist > sw.halfWidth - 0.2) return g;
-      let d = potholeDepth(wx, wz, potholeDensity(sw.kind, sw.washboard));
+      let d = potholeDepth(wx, wz, potholeDensity(sw.kind, sw.washboard, sw.gravel));
       if (d > deepest) deepest = d;
       if (sw.washboard) d += washboard(wx * ax + wz * az);
       return g - d;

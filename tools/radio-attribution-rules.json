@@ -214,6 +214,23 @@
         "stock voices",
         "not real people"
       ]
+    },
+    {
+      "group": "author-ai",
+      "sources": [
+        "fresh-eyes-electro",
+        "fresh-eyes-disco",
+        "fresh-eyes-ska",
+        "fresh-eyes-beat",
+        "fresh-eyes-hiphop",
+        "fresh-eyes-talking-blues",
+        "fresh-eyes-folk"
+      ],
+      "requires": [
+        "the author",
+        "Claude",
+        "ElevenLabs Music"
+      ]
     }
   ]
 }

@@ -64,6 +64,21 @@ await ok('an honest run is taken, scored again by the rules, and its row holds o
   assert.equal(v.row.time, v.result.firedAt ?? DAILY_LIMIT);
 });
 
+await ok('a run that fills the whole card is paid every line and the full card on the server', () => {
+  // Deterministic, so it does not depend on random runs reaching a full card (they draw from every scoring kind,
+  // and more kinds make a full card rarer).
+  const plan = dailyPlan(DATE, 'mabou'), squares = drawCard(plan.seed, supplyFor(plan, ALL)), events = []; let t = 2;
+  for (const s of squares) for (let k = 0; k < s.need; k++) { events.push([s.kind, t]); t += 2.5; }
+  const v = judge(makePost(events));
+  assert.equal(v.ok, true, JSON.stringify(v)); assert.equal(v.result.filled, 511, 'every square filled');
+  const book = new ScoreBook(), card = new BingoCard(squares);
+  for (const [kind, time] of events) {
+    const e = { kind, place: 'route', speed: 0, time }; book.add(e);
+    const h = card.hear(e); if (h.lines) book.award('bingo:line', h.lines * 600); if (h.full) book.award('bingo:card', 3000);
+  }
+  assert.equal(card.full, true); assert.equal(v.row.points, Math.round(book.total), 'eight lines and the full card paid');
+});
+
 await ok('the server stores its own score: a lower claim is taken at the rules’ points; a higher one, or a faster Fired, is refused', () => {
   // A run that leaves a square open (so a claim of an extra square means something).
   let n = 2; while (judge(makePost(honest(rng(n)))).result.filled === 511) n++;

@@ -88,6 +88,9 @@ node "$ROOT/tools/build-pwa.mjs" "$SITE"
 # The About and Help pages of each brand (served at /about and /help on each host by the Worker).
 node "$ROOT/tools/about-pages.mjs" "$SITE"
 for page in about help; do for brand in mail just; do [ -s "$SITE/$page/$brand/index.html" ] || { echo "$page: $brand page missing" >&2; exit 1; }; done; done
+# The Just Drive front page: a map of the places, served at the exact root of the Just Drive host by the Worker.
+node "$ROOT/tools/just-home.mjs" "$SITE"
+[ -s "$SITE/just/home/index.html" ] || { echo 'just-home: page missing' >&2; exit 1; }
 # Just Listen: the radio alone, one light page at /listen/ on both hosts. It reads the audio folder above and is in no
 # offline download (build-pwa.mjs has already made its list of files).
 node "$ROOT/tools/listen-page.mjs" "$SITE"

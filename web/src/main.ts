@@ -23,6 +23,8 @@ import { fleetEnabled, fleetRig } from './fleet-models';
 import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { isHillsideBuilding, NovemberBuildings } from './november-buildings';
+import { NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
@@ -75,6 +77,8 @@ import { BUS } from './school-bus-rules';
 import { SceneRoad } from './road-scene-rules';
 import { BUS_STOP_RADIUS, churchZones, placeAt } from './score-rules';
 import { FiredRun } from './fired';
+import { YardProps } from './yard-props';
+import { placeYard, scoreKind, SIZE as YARD_SIZE } from './yard-props-rules';
 import { DailyRun } from './daily';
 import { atlanticDate, CARD_SIZE, dailyArea, dailyPlan, drawCard, supplyFor, type Square } from './daily-rules';
 import { PartyLine, fetchCalls } from './party-line';
@@ -83,6 +87,7 @@ import { inventedName } from './mp/social';
 import { DriftFeedback } from './drift-feedback';
 import { phoneHandbrake } from './drift-rules';
 import { Boss, bossEnabled } from './boss';
+import { RideAlong, rideAlongEnabled } from './ride-along';
 import { Occluders } from './boss-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
@@ -114,6 +119,7 @@ import { createTitle } from './title';
 import { Endings } from './ending';
 import { YardJob } from './yard-job';
 import { FishingSite } from './fishing-site';
+import { wharfBuildingArt } from './mabou-wharf-buildings';
 import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
@@ -133,6 +139,8 @@ import { HomeSite } from './home-site';
 import { PorchDog } from './porch-dog';
 import { YardDogSite } from './yard-dog-site';
 import { YardDog } from './yard-dog';
+import { LotProps } from './lot-props';
+import { chooseLotProps } from './lot-props-rules';
 import { PorchHouse } from './porch-house';
 import { PorchSite } from './porch-site';
 import { ChurchSite } from './church-site';
@@ -349,20 +357,28 @@ const buildingList: Building[] | null = manifest.buildings ? await getJson(manif
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
-const buildingStyles = ERA.modern && manifest.buildingStyles
-
-  ? buildingAppearance(astra, LOW, sunDir, await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
-    .catch((e: unknown) => { console.warn('building styles', e); return undefined; }))
-  : buildingAppearance(astra, LOW, sunDir);
+const bakedBuildingStyles = ERA.modern && manifest.buildingStyles
+  ? await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
+    .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
+  : undefined;
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
 const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
-const buildings = ERA.modern && drawnBuildings ? new Buildings(mabouSite ? mabouSite.drawn(drawnBuildings) : drawnBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
+const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir,
+  wharfArt ? { ...bakedBuildingStyles, ...wharfArt.styles } : bakedBuildingStyles);
+const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
+const novemberBuildings = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+  ? new NovemberBuildings(AREA.id, properties, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
+const finalBuildings = novemberBuildings && AREA.id === 'mabou' ? sceneryBuildings?.filter(b => !isHillsideBuilding(b)) : sceneryBuildings;
+const buildings = ERA.modern && finalBuildings ? new Buildings(mabouSite ? mabouSite.drawn(finalBuildings) : finalBuildings,
+  manifest.village, EXAG, SEA_LEVEL, buildingStyles, novemberBuildings?.drawing) : null;
 if (buildings) clear.push(...buildings.clear);
+if (novemberBuildings) clear.push(...novemberBuildings.clear);
 if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
@@ -394,7 +410,11 @@ if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get
   terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id)).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
-const stuntPark=await createTestPark(params, terrain, yardSite, LOW, buildingList ?? []);
+const testPark = await createTestPark(params, terrain, yardSite, LOW, buildingList ?? []);
+const quarryStuntPark = quarryFeature && quarrySite && ERA.modern
+  ? quarryFeature.createQuarryStuntPark(terrain, LOW) : null;
+if (quarryStuntPark) await quarryStuntPark.prepare();
+const stuntPark = testPark ?? quarryStuntPark;
 if(stuntPark)scene.add(stuntPark.group);
 if (fishingSite) terrain.sites.push(fishingSite);
 if (homeSite) terrain.sites.push(homeSite);
@@ -420,7 +440,14 @@ if (LOW) terrain.lazyRange = 600;
 if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
-const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far', stockpiles?.excludes) : null;
+const roadData = manifest.roads ? await getJson(manifest.roads.file) : { roads: [] };
+const novemberRoads = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+  ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
+if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
+const treeExcludes = novemberRoads
+  ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
+  : stockpiles?.excludes;
+const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far', treeExcludes) : null;
 if (trees) scene.add(trees.group);
 scene.add(terrain.group);
 const [VE, VN] = manifest.village;
@@ -455,8 +482,7 @@ if (waterReflections) {
   Object.assign(terrain.uniforms, waterReflections.uniforms);
 }
 
-const roadData = manifest.roads ? await getJson(manifest.roads.file) : { roads: [] };
-const roads = new Roads(roadData, manifest.village, terrain);
+const roads = new Roads(novemberRoads?.added.length ? { roads: [...roadData.roads, ...novemberRoads.added] } : roadData, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
   ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW,
     // A modern bridge build moves the ground through its road cuts without a dataRevision change (both only grow).
@@ -587,6 +613,25 @@ const yardDogSite = ERA.modern && AREA.id === 'mabou' && buildingList && props ?
   excluded: [...terrain.sites.flatMap(s=>s.sitingBoxes??[s.box]), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
 }) : null;
 if (yardDogSite) { clear.push(...yardDogSite.clear); terrain.sites.push(yardDogSite); }
+// Lot props at houses: parked cars, SUVs and pickups, now and then a trailer, a motorhome or a ride-on mower, and a few
+// farm dogs. Chosen by a seeded rule from the map's house ids alone (lot-props-rules.ts), never from what stands at a
+// real house; each on its own house's lot, clear of roads, drives and the hand-built sites. ?lotprops=0 leaves them out.
+const lotPropList = ERA.modern && buildingList && params.get('lotprops') !== '0' ? chooseLotProps({
+  houses: properties.filter(b => b.kind === 'house').map(b => ({ id: b.buildingId ?? b.id, x: b.x - VE, z: VN - b.y, axis: THREE.MathUtils.degToRad(b.axisDeg),
+    length: b.length, width: b.width, footprint: b.footprint.map(([e, n]): [number, number] => [e - VE, VN - n]) })),
+  buildings: buildingList.map(b => ({ id: b.buildingId ?? b.id, footprint: b.footprint.map(([e, n]): [number, number] => [e - VE, VN - n]) })),
+  roads: roads.roads,
+  // Drawn things a prop must not stand in: power poles, mailboxes and community boxes. Only ever a reason to stand
+  // elsewhere, never a reason to choose a house.
+  obstacles: props ? [...props.poleSites, ...props.mail, ...props.sites].map(p => [p.x, p.z] as [number, number]) : [],
+  excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...[villageSite, hawkesburySite, mabouSite].flatMap(s => s?.clear ?? [])],
+}) : [];
+// No single tree stands in a parked car; the canopy is left as it is.
+// Kept apart: these only clear trees. Mail play's breakable yard props must not give way to them (they give way to those).
+const lotTreeClear = new Set<number[]>();
+for (const p of lotPropList) { const r = Math.hypot(p.half, p.halfWidth) + 0.6, box: [number, number, number, number] = [p.x - r, p.z - r, p.x + r, p.z + r]; lotTreeClear.add(box); terrain.addTreeClear(box); }
+const lotProps = lotPropList.length ? new LotProps(lotPropList, terrain, LOW, SEA_LEVEL) : null;
+if (lotProps) scene.add(lotProps.group);
 let garageEntry = readVehicle(params, !mailMode), vehicleSpec = garageEntry.spec;
 // A vehicle whose model is a file (the mail car): its download began at the top of this file. A load that fails must
 // never stop the game: the entry builds its fallback, and a rejection is swallowed here.
@@ -673,12 +718,14 @@ if (yard) fleetContacts.add({ revision: () => yard.collisionVersion(), resolve: 
 if (history) fleetContacts.add({ resolve: body => history.resolve(body as unknown as Vehicle) });
 if (home) fleetContacts.add({ resolve: body => home.resolveSolids(body) });
 if (porch) fleetContacts.add({ resolve: body => porch.resolveSolids(body) });
+if (lotProps) fleetContacts.add({ revision: () => lotProps.dropped, resolve: body => lotProps.resolveSolids(body) });
 if (church) fleetContacts.add({ resolve: body => church.resolveSolids(body) });
 // The optional pack arrives after boot; the registry must see its new solids.
 if (tallKey) fleetContacts.add({ revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) });
 if (village) fleetContacts.add({ resolve: body => village.resolveSolids(body) });
 if (hawkesbury) fleetContacts.add({ resolve: body => hawkesbury.resolveSolids(body) });
 if (mabouMain) fleetContacts.add({ resolve: body => mabouMain.resolveSolids(body) });
+if (novemberBuildings) fleetContacts.add({ resolve: body => novemberBuildings.resolveSolids(body) });
 if (cemeteries) fleetContacts.add({ resolve: body => cemeteries.resolveSolids(body) });
 if (props) fleetContacts.add({ revision: () => props.downCount, resolve: () => {}, allows: body => props.allowsFleetBody(body) });
 if (roads.guardrails) {
@@ -692,8 +739,9 @@ fleetContacts.add({ resolve: () => {}, allows: body => { const b = vehicle.bound
 // LOW (phones) builds the AI from the parked display models, without the car.
 const aiDriver = driverEnabled(AREA.id, ERA.modern, params, import.meta.env.DEV) ? new PointTupperDriver(roads, terrain, fleetContacts, garageEntry.id, SEA_LEVEL, Math.random, undefined, LOW) : null;
 if (aiDriver) scene.add(aiDriver.group);
-// Get Fired's Boss (boss.ts) is built further down, with the run it watches; the physics below already serve it.
-let boss: Boss | null = null;
+// Get Fired's Boss (boss.ts), or in mail play the ride-along Boss (ride-along.ts), is built further down, with the run
+// it watches; the physics below already serve it.
+let boss: Boss | RideAlong | null = null;
 // Time-travel seam: read the live era every call, so a runtime swap to 1884 hides the AI.
 const aiDriverOn = () => driverLive(ERA.modern, !!multiplayer?.choice.on);
 let towing: Towing | null = null;
@@ -705,13 +753,15 @@ let roadsidePlaying = false;
 let hookPlaced = false, jumpPlacement = 0;
 const jumpCheck = import.meta.env.DEV && params.get('jumpCheck') === '1';
 const fishingCheck = import.meta.env.DEV && params.get('fishingCheck') === '1';
+// Breakable yard and field props: built once the shift names its protected places (below).
+let yardProps: YardProps | null = null;
 const resolveYardSolids = () => {
   if (endings.busy) return;
   canal?.resolve(vehicle, canalBeforeX, canalBeforeZ);
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
   boss?.driver.resolve(vehicle);
   if (fleet || quarry || stuntPark) fleetContacts.resolve(vehicle);
-  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
+  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); novemberBuildings?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
   fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
   yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
@@ -723,6 +773,7 @@ const resolveYardSolids = () => {
   if (!fleet && !quarry && !stuntPark) ambientTraffic?.resolve(vehicle);   // otherwise fleetContacts, above, holds the traffic
   schoolBus?.setPaused(scenePaused());
   schoolBus?.step(1 / 120, vehicle, horse ? roadsidePlaying : vehicle.damageActive, jumpPlacement);
+  yardProps?.step(1 / 120, vehicle, started && !shift.ended && !demo && mode === 'drive' && !scenePaused());
   if (fleet) fleet.resolve(); else towing?.step();
 };
 let engineThrottle = 0;   // the pedal the vehicle really got this frame, for the engine sound
@@ -868,7 +919,33 @@ if (shift instanceof Shift) {
   const cemetery = cemeteries ? (x: number, z: number) => cemeteries.excludes(x + manifest.village[0], manifest.village[1] - z) : undefined;
   shift.placeAt = (x, z) => placeAt(x, z, zones, cemetery);
   if (schoolBus) schoolBus.onPass = p => shift.reportScore('schoolBus', p.x, p.z, p.speed);
+  // Breakable yard and field props: mail play and Get Fired only (never Explore or Just Drive); ?yardProps=0 leaves
+  // them out. Their positions are invented by rule from the real building shapes and roads (yard-props-rules.ts).
+  if (ERA.modern && mailMode && params.get('yardProps') !== '0' && properties.length) {
+    const VX = manifest.village[0], VZ = manifest.village[1], houseBoxes = new Set(buildings?.clear ?? []);
+    const near = (kinds: (k: number) => boolean) => (x: number, z: number, reach: number) => {
+      const h = roads.nearest(x, z, reach, r => kinds(r.kind));
+      return h && { dist: h.dist, x: h.x, z: h.z, heading: h.heading, halfWidth: h.road.halfWidth };
+    };
+    const yardList = placeYard({
+      buildings: properties.map(b => ({ id: b.id, x: b.x - VX, z: VZ - b.y, kind: b.kind, axis: b.axisDeg * Math.PI / 180, length: b.length, width: b.width })),
+      mailboxes: [...props?.mail ?? [], ...props?.sites ?? []],
+      publicRoad: near(k => k >= 1 && k <= 3), anyRoad: near(() => true), place: shift.placeAt,
+      // Hand-built sites and landmarks stay clear; ordinary buildings are kept clear by the oriented rule instead
+      // (their own clear boxes would push most yard props out of the yards).
+      excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []),
+        ...clear.filter((b: number[]) => !houseBoxes.has(b) && !lotTreeClear.has(b)).map((b: number[]): [number, number, number, number] => [b[0], b[1], b[2], b[3]])],
+    });
+    yardProps = new YardProps(yardList, terrain, LOW || touchDevice);
+    // No parked car or mower stands in a fence, a clothesline or a woodpile: where these are out, a lot prop on one is left out.
+    lotProps?.clearOf(yardList.map(p => ({ x: p.x, z: p.z, heading: p.yaw, half: YARD_SIZE[p.kind].half, halfWidth: YARD_SIZE[p.kind].halfWidth })));
+    scene.add(yardProps.group);
+    shift.yard = yardProps; yardProps.reset(shift.career.day);
+    yardProps.onBreak = (p, speed, byBale) => shift.propBroken(scoreKind(p.kind), p.owner, p.x, p.z, speed, byBale);
+    yardProps.onImpact = speed => { if (vehicle.damageActive) shift.damage.hit('impact', speed); };
+  }
 }
+if (import.meta.env.DEV) expose({ yardProps }, false);   // for tools/yard-props-browser.mjs; not enumerable: ui-check pins the public key set
 resets[resetSlot.schoolBus] = () => schoolBus?.reset();
 resets[resetSlot.stuntPark]=()=>stuntPark?.reset();
 if (schoolBus) {
@@ -1483,8 +1560,13 @@ const fired = firedMode && shift instanceof Shift && endings instanceof Endings 
 if (fired && DAILY && dailySquares && shift instanceof Shift && endings instanceof Endings) daily = new DailyRun(DAILY, dailySquares, AREA.name, shift, fired, endings, () => pause.resetClock(), dailySupply);
 if (fired && bare) document.getElementById('firedHud')!.style.display = 'none';
 // The Boss: Get Fired only, one car, single player only (bossLive); ?boss=0 leaves it out. Buildings block its sight.
+// Mail play (not Get Fired, so not Today's run; never Just Drive): the Boss rides along on about one day in four, the
+// same days for everybody (ride-along-rules.ts); on other days it stays hidden and sees nothing. ?boss=0 or ?rideAlong=0.
+const bossSight = () => buildings ? new Occluders(buildings.clear as [number, number, number, number][]) : null;
 boss = fired && bossEnabled(firedMode, ERA.modern, params, !!DAILY)
-  ? new Boss(roads, terrain, fleetContacts, SEA_LEVEL, LOW, shift as Shift, fired, buildings ? new Occluders(buildings.clear as [number, number, number, number][]) : null, vehicle, touchDevice) : null;
+  ? new Boss(roads, terrain, fleetContacts, SEA_LEVEL, LOW, shift as Shift, fired, bossSight(), vehicle, touchDevice)
+  : !firedMode && shift instanceof Shift && AREA.route && rideAlongEnabled(gameMode === 'mail', ERA.modern, SITE.brand === 'just', params)
+    ? new RideAlong(roads, terrain, fleetContacts, SEA_LEVEL, LOW, shift, bossSight(), vehicle, touchDevice, params, props) : null;
 // The traffic keeps its distance from every AI car on the road; one shared list, refilled each frame.
 const aiCars: Vehicle[] = [];
 if (boss) {
@@ -1502,6 +1584,7 @@ resets[resetSlot.fishing] = () => fishing?.reset();
 if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
 if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
+if (import.meta.env.DEV) expose({ lotProps }, false);   // for tools/lot-props-browser.mjs; not enumerable: ui-check pins the public key set
 if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
@@ -1526,10 +1609,14 @@ let started = bare || (!plainVisit && !params.has('room') && params.get('title')
 const titleDaily = DAILY && dailySquares ? { date: DAILY.date, squares: dailySquares, vehicle: GARAGE.find(g => g.id === DAILY.vehicle)?.name ?? 'Mail car',
   mood: MOODS.find(([m]) => m === DAILY.mood)?.[1] ?? 'Clear' } : undefined;
 const title = started ? null : createTitle(touchDevice, () => { started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
+// A ride-along day says so on the start card.
+if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
-const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...(cemeteries?.places ?? []), ...(stuntPark?testParkPlaces(stuntPark,manifest.village):[])];
+const stuntPlaces = testPark ? testParkPlaces(testPark, manifest.village)
+  : quarryStuntPark ? quarryFeature?.quarryCoursePlaces() ?? [] : [];
+const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...(cemeteries?.places ?? []), ...stuntPlaces];
 const placesUI = !mailMode && !bare && (placeList.length || (ERA.modern && !!tallKey)) ? new PlacesUI(placeList, manifest.village, history?.placeRoads ?? roads, {
 
   canOpen: () => started,
@@ -1610,9 +1697,10 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'mabouMain' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => mabouMain?.update(camera.position, now) },
   { ...(import.meta.env.DEV ? { name: 'stockpiles' } : {}), segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
   { ...(import.meta.env.DEV ? { name: 'cemeteries' } : {}), segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'terrain' } : {}), segment: 'landscape', ending: true, update: () => { terrain.update(camera, scenePaused()); wharves?.update(camera.position); } },
+  { ...(import.meta.env.DEV ? { name: 'terrain' } : {}), segment: 'landscape', ending: true, update: () => { terrain.update(camera, scenePaused()); wharves?.update(camera.position); novemberRoads?.update(terrain, camera.position); } },
   ...(fleet ? [{ ...(import.meta.env.DEV ? { name: 'fleet' } : {}), segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { ...(import.meta.env.DEV ? { name: 'coast' } : {}), segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
+  { ...(import.meta.env.DEV ? { name: 'lotProps' } : {}), segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
   { ...(import.meta.env.DEV ? { name: 'airport' } : {}), segment: 'landscape', ending: true, update: () => airport?.update(camera.position) },
   { ...(import.meta.env.DEV ? { name: 'quarry' } : {}), segment: 'landscape', ending: true, update: () => quarry?.update(camera.position, vehicle) },
   ...(stuntPark ? [{ ...(import.meta.env.DEV ? { name: 'stuntPark' } : {}), segment: 'landscape' as const, ending: true, update: (dt:number) => stuntPark.update(dt,vehicle,camera.position) }] : []),
@@ -1630,7 +1718,8 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'schoolBus' } : {}), segment: 'after-activities', ending: false, update: () => schoolBus?.update(camera) },
   { ...(import.meta.env.DEV ? { name: 'ambientTraffic' } : {}), segment: 'after-activities', ending: false, update: () => ambientTraffic?.update(camera, vehicle, !multiplayer?.choice.on) },
   { ...(import.meta.env.DEV ? { name: 'roadAnimals' } : {}), segment: 'after-activities', ending: false, update: dt => roadAnimals?.update(dt, vehicle, !multiplayer?.choice.on) },
-  { ...(import.meta.env.DEV ? { name: 'props' } : {}), segment: 'after-activities', ending: true, endingPosition: 7, update: dt => props?.update(camera, dt) },
+  { ...(import.meta.env.DEV ? { name: 'props' } : {}), segment: 'after-activities', ending: true, endingPosition: 8, update: dt => props?.update(camera, dt) },
+  { ...(import.meta.env.DEV ? { name: 'yardProps' } : {}), segment: 'after-activities', ending: false, update: dt => yardProps?.update(camera, dt) },
   { ...(import.meta.env.DEV ? { name: 'harbourLights' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
   { ...(import.meta.env.DEV ? { name: 'tall' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
   { ...(import.meta.env.DEV ? { name: 'grass' } : {}), segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },

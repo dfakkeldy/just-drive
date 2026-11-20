@@ -1,0 +1,165 @@
+// RUN=lot-props-browser.mjs VIEWS="desktop|x=1&at=624400,5103300,0 low|x=1&q=low&at=624400,5103300,0 era|era=1884&x=1&at=624400,5103300,0" tools/yard-shots.sh 1280 720
+// Lot props at houses (lot-props.ts): in Mabou today they appear, each kind is one instanced mesh, the real car is
+// stopped by a parked vehicle, trailer, mower or motorhome when it drives into one, a dog is never solid and slips away
+// from a car beside it, no prop stands on a road the land knows, and 1884 has none. Pictures, desktop and phone, of the
+// nearest vehicle, trailer, motorhome, mower and dog: lot-props-desktop-<kind>.png and, on LOW, lot-props-phone-<kind>.png.
+import assert from 'node:assert/strict';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { open, sleep } from './cdp.mjs';
+
+const [out, ...urls] = process.argv.slice(2);
+const evidence = process.env.MMM_CHECK_OUT ? join(process.env.MMM_CHECK_OUT, 'evidence', 'lot-props-browser') : out;
+mkdirSync(evidence, { recursive: true });
+const KINDS = ['car', 'suv', 'pickup', 'trailer', 'motorhome', 'mower', 'dog-lying', 'dog-sitting'];
+
+for (const url of urls) {
+  const page = await open(url);
+  try {
+    await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+    const params = new URL(url).searchParams, name = params.get('name');
+    if (params.get('era') === '1884') {
+      assert.equal(await page.read('window.mmm.lotProps'), null, 'no lot props in 1884');
+      console.log('PASS no lot props in 1884');
+      continue;
+    }
+    for (let i = 0; i < 120 && !await page.read('!!window.mmm?.lotProps'); i++) await sleep(500);
+    const census = await page.read(`(()=>{const y=mmm.lotProps,c={};for(const i of y.items)c[i.prop.kind]=(c[i.prop.kind]??0)+1;
+      return {total:y.items.length,kinds:c,solids:y.solids.length,droppedSolid:y.items.filter(i=>!i.solid&&!i.prop.kind.startsWith('dog')).length,
+      unaccounted:y.items.filter(i=>!i.prop.kind.startsWith('dog')&&!i.solid&&!y.near.dropped.has(i)).length,dogSolids:y.items.filter(i=>i.prop.kind.startsWith('dog')&&i.solid).length,low:y.low,area:mmm.area.id};})()`);
+    console.log(name, 'census', JSON.stringify(census));
+
+    // Clear of mail play's breakable yard props: no lot prop still standing comes within 1 m of a fence, clothesline,
+    // ornament, woodpile, bale or bin. Measured here on points along both outlines, not with the module's geometry.
+    const both = await page.read(`(()=>{const y=mmm.yardProps,l=mmm.lotProps;if(!y)return null;
+      return {yard:y.live.map(v=>({kind:v.p.kind,x:v.p.x,z:v.p.z,heading:v.p.yaw})),
+        lot:l.items.filter(i=>!l.near.dropped.has(i)).map(i=>({kind:i.prop.kind,x:i.x,z:i.z,heading:i.prop.heading,half:i.prop.half,halfWidth:i.prop.halfWidth})),
+        left:l.near.dropped.size,cleared:l.cleared};})()`);
+    if (name === 'desktop') assert.ok(both, 'the desktop view is mail play, where the breakable yard props stand');
+    if (both) {
+      // The breakable props' sizes, read from their own rules file so the two never drift apart.
+      const source = readFileSync(new URL('../web/src/yard-props-rules.ts', import.meta.url), 'utf8');
+      const size = Object.fromEntries([...source.match(/export const SIZE[\s\S]*?\n\}\);/)[0].matchAll(/(\w+): \{ half: ([\d.]+), halfWidth: ([\d.]+)/g)].map(m => [m[1], [+m[2], +m[3]]]));
+      assert.ok(Object.keys(size).length >= 10, 'the yard props sizes are read');
+      const dims = k => { assert.ok(size[k], `size of ${k}`); return size[k]; };
+      const outline = (r, step = 0.1) => { const pts = [[r.x, r.z]], s = Math.sin(r.heading), c = Math.cos(r.heading);
+        for (const [a0, b0, a1, b1] of [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1]]) {
+          const n = Math.max(1, Math.ceil(Math.hypot((a1 - a0) * r.half, (b1 - b0) * r.halfWidth) / step));
+          for (let i = 0; i < n; i++) { const a = (a0 + (a1 - a0) * i / n) * r.half, b = (b0 + (b1 - b0) * i / n) * r.halfWidth; pts.push([r.x + s * a + c * b, r.z - c * a + s * b]); } }
+        return pts; };
+      const toRect = (r, x, z) => { const dx = x - r.x, dz = z - r.z, u = dx * Math.sin(r.heading) - dz * Math.cos(r.heading), v = dx * Math.cos(r.heading) + dz * Math.sin(r.heading);
+        return Math.hypot(Math.max(Math.abs(u) - r.half, 0), Math.max(Math.abs(v) - r.halfWidth, 0)); };
+      const yard = both.yard.map(p => { const [half, halfWidth] = dims(p.kind); return { ...p, half, halfWidth }; });
+      let worst = Infinity, near = 0;
+      for (const a of both.lot) for (const b of yard) {
+        if (Math.hypot(a.x - b.x, a.z - b.z) > Math.hypot(a.half, a.halfWidth) + Math.hypot(b.half, b.halfWidth) + 2) continue;
+        near++;
+        const d = Math.min(...outline(a).map(([x, z]) => toRect(b, x, z)), ...outline(b).map(([x, z]) => toRect(a, x, z)));
+        worst = Math.min(worst, d);
+        assert.ok(d >= 1 - 0.1, `a ${a.kind} at ${a.x.toFixed(1)},${a.z.toFixed(1)} stands ${d.toFixed(2)} m from a ${b.kind}`);
+      }
+      console.log(name, 'yard props', JSON.stringify({ yard: yard.length, lot: both.lot.length, left: both.left, cleared: both.cleared, pairsChecked: near, closest: +worst.toFixed(2) }));
+      assert.ok(near > 0, 'lot props and yard props stand near each other somewhere, so the clearance was measured');
+      assert.ok(both.cleared > 0, 'some lot props gave way to yard props (clearOf ran)');
+    }
+    assert.equal(census.area, 'mabou');
+    assert.equal(census.low, params.get('q') === 'low', 'LOW detail follows the page');
+    assert.ok(census.total > 120, 'Mabou has lot props at a share of its houses');
+    for (const k of KINDS) assert.ok(census.kinds[k] > 0, `Mabou has ${k}`);
+    const dogs = (census.kinds['dog-lying'] ?? 0) + (census.kinds['dog-sitting'] ?? 0);
+    assert.equal(census.unaccounted, 0, 'every prop but a dog is solid, unless the land showed it cannot stand there (dropped)');
+    assert.equal(census.dogSolids, 0, 'no dog is solid');
+    assert.equal(census.solids + census.droppedSolid, census.total - dogs);
+    assert.ok(census.droppedSolid <= census.total * 0.1, 'few props dropped by the land check');
+
+    // The car goes beside the nearest yard with a vehicle; the camera follows it, and every prop near it is posed.
+    const target = await page.read(`(()=>{const y=mmm.lotProps,v=mmm.vehicle;
+      const cars=y.items.filter(i=>i.solid&&['car','suv','pickup'].includes(i.prop.kind)).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z));
+      const t=cars[0],h=t.heading,back=t.prop.half+9;
+      v.place(t.x-Math.sin(h)*back,t.z+Math.cos(h)*back,h);v.speed=0;v.vx=0;v.vz=0;
+      return {x:t.x,z:t.z,heading:h,half:t.prop.half,halfWidth:t.prop.halfWidth,kind:t.prop.kind,house:t.prop.house};})()`);
+    let drawn = null;
+    for (let i = 0; i < 240; i++) {
+      drawn = await page.read(`(()=>{const y=mmm.lotProps,meshes=[];y.group.traverse(o=>{if(o.isMesh)meshes.push({name:o.name,instanced:!!o.isInstancedMesh,count:o.count,visible:o.visible});});return meshes;})()`);
+      if (drawn.some(m => m.name === target.kind && m.count > 0)) break;
+      await sleep(500);
+    }
+    console.log(name, 'meshes', JSON.stringify(drawn));
+    assert.ok(drawn.some(m => m.name === target.kind && m.count > 0), `the ${target.kind} beside the car is drawn`);
+    assert.ok(drawn.every(m => m.instanced), 'every prop kind is one instanced mesh');
+    assert.equal(new Set(drawn.map(m => m.name)).size, drawn.length, 'one mesh per kind');
+    assert.ok(drawn.length <= KINDS.length);
+    assert.ok(drawn.every(m => m.visible === m.count > 0), 'a kind with nothing in view costs no draw');
+
+    // No drawn prop stands on a road the land knows (the baked road field) or in the sea.
+    const ground = await page.read(`(()=>{const y=mmm.lotProps,t=mmm.terrain,bad=[];let checked=0;
+      for(const i of y.items){const s=t.surfaceAt(i.x,i.z);if(!s||s.level<8)continue;checked++;
+        if(!y.near.dropped.has(i)&&s.roadDist<s.halfWidth)bad.push({kind:i.prop.kind,x:i.x,z:i.z,roadDist:s.roadDist,half:s.halfWidth});}
+      return {checked,bad,dropped:y.near.dropped.size};})()`);
+    console.log(name, 'ground', JSON.stringify(ground));
+    assert.ok(ground.checked >= 3, 'props were checked on fine land');
+    assert.deepEqual(ground.bad, [], 'no prop on a road');
+
+    // Every solid near the car: the car set just inside its end is pushed out (the same contact path the game runs).
+    const contacts = await page.read(`(()=>{const y=mmm.lotProps,v=mmm.vehicle,saved={x:v.x,z:v.z,heading:v.heading,vx:v.vx,vz:v.vz,speed:v.speed};let tested=0;
+      try{for(const s of y.solids.filter(s=>Math.hypot(s.x-v.x,s.z-v.z)<400)){const x=s.x+Math.sin(s.heading)*s.half*.85,z=s.z-Math.cos(s.heading)*s.half*.85;
+        Object.assign(v,{x,z,vx:0,vz:0,speed:0});y.resolveSolids(v);if(Math.hypot(v.x-x,v.z-z)<.1)throw Error('a lot prop did not block the car');tested++;}}
+      finally{Object.assign(v,saved);}return tested;})()`);
+    assert.ok(contacts >= 3, `solids tested near the car: ${contacts}`);
+
+    // The game's own frame loop keeps the real car out: set 0.3 m into the vehicle's tail, rolling into it at 3 m/s with the
+    // throttle held, the car is pushed back to the bumper within a few frames and never gets deeper. (Driving up from
+    // rest tests a yard's banks, which can stall a car short of the bumper, not the solid.)
+    const touch = target.half + 0.95 + 1.35;
+    const inside = `(()=>{const v=mmm.vehicle,t=${JSON.stringify(target)},ax=Math.sin(t.heading),az=-Math.cos(t.heading);let deepest=-Infinity;
+      for(const o of [-1.35,0,1.35]){const cx=v.x+Math.sin(v.heading)*o-t.x,cz=v.z-Math.cos(v.heading)*o-t.z,a=cx*ax+cz*az,b=-cx*az+cz*ax;
+        const out=Math.hypot(Math.max(Math.abs(a)-t.half,0),Math.max(Math.abs(b)-t.halfWidth,0));deepest=Math.max(deepest,0.95-out);}
+      return {deepest,gap:Math.hypot(v.x-t.x,v.z-t.z)};})()`;
+    const start = await page.read(`(()=>{const v=mmm.vehicle,t=${JSON.stringify(target)},ax=Math.sin(t.heading),az=-Math.cos(t.heading),back=${touch}-0.3;
+      const placed=v.place(t.x-ax*back,t.z-az*back,t.heading);v.vx=ax*3;v.vz=az*3;v.speed=3;return {placed,...${inside}};})()`);
+    assert.ok(start.placed && start.deepest > 0.2, `the car starts 0.3 m inside the ${target.kind} (placed ${start.placed}, ${start.deepest} m in)`);
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'ArrowUp', key: 'ArrowUp', windowsVirtualKeyCode: 38 });
+    const samples = [];
+    try { for (let i = 0; i < 30; i++) { samples.push(await page.read(inside)); await sleep(50); } }
+    finally { await page.send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'ArrowUp', key: 'ArrowUp', windowsVirtualKeyCode: 38 }); }
+    const settled = samples.slice(10), drive = { start: +start.deepest.toFixed(3), deepest: +Math.max(...settled.map(s => s.deepest)).toFixed(3), gap: +settled.at(-1).gap.toFixed(2), touch: +touch.toFixed(2) };
+    console.log(name, 'drive', JSON.stringify(drive));
+    assert.ok(drive.deepest < 0.05, `the ${target.kind} pushes the car out to its bumper and holds it there (deepest ${drive.deepest} m)`);
+    assert.ok(drive.gap < touch + 1.5, 'the car stays at the bumper, not thrown off');
+
+    // A dog is never solid: with the car on top of it, it slips away and nothing pushes the car.
+    const dog = await page.read(`(()=>{const y=mmm.lotProps,v=mmm.vehicle,d=y.items.filter(i=>!i.solid).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z))[0];
+      const saved={x:v.x,z:v.z,heading:v.heading,vx:v.vx,vz:v.vz,speed:v.speed};
+      try{Object.assign(v,{x:d.x,z:d.z,vx:0,vz:0,speed:0});y.resolveSolids(v);const pushed=Math.hypot(v.x-d.x,v.z-d.z);
+        y.update(mmm.camera,v);const away=d.away;Object.assign(v,{x:d.x+40,z:d.z});y.update(mmm.camera,v);return {pushed,away,back:!d.away,solid:y.solids.some(s=>s.x===d.x&&s.z===d.z)};}
+      finally{Object.assign(v,saved);}})()`);
+    console.log(name, 'dog', JSON.stringify(dog));
+    assert.ok(dog.pushed < 1e-6 && !dog.solid, 'a dog is never solid');
+    assert.ok(dog.away && dog.back, 'a dog slips away from a car beside it and comes back when it has gone');
+
+    // Pictures: the nearest of each sort in the game's own chase view, the car stopped 14 m off on the far side of the prop
+    // from its house, facing it with the prop just to one side, so the house stands behind the prop and not in front.
+    // Desktop size on the desktop view, phone size on LOW.
+    const [width, height, mobile, size] = params.get('q') === 'low' ? [390, 844, true, 'phone'] : [1280, 720, false, 'desktop'];
+    await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
+    const pictures = [];
+    for (const sort of [['pickup', 'suv', 'car'], ['trailer'], ['motorhome'], ['mower'], ['dog-lying', 'dog-sitting']]) {
+      const at = await page.read(`(()=>{const v=mmm.vehicle,sort=${JSON.stringify(sort)},t=mmm.lotProps.items.filter(i=>sort.includes(i.prop.kind)&&!mmm.lotProps.near.dropped.has(i)).sort((a,b)=>Math.hypot(a.x-v.x,a.z-v.z)-Math.hypot(b.x-v.x,b.z-v.z))[0];
+        if(!t)return null;const dog=t.prop.kind.startsWith('dog'),side=dog?2.6:3.2,far=dog?6:t.prop.kind==='mower'?10:14;const r=Math.hypot(t.x-t.prop.hx,t.z-t.prop.hz)||1,dx=(t.x-t.prop.hx)/r,dz=(t.z-t.prop.hz)/r;
+        const h=Math.atan2(-dx,dz),rx=Math.cos(h),rz=Math.sin(h);
+        v.place(t.x+dx*far+rx*side,t.z+dz*far+rz*side,h);v.speed=0;v.vx=0;v.vz=0;return {kind:t.prop.kind,house:t.prop.house,x:t.x,z:t.z};})()`);
+      if (!at) continue;
+      for (let i = 0; i < 120 && !await page.read(`mmm.lotProps.counts.drawn[${JSON.stringify(at.kind)}]>0`); i++) await sleep(500);
+      await sleep(2000);
+      const file = `lot-props-${size}-${at.kind}.png`;
+      await page.shot(join(evidence, file)); pictures.push(file);
+    }
+    console.log(name, 'pictures', pictures.join(' '));
+    assert.ok(pictures.length >= 4, 'pictures of at least four sorts of prop');
+    const facts = { census, target, drawn, ground, contacts, drive, dog, pictures };
+    writeFileSync(join(evidence, `lot-props-${name}.json`), JSON.stringify(facts, null, 1));
+    assert.deepEqual(page.errors, []);
+    console.log(`PASS lot props ${name}`);
+  } finally { await page.close(); }
+}
+console.log('PASS lot-props-browser');

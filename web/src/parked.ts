@@ -2,20 +2,24 @@ import { CAR_SPEC, type VehicleSpec } from './vehicle-spec';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Mesher, seeded, type RGB } from './yard-kit';
+import { LOT_PROP_SIZE } from './lot-props-rules';
 
 /**
- * Parked vehicles for any lot in the game: cars, SUVs and pickups in the muted colours of a staff car park.
+ * Parked vehicles for any lot in the game: cars, SUVs and pickups in the muted colours of a staff car park, and for a
+ * house's yard also a small utility trailer, a motorhome and a ride-on mower (types 3, 4 and 5).
  * One instanced mesh per type. Every vehicle is solid: `pushOut` keeps the player's car out of them.
+ * No badge, plate or lettering on any of them.
  */
-export interface Parked { x: number; z: number; heading: number; type: 0 | 1 | 2; colour: number }
+export type ParkedType = 0 | 1 | 2 | 3 | 4 | 5;
+export interface Parked { x: number; z: number; heading: number; type: ParkedType; colour: number }
 
 /** A solid rectangle on the ground, in world metres: centre, half sizes, and the heading of its long axis. */
 export interface Solid { x: number; z: number; half: number; halfWidth: number; heading: number }
 
 /** Body colours, weighted toward what stands in a rural lot: white, silver, grey, black, with some blue and red. */
 export const PARKED_COLOURS = [0xd9d9d4, 0xd9d9d4, 0xb4b7b9, 0xb4b7b9, 0x6f7376, 0x6f7376, 0x1b1c1e, 0x1b1c1e, 0x24364f, 0x7a1f1c, 0x4f5b4a, 0x8a8271, 0x2f3a45];
-/** Length, width in metres by type: car, SUV, pickup. */
-export const PARKED_SIZE: [number, number][] = [[4.5, 1.8], [4.7, 1.9], [5.7, 2.0]];
+/** Length, width in metres by type: car, SUV, pickup, utility trailer (with its tongue), motorhome, ride-on mower. */
+export const PARKED_SIZE: (readonly [number, number])[] = [LOT_PROP_SIZE.car, LOT_PROP_SIZE.suv, LOT_PROP_SIZE.pickup, LOT_PROP_SIZE.trailer, LOT_PROP_SIZE.motorhome, LOT_PROP_SIZE.mower];
 
 const GLASS: RGB = [0.06, 0.09, 0.11], TYRE: RGB = [0.035, 0.035, 0.038], WHITE: RGB = [1, 1, 1], LAMP: RGB = [0.9, 0.9, 0.82], TAIL: RGB = [0.5, 0.04, 0.03], TRIM: RGB = [0.16, 0.16, 0.17];
 
@@ -62,6 +66,93 @@ export function vehicleShape(m: Mesher, type: 0 | 1 | 2, frame: THREE.Matrix4 | 
   }
 }
 
+const DECK: RGB = [0.42, 0.36, 0.28], STEEL: RGB = [0.2, 0.2, 0.21], STRIPE: RGB = [0.42, 0.28, 0.17], SEAT: RGB = [0.05, 0.05, 0.055], GREY: RGB = [0.3, 0.31, 0.32];
+
+/** A small open utility trailer: a plank deck with low rails, one axle under fenders, and an A-frame tongue on a jack. */
+type Place = (x: number, y: number, z: number, yaw?: number, pitch?: number, roll?: number) => void;
+
+function trailerShape(m: Mesher, place: Place, body: RGB): void {
+  const w = PARKED_SIZE[3][1] / 2 - 0.12, x0 = -1.8, x1 = 0.75, mid = (x0 + x1) / 2, len = x1 - x0;
+  place(0, 0, 0);
+  m.box(mid, 0.5, 0, len, 0.12, w * 2, body);                     // frame
+  m.box(mid, 0.575, 0, len - 0.06, 0.04, w * 2 - 0.06, DECK);       // planks
+  for (const s of [-1, 1]) {
+    m.box(mid, 0.84, s * (w - 0.03), len, 0.05, 0.05, body);        // top rail
+    for (let x = x0 + 0.03; x <= x1; x += len / 4 - 0.01) m.box(x, 0.71, s * (w - 0.03), 0.04, 0.26, 0.04, body);
+    m.box(-0.45, 0.66, s * (w + 0.06), 0.9, 0.04, 0.2, body);       // fender
+    m.box(-0.45, 0.5, s * (w + 0.06), 0.06, 0.3, 0.2, body);
+  }
+  m.box(x0 + 0.02, 0.71, 0, 0.04, 0.26, w * 2 - 0.06, body);        // tailgate
+  for (const s of [-1, 1]) {
+    // The tongue: two bars from the front corners to the hitch.
+    const dx = 1.8 - x1, dz = -s * (w - 0.1), l = Math.hypot(dx, dz);
+    place(x1 + dx / 2, 0.46, s * (w - 0.1) + dz / 2, Math.atan2(-dz, dx));
+    m.box(0, 0, 0, l, 0.08, 0.07, body);
+  }
+  place(0, 0, 0);
+  m.box(1.72, 0.46, 0, 0.18, 0.1, 0.12, STEEL);                     // coupler
+  m.cyl(1.35, 0.27, 0, 0.035, 0.42, STEEL, 'y', 6);                 // jack, resting on the ground
+  m.box(1.35, 0.03, 0, 0.16, 0.04, 0.16, STEEL);
+  for (const s of [-1, 1]) { place(-0.45, 0.3, s * (w + 0.06)); m.cyl(0, 0, 0, 0.3, 0.18, TYRE, 'z', 8); }
+}
+
+/** A class C motorhome: a van cab with a bunk over it and a tall box behind, with a plain stripe and no lettering. */
+function motorhomeShape(m: Mesher, place: Place, body: RGB, glass: RGB | null): void {
+  const w = PARKED_SIZE[4][1] / 2, cab = w - 0.15;
+  place(0, 0, 0);
+  m.extrude([[-3.7, 0.5], [1.7, 0.5], [1.7, 3.2], [-3.6, 3.2], [-3.7, 3.05]], -w, w, body);       // the coach
+  m.extrude([[1.7, 0.5], [3.7, 0.5], [3.7, 1.05], [3.5, 1.35], [2.75, 1.5], [2.3, 2.25], [1.7, 2.3]], -cab, cab, body);   // the van cab
+  m.extrude([[1.7, 2.3], [2.85, 2.4], [3.05, 2.75], [2.85, 3.05], [1.7, 3.15]], -w + 0.05, w - 0.05, body);              // the bunk over it
+  for (const s of [-1, 1]) {
+    m.box(-1.0, 1.35, s * (w + 0.01), 5.4, 0.2, 0.02, STRIPE);
+    m.box(-1.0, 2.75, s * (w + 0.01), 5.4, 0.08, 0.02, STRIPE);
+    if (glass) {
+      m.box(2.05, 1.85, s * (cab + 0.012), 0.55, 0.5, 0.02, glass);                            // cab door glass
+      for (const x of [-2.6, -0.4]) m.box(x, 2.15, s * (w + 0.012), 1.1, 0.55, 0.02, glass);   // coach windows
+    }
+  }
+  if (glass) {
+    // The windscreen, on the cab's slope.
+    const lift = 0.014, zz = cab - 0.08;
+    m.quad([[2.75 + lift, 1.52, zz], [2.75 + lift, 1.52, -zz], [2.3 + lift, 2.22, -zz], [2.3 + lift, 2.22, zz]], glass);
+    m.box(-3.71, 2.3, 0, 0.02, 0.5, 1.2, glass);                                                   // rear window
+  }
+  m.box(1.0, 1.4, -w - 0.012, 0.6, 1.7, 0.02, [body[0] * 0.82, body[1] * 0.82, body[2] * 0.82]);   // the coach door, plain
+  for (const s of [-1, 1]) {
+    m.box(3.712, 0.95, s * (cab - 0.3), 0.03, 0.14, 0.36, LAMP);
+    m.box(-3.712, 0.95, s * (w - 0.2), 0.03, 0.3, 0.2, TAIL);
+  }
+  m.box(0, 0.58, 0, 7.42, 0.16, w * 2 + 0.02, TRIM);
+  for (const ax of [2.35, -1.75]) for (const s of [-1, 1]) { place(ax, 0.4, s * (w - 0.2)); m.cyl(0, 0, 0, 0.4, 0.28, TYRE, 'z', 8); }
+}
+
+/** A ride-on mower: a hood, a black seat, a wheel to steer by, a grey cutting deck under it and big back wheels. */
+function mowerShape(m: Mesher, place: Place, body: RGB): void {
+  place(0, 0, 0);
+  m.extrude([[0.05, 0.35], [0.9, 0.35], [0.9, 0.58], [0.72, 0.74], [0.05, 0.76]], -0.27, 0.27, body);   // hood
+  m.box(-0.45, 0.5, 0, 0.8, 0.12, 0.84, body);                     // the body and footrests
+  m.box(-0.48, 0.7, 0, 0.5, 0.28, 0.46, body);                     // under the seat
+  m.box(-0.5, 0.88, 0, 0.42, 0.08, 0.44, SEAT);
+  m.box(-0.72, 1.06, 0, 0.08, 0.36, 0.42, SEAT);                   // seat back
+  place(0.1, 0.72, 0, 0, 0, 0.3); m.cyl(0, 0.15, 0, 0.025, 0.3, STEEL, 'y', 5);   // steering column, leaning back
+  place(0, 0, 0);
+  m.cyl(0.02, 1.0, 0, 0.17, 0.03, SEAT, 'y', 10);                  // steering wheel
+  m.box(0.1, 0.2, 0, 0.95, 0.1, 1.08, GREY);                       // cutting deck
+  for (const s of [-1, 1]) {
+    place(-0.52, 0.3, s * 0.42); m.cyl(0, 0, 0, 0.3, 0.2, TYRE, 'z', 8);
+    place(0.66, 0.18, s * 0.33); m.cyl(0, 0, 0, 0.18, 0.12, TYRE, 'z', 8);
+  }
+}
+
+/** Any parked type as triangles: local +x is the nose, y is up. The paint is white so an instance colour can tint it. */
+export function parkedShape(m: Mesher, type: ParkedType, frame: THREE.Matrix4 | null = null, body: RGB = WHITE, glass: RGB | null = GLASS): void {
+  if (type <= 2) { vehicleShape(m, type as 0 | 1 | 2, frame, body, glass); return; }
+  const place: Place = (x, y, z, yaw = 0, pitch = 0, roll = 0) => { if (frame) m.within(frame, x, y, z, yaw, pitch, roll); else m.at(x, y, z, yaw, pitch, roll); };
+  if (type === 3) trailerShape(m, place, body);
+  else if (type === 4) motorhomeShape(m, place, body, glass);
+  else mowerShape(m, place, body);
+}
+
 /** The solid a parked vehicle stands in. */
 export function parkedSolid(p: Parked): Solid {
   return { x: p.x, z: p.z, half: PARKED_SIZE[p.type][0] / 2, halfWidth: PARKED_SIZE[p.type][1] / 2, heading: p.heading };
@@ -71,7 +162,7 @@ export function parkedSolid(p: Parked): Solid {
 export type ParkedGround = (x: number, z: number, p: Parked) => number | null;
 
 /** Pose `o` so one parked vehicle stands on the ground (its matrix updated). False while that ground has not loaded. */
-export function parkedMatrix(p: Parked, ground: ParkedGround, o: THREE.Object3D): boolean {
+export function parkedMatrix<P extends { x: number; z: number; heading: number } = Parked>(p: P, ground: (x: number, z: number, p: P) => number | null, o: THREE.Object3D): boolean {
   const fx = Math.sin(p.heading), fz = -Math.cos(p.heading);
   const y = ground(p.x, p.z, p), nose = ground(p.x + fx * 1.4, p.z + fz * 1.4, p), tail = ground(p.x - fx * 1.4, p.z - fz * 1.4, p);
   if (y === null || nose === null || tail === null) return false;
@@ -91,7 +182,7 @@ export function bakeParked(list: Parked[], ground: ParkedGround): THREE.BufferGe
   const shapes = new Map<number, THREE.BufferGeometry>(), parts: THREE.BufferGeometry[] = [], o = new THREE.Object3D();
   for (const p of list) {
     let shape = shapes.get(p.type);
-    if (!shape) { const m = new Mesher(); vehicleShape(m, p.type); shape = m.geometry(); shapes.set(p.type, shape); }
+    if (!shape) { const m = new Mesher(); parkedShape(m, p.type); shape = m.geometry(); shapes.set(p.type, shape); }
     if (!parkedMatrix(p, ground, o)) throw new Error('bakeParked: the ground under a parked vehicle has not loaded');
     const g = shape.clone().applyMatrix4(o.matrix), col = g.attributes.color, c = new THREE.Color(p.colour);
     for (let i = 0; i < col.count; i++) col.setXYZ(i, col.getX(i) * c.r, col.getY(i) * c.g, col.getZ(i) * c.b);
@@ -112,10 +203,11 @@ export class ParkedVehicles {
   /** `ground` gives the height under a point near a vehicle, or null while that ground has not loaded. */
   /** `material` lets several sets share one (it must be vertex-coloured); by default each set makes its own. */
   constructor(readonly list: Parked[], private ground: ParkedGround, material: THREE.Material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })) {
-    for (const type of [0, 1, 2] as const) {
+    // The three cars always (as before); a yard type only when the list has one.
+    for (const type of [0, 1, 2, ...([3, 4, 5] as const).filter((t) => list.some((p) => p.type === t))] as ParkedType[]) {
       const mine = list.filter((p) => p.type === type);
       const m = new Mesher();
-      vehicleShape(m, type);
+      parkedShape(m, type);
       const mesh = new THREE.InstancedMesh(m.geometry(), material, Math.max(1, mine.length));
       mesh.count = mine.length;
       mine.forEach((p, i) => mesh.setColorAt(i, new THREE.Color(p.colour)));
@@ -142,6 +234,94 @@ export class ParkedVehicles {
     this.group.visible = true;
     return true;
   }
+}
+
+/** One of many things stood about an area: where it stands, which way its nose points, and its paint. */
+export interface Placed { x: number; z: number; heading: number; colour: number }
+/**
+ * One kind of thing to draw many times. `range`: metres from the camera it is drawn within. `radius`: of a sphere
+ * round one, centred `lift` metres over its ground point, for the view test (half its height, so a tall roof is in it). `pose` stands one on the ground (o's matrix updated): true when done, false while its
+ * ground has not loaded, null when it can never stand there (it is dropped). `level` is the detail of the ground under
+ * one (higher is finer): an item is posed again when finer ground comes.
+ */
+export interface NearKind<T extends Placed> {
+  geometry: THREE.BufferGeometry; items: T[]; range: number; radius: number; lift: number; name?: string;
+  pose(item: T, o: THREE.Object3D): boolean | null; level(item: T): number;
+  /** False while an item is out of sight for its own reasons (a dog that has slipped away). */
+  shown?(item: T, index: number): boolean;
+}
+
+const NEAR_CELL = 128;
+const nearKey = (i: number, j: number) => (i + 0x8000) * 0x10000 + (j + 0x8000);
+/**
+ * Things spread over a whole area but drawn only near the camera: one instanced mesh per kind, however many there are.
+ * Every frame each mesh holds just the items within its range and inside the view, so a kind costs one draw call while
+ * any of it is on screen (none otherwise), and its triangles follow what is in view, not what the area holds.
+ */
+export class NearInstances<T extends Placed> {
+  readonly group = new THREE.Group();
+  readonly meshes: THREE.InstancedMesh[] = [];
+  /** Items dropped because they can never stand where they are (see NearKind.pose). */
+  readonly dropped = new Set<T>();
+  private sets: { kind: NearKind<T>; mesh: THREE.InstancedMesh; cells: Map<number, number[]>; matrices: Float32Array; posed: Int8Array; y: Float32Array }[] = [];
+  private frustum = new THREE.Frustum(); private view = new THREE.Matrix4(); private sphere = new THREE.Sphere();
+  private dummy = new THREE.Object3D(); private colour = new THREE.Color();
+  private frame = 0;
+
+  constructor(kinds: NearKind<T>[], material: THREE.Material) {
+    for (const kind of kinds) {
+      const mesh = new THREE.InstancedMesh(kind.geometry, material, Math.max(1, kind.items.length));
+      mesh.count = 0; mesh.visible = false; mesh.name = kind.name ?? '';
+      mesh.frustumCulled = false;   // each instance is tested against the view here
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.setColorAt(0, this.colour.setHex(0xffffff));
+      const cells = new Map<number, number[]>();
+      kind.items.forEach((p, i) => { const key = nearKey(Math.floor(p.x / NEAR_CELL), Math.floor(p.z / NEAR_CELL)); const l = cells.get(key); if (l) l.push(i); else cells.set(key, [i]); });
+      this.sets.push({ kind, mesh, cells, matrices: new Float32Array(kind.items.length * 16), posed: new Int8Array(kind.items.length).fill(-1), y: new Float32Array(kind.items.length) });
+      this.meshes.push(mesh); this.group.add(mesh);
+    }
+  }
+
+  /** Fill every mesh with the items near `camera` and in its view. `scale` shortens every range (1: as given). */
+  update(camera: THREE.Camera, scale = 1): void {
+    camera.updateMatrixWorld();
+    this.frustum.setFromProjectionMatrix(this.view.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    const cx = camera.matrixWorld.elements[12], cz = camera.matrixWorld.elements[14];
+    // Finer ground is looked for every 15th frame: a cheap lookup, but not one to make for every item every frame.
+    const recheck = this.frame++ % 15 === 0;
+    for (const set of this.sets) {
+      const { kind, mesh, cells, matrices, posed, y } = set, range = kind.range * scale;
+      let n = 0;
+      for (let i = Math.floor((cx - range) / NEAR_CELL); i <= Math.floor((cx + range) / NEAR_CELL); i++) for (let j = Math.floor((cz - range) / NEAR_CELL); j <= Math.floor((cz + range) / NEAR_CELL); j++) {
+        const list = cells.get(nearKey(i, j));
+        if (list) for (const k of list) {
+          const p = kind.items[k];
+          if (posed[k] === -2 || (p.x - cx) ** 2 + (p.z - cz) ** 2 > range * range) continue;
+          if (posed[k] === -1 || (recheck && kind.level(p) > posed[k])) {
+            const level = kind.level(p), done = kind.pose(p, this.dummy);
+            if (done === null) { posed[k] = -2; this.dropped.add(p); continue; }
+            if (done) { this.dummy.matrix.toArray(matrices, k * 16); y[k] = this.dummy.position.y; posed[k] = Math.max(0, level); }
+          }
+          if (posed[k] < 0 || (kind.shown && !kind.shown(p, k))) continue;
+          if (!this.frustum.intersectsSphere(this.sphere.set(this.dummy.position.set(p.x, y[k] + kind.lift, p.z), kind.radius))) continue;
+          const to = mesh.instanceMatrix.array as Float32Array;
+          for (let e = 0; e < 16; e++) to[n * 16 + e] = matrices[k * 16 + e];
+          mesh.setColorAt(n, this.colour.setHex(p.colour));
+          n++;
+        }
+      }
+      mesh.count = n; mesh.visible = n > 0;
+      if (n) { mesh.instanceMatrix.needsUpdate = true; if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true; }
+    }
+  }
+
+  /** Items drawn this frame, by kind. */
+  /** Leave one item out for good (as a dropped one): it is never posed or drawn again. */
+  remove(item: T): void {
+    for (const set of this.sets) { const k = set.kind.items.indexOf(item); if (k >= 0) { set.posed[k] = -2; this.dropped.add(item); return; } }
+  }
+  get counts(): number[] { return this.sets.map((s) => s.mesh.count); }
+  dispose(): void { for (const s of this.sets) s.mesh.dispose(); }
 }
 
 /**

@@ -2,7 +2,6 @@ import {RoadCuts,inMask,type RoadCutSource} from './road-cuts';
 import type { Paved } from './paved';
 import type { NightShading } from './night';
 import type {HistoryBridgeApproaches} from './eras/history-approaches';
-import {BRIDGE_PAINT_MASK} from './bridge-contact';
 import { CART_TERRAIN_FRAG, CART_WATER_MASK_FRAG } from './eras/cart-shaders';
 import * as THREE from 'three';
 import {STUNT_TERRAIN_FRAG} from './stunt-ground-style';
@@ -126,6 +125,13 @@ async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
   return ctx.getImageData(0, 0, S, S).data;
 }
 
+export interface SiteSurface {
+  dist: number; half: number; kind: number; coverage?: number;
+  gravelDrive?: boolean;
+  /** Reclassify a mapped gravel sample without moving the centre line or changing its width. */
+  paveGravel?: boolean;
+}
+
 /**
  * A hand-built place that changes the ground under it: graded pads, and surfaces painted through the road field
  * (kind 8 yard gravel, 9 concrete, 10 packed sand), so the picture and the wheels agree. Add before the first tile loads.
@@ -137,10 +143,12 @@ export interface Site extends RoadCutSource {
   box: [number, number, number, number];
   /** Occupied footprints for new sites when the query box covers disconnected spans. */
   sitingBoxes?: readonly (readonly [number, number, number, number])[];
+  /** Restrict tile construction for a site with separated footprints inside its world box. */
+  affectsTile?(x: number, z: number, size: number, level: number): boolean;
   /** True ground height in metres, given the surveyed one. */
   height(x: number, z: number, surveyed: number, level?:number): number;
   /** The surface at a point: metres from an imaginary centre line, half width in metres, and kind. */
-  surface(x: number, z: number,ground?:number,level?:number): { dist: number; half: number; kind: number;coverage?:number } | null;
+  surface(x: number, z: number,ground?:number,level?:number): SiteSurface | null;
   /** Kind 11 is visual gravel in the unused road alpha channel; RGB driving data stays untouched. */
   visualGravel?: boolean;
   /** Metres per sample of the coarsest tile this site is part of. A tile with no baked road field gets its own 257 x 257 texture
@@ -178,12 +186,35 @@ export interface Site extends RoadCutSource {
 }
 
 /** Apply a runtime field sample. Kind 11 only paints; it cannot change a mapped road's driving samples. */
-export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:{dist:number;half:number;kind:number;coverage?:number},zero:number,dScale:number,wScale:number):void {
+export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:SiteSurface,zero:number,dScale:number,wScale:number):void {
   if(f.coverage!==undefined)road[k+3]=Math.round(Math.max(0,Math.min(1,f.coverage))*255);
   if(f.kind===11){road[k+3]=Math.max(0,Math.min(255,Math.round((2+f.half-f.dist)*255/4)));return;}
   const flags=road[k+2];
+  if (f.paveGravel) {
+    if (flags === 3) road[k+2] = 2;
+    return;
+  }
   if(flags>0 && (flags&15)<=3 && Math.abs(road[k]-zero)*dScale<road[k+1]*wScale+1.2)return;
-  road[k]=Math.min(255,zero+Math.round(f.dist/dScale));road[k+1]=Math.min(255,Math.round(f.half/wScale));road[k+2]=f.kind;
+  road[k]=Math.min(255,zero+Math.round(f.dist/dScale));road[k+1]=Math.min(255,Math.round(f.half/wScale));road[k+2] = f.gravelDrive ? 68 : f.kind;
+}
+
+/** The road bytes a tile draws. A gravel driveway or pad is a track (kind 4) with the gravel bit (64); it is drawn exactly
+ *  as a gravel road (kind 3), by the programs that already draw gravel roads, so it needs no shader variant of its own.
+ *  Only the texture's copy changes: surfaceAt keeps reading the track and its gravel bit, and a tile without a gravel
+ *  driveway or bridge paint mask keeps sharing its bytes. The road flags stay in the CPU data. */
+export function drawnRoadBytes(road: Uint8Array | Uint8ClampedArray, bridgePaint?: Uint8Array): Uint8Array {
+  const bytes = new Uint8Array(road.buffer, road.byteOffset, road.byteLength);
+  let out = bytes;
+  for (let k = 2; k < bytes.length; k += 4) {
+    const flags = bytes[k];
+    let drawn = flags;
+    if (bridgePaint?.[k >> 2]) drawn = flags & 240;
+    else if ((flags & 207) === 68) drawn = (flags & 48) | 3;
+    if (drawn === flags) continue;
+    if (out === bytes) out = bytes.slice();
+    out[k] = drawn;
+  }
+  return out;
 }
 
 export class Terrain {
@@ -620,9 +651,12 @@ export class Terrain {
   }
 
   private build({ tile: t, px, bakedRoad }: DecodedTile) {
-    const sites = this.sites.filter((s) => !(s.box[2] < t.x0 || s.box[0] > t.x0 + t.size || s.box[3] < t.z0 || s.box[1] > t.z0 + t.size) && (s.maxTexel === undefined || t.size / T <= s.maxTexel));
+    const sites = this.sites.filter((s) => !(s.box[2] < t.x0 || s.box[0] > t.x0 + t.size || s.box[3] < t.z0 || s.box[1] > t.z0 + t.size) && (s.maxTexel === undefined || t.size / T <= s.maxTexel)
+      && (s.affectsTile?.(t.x0, t.z0, t.size, t.level) ?? true));
     const gravelOverlay=sites.some(s=>s.visualGravel);
     const airportMarkings=sites.some(s=>s.airportMarkings);
+    const deckPaintSites = this.cartRoads ? [] : sites.filter(site => site.deckMask);
+    let bridgePaint: Uint8Array | undefined;
     let road = bakedRoad ?? (sites.some(s=>s.roadField!==false&&s.roadField!=='painted') ? new Uint8ClampedArray(S * S * 4) : null);
     // Brooks get a field only on the two finest levels (samples 1 m and 2 m apart). Further off a brook is a pixel
     // wide, and the field's guarantee against seams needs close samples (see BROOK_SAMPLE in streams.ts).
@@ -653,10 +687,17 @@ export class Terrain {
         }
         const beforeSite=raw;raw = site.height(x, z, raw,t.level);
         const afterHeight=raw>this.seaLevel?this.seaLevel+(raw-this.seaLevel)*this.exag:raw,beforeHeight=beforeSite>this.seaLevel?this.seaLevel+(beforeSite-this.seaLevel)*this.exag:beforeSite;if(Math.fround(afterHeight)!==Math.fround(beforeHeight))t.siteChanges?.get(site)?.fill(1,k,k+1);
-        if(road && site.deckMask?.(x,z,road[k*4+2]&15))road[k*4+2]|=BRIDGE_PAINT_MASK;
         const f = site.surface(x, z,raw,t.level);
         if(f&&!road&&site.roadField==='painted'&&mpp<=f.half)road=new Uint8ClampedArray(S*S*4);
         if(f && road)paintSiteSurface(road,k*4,f,zero,dScale,wScale);
+      }
+      const kind = road ? road[k * 4 + 2] & 15 : 0;
+      if (kind > 0) for (const site of deckPaintSites) {
+        const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
+        if (site.deckMask?.(x, z, kind)) {
+          (bridgePaint ??= new Uint8Array(S * S))[k] = 1;
+          break;
+        }
       }
       if (brook && brook[k * 4 + 2] > 0) {
         // A soft crease along the brook, so the painted water lies in a dip. Not under a road: there it runs in a pipe.
@@ -672,7 +713,7 @@ export class Terrain {
         if(clearsGroundTrees(this.groundClassAt(x,z))){c=0;px[k*4+2]=0;}
       }
       if (road && road[k * 4 + 2] > 0) {
-        roadPavement ||= (road[k * 4 + 2] & 192) !== 0;
+        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) !== 4;
         // Nothing stands on a road: fade the tree layer out from the shoulder to the road edge.
         const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;
         c *= THREE.MathUtils.smoothstep(d, hw + 0.8, hw + 4.5);
@@ -740,14 +781,10 @@ export class Terrain {
     tex.needsUpdate = true;
     let roadTex: THREE.DataTexture = this.noRoad;
     if (road) {
-      // Site paint is finished; CPU samples and the texture only read these same bytes from here.
-      // CPU road kinds stay intact. The shader sees no draped road beneath a structural deck.
-      let renderedRoad=new Uint8Array(road.buffer,road.byteOffset,road.byteLength);
-      if(!this.cartRoads)for(let k=2;k<renderedRoad.length;k+=4)if((renderedRoad[k]&BRIDGE_PAINT_MASK)&&(renderedRoad[k]&15)){
-        if(renderedRoad.buffer===road.buffer)renderedRoad=new Uint8Array(road);
-        renderedRoad[k]&=240;
-      }
-      roadTex = new THREE.DataTexture(renderedRoad, S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
+      // Keep the CPU flags intact. The texture omits draped paint under decks.
+      let drawn = new Uint8Array(road.buffer, road.byteOffset, road.byteLength);
+      if (!this.cartRoads) drawn = drawnRoadBytes(drawn, bridgePaint);
+      roadTex = new THREE.DataTexture(drawn, S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
       roadTex.magFilter = roadTex.minFilter = THREE.NearestFilter;   // the shader blends the samples itself
       roadTex.needsUpdate = true;
     }
@@ -1080,7 +1117,8 @@ export class Terrain {
         out.kind = raw & 15;
         out.bridge = (raw & 16) !== 0;
         out.washboard = (raw & 32) !== 0;
-        if ((raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
+        // A gravel driveway, drawn as a gravel road (drawnRoadBytes); in 1884 it is drawn and driven as the track it is.
+        if (!this.cartRoads && (raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
       }
     }
     // Mail and every other ground reader see the same exact deck as the wheels.

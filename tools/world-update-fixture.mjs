@@ -33,7 +33,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
     window: {}, performance: { now: () => 1000 + calls.length }, THREE: { Vector3: vec, MathUtils: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) } },
     started: true, last: 1000, fps: 60, quiet: 25, camReady: true, mode: 'drive', vehicle, camera,
     endings: { ...update('endings'), busy: ending }, interiors: { ...update('interiors'), render: trace('interiors.render'), busy: false },
-    wharves: null,
+    wharves: null, novemberRoads: null,
     terrain: { ...update('terrain'), drawnFine: new Set(['tile']), surfaceAt: () => ({ level: 8 }), failed: 0 },
     quality: { frame: trace('quality') }, picture: null, lawnDemo: null, mailMode: true, tall: null, farTurbines: null, farVisibility:null, farLoading:false, farKey:null,tallKey:null,
     demo: 0, demoPhoto: false, drove: 0, reliefTest: 0, waitingToDrive: false, loaded: true, beaconT: 0,
@@ -70,11 +70,11 @@ export function spy(source, ending = false, dev = true, absent = false, override
     // An open pause gate keeps the old clock: dt from `last`, simulation time equal to the frame's time.
     pause: { blocked: false, time: 0, frame(now) { const dt = Math.max(0, (now - context.last) / 1000); context.last = now; this.time = now; return { paused: false, dt }; } },
   };
-  for (const name of ['tall', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'roads', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections', 'harbourLights']) context[name] = update(name);
+  for (const name of ['tall', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'lotProps', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'roads', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'yardProps', 'grass', 'waterReflections', 'harbourLights']) context[name] = update(name);
   context.stuntPark=null;
   context.roadScene.setPaused = trace('roadScene.pause');
   context.waterReflections.settle = trace('water.settle'); context.waterReflections.afterRender = trace('water.afterRender');
-  if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'grass', 'waterReflections', 'fishing', 'harbourLights']) context[name] = null;
+  if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'lotProps', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'yardProps', 'grass', 'waterReflections', 'fishing', 'harbourLights']) context[name] = null;
   if (typeof overrides === 'function') overrides(context, trace);
   else Object.assign(context, overrides);
   if (source.includes('devHooks.')) {
@@ -113,12 +113,12 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
     world('yard', dt, '@vehicle', '@camera.position'), world('yardDog', dt, '@vehicle'), world('home', '@camera.position', '@vehicle'),
     world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050), world('village', '@camera.position', 1050), world('hawkesbury', '@camera.position', 1050), world('mabouMain', '@camera.position', 1050), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
     call('camera.matrix'), call('sky', '@camera.position'), call('shared.time', 1.05), call('beacon', dt ? 2.2 : .15),
-    world('terrain', '@camera', paused), world('coast', '@camera.position'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
+    world('terrain', '@camera', paused), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
     world('trees', '@terrain.drawnFine', '@camera.position'), call('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
     call('placesUI', '@vehicle', playing), call('journey', .05, playing), call('relief', dt, playing ? 6 : 0, '@vehicle', playing),
     call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars'), call('radio', playing, false),
     world('history', '@camera.position', dt), world('roads', '@camera.position'), world('sidewalks'), world('edge', '@camera.position'), world('mineSite', '@camera.position'),
-    world('deckhand', dt, '@vehicle', '@camera.position'), world('fishing', dt, '@camera.position'), world('roadScene', '@camera'), world('schoolBus', '@camera'), world('ambientTraffic', '@camera', '@vehicle', true), world('roadAnimals', dt, '@vehicle', true), world('props', '@camera', dt), world('harbourLights', 1.05), world('tall', '@camera', 1.05), call('shift', started ? .05 : 0, '@vehicle'),
+    world('deckhand', dt, '@vehicle', '@camera.position'), world('fishing', dt, '@camera.position'), world('roadScene', '@camera'), world('schoolBus', '@camera'), world('ambientTraffic', '@camera', '@vehicle', true), world('roadAnimals', dt, '@vehicle', true), world('props', '@camera', dt), world('yardProps', '@camera', dt), world('harbourLights', 1.05), world('tall', '@camera', 1.05), call('shift', started ? .05 : 0, '@vehicle'),
     ...(!fly ? [call('shadowFocus', 3, 4, 5), call('sunShadows', .05, '@shadowFocus', 0, paused)] : []),
     world('grass', .05, '@camera', 3, 5, .7, '@vehicleSpec'), call('clipping', !absent), call('multiplayer', .05, '@camera', dt > 0 && !fly),
     world('mirror', '@camera'), call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'),
@@ -129,12 +129,12 @@ export function expectedEnding({ absent = false } = {}) {
   return [
     call('quality', .05, true), call('roadScene.pause', true), call('endings', .05), call('pad.show', false), call('radio', false, true),
     call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), world('trees', '@terrain.drawnFine', '@camera.position'),
-    world('coast', '@camera.position'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'), world('landmarks', '@camera'), world('roads', '@camera.position'),
+    world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'), world('landmarks', '@camera'), world('roads', '@camera.position'),
     world('props', '@camera', 0), world('sidewalks'), world('fishing', 0, '@camera.position'), call('clipping', !absent), world('mirror', '@camera'),
     call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'), call('raf', '@function'),
   ];
 }
-const optional = new Set('tall deckhand yard yardDog home porch porchDog church village hawkesbury mabouMain stockpiles cemeteries trees coast airport quarry culvertMouths landmarks history sidewalks edge mineSite roadScene schoolBus ambientTraffic roadAnimals roadScene.pause props grass waterReflections water.settle water.afterRender fishing harbourLights'.split(' '));
+const optional = new Set('tall deckhand yard yardDog home porch porchDog church village hawkesbury mabouMain stockpiles cemeteries trees coast lotProps airport quarry culvertMouths landmarks history sidewalks edge mineSite roadScene schoolBus ambientTraffic roadAnimals roadScene.pause props yardProps grass waterReflections water.settle water.afterRender fishing harbourLights'.split(' '));
 function normalized(values, ctx) {
   return JSON.parse(JSON.stringify(values, (_key, value) => {
     for (const [name, object] of Object.entries(ctx)) if (value === object && typeof object === 'object' && object !== null) return '@' + name;
@@ -243,7 +243,7 @@ export function mutated(source, name) {
     swap: source.replace(terrain, '__SWAP__').replace(coast, terrain).replace('__SWAP__', coast),
     ending: source.replace("segment: 'landscape', ending: true, endingPosition: 1", "segment: 'landscape', ending: false, endingPosition: 1"),
     drop: source.replace(terrain, ''),
-    treesPosition: source.replace('endingPosition: 1, ', ''), propsPosition: source.replace('endingPosition: 7, ', ''),
+    treesPosition: source.replace('endingPosition: 1, ', ''), propsPosition: source.replace('endingPosition: 8, ', ''),
     mirror: source.replace("segment: 'mirror', ending: true", "segment: 'mirror', ending: false"),
     iterator: source.replace('for (let i = 0; i < list.length; i++) {\n    const entry = list[i];', 'for (const entry of list) {'),
   };
