@@ -35,7 +35,6 @@ export class RaceView {
     this.panel.id='racePanel';this.panel.hidden=true;
     mountRoomCard(this.panel, host.touch);
     const summary=document.createElement('summary');summary.textContent='Room race';
-    if (settings) summary.style.cssText='min-height:56px;box-sizing:border-box;padding:16px 0;cursor:pointer';
     const label=document.createElement('label');label.textContent='Short road course ';this.select.setAttribute('aria-label','Short road course');label.append(this.select);
     this.start.textContent='Start · 5 seconds';this.cancel.textContent='Clear race';
 

@@ -52,15 +52,7 @@ export function createTouchControls(actions: TouchActions): TouchControls {
   reset.setAttribute('aria-label', 'Reset: put the car back on the road');
   view.setAttribute('aria-label', 'Change the camera view');
   const all = [steer, brake, go, reset, view, horn];
-  // END SHIFT moves into the settings panel: among the phone controls it overlapped something at most screen sizes.
-  const end = document.getElementById('endShift'), panel = document.getElementById('settings');
-  if (end && panel) {
-    end.classList.add('inPanel');
-    // Below the sheet's own header (title and Close), which stays first.
-    const header = panel.querySelector('#settingsHeader');
-    if (header) header.after(end); else panel.insertBefore(end, panel.firstChild);
-    end.addEventListener('click', () => panel.classList.remove('open'));
-  }
+  moveEndShiftToSettings();
   createPhoneLayout();
   document.body.classList.add('tcOn');
 
@@ -125,4 +117,17 @@ export function createTouchControls(actions: TouchActions): TouchControls {
       if (!visible) releaseAll();
     },
   };
+}
+
+/** Keep the one END SHIFT control in Settings for every input. */
+export function moveEndShiftToSettings(): void {
+  // Keep END SHIFT in Settings for every input.
+  const end = document.getElementById('endShift'), panel = document.getElementById('settings');
+  if (end && panel && !end.classList.contains('inPanel')) {
+    end.classList.add('inPanel');
+    // Below the sheet's own header (title and Close), which stays first.
+    const header = panel.querySelector('#settingsHeader');
+    if (header) header.after(end); else panel.insertBefore(end, panel.firstChild);
+    end.addEventListener('click', () => panel.classList.remove('open'));
+  }
 }

@@ -32,8 +32,8 @@ body.tcOn #miniMap.enlarged #miniMapCanvas{max-height:none}
 #miniMap.folded #miniMapHead span{display:none}   /* a folded map is its name only: its width never changes */
 #miniMap[hidden]{display:none}
 body.indoorOn #miniMap{display:none}
-body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(100px + env(safe-area-inset-top,0px));pointer-events:auto}
-@media(max-height:450px){body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(80px + env(safe-area-inset-top,0px))}}
+body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(174px + env(safe-area-inset-top,0px));pointer-events:auto}
+@media(orientation:landscape) and (max-height:450px){body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(10px + env(safe-area-inset-top,0px));left:calc(max(10px, var(--test-safe-left, env(safe-area-inset-left, 0px))) + var(--droneCol) + 8px)}}
 `;
 
 const RANGES = [450, 1200, 3200];                 // metres from the car to the edge of the map
@@ -168,7 +168,16 @@ export class MiniMap {
   }
 
   private fit() {
-    const small = this.flight && document.body.classList.contains('droneSticks') && innerHeight < 450 ? 96 : Math.min(innerWidth, innerHeight) < 520 ? 124 : 176;
+    const sticks = this.flight && document.body.classList.contains('droneSticks');
+    let flightSize = 156;
+    if (sticks) {
+      for (const id of ['bigMapButton', 'pauseButton']) {
+        const e = document.getElementById(id), r = e && !e.hidden ? e.getBoundingClientRect() : null;
+        if (r?.width) flightSize = Math.min(flightSize, r.left - 10 - 8 - 2);
+      }
+      document.body.style.setProperty('--droneCol', `${flightSize + 2}px`);
+    }
+    const small = sticks ? flightSize : Math.min(innerWidth, innerHeight) < 520 ? 124 : 176;
     const phone = document.body.classList.contains('tcOn');
     const safe = (side: string) => parseFloat(getComputedStyle(document.getElementById('phoneHud') ?? document.body).getPropertyValue(`--safe-${side}`)) || 0;
     const css = this.large ? Math.max(1, Math.min(600, innerWidth - 24 - safe('left') - safe('right'),
@@ -287,9 +296,10 @@ export class MiniMap {
     g.restore();
     // The compass turns with north. Its letters stay upright.
     const R = half - 7;
+    const shown = this.shown || s, tiny = shown < 100 && shown < s;
     const compass = ['N', 'E', 'S', 'W'].map((letter, i) => ({ letter,
       x: half + Math.sin(i * Math.PI / 2 - heading) * R,
-      y: half - Math.cos(i * Math.PI / 2 - heading) * R }));
+      y: half - Math.cos(i * Math.PI / 2 - heading) * R })).filter(({letter}) => !tiny || letter === 'N');
     const cy = half * 1.25;
     if (this.labelled) {
       // Placed and drawn in on-screen pixels: a phone shows this canvas smaller than it is laid out, and names

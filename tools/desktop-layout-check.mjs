@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { checkScrollMore } from './scroll-more-browser.mjs';
 import { readBaseline } from './baseline-source.mjs';
 import { cdp, cdpFetch } from './cdp.mjs';
 // Compare unchanged desktop controls with the baseline; pin the new sheet and credits. The same scene keeps the comparison useful.
@@ -12,12 +13,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 const [out, url] = process.argv.slice(2), port = process.env.CDP_PORT ?? '9333';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const original = (path) => (process.env.BASE_REF ? execFileSync('git', ['show', `${process.env.BASE_REF}:${path}`], { encoding:'utf8' }) : readBaseline('desktop-layout',path)).match(/<style>([\s\S]*?)<\/style>/)[1];
-for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 720, 2]]) {
+for (const [width, height, scale] of [[1280, 720, 1], [1440, 900, 1], [1600, 1000, 1], [1280, 720, 2]]) {
   const size = `${width}x${height}${scale > 1 ? `@${scale}` : ''}`;
   const tab = await (await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`, {method:'PUT'})).json();
   const { ws, send } = await cdp(tab.webSocketDebuggerUrl);
   const read = async (expression) => {
-    const result = await send('Runtime.evaluate', {expression, returnByValue:true});
+    const result = await send('Runtime.evaluate', {expression, returnByValue:true, awaitPromise:true});
     assert.ok(!result.result?.exceptionDetails, JSON.stringify(result.result?.exceptionDetails));
     return result.result?.result?.value;
   };
@@ -76,13 +77,17 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
                 stacked:h.height>0&&m.height>0&&Math.abs(h.bottom-m.top)<.1,
                 aligned:Math.abs(h.left-m.left)<.1&&Math.abs(h.width-m.width)<.1,
                 paint:[hs,ms].map(s=>[s.backgroundColor,s.borderLeftWidth,s.borderLeftStyle,s.borderLeftColor]),joinedPadding:ms.paddingTop};
+              result.driveWidth=Math.abs(card.getBoundingClientRect().width-Math.min(346,innerWidth-120))<1;
+              const width=card.getBoundingClientRect().width;hint.textContent='Box already down: photograph it; leave mail beside the post';
+              result.longFits=card.getBoundingClientRect().width===width&&hint.scrollWidth<=hint.clientWidth+1&&score.scrollWidth<=score.clientWidth+1&&getComputedStyle(hint).fontSize==='12px'&&getComputedStyle(score).fontSize==='12px';
               hint.textContent='';result.emptyPadding=getComputedStyle(score).paddingTop;result.emptyHidden=getComputedStyle(hint).display==='none';
               hint.textContent='Next: roadside box.';document.body.classList.add('droneOn');hint.style.display='none';
               result.flightPadding=getComputedStyle(score).paddingTop;
               result.flightFit=card.getBoundingClientRect().width<460&&Math.abs(card.getBoundingClientRect().width-score.getBoundingClientRect().width)<.1;
               return result;
             } finally {hint.textContent=saved.text;hint.style.cssText=saved.style;hint.hidden=saved.hidden;document.body.classList.toggle('droneOn',saved.drone);}
-          })()`),{inside:true,stacked:true,aligned:true,paint:Array.from({length:2},()=>['rgba(8, 14, 20, 0.82)','3px','solid','rgb(208, 99, 46)']),joinedPadding:'0px',emptyPadding:'8px',emptyHidden:true,flightPadding:'8px',flightFit:true},'mail hint and tally form one aligned panel; a lone tally keeps top padding');
+          })()`),{inside:true,stacked:true,aligned:true,paint:Array.from({length:2},()=>['rgba(8, 14, 20, 0.82)','3px','solid','rgb(208, 99, 46)']),joinedPadding:'0px',driveWidth:true,longFits:true,emptyPadding:'8px',emptyHidden:true,flightPadding:'8px',flightFit:true},'mail hint and tally form one aligned panel; a lone tally keeps top padding');
+          assert.ok(await read(`!document.getElementById('miniMap').hidden && !document.getElementById('radio').hidden`), 'the desktop stack is shown: run on a driving view, not a fixed shot');
           for(const short of [false,true]) {
             if(short)await send('Emulation.setDeviceMetricsOverride',{width:900,height:500,deviceScaleFactor:scale,mobile:false});
             await sleep(150);
@@ -123,16 +128,23 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
         // result its hint opens the panel (detail.ts). A blind click would then close it. Either way it starts at the top.
         await read(`(() => { const panel = document.getElementById('settings'); if (panel.classList.contains('open')) panel.scrollTop = 0; else document.getElementById('gear').click(); })()`);
         const panelTop = () => read(`(() => {
-          const end = document.getElementById('endShift').getBoundingClientRect();
-          const at = document.elementFromPoint((end.left+end.right)/2,(end.top+end.bottom)/2);
-          const panel = document.getElementById('settings');
-          return !!at && panel.contains(at) && getComputedStyle(panel).backgroundColor === 'rgb(12, 20, 28)';
+          if(mmm.gameMode!=='mail')return true;
+          const end = document.getElementById('endShift'), r=end.getBoundingClientRect(), panel=document.getElementById('settings'), at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2),s=getComputedStyle(end);
+          return end.parentElement===panel&&end.classList.contains('inPanel')&&['settingsHeader',''].includes(end.previousElementSibling.id)&&s.position==='static'&&r.height>=44&&s.backgroundColor==='rgba(0, 0, 0, 0)'&&(at===end||end.contains(at));
         })()`);
         if (phase === 'after') {
-          assert.ok(await panelTop(), `${carrier}: open settings cover END SHIFT`);
+          assert.ok(await panelTop(), `${carrier}: END SHIFT is a quiet, reachable Settings row`);
+          await checkScrollMore(read,'settings','settingsMore');
           assert.equal(await read(`(()=>{const p=document.getElementById('settings'),r=p.getBoundingClientRect(),c=document.getElementById('credit').getBoundingClientRect(),s=getComputedStyle(p);return document.getElementById('settingsHeading').textContent==='Settings'&&document.getElementById('settingsClose').getBoundingClientRect().height===44&&s.borderRadius==='10px'&&s.overflowY==='auto'&&r.width===320&&r.bottom<=c.top-8;})()`),true,'one sheet width, title, close, scroll and room above credit');
           await read(`document.getElementById('settingsClose').click()`);
           assert.equal(await read(`document.getElementById('settings').classList.contains('open')`),false,'visible Close closes Settings');
+          await sleep(50);assert.ok(await read(`document.getElementById('settingsMore').hidden`),'closed Settings hides its band');
+          if(await read(`mmm.gameMode==='mail'`))assert.ok(await read(`document.getElementById('endShift').getBoundingClientRect().width===0`),'no END SHIFT chip in the driving HUD');
+          if(await read(`!!document.getElementById('placesButton')`)) {
+            await read(`document.getElementById('placesButton').click()`);await checkScrollMore(read,'placesBody','placesMore');
+            assert.ok(await read(`(()=>{const e=document.getElementById('placesClose'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return at===e||e.contains(at);})()`),'Places Close stays above the cue');
+            await read(`document.getElementById('placesClose').click()`);
+          }
           await read(`document.getElementById('gear').click()`);
         }
         writeFileSync(`${out}/${phase}/desktop-${carrier}-${size}-settings.png`, Buffer.from((await send('Page.captureScreenshot', {format:'png'})).result.data, 'base64'));
@@ -167,7 +179,7 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
           document.getElementById('settings').insertBefore(group, document.getElementById('startOver'));
         })()`);
         if (phase === 'after') {
-          assert.ok(await panelTop(), `${carrier}: a taller panel stays above END SHIFT`);
+          assert.ok(await panelTop(), `${carrier}: END SHIFT remains in the taller Settings panel`);
           assert.ok(await lastReachable(), `${carrier}: last button remains reachable in a taller panel`);
           writeFileSync(`${out}/${phase}/desktop-${carrier}-${size}-picture-fixture.png`, Buffer.from((await send('Page.captureScreenshot', {format:'png'})).result.data, 'base64'));
         }

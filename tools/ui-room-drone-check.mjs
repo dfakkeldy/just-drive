@@ -2,9 +2,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
-const output = await build({ stdin: { contents: `export * from './mp/room-cards';export { SocialView } from './mp/social-view';export { RaceView } from './mp/race';export { GameView } from './mp/games';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, createDroneSticks, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
+const output = await build({ stdin: { contents: `export * from './mp/room-cards';export {Multiplayer} from './mp/index';export { SocialView } from './mp/social-view';export { RaceView } from './mp/race';export { GameView } from './mp/games';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, createDroneSticks, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
 const module = { exports: {} }; new Function('module','exports',output.outputFiles[0].text)(module,module.exports);
-const { mountRoomCard, removeRoomCard, fitRoomCards, RoomCountdown, RaceView, GameView, Drone, createDroneSticks, DRONE_HELP, MiniMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP } = module.exports;
+const { Multiplayer, mountRoomCard, removeRoomCard, fitRoomCards, RoomCountdown, RaceView, GameView, Drone, createDroneSticks, DRONE_HELP, MiniMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP } = module.exports;
 const paint = [];
 const context = new Proxy({ measureText: text => ({width:text.length*6}) }, { get: (o,k) => o[k] ?? ((...args) => paint.push([k,...args])) });
 class Element {
@@ -39,8 +39,24 @@ for(const touch of [false,true]){
  else{
   for(const [id,rect] of [['endShift',{left:1330,right:1430,top:65,bottom:145,width:100,height:80}],['credit',{left:300,right:1430,top:860,bottom:894,width:1130,height:34}]])body.append(Object.assign(new Element(),{id,rect}));
   fitRoomCards();assert.equal(home.style.bottom,'50px');assert.equal(home.style.maxHeight,'695px');
+  const endShift=document.getElementById('endShift');endShift.classList.add('inPanel');settings.append(endShift);settings.classList.add('open');
+  const reads=endShift.reads;fitRoomCards();assert.equal(endShift.reads,reads,'END SHIFT inside Settings is not measured as a HUD blocker');
+  assert.equal(home.style.maxHeight,'718px','END SHIFT inside open Settings leaves the room column in place');
+  settings.classList.remove('open');
  }
  removeRoomCard(cards[0]);assert.ok(home.parentElement,'other cards keep their home');removeRoomCard(cards[1]);removeRoomCard(cards[2]);assert.equal(home.parentElement,null,'disconnect removes the empty home');
+}
+// The gear observes timestamps even when the capped chat array keeps the same length.
+{
+ const gear=Object.assign(new Element(),{id:'gear'});body.append(gear);
+ const badge=new Element(),unreadDot=new Element(),net={status:'on',count:1,me:{id:1},chats:[]};
+ const room=Object.assign(Object.create(Multiplayer.prototype),{gear,badge,unreadDot,net,newestChat:-Infinity,unread:false});
+ room.updateGear();assert.equal(badge.textContent,'1');assert.equal(badge.hidden,false);assert.equal(gear.getAttribute('aria-label'),'Settings and room: 1 other driver');
+ net.chats=Array.from({length:6},(_,i)=>({id:1,at:i}));room.updateGear();assert.equal(unreadDot.hidden,true,'own chat is not unread');
+ net.chats.shift();net.chats.push({id:2,at:6});room.updateGear();assert.equal(unreadDot.hidden,false);assert.match(gear.getAttribute('aria-label'),/, new message$/);
+ settings.classList.add('open');room.updateGear();assert.equal(unreadDot.hidden,true);assert.doesNotMatch(gear.getAttribute('aria-label'),/new message/);settings.classList.remove('open');
+ net.count=0;room.updateGear();assert.equal(badge.hidden,true);assert.equal(gear.getAttribute('aria-label'),'Settings and room: nobody else on the road');
+ net.status='retry';room.updateGear();assert.equal(gear.getAttribute('aria-label'),'Settings');assert.equal(unreadDot.hidden,true);gear.remove();
 }
 // Use CSS-like column geometry to check both the open and folded footprints.
 for(const id of ['endShift','credit'])document.getElementById(id).remove();
@@ -131,6 +147,7 @@ for(let i=0;i<5;i++)drone.update(.25,still,{ground:0,floor:2},{x:0,y:0,z:0},0);
 assert.equal(dockWrites,0,'unchanged control boxes cause no help position writes');
 endShift.rect={...endShift.rect,bottom:128};gear.rect={...gear.rect,right:1410};drone.update(.25,still,{ground:0,floor:2},{x:0,y:0,z:0},0);
 assert.equal(dock.style.top,'138px');assert.equal(dock.style.right,'30px');assert.equal(dockWrites,2,'moved controls update both help coordinates');
+endShift.classList.add('inPanel');drone.update(.25,still,{ground:0,floor:2},{x:0,y:0,z:0},0);assert.equal(dock.style.top,'64px','an inPanel END SHIFT does not move drone hints');
 gear.remove();endShift.remove();
 const help=document.getElementById('droneHints');let hidden=help.hidden,hiddenWrites=0;
 Object.defineProperty(help,'hidden',{get:()=>hidden,set:v=>{hidden=v;hiddenWrites++;}});
@@ -143,13 +160,20 @@ drone.stow();drone.launch(0,0,0,0);assert.equal(drone.hintsHidden,false,'each fl
 innerWidth=844;innerHeight=390;body.classList.add('droneSticks');
 const map=new MiniMap({roads:[]});const root=document.getElementById('miniMap'),original=new Element();body.append(original);original.append(root);
 assert.equal(root.classList.contains('folded'),true);map.setFlight(true);assert.equal(root.parentElement,body);assert.equal(root.classList.contains('folded'),false);
-assert.equal(document.getElementById('miniMapCanvas').style.width,'96px');
+assert.equal(document.getElementById('miniMapCanvas').style.width,'156px','flight uses the shared readout column');
+assert.equal(body.style['--droneCol'],'158px');
+// Keep the 96px flight compass coverage as well as the new flight default.
+map.size=96;
 const parked={x:8,z:9};paint.length=0;map.update(1,10,20,Math.PI/2,[],[],[],parked);
 assert.ok(paint.some(([op,x])=>op==='rotate'&&x===-Math.PI/2));assert.ok(paint.some(([op,x,z])=>op==='translate'&&x===-10&&z===-20));
 for(const letter of ['N','E','S','W'])assert.ok(paint.some(([op,text])=>op==='fillText'&&text===letter),'compass paints '+letter);
 assert.ok(paint.some(([op,x,y,r])=>op==='arc'&&x===0&&y===0&&r===41),'96px compass ring is inset seven pixels');
 const north=paint.find(([op,text])=>op==='fillText'&&text==='N');assert.ok(north&&north[2]<48&&Math.abs(north[3]-48)<1e-6,'north moves left when heading east');
 assert.ok(paint.some(([op,x,z])=>op==='arc'&&x===8&&z===9),'parked car gets its own marker');map.setFlight(false);assert.equal(root.parentElement,original);assert.equal(root.classList.contains('folded'),true,'landing restores the map preference and parent');
+map.size=124;map.shown=78;map.folded=false;paint.length=0;map.update(1,10,20,0,[],[],[],parked);
+assert.ok(paint.some(([op,text])=>op==='fillText'&&text==='N'));
+for(const letter of ['E','S','W'])assert.ok(!paint.some(([op,text])=>op==='fillText'&&text===letter),'tiny driving map omits '+letter);
+map.folded=true;
 // An explicit fold choice during flight persists on landing and in storage.
 let stored;localStorage.setItem=(key,value)=>{if(key==='mmm.map')stored=value;};
 map.setFlight(true);const mapHead=document.getElementById('miniMapHead');

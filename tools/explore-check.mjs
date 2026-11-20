@@ -10,7 +10,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const missing = ['shiftHud','stopHint','cameraButton','endShift','mailButton','mailScore','shiftReport','photoTag','photoFlash','startOver','relief','reliefCard','doorPrompt','interiorHud','endingFrame'];
 const visible = `id => { const e=document.getElementById(id); if(!e || e.hidden)return false;const r=e.getBoundingClientRect();return r.width>0 && r.height>0 && getComputedStyle(e).visibility!=='hidden' && getComputedStyle(e).display!=='none'; }`;
 // Captured from the real page at b2a491b before the mode seam. Hash avoids duplicating its credits.
-const mailBaseline = {"hash":"80ae3b403ba84a165e6735231c15bc9190cc97eb3f048274cddf9d71ea698f1a","shown":["shiftHud","stopHint","cameraButton","endShift","mailButton","mailScore","photoFlash","relief"]};
+// END SHIFT now lives in closed Settings; all other shown mail ids and the title hash stay pinned.
+const mailBaseline = {"hash":"80ae3b403ba84a165e6735231c15bc9190cc97eb3f048274cddf9d71ea698f1a","shown":["shiftHud","stopHint","cameraButton","mailButton","mailScore","photoFlash","relief"]};
 const results = [], ownedTabs = [];
 process.on('uncaughtException', async error => { console.error(error.stack); for(const tab of ownedTabs){try{await fetch(`http://127.0.0.1:${port}/json/close/${tab.id}`);tab.ws?.close();}catch{}}process.exit(1); });
 function check(value, name) { results.push({name,pass:!!value}); console.log(`${value?'PASS':'FAIL'} ${name}`); if(process.env.EXPLORE_PROBE===name)throw new Error((value?'MUTATION MISSED: ':'MUTATION DETECTED: ')+name); }

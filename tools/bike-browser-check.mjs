@@ -94,6 +94,8 @@ try{
     await p.read(`document.documentElement.style.setProperty('--test-safe-top','${safe?(w>h?0:47):0}px');document.documentElement.style.setProperty('--test-safe-bottom','${safe?(w>h?21:34):0}px');document.documentElement.style.setProperty('--test-safe-left','${safe&&w>h?44:0}px');document.documentElement.style.setProperty('--test-safe-right','${safe&&w>h?44:0}px')`);
     await sleep(40);const b=await p.read(`(${boxes})(['hud','bikeJump','gear','placesButton','miniMap','radio','placeArrival','tcTrack','tcBrake','tcGo','tcPull','tcReset','tcView','tcHorn'])`);const faults=[];
     for(let i=0;i<b.length;i++){const[a,x,y,r,bt]=b[i];if(x<-.1||y<-.1||r>w+.5||bt>h+.5)faults.push(a+' offscreen');for(let j=i+1;j<b.length;j++){const[c,xx,yy,rr,bb]=b[j];if(Math.min(r,rr)-Math.max(x,xx)>1&&Math.min(bt,bb)-Math.max(y,yy)>1)faults.push(a+' overlaps '+c)}}
+    const status=await p.read(`(()=>{const jump=document.getElementById('bikeJump'),s=document.getElementById('phoneStatus'),hud=document.getElementById('hud');return {jump:!!jump&&!jump.hidden&&getComputedStyle(jump).display!=='none',clips:s.scrollHeight>s.clientHeight+1,squeezed:hud.getBoundingClientRect().height<14};})()`);
+    if(status.jump){if(status.clips)faults.push('#phoneStatus clips');if(status.squeezed)faults.push('#hud squeezed');}
     check(faults.length===0,`phone ${w}x${h} safe ${safe} clear controls ${faults.join(',')}`);
     check(b.some(x=>x[0]==='tcPull'&&x[3]-x[1]>=56&&x[4]-x[2]>=56)&&!await p.read(`!!document.getElementById('drivingHelp')`),`phone ${w}x${h} PULL target and no car steering help`);
    }

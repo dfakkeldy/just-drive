@@ -1,7 +1,7 @@
 // Node only. The old DOM expressions are frozen verbatim, not reconstructed from the new formatter.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { transform } from '../web/node_modules/esbuild/lib/main.js';
+import { build, transform } from '../web/node_modules/esbuild/lib/main.js';
 
 // Frozen from main 53bdb7e875c69dd409d55eadbf2c7d1c1c85d158, web/src/main.ts lines 897-914.
 const oldSource = [
@@ -54,6 +54,8 @@ async function load(text) {
   const { code } = await transform(text, { loader: 'ts', format: 'esm', target: 'es2022' });
   return import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 }
+const {outputFiles:droneFiles}=await build({stdin:{contents:"export {droneSpans} from './web/src/drone.ts'",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
+const {droneSpans}=await import('data:text/javascript;base64,'+Buffer.from(droneFiles[0].text).toString('base64'));
 const periodNames = await load(readFileSync(new URL('../web/src/eras/history-road-names.ts', import.meta.url), 'utf8'));
 function element(initial = '') {
   let text = initial, writes = 0, reads = 0, fpsWrites = 0;
@@ -76,7 +78,7 @@ function context(s, module, bare = false, started = true) {
     sun: { az: s.sunAz, el: s.sunEl }, terrain: { drawn: s.drawn, pending: s.pending }, flySpeed: s.flySpeed,
     SHOTS: { length: s.views }, shift: { done: s.done, stops: s.stops, ruts: { count: s.ruts, lawns: s.lawns } },
     mail: { delivered: s.delivered, lawn: s.lawn, ditch: s.ditch }, towing: { reason: s.trailerReason }, AREA: { route: s.route },
-    params: new URLSearchParams(s.showRuts ? 'lawn=0' : ''), hud: element('unchanged'), fleet: null, drone: { active: false, readout: () => 'DRONE' }, ...module,
+    params: new URLSearchParams(s.showRuts ? 'lawn=0' : ''), hud: element('unchanged'), fleet: null, droneSpans, drone: { active: false, readout: () => 'DRONE' }, ...module,
   };
   // Execute the production initializer too: do not duplicate its wiring in the fixture.
   ctx.hudState = initState(ctx);
@@ -317,6 +319,19 @@ function droneFrames(module, frame) {
   }
 }
 droneFrames(module, frame);
+{
+ const saved=globalThis.document;
+ globalThis.document={createElement:()=>({textContent:''}),createTextNode:textContent=>({textContent})};
+ try {
+  let text='',writes=0,rich=false;
+  const hud={get textContent(){return text;},set textContent(v){text=v;writes++;rich=false;},replaceChildren(...nodes){text=nodes.map(n=>n.textContent).join('');writes++;rich=true;assert.ok(nodes.some(n=>n.className==='dh'));}};
+  for(const line of ['DRONE · Height 6 m · From the car 2000 m · Speed 0 m/s · Heading N · at range limit','DRONE · Height 6 m\nFrom the car 2000 m\nSpeed 0 m/s\nHeading N · returning']) {
+   module.setHud(hud,'drive');module.setHud(hud,line,droneSpans);assert.equal(hud.textContent,line);assert.equal(rich,true,'drone uses the rich path');
+   const count=writes;module.setHud(hud,line,droneSpans);assert.equal(writes,count);
+   module.setHud(hud,'drive');assert.equal(hud.textContent,'drive');assert.equal(rich,false,'drive restores plain text after the drone');
+  }
+ } finally {globalThis.document=saved;}
+}
 console.log('PASS drone readout replaces the free camera lines, desktop keys, phone readout, clears on landing');
 console.log('PASS fleet selection, handbrake and refusal lines follow live state and share the HUD cache');
 console.log(`PASS ${sequenceFrames} frames in 1,500 kept contexts with changing values: the player readout in every frame`);

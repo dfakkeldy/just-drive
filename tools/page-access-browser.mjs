@@ -1,3 +1,4 @@
+import { checkScrollMore } from './scroll-more-browser.mjs';
 // tools/check-page-access.sh
 // Production static pages and PlacesUI, with real browser input and accessibility names.
 import assert from 'node:assert/strict';
@@ -98,7 +99,7 @@ async function audit(root){
 }
 try {
  await send('Page.enable');
- for(const [size,width,height] of [['desktop',1280,800],['phone',390,844]]){
+ for(const [size,width,height] of [['desktop',1280,800],['wide',1440,900],['phone',390,844]]){
   await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
   for(const brand of ['mail','just'])for(const kind of ['about','help']){
    await load(`/${kind}/${brand}`);await shot(`${kind}-${brand}-${size}`);
@@ -113,6 +114,7 @@ try {
   }
   await load('/panel');await key('Tab');assert.equal(await read('document.activeElement.id'),'placesButton');await key('Enter');assert.equal(await read(`document.querySelector('#placesPanel').hidden`),false,'Enter opens Places');await shot(`places-${size}`);
   assert.equal(await read(`document.querySelector('#placesList').tagName`),'UL','Places is a real list');assert.equal(await read(`document.querySelector('#placesList').getAttribute('role')`),'list','Places list keeps its role');assert.equal(await read(`document.getElementById(document.querySelector('#placesButton').getAttribute('aria-controls'))===document.querySelector('#placesPanel')`),true,'PLACES controls the panel');await dialog();assert.equal(await read(`document.querySelector('#placesButton').getAttribute('aria-expanded')`),'true','PLACES reports open');
+  await checkScrollMore(read,'placesBody','placesMore');
   await read(`document.querySelector('#placesBody').scrollTop=1e6`);
   assert.equal(await read(`(()=>{const e=document.querySelector('#placesClose'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.top>=0&&r.bottom<=innerHeight&&(at===e||e.contains(at));})()`),true,'Back stays in view at the end of Places');
   await read(`document.querySelector('#placesBody').scrollTop=0`);

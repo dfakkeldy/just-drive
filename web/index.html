@@ -26,7 +26,7 @@
   }
   canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   #hud {
-    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(10px, env(safe-area-inset-left, 0px));
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(10px, var(--test-safe-left, env(safe-area-inset-left, 0px)));
     max-width: calc(100% - 80px); background: var(--panel); padding: 6px 9px; border-radius: 4px;
     white-space: pre-wrap; pointer-events: none; font-variant-numeric: tabular-nums;
   }
@@ -111,6 +111,17 @@
   @media(pointer:fine){#cameraButton{right:24px;bottom:174px}}
   @media(max-width:600px){#shiftHud{top:calc(112px + env(safe-area-inset-top,0px));font-size:11px;max-width:calc(100% - 120px)}#stopHint{bottom:calc(131px + env(safe-area-inset-bottom,0px));font-size:11px}#photoTag{top:calc(193px + env(safe-area-inset-top,0px));max-width:190px}.reportBody{padding:20px 19px 8px}#reportPanel h1{font-size:25px}#reportPanel{font-size:15px}.reportFooter{padding:12px 19px}#gear{width:56px;height:56px}#settings{top:calc(72px + env(safe-area-inset-top,0px))}}
 
+.scrollMore{position:fixed;z-index:9;height:24px;pointer-events:none;font:12px/24px system-ui,sans-serif;text-align:center;color:var(--ink-dim);background:var(--panel-solid);border-radius:0 0 10px 10px}
+.scrollMore::before{content:'';position:absolute;left:0;right:0;bottom:100%;height:12px;background:linear-gradient(transparent,var(--panel-solid))}
+.scrollMore[hidden]{display:none}
+#settings.moreRoom,#placesBody.moreRoom{padding-bottom:36px;scroll-padding-bottom:36px}
+#placesMore{border-radius:0}
+body:not(.tcOn) #endShift.inPanel{position:static;top:auto;right:auto;z-index:auto;width:100%;min-height:44px;margin:0 0 12px;background:transparent;border:1px solid var(--ink-dim);font:12px var(--mono)}
+#settings details{margin:0;padding:0;border:0;border-top:1px solid var(--line)}
+#settings details>summary{display:list-item;align-content:center;min-height:44px;box-sizing:border-box;padding:0;font-weight:700;cursor:pointer}
+body.tcOn #settings details>summary{min-height:56px}
+#settings details[open]{padding-bottom:12px}
+body:not(.tcOn):not(.droneOn) #mailCard{width:min(346px,calc(100% - 120px))}
 /* Sheets use one content width and leave the credit chip clear. */
 body #settings.open[aria-labelledby]{max-height:calc(100dvh - var(--settings-top,calc(58px + env(safe-area-inset-top,0px))) - max(76px,var(--settings-credit-height,0px)) - var(--map-credit-space,0px) - var(--test-safe-bottom,env(safe-area-inset-bottom,0px)))}
 @media(max-width:600px){body{--settings-top:calc(72px + env(safe-area-inset-top,0px))}}
@@ -128,6 +139,7 @@ body.tcOn.compactPhone #phoneHud #phoneHint:has(#placeArrival:not([hidden])){wid
 body.tcOn.compactPhone #placeArrival{width:min(360px,100%);min-width:min(220px,100%);overflow-wrap:normal}
 body.tcOn.compactPhone #phoneHint #stopHint{font-size:11px;line-height:15px;padding:3px 6px;white-space:pre-line;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:36px;overflow:hidden;text-overflow:clip}
 body.tcOn.compactPhone #phoneHud #radio{width:max-content;max-width:100%;min-width:56px;justify-self:start}
+@media(orientation:portrait){body.tcOn.compactPhone #phoneHud #radio{width:var(--leftCol);text-align:left}}
 body.tcOn.compactPhone #phoneHud #radio b{width:auto;white-space:normal;overflow:visible;text-overflow:clip}
 @media(orientation:landscape){body.tcOn.compactPhone #phoneHud:not([hidden]){grid-template-rows:56px auto minmax(0,1fr) 72px var(--mail-pedal-height)}body.tcOn.compactPhone #phoneHud #phoneHint{min-height:14px}body.tcOn.compactPhone.mailPhone #phoneHud #phoneHint{min-height:36px}}
 @media(orientation:landscape) and (max-height:319px){body.tcOn.compactPhone #phoneHud:not([hidden]){grid-template-rows:56px auto minmax(0,1fr) 64px 60px}}
@@ -141,7 +153,7 @@ body:not(.tcOn):not(.droneSticks):not(.indoorOn):has(#placesButton:not([hidden])
 body:not(.tcOn):not(.droneSticks) #bigMapButton{right:calc(150px + env(safe-area-inset-right,0px));width:70px}
 body:not(.tcOn):not(.droneSticks):not(.indoorOn):has(#placesButton:not([hidden])) #bigMapButton{right:calc(244px + env(safe-area-inset-right,0px))}
 body:is(.tcOn,.droneSticks) :is(#placesButton,#pauseButton,#gear){border:1px solid rgba(238,242,246,.3);background:var(--panel);border-radius:10px;color:var(--ink);font-family:var(--mono)}
-body.tcOn:has(#settings.open) :is(.tc,#cameraButton,#mailButton){visibility:hidden}
+body.tcOn:has(#settings.open) :is(.tc,#cameraButton,#mailButton),body.tcOn:has(#settings.open) #phoneHud :is(#miniMap,#radio,#relief){visibility:hidden}
 body:not(.gameStarted) :is(#shiftHud,#mailCard),body.tcOn:not(.gameStarted) #phoneStatus{visibility:hidden}
 body.droneOn:not(.tcOn) #mailCard{width:fit-content;max-width:min(460px,calc(100% - 120px))}
 body:not(.tcOn):not(.droneSticks) :is(#cameraButton,#mailButton){box-sizing:border-box;width:auto;min-width:80px;height:44px;min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel-solid);color:var(--ink);font:700 12px var(--mono);letter-spacing:.08em}
@@ -169,7 +181,8 @@ body:not(.gameStarted) :is(#cameraButton,#mailButton){display:none!important}
 #pauseScreen button{display:block;min-height:48px;width:100%;margin-top:10px;border:1px solid var(--ink-dim);border-radius:6px;background:transparent;color:var(--ink);font:inherit;cursor:pointer}
 #pauseScreen #resumeGame{background:var(--maple);color:#0b1620;border-color:transparent;font-weight:700}
 body.exploreMode #pauseScreen #resumeGame{background:#a7d9bc}
-body.tcOn #pauseButton{position:static;min-height:56px;pointer-events:auto;flex:none}
+body.tcOn #pauseButton{position:static;min-height:56px;pointer-events:auto;flex:none;padding:0 6px}
+#pauseScreen #pauseEndShift{font:12px var(--mono);min-height:44px;margin-top:12px;border-top:1px solid var(--ink-dim)}
 </style>
 
 </head>

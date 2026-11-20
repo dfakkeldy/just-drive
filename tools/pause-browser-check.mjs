@@ -35,11 +35,13 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
   assert.equal(await read(`document.querySelector('#pauseScreen pre')`),null,'no HUD dump');
   assert.equal(await read(`document.getElementById('pauseRadio').textContent`),'Radio quiet','quiet radio line');
   assert.equal(await read(`document.getElementById('pauseRace').hidden`),true,'no idle race line');
+  assert.equal(await read(`document.getElementById('pauseEndShift').hidden`),name.startsWith('just-'),'End shift is shown only in the mail pause card');
+  await key('Enter','Enter');assert.equal(await read(`document.getElementById('pauseScreen').hidden`),true,'Enter on Resume resumes');await key('KeyP','p');
   await read(`document.getElementById('pauseSettings').focus()`);
   if(name.startsWith('just-')) {
    assert.equal(await read(`document.getElementById('pauseHome')?.href`),'https://justdrive.fakkeldy.ca/','Just Drive links its front page');
    await key('Tab','Tab');assert.equal(await read(`document.activeElement.id`),'pauseHome','Tab from Settings reaches All places');
-  } else assert.equal(await read(`document.getElementById('pauseHome')`),null,'mail has no front-page link');
+  } else {assert.equal(await read(`document.getElementById('pauseHome')`),null,'mail has no front-page link');await key('Tab','Tab');assert.equal(await read(`document.activeElement.id`),'pauseEndShift','Tab reaches End shift');}
   await key('Tab','Tab'); assert.equal(await read(`document.activeElement.tagName`),'SUMMARY','Tab wraps to Keys');
   await key('Enter','Enter'); assert.equal(await read(`document.querySelector('#pauseKeys').open`),true,'keyboard opens Keys');
   assert.ok(await read(`document.querySelectorAll('#pauseKeys dt').length>=8`),'full key list');
@@ -68,6 +70,7 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
   await c.send('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyW',key:'w'}); await sleep(900);
   await c.send('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyW',key:'w'});
   assert.notDeepEqual((await snapshot()).slice(0,3),held.slice(0,3),`${name}: a panel closed by another control resumes the game`);
+  if(!name.startsWith('just-')){await key('KeyP','p');await click('pauseEndShift');await sleep(300);assert.ok(await read(`document.getElementById('pauseScreen').hidden&&!document.getElementById('shiftReport').hidden`),'End shift resumes and opens the report');await key('KeyP','p');assert.ok(await read(`document.getElementById('pauseEndShift').hidden`),'End shift stays hidden after the shift');}
   console.log(`PASS ${name}: rolling bike Settings freeze/resume, P, Esc, phone target, pause screen, Settings nesting and direct panel close`);
  } finally { c.close(); await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`); }
 }

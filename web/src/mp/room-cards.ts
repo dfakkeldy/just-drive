@@ -1,8 +1,14 @@
 // One home for the room cards. The phone keeps the same nodes in Settings.
 const CSS = `
+body.tcOn #phoneTop #gear{position:relative}
+#gearRoom,#gearUnread{position:absolute;pointer-events:none;background:#d0632e;border-radius:50%}
+#gearRoom{top:2px;right:2px;width:18px;height:18px;color:#0b1620;font:700 12px/18px var(--mono);font-variant-numeric:tabular-nums;text-align:center}
+#gearUnread{top:2px;left:2px;width:8px;height:8px;border:2px solid #0b1620}
+#gearRoom[hidden],#gearUnread[hidden]{display:none}
+
 #mpCards{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:80px;z-index:6;
   width:max(240px,min(332px,calc(100vw - 330px)));max-height:calc(100dvh - 220px);overflow:auto;overscroll-behavior:contain;
-  display:flex;flex-direction:column;gap:8px;scrollbar-gutter:stable}
+  display:flex;flex-direction:column;gap:8px;scrollbar-width:thin}
 #mpCards>*{flex:none;width:100%;box-sizing:border-box;margin:0}
 #mpCards:empty{display:none}
 #mpRoom{border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
@@ -30,7 +36,10 @@ body.tcOn .roomCountdown{font-size:72px}
 :is(#mpCards,#mpRoom)>details[hidden]{display:none}
 :is(#mpCards,#mpRoom) summary{cursor:pointer}
 #mpRoom>details{border:0;border-radius:0;border-top:1px solid var(--line);background:none;padding:0}
-#mpRoom>details>summary{min-height:56px;box-sizing:border-box;padding:16px 0;font-weight:700}
+#mpRoom>details>summary{padding:0;align-content:center}
+#mpCards>details{padding:0 10px}
+#mpCards>details[open]{padding-bottom:10px}
+#mpCards>details>summary{display:list-item;align-content:center;min-height:44px;box-sizing:border-box;font-weight:700}
 :is(#racePanel,#gamePanel)>button+button{margin-left:8px}
 #mpRoom :is(button,select){min-height:56px}
 `;
@@ -78,7 +87,7 @@ export function fitRoomCards(): void {
   const topBlocks = ['hud','shiftHud','miniMap','radio','pauseButton','placesButton','gear','endShift','mpChip','gameResults','droneHints','photoTag'];
   const bottomBlocks = ['mailButton','cameraButton','placeArrival'];
   const visible = (id: string) => {
-    const e = document.getElementById(id), b = e && !e.hidden ? e.getBoundingClientRect() : null;
+    const e = document.getElementById(id), b = e && !e.hidden && !e.classList.contains('inPanel') ? e.getBoundingClientRect() : null;
     return b?.width && b.height ? b : null;
   };
   const above = topBlocks.map(visible), below = bottomBlocks.map(visible);

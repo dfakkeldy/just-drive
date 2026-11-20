@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { checkScrollMore } from './scroll-more-browser.mjs';
 // Parent-run only: one serial CDP browser job, PNGs and rectangle evidence in OUT.
 // OUT="$PWD/data/work/phone-hud-delivery" WEB_PORT=5368 CDP_PORT=9568 VITE_MP=1 HUD=1 RUN=phone-hud-browser.mjs VIEWS="phone|x=1" tools/yard-shots.sh 844 390
 import assert from 'node:assert/strict';
@@ -7,7 +8,7 @@ import { cdp, cdpFetch } from './cdp.mjs';
 import { mpLayoutScript } from './mp-layout-fixture.mjs';
 const [out,first]=process.argv.slice(2), base=new URL(first).origin, port=process.env.CDP_PORT??'9568';
 mkdirSync(out,{recursive:true});
-const defaultSizes=[[844,390],[932,430],[1000,462],[390,844],[430,932],[375,553],[375,667],[390,664],[553,375],[667,375,true],[568,320],[640,360]];
+const defaultSizes=[[320,568],[844,390],[932,430],[1000,462],[390,844],[430,932],[375,553],[375,667],[390,664],[553,375],[667,375,true],[568,320],[640,360]];
 const wanted=(process.env.SIZES??'').trim().split(/\s+/).filter(Boolean);
 const sizeKey=([w,h,safe])=>`${w}x${h}${safe?'-safe':''}`;
 for(const name of wanted)assert.ok(defaultSizes.some(s=>sizeKey(s)===name),'unknown phone size '+name);
@@ -93,6 +94,25 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       if(override.error)await read(`Object.entries({'--test-safe-left':'47px','--test-safe-right':'47px','--test-safe-bottom':'21px'}).forEach(([k,v])=>document.documentElement.style.setProperty(k,v))`);
       await sleep(150);
     }
+    assert.ok(await read(`(()=>{const e=document.getElementById('gear'),r=e.getBoundingClientRect();return getComputedStyle(e).fontSize==='20px'&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===e;})()`),'gear glyph and centre hit target stay intact');
+    if(width<height&&!await read(`document.body.classList.contains('phoneReadoutsMenu')`)) {
+      const wasFolded=await read(`document.getElementById('miniMap').classList.contains('folded')`);
+      await read(`if(document.getElementById('miniMap').classList.contains('folded'))document.getElementById('miniMapHead').click()`);await sleep(100);
+      assert.ok(await read(`(()=>{const ids=['miniMap','radio',...(mmm.gameMode==='mail'?['relief']:[])],r=ids.map(id=>document.getElementById(id).getBoundingClientRect());return r.every(b=>Math.abs(b.left-r[0].left)<=.5&&Math.abs(b.width-r[0].width)<=.5)&&getComputedStyle(document.getElementById('radio')).textAlign==='left';})()`),'portrait left column has one width and edge');
+      const station=await read(`mmm.radio.station`);
+      await read(`window.savedPhoneReception=mmm.radio.map;mmm.radio.useReception(null)`);
+      const count=await read(`mmm.radio.stations.length`);assert.equal(count,9,'all nine radio stations are checked');
+      for(let index=0;index<count;index++) {
+        await read(`mmm.radio.turnTo(${index})`);await sleep(50);
+        assert.ok(await read(`(()=>{const e=document.getElementById('radio');return e.scrollHeight<=e.clientHeight;})()`),'portrait station fits the radio');
+      }
+      await read(`mmm.radio.turnTo(${station})`);
+      await read(`document.getElementById('radio').click()`);await sleep(50);
+      assert.ok(await read(`document.getElementById('radio').classList.contains('expanded')`),'portrait radio expands after tap');
+      assert.ok(await read(`getComputedStyle(document.querySelector('#phoneHud #radio span')).display==='none'`),'portrait idle song stays hidden when expanded');
+      await read(`mmm.radio.useReception(savedPhoneReception);delete window.savedPhoneReception`);
+      if(wasFolded)await read(`document.getElementById('miniMapHead').click()`);await sleep(100);
+    }
     await inspect('initial');await shot('');
     assert.equal(await read('mmm.vehicle.touchSpeedLimit'),name==='mail','production mode sets cap for this ride');
     assert.equal(await read(`document.getElementById('phoneLine')?.textContent.includes('LIMIT') ?? false`),false,'resting status has no limiter marker');
@@ -109,6 +129,7 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       assert.equal(marked.width,before.width,'marker does not widen status');
       assert.equal(marked.height,before.height,'marker does not increase status height');
       assert.equal(await read(`(()=>{const e=document.getElementById('phoneLine'),r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,e.textContent.indexOf('LIMIT 100')+9);return r.getBoundingClientRect().right<=e.getBoundingClientRect().right-5;})()`),true,'full speed and LIMIT marker paint before ellipsis');
+      assert.equal(await read(`(()=>{const e=document.getElementById('phoneLine'),r=document.createRange(),end=e.textContent.indexOf('→ 18:00');if(end<0)return false;r.setStart(e.firstChild,0);r.setEnd(e.firstChild,end+7);return r.getBoundingClientRect().right<=e.getBoundingClientRect().right-5;})()`),true,'end time paints before the road ellipsis');
       await inspect('held limit render fixture');await shot('-limit');
       await read('restoreCapRender();delete window.restoreCapRender');
       await until(`!document.getElementById('phoneLine').textContent.includes('LIMIT')`);
@@ -145,7 +166,9 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
     }
     // Settings opens only after the camera check, because any gear click also dismisses the mail intro.
     await read(`document.getElementById('gear').click()`);
+    await checkScrollMore(read,'settings','settingsMore');
     const settingsIds=['tcSteer','tcBrake','tcGo','tcReset',...(name==='mail'?['cameraButton','mailButton']:[])];
+    const hudReadouts=await read(`[...document.querySelectorAll('#phoneHud :is(#miniMap,#radio,#relief)')].filter(e=>!e.hidden).map(e=>e.id)`);settingsIds.push(...hudReadouts);
     assert.deepEqual(await read(`(${JSON.stringify(settingsIds)}).map(id=>getComputedStyle(document.getElementById(id)).visibility)`),settingsIds.map(()=> 'hidden'),'Settings hides idle touch controls');
     assert.deepEqual(await read(`(()=>{const r=document.getElementById('settings').getBoundingClientRect();return [...document.querySelectorAll('.tc,#cameraButton,#mailButton')].filter(e=>{const b=e.getBoundingClientRect();return getComputedStyle(e).visibility==='visible'&&b.width>0&&b.height>0&&b.left<r.right&&b.right>r.left&&b.top<r.bottom&&b.bottom>r.top;}).map(e=>e.id);})()`),[],'no visible touch tile intersects Settings');
     await read(`document.getElementById('settingsClose').click()`);

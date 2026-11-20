@@ -43,6 +43,11 @@ export class Multiplayer {
   private peers: readonly import('./wire').PeerView[] = [];
   status = 'Looking for other drivers…';
   private readonly chip: HTMLElement | null;
+  private readonly gear = document.getElementById('gear');
+  private badge: HTMLElement | null = null;
+  private unreadDot: HTMLElement | null = null;
+  private newestChat = -Infinity;
+  private unread = false;
   private readonly local: Local = { flags: 0, steer: 0, heading: 0, x: 0, z: 0, vx: 0, vz: 0, air: 0 };
   /** For test scripts on the dev server: they play other games by hand. */
   readonly encode = encodeState;
@@ -73,6 +78,11 @@ export class Multiplayer {
     this.ghosts = new Ghosts({ ground: host.ground, low: host.low, label: host.label });
     host.scene.add(this.ghosts.group);
     this.chip = host.bare || host.touch ? null : document.body.appendChild(Object.assign(document.createElement('div'), { id: 'mpChip' }));
+    if (host.touch && !host.bare && this.gear) {
+      this.badge = Object.assign(document.createElement('span'), { id: 'gearRoom', hidden: true });
+      this.unreadDot = Object.assign(document.createElement('span'), { id: 'gearUnread', hidden: true });
+      for (const e of [this.badge, this.unreadDot]) { e.setAttribute('aria-hidden', 'true'); this.gear.append(e); }
+    }
     if (this.chip) {
       this.chip.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 6px);transform:translateX(-50%);z-index:5;'
         + 'padding:3px 10px;border-radius:10px;background:rgba(11,22,32,.72);color:#eef2f6;font:12px/1.4 system-ui,sans-serif;'
@@ -99,6 +109,7 @@ export class Multiplayer {
     s.flags = (v.airborne ? FLAG.air : 0) | (this.brake > 0 ? FLAG.brake : 0);
     const ride = this.host.ride?.(); if (ride) this.net.setRide(ride);
     this.net.report(s, now, !running);
+    this.updateGear();
     this.race.update();
     this.peers = this.net.views(now);
     this.games.update(dt, this.peers, camera);
@@ -117,6 +128,24 @@ export class Multiplayer {
       this.chipFit -= dt;
       if (this.chipFit <= 0) { this.chipFit = .5; this.fitChip(); if (!this.host.bare) fitRoomCards(); }
     }
+  }
+
+  private updateGear(): void {
+    if (!this.badge || !this.unreadDot || !this.gear) return;
+    const on = this.net.status === 'on', open = document.getElementById('settings')?.classList.contains('open');
+    const chat = this.net.chats.at(-1);
+    if (chat && chat.at !== this.newestChat) {
+      this.newestChat = chat.at;
+      if (on && !open && chat.id !== this.net.me?.id) this.unread = true;
+    }
+    if (!on || open) this.unread = false;
+    this.badge.hidden = !on || this.net.count < 1;
+    const count = String(this.net.count);
+    if (this.badge.textContent !== count) this.badge.textContent = count;
+    this.unreadDot.hidden = !this.unread;
+    const peers = this.net.count === 0 ? 'nobody else on the road' : this.net.count === 1 ? '1 other driver' : `${this.net.count} other drivers`;
+    const label = on ? `Settings and room: ${peers}${this.unread ? ', new message' : ''}` : 'Settings';
+    if (this.gear.getAttribute('aria-label') !== label) this.gear.setAttribute('aria-label', label);
   }
 
   /** Keep the desktop chip between the real readouts, including narrow desktop windows. */
@@ -161,5 +190,7 @@ export class Multiplayer {
     this.host.scene.remove(this.ghosts.group);
     this.ghosts.dispose();
     this.chip?.remove();
+    this.badge?.remove(); this.unreadDot?.remove(); this.unread = false;
+    if (this.badge) this.gear?.setAttribute('aria-label', 'Settings');
   }
 }

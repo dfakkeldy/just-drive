@@ -207,7 +207,7 @@ const SETTINGS = (brand) => qa([
   ['Full detail (phone) or Low detail (computer)', 'Full detail gives a phone or tablet sharper land, shadows and reflections; it needs a fast device. Low detail gives a slow computer a simpler picture. The page loads again.'],
   ['Grass, Shadows, Water reflections', 'On a computer, or a phone with Full detail. Turn these off for more speed.'],
   ['Hill height', '1.0 is true scale; the game starts at 1.5, for drama. Trees and buildings keep their real height.'],
-  ...(brand === 'mail' ? [['Throw help', 'On at the start. Aims the throw for you; on a phone it also lights the MAIL button when a box is in reach.'], ['END SHIFT', 'On a phone, END SHIFT is in the settings. Press it when the day is done.'], ['Start over from day 1', 'Clears your career. Your settings stay.']] : []),
+  ...(brand === 'mail' ? [['Throw help', 'On at the start. Aims the throw for you; on a phone it also lights the MAIL button when a box is in reach.'], ['END SHIFT', 'END SHIFT is in the settings and on the pause card; or press Enter.'], ['Start over from day 1', 'Clears your career. Your settings stay.']] : []),
   ['Property lines', 'Optional, online only. Shows the province’s property lines on the small map. The game asks you first.'],
   ['Offline play', 'Download for offline play keeps Mabou on this device, so it works without the internet.'],
 ]);
@@ -237,7 +237,7 @@ const HELP = {
 <li><b>Deliver the mail.</b> <span class="dim">Drive to each box and throw the mail from the driver’s window, on the right: <kbd>M</kbd> or <kbd>E</kbd>, or tap MAIL.</span></li>
 <li><b>Stay off the lawns.</b> <span class="dim">Customers phone in. A photo taken before the damage is your only defence: <kbd>C</kbd> or CAMERA.</span></li>
 <li><b>Mind the gauge.</b> <span class="dim">There is no washroom on the route. When the gauge says so, stop and step out (<kbd>B</kbd> or tap the gauge). Look for houses first.</span></li>
-<li><b>End the shift.</b> <span class="dim">Press <kbd>Enter</kbd>, or END SHIFT in the settings on a phone, and read the calls.</span></li>
+<li><b>End the shift.</b> <span class="dim">END SHIFT is in the settings and on the pause card; or press Enter. Read the calls.</span></li>
 </ol>
 <p>Prefer no mail at all? Choose <b>Just drive</b> on the title card, or go to <a href="https://justdrive.fakkeldy.ca/mabou">Just Drive</a>.</p>
 <p class="totop"><a href="#contents">Back to top</a></p>

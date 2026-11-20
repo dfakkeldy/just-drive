@@ -49,8 +49,9 @@ export function hudLine(s: HudState): string {
 
 // All #hud writers, including the separate preview entry points, share this per-element cache.
 const lastText = new WeakMap<{ textContent: string | null }, string>();
-export function setHud(hud: { textContent: string | null }, text: string): void {
+export function setHud(hud: { textContent: string | null }, text: string, rich?: (text: string) => Node[]): void {
   if (lastText.get(hud) === text) return;
-  hud.textContent = text;
+  if (rich && 'replaceChildren' in hud) (hud as HTMLElement).replaceChildren(...rich(text));
+  else hud.textContent = text;
   lastText.set(hud, text);
 }

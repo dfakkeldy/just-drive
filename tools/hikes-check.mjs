@@ -53,6 +53,26 @@ await run('map','mode=explore&at=624271,5103301,0',async p=>{
   const hit=await p.read(`(()=>{const r=mmm.bigMap.canvas.getBoundingClientRect(),m=mmm.bigMap.hitMarks.find(m=>m.place.id==='west-mabou-beach');return {x:m.x+r.x,y:m.y+r.y}})()`);
   await p.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...hit});await p.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...hit});
   check(await p.read(`document.getElementById('mapCard').dataset.place==='west-mabou-beach'&&!document.getElementById('mapCard').hidden`),'canvas click selects a trailhead');
+  // Fit the full set so a displaced label exercises a hit beyond the dot's 24px fallback.
+  await p.read(`document.getElementById('mapCard').hidden=true;mmm.bigMap.fit()`);await sleep(150);
+  const tag=await p.read(`(()=>{const map=mmm.bigMap,r=map.canvas.getBoundingClientRect(),m=map.hitMarks.find(m=>m.rect&&Math.hypot(m.rect.x+m.rect.w/2-m.x,m.rect.y+m.rect.h/2-m.y)>30);return m?{id:m.place.id,x:r.x+m.rect.x+m.rect.w/2,y:r.y+m.rect.y+m.rect.h/2}:null;})()`);
+  check(!!tag,'a displaced place tag is available');
+  await p.send('Input.dispatchMouseEvent',{type:'mouseMoved',...{x:tag.x,y:tag.y}});
+  const pointed=await p.read(`mmm.bigMap.canvas.style.cursor==='pointer'`);
+  await p.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,x:tag.x,y:tag.y});
+  const dragging=await p.read(`mmm.bigMap.canvas.style.cursor===''`);
+  await p.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,x:tag.x,y:tag.y});
+  check(await p.read(`document.getElementById('mapCard').dataset.place===${JSON.stringify(tag.id)}&&!document.getElementById('mapCard').hidden`),'canvas click on a place tag opens its card');
+  await p.read(`document.getElementById('mapCard').hidden=true`);
+  const empty=await p.read(`(()=>{const map=mmm.bigMap,r=map.canvas.getBoundingClientRect();for(let y=60;y<map.h-80;y+=30)for(let x=40;x<map.w-40;x+=30)if(!map.pick([x,y]))return {x:x+r.x,y:y+r.y};})()`);
+  await p.send('Input.dispatchMouseEvent',{type:'mouseMoved',...empty});
+  check(pointed&&dragging&&await p.read(`mmm.bigMap.canvas.style.cursor===''`),'cursor shows pointer over a tag and grab elsewhere');
+  const center=await p.read('mmm.bigMap.center');
+  await p.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,x:tag.x,y:tag.y});
+  await p.send('Input.dispatchMouseEvent',{type:'mouseMoved',button:'left',buttons:1,x:tag.x+40,y:tag.y+20});
+  await p.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,x:tag.x+40,y:tag.y+20});
+  check(await p.read(`document.getElementById('mapCard').hidden`)&&JSON.stringify(await p.read('mmm.bigMap.center'))!==JSON.stringify(center),'drag from a tag pans without opening a card');
+
 });
 for(const [w,h]of [[844,390],[390,844]].filter(([w])=>!process.env.HIKES_WIDTH||w===Number(process.env.HIKES_WIDTH)))await run('phone','mode=explore&touch=1&at=624271,5103301,0',async p=>{
   await p.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});

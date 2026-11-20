@@ -146,6 +146,7 @@ const numbers = {};
     if (replayReady) await p.pad.press(DOWN);
     assert.equal(await p.read('document.activeElement.id'), 'pauseSettings', 'd-pad down moves to Settings');
     assert.ok(await p.read(`document.activeElement.classList.contains('padFocus')`), 'and marks it');
+    if(await p.read(`!document.getElementById('pauseEndShift').hidden`)){await p.pad.press(DOWN);assert.equal(await p.read('document.activeElement.id'),'pauseEndShift','pad reaches End shift');await p.pad.press(UP);}
     await p.shot('desktop-pause');
     await p.pad.press(UP);
     if (replayReady) await p.pad.press(UP);

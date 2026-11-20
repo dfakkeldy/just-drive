@@ -17,7 +17,7 @@ const mainRoadStart = (roads: RoadNetwork, origin: readonly [number, number]) =>
 /** Only the loop's session surface. No career storage, daily draw, report, paper or clock. */
 export type DriveSession = Pick<Shift, 'damage' | 'evidence' | 'group' | 'elapsed' | 'ended' | 'done' | 'stops' | 'phone' |
   'run' | 'remaining' | 'today' | 'career' | 'update' | 'updateIndoors' | 'takePhoto' | 'end' |
-  'startOver' | 'interiorResult' | 'seenAtRoadside'> & {
+  'endsAtSix' | 'startOver' | 'interiorResult' | 'seenAtRoadside'> & {
     complaints: Pick<Shift['complaints'], 'all'>; ruts: Pick<Shift['ruts'], 'count' | 'lawns'>;
   };
 class NoDamage extends Damage {
@@ -31,6 +31,7 @@ export class FreeDrive implements DriveSession {
   readonly group = new THREE.Group();
   readonly elapsed = 0;
   readonly ended = false;
+  readonly endsAtSix = false;
   readonly done = 0;
   readonly stops = 0;
   phone = false;

@@ -118,8 +118,8 @@ export function ephemeris(date: string, lat: number, lon: number): Ephemeris {
 }
 
 const CSS = `
-#lightStudy{border-bottom:1px solid #71897e;padding:0 0 10px;margin:0 0 12px;font:13px/1.4 var(--text)}
-#lightStudy summary{cursor:pointer;font-weight:700;min-height:32px;display:list-item}
+#lightStudy{font:13px/1.4 var(--text)}
+#lightStudy summary{cursor:pointer;font-weight:700;display:list-item}
 #lightStudy .lightFields{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 #settings #lightStudy label{flex:1;min-width:100px;margin:0}
 #settings #lightStudy input{display:block;box-sizing:border-box;min-width:0;width:100%;max-width:100%;min-height:40px;padding:5px;color:inherit;background:var(--panel-solid);border:1px solid #89afa2;border-radius:4px;font:inherit;color-scheme:dark}

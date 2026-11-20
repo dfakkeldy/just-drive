@@ -55,7 +55,7 @@ export class BigMap {
   private readonly heldKeys = new Set<string>();
   private readonly suppressed = new Set<string>();
   private labels: Rect[] = [];
-  private hitMarks: { place: Place; x: number; y: number }[] = [];
+  private hitMarks: { place: Place; x: number; y: number; rect?: Rect }[] = [];
   readonly lines;
   constructor(private terrain: Terrain, private roads: Roads, readonly places: readonly Place[], readonly hikes: readonly Hike[], readonly box: MapBox, private actions: PlacesActions) {
     this.center = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
@@ -143,7 +143,7 @@ export class BigMap {
   close(): void {
     if (!this.busy) return;
     this.suppressed.clear(); for (const code of this.heldKeys) this.suppressed.add(code);
-    this.root.hidden = true; this.pointers.clear();
+    this.root.hidden = true; this.pointers.clear(); this.canvas.style.cursor = '';
     for (const item of this.inert) item.node.inert = item.was;
     this.inert = []; this.actions.pause(false); this.restore?.focus();
     // Nothing to return to: never leave focus on a hidden map button, nor on MAP after a click (Space would reopen it).
@@ -184,11 +184,24 @@ export class BigMap {
     this.constrain(); this.cached = null; this.redraw();
   }
   private constrain(): void { this.center = [Math.max(this.box[0], Math.min(this.box[2], this.center[0])), Math.max(this.box[1], Math.min(this.box[3], this.center[1]))]; }
+  private pick(p: Point): Place | undefined {
+    const hit = this.hitMarks.map(m => ({ ...m, d: Math.hypot(m.x - p[0], m.y - p[1]) })).sort((a, b) => a.d - b.d)[0];
+    if (hit?.d < 8) return hit.place;
+    const tags = this.hitMarks.filter(({rect:r}) => {
+      if (!r) return false;
+      const pad = Math.max(4, (44 - r.h) / 2);
+      return p[0] >= r.x - 4 && p[0] <= r.x + r.w + 4 && p[1] >= r.y - pad && p[1] <= r.y + r.h + pad;
+    }).sort((a, b) => Math.hypot(a.rect!.x + a.rect!.w / 2 - p[0], a.rect!.y + a.rect!.h / 2 - p[1]) - Math.hypot(b.rect!.x + b.rect!.w / 2 - p[0], b.rect!.y + b.rect!.h / 2 - p[1]));
+    if (tags[0]) return tags[0].place;
+    if (hit?.d < 24) return hit.place;
+    return undefined;
+  }
   private input(): void {
     const local = (ev: PointerEvent): Point => { const r = this.canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
     this.canvas.addEventListener('wheel', ev => { ev.preventDefault(); const r = this.canvas.getBoundingClientRect(); this.zoom(Math.exp(-Math.max(-120, Math.min(120, ev.deltaY)) * .004), ev.clientX - r.left, ev.clientY - r.top); }, { passive: false });
-    this.canvas.addEventListener('pointerdown', ev => { ev.preventDefault(); this.canvas.setPointerCapture(ev.pointerId); this.pointers.set(ev.pointerId, local(ev)); this.down = local(ev); this.moved = this.pointers.size > 1; });
+    this.canvas.addEventListener('pointerdown', ev => { ev.preventDefault(); this.canvas.style.cursor = ''; this.canvas.setPointerCapture(ev.pointerId); this.pointers.set(ev.pointerId, local(ev)); this.down = local(ev); this.moved = this.pointers.size > 1; });
     this.canvas.addEventListener('pointermove', ev => {
+      if (this.pointers.size === 0 && ev.pointerType !== 'touch') this.canvas.style.cursor = this.pick(local(ev)) ? 'pointer' : '';
       const old = this.pointers.get(ev.pointerId); if (!old) return;
       const p = local(ev), other = [...this.pointers.entries()].find(([id]) => id !== ev.pointerId)?.[1];
       if (other) {
@@ -205,7 +218,7 @@ export class BigMap {
     this.canvas.addEventListener('pointerup', ev => {
       if (!this.pointers.has(ev.pointerId)) return;
       const p = local(ev); this.pointers.delete(ev.pointerId);
-      if (!this.moved) { const hit = this.hitMarks.map(m => ({ ...m, d: Math.hypot(m.x - p[0], m.y - p[1]) })).sort((a, b) => a.d - b.d)[0]; if (hit?.d < 24) this.showCard(hit.place); }
+      if (!this.moved) { const place = this.pick(p); if (place) this.showCard(place); }
     });
     for (const event of ['pointercancel', 'lostpointercapture']) this.canvas.addEventListener(event, ev => { this.pointers.delete((ev as PointerEvent).pointerId); this.moved = true; });
   }
@@ -257,12 +270,12 @@ export class BigMap {
     for (const line of this.lines) { g.beginPath(); this.trace(g, line.pts); g.stroke(); }
     g.setLineDash([]);
   }
-  private label(text: string, x: number, y: number, colour: string, angle = 0, place = false, anchor?: Point, halo = false): boolean {
+  private label(text: string, x: number, y: number, colour: string, angle = 0, place = false, anchor?: Point, halo = false): Rect | null {
     const g = this.g; g.font = place ? '600 12px system-ui,sans-serif' : halo ? 'italic 11px system-ui,sans-serif' : '11px system-ui,sans-serif';
     const width = g.measureText(text).width + 10, h = 19;
     const w = Math.abs(Math.cos(angle)) * width + Math.abs(Math.sin(angle)) * h, height = Math.abs(Math.sin(angle)) * width + Math.abs(Math.cos(angle)) * h;
     const rect = { x: x - w / 2, y: y - height / 2, w, h: height };
-    if (rect.x < 8 || rect.y < 35 || rect.x + w > this.w - 8 || rect.y + height > this.h - 36 || this.labels.some(r => rect.x < r.x + r.w + 3 && rect.x + w + 3 > r.x && rect.y < r.y + r.h + 3 && rect.y + height + 3 > r.y)) return false;
+    if (rect.x < 8 || rect.y < 35 || rect.x + w > this.w - 8 || rect.y + height > this.h - 36 || this.labels.some(r => rect.x < r.x + r.w + 3 && rect.x + w + 3 > r.x && rect.y < r.y + r.h + 3 && rect.y + height + 3 > r.y)) return null;
     this.labels.push(rect);
     if (anchor) {
       g.save(); g.strokeStyle = '#dbe5cb99'; g.lineWidth = 1; g.beginPath(); g.moveTo(anchor[0], anchor[1]);
@@ -271,7 +284,7 @@ export class BigMap {
     g.save(); g.translate(x, y); g.rotate(angle); g.textAlign = 'center'; g.textBaseline = 'middle';
     if (halo) { g.lineJoin = 'round'; g.lineWidth = 3; g.strokeStyle = '#10242b'; g.strokeText(text, 0, 0); }
     else { g.fillStyle = '#10242be8'; g.fillRect(-width / 2, -h / 2, width, h); }
-    g.fillStyle = colour; g.fillText(text, 0, 0); g.restore(); return true;
+    g.fillStyle = colour; g.fillText(text, 0, 0); g.restore(); return rect;
   }
   private lineLabel(name: string, pts: readonly Point[], colour: string): boolean {
     const segments = pts.slice(1).map((p, i) => { const a = this.screen(pts[i]), b = this.screen(p); return { a, b, length: Math.hypot(b[0] - a[0], b[1] - a[1]) }; }).sort((a, b) => b.length - a.length);
@@ -300,10 +313,11 @@ export class BigMap {
     this.labels.push({ x: x - 11, y: y - 14, w: 22, h: 26 });
     this.label('You are here', x, y + 28, '#fff');
     // Draw every dot before labels, so a later dot never covers an earlier place name.
-    for (const { place, x, y } of this.hitMarks) {
+    for (const mark of this.hitMarks) {
+      const { place, x, y } = mark;
       let labelled = false;
-      for (const dy of [-18, 18, -38, 38, -58, 58, -78, 78, -98, 98]) if (this.label(place.name, x, y + dy, '#fff7d6', 0, true, [x, y])) { labelled = true; break; }
-      if (!labelled) for (const dx of [-100, 100]) if (this.label(place.name, x + dx, y, '#fff7d6', 0, true, [x, y])) break;
+      for (const dy of [-18, 18, -38, 38, -58, 58, -78, 78, -98, 98]) if ((mark.rect = this.label(place.name, x, y + dy, '#fff7d6', 0, true, [x, y]) ?? undefined)) { labelled = true; break; }
+      if (!labelled) for (const dx of [-100, 100]) if ((mark.rect = this.label(place.name, x + dx, y, '#fff7d6', 0, true, [x, y]) ?? undefined)) break;
     }
     const names = new Set<string>();
     for (const line of [...this.lines].sort((a, b) => b.pts.length - a.pts.length)) if (line.name && !names.has(line.name) && this.lineLabel(line.name, line.pts, '#ffd4e3')) names.add(line.name);

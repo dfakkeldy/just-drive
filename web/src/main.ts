@@ -127,7 +127,8 @@ import { wharfBuildingArt } from './mabou-wharf-buildings';
 import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
-import { createTouchControls } from './touch';
+import { createTouchControls, moveEndShiftToSettings } from './touch';
+import { scrollMore } from './scroll-more';
 import { createGamepad } from './gamepad';
 import { drivingHelpSetting } from './driving-help';
 import { Trees, crownTest, treeLook } from './trees';
@@ -155,7 +156,7 @@ import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
 import {createTestPark,testParkPlaces} from './stunt-test-park';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
-import { Drone, createDroneButton, createDroneSticks, roofHeights, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';
+import { Drone, createDroneButton, createDroneSticks, roofHeights, droneSpans, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';
 import { DRONE } from './drone-rules';
 
 // Mabou village, and the game's moment: the second week of October, late afternoon (Atlantic Daylight Time, UTC-3).
@@ -1186,6 +1187,7 @@ const pointers = new Map<number, { x: number; y: number; sx: number; sy: number 
 let flyTouch = 0, droneTurn = 0;   // droneTurn: how far a drag has turned the drone since its last frame
 // On a phone the visible pad and pedals own the driving input; with a mouse the old drag on the picture still works.
 const honk = () => { if (live() && !fleet?.busy && !document.hidden && !interiors.busy && mode === 'drive') { animals?.honk(vehicle); roadScene?.honk(vehicle); roadAnimals?.honk(vehicle); multiplayer?.horn(); ride.honk(); } };
+moveEndShiftToSettings();
 const pad = touchDevice && !bare ? createTouchControls({
   reset: () => { multiplayer?.reset(); if (fleet) fleet.respawn(); else vehicle.respawn(); },
   view: () => { if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
@@ -1470,11 +1472,12 @@ const pauseButton = Object.assign(document.createElement('button'), { id: 'pause
 const pauseScreen = document.createElement('div');
 pauseScreen.id = 'pauseScreen';
 pauseScreen.hidden = true;
-pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>A room keeps going when you pause.</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button></section>';
+pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>A room keeps going when you pause.</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button><button id="pauseEndShift" hidden>End shift</button></section>';
 if (SITE.brand === 'just') pauseScreen.querySelector('section')!.insertAdjacentHTML('beforeend', `<a id="pauseHome" href="${new URL(ABOUT_URL.just).origin}/">All places (front page)</a>`);
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
+scrollMore(settingsPanel, () => settingsPanel.classList.contains('open'), 'settingsMore', document.body);
 const settingsRoomPauseNote = touchDevice ? null : Object.assign(document.createElement('p'), { className: 'roomPauseNote', hidden: true, textContent: 'A room keeps going when you pause.' });
 if (settingsRoomPauseNote) settingsPanel.querySelector('#settingsHeader')!.after(settingsRoomPauseNote);
 function syncPauseUI(): void {
@@ -1485,6 +1488,7 @@ function syncPauseUI(): void {
   if (settingsRoomPauseNote) settingsRoomPauseNote.hidden = !room;
   settingsPanel.classList.toggle('open', pause.blocked && !pause.screen && !document.hidden);
   pauseScreen.hidden = !pause.screen || document.hidden || replay.active;
+  document.getElementById('pauseEndShift')!.hidden = !mailMode || document.getElementById('endShift')!.hidden || interiors.busy || bare;
   if (!pauseScreen.hidden) {
     // Rooms do not pause, so they have no replay; a fresh start has nothing to show yet.
     const watch = document.getElementById('pauseReplay') as HTMLButtonElement;
@@ -1542,6 +1546,7 @@ new MutationObserver(() => {
   if (open !== (pause.blocked && !pause.screen && !document.hidden)) { pause.setSettings(open); syncPauseUI(); }
 }).observe(settingsPanel, { attributes: true, attributeFilter: ['class'] });
 document.getElementById('resumeGame')!.addEventListener('click', () => { pause.resume(); syncPauseUI(); });
+document.getElementById('pauseEndShift')!.addEventListener('click', () => { pause.resume(); syncPauseUI(); shift.end(); });
 document.getElementById('pauseSettings')!.addEventListener('click', () => { pause.setSettings(true); syncPauseUI(); });
 document.getElementById('pauseReplay')!.addEventListener('click', () => { openReplay(); });
 for (const element of [pauseScreen, pauseButton]) for (const event of ['pointerdown', 'pointerup', 'pointermove']) element.addEventListener(event, ev => ev.stopPropagation());
@@ -2123,7 +2128,7 @@ function frame(now: number) {
       hudState.fleetLine = fleet.driven.id === 'truck' && fleet.handbrake && !line.includes('Handbrake on') ? `Handbrake on · ${line}` : line;
     } else hudState.fleetLine = '';
     ride.hud?.(hudState);
-    setHud(hud, hudLine(hudState));
+    setHud(hud, hudLine(hudState), drone.active && hudState.drone ? droneSpans : undefined);
   }
 
   requestAnimationFrame(frame);

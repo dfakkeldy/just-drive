@@ -195,7 +195,7 @@ export class Drone {
     const gear = document.getElementById('gear')?.getBoundingClientRect();
     let bottom = gear?.bottom ?? 54;
     for (const id of ['pauseButton','placesButton','bigMapButton','endShift']) {
-      const e = document.getElementById(id), b = e && !e.hidden ? e.getBoundingClientRect() : null;
+      const e = document.getElementById(id), b = e && !e.hidden && !e.classList.contains('inPanel') ? e.getBoundingClientRect() : null;
       if (b?.width && b.height) bottom = Math.max(bottom, b.bottom);
     }
     const top = `${bottom + 10}px`, right = `${gear?.width ? innerWidth - gear.right : 10}px`;
@@ -253,7 +253,12 @@ const CSS = `
 #droneHints dd{margin:0}#droneHints kbd{display:inline-block;background:#20303b;border:1px solid #71818e;border-bottom:2px solid #46566a;border-radius:4px;padding:2px 6px;font:700 12px var(--mono,monospace)}
 #droneHints[hidden],body.droneSticks #droneHints{display:none}
 body.droneOn #hud{max-width:calc(100vw - 270px);white-space:pre-wrap}
-body.droneOn.droneSticks #hud{max-width:calc(100vw - 170px);box-sizing:border-box;white-space:pre;font-size:10px;line-height:14px}
+body.droneOn #hud .dh{display:block;font:700 24px/26px var(--mono);font-variant-numeric:tabular-nums}
+body.droneOn #hud :is(.dk,.dq){font:12px/16px var(--mono);color:var(--ink-dim)}
+body.droneOn #hud .dsep{display:none}
+body.droneOn #hud .dst{font:12px/16px var(--mono);color:#f2b766}
+body.droneOn.droneSticks #hud{width:var(--droneCol);max-width:none;box-sizing:border-box;white-space:pre-wrap;font-size:12px;line-height:16px;min-height:154px;padding:8px;overflow-wrap:anywhere}
+body.droneOn #hud .dst{display:block}
 body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-right,0px))}
 
 .droneStick{position:fixed;z-index:6;bottom:calc(14px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));
@@ -265,8 +270,7 @@ body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-righ
 .droneStick b{position:absolute;left:50%;top:50%;width:46%;height:46%;margin:-23% 0 0 -23%;border-radius:50%;
   background:rgba(238,242,246,.9);box-shadow:0 2px 8px rgba(0,0,0,.45);pointer-events:none}
 .droneStick.held b{background:var(--maple,#d0632e)}
-.droneStick span{position:absolute;bottom:calc(100% + 3px);left:0;right:0;width:max-content;margin:0 auto;white-space:nowrap;padding:1px 6px;border:1px solid rgba(238,242,246,.4);border-radius:6px;background:var(--panel-solid,#0b1219);text-align:center;font:700 12px/14px ui-monospace,Menlo,Consolas,monospace;
-  letter-spacing:.08em;color:var(--ink,#eef2f6);pointer-events:none}
+.droneStick span{position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);width:max-content;white-space:nowrap;padding:0;border:0;background:none;text-align:center;font:700 12px/14px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.02em;color:var(--ink,#eef2f6);text-shadow:0 0 2px #0b1620,0 0 3px #0b1620,0 1px 3px rgba(0,0,0,.7);pointer-events:none}
 #droneReturn{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));
   min-width:112px;height:56px;padding:0 8px;border-radius:10px;border:1px solid rgba(238,242,246,.4);background:var(--panel-solid,#0b1219);
   color:var(--ink,#eef2f6);font:700 12px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em}
@@ -360,4 +364,15 @@ export function createDroneButton(launch: () => void): HTMLButtonElement {
   for (const type of ['pointerdown', 'pointerup', 'pointermove'] as const) button.addEventListener(type, (ev) => ev.stopPropagation());
   button.addEventListener('click', () => launch());
   return button;
+}
+
+/** Preserve the formatter's exact text while giving height its own line. */
+export function droneSpans(text: string): Node[] {
+  const match = /^(DRONE · Height )(.*?)(\n| · )([\s\S]*?)(?:([ ]· )(returning|at range limit|at height limit))?$/.exec(text);
+  if (!match) return [document.createTextNode(text)];
+  const nodes: Node[] = [];
+  const part = (tag: string, className: string, textContent: string) => nodes.push(Object.assign(document.createElement(tag), { className, textContent }));
+  part('span', 'dk', match[1]); part('b', 'dh', match[2]); part('span', 'dsep', match[3]); part('span', 'dq', match[4]);
+  if (match[6]) { part('span', 'dsep', match[5]); part('span', 'dst', match[6]); }
+  return nodes;
 }

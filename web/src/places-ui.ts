@@ -1,3 +1,4 @@
+import { scrollMore } from './scroll-more';
 import { startTrip } from './quarry-trip';
 import { ARRIVAL_RADIUS, arrivalAt, mapRank, nearestPlacement, placePosition, type Place, type RoadNetwork } from './places';
 import type { MapMark } from './minimap';
@@ -76,6 +77,7 @@ export class PlacesUI {
     }
     this.panel.querySelector<HTMLElement>('#placesClose')!.addEventListener('click', ev => this.close(ev.detail === 0));
     document.body.append(this.button, this.arrival, this.panel);
+    scrollMore(this.panel.querySelector<HTMLElement>('#placesBody')!, () => !this.panel.hidden, 'placesMore', this.panel.querySelector<HTMLElement>('#placesCard')!);
     for (const event of ['pointerdown', 'pointerup', 'pointermove', 'click', 'wheel']) this.panel.addEventListener(event, ev => ev.stopPropagation());
     addEventListener('keydown', ev => {
       if (this.busy) {

@@ -32,6 +32,7 @@ assert.match(css,/installPhoneControls\(root\)/,'actual phone grid must install 
 assert.match(css,/#phoneAux\{width:180px;height:56px\}/,'absolute utility buttons retain their header grid reservation');
 assert.match(css,/calc\(22vh - 56px\)/,'short landscape headers clear the band');
 const mutations=process.argv.includes('--mutations') ? [
+ ['grown-status-ignored','Math.max(56, v.statusHeight ?? 56)','56'],
  ['fixed-portrait-pedals','Math.min(100, available)','100'],
  ['ignore-safe-bottom','const bottom = v.height - v.bottom - 8','const bottom = v.height - 8'],
  ['landscape-stacking-removed','sideDrive || rightSpace < 142','false'],
@@ -78,7 +79,8 @@ async function verify(text, styles=css) {
    assert.ok(!overlap(b,band),'protected driving band '+JSON.stringify({width,height,bottom,b}));
   }
   for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++)assert.ok(!overlap(boxes[i],boxes[j]),'controls overlap '+boxes[i].id+' '+boxes[j].id);
-  const view={width,height,left,right,bottom,top,hintHeight:landscape&&mail?Math.max(36,hintHeight):hintHeight,mail,pull};
+  const statusHeight=!landscape&&!mail&&pull&&width===280?75:56;
+  const view={statusHeight,width,height,left,right,bottom,top,hintHeight:landscape&&mail?Math.max(36,hintHeight):hintHeight,mail,pull};
   const menu=phoneReadoutsInSettings(view), x0=left+8, x1=width-right-8, gap=4;
   const strip=Math.min(190,.22*width,.25*width-12-left), info=[];
   const add=(id,x,y,w,h)=>info.push([id,x,y,x+w,y+h]);
@@ -99,11 +101,11 @@ async function verify(text, styles=css) {
     assert.ok(paintedWidth<=statusWidth+.01,'speed bar ends at least 6px before gear or DRONE '+JSON.stringify({width,height,statusWidth,paintedWidth}));
     if(borderBox&&content+padding<statusWidth)assert.equal(paintedWidth,content+padding,'short bar fits its content');
   }
-  add(mail?'phoneLine':'hud',x0,top,statusWidth,56);
-  if(hintHeight&&!(landscape&&menu))add(mail?'stopHint':'placeArrival',x0,top+62,landscape||height<600?strip:x1-x0-62,landscape?(mail?36:14):hintHeight);
-  const start=top+68+(landscape?(mail?36:14):hintHeight);
+  add(mail?'phoneLine':'hud',x0,top,statusWidth,statusHeight);
+  if(hintHeight&&!(landscape&&menu))add(mail?'stopHint':'placeArrival',x0,top+statusHeight+6,landscape||height<600?strip:x1-x0-62,landscape?(mail?36:14):hintHeight);
+  const start=top+statusHeight+12+(landscape?(mail?36:14):hintHeight);
   if(!menu) for(const folded of [false,true])for(const photo of [false,true]) {
-   const rows=[...info], push=(...b)=>rows.push(b), mapWidth=folded?58:Math.min(78,landscape?Math.max(58,(strip-gap)*.8/1.8):strip);
+   const rows=[...info], push=(...b)=>rows.push(b), mapWidth=folded?58:Math.min(landscape?78:86,landscape?Math.max(58,(strip-gap)*.8/1.8):strip);
    const mapHeight=folded?58:mapWidth+56;
    push('miniMap',x0,start,x0+mapWidth,start+mapHeight);
    if(landscape){
@@ -137,6 +139,7 @@ async function verify(text, styles=css) {
  movePhoneReadouts(true,readouts,home,panel);assert.equal(readouts.parentElement,panel);assert.equal(panel.hidden,false);
  assert.equal(readouts.children[1],radio);assert.ok(radio.listener);
  movePhoneReadouts(false,readouts,home,panel);assert.equal(readouts.parentElement,home);assert.equal(panel.hidden,true);
+ assert.ok(phoneReadoutsInSettings({width:390,height:844,left:0,right:0,bottom:0,mail:false,pull:false,statusHeight:700,hintHeight:0}),'grown status reserves space before readouts');
  assert.ok(phoneReadoutsInSettings({width:667,height:375,left:47,right:47,bottom:21,mail:true,pull:false}));
  assert.ok(!phoneReadoutsInSettings({width:844,height:390,left:0,right:0,bottom:0,mail:true,pull:false}));
  // Native safe-area CSS changes need no window resize or DOM-style mutation.

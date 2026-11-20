@@ -56,6 +56,16 @@ for (const kind of ['car','bike','truck','sxs','horse']) for (const mode of ['dr
 assert.equal(pauseTitle('drive',{busy:false},{kind:'car'},{},false),'Pulled over');
 console.log('PASS live Settings capture restores gear focus; pause title follows ride and foot/free-camera mode');
 
+const endVisibility=main.match(/document\.getElementById\('pauseEndShift'\)!\.hidden = ([^;]+);/);
+assert.ok(endVisibility);
+const hiddenEnd=new Function('mailMode','document','interiors','bare',`return ${endVisibility[1].replaceAll('!.', '.')};`);
+for(const mail of [false,true])for(const endHidden of [false,true])for(const busy of [false,true])for(const bare of [false,true]) {
+ assert.equal(hiddenEnd(mail,{getElementById:()=>({hidden:endHidden})},{busy},bare),!mail||endHidden||busy||bare);
+}
+const endHandler=main.match(/document\.getElementById\('pauseEndShift'\)!\.addEventListener\('click', \(\) => \{ ([^}]+) \}\);/);
+assert.ok(endHandler);
+const actions=[];new Function('pause','syncPauseUI','shift',endHandler[1])({resume:()=>actions.push('resume')},()=>actions.push('sync'),{end:()=>actions.push('end')});
+assert.deepEqual(actions,['resume','sync','end']);
 const pauseMarkup = main.match(/pauseScreen.innerHTML = '([^']+)';/)[1];
 assert.match(pauseMarkup, /<details id="pauseKeys"><summary>Keys<\/summary>/);
 assert.doesNotMatch(pauseMarkup, /<pre|<details[^>]* open/);

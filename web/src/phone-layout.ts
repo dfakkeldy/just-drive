@@ -126,6 +126,12 @@ body.tcOn.compactPhone #miniMapCanvas{max-height:none}
 body.tcOn.compactPhone #relief{grid-area:2/1}
 body.tcOn.compactPhone #radio{grid-area:3/1}
 body.tcOn.compactPhone #photoTag{grid-area:4/1}
+@media(orientation:portrait){
+  body.tcOn.compactPhone #phoneReadouts{--leftCol:min(86px,100%)}
+  body.tcOn.compactPhone #miniMap:not(.folded),body.tcOn.compactPhone #relief,body.tcOn.compactPhone #radio{width:var(--leftCol)}
+  body.tcOn.compactPhone #phoneHud #radio:not(.lost):not(.weak):not(.call) span{display:none!important}
+  body.tcOn.compactPhone #phoneStatus:has(#bikeJump:not([hidden])){max-height:none;overflow:visible}
+}
 @media(orientation:portrait) and (max-width:343px){
   body.tcOn.compactPhone #phoneHud{grid-template-rows:auto auto minmax(0,1fr) auto auto auto}
   body.tcOn.compactPhone #phoneActions{grid-area:5/1/6/3}

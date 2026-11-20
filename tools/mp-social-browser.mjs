@@ -38,6 +38,8 @@ async function roomCardsLayout(p,mode='explore') {
     await sleep(700);
     const measured=await p.read(`(()=>{const home=document.getElementById('mpCards'),h=home.getBoundingClientRect(),cards=[...home.children].filter(e=>!e.hidden).map(e=>{const r=e.getBoundingClientRect();return [e.id,r.left,r.top,r.right,r.bottom]});return {cards,scroll:getComputedStyle(home).overflowY,box:[h.left,h.top,h.right,h.bottom],blockers:['hud','shiftHud','miniMap','radio','pauseButton','placesButton','gear','endShift','credit','mpChip','gameResults','droneHints','mailButton','cameraButton','placeArrival','photoTag'].flatMap(id=>{const e=document.getElementById(id),r=e?.getBoundingClientRect();return !e||e.hidden||!r.width||!r.height?[]:[[id,r.left,r.top,r.right,r.bottom]]})}})()`);
     assert.deepEqual(measured.cards.map(b=>b[0]),['mpSocial','racePanel','gamePanel']);
+    assert.ok(await p.read(`(()=>{const home=document.getElementById('mpCards'),r=home.getBoundingClientRect();return [...home.querySelectorAll(':scope>details')].filter(e=>!e.hidden).every(e=>{const b=e.getBoundingClientRect(),summary=e.querySelector('summary');return summary.getBoundingClientRect().height>=44&&(home.scrollHeight<=home.clientHeight&&innerWidth>=1280?Math.abs(b.right-(innerWidth-10))<=1:b.right<=r.left+home.clientWidth+1);});})()`),'desktop room summaries and right edge fit the column');
+
     assert.equal(measured.scroll,'auto');assert.ok(measured.blockers.some(b=>b[0]===(mode==='mail'?'mailButton':'placeArrival')),`${mode}: tested with the relevant lower HUD showing`);
     if(mode==='mail')for(const id of ['cameraButton','photoTag'])assert.ok(measured.blockers.some(b=>b[0]===id),`${id} is visible`);
     const [l,t,r,b]=measured.box; assert.ok(l>=0&&t>=0&&r<=width&&b<=height&&b>t&&r-l>=240);
@@ -59,6 +61,11 @@ let failed;
 try {
   const a=await open('Dusty Tire'), b=await open('Foggy Window',true);
   await a.until('mmm.mp.current.net.count===1');
+  await b.until(`!document.getElementById('gearRoom').hidden`);
+  assert.equal(await a.read(`document.getElementById('gearRoom')`),null,'desktop has no gear badge');
+  const badge=async()=>assert.ok(await b.read(`(()=>{const e=document.getElementById('gearRoom'),g=document.getElementById('gear'),r=e.getBoundingClientRect(),b=g.getBoundingClientRect();return !e.hidden&&e.textContent==='1'&&parseFloat(getComputedStyle(e).fontSize)>=12&&r.left>=b.left&&r.right<=b.right&&r.top>=b.top&&r.bottom<=b.bottom;})()`),'room count fits inside the gear');
+  await badge();
+
   assert.equal(await a.read('mmm.mp.current.net.me.name'),'Dusty Tire');
   assert.equal(await b.read('mmm.mp.current.net.me.name'),'Foggy Window');
   await a.until('document.getElementById("mpRoster").textContent.includes("Foggy Window")');
@@ -71,14 +78,21 @@ try {
   await clickSummary(a,'mpSocial');assert.equal(await a.read('document.getElementById("mpSocial").open'),false);
   await clickSummary(a,'mpSocial');assert.equal(await a.read('document.getElementById("mpSocial").open'),true,'desktop summary click opens chat');
   await b.read('document.getElementById("settings").classList.add("open")');
+  await sleep(100);
+  assert.ok(await b.read(`Array.from(document.querySelectorAll('#settings details>summary')).filter(e=>e.getClientRects().length).every(e=>{const r=e.getBoundingClientRect();return r.height>=56&&r.height<=57&&getComputedStyle(e).display==='list-item';})`),'phone summary rows share a 56px native marker row');
+
   if(!await b.read('document.getElementById("mpSocial").open'))await clickSummary(b,'mpSocial');
   await b.read('document.getElementById("mpChatButton").click();document.getElementById("mpChatGrid").scrollIntoView({block:"center"})');
   // Eight road phrases, and the three game phrases in a room that runs games (this one does).
   assert.equal(await b.read('[...document.querySelectorAll("#mpChatGrid button")].filter(e=>!e.hidden).length'),11);
   assert.equal(await b.read('[...document.querySelectorAll("#mpChatGrid button")].filter(e=>!e.hidden&&e.dataset.game).length'),3);
+  await b.read('document.getElementById("settings").classList.remove("open")');await sleep(100);
   await b.read('document.querySelectorAll("#mpChatGrid button")[4].click()');
   await a.until('document.getElementById("mpChatLog").textContent.includes("Foggy Window: Look at this")');
   await b.until('document.getElementById("mpChatLog").textContent.includes("Look at this")');
+  await sleep(150);
+  assert.ok(await b.read(`!document.getElementById('settings').classList.contains('open')&&document.getElementById('gearUnread').hidden`),'own chat sets no unread dot with Settings closed');
+  await b.read('document.getElementById("settings").classList.add("open")');
   await a.read('document.activeElement?.blur()');
   await a.send('Input.dispatchKeyEvent',{type:'keyDown',key:'1',code:'Digit1',windowsVirtualKeyCode:49});
   await a.send('Input.dispatchKeyEvent',{type:'keyUp',key:'1',code:'Digit1',windowsVirtualKeyCode:49});
@@ -98,11 +112,23 @@ try {
   const ahead=await b.read('({x:mmm.vehicle.x+Math.sin(mmm.vehicle.heading)*12,z:mmm.vehicle.z-Math.cos(mmm.vehicle.heading)*12})');
   await pose(a,ahead.x,ahead.z);await sleep(700);
   await a.read('mmm.mp.current.net.chat(4)');
+  await b.until(`!document.getElementById('gearUnread').hidden`);await badge();
+  assert.ok(await b.read(`document.getElementById('gear').getAttribute('aria-label').endsWith(', new message')`),'peer chat updates the gear label');
+  await b.read(`document.getElementById('settings').classList.add('open')`);await b.until(`document.getElementById('gearUnread').hidden`);
+  assert.ok(await b.read(`!document.getElementById('gear').getAttribute('aria-label').includes('new message')`),'opening Settings clears unread label');
+  await b.read(`document.getElementById('settings').classList.remove('open')`);
+
   await b.until('mmm.mp.current.ghosts.tagBoxes.length>0&&[...document.querySelectorAll("#mpChatBubbles [data-sender]")].some(e=>!e.hidden)');
   assert.ok(await b.read(bubblesClear),'landscape phone bubbles clear every drawn name tag');
   const planes=await b.read('mmm.mp.current.ghosts.tagBoxes.map(t=>t.bottom-t.top)');
   assert.ok(planes.length&&planes.every(h=>h>=23.9&&h<=24.1),'landscape phone name planes have 12 px ink in a 24 px plane '+JSON.stringify(planes));
   await b.shot('social-phone-landscape');
+  await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await sleep(100);await badge();
+  await sleep(4300);await a.read('mmm.mp.current.net.chat(4)');await b.until(`!document.getElementById('gearUnread').hidden`);
+  await b.read(`document.getElementById('settings').classList.add('open')`);await b.until(`document.getElementById('gearUnread').hidden`);
+  await b.read(`document.getElementById('settings').classList.remove('open');mmm.mp.current.net.chat(4)`);await sleep(150);
+  assert.ok(await b.read(`document.getElementById('gearUnread').hidden`),'own new chat leaves no dot with sheet closed');
+
   await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   await b.read('document.getElementById("settings").classList.add("open")');
   // Names in races are the same validated handles.
