@@ -118,7 +118,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
     world('terrain', '@camera', paused), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
     world('trees', '@terrain.drawnFine', '@camera.position'), call('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
     call('placesUI', '@vehicle', playing), call('journey', .05, playing), call('relief', dt, playing ? 6 : 0, '@vehicle', playing),
-    call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars'), call('radio', playing, false),
+    call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars', null), call('radio', playing, false),
     world('history', '@camera.position', dt), world('roads', '@camera.position'), world('sidewalks'), world('edge', '@camera.position'), world('mineSite', '@camera.position'),
     world('deckhand', dt, '@vehicle', '@camera.position'), world('fishing', dt, '@camera.position'), world('roadScene', '@camera'), world('schoolBus', '@camera'), world('ambientTraffic', '@camera', '@vehicle', true), world('roadAnimals', dt, '@vehicle', true), world('props', '@camera', dt), world('yardProps', '@camera', dt), world('harbourLights', 1.05), world('tall', '@camera', 1.05), call('shift', started ? .05 : 0, '@vehicle'),
     ...(!fly ? [call('shadowFocus', 3, 4, 5), call('sunShadows', .05, '@shadowFocus', 0, paused)] : []),

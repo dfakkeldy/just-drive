@@ -214,7 +214,7 @@ export class Ghosts {
       const slot = this.slots[i]; slot.used = false;
       for (let j = 0; j < this.cap; j++) if (this.chosen[j]?.id === slot.id) { slot.used = true; break; }
     }
-    this.drawn = this.labelCount = 0; this.tagBoxes.length = 0;
+    this.drawn = this.labelCount = 0;
     this.blend = 1 - Math.exp(-10 * Math.max(0, Math.min(dt, .1)));
     for (let i = 0; i < this.cap; i++) {
       const peer = this.chosen[i]; if (!peer) break;
@@ -232,6 +232,7 @@ export class Ghosts {
     }
     for (let i = 0; i < this.cap; i++) if (!this.slots[i].used) this.slots[i].id = -1;
     this.cars.count = this.drawn; this.labels.count = this.labelCount;
+    if (this.tagBoxes.length !== this.labelCount) this.tagBoxes.length = this.labelCount;
     if (this.cars.morphTexture) this.cars.morphTexture.needsUpdate = true;
     this.legacy.needsUpdate = true;
     this.cars.instanceMatrix.needsUpdate = true; this.labels.instanceMatrix.needsUpdate = true;
@@ -320,7 +321,8 @@ export class Ghosts {
     const tag = this.tagPool[this.labelCount];
     tag.id = id; tag.left = (left + 1) * innerWidth / 2; tag.right = (right + 1) * innerWidth / 2;
     tag.top = (1 - top - lift) * innerHeight / 2; tag.bottom = (1 - bottom - lift) * innerHeight / 2;
-    this.tagBoxes.push(tag);
+    // Write in place: emptying the array each frame would make V8 allocate a new backing store.
+    this.tagBoxes[this.labelCount] = tag;
   }
 
   dispose(): void {
