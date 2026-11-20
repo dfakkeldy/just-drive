@@ -1063,14 +1063,11 @@ export class Terrain {
     const weight=Math.max(this.triangleValue(t,x,z,paint,0),this.triangleValue(t,x,z,paint,3));
     const uniforms=(t.mesh!.material as THREE.ShaderMaterial).uniforms;
     const style=uniforms.tSiteStyle?.value.image.data;
-    if(style){
-      // Sample the same nearest style texel as STUNT_TERRAIN_FRAG, including off-road run-ups.
-      const a=Math.round((x-t.x0)*T/t.size),b=Math.round((z-t.z0)*T/t.size);
-      if(style[(b*S+a)*4+3]>0)return false;
-    }
+    // STUNT_TERRAIN_FRAG samples style alpha bilinearly at the terrain grid's texel centres.
+    const styleAlpha=style?lerp(style,4,3)/255:0;
     // tNormal.b is linearly sampled in the shader at the same grid coordinates. Each canopy byte is 0.2 m.
     const renderCanopy=clearsGroundTrees(this.groundClassAt(x,z))?0:lerp(uniforms.tNormal.value.image.data,4,2)*.2;
-    if(quarryGypsumFill(weight,renderCanopy,uniforms.hull.value)<QUARRY_GRAVEL_FILL)return false;
+    if(quarryGypsumFill(weight,renderCanopy,uniforms.hull.value)*(1-styleAlpha)<QUARRY_GRAVEL_FILL)return false;
     const h=this.seaLevel+(surface.ground-this.seaLevel)/this.exag;
     return site.quarryFloorAllowsMineral(x,z,h);
   }
