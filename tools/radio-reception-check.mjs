@@ -207,11 +207,21 @@ function sound(api) {
 }
 
 // The car radio alone asks the rules; the Just Listen page and the shared engine never do.
-function wiring() {
+const EXPLORE_LINE = "    if (gameMode === 'explore') radio?.useReception(null);\n";
+// `main`: the text of main.ts, so that the mutants below can hand in a broken one.
+function wiring(main = read('web/src/main.ts')) {
   for (const file of ['web/src/listen.ts', 'web/src/radio-player.ts']) assert.ok(!read(file).includes('radio-reception'), `${file} has no reception`);
-  const main = read('web/src/main.ts'), radio = read('web/src/radio.ts');
+  const radio = read('web/src/radio.ts');
   assert.equal(main.split('radio?.setPlace(vehicle.x + manifest.village[0], manifest.village[1] - vehicle.z);').length, 2, 'the game tells the radio where the car is, once');
   assert.equal(main.split("if (params.get('reception') === '0') radio?.useReception(null);").length, 2, '?reception=0');
+  // Only the mail shift has reception: just driving (explore mode) hears every station everywhere (the owner, 20 Nov 2026).
+  // The line must run after the radio is made, in loadRadio's own callback. Comment lines do not count.
+  const code = main.split('\n').filter(line => !line.trim().startsWith('//')).join('\n'), drop = EXPLORE_LINE.trim();
+  const callback = /loadRadio\(audioBase, siteRadio\(SITE\)\)\.then\(next => \{\n([\s\S]*?)\n\s*if \(import\.meta\.env\.DEV\) expose\(\{ radio \}\);/.exec(code)?.[1] ?? '';
+  assert.ok(callback.includes('radio = next;'), 'main.ts makes the radio in a loadRadio callback; if that has moved, read it here in the new way');
+  assert.equal(code.split(drop).length, 2, 'just driving takes the reception map away, once');
+  assert.ok(callback.indexOf(drop) > callback.indexOf('radio = next;'), 'and after the radio is made, in its own callback');
+  assert.equal(code.split('useReception(').length, 3, 'and nothing else in main.ts gives the radio a map');
   assert.ok(radio.includes("from './radio-reception'") && radio.includes('nextOnDial(') && radio.includes('private map: ReceptionMap | null = RECEPTION;'));
   assert.ok(radio.includes('this.audio.muted = this.music <= 0;'), 'a lost station is muted (a phone ignores the volume)');
   assert.ok(radio.includes('protected override level(): number { return this.volume * this.wind * this.music; }'), 'a weak signal takes some of the music');
@@ -262,4 +272,18 @@ if (process.argv.includes('--mutations')) {
     console.log(`KILLED ${name}`);
   }
   console.log(`PASS ${mutants.length} radio reception mutants killed`);
+  // The explore-mode line in main.ts, broken four ways: the wiring check must catch each.
+  const mainSource = read('web/src/main.ts'), made = "    radio = next; if (SITE.brand === 'just')";
+  const wiringMutants = [
+    ['W1 just driving keeps the map', s => s.replace(EXPLORE_LINE, '')],
+    ['W2 the line is only a comment', s => s.replace(EXPLORE_LINE, `    // ${EXPLORE_LINE.trimStart()}`)],
+    ['W3 the line runs before the radio is made', s => s.replace(EXPLORE_LINE, '').replace(made, EXPLORE_LINE + made)],
+    ['W4 another line gives the radio a map again', s => s.replace(EXPLORE_LINE, `${EXPLORE_LINE}    radio?.useReception(RECEPTION);\n`)],
+  ];
+  for (const [name, mutate] of wiringMutants) {
+    assert.ok(mainSource.split(EXPLORE_LINE).length === 2 && mainSource.split(made).length === 2, `${name}: anchor`);
+    assert.throws(() => wiring(mutate(mainSource)), assert.AssertionError, `${name} survived`);
+    console.log(`KILLED ${name}`);
+  }
+  console.log(`PASS ${wiringMutants.length} wiring mutants killed`);
 }
