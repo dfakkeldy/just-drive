@@ -591,6 +591,8 @@ if (scenario === 'arrival') await arrival();
 
 async function builds(count) {
   // Portable data pin: no dependency on an unmerged branch commit surviving a squash merge.
+  // The perf-tile-normal-map PR (#81) moved main's pin: the normal-map loop clamps its row and column offsets once
+  // instead of in two closures per read. The maths and their order stay; the pin's reason records each move.
   const pin=JSON.parse(readFileSync(root+'tools/baseline/terrain-tile-maths.json','utf8'));
   // Approved class-mask additions are checked by the real-terrain ground-canopy
   // suite and its three mutants. Strip only those exact additions (every

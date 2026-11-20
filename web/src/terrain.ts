@@ -779,17 +779,23 @@ export class Terrain {
     }
 
     // Lighting detail comes from a normal map at full sample density.
+    // This loop is most of a tile build. The edge clamps are worked out once per row and per column, not per read.
+    // The maths, its order and Math.hypot stay as they were, so the texture bytes do not change.
     const nm = new Uint8Array(S * S * 4);
-    const at = (arr: Float32Array, a: number, b: number) => arr[Math.min(Math.max(b, 0), T) * S + Math.min(Math.max(a, 0), T)];
-    const surf = (a: number, b: number) => at(ground, a, b) + (hull ? 0.6 * at(canopy, a, b) : 0);
     for (let b = 0; b < S; b++) {
+      const b0 = Math.max(b - 1, 0), b1 = Math.min(b + 1, T), h = (b1 - b0) * mpp;
+      const row = b * S, up = b0 * S, down = b1 * S;
       for (let a = 0; a < S; a++) {
-        const w = (Math.min(a + 1, T) - Math.max(a - 1, 0)) * mpp, h = (Math.min(b + 1, T) - Math.max(b - 1, 0)) * mpp;
-        let nx = -(surf(a + 1, b) - surf(a - 1, b)) / w, nz = -(surf(a, b + 1) - surf(a, b - 1)) / h;
+        const a0 = Math.max(a - 1, 0), a1 = Math.min(a + 1, T), w = (a1 - a0) * mpp;
+        const gl = ground[row + a0], gr = ground[row + a1], gu = ground[up + a], gd = ground[down + a];
+        // The surface the light sees: ground plus the tree hull.
+        const sl = gl + (hull ? 0.6 * canopy[row + a0] : 0), sr = gr + (hull ? 0.6 * canopy[row + a1] : 0);
+        const su = gu + (hull ? 0.6 * canopy[up + a] : 0), sd = gd + (hull ? 0.6 * canopy[down + a] : 0);
+        let nx = -(sr - sl) / w, nz = -(sd - su) / h;
         const inv = 1 / Math.hypot(nx, 1, nz);
         nx *= inv; nz *= inv;
-        const gs = Math.hypot((at(ground, a + 1, b) - at(ground, a - 1, b)) / w, (at(ground, a, b + 1) - at(ground, a, b - 1)) / h);
-        const k = (b * S + a) * 4;
+        const gs = Math.hypot((gr - gl) / w, (gd - gu) / h);
+        const k = (row + a) * 4;
         nm[k] = Math.round((nx * 0.5 + 0.5) * 255);
         nm[k + 1] = Math.round((nz * 0.5 + 0.5) * 255);
         nm[k + 2] = px[k + 2];
