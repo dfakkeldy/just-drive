@@ -26,6 +26,8 @@ interface Span {
 export class ModernBridges {
   private readonly spans:Span[]=[];
   private readonly cells=new Map<number,number[]>();
+  // The existing span lists in row order, so a padded hull query can skip the empty cells outside the map.
+  private clearanceGrid?: {x:number;z:number;w:number;h:number;members:(readonly number[]|undefined)[]};
   private readonly material=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
   private mesh:THREE.Mesh|null=null;
   /** Road ids whose spans are left out of the drawn mesh (the canal swing span while a vessel passes). */
@@ -96,8 +98,9 @@ export class ModernBridges {
         }
       }if(parallel>=3&&parallel>=total*.5){a.parallel.push(b);b.parallel.push(a);}
     }
-    if(this.spans.length&&terrain.sites){
-      terrain.sites.push({mask:this.mask(),box:[Math.min(...this.spans.map(r=>r.x0)),Math.min(...this.spans.map(r=>r.z0)),Math.max(...this.spans.map(r=>r.x1)),Math.max(...this.spans.map(r=>r.z1))],
+    if(this.spans.length){
+      const mask=this.mask();
+      terrain.sites?.push({mask,box:[Math.min(...this.spans.map(r=>r.x0)),Math.min(...this.spans.map(r=>r.z0)),Math.max(...this.spans.map(r=>r.x1)),Math.max(...this.spans.map(r=>r.z1))],
         sitingBoxes:this.spans.map(r=>[r.x0,r.z0,r.x1,r.z1] as const),
         roadField:false,samplesTerrain:false,height:(_x,_z,h)=>h,surface:()=>null,deckDriving:this.driving,deckMask:(x,z,kind)=>this.maskPaint(x,z,kind),deckClear:(x,z,pad)=>this.clearCorridor(x,z,pad),roadBedHeight:(x,z)=>this.roadBedHeight(x,z),roadCutHeight:(x,z)=>this.query(x,z,true,false,undefined,false,0,false),roadCutRevision:(x0,z0,x1,z1)=>this.cutRevision(x0,z0,x1,z1),roadCutTriangles:(x0,z0,x1,z1)=>this.cutTriangles(x0,z0,x1,z1),deckContactHeight:(x,z,referenceY)=>this.contactHeightAt(x,z,referenceY)});
     }
@@ -123,8 +126,14 @@ export class ModernBridges {
   private mask():CellMask {
     let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;
     for(const r of this.spans){x0=Math.min(x0,Math.floor(r.x0/CELL));z0=Math.min(z0,Math.floor(r.z0/CELL));x1=Math.max(x1,Math.floor(r.x1/CELL));z1=Math.max(z1,Math.floor(r.z1/CELL));}
-    const w=x1-x0+1,h=z1-z0+1,bits=new Uint8Array(w*h);
-    for(const r of this.spans)for(let z=Math.floor(r.z0/CELL);z<=Math.floor(r.z1/CELL);z++)for(let x=Math.floor(r.x0/CELL);x<=Math.floor(r.x1/CELL);x++)bits[(z-z0)*w+x-x0]=1;
+    const w=x1-x0+1,h=z1-z0+1,bits=new Uint8Array(w*h),members=new Array<readonly number[]|undefined>(w*h);
+    for(const r of this.spans)for(let z=Math.floor(r.z0/CELL);z<=Math.floor(r.z1/CELL);z++)for(let x=Math.floor(r.x0/CELL);x<=Math.floor(r.x1/CELL);x++){
+      const i=(z-z0)*w+x-x0;
+      if(bits[i]===1)continue;
+      bits[i]=1;
+      members[i]=this.cells.get(key(x*CELL,z*CELL,CELL));
+    }
+    this.clearanceGrid={x:x0,z:z0,w,h,members};
     return {x0:x0*CELL,z0:z0*CELL,size:CELL,w,h,bits};
   }
   /** Footprint only: safe while terrain tiles are being decoded, before deck heights exist. */
@@ -138,11 +147,21 @@ export class ModernBridges {
 
   /** Only the averaged tree hull is cleared. Bare-earth heights and the water below stay untouched. */
   private clearCorridor(x:number,z:number,pad:number):boolean {
-    for(let cz=Math.floor((z-pad)/CELL);cz<=Math.floor((z+pad)/CELL);cz++)for(let cx=Math.floor((x-pad)/CELL);cx<=Math.floor((x+pad)/CELL);cx++){
-      const list=this.cells.get(key(cx*CELL,cz*CELL,CELL));if(!list)continue;
+    const grid=this.clearanceGrid;
+    if(!grid)return false;
+    const x0=Math.max(0,Math.floor((x-pad)/CELL)-grid.x),x1=Math.min(grid.w-1,Math.floor((x+pad)/CELL)-grid.x);
+    const z0=Math.max(0,Math.floor((z-pad)/CELL)-grid.z),z1=Math.min(grid.h-1,Math.floor((z+pad)/CELL)-grid.z);
+    if(x0>x1||z0>z1)return false;
+    for(let cz=z0;cz<=z1;cz++)for(let cx=x0;cx<=x1;cx++){
+      const list=grid.members[cz*grid.w+cx];if(!list)continue;
       for(const index of list){const r=this.spans[index];
-        const c=r.corridor;for(let i=0;i<c.length;i+=4){const ax=c[i],az=c[i+1],dx=c[i+2]-ax,dz=c[i+3]-az,n=dx*dx+dz*dz||1,t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/n));
-          if(Math.hypot(x-ax-dx*t,z-az-dz*t)<=Math.max(r.width,r.road.halfWidth+.45)+pad)return true;
+        const c=r.corridor,reach=Math.max(r.width,r.road.halfWidth+.45)+pad;
+        for(let i=0;i<c.length;i+=4){
+          const ax=c[i],az=c[i+1],dx=c[i+2]-ax,dz=c[i+3]-az,px=x-ax,pz=z-az;
+          // Reject points outside the expanded segment box before projecting onto the segment.
+          if(px-Math.max(0,dx)>reach||Math.min(0,dx)-px>reach||pz-Math.max(0,dz)>reach||Math.min(0,dz)-pz>reach)continue;
+          const n=dx*dx+dz*dz||1,t=Math.max(0,Math.min(1,(px*dx+pz*dz)/n));
+          if(Math.hypot(px-dx*t,pz-dz*t)<=reach)return true;
         }
       }
     }return false;
@@ -375,16 +394,16 @@ export class ModernBridges {
     const slope=(a:number,b:number,c:number)=>{const dx=grid[b]-grid[a],dz=grid[b+2]-grid[a+2],ex=grid[c]-grid[a],ez=grid[c+2]-grid[a+2],det=dx*ez-dz*ex;if(Math.abs(det)<1e-8)return 0;const dy=grid[b+1]-grid[a+1],ey=grid[c+1]-grid[a+1];return Math.hypot((dy*ez-ey*dz)/det,(dx*ey-ex*dy)/det);};
     let badStart=false,badEnd=false;
     for(let pass=0;pass<600;pass++){
-      let changed=false;badStart=badEnd=false;
+      let moved=false,lifted=false,steep=false;badStart=badEnd=false;
       for(let i=0;i<rows;i++)for(let j=0;j<columns;j++){
         const a=(i*(columns+1)+j)*3,b=a+3,c=a+(columns+1)*3,d=c+3;
         for(const tri of[[a,c,b],[b,c,d]]){
           if(pass===0)for(const w of checks){
             let x=0,y=0,z=0;for(let k=0;k<3;k++){x+=grid[tri[k]]*w[k];y+=grid[tri[k]+1]*w[k];z+=grid[tri[k]+2]*w[k];}
-            if(!this.isSpan(x,z,-1))continue;const lift=(this.land(x,z)??-Infinity)+.05-y;if(lift>0)for(const k of tri){grid[k+1]+=lift;floor[k/3]=Math.max(floor[k/3],grid[k+1]);}
+            if(!this.isSpan(x,z,-1))continue;const lift=(this.land(x,z)??-Infinity)+.05-y;if(lift>0){lifted=true;for(const k of tri){grid[k+1]+=lift;floor[k/3]=Math.max(floor[k/3],grid[k+1]);}}
           }
           const grade=slope(...tri as[number,number,number]);if(grade<=.246)continue;
-          changed=true;
+          steep=true;
           const [u,v,w]=tri,dx=grid[v]-grid[u],dz=grid[v+2]-grid[u+2],ex=grid[w]-grid[u],ez=grid[w+2]-grid[u+2],det=dx*ez-dz*ex;
           if(Math.abs(det)<1e-8)continue;
           const cx=[(dz-ez)/det,ez/det,-dz/det],cz=[(ex-dx)/det,-ex/det,dx/det],free=tri.map((k,i)=>fixed[k/3]?-1:i).filter(i=>i>=0);
@@ -395,9 +414,12 @@ export class ModernBridges {
           if(norm(hi)>.246){if(i===0)badStart=true;else if(i===rows-1)badEnd=true;continue;}
           for(let n=0;n<26;n++){const mid=(lo+hi)/2;if(norm(mid)>.245)lo=mid;else hi=mid;}
           const d=1+hi*(xx+zz)+hi*hi*determinant,px=((1+hi*zz)*gx-hi*xz*gz)/d,pz=((1+hi*xx)*gz-hi*xz*gx)/d;
-          for(const n of free){const k=tri[n];grid[k+1]=Math.max(floor[k/3],grid[k+1]-hi*(cx[n]*px+cz[n]*pz));}
+          for(const n of free){const k=tri[n],before=grid[k+1];grid[k+1]=Math.max(floor[k/3],before-hi*(cx[n]*px+cz[n]*pz));if(grid[k+1]!==before)moved=true;}
         }
-      }if(!changed)break;
+      }
+      // A fixed floor can keep a triangle steep even when Float32 heights stop moving.
+      // The first pass can still have changed a shared floor after visiting its neighbour.
+      if(!moved&&!(lifted&&steep))break;
     }
     // A toe with a steep crossfall needs a longer approach to find a sound road section.
     let invalid=false;
