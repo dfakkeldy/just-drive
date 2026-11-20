@@ -59,10 +59,12 @@ const fixtureRoads = new Roads({roads:[
 ]},[0,0],terrain);
 const fake=(x,z)=>({x,z,motion:{}});
 const synthetic = new Route(fixtureRoads, {
-  mail: [fake(30,-4), fake(30,-9), fake(54,-4.3), fake(84,-4.3), fake(54,-5), fake(50.5,-4), fake(10,-5)],
+  // fake(14,-3.2) is nearer the Parallel Lane (1.8 m) than the highway (3.2 m) and within reach of the lane end;
+  // only the junction test keeps it off the run, so removing or loosening that test fails here.
+  mail: [fake(30,-4), fake(30,-9), fake(54,-4.3), fake(84,-4.3), fake(54,-5), fake(50.5,-4), fake(10,-5), fake(14,-3.2)],
   sites: [fake(30,-4), fake(54,-4.3)],
 });
-assert.deepEqual([...synthetic.members.keys()], [0, 2, 3, 7]);
+assert.deepEqual([...synthetic.members.keys()], [0, 2, 3, 8]);
 assert.ok(synthetic.runs[3].stops.every((stop) => stop.hit.road.id === 1));
 console.log('PASS: baked counts, lane-mouth ownership, sites, Highway 19 split, eight ordered runs, road starts, run cycle/override, 64 daily draws, fixed flag customers.');
 for (const [i, from, to] of moved) console.log(`Moved box ${i}: ${from} -> ${to}.`);
