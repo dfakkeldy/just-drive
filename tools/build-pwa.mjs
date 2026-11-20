@@ -6,7 +6,7 @@ import { HISTORY_AREAS } from '../web/src/eras/history-areas.ts';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync as read, writeFileSync as write, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { chunkPreloads, normalizedPage } from './pwa-shell.mjs';
+import { normalizedPage } from './pwa-shell.mjs';
 import { offlineModel } from './offline-models.mjs';
 const site = resolve(process.argv[2]);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -44,13 +44,16 @@ const chunks = existsSync(site + '/chunks') ? readdirSync(site + '/chunks').filt
 const chunkUrls = chunks.map(name => `/offline/chunks/${name}`);
 if (chunks.length) mkdirSync(site + '/offline/chunks', { recursive: true });
 for (const name of chunks) write(site + `/offline/chunks/${name}`, read(site + `/chunks/${name}`));
-const preloads = chunkPreloads(app.toString('utf8'), name => read(site + `/chunks/${name}`));
+// The chunks app.js imports at its top. The ordinary page pins them with integrity, as it pins app.js; the saved
+// page needs none, because the worker checks every shell file's hash.
+const preloads = [...new Set([...app.toString('utf8').matchAll(/(?:\bfrom|\bimport)\s*"\.\/chunks\/([\w-]+\.js)"/g)].map(m => m[1]))]
+  .map(name => ({ name, integrity: 'sha256-' + createHash('sha256').update(read(site + `/chunks/${name}`)).digest('base64') }));
 const manifestUrl = just ? '/manifest-just.webmanifest' : '/manifest.webmanifest';
 const manifest = { id: '/', name: just ? 'Just Drive: Mabou' : 'Mabou Mail Madness', short_name: just ? 'Just Drive' : 'Mabou Mail', start_url: just ? '/mabou' : '/', scope: '/', display: 'standalone', orientation: 'any', theme_color: '#0b1620', background_color: '#0b1620', description: 'Drive the October hills.', icons: [ { src:'/offline/icons/icon-192.png',sizes:'192x192',type:'image/png',purpose:'any'}, {src:'/offline/icons/icon-512.png',sizes:'512x512',type:'image/png',purpose:'any'},{src:'/offline/icons/maskable-512.png',sizes:'512x512',type:'image/png',purpose:'maskable'}] };
 write(site + manifestUrl, JSON.stringify(manifest));
 let page = normalizedPage(just ? justPage(originalPage, AREAS[0]) : originalPage,appUrl);
 // The chunks app.js imports at its top start with it: the page names them, so they do not wait for app.js to arrive.
-page = page.replace('</head>', preloads.map(p => `<link rel="modulepreload" href="/offline/chunks/${p.name}" integrity="${p.integrity}">\n`).join('') + '</head>');
+page = page.replace('</head>', preloads.map(p => `<link rel="modulepreload" href="/offline/chunks/${p.name}">\n`).join('') + '</head>');
 const pageKey = hash(JSON.stringify({ builtAt, page, dataRevision, app:hash(app), chunks:chunkUrls.map(url => file(url).hash), manifest, icons:shellIconHashes() }));
 function shellIconHashes() { return ['180','192','512'].map(n=>file(`/offline/icons/icon-${n}.png`).hash).concat(file('/offline/icons/maskable-512.png').hash); }
 page = page.replace('</head>', `<link rel="manifest" href="${manifestUrl}">\n<link rel="apple-touch-icon" sizes="180x180" href="/offline/icons/icon-180.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="${just ? 'Just Drive: Mabou' : 'Mabou Mail'}">\n<meta name="mmm-offline-bytes" content="${files.reduce((n,f)=>n+f.bytes,0)}">\n<meta name="mmm-page" content="${pageKey}">\n<meta name="mmm-build" content="${hash(app).slice(0,16)}">\n</head>`);
@@ -63,7 +66,7 @@ for(let pass=0;pass<4;pass++) {
   const next=dataBytes+fixedShellBytes+Buffer.byteLength(page);if(next===previewBytes)break;
   previewBytes=next;page=page.replace(/(<meta name="mmm-offline-bytes" content=")[0-9]+("[>])/,`$1${previewBytes}$2`);
 }
-const pageUrl = `/offline/page.${hash(page)}.html`; write(site + pageUrl,page); if (!just) write(site + '/index.html',page.replace(`src="${appUrl}"`,`src="/app.js" integrity="sha256-${createHash('sha256').update(app).digest('base64')}"`).replaceAll('<link rel="modulepreload" href="/offline/chunks/','<link rel="modulepreload" href="/chunks/'));
+const pageUrl = `/offline/page.${hash(page)}.html`; write(site + pageUrl,page); if (!just) write(site + '/index.html',page.replace(`src="${appUrl}"`,`src="/app.js" integrity="sha256-${createHash('sha256').update(app).digest('base64')}"`).replace(/<link rel="modulepreload" href="\/offline\/chunks\/([\w-]+\.js)">/g,(_all,name)=>`<link rel="modulepreload" href="/chunks/${name}" integrity="${preloads.find(p=>p.name===name).integrity}">`));
 const connectionMeta = Object.fromEntries([...AREAS, null].map(area => [area?.id ?? 'unknown', { title: area ? `Just Drive: ${area.name}` : 'Just Drive', head: justPage('<html><head></head><body></body></html>', area).match(/<head>([\s\S]*?)<\/head>/)[1] }]));
 write(site+'/sw.js', `const JUST_AREAS = ${JSON.stringify(['sugar-camp-quarry', ...AREAS.map(area => area.id), ...Object.values(HISTORY_AREAS).map(a => a.address)])};\nconst JUST_ALIASES = ${JSON.stringify({...Object.fromEntries(Object.values(HISTORY_AREAS).map(a => [a.address, a.id])), 'sugar-camp-quarry':'westbay'})};\nconst JUST_META = ${JSON.stringify(connectionMeta)};\n` + read(new URL('../web/pwa/sw.js',import.meta.url), 'utf8'));
 const shell = [pageUrl,appUrl,...chunkUrls,manifestUrl,...['180','192','512'].map(s=>`/offline/icons/icon-${s}.png`),'/offline/icons/maskable-512.png'].map(file);
