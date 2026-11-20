@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 
+/** Seconds between probes of a hidden mesh. */
+const RETRY=.2;
 /** Existing draws double as probes. A hidden mesh is retried five times per second;
  * moving/turning the camera immediately restores it. There is no proxy draw,
  * terrain guess, GPU readback wait or per-instance loop.
  */
-/** Seconds between probes of a hidden mesh. */
-const RETRY=.2;
 export class FarVisibility {
   private readonly records: {mesh:THREE.Mesh;query:WebGLQuery|null;pending:boolean;active:boolean;visible:boolean;retry:number;version:number}[]=[];
   private pose=0;
