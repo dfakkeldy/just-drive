@@ -24,6 +24,8 @@ export function areaPlaces(area: string): Place[] {
       place('porthood', 'port-hood-station', 'Port Hood Station Provincial Park', 'beach', 613449.4, 5095264.8, 'A picnic park with a cobble beach, next to a white sand beach. The coastal rail trail has a trailhead at Port Hood Station.', ['https://parks.novascotia.ca/park/port-hood-station', OSM + 'way/480281114', TRAIL], 420),
       place('porthood', 'port-hood-wharf', 'Port Hood wharf', 'water', 613030, 5097010, 'Wharves reach out into Port Hood harbour here.', [OSM + 'way/117552872', OSM + 'way/117552398', GEO + 'CBULE'], 220),
       place('porthood', 'murphys-pond', 'Murphys Pond breakwaters', 'water', 612690, 5098110, 'Two breakwaters and a slipway stand at Murphys Pond, north of the village.', [GEO + 'CBAVM', OSM + 'way/117552509', OSM + 'way/117552922', OSM + 'node/10264417207'], 120),
+      { ...place('porthood', 'marble-hill-view', 'Marble Hill Road view', 'view', 612743.51, 5099500.28, 'Look south-west over Port Hood harbour and the island.', ['areas/porthood/roads.json#56']),
+        spawn: { e: 612743.51, n: 5099500.28, road: 'Marble Hill Road', heading: 225 * Math.PI / 180 } },
       place('porthood', 'little-judique-harbour', 'Little Judique Harbour', 'water', 614210, 5090495, 'Fishing boats tie up at the harbour wharf. The coastal rail trail crosses the harbour on a causeway.', [GEO + 'CAUJQ', TRAIL_SECTIONS, OSM + 'way/117702817']),
       place('porthood', 'pigs-cove', 'Pigs Cove', 'water', 614203.4, 5088431.8, 'A slipway and a pier, with breakwaters, at Pigs Cove.', [GEO + 'CBDQV', OSM + 'node/10264006008', OSM + 'way/117703005', OSM + 'way/1122197668', OSM + 'way/117702993']),
     ];

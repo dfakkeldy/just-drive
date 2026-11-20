@@ -8,7 +8,7 @@ export interface Place {
   /** Optional on-road approach, for places reached by a mapped track. */
   trip?: 'quarry'|'quarry-gate';
   track?: boolean;
-  spawn?: { e: number; n: number; road: string; heading: number };
+  spawn?: { e: number; n: number; road: string | null; heading: number; roadId?: number };
   id: string; area: 'mabou' | 'judique' | 'porthood' | 'pointtupper' | 'westbay' | 'cansocauseway'; name: string; e: number; n: number;
   kind: 'village' | 'view' | 'trail' | 'beach' | 'water' | 'site'; note: string; sources: string[]; radius?: number;
   /** Map label order when the kind's own is wrong for this place; see `mapRank`. */
@@ -58,6 +58,9 @@ export function placesFor(village: readonly [number, number]): Place[] {
     // Views from the owner's dash cam of 18 Nov 2026: each jump faces the view, checked in the game's own pictures.
     view('harbour-inlet-view', 'Mabou Harbour Road above the inlet', 'Mabou Harbour Road', 621520.0, 5104587.4, 215, 'The road runs above the harbour here, where the water opens wide to the south.', ['terrain/roads.json#49']),
     view('glen-view', 'MacDonald Glen Road view', 'MacDonald Glen Road', 623475.2, 5105547.8, 220, 'The glen falls away south-west from here, down to the harbour.', ['terrain/roads.json#59']),
+    view('coal-mines-valley', 'Mabou Coal Mines valley', 'Mabou Mines Road', 619193.56, 5110378.41, 270, 'Look west down the valley, past the ponds to the sea.', ['terrain/roads.json#55']),
+    { ...place('harbour-wharf-view', 'Mabou Harbour wharf from the lane', 'view', 618732.67, 5104952.35, 'Look down the lane toward the lighthouse and the fishing basin.', ['terrain/roads.json#922']),
+      spawn: { e: 618732.67, n: 5104952.35, road: null, roadId: 922, heading: 199 * Math.PI / 180 } },
     view('mines-road-view', 'Mabou Mines Road above the harbour', 'Mabou Mines Road', 620332.5, 5104839.9, 125, 'Mabou Mines Road climbs north from the harbour road here. Look back south-east over the harbour.', ['terrain/roads.json#55']),
     view('shore-bends', 'Mabou Harbour Road shore bends', 'Mabou Harbour Road', 619602.1, 5105013.5, 240, 'The road follows the bends of the harbour shore here.', ['terrain/roads.json#49']),
     view('harbour-road-end', 'West end of Mabou Harbour Road', 'Mabou Harbour Road', 617500.4, 5105590.6, 290, 'The road ends on high ground above the shore, looking out to sea.', ['terrain/roads.json#51']),
@@ -89,7 +92,7 @@ export function arrivalAt(places: readonly Place[], origin: readonly [number, nu
 export function nearestPlacement(roads: RoadNetwork, place: Pick<Place, 'e' | 'n'> & Pick<Partial<Place>, 'spawn'|'track'>, origin: readonly [number, number]): RoadHit | null {
   if (place.spawn) {
     const spawn = place.spawn, p = placePosition(spawn, origin);
-    const hit = roads.nearest(p.x, p.z, 2, road => road.name === spawn.road && road.kind >= 1 && road.kind <= 4);
+    const hit = roads.nearest(p.x, p.z, 2, road => road.name === spawn.road && (spawn.roadId === undefined || road.id === spawn.roadId) && road.kind >= 1 && road.kind <= 4);
     return hit ? { ...hit, heading: spawn.heading } : null;
   }
   const p = placePosition(place, origin);

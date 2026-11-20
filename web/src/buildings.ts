@@ -181,7 +181,8 @@ export class Buildings {
   /** World boxes [x0, z0, x1, z1] under the buildings, so the terrain's tree layer is removed there. */
   readonly clear: number[][] = [];
 
-  constructor(list: Building[], village: [number, number], exag: number, seaLevel: number, paint: BuildingPaint | FacadeStudy = {}) {
+  constructor(list: Building[], village: [number, number], exag: number, seaLevel: number, paint: BuildingPaint | FacadeStudy = {},
+    details?: { pos: readonly number[]; col: readonly number[] }) {
     const { styles = {}, study, low, sunDir } = isFacadeStudy(paint) ? paint : { styles: paint, study: undefined, low: false, sunDir: undefined };
     const pos: number[] = [], col: number[] = [];
     const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, colourA: RGB, shade = 1, colourB = colourA, colourC = colourA) => {
@@ -623,6 +624,11 @@ export class Buildings {
         this.clear.push([Math.min(...corners.map((p) => p.x)), Math.min(...corners.map((p) => p.z)), Math.max(...corners.map((p) => p.x)), Math.max(...corners.map((p) => p.z))]);
       }
       this.clear.push(...clearBoxes(b, village, 2.5));
+    }
+    // Hand-built roofs and park props share the ordinary building draws and their water reflection.
+    if (details) {
+      for (const value of details.pos) pos.push(value);
+      for (const value of details.col) col.push(value);
     }
     this.triangles = pos.length / 9;
     const geo = new THREE.BufferGeometry();

@@ -119,6 +119,13 @@ async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
   return ctx.getImageData(0, 0, S, S).data;
 }
 
+export interface SiteSurface {
+  dist: number; half: number; kind: number; coverage?: number;
+  gravelDrive?: boolean;
+  /** Reclassify a mapped gravel sample without moving the centre line or changing its width. */
+  paveGravel?: boolean;
+}
+
 /**
  * A hand-built place that changes the ground under it: graded pads, and surfaces painted through the road field
  * (kind 8 yard gravel, 9 concrete, 10 packed sand), so the picture and the wheels agree. Add before the first tile loads.
@@ -133,7 +140,7 @@ export interface Site {
   /** True ground height in metres, given the surveyed one. */
   height(x: number, z: number, surveyed: number, level?:number): number;
   /** The surface at a point: metres from an imaginary centre line, half width in metres, and kind. */
-  surface(x: number, z: number,ground?:number,level?:number): { dist: number; half: number; kind: number;coverage?:number } | null;
+  surface(x: number, z: number,ground?:number,level?:number): SiteSurface | null;
   /** Kind 11 is visual gravel in the unused road alpha channel; RGB driving data stays untouched. */
   visualGravel?: boolean;
   /** Metres per sample of the coarsest tile this site is part of. A tile with no baked road field gets its own 257 x 257 texture
@@ -164,12 +171,16 @@ export interface Site {
 }
 
 /** Apply a runtime field sample. Kind 11 only paints; it cannot change a mapped road's driving samples. */
-export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:{dist:number;half:number;kind:number;coverage?:number},zero:number,dScale:number,wScale:number):void {
+export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:SiteSurface,zero:number,dScale:number,wScale:number):void {
   if(f.coverage!==undefined)road[k+3]=Math.round(Math.max(0,Math.min(1,f.coverage))*255);
   if(f.kind===11){road[k+3]=Math.max(0,Math.min(255,Math.round((2+f.half-f.dist)*255/4)));return;}
   const flags=road[k+2];
+  if (f.paveGravel) {
+    if (flags === 3) road[k+2] = 2;
+    return;
+  }
   if(flags>0 && (flags&15)<=3 && Math.abs(road[k]-zero)*dScale<road[k+1]*wScale+1.2)return;
-  road[k]=Math.min(255,zero+Math.round(f.dist/dScale));road[k+1]=Math.min(255,Math.round(f.half/wScale));road[k+2]=f.kind;
+  road[k]=Math.min(255,zero+Math.round(f.dist/dScale));road[k+1]=Math.min(255,Math.round(f.half/wScale));road[k+2] = f.gravelDrive ? 68 : f.kind;
 }
 
 /** The road bytes a tile draws. A gravel driveway or pad is a track (kind 4) with the gravel bit (64); it is drawn exactly

@@ -124,13 +124,15 @@ function check(lists) {
       assert.equal(p.area, id, `${where}: area tag`);
       assert.ok(!ids.has(p.id) && !OTHER.some(o => o.id === p.id), `${where}: id is unique`); ids.add(p.id);
       assert.ok(Array.isArray(p.sources) && p.sources.length > 0, `${where}: lists its sources`);
-      for (const s of p.sources) assert.ok(PUBLIC.test(s) || new RegExp(`^areas/${id}/manifest\\.json#village$`).test(s), `${where}: public source ${s}`);
-      assert.ok(p.sources.some(s => s.startsWith('https://')), `${where}: at least one public web source`);
+      const roadSource = new RegExp(`^areas/${id}/roads\\.json#(\\d+)$`);
+      const roadSources = p.sources.map(s => roadSource.exec(s)).filter(Boolean);
+      for (const s of p.sources) assert.ok(PUBLIC.test(s) || s === `areas/${id}/manifest.json#village` || roadSource.test(s), `${where}: public source ${s}`);
+      assert.ok(p.sources.some(s => s.startsWith('https://')) || p.spawn && roadSources.length, `${where}: a public source or a mapped view`);
       const sentences = p.note.replace(/\bSt\. /g, 'St ').split(/(?<=[.!?])\s+/).filter(Boolean);
       assert.ok(sentences.length >= 1 && sentences.length <= 2 && /[.!?]$/.test(p.note), `${where}: one or two plain sentences`);
       assert.ok(!/\d/.test((p.name + ' ' + p.note).replace(/\bHighway \d+\b/g, '')), `${where}: no numbers but highway numbers (no civic numbers)`);
       assert.ok(!NOT_SAID.test(p.note), `${where}: says nothing about access, parking, opening or events (${p.note.match(NOT_SAID)?.[0]})`);
-      assert.ok(['village', 'view', 'trail', 'beach', 'water', 'site'].includes(p.kind) && !p.trip && !p.spawn, `${where}: plain place`);
+      assert.ok(['village', 'view', 'trail', 'beach', 'water', 'site'].includes(p.kind) && !p.trip && (!p.spawn || p.kind === 'view' && Number.isFinite(p.spawn.heading) && roadSources.length === 1), `${where}: plain place or sourced view`);
       assert.ok(inside(p.e, p.n), `${where}: inside the drive bounds`);
       for (const site of SITES) { const d = boxDistance(p.e, p.n, site.box); assert.ok(d >= MIN_SITE, `${where}: ${d.toFixed(0)} m from the ${site.name}`); }
       for (const o of [...OTHER, ...AREA_IDS.flatMap(a => lists[a])]) {
@@ -139,6 +141,7 @@ function check(lists) {
       }
       const hit = nearestPlacement(roads, p, v);
       assert.ok(hit, `${where}: a road to jump to`);
+      if (p.spawn) assert.equal(hit.road.id, Number(roadSources[0][1]), `${where}: the jump matches its road source`);
       assert.ok(!railwayRoad(hit.road) && hit.road.kind >= 1 && hit.road.kind <= (p.track ? 4 : 3), `${where}: jumps to a road, not ${hit.road.name}/${hit.road.kind}`);
       const radius = p.radius ?? ARRIVAL_RADIUS;
       assert.ok(hit.dist + 5 <= radius, `${where}: road ${hit.dist.toFixed(0)} m away, arrival radius ${radius} m`);
