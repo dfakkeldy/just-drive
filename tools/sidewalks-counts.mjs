@@ -17,14 +17,16 @@ const proven=process.env.SIDEWALK_COUNT_EXPECT_PROVEN==='1'&&!zero?JSON.parse(re
 const all=['new-player-start','village-start','harbour-water','mines-lookoff-south','highway19-far-land','pointtupper-start'];
 const wanted=process.env.SIDEWALK_COUNT_VIEWS?process.env.SIDEWALK_COUNT_VIEWS.split(','):all;assert.ok(wanted.every(v=>all.includes(v)),'known count view');
 const report={head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),base:process.env.SIDEWALK_MEASURE_BASE_REF??'same tree, ?sidewalks=0',host:process.env.HOSTNAME??'remote count host',method:diagnostic?'one paired shader-inventory diagnostic; radio and songs off on both sides':'five fresh paired loads per view/mode, same hardware, radio and songs off on BOTH sides; deltas only; no MacBook pin update',rows:[]};
+const deckTriangles = frame => (frame.groupTriangles['bridge deck'] ?? 0) + (frame.groupTriangles['bridge deck (shadow)'] ?? 0);
 const save=()=>writeFileSync(`${out}/paired-counts.json`,JSON.stringify(report,null,2)+'\n');let failed=false;
 try{
  for(const scene of scenes.filter(s=>diagnostic?s.id==='highway19-far-land':wanted.includes(s.id)))for(const mode of modes.filter(m=>(!scene.exploreOnly||m.explore)&&(!diagnostic||m.id==='desktop-mail'))){
   const row={view:scene.id,mode:mode.id,low:mode.phone,pairs:[]};report.rows.push(row);
   for(let n=0;n<(diagnostic?1:5);n++){
-   const main=await measure(scene,mode,diagnostic?programs:undefined,{origin:base,query:baseQuery,radioOff:true,programInventory:true,farWait:baseFar}),current=await measure(scene,mode,diagnostic?programs:undefined,{origin,radioOff:true,programInventory:true});
-   const delta=countDelta(main.counts,current.counts);row.pairs.push({main,current,delta});save();console.log('PAIRED COUNT',JSON.stringify({view:scene.id,mode:mode.id,run:n+1,main:main.counts,current:current.counts,delta}));
-   try{if(proven)checkProvenCountDelta(delta,proven[scene.id+'/'+mode.id]);if(zero)checkUnchangedCounts(delta,main.programKeys,current.programKeys);checkCountDelta(delta,mode.phone,current.groups,{view:scene.id,mode:mode.id,addedPrograms:current.programKeys.filter(k=>!main.programKeys.includes(k)),removedPrograms:main.programKeys.filter(k=>!current.programKeys.includes(k))});}catch(error){row.failure=error.message;failed=true;console.error('FAIL COUNT DELTA',scene.id,mode.id,error.message);}
+   const main=await measure(scene,mode,diagnostic?programs:undefined,{origin:base,query:baseQuery,radioOff:true,programInventory:true,bridgeInventory:true,farWait:baseFar}),current=await measure(scene,mode,diagnostic?programs:undefined,{origin,radioOff:true,programInventory:true,bridgeInventory:true});
+   const bridgeDeckTriangles = Math.max(0, deckTriangles(current) - deckTriangles(main));
+   const delta=countDelta(main.counts,current.counts);row.pairs.push({main,current,delta,bridgeDeckTriangles});save();console.log('PAIRED COUNT',JSON.stringify({view:scene.id,mode:mode.id,run:n+1,main:main.counts,current:current.counts,delta}));
+   try{if(proven)checkProvenCountDelta(delta,proven[scene.id+'/'+mode.id]);if(zero)checkUnchangedCounts(delta,main.programKeys,current.programKeys);checkCountDelta(delta,mode.phone,current.groups,{view:scene.id,mode:mode.id,bridgeDeckTriangles,addedPrograms:current.programKeys.filter(k=>!main.programKeys.includes(k)),removedPrograms:main.programKeys.filter(k=>!current.programKeys.includes(k))});}catch(error){row.failure=error.message;failed=true;console.error('FAIL COUNT DELTA',scene.id,mode.id,error.message);}
   }
   for(const side of ['main','current'])for(const metric of countMetrics){const values=row.pairs.map(p=>p[side].counts[metric]);assert.ok(values.every(v=>v===values[0]),`${scene.id}/${mode.id}: ${side} ${metric} not exact over five loads`);}
   row.main=row.pairs[0].main.counts;row.current=row.pairs[0].current.counts;row.delta=row.pairs[0].delta;row.pass=!row.failure;save();

@@ -249,6 +249,7 @@ async function openPage(scene, mode, options = {}) {
       const roots = new Map(Object.entries(m).filter(([,v]) => v?.group).map(([k,v]) => [v.group,k]));
       roots.set(m.vehicle.car.root, 'vehicle');
       const groupName = object => {
+        if (${options.bridgeInventory === true} && object === m.roads.modern?.mesh) return 'bridge deck';
         for (let n=object; n && n!==b.scene; n=n.parent) if (roots.has(n)) return roots.get(n);
         let top=object; while(top.parent && top.parent!==b.scene && !top.parent.isScene) top=top.parent;
         return top.name || object.material?.name || object.material?.type || object.type;
