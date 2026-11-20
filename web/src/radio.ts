@@ -3,10 +3,9 @@
 // memory, the join in the middle of a song) is the engine in radio-player.ts, which the Just Listen page shares.
 // The songs are data (audio/radio.json and its files), not code: without them there is no radio and the game runs.
 // Built in script, so the test page and the published page cannot drift apart.
-// Reception by place lives here too, and only here: where the car is decides how much of its station comes in
-// (radio-reception.ts has the rules). The Just Listen page stands on the engine alone and hears every station.
-// Only the mail shift has reception. Just driving (the Just Drive site, or the mail game's "Just drive" mode) takes the map
-// away (main.ts), so there every station comes in everywhere.
+// Reception by place lives here too: where the car is decides how much of its station comes in (radio-reception.ts has
+// the rules). The Just Listen page stands on the engine alone and hears every station. main.ts chooses where the rules
+// apply: it takes the map away in explore mode (just driving), so only the mail shift has reception.
 
 import { windGain } from './damage-rules';
 import { placePhoneReadout } from './phone-layout';

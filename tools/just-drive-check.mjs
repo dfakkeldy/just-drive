@@ -56,7 +56,8 @@ async function page(host,path,width,height,verify,missingRadio=false) {
 }
 // Reception (the owner, 20 Nov 2026): only the mail shift has it. Just driving, on the Just Drive site and in the mail
 // game's "Just drive" mode, hears every station everywhere. A whole turn of the dial at a place, in one read so that no
-// frame moves the car between steps, gives each stop's dial and its readout word.
+// frame moves the car between steps, gives each stop's dial and its readout word. It leaves the radio off, so keep it
+// the last step on its page.
 const village=id=>JSON.parse(readFileSync(new URL(id==='mabou'?'../data/baked/terrain/manifest.json':`../data/baked/areas/${id}/manifest.json`,import.meta.url),'utf8')).village;
 const dialWalk=(p,[e,n])=>p.read(`(()=>{const r=mmm.radio,dials=r.stations.map(s=>s.dial),walk=[];r.setPlace(${e},${n});
   for(let k=0;k<=dials.length&&r.station>=0;k++)r.next();
