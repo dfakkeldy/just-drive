@@ -198,7 +198,7 @@ await onClock('after LIVE');
 
 // ---- Every phone size, upright and sideways ----
 await read(`document.querySelector('details.card').open = false, scrollTo(0, 0)`);
-const SIZES = [[320, 568], [360, 640], [375, 667], [390, 844], [412, 915], [430, 932], [540, 960], [568, 320], [640, 360], [667, 375], [844, 390], [915, 412], [932, 430], [768, 1024], [1280, 800]];
+const SIZES = [[320, 568], [360, 640], [375, 667], [390, 844], [412, 915], [430, 932], [494, 960], [540, 960], [568, 320], [640, 360], [667, 375], [844, 390], [915, 412], [932, 430], [768, 1024], [1280, 800]];
 for (const [w, h] of SIZES) {
   await phone(w, h);
   await read(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => { scrollTo(0, 0); r(true); })))`);
@@ -207,8 +207,9 @@ for (const [w, h] of SIZES) {
     const hs=[...document.querySelectorAll('.preset')].map(e=>box(e).height);
     if (!(W > H && H <= 520) && Math.max(...hs)-Math.min(...hs) > .5) bad.push('preset heights differ by more than 0.5px');
     // The radio is sounding here, so the lit key shows its status. Where the status sits on the frequency line, it must not touch the frequency.
+    // Any key can be lit, so test the lit key's status width against every key's frequency, the widest dials included.
     const lit = document.querySelector('.preset[aria-pressed=true]'), st = lit && getComputedStyle(lit, '::after');
-    if (st && st.position === 'absolute' && st.content !== 'none') { const t = box(lit), r = document.createRange(); r.selectNodeContents(lit.querySelector('b')); const right = r.getBoundingClientRect().right, left = t.right - parseFloat(st.right) - parseFloat(st.width); if (right > left - 4) bad.push('the lit key status overlaps its frequency (' + Math.round(right) + ' > ' + Math.round(left - 4) + ')'); }
+    if (st && st.position === 'absolute' && st.content !== 'none') for (const key of document.querySelectorAll('.preset')) { const t = box(key), r = document.createRange(); r.selectNodeContents(key.querySelector('b')); const right = r.getBoundingClientRect().right, left = t.right - parseFloat(st.right) - parseFloat(st.width); if (right > left - 4) bad.push('a lit status would overlap ' + key.querySelector('b').textContent + ' (' + Math.round(right) + ' > ' + Math.round(left - 4) + ')'); }
     if (document.documentElement.scrollWidth > W) bad.push('the page scrolls sideways (' + document.documentElement.scrollWidth + ' > ' + W + ')');
     const all = [...document.querySelectorAll('#unit, #unit *, .card, .way, .foot a')].filter(e => e.getClientRects().length && !e.closest('svg') && getComputedStyle(e).position !== 'absolute');
     for (const e of all) { const b = box(e); if (b.left < -0.5 || b.right > W + 0.5) bad.push((e.id || e.className || e.tagName) + ' leaves the screen sideways'); }
