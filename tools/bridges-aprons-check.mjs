@@ -66,7 +66,7 @@ if(process.argv.includes('--mutations')){
  const terrainFile='web/src/terrain.ts',terrain=readFileSync(root+terrainFile,'utf8');
  const mask='renderedRoad[k]&=240;';assert.equal(terrain.split(mask).length,2);
  await assert.rejects(()=>verify({[terrainFile]:terrain.replace(mask,'')},'mabou'),/rendered bare-earth road/,'road paint mask removed must fail');console.log('KILLED under-deck road paint mask removed');
- const canopy='if(c>0&&sites.some(site=>site.deckClear?.(t.x0+ga*mpp,t.z0+gb*mpp,mpp*step*1.5)))c=0;';assert.equal(terrain.split(canopy).length,2);
+ const canopy='if(c>0&&deckClearSites.length&&deckClearSites.some(site=>site.deckClear?.(t.x0+ga*mpp,t.z0+gb*mpp,mpp*step*1.5)))c=0;';assert.equal(terrain.split(canopy).length,2);
  await assert.rejects(()=>verify({[terrainFile]:terrain.replace(canopy,'')},'mabou'),/canopy does not cover/,'coarse canopy clearance removed must fail');console.log('KILLED coarse canopy clearance removed');
  const kind='this.driving.kind=wash?road.kind:deck?(r.timber?5:9):road.kind;';assert.equal(source.split(kind).length,2);
  await assert.rejects(()=>verify({[file]:source.replace(kind,'this.driving.kind=wash?road.kind:deck?(r.timber?5:9):9;')},'mabou'),/every apron keeps its own mapped road kind/,'non-washboard aprons concrete must fail');console.log('KILLED non-washboard aprons concrete');

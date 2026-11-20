@@ -99,7 +99,7 @@ export class ModernBridges {
     if(this.spans.length&&terrain.sites){
       terrain.sites.push({mask:this.mask(),box:[Math.min(...this.spans.map(r=>r.x0)),Math.min(...this.spans.map(r=>r.z0)),Math.max(...this.spans.map(r=>r.x1)),Math.max(...this.spans.map(r=>r.z1))],
         sitingBoxes:this.spans.map(r=>[r.x0,r.z0,r.x1,r.z1] as const),
-        roadField:false,height:(_x,_z,h)=>h,surface:()=>null,deckDriving:this.driving,deckMask:(x,z,kind)=>this.maskPaint(x,z,kind),deckClear:(x,z,pad)=>this.clearCorridor(x,z,pad),roadBedHeight:(x,z)=>this.roadBedHeight(x,z),roadCutHeight:(x,z)=>this.query(x,z,true,false,undefined,false,0,false),roadCutRevision:(x0,z0,x1,z1)=>this.cutRevision(x0,z0,x1,z1),roadCutTriangles:(x0,z0,x1,z1)=>this.cutTriangles(x0,z0,x1,z1),deckContactHeight:(x,z,referenceY)=>this.contactHeightAt(x,z,referenceY)});
+        roadField:false,samplesTerrain:false,height:(_x,_z,h)=>h,surface:()=>null,deckDriving:this.driving,deckMask:(x,z,kind)=>this.maskPaint(x,z,kind),deckClear:(x,z,pad)=>this.clearCorridor(x,z,pad),roadBedHeight:(x,z)=>this.roadBedHeight(x,z),roadCutHeight:(x,z)=>this.query(x,z,true,false,undefined,false,0,false),roadCutRevision:(x0,z0,x1,z1)=>this.cutRevision(x0,z0,x1,z1),roadCutTriangles:(x0,z0,x1,z1)=>this.cutTriangles(x0,z0,x1,z1),deckContactHeight:(x,z,referenceY)=>this.contactHeightAt(x,z,referenceY)});
     }
   }
 

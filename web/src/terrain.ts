@@ -139,6 +139,8 @@ export interface SiteSurface {
 export interface Site extends RoadCutSource {
   /** False skips blank fields; painted overlays allocate only when two samples resolve their width. */
   roadField?:boolean|'painted';
+  /** False when the site supplies contacts and deck paint only, without grading or painting terrain samples. */
+  samplesTerrain?: false;
   /** World box [x0, z0, x1, z1] outside which the site changes nothing. */
   box: [number, number, number, number];
   /** Occupied footprints for new sites when the query box covers disconnected spans. */
@@ -674,7 +676,9 @@ export class Terrain {
       && (s.affectsTile?.(t.x0, t.z0, t.size, t.level) ?? true));
     const gravelOverlay=sites.some(s=>s.visualGravel);
     const airportMarkings=sites.some(s=>s.airportMarkings);
+    const terrainSites = sites.filter(site => site.samplesTerrain !== false);
     const deckPaintSites = this.cartRoads ? [] : sites.filter(site => site.deckMask);
+    const deckClearSites = sites.filter(site => site.deckClear);
     let bridgePaint: Uint8Array | undefined;
     let road = bakedRoad ?? (sites.some(s=>s.roadField!==false&&s.roadField!=='painted') ? new Uint8ClampedArray(S * S * 4) : null);
     // Brooks get a field only on the two finest levels (samples 1 m and 2 m apart). Further off a brook is a pixel
@@ -697,7 +701,7 @@ export class Terrain {
     for (let k = 0; k < S * S; k++) {
       if(road && gravelOverlay)road[k*4+3]=0;
       let raw = (px[k * 4] * 256 + px[k * 4 + 1]) * scale + offset;
-      for (const site of sites) {
+      for (const site of terrainSites) {
         const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
         if (x < site.box[0] || x > site.box[2] || z < site.box[1] || z > site.box[3]) continue;
         if (site.preserveRoads && road) {
@@ -711,11 +715,14 @@ export class Terrain {
         if(f && road)paintSiteSurface(road,k*4,f,zero,dScale,wScale);
       }
       const kind = road ? road[k * 4 + 2] & 15 : 0;
-      if (kind > 0) for (const site of deckPaintSites) {
+      if (kind > 0 && deckPaintSites.length > 0) {
         const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
-        if (site.deckMask?.(x, z, kind)) {
-          (bridgePaint ??= new Uint8Array(S * S))[k] = 1;
-          break;
+        for (const site of deckPaintSites) {
+          if (site.mask && !inMask(site.mask, x, z)) continue;
+          if (site.deckMask?.(x, z, kind)) {
+            (bridgePaint ??= new Uint8Array(S * S))[k] = 1;
+            break;
+          }
         }
       }
       if (brook && brook[k * 4 + 2] > 0) {
@@ -844,7 +851,7 @@ export class Terrain {
         if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;
         // A coarse forest hull can cross a narrow bridge even when its vertex misses the road field.
         // Clear the vertices that feed that triangle, rather than using the hull as an abutment height.
-        if(c>0&&sites.some(site=>site.deckClear?.(t.x0+ga*mpp,t.z0+gb*mpp,mpp*step*1.5)))c=0;
+        if(c>0&&deckClearSites.length&&deckClearSites.some(site=>site.deckClear?.(t.x0+ga*mpp,t.z0+gb*mpp,mpp*step*1.5)))c=0;
         if(walkMask?.[k0])c=0;
         if (crowns) crowns[b * n + a] = hull ? 0 : c;
         if (!hull) c = 0;
