@@ -97,7 +97,8 @@ try {
   await a.read('mmm.mp.current.net.chat(4)');
   await b.until('mmm.mp.current.ghosts.tagBoxes.length>0&&[...document.querySelectorAll("#mpChatBubbles [data-sender]")].some(e=>!e.hidden)');
   assert.ok(await b.read(bubblesClear),'landscape phone bubbles clear every drawn name tag');
-  assert.ok(await b.read('mmm.mp.current.ghosts.tagBoxes.every(t=>t.bottom-t.top>=23.9&&t.bottom-t.top<=24.1)'),'landscape phone name planes have 12 px ink in a 24 px plane');
+  const planes=await b.read('mmm.mp.current.ghosts.tagBoxes.map(t=>t.bottom-t.top)');
+  assert.ok(planes.length&&planes.every(h=>h>=23.9&&h<=24.1),'landscape phone name planes have 12 px ink in a 24 px plane '+JSON.stringify(planes));
   await b.shot('social-phone-landscape');
   await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   await b.read('document.getElementById("settings").classList.add("open")');

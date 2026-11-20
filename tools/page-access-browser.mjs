@@ -86,7 +86,7 @@ async function audit(root){
  }
  await read(`for(const e of document.querySelectorAll('*'))if(e.scrollTop||e.scrollLeft){e.scrollTop=0;e.scrollLeft=0;}for(const [e,x,y] of accessScroll){e.scrollLeft=x;e.scrollTop=y;}`);
  assert.deepEqual(failures,[],'rendered text contrast');
- const controls=await read(`Array.from(document.querySelectorAll(${JSON.stringify(root)}+' a[href],'+${JSON.stringify(root)}+' button')).filter(e=>e.getClientRects().length).map((e,i)=>{e.dataset.accessIndex=String(i);return e.textContent.trim()})`);
+ const controls=await read(`Array.from(document.querySelectorAll(${JSON.stringify(root)}+' a[href],'+${JSON.stringify(root)}+' button,'+${JSON.stringify(root)}+' summary')).filter(e=>e.getClientRects().length).map((e,i)=>{e.dataset.accessIndex=String(i);return e.textContent.trim()})`);
  assert.ok(controls.length,'visible controls exist');
  if(root==='body')await read('document.activeElement.blur(); window.scrollTo(0,0)');
  for(let i=0;i<controls.length;i++){

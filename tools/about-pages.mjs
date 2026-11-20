@@ -23,7 +23,7 @@ const CSS = `
 html{-webkit-text-size-adjust:100%}
 body{margin:0;overflow-x:hidden;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
 a{color:var(--accent);text-underline-offset:3px}
-a:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:4px}
+:is(a,summary):focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:4px}
 h1,h2,.serif{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;font-weight:600;letter-spacing:-.01em}
 .page{display:grid;grid-template-columns:minmax(0,1fr);min-height:100vh}
 .picture{position:relative;height:62vh;min-height:360px;max-height:640px;overflow:hidden;background:#1b2a36}

@@ -210,7 +210,7 @@ const numbers = {};
   const p = await open('title=1&hud=1&radio=0', { plugged: true });
   try {
     assert.ok(await p.read(`!document.getElementById('title').hidden`), 'the title card is up');
-    assert.match(await p.read(`document.querySelector('#title dl').textContent`), /W A S D/, 'keyboard rows first');
+    assert.match(await p.read(`document.querySelector('#title dl').textContent`), /WASD \/ arrows/, 'keyboard rows first');
     await p.pad.set(LB, 1); await sleep(1300); await p.pad.set(LB, 0); await sleep(150);   // a bumper (no menu move), held past the 1 s look for a missed pad
     await p.pad.press(DOWN);
     assert.match(await p.read(`document.querySelector('#title dl').textContent`), /RT \/ LT/, 'the controller rows replace them');

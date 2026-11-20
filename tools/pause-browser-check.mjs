@@ -9,7 +9,8 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
  const tab = await (await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
  const c = await cdp(tab.webSocketDebuggerUrl);
  const read = async expression => (await c.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result.result.value;
- const key = async (code,key) => { await c.send('Input.dispatchKeyEvent',{type:'keyDown',code,key}); await c.send('Input.dispatchKeyEvent',{type:'keyUp',code,key}); };
+ // Enter carries its text, as a real key press does: CDP activates a focused control only then.
+ const key = async (code,key) => { await c.send('Input.dispatchKeyEvent',{type:'keyDown',code,key,...(code==='Enter'?{text:'\r'}:{})}); await c.send('Input.dispatchKeyEvent',{type:'keyUp',code,key}); };
  const click = async id => { const r = await read(`(()=>{const r=document.getElementById('${id}').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`); await c.send('Input.dispatchMouseEvent',{type:'mousePressed',...r,button:'left',clickCount:1}); await c.send('Input.dispatchMouseEvent',{type:'mouseReleased',...r,button:'left',clickCount:1}); };
  const snapshot = () => read(`(()=>{const v=mmm.vehicle;return [v.x,v.y,v.z,v.speed,v.vx,v.vz,mmm.shift.elapsed,document.getElementById('shiftHud').textContent]})()`);
  try {

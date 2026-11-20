@@ -56,7 +56,9 @@ export function createTouchControls(actions: TouchActions): TouchControls {
   const end = document.getElementById('endShift'), panel = document.getElementById('settings');
   if (end && panel) {
     end.classList.add('inPanel');
-    panel.insertBefore(end, panel.firstChild);
+    // Below the sheet's own header (title and Close), which stays first.
+    const header = panel.querySelector('#settingsHeader');
+    if (header) header.after(end); else panel.insertBefore(end, panel.firstChild);
     end.addEventListener('click', () => panel.classList.remove('open'));
   }
   createPhoneLayout();

@@ -284,9 +284,12 @@ export class Ghosts {
     }
     // Scale by view depth, with a small near limit. The bottom stays above the roof.
     this.labelPosition.applyMatrix4(camera.matrixWorldInverse);
-    const depth = camera.projectionMatrix.elements[15] === 0 ? Math.abs(this.labelPosition.z) : 1;
+    const perspective = camera.projectionMatrix.elements[15] === 0, projection = Math.abs(camera.projectionMatrix.elements[5]);
     // The 32/64 atlas font takes half the plane height; use CSS px, not drawing-buffer pixels.
-    const height = callSignHeight(depth, Math.abs(camera.projectionMatrix.elements[5]), innerHeight, this.low, distance);
+    let height = callSignHeight(perspective ? Math.abs(this.labelPosition.z) : 1, projection, innerHeight, this.low, distance);
+    // Size it again at the plane's centre, half a plane above the base, where it is drawn.
+    this.labelPosition.set(peer.x, y + roof + .25 + height / 2, peer.z).applyMatrix4(camera.matrixWorldInverse);
+    height = callSignHeight(perspective ? Math.abs(this.labelPosition.z) : 1, projection, innerHeight, this.low, distance);
     this.billboard.position.set(peer.x, y + roof + .25 + height / 2, peer.z);
     this.billboard.quaternion.copy(this.cameraRotation); this.billboard.scale.set(height * WIDTH / ROW, height, 1);
     this.arrangeLabel(camera, peer.id);

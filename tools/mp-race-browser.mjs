@@ -85,8 +85,14 @@ try{
   receipt.a=await a.read('mmm.mp.current.net.race.racers');receipt.b=await b.read('mmm.mp.current.net.race.racers');assert.deepEqual(receipt.a,receipt.b);assert.ok(receipt.a.every(r=>r.time>0&&!r.out));
   await a.until('/Finished/.test(document.querySelector("#racePanel p").textContent)');
   assert.equal(await a.read('document.querySelectorAll("#racePanel li").length'),2);await a.shot('race-results-host');await b.shot('race-results-guest');
-  await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await b.shot('race-results-phone');
-  assert.ok(await b.read('(()=>{const r=document.getElementById("racePanel").getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight;})()'),'phone race panel fits');
+  await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  // The race card sits in the room column (room-cards.ts), refitted every half second to clear the HUD and credit
+  // line; the column scrolls inside itself. On the phone the column stays on screen, the card fits its width, and the
+  // last result scrolls into view uncovered (1 px for fractional layout under a whole-pixel scroll).
+  await sleep(1200);
+  const phoneFit=await b.read('(()=>{const c=document.getElementById("mpCards").getBoundingClientRect(),r=document.getElementById("racePanel").getBoundingClientRect(),last=document.querySelector("#racePanel li:last-child");last.scrollIntoView({block:"nearest"});const l=last.getBoundingClientRect(),hit=document.elementFromPoint(l.left+l.width/2,l.top+l.height/2);return {column:[c.left,c.top,c.right,c.bottom],panel:[r.left,r.right],last:[l.left,l.top,l.right,l.bottom],ok:c.left>=0&&c.top>=0&&c.right<=innerWidth&&c.bottom<=innerHeight&&r.left>=c.left&&r.right<=c.right&&l.top>=c.top-1&&l.bottom<=c.bottom+1&&!!hit&&(hit===last||last.contains(hit))};})()');
+  await b.shot('race-results-phone');
+  assert.ok(phoneFit.ok,'phone race panel fits '+JSON.stringify(phoneFit));
   // Clear, refresh at the finish, and start the nearby course through the actual controls.
   await a.read('document.querySelectorAll("#racePanel button")[1].click()');await a.until('!mmm.mp.current.net.race.route');
   await a.until('document.querySelector("#racePanel select").value===""');
