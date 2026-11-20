@@ -1,6 +1,20 @@
 {
  "version": 1,
  "bake": "pipeline/36_stage_mabou_wharf.py",
+ "roadBed": {
+  "files": [
+   {
+    "file": "terrain/cemeteries.json",
+    "before": "adbc84141ce39b3bb3d72b2a4d67990b1c84c084e294199f488546d8534aaf92",
+    "sha256": "3b72cd5f78f5aeb079656da1bf285911e85de5ebe5a9ef9f59cdaf4de9e722aa"
+   },
+   {
+    "file": "terrain/roads.json",
+    "before": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9",
+    "sha256": "0352666265abaa77ecadd9e56bf0345a8f680a402a5abb7fbda82a14a73d66a6"
+   }
+  ]
+ },
  "files": [
   {
    "file": "terrain/5/12_15.r.png",

@@ -18,7 +18,19 @@ receipt = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(receipt)
 
 
+def pins_for(report, roads, baked=None):
+    road = next(f for f in report['roadBed']['files'] if f['file'] == 'terrain/roads.json')
+    with_bed = receipt.sha(roads.read_bytes()) in (road['before'], road['sha256'])
+    if with_bed and baked is not None:
+        companion = receipt.target(baked, receipt.PRE_BED)
+        pin = json.loads(receipt.RECEIPT.read_text())['roadBed']['companion']['sha256']
+        if not companion.is_file() or receipt.sha(companion.read_bytes()) != pin:
+            raise ValueError('The repaired roads need their matching pre-bed lines')
+    return receipt.receipt_for(report, with_bed)
+
+
 def verify(source, stage, pins):
+    pins = pins_for(pins, source/'roads.json')
     made = receipt.record(source, stage)
     made['bake'] = 'pipeline/36_stage_mabou_wharf.py'
     if made != pins:
@@ -39,12 +51,15 @@ def verify(source, stage, pins):
 if __name__ == '__main__':
     report = json.loads(PINS.read_text())
     if sys.argv[1:2] == ['land'] and len(sys.argv) == 3:
-        print(f'PASS 19 Nov wharf road land: {receipt.state(sys.argv[2], report)}')
+        baked = Path(sys.argv[2])
+        pins = pins_for(report, baked/'terrain/roads.json', baked)
+        print(f'PASS 19 Nov wharf road land: {receipt.state(baked, pins)}')
     elif len(sys.argv) == 4 and sys.argv[1] in ('verify', 'install', 'uninstall'):
         op, a, b = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
         if op == 'verify':
             verify(a, b, report)
         else:
-            print(f'PASS 19 Nov wharf road land: {getattr(receipt, op)(a, b, report)}')
+            pins = pins_for(report, a/'roads.json', b)
+            print(f'PASS 19 Nov wharf road land: {getattr(receipt, op)(a, b, pins)}')
     else:
         sys.exit(__doc__)
