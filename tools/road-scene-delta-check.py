@@ -314,7 +314,8 @@ def owned_counts(manifest):
 # before the 18 Nov promotion), not here.
 VILLAGE = ROOT/'tools/mabou-village-delta/hashes.json'
 NOV18 = ROOT/'tools/mabou-dashcam-18nov/hashes.json'
-LATER = (VILLAGE, NOV18)
+NOV19 = ROOT/'tools/mabou-wharf/roads.json'
+LATER = (VILLAGE, NOV18, NOV19)
 
 
 def superseded(root, entries, hashes, later=LATER):
@@ -346,13 +347,16 @@ def step29_view(root, name, later):
     Weaver Lane, so its receipt's undo is applied when that bake replaced this file."""
     props = json.loads((root/name).read_bytes())
     roads = json.loads((root/Path(name).with_name('roads.json')).read_bytes())['roads']
-    if NOV18 in later.get(name, ()):
+    if NOV18 in later.get(name, ()) or NOV19 in later.get(name, ()):
         spec = importlib.util.spec_from_file_location('nov18_receipt', ROOT/'tools/mabou-dashcam-18nov/receipt.py')
         receipt = importlib.util.module_from_spec(spec); spec.loader.exec_module(receipt)
-        report = json.loads(NOV18.read_text())
-        props, roads = receipt.undo(props, roads, report['undo'])
-        before = next(f['before'] for f in report['files'] if f['file'] == name)
-        assert hashlib.sha256(receipt.compact(props)).hexdigest() == before, f'{name}: the 18 Nov undo does not rebuild its before props'
+        for path in (NOV19, NOV18):
+            if path not in later.get(name, ()):
+                continue
+            report = json.loads(path.read_text())
+            props, roads = receipt.undo(props, roads, report['undo'])
+            before = next(f['before'] for f in report['files'] if f['file'] == name)
+            assert hashlib.sha256(receipt.compact(props)).hexdigest() == before, f'{name}: {path.parent.name} undo did not rebuild before props'
     return props, roads
 
 
