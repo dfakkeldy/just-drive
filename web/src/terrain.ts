@@ -677,6 +677,7 @@ export class Terrain {
     const gravelOverlay=sites.some(s=>s.visualGravel);
     const airportMarkings=sites.some(s=>s.airportMarkings);
     const terrainSites = sites.filter(site => site.samplesTerrain !== false);
+    const canopySites = sites.filter(site => site.clearCanopy);
     const deckPaintSites = this.cartRoads ? [] : sites.filter(site => site.deckMask
       && (!site.mask || maskTouches(site.mask, t.x0, t.z0, t.x0 + t.size, t.z0 + t.size)));
     let bridgePaint: Uint8Array | undefined;
@@ -714,14 +715,16 @@ export class Terrain {
         if(f&&!road&&site.roadField==='painted'&&mpp<=f.half)road=new Uint8ClampedArray(S*S*4);
         if(f && road)paintSiteSurface(road,k*4,f,zero,dScale,wScale);
       }
-      const kind = road ? road[k * 4 + 2] & 15 : 0;
-      if (kind > 0 && deckPaintSites.length > 0) {
-        const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
-        for (const site of deckPaintSites) {
-          if (site.mask && !inMask(site.mask, x, z)) continue;
-          if (site.deckMask?.(x, z, kind)) {
-            (bridgePaint ??= new Uint8Array(S * S))[k] = 1;
-            break;
+      if (road && deckPaintSites.length > 0) {
+        const kind = road[k * 4 + 2] & 15;
+        if (kind > 0) {
+          const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
+          for (const site of deckPaintSites) {
+            if (site.mask && !inMask(site.mask, x, z)) continue;
+            if (site.deckMask?.(x, z, kind)) {
+              (bridgePaint ??= new Uint8Array(S * S))[k] = 1;
+              break;
+            }
           }
         }
       }
@@ -745,7 +748,13 @@ export class Terrain {
         c *= THREE.MathUtils.smoothstep(d, hw + 0.8, hw + 4.5);
         px[k * 4 + 2] = Math.round(c / cs);
       }
-      for(const site of sites)if(site.clearCanopy){const x=t.x0+(k%S)*mpp,z=t.z0+Math.floor(k/S)*mpp;const rk=road?(road[k*4+2]&15):0,protectedRoad=site.preserveRoads&&road&&rk>0&&rk<=5&&Math.abs(road[k*4]-zero)*dScale<road[k*4+1]*wScale+2*t.size/segFor(t.level)+2;if(!protectedRoad&&site.clearCanopy(x,z,t.level)){c=0;px[k*4+2]=0;}}
+      if (canopySites.length) for (const site of canopySites) {
+        const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
+        const kind = road ? road[k * 4 + 2] & 15 : 0;
+        const protectedRoad = site.preserveRoads && road && kind > 0 && kind <= 5
+          && Math.abs(road[k * 4] - zero) * dScale < road[k * 4 + 1] * wScale + 2 * t.size / segFor(t.level) + 2;
+        if (!protectedRoad && site.clearCanopy?.(x, z, t.level)) { c = 0; px[k * 4 + 2] = 0; }
+      }
       if (this.canopyExcludes?.(t.x0 + (k % S) * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + Math.floor(k / S) * mpp))) { c = 0; px[k * 4 + 2] = 0; }
       canopy[k] = c;
       if (g < lo) lo = g;
