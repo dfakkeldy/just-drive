@@ -194,7 +194,8 @@ async function indexFor(v, signal) {
 }
 async function saveShell(s,signal) {
   const cache=await openStore(shellName(s));
-  for(const f of s.index.shell) if(!await matchStore(cache,f.url)) await cache.put(f.url,await checked(f,signal));
+  // In parallel: the shell holds app.js and its chunks (web/area-chunks-build.ts), and each file is one request.
+  await Promise.all(s.index.shell.map(async f=>{if(!await matchStore(cache,f.url)) await cache.put(f.url,await checked(f,signal));}));
   await (await openStore(META)).put(versionKey(s.version.revision),new Response(record(s)));
 }
 async function saveDelivered(s) {
