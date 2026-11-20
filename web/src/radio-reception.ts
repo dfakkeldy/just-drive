@@ -1,6 +1,6 @@
 // Radio reception by place: where each station comes in, and how a weak one sounds. Rules only: no page, no sound.
-// The car radio (radio.ts) asks these rules every frame, in the mail game only. The Just Listen page and Just Drive do not:
-// they hear every station everywhere (main.ts takes the map away from Just Drive's radio).
+// The car radio (radio.ts) asks these rules every frame, during the mail shift only. The Just Listen page and just driving
+// do not: they hear every station everywhere (main.ts takes the map away in explore mode, and every Just Drive page is one).
 // Every transmitter here is invented. A place is in map metres (east, north), the grid that every area's land shares,
 // so one table serves all the areas and a drive from one to the next needs nothing more.
 // A station with no transmitter in the table comes in everywhere, also in a hollow (the talk station is one).

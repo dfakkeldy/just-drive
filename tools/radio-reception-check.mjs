@@ -212,8 +212,8 @@ function wiring() {
   const main = read('web/src/main.ts'), radio = read('web/src/radio.ts');
   assert.equal(main.split('radio?.setPlace(vehicle.x + manifest.village[0], manifest.village[1] - vehicle.z);').length, 2, 'the game tells the radio where the car is, once');
   assert.equal(main.split("if (params.get('reception') === '0') radio?.useReception(null);").length, 2, '?reception=0');
-  // Just Drive hears every station everywhere: only the mail game has reception (the owner, 20 Nov 2026).
-  assert.equal(main.split("if (SITE.brand === 'just') radio?.useReception(null);").length, 2, 'Just Drive takes the reception map away');
+  // Only the mail shift has reception: just driving, on either site, hears every station everywhere (the owner, 20 Nov 2026).
+  assert.equal(main.split("if (gameMode === 'explore') radio?.useReception(null);").length, 2, 'just driving takes the reception map away');
   assert.equal(main.split('useReception(').length, 3, 'and nothing else in main.ts gives the radio a map');
   assert.ok(radio.includes("from './radio-reception'") && radio.includes('nextOnDial(') && radio.includes('private map: ReceptionMap | null = RECEPTION;'));
   assert.ok(radio.includes('this.audio.muted = this.music <= 0;'), 'a lost station is muted (a phone ignores the volume)');
