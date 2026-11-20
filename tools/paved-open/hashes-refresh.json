@@ -1,0 +1,2952 @@
+{
+ "version": 1,
+ "source": "nstdb-designated-open-v1",
+ "licence": "https://support.novascotia.ca/services/open-data-portal-licence",
+ "areas": [
+  {
+   "area": "mabou",
+   "folder": "terrain",
+   "manifestKey": {
+    "file": "paved/index.json",
+    "tiles": 44,
+    "source": "nstdb-designated-open-v1"
+   },
+   "files": [
+    {
+     "file": "terrain/paved/100_153.r8",
+     "bytes": 16384,
+     "sha256": "21d11a3f16251666a11cded7acb97fd20ba803ca02219240abed52a6e72ac69f"
+    },
+    {
+     "file": "terrain/paved/103_120.r8",
+     "bytes": 16384,
+     "sha256": "7e9e188c5ef5425fe9e41c70dce524d6725d44d3fcb0cbe68266389fa4a271c8"
+    },
+    {
+     "file": "terrain/paved/104_129.r8",
+     "bytes": 16384,
+     "sha256": "aab8975c1988017259872b65d6024e1f7f43f25b46a5206077f3fea48a509834"
+    },
+    {
+     "file": "terrain/paved/104_152.r8",
+     "bytes": 16384,
+     "sha256": "737cb161d04f0c86bd59849f5318ac2bc71cb9df7b8d2f93126f08dd87791e68"
+    },
+    {
+     "file": "terrain/paved/106_120.r8",
+     "bytes": 16384,
+     "sha256": "2776c6d3d915a0c5abab615b7d46f4385012cd0a15a0ac22324c0145b087ca93"
+    },
+    {
+     "file": "terrain/paved/106_121.r8",
+     "bytes": 16384,
+     "sha256": "711a5b205577d73bd3918b9d4e9e9d5a33b4a1d1c4ed486b4d9433efc02405b9"
+    },
+    {
+     "file": "terrain/paved/106_129.r8",
+     "bytes": 16384,
+     "sha256": "96bb766dcfae8e7268202b5907ae14359a1acc99600c206b8593273fdd246a02"
+    },
+    {
+     "file": "terrain/paved/107_129.r8",
+     "bytes": 16384,
+     "sha256": "7611bf24f33a9ab845cce70948dbc0f5d7108561c0941bb0b77480e32dd4daa9"
+    },
+    {
+     "file": "terrain/paved/109_129.r8",
+     "bytes": 16384,
+     "sha256": "7a2c2931c111c149480d4d85a6eef796b6d5d6cb0b2a6aabad186f39dc0ee78d"
+    },
+    {
+     "file": "terrain/paved/109_130.r8",
+     "bytes": 16384,
+     "sha256": "3e7c6e4981c169f9f4fa9b8e659833be0f17ba53d632e86a83305c381e6cda6a"
+    },
+    {
+     "file": "terrain/paved/109_150.r8",
+     "bytes": 16384,
+     "sha256": "15b2d7881181d974d6e19985327969d7f18de966fc2cb2fb022ee7173abf2168"
+    },
+    {
+     "file": "terrain/paved/110_148.r8",
+     "bytes": 16384,
+     "sha256": "68284d3ba0e56613f923be932ff7c053fefd7aa2b5f90cdda768ef3d34e81b83"
+    },
+    {
+     "file": "terrain/paved/112_122.r8",
+     "bytes": 16384,
+     "sha256": "c5d5261ee38eec06b8f675e4b9af980409324ca3ccc85a592b11874769dd21b1"
+    },
+    {
+     "file": "terrain/paved/112_131.r8",
+     "bytes": 16384,
+     "sha256": "e2da21b6b5e71153d79ff7bdd0e8772fde8e713311245f13e233177ad19d8643"
+    },
+    {
+     "file": "terrain/paved/114_133.r8",
+     "bytes": 16384,
+     "sha256": "9f831572f296d17cb253012693d58ce9798845db0f5bcda7f29cca412e377ca6"
+    },
+    {
+     "file": "terrain/paved/115_141.r8",
+     "bytes": 16384,
+     "sha256": "62d12de087ca738683a0b37681f4c0323ca41f794eec31188d1d80300c4e287a"
+    },
+    {
+     "file": "terrain/paved/116_141.r8",
+     "bytes": 16384,
+     "sha256": "060d4c02f1b7a82c4fb7a9260956f2d8bd634bf5913d5082b8fef01877c7047e"
+    },
+    {
+     "file": "terrain/paved/123_122.r8",
+     "bytes": 16384,
+     "sha256": "42b615e0d16d20de4cd63f2f54a59662bbc84cb6375d0a82944080c11802e59d"
+    },
+    {
+     "file": "terrain/paved/123_132.r8",
+     "bytes": 16384,
+     "sha256": "8439713ee9c929aab7e4300704bea246d6881f9be5adba6698cdc99bc047d947"
+    },
+    {
+     "file": "terrain/paved/124_132.r8",
+     "bytes": 16384,
+     "sha256": "f2abf1e8ffb7af3b8c63239589c9ac0b75c4fb70cc7c55b65b91d1220f9e6ef8"
+    },
+    {
+     "file": "terrain/paved/125_129.r8",
+     "bytes": 16384,
+     "sha256": "ad44fb7a29c5df8818d4c1a8a0f8d5221ccf859dba354e0dce3bbbb104760c99"
+    },
+    {
+     "file": "terrain/paved/126_127.r8",
+     "bytes": 16384,
+     "sha256": "45f39649aafaa8a870033f56c60407bd51121b6bdbe24571a3cda49806f8eae2"
+    },
+    {
+     "file": "terrain/paved/126_129.r8",
+     "bytes": 16384,
+     "sha256": "7d67430f1ab26624da6e80aa8dfbc1889a11551e6abf378f849d16e412362a7e"
+    },
+    {
+     "file": "terrain/paved/127_127.r8",
+     "bytes": 16384,
+     "sha256": "73f0a447e9c9412dd780a7187298c3bdf82a25dccd946c466ba1addc1dfd9d48"
+    },
+    {
+     "file": "terrain/paved/127_128.r8",
+     "bytes": 16384,
+     "sha256": "84f1080970389bf7dcdef30286c2751f436faa424f51ef3865426b99e0ab9fe2"
+    },
+    {
+     "file": "terrain/paved/128_127.r8",
+     "bytes": 16384,
+     "sha256": "e20122805946f555a0f4d98043f86a90ff47ec2c25bac4b0810c7215a4bc17bc"
+    },
+    {
+     "file": "terrain/paved/128_128.r8",
+     "bytes": 16384,
+     "sha256": "c220db7fa51c8e16434c204217afb4dc9be8b5eef1ac6da1176387652b3705b4"
+    },
+    {
+     "file": "terrain/paved/129_127.r8",
+     "bytes": 16384,
+     "sha256": "e49a4e7bee8ed4fe75f058f886ec70e2a2f5c15778a1c2b89f3869f51a86e9fb"
+    },
+    {
+     "file": "terrain/paved/129_143.r8",
+     "bytes": 16384,
+     "sha256": "89991ceeb38037d3a2bae01e07965b3b49732849d8b53191853b9d3b26f63a00"
+    },
+    {
+     "file": "terrain/paved/130_126.r8",
+     "bytes": 16384,
+     "sha256": "a41ea8b08413152b31f3bdf23152acdfbea085380b88c3a9066d8b18ea64acab"
+    },
+    {
+     "file": "terrain/paved/130_127.r8",
+     "bytes": 16384,
+     "sha256": "a7f2adaca2a6869d2d5333bdc730225d8aa778b85ff0c9079afc0f79fea34a59"
+    },
+    {
+     "file": "terrain/paved/133_133.r8",
+     "bytes": 16384,
+     "sha256": "d8143c0811b4d188849317f08983c071628269270e481e1d253462b4052bbdc9"
+    },
+    {
+     "file": "terrain/paved/136_120.r8",
+     "bytes": 16384,
+     "sha256": "a986e4ba5a0a76088203efa18c3ea81a52b7a2cc9035e50624870c307c152646"
+    },
+    {
+     "file": "terrain/paved/137_118.r8",
+     "bytes": 16384,
+     "sha256": "7dcef0cd16e08db5f28b9bf6b6f800341f66d2dde91407ebb0343409e0f9d159"
+    },
+    {
+     "file": "terrain/paved/138_111.r8",
+     "bytes": 16384,
+     "sha256": "a1420bab22be549dbef6e33bfab094383980e83c88d17fcf308f7bd964e95827"
+    },
+    {
+     "file": "terrain/paved/138_126.r8",
+     "bytes": 16384,
+     "sha256": "821ca78d6a79b46b0c94db07ea35cd7007f62a43c14e9d5c7cb20d83dbf49063"
+    },
+    {
+     "file": "terrain/paved/138_127.r8",
+     "bytes": 16384,
+     "sha256": "d58f8122957bfd73b9a495db0ca4befdd2a9369ab01865ed47c61298bb64bb31"
+    },
+    {
+     "file": "terrain/paved/142_129.r8",
+     "bytes": 16384,
+     "sha256": "3de4fbb4fda96320735ecbefb92e1d42437dcbf393e7ff9d8b68aa57bf2bd1f5"
+    },
+    {
+     "file": "terrain/paved/146_99.r8",
+     "bytes": 16384,
+     "sha256": "98012d0bebfac134c828d429bb51f22003996c956b0f2e31adece1681929222e"
+    },
+    {
+     "file": "terrain/paved/151_139.r8",
+     "bytes": 16384,
+     "sha256": "e4dafc1d1b3920ee68737e27a505041cd5311bb050c6f32ae57b8624207ce856"
+    },
+    {
+     "file": "terrain/paved/156_136.r8",
+     "bytes": 16384,
+     "sha256": "37a33a9d9c30c9cb320744058ae1aed44c0634ab4a69a6d65ede84222ca4d5f1"
+    },
+    {
+     "file": "terrain/paved/158_136.r8",
+     "bytes": 16384,
+     "sha256": "724e05eeab29674bb04475a17eccf9359be8521ab33346eef39c2991ef16fce5"
+    },
+    {
+     "file": "terrain/paved/96_154.r8",
+     "bytes": 16384,
+     "sha256": "c0c1fea06a8e94f28bbb56b3111267893124dbc54109a31cde7b09796d0c850b"
+    },
+    {
+     "file": "terrain/paved/99_153.r8",
+     "bytes": 16384,
+     "sha256": "2d50fc6057dcd5df61c18c0d253b37244dcb4895d8194bbcb3189f96be127ec4"
+    },
+    {
+     "file": "terrain/paved/index.json",
+     "bytes": 1562,
+     "sha256": "533840b11eba252c85a5da54fbd6864959ac849acf84bfa9fd355b9293ec1ea5"
+    }
+   ],
+   "inputs": [
+    {
+     "file": "terrain/8/100_153.t.bin",
+     "sha256": "f3a2caf7e27c891eddf8845c1c88946e06a8d40d0ff12cf9f1547449bec48504"
+    },
+    {
+     "file": "terrain/8/103_120.t.bin",
+     "sha256": "7723f74d6913026282b67007cfe4a03038ea769c0cb2dd69fdbf80f984875290"
+    },
+    {
+     "file": "terrain/8/104_152.t.bin",
+     "sha256": "3129a7cc206c3faae564152e40e8b91b073210113f99380e4ad30f2b18c544ba"
+    },
+    {
+     "file": "terrain/8/106_120.t.bin",
+     "sha256": "2d8f63f82cfb66a70b0698b054f5ef4326d29ed63c3f46643e6102c8d838ceea"
+    },
+    {
+     "file": "terrain/8/106_121.t.bin",
+     "sha256": "7d0f355531b59ec31e168aae9a2de53ca7dedb6ae1e53fc91ea85f34074b72a4"
+    },
+    {
+     "file": "terrain/8/109_150.t.bin",
+     "sha256": "29dbe6653554c4f60a4ada9c950ac8f86ec582111a8f2a9aad47baa77b0dcdb7"
+    },
+    {
+     "file": "terrain/8/110_148.t.bin",
+     "sha256": "cda42d8b6c82a1f334dfc5e589e51fc7eb3c67a7a1a4f6055ab6944b3d0678ed"
+    },
+    {
+     "file": "terrain/8/112_122.t.bin",
+     "sha256": "10af316c10c48d7fb027d77c928be29942a5a316e142f259117389f513db5950"
+    },
+    {
+     "file": "terrain/8/115_141.t.bin",
+     "sha256": "24915dc38da900b388b199ae12a741aa24d6779061483b21522c73991b62a6fe"
+    },
+    {
+     "file": "terrain/8/116_141.t.bin",
+     "sha256": "983a2125c028223d4e95492e2e52ac7c149bd61bb4c82c9a0cb807409f83e9e4"
+    },
+    {
+     "file": "terrain/8/123_122.t.bin",
+     "sha256": "967d3593601216ac53140fef41c47ea363f5d62a27c2b9c65f4a8f403062463a"
+    },
+    {
+     "file": "terrain/8/123_132.t.bin",
+     "sha256": "75dd2f503a5de816115f438de6b8847c2422cb68fe9069b9c0eece275cd204a5"
+    },
+    {
+     "file": "terrain/8/124_132.t.bin",
+     "sha256": "276d1eff934fcdfcc3a158ad8f4374cc35d15fffc6add3506edd75ea6a8b9fba"
+    },
+    {
+     "file": "terrain/8/125_129.t.bin",
+     "sha256": "9fb18ea3007665c91fc7783127f3fad1caba0d84e2feadca16fb37baf5a4d8e9"
+    },
+    {
+     "file": "terrain/8/126_127.t.bin",
+     "sha256": "2a60ddc6ada95a86cc831f5daab9a75574c1fca7ca225785cdc6a075a66ef43a"
+    },
+    {
+     "file": "terrain/8/126_129.t.bin",
+     "sha256": "b05b5e14b4a199681fc03630596db6c836aeea52412ed8be7838fb62207e297b"
+    },
+    {
+     "file": "terrain/8/127_127.t.bin",
+     "sha256": "d07b2df393c3ce45683eb524f1f142e85752d670ac8993746d62c97398eb3652"
+    },
+    {
+     "file": "terrain/8/127_128.t.bin",
+     "sha256": "e334be02544b65d3ead349fbd9797f433d8173412ed56daba2725bf39d3322bb"
+    },
+    {
+     "file": "terrain/8/128_127.t.bin",
+     "sha256": "f8c55932894de56c563b630e8991c47093f0376c0103b9826fd2aef411d36f36"
+    },
+    {
+     "file": "terrain/8/128_128.t.bin",
+     "sha256": "a7d5aefdb8cbe9f55b2b8f841da08bf96410f6e4d1ef5d8f082b01b7280a95c3"
+    },
+    {
+     "file": "terrain/8/129_127.t.bin",
+     "sha256": "23575e0bc87e2777261af1ca0e929505bc26a32a186c021fbe7e7b675e7eb3a2"
+    },
+    {
+     "file": "terrain/8/129_143.t.bin",
+     "sha256": "9b7bc604cb9f69ba5f14e9c9948e1373617b23238f7dc636bd11095fa407d5ee"
+    },
+    {
+     "file": "terrain/8/130_126.t.bin",
+     "sha256": "e58af1bb6bf1cec9ee04c47b5691384f013039f2b832e6cf4f011634be3ae28c"
+    },
+    {
+     "file": "terrain/8/130_127.t.bin",
+     "sha256": "1d77d4618171b7c4f0f0ffb14e8416956d8de26527400be1edd0845f23f75b30"
+    },
+    {
+     "file": "terrain/8/133_133.t.bin",
+     "sha256": "e7ff22c1e38dfa765576453789dfb3019e3d76771f01e95f80cf6c165452bef4"
+    },
+    {
+     "file": "terrain/8/136_120.t.bin",
+     "sha256": "6420fe2df88b083b2debc5a7dfec58b951109a9932f288428ae73a1e952730a8"
+    },
+    {
+     "file": "terrain/8/137_118.t.bin",
+     "sha256": "11921b8a211f5d8212c9a11279a66cbde30fa15f991af932ec75d88e1faa3139"
+    },
+    {
+     "file": "terrain/8/138_111.t.bin",
+     "sha256": "666603cc66d149fc3dc190a9b0cae254d792d9e69a18b1f2c4e28ae7f76848be"
+    },
+    {
+     "file": "terrain/8/138_126.t.bin",
+     "sha256": "0a673fa3ed483278ecc98a7b40bc31cb426f880b7865b5ae942e9dd6a7e9fa77"
+    },
+    {
+     "file": "terrain/8/138_127.t.bin",
+     "sha256": "507356fd2d29d0576fd20d1844726888bb693afe4c1096d1592fddab22bae3cd"
+    },
+    {
+     "file": "terrain/8/142_129.t.bin",
+     "sha256": "7ac27d542ffcc5b8c50de3c29478f7d51d74d821e78a4d7b49b44d959527ed0a"
+    },
+    {
+     "file": "terrain/8/146_99.t.bin",
+     "sha256": "0a66fe6e23cca7669420ab53164f0dd3cb3cb07f6f3442206b64add1bad208fc"
+    },
+    {
+     "file": "terrain/8/151_139.t.bin",
+     "sha256": "e9cc05fa94472d2cdee1d7e5da9dc742048fdb6a1c01c566080d0440cde7da70"
+    },
+    {
+     "file": "terrain/8/156_136.t.bin",
+     "sha256": "8ec274d7471e2461291d158c2b7d1fa7c7e60f87a08223456b2b99f942d3ec9a"
+    },
+    {
+     "file": "terrain/8/158_136.t.bin",
+     "sha256": "93fa08417152f362cc326d286ef7a6a40e20cff542c626f3402f0c713a590d15"
+    },
+    {
+     "file": "terrain/8/96_154.t.bin",
+     "sha256": "a8ccbcd3c757a566d518591a58cd1848d4da967464ad89ce02c35800fa7c7eb5"
+    },
+    {
+     "file": "terrain/8/99_153.t.bin",
+     "sha256": "949337c9ecfa9b1b971569be460ff4e9f6b2aa9e8a8b6e0a1efc63a18a7c0ac6"
+    },
+    {
+     "file": "terrain/buildings.json",
+     "sha256": "2e6c321f544fabaa589f94b81e2b853140432cf84d40ca18f9081dff8919f7fc"
+    },
+    {
+     "file": "terrain/manifest.json",
+     "lattice": true,
+     "sha256": "d435ba0088d77be8f3ca9ab86d56725572076e0d9d8ae15c47dce312ef6db25e"
+    },
+    {
+     "file": "terrain/roads.json",
+     "sha256": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9"
+    }
+   ],
+   "lots_m2": 12624,
+   "apron_m2": 3692,
+   "omitted": []
+  },
+  {
+   "area": "judique",
+   "folder": "areas/judique",
+   "manifestKey": {
+    "file": "paved/index.json",
+    "tiles": 33,
+    "source": "nstdb-designated-open-v1"
+   },
+   "files": [
+    {
+     "file": "areas/judique/paved/100_212.r8",
+     "bytes": 16384,
+     "sha256": "56be5232f7f2b333bde2979caf2078ead3832c0c10eb6ec412ca99eb90f71df4"
+    },
+    {
+     "file": "areas/judique/paved/100_213.r8",
+     "bytes": 16384,
+     "sha256": "a74289a74486aa7568ef674daef58e92e6736b81140261f002fddfe671b48baf"
+    },
+    {
+     "file": "areas/judique/paved/100_214.r8",
+     "bytes": 16384,
+     "sha256": "fe2626af4383107f80e4d7b9451494cee7d9b84de7f42c2ddda96f49eed62d20"
+    },
+    {
+     "file": "areas/judique/paved/100_216.r8",
+     "bytes": 16384,
+     "sha256": "66afc98e5d86c78f16cfe64a7e6eef159c675ecbdd96c27a43ac6d429cc52849"
+    },
+    {
+     "file": "areas/judique/paved/100_220.r8",
+     "bytes": 16384,
+     "sha256": "d24bfd580423086e316427251c88e91a1a9a36511a5c857a47f5f02606f8f73b"
+    },
+    {
+     "file": "areas/judique/paved/100_221.r8",
+     "bytes": 16384,
+     "sha256": "50cd111eb95070c431c4d93dccc4300fd960e20eb87d72435f50eec408e86d50"
+    },
+    {
+     "file": "areas/judique/paved/100_223.r8",
+     "bytes": 16384,
+     "sha256": "7da5f8667624dae9b45b337eed58f1868b0ab9431e5ae7521f52ada446dc0ce9"
+    },
+    {
+     "file": "areas/judique/paved/102_228.r8",
+     "bytes": 16384,
+     "sha256": "12c068772d852ca94af1578ffc921c36d207484be11616d9937a744ecbc5e1bb"
+    },
+    {
+     "file": "areas/judique/paved/103_228.r8",
+     "bytes": 16384,
+     "sha256": "1fbab458bafc87a3b8b9da1c26e137f6da7d9c24bb46594779c21e524ad4cabd"
+    },
+    {
+     "file": "areas/judique/paved/103_236.r8",
+     "bytes": 16384,
+     "sha256": "48acccbeb7b32d2914770ee3973d53dae69bf2d0bf3b851253d8f4768ffac0b9"
+    },
+    {
+     "file": "areas/judique/paved/103_237.r8",
+     "bytes": 16384,
+     "sha256": "1cb93835a306819eed3dc9bbb37c33d0a501392d808d5219c245499ea4741827"
+    },
+    {
+     "file": "areas/judique/paved/104_238.r8",
+     "bytes": 16384,
+     "sha256": "d12af62a6d52da782fe8c83964ed24860dc7161e0c4dcb20b29858e30cb0f478"
+    },
+    {
+     "file": "areas/judique/paved/104_239.r8",
+     "bytes": 16384,
+     "sha256": "9f1fc3d06876138729ee50a6dc6beefac1d5e9ee79fdca6830c0bf241383ec4a"
+    },
+    {
+     "file": "areas/judique/paved/105_241.r8",
+     "bytes": 16384,
+     "sha256": "c996918b76d44594cfcbc614859ba4962d77e43a8923dbee6503e050f14a493a"
+    },
+    {
+     "file": "areas/judique/paved/106_195.r8",
+     "bytes": 16384,
+     "sha256": "9e4121aa9077294e26821db64fe863bb915ba4a1078e7eb9ca1eaaa9623c22e0"
+    },
+    {
+     "file": "areas/judique/paved/106_213.r8",
+     "bytes": 16384,
+     "sha256": "9ae7e338195c7af4f7af29ff5237aef13d459bf575b33db77e76f10fd5d5a955"
+    },
+    {
+     "file": "areas/judique/paved/108_199.r8",
+     "bytes": 16384,
+     "sha256": "0445212548ede104e6bf4780749ba4b9061610a75d64bbfc7bde4bc98524ccf9"
+    },
+    {
+     "file": "areas/judique/paved/108_204.r8",
+     "bytes": 16384,
+     "sha256": "932ac0d9a8beb9ebb6674b5d133dda8c290dc21a861d18743b6f0364ff1d0d79"
+    },
+    {
+     "file": "areas/judique/paved/108_236.r8",
+     "bytes": 16384,
+     "sha256": "8593589dec87529ee7847234fe60941c77068a2bb21b4137ad5a7568e24beffc"
+    },
+    {
+     "file": "areas/judique/paved/108_238.r8",
+     "bytes": 16384,
+     "sha256": "88be2ecda575f2b87627eac2709cb893b705821b084b6617a689eb680956eee5"
+    },
+    {
+     "file": "areas/judique/paved/109_192.r8",
+     "bytes": 16384,
+     "sha256": "1f3bc755e8eb12d9a83119fb7f02578b5bdd07e7ce3d73603a83156413ef4951"
+    },
+    {
+     "file": "areas/judique/paved/109_240.r8",
+     "bytes": 16384,
+     "sha256": "5af5200bc37fc0830920b29bd9bbb38fc205fc03eeed1a2ef157a624e5f3778f"
+    },
+    {
+     "file": "areas/judique/paved/144_237.r8",
+     "bytes": 16384,
+     "sha256": "5a3c26592118e07f70051a3cb3ed015af069149324d3226626fa3fd8441f4d7c"
+    },
+    {
+     "file": "areas/judique/paved/148_242.r8",
+     "bytes": 16384,
+     "sha256": "8eb0f877b2790a3ddb51e0eaa6688075cdae51b60ca839d23b207fb175c01552"
+    },
+    {
+     "file": "areas/judique/paved/151_241.r8",
+     "bytes": 16384,
+     "sha256": "22aecc5f52538b66b6e950b46d67293b5a1489a384fa8d3eb06797a416412e25"
+    },
+    {
+     "file": "areas/judique/paved/151_253.r8",
+     "bytes": 16384,
+     "sha256": "42c9b43ae03f3d878641ccf887e1b44a65315b93da601acbee526f26899e9c2c"
+    },
+    {
+     "file": "areas/judique/paved/152_253.r8",
+     "bytes": 16384,
+     "sha256": "d1c7da89ff345861738949b6a489d80dd0393232f43618b7197fa6f880831e41"
+    },
+    {
+     "file": "areas/judique/paved/153_239.r8",
+     "bytes": 16384,
+     "sha256": "4e459c4105aa852e1e1f616125216c22c9a06ad68382831b0a3aac3aa8c97591"
+    },
+    {
+     "file": "areas/judique/paved/153_253.r8",
+     "bytes": 16384,
+     "sha256": "6d9f0dac61a9b04226f89dcc6a522d072ee73fcea37195dab42e0038998f3833"
+    },
+    {
+     "file": "areas/judique/paved/155_233.r8",
+     "bytes": 16384,
+     "sha256": "403c47e8b414856b72deb882219866fb661cd5410b1a3f7ad43b6f32efe81a98"
+    },
+    {
+     "file": "areas/judique/paved/94_198.r8",
+     "bytes": 16384,
+     "sha256": "a7a53007d2d8fdf86e8e74984e672b9c08c30ea2593b41000640d229dba25a3f"
+    },
+    {
+     "file": "areas/judique/paved/99_212.r8",
+     "bytes": 16384,
+     "sha256": "3a94ec92361374b203a59b10e5eba510c884744a40e92dd07946e45510a7f867"
+    },
+    {
+     "file": "areas/judique/paved/99_213.r8",
+     "bytes": 16384,
+     "sha256": "affabba64d5c39c045b83682f55c35f03c3cc7ea23f899adba864b2ad5fbaee7"
+    },
+    {
+     "file": "areas/judique/paved/index.json",
+     "bytes": 1889,
+     "sha256": "655ca8d8093dbac7194617ff92b3169a564b63f4dcf8bae5837ed7fa405a7536"
+    }
+   ],
+   "inputs": [
+    {
+     "file": "areas/judique/8/100_212.t.bin",
+     "sha256": "5ede2e22b8afc2100d5b66df35d6618418d3d10ac42816b3b9496c557daeb956"
+    },
+    {
+     "file": "areas/judique/8/100_213.t.bin",
+     "sha256": "513a24a7a773ae05b0fa4d1fc5ef58571bcf01c2c6a0477c809a65ee42ddb89e"
+    },
+    {
+     "file": "areas/judique/8/100_214.t.bin",
+     "sha256": "9b6f092aa4e286130f16461ae365582f11195d46a34ea8651ec0d15bdf6da25c"
+    },
+    {
+     "file": "areas/judique/8/100_216.t.bin",
+     "sha256": "7057cc99f52806a549cde450e63e7c102ea3b88f271639376944c9e0e9f6e553"
+    },
+    {
+     "file": "areas/judique/8/100_220.t.bin",
+     "sha256": "31fe84a07ebf0cd0afe27577602f9d19199d33fbc911a1766fe159a3d7c3a157"
+    },
+    {
+     "file": "areas/judique/8/100_221.t.bin",
+     "sha256": "7fc2523b4c5bd22ca20d27bbccd875277825d62e016bcfaf23f5438787a480bf"
+    },
+    {
+     "file": "areas/judique/8/100_223.t.bin",
+     "sha256": "e39296379653715e43f16d78d15ca71a466650de59dcfec9124928d927930c5a"
+    },
+    {
+     "file": "areas/judique/8/102_228.t.bin",
+     "sha256": "9bd85aabaf39eac8ea52330e14848af22fc5edd6485cc8aaaca1b8a5cb09cb8b"
+    },
+    {
+     "file": "areas/judique/8/103_228.t.bin",
+     "sha256": "ca69c6c32ed2d16ebfcc16d44b45c66e1541223eceb42fdb7723ce690f465db9"
+    },
+    {
+     "file": "areas/judique/8/103_236.t.bin",
+     "sha256": "6c630854a5cda56289531d3cfc901816882185bbe12d774e9317e131fc8e2265"
+    },
+    {
+     "file": "areas/judique/8/103_237.t.bin",
+     "sha256": "f965b6938f408f3cc129c74f413f12f2f8ae74dd434aa649e8158bc23ca39457"
+    },
+    {
+     "file": "areas/judique/8/104_238.t.bin",
+     "sha256": "e9adfc4294d275d663b7549ce5f9ed272506237f2d29bdeaca7939a650c3fab7"
+    },
+    {
+     "file": "areas/judique/8/104_239.t.bin",
+     "sha256": "a4ae15903b5fdbcf7202bed8ac026157e9fb51cb6e20a267ad2454585c518850"
+    },
+    {
+     "file": "areas/judique/8/105_241.t.bin",
+     "sha256": "8b714e067e0ce933a3fc5fa1751342ff98b77e2265faca8ceec5dfedbb29ccea"
+    },
+    {
+     "file": "areas/judique/8/106_195.t.bin",
+     "sha256": "0a5bbdfcd68c6d79c2162ae6df7b2f04fa3bec868e301e080c6b9b17d2f668ac"
+    },
+    {
+     "file": "areas/judique/8/106_213.t.bin",
+     "sha256": "a22df2018c046fcb4d4cf4d64638aae142bf7cea926676eb5decc5a47b10a05d"
+    },
+    {
+     "file": "areas/judique/8/108_199.t.bin",
+     "sha256": "0c396167ad126862304b35018ddbfb082a5f8718fcffb81ab9319706eadfba44"
+    },
+    {
+     "file": "areas/judique/8/108_204.t.bin",
+     "sha256": "118741db2ee8ebf300e71feeb5891999f1031526e7ff09e395a7db41032bb5a3"
+    },
+    {
+     "file": "areas/judique/8/108_236.t.bin",
+     "sha256": "c9507232cdf0a61720a469a1cf752364f3666cdcf018b476564c2e2480201939"
+    },
+    {
+     "file": "areas/judique/8/108_238.t.bin",
+     "sha256": "7763f65d28fbc63308b50cc0bece3bed3a78e5c5c2722afa8b45f4a023599db9"
+    },
+    {
+     "file": "areas/judique/8/109_192.t.bin",
+     "sha256": "d1cb55b5a929f105065cd4bc55cd9d604137172564f74a39c3a7c24c4a132c5f"
+    },
+    {
+     "file": "areas/judique/8/109_240.t.bin",
+     "sha256": "1e21dc533d17179d1e1c353b88bc86acf7050708eaa14c46aa6cf9ab21570d5d"
+    },
+    {
+     "file": "areas/judique/8/144_237.t.bin",
+     "sha256": "03b88f0c741004c1d1e108e5cd5ef16489c60d5b47eda142ad1de5f7e477267e"
+    },
+    {
+     "file": "areas/judique/8/148_242.t.bin",
+     "sha256": "543df3899a5f20bac9f54a05e33ffa9fa434a34afb449664137d78cb428b949b"
+    },
+    {
+     "file": "areas/judique/8/151_241.t.bin",
+     "sha256": "62aa0f7950940b9ebda2106cf7e5b5ad92fb6772ee936677ae2f700241f17f61"
+    },
+    {
+     "file": "areas/judique/8/151_253.t.bin",
+     "sha256": "c65b4a9860415dd0fcc1d85ba9af52cac7895df47c20a50609192c238351811e"
+    },
+    {
+     "file": "areas/judique/8/152_253.t.bin",
+     "sha256": "32811cd279816717fb0c8bb10125eff1974b01b4b24b1502bacb8e7ce51c2aea"
+    },
+    {
+     "file": "areas/judique/8/153_239.t.bin",
+     "sha256": "ab4ad2ef540153b131ea4dfbd0409499f39e1304323815a4b59a796f7eb648cd"
+    },
+    {
+     "file": "areas/judique/8/153_253.t.bin",
+     "sha256": "b7360a9e17b6f9784ff67fb16121f4a66adfb36c2b78cf969c4917cca05be7aa"
+    },
+    {
+     "file": "areas/judique/8/155_233.t.bin",
+     "sha256": "eb4547603fb8e49e31a493fa1af9119d5ed0296d76019d4aadb3734bba44df75"
+    },
+    {
+     "file": "areas/judique/8/94_198.t.bin",
+     "sha256": "2997fa3e18d25ec8c5ec9b42c80e41e1104da246ed9911ea86ddab9013ea0313"
+    },
+    {
+     "file": "areas/judique/8/99_212.t.bin",
+     "sha256": "72ed1f00d9ae9228526fa27f1f5ce7761d9a2d577751aaea936f90f9d61d6fe0"
+    },
+    {
+     "file": "areas/judique/8/99_213.t.bin",
+     "sha256": "afe5bdacf3670203db8cc2a66b4df05744434bb88961bf08130517fdc12215eb"
+    },
+    {
+     "file": "areas/judique/buildings.json",
+     "sha256": "bb51fbe87cf55d636db3d284826d42e2d52d9dbc5fbb1452235f0c5a842c0f86"
+    },
+    {
+     "file": "areas/judique/manifest.json",
+     "lattice": true,
+     "sha256": "4ddb0a54318bf49475bbedc4a8f28e65eee5dabe4c21335217a739f37e8b7334"
+    },
+    {
+     "file": "areas/judique/roads.json",
+     "sha256": "ca15b47b7d71407f4950944bc16344eb3d9c45addeac917382382cfe67a1eaa4"
+    },
+    {
+     "file": "terrain/buildings.json",
+     "sha256": "2e6c321f544fabaa589f94b81e2b853140432cf84d40ca18f9081dff8919f7fc"
+    },
+    {
+     "file": "terrain/manifest.json",
+     "lattice": true,
+     "sha256": "d435ba0088d77be8f3ca9ab86d56725572076e0d9d8ae15c47dce312ef6db25e"
+    },
+    {
+     "file": "terrain/roads.json",
+     "sha256": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9"
+    }
+   ],
+   "lots_m2": 7100,
+   "apron_m2": 3352,
+   "omitted": []
+  },
+  {
+   "area": "porthood",
+   "folder": "areas/porthood",
+   "manifestKey": {
+    "file": "paved/index.json",
+    "tiles": 38,
+    "source": "nstdb-designated-open-v1"
+   },
+   "files": [
+    {
+     "file": "areas/porthood/paved/100_153.r8",
+     "bytes": 16384,
+     "sha256": "bf3c4b79c6248b76aa2a06d6a493f6406d071c207d2d630fa1ce8739f6a95001"
+    },
+    {
+     "file": "areas/porthood/paved/104_129.r8",
+     "bytes": 16384,
+     "sha256": "aab8975c1988017259872b65d6024e1f7f43f25b46a5206077f3fea48a509834"
+    },
+    {
+     "file": "areas/porthood/paved/104_152.r8",
+     "bytes": 16384,
+     "sha256": "737cb161d04f0c86bd59849f5318ac2bc71cb9df7b8d2f93126f08dd87791e68"
+    },
+    {
+     "file": "areas/porthood/paved/106_129.r8",
+     "bytes": 16384,
+     "sha256": "77f8c01f38691e737a02a6e2013272ee1dba2c99f6a72a95c72ad9de7b6169f6"
+    },
+    {
+     "file": "areas/porthood/paved/107_129.r8",
+     "bytes": 16384,
+     "sha256": "6ec2e75d7e6d2e598b62aa549b9b81d4752353e0d619d9e88961307c6b53466a"
+    },
+    {
+     "file": "areas/porthood/paved/109_129.r8",
+     "bytes": 16384,
+     "sha256": "ad1be98638f6532d51b6dad111b5864ef68f1a7d8062f2790912bac98c6b056c"
+    },
+    {
+     "file": "areas/porthood/paved/109_130.r8",
+     "bytes": 16384,
+     "sha256": "919f55a1ee4f1fa0575f111df5823c29e13927fd9e888c470bca13192dcbde94"
+    },
+    {
+     "file": "areas/porthood/paved/109_150.r8",
+     "bytes": 16384,
+     "sha256": "15b2d7881181d974d6e19985327969d7f18de966fc2cb2fb022ee7173abf2168"
+    },
+    {
+     "file": "areas/porthood/paved/110_148.r8",
+     "bytes": 16384,
+     "sha256": "68284d3ba0e56613f923be932ff7c053fefd7aa2b5f90cdda768ef3d34e81b83"
+    },
+    {
+     "file": "areas/porthood/paved/84_148.r8",
+     "bytes": 16384,
+     "sha256": "ebef458e7747379669ad0f2b6bdc2cd9658451400a4cbd66095edad5d62da26e"
+    },
+    {
+     "file": "areas/porthood/paved/84_151.r8",
+     "bytes": 16384,
+     "sha256": "23ea1fa5bbefe669d7aa1c08fe7195bc1e3b83687ece4ee167c87254ebb273bc"
+    },
+    {
+     "file": "areas/porthood/paved/84_152.r8",
+     "bytes": 16384,
+     "sha256": "39ffdf14b02bb656111ed5458e6fd3dd286fcd828e3d438e0e031ea911969153"
+    },
+    {
+     "file": "areas/porthood/paved/85_152.r8",
+     "bytes": 16384,
+     "sha256": "be8c0fa2b879fef318c299e7690303ce711e3b1c5c37fafb1096b8196a7fdeb7"
+    },
+    {
+     "file": "areas/porthood/paved/86_151.r8",
+     "bytes": 16384,
+     "sha256": "a0ef44f43d8d4ba6dae9925e683b644871c30ee8fe66a830a2854f68b741ccc7"
+    },
+    {
+     "file": "areas/porthood/paved/86_152.r8",
+     "bytes": 16384,
+     "sha256": "2ebdc340ff090eef321e7233e398e9fd30a7b316a4eae199680032d8ffdbf093"
+    },
+    {
+     "file": "areas/porthood/paved/86_154.r8",
+     "bytes": 16384,
+     "sha256": "6cf1706a70f6cae2017437e60cc93a1eb0d5f1a5c3c08e3bc1e0668c598f404e"
+    },
+    {
+     "file": "areas/porthood/paved/86_158.r8",
+     "bytes": 16384,
+     "sha256": "0d1e774daf45ed47703c531d20c241d0048144253cc039bc1d8fd52d76eb7869"
+    },
+    {
+     "file": "areas/porthood/paved/87_154.r8",
+     "bytes": 16384,
+     "sha256": "0fd63ded2ef1d494445b1670836dbf0d37504657e2fec4846b00ce0764802ed5"
+    },
+    {
+     "file": "areas/porthood/paved/87_155.r8",
+     "bytes": 16384,
+     "sha256": "197e6e7371c239ed563f05f5dd19b5a2a561e684d118fba23ceb83b3583bc776"
+    },
+    {
+     "file": "areas/porthood/paved/87_156.r8",
+     "bytes": 16384,
+     "sha256": "08ca00bf94af02e2ea8ad46da070e4fa7b52a9df4d267a758b7e7c1354e83028"
+    },
+    {
+     "file": "areas/porthood/paved/87_160.r8",
+     "bytes": 16384,
+     "sha256": "815a5060390a9034533cdfe38da162a579ea0f965d09af91589805cef84d76be"
+    },
+    {
+     "file": "areas/porthood/paved/88_156.r8",
+     "bytes": 16384,
+     "sha256": "7c728b4be22eac25ecac981478256526714b248b0eaa040bf869c161547c5476"
+    },
+    {
+     "file": "areas/porthood/paved/88_157.r8",
+     "bytes": 16384,
+     "sha256": "76e2d4a615fda47111efc8308618df8c44486f0da2a8c60af0615a5832af210e"
+    },
+    {
+     "file": "areas/porthood/paved/88_174.r8",
+     "bytes": 16384,
+     "sha256": "9b426aeb917efbabc052ad3274fa2478edb07abb16dea46c8fc70901dbf61de6"
+    },
+    {
+     "file": "areas/porthood/paved/89_156.r8",
+     "bytes": 16384,
+     "sha256": "91ecd778d2cabd5d637578c394041021ba582efc6b0bd433d30beb4c59ee540a"
+    },
+    {
+     "file": "areas/porthood/paved/89_178.r8",
+     "bytes": 16384,
+     "sha256": "3f3dc4a61a7dfeacd3393bf74c31fb5cb4a4973c2223fcf6ce47be0b4247816b"
+    },
+    {
+     "file": "areas/porthood/paved/91_181.r8",
+     "bytes": 16384,
+     "sha256": "4bcdb6856b10565fc15871e3a5909c07d82aa31c9a9705101ca49fd8c6b119aa"
+    },
+    {
+     "file": "areas/porthood/paved/91_184.r8",
+     "bytes": 16384,
+     "sha256": "a799954c50258dd9cee22106e1198f694089b4068e485e2adf936151e017cb5e"
+    },
+    {
+     "file": "areas/porthood/paved/91_186.r8",
+     "bytes": 16384,
+     "sha256": "9d78317d2a6e8cecb8f35e21a195b8776cbd4b06a848f585e7dc366af0faacfb"
+    },
+    {
+     "file": "areas/porthood/paved/92_156.r8",
+     "bytes": 16384,
+     "sha256": "13d8bfe3937d1b6b03fc58531ada558c11952c903447cba16be243af91d81cbb"
+    },
+    {
+     "file": "areas/porthood/paved/92_186.r8",
+     "bytes": 16384,
+     "sha256": "0ae6dc67e2e04f0da45207fb3e07a7b2180890a6e4b447561975acd6c1702560"
+    },
+    {
+     "file": "areas/porthood/paved/93_155.r8",
+     "bytes": 16384,
+     "sha256": "1f1d8c510d7009fc89fc9ef5e23b9b5993744db093042bd66e538f317db4b9a4"
+    },
+    {
+     "file": "areas/porthood/paved/93_157.r8",
+     "bytes": 16384,
+     "sha256": "d750f9da700ff23096341d64d06ac9fd0be59f62d67b6620fdfb5fce39afde99"
+    },
+    {
+     "file": "areas/porthood/paved/93_170.r8",
+     "bytes": 16384,
+     "sha256": "7c3dccc4e7066e948126e0370e0aa5be4316bee231ce59453e161ddcc69192cb"
+    },
+    {
+     "file": "areas/porthood/paved/94_170.r8",
+     "bytes": 16384,
+     "sha256": "9c7173358d2c4c74119dbb2ff3352df78bb4725d2cd268140e58580456ef3c9a"
+    },
+    {
+     "file": "areas/porthood/paved/96_154.r8",
+     "bytes": 16384,
+     "sha256": "f0a5844e2d2ce2982b2c6b353fe1039cac5c4849f4fffbf99f598c85a370ab72"
+    },
+    {
+     "file": "areas/porthood/paved/96_179.r8",
+     "bytes": 16384,
+     "sha256": "51f9644fd63ffacd1769265ebbbc4da5378f8ea27813de7cb4e45ae10a5b3ad3"
+    },
+    {
+     "file": "areas/porthood/paved/99_153.r8",
+     "bytes": 16384,
+     "sha256": "2d50fc6057dcd5df61c18c0d253b37244dcb4895d8194bbcb3189f96be127ec4"
+    },
+    {
+     "file": "areas/porthood/paved/index.json",
+     "bytes": 1431,
+     "sha256": "22a487b55b21d1202da98a2dfb49a1d15713b4559edfc98903fad832cb14d3e3"
+    }
+   ],
+   "inputs": [
+    {
+     "file": "areas/porthood/8/100_153.t.bin",
+     "sha256": "b336b0a47328ba191abea507bee0467bee7815c4c773c5441328f4ce83b0afbc"
+    },
+    {
+     "file": "areas/porthood/8/104_129.t.bin",
+     "sha256": "19a5d75b67c923061b61fee6a047a7014164f448dffdfc8454857888a988d1db"
+    },
+    {
+     "file": "areas/porthood/8/104_152.t.bin",
+     "sha256": "5ccd539743503bdec225164ef1b1e0382594fd658bb8f555613b3595909a9794"
+    },
+    {
+     "file": "areas/porthood/8/106_129.t.bin",
+     "sha256": "3e31d957ccbfefbe4ec59f0431087407eaee7d2e86650bebef4387f48b2febcd"
+    },
+    {
+     "file": "areas/porthood/8/107_129.t.bin",
+     "sha256": "81eb0d7d0d368861480aa96a989846ef714189ed8aa5772db51a78d31cb06874"
+    },
+    {
+     "file": "areas/porthood/8/109_129.t.bin",
+     "sha256": "ada37b86108437c87b358896e4667e9b309e138c9f2e135e7d2241347b5ca74a"
+    },
+    {
+     "file": "areas/porthood/8/109_130.t.bin",
+     "sha256": "a59478f60968462e6f8c0b717dcc3c6a1566a6cc99bf9daf88cdc814bbd35369"
+    },
+    {
+     "file": "areas/porthood/8/109_150.t.bin",
+     "sha256": "bbc7168ed5c8df3c28f16bffaf80be8aa44df4eaf63a6bcc81d9d3b12df5d802"
+    },
+    {
+     "file": "areas/porthood/8/110_148.t.bin",
+     "sha256": "eb6276dd519ac12efb068a2c8134f2bdcae4ee79e6d8d5adef4b27aa92ba6f4c"
+    },
+    {
+     "file": "areas/porthood/8/84_148.t.bin",
+     "sha256": "ad988a704d43b73e9f2586614c75b72cc37c655d6fad0525dd53f68fb63693d0"
+    },
+    {
+     "file": "areas/porthood/8/84_151.t.bin",
+     "sha256": "794776a411c08fe221f207fd1e18fb96a0c21d3361e8162a94da30e6d0559799"
+    },
+    {
+     "file": "areas/porthood/8/84_152.t.bin",
+     "sha256": "ff7551ab32a26e784594234cd51087ce94ba2402b715042c9efed02dfb49701b"
+    },
+    {
+     "file": "areas/porthood/8/85_152.t.bin",
+     "sha256": "0e300afde77848d10388fd4ecdd59c211be1543fded056c8f53cf9d105446c93"
+    },
+    {
+     "file": "areas/porthood/8/86_151.t.bin",
+     "sha256": "7d6bc6f217883047153f411e2acfc27d86f41b9e77989642ba89e33c1b540a00"
+    },
+    {
+     "file": "areas/porthood/8/86_152.t.bin",
+     "sha256": "5f61b185bbf763d898b78904ad66a2c46b0132ae62a7c308d81db95500cb6543"
+    },
+    {
+     "file": "areas/porthood/8/86_154.t.bin",
+     "sha256": "22320284411c85f59fd880e86479240ba3f376e67ef6c092ec15dd21ac91c7bd"
+    },
+    {
+     "file": "areas/porthood/8/86_158.t.bin",
+     "sha256": "4a942dc8b39505c312af9457f46d5bc20801e7dc42302dd268758dd8d2b522df"
+    },
+    {
+     "file": "areas/porthood/8/87_154.t.bin",
+     "sha256": "8566d417911b0f611f35496fcb2df042e1632a54fcff01101ea815e30de2e842"
+    },
+    {
+     "file": "areas/porthood/8/87_155.t.bin",
+     "sha256": "5d2716559f42902f8eeb66ee8efe74a6cb56a2d4710f8b9b77af8915dcebe9b3"
+    },
+    {
+     "file": "areas/porthood/8/87_156.t.bin",
+     "sha256": "6636856f3b13074f6fcfb45366897c2912fa16d86728fb67070f7380e51f68d6"
+    },
+    {
+     "file": "areas/porthood/8/87_160.t.bin",
+     "sha256": "39f67d740c71d249e341e2d8d4f0ba0f5b3758e0511ddf3429b53f0b26b41a4a"
+    },
+    {
+     "file": "areas/porthood/8/88_156.t.bin",
+     "sha256": "b353fde7845506868b36e408b60d77db37f3beb75362d4797ccee1fa81b49dfe"
+    },
+    {
+     "file": "areas/porthood/8/88_157.t.bin",
+     "sha256": "60e7ea6b865d7d1f8d84d5a1ecc7cb1ec3a019f17e7b29a330de78360b88460d"
+    },
+    {
+     "file": "areas/porthood/8/88_174.t.bin",
+     "sha256": "6f232b446f2326ec66454ff5ca558b14dc67e74ca498066f48e6e99cc3b8d019"
+    },
+    {
+     "file": "areas/porthood/8/89_156.t.bin",
+     "sha256": "87808521e895e820b1b5bd0a5c6051d878f0d6791d7b2b10aea5b22208539fb9"
+    },
+    {
+     "file": "areas/porthood/8/89_178.t.bin",
+     "sha256": "b59c96028c5588541ab33afc5f76acdfb41f37da790bf27587ad962223792a23"
+    },
+    {
+     "file": "areas/porthood/8/91_181.t.bin",
+     "sha256": "6d8d324f1f99328a5607fa47564a08677c51cae5a6cbf72deaf7a6b5fc2bcd33"
+    },
+    {
+     "file": "areas/porthood/8/91_184.t.bin",
+     "sha256": "af4ce2ec8510656f87d79dd85ade2a4f03f5a46d14d9505a090248fa1b0e9cd7"
+    },
+    {
+     "file": "areas/porthood/8/91_186.t.bin",
+     "sha256": "9120d363b598b580ccf67b82cb8fcbf4f7dbb452690ca3b47d53a869878c2bf9"
+    },
+    {
+     "file": "areas/porthood/8/92_156.t.bin",
+     "sha256": "f283b973b15209cd9f3af970f6ac38dd7cf6bf53bbc24c0af28bacbafd0ad099"
+    },
+    {
+     "file": "areas/porthood/8/92_186.t.bin",
+     "sha256": "44b5f921ba2e8d04db26ed5c5a0336f1cfa764439b2640b257cd12837ab7ca89"
+    },
+    {
+     "file": "areas/porthood/8/93_155.t.bin",
+     "sha256": "2e02ac24445b51f6ab7dc4c3a08338a020d277b14a5ec1dd01f0020a839097ec"
+    },
+    {
+     "file": "areas/porthood/8/93_157.t.bin",
+     "sha256": "2c6c44d6944d7aced31ac7a02f4ebabfe8c330693435a2fc350e3cc0d34814d0"
+    },
+    {
+     "file": "areas/porthood/8/93_170.t.bin",
+     "sha256": "fc7acf9422622cdebf4bcd97b881e92d3b1da2f0ef81f59882f4ce87acf89dba"
+    },
+    {
+     "file": "areas/porthood/8/94_170.t.bin",
+     "sha256": "d9c9836243d8e9e1f44bfd51eeb376b9a469dc655c731d7d36fde6204b0ff3a8"
+    },
+    {
+     "file": "areas/porthood/8/96_154.t.bin",
+     "sha256": "bc377b9fd08d96a4899f6bb16e70f8225efc4099a87865c6fc22c4cc0ab5bcbb"
+    },
+    {
+     "file": "areas/porthood/8/96_179.t.bin",
+     "sha256": "26636b763001b9f4cce311b6ea7d0c3d2096b0bc98c6e7668f4ee1c6370945f8"
+    },
+    {
+     "file": "areas/porthood/8/99_153.t.bin",
+     "sha256": "11f1af3ccff395f354124804cbcb11480181b10876dac0eda97e4512d249501c"
+    },
+    {
+     "file": "areas/porthood/buildings.json",
+     "sha256": "bed7e514e9d39bae87302f53be9eddb0a2c02381d1f0098948bfd28fc8bc6f3e"
+    },
+    {
+     "file": "areas/porthood/manifest.json",
+     "lattice": true,
+     "sha256": "897d218f4643756a7e47755cd28d46247f4ecd7355e58c45bcbca843d127f870"
+    },
+    {
+     "file": "areas/porthood/roads.json",
+     "sha256": "5c200a4a39e3dcfb1153e60b8960ebf2d5016ad59a72fb9a6bf43ac6eadd5368"
+    },
+    {
+     "file": "terrain/buildings.json",
+     "sha256": "2e6c321f544fabaa589f94b81e2b853140432cf84d40ca18f9081dff8919f7fc"
+    },
+    {
+     "file": "terrain/manifest.json",
+     "lattice": true,
+     "sha256": "d435ba0088d77be8f3ca9ab86d56725572076e0d9d8ae15c47dce312ef6db25e"
+    },
+    {
+     "file": "terrain/roads.json",
+     "sha256": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9"
+    }
+   ],
+   "lots_m2": 15768,
+   "apron_m2": 3432,
+   "omitted": []
+  },
+  {
+   "area": "westbay",
+   "folder": "areas/westbay",
+   "manifestKey": {
+    "file": "paved/index.json",
+    "tiles": 38,
+    "source": "nstdb-designated-open-v1"
+   },
+   "files": [
+    {
+     "file": "areas/westbay/paved/144_109.r8",
+     "bytes": 16384,
+     "sha256": "5a3c26592118e07f70051a3cb3ed015af069149324d3226626fa3fd8441f4d7c"
+    },
+    {
+     "file": "areas/westbay/paved/144_170.r8",
+     "bytes": 16384,
+     "sha256": "e04dc148ddaa4e9e344c6fa9dba76245b06f7799776c18e0d7ce31862d939ca9"
+    },
+    {
+     "file": "areas/westbay/paved/145_170.r8",
+     "bytes": 16384,
+     "sha256": "cda54b7b4b0dbe2b2ccd053a01d802da292d76bd3e637c60b9accd3b225be035"
+    },
+    {
+     "file": "areas/westbay/paved/147_136.r8",
+     "bytes": 16384,
+     "sha256": "ce4f99def0a9a1e36fe7bc3d6f7c1a1c90309835c92deaf98741a72a2091b894"
+    },
+    {
+     "file": "areas/westbay/paved/148_114.r8",
+     "bytes": 16384,
+     "sha256": "8eb0f877b2790a3ddb51e0eaa6688075cdae51b60ca839d23b207fb175c01552"
+    },
+    {
+     "file": "areas/westbay/paved/149_138.r8",
+     "bytes": 16384,
+     "sha256": "a20ed4f865e640d80b6daf70f8a9b086071bb0bae07695b7f91fbb6869c75034"
+    },
+    {
+     "file": "areas/westbay/paved/150_163.r8",
+     "bytes": 16384,
+     "sha256": "bd462a1c59d98e2ea76dabf50462662df2c86b854608864b2ca709fd56571435"
+    },
+    {
+     "file": "areas/westbay/paved/151_113.r8",
+     "bytes": 16384,
+     "sha256": "0f2a364948bbcdccb4cf47413826a425b0de8818089dab195b79f411d9469cf8"
+    },
+    {
+     "file": "areas/westbay/paved/151_125.r8",
+     "bytes": 16384,
+     "sha256": "42c9b43ae03f3d878641ccf887e1b44a65315b93da601acbee526f26899e9c2c"
+    },
+    {
+     "file": "areas/westbay/paved/152_125.r8",
+     "bytes": 16384,
+     "sha256": "d1c7da89ff345861738949b6a489d80dd0393232f43618b7197fa6f880831e41"
+    },
+    {
+     "file": "areas/westbay/paved/152_168.r8",
+     "bytes": 16384,
+     "sha256": "11f6896b5f2fbf3ec8946de6b0d7db1da9a12c9a1d4ace6d210b381c9bef382c"
+    },
+    {
+     "file": "areas/westbay/paved/153_111.r8",
+     "bytes": 16384,
+     "sha256": "9721f55158ad14807dbafb74d964b0a0ae99c4bcd3d11a3e10dd209360d32be2"
+    },
+    {
+     "file": "areas/westbay/paved/153_125.r8",
+     "bytes": 16384,
+     "sha256": "6d9f0dac61a9b04226f89dcc6a522d072ee73fcea37195dab42e0038998f3833"
+    },
+    {
+     "file": "areas/westbay/paved/155_105.r8",
+     "bytes": 16384,
+     "sha256": "403c47e8b414856b72deb882219866fb661cd5410b1a3f7ad43b6f32efe81a98"
+    },
+    {
+     "file": "areas/westbay/paved/157_171.r8",
+     "bytes": 16384,
+     "sha256": "ea9f1781c37412f0f2c09df8dc816ab2c4d40c92e883a6cd212a311c221ec5b4"
+    },
+    {
+     "file": "areas/westbay/paved/163_152.r8",
+     "bytes": 16384,
+     "sha256": "4d70b3e3e8b32ee879be2ebb5d8cd8cd13d50853ba690825d73e0b1d42afde82"
+    },
+    {
+     "file": "areas/westbay/paved/163_156.r8",
+     "bytes": 16384,
+     "sha256": "259a6d6c67ca2c5c289fb530008c9df60b8f5f5aa6f6e6017f4c46e816ec7fb8"
+    },
+    {
+     "file": "areas/westbay/paved/173_147.r8",
+     "bytes": 16384,
+     "sha256": "4e80f24d2d63dc491dfd22d06adedd2fd6341983e06703cc4ae9d3fe2cf548ed"
+    },
+    {
+     "file": "areas/westbay/paved/178_174.r8",
+     "bytes": 16384,
+     "sha256": "96aecb9d7441b1db62f5d235e723286e89a2cfee1f4d18bb0fcbb0a5f12033d5"
+    },
+    {
+     "file": "areas/westbay/paved/179_174.r8",
+     "bytes": 16384,
+     "sha256": "045daf9e08896dae0fd8525003f5531acd6fd11b127651caf3887bef8e456269"
+    },
+    {
+     "file": "areas/westbay/paved/182_124.r8",
+     "bytes": 16384,
+     "sha256": "bf5542c2a1ccc0b96054849eee46b32c9e55c45b796debca0b3b5d6d1647a37a"
+    },
+    {
+     "file": "areas/westbay/paved/188_114.r8",
+     "bytes": 16384,
+     "sha256": "4fd9793670a2b47514db6ae118986ec89e7b2ee3726fea03f5f9e5d910fb7953"
+    },
+    {
+     "file": "areas/westbay/paved/188_167.r8",
+     "bytes": 16384,
+     "sha256": "e5df70c9ee173674b05ea8552ef0eaaa114707c85d313fedde22fc45ba8e434b"
+    },
+    {
+     "file": "areas/westbay/paved/190_112.r8",
+     "bytes": 16384,
+     "sha256": "09bef1485ed54ce7de8aa24bceabba12bd1bcff190dddb060578ad10ffc65898"
+    },
+    {
+     "file": "areas/westbay/paved/191_150.r8",
+     "bytes": 16384,
+     "sha256": "f4304e952b991c859ca11afae2a6ad26bd80f1dea817d170c252e09ba3054168"
+    },
+    {
+     "file": "areas/westbay/paved/195_100.r8",
+     "bytes": 16384,
+     "sha256": "4b2e371c1b91092e14f6c6b2ee106143cc68aac1526357470cac8b54702e8c1d"
+    },
+    {
+     "file": "areas/westbay/paved/195_103.r8",
+     "bytes": 16384,
+     "sha256": "1aa544a68e68e6381cd1fa8a3597f728d8831c5879d9fe220c3780c2400519f8"
+    },
+    {
+     "file": "areas/westbay/paved/198_102.r8",
+     "bytes": 16384,
+     "sha256": "513f39fee5e39540ec54a053d400d0458e7fb566d3520909ace649b8d736a6a8"
+    },
+    {
+     "file": "areas/westbay/paved/199_157.r8",
+     "bytes": 16384,
+     "sha256": "4814f5cacc04eb69f03aaaa882c373277a225ae97027afabce3a04ac7188ada8"
+    },
+    {
+     "file": "areas/westbay/paved/199_158.r8",
+     "bytes": 16384,
+     "sha256": "5f7b70c26c8be630359cdfe1bd9e365ffaeef58e5425a31fd1db143abdf64b54"
+    },
+    {
+     "file": "areas/westbay/paved/201_112.r8",
+     "bytes": 16384,
+     "sha256": "1deb3671c0cb4d35455432109925ae7b9633e248ae05254dddf091a6919826df"
+    },
+    {
+     "file": "areas/westbay/paved/203_147.r8",
+     "bytes": 16384,
+     "sha256": "8da8e947d1e595e7eeec2ab7e5794303b58f7479f19d234213ee5f33c00b0a18"
+    },
+    {
+     "file": "areas/westbay/paved/203_159.r8",
+     "bytes": 16384,
+     "sha256": "968c04dfd7a75acd555154e16ac19eefed06c48ba0975c445c800e606210cf2d"
+    },
+    {
+     "file": "areas/westbay/paved/210_160.r8",
+     "bytes": 16384,
+     "sha256": "3182bb366cdc2136cd1cda4d4853f59035ef8dbfaeaec22f9089c5359108c717"
+    },
+    {
+     "file": "areas/westbay/paved/226_158.r8",
+     "bytes": 16384,
+     "sha256": "070cc9120cf7a5e0173de9c1c1eed5b1f9bc9fffbb16ddd24698c75ae29c2c48"
+    },
+    {
+     "file": "areas/westbay/paved/236_106.r8",
+     "bytes": 16384,
+     "sha256": "44ca18b67d3697114f9da02d39f293646539da4c560409e957cfb7fbdf5b35d5"
+    },
+    {
+     "file": "areas/westbay/paved/236_107.r8",
+     "bytes": 16384,
+     "sha256": "1da55245b0c43e4fac459fa6c2df748d7187acb75e2422f9d5e3ca96b11183ec"
+    },
+    {
+     "file": "areas/westbay/paved/239_150.r8",
+     "bytes": 16384,
+     "sha256": "5f9804c6b958a30762ebfad47f8e8962f974a2c43f25b9ede5e9c09c1899ca7f"
+    },
+    {
+     "file": "areas/westbay/paved/index.json",
+     "bytes": 1459,
+     "sha256": "20a2a0c935888f4968ada31cebcbe6f8535cbed26967c1e84aea29c3f27053a6"
+    }
+   ],
+   "inputs": [
+    {
+     "file": "areas/westbay/8/144_109.t.bin",
+     "sha256": "a4edac46c14eb3b215879d8482db3aa92c587902a5ef148c11b52c710377f2a3"
+    },
+    {
+     "file": "areas/westbay/8/144_170.t.bin",
+     "sha256": "e7bba30ab356ea4182e2e6f9e727f333e6cb9cc571d666b3c6ce9ea342f8dd83"
+    },
+    {
+     "file": "areas/westbay/8/145_170.t.bin",
+     "sha256": "18a2bb1caebaefe32e8711f4a115c6ba065af5fcb4bf5ae7886b10159e5b9bc7"
+    },
+    {
+     "file": "areas/westbay/8/147_136.t.bin",
+     "sha256": "ee394ed6661ac5d396c239b700e619e5a637404fae068fd4a21bbf6e7d138cd8"
+    },
+    {
+     "file": "areas/westbay/8/148_114.t.bin",
+     "sha256": "e3fbd8137e9b4ebaafb32ab244cfe2d251d5d0353a7f4f0d023b855bc7c937dd"
+    },
+    {
+     "file": "areas/westbay/8/149_138.t.bin",
+     "sha256": "45eb86695b5b1b10b03baa8a024a740fade6af26a5460dd23b3ab7160cc4a0bf"
+    },
+    {
+     "file": "areas/westbay/8/150_163.t.bin",
+     "sha256": "13a9b4cb1df44f45d2f0037954c0d51692abb4e41e0ff8cc02cee57415c7300b"
+    },
+    {
+     "file": "areas/westbay/8/151_113.t.bin",
+     "sha256": "d74cd2b17b105316eaf38394c7c0a7d68408bc7bd545e9e7420bd52585532c45"
+    },
+    {
+     "file": "areas/westbay/8/151_125.t.bin",
+     "sha256": "833ba9d80bae6f45345cfc9520f889f2c65d6a6d6a0195d4f487feac98d05e18"
+    },
+    {
+     "file": "areas/westbay/8/152_125.t.bin",
+     "sha256": "f3fbcfb23667ec459403ca8cb21d217e45998d0ad362725665e0b1567e2b1646"
+    },
+    {
+     "file": "areas/westbay/8/152_168.t.bin",
+     "sha256": "059f23ebe7b162aff81248ecdcb49ba3ebfa633db607516a7583803e5eebe366"
+    },
+    {
+     "file": "areas/westbay/8/153_111.t.bin",
+     "sha256": "b57e966e68089b442cf1c4c9480d787af5cbf934a0057695e4fe7d6493c57148"
+    },
+    {
+     "file": "areas/westbay/8/153_125.t.bin",
+     "sha256": "eed9e43b7c91f68eb8f37bce4a42f9055fecad4877cca46374b0f202d8e6283b"
+    },
+    {
+     "file": "areas/westbay/8/155_105.t.bin",
+     "sha256": "52634ab0f347c1e315f8e0f8212ffd14f1ecff193f85f3a5510d33df2dbad03d"
+    },
+    {
+     "file": "areas/westbay/8/157_171.t.bin",
+     "sha256": "213d4f587e835e0d73a2027d54619665f51687b96d2408d016f791df57c93798"
+    },
+    {
+     "file": "areas/westbay/8/163_152.t.bin",
+     "sha256": "2117b28e6184499b87d5d8a7ccb5e84f82ce77c83504c9546af1b3aac2a15aa3"
+    },
+    {
+     "file": "areas/westbay/8/163_156.t.bin",
+     "sha256": "a8edc7429640a6b551d4b1a60a68413bc3a9e4e5c45da8ba0c890a1bf744ca48"
+    },
+    {
+     "file": "areas/westbay/8/173_147.t.bin",
+     "sha256": "05aea700df307e561d84e3aece94e29448bc3d31e900b609e8e2b331debfe35a"
+    },
+    {
+     "file": "areas/westbay/8/178_174.t.bin",
+     "sha256": "106208184e32bdbf3eb10dfadefdfdd58336cf9626a25f8853d98c7d61ad807d"
+    },
+    {
+     "file": "areas/westbay/8/179_174.t.bin",
+     "sha256": "1e537788bdcbc2fd9e6525d3e8a117fc5abef4795c435bc44c5d75a063905f9f"
+    },
+    {
+     "file": "areas/westbay/8/182_124.t.bin",
+     "sha256": "19f9fa73efa918a621d2b15a62dbc5f4814b894ee8c580b46cb9ff071c333c8e"
+    },
+    {
+     "file": "areas/westbay/8/188_114.t.bin",
+     "sha256": "ec75ba9b5a1ada9f18cf6d53200a6fa1cd6b918fdd8b5195072ad7b2dd3bbf73"
+    },
+    {
+     "file": "areas/westbay/8/188_167.t.bin",
+     "sha256": "387b1fa6fb5eafcc9073d5388aba8148cf9c7968ab1ba34e3a1fce19c11cdec8"
+    },
+    {
+     "file": "areas/westbay/8/190_112.t.bin",
+     "sha256": "29e9998b91fbb66c04386245703f16fc3f39dd2d96e73e2ddfb02ca03e1869d9"
+    },
+    {
+     "file": "areas/westbay/8/191_150.t.bin",
+     "sha256": "9d55f9873bc34967a6b39212c81bb51ca674f708524b3dbc9e719f1814b7bb6b"
+    },
+    {
+     "file": "areas/westbay/8/195_100.t.bin",
+     "sha256": "96fee461e0acad19c6019f657258191e0767ba3cfea1cf9e6cfe70fa82cb15c8"
+    },
+    {
+     "file": "areas/westbay/8/195_103.t.bin",
+     "sha256": "ffaf3e014a61a963de7f8bcaa3eaaeec052e4268a19929a877db9df5c221e049"
+    },
+    {
+     "file": "areas/westbay/8/198_102.t.bin",
+     "sha256": "d03ab5ed0e608412764bf1522a7f25b260dedcdd98cacaa629dcc145ee15fb0b"
+    },
+    {
+     "file": "areas/westbay/8/199_157.t.bin",
+     "sha256": "48f57235cf635d3ec0d19abb21d15138c0b03247bae7c8859575dc0c42aa852f"
+    },
+    {
+     "file": "areas/westbay/8/199_158.t.bin",
+     "sha256": "2ea908c80748af6f9a5ea6ab2daf7e523d290957309717f9f39219a560fa248a"
+    },
+    {
+     "file": "areas/westbay/8/203_147.t.bin",
+     "sha256": "2e9c5e6d3a347b22078133392770a3feef40a5b9d18963995cf52809db0532c4"
+    },
+    {
+     "file": "areas/westbay/8/203_159.t.bin",
+     "sha256": "b4292c3b26a9a8e9a17b7c80dc55176dcf7c7920b2a63bbc1e5c831c7cea9d68"
+    },
+    {
+     "file": "areas/westbay/8/210_160.t.bin",
+     "sha256": "9e83c8d4f78a8faa3c0c6b174da19a7a97b127635c093543da09ca2dfe0cdce8"
+    },
+    {
+     "file": "areas/westbay/8/226_158.t.bin",
+     "sha256": "1a1c395156728bb878e69d2ce4205eded06bf1cdf0bf11119ac23fdee9cc8fc3"
+    },
+    {
+     "file": "areas/westbay/8/236_106.t.bin",
+     "sha256": "0f4cb3ff02248259cd28b80ed07af7d8f43473c4c5ba4a9d2cede2263ac8bff9"
+    },
+    {
+     "file": "areas/westbay/8/236_107.t.bin",
+     "sha256": "a9684c13b072928949b4931031dcee686c80dce299b5f2e0589ffd2e9e0fdaab"
+    },
+    {
+     "file": "areas/westbay/8/239_150.t.bin",
+     "sha256": "117ffaec5e7bffb5588af6451b256a503f1795f93ea88c1d5ec29d24c987cc29"
+    },
+    {
+     "file": "areas/westbay/buildings.json",
+     "sha256": "f3c5f4024c514f350fca6febbcaf6d64cd635a6d2b5d64cdda2a849a79970bd3"
+    },
+    {
+     "file": "areas/westbay/manifest.json",
+     "lattice": true,
+     "sha256": "979aa52b6173c2776db97d0bdf1140503bbf78471e44f59ce67adec5fbea3f58"
+    },
+    {
+     "file": "areas/westbay/roads.json",
+     "sha256": "8f05dad05ae6d05a78431087446617faa44edee29be7e220447c82d57dbd7545"
+    },
+    {
+     "file": "terrain/buildings.json",
+     "sha256": "2e6c321f544fabaa589f94b81e2b853140432cf84d40ca18f9081dff8919f7fc"
+    },
+    {
+     "file": "terrain/manifest.json",
+     "lattice": true,
+     "sha256": "d435ba0088d77be8f3ca9ab86d56725572076e0d9d8ae15c47dce312ef6db25e"
+    },
+    {
+     "file": "terrain/roads.json",
+     "sha256": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9"
+    }
+   ],
+   "lots_m2": 4528,
+   "apron_m2": 4824,
+   "omitted": []
+  },
+  {
+   "area": "pointtupper",
+   "folder": "areas/pointtupper",
+   "manifestKey": {
+    "file": "paved/index.json",
+    "tiles": 117,
+    "source": "nstdb-designated-open-v1"
+   },
+   "files": [
+    {
+     "file": "areas/pointtupper/paved/117_183.r8",
+     "bytes": 16384,
+     "sha256": "0854f8ea5bfef6955ec8c858e11b6b3ce0f623fa8005c59451528c076a7c40f9"
+    },
+    {
+     "file": "areas/pointtupper/paved/117_184.r8",
+     "bytes": 16384,
+     "sha256": "13d96e99b9fa23c062e86eed7bd2913f66210b0e1b0bf473639b5014759d14da"
+    },
+    {
+     "file": "areas/pointtupper/paved/120_186.r8",
+     "bytes": 16384,
+     "sha256": "e22676d52fef7f4617fdc5255439b4b006846488f2dc19a2305eeddacad311a3"
+    },
+    {
+     "file": "areas/pointtupper/paved/120_187.r8",
+     "bytes": 16384,
+     "sha256": "d51313d3e9afcd4c04d42b076e28223480349816c28ec4fdd07c25a7a27b25bc"
+    },
+    {
+     "file": "areas/pointtupper/paved/120_190.r8",
+     "bytes": 16384,
+     "sha256": "3f09a16243c61e7a4ebcc5b2a1324b4a122e6a4ad2d681a6cc3d682e65a71584"
+    },
+    {
+     "file": "areas/pointtupper/paved/121_187.r8",
+     "bytes": 16384,
+     "sha256": "72026ddf43e3fae906180ef9a6ca006a394e87d250079d9689988029772e17a8"
+    },
+    {
+     "file": "areas/pointtupper/paved/122_176.r8",
+     "bytes": 16384,
+     "sha256": "098df82fdf5f50e185cb9ce8f9009d203de1e686126c2512b7cef713d6dbc01c"
+    },
+    {
+     "file": "areas/pointtupper/paved/123_176.r8",
+     "bytes": 16384,
+     "sha256": "c05e545138cecb8adb20abcf197555b628b2089edb32329337440e79fda01898"
+    },
+    {
+     "file": "areas/pointtupper/paved/123_187.r8",
+     "bytes": 16384,
+     "sha256": "db69cd3d94673908d6d76d6fa51977edb75ab2e947e42d720ee46f41d35d57d2"
+    },
+    {
+     "file": "areas/pointtupper/paved/124_180.r8",
+     "bytes": 16384,
+     "sha256": "aaf653d070b45994d73d582b4804dfd3cb69ce857b5cd6c13a41c6aa7fe36a49"
+    },
+    {
+     "file": "areas/pointtupper/paved/124_197.r8",
+     "bytes": 16384,
+     "sha256": "b0d35aed76b9887f848221d84586d21ec30a7a985ed207907e42d00c343e5ce9"
+    },
+    {
+     "file": "areas/pointtupper/paved/125_180.r8",
+     "bytes": 16384,
+     "sha256": "ad030fbd0a94702aeb0a2794ab392d35c546c2d3df847b762e9d75005125f11f"
+    },
+    {
+     "file": "areas/pointtupper/paved/125_182.r8",
+     "bytes": 16384,
+     "sha256": "71be9ad59a73894988f3b9800389dfe84445230c3917fd0f39beae27a70bee7f"
+    },
+    {
+     "file": "areas/pointtupper/paved/125_197.r8",
+     "bytes": 16384,
+     "sha256": "6ae33db8fba67cd84c7cae0eed9a06ff0ed0d05c9cc7ffd81b5992faa23ba23e"
+    },
+    {
+     "file": "areas/pointtupper/paved/127_184.r8",
+     "bytes": 16384,
+     "sha256": "be3c9a8fc6a28ba72437c1fdda434568a3b7c111b685aac1e1ab6d3eebb9b4ee"
+    },
+    {
+     "file": "areas/pointtupper/paved/128_182.r8",
+     "bytes": 16384,
+     "sha256": "6f09426562727d7ee2befe522d5b6e2ee0da251b7dac528c74cd24dcacbd5cce"
+    },
+    {
+     "file": "areas/pointtupper/paved/128_183.r8",
+     "bytes": 16384,
+     "sha256": "eaeb5d3411acf54dd8344f8aa8238b4569446dcf260af801b151d42f020ade63"
+    },
+    {
+     "file": "areas/pointtupper/paved/128_184.r8",
+     "bytes": 16384,
+     "sha256": "99c21a980bd3343712fda77f3d63e406e5a0f8ee75445918acf863c51ab684a7"
+    },
+    {
+     "file": "areas/pointtupper/paved/128_185.r8",
+     "bytes": 16384,
+     "sha256": "cdfde71ba5529a25f6028f713ae07cd2f76c9f59b4f5d65ae5b1448ed15dacc4"
+    },
+    {
+     "file": "areas/pointtupper/paved/129_181.r8",
+     "bytes": 16384,
+     "sha256": "78db80dae96b8445ad4549439b36e9e1f13e64e83129cf5c38ecb62c60e82087"
+    },
+    {
+     "file": "areas/pointtupper/paved/129_182.r8",
+     "bytes": 16384,
+     "sha256": "2d6e43d16f1ee8ce7154c188cddd3d300ac55bb06310a70af0980a7bb3c27a34"
+    },
+    {
+     "file": "areas/pointtupper/paved/129_183.r8",
+     "bytes": 16384,
+     "sha256": "a60239254240065d1b29a9d5df74e93bce90ce50629fafb66f697398acb7bb27"
+    },
+    {
+     "file": "areas/pointtupper/paved/129_185.r8",
+     "bytes": 16384,
+     "sha256": "cfbc237137b35fb71170cb0585bffd71b3059712ad9096494c4c74bb78784515"
+    },
+    {
+     "file": "areas/pointtupper/paved/129_197.r8",
+     "bytes": 16384,
+     "sha256": "498cdd0f5f3d69bda264090e36d706ccda8a2a225de493493af325854f345de0"
+    },
+    {
+     "file": "areas/pointtupper/paved/130_196.r8",
+     "bytes": 16384,
+     "sha256": "9bbd7efa6d85e54267cfd7ba8c118ad4c0a31dcb13eb7a5077a6d345e7b4f9fe"
+    },
+    {
+     "file": "areas/pointtupper/paved/130_197.r8",
+     "bytes": 16384,
+     "sha256": "833f6f8b66019bcc831ce46ce8b3b16358e7bd50d68bb21af71b87b9f7bf386f"
+    },
+    {
+     "file": "areas/pointtupper/paved/130_198.r8",
+     "bytes": 16384,
+     "sha256": "0ef5b616397090120a018d3850595cc4698f34a7a189e55ad8b25eab017ecda2"
+    },
+    {
+     "file": "areas/pointtupper/paved/131_196.r8",
+     "bytes": 16384,
+     "sha256": "6a04c77a1f4cb5069ec4f4dfd0b18739df8ac0acaa85b100c24493432d0fbc9d"
+    },
+    {
+     "file": "areas/pointtupper/paved/131_197.r8",
+     "bytes": 16384,
+     "sha256": "f9b4dfee52e55cf5e4cc225332f4d964efe527b4fafcb579570d75ea23e37e44"
+    },
+    {
+     "file": "areas/pointtupper/paved/132_186.r8",
+     "bytes": 16384,
+     "sha256": "b4156cbf436f0e6896f4d1df26ab727935ee79849e2f31c7df7c842f1e4fa744"
+    },
+    {
+     "file": "areas/pointtupper/paved/132_187.r8",
+     "bytes": 16384,
+     "sha256": "56dff68b07a729e3dc38d69454d339fa74f7a6da6e9d17ff93c09cbda6b7b137"
+    },
+    {
+     "file": "areas/pointtupper/paved/132_200.r8",
+     "bytes": 16384,
+     "sha256": "7c1a3205654bacf3812e5bc28088988c7cfeaa8dc7af512a6a32e4f86412f282"
+    },
+    {
+     "file": "areas/pointtupper/paved/132_201.r8",
+     "bytes": 16384,
+     "sha256": "0e3e5c8d95def11822b3b12e3c2a1b93b0fdff3c33864617c9bd0286d5436cbd"
+    },
+    {
+     "file": "areas/pointtupper/paved/132_203.r8",
+     "bytes": 16384,
+     "sha256": "034e31867b502184265b5c8d8ae36e7d8a3f6da187c960d4e462cdf7ceeba869"
+    },
+    {
+     "file": "areas/pointtupper/paved/133_186.r8",
+     "bytes": 16384,
+     "sha256": "6292c5c6acc96836e5b62486ee50e8d48e4cc6068abd4c140717c064b32abfec"
+    },
+    {
+     "file": "areas/pointtupper/paved/133_187.r8",
+     "bytes": 16384,
+     "sha256": "f5124b05074897c98ced9507a60f6c163217c98218c10d885de8ca213f8b7135"
+    },
+    {
+     "file": "areas/pointtupper/paved/133_199.r8",
+     "bytes": 16384,
+     "sha256": "d8df0bd030360811ac2a74f0ea349f4d5b8edb64b10233ea40147365df38f9dc"
+    },
+    {
+     "file": "areas/pointtupper/paved/133_200.r8",
+     "bytes": 16384,
+     "sha256": "cfc40cd5be2532822f2ce9ed72e11b1c8b3e2a993cbbbd8ca68db0eeefbd584d"
+    },
+    {
+     "file": "areas/pointtupper/paved/133_201.r8",
+     "bytes": 16384,
+     "sha256": "e72a5b13432c9988c30a0a7c92063b75ea3c3d8c3bcdf06c6e68c76b6d5b70c8"
+    },
+    {
+     "file": "areas/pointtupper/paved/133_202.r8",
+     "bytes": 16384,
+     "sha256": "669516625041526526397a120233042c7d6cae5120936ada2064596397a88013"
+    },
+    {
+     "file": "areas/pointtupper/paved/133_203.r8",
+     "bytes": 16384,
+     "sha256": "8b396df2bc88b60101a3cf1fb303c8944a85a9f55d68607f090c95d048e5e235"
+    },
+    {
+     "file": "areas/pointtupper/paved/134_187.r8",
+     "bytes": 16384,
+     "sha256": "5c723e786b8c4ba0ea6a834ec1416905cf9c3efb34cfba9502dd1e619bcf3d6b"
+    },
+    {
+     "file": "areas/pointtupper/paved/134_188.r8",
+     "bytes": 16384,
+     "sha256": "1d564da63974318faaecd074f74e09e472a9cb0481ee9e832f886d93d264415a"
+    },
+    {
+     "file": "areas/pointtupper/paved/135_212.r8",
+     "bytes": 16384,
+     "sha256": "b91449ea8eab1aba69fc7eca591dbe3c9f33a6b71e45ae6b9476f13cef9aaf65"
+    },
+    {
+     "file": "areas/pointtupper/paved/137_189.r8",
+     "bytes": 16384,
+     "sha256": "7ca5c1908993613a024b4bc183bf7400fef4ac21016baac414cfaaf75e70d31c"
+    },
+    {
+     "file": "areas/pointtupper/paved/137_192.r8",
+     "bytes": 16384,
+     "sha256": "83b5c7b6873525e66495a2f0aec20bf2341a7f09685cbad7f3bf590b07c09f78"
+    },
+    {
+     "file": "areas/pointtupper/paved/138_185.r8",
+     "bytes": 16384,
+     "sha256": "95b18cdf306ed31647c6e5f33fbed027f363de0068d900e49f69a4611879c6ea"
+    },
+    {
+     "file": "areas/pointtupper/paved/138_193.r8",
+     "bytes": 16384,
+     "sha256": "5628fe6c14e99a20751fc5437c31a9f1e5f4e34df2be143956100e92e048248e"
+    },
+    {
+     "file": "areas/pointtupper/paved/138_202.r8",
+     "bytes": 16384,
+     "sha256": "4d48d52fae61be5a838d5e7522011d6ce42b3254a3874ae4cfc997ee011d4f38"
+    },
+    {
+     "file": "areas/pointtupper/paved/138_203.r8",
+     "bytes": 16384,
+     "sha256": "e5fb4f60b9a185fb8f04b5374438dcdcb9f97211969e9bfb61e41d22d8f3afe9"
+    },
+    {
+     "file": "areas/pointtupper/paved/139_192.r8",
+     "bytes": 16384,
+     "sha256": "37a3cfab6e5cadf7084f98512ae640853d5d7055fce830568c7cb2e37a131b12"
+    },
+    {
+     "file": "areas/pointtupper/paved/139_193.r8",
+     "bytes": 16384,
+     "sha256": "973d568f32d38acea99b77169033127866afdc7fb4572c8898e8cc5fb852b242"
+    },
+    {
+     "file": "areas/pointtupper/paved/139_196.r8",
+     "bytes": 16384,
+     "sha256": "750b936096395c7130b364486b30767d64d24a7e568ad15928a196020edbc37d"
+    },
+    {
+     "file": "areas/pointtupper/paved/140_192.r8",
+     "bytes": 16384,
+     "sha256": "f7a4eb37401d4fe661f4156ade76c1e960eada68bef47264e7b5b718de78d13a"
+    },
+    {
+     "file": "areas/pointtupper/paved/140_193.r8",
+     "bytes": 16384,
+     "sha256": "7f6ed24d7130dec889c55467f9681ad047c225c11df19de4f7bedaec8866c76a"
+    },
+    {
+     "file": "areas/pointtupper/paved/140_196.r8",
+     "bytes": 16384,
+     "sha256": "c938cdd086bc46dbcc857500e36756f134f667cdf2843c590c0520e8c899c3a3"
+    },
+    {
+     "file": "areas/pointtupper/paved/140_197.r8",
+     "bytes": 16384,
+     "sha256": "66bc73d4ec7f92ebd7efea41c319c295076d4bc32824657f108e3235662e870d"
+    },
+    {
+     "file": "areas/pointtupper/paved/140_198.r8",
+     "bytes": 16384,
+     "sha256": "220e02c9affe46601545945c116835b4f0bb4c048ecfaf345c8804784ebd65be"
+    },
+    {
+     "file": "areas/pointtupper/paved/140_201.r8",
+     "bytes": 16384,
+     "sha256": "1c169db510ba9435ca46e0e3506c15344fc392a0cb575b50b1b9fd95940c6c2d"
+    },
+    {
+     "file": "areas/pointtupper/paved/140_202.r8",
+     "bytes": 16384,
+     "sha256": "0ee68e92617232ccad96b70dfd053fc9870bf8f5e053143a31d17bfc5a2f4977"
+    },
+    {
+     "file": "areas/pointtupper/paved/141_194.r8",
+     "bytes": 16384,
+     "sha256": "ae3a7450813947dad35ff2a8e9e505f7cc52b381f2c1c8980b09c544c0f3beac"
+    },
+    {
+     "file": "areas/pointtupper/paved/141_198.r8",
+     "bytes": 16384,
+     "sha256": "b649419f07d72963c02d5419b691309957fb3a86bef3eb1a8af9346c52995f86"
+    },
+    {
+     "file": "areas/pointtupper/paved/141_204.r8",
+     "bytes": 16384,
+     "sha256": "45929a292b699ffc152ffb529d849aa7b2f1fd97499bb019afaeeb3ddcb8d9bb"
+    },
+    {
+     "file": "areas/pointtupper/paved/141_205.r8",
+     "bytes": 16384,
+     "sha256": "e72a6f2d0cbd40a2e5820e644c303eac263a8ecf7de60de7b770e1798873f118"
+    },
+    {
+     "file": "areas/pointtupper/paved/142_196.r8",
+     "bytes": 16384,
+     "sha256": "7d8b89c47957bccab62ec61d7879f480775e384ce609c79cbabe60fdab9621ee"
+    },
+    {
+     "file": "areas/pointtupper/paved/142_197.r8",
+     "bytes": 16384,
+     "sha256": "e0dbaf42acab97c989d3d862fa79c5b4a6cd24d6e8d69ce88c9aa6c5724c05de"
+    },
+    {
+     "file": "areas/pointtupper/paved/142_198.r8",
+     "bytes": 16384,
+     "sha256": "5e220e98be7b18a71add0d3990182b597a57bef30e87317d2e27867f07c8da14"
+    },
+    {
+     "file": "areas/pointtupper/paved/142_204.r8",
+     "bytes": 16384,
+     "sha256": "ad1a98010e463940066b760acd10f19d5d3da85c8c47712cbc2b866efa53424b"
+    },
+    {
+     "file": "areas/pointtupper/paved/142_205.r8",
+     "bytes": 16384,
+     "sha256": "1e6dc7e0ab77c0136b084cf483296c58bd4be1088e69d47b727c88b2f56d3155"
+    },
+    {
+     "file": "areas/pointtupper/paved/143_194.r8",
+     "bytes": 16384,
+     "sha256": "03970372959406684cb888606688a6ad4ce8d5daa20e985450422d0cf98f65f4"
+    },
+    {
+     "file": "areas/pointtupper/paved/143_196.r8",
+     "bytes": 16384,
+     "sha256": "17d5447925d940439997b842fa9f0572c95d7955f15d6b1bc3cfec69a0a8b940"
+    },
+    {
+     "file": "areas/pointtupper/paved/143_197.r8",
+     "bytes": 16384,
+     "sha256": "96834e650b939b21c4b6f03805f285565b1fec7c1144a8c05bbf49d51a3f1502"
+    },
+    {
+     "file": "areas/pointtupper/paved/143_198.r8",
+     "bytes": 16384,
+     "sha256": "7bd9e8af8adc671c7cdfc8843f9ea631227627afe2aa19ef7b3c28c2adfa4007"
+    },
+    {
+     "file": "areas/pointtupper/paved/143_199.r8",
+     "bytes": 16384,
+     "sha256": "ae748f8f7fbaaa3945778f8159bf7885e553c434faa94aff79d9ff3b88f47a3e"
+    },
+    {
+     "file": "areas/pointtupper/paved/143_202.r8",
+     "bytes": 16384,
+     "sha256": "fcbbde1fb8023594caaf0179f4dd6b1c3d52a881cc9096d959c4188ff1010a2f"
+    },
+    {
+     "file": "areas/pointtupper/paved/143_204.r8",
+     "bytes": 16384,
+     "sha256": "f7152b3378bc1b789004af43c9d9f45d849e3439de0f7a2ea0bd98444e27fe2b"
+    },
+    {
+     "file": "areas/pointtupper/paved/143_205.r8",
+     "bytes": 16384,
+     "sha256": "640b58ca2c6b671c9be2e9b413ad836f651efa5d649f4f16f5196b8ef5a34a96"
+    },
+    {
+     "file": "areas/pointtupper/paved/144_197.r8",
+     "bytes": 16384,
+     "sha256": "e26785dde89f6a073f716b0bf9e9cf2f7a0039dfacfce21db5da4372183a46ac"
+    },
+    {
+     "file": "areas/pointtupper/paved/144_198.r8",
+     "bytes": 16384,
+     "sha256": "df9882527a95f954d64e6fc53c74ae840a48ad925f872d6cd967e2c3fa547f82"
+    },
+    {
+     "file": "areas/pointtupper/paved/145_193.r8",
+     "bytes": 16384,
+     "sha256": "f9ebe3d67197803b404bc060d9a7e3b8c1b0673afc85b9633767558dabb5312d"
+    },
+    {
+     "file": "areas/pointtupper/paved/145_198.r8",
+     "bytes": 16384,
+     "sha256": "9bdce1b0ba51836135679a8043b743e48ccc28c03f2978d08df9896162436db4"
+    },
+    {
+     "file": "areas/pointtupper/paved/145_199.r8",
+     "bytes": 16384,
+     "sha256": "7409273491ff3e69d81eb6bae8e0439d0b6d49f1768226d337fffcde45afca61"
+    },
+    {
+     "file": "areas/pointtupper/paved/145_201.r8",
+     "bytes": 16384,
+     "sha256": "e7955efcc555724b6c77e809193b64d22449449addaada188774dbeb34112648"
+    },
+    {
+     "file": "areas/pointtupper/paved/145_210.r8",
+     "bytes": 16384,
+     "sha256": "d78ef19fce9da7d240cab9844700d812a9fb06642532a0687e90d07b4068a363"
+    },
+    {
+     "file": "areas/pointtupper/paved/146_193.r8",
+     "bytes": 16384,
+     "sha256": "090178cb663dde9f6391df99612be330e6a6f729180f27036f6c1041f34d7188"
+    },
+    {
+     "file": "areas/pointtupper/paved/146_198.r8",
+     "bytes": 16384,
+     "sha256": "612528fcfd0bc98173ea76fbd597830ee87156ffbaa85da7bcbb4a8840673fd7"
+    },
+    {
+     "file": "areas/pointtupper/paved/146_199.r8",
+     "bytes": 16384,
+     "sha256": "50f2f994c454a1bf45d84c3c8cdeb3d4fef0b1cc8fb3c87c55403c2d8227249b"
+    },
+    {
+     "file": "areas/pointtupper/paved/146_200.r8",
+     "bytes": 16384,
+     "sha256": "c86f69e88f62dc1633bc1643fa171f3465e99ac587fc206434ec81a9eda2306f"
+    },
+    {
+     "file": "areas/pointtupper/paved/146_206.r8",
+     "bytes": 16384,
+     "sha256": "29964023ba5d524fe7ee943cac033646635bee6ffb0f9bc0fcbd78b244153441"
+    },
+    {
+     "file": "areas/pointtupper/paved/146_208.r8",
+     "bytes": 16384,
+     "sha256": "e53b705ea9d1593a705dbbb99970d5684a982bd75e26ad69330cf6806f9acc09"
+    },
+    {
+     "file": "areas/pointtupper/paved/146_209.r8",
+     "bytes": 16384,
+     "sha256": "6bb83d77ab1f4f6829795ad86fa0d0bbd9b716934c5a412802307438d9bc4be3"
+    },
+    {
+     "file": "areas/pointtupper/paved/146_210.r8",
+     "bytes": 16384,
+     "sha256": "16eabf3102a4099c4c8bfdd49eb5dcf92997a4d3f89f93facd2cd75152c27142"
+    },
+    {
+     "file": "areas/pointtupper/paved/147_194.r8",
+     "bytes": 16384,
+     "sha256": "d6c757e0a291af0e7d4ac7a15489e169ce4ece9e42435dd0af340601599dc153"
+    },
+    {
+     "file": "areas/pointtupper/paved/147_198.r8",
+     "bytes": 16384,
+     "sha256": "699fb94bd46bf27afa00670fb3178589d309ff2e151366391bf2d94ae589bef4"
+    },
+    {
+     "file": "areas/pointtupper/paved/147_199.r8",
+     "bytes": 16384,
+     "sha256": "b23096d38f837ec345c44a54bcfb158f9246c5d31d5a7532dc3fa57b7663907d"
+    },
+    {
+     "file": "areas/pointtupper/paved/147_200.r8",
+     "bytes": 16384,
+     "sha256": "f5e05b2a53b2a2887202d980bec0f3119350d0cca42c11e367296cb0e8fea9a9"
+    },
+    {
+     "file": "areas/pointtupper/paved/147_208.r8",
+     "bytes": 16384,
+     "sha256": "6393a88cebc5882fd45607b2c5b12094538a3fef97e5b9579d30c7e0c42b4c8d"
+    },
+    {
+     "file": "areas/pointtupper/paved/148_197.r8",
+     "bytes": 16384,
+     "sha256": "bca5e91ef340b0609f1e5dd52406d1b2923c6ace0e8a0d87573553d39c747859"
+    },
+    {
+     "file": "areas/pointtupper/paved/148_198.r8",
+     "bytes": 16384,
+     "sha256": "dd1fda0bbe6212d6921ade271605090d3e72fc9e615775f12bc0720f235cd624"
+    },
+    {
+     "file": "areas/pointtupper/paved/148_199.r8",
+     "bytes": 16384,
+     "sha256": "396aebe71c6258e3ae3ee91fb0d9a25f26823398d8a6644dc20e7ad9c3bc79a9"
+    },
+    {
+     "file": "areas/pointtupper/paved/149_195.r8",
+     "bytes": 16384,
+     "sha256": "8391a701e533f46b4daaadb63ab3010e827ef5a88cc6dd3fda7cfbb6f190752d"
+    },
+    {
+     "file": "areas/pointtupper/paved/149_196.r8",
+     "bytes": 16384,
+     "sha256": "088073efca2c9a8b343259230f01d7d6322dc6f69fd82cb259383a11bef02b74"
+    },
+    {
+     "file": "areas/pointtupper/paved/149_197.r8",
+     "bytes": 16384,
+     "sha256": "e185d4d4110e83c6ae90e49e7e5e64976dbd01485f6a119f694782ae28e7ba50"
+    },
+    {
+     "file": "areas/pointtupper/paved/149_198.r8",
+     "bytes": 16384,
+     "sha256": "253a65f0215f31441715fec3c773a3b696268f779553c9140824b9f9622c59ae"
+    },
+    {
+     "file": "areas/pointtupper/paved/149_199.r8",
+     "bytes": 16384,
+     "sha256": "b3f324bc1ecf0cf83a5d8a51b119b2047b0ad85fb4912c8fecaf08afe49ab624"
+    },
+    {
+     "file": "areas/pointtupper/paved/149_214.r8",
+     "bytes": 16384,
+     "sha256": "43520834a252000254384febb8a11cb35ad0c0970e3760dcd58daed246ca0618"
+    },
+    {
+     "file": "areas/pointtupper/paved/149_215.r8",
+     "bytes": 16384,
+     "sha256": "d1b0bbd5ade314079b7bfefda3a78df3d9359f427fbd15d490bbf87731fe7b4f"
+    },
+    {
+     "file": "areas/pointtupper/paved/150_195.r8",
+     "bytes": 16384,
+     "sha256": "fd4e4298924cab7bd48376cdbe8b44511f12eb967f83b42d5ad6748f7a43411d"
+    },
+    {
+     "file": "areas/pointtupper/paved/150_196.r8",
+     "bytes": 16384,
+     "sha256": "04413ac0872340da15f25d65b30405724d345ae80ab03ec41316ca61ef64591e"
+    },
+    {
+     "file": "areas/pointtupper/paved/150_197.r8",
+     "bytes": 16384,
+     "sha256": "8a713e728694481480a562aa788a68ad9f1249e1f789787ac9a8865f01f251bd"
+    },
+    {
+     "file": "areas/pointtupper/paved/150_214.r8",
+     "bytes": 16384,
+     "sha256": "6450324085830ca0bda29f4ec4a4c85a2804524b753d2ad421cde1aa39eefb28"
+    },
+    {
+     "file": "areas/pointtupper/paved/150_216.r8",
+     "bytes": 16384,
+     "sha256": "71413b6d29c279e06f56f84a314ea5d67d525459b37c622880dd6f38f88594d1"
+    },
+    {
+     "file": "areas/pointtupper/paved/151_214.r8",
+     "bytes": 16384,
+     "sha256": "71806afe5d5511058318cd7d438ee3899b6fbd3a858309ab1a125f37dbb58026"
+    },
+    {
+     "file": "areas/pointtupper/paved/152_190.r8",
+     "bytes": 16384,
+     "sha256": "0ac11ddb88429d0bcdcf6aec5692e72c174e315b32a806692aa50495d39e65c2"
+    },
+    {
+     "file": "areas/pointtupper/paved/152_191.r8",
+     "bytes": 16384,
+     "sha256": "d0fa598e827c148064c291abe5db7d07de91bcde2c1002457733eac22f6217c7"
+    },
+    {
+     "file": "areas/pointtupper/paved/153_190.r8",
+     "bytes": 16384,
+     "sha256": "a556f7b551064f358e117cb85ebd47375bb09e7ecdda53b15b4bcaf8c4ec360a"
+    },
+    {
+     "file": "areas/pointtupper/paved/153_191.r8",
+     "bytes": 16384,
+     "sha256": "fd157e98d7515970766f57c9f5c0e7806f046c241d56547534041b7c8aa0c3f1"
+    },
+    {
+     "file": "areas/pointtupper/paved/index.json",
+     "bytes": 2885,
+     "sha256": "097fc9dfe28bce67e48b4cb4cb27e2fe534bf9a0d219f9f98698d2067c47b724"
+    }
+   ],
+   "inputs": [
+    {
+     "file": "areas/pointtupper/8/117_183.t.bin",
+     "sha256": "fe837f4452a3adc405825ff5a285e4dfafc1e2e09e2d1ade6fcf4e01a731630a"
+    },
+    {
+     "file": "areas/pointtupper/8/117_184.t.bin",
+     "sha256": "e1b6ee10a3e7e1cbd77737ca75139394c2c45486a6d53efe9b14e2f57bcb68ac"
+    },
+    {
+     "file": "areas/pointtupper/8/120_186.t.bin",
+     "sha256": "127b1ad4857ef1ffeb5cf112c9827821bafae7248895aad014bb7e1236ce1b62"
+    },
+    {
+     "file": "areas/pointtupper/8/120_187.t.bin",
+     "sha256": "ad142e079876a76a0c12bf305bcf47020c5618dc6171f22c41933960372afa23"
+    },
+    {
+     "file": "areas/pointtupper/8/120_190.t.bin",
+     "sha256": "d357cd31489be76a12e87a70ddd595231eba1c67844d7687aa1a32983d93665a"
+    },
+    {
+     "file": "areas/pointtupper/8/121_187.t.bin",
+     "sha256": "fc4f26c5c2c3650bf90af917aa30b0253ef381c5e6afb00bf0987cadfcc8b27a"
+    },
+    {
+     "file": "areas/pointtupper/8/122_176.t.bin",
+     "sha256": "11cacac06b5a4abfc1989d5c0bf6563b625a125118a0fc67dd517b2ea2b60d78"
+    },
+    {
+     "file": "areas/pointtupper/8/123_176.t.bin",
+     "sha256": "928cdd59a10729276f165415cd78585aa5d95bea34ca0983f2a639331b5df8ed"
+    },
+    {
+     "file": "areas/pointtupper/8/123_187.t.bin",
+     "sha256": "4a02df127fe8f378ede894fb76f6fa907c1d45ef1a5a06910118cee149daabfa"
+    },
+    {
+     "file": "areas/pointtupper/8/124_180.t.bin",
+     "sha256": "89cfe5d8dfe1ecc86d8ab25c7428cd98dad58e3bff0c1e7967d31ae4c4741d46"
+    },
+    {
+     "file": "areas/pointtupper/8/124_197.t.bin",
+     "sha256": "1164cf02311588cc5dbb1f15d3bf49f0d51106c1331227474db872f0ed0b2386"
+    },
+    {
+     "file": "areas/pointtupper/8/125_180.t.bin",
+     "sha256": "856ace00832749368f41d6a689b777876792dee8ee8d29799e1da7695afb5213"
+    },
+    {
+     "file": "areas/pointtupper/8/125_182.t.bin",
+     "sha256": "6d742e3aa3a2bfac85af9e7293a74f5bd2f49ae31114706eccd418944b552fe7"
+    },
+    {
+     "file": "areas/pointtupper/8/125_197.t.bin",
+     "sha256": "ae996a02d82de7df375da01b66c23f9f16e621cdbf3e6e934cece05cd622c5eb"
+    },
+    {
+     "file": "areas/pointtupper/8/127_184.t.bin",
+     "sha256": "a06a9a4a9c5687c7e6b670ff7546411b779bef1165251627f007a75adb082dd1"
+    },
+    {
+     "file": "areas/pointtupper/8/128_182.t.bin",
+     "sha256": "617fc3adf15310ac789b25567c630f593e4c11ee686f1813c961b1d531c350d6"
+    },
+    {
+     "file": "areas/pointtupper/8/128_183.t.bin",
+     "sha256": "4b59546ed5a65b037af2b83542ba1d630e5ea8c5b575f069f0a3abcb7ebc112b"
+    },
+    {
+     "file": "areas/pointtupper/8/128_184.t.bin",
+     "sha256": "745d63fe18db4f7f62c505a70926c82d587be67bd51ca776e26e29c8a76fdcac"
+    },
+    {
+     "file": "areas/pointtupper/8/128_185.t.bin",
+     "sha256": "dda2e44ab9c0ebfd18e6529ee09279de4a5fe9c967b8381d40abf36ca1d33b56"
+    },
+    {
+     "file": "areas/pointtupper/8/129_181.t.bin",
+     "sha256": "492a0a49dc9ab9cc506207534c2243f2c5ce9d257c3b6eb8b3bdc83fc4c7d91c"
+    },
+    {
+     "file": "areas/pointtupper/8/129_182.t.bin",
+     "sha256": "0aea1a26f08daae31bef89e73f937238540433f8fe98bc30ebf76fd6d4c01bb1"
+    },
+    {
+     "file": "areas/pointtupper/8/129_183.t.bin",
+     "sha256": "e420af14bebd6176e5b3cefc1e063c82b7f272fea79c03c7f1427dad31f495e4"
+    },
+    {
+     "file": "areas/pointtupper/8/129_185.t.bin",
+     "sha256": "959f204c5bceb3aac6c91b119a75fccf5eb960461a880395dbae36385839e2d8"
+    },
+    {
+     "file": "areas/pointtupper/8/129_197.t.bin",
+     "sha256": "e0f6dd9c98f58ba6f620b3d9cdb8c975814617a2ae8a8ac2de55b9935e83303b"
+    },
+    {
+     "file": "areas/pointtupper/8/130_196.t.bin",
+     "sha256": "7f14a6d9ad5d789763a98201b7ffe742704307226326848c8ec1552ee47414d8"
+    },
+    {
+     "file": "areas/pointtupper/8/130_197.t.bin",
+     "sha256": "e0b2fc67710e52de466a8c4edf48b997a32b8d78172beb0537211c2b5b04fe90"
+    },
+    {
+     "file": "areas/pointtupper/8/130_198.t.bin",
+     "sha256": "c56a667a8f3dc1a6944488a0f443f59c359c1f57802fdbdf49ded70d18a3bbec"
+    },
+    {
+     "file": "areas/pointtupper/8/131_196.t.bin",
+     "sha256": "224bc6f24aa1d52e29a6930b8091c0fad22f6146e12e37080979581e6b7fa1a4"
+    },
+    {
+     "file": "areas/pointtupper/8/131_197.t.bin",
+     "sha256": "d703a66801ff34b0ed1eabb0d29c9b905a46fb98c4ca9bf81a2756b3921e1cb5"
+    },
+    {
+     "file": "areas/pointtupper/8/132_186.t.bin",
+     "sha256": "04be85429c13caaae3ef8ddf1805e74d13b1d7c03b9f77c26f5ad4f0af49c2ad"
+    },
+    {
+     "file": "areas/pointtupper/8/132_187.t.bin",
+     "sha256": "7ba8b161c22c4e8c9d154134ee06023948358c9f3a223e05cb7b8238da1c68bc"
+    },
+    {
+     "file": "areas/pointtupper/8/132_200.t.bin",
+     "sha256": "bc870bcb78a9c76e148b8a3a9b1115c66a814fd2ccd86f0f16eb2a7ca67d04f2"
+    },
+    {
+     "file": "areas/pointtupper/8/132_201.t.bin",
+     "sha256": "9b1f5256bb02b585cec7ad66c03cafdb5f98e8d11de8c7f1b684a7581d7eb092"
+    },
+    {
+     "file": "areas/pointtupper/8/132_203.t.bin",
+     "sha256": "0612f0c091e03d4d183998212a928c033ab3dc5b5888d5bc05e00972b620629c"
+    },
+    {
+     "file": "areas/pointtupper/8/133_186.t.bin",
+     "sha256": "c8fa92d282fc839888c64735daaae9128374ad2175264cfa28ca23305f9a1546"
+    },
+    {
+     "file": "areas/pointtupper/8/133_187.t.bin",
+     "sha256": "d01d3dc79d655030fd10c63540ba79aeddedda92aa5571ea631c492b5ab135ad"
+    },
+    {
+     "file": "areas/pointtupper/8/133_199.t.bin",
+     "sha256": "75d2f68b2752dd3cc1e38d71f1577cc02a8a91001b5016699c07f4c884970f9d"
+    },
+    {
+     "file": "areas/pointtupper/8/133_200.t.bin",
+     "sha256": "cc35904ef8f830af9d22b49bce25b8eeeef6a0a4b9f14dfde9132e7b4edaf72b"
+    },
+    {
+     "file": "areas/pointtupper/8/133_201.t.bin",
+     "sha256": "e9d947f89e66ba1e13f98efd1a5b9a8d7278543a599350500c0d3fdfa783cf1c"
+    },
+    {
+     "file": "areas/pointtupper/8/133_202.t.bin",
+     "sha256": "80b6e73d2054d0108f59d7e09b7eebd4437510a7ef7cd5ead80a0ee6683c3b2b"
+    },
+    {
+     "file": "areas/pointtupper/8/133_203.t.bin",
+     "sha256": "51c381835b4893b0bffdf79310548f28e8c01b98dc0f8722d416a0eac7f75562"
+    },
+    {
+     "file": "areas/pointtupper/8/134_187.t.bin",
+     "sha256": "fdcb1695bbca8c6b275506d7d2e22c1be0532005075fe8f892626cec4829a33f"
+    },
+    {
+     "file": "areas/pointtupper/8/134_188.t.bin",
+     "sha256": "b83a76dccf9a836e3718917ddfb0e3a531ab57d30d4de1f3dd225a8f35073794"
+    },
+    {
+     "file": "areas/pointtupper/8/135_212.t.bin",
+     "sha256": "58468aabb794b734e0be8c5f60304ea27a88ddcb64f685f9818742af165b65dc"
+    },
+    {
+     "file": "areas/pointtupper/8/137_189.t.bin",
+     "sha256": "64cab44987fcd651d1651d6447714d52ac9c7112f6e5ff620911ead9da095a3e"
+    },
+    {
+     "file": "areas/pointtupper/8/137_192.t.bin",
+     "sha256": "2d13a905eb4526eaa3c2f6d41b176eb6e5a3119ace7d0258287cc4ed22b64c37"
+    },
+    {
+     "file": "areas/pointtupper/8/138_185.t.bin",
+     "sha256": "4c6a824f1f9965b976516d0d50b7854830d6b91088da289bb0fe1b48a0fc9c0d"
+    },
+    {
+     "file": "areas/pointtupper/8/138_193.t.bin",
+     "sha256": "6ba3a07f142fbdfdd83ef4e89936d39d2bfea0f268fe7bbe455545dd615c4573"
+    },
+    {
+     "file": "areas/pointtupper/8/138_202.t.bin",
+     "sha256": "252433266ada3c4bdf1409ebe147be83185fe7c4109c222ddf151931ade0da53"
+    },
+    {
+     "file": "areas/pointtupper/8/139_192.t.bin",
+     "sha256": "c6780ca9e4786cab1300909b339f250b8c9d13d6af74585f4395811f6b364bfe"
+    },
+    {
+     "file": "areas/pointtupper/8/139_193.t.bin",
+     "sha256": "dfe28466a737267a7e4a49b256fc46fdefbf6d4f59b23e451f063c116a32ec81"
+    },
+    {
+     "file": "areas/pointtupper/8/139_196.t.bin",
+     "sha256": "e41448ea6c7ef50256246e3e981656d15fd43b273eac4ad90dc4b30839be77b2"
+    },
+    {
+     "file": "areas/pointtupper/8/140_192.t.bin",
+     "sha256": "c9c43929d3c88ff6783217d48ef36ef347fc32f98a1b3902dbf0763ad956d598"
+    },
+    {
+     "file": "areas/pointtupper/8/140_193.t.bin",
+     "sha256": "55064d01a7bed6ee9113d598013a9d951b6f6fd0a02e3315649e92c423e44f9f"
+    },
+    {
+     "file": "areas/pointtupper/8/140_196.t.bin",
+     "sha256": "79cba89797d2f2833942d933bf0a1510ceb7e7a027e42fd54a31debfb0512595"
+    },
+    {
+     "file": "areas/pointtupper/8/140_197.t.bin",
+     "sha256": "e948ffe8d81e5a27405d83431fa6839b4dece528766e6e93c4c21f300740f135"
+    },
+    {
+     "file": "areas/pointtupper/8/140_198.t.bin",
+     "sha256": "8ea605c5f48b0ef27771c883129b1aff8ae9d4ca83179380eed28ed5718e7f3f"
+    },
+    {
+     "file": "areas/pointtupper/8/140_201.t.bin",
+     "sha256": "2be47afdb76dda19156328d5884d9a7dae610fee42246bc254e32e02e3822584"
+    },
+    {
+     "file": "areas/pointtupper/8/140_202.t.bin",
+     "sha256": "9b4096a544154bb53caa1ddb5185d80eee674f5c9bd8a118221e0a6257a41d72"
+    },
+    {
+     "file": "areas/pointtupper/8/141_194.t.bin",
+     "sha256": "1b98284b9ebe05125be7d9e77fe9bb0f5a6f2a37ef6cafd057e4ff30bb71cf57"
+    },
+    {
+     "file": "areas/pointtupper/8/141_198.t.bin",
+     "sha256": "c4182550e213d923e3e92d776283f239946aa14243dca37c691e1e7b49233ce3"
+    },
+    {
+     "file": "areas/pointtupper/8/141_204.t.bin",
+     "sha256": "8f867b3ef2ca30f3b1ab237f38fec38aa9c8a50081df55b57969d9442de7a647"
+    },
+    {
+     "file": "areas/pointtupper/8/141_205.t.bin",
+     "sha256": "8fc4ff4f30b409b23a5357594e9f910f032debcf7bb1f37b8542718ee4414a1d"
+    },
+    {
+     "file": "areas/pointtupper/8/142_196.t.bin",
+     "sha256": "c0ecb47a32cf91b706878b1c810515795391245b02440ffe8fb606935acd4705"
+    },
+    {
+     "file": "areas/pointtupper/8/142_197.t.bin",
+     "sha256": "ac6ceb00b8033f6ec05432dd5a2509550d5fd9bd3bfb3f47d44f9618596179fc"
+    },
+    {
+     "file": "areas/pointtupper/8/142_198.t.bin",
+     "sha256": "cc8e51f28477bf8d5265ffa1e1d5bf20078f6d731ad2e3c2d37e3bd1e0659e38"
+    },
+    {
+     "file": "areas/pointtupper/8/142_204.t.bin",
+     "sha256": "9f31cc907c7a1a0898760608c4e12a9512a9cf89c14235f929aee53cf5e2918c"
+    },
+    {
+     "file": "areas/pointtupper/8/142_205.t.bin",
+     "sha256": "e6e810b5fa2a908387c978bc80617e9d52e7e04e5fe8cef4e69426acd5dfbee6"
+    },
+    {
+     "file": "areas/pointtupper/8/143_194.t.bin",
+     "sha256": "994bbfc2556ca1c7255af321aa97e8ae66ef83194430924625bf6a52a6c30e08"
+    },
+    {
+     "file": "areas/pointtupper/8/143_196.t.bin",
+     "sha256": "9144eaf0ede809bdc123509c34d55d57caffbc92aec1ddca975dde9d6024d354"
+    },
+    {
+     "file": "areas/pointtupper/8/143_197.t.bin",
+     "sha256": "f25c5fad0f613ff407f7bcb67eeb852eba68f89c3bb0a3b7eeefc67cf30627c0"
+    },
+    {
+     "file": "areas/pointtupper/8/143_198.t.bin",
+     "sha256": "04b76f90e69be65f329e0bb00b84a116dedfe8068e345a382637070db85dfeb2"
+    },
+    {
+     "file": "areas/pointtupper/8/143_199.t.bin",
+     "sha256": "1e7064b7364c77ab95dcf1ef80110395c0d21f0502d9cd71788f7948332e6e68"
+    },
+    {
+     "file": "areas/pointtupper/8/143_202.t.bin",
+     "sha256": "3388e8ed87331b6ba741369b31aa5d0cae8f590774f56b4a05d7da1f39449ef9"
+    },
+    {
+     "file": "areas/pointtupper/8/143_204.t.bin",
+     "sha256": "1ba3f438279695e15d7ee2fade2ce137d9b5158b33954d34012c5e65106af1fe"
+    },
+    {
+     "file": "areas/pointtupper/8/143_205.t.bin",
+     "sha256": "940047c7592626f1c6d2ddf5356b609f081a85983748ed6d4973024e1ab89de3"
+    },
+    {
+     "file": "areas/pointtupper/8/144_197.t.bin",
+     "sha256": "720796ad93a2d8a7ac6a3ffd3adf6f955ff1e3990e67293e2fec0d1da3635657"
+    },
+    {
+     "file": "areas/pointtupper/8/144_198.t.bin",
+     "sha256": "d25f6bde3384c7b922ab067cbb13999244cbdc86e33d22972642b9bcaeb0d36d"
+    },
+    {
+     "file": "areas/pointtupper/8/145_193.t.bin",
+     "sha256": "7dc678eb593922e9222ef56ea7c2f6f07635dfc322f8cfeaac9787f76bf9692b"
+    },
+    {
+     "file": "areas/pointtupper/8/145_198.t.bin",
+     "sha256": "09a51a81d6cd478369b2b31357e99abef4313c2d245db2bb41f9ba79dece84be"
+    },
+    {
+     "file": "areas/pointtupper/8/145_199.t.bin",
+     "sha256": "03b835ce03dedbb2a32877d416c8a48ce175d94156cd0575e5e0c2f57fba773d"
+    },
+    {
+     "file": "areas/pointtupper/8/145_201.t.bin",
+     "sha256": "4ffd674c60ea57819a978f9dfa58cde32dec685e17bb6ec992745ab304928022"
+    },
+    {
+     "file": "areas/pointtupper/8/146_193.t.bin",
+     "sha256": "8e4ac49181488fce9b32bfeba4536ad04b6b08ed50e713dc24a359e5e3a7cf4c"
+    },
+    {
+     "file": "areas/pointtupper/8/146_198.t.bin",
+     "sha256": "cb08464c53591d67e4f6b2f9eab9902e0abe67a052c0e39fa374931f0ac013c1"
+    },
+    {
+     "file": "areas/pointtupper/8/146_199.t.bin",
+     "sha256": "3c8b0140c9cb3c69e7090090fd9d1c6966fce4572b28a8a7c5b915c75cf66b36"
+    },
+    {
+     "file": "areas/pointtupper/8/146_200.t.bin",
+     "sha256": "543b02caf7ecb7385d5ff8a31f14ee48c29ad9f0217838c5f2dfb97feb86e89d"
+    },
+    {
+     "file": "areas/pointtupper/8/146_206.t.bin",
+     "sha256": "a08a656f4ec5447e45e93ef2a538b273921830a1e3c77d6e476f4bffb4ce971e"
+    },
+    {
+     "file": "areas/pointtupper/8/146_208.t.bin",
+     "sha256": "ed612d50530337e7b58236213df861b30273e8841161ff4462bb98167f09da65"
+    },
+    {
+     "file": "areas/pointtupper/8/146_209.t.bin",
+     "sha256": "dd39d79790fca46fdd222edb150860edebfc36911de16c0478fbfcead94bfa12"
+    },
+    {
+     "file": "areas/pointtupper/8/146_210.t.bin",
+     "sha256": "0b9b37f6e549b0490690371ceb18914502d9577440b369e9c44ede23559a11af"
+    },
+    {
+     "file": "areas/pointtupper/8/147_194.t.bin",
+     "sha256": "609ad5ed9ab4424273c09affd082f7ce7710e4db2ed12ae61147bdbd451d252e"
+    },
+    {
+     "file": "areas/pointtupper/8/147_198.t.bin",
+     "sha256": "de544f97c060566d1615c3a0c35842230912bb7f787c9d417d498afac8a4aa95"
+    },
+    {
+     "file": "areas/pointtupper/8/147_199.t.bin",
+     "sha256": "12354a83183cdaa9bc7136e4afaed0e372c7e48c0364e4356a3650046810a164"
+    },
+    {
+     "file": "areas/pointtupper/8/147_200.t.bin",
+     "sha256": "59ca5560c1e328887ad51293e8181bc8b8451f4a8e1c39d9409fd2c94c962713"
+    },
+    {
+     "file": "areas/pointtupper/8/148_197.t.bin",
+     "sha256": "54909976a77041fb0b1bffa9167b4c134d5d70dd03f1ef4ff753eb7986192891"
+    },
+    {
+     "file": "areas/pointtupper/8/148_198.t.bin",
+     "sha256": "8bbb5b2e91027fb32c67e7d12709d7c263534cc55ace13fe975e0c390a4f2458"
+    },
+    {
+     "file": "areas/pointtupper/8/148_199.t.bin",
+     "sha256": "877572b988b485bcf2a25a63fb0d3976ee96636bd3010c9dd702b2dafb7e88aa"
+    },
+    {
+     "file": "areas/pointtupper/8/149_195.t.bin",
+     "sha256": "cf1cef0610f258b163f92eac92cf2b05908a2a2c4532365400a61f918c864770"
+    },
+    {
+     "file": "areas/pointtupper/8/149_196.t.bin",
+     "sha256": "454081d58fd092d647bb98ae0cf156d3f789c8f3efe251dd5a6e46c921b1a217"
+    },
+    {
+     "file": "areas/pointtupper/8/149_197.t.bin",
+     "sha256": "2719679c44bb9106786872815ed531f430783820df6adf7f96e95f5a2e9382f9"
+    },
+    {
+     "file": "areas/pointtupper/8/149_198.t.bin",
+     "sha256": "3e463f86d3f4374306204c7587e3fa482615a95ef1f92ca1cdb5526add846d67"
+    },
+    {
+     "file": "areas/pointtupper/8/149_199.t.bin",
+     "sha256": "04c45ee27c8d2b6c172a67c2549fc28ccb4c38b66770f9314e19770492e688a5"
+    },
+    {
+     "file": "areas/pointtupper/8/149_215.t.bin",
+     "sha256": "0ca85132fe82e097df987f4279b1ffc01b118e60284bffc836563c43b3ebe343"
+    },
+    {
+     "file": "areas/pointtupper/8/150_195.t.bin",
+     "sha256": "e3ac2aba348a810300de3f0417756ec9eedea8c85cd21116ec09d37a9177a486"
+    },
+    {
+     "file": "areas/pointtupper/8/150_196.t.bin",
+     "sha256": "3f2e94a5c4903c78285cc2e49f80b979d73960ce6e23bc609cb976d3e0bb791f"
+    },
+    {
+     "file": "areas/pointtupper/8/150_197.t.bin",
+     "sha256": "b9a3eaf7a36175185c1c70fa1d99caac99978ebb85611ae81bb24dc3b8445b2d"
+    },
+    {
+     "file": "areas/pointtupper/8/150_216.t.bin",
+     "sha256": "8b018f478691f4895fa014a9c44c9b9f2efa183e9c9d87b7b3be2a80082e580b"
+    },
+    {
+     "file": "areas/pointtupper/8/152_190.t.bin",
+     "sha256": "f9d34118738b16d1260687be1941e53ad036c102d1edf2948677afabfb46dd44"
+    },
+    {
+     "file": "areas/pointtupper/8/152_191.t.bin",
+     "sha256": "5022b088e47c3dea30ae043f31b2688a6a2afbc88ce124215cd087240be68ab8"
+    },
+    {
+     "file": "areas/pointtupper/8/153_190.t.bin",
+     "sha256": "353ebff3226b3f356510b368921c6d6137e265baa193e3f14cafd617e4fffc89"
+    },
+    {
+     "file": "areas/pointtupper/8/153_191.t.bin",
+     "sha256": "cfb060870b2a7d779a75e20eb471569a1b9a39e4a9763456630343849bde59c6"
+    },
+    {
+     "file": "areas/pointtupper/buildings.json",
+     "sha256": "20f8a48216e7b47fc34723339f38807c5b23cdc4043656078379786bb83cf55f"
+    },
+    {
+     "file": "areas/pointtupper/manifest.json",
+     "lattice": true,
+     "sha256": "5837dccc69abbdc4f91f26a838a62999e7ed0b68ed8c0789658773bb3e2fa13d"
+    },
+    {
+     "file": "areas/pointtupper/roads.json",
+     "sha256": "9e1c5660a308ca5732cb16ab72b668941022ad32e14059a76241e64282191cc0"
+    },
+    {
+     "file": "terrain/buildings.json",
+     "sha256": "2e6c321f544fabaa589f94b81e2b853140432cf84d40ca18f9081dff8919f7fc"
+    },
+    {
+     "file": "terrain/manifest.json",
+     "lattice": true,
+     "sha256": "d435ba0088d77be8f3ca9ab86d56725572076e0d9d8ae15c47dce312ef6db25e"
+    },
+    {
+     "file": "terrain/roads.json",
+     "sha256": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9"
+    }
+   ],
+   "lots_m2": 395080,
+   "apron_m2": 4368,
+   "omitted": [
+    13,
+    30,
+    46,
+    53,
+    63,
+    64,
+    75
+   ]
+  },
+  {
+   "area": "cansocauseway",
+   "folder": "areas/cansocauseway",
+   "manifestKey": {
+    "file": "paved/index.json",
+    "tiles": 32,
+    "source": "nstdb-designated-open-v1"
+   },
+   "files": [
+    {
+     "file": "areas/cansocauseway/paved/100_172.r8",
+     "bytes": 16384,
+     "sha256": "0b830b84ca7646be52d6fb30c3a217bda77a3d7d6224d0bae7bec21296e401c1"
+    },
+    {
+     "file": "areas/cansocauseway/paved/111_150.r8",
+     "bytes": 16384,
+     "sha256": "e2ca0eabec010e48de616dbfab187ca28c1420cb866d5365020bffc287e074e5"
+    },
+    {
+     "file": "areas/cansocauseway/paved/112_148.r8",
+     "bytes": 16384,
+     "sha256": "a44820db9ca1759e09f41a06d8a92f6fb7d6d3d9da4b68ca1497bcd4031b076d"
+    },
+    {
+     "file": "areas/cansocauseway/paved/117_183.r8",
+     "bytes": 16384,
+     "sha256": "0854f8ea5bfef6955ec8c858e11b6b3ce0f623fa8005c59451528c076a7c40f9"
+    },
+    {
+     "file": "areas/cansocauseway/paved/117_184.r8",
+     "bytes": 16384,
+     "sha256": "13d96e99b9fa23c062e86eed7bd2913f66210b0e1b0bf473639b5014759d14da"
+    },
+    {
+     "file": "areas/cansocauseway/paved/118_169.r8",
+     "bytes": 16384,
+     "sha256": "5788769c305cac2fef65f126ccb00008efae502c1a6e6462cc2f70776b746bfc"
+    },
+    {
+     "file": "areas/cansocauseway/paved/120_186.r8",
+     "bytes": 16384,
+     "sha256": "e22676d52fef7f4617fdc5255439b4b006846488f2dc19a2305eeddacad311a3"
+    },
+    {
+     "file": "areas/cansocauseway/paved/120_187.r8",
+     "bytes": 16384,
+     "sha256": "d51313d3e9afcd4c04d42b076e28223480349816c28ec4fdd07c25a7a27b25bc"
+    },
+    {
+     "file": "areas/cansocauseway/paved/120_190.r8",
+     "bytes": 16384,
+     "sha256": "3f09a16243c61e7a4ebcc5b2a1324b4a122e6a4ad2d681a6cc3d682e65a71584"
+    },
+    {
+     "file": "areas/cansocauseway/paved/121_187.r8",
+     "bytes": 16384,
+     "sha256": "72026ddf43e3fae906180ef9a6ca006a394e87d250079d9689988029772e17a8"
+    },
+    {
+     "file": "areas/cansocauseway/paved/122_176.r8",
+     "bytes": 16384,
+     "sha256": "098df82fdf5f50e185cb9ce8f9009d203de1e686126c2512b7cef713d6dbc01c"
+    },
+    {
+     "file": "areas/cansocauseway/paved/123_176.r8",
+     "bytes": 16384,
+     "sha256": "c05e545138cecb8adb20abcf197555b628b2089edb32329337440e79fda01898"
+    },
+    {
+     "file": "areas/cansocauseway/paved/123_187.r8",
+     "bytes": 16384,
+     "sha256": "db69cd3d94673908d6d76d6fa51977edb75ab2e947e42d720ee46f41d35d57d2"
+    },
+    {
+     "file": "areas/cansocauseway/paved/124_180.r8",
+     "bytes": 16384,
+     "sha256": "aaf653d070b45994d73d582b4804dfd3cb69ce857b5cd6c13a41c6aa7fe36a49"
+    },
+    {
+     "file": "areas/cansocauseway/paved/125_180.r8",
+     "bytes": 16384,
+     "sha256": "ad030fbd0a94702aeb0a2794ab392d35c546c2d3df847b762e9d75005125f11f"
+    },
+    {
+     "file": "areas/cansocauseway/paved/125_182.r8",
+     "bytes": 16384,
+     "sha256": "71be9ad59a73894988f3b9800389dfe84445230c3917fd0f39beae27a70bee7f"
+    },
+    {
+     "file": "areas/cansocauseway/paved/127_184.r8",
+     "bytes": 16384,
+     "sha256": "be3c9a8fc6a28ba72437c1fdda434568a3b7c111b685aac1e1ab6d3eebb9b4ee"
+    },
+    {
+     "file": "areas/cansocauseway/paved/128_182.r8",
+     "bytes": 16384,
+     "sha256": "6f09426562727d7ee2befe522d5b6e2ee0da251b7dac528c74cd24dcacbd5cce"
+    },
+    {
+     "file": "areas/cansocauseway/paved/128_183.r8",
+     "bytes": 16384,
+     "sha256": "eaeb5d3411acf54dd8344f8aa8238b4569446dcf260af801b151d42f020ade63"
+    },
+    {
+     "file": "areas/cansocauseway/paved/128_184.r8",
+     "bytes": 16384,
+     "sha256": "99c21a980bd3343712fda77f3d63e406e5a0f8ee75445918acf863c51ab684a7"
+    },
+    {
+     "file": "areas/cansocauseway/paved/128_185.r8",
+     "bytes": 16384,
+     "sha256": "cdfde71ba5529a25f6028f713ae07cd2f76c9f59b4f5d65ae5b1448ed15dacc4"
+    },
+    {
+     "file": "areas/cansocauseway/paved/129_181.r8",
+     "bytes": 16384,
+     "sha256": "78db80dae96b8445ad4549439b36e9e1f13e64e83129cf5c38ecb62c60e82087"
+    },
+    {
+     "file": "areas/cansocauseway/paved/129_182.r8",
+     "bytes": 16384,
+     "sha256": "2d6e43d16f1ee8ce7154c188cddd3d300ac55bb06310a70af0980a7bb3c27a34"
+    },
+    {
+     "file": "areas/cansocauseway/paved/129_183.r8",
+     "bytes": 16384,
+     "sha256": "a60239254240065d1b29a9d5df74e93bce90ce50629fafb66f697398acb7bb27"
+    },
+    {
+     "file": "areas/cansocauseway/paved/129_185.r8",
+     "bytes": 16384,
+     "sha256": "cfbc237137b35fb71170cb0585bffd71b3059712ad9096494c4c74bb78784515"
+    },
+    {
+     "file": "areas/cansocauseway/paved/132_186.r8",
+     "bytes": 16384,
+     "sha256": "b4156cbf436f0e6896f4d1df26ab727935ee79849e2f31c7df7c842f1e4fa744"
+    },
+    {
+     "file": "areas/cansocauseway/paved/132_187.r8",
+     "bytes": 16384,
+     "sha256": "56dff68b07a729e3dc38d69454d339fa74f7a6da6e9d17ff93c09cbda6b7b137"
+    },
+    {
+     "file": "areas/cansocauseway/paved/133_186.r8",
+     "bytes": 16384,
+     "sha256": "6292c5c6acc96836e5b62486ee50e8d48e4cc6068abd4c140717c064b32abfec"
+    },
+    {
+     "file": "areas/cansocauseway/paved/133_187.r8",
+     "bytes": 16384,
+     "sha256": "f5124b05074897c98ced9507a60f6c163217c98218c10d885de8ca213f8b7135"
+    },
+    {
+     "file": "areas/cansocauseway/paved/134_187.r8",
+     "bytes": 16384,
+     "sha256": "13f0a7f5a7bf7f693d08dfdc0720ea1d0d656a454060d655ad7bc601c67ae119"
+    },
+    {
+     "file": "areas/cansocauseway/paved/134_188.r8",
+     "bytes": 16384,
+     "sha256": "1d564da63974318faaecd074f74e09e472a9cb0481ee9e832f886d93d264415a"
+    },
+    {
+     "file": "areas/cansocauseway/paved/97_172.r8",
+     "bytes": 16384,
+     "sha256": "167641d5a4d2b76ed9c3ab73e4270bc7b8ca7f5ea5ac9a0e8ddd6681683c3485"
+    },
+    {
+     "file": "areas/cansocauseway/paved/index.json",
+     "bytes": 1356,
+     "sha256": "b9785e0b330838cd47d3a0924db0f68f2da4fbcbae9e8bb036fdedfcdce28548"
+    }
+   ],
+   "inputs": [
+    {
+     "file": "areas/cansocauseway/8/100_172.t.bin",
+     "sha256": "a5fd663305814e83f3188fc2ebfe6baabb385de7c914672905c80e12a1a8b9e3"
+    },
+    {
+     "file": "areas/cansocauseway/8/111_150.t.bin",
+     "sha256": "fc943c442f70caf1b64c514a5a758dcdcded33e4865d213b22313e2e5d31dac1"
+    },
+    {
+     "file": "areas/cansocauseway/8/112_148.t.bin",
+     "sha256": "7f8406042c27a8297630fecbd0bab988bd9a605b38a042844242c3dec3abf481"
+    },
+    {
+     "file": "areas/cansocauseway/8/117_183.t.bin",
+     "sha256": "4329fe79dde0b7d928348b59650dc9ade765b21a2d749abc58ee956d74e23f76"
+    },
+    {
+     "file": "areas/cansocauseway/8/117_184.t.bin",
+     "sha256": "8d16c678747348b92d400cc3689fde630a3beb7ed88f76eb07fc9cb8ee5267fe"
+    },
+    {
+     "file": "areas/cansocauseway/8/118_169.t.bin",
+     "sha256": "238d4b3e868800b254a6a2e5174b18948be505dc794099863ae0b96d8c5f51e7"
+    },
+    {
+     "file": "areas/cansocauseway/8/120_186.t.bin",
+     "sha256": "b341b12e6a78dd5b6e507f25ea7af3b986f4cce16991b0cdcdeeff3c0fa26f07"
+    },
+    {
+     "file": "areas/cansocauseway/8/120_187.t.bin",
+     "sha256": "02fe9785e1d30a8dd95989bd86d83df687556f6e15e20c3a9ce1179de91de28d"
+    },
+    {
+     "file": "areas/cansocauseway/8/120_190.t.bin",
+     "sha256": "0ce7fa245cf23459144679c812cf13416c8878234113fa93e29fd1fb9bba02eb"
+    },
+    {
+     "file": "areas/cansocauseway/8/121_187.t.bin",
+     "sha256": "a5a206c9edafdab37b55926eb7e45f1c294665a355db5438957a1dfcd639f79a"
+    },
+    {
+     "file": "areas/cansocauseway/8/122_176.t.bin",
+     "sha256": "9e11f6e1bcb0d81cac68f9f18400e075ab90d9c2efa6f09da2b60bf3a95a8215"
+    },
+    {
+     "file": "areas/cansocauseway/8/123_176.t.bin",
+     "sha256": "f0e388188f7e29053e96c94390041c6071c35d405c6c557eeb65263f806629fb"
+    },
+    {
+     "file": "areas/cansocauseway/8/123_187.t.bin",
+     "sha256": "af6a96adbec2374c70f26e8322e074eb8102f57826b73fbd98ec3ff009018fe2"
+    },
+    {
+     "file": "areas/cansocauseway/8/124_180.t.bin",
+     "sha256": "cdca98c69774e76d624deac6f2bdf38b1b05916f55de3df4d3f91d340adf9c6c"
+    },
+    {
+     "file": "areas/cansocauseway/8/125_180.t.bin",
+     "sha256": "38e44b12acd2bf91023d3a7d3386c5f87ffe1a7a29611dc8b059a9c218ce3bdb"
+    },
+    {
+     "file": "areas/cansocauseway/8/125_182.t.bin",
+     "sha256": "3eb7d8621f0926bd279dc786db0b55c4e50fef4f89e4ed8f0c4e43d14b594b8b"
+    },
+    {
+     "file": "areas/cansocauseway/8/127_184.t.bin",
+     "sha256": "b67ab25245bc5b3156b0689c4cb4ff5cf65bedf43ee09a36103291ab0fb1bdf6"
+    },
+    {
+     "file": "areas/cansocauseway/8/128_182.t.bin",
+     "sha256": "8379d35758dfdbd7fdd4bcf3054999c2a32fcf5a73fed61e50c96ff73d473e1f"
+    },
+    {
+     "file": "areas/cansocauseway/8/128_183.t.bin",
+     "sha256": "f1ba4e15a6a2c2907e17b9e08957ffa3ed2b6171a9873602764950865d37444f"
+    },
+    {
+     "file": "areas/cansocauseway/8/128_184.t.bin",
+     "sha256": "fdec9d98f7711271efc63c5469cfd00f5dfbb101f190a06bfe30e257b7ccd01d"
+    },
+    {
+     "file": "areas/cansocauseway/8/128_185.t.bin",
+     "sha256": "dda2e44ab9c0ebfd18e6529ee09279de4a5fe9c967b8381d40abf36ca1d33b56"
+    },
+    {
+     "file": "areas/cansocauseway/8/129_181.t.bin",
+     "sha256": "9f965416fc4f5249b8f166d3eb5c6e4ea45a5a19091f0eaa62eb7aed045c4dc9"
+    },
+    {
+     "file": "areas/cansocauseway/8/129_182.t.bin",
+     "sha256": "7994d442624528366edb8932379b6884f207d53899e4497af0a6a4eb2459056d"
+    },
+    {
+     "file": "areas/cansocauseway/8/129_183.t.bin",
+     "sha256": "bf6273bc7188b29497cd50f59e07cbfda1fac3638c538c0581460c1be2684991"
+    },
+    {
+     "file": "areas/cansocauseway/8/129_185.t.bin",
+     "sha256": "959f204c5bceb3aac6c91b119a75fccf5eb960461a880395dbae36385839e2d8"
+    },
+    {
+     "file": "areas/cansocauseway/8/132_186.t.bin",
+     "sha256": "c979e306b2ef306ede45158c056b04d96904d15252e8bc186c1389c41f4b3552"
+    },
+    {
+     "file": "areas/cansocauseway/8/132_187.t.bin",
+     "sha256": "dfd49184855a471704f141a739b6b86d0665aa5bc32a300317345ee24da85047"
+    },
+    {
+     "file": "areas/cansocauseway/8/133_186.t.bin",
+     "sha256": "e70f6abb89f292c0f3188e1472c478a7feed108c6062f8f17ec0e66b2658685e"
+    },
+    {
+     "file": "areas/cansocauseway/8/133_187.t.bin",
+     "sha256": "03c14653803d15510dd8792af7dbd3d41d1ef29f1c1891106083548b423acf13"
+    },
+    {
+     "file": "areas/cansocauseway/8/134_187.t.bin",
+     "sha256": "43ed40cfbebbca72fec40a48e861fc9cde9c4667a70a9b3e7967132a550af93d"
+    },
+    {
+     "file": "areas/cansocauseway/8/134_188.t.bin",
+     "sha256": "874a87ff99510d90e2c5855c020414c9cc6fa5e62776c2fc2bebd64283a6401e"
+    },
+    {
+     "file": "areas/cansocauseway/8/97_172.t.bin",
+     "sha256": "1c602398d390d5b2b01536795b869d506c8757c41e6f343ad42656d7112aa5ef"
+    },
+    {
+     "file": "areas/cansocauseway/buildings.json",
+     "sha256": "b2ba8bec78f901bb3ce37308d3939fb9dec3f681e8f25dbc3fb95b5f4cdfd612"
+    },
+    {
+     "file": "areas/cansocauseway/manifest.json",
+     "lattice": true,
+     "sha256": "23c49aef0e45262081ea7d43b4bbcb9a8c4b074c9876269aaa23be6286a4ea23"
+    },
+    {
+     "file": "areas/cansocauseway/roads.json",
+     "sha256": "4e7215bcc8999f616668ea6928e7e993161d73f83e91863e83026a36e468e79e"
+    },
+    {
+     "file": "terrain/buildings.json",
+     "sha256": "2e6c321f544fabaa589f94b81e2b853140432cf84d40ca18f9081dff8919f7fc"
+    },
+    {
+     "file": "terrain/manifest.json",
+     "lattice": true,
+     "sha256": "d435ba0088d77be8f3ca9ab86d56725572076e0d9d8ae15c47dce312ef6db25e"
+    },
+    {
+     "file": "terrain/roads.json",
+     "sha256": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9"
+    }
+   ],
+   "lots_m2": 59392,
+   "apron_m2": 2180,
+   "omitted": []
+  }
+ ],
+ "mirror": [
+  {
+   "file": "data/raw/paved-open/corrections.json",
+   "sha256": "663f207030ed0fff85a6ff44b0bcbe9f405a93c1916d268890ab32c50a1e2dd5"
+  }
+ ]
+}
