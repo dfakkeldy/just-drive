@@ -9,6 +9,7 @@ export const scenes = [
   {id:'mines-lookoff-south',cam:'618976,5109274,4,180,-17,64'},
   {id:'works-yard',cam:'620525.19624,5099315.85697,3.2,-34.25384,-5,55'},
   {id:'highway19-far-land',cam:'624467.095,5103372.288,3.5,328,-5,58'},
+  // West Bay's ground class runs add one asset request on both devices.
   {id:'quarry-air',area:'westbay',exploreOnly:true,cam:'631900,5063300,450,350,-32,60'},
   {id:'quarry-gate',area:'westbay',exploreOnly:true,trailer:true,cam:'632015,5061860,10,340,-10,65',at:'631920,5062068,333.2'},
   // Cow and four-cattle pasture; the bull remains covered by guardrail-browser.
