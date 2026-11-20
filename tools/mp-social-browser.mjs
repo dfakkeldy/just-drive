@@ -44,8 +44,11 @@ async function roomCardsLayout(p,mode='explore') {
     for(let i=0;i<measured.cards.length;i++) {const c=measured.cards[i];assert.equal(c[1],l);assert.ok(c[3]<=r);if(i)assert.ok(c[2]>=measured.cards[i-1][4]+7);}
     for(const [id,x,y,z,q] of measured.blockers) assert.ok(r<=x||l>=z||b<=y||t>=q,`column clears ${id} at ${width}x${height}`);
     if(!folded){
-      await p.read(`(()=>{const e=document.querySelector('#gamePanel button:last-of-type');e.scrollIntoView({block:'nearest'})})()`);
-      assert.ok(await p.read(`(()=>{const e=document.querySelector('#gamePanel button:last-of-type'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return at===e||e.contains(at)})()`),'last card remains reachable through the column scroll');
+      // The last control the card shows (Stop game stays hidden until a game runs).
+      const lastShown=`[...document.querySelectorAll('#gamePanel button')].filter(b=>b.getClientRects().length).at(-1)`;
+      await p.read(`(()=>{const e=${lastShown};e.scrollIntoView({block:'nearest'})})()`);
+      const last=await p.read(`(()=>{const e=${lastShown},r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {ok:at===e||e.contains(at),box:[r.left,r.top,r.right,r.bottom],text:e.textContent,at:at&&(at.id||at.className||at.tagName)}})()`);
+      assert.ok(last.ok,`last card remains reachable through the column scroll at ${width}x${height}: ${JSON.stringify(last)}`);
     }
     if(mode==='mail')for(const id of ['mailButton','cameraButton'])assert.ok(await p.read(`(()=>{const e=document.getElementById('${id}'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return at===e||e.contains(at)})()`),`${id} receives mouse clicks with folded=${folded}`);
   }
