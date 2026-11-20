@@ -90,6 +90,8 @@ a{color:var(--amber-soft);text-underline-offset:3px}
 .preset[aria-pressed=true] b{color:var(--amber)}
 [data-state=silent] .preset[aria-pressed=true]::after,[data-state=tuning] .preset[aria-pressed=true]::after{content:"Tuned";font:600 12px/1.3 var(--mono);color:var(--amber)}
 [data-state=sound] .preset[aria-pressed=true]::after{content:"▶ Playing";font:600 12px/1.3 var(--mono);color:var(--amber)}
+/* Phone portrait: the status sits on the frequency line, so tiles size to their names; 1fr rows keep them one height. */
+@media(min-width:360px) and (max-width:599px){.presets{grid-auto-rows:1fr}.preset{min-height:0}.preset[aria-pressed=true]::after{position:absolute;top:6px;right:10px}}
 .volume{display:flex;align-items:center;gap:12px;margin:16px 2px;font:700 12px/1 var(--mono);letter-spacing:.16em;color:var(--dim)}
 .volume input{flex:1;min-width:0;accent-color:var(--amber)}
 

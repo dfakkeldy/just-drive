@@ -160,7 +160,7 @@ async function ui(m) {
       if(['mail','1884','query-1884','no-title'].includes(scenario)){assert.equal(button,undefined,scenario);continue;}
       assert.match(find(body,'startHereHint').textContent,/^Use your location to start on a nearby public road\. Other players see your car if you drive with others\.$/);
       assert.equal(button.attributes['aria-describedby'], 'startHereHint');
-      if(scenario==='era-door')assert.deepEqual(button.parent.children.map(n=>n.id), ['titleStartHere','startHereHint','titleEra'], 'location hint stays beside its button before the era link');
+      if(scenario==='era-door')assert.deepEqual(button.parent.children.map(n=>n.id), ['titleStartHere','startHereHint','titleEra'], 'location hint follows its button in the DOM, before the era link (a portrait phone shows the era link on the button row; tab order is unchanged)');
       if(scenario==='pending'){assert.equal(store.values.size,0);microtasks.forEach(fn=>fn());}
       else button.click();
       if(scenario==='normal-first'){button.click();assert.equal(asks,1,'double tap one request');start.click();answer();}

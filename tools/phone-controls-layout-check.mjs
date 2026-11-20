@@ -14,6 +14,10 @@ const source=readFileSync('web/src/phone-controls-layout.ts','utf8');
 const css=readFileSync('web/src/phone-layout.ts','utf8');
 const carrier=readFileSync('web/index.html','utf8');
 const browser=readFileSync('tools/phone-hud-browser.mjs','utf8');
+// The built site puts the carrier's <style> after the module CSS, so the landscape strip rule must outrank
+// the carrier's body.tcOn.compactPhone #placeArrival min-width by specificity, not by order.
+assert.ok(/body\.tcOn\.compactPhone #placeArrival\{[^}]*min-width:min\(220px,100%\)/.test(carrier),'carrier keeps its arrival min-width');
+assert.ok(css.includes('body.tcOn.compactPhone #phoneHud #placeArrival{width:fit-content;min-width:0}'),'landscape arrival strip fits its text over the carrier rule');
 const legacy=readFileSync('tools/layout-check.mjs','utf8');
 assert.ok(browser.includes("document.body.classList.contains('tcOn') && document.documentElement.dataset.mmmReady==='true'"),'named Just Drive waits on the hidden ready signal');
 assert.doesNotMatch(browser,/document\.title\s*===\s*['"]settled/,'named pages retain their titles');

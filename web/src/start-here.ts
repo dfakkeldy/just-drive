@@ -205,19 +205,27 @@ const CSS = `
 /* Phones. At 390x844 the card reached 847px once the two-line DRONE row came (#219): spacing is tight upright, and in both
    orientations the card scrolls inside itself rather than run off the screen when it still grows. Buttons keep 44px. */
 @media(max-width:649px){
- #title.justDrive:has(#startHere){padding:calc(76px + env(safe-area-inset-top,0px)) 10px 10px;align-items:safe center}
- #title.justDrive #titleCard:has(>#startHere){padding:14px 16px 12px;max-width:100%;max-height:calc(100dvh - 92px - env(safe-area-inset-top,0px));height:auto;overflow-y:auto;overscroll-behavior:contain}
+ /* Clear the top tile row (62 px plus the phone top gap: 6 px in a tab, 16 px from the home screen). */
+ #title.justDrive:has(#startHere){padding:calc(62px + var(--phone-top-gap,6px) + env(safe-area-inset-top,0px)) 10px 10px;align-items:safe center}
+ #title.justDrive #titleCard:has(>#startHere){padding:14px 16px 12px;max-width:100%;max-height:calc(100dvh - 72px - var(--phone-top-gap,6px) - env(safe-area-inset-top,0px));height:auto;overflow-y:auto;overscroll-behavior:contain}
+ /* No empty foot under the card: a stuck Start rises 26 px instead, so it still clears the More below band. */
+ body:has(#phoneTop) #title.justDrive #titleCard:has(>#startHere){padding-bottom:12px!important}
+ body:has(#phoneTop) #title.justDrive:has(#startHere) #titleStart{bottom:26px}
  #title.justDrive:has(#startHere) h1{font-size:30px}
  #title.justDrive:has(#startHere) .tag{margin-bottom:6px}
  #title.justDrive:has(#startHere) p:not(.tag){font-size:13px;line-height:1.4;margin-top:5px}
  #title.justDrive:has(#startHere) dl{font-size:12px;line-height:1.35;gap:2px 10px;margin-top:8px}
  #title.justDrive:has(#startHere) dt{font-size:11px}
- #title.justDrive:has(#startHere) #vehicleChoice{margin-bottom:6px!important}
+ #title.justDrive:has(#startHere) #vehicleChoice{margin-top:8px!important;margin-bottom:6px!important}
  #title.justDrive:has(#startHere) .mpControl{margin-top:6px;padding-top:6px}
  #title.justDrive:has(#startHere) .mpControl small{font-size:11px;line-height:1.3;margin:4px 0}
  #title.justDrive:has(#startHere) #startHere{margin-top:6px}
  #title.justDrive:has(#startHere) #titleStart{min-height:44px;margin-top:8px}
- #title.justDrive:has(#startHere) #titleCredits{margin-top:6px;padding:4px 0}
+ #title.justDrive:has(#startHere) #titleCredits{padding:4px 0}
+ /* The 1884 link shares the Start where I am row; the hint follows. Tab order matches what you see. */
+ #title.justDrive:has(#startHere) #titleEra{order:1;flex:0 1 auto}
+ #title.justDrive:has(#startHere) #startHereHint{order:2}
+ #title.justDrive:has(#startHere) #titleOtherGame{order:3;margin-top:4px}
 }
 `;
 
