@@ -1056,7 +1056,7 @@ export class Terrain {
   private quarryMineral(t:Tile,x:number,z:number,surface:Surface,lerp:(arr:ArrayLike<number>,stride:number,off:number)=>number):boolean {
     const site=this.coast;
     // The renderer uses individual trees near the player. Their ground keeps the existing brush boundary.
-    if(!site?.quarryFloorAllowsMineral || surface.canopy>1.6 || surface.kind>=8
+    if(!site?.quarryFloorAllowsMineral || surface.canopy>1.6
       || (surface.kind>0 && surface.roadDist<=surface.halfWidth+.4))return false;
     const paint=t.mesh?.geometry.getAttribute('coast');
     if(!paint)return false;

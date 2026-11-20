@@ -64,6 +64,8 @@ function quarryPainting(TerrainClass){
  for(let i=2;i<normal.length;i+=4)normal[i]=16;
  assert.equal(read().mineral,undefined,'rendered canopy fades the gypsum fill');
  uniforms.hull.value=0;assert.equal(read().mineral,true,'single trees use the ground shader without its canopy hull');
+ tile.canopy.fill(1.5);assert.equal(read().mineral,true,'canopy below the brush threshold keeps gypsum handling');
+ tile.canopy.fill(1.7);assert.equal(read().mineral,undefined,'canopy above the brush threshold keeps brush handling');
  tile.canopy.fill(5);assert.equal(read().mineral,undefined,'real tree canopy keeps its old handling');
  assert.equal(read().canopy,5,'paint alone leaves measured canopy alone');
  tile.canopy.fill(0);normal.fill(0);uniforms.hull.value=1;
@@ -72,13 +74,25 @@ function quarryPainting(TerrainClass){
  tile.road=new Uint8ClampedArray(257*257*4);
  for(let i=0;i<tile.road.length;i+=4)tile.road.set([128,40,4,0],i);
  assert.equal(read().mineral,undefined,'mapped track takes priority');
- for(let i=0;i<tile.road.length;i+=4)tile.road.set([255,40,8,0],i);
+ for(let i=0;i<tile.road.length;i+=4)tile.road.set([128,40,8,0],i);
  assert.equal(read().mineral,undefined,'authored pad and run-up field takes priority');
+ for(let i=0;i<tile.road.length;i+=4)tile.road.set([255,40,8,0],i);
+ assert.equal(read().mineral,true,'off-road kind-8 paint halo can be gypsum');
  tile.road=null;
  terrain.groundClassAt=()=>6;paint.setW(opposite,0);
  assert.equal(read().mineral,undefined,'source class cannot override invisible quarry paint');
  paint.setW(opposite,.7);terrain.groundClassAt=()=>0;
  terrain.cartRoads=true;assert.equal(read().mineral,undefined,'historical terrain keeps its own handling');terrain.cartRoads=false;
+ const relocate=(east,north,h)=>{
+  tile.x0=east-site.village[0]-51.5;tile.z0=site.village[1]-north-51.5;tile.ground.fill(h);
+  return read(tile.x0+51.5,tile.z0+51.5);
+ };
+ assert.equal(relocate(631775,5064450,30).mineral,undefined,'talus takes priority over contact paint');
+ assert.equal(relocate(631876,5064632,40).mineral,undefined,'mapped lake footprint takes priority over contact paint');
+ assert.equal(relocate(631650,5061900,45).mineral,undefined,'approach outside the quarry paint box keeps its surface');
+ terrain.groundClassAt=()=>6;
+ assert.equal(relocate(631650,5061550,45).mineral,true,'published class 6 still works outside the authored quarry');
+ terrain.groundClassAt=()=>0;relocate(631651.5,5063448.5,45);
  terrain.coast={contains:()=>true};assert.equal(read().mineral,undefined,'coastal paint is not quarry floor');
  mesh.geometry.dispose();mesh.material.dispose();
  assert.equal(site.quarryFloorAllowsMineral(700,-1000,72),false,'authored course pad');
@@ -87,6 +101,7 @@ function quarryPainting(TerrainClass){
 quarryPainting(Terrain);console.log('PASS quarry paint triangles feed contact while preserving terrain and authored surfaces');
 assert.match(TERRAIN_FRAG,/mineralFill=smoothstep\(\.05,\.60,max\(vCoast\.x,vCoast\.w\)\)\*\(1\.0-tree\)/);
 assert.match(TERRAIN_FRAG,/float tree = smoothstep\(1\.8, 3\.5, canopy\) \* hull/);
+assert.ok(TERRAIN_FRAG.includes(`ring *= 1.0 - step(${QUARRY_GRAVEL_FILL}, mineralFill);`),'grass root shading uses the visible gypsum cutoff');
 assert.equal(quarryGypsumFill(.6,1.8,1),1);
 assert.equal(quarryGypsumFill(.6,3.5,1),0);
 assert.equal(QUARRY_GRAVEL_FILL,.25);
@@ -211,16 +226,18 @@ if(process.argv.includes('--mutations')){
  const bikeApi=await import('data:text/javascript;base64,'+Buffer.from(bikeBundle.outputFiles[0].text).toString('base64'));
  assert.throws(()=>bikeDriving(bikeApi.BikeRide),{message:/confirmed mineral uses the bike gravel response/});
  console.log('KILLED bike mineral gravel feel removed');
- for(const [name,filename,exportName,anchor,check,expected] of [
+ for(const [name,filename,exportName,anchor,check,expected,replacement=''] of [
   ['quarry paint contact','terrain','Terrain','quarry ? this.quarryMineral(t,x,z,out,lerp) : ',quarryPainting,/authored gypsum supplies off-road mineral/],
-  ['quarry actual canopy protection','terrain','Terrain','surface.canopy>1.6 || ',quarryPainting,/real tree canopy keeps its old handling/],
+  ['quarry actual canopy protection','terrain','Terrain',' || surface.canopy>1.6',quarryPainting,/canopy above the brush threshold keeps brush handling/],
+  ['quarry authored protections','terrain','Terrain','return site.quarryFloorAllowsMineral(x,z,h);',quarryPainting,/talus takes priority over contact paint/,'return true;'],
+  ['class 6 outside the quarry','terrain','Terrain','&&this.coast.contains(x,z)',quarryPainting,/published class 6 still works outside the authored quarry/],
   ['grass mineral exclusion','grass','Grass','surface.mineral || ',quarryGrass,/gypsum contact suppresses old-cover tufts/],
   ['quarry grass root precision','grass','Grass','if (quarry?.contains(x,z)) { x = Math.fround(x); z = Math.fround(z); }',quarryGrass,/paint is checked where the GPU stores the grass root/],
  ]){
   const source=readFileSync(`web/src/${filename}.ts`,'utf8');
   assert(source.includes(anchor),`${filename} mineral mutation anchor`);
   const bundle=await build({entryPoints:[`web/src/${filename}.ts`],bundle:true,write:false,platform:'node',format:'esm',logLevel:'silent',plugins:[{
-   name:'quarry-mineral-mutant',setup(b){b.onLoad({filter:new RegExp(`/${filename}\\.ts$`)},()=>({contents:source.replace(anchor,''),loader:'ts',resolveDir:process.cwd()+'/web/src'}));},
+   name:'quarry-mineral-mutant',setup(b){b.onLoad({filter:new RegExp(`/${filename}\\.ts$`)},()=>({contents:source.replace(anchor,replacement),loader:'ts',resolveDir:process.cwd()+'/web/src'}));},
   }]});
   const mutant=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
   assert.throws(()=>check(mutant[exportName]),{message:expected});
