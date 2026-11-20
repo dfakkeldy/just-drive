@@ -25,8 +25,9 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
   assert.ok(Math.abs((await snapshot())[3])>.3,`${name}: bike rolling`);
   await click('gear'); await sleep(200); const frozen = await snapshot(); await sleep(1200);
   assert.deepEqual(await snapshot(),frozen,`${name}: Settings freezes bike and shift`);
-  await click('gear'); await sleep(500); assert.notDeepEqual((await snapshot()).slice(0,3),frozen.slice(0,3),`${name}: bike resumes`);
+  await key('Escape','Escape'); assert.equal(await read(`document.activeElement.id`),'gear','Escape restores gear focus'); await sleep(500); assert.notDeepEqual((await snapshot()).slice(0,3),frozen.slice(0,3),`${name}: bike resumes`);
   await key('KeyP','p'); await sleep(100); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),false);
+  assert.equal(await read(`document.getElementById('pauseTitle').textContent`),'Paused','bike pause title');
   const paused=await snapshot(); await sleep(700); assert.deepEqual(await snapshot(),paused);
   await click('pauseSettings'); assert.equal(await read(`document.getElementById('settings').classList.contains('open')`),true);
   await click('gear'); assert.equal(await read(`document.getElementById('pauseScreen').hidden`),false,'Settings returns to pause');

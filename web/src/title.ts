@@ -17,11 +17,11 @@ import { horseKeys, bikeKeys, vehicleButtons, type VehicleChoice } from './vehic
 
 const CSS = `
 #title{--title-accent:var(--maple,#d0632e);box-sizing:border-box;align-items:safe center}
-#title.justDrive{--title-accent:#a7d9bc}
+body.exploreMode #title,#title.justDrive{--title-accent:#a7d9bc}
 #title #titleCard{display:block!important;box-sizing:border-box;width:min(680px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}
 #title #titleCard h1{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
 #title .tag{font:600 15px/1.4 system-ui,sans-serif;letter-spacing:0;text-transform:none;color:var(--ink)}
-#title.justDrive #titleStart{background:#a7d9bc;color:#0b1620}
+body.exploreMode #title #titleStart,#title.justDrive #titleStart{background:#a7d9bc;color:#0b1620}
 #title :is(#modeChoice,#dailyChoice,#vehicleChoice) button[aria-pressed="true"]{border:2px solid var(--title-accent)!important}
 #title :is(#modeChoice,#dailyChoice,#vehicleChoice) button[aria-pressed="true"]::before{content:'✓ ';font-weight:800}
 #titleControls summary{min-height:44px;display:flex;align-items:center;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
@@ -158,7 +158,8 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   };
   const controls = () => {
     const all = rows(radioAvailable).match(/<dt>[\s\S]*?<\/dd>/g) ?? [];
-    return `<dl>${all.slice(0, 4).join('')}</dl><details><summary>All controls</summary><dl>${all.slice(4).join('')}</dl></details>`;
+    const open = root.querySelector<HTMLDetailsElement>('#titleControls details')?.open;
+    return `<dl>${all.slice(0, 4).join('')}</dl><details${open ? ' open' : ''}><summary>All controls</summary><dl>${all.slice(4).join('')}</dl></details>`;
   };
   const place = areaName ?? 'Mabou';
   const addressSite = just && typeof location !== 'undefined' ? readSite(location.hostname, location.pathname, new URLSearchParams(location.search)) : null;

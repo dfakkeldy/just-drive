@@ -30,7 +30,8 @@ const expectedSource = oldSource
  .replace('   ${vehicle.surfaceName}', "${touchDevice ? '' : `   ${vehicle.surfaceName}`}")
  .replace('(touchDevice ? `   ${fps.toFixed(0)} fps${ride.jumpLine}`', '(touchDevice ? ride.jumpLine')
  .replace(': !mailMode ? ride.help :', ": drove >= 60 ? '' : !mailMode ? ride.help :")
- .replace('F: fly · ${fps.toFixed(0)} fps', 'F: drone');
+ .replace('F: fly · ${fps.toFixed(0)} fps', 'F: drone')
+ .replace('    } else {', "      if (!touchDevice) hud.textContent += ride.airLine || '';\n    } else {");
 const speedSite = '${Math.abs(vehicle.speed * 3.6).toFixed(0)} km/h';
 assert.equal(expectedSource.split(speedSite).length, 2);
 const capExpectedSource = expectedSource.replace(speedSite, speedSite + '${touchDevice && mailMode && !scenePaused() && vehicle.activeTouchSpeedLimit > 0 ? ` ▸ LIMIT ${(vehicle.activeTouchSpeedLimit * 3.6).toFixed(0)}` : ""}');
@@ -52,9 +53,10 @@ async function load(text) {
 }
 const periodNames = await load(readFileSync(new URL('../web/src/eras/history-road-names.ts', import.meta.url), 'utf8'));
 function element(initial = '') {
-  let text = initial, writes = 0, reads = 0;
+  let text = initial, writes = 0, reads = 0, fpsWrites = 0;
+  const dataset = new Proxy({}, { set(target, key, value) { if (key === 'fps') fpsWrites++; target[key] = value; return true; } });
   return {
-    style: {}, dataset: {},
+    style: {}, dataset, fpsWrites: () => fpsWrites,
     get textContent() { reads++; return text; },
     set textContent(value) { writes++; text = value; },
     inspect: () => ({ text, writes, reads }),
@@ -66,7 +68,7 @@ function context(s, module, bare = false, started = true) {
     ERA: { id: s.era ?? 'today' }, historyRoadName: periodNames.historyRoadName,
     vehicle: { speed: s.speed, activeTouchSpeedLimit: s.activeTouchSpeedLimit, roadName: s.rawRoad, surfaceName: s.surfaceName, airborne: s.airborne, atEdge: s.atEdge, x: 3, z: 4 },
     yardSite: s.yard === null ? null : { surface: () => s.yard }, homeSite: s.home === null ? null : { surface: () => s.home },
-    ride: { help: s.help, jumpLine: s.jumpLine },
+    ride: { help: s.help, jumpLine: s.jumpLine, airLine: s.airLine ?? '' },
     camera: { position: { x: s.e - 100, z: 200 - s.n, y: s.height } }, VE: 100, VN: 200, EXAG: s.exag,
     sun: { az: s.sunAz, el: s.sunEl }, terrain: { drawn: s.drawn, pending: s.pending }, flySpeed: s.flySpeed,
     SHOTS: { length: s.views }, shift: { done: s.done, stops: s.stops, ruts: { count: s.ruts, lawns: s.lawns } },
@@ -177,9 +179,29 @@ for (const mailMode of [false,true]) {
  const c=context(s,module);c.drove=59.99;frame(c);assert.match(c.hud.inspect().text,/WASD/);
  c.drove=60;frame(c);assert.doesNotMatch(c.hud.inspect().text,/WASD/);
  assert.equal(c.hud.dataset.fps,'60','diagnostic rate stays available');
+ for(let i=0;i<120;i++)frame(c);
+ assert.equal(c.hud.fpsWrites(),1,'stable FPS writes its data attribute once');
  c.fps=42;frame(c);assert.equal(c.hud.dataset.fps,'42','diagnostic rate stays live');
+ assert.equal(c.hud.fpsWrites(),2,'changed FPS writes its data attribute once');
  assert.match(module.hudLine({...c.hudState,hintsHidden:false}), /WASD/,'pause restores keys');
 }
+
+function airFeedback(module, frame) {
+ for (const mailMode of [false, true]) for (const pad of [false, true]) {
+  const airLine='\nAir 2.4 s · 19 m · 1 backflip · clean';
+  const s={...base,mailMode,touchDevice:false,hintsHidden:true,airLine};
+  const c=context(s,module);c.ride.padHelp='\nRT: drive';
+  c.hudState.padHelp=pad?c.ride.padHelp:'';frame(c);
+  assert.equal(c.hudState.hintsHidden,true);
+  assert.match(c.hud.inspect().text,/\nAir 2\.4 s · 19 m · 1 backflip · clean/,'jump result survives hidden keys');
+  assert.doesNotMatch(c.hud.inspect().text,/WASD|RT: drive/);
+  c.drove=0;frame(c);
+  assert.equal(c.hud.inspect().text.split(airLine).length-1,1,'jump result appears once with hints');
+  c.ride.airLine='';frame(c);
+  assert.doesNotMatch(c.hud.inspect().text,/Air 2\.4/,'expired jump feedback clears');
+ }
+}
+airFeedback(module, frame);
 
 {
   const c=context(base,module);c.stuntPark={hudLine:'gap-tanks: CLEAN'};
@@ -211,7 +233,7 @@ for (const fps of [0, 29.49, 60.5]) for (const speed of [0, -12.5, .1389, 27.77]
   const jump = bits & 2 ? '\nAir 2.4 s · 19 m · 1 backflip · clean' : '';
   const s = { ...base, brand, mailMode, mode, touchDevice, fps, speed, rawRoad,
     surfaceName: bits & 1 ? 'asphalt' : 'gravel', airborne: !!(bits & 1),
-    help: `\nWASD: drive · ${vehicle} · ${brand === 'just' ? '⇧' : 'Shift'}` + jump,
+    help: `\nWASD: drive · ${vehicle} · ${brand === 'just' ? '⇧' : 'Shift'}`, airLine: jump,
     jumpLine: jump ? ' · ' + jump.slice(1) : '', trailerReason: bits & 4 ? 'Too steep & uneven' : undefined,
     atEdge: !!(bits & 8), route: !!(bits & 16), showRuts: !!(bits & 32), views: bits & 64 ? 9 : 0,
   };
@@ -309,6 +331,7 @@ if (process.argv.includes('--mutations')) {
     ['limit marker always shown', "activeTouchSpeedLimit > 0 ?", "true ?"],
     ['limit marker never shown', "activeTouchSpeedLimit > 0 ?", "false ?"],
     ['debug FPS removed', 's.debugFps ? `   ${s.fps.toFixed(0)} fps`', "false ? `   ${s.fps.toFixed(0)} fps`"],
+    ['air feedback dropped', "(s.airLine || '')", "''"],
     ['key hints never hide', "s.hintsHidden ? '' :", "false ? '' :"],
     ['part dropped', trailer, ''],
     ['parts swapped', optional, edge + trailer],
@@ -318,10 +341,11 @@ if (process.argv.includes('--mutations')) {
   for (const [name, from, to] of mutations) {
     assert.equal(source.split(from).length, 2, name + ' unique source site');
     const bad = await load(source.replace(from, to));
-    assert.throws(() => { caps(bad, frameFor()); verifyState(full, bad, frameFor(), true); verifyState({ ...base, mailMode: false, touchDevice: false }, bad, frameFor(), true); verifyState({ ...base, touchDevice: false, hintsHidden: true }, bad, frameFor(), true); writes(bad); }, undefined, name + ' must fail');
+    assert.throws(() => { caps(bad, frameFor()); verifyState(full, bad, frameFor(), true); verifyState({ ...base, mailMode: false, touchDevice: false }, bad, frameFor(), true); verifyState({ ...base, touchDevice: false, hintsHidden: true }, bad, frameFor(), true); writes(bad); airFeedback(bad, frameFor()); }, undefined, name + ' must fail');
     console.log('KILLED ' + name);
   }  // Wiring faults in the frame block of main.ts: a field of the reused state that is no longer refreshed.
   const wiring = [
+    ['air feedback not refreshed', "      hudState.airLine = touchDevice ? '' : ride.airLine;", ''],
     ['fps and mode not refreshed', 'hudState.mode = mode; hudState.fps = fps;', ''],
     ['limit not refreshed', ' hudState.activeTouchSpeedLimit = scenePaused() ? 0 : vehicle.activeTouchSpeedLimit;', ''],
     ['paused limit remains visible', 'scenePaused() ? 0 : vehicle.activeTouchSpeedLimit', 'vehicle.activeTouchSpeedLimit'],
@@ -336,7 +360,7 @@ if (process.argv.includes('--mutations')) {
   for (const [name, from, to] of wiring) {
     assert.equal(frameSource.split(from).length, 2, name + ' unique source site');
     const bad = new Function('context', `with(context) { ${frameSource.replace(from, to)} }`);
-    assert.throws(() => { caps(module, bad); sequence(module, bad); droneFrames(module, bad); }, undefined, name + ' must fail');
+    assert.throws(() => { caps(module, bad); sequence(module, bad); droneFrames(module, bad); airFeedback(module, bad); }, undefined, name + ' must fail');
     console.log('KILLED ' + name);
   }
 }

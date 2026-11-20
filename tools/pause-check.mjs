@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { PauseGate } from '../web/src/pause.ts';
+import { readFileSync } from 'node:fs';
+import { transformSync } from '../web/node_modules/esbuild/lib/main.js';
 const gate = new PauseGate();
 let updates = 0;
 const frame = (now, room = false) => { const f = gate.frame(now, room); if (!f.paused) updates++; return f; };
@@ -17,3 +19,38 @@ assert.equal(frame(30000).paused, true); gate.resume(); assert.equal(frame(40000
 gate.toggle(); assert.equal(frame(41000, true).paused, false); assert.equal(gate.blocked, true);
 assert.equal(frame(41016, true).dt, .016); assert.equal(frame(51000, true).dt, 9.984);
 console.log('PASS pause gate: Settings, explicit pause, hidden latch, no catch-up, room world continues');
+
+// Run the live capture handler. A later Settings listener cannot repair its focus.
+const main=readFileSync('web/src/main.ts','utf8');
+const start=main.indexOf("addEventListener('keydown', ev => {\n  // The replay owns");
+const finish="}, { capture: true });";
+const end=main.indexOf(finish,start);
+assert.ok(start>=0&&end>start,'pause capture handler found');
+const capture=transformSync(main.slice(start,end+finish.length),{loader:'ts'}).code;
+for (const nested of [false,true]) {
+ const pause=new PauseGate();
+ if(nested)pause.toggle();
+ pause.setSettings(true);
+ let handler,focused='settingsClose',open=true;
+ class Element { closest(){return null;} }
+ const context={pause,replay:{active:false},HTMLElement:Element,interiors:{busy:false},pauseAllowed:()=>true,
+  settingsPanel:{classList:{contains:()=>open}},
+  document:{getElementById:id=>({focus:()=>{focused=id;}})},
+  syncPauseUI:()=>{open=pause.blocked&&!pause.screen;},
+  addEventListener:(name,callback,options)=>{assert.equal(name,'keydown');assert.equal(options.capture,true);handler=callback;}};
+ new Function('context',`with(context){${capture}}`)(context);
+ let prevented=false,stopped=false;
+ handler({code:'Escape',target:new Element(),repeat:false,preventDefault:()=>{prevented=true;},stopImmediatePropagation:()=>{stopped=true;}});
+ assert.equal(open,false,'Escape closes Settings');
+ assert.equal(focused,'gear','Escape returns focus to the gear');
+ assert.ok(prevented&&stopped,'capture owns Escape');
+}
+const title=main.match(/document\.getElementById\('pauseTitle'\)!\.textContent = ([\s\S]*?);/);
+assert.ok(title,'pause title expression found');
+const pauseTitle=new Function('mode','interiors','ride','vehicle',`return ${title[1]};`);
+for (const kind of ['car','bike','truck','sxs','horse']) for (const mode of ['drive','fly']) for (const busy of [false,true]) {
+ const expected=kind==='car'&&mode==='drive'&&!busy?'Pulled over on Track':'Paused';
+ assert.equal(pauseTitle(mode,{busy},{kind},{roadName:'Track'}),expected);
+}
+assert.equal(pauseTitle('drive',{busy:false},{kind:'car'},{}),'Pulled over');
+console.log('PASS live Settings capture restores gear focus; pause title follows ride and foot/free-camera mode');

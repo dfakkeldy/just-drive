@@ -295,3 +295,18 @@ if(process.argv.includes('--mutations')){
  console.log('PASS rejected horse-radio-load mutation');
 }
 console.log('PASS car/bike load radio; horse does not request its list');
+
+// Rebuilds keep the player's full control list open or closed.
+for (const open of [false, true]) {
+ const roots=dom(), title=current.createTitle(false,()=>{},'explore');
+ const root=roots[0], details=root.querySelector('#titleControls details');
+ details.open=open;
+ for (const rebuild of [()=>title.setRadio(false),()=>title.setDevice(true),()=>title.open()]) {
+  rebuild();
+  assert.equal(root.querySelector('#titleControls').innerHTML.includes('<details open>'),open,'full controls keep their open state');
+ }
+}
+const titleCSS=tallTitleSource.match(/const CSS = `([\s\S]*?)`;/)[1];
+assert.match(titleCSS,/body\.exploreMode #title #titleStart,#title\.justDrive #titleStart\{background:#a7d9bc;color:#0b1620\}/,'both driving modes use the green start button');
+assert.match(readFileSync('web/index.html','utf8'),/body\.exploreMode\{--settings-accent:#a7d9bc\}/,'Settings uses the same green');
+console.log('PASS full controls survive radio, device and title rebuilds; driving accents agree');

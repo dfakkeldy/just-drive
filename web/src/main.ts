@@ -1451,7 +1451,8 @@ function syncPauseUI(): void {
     const watch = document.getElementById('pauseReplay') as HTMLButtonElement;
     watch.hidden = room; watch.disabled = !replay.available;
     const station = radio?.tunedDial;
-    document.getElementById('pauseTitle')!.textContent = `Pulled over${vehicle.roadName ? ' on ' + vehicle.roadName : ''}`;
+    document.getElementById('pauseTitle')!.textContent = mode === 'drive' && !interiors.busy && ride.kind === 'car'
+      ? `Pulled over${vehicle.roadName ? ' on ' + vehicle.roadName : ''}` : 'Paused';
     document.getElementById('pauseState')!.textContent = [document.getElementById('shiftHud')?.textContent || (mailMode ? 'Shift ready' : 'Free drive'), document.querySelector('#racePanel [role=status]')?.textContent || 'No active race', station ? radio!.stationNamed(station)! : 'Radio quiet', hudLine({ ...hudState, hintsHidden: false })].join('\n');
     document.getElementById('resumeGame')!.focus();
   }
@@ -1466,7 +1467,11 @@ addEventListener('keydown', ev => {
   const escapeOwned = ev.code === 'Escape' && !pause.blocked && interiors.busy;
   if ((ev.code === 'Escape' && !escapeOwned || ev.code === 'KeyP' && !typing) && pauseAllowed()) {
     ev.preventDefault(); ev.stopImmediatePropagation();
-    if (!ev.repeat) { pause.toggle(); syncPauseUI(); }
+    if (!ev.repeat) {
+      const settingsClosed = ev.code === 'Escape' && settingsPanel.classList.contains('open');
+      pause.toggle(); syncPauseUI();
+      if (settingsClosed) document.getElementById('gear')!.focus();
+    }
   } else if (ev.code === 'Tab' && !pauseScreen.hidden) {
     ev.preventDefault();
     const list = [...pauseScreen.querySelectorAll<HTMLButtonElement>('button:not([disabled]):not([hidden])')];
@@ -1786,6 +1791,7 @@ function drawEnding(dt: number): void {
 
 // Reuse this record: the HUD path allocates no per-frame state object.
 const hudState: HudState = {
+  // Set debugFps: true here to show FPS in the player readout.
   mode, mailMode, touchDevice, fps, speed: 0, activeTouchSpeedLimit: 0, roadName: '', surfaceName: '', airborne: false, help: '', jumpLine: '',
   e: 0, n: 0, height: 0, exag: EXAG, sunAz: 0, sunEl: 0, drawn: 0, pending: 0, flySpeed, views: SHOTS.length,
   done: 0, stops: 0, delivered: 0, lawn: 0, ditch: 0, trailerReason: '', atEdge: false, route: !!AREA.route,
@@ -2036,7 +2042,8 @@ function frame(now: number) {
     // Behind the title card the readout said "0 km/h off the map" while the land was still loading: keep it out of sight.
     hud.style.visibility = started ? '' : 'hidden';
     hudState.mode = mode; hudState.fps = fps;
-    hud.dataset.fps = fps.toFixed(0);
+    const fpsText = fps.toFixed(0);
+    if (hud.dataset.fps !== fpsText) hud.dataset.fps = fpsText;
     hudState.hintsHidden = drove >= 60;
     if (mode === 'drive') {
       hudState.speed = vehicle.speed; hudState.activeTouchSpeedLimit = scenePaused() ? 0 : vehicle.activeTouchSpeedLimit; hudState.surfaceName = vehicle.surfaceName; hudState.airborne = vehicle.airborne;
@@ -2044,6 +2051,7 @@ function frame(now: number) {
       if (ERA.id === '1884') hudState.roadName = historyRoadName(hudState.roadName, AREA.id);
       if (touchDevice) hudState.jumpLine = ride.jumpLine;
       else if (!mailMode) hudState.help = ride.help;
+      hudState.airLine = touchDevice ? '' : ride.airLine;
     } else {
       hudState.e = camera.position.x + VE; hudState.n = VN - camera.position.z; hudState.height = camera.position.y;
       hudState.sunAz = sun.az; hudState.sunEl = sun.el; hudState.drawn = terrain.drawn; hudState.pending = terrain.pending; hudState.flySpeed = flySpeed;

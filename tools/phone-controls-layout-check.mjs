@@ -20,7 +20,7 @@ assert.doesNotMatch(browser,/document\.title\s*===\s*['"]settled/,'named pages r
 assert.match(carrier,/#phoneHud #radio b\{width:auto;white-space:normal;overflow:visible;text-overflow:clip/,'frequency-first station names wrap within their chip');
 assert.match(carrier,/#phoneHint #stopHint\{[^}]*white-space:pre-line[^}]*-webkit-line-clamp:2;max-height:36px/,'phone hint keeps two full lines');
 assert.match(css,/flex-wrap:nowrap;gap:2px/,'radio is two complete fixed-height lines');
-assert.ok(14*3+2+10<=56,'three station-name lines, gaps, padding and border fit the chip');
+assert.ok(14*3+2*2+10<=56,'three station-name lines, two gaps, padding and border fit the chip');
 assert.match(css,/installPhoneControls\(root\)/,'actual phone grid must install the tested writer');
 assert.match(css,/#phoneAux\{width:180px;height:56px\}/,'absolute utility buttons retain their header grid reservation');
 assert.match(css,/calc\(22vh - 56px\)/,'short landscape headers clear the band');
