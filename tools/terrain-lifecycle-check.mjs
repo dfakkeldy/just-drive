@@ -592,7 +592,10 @@ async function builds(count) {
   // program on purpose; separate stunt-main-* rows compare ordinary meshes, road/canopy samples, normals and programs
   // with origin/main at every LOD/Hill/quality, and stunt-main-mutant breaks that path. The pin is now the SHA-256
   // of the reviewed maths text (branch commit 79475f31), so it survives a squash merge and a fresh clone.
-  const MATHS_SHA256='cb3ff8b358b76342d7f029ccb3f4a201b86e63ee7a8dad9cf491e5efa76cb90e';
+  // The perf-tile-normal-map PR moved it (it was cb3ff8b3...): the normal-map loop now clamps its row and column
+  // offsets once instead of in two closures per read. The maths and their order stay; every normal-map byte of every
+  // baked tile in Mabou and Point Tupper matched before and after, and the stunt-main-* rows compare normals with main.
+  const MATHS_SHA256='353c4768d783eaf5037e69aa99521fac973943d46c08417258fd56f16bf71da3';
   // Approved class-mask additions are checked by the real-terrain ground-canopy
   // suite and its three mutants. Strip only those exact additions (every
   // occurrence: the ordinary and STUNT_PARK tile programs both carry the define)
