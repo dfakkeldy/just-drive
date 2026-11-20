@@ -505,9 +505,15 @@ export class Animals {
       const cv = new OffscreenCanvas(257, 257), ctx = cv.getContext('2d', { willReadFrequently: true })!;
       ctx.drawImage(bmp, 0, 0); bmp.close(); return ctx.getImageData(0, 0, 257, 257).data;
     };
-    // Four reads at a time. A failed read gets one more try; a second failure stops the start (main.ts shows Retry).
-    let next = 0;
-    const reader = async () => { while (next < keys.length) { const key = keys[next++]; cache.set(key, await decode(key).catch(() => decode(key))); } };
+    // Four reads at a time. A failed read gets one more try; a second failure stops the start (main.ts shows Retry),
+    // and no reader starts another read after it.
+    let next = 0, failed = false;
+    const reader = async () => {
+      while (!failed && next < keys.length) {
+        const key = keys[next++];
+        cache.set(key, await decode(key).catch(() => decode(key)).catch((error: unknown) => { failed = true; throw error; }));
+      }
+    };
     await Promise.all(Array.from({ length: Math.min(4, keys.length) }, reader));
     let best = roadPoint(road, length(road) / 2), score = -Infinity;
     for (const { p, points: [[lx, lz], [rx, rz], [cx, cz]] } of steps) {
