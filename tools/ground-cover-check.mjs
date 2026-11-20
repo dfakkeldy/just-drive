@@ -44,8 +44,8 @@ t.groundClassAt=()=>6;t.cartRoads=true;assert.equal(t.surfaceAt(50,50).mineral,u
 t.cartRoads=false;t.waterLevelAt=()=>12;assert.equal(t.surfaceAt(50,50).mineral,undefined);
 console.log('PASS ground CPU parser, every fixture cell, tree/grass policy and real Terrain.surfaceAt');
 
-function quarryPainting(TerrainClass){
- const terrain=Object.create(TerrainClass.prototype),site=new QuarrySite([631600,5063500]);
+function quarryPainting(TerrainClass,QuarryClass=QuarrySite){
+ const terrain=Object.create(TerrainClass.prototype),site=new QuarryClass([631600,5063500]);
  const normal=new Uint8Array(257*257*4),uniforms={tNormal:{value:{image:{data:normal}}},hull:{value:1}};
  const mesh=new THREE.Mesh(undefined,new THREE.ShaderMaterial({uniforms})),side=131;
  const paint=new THREE.Float32BufferAttribute(new Float32Array(side*side*4),4);
@@ -87,6 +87,25 @@ function quarryPainting(TerrainClass){
   tile.x0=east-site.village[0]-51.5;tile.z0=site.village[1]-north-51.5;tile.ground.fill(h);
   return read(tile.x0+51.5,tile.z0+51.5);
  };
+ tile.road=new Uint8ClampedArray(257*257*4);
+ for(let i=0;i<tile.road.length;i+=4)tile.road.set([255,200,8,0],i);
+ assert.equal(relocate(632236.5,5064409.5,76).mineral,true,'upper pad halo outside the drawn style supplies mineral');
+ const style=new Uint8Array(257*257*4);uniforms.tSiteStyle={value:{image:{data:style}}};
+ style[(52*257+52)*4+3]=1;
+ assert.equal(relocate(632234.5,5064414.5,76).mineral,undefined,'off-road painted pad keeps its surface');
+ style.fill(0);
+ for(let i=0;i<tile.road.length;i+=4)tile.road.set([128,200,8,0],i);
+ for(const [e,n,label] of [[632309,5064470,'drawn pad'],[632269,5064428,'run-up']]){
+  const sample=relocate(e,n,74);
+  assert.equal(sample.kind,8,label+' keeps its road kind');
+  assert.equal(sample.mineral,undefined,label+' keeps its authored surface');
+ }
+ terrain.withDeck=(_x,_z,h,s)=>{s.deck=true;s.kind=9;return h+1;};
+ const deck=relocate(632269,5064442,74);
+ assert.equal(deck.ground,75,'the deck keeps its contact height');
+ assert.equal(deck.kind,9,'the deck keeps its surface kind');
+ assert.equal(deck.mineral,undefined,'the deck takes priority over gypsum');
+ terrain.withDeck=(_x,_z,h)=>h;tile.road=null;
  assert.equal(relocate(631775,5064450,30).mineral,undefined,'talus takes priority over contact paint');
  assert.equal(relocate(631876,5064632,40).mineral,undefined,'mapped lake footprint takes priority over contact paint');
  assert.equal(relocate(631650,5061900,45).mineral,undefined,'approach outside the quarry paint box keeps its surface');
@@ -95,13 +114,13 @@ function quarryPainting(TerrainClass){
  terrain.groundClassAt=()=>0;relocate(631651.5,5063448.5,45);
  terrain.coast={contains:()=>true};assert.equal(read().mineral,undefined,'coastal paint is not quarry floor');
  mesh.geometry.dispose();mesh.material.dispose();
- assert.equal(site.quarryFloorAllowsMineral(700,-1000,72),false,'authored course pad');
  assert.equal(site.quarryFloorAllowsMineral(175,-950,30),false,'existing talus toe');
 }
 quarryPainting(Terrain);console.log('PASS quarry paint triangles feed contact while preserving terrain and authored surfaces');
 assert.match(TERRAIN_FRAG,/mineralFill=smoothstep\(\.05,\.60,max\(vCoast\.x,vCoast\.w\)\)\*\(1\.0-tree\)/);
 assert.match(TERRAIN_FRAG,/float tree = smoothstep\(1\.8, 3\.5, canopy\) \* hull/);
 assert.ok(TERRAIN_FRAG.includes(`ring *= 1.0 - step(${QUARRY_GRAVEL_FILL}, mineralFill);`),'grass root shading uses the visible gypsum cutoff');
+assert.match(TERRAIN_FRAG,/if \(siteStyle\.a <= 0\.001\)\s*#endif\s*if \(canopy <= 1\.6\) ring/,'painted park keeps its grass root shade');
 assert.equal(quarryGypsumFill(.6,1.8,1),1);
 assert.equal(quarryGypsumFill(.6,3.5,1),0);
 assert.equal(QUARRY_GRAVEL_FILL,.25);
@@ -230,6 +249,7 @@ if(process.argv.includes('--mutations')){
   ['quarry paint contact','terrain','Terrain','quarry ? this.quarryMineral(t,x,z,out,lerp) : ',quarryPainting,/authored gypsum supplies off-road mineral/],
   ['quarry actual canopy protection','terrain','Terrain',' || surface.canopy>1.6',quarryPainting,/canopy above the brush threshold keeps brush handling/],
   ['quarry authored protections','terrain','Terrain','return site.quarryFloorAllowsMineral(x,z,h);',quarryPainting,/talus takes priority over contact paint/,'return true;'],
+  ['quarry pad rectangle restored','quarry-site','QuarrySite','&&!lakeAt(e,n)',Site=>quarryPainting(Terrain,Site),/upper pad halo outside the drawn style supplies mineral/,'&&!onCoursePad(e,n)&&!lakeAt(e,n)'],
   ['class 6 outside the quarry','terrain','Terrain','&&this.coast.contains(x,z)',quarryPainting,/published class 6 still works outside the authored quarry/],
   ['grass mineral exclusion','grass','Grass','surface.mineral || ',quarryGrass,/gypsum contact suppresses old-cover tufts/],
   ['quarry grass root precision','grass','Grass','if (quarry?.contains(x,z)) { x = Math.fround(x); z = Math.fround(z); }',quarryGrass,/paint is checked where the GPU stores the grass root/],

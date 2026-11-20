@@ -191,7 +191,7 @@ export class QuarrySite implements Site,RockSite {
   quarryFloorAllowsMineral(x:number,z:number,h:number):boolean {
     const e=x+this.village[0],n=this.village[1]-z;
     return e>=QUARRY_BOX[0]&&e<=QUARRY_BOX[2]&&n>=QUARRY_BOX[1]&&n<=QUARRY_BOX[3]
-      &&!onCoursePad(e,n)&&!lakeAt(e,n)&&talusPaint(e,n,h)*.92<=.001;
+      &&!lakeAt(e,n)&&talusPaint(e,n,h)*.92<=.001;
   }
   treeAllowed(x:number,z:number,h:number,slope:number):boolean{
     if(!this.contains(x,z))return true;
