@@ -51,7 +51,10 @@ async function audit(root){
  // A full-page screenshot does not expand an inner scroll view. Offscreen text ranges
  // used to sample the dim overlay outside Places, rather than their painted card.
  // Bring every text element into view and sample only pixels inside its scroll clips.
- const count=await read(`(()=>{const list=[...document.querySelectorAll(${JSON.stringify(root)}+' *')].filter(el=>el.getClientRects().length&&[...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim()));list.forEach((el,i)=>el.dataset.contrastIndex=i);return list.length;})()`);
+ // Screen-reader-only text (a 1px box clipped to nothing) is never painted, so it has no contrast to measure.
+ const count=await read(`(()=>{const hidden=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width<=1&&r.height<=1&&(s.clip!=='auto'||s.clipPath!=='none');};const list=[...document.querySelectorAll(${JSON.stringify(root)}+' *')].filter(el=>el.getClientRects().length&&!hidden(el)&&[...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim()));list.forEach((el,i)=>el.dataset.contrastIndex=i);return list.length;})()`);
+ // Keep every scroll position, so sampling does not move what the focus checks below see.
+ await read(`window.accessScroll=[[document.scrollingElement,scrollX,scrollY],...[...document.querySelectorAll('*')].filter(e=>e.scrollTop||e.scrollLeft).map(e=>[e,e.scrollLeft,e.scrollTop])]`);
  const failures=[];
  for(let index=0;index<count;index++){
   await read(`document.querySelector('[data-contrast-index="${index}"]').scrollIntoView({block:'center',inline:'nearest'});window.accessHide=document.createElement('style');accessHide.textContent='*{-webkit-text-fill-color:transparent!important;text-shadow:none!important}';document.head.append(accessHide)`);
@@ -81,11 +84,11 @@ async function audit(root){
    return errors;
   })()`));
  }
+ await read(`for(const e of document.querySelectorAll('*'))if(e.scrollTop||e.scrollLeft){e.scrollTop=0;e.scrollLeft=0;}for(const [e,x,y] of accessScroll){e.scrollLeft=x;e.scrollTop=y;}`);
  assert.deepEqual(failures,[],'rendered text contrast');
  const controls=await read(`Array.from(document.querySelectorAll(${JSON.stringify(root)}+' a[href],'+${JSON.stringify(root)}+' button')).filter(e=>e.getClientRects().length).map((e,i)=>{e.dataset.accessIndex=String(i);return e.textContent.trim()})`);
  assert.ok(controls.length,'visible controls exist');
  if(root==='body')await read('document.activeElement.blur(); window.scrollTo(0,0)');
- else await read(`document.querySelector('[data-access-index="0"]').focus()`);
  for(let i=0;i<controls.length;i++){
   if(root==='body'||i)await key('Tab');
   assert.equal(await read('document.activeElement.dataset.accessIndex'),String(i),'Tab reading order '+controls[i]);
