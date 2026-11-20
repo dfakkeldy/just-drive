@@ -1,4 +1,4 @@
-/** This module graph is loaded only for West Bay; the flat build also defers all its initializers. */
+/** This module graph is loaded only for West Bay: the published build puts it in a chunk of its own, and its initializers wait for load(). */
 import {QuarrySite} from './quarry-site';
 import {Quarry} from './quarry';
 import {QuarryJourney,quarryCard} from './quarry-journey';
