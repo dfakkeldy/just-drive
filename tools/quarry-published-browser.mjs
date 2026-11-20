@@ -50,9 +50,9 @@ try{
  await visit('/?site=just&trip=quarry&title=1&q=low&radio=0');
  await check('P4-E bare Just Drive root trip supplies its starting area',"location.pathname==='/westbay'&&new URLSearchParams(location.search).get('trip')==='quarry'&&!!document.getElementById('tripHud')");
  await visit('/?site=just&trip=quarry&area=westbay&mode=explore&vehicle=truck&trailer=1&title=1&q=low&radio=0');
- await check('P4-E expanded root trip enters West Bay in the actual flat build',"location.pathname==='/westbay'&&new URLSearchParams(location.search).get('trip')==='quarry'&&!!document.getElementById('tripHud')");
+ await check('P4-E expanded root trip enters West Bay in the actual published build',"location.pathname==='/westbay'&&new URLSearchParams(location.search).get('trip')==='quarry'&&!!document.getElementById('tripHud')");
  await visit('/judique?site=just&trip=quarry&area=westbay&mode=explore&vehicle=truck&trailer=1&title=1&q=low&radio=0');
- await check('P3-3 expanded trip path change honours Judique in the actual flat build',"location.pathname==='/judique'&&document.getElementById('siteArea').value==='judique'&&!new URLSearchParams(location.search).has('trip')&&!document.getElementById('tripHud')&&!(globalThis.__quarryEvaluations?.length)");
+ await check('P3-3 expanded trip path change honours Judique in the actual published build',"location.pathname==='/judique'&&document.getElementById('siteArea').value==='judique'&&!new URLSearchParams(location.search).has('trip')&&!document.getElementById('tripHud')&&!(globalThis.__quarryEvaluations?.length)");
  await visit('/westbay?site=just&trip=quarry&area=westbay&mode=explore&vehicle=truck&trailer=1&title=1&q=low&radio=0');
  await check('P3-3 expanded trip plain reload keeps its route',"location.pathname==='/westbay'&&new URLSearchParams(location.search).get('trip')==='quarry'&&!!document.getElementById('tripHud')");
  await c.send('Page.reload');await until(settled);
