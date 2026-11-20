@@ -37,16 +37,22 @@ try {
     const side=.5*4.822*scale,nx=-dz/length,nz=dx/length,near=boxes.filter(b=>Math.max(pipe.x,pipe.endX)+side>=b.x0&&Math.min(pipe.x,pipe.endX)-side<=b.x1&&Math.max(pipe.z,pipe.endZ)+side>=b.z0&&Math.min(pipe.z,pipe.endZ)-side<=b.z1).map(b=>b.r),cover=[];
     for(let d=0;d<=Math.ceil(length);d++){const t=Math.min(1,d/length);for(const o of[0,-side,side]){const px=pipe.x+dx*t+nx*o,pz=pipe.z+dz*t+nz*o;if(near.some(r=>distance(px,pz,r)<=r.halfWidth+.5))cover.push({x:px,z:pz});}}
     out.push({x,z,heading:Math.atan2(dx,-dz),scale,length,road:road.id,cover});}return out;};
-  let seed=7,crossings=0,onRandom=0,covered=0;const rnd=()=>(seed=(seed*1103515245+12345)%2147483648)/2147483648;
+  let seed=7,crossings=0,onRandom=0,covered=0;// Math.imul keeps the full 2^31 period: the old float product lost its low bits and cycled after about 10,000 draws.
+  const rnd=()=>(seed=(Math.imul(seed,1103515245)+12345)&0x7fffffff)/2147483648;
   for(let round=0;round<600;round++){
    const lines=[];for(let i=0;i<12;i++){const n=Math.floor(rnd()*5),pts=[];let x=rnd()*400-200,z=rnd()*400-200;for(let k=0;k<n;k++){pts.push([x,z]);x+=rnd()*60-30;z+=rnd()*60-30;}
     if(rnd()<.05&&pts.length)pts[0]=[NaN,pts[0][1]];if(round%3===0&&pts.length&&rnd()<.1)pts[pts.length-1]=[rnd()<.5?Infinity:-Infinity,pts[pts.length-1][1]];
     lines.push({pts,halfWidth:rnd()<.03?NaN:round%5===0&&rnd()<.1?(rnd()<.5?Infinity:-5):rnd()*8});}
    // Every random line is also a road, so lines with one or no points, NaN or infinite points and odd widths reach the
    // own-road and cover tests. Bridge spans come from at most three lines with finite points, so the bridge test does not
-   // remove every pipe (a line with fewer than two points is at distance 0 from everything).
+   // remove every pipe (a line with fewer than two points is at distance 0 from everything). Every other round adds a span
+   // with a NaN or infinite end before its finite segments, which the old scan still measured, and one round in twenty
+   // adds a span with one or no points, which removes every pipe.
    const finite=l=>l.pts.length>=2&&l.pts.every(([x,z])=>Number.isFinite(x)&&Number.isFinite(z));
    const spans=lines.filter(finite).slice(0,3),straight={id:1,kind:2,halfWidth:3,pts:[[-300,0],[300,0]],bridge:false};
+   const partial=lines.filter(finite)[3];
+   if(round%2===1&&partial)spans.push({...partial,pts:[[[NaN,Infinity,-Infinity][round%3],partial.pts[0][1]],...partial.pts]});
+   if(round%20===7)spans.push({pts:round%40===7?[]:[[rnd()*400-200,rnd()*400-200]],halfWidth:rnd()*8});
    const crooked=lines.map((l,i)=>({id:10+i,kind:2,halfWidth:l.halfWidth,pts:l.pts,bridge:false})),pipes=[];
    for(let i=0;i<40;i++){
     if(i%2===0){const x=rnd()<.02?Infinity:rnd()*500-250,len=rnd()*30+1;pipes.push({road:1,x,z:-len/2,endX:x,endZ:len/2,dia:rnd()*5});continue;}
@@ -59,8 +65,14 @@ try {
    assert.deepEqual(got,reference({pipes},roads,spans),'early-exit reach test matches the nearest-point scan, round '+round);
    crossings+=got.length;onRandom+=got.filter(c=>c.road!==1).length;covered+=got.reduce((n,c)=>n+c.cover.length,0);
   }
-  // The reach test itself, also at NaN and infinite query points and reaches, which the planner never asks about.
+  // The reach test itself, also at NaN and infinite query points and reaches, which the planner never asks about: every
+  // pairing from a fixed table of edge cases, then random cases.
   let asked=0;
+  {const odd=[NaN,Infinity,-Infinity,0,5,1e5],reaches=[NaN,Infinity,-Infinity,-1,0,-0,3,1e9];
+   const shapes=[[],[[0,0]],[[0,0],[1,0]],[[0,0],[0,0]],[[NaN,0],[1,0],[2,0]],[[Infinity,0],[1,0]],[[0,0],[1,0],[-Infinity,5]],
+    [[NaN,NaN],[NaN,NaN]],[[1000,1000],[1001,1000]],[[0,-1e5],[0,1e5]]];
+   for(const qx of odd)for(const qz of odd)for(const reach of reaches)for(const pts of shapes){
+    assert.equal(withinRoad(qx,qz,{pts},reach),distance(qx,qz,{pts})<=reach,'reach test at '+[qx,qz,reach]+' on '+JSON.stringify(pts));asked++;}}
   for(let round=0;round<4000;round++){
    const n=Math.floor(rnd()*5),pts=[];let x=rnd()*400-200,z=rnd()*400-200;for(let k=0;k<n;k++){pts.push([x,z]);x+=rnd()*60-30;z+=rnd()*60-30;}
    if(rnd()<.1&&pts.length)pts[Math.floor(rnd()*pts.length)][0]=[NaN,Infinity,-Infinity][Math.floor(rnd()*3)];

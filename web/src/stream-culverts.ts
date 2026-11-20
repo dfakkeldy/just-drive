@@ -51,9 +51,10 @@ export function streamCrossings(streams: Streams, roads: readonly Road[], spans:
   return result;
 }
 
-/** The old nearest-point scan's answer to `distance from (x, z) to the line <= reach`, for any coordinates whose squares do
- *  not overflow (anything on a map), but it stops at the first finite segment within reach and skips any segment whose box
- *  lies more than reach + 1 m away along an axis (such a segment is farther than reach, so it could never decide). Like that
+/** The old nearest-point scan's answer to `distance from (x, z) to the line <= reach`, for coordinates below about 1e15
+ *  (anything on a map; far beyond that the old scan's rounding moves its nearest point), but it stops at the first finite
+ *  segment within reach and skips any segment whose box lies more than reach + 1 m away along an axis (such a segment is
+ *  farther than reach, so it could never decide). Like that
  *  scan, a line with no finite segment distance measures from the point to itself: 0, or NaN for a NaN or infinite point.
  *  This runs for every culvert before the first frame: the full scan over every bridge and road point took most of a second. */
 export function withinRoad(x: number, z: number, line: Pick<BridgeLine, 'pts'>, reach: number): boolean {
