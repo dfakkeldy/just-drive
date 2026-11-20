@@ -702,7 +702,8 @@ const places: Record<keyof typeof placeSites, { place: HandBuiltPlace | null; de
 };
 const handBuilt = Object.values(places);
 for (const { place } of handBuilt) if (place) scene.add(place.group);
-const placesWaiting = (): boolean => { for (const { place } of handBuilt) if (place?.waiting) return true; return false; };
+// The frame asks this; an index loop makes no array iterator.
+const placesWaiting = (): boolean => { for (let i = 0; i < handBuilt.length; i++) if (handBuilt[i].place?.waiting) return true; return false; };
 const placeContact = ({ place }: { place: HandBuiltPlace | null }): ContactSite | null => place && { resolve: body => place.resolveSolids(body) };
 const quarry = quarryFeature && quarrySite ? new quarryFeature.Quarry(quarrySite, terrain, roads) : null;
 if (quarry) quarry.attach(scene, waterReflections);
