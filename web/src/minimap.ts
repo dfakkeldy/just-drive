@@ -119,6 +119,7 @@ export class MiniMap {
     head.addEventListener('click', () => {
       if (this.large) this.setLarge(false);
       this.folded = !this.folded;
+      if (this.flight) this.flightFolded = this.folded;
       this.root.classList.toggle('folded', this.folded);
       try { localStorage.setItem('mmm.map', this.folded ? 'folded' : 'open'); } catch { /* the choice lasts for this visit */ }
       this.since = 1;

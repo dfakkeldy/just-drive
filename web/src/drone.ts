@@ -162,7 +162,8 @@ export class Drone {
    * `look` turns the drone with the mouse or a finger (radians this frame).
    */
   update(dt: number, cmd: DroneCommand, under: DroneGround, roof: { x: number; y: number; z: number }, look: number): boolean {
-    this.hintTime += dt; if (this.help) this.help.hidden = this.hintsHidden;
+    this.hintTime += dt;
+    if (this.help && this.help.hidden !== this.hintsHidden) this.help.hidden = this.hintsHidden;
     const s = this.state;
     if (this.returning) look = 0;
     s.yaw += look;
@@ -211,6 +212,7 @@ export const DRONE_HELP = [
   ['Space', 'Up'], ['Shift or C', 'Down'], ['Mouse wheel', 'Top speed'],
   ['R', 'Fly back'], ['F', 'Land'],
 ] as const;
+export const DRONE_TOUCH_HELP = [['Left stick', 'Climb and turn'], ['Right stick', 'Fly'], ['Return to car', 'Fly back']] as const;
 function createDroneHelp(): HTMLElement {
   const help = Object.assign(document.createElement('dl'), { id: 'droneHints', hidden: true });
   help.setAttribute('aria-label', 'Drone keys');
@@ -221,8 +223,8 @@ function createDroneHelp(): HTMLElement {
   document.body.append(help); return help;
 }
 const CSS = `
-#droneHints{position:fixed;left:200px;top:100px;z-index:3;margin:0;padding:10px 12px;border-radius:6px;
-  display:grid;grid-template-columns:auto auto auto auto;gap:7px 10px;max-width:calc(100vw - 240px);
+#droneHints{position:fixed;left:270px;top:100px;z-index:3;margin:0;padding:10px 12px;border-radius:6px;
+  display:grid;grid-template-columns:auto auto auto auto;gap:7px 10px;max-width:calc(100vw - 310px);
   background:var(--panel,rgba(8,14,20,.72));color:var(--ink,#eef2f6);font:12px/1.4 system-ui}
 #droneHints dd{margin:0}#droneHints kbd{display:inline-block;background:#20303b;border:1px solid #71818e;border-radius:4px;padding:1px 4px;font:inherit}
 #droneHints[hidden],body.droneSticks #droneHints{display:none}

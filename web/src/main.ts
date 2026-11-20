@@ -151,7 +151,7 @@ import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
 import {createTestPark,testParkPlaces} from './stunt-test-park';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
-import { Drone, createDroneButton, createDroneSticks, roofHeights, DRONE_HELP } from './drone';
+import { Drone, createDroneButton, createDroneSticks, roofHeights, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';
 import { DRONE } from './drone-rules';
 
 // Mabou village, and the game's moment: the second week of October, late afternoon (Atlantic Daylight Time, UTC-3).
@@ -1461,7 +1461,8 @@ function syncPauseUI(): void {
     const raceLine = document.getElementById('pauseRace')!;
     raceLine.hidden = !multiplayer?.current?.net.race?.startAt || !race || /no active race/i.test(race);
     raceLine.textContent = raceLine.hidden ? '' : race!;
-    const hints = drone.active ? DRONE_HELP : gamepad.device === 'gamepad' ? padKeys(ride.kind, mailMode, !!radio)
+    const hints = drone.active && !touchDevice ? DRONE_HELP : drone.active && touchDevice ? DRONE_TOUCH_HELP
+      : gamepad.device === 'gamepad' ? padKeys(ride.kind, mailMode, !!radio)
       : ride.kind === 'horse' ? horseKeys(touchDevice, mailMode) : ride.kind === 'bike' ? bikeKeys(touchDevice)
       : touchDevice ? (mailMode ? TOUCH : DRIVING_TOUCH) : (mailMode ? KEYS : DRIVING_KEYS);
     document.querySelector<HTMLDetailsElement>('#pauseKeys')!.open = false;

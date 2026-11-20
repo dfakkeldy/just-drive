@@ -95,6 +95,7 @@ export class Ghosts {
   drawn = 0;
   private labelCount = 0;
   readonly tagBoxes: TagBox[] = [];
+  private readonly tagPool: TagBox[];
   private blend = 0;
   private readonly cap: number;
   private readonly low: boolean;
@@ -133,6 +134,7 @@ export class Ghosts {
     this.chosen = new Array(this.cap).fill(null);
     this.scores = new Float64Array(this.cap);
     this.labelBounds = new Float64Array(this.cap * 4);
+    this.tagPool = Array.from({ length: this.cap }, () => ({ id: 0, left: 0, right: 0, top: 0, bottom: 0 }));
     this.fades = new THREE.InstancedBufferAttribute(new Float32Array(this.cap), 1);
     this.brakes = new THREE.InstancedBufferAttribute(new Float32Array(this.cap), 1);
     this.tints = new THREE.InstancedBufferAttribute(new Float32Array(this.cap * 3), 3);
@@ -315,8 +317,10 @@ export class Ghosts {
     const b = this.labelCount * 4;
     this.labelBounds[b] = left; this.labelBounds[b + 1] = right;
     this.labelBounds[b + 2] = bottom + lift; this.labelBounds[b + 3] = top + lift;
-    this.tagBoxes.push({ id, left: (left + 1) * innerWidth / 2, right: (right + 1) * innerWidth / 2,
-      top: (1 - top - lift) * innerHeight / 2, bottom: (1 - bottom - lift) * innerHeight / 2 });
+    const tag = this.tagPool[this.labelCount];
+    tag.id = id; tag.left = (left + 1) * innerWidth / 2; tag.right = (right + 1) * innerWidth / 2;
+    tag.top = (1 - top - lift) * innerHeight / 2; tag.bottom = (1 - bottom - lift) * innerHeight / 2;
+    this.tagBoxes.push(tag);
   }
 
   dispose(): void {

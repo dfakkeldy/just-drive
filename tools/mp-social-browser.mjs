@@ -5,8 +5,8 @@ import { multiplayerPage } from './mp-browser-page.mjs';
 import { cdp, exitCheck, sleep } from './cdp.mjs';
 const [out,first]=process.argv.slice(2),base=new URL(first).origin,port=process.env.CDP_PORT,server=process.env.MP_SERVER;
 assert.match(server,/^ws:\/\/(127\.0\.0\.1|localhost):\d+$/);mkdirSync(out,{recursive:true});
-const pages=[],receipt={};
-async function open(name,touch=false){
+const pages=[];
+async function open(name,touch=false,mode='explore',room='social'){
   const tab=await multiplayerPage(port);
   const {ws,send,errors}=await cdp(tab.webSocketDebuggerUrl);
   const read=async expression=>{await send('Page.bringToFront');const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});assert.ok(!r.result?.exceptionDetails,JSON.stringify(r.result?.exceptionDetails));return r.result.result.value;};
@@ -16,7 +16,7 @@ async function open(name,touch=false){
   const p={read,until,close,shot,errors,send};pages.push(p);
   await send('Page.addScriptToEvaluateOnNewDocument',{source:`localStorage.setItem('mmm.mp.handle',${JSON.stringify(name)});`});
   await send('Page.enable');await send('Runtime.enable');await send('Emulation.setDeviceMetricsOverride',{width:touch?390:1280,height:touch?844:800,deviceScaleFactor:1,mobile:touch});
-  const url=new URL(base);url.search=new URLSearchParams({mode:'explore',road:'Highway 19',f:'.4',mp:'1',touch:touch?'1':'0',room:'social',mpserver:server,res:'1',hud:'1'}).toString();
+  const url=new URL(base);url.search=new URLSearchParams({mode,site:mode==='explore'?'just':'mail',area:'mabou',road:'Highway 19',f:'.4',mp:'1',touch:touch?'1':'0',room,mpserver:server,res:'1',hud:'1'}).toString();
   await send('Page.navigate',{url:url.href});await until('!!window.mmm && document.title.startsWith("settled")');
   await read(`if(!document.getElementById('title').hidden)document.getElementById('titleStart').click()`);
   await until('mmm.mp.current?.net.status === "on" && !!mmm.mp.current.net.race?.host');
@@ -25,20 +25,29 @@ async function open(name,touch=false){
 }
 async function pose(p,x,z){await p.read(`mmm.vehicle.place(${x},${z},0);mmm.vehicle.vx=mmm.vehicle.vz=mmm.vehicle.speed=0`);}
 const bubblesClear = `(()=>{const tags=mmm.mp.current.ghosts.tagBoxes;return tags.length>0&&[...document.querySelectorAll('#mpChatBubbles [data-sender]')].filter(e=>!e.hidden).every(e=>{const b=e.getBoundingClientRect();return tags.every(t=>b.right<=t.left||b.left>=t.right||b.bottom<=t.top-7||b.top>=t.bottom+7)})})()`;
-async function roomCardsLayout(p) {
+async function clickSummary(p,id) {
+  const point=await p.read(`(()=>{const e=document.querySelector('#${id}>summary');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+  await p.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+  await p.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+}
+async function roomCardsLayout(p,mode='explore') {
   await p.read(`window.savedRoomRoster=document.getElementById('mpRoster').innerHTML;document.querySelector('#mpSocial details').open=true;document.getElementById('mpRoster').replaceChildren(...Array.from({length:24},(_,i)=>Object.assign(document.createElement('li'),{textContent:'Dusty Window '+i})))`);
-  for (const [width,height] of [[1440,900],[1280,720],[720,480]]) {
+  for (const [width,height] of [[1440,900],[1280,720],[720,480]]) for (const folded of [false,true]) {
     await p.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
-    await p.read(`document.querySelectorAll('#mpCards>details').forEach(e=>e.open=true);document.getElementById('mpChatButton').click()`);
+    await p.read(`document.querySelectorAll('#mpCards>details').forEach(e=>e.open=${!folded});if(document.getElementById('mpChatGrid').hidden)document.getElementById('mpChatButton').click()`);
     await sleep(700);
-    const measured=await p.read(`(()=>{const home=document.getElementById('mpCards'),h=home.getBoundingClientRect(),cards=[...home.children].filter(e=>!e.hidden).map(e=>{const r=e.getBoundingClientRect();return [e.id,r.left,r.top,r.right,r.bottom]});return {cards,scroll:getComputedStyle(home).overflowY,box:[h.left,h.top,h.right,h.bottom],blockers:['hud','miniMap','radio','pauseButton','placesButton','gear','endShift','credit','mpChip','gameResults'].flatMap(id=>{const e=document.getElementById(id),r=e?.getBoundingClientRect();return !e||e.hidden||!r.width||!r.height?[]:[[id,r.left,r.top,r.right,r.bottom]]})}})()`);
+    const measured=await p.read(`(()=>{const home=document.getElementById('mpCards'),h=home.getBoundingClientRect(),cards=[...home.children].filter(e=>!e.hidden).map(e=>{const r=e.getBoundingClientRect();return [e.id,r.left,r.top,r.right,r.bottom]});return {cards,scroll:getComputedStyle(home).overflowY,box:[h.left,h.top,h.right,h.bottom],blockers:['hud','shiftHud','miniMap','radio','pauseButton','placesButton','gear','endShift','credit','mpChip','gameResults','droneHints','mailButton','cameraButton','placeArrival','photoTag'].flatMap(id=>{const e=document.getElementById(id),r=e?.getBoundingClientRect();return !e||e.hidden||!r.width||!r.height?[]:[[id,r.left,r.top,r.right,r.bottom]]})}})()`);
     assert.deepEqual(measured.cards.map(b=>b[0]),['mpSocial','racePanel','gamePanel']);
-    assert.equal(measured.scroll,'auto');
-    const [l,t,r,b]=measured.box; assert.ok(l>=0&&t>=0&&r<=width&&b<=height);
+    assert.equal(measured.scroll,'auto');assert.ok(measured.blockers.some(b=>b[0]===(mode==='mail'?'mailButton':'placeArrival')),`${mode}: tested with the relevant lower HUD showing`);
+    if(mode==='mail')for(const id of ['cameraButton','photoTag'])assert.ok(measured.blockers.some(b=>b[0]===id),`${id} is visible`);
+    const [l,t,r,b]=measured.box; assert.ok(l>=0&&t>=0&&r<=width&&b<=height&&b>t&&r-l>=240);
     for(let i=0;i<measured.cards.length;i++) {const c=measured.cards[i];assert.equal(c[1],l);assert.ok(c[3]<=r);if(i)assert.ok(c[2]>=measured.cards[i-1][4]+7);}
     for(const [id,x,y,z,q] of measured.blockers) assert.ok(r<=x||l>=z||b<=y||t>=q,`column clears ${id} at ${width}x${height}`);
-    await p.read(`(()=>{const e=document.querySelector('#gamePanel button:last-of-type');e.scrollIntoView({block:'nearest'})})()`);
-    assert.ok(await p.read(`(()=>{const e=document.querySelector('#gamePanel button:last-of-type'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return at===e||e.contains(at)})()`),'last card remains reachable through the column scroll');
+    if(!folded){
+      await p.read(`(()=>{const e=document.querySelector('#gamePanel button:last-of-type');e.scrollIntoView({block:'nearest'})})()`);
+      assert.ok(await p.read(`(()=>{const e=document.querySelector('#gamePanel button:last-of-type'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return at===e||e.contains(at)})()`),'last card remains reachable through the column scroll');
+    }
+    if(mode==='mail')for(const id of ['mailButton','cameraButton'])assert.ok(await p.read(`(()=>{const e=document.getElementById('${id}'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return at===e||e.contains(at)})()`),`${id} receives mouse clicks with folded=${folded}`);
   }
   await p.read(`document.getElementById('mpRoster').innerHTML=savedRoomRoster;document.querySelector('#mpSocial details').open=false`);
   await p.send('Emulation.setDeviceMetricsOverride',{width:1280,height:800,deviceScaleFactor:1,mobile:false});
@@ -54,9 +63,12 @@ try {
   await pose(b,front.x,front.z); await sleep(700);
   assert.ok(await b.read('(()=>{const s=document.getElementById("settings"),g=document.getElementById("mpRoom");return s.firstElementChild.id==="settingsHeader"&&g.previousElementSibling.id==="settingsHeader"&&g.querySelector("h3").textContent==="Room"&&[...g.querySelectorAll(":scope>details")].map(e=>e.id).join() === "mpSocial,racePanel,gamePanel"})()'),'phone Room group follows the Settings header in a fixed order');
   assert.ok(await a.read('document.getElementById("mpSocial").parentElement.id==="mpCards"&&getComputedStyle(document.getElementById("mpCards")).position==="fixed"'),'desktop cards share one fixed column');
-  for (const p of [a,b]) await p.read('document.getElementById("mpSocial").open=true');
-  await roomCardsLayout(a);
+  assert.equal(await a.read('document.getElementById("mpSocial").open'),true,'desktop drivers and chat starts open');
+  assert.equal(await b.read('document.getElementById("mpSocial").open'),false,'phone card starts folded');
+  await clickSummary(a,'mpSocial');assert.equal(await a.read('document.getElementById("mpSocial").open'),false);
+  await clickSummary(a,'mpSocial');assert.equal(await a.read('document.getElementById("mpSocial").open'),true,'desktop summary click opens chat');
   await b.read('document.getElementById("settings").classList.add("open")');
+  if(!await b.read('document.getElementById("mpSocial").open'))await clickSummary(b,'mpSocial');
   await b.read('document.getElementById("mpChatButton").click();document.getElementById("mpChatGrid").scrollIntoView({block:"center"})');
   // Eight road phrases, and the three game phrases in a room that runs games (this one does).
   assert.equal(await b.read('[...document.querySelectorAll("#mpChatGrid button")].filter(e=>!e.hidden).length'),11);
@@ -85,7 +97,7 @@ try {
   await a.read('mmm.mp.current.net.chat(4)');
   await b.until('mmm.mp.current.ghosts.tagBoxes.length>0&&[...document.querySelectorAll("#mpChatBubbles [data-sender]")].some(e=>!e.hidden)');
   assert.ok(await b.read(bubblesClear),'landscape phone bubbles clear every drawn name tag');
-  assert.ok(await b.read('mmm.mp.current.ghosts.tagBoxes.every(t=>t.bottom-t.top>=19.9&&t.bottom-t.top<=20.1)'),'landscape phone name planes have 10 px ink in a 20 px plane');
+  assert.ok(await b.read('mmm.mp.current.ghosts.tagBoxes.every(t=>t.bottom-t.top>=23.9&&t.bottom-t.top<=24.1)'),'landscape phone name planes have 12 px ink in a 24 px plane');
   await b.shot('social-phone-landscape');
   await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   await b.read('document.getElementById("settings").classList.add("open")');
@@ -104,7 +116,18 @@ try {
   assert.equal(await b.read('localStorage.getItem("mmm.mp.handle")'),null);
   await b.read('document.querySelector(".mpControl[data-mp=settings] .mpDice").click()');
   await b.until('mmm.mp.current?.net.status==="on" && mmm.mp.current.net.me.name===localStorage.getItem("mmm.mp.handle")');
-  assert.deepEqual(a.errors,[]);assert.deepEqual(b.errors,[]);
-  console.log('PASS two local clients: handles, roster, desktop key, phrase grid, authoritative log, expiry, phone fit and race handles');
+  const arrival=await open('Arrival Driver',false,'explore','look');
+  await arrival.read(`(()=>{const p=mmm.places.marks[0];mmm.vehicle.place(p.x,p.z,0);mmm.vehicle.vx=mmm.vehicle.vz=mmm.vehicle.speed=0})()`);
+  await arrival.until(`!document.getElementById('placeArrival').hidden&&document.getElementById('placeArrival').textContent.length>0`);
+  await roomCardsLayout(arrival,'explore');await arrival.shot('room-arrival');
+  const mail=await open('Mail Driver',false,'mail','mail');
+  assert.equal(await mail.read('mmm.gameMode'),'mail');
+  await mail.until(`!document.getElementById('mailButton').hidden&&!document.getElementById('cameraButton').hidden`);
+  // Take a photo through the real button, so its retained tag participates too.
+  await mail.read(`document.getElementById('cameraButton').click()`);
+  await mail.until(`!document.getElementById('photoTag').hidden`);
+  await roomCardsLayout(mail,'mail');await mail.shot('room-mail');
+  for(const p of pages)assert.deepEqual(p.errors,[]);
+  console.log('PASS two local clients: handles, roster, desktop key, phrase grid, authoritative log, expiry, phone fit, race handles, clicked summaries, mail buttons and arrival/photo card clearance');
 }catch(e){failed=e;console.error(e.stack);}finally{for(const p of pages)await p.close();}
 exitCheck(failed?1:0);

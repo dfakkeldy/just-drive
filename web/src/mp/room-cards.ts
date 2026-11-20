@@ -1,7 +1,7 @@
 // One home for the room cards. The phone keeps the same nodes in Settings.
 const CSS = `
 #mpCards{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:80px;z-index:6;
-  width:min(332px,calc(100vw - 330px));max-height:calc(100dvh - 220px);overflow:auto;overscroll-behavior:contain;
+  width:max(240px,min(332px,calc(100vw - 330px)));max-height:calc(100dvh - 220px);overflow:auto;overscroll-behavior:contain;
   display:flex;flex-direction:column;gap:8px;scrollbar-gutter:stable}
 #mpCards>*{flex:none;width:100%;box-sizing:border-box;margin:0}
 #mpCards:empty{display:none}
@@ -49,13 +49,37 @@ export function fitRoomCards(): void {
     }
   }
   const home = document.getElementById('mpCards'); if (!home) return;
+  // Start at the usual corner each time, so a hidden button releases its space.
+  home.style.right = ''; home.style.width = '';
   const box = home.getBoundingClientRect();
-  let top = 132, bottom = innerHeight - 10;
   const credit = document.getElementById('credit')?.getBoundingClientRect();
-  if (credit?.height) bottom = Math.min(bottom, credit.top - 10);
-  for (const id of ['hud','shiftHud','miniMap','radio','pauseButton','placesButton','gear','endShift','mpChip','gameResults','droneHints']) {
-    const e = document.getElementById(id), b = e?.getBoundingClientRect();
-    if (e && !e.hidden && b?.height && b.width && b.left < box.right && b.right > box.left) top = Math.max(top, b.bottom + 10);
+  const topBlocks = ['hud','shiftHud','miniMap','radio','pauseButton','placesButton','gear','endShift','mpChip','gameResults','droneHints','photoTag'];
+  const bottomBlocks = ['mailButton','cameraButton','placeArrival'];
+  const visible = (id: string) => {
+    const e = document.getElementById(id), b = e && !e.hidden ? e.getBoundingClientRect() : null;
+    return b?.width && b.height ? b : null;
+  };
+  const above = topBlocks.map(visible), below = bottomBlocks.map(visible);
+  const bounds = (column: { left: number; right: number }) => {
+    let top = 132, bottom = credit?.height ? Math.min(innerHeight - 10, credit.top - 10) : innerHeight - 10;
+    for (const b of above) if (b && b.left < column.right && b.right > column.left) top = Math.max(top, b.bottom + 10);
+    for (const b of below) if (b && b.left < column.right && b.right > column.left) bottom = Math.min(bottom, b.top - 10);
+    return { top, bottom };
+  };
+  let { top, bottom } = bounds(box);
+  if (bottom - top < 180) {
+    let right = box.right;
+    for (const b of below) if (b && b.left < box.right && b.right > box.left) right = Math.min(right, b.left - 10);
+    if (right < box.right) {
+      // On a short desktop, a narrower column can also clear the left HUD.
+      for (const width of [box.width, Math.min(240, box.width)]) {
+        if (right - width < 10) continue;
+        const fit = bounds({ left: right - width, right });
+        if (fit.bottom - fit.top <= bottom - top) continue;
+        home.style.right = `${innerWidth - right}px`; home.style.width = `${width}px`;
+        ({ top, bottom } = fit);
+      }
+    }
   }
   home.style.bottom = `${innerHeight - bottom}px`;
   home.style.maxHeight = `${Math.max(0, bottom - top)}px`;

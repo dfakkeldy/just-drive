@@ -83,7 +83,7 @@ async function flightMap(p, phone) {
 // ---- desktop, keyboard only -------------------------------------------------------------------------
 {
   const p = await page(1280, 720, false);
-  await p.load({ q: 'high' });
+  await p.load({ q: 'high',mode:'mail',site:'mail',area:'mabou' });
   // On the paved road nearest Mabou village's centre (the land's origin), so the flight passes over the village.
   await p.read(`(()=>{const r=mmm.roads.nearest(0,0,400,r=>r.kind<=2);if(!r)throw Error('no village road');mmm.vehicle.place(r.x,r.z,r.heading);mmm.driveVehicle(0,{throttle:0,steer:0,handbrake:true});})()`);
   await sleep(1000); await p.until(`String(document.title).startsWith('settled')`, 120000); await sleep(800);
@@ -96,6 +96,7 @@ async function flightMap(p, phone) {
   await sleep(1600);
   await flightMap(p, false);
   check(await p.read(`!document.getElementById('droneHints').hidden&&document.querySelectorAll('#droneHints kbd').length===8`),'grouped desktop keycaps appear at launch');
+  check(await p.read(`(()=>{const e=document.getElementById('shiftHud'),h=document.getElementById('droneHints'),a=e.getBoundingClientRect(),b=h.getBoundingClientRect();return mmm.gameMode==='mail'&&!e.hidden&&!h.hidden&&a.width>0&&a.height>0&&b.width>0&&b.height>0&&(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom)})()`),'mail day card and drone hints are visible and clear of each other');
   await p.read(`document.getElementById('pauseButton').click();document.querySelector('#pauseKeys summary').click()`);
   check(await p.read(`document.querySelector('#pauseKeys dl').textContent.includes('Mouse wheelTop speed')&&document.querySelector('#pauseKeys dl').textContent.includes('RFly back')`),'pause Keys lists drone controls');
   await p.read(`document.getElementById('resumeGame').click()`);
@@ -197,6 +198,9 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   await sleep(1500);
   await flightMap(p, true);
   check(await p.read(`document.querySelector('#droneLeft span').textContent==='Climb · turn'&&document.getElementById('droneReturn').textContent==='Return to car'`),'touch labels explain climb, turn and return');
+  await p.read(`document.getElementById('pauseButton').click();document.querySelector('#pauseKeys summary').click()`);
+  check(await p.read(`JSON.stringify([...document.querySelectorAll('#pauseKeys dt')].map(e=>e.textContent))===JSON.stringify(['Left stick','Right stick','Return to car'])&&document.querySelector('#pauseKeys dl').textContent.includes('Climb and turn')`),'phone pause help lists sticks and Return to car');
+  await p.read(`document.getElementById('resumeGame').click()`);
   // Left stick up: climb.
   const left = await p.centre('droneLeft'), right = await p.centre('droneRight');
   const push = async (c, dx, dy, ms) => {
