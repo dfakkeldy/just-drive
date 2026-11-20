@@ -24,11 +24,19 @@ const buildings=JSON.parse(readFileSync('../data/baked/terrain/buildings.json'))
 let measuredPark;
 for(const low of [false,true])for(const exag of (process.env.STUNT_HILLS??'1,1.5,2,2.5').split(',').map(Number)){
  process.env.PHONE_EXAG=String(exag);const {terrain,roads}=makeGround(),yard=new YardSite(terrain.manifest.village,'invented');terrain.low=low;terrain.sites.push(yard);
- const before=terrain.sites.length;assert.equal(await createTestPark(new URLSearchParams(),terrain,yard,false),null);assert.equal(terrain.sites.length,before,'no parameter: no Site');
- assert.equal(await createTestPark(new URLSearchParams('park=other'),terrain,yard,false),null);
- const park=await createTestPark(new URLSearchParams('park=test'),terrain,yard,low,buildings);assert.equal(terrain.sites.length,before+1);
+ const before=terrain.sites.length;
+ assert.equal(await createTestPark(terrain,null,low),null,'areas without a works yard have no Mabou park');
+ assert.equal(await createTestPark(terrain,new YardSite(terrain.manifest.village,'closed'),low),null,'a closed yard has no park');
+ assert.equal(terrain.sites.length,before,'absent and closed yards register no park Site');
+ const park=await createTestPark(terrain,yard,low,buildings);
+ assert.equal(park.pieces.length,14);
+ assert.equal(terrain.sites.length,before+1,'an open yard registers the park Site');
+ assert.ok(park.pieces.every(p=>p.pad===null),'opening Mabou does not fetch the field survey');
+ await preload(terrain,[[0,0]],0);
+ assert.ok(park.pieces.every(p=>p.pad===null),'a fine village tile does not fetch the field survey');
  const points=park.pieces.flatMap(p=>{const b=p.placement.piece.footprint;return [[b[0],b[1]],[b[2],b[1]],[b[0],b[3]],[b[2],b[3]],[0,0]].map(([u,v])=>Object.values(p.world(u,v)));});
  await preload(terrain,points,65);
+ assert.ok(park.pieces.every(p=>Number.isFinite(p.pad)),'fine field tiles wait for the survey datums');
  for(const tile of terrain.tiles.values())if(tile.mesh){tile.mesh.visible=true;tile.mesh.material.uniforms.hideQuad.value.set(0,0,0,0);}
  terrain.group.updateMatrixWorld(true);
  console.log('LOADED',exag,low?'LOW':'desktop');

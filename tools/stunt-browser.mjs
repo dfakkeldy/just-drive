@@ -127,7 +127,10 @@ try{
  const touch=await p.read(`(()=>{const p=mmm.stuntPark.pieces[0],a=p.world(-15,0);mmm.places.jumpTo(a.x,a.z,p.placement.heading);const b=document.getElementById('tcGo').getBoundingClientRect();return{x:b.x+b.width/2,y:b.y+b.height/2,start:[a.x,a.z]};})()`);
  await p.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touch.x,y:touch.y,id:1}]});for(let i=0;i<70;i++){await sleep(500);if(await p.read('mmm.stuntPark.pieces[0].u(mmm.vehicle.x,mmm.vehicle.z)>220'))break;}await p.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  const phone=await p.read('({x:mmm.vehicle.x,z:mmm.vehicle.z,speed:mmm.vehicle.speed,along:mmm.stuntPark.pieces[0].u(mmm.vehicle.x,mmm.vehicle.z)})');check(phone.along>220,'actual phone GO travels the complete easy line',phone);await setup();await p.read(`(async()=>{const piece=st.park.pieces.find(p=>p.placement.piece.id==='tabletop');await st.focus(piece);st.stopOn(piece);window.stoppedFrame?.(performance.now());const eye=piece.world(-6,-13);await st.view(new st.THREE.Vector3(eye.x,st.v.y+8,eye.z),new st.THREE.Vector3(st.v.x,st.v.y+.5,st.v.z));})()`);await p.shot(`${out}/park-phone${suffix}.png`);
- await p.navigate(`${origin}/?exag=1.5&scene=0&hud=1&radio=0`);check(await p.read('!(\'stuntPark\' in mmm)&&!(\'sunShadows\' in mmm)&&!mmm.terrain.sites.some(s=>s.constructor.name===\'StuntPark\')'),'no parameter: no park constructed, registered or exposed');
+ await p.navigate(`${origin}/?exag=1.5&scene=0&hud=1&radio=0`);
+ check(await p.read('mmm.stuntPark?.pieces.length===14 && mmm.terrain.sites.includes(mmm.stuntPark)'),'default mail play registers all fourteen pieces');
+ await p.navigate(`${origin}/?yard=closed&park=test&exag=1.5&scene=0&hud=1&radio=0`);
+ check(await p.read("mmm.yard?.site.mode==='closed' && !('stuntPark' in mmm) && !mmm.terrain.sites.some(s=>s.constructor.name==='StuntPark')"),'closed yard suppresses the park even with the old link');
  }
  check(await p.read('mmm.renderer.info.programs.every(p=>!p.diagnostics||p.diagnostics.runnable)'),'all real game shader programs compile');
  writeFileSync(reportFile,JSON.stringify({reports,failures,stats,lineRuns,shoulderDiagnostics},null,2)+'\n');assert.equal(failures.length,0,failures.map(f=>f.label).join('; '));

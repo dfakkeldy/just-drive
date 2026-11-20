@@ -4,7 +4,7 @@ import {StuntPark} from '../web/src/stunt-kit.ts';
 import {testParkLayout,testParkDressing,testParkRunups,testParkStarts} from '../web/src/stunt-test-park.ts';
 import {YardSite} from '../web/src/yard-site.ts';
 const yard=new YardSite([0,0],'invented'),dressing=testParkDressing(yard),lanes=testParkRunups(dressing);
-const make=()=>({sites:[],clear:[],exag:2.5,addTreeClear(b){this.clear.push(b);},protectedRoadAt:()=>false,surveyHeightAt:async(x,z)=>3+Math.sin(x/40)+z*.014});
+const make=()=>({sites:[],clear:[],exag:2.5,addTreeClear(b){this.clear.push(b);},protectedRoadAt:()=>false,surveyHeightsAt:async points=>points.map(({x,z})=>3+Math.sin(x/40)+z*.014)});
 const a=make(),b=make(),bare=new StuntPark(a,testParkLayout(yard),false,[],dressing),park=new StuntPark(b,testParkLayout(yard),false,[],dressing,lanes);
 await bare.prepare();await park.prepare();let heights=0,coverage=0;
 const hardStart=testParkStarts(park)[1],old=yard.world(615,345),oldHeading=yard.heading(0,-1);

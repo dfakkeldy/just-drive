@@ -398,7 +398,7 @@ if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get
   terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id)).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
-const testPark = await createTestPark(params, terrain, yardSite, LOW, buildingList ?? []);
+const testPark = await createTestPark(terrain, yardSite, LOW, buildingList ?? []);
 const quarryStuntPark = quarryFeature && quarrySite && ERA.modern
   ? quarryFeature.createQuarryStuntPark(terrain, LOW) : null;
 if (quarryStuntPark) await quarryStuntPark.prepare();
