@@ -137,6 +137,14 @@ body:not(.tcOn):not(.droneSticks):not(.indoorOn):has(#placesButton:not([hidden])
 body:not(.tcOn):not(.droneSticks) #bigMapButton{right:calc(150px + env(safe-area-inset-right,0px));width:70px}
 body:not(.tcOn):not(.droneSticks):not(.indoorOn):has(#placesButton:not([hidden])) #bigMapButton{right:calc(244px + env(safe-area-inset-right,0px))}
 body:is(.tcOn,.droneSticks) :is(#placesButton,#pauseButton,#gear){border:1px solid rgba(238,242,246,.3);background:var(--panel);border-radius:10px;color:var(--ink);font-family:var(--mono)}
+body.tcOn:has(#settings.open) :is(.tc,#cameraButton,#mailButton){visibility:hidden}
+body:not(.gameStarted) :is(#shiftHud,#mailCard),body.tcOn:not(.gameStarted) #phoneStatus{visibility:hidden}
+body.droneOn:not(.tcOn) #mailCard{width:fit-content;max-width:min(460px,calc(100% - 120px))}
+body:not(.tcOn):not(.droneSticks) :is(#cameraButton,#mailButton){box-sizing:border-box;width:auto;min-width:80px;height:44px;min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel-solid);color:var(--ink);font:700 12px var(--mono);letter-spacing:.08em}
+body:not(.tcOn):not(.droneSticks) #cameraButton{box-shadow:none}
+body:not(.tcOn):not(.droneSticks) #mailButton{border:2px solid var(--maple);box-shadow:none}
+body:not(.tcOn):not(.droneSticks) #mailButton:is(.held,:active){background:#f4d698;color:#49301e}
+body:not(.tcOn):not(.droneSticks) #mailButton.throwNow{box-shadow:0 0 0 5px #ffdf70,0 0 22px #ffdf7099;border-color:#fff4b7}
 body:not(.gameStarted) #droneButton,body.tcOn:not(.gameStarted) #phoneHint #stopHint{visibility:hidden}
 body:is(.tcOn,.droneSticks) :is(#placesButton,#pauseButton){font:700 12px var(--mono);letter-spacing:.08em}
 body.droneSticks :is(#gear,#pauseButton){min-width:56px;min-height:56px}
@@ -191,7 +199,7 @@ body.tcOn #pauseButton{position:static;min-height:56px;pointer-events:auto;flex:
   <header id="settingsHeader"><h2 id="settingsHeading">Settings</h2><button id="settingsClose" type="button">Close</button></header>
   <label for="exag">Hill height: x<span id="exagValue">1.5</span></label>
   <input id="exag" type="range" min="1" max="2.5" step="0.1">
-  <small>1.0 is true scale. Trees and buildings keep their real height.</small>
+  <small>1.0 is true scale; the game starts at 1.5, for drama. Trees and buildings keep their real height.</small>
   <button id="startOver">Start over from day 1</button>
 </div>
 <div id="credit">Elevation: Natural Resources Canada HRDEM, from Province of Nova Scotia LiDAR · Forest and base data © Province of Nova Scotia · © OpenStreetMap contributors · A private test build</div>

@@ -10,7 +10,7 @@ const results=[], family=process.env.HIKES_FAMILY??'all';
 function check(value,name){results.push({name,pass:!!value});console.log(`${value?'PASS':'FAIL'} ${name}`);if(process.env.HIKES_PROBE===name){const marker=(value?'MUTATION MISSED: ':'MUTATION DETECTED: ')+name;console.error(marker);throw Error(marker);}assert.ok(value,name);}
 const run=async(name,query,fn,w=1600,h=1000,init='')=>{if(family!=='all'&&family!==name)return;const p=await hikesPage(base,query,w,h,init);try{await fn(p);check(!p.errors.length,`${name} ${w} has no runtime errors`);}finally{await p.close();}};
 await run('map','mode=explore&at=624271,5103301,0',async p=>{
-  await p.read(`window.mapTexts=[];const g=mmm.bigMap.g,orig=g.fillText.bind(g);g.fillText=(...a)=>{mapTexts.push(a[0]);return orig(...a)};window.trailStrokes=0;const layer=mmm.bigMap.layer.getContext('2d'),stroke=layer.stroke.bind(layer);layer.stroke=(...a)=>{if(layer.getLineDash().length)trailStrokes++;return stroke(...a)};`);
+  await p.read(`window.mapHalos=[];window.mapTexts=[];const g=mmm.bigMap.g,orig=g.fillText.bind(g);g.fillText=(...a)=>{mapTexts.push(a[0]);return orig(...a)};const halo=g.strokeText.bind(g);g.strokeText=(...a)=>{mapHalos.push(a[0]);return halo(...a)};window.trailStrokes=0;const layer=mmm.bigMap.layer.getContext('2d'),stroke=layer.stroke.bind(layer);layer.stroke=(...a)=>{if(layer.getLineDash().length)trailStrokes++;return stroke(...a)};`);
   await p.read(`window.driveThrottles=[];const step=mmm.vehicle.update.bind(mmm.vehicle);mmm.vehicle.update=(...args)=>{driveThrottles.push(args[1].throttle);return step(...args)}`);
   await p.key('KeyW');await sleep(1000);await p.tap('KeyM');await sleep(600);
   check(await p.read(`!document.getElementById('bigMap').hidden`),'M opens big map');
@@ -20,7 +20,7 @@ await run('map','mode=explore&at=624271,5103301,0',async p=>{
   check(await p.read(`mmm.bigMap.canvas.width===Math.round(mmm.bigMap.w*2)&&mmm.bigMap.canvas.height===Math.round(mmm.bigMap.h*2)`),'map canvas is sharp at Retina ratio');
   check(await p.read(`document.querySelectorAll('#mapIndex [data-map-place]').length===mmm.places.places.length&&document.querySelectorAll('#mapIndex [data-hike]').length===3&&trailStrokes>=mmm.bigMap.lines.length&&mmm.bigMap.lines.length>0&&mmm.bigMap.hitMarks.length===mmm.places.places.length`),'map shows every place and hike');
   console.log('map labels',await p.read('mapTexts'));await p.shot('01-big-map-whole');
-  check(await p.read(`mapTexts.includes('Highway 19')&&mapTexts.some(t=>t==='Mabou Rivers Trail')&&mapTexts.includes('You are here')&&mapTexts.includes('↑ N')&&mapTexts.some(t=>/ km$/.test(t))`),'map draws road and trail names, heading, scale and north');
+  check(await p.read(`mapHalos.includes('Highway 19')&&mapHalos.includes('Mabou Rivers Trail')&&!mapHalos.includes('You are here')&&mapTexts.includes('Highway 19')&&mapTexts.some(t=>t==='Mabou Rivers Trail')&&mapTexts.includes('You are here')&&mapTexts.includes('↑ N')&&mapTexts.some(t=>/ km$/.test(t))`),'map draws road and trail names, heading, scale and north');
   await p.shot('01-big-map-whole');
   const cache=await p.read(`JSON.stringify([mmm.bigMap.cached,mapTexts.length,trailStrokes])`);await sleep(500);check(cache===await p.read('JSON.stringify([mmm.bigMap.cached,mapTexts.length,trailStrokes])'),'idle map keeps static layer');
   await p.read(`mmm.bigMap.view(624271,5103301,4)`);await sleep(200);await p.shot('02-map-village');

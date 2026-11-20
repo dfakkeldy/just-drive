@@ -122,5 +122,5 @@ export function droneReadout(heightAboveGround: number | null, distance: number,
   const h = heightAboveGround === null ? '–' : `${Math.max(0, heightAboveGround).toFixed(0)} m`;
   const state = returning ? 'returning' : distance >= DRONE.range - 1 ? 'at range limit' : heightAboveGround !== null && heightAboveGround >= DRONE.ceiling - 1 ? 'at height limit' : '';
   const heading = ['N','NE','E','SE','S','SW','W','NW'][((Math.round(-yaw / (Math.PI / 4)) % 8) + 8) % 8];
-  return `DRONE · Height ${h} · From the car ${distance.toFixed(0)} m · Speed ${speed.toFixed(0)} m/s (max ${maxSpeed.toFixed(0)}) · Heading ${heading}${state ? ` · ${state}` : ''}`;
+  return `DRONE · Height ${h} · From the car ${distance.toFixed(0)} m · Speed ${speed.toFixed(0)} m/s${Math.round(maxSpeed) !== DRONE.speed ? ` (max ${maxSpeed.toFixed(0)})` : ''} · Heading ${heading}${state ? ` · ${state}` : ''}`;
 }

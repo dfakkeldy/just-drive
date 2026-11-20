@@ -73,6 +73,14 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
     await send('Page.navigate',{url:`${origin.origin}/mabou?${query}&touch=1&q=low&res=1&hud=1&title=1`});
     await until(`!!window.mmm?.vehicle && document.documentElement.dataset.mmmReady==='true' && !!document.getElementById('titleStart')`);
     await until(`!!document.querySelector('#titleCard .mpControl .mpToggle[aria-checked="true"]')`);
+    if(name==='mail') {
+      if(safeLandscape) await read(`Object.entries({'--test-safe-left':'47px','--test-safe-right':'47px','--test-safe-bottom':'21px'}).forEach(([k,v])=>document.documentElement.style.setProperty(k,v))`);
+      assert.equal(await read(`['shiftHud','mailCard','phoneStatus'].every(id=>getComputedStyle(document.getElementById(id)).visibility==='hidden')`),true,'no live mail HUD before play');
+      await read(`document.getElementById('titleCard').scrollTop=0;new Promise(requestAnimationFrame)`);
+      const fade=await read(`(()=>{const e=document.getElementById('titleScrollFade'),shown=!e.hidden&&e.getClientRects().length>0;return {shown,solid:!shown||getComputedStyle(e).backgroundColor==='rgb(12, 20, 28)',clear:!shown||document.getElementById('titleStart').getBoundingClientRect().bottom<=e.getBoundingClientRect().top-12};})()`);
+      if(width===375&&height===667)assert.ok(fade.shown,'375x667 shows More below');
+      assert.ok(fade.solid&&fade.clear,'opaque More below and its fade clear START');
+    }
     await read(`document.getElementById('titleStart').click()`);
     await until(`document.body.classList.contains('tcOn') && document.documentElement.dataset.mmmReady==='true'`);
     assert.equal(await read('mmm.gameMode'),name==='mail'?'mail':'explore');
@@ -89,6 +97,9 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
     assert.equal(await read('mmm.vehicle.touchSpeedLimit'),name==='mail','production mode sets cap for this ride');
     assert.equal(await read(`document.getElementById('phoneLine')?.textContent.includes('LIMIT') ?? false`),false,'resting status has no limiter marker');
     if(name==='mail') {
+      // Keep the bar at its cap for both readings. Short text is content-sized; the LIMIT marker must not move that cap.
+      await read(`(()=>{const v=mmm.vehicle,saved=Object.getOwnPropertyDescriptor(v,'roadName');window.restoreStatusRoad=()=>{if(saved)Object.defineProperty(v,'roadName',saved);else delete v.roadName;};Object.defineProperty(v,'roadName',{get:()=> 'Long road name '.repeat(12),set(){},configurable:true});})()`);
+      await until(`document.getElementById('phoneLine').textContent.includes('Long road name')`);
       const before=(await boxes()).find(b=>b.id==='phoneLine');
       // Render fixture only: physics/activation is checked by phone-speed-cap. Feed the real
       // frame and PhoneMailHud a held-cap reading so every viewport paints the longest marker.
@@ -101,6 +112,7 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       await inspect('held limit render fixture');await shot('-limit');
       await read('restoreCapRender();delete window.restoreCapRender');
       await until(`!document.getElementById('phoneLine').textContent.includes('LIMIT')`);
+      await read('restoreStatusRoad();delete window.restoreStatusRoad');
     }
     const menu=await read(`document.body.classList.contains('phoneReadoutsMenu')`);
     if(menu) {
@@ -131,6 +143,13 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       assert.equal(await read(`(()=>{const label=[...document.querySelectorAll('#settings label')].find(e=>e.textContent==='Throw help');if(!label)return false;const b=label.querySelector('input');if(!b.checked)return false;b.click();if(localStorage.getItem('mmm.throwHelp')!=='0')return false;b.click();return localStorage.getItem('mmm.throwHelp')==='1';})()`),true,'Throw help uses saved toggle');
       await read(`document.getElementById('gear').click()`);
     }
+    // Settings opens only after the camera check, because any gear click also dismisses the mail intro.
+    await read(`document.getElementById('gear').click()`);
+    const settingsIds=['tcSteer','tcBrake','tcGo','tcReset',...(name==='mail'?['cameraButton','mailButton']:[])];
+    assert.deepEqual(await read(`(${JSON.stringify(settingsIds)}).map(id=>getComputedStyle(document.getElementById(id)).visibility)`),settingsIds.map(()=> 'hidden'),'Settings hides idle touch controls');
+    assert.deepEqual(await read(`(()=>{const r=document.getElementById('settings').getBoundingClientRect();return [...document.querySelectorAll('.tc,#cameraButton,#mailButton')].filter(e=>{const b=e.getBoundingClientRect();return getComputedStyle(e).visibility==='visible'&&b.width>0&&b.height>0&&b.left<r.right&&b.right>r.left&&b.top<r.bottom&&b.bottom>r.top;}).map(e=>e.id);})()`),[],'no visible touch tile intersects Settings');
+    await read(`document.getElementById('settingsClose').click()`);
+    assert.deepEqual(await read(`(${JSON.stringify(settingsIds)}).map(id=>getComputedStyle(document.getElementById(id)).visibility)`),settingsIds.map(()=> 'visible'),'Close restores touch controls');
     if(width<height) {
       await read(`document.getElementById('gear').click()`);
       assert.equal(await read(`(()=>{const s=document.querySelector('#settings .mpControl');if(!s)return false;const toggle=s.querySelector('.mpToggle');toggle.scrollIntoView({block:'center'});const r=toggle.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return toggle.getAttribute('aria-checked')==='true'&&(at===toggle||toggle.contains(at));})()`),true,'multiplayer controls shown and reachable');

@@ -83,7 +83,7 @@ a{color:var(--amber-soft);text-underline-offset:3px}
 #play .pause,#play[aria-pressed=true] .go{display:none}
 #play[aria-pressed=true] .pause{display:block}
 .presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
-.preset{display:grid;align-content:center;gap:2px;min-height:54px;padding:6px 10px;text-align:left;position:relative}
+.preset{display:grid;align-content:start;gap:2px;min-height:82px;padding:6px 10px;text-align:left;position:relative}
 .preset b{font:700 16px/1.1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
 .preset span{font:600 12px/1.25 var(--mono);letter-spacing:.06em;color:var(--dim);overflow-wrap:anywhere}
 .preset[aria-pressed=true]{border-color:var(--amber-dim);box-shadow:inset 0 0 0 1px rgba(255,178,63,.35),inset 0 0 18px rgba(255,178,63,.12),0 2px 0 #06080a}
@@ -112,7 +112,8 @@ summary span{color:var(--amber-soft);letter-spacing:.06em;text-transform:none;mi
 .card.credits{border:0;background:transparent;padding:14px 0}
 .way::after{content:"→";color:var(--amber);grid-column:2;grid-row:1/3}
 .way:is(:hover,:focus-visible){background:#263d34}
-.credits p{margin:8px 0 0;font-size:14px;line-height:1.55;color:var(--dim)}
+.credits p,.about{margin:8px 0 0;font-size:14px;line-height:1.55;color:var(--dim)}
+.about{margin:0}
 .ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:10px}
 .way{display:grid;grid-template-columns:1fr auto;gap:2px;min-height:64px;align-content:center;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);text-decoration:none;font-weight:700}
 .way span{grid-column:1;font-weight:400;font-size:14px;color:var(--dim)}
@@ -199,15 +200,15 @@ export async function listenPage() {
 <p class="hint">Choose a piece to hear it from its start. LIVE goes back to what is on the air now.</p>
 <ol id="programme"></ol>
 </details>
-<section class="card credits" aria-labelledby="creditsHead">
-<h2 id="creditsHead">Credits</h2>
-${PUBLIC_MUSIC_CREDIT.replace(' id="titleMusic"', ' id="listenMusic"')}
-<p>This is the car radio from two driving games on the real land of Cape Breton. The page and a car in the game play the same thing at the same moment.</p>
-</section>
+<p class="about">This is the car radio from two driving games on the real land of Cape Breton. The page and a car in the game play the same thing at the same moment.</p>
 <nav class="ways" aria-label="The games">
 <a class="way" href="https://mmm.fakkeldy.ca/">Mabou Mail Madness<span>A rural mail route you cannot win.</span></a>
 <a class="way" href="https://justdrive.fakkeldy.ca/mabou">Just Drive<span>The same land, no mail and no clock.</span></a>
 </nav>
+<section class="card credits" aria-labelledby="creditsHead">
+<h2 id="creditsHead">Credits</h2>
+${PUBLIC_MUSIC_CREDIT.replace(' id="titleMusic"', ' id="listenMusic"')}
+</section>
 <p class="foot"><a id="coffee" href="${COFFEE_URL}" rel="noopener">${COFFEE_TEXT}</a><a href="${ABOUT_URL.mail}">About: who made it and how</a></p>
 </div>
 </div>

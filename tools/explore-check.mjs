@@ -143,7 +143,12 @@ if(family==='all'||family==='phone'){
   check(['tcTrack','tcGo','tcBrake','placesButton'].every(id=>boxes.some(b=>b[0]===id)),`phone ${w} keeps driving and places controls`);
   if(w===844)await p.shot('07-phone-explore-drive');
   await p.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
-  const hit=async selector=>{const r=await p.read(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);await p.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,...r}]});await p.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await sleep(350);};
+  // Tap like a player: if a scrolling list cuts the target off, swipe it into view first. Then require that the
+  // tap point really lands on the target, so a tap on padding can no longer pass or fail by luck of layout.
+  const where=selector=>p.read(`(()=>{const e=document.querySelector(${JSON.stringify(selector)}),r=e.getBoundingClientRect(),c=e.closest('#placesBody')?.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,over:c?Math.max(0,r.bottom-c.bottom):0,sx:c?c.x+c.width/2:0,sy:c?c.bottom-8:0}})()`);
+  const hit=async selector=>{let r=await where(selector);if(r.over>0){await p.send('Input.synthesizeScrollGesture',{x:r.sx,y:r.sy,yDistance:-(r.over+16),speed:800,gestureSourceType:'touch'});await sleep(300);r=await where(selector);}
+   check(await p.read(`!!document.querySelector(${JSON.stringify(selector)}).contains(document.elementFromPoint(${r.x},${r.y}))`),`phone ${w} ${selector} is tappable where the player touches`);
+   await p.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:r.x,y:r.y}]});await p.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await sleep(350);};
   await hit('#placesButton');await hit('[data-place="rail-trail"]');
   check(await p.read(`document.getElementById('placesPanel').hidden&&mmm.vehicle.speed===0&&document.getElementById('placeArrival').innerText.includes('Mabou Rivers Trail')`),`phone ${w} real touch places jump`);
   check(p.errors.length===0,`phone ${w} no runtime exceptions`);await p.close();

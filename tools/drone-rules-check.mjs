@@ -73,11 +73,13 @@ function suite(m) {
   // The wheel and the readout.
   assert.equal(m.wheelSpeed(15, -1), 18.75); assert.equal(m.wheelSpeed(15, 1), 12);
   assert.equal(m.wheelSpeed(D.maxSpeed, -1), D.maxSpeed); assert.equal(m.wheelSpeed(D.minSpeed, 1), D.minSpeed);
-  assert.equal(m.droneReadout(12.4, 85.2, 9.04, 15, false), 'DRONE · Height 12 m · From the car 85 m · Speed 9 m/s (max 15) · Heading N');
-  assert.equal(m.droneReadout(null, 10, 0, 15, true), 'DRONE · Height – · From the car 10 m · Speed 0 m/s (max 15) · Heading N · returning');
+  assert.equal(m.droneReadout(12.4, 85.2, 9.04, 15, false), 'DRONE · Height 12 m · From the car 85 m · Speed 9 m/s · Heading N');
+  assert.equal(m.droneReadout(null, 10, 0, 15, true), 'DRONE · Height – · From the car 10 m · Speed 0 m/s · Heading N · returning');
   assert.match(m.droneReadout(5, D.range, 0, 15, false), /at range limit$/);
   assert.match(m.droneReadout(D.ceiling, 10, 0, 15, false), /at height limit$/);
   for (const [i, heading] of ['N','NE','E','SE','S','SW','W','NW'].entries()) assert.match(m.droneReadout(10, 2, 0, 15, false, -i * Math.PI / 4), new RegExp('Heading '+heading+'$'));
+  assert.match(m.droneReadout(12.4, 85.2, 9.04, 20, false), /Speed 9 m\/s \(max 20\)/);
+  assert.doesNotMatch(m.droneReadout(12.4, 85.2, 9.04, m.wheelSpeed(m.wheelSpeed(15, 1), -1), false), /\(max/, 'a wheel round trip hides the default despite floating point rounding');
   // The gimbal on held arrow keys: smooth start, about 60 degrees a second, stops at straight down and just above level.
   const g = { pitch: -0.3, rate: 0 }; m.stepGimbal(g, 1, 1 / 60);
   assert.ok(g.rate > 0 && g.rate < 0.3 * m.GIMBAL.rate, 'the tilt starts gently');

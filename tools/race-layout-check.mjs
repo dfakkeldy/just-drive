@@ -121,10 +121,10 @@ export async function raceLayoutCheck({open,safeArea,sizes,outDir}) {
           // Countdown, running time and results must PAINT while Settings is CLOSED.
           await p.read(`document.getElementById('gear').click()`);
           const states=[];
-          for(const state of ['countdown','running','finished']) {
+          for(const state of ['countdown','running','finished','spectator']) {
             await p.read(`(()=>{const m=mmm.mp.current,s=m.net.race;s.serial++;s.route={roadId:m.host?.roads?.[0]?.id??1,gates:[{x:mmm.vehicle.x,z:mmm.vehicle.z},{x:mmm.vehicle.x+50,z:mmm.vehicle.z},{x:mmm.vehicle.x+100,z:mmm.vehicle.z}]};
-              s.startAt=${state==='countdown'?25000:7600};s.racers=[{id:m.net.me.id,next:1,time:${state==='finished'?2000:'null'},out:false}];m.race.update();})()`);
-            const expected=state==='countdown'?'Race starts in 5':state==='running'?'Race · ring 2/3 · 12.4 s':'Finished · 2.00 s';
+              s.startAt=${state==='countdown'?25000:7600};s.racers=${state==='spectator'?'[]':`[{id:m.net.me.id,next:1,time:${state==='finished'?2000:'null'},out:false}]`};m.race.update();})()`);
+            const expected=state==='countdown'?'Race starts in 5':state==='running'?'Race · ring 2/3 · 12.4 s':state==='spectator'?'Spectating · 12.4 s':'Finished · 2.00 s';
             if(process.env.RACE_LAYOUT_MUTANT==='go')await p.read(overGoMutant);
             const measured=await inspectReadout(p,w,h,insets,expected);states.push({state,...measured});
             if(property&&!folded)await shot(`${name}-${state}`);
@@ -139,7 +139,7 @@ export async function raceLayoutCheck({open,safeArea,sizes,outDir}) {
             }
             // Keep the full Settings status regression too; hidden text is never the driving proof.
             const text=await p.read(`document.getElementById('racePanel').textContent`);
-            assert.match(text,state==='countdown'?/Race starts in 5[\s\S]*Stay inside the start ring until GO\./:state==='running'?/Race · 12\.4 s[\s\S]*GO · checkpoint 2\/3 · 12\.4 s/:/Race finished · results[\s\S]*Finished · 2\.00 s/);
+            assert.match(text,state==='countdown'?/Race starts in 5[\s\S]*Stay inside the start ring until GO\./:state==='running'?/Race · 12\.4 s[\s\S]*GO · checkpoint 2\/3 · 12\.4 s/:state==='spectator'?/Room race[\s\S]*Spectating · join the next race\./:/Race finished · results[\s\S]*Finished · 2\.00 s/);
           }
           await p.read(`document.getElementById('gear').click()`);
           for(const selector of ['summary','select','button:first-of-type','button:last-of-type']) {

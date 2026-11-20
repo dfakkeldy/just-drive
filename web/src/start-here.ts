@@ -194,11 +194,12 @@ export function startHereAddress(site: Site, area: string, url: URL, multiplayer
 }
 
 const CSS = `
-#startHere{min-width:0;margin-top:10px;overflow-wrap:anywhere}
-#startHere button{box-sizing:border-box;width:100%;min-height:44px;border:0;border-radius:0;background:transparent;color:inherit;font:700 14px system-ui,sans-serif;padding:7px 0;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+#startHere{min-width:0;margin-top:10px;overflow-wrap:anywhere;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;text-align:left}
+#startHere>:not(#titleStartHere,#startHereHint){flex-basis:100%}
+#startHere button{box-sizing:border-box;width:auto;flex:none;text-align:left;min-height:44px;border:0;border-radius:0;background:transparent;color:inherit;font:700 14px system-ui,sans-serif;padding:7px 0;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 #startHere button:focus-visible{outline:3px solid white;outline-offset:2px}
 #startHere button:disabled{opacity:.6;cursor:wait}
-#startHere small{display:block;margin-top:4px;font:13px/1.4 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
+#startHere small{display:block;flex:1 1 220px;margin-top:0;font:13px/1.4 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
 #startHereStatus{position:fixed;z-index:30;top:max(12px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:calc(100% - 24px);margin:0;padding:8px 12px;border-radius:6px;background:#0c141c;color:#eef2f6;font:13px/1.4 system-ui,sans-serif;pointer-events:none}
 #startHereStatus:empty{display:none}
 /* Phones. At 390x844 the card reached 847px once the two-line DRONE row came (#219): spacing is tight upright, and in both

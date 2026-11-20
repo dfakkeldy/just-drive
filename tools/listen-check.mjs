@@ -50,6 +50,9 @@ try {
   assert.match(html, /\.volume\{[^}]*margin:16px 2px/);
   assert.match(html, /\.preset span\{[^}]*12px/);
   assert.match(html, /\[data-state=sound\] \.preset\[aria-pressed=true\]::after\{content:"▶ Playing"/);
+  const aboutAt=html.indexOf('class="about"'), waysAt=html.indexOf('class="ways"'), creditsAt=html.indexOf('id="creditsHead"');
+  assert.ok(aboutAt>=0 && waysAt>aboutAt && creditsAt>waysAt,'about and games precede credits');
+  assert.match(html, /\.preset\{[^}]*align-content:start[^}]*min-height:82px/);
   // One catalogue: the page asks for the car radio's lists, in the car radio's folder, and holds no station of its own.
   assert.match(html, /"\.\.\/audio"/, 'the songs are in the site audio folder');
   assert.match(html, /radio\.json/); assert.doesNotMatch(html, /radio-just\.json/, 'one list on both hosts: the page is the same page');

@@ -107,7 +107,7 @@ body.tcOn #settings{top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-t
   box-sizing:border-box;font-size:10px;line-height:18px;padding:2px 5px;
   background:var(--panel);border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.tcOn :is(#raceReadout,#gameReadout):not([hidden]){display:block}
-body.tcOn.compactPhone #phoneLine{display:block;font-size:10px;line-height:18px;padding:2px 5px;
+body.tcOn.compactPhone #phoneLine{display:block;box-sizing:border-box;width:fit-content;max-width:100%;font-size:10px;line-height:18px;padding:2px 5px;
   background:var(--panel);border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.tcOn.mailPhone :is(#hud,#shiftHud){display:none}
 body.tcOn.mailPhone.introDone #stopHint.intro{display:none}
@@ -186,7 +186,7 @@ body.tcOn #settings #miniMapCanvas{touch-action:pan-y}
 body.tcOn #settings #stopHint{width:100%;max-width:none;white-space:pre-line;font-size:11px;line-height:15px;padding:3px 6px}
 body.tcOn #settings #photoCaption{-webkit-line-clamp:unset}
 body.tcOn #settings #placeArrival{height:auto;max-height:none;white-space:normal;font-size:11px;line-height:15px;padding:6px 8px}
-@media(orientation:landscape){body.tcOn.compactPhone #placeArrival{height:14px;max-height:14px;min-height:0;padding:0 4px;border:0;overflow:hidden;white-space:nowrap;font-size:10px;line-height:14px}}
+@media(orientation:landscape){body.tcOn.compactPhone #placeArrival{width:fit-content;min-width:0;height:14px;max-height:14px;min-height:0;padding:0 4px;border:0;overflow:hidden;white-space:nowrap;font-size:10px;line-height:14px}body.tcOn.compactPhone #phoneHud #placeArrival p{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}}
 body.tcOn #settings :is(#radio,#relief,#photoTag){width:100%;max-width:none}
 @media(orientation:landscape){body.tcOn #radio:not(.lost):not(.weak):not(.call) span{display:none!important}body.tcOn #radio b,body.tcOn.compactPhone #radio b{display:block!important;white-space:normal;overflow-wrap:anywhere}}
 #phoneReadoutsPanel[hidden]{display:none}

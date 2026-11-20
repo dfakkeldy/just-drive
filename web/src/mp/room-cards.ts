@@ -30,7 +30,8 @@ body.tcOn .roomCountdown{font-size:72px}
 :is(#mpCards,#mpRoom)>details[hidden]{display:none}
 :is(#mpCards,#mpRoom) summary{cursor:pointer}
 #mpRoom>details{border:0;border-radius:0;border-top:1px solid var(--line);background:none;padding:0}
-#mpRoom>details>summary{min-height:56px;box-sizing:border-box;padding:16px 0}
+#mpRoom>details>summary{min-height:56px;box-sizing:border-box;padding:16px 0;font-weight:700}
+:is(#racePanel,#gamePanel)>button+button{margin-left:8px}
 #mpRoom :is(button,select){min-height:56px}
 `;
 const order = ['mpSocial', 'racePanel', 'gamePanel'];

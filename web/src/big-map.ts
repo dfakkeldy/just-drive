@@ -257,8 +257,8 @@ export class BigMap {
     for (const line of this.lines) { g.beginPath(); this.trace(g, line.pts); g.stroke(); }
     g.setLineDash([]);
   }
-  private label(text: string, x: number, y: number, colour: string, angle = 0, place = false, anchor?: Point): boolean {
-    const g = this.g; g.font = place ? '600 12px system-ui,sans-serif' : '11px system-ui,sans-serif';
+  private label(text: string, x: number, y: number, colour: string, angle = 0, place = false, anchor?: Point, halo = false): boolean {
+    const g = this.g; g.font = place ? '600 12px system-ui,sans-serif' : halo ? 'italic 11px system-ui,sans-serif' : '11px system-ui,sans-serif';
     const width = g.measureText(text).width + 10, h = 19;
     const w = Math.abs(Math.cos(angle)) * width + Math.abs(Math.sin(angle)) * h, height = Math.abs(Math.sin(angle)) * width + Math.abs(Math.cos(angle)) * h;
     const rect = { x: x - w / 2, y: y - height / 2, w, h: height };
@@ -268,13 +268,16 @@ export class BigMap {
       g.save(); g.strokeStyle = '#dbe5cb99'; g.lineWidth = 1; g.beginPath(); g.moveTo(anchor[0], anchor[1]);
       g.lineTo(Math.max(rect.x, Math.min(rect.x + rect.w, anchor[0])), Math.max(rect.y, Math.min(rect.y + rect.h, anchor[1]))); g.stroke(); g.restore();
     }
-    g.save(); g.translate(x, y); g.rotate(angle); g.fillStyle = '#10242be8'; g.fillRect(-width / 2, -h / 2, width, h); g.fillStyle = colour; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 0, 0); g.restore(); return true;
+    g.save(); g.translate(x, y); g.rotate(angle); g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (halo) { g.lineJoin = 'round'; g.lineWidth = 3; g.strokeStyle = '#10242b'; g.strokeText(text, 0, 0); }
+    else { g.fillStyle = '#10242be8'; g.fillRect(-width / 2, -h / 2, width, h); }
+    g.fillStyle = colour; g.fillText(text, 0, 0); g.restore(); return true;
   }
   private lineLabel(name: string, pts: readonly Point[], colour: string): boolean {
     const segments = pts.slice(1).map((p, i) => { const a = this.screen(pts[i]), b = this.screen(p); return { a, b, length: Math.hypot(b[0] - a[0], b[1] - a[1]) }; }).sort((a, b) => b.length - a.length);
     for (const { a, b } of segments) {
       let angle = Math.atan2(b[1] - a[1], b[0] - a[0]); if (angle > Math.PI / 2) angle -= Math.PI; if (angle < -Math.PI / 2) angle += Math.PI;
-      if (this.label(name, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 9, colour, angle)) return true;
+      if (this.label(name, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 9, colour, angle, false, undefined, true)) return true;
     }
     return false;
   }

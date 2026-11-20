@@ -90,7 +90,7 @@ export class RaceView {
         :racer?.time!==null&&racer?.time!==undefined?`Finished · ${(racer.time/1000).toFixed(2)} s`
         :racer?.out?'Race · out':s.startAt&&now-s.startAt>=RACE_LIMIT?'Race timed out.'
         :racer && racer.time==null && !racer.out && s.startAt && s.startAt<=now?`Race · ring ${Math.min(next+1,s.route?.gates.length??0)}/${s.route?.gates.length} · ${((now-s.startAt)/1000).toFixed(1)} s`
-        :s.startAt?`Race · ${((now-s.startAt)/1000).toFixed(1)} s`:'Room race';
+        :s.startAt?`Spectating · ${((now-s.startAt)/1000).toFixed(1)} s`:'Room race';
       if(this.readout.textContent!==text)this.readout.textContent=text;
     }
     this.status.style.color = host && !s.route ? 'var(--ink-dim)' : '';

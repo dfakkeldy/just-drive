@@ -265,7 +265,7 @@ body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-righ
 .droneStick b{position:absolute;left:50%;top:50%;width:46%;height:46%;margin:-23% 0 0 -23%;border-radius:50%;
   background:rgba(238,242,246,.9);box-shadow:0 2px 8px rgba(0,0,0,.45);pointer-events:none}
 .droneStick.held b{background:var(--maple,#d0632e)}
-.droneStick span{position:absolute;bottom:calc(100% + 3px);left:0;right:0;width:max-content;margin:0 auto;white-space:nowrap;padding:1px 6px;border:1px solid rgba(238,242,246,.4);border-radius:6px;background:var(--panel-solid,#0b1219);text-align:center;font:700 10px ui-monospace,Menlo,Consolas,monospace;
+.droneStick span{position:absolute;bottom:calc(100% + 3px);left:0;right:0;width:max-content;margin:0 auto;white-space:nowrap;padding:1px 6px;border:1px solid rgba(238,242,246,.4);border-radius:6px;background:var(--panel-solid,#0b1219);text-align:center;font:700 12px/14px ui-monospace,Menlo,Consolas,monospace;
   letter-spacing:.08em;color:var(--ink,#eef2f6);pointer-events:none}
 #droneReturn{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));
   min-width:112px;height:56px;padding:0 8px;border-radius:10px;border:1px solid rgba(238,242,246,.4);background:var(--panel-solid,#0b1219);
@@ -326,7 +326,7 @@ export function createDroneSticks(home: () => void): DroneSticks {
     document.body.appendChild(el);
     return { el, end };
   };
-  const left = stick('droneLeft', 'CLIMB · TURN', (x, y) => { command.turn = -x; command.up = y; });
+  const left = stick('droneLeft', '↕ CLIMB · ↔ TURN', (x, y) => { command.turn = -x; command.up = y; });
   const right = stick('droneRight', 'FLY', (x, y) => { command.right = x; command.forward = y; });
   const ret = Object.assign(document.createElement('button'), { id: 'droneReturn', textContent: 'RETURN TO CAR', hidden: true });
   ret.setAttribute('aria-label', 'Fly the drone back to the vehicle. Tap again to land at once');

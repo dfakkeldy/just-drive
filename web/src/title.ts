@@ -32,7 +32,8 @@ body.exploreMode #title #titleStart,#title.justDrive #titleStart{background:#a7d
 #title .titleFooter>span{white-space:nowrap}
 #title .titleFooter>span+span::before{content:'· '}
 @media(max-width:759px){#title .titleFooter>span:last-child{flex-basis:100%}#title .titleFooter>span:last-child::before{content:none}}
-#titleScrollFade{position:fixed;z-index:3;height:24px;pointer-events:none;font:12px/24px system-ui,sans-serif;text-align:center;color:var(--ink-dim,#b9c3cc);background:linear-gradient(transparent,var(--panel-solid,#0c141c) 40%);border-radius:0 0 10px 10px}
+#titleScrollFade{position:fixed;z-index:3;height:24px;pointer-events:none;font:12px/24px system-ui,sans-serif;text-align:center;color:var(--ink-dim,#b9c3cc);background:var(--panel-solid,#0c141c);border-radius:0 0 10px 10px}
+#titleScrollFade::before{content:'';position:absolute;left:0;right:0;bottom:100%;height:12px;background:linear-gradient(transparent,var(--panel-solid,#0c141c))}
 #titleScrollFade[hidden]{display:none}
 #title .titleFooter #titleCredits{margin:0;min-height:44px}
 #title :is(#titleOtherGame,#exploreCaution,.titleFooter){font:13px/1.4 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
@@ -58,6 +59,7 @@ body.exploreMode #modeChoice button[aria-pressed="true"],#title.justDrive #modeC
 #titleOtherGame a:focus-visible{outline:3px solid #fff;outline-offset:3px}
 #title dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:18px 0 0;font-size:14px}
 #title dt{font:700 12px ui-monospace,Menlo,Consolas,monospace;color:var(--ink,#eef2f6);white-space:nowrap}
+#title dt b{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-weight:600}
 #title dd{margin:0;color:var(--ink-dim,#b9c3cc)}
 #titleStart{margin-top:22px;width:100%;min-height:54px;border:0;border-radius:8px;background:var(--maple,#d0632e);color:#0b1620;font:800 17px system-ui,sans-serif;cursor:pointer}
 #titleStart:focus-visible,#titleCredits:focus-visible{outline:3px solid #fff;outline-offset:3px}
@@ -86,7 +88,7 @@ body.exploreMode #modeChoice button[aria-pressed="true"],#title.justDrive #modeC
 
 const PHONE_CSS = `
 body:has(#phoneTop) #title{padding-top:calc(76px + env(safe-area-inset-top,0px));align-items:safe center;box-sizing:border-box}
-body:has(#phoneTop) #title #titleCard{max-height:calc(100dvh - 92px - env(safe-area-inset-top,0px));height:auto;padding-bottom:34px!important}
+body:has(#phoneTop) #title #titleCard{max-height:calc(100dvh - 92px - env(safe-area-inset-top,0px));height:auto;padding-bottom:46px!important}
 `;
 const JUST_CSS = `
 #title.justDrive,#title.justDrive #titleCard{box-sizing:border-box}
@@ -176,7 +178,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     ? eraAddress(addressSite, !historical, location.pathname, new URLSearchParams(location.search)) : null;
   // Keep the shared mail markup and styles byte-identical. Only this card gets the extra line.
   if (door) document.head.appendChild(Object.assign(document.createElement('style'), { textContent: `
-#titleEra{display:block;color:var(--ink-dim,#b9c3cc);font:13px/1.4 system-ui,sans-serif;text-align:center;padding:10px 0;min-height:24px;box-sizing:content-box}
+#titleEra{display:block;color:var(--ink-dim,#b9c3cc);font:13px/1.4 system-ui,sans-serif;text-align:left;padding:10px 0;min-height:24px;box-sizing:content-box}
 #titleEra:focus-visible{outline:3px solid #fff;outline-offset:2px}
 
 ` }));
@@ -187,7 +189,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
 
     <p class="tag">${historical ? 'A fictional journey · Cape Breton' : explore ? 'The land at your own pace' : areaName ? 'Real land and roads' : daily ? `Today’s run · ${shortDate(daily.date)} · the same for everybody` : fired ? 'Get Fired · a job you cannot lose' : 'A route you cannot win'}</p>
     <h1>${explore ? name : areaName ? `Drive around <span>${areaName}</span>` : 'Mabou <span>Mail</span> Madness'}</h1>
-    <p id="titleLede">${historical ? "A work of fiction, based on an 1884 survey sheet. Places are approximate. It shows no person's land." : explore ? `Drive around the real land near ${place}, Cape Breton, and find places at your own pace.` : daily ? dailyText : fired ? 'Same route, same clock. Today every complaint counts for you. Climb the discipline ladder to Fired before 18:00. The union grieves every step.' : areaName ? `Explore the real land and roads around ${areaName}, Cape Breton.` : 'Deliver the day’s run around Mabou, Cape Breton. Stay off the lawns. Somebody will phone the post office anyway.'}</p>
+    <p id="titleLede">${historical ? "A work of fiction, based on an 1884 survey sheet. Places are approximate. It shows no person's land." : explore ? `Drive around the real land near ${place}, Cape Breton, and find its places.` : daily ? dailyText : fired ? 'Same route, same clock. Today every complaint counts for you. Climb the discipline ladder to Fired before 18:00. The union grieves every step.' : areaName ? `Explore the real land and roads around ${areaName}, Cape Breton.` : 'Deliver the day’s run around Mabou, Cape Breton. Stay off the lawns. Somebody will phone the post office anyway.'}</p>
     ${mailCard ? `<div id="modeChoice" role="group" aria-label="How to play" aria-describedby="titleLede"><button id="modeMail" aria-pressed="${!explore && !fired}">Deliver the mail</button><button id="modeExplore" aria-pressed="${explore}">Just drive</button><button id="modeFired" aria-pressed="${fired && !daily}">Get fired</button></div><div id="dailyChoice"><button id="modeDaily" aria-pressed="${!!daily}">Today’s run: five minutes, complaint bingo</button></div>` : ''}
     ${daily ? `<div id="titleBingo" role="list" aria-label="Today’s complaint bingo card">${daily.squares.map(s => `<span role="listitem">${s.label.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</span>`).join('')}</div>
     ` : ''}<p id="waysOut" hidden></p>

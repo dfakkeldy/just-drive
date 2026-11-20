@@ -121,7 +121,7 @@ async function flightMap(p, phone) {
   check(climbed.height > 12, `Space climbs: ${climbed.height?.toFixed(1)} m above the ground`);
   // The readout keeps the numbers; the keys sit in the docked Drone keys panel.
   const keysDocked = await p.read(`(()=>{const h=document.getElementById('droneHints');return !h.hidden&&h.getClientRects().length>0&&h.textContent.includes('↑/↓Camera')&&h.textContent.includes('SpaceUp')})()`);
-  check(/^DRONE · Height \d+ m · From the car \d+ m · Speed \d+ m\/s \(max \d+\) · Heading (N|NE|E|SE|S|SW|W|NW)\b/.test(climbed.hud) && !climbed.hud.includes('↑/↓') && keysDocked, 'HUD shows height, distance, speed and heading, and the docked panel the keyboard keys: ' + climbed.hud.split('\n')[0]);
+  check(/^DRONE · Height \d+ m · From the car \d+ m · Speed \d+ m\/s · Heading (N|NE|E|SE|S|SW|W|NW)\b/.test(climbed.hud) && !climbed.hud.includes('(max') && !climbed.hud.includes('↑/↓') && keysDocked, 'HUD shows height, distance, speed and heading, and the docked panel the keyboard keys: ' + climbed.hud.split('\n')[0]);
   // ↑ tilts back up, without moving it.
   await p.hold('ArrowUp', 700); await sleep(400);
   a = await s();
@@ -149,6 +149,7 @@ async function flightMap(p, phone) {
   await p.read(`mmm.drone.state.yaw=${toVillage}`);
   const farFromCar = Math.hypot(parked.car.x, parked.car.z);
   for (let i = 0; i < 3; i++) await p.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 360, deltaX: 0, deltaY: -100 });
+  check(await p.until(`document.getElementById('hud').textContent.includes('(max 29)')`), 'three wheel steps show the changed top speed');
   const flyFor = Math.max(2500, Math.min(14000, farFromCar / 25 * 1000));
   await p.hold('KeyW', flyFor); await sleep(2500);
   await p.hold('ArrowUp', 500);
@@ -207,7 +208,8 @@ for (const [w, h, name, mode] of [[390, 844, 'portrait', 'mail'], [844, 390, 'la
   check(await p.until(`!document.body.classList.contains('tcOn') && !document.getElementById('droneLeft').hidden && !document.getElementById('droneRight').hidden && !document.getElementById('droneReturn').hidden`), `${name}: driving controls give way to the two sticks and RETURN`);
   await sleep(1500);
   await flightMap(p, true);
-  check(await p.read(`document.querySelector('#droneLeft span').textContent==='CLIMB · TURN'&&document.getElementById('droneReturn').textContent==='RETURN TO CAR'`),'touch labels explain climb, turn and return');
+  check(await p.read(`document.querySelector('#droneLeft span').textContent==='↕ CLIMB · ↔ TURN'&&document.getElementById('droneReturn').textContent==='RETURN TO CAR'`),'touch labels explain climb, turn and return');
+  check(await p.read(`Array.from(document.querySelectorAll('.droneStick span')).every(e=>{const s=getComputedStyle(e);return s.fontSize==='12px'&&s.lineHeight==='14px'&&e.getBoundingClientRect().height<=18;})`),'stick labels use 12px type in chips no taller than 18px');
   await p.read(`document.getElementById('pauseButton').click();document.querySelector('#pauseKeys summary').click()`);
   check(await p.read(`JSON.stringify([...document.querySelectorAll('#pauseKeys dt')].map(e=>e.textContent))===JSON.stringify(['Left stick','Right stick','RETURN TO CAR'])&&document.querySelector('#pauseKeys dl').textContent.includes('Climb and turn')`),'phone pause help lists sticks and Return to car');
   await p.read(`document.getElementById('resumeGame').click()`);
@@ -229,7 +231,7 @@ for (const [w, h, name, mode] of [[390, 844, 'portrait', 'mail'], [844, 390, 'la
   const d = await s();
   check(d.yaw < c.yaw - 0.3, `${name}: left stick right turns right`);
   await sleep(1500);
-  check(/^DRONE · Height \d+ m\nFrom the car \d+ m\nSpeed \d+ m\/s \(max \d+\)\nHeading [NESW]{1,2}/.test(d.hud) && !d.hud.includes('WASD'), `${name}: phone HUD shows the readout, two short lines, without keys: ${JSON.stringify(d.hud)}`);
+  check(/^DRONE · Height \d+ m\nFrom the car \d+ m\nSpeed \d+ m\/s\nHeading [NESW]{1,2}/.test(d.hud) && !d.hud.includes('(max') && !d.hud.includes('WASD'), `${name}: phone HUD shows the readout, two short lines, without keys: ${JSON.stringify(d.hud)}`);
   const hidden = await p.read(`['cameraButton','stopHint','mailScore'].filter(id=>{const e=document.getElementById(id);return e&&e.getClientRects().length>0})`);
   check(hidden.length === 0, `${name}: CAMERA, the stop hint and the score give the sticks room ${JSON.stringify(hidden)}`);
   const hudClear = await p.read(`(()=>{const h=document.getElementById('hud').getBoundingClientRect();return ['pauseButton','gear'].filter(id=>{const r=document.getElementById(id).getBoundingClientRect();return h.left<r.right&&h.right>r.left&&h.top<r.bottom&&h.bottom>r.top})})()`);

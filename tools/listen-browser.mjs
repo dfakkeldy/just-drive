@@ -204,6 +204,8 @@ for (const [w, h] of SIZES) {
   await read(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => { scrollTo(0, 0); r(true); })))`);
   const bad = await read(`(() => {
     const bad = [], W = innerWidth, H = innerHeight, box = e => e.getBoundingClientRect();
+    const hs=[...document.querySelectorAll('.preset')].map(e=>box(e).height);
+    if (!(W > H && H <= 520) && Math.max(...hs)-Math.min(...hs) > .5) bad.push('preset heights differ by more than 0.5px');
     if (document.documentElement.scrollWidth > W) bad.push('the page scrolls sideways (' + document.documentElement.scrollWidth + ' > ' + W + ')');
     const all = [...document.querySelectorAll('#unit, #unit *, .card, .way, .foot a')].filter(e => e.getClientRects().length && !e.closest('svg') && getComputedStyle(e).position !== 'absolute');
     for (const e of all) { const b = box(e); if (b.left < -0.5 || b.right > W + 0.5) bad.push((e.id || e.className || e.tagName) + ' leaves the screen sideways'); }

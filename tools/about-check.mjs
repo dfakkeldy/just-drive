@@ -21,6 +21,8 @@ try {
     assert.doesNotMatch(html, /<summary>\s*<h[1-6]/);
     const credits = html.match(/<details open class="credits"[^>]*>([\s\S]*?)<\/details>/)[1];
     assert.match(html, /<\/details>\s*<p class="signoff">[^<]+<\/p>/);
+    const signoff=html.match(/<p class="signoff">([^<]+)<\/p>/)[1];
+    assert.equal(words.split(signoff).length,2,brand+' sign-off appears only once');
     assert.doesNotMatch(html.match(/\.maker\{([^}]+)\}/)[1], /border|background/);
     assert.equal([...html.matchAll(/<title>/g)].length, 1, brand + ' one title');
     assert.match(html, /<meta name="viewport"/);

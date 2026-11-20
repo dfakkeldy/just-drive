@@ -188,7 +188,7 @@ for(const touch of [false,true]){
   racer.time=1200;race.update();assert.equal(strip.textContent,'Finished · 1.20 s');
   racer.time=null;racer.out=true;race.update();assert.equal(strip.textContent,'Race · out');
   racer.out=false;countdownNow=net.race.startAt+600000;race.update();assert.equal(strip.textContent,'Race timed out.');
-  net.race.racers=[];countdownNow=11000;race.update();assert.equal(strip.textContent,'Race · 1.0 s','spectator keeps its old strip');
+  net.race.racers=[];countdownNow=11000;race.update();assert.equal(strip.textContent,'Spectating · 1.0 s','a spectator\'s strip says Spectating');
  }
  net.race.route=null;net.race.startAt=0;race.update();
  assert.equal(document.getElementById('raceStatus').textContent,'Pick a course to start.');

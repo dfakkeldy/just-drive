@@ -61,7 +61,10 @@ for(const [width,height,name] of [[390,844,'just-drive-portrait'],[844,390,'just
  checkStations(await p.read('mmm.radio.stations'));
  assert.equal(await p.read(`mmm.radio.stations[mmm.radio.station].dial`),JUST_START_DIAL);
  assert.equal(await p.read(`mmm.radio.storageKey`),'mmm.radio.just');
+ await p.read(`document.querySelector('#titleControls details summary').click()`);
+ assert.equal(await p.read(`(()=>{const d=document.querySelector('#titleControls details'),e=[...d.querySelectorAll('dt')].find(e=>e.textContent==='RADIO');return d.open&&!!e&&e.getClientRects().length>0&&getComputedStyle(e).visibility==='visible';})()`),true,'All controls reveals the visible RADIO row');
  assert.match(await p.read(`document.getElementById('titleCard').innerText`),/RADIO/);
+ await p.read(`document.querySelector('#titleControls details summary').click()`);
  assert.equal(await p.read('document.title'),'Just Drive: Mabou');assert.equal(await p.read(`document.querySelector('#title h1').innerText`),'Just Drive: Mabou');
  assert.equal(await p.read('mmm.gameMode'),'explore');assert.deepEqual(await p.read('__modeAccess'),[]);
  assert.equal(await p.read(`!!document.getElementById('modeMail')`),false);

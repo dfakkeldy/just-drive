@@ -64,7 +64,7 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
             return { before, after }; })()`);
           // The sheet, credit, gear and stop hint have new pins below. All other paint stays pinned.
           assert.deepEqual(both.after.gear.paint,['rgb(238, 242, 246)','rgb(12, 20, 28)','ui-monospace, "SF Mono", Menlo, Consolas, monospace','20px','normal','1','normal','6px','auto','block'],'shared gear paint');
-          for(const id of ['settings','credit','gear','stopHint']){delete both.before[id];delete both.after[id];}
+          for(const id of ['settings','credit','gear','stopHint','cameraButton','mailButton']){delete both.before[id];delete both.after[id];}
           assert.deepEqual(both.after, both.before, `${carrier} ${size} unchanged desktop boxes and paint`);
           if(await read(`mmm.gameMode==='mail'`)) assert.deepEqual(await read(`(()=>{
             const card=document.getElementById('mailCard'),hint=document.getElementById('stopHint'),score=document.getElementById('mailScore');
@@ -79,9 +79,39 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
               hint.textContent='';result.emptyPadding=getComputedStyle(score).paddingTop;result.emptyHidden=getComputedStyle(hint).display==='none';
               hint.textContent='Next: roadside box.';document.body.classList.add('droneOn');hint.style.display='none';
               result.flightPadding=getComputedStyle(score).paddingTop;
+              result.flightFit=card.getBoundingClientRect().width<460&&Math.abs(card.getBoundingClientRect().width-score.getBoundingClientRect().width)<.1;
               return result;
             } finally {hint.textContent=saved.text;hint.style.cssText=saved.style;hint.hidden=saved.hidden;document.body.classList.toggle('droneOn',saved.drone);}
-          })()`),{inside:true,stacked:true,aligned:true,paint:Array.from({length:2},()=>['rgba(8, 14, 20, 0.82)','3px','solid','rgb(208, 99, 46)']),joinedPadding:'0px',emptyPadding:'8px',emptyHidden:true,flightPadding:'8px'},'mail hint and tally form one aligned panel; a lone tally keeps top padding');
+          })()`),{inside:true,stacked:true,aligned:true,paint:Array.from({length:2},()=>['rgba(8, 14, 20, 0.82)','3px','solid','rgb(208, 99, 46)']),joinedPadding:'0px',emptyPadding:'8px',emptyHidden:true,flightPadding:'8px',flightFit:true},'mail hint and tally form one aligned panel; a lone tally keeps top padding');
+          for(const short of [false,true]) {
+            if(short)await send('Emulation.setDeviceMetricsOverride',{width:900,height:500,deviceScaleFactor:scale,mobile:false});
+            await sleep(150);
+            await read(`(()=>{const map=document.getElementById('miniMap');if(map.classList.contains('enlarged'))document.getElementById('miniMapLarge').click();if(map.classList.contains('folded'))document.getElementById('miniMapHead').click();})()`);
+            assert.deepEqual(await read(`(()=>{
+              const map=document.getElementById('miniMap'),relief=document.getElementById('relief'),radio=document.getElementById('radio');
+              const saved={map:map.className,relief:relief.className,radio:radio.className};
+              try {
+                map.classList.remove('folded','enlarged');relief.classList.add('ready');radio.classList.remove('live','off');
+                const m=map.getBoundingClientRect(),r=radio.getBoundingClientRect(),g=relief.getBoundingClientRect(),label=relief.querySelector('span').getBoundingClientRect();
+                const inside=(a,b)=>a.left>=b.left&&a.right<=b.right+1;
+                return {width:m.width,aligned:[g,r].every(b=>Math.abs(b.left-m.left)<=1&&Math.abs(b.width-m.width)<=1),
+                  radioFits:[radio.querySelector('b'),radio.querySelector('span')].every(e=>e.scrollWidth<=e.clientWidth+1&&inside(e.getBoundingClientRect(),r)),
+                  colour:getComputedStyle(radio.querySelector('span')).color,opacity:getComputedStyle(radio.querySelector('span')).opacity,
+                  labelFits:inside(label,g),track:relief.querySelector('i').getBoundingClientRect().width>=24};
+              } finally {map.className=saved.map;relief.className=saved.relief;radio.className=saved.radio;}
+            })()`),{width:short?126:178,aligned:true,radioFits:true,colour:'rgb(154, 166, 177)',opacity:'1',labelFits:true,track:true},'desktop stack fits the minimap width, including ready label and radio text');
+          }
+          await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:scale,mobile:false});
+          await sleep(150);
+          if(await read(`mmm.gameMode==='mail'`)) assert.deepEqual(await read(`(()=>{
+            const hint=document.getElementById('stopHint'),saved=hint.textContent;hint.textContent='Next: roadside box.';
+            const card=document.getElementById('mailCard').getBoundingClientRect(),credit=document.getElementById('credit').getBoundingClientRect();
+            const overlap=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
+            try {return ['cameraButton','mailButton'].map(id=>{const e=document.getElementById(id),b=e.getBoundingClientRect(),s=getComputedStyle(e);
+              const result={height:b.height,radius:s.borderRadius,right:innerWidth-b.right,hit:document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===e,clear:!overlap(b,card)&&!overlap(b,credit)};
+              if(id==='mailButton'){result.rim=[s.borderTopWidth,s.borderTopColor];e.classList.add('throwNow');result.throwGlow=getComputedStyle(e).boxShadow!=='none';e.classList.remove('throwNow');}return result;});}
+            finally {hint.textContent=saved;}
+          })()`),[{height:44,radius:'6px',right:24,hit:true,clear:true},{height:44,radius:'6px',right:24,hit:true,clear:true,rim:['2px','rgb(208, 99, 46)'],throwGlow:true}],'desktop CAMERA and MAIL use reachable chips with clear feedback');
           assert.deepEqual(await read(`(()=>{const e=document.getElementById('gear'),r=e.getBoundingClientRect(),s=getComputedStyle(e);return {w:r.width,h:r.height,right:innerWidth-r.right,top:r.top,fill:s.backgroundColor,rim:s.borderTopWidth,radius:s.borderRadius,font:s.fontSize,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===e}})()`),{w:44,h:44,right:10,top:10,fill:'rgb(12, 20, 28)',rim:'1px',radius:'6px',font:'20px',hit:true},'gear uses the shared desktop chip rule');
           assert.deepEqual(await read(`(()=>{const e=document.getElementById('credit'),s=getComputedStyle(e),r=e.getBoundingClientRect();return {size:s.fontSize,opacity:s.opacity,background:s.backgroundColor,radius:s.borderRadius,clear:r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight};})()`),{size:'12px',opacity:'1',background:'rgb(12, 20, 28)',radius:'4px',clear:true},'solid readable credit chip');
         }

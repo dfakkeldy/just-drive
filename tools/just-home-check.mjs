@@ -20,6 +20,9 @@ try {
   assert.ok(html.includes('viewBox="180 80 520 680"'));
   assert.match(html,/@media\(max-width:599px\)\{footer nav\{display:grid;grid-template-columns:1fr 1fr/);
   assert.match(html,/@media\(min-width:600px\)\{\.roadPicture img\{object-position:50% 52%\}/);
+  assert.match(html, /@media \(min-width:1000px\)\{header\{max-width:none;display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\);column-gap:40px;align-items:start\}header>\*\{grid-column:1\}header>\.roadPicture\{grid-column:2;grid-row:1\/span 4;align-self:center\}\}/);
+  assert.doesNotMatch(html.match(/\.place \.mailCaption\{[^}]*\}/)[0],/font-size/);
+  assert.match(html,/@media print\{header\{display:block\}/);
   const areas = AREAS.filter(a => a.id !== 'fixture');
   assert.equal([...html.matchAll(/<title>/g)].length, 1, 'one title');
   assert.match(html, /<title>Just Drive: a free 3D driving game on the real roads of Cape Breton<\/title>/);

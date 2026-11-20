@@ -79,6 +79,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-si
 .controls div.row{display:grid;grid-template-columns:minmax(96px,38%) 1fr;gap:12px;padding:10px 0;background:none}
 .controls div.row+div.row{border-top:1px solid var(--line)}
 .controls dt{font:700 14px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--ink)}
+.controls dt b{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-weight:600}
 .controls dd{margin:0;color:var(--dim)}
 .qa{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:12px}
 .qa li{padding:8px 0}
@@ -136,7 +137,7 @@ ${PUBLIC_MUSIC_CREDIT}
 ${ENGINE_CREDIT}
 <p>Property lines (optional, online only): ${PROPERTY_ATTRIBUTION} <a href="${PROPERTY_LICENSE_URL}" rel="noopener noreferrer">Licence</a></p>
 </details>
-<p class="signoff">${brand === 'just' ? 'I made these roads for a slow drive. Take your time.' : 'The madness is only a little exaggerated.'}</p>`;
+<p class="signoff">${brand === 'just' ? 'I made these roads for a slow drive. Take your time.' : 'Mail service. More or less.'}</p>`;
 
 const PAGES = {
   mail: {

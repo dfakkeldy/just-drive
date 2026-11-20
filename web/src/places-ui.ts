@@ -12,7 +12,7 @@ export interface PlacesActions {
 const CSS = `
 #placesButton{position:fixed;cursor:pointer}
 body.droneOn.droneSticks #placesButton{position:fixed;top:calc(76px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));width:86px;height:56px;box-sizing:border-box;z-index:6;pointer-events:auto;margin:0;padding:0 8px;border:1px solid rgba(238,242,246,.3);border-radius:10px;background:var(--panel);color:var(--ink);font:700 12px var(--mono)}
-#placeArrival{position:fixed;right:24px;bottom:32px;z-index:4;width:min(310px,calc(100% - 32px));box-sizing:border-box;padding:12px 16px;background:var(--panel);border:1px solid #89afa2;border-left:3px solid #a7d9bc;border-radius:6px;font:13px/1.45 var(--text);pointer-events:none}
+#placeArrival{position:fixed;right:24px;bottom:32px;z-index:4;width:min(310px,calc(100% - 32px));box-sizing:border-box;padding:12px 16px;background:var(--panel);border:0;border-left:3px solid #a7d9bc;border-radius:0;font:13px/1.45 var(--text);pointer-events:none}
 body:has(#settings.open) #placeArrival,body:has(#pauseScreen:not([hidden])) #placeArrival,body:has(#bigMap:not([hidden])) #placeArrival{display:none}
 #placesList .youAreHere{font:700 12px var(--text);color:#c1ead0}
 #placeArrival strong{display:block;color:#c1ead0;margin-bottom:4px}#placeArrival p{margin:0;color:var(--ink-dim)}
