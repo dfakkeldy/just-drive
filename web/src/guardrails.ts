@@ -32,7 +32,9 @@ export class Guardrails {
   private readonly materials: (THREE.MeshLambertMaterial | undefined)[] = [];
   readonly audit = { planned: 0, pending: 0, samples: 0, queries: 0 };
   private work: { chunk: Chunk; revision: number; steps: Generator<void, RailSpan[], void> } | null = null;
-  private lastBridge=-1;
+  // Roads.bridgeRevision counts deck builds and starts at 0. Before the first build there is no deck to clear around,
+  // so the first update runs no empty replan; the first real build changes the count and runs bridgeBuilt.
+  private lastBridge=0;
   private lastLow = false;
   private lastX = Infinity; private lastZ = Infinity; private revision = -1;
   constructor(private readonly roads: Roads, private readonly terrain: Terrain) {
