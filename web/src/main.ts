@@ -858,7 +858,8 @@ mailButton?.addEventListener('pointercancel', releaseMail);
 mailButton?.addEventListener('lostpointercapture', releaseMail);
 addEventListener('blur', () => { mailRequested = false; mailPointers.clear(); mailButton?.classList.remove('held'); });
 const animals = AREA.animals ? new Animals(roads, terrain, buildingList, manifest.village) : null;
-await animals?.ready;
+// The cat's place is read from land tiles; a failed read is a land that could not load (area-screen.ts).
+await animals?.ready.catch(() => areaScreen('The land could not load. Retry this area.', true));
 if (animals) scene.add(animals.group);
 
 // ---- modes --------------------------------------------------------------------------------
