@@ -136,15 +136,16 @@ const hintPass=(rs,sh,speed,from,to)=>{const dir=Math.sign(to-from),car={x:0,z:0
   report.push(`${name} ${specTop.toFixed(1)} m/s, ${specWorst.toFixed(1)} m`);worst=Math.max(worst,specWorst);fastest=Math.max(fastest,specTop);}
  console.log(`braking proof (top speed; HUD redraw, 1 s to read, brake under ${PAINTER.speed} m/s): ${report.join('; ')}; hint at ${PAINTER.hint} m, dust inside ${PAINTER.range} m`);
  assert.ok(fastest>20,`the fastest reaches washboard top speed downhill (${fastest.toFixed(1)} m/s)`);
- assert.ok(PAINTER.range+worst<PAINTER.hint,`hint distance ${PAINTER.hint} m covers ${worst.toFixed(1)} m to read and brake plus the ${PAINTER.range} m dust range`);
+ // Sugar Camp's faster pickup and buggy must still get the whole reading and braking distance.
+ assert.ok(PAINTER.range+worst<PAINTER.hint&&PAINTER.hint<PAINTER.draw,`hint distance ${PAINTER.hint} m covers ${worst.toFixed(1)} m to read and brake plus the ${PAINTER.range} m dust range, with the painter in view`);
  // The pass itself, at that top speed and at 12 m/s, from both directions and in reverse.
  for(const [speed,from,to] of [[fastest,PAINTER.along-PAINTER.hint-30,PAINTER.along+20],[fastest,PAINTER.along+PAINTER.hint+30,PAINTER.along-20],[12,PAINTER.along-PAINTER.hint-30,PAINTER.along+20],[-12,PAINTER.along+PAINTER.hint+30,PAINTER.along-20]]){
   const {sh,rs}=world(),r=hintPass(rs,sh,speed,from,to),label=`${speed.toFixed(1)} m/s from ${from}`;
   assert.ok(r.complaint,label+': the fast pass still complains');assert.ok(r.first,label+': a hint');
   assert.equal(r.complaint.hint,PAINTER_TEXT.dusty,label+': after the complaint the hint says so');
-  assert.ok(r.first.d>PAINTER.hint-1&&r.first.d<PAINTER.hint,label+`: hint from ${r.first.d.toFixed(1)} m`);
+  assert.ok(r.first.d>PAINTER.range+worst&&r.first.d<PAINTER.hint,label+`: room to read and brake from ${r.first.d.toFixed(1)} m`);
   assert.ok(r.firstSample!==null&&r.firstSample<r.complaint.t-1,label+': the HUD shows it more than a second before the complaint');
-  assert.ok(r.complaint.d<PAINTER.range&&r.first.d-r.complaint.d>PAINTER.hint-PAINTER.range-1,label+': hint well before any complaint can count');
+  assert.ok(r.complaint.d<PAINTER.range&&r.first.d-r.complaint.d>worst,label+': hint well before any complaint can count');
   assert.equal(r.gap,false,label+': the hint stays up until the complaint');}}
 {const {sh,rs}=world(),r=hintPass(rs,sh,5,PAINTER.along-PAINTER.hint-30,PAINTER.along+PAINTER.hint+30);
  assert.equal(sh.complaints.all.length,0);assert.deepEqual([...r.shown],[PAINTER_TEXT.approach],'a slow pass sees only the slow-down line');

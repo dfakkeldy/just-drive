@@ -56,7 +56,8 @@ if(process.env.TRAILER_TRANSFORMS_ONLY==='1'){await transformOracle(terrain,road
 const measured={acceleration:acceleration(TRUCK_SPEC),braking:braking(TRUCK_SPEC),top:topSpeed(TRUCK_SPEC)};
 console.log('MEASURED',JSON.stringify(measured));
 if(process.argv.includes('--explore'))process.exit(0);
-assert.ok(measured.acceleration>=11&&measured.acceleration<=14,'loaded 0–100: 11–14 s');
+const loadedAccelerationOK = n => n>=6&&n<=7.5;
+assert.ok(loadedAccelerationOK(measured.acceleration),'loaded 0–100: 6–7.5 s');
 assert.ok(measured.braking.runs.every(d=>d>=60&&d<=80),'loaded 100–0: 60–80 m');
 assert.ok(measured.top.levelPeak>=140&&measured.top.peak<=160,'loaded top speed: 140–160 km/h');
 const model=createTrailer(true);assert.ok(model.triangles<=47000&&model.drawCalls<=38&&model.chassisCost.triangles<=14000&&model.chassisCost.drawCalls===8,'real cargo and unchanged chassis budgets');console.log('MODEL',model.triangles,model.drawCalls);
@@ -121,13 +122,17 @@ if(process.env.TRAILER_TRUCK_ORACLE){
 }
 
 const mutation=(name,action,predicate)=>{const value=action();assert.equal(predicate(value),false,'mutation must fail: '+name);console.log('MUTATION rejected',name);};
-mutation('loaded acceleration',()=>acceleration({...TRUCK_SPEC,engineAcceleration:1.5}),n=>n>=11&&n<=14);
+mutation('loaded acceleration',()=>acceleration({...TRUCK_SPEC,engineAcceleration:1.5}),loadedAccelerationOK);
 mutation('loaded braking',()=>braking({...TRUCK_SPEC,brake:2}),n=>n.runs.every(d=>d>=60&&d<=80));
 mutation('loaded top speed',()=>topSpeed({...TRUCK_SPEC,enginePower:20}),n=>n.levelPeak>=140&&n.peak<=160);
 mutation('detached path changed',()=>{const copy=structuredClone(detached);copy[10][0]+=.001;return copy;},n=>JSON.stringify(n)===JSON.stringify(plain));
 mutation('model budget',()=>{const n=createTrailer();n.drawCalls+=10;return n;},n=>n.triangles<=47000&&n.drawCalls<=38);
-function swayRun(saw=false){const car=v(),p=at(hwy,flat.s);car.place(p.x,p.z,p.heading);setSpeed(car,120/3.6);const peaks=[];let sign=0,peak=0;for(let i=0;i<120*6;i++){step(car,{...coast,steer:saw?Math.sin(i*dt*5)*.7:i<36?.8:0});const t=car.tow;const next=Math.sign(t.sway);peak=Math.max(peak,Math.abs(t.sway));if(sign&&next!==sign){peaks.push(peak);peak=0;}sign=next;}return{peaks,angle:car.tow.angle,sway:car.tow.sway};}
-const sway=swayRun();console.log('SWAY',JSON.stringify(sway));assert.ok(sway.peaks.length>=5&&sway.peaks[0]>.0005&&sway.peaks.at(-1)<sway.peaks[0]*.05,'sharp high-speed steer: bounded sway dies in 2–3 cycles');
+function swayRun(kph=120,saw=false){const car=v(),p=at(hwy,flat.s);car.place(p.x,p.z,p.heading);setSpeed(car,kph/3.6);const peaks=[];let sign=0,peak=0,maxAngle=0;for(let i=0;i<120*6;i++){step(car,{...coast,steer:saw?Math.sin(i*dt*5)*.7:i<36?.8:0});const t=car.tow;const next=Math.sign(t.sway);peak=Math.max(peak,Math.abs(t.sway));maxAngle=Math.max(maxAngle,Math.abs(t.angle));if(sign&&next!==sign){peaks.push(peak);peak=0;}sign=next;}return{kph,peaks,maxAngle,angle:car.tow.angle,sway:car.tow.sway};}
+const sway=swayRun(120), topSway=swayRun(measured.top.levelPeak);
+for(const run of [sway,topSway]){
+ console.log('SWAY',JSON.stringify(run));
+ assert.ok(run.maxAngle<.5&&run.peaks.length>=5&&run.peaks[0]>.0005&&run.peaks.at(-1)<run.peaks[0]*.05,'sharp high-speed steer: bounded sway dies in 2–3 cycles');
+}
 const steady=[];for(const [path,speed,s]of [[hwy,80/3.6,flat.s],[mines,55/3.6,2000]]){const car=v(),p=at(path,s);car.place(p.x,p.z,p.heading);let progress=s,maxAngle=0;for(let i=0;i<120*12;i++){progress+=drive(car,path,progress,speed);maxAngle=Math.max(maxAngle,Math.abs(car.tow.angle));}steady.push({speed:speed*3.6,maxAngle});assert.ok(maxAngle<.5,'steady paved/gravel tracking');}console.log('STEADY',JSON.stringify(steady));
 mutation('sway decay absent',()=>({...sway,peaks:sway.peaks.map(()=>sway.peaks[0])}),n=>n.peaks.at(-1)<n.peaks[0]*.05);
 // Full-lock reverse reaches hard articulation contact, and cannot continue driving into the tongue.
@@ -198,7 +203,7 @@ try{
 const extra=model.root.children.find(n=>n.isMesh).clone();model.root.add(extra);try{const actual=rigCost(model.root);assert.ok(actual.drawCalls>38,'mutation rejected: actual extra draw call');}finally{model.root.remove(extra);}
 console.log('PASS production decay/contact/finite/model fault injections restored.');
 
-const sawing=swayRun(true);console.log('SAWING',JSON.stringify(sawing));assert.ok(sawing.peaks.at(-1)>sway.peaks.at(-1)*5,'continued steering sustains sway while steady hands let it die');
+const sawing=swayRun(120,true);console.log('SAWING',JSON.stringify(sawing));assert.ok(sawing.peaks.at(-1)>sway.peaks.at(-1)*5,'continued steering sustains sway while steady hands let it die');
 let washPoint=null;for(let s=1800;s<3100;s+=10){const q=at(mines,s);if(terrain.surfaceAt(q.x,q.z)?.washboard){washPoint=q;break;}}
 assert.ok(washPoint,'real washboard fuzz location exists');
 const rough=v(),roughRandom=random(345);rough.bounds=[washPoint.x-60,washPoint.z-60,washPoint.x+60,washPoint.z+60];let roughAngle=0;const oldRandom=Math.random;Math.random=random(346);

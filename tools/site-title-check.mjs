@@ -282,7 +282,7 @@ async function vehicleRadioGate(main){
  const compiled=(await transform(block,{loader:'ts',target:'es2022',define:{'import.meta.env.DEV':'false','import.meta.env.BASE_URL':JSON.stringify('./')}})).code;
  for(const kind of ['car','bike','horse']){
   const requests=[];
-  const context=vm.createContext({bare:false,params:new URLSearchParams('era=1884'),ERA:{radio:true},ride:{kind},SITE:{brand:'mail'},started:false,radio:null,fired:null,siteRadio:()=>({}),loadRadio:(...a)=>{requests.push(a);return Promise.resolve(null);}});
+  const context=vm.createContext({bare:false,params:new URLSearchParams('era=1884'),ERA:{radio:true},ride:{kind},SITE:{brand:'mail'},gameMode:'explore',started:false,radio:null,fired:null,siteRadio:()=>({}),loadRadio:(...a)=>{requests.push(a);return Promise.resolve(null);}});
   vm.runInContext(compiled,context);await Promise.resolve();
   assert.equal(requests.length,kind==='horse'?0:1,'radio load for '+kind);
  }
