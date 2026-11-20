@@ -25,9 +25,8 @@ assert.equal(styleFault(styles), null, 'every style key is a property id, and ev
 // One property for each building, wherever houses are counted. buildingSites can be applied again without change.
 assert.deepEqual(buildingSites(sites), sites);
 assert.ok(sites.every((b) => b.buildingId === undefined || b.buildingId === b.id), 'no wing is a property');
-// The game's counters of houses (mail, lawn ruts, the roadside break, complaints) must read the properties, not
-// the wings: main.ts hands the full list only to the drawing, the yard and the animals (which pick roofs). The porch
-// house belongs to the drawing: it finds its own surveyed box in the list and takes that one box out of what is drawn.
+// The game's house counters (mail, lawn ruts, the roadside break and complaints) must read the property list.
+// The porch house finds its surveyed box in the full list and takes that box out of the drawing.
 {
   const main = fs.readFileSync(`${process.env.MMM_ROOT}/web/src/main.ts`, 'utf8');
   const uses = main.split('\n').filter((line) => /\bbuildingList\b/.test(line));
@@ -43,10 +42,14 @@ assert.ok(sites.every((b) => b.buildingId === undefined || b.buildingId === b.id
     // The public wharves keep clear of every surveyed footprint, wings included (footprints only, nothing is counted).
     /^const wharves = .*\(buildings \? buildingList \?\? \[\] : \[\]\)\.map\(b => b\.footprint\)\) : null;$/,
     // The yard dog's invented driveway only asks if the list exists. Its houses come from `properties` (next assert).
-    /^const yardDogSite = ERA\.modern && AREA\.id === 'mabou' && buildingList && props \? YardDogSite\.create\(\{$/];
+    /^const yardDogSite = ERA\.modern && AREA\.id === 'mabou' && buildingList && props \? YardDogSite\.create\(\{$/,
+    // Lot props need every footprint for clearance. Only properties can supply a candidate house.
+    /^const lotPropList = ERA\.modern && buildingList && params\.get\('lotprops'\) !== '0' \? chooseLotProps\(\{$/,
+    /^buildings: buildingList\.map\(b => \(\{ id: b\.buildingId \?\? b\.id, footprint: b\.footprint\.map\(\(\[e, n\]\): \[number, number\] => \[e - VE, VN - n\]\) \}\)\),$/];
   assert.match(main, /YardDogSite\.create\(\{[^}]*houses: properties\.filter\(/, 'the yard dog counts houses from the properties, not from the list with wings');
+  assert.match(main, /chooseLotProps\(\{\s*houses: properties\.filter\(/, 'lot props choose houses from the property list');
   const stray = uses.filter((line) => !allowed.some((re) => re.test(line.trim())));
-  assert.deepEqual(stray, [], 'main.ts passes the list with wings only to the drawing, the animals, the drone floor and the tree clearing of 1884 (roofSites)');
+  assert.deepEqual(stray, [], 'unexpected use of the list with wings in main.ts');
   const ruts = fs.readFileSync(`${process.env.MMM_ROOT}/web/src/ruts.ts`, 'utf8');
   assert.ok(/for \(const b of buildingSites\(buildings\)\)/.test(ruts), 'lawn ruts index one property per building');
 }
