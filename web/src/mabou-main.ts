@@ -15,6 +15,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Terrain } from './terrain';
 import type { Road } from './roads';
 import { pushOut, type Pushable } from './parked';
+import type { HandBuiltPlace } from './place';
 import { Kit as SiteKit, Face, canvas, grey, seeded, v } from './site-kit';
 import {
   FESTOONS, GAS_ISLANDS, GAS_ISLAND_Z, MAIN_ITEMS, MAIN_PLACES, SIDEWALK, STREET_LAMPS, STREET_SPLIT, placePoints, streetPoints,
@@ -860,7 +861,7 @@ function clippedTop(tri: [number, number, number][], x0: number, x1: number, z0:
  * Each unit builds once, when the camera comes within reach and the finest land under it is in memory; one unit per
  * update, so no frame builds two. A cluster's units are merged once all are built.
  */
-export class MabouMain {
+export class MabouMain implements HandBuiltPlace {
   readonly group = new THREE.Group();
   triangles = 0;
   /** True while a unit near the camera has its land and is about to be built: a picture should wait. */

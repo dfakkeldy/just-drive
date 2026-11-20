@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Building } from './buildings';
 import { ParkedVehicles, bakeParked, parkedMatrix, parkedSolid, pushOut, type Parked, type Pushable, type Solid } from './parked';
+import type { HandBuiltPlace } from './place';
 import type { Terrain } from './terrain';
 import { Face, Kit as SiteKit, canvas, grey } from './site-kit';
 import {
@@ -623,7 +624,7 @@ type ClusterName = (typeof PH_CLUSTER)[GroupName];
 interface Cluster { models: Map<Tex | null, THREE.Mesh>; decal: THREE.Mesh; vehicles: THREE.Mesh; parked: ParkedVehicles | null; near: string }
 
 /** Each group builds once, when the camera comes within reach and the finest land under it is in memory. */
-export class PortHawkesbury {
+export class PortHawkesbury implements HandBuiltPlace {
   readonly group = new THREE.Group();
   triangles = 0;
   readonly built = new Map<GroupName, Built>();

@@ -135,7 +135,10 @@ function drawing(){
 }
 drawing();
 assert.match(main,/ERA.modern && tallKey/,'modern construction gate');
-assert.match(main,/tall\?\.resolveSolids\(vehicle\)/,'real vehicle collision hook');
+// One tall contact row serves the registry and solo driving (siteContacts in main.ts).
+assert.match(main,/\['tall', tallKey \? \{[^\n]*resolve: body => tall\?\.resolveSolids\(body\)/,'real vehicle collision hook');
+assert.match(main,/siteContacts\.filter\(\(\[name\]\) => name === 'tall'\)\]\) if \(row\) soloContacts\.add\(row\);/,'solo driving meets the towers too');
+assert.match(main,/if \(fleet \|\| quarry\) fleetContacts\.resolve\(vehicle\);\n\s*else soloContacts\.resolve\(vehicle\);/,'solo driving resolves the car against the site rows');
 assert.match(renderer,/const steps=\(span.ground.length-1\)\*\(low\?1:2\)/,'cheap wire segments');
 assert.match(renderer,/\!this.low\|\|Math.hypot\(camera.position.x-w.x,camera.position.z-w.z\)<1800\+w.radius/,'low wire distance');
 console.log('PASS real renderer high/low, instancing, loaded/baked heights, fog, solids and modern integration');

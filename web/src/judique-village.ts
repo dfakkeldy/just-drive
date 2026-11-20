@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import { pushOut, type Pushable } from './parked';
+import type { HandBuiltPlace } from './place';
 import { CHURCH_WALL, MAILBOX_CABINETS, VILLAGE_ITEMS, VILLAGE_PLACES, placePoints, type JudiqueVillageSite, type PlaceName, type VillagePlace } from './judique-village-site';
 import { Kit as SiteKit, Face, canvas, grey, mergeKit, seeded, v } from './site-kit';
 
@@ -761,7 +762,7 @@ export function buildPlace(name: PlaceName, site: JudiqueVillageSite, groundAt: 
 }
 
 /** Each place builds once, when the camera comes within reach and the finest land under it is in memory. */
-export class JudiqueVillage {
+export class JudiqueVillage implements HandBuiltPlace {
   readonly group = new THREE.Group();
   triangles = 0;
   private pending: { name: PlaceName; x: number; z: number; probes: { x: number; z: number }[] }[];

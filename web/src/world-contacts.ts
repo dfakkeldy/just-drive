@@ -8,7 +8,7 @@ export interface WorldContacts {
   resolve(body: Body): void;
   bindVehicle?(vehicle: Vehicle): void;
 }
-type ContactSite = { resolve(body: Body): void; allows?(body: ContactBody): boolean; revision?(): number };
+export type ContactSite = { resolve(body: Body): void; allows?(body: ContactBody): boolean; revision?(): number };
 /** Register a site's pure contact resolver once; physics and all fleet preflights share the registry. */
 export class AreaContacts implements WorldContacts {
   private epoch = 0;
