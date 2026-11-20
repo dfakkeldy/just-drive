@@ -14,6 +14,19 @@ function visit(node){
  ts.forEachChild(node,visit);
 }
 visit(tree);assert.ok(expression,'actual main yard-dog siting expression');
+// Every placement that keeps clear of hand-built sites must use the bridge footprints, never the area-wide query box.
+// The box of the ModernBridges site spans every bridge in the area (about 13 x 16 km in Mabou).
+export function wholeSiteBoxes(files){
+ const found=[];
+ for(const [file,text] of files)for(const m of text.matchAll(/\bsites\.map\(\s*\(?(\w+)\)?\s*=>\s*\1\.box\s*\)/g))found.push(file+': '+m[0]);
+ return found;
+}
+const placementFiles=['web/src/main.ts','web/src/road-animals.ts','web/src/lot-props-rules.ts','web/src/yard-props-rules.ts'].map(f=>[f,readFileSync(root+f,'utf8')]);
+assert.deepEqual(wholeSiteBoxes(placementFiles),[],'site exclusions use sitingBoxes, not the whole bridge query box');
+assert.equal(wholeSiteBoxes([['mutant',"excluded: [...terrain.sites.map(s => s.box), ...x]"]]).length,1,'the whole-box lint sees the old lot and yard prop expression');
+assert.equal(wholeSiteBoxes([['mutant',"this.terrain.sites.map(site => site.box)"]]).length,1,'the whole-box lint sees the old road animal expression');
+const sitingUses=placementFiles.map(([,text])=>text.split('sitingBoxes ?? [').length+text.split('sitingBoxes??[').length-2).reduce((a,b)=>a+b,0);
+assert.ok(sitingUses>=6,'yard dog, lot props, yard lights, yard props and both road animal checks use sitingBoxes ('+sitingUses+')');
 async function probe(mutant=''){
  const replacements={};
  if(mutant==='eager field'){

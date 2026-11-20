@@ -629,7 +629,7 @@ const lotPropList = ERA.modern && buildingList && params.get('lotprops') !== '0'
   // Drawn things a prop must not stand in: power poles, mailboxes and community boxes. Only ever a reason to stand
   // elsewhere, never a reason to choose a house.
   obstacles: props ? [...props.poleSites, ...props.mail, ...props.sites].map(p => [p.x, p.z] as [number, number]) : [],
-  excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...[villageSite, hawkesburySite, mabouSite].flatMap(s => s?.clear ?? [])],
+  excluded: [...terrain.sites.flatMap(s => s.sitingBoxes ?? [s.box]), ...(coast ? [coast.site.box] : []), ...[villageSite, hawkesburySite, mabouSite].flatMap(s => s?.clear ?? [])],
 }) : [];
 // No single tree stands in a parked car; the canopy is left as it is.
 // Kept apart: these only clear trees. Mail play's breakable yard props must not give way to them (they give way to those).
@@ -942,7 +942,7 @@ if (shift instanceof Shift) {
       publicRoad: near(k => k >= 1 && k <= 3), anyRoad: near(() => true), place: shift.placeAt,
       // Hand-built sites and landmarks stay clear; ordinary buildings are kept clear by the oriented rule instead
       // (their own clear boxes would push most yard props out of the yards).
-      excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []),
+      excluded: [...terrain.sites.flatMap(s => s.sitingBoxes ?? [s.box]), ...(coast ? [coast.site.box] : []),
         ...clear.filter((b: number[]) => !houseBoxes.has(b) && !lotTreeClear.has(b)).map((b: number[]): [number, number, number, number] => [b[0], b[1], b[2], b[3]])],
     });
     yardProps = new YardProps(yardList, terrain, LOW || touchDevice);
