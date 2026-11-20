@@ -6,17 +6,17 @@
 // shadow references; it writes own group/instances and terrain coastRecessAnchor shader values. Tree
 // contact sampling does not read that shader anchor. Both reach Terrain.find/meshHeightAt -> use, which
 // reads/writes shared lastUsed/countedFrame/wantedCount. This fails the requested strict no-shared-write
-// proof even though use normally makes idempotent marks. Trees retains endingPosition 1 before coast.
+// proof even though use normally makes idempotent marks. Trees keeps its ending anchor (after the terrain updates) before coast.
 // Quarry reads camera, vehicle x/z/roadName/surfaceName and terrain mesh visibility/heights. It writes
 // vehicle.roadName, own water/fixtures/rocks/solids and terrain quarryReflectionLevel. Trees reads neither
 // that uniform nor the vehicle/quarry state, but shares Terrain.use bookkeeping with quarry sampling.
 // QuarryWater.prepareLand also changes contact geometry during construction/loading (not update).
-// Trees' same endingPosition 1 keeps it before quarry, too.
+// Trees' same anchor keeps it before quarry, too.
 // Fishing reads camera.position, vehicle x/z, own art and terrain.surfaceAt for its first build. It writes
 // own art/group/solids AND FishingSite.top/toe. Props reads camera world position, time, own motion/cells
 // and terrain height/surface; it writes own groups/instances/wires/timers and shares Terrain.use records.
 // Crucially Terrain.heightAt -> withDeck -> FishingSite.deckHeight reads top/toe written by fishing.build.
-// Props can therefore observe fishing's new deck in the same frame. Props retains endingPosition 6.
+// Props can therefore observe fishing's new deck in the same frame. Props keeps its ending anchor (after roads and canal).
 // Fishing dt=0 does not advance phase or move camera/vehicle. Props.getWorldPosition refreshes camera
 // matrices (and parent matrices, when present); it does not change camera position or orientation.
 import assert from 'node:assert/strict';
