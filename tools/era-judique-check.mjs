@@ -24,14 +24,14 @@ const root=process.env.MMM_ROOT??process.cwd(),sha=file=>createHash('sha256').up
 // The pins live here because this change is what could move Mabou; era-density-generated regenerates it.
 const MABOU_FROZEN={
  'web/src/eras/mabou-1884-layout.ts':'c679f1dc15adf756717d923ff04603d1d9c371b9d6bfc24d191e3b8dc4aa889d',
- // The audit's manifest fingerprint leaves out buildingStyles since grok-bots #1288 (no 1884 input reads it); the layout is unchanged.
- 'tools/era-density-layout.json':'e9220bcbdc5464bc455740f8d3628e9b9d3639e79f7d80020d796158ae2de9f8',
+ // The road bake (#27), far-view install (#43) and road-bed receipt (#60) update the audit. The shipped layout is byte-identical.
+ 'tools/era-density-layout.json':'6dbbcc88191590c3b4e17e64e95921c20373754e9e97c6eeea3282e3acf9b41f',
  'web/src/eras/mabou-1884-density.ts':'d334407249308e3ac893c34f0217fdbdb2bd2bdc4dbff0347f7386a2443204c0',
  'web/src/eras/mabou-1884-trades.ts':'0b70423528df61a4976cd2b1b471db9f4b6cb170e2e87f091c93bc8dac99202a',
 };
 for(const[file,want]of Object.entries(MABOU_FROZEN))assert.equal(sha(file),want,file+' changed: Mabou 1884 must stay byte-identical');
 assert.equal(getHistoryLayoutData('mabou').trades.length,48);
-console.log('PASS Mabou 1884 layout, audit, counts and labels are byte-identical to main');
+console.log('PASS Mabou 1884 layout, audit, counts and labels match their pinned hashes');
 
 // 2. Era and words.
 const era=readEra(new URLSearchParams('era=1884&area=judique'));assert.equal(era.title,'Judique, 1884');assert.equal(era.area,'judique');

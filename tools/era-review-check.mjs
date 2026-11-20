@@ -76,7 +76,10 @@ test('drawn-query',()=>{
  assert.equal(visited,0,'drawn queries must use the level index, not scan the tile cache');
 });
 test('multiplayer-off',()=>{
- const s=source('web/src/main.ts');assert.match(s,/const MULTIPLAYER\s*=\s*[^;\n]*&&\s*ERA\.modern;\s*\nconst multiplayer\s*=\s*MULTIPLAYER\s*\?/,'construction is gated before mp code can create settings/title UI');
+ const s=source('web/src/main.ts');
+ // The quiet-zone callback can be declared between the flag and the switch.
+ assert.match(s,/^const MULTIPLAYER\s*=\s*[^;\n]*&&\s*ERA\.modern;$/m,'rooms are only enabled in the modern era');
+ assert.match(s,/^const multiplayer\s*=\s*MULTIPLAYER\s*\?\s*multiplayerSwitch\(/m,'construction is gated before mp code can create settings/title UI');
 });
 test('raw-shaders',async()=>{
  let now=source('web/src/shaders.ts'),main=execFileSync('git',['show','origin/main:web/src/shaders.ts'],{cwd:root,encoding:'utf8'});
