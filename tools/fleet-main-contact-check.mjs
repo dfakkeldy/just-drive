@@ -30,7 +30,10 @@ async function drive(mod,hill,kind,label,reference){
   const stats={label,hill,kind,drawnTyre:0,ownTyre:0,float:0,body:0,samples:0,progress:0,arrived:false};
   const inputs=[],state={};
   for(let tick=0;tick<12000;tick++){
-    const input=followPath(f.v,path,state,4);
+    let input;
+    // The path driver throws when a heavy vehicle stalls twice. On the main (reference) side that only ends
+    // the stretch to compare; on the branch side it stays a failure.
+    try{input=followPath(f.v,path,state,4);}catch(e){if(reference||!String(e.message).startsWith('Physical driver cannot progress'))throw e;stats.stall=String(e.message);break;}
     // A steep crossing can stall on main. Compare the same stretch even if the branch can go farther.
     if(reference&&!reference.arrived&&state.at>reference.progress+.05)break;
     stats.progress=Math.max(stats.progress,state.at??0);
