@@ -1,5 +1,6 @@
 import { checkStations, radioTextToCheck, JUST_START_DIAL, MUSIC_CREDIT_TEXT } from './radio-expectations.mjs';
 import { AREAS } from '../web/src/area.ts';
+import { RECEPTION, comesIn, signalAt } from '../web/src/radio-reception.ts';
 // Real phone/player checks. Run only through yard-shots.sh, one owned browser job at a time.
 // WEB_PORT=5351 CDP_PORT=9551 VITE_MP=1 RUN=just-drive-check.mjs tools/yard-shots.sh
 import assert from 'node:assert/strict';
@@ -101,6 +102,15 @@ await page('justdrive.localhost','/judique?area=mabou&touch=1&q=low',390,844,asy
 await page('justdrive.localhost','/?area=judique&touch=1&q=low',390,844,async p=>{await p.until(titleReady);assert.equal(await p.read('document.title'),'Just Drive: Mabou');assert.ok(p.requests.some(u=>u.includes('/terrain/manifest.json')));assert.ok(!p.requests.some(u=>u.includes('/areas/judique/manifest.json')));await p.clean('root ignores area query');});
 await page('justdrive.localhost','/westbay?area=mabou&touch=1&q=low',390,844,async p=>{
  await p.until(titleReady);assert.equal(await p.read('document.title'),'Just Drive: West Bay');assert.ok(p.requests.some(u=>u.includes('/areas/westbay/manifest.json')));checkStations(await p.read('mmm.radio.stations'));assert.equal(await p.read('mmm.radio.storageKey'),'mmm.radio.just');await p.clean('West Bay title');
+ // Every station comes in everywhere in Just Drive (the owner, 20 Nov 2026). At West Bay's village the mail game's table
+ // loses some stations, so a whole turn of the dial there proves it. One read, so no frame moves the car between steps.
+ const westBay=JSON.parse(readFileSync(new URL('../data/baked/areas/westbay/manifest.json',import.meta.url),'utf8')).village;
+ const {dials,walk}=await p.read(`(()=>{const r=mmm.radio,dials=r.stations.map(s=>s.dial),walk=[];r.setPlace(${westBay[0]},${westBay[1]});
+  for(let k=0;k<=dials.length&&r.station>=0;k++)r.next();
+  for(let k=0;k<=dials.length;k++){r.next();if(r.station<0)break;walk.push(dials[r.station]);}
+  return {dials,walk};})()`);
+ assert.ok(dials.some(dial=>!comesIn(signalAt(RECEPTION,dial,...westBay))),'the mail game loses a station at West Bay, so this walk tests something');
+ assert.deepEqual([...walk].sort(),[...dials].sort(),'the dial stops at every station at West Bay: '+walk.join(' '));
 });
 await page('localhost','/mabou?site=just&q=low',1280,900,async p=>{
  await p.until(titleReady);assert.equal(await p.read('mmm.radio'),null);assert.equal(await p.read(`!!document.getElementById('radio')`),false);assert.doesNotMatch(await p.read(`document.getElementById('titleCard').innerText`),/\bradio\b/i);await p.clean('missing radio title');
@@ -140,4 +150,4 @@ for(const brand of ['mail','just'])for(const selection of ['', '&vehicle=horse']
 });
 writeFileSync(`${out}/player-strings.json`,JSON.stringify(strings,null,2));
 writeFileSync(`${out}/browser-results.json`,JSON.stringify({words,baseline:baselineHead,results},null,2));
-console.log('PASS forbidden words: '+words.join(', ')+'; no mail radio requests; all catalogue stations in Mabou/West Bay and both 1884 brands; null-radio hints; storage isolation; both phone fits; real canvas text; path-only root and quality fallback; actual host/path and area switch; unknown area; bike; main title text with reviewed music geography');
+console.log('PASS forbidden words: '+words.join(', ')+'; no mail radio requests; all catalogue stations in Mabou/West Bay and both 1884 brands; the dial stops at every station at West Bay; null-radio hints; storage isolation; both phone fits; real canvas text; path-only root and quality fallback; actual host/path and area switch; unknown area; bike; main title text with reviewed music geography');

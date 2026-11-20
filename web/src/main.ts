@@ -1660,6 +1660,8 @@ if (!bare && params.get('radio') !== '0') {
   const audioBase = `${import.meta.env.BASE_URL}audio`;
   void loadRadio(audioBase, siteRadio(SITE)).then(next => {
     radio = next; if (SITE.brand === 'just') { title?.setRadio(!!radio); ride.setRadio(!!radio); }
+    // Just Drive hears every station everywhere. The places with no signal are a joke of the mail game alone (the owner, 20 Nov 2026).
+    if (SITE.brand === 'just') radio?.useReception(null);
     if (params.get('reception') === '0') radio?.useReception(null);   // every station everywhere, as on the Just Listen page
     if (import.meta.env.DEV) expose({ radio });   // for tools/radio-check.mjs
     if (started) radio?.start();

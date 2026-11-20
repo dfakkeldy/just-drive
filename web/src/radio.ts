@@ -5,6 +5,7 @@
 // Built in script, so the test page and the published page cannot drift apart.
 // Reception by place lives here too, and only here: where the car is decides how much of its station comes in
 // (radio-reception.ts has the rules). The Just Listen page stands on the engine alone and hears every station.
+// Only the mail game has reception: Just Drive takes the map away (main.ts), so there every station comes in everywhere.
 
 import { windGain } from './damage-rules';
 import { placePhoneReadout } from './phone-layout';
@@ -191,7 +192,7 @@ export class Radio extends RadioPlayer {
   /** Where the car is, in map metres (east, north). The game says so every frame. */
   setPlace(e: number, n: number): void { this.e = e; this.n = n; this.receive(); }
 
-  /** For the checks: another reception map, or none (every station comes in everywhere). */
+  /** Another reception map, or none (every station comes in everywhere): Just Drive and ?reception=0 take none, and the checks give their own. */
   useReception(map: ReceptionMap | null): void { this.map = map; this.receive(true); }
 
   /** For the checks: what the car hears of its station now. `static` is the level of the static that sounds (0: none). */
