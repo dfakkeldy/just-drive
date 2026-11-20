@@ -52,9 +52,9 @@ function roofShape(m: Mesher, x: number, z: number, eave: number, ridge: number,
   for (const side of [-x, x]) m.tri(side,eave,-z, side,eave,z, side,ridge,0, wall);
 }
 
-function shell(m: Mesher, b: Model, wall: RGB, upper = wall, mono = false) {
+function shell(m: Mesher, b: Model, wall: RGB, upper = wall, mono = false, foot = -3) {
   const x = b.length / 2, z = b.width / 2, base = upper === wall ? 0.22 : 2.6;
-  m.box(0, (-3 + base) / 2, 0, b.length, base + 3, b.width, upper === wall ? stone : wall);
+  m.box(0, (foot + base) / 2, 0, b.length, base - foot, b.width, upper === wall ? stone : wall);
   m.box(0, (base + b.eave) / 2, 0, b.length, b.eave - base, b.width, upper);
   roofShape(m, x, z, b.eave, b.ridge, upper, mono);
 }
@@ -123,7 +123,8 @@ function villageHouse(m: Mesher, b: Model, low: boolean) {
 }
 
 function hillsideHouse(m: Mesher, b: Model, low: boolean, exag: number) {
-  shell(m,b,sage);
+  const foot = -2.55 * exag - .15;
+  shell(m,b,sage,sage,false,foot);
   siding(m,b,sage,false,low);
   const x=b.length/2, z=b.width/2;
   // Light timber and large windows mark the gable from the harbour road.
@@ -132,15 +133,16 @@ function hillsideHouse(m: Mesher, b: Model, low: boolean, exag: number) {
     opening(m,false,z,u*1.58,2.28,2,2.55,trim);
   }
   opening(m,true,x,0,b.eave+.86,1.52,1.56,trim);
-  deck(m,b.length-.7,z,2.65,.77,true,-2.55*exag-.15);
+  deck(m,b.length-.7,z,2.65,.77,true,foot);
   // Full-width stairs and a post-and-beam porch on the uphill long wall.
   const w=2.6, front=-z-2.18;
   opening(m,false,-z,0,1.66,1.16,2.12,trim,timber);
   for (const u of [-4.35,4.35]) opening(m,false,-z,u,2.31,1.36,2.22);
   for (const u of [-2.6,2.6]) opening(m,true,-x,u,2.25,1.38,2.05);
-  m.box(0,.35,-z-1.05,w*2,.36,2.14,timber);
+  const bottom = -.18 * exag;
+  m.box(0,(.53+bottom)/2,-z-1.05,w*2,.53-bottom,2.14,timber);
   for (let i = 0; i < 3; i++) {
-    const top = .15 * (i + 1), bottom = -.18 * exag;
+    const top = .15 * (i + 1);
     m.box(0,(top+bottom)/2,front-.66+i*.29,w*2,top-bottom,.36,stone);
   }
   for (const u of [-w+.2,w-.2]) m.box(u,1.92,front,.22,2.87,.22,timber);

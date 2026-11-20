@@ -74,6 +74,22 @@ for (const area of ['mabou', 'porthood']) {
     }
   }
 
+  if (area === 'mabou') {
+    const exag = 2.5, house = mapped.find(b => b.id === 900007);
+    const [cx, cz] = world([house.x, house.y]), axis = house.axisDeg * Math.PI / 180;
+    const drawing = new NovemberBuildings(area, mapped, village, exag, 0, false).drawing;
+    let foundationBottom = Infinity, porchBottom = Infinity;
+    for (let i = 0; i < drawing.pos.length; i += 3) {
+      const x = drawing.pos[i] - cx, y = drawing.pos[i+1], z = drawing.pos[i+2] - cz;
+      const along = x*Math.sin(axis)-z*Math.cos(axis), across = x*Math.cos(axis)+z*Math.sin(axis);
+      if (Math.abs(across-4.5) < .01 && Math.abs(along) < 6.51) foundationBottom = Math.min(foundationBottom,y);
+      if (Math.abs(across+6.62) < .01 && Math.abs(along) < 2.61) porchBottom = Math.min(porchBottom,y);
+    }
+    // DTM at the harbour-side wall and the uphill bench, in unexaggerated metres.
+    assert.ok(foundationBottom <= 62.73*exag, 'foundation reaches the downhill ground at maximum hill height');
+    assert.ok(porchBottom <= 64.44*exag, 'porch apron reaches the uphill bench at maximum hill height');
+  }
+
   const want = area === 'mabou' ? [['coal-mines-valley', 55, 270], ['harbour-wharf-view', 922, 199]] : [['marble-hill-view', 56, 225]];
   const list = area === 'mabou' ? placesFor(village) : areaPlaces(area);
   for (const [id, roadId, bearing] of want) {
