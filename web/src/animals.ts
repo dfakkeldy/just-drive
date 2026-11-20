@@ -343,10 +343,10 @@ function pantherSign(): THREE.Group {
   return group;
 }
 
-/** Invented residents. The data supplies geography, never names or ownership. */
 /** A land tile the cat's place needs could not be read, even with a retry: the land did not load (main.ts shows Retry). */
 export class CatTileUnread extends Error {}
 
+/** Invented residents. The data supplies geography, never names or ownership. */
 export class Animals {
   readonly group = new THREE.Group();
   readonly places: Place[] = [];
