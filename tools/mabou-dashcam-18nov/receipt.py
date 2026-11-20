@@ -11,6 +11,8 @@ SOURCE is the Mabou terrain pack the bake read (data/baked/terrain) and STAGE th
 hashes.json pins, for every file the bake writes except manifest.json, the bytes it replaces (`before`) and
 its bytes (`sha256`), relative to data/baked. The manifest is pinned by the three counts the bake owns (buildings,
 building styles and trees: the driveways drop the trees on them), because other bakes own every other manifest key.
+The roadBed pins cover the paired pre-bed lines and the two JSON files that refer to the new hashes. Install
+puts the companion in data/work/overview. The original pins also verify the historical stage and installed land.
 `undo` rebuilds the bake's before props, road list and road kinds from its after files (it drops the split pieces
 and the driveway pieces): tools/road-scene-delta-check.py reads it to judge step-29 props on promoted land, and `record` proves that
 it reproduces the before props byte for byte.
@@ -27,6 +29,7 @@ HERE = Path(__file__).resolve().parent
 RECEIPT = HERE/'hashes.json'
 FOLDER = 'terrain'
 COUNTS = ('buildings', 'buildingStyles', 'trees')
+PRE_BED = 'work/overview/roads-before-bed.json'
 
 
 def sha(data): return hashlib.sha256(data).hexdigest()
@@ -49,15 +52,46 @@ def undo(props, roads, rule):
 def counts(manifest): return {k: dict(count=manifest[k]['count']) for k in COUNTS}
 
 
+def staged_name(name):
+    return Path(name).name if name == PRE_BED else name[len(FOLDER)+1:]
+
+
+def target(baked, name):
+    return baked.parent/name if name == PRE_BED else baked/name
+
+
+def receipt_for(report, with_bed):
+    """Select the original pins or the pins for the stage with a pre-bed companion."""
+    result = {k: v for k, v in report.items() if k != 'roadBed'}
+    if with_bed:
+        bed = report['roadBed']
+        replacements = {f['file']: f['sha256'] for f in bed['files']}
+        result['files'] = [dict(f, sha256=replacements.get(f['file'], f['sha256'])) for f in report['files']]
+        result['files'].append(bed['companion'])
+    return result
+
+
+def stage_receipt(report, stage):
+    return receipt_for(report, 'roadBed' in report and (Path(stage)/staged_name(PRE_BED)).is_file())
+
+
 def record(source, stage):
     source, stage = Path(source), Path(stage)
     files = []
+    companion = stage/staged_name(PRE_BED)
     for path in sorted(p for p in stage.rglob('*') if p.is_file()):
         name = path.relative_to(stage).as_posix()
-        if name == 'manifest.json': continue
+        if name == 'manifest.json' or path == companion: continue
         files.append(dict(file=f'{FOLDER}/{name}', before=sha((source/name).read_bytes()), sha256=sha(path.read_bytes())))
-    old = {r['id']: r for r in json.loads((source/'roads.json').read_bytes())['roads']}
-    new = json.loads((stage/'roads.json').read_bytes())['roads']
+    before_roads = json.loads((source/'roads.json').read_bytes())
+    after_roads = json.loads((stage/'roads.json').read_bytes())
+    if companion.is_file():
+        digest = sha(companion.read_bytes())
+        if after_roads['bed']['before'] != digest:
+            raise ValueError('The staged roads do not name the staged pre-bed lines')
+        files.append(dict(file=PRE_BED, before=before_roads['bed']['before'], sha256=digest))
+    old = {r['id']: r for r in before_roads['roads']}
+    new = after_roads['roads']
     added = [r for r in new if r['id'] not in old]
     drives = [r['id'] for r in added if r.get('driveway')]
     if new[len(new)-len(drives):] != [r for r in added if r.get('driveway')]: raise ValueError('driveway pieces must come last')
@@ -79,7 +113,7 @@ def record(source, stage):
 
 
 def verify(source, stage):
-    report = json.loads(RECEIPT.read_text())
+    report = stage_receipt(json.loads(RECEIPT.read_text()), stage)
     made = record(source, stage)
     if made != report:
         raise AssertionError('the land or the staged files are not this receipt (land differs from the one it was made on?)')
@@ -88,9 +122,10 @@ def verify(source, stage):
 
 def state(baked, report, later=()):
     """'before' or 'after' when every pinned file and the owned manifest counts are one side of the receipt."""
+    baked = Path(baked)
     seen = set()
     for f in report['files']:
-        now = sha((Path(baked)/f['file']).read_bytes())
+        now = sha(target(baked, f['file']).read_bytes())
         for delta in reversed(later):
             now = next((e['before'] for e in delta['files'] if e['file'] == f['file'] and e['sha256'] == now), now)
         seen.add('before' if now == f['before'] else 'after' if now == f['sha256'] else f'unknown bytes {f["file"]}')
@@ -108,9 +143,9 @@ def install(stage, baked, report=None):
     """Copy the staged files over BAKED/terrain and set only the three owned manifest counts: other bakes own every other
     manifest key, so the staged manifest is never copied. Refuses before writing on staged bytes or land that are not
     this receipt's. Replaced bytes are kept in STAGE.before/ so the install can be undone. Run again: it does nothing."""
-    report = report or json.loads(RECEIPT.read_text())
+    report = stage_receipt(report or json.loads(RECEIPT.read_text()), stage)
     stage, baked = Path(stage), Path(baked)
-    names = {f['file'][len(FOLDER)+1:]: f for f in report['files']}
+    names = {staged_name(f['file']): f for f in report['files']}
     extra = {p.relative_to(stage).as_posix() for p in stage.rglob('*') if p.is_file()} - set(names) - {'manifest.json'}
     if extra: raise ValueError('staged files outside the receipt: ' + ', '.join(sorted(extra)))
     for name, f in names.items():
@@ -118,8 +153,9 @@ def install(stage, baked, report=None):
     (m,) = report['manifests']
     if counts(json.loads((stage/'manifest.json').read_bytes())) != m['after']: raise ValueError('staged manifest counts are not the receipt')
     live = baked/FOLDER
-    for name, f in names.items():
-        if sha((live/name).read_bytes()) not in (f['before'], f['sha256']): raise ValueError(f'live {FOLDER}/{name} is neither before nor after; refusing')
+    for f in names.values():
+        if sha(target(baked, f['file']).read_bytes()) not in (f['before'], f['sha256']):
+            raise ValueError(f'live {f["file"]} is neither before nor after; refusing')
     manifest = json.loads((live/'manifest.json').read_bytes())
     if counts(manifest) not in (m['before'], m['after']): raise ValueError('live manifest counts are neither before nor after; refusing')
     keep = stage.with_name(stage.name + '.before')
@@ -127,10 +163,11 @@ def install(stage, baked, report=None):
         if (keep/name).exists() and sha((keep/name).read_bytes()) != f['before']:
             raise ValueError(f'kept {keep.name}/{name} is not the pinned before bytes; refusing')
     for name, f in names.items():
-        if sha((live/name).read_bytes()) == f['before']:
+        dest = target(baked, f['file'])
+        if sha(dest.read_bytes()) == f['before']:
             (keep/name).parent.mkdir(parents=True, exist_ok=True)
-            if not (keep/name).exists(): shutil.copyfile(live/name, keep/name)
-        write(live/name, (stage/name).read_bytes())
+            if not (keep/name).exists(): shutil.copyfile(dest, keep/name)
+        write(dest, (stage/name).read_bytes())
     set_counts(live, m['after'])
     return state(baked, report)
 
@@ -151,19 +188,20 @@ def set_counts(live, side):
 def uninstall(stage, baked, report=None):
     """Undo install: put back each pinned file from STAGE.before/ (checked against its before hash) and set the
     owned counts back. Refuses before writing on land or kept bytes that are not this receipt's. Run again: it does nothing."""
-    report = report or json.loads(RECEIPT.read_text())
-    live, keep = Path(baked)/FOLDER, Path(stage).with_name(Path(stage).name + '.before')
-    names = {f['file'][len(FOLDER)+1:]: f for f in report['files']}
+    report = stage_receipt(report or json.loads(RECEIPT.read_text()), stage)
+    stage, baked = Path(stage), Path(baked)
+    live, keep = baked/FOLDER, stage.with_name(stage.name + '.before')
+    names = {staged_name(f['file']): f for f in report['files']}
     (m,) = report['manifests']
     for name, f in names.items():
-        now = sha((live/name).read_bytes())
-        if now not in (f['before'], f['sha256']): raise ValueError(f'live {FOLDER}/{name} is neither before nor after; refusing')
+        now = sha(target(baked, f['file']).read_bytes())
+        if now not in (f['before'], f['sha256']): raise ValueError(f'live {f["file"]} is neither before nor after; refusing')
         if now == f['sha256'] and (not (keep/name).exists() or sha((keep/name).read_bytes()) != f['before']):
             raise ValueError(f'{keep.name}/{name} is missing or not the pinned before bytes; refusing')
     if counts(json.loads((live/'manifest.json').read_bytes())) not in (m['before'], m['after']):
         raise ValueError('live manifest counts are neither before nor after; refusing')
-    for name in names:
-        if (keep/name).exists(): write(live/name, (keep/name).read_bytes())
+    for name, f in names.items():
+        if (keep/name).exists(): write(target(baked, f['file']), (keep/name).read_bytes())
     set_counts(live, m['before'])
     return state(baked, report)
 
@@ -172,8 +210,8 @@ def fixture():
     """The state rule on a synthetic receipt: both sides pass; a half install and unknown bytes fail."""
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        (root/FOLDER).mkdir()
+        root = Path(tmp)/'baked'
+        (root/FOLDER).mkdir(parents=True)
         files = {'a.json': (b'1', b'2'), 'b.json': (b'3', b'4')}
         manifest = lambda n: compact({k: dict(count=n) for k in COUNTS})
         report = dict(files=[dict(file=f'{FOLDER}/{k}', before=sha(v[0]), sha256=sha(v[1])) for k, v in files.items()],
@@ -232,13 +270,43 @@ def fixture():
         assert undo(props, [dict(id=5, kind=3)], dict(poles={}, kinds={}))[1] == [dict(id=5, kind=3)], 'a rule without driveways' 
 
 
+        lay(0, 1)
+        stage = root/'stage-bed'
+        stage.mkdir()
+        staged()
+        companion = target(root, PRE_BED)
+        companion.parent.mkdir(parents=True)
+        companion.write_bytes(b'original')
+        staged_companion = stage/staged_name(PRE_BED)
+        staged_companion.write_bytes(b'split')
+        (stage/'a.json').write_bytes(b'paired')
+        paired = dict(report, roadBed=dict(
+            files=[dict(file=f'{FOLDER}/a.json', sha256=sha(b'paired'))],
+            companion=dict(file=PRE_BED, before=sha(b'original'), sha256=sha(b'split'))))
+        assert install(stage, root, paired) == 'after' and install(stage, root, paired) == 'after'
+        assert companion.read_bytes() == b'split'
+        companion.write_bytes(b'original')
+        try:
+            state(root, stage_receipt(paired, stage))
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError('Accepted staged roads with the old pre-bed lines')
+        assert install(stage, root, paired) == 'after'
+        assert uninstall(stage, root, paired) == 'before' and companion.read_bytes() == b'original'
+
+
 def land(baked):
     fixture()
     report = json.loads(RECEIPT.read_text())
     later = HERE.parent / 'mabou-wharf' / 'roads.json'
     followups = [json.loads(later.read_text())] if later.exists() else []
-    mode = state(baked, report, followups)
-    print(f'PASS 18 Nov Mabou land is {mode} ({len(report["files"])} files and the manifest counts); fixture: half install, counts left behind and unknown bytes refused; install/uninstall refusals write nothing, kept keys and bytes, idempotent')
+    companion = target(baked, PRE_BED)
+    bed = report['roadBed']
+    repaired = companion.is_file() and sha(companion.read_bytes()) == bed['companion']['sha256']
+    pins = receipt_for(report, repaired)
+    mode = state(baked, pins, followups)
+    print(f'PASS 18 Nov Mabou land is {mode} ({len(pins["files"])} files and the manifest counts); fixture: half install, counts left behind and unknown bytes refused; install/uninstall refusals write nothing, kept keys and bytes, idempotent')
 
 
 if __name__ == '__main__':
