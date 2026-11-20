@@ -312,8 +312,8 @@ export class RadioPlayer {
   /** Joins the station where its own clock says it is. */
   protected tuneLive(): void {
     this.behind = false;
-    this.missed = 0;
     const live = this.live();
+    this.missed = 0;
     this.tune(live.track, live.at, true);
   }
 
