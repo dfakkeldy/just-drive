@@ -107,10 +107,10 @@ await page('justdrive.localhost','/westbay?area=mabou&touch=1&q=low',390,844,asy
  const westBay=JSON.parse(readFileSync(new URL('../data/baked/areas/westbay/manifest.json',import.meta.url),'utf8')).village;
  const {dials,walk}=await p.read(`(()=>{const r=mmm.radio,dials=r.stations.map(s=>s.dial),walk=[];r.setPlace(${westBay[0]},${westBay[1]});
   for(let k=0;k<=dials.length&&r.station>=0;k++)r.next();
-  for(let k=0;k<=dials.length;k++){r.next();if(r.station<0)break;walk.push(dials[r.station]);}
+  for(let k=0;k<=dials.length;k++){r.next();if(r.station<0)break;walk.push(dials[r.station]+' '+r.reception.band);}
   return {dials,walk};})()`);
  assert.ok(dials.some(dial=>!comesIn(signalAt(RECEPTION,dial,...westBay))),'the mail game loses a station at West Bay, so this walk tests something');
- assert.deepEqual([...walk].sort(),[...dials].sort(),'the dial stops at every station at West Bay: '+walk.join(' '));
+ assert.deepEqual([...walk].sort(),dials.map(dial=>dial+' clear').sort(),'the dial stops at every station at West Bay, and each is clear: '+walk.join(', '));
 });
 await page('localhost','/mabou?site=just&q=low',1280,900,async p=>{
  await p.until(titleReady);assert.equal(await p.read('mmm.radio'),null);assert.equal(await p.read(`!!document.getElementById('radio')`),false);assert.doesNotMatch(await p.read(`document.getElementById('titleCard').innerText`),/\bradio\b/i);await p.clean('missing radio title');

@@ -214,6 +214,7 @@ function wiring() {
   assert.equal(main.split("if (params.get('reception') === '0') radio?.useReception(null);").length, 2, '?reception=0');
   // Just Drive hears every station everywhere: only the mail game has reception (the owner, 20 Nov 2026).
   assert.equal(main.split("if (SITE.brand === 'just') radio?.useReception(null);").length, 2, 'Just Drive takes the reception map away');
+  assert.equal(main.split('useReception(').length, 3, 'and nothing else in main.ts gives the radio a map');
   assert.ok(radio.includes("from './radio-reception'") && radio.includes('nextOnDial(') && radio.includes('private map: ReceptionMap | null = RECEPTION;'));
   assert.ok(radio.includes('this.audio.muted = this.music <= 0;'), 'a lost station is muted (a phone ignores the volume)');
   assert.ok(radio.includes('protected override level(): number { return this.volume * this.wind * this.music; }'), 'a weak signal takes some of the music');
