@@ -209,9 +209,14 @@ def uninstall(stage, baked, report=None, *, upgrade=False):
     owned counts back. An upgrade rollback uses STAGE.pre-upgrade/."""
     stage, baked = Path(stage), Path(baked)
     original = report or json.loads(RECEIPT.read_text())
-    report = stage_receipt(original)
     if upgrade:
-        report = upgrade_receipt(baked, original, report)
+        report = upgrade_receipt(baked, original, stage_receipt(original))
+    else:
+        # Pick the pins the live land holds, as land() does: the original install has no repaired companion.
+        companion = target(baked, PRE_BED)
+        repaired = ('roadBed' in original and companion.is_file()
+                    and sha(companion.read_bytes()) == original['roadBed']['companion']['sha256'])
+        report = receipt_for(original, repaired)
     live, keep = baked/FOLDER, stage.with_name(stage.name + ('.pre-upgrade' if upgrade else '.before'))
     names = {staged_name(f['file']): f for f in report['files']}
     (m,) = report['manifests']

@@ -161,6 +161,8 @@ The upgrade checks the installed pins and backs up the three replaced files in `
 With the same stage and backup, repeat `upgrade` to finish an interrupted upgrade or `rollback-upgrade` to restore
 the original bytes. The `land` command warns if the original install still needs the repair.
 Use `install` for a verified stage on the pre-step-35 land.
+To undo all of step 35 after an upgrade, run `rollback-upgrade "$STAGE" "$BAKED"`, then
+`uninstall "$OLDSTAGE" "$BAKED"` with the stage of the original install.
 
 Mapped outlines below 82% rectangle fill can use two to four wings on their own axes.
 Each wing is at least 3 m wide and 20 m² (also 8% of the mapped building).
