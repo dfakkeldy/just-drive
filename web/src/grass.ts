@@ -373,6 +373,7 @@ export class Grass {
         if (performance.now() - start >= 1.5) break;
         this.populate(patch, start + 1.5);
       }
+      pending.length = 0;   // keep no patch alive until the next visible frame
     }
     this.buildMaxMs = Math.max(this.buildMaxMs, performance.now() - start);
   }
