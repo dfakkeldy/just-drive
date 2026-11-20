@@ -410,7 +410,7 @@ if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get
   terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id)).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
-const testPark = await createTestPark(params, terrain, yardSite, LOW, buildingList ?? []);
+const testPark = await createTestPark(terrain, yardSite, LOW, buildingList ?? []);
 const quarryStuntPark = quarryFeature && quarrySite && ERA.modern
   ? quarryFeature.createQuarryStuntPark(terrain, LOW) : null;
 if (quarryStuntPark) await quarryStuntPark.prepare();
@@ -709,7 +709,8 @@ if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
 // A site registers here once. Fleet sweeps and fixed-step driving use this same list.
 const fleetContacts = new AreaContacts();
-if(stuntPark)fleetContacts.add(stuntPark.contactProvider());
+const parkContacts = stuntPark?.contactProvider();
+if (parkContacts) fleetContacts.add(parkContacts);
 if (quarry) {
   fleetContacts.add(quarry.contactProvider());
   if (!fleetEnabled(garageEntry, params, !mailMode, ERA.modern)) quarry.bindVehicle(vehicle, fleetContacts);
@@ -760,8 +761,11 @@ const resolveYardSolids = () => {
   canal?.resolve(vehicle, canalBeforeX, canalBeforeZ);
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
   boss?.driver.resolve(vehicle);
-  if (fleet || quarry || stuntPark) fleetContacts.resolve(vehicle);
-  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); novemberBuildings?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
+  if (fleet || quarry) fleetContacts.resolve(vehicle);
+  else {
+    yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); novemberBuildings?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle);
+    parkContacts?.resolve(vehicle);
+  }
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
   fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
   yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
@@ -770,7 +774,7 @@ const resolveYardSolids = () => {
   if (!scenePaused()) ambientTraffic?.step(1 / 120, vehicle);
   if (!scenePaused()) roadAnimals?.step(1 / 120, vehicle, horse ? roadsidePlaying : vehicle.damageActive);
   if (!scenePaused()) canal?.advance(1 / 120, vehicle, !multiplayer?.choice.on);   // the canal clock runs with the traffic
-  if (!fleet && !quarry && !stuntPark) ambientTraffic?.resolve(vehicle);   // otherwise fleetContacts, above, holds the traffic
+  if (!fleet && !quarry) ambientTraffic?.resolve(vehicle);   // otherwise fleetContacts, above, holds the traffic
   schoolBus?.setPaused(scenePaused());
   schoolBus?.step(1 / 120, vehicle, horse ? roadsidePlaying : vehicle.damageActive, jumpPlacement);
   yardProps?.step(1 / 120, vehicle, started && !shift.ended && !demo && mode === 'drive' && !scenePaused());
@@ -972,7 +976,9 @@ if (roadAnimals) scene.add(roadAnimals.group);
 if (import.meta.env.DEV) expose({ roadAnimals });
 if (ERA.modern && garageEntry.id === 'truck' && ['1', 'empty'].includes(params.get('trailer') ?? '')) {
   if (!mailMode && roadScene) fleetContacts.add({ resolve: body => { if (roadScene.rules.enabled) pushOut(body, roadScene.placementSolids, true); } });
-  towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? hawkesbury.solids : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts: quarry || stuntPark || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts : undefined }, true, LOW);
+  const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts
+    : parkContacts && { allows: parkContacts.allows, resolve: parkContacts.resolve };
+  towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? hawkesbury.solids : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts }, true, LOW);
   if (towing.attached) scene.add(towing.trailer.root);
   trailerHelpSetting(towing, document.getElementById('settings'), document.getElementById('startOver'));
   if (import.meta.env.DEV) expose({ towing });
@@ -1000,7 +1006,17 @@ if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.
 const churchRoom = churchSite ? await import('./interior-church') : null;
 const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => shift.interiorResult(receipt), bare)
   : churchRoom ? new Interiors(() => 0, () => '', () => {}, bare) : quietInteriors();
-if(stuntPark)for(const actor of fleet?fleet.members.map(m=>m.vehicle):[vehicle])fleetContacts.bindVehicle(actor,pose=>stuntPark.contains(pose.x,pose.z,actor.spec.envelope.reach)?terrain.heightAt(pose.x,pose.z,pose.y):actor.y??0);   // pose.y: the placement's own reference (#156), so a deck above or below it is judged where the body will stand
+if (testPark && !fleet) {
+  // Adding the park must not change other sites' placement checks for an ordinary ride.
+  const previousGuard = vehicle.placementGuard;
+  vehicle.placementGuard = pose => (!previousGuard || previousGuard(pose))
+    && (!testPark.contains(pose.x, pose.z, vehicle.spec.envelope.reach) || testPark.placementAllowed(pose, vehicle.spec));
+} else if (stuntPark) {
+  for (const actor of fleet ? fleet.members.map(m => m.vehicle) : [vehicle]) {
+    // A placement over joined terrain must use the deck within reach of its own height.
+    fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z, pose.y) : actor.y ?? 0);
+  }
+}
 resets[resetSlot.interiors] = () => interiors.reset();
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
 if (mineSite) scene.add(mineSite.group);

@@ -31,7 +31,7 @@ assert.ok(sites.every((b) => b.buildingId === undefined || b.buildingId === b.id
 {
   const main = fs.readFileSync(`${process.env.MMM_ROOT}/web/src/main.ts`, 'utf8');
   const uses = main.split('\n').filter((line) => /\bbuildingList\b/.test(line));
-  const allowed = [/^const buildingList\b/, /new Buildings\((?:porchBox \? PorchHouse\.drawn\(buildingList, porchBox\) : )?buildingList,/, /buildingSites\(buildingList \?\? \[\]\)/, /new Animals\(roads, terrain, buildingList,/, /createTestPark\(params, terrain, yardSite, LOW, buildingList \?\? \[\]\)/,
+  const allowed = [/^const buildingList\b/, /new Buildings\((?:porchBox \? PorchHouse\.drawn\(buildingList, porchBox\) : )?buildingList,/, /buildingSites\(buildingList \?\? \[\]\)/, /new Animals\(roads, terrain, buildingList,/, /createTestPark\(terrain, yardSite, LOW, buildingList \?\? \[\]\)/,
     // The 1884 scene clears trees under every roof: one record per building and the further blocks of a large one, never a wing.
     /new HistoryScene\(terrain, roads, streams, roofSites\(buildingList \?\? \[\]\), ground\)/,
     /^const porchBox = .*\? PorchSite\.find\(buildingList\) : null;$/,

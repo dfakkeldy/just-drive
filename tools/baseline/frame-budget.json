@@ -59,11 +59,11 @@
 
   "village-start/phone-mail":{"calls":191,"triangles":1162200,"geometries":79,"textures":71,"programs":15,"readyTiles":94,"requests":226},
 
-  "works-yard/desktop-explore-truck":{"calls":559,"triangles":3377122,"geometries":124,"textures":123,"programs":34,"readyTiles":297,"requests":551},
+  "works-yard/desktop-explore-truck":{"calls":559,"triangles":3377122,"geometries":124,"textures":123,"programs":34,"readyTiles":297,"requests":555},
 
-  "works-yard/desktop-mail":{"calls":571,"triangles":3473554,"geometries":131,"textures":123,"programs":36,"readyTiles":297,"requests":544},
+  "works-yard/desktop-mail":{"calls":571,"triangles":3473554,"geometries":131,"textures":123,"programs":36,"readyTiles":297,"requests":548},
 
-  "works-yard/phone-explore-truck":{"calls":170,"triangles":1455450,"geometries":68,"textures":66,"programs":15,"readyTiles":72,"requests":182},
+  "works-yard/phone-explore-truck":{"calls":170,"triangles":1455450,"geometries":68,"textures":66,"programs":15,"readyTiles":72,"requests":186},
 
-  "works-yard/phone-mail":{"calls":177,"triangles":1475362,"geometries":75,"textures":66,"programs":17,"readyTiles":72,"requests":175}
+  "works-yard/phone-mail":{"calls":177,"triangles":1475362,"geometries":75,"textures":66,"programs":17,"readyTiles":72,"requests":179}
 }
