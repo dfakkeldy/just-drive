@@ -23,6 +23,8 @@ import { fleetEnabled, fleetRig } from './fleet-models';
 import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { isHillsideBuilding, NovemberBuildings } from './november-buildings';
+import { NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
@@ -362,11 +364,15 @@ const buildingStyles = ERA.modern && manifest.buildingStyles
 const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
-const buildings = ERA.modern && drawnBuildings ? new Buildings(mabouSite ? mabouSite.drawn(drawnBuildings) : drawnBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
+const novemberBuildings = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+  ? new NovemberBuildings(AREA.id, buildingList ?? [], manifest.village, EXAG, SEA_LEVEL, LOW) : null;
+const finalBuildings = novemberBuildings && AREA.id === 'mabou' ? drawnBuildings?.filter(b => !isHillsideBuilding(b)) : drawnBuildings;
+const buildings = ERA.modern && finalBuildings ? new Buildings(mabouSite ? mabouSite.drawn(finalBuildings) : finalBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
 if (buildings) clear.push(...buildings.clear);
+if (novemberBuildings) { clear.push(...novemberBuildings.clear); scene.add(novemberBuildings.group); }
 if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
@@ -428,7 +434,14 @@ if (LOW) terrain.lazyRange = 600;
 if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
-const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far', stockpiles?.excludes) : null;
+const roadData = manifest.roads ? await getJson(manifest.roads.file) : { roads: [] };
+const novemberRoads = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+  ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
+if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
+const treeExcludes = novemberRoads
+  ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
+  : stockpiles?.excludes;
+const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far', treeExcludes) : null;
 if (trees) scene.add(trees.group);
 scene.add(terrain.group);
 const [VE, VN] = manifest.village;
@@ -458,13 +471,13 @@ const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea,
   new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
   terrain, trees?.group ?? null, params.get('reflections'));
 if (coast) waterReflections?.include(coast.group);
+if (novemberBuildings) waterReflections?.include(novemberBuildings.group);
 if (waterReflections) {
   Object.assign(shared, waterReflections.uniforms);
   Object.assign(terrain.uniforms, waterReflections.uniforms);
 }
 
-const roadData = manifest.roads ? await getJson(manifest.roads.file) : { roads: [] };
-const roads = new Roads(roadData, manifest.village, terrain);
+const roads = new Roads(novemberRoads?.added.length ? { roads: [...roadData.roads, ...novemberRoads.added] } : roadData, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
   ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW, () => terrain.dataRevision)
   : null;
@@ -705,6 +718,7 @@ if (tallKey) fleetContacts.add({ revision: () => tall?.solids.length ?? 0, resol
 if (village) fleetContacts.add({ resolve: body => village.resolveSolids(body) });
 if (hawkesbury) fleetContacts.add({ resolve: body => hawkesbury.resolveSolids(body) });
 if (mabouMain) fleetContacts.add({ resolve: body => mabouMain.resolveSolids(body) });
+if (novemberBuildings) fleetContacts.add({ resolve: body => novemberBuildings.resolveSolids(body) });
 if (cemeteries) fleetContacts.add({ resolve: body => cemeteries.resolveSolids(body) });
 if (props) fleetContacts.add({ revision: () => props.downCount, resolve: () => {}, allows: body => props.allowsFleetBody(body) });
 if (roads.guardrails) {
@@ -740,7 +754,7 @@ const resolveYardSolids = () => {
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
   boss?.driver.resolve(vehicle);
   if (fleet || quarry || stuntPark) fleetContacts.resolve(vehicle);
-  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
+  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); novemberBuildings?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
   fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
   yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
@@ -1675,7 +1689,7 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'mabouMain' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => mabouMain?.update(camera.position, now) },
   { ...(import.meta.env.DEV ? { name: 'stockpiles' } : {}), segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
   { ...(import.meta.env.DEV ? { name: 'cemeteries' } : {}), segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'terrain' } : {}), segment: 'landscape', ending: true, update: () => { terrain.update(camera, scenePaused()); wharves?.update(camera.position); } },
+  { ...(import.meta.env.DEV ? { name: 'terrain' } : {}), segment: 'landscape', ending: true, update: () => { terrain.update(camera, scenePaused()); wharves?.update(camera.position); novemberRoads?.update(terrain, camera.position); } },
   ...(fleet ? [{ ...(import.meta.env.DEV ? { name: 'fleet' } : {}), segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { ...(import.meta.env.DEV ? { name: 'coast' } : {}), segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
   { ...(import.meta.env.DEV ? { name: 'lotProps' } : {}), segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
