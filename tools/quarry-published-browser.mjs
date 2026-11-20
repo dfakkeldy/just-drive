@@ -19,16 +19,25 @@ const read=async expression=>(await c.send('Runtime.evaluate',{expression,return
 const until=async expression=>{for(let i=0;i<1800;i++){await sleep(250);if(await read(expression))return;}throw Error('Published quarry page did not settle: '+expression);};
 const settled="document.documentElement.dataset.mmmReady==='true'&&!document.getElementById('boot')";
 const parkFetched="performance.getEntriesByType('resource').some(r=>/\\/chunks\\/quarry-feature-[\\w-]+\\.js(?:\\?|$)/.test(r.name))",noPark=`!(globalThis.__quarryEvaluations?.length)&&!${parkFetched}`;
-const visit=async path=>{await c.send('Page.navigate',{url:origin+path});await until(settled);};
+let logMark=0;const visit=async path=>{logMark=c.logs.length;await c.send('Page.navigate',{url:origin+path});await until(settled);};
 const results=[],check=async(label,expression)=>{const value=await read(expression);assert.ok(value,label);results.push({label,exit:0});console.log('PASS',label);};
+// The Blender mail car is the default (14 Nov 2026), so the published build must load it as the dev build does: its
+// chunk and its model file arrive, and the page logs no "did not load" or "could not be built" line for it.
+const blenderCar=async(label,low)=>{
+ await check(label+' fetches the Blender mail car chunk and model file',`performance.getEntriesByType('resource').some(r=>/\\/chunks\\/car-model-[\\w-]+\\.js(?:\\?|$)/.test(r.name))&&performance.getEntriesByType('resource').some(r=>new URL(r.name).pathname===${JSON.stringify(low?'/models/mail-car-low.glb':'/models/mail-car.glb')})`);
+ const warned=c.logs.slice(logMark).filter(line=>/Blender mail car (?:did not load|could not be built)/.test(line));assert.deepEqual(warned,[],label+' draws the Blender mail car');results.push({label:label+' draws the Blender mail car',exit:0});console.log('PASS',label,'draws the Blender mail car');
+};
 try{
  await c.send('Page.enable');
  // The page asks for hundreds of land files: keep every resource entry, so a late park fetch is never dropped.
  await c.send('Page.addScriptToEvaluateOnNewDocument',{source:'performance.setResourceTimingBufferSize(1e6)'});
  if(!process.env.QUARRY_P3_PATH_ONLY){await visit('/?area=mabou&mode=mail&shot=2&q=low&radio=0');
  await check('Published Mabou mail evaluates zero quarry modules',noPark);
+ await blenderCar('Published Mabou mail (LOW)',true);
  await check('Published pothole diagnostic setter is absent or dead',`(async()=>{const asset=performance.getEntriesByType('resource').find(r=>/\\/(?:app\\.js|offline\\/app\\.[^/]+\\.js)(?:\\?|$)/.test(r.name));if(!asset)throw Error('Published app resource absent');const module=await import(asset.name);let globalDenied=false,moduleDenied=false;try{globalThis.setDiagnosticPotholes(false)}catch(error){globalDenied=error instanceof TypeError||/dev server/.test(error.message)}try{module.setDiagnosticPotholes(false)}catch(error){moduleDenied=error instanceof TypeError||/dev server/.test(error.message)}window.__publishedPotholeProof={moduleExports:Object.keys(module),globalDenied,moduleDenied};return globalDenied&&moduleDenied&&!globalThis.mmm})()`);
  writeFileSync(out+'/published-pothole-call.json',JSON.stringify(await read('window.__publishedPotholeProof'),null,2));
+ await visit('/?area=mabou&mode=mail&shot=2&q=high&radio=0');
+ await blenderCar('Published Mabou mail (desktop)',false);
  for(const area of readdirSync(root+'/areas',{withFileTypes:true}).filter(d=>d.isDirectory()&&d.name!=='westbay').map(d=>d.name)){
   await visit('/?area='+area+'&mode=explore&vehicle=car&title=1&q=low&radio=0');
   await check('Published '+area+' evaluates zero park modules',noPark+"&&!document.getElementById('tripHud')");
