@@ -1676,6 +1676,9 @@ if (!bare && params.get('radio') !== '0') {
   const audioBase = `${import.meta.env.BASE_URL}audio`;
   void loadRadio(audioBase, siteRadio(SITE)).then(next => {
     radio = next; if (SITE.brand === 'just') { title?.setRadio(!!radio); ride.setRadio(!!radio); }
+    // Only the mail shift has reception: the places with no signal are its joke. Just driving (explore mode: every Just Drive
+    // page, the mail game's "Just drive" mode, its other areas and 1884) hears every station everywhere (the owner, 20 Nov 2026).
+    if (gameMode === 'explore') radio?.useReception(null);
     if (params.get('reception') === '0') radio?.useReception(null);   // every station everywhere, as on the Just Listen page
     if (import.meta.env.DEV) expose({ radio });   // for tools/radio-check.mjs
     if (started) radio?.start();

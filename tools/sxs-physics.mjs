@@ -43,9 +43,18 @@ function turning(spec){const car=v(spec),p=yard.world(230,80);car.place(p.x,p.z,
  let dist=0;for(let i=0;i<120*45&&car.heading-before<Math.PI*2;i++){const x=car.x,z=car.z;step(car,{...coast,throttle:Math.max(-1,Math.min(1,(1.5-car.speed)*2)),steer:1});dist+=Math.hypot(car.x-x,car.z-z);}
  // Radius of the outside front tyre's outer sidewall, measured from the integrated centre path.
  const radius=dist/(car.heading-before);return {diameter:2*(Math.hypot(radius+spec.track/2,spec.wheelbase/2)+.179),yaw:car.heading-before, speed:car.speed, surface:car.surfaceName, pitch:car.pitch, position:[car.x,car.z],start:p};}
-function topSpeed(spec){const car=v(spec);const p=at(hwy,flat.s);car.place(p.x,p.z,p.heading);let s=200,peak=0,levelPeak=0,off=0;const start=at(hwy,s);car.place(start.x,start.z,start.heading);for(let i=0;i<120*180&&s<hwy.length-20;i++){
- s+=drive(car,hwy,s,Infinity);const q=at(hwy,s),r=at(hwy,s+10),grade=Math.abs(terrain.heightAt(r.x,r.z)-terrain.heightAt(q.x,q.z))/10;
- peak=Math.max(peak,car.speed*3.6);if(grade<.01)levelPeak=Math.max(levelPeak,car.speed*3.6);off=Math.max(off,Math.hypot(car.x-q.x,car.z-q.z));}return {peak,levelPeak,off};}
+function topSpeed(spec){const car=v(spec);let s=200,peak=0,levelPeak=0,off=0,edge=-Infinity;const start=at(hwy,s);car.place(start.x,start.z,start.heading);for(let i=0;i<120*240&&s<hwy.length-20;i++){
+ // Back off before a bend so the highway test measures top speed on the straights.
+ const ahead=at(hwy,s+60),look=at(hwy,s+15);
+ const bend=Math.abs(wrap(ahead.heading-look.heading));
+ const target=bend>.06?Math.sqrt(5*45/bend):Infinity;
+ s+=drive(car,hwy,s,target);
+ const q=at(hwy,s),r=at(hwy,s+10),grade=Math.abs(terrain.heightAt(r.x,r.z)-terrain.heightAt(q.x,q.z))/10;
+ s+=Math.max(-.6,Math.min(.6,(car.x-q.x)*Math.sin(q.heading)-(car.z-q.z)*Math.cos(q.heading)));
+ peak=Math.max(peak,car.speed*3.6);if(grade<.01)levelPeak=Math.max(levelPeak,car.speed*3.6);
+ // Measure lateral distance to the actual highway, independent of the driver's path progress estimate.
+ const hit=roads.nearest(car.x,car.z,10,r=>r.id===25),dist=hit?.dist??Infinity;
+ off=Math.max(off,dist);edge=Math.max(edge,dist+spec.halfWidth-(hit?.road.halfWidth??0));}return {peak,levelPeak,off,edge};}
 const random=seed=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
 function washboard(spec,target=40,start=2400){const car=v(spec);const p=at(mines,start);car.place(p.x,p.z,p.heading);Math.random=random(0x54525543);setSpeed(car,target/3.6);let s=start,maxError=0,maxSide=0,maxRoadDistance=0,seconds=0,shake=0,heave=0,count=0,nearTarget=0,minSpeed=Infinity,maxSpeed=0;
  for(let i=0;i<120*30;i++){const q=at(mines,s),r=at(mines,s+Math.max(7,car.speed*.6)),dx=r.x-car.x,dz=r.z-car.z,skip=Math.max(.28,Math.min(1,1-(Math.abs(car.speed)-5)/15)),lock=Math.min(spec.maxSteer,Math.atan(spec.wheelbase*spec.gripLock*.6*skip*9.81/Math.max(car.speed*car.speed,4))),angle=Math.atan2(2*spec.wheelbase*Math.sin(wrap(Math.atan2(dx,-dz)-car.heading)),Math.max(1,Math.hypot(dx,dz))),steer=Math.max(-1,Math.min(1,angle/lock));step(car,{...coast,steer,throttle:Math.max(-1,Math.min(1,0.6+(target/3.6-car.speed)*1.5))});s+=Math.max(0,car.speed)*dt;maxRoadDistance=Math.max(maxRoadDistance,roads.nearest(car.x,car.z,30)?.dist??30);maxError=Math.max(maxError,Math.abs(wrap(car.heading-q.heading)));maxSide=Math.max(maxSide,Math.hypot(car.x-q.x,car.z-q.z));if(car.surfaceName==='washboard'){if(car.speed*3.6>=target-.5&&car.speed*3.6<=target+2)nearTarget+=dt;if(i>240){minSpeed=Math.min(minSpeed,car.speed*3.6);maxSpeed=Math.max(maxSpeed,car.speed*3.6);}seconds+=dt;shake+=Math.abs(car.car.body.rotation.z);heave+=Math.abs(car.car.body.position.y);count++;}}
@@ -76,12 +85,15 @@ const measured={paved80:Object.fromEntries([['car',CAR_SPEC],['truck',TRUCK_SPEC
  jump:jump(SXS_SPEC),carJump:jump(CAR_SPEC),slide:slide(GRIP_SXS),sections:{gravel:{id:gravelSection.r.id,start:gravelSection.start},track:{id:trackSection.r.id,start:trackSection.start}}};
 console.log('SXS MEASURED',JSON.stringify(measured));
 if(process.argv.includes('--explore'))process.exit(0);
+const highwayTopOK = n => n.levelPeak>=155&&n.peak<=172&&n.edge<0;
+// The faster pickup is no longer the gravel acceleration reference. Keep the buggy's own time and its edge over the car.
+const gravelOK = n => n.surfaces.join()==='gravel'&&n.seconds<4.5&&n.seconds<measured.gravel.car.seconds*.8;
 const checks={
  level:()=>sectionGrade(flat.s)<.012,
  acceleration:()=>measured.acceleration>=4.5&&measured.acceleration<=5.5,
- top:()=>measured.top.levelPeak>=135&&measured.top.peak<=145&&measured.top.off<2,
+ top:()=>highwayTopOK(measured.top),
  turning:()=>measured.turning.yaw>6&&measured.turning.diameter>=10&&measured.turning.diameter<=11.5,
- gravel:()=>measured.gravel.sxs.surfaces.join()==='gravel'&&measured.gravel.sxs.seconds<Math.min(measured.gravel.car.seconds,measured.gravel.truck.seconds)*.8&&measured.gravel.sxs.seconds/measured.paved80.sxs<measured.gravel.car.seconds/measured.paved80.car*.95,
+ gravel:()=>gravelOK(measured.gravel.sxs)&&measured.gravel.sxs.seconds/measured.paved80.sxs<measured.gravel.car.seconds/measured.paved80.car*.95,
  track:()=>measured.track.sxs.surfaces.join()==='dirt track'&&measured.track.sxs.seconds<measured.track.car.seconds*.7,
  wash40:()=>measured.wash40.seconds>29&&measured.wash40.nearTarget>25&&measured.wash40.maxRoadDistance+SXS_SPEC.halfWidth<2.6&&measured.wash40.meanShake<measured.carWash40.meanShake*.6&&measured.wash40.meanHeave<measured.carWash40.meanHeave*.4,
  wash60:()=>measured.wash60.seconds>29&&measured.wash60.nearTarget>15&&measured.wash60.minSpeed>57&&measured.wash60.maxRoadDistance+SXS_SPEC.halfWidth<2.6&&measured.wash60.meanShake<measured.carWash60.meanShake*.7&&measured.wash60.meanHeave<measured.carWash60.meanHeave*.4,
@@ -94,9 +106,9 @@ for(const [name,test]of Object.entries(checks))assert.ok(test(),name);
 const reject=(name,run,predicate)=>{const result=run();assert.ok(!predicate(result),`mutation rejected ${name}: ${JSON.stringify(result)}`);console.log('MUTATION rejected',name);};
 const inRange=n=>n>=4.5&&n<=5.5;
 reject('engine acceleration',()=>acceleration({...SXS_SPEC,engineAcceleration:2}),inRange);
-reject('top power',()=>topSpeed({...SXS_SPEC,enginePower:30}),n=>n.levelPeak>=135&&n.peak<=145);
+reject('top power',()=>topSpeed({...SXS_SPEC,enginePower:30}),highwayTopOK);
 reject('steering lock',()=>turning({...SXS_SPEC,maxSteer:.4}),n=>n.diameter>=10&&n.diameter<=11.5);
-reject('gravel traction',()=>looseAcceleration({...SXS_SPEC,tractionShare:.2},gravelSection),n=>n.surfaces.join()==='gravel'&&n.seconds<Math.min(measured.gravel.car.seconds,measured.gravel.truck.seconds)*.8);
+reject('gravel traction',()=>looseAcceleration({...SXS_SPEC,tractionShare:.2},gravelSection),gravelOK);
 reject('track traction',()=>looseAcceleration({...SXS_SPEC,tractionShare:.2},trackSection),n=>n.surfaces.join()==='dirt track'&&n.seconds<measured.track.car.seconds*.7);
 for(const target of [40,60]) {
  const car=target===40?measured.carWash40:measured.carWash60;

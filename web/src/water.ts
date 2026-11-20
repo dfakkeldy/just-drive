@@ -25,7 +25,6 @@ export class WaterReflections {
   private readonly gl: WebGL2RenderingContext;
   private readonly seaVisibility: Visibility = { query: null, pending: false, active: false, visible: false };
   private readonly landVisibility: Visibility = { query: null, pending: false, active: false, visible: false };
-  private visible = false;
   private valid = false;
   private lost = false;
   private readonly projection = new THREE.Matrix4();
@@ -133,7 +132,7 @@ export class WaterReflections {
   }
 
   private invalidate(): void {
-    this.valid = false; this.visible = false; this.uniforms.reflectionOn.value = 0;
+    this.valid = false; this.uniforms.reflectionOn.value = 0;
   }
 
   private resetQueries(): void {
@@ -248,10 +247,7 @@ export class WaterReflections {
     const visible = this.on && (this.siteWater || this.seaVisibility.visible || this.landVisibility.visible) && camera.position.y > this.level;
     const size = this.uniforms.waterViewport.value;
     const width = Math.min(1024, Math.ceil(size.x / 2)), height = Math.max(1, Math.round(width * size.y / size.x));
-    const changed = this.target.width !== width || this.target.height !== height || !this.projection.equals(camera.projectionMatrix);
     if (!visible) { this.invalidate(); return; }
-    if (!this.visible || changed) this.valid = false;
-    this.visible = true;
     this.valid = false;
     if (this.target.width !== width || this.target.height !== height) this.target.setSize(width, height);
     this.uniforms.reflectionTexel.value.set(1 / width, 1 / height);
