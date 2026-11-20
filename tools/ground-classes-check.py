@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Ground contract and source mutants. Synthetic cases exercise production functions.
 
---work-root additionally verifies all six real bakes against their pinned sources.
+--work-root additionally verifies real bakes against their pinned sources.
 """
 import argparse
 import json
@@ -66,12 +66,26 @@ def cases(g):
     assert g.forest_class({'FORNON':0}) is None and g.forest_class({'FORNON':60}) is None,'stale forest is not approved clearing'
     assert g.wet_class({'CNWI_CLASS_EN':'Swamp'})==9
     assert g.wet_class({'CNWI_CLASS_EN':'Peatland'}) is None
-    # Finding 1: a treed stand inside a CNWI bog keeps its trees (9); only measured open cells become 8.
+    # Only measured open cells become 8.
     wet=np.array([[8,8,8,9],[8,8,0,9]],np.uint8);canopy10=np.array([[0.,6.]])
     assert g.open_wetland(wet,canopy10,(0,0,20,10)).tolist()==[[8,8,9,9],[8,8,0,9]],'treed bog keeps trees'
     assert g.open_wetland(wet,np.array([[np.inf,0.]]),(0,0,20,10)).tolist()==[[9,9,8,9],[9,9,0,9]],'unknown canopy is not open'
     picked=g.coarse_cells(np.array([[False,False,True,False],[False]*4]),(0,0,27,10),4,2)
     assert picked.shape==(1,3) and picked.tolist()==[[False,True,True]],'every overlapped 10m cell is measured'
+    # A 5.4m cover cell can straddle the 10m boundary. CNWI still has priority.
+    forest=np.array([[8,8,8,8,8],[8,8,8,8,8]],np.uint8)
+    cnwi=np.array([[0,0,8,9,0],[8,0,0,0,9]],np.uint8)
+    original_sampler=g.canopy_cells
+    def sample(root,area,bounds,targets):
+        assert targets.tolist()==[[True,True,True]]
+        return np.array([[2.,6.,np.inf]])
+    g.canopy_cells=sample
+    try:
+        qualified=g.overlay_wetlands(None,None,(0,0,27,10),forest,cnwi)
+        assert qualified.tolist()==[[8,9,9,9,9],[8,9,9,9,9]],'forest and CNWI share canopy qualification'
+        qualified=g.overlay_wetlands(None,None,(0,0,27,10),forest,np.zeros_like(cnwi))
+        assert qualified.tolist()==[[8,9,9,9,9]]*2,'forest-only wetland needs measured low canopy'
+    finally:g.canopy_cells=original_sampler
     # Finding 6: never bake over a promoted cover.
     g.baseline_cover({'file':'cover.png'})
     rejects(lambda:g.baseline_cover({'file':'cover.png','ground':{'file':'cover-ground.bin'}}))
@@ -124,6 +138,7 @@ def mutants():
       'wide rail corridor':("return line.buffer(2.5,cap_style=2).intersection(corridor)","return line.buffer(10,cap_style=2).intersection(corridor)"),
       'nodata confirms bare':("known=(pixels[:,0].astype(np.uint16)*256+pixels[:,1])!=9600","known=np.ones(len(pixels),dtype=bool)"),
       'envelope edge overreach':("result[r[~contained],c[~contained]]=False","pass"),
+      'forest wetland bypasses canopy':("return open_wetland(proposed,canopy_cells(root,area,bounds,targets),bounds)","return np.where(cnwi>0,open_wetland(cnwi,canopy_cells(root,area,bounds,targets),bounds),forest)"),
       'treed bog clears':("result=wet.copy(); result[(wet==8)&~open5]=9","result=wet.copy()"),
       'unknown canopy is open':("open5=refine_support(canopy10<=2,","open5=refine_support(np.where(np.isinf(canopy10),0,canopy10)<=2,"),
       'one coarse corner':("        for c in (c0[cc],c1[cc]): out[r,c]=True","        out[r,c0[cc]]=True"),
@@ -144,12 +159,14 @@ def mutants():
     else: raise AssertionError('SURVIVED missing yard-dog reservation')
 
 
-def real(work_root,data_root):
-    for ar in ground.AREAS:
+def real(work_root,data_root,areas):
+    for ar in areas:
         out=Path(work_root)/ar;p=json.loads((out/'promotion.json').read_text())
         ground.validate_output_files(out);ground.sources(Path(data_root),ar)
         for file,digest in p['outputs'].items():assert ground.sha(out/file)==digest
         for item in p['input_hashes']:
+            path=Path(item['path'])
+            assert not path.is_absolute() and '..' not in path.parts,ar+' input path is not portable: '+str(path)
             source=(Path(data_root) if item['path'].startswith('data/') else ground.REPO)/item['path']
             assert ground.sha(source)==item['sha256'],ar+' input changed: '+item['path']
         oldroot=Path(data_root)/('data/baked/terrain' if ar=='mabou' else 'data/baked/areas/'+ar)
@@ -158,6 +175,8 @@ def real(work_root,data_root):
         assert np.array_equal(before[protected],after[protected]),ar+' hand sites'
         assert np.array_equal(before[:,:,2]==4,after[:,:,2]==4),ar+' water'
         assert np.array_equal(before[before[:,:,2]==4],after[before[:,:,2]==4]),ar+' water RGB'
+        wooded_forest=(before[:,:,2]==1)&(after[:,:,2]==9)
+        assert np.array_equal(before[wooded_forest,:2],after[wooded_forest,:2]),ar+' wooded wetland tree palette'
         # CPU run bytes must name exactly the same clearing cells as the GPU B channel.
         import struct
         payload=(out/'cover-ground.bin').read_bytes();width,height,count=struct.unpack_from('<III',payload,4)
@@ -178,8 +197,9 @@ def real(work_root,data_root):
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--mutations',action='store_true')
     parser.add_argument('--work-root',type=Path);parser.add_argument('--data-root',type=Path)
+    parser.add_argument('--area',choices=ground.AREAS,help='verify only this area with --work-root')
     args=parser.parse_args();cases(ground)
     site_list((Path(__file__).absolute().parents[1]/'tools/paved-sites.mjs').read_text())
     print('PASS ground site list: every web/src/*-site.ts is reserved')
     if args.mutations:mutants()
-    if args.work_root:real(args.work_root,args.data_root)
+    if args.work_root:real(args.work_root,args.data_root,[args.area] if args.area else ground.AREAS)
