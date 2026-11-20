@@ -117,6 +117,7 @@ import { createTitle } from './title';
 import { Endings } from './ending';
 import { YardJob } from './yard-job';
 import { FishingSite } from './fishing-site';
+import { wharfBuildingArt } from './mabou-wharf-buildings';
 import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
@@ -353,16 +354,20 @@ const buildingList: Building[] | null = manifest.buildings ? await getJson(manif
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
-const buildingStyles = ERA.modern && manifest.buildingStyles
-
-  ? buildingAppearance(astra, LOW, sunDir, await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
-    .catch((e: unknown) => { console.warn('building styles', e); return undefined; }))
-  : buildingAppearance(astra, LOW, sunDir);
+const bakedBuildingStyles = ERA.modern && manifest.buildingStyles
+  ? await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
+    .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
+  : undefined;
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
 const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
-const buildings = ERA.modern && drawnBuildings ? new Buildings(mabouSite ? mabouSite.drawn(drawnBuildings) : drawnBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
+const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir,
+  wharfArt ? { ...bakedBuildingStyles, ...wharfArt.styles } : bakedBuildingStyles);
+const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
+const buildings = ERA.modern && sceneryBuildings ? new Buildings(mabouSite ? mabouSite.drawn(sceneryBuildings) : sceneryBuildings,
+  manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
