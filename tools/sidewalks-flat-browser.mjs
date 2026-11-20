@@ -55,8 +55,9 @@ try{
     // Every chunk the page fetched is the exact SITE file, and a split build always fetches its core chunk.
     const core=Object.keys(build.chunks).filter(path=>/^\/chunks\/core-[^/]+\.js$/.test(path));assert.ok(core.length===(Object.keys(build.chunks).length?1:0),'a split build has exactly one core chunk');
     if(core.length)assert.ok(chunkRequests.has(core[0])&&await received(chunkRequests.get(core[0])),'real core chunk downloaded');
-    const chunksSeen={};for(const [path,requestId]of chunkRequests){assert.ok(path in build.chunks,'browser asks only for SITE chunks: '+path);const hash=await received(requestId);if(hash===null)continue;assert.equal(hash,build.chunks[path],'browser receives exact unmodified SITE '+path);chunksSeen[path]=hash;}
-    const row={role:build.role,area,low,chunks:Object.keys(chunksSeen),...state,verdict:state.ready&&!state.errors.length?'PASS':'FAIL'};report.pages.push(row);save();console.log('FLAT OBSERVATION',JSON.stringify(row));
+    const chunksSeen={},unfinished=[];for(const [path,requestId]of chunkRequests){assert.ok(path in build.chunks,'browser asks only for SITE chunks: '+path);const hash=await received(requestId);if(hash===null){unfinished.push(path);continue;}assert.equal(hash,build.chunks[path],'browser receives exact unmodified SITE '+path);chunksSeen[path]=hash;}
+    if(gate)assert.deepEqual(unfinished,[],'every chunk the page asked for arrives');
+    const row={role:build.role,area,low,chunks:Object.keys(chunksSeen),unfinished,...state,verdict:state.ready&&!state.errors.length?'PASS':'FAIL'};report.pages.push(row);save();console.log('FLAT OBSERVATION',JSON.stringify(row));
     if(gate){assert.equal(row.verdict,'PASS','flat SITE must boot without a page error');assert.ok(!c.logs.some(l=>/Sidewalk.*(?:unavailable|failed)/i.test(l)),'normal SITE has no sidewalk failure warning');}
    }finally{c?.close();await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`).catch(()=>{});}
   }

@@ -157,8 +157,8 @@ cache_rule() {   # cache_rule <_headers rule> <path>
 cache_rule /app.js /app.js
 # The published script is app.js and its chunks (web/area-chunks-build.ts): the core chunk and one offline copy of a
 # chunk, each byte for byte and with its folder's cache rule.
-CORE="$(cd "$SITE_PATH" && find chunks -maxdepth 1 -name 'core-*.js' 2>/dev/null | sort | head -1)"
-OFFLINE_CHUNK="$(cd "$SITE_PATH" && find offline/chunks -maxdepth 1 -name '*.js' 2>/dev/null | sort | head -1)"
+CORE="$(cd "$SITE_PATH" && find chunks -maxdepth 1 -name 'core-*.js' 2>/dev/null | sort | head -1 || true)"
+OFFLINE_CHUNK="$(cd "$SITE_PATH" && find offline/chunks -maxdepth 1 -name '*.js' 2>/dev/null | sort | head -1 || true)"
 if [[ -n "$CORE" && -n "$OFFLINE_CHUNK" ]]; then
   for rel in "$CORE" "$OFFLINE_CHUNK"; do
     expect 200 "/$rel"
