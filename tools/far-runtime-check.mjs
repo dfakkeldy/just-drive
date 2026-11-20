@@ -38,6 +38,9 @@ function visibility(mod){
  // A pending result from a previous viewpoint must not hide the new view.
  queries[0].available=false;camera.position.x+=10;v.update(camera,1.23);assert.equal(mesh.visible,true,'camera motion discards stale occlusion');queries[0].available=true;v.update(camera,1.24);assert.equal(mesh.visible,true);
  mesh.onBeforeRender({},null,camera);mesh.onAfterRender({},null,camera);assert.equal(active,null,'normal draw still releases its query');
+ // Replay and endings pass wall time, driving passes drive time. A wall-time deadline must not hold an occluded mesh after the clock goes back.
+ queries[0].result=false;v.update(camera,1000);assert.equal(mesh.visible,true,'wall-time probe');mesh.onBeforeRender({},null,camera);mesh.onAfterRender({},null,camera);
+ v.update(camera,10);assert.equal(mesh.visible,false,'occluded after the clock goes back');v.update(camera,10.22);assert.equal(mesh.visible,true,'wall-time deadline still retried within 0.2 seconds');
 }
 materials(moduleAt('web/src/far-materials.ts'));visibility(moduleAt('web/src/far-visibility.ts'));
 {
@@ -95,7 +98,8 @@ if(process.argv.includes('--mutations')){
   ['centroid changes near depth','web/src/far-materials.ts','if (length(vFarDepthXZ) > ${CURVE_START.toFixed(1)})','if (true)',materials],
   ['own curve wrapped again','web/src/far-materials.ts',"const ownsCurve=object.name==='near-sea'||(raw.isShaderMaterial&&raw.vertexShader.includes('float farDrop('));",'const ownsCurve=false;',materials],
   ['occlusion never skips','web/src/far-visibility.ts','r.mesh.visible=r.visible||seconds>=r.retry;','r.mesh.visible=true;',visibility],
-  ['slow occlusion retry','web/src/far-visibility.ts','r.retry=seconds+.2;','r.retry=seconds+.5;',visibility],
+  ['slow occlusion retry','web/src/far-visibility.ts','const RETRY=.2;','const RETRY=.5;',visibility],
+  ['stale wall-clock retry kept','web/src/far-visibility.ts','if(r.retry>seconds+RETRY)r.retry=seconds+RETRY;','',visibility],
   ['failed draw query left active','web/src/far-visibility.ts','for(const r of this.records)if(r.active){','for(const r of this.records)if(false){',visibility],
   ['stale occlusion accepted','web/src/far-visibility.ts','if(r.version===this.pose)','if(true)',visibility],
  ]){const text=source(path);assert.equal(text.split(a).length,2);assert.throws(()=>test(moduleAt(path,text.replace(a,b))),{name:'AssertionError'});console.log('KILLED',label);}
