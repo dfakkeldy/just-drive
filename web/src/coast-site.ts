@@ -72,6 +72,8 @@ export interface RockSite {
   contains(x:number,z:number):boolean;
   intersects(x:number,z:number,size:number):boolean;
   weights(x:number,z:number,h:number,slope:number,curvature?:number):[number,number,number,number];
+  /** Authored quarry treatments that take priority over a gypsum floor. */
+  quarryFloorAllowsMineral?(x:number,z:number,h:number):boolean;
   treeAllowed(x:number,z:number,h:number,slope:number):boolean;
 }
 export class CoastSite implements RockSite {

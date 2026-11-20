@@ -261,7 +261,7 @@ export class Grass {
         if (!this.terrain.hasFinest(x, z)) continue;
         p.cursor--; return;
       }
-      if (surface.canopy > 1.8 || surface.ground < this.terrain.seaLevel + 1.45) continue;
+      if (surface.mineral || surface.canopy > 1.8 || surface.ground < this.terrain.seaLevel + 1.45) continue;
       // No grass in a brook or on its wet stones; the rank grass of the bank starts just beyond.
       if (surface.brook < 0.45) continue;
       const cls = this.terrain.coverAt(x, z);

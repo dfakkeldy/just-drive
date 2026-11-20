@@ -3,9 +3,11 @@ import {build} from '../web/node_modules/esbuild/lib/main.js';
 import {readFileSync} from 'node:fs';
 import {GroundCover,clearsGroundTrees,growsGroundGrass} from '../web/src/ground-cover.ts';
 import {Terrain} from '../web/src/terrain.ts';
+import {Grass} from '../web/src/grass.ts';
 import {Trees} from '../web/src/trees.ts';
 import {Vehicle} from '../web/src/vehicle.ts';
 import {BikeRide} from '../web/src/bike-ride.ts';
+import {QuarrySite} from '../web/src/quarry-site.ts';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import {createRequire} from 'node:module';
 const ts=createRequire(new URL('../web/package.json',import.meta.url))('typescript');
@@ -39,6 +41,56 @@ t.groundClassAt=()=>8;assert.equal(t.surfaceAt(50,50).mineral,undefined);
 t.groundClassAt=()=>6;t.cartRoads=true;assert.equal(t.surfaceAt(50,50).mineral,undefined);
 t.cartRoads=false;t.waterLevelAt=()=>12;assert.equal(t.surfaceAt(50,50).mineral,undefined);
 console.log('PASS ground CPU parser, every fixture cell, tree/grass policy and real Terrain.surfaceAt');
+
+function quarryPainting(TerrainClass){
+ const terrain=Object.create(TerrainClass.prototype),site=new QuarrySite([631600,5063500]);
+ const mesh=new THREE.Mesh(),side=131;
+ const paint=new THREE.Float32BufferAttribute(new Float32Array(side*side*4),4);
+ mesh.geometry.setAttribute('coast',paint);
+ const tile={x0:0,z0:0,size:256,level:8,mesh,ground:new Float32Array(257*257).fill(45),canopy:new Float32Array(257*257).fill(5),road:null};
+ Object.assign(terrain,{coast:site,find:()=>tile,withDeck:(_x,_z,h)=>h,waterLevelAt:()=>null,groundClassAt:()=>0,seaLevel:-.2,exag:1,
+  manifest:{roads:{encoding:{distance:.1,halfWidth:.05,signed:true,zero:128}}}});
+ const opposite=27*side+27;
+ paint.setX(opposite,.7);
+ const read=(x=51.5,z=51.5)=>terrain.surfaceAt(x,z);
+ assert.equal(read(50.25,50.25).mineral,undefined,'only the painted triangle contributes');
+ assert.equal(read().mineral,true,'authored gypsum supplies off-road mineral');
+ paint.setX(opposite,.06);assert.equal(read().mineral,undefined,'subtle edge tint keeps its old handling');
+ assert.equal(read().canopy,5,'paint alone leaves measured canopy alone');
+ paint.setX(opposite,0);paint.setW(opposite,.7);
+ assert.equal(read().mineral,true,'gypsum shelf paint also supplies off-road mineral');
+ terrain.waterLevelAt=()=>46;assert.equal(read().mineral,undefined,'water takes priority');terrain.waterLevelAt=()=>null;
+ terrain.withDeck=(_x,_z,h,s)=>{s.deck=true;return h;};assert.equal(read().mineral,undefined,'deck takes priority');terrain.withDeck=(_x,_z,h)=>h;
+ tile.road=new Uint8ClampedArray(257*257*4);
+ for(let i=0;i<tile.road.length;i+=4)tile.road.set([128,40,4,0],i);
+ assert.equal(read().mineral,undefined,'mapped track takes priority');
+ for(let i=0;i<tile.road.length;i+=4)tile.road.set([255,40,8,0],i);
+ assert.equal(read().mineral,undefined,'authored pad and run-up field takes priority');
+ tile.road=null;
+ terrain.cartRoads=true;assert.equal(read().mineral,undefined,'historical terrain keeps its own handling');terrain.cartRoads=false;
+ terrain.coast={contains:()=>true};assert.equal(read().mineral,undefined,'coastal paint is not quarry floor');
+ mesh.geometry.dispose();mesh.material.dispose();
+ assert.equal(site.quarryFloorAllowsMineral(700,-1000,72),false,'authored course pad');
+ assert.equal(site.quarryFloorAllowsMineral(175,-950,30),false,'existing talus toe');
+}
+quarryPainting(Terrain);console.log('PASS quarry paint triangles feed contact while preserving terrain and authored surfaces');
+
+function quarryGrass(GrassClass){
+ const grass=Object.create(GrassClass.prototype);
+ let mineral=false;
+ const surface={level:8,ground:30,canopy:0,brook:99,kind:0,roadDist:99,halfWidth:0};
+ Object.assign(grass,{group:new THREE.Group(),geometry:new THREE.BufferGeometry(),clock:{value:0},material:new THREE.ShaderMaterial(),terrain:{
+  clear:[],seaLevel:0,coverAt:()=>5,heightAt:()=>30,meshHeightAt:()=>30,surfaceAt:()=>({...surface,mineral}),
+ }});
+ grass.blades();
+ const before=grass.patch(0,0);grass.populate(before,Infinity);
+ assert(before.count>0,'legacy open cover grows actual grass tufts');
+ mineral=true;
+ const after=grass.patch(0,0);grass.populate(after,Infinity);
+ assert.equal(after.count,0,'gypsum contact suppresses old-cover tufts');
+ before.mesh.geometry.dispose();grass.geometry.dispose();grass.material.dispose();
+}
+quarryGrass(Grass);console.log('PASS production grass leaves painted mineral bare');
 
 function planting(TreeClass){
  const buffer=new ArrayBuffer(8),d=new DataView(buffer);d.setUint16(0,32768,true);d.setUint16(2,32768,true);d.setUint8(4,50);d.setUint8(5,10);d.setUint8(7,42);
@@ -138,4 +190,17 @@ if(process.argv.includes('--mutations')){
  const bikeApi=await import('data:text/javascript;base64,'+Buffer.from(bikeBundle.outputFiles[0].text).toString('base64'));
  assert.throws(()=>bikeDriving(bikeApi.BikeRide),{message:/confirmed mineral uses the bike gravel response/});
  console.log('KILLED bike mineral gravel feel removed');
+ for(const [filename,exportName,anchor,replacement,check,expected] of [
+  ['terrain','Terrain','||this.quarryMineral(t,x,z,out)','',quarryPainting,/authored gypsum supplies off-road mineral/],
+  ['grass','Grass','surface.mineral || ','',quarryGrass,/gypsum contact suppresses old-cover tufts/],
+ ]){
+  const source=readFileSync(`web/src/${filename}.ts`,'utf8');
+  assert(source.includes(anchor),`${filename} mineral mutation anchor`);
+  const bundle=await build({entryPoints:[`web/src/${filename}.ts`],bundle:true,write:false,platform:'node',format:'esm',logLevel:'silent',plugins:[{
+   name:'quarry-mineral-mutant',setup(b){b.onLoad({filter:new RegExp(`/${filename}\\.ts$`)},()=>({contents:source.replace(anchor,replacement),loader:'ts',resolveDir:process.cwd()+'/web/src'}));},
+  }]});
+  const mutant=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+  assert.throws(()=>check(mutant[exportName]),{message:expected});
+  console.log('KILLED quarry mineral branch removed from '+filename);
+ }
 }
