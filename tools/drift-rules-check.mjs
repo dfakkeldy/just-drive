@@ -55,6 +55,14 @@ function drive(v, seconds, input, t0 = 0) {
 }
 /** The classic entry: handbrake and the wheel right for 0.4 s; then power and counter-steer. */
 const handbrakeIn = (counter = HOLD_STEER, until = 3.5) => t => t < .4 ? go(0, 1, true) : t < until ? go(1, -counter) : go(1, 0);
+
+ok('pickup holds a stable powered turn with the steer key held', () => {
+  const v = ride(TRUCK_SPEC, 'track', 35);
+  const turn = drive(v, 30, () => go(1, 1));
+  const settled = turn.at(-1).speed*3.6;
+  assert.ok(settled > 95 && settled < 130, `full-lock speed ${settled} km/h`);
+  assert.ok(turn.every(s => Number.isFinite(s.speed) && !s.active && Math.abs(s.slip) < .12));
+});
 const spread = (xs) => Math.max(...xs) - Math.min(...xs);
 
 // ---- The pure rules ----

@@ -267,7 +267,8 @@ for(const id of DISPLAY_KINDS) {
  const moved=Math.hypot(v.x-start.x,v.z-start.z);
  assert.ok(moved>5,`${id}: the LOW rig drives (${moved.toFixed(1)} m)`);
  assert.ok(Math.abs(v.heading)>.05,`${id}: the LOW rig steers (heading ${v.heading.toFixed(3)})`);
- for(let i=0;i<240;i++) v.update(1/60,{throttle:0,steer:0,handbrake:true},()=>{});
+ // Match the AI's stop input. The faster bike enters this stop at a higher speed.
+ for(let i=0;i<240;i++) v.update(1/60,{throttle:v.speed>.1?-1:0,steer:0,handbrake:true},()=>{});
  assert.ok(Math.abs(v.speed)<.5,`${id}: the LOW rig stops (${v.speed.toFixed(2)} m/s)`);
 }
 assert.deepEqual(draws,{truck:7,sxs:5,bike:2},'LOW AI draws per kind');

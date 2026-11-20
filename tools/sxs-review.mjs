@@ -21,6 +21,19 @@ function speed(v,n){v.vx=Math.sin(v.heading)*n;v.vz=-Math.cos(v.heading)*n;v.spe
 function run(v,seconds,input,visit=()=>{}){for(let i=0;i<seconds/dt;i++){v.update(dt,typeof input==='function'?input(i):input);visit(v,i);}}
 const go={throttle:1,steer:0,handbrake:false},turn={...go,steer:1};
 const straight=car();run(straight,120,go);const top=Math.hypot(straight.vx,straight.vz);
+// Level synthetic surfaces isolate the speed targets from grade and steering on the real-highway row.
+const levelTop=(spec,kind)=>{
+ const terrain=ground(),sample=terrain.surfaceAt;
+ terrain.surfaceAt=(x,z)=>({...sample(x,z),kind,deck:false});
+ const v=car(spec,tiny(),terrain);run(v,120,go);return v.speed*3.6;
+};
+const gravelTop=levelTop(SXS_SPEC,3),trackTop=levelTop(SXS_SPEC,4);
+const looseTopOK=(gravel,track)=>Math.abs(gravel-155)<=2&&Math.abs(track-155)<=2;
+check('sxs_firm_loose_ground_155_kph',looseTopOK(gravelTop,trackTop),{gravelTop,trackTop});
+const oldSxs={...SXS_SPEC,enginePower:175,aeroDrag:.003};
+check('sxs_speed_pin_rejects_previous_tune',!looseTopOK(levelTop(oldSxs,3),levelTop(oldSxs,4)),{});
+const pavedTruck=levelTop(TRUCK_SPEC,9);
+check('pickup_level_pavement_160_to_170_kph',pavedTruck>=160&&pavedTruck<=170,{pavedTruck});
 const powered=car();let peak=0;run(powered,60,turn,v=>peak=Math.max(peak,Math.hypot(v.vx,v.vz)));
 check('energy_powered_full_lock',peak<=top+.02,{peak,straightTop:top,forward:powered.speed});
 const coast=car();run(coast,10,turn);let previous=Math.hypot(coast.vx,coast.vz),increase=0,start=previous;run(coast,15,{...turn,throttle:0},v=>{const s=Math.hypot(v.vx,v.vz);increase=Math.max(increase,s-previous);previous=s;});
