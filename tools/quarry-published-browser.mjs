@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import {quarryFailure} from './quarry-failure-browser.mjs';
 import {publishedPotholeHook} from './fleet-published-hook-check.mjs';
 import {createServer} from 'node:http';
-import {readFileSync,createReadStream,statSync,writeFileSync,readdirSync} from 'node:fs';
+import {existsSync,readFileSync,createReadStream,statSync,writeFileSync,readdirSync} from 'node:fs';
 import {resolve,extname} from 'node:path';
 import {cdp,cdpFetch,sleep} from './cdp.mjs';
 const out=resolve(process.argv[2]),root=resolve(process.env.QUARRY_PUBLIC_ROOT??out+'/site');
 writeFileSync(out+'/published-pothole-hook.json',JSON.stringify(publishedPotholeHook(root),null,2));
-assert.ok(readFileSync(root+'/app.js','utf8').includes('__quarryEvaluations'),'build must use QUARRY_EVAL_PROBE=1');
+// The published script is app.js and its chunks (web/area-chunks-build.ts); the probe sits in the quarry's chunk.
+assert.ok(['app.js',...(existsSync(root+'/chunks')?readdirSync(root+'/chunks').map(name=>'chunks/'+name):[])].some(name=>readFileSync(root+'/'+name,'utf8').includes('__quarryEvaluations')),'build must use QUARRY_EVAL_PROBE=1');
 const server=createServer((req,res)=>{try{let path=new URL(req.url,'http://localhost').pathname;if(/^\/(?:mabou|westbay|judique)?\/?$/i.test(path))path='/index.html';const file=resolve(root,'.'+path);assert.ok(file.startsWith(root+'/'));const stat=statSync(file);assert.ok(stat.isFile());res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.json':'application/json','.png':'image/png','.mp3':'audio/mpeg','.webmanifest':'application/manifest+json'})[extname(file)]??'application/octet-stream');res.setHeader('Cache-Control','no-store');createReadStream(file).pipe(res);}catch{res.writeHead(404);res.end('Missing');}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://localhost:'+server.address().port;
 const tab=await(await cdpFetch(`http://127.0.0.1:${process.env.CDP_PORT}/json/new?about:blank`,{method:'PUT'})).json(),c=await cdp(tab.webSocketDebuggerUrl,{deadline:180000});
