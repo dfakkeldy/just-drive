@@ -63,7 +63,7 @@ for (const area of ['mabou', 'porthood']) {
   for (const low of [true, false]) {
     const models = new NovemberBuildings(area, mapped, village, 1.5, 0, low);
     assert.ok(models.drawing.pos.every(Number.isFinite));
-    assert.equal(models.solids.length, area === 'mabou' ? 19 : 1);
+    assert.equal(models.solids.length, area === 'mabou' ? 20 : 1);
     const batch = new Buildings([], village, 1.5, 0, {}, models.drawing);
     assert.equal(batch.triangles, models.drawing.triangles, 'built details use the existing building mesh');
     assert.ok(batch.triangles < 3500, `added details stay within a small triangle envelope: ${batch.triangles}`);

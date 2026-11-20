@@ -86,11 +86,11 @@ function houseWindows(m: Mesher, b: Model, floors: number) {
   opening(m, false, z, 0, 1.33, 1.03, 2.15, trim, timber);
 }
 
-function deck(m: Mesher, width: number, depth: number, reach: number, y: number, rail = true) {
+function deck(m: Mesher, width: number, depth: number, reach: number, y: number, rail = true, foot = -2) {
   const edge = depth + reach;
   m.box(0, y - .12, depth + reach / 2, width, .24, reach, timber);
   const posts = [-width / 2 + .13, 0, width / 2 - .13];
-  for (const x of posts) m.box(x, (y - 2.0) / 2, edge - .13, .19, y + 2, .19, timber);
+  for (const x of posts) m.box(x, (y + foot) / 2, edge - .13, .19, y - foot, .19, timber);
   if (!rail) return;
   for (const x of posts) m.box(x, y + .44, edge - .13, .12, .9, .12, trim);
   for (const x of [posts[0], posts[2]]) m.box(x, y + .86, depth + reach / 2, .085, .085, reach, trim);
@@ -122,7 +122,7 @@ function villageHouse(m: Mesher, b: Model, low: boolean) {
   }
 }
 
-function hillsideHouse(m: Mesher, b: Model, low: boolean) {
+function hillsideHouse(m: Mesher, b: Model, low: boolean, exag: number) {
   shell(m,b,sage);
   siding(m,b,sage,false,low);
   const x=b.length/2, z=b.width/2;
@@ -132,14 +132,17 @@ function hillsideHouse(m: Mesher, b: Model, low: boolean) {
     opening(m,false,z,u*1.58,2.28,2,2.55,trim);
   }
   opening(m,true,x,0,b.eave+.86,1.52,1.56,trim);
-  deck(m,b.length-.7,z,2.65,.77);
+  deck(m,b.length-.7,z,2.65,.77,true,-2.55*exag-.15);
   // Full-width stairs and a post-and-beam porch on the uphill long wall.
   const w=2.6, front=-z-2.18;
   opening(m,false,-z,0,1.66,1.16,2.12,trim,timber);
   for (const u of [-4.35,4.35]) opening(m,false,-z,u,2.31,1.36,2.22);
   for (const u of [-2.6,2.6]) opening(m,true,-x,u,2.25,1.38,2.05);
   m.box(0,.35,-z-1.05,w*2,.36,2.14,timber);
-  for (let i=0; i<3; i++) m.box(0,.075*(i+1),front-.9+i*.29,w*2,.15*(i+1),.36,stone);
+  for (let i = 0; i < 3; i++) {
+    const top = .15 * (i + 1), bottom = -.18 * exag;
+    m.box(0,(top+bottom)/2,front-.66+i*.29,w*2,top-bottom,.36,stone);
+  }
   for (const u of [-w+.2,w-.2]) m.box(u,1.92,front,.22,2.87,.22,timber);
   m.box(0,3.25,front,w*2,.2,.18,timber);
   for (const side of [-1,1]) {
@@ -184,6 +187,7 @@ function riverPark(m: Mesher, place: (e: number, n: number, y: number, az?: numb
   place(624138.7,5103130,y);
   const ring = Array.from({ length: 8 }, (_, i) => [2.95*Math.cos(i*Math.PI/4),2.95*Math.sin(i*Math.PI/4)]);
   m.cyl(0,.16,0,2.96,.44,greyCedar,'y',8);
+  solid({ e:624138.7, n:5103130, az:90, length:4.15, width:4.15 });
   m.cyl(0,3.12,0,3.2,1.22,roof,'y',8,.04);
   for (const [x,z] of ring) {
     m.box(.94*x,1.41,.94*z,.16,2.4,.16,greyCedar);
@@ -264,10 +268,13 @@ export class NovemberBuildings {
       shell(m,b,stone); siding(m,b,stone,true,low);
       opening(m,true,b.length/2,0,1.03,1.25,1.85,timber);
     });
-    const builders = new Map([[900007,hillsideHouse],[900008,hillsideGarage],[900009,hillsideShed]]);
+    const builders = new Map([[900008,hillsideGarage],[900009,hillsideShed]]);
     for (const b of mapped) {
       const draw = builders.get(b.id);
-      if (draw) build(b,draw);
+      if (b.id === 900007) {
+        // The porch stands on the uphill bench, about 0.8 m above the footprint centre.
+        build({ ...b, ground:b.ground+.78 }, (m, b, low) => hillsideHouse(m,b,low,exag));
+      } else if (draw) build(b,draw);
     }
     riverPark(m,(e,n,y,az) => place(m,e,n,y,az),solid,exag,sea);
     this.clear.push([624135.6-village[0],village[1]-5103134.5,624142-village[0],village[1]-5103126.7]);
