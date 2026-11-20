@@ -76,7 +76,8 @@ async function flightMap(p, phone) {
   const sample=await p.read(`(()=>{const e=document.getElementById('miniMap'),r=e.getBoundingClientRect(),c=document.getElementById('miniMapCanvas'),g=c.getContext('2d');window.flightMapSample=null;const map=mmm.miniMap,original=map.update.bind(map);map.update=(...args)=>{window.flightMapSample=args;return original(...args)};const fill=g.fillText.bind(g);window.flightNorth=0;g.fillText=(text,...args)=>{if(text==='N')flightNorth++;return fill(text,...args)};return {visible:!e.hidden&&r.width>0&&r.height>0,parent:e.parentElement===document.body,folded:e.classList.contains('folded')}})()`);
   check(sample.visible&&sample.parent&&!sample.folded,'flight map is open and painted outside the hidden driving HUD');
   await sleep(400);
-  check(await p.read(`flightNorth>0&&Math.abs(flightMapSample[1]-mmm.drone.state.x)<2&&Math.abs(flightMapSample[2]-mmm.drone.state.z)<2&&Math.abs(flightMapSample[3]+mmm.drone.state.yaw)<.1&&flightMapSample[7]===mmm.vehicle`),'map follows drone position and heading, paints north and marks the parked car');
+  // mmm.vehicle is a dev Proxy over the car, never === the raw object the map gets: match its class and place.
+  check(await p.read(`flightNorth>0&&Math.abs(flightMapSample[1]-mmm.drone.state.x)<2&&Math.abs(flightMapSample[2]-mmm.drone.state.z)<2&&Math.abs(flightMapSample[3]+mmm.drone.state.yaw)<.1&&!!flightMapSample[7]&&flightMapSample[7]!==mmm.drone.state&&Object.getPrototypeOf(flightMapSample[7])===Object.getPrototypeOf(mmm.vehicle)&&Math.abs(flightMapSample[7].x-mmm.vehicle.x)<.01&&Math.abs(flightMapSample[7].z-mmm.vehicle.z)<.01`),'map follows drone position and heading, paints north and marks the parked car');
   if(phone)check(await p.read(`(()=>{const b=document.getElementById('miniMap').getBoundingClientRect();return ['droneLeft','droneRight','droneReturn','hud','gear','pauseButton'].every(id=>{const r=document.getElementById(id).getBoundingClientRect();return b.right<=r.left||b.left>=r.right||b.bottom<=r.top||b.top>=r.bottom})})()`),'phone flight map clears sticks, Return, chip, Pause and gear');
 }
 
@@ -111,7 +112,9 @@ async function flightMap(p, phone) {
   await p.hold('Space', 2500); await sleep(500);
   const climbed = await s();
   check(climbed.height > 12, `Space climbs: ${climbed.height?.toFixed(1)} m above the ground`);
-  check(/^DRONE   height \d+ m   distance \d+ m/.test(climbed.hud) && climbed.hud.includes('↑/↓: camera'), 'HUD shows height, distance and the keyboard keys: ' + climbed.hud.split('\n')[0]);
+  // The readout keeps the numbers; the keys sit in the docked Drone keys panel.
+  const keysDocked = await p.read(`(()=>{const h=document.getElementById('droneHints');return !h.hidden&&h.getClientRects().length>0&&h.textContent.includes('↑/↓Camera')&&h.textContent.includes('SpaceUp')})()`);
+  check(/^DRONE · Height \d+ m · From the car \d+ m · Speed \d+ m\/s \(max \d+\) · Heading (N|NE|E|SE|S|SW|W|NW)\b/.test(climbed.hud) && !climbed.hud.includes('↑/↓') && keysDocked, 'HUD shows height, distance, speed and heading, and the docked panel the keyboard keys: ' + climbed.hud.split('\n')[0]);
   // ↑ tilts back up, without moving it.
   await p.hold('ArrowUp', 700); await sleep(400);
   a = await s();
@@ -230,7 +233,8 @@ for (const [w, h, name, mode] of [[390, 844, 'portrait', 'mail'], [844, 390, 'la
   check(sticksClear.length === 0, `${name}: sticks, RETURN, gear, Pause, PLACES and MAP do not overlap and stay on screen ${JSON.stringify(sticksClear)}`);
   await p.touchAt('touchStart', [ret]); await p.touchAt('touchEnd', []);
   check(await p.until('mmm.drone.returning'), `${name}: RETURN flies it home`);
-  check(await p.read(`document.getElementById('droneReturn').textContent==='LAND NOW'&&document.getElementById('droneReturn').getAttribute('aria-label')==='Land now'`),'return flight offers Land now');
+  // The sticks relabel on the next frame (main.ts flyDrone), so wait for it rather than read at once.
+  check(await p.until(`document.getElementById('droneReturn').textContent==='LAND NOW'&&document.getElementById('droneReturn').getAttribute('aria-label')==='Land now'`, 1000),'return flight offers Land now');
   await sleep(1200);
   await p.shot(`12-phone-${name}-returning`);
   await p.touchAt('touchStart', [ret]); await p.touchAt('touchEnd', []);
