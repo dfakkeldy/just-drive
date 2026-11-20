@@ -52,7 +52,7 @@ function quarryPainting(TerrainClass,QuarryClass=QuarrySite){
  const paint=new THREE.Float32BufferAttribute(new Float32Array(side*side*4),4);
  mesh.geometry.setAttribute('coast',paint);
  const tile={x0:0,z0:0,size:256,level:8,mesh,ground:new Float32Array(257*257).fill(45),canopy:new Float32Array(257*257),road:null};
- Object.assign(terrain,{coast:site,find:()=>tile,withDeck:(_x,_z,h)=>h,waterLevelAt:()=>null,groundClassAt:()=>0,seaLevel:-.2,exag:1,
+ Object.assign(terrain,{coast:site,find:()=>tile,withDeck:(_x,_z,h)=>h,roadCuts:{land:(_x,_z,h)=>h},waterLevelAt:()=>null,groundClassAt:()=>0,seaLevel:-.2,exag:1,
   manifest:{roads:{encoding:{distance:.1,halfWidth:.05,signed:true,zero:128}}}});
  const opposite=27*side+27;
  paint.setX(opposite,.7);
@@ -218,7 +218,8 @@ function bikeDriving(BikeClass){
  assert.equal(sample({}).surface,'grass');
  assert.equal(sample({canopy:5}).surface,'brush');
  assert.equal(sample({mineral:true,kind:1,roadDist:0}).surface,'pavement');
- assert.equal(sample({mineral:true,deck:true}).surface,'concrete');
+ // A deck reports the kind of road it carries (Terrain.withDeck); a concrete works deck stays concrete on mineral ground.
+ assert.equal(sample({mineral:true,deck:true,kind:9}).surface,'concrete');
  assert.equal(sample({mineral:true},100).surface,'pavement');
 }
 bikeDriving(BikeRide);console.log('PASS production BikeRide mineral, grass, brush, road and deck handling');

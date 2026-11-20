@@ -51,12 +51,12 @@ export function streamCrossings(streams: Streams, roads: readonly Road[], spans:
   return result;
 }
 
-/** Exactly `distance from (x, z) to the nearest point of the line <= reach`, as the old nearest-point scan decided it,
- *  but it stops at the first segment within reach and skips any segment whose box lies more than reach + 1 m away along
- *  an axis (such a segment is farther than reach, so it could never decide the answer). Like that scan, a line with no
- *  finite segment distance (fewer than two points, or only NaN or infinite points) counts as distance 0. This runs for
- *  every culvert before the first frame: the full scan over every bridge and road point took most of a second. */
-function withinRoad(x: number, z: number, line: Pick<BridgeLine, 'pts'>, reach: number): boolean {
+/** The old nearest-point scan's answer to `distance from (x, z) to the line <= reach`, for any coordinates whose squares do
+ *  not overflow (anything on a map), but it stops at the first finite segment within reach and skips any segment whose box
+ *  lies more than reach + 1 m away along an axis (such a segment is farther than reach, so it could never decide). Like that
+ *  scan, a line with no finite segment distance measures from the point to itself: 0, or NaN for a NaN or infinite point.
+ *  This runs for every culvert before the first frame: the full scan over every bridge and road point took most of a second. */
+export function withinRoad(x: number, z: number, line: Pick<BridgeLine, 'pts'>, reach: number): boolean {
   const pts = line.pts, far = reach + 1;
   let finite = false;
   for (let k = 1; k < pts.length; k++) {
@@ -69,10 +69,9 @@ function withinRoad(x: number, z: number, line: Pick<BridgeLine, 'pts'>, reach: 
     const dx = bx - ax, dz = bz - az;
     const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
     const distance = Math.hypot(x - (ax + t * dx), z - (az + t * dz));
-    if (distance <= reach) return true;
-    if (distance < Infinity) finite = true;
+    if (distance < Infinity) { if (distance <= reach) return true; finite = true; }
   }
-  return !finite && 0 <= reach;
+  return !finite && Math.hypot(x - x, z - z) <= reach;
 }
 
 /** Scenery only. Wheels keep the surveyed land contact, including washboard and potholes. */
