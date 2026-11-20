@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readBaseline } from './baseline-source.mjs';
 import { cdp, cdpFetch } from './cdp.mjs';
-// Compare both carriers with their desktop CSS before the phone grid. The same scene keeps the comparison useful.
+// Compare unchanged desktop controls with the baseline; pin the new sheet and credits. The same scene keeps the comparison useful.
 // Each size runs on an ordinary screen (pixel ratio 1: no Picture group, so three rows stand in for a taller panel).
 // 1280x720 also runs on a Retina screen (ratio 2), where the settings panel holds the real Picture group.
 // RUN=desktop-layout-check.mjs VIEWS="desktop|demo=2&relief=0.5" tools/yard-shots.sh 1280 720
@@ -62,7 +62,10 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
             dress(${JSON.stringify(current)}, ${JSON.stringify(carrier === 'dev' ? 'devPage' : '')}); const after = measure();
             still.remove();
             return { before, after }; })()`);
-          assert.deepEqual(both.after, both.before, `${carrier} ${size} desktop boxes and paint stay the same`);
+          // The climb changes these two surfaces. Every other box and paint stays pinned.
+          for(const id of ['settings','credit']){delete both.before[id];delete both.after[id];}
+          assert.deepEqual(both.after, both.before, `${carrier} ${size} unchanged desktop boxes and paint`);
+          assert.deepEqual(await read(`(()=>{const e=document.getElementById('credit'),s=getComputedStyle(e),r=e.getBoundingClientRect();return {size:s.fontSize,opacity:s.opacity,background:s.backgroundColor,radius:s.borderRadius,clear:r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight};})()`),{size:'12px',opacity:'1',background:'rgb(12, 20, 28)',radius:'4px',clear:true},'solid readable credit chip');
         }
         await read(`(${DRESS})(${JSON.stringify(phase === 'before' ? original(path) : current)}, ${JSON.stringify(phase === 'after' && carrier === 'dev' ? 'devPage' : '')})`);
         await sleep(600);
@@ -77,7 +80,13 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
           const panel = document.getElementById('settings');
           return !!at && panel.contains(at) && getComputedStyle(panel).backgroundColor === 'rgb(12, 20, 28)';
         })()`);
-        if (phase === 'after') assert.ok(await panelTop(), `${carrier}: open settings cover END SHIFT`);
+        if (phase === 'after') {
+          assert.ok(await panelTop(), `${carrier}: open settings cover END SHIFT`);
+          assert.equal(await read(`(()=>{const p=document.getElementById('settings'),r=p.getBoundingClientRect(),c=document.getElementById('credit').getBoundingClientRect(),s=getComputedStyle(p);return document.getElementById('settingsHeading').textContent==='Settings'&&document.getElementById('settingsClose').getBoundingClientRect().height>=44&&s.borderRadius==='10px'&&s.overflowY==='auto'&&r.width===320&&r.bottom<=c.top-8;})()`),true,'one sheet width, title, close, scroll and room above credit');
+          await read(`document.getElementById('settingsClose').click()`);
+          assert.equal(await read(`document.getElementById('settings').classList.contains('open')`),false,'visible Close closes Settings');
+          await read(`document.getElementById('gear').click()`);
+        }
         writeFileSync(`${out}/${phase}/desktop-${carrier}-${size}-settings.png`, Buffer.from((await send('Page.captureScreenshot', {format:'png'})).result.data, 'base64'));
         const lastReachable = () => read(`(() => {
           const button = [...document.querySelectorAll('#settings button')].at(-1);
@@ -117,6 +126,6 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
         await read(`document.getElementById('desktopPictureQA').remove(); document.getElementById('gear').click()`);
       }
     }
-    console.log(`PASS ${size}: dev + published desktop boxes and paint match ${process.env.BASE_REF ?? 'the frozen desktop baseline'}; settings cover END SHIFT, ${scale > 1 ? 'with the real Picture group' : 'also as a taller panel'}; no touch controls`);
+    console.log(`PASS ${size}: unchanged desktop controls match ${process.env.BASE_REF ?? 'the frozen desktop baseline'}; new sheet and credit chip pass their exact pins; settings cover END SHIFT, ${scale > 1 ? 'with the real Picture group' : 'also as a taller panel'}; no touch controls`);
   } finally { await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`); ws.close(); }
 }

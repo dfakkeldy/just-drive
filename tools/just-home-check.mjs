@@ -29,7 +29,7 @@ try {
   for (const area of areas) {
     const cardHtml = html.match(new RegExp(`<li class="place" id="place-${area.id}">([\\s\\S]*?)</div></li>`))?.[1];
     assert.ok(cardHtml, area.id + ' card');
-    assert.ok(cardHtml.includes(`<a class="button" href="/${area.id}">Drive</a>`), area.id + ' Drive link');
+    assert.ok(cardHtml.includes(`<a class="button" href="/${area.id}" aria-label="Drive in ${area.name}">Drive</a>`), area.id + ' Drive link');
     assert.match(html, new RegExp(`<a class="pin[^"]*" id="pin-${area.id}" href="/${area.id}"`), area.id + ' pin');
     assert.equal(cardHtml.includes(`href="${MAIL_URL}"`), !!area.mail, area.id + ': mail link only where the mail route is');
     const era = Object.values(HISTORY_AREAS).find(e => e.id === area.id);
@@ -37,6 +37,15 @@ try {
     const [x, y] = MAP.pins[area.id];
     assert.ok(x > 180 && x < 700 && y > 80 && y < 720, area.id + ' pin inside the map view');
   }
+  assert.match(html, /Start in Mabou<\/a>/);
+  assert.match(html, /free 3D driving game/);
+  assert.match(html, /\.pin \.hit\{[^}]*stroke-width:44px;vector-effect:non-scaling-stroke/);
+  const luminance=hex=>hex.match(/../g).map(n=>parseInt(n,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
+  assert.ok((luminance('e07a46')+.05)/(luminance('0b1620')+.05)>=4.5,'mail action text contrast');
+  assert.match(html, /aria-label="Drive in Mabou, mail route too"/);
+  assert.match(html, /\.pin:focus-visible \.halo\{[^}]*stroke:#fff;stroke-width:3/);
+  assert.match(html, /\.button.mail\{background:var\(--maple\);color:#0b1620/);
+  assert.equal((html.match(/>Drive in 1884<\/a>/g) ?? []).length, Object.keys(HISTORY_AREAS).length);
   // Every same-site link is an address the Worker serves; nothing names a home, a civic number or a private path.
   const known = new Set(['/about', '/help', '/listen/', '/manifest-just.webmanifest', ...areas.map(a => '/' + a.id), ...Object.values(HISTORY_AREAS).map(e => '/' + e.address)]);
   for (const [, href] of html.matchAll(/href="(\/[^"]*)"/g)) assert.ok(known.has(href), 'unknown link ' + href);

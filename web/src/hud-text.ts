@@ -1,6 +1,8 @@
 /** Plain HUD inputs; main reuses one record and keeps DOM/ride hooks outside the formatter. */
 export interface HudState {
   driveHelp?: string;
+  debugFps?: boolean;
+  hintsHidden?: boolean;
   mode: 'drive' | 'fly'; mailMode: boolean; touchDevice: boolean; fps: number;
   speed: number; activeTouchSpeedLimit: number; roadName: string; surfaceName: string; airborne: boolean; help: string; jumpLine: string;
   e: number; n: number; height: number; exag: number; sunAz: number; sunEl: number;
@@ -23,12 +25,13 @@ export function speedReadout(speed: number, activeTouchSpeedLimit = 0): string {
 
 export function hudLine(s: HudState): string {
   let text: string;
+  const rate = s.debugFps ? `   ${s.fps.toFixed(0)} fps` : '';
+  const hints = s.hintsHidden ? '' : s.padHelp || s.driveHelp || (!s.mailMode ? s.help : '\nWASD/arrows: drive · space: brake · M/E: mail · C: photo · Esc/P: pause · Enter: end shift\nH: horn · R: road · V: seat · F: drone');
   if (s.mode === 'drive') {
-    text = `${speedReadout(s.speed, s.touchDevice && s.mailMode ? s.activeTouchSpeedLimit : 0)}   ${s.roadName}   ${s.surfaceName}${s.airborne ? '   AIR' : ''}` +
-      (s.touchDevice ? `   ${s.fps.toFixed(0)} fps${s.jumpLine}`
-        : s.padHelp ? `   ${s.fps.toFixed(0)} fps` + s.padHelp : s.driveHelp ?? (!s.mailMode ? `   ${s.fps.toFixed(0)} fps` + s.help : `\nWASD/arrows: drive · space: brake · M/E: mail · C: photo · Esc/P: pause · Enter: end shift\nH: horn · R: road · V: seat · F: drone · ${s.fps.toFixed(0)} fps`));
+    text = `${speedReadout(s.speed, s.touchDevice && s.mailMode ? s.activeTouchSpeedLimit : 0)}   ${s.roadName}${s.touchDevice ? '' : `   ${s.surfaceName}`}${s.airborne ? '   AIR' : ''}` +
+      (s.touchDevice ? `${rate}${s.jumpLine}` : rate + hints);
   } else if (s.drone) {
-    text = s.touchDevice ? s.drone : `${s.drone}   ${s.fps.toFixed(0)} fps\n` +
+    text = s.touchDevice ? s.drone : `${s.drone}${rate}\n` +
       'WASD: fly · ←/→ or Q/E: turn · ↑/↓: camera · space: up · shift/C: down · wheel: top speed · R: fly back · F: land';
   } else {
     text = `E ${s.e.toFixed(0)}  N ${s.n.toFixed(0)}  h ${s.height.toFixed(1)} m   hills x${s.exag}\n` +

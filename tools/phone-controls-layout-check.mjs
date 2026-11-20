@@ -12,14 +12,15 @@ if(process.argv.includes('--prior-empty-document')) {
 await checkTouchControlsMount();
 const source=readFileSync('web/src/phone-controls-layout.ts','utf8');
 const css=readFileSync('web/src/phone-layout.ts','utf8');
+const carrier=readFileSync('web/index.html','utf8');
 const browser=readFileSync('tools/phone-hud-browser.mjs','utf8');
 const legacy=readFileSync('tools/layout-check.mjs','utf8');
 assert.ok(browser.includes("document.body.classList.contains('tcOn') && document.documentElement.dataset.mmmReady==='true'"),'named Just Drive waits on the hidden ready signal');
 assert.doesNotMatch(browser,/document\.title\s*===\s*['"]settled/,'named pages retain their titles');
-assert.match(css,/white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:14px/,'radio lines ellipsize horizontally');
-assert.match(css,/#stopHint\{[^}]*white-space:nowrap[^}]*overflow:hidden;text-overflow:ellipsis/,'landscape hint owns its ellipsis clipping');
+assert.match(carrier,/#phoneHud #radio b\{width:auto;white-space:normal;overflow:visible;text-overflow:clip/,'frequency-first station names wrap within their chip');
+assert.match(carrier,/#phoneHint #stopHint\{[^}]*white-space:pre-line[^}]*-webkit-line-clamp:2;max-height:36px/,'phone hint keeps two full lines');
 assert.match(css,/flex-wrap:nowrap;gap:2px/,'radio is two complete fixed-height lines');
-assert.ok(14*2+2+10<=56,'radio text/padding/border fits its chip');
+assert.ok(14*3+2+10<=56,'three station-name lines, gaps, padding and border fit the chip');
 assert.match(css,/installPhoneControls\(root\)/,'actual phone grid must install the tested writer');
 assert.match(css,/#phoneAux\{width:180px;height:56px\}/,'absolute utility buttons retain their header grid reservation');
 assert.match(css,/calc\(22vh - 56px\)/,'short landscape headers clear the band');
@@ -50,7 +51,7 @@ async function verify(text) {
    views.push({width:w,height:h,left,right:left,bottom,top:portrait?safeTop+6:Math.min(6,Math.max(0,.22*h-56)),safeTop});
   }
  }
- for(const {width,height,left,right,bottom,top,safeTop=0} of views)for(const hintHeight of (width>height?[0,14]:[0,36,96,186]))for(const mail of [false,true])for(const pull of [false,true]) {
+ for(const {width,height,left,right,bottom,top,safeTop=0} of views)for(const hintHeight of (width>height?[0,14,36]:[0,36,96,186]))for(const mail of [false,true])for(const pull of [false,true]) {
   const elements=new Map();
   const find=id=>{if(!elements.has(id))elements.set(id,{style:{removeProperty(k){delete this[k];}}});return elements.get(id);};
   placePhoneControls(phoneControls({width,height,left,right,bottom,top,hintHeight,mail,pull}),find);
@@ -70,7 +71,7 @@ async function verify(text) {
    assert.ok(!overlap(b,band),'protected driving band '+JSON.stringify({width,height,bottom,b}));
   }
   for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++)assert.ok(!overlap(boxes[i],boxes[j]),'controls overlap '+boxes[i].id+' '+boxes[j].id);
-  const view={width,height,left,right,bottom,top,hintHeight,mail,pull};
+  const view={width,height,left,right,bottom,top,hintHeight:landscape&&mail?Math.max(36,hintHeight):hintHeight,mail,pull};
   const menu=phoneReadoutsInSettings(view), x0=left+8, x1=width-right-8, gap=4;
   const strip=Math.min(190,.22*width,.25*width-12-left), info=[];
   const add=(id,x,y,w,h)=>info.push([id,x,y,x+w,y+h]);
@@ -79,8 +80,8 @@ async function verify(text) {
   const places=mail?0:80;
   if(places)add('placesButton',gearRight-62-places,top,places,56);
   add(mail?'phoneLine':'hud',x0,top,Math.min(landscape?Infinity:440,gearRight-62-places-(places?6:0)-x0),56);
-  if(hintHeight&&!(landscape&&menu))add(mail?'stopHint':'placeArrival',x0,top+62,strip,landscape?14:hintHeight);
-  const start=top+68+(landscape?14:hintHeight);
+  if(hintHeight&&!(landscape&&menu))add(mail?'stopHint':'placeArrival',x0,top+62,landscape||height<600?strip:x1-x0-62,landscape?(mail?36:14):hintHeight);
+  const start=top+68+(landscape?(mail?36:14):hintHeight);
   if(!menu) for(const folded of [false,true])for(const photo of [false,true]) {
    const rows=[...info], push=(...b)=>rows.push(b), mapWidth=folded?58:Math.min(78,landscape?Math.max(58,(strip-gap)*.8/1.8):strip);
    const mapHeight=folded?58:mapWidth+56;

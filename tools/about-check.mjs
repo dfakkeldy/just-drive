@@ -58,7 +58,7 @@ try {
   // Help: the control rows are the title card's own, in order, and each page links its partner.
   const help = brand => readFileSync(`${out}/help/${brand}/index.html`, 'utf8');
   const esc = t => t.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
-  const rows = list => list.map(([k, v]) => `<div class="row"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
+  const rows = list => list.map(([k, v]) => `<div class="row"><dt><kbd>${esc(k.replace("W A S D", "WASD"))}</kbd></dt><dd>${esc(v)}</dd></div>`).join('');
   for (const [brand, lists] of [['mail', [KEYS, TOUCH, padKeys('car', true)]], ['just', [DRIVING_KEYS, DRIVING_TOUCH, bikeKeys(false), bikeKeys(true), padKeys('car', false), padKeys('bike', false)]]]) {
     const html = help(brand), words = text(html);
     for (const list of lists) assert.ok(html.includes(`<dl>${rows(list)}</dl>`), brand + ' help control table matches the title card');

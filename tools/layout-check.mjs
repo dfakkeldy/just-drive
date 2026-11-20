@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { raceLayoutCheck, racePropertyScript } from './race-layout-check.mjs';
 
 const [outDir, first] = process.argv.slice(2);
-const base = new URL(first).origin;
+const base = first ? new URL(first).origin : null;
 const PORT = process.env.CDP_PORT ?? '9333';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SIZES = (process.env.SIZES ?? '320x568 320x640 360x740 375x553 375x667 390x664 390x844 402x874 412x915 414x736 430x932 440x956 568x320 667x375 740x360 781x390 812x375 844x390 874x402 932x430 956x440 768x1024 280x653 344x1000 1024x768 600x400 568x280 320x460-plain')
@@ -97,14 +97,17 @@ function faults(list,w,h,menu=false,safe=null){
 }
 
 // Both carriers share the same control rules; script owns the phone structure and styling.
-const style = (path) => readFileSync(new URL(path, import.meta.url), 'utf8').match(/<style>([\s\S]*?)<\/style>/)[1].trim();
-if (style('../web/index.html') !== style('../artifact/page.html')) throw new Error('dev and published page CSS differ');
+const style = (path) => readFileSync(new URL(path, import.meta.url), 'utf8').match(/<style\b[^>]*>[\s\S]*?<\/style>/g)?.map(block => block.trim()) ?? [];
+if (style('../web/index.html').length < 2) throw new Error('expected both carrier style blocks');
+if (JSON.stringify(style('../web/index.html')) !== JSON.stringify(style('../artifact/page.html'))) throw new Error('dev and published page CSS differ');
 
 for (const path of ['../web/index.html', '../artifact/page.html']) {
   const html = readFileSync(new URL(path, import.meta.url), 'utf8');
   for (const id of ['hud', 'shiftHud', 'stopHint', 'gear', 'settings', 'cameraButton', 'mailButton', 'photoTag', 'endShift'])
     if (html.split(`id="${id}"`).length !== 2) throw new Error(`${path}: expected exactly one #${id}`);
 }
+
+if (!first) { console.log('PASS all dev/published style blocks and stable carrier ids'); process.exit(0); }
 
 if (process.env.FLEET_LAYOUT === '1') { await import('./fleet-layout-check.mjs'); process.exit(0); }
 const openSections = `(selector) => {
@@ -268,8 +271,7 @@ for (const [w, h, plain] of SIZES) {
       await p.shot(name);
       // Keep the test text in place while the game updates its normal roadside hint.
       await p.read(`(() => { const route = document.getElementById('shiftHud'); route.textContent = 'DAY 8 · 0/130 STOPS · 16:58\\nNORTHEAST / MINES / VILLAGE · DOUBLE MAIL'; Object.defineProperty(route, 'textContent', { configurable:true, get:() => route.innerText, set:() => {} }); const e = document.getElementById('stopHint'); e.classList.remove('intro'); e.textContent = ${JSON.stringify('Next: rural box by the long driveway.\nHold MAIL beside the roadside box.')}; Object.defineProperty(e, 'textContent', { configurable:true, get:() => e.innerText, set:() => {} }); })()`);
-      // The mail dashboard keeps landscape hints on one line above the clear road band.
-      const oneLine = w > h;
+      // The mail dashboard keeps the full two-line hint in both orientations.
       // One reading: the phone layout's observers can move the hint into the menu between
       // separate reads, so a height read before the move would be judged as a dashboard hint.
       const hint = await p.read(`(() => {
@@ -278,7 +280,7 @@ for (const [w, h, plain] of SIZES) {
           inMenu: document.body.classList.contains('phoneReadoutsMenu') && !!e.closest('#settings'),
           retained: e.textContent.includes('long driveway') };
       })()`);
-      if (!hint.inMenu && (oneLine ? !(hint.height >= 14 && hint.height < 30) : !(hint.height >= 36))) found.push(`long ${oneLine ? 'one-line' : 'two-line'} hint did not appear (height ${hint.height})`);
+      if (!hint.inMenu && hint.height !== 36) found.push(`long two-line hint did not appear (height ${hint.height})`);
       if (hint.inMenu && !hint.retained) found.push('full hint not retained in the narrow-view menu');
       for (const folded of [false, true]) {
         await p.read(`(() => { const m = document.getElementById('miniMap'); if (m.classList.contains('folded') !== ${folded}) document.getElementById('miniMapHead').click(); })()`);

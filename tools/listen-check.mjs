@@ -43,6 +43,10 @@ try {
   assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
   assert.ok(html.includes(`<link rel="canonical" href="${LISTEN_URL.mail}">`));
 
+  assert.match(html, /\.state\{[^}]*12px/);
+  assert.match(html, /\.progress\{[^}]*12px/);
+  assert.match(html, /\.preset span\{[^}]*12px/);
+  assert.match(html, /\[data-state=sound\] \.preset\[aria-pressed=true\]::after\{content:"▶ Playing"/);
   // One catalogue: the page asks for the car radio's lists, in the car radio's folder, and holds no station of its own.
   assert.match(html, /"\.\.\/audio"/, 'the songs are in the site audio folder');
   assert.match(html, /radio\.json/); assert.doesNotMatch(html, /radio-just\.json/, 'one list on both hosts: the page is the same page');

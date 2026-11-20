@@ -14,12 +14,13 @@ const CSS = `
 #placeArrival{position:fixed;right:24px;bottom:32px;z-index:4;width:min(310px,calc(100% - 32px));box-sizing:border-box;padding:12px 16px;background:var(--panel);border:1px solid #89afa2;border-left:3px solid #a7d9bc;border-radius:6px;font:13px/1.45 var(--text);pointer-events:none}
 #placeArrival strong{display:block;color:#c1ead0;margin-bottom:4px}#placeArrival p{margin:0;color:var(--ink-dim)}
 #placesPanel{position:fixed;inset:0;z-index:21;display:grid;place-items:center;padding:16px;box-sizing:border-box;background:#071016ad;color:var(--ink);font:15px/1.5 var(--text);touch-action:pan-y}
-#placesCard{box-sizing:border-box;width:min(100%,560px);max-height:100%;overflow:auto;border:1px solid #89afa2;border-radius:10px;background:var(--panel-solid);padding:22px}
+#placesCard{box-sizing:border-box;width:min(100%,560px);max-height:100%;overflow:hidden;display:flex;flex-direction:column;border:1px solid #89afa2;border-radius:10px;background:var(--panel-solid);padding:22px}
+#placesHeader{flex:none}#placesBody{overflow:auto;min-height:0;overscroll-behavior:contain}
 #placesCard h2{margin:0;font-size:28px}#placesCard p{color:var(--ink-dim);margin:6px 0 16px}#placesList{display:grid;gap:10px;list-style:none;margin:0;padding:0}#placesList button{width:100%}
 #placesCard button{cursor:pointer;font:inherit;color:inherit;min-height:56px;border:1px solid #71897e;border-radius:6px;background:#20362e;padding:12px;text-align:left}
 #placesList button strong,#placesList button span{display:block}#placesList button span{color:var(--ink-dim);font-size:13px;margin-top:4px}
 #placesMap{width:100%;margin:0 0 12px;text-align:center!important}
-#placesClose{margin-top:14px;width:100%;text-align:center!important;background:transparent!important}
+#placesClose{flex:none;margin-top:14px;width:100%;text-align:center!important;background:#20362e!important}
 #placesCard button:focus-visible,#placesButton:focus-visible{outline:3px solid #fff;outline-offset:2px}
 #placesPanel[hidden],#placeArrival[hidden],#placesButton[hidden]{display:none}
 body.tcOn #placesButton{position:static;min-height:56px;flex:none;pointer-events:auto;margin:0}
@@ -51,7 +52,7 @@ export class PlacesUI {
     this.arrival.id = 'placeArrival'; this.arrival.hidden = true; this.arrival.setAttribute('role', 'status'); this.arrival.append(this.head, this.note);
     this.panel.id = 'placesPanel'; this.panel.hidden = true; this.panel.setAttribute('role', 'dialog'); this.panel.setAttribute('aria-modal', 'true'); this.panel.setAttribute('aria-labelledby', 'placesHeading');
     this.panel.setAttribute('aria-describedby', 'placesDescription');
-    this.panel.innerHTML = `<section id="placesCard"><h2 id="placesHeading">Places</h2><p id="placesDescription">Choose a place to start there, at rest${places.some(place => place.start) ? '' : ' on the nearest road'}.</p><ul id="placesList" role="list"></ul><p id="placesError" role="status" hidden></p><button id="placesClose">Back to driving · Esc</button></section>`;
+    this.panel.innerHTML = `<section id="placesCard"><header id="placesHeader"><h2 id="placesHeading">Places</h2></header><div id="placesBody"><p id="placesDescription">Choose a place to start there, at rest${places.some(place => place.start) ? '' : ' on the nearest road'}.</p><ul id="placesList" role="list"></ul><p id="placesError" role="status" hidden></p></div><button id="placesClose">Back to driving · Esc</button></section>`;
     this.addPlaces(places);this.button.hidden=!places.length;
     if (hikes.length) {
       const section = document.createElement('div'); section.id = 'hikesList';

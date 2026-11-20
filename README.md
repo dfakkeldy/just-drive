@@ -77,7 +77,7 @@ The single-check commands remain useful for focused work:
 
 | Job | Command | Result |
 |---|---|---|
-| HUD text and writes | `node tools/hud-text-check.mjs` (add `--mutations`) | frozen old text plus desktop free-drive FPS, one write per changed string, no DOM text reads |
+| HUD text and writes | `node tools/hud-text-check.mjs` (add `--mutations`) | player readout, keys hide after a minute, diagnostic FPS in `#hud[data-fps]`, one write per changed string, no DOM text reads |
 | Phone HUD and throw help | `node tools/mail-help-check.mjs --mutations`; `node tools/phone-mail-hud-check.mjs` | real Mail/Props hit rates, frozen help-off bytes, due-only bounded aim at actual openings, sloped frame-rate and ordered-contact regressions, eight mutants; settings and hint lifecycle |
 | Phone HUD in a browser | `VITE_MP=1 HUD=1 RUN=phone-hud-browser.mjs VIEWS="phone\|x=1" tools/yard-shots.sh 844 390` (set `OUT`) | twelve phone cases in mail and both drive-around brands, multiplayer and bike; clear portrait/landscape bands, thumb reach, PULL, standalone safe-area clearance, PNGs and rectangle JSON |
 | Short portrait controls | `node tools/phone-controls-layout-check.mjs --mutations` | production planner/writer, 20,928 portrait/landscape size/hint cases including the full browser inventory; shared geometry oracle, native safe-area lifecycle and six mutants |

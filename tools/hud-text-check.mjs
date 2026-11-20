@@ -25,20 +25,16 @@ const oldSource = [
   "  if (mailMode && params.has('lawn') && !bare) hud.textContent += `\\nTyre strips: ${shift.ruts.count} · Lawns damaged: ${shift.ruts.lawns}`;"
 ].join('\n');
 const oldFrame = new Function('context', `with(context) { ${oldSource} }`);
-// Intentional phone-feedback follow-up: desktop free driving gains FPS on its first line.
-// Keep the original oracle frozen and apply only this explicit, one-site text change.
-const fpsSite = ': !mailMode ? ride.help :';
-assert.equal(oldSource.split(fpsSite).length, 2);
-const expectedSource = oldSource.replace(fpsSite, ': !mailMode ? `   ${fps.toFixed(0)} fps` + ride.help :');
-// The new phone-only cap marker is the second deliberate change to this frozen oracle.
+// Keep the old oracle frozen. These exact edits describe the new player readout.
+const expectedSource = oldSource
+ .replace('   ${vehicle.surfaceName}', "${touchDevice ? '' : `   ${vehicle.surfaceName}`}")
+ .replace('(touchDevice ? `   ${fps.toFixed(0)} fps${ride.jumpLine}`', '(touchDevice ? ride.jumpLine')
+ .replace(': !mailMode ? ride.help :', ": drove >= 60 ? '' : !mailMode ? ride.help :")
+ .replace('F: fly · ${fps.toFixed(0)} fps', 'F: drone');
 const speedSite = '${Math.abs(vehicle.speed * 3.6).toFixed(0)} km/h';
 assert.equal(expectedSource.split(speedSite).length, 2);
 const capExpectedSource = expectedSource.replace(speedSite, speedSite + '${touchDevice && mailMode && !scenePaused() && vehicle.activeTouchSpeedLimit > 0 ? ` ▸ LIMIT ${(vehicle.activeTouchSpeedLimit * 3.6).toFixed(0)}` : ""}');
-// The third: F launches the camera drone now, so the mail game's key line says so.
-const flySite = 'V: seat · F: fly ·';
-assert.equal(capExpectedSource.split(flySite).length, 2);
-const droneExpectedSource = capExpectedSource.replace(flySite, 'V: seat · F: drone ·');
-const expectedFrame = new Function('context', `with(context) { ${droneExpectedSource} }`);
+const expectedFrame = new Function('context', `with(context) { ${capExpectedSource} }`);
 const main = readFileSync(new URL('../web/src/main.ts', import.meta.url), 'utf8');
 const source = readFileSync(new URL('../web/src/hud-text.ts', import.meta.url), 'utf8');
 const start = main.indexOf('  if (!bare) {', main.indexOf('if (mailScore && !bare'));
@@ -58,7 +54,7 @@ const periodNames = await load(readFileSync(new URL('../web/src/eras/history-roa
 function element(initial = '') {
   let text = initial, writes = 0, reads = 0;
   return {
-    style: {},
+    style: {}, dataset: {},
     get textContent() { reads++; return text; },
     set textContent(value) { writes++; text = value; },
     inspect: () => ({ text, writes, reads }),
@@ -66,7 +62,7 @@ function element(initial = '') {
 }
 function context(s, module, bare = false, started = true) {
   const ctx = {
-    mode: s.mode, mailMode: s.mailMode, touchDevice: s.touchDevice, fps: s.fps, bare, started, stuntPark: null, scenePaused: () => !ctx.started,
+    mode: s.mode, mailMode: s.mailMode, touchDevice: s.touchDevice, fps: s.fps, drove: s.hintsHidden ? 60 : 0, bare, started, stuntPark: null, scenePaused: () => !ctx.started,
     ERA: { id: s.era ?? 'today' }, historyRoadName: periodNames.historyRoadName,
     vehicle: { speed: s.speed, activeTouchSpeedLimit: s.activeTouchSpeedLimit, roadName: s.rawRoad, surfaceName: s.surfaceName, airborne: s.airborne, atEdge: s.atEdge, x: 3, z: 4 },
     yardSite: s.yard === null ? null : { surface: () => s.yard }, homeSite: s.home === null ? null : { surface: () => s.home },
@@ -102,7 +98,7 @@ function verifyState(s, module, frame, integration = false) {
   }
 }
 function writes(module) {
-  const s = { ...base }, hud = element();
+  const s = { ...base, debugFps: true }, hud = element();
   for (let i = 0; i < 120; i++) module.setHud(hud, module.hudLine(s));
   assert.deepEqual(hud.inspect(), { text: module.hudLine(s), writes: 1, reads: 0 }, '120 stable frames');
   const changed = element();
@@ -174,6 +170,17 @@ function caps(module, frame) {
   assert.equal(c.hud.inspect().text.includes('LIMIT'), true, 'running scene can show held telemetry again');
 }
 const module = await load(source), frame = frameFor();
+for (const mailMode of [false,true]) {
+ const s={...base,mailMode,touchDevice:false};
+ assert.doesNotMatch(module.hudLine(s), /fps/);
+ assert.match(module.hudLine({...s,debugFps:true}), /60 fps/);
+ const c=context(s,module);c.drove=59.99;frame(c);assert.match(c.hud.inspect().text,/WASD/);
+ c.drove=60;frame(c);assert.doesNotMatch(c.hud.inspect().text,/WASD/);
+ assert.equal(c.hud.dataset.fps,'60','diagnostic rate stays available');
+ c.fps=42;frame(c);assert.equal(c.hud.dataset.fps,'42','diagnostic rate stays live');
+ assert.match(module.hudLine({...c.hudState,hintsHidden:false}), /WASD/,'pause restores keys');
+}
+
 {
   const c=context(base,module);c.stuntPark={hudLine:'gap-tanks: CLEAN'};
   for(let i=0;i<120;i++)frame(c);
@@ -282,8 +289,8 @@ function droneFrames(module, frame) {
 droneFrames(module, frame);
 console.log('PASS drone readout replaces the free camera lines, desktop keys, phone readout, clears on landing');
 console.log('PASS fleet selection, handbrake and refusal lines follow live state and share the HUD cache');
-console.log(`PASS ${sequenceFrames} frames in 1,500 kept contexts with changing values: old text plus the intended desktop free-drive FPS in every frame`);
-console.log(`PASS ${states} frozen-old states with the explicit FPS addition; ${adapters} actual frame adapter states; bare/title guards and lazy ride hooks`);
+console.log(`PASS ${sequenceFrames} frames in 1,500 kept contexts with changing values: the player readout in every frame`);
+console.log(`PASS ${states} frozen-old states with explicit player text changes; ${adapters} actual frame adapter states; bare/title guards and lazy ride hooks`);
 console.log('PASS 120 rest frames: old 120 writes, new 1; all optional lines: old 600 writes/480 reads, new 1 write/0 reads');
 console.log('PASS changing FPS: 12 writes for 12 values, 120 for 120 changes; zero DOM text reads; per-element/shared-writer cache');
 if (process.argv.includes('--mutations')) {
@@ -301,7 +308,8 @@ if (process.argv.includes('--mutations')) {
   const mutations = [
     ['limit marker always shown', "activeTouchSpeedLimit > 0 ?", "true ?"],
     ['limit marker never shown', "activeTouchSpeedLimit > 0 ?", "false ?"],
-    ['desktop explore FPS removed', '(!s.mailMode ? `   ${s.fps.toFixed(0)} fps` + s.help :', '(!s.mailMode ? s.help :'],
+    ['debug FPS removed', 's.debugFps ? `   ${s.fps.toFixed(0)} fps`', "false ? `   ${s.fps.toFixed(0)} fps`"],
+    ['key hints never hide', "s.hintsHidden ? '' :", "false ? '' :"],
     ['part dropped', trailer, ''],
     ['parts swapped', optional, edge + trailer],
     ['wrong cache comparison', 'lastText.get(hud) === text', 'lastText.get(hud) !== undefined'],
@@ -310,7 +318,7 @@ if (process.argv.includes('--mutations')) {
   for (const [name, from, to] of mutations) {
     assert.equal(source.split(from).length, 2, name + ' unique source site');
     const bad = await load(source.replace(from, to));
-    assert.throws(() => { caps(bad, frameFor()); verifyState(full, bad, frameFor(), true); verifyState({ ...base, mailMode: false, touchDevice: false }, bad, frameFor(), true); writes(bad); }, undefined, name + ' must fail');
+    assert.throws(() => { caps(bad, frameFor()); verifyState(full, bad, frameFor(), true); verifyState({ ...base, mailMode: false, touchDevice: false }, bad, frameFor(), true); verifyState({ ...base, touchDevice: false, hintsHidden: true }, bad, frameFor(), true); writes(bad); }, undefined, name + ' must fail');
     console.log('KILLED ' + name);
   }  // Wiring faults in the frame block of main.ts: a field of the reused state that is no longer refreshed.
   const wiring = [

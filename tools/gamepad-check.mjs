@@ -188,7 +188,7 @@ const hud = { mode: 'drive', mailMode: true, touchDevice: false, fps: 60, speed:
 assert.match(hudLine(hud), /WASD\/arrows: drive/, 'keys: the keyboard line');
 const padLine = hudLine({ ...hud, padHelp: padHelp('car', true) });
 assert.match(padLine, /RT\/LT: go\/brake/); assert.doesNotMatch(padLine, /WASD/); assert.match(padLine, /1\/9 stops/, 'the stop count stays');
-assert.match(hudLine({ ...hud, mailMode: false, padHelp: padHelp('car', false) }), /^36 km\/h   Main Street   pavement   60 fps\nstick: steer/, 'explore: fps then the controller line');
+assert.match(hudLine({ ...hud, mailMode: false, padHelp: padHelp('car', false) }), /^36 km\/h   Main Street   pavement\nstick: steer/, 'explore: the controller line without FPS');
 assert.equal(hudLine({ ...hud, touchDevice: true, padHelp: padHelp('car', true) }), hudLine({ ...hud, touchDevice: true }), 'a phone line has no room for it');
 assert.match(hudLine({ ...hud, driveHelp: '\nhorse keys', padHelp: padHelp('horse', true) }), /whinny/, 'the controller line wins over a ride line');
 assert.equal(hudLine({ ...hud, padHelp: '' }), hudLine(hud), 'empty: as before');

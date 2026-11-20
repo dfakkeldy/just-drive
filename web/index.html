@@ -65,11 +65,7 @@
   :where(html.devPage) canvas#c{position:static;inset:auto;width:100vw;height:100vh}
   :where(html.devPage body:not(.tcOn)) #hud{left:10px;top:10px;max-width:none;background:#0009;white-space:pre;font-variant-numeric:normal}
   :where(html.devPage body:not(.tcOn)) #gear{right:10px;top:10px;background:#0009;color:#eef}
-  :where(html.devPage body:not(.tcOn)) #settings{right:10px;top:58px;background:#000c;max-width:none;font-family:inherit}
-  :where(html.devPage body:not(.tcOn)) #settings input{accent-color:auto}
-  :where(html.devPage body:not(.tcOn)) #settings small{color:inherit;opacity:.7}
   :where(html.devPage body:not(.tcOn)) #gear:focus-visible,:where(html.devPage body:not(.tcOn)) #settings input:focus-visible{outline:revert;outline-offset:revert}
-  :where(html.devPage body:not(.tcOn)) #credit{right:8px;bottom:6px;left:auto;font:10.5px/1.4 ui-monospace,Menlo,Consolas,monospace;color:inherit;opacity:.75}
 
   #mailButton{position:fixed;z-index:4;right:max(14px,env(safe-area-inset-right,0px));bottom:calc(38% - 34px + env(safe-area-inset-bottom,0px));width:68px;height:68px;border:2px solid #ebdfba;border-radius:50%;background:#b45a29e6;color:#fff8e6;font:bold 13px ui-monospace,monospace;letter-spacing:.08em;touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer;box-shadow:0 3px 10px #0006}
   #mailButton.held,#mailButton:active{background:#f4d698;color:#49301e;transform:scale(.94)}
@@ -109,15 +105,33 @@
   #shiftReport[hidden],#cameraButton[hidden],#endShift[hidden],#photoTag[hidden]{display:none}
   @media(pointer:fine){#cameraButton{right:24px;bottom:174px}}
   @media(max-width:600px){#shiftHud{top:calc(112px + env(safe-area-inset-top,0px));font-size:11px;max-width:calc(100% - 120px)}#stopHint{bottom:calc(131px + env(safe-area-inset-bottom,0px));font-size:11px}#photoTag{top:calc(193px + env(safe-area-inset-top,0px));max-width:190px}.reportBody{padding:20px 19px 8px}#reportPanel h1{font-size:25px}#reportPanel{font-size:15px}.reportFooter{padding:12px 19px}#gear{width:56px;height:56px}#settings{top:calc(72px + env(safe-area-inset-top,0px))}}
+
+/* Sheets use one content width and leave the credit chip clear. */
+body:not(.tcOn) #settings.open[aria-labelledby]{max-height:calc(100dvh - 134px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
+body #settings{width:320px;min-width:0;max-width:calc(100% - 32px);max-height:calc(100dvh - 134px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain;border-radius:10px;box-sizing:border-box;font-family:var(--text)}
+#settings>*{box-sizing:border-box;max-width:100%}
+#settingsHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+#settingsHeader h2{font-size:20px;margin:0}
+#settingsClose{min-width:56px;min-height:56px;border:1px solid var(--ink-dim);border-radius:6px;background:var(--panel-solid);color:var(--ink);font:inherit;cursor:pointer}
+body.exploreMode{--settings-accent:#a7d9bc}#settings input{accent-color:var(--settings-accent,var(--maple))}
+#credit{left:auto;width:fit-content;max-width:calc(100% - 32px);padding:4px 8px;background:#0c141c;border-radius:4px;font:12px/1.4 var(--text);opacity:1;text-shadow:none}
+@media(orientation:portrait) and (min-height:600px){body.tcOn.compactPhone #phoneHud #phoneHint{width:calc(100% - 62px)}}
+body.tcOn.compactPhone #phoneHud #phoneHint:has(#placeArrival:not([hidden])){width:calc(100% - 62px)}
+body.tcOn.compactPhone #placeArrival{width:min(360px,100%);min-width:min(220px,100%);overflow-wrap:normal}
+body.tcOn.compactPhone #phoneHint #stopHint{font-size:11px;line-height:15px;padding:3px 6px;white-space:pre-line;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:36px;overflow:hidden;text-overflow:clip}
+body.tcOn.compactPhone #phoneHud #radio{width:max-content;max-width:100%;min-width:56px;justify-self:start}
+body.tcOn.compactPhone #phoneHud #radio b{width:auto;white-space:normal;overflow:visible;text-overflow:clip}
+@media(orientation:landscape){body.tcOn.compactPhone #phoneHud:not([hidden]){grid-template-rows:56px auto minmax(0,1fr) 72px var(--mail-pedal-height)}body.tcOn.compactPhone #phoneHud #phoneHint{min-height:14px}body.tcOn.compactPhone.mailPhone #phoneHud #phoneHint{min-height:36px}}
+@media(orientation:landscape) and (max-height:319px){body.tcOn.compactPhone #phoneHud:not([hidden]){grid-template-rows:56px auto minmax(0,1fr) 64px 60px}}
 </style>
 <style>
-#pauseButton{position:fixed;right:78px;top:calc(10px + env(safe-area-inset-top,0px));z-index:6;min-width:56px;min-height:56px;border:1px solid var(--ink-dim);border-radius:6px;background:var(--panel-solid);color:var(--ink);font:14px var(--mono);cursor:pointer}
+#pauseButton{position:fixed;right:170px;top:calc(10px + env(safe-area-inset-top,0px));z-index:6;min-width:56px;min-height:40px;border:1px solid #a3b9b3;border-radius:6px;background:var(--panel);color:var(--ink);font:700 12px var(--mono);padding:0 14px;cursor:pointer}
 #pauseScreen{position:fixed;inset:0;z-index:9;display:grid;place-items:center;background:#0009;padding:16px;box-sizing:border-box}
 #pauseScreen[hidden]{display:none}
 #pauseScreen section{background:var(--panel-solid);color:var(--ink);border:1px solid var(--ink-dim);border-radius:10px;padding:20px;width:min(320px,100%);max-height:90dvh;overflow:auto;box-sizing:border-box}
 #pauseScreen h2{margin-top:0}#pauseScreen pre{white-space:pre-wrap;font:inherit}
 #pauseScreen button{display:block;min-height:48px;width:100%;margin-top:10px;font:inherit;cursor:pointer}
-body.tcOn #pauseButton{position:static;pointer-events:auto;flex:none}
+body.tcOn #pauseButton{position:static;min-height:56px;pointer-events:auto;flex:none}
 </style>
 
 </head>
@@ -126,8 +140,8 @@ body.tcOn #pauseButton{position:static;pointer-events:auto;flex:none}
 <div id="hud"></div>
 <div id="shiftHud" aria-label="Today’s route"></div>
 <div id="stopHint" role="status"></div>
-<button id="cameraButton" aria-label="Take evidence photo. C.">CAMERA</button>
-<button id="endShift" hidden aria-label="End the shift. Enter.">END SHIFT</button>
+<button id="cameraButton" aria-label="Camera: take evidence photo. C">CAMERA</button>
+<button id="endShift" hidden aria-label="End shift. Enter">END SHIFT</button>
 <div id="photoFlash" aria-hidden="true"></div>
 <div id="photoTag" hidden><canvas id="photoThumb" width="160" height="90" aria-hidden="true"></canvas><span id="photoCaption" role="status"></span></div>
 <div id="shiftReport" hidden role="dialog" aria-modal="true" aria-labelledby="reportTitle">
@@ -147,7 +161,8 @@ body.tcOn #pauseButton{position:static;pointer-events:auto;flex:none}
 <button id="mailButton" aria-label="Throw mail. Hold to keep throwing.">MAIL</button>
 <div id="mailScore" role="status" aria-label="Mail service tally"></div>
 <button id="gear" aria-label="Settings">&#9881;</button>
-<div id="settings">
+<div id="settings" role="region" aria-labelledby="settingsHeading">
+  <header id="settingsHeader"><h2 id="settingsHeading">Settings</h2><button id="settingsClose" type="button">Close</button></header>
   <label for="exag">Hill height: x<span id="exagValue">1.5</span></label>
   <input id="exag" type="range" min="1" max="2.5" step="0.1">
   <small>1.0 is true scale. Trees and buildings keep their real height.</small>

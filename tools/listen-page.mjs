@@ -48,19 +48,19 @@ a{color:var(--amber-soft);text-underline-offset:3px}
 .fm{font:700 13px/1 var(--mono);letter-spacing:.14em;color:var(--amber-low);text-shadow:none}
 .name{flex:1 1 100%;min-width:0;font:700 clamp(15px,4.4vw,19px)/1.25 var(--mono);letter-spacing:.09em;overflow-wrap:anywhere}
 .now{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:4px 10px;margin:10px 0 0}
-.state{grid-column:1;font:700 11px/1.3 var(--mono);letter-spacing:.16em;color:var(--amber-low);text-shadow:none}
+.state{grid-column:1;font:700 12px/1.3 var(--mono);letter-spacing:.16em;color:var(--amber-low);text-shadow:none}
 .title{grid-column:1/-1;margin:0;min-height:2.6em;font:600 18px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--amber-soft);
  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
 #live{grid-column:2;grid-row:1;min-height:24px;padding:0 8px;border:1px solid var(--amber-dim);border-radius:99px;background:transparent;
- font:700 11px/1 var(--mono);letter-spacing:.12em;color:var(--amber-low);cursor:pointer;position:relative}
+ font:700 12px/1 var(--mono);letter-spacing:.12em;color:var(--amber-low);cursor:pointer;position:relative}
 #live::after{content:"";position:absolute;inset:-12px -8px}
 #live[aria-pressed=true]{color:#1a1206;background:var(--amber);border-color:var(--amber);text-shadow:none}
 [data-state=silent] #live[aria-pressed=true]{color:var(--amber-low);background:transparent;border-color:var(--amber-dim)}
-.progress{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin-top:8px;font:500 11px/1 var(--mono);color:var(--amber-low);text-shadow:none}
+.progress{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin-top:8px;font:500 12px/1 var(--mono);color:var(--amber-low);text-shadow:none}
 .progress div{height:3px;border-radius:2px;background:rgba(255,178,63,.16);overflow:hidden}
 .progress i{display:block;height:100%;width:0;background:var(--amber)}
 .next{display:flex;gap:8px;margin:8px 0 0;font:500 13px/1.3 system-ui,sans-serif;color:var(--amber-low);text-shadow:none}
-.next b{flex:none;font:700 11px/1.5 var(--mono);letter-spacing:.16em}
+.next b{flex:none;font:700 12px/1.5 var(--mono);letter-spacing:.16em}
 .next span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#c99445}
 
 /* The dial's scale: a tick at each megahertz, a mark at each station, and the needle. */
@@ -85,10 +85,11 @@ a{color:var(--amber-soft);text-underline-offset:3px}
 .presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
 .preset{display:grid;align-content:center;gap:2px;min-height:54px;padding:6px 10px;text-align:left;position:relative}
 .preset b{font:700 16px/1.1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
-.preset span{font:600 10.5px/1.25 var(--mono);letter-spacing:.06em;color:var(--dim);overflow-wrap:anywhere}
+.preset span{font:600 12px/1.25 var(--mono);letter-spacing:.06em;color:var(--dim);overflow-wrap:anywhere}
 .preset[aria-pressed=true]{border-color:var(--amber-dim);box-shadow:inset 0 0 0 1px rgba(255,178,63,.35),inset 0 0 18px rgba(255,178,63,.12),0 2px 0 #06080a}
 .preset[aria-pressed=true] b{color:var(--amber)}
-.volume{display:flex;align-items:center;gap:12px;margin:12px 2px 0;font:700 11px/1 var(--mono);letter-spacing:.16em;color:var(--dim)}
+[data-state=sound] .preset[aria-pressed=true]::after{content:"▶ Playing";font:600 12px/1.3 var(--mono);color:var(--amber)}
+.volume{display:flex;align-items:center;gap:12px;margin:12px 2px 0;font:700 12px/1 var(--mono);letter-spacing:.16em;color:var(--dim)}
 .volume input{flex:1;min-width:0;accent-color:var(--amber)}
 
 /* Below the unit: the programme, the credits and the ways on. */
@@ -129,6 +130,8 @@ summary span{color:var(--amber-soft);letter-spacing:.06em;text-transform:none;mi
  .preset{min-height:44px;padding:4px 10px}
  .presets{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:6px}
  .volume{margin-top:8px}
+}
+@media(max-width:599px) and (orientation:portrait){.volume{margin:0 2px 16px}
 }
 /* A wide window: the unit stays in view beside the lists. */
 @media (min-width:980px) and (min-height:521px){
@@ -183,8 +186,8 @@ export async function listenPage() {
 <button id="play" class="key" type="button" aria-label="Play the radio" aria-pressed="false"><svg class="go" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.5v13l11-6.5z"/></svg><svg class="pause" viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 3.5h4v13h-4zM11.5 3.5h4v13h-4z"/></svg></button>
 <button id="up" class="key" type="button" aria-label="Station up">${tri('M7 3l8 7-8 7z')}</button>
 </div>
-<div id="presets" class="presets" role="group" aria-label="Stations"></div>
 <label id="volumeRow" class="volume">VOLUME <input id="volume" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+<div id="presets" class="presets" role="group" aria-label="Stations"></div>
 </main>
 <div class="side">
 <details class="card">

@@ -66,10 +66,10 @@ p{margin:0 0 14px}
 footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:14px;color:var(--quiet);display:flex;flex-wrap:wrap;gap:8px 20px}
 /* Help pages: one column, a contents strip and control tables. */
 .page.plain{grid-template-columns:minmax(0,1fr)}
-.plain .text{margin:0 auto;padding-top:40px}
+.plain .text{max-width:880px;margin:0 auto;padding-top:40px}
 .toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0;padding:0;list-style:none}
 .toc a{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:99px;color:var(--ink);text-decoration:none;font-size:15px}
-.toc a:hover{border-color:var(--accent)}
+.toc a:hover{border-color:var(--accent);text-decoration:underline}
 .controls{display:grid;gap:16px;margin-top:16px}
 .controls h3{margin:0 0 6px;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
 .controls dl{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -143,7 +143,7 @@ const PAGES = {
 <h1>Mabou <span>Mail</span> Madness</h1>
 <p class="lead">A rural mail route you cannot win, on the real roads around Mabou. The madness is only a little exaggerated.</p>
 <p><b>Two games, one island.</b> Mabou Mail Madness gives you a mail route. <a href="https://justdrive.fakkeldy.ca/">Just Drive</a> has every area, no mail.</p>
-<div class="actions"><a class="button" href="/">Start the shift</a><a class="button second" href="https://justdrive.fakkeldy.ca/mabou">Just drive instead</a></div>
+<div class="actions"><a class="button" href="/">Start the shift</a><span>Free. No download.</span><a class="button second" href="https://justdrive.fakkeldy.ca/mabou">Just drive instead</a><span>Free. No download.</span></div>
 <section aria-labelledby="game">
 <span class="label">The game</span>
 <h2 id="game">Deliver the day’s run</h2>
@@ -166,7 +166,7 @@ ${MADE('mail')}`,
 <h1>Just Drive</h1>
 <p class="lead">Drive the real land of Cape Breton. No missions and no clock: choose a place, choose a car or a dirt bike, and go.</p>
 <p><b>Two games, one island.</b> Just Drive has every area, no mail. <a href="https://mmm.fakkeldy.ca/">Mabou Mail Madness</a> is the same land, with a mail route.</p>
-<div class="actions"><a class="button" href="/mabou">Start in Mabou</a><a class="button second" href="#places">Choose a place</a></div>
+<div class="actions"><a class="button" href="/mabou">Start in Mabou</a><span>Free. No download.</span><a class="button second" href="#places">Choose a place</a></div>
 <section aria-labelledby="places">
 <span class="label">Places</span>
 <h2 id="places">Where you can drive</h2>
@@ -194,7 +194,7 @@ ${MADE('just')}`,
 // ---- Help ----
 const html = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
 /** One control table, rows exactly as the title card shows them. */
-const table = (heading, rows) => `<div><h3>${heading}</h3><dl>${rows.map(([key, what]) => `<div class="row"><dt>${html(key)}</dt><dd>${html(what)}</dd></div>`).join('')}</dl></div>`;
+const table = (heading, rows) => `<div><h3>${heading}</h3><dl>${rows.map(([key, what]) => `<div class="row"><dt><kbd>${html(key.replace("W A S D", "WASD"))}</kbd></dt><dd>${html(what)}</dd></div>`).join('')}</dl></div>`;
 const qa = items => `<ul role="list" class="qa">${items.map(([q, a]) => `<li><b>${q}</b><span>${a}</span></li>`).join('')}</ul>`;
 
 const SETTINGS = (brand) => qa([
@@ -230,7 +230,7 @@ const HELP = {
 <ol role="list" class="steps">
 <li><b>Start the shift.</b> <span class="dim">The title card shows the controls. Press the start button.</span></li>
 <li><b>Deliver the mail.</b> <span class="dim">Drive to each box and throw the mail from the driver’s window, on the right: <kbd>M</kbd> or <kbd>E</kbd>, or tap MAIL.</span></li>
-<li><b>Stay off the lawns.</b> <span class="dim">Customers phone in. A photo taken before the damage is your only defence: <kbd>P</kbd> or CAMERA.</span></li>
+<li><b>Stay off the lawns.</b> <span class="dim">Customers phone in. A photo taken before the damage is your only defence: <kbd>C</kbd> or CAMERA.</span></li>
 <li><b>Mind the gauge.</b> <span class="dim">There is no washroom on the route. When the gauge says so, stop and step out (<kbd>B</kbd> or tap the gauge). Look for houses first.</span></li>
 <li><b>End the shift.</b> <span class="dim">Press <kbd>Enter</kbd>, or END SHIFT in the settings on a phone, and read the calls.</span></li>
 </ol>

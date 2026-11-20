@@ -16,6 +16,20 @@ import { horseKeys, bikeKeys, vehicleButtons, type VehicleChoice } from './vehic
 // Built here in script so the test page and the published page cannot drift apart.
 
 const CSS = `
+#title{--title-accent:var(--maple,#d0632e);box-sizing:border-box;align-items:safe center}
+#title.justDrive{--title-accent:#a7d9bc}
+#title #titleCard{display:block!important;box-sizing:border-box;width:min(680px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain}
+#title #titleCard h1{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+#title .tag{font:600 15px/1.4 system-ui,sans-serif;letter-spacing:0;text-transform:none;color:var(--ink)}
+#title.justDrive #titleStart{background:#a7d9bc;color:#0b1620}
+#title :is(#modeChoice,#dailyChoice,#vehicleChoice) button[aria-pressed="true"]{border:2px solid var(--title-accent)!important}
+#title :is(#modeChoice,#dailyChoice,#vehicleChoice) button[aria-pressed="true"]::before{content:'✓ ';font-weight:800}
+#titleControls summary{min-height:44px;display:flex;align-items:center;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+#titleControls kbd{display:inline-block;background:#20303b;border:1px solid #71818e;border-radius:4px;padding:1px 4px;font:inherit;white-space:normal}
+#titleControls dl{grid-template-columns:minmax(90px,auto) minmax(0,1fr)}
+#title .titleFooter{margin-top:16px;font-size:12px}
+@media(max-width:759px){#title #titleStart{position:sticky;bottom:-8px;z-index:2;padding:12px;box-shadow:0 -10px 14px var(--panel-solid,#0c141c)}#title #titleCard{scroll-padding-bottom:120px}}
+
 #title{position:fixed;inset:0;z-index:20;display:grid;place-items:center;overflow:auto;
   padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
   background:linear-gradient(rgba(8,14,20,.55),rgba(8,14,20,.86));color:var(--ink,#eef2f6);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -27,7 +41,7 @@ const CSS = `
 #titleCard{width:min(100%,560px);background:var(--panel-solid,#0c141c);border:1px solid rgba(238,242,246,.18);border-radius:10px;padding:26px 24px 20px}
 #title h1{margin:0;font:800 clamp(30px,8vw,46px)/1.02 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:-.01em;text-wrap:balance}
 #title h1 span{color:var(--maple,#d0632e)}
-#title .tag{font:700 11px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim,#b9c3cc);margin:0 0 10px}
+#title .tag{font:600 15px/1.4 system-ui,sans-serif;letter-spacing:0;color:var(--ink);margin:0 0 10px}
 #title p{margin:12px 0 0;color:var(--ink-dim,#b9c3cc)}
 #titleOtherGame{display:block;font-size:13px;line-height:1.4;margin-top:8px}
 #titleOtherGame a{color:inherit;text-underline-offset:3px}
@@ -130,7 +144,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   let radioAvailable = radio, padRows = false;
   const rows = (available: boolean) => {
     radioAvailable = available;
-    if (padRows) return padKeys(ride?.kind, !explore && !areaName, available).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    if (padRows) return padKeys(ride?.kind, !explore && !areaName, available).map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join('');
   let keys = explore ? (ride?.kind === 'bike' ? bikeKeys(touch) : touch ? drivingTouch : drivingKeys) : areaName ? areaRows : touch ? TOUCH : KEYS;
   if (ride?.kind === 'horse') { keys = horseKeys(touch, !explore && !areaName); available = false; }
   if(historical&&ride?.kind !== 'horse'&&touch&&!keys.some(([key])=>key.includes('HORN')))keys=keys.concat([['HORN','Honk.']]);
@@ -139,8 +153,12 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     if (!available && k === 'H / T') [k, v] = ['H', historical ? 'Horn.' : 'Small horn.'];
     if(!available&&historical&&k==='H'&&ride?.kind !== 'horse')v='Horn.';
     // Just Drive says no "shift" (a mail word): the key column already shows ⇧; the drone row (#219) names it in its text.
-    return `<dt>${just ? k.replace('Shift', '⇧') : k}</dt><dd>${just ? v.replaceAll('Shift', '⇧') : v}</dd>`;
+    return `<dt><kbd>${(just ? k.replace('Shift', '⇧') : k).replace('W A S D', 'WASD')}</kbd></dt><dd>${just ? v.replaceAll('Shift', '⇧') : v}</dd>`;
   }).join('');
+  };
+  const controls = () => {
+    const all = rows(radioAvailable).match(/<dt>[\s\S]*?<\/dd>/g) ?? [];
+    return `<dl>${all.slice(0, 4).join('')}</dl><details><summary>All controls</summary><dl>${all.slice(4).join('')}</dl></details>`;
   };
   const place = areaName ?? 'Mabou';
   const addressSite = just && typeof location !== 'undefined' ? readSite(location.hostname, location.pathname, new URLSearchParams(location.search)) : null;
@@ -175,20 +193,24 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   if (mailCard) document.head.appendChild(Object.assign(document.createElement('style'), { textContent: DAILY_CSS }));
   const dailyText = daily ? `One Get Fired run a day, the same for everybody: the start, the ${daily.vehicle.toLowerCase()} and the ${daily.mood.toLowerCase()} weather. Five minutes on the clock. Fill the complaint bingo card: a line pays ${LINE_BONUS}, the full card ${CARD_BONUS}. Your first finished try is today’s card; later tries are practice.` : '';
   root.innerHTML = `<div id="titleCard">
-    ${mailCard ? `<div id="modeChoice" role="group" aria-label="How to play"><button id="modeMail" aria-pressed="${!explore && !fired}">Deliver the mail</button><button id="modeExplore" aria-pressed="${explore}">Just drive</button><button id="modeFired" aria-pressed="${fired && !daily}">Get fired</button></div><div id="dailyChoice"><button id="modeDaily" aria-pressed="${!!daily}">Today’s run: five minutes, complaint bingo</button></div>` : ''}
-    <p class="tag">${historical ? 'A fictional journey · Cape Breton' : explore ? 'Preview build · the land at your own pace' : areaName ? 'Preview build · real land and roads' : daily ? `Today’s run · ${shortDate(daily.date)} · the same for everybody` : fired ? 'Get Fired · a job you cannot lose' : 'Preview build · a route you cannot win'}</p>
+
+    <p class="tag">${historical ? 'A fictional journey · Cape Breton' : explore ? 'The land at your own pace' : areaName ? 'Real land and roads' : daily ? `Today’s run · ${shortDate(daily.date)} · the same for everybody` : fired ? 'Get Fired · a job you cannot lose' : 'A route you cannot win'}</p>
     <h1>${explore ? name : areaName ? `Drive around <span>${areaName}</span>` : 'Mabou <span>Mail</span> Madness'}</h1>
-    <p>${historical ? "A work of fiction, based on an 1884 survey sheet. Places are approximate. It shows no person's land." : explore ? `Drive around the real land near ${place}, Cape Breton, and find places at your own pace.` : daily ? dailyText : fired ? 'Same route, same clock. Today every complaint counts for you. Climb the discipline ladder to Fired before 18:00. The union grieves every step.' : areaName ? `Explore the real land and roads around ${areaName}, Cape Breton.` : 'Deliver the day’s run around Mabou, Cape Breton. Stay off the lawns. Somebody will phone the post office anyway.'}${otherLine}</p>
-    ${explore ? '<p id="exploreCaution">A toy for getting a feel for the place. It is not a map for navigation or for safety. Roads and trails can differ on the day.</p>' : ''}
+    <p>${historical ? "A work of fiction, based on an 1884 survey sheet. Places are approximate. It shows no person's land." : explore ? `Drive around the real land near ${place}, Cape Breton, and find places at your own pace.` : daily ? dailyText : fired ? 'Same route, same clock. Today every complaint counts for you. Climb the discipline ladder to Fired before 18:00. The union grieves every step.' : areaName ? `Explore the real land and roads around ${areaName}, Cape Breton.` : 'Deliver the day’s run around Mabou, Cape Breton. Stay off the lawns. Somebody will phone the post office anyway.'}</p>
+    ${mailCard ? `<div id="modeChoice" role="group" aria-label="How to play"><button id="modeMail" aria-pressed="${!explore && !fired}">Deliver the mail</button><button id="modeExplore" aria-pressed="${explore}">Just drive</button><button id="modeFired" aria-pressed="${fired && !daily}">Get fired</button></div><div id="dailyChoice"><button id="modeDaily" aria-pressed="${!!daily}">Today’s run: five minutes, complaint bingo</button></div>` : ''}
     ${daily ? `<div id="titleBingo" role="list" aria-label="Today’s complaint bingo card">${daily.squares.map(s => `<span role="listitem">${s.label.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</span>`).join('')}</div>
     ` : ''}<p id="waysOut" hidden></p>
-    <dl>${rows(radio)}</dl>
+    <div id="titleControls">${controls()}</div>
+
     <button id="titleStart">${ride?.kind === 'horse' ? 'Start riding' : explore || areaName ? 'Start driving' : daily ? 'Start today’s run' : 'Start the shift'}</button>
+    ${explore ? '<p id="exploreCaution">A toy for getting a feel for the place. It is not a map for navigation or for safety. Roads and trails can differ on the day.</p>' : ''}
+    ${otherLine}
+    <p class="titleFooter">Preview build · Cape Breton, Nova Scotia</p>
     ${door ? `<a id="titleEra" href="${door.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">${historical ? 'Back to today →' : eraDoorText(eraWords!.name)}</a>
     ` : ''}<button id="titleCredits" aria-expanded="false">Credits and data</button>
     <div id="titleLegal" hidden>${CONTACT_LINE}${aboutLine(just)}${historical ? `${(historyArea(eraAreaId(era)) ?? HISTORY_AREAS.mabou).credits}${LAND_CREDITS}${FAR_CREDITS}${MUSIC_CREDIT}${ENGINE_CREDIT}` : just ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : areaName ? LEGAL.replace(/<p>.*?<\/p>/, '<p>The land, roads and mapped building shapes are real.</p>') : explore ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : LEGAL}${paved ? PAVED_CREDIT : ''}</div>
   </div>`;
-  if (explore && ride) { const buttons = vehicleButtons(ride); const modeChoice = root.querySelector('#modeChoice'); if (modeChoice) modeChoice.after(buttons); else root.querySelector('#titleCard')!.prepend(buttons); }
+  if (explore && ride) { const buttons = vehicleButtons(ride); const modeChoice = root.querySelector('#modeChoice'); if (modeChoice) modeChoice.after(buttons); else root.querySelector('#titleControls')!.before(buttons); }
   document.body.appendChild(root);
   for (const [id, choice] of [['modeMail', 'mail'], ['modeExplore', 'explore'], ['modeFired', 'fired']] as const) root.querySelector('#' + id)?.addEventListener('click', () => { if (choice !== mode || daily) chooseMode(choice); });
   root.querySelector('#modeDaily')?.addEventListener('click', () => { if (!daily) chooseDaily(); });
@@ -210,18 +232,20 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   });
   // Keys must not drive the car while the card is up.
   root.addEventListener('keydown', (ev) => ev.stopPropagation());
-  start.focus();
+  start.focus({ preventScroll: true });
+  root.scrollTop = 0; root.querySelector('#titleCard')!.scrollTop = 0;
   return {
-    setRadio(available) { root.querySelector('dl')!.innerHTML = rows(available); },
-    setDevice(pad) { if (pad !== padRows) { padRows = pad; root.querySelector('dl')!.innerHTML = rows(radioAvailable); } },
+    setRadio(available) { radioAvailable = available; root.querySelector('#titleControls')!.innerHTML = controls(); },
+    setDevice(pad) { if (pad !== padRows) { padRows = pad; root.querySelector('#titleControls')!.innerHTML = controls(); } },
     open() {
-      if (explore) root.querySelector('dl')!.innerHTML = rows(radioAvailable);
+      if (explore) root.querySelector('#titleControls')!.innerHTML = controls();
       refreshWays();
       start.textContent = ride?.kind === 'horse' ? (started ? 'Back to riding' : 'Start riding') : explore || areaName ? (started ? 'Back to driving' : 'Start driving') : daily ? (started ? 'Back to today’s run' : 'Start today’s run') : started ? 'Back to the shift' : 'Start the shift';
       legal.hidden = false;
       credits.setAttribute('aria-expanded', 'true');
       root.hidden = false;
-      start.focus();
+      start.focus({ preventScroll: true });
+      root.scrollTop = 0; root.querySelector('#titleCard')!.scrollTop = 0;
     },
   };
 }

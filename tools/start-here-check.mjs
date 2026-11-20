@@ -129,6 +129,7 @@ async function ui(m) {
         children=[];listeners={};disabled=false;id='';textContent='';attributes={};
         append(...nodes){for(const n of nodes){this.children.push(n);n.parent=this;}}
         appendChild(node){this.append(node);return node;}
+        after(node){const i=this.parent.children.indexOf(this);this.parent.children.splice(i+1,0,node);node.parent=this.parent;}
         before(node){const i=this.parent.children.indexOf(this);this.parent.children.splice(i,0,node);node.parent=this.parent;}
         setAttribute(k,v){this.attributes[k]=v;}
         addEventListener(k,fn){(this.listeners[k]??=[]).push(fn);}
@@ -156,7 +157,7 @@ async function ui(m) {
       assert.equal(asks,0,scenario+': never on load');
       const button=find(body,'titleStartHere');
       if(['mail','1884','query-1884','no-title'].includes(scenario)){assert.equal(button,undefined,scenario);continue;}
-      assert.match(find(body,'startHereHint').textContent,/Drive with others.*other players see your car/);
+      assert.match(find(body,'startHereHint').textContent,/^Use your location to start on a nearby public road\. Other players see your car if you drive with others\.$/);
       if(scenario==='pending'){assert.equal(store.values.size,0);microtasks.forEach(fn=>fn());}
       else button.click();
       if(scenario==='normal-first'){button.click();assert.equal(asks,1,'double tap one request');start.click();answer();}

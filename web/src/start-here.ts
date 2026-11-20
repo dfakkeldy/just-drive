@@ -195,7 +195,7 @@ export function startHereAddress(site: Site, area: string, url: URL, multiplayer
 
 const CSS = `
 #startHere{min-width:0;margin-top:10px;overflow-wrap:anywhere}
-#startHere button{box-sizing:border-box;width:100%;min-height:44px;border:1px solid #a7d9bc;border-radius:7px;background:transparent;color:inherit;font:700 14px system-ui,sans-serif;padding:7px;cursor:pointer}
+#startHere button{box-sizing:border-box;width:100%;min-height:44px;border:0;border-radius:0;background:transparent;color:inherit;font:700 14px system-ui,sans-serif;padding:7px 0;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 #startHere button:focus-visible{outline:3px solid white;outline-offset:2px}
 #startHere button:disabled{opacity:.6;cursor:wait}
 #startHere small{display:block;margin-top:4px;font:12px/1.35 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
@@ -233,7 +233,7 @@ const CSS = `
  #title.justDrive #titleCard>*{grid-column:1/3!important}
  #title.justDrive #titleCard>dl{grid-column:3!important;grid-row:1/6!important}
  #title.justDrive #titleCard>.mpControl{grid-column:3!important;grid-row:6/9!important;box-sizing:border-box;min-height:0;max-height:min(120px,calc(100dvh - 260px));overflow-y:auto}
- #title.justDrive #titleCard>#startHere{display:contents}
+ #title.justDrive #titleCard>#startHere{display:block}
  #title.justDrive #titleCard>#titleStart{grid-column:1!important;grid-row:6!important;font-size:14px;margin-top:6px}
  #title.justDrive #titleStartHere{grid-column:2;grid-row:6;margin-top:6px}
  #title.justDrive #startHereHint{grid-column:1/3;grid-row:7;font-size:11px}
@@ -260,9 +260,9 @@ export function startHere(options: StartHereOptions): void {
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
   const group = Object.assign(document.createElement('div'), { id: 'startHere' });
   const button = Object.assign(document.createElement('button'), { id: 'titleStartHere', type: 'button', textContent: 'Start where I am' });
-  const hint = Object.assign(document.createElement('small'), { id: 'startHereHint', textContent: 'With “Drive with others” on, other players see your car where you start.' });
+  const hint = Object.assign(document.createElement('small'), { id: 'startHereHint', textContent: 'Use your location to start on a nearby public road. Other players see your car if you drive with others.' });
   button.setAttribute('aria-describedby', hint.id);
-  group.append(button, hint); start.before(group);
+  group.append(button, hint); start.after(group);
   const status = Object.assign(document.createElement('p'), { id: 'startHereStatus' });
   status.setAttribute('role', 'status'); document.body.appendChild(status);
   let generation = 0, messageTimer: ReturnType<typeof setTimeout> | undefined;

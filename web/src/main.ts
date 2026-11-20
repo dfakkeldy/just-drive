@@ -1,3 +1,4 @@
+import { installSettings } from './settings';
 import { Sidewalks } from './sidewalks';
 import { loadSidewalkData } from './sidewalks-cache';
 import { StreamCulverts } from './stream-culverts';
@@ -1449,7 +1450,9 @@ function syncPauseUI(): void {
     // Rooms do not pause, so they have no replay; a fresh start has nothing to show yet.
     const watch = document.getElementById('pauseReplay') as HTMLButtonElement;
     watch.hidden = room; watch.disabled = !replay.available;
-    document.getElementById('pauseState')!.textContent = [document.getElementById('shiftHud')?.textContent || (mailMode ? 'Shift ready' : 'Free drive'), document.querySelector('#racePanel [role=status]')?.textContent || 'No active race'].join('\n');
+    const station = radio?.tunedDial;
+    document.getElementById('pauseTitle')!.textContent = `Pulled over${vehicle.roadName ? ' on ' + vehicle.roadName : ''}`;
+    document.getElementById('pauseState')!.textContent = [document.getElementById('shiftHud')?.textContent || (mailMode ? 'Shift ready' : 'Free drive'), document.querySelector('#racePanel [role=status]')?.textContent || 'No active race', station ? radio!.stationNamed(station)! : 'Radio quiet', hudLine({ ...hudState, hintsHidden: false })].join('\n');
     document.getElementById('resumeGame')!.focus();
   }
   syncRoadScenePause();
@@ -1484,6 +1487,7 @@ document.getElementById('pauseReplay')!.addEventListener('click', () => { openRe
 for (const element of [pauseScreen, pauseButton]) for (const event of ['pointerdown', 'pointerup', 'pointermove']) element.addEventListener(event, ev => ev.stopPropagation());
 
 // ---- settings -----------------------------------------------------------------------------
+installSettings();
 {
   const slider = document.getElementById('exag') as HTMLInputElement, label = document.getElementById('exagValue')!;
   const panel = document.getElementById('settings')!;
@@ -2032,6 +2036,8 @@ function frame(now: number) {
     // Behind the title card the readout said "0 km/h off the map" while the land was still loading: keep it out of sight.
     hud.style.visibility = started ? '' : 'hidden';
     hudState.mode = mode; hudState.fps = fps;
+    hud.dataset.fps = fps.toFixed(0);
+    hudState.hintsHidden = drove >= 60;
     if (mode === 'drive') {
       hudState.speed = vehicle.speed; hudState.activeTouchSpeedLimit = scenePaused() ? 0 : vehicle.activeTouchSpeedLimit; hudState.surfaceName = vehicle.surfaceName; hudState.airborne = vehicle.airborne;
       hudState.roadName = vehicle.roadName ?? (yardSite?.surface(vehicle.x, vehicle.z) ? 'works yard' : homeSite?.surface(vehicle.x, vehicle.z) ? 'house yard' : 'off the map');
