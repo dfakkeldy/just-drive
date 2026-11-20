@@ -155,6 +155,8 @@ export class Grass {
   private scanX = Infinity;
   private scanZ = Infinity;
   private retry = 0;
+  /** Active patches still planting, filled each frame in map order (far patches, then dense ones). One reused list. */
+  private readonly planting: Patch[] = [];
   /** Dev readouts let a browser check the actual work budget, rather than guess from frame rate. */
   buildMaxMs = 0;
 
@@ -346,7 +348,10 @@ export class Grass {
       }
     }
     // The 16 m core has a 4 m fade. Other patches do not build or draw the dense set.
+    const pending = this.planting;
+    pending.length = 0;
     for (const [key, patch] of this.patches) {
+      if (patch.active && patch.cursor < patch.side * patch.side) pending.push(patch);
       const dx = Math.max(patch.x - cx, 0, cx - patch.x - CELL);
       const dz = Math.max(patch.z - cz, 0, cz - patch.z - CELL);
       const near = Math.hypot(dx, dz) < NEAR && camera.position.y - (ground ?? 0) < NEAR;
@@ -360,13 +365,15 @@ export class Grass {
       if (distance > NEAR + CELL || !this.patches.has(key)) {
         if (patch.mesh) { this.group.remove(patch.mesh); patch.mesh.geometry.dispose(); }
         this.dense.delete(key);
-      }
+      } else if (patch.active && patch.cursor < patch.side * patch.side) pending.push(patch);
     }
-    const pending = [...this.patches.values(), ...this.dense.values()].filter((p) => p.active && p.cursor < p.side * p.side);
-    pending.sort((a, b) => Math.hypot(a.x + CELL / 2 - cx, a.z + CELL / 2 - cz) - Math.hypot(b.x + CELL / 2 - cx, b.z + CELL / 2 - cz));
-    for (const patch of pending) {
-      if (performance.now() - start >= 1.5) break;
-      this.populate(patch, start + 1.5);
+    if (pending.length > 0) {
+      pending.sort((a, b) => Math.hypot(a.x + CELL / 2 - cx, a.z + CELL / 2 - cz) - Math.hypot(b.x + CELL / 2 - cx, b.z + CELL / 2 - cz));
+      for (const patch of pending) {
+        if (performance.now() - start >= 1.5) break;
+        this.populate(patch, start + 1.5);
+      }
+      pending.length = 0;   // keep no patch alive until the next visible frame
     }
     this.buildMaxMs = Math.max(this.buildMaxMs, performance.now() - start);
   }
