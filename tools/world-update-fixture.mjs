@@ -101,11 +101,18 @@ export function spy(source, ending = false, dev = true, absent = false, override
 }
 
 // Editable, ongoing oracle. A world() line pins order, arguments and the dev cost key together.
+// A quiet() line is a world entry whose part is absent here: it pins the dev cost key and makes no call.
 const call = (name, ...args) => ({ name, args });
 const world = (name, ...args) => ({ name: name === 'mirror' ? 'waterReflections' : name, args, world: name });
+const quiet = name => ({ name, args: [], world: name, quiet: true });
+// The wharves, the November roads and the canal are absent in the base scenarios; `spied` gives them spies.
+const wharfLines = spied => spied ? [world('wharves', '@camera.position'), world('novemberRoads', '@terrain', '@camera.position')] : [quiet('wharves'), quiet('novemberRoads')];
+const canalLine = spied => spied ? world('canal', 0, '@vehicle', true) : quiet('canal');
 const input = { throttle: 0, steer: 0, handbrake: true };
-export function expectedDrive({ started = true, hidden = false, fly = false, absent = false } = {}) {
+export function expectedDrive({ started = true, hidden = false, fly = false, absent = false, spied = false, mirror = false } = {}) {
   const dt = started && !hidden ? .05 : 0, playing = started && !fly, paused = !started || hidden;
+  // `mirror` gives the Point Tupper driver, the boss and the far views spies (they run just before the water).
+  const mirrorLines = mirror ? [world('aiDriver', '@camera', '@vehicle', true, 'car'), world('boss', '@camera', dt, false, started, fly || hidden)] : [quiet('aiDriver'), quiet('boss')];
   return [
     call('quality', .05, true), call('roadScene.pause', paused), ...(fly ? [call('fishing.cancel')] : []),
     call('radio.wind', false, 0), call('radio.place', 1003, 1995), call('interiors', .05, input, '@vehicle', playing), call('pad.show', !fly),
@@ -115,24 +122,24 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
     world('yard', dt, '@vehicle', '@camera.position'), world('yardDog', dt, '@vehicle'), world('home', '@camera.position', '@vehicle'),
     world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050), world('village', '@camera.position', 1050), world('hawkesbury', '@camera.position', 1050), world('mabouMain', '@camera.position', 1050), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
     call('camera.matrix'), call('sky', '@camera.position'), call('shared.time', 1.05), call('beacon', dt ? 2.2 : .15),
-    world('terrain', '@camera', paused), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
-    world('trees', '@terrain.drawnFine', '@camera.position'), call('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
+    world('terrain', '@camera', paused), ...wharfLines(spied), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
+    world('trees', '@terrain.drawnFine', '@camera.position'), world('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
     call('placesUI', '@vehicle', playing), call('journey', .05, playing), call('relief', dt, playing ? 6 : 0, '@vehicle', playing),
     call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars', null), call('radio', playing, false),
-    world('history', '@camera.position', dt), world('roads', '@camera.position'), world('sidewalks'), world('edge', '@camera.position'), world('mineSite', '@camera.position'),
+    world('history', '@camera.position', dt), world('roads', '@camera.position'), canalLine(spied), world('sidewalks'), world('edge', '@camera.position'), world('mineSite', '@camera.position'),
     world('deckhand', dt, '@vehicle', '@camera.position'), world('fishing', dt, '@camera.position'), world('roadScene', '@camera'), world('schoolBus', '@camera'), world('ambientTraffic', '@camera', '@vehicle', true), world('roadAnimals', dt, '@vehicle', true), world('props', '@camera', dt), world('yardProps', '@camera', dt), world('harbourLights', 1.05), world('tall', '@camera', 1.05), call('shift', started ? .05 : 0, '@vehicle'),
     ...(!fly ? [call('shadowFocus', 3, 4, 5), call('sunShadows', .05, '@shadowFocus', 0, paused)] : []),
-    world('grass', .05, '@camera', 3, 5, .7, '@vehicleSpec'), call('clipping', !absent), call('multiplayer', .05, '@camera', dt > 0 && !fly),
-    world('mirror', '@camera'), call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'),
+    world('grass', .05, '@camera', 3, 5, .7, '@vehicleSpec'), call('clipping', !absent),
+    ...mirrorLines, world('multiplayer', .05, '@camera', dt > 0 && !fly), mirror ? world('farVisibility', '@camera', 1.05) : quiet('farVisibility'), world('mirror', '@camera'), call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'),
     call('page.ready', true), call('phoneMailHud', '@shift', '@vehicle', playing && !paused), call('raf', '@function'),
   ];
 }
-export function expectedEnding({ absent = false } = {}) {
+export function expectedEnding({ absent = false, spied = false } = {}) {
   return [
     call('quality', .05, true), call('roadScene.pause', true), call('endings', .05), call('pad.show', false), call('radio', false, true),
-    call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), world('trees', '@terrain.drawnFine', '@camera.position'),
+    call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), ...wharfLines(spied), world('trees', '@terrain.drawnFine', '@camera.position'),
     world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'), world('landmarks', '@camera'), world('roads', '@camera.position'),
-    world('props', '@camera', 0), world('sidewalks'), world('fishing', 0, '@camera.position'), call('clipping', !absent), world('mirror', '@camera'),
+    canalLine(spied), world('props', '@camera', 0), world('sidewalks'), world('fishing', 0, '@camera.position'), call('clipping', !absent), world('mirror', '@camera'),
     call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'), call('raf', '@function'),
   ];
 }
@@ -150,22 +157,57 @@ function traceOf(result) {
   const indexes = {};
   return result.calls.map(name => { const i = indexes[name] ?? 0; indexes[name] = i + 1; return { name, args: normalized(result.args[name][i], result.context) }; });
 }
-const scenarios = [{}, { ending: true }, { hidden: true }, { started: false }, { fly: true }, { absent: true }, { ending: true, absent: true }];
+// `spied` gives the wharves, the November roads and the canal real spies: their calls keep the old nested order.
+const scenarios = [{}, { ending: true }, { hidden: true }, { started: false }, { fly: true }, { absent: true }, { ending: true, absent: true },
+  { spied: true }, { ending: true, spied: true }, { mirror: true }, { mirror: true, fly: true }, { mirror: true, hidden: true }, { mirror: true, started: false }];
 function run(source, s, dev = true) {
-  return spy(source, s.ending, dev, s.absent, {
-    ...(s.hidden ? { document: { hidden: true, body: { classList: { toggle() {} } } } } : {}), ...(s.started === false ? { started: false } : {}),
-    ...(s.fly ? { mode: 'fly', sunShadows: null } : {}),
+  return spy(source, s.ending, dev, s.absent, (context, trace) => {
+    Object.assign(context, {
+      ...(s.hidden ? { document: { hidden: true, body: { classList: { toggle() {} } } } } : {}), ...(s.started === false ? { started: false } : {}),
+      ...(s.fly ? { mode: 'fly', sunShadows: null } : {}),
+    });
+    if (s.spied) for (const name of ['wharves', 'novemberRoads', 'canal']) context[name] = { update: trace(name) };
+    if (s.mirror) Object.assign(context, { aiDriver: { update: trace('aiDriver'), onRoad: [] }, boss: { update: trace('boss'), driver: { onRoad: [] }, mapSpot: null },
+      farVisibility: { update: trace('farVisibility'), settle() {} }, aiDriverOn: () => true, garageEntry: { id: 'car' }, aiCars: [] });
   });
+}
+// Optional ending entries: the fleet sits in the landscape segment after terrain, the stunt park after the quarry.
+// Neither may move trees off the terrain updates or props off roads and the canal (grok-bots#1308 C1).
+const optionalEnding = {
+  fleet: { after: 'trees', calls: [call('fleet.refresh', 0), call('fleet.draw', '@camera.position'), call('fleet.hud')],
+    give: (context, trace) => { context.fleet = { busy: false, refresh: trace('fleet.refresh'), draw: trace('fleet.draw') }; context.updateFleetHud = trace('fleet.hud'); } },
+  stuntPark: { after: 'quarry', calls: [call('stuntPark', 0, '@vehicle', '@camera.position')],
+    give: (context, trace) => { context.stuntPark = { update: trace('stuntPark') }; } },
+};
+export function verifyOptionalEnding(source) {
+  for (const names of [['fleet'], ['stuntPark'], ['fleet', 'stuntPark']]) for (const dev of [true, false]) {
+    const result = spy(source, true, dev, false, (context, trace) => { for (const name of names) optionalEnding[name].give(context, trace); });
+    const expected = expectedEnding().filter(x => !x.quiet);
+    for (const name of names) {
+      const at = expected.findIndex(x => x.name === optionalEnding[name].after);
+      expected.splice(at + 1, 0, ...optionalEnding[name].calls);
+    }
+    const label = 'ending with ' + names.join(' and ');
+    const calls = result.calls;
+    assert.equal(calls[calls.indexOf('terrain') + 1], 'trees', label + ': trees right after terrain in the frame call order');
+    assert.ok(calls.indexOf('roads') < calls.indexOf('props') && calls.indexOf('landmarks') < calls.indexOf('props'), label + ': roads before props in the frame call order: ' + JSON.stringify(calls));
+    assert.deepEqual(calls, expected.map(x => x.name), label + ' frame call order');
+    assert.deepEqual(traceOf(result), expected.map(({ name, args }) => ({ name, args })), label + ' frame arguments');
+    if (dev) for (const name of names) assert.ok(Number.isFinite(result.cost[name]), label + ': dev cost has ' + name);
+  }
 }
 export function verify(source, { drive = expectedDrive, ending = expectedEnding } = {}) {
   for (const s of scenarios) for (const dev of [true, false]) {
     const result = run(source, s, dev), expected = (s.ending ? ending : drive)(s);
-    const filtered = s.absent ? expected.filter(x => !optional.has(x.name)) : expected;
+    const filtered = (s.absent ? expected.filter(x => !optional.has(x.name)) : expected).filter(x => !x.quiet);
     const label = s.ending ? 'ending' : 'drive';
     assert.deepEqual(result.calls, filtered.map(x => x.name), label + ' frame call order');
     assert.deepEqual(traceOf(result), filtered.map(({ name, args }) => ({ name, args })), label + ' frame arguments');
-    assert.equal(result.iterators, 0, label + ' frame creates zero array iterators');
-    assert.equal(result.iteratorSteps, 0, label + ' frame uses zero iterator steps');
+    // The boss's AI car list is rebuilt with for...of, as it always was: only frames without a boss count iterators.
+    if (!s.mirror) {
+      assert.equal(result.iterators, 0, label + ' frame creates zero array iterators');
+      assert.equal(result.iteratorSteps, 0, label + ' frame uses zero iterator steps');
+    }
     if (dev) {
       assert.ok(result.cost, 'dev cost exists');
       assert.deepEqual(Object.keys(result.cost), expected.filter(x => x.world).map(x => x.world), 'dev cost entries');
@@ -174,6 +216,7 @@ export function verify(source, { drive = expectedDrive, ending = expectedEnding 
     } else assert.equal(result.cost, undefined, 'production has no cost');
   }
   hotLoop(source);
+  verifyOptionalEnding(source);
   if(source.includes("name: 'fleet'")){
     const checkFleet = code => {
       const result=spy(code,false,true,false,(context,trace)=>{
@@ -203,7 +246,7 @@ export function verify(source, { drive = expectedDrive, ending = expectedEnding 
     const line=source.split('\n').find(l=>l.includes("name: 'trafficSignals'"));
     assert.throws(()=>checkSignals(source.replace(line,'')),/traffic signals follow roads/,'missing signal update must fail');
   }
-  return { drive: drive().map(x => x.name), ending: ending().map(x => x.name), iteratorsPerFrame: 0, iteratorStepsPerFrame: 0 };
+  return { drive: drive().filter(x => !x.quiet).map(x => x.name), ending: ending().filter(x => !x.quiet).map(x => x.name), iteratorsPerFrame: 0, iteratorStepsPerFrame: 0 };
 }
 function hotLoop(source) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
@@ -243,9 +286,14 @@ export function mutated(source, name) {
   assert.ok(terrain && coast, 'mutation anchors');
   const mutations = {
     swap: source.replace(terrain, '__SWAP__').replace(coast, terrain).replace('__SWAP__', coast),
-    ending: source.replace("segment: 'landscape', ending: true, endingPosition: 1", "segment: 'landscape', ending: false, endingPosition: 1"),
+    ending: source.replace("segment: 'landscape', ending: true, endingAfter: 'novemberRoads'", "segment: 'landscape', ending: false, endingAfter: 'novemberRoads'"),
     drop: source.replace(terrain, ''),
-    treesPosition: source.replace('endingPosition: 1, ', ''), propsPosition: source.replace('endingPosition: 8, ', ''),
+    treesPosition: source.replace("endingAfter: 'novemberRoads', ", ''), propsPosition: source.replace("endingAfter: 'canal', ", ''),
+    // Anchors one entry too early: only the spied scenarios see trees before the wharves, or props before the canal.
+    treesAnchor: source.replace("endingAfter: 'novemberRoads', ", "endingAfter: 'terrain', "), propsAnchor: source.replace("endingAfter: 'canal', ", "endingAfter: 'roads', "),
+    anchor: source.replace("endingAfter: 'canal', ", "endingAfter: 'kanal', "),
+    // The boss reads the frame's flags through the world table: a stale flag shows only in its arguments.
+    bossHeld: source.replace('mirrorFlags.bossHeld = !driving ||', 'mirrorFlags.bossHeld = false ||'),
     mirror: source.replace("segment: 'mirror', ending: true", "segment: 'mirror', ending: false"),
     iterator: source.replace('for (let i = 0; i < list.length; i++) {\n    const entry = list[i];', 'for (const entry of list) {'),
   };
@@ -253,10 +301,11 @@ export function mutated(source, name) {
   return mutations[name];
 }
 export function mutations() {
-  for (const name of ['swap', 'ending', 'drop', 'mirror', 'treesPosition', 'propsPosition', 'iterator']) {
+  for (const name of ['swap', 'ending', 'drop', 'mirror', 'treesPosition', 'propsPosition', 'treesAnchor', 'propsAnchor', 'anchor', 'bossHeld', 'iterator']) {
     const result = spawnSync(process.execPath, [new URL(import.meta.url).pathname, '--mutation', name], { encoding: 'utf8' });
     assert.equal(result.status, 1, name + ' must exit 1');
-    assert.match(result.stderr, name === 'iterator' ? /zero array iterators/ : /frame call order/, 'actual frame guard rejects ' + name);
+    assert.match(result.stderr, name === 'iterator' ? /zero array iterators/ : name === 'anchor' ? /ending anchor 'kanal' for 'props' is missing/
+      : name.endsWith('Anchor') ? /frame call order|dev cost entries/ : name === 'bossHeld' ? /frame arguments/ : /frame call order/, 'actual frame guard rejects ' + name);
     console.log(`KILLED ${name}: actual frame spy, exit ${result.status}`);
   }
   const bad = spawnSync(process.execPath, [new URL(import.meta.url).pathname, '--inconclusive'], { encoding: 'utf8' });
@@ -267,7 +316,7 @@ export function mutations() {
 export function experiment(source) {
   const anchor = source.split('\n').find(l => l.includes("name: 'grass'"));
   assert.ok(anchor);
-  const entry = "  { ...(import.meta.env.DEV ? { name: 'dummy' } : {}), segment: 'grass', ending: false, update: () => dummy.update(camera) },";
+  const entry = "  { name: 'dummy', segment: 'grass', ending: false, update: () => dummy.update(camera) },";
   const changed = source.replace(anchor, entry + '\n' + anchor);
   const drive = s => {
     const expected = expectedDrive(s), i = expected.findIndex(x => x.world === 'grass');
