@@ -30,6 +30,28 @@ const point = (p: [number, number]): Point => ({ x: p[0], z: p[1] });
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.z - b.z);
 const first = (p: Piece) => point(p.road.pts[p.reverse ? p.road.pts.length - 1 : 0]);
 const last = (p: Piece) => point(p.road.pts[p.reverse ? 0 : p.road.pts.length - 1]);
+const isPublicRoad = (road: Road) => road.kind >= 1 && road.kind <= 3;
+const MOUTH_RADIUS = 6;
+const JUNCTION_TOLERANCE = 1;
+const EXTRA_ROUTE_DISTANCE = 2;
+
+/** A rural box at a side lane's mouth can be served from the route road. */
+function laneMouthHit(roads: Roads, lines: ReadonlyMap<string, Line>, box: Point, side: RoadHit): RoadHit | null {
+  if (side.road.bridge) return null;
+  const ends = [side.road.pts[0], side.road.pts[side.road.pts.length - 1]];
+  // Keep the route road within reach and close enough to be a plausible approach.
+  const reach = Math.min(MOUTH_RADIUS, side.dist + EXTRA_ROUTE_DISTANCE);
+  let best: RoadHit | null = null;
+  for (const end of ends) {
+    if (distance(box, point(end)) > MOUTH_RADIUS) continue;
+    const junction = roads.nearest(end[0], end[1], JUNCTION_TOLERANCE,
+      (r) => isPublicRoad(r) && !r.bridge && r.name !== null && lines.has(r.name));
+    if (!junction) continue;
+    const hit = roads.nearest(box.x, box.z, reach, (r) => isPublicRoad(r) && r.name === junction.road.name);
+    if (hit && (!best || hit.dist < best.dist)) best = hit;
+  }
+  return best;
+}
 
 /** Join the baked pieces (including bridges) before measuring distance along a named road. */
 function line(roads: Road[]): Line | null {
@@ -85,11 +107,11 @@ export class Route {
     if (!enabled) { this.late = -1; return; }
     const lines = new Map<string, Line>();
     for (const name of new Set(ROUTE_ROADS)) {
-      const l = line(roads.roads.filter((r) => r.name === name && r.kind >= 1 && r.kind <= 3));
+      const l = line(roads.roads.filter((r) => r.name === name && isPublicRoad(r)));
       if (l) lines.set(name, l);
     }
     const highway = lines.get('Highway 19');
-    const centre = roads.nearest(0, 0, 1000, (r) => r.name === 'Highway 19' && r.kind >= 1 && r.kind <= 3);
+    const centre = roads.nearest(0, 0, 1000, (r) => r.name === 'Highway 19' && isPublicRoad(r));
     const village = highway && centre ? along(highway, centre) : 0;
     // Easting increases from the southwest end to the northeast end of Highway 19.
     const highwayForward = !highway || highway.start.x < highway.end.x;
@@ -104,8 +126,11 @@ export class Route {
     if (props) {
       const targets = [...props.mail, ...props.sites];
       targets.forEach((p, index) => {
-        // Filter public roads BEFORE testing membership, so a neighbour's road wins fairly.
-        const hit = roads.nearest(p.x, p.z, 256, (r) => r.kind >= 1 && r.kind <= 3);
+        // Start with the closest public road. Only rural boxes get the lane-mouth rule.
+        const nearest = roads.nearest(p.x, p.z, 256, isPublicRoad);
+        if (!nearest) return;
+        const isRoute = nearest.road.name !== null && lines.has(nearest.road.name);
+        const hit = isRoute || index >= props.mail.length ? nearest : laneMouthHit(roads, lines, p, nearest);
         if (!hit?.road.name) return;
         if (Route.reachable && !(Route.reachable(p.x, p.z) && Route.reachable(hit.x, hit.z))) return;
         const l = lines.get(hit.road.name); if (!l) return;

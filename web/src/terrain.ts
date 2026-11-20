@@ -109,6 +109,9 @@ class Tile {
 interface DecodedTile { tile: Tile; px: Uint8ClampedArray; bakedRoad: Uint8ClampedArray | null }
 
 interface Grid { index: THREE.BufferAttribute; uvs: THREE.BufferAttribute }
+/** One reused record of a tile's main-view state while the mirror draws. Empty between mirror passes. */
+interface MirrorSave { tile: Tile | null; mesh: THREE.Mesh | null; visible: boolean; hide: THREE.Vector4; geometry: THREE.BufferGeometry | null; material: THREE.Material | THREE.Material[] | null }
+type MirrorHeld = { [K in keyof MirrorSave]: NonNullable<MirrorSave[K]> };
 
 async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
   const bmp = await createImageBitmap(await readFile(base, path), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
@@ -314,6 +317,8 @@ export class Terrain {
   private lastEvict = 0;
   private spare: Tile[] = [];
   private frustum = new THREE.Frustum();
+  private readonly mirrorFrustum = new THREE.Frustum();
+  private readonly mirrorSaved: MirrorSave[] = [];
   private m4 = new THREE.Matrix4();
   drawn = 0;
   /** A tile splits into finer tiles when the camera is nearer than split x its size. */
@@ -1266,19 +1271,23 @@ export class Terrain {
 
   /** Mirror visibility has its own frustum. Restore the main visibility and quadrant masks even on failure. */
   withReflection(camera: THREE.PerspectiveCamera, focus: THREE.Vector3, draw: () => void): void {
-    const frustum = this.frustum.clone(), drawn = this.drawn;
-    const saved: { tile: Tile; mesh: THREE.Mesh; visible: boolean; hide: THREE.Vector4; geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[] }[] = [];
+    // The save records are reused each frame: no new frustum, record or mask vector per resident tile.
+    const frustum = this.mirrorFrustum.copy(this.frustum), drawn = this.drawn, saved = this.mirrorSaved;
+    let count = 0;
     for (const t of this.tiles.values()) if (t.mesh) {
       const mesh = t.mesh, hide = (mesh.material as THREE.ShaderMaterial).uniforms.hideQuad.value as THREE.Vector4;
-      saved.push({ tile: t, mesh, visible: mesh.visible, hide: hide.clone(), geometry: mesh.geometry, material: mesh.material });
+      const state = saved[count] ??= { tile: null, mesh: null, visible: false, hide: new THREE.Vector4(), geometry: null, material: null };
+      count++;
+      state.tile = t; state.mesh = mesh; state.visible = mesh.visible; state.hide.copy(hide); state.geometry = mesh.geometry; state.material = mesh.material;
       mesh.visible = false;
     }
     this.mirrorFocus.value.set(focus.x, focus.z);
     this.frustum.setFromProjectionMatrix(this.m4.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     try {
       this.visit(0, 0, 0, focus, true);
-      for (const state of saved) if (state.mesh.visible) {
-        const t = state.tile;
+      for (let k = 0; k < count; k++) {
+        const state = saved[k] as MirrorHeld, t = state.tile;
+        if (!state.mesh.visible) continue;
         if (!t.mirror) {
           // One coarser grid step, without moving the tile or changing its LOD boundaries.
           const seg = segFor(t.level), n = seg + 3;
@@ -1308,9 +1317,12 @@ export class Terrain {
       }
       draw();
     } finally {
-      for (const state of saved) {
+      for (let k = 0; k < count; k++) {
+        const state = saved[k] as MirrorHeld;
         state.mesh.visible = state.visible; state.mesh.geometry = state.geometry; state.mesh.material = state.material;
         ((state.material as THREE.ShaderMaterial).uniforms.hideQuad.value as THREE.Vector4).copy(state.hide);
+        // Drop the references, so a tile evicted later is not kept alive by its old record.
+        saved[k].tile = saved[k].mesh = saved[k].geometry = saved[k].material = null;
       }
       this.frustum.copy(frustum); this.drawn = drawn;
     }
