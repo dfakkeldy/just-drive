@@ -525,13 +525,14 @@ const sidewalkData = await sidewalkDataReady;
 // An optional layer: a failure or a refused budget warns once and leaves the town as main draws it (no clearing, no pole moves).
 const sidewalks = (() => {
   if (!ERA.modern || !sidewalkData) return null;
-  const bridgeWalks = new Map(roads.bridgeWalks);   // the layer widens bridge parapets while it builds
   try {
     const layer = new Sidewalks(sidewalkData, manifest.village, terrain, roads, LOW);
-    if (!layer.audit.disabled) return layer;
+    if (!layer.audit.disabled) {
+      for (const [id, walk] of layer.bridgeReservations) roads.bridgeWalks.set(id, walk);   // its walks widen the bridge parapets
+      return layer;
+    }
     layer.dispose();
   } catch (error) { console.warn('Sidewalks failed to start; skipping sidewalks', error); }
-  roads.bridgeWalks.clear(); for (const [id, walk] of bridgeWalks) roads.bridgeWalks.set(id, walk);
   return null;
 })();
 if (sidewalks) { terrain.sidewalks=sidewalks; scene.add(sidewalks.group); if (mabouSite) mabouSite.sidewalkLayer = true; }
