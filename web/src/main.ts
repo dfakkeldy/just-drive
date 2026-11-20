@@ -117,7 +117,7 @@ import { createTitle } from './title';
 import { Endings } from './ending';
 import { YardJob } from './yard-job';
 import { FishingSite } from './fishing-site';
-import { wharfBuildings, wharfBuildingStyles } from './mabou-wharf-buildings';
+import { wharfBuildingArt } from './mabou-wharf-buildings';
 import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
@@ -358,14 +358,14 @@ const bakedBuildingStyles = ERA.modern && manifest.buildingStyles
   ? await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
     .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
   : undefined;
-const modernWharf = ERA.modern && AREA.fishing;
-const buildingStyles = buildingAppearance(astra, LOW, sunDir,
-  modernWharf ? { ...bakedBuildingStyles, ...wharfBuildingStyles } : bakedBuildingStyles);
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
 const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
-const sceneryBuildings = modernWharf && drawnBuildings ? wharfBuildings(drawnBuildings) : drawnBuildings;
+const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir,
+  wharfArt ? { ...bakedBuildingStyles, ...wharfArt.styles } : bakedBuildingStyles);
+const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
 const buildings = ERA.modern && sceneryBuildings ? new Buildings(mabouSite ? mabouSite.drawn(sceneryBuildings) : sceneryBuildings,
   manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts

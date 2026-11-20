@@ -6,6 +6,8 @@ type Fixture = {
   art: (m: Mesher, low: boolean) => void;
 };
 
+export const WHARF_HOIST = { u: 11.55, v: 16, half: .31, halfWidth: .36, yaw: 0 };
+
 const steel: RGB = [.24, .28, .29];
 const zinc: RGB = [.53, .58, .58];
 const timber: RGB = [.29, .20, .13];
@@ -26,7 +28,7 @@ function beam(m: Mesher, a: Point, b: Point, width: number, colour: RGB): void {
 function grid(m: Mesher, width: number, depth: number, bottom: number, height: number, colour: RGB, low: boolean): void {
   for (const side of [-1, 1]) {
     const x = side * width / 2, z = side * depth / 2;
-    const stride = low ? .26 : .15;
+    const stride = low ? .33 : .19;
     for (let px = -width / 2; px < width / 2; px += stride)
       m.quad([[px, bottom, z], [px + .019, bottom, z], [px + .019, bottom + height, z], [px, bottom + height, z]], colour);
     for (let pz = -depth / 2; pz < depth / 2; pz += stride)
@@ -207,7 +209,7 @@ export function addWharfProps(m: Mesher, ground: readonly number[], deck: number
   }
 
   // Hoist on the inner edge of the working pier. The hook hangs clear over the basin.
-  const u = 11.55, v = 16.0, mast = deck + 5.6;
+  const { u, v } = WHARF_HOIST, mast = deck + 5.6;
   const head: Point = [u + 4.5, deck + 4.5, v + 1.65];
   m.at(u, deck, v);
   m.box(0, .09, 0, .71, .18, .62, steel);

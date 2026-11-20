@@ -5,7 +5,7 @@ import { sampleDeparture, departureDuration, type BoatCourseSample } from './fis
 import { FishingJudge, type FishingSample } from './fishing-rules';
 import { BOARD, FishingSite, PARK, WHARF } from './fishing-site';
 import { pushOut, type Solid } from './parked';
-import { WHARF_ANCHORS, WHARF_FIXTURES } from './mabou-wharf-props';
+import { WHARF_ANCHORS, WHARF_FIXTURES, WHARF_HOIST } from './mabou-wharf-props';
 import type { Terrain } from './terrain';
 import type { Vehicle } from './vehicle';
 
@@ -65,6 +65,7 @@ export class Fishing {
     const solid=(u:number,v:number,half:number,halfWidth:number,heading:number)=>this.solids.push({x:this.site.x+u,z:this.site.z+v,half,halfWidth,heading});
     // The low timber guards are real solids at every physics substep, not a painted edge.
     solid(2,37,27,.145,Math.PI);solid(12,37,27,.145,Math.PI);solid(7,64,5,.145,Math.PI/2);
+    solid(WHARF_HOIST.u, WHARF_HOIST.v, WHARF_HOIST.half, WHARF_HOIST.halfWidth, WHARF_HOIST.yaw);
     this.shoreSolids = WHARF_FIXTURES.map(({u,v,half,halfWidth,yaw}, i) => ({
       ground: ground[i], bounds: [{ x: this.site.x + u, z: this.site.z + v, half, halfWidth, heading: yaw }],
     }));

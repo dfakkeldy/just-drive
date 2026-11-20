@@ -1,17 +1,23 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { WHARF_FIXTURES } from '../../web/src/mabou-wharf-props.ts';
+import { WHARF_FIXTURES, WHARF_HOIST } from '../../web/src/mabou-wharf-props.ts';
 import { WHARF, PARK } from '../../web/src/fishing-site.ts';
-import { wharfBuildings } from '../../web/src/mabou-wharf-buildings.ts';
+import { wharfBuildingArt } from '../../web/src/mabou-wharf-buildings.ts';
 
 const land = name => JSON.parse(readFileSync('data/baked/terrain/' + name, 'utf8'));
 const local = ([e, n]) => [e - WHARF.e, WHARF.n - n];
 const roads = land('roads.json').roads.filter(r => r.pts.some(([e, n]) =>
   Math.abs(e - WHARF.e) < 120 && Math.abs(n - WHARF.n) < 120));
 assert.ok(roads.some(r => r.id === 922), 'The wharf access road must be present');
-const buildings = wharfBuildings(land('buildings.json').buildings
-  .filter(b => b.id === 8 || b.id === 73));
+const surveyed = land('buildings.json').buildings;
+const art = wharfBuildingArt(surveyed);
+const buildings = art.buildings.filter(b => art.styles[b.id]);
 assert.equal(buildings.length, 3);
+for (const [e, n] of [[618685.9, 5104819.5], [618653.2, 5104764.4]]) {
+  const building = buildings.find(b => b.kind === 'barn' && Math.hypot(b.x - e, b.y - n) <= 4);
+  assert.ok(building && art.styles[building.id], 'styles belong to the two wharf barns');
+}
+assert.ok(WHARF_HOIST.u - WHARF_HOIST.halfWidth > PARK.u + 1.5, 'hoist stays outside the pier drive line');
 
 function gap(point, { u, v, yaw, half, halfWidth }) {
   const x = point[0] - u, z = point[1] - v;

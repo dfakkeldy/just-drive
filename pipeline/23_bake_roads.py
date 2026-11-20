@@ -366,14 +366,12 @@ def main():
             print(f"Road bed: {moved['roadsMoved']} roads moved over {moved['metresMoved']:,} m; junctions whole "
                   f"({moved['junctions']['nodes']:,} nodes, ends apart by at most {moved['junctions']['endsApart']} m); "
                   f"{len(moved['junctionsHeld'])} odd junctions held", flush=True)
-            # The mailboxes are decided on the lines as they were (29_bake_props.py); keep those lines for it.
-
         # <<< road-ground trial
         # Observed driveways come after the bed move: their lines are final, and they join the moved public road.
         roads = nov18_driveways(roads, AREA.id)
         corrected = correct_nov19_roads(roads, AREA.id)
         if os.environ.get('MMM_ROAD_BED') == '1':
-            # Split the saved pre-move line at the same vertex. The new gravel piece keeps the rest.
+            # Step 29 uses the lines before the bed move. Split that saved line at the same vertex.
             for road in roads:
                 before.setdefault(road['id'], road['pts'])
             if corrected is not roads:
