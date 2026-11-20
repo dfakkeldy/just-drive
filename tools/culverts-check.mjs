@@ -23,6 +23,31 @@ function bridgeOracle(c,roads,extra=0,spans=[]){
 }
 try {
  const {streamCrossings,Streams,StreamCulverts,ArchCulvert,Vector3,Box3,Group,ModernBridges}=await load();
+ // The early-exit reach test must decide every crossing exactly as the full nearest-point scan did: random lines with
+ // one or no points, NaN and infinite points, NaN, infinite and negative widths, through the bridge, own-road and cover tests.
+ {const nearest=(x,z,road)=>{let best=Infinity,point={x,z};for(let k=1;k<road.pts.length;k++){const[ax,az]=road.pts[k-1],dx=road.pts[k][0]-ax,dz=road.pts[k][1]-az;
+   const t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz||1))),px=ax+t*dx,pz=az+t*dz,d=Math.hypot(x-px,z-pz);if(d<best){best=d;point={x:px,z:pz};}}return point;};
+  const distance=(x,z,road)=>{const p=nearest(x,z,road);return Math.hypot(p.x-x,p.z-z);};
+  // The scan this replaced, kept here as the oracle (stream-culverts.ts before the early exit).
+  const reference=(streams,roads,spans)=>{const bridges=[...roads.filter(r=>r.bridge),...spans],byId=new Map(roads.map(r=>[r.id,r]));
+   const boxes=roads.filter(r=>!r.bridge&&r.pts.length>1).map(r=>{let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;for(const[x,z]of r.pts){x0=Math.min(x0,x);z0=Math.min(z0,z);x1=Math.max(x1,x);z1=Math.max(z1,z);}const pad=r.halfWidth+.5;return{r,x0:x0-pad,z0:z0-pad,x1:x1+pad,z1:z1+pad};});
+   const out=[];for(const pipe of streams.pipes){const road=byId.get(pipe.road);if(!road||road.bridge)continue;const dx=pipe.endX-pipe.x,dz=pipe.endZ-pipe.z,x=(pipe.x+pipe.endX)/2,z=(pipe.z+pipe.endZ)/2,length=Math.hypot(dx,dz),scale=Math.min(1,pipe.dia/4.1);
+    if(bridges.some(b=>distance(x,z,b)<=b.halfWidth+Math.hypot(length/2+.3,6.1*scale)+3))continue;let own=false;
+    for(let d=0;d<=Math.ceil(length)&&!own;d++){const t=Math.min(1,d/length);own=distance(pipe.x+dx*t,pipe.z+dz*t,road)<=road.halfWidth+.5;}if(!own)continue;
+    const side=.5*4.822*scale,nx=-dz/length,nz=dx/length,near=boxes.filter(b=>Math.max(pipe.x,pipe.endX)+side>=b.x0&&Math.min(pipe.x,pipe.endX)-side<=b.x1&&Math.max(pipe.z,pipe.endZ)+side>=b.z0&&Math.min(pipe.z,pipe.endZ)-side<=b.z1).map(b=>b.r),cover=[];
+    for(let d=0;d<=Math.ceil(length);d++){const t=Math.min(1,d/length);for(const o of[0,-side,side]){const px=pipe.x+dx*t+nx*o,pz=pipe.z+dz*t+nz*o;if(near.some(r=>distance(px,pz,r)<=r.halfWidth+.5))cover.push({x:px,z:pz});}}
+    out.push({x,z,heading:Math.atan2(dx,-dz),scale,length,road:road.id,cover});}return out;};
+  let seed=7,crossings=0;const rnd=()=>(seed=(seed*1103515245+12345)%2147483648)/2147483648;
+  for(let round=0;round<600;round++){
+   const lines=[];for(let i=0;i<12;i++){const n=Math.floor(rnd()*5),pts=[];let x=rnd()*400-200,z=rnd()*400-200;for(let k=0;k<n;k++){pts.push([x,z]);x+=rnd()*60-30;z+=rnd()*60-30;}
+    if(rnd()<.05&&pts.length)pts[0]=[NaN,pts[0][1]];if(round%3===0&&pts.length&&rnd()<.1)pts[pts.length-1]=[rnd()<.5?Infinity:-Infinity,pts[pts.length-1][1]];
+    lines.push({pts,halfWidth:rnd()<.03?NaN:round%5===0&&rnd()<.1?(rnd()<.5?Infinity:-5):rnd()*8});}
+   const straight={id:1,kind:2,halfWidth:3,pts:[[-300,0],[300,0]],bridge:false},crooked=lines.filter(l=>l.pts.length).map((l,i)=>({id:10+i,kind:2,halfWidth:l.halfWidth,pts:l.pts,bridge:false}));
+   const pipes=[];for(let i=0;i<40;i++){const x=rnd()<.02?Infinity:rnd()*500-250,len=rnd()*30+1;pipes.push({road:i%2||!crooked.length?1:crooked[i%crooked.length].id,x,z:-len/2,endX:x,endZ:len/2,dia:rnd()*5});}
+   const roads=[straight,...crooked],got=streamCrossings({pipes},roads,lines);
+   assert.deepEqual(got,reference({pipes},roads,lines),'early-exit reach test matches the nearest-point scan, round '+round);crossings+=got.length;
+  }
+  console.log('PASS early-exit culvert reach test equals the nearest-point scan on',crossings,'random crossings');}
  const road={id:1,halfWidth:3,bridge:false,kind:2,name:null,pts:[[-20,0],[20,0]]};
  const data={streams:[{id:1,name:'',half:.5,pts:[[0,-20],[0,0],[0,20]]}],culverts:[{stream:1,road:1,a:[0,-6],b:[0,6],dia:1,mapped:true}]};
  const streams=new Streams(data,[0,0]);

@@ -24,12 +24,12 @@ export function streamCrossings(streams: Streams, roads: readonly Road[], spans:
     const dx = pipe.endX - pipe.x, dz = pipe.endZ - pipe.z;
     const x = (pipe.x + pipe.endX) / 2, z = (pipe.z + pipe.endZ) / 2;
     const length = Math.hypot(dx, dz), scale = Math.min(1, pipe.dia / 4.1);
-    if (bridges.some(b => distanceToRoad(x, z, b) <= b.halfWidth + Math.hypot(length / 2 + .3, 6.1 * scale) + 3)) continue;
+    if (bridges.some(b => withinRoad(x, z, b, b.halfWidth + Math.hypot(length / 2 + .3, 6.1 * scale) + 3))) continue;
     // A later road-bed bake moved one shipped pair away from its road. It is no longer a crossing.
     let own = false;
     for (let d = 0; d <= Math.ceil(length) && !own; d++) {
       const t = Math.min(1, d / length);
-      own = distanceToRoad(pipe.x + dx * t, pipe.z + dz * t, road) <= road.halfWidth + .5;
+      own = withinRoad(pipe.x + dx * t, pipe.z + dz * t, road, road.halfWidth + .5);
     }
     if (!own) continue;
     // Fill and crown samples under every road the arch passes beneath, not only the road it was mapped to: a long
@@ -43,7 +43,7 @@ export function streamCrossings(streams: Streams, roads: readonly Road[], spans:
       const t = Math.min(1, d / length);
       for (const o of [0, -side, side]) {
         const px = pipe.x + dx * t + nx * o, pz = pipe.z + dz * t + nz * o;
-        if (near.some(r => distanceToRoad(px, pz, r) <= r.halfWidth + .5)) cover.push({ x: px, z: pz });
+        if (near.some(r => withinRoad(px, pz, r, r.halfWidth + .5))) cover.push({ x: px, z: pz });
       }
     }
     result.push({ x, z, heading: Math.atan2(dx, -dz), scale, length, road: road.id, cover });
@@ -51,19 +51,28 @@ export function streamCrossings(streams: Streams, roads: readonly Road[], spans:
   return result;
 }
 
-function nearestRoadPoint(x: number, z: number, road: Pick<BridgeLine, 'pts'>): { x: number; z: number } {
-  let best = Infinity, point = { x, z };
-  for (let k = 1; k < road.pts.length; k++) {
-    const [ax, az] = road.pts[k - 1], dx = road.pts[k][0] - ax, dz = road.pts[k][1] - az;
+/** Exactly `distance from (x, z) to the nearest point of the line <= reach`, as the old nearest-point scan decided it,
+ *  but it stops at the first segment within reach and skips any segment whose box lies more than reach + 1 m away along
+ *  an axis (such a segment is farther than reach, so it could never decide the answer). Like that scan, a line with no
+ *  finite segment distance (fewer than two points, or only NaN or infinite points) counts as distance 0. This runs for
+ *  every culvert before the first frame: the full scan over every bridge and road point took most of a second. */
+function withinRoad(x: number, z: number, line: Pick<BridgeLine, 'pts'>, reach: number): boolean {
+  const pts = line.pts, far = reach + 1;
+  let finite = false;
+  for (let k = 1; k < pts.length; k++) {
+    const ax = pts[k - 1][0], az = pts[k - 1][1], bx = pts[k][0], bz = pts[k][1];
+    if (x < ax - far && x < bx - far || x > ax + far && x > bx + far || z < az - far && z < bz - far || z > az + far && z > bz + far) {
+      // A skipped segment has a finite distance whenever the point and its own ends are finite.
+      if (x - x + z - z + ax - ax + az - az + bx - bx + bz - bz === 0) finite = true;
+      continue;
+    }
+    const dx = bx - ax, dz = bz - az;
     const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
-    const px = ax + t * dx, pz = az + t * dz, distance = Math.hypot(x - px, z - pz);
-    if (distance < best) { best = distance; point = { x: px, z: pz }; }
+    const distance = Math.hypot(x - (ax + t * dx), z - (az + t * dz));
+    if (distance <= reach) return true;
+    if (distance < Infinity) finite = true;
   }
-  return point;
-}
-function distanceToRoad(x: number, z: number, road: Pick<BridgeLine, 'pts'>): number {
-  const p = nearestRoadPoint(x, z, road);
-  return Math.hypot(p.x - x, p.z - z);
+  return !finite && 0 <= reach;
 }
 
 /** Scenery only. Wheels keep the surveyed land contact, including washboard and potholes. */
