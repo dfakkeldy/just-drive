@@ -990,23 +990,38 @@ export class Terrain {
   meshHeightAt(x: number, z: number, drawnOnly = false): number | null {
     let t = this.find(x, z);
     if(drawnOnly && this.cartRoads)t=this.drawnTile(x,z);
-    else if(drawnOnly){
-      t=null;
-      for(const q of this.tiles.values())if(q.mesh?.visible && x>=q.x0 && x<q.x0+q.size && z>=q.z0 && z<q.z0+q.size && (!t || q.level>t.level)){
-        const quarter=(x>=q.x0+q.size/2?1:0)+(z>=q.z0+q.size/2?2:0);
-        if((q.mesh.material as THREE.ShaderMaterial).uniforms.hideQuad.value.getComponent(quarter)<.5)t=q;
-      }
-    }
+    else if(drawnOnly)t=this.drawnBoundsTile(x,z);
     if (!t?.mesh) return null;
     this.use(t);
-    const seg = segFor(t.level), n = seg + 3;
-    const fa = (x - t.x0) * seg / t.size, fb = (z - t.z0) * seg / t.size;
-    const a = Math.min(Math.floor(fa), seg - 1), b = Math.min(Math.floor(fb), seg - 1);
-    const u = fa - a, v = fb - b, i = (b + 1) * n + a + 1;
-    const p = t.mesh.geometry.getAttribute('position');
-    const h00 = p.getY(i), h10 = p.getY(i + 1), h01 = p.getY(i + n), h11 = p.getY(i + n + 1);
-    return u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v
-      : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
+    return this.triangleHeight(t, x, z);
+  }
+  /** The finest visible tile whose bounds hold the point and whose quarter is shown. Tiles are found by key, a few
+   *  lookups per sample, not a walk over every loaded tile. The test is each tile's own bounds, not the floor() key,
+   *  so a point on a seam gets the same tile as before; neighbouring tiles of other levels can differ there. */
+  private drawnBoundsTile(x:number,z:number):Tile|null {
+    const m=this.manifest,e=x+m.village[0]-m.origin[0],s=z-(m.village[1]-m.origin[1]);
+    const holds=(q:Tile)=>x>=q.x0&&x<q.x0+q.size&&z>=q.z0&&z<q.z0+q.size;
+    for(let level=this.maxLevel;level>=0;level--){
+      // Rounding can move floor() one tile from the tile whose bounds hold the point, so try the neighbours too.
+      const size=m.size/2**level,i0=Math.floor(e/size),j0=Math.floor(s/size);
+      let t:Tile|null=null,count=0;
+      for(let di=-1;di<=1;di++){
+        const i=i0+di,x0=m.origin[0]+i*size-m.village[0];if(!(x>=x0&&x<x0+size))continue;
+        for(let dj=-1;dj<=1;dj++){
+          const j=j0+dj,z0=m.village[1]-(m.origin[1]-j*size);if(!(z>=z0&&z<z0+size))continue;
+          const q=this.tiles.get(`${level}/${i}_${j}`);
+          if(q?.mesh?.visible&&holds(q)&&this.shownAt(q,x,z)){t=q;count++;}
+        }
+      }
+      if(count===1)return t;
+      // Two tiles of one level can overlap by a rounding step at a seam: keep the first in map order, as the scan did.
+      if(count>1){for(const q of this.tiles.values())if(q.level===level&&q.mesh?.visible&&holds(q)&&this.shownAt(q,x,z))return q;}
+    }
+    return null;
+  }
+  private shownAt(q:Tile,x:number,z:number):boolean {
+    const quarter=(x>=q.x0+q.size/2?1:0)+(z>=q.z0+q.size/2?2:0);
+    return (q.mesh!.material as THREE.ShaderMaterial).uniforms.hideQuad.value.getComponent(quarter)<.5;
   }
   /** Mapped driving data only; this never enters a ground or deck query. */
   protectedRoadAt(x:number,z:number):boolean {
