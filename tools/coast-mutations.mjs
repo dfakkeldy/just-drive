@@ -21,7 +21,7 @@ const mutations=[
  ['wrong ground reader','coast','block.x,block.z,true','block.x,block.z,false'],
  ['away work','coast','if(!this.group.visible)return;',''],
  ['missing frustum cull','coast','this.mesh.frustumCulled=true','this.mesh.frustumCulled=false'],
- ['discarded parent used as ground','terrain','if((q.mesh.material as THREE.ShaderMaterial).uniforms.hideQuad.value.getComponent(quarter)<.5)t=q;','t=q;'],
+ ['discarded parent used as ground','terrain','return (q.mesh!.material as THREE.ShaderMaterial).uniforms.hideQuad.value.getComponent(quarter)<.5;','return true;'],
  ['mirror block clip missing','coast','clipping:true','clipping:false'],
  ['extra shadow draw','coast','this.mesh.userData.shadowSet=true','this.mesh.userData.shadowSet=false'],
  ['missing block batch','coast','this.mesh.count=this.blocks.length','this.mesh.count=0'],

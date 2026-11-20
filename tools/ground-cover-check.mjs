@@ -84,16 +84,28 @@ function quarryPainting(TerrainClass,QuarryClass=QuarrySite){
  assert.equal(read().mineral,undefined,'source class cannot override invisible quarry paint');
  paint.setW(opposite,.7);terrain.groundClassAt=()=>0;
  terrain.cartRoads=true;assert.equal(read().mineral,undefined,'historical terrain keeps its own handling');terrain.cartRoads=false;
- const relocate=(east,north,h)=>{
-  tile.x0=east-site.village[0]-51.5;tile.z0=site.village[1]-north-51.5;tile.ground.fill(h);
-  return read(tile.x0+51.5,tile.z0+51.5);
+ const relocate=(east,north,h,x=51.5,z=51.5)=>{
+  tile.x0=east-site.village[0]-x;tile.z0=site.village[1]-north-z;tile.ground.fill(h);
+  return read(tile.x0+x,tile.z0+z);
  };
  tile.road=new Uint8ClampedArray(257*257*4);
  for(let i=0;i<tile.road.length;i+=4)tile.road.set([255,200,8,0],i);
  assert.equal(relocate(632236.5,5064409.5,76).mineral,true,'upper pad halo outside the drawn style supplies mineral');
  const style=new Uint8Array(257*257*4);uniforms.tSiteStyle={value:{image:{data:style}}};
- style[(52*257+52)*4+3]=1;
- assert.equal(relocate(632234.5,5064414.5,76).mineral,undefined,'off-road painted pad keeps its surface');
+ const alphaByte=(83*257+191)*4+3;
+ paint.array.fill(.385);
+ style[alphaByte]=255;
+ assert.equal(relocate(632234.5,5064414.5,76,191.25,83.125).mineral,undefined,'asymmetric bilinear style preserves the painted pad');
+ // 16/255 in the northwest texel gives about .041 blended alpha, as on the north rim transect.
+ style[alphaByte]=16;
+ assert.equal(relocate(632241.25,5064594.25,73,191.25,83.125).mineral,true,'faded north rim supplies gravel');
+ style[alphaByte]=255;
+ // A quarter texel north of the opaque texel blends to .55 alpha, so .661 fill leaves .30 visible gypsum: gravel. A nearest
+ // read (alpha 1), or a fade applied to the paint weight before the fill curve, would give grass here.
+ assert.equal(relocate(632234.5,5064414.5,76,191.25,83.267).mineral,true,'half-faded style keeps gravel where the gypsum still shows');
+ paint.array.fill(0);paint.setW(opposite,.7);
+ style.fill(255);
+ assert.equal(relocate(632269,5064428,74).mineral,undefined,'opaque off-road run-up keeps its surface');
  style.fill(0);
  for(let i=0;i<tile.road.length;i+=4)tile.road.set([128,200,8,0],i);
  for(const [e,n,label] of [[632309,5064470,'drawn pad'],[632269,5064428,'run-up']]){
@@ -120,8 +132,11 @@ function quarryPainting(TerrainClass,QuarryClass=QuarrySite){
 quarryPainting(Terrain);console.log('PASS quarry paint triangles feed contact while preserving terrain and authored surfaces');
 assert.match(TERRAIN_FRAG,/mineralFill=smoothstep\(\.05,\.60,max\(vCoast\.x,vCoast\.w\)\)\*\(1\.0-tree\)/);
 assert.match(TERRAIN_FRAG,/float tree = smoothstep\(1\.8, 3\.5, canopy\) \* hull/);
-assert.ok(TERRAIN_FRAG.includes(`ring *= 1.0 - step(${QUARRY_GRAVEL_FILL}, mineralFill);`),'grass root shading uses the visible gypsum cutoff');
-assert.match(TERRAIN_FRAG,/if \(siteStyle\.a <= 0\.001\)\s*#endif\s*if \(canopy <= 1\.6\) ring/,'painted park keeps its grass root shade');
+assert.ok(TERRAIN_FRAG.includes(`ring *= 1.0 - step(${QUARRY_GRAVEL_FILL}, exposedGypsum);`),'grass root shading uses the visible gypsum cutoff');
+assert.match(TERRAIN_FRAG,/float exposedGypsum = mineralFill;\s*#ifdef STUNT_PARK\s*exposedGypsum \*= 1\.0 - siteStyle\.a;\s*#endif\s*if \(canopy <= 1\.6\) ring/,'park style fades exposed gypsum only in the park shader');
+// The CPU style read above is bilinear at the grid's texel centres; these two GPU facts make that true.
+assert.ok(readFileSync('web/src/terrain.ts','utf8').includes('styleTex.minFilter=styleTex.magFilter=THREE.LinearFilter'),'the park style texture is filtered linearly, as the CPU style read assumes');
+assert.ok(readFileSync('web/src/stunt-ground-style.ts','utf8').includes('texture2D(tSiteStyle,(vUv*256.0+0.5)/257.0)'),'the park shader samples style at the terrain grid texel centres');
 assert.equal(quarryGypsumFill(.6,1.8,1),1);
 assert.equal(quarryGypsumFill(.6,3.5,1),0);
 assert.equal(QUARRY_GRAVEL_FILL,.25);
@@ -246,10 +261,16 @@ if(process.argv.includes('--mutations')){
  const bikeApi=await import('data:text/javascript;base64,'+Buffer.from(bikeBundle.outputFiles[0].text).toString('base64'));
  assert.throws(()=>bikeDriving(bikeApi.BikeRide),{message:/confirmed mineral uses the bike gravel response/});
  console.log('KILLED bike mineral gravel feel removed');
+ const surfaceGrid=`const t = this.find(x, z);
+    if (!t) return null;
+    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;`;
  for(const [name,filename,exportName,anchor,check,expected,replacement=''] of [
   ['quarry paint contact','terrain','Terrain','quarry ? this.quarryMineral(t,x,z,out,lerp) : ',quarryPainting,/authored gypsum supplies off-road mineral/],
   ['quarry actual canopy protection','terrain','Terrain',' || surface.canopy>1.6',quarryPainting,/canopy above the brush threshold keeps brush handling/],
   ['quarry authored protections','terrain','Terrain','return site.quarryFloorAllowsMineral(x,z,h);',quarryPainting,/talus takes priority over contact paint/,'return true;'],
+  ['quarry style axes swapped','terrain','Terrain',surfaceGrid,quarryPainting,/asymmetric bilinear style preserves the painted pad/,surfaceGrid.replace('x - t.x0','z - t.z0').replace('fb = ((z - t.z0)','fb = ((x - t.x0)')],
+  ['quarry style uses sample count as scale','terrain','Terrain',surfaceGrid,quarryPainting,/asymmetric bilinear style preserves the painted pad/,surfaceGrid.replaceAll('* T','* S')],
+  ['quarry style rejects any alpha','terrain','Terrain','const styleAlpha=style?lerp(style,4,3)/255:0;',quarryPainting,/faded north rim supplies gravel/,'if(style&&lerp(style,4,3)>0)return false;const styleAlpha=0;'],
   ['quarry pad rectangle restored','quarry-site','QuarrySite','&&!lakeAt(e,n)',Site=>quarryPainting(Terrain,Site),/upper pad halo outside the drawn style supplies mineral/,'&&!onCoursePad(e,n)&&!lakeAt(e,n)'],
   ['class 6 outside the quarry','terrain','Terrain','&&this.coast.contains(x,z)',quarryPainting,/published class 6 still works outside the authored quarry/],
   ['grass mineral exclusion','grass','Grass','surface.mineral || ',quarryGrass,/gypsum contact suppresses old-cover tufts/],
