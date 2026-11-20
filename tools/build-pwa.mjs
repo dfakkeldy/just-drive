@@ -54,7 +54,8 @@ write(site + manifestUrl, JSON.stringify(manifest));
 let page = normalizedPage(just ? justPage(originalPage, AREAS[0]) : originalPage,appUrl);
 // The chunks app.js imports at its top start with it: the page names them, so they do not wait for app.js to arrive.
 page = page.replace('</head>', preloads.map(p => `<link rel="modulepreload" href="/offline/chunks/${p.name}">\n`).join('') + '</head>');
-const pageKey = hash(JSON.stringify({ builtAt, page, dataRevision, app:hash(app), chunks:chunkUrls.map(url => file(url).hash), manifest, icons:shellIconHashes() }));
+// app.js names every chunk by its content hash, so the app's hash pins the chunks too.
+const pageKey = hash(JSON.stringify({ builtAt, page, dataRevision, app:hash(app), manifest, icons:shellIconHashes() }));
 function shellIconHashes() { return ['180','192','512'].map(n=>file(`/offline/icons/icon-${n}.png`).hash).concat(file('/offline/icons/maskable-512.png').hash); }
 page = page.replace('</head>', `<link rel="manifest" href="${manifestUrl}">\n<link rel="apple-touch-icon" sizes="180x180" href="/offline/icons/icon-180.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="${just ? 'Just Drive: Mabou' : 'Mabou Mail'}">\n<meta name="mmm-offline-bytes" content="${files.reduce((n,f)=>n+f.bytes,0)}">\n<meta name="mmm-page" content="${pageKey}">\n<meta name="mmm-build" content="${hash(app).slice(0,16)}">\n</head>`);
 // The preview includes the saved page, app, manifest and icons as well as terrain and radio.
