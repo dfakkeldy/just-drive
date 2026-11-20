@@ -333,3 +333,20 @@ def correct_nov19_roads(roads, area):
         result[i] = dict(lane, pavement='gravel')
     result[index:index+1] = [dict(road, pts=road['pts'][:cut+1], correction=key), gravel]
     return result
+
+
+
+def finish_observed_roads(roads, area, before=None):
+    """Apply final surveyed lines and preserve the corresponding pre-move stations."""
+    # Observed driveways use final lines that join the moved public road.
+    roads = nov18_driveways(roads, area)
+    corrected = correct_nov19_roads(roads, area)
+    if before is not None:
+        for road in roads:
+            before.setdefault(road['id'], road['pts'])
+        if corrected is not roads:
+            paved, gravel = [r for r in corrected if r.get('correction') == '19nov:Mabou Harbour Road']
+            line = before[paved['id']]
+            cut = len(paved['pts']) - 1
+            before[paved['id']], before[gravel['id']] = line[:cut+1], line[cut:]
+    return corrected
