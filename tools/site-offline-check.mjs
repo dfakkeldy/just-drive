@@ -123,7 +123,7 @@ assert.throws(()=>savedRadio(wrong.Radio),error=>error.code==='ERR_ASSERTION'&&e
 console.log('PASS real Radio constructor: unknown/empty saved dial uses each brand start; valid/off kept; station-zero mutant rejected');
 const forbidden=/\b(mail|post|route|shift|carrier|delivery)\b/i;
 const sample=PUBLIC_STATIONS.find(s=>forbidden.test(s.name))??PUBLIC_STATIONS[0];
-const radio={station:`♪ ${sample.dial} ${sample.name}`,track:sample.tracks[0].title};radio.text=radio.station+'\n'+radio.track;
+const radio={station:`${sample.dial} ${sample.name}`,track:sample.tracks[0].title};radio.text=radio.station+'\n'+radio.track;
 for(const extra of ['', ' mail', ' post', ' delivery']){
  const chip={...radio,text:radio.text+extra},scanned=radioTextToCheck('Driving\n'+chip.text,chip,plan);
  assert.equal(forbidden.test(scanned.body)||forbidden.test(scanned.radio),!!extra,'only catalogue fields are allowed in the chip');

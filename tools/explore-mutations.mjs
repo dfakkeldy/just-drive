@@ -44,7 +44,7 @@ const mutations=[
  ['portrait controls','phone','phone 390 keeps driving and places controls',[one('places-ui.ts','body.tcOn #placesButton{position:static;','body.tcOn #placesButton{display:none!important;position:static;')]],
  ['portrait touch','phone','phone 390 real touch places jump',[one('places-ui.ts','this.jumpTo(hit.x, hit.z, hit.heading);','this.close(false);')]],
  ['village click jump','explore','touch/click jump village rests on road',[one('places-ui.ts','this.jumpTo(hit.x, hit.z, hit.heading);',"this.jumpTo(hit.x + (place.id === 'village' ? 20 : 0), hit.z, hit.heading);")]],
- ['mail title preservation','mail','mail title keeps its own heading, key rows, start button and satire notice',[one('title.ts','Preview build · a route you cannot win','Broken mail tagline')]],
+ ['mail title preservation','mail','mail title keeps its own heading, key rows, start button and satire notice',[one('title.ts',"'A route you cannot win'","'Broken mail tagline'")]],
  ['mail visibility preservation','mail','mail visible elements equal base',[one('main.ts','if (!mailMode) prepareExplore();','prepareExplore();')]],
  ['mail places exclusion','mail','mail has no places UI',[one('main.ts','const placesUI = !mailMode && !bare && (placeList.length || (ERA.modern && !!tallKey)) ?','const placesUI = !bare && (placeList.length || (ERA.modern && !!tallKey)) ?')]],
  ['mail session preservation','mail','clean profile still starts mail day one',[one('main.ts','const mail = mailMode ?','const mail = false ?')]],
