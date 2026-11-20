@@ -63,7 +63,7 @@ p{margin:0 0 14px}
 .maker{display:grid;gap:4px;padding:0}
 .maker .serif{font-size:24px}
 .credits{font-size:14px;line-height:1.55;color:var(--dim)}
-.credits p{margin:0 0 10px}.credits{margin-top:56px}.credits summary{cursor:pointer;min-height:44px}.credits summary h2{display:inline;font-size:24px}.signoff{margin-top:32px;font:22px/1.4 "Iowan Old Style",Palatino,Georgia,serif}
+.credits p{margin:0 0 10px}#credits{margin-top:56px}.credits{margin-top:0}.credits summary{cursor:pointer;min-height:44px}.signoff{margin-top:32px;font:22px/1.4 "Iowan Old Style",Palatino,Georgia,serif}
 footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:14px;color:var(--quiet);display:flex;flex-wrap:wrap;gap:8px 20px}
 /* Help pages: one column, a contents strip and control tables. */
 .page.plain{grid-template-columns:minmax(0,1fr)}
@@ -125,7 +125,8 @@ const MADE = (brand) => `<section aria-labelledby="made">
 <p>A road in the wrong place, or you want a place removed? Write to <a href="mailto:${CONTACT}">${CONTACT}</a>.</p>
 <p class="dim">No ads and no accounts. Your settings stay in your own browser. When you drive with others, the server passes car positions between players. A room retains its current race course, player IDs, checkpoint progress and times until the last driver leaves. It keeps no position history.</p>
 ${brand === 'mail' ? `<p class="dim" id="boardData">Today’s board keeps only what you post with <b>Post my result</b> at the end of Today’s run: the name you chose, your points, discipline step, time, bingo squares and vehicle, and a number your device makes from its own random secret for that one board, so a device posts once a day. The number for one day cannot be matched to the number for another (the name you choose can, if you keep it). That number stays with the day’s board even if your row drops out of the top 100. No account, no email and no network address. Each day’s board keeps its top 100, and the whole board is deleted after 60 days.</p>\n` : ''}</section>
-<details open class="credits" aria-labelledby="credits"><summary><h2 id="credits">Credits and data</h2></summary>
+<h2 id="credits">Credits and data</h2>
+<details open class="credits" aria-labelledby="credits"><summary>Show credits and data</summary>
 ${LAND_CREDITS}
 ${FAR_CREDITS}
 ${PUBLIC_MUSIC_CREDIT}

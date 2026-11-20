@@ -117,10 +117,12 @@ export class RoomCountdown {
       if (this.node.hidden !== !visible) this.node.hidden = !visible;
       if (visible) {
         const count = untilStart! > 0 ? String(Math.min(5, Math.ceil(untilStart! / 1000))) : 'GO';
-        if (this.node.textContent !== count) this.node.textContent = count;
-        const pill = document.getElementById('mpChip');
-        const box = pill && !pill.hidden ? pill.getBoundingClientRect() : null;
-        if (box?.height) { const top = `${box.bottom + 10}px`; if (this.node.style.top !== top) this.node.style.top = top; }
+        if (this.node.textContent !== count) {
+          this.node.textContent = count;
+          const pill = document.getElementById('mpChip');
+          const box = pill && !pill.hidden ? pill.getBoundingClientRect() : null;
+          if (box?.height) { const top = `${box.bottom + 10}px`; if (this.node.style.top !== top) this.node.style.top = top; }
+        }
       }
     }
     return untilStart === null ? '' : untilStart > 3000 ? '5' : untilStart > 0 ? '3' : untilStart > -1000 ? 'GO' : '';

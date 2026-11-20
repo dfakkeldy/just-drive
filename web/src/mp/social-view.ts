@@ -17,6 +17,8 @@ export class SocialView {
   private readonly log = document.createElement('div');
   private readonly point = new Vector3();
   private shown = '';
+  private tilesBox: DOMRect | null = null;
+  private readonly resize = () => { this.tilesBox = null; };
   private readonly chatButton = document.createElement('button');
   private readonly grid = document.createElement('div');
   private readonly bubbleNodes = new Map<number, Bubble>();
@@ -52,6 +54,7 @@ export class SocialView {
     this.root.addEventListener('keydown', ev => ev.stopPropagation());
     this.bubbles.id = 'mpChatBubbles'; this.bubbles.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:5;overflow:hidden';
     document.body.append(this.bubbles); addEventListener('keydown', this.key, true);
+    addEventListener('resize', this.resize);
   }
   update(camera: Camera, peers: readonly PeerView[], me: {x:number;y:number;z:number}, tags: readonly TagBox[] = []): void {
     const now = performance.now();
@@ -78,7 +81,9 @@ export class SocialView {
     for (const tag of tags) { this.sortedTags.push(tag); this.tagsById.set(tag.id, tag); }
     this.sortedTags.sort(lowerTagFirst);
     const phone = document.body.classList.contains('tcOn');
-    const tiles = phone && latest.size ? document.getElementById('phoneTop')?.getBoundingClientRect() : null;
+    if (!phone) this.tilesBox = null;
+    if (phone && latest.size && !this.tilesBox) this.tilesBox = document.getElementById('phoneTop')?.getBoundingClientRect() ?? null;
+    const tiles = phone ? this.tilesBox : null;
     for (const c of latest.values()) {
       let entry = this.bubbleNodes.get(c.id);
       if (!entry) {
@@ -116,5 +121,5 @@ export class SocialView {
       bubble.style.top = `${bottom}px`;
     }
   }
-  dispose(): void { removeEventListener('keydown',this.key,true); removeRoomCard(this.root); this.bubbles.remove(); }
+  dispose(): void { removeEventListener('resize',this.resize); removeEventListener('keydown',this.key,true); removeRoomCard(this.root); this.bubbles.remove(); }
 }

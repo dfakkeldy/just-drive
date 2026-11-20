@@ -131,9 +131,9 @@ body:not(.tcOn):not(.droneSticks) :is(#bigMapButton,#pauseButton,#placesButton,#
 body:not(.tcOn):not(.droneSticks) #gear{right:max(10px,env(safe-area-inset-right,0px));width:44px;font-size:20px}
 body:not(.tcOn):not(.droneSticks) #placesButton{right:calc(62px + env(safe-area-inset-right,0px));width:86px}
 body:not(.tcOn):not(.droneSticks) #pauseButton{right:calc(62px + env(safe-area-inset-right,0px));width:80px}
-body:not(.tcOn):not(.droneSticks):has(#placesButton:not([hidden])) #pauseButton{right:calc(156px + env(safe-area-inset-right,0px))}
+body:not(.tcOn):not(.droneSticks):not(.indoorOn):has(#placesButton:not([hidden])) #pauseButton{right:calc(156px + env(safe-area-inset-right,0px))}
 body:not(.tcOn):not(.droneSticks) #bigMapButton{right:calc(150px + env(safe-area-inset-right,0px));width:70px}
-body:not(.tcOn):not(.droneSticks):has(#placesButton:not([hidden])) #bigMapButton{right:calc(244px + env(safe-area-inset-right,0px))}
+body:not(.tcOn):not(.droneSticks):not(.indoorOn):has(#placesButton:not([hidden])) #bigMapButton{right:calc(244px + env(safe-area-inset-right,0px))}
 body:is(.tcOn,.droneSticks) :is(#placesButton,#gear){border:1px solid rgba(238,242,246,.3);background:var(--panel);border-radius:10px;color:var(--ink);font-family:var(--mono)}
 body.droneSticks :is(#gear,#pauseButton){min-width:56px;min-height:56px}
 body:not(.gameStarted) :is(#cameraButton,#mailButton){display:none!important}

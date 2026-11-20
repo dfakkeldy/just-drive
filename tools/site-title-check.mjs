@@ -67,7 +67,7 @@ const groundCredits=[
  '<p>Environment and Climate Change Canada - <span lang="fr">Environnement et Changement climatique Canada</span>. (2025) “Canadian National Wetlands Inventory - <span lang="fr">Inventaire national des terres humides du Canada</span>”. Available at: <a href="https://open.canada.ca/data/en/dataset/d5af4ac5-ebdb-4645-bb0a-8ec5cac5e29f">Canadian National Wetlands Inventory</a> (Accessed 14 November 2026). Contains information licensed under the Open Government Licence – Canada.</p>',
  '<p>Contains modified Copernicus Sentinel data 2025, 2026. Only derived ground classes are used.</p>',
 ];
-const noContact=html=>priorTitleMarkup(groundCredits.reduce((s,c)=>s.replace(c+'\n',''),html).replace(/<span id="titleOtherGame">[\s\S]*?<\/span>/,'').replace(/<p id="titleMusic">[\s\S]*?<\/p>/,'').replace(/<p id="titleContact">[\s\S]*?<\/p>/,'').replace(/<p id="titleAbout">[\s\S]*?<\/p>/,'').replace(' id="titleMusic"','').replace(/<p id="ns(?:Lidar|Paved)Credit">[\s\S]*?<\/p>\n?/,''),true);
+const noContact=(html,reviewed=true)=>priorTitleMarkup(groundCredits.reduce((s,c)=>s.replace(c+'\n',''),html).replace(/<span id="titleOtherGame">[\s\S]*?<\/span>/,'').replace(/<p id="titleMusic">[\s\S]*?<\/p>/,'').replace(/<p id="titleContact">[\s\S]*?<\/p>/,'').replace(/<p id="titleAbout">[\s\S]*?<\/p>/,'').replace(' id="titleMusic"','').replace(/<p id="ns(?:Lidar|Paved)Credit">[\s\S]*?<\/p>\n?/,''),true,reviewed);
 // The ground classes (pits, open wetland, rail and quarry ground) name every source they read.
 const OGL_NS=/Roads, railways, water, building locations, utility lines and towers, forest types, designated areas, and Point Tupper dams, culverts, conveyors and some fences and gates: Province of Nova Scotia\. Contains information licensed under the Open Government Licence – Nova Scotia\./;
 function groundAttribution(title){
@@ -115,7 +115,7 @@ function expected(){const roots=dom();before.createTitle(true,()=>{});let html=r
 assert.equal(noContact(await actual(source,'',null)).split(firedChoice).length,2,'the mail title offers Get Fired exactly once');
 assert.equal(noContact(await actual(source,'',null)).split(dailyChoice).length,2,'the mail title offers Today’s run exactly once');
 assert.equal(noContact(await actual(source,'',null)).split(propertyCredit).length,2,'the current title holds the complete property credit exactly once');
-for(const [label,query,radio] of [['present','',{start(){}}],['disabled','radio=0',null],['missing','',null]])assert.equal(noContact(await actual(source,query,radio)),noContact(withoutTallCredits(expected())),'mail title matches origin/main: '+label);
+for(const [label,query,radio] of [['present','',{start(){}}],['disabled','radio=0',null],['missing','',null]])assert.equal(noContact(await actual(source,query,radio)),noContact(withoutTallCredits(expected()),false),'mail title matches origin/main: '+label);
 console.log('PASS actual main radio wiring and title HTML match main with reviewed music geography and the exact property credit for present, disabled and missing lists');
 if(process.argv.includes('--mutations')){
  for(const [i,row] of tallCredits.entries()){
@@ -124,7 +124,7 @@ if(process.argv.includes('--mutations')){
   console.log('PASS rejected missing tall credit:',i);
  }
  for(const [label,from,to] of [['initial hints',"ride.choice, SITE.brand === 'just', SITE.brand !== 'just'","ride.choice, SITE.brand === 'just', false"],['shared availability update',"if (SITE.brand === 'just') { title?.setRadio",'if (true) { title?.setRadio']]){
-  assert.ok(source.includes(from));assert.notEqual(noContact(await actual(source.replace(from,to),'',null)),noContact(withoutTallCredits(expected())),label);console.log('PASS rejected title mutation:',label);
+  assert.ok(source.includes(from));assert.notEqual(noContact(await actual(source.replace(from,to),'',null)),noContact(withoutTallCredits(expected()),false),label);console.log('PASS rejected title mutation:',label);
  }
 }
 

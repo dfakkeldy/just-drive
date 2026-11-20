@@ -322,7 +322,7 @@ export class MiniMap {
     g.strokeStyle = '#b9c3cc'; g.lineWidth = 1;
     g.beginPath(); g.arc(0, 0, half - 4, 0, Math.PI * 2); g.stroke();
     for (let i = 0; i < 16; i++) {
-      g.rotate(Math.PI / 8); g.beginPath(); g.moveTo(0, -half + 4); g.lineTo(0, -half + (i % 4 === 3 ? 10 : 7)); g.stroke();
+      g.rotate(Math.PI / 8); g.beginPath(); g.moveTo(0, -half + 4); g.lineTo(0, -half + 7); g.stroke();
     }
     g.restore();
     g.fillStyle = '#ff5a4a'; g.font = '700 11px ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';

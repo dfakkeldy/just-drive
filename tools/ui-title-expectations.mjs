@@ -63,7 +63,10 @@ const ROUND2_STRIPPED_EDITS = [
 ];
 export function priorTitleStyle(css, reviewed = true) {
  if (!reviewed) return css;
- for (const [now,before] of ROUND3_STYLE_EDITS) if (css.includes(now)) css = css.replace(now,before);
+ if (css.includes('#titleControls kbd')) for (const [index, [now, before]] of ROUND3_STYLE_EDITS.entries()) {
+  assert.ok(css.includes(now), `required round-3 title CSS swap ${index}`);
+  css = css.replace(now, before);
+ }
  const edits = css.includes("\n#titleOtherGame{display:block") ? ROUND2_STYLE_EDITS : ROUND2_STRIPPED_EDITS;
  // Each injected stylesheet has its own required swaps; a missing new rule must fail.
  const full = edits === ROUND2_STYLE_EDITS;
@@ -81,10 +84,12 @@ export function priorTitleStyle(css, reviewed = true) {
  assert.ok(css.includes(tagNow),'plain promise style');
  return css.replace(UI_START_CSS,'').replace(tagNow,tagBefore);
 }
-export function priorTitleMarkup(html, touch) {
+export function priorTitleMarkup(html, touch, reviewed = true) {
  const footer3 = "<p class=\"titleFooter\"><span>Preview build</span><span>\u00b7 Cape Breton, Nova Scotia</span><span>\u00b7 <button id=\"titleCredits\" aria-expanded=\"false\">Credits and data</button></span></p>";
+ if (reviewed) assert.ok(html.includes(footer3), 'required round-3 unbreakable footer');
  if (html.includes(footer3)) html=html.replace(footer3,"<p class=\"titleFooter\">Preview build \u00b7 Cape Breton, Nova Scotia \u00b7 <button id=\"titleCredits\" aria-expanded=\"false\">Credits and data</button></p>");
  const description=html.match(/<p id="modeDescription">([^<]*)<\/p>/);
+ if (reviewed && html.includes('id="modeChoice"')) assert.ok(description, 'required round-3 mail mode description');
  if(description){
   const pressed=id=>html.includes(`id="${id}" aria-pressed="true"`);
   const expected=pressed('modeExplore')?'The land at your own pace':pressed('modeDaily')?'Five minutes on the clock. Fill the complaint bingo card.':pressed('modeFired')?'Same route, same clock. Today every complaint counts for you.':'Deliver the day’s run around Mabou, Cape Breton.';

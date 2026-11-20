@@ -2,9 +2,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
-const output = await build({ stdin: { contents: `export * from './mp/room-cards';export { SocialView } from './mp/social-view';export { RaceView } from './mp/race';export { GameView } from './mp/games';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
+const output = await build({ stdin: { contents: `export * from './mp/room-cards';export { SocialView } from './mp/social-view';export { RaceView } from './mp/race';export { GameView } from './mp/games';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, createDroneSticks, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
 const module = { exports: {} }; new Function('module','exports',output.outputFiles[0].text)(module,module.exports);
-const { mountRoomCard, removeRoomCard, fitRoomCards, RoomCountdown, RaceView, GameView, Drone, DRONE_HELP, MiniMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP } = module.exports;
+const { mountRoomCard, removeRoomCard, fitRoomCards, RoomCountdown, RaceView, GameView, Drone, createDroneSticks, DRONE_HELP, MiniMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP } = module.exports;
 const paint = [];
 const context = new Proxy({ measureText: text => ({width:text.length*6}) }, { get: (o,k) => o[k] ?? ((...args) => paint.push([k,...args])) });
 class Element {
@@ -22,12 +22,14 @@ class Element {
   remove(){if(this.parentElement){const p=this.parentElement;p.children.splice(p.children.indexOf(this),1);this.parentElement=null;}}
   replaceChildren(...nodes){for(const n of [...this.children])n.remove();this.append(...nodes);}
   replaceWith(n){this.before(n);this.remove();}
-  querySelector(selector){for(const n of this.children){if(selector.split(',').some(s=>s.startsWith('#')?n.id===s.slice(1):n.tagName===s))return n;const found=n.querySelector(selector);if(found)return found;}return null;}
+  querySelector(selector){if(selector==='b' && this.innerHTML?.includes('<b>') && !this.children.some(n=>n.tagName==='b'))this.append(new Element('b'));for(const n of this.children){if(selector.split(',').some(s=>s.startsWith('#')?n.id===s.slice(1):n.tagName===s))return n;const found=n.querySelector(selector);if(found)return found;}return null;}
   attributes={};setAttribute(k,v){this.attributes[k]=v;} getAttribute(k){return this.attributes[k];} addEventListener(k,v){this.listeners[k]=v;} getContext(){return context;}
   getBoundingClientRect(){this.reads++;return this.rect;} getClientRects(){return this.hidden?[]:[this.rect];}
 }
+const windowListeners=new Map();
+const resize=()=>{for(const listener of windowListeners.get('resize')??[])listener();};
 const body=new Element(),head=new Element(),settings=new Element(),header=new Element('header');settings.id='settings';header.id='settingsHeader';settings.append(header);body.append(settings);
-Object.assign(globalThis,{document:{body,head,hidden:false,createElement:t=>new Element(t),createComment:()=>new Element('comment'),createTextNode:t=>Object.assign(new Element('text'),{textContent:t}),getElementById:id=>body.querySelector('#'+id)??head.querySelector('#'+id)},innerWidth:1440,innerHeight:900,devicePixelRatio:1,localStorage:{getItem:()=> 'folded',setItem(){}},addEventListener(){},removeEventListener(){},getComputedStyle:()=>({getPropertyValue:()=>'',overflowX:'visible',overflowY:'visible'})});
+Object.assign(globalThis,{document:{body,head,hidden:false,addEventListener(){},createElement:t=>new Element(t),createComment:()=>new Element('comment'),createTextNode:t=>Object.assign(new Element('text'),{textContent:t}),getElementById:id=>body.querySelector('#'+id)??head.querySelector('#'+id)},innerWidth:1440,innerHeight:900,devicePixelRatio:1,localStorage:{getItem:()=> 'folded',setItem(){}},addEventListener(type,listener){if(!windowListeners.has(type))windowListeners.set(type,new Set());windowListeners.get(type).add(listener);},removeEventListener(type,listener){windowListeners.get(type)?.delete(listener);},getComputedStyle:()=>({getPropertyValue:()=>'',overflowX:'visible',overflowY:'visible'})});
 for(const touch of [false,true]){
  const cards=['gamePanel','racePanel','mpSocial'].map(id=>Object.assign(new Element('details'),{id}));
  for(const card of cards)mountRoomCard(card,touch);
@@ -72,12 +74,15 @@ innerWidth=720;innerHeight=480;
  for(const fixture of fixtures)fixture.remove();removeRoomCard(card);
 }
 innerWidth=1440;innerHeight=900;
+const pill=Object.assign(new Element(),{id:'mpChip',rect:{bottom:66,height:44}});body.append(pill);
 const count=new RoomCountdown('testCountdown',false),countNode=document.getElementById('testCountdown');
 assert.equal(countNode.getAttribute('aria-hidden'),'true');
 for(const [ms,visual,spoken] of [[5000,'5','5'],[4000,'4','5'],[3000,'3','3'],[2000,'2','3'],[1000,'1','3'],[0,'GO','GO'],[-999,'GO','GO']]){
  assert.equal(count.update(ms),spoken);assert.equal(countNode.textContent,visual);assert.equal(countNode.hidden,false);
 }
-count.update(-1000);assert.equal(countNode.hidden,true,'GO leaves after one second');count.update(5000);count.update(null);assert.equal(countNode.hidden,true,'disconnect clears the count');count.dispose();
+const pillReads=pill.reads;for(let i=0;i<20;i++)count.update(-500);
+assert.equal(pill.reads,pillReads,'same count reuses the pill position');assert.equal(countNode.style.top,'76px');
+count.update(-1000);assert.equal(countNode.hidden,true,'GO leaves after one second');count.update(5000);count.update(null);assert.equal(countNode.hidden,true,'disconnect clears the count');count.dispose();pill.remove();
 // Run the actual social view. A stable phrase needs no layout reads on later frames.
 const camera=new PerspectiveCamera(60,innerWidth/innerHeight,.1,1000);camera.updateMatrixWorld();
 const net={canChat:true,gamesSupported:true,roster:[],chats:[],names:new Map(),bubbles:new Map(),me:{id:1}};
@@ -103,8 +108,10 @@ body.classList.add('tcOn');social.update(camera,peers,me,tags);assert.equal(bubb
 const tiles=Object.assign(new Element(),{id:'phoneTop',rect:{left:0,right:1440,top:0,bottom:200,width:1440,height:56}});body.append(tiles);
 bubbles[0].rect={left:0,right:100,top:0,bottom:20,width:100,height:20};net.bubbles.get(1).phrase=5;social.update(camera,peers,me,tags);
 assert.equal(bubbles[0].hidden,false);assert.ok(parseFloat(bubbles[0].style.top)-20>=tiles.rect.bottom+8,'phone bubbles clear the tile row by eight pixels');
-tiles.rect.bottom=300;social.update(camera,peers,me,tags);assert.equal(bubbles[0].hidden,true,'hide a bubble if its tag leaves no clear space below the tiles');tiles.remove();
-body.classList.remove('tcOn');social.dispose();
+for(let i=0;i<20;i++)social.update(camera,peers,me,tags);
+assert.equal(tiles.reads,1,'stable phone bubbles reuse the tile rectangle');
+tiles.rect={...tiles.rect,bottom:300};resize();social.update(camera,peers,me,tags);assert.equal(bubbles[0].hidden,true,'hide a bubble if its tag leaves no clear space below the tiles');assert.equal(tiles.reads,2,'resize refreshes the tile rectangle once');social.update(camera,peers,me,tags);assert.equal(tiles.reads,2);tiles.remove();
+body.classList.remove('tcOn');social.dispose();assert.equal(windowListeners.get('resize').size,0,'dispose removes the resize listener');
 // Draw two frames, including an empty one: labels reuse the same pool objects.
 const ghosts=new Ghosts({ground:()=>0,low:false,cap:2});
 const peer={id:2,name:'Dusty Tire',hue:0,x:0,z:-20,air:0,heading:0,alpha:1,flags:0,steer:0};
@@ -115,7 +122,15 @@ for(const height of [280,390,844])for(const distance of [5,30,60])assert.ok(call
 assert.deepEqual(DRONE_HELP,[['R','Fly back'],['F','Land'],['WASD','Move'],['←/→ or Q/E','Turn'],['↑/↓','Camera'],['Space','Up'],['Shift or C','Down'],['Mouse wheel','Top speed']]);
 const gear=Object.assign(new Element(),{id:'gear',rect:{left:1386,right:1430,top:10,bottom:54,width:44,height:44}}),endShift=Object.assign(new Element(),{id:'endShift',rect:{left:1320,right:1430,top:64,bottom:108,width:110,height:44}});body.append(gear,endShift);
 const drone=new Drone();drone.launch(0,0,0,0);assert.equal(document.getElementById('droneHints').hidden,false);
-assert.equal(document.getElementById('droneHints').style.top,'118px','help starts ten pixels below the lowest control');assert.equal(document.getElementById('droneHints').style.right,'10px','help aligns with the gear');gear.remove();endShift.remove();
+assert.equal(document.getElementById('droneHints').style.top,'118px','help starts ten pixels below the lowest control');assert.equal(document.getElementById('droneHints').style.right,'10px','help aligns with the gear');
+const dock=document.getElementById('droneHints');let dockWrites=0;
+for(const key of ['top','right']){let value=dock.style[key];Object.defineProperty(dock.style,key,{get:()=>value,set:v=>{value=v;dockWrites++;}});}
+const still={forward:0,right:0,up:0,turn:0};
+for(let i=0;i<5;i++)drone.update(.25,still,{ground:0,floor:2},{x:0,y:0,z:0},0);
+assert.equal(dockWrites,0,'unchanged control boxes cause no help position writes');
+endShift.rect={...endShift.rect,bottom:128};gear.rect={...gear.rect,right:1410};drone.update(.25,still,{ground:0,floor:2},{x:0,y:0,z:0},0);
+assert.equal(dock.style.top,'138px');assert.equal(dock.style.right,'30px');assert.equal(dockWrites,2,'moved controls update both help coordinates');
+gear.remove();endShift.remove();
 const help=document.getElementById('droneHints');let hidden=help.hidden,hiddenWrites=0;
 Object.defineProperty(help,'hidden',{get:()=>hidden,set:v=>{hidden=v;hiddenWrites++;}});
 const command={forward:0,right:0,up:0,turn:0},under={ground:0,floor:2},roof={x:0,y:0,z:0};
@@ -152,17 +167,32 @@ for(const touch of [false,true]){
  const race=new RaceView(net,host),spoken=[];
  for(const now of [5000,6000,7000,8000,9000,10000]){countdownNow=now;race.update();spoken.push(document.getElementById('racePanel').querySelector('p').textContent);}
  assert.deepEqual(spoken,['Start in 5 · stay inside the start ring.','Start in 5 · stay inside the start ring.','Start in 3 · stay inside the start ring.','Start in 3 · stay inside the start ring.','Start in 3 · stay inside the start ring.','GO']);
- assert.equal(document.getElementById('raceCountdown').textContent,'GO');countdownNow=11000;race.update();assert.equal(document.getElementById('raceCountdown').hidden,true);
+ assert.equal(document.getElementById('raceCountdown').textContent,'GO');
+ racer.out=true;countdownNow=10500;race.update();assert.match(document.getElementById('racePanel').querySelector('p').textContent,/^Out · left start early/,'GO does not hide disqualification');
+ countdownNow=11000;race.update();assert.equal(document.getElementById('raceCountdown').hidden,true);
  if(touch)assert.equal(document.getElementById('raceReadout').hidden,false,'phone keeps its race strip');race.dispose();
- let gameLeft=5000;net.race=null;net.game={kind:1,phase:1,serial:1,host:1,table:[],tag:null};net.gameLeft=()=>gameLeft;
+ let gameLeft=5000;net.race=null;net.game={kind:1,phase:1,serial:1,host:1,table:[],tag:null};net.gameLeft=()=>gameLeft;net.game.tag={holder:0,parcel:{x:120,z:0}};
  const game=new GameView(net,host),cues=[];
  for(const left of [5000,4000,3000,2000,1000]){gameLeft=left;game.update(.1,[],camera);cues.push(document.getElementById('gamePanel').querySelector('p').textContent);}
+ if(touch)assert.match(document.getElementById('gameReadout').textContent,/Parcel tag in 1 · 120 m E/,'countdown readout points to the parcel');
  assert.deepEqual(cues,['Parcel tag in 5. The parcel waits on the road.','Parcel tag in 5. The parcel waits on the road.','Parcel tag in 3. The parcel waits on the road.','Parcel tag in 3. The parcel waits on the road.','Parcel tag in 3. The parcel waits on the road.']);
  net.game.phase=2;gameLeft=180000;countdownNow=20000;game.update(.1,[],camera);assert.equal(document.getElementById('gameCountdown').textContent,'GO');assert.equal(document.getElementById('gamePanel').querySelector('p').textContent,'GO');
  countdownNow=21000;game.update(.1,[],camera);assert.equal(document.getElementById('gameCountdown').hidden,true);game.dispose();strip.remove();
 }
 globalThis.performance=savedPerformance;
+const sticks=createDroneSticks(()=>{}),returnButton=document.getElementById('droneReturn');let labelWrites=0;
+const setLabel=returnButton.setAttribute.bind(returnButton);returnButton.setAttribute=(key,value)=>{if(key==='aria-label')labelWrites++;setLabel(key,value);};
+sticks.show(true);for(let i=0;i<20;i++)sticks.show(true);assert.equal(labelWrites,1,'stable flight label is written once');
+sticks.show(true,true);assert.equal(labelWrites,2);assert.equal(returnButton.getAttribute('aria-label'),'Land now');sticks.show(true,true);assert.equal(labelWrites,2);sticks.show(false);
 const main=readFileSync(new URL('../web/src/main.ts',import.meta.url),'utf8');
+const noteSetup=main.slice(main.indexOf('const settingsRoomPauseNote ='),main.indexOf('function syncPauseUI():'));
+for(const touchDevice of [false,true]){
+ const panel=new Element(),heading=Object.assign(new Element(),{id:'settingsHeader'});panel.append(heading);
+ const note=new Function('touchDevice','settingsPanel',noteSetup.replace(")!.after",").after")+'return settingsRoomPauseNote;')(touchDevice,panel);
+ assert.equal(panel.children.length,touchDevice?1:2);if(note){assert.equal(panel.children[1],note);assert.equal(note.textContent,'A room keeps going when you pause.');assert.equal(note.hidden,true);}
+ const visibility=main.match(/  if \(settingsRoomPauseNote\) settingsRoomPauseNote.hidden = !room;/)[0];
+ for(const room of [false,true,false]){new Function('settingsRoomPauseNote','room',visibility)(note,room);if(note)assert.equal(note.hidden,!room);}
+}
 const block=main.slice(main.indexOf('    if (miniMap) {',main.indexOf('  culvertMouths?.update')),main.indexOf('    // Paused frames return early'));
 const frame=new Function('ctx',`with(ctx){${block}}`);
 for(const active of [false,true]){
@@ -180,4 +210,6 @@ for(const touchDevice of [false,true])for(const active of [false,true])for(const
 }
 const a=readFileSync(new URL('../web/index.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];
 const b=readFileSync(new URL('../artifact/page.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];assert.equal(a,b,'page style blocks remain identical');
+assert.ok(a.includes(':not(.indoorOn):has(#placesButton:not([hidden])) #pauseButton'),'indoor controls close the chip gap');
+assert.ok(a.includes(':not(.indoorOn):has(#placesButton:not([hidden])) #bigMapButton'),'indoor map closes the chip gap');
 console.log('PASS lower HUD and photo clearance, short-column fallback, desktop chat default, cached bubble sizes, pooled label boxes, touch and desktop pause execution, flight fold persistence; room order, header, scroll bounds, disconnect cleanup, 12 px names, drone keycaps and hint timer, phone metrics, flight map parent, fold, north, heading, parked car and actual frame wiring; page CSS parity');

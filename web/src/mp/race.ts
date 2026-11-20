@@ -89,7 +89,7 @@ export class RaceView {
         :s.startAt?`Race · ${((now-s.startAt)/1000).toFixed(1)} s`:'Room race';
       if(this.readout.textContent!==text)this.readout.textContent=text;
     }
-    if(cue==='GO')say='GO';
+    if(cue==='GO' && !racer?.out)say='GO';
     if(say!==this.text){this.status.textContent=this.text=say;}
     const rows=s.racers.map(r=>({r,name:this.host.label?.(this.net.names.get(r.id) ?? `Driver ${r.id}`,r.id) ?? this.net.names.get(r.id) ?? `Driver ${r.id}`})).sort((a,b)=>(a.r.time??Infinity)-(b.r.time??Infinity));
     const text=rows.map(({r,name})=>`${name}: ${r.time!==null?(r.time/1000).toFixed(2)+' s':r.out?'out':now-s.startAt>=RACE_LIMIT?'timed out':s.startAt>now?'on grid':'racing'}`);

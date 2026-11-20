@@ -181,9 +181,9 @@ async function flightMap(p, phone) {
 }
 
 // ---- phone, touch only ------------------------------------------------------------------------------
-for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
+for (const [w, h, name, mode] of [[390, 844, 'portrait', 'mail'], [844, 390, 'landscape', 'mail'], [390, 844, 'portrait-places', 'explore'], [844, 390, 'landscape-places', 'explore']]) {
   const p = await page(w, h, true);
-  await p.load({ q: 'low', touch: '1' });
+  await p.load({ q: 'low', touch: '1', mode });
   const s = async () => JSON.parse(await p.read(state));
   const button = await p.centre('droneButton');
   check(button.w >= 56 && button.h >= 56, `${name}: DRONE button is a full touch target (${button.w}x${button.h})`);
@@ -226,8 +226,8 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   check(hudClear.length === 0, `${name}: the readout clears Pause and the gear ${JSON.stringify(hudClear)}`);
   await p.shot(`11-phone-${name}-flying`);
   const ret = await p.centre('droneReturn');
-  const sticksClear = await p.read(`(()=>{const ids=['droneLeft','droneRight','droneReturn','gear','pauseButton','miniMap'];const r=ids.map(i=>document.getElementById(i).getBoundingClientRect());const out=[];for(let i=0;i<r.length;i++)for(let j=i+1;j<r.length;j++)if(r[i].left<r[j].right&&r[i].right>r[j].left&&r[i].top<r[j].bottom&&r[i].bottom>r[j].top)out.push(ids[i]+'/'+ids[j]);for(const x of r)if(x.left<0||x.top<0||x.right>innerWidth||x.bottom>innerHeight)out.push('off screen');return out})()`);
-  check(sticksClear.length === 0, `${name}: sticks, RETURN, gear and Pause do not overlap and stay on screen ${JSON.stringify(sticksClear)}`);
+  const sticksClear = await p.read(`(()=>{const ids=['droneLeft','droneRight','droneReturn','gear','pauseButton','miniMap','placesButton','bigMapButton'].filter(id=>!['placesButton','bigMapButton'].includes(id)||mmm.gameMode==='explore');const r=ids.map(i=>document.getElementById(i).getBoundingClientRect());const out=[];for(let i=0;i<r.length;i++)for(let j=i+1;j<r.length;j++)if(r[i].left<r[j].right&&r[i].right>r[j].left&&r[i].top<r[j].bottom&&r[i].bottom>r[j].top)out.push(ids[i]+'/'+ids[j]);for(const x of r)if(x.left<0||x.top<0||x.right>innerWidth||x.bottom>innerHeight)out.push('off screen');return out})()`);
+  check(sticksClear.length === 0, `${name}: sticks, RETURN, gear, Pause, PLACES and MAP do not overlap and stay on screen ${JSON.stringify(sticksClear)}`);
   await p.touchAt('touchStart', [ret]); await p.touchAt('touchEnd', []);
   check(await p.until('mmm.drone.returning'), `${name}: RETURN flies it home`);
   check(await p.read(`document.getElementById('droneReturn').textContent==='LAND NOW'&&document.getElementById('droneReturn').getAttribute('aria-label')==='Land now'`),'return flight offers Land now');

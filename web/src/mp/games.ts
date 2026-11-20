@@ -158,7 +158,7 @@ export class GameView {
     if (text !== this.tableText) { this.tableText = text; this.table.replaceChildren(...lines.map(t => Object.assign(document.createElement('li'), { textContent: t }))); }
     const place = rows.findIndex(r => r.id === me.id), myScore = place >= 0 ? rows[place].score : 0;
     if (this.readout) {
-      const r = f.phase === PHASE.free ? '' : f.phase === PHASE.countdown ? `${title} in ${Math.ceil(left / 1000)}`
+      const r = f.phase === PHASE.free ? '' : f.phase === PHASE.countdown ? `${title} in ${Math.ceil(left / 1000)}${target ? ` · ${this.toward(target).text}` : ''}`
         // Where the parcel is comes first: a narrow phone cuts the end of the line.
         : f.phase === PHASE.play ? `Tag ${clock(left)}${mine ? ' · parcel!' : target ? ` · ${this.toward(target).text}` : ''}${place >= 0 ? ` · #${place + 1}` : ''} · ${myScore} pts`
         : `Tag over · ${myScore} pts${place >= 0 ? ` · #${place + 1}` : ''}`;

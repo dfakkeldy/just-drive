@@ -17,7 +17,9 @@ try {
   const text = html => html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   for (const brand of ['mail', 'just']) {
     const html = page(brand), words = text(html);
-    assert.match(html, /<details open class="credits" aria-labelledby="credits"><summary><h2 id="credits">Credits and data<\/h2><\/summary>/);
+    assert.match(html, /<h2 id="credits">Credits and data<\/h2>\s*<details open class="credits" aria-labelledby="credits"><summary>Show credits and data<\/summary>/);
+    assert.doesNotMatch(html, /<summary>\s*<h[1-6]/);
+    const credits = html.match(/<details open class="credits"[^>]*>([\s\S]*?)<\/details>/)[1];
     assert.match(html, /<\/details>\s*<p class="signoff">[^<]+<\/p>/);
     assert.doesNotMatch(html.match(/\.maker\{([^}]+)\}/)[1], /border|background/);
     assert.equal([...html.matchAll(/<title>/g)].length, 1, brand + ' one title');
@@ -27,8 +29,9 @@ try {
     assert.ok(html.includes('<script src="/about/page-links.js" defer></script>'), brand + ' keyboard link support');
     assert.ok(existsSync(out + '/about/page-links.js'), 'keyboard script ships');
     // The credits the title card shows, word for word, and the owner's choices of 14 Nov 2026.
-    for (const credit of [LAND_CREDITS, FAR_CREDITS, ENGINE_CREDIT]) assert.ok(html.includes(credit), brand + ' credits verbatim');
-    assert.match(html, /id="titleMusic"/, brand + ' music credit');
+    for (const credit of [LAND_CREDITS, FAR_CREDITS, ENGINE_CREDIT]) assert.ok(credits.includes(credit), brand + ' credits verbatim inside disclosure');
+    assert.match(credits, /id="titleMusic"/, brand + ' music credit');
+    assert.match(credits, /Property lines \(optional, online only\):/);
     assert.ok(html.includes(`href="mailto:${CONTACT}"`), brand + ' contact');
     assert.ok(html.includes('href="https://fakkeldy.ca/"'), brand + ' maker link');
     // The radio's donation ad says "the coffee link": both brands carry it exactly once, to the one address.

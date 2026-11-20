@@ -197,8 +197,9 @@ export class Drone {
       const e = document.getElementById(id), b = e && !e.hidden ? e.getBoundingClientRect() : null;
       if (b?.width && b.height) bottom = Math.max(bottom, b.bottom);
     }
-    this.help.style.top = `${bottom + 10}px`;
-    this.help.style.right = `${gear?.width ? innerWidth - gear.right : 10}px`;
+    const top = `${bottom + 10}px`, right = `${gear?.width ? innerWidth - gear.right : 10}px`;
+    if (this.help.style.top !== top) this.help.style.top = top;
+    if (this.help.style.right !== right) this.help.style.right = right;
   }
 
   /** Puts the camera a little behind and over the drone, looking along the gimbal. Keeps it over the ground. */
@@ -338,7 +339,8 @@ export function createDroneSticks(home: () => void): DroneSticks {
     show(visible: boolean, returning = false) {
       const words = returning ? 'LAND NOW' : 'RETURN TO CAR';
       if (ret.textContent !== words) ret.textContent = words;
-      ret.setAttribute('aria-label', returning ? 'Land now' : 'Return to car');
+      const label = returning ? 'Land now' : 'Return to car';
+      if (ret.getAttribute('aria-label') !== label) ret.setAttribute('aria-label', label);
       if (visible === shown) return;
       shown = visible;
       left.el.hidden = right.el.hidden = ret.hidden = !visible;

@@ -1438,11 +1438,14 @@ pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledb
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
+const settingsRoomPauseNote = touchDevice ? null : Object.assign(document.createElement('p'), { className: 'roomPauseNote', hidden: true, textContent: 'A room keeps going when you pause.' });
+if (settingsRoomPauseNote) settingsPanel.querySelector('#settingsHeader')!.after(settingsRoomPauseNote);
 function syncPauseUI(): void {
   keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = flyTouch = 0;
   const room = !!multiplayer?.choice.on;
   pauseScreen.querySelector<HTMLElement>('.roomPauseNote')!.hidden = !room;
+  if (settingsRoomPauseNote) settingsRoomPauseNote.hidden = !room;
   settingsPanel.classList.toggle('open', pause.blocked && !pause.screen && !document.hidden);
   pauseScreen.hidden = !pause.screen || document.hidden || replay.active;
   if (!pauseScreen.hidden) {

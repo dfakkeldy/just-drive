@@ -1,13 +1,10 @@
 import { priorTitleMarkup, priorTitleStyle } from './ui-title-expectations.mjs';
-import {FAR_CREDITS} from '../web/src/credits.ts';
 // Address identity stays separate from area, room and current driving state.
 import assert from 'node:assert/strict';
-import { readSite, areaAddress, eraAddress, SITE_AREAS } from '../web/src/site.ts';
-import { readEra } from '../web/src/era.ts';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 import { justPage } from './site-pages.mjs';
-const result = await build({stdin:{contents:"export {roomInvitation} from './mp/switch'; export {periodRides} from './garage'; export {createTitle} from './title'; export {bootTripParams} from './quarry-trip';",resolveDir:process.cwd()+'/web/src',loader:'ts'},bundle:true,write:false,format:'esm',platform:'node'});
-const {roomInvitation,periodRides,createTitle,bootTripParams} = await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
+const result = await build({stdin:{contents:"export {FAR_CREDITS} from './credits'; export {readSite,areaAddress,eraAddress,SITE_AREAS} from './site'; export {ERAS,readEra} from './era'; export {AREAS} from './area'; export {roomInvitation} from './mp/switch'; export {periodRides} from './garage'; export {createTitle} from './title'; export {bootTripParams} from './quarry-trip';",resolveDir:process.cwd()+'/web/src',loader:'ts'},bundle:true,write:false,format:'esm',platform:'node'});
+const {AREAS,ERAS,FAR_CREDITS,readSite,areaAddress,eraAddress,SITE_AREAS,readEra,roomInvitation,periodRides,createTitle,bootTripParams} = await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
 for (const host of ['justdrive.fakkeldy.ca','justdrive.localhost','localhost']) {
  const q = new URLSearchParams('site=just&era=today&trip=old&driveAt=1,2&start=old&q=low&vehicle=bike&room=abcd&touch=1');
  const site = readSite(host,'/mabou-1884',q);
@@ -82,8 +79,6 @@ try {
 } finally {rmSync(dir,{recursive:true,force:true});}
 
 // Pin mail HTML/CSS outside the independently checked cross-brand line and phone width fix.
-const {AREAS} = await import('../web/src/area.ts');
-const {ERAS} = await import('../web/src/era.ts');
 const titleBefore = await build({stdin:{contents:execFileSync('git',['show',base+':web/src/title.ts'],{encoding:'utf8'}),resolveDir:process.cwd()+'/web/src',loader:'ts'},bundle:true,write:false,format:'esm',platform:'node'});
 const oldTitle = (await import('data:text/javascript;base64,'+Buffer.from(titleBefore.outputFiles[0].text).toString('base64'))).createTitle;
 const crossBrandStyles = [
@@ -125,7 +120,7 @@ for(const area of AREAS)for(const era of ERAS)for(const mode of ['mail','explore
  assert.equal(current.html.split(FAR_CREDITS).length,2,'far source credits occur once');
  // The far-data licence is an intentional addition to the frozen card.
  for(const c of [current,previous])c.html=c.html.replace(FAR_CREDITS+'\n','').replace(FAR_CREDITS,'');
- assert.deepEqual({...current,html:priorTitleMarkup(current.html,true)},{...previous,html:priorTitleMarkup(previous.html,true)},'mail card HTML/styles outside reviewed UI/cross-brand changes and far-data credit: '+area.id+' '+era.id+' '+mode);
+ assert.deepEqual({...current,html:priorTitleMarkup(current.html,true)},{...previous,html:priorTitleMarkup(previous.html,true,false)},'mail card HTML/styles outside reviewed UI/cross-brand changes and far-data credit: '+area.id+' '+era.id+' '+mode);
 }
 for(const k of ['document','localStorage','location'])delete globalThis[k];
 if(titleWindowListener)globalThis.addEventListener=titleWindowListener;else delete globalThis.addEventListener;
