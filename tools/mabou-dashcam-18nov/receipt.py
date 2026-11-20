@@ -5,6 +5,8 @@ record: python3 tools/mabou-dashcam-18nov/receipt.py record SOURCE STAGE   (prin
 verify: python3 tools/mabou-dashcam-18nov/receipt.py verify SOURCE STAGE   (before promotion: the land and the staged files are the receipt's)
 install: python3 tools/mabou-dashcam-18nov/receipt.py install STAGE BAKED (main thread only: promote the staged files)
 uninstall: python3 tools/mabou-dashcam-18nov/receipt.py uninstall STAGE BAKED (main thread only: put the before bytes back)
+upgrade: python3 tools/mabou-dashcam-18nov/receipt.py upgrade STAGE BAKED (repair the original step-35 install)
+rollback-upgrade: python3 tools/mabou-dashcam-18nov/receipt.py rollback-upgrade STAGE BAKED (restore that original install)
 land:   python3 tools/mabou-dashcam-18nov/receipt.py land [BAKED]           (installed land is all before or all after; never mixed)
 
 SOURCE is the Mabou terrain pack the bake read (data/baked/terrain) and STAGE the bake's --output folder.
@@ -12,7 +14,7 @@ hashes.json pins, for every file the bake writes except manifest.json, the bytes
 its bytes (`sha256`), relative to data/baked. The manifest is pinned by the three counts the bake owns (buildings,
 building styles and trees: the driveways drop the trees on them), because other bakes own every other manifest key.
 The roadBed pins cover the paired pre-bed lines and the two JSON files that refer to the new hashes. Install
-puts the companion in data/work/overview. The original pins also verify the historical stage and installed land.
+puts the companion in data/work/overview. The land check warns on the original installed bytes.
 `undo` rebuilds the bake's before props, road list and road kinds from its after files (it drops the split pieces
 and the driveway pieces): tools/road-scene-delta-check.py reads it to judge step-29 props on promoted land, and `record` proves that
 it reproduces the before props byte for byte.
@@ -21,11 +23,13 @@ import copy
 import hashlib
 import json
 import os
-import shutil
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+from land_receipt_pins import previous_digest, receipt_for
+
 RECEIPT = HERE/'hashes.json'
 FOLDER = 'terrain'
 COUNTS = ('buildings', 'buildingStyles', 'trees')
@@ -60,19 +64,8 @@ def target(baked, name):
     return baked.parent/name if name == PRE_BED else baked/name
 
 
-def receipt_for(report, with_bed):
-    """Select the original pins or the pins for the stage with a pre-bed companion."""
-    result = {k: v for k, v in report.items() if k != 'roadBed'}
-    if with_bed:
-        bed = report['roadBed']
-        replacements = {f['file']: f['sha256'] for f in bed['files']}
-        result['files'] = [dict(f, sha256=replacements.get(f['file'], f['sha256'])) for f in report['files']]
-        result['files'].append(bed['companion'])
-    return result
-
-
-def stage_receipt(report, stage):
-    return receipt_for(report, 'roadBed' in report and (Path(stage)/staged_name(PRE_BED)).is_file())
+def stage_receipt(report):
+    return receipt_for(report, 'roadBed' in report)
 
 
 def record(source, stage):
@@ -113,7 +106,7 @@ def record(source, stage):
 
 
 def verify(source, stage):
-    report = stage_receipt(json.loads(RECEIPT.read_text()), stage)
+    report = stage_receipt(json.loads(RECEIPT.read_text()))
     made = record(source, stage)
     if made != report:
         raise AssertionError('the land or the staged files are not this receipt (land differs from the one it was made on?)')
@@ -127,7 +120,7 @@ def state(baked, report, later=()):
     for f in report['files']:
         now = sha(target(baked, f['file']).read_bytes())
         for delta in reversed(later):
-            now = next((e['before'] for e in delta['files'] if e['file'] == f['file'] and e['sha256'] == now), now)
+            now = previous_digest(delta, f['file'], now) or now
         seen.add('before' if now == f['before'] else 'after' if now == f['sha256'] else f'unknown bytes {f["file"]}')
     for m in report['manifests']:
         now = counts(json.loads((Path(baked)/m['folder']/'manifest.json').read_bytes()))
@@ -139,12 +132,7 @@ def state(baked, report, later=()):
     return seen.pop()
 
 
-def install(stage, baked, report=None):
-    """Copy the staged files over BAKED/terrain and set only the three owned manifest counts: other bakes own every other
-    manifest key, so the staged manifest is never copied. Refuses before writing on staged bytes or land that are not
-    this receipt's. Replaced bytes are kept in STAGE.before/ so the install can be undone. Run again: it does nothing."""
-    report = stage_receipt(report or json.loads(RECEIPT.read_text()), stage)
-    stage, baked = Path(stage), Path(baked)
+def checked_stage(stage, report):
     names = {staged_name(f['file']): f for f in report['files']}
     extra = {p.relative_to(stage).as_posix() for p in stage.rglob('*') if p.is_file()} - set(names) - {'manifest.json'}
     if extra: raise ValueError('staged files outside the receipt: ' + ', '.join(sorted(extra)))
@@ -152,28 +140,57 @@ def install(stage, baked, report=None):
         if sha((stage/name).read_bytes()) != f['sha256']: raise ValueError(f'staged {name} is not the receipt')
     (m,) = report['manifests']
     if counts(json.loads((stage/'manifest.json').read_bytes())) != m['after']: raise ValueError('staged manifest counts are not the receipt')
+
+
+def upgrade_receipt(baked, report, fixed):
+    """Check the unchanged installed files and return the three-file upgrade."""
+    changed = {entry['file'] for entry in report['roadBed']['files']}
+    unchanged = dict(report, files=[f for f in report['files'] if f['file'] not in changed])
+    if state(baked, unchanged) != 'after':
+        raise ValueError('Upgrade needs the original step-35 install')
+    old = {f['file']: f['sha256'] for f in report['files']}
+    replacements = [dict(f, before=old.get(f['file'], f['before']))
+                    for f in fixed['files'] if f['file'] in changed or f['file'] == PRE_BED]
+    manifests = [dict(m, before=m['after']) for m in fixed['manifests']]
+    return dict(fixed, files=replacements, manifests=manifests)
+
+
+def install(stage, baked, report=None, *, upgrade=False):
+    """Install verified files, or upgrade the original install. Keep the replaced bytes for rollback."""
+    stage, baked = Path(stage), Path(baked)
+    original = report or json.loads(RECEIPT.read_text())
+    report = stage_receipt(original)
+    checked_stage(stage, report)
+    if upgrade:
+        report = upgrade_receipt(baked, original, report)
+    names = {staged_name(f['file']): f for f in report['files']}
+    (m,) = report['manifests']
     live = baked/FOLDER
     for f in names.values():
         if sha(target(baked, f['file']).read_bytes()) not in (f['before'], f['sha256']):
             raise ValueError(f'live {f["file"]} is neither before nor after; refusing')
     manifest = json.loads((live/'manifest.json').read_bytes())
     if counts(manifest) not in (m['before'], m['after']): raise ValueError('live manifest counts are neither before nor after; refusing')
-    keep = stage.with_name(stage.name + '.before')
+    keep = stage.with_name(stage.name + ('.pre-upgrade' if upgrade else '.before'))
     for name, f in names.items():
-        if (keep/name).exists() and sha((keep/name).read_bytes()) != f['before']:
+        backup = keep/name
+        if backup.exists() and sha(backup.read_bytes()) != f['before']:
             raise ValueError(f'kept {keep.name}/{name} is not the pinned before bytes; refusing')
+        if upgrade and not backup.exists() and sha(target(baked, f['file']).read_bytes()) == f['sha256']:
+            raise ValueError(f'kept {keep.name}/{name} is missing; refusing to upgrade without rollback bytes')
     for name, f in names.items():
         dest = target(baked, f['file'])
         if sha(dest.read_bytes()) == f['before']:
             (keep/name).parent.mkdir(parents=True, exist_ok=True)
-            if not (keep/name).exists(): shutil.copyfile(dest, keep/name)
-        write(dest, (stage/name).read_bytes())
+            write(keep/name, dest.read_bytes())
+    for name, f in names.items():
+        write(target(baked, f['file']), (stage/name).read_bytes())
     set_counts(live, m['after'])
     return state(baked, report)
 
 
 def write(target, data):
-    if target.read_bytes() == data: return
+    if target.is_file() and target.read_bytes() == data: return
     temporary = target.with_name(target.name + '.18nov-tmp')
     temporary.write_bytes(data); os.replace(temporary, target)
 
@@ -181,22 +198,28 @@ def write(target, data):
 def set_counts(live, side):
     """Only the counts this bake owns; every other manifest key stays as other bakes left it."""
     manifest = json.loads((live/'manifest.json').read_bytes())
+    if counts(manifest) == side:
+        return
     for key, value in side.items(): manifest[key]['count'] = value['count']
     write(live/'manifest.json', compact(manifest))
 
 
-def uninstall(stage, baked, report=None):
+def uninstall(stage, baked, report=None, *, upgrade=False):
     """Undo install: put back each pinned file from STAGE.before/ (checked against its before hash) and set the
-    owned counts back. Refuses before writing on land or kept bytes that are not this receipt's. Run again: it does nothing."""
-    report = stage_receipt(report or json.loads(RECEIPT.read_text()), stage)
+    owned counts back. An upgrade rollback uses STAGE.pre-upgrade/."""
     stage, baked = Path(stage), Path(baked)
-    live, keep = baked/FOLDER, stage.with_name(stage.name + '.before')
+    original = report or json.loads(RECEIPT.read_text())
+    report = stage_receipt(original)
+    if upgrade:
+        report = upgrade_receipt(baked, original, report)
+    live, keep = baked/FOLDER, stage.with_name(stage.name + ('.pre-upgrade' if upgrade else '.before'))
     names = {staged_name(f['file']): f for f in report['files']}
     (m,) = report['manifests']
     for name, f in names.items():
         now = sha(target(baked, f['file']).read_bytes())
         if now not in (f['before'], f['sha256']): raise ValueError(f'live {f["file"]} is neither before nor after; refusing')
-        if now == f['sha256'] and (not (keep/name).exists() or sha((keep/name).read_bytes()) != f['before']):
+        backup = keep/name
+        if (backup.exists() and sha(backup.read_bytes()) != f['before']) or (now == f['sha256'] and not backup.exists()):
             raise ValueError(f'{keep.name}/{name} is missing or not the pinned before bytes; refusing')
     if counts(json.loads((live/'manifest.json').read_bytes())) not in (m['before'], m['after']):
         raise ValueError('live manifest counts are neither before nor after; refusing')
@@ -287,13 +310,19 @@ def fixture():
         assert companion.read_bytes() == b'split'
         companion.write_bytes(b'original')
         try:
-            state(root, stage_receipt(paired, stage))
+            state(root, stage_receipt(paired))
         except AssertionError:
             pass
         else:
             raise AssertionError('Accepted staged roads with the old pre-bed lines')
         assert install(stage, root, paired) == 'after'
         assert uninstall(stage, root, paired) == 'before' and companion.read_bytes() == b'original'
+        lay(1, 2)
+        assert install(stage, root, paired, upgrade=True) == 'after'
+        assert (stage.with_name(stage.name + '.pre-upgrade')/'a.json').read_bytes() == b'2'
+        assert install(stage, root, paired, upgrade=True) == 'after'
+        assert uninstall(stage, root, paired, upgrade=True) == 'before'
+        assert (root/FOLDER/'a.json').read_bytes() == b'2' and companion.read_bytes() == b'original'
 
 
 def land(baked):
@@ -306,6 +335,8 @@ def land(baked):
     repaired = companion.is_file() and sha(companion.read_bytes()) == bed['companion']['sha256']
     pins = receipt_for(report, repaired)
     mode = state(baked, pins, followups)
+    if mode == 'after' and not repaired:
+        print('WARNING: the original step-35 install has unsplit pre-bed lines. Use the receipt upgrade before rebaking props.', file=sys.stderr)
     print(f'PASS 18 Nov Mabou land is {mode} ({len(pins["files"])} files and the manifest counts); fixture: half install, counts left behind and unknown bytes refused; install/uninstall refusals write nothing, kept keys and bytes, idempotent')
 
 
@@ -314,6 +345,10 @@ if __name__ == '__main__':
         land(Path(sys.argv[2]) if len(sys.argv) == 3 else HERE.parents[1]/'data/baked')
     elif len(sys.argv) == 4 and sys.argv[1] == 'uninstall':
         print(f'PASS 18 Nov Mabou land is {uninstall(sys.argv[2], sys.argv[3])}')
+    elif len(sys.argv) == 4 and sys.argv[1] in ('upgrade', 'rollback-upgrade'):
+        action = install if sys.argv[1] == 'upgrade' else uninstall
+        result = action(sys.argv[2], sys.argv[3], upgrade=True)
+        print(f'PASS step-35 road-bed upgrade is {result}; rollback bytes in {Path(sys.argv[2]).name}.pre-upgrade/')
     elif len(sys.argv) == 4 and sys.argv[1] in ('record', 'verify', 'install'):
         if sys.argv[1] == 'record': print(json.dumps(record(sys.argv[2], sys.argv[3]), indent=1))
         elif sys.argv[1] == 'verify': verify(sys.argv[2], sys.argv[3])

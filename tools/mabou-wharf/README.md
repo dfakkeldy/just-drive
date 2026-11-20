@@ -11,6 +11,9 @@ python3 tools/mabou-wharf/receipt.py verify data/baked/terrain data/work/mabou-w
 
 The stage retains the road centrelines and the existing road-bed marker. It changes 11 road field tiles, the road list, and three files that reference roads. The approach and its apron drive as gravel. They stay service lanes in the mail route data. The sidewalk plan lies farther east and keeps its existing meshes. The stage also works in an isolated worktree with a read-only link to the installed terrain.
 
+After the step-35 road-bed upgrade, make a fresh wharf stage from that pack and pass its report folder with `--overview`.
+The wharf receipt checks both the original and repaired road-bed variants.
+
 The main thread installs the verified stage before publishing and keeps the automatically created `mabou-wharf-stage.before` folder for rollback.
 
 ```sh
