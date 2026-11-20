@@ -5,6 +5,7 @@ import {GroundCover,clearsGroundTrees,growsGroundGrass} from '../web/src/ground-
 import {Terrain} from '../web/src/terrain.ts';
 import {Trees} from '../web/src/trees.ts';
 import {Vehicle} from '../web/src/vehicle.ts';
+import {BikeRide} from '../web/src/bike-ride.ts';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import {createRequire} from 'node:module';
 const ts=createRequire(new URL('../web/package.json',import.meta.url))('typescript');
@@ -76,6 +77,29 @@ function driving(VehicleClass){
 }
 driving(Vehicle);console.log('PASS production Vehicle gravel selection and mapped-road priority');
 
+function bikeDriving(BikeClass){
+ const sample=(surface,deck=null)=>{
+  const rig={root:new THREE.Group(),pose(){}};
+  const terrain={heightAt:()=>100,withContactHeight:(_body,read)=>read(),surfaceAt:()=>({
+   ground:100,canopy:0,kind:0,washboard:false,roadDist:99,halfWidth:3,level:8,...surface,
+  })};
+  const bike=new BikeClass(rig,terrain,{nearest:()=>null,deckHeight:()=>deck},0);
+  assert.ok(bike.place(0,0,0));
+  for(let i=0;i<12;i++)bike.update(1/120,{throttle:.5,steer:0,handbrake:false});
+  return {surface:bike.surfaceName,speed:bike.speed};
+ };
+ const gravel=sample({kind:3,roadDist:0});
+ assert.equal(gravel.surface,'gravel');
+ assert.deepEqual(sample({mineral:true}),gravel,'confirmed mineral uses the bike gravel response');
+ assert.deepEqual(sample({mineral:true,kind:1,canopy:5}),gravel,'confirmed mineral wins off the road and under stale canopy');
+ assert.equal(sample({}).surface,'grass');
+ assert.equal(sample({canopy:5}).surface,'brush');
+ assert.equal(sample({mineral:true,kind:1,roadDist:0}).surface,'pavement');
+ assert.equal(sample({mineral:true,deck:true}).surface,'concrete');
+ assert.equal(sample({mineral:true},100).surface,'pavement');
+}
+bikeDriving(BikeRide);console.log('PASS production BikeRide mineral, grass, brush, road and deck handling');
+
 if(process.argv.includes('--mutations')){
  assert.throws(()=>bootOrder(mainSource.replace('await terrain.readGroundCover()','terrain.readGroundCover()')));console.log('KILLED unawaited ground initialization');
  assert.throws(()=>bootOrder(mainSource.replace('if (ERA.modern) await terrain.readGroundCover()','await terrain.readGroundCover()')));console.log('KILLED ground classes in the 1884 era');
@@ -108,4 +132,10 @@ if(process.argv.includes('--mutations')){
  const r=await build({entryPoints:['web/src/vehicle.ts'],bundle:true,write:false,platform:'node',format:'esm',logLevel:'silent',plugins:[{name:'mineral-feel-mutant',setup(b){b.onLoad({filter:/\/vehicle\.ts$/},()=>({contents:vehicleSource.replace(from,': s.mineral ? SURFACES.grass :'),loader:'ts',resolveDir:process.cwd()+'/web/src'}));}}]});
  const api=await import('data:text/javascript;base64,'+Buffer.from(r.outputFiles[0].text).toString('base64'));
  assert.throws(()=>driving(api.Vehicle));console.log('KILLED mineral gravel feel removed');
+ const bikeSource=readFileSync('web/src/bike-ride.ts','utf8'),mineral='return s.mineral ? SURFACES.gravel :';
+ assert.ok(bikeSource.includes(mineral),'bike mineral anchor');
+ const bikeBundle=await build({entryPoints:['web/src/bike-ride.ts'],bundle:true,write:false,platform:'node',format:'esm',logLevel:'silent',plugins:[{name:'bike-mineral-mutant',setup(b){b.onLoad({filter:/\/bike-ride\.ts$/},()=>({contents:bikeSource.replace(mineral,'return'),loader:'ts',resolveDir:process.cwd()+'/web/src'}));}}]});
+ const bikeApi=await import('data:text/javascript;base64,'+Buffer.from(bikeBundle.outputFiles[0].text).toString('base64'));
+ assert.throws(()=>bikeDriving(bikeApi.BikeRide),{message:/confirmed mineral uses the bike gravel response/});
+ console.log('KILLED bike mineral gravel feel removed');
 }
