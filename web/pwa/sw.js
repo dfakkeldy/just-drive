@@ -364,6 +364,9 @@ async function resetResource(request,path,event) {
 }
 async function resource(request,path,event={}) {
   if(path.startsWith('/areas/')) return fetch(request);
+  // A chunk of app.js (web/area-chunks-build.ts) is named by its content hash: any saved copy is the right file, so it
+  // needs no page binding. A late import must not meet a binding race and be told to update.
+  if(path.startsWith('/offline/chunks/')) { try { const r=await caches.match(path); if(r) return r; } catch { /* Read failure: the network copy. */ } return fetch(request); }
   const isData=path.startsWith('/terrain/') || path.startsWith('/audio/') || path.startsWith('/models/') || path.startsWith('/areas/');
   if(disabled) return isData ? resetResource(request,path,event) : fetch(request);
   const token=new URL(request.url).searchParams.get('mmm-page'), id=event.clientId || '__non_client__';
