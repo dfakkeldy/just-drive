@@ -32,16 +32,16 @@
     "fingerprints": {
       "files": {
         "buildings.json": {
-          "sha256": "2dedcbdb985707f9834606dc9e75266fb8e893107e2e90bd342806f292d3c9d8",
-          "bytes": 352740
+          "sha256": "2e6c321f544fabaa589f94b81e2b853140432cf84d40ca18f9081dff8919f7fc",
+          "bytes": 354939
         },
         "cover.png": {
           "sha256": "87cfc7644dd7471dc9b128e8fc2101fadeb6c0a0ee86ca5fe4a4294aa49ac01b",
           "bytes": 835637
         },
         "manifest.json": {
-          "sha256": "fb9b2e48929c146fb1a881bea820d3742f7acefbc87ff56af283467482ee7cc9",
-          "bytes": 48396,
+          "sha256": "9ba374d4d730a881048b18a5fbde4e2c66f52851883a156f8d0d259c5edb0ac3",
+          "bytes": 48441,
           "without": [
             "buildingStyles",
             "paved",
@@ -49,18 +49,18 @@
           ]
         },
         "roads.json": {
-          "sha256": "2a34feac490ceccad35af2b6ffc5fac1315baaa72d3c8795828dfed4cc874f82",
-          "bytes": 3123542
+          "sha256": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9",
+          "bytes": 3127528
         },
         "streams.json": {
-          "sha256": "562b02cf8f3142e63e4dc43fcbac433e674c9a990812c4f167feeeccc7404360",
-          "bytes": 565993
+          "sha256": "85b6ece7db51cdcb96db3e67f38182f06310a46bfff7b97ae6276315581bbb32",
+          "bytes": 565995
         }
       },
       "terrain": {
-        "sha256": "c211494219b36ea22c171c13d62dbe2774a12b9c7cb5fb7598cd2df532e46228",
-        "count": 1023,
-        "bytes": 54766087,
+        "sha256": "ea8217c29a23e0cebd4e2bff11f695aef07c7dd8a01fd2f83e7742a6a5dd2bd7",
+        "count": 1025,
+        "bytes": 54862618,
         "files": [
           {
             "file": "6/24_32.png",
@@ -1984,8 +1984,8 @@
           },
           {
             "file": "8/103_120.r.png",
-            "sha256": "96c74f92b9df6837814c835a362d9ddcdae219797737b1dda72f22c550bd0d2a",
-            "bytes": 5149
+            "sha256": "31f648b936b43139618739436f35461dd4a67326622f694a2fd5b5e44e83044a",
+            "bytes": 5212
           },
           {
             "file": "8/103_152.png",
@@ -2024,8 +2024,8 @@
           },
           {
             "file": "8/104_120.r.png",
-            "sha256": "85b3ac9bba3431b55d1f6bc101ca6fa9f4e0bcddd3c3195fe188e2d18242a0a9",
-            "bytes": 4819
+            "sha256": "cccf141e5e61a817a56315711a84e64a5a3307c6a222b0b5404f93fef9bd5c46",
+            "bytes": 4810
           },
           {
             "file": "8/105_112.png",
@@ -2054,8 +2054,8 @@
           },
           {
             "file": "8/105_120.r.png",
-            "sha256": "3ef18a3fa9e398758bb6a051e08e6266068371b96415911cad84a1ff55305147",
-            "bytes": 3097
+            "sha256": "03460749f78d7d4afbd82f863dfdfb6d66122dbc1d261f741ca374f98e8710e8",
+            "bytes": 3051
           },
           {
             "file": "8/106_101.png",
@@ -2109,8 +2109,8 @@
           },
           {
             "file": "8/106_120.r.png",
-            "sha256": "d86c1f3cbfdacb508dd00a549a86c815819a8bd011631397a98fed1dc8058873",
-            "bytes": 2132
+            "sha256": "6af1e7a07de50e434a9409ee73096a1daf62e91175cdf8800b721089837eb9a5",
+            "bytes": 2140
           },
           {
             "file": "8/107_100.png",
@@ -2794,8 +2794,8 @@
           },
           {
             "file": "8/112_120.r.png",
-            "sha256": "0d5bf20c6dabd371dad6dcb1a9a94fb1725c100eb666eaeb54418c4b3b1f5878",
-            "bytes": 4294
+            "sha256": "08d9e0791218dd3beee20c4183c9c0a4cd59f493a1fdacf1e9563ca3b6e39aaf",
+            "bytes": 6192
           },
           {
             "file": "8/112_139.png",
@@ -2868,14 +2868,24 @@
             "bytes": 91288
           },
           {
+            "file": "8/113_119.png",
+            "sha256": "5ff6033fe302cc954dd2dba44bad006f2e26647176054432b995ac5925bf593e",
+            "bytes": 92461
+          },
+          {
+            "file": "8/113_119.r.png",
+            "sha256": "bbcf39b61f0f407832113ca647c0d89319001ee2ee9fa920bf83b8eb870bf873",
+            "bytes": 852
+          },
+          {
             "file": "8/113_120.png",
             "sha256": "0b667dc574d66eb7e8938ab73c8b639efdbd03a4ecf2467b9ee5184c3e5b8a4c",
             "bytes": 98432
           },
           {
             "file": "8/113_120.r.png",
-            "sha256": "06825453981aed474899ba7d18876b152cb171b21566204d06e58091f7456c2e",
-            "bytes": 1466
+            "sha256": "0df0f01c286561ac35fbc608bca278b99cf7df82ba3ed999ff6eea5c3fdfe239",
+            "bytes": 2770
           },
           {
             "file": "8/113_122.png",
@@ -5849,7 +5859,7 @@
       "drawn": 35
     },
     "roadside": {
-      "candidates": 1442,
+      "candidates": 1446,
       "target": 257,
       "drawn": 257
     },
