@@ -25,9 +25,13 @@ body.exploreMode #title #titleStart,#title.justDrive #titleStart{background:#a7d
 #title :is(#modeChoice,#dailyChoice,#vehicleChoice) button[aria-pressed="true"]{border:2px solid var(--title-accent)!important}
 #title :is(#modeChoice,#dailyChoice,#vehicleChoice) button[aria-pressed="true"]::before{content:'✓ ';font-weight:800}
 #titleControls summary{min-height:44px;display:list-item;align-content:center;cursor:pointer}
-#titleControls kbd{display:inline-block;background:#20303b;border:1px solid #71818e;border-radius:4px;padding:1px 4px;font:inherit;white-space:normal}
+#titleControls kbd{display:inline-block;background:#20303b;border:1px solid #71818e;border-radius:4px;padding:2px 6px;border-bottom-color:#0b1620;font:700 12px ui-monospace,Menlo,Consolas,monospace;white-space:normal}
 #titleControls dl{grid-template-columns:minmax(90px,auto) minmax(0,1fr)}
 #title .titleFooter{display:flex;flex-wrap:wrap;align-items:center;gap:0 4px;margin-top:16px;font-size:13px}
+#title .titleFooter>span{white-space:nowrap}
+#title #modeDescription{font:13px/1.4 system-ui;color:var(--ink-dim);margin:6px 0 12px}
+#titleScrollFade{position:fixed;z-index:3;height:24px;pointer-events:none;background:linear-gradient(transparent,var(--panel-solid,#0c141c));border-radius:0 0 10px 10px}
+#titleScrollFade[hidden]{display:none}
 #title .titleFooter #titleCredits{margin:0;min-height:44px}
 #title :is(#titleOtherGame,#exploreCaution,.titleFooter){font:13px/1.4 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
 #title :is(#modeChoice,#vehicleChoice){margin-top:18px!important}
@@ -78,6 +82,10 @@ body.exploreMode #modeChoice button[aria-pressed="true"],#title.justDrive #modeC
 
 `;
 
+const PHONE_CSS = `
+body:has(#phoneTop) #title{padding-top:calc(76px + env(safe-area-inset-top,0px));align-items:safe center;box-sizing:border-box}
+body:has(#phoneTop) #title #titleCard{max-height:calc(100dvh - 92px - env(safe-area-inset-top,0px));height:auto;padding-bottom:16px!important}
+`;
 const JUST_CSS = `
 #title.justDrive,#title.justDrive #titleCard{box-sizing:border-box}
 @media(max-height:500px) and (min-width:650px){
@@ -124,7 +132,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   // Three cards: the mail game; an area that has no mail game yet (areaName, mail mode); and the driving mode of any area.
   const historical = era.id !== 'today';
   const explore = mode === 'explore', fired = mode === 'fired', name = era.title ?? (just ? `Just Drive: ${areaName ?? 'Mabou'}` : explore ? (areaName ? `Driving ${areaName}` : EXPLORE_TITLE) : areaName ? `Drive around ${areaName}` : 'Mabou Mail Madness');
-  document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS + (just && !historical ? JUST_CSS : '') }));
+  document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS + PHONE_CSS + (just && !historical ? JUST_CSS : '') }));
   const root = document.createElement('div');
   root.id = 'title';
   if (just) root.classList.add('justDrive');
@@ -178,20 +186,36 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     <p class="tag">${historical ? 'A fictional journey · Cape Breton' : explore ? 'The land at your own pace' : areaName ? 'Real land and roads' : daily ? `Today’s run · ${shortDate(daily.date)} · the same for everybody` : fired ? 'Get Fired · a job you cannot lose' : 'A route you cannot win'}</p>
     <h1>${explore ? name : areaName ? `Drive around <span>${areaName}</span>` : 'Mabou <span>Mail</span> Madness'}</h1>
     <p>${historical ? "A work of fiction, based on an 1884 survey sheet. Places are approximate. It shows no person's land." : explore ? `Drive around the real land near ${place}, Cape Breton, and find places at your own pace.` : daily ? dailyText : fired ? 'Same route, same clock. Today every complaint counts for you. Climb the discipline ladder to Fired before 18:00. The union grieves every step.' : areaName ? `Explore the real land and roads around ${areaName}, Cape Breton.` : 'Deliver the day’s run around Mabou, Cape Breton. Stay off the lawns. Somebody will phone the post office anyway.'}</p>
-    ${mailCard ? `<div id="modeChoice" role="group" aria-label="How to play"><button id="modeMail" aria-pressed="${!explore && !fired}">Deliver the mail</button><button id="modeExplore" aria-pressed="${explore}">Just drive</button><button id="modeFired" aria-pressed="${fired && !daily}">Get fired</button></div><div id="dailyChoice"><button id="modeDaily" aria-pressed="${!!daily}">Today’s run: five minutes, complaint bingo</button></div>` : ''}
+    ${mailCard ? `<div id="modeChoice" role="group" aria-label="How to play" aria-describedby="modeDescription"><button id="modeMail" aria-pressed="${!explore && !fired}">Deliver the mail</button><button id="modeExplore" aria-pressed="${explore}">Just drive</button><button id="modeFired" aria-pressed="${fired && !daily}">Get fired</button></div><p id="modeDescription">${explore ? "The land at your own pace" : daily ? "Five minutes on the clock. Fill the complaint bingo card." : fired ? "Same route, same clock. Today every complaint counts for you." : "Deliver the day’s run around Mabou, Cape Breton."}</p><div id="dailyChoice"><button id="modeDaily" aria-pressed="${!!daily}">Today’s run: five minutes, complaint bingo</button></div>` : ''}
     ${daily ? `<div id="titleBingo" role="list" aria-label="Today’s complaint bingo card">${daily.squares.map(s => `<span role="listitem">${s.label.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</span>`).join('')}</div>
     ` : ''}<p id="waysOut" hidden></p>
     <div id="titleControls">${controls()}</div>
 
     <button id="titleStart">${ride?.kind === 'horse' ? 'Start riding' : explore || areaName ? 'Start driving' : daily ? 'Start today’s run' : 'Start the shift'}</button>
-    ${explore ? '<p id="exploreCaution">A toy for getting a feel for the place. It is not a map for navigation or for safety. Roads and trails can differ on the day.</p>' : ''}
-    ${otherLine}
     ${door ? `<a id="titleEra" href="${door.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">${historical ? 'Back to today →' : eraDoorText(eraWords!.name)}</a>
-    ` : ''}<p class="titleFooter">Preview build · Cape Breton, Nova Scotia · <button id="titleCredits" aria-expanded="false">Credits and data</button></p>
+    ` : ''}${otherLine}
+    ${explore ? '<p id="exploreCaution">A toy for getting a feel for the place. It is not a map for navigation or for safety. Roads and trails can differ on the day.</p>' : ''}
+    <p class="titleFooter"><span>Preview build</span><span>· Cape Breton, Nova Scotia</span><span>· <button id="titleCredits" aria-expanded="false">Credits and data</button></span></p>
     <div id="titleLegal" hidden>${CONTACT_LINE}${aboutLine(just)}${historical ? `${(historyArea(eraAreaId(era)) ?? HISTORY_AREAS.mabou).credits}${LAND_CREDITS}${FAR_CREDITS}${MUSIC_CREDIT}${ENGINE_CREDIT}` : just ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : areaName ? LEGAL.replace(/<p>.*?<\/p>/, '<p>The land, roads and mapped building shapes are real.</p>') : explore ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : LEGAL}${paved ? PAVED_CREDIT : ''}</div>
   </div>`;
-  if (explore && ride) { const buttons = vehicleButtons(ride); const modeChoice = root.querySelector('#modeChoice'); if (modeChoice) modeChoice.after(buttons); else root.querySelector('#titleControls')!.before(buttons); }
+  if (explore && ride) { const buttons = vehicleButtons(ride); const modeChoice = root.querySelector('#modeChoice'); if (modeChoice) (root.querySelector('#modeDescription') ?? modeChoice).after(buttons); else root.querySelector('#titleControls')!.before(buttons); }
   document.body.appendChild(root);
+  const card = root.querySelector<HTMLElement>('#titleCard')!;
+  const fade = Object.assign(document.createElement('div'), { id: 'titleScrollFade', hidden: true });
+  fade.setAttribute('aria-hidden', 'true'); root.append(fade);
+  const refreshFade = () => {
+    const more = !root.hidden && card.scrollTop + card.clientHeight < card.scrollHeight - 1;
+    if (fade.hidden === more) fade.hidden = !more;
+    if (!more) return;
+    const box = card.getBoundingClientRect();
+    fade.style.left = `${box.left + 1}px`; fade.style.width = `${box.width - 2}px`; fade.style.top = `${box.bottom - 25}px`;
+  };
+  card.addEventListener('scroll', refreshFade);
+  root.addEventListener('toggle', refreshFade, true);
+  addEventListener('resize', refreshFade);
+  if (typeof ResizeObserver === 'function') new ResizeObserver(refreshFade).observe(card);
+  if (typeof MutationObserver === 'function') new MutationObserver(refreshFade).observe(card, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden','open'] });
+  refreshFade();
   for (const [id, choice] of [['modeMail', 'mail'], ['modeExplore', 'explore'], ['modeFired', 'fired']] as const) root.querySelector('#' + id)?.addEventListener('click', () => { if (choice !== mode || daily) chooseMode(choice); });
   root.querySelector('#modeDaily')?.addEventListener('click', () => { if (!daily) chooseDaily(); });
   const start = root.querySelector<HTMLButtonElement>('#titleStart')!;

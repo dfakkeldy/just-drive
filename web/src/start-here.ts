@@ -204,8 +204,8 @@ const CSS = `
 /* Phones. At 390x844 the card reached 847px once the two-line DRONE row came (#219): spacing is tight upright, and in both
    orientations the card scrolls inside itself rather than run off the screen when it still grows. Buttons keep 44px. */
 @media(max-width:649px){
- #title.justDrive:has(#startHere){padding:10px;align-items:safe center}
- #title.justDrive #titleCard:has(>#startHere){padding:14px 16px 12px;max-width:100%;max-height:calc(100dvh - 20px);overflow-y:auto;overscroll-behavior:contain}
+ #title.justDrive:has(#startHere){padding:calc(76px + env(safe-area-inset-top,0px)) 10px 10px;align-items:safe center}
+ #title.justDrive #titleCard:has(>#startHere){padding:14px 16px 12px;max-width:100%;max-height:calc(100dvh - 92px - env(safe-area-inset-top,0px));height:auto;overflow-y:auto;overscroll-behavior:contain}
  #title.justDrive:has(#startHere) h1{font-size:30px}
  #title.justDrive:has(#startHere) .tag{margin-bottom:6px}
  #title.justDrive:has(#startHere) p:not(.tag){font-size:13px;line-height:1.4;margin-top:5px}
@@ -243,7 +243,7 @@ export function startHere(options: StartHereOptions): void {
   button.setAttribute('aria-describedby', hint.id);
   group.append(button, hint); start.after(group);
   const eraDoor = document.getElementById('titleEra');
-  if (eraDoor) hint.after(eraDoor);
+  if (eraDoor) { hint.after(eraDoor); const other = document.getElementById('titleOtherGame'); if (other) eraDoor.after(other); }
   const status = Object.assign(document.createElement('p'), { id: 'startHereStatus' });
   status.setAttribute('role', 'status'); document.body.appendChild(status);
   let generation = 0, messageTimer: ReturnType<typeof setTimeout> | undefined;

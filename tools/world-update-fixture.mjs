@@ -50,7 +50,8 @@ export function spy(source, ending = false, dev = true, absent = false, override
     // The drift dust and meter (drift-feedback.ts): untraced too, nothing slides here.
     driftFeedback: { update() {} },
     pad: { show: trace('pad.show') }, relief: { ...update('relief'), breaks: 0, busy: false },
-    miniMap: { ...update('miniMap'), show: trace('miniMap.show') }, mapTimer: 0, refreshMap: trace('refreshMap'), mapStops: [], mapMarks: [], mapCars: [],
+    drone: { active: false },
+    miniMap: { setFlight() {}, ...update('miniMap'), show: trace('miniMap.show') }, mapTimer: 0, refreshMap: trace('refreshMap'), mapStops: [], mapMarks: [], mapCars: [],
     propertyLayer: null, // Default-off ground mode has no per-frame update.
     placesUI: { ...update('placesUI'), busy: false }, journey: update('journey'),
     bigMap: null, footpaths: null, // The explore map dialog and hike paths: absent in mail mode and history eras.
@@ -152,7 +153,7 @@ function traceOf(result) {
 const scenarios = [{}, { ending: true }, { hidden: true }, { started: false }, { fly: true }, { absent: true }, { ending: true, absent: true }];
 function run(source, s, dev = true) {
   return spy(source, s.ending, dev, s.absent, {
-    ...(s.hidden ? { document: { hidden: true } } : {}), ...(s.started === false ? { started: false } : {}),
+    ...(s.hidden ? { document: { hidden: true, body: { classList: { toggle() {} } } } } : {}), ...(s.started === false ? { started: false } : {}),
     ...(s.fly ? { mode: 'fly', sunShadows: null } : {}),
   });
 }

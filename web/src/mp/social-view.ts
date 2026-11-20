@@ -1,10 +1,10 @@
 import { Vector3, type Camera } from 'three';
 import { mountRoomCard, removeRoomCard } from './room-cards';
-import type { TagBox } from './ghosts';
+import { PALETTE, type TagBox } from './ghosts';
 import type { Net } from './net';
 import type { PeerView } from './wire';
 import { PHRASES, CHAT_MS, GAME_PHRASES, isPhraseId, readHandle } from './social';
-interface Bubble { node: HTMLElement; phrase: number; phone: boolean; width: number; height: number }
+interface Bubble { node: HTMLElement; phrase: number; phone: boolean; speaker: string; width: number; height: number }
 const lowerTagFirst = (a: TagBox, b: TagBox) => b.bottom - a.bottom;
 export function savedHandle(): string | undefined {
   try { return readHandle(localStorage.getItem('mmm.mp.handle')) ?? undefined; } catch { return undefined; }
@@ -13,6 +13,7 @@ export class SocialView {
   private readonly root = document.createElement('details');
   private readonly bubbles = document.createElement('div');
   private readonly roster = document.createElement('ul');
+  private readonly peopleHeading = document.createElement('h4');
   private readonly log = document.createElement('div');
   private readonly point = new Vector3();
   private shown = '';
@@ -32,12 +33,12 @@ export class SocialView {
     this.root.id = 'mpSocial';
     this.root.open = !touch;
     mountRoomCard(this.root, touch);
-    const title = document.createElement('summary'); title.textContent = 'Room drivers and chat';
-    const people = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = 'Room drivers'; people.append(summary, this.roster);
-    this.roster.id = 'mpRoster'; this.roster.style.cssText = 'padding-left:20px;margin:4px';
-    const button = this.chatButton; button.id = 'mpChatButton'; button.textContent = 'Chat'; button.setAttribute('aria-expanded','false');
+    const title = document.createElement('summary'); title.textContent = 'Drivers and chat';
+    this.peopleHeading.textContent = 'Drivers (0)';
+    this.roster.id = 'mpRoster'; this.roster.setAttribute('role', 'list');
+    const button = this.chatButton; button.id = 'mpChatButton'; button.textContent = touch ? 'Quick chat' : 'Quick chat · or keys 1-8'; button.setAttribute('aria-expanded','false');
     const grid = this.grid; grid.id = 'mpChatGrid'; grid.hidden = true; grid.style.cssText = 'grid-template-columns:1fr 1fr;gap:4px';
-    const style = (b: HTMLButtonElement) => b.style.cssText = 'min-height:44px;background:#24445c;color:white;border:1px solid #8198aa;border-radius:6px;font:inherit;padding:5px 8px';
+    const style = (b: HTMLButtonElement) => { b.type = 'button'; };
     style(button);
     button.onclick = () => { grid.hidden = !grid.hidden; grid.style.display = grid.hidden ? 'none' : 'grid'; button.setAttribute('aria-expanded',String(!grid.hidden)); };
     PHRASES.forEach((phrase, id) => {
@@ -47,7 +48,7 @@ export class SocialView {
       b.onclick = () => { this.net.chat(id); grid.hidden = true; grid.style.display = 'none'; button.setAttribute('aria-expanded','false'); }; grid.append(b);
     });
     this.log.id = 'mpChatLog'; this.log.setAttribute('role','log'); this.log.setAttribute('aria-label','Quick chat');
-    this.root.append(title, people, button, grid, this.log);
+    this.root.append(title, this.peopleHeading, this.roster, this.log, button, grid);
     this.root.addEventListener('keydown', ev => ev.stopPropagation());
     this.bubbles.id = 'mpChatBubbles'; this.bubbles.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:5;overflow:hidden';
     document.body.append(this.bubbles); addEventListener('keydown', this.key, true);
@@ -60,9 +61,14 @@ export class SocialView {
       this.chatButton.hidden = !this.net.canChat;
       if (!this.net.canChat) { this.grid.hidden = true; this.grid.style.display = 'none'; this.chatButton.setAttribute('aria-expanded','false'); }
     }
-    const text = this.net.roster.map(p => p.name).join('\n') + this.net.chats.map(c => `${c.at}:${c.id}:${c.phrase}`).join(',');
+    const text = this.net.roster.map(p => `${p.id}:${p.hue}:${p.name}`).join('\n') + this.net.chats.map(c => `${c.at}:${c.id}:${c.phrase}`).join(',');
     if (text !== this.shown) {
-      this.shown = text; this.roster.replaceChildren(...this.net.roster.map(p => Object.assign(document.createElement('li'), { textContent:p.name })));
+      this.shown = text; this.peopleHeading.textContent = `Drivers (${this.net.roster.length})`;
+      this.roster.replaceChildren(...this.net.roster.map(p => {
+        const row = document.createElement('li'), dot = document.createElement('i');
+        dot.setAttribute('aria-hidden', 'true'); dot.style.background = '#' + PALETTE[((p.hue % 8) + 8) % 8 | 0].toString(16).padStart(6, '0');
+        row.append(dot, document.createTextNode(p.name)); return row;
+      }));
       this.log.replaceChildren(...this.net.chats.map(c => Object.assign(document.createElement('div'), { textContent:`${this.net.names.get(c.id) ?? 'Driver'}: ${PHRASES[c.phrase]}` })));
     }
     const latest = this.net.bubbles;
@@ -72,10 +78,11 @@ export class SocialView {
     for (const tag of tags) { this.sortedTags.push(tag); this.tagsById.set(tag.id, tag); }
     this.sortedTags.sort(lowerTagFirst);
     const phone = document.body.classList.contains('tcOn');
+    const tiles = phone && latest.size ? document.getElementById('phoneTop')?.getBoundingClientRect() : null;
     for (const c of latest.values()) {
       let entry = this.bubbleNodes.get(c.id);
       if (!entry) {
-        entry = { node: document.createElement('div'), phrase: -1, phone, width: 0, height: 0 };
+        entry = { node: document.createElement('div'), phrase: -1, phone, speaker: '', width: 0, height: 0 };
         this.bubbleNodes.set(c.id, entry); this.bubbles.append(entry.node);
       }
       const bubble = entry.node;
@@ -89,11 +96,12 @@ export class SocialView {
       this.point.applyMatrix4(camera.projectionMatrix);
       if (Math.abs(this.point.x)>1 || Math.abs(this.point.y)>1 || this.point.z>1) continue;
       bubble.hidden = false;
-      if (entry.phrase !== c.phrase || entry.phone !== phone) {
-        bubble.textContent = PHRASES[c.phrase]; bubble.dataset.sender = String(c.id);
+      const speaker = this.net.names.get(c.id) ?? 'Driver';
+      if (entry.phrase !== c.phrase || entry.phone !== phone || entry.speaker !== speaker) {
+        bubble.textContent = `${speaker}: ${PHRASES[c.phrase]}`; bubble.dataset.sender = String(c.id);
         bubble.style.cssText = `position:absolute;transform:translate(-50%,-100%);background:#fff;color:#16262e;border-radius:12px;padding:6px 10px;font:600 ${phone ? 11 : 14}px system-ui;white-space:nowrap`;
         const rect = bubble.getBoundingClientRect();
-        entry.width = rect.width; entry.height = rect.height; entry.phrase = c.phrase; entry.phone = phone;
+        entry.width = rect.width; entry.height = rect.height; entry.phrase = c.phrase; entry.phone = phone; entry.speaker = speaker;
       }
       const x = (this.point.x + 1) * innerWidth / 2, screenY = (1 - this.point.y) * innerHeight / 2;
       const left = x - entry.width / 2, right = x + entry.width / 2;
@@ -102,6 +110,8 @@ export class SocialView {
       for (const tag of this.sortedTags) {
         if (left < tag.right && right > tag.left && bottom > tag.top - 8 && bottom - entry.height < tag.bottom + 8) bottom = tag.top - 8;
       }
+      // Keep a phone bubble below the tiles; hide it if its tag leaves no room.
+      if (tiles?.height && bottom - entry.height < tiles.bottom + 8) { bubble.hidden = true; continue; }
       bubble.style.left = `${x}px`;
       bubble.style.top = `${bottom}px`;
     }

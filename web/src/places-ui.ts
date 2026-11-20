@@ -10,8 +10,10 @@ export interface PlacesActions {
   jump(x: number, z: number, heading: number): void;
 }
 const CSS = `
-#placesButton{position:fixed;right:70px;top:10px;z-index:5;min-height:40px;padding:0 14px;border:1px solid #a3b9b3;border-radius:6px;background:var(--panel);color:var(--ink);font:700 12px var(--mono);cursor:pointer}
+#placesButton{cursor:pointer}
 #placeArrival{position:fixed;right:24px;bottom:32px;z-index:4;width:min(310px,calc(100% - 32px));box-sizing:border-box;padding:12px 16px;background:var(--panel);border:1px solid #89afa2;border-left:3px solid #a7d9bc;border-radius:6px;font:13px/1.45 var(--text);pointer-events:none}
+body:has(#settings.open) #placeArrival,body:has(#pauseScreen:not([hidden])) #placeArrival,body:has(#bigMap:not([hidden])) #placeArrival{display:none}
+#placesList .youAreHere{font:700 12px var(--text);color:#c1ead0}
 #placeArrival strong{display:block;color:#c1ead0;margin-bottom:4px}#placeArrival p{margin:0;color:var(--ink-dim)}
 #placesPanel{position:fixed;inset:0;z-index:21;display:grid;place-items:center;padding:16px;box-sizing:border-box;background:#071016ad;color:var(--ink);font:15px/1.5 var(--text);touch-action:pan-y}
 #placesCard{box-sizing:border-box;width:min(100%,560px);max-height:100%;overflow:hidden;display:flex;flex-direction:column;border:1px solid #89afa2;border-radius:10px;background:var(--panel-solid);padding:22px}
@@ -150,6 +152,12 @@ export class PlacesUI {
     if (place && place !== this.previous) {
       this.head.textContent = place.name; this.note.textContent = place.note;
       for (const hike of this.hikes.filter(h => h.trailhead === place.id)) this.note.append(document.createElement('br'), document.createTextNode(hikeFacts(hike)));
+    }
+    if (place !== this.previous) for (const button of this.panel.querySelectorAll<HTMLButtonElement>('[data-place]')) {
+      const here = button.dataset.place === place?.id;
+      if (here) button.setAttribute('aria-current', 'location'); else button.removeAttribute('aria-current');
+      button.querySelector('.youAreHere')?.remove();
+      if (here) button.append(Object.assign(document.createElement('small'), { className: 'youAreHere', textContent: 'You are here' }));
     }
     this.previous = place;
   }

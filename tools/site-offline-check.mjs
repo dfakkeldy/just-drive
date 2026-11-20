@@ -102,7 +102,7 @@ const plan=JSON.parse(readFileSync('tools/radio_stations.json','utf8'));
 const stations=PUBLIC_STATIONS.map(s=>({...s,tracks:s.tracks.map(t=>({...t,file:t.source+'.mp3',seconds:10}))}));
 function savedRadio(RadioClass){
  const saved=Object.fromEntries(['document','Audio','localStorage'].map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
- const element=()=>({style:{},classList:{toggle(){},add(){},remove(){}},setAttribute(){},append(){},appendChild(){},addEventListener(){}});
+ const element=()=>({style:{},classList:{contains(){return false;},toggle(){},add(){},remove(){}},setAttribute(){},append(){},appendChild(){},addEventListener(){}});
  try{
   globalThis.Audio=class{addEventListener(){}};
   globalThis.document={hidden:false,createElement:element,head:element(),body:element(),getElementById:()=>null,addEventListener(){}};

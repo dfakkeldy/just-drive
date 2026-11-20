@@ -62,9 +62,11 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
             dress(${JSON.stringify(current)}, ${JSON.stringify(carrier === 'dev' ? 'devPage' : '')}); const after = measure();
             still.remove();
             return { before, after }; })()`);
-          // The climb changes these two surfaces. Every other box and paint stays pinned.
-          for(const id of ['settings','credit']){delete both.before[id];delete both.after[id];}
+          // The sheet, credit and gear have new pins below. All other paint stays pinned.
+          assert.deepEqual(both.after.gear.paint,['rgb(238, 242, 246)','rgb(12, 20, 28)','ui-monospace, "SF Mono", Menlo, Consolas, monospace','20px','normal','1','normal','6px','auto','block'],'shared gear paint');
+          for(const id of ['settings','credit','gear']){delete both.before[id];delete both.after[id];}
           assert.deepEqual(both.after, both.before, `${carrier} ${size} unchanged desktop boxes and paint`);
+          assert.deepEqual(await read(`(()=>{const e=document.getElementById('gear'),r=e.getBoundingClientRect(),s=getComputedStyle(e);return {w:r.width,h:r.height,right:innerWidth-r.right,top:r.top,fill:s.backgroundColor,rim:s.borderTopWidth,radius:s.borderRadius,font:s.fontSize,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===e}})()`),{w:44,h:44,right:10,top:10,fill:'rgb(12, 20, 28)',rim:'1px',radius:'6px',font:'20px',hit:true},'gear uses the shared desktop chip rule');
           assert.deepEqual(await read(`(()=>{const e=document.getElementById('credit'),s=getComputedStyle(e),r=e.getBoundingClientRect();return {size:s.fontSize,opacity:s.opacity,background:s.backgroundColor,radius:s.borderRadius,clear:r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight};})()`),{size:'12px',opacity:'1',background:'rgb(12, 20, 28)',radius:'4px',clear:true},'solid readable credit chip');
         }
         await read(`(${DRESS})(${JSON.stringify(phase === 'before' ? original(path) : current)}, ${JSON.stringify(phase === 'after' && carrier === 'dev' ? 'devPage' : '')})`);
@@ -101,11 +103,11 @@ for (const [width, height, scale] of [[1280, 720, 1], [1600, 1000, 1], [1280, 72
               const g = document.getElementById('picture'), panel = document.getElementById('settings'), over = document.getElementById('startOver');
               const buttons = [...g.querySelectorAll('button')];
               return { inPanel: g.parentElement === panel, beforeStartOver: !!(g.compareDocumentPosition(over) & Node.DOCUMENT_POSITION_FOLLOWING),
-                names: buttons.map((b) => b.textContent).join(), pressed: buttons.filter((b) => b.getAttribute('aria-pressed') === 'true').length,
+                names: buttons.map((b) => b.textContent.replace(/^✓ /,'')).join(), checks: buttons.filter(b=>b.textContent.startsWith('✓ ')).length, accent: buttons.filter(b=>b.getAttribute('aria-pressed')==='true').every(b=>getComputedStyle(b).borderTopWidth==='2px'&&getComputedStyle(b).borderTopColor==='rgb(208, 99, 46)'), pressed: buttons.filter((b) => b.getAttribute('aria-pressed') === 'true').length,
                 onTop: buttons.every((b) => { const r = b.getBoundingClientRect(), at = document.elementFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2);
                   return r.width >= 40 && r.height >= 30 && r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && at === b; }) };
             })()`);
-            assert.deepEqual(picture, {inPanel:true, beforeStartOver:true, names:'Sharp,Balanced,Fast', pressed:1, onTop:true}, `${carrier}: the Picture group is in the open settings panel, before Start over, with each button on top`);
+            assert.deepEqual(picture, {inPanel:true, beforeStartOver:true, names:'Sharp,Balanced,Fast', checks:1, accent:true, pressed:1, onTop:true}, `${carrier}: the Picture group is in the open settings panel, before Start over, with each button on top`);
             assert.ok(await lastReachable(), `${carrier}: last button remains reachable with the Picture group`);
             writeFileSync(`${out}/${phase}/desktop-${carrier}-${size}-picture.png`, Buffer.from((await send('Page.captureScreenshot', {format:'png'})).result.data, 'base64'));
           }

@@ -3,7 +3,7 @@
 
 /** The mail game on a keyboard. */
 export const KEYS: [string, string][] = [
-  ['Esc / P', 'Pause or resume. Room games do not pause.'],
+  ['Esc / P', 'Pause or resume. A room keeps going when you pause.'],
   ['W A S D / arrows', 'Drive. Hold S when stopped to reverse.'],
   ['M or E', 'Throw mail from the driver’s window, on the right.'],
   ['C', 'Take a photo. A photo taken before the damage is your only defence.'],
@@ -16,13 +16,13 @@ export const KEYS: [string, string][] = [
   ['Enter', 'End the shift and read the calls.'],
 ];
 export const TOUCH: [string, string][] = [
-  ['PAUSE', 'Pause or resume. Room games do not pause.'],
+  ['PAUSE', 'Pause or resume. A room keeps going when you pause.'],
   ['Left thumb', 'Slide the pad to steer.'],
   ['Right thumb', 'GO and BRAKE. Hold BRAKE when stopped to reverse. Both at once: handbrake.'],
   ['MAIL', 'Throw mail from the driver’s window, on the right.'],
   ['CAMERA', 'A photo taken before the damage is your only defence.'],
   ['RESET', 'Back on the road.'],
-  ['DRONE', 'Camera drone. Left stick climbs and turns, right stick flies; RETURN brings it back.'],
+  ['DRONE', 'Camera drone. Left stick climbs and turns, right stick flies; RETURN TO CAR brings it back. LAND NOW lands at once.'],
   ['BLADDER', 'Tap the gauge when the car is stopped. Look for houses first.'],
   ['RADIO', 'Tap for the next station. After the last one, off.'],
   ['\u2699', 'Settings. END SHIFT is in there: press it when the day is done.'],
@@ -41,7 +41,7 @@ export const DRIVING_TOUCH: [string, string][] = TOUCH.filter(([key]) => !['MAIL
 export function padKeys(kind = 'car', mail = true, radio = true): [string, string][] {
   const horse = kind === 'horse', bike = kind === 'bike';
   const rows: [string, string][] = [
-    ['Start', 'Pause or resume. Room games do not pause.'],
+    ['Start', 'Pause or resume. A room keeps going when you pause.'],
     ['Left stick', horse ? 'Guide the horse.' : bike ? 'Steer. In the air, whip left or right.' : 'Steer.'],
     ['RT / LT', horse ? 'Ride / stop. Hold LT at rest to back up.' : bike ? 'Ride / brake. In the air, RT pitches forward; LT pitches back.' : 'Go / brake. Hold LT when stopped to reverse.'],
     ['A', horse ? 'Stop.' : bike ? 'Rear brake and slide.' : 'Handbrake.'],

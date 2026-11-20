@@ -8,10 +8,29 @@ const CSS = `
 #mpRoom{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
 #mpRoom>h3{margin:0;font:700 13px system-ui;color:var(--ink-dim,#b9c5cb)}
 #mpRoom>*{flex:none;width:100%;box-sizing:border-box;margin:0}
-:is(#mpCards,#mpRoom)>details{background:#102531ed;color:#fff;border:1px solid #70939e;border-radius:10px;padding:10px;font:13px/1.4 system-ui}
+#mpRoom>.roomCaption{margin:0 0 4px;color:var(--ink-dim);font:13px/1.4 system-ui}
+:is(#mpCards,#mpRoom)>details{background:var(--panel-solid);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font:14px/1.4 system-ui}
+:is(#mpCards,#mpRoom) :is(button,select){box-sizing:border-box;font:inherit;max-width:100%;min-height:44px;margin:4px 0;color:inherit;background:transparent;border:1px solid #6b7780;border-radius:6px;padding:6px 10px}
+:is(#mpCards,#mpRoom) button{cursor:pointer}
+:is(#mpCards,#mpRoom) :is(button,select):disabled{opacity:.5;border-style:dashed;cursor:default}
+:is(#mpCards,#mpRoom) select{appearance:none;width:100%;padding-right:28px;background:var(--panel-solid) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='12'%3E%3Cpath d='m3 4 5 5 5-5' fill='none' stroke='%23b9c3cc'/%3E%3C/svg%3E") no-repeat right 8px center}
+:is(#mpCards,#mpRoom) :is(button,select):focus-visible{outline:3px solid #fff;outline-offset:2px}
+#mpSocial h4{font:700 13px system-ui;margin:12px 0 6px;color:var(--ink-dim)}
+#mpRoster{list-style:none;padding:0;margin:0 0 12px}
+#mpRoster li{display:flex;align-items:center;gap:8px;margin:4px 0}
+#mpRoster i{width:8px;height:8px;flex:none;border-radius:50%}
+#mpChatLog{font-size:13px;color:var(--ink-dim)}
+#mpChatButton{width:100%;text-align:left}
+#mpChatButton::after{content:'▸';float:right;transition:transform .15s}
+#mpChatButton[aria-expanded="true"]::after{transform:rotate(90deg)}
+.roomCountdown{position:fixed;left:50%;top:calc(72px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:7;pointer-events:none;color:#ffca64;text-shadow:0 2px 6px #000;font:800 56px/1 var(--mono);font-variant-numeric:tabular-nums}
+.roomCountdown[hidden]{display:none}
+body.tcOn .roomCountdown{font-size:44px}
 :is(#mpCards,#mpRoom)>details[hidden]{display:none}
 :is(#mpCards,#mpRoom) summary{cursor:pointer}
+#mpRoom>details{border:0;border-radius:0;border-top:1px solid var(--line);background:none;padding:0}
 #mpRoom>details>summary{min-height:56px;box-sizing:border-box;padding:16px 0}
+#mpRoom :is(button,select){min-height:56px}
 `;
 const order = ['mpSocial', 'racePanel', 'gamePanel'];
 export function mountRoomCard(card: HTMLElement, touch: boolean): void {
@@ -23,7 +42,7 @@ export function mountRoomCard(card: HTMLElement, touch: boolean): void {
     home = Object.assign(document.createElement('section'), { id });
     home.setAttribute('aria-label', 'Room');
     if (settings) {
-      home.append(Object.assign(document.createElement('h3'), { textContent: 'Room' }));
+      home.append(Object.assign(document.createElement('h3'), { textContent: 'Room' }), Object.assign(document.createElement('p'), { className: 'roomCaption', textContent: 'A room keeps going when you pause.' }));
       const header = settings.querySelector('#settingsHeader');
       if (header) header.after(home); else settings.append(home);
     } else document.body.append(home);
@@ -83,4 +102,28 @@ export function fitRoomCards(): void {
   }
   home.style.bottom = `${innerHeight - bottom}px`;
   home.style.maxHeight = `${Math.max(0, bottom - top)}px`;
+}
+
+/** One visual count and three spoken cues for either room start. */
+export class RoomCountdown {
+  private readonly node: HTMLElement | null;
+  constructor(id: string, bare: boolean) {
+    this.node = bare ? null : Object.assign(document.createElement('div'), { id, className: 'roomCountdown', hidden: true });
+    if (this.node) { this.node.setAttribute('aria-hidden', 'true'); document.body.append(this.node); }
+  }
+  update(untilStart: number | null): string {
+    const visible = untilStart !== null && untilStart > -1000;
+    if (this.node) {
+      if (this.node.hidden !== !visible) this.node.hidden = !visible;
+      if (visible) {
+        const count = untilStart! > 0 ? String(Math.min(5, Math.ceil(untilStart! / 1000))) : 'GO';
+        if (this.node.textContent !== count) this.node.textContent = count;
+        const pill = document.getElementById('mpChip');
+        const box = pill && !pill.hidden ? pill.getBoundingClientRect() : null;
+        if (box?.height) { const top = `${box.bottom + 10}px`; if (this.node.style.top !== top) this.node.style.top = top; }
+      }
+    }
+    return untilStart === null ? '' : untilStart > 3000 ? '5' : untilStart > 0 ? '3' : untilStart > -1000 ? 'GO' : '';
+  }
+  dispose(): void { this.node?.remove(); }
 }

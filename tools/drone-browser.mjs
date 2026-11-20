@@ -95,7 +95,7 @@ async function flightMap(p, phone) {
   check(await p.until('mmm.drone.active'), 'F launches the drone');
   await sleep(1600);
   await flightMap(p, false);
-  check(await p.read(`!document.getElementById('droneHints').hidden&&document.querySelectorAll('#droneHints kbd').length===8`),'grouped desktop keycaps appear at launch');
+  check(await p.read(`!document.getElementById('droneHints').hidden&&document.querySelectorAll('#droneHints kbd').length===7&&document.querySelector('#droneHints').textContent.includes('Mouse wheel')`),'grouped desktop keycaps appear at launch');
   check(await p.read(`(()=>{const e=document.getElementById('shiftHud'),h=document.getElementById('droneHints'),a=e.getBoundingClientRect(),b=h.getBoundingClientRect();return mmm.gameMode==='mail'&&!e.hidden&&!h.hidden&&a.width>0&&a.height>0&&b.width>0&&b.height>0&&(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom)})()`),'mail day card and drone hints are visible and clear of each other');
   await p.read(`document.getElementById('pauseButton').click();document.querySelector('#pauseKeys summary').click()`);
   check(await p.read(`document.querySelector('#pauseKeys dl').textContent.includes('Mouse wheelTop speed')&&document.querySelector('#pauseKeys dl').textContent.includes('RFly back')`),'pause Keys lists drone controls');
@@ -197,9 +197,9 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   check(await p.until(`!document.body.classList.contains('tcOn') && !document.getElementById('droneLeft').hidden && !document.getElementById('droneRight').hidden && !document.getElementById('droneReturn').hidden`), `${name}: driving controls give way to the two sticks and RETURN`);
   await sleep(1500);
   await flightMap(p, true);
-  check(await p.read(`document.querySelector('#droneLeft span').textContent==='Climb · turn'&&document.getElementById('droneReturn').textContent==='Return to car'`),'touch labels explain climb, turn and return');
+  check(await p.read(`document.querySelector('#droneLeft span').textContent==='CLIMB · TURN'&&document.getElementById('droneReturn').textContent==='RETURN TO CAR'`),'touch labels explain climb, turn and return');
   await p.read(`document.getElementById('pauseButton').click();document.querySelector('#pauseKeys summary').click()`);
-  check(await p.read(`JSON.stringify([...document.querySelectorAll('#pauseKeys dt')].map(e=>e.textContent))===JSON.stringify(['Left stick','Right stick','Return to car'])&&document.querySelector('#pauseKeys dl').textContent.includes('Climb and turn')`),'phone pause help lists sticks and Return to car');
+  check(await p.read(`JSON.stringify([...document.querySelectorAll('#pauseKeys dt')].map(e=>e.textContent))===JSON.stringify(['Left stick','Right stick','RETURN TO CAR'])&&document.querySelector('#pauseKeys dl').textContent.includes('Climb and turn')`),'phone pause help lists sticks and Return to car');
   await p.read(`document.getElementById('resumeGame').click()`);
   // Left stick up: climb.
   const left = await p.centre('droneLeft'), right = await p.centre('droneRight');
@@ -219,7 +219,7 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   const d = await s();
   check(d.yaw < c.yaw - 0.3, `${name}: left stick right turns right`);
   await sleep(1500);
-  check(/^DRONE height \d+ m\ndistance \d+ m/.test(d.hud) && !d.hud.includes('WASD'), `${name}: phone HUD shows the readout, two short lines, without keys: ${JSON.stringify(d.hud)}`);
+  check(/^DRONE · Height \d+ m\nFrom the car \d+ m\nSpeed \d+ m\/s \(max \d+\)\nHeading [NESW]{1,2}/.test(d.hud) && !d.hud.includes('WASD'), `${name}: phone HUD shows the readout, two short lines, without keys: ${JSON.stringify(d.hud)}`);
   const hidden = await p.read(`['cameraButton','stopHint','mailScore'].filter(id=>{const e=document.getElementById(id);return e&&e.getClientRects().length>0})`);
   check(hidden.length === 0, `${name}: CAMERA, the stop hint and the score give the sticks room ${JSON.stringify(hidden)}`);
   const hudClear = await p.read(`(()=>{const h=document.getElementById('hud').getBoundingClientRect();return ['pauseButton','gear'].filter(id=>{const r=document.getElementById(id).getBoundingClientRect();return h.left<r.right&&h.right>r.left&&h.top<r.bottom&&h.bottom>r.top})})()`);
@@ -230,6 +230,7 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   check(sticksClear.length === 0, `${name}: sticks, RETURN, gear and Pause do not overlap and stay on screen ${JSON.stringify(sticksClear)}`);
   await p.touchAt('touchStart', [ret]); await p.touchAt('touchEnd', []);
   check(await p.until('mmm.drone.returning'), `${name}: RETURN flies it home`);
+  check(await p.read(`document.getElementById('droneReturn').textContent==='LAND NOW'&&document.getElementById('droneReturn').getAttribute('aria-label')==='Land now'`),'return flight offers Land now');
   await sleep(1200);
   await p.shot(`12-phone-${name}-returning`);
   await p.touchAt('touchStart', [ret]); await p.touchAt('touchEnd', []);

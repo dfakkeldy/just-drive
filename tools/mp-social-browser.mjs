@@ -31,7 +31,7 @@ async function clickSummary(p,id) {
   await p.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
 }
 async function roomCardsLayout(p,mode='explore') {
-  await p.read(`window.savedRoomRoster=document.getElementById('mpRoster').innerHTML;document.querySelector('#mpSocial details').open=true;document.getElementById('mpRoster').replaceChildren(...Array.from({length:24},(_,i)=>Object.assign(document.createElement('li'),{textContent:'Dusty Window '+i})))`);
+  await p.read(`window.savedRoomRoster=document.getElementById('mpRoster').innerHTML;document.getElementById('mpSocial').open=true;document.getElementById('mpRoster').replaceChildren(...Array.from({length:24},(_,i)=>Object.assign(document.createElement('li'),{textContent:'Dusty Window '+i})))`);
   for (const [width,height] of [[1440,900],[1280,720],[720,480]]) for (const folded of [false,true]) {
     await p.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
     await p.read(`document.querySelectorAll('#mpCards>details').forEach(e=>e.open=${!folded});if(document.getElementById('mpChatGrid').hidden)document.getElementById('mpChatButton').click()`);
@@ -49,7 +49,7 @@ async function roomCardsLayout(p,mode='explore') {
     }
     if(mode==='mail')for(const id of ['mailButton','cameraButton'])assert.ok(await p.read(`(()=>{const e=document.getElementById('${id}'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return at===e||e.contains(at)})()`),`${id} receives mouse clicks with folded=${folded}`);
   }
-  await p.read(`document.getElementById('mpRoster').innerHTML=savedRoomRoster;document.querySelector('#mpSocial details').open=false`);
+  await p.read(`document.getElementById('mpRoster').innerHTML=savedRoomRoster`);
   await p.send('Emulation.setDeviceMetricsOverride',{width:1280,height:800,deviceScaleFactor:1,mobile:false});
 }
 let failed;

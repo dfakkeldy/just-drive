@@ -38,10 +38,16 @@ try {
     assert.ok(x > 180 && x < 700 && y > 80 && y < 720, area.id + ' pin inside the map view');
   }
   assert.match(html, /Start in Mabou<\/a>/);
+  assert.match(html, /<a href="\/about">built from the province’s LiDAR laser survey<\/a>/);
+  assert.match(html, /No missions and no clock\./);
+  assert.match(html, /property="og:image" content="https:\/\/justdrive\.fakkeldy\.ca\/about\/img\/road\.jpg"/);
+  assert.match(html, /<figure class="roadPicture"><img src="\/about\/img\/road\.jpg"[^>]+><figcaption>The shore road near Mabou, in the game\.<\/figcaption>/);
+  assert.equal((html.match(/class="mailCentre"/g)??[]).length,1,'only the mail pin has a filled centre');
+  assert.doesNotMatch(html, /<li>Mail route<\/li>/,'mail caption and action keep the meaning');
   assert.match(html, /free 3D driving game/);
   assert.match(html, /\.pin \.hit\{[^}]*stroke-width:44px;vector-effect:non-scaling-stroke/);
   const luminance=hex=>hex.match(/../g).map(n=>parseInt(n,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
-  assert.ok((luminance('e07a46')+.05)/(luminance('0b1620')+.05)>=4.5,'mail action text contrast');
+  assert.ok((luminance(html.match(/--maple:#([0-9a-f]{6})/)[1])+.05)/(luminance('0b1620')+.05)>=4.5,'mail action text contrast');
   assert.match(html, /aria-label="Drive in Mabou, mail route too"/);
   assert.match(html, /\.pin:focus-visible \.halo\{[^}]*stroke:#fff;stroke-width:3/);
   assert.match(html, /\.button.mail\{background:var\(--maple\);color:#0b1620/);
@@ -61,7 +67,7 @@ try {
     const values = [luminance(waterLabel), luminance(background)];
     assert.ok((Math.max(...values)+.05)/(Math.min(...values)+.05)>=4.5, `water labels contrast on ${name}`);
   }
-  const lead = html.match(/<p class="lead">([^<]+)<\/p>/)[1];
+  const lead = html.match(/<p class="lead">([\s\S]*?)<\/p>/)[1].replace(/<[^>]*>/g,'');
   for (const tag of ['name="description"', 'property="og:description"']) assert.ok(html.includes(`<meta ${tag} content="${lead}">`));
   // Every same-site link is an address the Worker serves; nothing names a home, a civic number or a private path.
   const known = new Set(['/changes/', '/about', '/help', '/listen/', '/manifest-just.webmanifest', ...areas.map(a => '/' + a.id), ...Object.values(HISTORY_AREAS).map(e => '/' + e.address)]);

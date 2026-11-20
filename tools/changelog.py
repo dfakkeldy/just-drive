@@ -109,9 +109,9 @@ def page(groups):
 body{max-width:48rem;margin:auto;padding:24px max(20px,env(safe-area-inset-right)) 48px max(20px,env(safe-area-inset-left))}
 a{color:#b8dfcf}a:focus-visible{outline:3px solid white;outline-offset:4px}
 h1{font:600 clamp(40px,7vw,64px)/1.08 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:-.01em}.overline{font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#b8dfcf}h2{font:600 1.4rem/1.3 "Iowan Old Style",Palatino,Georgia,serif;margin-top:2rem}li{margin:.65rem 0;overflow-wrap:anywhere}
-.topNav{font-size:13px;margin-bottom:24px}.topNav a{display:inline-flex;align-items:center;min-height:44px}small{color:#b9c3cc;font-size:12px}ul{padding-left:1.3rem}section{border-top:1px solid #34434e}footer{margin-top:40px;padding-top:16px;border-top:1px solid #34434e}footer nav{display:flex;flex-direction:column}footer a{display:flex;align-items:center;min-height:44px}</style>
+.topNav{font-size:15px;margin-bottom:24px}.topNav a{display:inline-flex;align-items:center;min-height:44px}small{color:#b9c3cc;font-size:12px}ul{padding-left:1.3rem}section{border-top:1px solid #34434e}footer{margin-top:40px;padding-top:16px;border-top:1px solid #34434e}footer nav{font-size:15px}footer a{display:inline-flex;align-items:center;min-height:44px}</style>
 </head><body><nav class="topNav" aria-label="Back"><a href="/">Back to the game</a> · <a href="/about">About</a></nav><main><p class="overline">From the roads of Cape Breton</p><h1>What's new</h1><p>Changes to the game, newest first. Dates use Atlantic time.</p>
-''' + '\n'.join(sections) + '\n</main><footer><nav aria-label="More"><a href="/">Back to the game</a><a href="/about">About</a><a href="/help">Help and controls</a><a href="/listen/">Just Listen</a></nav></footer></body></html>\n'
+''' + '\n'.join(sections) + '\n</main><footer><nav aria-label="More"><a href="/">Back to the game</a> · <a href="/about">About</a> · <a href="/help">Help and controls</a> · <a href="/listen/">Just Listen</a></nav></footer></body></html>\n'
 
 
 def main():

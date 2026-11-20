@@ -1275,7 +1275,7 @@ const droneCommand = { forward: 0, right: 0, up: 0, turn: 0 }, droneRoofAt = { x
 const droneUnder: { ground: number | null; floor: number | null } = { ground: null, floor: null };
 const droneKey = (code: string) => keys.has(code) ? 1 : 0;
 function flyDrone(dt: number) {
-  droneSticks?.show(!shift.ended);
+  droneSticks?.show(!shift.ended, drone.returning);
   if (pause.blocked) return;
   const stick = droneSticks?.command;
   // Keyboard alone flies it: WASD move it level, ←/→ (or Q/E) turn it, ↑/↓ tilt the camera, Space/Shift (or C) climb
@@ -1434,17 +1434,14 @@ const pauseButton = Object.assign(document.createElement('button'), { id: 'pause
 const pauseScreen = document.createElement('div');
 pauseScreen.id = 'pauseScreen';
 pauseScreen.hidden = true;
-pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>Room games do not pause</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button></section>';
+pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>A room keeps going when you pause.</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button></section>';
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
-const roomPauseNote = Object.assign(document.createElement('p'), { textContent: 'Room games do not pause', hidden: true });
-document.getElementById('settingsHeader')!.after(roomPauseNote);
 function syncPauseUI(): void {
   keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = flyTouch = 0;
   const room = !!multiplayer?.choice.on;
-  roomPauseNote.hidden = !room;
   pauseScreen.querySelector<HTMLElement>('.roomPauseNote')!.hidden = !room;
   settingsPanel.classList.toggle('open', pause.blocked && !pause.screen && !document.hidden);
   pauseScreen.hidden = !pause.screen || document.hidden || replay.active;

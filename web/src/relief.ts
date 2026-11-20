@@ -51,6 +51,7 @@ export class Relief {
   private forced = false;
   private ready = false;
   private layout = 1;
+  private labelledLevel = -1;
   private readonly chip = document.createElement('div');
   private readonly bar = document.createElement('b');
   private readonly card = document.createElement('div');
@@ -63,7 +64,7 @@ export class Relief {
     document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
     this.chip.id = 'relief';
     this.chip.setAttribute('role', 'button');
-    this.chip.setAttribute('aria-label', 'Bladder. When the car is stopped, press to step out.');
+    this.labelLevel();
     const track = document.createElement('i');
     track.appendChild(this.bar);
     this.chip.append(Object.assign(document.createElement('span'), { textContent: 'BLADDER' }), track);
@@ -75,6 +76,12 @@ export class Relief {
     document.body.append(this.chip, this.card);
   }
 
+  private labelLevel(): void {
+    const percent = Math.round(this.level * 10) * 10;
+    if (percent === this.labelledLevel) return;
+    this.labelledLevel = percent;
+    this.chip.setAttribute('aria-label', `Bladder, level ${percent} percent. When the car is stopped, press to step out.`);
+  }
   private wanted = false;
   /** The B key, or a tap on the gauge. It does nothing unless the car is stopped and the gauge has reached the mark. */
   request(): void { this.wanted = true; }
@@ -83,7 +90,7 @@ export class Relief {
 
   reset(): void {
     this.level = START; this.full = this.busyFor = this.cardFor = this.breaks = 0; this.forced = this.ready = this.wanted = false;
-    this.card.hidden = true; this.chip.className = '';
+    this.card.hidden = true; this.chip.className = ''; this.labelLevel();
   }
 
   private say(head: string, text: string, seconds: number): void {
@@ -144,6 +151,7 @@ export class Relief {
       }
       this.wanted = false;
     }
+    this.labelLevel();
     this.bar.style.width = `${Math.round(this.level * 100)}%`;
     this.chip.className = `${this.level >= 1 ? 'now' : this.level >= SOON ? 'soon' : ''}${this.ready && !this.busy ? ' ready' : ''}`;
     // The phone grid owns placement. The desktop gauge still follows the map.

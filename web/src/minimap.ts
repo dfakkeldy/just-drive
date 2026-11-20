@@ -28,6 +28,7 @@ body.tcOn #miniMap.enlarged #miniMapCanvas{max-height:none}
 #miniMap.folded #miniMapLarge{display:none}
 #miniMapCanvas{display:block;touch-action:none;cursor:pointer}
 #miniMap.folded #miniMapCanvas{display:none}
+#miniMap.folded #miniMapHead::after{content:'▸'}
 #miniMap.folded #miniMapHead span{display:none}   /* a folded map is its name only: its width never changes */
 #miniMap[hidden]{display:none}
 body.indoorOn #miniMap{display:none}
@@ -101,7 +102,7 @@ export class MiniMap {
     if (panel) {
       const expand = Object.assign(document.createElement('button'), { id: 'miniMapEnlargeSetting', textContent: 'Enlarge map' });
       expand.addEventListener('click', () => {
-        this.folded = false; this.root.classList.remove('folded'); this.setLarge(true); panel.classList.remove('open');
+        this.folded = false; head.setAttribute('aria-expanded', 'true'); this.root.classList.remove('folded'); this.setLarge(true); panel.classList.remove('open');
       });
       panel.appendChild(expand);
     }
@@ -116,11 +117,13 @@ export class MiniMap {
     // Folded at first on a screen too short for the open map and the controls under it (a small phone, or any phone sideways).
     this.folded = saved ? saved === 'folded' : innerHeight < 570;
     this.root.classList.toggle('folded', this.folded);
+    this.root.querySelector('#miniMapHead')!.setAttribute('aria-expanded', String(!this.folded));
     head.addEventListener('click', () => {
       if (this.large) this.setLarge(false);
       this.folded = !this.folded;
       if (this.flight) this.flightFolded = this.folded;
       this.root.classList.toggle('folded', this.folded);
+      this.root.querySelector('#miniMapHead')!.setAttribute('aria-expanded', String(!this.folded));
       try { localStorage.setItem('mmm.map', this.folded ? 'folded' : 'open'); } catch { /* the choice lasts for this visit */ }
       this.since = 1;
     });
@@ -143,7 +146,8 @@ export class MiniMap {
     } else {
       this.folded = this.flightFolded; this.flightHome?.replaceWith(this.root); this.flightHome = null;
     }
-    this.root.classList.toggle('folded', this.folded); this.fit();
+    this.root.classList.toggle('folded', this.folded);
+    this.root.querySelector('#miniMapHead')!.setAttribute('aria-expanded', String(!this.folded)); this.fit();
   }
 
   reserveCredit(pixels: number): void { this.creditSpace = pixels; if (this.large) this.fit(); }
@@ -299,7 +303,7 @@ export class MiniMap {
         candidates.push({ label: mark.label, px: px * f, py: py * f, rank: mark.rank ?? 2, distance, here: mark.radius !== undefined && distance <= mark.radius });
       }
       this.labelKeep = [{ x0: (half - 8) * f, y0: (cy - 10) * f, x1: (half + 8) * f, y1: (cy + 8) * f },
-        { x0: (nx - 8) * f, y0: (ny - 8) * f, x1: (nx + 8) * f, y1: (ny + 8) * f }];
+        { x0: nx * f - 22, y0: ny * f - 22, x1: nx * f + 22, y1: ny * f + 22 }];
       this.labels = placeLabels(candidates, { size: shown, cap: labelCap(shown, reach), measure: text => g.measureText(text).width,
         keep: this.labelKeep, previous: this.labelSlots });
       this.labelSlots = new Map(this.labels.map(l => [l.label, l.slot]));
@@ -313,6 +317,14 @@ export class MiniMap {
     g.fillStyle = '#ffffff'; g.strokeStyle = '#10181f'; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(half, half * 1.25 - 8); g.lineTo(half + 5.5, half * 1.25 + 6); g.lineTo(half - 5.5, half * 1.25 + 6); g.closePath();
     g.fill(); g.stroke();
+    // The rim and its ticks turn with north. Letters stay upright.
+    g.save(); g.translate(half, half); g.rotate(-heading);
+    g.strokeStyle = '#b9c3cc'; g.lineWidth = 1;
+    g.beginPath(); g.arc(0, 0, half - 4, 0, Math.PI * 2); g.stroke();
+    for (let i = 0; i < 16; i++) {
+      g.rotate(Math.PI / 8); g.beginPath(); g.moveTo(0, -half + 4); g.lineTo(0, -half + (i % 4 === 3 ? 10 : 7)); g.stroke();
+    }
+    g.restore();
     g.fillStyle = '#ff5a4a'; g.font = '700 11px ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText('N', nx, ny);
     // The Boss last, over the car's own arrow: close behind, it would hide under it.

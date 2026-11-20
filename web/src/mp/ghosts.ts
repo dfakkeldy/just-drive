@@ -15,7 +15,7 @@ export interface GhostOptions {
   label?: (name: string, id: number) => string;
 }
 
-const PALETTE = [0x305b83, 0x8f2935, 0x326052, 0xe6e5df, 0x303842, 0xb17a32, 0x73536d, 0x557e80];
+export const PALETTE = [0x305b83, 0x8f2935, 0x326052, 0xe6e5df, 0x303842, 0xb17a32, 0x73536d, 0x557e80];
 const WB = 2.62, TRACK = 1.57;
 const ROW = 64, WIDTH = 320;
 

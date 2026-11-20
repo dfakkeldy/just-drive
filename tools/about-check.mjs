@@ -17,6 +17,9 @@ try {
   const text = html => html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   for (const brand of ['mail', 'just']) {
     const html = page(brand), words = text(html);
+    assert.match(html, /<details open class="credits" aria-labelledby="credits"><summary><h2 id="credits">Credits and data<\/h2><\/summary>/);
+    assert.match(html, /<\/details>\s*<p class="signoff">[^<]+<\/p>/);
+    assert.doesNotMatch(html.match(/\.maker\{([^}]+)\}/)[1], /border|background/);
     assert.equal([...html.matchAll(/<title>/g)].length, 1, brand + ' one title');
     assert.match(html, /<meta name="viewport"/);
     assert.ok(html.includes(`<link rel="canonical" href="${ABOUT_URL[brand]}">`), brand + ' canonical');

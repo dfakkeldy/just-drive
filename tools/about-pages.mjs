@@ -60,10 +60,10 @@ p{margin:0 0 14px}
 .inline-picture{margin:20px 0 0;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
 .inline-picture img{display:block;width:100%;height:auto;aspect-ratio:16/10;object-fit:cover;object-position:50% 45%}
 .inline-picture figcaption{padding:8px 14px;font-size:13px;color:var(--quiet);background:var(--panel)}
-.maker{display:grid;gap:4px;padding:20px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(135deg,var(--panel),var(--bg))}
+.maker{display:grid;gap:4px;padding:0}
 .maker .serif{font-size:24px}
 .credits{font-size:14px;line-height:1.55;color:var(--dim)}
-.credits p{margin:0 0 10px}
+.credits p{margin:0 0 10px}.credits{margin-top:56px}.credits summary{cursor:pointer;min-height:44px}.credits summary h2{display:inline;font-size:24px}.signoff{margin-top:32px;font:22px/1.4 "Iowan Old Style",Palatino,Georgia,serif}
 footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:14px;color:var(--quiet);display:flex;flex-wrap:wrap;gap:8px 20px}
 /* Help pages: one column, a contents strip and control tables. */
 .page.plain{grid-template-columns:minmax(0,1fr)}
@@ -73,8 +73,8 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-si
 .toc a:is(:hover,:focus-visible){border-color:var(--accent);background:var(--accent);color:#0b1620}
 .controls{display:grid;gap:16px;margin-top:16px}
 .controls h3{margin:0 0 6px;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
-.controls dl{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.controls div.row{display:grid;grid-template-columns:minmax(96px,38%) 1fr;gap:12px;padding:10px 14px;background:var(--panel)}
+.controls dl{margin:0}
+.controls div.row{display:grid;grid-template-columns:minmax(96px,38%) 1fr;gap:12px;padding:10px 0;background:none}
 .controls div.row+div.row{border-top:1px solid var(--line)}
 .controls dt{font:700 14px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--ink)}
 .controls dd{margin:0;color:var(--dim)}
@@ -82,7 +82,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-si
 .qa li{padding:8px 0}
 .qa b{display:block}
 .qa span{color:var(--dim)}
-kbd{font:700 .9em ui-monospace,Menlo,Consolas,monospace;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--panel);color:var(--ink)}
+kbd{font:700 .9em ui-monospace,Menlo,Consolas,monospace;padding:2px 6px;border:1px solid #71818e;border-bottom-color:#0b1620;border-radius:4px;background:#20303b;color:var(--ink)}
 @media (min-width:960px){
  .page.plain .text{padding:64px 16px}
  .controls{grid-template-columns:1fr 1fr}
@@ -125,15 +125,14 @@ const MADE = (brand) => `<section aria-labelledby="made">
 <p>A road in the wrong place, or you want a place removed? Write to <a href="mailto:${CONTACT}">${CONTACT}</a>.</p>
 <p class="dim">No ads and no accounts. Your settings stay in your own browser. When you drive with others, the server passes car positions between players. A room retains its current race course, player IDs, checkpoint progress and times until the last driver leaves. It keeps no position history.</p>
 ${brand === 'mail' ? `<p class="dim" id="boardData">Today’s board keeps only what you post with <b>Post my result</b> at the end of Today’s run: the name you chose, your points, discipline step, time, bingo squares and vehicle, and a number your device makes from its own random secret for that one board, so a device posts once a day. The number for one day cannot be matched to the number for another (the name you choose can, if you keep it). That number stays with the day’s board even if your row drops out of the top 100. No account, no email and no network address. Each day’s board keeps its top 100, and the whole board is deleted after 60 days.</p>\n` : ''}</section>
-<section aria-labelledby="credits" class="credits">
-<span class="label">Credits and data</span>
-<h2 id="credits" class="sr">Credits and data</h2>
+<details open class="credits" aria-labelledby="credits"><summary><h2 id="credits">Credits and data</h2></summary>
 ${LAND_CREDITS}
 ${FAR_CREDITS}
 ${PUBLIC_MUSIC_CREDIT}
 ${ENGINE_CREDIT}
 <p>Property lines (optional, online only): ${PROPERTY_ATTRIBUTION} <a href="${PROPERTY_LICENSE_URL}" rel="noopener noreferrer">Licence</a></p>
-</section>`;
+</details>
+<p class="signoff">${brand === 'just' ? 'I made these roads for a slow drive. Take your time.' : 'The madness is only a little exaggerated.'}</p>`;
 
 const PAGES = {
   mail: {

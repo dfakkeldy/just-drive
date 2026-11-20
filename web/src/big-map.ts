@@ -7,7 +7,7 @@ import { hikeFacts, typing, TRAIL_CAUTION, TRAIL_COLOUR, type Hike, type MapBox,
 const ROAD_COLOURS = ['', '#e9b65c', '#e8e8e2', '#b9a98c', '#7d7667', '#9fb48a'];
 const ROAD_WIDTHS = [0, 3, 2, 1.6, .8, 1.2];
 const CSS = `
-#bigMapButton{position:fixed;right:174px;top:10px;z-index:5;min-height:40px;padding:0 14px;border:1px solid #a3b9b3;border-radius:6px;background:var(--panel);color:var(--ink);font:700 12px var(--mono);cursor:pointer}
+#bigMapButton{cursor:pointer}
 body.tcOn #bigMapButton{position:static;min-width:56px;min-height:56px;flex:none;pointer-events:auto;margin:0}
 #bigMap{position:fixed;inset:0;z-index:23;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#17323c;color:#f2f1e4;font:14px/1.4 system-ui,sans-serif;box-sizing:border-box;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 #bigMap[hidden],#bigMapButton[hidden],#mapCard[hidden],#mapIndex[hidden]{display:none}

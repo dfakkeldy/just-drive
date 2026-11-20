@@ -2,9 +2,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
-const output = await build({ stdin: { contents: `export * from './mp/room-cards';export { SocialView } from './mp/social-view';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
+const output = await build({ stdin: { contents: `export * from './mp/room-cards';export { SocialView } from './mp/social-view';export { RaceView } from './mp/race';export { GameView } from './mp/games';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
 const module = { exports: {} }; new Function('module','exports',output.outputFiles[0].text)(module,module.exports);
-const { mountRoomCard, removeRoomCard, fitRoomCards, Drone, DRONE_HELP, MiniMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP } = module.exports;
+const { mountRoomCard, removeRoomCard, fitRoomCards, RoomCountdown, RaceView, GameView, Drone, DRONE_HELP, MiniMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP } = module.exports;
 const paint = [];
 const context = new Proxy({ measureText: text => ({width:text.length*6}) }, { get: (o,k) => o[k] ?? ((...args) => paint.push([k,...args])) });
 class Element {
@@ -15,6 +15,7 @@ class Element {
   constructor(tag='div'){this.tagName=tag;}
   append(...nodes){for(const n of nodes){if(typeof n==='string')continue;n.remove();n.parentElement=this;this.children.push(n);}}
   appendChild(n){this.append(n);return n;}
+  add(n){this.append(n);}
   insertBefore(n,next){n.remove();n.parentElement=this;const at=this.children.indexOf(next);this.children.splice(at<0?this.children.length:at,0,n);}
   before(n){this.parentElement.insertBefore(n,this);}
   after(n){const p=this.parentElement;p.insertBefore(n,p.children[p.children.indexOf(this)+1]);}
@@ -22,11 +23,11 @@ class Element {
   replaceChildren(...nodes){for(const n of [...this.children])n.remove();this.append(...nodes);}
   replaceWith(n){this.before(n);this.remove();}
   querySelector(selector){for(const n of this.children){if(selector.split(',').some(s=>s.startsWith('#')?n.id===s.slice(1):n.tagName===s))return n;const found=n.querySelector(selector);if(found)return found;}return null;}
-  setAttribute(){} addEventListener(k,v){this.listeners[k]=v;} getContext(){return context;}
+  attributes={};setAttribute(k,v){this.attributes[k]=v;} getAttribute(k){return this.attributes[k];} addEventListener(k,v){this.listeners[k]=v;} getContext(){return context;}
   getBoundingClientRect(){this.reads++;return this.rect;} getClientRects(){return this.hidden?[]:[this.rect];}
 }
 const body=new Element(),head=new Element(),settings=new Element(),header=new Element('header');settings.id='settings';header.id='settingsHeader';settings.append(header);body.append(settings);
-Object.assign(globalThis,{document:{body,head,hidden:false,createElement:t=>new Element(t),createComment:()=>new Element('comment'),getElementById:id=>body.querySelector('#'+id)??head.querySelector('#'+id)},innerWidth:1440,innerHeight:900,devicePixelRatio:1,localStorage:{getItem:()=> 'folded',setItem(){}},addEventListener(){},removeEventListener(){},getComputedStyle:()=>({getPropertyValue:()=>'',overflowX:'visible',overflowY:'visible'})});
+Object.assign(globalThis,{document:{body,head,hidden:false,createElement:t=>new Element(t),createComment:()=>new Element('comment'),createTextNode:t=>Object.assign(new Element('text'),{textContent:t}),getElementById:id=>body.querySelector('#'+id)??head.querySelector('#'+id)},innerWidth:1440,innerHeight:900,devicePixelRatio:1,localStorage:{getItem:()=> 'folded',setItem(){}},addEventListener(){},removeEventListener(){},getComputedStyle:()=>({getPropertyValue:()=>'',overflowX:'visible',overflowY:'visible'})});
 for(const touch of [false,true]){
  const cards=['gamePanel','racePanel','mpSocial'].map(id=>Object.assign(new Element('details'),{id}));
  for(const card of cards)mountRoomCard(card,touch);
@@ -71,6 +72,12 @@ innerWidth=720;innerHeight=480;
  for(const fixture of fixtures)fixture.remove();removeRoomCard(card);
 }
 innerWidth=1440;innerHeight=900;
+const count=new RoomCountdown('testCountdown',false),countNode=document.getElementById('testCountdown');
+assert.equal(countNode.getAttribute('aria-hidden'),'true');
+for(const [ms,visual,spoken] of [[5000,'5','5'],[4000,'4','5'],[3000,'3','3'],[2000,'2','3'],[1000,'1','3'],[0,'GO','GO'],[-999,'GO','GO']]){
+ assert.equal(count.update(ms),spoken);assert.equal(countNode.textContent,visual);assert.equal(countNode.hidden,false);
+}
+count.update(-1000);assert.equal(countNode.hidden,true,'GO leaves after one second');count.update(5000);count.update(null);assert.equal(countNode.hidden,true,'disconnect clears the count');count.dispose();
 // Run the actual social view. A stable phrase needs no layout reads on later frames.
 const camera=new PerspectiveCamera(60,innerWidth/innerHeight,.1,1000);camera.updateMatrixWorld();
 const net={canChat:true,gamesSupported:true,roster:[],chats:[],names:new Map(),bubbles:new Map(),me:{id:1}};
@@ -78,16 +85,26 @@ for(const touch of [false,true]){
  const social=new SocialView(net,()=>0,touch);
  assert.equal(document.getElementById('mpSocial').open,!touch,'desktop chat starts open; phone starts folded');social.dispose();
 }
+net.roster=[{id:1,name:'Dusty Tire',hue:0},{id:2,name:'Muddy Wheel',hue:1}];net.names=new Map(net.roster.map(p=>[p.id,p.name]));
 const social=new SocialView(net,()=>0),me={x:0,y:0,z:-20};
 const tags=[{id:2,left:650,right:790,top:360,bottom:400},{id:1,left:650,right:790,top:420,bottom:450}];
 net.bubbles.set(1,{id:1,phrase:0,at:performance.now()});net.bubbles.set(2,{id:2,phrase:1,at:performance.now()});
 const peers=[{id:2,x:0,z:-20,air:0}];social.update(camera,peers,me,tags);
 const bubbles=[...document.getElementById('mpChatBubbles').children];
+assert.equal(document.getElementById('mpSocial').querySelector('details'),null,'one disclosure only');
+assert.equal(document.getElementById('mpSocial').querySelector('h4').textContent,'Drivers (2)');
+assert.equal(document.getElementById('mpRoster').children[0].children[0].style.background,'#305b83','roster dot matches the tag palette');
+assert.equal(bubbles[0].textContent.startsWith('Dusty Tire: '),true,'bubbles name their speaker');
 for(const bubble of bubbles){assert.equal(bubble.reads,1);assert.ok(parseFloat(bubble.style.top)<=352,'bubble clears its own and neighbouring tags');}
 for(let i=0;i<20;i++)social.update(camera,peers,me,tags);
 for(const bubble of bubbles)assert.equal(bubble.reads,1,'unchanged phrase reuses measured size');
 net.bubbles.get(1).phrase=4;social.update(camera,peers,me,tags);assert.equal(bubbles[0].reads,2,'new phrase is measured once');
-body.classList.add('tcOn');social.update(camera,peers,me,tags);assert.equal(bubbles[0].reads,3,'phone font gets its own measurement');body.classList.remove('tcOn');social.dispose();
+body.classList.add('tcOn');social.update(camera,peers,me,tags);assert.equal(bubbles[0].reads,3,'phone font gets its own measurement');
+const tiles=Object.assign(new Element(),{id:'phoneTop',rect:{left:0,right:1440,top:0,bottom:200,width:1440,height:56}});body.append(tiles);
+bubbles[0].rect={left:0,right:100,top:0,bottom:20,width:100,height:20};net.bubbles.get(1).phrase=5;social.update(camera,peers,me,tags);
+assert.equal(bubbles[0].hidden,false);assert.ok(parseFloat(bubbles[0].style.top)-20>=tiles.rect.bottom+8,'phone bubbles clear the tile row by eight pixels');
+tiles.rect.bottom=300;social.update(camera,peers,me,tags);assert.equal(bubbles[0].hidden,true,'hide a bubble if its tag leaves no clear space below the tiles');tiles.remove();
+body.classList.remove('tcOn');social.dispose();
 // Draw two frames, including an empty one: labels reuse the same pool objects.
 const ghosts=new Ghosts({ground:()=>0,low:false,cap:2});
 const peer={id:2,name:'Dusty Tire',hue:0,x:0,z:-20,air:0,heading:0,alpha:1,flags:0,steer:0};
@@ -95,14 +112,17 @@ ghosts.update(.1,[peer],camera);assert.equal(ghosts.tagBoxes.length,1);const tag
 ghosts.update(.1,[],camera);assert.equal(ghosts.tagBoxes.length,0);
 ghosts.update(.1,[{...peer,x:2}],camera);assert.equal(ghosts.tagBoxes[0],tag,'drawn label keeps its pooled rectangle');ghosts.dispose();
 for(const height of [280,390,844])for(const distance of [5,30,60])assert.ok(callSignHeight(distance,2,height,true,distance)*2/distance*height/4>=12,'phone ink stays at least 12 CSS px');
-assert.deepEqual(DRONE_HELP,[['WASD','Move'],['←/→ or Q/E','Turn'],['↑/↓','Camera'],['Space','Up'],['Shift or C','Down'],['Mouse wheel','Top speed'],['R','Fly back'],['F','Land']]);
+assert.deepEqual(DRONE_HELP,[['R','Fly back'],['F','Land'],['WASD','Move'],['←/→ or Q/E','Turn'],['↑/↓','Camera'],['Space','Up'],['Shift or C','Down'],['Mouse wheel','Top speed']]);
+const gear=Object.assign(new Element(),{id:'gear',rect:{left:1386,right:1430,top:10,bottom:54,width:44,height:44}}),endShift=Object.assign(new Element(),{id:'endShift',rect:{left:1320,right:1430,top:64,bottom:108,width:110,height:44}});body.append(gear,endShift);
 const drone=new Drone();drone.launch(0,0,0,0);assert.equal(document.getElementById('droneHints').hidden,false);
+assert.equal(document.getElementById('droneHints').style.top,'118px','help starts ten pixels below the lowest control');assert.equal(document.getElementById('droneHints').style.right,'10px','help aligns with the gear');gear.remove();endShift.remove();
 const help=document.getElementById('droneHints');let hidden=help.hidden,hiddenWrites=0;
 Object.defineProperty(help,'hidden',{get:()=>hidden,set:v=>{hidden=v;hiddenWrites++;}});
 const command={forward:0,right:0,up:0,turn:0},under={ground:0,floor:2},roof={x:0,y:0,z:0};
-for(let i=0;i<201;i++)drone.update(.1,command,under,roof,0);
+for(let i=0;i<301;i++)drone.update(.1,command,under,roof,0);
 assert.equal(hiddenWrites,1,'hint timer writes hidden only at the transition');assert.equal(drone.hintsHidden,true);assert.equal(document.getElementById('droneHints').hidden,true);
-assert.match(drone.readout(true),/^DRONE · Height .*\nDistance .*\nSpeed /);
+assert.match(drone.readout(true),/^DRONE · Height .*\nFrom the car .*\nSpeed .*\nHeading [NESW]{1,2}$/);
+drone.callHome();assert.equal(drone.readout(true).split('\n').length,4,'return state shares the heading line, keeping the landscape map clear');assert.match(drone.readout(true),/Heading N · returning$/);
 drone.stow();drone.launch(0,0,0,0);assert.equal(drone.hintsHidden,false,'each flight gets its own hints');drone.stow();assert.equal(document.getElementById('droneHints').hidden,true);
 innerWidth=844;innerHeight=390;body.classList.add('droneSticks');
 const map=new MiniMap({roads:[]});const root=document.getElementById('miniMap'),original=new Element();body.append(original);original.append(root);
@@ -119,6 +139,29 @@ mapHead.listeners.click();assert.equal(stored,'folded');
 mapHead.listeners.click();assert.equal(stored,'open');
 map.setFlight(false);assert.equal(root.classList.contains('folded'),false,'landing keeps the choice made in flight');
 map.setFlight(true);mapHead.listeners.click();map.setFlight(false);assert.equal(root.classList.contains('folded'),true);assert.equal(stored,'folded');
+// Execute both shipping countdown paths, including phone summaries and strips.
+const savedPerformance=globalThis.performance;
+let countdownNow=5000;
+globalThis.performance={now:()=>countdownNow};
+globalThis.Option=class extends Element{constructor(text,value){super('option');this.textContent=text;this.value=value;}};
+for(const touch of [false,true]){
+ const strip=Object.assign(new Element(),{id:'phoneStatus'});body.append(strip);
+ const host={touch,bare:false,scene:{add(){},remove(){}},ground:()=>0,vehicle:{x:0,y:0,z:0,speed:0},roads:[]};
+ const racer={id:1,next:0,time:null,out:false};
+ const net={status:'on',me:{id:1},names:new Map([[1,'Dusty Tire']]),roster:[{id:1}],count:1,gamesSupported:true,race:{serial:1,host:1,startAt:10000,route:{roadId:1,gates:[{x:0,z:0},{x:10,z:0}]},racers:[racer]},game:null,serverNow:()=>countdownNow};
+ const race=new RaceView(net,host),spoken=[];
+ for(const now of [5000,6000,7000,8000,9000,10000]){countdownNow=now;race.update();spoken.push(document.getElementById('racePanel').querySelector('p').textContent);}
+ assert.deepEqual(spoken,['Start in 5 · stay inside the start ring.','Start in 5 · stay inside the start ring.','Start in 3 · stay inside the start ring.','Start in 3 · stay inside the start ring.','Start in 3 · stay inside the start ring.','GO']);
+ assert.equal(document.getElementById('raceCountdown').textContent,'GO');countdownNow=11000;race.update();assert.equal(document.getElementById('raceCountdown').hidden,true);
+ if(touch)assert.equal(document.getElementById('raceReadout').hidden,false,'phone keeps its race strip');race.dispose();
+ let gameLeft=5000;net.race=null;net.game={kind:1,phase:1,serial:1,host:1,table:[],tag:null};net.gameLeft=()=>gameLeft;
+ const game=new GameView(net,host),cues=[];
+ for(const left of [5000,4000,3000,2000,1000]){gameLeft=left;game.update(.1,[],camera);cues.push(document.getElementById('gamePanel').querySelector('p').textContent);}
+ assert.deepEqual(cues,['Parcel tag in 5. The parcel waits on the road.','Parcel tag in 5. The parcel waits on the road.','Parcel tag in 3. The parcel waits on the road.','Parcel tag in 3. The parcel waits on the road.','Parcel tag in 3. The parcel waits on the road.']);
+ net.game.phase=2;gameLeft=180000;countdownNow=20000;game.update(.1,[],camera);assert.equal(document.getElementById('gameCountdown').textContent,'GO');assert.equal(document.getElementById('gamePanel').querySelector('p').textContent,'GO');
+ countdownNow=21000;game.update(.1,[],camera);assert.equal(document.getElementById('gameCountdown').hidden,true);game.dispose();strip.remove();
+}
+globalThis.performance=savedPerformance;
 const main=readFileSync(new URL('../web/src/main.ts',import.meta.url),'utf8');
 const block=main.slice(main.indexOf('    if (miniMap) {',main.indexOf('  culvertMouths?.update')),main.indexOf('    // Paused frames return early'));
 const frame=new Function('ctx',`with(ctx){${block}}`);
@@ -133,7 +176,7 @@ for(const touchDevice of [false,true])for(const active of [false,true])for(const
  const driving=[['Driving','Controls']],pad=[['Pad','Controls']];
  const hints=pauseHints({drone:{active},touchDevice,DRONE_HELP,DRONE_TOUCH_HELP,gamepad:{device},padKeys:()=>pad,ride:{kind:'car'},mailMode:true,radio:null,TOUCH:driving,DRIVING_TOUCH:driving,KEYS:driving,DRIVING_KEYS:driving});
  assert.deepEqual(hints,active?(touchDevice?DRONE_TOUCH_HELP:DRONE_HELP):device==='gamepad'?pad:driving);
- if(active&&touchDevice)assert.deepEqual(hints,[['Left stick','Climb and turn'],['Right stick','Fly'],['Return to car','Fly back']]);
+ if(active&&touchDevice)assert.deepEqual(hints,[['Left stick','Climb and turn'],['Right stick','Fly'],['RETURN TO CAR','Fly back. LAND NOW lands at once.']]);
 }
 const a=readFileSync(new URL('../web/index.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];
 const b=readFileSync(new URL('../artifact/page.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];assert.equal(a,b,'page style blocks remain identical');

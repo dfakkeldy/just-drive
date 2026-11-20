@@ -301,6 +301,7 @@ function offWork(mapText = map, viewText = view) {
     constructor() { nodes.push(this); }
     append(...items) { for (const item of items) if (item instanceof Element) { item.parentElement = this; this.children.push(item); } }
     appendChild(item) { this.append(item); }
+    querySelector(selector) { return this.children.find(n => '#'+n.id === selector) ?? this.children.map(n => n.querySelector(selector)).find(Boolean) ?? null; }
     after() {} setAttribute() {} focus() {}
     addEventListener(name, callback) { this.listeners[name] = callback; }
     getContext() { return context; }

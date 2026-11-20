@@ -92,14 +92,17 @@ const crossBrandStyles = [
  '#titleOtherGame a:focus-visible{outline:3px solid #fff;outline-offset:3px}\n',
  '/* content-box 100% plus padding overflowed narrow screens on cards without a multiplayer control (1884): */\n@media(max-width:719px){#titleCard{box-sizing:border-box}}\n',
 ];
+const titleWindowListener=globalThis.addEventListener;
 function card(make, just, area, era, mode) {
+ globalThis.addEventListener=()=>{};
  const roots=[],styles=[];
- const node=()=>({style:{},classList:{add(){}},setAttribute(){},addEventListener(){},focus(){},innerHTML:'',textContent:'',hidden:false});
+ const node=()=>({style:{},classList:{add(){}},append(){},setAttribute(){},addEventListener(){},focus(){},innerHTML:'',textContent:'',hidden:false});
  globalThis.document={head:{appendChild(n){styles.push(n.textContent);}},body:{appendChild(n){roots.push(n);}},createElement(){const n=node();n.querySelector=()=>node();return n;}};
  globalThis.localStorage={getItem:()=>null};
  globalThis.location={hostname:just?'justdrive.fakkeldy.ca':'mmm.fakkeldy.ca',pathname:'/'+area.id,search:era.id==='today'?'':'?era=1884'};
  make(true,()=>{},mode,area.name,undefined,just,true,era);
  // The About line holds credits and links (help, coffee); it changes for its own reasons, not the era door's.
+ const normalizedStyles=styles.map(css => priorTitleStyle(css, make === createTitle));
  let html = roots[0].innerHTML.replace(/<p id="titleAbout">[\s\S]*?<\/p>/,'<p id="titleAbout"></p>');
  if (!just) {
   const line = html.match(/<span id="titleOtherGame">[\s\S]*?<\/span>/)?.[0];
@@ -111,9 +114,9 @@ function card(make, just, area, era, mode) {
   }
   if (line) html = html.replace(line, '');
   // Remove only these exact approved rules. Other CSS changes still fail the frozen comparison.
-  for (let i = 0; i < styles.length; i++) for (const css of crossBrandStyles) styles[i] = styles[i].replace(css, '');
+  for (let i = 0; i < normalizedStyles.length; i++) for (const css of crossBrandStyles) normalizedStyles[i] = normalizedStyles[i].replace(css, '');
  }
- return {html,styles:styles.map(css => priorTitleStyle(css, make === createTitle))};
+ return {html,styles:normalizedStyles};
 }
 for(const area of AREAS)for(const era of ERAS)for(const mode of ['mail','explore']){
  const just=card(createTitle,true,area,era,mode);
@@ -125,4 +128,5 @@ for(const area of AREAS)for(const era of ERAS)for(const mode of ['mail','explore
  assert.deepEqual({...current,html:priorTitleMarkup(current.html,true)},{...previous,html:priorTitleMarkup(previous.html,true)},'mail card HTML/styles outside reviewed UI/cross-brand changes and far-data credit: '+area.id+' '+era.id+' '+mode);
 }
 for(const k of ['document','localStorage','location'])delete globalThis[k];
+if(titleWindowListener)globalThis.addEventListener=titleWindowListener;else delete globalThis.addEventListener;
 console.log('PASS every area/era/mode visibility; exact cross-brand line and phone CSS; all other mail HTML/styles match branch base');

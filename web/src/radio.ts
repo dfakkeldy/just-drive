@@ -69,6 +69,8 @@ body.indoorOn #radio{display:none}
 /* A call about the run: its line (the player's name) is shown whole, on a line of its own under the station. */
 #radio.call{flex-wrap:wrap;row-gap:1px;padding:3px 8px}
 #radio.call span{flex:1 0 100%;text-align:left;white-space:normal;overflow-wrap:anywhere;color:var(--ink,#eef2f6);opacity:1}
+body:not(.tcOn) #radio{flex-wrap:wrap;padding-block:4px}
+body:not(.tcOn) #radio span{white-space:normal;overflow:visible;text-overflow:clip;flex:1 0 100%;line-height:1.4}
 #radioVolume{display:block;margin-top:12px}
 `;
 

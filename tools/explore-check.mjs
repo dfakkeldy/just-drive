@@ -72,6 +72,7 @@ if(family==='all'||family==='explore'){
  check(await p.read(`document.querySelector('#titleLegal > p:first-child#titleContact a')?.getAttribute('href')==='mailto:justdrive@fakkeldy.ca'&&document.getElementById('titleContact').textContent==='Something wrong, or you want a place removed? Write to justdrive@fakkeldy.ca.'`),'explore credits begin with the contact line');
  await p.shot('02-explore-title');await p.read(`document.getElementById('titleStart').click()`);await sleep(800);
  check((await p.read(`${JSON.stringify(missing)}.filter(${visible})`)).length===0,'explore hides every mail element');
+ check(await p.read(`(()=>{const ids=['bigMapButton','pauseButton','placesButton','gear'],boxes=ids.map(id=>document.getElementById(id)?.getBoundingClientRect());return boxes.every((b,i)=>b&&b.height===44&&b.top===boxes[0].top&&(i===0||Math.abs(b.left-boxes[i-1].right-8)<.1)&&document.getElementById(ids[i]).contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)))})()`),'desktop MAP, PAUSE, PLACES and gear share one clear row');
  check(await p.read(`!document.getElementById('relief')&&!document.getElementById('doorPrompt')&&!document.getElementById('endingFrame')`),'explore never creates mail-only UI');
  check(await p.read(`mmm.shift.stops===0&&!mmm.shift.ended&&mmm.shift.elapsed===0&&mmm.shift.career.day===0&&mmm.shift.complaints.all.length===0`),'explore has no shift or complaints');
  const start=await p.read(`({x:mmm.vehicle.x,z:mmm.vehicle.z,heading:mmm.vehicle.heading})`);
@@ -86,6 +87,12 @@ if(family==='all'||family==='explore'){
  check(await p.read(`!mmm.vehicle.car.root.parent.getObjectByName('Mail and delivery dings')&&!mmm.vehicle.car.root.parent.getObjectByName('Two months of old flyers')`),'explore has no paper meshes');
  await p.key('KeyW');await sleep(700);await p.key('KeyW',false);const comparison=await p.read(`({x:mmm.vehicle.x,z:mmm.vehicle.z,heading:mmm.vehicle.heading})`);await p.shot('03-explore-village');await p.read(`mmm.vehicle.restart(${start.x},${start.z},${start.heading});mmm.vehicle.speed=0`);await sleep(300);
  check(await p.read(`document.getElementById('placeArrival').innerText.includes('Mabou village')&&!document.getElementById('placeArrival').hidden`),'arrival card appears at village');await p.shot('04-arrival');
+ check(await p.read(`document.querySelector('[data-place="village"]').getAttribute('aria-current')==='location'&&document.querySelector('[data-place="village"] .youAreHere').textContent==='You are here'`),'Places marks the current village');
+ for(const id of ['settings','pauseScreen','bigMap']){
+  await p.read(`(()=>{const e=document.getElementById('${id}');if('${id}'==='settings')e.classList.add('open');else e.hidden=false;})()`);
+  check(await p.read(`getComputedStyle(document.getElementById('placeArrival')).display==='none'`),'arrival stays hidden under '+id);
+  await p.read(`(()=>{const e=document.getElementById('${id}');if('${id}'==='settings')e.classList.remove('open');else e.hidden=true;})()`);
+ }
  await p.read(`mmm.vehicle.restart(${start.x+400},${start.z},${start.heading})`);await sleep(700);
  check(await p.read(`document.getElementById('placeArrival').hidden`),'arrival card leaves with player');
  await p.read(`mmm.vehicle.restart(${start.x},${start.z},${start.heading})`);await sleep(800);

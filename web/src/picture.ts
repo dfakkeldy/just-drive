@@ -141,7 +141,7 @@ export function pictureSetting(renderer: WebGLRenderer, panel: HTMLElement | nul
     const note = Object.assign(document.createElement('small'), { textContent: 'Fast draws fewer pixels, for more frames a second.' });
     note.style.cssText = 'display:block;margin-top:4px';
     show = () => {
-      for (const b of buttons) { const on = phone ? ratio(b.dataset.picture as Picture, devicePixelRatio) === ratio(choice, devicePixelRatio) : b.dataset.picture === choice; b.setAttribute('aria-pressed', String(on)); b.style.background = on ? '#3d6f8f' : 'none'; }
+      for (const b of buttons) { const on = phone ? ratio(b.dataset.picture as Picture, devicePixelRatio) === ratio(choice, devicePixelRatio) : b.dataset.picture === choice; b.setAttribute('aria-pressed', String(on)); b.style.background = 'none'; b.style.borderColor = on ? 'var(--settings-accent,var(--maple))' : '#6b7780'; b.style.borderWidth = on ? '2px' : '1px'; b.textContent = `${on ? '✓ ' : ''}${NAMES[b.dataset.picture as Picture]}`; }
       group.dataset.measuring = String(first !== null);
     };
     row.append(...buttons);
