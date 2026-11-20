@@ -155,6 +155,8 @@ export class Grass {
   private scanX = Infinity;
   private scanZ = Infinity;
   private retry = 0;
+  /** Active patches still planting, filled each frame in map order (far patches, then dense ones). One reused list. */
+  private readonly planting: Patch[] = [];
   /** Dev readouts let a browser check the actual work budget, rather than guess from frame rate. */
   buildMaxMs = 0;
 
@@ -244,12 +246,15 @@ export class Grass {
 
   private populate(p: Patch, deadline: number): void {
     const boxes = this.terrain.clear.filter((b) => b[0] < p.x + CELL && b[2] > p.x && b[1] < p.z + CELL && b[3] > p.z);
+    const quarry = this.terrain.coast?.quarry ? this.terrain.coast : null;
     while (p.cursor < p.side * p.side) {
       // Check often enough that a newly loaded terrain tile cannot turn this into a long frame.
       if (performance.now() >= deadline) return;
       const i = p.cursor++, gx = p.x * p.side / CELL + i % p.side, gz = p.z * p.side / CELL + Math.floor(i / p.side);
       const r = random(gx, gz, 31), r2 = random(gx, gz, 971);
-      const x = (gx + 0.15 + 0.7 * r) * CELL / p.side, z = (gz + 0.15 + 0.7 * r2) * CELL / p.side;
+      let x = (gx + 0.15 + 0.7 * r) * CELL / p.side, z = (gz + 0.15 + 0.7 * r2) * CELL / p.side;
+      // Test the position stored in the Float32 root buffer at a quarry paint edge.
+      if (quarry?.contains(x,z)) { x = Math.fround(x); z = Math.fround(z); }
       if (this.terrain.sidewalks?.vegetationAt(x,z)) continue;
       if (this.excludes?.(x + this.terrain.manifest.village[0], this.terrain.manifest.village[1] - z)) continue;
       const surface = this.terrain.surfaceAt(x, z);
@@ -259,7 +264,7 @@ export class Grass {
         if (!this.terrain.hasFinest(x, z)) continue;
         p.cursor--; return;
       }
-      if (surface.canopy > 1.8 || surface.ground < this.terrain.seaLevel + 1.45) continue;
+      if (surface.mineral || surface.canopy > 1.8 || surface.ground < this.terrain.seaLevel + 1.45) continue;
       // No grass in a brook or on its wet stones; the rank grass of the bank starts just beyond.
       if (surface.brook < 0.45) continue;
       const cls = this.terrain.coverAt(x, z);
@@ -346,7 +351,10 @@ export class Grass {
       }
     }
     // The 16 m core has a 4 m fade. Other patches do not build or draw the dense set.
+    const pending = this.planting;
+    pending.length = 0;
     for (const [key, patch] of this.patches) {
+      if (patch.active && patch.cursor < patch.side * patch.side) pending.push(patch);
       const dx = Math.max(patch.x - cx, 0, cx - patch.x - CELL);
       const dz = Math.max(patch.z - cz, 0, cz - patch.z - CELL);
       const near = Math.hypot(dx, dz) < NEAR && camera.position.y - (ground ?? 0) < NEAR;
@@ -360,13 +368,15 @@ export class Grass {
       if (distance > NEAR + CELL || !this.patches.has(key)) {
         if (patch.mesh) { this.group.remove(patch.mesh); patch.mesh.geometry.dispose(); }
         this.dense.delete(key);
-      }
+      } else if (patch.active && patch.cursor < patch.side * patch.side) pending.push(patch);
     }
-    const pending = [...this.patches.values(), ...this.dense.values()].filter((p) => p.active && p.cursor < p.side * p.side);
-    pending.sort((a, b) => Math.hypot(a.x + CELL / 2 - cx, a.z + CELL / 2 - cz) - Math.hypot(b.x + CELL / 2 - cx, b.z + CELL / 2 - cz));
-    for (const patch of pending) {
-      if (performance.now() - start >= 1.5) break;
-      this.populate(patch, start + 1.5);
+    if (pending.length > 0) {
+      pending.sort((a, b) => Math.hypot(a.x + CELL / 2 - cx, a.z + CELL / 2 - cz) - Math.hypot(b.x + CELL / 2 - cx, b.z + CELL / 2 - cz));
+      for (const patch of pending) {
+        if (performance.now() - start >= 1.5) break;
+        this.populate(patch, start + 1.5);
+      }
+      pending.length = 0;   // keep no patch alive until the next visible frame
     }
     this.buildMaxMs = Math.max(this.buildMaxMs, performance.now() - start);
   }

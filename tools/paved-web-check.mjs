@@ -39,13 +39,15 @@ const bundle=await build({stdin:{contents:"export {Paved,classTile,loadPaved} fr
  b.onLoad({filter:/\/(?:paved(?:-shader|-weight)?|title)\.ts$/},a=>{let s=readFileSync(a.path,'utf8');if(mutation&&a.path.endsWith('/'+changes[mutation][0])){const [,from,to]=changes[mutation];assert.equal(s.split(from).length,2);s=s.replace(from,to);}return {contents:s,loader:'ts'};});
 }}]});
 const {Paved,classTile,loadPaved,pavedGroundShader,pavedGrassShader,PAVED_SAMPLE,pavedWeight,pavedTreeCell,createTitle,TERRAIN_FRAG}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+// main.ts states the gate twice: where the boot starts the index read early, and where it waits. A gate mutant changes both.
 let main=readFileSync(root+'/web/src/main.ts','utf8');
-if(mutation==='OPTIN')main=main.replace("params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1')","params.get('paved') === '1'");
-if(mutation==='NOOFF')main=main.replace("params.get('paved') !== '0' && (","(");
-if(mutation==='NODATA')main=main.replace("(!!manifest.paved || params.get('paved') === '1')","true");
+if(mutation==='OPTIN')main=main.replaceAll("params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1')","params.get('paved') === '1'");
+if(mutation==='NOOFF')main=main.replaceAll("params.get('paved') !== '0' && (","(");
+if(mutation==='NODATA')main=main.replaceAll("(!!manifest.paved || params.get('paved') === '1')","true");
 if(['OPTIN','NOOFF','NODATA'].includes(mutation))assert.notEqual(main,readFileSync(root+'/web/src/main.ts','utf8'),'gate mutant applies');
 const criterion=main.match(/\/\/ Open designated pavement[^\n]*\n[^\n]*\nif \(([^\n]*)\) \{\n  terrain\.paved = /)[1];
 const enabled=new Function('ERA','AREA','params','manifest','return '+criterion);
+assert.equal(main.match(/\nconst pavedRead = ([^\n]*) \? early\(readFile\(base, 'paved\/index\.json'\)\) : null;\n/)?.[1],criterion,'the early index read has the same gate');
 // Default on where the area's bake lists the layer; paved=0 is the way out; no data means no request unless forced.
 for(const area of ['pointtupper','mabou','westbay','judique','porthood','cansocauseway'])for(const modern of [true,false])for(const installed of [true,false])for(const flag of [null,'0','1','true']){
  const p=new URLSearchParams();if(flag!==null)p.set('paved',flag);

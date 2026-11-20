@@ -54,13 +54,32 @@ test('explore contacts use the selected collision spec',()=>{
  const {v}=world(),calls=[],contact=new SceneryContact({hitCar(...args){calls.push(args);return 1}});
  contact.update(BIKE_STEP,v,false);assert.equal(calls[0][7],v.spec);assert.equal(calls[0][7].envelope.radius,.55);
 });
-for(const [name,kind,top,t80]of [['pavement',1,115,5.1],['gravel',3,104,6.0],['grass',0,88,8.5]])test(name+' speed and acceleration',()=>{
- const {v}=world({kind});let zero80=null;for(let i=0;i<120*70;i++){v.update(BIKE_STEP,go);if(zero80===null&&v.speed>=80/3.6)zero80=(i+1)/120;}
- console.log(JSON.stringify({surface:name,top:v.speed*3.6,zero80}));assert.ok(Math.abs(v.speed*3.6-top)<2,`${name} top ${v.speed*3.6}`);assert.ok(zero80>3&&zero80<t80,`${name} 0-80 ${zero80}`);
+const pavedNominal = 152.16;
+// Sugar Camp speed targets from the owner's request on 20 Nov 2026.
+for (const [name, kind, nominal, accel, target, time80, canopy] of [
+ ['pavement', 1, pavedNominal, 6.4, 150, 4.3, 0],
+ ['concrete', 9, pavedNominal, 6.4, 150, 4.3, 0],
+ ['gravel', 3, 147.26, 5.9, 145, 4.7, 0],
+ ['dirt track', 4, 142.39, 5.4, 140, 5.2, 0],
+ ['grass', 0, 122.13, 5.2, 120, 5.7, 0],
+ ['brush', 0, 38, 3, 37, null, 2],
+]) test(name+' speed and acceleration',()=>{
+ const {v}=world({kind,canopy});
+ const expected=nominal*Math.sqrt(1-.18/accel);
+ let zero80=null;
+ for(let i=0;i<120*70;i++){
+  v.update(BIKE_STEP,go);
+  if(zero80===null&&v.speed>=80/3.6)zero80=(i+1)/120;
+ }
+ const top=v.speed*3.6;
+ console.log(JSON.stringify({surface:name,top,expected,zero80}));
+ assert.equal(v.surfaceName,name);
+ assert.ok(Math.abs(top-target)<.5&&Math.abs(top-expected)<.1,`${name} top ${top}`);
+ if(time80!==null)assert.ok(zero80>3&&zero80<time80,`${name} 0-80 ${zero80}`);
 });
 test('lean has correct sign and steady magnitude',()=>{
  const {v}=world();const speed=60/3.6;v.vx=v.speed=speed;
- const steer=speed*speed/(40*9.81*1.35),throttle=.18/(6.4*(1-(speed/(115/3.6))**2));
+ const steer=speed*speed/(40*9.81*1.35),throttle=.18/(6.4*(1-(speed/(pavedNominal/3.6))**2));
  run(v,5,{...go,throttle,steer});
  const expected=-Math.atan(speed*speed/(40*9.81));
  assert.ok(v.roll<0&&Math.abs(v.roll-expected)<.005,`roll ${v.roll}`);assert.ok(Math.abs(v.speed-speed)<.05);assert.ok(v.heading>Math.PI/2);console.log('Lean at 60 km/h and 40 m radius',v.roll*180/Math.PI);
@@ -124,12 +143,12 @@ test('bounded finite state never falls through land',()=>{
  const height=(x,z)=>2+Math.sin(x*.05)*.8+Math.cos(z*.04)*.5;const {v}=world({kind:3,height});
  run(v,60,(_v,t)=>({...go,steer:Math.sin(t*.7)*.7,throttle:Math.sin(t*.4)>.8?-1:1,pull:t%9<1}),60,()=>{
   for(const key of ['x','z','y','vx','vz','vy','speed','pitch','roll','wheelie'])assert.ok(Number.isFinite(v[key]),key);
-  assert.ok(Math.hypot(v.vx,v.vz)<=34.00001);assert.ok(v.y>=height(v.x,v.z)-.001,`below ground ${v.y-height(v.x,v.z)}`);
+  assert.ok(Math.hypot(v.vx,v.vz)<=44.00001);assert.ok(v.y>=height(v.x,v.z)-.001,`below ground ${v.y-height(v.x,v.z)}`);
  });
  v.update(NaN,go);v.update(.1,{throttle:NaN,steer:Infinity,handbrake:false});assert.ok(Number.isFinite(v.y)&&Number.isFinite(v.x));
  const invalid=world().v;invalid.update(.1,{throttle:NaN,steer:NaN,handbrake:false});invalid.update(.1,{throttle:Infinity,steer:Infinity,handbrake:false});assert.ok(Number.isFinite(invalid.heading)&&Number.isFinite(invalid.speed));assert.equal(invalid.speed,0);
  const finite=world().v;finite.update(NaN,go);run(finite,1,go);assert.ok(finite.speed>1);
- const fast=world().v;fast.airborne=true;fast.y=100;fast.vx=100;fast.update(.1,idle);assert.ok(Math.hypot(fast.vx,fast.vz)<=34.00001);
+ const fast=world().v;fast.airborne=true;fast.y=100;fast.vx=100;fast.update(.1,idle);assert.ok(Math.abs(Math.hypot(fast.vx,fast.vz)-44)<.00001);
 });
 test('procedural model stays within geometry and draw budget',()=>{
  const b=createBike();console.log('Bike model',b.triangles,'triangles',b.drawCalls,'draw calls');assert.ok(b.triangles<=15000);assert.equal(b.drawCalls,2);assert.ok(b.triangles>3000);

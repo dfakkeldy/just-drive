@@ -9,7 +9,7 @@ import { eraRoadField } from './era';
 import { MIRROR_TERRAIN_VERT, TERRAIN_FRAG, TERRAIN_VERT, WATER_MASK_FRAG } from './shaders';
 import { readFile } from './store';
 import { updateCoastView } from './coast-view';
-import { coastRecessUniforms, RECESSES, type RockSite } from './coast-site';
+import { coastRecessUniforms, quarryGypsumFill, QUARRY_GRAVEL_FILL, RECESSES, type RockSite } from './coast-site';
 import { BROOK_SAMPLE, brookBlend, brookDistance, brookField, Streams } from './streams';
 import { GroundCover, type GroundMeta, clearsGroundTrees } from './ground-cover';
 
@@ -56,7 +56,7 @@ export interface Surface {
   deckRoadKind?: number;
   water?: boolean;     // mapped inland water; its LiDAR return is the surface, not a measured bed
   waterLimit?: number; // drawn water/return height plus contact tolerance; airborne bodies above it stay dry
-  mineral?: boolean;  // confirmed class-6 cell; handling only, never a road, grading or invented collision
+  mineral?: boolean;  // confirmed class 6 or authored quarry paint; never a road, grading or collision
   level: number;        // detail level the answer came from
 }
 
@@ -115,6 +115,9 @@ class Tile {
 interface DecodedTile { tile: Tile; px: Uint8ClampedArray; bakedRoad: Uint8ClampedArray | null }
 
 interface Grid { index: THREE.BufferAttribute; uvs: THREE.BufferAttribute }
+/** One reused record of a tile's main-view state while the mirror draws. Empty between mirror passes. */
+interface MirrorSave { tile: Tile | null; mesh: THREE.Mesh | null; visible: boolean; hide: THREE.Vector4; geometry: THREE.BufferGeometry | null; material: THREE.Material | THREE.Material[] | null }
+type MirrorHeld = { [K in keyof MirrorSave]: NonNullable<MirrorSave[K]> };
 
 async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
   const bmp = await createImageBitmap(await readFile(base, path), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
@@ -346,6 +349,8 @@ export class Terrain {
   private lastEvict = 0;
   private spare: Tile[] = [];
   private frustum = new THREE.Frustum();
+  private readonly mirrorFrustum = new THREE.Frustum();
+  private readonly mirrorSaved: MirrorSave[] = [];
   private m4 = new THREE.Matrix4();
   drawn = 0;
   /** A tile splits into finer tiles when the camera is nearer than split x its size. */
@@ -1109,14 +1114,7 @@ export class Terrain {
     }
     if (!t?.mesh) return null;
     this.use(t);
-    const seg = segFor(t.level), n = seg + 3;
-    const fa = (x - t.x0) * seg / t.size, fb = (z - t.z0) * seg / t.size;
-    const a = Math.min(Math.floor(fa), seg - 1), b = Math.min(Math.floor(fb), seg - 1);
-    const u = fa - a, v = fb - b, i = (b + 1) * n + a + 1;
-    const p = t.mesh.geometry.getAttribute('position');
-    const h00 = p.getY(i), h10 = p.getY(i + 1), h01 = p.getY(i + n), h11 = p.getY(i + n + 1);
-    const height=u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v
-      : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
+    const height = this.triangleValue(t, x, z, t.mesh.geometry.getAttribute('position'), 1);
     const cut=this.cartRoads?null:this.roadCuts.height(x,z);return cut!==null&&height>cut-.035?null:height;
   }
   /** Mapped driving data only; this never enters a ground or deck query. */
@@ -1156,15 +1154,40 @@ export class Terrain {
     return null;
   }
   private triangleHeight(t:Tile,x:number,z:number):number {
-    const seg=segFor(t.level),n=seg+3,fa=(x-t.x0)*seg/t.size,fb=(z-t.z0)*seg/t.size;
-    const a=Math.min(Math.floor(fa),seg-1),b=Math.min(Math.floor(fb),seg-1),u=fa-a,v=fb-b,i=(b+1)*n+a+1;
-    const p=t.mesh!.geometry.getAttribute('position'),h00=p.getY(i),h10=p.getY(i+1),h01=p.getY(i+n),h11=p.getY(i+n+1);
-    const height=u+v<=1?h00+(h10-h00)*u+(h01-h00)*v:h11+(h01-h11)*(1-u)+(h10-h11)*(1-v);
-    const xw=x,zw=z,cut=this.cartRoads?null:this.roadCuts.height(xw,zw);
+    const height=this.triangleValue(t,x,z,t.mesh!.geometry.getAttribute('position'),1);
+    const cut=this.cartRoads?null:this.roadCuts.height(x,z);
     if(cut===null||height<=cut-.035)return height;
     const fa0=((x-t.x0)/t.size)*T,fb0=((z-t.z0)/t.size)*T,ia=Math.min(Math.floor(fa0),T-1),ib=Math.min(Math.floor(fb0),T-1),ua=fa0-ia,ub=fb0-ib,g=t.ground!;
     return (g[ib*S+ia]*(1-ua)+g[ib*S+ia+1]*ua)*(1-ub)+(g[(ib+1)*S+ia]*(1-ua)+g[(ib+1)*S+ia+1]*ua)*ub;
+  }
 
+  private triangleValue(t:Tile,x:number,z:number,attr:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,component:number):number {
+    const seg=segFor(t.level),n=seg+3,fa=(x-t.x0)*seg/t.size,fb=(z-t.z0)*seg/t.size;
+    const a=Math.min(Math.floor(fa),seg-1),b=Math.min(Math.floor(fb),seg-1),u=fa-a,v=fb-b,i=(b+1)*n+a+1;
+    const h00=attr.getComponent(i,component),h10=attr.getComponent(i+1,component),h01=attr.getComponent(i+n,component),h11=attr.getComponent(i+n+1,component);
+    return u+v<=1?h00+(h10-h00)*u+(h01-h00)*v:h11+(h01-h11)*(1-u)+(h10-h11)*(1-v);
+  }
+
+  private quarryMineral(t:Tile,x:number,z:number,surface:Surface,lerp:(arr:ArrayLike<number>,stride:number,off:number)=>number):boolean {
+    const site=this.coast;
+    // The renderer uses individual trees near the player. Their ground keeps the existing brush boundary.
+    if(!site?.quarryFloorAllowsMineral || surface.canopy>1.6
+      || (surface.kind>0 && surface.roadDist<=surface.halfWidth+.4))return false;
+    const paint=t.mesh?.geometry.getAttribute('coast');
+    if(!paint)return false;
+    const weight=Math.max(this.triangleValue(t,x,z,paint,0),this.triangleValue(t,x,z,paint,3));
+    const uniforms=(t.mesh!.material as THREE.ShaderMaterial).uniforms;
+    const style=uniforms.tSiteStyle?.value.image.data;
+    if(style){
+      // Sample the same nearest style texel as STUNT_TERRAIN_FRAG, including off-road run-ups.
+      const a=Math.round((x-t.x0)*T/t.size),b=Math.round((z-t.z0)*T/t.size);
+      if(style[(b*S+a)*4+3]>0)return false;
+    }
+    // tNormal.b is linearly sampled in the shader at the same grid coordinates. Each canopy byte is 0.2 m.
+    const renderCanopy=clearsGroundTrees(this.groundClassAt(x,z))?0:lerp(uniforms.tNormal.value.image.data,4,2)*.2;
+    if(quarryGypsumFill(weight,renderCanopy,uniforms.hull.value)<QUARRY_GRAVEL_FILL)return false;
+    const h=this.seaLevel+(surface.ground-this.seaLevel)/this.exag;
+    return site.quarryFloorAllowsMineral(x,z,h);
   }
 
   surfaceAt(x: number, z: number, referenceY?:number): Surface | null {
@@ -1204,7 +1227,10 @@ export class Terrain {
     out.ground = this.withDeck(x, z, out.ground,out,referenceY);
     const waterLevel=out.deck?null:this.waterLevelAt(x,z,out.ground);
     if (waterLevel!==null) {out.water=true;out.waterLimit=Math.max(waterLevel,out.ground)+.25;}
-    if(!this.cartRoads&&!out.deck&&!out.water&&this.groundClassAt(x,z)===6)out.mineral=true;
+    if(!this.cartRoads&&!out.deck&&!out.water){
+      const quarry=this.coast?.quarry&&this.coast.contains(x,z);
+      if(quarry ? this.quarryMineral(t,x,z,out,lerp) : this.groundClassAt(x,z)===6)out.mineral=true;
+    }
     return out;
   }
 
@@ -1384,19 +1410,23 @@ export class Terrain {
 
   /** Mirror visibility has its own frustum. Restore the main visibility and quadrant masks even on failure. */
   withReflection(camera: THREE.PerspectiveCamera, focus: THREE.Vector3, draw: () => void): void {
-    const frustum = this.frustum.clone(), drawn = this.drawn;
-    const saved: { tile: Tile; mesh: THREE.Mesh; visible: boolean; hide: THREE.Vector4; geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[] }[] = [];
+    // The save records are reused each frame: no new frustum, record or mask vector per resident tile.
+    const frustum = this.mirrorFrustum.copy(this.frustum), drawn = this.drawn, saved = this.mirrorSaved;
+    let count = 0;
     for (const t of this.tiles.values()) if (t.mesh) {
       const mesh = t.mesh, hide = (mesh.material as THREE.ShaderMaterial).uniforms.hideQuad.value as THREE.Vector4;
-      saved.push({ tile: t, mesh, visible: mesh.visible, hide: hide.clone(), geometry: mesh.geometry, material: mesh.material });
+      const state = saved[count] ??= { tile: null, mesh: null, visible: false, hide: new THREE.Vector4(), geometry: null, material: null };
+      count++;
+      state.tile = t; state.mesh = mesh; state.visible = mesh.visible; state.hide.copy(hide); state.geometry = mesh.geometry; state.material = mesh.material;
       mesh.visible = false;
     }
     this.mirrorFocus.value.set(focus.x, focus.z);
     this.frustum.setFromProjectionMatrix(this.m4.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     try {
       this.visit(0, 0, 0, focus, true);
-      for (const state of saved) if (state.mesh.visible) {
-        const t = state.tile;
+      for (let k = 0; k < count; k++) {
+        const state = saved[k] as MirrorHeld, t = state.tile;
+        if (!state.mesh.visible) continue;
         if (!t.mirror) {
           // One coarser grid step, without moving the tile or changing its LOD boundaries.
           const seg = segFor(t.level), n = seg + 3;
@@ -1426,9 +1456,12 @@ export class Terrain {
       }
       draw();
     } finally {
-      for (const state of saved) {
+      for (let k = 0; k < count; k++) {
+        const state = saved[k] as MirrorHeld;
         state.mesh.visible = state.visible; state.mesh.geometry = state.geometry; state.mesh.material = state.material;
         ((state.material as THREE.ShaderMaterial).uniforms.hideQuad.value as THREE.Vector4).copy(state.hide);
+        // Drop the references, so a tile evicted later is not kept alive by its old record.
+        saved[k].tile = saved[k].mesh = saved[k].geometry = saved[k].material = null;
       }
       this.frustum.copy(frustum); this.drawn = drawn;
     }

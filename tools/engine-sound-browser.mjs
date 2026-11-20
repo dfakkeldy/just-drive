@@ -2,7 +2,8 @@
 // The driving sounds in a real browser (web/src/engine-sound.ts): no audio context before the player's first input; the
 // real title tap and the W key start it; the engine follows the car (engine speed rises, gears change); a hidden page
 // suspends it and a shown one resumes it; the Settings slider turns it down; the pause screen and the fly view (not driving) suspend it and
-// a key there does not wake it; LOW detail builds the smaller graph; a touch tap (a phone's gesture) starts it too.
+// a key there does not wake it; LOW detail builds the smaller graph; a touch tap (a phone's gesture) starts it too. A truck
+// pass proves its voice, a periodic wave of one whole engine cycle, plays in a real browser and reports its firing rate.
 // It reads the Web Audio graph's state, which is the browser's own. It does not prove that a person heard the sound:
 // a headless browser plays into a silent output.
 // Usage: RUN=engine-sound-browser.mjs VIEWS="engine|vehicle=car" tools/yard-shots.sh 1280 720
@@ -142,6 +143,34 @@ for (const [detail, touch] of [['high', false], ['low', true]]) {
   check(await until(`mmm.engineSound.snapshot.context === 'running' && mmm.engineSound.snapshot.live`), 'back on the road, the engine runs again');
 
   await note('after');
+  assertHealthy();
+}
+
+// The truck's voice is a periodic wave (setPeriodicWave: one engine cycle of eight uneven pulses); only a real browser can
+// prove it plays. Its oscillator runs once per engine cycle, an eighth of the firing rate; the snapshot multiplies it back.
+{
+  console.log('--- vehicle=truck, q=high');
+  await send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  await load({ q: 'high', vehicle: 'truck' });
+  await tapStart(false);
+  check(await until(`mmm.engineSound.snapshot.built`), 'the truck: the first tap builds the graph');
+  await key('keyDown', 'KeyW', 'w');
+  check(await until(`mmm.engineSound.snapshot.live && mmm.engineSound.snapshot.kind === 'truck' && mmm.engineSound.snapshot.context === 'running'`), 'the truck: driving starts the sound');
+  // The voice glides toward each new engine speed: keep the closest of a few readings to the target (rpm x 4 / 60).
+  let best = null;
+  for (let i = 0; i < 30; i++) {
+    await sleep(150);
+    const now = await snap(), target = now.rpm * 4 / 60, error = Math.abs(now.frequency - target) / target;
+    if (!best || error < best.error) best = { ...now, target, error };
+  }
+  const truck = await note('truck pulling');
+  check(truck.wave === 'custom', `the truck's voice is a periodic wave (type ${truck.wave})`);
+  check(best.error < .1, `the snapshot reports the truck's firing rate (${best.frequency} Hz at ${best.rpm} rpm, target ${best.target.toFixed(1)} Hz)`);
+  check(truck.frequency > 20 && truck.frequency < 400, `the truck's firing frequency is in range (${truck.frequency} Hz)`);
+  check(truck.master > .2 && truck.speed > 1, `the truck moves and its engine is audible in the graph (master ${truck.master}, ${truck.speed} m/s)`);
+  const engines = truck.contexts.filter(c => c.buffers > 0);
+  check(engines.length === 1 && engines[0].tones === 3, `the truck adds no oscillator (${engines[0]?.tones})`);
+  await key('keyUp', 'KeyW', 'w');
   assertHealthy();
 }
 

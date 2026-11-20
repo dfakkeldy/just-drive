@@ -1105,6 +1105,12 @@ void main() {
   // Height shifts the crown pattern, so the steep side of a forest edge is not striped.
   albedo = mix(albedo, treeColor(p + vWorld.y * vec2(0.71, 0.37), red, yel, dist), tree);
 
+#ifdef QUARRY
+  float mineralFill = 0.0;
+  if(inQuarry&&p.y+coastOrigin.y<=47000.0&&max(vCoast.x,vCoast.w)>.001){
+    mineralFill=smoothstep(.05,.60,max(vCoast.x,vCoast.w))*(1.0-tree);
+  }
+#endif
 #if !defined(LOW) && !defined(MIRROR)
 #ifdef GROUND_CLASSES
   if (grassFocus.z > 0.0 && cls != 4.0 && cls != 6.0 && cls != 7.0 && cls != 10.0 && cls != 12.0 && canopy < 1.8 && vGround > seaLevel + 1.45 && slope < 0.62
@@ -1117,6 +1123,13 @@ void main() {
 #ifdef COAST_SHORE
     // The bare beach has no grass roots; the old height cutoff otherwise draws a false sand seam.
     ring *= 1.0 - smoothstep(0.05,0.20,vCoast.w);
+#endif
+#ifdef QUARRY
+    // The grass patch builder leaves exposed gypsum bare at this fill and canopy cutoff.
+#ifdef STUNT_PARK
+    if (siteStyle.a <= 0.001)
+#endif
+    if (canopy <= 1.6) ring *= 1.0 - step(0.25, mineralFill);
 #endif
     albedo *= 1.0 - ring * (0.20 + 0.12 * vnoise(p * 11.0));
   }
@@ -1131,8 +1144,7 @@ void main() {
   // Sky light from above, plus warm light that the sunlit land throws back onto shaded slopes.
   vec3 light = sunColor * diff + skyColor * (0.65 + 0.55 * n.y) * (1.0 - 0.35 * tree * (1.0 - n.y)) + sunColor * vec3(0.060, 0.050, 0.035);
 #ifdef QUARRY
-  if(inQuarry&&p.y+coastOrigin.y<=47000.0&&max(vCoast.x,vCoast.w)>.001){
-  float mineralFill=smoothstep(.05,.60,max(vCoast.x,vCoast.w))*(1.0-tree);
+  if(mineralFill>0.0){
   vec3 warmFill=vec3(max(dot(skyColor,vec3(.3,.5,.2)),.82*smoothstep(0.0,.20,sunDir.y)))*vec3(1.025,1.01,.97);
   light=mix(light,sunColor*diff+warmFill*(.82+.40*max(n.y,0.0))+sunColor*vec3(.10,.08,.05),mineralFill);
   }

@@ -15,8 +15,8 @@ function check(source){
 const source=process.env.STUNT_ORDER_BASE?execFileSync('git',['show',process.env.STUNT_ORDER_BASE+':web/src/main.ts'],{encoding:'utf8'}):current();
 check(source);
 if(!process.env.STUNT_ORDER_BASE){
-  const from="name: 'stuntPark' } : {}), segment: 'landscape'";
+  const from="name: 'stuntPark', segment: 'landscape'";
   assert.equal(source.split(from).length,2,'unique park ordering mutant anchor');
-  assert.throws(()=>check(source.replace(from,"name: 'stuntPark' } : {}), segment: 'before-camera'")),/park visibility observes this frame terrain revision|park updates after terrain selection/,'early park update must fail');
+  assert.throws(()=>check(source.replace(from,"name: 'stuntPark', segment: 'before-camera'")),/park visibility observes this frame terrain revision|park updates after terrain selection/,'early park update must fail');
 }
 console.log('PASS actual main-frame park ordering and early-update mutant');

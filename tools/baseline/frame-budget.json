@@ -39,17 +39,17 @@
 
   "new-player-start/phone-mail":{"calls":229,"triangles":1433908,"geometries":112,"textures":83,"programs":18,"readyTiles":74,"requests":154},
 
-  "pointtupper-start/desktop-explore-truck":{"calls":1005,"triangles":4751601,"geometries":290,"textures":151,"programs":47,"readyTiles":347,"requests":638},
+  "pointtupper-start/desktop-explore-truck":{"calls":1001,"triangles":4674260,"geometries":286,"textures":162,"programs":47,"readyTiles":355,"requests":658},
 
-  "pointtupper-start/phone-explore-truck":{"calls":213,"triangles":1283670,"geometries":124,"textures":61,"programs":18,"readyTiles":83,"requests":196},
+  "pointtupper-start/phone-explore-truck":{"calls":204,"triangles":1123375,"geometries":121,"textures":58,"programs":17,"readyTiles":88,"requests":206},
 
-  "quarry-air/desktop-explore-truck":{"calls":846,"triangles":4398223,"geometries":169,"textures":169,"programs":31,"readyTiles":344,"requests":602},
+  "quarry-air/desktop-explore-truck":{"calls":846,"triangles":4398223,"geometries":169,"textures":169,"programs":31,"readyTiles":344,"requests":603},
 
-  "quarry-air/phone-explore-truck":{"calls":97,"triangles":927911,"geometries":54,"textures":52,"programs":14,"readyTiles":72,"requests":147},
+  "quarry-air/phone-explore-truck":{"calls":97,"triangles":927911,"geometries":54,"textures":52,"programs":14,"readyTiles":72,"requests":148},
 
-  "quarry-gate/desktop-explore-truck":{"calls":646,"triangles":4714156,"geometries":198,"textures":177,"programs":36,"readyTiles":342,"requests":615},
+  "quarry-gate/desktop-explore-truck":{"calls":646,"triangles":4714156,"geometries":198,"textures":177,"programs":36,"readyTiles":342,"requests":616},
 
-  "quarry-gate/phone-explore-truck":{"calls":133,"triangles":1325613,"geometries":98,"textures":57,"programs":22,"readyTiles":194,"requests":336},
+  "quarry-gate/phone-explore-truck":{"calls":133,"triangles":1325613,"geometries":98,"textures":57,"programs":22,"readyTiles":194,"requests":337},
 
   "village-start/desktop-explore-truck":{"calls":906,"triangles":4259417,"geometries":235,"textures":166,"programs":43,"readyTiles":366,"requests":696},
 

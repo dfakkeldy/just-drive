@@ -12,8 +12,9 @@ export const TRUCK_SPEC: VehicleSpec = deepFreeze({
   // ends are rounded, as on the car: behind the axle the cover falls to 1.14 m at the fender's tail (8 cm inside
   // its widest point), which keeps the tail of the envelope at the bumper and not past it.
   envelope: { circles: [-2.18, -1.938, -1.695, -1.453, -0.727, 0, 0.727, 1.453, 2.18], radius: 1.22, reach: 4.5, sweepHalfWidth: 1.23, sweepHalfLength: 3.41, overhead: 1.425, grassHalfWidth: 1.62, grassHalfLength: 3.9, nose: 4.3 },
-  engineAcceleration: 4.2, enginePower: 122, tractionShare: 0.78,
-  brake: 7.1, handbrake: 5.8, aeroDrag: 0.00115,
+  // Reach the small kicker's posted speed on the gravel run-up and keep the paved top near 164 km/h.
+  engineAcceleration: 7.6, enginePower: 170, tractionShare: 1.16,
+  brake: 7.1, handbrake: 5.8, aeroDrag: 0.0017, hardSteerDrag: 2.6,
   maxSteer: 0.59, cornering: 1.65,
   steerBaseRate: 0.45, steerSpeedRate: 1.8, steerReturnRate: 2.6,
   pitchGain: 0.003, pitchLimit: 0.022, rollGain: 0.0035, rollLimit: 0.035,

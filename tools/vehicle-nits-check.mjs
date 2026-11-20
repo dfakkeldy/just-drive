@@ -11,8 +11,8 @@ import { relative, resolve } from 'node:path';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const GOLDEN_COMMIT = '61b6083456dfb2ab5dc39585cd618e66208e91c7';
-// Review note: expand G20c coverage without driving changes; retain the approved removal of unread bike leans.
+const GOLDEN_COMMIT = '697947cd013436dca6680ccabd12fbc604ec716f';
+// Review note: The owner asked for faster Sugar Camp vehicles on 20 Nov 2026. This records the bike, side-by-side and pickup tune.
 const RECORD_PROCEDURE = 'A deliberate change to driving: run node tools/vehicle-nits-check.mjs --record on the new code, paste the goldens with the commit SHA and one line that says what changed and why; a reviewer must see that line.';
 const N = 5000, MIXED_N = 4500, dt = 1 / 120;
 // Paste the --record output here. SHA-256 consumes little-endian Float64 values,
@@ -40,50 +40,48 @@ const GOLDEN = {
     }
   },
   "sxs": {
-    "spec": "48b612d025d22a8408f3683af4bb9e8b57fe7422949301a101e3b7afd589bc6b",
+    "spec": "1fadc6d0b6395780f4a29783a8e884148c8e6deb8df266b1beb35a765219b634",
     "washboard": {
-      "state": "eb54ddd4efc2b89950fcad2071665f200b6899a1ff23873a09da4de43f5ec6d5",
-      "draws": "ff0d8c3724de8c0ddf213c14a32c25110399b42aa075435199752a2f8bf3b995",
+      "state": "f3ed8d256316d4939a02ff401081eade2216645f0e42ca3e6edf593fda82a120",
+      "draws": "381689f6a1744461c12715c985eff4efb3dd99d9a22e6b731a0833143352e8b6",
       "histogram": {
-        "3": 64,
-        "5": 4936
+        "3": 178,
+        "5": 4822
       }
     },
     "mixed": {
-      "state": "67cb8c6858bc4f2d04a9d6bb59e0cb3ae64f57324a5d929c296da40b86718634",
-      "draws": "0bade109cdec9c66c82ebc7fd3e6fc0e8b802986b04a63e6f2a03c04449b2609",
+      "state": "d1c0cd6e0176426a2b6093935cc9128a0c8114702182266069c1d741a0b61b83",
+      "draws": "791729ca86a52039ad5de12ef6efc5120580cb5f0d314e380edfc84582e5b7c1",
       "histogram": {
-        "3": 3403,
-        "5": 532,
-        "7": 322,
-        "9": 1,
-        "11": 242
+        "3": 3508,
+        "5": 488,
+        "7": 287,
+        "11": 217
       }
     }
   },
   "truck": {
-    "spec": "c417bb66a79252ddcf173d390b7aabeae692bdf33033b5292018e4541f097919",
+    "spec": "4de0b8beb50d0b8d8194b6ea14586d031a879a538bc8659a2a02b59ac19b5d93",
     "washboard": {
-      "state": "4cd4910e387cb9d8aa0677c5e19b677a8c558a44af5323afc714323541396776",
+      "state": "a0ef5ec7ea5cca187b5b08f5d166061be3d4712f02c6365a849ba60984f01ca1",
       "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
       "histogram": {
         "5": 5000
       }
     },
     "mixed": {
-      "state": "651d8fdd13e26b1e988982be722b2d8d6abb34e9f873aeebd818245556a6478a",
-      "draws": "d78fa522917157ed4854a9e9a3b4ff515103f6d9acac53a81b6976c68ba5deb2",
+      "state": "d321f55d0157171c69e2dcc52e4c9f5de786e627025ec1ba9c2ba40602f3dcac",
+      "draws": "b1898faf456d55ec843daf3d53c04c02ab848c1b9fec6a5fc63c635676013b47",
       "histogram": {
-        "3": 3188,
-        "5": 636,
-        "7": 385,
-        "11": 291
+        "3": 3152,
+        "5": 653,
+        "7": 395,
+        "11": 300
       }
     }
   },
   "bike": {
-    "spec": "3a5e13ec93ebff65c15f64c75b6770872a6b00da2fed53d2aab06c47d60de7f5",
-    "specAfterLeansRemoval": "d4e0097be484a22253d008ad08fdafe7b24afe48618fc499342698923b319ff7",
+    "spec": "c9a91271b8bdfdde6a0b20e618bd95c5a0b7e28c7897e9a253caf8259747b365",
     "washboard": {
       "state": "31110cd3631cea0e42631acebec314e4471ebcc555c5b45a2c68f71de93b48a7",
       "draws": "e7e2dcff542de95352682dc186432e98f0188084896773f1973276b0577d5305",
@@ -92,7 +90,7 @@ const GOLDEN = {
       }
     },
     "mixed": {
-      "state": "1a148fe79ea14f0b15deb61e770340fba9fe95ed0a78301e4ced8701a8d2898e",
+      "state": "0b2b1462b6173941539ecc1f9c74c0277d72fd263fb839dcb2984d1c785dc2cd",
       "draws": "d7967a6f7d2dd3204ed70cc72c705e33a573aef8431b69c5bbd39e5b5cd67384",
       "histogram": {
         "0": 4500
@@ -100,6 +98,8 @@ const GOLDEN = {
     }
   }
 };
+
+
 
 const read = path => readFileSync(new URL(path, `file://${root}`), 'utf8');
 const seeded = () => { let s = 0x6e697473; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 2 ** 32; }; };

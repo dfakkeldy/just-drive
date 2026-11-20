@@ -14,15 +14,17 @@ import { washboard, potholeDepth, potholeDensity } from './defects';
 
 export const BIKE_STEP = 1 / 120, BIKE_WHEELBASE = BIKE_SPEC.wheelbase, BIKE_RADIUS = BIKE_SPEC.wheelRadius;
 const G = 9.81, TAU = Math.PI * 2;
+const MAX_HORIZONTAL_SPEED = 44; // m/s, with headroom above the 150 km/h level-ground top
 const clamp = THREE.MathUtils.clamp;
 const angle = (v: number) => Math.atan2(Math.sin(v), Math.cos(v));
+// Nominal tops allow for the constant 0.18 m/s² rolling loss in the drive step.
 const SURFACES = {
-  concrete: { top: 115 / 3.6, accel: 6.4, grip: 1.35, rough: 0, name: 'concrete' },
-  paved: { top: 115 / 3.6, accel: 6.4, grip: 1.35, rough: 0, name: 'pavement' },
-  gravel: { top: 104 / 3.6, accel: 5.9, grip: 1.05, rough: .015, name: 'gravel' },
-  trail: { top: 100 / 3.6, accel: 5.8, grip: 1.1, rough: .009, name: 'rail trail' },
-  track: { top: 92 / 3.6, accel: 5.4, grip: .9, rough: .035, name: 'dirt track' },
-  grass: { top: 88 / 3.6, accel: 5.2, grip: .85, rough: .045, name: 'grass' },
+  concrete: { top: 152.16 / 3.6, accel: 6.4, grip: 1.35, rough: 0, name: 'concrete' },
+  paved: { top: 152.16 / 3.6, accel: 6.4, grip: 1.35, rough: 0, name: 'pavement' },
+  gravel: { top: 147.26 / 3.6, accel: 5.9, grip: 1.05, rough: .015, name: 'gravel' },
+  trail: { top: 147.30 / 3.6, accel: 5.8, grip: 1.1, rough: .009, name: 'rail trail' },
+  track: { top: 142.39 / 3.6, accel: 5.4, grip: .9, rough: .035, name: 'dirt track' },
+  grass: { top: 122.13 / 3.6, accel: 5.2, grip: .85, rough: .045, name: 'grass' },
   brush: { top: 38 / 3.6, accel: 3, grip: .7, rough: .07, name: 'brush' },
   washboard: { top: 78 / 3.6, accel: 4.9, grip: .7, rough: .095, name: 'washboard' },
 };
@@ -180,7 +182,7 @@ export class BikeRide implements Ride {
     if (this.terrain.cartRoads && deckCounts(this.roads.deckHeight(this.x,this.z),this.y,this.terrain.cartRoads)) return s.kind===4?SURFACES.track:s.washboard?SURFACES.washboard:SURFACES.gravel;
     if (s.deck) return s.washboard?SURFACES.washboard:s.kind===9?SURFACES.concrete:s.kind<=2?SURFACES.paved:s.kind===5?SURFACES.trail:s.kind===4?SURFACES.track:SURFACES.gravel;
     if (!s.deck && deckCounts(this.roads.deckHeight(this.x, this.z),this.y,this.terrain.cartRoads)) return SURFACES.paved;
-    if (s.kind === 0 || s.roadDist > s.halfWidth + .4) return s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
+    if (s.kind === 0 || s.roadDist > s.halfWidth + .4) return s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
     return s.kind === 9 ? SURFACES.concrete : s.kind <= 2 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 5 ? SURFACES.trail : s.kind === 4 && (!s.gravel || this.terrain.cartRoads) ? SURFACES.track : SURFACES.gravel;
   }
   private beginJump(): void {
@@ -252,7 +254,7 @@ export class BikeRide implements Ride {
       acceleration -= G * Math.sin(slope);
       if (t === 0 && speed < .08 && Math.abs(slope) < .1) forward = 0;
       else { acceleration -= Math.sign(forward) * .18; forward += acceleration * dt; }
-      forward = clamp(forward, -5, 34);
+      forward = clamp(forward, -5, MAX_HORIZONTAL_SPEED);
       const maxYaw = Math.min(1.8, surf.grip * G / Math.max(speed, 2));
       const targetRoll = speed > 2 ? -Math.atan(speed * input.steer * maxYaw / G) : 0;
       this.roll += (targetRoll - this.roll) * Math.min(1, dt * (speed > 8 ? 3 : 6));
@@ -286,7 +288,10 @@ export class BikeRide implements Ride {
       this.vx = nfx * forward + Math.cos(this.heading) * sideways; this.vz = nfz * forward + Math.sin(this.heading) * sideways;
     }
     const horizontal = Math.hypot(this.vx, this.vz);
-    if (horizontal > 34) { this.vx *= 34 / horizontal; this.vz *= 34 / horizontal; }
+    if (horizontal > MAX_HORIZONTAL_SPEED) {
+      this.vx *= MAX_HORIZONTAL_SPEED / horizontal;
+      this.vz *= MAX_HORIZONTAL_SPEED / horizontal;
+    }
     this.x += this.vx * dt; this.z += this.vz * dt; this.wall();
     this.speed = this.vx * Math.sin(this.heading) - this.vz * Math.cos(this.heading);
     this.roads.guardrails?.block(this, dt);

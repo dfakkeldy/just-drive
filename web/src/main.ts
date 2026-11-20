@@ -26,7 +26,7 @@ import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { isHillsideBuilding, NovemberBuildings } from './november-buildings';
 import { NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
-import { Animals } from './animals';
+import { Animals, CatTileUnread } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
 import { areaScreen } from './area-screen';
 import { GARAGE, readVehicle } from './garage';
@@ -104,10 +104,11 @@ import { MineInterior } from './interior-mine';
 import { LawnDemo } from './shift-demo';
 import { Route } from './route';
 import { SEA_FRAG, SEA_VERT } from './shaders';
-import { SunShadows } from './shadows';
+import { SunShadows, lookFocus } from './shadows';
 import { Streams, type StreamFile } from './streams';
 import { WaterReflections } from './water';
-import { initStore } from './store';
+import { initStore, readFile } from './store';
+import { early } from './boot-tasks';
 import { Edge } from './edge';
 import { directionFromAngles, sunAngles } from './sun';
 import { readLightStudy, studyScale, studyLightingElevation, lightStudyUI, readDrivePosition } from './light-study';
@@ -219,16 +220,22 @@ const manifest = await loadAreaManifest<Manifest>(AREA, base).catch(error => {
 });
 if (__PUBLIC_APP__) offlinePlay(document.getElementById('settings'), document.getElementById('startOver'), offlinePageKey, AREA.id, SITE.brand === 'just', localJust);
 const getJson = async (name: string) => (await fetch(`${base}/${name}`)).json();
-// These inputs describe the selected area and can load while the rest of the scene starts.
-const roadDataReady = manifest.roads ? getJson(manifest.roads.file) : Promise.resolve({ roads: [] });
-// A road read failure still stops startup when roadDataReady is awaited.
-void roadDataReady.catch(() => {});
-// Brooks are optional. A missing or broken file leaves the scene without them.
-const streamsReady = manifest.streams && params.get('brooks') !== '0'
-  ? getJson(manifest.streams.file).then((d: StreamFile) => new Streams(d, manifest.village))
-    .catch((e: unknown) => { console.warn('streams', e); return null; })
-  : Promise.resolve(null);
 await initStore(base);
+// Every boot read below needs only the manifest, so all start now, under the same conditions as before. Each line that used
+// to start its read now waits for it there (boot-tasks.ts), so the build order and the failures stay as they were.
+// The ground class read still starts in terrain.ts (readGroundCover); moving it here is left for a later change.
+const landmarksRead = AREA.landmarks ? early(getJson('landmarks.json')) : null;
+const buildingsRead = manifest.buildings ? early(getJson(manifest.buildings.file)) : null;
+const stylesRead = ERA.modern && manifest.buildingStyles ? early(getJson(manifest.buildingStyles.file)) : null;
+const pavedRead = ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1') ? early(readFile(base, 'paved/index.json')) : null;
+const cemeteryEntry = (manifest as Manifest & { cemeteries?: { file: string } }).cemeteries;
+const cemeteriesRead = ERA.modern && cemeteryEntry ? early(getJson(cemeteryEntry.file)) : null;
+const stockpilesRead = ERA.modern && manifest.stockpiles ? early(getJson(manifest.stockpiles.file)) : null;
+// The 1884 land reads the brook file too, even with ?brooks=0: both lines share this one read.
+const streamUses = (params.get('brooks') !== '0' ? 1 : 0) + (ERA.id === '1884' ? 1 : 0);
+const streamsRead = manifest.streams && streamUses ? early(getJson(manifest.streams.file), streamUses) : null;
+const roadsRead = manifest.roads ? early(getJson(manifest.roads.file)) : null;
+const propsRead = ERA.modern && manifest.props ? early(getJson(manifest.props.file)) : null;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -337,7 +344,7 @@ if (LOW) {
 }
 scene.add(sea);
 
-const landmarkList = AREA.landmarks ? await getJson('landmarks.json') : [];
+const landmarkList = landmarksRead ? await landmarksRead.take() : [];
 const clear = landmarkList.map((lm: { footprint: [number, number][] }) => {
   const xs = lm.footprint.map((p) => p[0] - manifest.village[0]), zs = lm.footprint.map((p) => manifest.village[1] - p[1]);
   return [Math.min(...xs) - 4, Math.min(...zs) - 4, Math.max(...xs) + 4, Math.max(...zs) + 4];
@@ -360,14 +367,14 @@ let mappedBuildings: Building[] = [];
 // group, the pub, the bank branch, lamp posts, sidewalk, string lights): built by hand from the dash cam brief. The boxes
 // it replaces leave the drawing only; they stay properties. ?mabou=0 leaves the surveyed boxes.
 const mabouSite = ERA.modern && AREA.id === 'mabou' && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
-const buildingList: Building[] | null = manifest.buildings ? await getJson(manifest.buildings.file).then((data: { buildings: Building[] }) => {
+const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then((data: { buildings: Building[] }) => {
   mappedBuildings = data.buildings;
   const list = homeSite ? Home.buildings(data.buildings, homeSite, manifest.village) : yardSite ? Yard.buildings(data.buildings, yardSite, manifest.village) : data.buildings;
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
-const bakedBuildingStyles = ERA.modern && manifest.buildingStyles
-  ? await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
+const bakedBuildingStyles = stylesRead
+  ? await stylesRead.take().then(readBuildingStyles)
     .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
   : undefined;
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
@@ -416,7 +423,7 @@ terrain.cartRoads = ERA.cartRoads;
 // Open designated pavement (NSTDB lots): on by default in an area whose bake lists it.
 // paved=0 turns it off; paved=1 forces a load (work-bake previews). Absent data means no request.
 if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1')) {
-  terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id)).catch(e => { console.warn('Paved layer unavailable', e); return null; });
+  terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id, pavedRead?.take())).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
 const testPark = await createTestPark(terrain, yardSite, LOW, buildingList ?? []);
@@ -430,14 +437,18 @@ if (homeSite) terrain.sites.push(homeSite);
 if (porchSite) terrain.sites.push(porchSite);
 if (churchSite) terrain.sites.push(churchSite);
 if (quarrySite) { terrain.sites.push(quarrySite); terrain.coast=quarrySite; }
-const cemeteries = ERA.modern ? await Cemeteries.load(manifest, getJson, terrain, LOW, AREA.id) : null;
+const cemeteries = ERA.modern ? await Cemeteries.load(manifest, name => cemeteriesRead?.take() ?? getJson(name), terrain, LOW, AREA.id) : null;
 if (cemeteries) scene.add(cemeteries.group);
-const stockpiles = ERA.modern ? await Stockpiles.load(manifest, getJson, terrain, LOW, AREA.id) : null;
+const stockpiles = ERA.modern ? await Stockpiles.load(manifest, name => stockpilesRead?.take() ?? getJson(name), terrain, LOW, AREA.id) : null;
 if (stockpiles) { scene.add(stockpiles.group); terrain.canopyExcludes = stockpiles.excludes; }
 // The coast at Mabou Coal Mines is Mabou's own: another area gets none of it.
 const coast = !AREA.coast || params.get('coast') === '0' ? null : new Coast(new CoastSite(manifest.village), terrain, LOW);
 if (coast) { terrain.coast = coast.site; scene.add(coast.group); }
-terrain.streams = await streamsReady;
+// Brooks are scenery: when their file is missing or broken, the game still starts, without them.
+// ?brooks=0 leaves them out (to time one build both ways).
+terrain.streams = streamsRead && params.get('brooks') !== '0'
+  ? await streamsRead.take().then((d: StreamFile) => new Streams(d, manifest.village)).catch((e: unknown) => { console.warn('streams', e); return null; })
+  : null;
 if (LOW) { terrain.split = AREA.quarry ? 1 : 1.15; terrain.low = true; }   // fine tiles and single trees reach less far
 else if (params.get('shadows') !== '0') terrain.shadows = true;
 // Phone cold start: past 600 m, land outside the view is read later, in the background (terrain.ts lazyRange).
@@ -445,7 +456,7 @@ if (LOW) terrain.lazyRange = 600;
 if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
-const roadData = await roadDataReady;
+const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
 const novemberRoads = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
 if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
@@ -512,7 +523,7 @@ if (ERA.modern && AREA.id === 'pointtupper' && !LOW) {
 
 const history = ERA.id === '1884' ? await (async () => {
   await terrain.readCover();
-  const streams = manifest.streams ? await getJson(manifest.streams.file) as StreamFile : null;
+  const streams = streamsRead ? await streamsRead.take() as StreamFile : null;
   const ground=await historyGround(manifest,base,roads.roads.filter(r=>r.bridge).flatMap(r=>r.pts.map(([x,z]):[number,number]=>[x+manifest.village[0],manifest.village[1]-z])));
   new HistoryBridgeApproaches(roads,terrain,ground).install(terrain);
   return new HistoryScene(terrain, roads, streams, roofSites(buildingList ?? []), ground);
@@ -535,9 +546,9 @@ const sidewalks = (() => {
 if (sidewalks) { terrain.sidewalks=sidewalks; scene.add(sidewalks.group); if (mabouSite) mabouSite.sidewalkLayer = true; }
 // Roadside props are scenery: when their file is missing or broken, the game still starts.
 const props = await (async () => {
-  if (!ERA.modern || !manifest.props) return null;
+  if (!propsRead) return null;
   try {
-    const read = await getJson(manifest.props.file);
+    const read = await propsRead.take();
     // The service drops of the boxes Port Hawkesbury and Mabou's main street replace end on their models, not in the air.
     const placed = hawkesburySite && Array.isArray(read.serviceDrops) ? { ...read, serviceDrops: aimDrops(read.serviceDrops) } : read;
     const data = mabouSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: aimMabouDrops(placed.serviceDrops) } : placed;
@@ -851,7 +862,13 @@ mailButton?.addEventListener('pointercancel', releaseMail);
 mailButton?.addEventListener('lostpointercapture', releaseMail);
 addEventListener('blur', () => { mailRequested = false; mailPointers.clear(); mailButton?.classList.remove('held'); });
 const animals = AREA.animals ? new Animals(roads, terrain, buildingList, manifest.village) : null;
-await animals?.ready;
+// The cat's place is read from land tiles; a failed read is a land that could not load (area-screen.ts).
+// Any other fault in choosing the animals' places still stops the start with its own message (page-state.ts).
+await animals?.ready.catch((error: unknown) => {
+  if (!(error instanceof CatTileUnread)) throw error;
+  console.error(error);
+  return areaScreen('The land could not load. Retry this area.', true);
+});
 if (animals) scene.add(animals.group);
 
 // ---- modes --------------------------------------------------------------------------------
@@ -1340,6 +1357,7 @@ function flyDrone(dt: number) {
   if (landed) landDrone();
 }
 
+const flyDir = new THREE.Vector3(), flyRight = new THREE.Vector3();
 function fly(dt: number) {
   if (drone.active) { flyDrone(dt); return; }
   if (pause.blocked) return;
@@ -1349,8 +1367,8 @@ function fly(dt: number) {
   if (f || r || u) pendingShot = null;
   const v = flySpeed * (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 5 : 1) * dt;
   camera.rotation.set(pitch, yaw, 0);
-  const dir = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
-  const right = new THREE.Vector3(1, 0, 0).applyEuler(camera.rotation);
+  const dir = flyDir.set(0, 0, -1).applyEuler(camera.rotation);
+  const right = flyRight.set(1, 0, 0).applyEuler(camera.rotation);
   camera.position.addScaledVector(dir, f * v).addScaledVector(right, r * v);
   camera.position.y += u * v;
   const g = terrain.heightAt(camera.position.x, camera.position.z);
@@ -1362,7 +1380,7 @@ function fly(dt: number) {
 }
 
 // The chase camera trails the car's direction of travel and never dips under the ground.
-const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), camAim = new THREE.Vector3(), camTarget = new THREE.Vector3();
 let camHeading = 0, camReady = false;
 drivenChanged = () => { ride.resetInput(); animals?.resetVehicleHistory(); mail.reset(); camReady = false; waitingToDrive = false; keys.clear(); pointers.clear(); mailPointers.clear(); pad?.release(); touch.steer = touch.throttle = 0; };
 if (fleet) fleet.releaseInput = drivenChanged;
@@ -1397,9 +1415,9 @@ function chase(dt: number) {
     ? g.ground + vehicleSpec.chase.height + towCamera.height
     : Math.max(ty, g.ground + g.canopy * 0.5 + 1.3);
   const k = camReady ? Math.min(1, 7 * dt) : 1;
-  camPos.lerp(new THREE.Vector3(tx, ty, tz), k);
+  camPos.lerp(camAim.set(tx, ty, tz), k);
   const lookAhead = towCamera ? -towCamera.lookBack : vehicleSpec.chase.lookAhead;
-  const target = new THREE.Vector3(vehicle.x + Math.sin(vehicle.heading) * lookAhead + Math.cos(camHeading) * (towCamera?.lookSide ?? 0), vehicle.y + vehicleSpec.chase.lookHeight, vehicle.z - Math.cos(vehicle.heading) * lookAhead + Math.sin(camHeading) * (towCamera?.lookSide ?? 0));
+  const target = camTarget.set(vehicle.x + Math.sin(vehicle.heading) * lookAhead + Math.cos(camHeading) * (towCamera?.lookSide ?? 0), vehicle.y + vehicleSpec.chase.lookHeight, vehicle.z - Math.cos(vehicle.heading) * lookAhead + Math.sin(camHeading) * (towCamera?.lookSide ?? 0));
   if (astra === 'bend-camera' && garageEntry.id === 'car' && vehicle.speed > 2 && !vehicle.airborne) {
     // Aim into the next fraction of a second of the turn. Keep the horizon level and the right shoulder in view.
     const pace = THREE.MathUtils.smoothstep(vehicle.speed, 2, 14);
@@ -1670,6 +1688,9 @@ if (!bare && params.get('radio') !== '0') {
   const audioBase = `${import.meta.env.BASE_URL}audio`;
   void loadRadio(audioBase, siteRadio(SITE)).then(next => {
     radio = next; if (SITE.brand === 'just') { title?.setRadio(!!radio); ride.setRadio(!!radio); }
+    // Only the mail shift has reception: the places with no signal are its joke. Just driving (explore mode: every Just Drive
+    // page, the mail game's "Just drive" mode, its other areas and 1884) hears every station everywhere (the owner, 20 Nov 2026).
+    if (gameMode === 'explore') radio?.useReception(null);
     if (params.get('reception') === '0') radio?.useReception(null);   // every station everywhere, as on the Just Listen page
     if (import.meta.env.DEV) expose({ radio });   // for tools/radio-check.mjs
     if (started) radio?.start();
@@ -1704,47 +1725,64 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Segments keep the drive frame's camera, activity and render work between the same updates.
-// Endings keep two explicit positions where shared terrain state prevents an independence proof.
+// Endings move two entries right after a named entry, where shared terrain state prevents an independence proof.
 type WorldSegment = 'ride' | 'before-camera' | 'landscape' | 'landmarks' | 'after-activities' | 'grass' | 'mirror';
-const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolean; endingPosition?: number; update: (dt: number, realDt: number, now: number) => void }> = [
-  ...(ride.update ? [{ ...(import.meta.env.DEV ? { name: 'ride' } : {}), segment: 'ride' as const, ending: false, update: (_dt: number, realDt: number) => ride.update!(realDt, !scenePaused() && mode === 'drive') }] : []),
-  { ...(import.meta.env.DEV ? { name: 'yard' } : {}), segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'yardDog' } : {}), segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'home' } : {}), segment: 'before-camera', ending: false, update: () => home?.update(camera.position, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'porch' } : {}), segment: 'before-camera', ending: false, update: (dt, _realDt, now) => { porch?.update(camera.position, vehicle); porchDog?.update(dt, vehicle, now / 1000); } },
-  { ...(import.meta.env.DEV ? { name: 'church' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => church?.update(camera.position, now) },
-  { ...(import.meta.env.DEV ? { name: 'village' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => village?.update(camera.position, now) },
-  { ...(import.meta.env.DEV ? { name: 'hawkesbury' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => hawkesbury?.update(camera.position, now) },
-  { ...(import.meta.env.DEV ? { name: 'mabouMain' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => mabouMain?.update(camera.position, now) },
-  { ...(import.meta.env.DEV ? { name: 'stockpiles' } : {}), segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'cemeteries' } : {}), segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'terrain' } : {}), segment: 'landscape', ending: true, update: () => { terrain.update(camera, scenePaused()); wharves?.update(camera.position); novemberRoads?.update(terrain, camera.position); } },
-  ...(fleet ? [{ ...(import.meta.env.DEV ? { name: 'fleet' } : {}), segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
-  { ...(import.meta.env.DEV ? { name: 'coast' } : {}), segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'lotProps' } : {}), segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'airport' } : {}), segment: 'landscape', ending: true, update: () => airport?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'quarry' } : {}), segment: 'landscape', ending: true, update: () => quarry?.update(camera.position, vehicle) },
-  ...(stuntPark ? [{ ...(import.meta.env.DEV ? { name: 'stuntPark' } : {}), segment: 'landscape' as const, ending: true, update: (dt:number) => stuntPark.update(dt,vehicle,camera.position) }] : []),
-  { ...(import.meta.env.DEV ? { name: 'trees' } : {}), segment: 'landscape', ending: true, endingPosition: 1, update: () => trees?.update(terrain.drawnFine, camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'landmarks' } : {}), segment: 'landmarks', ending: true, update: () => landmarks?.update(camera) },
-  { ...(import.meta.env.DEV ? { name: 'history' } : {}), segment: 'after-activities', ending: false, update: dt => history?.update(camera.position, dt) },
-  { ...(import.meta.env.DEV ? { name: 'roads' } : {}), segment: 'after-activities', ending: true, update: () => { roads.update(camera.position); canal?.update(0, vehicle, !multiplayer?.choice.on); } },
-  { ...(import.meta.env.DEV ? { name: 'sidewalks' } : {}), segment: 'after-activities', ending: true, update: () => sidewalks?.update() },
-  ...(trafficSignals ? [{ ...(import.meta.env.DEV ? { name: 'trafficSignals' } : {}), segment: 'after-activities' as const, ending: false, update: (dt: number, realDt: number) => trafficSignals!.update(dt, camera.position, realDt) }] : []),
-  { ...(import.meta.env.DEV ? { name: 'edge' } : {}), segment: 'after-activities', ending: false, update: () => edge?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'mineSite' } : {}), segment: 'after-activities', ending: false, update: () => mineSite?.update(camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'deckhand' } : {}), segment: 'after-activities', ending: false, update: dt => deckhand?.update(dt, vehicle, camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'fishing' } : {}), segment: 'after-activities', ending: true, update: dt => fishing?.update(dt, camera.position) },
-  { ...(import.meta.env.DEV ? { name: 'roadScene' } : {}), segment: 'after-activities', ending: false, update: () => roadScene?.update(camera) },
-  { ...(import.meta.env.DEV ? { name: 'schoolBus' } : {}), segment: 'after-activities', ending: false, update: () => schoolBus?.update(camera) },
-  { ...(import.meta.env.DEV ? { name: 'ambientTraffic' } : {}), segment: 'after-activities', ending: false, update: () => ambientTraffic?.update(camera, vehicle, !multiplayer?.choice.on) },
-  { ...(import.meta.env.DEV ? { name: 'roadAnimals' } : {}), segment: 'after-activities', ending: false, update: dt => roadAnimals?.update(dt, vehicle, !multiplayer?.choice.on) },
-  { ...(import.meta.env.DEV ? { name: 'props' } : {}), segment: 'after-activities', ending: true, endingPosition: 8, update: dt => props?.update(camera, dt) },
-  { ...(import.meta.env.DEV ? { name: 'yardProps' } : {}), segment: 'after-activities', ending: false, update: dt => yardProps?.update(camera, dt) },
-  { ...(import.meta.env.DEV ? { name: 'harbourLights' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
-  { ...(import.meta.env.DEV ? { name: 'tall' } : {}), segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
-  { ...(import.meta.env.DEV ? { name: 'grass' } : {}), segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },
-  { ...(import.meta.env.DEV ? { name: 'mirror' } : {}), segment: 'mirror', ending: true, update: () => waterReflections?.update(camera) },
+// The frame's own flags at the mirror segment, for the updates there that read them. One reused record.
+const mirrorFlags = { driving: false, bossClock: false, bossHeld: false };
+const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean; endingAfter?: string; update: (dt: number, realDt: number, now: number) => void }> = [
+  ...(ride.update ? [{ name: 'ride', segment: 'ride' as const, ending: false, update: (_dt: number, realDt: number) => ride.update!(realDt, !scenePaused() && mode === 'drive') }] : []),
+  { name: 'yard', segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
+  { name: 'yardDog', segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
+  { name: 'home', segment: 'before-camera', ending: false, update: () => home?.update(camera.position, vehicle) },
+  { name: 'porch', segment: 'before-camera', ending: false, update: (dt, _realDt, now) => { porch?.update(camera.position, vehicle); porchDog?.update(dt, vehicle, now / 1000); } },
+  { name: 'church', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => church?.update(camera.position, now) },
+  { name: 'village', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => village?.update(camera.position, now) },
+  { name: 'hawkesbury', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => hawkesbury?.update(camera.position, now) },
+  { name: 'mabouMain', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => mabouMain?.update(camera.position, now) },
+  { name: 'stockpiles', segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
+  { name: 'cemeteries', segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
+  { name: 'terrain', segment: 'landscape', ending: true, update: () => terrain.update(camera, scenePaused()) },
+  { name: 'wharves', segment: 'landscape', ending: true, update: () => wharves?.update(camera.position) },
+  { name: 'novemberRoads', segment: 'landscape', ending: true, update: () => novemberRoads?.update(terrain, camera.position) },
+  ...(fleet ? [{ name: 'fleet', segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
+  { name: 'coast', segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
+  { name: 'lotProps', segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
+  { name: 'airport', segment: 'landscape', ending: true, update: () => airport?.update(camera.position) },
+  { name: 'quarry', segment: 'landscape', ending: true, update: () => quarry?.update(camera.position, vehicle) },
+  ...(stuntPark ? [{ name: 'stuntPark', segment: 'landscape' as const, ending: true, update: (dt:number) => stuntPark.update(dt,vehicle,camera.position) }] : []),
+  { name: 'trees', segment: 'landscape', ending: true, endingAfter: 'novemberRoads', update: () => trees?.update(terrain.drawnFine, camera.position) },
+  { name: 'culvertMouths', segment: 'landscape', ending: false, update: () => culvertMouths?.update(camera.position) },
+  { name: 'landmarks', segment: 'landmarks', ending: true, update: () => landmarks?.update(camera) },
+  { name: 'history', segment: 'after-activities', ending: false, update: dt => history?.update(camera.position, dt) },
+  { name: 'roads', segment: 'after-activities', ending: true, update: () => roads.update(camera.position) },
+  { name: 'canal', segment: 'after-activities', ending: true, update: () => canal?.update(0, vehicle, !multiplayer?.choice.on) },
+  { name: 'sidewalks', segment: 'after-activities', ending: true, update: () => sidewalks?.update() },
+  ...(trafficSignals ? [{ name: 'trafficSignals', segment: 'after-activities' as const, ending: false, update: (dt: number, realDt: number) => trafficSignals!.update(dt, camera.position, realDt) }] : []),
+  { name: 'edge', segment: 'after-activities', ending: false, update: () => edge?.update(camera.position) },
+  { name: 'mineSite', segment: 'after-activities', ending: false, update: () => mineSite?.update(camera.position) },
+  { name: 'deckhand', segment: 'after-activities', ending: false, update: dt => deckhand?.update(dt, vehicle, camera.position) },
+  { name: 'fishing', segment: 'after-activities', ending: true, update: dt => fishing?.update(dt, camera.position) },
+  { name: 'roadScene', segment: 'after-activities', ending: false, update: () => roadScene?.update(camera) },
+  { name: 'schoolBus', segment: 'after-activities', ending: false, update: () => schoolBus?.update(camera) },
+  { name: 'ambientTraffic', segment: 'after-activities', ending: false, update: () => ambientTraffic?.update(camera, vehicle, !multiplayer?.choice.on) },
+  { name: 'roadAnimals', segment: 'after-activities', ending: false, update: dt => roadAnimals?.update(dt, vehicle, !multiplayer?.choice.on) },
+  { name: 'props', segment: 'after-activities', ending: true, endingAfter: 'canal', update: dt => props?.update(camera, dt) },
+  { name: 'yardProps', segment: 'after-activities', ending: false, update: dt => yardProps?.update(camera, dt) },
+  { name: 'harbourLights', segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
+  { name: 'tall', segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
+  { name: 'grass', segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },
+  { name: 'aiDriver', segment: 'mirror', ending: false, update: () => aiDriver?.update(camera, vehicle, aiDriverOn(), fleet?.driven.id ?? garageEntry.id) },
+  { name: 'boss', segment: 'mirror', ending: false, update: dt => {
+    if (!boss) return;
+    // Held, not hidden, while the player is out of the car (a drone flight, indoors) or the tab is away.
+    boss.update(camera, dt, !!multiplayer?.choice.on, mirrorFlags.bossClock, mirrorFlags.bossHeld);
+    aiCars.length = 0;
+    if (aiDriverOn() && aiDriver) for (const c of aiDriver.onRoad) aiCars.push(c);
+    for (const c of boss.driver.onRoad) aiCars.push(c);
+  } },
+  { name: 'multiplayer', segment: 'mirror', ending: false, update: (dt, realDt) => multiplayer?.update(realDt, camera, dt > 0 && mirrorFlags.driving) },
+  { name: 'farVisibility', segment: 'mirror', ending: false, update: (_dt, _realDt, now) => farVisibility?.update(camera, now / 1000) },
+  { name: 'mirror', segment: 'mirror', ending: true, update: () => waterReflections?.update(camera) },
 ];
 // Build the plain segment arrays once. Frame calls visit only their segment's entries.
 const worldSegments: Record<WorldSegment | 'ending' | 'ending-mirror', typeof worldUpdates> = {
@@ -1757,13 +1795,15 @@ for (let i = 0; i < worldUpdates.length; i++) {
   worldSegments[entry.segment].push(entry);
   if (entry.ending) endingWorldUpdates.push(entry);
 }
-// Positions are zero-based among ending entries: trees follows terrain; props precedes fishing.
+// Anchors are entry names: trees follows the terrain updates (after novemberRoads); props follows roads and canal.
+// They hold whichever optional entries (fleet, stunt park) are present. A missing anchor stops the boot.
 for (let i = 0; i < worldUpdates.length; i++) {
   const entry = worldUpdates[i];
-  if (entry.ending && entry.endingPosition !== undefined) {
-    endingWorldUpdates.splice(endingWorldUpdates.indexOf(entry), 1);
-    endingWorldUpdates.splice(entry.endingPosition, 0, entry);
-  }
+  if (!entry.ending || entry.endingAfter === undefined) continue;
+  endingWorldUpdates.splice(endingWorldUpdates.indexOf(entry), 1);
+  const anchor = endingWorldUpdates.findIndex(other => other.name === entry.endingAfter);
+  if (anchor < 0) throw new Error(`ending anchor '${entry.endingAfter}' for '${entry.name}' is missing`);
+  endingWorldUpdates.splice(anchor + 1, 0, entry);
 }
 for (let i = 0; i < endingWorldUpdates.length; i++) {
   const entry = endingWorldUpdates[i];
@@ -1779,7 +1819,7 @@ function updateWorld(segment: WorldSegment | 'ending' | 'ending-mirror', dt: num
     if (import.meta.env.DEV) {
       const start = performance.now();
       entry.update(dt, realDt, now);
-      worldCost[entry.name!] = performance.now() - start;
+      worldCost[entry.name] = performance.now() - start;
     } else entry.update(dt, realDt, now);
   }
 }
@@ -1805,7 +1845,7 @@ function drawWorld(): void {
 }
 if (drawProbe) Object.assign((window as unknown as { mmm?: Record<string, unknown> }).mmm ??= {}, { finish, drawProbe });
 
-const shadowFocus = new THREE.Vector3(), shadowDir = new THREE.Vector3();
+const shadowFocus = new THREE.Vector3();
 function drawEnding(dt: number): void {
   if (ride.update) updateWorld('ride', 0);
   engineSound?.update(dt, null);
@@ -1989,7 +2029,6 @@ function frame(now: number) {
   beaconT += dt;
   if (beaconMat) beaconMat.emissiveIntensity = !mailMode ? 0 : Math.abs(vehicle.speed) < 8 ? (Math.sin(beaconT * 9) > 0.3 ? 2.2 : 0.15) : 0.15;   // flashes while it creeps between boxes
   updateWorld('landscape', dt, realDt, now);
-  culvertMouths?.update(camera.position);
   updateWorld('landmarks', dt, realDt, now);
   {
     placesUI?.update(vehicle, placesEnabled);
@@ -2017,41 +2056,13 @@ function frame(now: number) {
     // The shadow box follows the car; with the free camera it sits a little ahead of the lens.
     let reach = 0;
     if (mode === 'drive') shadowFocus.set(vehicle.x, vehicle.y, vehicle.z);
-    else {
-      // Walk down the line of sight to the ground, in coarse steps: that is what the picture is of.
-      shadowDir.set(0, 0, -1).applyQuaternion(camera.quaternion);
-      for (reach = 20; reach < 1400; reach *= 1.35) {
-        shadowFocus.copy(camera.position).addScaledVector(shadowDir, reach);
-        const g = terrain.heightAt(shadowFocus.x, shadowFocus.z,shadowFocus.y);
-        if (g !== null && shadowFocus.y <= g) { shadowFocus.y = g; break; }
-      }
-      if (reach >= 1400) {
-        // A high, shallow look meets no ground within reach. Then the box sits on the ground ahead of the camera,
-        // as far ahead as the camera is high, and is sized for that height.
-        const under = terrain.heightAt(camera.position.x, camera.position.z,camera.position.y) ?? SEA_LEVEL;
-        const height = Math.max(20, camera.position.y - under), flat = Math.hypot(shadowDir.x, shadowDir.z);
-        // A look that is nearly straight down has no "ahead": the box then stays under the camera.
-        const ahead = flat > 0.2 ? height / flat : 0;
-        shadowFocus.set(camera.position.x + shadowDir.x * ahead, 0, camera.position.z + shadowDir.z * ahead);
-        shadowFocus.y = terrain.heightAt(shadowFocus.x, shadowFocus.z,camera.position.y) ?? under;
-        reach = Math.min(1400, height * 1.5);
-      }
-    }
+    else reach = lookFocus(camera, terrain, SEA_LEVEL, shadowFocus);
     sunShadows.update(realDt, shadowFocus, reach, pictureBusy);
   }
   updateWorld('grass', dt, realDt, now);
   // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
   renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
-  aiDriver?.update(camera, vehicle, aiDriverOn(), fleet?.driven.id ?? garageEntry.id);
-  if (boss) {
-    // Held, not hidden, while the player is out of the car (a drone flight, indoors) or the tab is away.
-    boss.update(camera, dt, !!multiplayer?.choice.on, clockRuns && frameLive, !driving || interiors.busy || document.hidden);
-    aiCars.length = 0;
-    if (aiDriverOn() && aiDriver) for (const c of aiDriver.onRoad) aiCars.push(c);
-    for (const c of boss.driver.onRoad) aiCars.push(c);
-  }
-  multiplayer?.update(realDt, camera, dt > 0 && driving);
-  farVisibility?.update(camera,now/1000);
+  mirrorFlags.driving = driving; mirrorFlags.bossClock = clockRuns && frameLive; mirrorFlags.bossHeld = !driving || interiors.busy || document.hidden;
   updateWorld('mirror', dt, realDt, now);
   try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
   afterWorld();

@@ -36,6 +36,11 @@ export function coastRecessUniforms() {
 export const smooth = (a:number,b:number,x:number):number => {
   const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);
 };
+/** The quarry shader's mineralFill after the rendered canopy fade. */
+export const quarryGypsumFill = (paint:number,canopy:number,hull:number):number =>
+  smooth(.05,.60,paint)*(1-smooth(1.8,3.5,canopy)*hull);
+export const QUARRY_GRAVEL_FILL = .25;
+
 export function lineDistance(e:number,n:number,points:readonly (readonly [number,number])[]):number {
   let best=Infinity;
   for(let i=1;i<points.length;i++){
@@ -72,6 +77,8 @@ export interface RockSite {
   contains(x:number,z:number):boolean;
   intersects(x:number,z:number,size:number):boolean;
   weights(x:number,z:number,h:number,slope:number,curvature?:number):[number,number,number,number];
+  /** Authored quarry treatments that take priority over a gypsum floor. */
+  quarryFloorAllowsMineral?(x:number,z:number,h:number):boolean;
   treeAllowed(x:number,z:number,h:number,slope:number):boolean;
 }
 export class CoastSite implements RockSite {
