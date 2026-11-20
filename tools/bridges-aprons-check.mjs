@@ -8,6 +8,22 @@ async function verify(replacements={},only,scale=1){
 const rows=[];
 for(const area of only?[only]:areas){
  const f=await fixture(area,scale,replacements),M=f.roads.modern,spans=M.spans;await f.load(spans.flatMap(r=>r.pts));
+ // Use the deck footprint at the time of tile build. Bit 64 in the CPU field is a pavement or gravel flag.
+ let masked=0;
+ for(const t of f.terrain.tiles.values())if(t.road&&t.mesh){
+  const image=t.mesh.material.uniforms.tRoad.value.image,side=image.width,step=t.size/(side-1);
+  for(let k=2;k<t.road.length;k+=4){
+   const raw=t.road[k],kind=raw&15,i=k>>2;
+   if(kind&&M.maskPaint(t.x0+(i%side)*step,t.z0+Math.floor(i/side)*step,kind)){
+    masked++;
+    assert.equal(image.data[k],raw&240,'structural deck masks only the rendered bare-earth road');
+   }else{
+    const expected=(raw&207)===68?(raw&48)|3:raw;
+    assert.equal(image.data[k],expected,'unmasked samples keep their road material');
+   }
+  }
+ }
+ assert.ok(masked>0,'real bridge road pixels were checked');
  for(const r of spans)f.roads.update(new THREE.Vector3(r.pts[0][0],20,r.pts[0][1]));
  for(const r of spans){if(!r.triangles)continue;
   let worst=0,at=0,step=0,stepAt=0;let prev=null;
@@ -27,8 +43,6 @@ for(const area of only?[only]:areas){
   const r=spans.find(r=>r.road.id===57);assert.ok(r,'Mines bridge57 retained');
   for(const s of[-12,-4,r.length/2,r.length+4,r.length+12]){const p=M.at(r,s),h=f.roads.deckHeight(p.x,p.z),surface=f.terrain.surfaceAt(p.x,p.z,h);assert.equal(surface.kind,3,'Mabou Mines Road bridge57 kind');assert.equal(surface.washboard,true,'Mabou Mines Road washboard is never softened');assert.equal(f.BikeRide.prototype.surface.call({terrain:f.terrain,roads:f.roads,x:p.x,z:p.z,y:h},surface).name,'washboard','Mabou Mines Road bike remains on washboard');}
  }
- let masked=0;for(const t of f.terrain.tiles.values())if(t.road&&t.mesh){const rendered=t.mesh.material.uniforms.tRoad.value.image.data;for(let k=2;k<t.road.length;k+=4)if((t.road[k]&64)&&(t.road[k]&15)){masked++;assert.equal(rendered[k]&15,0,'structural deck masks only the rendered bare-earth road');}}
- assert.ok(masked>0,'real bridge road pixels were checked');
  if(area==='mabou'){const r=spans.find(r=>r.road.id===954);for(let s=-12;s<=r.length+12;s+=2){const p=M.at(r,s),land=f.terrain.landHeightAt(p.x,p.z),drawn=rawMesh(f.terrain,p.x,p.z);assert.ok(drawn<=land+.5,'Mabou954 averaged canopy does not cover the bridge');}}
  dispose(f);
 }
@@ -64,8 +78,8 @@ if(process.argv.includes('--mutations')){
  const wash='const wash=!!(r.road.washboard||road.washboard);';assert.equal(source.split(wash).length,2);
  await assert.rejects(()=>verify({[file]:source.replace(wash,'const wash=false;')},'mabou'),/Mabou Mines Road|every apron keeps its own washboard flag/,'softened Mines Road must fail');console.log('KILLED Mines Road washboard removed');
  const terrainFile='web/src/terrain.ts',terrain=readFileSync(root+terrainFile,'utf8');
- const mask='renderedRoad[k]&=240;';assert.equal(terrain.split(mask).length,2);
- await assert.rejects(()=>verify({[terrainFile]:terrain.replace(mask,'')},'mabou'),/rendered bare-earth road/,'road paint mask removed must fail');console.log('KILLED under-deck road paint mask removed');
+ const mask='if (bridgePaint?.[k >> 2]) drawn = flags & 240;';assert.equal(terrain.split(mask).length,2);
+ await assert.rejects(()=>verify({[terrainFile]:terrain.replace(mask,'if (bridgePaint?.[k >> 2]) drawn = flags;')},'mabou'),/rendered bare-earth road/,'road paint mask removed must fail');console.log('KILLED under-deck road paint mask removed');
  const canopy='if(c>0&&deckClearSites.length&&deckClearSites.some(site=>site.deckClear?.(t.x0+ga*mpp,t.z0+gb*mpp,deckClearPad)))c=0;';assert.equal(terrain.split(canopy).length,2);
  await assert.rejects(()=>verify({[terrainFile]:terrain.replace(canopy,'')},'mabou'),/canopy does not cover/,'coarse canopy clearance removed must fail');console.log('KILLED coarse canopy clearance removed');
  const kind='this.driving.kind=wash?road.kind:deck?(r.timber?5:9):road.kind;';assert.equal(source.split(kind).length,2);
