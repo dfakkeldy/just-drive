@@ -302,7 +302,7 @@ async function retry() {
   try {
     await tick(t, c); assert.equal(t.pending, 0); assert.equal(t.failed, 1, 'back-off count');
     const main = readFileSync(`${root}web/src/main.ts`, 'utf8');
-    const context = { loaded: true, terrain: t, sidewalks: null, grass: null, trees: null, mode: 'drive', demo: 0, drove: 0, pendingShot: null, camera: c, vehicle: { speed: 0 }, relief: { busy: false }, porch: null, porchDog: null, mabouMain: null, quiet: 21 };
+    const context = { loaded: true, terrain: t, sidewalks: null, grass: null, trees: null, mode: 'drive', demo: 0, drove: 0, pendingShot: null, camera: c, vehicle: { speed: 0 }, relief: { busy: false }, placesWaiting: () => false, quiet: 21 };
     const evaluate = expression => Function(...Object.keys(context), `return (${expression});`)(...Object.values(context));
     assert.equal(evaluate(main.match(/const waiting = ([\s\S]*?);/)[1]), false, 'network failure must not reset quiet');
     assert.equal(evaluate(main.match(/const qualityReady = ([^;]+);/)[1]), true, 'network failure must not blame the Full detail trial');
