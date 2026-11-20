@@ -54,8 +54,11 @@ console.log('MEASURED',JSON.stringify(measured));
 if(process.argv.includes('--explore'))process.exit(0);
 assert.ok(flat.maxGrade<.012,'real pavement section is level within 1.2 percent');
 const heightReader=terrain.heightAt;try{terrain.heightAt=(x,z)=>heightReader(x,z)*10;assert.ok(sectionGrade(flat.s)>=.012,'mutation rejected: steep pavement section');}finally{terrain.heightAt=heightReader;}
-assert.ok(measured.acceleration>=7&&measured.acceleration<=8.5,'0–100 km/h in 7–8.5 s');
-assert.ok(measured.top.levelPeak>=165&&measured.top.peak<=180,'top speed on real highway 165–180 km/h');
+// The 20 Nov Sugar Camp request calls for a faster run-up and a Ram-like level top.
+const accelerationOK = n => n>=4&&n<=4.6;
+const highwayTopOK = n => n.levelPeak>=160&&n.levelPeak<=172&&n.peak<=175;
+assert.ok(accelerationOK(measured.acceleration),'0–100 km/h in 4–4.6 s');
+assert.ok(highwayTopOK(measured.top),'real highway speed stays near the level-ground target, including on grades');
 assert.ok(measured.turning.yaw>6&&measured.turning.diameter>=15&&measured.turning.diameter<=17,'kerb turning diameter 15–17 m');
 assert.ok(measured.braking.runs.every(d=>d>=45&&d<=60),'100–0 km/h in 45–60 m in both directions');
 assert.ok(measured.wash.seconds>20&&measured.wash.nearForty>5&&measured.wash.maxSpeed>=40&&measured.wash.maxError<.3&&measured.wash.maxSide<.5,'40 km/h washboard: no swing, spin or off-road excursion');
@@ -71,8 +74,9 @@ const defaultEntry=GARAGE[0];try{GARAGE[0]=GARAGE[1];assert.notEqual(readVehicle
 const truckIndex=GARAGE.findIndex(e=>e.id==='truck'),[entry]=GARAGE.splice(truckIndex,1);try{assert.notEqual(readVehicle(new URLSearchParams('vehicle=truck')).spec,TRUCK_SPEC);console.log('MUTATION rejected missing garage entry');}finally{GARAGE.splice(truckIndex,0,entry);}
 // Real production faults, exercised through the same runs; no tracked source file is changed.
 const reject=(name,run,test)=>{assert.ok(!test(run()),`mutation rejected: ${name}`);console.log('MUTATION rejected',name);};
-reject('acceleration cap',()=>acceleration({...TRUCK_SPEC,engineAcceleration:2}),n=>n>=7&&n<=8.5);
-reject('power',()=>topSpeed({...TRUCK_SPEC,enginePower:20}),n=>n.levelPeak>=165&&n.peak<=180);
+reject('acceleration cap',()=>acceleration({...TRUCK_SPEC,engineAcceleration:2}),accelerationOK);
+reject('old acceleration cap',()=>acceleration({...TRUCK_SPEC,engineAcceleration:4.2}),accelerationOK);
+reject('power',()=>topSpeed({...TRUCK_SPEC,enginePower:20}),highwayTopOK);
 reject('steering lock',()=>turning({...TRUCK_SPEC,maxSteer:.4}),n=>n.diameter>=15&&n.diameter<=17);
 reject('brakes',()=>braking({...TRUCK_SPEC,brake:3}),n=>n.runs.every(d=>d>=45&&d<=60));
 reject('washboard yaw',()=>washboard({...TRUCK_SPEC,washboardYaw:4}),n=>n.seconds>5&&n.maxError<.3&&n.maxSide<4);

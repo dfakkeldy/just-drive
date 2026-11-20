@@ -27,6 +27,8 @@ import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
 import { ABOUT_URL } from './credits';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { isHillsideBuilding, NovemberBuildings } from './november-buildings';
+import { NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
@@ -121,6 +123,7 @@ import { createTitle } from './title';
 import { Endings } from './ending';
 import { YardJob } from './yard-job';
 import { FishingSite } from './fishing-site';
+import { wharfBuildingArt } from './mabou-wharf-buildings';
 import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
@@ -357,20 +360,28 @@ const buildingList: Building[] | null = manifest.buildings ? await getJson(manif
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
-const buildingStyles = ERA.modern && manifest.buildingStyles
-
-  ? buildingAppearance(astra, LOW, sunDir, await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
-    .catch((e: unknown) => { console.warn('building styles', e); return undefined; }))
-  : buildingAppearance(astra, LOW, sunDir);
+const bakedBuildingStyles = ERA.modern && manifest.buildingStyles
+  ? await getJson(manifest.buildingStyles.file).then(readBuildingStyles)
+    .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
+  : undefined;
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
 const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
-const buildings = ERA.modern && drawnBuildings ? new Buildings(mabouSite ? mabouSite.drawn(drawnBuildings) : drawnBuildings, manifest.village, EXAG, SEA_LEVEL, buildingStyles) : null;
+const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir,
+  wharfArt ? { ...bakedBuildingStyles, ...wharfArt.styles } : bakedBuildingStyles);
+const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
+const novemberBuildings = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+  ? new NovemberBuildings(AREA.id, properties, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
+const finalBuildings = novemberBuildings && AREA.id === 'mabou' ? sceneryBuildings?.filter(b => !isHillsideBuilding(b)) : sceneryBuildings;
+const buildings = ERA.modern && finalBuildings ? new Buildings(mabouSite ? mabouSite.drawn(finalBuildings) : finalBuildings,
+  manifest.village, EXAG, SEA_LEVEL, buildingStyles, novemberBuildings?.drawing) : null;
 if (buildings) clear.push(...buildings.clear);
+if (novemberBuildings) clear.push(...novemberBuildings.clear);
 if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
@@ -402,7 +413,7 @@ if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get
   terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id)).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
-const testPark = await createTestPark(params, terrain, yardSite, LOW, buildingList ?? []);
+const testPark = await createTestPark(terrain, yardSite, LOW, buildingList ?? []);
 const quarryStuntPark = quarryFeature && quarrySite && ERA.modern
   ? quarryFeature.createQuarryStuntPark(terrain, LOW) : null;
 if (quarryStuntPark) await quarryStuntPark.prepare();
@@ -432,7 +443,14 @@ if (LOW) terrain.lazyRange = 600;
 if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
-const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far', stockpiles?.excludes) : null;
+const roadData = manifest.roads ? await getJson(manifest.roads.file) : { roads: [] };
+const novemberRoads = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+  ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
+if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
+const treeExcludes = novemberRoads
+  ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
+  : stockpiles?.excludes;
+const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far', treeExcludes) : null;
 if (trees) scene.add(trees.group);
 scene.add(terrain.group);
 const [VE, VN] = manifest.village;
@@ -467,8 +485,7 @@ if (waterReflections) {
   Object.assign(terrain.uniforms, waterReflections.uniforms);
 }
 
-const roadData = manifest.roads ? await getJson(manifest.roads.file) : { roads: [] };
-const roads = new Roads(roadData, manifest.village, terrain);
+const roads = new Roads(novemberRoads?.added.length ? { roads: [...roadData.roads, ...novemberRoads.added] } : roadData, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
   ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW, () => terrain.dataRevision)
   : null;
@@ -693,7 +710,8 @@ if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
 // A site registers here once. Fleet sweeps and fixed-step driving use this same list.
 const fleetContacts = new AreaContacts();
-if(stuntPark)fleetContacts.add(stuntPark.contactProvider());
+const parkContacts = stuntPark?.contactProvider();
+if (parkContacts) fleetContacts.add(parkContacts);
 if (quarry) {
   fleetContacts.add(quarry.contactProvider());
   if (!fleetEnabled(garageEntry, params, !mailMode, ERA.modern)) quarry.bindVehicle(vehicle, fleetContacts);
@@ -709,6 +727,7 @@ if (tallKey) fleetContacts.add({ revision: () => tall?.solids.length ?? 0, resol
 if (village) fleetContacts.add({ resolve: body => village.resolveSolids(body) });
 if (hawkesbury) fleetContacts.add({ resolve: body => hawkesbury.resolveSolids(body) });
 if (mabouMain) fleetContacts.add({ resolve: body => mabouMain.resolveSolids(body) });
+if (novemberBuildings) fleetContacts.add({ resolve: body => novemberBuildings.resolveSolids(body) });
 if (cemeteries) fleetContacts.add({ resolve: body => cemeteries.resolveSolids(body) });
 if (props) fleetContacts.add({ revision: () => props.downCount, resolve: () => {}, allows: body => props.allowsFleetBody(body) });
 if (roads.guardrails) {
@@ -743,8 +762,11 @@ const resolveYardSolids = () => {
   canal?.resolve(vehicle, canalBeforeX, canalBeforeZ);
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
   boss?.driver.resolve(vehicle);
-  if (fleet || quarry || stuntPark) fleetContacts.resolve(vehicle);
-  else { yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle); }
+  if (fleet || quarry) fleetContacts.resolve(vehicle);
+  else {
+    yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); novemberBuildings?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle);
+    parkContacts?.resolve(vehicle);
+  }
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
   fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
   yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
@@ -753,7 +775,7 @@ const resolveYardSolids = () => {
   if (!scenePaused()) ambientTraffic?.step(1 / 120, vehicle);
   if (!scenePaused()) roadAnimals?.step(1 / 120, vehicle, horse ? roadsidePlaying : vehicle.damageActive);
   if (!scenePaused()) canal?.advance(1 / 120, vehicle, !multiplayer?.choice.on);   // the canal clock runs with the traffic
-  if (!fleet && !quarry && !stuntPark) ambientTraffic?.resolve(vehicle);   // otherwise fleetContacts, above, holds the traffic
+  if (!fleet && !quarry) ambientTraffic?.resolve(vehicle);   // otherwise fleetContacts, above, holds the traffic
   schoolBus?.setPaused(scenePaused());
   schoolBus?.step(1 / 120, vehicle, horse ? roadsidePlaying : vehicle.damageActive, jumpPlacement);
   yardProps?.step(1 / 120, vehicle, started && !shift.ended && !demo && mode === 'drive' && !scenePaused());
@@ -956,7 +978,9 @@ if (roadAnimals) scene.add(roadAnimals.group);
 if (import.meta.env.DEV) expose({ roadAnimals });
 if (ERA.modern && garageEntry.id === 'truck' && ['1', 'empty'].includes(params.get('trailer') ?? '')) {
   if (!mailMode && roadScene) fleetContacts.add({ resolve: body => { if (roadScene.rules.enabled) pushOut(body, roadScene.placementSolids, true); } });
-  towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? hawkesbury.solids : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts: quarry || stuntPark || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts : undefined }, true, LOW);
+  const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts
+    : parkContacts && { allows: parkContacts.allows, resolve: parkContacts.resolve };
+  towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? hawkesbury.solids : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts }, true, LOW);
   if (towing.attached) scene.add(towing.trailer.root);
   trailerHelpSetting(towing, document.getElementById('settings'), document.getElementById('startOver'));
   if (import.meta.env.DEV) expose({ towing });
@@ -984,7 +1008,16 @@ if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.
 const churchRoom = churchSite ? await import('./interior-church') : null;
 const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => shift.interiorResult(receipt), bare)
   : churchRoom ? new Interiors(() => 0, () => '', () => {}, bare) : quietInteriors();
-if(stuntPark)for(const actor of fleet?fleet.members.map(m=>m.vehicle):[vehicle])fleetContacts.bindVehicle(actor,pose=>stuntPark.contains(pose.x,pose.z,actor.spec.envelope.reach)?terrain.heightAt(pose.x,pose.z):actor.y??0);
+if (testPark && !fleet) {
+  // Adding the park must not change other sites' placement checks for an ordinary ride.
+  const previousGuard = vehicle.placementGuard;
+  vehicle.placementGuard = pose => (!previousGuard || previousGuard(pose))
+    && (!testPark.contains(pose.x, pose.z, vehicle.spec.envelope.reach) || testPark.placementAllowed(pose, vehicle.spec));
+} else if (stuntPark) {
+  for (const actor of fleet ? fleet.members.map(m => m.vehicle) : [vehicle]) {
+    fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z) : actor.y ?? 0);
+  }
+}
 resets[resetSlot.interiors] = () => interiors.reset();
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
 if (mineSite) scene.add(mineSite.group);
@@ -1662,6 +1695,9 @@ if (!bare && params.get('radio') !== '0') {
   const audioBase = `${import.meta.env.BASE_URL}audio`;
   void loadRadio(audioBase, siteRadio(SITE)).then(next => {
     radio = next; if (SITE.brand === 'just') { title?.setRadio(!!radio); ride.setRadio(!!radio); }
+    // Only the mail shift has reception: the places with no signal are its joke. Just driving (explore mode: every Just Drive
+    // page, the mail game's "Just drive" mode, its other areas and 1884) hears every station everywhere (the owner, 20 Nov 2026).
+    if (gameMode === 'explore') radio?.useReception(null);
     if (params.get('reception') === '0') radio?.useReception(null);   // every station everywhere, as on the Just Listen page
     if (import.meta.env.DEV) expose({ radio });   // for tools/radio-check.mjs
     if (started) radio?.start();
@@ -1710,7 +1746,7 @@ const worldUpdates: Array<{ name?: string; segment: WorldSegment; ending: boolea
   { ...(import.meta.env.DEV ? { name: 'mabouMain' } : {}), segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => mabouMain?.update(camera.position, now) },
   { ...(import.meta.env.DEV ? { name: 'stockpiles' } : {}), segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
   { ...(import.meta.env.DEV ? { name: 'cemeteries' } : {}), segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
-  { ...(import.meta.env.DEV ? { name: 'terrain' } : {}), segment: 'landscape', ending: true, update: () => { terrain.update(camera, scenePaused()); wharves?.update(camera.position); } },
+  { ...(import.meta.env.DEV ? { name: 'terrain' } : {}), segment: 'landscape', ending: true, update: () => { terrain.update(camera, scenePaused()); wharves?.update(camera.position); novemberRoads?.update(terrain, camera.position); } },
   ...(fleet ? [{ ...(import.meta.env.DEV ? { name: 'fleet' } : {}), segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { ...(import.meta.env.DEV ? { name: 'coast' } : {}), segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
   { ...(import.meta.env.DEV ? { name: 'lotProps' } : {}), segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },

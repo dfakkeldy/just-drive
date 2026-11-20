@@ -140,6 +140,30 @@ Without it stage 29 stops and says so. Mailboxes are decided on those lines and 
 of the moved line, so a box follows its road. Only a box whose carried place is not safe on the moved lines is
 placed again by the rule, and that box can move farther.
 
+For the 18 Nov Mabou road correction, pass the pre-step-35 pack's report folder explicitly when staging from a saved copy.
+Use a new stage folder.
+
+```sh
+tools/bake.sh 35_bake_mabou_dashcam.py --source "$PRE35_TERRAIN" --overview "$PRE35_OVERVIEW" --output "$STAGE"
+python3 tools/mabou-dashcam-18nov/receipt.py verify "$PRE35_TERRAIN" "$STAGE"
+```
+
+To repair the original step-35 install, the main thread runs the receipt upgrade before rebaking props.
+Set `BAKED` to the target's `data/baked` folder. Rehearse on a clone with its own
+`data/work/overview/roads-before-bed.json`, from the same land as the cloned terrain.
+
+```sh
+python3 tools/mabou-dashcam-18nov/receipt.py upgrade "$STAGE" "$BAKED"
+python3 tools/mabou-dashcam-18nov/receipt.py land "$BAKED"
+```
+
+The upgrade checks the installed pins and backs up the three replaced files in `$STAGE.pre-upgrade`.
+With the same stage and backup, repeat `upgrade` to finish an interrupted upgrade or `rollback-upgrade` to restore
+the original bytes. The `land` command warns if the original install still needs the repair.
+Use `install` for a verified stage on the pre-step-35 land.
+To undo all of step 35 after an upgrade, run `rollback-upgrade "$STAGE" "$BAKED"`, then
+`uninstall "$OLDSTAGE" "$BAKED"` with the stage of the original install.
+
 Mapped outlines below 82% rectangle fill can use two to four wings on their own axes.
 Each wing is at least 3 m wide and 20 m² (also 8% of the mapped building).
 The cover must retain 90% of the outline with 88% intersection over union.

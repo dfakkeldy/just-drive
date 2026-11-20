@@ -11,6 +11,8 @@ from pathlib import Path
 import random
 import sys
 
+from land_receipt_pins import previous_digest
+
 ROOT = Path(__file__).resolve().parents[1]
 # Installed on the MacBook by the main thread on 17 Nov 2026 (55 delta files + the step-29 pins): only 'after' land passes.
 EXPECT = 'after'
@@ -314,7 +316,8 @@ def owned_counts(manifest):
 # before the 18 Nov promotion), not here.
 VILLAGE = ROOT/'tools/mabou-village-delta/hashes.json'
 NOV18 = ROOT/'tools/mabou-dashcam-18nov/hashes.json'
-LATER = (VILLAGE, NOV18)
+NOV19 = ROOT/'tools/mabou-wharf/roads.json'
+LATER = (VILLAGE, NOV18, NOV19)
 
 
 def superseded(root, entries, hashes, later=LATER):
@@ -325,9 +328,11 @@ def superseded(root, entries, hashes, later=LATER):
     owned = {name: owned_counts(json.loads((root/name).read_bytes())) for name, f in ours.items() if 'ownedCounts' in f}
     for path in reversed(later):
         report = json.loads(path.read_text())
-        for f in report['files']:
-            if f['file'] in now and f['sha256'] and now[f['file']] == f['sha256']:
-                now[f['file']] = f['before']; names[f['file']].append(path)
+        for name, digest in now.items():
+            before = previous_digest(report, name, digest)
+            if before is not None:
+                now[name] = before
+                names[name].append(path)
         for m in report['manifests']:
             name = m['folder']+'/manifest.json'
             if name in owned and owned[name] == {k: m['after'][k]['count'] for k in owned[name] if k in m['after']} | {k: v for k, v in owned[name].items() if k not in m['after']}:
@@ -346,13 +351,16 @@ def step29_view(root, name, later):
     Weaver Lane, so its receipt's undo is applied when that bake replaced this file."""
     props = json.loads((root/name).read_bytes())
     roads = json.loads((root/Path(name).with_name('roads.json')).read_bytes())['roads']
-    if NOV18 in later.get(name, ()):
+    if NOV18 in later.get(name, ()) or NOV19 in later.get(name, ()):
         spec = importlib.util.spec_from_file_location('nov18_receipt', ROOT/'tools/mabou-dashcam-18nov/receipt.py')
         receipt = importlib.util.module_from_spec(spec); spec.loader.exec_module(receipt)
-        report = json.loads(NOV18.read_text())
-        props, roads = receipt.undo(props, roads, report['undo'])
-        before = next(f['before'] for f in report['files'] if f['file'] == name)
-        assert hashlib.sha256(receipt.compact(props)).hexdigest() == before, f'{name}: the 18 Nov undo does not rebuild its before props'
+        for path in (NOV19, NOV18):
+            if path not in later.get(name, ()):
+                continue
+            report = json.loads(path.read_text())
+            props, roads = receipt.undo(props, roads, report['undo'])
+            before = next(f['before'] for f in report['files'] if f['file'] == name)
+            assert hashlib.sha256(receipt.compact(props)).hexdigest() == before, f'{name}: {path.parent.name} undo did not rebuild before props'
     return props, roads
 
 

@@ -231,16 +231,37 @@ export class StuntPark implements Site {
     this.exclusions=exclusions.filter(e=>inside(this.box,e.x,e.z,e.radius+8));
     this.group.name='Stunt park';for(const p of this.pieces)this.group.add(p.group);for(const p of this.dressing)this.group.add(p.group);terrain.sites.push(this);
   }
-  /** Call before the first terrain update. The survey sets pad datums; structures later read drawn triangles. */
-  async prepare():Promise<void> {
-    if(!this.courseGround)for(const p of this.pieces){const b=p.placement.piece.gradingFootprint??p.placement.piece.footprint,w=p.world((b[0]+b[2])/2,(b[1]+b[3])/2);p.pad=await this.terrain.surveyHeightAt(w.x,w.z);}
+  private survey: Promise<void> | undefined;
+
+  prepareTile({level, x0, z0, size}: {level: number; x0: number; z0: number; size: number}): Promise<void> | undefined {
+    // The Mabou park only grades fine land. A distant tile has no need for the field's survey.
+    if (level !== 8 || x0 > this.box[2] || z0 > this.box[3] || x0 + size < this.box[0] || z0 + size < this.box[1]) return;
+    return this.prepareSurvey();
+  }
+
+  private prepareSurvey(): Promise<void> | undefined {
+    if (this.courseGround) return;
+    return this.survey ??= (async () => {
+      const centres = this.pieces.map(placed => {
+        const piece = placed.placement.piece, b = piece.gradingFootprint ?? piece.footprint;
+        return placed.world((b[0] + b[2]) / 2, (b[1] + b[3]) / 2);
+      });
+      const heights = await this.terrain.surveyHeightsAt(centres);
+      for (const [index, piece] of this.pieces.entries()) piece.pad = heights[index];
+    })().catch(error => {
+      this.survey = undefined;
+      throw error;
+    });
+  }
+
+  /** Register tree clearings before terrain loads. The game reads pad datums with the first nearby fine tile. */
+  async prepare({deferSurvey = false} = {}): Promise<void> {
+    if (!deferSurvey) await this.prepareSurvey();
     // Fine oriented cells remove real trees without clearing terrain samples outside their own footprint.
     const step=2,x0=Math.floor(this.box[0]/step)*step,x1=Math.ceil(this.box[2]/step)*step;
     for(let z=Math.floor(this.box[1]/step)*step;z<this.box[3];z+=step){let start:number|null=null;
       for(let x=x0;x<=x1;x+=step){const inside=x<x1&&this.clearCanopy(x,z)&&this.clearCanopy(x+step,z)&&this.clearCanopy(x,z+step)&&this.clearCanopy(x+step,z+step);if(inside&&start===null)start=x;if(!inside&&start!==null){this.terrain.addTreeClear([start,z,x,z+step]);start=null;}}
     }
-
-
   }
   private runupAt(x:number,z:number,canopy=false):boolean {
     for(const p of this.runups){const dx=x-p.x,dz=z-p.z,u=dx*p.sin-dz*p.cos,v=dx*p.cos+dz*p.sin,m=canopy?p.canopyMargin:0;

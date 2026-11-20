@@ -109,6 +109,9 @@ class Tile {
 interface DecodedTile { tile: Tile; px: Uint8ClampedArray; bakedRoad: Uint8ClampedArray | null }
 
 interface Grid { index: THREE.BufferAttribute; uvs: THREE.BufferAttribute }
+/** One reused record of a tile's main-view state while the mirror draws. Empty between mirror passes. */
+interface MirrorSave { tile: Tile | null; mesh: THREE.Mesh | null; visible: boolean; hide: THREE.Vector4; geometry: THREE.BufferGeometry | null; material: THREE.Material | THREE.Material[] | null }
+type MirrorHeld = { [K in keyof MirrorSave]: NonNullable<MirrorSave[K]> };
 
 async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
   const bmp = await createImageBitmap(await readFile(base, path), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
@@ -117,6 +120,13 @@ async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
   ctx.drawImage(bmp, 0, 0);
   bmp.close();
   return ctx.getImageData(0, 0, S, S).data;
+}
+
+export interface SiteSurface {
+  dist: number; half: number; kind: number; coverage?: number;
+  gravelDrive?: boolean;
+  /** Reclassify a mapped gravel sample without moving the centre line or changing its width. */
+  paveGravel?: boolean;
 }
 
 /**
@@ -128,10 +138,12 @@ export interface Site {
   box: [number, number, number, number];
   /** Restrict tile construction for a site with separated footprints inside its world box. */
   affectsTile?(x: number, z: number, size: number, level: number): boolean;
+  /** Load survey data before building a tile that this site can grade. */
+  prepareTile?(tile: { level: number; x0: number; z0: number; size: number }): Promise<void> | undefined;
   /** True ground height in metres, given the surveyed one. */
   height(x: number, z: number, surveyed: number, level?:number): number;
   /** The surface at a point: metres from an imaginary centre line, half width in metres, and kind. */
-  surface(x: number, z: number,ground?:number,level?:number): { dist: number; half: number; kind: number;coverage?:number } | null;
+  surface(x: number, z: number,ground?:number,level?:number): SiteSurface | null;
   /** Kind 11 is visual gravel in the unused road alpha channel; RGB driving data stays untouched. */
   visualGravel?: boolean;
   /** Metres per sample of the coarsest tile this site is part of. A tile with no baked road field gets its own 257 x 257 texture
@@ -162,12 +174,16 @@ export interface Site {
 }
 
 /** Apply a runtime field sample. Kind 11 only paints; it cannot change a mapped road's driving samples. */
-export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:{dist:number;half:number;kind:number;coverage?:number},zero:number,dScale:number,wScale:number):void {
+export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:SiteSurface,zero:number,dScale:number,wScale:number):void {
   if(f.coverage!==undefined)road[k+3]=Math.round(Math.max(0,Math.min(1,f.coverage))*255);
   if(f.kind===11){road[k+3]=Math.max(0,Math.min(255,Math.round((2+f.half-f.dist)*255/4)));return;}
   const flags=road[k+2];
+  if (f.paveGravel) {
+    if (flags === 3) road[k+2] = 2;
+    return;
+  }
   if(flags>0 && (flags&15)<=3 && Math.abs(road[k]-zero)*dScale<road[k+1]*wScale+1.2)return;
-  road[k]=Math.min(255,zero+Math.round(f.dist/dScale));road[k+1]=Math.min(255,Math.round(f.half/wScale));road[k+2]=f.kind;
+  road[k]=Math.min(255,zero+Math.round(f.dist/dScale));road[k+1]=Math.min(255,Math.round(f.half/wScale));road[k+2] = f.gravelDrive ? 68 : f.kind;
 }
 
 /** The road bytes a tile draws. A gravel driveway or pad is a track (kind 4) with the gravel bit (64); it is drawn exactly
@@ -301,6 +317,8 @@ export class Terrain {
   private lastEvict = 0;
   private spare: Tile[] = [];
   private frustum = new THREE.Frustum();
+  private readonly mirrorFrustum = new THREE.Frustum();
+  private readonly mirrorSaved: MirrorSave[] = [];
   private m4 = new THREE.Matrix4();
   drawn = 0;
   /** A tile splits into finer tiles when the camera is nearer than split x its size. */
@@ -534,16 +552,29 @@ export class Terrain {
   /** Optional sleeping-fleet notification. It does not change the land or ordinary visits. */
   fleetGroundChanged: ((x: number, z: number, size: number) => void) | null = null;
   private readonly fleetMasks = new WeakMap<Tile, number>();
-  /** Survey datum for a graded site, before any tiles are built. Does not include sites, decks or exaggeration. */
-  async surveyHeightAt(x:number,z:number):Promise<number|null> {
-    const m=this.manifest,e=x+m.village[0]-m.origin[0],s=z-(m.village[1]-m.origin[1]);
-    for(let level=this.maxLevel;level>=0;level--){
-      const size=m.size/2**level,i=Math.floor(e/size),j=Math.floor(s/size),key=`${level}/${i}_${j}`;
-      if(!this.exists.has(key))continue;
-      const px=await readPng(this.base,`${key}.png`),a=Math.min(T,Math.max(0,Math.round((e/size-i)*T))),b=Math.min(T,Math.max(0,Math.round((s/size-j)*T))),k=(b*S+a)*4;
-      return (px[k]*256+px[k+1])*m.height.scale+m.height.offset;
-    }
-    return null;
+  /** Survey datums before any tiles are built, without sites, decks or exaggeration. */
+  surveyHeightsAt(points: readonly { x: number; z: number }[]): Promise<(number | null)[]> {
+    const m = this.manifest, pages = new Map<string, Promise<Uint8ClampedArray>>();
+    return Promise.all(points.map(async ({ x, z }) => {
+      const e = x + m.village[0] - m.origin[0], s = z - (m.village[1] - m.origin[1]);
+      for (let level = this.maxLevel; level >= 0; level--) {
+        const size = m.size / 2 ** level, i = Math.floor(e / size), j = Math.floor(s / size), key = `${level}/${i}_${j}`;
+        if (!this.exists.has(key)) continue;
+        let page = pages.get(key);
+        if (!page) { page = readPng(this.base, `${key}.png`); pages.set(key, page); }
+        const px = await page;
+        const a = Math.min(T, Math.max(0, Math.round((e / size - i) * T)));
+        const b = Math.min(T, Math.max(0, Math.round((s / size - j) * T)));
+        const k = (b * S + a) * 4;
+        return (px[k] * 256 + px[k + 1]) * m.height.scale + m.height.offset;
+      }
+      return null;
+    }));
+  }
+
+  async surveyHeightAt(x: number, z: number): Promise<number | null> {
+    const [height] = await this.surveyHeightsAt([{ x, z }]);
+    return height;
   }
 
   private finishBurst() {
@@ -607,7 +638,11 @@ export class Terrain {
   private async load(t: Tile) {
     const name = `${t.level}/${t.i}_${t.j}`;
     const withRoad = this.hasRoad.has(`${t.level}/${t.i}_${t.j}`);
-    const [px, bakedRoad] = await Promise.all([readPng(this.base, `${name}.png`), withRoad ? readPng(this.base, `${name}.r.png`) : Promise.resolve(null)]);
+    const [px, bakedRoad] = await Promise.all([
+      readPng(this.base, `${name}.png`),
+      withRoad ? readPng(this.base, `${name}.r.png`) : Promise.resolve(null),
+      ...this.sites.map(s => s.prepareTile?.(t)),
+    ]);
     return { tile: t, px, bakedRoad };
   }
 
@@ -1236,19 +1271,23 @@ export class Terrain {
 
   /** Mirror visibility has its own frustum. Restore the main visibility and quadrant masks even on failure. */
   withReflection(camera: THREE.PerspectiveCamera, focus: THREE.Vector3, draw: () => void): void {
-    const frustum = this.frustum.clone(), drawn = this.drawn;
-    const saved: { tile: Tile; mesh: THREE.Mesh; visible: boolean; hide: THREE.Vector4; geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[] }[] = [];
+    // The save records are reused each frame: no new frustum, record or mask vector per resident tile.
+    const frustum = this.mirrorFrustum.copy(this.frustum), drawn = this.drawn, saved = this.mirrorSaved;
+    let count = 0;
     for (const t of this.tiles.values()) if (t.mesh) {
       const mesh = t.mesh, hide = (mesh.material as THREE.ShaderMaterial).uniforms.hideQuad.value as THREE.Vector4;
-      saved.push({ tile: t, mesh, visible: mesh.visible, hide: hide.clone(), geometry: mesh.geometry, material: mesh.material });
+      const state = saved[count] ??= { tile: null, mesh: null, visible: false, hide: new THREE.Vector4(), geometry: null, material: null };
+      count++;
+      state.tile = t; state.mesh = mesh; state.visible = mesh.visible; state.hide.copy(hide); state.geometry = mesh.geometry; state.material = mesh.material;
       mesh.visible = false;
     }
     this.mirrorFocus.value.set(focus.x, focus.z);
     this.frustum.setFromProjectionMatrix(this.m4.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     try {
       this.visit(0, 0, 0, focus, true);
-      for (const state of saved) if (state.mesh.visible) {
-        const t = state.tile;
+      for (let k = 0; k < count; k++) {
+        const state = saved[k] as MirrorHeld, t = state.tile;
+        if (!state.mesh.visible) continue;
         if (!t.mirror) {
           // One coarser grid step, without moving the tile or changing its LOD boundaries.
           const seg = segFor(t.level), n = seg + 3;
@@ -1278,9 +1317,12 @@ export class Terrain {
       }
       draw();
     } finally {
-      for (const state of saved) {
+      for (let k = 0; k < count; k++) {
+        const state = saved[k] as MirrorHeld;
         state.mesh.visible = state.visible; state.mesh.geometry = state.geometry; state.mesh.material = state.material;
         ((state.material as THREE.ShaderMaterial).uniforms.hideQuad.value as THREE.Vector4).copy(state.hide);
+        // Drop the references, so a tile evicted later is not kept alive by its old record.
+        saved[k].tile = saved[k].mesh = saved[k].geometry = saved[k].material = null;
       }
       this.frustum.copy(frustum); this.drawn = drawn;
     }

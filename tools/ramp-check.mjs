@@ -29,7 +29,11 @@ try {
       // This suite isolates the deck/crib physics. jump-check drives the staged load with its collision intact.
       yard.jumpLoad = [];
       window.rampTest={r,slipLift,car,yard,terrain,camera,site};
-      rampTest.place=(u,v,du,dv)=>{const p=site.world(u,v);car.place(p.x,p.z,site.heading(du,dv));car.assist=0;car.steerAngle=0;};
+      rampTest.place=(u,v,du,dv)=>{
+        const p=site.world(u,v);
+        if(!car.place(p.x,p.z,site.heading(du,dv)))throw Error('yard rejected ramp test placement '+JSON.stringify({u,v,du,dv}));
+        car.assist=0;car.steerAngle=0;
+      };
       rampTest.contact=run=>terrain.withGroundContact?terrain.withGroundContact(car,run):run();
       rampTest.frame=(dt,input)=>{if(mmm.driveVehicle)mmm.driveVehicle(dt,input);else car.update(dt,input);yard.update(dt,car,camera.position);};
       rampTest.step=(throttle=0,steer=0)=>rampTest.frame(1/120,{throttle,steer,handbrake:false});

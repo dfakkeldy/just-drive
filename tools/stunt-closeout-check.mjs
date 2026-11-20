@@ -14,7 +14,7 @@ import {Towing} from '../web/src/towing.ts';
 import {tableTop} from '../web/src/stunts/tabletop.ts';
 import {tyreContacts} from './tyre-contacts.mjs';
 
-const ground={sites:[],clear:[],exag:1,addTreeClear(){},surveyHeightAt:async()=>0,
+const ground={sites:[],clear:[],exag:1,addTreeClear(){},surveyHeightsAt:async points=>points.map(()=>0),
   meshHeightAt:()=>0,drawnLevelAt:()=>8,surfaceAt:()=>({level:8}),heightAt:()=>0,
   protectedRoadAt:()=>false,siteGroundChangedAt:()=>true};
 const actor={x:0,z:0,y:0,heading:Math.PI/2,pitch:0,roll:0,airborne:false,vx:0,vz:0,speed:0,

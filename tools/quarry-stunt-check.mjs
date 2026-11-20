@@ -10,6 +10,7 @@ import { AreaContacts } from '../web/src/world-contacts.ts';
 import { makeGround, preload } from './phone-ground.mjs';
 import { QuarrySite, COURSE_PADS, lakeAt, onApron, onCoursePad } from '../web/src/quarry-site.ts';
 import { createQuarryStuntPark, quarryCoursePlaces } from '../web/src/quarry-stunt-park.ts';
+import { STUNT_GUIDANCE } from '../web/src/stunt-guidance.ts';
 
 const { terrain, roads } = makeGround('../data/baked/areas/westbay');
 const origin = terrain.manifest.village;
@@ -102,3 +103,44 @@ for (const {start} of quarryCoursePlaces()) {
   }
 }
 console.log('PASS Sugar Camp piece footprints, production seats and both run-ups for the loaded rig, side by side and bike on baked land');
+
+// Sugar Camp, 20 Nov 2026: the pickup must reach the sign speeds from rest.
+// Distances are from each lane's cleared start to the piece origin, in piece coordinates.
+const runupStarts = {
+  'slip-small': -46, 'slip-medium': -40, 'slip-large': -40, 'gap-4': -41,
+  'gap-tanks': -40, 'drop-0.8': -41, 'drop-1.6': -41, 'drop-2.4': -40,
+};
+for (const [id, startU] of Object.entries(runupStarts)) {
+  const piece = park.pieces.find(p => p.placement.piece.id === id);
+  const start = piece.world(startU, 0);
+  const takeoff = piece.placement.piece.route.takeoff;
+  const [min, max] = STUNT_GUIDANCE[id].truck;
+  // The small kicker needs full throttle. On the other lines the driver sets the entry speed.
+  const target = (min + max) / 2 / 3.6;
+  assert.ok(park.clearCanopy(start.x, start.z), id+' start is cleared');
+  const driveRunup = ride => {
+    assert.ok(ride.place(start.x, start.z, piece.placement.heading));
+    ride.assist = 0;
+    const impacts = park.contacts;
+    for (let tick = 0; tick < 12*120; tick++) {
+      const throttle = id === 'slip-small' ? 1 : Math.max(-1, Math.min(1, (target-ride.speed)*2));
+      terrain.withGroundContact(ride, () => ride.update(1/120, {throttle, steer:0}, () => park.step(1/120, ride)));
+      if (park.contacts !== impacts) break;
+      const along = piece.u(ride.x, ride.z);
+      // The front axle can leave the lip before the ride's reference point reaches it.
+      if (along >= takeoff || (ride.airborne && along >= takeoff-ride.spec.wheelbase/2)) return { kph:ride.speed*3.6, airborne:ride.airborne };
+    }
+    throw Error(id+' did not reach the lip cleanly');
+  };
+  const result = driveRunup(truck);
+  console.log('PICKUP RUN-UP', id, JSON.stringify(result));
+  assert.ok(result.kph >= min && result.kph <= max, `${id}: ${result.kph} km/h, posted ${min}–${max}`);
+  if (id === 'slip-small') {
+    assert.ok(result.airborne, 'small kicker launches at its posted speed');
+    const previous = new Vehicle(truck.car, terrain, roads, -.2, {
+      ...TRUCK_SPEC, engineAcceleration:4.2, enginePower:122, tractionShare:.78, aeroDrag:.00115,
+    });
+    contacts.bindVehicle(previous);
+    assert.ok(driveRunup(previous).kph < min, 'the previous pickup tune misses the launch band');
+  }
+}

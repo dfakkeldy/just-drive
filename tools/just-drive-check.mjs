@@ -1,5 +1,6 @@
 import { checkStations, radioTextToCheck, JUST_START_DIAL, MUSIC_CREDIT_TEXT } from './radio-expectations.mjs';
 import { AREAS } from '../web/src/area.ts';
+import { RECEPTION, bandOf, comesIn, signalAt } from '../web/src/radio-reception.ts';
 // Real phone/player checks. Run only through yard-shots.sh, one owned browser job at a time.
 // WEB_PORT=5351 CDP_PORT=9551 VITE_MP=1 RUN=just-drive-check.mjs tools/yard-shots.sh
 import assert from 'node:assert/strict';
@@ -53,6 +54,22 @@ async function page(host,path,width,height,verify,missingRadio=false) {
   assert.deepEqual(errors,[],'no uncaught errors');results.push({host,path,width,height,ok:true});console.log('PASS '+host+path+' '+width+'x'+height);
  } finally {await fetch(`http://127.0.0.1:${port}/json/close/${tab.id}`).catch(()=>{});ws.close();}
 }
+// Reception (the owner, 20 Nov 2026): only the mail shift has it. Just driving, on the Just Drive site and in the mail
+// game's "Just drive" mode, hears every station everywhere. A whole turn of the dial at a place, in one read so that no
+// frame moves the car between steps, gives each stop's dial and its readout word. It leaves the radio off, so keep it
+// the last step on its page.
+const village=id=>JSON.parse(readFileSync(new URL(id==='mabou'?'../data/baked/terrain/manifest.json':`../data/baked/areas/${id}/manifest.json`,import.meta.url),'utf8')).village;
+const dialWalk=(p,[e,n])=>p.read(`(()=>{const r=mmm.radio,dials=r.stations.map(s=>s.dial),walk=[];r.setPlace(${e},${n});
+  for(let k=0;k<=dials.length&&r.station>=0;k++)r.next();
+  for(let k=0;k<=dials.length;k++){r.next();if(r.station<0)break;walk.push(dials[r.station]+' '+r.reception.band);}
+  return {dials,walk};})()`);
+/** What the mail shift's table lets in at a place: each station that comes in, with its word. */
+const mailTable=(dials,[e,n])=>dials.filter(dial=>comesIn(signalAt(RECEPTION,dial,e,n))).map(dial=>dial+' '+bandOf(signalAt(RECEPTION,dial,e,n)));
+async function everyStation(p,id,label){
+ const place=village(id),{dials,walk}=await dialWalk(p,place);
+ assert.ok(mailTable(dials,place).length<dials.length,`${label}: the mail table loses a station at ${id}, so this walk tests something`);
+ assert.deepEqual([...walk].sort(),dials.map(dial=>dial+' clear').sort(),`${label}: the dial stops at every station at ${id}, and each is clear: ${walk.join(', ')}`);
+}
 const titleReady=`!!document.getElementById('titleStart') && !!window.mmm?.gameMode && document.documentElement.dataset.mmmReady==='true' && (window.mmm.vehicleId==='horse' || new URLSearchParams(location.search).get('radio')==='0' || typeof window.mmm.radio!=='undefined')`;
 for(const [width,height,name] of [[390,844,'just-drive-portrait'],[844,390,'just-drive-landscape']]) await page('localhost','/mabou?site=just&touch=1&q=low',width,height,async p=>{
  await p.until(titleReady);await p.clean('title');
@@ -104,6 +121,12 @@ await page('justdrive.localhost','/judique?area=mabou&touch=1&q=low',390,844,asy
 await page('justdrive.localhost','/?area=judique&touch=1&q=low',390,844,async p=>{await p.until(titleReady);assert.equal(await p.read('document.title'),'Just Drive: Mabou');assert.ok(p.requests.some(u=>u.includes('/terrain/manifest.json')));assert.ok(!p.requests.some(u=>u.includes('/areas/judique/manifest.json')));await p.clean('root ignores area query');});
 await page('justdrive.localhost','/westbay?area=mabou&touch=1&q=low',390,844,async p=>{
  await p.until(titleReady);assert.equal(await p.read('document.title'),'Just Drive: West Bay');assert.ok(p.requests.some(u=>u.includes('/areas/westbay/manifest.json')));checkStations(await p.read('mmm.radio.stations'));assert.equal(await p.read('mmm.radio.storageKey'),'mmm.radio.just');await p.clean('West Bay title');
+ await everyStation(p,'westbay','Just Drive');
+});
+// The mail game's "Just drive" mode hears every station too, at Mabou, where the mail shift hears only two.
+await page('localhost','/?mode=explore&touch=1&q=low',390,844,async p=>{
+ await p.until(titleReady);assert.equal(await p.read('mmm.gameMode'),'explore');assert.equal(await p.read('mmm.radio.storageKey'),'mmm.radio');
+ await everyStation(p,'mabou','the mail game\'s Just drive mode');
 });
 await page('localhost','/mabou?site=just&q=low',1280,900,async p=>{
  await p.until(titleReady);assert.equal(await p.read('mmm.radio'),null);assert.equal(await p.read(`!!document.getElementById('radio')`),false);assert.doesNotMatch(await p.read(`document.getElementById('titleCard').innerText`),/\bradio\b/i);await p.clean('missing radio title');
@@ -122,10 +145,13 @@ for(const [name,path,blocked] of [['present','/?touch=1&q=low',false],['disabled
  // The Get Fired choice (#modeFired) is pinned here and in site-title-check, then left out on both sides.
  assert.deepEqual(await p.read(`[...document.querySelectorAll('#modeChoice #modeFired')].map(b=>b.textContent)`),['Get fired']);
  // Today's run (#dailyChoice) likewise: pinned here and in site-title-check, then left out on both sides.
+ // The Boss's ride-along line (#titleBoss) is added to the card by ride-along.ts, not by the title, on every mail-play
+ // page (hidden on other days, but textContent still reads it). ride-along-browser asserts it; leave it out on both sides.
  assert.deepEqual(await p.read(`[...document.querySelectorAll('#dailyChoice #modeDaily')].map(b=>b.textContent)`),['Today’s run: five minutes, complaint bingo']);
- const before=await p.read(`(()=>{const e=document.getElementById('titleCard').cloneNode(true);const promise=e.querySelector('.tag');if(promise.textContent!=='A route you cannot win')throw Error('promise');promise.textContent='Preview build · a route you cannot win';const footer=e.querySelector('.titleFooter');if(footer?.textContent!=='Preview build · Cape Breton, Nova Scotia')throw Error('preview footer');footer.remove();const more=e.querySelector('#titleControls summary');if(more?.textContent!=='All controls')throw Error('full control list');more.remove();const modes=e.querySelector('#modeChoice');e.prepend(modes);e.querySelector('.mpControl')?.remove();e.querySelector('#titleContact')?.remove();e.querySelector('#titleAbout')?.remove();e.querySelector('#titleMusic')?.remove();e.querySelector('#nsPavedCredit')?.remove();e.querySelector('#titleOtherGame')?.remove();e.querySelector('#modeFired')?.remove();e.querySelector('#dailyChoice')?.remove();return e.textContent;})()`);
- const old=await p.read(`(async()=>{document.getElementById('title').remove();const m=await import(${JSON.stringify(baselineData)});m.createTitle(true,()=>{});document.getElementById('titleContact')?.remove();document.getElementById('titleAbout')?.remove();document.getElementById('titleMusic')?.remove();document.getElementById('nsPavedCredit')?.remove();document.getElementById('titleOtherGame')?.remove();document.getElementById('modeFired')?.remove();document.getElementById('dailyChoice')?.remove();return document.getElementById('titleCard').textContent;})()`);
+ const before=await p.read(`(()=>{const e=document.getElementById('titleCard').cloneNode(true);const promise=e.querySelector('.tag');if(promise.textContent!=='A route you cannot win')throw Error('promise');promise.textContent='Preview build · a route you cannot win';const footer=e.querySelector('.titleFooter');if(footer?.textContent!=='Preview build · Cape Breton, Nova Scotia')throw Error('preview footer');footer.remove();const more=e.querySelector('#titleControls summary');if(more?.textContent!=='All controls')throw Error('full control list');more.remove();const modes=e.querySelector('#modeChoice');e.prepend(modes);e.querySelector('.mpControl')?.remove();e.querySelector('#titleContact')?.remove();e.querySelector('#titleAbout')?.remove();e.querySelector('#titleMusic')?.remove();e.querySelector('#nsPavedCredit')?.remove();e.querySelector('#titleOtherGame')?.remove();e.querySelector('#modeFired')?.remove();e.querySelector('#dailyChoice')?.remove();e.querySelector('#titleBoss')?.remove();return e.textContent;})()`);
+ const old=await p.read(`(async()=>{document.getElementById('title').remove();const m=await import(${JSON.stringify(baselineData)});m.createTitle(true,()=>{});document.getElementById('titleContact')?.remove();document.getElementById('titleAbout')?.remove();document.getElementById('titleMusic')?.remove();document.getElementById('nsPavedCredit')?.remove();document.getElementById('titleOtherGame')?.remove();document.getElementById('modeFired')?.remove();document.getElementById('dailyChoice')?.remove();document.getElementById('titleBoss')?.remove();return document.getElementById('titleCard').textContent;})()`);
  assert.equal(before.replace(/\s+/g,' ').trim(),old.replace(/\s+/g,' ').trim(),'non-music title text matches main after approved presentation edits; music checked separately: '+name);console.log('PASS plain title comparison '+name);
+ if(name==='present'){const place=village('mabou'),{dials,walk}=await dialWalk(p,place);assert.deepEqual([...walk].sort(),mailTable(dials,place).sort(),'the mail shift keeps its reception at Mabou: '+walk.join(', '));}
 },blocked);
 for(const brand of ['mail','just'])for(const vehicle of ['car','bike']) await page('localhost',(brand==='just'?'/mabou?site=just&era=1884&touch=1&q=low':'/?era=1884&touch=1&q=low')+'&vehicle='+vehicle,390,844,async p=>{
  await p.until(titleReady);assert.equal(await p.read('mmm.era.id'),'1884');checkStations(await p.read('mmm.radio.stations'));
@@ -143,4 +169,4 @@ for(const brand of ['mail','just'])for(const selection of ['', '&vehicle=horse']
 });
 writeFileSync(`${out}/player-strings.json`,JSON.stringify(strings,null,2));
 writeFileSync(`${out}/browser-results.json`,JSON.stringify({words,baseline:baselineHead,results},null,2));
-console.log('PASS forbidden words: '+words.join(', ')+'; no mail radio requests; all catalogue stations in Mabou/West Bay and both 1884 brands; null-radio hints; storage isolation; both phone fits; real canvas text; path-only root and quality fallback; actual host/path and area switch; unknown area; bike; main title text with reviewed music geography');
+console.log('PASS forbidden words: '+words.join(', ')+'; no mail radio requests; all catalogue stations in Mabou/West Bay and both 1884 brands; every station clear when just driving (Just Drive at West Bay, the mail game Just drive mode at Mabou) and the mail shift reception at Mabou; null-radio hints; storage isolation; both phone fits; real canvas text; path-only root and quality fallback; actual host/path and area switch; unknown area; bike; main title text with reviewed music geography');

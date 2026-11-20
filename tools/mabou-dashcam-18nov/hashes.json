@@ -1,6 +1,23 @@
 {
  "version": 1,
  "bake": "pipeline/35_bake_mabou_dashcam.py",
+ "roadBed": {
+  "companion": {
+   "file": "work/overview/roads-before-bed.json",
+   "before": "214cdae547902e7dc65da539e9e5f3026838f30eb8157642d55c80797618b623",
+   "sha256": "a636dd87d9c605e1f4a23e27db77385f2b021112c52a34f0db04e638e64e6d62"
+  },
+  "files": [
+   {
+    "file": "terrain/cemeteries.json",
+    "sha256": "adbc84141ce39b3bb3d72b2a4d67990b1c84c084e294199f488546d8534aaf92"
+   },
+   {
+    "file": "terrain/roads.json",
+    "sha256": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9"
+   }
+  ]
+ },
  "files": [
   {
    "file": "terrain/5/12_15.r.png",

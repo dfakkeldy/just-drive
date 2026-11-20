@@ -9,7 +9,8 @@ export const SXS_SPEC: VehicleSpec = deepFreeze({
   // One radius, with body rows and wheel-centred circles: covered tyre corners without long centreline caps.
   envelope: { circles: [-1.27,-.92,-.57,-.22,.13,.48,.83,1.18,1.33, -1.27,-.92,-.57,-.22,.13,.48,.83,1.18,1.33, 1.3,1.3,-1.3,-1.3],
     circleSides: [-.2,-.2,-.2,-.2,-.2,-.2,-.2,-.2,-.2, .2,.2,.2,.2,.2,.2,.2,.2,.2, -.745,.745,-.745,.745], radius: .44, reach: 3.3, sweepHalfWidth: 1.14, sweepHalfLength: 1.76, overhead: 1.8, grassHalfWidth: 1.32, grassHalfLength: 2.2, nose: 2.55 },
-  engineAcceleration: 6.6, enginePower: 175, tractionShare: 2.2, aeroDrag: .003,
+  // 155 km/h on firm dirt, with the same low-speed acceleration limit.
+  engineAcceleration: 6.6, enginePower: 229, tractionShare: 2.2, aeroDrag: .0024,
   brake: 10.2, handbrake: 6.2, cornering: 1.45, maxSteer: .56,
   steerBaseRate: .85, steerSpeedRate: 2.7, steerReturnRate: 4.5, gripLock: 1.12,
   lateralInertia: 1.0, landingForward: .985, landingSideways: .8,
