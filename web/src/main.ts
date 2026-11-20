@@ -478,7 +478,9 @@ const sunShadows = terrain.shadows ? new SunShadows(renderer, scene, sunLight, s
 if (sunShadows) Object.assign(terrain.uniforms, sunShadows.uniforms);   // every land tile made from here on reads the map
 // Phones do not load the grass module or read the cover image back to the CPU.
 const grassExcludes = stockpiles ? (east: number, north: number) => stockpiles.excludes(east, north) || !!cemeteries?.excludes(east, north) : cemeteries?.excludes;
-const grass = LOW ? null : new (await import('./grass')).Grass(terrain, params.get('grass'), grassExcludes);
+// In the published build each import() is a file of its own. A deploy during a start can remove the old file: show Retry.
+const partFailed = () => areaScreen('Part of this area could not load. Retry or choose another area.', true);
+const grass = LOW ? null : new (await import('./grass').catch(partFailed)).Grass(terrain, params.get('grass'), grassExcludes);
 if (grass) scene.add(grass.group);
 // Mapped public wharves (today, in the areas that have them); like airport, the dev key exists only there.
 const wharves = ERA.id === 'today' && hasWharves(AREA.id) ? new PublicWharves(AREA.id, terrain, manifest.village, SEA_LEVEL, (buildings ? buildingList ?? [] : []).map(b => b.footprint)) : null;
@@ -685,14 +687,14 @@ if (home) scene.add(home.group);
 const porch = porchSite ? new PorchHouse(porchSite, terrain, (metres) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres)) : null;
 const porchDog = porch ? new PorchDog(LOW) : null;
 if (porch) { scene.add(porch.group); if (porchDog) porch.seat(porchDog.group); }
-const church = churchSite ? new (await import('./church')).Church(churchSite, terrain) : null;
+const church = churchSite ? new (await import('./church').catch(partFailed)).Church(churchSite, terrain) : null;
 if (church) scene.add(church.group);
-const village = villageSite ? new (await import('./judique-village')).JudiqueVillage(villageSite, terrain, LOW) : null;
+const village = villageSite ? new (await import('./judique-village').catch(partFailed)).JudiqueVillage(villageSite, terrain, LOW) : null;
 if (village) scene.add(village.group);
-const hawkesbury = hawkesburySite ? new (await import('./port-hawkesbury')).PortHawkesbury(hawkesburySite, terrain, LOW,
+const hawkesbury = hawkesburySite ? new (await import('./port-hawkesbury').catch(partFailed)).PortHawkesbury(hawkesburySite, terrain, LOW,
   roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings) : null;
 if (hawkesbury) scene.add(hawkesbury.group);
-const mabouMain = mabouSite ? new (await import('./mabou-main')).MabouMain(mabouSite, terrain, LOW, roads.roads) : null;
+const mabouMain = mabouSite ? new (await import('./mabou-main').catch(partFailed)).MabouMain(mabouSite, terrain, LOW, roads.roads) : null;
 if (mabouMain) scene.add(mabouMain.group);
 const quarry = quarryFeature && quarrySite ? new quarryFeature.Quarry(quarrySite, terrain, roads) : null;
 if (quarry) quarry.attach(scene, waterReflections);
@@ -1022,7 +1024,7 @@ vehicle.damage = horse ? null : shift.damage; vehicle.desktopPull = !touchDevice
 if (import.meta.env.DEV) expose({ shift, roadScene, schoolBus, animals, sidewalks, aiDriver });
 if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.mjs and the guard rail night pictures
 // Outside the mail game a door is only a place to look: no shift, no receipt. Mabou has no such door, so it stays quiet.
-const churchRoom = churchSite ? await import('./interior-church') : null;
+const churchRoom = churchSite ? await import('./interior-church').catch(partFailed) : null;
 const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => shift.interiorResult(receipt), bare)
   : churchRoom ? new Interiors(() => 0, () => '', () => {}, bare) : quietInteriors();
 if (testPark && !fleet) {
