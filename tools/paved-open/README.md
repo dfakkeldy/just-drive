@@ -229,6 +229,11 @@ Run these from a real checkout with its own `data/`. First rehearse the
 install on an APFS clone as described in [checks-README.md](../checks-README.md).
 Use the merged code before installing on live land.
 
+`$STAGE` is the step-32 output folder: one folder per area (`mabou`,
+`judique`, `porthood`, `westbay`, `pointtupper`, `cansocauseway`), each with
+its `paved/` files. `refresh.py` does not bake; it only records, verifies,
+installs and rolls back a stage.
+
 ```sh
 python3 tools/paved-open/refresh.py verify "$STAGE" data/baked
 python3 tools/paved-open/refresh.py install "$STAGE" data/work/pavement-before
@@ -240,6 +245,22 @@ It changes the pavement files and the `paved` key only. If the receipt or
 any required land check fails after the swap, it restores the backup before
 it releases the lock. To roll back a successful install, use
 `python3 tools/paved-open/refresh.py rollback data/work/pavement-before`.
+
+A hard stop (a killed process, a closed terminal, power loss) skips the
+automatic restore. Then `install` and `rollback` stop on the lock. Recover
+by hand:
+
+1. Make sure no install is running, then remove `data/work/install.lock`.
+2. If the stop came after the checks started (the swap had finished), run
+   `rollback` as above.
+3. If `rollback` refuses, the swap was cut short. Copy each file in the
+   backup directory back to its place in `data/baked` with `cp -c -p` (the
+   backup keeps the paths relative to `data/baked`). Delete the tiles the
+   receipt adds, which have no backup (in this refresh,
+   `terrain/paved/103_120.r8`). Delete any leftover `.pavement-*` folder
+   inside a `paved/` folder.
+4. Run `paved-open-land` and the other land rows. They must report the
+   pre-refresh land.
 
 ## Judique lots delta (Judique lots delta)
 
