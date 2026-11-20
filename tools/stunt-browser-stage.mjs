@@ -47,7 +47,12 @@ export const stuntStage=tyreContacts=>`(async()=>{
    const id=piece.placement.piece.id,deck=['footbridge','tabletop'].includes(id)||id.startsWith('drop-')?piece.decks[1]:piece.decks.find(d=>d.source.box[2]-d.source.box[0]>3),b=deck?.source.box??piece.placement.piece.footprint;
    const target=piece.placement.piece.id==='tunnel'?0:piece.placement.piece.id==='berm'?0:Math.min(b[2]-v.spec.wheelbase/2-1,Math.max(5,(b[0]+b[2])/2));
    st.place(piece,piece.placement.piece.footprint[0]-7);
-   if(piece.placement.piece.runup===0){v.vx=Math.sin(v.heading)*45/3.6;v.vz=-Math.cos(v.heading)*45/3.6;v.speed=45/3.6;for(let n=0;n<1200&&piece.u(v.x,v.z)<piece.placement.piece.footprint[0]+1;n++)st.step(1);}
+   if(piece.placement.piece.runup===0){
+     // Start the stop probe at the same entry pace for every tune.
+     const entry=45/3.6;
+     v.vx=Math.sin(v.heading)*entry;v.vz=-Math.cos(v.heading)*entry;v.speed=entry;
+     for(let n=0;n<1200&&piece.u(v.x,v.z)<piece.placement.piece.footprint[0]+1;n++)st.step(Math.max(-1,Math.min(1,(entry-v.speed)*2)));
+   }
    let i=0;
    for(;i<3600&&piece.u(v.x,v.z)<target;i++)st.step(Math.max(-1,Math.min(1,(2.2-v.speed)*2)));
    for(let n=0;n<360;n++)st.step(v.speed>.02?-1:0,0,true);
