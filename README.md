@@ -39,7 +39,8 @@ Apache-2.0, ISC and BSD-3-Clause).
 
 ## Airport drag races
 
-In Point Tupper, choose **Places → Port Hawkesbury Airport**. Select **Stage** in the left lane and wait for green.
+In Point Tupper, open **Places** (L on a keyboard) and choose **Port Hawkesbury Airport**.
+Select **Stage** in the left lane and wait for green.
 Race the pace car over 402 m in the car, pickup, side by side or dirt bike. The result shows reaction time,
 elapsed time and trap speed. The game saves the best elapsed time for each vehicle on this device.
 

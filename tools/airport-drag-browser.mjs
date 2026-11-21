@@ -20,6 +20,12 @@ async function until(tab, condition, label, ms = 45000) {
   assert.fail(label + ': ' + JSON.stringify(await tab.read(`({phase:${phase},status:${status},x:mmm.vehicle.x,z:mmm.vehicle.z,speed:mmm.vehicle.speed})`)));
 }
 const click = (tab, selector) => tab.read(`document.querySelector(${JSON.stringify(selector)}).click()`);
+async function openPlaces(tab) {
+  const key = { code: 'KeyL', key: 'l', windowsVirtualKeyCode: 76 };
+  await tab.send('Input.dispatchKeyEvent', { ...key, type: 'rawKeyDown' });
+  await tab.send('Input.dispatchKeyEvent', { ...key, type: 'keyUp' });
+  assert.ok(await tab.read("!document.querySelector('#placesPanel').hidden"), 'L opens Places');
+}
 async function pedal(tab, down, phone = false) {
   if (!phone) return tab.send('Input.dispatchKeyEvent', { type: down ? 'rawKeyDown' : 'keyUp', code: 'KeyW', key: 'w', windowsVirtualKeyCode: 87 });
   const point = down ? await tab.read(`(() => {const r=document.querySelector('#tcGo').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`) : null;
@@ -42,7 +48,7 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
     assert.ok(await tab.read("!document.querySelector('#title').hidden"), 'title remains on the start link');
     await click(tab, '#titleStart');
     if (vehicle === 'car') {
-      await click(tab, '#placesButton');
+      await openPlaces(tab);
       assert.match(await tab.read("document.querySelector('[data-place=airport-drag]').innerText"), /Port Hawkesbury Airport/);
       await click(tab, '[data-place=airport-drag]');
     }
@@ -123,7 +129,7 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
       await tab.shot(join(evidence, '03-result-card.png'));
       await tab.navigate(url.href);
       await click(tab, '#titleStart');
-      await click(tab, '#placesButton');
+      await openPlaces(tab);
       await click(tab, '[data-place=airport-drag]');
       await until(tab, `!!${staged}`, 'can stage after reload');
       assert.match(await tab.read("document.querySelector('.dragBest').innerText"), /Vehicle best/);
