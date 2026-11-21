@@ -376,11 +376,10 @@ let littleMabouArt: ReturnType<typeof littleMabouBuildingArt> | undefined;
 const mabouSite = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
 const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then((data: { buildings: Building[] }) => {
   mappedBuildings = data.buildings;
-  if (ERA.modern && AREA.id === 'porthood') {
-    littleMabouArt = littleMabouBuildingArt(mappedBuildings);
-    return littleMabouArt.buildings;
-  }
-  const list = homeSite ? Home.buildings(data.buildings, homeSite, manifest.village) : yardSite ? Yard.buildings(data.buildings, yardSite, manifest.village) : data.buildings;
+  // Little Mabou Road's two homes (Port Hood pack only); the area's other sites still run on the result.
+  if (ERA.modern && AREA.id === 'porthood') littleMabouArt = littleMabouBuildingArt(data.buildings);
+  const base = littleMabouArt?.buildings ?? data.buildings;
+  const list = homeSite ? Home.buildings(base, homeSite, manifest.village) : yardSite ? Yard.buildings(base, yardSite, manifest.village) : base;
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
