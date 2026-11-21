@@ -411,6 +411,8 @@ if (fishingSite) clear.push(...fishingSite.clear);
 // One row per hand-built place (place.ts): its site from above, and how to build it once the land and roads are ready
 // (below). The rows' order is the places list's order. A row whose code loads by import() returns a promise. The site
 // lines stay apart: the building list reads four sites, the porch needs that list, and Maryville's module loads first.
+// The home and the porch house take the car, not the clock, so their slots wrap them; the porch's slot also turns its
+// dog and waits for it.
 let porchDog: PorchDog | null = null;   // the porch's build seats it
 const lift = (metres: number) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres);
 const placeRows = {
