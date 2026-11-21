@@ -32,6 +32,8 @@ export interface RoadCutSource {
 }
 interface CutTile {x0:number;z0:number;size:number;roadCutRevision:number;mesh:THREE.Mesh|null}
 const PAGE=64,LAYERS=64,FLOATS=PAGE*PAGE*4;
+/** Pages in one atlas: no job is larger, so a step allowed this many uploads finishes the job it holds. */
+export const CUT_ATLAS_PAGES=LAYERS;
 interface Atlas {texture:THREE.DataArrayTexture;data:Float32Array;used:Uint8Array}
 interface Allocation {atlas:Atlas;first:number;pages:number}
 interface Entry {tile:CutTile;revision:number;raster:CutRaster|null;allocation?:Allocation}
@@ -73,8 +75,9 @@ export class RoadCuts {
     if(this.job?.entry===e&&this.job.revision===revision||this.queue.get(t)===e)return;
     if(!revision){if(e.allocation){this.free(e.allocation);e.allocation=undefined;}e.raster=null;(t.mesh.material as THREE.ShaderMaterial).uniforms.roadCuts.value=0;e.revision=0;t.roadCutRevision=0;return;}this.startWorker();if(e.allocation){this.free(e.allocation);e.allocation=undefined;}e.raster=null;(t.mesh.material as THREE.ShaderMaterial).uniforms.roadCuts.value=0;this.queue.set(t,e);
   }
-  /** This is the only main-thread build/upload pump. No tile arrival performs a field build. */
-  step(budgetMs=2):void {
+  /** This is the only main-thread build/upload pump. No tile arrival performs a field build. It uploads at most
+   *  `pages` atlas pages (64 KB each) per call, within `budgetMs`. The order of jobs and pages does not depend on it. */
+  step(budgetMs=2,pages=1):void {
     if(!this.job&&!this.queue.size)return;
     const start=performance.now();let uploads=0,prepared=0,posted=0,validated=0,allocated=0,copied=0;
     while(performance.now()-start<budgetMs){
@@ -93,7 +96,7 @@ export class RoadCuts {
       }
       if(!j.result){e.revision=j.revision;e.tile.roadCutRevision=j.revision;this.job=null;continue;}
       if(!j.allocation){const phase=performance.now();j.allocation=this.allocate(Math.ceil(j.result.data.length/FLOATS))??undefined;allocated+=performance.now()-phase;if(!j.allocation)break;this.audit.maxCandidates=Math.max(this.audit.maxCandidates,j.result.maxCandidates);}
-      if(uploads>=1)break;
+      if(uploads>=pages)break;
       const copying=performance.now(),a=j.allocation!,data=j.result!.data,from=j.copied*FLOATS,layer=a.first+j.copied;
       a.atlas.data.set(data.subarray(from,Math.min(from+FLOATS,data.length)),layer*FLOATS);a.atlas.texture.addLayerUpdate(layer);a.atlas.texture.needsUpdate=true;j.copied++;uploads++;
       if(j.copied===a.pages){if(e.allocation)this.free(e.allocation);e.allocation=a;e.raster=j.result!;e.revision=j.revision;e.tile.roadCutRevision=j.revision;

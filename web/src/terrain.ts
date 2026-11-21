@@ -1,4 +1,4 @@
-import {RoadCuts,inMask,maskTouches,type RoadCutSource} from './road-cuts';
+import {RoadCuts,CUT_ATLAS_PAGES,inMask,maskTouches,type RoadCutSource} from './road-cuts';
 import type { Paved } from './paved';
 import type { NightShading } from './night';
 import type {HistoryBridgeApproaches} from './eras/history-approaches';
@@ -1323,7 +1323,9 @@ export class Terrain {
 
   update(camera: THREE.PerspectiveCamera, startMode = false) {
     this.frame++;
-    if(!this.cartRoads)this.roadCuts.step();
+    // While the game waits for the driver, a finished cut job uploads all its pages in one frame (no one drives yet,
+    // and ready waits for it). While driving, one page per frame keeps each frame's upload small.
+    if(!this.cartRoads)this.roadCuts.step(2,this.holdBackground?CUT_ATLAS_PAGES:1);
     if(this.cartRoads){const previous=this.contactPrevious;this.contactPrevious=this.contactSelected;this.contactSelected=previous;this.contactSelected.length=0;}
     this.wantedCount = 0;
     this.drawn = 0;

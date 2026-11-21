@@ -22,7 +22,24 @@ async function contracts(replacements={}){
  const heavy=new f.RoadCuts([{roadCutRevision:()=>1,roadCutTriangles:()=>[new Float32Array(plane)]}],new THREE.Texture()),t=tile(),old=globalThis.performance;let clock=0;
  Object.defineProperty(globalThis,'performance',{configurable:true,value:{now:()=>clock+=.02}});
  try{heavy.update(t);let frames=0;while(heavy.pending){heavy.step();assert.ok(++frames<1000);}assert.ok(heavy.audit.maxFrameMs<8,'scheduler keeps each main-thread raster slice below 8ms under a controlled clock');}finally{Object.defineProperty(globalThis,'performance',{configurable:true,value:old});heavy.dispose();}
- dispose(f);console.log('PASS shared atlas, exact shader footprint, stale invalidation and bounded scheduler');
+ // Upload pacing: a job's pages go up one per step unless the caller allows more. Terrain allows a whole atlas while
+ // the game waits for the driver (holdBackground), so a held start finishes a job in one step.
+ const ATLAS_PAGES=64; // CUT_ATLAS_PAGES in road-cuts.ts
+ const grid=[];for(let z=0;z<40;z++)for(let x=0;x<40;x++)grid.push(x,2,z,x+1,2,z,x,2,z+1,x+1,2,z,x+1,2,z+1,x,2,z+1);
+ const paced=allowance=>{const rc=new f.RoadCuts([{roadCutRevision:()=>1,roadCutTriangles:()=>[new Float32Array(grid)]}],new THREE.Texture()),t=tile(),counts=[];let seen=0;
+  // No time budget binds here: only the page allowance ends a step.
+  rc.update(t);while(rc.pending){rc.step(Infinity,allowance);const n=rc.atlases[0]?.texture.layerUpdates.size??0;if(n>seen)counts.push(n-seen);seen=n;assert.ok(counts.length<1000);}
+  const pages=rc.raster(t)?Math.ceil(rc.raster(t).data.length/(64*64*4)):0;assert.equal(t.mesh.material.uniforms.roadCuts.value,1,'the paced job finishes');rc.dispose();return{pages,counts};};
+ const held=paced(ATLAS_PAGES),driving=paced(1);
+ assert.ok(held.pages>1,'the pacing job spans several atlas pages: '+held.pages);
+ assert.deepEqual(held.counts,[held.pages],'a held start uploads a whole multi-page cut job in one step');
+ assert.deepEqual(driving.counts,Array(driving.pages).fill(1),'a driving step uploads one cut page');
+ const allowances=[],step=f.terrain.roadCuts.step,camera=new THREE.PerspectiveCamera();camera.position.set(-1e6,500,-1e6);camera.updateMatrixWorld();
+ f.terrain.roadCuts.step=(budget,pages)=>{allowances.push(pages);};
+ try{for(const hold of[true,false]){f.terrain.holdBackground=hold;f.terrain.update(camera);}}finally{f.terrain.roadCuts.step=step;f.terrain.holdBackground=false;}
+ assert.equal(allowances[0],ATLAS_PAGES,'Terrain lets a held start upload a whole cut job per frame');
+ assert.equal(allowances[1],1,'Terrain uploads one cut page per driving frame');
+ dispose(f);console.log('PASS shared atlas, exact shader footprint, stale invalidation, bounded scheduler and upload pacing '+JSON.stringify({pages:held.pages,held:held.counts,driving:driving.counts.length}));
 }
 function raw(t,x,z){const p=t.mesh.geometry.getAttribute('position'),n=Math.round(Math.sqrt(p.count)),seg=n-3,fx=(x-t.x0)*seg/t.size,fz=(z-t.z0)*seg/t.size,a=Math.min(Math.floor(fx),seg-1),b=Math.min(Math.floor(fz),seg-1),u=fx-a,v=fz-b,i=(b+1)*n+a+1;return u+v<=1?p.getY(i)+(p.getY(i+1)-p.getY(i))*u+(p.getY(i+n)-p.getY(i))*v:p.getY(i+n+1)+(p.getY(i+n)-p.getY(i+n+1))*(1-u)+(p.getY(i+1)-p.getY(i+n+1))*(1-v);}
 async function real(replacements={},list=areas){for(const area of list){const f=await fixture(area,1.5,replacements),M=f.roads.modern;assert.equal(f.terrain.sites.find(s=>s.deckMask)?.roadField,false,'bridge contact provider declares that it does not paint new road fields');await f.load(M.spans.flatMap(r=>r.pts));for(const r of M.spans)f.roads.update(new THREE.Vector3(r.pts[0][0],20,r.pts[0][1]));let tested=0,holes=0,blankFieldsAvoided=0;const contains=predicate(f);
@@ -52,6 +69,10 @@ if(process.env.BRIDGE_CUT_AREA){
    ['web/src/road-cuts.ts','for(const atlas of this.atlases){','for(const atlas of []){','tiles share a cut atlas'],
    ['web/src/road-cuts.ts','u.tRoadCut.value=this.atlases[0]?.texture??null;','u.tRoadCut.value=this.atlases[0]?.texture??new THREE.DataArrayTexture(new Float32Array(4),1,1,1);','plain land allocates no placeholder'],
    ['web/src/road-cuts.ts','while(performance.now()-start<budgetMs){','while(true){','scheduler keeps each'],
+   ['web/src/road-cuts.ts','if(uploads>=pages)break;','if(uploads>=1)break;','a held start uploads a whole'],
+   ['web/src/road-cuts.ts','if(uploads>=pages)break;','if(uploads>=CUT_ATLAS_PAGES)break;','a driving step uploads one'],
+   ['web/src/terrain.ts','this.roadCuts.step(2,this.holdBackground?CUT_ATLAS_PAGES:1);','this.roadCuts.step(2,1);','Terrain lets a held start'],
+   ['web/src/terrain.ts','this.roadCuts.step(2,this.holdBackground?CUT_ATLAS_PAGES:1);','this.roadCuts.step(2,CUT_ATLAS_PAGES);','Terrain uploads one cut page'],
    ['web/src/road-cuts.ts','(t.mesh.material as THREE.ShaderMaterial).uniforms.roadCuts.value=0;this.queue.set(t,e);','this.queue.set(t,e);', 'stale cuts disable']]){
     const source=read(file);assert.equal(source.split(from).length,2);await assert.rejects(()=>contracts({[file]:source.replace(from,to)}),new RegExp(label));console.log('KILLED '+label);
   }
