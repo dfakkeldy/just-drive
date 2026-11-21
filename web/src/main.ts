@@ -358,15 +358,15 @@ const quarrySite = quarryFeature && params.get('quarry') !== '0' ? new quarryFea
 const churchSite = ERA.modern && AREA.church && params.get('church') !== '0' ? new ChurchSite(manifest.village) : null;
 // The heart of Judique on Highway 19 (stone church, music centre, community centre, store, garage): built by hand from
 // the dash cam brief. ?village=0 leaves the surveyed boxes.
-const villageSite = ERA.modern && AREA.id === 'judique' && params.get('village') !== '0' ? new JudiqueVillageSite(manifest.village) : null;
+const villageSite = ERA.modern && AREA.judiqueVillage && params.get('village') !== '0' ? new JudiqueVillageSite(manifest.village) : null;
 // Port Hawkesbury (the hardware store front, the dealers, the gas bars, the corner garage, the big lots' furniture): built by
 // hand from the dash cam brief. ?hawkesbury=0 leaves the surveyed boxes and bare lots.
-const hawkesburySite = ERA.modern && AREA.id === 'pointtupper' && params.get('hawkesbury') !== '0' ? new PortHawkesburySite(manifest.village) : null;
+const hawkesburySite = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' ? new PortHawkesburySite(manifest.village) : null;
 let mappedBuildings: Building[] = [];
 // Mabou's main street (the grocery, the post office building and its memorial lawn, the hall, the gas station, the junction
 // group, the pub, the bank branch, lamp posts, sidewalk, string lights): built by hand from the dash cam brief. The boxes
 // it replaces leave the drawing only; they stay properties. ?mabou=0 leaves the surveyed boxes.
-const mabouSite = ERA.modern && AREA.id === 'mabou' && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
+const mabouSite = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
 const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then((data: { buildings: Building[] }) => {
   mappedBuildings = data.buildings;
   const list = homeSite ? Home.buildings(data.buildings, homeSite, manifest.village) : yardSite ? Yard.buildings(data.buildings, yardSite, manifest.village) : data.buildings;
@@ -378,7 +378,7 @@ const bakedBuildingStyles = stylesRead
     .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
   : undefined;
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
-const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
+const porchBox = ERA.modern && AREA.porch && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
@@ -388,9 +388,9 @@ const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
-const novemberBuildings = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+const novemberBuildings = ERA.modern && AREA.november
   ? new NovemberBuildings(AREA.id, properties, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
-const finalBuildings = novemberBuildings && AREA.id === 'mabou' ? sceneryBuildings?.filter(b => !isHillsideBuilding(b)) : sceneryBuildings;
+const finalBuildings = novemberBuildings && AREA.hillside ? sceneryBuildings?.filter(b => !isHillsideBuilding(b)) : sceneryBuildings;
 const buildings = ERA.modern && finalBuildings ? new Buildings(mabouSite ? mabouSite.drawn(finalBuildings) : finalBuildings,
   manifest.village, EXAG, SEA_LEVEL, buildingStyles, novemberBuildings?.drawing) : null;
 if (buildings) clear.push(...buildings.clear);
@@ -405,20 +405,21 @@ if (quarrySite) clear.push(...quarrySite.clear);
 // In the published build each import() is a file of its own. A deploy during a start can remove the old file: show Retry.
 const partFailed = (error: unknown) => { console.warn('Area part unavailable', error); return areaScreen('Part of this area could not load. Retry or choose another area.', true); };
 // Modern Point Tupper only; airport=0 turns it off. The module (and its source extract) loads only here.
-const airportModule = ERA.modern && AREA.id === 'pointtupper' && params.get('airport') !== '0' ? await import('./airport').catch(partFailed) : null;
+const airportModule = ERA.modern && AREA.airport && params.get('airport') !== '0' ? await import('./airport').catch(partFailed) : null;
 const airportSite = airportModule ? new airportModule.AirportSite(manifest.village) : null;
-const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear);
+// Known before the first tile. Phones: fine tiles and single trees reach less far, and past 600 m, land outside the view is
+// read later, in the background (terrain.ts lazyRange). Desktop: sun shadows, unless ?shadows=0 or a night (it has no sun).
+const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear, { night: nightShading, cartRoads: ERA.cartRoads,
+  ...(LOW ? { split: AREA.quarry ? 1 : 1.15, low: true, lazyRange: 600 } : {}), shadows: !LOW && params.get('shadows') !== '0' && !nightLook });
 // Complete the approved CPU class mask before any terrain canopy or individual tree is built.
 // Modern land only: the 1884 era keeps today's cover handling, like other modern features.
 if (ERA.modern) await terrain.readGroundCover().catch(() => areaScreen('The land could not load. Retry this area.', true));
-terrain.night = nightShading;
 if (airportSite) terrain.sites.push(airportSite);
 const airport = airportModule && airportSite ? new airportModule.Airport(airportSite, terrain, !!nightLook) : null;
 if (airport) {
   scene.add(airport.group);
   if (import.meta.env.DEV) expose({ airport });   // only where the airfield stands, like fleet: the pinned dev keys stay
 }
-terrain.cartRoads = ERA.cartRoads;
 // Open designated pavement (NSTDB lots): on by default in an area whose bake lists it.
 // paved=0 turns it off; paved=1 forces a load (work-bake previews). Absent data means no request. A missing chunk shows Retry; a bad index warns.
 if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1')) {
@@ -448,15 +449,10 @@ if (coast) { terrain.coast = coast.site; scene.add(coast.group); }
 terrain.streams = streamsRead && params.get('brooks') !== '0'
   ? await streamsRead.take().then((d: StreamFile) => new Streams(d, manifest.village)).catch((e: unknown) => { console.warn('streams', e); return null; })
   : null;
-if (LOW) { terrain.split = AREA.quarry ? 1 : 1.15; terrain.low = true; }   // fine tiles and single trees reach less far
-else if (params.get('shadows') !== '0') terrain.shadows = true;
-// Phone cold start: past 600 m, land outside the view is read later, in the background (terrain.ts lazyRange).
-if (LOW) terrain.lazyRange = 600;
-if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
 const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
-const novemberRoads = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+const novemberRoads = ERA.modern && AREA.november
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
 if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
 const treeExcludes = novemberRoads
@@ -512,7 +508,7 @@ if (trafficSignals) {
 
 // Modern Point Tupper only. A chunk that does not load shows Retry, like the airport.
 // Not on LOW: the Point Tupper phone start is already at PHONE_CAP (tools/frame-budget-policy.mjs) with the AI driver.
-if (ERA.modern && AREA.id === 'pointtupper' && !LOW) {
+if (ERA.modern && AREA.ptInfrastructure && !LOW) {
   const loaded = await Promise.all([import('./pt-infrastructure').catch(partFailed), import('./pt-infrastructure-source').catch(partFailed)]);
   scene.add(new loaded[0].PointInfrastructure(loaded[1].PT_FEATURES, manifest.village, EXAG, SEA_LEVEL, roads).group);
 }
@@ -530,13 +526,14 @@ const sidewalkData = await sidewalkDataReady;
 // An optional layer: a failure or a refused budget warns once and leaves the town as main draws it (no clearing, no pole moves).
 const sidewalks = (() => {
   if (!ERA.modern || !sidewalkData) return null;
-  const bridgeWalks = new Map(roads.bridgeWalks);   // the layer widens bridge parapets while it builds
   try {
     const layer = new Sidewalks(sidewalkData, manifest.village, terrain, roads, LOW);
-    if (!layer.audit.disabled) return layer;
+    if (!layer.audit.disabled) {
+      for (const [id, walk] of layer.bridgeReservations) roads.bridgeWalks.set(id, walk);   // its walks widen the bridge parapets
+      return layer;
+    }
     layer.dispose();
   } catch (error) { console.warn('Sidewalks failed to start; skipping sidewalks', error); }
-  roads.bridgeWalks.clear(); for (const [id, walk] of bridgeWalks) roads.bridgeWalks.set(id, walk);
   return null;
 })();
 if (sidewalks) { terrain.sidewalks=sidewalks; scene.add(sidewalks.group); if (mabouSite) mabouSite.sidewalkLayer = true; }
@@ -619,7 +616,7 @@ async function loadFarViews(): Promise<void> {
 }
 
 // One invented driveway, guarded against all mailboxes, houses and existing site clearings.
-const yardDogSite = ERA.modern && AREA.id === 'mabou' && buildingList && props ? YardDogSite.create({
+const yardDogSite = ERA.modern && AREA.yardDog && buildingList && props ? YardDogSite.create({
   roads: roads.roads, village: manifest.village, mail: [...props.mail,...props.sites],
   houses: properties.filter(b=>b.kind==='house').map(b=>({x:b.x-manifest.village[0],z:manifest.village[1]-b.y})),
   excluded: [...terrain.sites.map(s=>s.box), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
@@ -718,7 +715,7 @@ const roomQuiet = () => quietPlaces ??= [
   ...churchZones(landmarkList, manifest.village).map(({ x, z, radius }) => ({ x, z, radius })),
   ...cemeteries?.zones() ?? [],
   ...(() => {
-    if (AREA.id !== 'mabou') return [];
+    if (!AREA.schoolBus) return [];
     const loop = roads.roads.find(r => r.name === BUS.road && r.pts.length > 2 && Math.hypot(r.pts[0][0] - r.pts[r.pts.length - 1][0], r.pts[0][1] - r.pts[r.pts.length - 1][1]) < 1);
     if (!loop) return [];
     const stop = { x: 0, z: 0, heading: 0 }; new SceneRoad(loop.pts, 0, 1).at(BUS.stop, BUS.lane, stop);
@@ -729,7 +726,7 @@ const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as 'car' | 'truck' | 'sxs' | 'bike', trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
   ground: (x, z) => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; } }) : null;
-const canal = ERA.modern && AREA.id === 'cansocauseway' ? new Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
+const canal = ERA.modern && AREA.canal ? new Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
 if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
 // Each solid site's contact row is written once, here. The registry (fleet sweeps, fleet driving and the quarry) adds
@@ -952,7 +949,7 @@ if (aiDriver) {
   }
 }
 if (import.meta.env.DEV) expose({ ambientTraffic });
-const schoolBus = ERA.modern && AREA.id === 'mabou' && shift instanceof Shift ? new SchoolBus(roads, terrain, shift) : null;
+const schoolBus = ERA.modern && AREA.schoolBus && shift instanceof Shift ? new SchoolBus(roads, terrain, shift) : null;
 if (shift instanceof Shift) {
   // The score stream names real places where nothing scores: church grounds, cemeteries and the school bus stop.
   const stop = { x: 0, z: 0, heading: 0 }; schoolBus?.road?.at(BUS.stop, BUS.lane, stop);
