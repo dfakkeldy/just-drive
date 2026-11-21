@@ -32,7 +32,6 @@ import { areaScreen } from './area-screen';
 import { GARAGE, readVehicle } from './garage';
 import { rideFeatures } from './ride-features';
 import { legacyVehicle, type RideInput } from './ride';
-import { Canal } from './canal';
 import { Landmarks } from './landmarks';
 import { Roads } from './roads';
 import { detailSetting } from './detail';
@@ -62,9 +61,6 @@ import { Mail } from './mail';
 import { Shift } from './shift';
 import { readMode } from './mode';
 import { readEra, areaInEra } from './era';
-import { HistoryScene } from './eras/history-scene';
-import { historyGround } from './eras/history-ground';
-import { HistoryBridgeApproaches } from './eras/history-approaches';
 import { FreeDrive, SceneryContact, quietInteriors, quietRelief, quietEndings, prepareExplore, exploreKey } from './explore';
 import { placesFor, homePlaces, churchPlaces, westBayPlaces, areaPlaces } from './places';
 import { PlacesUI } from './places-ui';
@@ -214,6 +210,10 @@ const base = `${import.meta.env.BASE_URL}${AREA.base}`;
 const localJust = SITE.brand === 'just' && location.hostname === 'localhost';
 const offlinePageKey = __PUBLIC_APP__ && !localJust ? bindOfflineVersion(AREA.id) : '';
 const sidewalkDataReady = ERA.modern && params.get('sidewalks') !== '0' ? loadSidewalkData(AREA.id, base, LOW) : Promise.resolve(null);
+// The 1884 scene and the Canso canal have their own chunks. Only their era or area downloads them. They need no manifest,
+// so the download starts here, before the manifest read.
+const historyModules = ERA.id === '1884' ? early(Promise.all([import('./eras/history-ground'), import('./eras/history-approaches'), import('./eras/history-scene')])) : null;
+const canalModule = ERA.modern && AREA.canal ? early(import('./canal')) : null;
 const manifest = await loadAreaManifest<Manifest>(AREA, base).catch(error => {
   if (__PUBLIC_APP__ && error instanceof Error && error.name === 'GameUpdateRequired') return new Promise<never>(() => {});
   return areaScreen(error instanceof Error ? error.message : String(error));
@@ -526,6 +526,7 @@ if (ERA.modern && AREA.ptInfrastructure && !LOW) {
 const history = ERA.id === '1884' ? await (async () => {
   await terrain.readCover();
   const streams = streamsRead ? await streamsRead.take() as StreamFile : null;
+  const [{ historyGround }, { HistoryBridgeApproaches }, { HistoryScene }] = await historyModules!.take().catch(partFailed);
   const ground=await historyGround(manifest,base,roads.roads.filter(r=>r.bridge).flatMap(r=>r.pts.map(([x,z]):[number,number]=>[x+manifest.village[0],manifest.village[1]-z])));
   new HistoryBridgeApproaches(roads,terrain,ground).install(terrain);
   return new HistoryScene(terrain, roads, streams, roofSites(buildingList ?? []), ground);
@@ -741,7 +742,7 @@ const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as import('./mp/wire').RideKind, trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
   ground: (x, z) => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; } }) : null;
-const canal = ERA.modern && AREA.canal ? new Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
+const canal = canalModule ? new (await canalModule.take().catch(partFailed)).Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
 if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
 // Each solid site's contact row is written once, here. The registry (fleet sweeps, fleet driving and the quarry) adds
