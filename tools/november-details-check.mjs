@@ -151,7 +151,13 @@ for (const {a, b, side} of added) {
   }
   assert.equal(lot.surface(...world([616237, 5079352])), null, 'the slipway keeps its own surface');
   for (const source of WHARF_SOURCES.filter(s => s.area === 'judique')) {
-    for (const p of source.outline) assert.equal(lot.surface(...world(p)), null, 'the lot stays off the wharf');
+    for (const [i, [ae, an]] of source.outline.entries()) {
+      const [be, bn] = source.outline[(i + 1) % source.outline.length], steps = Math.ceil(Math.hypot(be - ae, bn - an) / .5);
+      for (let j = 0; j <= steps; j++) {
+        const p = [ae + (be - ae) * j / steps, an + (bn - an) * j / steps];
+        assert.equal(lot.surface(...world(p)), null, `the lot stays off the wharf edge at ${p}`);
+      }
+    }
   }
   const mapped = read(dir, 'buildings').buildings, copy = structuredClone(mapped);
   const art = baxtersCoveBuildingArt(mapped);

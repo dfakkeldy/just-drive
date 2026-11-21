@@ -19,7 +19,7 @@ const VILLAGE_DRIVE: Point[] = [
 ];
 
 // Baxters Cove harbour (Judique), 21 Nov 2026 dash cam: open gravel from the wharf heads to the long gear shed's lot
-// wall, and south past the white shed. Its feathered edge stays 2 m off the wharf outlines, and it leaves out the
+// wall, and south past the white shed. Its feathered edge stays clear of the wharf outlines, and it leaves out the
 // slipway and the grass round the gambrel shed.
 export const BAXTERS_COVE_LOT: readonly Point[] = [
   [616228, 5079318], [616284, 5079318], [616290, 5079322], [616278, 5079332], [616268.3, 5079351.6],
