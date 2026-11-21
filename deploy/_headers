@@ -30,6 +30,10 @@
   Content-Type: model/gltf-binary
 /app.js
   Cache-Control: no-cache
+/chunks/*
+  Cache-Control: public, max-age=31536000, immutable
+/offline/chunks/*
+  Cache-Control: public, max-age=31536000, immutable
 /version-just.json
   Cache-Control: no-store
 /manifest-just.webmanifest

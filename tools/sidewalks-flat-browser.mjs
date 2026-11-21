@@ -1,6 +1,6 @@
 // Real flat SITE command and bytes, served without Vite transforms. Audit mode is collection, not a release PASS.
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,existsSync,unlinkSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,existsSync,unlinkSync,readdirSync} from 'node:fs';
 import {resolve,extname} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createServer} from 'node:http';
@@ -10,7 +10,7 @@ import {cdp,cdpFetch,sleep} from './cdp.mjs';
 const root=resolve(import.meta.dirname,'..'),gate=process.env.SIDEWALK_FLAT_GATE==='1',port=process.env.CDP_PORT;
 let [out]=process.argv.slice(2);if(out===process.env.MMM_CHECK_OUT){out=mkdtempSync(resolve(root,'data/work/checks/checks-sidewalks-flat-'));console.log('Evidence kept at '+out);}mkdirSync(out,{recursive:true});
 const sha=b=>createHash('sha256').update(b).digest('hex'),run=(cmd,args,options={})=>execFileSync(cmd,args,{cwd:root,stdio:'pipe',maxBuffer:32*1024*1024,...options});
-const report={gate,method:'Exact build_site.sh Vite command (MMM_PUBLIC=1,VITE_MP=1), scratch ARTIFACT_OUT/SITE_OUT; unmodified app.js served with real published markup and read-only public land; no PWA inventory claim',builds:[],pages:[]},save=()=>writeFileSync(out+'/flat-audit.json',JSON.stringify(report,null,2)+'\n');
+const report={gate,method:'Exact build_site.sh Vite command (MMM_PUBLIC=1,VITE_MP=1), scratch ARTIFACT_OUT/SITE_OUT; unmodified app.js and chunks served with real published markup and read-only public land; no PWA inventory claim',builds:[],pages:[]},save=()=>writeFileSync(out+'/flat-audit.json',JSON.stringify(report,null,2)+'\n');
 const roles=gate||process.env.SIDEWALK_FLAT_WORKING_ONLY==='1'?[['working',null]]:[...(process.env.SIDEWALK_REVIEW_REPLAYS==='1'?[['main0e','0e798a9fa5f50d92f38558726c89b9747fc5ebf0'],['b7','b7a712986fe2dd06f806abe7d2416dfd1c7c9be8']]:[]),['working',null]],trees=[];
 let server,selected;
 try{
@@ -20,7 +20,9 @@ try{
   const dest=resolve(out,'build-'+role);mkdirSync(dest,{recursive:true});
   const env={...process.env,MMM_PUBLIC:'1',VITE_MP:'1',ARTIFACT_OUT:dest,SITE_OUT:dest};delete env.MMM_MUTATION;
   const log=run('npx',['--no-install','vite','build','-c','vite.artifact.config.ts'],{cwd:tree+'/web',env});writeFileSync(out+'/build-'+role+'.log',log);
-  const bytes=readFileSync(dest+'/app.js');report.builds.push({role,ref:ref??'working tree at '+run('git',['rev-parse','HEAD']).toString().trim(),dest,appBytes:bytes.length,gzipBytes:gzipSync(bytes,{level:9}).length,sha256:sha(bytes)});save();
+  // The published script is app.js and its chunks (web/area-chunks-build.ts); a build from before the split has none.
+  const bytes=readFileSync(dest+'/app.js'),chunkDir=dest+'/chunks',chunks=Object.fromEntries((existsSync(chunkDir)?readdirSync(chunkDir):[]).filter(name=>name.endsWith('.js')).sort().map(name=>['/chunks/'+name,sha(readFileSync(chunkDir+'/'+name))]));
+  report.builds.push({role,ref:ref??'working tree at '+run('git',['rev-parse','HEAD']).toString().trim(),dest,appBytes:bytes.length,gzipBytes:gzipSync(bytes,{level:9}).length,sha256:sha(bytes),chunks});save();
  }
  const markup='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>'+readFileSync(root+'/artifact/page.html','utf8')+'</body></html>';
  const mime={'.js':'application/javascript','.json':'application/json','.html':'text/html','.png':'image/png','.bin':'application/octet-stream','.glb':'model/gltf-binary','.css':'text/css'};
@@ -35,12 +37,12 @@ try{
  const poses={mabou:'624450,5103340,55',porthood:'613770,5096500,0',pointtupper:'628180,5052820,130'};
  for(const build of report.builds){selected=build;
   for(const area of Object.keys(poses))for(const low of [false,true]){
-   const tab=await(await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();let c,appRequest,loader,loaded=false;
+   const tab=await(await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();let c,appRequest,loader;const chunkRequests=new Map(),finished=new Set();
    try{
     c=await cdp(tab.webSocketDebuggerUrl,{onEvent:e=>{
      if(e.method==='Page.frameNavigated'&&!e.params.frame.parentId)loader=e.params.frame.loaderId;
-     if(e.method==='Network.responseReceived'&&new URL(e.params.response.url).pathname==='/app.js')appRequest=e.params.requestId;
-     if(e.method==='Network.loadingFinished'&&e.params.requestId===appRequest)loaded=true;
+     if(e.method==='Network.responseReceived'){const path=new URL(e.params.response.url).pathname;if(path==='/app.js')appRequest=e.params.requestId;else if(path.startsWith('/chunks/'))chunkRequests.set(path,e.params.requestId);}
+     if(e.method==='Network.loadingFinished')finished.add(e.params.requestId);
     }});
     await c.send('Page.enable');if(!gate)await c.send('Runtime.disable'); // Audit records expected broken pages; the release gate keeps fatal transport errors.
     await c.send('Network.enable',{maxTotalBufferSize:64*1024*1024,maxResourceBufferSize:24*1024*1024});await c.send('Network.setCacheDisabled',{cacheDisabled:true});
@@ -48,8 +50,14 @@ try{
     await c.send('Page.addScriptToEvaluateOnNewDocument',{source:'globalThis.__flatErrors=[];addEventListener("error",e=>__flatErrors.push(e.message));addEventListener("unhandledrejection",e=>__flatErrors.push(e.reason?.stack??String(e.reason)));'});
     const nav=await c.send('Page.navigate',{url:`${origin}/?test=1&area=${area}&at=${poses[area]}&mode=explore&q=${low?'low':'high'}&radio=0&still=1&hud=0&shadows=1`});let state={ready:false,errors:[]};const end=Date.now()+120000;
     while(Date.now()<end){await sleep(100);if(loader!==nav.result.loaderId)continue;const r=await c.send('Runtime.evaluate',{expression:'({ready:document.documentElement?.dataset.mmmReady==="true",errors:globalThis.__flatErrors??[]})',returnByValue:true});state=r.result.result.value;if(state.ready||state.errors.length)break;}
-    for(let i=0;i<50&&!loaded;i++)await sleep(100);assert.ok(loaded,'real app.js downloaded');const body=await c.send('Network.getResponseBody',{requestId:appRequest});assert.ok(body.result,JSON.stringify(body.error));const bytes=body.result.base64Encoded?Buffer.from(body.result.body,'base64'):Buffer.from(body.result.body);assert.equal(sha(bytes),build.sha256,'browser receives exact unmodified SITE app.js');
-    const row={role:build.role,area,low,...state,verdict:state.ready&&!state.errors.length?'PASS':'FAIL'};report.pages.push(row);save();console.log('FLAT OBSERVATION',JSON.stringify(row));
+    const received=async requestId=>{for(let i=0;i<50&&!finished.has(requestId);i++)await sleep(100);if(!finished.has(requestId))return null;const body=await c.send('Network.getResponseBody',{requestId});assert.ok(body.result,JSON.stringify(body.error));return sha(body.result.base64Encoded?Buffer.from(body.result.body,'base64'):Buffer.from(body.result.body));};
+    const appHash=appRequest?await received(appRequest):null;assert.ok(appHash,'real app.js downloaded');assert.equal(appHash,build.sha256,'browser receives exact unmodified SITE app.js');
+    // Every chunk the page fetched is the exact SITE file, and a split build always fetches its core chunk.
+    const core=Object.keys(build.chunks).filter(path=>/^\/chunks\/core-[^/]+\.js$/.test(path));assert.ok(core.length===(Object.keys(build.chunks).length?1:0),'a split build has exactly one core chunk');
+    if(core.length)assert.ok(chunkRequests.has(core[0])&&await received(chunkRequests.get(core[0])),'real core chunk downloaded');
+    const chunksSeen={},unfinished=[];for(const [path,requestId]of chunkRequests){assert.ok(path in build.chunks,'browser asks only for SITE chunks: '+path);const hash=await received(requestId);if(hash===null){unfinished.push(path);continue;}assert.equal(hash,build.chunks[path],'browser receives exact unmodified SITE '+path);chunksSeen[path]=hash;}
+    if(gate)assert.deepEqual(unfinished,[],'every chunk the page asked for arrives');
+    const row={role:build.role,area,low,chunks:Object.keys(chunksSeen),unfinished,...state,verdict:state.ready&&!state.errors.length?'PASS':'FAIL'};report.pages.push(row);save();console.log('FLAT OBSERVATION',JSON.stringify(row));
     if(gate){assert.equal(row.verdict,'PASS','flat SITE must boot without a page error');assert.ok(!c.logs.some(l=>/Sidewalk.*(?:unavailable|failed)/i.test(l)),'normal SITE has no sidewalk failure warning');}
    }finally{c?.close();await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`).catch(()=>{});}
   }
