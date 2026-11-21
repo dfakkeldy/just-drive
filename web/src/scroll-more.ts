@@ -1,5 +1,6 @@
 /** A scroll cue stays outside the content and leaves every control reachable. */
 export function scrollMore(scroller: HTMLElement, isShown: () => boolean, id: string, host: HTMLElement): void {
+  if (typeof getComputedStyle !== 'function' || typeof ResizeObserver !== 'function' || typeof MutationObserver !== 'function' || typeof requestAnimationFrame !== 'function') return;
   const band = Object.assign(document.createElement('div'), { id, className: 'scrollMore', textContent: 'More below ▾', hidden: true });
   band.setAttribute('aria-hidden', 'true'); host.append(band);
   const extra = Math.max(0, 36 - parseFloat(getComputedStyle(scroller).paddingBottom || '0'));

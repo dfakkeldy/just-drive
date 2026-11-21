@@ -43,7 +43,7 @@ export class Multiplayer {
   private peers: readonly import('./wire').PeerView[] = [];
   status = 'Looking for other drivers…';
   private readonly chip: HTMLElement | null;
-  private readonly gear = document.getElementById('gear');
+  private readonly gear: HTMLElement | null;
   private badge: HTMLElement | null = null;
   private unreadDot: HTMLElement | null = null;
   private newestChat = -Infinity;
@@ -78,7 +78,8 @@ export class Multiplayer {
     this.ghosts = new Ghosts({ ground: host.ground, low: host.low, label: host.label });
     host.scene.add(this.ghosts.group);
     this.chip = host.bare || host.touch ? null : document.body.appendChild(Object.assign(document.createElement('div'), { id: 'mpChip' }));
-    if (host.touch && !host.bare && this.gear) {
+    this.gear = host.touch && !host.bare ? document.getElementById('gear') : null;
+    if (this.gear) {
       this.badge = Object.assign(document.createElement('span'), { id: 'gearRoom', hidden: true });
       this.unreadDot = Object.assign(document.createElement('span'), { id: 'gearUnread', hidden: true });
       for (const e of [this.badge, this.unreadDot]) { e.setAttribute('aria-hidden', 'true'); this.gear.append(e); }
