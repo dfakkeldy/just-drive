@@ -134,7 +134,7 @@ import { Cemeteries } from './cemeteries';
 import { Stockpiles } from './stockpiles';
 import { HomeSite } from './home-site';
 import { PorchDog } from './porch-dog';
-import type { HandBuiltPlace } from './place';
+import { lazyPlaceRow, placeRow, placeSlots, sitesOf, type BuiltPlaces, type HandBuiltPlace, type PlaceRow } from './place';
 import { YardDogSite } from './yard-dog-site';
 import { YardDog } from './yard-dog';
 import { LotProps } from './lot-props';
@@ -408,8 +408,29 @@ if (novemberBuildings) clear.push(...novemberBuildings.clear);
 if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
-// The hand-built places' sites (place.ts), in the order of the places list below. Each clears its surveyed land.
-const placeSites = { home: homeSite, porch: porchSite, church: churchSite, village: villageSite, hawkesbury: hawkesburySite, mabouMain: mabouSite, maryville: maryvilleSite };
+// One row per hand-built place (place.ts): its site from above, and how to build it once the land and roads are ready
+// (below). The rows' order is the places list's order. A lazy row's import() is awaited just before its build. The site
+// lines stay apart: the building list reads four sites, the porch needs that list, and Maryville's module loads first.
+// The home and the porch house take the car, not the clock, so their slots wrap them; the porch's slot also turns its
+// dog and waits for it.
+let porchDog = null as PorchDog | null;   // the porch's build seats it; the cast keeps tsc from narrowing it to null below
+const lift = (metres: number) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres);
+const placeRows = {
+  home: placeRow(homeSite, site => new Home(site, terrain, lift),
+    home => ({ group: home.group, resolveSolids: car => home.resolveSolids(car), update: (view, _now, car) => home.update(view, car) })),
+  porch: placeRow(porchSite, site => { const porch = new PorchHouse(site, terrain, lift); porchDog = new PorchDog(LOW); porch.seat(porchDog.group); return porch; },
+    porch => ({ group: porch.group, resolveSolids: car => porch.resolveSolids(car),
+      update: (view, now, car, dt) => { porch.update(view, car); porchDog?.update(dt, car, now / 1000); },
+      get waiting() { return porch.waiting || porchDog?.state === 'loading'; } })),
+  church: lazyPlaceRow(churchSite, () => import('./church').catch(partFailed), (site, part) => new part.Church(site, terrain)),
+  village: lazyPlaceRow(villageSite, () => import('./judique-village').catch(partFailed), (site, part) => new part.JudiqueVillage(site, terrain, LOW)),
+  hawkesbury: lazyPlaceRow(hawkesburySite, () => import('./port-hawkesbury').catch(partFailed), (site, part) => new part.PortHawkesbury(site, terrain, LOW,
+    roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings)),
+  mabouMain: lazyPlaceRow(mabouSite, () => import('./mabou-main').catch(partFailed), (site, part) => new part.MabouMain(site, terrain, LOW, roads.roads)),
+  maryville: placeRow(maryvilleSite, site => new maryvilleFeature!.MaryvilleStore(site, terrain, LOW)),
+};
+// Each site clears its surveyed land.
+const placeSites = sitesOf(placeRows);
 for (const site of Object.values(placeSites)) if (site) clear.push(...site.clear);
 if (quarrySite) clear.push(...quarrySite.clear);
 // Modern Point Tupper only; airport=0 turns it off. The module (and its source extract) loads only here.
@@ -696,30 +717,15 @@ const night = nightShading ? new Night(nightShading, {
 if (night) scene.onBeforeRender = (r, _scene, view) => night.update(r, view);
 const yard = yardSite ? new Yard(yardSite, terrain, LOW) : null;
 if (yard) scene.add(yard.group);
-const home = homeSite ? new Home(homeSite, terrain, (metres) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres)) : null;
-const porch = porchSite ? new PorchHouse(porchSite, terrain, (metres) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres)) : null;
-const porchDog = porch ? new PorchDog(LOW) : null;
-if (porch && porchDog) porch.seat(porchDog.group);
-const church = churchSite ? new (await import('./church').catch(partFailed)).Church(churchSite, terrain) : null;
-const village = villageSite ? new (await import('./judique-village').catch(partFailed)).JudiqueVillage(villageSite, terrain, LOW) : null;
-const hawkesbury = hawkesburySite ? new (await import('./port-hawkesbury').catch(partFailed)).PortHawkesbury(hawkesburySite, terrain, LOW,
-  roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings) : null;
-const mabouMain = mabouSite ? new (await import('./mabou-main').catch(partFailed)).MabouMain(mabouSite, terrain, LOW, roads.roads) : null;
-const maryville = maryvilleFeature && maryvilleSite ? new maryvilleFeature.MaryvilleStore(maryvilleSite, terrain, LOW) : null;
-// One slot for each site above, in the same order. A slot keeps its name while its place is off, so the frame's update
-// list keeps the same entries. `dev` is what the dev tools see. The home and the porch house take the car, not the
-// clock, so they are wrapped; the porch's slot also turns its dog and waits for it.
-const places: Record<keyof typeof placeSites, { place: HandBuiltPlace | null; dev: object | null }> = {
-  home: { dev: home, place: home && { group: home.group, resolveSolids: car => home.resolveSolids(car), update: (view, _now, car) => home.update(view, car) } },
-  porch: { dev: porch, place: porch && { group: porch.group, resolveSolids: car => porch.resolveSolids(car),
-    update: (view, now, car, dt) => { porch.update(view, car); porchDog?.update(dt, car, now / 1000); },
-    get waiting() { return porch.waiting || porchDog?.state === 'loading'; } } },
-  church: { dev: church, place: church },
-  village: { dev: village, place: village },
-  hawkesbury: { dev: hawkesbury, place: hawkesbury },
-  mabouMain: { dev: mabouMain, place: mabouMain },
-  maryville: { dev: maryville, place: maryville },
-};
+// Build the places in the rows' order. A lazy row awaits its import() here, as before; the others add no wait.
+const builtPlaces = {} as BuiltPlaces<typeof placeRows>;
+for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown, object, unknown>][]) {
+  (builtPlaces as Record<string, object | null>)[name] = row.site ? row.build(row.site, row.load && await row.load()) : null;
+}
+const { hawkesbury, mabouMain } = builtPlaces;
+// One slot for each row. A slot keeps its name while its place is off, so the frame's update list keeps the same
+// entries. `dev` is what the dev tools see.
+const places = placeSlots(placeRows, builtPlaces);
 const handBuilt = Object.values(places);
 for (const { place } of handBuilt) if (place) scene.add(place.group);
 // The frame asks this; an index loop makes no array iterator.
