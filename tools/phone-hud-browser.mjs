@@ -7,13 +7,13 @@ import { cdp, cdpFetch } from './cdp.mjs';
 import { mpLayoutScript } from './mp-layout-fixture.mjs';
 const [out,first]=process.argv.slice(2), base=new URL(first).origin, port=process.env.CDP_PORT??'9568';
 mkdirSync(out,{recursive:true});
-const defaultSizes=[[844,390],[932,430],[1000,462],[390,844],[430,932],[375,553],[375,667],[390,664],[553,375],[667,375,true],[568,320],[640,360]];
+const defaultSizes=[[844,390],[932,430],[1000,462],[390,844],[430,932],[375,553],[375,667],[390,664],[553,375],[667,375,true],[568,320],[640,360],[320,568],[320,460],[280,653]];
 const wanted=(process.env.SIZES??'').trim().split(/\s+/).filter(Boolean);
 const sizeKey=([w,h,safe])=>`${w}x${h}${safe?'-safe':''}`;
 for(const name of wanted)assert.ok(defaultSizes.some(s=>sizeKey(s)===name),'unknown phone size '+name);
 const sizes=defaultSizes.filter(s=>!wanted.length||wanted.includes(sizeKey(s)));
-const ids=['phoneLine','hud','shiftHud','stopHint','miniMap','relief','radio','photoTag','gear','tcReset','tcView','tcHorn','tcTrack','tcBrake','tcGo','tcPull','cameraButton','mailButton','placesButton','bikeJump'];
-const controls=['gear','tcReset','tcView','tcHorn','tcSteer','tcBrake','tcGo','tcPull','cameraButton','mailButton','miniMapHead','relief','radio','placesButton'];
+const ids=['phoneLine','hud','shiftHud','stopHint','miniMap','relief','radio','photoTag','gear','pauseButton','droneButton','tcReset','tcView','tcHorn','tcTrack','tcBrake','tcGo','tcPull','cameraButton','mailButton','placesButton','bikeJump','savePictureButton'];
+const controls=['gear','pauseButton','droneButton','tcReset','tcView','tcHorn','tcSteer','tcBrake','tcGo','tcPull','cameraButton','mailButton','miniMapHead','relief','radio','placesButton','savePictureButton'];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const overlaps=(a,b,epsilon=1)=>Math.min(a.right,b.right)>Math.max(a.left,b.left)+epsilon && Math.min(a.bottom,b.bottom)>Math.max(a.top,b.top)+epsilon;
 const evidence=[],failures=[];
@@ -35,10 +35,11 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
     const all=await boxes(), list=all.filter(b=>ids.includes(b.id)), buttons=all.filter(b=>controls.includes(b.id));
     for(const b of list) assert.ok(b.left>=safe.left-1&&b.top>=safe.top-1&&b.right<=width-safe.right+1&&b.bottom<=height-safe.bottom+1,`${b.id} outside viewport`);
     for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++)assert.ok(!overlaps(list[i],list[j]),`${list[i].id} overlaps ${list[j].id}`);
-    for(const id of ['tcTrack','tcBrake','tcGo','gear','tcReset','tcView','tcHorn'])assert.ok(list.some(b=>b.id===id),'missing '+id);
+    for(const id of ['tcTrack','tcBrake','tcGo','gear','pauseButton','droneButton','tcReset','tcView','tcHorn'])assert.ok(list.some(b=>b.id===id),'missing '+id);
     for(const b of buttons){const minimum=b.id==='mailButton'?64:56;assert.ok(b.width>=minimum&&b.height>=minimum,`${b.id} too small`);}
     assert.deepEqual(await read(`(${JSON.stringify(buttons.map(b=>b.id))}).filter(id=>{const e=document.getElementById(id),b=e.getBoundingClientRect(),at=document.elementFromPoint((b.left+b.right)/2,(b.top+b.bottom)/2);return !(at===e||e.contains(at));})`),[],'control centres receive touches');
     if(name==='mail') {
+      assert.ok(!list.some(b=>b.id==='savePictureButton'),'mail keeps its own camera');
       const m=list.find(b=>b.id==='mailButton'), c=list.find(b=>b.id==='cameraButton'), go=list.find(b=>b.id==='tcGo');
       assert.ok(m&&c&&go,'MAIL, CAMERA and GO present'); assert.ok(m.width>=64&&m.height>=64&&c.width>=64&&c.height>=64);
       assert.ok(m.right>=width-safe.right-24&&m.bottom<=go.top&&go.top-m.bottom<=16,'MAIL directly above GO at right edge');
@@ -53,12 +54,15 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       assert.ok(!list.some(b=>b.id==='hud'||b.id==='shiftHud'),'old stacked status hidden');
     } else {
       assert.ok(!list.some(b=>b.id==='mailButton'||b.id==='cameraButton'||b.id==='shiftHud'||b.id==='relief'),'drive mode hides mail functions');
+      assert.ok(list.some(b=>b.id==='savePictureButton'),'drive mode has a save picture button');
+      assert.ok(list.find(b=>b.id==='hud')?.width>=52,'drive status keeps its width');
       assert.ok(await read(`document.body.classList.contains('compactPhone')`),'shared compact free-drive grid');
       if(name.endsWith('bike')){assert.equal(await read(`document.body.classList.contains('bikeMode')`),true);assert.ok(list.some(b=>b.id==='tcPull'),'bike pull retained');}
     }
     const clearBand=width>height ? {left:width*.25,right:width*.75,top:height*.22,bottom:height*.78}
       : {left:width*.25,right:width*.75,top:height*.30,bottom:height*.72};
-    for(const b of list)assert.ok(!overlaps(b,clearBand,.01),`${b.id} enters ${width>height?'landscape':'portrait'} clear band`);
+    // Chrome rounds rendered positions to 1/64 px. Allow that rounding at the band edge.
+    for(const b of list)assert.ok(!overlaps(b,clearBand,1/64),`${b.id} enters ${width>height?'landscape':'portrait'} clear band`);
     evidence.push({name,width,height,insets:safe,state,multiplayer:true,rectangles:all});
   };
   try {
@@ -90,12 +94,24 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       const before=(await boxes()).find(b=>b.id==='phoneLine');
       // Render fixture only: physics/activation is checked by phone-speed-cap. Feed the real
       // frame and PhoneMailHud a held-cap reading so every viewport paints the longest marker.
-      await read(`(()=>{const v=mmm.vehicle,update=v.update;window.restoreCapRender=()=>{delete v.activeTouchSpeedLimit;delete v.update;};Object.defineProperty(v,'activeTouchSpeedLimit',{value:100/3.6,configurable:true});v.update=function(...args){update.apply(this,args);this.speed=100/3.6;};})()`);
+      await read(`(async()=>{
+        const {PhoneMailHud}=await import('/src/phone-mail-hud.ts');
+        const {update}=PhoneMailHud.prototype;
+        window.restoreCapRender=()=>{PhoneMailHud.prototype.update=update;};
+        PhoneMailHud.prototype.update=function(shift,vehicle,driving){
+          // The parked-start loop restores the real vehicle's speed before the HUD reads it.
+          const displayVehicle=Object.create(vehicle,{speed:{value:100/3.6},activeTouchSpeedLimit:{value:100/3.6}});
+          update.call(this,shift,displayVehicle,driving);
+        };
+      })()`);
       await until(`document.getElementById('phoneLine').textContent.startsWith('100 km/h ▸ LIMIT 100')`);
       const marked=(await boxes()).find(b=>b.id==='phoneLine');
       assert.equal(marked.width,before.width,'marker does not widen status');
       assert.equal(marked.height,before.height,'marker does not increase status height');
-      assert.equal(await read(`(()=>{const e=document.getElementById('phoneLine'),r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,e.textContent.indexOf('LIMIT 100')+9);return r.getBoundingClientRect().right<=e.getBoundingClientRect().right-5;})()`),true,'full speed and LIMIT marker paint before ellipsis');
+      // At the 320x460 viewport floor DRONE shares the toolbar and the longer status may ellipsize.
+      if(width!==320||height!==460) {
+        assert.equal(await read(`(()=>{const e=document.getElementById('phoneLine'),r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,e.textContent.indexOf('LIMIT 100')+9);return r.getBoundingClientRect().right<=e.getBoundingClientRect().right-5;})()`),true,'full speed and LIMIT marker paint before ellipsis');
+      }
       await inspect('held limit render fixture');await shot('-limit');
       await read('restoreCapRender();delete window.restoreCapRender');
       await until(`!document.getElementById('phoneLine').textContent.includes('LIMIT')`);
@@ -133,9 +149,11 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       await read(`document.getElementById('gear').click()`);
       assert.equal(await read(`(()=>{const s=document.querySelector('#settings .mpControl');if(!s)return false;const toggle=s.querySelector('.mpToggle');toggle.scrollIntoView({block:'center'});const r=toggle.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return toggle.getAttribute('aria-checked')==='true'&&(at===toggle||toggle.contains(at));})()`),true,'multiplayer controls shown and reachable');
       await shot('-multiplayer');await read(`document.getElementById('gear').click()`);
+      if(name!=='mail')await until(`!document.getElementById('savePictureButton').hidden`);
       await inspect('multiplayer settings closed');
     }
-    if(width<height) {
+    // The 320x460 case represents a short browser viewport without a notch.
+    if(width<height&&height>460) {
       await read(`document.documentElement.style.setProperty('--test-safe-top','47px');document.documentElement.style.setProperty('--test-safe-bottom','34px')`);
       safe.top=47; safe.bottom=34;
       const browserTop=await read(`document.getElementById('phoneTop').getBoundingClientRect().top`);

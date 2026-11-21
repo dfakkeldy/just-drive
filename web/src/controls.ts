@@ -30,9 +30,9 @@ export const TOUCH: [string, string][] = [
 
 /** Just driving (no mail) on a keyboard and on a touch screen: the mail rows out, the driving rows in. */
 export const DRIVING_KEYS: [string, string][] = KEYS.filter(([key]) => !['M or E', 'C', 'B', 'Enter'].includes(key))
-  .concat([['Space', 'Handbrake. Pull it in a turn at speed to slide.'], ['L / M', 'Places / the map (today).']]);
+  .concat([['Space', 'Handbrake. Pull it in a turn at speed to slide.'], ['L / M', 'Places / the map (today).'], ['O', 'Save a picture.']]);
 export const DRIVING_TOUCH: [string, string][] = TOUCH.filter(([key]) => !['MAIL', 'CAMERA', 'BLADDER', '\u2699'].includes(key))
-  .concat([['PLACES', 'Choose a place, or the map.'], ['\u2699', 'Settings.']]);
+  .concat([['PLACES', 'Choose a place, or the map.'], ['Save picture', 'Save a picture.'], ['\u2699', 'Settings.']]);
 
 /**
  * A controller with the standard layout (gamepad.ts, gamepad-rules.ts). The title card shows these rows in place of

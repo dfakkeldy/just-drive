@@ -1,7 +1,7 @@
 /** One planner owns control rectangles in both orientations, including safe areas and short toolbars. */
 export interface ControlRect { left: number; top: number; width: number; height: number }
 export interface PhoneControlView { width: number; height: number; left: number; right: number; bottom: number; top?: number; hintHeight?: number; mail: boolean; pull: boolean }
-const IDS = ['tcSteer', 'tcBrake', 'tcGo', 'tcPull', 'tcReset', 'tcView', 'tcHorn', 'cameraButton', 'mailButton', 'droneButton'] as const;
+const IDS = ['tcSteer', 'tcBrake', 'tcGo', 'tcPull', 'tcReset', 'tcView', 'tcHorn', 'cameraButton', 'mailButton', 'droneButton', 'savePictureButton'] as const;
 export function portraitControls(v: PhoneControlView): Record<string, ControlRect> {
   const result: Record<string, ControlRect> = {}, gap = 6, left = v.left + 8, right = v.width - v.right - 8;
   const bottom = v.height - v.bottom - 8, action = v.mail ? 72 : 56;
@@ -21,12 +21,17 @@ export function portraitControls(v: PhoneControlView): Record<string, ControlRec
     put('cameraButton', right - 134, rowBottom - 64, 64, 64);
     for (const id of ['tcHorn', 'tcView', 'tcReset']) { put(id, left, rowBottom - 56, 56, 56); rowBottom -= 62; }
   } else if (edges) {
-    // A very short safe-area viewport cannot fit two full rows. Keep a right-edge stack outside the band.
+    // Keep a stack outside the band. Explore leaves the right edge free for Drone and Save picture.
     if (v.mail) {
       put('mailButton', right - 64, rowBottom - 64, 64, 64); rowBottom -= 70;
       put('cameraButton', right - 64, rowBottom - 64, 64, 64); rowBottom -= 70;
     }
-    for (const id of ['tcHorn', 'tcView', 'tcReset']) { put(id, right - 56, rowBottom - 56, 56, 56); rowBottom -= 62; }
+    const pictureBottom = (v.top ?? 6) + 3 * 56 + 2 * gap;
+    for (const id of ['tcHorn', 'tcView', 'tcReset']) {
+      const top = rowBottom - 56;
+      put(id, !v.mail && top < pictureBottom + gap ? left : right - 56, top, 56, 56);
+      rowBottom -= 62;
+    }
   } else {
     if (v.mail) { put('mailButton', right - 72, rowBottom - 72, 72, 72); put('cameraButton', right - 142, rowBottom - 64, 64, 64); }
     for (const [i, id] of ['tcReset', 'tcView', 'tcHorn'].entries()) put(id, left + i * 62, rowBottom - 56, 56, 56);
@@ -88,12 +93,19 @@ export function landscapeControls(v: PhoneControlView): Record<string, ControlRe
 }
 
 export function phoneControls(v: PhoneControlView): Record<string, ControlRect> {
-  const landscape = v.width > v.height, result = landscape ? landscapeControls(v) : portraitControls(v), gap = 6;
-  // The top row is the status line's. The camera drone sits just under the row's right end, over the road, wherever
-  // that spot is clear of every other control. Only where a short screen's right-edge stack reaches it does DRONE stay
-  // in the top row (its place in the page's flow) beside the gear.
+  const landscape = v.width > v.height, result = landscape ? landscapeControls(v) : portraitControls(v);
   const right = v.width - v.right - 8, top = landscape ? result.tcReset.top : v.top ?? 6;
-  const drone = { left: right - 56, top: top + 62, width: 56, height: 56 }, e = 0.01;   // e: rounding (5.6 + 56 vs 67.6 - 6)
+  const gap = !v.mail && landscape && v.height < 320 ? 2 : 6;
+  const drone = { left: right - 56, top: top + 56 + gap, width: 56, height: 56 };
+  if (!v.mail) {
+    // This right-edge stack leaves room for the status, Places, Settings and Pause in the top row.
+    // A short landscape view uses a 2 px gap so both buttons fit above GO.
+    result.droneButton = drone;
+    result.savePictureButton = { ...drone, top: drone.top + drone.height + gap };
+    return result;
+  }
+  // In mail mode DRONE stays in the top row when the right-edge mail actions need its spot.
+  const e = 0.01;   // rounding (5.6 + 56 vs 67.6 - 6)
   if (Object.values(result).every(r => r.left >= drone.left + drone.width + gap - e || r.left + r.width <= drone.left - gap + e
     || r.top >= drone.top + drone.height + gap - e || r.top + r.height <= drone.top - gap + e)) result.droneButton = drone;
   return result;
@@ -110,7 +122,8 @@ export function placePhoneControls(layout: Record<string, ControlRect> | null, f
   for (const id of IDS) {
     const element = find(id); if (!element) continue;
     const box = layout?.[id];
-    if (box) Object.assign(element.style, { position: 'absolute', left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+    if (box) Object.assign(element.style, { position: id === 'savePictureButton' ? 'fixed' : 'absolute',
+      left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
     else for (const name of ['position', 'left', 'top', 'width', 'height']) element.style.removeProperty(name);
   }
 }

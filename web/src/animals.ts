@@ -364,7 +364,7 @@ export class Animals {
   }
   private time = 0;
   private flash = 0;
-  private readonly horn: THREE.Sprite;
+  readonly horn: THREE.Sprite;
   private readonly demo = new URLSearchParams(location.search).has('demo');
   private readonly requested = (() => { const key = new URLSearchParams(location.search).get('animal'); return key === 'spaniel' ? 'bernese' : key; })();
   private readonly hoof = new THREE.Vector3();
