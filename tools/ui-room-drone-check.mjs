@@ -201,7 +201,8 @@ assert.equal(body.classList.contains('droneStack'),false);
   assert.equal(mapHeadBtn.getAttribute('aria-expanded'),String(!folded),`${w}x${h}: aria-expanded matches actual canvas visibility`);
   // Mirror CSS Media Queries Level 4: orientation:landscape is strictly width > height.
   const isStacked=stacked||!(w>h&&h<=450);
-  const mapL=isStacked?10:10+col+8,mapR=mapL+col,mapT=isStacked?20+hud.rect.height:10;
+  const mapW=folded?col:parseFloat(document.getElementById('miniMapCanvas').style.width)+2;
+  const mapL=isStacked?10:10+col+8,mapR=mapL+mapW,mapT=isStacked?20+hud.rect.height:10;
   const mapB=mapT+28+(folded?0:parseFloat(document.getElementById('miniMapCanvas').style.width));
   assert.ok(mapR<=pauseLeft-8,`${w}x${h}: map clears Pause (right=${mapR}, pause=${pauseLeft})`);
   const stick=Math.min(132,w*.34,h*.42),labelTop=h-14-stick-18;
@@ -226,6 +227,20 @@ assert.equal(body.classList.contains('droneStack'),false);
  assert.equal(root.classList.contains('enlarged'),false,'second tap closes enlarged view');
  assert.equal(root.classList.contains('folded'),true,'closing enlarged view returns to compact header');
  assert.equal(mapHeadBtn.getAttribute('aria-expanded'),'false');
+ // Opening compact overlay at 360x320, resizing to 844x390, then closing it must not overwrite the fold preference.
+ {
+  let savedPref='open';
+  const prevSet=localStorage.setItem;
+  localStorage.setItem=(key,value)=>{if(key==='mmm.map')savedPref=value;};
+  mapHeadBtn.listeners.click();
+  assert.equal(root.classList.contains('enlarged'),true);
+  innerWidth=844;innerHeight=390;resize();
+  mapHeadBtn.listeners.click();
+  assert.equal(root.classList.contains('enlarged'),false,'tapping header after resize closes compact overlay');
+  assert.equal(root.classList.contains('folded'),false,'closing compact overlay after resize restores inline open map');
+  assert.equal(savedPref,'open','closing compact overlay after resize keeps saved fold preference');
+  localStorage.setItem=prevSet;
+ }
  const landscapeStacked=assertClear(400,390,170);
  assert.equal(landscapeStacked.stacked,true,'400x390 landscape stacks when two columns are too narrow');
  assert.equal(landscapeStacked.folded,false,'400x390 fits an open stacked map above the sticks');
@@ -235,6 +250,24 @@ assert.equal(body.classList.contains('droneStack'),false);
  hud.rect={left:10,right:122,top:10,bottom:124,width:112,height:114};
  notifyResize(hud);
  assertClear(360,440,220,false);
+ // Width-dependent HUD text wrapping at 360x420 must settle with zero oscillation.
+ {
+  const heightForCol=c=>c<95?180:110;
+  hud.rect={left:10,right:116,top:10,bottom:120,width:106,height:110};
+  let prev=assertClear(360,420,220);
+  let settled=false;
+  for(let step=0;step<6;step++){
+   const nextH=heightForCol(prev.col);
+   if(nextH===hud.rect.height&&step>0){settled=true;break;}
+   hud.rect={left:10,right:10+prev.col,top:10,bottom:10+nextH,width:prev.col,height:nextH};
+   notifyResize(hud);
+   const next=assertClear(360,420,220,false);
+   assert.equal(next.col,prev.col,'HUD column width stays stable during height-driven refit');
+   if(next.col===prev.col&&next.folded===prev.folded&&next.mapB===prev.mapB){settled=true;break;}
+   prev=next;
+  }
+  assert.equal(settled,true,'360x420 width-dependent HUD resize settles without oscillation');
+ }
  pause.remove();hud.remove();innerWidth=844;innerHeight=390;resize();
  assert.equal(body.classList.contains('droneStack'),false);
  assert.equal(root.classList.contains('folded'),false);

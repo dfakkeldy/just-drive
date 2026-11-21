@@ -54,6 +54,7 @@ export class MiniMap {
   private large = false;
   private flight = false;
   private tight = false;
+  private largeFromTight = false;
   private hudObserver: ResizeObserver | null = null;
   private flightHome: Comment | null = null;
   private flightFolded = false;
@@ -122,9 +123,11 @@ export class MiniMap {
     this.syncFold();
     head.addEventListener('click', () => {
       if (this.large) {
+        const fromTight = this.largeFromTight;
         this.setLarge(false);
-        if (this.tight) return;
+        if (fromTight || this.tight) return;
       } else if (this.tight) {
+        this.largeFromTight = true;
         this.setLarge(true);
         return;
       }
@@ -176,7 +179,9 @@ export class MiniMap {
 
   private setLarge(on: boolean): void {
     if (this.large === on) return;
-    this.large = on; this.root.classList.toggle('enlarged', on);
+    this.large = on;
+    if (!on) this.largeFromTight = false;
+    this.root.classList.toggle('enlarged', on);
     const button = this.root.querySelector<HTMLButtonElement>('#miniMapLarge')!;
     button.setAttribute('aria-pressed', String(on)); button.setAttribute('aria-label', on ? 'Shrink map' : 'Enlarge map');
     if (on) {
@@ -226,35 +231,39 @@ export class MiniMap {
         ? matchMedia('(orientation: landscape) and (max-height: 450px)').matches
         : innerWidth > innerHeight && innerHeight <= 450;
       const singleW = Math.min(156, Math.floor(rightLimit - leftEdge - 10));
-      let placed = false;
+      let placed = false, hudCol = 158;
       if (landscape) {
         const pairedW = Math.min(156, Math.floor((rightLimit - leftEdge - 16) / 2) - 2);
         if (pairedW >= 96) {
           let pairedSize = Math.min(pairedW, Math.floor(belowLimit(leftEdge + pairedW + 10, leftEdge + pairedW * 2 + 12) - sideTop - 28));
           if (pairedSize >= 96) pairedSize = Math.min(pairedSize, Math.floor(belowLimit(leftEdge + pairedSize + 10, leftEdge + pairedSize * 2 + 12) - sideTop - 28));
-          if (pairedSize >= 96) { flightSize = pairedSize; placed = true; }
+          if (pairedSize >= 96) { flightSize = pairedSize; hudCol = pairedSize + 2; placed = true; }
         }
       }
       if (!placed) {
         stacked = landscape;
         const clearReturnW = Math.min(singleW, Math.floor(returnLeft - 8 - leftEdge - 2));
+        // Keep the HUD column width independent of measured HUD height so height-driven refits cannot oscillate.
+        const stackW = Math.max(72, innerHeight <= 450 && clearReturnW >= 96 ? clearReturnW : singleW);
+        hudCol = stackW + 2;
         const tryWidth = (w: number) => w >= 56 ? Math.min(w, Math.floor(belowLimit(leftEdge, leftEdge + w + 2) - stackTop - 28)) : -1;
-        const bestStack = Math.max(tryWidth(singleW), tryWidth(clearReturnW));
+        const bestStack = Math.max(tryWidth(stackW), tryWidth(clearReturnW));
         if (bestStack >= 56) {
           flightSize = bestStack;
         } else {
           tight = true;
-          const headerW = Math.max(72, Math.min(singleW, clearReturnW >= 72 ? clearReturnW : singleW));
+          const headerW = Math.max(72, Math.min(stackW, clearReturnW >= 72 ? clearReturnW : stackW));
           const headerBottom = stackTop + 28;
-          if (landscape && headerBottom > belowLimit(leftEdge, leftEdge + headerW + 2)) {
+          const sideSpace = Math.floor(rightLimit - leftEdge - hudCol - 18);
+          if (landscape && sideSpace >= 56 && headerBottom > belowLimit(leftEdge, leftEdge + headerW + 2)) {
             stacked = false;
-            flightSize = Math.max(56, Math.min(156, Math.floor((rightLimit - leftEdge - 16) / 2) - 2));
+            flightSize = Math.min(headerW, sideSpace);
           } else {
             flightSize = headerW;
           }
         }
       }
-      document.body.style.setProperty('--droneCol', `${flightSize + 2}px`);
+      document.body.style.setProperty('--droneCol', `${hudCol}px`);
     }
     this.tight = tight;
     document.body.classList.toggle('droneStack', stacked);
