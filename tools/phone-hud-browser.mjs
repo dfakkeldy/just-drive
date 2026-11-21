@@ -61,7 +61,8 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
     }
     const clearBand=width>height ? {left:width*.25,right:width*.75,top:height*.22,bottom:height*.78}
       : {left:width*.25,right:width*.75,top:height*.30,bottom:height*.72};
-    for(const b of list)assert.ok(!overlaps(b,clearBand,.01),`${b.id} enters ${width>height?'landscape':'portrait'} clear band`);
+    // Chrome rounds rendered positions to 1/64 px. Allow that rounding at the band edge.
+    for(const b of list)assert.ok(!overlaps(b,clearBand,1/64),`${b.id} enters ${width>height?'landscape':'portrait'} clear band`);
     evidence.push({name,width,height,insets:safe,state,multiplayer:true,rectangles:all});
   };
   try {
