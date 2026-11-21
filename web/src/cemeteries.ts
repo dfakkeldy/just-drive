@@ -1,11 +1,36 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { TONES } from './cemetery-graves';
 import type { Terrain, Manifest } from './terrain';
 import type { Place } from './places';
 import { pushOut, type Pushable, type Solid } from './parked';
 import { HEDGE_THICK, cemeteryPlaces, distance, drawnSolids, edgeKind, fenceSegments, inside, stoneLayout, type Cemetery, type CemeteryFile, type Point } from './cemetery-rules';
 
-/** Anonymous decorative shapes. These are not surveyed graves or burial records. */
+/** Anonymous shapes: no text and no textures. Kinds 0 to 2 are decorative; 3 to 7 are unit shapes scaled to a measured marker. */
 export function stoneGeometry(kind: number, low: boolean): THREE.BufferGeometry {
+  const block = (w: number, h: number, t: number, y = 0) => new THREE.BoxGeometry(w, h, t).translate(0, y + h / 2, 0);
+  const slab = (outline: [number, number][]) => {
+    const shape = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x, y)));
+    return new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false }).translate(0, 0, -0.5);
+  };
+  if (kind === 3) {                                            // rounded tablet: an elliptic head on straight sides
+    if (low) return block(1, 0.88, 1);
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.5, 0); shape.lineTo(0.5, 0); shape.lineTo(0.5, 0.75);
+    shape.absellipse(0, 0.75, 0.5, 0.25, 0, Math.PI, false); shape.lineTo(-0.5, 0);
+    return new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 5 }).translate(0, 0, -0.5);
+  }
+  if (kind === 4) return low ? block(1, 0.9, 1)                // shouldered tablet: square shoulders and a low peak
+    : slab([[-0.5, 0], [0.5, 0], [0.5, 0.8], [0.36, 0.86], [0.22, 0.88], [0, 1], [-0.22, 0.88], [-0.36, 0.86], [-0.5, 0.8]]);
+  if (kind === 5 || kind === 6) {
+    const parts = kind === 5
+      ? [block(1, 0.28, 1), block(0.76, 0.58, 0.76, 0.28), block(0.84, 0.14, 0.84, 0.86)]          // pedestal: base, die and cap
+      : [block(1, 0.22, 1), block(0.7, 0.2, 0.7, 0.22), block(0.3, 0.58, 0.32, 0.42), block(0.86, 0.09, 0.32, 0.8), block(0.3, 0.2, 0.32, 0.8)];   // cross on a stepped base
+    const merged = mergeGeometries(low ? parts.slice(0, kind === 5 ? 2 : 4) : parts);
+    if (!merged) throw new Error('stone parts must merge');
+    return merged;
+  }
+  if (kind === 7) return block(1, 1, 1);                       // small post
   if (kind === 2) return new THREE.BoxGeometry(0.7, 0.32, 0.42).translate(0, 0.16, 0);
   if (kind === 0 || low) return new THREE.BoxGeometry(0.62, 0.85, 0.18).translate(0, 0.425, 0);
   const shape = new THREE.Shape();
@@ -14,7 +39,7 @@ export function stoneGeometry(kind: number, low: boolean): THREE.BufferGeometry 
   return new THREE.ExtrudeGeometry(shape, { depth: 0.18, bevelEnabled: false, curveSegments: 4 }).translate(0, 0, -0.09);
 }
 interface Fitted {
-  mesh: THREE.InstancedMesh; samples: { a: Point; b?: Point; turn?: number }[];
+  mesh: THREE.InstancedMesh; samples: { a: Point; b?: Point; turn?: number; size?: [number, number, number] }[];
   /** The last fitted ground heights at each sample's a and b. NaN means no height (null); fitted is false until the first fit. */
   ya: Float64Array; yb: Float64Array; fitted: boolean;
   /** The coarsest land level that may fit each sample's a and b: the finest level that has its tile, at most 6. -1 means no level has it. */
@@ -71,8 +96,9 @@ export class Cemeteries {
       return finest ? Math.min(finest.level, 6) : -1;
     };
     this.places = cemeteryPlaces(list, area);
-    const kinds = low ? [0, 2] : [0, 1, 2];
-    const wall = new THREE.BoxGeometry(1, 1, 1), shapes = kinds.map(k => stoneGeometry(k, low));
+    // One geometry per stone kind, shared by every site that shows it. The phone draws kind 1 as kind 0.
+    const wall = new THREE.BoxGeometry(1, 1, 1), shapes = new Map<number, THREE.BufferGeometry>();
+    const shape = (kind: number) => shapes.get(kind) ?? shapes.set(kind, stoneGeometry(kind, low)).get(kind)!;
     this.sites = list.map(c => {
       const group = new THREE.Group(); group.visible = false; this.group.add(group);
       const xs = c.ring.map(p => p[0]), ys = c.ring.map(p => p[1]);
@@ -90,10 +116,13 @@ export class Cemeteries {
       // A road-side edge can be open (no wall drawn) or a low clipped hedge (ROAD_EDGES).
       add(wall, segments.filter(([a, b]) => edgeKind(area, a, b) === 'wall').map(([a, b]) => ({ a, b })), () => new THREE.Color(0x73776f));
       add(wall, segments.filter(([a, b]) => edgeKind(area, a, b) === 'hedge').map(([a, b]) => ({ a, b })), i => new THREE.Color(0x3d5a34).multiplyScalar(0.92 + 0.16 * ((i * 7) % 5) / 4), 0.85, HEDGE_THICK);
-      const stones = stoneLayout(c, low);
-      for (let k = 0; k < shapes.length; k++) {
-        const mine = stones.filter(s => (low && s.kind === 1 ? 0 : s.kind) === kinds[k]);
-        add(shapes[k], mine.map(s => ({ a: s.point, turn: s.turn })), i => new THREE.Color().setRGB(0.32 + mine[i].shade * 0.12, 0.33 + mine[i].shade * 0.12, 0.32 + mine[i].shade * 0.13));
+      const stones = stoneLayout(c, low), drawn = (kind: number) => low && kind === 1 ? 0 : kind;
+      for (const kind of [...new Set(stones.map(s => drawn(s.kind)))].sort((a, b) => a - b)) {
+        const mine = stones.filter(s => drawn(s.kind) === kind);
+        add(shape(kind), mine.map(s => ({ a: s.point, turn: s.turn, size: s.size })), i => {
+          const tone = mine[i].tone, shade = mine[i].shade;
+          return tone !== undefined ? new THREE.Color().setRGB(...TONES[tone]) : new THREE.Color().setRGB(0.32 + shade * 0.12, 0.33 + shade * 0.12, 0.32 + shade * 0.13);
+        });
       }
       return { cemetery: c, group, center, radius, fitted, solids: drawnSolids(c, origin, area) };
     });
@@ -152,7 +181,7 @@ export class Cemeteries {
             return;
           } else {
             this.dummy.position.set(s.a[0] - this.origin[0], ya - 0.04, this.origin[1] - s.a[1]);
-            this.dummy.rotation.set(0, s.turn ?? 0, 0); this.dummy.scale.set(1, 1, 1);
+            this.dummy.rotation.set(0, s.turn ?? 0, 0); this.dummy.scale.set(...(s.size ?? [1, 1, 1]));
           }
           this.dummy.updateMatrix(); f.mesh.setMatrixAt(i, this.dummy.matrix);
         });

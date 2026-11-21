@@ -538,7 +538,7 @@ export class ChurchRoomArt {
     this.box('plain', PAINT.red, sx - .13, .76, sz - .03, sx + .13, .86, sz + .03);
     this.disc(PAINT.white, sx, .88, sz, .27, .035, 'y');
     // A tall white pedestal with a shelf top, by the right wall.
-    const px = w + .42, pz = c - 3.6;
+    const px = w + .42, pz = N.z0 + .4;
     this.box('plain', PAINT.white, px - .16, 0, pz - .16, px + .16, .06, pz + .16);
     this.box('plain', PAINT.white, px - .05, .06, pz - .05, px + .05, 1.22, pz + .05);
     this.box('plain', PAINT.white, px - .2, 1.22, pz - .3, px + .2, 1.27, pz + .3);

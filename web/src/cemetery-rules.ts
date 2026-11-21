@@ -1,5 +1,6 @@
 import type { Place } from './places';
 import type { Solid } from './parked';
+import { MEASURED_STONES, measuredPoint, measuredTurn } from './cemetery-graves';
 
 export type Point = [number, number];
 export interface Cemetery {
@@ -15,7 +16,8 @@ export interface Cemetery {
 }
 export interface Region { outer: Point[]; holes: Point[][] }
 export interface CemeteryFile { crs: 'EPSG:2961'; area: string; roadsSha256: string; cemeteries: Cemetery[] }
-export interface Stone { point: Point; turn: number; kind: number; shade: number }
+/** A measured marker also carries its size (width, height, thickness in metres) and its tone (cemetery-graves.ts). */
+export interface Stone { point: Point; turn: number; kind: number; shade: number; size?: [number, number, number]; tone?: number }
 export function nearestPoint(p: Point, a: Point, b: Point): Point {
   const dx = b[0] - a[0], dy = b[1] - a[1], ll = dx * dx + dy * dy;
   const t = ll ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / ll)) : 0;
@@ -56,6 +58,9 @@ function random(id: string): () => number {
 /** Tidy rows follow the longest mapped edge. Decorative shapes are never burial records. */
 export function stoneLayout(c: Cemetery, low = false): Stone[] {
   if (!c.wall.length || c.suppressed) return [];
+  // A cemetery with a measured table shows its real markers, the same in both detail levels.
+  const measured = MEASURED_STONES[c.id];
+  if (measured) return measured.map(r => ({ point: measuredPoint(r), turn: measuredTurn(r[7]), kind: r[2], shade: 0.5, size: [r[4], r[5], r[6]], tone: r[3] }));
   let longest = 0, turn = 0;
   for (let i = 1; i < c.ring.length; i++) {
     const a = c.ring[i - 1], b = c.ring[i], len = distance(a, b);
@@ -89,6 +94,8 @@ export const ROAD_EDGES: { area: string; a: Point; b: Point; kind: 'open' | 'hed
   { area: 'judique', a: [617092.78, 5081792.26], b: [617083.11, 5081745.14], kind: 'hedge' },
   { area: 'judique', a: [617095.34, 5081820.2], b: [617093.38, 5081796.45], kind: 'hedge' },
   { area: 'judique', a: [617096.22, 5081858.37], b: [617095.67, 5081826.8], kind: 'hedge' },
+  // River Denys Mountain: the mown lane from the church enters the cemetery here (church-site.ts, CHURCH_LANE).
+  { area: 'judique', a: [630853.52, 5080570.2], b: [630858.31, 5080572.81], kind: 'open' },
 ];
 /** What stands on one wall segment: the baked wall unless a road-side edge covers both its ends. */
 export function edgeKind(area: string, a: Point, b: Point): 'wall' | 'open' | 'hedge' {

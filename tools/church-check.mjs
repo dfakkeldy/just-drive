@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
-import {ChurchSite, CHURCH_GEOM, CHURCH_FEATURES, CHURCH_SCALE, CHURCH_ORIGIN, CHURCH_START} from '../web/src/church-site.ts';
+import {ChurchSite, CHURCH_GEOM, CHURCH_FEATURES, CHURCH_SCALE, CHURCH_ORIGIN, CHURCH_START, CHURCH_LANE, CHURCH_GROUNDS} from '../web/src/church-site.ts';
 import {buildChurchModel, Church} from '../web/src/church.ts';
 import {churchPlaces, nearestPlacement} from '../web/src/places.ts';
 import {Roads} from '../web/src/roads.ts';
@@ -10,12 +10,13 @@ import {pushOut} from '../web/src/parked.ts';
 import {touchesPlayer} from '../web/src/road-scene-rules.ts';
 import {fixture} from './trailer-regressions.mjs';
 const read = file => JSON.parse(readFileSync(file));
-const original = read('data/work/areas/church/church.json');
+// The private record of the scan measurements (church-scan-20261121, not in git). The code must match it number for number.
+const original = read('data/work/church-scan-20261121/church-site.json');
 // Static site imports must remain plain data; trigonometry belongs to instances.
 const siteData=readFileSync('web/src/church-site.ts','utf8').split('export class ChurchSite')[0];
 assert.ok(!/Math\.(sin|cos|atan2)\s*\(/.test(siteData),'no trigonometry at site import');
 assert.deepEqual(CHURCH_GEOM, original.geom);
-assert.deepEqual(CHURCH_FEATURES, {openings:original.features.openings, steps:original.features.steps});
+assert.deepEqual(CHURCH_FEATURES, original.features);assert.deepEqual(CHURCH_ORIGIN, original.origin);
 const manifest=read('data/baked/areas/judique/manifest.json'), site=new ChurchSite(manifest.village);
 const close=(a,b,message)=>assert.ok(Math.abs(a-b)<1e-7,`${message}: ${a} vs ${b}`);
 for(const [x,z] of [[0,0],[-29.1,7],[2.4,0],[0,1]]) {
@@ -24,7 +25,7 @@ for(const [x,z] of [[0,0],[-29.1,7],[2.4,0],[0,1]]) {
  close(rotated.x,p.x-site.origin.x,'model/world x');close(rotated.z,p.z-site.origin.z,'model/world z');
 }
 const heading=(x,z)=>{const p=site.world(x,z);return (Math.atan2(p.x-site.origin.x,site.origin.z-p.z)*180/Math.PI+360)%360;};
-close(heading(1,0),297,'tower axis WNW'); close(heading(0,1),27,'vestry offset NNE');close(heading(-1,0),117,'vestry end ESE');
+close(heading(1,0),297.65,'tower axis WNW'); close(heading(0,1),27.65,'vestry offset NNE');close(heading(-1,0),117.65,'vestry end ESE');
 assert.equal(new THREE.Matrix4().makeRotationY(site.yaw).determinant(),1);
 const baked=read('data/baked/areas/judique/buildings.json').buildings;
 const replaced=baked.filter(b=>Math.hypot(b.x-630844.2,b.y-5080637.2)<=8);
@@ -69,7 +70,11 @@ for(const solid of site.solids.slice(0,3)) for(const heading of [0,.8,1.6,3.2,4.
  console.log(`PASS church towing: trailer-first reverse, ${impacts} impact notifications, trailer-only placement refusal, relocation and final static-change guard`);
 }
 assert.equal(site.height(0,0,206.4),206.4);
-const gravel=site.world(20,18),outside=site.world(-20,18);assert.equal(site.surface(gravel.x,gravel.z).kind,11);assert.equal(site.surface(outside.x,outside.z),null);
+const gravel=site.world(14.58,11.55),outside=site.world(-20,18);assert.equal(site.surface(gravel.x,gravel.z).kind,11);assert.equal(site.surface(outside.x,outside.z),null);
+// The mown lane to the cemetery drives as grass along its whole length, and trees keep off it.
+for(let i=1;i<CHURCH_LANE.pts.length;i++)for(let k=0;k<=4;k++){const [a,b]=[CHURCH_LANE.pts[i-1],CHURCH_LANE.pts[i]],x=a[0]+(b[0]-a[0])*k/4,z=a[1]+(b[1]-a[1])*k/4,w=site.world(x,z);assert.equal(site.surface(w.x,w.z)?.kind,12,'mown lane is lawn');assert.ok(site.clearCanopy(w.x,w.z),'no trees on the lane');}
+// The monument, the wayside cross and the big boulder block the car.
+for(const [x,z] of [[CHURCH_GROUNDS.monument.x,CHURCH_GROUNDS.monument.z],[CHURCH_GROUNDS.wayside.x,CHURCH_GROUNDS.wayside.z],[-40.43,-34.7]]){const w=site.world(x,z),car={x:w.x,z:w.z,heading:0,vx:0,vz:0,speed:0};pushOut(car,site.solids);assert.ok(Math.hypot(car.x-w.x,car.z-w.z)>.3,'yard solid blocks car');}
 // Canvas drawing is procedural. A minimal canvas lets this CPU test inspect all merged geometry.
 globalThis.document={createElement(){return {width:0,height:0,getContext(){return {fillRect(){},strokeRect(){}};}};}};
 const group=buildChurchModel();assert.equal(group.children.length,3);
@@ -96,28 +101,29 @@ for(const exag of [1,1.5,3]){
  const t=CHURCH_GEOM.tower,st=CHURCH_FEATURES.steps;
  let contacts=0;
  for(const x of [t.x1+.15,t.x1+st.run/2,t.x1+st.run-.05])for(const side of [-1,1]){
-  const edge=side*st.width/2,y=ground(x,edge)+.04;
+  const edge=st.u+side*st.width/2,y=ground(x,edge)+.04;
   const hit=cast(x,y,edge+side*.4,0,-side);assert.ok(hit&&hit.distance<.41*CHURCH_SCALE,`step side reaches sloping ground at exag ${exag}`);contacts++;
  }
- for(const z of [-.8,0,.8]){
+ for(const z of [st.u-.5,st.u,st.u+.5]){
   const x=t.x1+st.run,y=ground(x,z)+.04;
   const hit=cast(x+.4,y,z,-1,0);assert.ok(hit&&hit.distance<.41*CHURCH_SCALE,`bottom riser reaches ground at exag ${exag}`);contacts++;
  }
- for(const side of [-1,1])for(const x of [0,1,2]){
+ // x = 0 is the exact seam with the gable plane, where a ray grazes the wall edge; sample just inside the tower.
+ for(const side of [-1,1])for(const x of [.1,1,2]){
   const z=side<0?-t.zn:t.zs,y=ground(x,z)+.04;
   const hit=cast(x,y,z+side*.4,0,-side);assert.ok(hit&&hit.distance<.41*CHURCH_SCALE,`tower skirt reaches ground at exag ${exag}`);contacts++;
  }
- for(const z of [-1.8,1.8]){
+ for(const z of [-.76,.92]){
   const x=t.x1,y=ground(x,z)+.04,hit=cast(x+.4,y,z,-1,0);
   assert.ok(hit&&hit.distance<.41*CHURCH_SCALE,`tower front skirt reaches ground at exag ${exag}`);contacts++;
  }
- // The four original tread heights stay intact.
+ // Every tread stays at its measured height.
  for(let i=0;i<st.count;i++){
   const x=t.x1+st.run*(st.count-i-.5)/st.count,p=site.world(x,0);
   const hit=new THREE.Raycaster(new THREE.Vector3(p.x,slope.group.position.y+2,p.z),new THREE.Vector3(0,-1,0)).intersectObject(slope.group,true)[0];
   assert.ok(hit);close((hit.point.y-slope.group.position.y)/CHURCH_SCALE,st.rise*(i+1)/st.count,'tread height');
  }
- console.log(`PASS entrance exag=${exag}: ${contacts} ground-contact rays plus four unchanged tread heights`);
+ console.log(`PASS entrance exag=${exag}: ${contacts} ground-contact rays plus ${st.count} tread heights`);
 }
-close((CHURCH_GEOM.tower.x1-CHURCH_GEOM.vestry.x0)*CHURCH_SCALE,20.79,'building length');
+close((CHURCH_GEOM.tower.x1-CHURCH_GEOM.vestry.x0)*CHURCH_SCALE,17.95,'building length (scan)');
 console.log(`PASS church: source constants, handedness, map origin ${CHURCH_ORIGIN}, position-based replacement, renumbered and split inputs, ${distance.toFixed(2)} m road spawn, collision, gravel, gated polling and one build; ${group.children.length} draws, ${triangles} triangles`);
