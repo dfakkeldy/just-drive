@@ -1137,8 +1137,9 @@ const startPlacement = fleet ? {
       if (journey) journey.place(placeVisit);
       else {
         // ?start=mabou-harbour-road is a player's link: the title card stays, and only this first place changes.
-        const asked = airportDrag && params.get('start') === dragModule?.DRAG_START_KEY
-          ? { ...airportDrag.strip.start, distance: 0 } : startKey(params.get('start'), roads.roads, vehicle.bounds);
+        const start = params.get('start');
+        const asked = airportDrag && start === dragModule?.DRAG_START_KEY
+          ? { ...airportDrag.strip.start, distance: 0 } : startKey(start, roads.roads, vehicle.bounds);
         if (!asked || (!placeAtStart(startPlacement, asked) && !fleet?.visitQueued)) placeFirstStop('new-visit');
       }
     }

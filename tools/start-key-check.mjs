@@ -249,7 +249,7 @@ function verify({ key, visit, main, place }) {
   // 10. The wiring as text: one read of the key, after the test keys and the trip, and the normal start when there is no place.
   const begin = main.indexOf('// The daily run supplies the start'), end = main.indexOf('scene.add(shift.group);');
   assert.ok(begin > 0 && end > begin, 'the placement block is found');
-  const block = main.slice(begin, end), order = ["params.get('road')", "params.get('at')", 'journey.place(placeVisit);', "startKey(params.get('start'), roads.roads, vehicle.bounds)", 'placeAtStart(startPlacement, asked)', "placeFirstStop('new-visit');"].map((text) => block.lastIndexOf(text));
+  const block = main.slice(begin, end), order = ["params.get('road')", "params.get('at')", 'journey.place(placeVisit);', "params.get('start')", "startKey(start, roads.roads, vehicle.bounds)", 'placeAtStart(startPlacement, asked)', "placeFirstStop('new-visit');"].map((text) => block.lastIndexOf(text));
   assert.ok(order.every((index, i) => index >= 0 && (i === 0 || index > order[i - 1])), 'the start key comes last in the placement block, and falls back to the normal start');
   assert.ok(/if \(!asked \|\| \(!placeAtStart\(startPlacement, asked\) && !fleet\?\.visitQueued\)\) placeFirstStop\('new-visit'\);/.test(block), 'no place, or a refused place: the normal start');
   return { places, outside };
