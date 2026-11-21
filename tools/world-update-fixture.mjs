@@ -9,7 +9,8 @@ export const current = () => readFileSync(new URL('../web/src/main.ts', import.m
 export function frameSource(source, dev = true) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const names = new Set(['expose', 'live', 'scenePaused', 'syncRoadScenePause', 'updateWorld', 'drawEnding', 'frame']);
-  const vars = new Set(['shadowFocus', 'hudState']);
+  // The hand-built places list (built once at boot) feeds the before-camera updates and the frame's waiting test.
+  const vars = new Set(['shadowFocus', 'hudState', 'places', 'handBuilt', 'placesWaiting']);
   const setupStart = source.indexOf('type WorldSegment ='), setupEnd = source.indexOf('const shadowFocus =');
   return transformSync(ast.statements.filter(n =>
     setupStart >= 0 && n.getStart(ast) >= setupStart && n.end <= setupEnd ||
@@ -118,7 +119,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
       : [call('driveVehicle', dt, input), call('animals', dt, '@vehicle', '@camera'), call('chase', dt)]),
     call('mail', dt, '@vehicle', false, '@camera'),
     world('yard', dt, '@vehicle', '@camera.position'), world('yardDog', dt, '@vehicle'), world('home', '@camera.position', '@vehicle'),
-    world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050), world('village', '@camera.position', 1050), world('hawkesbury', '@camera.position', 1050), world('mabouMain', '@camera.position', 1050), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
+    world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050, '@vehicle', dt), world('village', '@camera.position', 1050, '@vehicle', dt), world('hawkesbury', '@camera.position', 1050, '@vehicle', dt), world('mabouMain', '@camera.position', 1050, '@vehicle', dt), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
     call('camera.matrix'), call('sky', '@camera.position'), call('shared.time', 1.05), call('beacon', dt ? 2.2 : .15),
     world('terrain', '@camera', paused), ...wharfLines(spied), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
     world('trees', '@terrain.drawnFine', '@camera.position'), world('culvertMouths', '@camera.position'), world('landmarks', '@camera'),

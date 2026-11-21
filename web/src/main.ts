@@ -16,7 +16,7 @@ import { siteRadio } from './site';
 import { isTestVisit } from './visit';
 import { pageState } from './page-state';
 import { Towing, trailerHelpSetting } from './towing';
-import { AreaContacts } from './world-contacts';
+import { AreaContacts, type ContactSite } from './world-contacts';
 import { pushOut } from './parked';
 import { Fleet } from './fleet';
 import { fleetEnabled, fleetRig } from './fleet-models';
@@ -138,6 +138,7 @@ import { Cemeteries } from './cemeteries';
 import { Stockpiles } from './stockpiles';
 import { HomeSite } from './home-site';
 import { PorchDog } from './porch-dog';
+import type { HandBuiltPlace } from './place';
 import { YardDogSite } from './yard-dog-site';
 import { YardDog } from './yard-dog';
 import { LotProps } from './lot-props';
@@ -397,12 +398,9 @@ if (novemberBuildings) clear.push(...novemberBuildings.clear);
 if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
-if (homeSite) clear.push(...homeSite.clear);
-if (porchSite) clear.push(...porchSite.clear);
-if (churchSite) clear.push(...churchSite.clear);
-if (villageSite) clear.push(...villageSite.clear);
-if (hawkesburySite) clear.push(...hawkesburySite.clear);
-if (mabouSite) clear.push(...mabouSite.clear);
+// The hand-built places' sites (place.ts), in the order of the places list below. Each clears its surveyed land.
+const placeSites = { home: homeSite, porch: porchSite, church: churchSite, village: villageSite, hawkesbury: hawkesburySite, mabouMain: mabouSite };
+for (const site of Object.values(placeSites)) if (site) clear.push(...site.clear);
 if (quarrySite) clear.push(...quarrySite.clear);
 // Modern Point Tupper only; airport=0 turns it off. The module (and its source extract) loads only here.
 const airportModule = ERA.modern && AREA.id === 'pointtupper' && params.get('airport') !== '0' ? await import('./airport').catch(e => { console.warn('Airport unavailable', e); return null; }) : null;
@@ -683,19 +681,32 @@ if (night) scene.onBeforeRender = (r, _scene, view) => night.update(r, view);
 const yard = yardSite ? new Yard(yardSite, terrain, LOW) : null;
 if (yard) scene.add(yard.group);
 const home = homeSite ? new Home(homeSite, terrain, (metres) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres)) : null;
-if (home) scene.add(home.group);
 const porch = porchSite ? new PorchHouse(porchSite, terrain, (metres) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres)) : null;
 const porchDog = porch ? new PorchDog(LOW) : null;
-if (porch) { scene.add(porch.group); if (porchDog) porch.seat(porchDog.group); }
+if (porch && porchDog) porch.seat(porchDog.group);
 const church = churchSite ? new (await import('./church').catch(partFailed)).Church(churchSite, terrain) : null;
-if (church) scene.add(church.group);
 const village = villageSite ? new (await import('./judique-village').catch(partFailed)).JudiqueVillage(villageSite, terrain, LOW) : null;
-if (village) scene.add(village.group);
 const hawkesbury = hawkesburySite ? new (await import('./port-hawkesbury').catch(partFailed)).PortHawkesbury(hawkesburySite, terrain, LOW,
   roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings) : null;
-if (hawkesbury) scene.add(hawkesbury.group);
 const mabouMain = mabouSite ? new (await import('./mabou-main').catch(partFailed)).MabouMain(mabouSite, terrain, LOW, roads.roads) : null;
-if (mabouMain) scene.add(mabouMain.group);
+// One slot for each site above, in the same order. A slot keeps its name while its place is off, so the frame's update
+// list keeps the same entries. `dev` is what the dev tools see. The home and the porch house take the car, not the
+// clock, so they are wrapped; the porch's slot also turns its dog and waits for it.
+const places: Record<keyof typeof placeSites, { place: HandBuiltPlace | null; dev: object | null }> = {
+  home: { dev: home, place: home && { group: home.group, resolveSolids: car => home.resolveSolids(car), update: (view, _now, car) => home.update(view, car) } },
+  porch: { dev: porch, place: porch && { group: porch.group, resolveSolids: car => porch.resolveSolids(car),
+    update: (view, now, car, dt) => { porch.update(view, car); porchDog?.update(dt, car, now / 1000); },
+    get waiting() { return porch.waiting || porchDog?.state === 'loading'; } } },
+  church: { dev: church, place: church },
+  village: { dev: village, place: village },
+  hawkesbury: { dev: hawkesbury, place: hawkesbury },
+  mabouMain: { dev: mabouMain, place: mabouMain },
+};
+const handBuilt = Object.values(places);
+for (const { place } of handBuilt) if (place) scene.add(place.group);
+// The frame asks this; an index loop makes no array iterator.
+const placesWaiting = (): boolean => { for (let i = 0; i < handBuilt.length; i++) if (handBuilt[i].place?.waiting) return true; return false; };
+const placeContact = ({ place }: { place: HandBuiltPlace | null }): ContactSite | null => place && { resolve: body => place.resolveSolids(body) };
 const quarry = quarryFeature && quarrySite ? new quarryFeature.Quarry(quarrySite, terrain, roads) : null;
 if (quarry) quarry.attach(scene, waterReflections);
 // The small switch loads other players' cars only after consent.
@@ -722,7 +733,8 @@ const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads,
 const canal = ERA.modern && AREA.id === 'cansocauseway' ? new Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
 if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
-// A site registers here once. Fleet sweeps and fixed-step driving use this same list.
+// Each solid site's contact row is written once, here. The registry (fleet sweeps, fleet driving and the quarry) adds
+// the park, the quarry and then these rows in this order. Solo driving and a solo trailer use soloContacts (below).
 const fleetContacts = new AreaContacts();
 const parkContacts = stuntPark?.contactProvider();
 if (parkContacts) fleetContacts.add(parkContacts);
@@ -730,19 +742,27 @@ if (quarry) {
   fleetContacts.add(quarry.contactProvider());
   if (!fleetEnabled(garageEntry, params, !mailMode, ERA.modern)) quarry.bindVehicle(vehicle, fleetContacts);
 }
-if (yard) fleetContacts.add({ revision: () => yard.collisionVersion(), resolve: body => yard.resolveSolids(body), allows: body => yard.allowsBody(body, body.spec, body.y) });
-if (history) fleetContacts.add({ resolve: body => history.resolve(body as unknown as Vehicle) });
-if (home) fleetContacts.add({ resolve: body => home.resolveSolids(body) });
-if (porch) fleetContacts.add({ resolve: body => porch.resolveSolids(body) });
-if (lotProps) fleetContacts.add({ revision: () => lotProps.dropped, resolve: body => lotProps.resolveSolids(body) });
-if (church) fleetContacts.add({ resolve: body => church.resolveSolids(body) });
-// The optional pack arrives after boot; the registry must see its new solids.
-if (tallKey) fleetContacts.add({ revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) });
-if (village) fleetContacts.add({ resolve: body => village.resolveSolids(body) });
-if (hawkesbury) fleetContacts.add({ resolve: body => hawkesbury.resolveSolids(body) });
-if (mabouMain) fleetContacts.add({ resolve: body => mabouMain.resolveSolids(body) });
-if (novemberBuildings) fleetContacts.add({ resolve: body => novemberBuildings.resolveSolids(body) });
-if (cemeteries) fleetContacts.add({ resolve: body => cemeteries.resolveSolids(body) });
+const siteContacts: [string, ContactSite | null][] = [
+  ['yard', yard && { revision: () => yard.collisionVersion(), resolve: body => yard.resolveSolids(body), allows: body => yard.allowsBody(body, body.spec, body.y) }],
+  ['history', history && { resolve: body => history.resolve(body as unknown as Vehicle) }],
+  ['home', placeContact(places.home)],
+  ['porch', placeContact(places.porch)],
+  ['lotProps', lotProps && { revision: () => lotProps.dropped, resolve: body => lotProps.resolveSolids(body) }],
+  ['church', placeContact(places.church)],
+  // The optional pack arrives after boot; the registry must see its new solids.
+  ['tall', tallKey ? { revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) } : null],
+  ['village', placeContact(places.village)],
+  ['hawkesbury', placeContact(places.hawkesbury)],
+  ['mabouMain', placeContact(places.mabouMain)],
+  ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
+  ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
+];
+for (const [, row] of siteContacts) if (row) fleetContacts.add(row);
+// Solo driving (no fleet, no quarry) keeps its own order of the same rows (#57): tall moves after every other site,
+// and the park after tall. A new site row lands in both lists.
+const soloContacts = new AreaContacts();
+for (const [, row] of [...siteContacts.filter(([name]) => name !== 'tall'), ...siteContacts.filter(([name]) => name === 'tall')]) if (row) soloContacts.add(row);
+if (parkContacts) soloContacts.add(parkContacts);
 if (props) fleetContacts.add({ revision: () => props.downCount, resolve: () => {}, allows: body => props.allowsFleetBody(body) });
 if (roads.guardrails) {
   const rails = roads.guardrails, probe = { x: 0, z: 0, y: 0, heading: 0, spec: vehicleSpec, vx: 0, vz: 0, speed: 0 };
@@ -777,10 +797,7 @@ const resolveYardSolids = () => {
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
   boss?.driver.resolve(vehicle);
   if (fleet || quarry) fleetContacts.resolve(vehicle);
-  else {
-    yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); novemberBuildings?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle);
-    parkContacts?.resolve(vehicle);
-  }
+  else soloContacts.resolve(vehicle);
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
   fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
   yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
@@ -997,8 +1014,8 @@ if (roadAnimals) scene.add(roadAnimals.group);
 if (import.meta.env.DEV) expose({ roadAnimals });
 if (ERA.modern && garageEntry.id === 'truck' && ['1', 'empty'].includes(params.get('trailer') ?? '')) {
   if (!mailMode && roadScene) fleetContacts.add({ resolve: body => { if (roadScene.rules.enabled) pushOut(body, roadScene.placementSolids, true); } });
-  const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts
-    : parkContacts && { allows: parkContacts.allows, resolve: parkContacts.resolve };
+  // Without the fleet the trailer meets the same solid sites as the truck: soloContacts.
+  const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts : soloContacts;
   towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? hawkesbury.solids : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts }, true, LOW);
   if (towing.attached) scene.add(towing.trailer.root);
   trailerHelpSetting(towing, document.getElementById('settings'), document.getElementById('startOver'));
@@ -1621,7 +1638,7 @@ if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
 if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
 if (import.meta.env.DEV) expose({ lotProps }, false);   // for tools/lot-props-browser.mjs; not enumerable: ui-check pins the public key set
-if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
+if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
   const report = document.getElementById('shiftReport'), footer = report?.querySelector('.reportFooter');
@@ -1730,12 +1747,7 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   ...(ride.update ? [{ name: 'ride', segment: 'ride' as const, ending: false, update: (_dt: number, realDt: number) => ride.update!(realDt, !scenePaused() && mode === 'drive') }] : []),
   { name: 'yard', segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
   { name: 'yardDog', segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
-  { name: 'home', segment: 'before-camera', ending: false, update: () => home?.update(camera.position, vehicle) },
-  { name: 'porch', segment: 'before-camera', ending: false, update: (dt, _realDt, now) => { porch?.update(camera.position, vehicle); porchDog?.update(dt, vehicle, now / 1000); } },
-  { name: 'church', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => church?.update(camera.position, now) },
-  { name: 'village', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => village?.update(camera.position, now) },
-  { name: 'hawkesbury', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => hawkesbury?.update(camera.position, now) },
-  { name: 'mabouMain', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => mabouMain?.update(camera.position, now) },
+  ...Object.entries(places).map(([name, { place }]) => ({ name, segment: 'before-camera' as const, ending: false, update: (dt: number, _realDt: number, now: number) => place?.update(camera.position, now, vehicle, dt) })),
   { name: 'stockpiles', segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
   { name: 'cemeteries', segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
   { name: 'terrain', segment: 'landscape', ending: true, update: () => terrain.update(camera, scenePaused()) },
@@ -2071,7 +2083,7 @@ function frame(now: number) {
   // A page is "settled" when nothing has been loading for a while; screenshots wait for this.
   const waiting = !loaded || (grass?.pending ?? 0) > 0 || (trees?.pending ?? 0) > 0 || (mode === 'fly' && pendingShot !== null && terrain.heightAt(camera.position.x, camera.position.z) === null)
     || (mode === 'drive' && demo > 0 && (drove < demo || Math.abs(vehicle.speed) > 0.15)) || relief.busy
-    || !!porch?.waiting || porchDog?.state === 'loading' || !!mabouMain?.waiting;
+    || placesWaiting();
   quiet = waiting ? 0 : quiet + 1;
   page.ready(quiet > 20 && terrain.failed === 0 && terrain.pending === 0 && (sidewalks?.pending ?? 0) === 0);
   // The clock or report can end the shift above: these final HUD reads must use the new state.
