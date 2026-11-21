@@ -2,16 +2,6 @@ import { CURVE_GLSL } from './far-rules';
 
 // GLSL for the terrain and the sea. Colours are linear; three.js applies tone mapping and sRGB at the end.
 
-// Shared by the land and the water mask, which read the road field the same way.
-const ROAD_CODE = /* glsl */ `
-// A road sample's flag byte as one road: the rough bit (rough-roads.ts, 128 on gravel and tracks) marks a stretch of the
-// same road, so it must not count as a seam where a stretch starts or ends.
-float roadCode(float b) {
-  float f = floor(b * 255.0 + 0.5), k = mod(f, 16.0);
-  return k > 2.5 && k < 4.5 && f >= 128.0 ? f - 128.0 : f;
-}
-`;
-
 export const LAND_LIGHT = /* glsl */ `
 uniform vec3 sunDir;
 uniform vec3 sunColor;
@@ -715,7 +705,14 @@ float pothole(vec2 p, float density) {
   return (0.05 + 0.09 * r2) * min(1.0, (1.0 - d / radius) * 2.2);
 }
 
-${ROAD_CODE}
+#ifdef ROAD_PAVEMENT
+// A road sample's flag byte as one road: the rough bit (rough-roads.ts, 128 on gravel and tracks) marks a stretch of the
+// same road, so it must not count as a seam where a stretch starts or ends.
+float roadCode(float b) {
+  float f = floor(b * 255.0 + 0.5), k = mod(f, 16.0);
+  return k > 2.5 && k < 4.5 && f >= 128.0 ? f - 128.0 : f;
+}
+#endif
 vec3 crownCell(vec2 p, out vec2 off) {
   vec2 g = floor(p), f = fract(p);
   float md = 8.0;
@@ -876,8 +873,12 @@ void main() {
   // A sample with no road counts as far away.
   float sa = qa.b > 0.0 ? (qa.r - roadZero) * 25.5 : 13.0, sb = qb.b > 0.0 ? (qb.r - roadZero) * 25.5 : 13.0;
   float sc = qc.b > 0.0 ? (qc.r - roadZero) * 25.5 : 13.0, sd = qd.b > 0.0 ? (qd.r - roadZero) * 25.5 : 13.0;
+#ifdef ROAD_PAVEMENT
   float ca = roadCode(qa.b), cb = roadCode(qb.b), cc = roadCode(qc.b), cd = roadCode(qd.b);
   bool oneRoad = qa.b > 0.0 && ca == cb && ca == cc && ca == cd && qa.g == qb.g && qa.g == qc.g && qa.g == qd.g
+#else
+  bool oneRoad = qa.b > 0.0 && qa.b == qb.b && qa.b == qc.b && qa.b == qd.b && qa.g == qb.g && qa.g == qc.g && qa.g == qd.g
+#endif
     && max(max(abs(sa - sb), abs(sa - sc)), max(abs(sd - sb), abs(sd - sc))) < 1.6 * texel + 0.2;
   float rsigned = mix(mix(sa, sb, rw.x), mix(sc, sd, rw.x), rw.y);
   float rdist = oneRoad ? abs(rsigned) : mix(mix(abs(sa), abs(sb), rw.x), mix(abs(sc), abs(sd), rw.x), rw.y);
@@ -916,8 +917,10 @@ void main() {
 #endif
 #endif
   float wash = step(32.0, mod(rflags, 64.0));   // washboard road
+#ifdef ROAD_PAVEMENT
   // A rough stretch of gravel or track (rough-roads.ts, bit 128). On pavement the same bit means faded asphalt.
   float rough = rkind > 2.5 && rkind < 4.5 && rflags >= 128.0 ? 1.0 : 0.0;
+#endif
   float onRoad = 0.0;
   if (rkind > 0.5 && rdist < 11.5) {
     float aa = max(fwidth(rdist), 0.02);
@@ -947,6 +950,7 @@ void main() {
       // Gravel road: two packed wheel paths, loose stone between and outside, potholes.
       float track = smoothstep(0.55, 0.15, abs(rdist - rhalf * 0.5));
       surface = mix(gravel, gravel * 0.72, track);
+#ifdef ROAD_PAVEMENT
       if (rough > 0.5) {
         // Rough: the road has gone back to two ruts a car's width apart (rough-roads.ts RUT), dark wet mud in them, and a
         // ridge of stone and dead grass left between them.
@@ -954,6 +958,7 @@ void main() {
         surface = mix(gravel * 0.92, mud, smoothstep(0.62, 0.18, abs(rdist - 0.8)) * 0.85);
         surface = mix(surface, mix(vec3(0.200, 0.185, 0.120), vec3(0.150, 0.160, 0.070), speck), smoothstep(0.45, 0.1, rdist) * (0.25 + 0.3 * vnoise(p * 0.6)));
       }
+#endif
     } else if (rkind > 4.5) {
       // Rail trail: fine crusher dust, packed flat and kept that way. Paler than a gravel road; no ruts, no holes.
       vec3 dust = mix(vec3(0.300, 0.280, 0.240), vec3(0.380, 0.360, 0.315), grit) * (0.92 + 0.16 * speck);
@@ -967,8 +972,10 @@ void main() {
 #else
       surface = mix(mix(albedo, vec3(0.160, 0.170, 0.060), 0.5), vec3(0.170, 0.130, 0.090), rut);
 #endif
+#ifdef ROAD_PAVEMENT
       // Rough: the ruts are cut wider and deeper, and hold dark wet mud.
       if (rough > 0.5) surface = mix(surface, vec3(0.105, 0.078, 0.055) * (0.8 + 0.3 * grit), smoothstep(0.62, 0.22, abs(rdist - 0.75)) * 0.85);
+#endif
 #ifdef ROAD_PAVEMENT
     } else if (rkind < 1.5 || (rkind == 2.0 && mod(rflags, 128.0) >= 64.0)) {
 #else
@@ -1020,7 +1027,11 @@ void main() {
     }
 #endif
     // Potholes: dark, broken bottoms. The wheels drop into the same ones.
+#ifdef ROAD_PAVEMENT
     float density = rkind > 7.5 ? 0.0 : (rkind < 1.5 ? 0.17 : rkind < 2.5 ? 0.28 : rkind < 3.5 ? 0.42 : rkind < 4.5 ? 0.36 : 0.0) + 0.2 * wash + 0.3 * rough;   // defects.ts ROUGH_POTHOLES
+#else
+    float density = rkind > 7.5 ? 0.0 : (rkind < 1.5 ? 0.17 : rkind < 2.5 ? 0.28 : rkind < 3.5 ? 0.42 : rkind < 4.5 ? 0.36 : 0.0) + 0.2 * wash;
+#endif
     float hole = rdist < rhalf - 0.2 && density > 0.0 ? pothole(p, density) : 0.0;
     surface = mix(surface, mix(vec3(0.060, 0.052, 0.045), vec3(0.105, 0.092, 0.078), speck), smoothstep(0.0, 0.03, hole) * (1.0 - smoothstep(120.0, 400.0, dist)));
     albedo = mix(albedo, gravel, shoulder * 0.85 * step(rkind, 11.5));   // a lawn has no gravel shoulder
@@ -1223,7 +1234,6 @@ uniform float seaLevel;
 varying vec2 vUv;
 varying vec3 vWorld;
 varying float vGround;
-${ROAD_CODE}
 void main() {
   float quarter = step(0.5, vUv.x) + 2.0 * step(0.5, vUv.y);
   if ((quarter < 0.5 ? hideQuad.x : quarter < 1.5 ? hideQuad.y : quarter < 2.5 ? hideQuad.z : hideQuad.w) > 0.5) discard;
@@ -1242,8 +1252,7 @@ void main() {
   // A sample with no road counts as far away.
   float sa = qa.b > 0.0 ? (qa.r - roadZero) * 25.5 : 13.0, sb = qb.b > 0.0 ? (qb.r - roadZero) * 25.5 : 13.0;
   float sc = qc.b > 0.0 ? (qc.r - roadZero) * 25.5 : 13.0, sd = qd.b > 0.0 ? (qd.r - roadZero) * 25.5 : 13.0;
-  float ca = roadCode(qa.b), cb = roadCode(qb.b), cc = roadCode(qc.b), cd = roadCode(qd.b);
-  bool oneRoad = qa.b > 0.0 && ca == cb && ca == cc && ca == cd && qa.g == qb.g && qa.g == qc.g && qa.g == qd.g
+  bool oneRoad = qa.b > 0.0 && qa.b == qb.b && qa.b == qc.b && qa.b == qd.b && qa.g == qb.g && qa.g == qc.g && qa.g == qd.g
     && max(max(abs(sa - sb), abs(sa - sc)), max(abs(sd - sb), abs(sd - sc))) < 1.6 * texel + 0.2;
   float rsigned = mix(mix(sa, sb, rw.x), mix(sc, sd, rw.x), rw.y);
   float rdist = oneRoad ? abs(rsigned) : mix(mix(abs(sa), abs(sb), rw.x), mix(abs(sc), abs(sd), rw.x), rw.y);
