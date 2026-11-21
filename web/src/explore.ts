@@ -89,7 +89,7 @@ export function prepareExplore(): void {
       color:var(--ink);font:700 11px/1.2 var(--mono);padding:0;pointer-events:auto}
     body.tcOn #savePictureButton{right:auto}
     /* Place Save picture beside the flight stick on short landscape screens, clear of its caption. */
-    @media(orientation:landscape) and (max-height:319px){
+    @media(orientation:landscape) and (min-width:421px) and (max-height:319px){
       body.droneOn #savePictureButton{right:calc(22px + var(--drone-stick-size) + env(safe-area-inset-right,0px))}
     }
     #savePictureButton:active{background:var(--maple)}
@@ -102,9 +102,13 @@ export function prepareExplore(): void {
       body.droneOn.droneSticks #savePictureStatus{left:auto;right:calc(8px + env(safe-area-inset-right,0px));transform:none;
         bottom:calc(102px + var(--drone-stick-size) + var(--safe-bottom,env(safe-area-inset-bottom,0px)))}
     }
-    @media(orientation:landscape) and (max-height:319px){
+    @media(orientation:landscape) and (min-width:421px) and (max-height:319px){
       body.droneOn.droneSticks #savePictureStatus{left:auto;right:calc(22px + var(--drone-stick-size) + env(safe-area-inset-right,0px));
         top:calc(134px + env(safe-area-inset-top,0px));bottom:auto;transform:none;box-sizing:border-box;max-width:56px;padding:4px;font-size:9px;white-space:normal;overflow-wrap:break-word;text-align:center}
+    }
+    @media(orientation:landscape) and (max-width:420px) and (max-height:319px){
+      body.droneOn.droneSticks #savePictureStatus{left:50%;right:auto;top:auto;bottom:calc(14px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));
+        transform:translateX(-50%);box-sizing:border-box;max-width:84px;padding:4px;font-size:9px;white-space:normal;overflow-wrap:break-word;text-align:center}
     }
     #savePictureStatus:empty{display:none}
   ` }));

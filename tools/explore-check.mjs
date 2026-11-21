@@ -306,6 +306,27 @@ if(family==='all'||family==='phone'){
    if(noticeFaults.length)console.log('Flight notice faults',text??'saved',noticeFaults.join(','));
    check(noticeBoxes.some(b=>b[0]==='savePictureStatus')&&noticeFaults.length===0,`${label} flight save notice (${text??'Picture saved'}) clears telemetry, map and flight controls`);
   }
+  if(w===390&&h===844){
+   await p.send('Emulation.setDeviceMetricsOverride',{width:390,height:310,deviceScaleFactor:1,mobile:true});await sleep(200);
+   const shortFaults=boxes=>{
+    const issues=[];
+    for(let i=0;i<boxes.length;i++){
+     const [a,x,y,r,b]=boxes[i];
+     if(x<0||y<0||r>391||b>311)issues.push(a+' offscreen');
+     for(const [c,xx,yy,rr,bb] of boxes.slice(i+1)){
+      if(Math.min(r,rr)-Math.max(x,xx)>1&&Math.min(b,bb)-Math.max(y,yy)>1)issues.push(a+' overlaps '+c);
+     }
+    }
+    return issues;
+   };
+   for(const text of ['Picture saved','Could not save picture']){
+    await p.read(`document.getElementById('savePictureStatus').textContent=${JSON.stringify(text)}`);
+    const b=await readBoxes([...flightIds,'miniMap','savePictureStatus']), f=shortFaults(b);
+    if(f.length)console.log('Flight 390x310 faults',text,f.join(','));
+    check(flightIds.every(id=>b.some(x=>x[0]===id))&&b.some(x=>x[0]==='savePictureStatus')&&f.length===0,`phone 390x310 flight controls and save notice (${text}) fit without overlap`);
+   }
+   await p.send('Emulation.setDeviceMetricsOverride',{width:w,height:h,deviceScaleFactor:1,mobile:true});await sleep(200);
+  }
   await p.read(`document.getElementById('savePictureStatus').textContent=''`);
   if(w===320&&h===568){
    await p.read('window.cancelPicture = true');
