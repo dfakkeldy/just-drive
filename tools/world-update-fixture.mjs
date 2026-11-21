@@ -10,13 +10,21 @@ export function frameSource(source, dev = true) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const names = new Set(['expose', 'live', 'scenePaused', 'syncRoadScenePause', 'updateWorld', 'drawEnding', 'frame']);
   // The hand-built places list (built once at boot) feeds the before-camera updates and the frame's waiting test.
-  const vars = new Set(['shadowFocus', 'hudState', 'places', 'handBuilt', 'placesWaiting']);
+  // Its rows hold the home and porch wrappers; spy() gives the rows' helpers from place.ts and what the boot built.
+  const vars = new Set(['shadowFocus', 'hudState', 'placeRows', 'places', 'handBuilt', 'placesWaiting']);
   const setupStart = source.indexOf('type WorldSegment ='), setupEnd = source.indexOf('const shadowFocus =');
   return transformSync(ast.statements.filter(n =>
     setupStart >= 0 && n.getStart(ast) >= setupStart && n.end <= setupEnd ||
     ts.isFunctionDeclaration(n) && names.has(n.name?.text) ||
     ts.isVariableStatement(n) && n.declarationList.declarations.some(d => vars.has(d.name.getText(ast)))
   ).map(n => n.getText(ast)).join('\n').replaceAll('import.meta.env.DEV', String(dev)), { loader: 'ts', target: 'es2022' }).code;
+}
+// The places rows' helpers (placeRow, placeSlots), read from the real place.ts like the dev hooks below.
+export function placeHelpers() {
+  const source = readFileSync(new URL('../web/src/place.ts', import.meta.url), 'utf8');
+  const ast = ts.createSourceFile('place.ts', source, ts.ScriptTarget.Latest, true);
+  const code = transformSync(ast.statements.filter(n => !ts.isImportDeclaration(n)).map(n => n.getText(ast)).join('\n').replaceAll(/^export /gm, ''), { loader: 'ts', target: 'es2022' }).code;
+  return new Function(`${code}; return { placeRow, placeSlots };`)();
 }
 export const hooksSource = () => readFileSync(new URL('../web/src/dev-hooks.ts', import.meta.url), 'utf8');
 export function hookFactory(source = hooksSource()) {
@@ -78,6 +86,9 @@ export function spy(source, ending = false, dev = true, absent = false, override
   if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'lotProps', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'yardProps', 'grass', 'waterReflections', 'fishing', 'harbourLights']) context[name] = null;
   if (typeof overrides === 'function') overrides(context, trace);
   else Object.assign(context, overrides);
+  // The places rows: their sites are only stored, and each built place is the spy (or null) of the same name.
+  Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null,
+    builtPlaces: new Proxy({}, { get: (_target, name) => context[name] ?? null }) });
   if (source.includes('devHooks.')) {
     if (context.demo && !context.params.has('demo')) context.params.set('demo', String(context.demo));
     const Hooks = hookFactory(context.hooksSource)(context);
