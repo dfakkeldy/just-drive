@@ -251,11 +251,13 @@ assert.equal(body.classList.contains('droneStack'),false);
  hud.rect={left:10,right:122,top:10,bottom:124,width:112,height:114};
  notifyResize(hud);
  assertClear(360,440,220,false);
- // Tight landscape with tall HUD (130 px) and Pause at x=188 moves the compact header beside HUD to clear the stick label.
+ // Tight landscape with tall HUD (130 px) moves the compact header beside HUD to clear the stick label, including the 72–73 px HUD width boundary.
  hud.rect={left:10,right:114,top:10,bottom:140,width:104,height:130};
- const crampedSide=assertClear(360,320,188);
- assert.equal(crampedSide.stacked,false,'360x320 with tall HUD moves compact header to the side position');
- assert.equal(crampedSide.folded,true,'360x320 with tall HUD keeps compact header folded');
+ for(const pauseLeft of [188,157,156]){
+  const crampedSide=assertClear(360,320,pauseLeft);
+  assert.equal(crampedSide.stacked,false,`360x320 Pause x=${pauseLeft} moves compact header to the side position`);
+  assert.equal(crampedSide.folded,true,`360x320 Pause x=${pauseLeft} keeps compact header folded`);
+ }
  // Width-dependent HUD text wrapping at 360x420 must settle with zero oscillation across a real height transition.
  {
   const heightForCol=c=>c<95?180:120;
