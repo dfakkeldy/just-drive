@@ -23,8 +23,8 @@ import { fleetEnabled, fleetRig } from './fleet-models';
 import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { isHillsideBuilding, NovemberBuildings } from './november-buildings';
-import { NovemberRoadDetails } from './november-road-details';
+import { isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
+import { littleMabouMarshRail, NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals, CatTileUnread } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
@@ -369,13 +369,17 @@ const maryvilleFeature = ERA.modern && AREA.maryville && params.get('maryville')
   ? await import('./maryville-store').catch(partFailed) : null;
 const maryvilleSite = maryvilleFeature ? new maryvilleFeature.MaryvilleStoreSite(manifest.village) : null;
 let mappedBuildings: Building[] = [];
+let littleMabouArt: ReturnType<typeof littleMabouBuildingArt> | undefined;
 // Mabou's main street (the grocery, the post office building and its memorial lawn, the hall, the gas station, the junction
 // group, the pub, the bank branch, lamp posts, sidewalk, string lights): built by hand from the dash cam brief. The boxes
 // it replaces leave the drawing only; they stay properties. ?mabou=0 leaves the surveyed boxes.
 const mabouSite = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
 const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then((data: { buildings: Building[] }) => {
   mappedBuildings = data.buildings;
-  const list = homeSite ? Home.buildings(data.buildings, homeSite, manifest.village) : yardSite ? Yard.buildings(data.buildings, yardSite, manifest.village) : data.buildings;
+  // Little Mabou Road's two homes (Port Hood pack only); the area's other sites still run on the result.
+  if (ERA.modern && AREA.id === 'porthood') littleMabouArt = littleMabouBuildingArt(data.buildings);
+  const base = littleMabouArt?.buildings ?? data.buildings;
+  const list = homeSite ? Home.buildings(base, homeSite, manifest.village) : yardSite ? Yard.buildings(base, yardSite, manifest.village) : base;
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
   return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
@@ -389,7 +393,7 @@ const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
 const buildingStyles = buildingAppearance(astra, LOW, sunDir,
-  wharfArt ? { ...bakedBuildingStyles, ...wharfArt.styles } : bakedBuildingStyles);
+  littleMabouArt || wharfArt ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles } : bakedBuildingStyles);
 const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
@@ -498,7 +502,8 @@ if (waterReflections) {
   Object.assign(terrain.uniforms, waterReflections.uniforms);
 }
 
-const roads = new Roads(novemberRoads?.added.length ? { roads: [...roadData.roads, ...novemberRoads.added] } : roadData, manifest.village, terrain);
+const roadLines = ERA.modern && AREA.id === 'mabou' ? roadData.roads.map(littleMabouMarshRail) : roadData.roads;
+const roads = new Roads({ roads: novemberRoads?.added.length ? [...roadLines, ...novemberRoads.added] : roadLines }, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
   ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW, () => terrain.dataRevision)
   : null;
@@ -640,7 +645,8 @@ const lotPropList = ERA.modern && buildingList && params.get('lotprops') !== '0'
   // Drawn things a prop must not stand in: power poles, mailboxes and community boxes. Only ever a reason to stand
   // elsewhere, never a reason to choose a house.
   obstacles: props ? [...props.poleSites, ...props.mail, ...props.sites].map(p => [p.x, p.z] as [number, number]) : [],
-  excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...[villageSite, hawkesburySite, mabouSite].flatMap(s => s?.clear ?? [])],
+  // A hand-built place that is not a terrain site keeps props off through its clear boxes (village, hawkesbury, mabouMain).
+  excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
 }) : [];
 // No single tree stands in a parked car; the canopy is left as it is.
 // Kept apart: these only clear trees. Mail play's breakable yard props must not give way to them (they give way to those).
@@ -705,7 +711,7 @@ const places: Record<keyof typeof placeSites, { place: HandBuiltPlace | null; de
   village: { dev: village, place: village },
   hawkesbury: { dev: hawkesbury, place: hawkesbury },
   mabouMain: { dev: mabouMain, place: mabouMain },
-  maryville: { dev: null, place: maryville },
+  maryville: { dev: maryville, place: maryville },
 };
 const handBuilt = Object.values(places);
 for (const { place } of handBuilt) if (place) scene.add(place.group);
@@ -763,9 +769,14 @@ const siteContacts: [string, ContactSite | null][] = [
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
 ];
+// A place without a row would compile and boot, and the car would drive through it. Stop at boot instead.
+for (const name of Object.keys(places)) if (!siteContacts.some(([row]) => row === name)) throw new Error(`hand-built place '${name}' has no contact row`);
 for (const [, row] of siteContacts) if (row) fleetContacts.add(row);
-// Solo driving (no fleet, no quarry) keeps its own order of the same rows (#57): tall moves after every other site,
-// and the park after tall. A new site row lands in both lists.
+// Solo driving (no fleet, no quarry) keeps its own order of the same rows: tall moves after every other site,
+// and the park after tall. This is kept history, not a known overlap rule. The old hand-written solo resolver got tall
+// at its end with the turbines (#9), and the park after it when Kicker Field opened (#57), so ordinary rides kept their
+// exact poses. No known overlap depends on this order; the works yard and Kicker Field are the one pair where it could.
+// A new site row lands in both lists, with the same neighbours; only its place next to tall and the park differs.
 const soloContacts = new AreaContacts();
 for (const [, row] of [...siteContacts.filter(([name]) => name !== 'tall'), ...siteContacts.filter(([name]) => name === 'tall')]) if (row) soloContacts.add(row);
 if (parkContacts) soloContacts.add(parkContacts);
@@ -1644,8 +1655,7 @@ if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
 if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
 if (import.meta.env.DEV) expose({ lotProps }, false);   // for tools/lot-props-browser.mjs; not enumerable: ui-check pins the public key set
-if (import.meta.env.DEV && maryville) expose({ maryville }, false);
-if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).filter(([name]) => name !== 'maryville').map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
+if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
   const report = document.getElementById('shiftReport'), footer = report?.querySelector('.reportFooter');
