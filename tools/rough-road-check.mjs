@@ -9,7 +9,10 @@ import { Object3D } from '../web/node_modules/three/build/three.module.js';
 import { ROUGH_STRETCHES, PUDDLE_POND, PUDDLE_RUT, PUDDLE_POOL, resolveStretch, roughRoads, setPuddleField, puddleDip, puddlesFor, roughSite } from '../web/src/rough-roads.ts';
 import { ROUGH_POTHOLES, potholeDensity, potholeDepth } from '../web/src/defects.ts';
 import { ROUGH_BIT, paintSiteSurface, placeBoxes } from '../web/src/terrain.ts';
-import { Vehicle } from '../web/src/vehicle.ts';
+import { Vehicle, PUDDLE_DRAG } from '../web/src/vehicle.ts';
+import { BikeRide, BIKE_STEP } from '../web/src/bike-ride.ts';
+import { PuddleField } from '../web/src/rough-roads.ts';
+import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
 import { CHURCH_START } from '../web/src/church-site.ts';
 
@@ -114,6 +117,26 @@ console.error(JSON.stringify(rows, null, 1));
 ok(rows['rough gravel 15 km/h'].rms > rows['plain gravel 15 km/h'].rms * 1.3, 'a rough stretch shakes more than plain gravel at the same speed');
 ok(rows['rough gravel 15 km/h'].rms >= rows['plain gravel 50 km/h'].rms * 0.8, 'at 15 km/h it shakes about as hard as plain gravel at 50 km/h (the dash cam)');
 ok(rows['rough gravel + water 30 km/h'].drag > rows['rough gravel 30 km/h'].drag, 'water holds the car back');
+
+// 4b. The bike in water: the same drag per wheel as the car (linear in speed, two wheels), not a wall.
+{
+  const slow = (kmh, water) => {
+    const terrain = { heightAt: () => 0, withContactHeight: (_b, read) => read(), surfaceAt: () => ({ ground: 0, canopy: 0, kind: 3, roadDist: 0, halfWidth: 3, bridge: false, washboard: false, brook: 99, level: 8 }) };
+    const road = { id: 1, kind: 3, bridge: false, name: 'Test road', halfWidth: 3, pts: [[-10000, 0], [10000, 0]] };
+    const roads = { deckHeight: () => null, nearest: (x, z, d, pred) => !pred || pred(road) ? { x, z: 0, heading: Math.PI / 2, dist: Math.abs(z), road, seg: 0, t: .5 } : null };
+    const v = new BikeRide({ root: new THREE.Group(), pose() {}, driverEye: new THREE.Object3D() }, terrain, roads, -.2);
+    setPuddleField(water ? new PuddleField([{ x: 0, z: 0, a: 60, b: 60, yaw: 0, depth: water, kind: PUDDLE_POND, seed: 1 }]) : null);
+    v.place(0, 0, Math.PI / 2);
+    for (let i = 0; i < 30; i++) { v.vx = v.speed = kmh / 3.6; v.vz = 0; v.update(BIKE_STEP, { throttle: 0, steer: 0, handbrake: false }); }
+    const before = v.speed; v.update(BIKE_STEP, { throttle: 0, steer: 0, handbrake: false });
+    setPuddleField(null);
+    return (before - v.speed) / BIKE_STEP;
+  };
+  for (const kmh of [30, 50, 70]) {
+    const extra = slow(kmh, 0.1) - slow(kmh, 0), rule = 2 * 0.1 * PUDDLE_DRAG * kmh / 3.6;
+    ok(extra > rule * 0.6 && extra < rule * 1.4, `bike in 0.1 m of water at ${kmh} km/h slows ${extra.toFixed(2)} m/s2 more, about the car's rule for two wheels (${rule.toFixed(2)})`);
+  }
+}
 
 // 5. The baked River Denys Road: every stretch resolves, and the water keeps clear of the church start.
 const baked = process.env.MMM_ROOT ? `${process.env.MMM_ROOT}/data/baked/areas/judique/roads.json` : 'data/baked/areas/judique/roads.json';

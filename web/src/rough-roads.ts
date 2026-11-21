@@ -39,8 +39,8 @@ export const ROUGH_STRETCHES: readonly RoughStretch[] = Object.freeze([
 ]);
 
 /** How much water each level holds: the share of potholes that hold water (on average: pools come in clusters), and
- *  metres along the road between rut streaks and between ponds. Survey: 1-2 puddles per 100 m on the rough stretches,
- *  2-4 (with clusters of pools) on the severe ones. */
+ *  metres along the road between rut streaks and between ponds. Survey: 1-2 rut streaks or ponds per 100 m on the
+ *  rough stretches and 2-4 on the severe ones, plus the pools in potholes (rough-road-check prints the totals). */
 export const PUDDLE_RULES: Readonly<Record<Roughness, { poolShare: number; rut: [number, number]; pond: [number, number]; pondWidth: [number, number] }>> = Object.freeze({
   rough: { poolShare: 0.08, rut: [60, 120], pond: [150, 280], pondWidth: [0.45, 0.7] },
   severe: { poolShare: 0.2, rut: [25, 50], pond: [55, 120], pondWidth: [0.7, 0.92] },

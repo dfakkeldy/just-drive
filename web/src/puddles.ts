@@ -82,6 +82,8 @@ function dropTexture(): THREE.DataTexture {
 export interface Wading {
   x: number; z: number; y: number; heading: number; speed: number; airborne: boolean;
   readonly wheelWater: Float32Array;
+  /** One wheel track (a bike): the wheels write slots 0 and 2, and the spray leaves from the middle to both sides. */
+  readonly singleTrack?: boolean;
   readonly spec: { readonly wheelbase: number; readonly track: number; readonly rearTrack?: number };
 }
 
@@ -206,14 +208,14 @@ export class Puddles {
       const entering = this.wasWet[w] <= 0;
       this.wasWet[w] = water;
       this.due[w] += dt * Math.min(40, water * 260 * speed / 10) + (entering ? Math.min(8, speed * water * 30) : 0);
-      const along = w < 2 ? hl : -hl, side = (w & 1 ? 1 : -1) * (w < 2 ? half : rear);
+      const along = w < 2 ? hl : -hl, side = v.singleTrack ? 0 : (w & 1 ? 1 : -1) * (w < 2 ? half : rear);
       while (this.due[w] >= 1) {
         this.due[w]--;
         const i = this.next, k = i * 3, j = ((i * 7919) % 97) / 97 - .5;
         this.next = (this.next + 1) % this.size;
         this.pos[k] = v.x + fx * along + rx * side; this.pos[k + 1] = v.y + .1; this.pos[k + 2] = v.z + fz * along + rz * side;
         // Up, out to the wheel's own side, and back: water leaves a tyre as a fan.
-        const out = Math.sign(side) * (1.2 + 1.5 * j + speed * .08), up = 1.6 + speed * .18 + j;
+        const out = (v.singleTrack ? (i & 1 ? 1 : -1) : Math.sign(side)) * (1.2 + 1.5 * j + speed * .08), up = 1.6 + speed * .18 + j;
         this.vel[k] = rx * out - fx * speed * (.25 + .2 * j); this.vel[k + 1] = up; this.vel[k + 2] = rz * out - fz * speed * (.25 + .2 * j);
         this.age[i] = 0; this.scale[i] = .45 + .45 * (j + .5) + water * 3;
         // Grey-white water and brown mud, kept dim: unlit, a bright drop would glow like a lamp in the shade of the trees.

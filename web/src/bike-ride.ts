@@ -46,6 +46,7 @@ export class BikeRide implements Ride {
   surfaceName = ''; roadName: string | null = null;
   /** Water under the wheels this step, metres, in the car's order (the bike uses front left and rear left). */
   readonly wheelWater = new Float32Array(4);
+  readonly singleTrack = true;
   wheelie = 0; wheelieRate = 0; pitchRate = 0; whip = 0;
   frontTravel = 0; rearTravel = 0; compression = 0;
   crashTime = 0; crashes = 0;
@@ -252,10 +253,10 @@ export class BikeRide implements Ride {
       const ridge = s.washboard ? washboard(phase) : 0;
       const hole = !(s.kind > 0 && s.roadDist < s.halfWidth) ? 0 : s.rough ? potholeDepth(this.x, this.z, potholeDensity(s.kind, s.washboard, s.gravel, true), ROUGH_DEPTH)
         : potholeDepth(this.x, this.z, potholeDensity(s.kind, s.washboard, s.gravel));
-      // Water holds both wheels back (vehicle.ts PUDDLE_DRAG, for two wheels) and the front dips into it.
+      // Water holds both wheels back (vehicle.ts PUDDLE_DRAG per wheel, so twice that) and the front dips into it.
       const water = puddleDip(this.x, this.z);
       this.wheelWater[0] = this.wheelWater[2] = water;
-      if (water > 0) forward *= Math.max(0, 1 - dt * 2 * water * PUDDLE_DRAG * Math.abs(forward));
+      if (water > 0) forward *= Math.max(0, 1 - dt * 2 * water * PUDDLE_DRAG);
       const rough = Math.sin(phase * 4.1) * surf.rough * Math.min(speed / 10, 1);
       this.frontTravel = clamp(rough + ridge * .6 + (hole + water) * .4 + this.compression + (t < 0 ? .08 : 0), -.09, .24);
       this.rearTravel = clamp(-rough * .7 + ridge * .4 + this.compression * .7, -.09, .20);

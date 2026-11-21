@@ -9,7 +9,7 @@
 //   noise -> bandpass -> pulse gain (opened and shut by a square LFO: gravel chatter, washboard rattle) -> tyre gain
 //   noise -> lowpass -> splash gain (wheels through a puddle: rough-roads.ts; quick to rise, slow to die away)
 //   all -> master (the "Engine sound" volume times OUTPUT_TRIM, ducked under the radio) -> speakers
-// LOW detail drops the upper voice and the rasp: two sources and two filters in all.
+// LOW detail drops the upper voice and the rasp: two sources and three filters (with the splash lowpass) in all.
 // The context is suspended (no CPU, no sound) while the page is hidden, off the road, indoors or at an ending.
 
 import { ENGINES, OUTPUT_TRIM, RADIO_DUCK, SPLASH_DUCK, SPLASH_GAIN, UPPER, engineKind, engineState, engineWave, tyreState, voicePulses, type EngineKind } from './engine-sound-rules';
