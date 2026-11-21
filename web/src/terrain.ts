@@ -65,7 +65,7 @@ const BURST_DISTANCE = 150;
 // made a build cheaper. In a driving capture of Nov 2026 (Apple M1 Pro, two runs per view), no whole terrain.update
 // (builds included) took longer than 7.1 ms with desktop detail or 12.5 ms with phone detail. With desktop detail that
 // is below the old 8 ms, so each cap now holds more builds there. The dev server keeps the last and the longest single
-// build in terrain.lastBuildMs and terrain.maxBuildMs.
+// build in terrain.lastBuildMs and terrain.maxBuildMs, and counts timed builds in terrain.buildCount.
 // Behind the title or while paused.
 const PAUSED_BUILD_BUDGET_MS = 48;
 // After a jump: short, so the coarse-land wait does not stretch.
@@ -326,9 +326,12 @@ export class Terrain {
   /** The budget used by the last update, including the update that ended a burst. */
   private lastBuildMode: 'driving' | 'paused' | 'burst' = 'driving';
   get buildMode() { return this.lastBuildMode; }
-  /** Dev server only: the last and the longest single tile build, in milliseconds (buildWaiting). Never set in production. */
+  /** Dev server only: the last and the longest single tile build, in milliseconds (buildWaiting), and how many builds
+   *  were timed. A driving update builds at most one tile, so a reader that sees buildCount go up by one reads that build
+   *  in lastBuildMs once. Never set in production. */
   declare lastBuildMs?: number;
   declare maxBuildMs?: number;
+  declare buildCount?: number;
   private readyCount = 0;
   private wantedCount = 0;
   private lastEvict = 0;
@@ -651,6 +654,7 @@ export class Terrain {
           this.build(decoded);
           this.lastBuildMs = performance.now() - start;
           this.maxBuildMs = Math.max(this.maxBuildMs ?? 0, this.lastBuildMs);
+          this.buildCount = (this.buildCount ?? 0) + 1;
         } else this.build(decoded);
         // The pin pass ran before this tile was ready; protect a newly built camera/car column too.
         if (bestUnder) this.use(t);
