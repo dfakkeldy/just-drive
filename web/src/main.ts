@@ -1891,7 +1891,9 @@ const worldCost: Record<string, number> = {};
 if (import.meta.env.DEV) expose({ cost: worldCost });
 // The frame's own blocks outside the table (the drive steps, animals, chase, mail, sun shadows), in milliseconds, on the
 // dev server only. A separate record, so mmm.cost keeps exactly the table's entries. Not enumerable: ui-check pins the
-// public key set. Each call site is guarded like updateWorld: the production bundle keeps no clock.
+// public key set. Each call site is guarded like updateWorld: the production bundle keeps no clock. A key keeps its last
+// value on frames that skip its block (drive and chase while flying; some or all keys on frames that return early, such
+// as interior or ending frames), so a reader counts only the keys written this frame.
 const frameCost: Record<string, number> = {};
 if (import.meta.env.DEV) expose({ frameCost }, false);
 let frameClock = 0;
