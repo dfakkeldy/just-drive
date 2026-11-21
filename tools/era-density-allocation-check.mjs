@@ -1,4 +1,7 @@
-// Boot the static import graph in both normal and artifact-style inline builds.
+// Boot the static import graph. `normal` keeps each dynamic import a chunk of its own (Vite's default split), as the
+// published build does; it does not use web/area-chunks-build.ts.
+// `artifact` inlines every dynamic import, the published layout before the split; it stays as an extra stress case.
+// `eager-fault` must fail: it proves the check sees an eager layout decode.
 import assert from 'node:assert/strict';
 import {build} from '../web/node_modules/vite/dist/node/index.js';
 import ts from '../web/node_modules/typescript/lib/typescript.js';

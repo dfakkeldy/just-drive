@@ -11,8 +11,9 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms)),rootFile=out+'/opt-in-root',fau
 const roots={};
 for(const [name,enabled] of [['normal',false],['public',true]]){
  const root=roots[name]=out+'/opt-in-'+name;mkdirSync(root,{recursive:true});
- for(const path of ['terrain','audio','areas','offline','manifest.webmanifest','_headers','sw.js','version.json'])if(existsSync(out+'/site/'+path)&&!existsSync(root+'/'+path))symlinkSync(out+'/site/'+path,root+'/'+path);
- write(root+'/index.html',read(out+'/site/index.html','utf8').replace(/ integrity="[^"]+"/,'')); // Ordinary shell, including its real build metadata.
+ for(const path of ['terrain','audio','areas','chunks','offline','manifest.webmanifest','_headers','sw.js','version.json'])if(existsSync(out+'/site/'+path)&&!existsSync(root+'/'+path))symlinkSync(out+'/site/'+path,root+'/'+path);
+ // Ordinary shell, including its real build metadata. This app.js is one esbuild file: no script integrity, no chunk preloads.
+ write(root+'/index.html',read(out+'/site/index.html','utf8').replace(/(<script[^>]*?) integrity="[^"]+"/,'$1').replace(/<link rel="modulepreload"[^>]*>\n?/g,''));
  await build({entryPoints:['web/src/main.ts'],bundle:true,format:'esm',target:'es2022',minify:true,outfile:root+'/app.js',define:{__PUBLIC_APP__:JSON.stringify(enabled),'import.meta.env.BASE_URL':JSON.stringify('./'),'import.meta.env.DEV':'false','import.meta.env.VITE_MP':JSON.stringify('1')},plugins:baseline&&enabled?[{name:'review-baseline',setup(b){b.onLoad({filter:/web\/src\/(main|offline-play|offline-version|streams)\.ts$/},args=>({contents:readBaseline('pwa-opt-in',args.path.slice(args.path.indexOf('web/src/'))),loader:'ts'}));}}]:[]});
 }
 // Use the actual Vite public app for the fixed case; no-offline oracle differs only by compiled-out feature.

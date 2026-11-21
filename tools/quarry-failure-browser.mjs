@@ -1,4 +1,5 @@
-// A real failed HTTP request, then a failed factory, must lead to the existing retryable area screen.
+// A real failed HTTP request, then a failed factory, must lead to the existing retryable area screen. The request is the
+// park's module: /src/quarry-feature.ts on the dev server, chunks/quarry-feature-<hash>.js in the published build.
 import assert from 'node:assert/strict';
 import {writeFileSync,createReadStream,statSync} from 'node:fs';
 import {createServer} from 'node:http';
@@ -12,7 +13,7 @@ const tab=await(await cdpFetch(`http://127.0.0.1:${process.env.CDP_PORT}/json/ne
 const rows=[],failures=[];
 const check=(name,ok)=>{rows.push({name,exit:ok?0:1});console.log(ok?'PASS':'FAIL',name);if(!ok)failures.push(name);};
 try{
- c=await cdp(tab.webSocketDebuggerUrl,{onEvent:m=>{if(m.method==='Fetch.requestPaused'){intercepted++;const {requestId}=m.params;void(action==='network'?c.send('Fetch.failRequest',{requestId,errorReason:'Failed'}):c.send('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:root?'application/json':'text/javascript'},{name:'Cache-Control',value:'no-store'}],body:Buffer.from(root?'{"QUARRY_LAKES":[null],"TALUS_TOES":[]}':"export function load(){throw Error('injected factory failure')}").toString('base64')}));}}});
+ c=await cdp(tab.webSocketDebuggerUrl,{onEvent:m=>{if(m.method==='Fetch.requestPaused'){intercepted++;const {requestId}=m.params;void(action==='network'?c.send('Fetch.failRequest',{requestId,errorReason:'Failed'}):c.send('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'text/javascript'},{name:'Cache-Control',value:'no-store'}],body:Buffer.from("export function load(){throw Error('injected factory failure')}").toString('base64')}));}}});
  await c.send('Emulation.setDeviceMetricsOverride',{width:844,height:390,deviceScaleFactor:1,mobile:false});
  await c.send('Runtime.disable');await c.send('Page.enable');await c.send('Fetch.enable',{patterns:[{urlPattern:'*quarry-feature*',requestStage:'Request'}]});
  const read=async expression=>(await c.send('Runtime.evaluate',{expression,returnByValue:true})).result.result.value;

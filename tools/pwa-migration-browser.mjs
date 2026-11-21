@@ -45,7 +45,7 @@ const aRoot=out+'/site',vA=JSON.parse(read(aRoot+'/version.json')),iA=JSON.parse
 const bRoot=out+'/migration-b';if(existsSync(bRoot))rmSync(bRoot,{recursive:true});
 function buildB(marker,unseen) {
  if(!existsSync(bRoot)) {
-  mkdirSync(bRoot+'/offline',{recursive:true});symlinkSync(aRoot+'/offline/icons',bRoot+'/offline/icons');symlinkSync(aRoot+'/audio',bRoot+'/audio');if(existsSync(aRoot+'/areas'))symlinkSync(aRoot+'/areas',bRoot+'/areas');
+  mkdirSync(bRoot+'/offline',{recursive:true});symlinkSync(aRoot+'/offline/icons',bRoot+'/offline/icons');symlinkSync(aRoot+'/audio',bRoot+'/audio');if(existsSync(aRoot+'/areas'))symlinkSync(aRoot+'/areas',bRoot+'/areas');if(existsSync(aRoot+'/chunks'))symlinkSync(aRoot+'/chunks',bRoot+'/chunks');
   linkTree(aRoot+'/terrain',bRoot+'/terrain',new Set([aRoot+'/terrain/manifest.json',aRoot+unseen]));
  }
  write(bRoot+'/app.js',read(aRoot+'/app.js','utf8')+`\nglobalThis.__pwaBuild=${JSON.stringify(marker)};\n`);write(bRoot+'/index.html',read(aRoot+'/index.html'));write(bRoot+'/_headers',read(aRoot+'/_headers'));execFileSync(process.execPath,['tools/build-pwa.mjs',bRoot]);return JSON.parse(read(bRoot+'/version.json'));
@@ -92,7 +92,7 @@ try {
  await value(observer,`document.getElementById('gear').click();document.getElementById('gear').click()`);await until(observer,`/Done:/.test(document.getElementById('offlineStatus').textContent)&&document.getElementById('offlineStop').hidden`,'observer refreshes completion');ok(true,'second real tab refreshes running to Done on reopening settings');await shot(observer,'migration-observer-done');
  // A complete B must outlive an incomplete online C, even after B's last tab closes.
  const cRoot=out+'/migration-c';if(existsSync(cRoot))rmSync(cRoot,{recursive:true});mkdirSync(cRoot+'/offline',{recursive:true});
- symlinkSync(bRoot+'/offline/icons',cRoot+'/offline/icons');symlinkSync(bRoot+'/audio',cRoot+'/audio');if(existsSync(bRoot+'/areas'))symlinkSync(bRoot+'/areas',cRoot+'/areas');
+ symlinkSync(bRoot+'/offline/icons',cRoot+'/offline/icons');symlinkSync(bRoot+'/audio',cRoot+'/audio');if(existsSync(bRoot+'/areas'))symlinkSync(bRoot+'/areas',cRoot+'/areas');if(existsSync(bRoot+'/chunks'))symlinkSync(bRoot+'/chunks',cRoot+'/chunks');
  linkTree(bRoot+'/terrain',cRoot+'/terrain',new Set([bRoot+'/terrain/manifest.json',bRoot+unseen]));
  write(cRoot+'/app.js',read(bRoot+'/app.js','utf8')+'\nglobalThis.__pwaBuild="C";');write(cRoot+'/index.html',read(bRoot+'/index.html'));write(cRoot+'/_headers',read(bRoot+'/_headers'));execFileSync(process.execPath,['tools/build-pwa.mjs',cRoot]);
  write(rootFile,cRoot);await load(observer);await until(observer,`window.__pwaBuild==='C'`,'new online C');await close(b);await message(observer,'status');

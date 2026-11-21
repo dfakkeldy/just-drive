@@ -120,6 +120,8 @@ MP_SERVER="ws://127.0.0.1:$PORT" node "$ROOT/tools/mp-race-compat.mjs"
 # The published script carries multiplayer by default; VITE_MP=0 builds one with none of it (the way back).
 npx vite build -c vite.artifact.config.ts --outDir "$WORK/with" --logLevel error
 VITE_MP=0 npx vite build -c vite.artifact.config.ts --outDir "$WORK/plain" --logLevel error
-if grep -q -e mpChip -e '/mp/v' "$WORK/plain/app.js"; then echo "FAIL the VITE_MP=0 build carries multiplayer code" >&2; exit 1; fi
-grep -q mpChip "$WORK/with/app.js" || { echo "FAIL the published build has no multiplayer code" >&2; exit 1; }
-echo "PASS the published build: multiplayer is in it ($(wc -c < "$WORK/with/app.js" | tr -d ' ') bytes); VITE_MP=0 leaves it out ($(wc -c < "$WORK/plain/app.js" | tr -d ' ') bytes)"
+# The build is app.js and its chunks (web/area-chunks-build.ts): join them into one file and read that.
+for build in with plain; do cat "$WORK/$build/app.js" > "$WORK/$build.all.js"; if [ -d "$WORK/$build/chunks" ]; then cat "$WORK/$build"/chunks/*.js >> "$WORK/$build.all.js"; fi; done
+if grep -q -e mpChip -e '/mp/v' "$WORK/plain.all.js"; then echo "FAIL the VITE_MP=0 build carries multiplayer code" >&2; exit 1; fi
+grep -q mpChip "$WORK/with.all.js" || { echo "FAIL the published build has no multiplayer code" >&2; exit 1; }
+echo "PASS the published build: multiplayer is in it ($(wc -c < "$WORK/with.all.js" | tr -d ' ') bytes); VITE_MP=0 leaves it out ($(wc -c < "$WORK/plain.all.js" | tr -d ' ') bytes)"
