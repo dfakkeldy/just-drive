@@ -199,7 +199,7 @@ export class MiniMap {
       const safeTop = safe('top'), safeBottom = safe('bottom'), safeRight = safe('right');
       const leftEdge = Math.max(10, safeLeft);
       let rightLimit = innerWidth - 10;
-      for (const id of ['bigMapButton', 'pauseButton']) {
+      for (const id of ['bigMapButton', 'pauseButton', 'savePictureButton']) {
         const e = document.getElementById(id), r = e && !e.hidden ? e.getBoundingClientRect() : null;
         if (r?.width) rightLimit = Math.min(rightLimit, r.left);
       }
