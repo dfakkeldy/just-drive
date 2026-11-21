@@ -78,10 +78,15 @@ async function contracts(replacements={}){
  const moved=camera.clone().add(new THREE.Vector3(31,0,0));
  assert.equal(step(moved),4,'the hold ends when the camera moves more than 30 m across the map');
  assert.equal(step(moved),5,'an ended hold stays ended');
- const far=moved.clone().add(new THREE.Vector3(-31,0,-200));
- assert.equal(step(far),5,'a jump of more than 150 m starts a new hold where the camera lands');
- land.dataRevision++;assert.notEqual(held.deckHeight(0,-20),null);assert.equal(deck.audit.builds,6,'a deck query still builds at once during a burst');
- const span=deck.spans[0];span.forceBuild=true;span.revision=-1;held.update(far);assert.equal(deck.audit.builds,7,'a forced build does not wait for the burst');
+ // A jump is one step of more than 150 m from the last camera position, not a distance from where the hold began.
+ // So 20 m steps in a straight line, 200 m in all, keep an ended hold ended, and so does one step of 149 m.
+ const walk=moved.clone();
+ for(let i=1;i<=10;i++){walk.z-=20;assert.equal(step(walk),5+i,`steps of 20 m keep an ended hold ended (${20*i} m)`);}
+ walk.x+=149;assert.equal(step(walk),16,'one step shorter than 150 m keeps an ended hold ended');
+ const far=walk.clone().add(new THREE.Vector3(-31,0,-200));
+ assert.equal(step(far),16,'a jump of more than 150 m starts a new hold where the camera lands');
+ land.dataRevision++;assert.notEqual(held.deckHeight(0,-20),null);assert.equal(deck.audit.builds,17,'a deck query still builds at once during a burst');
+ const span=deck.spans[0];span.forceBuild=true;span.revision=-1;held.update(far);assert.equal(deck.audit.builds,18,'a forced build does not wait for the burst');
  // Node tools and stubs that never set holdBackground see no hold.
  const bareLand={...terrain,dataRevision:1,burst:true},bare=new mod.Roads({roads:[road(9,0,20)]},[0,0],bareLand);
  bare.update(camera);bareLand.dataRevision++;bare.update(camera);
@@ -176,6 +181,9 @@ if(process.argv.includes('--mutations')){
   ['the hold has no camera bound','else if(Math.hypot(cam.x-this.holdAt!.x,cam.z-this.holdAt!.z)>HOLD_REACH)this.holdEnded=true;','',/moves more than 30 m/],
   ['the camera bound counts height','Math.hypot(cam.x-this.holdAt!.x,cam.z-this.holdAt!.z)>HOLD_REACH','cam.distanceTo(this.holdAt!)>HOLD_REACH',/rising with the car/],
   ['a jump does not start a new hold','const jump=!this.holdAt||!this.holdLast||cam.distanceTo(this.holdLast)>HOLD_JUMP;','const jump=!this.holdAt;',/jump of more than 150 m/],
+  ['a jump is measured from where the hold began','cam.distanceTo(this.holdLast)>HOLD_JUMP','cam.distanceTo(this.holdAt)>HOLD_JUMP',/steps of 20 m keep an ended hold ended/],
+  ['the last camera position moves only on a jump','this.holdLast=(this.holdLast??new THREE.Vector3()).copy(cam);\n    if(jump){','if(jump){this.holdLast=(this.holdLast??new THREE.Vector3()).copy(cam);',/steps of 20 m keep an ended hold ended/],
+  ['a jump is a step of more than 40 m','HOLD_REACH = 30, HOLD_JUMP = 150;','HOLD_REACH = 30, HOLD_JUMP = 40;',/one step shorter than 150 m/],
   ['a forced build waits for the burst','&&!r.forceBuild)continue;',')continue;',/forced build/],
   ['a deck query waits for the burst','if(build)this.ensure(r);','if(build&&!this.terrain.burst)this.ensure(r);',/query still builds/],
  ]){
