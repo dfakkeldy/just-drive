@@ -319,3 +319,6 @@ ride-along-browser	unproven	no	apple-check-host M4 / Edge 157 PASS 64 s (day 3: 
 ride-along-browser-phone	unproven	no	apple-check-host M4 / Edge 157 PASS 21 s (phone LOW, day 16 run 3: the crawling Boss, the same seen throw, card and report fit); not yet run on the MacBook or on Linux
 ride-along-budget	unproven	no	apple-check-host M4 / Edge 157 PASS 32 s (ride-along day, Boss in view +45 draws, +44,768 triangles; hidden 0); not yet run on the MacBook or on Linux
 ride-along-budget-low	unproven	no	apple-check-host M4 / Edge 157 PASS 27 s on the breakable yard props (#36) base (LOW ride-along start with the Boss in view 227 of 227 calls (PHONE_CAP); the Boss 2 draws, its door words left off on LOW; hidden 0); after the lot props (#41), 2026-11-19: FAIL, 229 of 227 (the start without the Boss is 227); not yet run on the MacBook or on Linux
+drag-rules	portable	yes	Node timing and runway data in source
+drag-rules-mutations	portable	yes	Node mutation controls, source only
+airport-drag-browser	unproven	no	Hardware WebGL, Point Tupper land and live input

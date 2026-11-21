@@ -45,7 +45,7 @@ function verifyPauseWiring(main) {
     let received, aiResolved = 0;
     const context = { aiDriver: { resolve() { aiResolved++; } }, aiDriverOn: () => aiOn, boss: null, multiplayer: null, endings: { busy: false }, yard: null, history: null, home: null, porch: null,
       ambientTraffic: null, roadAnimals: null, canal: null, canalBeforeX: 0, canalBeforeZ: 0, church: null, village: null, hawkesbury: null, mabouMain: null, novemberBuildings: null, quarry: null, tall: null, fleet: null, stuntPark: null, parkContacts: null, soloContacts: { resolve() {} }, cemeteries: null, fishing: null, yardJob: null, yardProps: null, lotProps: null, roadScene: null, towing: null,
-      vehicle: { damageActive: true }, horse: false, roadsidePlaying: false, jumpPlacement: 0,
+      airportDrag: null, vehicle: { damageActive: true }, horse: false, roadsidePlaying: false, jumpPlacement: 0,
       syncRoadScenePause() {}, scenePaused: () => paused,
       schoolBus: { setPaused: value => { received = value; }, step() {} } };
     new Function('context', `with(context) { ${body} }`)(context);

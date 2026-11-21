@@ -29,7 +29,7 @@ const cases=[
  ['ramp landing','ramp','bike-ride.ts','const clean = Math.abs(angle(this.pitch - slope)) < .62','const clean = false && Math.abs(angle(this.pitch - slope)) < .62','bike lands the slipway jump cleanly'],
  ['jump telemetry','ramp','bike-ride.ts','this.lastJump = { ...this.jump };','this.lastJump = { ...this.jump, peakHeight: NaN };','jump telemetry is exposed in dev'],
  ['jump HUD','ramp','ride-features.ts','j && j.airTime > 1','j && j.airTime > 100','HUD shows long jump summary'],
- ['places road placement','places','main.ts','vehicle.restart(x, z, heading); vehicle.vx','vehicle.restart(x+20, z+20, heading); vehicle.vx','bike place jump rests on road and shows arrival'],
+ ['places road placement','places','main.ts','vehicle.restart(x, z, heading);\n  vehicle.vx','vehicle.restart(x+20, z+20, heading);\n  vehicle.vx','bike place jump rests on road and shows arrival'],
  ['animal horn','places','main.ts','animals?.honk(vehicle); roadScene?.honk(vehicle);','roadScene?.honk(vehicle);','bike horn reaches animals'],
  ['eye camera','places','bike-camera.ts',"if (view === 'seat')",'if (false)','bike eye camera stays above land'],
  ['road reset','places','bike-ride.ts','respawn(): void {','respawn(): void { return;','R resets bike to road at rest'],

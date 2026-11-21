@@ -160,7 +160,7 @@ function check(lists) {
 
 // main.ts: the list for each area. Only Judique has the two hand-built places.
 const main = readFileSync(`${root}/web/src/main.ts`, 'utf8');
-assert.ok(main.includes("...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...(cemeteries?.places ?? [])"), 'main.ts shows the researched places, then the cemeteries');
+assert.ok(main.includes("...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...dragPlaces, ...(cemeteries?.places ?? [])"), 'main.ts shows researched places, then the airport if built, then cemeteries');
 const lists = () => Object.fromEntries(AREA_IDS.map(id => [id, [...(id === 'judique' ? [...homePlaces(), ...churchPlaces()] : []), ...areaPlaces(id)]]));
 assert.deepEqual(['mabou', 'westbay', 'fixture'].map(id => areaPlaces(id).length), [0, 0, 0], 'other areas keep their own lists');
 const report = check(lists());
