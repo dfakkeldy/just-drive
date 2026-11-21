@@ -13,7 +13,7 @@ body.tcOn #bigMapButton{position:static;min-width:56px;min-height:56px;flex:none
 #bigMap{position:fixed;inset:0;z-index:23;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#17323c;color:#f2f1e4;font:14px/1.4 system-ui,sans-serif;box-sizing:border-box;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 #bigMap[hidden],#bigMapButton[hidden],#mapCard[hidden],#mapIndex[hidden]{display:none}
 #bigMap header{display:flex;gap:6px;align-items:center;padding:8px 12px;background:#10242b;border-bottom:1px solid #668085}
-#bigMap h2{font-size:20px;margin:0 auto 0 0;letter-spacing:.02em}#bigMap button{min-height:44px;min-width:44px;cursor:pointer;background:#24414a;border:1px solid #779398;border-radius:6px;color:inherit;padding:8px 12px;font:inherit}
+#bigMap h2{margin:0 auto 0 0;font:600 20px/1.15 "Iowan Old Style",Palatino,Georgia,serif}#bigMap button{min-height:44px;min-width:44px;cursor:pointer;background:#24414a;border:1px solid #779398;border-radius:6px;color:inherit;padding:8px 12px;font:inherit}
 #bigMap button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 #mapStage{position:relative;min-height:0;overflow:hidden}#bigMapCanvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}#bigMapCanvas:active{cursor:grabbing}
 #mapIndex,#mapCard{position:absolute;right:12px;top:12px;box-sizing:border-box;width:min(330px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;background:#10242bf5;border:1px solid #93aaa0;border-radius:9px;padding:16px;box-shadow:0 6px 24px #07151b66;overscroll-behavior:contain}

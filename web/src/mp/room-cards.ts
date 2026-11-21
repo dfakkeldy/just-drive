@@ -1,9 +1,10 @@
 // One home for the room cards. The phone keeps the same nodes in Settings.
 const CSS = `
 body.tcOn #phoneTop #gear{position:relative}
-#gearRoom,#gearUnread{position:absolute;pointer-events:none;background:#d0632e;border-radius:50%}
-#gearRoom{top:2px;right:2px;width:18px;height:18px;color:#0b1620;font:700 12px/18px var(--mono);font-variant-numeric:tabular-nums;text-align:center}
-#gearUnread{top:2px;left:2px;width:8px;height:8px;border:2px solid #0b1620}
+#gearRoom,#gearUnread{position:absolute;pointer-events:none;box-sizing:border-box;border-radius:50%}
+#gearRoom{top:2px;right:2px;width:18px;height:18px;background:#2a3a4a;border:1px solid #8a99a6;color:#eef2f6;font:700 12px/16px var(--mono);font-variant-numeric:tabular-nums;text-align:center}
+#gearUnread{top:0;right:0;width:22px;height:22px;background:none;border:2px solid var(--settings-accent,var(--maple))}
+#gearRoom[hidden]+#gearUnread{top:6px;right:6px;width:10px;height:10px;border:0;background:var(--settings-accent,var(--maple))}
 #gearRoom[hidden],#gearUnread[hidden]{display:none}
 
 #mpCards{position:fixed;right:max(10px,env(safe-area-inset-right,0px));bottom:80px;z-index:6;
@@ -11,10 +12,10 @@ body.tcOn #phoneTop #gear{position:relative}
   display:flex;flex-direction:column;gap:8px;scrollbar-width:thin}
 #mpCards>*{flex:none;width:100%;box-sizing:border-box;margin:0}
 #mpCards:empty{display:none}
-#mpRoom{border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
-#mpRoom>h3{margin:0;font:700 13px system-ui;color:var(--ink-dim,#b9c5cb)}
+#mpRoom{display:flex;flex-direction:column;gap:0}
 #mpRoom>*{flex:none;width:100%;box-sizing:border-box;margin:0}
-#mpRoom>.roomCaption{margin:0 0 4px;color:var(--ink-dim);font:13px/1.4 system-ui}
+#mpRoom>h3{margin:0 0 4px;font:700 13px system-ui;color:var(--ink-dim,#b9c5cb)}
+#mpRoom>.roomCaption{margin:0 0 12px;color:var(--ink-dim);font:13px/1.4 system-ui}
 :is(#mpCards,#mpRoom)>details{background:var(--panel-solid);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font:14px/1.4 system-ui}
 :is(#mpCards,#mpRoom) :is(button,select){box-sizing:border-box;font:inherit;max-width:100%;min-height:44px;margin:4px 0;color:inherit;background:transparent;border:1px solid #6b7780;border-radius:6px;padding:6px 10px}
 :is(#mpCards,#mpRoom) button{cursor:pointer}
@@ -42,6 +43,7 @@ body.tcOn .roomCountdown{font-size:72px}
 #mpCards>details>summary{display:list-item;align-content:center;min-height:44px;box-sizing:border-box;font-weight:700}
 :is(#racePanel,#gamePanel)>button+button{margin-left:8px}
 #mpRoom :is(button,select){min-height:56px}
+#racePanel>ol{padding-left:0;list-style-position:inside}
 `;
 const order = ['mpSocial', 'racePanel', 'gamePanel'];
 export function mountRoomCard(card: HTMLElement, touch: boolean): void {

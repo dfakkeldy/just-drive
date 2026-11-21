@@ -33,7 +33,7 @@ body.exploreMode #title #titleStart,#title.justDrive #titleStart{background:#a7d
 #title .titleFooter>span+span::before{content:'· '}
 @media(max-width:759px){#title .titleFooter>span:last-child{flex-basis:100%}#title .titleFooter>span:last-child::before{content:none}}
 #titleScrollFade{position:fixed;z-index:3;height:24px;pointer-events:none;font:12px/24px system-ui,sans-serif;text-align:center;color:var(--ink-dim,#b9c3cc);background:var(--panel-solid,#0c141c);border-radius:0 0 10px 10px}
-#titleScrollFade::before{content:'';position:absolute;left:0;right:0;bottom:100%;height:12px;background:linear-gradient(transparent,var(--panel-solid,#0c141c))}
+#titleScrollFade::before{content:'';position:absolute;left:0;right:0;bottom:100%;height:20px;background:linear-gradient(transparent,var(--panel-solid,#0c141c))}
 #titleScrollFade[hidden]{display:none}
 #title .titleFooter #titleCredits{margin:0;min-height:44px}
 #title :is(#titleOtherGame,#exploreCaution,.titleFooter){font:13px/1.4 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
@@ -88,7 +88,7 @@ body.exploreMode #modeChoice button[aria-pressed="true"],#title.justDrive #modeC
 
 const PHONE_CSS = `
 body:has(#phoneTop) #title{padding-top:calc(76px + env(safe-area-inset-top,0px));align-items:safe center;box-sizing:border-box}
-body:has(#phoneTop) #title #titleCard{max-height:calc(100dvh - 92px - env(safe-area-inset-top,0px));height:auto;padding-bottom:46px!important}
+body:has(#phoneTop) #title #titleCard{max-height:calc(100dvh - 92px - env(safe-area-inset-top,0px));height:auto;padding-bottom:52px!important}
 `;
 const JUST_CSS = `
 #title.justDrive,#title.justDrive #titleCard{box-sizing:border-box}

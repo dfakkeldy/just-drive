@@ -204,7 +204,7 @@ const mailCounts = Object.assign(Object.create(Mail.prototype), {
 });
 Shift.prototype.refreshUI.call(shift); mailScore.textContent = mailCounts.tally;
 assert.match(shiftHud.textContent, /\b1\/9 STOPS\b/, 'the day card keeps the stop count beside controller help');
-assert.match(mailScore.textContent, /^Delivered 3 · Lawn 0 · Ditch 0 · Boxes down 0\nCustomers 1\/9$/, 'the tally keeps deliveries and customer counts');
+assert.match(mailScore.textContent, /^Delivered 3 · Lawn 0 · Ditch 0\nBoxes down 0 · Customers 1\/9\n $/, 'the tally keeps deliveries and customer counts');
 assert.match(hudLine({ ...hud, mailMode: false, padHelp: padHelp('car', false) }), /^36 km\/h   Main Street   pavement\nstick: steer/, 'explore: the controller line without FPS');
 assert.equal(hudLine({ ...hud, touchDevice: true, padHelp: padHelp('car', true) }), hudLine({ ...hud, touchDevice: true }), 'a phone line has no room for it');
 assert.match(hudLine({ ...hud, driveHelp: '\nhorse keys', padHelp: padHelp('horse', true) }), /whinny/, 'the controller line wins over a ride line');

@@ -183,7 +183,7 @@ export async function listenPage() {
 <div class="brand"><i class="lamp" aria-hidden="true"></i><h1>JUST LISTEN</h1><span>FM · MABOU</span></div>
 <section class="glass" aria-label="Now on the radio">
 <div class="tuned"><span id="dial" class="dial">--.-</span><span class="fm">FM</span><span id="name" class="name">&nbsp;</span></div>
-<div class="now"><span id="state" class="state">TUNING…</span><button id="live" type="button" aria-pressed="true">LIVE</button><p id="title" class="title" aria-live="polite">Finding the stations…</p></div>
+<div class="now"><span id="state" class="state">Press ▶ to listen</span><button id="live" type="button" aria-pressed="true">LIVE</button><p id="title" class="title" aria-live="polite">Finding the stations…</p></div>
 <div class="progress"><time id="timeNow">0:00</time><div><i id="bar"></i></div><time id="timeAll">0:00</time></div>
 <p class="next"><b>NEXT</b><span id="next"></span></p>
 <div id="band" class="band" aria-hidden="true"><i id="needle" class="needle"></i></div>

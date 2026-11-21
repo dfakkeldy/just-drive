@@ -257,7 +257,7 @@ body.droneOn #hud .dh{display:block;font:700 24px/26px var(--mono);font-variant-
 body.droneOn #hud :is(.dk,.dq){font:12px/16px var(--mono);color:var(--ink-dim)}
 body.droneOn #hud .dsep{display:none}
 body.droneOn #hud .dst{font:12px/16px var(--mono);color:#f2b766}
-body.droneOn.droneSticks #hud{width:var(--droneCol);max-width:none;box-sizing:border-box;white-space:pre-wrap;font-size:12px;line-height:16px;min-height:154px;padding:8px;overflow-wrap:anywhere}
+body.droneOn.droneSticks #hud{width:var(--droneCol);max-width:none;box-sizing:border-box;white-space:pre-wrap;font-size:12px;line-height:16px;padding:8px;overflow-wrap:anywhere}
 body.droneOn #hud .dst{display:block}
 body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-right,0px))}
 
@@ -302,6 +302,10 @@ const style = () => { if (!styled) { styled = true; document.head.appendChild(Ob
 export function createDroneSticks(home: () => void): DroneSticks {
   style();
   document.body.classList.add('droneSticks');
+  const hud = document.getElementById('hud');
+  if (hud && typeof ResizeObserver === 'function') new ResizeObserver(() => {
+    if (document.body.classList.contains('droneOn')) document.body.style.setProperty('--droneHudH', `${hud.offsetHeight}px`);
+  }).observe(hud);
   const command: DroneCommand = { forward: 0, right: 0, up: 0, turn: 0 };
   const stick = (id: string, label: string, set: (x: number, y: number) => void) => {
     const el = Object.assign(document.createElement('div'), { id, className: 'droneStick', hidden: true });

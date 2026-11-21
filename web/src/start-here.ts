@@ -210,7 +210,7 @@ const CSS = `
  #title.justDrive #titleCard:has(>#startHere){padding:14px 16px 12px;max-width:100%;max-height:calc(100dvh - 62px - var(--phone-top-gap,6px) - env(safe-area-inset-top,0px) - max(10px,env(safe-area-inset-bottom,0px)));height:auto;overflow-y:auto;overscroll-behavior:contain}
  /* No empty foot under the card: a stuck Start rises 26 px instead, so it still clears the More below band. */
  body:has(#phoneTop) #title.justDrive #titleCard:has(>#startHere){padding-bottom:12px!important}
- body:has(#phoneTop) #title.justDrive:has(#startHere) #titleStart{bottom:26px}
+ body:has(#phoneTop) #title.justDrive:has(#startHere) #titleStart{bottom:32px}
  #title.justDrive:has(#startHere) h1{font-size:30px}
  #title.justDrive:has(#startHere) .tag{margin-bottom:6px}
  #title.justDrive:has(#startHere) p:not(.tag){font-size:13px;line-height:1.4;margin-top:5px}

@@ -80,7 +80,7 @@ let first = await state();
 for (let n = 0; n < 6 && !(first.clock && first.tracks[first.clock.track] === first.title); n++) { await sleep(500); first = await state(); }   // the page draws the clock once a second
 check(list.stations.length > 1 && first.dial === (list.start ?? list.stations[0].dial), `a new listener is on the list's starting station (${first.dial} ${first.name})`);
 check(first.i >= 0 && first.name === list.stations[first.i].name, 'the station name is the list\'s');
-check(!!first.clock && first.tracks[first.clock.track] === first.title && first.state === 'ON THE AIR NOW', `before any tap the page shows what is on the air (${first.title})`);
+check(!!first.clock && first.tracks[first.clock.track] === first.title && first.state === 'Press ▶ to listen', `before any tap the page names the clock piece and asks for Play (${first.title})`);
 check(first.next === first.tracks[(first.clock.track + 1) % first.tracks.length], 'and the piece that comes next');
 check(await read(`document.querySelectorAll('#presets .preset').length`) === list.stations.length, `one key for each station (${list.stations.length})`);
 check(await read(`[...document.querySelectorAll('#presets .preset')].map(k => k.querySelector('b').textContent + ' ' + k.querySelector('span').textContent).join('|')`) === list.stations.map(s => `${s.dial} ${s.name}`).join('|'), 'each key shows its dial and its name, in the list\'s order');
@@ -93,6 +93,10 @@ check(await read(`(() => { const p = document.getElementById('listenMusic'), b =
 check(await read(`document.getElementById('coffee').href === 'https://ko-fi.com/fakkeldy' && document.getElementById('coffee').textContent === 'Buy the developer a coffee'`), 'the coffee link');
 check(await read(`['https://mmm.fakkeldy.ca/', 'https://justdrive.fakkeldy.ca/mabou'].every(h => [...document.querySelectorAll('a.way')].some(a => a.href === h))`), 'links to Mail Madness and to Just Drive');
 check(await read(`document.getElementById('volumeRow').hidden === matchMedia('(pointer: coarse)').matches`), 'a phone has no volume slider (its own buttons set the volume)');
+
+const stillBar=await read(`document.getElementById('bar').getBoundingClientRect().width`);
+await sleep(2100);
+check(await read(`document.getElementById('state').textContent !== 'ON THE AIR NOW' && document.getElementById('bar').getBoundingClientRect().width === ${stillBar}`),'before first Play the prompt is honest and progress stays still for two seconds');
 
 // ---- A station plays, from the middle ----
 await tap('#play');

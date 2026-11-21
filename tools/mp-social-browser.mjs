@@ -65,6 +65,8 @@ try {
   assert.equal(await a.read(`document.getElementById('gearRoom')`),null,'desktop has no gear badge');
   const badge=async()=>assert.ok(await b.read(`(()=>{const e=document.getElementById('gearRoom'),g=document.getElementById('gear'),r=e.getBoundingClientRect(),b=g.getBoundingClientRect();return !e.hidden&&e.textContent==='1'&&parseFloat(getComputedStyle(e).fontSize)>=12&&r.left>=b.left&&r.right<=b.right&&r.top>=b.top&&r.bottom<=b.bottom;})()`),'room count fits inside the gear');
   await badge();
+  assert.notEqual(await b.read(`getComputedStyle(document.getElementById('gearRoom')).backgroundColor`),'rgb(208, 99, 46)','count uses neutral ink');
+  const unreadRing=async()=>assert.ok(await b.read(`(()=>{const e=document.getElementById('gearUnread'),r=e.getBoundingClientRect(),c=document.getElementById('gearRoom').getBoundingClientRect(),g=document.getElementById('gear').getBoundingClientRect();return Math.abs((r.left+r.right-c.left-c.right)/2)<=2&&Math.abs((r.top+r.bottom-c.top-c.bottom)/2)<=2&&r.left>=g.left&&r.right<=g.right&&r.top>=g.top&&r.bottom<=g.bottom&&getComputedStyle(e).borderTopWidth==='2px';})()`),'unread ring shares the count centre and fits inside the gear');
 
   assert.equal(await a.read('mmm.mp.current.net.me.name'),'Dusty Tire');
   assert.equal(await b.read('mmm.mp.current.net.me.name'),'Foggy Window');
@@ -80,6 +82,9 @@ try {
   await b.read('document.getElementById("settings").classList.add("open")');
   await sleep(100);
   assert.ok(await b.read(`Array.from(document.querySelectorAll('#settings details>summary')).filter(e=>e.getClientRects().length).every(e=>{const r=e.getBoundingClientRect();return r.height>=56&&r.height<=57&&getComputedStyle(e).display==='list-item';})`),'phone summary rows share a 56px native marker row');
+
+  await b.read(`document.querySelectorAll('#settings details').forEach(e=>e.open=false)`);
+  assert.ok(await b.read(`(()=>{const rows=[...document.querySelectorAll('#settings details>summary')].filter(e=>e.getClientRects().length),start=rows.findIndex(e=>e.parentElement.id==='mpSocial'),end=rows.findIndex(e=>e.textContent.includes('Light study')),selected=rows.slice(start,end+1),tops=selected.map(e=>e.getBoundingClientRect().top),rules=[...document.querySelectorAll('#mpRoom,#settings details,#settings hr')].flatMap(e=>{if(!e.getClientRects().length)return [];const s=getComputedStyle(e),r=e.getBoundingClientRect();return [...(parseFloat(s.borderTopWidth)>0?[r.top]:[]),...(parseFloat(s.borderBottomWidth)>0?[r.bottom]:[])];}).sort((a,b)=>a-b);return start>=0&&end>start&&selected.every(e=>!e.parentElement.open)&&tops.slice(1).every((top,i)=>Math.abs(top-tops[i]-57)<=1)&&rules.slice(1).every((top,i)=>top-rules[i]>=24);})()`),'closed Room through Light study shares one pitch, with no doubled rules');
 
   if(!await b.read('document.getElementById("mpSocial").open'))await clickSummary(b,'mpSocial');
   await b.read('document.getElementById("mpChatButton").click();document.getElementById("mpChatGrid").scrollIntoView({block:"center"})');
@@ -112,7 +117,7 @@ try {
   const ahead=await b.read('({x:mmm.vehicle.x+Math.sin(mmm.vehicle.heading)*12,z:mmm.vehicle.z-Math.cos(mmm.vehicle.heading)*12})');
   await pose(a,ahead.x,ahead.z);await sleep(700);
   await a.read('mmm.mp.current.net.chat(4)');
-  await b.until(`!document.getElementById('gearUnread').hidden`);await badge();
+  await b.until(`!document.getElementById('gearUnread').hidden`);await unreadRing();await badge();
   assert.ok(await b.read(`document.getElementById('gear').getAttribute('aria-label').endsWith(', new message')`),'peer chat updates the gear label');
   await b.read(`document.getElementById('settings').classList.add('open')`);await b.until(`document.getElementById('gearUnread').hidden`);
   assert.ok(await b.read(`!document.getElementById('gear').getAttribute('aria-label').includes('new message')`),'opening Settings clears unread label');
@@ -124,7 +129,7 @@ try {
   assert.ok(planes.length&&planes.every(h=>h>=23.9&&h<=24.1),'landscape phone name planes have 12 px ink in a 24 px plane '+JSON.stringify(planes));
   await b.shot('social-phone-landscape');
   await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await sleep(100);await badge();
-  await sleep(4300);await a.read('mmm.mp.current.net.chat(4)');await b.until(`!document.getElementById('gearUnread').hidden`);
+  await sleep(4300);await a.read('mmm.mp.current.net.chat(4)');await b.until(`!document.getElementById('gearUnread').hidden`);await unreadRing();
   await b.read(`document.getElementById('settings').classList.add('open')`);await b.until(`document.getElementById('gearUnread').hidden`);
   await b.read(`document.getElementById('settings').classList.remove('open');mmm.mp.current.net.chat(4)`);await sleep(150);
   assert.ok(await b.read(`document.getElementById('gearUnread').hidden`),'own new chat leaves no dot with sheet closed');

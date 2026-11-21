@@ -41,7 +41,9 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
   if(name.startsWith('just-')) {
    assert.equal(await read(`document.getElementById('pauseHome')?.href`),'https://justdrive.fakkeldy.ca/','Just Drive links its front page');
    await key('Tab','Tab');assert.equal(await read(`document.activeElement.id`),'pauseHome','Tab from Settings reaches All places');
-  } else {assert.equal(await read(`document.getElementById('pauseHome')`),null,'mail has no front-page link');await key('Tab','Tab');assert.equal(await read(`document.activeElement.id`),'pauseEndShift','Tab reaches End shift');}
+  } else {
+   assert.ok(await read(`(()=>{const e=document.getElementById('pauseEndShift'),s=getComputedStyle(e),r=e.getBoundingClientRect(),p=e.closest('section');return s.fontFamily===getComputedStyle(document.getElementById('pauseSettings')).fontFamily&&s.borderTopWidth==='0px'&&r.height>=44&&Math.abs(r.left-p.getBoundingClientRect().left-parseFloat(getComputedStyle(p).borderLeftWidth)-parseFloat(getComputedStyle(p).paddingLeft))<=1;})()`),'End shift is a quiet sans line on the card content edge with a full touch height');
+   assert.equal(await read(`document.getElementById('pauseHome')`),null,'mail has no front-page link');await key('Tab','Tab');assert.equal(await read(`document.activeElement.id`),'pauseEndShift','Tab reaches End shift');}
   await key('Tab','Tab'); assert.equal(await read(`document.activeElement.tagName`),'SUMMARY','Tab wraps to Keys');
   await key('Enter','Enter'); assert.equal(await read(`document.querySelector('#pauseKeys').open`),true,'keyboard opens Keys');
   assert.ok(await read(`document.querySelectorAll('#pauseKeys dt').length>=8`),'full key list');

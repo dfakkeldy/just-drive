@@ -77,10 +77,12 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
     if(name==='mail') {
       if(safeLandscape) await read(`Object.entries({'--test-safe-left':'47px','--test-safe-right':'47px','--test-safe-bottom':'21px'}).forEach(([k,v])=>document.documentElement.style.setProperty(k,v))`);
       assert.equal(await read(`['shiftHud','mailCard','phoneStatus'].every(id=>getComputedStyle(document.getElementById(id)).visibility==='hidden')`),true,'no live mail HUD before play');
+    }
+    {
       await read(`document.getElementById('titleCard').scrollTop=0;new Promise(requestAnimationFrame)`);
-      const fade=await read(`(()=>{const e=document.getElementById('titleScrollFade'),shown=!e.hidden&&e.getClientRects().length>0;return {shown,solid:!shown||getComputedStyle(e).backgroundColor==='rgb(12, 20, 28)',clear:!shown||document.getElementById('titleStart').getBoundingClientRect().bottom<=e.getBoundingClientRect().top-12};})()`);
-      if(width===375&&height===667)assert.ok(fade.shown,'375x667 shows More below');
-      assert.ok(fade.solid&&fade.clear,'opaque More below and its fade clear START');
+      const fade=await read(`(()=>{const e=document.getElementById('titleScrollFade'),shown=!e.hidden&&e.getClientRects().length>0;const startBottom=document.getElementById('titleStart').getBoundingClientRect().bottom,limit=e.getBoundingClientRect().top-20;return {shown,solid:!shown||getComputedStyle(e).backgroundColor==='rgb(12, 20, 28)',clear:!shown||startBottom<=limit,shortfall:shown?Math.max(0,startBottom-limit):0};})()`);
+      if(name==='mail'&&width===375&&height===667)assert.ok(fade.shown,'375x667 shows More below');
+      assert.ok(fade.solid&&fade.clear,name+' '+width+'x'+height+': opaque More below and its fade clear START '+JSON.stringify(fade));
     }
     await read(`document.getElementById('titleStart').click()`);
     await until(`document.body.classList.contains('tcOn') && document.documentElement.dataset.mmmReady==='true'`);
@@ -112,6 +114,17 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       assert.ok(await read(`getComputedStyle(document.querySelector('#phoneHud #radio span')).display==='none'`),'portrait idle song stays hidden when expanded');
       await read(`mmm.radio.useReception(savedPhoneReception);delete window.savedPhoneReception`);
       if(wasFolded)await read(`document.getElementById('miniMapHead').click()`);await sleep(100);
+    }
+    if(width>height&&!await read(`document.body.classList.contains('phoneReadoutsMenu')`)) {
+      assert.ok(await read(`(()=>{const e=document.getElementById('radio'),r=e.getBoundingClientRect();if(getComputedStyle(e).textAlign!=='left')return false;if(mmm.gameMode==='mail'){const b=document.getElementById('relief').getBoundingClientRect();return Math.abs(r.left-b.left)<=1&&Math.abs(r.width-b.width)<=1;}const tracks=getComputedStyle(document.getElementById('phoneReadouts')).gridTemplateColumns.split(' ').map(parseFloat);return Math.abs(r.width-tracks[1])<=1;})()`),'landscape radio shares its neighbour width and left alignment');
+      const station=await read(`mmm.radio.station`);
+      await read(`window.savedPhoneReception=mmm.radio.map;mmm.radio.useReception(null)`);
+      const count=await read(`mmm.radio.stations.length`);assert.equal(count,9);
+      for(let index=0;index<count;index++) {
+        await read(`mmm.radio.turnTo(${index})`);await sleep(50);
+        assert.ok(await read(`(()=>{const e=document.getElementById('radio');return e.scrollHeight<=e.clientHeight;})()`),'landscape station fits the radio');
+      }
+      await read(`mmm.radio.turnTo(${station});mmm.radio.useReception(savedPhoneReception);delete window.savedPhoneReception`);
     }
     await inspect('initial');await shot('');
     assert.equal(await read('mmm.vehicle.touchSpeedLimit'),name==='mail','production mode sets cap for this ride');

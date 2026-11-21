@@ -69,14 +69,17 @@ for (const [width, height, scale] of [[1280, 720, 1], [1440, 900, 1], [1600, 100
           assert.deepEqual(both.after, both.before, `${carrier} ${size} unchanged desktop boxes and paint`);
           if(await read(`mmm.gameMode==='mail'`)) assert.deepEqual(await read(`(()=>{
             const card=document.getElementById('mailCard'),hint=document.getElementById('stopHint'),score=document.getElementById('mailScore');
-            const saved={text:hint.textContent,style:hint.style.cssText,hidden:hint.hidden,drone:document.body.classList.contains('droneOn')};
+            const saved={text:hint.textContent,style:hint.style.cssText,hidden:hint.hidden,score:score.textContent,drone:document.body.classList.contains('droneOn')};
             try {
-              document.body.classList.remove('droneOn');hint.hidden=false;hint.style.display='';hint.textContent='Next: roadside box.';
+              document.body.classList.remove('droneOn');score.textContent='Delivered 12 · Lawn 34 · Ditch 56\\nBoxes down 78 · Customers 99/769\\nReady to throw';hint.hidden=false;hint.style.display='';hint.textContent='Next: roadside box.';
               const h=hint.getBoundingClientRect(),m=score.getBoundingClientRect(),hs=getComputedStyle(hint),ms=getComputedStyle(score);
               const result={inside:hint.parentElement===card&&score.parentElement===card&&hint.nextElementSibling===score,
                 stacked:h.height>0&&m.height>0&&Math.abs(h.bottom-m.top)<.1,
                 aligned:Math.abs(h.left-m.left)<.1&&Math.abs(h.width-m.width)<.1,
                 paint:[hs,ms].map(s=>[s.backgroundColor,s.borderLeftWidth,s.borderLeftStyle,s.borderLeftColor]),joinedPadding:ms.paddingTop};
+              const text=score.firstChild,lineEnds=[score.textContent.indexOf('\\n'),score.textContent.indexOf('\\n',score.textContent.indexOf('\\n')+1)];
+              const oneLine=(start,end)=>{const range=document.createRange();range.setStart(text,start);range.setEnd(text,end);const boxes=[...range.getClientRects()].filter(r=>r.width>0);return boxes.length>0&&boxes.every(r=>Math.abs(r.top-boxes[0].top)<1);};
+              result.tallyLines=oneLine(0,lineEnds[0])&&oneLine(lineEnds[0]+1,lineEnds[1])&&[...score.textContent.matchAll(/(?:Delivered|Lawn|Ditch|Boxes down|Customers) [0-9/]+/g)].every(m=>oneLine(m.index,m.index+m[0].length));
               result.driveWidth=Math.abs(card.getBoundingClientRect().width-Math.min(346,innerWidth-120))<1;
               const width=card.getBoundingClientRect().width;hint.textContent='Box already down: photograph it; leave mail beside the post';
               result.longFits=card.getBoundingClientRect().width===width&&hint.scrollWidth<=hint.clientWidth+1&&score.scrollWidth<=score.clientWidth+1&&getComputedStyle(hint).fontSize==='12px'&&getComputedStyle(score).fontSize==='12px';
@@ -85,8 +88,8 @@ for (const [width, height, scale] of [[1280, 720, 1], [1440, 900, 1], [1600, 100
               result.flightPadding=getComputedStyle(score).paddingTop;
               result.flightFit=card.getBoundingClientRect().width<460&&Math.abs(card.getBoundingClientRect().width-score.getBoundingClientRect().width)<.1;
               return result;
-            } finally {hint.textContent=saved.text;hint.style.cssText=saved.style;hint.hidden=saved.hidden;document.body.classList.toggle('droneOn',saved.drone);}
-          })()`),{inside:true,stacked:true,aligned:true,paint:Array.from({length:2},()=>['rgba(8, 14, 20, 0.82)','3px','solid','rgb(208, 99, 46)']),joinedPadding:'0px',driveWidth:true,longFits:true,emptyPadding:'8px',emptyHidden:true,flightPadding:'8px',flightFit:true},'mail hint and tally form one aligned panel; a lone tally keeps top padding');
+            } finally {hint.textContent=saved.text;score.textContent=saved.score;hint.style.cssText=saved.style;hint.hidden=saved.hidden;document.body.classList.toggle('droneOn',saved.drone);}
+          })()`),{inside:true,stacked:true,aligned:true,paint:Array.from({length:2},()=>['rgba(8, 14, 20, 0.82)','3px','solid','rgb(208, 99, 46)']),joinedPadding:'0px',tallyLines:true,driveWidth:true,longFits:true,emptyPadding:'8px',emptyHidden:true,flightPadding:'8px',flightFit:true},'mail hint and tally form one aligned panel; a lone tally keeps top padding');
           assert.ok(await read(`!document.getElementById('miniMap').hidden && !document.getElementById('radio').hidden`), 'the desktop stack is shown: run on a driving view, not a fixed shot');
           for(const short of [false,true]) {
             if(short)await send('Emulation.setDeviceMetricsOverride',{width:900,height:500,deviceScaleFactor:scale,mobile:false});

@@ -108,9 +108,9 @@
   @media(max-width:600px){#shiftHud{top:calc(112px + env(safe-area-inset-top,0px));font-size:11px;max-width:calc(100% - 120px)}#stopHint{bottom:calc(131px + env(safe-area-inset-bottom,0px));font-size:11px}#photoTag{top:calc(193px + env(safe-area-inset-top,0px));max-width:190px}.reportBody{padding:20px 19px 8px}#reportPanel h1{font-size:25px}#reportPanel{font-size:15px}.reportFooter{padding:12px 19px}#gear{width:56px;height:56px}#settings{top:calc(72px + env(safe-area-inset-top,0px))}}
 
 .scrollMore{position:fixed;z-index:9;height:24px;pointer-events:none;font:12px/24px system-ui,sans-serif;text-align:center;color:var(--ink-dim);background:var(--panel-solid);border-radius:0 0 10px 10px}
-.scrollMore::before{content:'';position:absolute;left:0;right:0;bottom:100%;height:12px;background:linear-gradient(transparent,var(--panel-solid))}
+.scrollMore::before{content:'';position:absolute;left:0;right:0;bottom:100%;height:20px;background:linear-gradient(transparent,var(--panel-solid))}
 .scrollMore[hidden]{display:none}
-#settings.moreRoom,#placesBody.moreRoom{padding-bottom:36px;scroll-padding-bottom:36px}
+#settings.moreRoom,#placesBody.moreRoom{padding-bottom:36px;scroll-padding-bottom:44px}
 #placesMore{border-radius:0}
 body:not(.tcOn) #endShift.inPanel{position:static;top:auto;right:auto;z-index:auto;width:100%;min-height:44px;margin:0 0 12px;background:transparent;border:1px solid var(--ink-dim);font:12px var(--mono)}
 #settings details{margin:0;padding:0;border:0;border-top:1px solid var(--line)}
@@ -136,6 +136,7 @@ body.tcOn.compactPhone #placeArrival{width:min(360px,100%);min-width:min(220px,1
 body.tcOn.compactPhone #phoneHint #stopHint{font-size:11px;line-height:15px;padding:3px 6px;white-space:pre-line;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:36px;overflow:hidden;text-overflow:clip}
 body.tcOn.compactPhone #phoneHud #radio{width:max-content;max-width:100%;min-width:56px;justify-self:start}
 @media(orientation:portrait){body.tcOn.compactPhone #phoneHud #radio{width:var(--leftCol);text-align:left}}
+@media(orientation:landscape){body.tcOn.compactPhone #phoneHud #radio{width:100%;text-align:left}}
 body.tcOn.compactPhone #phoneHud #radio b{width:auto;white-space:normal;overflow:visible;text-overflow:clip}
 @media(orientation:landscape){body.tcOn.compactPhone #phoneHud:not([hidden]){grid-template-rows:56px auto minmax(0,1fr) 72px var(--mail-pedal-height)}body.tcOn.compactPhone #phoneHud #phoneHint{min-height:14px}body.tcOn.compactPhone.mailPhone #phoneHud #phoneHint{min-height:36px}}
 @media(orientation:landscape) and (max-height:319px){body.tcOn.compactPhone #phoneHud:not([hidden]){grid-template-rows:56px auto minmax(0,1fr) 64px 60px}}
@@ -178,7 +179,8 @@ body:not(.gameStarted) :is(#cameraButton,#mailButton){display:none!important}
 #pauseScreen #resumeGame{background:var(--maple);color:#0b1620;border-color:transparent;font-weight:700}
 body.exploreMode #pauseScreen #resumeGame{background:#a7d9bc}
 body.tcOn #pauseButton{position:static;min-height:56px;pointer-events:auto;flex:none;padding:0 6px}
-#pauseScreen #pauseEndShift{font:12px var(--mono);min-height:44px;margin-top:12px;border-top:1px solid var(--ink-dim)}
+#pauseScreen #pauseEndShift{display:flex;align-items:center;width:auto;min-height:44px;margin-top:12px;padding:0;border:0;border-radius:0;background:none;color:var(--ink-dim);font:13px var(--text);text-decoration:underline}
+#pauseScreen #pauseEndShift:hover{color:var(--ink)}
 </style>
 <div id="boot"><div><b>Mabou Mail Madness</b>Loading the land around Mabou. The first load is about 15 MB.</div></div>
 <canvas id="c"></canvas>

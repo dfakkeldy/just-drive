@@ -32,7 +32,8 @@ body.tcOn #miniMap.enlarged #miniMapCanvas{max-height:none}
 #miniMap.folded #miniMapHead span{display:none}   /* a folded map is its name only: its width never changes */
 #miniMap[hidden]{display:none}
 body.indoorOn #miniMap{display:none}
-body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(174px + env(safe-area-inset-top,0px));pointer-events:auto}
+/* Mirror #hud's 10px top plus the safe inset in web/index.html; leave a 10px gap. */
+body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(20px + env(safe-area-inset-top,0px) + var(--droneHudH,154px));pointer-events:auto}
 @media(orientation:landscape) and (max-height:450px){body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(10px + env(safe-area-inset-top,0px));left:calc(max(10px, var(--test-safe-left, env(safe-area-inset-left, 0px))) + var(--droneCol) + 8px)}}
 `;
 

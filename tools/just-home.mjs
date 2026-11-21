@@ -110,7 +110,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);color:v
 footer nav{display:flex;flex-wrap:wrap;gap:6px 20px;margin-bottom:12px}
 footer nav a{display:inline-flex;align-items:center;min-height:44px}
 footer p{margin:0 0 6px}
-@media(max-width:599px){footer nav{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-bottom:32px}.button.second{width:100%;justify-content:center}}
+@media(max-width:599px){footer nav{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-bottom:32px}.button.second{width:auto;justify-content:center}}
 @media(min-width:600px){.roadPicture img{object-position:50% 52%}}
 @media (min-width:900px){.layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}.map{position:sticky;top:20px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}

@@ -23,6 +23,24 @@ try {
   assert.match(html, /@media \(min-width:1000px\)\{header\{max-width:none;display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\);column-gap:40px;align-items:start\}header>\*\{grid-column:1\}header>\.roadPicture\{grid-column:2;grid-row:1\/span 4;align-self:center\}\}/);
   assert.doesNotMatch(html.match(/\.place \.mailCaption\{[^}]*\}/)[0],/font-size/);
   assert.match(html,/@media print\{header\{display:block\}/);
+  // Optional parent-owned browser run: node tools/just-home-check.mjs --browser with CDP_PORT set.
+  if(process.argv.includes('--browser')) {
+    const {cdp,cdpFetch}=await import('./cdp.mjs');
+    const port=process.env.CDP_PORT;assert.ok(port,'--browser needs the parent CDP_PORT');
+    const tab=await(await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
+    const c=await cdp(tab.webSocketDebuggerUrl);
+    try {
+      await c.send('Page.enable');await c.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+      const frame=(await c.send('Page.getFrameTree')).result.frameTree.frame.id;
+      await c.send('Page.setDocumentContent',{frameId:frame,html});
+      const result=await c.send('Runtime.evaluate',{expression:`(()=>{return [...document.querySelectorAll('.button.second')].map(e=>{const r=e.getBoundingClientRect(),drive=e.parentElement.querySelector('.button').getBoundingClientRect(),row=e.parentElement.getBoundingClientRect();return {height:r.height,width:r.width,driveWidth:drive.width,rowWidth:row.width,position:Math.abs(r.top-drive.top)<=1||r.top>=drive.bottom,fit:r.left>=row.left&&r.right<=row.right};});})()`,returnByValue:true});
+      assert.ok(!result.result.exceptionDetails,JSON.stringify(result.result.exceptionDetails));
+      const rows=result.result.result.value;assert.ok(rows.length);
+      assert.ok(rows.every(r=>r.height>=44&&r.width<r.rowWidth&&r.position&&r.fit),'390px era actions keep their own width, row flow and full touch height: '+JSON.stringify(rows));
+      // Report both widths. The longer era label cannot be narrower than Drive under width:auto alone.
+      console.log('HOME_ACTION_WIDTHS '+JSON.stringify(rows));
+    } finally {c.close();await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`);}
+  }
   const areas = AREAS.filter(a => a.id !== 'fixture');
   assert.equal([...html.matchAll(/<title>/g)].length, 1, 'one title');
   assert.match(html, /<title>Just Drive: a free 3D driving game on the real roads of Cape Breton<\/title>/);
@@ -65,6 +83,9 @@ try {
   assert.match(html, /Mabou Mail Madness: the same roads, with a mail route you cannot win\./);
   assert.match(html, /Choose a pin to drive/);
   assert.match(html, /\.button.second\{background:transparent;border:1px solid #e9d2ad/);
+  assert.match(html, /@media\(max-width:599px\)\{[^\n]*\.button.second\{width:auto;justify-content:center\}/, 'phone era action keeps its own width');
+  assert.match(html, /\.actions\{display:flex;flex-wrap:wrap;gap:8px;/, 'phone era action can wrap to the next row');
+  assert.match(html, /\.button\{[^}]*min-height:44px;/, 'era action retains the 44px target floor');
   const colour = pattern => {
     const match = html.match(pattern);
     assert.ok(match, `built page colour: ${pattern}`);

@@ -89,6 +89,7 @@ try{
   receipt.a=await a.read('mmm.mp.current.net.race.racers');receipt.b=await b.read('mmm.mp.current.net.race.racers');assert.deepEqual(receipt.a,receipt.b);assert.ok(receipt.a.every(r=>r.time>0&&!r.out));
   await a.until('/Finished/.test(document.querySelector("#racePanel p").textContent)');
   assert.equal(await a.read('document.querySelectorAll("#racePanel li").length'),2);await a.shot('race-results-host');await b.shot('race-results-guest');
+  assert.ok(await a.read(`Math.abs(document.querySelector('#racePanel li:first-child').getBoundingClientRect().left-document.getElementById('raceStatus').getBoundingClientRect().left)<=2`),'first result aligns with race status');
   await b.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   // The race card sits in the room column (room-cards.ts), refitted every half second to clear the HUD and credit
   // line; the column scrolls inside itself. On the phone the column stays on screen, the card fits its width, and the

@@ -8,12 +8,15 @@ const [out, first]=process.argv.slice(2), base=new URL(first).origin;
 process.env.OUT=out;
 const results=[], family=process.env.HIKES_FAMILY??'all';
 function check(value,name){results.push({name,pass:!!value});console.log(`${value?'PASS':'FAIL'} ${name}`);if(process.env.HIKES_PROBE===name){const marker=(value?'MUTATION MISSED: ':'MUTATION DETECTED: ')+name;console.error(marker);throw Error(marker);}assert.ok(value,name);}
+const mapHeaderFits=async p=>check(await p.read(`(()=>{const h=document.getElementById('bigMapHeading'),header=h.closest('header'),b=header.getBoundingClientRect(),items=[...header.children].filter(e=>e.getClientRects().length).map(e=>e.getBoundingClientRect());return getComputedStyle(h).fontFamily===getComputedStyle(document.querySelector('#settingsHeader h2')).fontFamily&&header.scrollWidth<=header.clientWidth&&items.every(r=>r.left>=b.left&&r.right<=b.right&&r.top>=b.top&&r.bottom<=b.bottom)&&items.slice(1).every((r,i)=>r.left>=items[i].right);})()`),'map heading matches Settings; header buttons fit without overlap');
 const run=async(name,query,fn,w=1600,h=1000,init='')=>{if(family!=='all'&&family!==name)return;const p=await hikesPage(base,query,w,h,init);try{await fn(p);check(!p.errors.length,`${name} ${w} has no runtime errors`);}finally{await p.close();}};
 await run('map','mode=explore&at=624271,5103301,0',async p=>{
   await p.read(`window.mapHalos=[];window.mapTexts=[];const g=mmm.bigMap.g,orig=g.fillText.bind(g);g.fillText=(...a)=>{mapTexts.push(a[0]);return orig(...a)};const halo=g.strokeText.bind(g);g.strokeText=(...a)=>{mapHalos.push(a[0]);return halo(...a)};window.trailStrokes=0;const layer=mmm.bigMap.layer.getContext('2d'),stroke=layer.stroke.bind(layer);layer.stroke=(...a)=>{if(layer.getLineDash().length)trailStrokes++;return stroke(...a)};`);
   await p.read(`window.driveThrottles=[];const step=mmm.vehicle.update.bind(mmm.vehicle);mmm.vehicle.update=(...args)=>{driveThrottles.push(args[1].throttle);return step(...args)}`);
   await p.key('KeyW');await sleep(1000);await p.tap('KeyM');await sleep(600);
   check(await p.read(`!document.getElementById('bigMap').hidden`),'M opens big map');
+  await p.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:2,mobile:false});await sleep(150);await mapHeaderFits(p);
+  await p.send('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:2,mobile:false});await sleep(150);
   const paused=await p.read(`JSON.stringify([mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.speed])`);await sleep(700);
   check(await p.read(`JSON.stringify([mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.speed])`)===paused,'big map pauses the game');
   check(await p.read(`document.getElementById('c').inert&&document.activeElement.closest('#bigMap')!==null&&document.getElementById('bigMap').getAttribute('aria-modal')==='true'`),'map owns focus and makes background inert');
@@ -84,6 +87,7 @@ for(const [w,h]of [[844,390],[390,844]].filter(([w])=>!process.env.HIKES_WIDTH||
   await p.touch('#placesButton');await sleep(250);
   check(await p.read(`(()=>{const e=document.getElementById('placesMap'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !document.getElementById('placesPanel').hidden&&r.width>=56&&r.height>=56&&r.top>=0&&r.bottom<=innerHeight&&(at===e||e.contains(at))})()`),`phone ${w} MAP control is reachable`);
   await p.touch('#placesMap');await sleep(250);check(await p.read(`!document.getElementById('bigMap').hidden&&document.getElementById('placesPanel').hidden`),`phone ${w} touch opens map`);
+  await mapHeaderFits(p);
   await p.shot(w===844?'13-map-phone-landscape':'14-map-phone-portrait');
   const scale=await p.read('mmm.bigMap.scale'), y=await p.read(`mmm.bigMap.canvas.getBoundingClientRect().y+mmm.bigMap.h/2`);
   await p.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:w/2-40,y},{id:2,x:w/2+40,y}]});
