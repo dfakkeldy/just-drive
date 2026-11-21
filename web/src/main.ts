@@ -762,6 +762,8 @@ const siteContacts: [string, ContactSite | null][] = [
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
 ];
+// A place without a row would compile and boot, and the car would drive through it. Stop at boot instead.
+for (const name of Object.keys(places)) if (!siteContacts.some(([row]) => row === name)) throw new Error(`hand-built place '${name}' has no contact row`);
 for (const [, row] of siteContacts) if (row) fleetContacts.add(row);
 // Solo driving (no fleet, no quarry) keeps its own order of the same rows (#57): tall moves after every other site,
 // and the park after tall. A new site row lands in both lists.
