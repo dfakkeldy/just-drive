@@ -124,7 +124,7 @@ export class Cemeteries {
           return tone !== undefined ? new THREE.Color().setRGB(...TONES[tone]) : new THREE.Color().setRGB(0.32 + shade * 0.12, 0.33 + shade * 0.12, 0.32 + shade * 0.13);
         });
       }
-      return { cemetery: c, group, center, radius, fitted, solids: drawnSolids(c, origin, area) };
+      return { cemetery: c, group, center, radius, fitted, solids: drawnSolids(c, origin, area, low ? 6 : 3) };
     });
     // The sites start hidden, so three.js would build their shader at first sight, in the middle of a drive.
     // This mesh is in every picture with no instance to draw. three.js prepares the material of each mesh in its

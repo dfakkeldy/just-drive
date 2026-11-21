@@ -8,6 +8,7 @@ import {churchPlaces, nearestPlacement} from '../web/src/places.ts';
 import {Roads} from '../web/src/roads.ts';
 import {pushOut} from '../web/src/parked.ts';
 import {touchesPlayer} from '../web/src/road-scene-rules.ts';
+import {ROAD_EDGES} from '../web/src/cemetery-rules.ts';
 import {fixture} from './trailer-regressions.mjs';
 const read = file => JSON.parse(readFileSync(file));
 // The private record of the scan measurements (church-scan-20261121, not in git). The code must match it number for number.
@@ -73,6 +74,16 @@ assert.equal(site.height(0,0,206.4),206.4);
 const gravel=site.world(14.58,11.55),outside=site.world(-20,18);assert.equal(site.surface(gravel.x,gravel.z).kind,11);assert.equal(site.surface(outside.x,outside.z),null);
 // The mown lane to the cemetery drives as grass along its whole length, and trees keep off it.
 for(let i=1;i<CHURCH_LANE.pts.length;i++)for(let k=0;k<=4;k++){const [a,b]=[CHURCH_LANE.pts[i-1],CHURCH_LANE.pts[i]],x=a[0]+(b[0]-a[0])*k/4,z=a[1]+(b[1]-a[1])*k/4,w=site.world(x,z);assert.equal(site.surface(w.x,w.z)?.kind,12,'mown lane is lawn');assert.ok(site.clearCanopy(w.x,w.z),'no trees on the lane');}
+// The lane enters the cemetery through its open edge: its middle line crosses the wall line there, its mown width inside the edge.
+{
+ const edge=ROAD_EDGES.find(e=>e.lane==='church');assert.ok(edge&&edge.kind==='open','the church lane has an open cemetery edge');
+ const map=([x,z])=>{const w=site.world(x,z);return [manifest.village[0]+w.x,manifest.village[1]-w.z];};
+ const dx=edge.b[0]-edge.a[0],dy=edge.b[1]-edge.a[1],len=Math.hypot(dx,dy),side=p=>(dx*(p[1]-edge.a[1])-dy*(p[0]-edge.a[0]))/len,along=p=>(dx*(p[0]-edge.a[0])+dy*(p[1]-edge.a[1]))/len;
+ const pts=CHURCH_LANE.pts.map(map);let cross=null;
+ for(let i=1;i<pts.length&&!cross;i++){const sa=side(pts[i-1]),sb=side(pts[i]);if(sa*sb<=0){const k=sa/(sa-sb);cross=[pts[i-1][0]+(pts[i][0]-pts[i-1][0])*k,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*k];}}
+ assert.ok(cross,'the lane crosses the cemetery wall line');const t=along(cross);
+ assert.ok(t>=CHURCH_LANE.half&&t<=len-CHURCH_LANE.half,`the mown width fits the open edge (${t.toFixed(2)} of ${len.toFixed(2)} m)`);
+}
 // The monument, the wayside cross and the big boulder block the car.
 for(const [x,z] of [[CHURCH_GROUNDS.monument.x,CHURCH_GROUNDS.monument.z],[CHURCH_GROUNDS.wayside.x,CHURCH_GROUNDS.wayside.z],[-40.43,-34.7]]){const w=site.world(x,z),car={x:w.x,z:w.z,heading:0,vx:0,vz:0,speed:0};pushOut(car,site.solids);assert.ok(Math.hypot(car.x-w.x,car.z-w.z)>.3,'yard solid blocks car');}
 // Canvas drawing is procedural. A minimal canvas lets this CPU test inspect all merged geometry.

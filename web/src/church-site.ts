@@ -21,7 +21,8 @@ export const CHURCH_GEOM = {
 } as const;
 /** Faces: nave_n and tower_n are the SSW (-z) walls, nave_s, tower_s and vestry_s the NNE (+z) walls. On a long wall
  * `u` is x; on the front gable (west) and the tower front (tower_w) `u` is z. `y0` and `y1` are heights above the
- * ground at the origin; an arch's `y1` is where its round head starts. */
+ * ground at the origin; an arch's `y1` is where its round head starts. The tower door stays the first door: the interior
+ * takes its floor and entry from the first door it finds. */
 export const CHURCH_FEATURES = {
   "openings": [
     { "kind": "door", "face": "tower_w", "u": 0.02, "y0": 0.4, "y1": 2.4, "w": 0.95 },
@@ -135,7 +136,8 @@ export class ChurchSite implements Site {
       solid(landing.u - landing.width / 2 - 0.1, landing.u + landing.width / 2 + 0.1, v.z1, v.z1 + landing.depth),
       solid(m.x - m.w / 2, m.x + m.w / 2, m.z - m.w / 2, m.z + m.w / 2),
       solid(w.x - 0.3, w.x + 0.3, w.z - 0.3, w.z + 0.3),
-      solid(big[0] - big[3] / 2, big[0] + big[3] / 2, big[1] - big[4] / 2, big[1] + big[4] / 2)];
+      // The big boulder is drawn turned; a square of its mean width blocks the same ground at any turn.
+      solid(big[0] - (big[3] + big[4]) / 4, big[0] + (big[3] + big[4]) / 4, big[1] - (big[3] + big[4]) / 4, big[1] + (big[3] + big[4]) / 4)];
   }
   /** Model metres to game metres. +X -> WNW (297.65°), +Z -> NNE (27.65°). */
   world(x: number, z: number): { x: number; z: number } {

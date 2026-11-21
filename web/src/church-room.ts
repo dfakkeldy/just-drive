@@ -15,6 +15,7 @@ const S = CHURCH_SCALE;
 /** Wall thickness in model units: the same T as web/src/church.ts (tools/church-interior-check.mjs compares them). */
 export const CHURCH_WALL = 0.25;
 const { nave: n, tower: t, vestry: v } = CHURCH_GEOM;
+// The tower door is the first door in CHURCH_FEATURES (church-site.ts keeps it first).
 const entry = CHURCH_FEATURES.openings.find(o => o.kind === 'door')!;
 const metres = (units: number): number => units * S;
 const height = (y: number): number => (y - entry.y0) * S;
@@ -39,6 +40,9 @@ export const CHURCH_ROOM = {
     vestry: {
       x0: metres(v.x0 + CHURCH_WALL), x1: metres(n.x0),
       z0: metres(v.z0 + CHURCH_WALL), z1: metres(v.z1 - CHURCH_WALL), ceiling: height(v.eave),
+      /** Where the sash window and the outside door stand on the left (+z) wall: the same places as outside. */
+      window: metres(CHURCH_FEATURES.openings.find(o => o.face === 'vestry_s' && o.kind === 'rect')!.u),
+      door: metres(CHURCH_FEATURES.openings.find(o => o.face === 'vestry_s' && o.kind === 'door')!.u),
     },
   },
   fit: {
