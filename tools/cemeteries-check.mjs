@@ -81,6 +81,12 @@ function stonesCheck(c,stones,cap,near=[]){
 function measuredCheck(c,stones,near,area){
  const rows=MEASURED_STONES[c.id],walls=fenceSegments(c);assert.equal(stones.length,rows.length,'every measured row is shown');
  let lane=0,close=0;
+ stones.forEach((s,i)=>{
+  // The drawn face looks toward the table's bearing (or its back does): rotate the shape's -z the way the renderer does.
+  const o=new THREE.Object3D();o.rotation.y=s.turn;o.updateMatrix();const d=new THREE.Vector3(0,0,-1).applyMatrix4(new THREE.Matrix4().extractRotation(o.matrix));
+  const bearing=(Math.atan2(d.x,-d.z)*180/Math.PI+360)%360,off=Math.abs(((bearing-rows[i][7])%180+270)%180-90);
+  assert.ok(off<1e-6,`measured marker ${i} faces ${bearing.toFixed(1)}, not ${rows[i][7]}`);
+ });
  for(const s of stones){
   assert.ok(inside(s.point,c.ring),'measured marker inside the mapped ring');
   assert.ok(s.size.every(n=>n>0.1&&n<3),'measured size in metres');assert.ok([3,4,5,6,7].includes(s.kind),'measured shape');assert.ok(TONES[s.tone],'measured tone');

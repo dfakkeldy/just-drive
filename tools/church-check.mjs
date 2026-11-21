@@ -89,6 +89,20 @@ assert.equal(reads,4,'near unavailable church polls twice per second');
 assert.equal(church.group.children.length,0);level=8;
 church.update(near,2000);assert.equal(church.group.children.length,1);assert.equal(church.triangles,triangles);close(church.group.position.y,206.4,'terrain base');
 const afterBuild=reads;for(let i=0;i<100;i++)church.update(near,3000+i*16);assert.equal(reads,afterBuild,'no terrain/geometry work after build');
+// Top-down rays on flat land: each new part stands at its measured height, and the ramp falls away from the tower door.
+{
+ church.group.updateMatrixWorld(true);
+ const top=(x,z)=>{const p=site.world(x,z),hit=new THREE.Raycaster(new THREE.Vector3(p.x,church.group.position.y+30,p.z),new THREE.Vector3(0,-1,0)).intersectObject(church.group,true)[0];assert.ok(hit,`model ${x},${z} has something to hit`);return (hit.point.y-church.group.position.y)/CHURCH_SCALE;};
+ const {nave:n,tower:t,cupola:c}=CHURCH_GEOM,{ramp:rp,landing:ld}=CHURCH_FEATURES,{monument:m,wayside:w}=CHURCH_GROUNDS;
+ const near=(a,b,eps,what)=>assert.ok(Math.abs(a-b)<=eps,`${what}: ${a.toFixed(3)} vs ${b}`);
+ const rampAt=k=>top(rp.u,-t.zn-rp.run*k);
+ near(rampAt(.1),rp.rise-(rp.rise-.03)*.1,.01,'ramp top by the tower door');near(rampAt(.9),rp.rise-(rp.rise-.03)*.9,.01,'ramp foot');
+ near(top(ld.u,CHURCH_GEOM.vestry.z1+ld.depth/2),ld.rise,.01,'vestry landing');
+ near(top(m.x+.02,m.z+.02),m.h,.06,'monument top');near(top(w.x,w.z),w.h,.01,'wayside cross top');
+ near(top(c.x,c.z),c.cross,.01,'cupola cross tip');near(top(t.x1-.05,-t.zn+.05),c.base,.01,'tower cap');
+ near(top((n.x0+n.x1)/2,(n.zs-n.zn)/2),n.ridge+.19,.01,'ridge cap');
+ console.log('PASS church parts: ramp falls from the tower door; landing, monument, wayside cross, cupola cross, tower cap and ridge at their measured heights');
+}
 // Build through Church.update on sloping terrain, so the local/world and exaggeration conversion is exercised.
 for(const exag of [1,1.5,3]){
  const heightAt=(x,z)=>{const p=site.local(x,z);return 206.4*exag+(-.1*p.x+.025*p.z)*exag;};
@@ -108,8 +122,9 @@ for(const exag of [1,1.5,3]){
   const x=t.x1+st.run,y=ground(x,z)+.04;
   const hit=cast(x+.4,y,z,-1,0);assert.ok(hit&&hit.distance<.41*CHURCH_SCALE,`bottom riser reaches ground at exag ${exag}`);contacts++;
  }
- // x = 0 is the exact seam with the gable plane, where a ray grazes the wall edge; sample just inside the tower.
- for(const side of [-1,1])for(const x of [.1,1,2]){
+ // The tower's back corner is the exact seam with the gable plane, where a ray grazes the wall edge; sample 0.1 m inside it.
+ const tx0=CHURCH_GEOM.nave.x1;
+ for(const side of [-1,1])for(const x of [tx0+.1,(tx0+t.x1)/2,t.x1]){
   const z=side<0?-t.zn:t.zs,y=ground(x,z)+.04;
   const hit=cast(x,y,z+side*.4,0,-side);assert.ok(hit&&hit.distance<.41*CHURCH_SCALE,`tower skirt reaches ground at exag ${exag}`);contacts++;
  }

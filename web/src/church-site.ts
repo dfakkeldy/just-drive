@@ -51,8 +51,9 @@ export const CHURCH_FEATURES = {
 /**
  * What stands on the grounds, in model metres, from the same scan: the row of rocks along the lot, a rock beside the
  * lane, the granite monument in front, and the tall wayside cross on the lane. `h` is the height above the ground, `w`
- * and `t` the footprint, `ry` the turn in the model frame. The last twelve rocks lie outside the scan: they keep the
- * positions from the owner's earlier drone model.
+ * and `t` the footprint, `ry` the turn in the model frame (for the rocks it only varies their look). The wayside cross
+ * faces bearing 85.8 degrees, toward the lane, so its arms run along bearing 175.8: ry = 297.65 - 175.8 degrees.
+ * The last twelve rocks lie outside the scan: they keep the positions from the owner's earlier drone model.
  */
 export const CHURCH_GROUNDS = {
   "rocks": [
@@ -66,7 +67,7 @@ export const CHURCH_GROUNDS = {
     [22.2, 13.97, 0.3, 0.9, 0.7, 0.6], [24.17, 13.02, 0.3, 0.9, 0.7, 1.8], [26.08, 12.21, 0.3, 0.9, 0.7, 2.9]
   ],
   "monument": { "x": 11.85, "z": 0.78, "h": 1.99, "w": 0.85 },
-  "wayside": { "x": -42.47, "z": -39.9, "h": 4.25, "arm": 1.6, "armAt": 3.25, "ry": 3.71 }
+  "wayside": { "x": -42.47, "z": -39.9, "h": 4.25, "arm": 1.6, "armAt": 3.25, "ry": 2.13 }
 } as const;
 
 /**
@@ -119,12 +120,15 @@ export class ChurchSite implements Site {
     const yard = bounds(-21, -7.5, 28, 20);
     this.box = [Math.min(yard[0], laneBox[0]), Math.min(yard[1], laneBox[1]), Math.max(yard[2], laneBox[2]), Math.max(yard[3], laneBox[3])];
     const { nave: n, tower: t, vestry: v } = CHURCH_GEOM, { steps: st, ramp, landing } = CHURCH_FEATURES;
-    this.clear = [bounds(v.x0 - 1, -t.zn - ramp.run - 0.6, t.x1 + st.run + 0.5, n.zs + 1.6), bounds(LOT[0], LOT[1], LOT[2], LOT[3])];
+    const { monument: m, wayside: w } = CHURCH_GROUNDS, big = CHURCH_GROUNDS.rocks[10];
+    // The church and the lot, then a small clearing round each solid that stands on open ground, so no tree grows through it.
+    const around = (x: number, z: number, r: number) => bounds(x - r, z - r, x + r, z + r);
+    this.clear = [bounds(v.x0 - 1, -t.zn - ramp.run - 0.6, t.x1 + st.run + 0.5, n.zs + 1.6), bounds(LOT[0], LOT[1], LOT[2], LOT[3]),
+      around(m.x, m.z, 1.5), around(w.x, w.z, 1.5), around(big[0], big[1], 2)];
     const solid = (x0: number, x1: number, z0: number, z1: number): Solid => ({
       ...this.world((x0 + x1) / 2, (z0 + z1) / 2), half: (x1 - x0) * CHURCH_SCALE / 2,
       halfWidth: (z1 - z0) * CHURCH_SCALE / 2, heading: CHURCH_HEADING,
     });
-    const { monument: m, wayside: w } = CHURCH_GROUNDS, big = CHURCH_GROUNDS.rocks[10];
     this.solids = [solid(n.x0, n.x1, -n.zn, n.zs), solid(n.x1, t.x1, -t.zn, t.zs), solid(v.x0, n.x0, v.z0, v.z1),
       solid(t.x1, t.x1 + st.run, st.u - st.width / 2 - 0.1, st.u + st.width / 2 + 0.1),
       solid(ramp.u - ramp.width / 2 - 0.1, ramp.u + ramp.width / 2 + 0.1, -t.zn - ramp.run, -t.zn),
