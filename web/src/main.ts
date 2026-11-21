@@ -210,6 +210,10 @@ const base = `${import.meta.env.BASE_URL}${AREA.base}`;
 const localJust = SITE.brand === 'just' && location.hostname === 'localhost';
 const offlinePageKey = __PUBLIC_APP__ && !localJust ? bindOfflineVersion(AREA.id) : '';
 const sidewalkDataReady = ERA.modern && params.get('sidewalks') !== '0' ? loadSidewalkData(AREA.id, base, LOW) : Promise.resolve(null);
+// The 1884 scene and the Canso canal have their own chunks. Only their era or area downloads them. They need no manifest,
+// so the download starts here, before the manifest read.
+const historyModules = ERA.id === '1884' ? early(Promise.all([import('./eras/history-ground'), import('./eras/history-approaches'), import('./eras/history-scene')])) : null;
+const canalModule = ERA.modern && AREA.canal ? early(import('./canal')) : null;
 const manifest = await loadAreaManifest<Manifest>(AREA, base).catch(error => {
   if (__PUBLIC_APP__ && error instanceof Error && error.name === 'GameUpdateRequired') return new Promise<never>(() => {});
   return areaScreen(error instanceof Error ? error.message : String(error));
@@ -232,9 +236,6 @@ const streamUses = (params.get('brooks') !== '0' ? 1 : 0) + (ERA.id === '1884' ?
 const streamsRead = manifest.streams && streamUses ? early(getJson(manifest.streams.file), streamUses) : null;
 const roadsRead = manifest.roads ? early(getJson(manifest.roads.file)) : null;
 const propsRead = ERA.modern && manifest.props ? early(getJson(manifest.props.file)) : null;
-// The 1884 scene and the Canso canal have their own chunks. Only their era or area downloads them, and the download starts here.
-const historyModules = ERA.id === '1884' ? early(Promise.all([import('./eras/history-ground'), import('./eras/history-approaches'), import('./eras/history-scene')])) : null;
-const canalModule = ERA.modern && AREA.canal ? early(import('./canal')) : null;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
