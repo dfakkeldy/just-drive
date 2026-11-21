@@ -14,7 +14,9 @@ export function stoneGeometry(kind: number, low: boolean): THREE.BufferGeometry 
   return new THREE.ExtrudeGeometry(shape, { depth: 0.18, bevelEnabled: false, curveSegments: 4 }).translate(0, 0, -0.09);
 }
 interface Fitted {
-  mesh: THREE.InstancedMesh; samples: { a: Point; b?: Point; turn?: number }[]; signature: string;
+  mesh: THREE.InstancedMesh; samples: { a: Point; b?: Point; turn?: number }[];
+  /** The last fitted ground heights at each sample's a and b. NaN means no height (null); fitted is false until the first fit. */
+  ya: Float64Array; yb: Float64Array; fitted: boolean;
   /** A wall piece's height and thickness (a hedge is lower and thicker than the wall). */
   height?: number; thick?: number;
 }
@@ -29,6 +31,8 @@ export function wallMatrix(a: Point, b: Point, ya: number, yb: number, origin: P
     dz, 0, dx / len * thick, origin[1] - (a[1] + b[1]) / 2,
     0, 0, 0, 1);
 }
+/** Two heights match when they are equal or both missing (NaN). */
+const same = (a: number, b: number): boolean => a === b || (Number.isNaN(a) && Number.isNaN(b));
 export class Cemeteries {
   readonly group = new THREE.Group();
   readonly places: Place[];
@@ -71,7 +75,7 @@ export class Cemeteries {
         const mesh = new THREE.InstancedMesh(geometry, this.material, samples.length);
         // Instance bounds are refreshed after ground fitting, so off-screen sites cost no draw calls.
         samples.forEach((_, i) => { mesh.setMatrixAt(i, this.zero); mesh.setColorAt(i, color(i)); });
-        group.add(mesh); fitted.push({ mesh, samples, signature: '', height, thick });
+        group.add(mesh); fitted.push({ mesh, samples, ya: new Float64Array(samples.length), yb: new Float64Array(samples.length), fitted: false, height, thick });
       };
       // A road-side edge can be open (no wall drawn) or a low clipped hedge (ROAD_EDGES).
       add(wall, segments.filter(([a, b]) => edgeKind(area, a, b) === 'wall').map(([a, b]) => ({ a, b })), () => new THREE.Color(0x73776f));
@@ -121,15 +125,23 @@ export class Cemeteries {
       site.group.visible = far < (this.low ? 600 : 1100) + site.radius;
       if (!site.group.visible) continue;
       for (const f of site.fitted) {
-        const heights = f.samples.map(s => [this.ground(s.a), s.b ? this.ground(s.b) : null]);
-        const signature = JSON.stringify(heights);
-        if (signature === f.signature) continue;
-        f.signature = signature;
+        // Compare the heights in place: a mesh refits only on its first pass or when a height changed.
+        let changed = !f.fitted;
+        for (let i = 0; i < f.samples.length; i++) {
+          const s = f.samples[i], ya = this.ground(s.a) ?? NaN, yb = s.b ? this.ground(s.b) ?? NaN : NaN;
+          if (!same(ya, f.ya[i]) || !same(yb, f.yb[i])) changed = true;
+          // Keep the newest value (0 and -0 compare equal), so a refit draws exactly what this pass sampled.
+          f.ya[i] = ya; f.yb[i] = yb;
+        }
+        if (!changed) continue;
+        f.fitted = true;
+        let shown = false;
         f.samples.forEach((s, i) => {
-          const [ya, yb] = heights[i];
-          if (ya === null || (s.b && yb === null)) { f.mesh.setMatrixAt(i, this.zero); return; }
+          const ya = f.ya[i], yb = f.yb[i];
+          if (Number.isNaN(ya) || (s.b && Number.isNaN(yb))) { f.mesh.setMatrixAt(i, this.zero); return; }
+          shown = true;
           if (s.b) {
-            f.mesh.setMatrixAt(i, wallMatrix(s.a, s.b, ya, yb!, this.origin, undefined, f.height, f.thick));
+            f.mesh.setMatrixAt(i, wallMatrix(s.a, s.b, ya, yb, this.origin, undefined, f.height, f.thick));
             return;
           } else {
             this.dummy.position.set(s.a[0] - this.origin[0], ya - 0.04, this.origin[1] - s.a[1]);
@@ -138,7 +150,7 @@ export class Cemeteries {
           this.dummy.updateMatrix(); f.mesh.setMatrixAt(i, this.dummy.matrix);
         });
         f.mesh.instanceMatrix.needsUpdate = true;
-        f.mesh.visible = heights.some(([a, b], i) => a !== null && (!f.samples[i].b || b !== null));
+        f.mesh.visible = shown;
         if (f.mesh.visible) f.mesh.computeBoundingSphere();
       }
     }

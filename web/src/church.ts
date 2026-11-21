@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Terrain } from './terrain';
 import { pushOut, type Pushable } from './parked';
+import type { HandBuiltPlace } from './place';
 import { CHURCH_GEOM, CHURCH_FEATURES, CHURCH_SCALE, type ChurchSite } from './church-site';
 
 type Opening = typeof CHURCH_FEATURES.openings[number];
@@ -326,7 +327,7 @@ function mergeChurch(source: THREE.Group): THREE.Group {
 }
 
 /** Builds once, after the finest land is loaded. Later updates do no terrain or geometry work. */
-export class Church {
+export class Church implements HandBuiltPlace {
   readonly group = new THREE.Group();
   triangles = 0;
   private built = false;

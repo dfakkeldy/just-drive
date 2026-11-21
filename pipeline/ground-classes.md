@@ -10,9 +10,10 @@ python3 pipeline/ground_classes.py --data-root "$MMM_SOURCE_ROOT" \
 ```
 
 The source root contains the existing `data/raw`, `data/baked` and retained
-phase-1 derived-index snapshots. Paths in `pipeline/ground_sources.json` are
-relative to that root. GDAL, NumPy, Pillow and Shapely are pipeline dependencies;
-the web client receives none of them. The script refuses a baked/site output
+phase-1 derived-index snapshots. The vector and index paths in
+`pipeline/ground_sources.json` are relative to that root. The repository holds
+`pipeline/ground_canopy_pins.json`. Its tile paths are relative to `data/baked`.
+The bake needs GDAL, NumPy, Pillow and Shapely. The script refuses a baked/site output
 path. A changed pinned source or canopy tile fails the bake.
 
 Each area's package has three runtime files and one review receipt:
@@ -50,13 +51,13 @@ then old classes. DAPA41/DASA41 belong to the separate paved layer. They retain
 the original RGB bytes here. Existing water membership and RGB bytes also remain
 unchanged. The 51 stale-forest candidates are not clearing inputs.
 
-Class 8 follows the approved open-wetland policy: no trees and low plants. A CNWI
-bog, fen or marsh becomes class 8 only where every overlapped 10 m cell has a
-known baked canopy of 2 m or less (the same 1 m sampling as the pits). Treed or
-unmeasured cells in the polygon, such as black spruce on a bog, become class 9.
-`promotion.json` reports them as `cnwi_wooded_m2`. Class
-9 keeps tree roots, shapes and colours. Its floor darkens; nonforest cells retain
-the old shader's effective tree-colour shares in R/G. A rail corridor is low brush
+Class 8 has low plants. Forest inventory wetland codes and CNWI bogs, fens and
+marshes become class 8 only where every
+overlapped 10 m cell has a known baked canopy of 2 m or less. Both sources use
+the same 1 m sampling as the pits. Treed or unmeasured cells become class 9.
+`promotion.json` reports those candidates as `forest_wooded_m2` and
+`cnwi_wooded_m2`. Class 9 keeps tree roots, shapes and colours. Its floor
+darkens. Nonforest cells retain the old shader's tree-colour shares in R/G. A rail corridor is low brush
 except for a five-metre bed along an actual mapped line. No rail models or road
 geometry are generated. The Canso bed respects the existing aligned trail.
 
@@ -110,8 +111,9 @@ node tools/ground-canopy-mutations.mjs
 node tools/site-title-check.mjs --mutations
 ```
 
-The per-area check compares every decoded CPU clearing cell to cover B. It also
-checks the class domain, site/paved/water priority, hashes and output allowlist.
+Use `--area westbay` to verify a West Bay-only work root. The per-area check
+compares each decoded CPU clearing cell to cover B. It checks the class domain,
+site, paved and water priority, input hashes and the output allowlist.
 Production Terrain, Trees and Vehicle fixtures cover canopy, retained trees and
 gravel selection. Mutants remove each important guard. The check inventory has
 separate baseline and mutation rows.

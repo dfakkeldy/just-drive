@@ -8,7 +8,7 @@ import { eraRoadField } from './era';
 import { MIRROR_TERRAIN_VERT, TERRAIN_FRAG, TERRAIN_VERT, WATER_MASK_FRAG } from './shaders';
 import { readFile } from './store';
 import { updateCoastView } from './coast-view';
-import { coastRecessUniforms, RECESSES, type RockSite } from './coast-site';
+import { coastRecessUniforms, quarryGypsumFill, QUARRY_GRAVEL_FILL, RECESSES, type RockSite } from './coast-site';
 import { BROOK_SAMPLE, brookBlend, brookDistance, brookField, Streams } from './streams';
 import { GroundCover, type GroundMeta, clearsGroundTrees } from './ground-cover';
 
@@ -51,7 +51,7 @@ export interface Surface {
   deck?: boolean;
   water?: boolean;     // mapped inland water; its LiDAR return is the surface, not a measured bed
   waterLimit?: number; // drawn water/return height plus contact tolerance; airborne bodies above it stay dry
-  mineral?: boolean;  // confirmed class-6 cell; handling only, never a road, grading or invented collision
+  mineral?: boolean;  // confirmed class 6 or authored quarry paint; never a road, grading or collision
   level: number;        // detail level the answer came from
 }
 
@@ -744,17 +744,23 @@ export class Terrain {
     }
 
     // Lighting detail comes from a normal map at full sample density.
+    // This loop is most of a tile build. The edge clamps are worked out once per row and per column, not per read.
+    // The maths, its order and Math.hypot stay as they were, so the texture bytes do not change.
     const nm = new Uint8Array(S * S * 4);
-    const at = (arr: Float32Array, a: number, b: number) => arr[Math.min(Math.max(b, 0), T) * S + Math.min(Math.max(a, 0), T)];
-    const surf = (a: number, b: number) => at(ground, a, b) + (hull ? 0.6 * at(canopy, a, b) : 0);
     for (let b = 0; b < S; b++) {
+      const b0 = Math.max(b - 1, 0), b1 = Math.min(b + 1, T), h = (b1 - b0) * mpp;
+      const row = b * S, up = b0 * S, down = b1 * S;
       for (let a = 0; a < S; a++) {
-        const w = (Math.min(a + 1, T) - Math.max(a - 1, 0)) * mpp, h = (Math.min(b + 1, T) - Math.max(b - 1, 0)) * mpp;
-        let nx = -(surf(a + 1, b) - surf(a - 1, b)) / w, nz = -(surf(a, b + 1) - surf(a, b - 1)) / h;
+        const a0 = Math.max(a - 1, 0), a1 = Math.min(a + 1, T), w = (a1 - a0) * mpp;
+        const gl = ground[row + a0], gr = ground[row + a1], gu = ground[up + a], gd = ground[down + a];
+        // The surface the light sees: ground plus the tree hull.
+        const sl = gl + (hull ? 0.6 * canopy[row + a0] : 0), sr = gr + (hull ? 0.6 * canopy[row + a1] : 0);
+        const su = gu + (hull ? 0.6 * canopy[up + a] : 0), sd = gd + (hull ? 0.6 * canopy[down + a] : 0);
+        let nx = -(sr - sl) / w, nz = -(sd - su) / h;
         const inv = 1 / Math.hypot(nx, 1, nz);
         nx *= inv; nz *= inv;
-        const gs = Math.hypot((at(ground, a + 1, b) - at(ground, a - 1, b)) / w, (at(ground, a, b + 1) - at(ground, a, b - 1)) / h);
-        const k = (b * S + a) * 4;
+        const gs = Math.hypot((gr - gl) / w, (gd - gu) / h);
+        const k = (row + a) * 4;
         nm[k] = Math.round((nx * 0.5 + 0.5) * 255);
         nm[k + 1] = Math.round((nz * 0.5 + 0.5) * 255);
         nm[k + 2] = px[k + 2];
@@ -995,23 +1001,38 @@ export class Terrain {
   meshHeightAt(x: number, z: number, drawnOnly = false): number | null {
     let t = this.find(x, z);
     if(drawnOnly && this.cartRoads)t=this.drawnTile(x,z);
-    else if(drawnOnly){
-      t=null;
-      for(const q of this.tiles.values())if(q.mesh?.visible && x>=q.x0 && x<q.x0+q.size && z>=q.z0 && z<q.z0+q.size && (!t || q.level>t.level)){
-        const quarter=(x>=q.x0+q.size/2?1:0)+(z>=q.z0+q.size/2?2:0);
-        if((q.mesh.material as THREE.ShaderMaterial).uniforms.hideQuad.value.getComponent(quarter)<.5)t=q;
-      }
-    }
+    else if(drawnOnly)t=this.drawnBoundsTile(x,z);
     if (!t?.mesh) return null;
     this.use(t);
-    const seg = segFor(t.level), n = seg + 3;
-    const fa = (x - t.x0) * seg / t.size, fb = (z - t.z0) * seg / t.size;
-    const a = Math.min(Math.floor(fa), seg - 1), b = Math.min(Math.floor(fb), seg - 1);
-    const u = fa - a, v = fb - b, i = (b + 1) * n + a + 1;
-    const p = t.mesh.geometry.getAttribute('position');
-    const h00 = p.getY(i), h10 = p.getY(i + 1), h01 = p.getY(i + n), h11 = p.getY(i + n + 1);
-    return u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v
-      : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
+    return this.triangleHeight(t, x, z);
+  }
+  /** The finest visible tile whose bounds hold the point and whose quarter is shown. Tiles are found by key, a few
+   *  lookups per sample, not a walk over every loaded tile. The test is each tile's own bounds, not the floor() key,
+   *  so a point on a seam gets the same tile as before; neighbouring tiles of other levels can differ there. */
+  private drawnBoundsTile(x:number,z:number):Tile|null {
+    const m=this.manifest,e=x+m.village[0]-m.origin[0],s=z-(m.village[1]-m.origin[1]);
+    const holds=(q:Tile)=>x>=q.x0&&x<q.x0+q.size&&z>=q.z0&&z<q.z0+q.size;
+    for(let level=this.maxLevel;level>=0;level--){
+      // Rounding can move floor() one tile from the tile whose bounds hold the point, so try the neighbours too.
+      const size=m.size/2**level,i0=Math.floor(e/size),j0=Math.floor(s/size);
+      let t:Tile|null=null,count=0;
+      for(let di=-1;di<=1;di++){
+        const i=i0+di,x0=m.origin[0]+i*size-m.village[0];if(!(x>=x0&&x<x0+size))continue;
+        for(let dj=-1;dj<=1;dj++){
+          const j=j0+dj,z0=m.village[1]-(m.origin[1]-j*size);if(!(z>=z0&&z<z0+size))continue;
+          const q=this.tiles.get(`${level}/${i}_${j}`);
+          if(q?.mesh?.visible&&holds(q)&&this.shownAt(q,x,z)){t=q;count++;}
+        }
+      }
+      if(count===1)return t;
+      // Two tiles of one level can overlap by a rounding step at a seam: keep the first in map order, as the scan did.
+      if(count>1){for(const q of this.tiles.values())if(q.level===level&&q.mesh?.visible&&holds(q)&&this.shownAt(q,x,z))return q;}
+    }
+    return null;
+  }
+  private shownAt(q:Tile,x:number,z:number):boolean {
+    const quarter=(x>=q.x0+q.size/2?1:0)+(z>=q.z0+q.size/2?2:0);
+    return (q.mesh!.material as THREE.ShaderMaterial).uniforms.hideQuad.value.getComponent(quarter)<.5;
   }
   /** Mapped driving data only; this never enters a ground or deck query. */
   protectedRoadAt(x:number,z:number):boolean {
@@ -1050,10 +1071,33 @@ export class Terrain {
     return null;
   }
   private triangleHeight(t:Tile,x:number,z:number):number {
+    return this.triangleValue(t,x,z,t.mesh!.geometry.getAttribute('position'),1);
+  }
+
+  private triangleValue(t:Tile,x:number,z:number,attr:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,component:number):number {
     const seg=segFor(t.level),n=seg+3,fa=(x-t.x0)*seg/t.size,fb=(z-t.z0)*seg/t.size;
     const a=Math.min(Math.floor(fa),seg-1),b=Math.min(Math.floor(fb),seg-1),u=fa-a,v=fb-b,i=(b+1)*n+a+1;
-    const p=t.mesh!.geometry.getAttribute('position'),h00=p.getY(i),h10=p.getY(i+1),h01=p.getY(i+n),h11=p.getY(i+n+1);
+    const h00=attr.getComponent(i,component),h10=attr.getComponent(i+1,component),h01=attr.getComponent(i+n,component),h11=attr.getComponent(i+n+1,component);
     return u+v<=1?h00+(h10-h00)*u+(h01-h00)*v:h11+(h01-h11)*(1-u)+(h10-h11)*(1-v);
+  }
+
+  private quarryMineral(t:Tile,x:number,z:number,surface:Surface,lerp:(arr:ArrayLike<number>,stride:number,off:number)=>number):boolean {
+    const site=this.coast;
+    // The renderer uses individual trees near the player. Their ground keeps the existing brush boundary.
+    if(!site?.quarryFloorAllowsMineral || surface.canopy>1.6
+      || (surface.kind>0 && surface.roadDist<=surface.halfWidth+.4))return false;
+    const paint=t.mesh?.geometry.getAttribute('coast');
+    if(!paint)return false;
+    const weight=Math.max(this.triangleValue(t,x,z,paint,0),this.triangleValue(t,x,z,paint,3));
+    const uniforms=(t.mesh!.material as THREE.ShaderMaterial).uniforms;
+    const style=uniforms.tSiteStyle?.value.image.data;
+    // STUNT_TERRAIN_FRAG samples style alpha bilinearly at the terrain grid's texel centres.
+    const styleAlpha=style?lerp(style,4,3)/255:0;
+    // tNormal.b is linearly sampled in the shader at the same grid coordinates. Each canopy byte is 0.2 m.
+    const renderCanopy=clearsGroundTrees(this.groundClassAt(x,z))?0:lerp(uniforms.tNormal.value.image.data,4,2)*.2;
+    if(quarryGypsumFill(weight,renderCanopy,uniforms.hull.value)*(1-styleAlpha)<QUARRY_GRAVEL_FILL)return false;
+    const h=this.seaLevel+(surface.ground-this.seaLevel)/this.exag;
+    return site.quarryFloorAllowsMineral(x,z,h);
   }
 
   surfaceAt(x: number, z: number): Surface | null {
@@ -1092,7 +1136,10 @@ export class Terrain {
     out.ground = this.withDeck(x, z, out.ground,out);
     const waterLevel=out.deck?null:this.waterLevelAt(x,z,out.ground);
     if (waterLevel!==null) {out.water=true;out.waterLimit=Math.max(waterLevel,out.ground)+.25;}
-    if(!this.cartRoads&&!out.deck&&!out.water&&this.groundClassAt(x,z)===6)out.mineral=true;
+    if(!this.cartRoads&&!out.deck&&!out.water){
+      const quarry=this.coast?.quarry&&this.coast.contains(x,z);
+      if(quarry ? this.quarryMineral(t,x,z,out,lerp) : this.groundClassAt(x,z)===6)out.mineral=true;
+    }
     return out;
   }
 

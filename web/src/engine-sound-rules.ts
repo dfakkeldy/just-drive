@@ -13,7 +13,7 @@ export interface EngineProfile {
   pulses: number;
   /** Road speed (m/s) at the redline in each gear. Absent for a belt drive (CVT), which holds its engine speed instead. */
   gears?: readonly number[];
-  /** The voice: saw for a car's growl, square for the bike's two-stroke buzz. */
+  /** The voice: saw for a car's growl, square for the bike's two-stroke buzz, custom for a pulse train (`train`). */
   wave: OscillatorType;
   /** How loud the engine sits under the other game sounds, 0 to 1. */
   level: number;
@@ -21,17 +21,48 @@ export interface EngineProfile {
   bright: number;
   /** Tyre noise scale: a bike has two narrow tyres, a truck four wide ones. */
   tyres: number;
+  /** Where the box changes up at full pedal, as a share of the gear's redline speed. Default .9. */
+  upshift?: number;
+  /** How far the engine flares in the air at full pedal, as a share of the range from idle to redline. Default .95. */
+  flare?: number;
+  /** The highest filter cutoff, Hz: a big exhaust stays dark however hard the engine works. Default 6000. */
+  ceiling?: number;
+  /** The gain of the octave-up voice (full detail only). Default UPPER. */
+  upper?: number;
+  /** The centre of the rasp noise, as a multiple of the firing frequency. Default RASP. */
+  rasp?: number;
+  /**
+   * One whole engine cycle (two crank turns for a four-stroke) as a train of pulses, for `wave: 'custom'`. `lump` is each
+   * pulse's height in firing order, `skew` its small timing error (a share of one firing interval), `decay` how long each
+   * pulse rings (a share of one firing interval). Uneven pulses put the engine's lower orders under the firing note.
+   */
+  train?: { lump: readonly number[]; skew: readonly number[]; decay: number };
 }
+
+/** The gain of the octave-up voice, unless a profile sets its own. */
+export const UPPER = .35;
+/** The centre of the rasp noise as a multiple of the firing frequency, unless a profile sets its own. */
+export const RASP = 6;
+
+// A cross-plane V8 fires 1-8-4-3-6-5-7-2: left, right, right, left, right, left, left, right. The near (left) bank's
+// tailpipe is louder, so each bank's uneven spacing comes through as the lope. Heights and timing errors are by ear.
+const V8 = { lump: [1, .6, .52, .94, .58, 1, .9, .55], skew: [0, .03, -.02, .02, -.03, .01, .03, -.02], decay: .8 };
 
 export const ENGINES: Readonly<Record<EngineKind, EngineProfile>> = {
   // A small four-cylinder with a five-speed box.
   car: { idle: 800, redline: 6200, pulses: 2, gears: [9, 16, 24, 32, 42], wave: 'sawtooth', level: .5, bright: 7, tyres: 1 },
-  // A big V8 and a four-speed automatic: low, slow and deep.
-  truck: { idle: 650, redline: 4800, pulses: 4, gears: [10, 18, 28, 40], wave: 'sawtooth', level: .58, bright: 5, tyres: 1.2 },
+  // A big V8 and a six-speed automatic: low, slow and lumpy. Players hold the pedal flat, so the box changes up early, at
+  // 74% of the redline. The steps are a truck six-speed's (3.74, 2.00, 1.34, 1.00, 0.77, 0.63): wide at the bottom, so the
+  // first changes land low and far apart in speed. The top gear is tall: about 3300 rpm at the truck's top speed (45.5 m/s
+  // on pavement), never on the limiter. A dark exhaust (the cutoff stops at 750 Hz), no octave-up voice, and an intake roar
+  // just above the firing note.
+  truck: { idle: 600, redline: 4800, pulses: 4, gears: [11, 20.6, 30.8, 41.3, 53.6, 65.5], wave: 'custom', level: 1, bright: 2, tyres: 1.2,
+    upshift: .74, flare: .62, ceiling: 750, upper: 0, rasp: 2.5, train: V8 },
   // A parallel twin on a belt (CVT): the engine speed follows the pedal, not the road.
   sxs: { idle: 1200, redline: 7200, pulses: 1, wave: 'sawtooth', level: .5, bright: 8, tyres: 1 },
-  // A two-stroke single, five close gears: buzzy and high.
-  bike: { idle: 1500, redline: 9800, pulses: 1, gears: [7, 12, 17, 23, 30], wave: 'square', level: .42, bright: 9, tyres: .7 },
+  // A two-stroke single, five close gears: buzzy and high. Top gear reaches the redline at 45.3 m/s, so at the bike's top
+  // speed (41.7 m/s on pavement) it turns at 92% of the redline, not on the limiter.
+  bike: { idle: 1500, redline: 9800, pulses: 1, gears: [10.6, 18.1, 25.7, 34.8, 45.3], wave: 'square', level: .42, bright: 9, tyres: .7 },
 };
 
 /** The garage id of a motor, or null for the horse (hooves have their own sound, horse-sound.ts) and anything unknown. */
@@ -51,7 +82,7 @@ export function gearFor(p: EngineProfile, speed: number, throttle: number, curre
   if (!gears) return 1;
   const v = Math.abs(speed);
   let g = Math.min(Math.max(1, Math.round(current) || 1), gears.length);
-  const up = .5 + .4 * clamp(throttle);   // fraction of the redline speed where the box changes up
+  const up = .5 + ((p.upshift ?? .9) - .5) * clamp(throttle);   // fraction of the redline speed where the box changes up
   while (g < gears.length && v > gears[g - 1] * up) g++;
   while (g > 1 && v < gears[g - 2] * .42) g--;
   return g;
@@ -66,7 +97,21 @@ export interface EngineInput {
   towing: boolean;
 }
 
-export interface EngineState { gear: number; rpm: number; load: number; frequency: number; gain: number; cutoff: number }
+export interface EngineState {
+  gear: number; rpm: number; load: number;
+  /** The firing frequency, Hz. */
+  frequency: number;
+  /** The voice oscillator's frequency, Hz: the firing frequency, or one engine cycle for a pulse train. */
+  voice: number;
+  gain: number; cutoff: number;
+  /** The centre of the rasp noise, Hz. */
+  rasp: number;
+}
+
+/** Firing pulses in one period of the voice: a pulse train holds a whole engine cycle, a plain wave one pulse. */
+export function voicePulses(p: EngineProfile): number {
+  return p.wave === 'custom' && p.train ? p.train.lump.length : 1;
+}
 
 /**
  * Engine speed, load and the voice settings for one moment. `gear` is the gear before this moment (see gearFor).
@@ -83,7 +128,7 @@ export function engineState(p: EngineProfile, input: EngineInput, gear: number):
   let rpm: number;
   if (input.airborne) {
     // Wheels off the ground spin free: the engine flares with the pedal.
-    rpm = p.idle + (p.redline - p.idle) * .95 * push;
+    rpm = p.idle + (p.redline - p.idle) * (p.flare ?? .95) * push;
   } else if (!p.gears) {
     // A belt drive engages above idle and holds a high, even note while the pedal is down.
     const engaged = 2600 + 3400 * push + 1200 * clamp(v / 22);
@@ -104,9 +149,34 @@ export function engineState(p: EngineProfile, input: EngineInput, gear: number):
   return {
     gear: g, rpm, load,
     frequency,
+    voice: frequency / voicePulses(p),
     gain: p.level * (.38 + .62 * load) * (.55 + .45 * spin),
-    cutoff: clamp(frequency * (2 + p.bright * load), 160, 6000),
+    cutoff: clamp(frequency * (2 + p.bright * load), 160, p.ceiling ?? 6000),
+    rasp: Math.min(5000, frequency * (p.rasp ?? RASP)),
   };
+}
+
+/**
+ * The truck's voice: one engine cycle of pulses as a Web Audio periodic wave (cosine and sine terms for each harmonic of
+ * the cycle). Each pulse is a sharp rise and a decay, placed at its firing slot plus its skew and scaled by its lump.
+ * With even pulses, only every `lump.length`-th harmonic (the firing note and its overtones) is left; uneven ones add the
+ * orders below it. The browser normalises the wave, so its peak stays 1 whatever the heights.
+ */
+export function engineWave(p: EngineProfile, harmonics = 160): { real: Float32Array; imag: Float32Array } {
+  if (!p.train) throw Error('engineWave needs a pulse train');
+  const { lump, skew, decay } = p.train, c = lump.length, tau = decay / c;
+  const real = new Float32Array(harmonics + 1), imag = new Float32Array(harmonics + 1);
+  for (let h = 1; h <= harmonics; h++) {
+    let cs = 0, sn = 0;
+    for (let k = 0; k < c; k++) {
+      const a = 2 * Math.PI * h * (k + skew[k]) / c;
+      cs += lump[k] * Math.cos(a); sn += lump[k] * Math.sin(a);
+    }
+    // A decaying pulse, exp(-t / tau) from its start: in the frequency domain 1 / (1 + iw).
+    const w = 2 * Math.PI * h * tau, d = 1 + w * w;
+    real[h] = 2 * (cs - sn * w) / d; imag[h] = 2 * (cs * w + sn) / d;
+  }
+  return { real, imag };
 }
 
 export interface TyreState { gain: number; frequency: number; q: number; rate: number; depth: number }
