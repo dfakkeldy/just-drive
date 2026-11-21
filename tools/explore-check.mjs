@@ -247,7 +247,7 @@ if(family==='all'||family==='switch'){
 if(family==='all'||family==='phone'){
  const driveIds=['hud','gear','pauseButton','droneButton','placesButton','miniMap','radio','placeArrival','tcTrack','tcBrake','tcGo','tcReset','tcView','tcHorn','savePictureButton'];
  const flightIds=['hud','gear','pauseButton','droneLeft','droneLeft span','droneRight','droneRight span','droneReturn','savePictureButton'];
- for(const [w,h,bottom=0] of [[844,390],[390,844],[320,568],[320,460],[280,653],[568,280,21]]){
+ for(const [w,h,bottom=0] of [[844,390],[390,844],[320,568],[320,460],[280,653],[568,280],[568,280,21]]){
   const p=await page('mode=explore&touch=1&title=1',w,h);
   const label=(w===844||w===390)?`phone ${w}`:`phone ${w}x${h}`;
   check((await p.read(titleState)).rows.includes('Save picture'),`${label} title lists Save picture`);

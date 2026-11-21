@@ -102,6 +102,10 @@ export function prepareExplore(): void {
       body.droneOn.droneSticks #savePictureStatus{left:auto;right:calc(8px + env(safe-area-inset-right,0px));transform:none;
         bottom:calc(102px + var(--drone-stick-size) + var(--safe-bottom,env(safe-area-inset-bottom,0px)))}
     }
+    @media(orientation:landscape) and (max-height:319px){
+      body.droneOn.droneSticks #savePictureStatus{left:auto;right:calc(22px + var(--drone-stick-size) + env(safe-area-inset-right,0px));
+        top:calc(134px + env(safe-area-inset-top,0px));bottom:auto;transform:none;box-sizing:border-box;max-width:72px;white-space:normal;text-align:center}
+    }
     #savePictureStatus:empty{display:none}
   ` }));
 }
