@@ -135,10 +135,12 @@ function compare(d, s, factory, gated) {
 }
 
 // Pin main creation order and LOW/quarry/URL gates, including the optional cemetery and stockpile exclusion. A grass
-// chunk that does not load shows the Retry screen (partFailed); the gate and the arguments are the same.
+// chunk that does not load shows the Retry screen (partFailed); the gate and the arguments are the same. The chunk starts
+// downloading early in the boot under the same LOW gate (boot-tasks.ts early()), and this line takes it.
+assert.match(main, /\nconst grassChunk = LOW \? null : early\(import\('\.\/grass'\)\);/);
 assert.match(main, /\.\.\.\(LOW \? \{ split: AREA\.quarry \? 1 : 1\.15, low: true, lazyRange: 600 \} : \{\}\), shadows: !LOW && params\.get\('shadows'\) !== '0' && !nightLook \}\);/);
 assert.match(main, /const sunShadows = terrain\.shadows \? new SunShadows\(renderer, scene, sunLight, sunDir, params\.get\('shadows'\) === '1'\) : null;/);
-assert.match(main, /const grass = LOW \? null : new \(await import\('\.\/grass'\)(?:\.catch\(partFailed\))?\)\.Grass\(terrain, params\.get\('grass'\)(?:, (?:cemeteries\?\.excludes|grassExcludes))?\);/);
+assert.match(main, /const grass = LOW \? null : new \(await grassChunk!\.take\(\)\.catch\(partFailed\)\)\.Grass\(terrain, params\.get\('grass'\)(?:, (?:cemeteries\?\.excludes|grassExcludes))?\);/);
 assert.match(main, /const waterReflections = LOW \? null : new WaterReflections\(/);
 const order = [...main.matchAll(/const (sunShadows|grass|waterReflections) = /g)].map(match => match[1]);
 assert.deepEqual(order, ['sunShadows', 'grass', 'waterReflections']);

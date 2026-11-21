@@ -11,7 +11,10 @@ import {APRON} from '../web/src/quarry-site';
 export function pass3Tests(test,read){
  test('P3-1 failed feature import and factory use the retryable area screen',()=>{
   const main=read('web/src/main.ts'),screen=read('web/src/area-screen.ts');
-  assert.match(main,/import\('\.\/quarry-feature'\)[\s\S]{0,140}\.catch\(/,'import AND factory must be in the handled promise');
+  // The boot starts the import early (boot-tasks.ts early(), which holds a failure); the line that takes it handles it.
+  // Older sources (QUARRY_REVIEW_REF) import at that line instead.
+  const chunk=main.match(/\nconst (\w+) = [^\n]*\bearly\(import\('\.\/quarry-feature'\)\)/)?.[1];
+  assert.match(main,chunk?new RegExp(chunk+'!\\.take\\(\\)[\\s\\S]{0,140}\\.catch\\('):/import\('\.\/quarry-feature'\)[\s\S]{0,140}\.catch\(/,'import AND factory must be in the handled promise');
   assert.match(screen,/location\.reload\(/,'existing area screen offers retry');
  });
  test('P3-2 shoreline discard stops at the drawn water plane',()=>{

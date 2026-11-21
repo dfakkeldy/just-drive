@@ -10,13 +10,21 @@ export function frameSource(source, dev = true) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const names = new Set(['expose', 'live', 'scenePaused', 'syncRoadScenePause', 'updateWorld', 'drawEnding', 'frame']);
   // The hand-built places list (built once at boot) feeds the before-camera updates and the frame's waiting test.
-  const vars = new Set(['shadowFocus', 'hudState', 'places', 'handBuilt', 'placesWaiting']);
+  // Its rows hold the home and porch wrappers; spy() gives the rows' helpers from place.ts and what the boot built.
+  const vars = new Set(['shadowFocus', 'hudState', 'placeRows', 'places', 'handBuilt', 'placesWaiting']);
   const setupStart = source.indexOf('type WorldSegment ='), setupEnd = source.indexOf('const shadowFocus =');
   return transformSync(ast.statements.filter(n =>
     setupStart >= 0 && n.getStart(ast) >= setupStart && n.end <= setupEnd ||
     ts.isFunctionDeclaration(n) && names.has(n.name?.text) ||
     ts.isVariableStatement(n) && n.declarationList.declarations.some(d => vars.has(d.name.getText(ast)))
   ).map(n => n.getText(ast)).join('\n').replaceAll('import.meta.env.DEV', String(dev)), { loader: 'ts', target: 'es2022' }).code;
+}
+// The places rows' helpers (placeRow, lazyPlaceRow, placeSlots), read from the real place.ts like the dev hooks below.
+export function placeHelpers() {
+  const source = readFileSync(new URL('../web/src/place.ts', import.meta.url), 'utf8');
+  const ast = ts.createSourceFile('place.ts', source, ts.ScriptTarget.Latest, true);
+  const code = transformSync(ast.statements.filter(n => !ts.isImportDeclaration(n)).map(n => n.getText(ast)).join('\n').replaceAll(/^export /gm, ''), { loader: 'ts', target: 'es2022' }).code;
+  return new Function(`${code}; return { placeRow, lazyPlaceRow, placeSlots };`)();
 }
 export const hooksSource = () => readFileSync(new URL('../web/src/dev-hooks.ts', import.meta.url), 'utf8');
 export function hookFactory(source = hooksSource()) {
@@ -78,6 +86,9 @@ export function spy(source, ending = false, dev = true, absent = false, override
   context.roadScene.setPaused = trace('roadScene.pause');
   context.waterReflections.settle = trace('water.settle'); context.waterReflections.afterRender = trace('water.afterRender');
   if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'lotProps', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'yardProps', 'grass', 'waterReflections', 'fishing', 'harbourLights']) context[name] = null;
+  // The places rows: their sites are only stored, and each built place is the spy (or null) of the same name, read late so `absent` and the overrides apply.
+  Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null,
+    builtPlaces: new Proxy({}, { get: (_target, name) => context[name] ?? null }) });
   if (typeof overrides === 'function') overrides(context, trace);
   else Object.assign(context, overrides);
   if (source.includes('devHooks.')) {
@@ -249,6 +260,32 @@ export function verify(source, { drive = expectedDrive, ending = expectedEnding 
   }
   return { drive: drive().filter(x => !x.quiet).map(x => x.name), ending: ending().filter(x => !x.quiet).map(x => x.name), iteratorsPerFrame: 0, iteratorStepsPerFrame: 0 };
 }
+// The places rows at boot and in the frame (grok-bots#1308 C52). verify() does not run the boot's build loop: its
+// spies stand in for what the loop built. This lifts the real loop and the porch slot's waiting test.
+export async function verifyPlaces(source) {
+  // The porch slot waits for the dog too: a loading dog keeps the page from settling, as the porch does.
+  const ready = (porchWaiting, dog) => spy(source, false, true, false, context => {
+    context.porch.waiting = porchWaiting; context.porchDog.state = dog;
+  }).args['page.ready'][0][0];
+  assert.equal(ready(false, 'here'), true, 'porch and dog done: the page settles');
+  assert.equal(ready(true, 'here'), false, 'porch still building: the page waits');
+  assert.equal(ready(false, 'loading'), false, 'porch dog still loading: the page waits');
+  // The build loop: a row without a site builds nothing and imports nothing; a row without load() adds no wait.
+  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
+  const loops = ast.statements.filter(n => ts.isForOfStatement(n) && /\bplaceRows\b/.test(n.expression.getText(ast)));
+  assert.equal(loops.length, 1, 'one boot loop over the places rows');
+  const code = transformSync(loops[0].getText(ast), { loader: 'ts', target: 'es2022' }).code;
+  const log = [], row = (name, site, lazy) => ({ site,
+    build: (at, part) => { log.push(`build ${name} ${at === site} ${part}`); return { name }; },
+    ...(lazy ? { load: () => { log.push('load ' + name); return Promise.resolve('part-' + name); } } : {}) });
+  const context = { builtPlaces: {}, placeRows: { first: row('first', {}), offLazy: row('offLazy', null, true), off: row('off', null),
+    lazy: row('lazy', {}, true), after: row('after', {}) } };
+  const done = new Function('context', `return (async () => { with (context) { ${code} } })();`)(context);
+  assert.deepEqual(log, ['build first true undefined', 'load lazy'], 'before any wait: the rows up to the first lazy one with a site');
+  await done;
+  assert.deepEqual(log, ['build first true undefined', 'load lazy', 'build lazy true part-lazy', 'build after true undefined'], 'places build loop order');
+  assert.deepEqual(context.builtPlaces, { first: { name: 'first' }, offLazy: null, off: null, lazy: { name: 'lazy' }, after: { name: 'after' } }, 'built places');
+}
 function hotLoop(source) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const fn = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'updateWorld');
@@ -335,6 +372,8 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   if (mutation !== -1) verify(mutated(current(), process.argv[mutation + 1]));
   console.log(JSON.stringify(verify(current())));
   console.log('PASS ongoing frame regression (no historical comparison)');
+  await verifyPlaces(current());
+  console.log('PASS places rows: porch dog waiting, boot build loop');
   {
     const scheduled=[];let loads=0;
     const actual=spy(current(),false,true,false,{farKey:{file:'far-land.json'},farLoading:false,setTimeout:fn=>{scheduled.push(fn);return 1;},loadFarViews:()=>{loads++;return Promise.resolve();}},frame=>{frame(1050);frame(1067);});

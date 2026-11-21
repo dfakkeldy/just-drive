@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { cdp, cdpFetch, exitCheck } from './cdp.mjs';
-import { current, verify, mutations } from './world-update-fixture.mjs';
+import { current, verify, verifyPlaces, mutations } from './world-update-fixture.mjs';
 import { verifyPlayFlags, playMutations } from './play-flags-fixture.mjs';
-verify(current()); mutations();
+verify(current()); await verifyPlaces(current()); mutations();
 verifyPlayFlags(current()); playMutations();
 // The fixed-ending picture A/B replays an older drawEnding from git history, so it is an explicit refactor audit:
 // MMM_WORLD_AUDIT=<revision> (for example f7428e7). Ordinary UI checks do not depend on git history.

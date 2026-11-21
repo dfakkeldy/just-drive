@@ -139,7 +139,7 @@ import { Cemeteries } from './cemeteries';
 import { Stockpiles } from './stockpiles';
 import { HomeSite } from './home-site';
 import { PorchDog } from './porch-dog';
-import type { HandBuiltPlace } from './place';
+import { lazyPlaceRow, placeRow, placeSlots, sitesOf, type BuiltPlaces, type HandBuiltPlace, type PlaceRow } from './place';
 import { YardDogSite } from './yard-dog-site';
 import { YardDog } from './yard-dog';
 import { LotProps } from './lot-props';
@@ -228,7 +228,6 @@ const getJson = async (name: string) => (await fetch(`${base}/${name}`)).json();
 await initStore(base);
 // Every boot read below needs only the manifest, so all start now, under the same conditions as before. Each line that used
 // to start its read now waits for it there (boot-tasks.ts), so the build order and the failures stay as they were.
-// The ground class read still starts in terrain.ts (readGroundCover); moving it here is left for a later change.
 const landmarksRead = AREA.landmarks ? early(getJson('landmarks.json')) : null;
 const buildingsRead = manifest.buildings ? early(getJson(manifest.buildings.file)) : null;
 const stylesRead = ERA.modern && manifest.buildingStyles ? early(getJson(manifest.buildingStyles.file)) : null;
@@ -236,11 +235,33 @@ const pavedRead = ERA.modern && params.get('paved') !== '0' && (!!manifest.paved
 const cemeteryEntry = (manifest as Manifest & { cemeteries?: { file: string } }).cemeteries;
 const cemeteriesRead = ERA.modern && cemeteryEntry ? early(getJson(cemeteryEntry.file)) : null;
 const stockpilesRead = ERA.modern && manifest.stockpiles ? early(getJson(manifest.stockpiles.file)) : null;
-// The 1884 land reads the brook file too, even with ?brooks=0: both lines share this one read.
-const streamUses = (params.get('brooks') !== '0' ? 1 : 0) + (ERA.id === '1884' ? 1 : 0);
+// The brook file has two readers: the brooks (unless ?brooks=0) and the 1884 land, which reads it even with ?brooks=0.
+const wantBrooks = params.get('brooks') !== '0';
+const historyLand = ERA.id === '1884';
+const streamUses = +wantBrooks + +historyLand;
 const streamsRead = manifest.streams && streamUses ? early(getJson(manifest.streams.file), streamUses) : null;
 const roadsRead = manifest.roads ? early(getJson(manifest.roads.file)) : null;
 const propsRead = ERA.modern && manifest.props ? early(getJson(manifest.props.file)) : null;
+// The ground classes (modern land only); the terrain reads them through this read (terrain.ts readGroundCover).
+const groundEntry = manifest.cover.ground;
+const groundRead = ERA.modern && groundEntry?.version === 1 ? early(fetch(`${base}/${groundEntry.file}`).then(response => {
+  if (!response.ok) throw Error('Ground classes unavailable');
+  return response.arrayBuffer();
+})) : null;
+// The area code chunks start here too, each under the same gate as the line below that waits for it. They need no more
+// than the manifest, and their top levels only set up constants, so they all download together instead of one by one.
+const quarryChunk = AREA.quarry ? early(import('./quarry-feature')) : null;
+const maryvilleChunk = ERA.modern && AREA.maryville && params.get('maryville') !== '0' ? early(import('./maryville-store')) : null;
+const airportChunk = ERA.modern && AREA.airport && params.get('airport') !== '0' ? early(import('./airport')) : null;
+const pavedChunk = pavedRead ? early(import('./paved')) : null;
+const grassChunk = LOW ? null : early(import('./grass'));
+const ptInfrastructureChunk = ERA.modern && AREA.ptInfrastructure && !LOW
+  ? early(Promise.all([import('./pt-infrastructure'), import('./pt-infrastructure-source')])) : null;
+const churchChunk = ERA.modern && AREA.church && params.get('church') !== '0' ? early(import('./church')) : null;
+const churchRoomChunk = churchChunk ? early(import('./interior-church')) : null;
+const villageChunk = ERA.modern && AREA.judiqueVillage && params.get('village') !== '0' ? early(import('./judique-village')) : null;
+const hawkesburyChunk = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' ? early(import('./port-hawkesbury')) : null;
+const mabouMainChunk = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? early(import('./mabou-main')) : null;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -358,7 +379,7 @@ const clear = landmarkList.map((lm: { footprint: [number, number][] }) => {
 const yardSite = AREA.worksYard ? new YardSite(manifest.village, yardMode(params)) : null;
 // the Red Roof by the Brook house on Old Chisholm Mill Road (Judique): newer than the land survey, so it is modelled by hand.
 const homeSite = AREA.home && params.get('home') !== '0' ? new HomeSite(manifest.village) : null;
-const quarryFeature = AREA.quarry ? await import('./quarry-feature').then(feature => feature.load()).catch(() => areaScreen('The park could not load. Retry or choose another area.', true)) : null;
+const quarryFeature = AREA.quarry ? await quarryChunk!.take().then(feature => feature.load()).catch(() => areaScreen('The park could not load. Retry or choose another area.', true)) : null;
 // In the published build each import() is a file of its own. A deploy during a start can remove the old file: show Retry.
 const partFailed = (error: unknown) => { console.warn('Area part unavailable', error); return areaScreen('Part of this area could not load. Retry or choose another area.', true); };
 const quarrySite = quarryFeature && params.get('quarry') !== '0' ? new quarryFeature.QuarrySite(manifest.village) : null;
@@ -371,7 +392,7 @@ const villageSite = ERA.modern && AREA.judiqueVillage && params.get('village') !
 const hawkesburySite = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' ? new PortHawkesburySite(manifest.village) : null;
 // The old store and tractor yard at Maryville Station Road. ?maryville=0 leaves the surveyed land.
 const maryvilleFeature = ERA.modern && AREA.maryville && params.get('maryville') !== '0'
-  ? await import('./maryville-store').catch(partFailed) : null;
+  ? await maryvilleChunk!.take().catch(partFailed) : null;
 const maryvilleSite = maryvilleFeature ? new maryvilleFeature.MaryvilleStoreSite(manifest.village) : null;
 let mappedBuildings: Building[] = [];
 let littleMabouArt: ReturnType<typeof littleMabouBuildingArt> | undefined;
@@ -413,16 +434,37 @@ if (novemberBuildings) clear.push(...novemberBuildings.clear);
 if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
-// The hand-built places' sites (place.ts), in the order of the places list below. Each clears its surveyed land.
-const placeSites = { home: homeSite, porch: porchSite, church: churchSite, village: villageSite, hawkesbury: hawkesburySite, mabouMain: mabouSite, maryville: maryvilleSite };
+// One row per hand-built place (place.ts): its site from above, and how to build it once the land and roads are ready
+// (below). The rows' order is the places list's order. A lazy row waits for its chunk, which started early, just before its build. The site
+// lines stay apart: the building list reads four sites, the porch needs that list, and Maryville's module loads first.
+// The home and the porch house take the car, not the clock, so their slots wrap them; the porch's slot also turns its
+// dog and waits for it.
+let porchDog = null as PorchDog | null;   // the porch's build seats it; the cast keeps tsc from narrowing it to null below
+const lift = (metres: number) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres);
+const placeRows = {
+  home: placeRow(homeSite, site => new Home(site, terrain, lift),
+    home => ({ group: home.group, resolveSolids: car => home.resolveSolids(car), update: (view, _now, car) => home.update(view, car) })),
+  porch: placeRow(porchSite, site => { const porch = new PorchHouse(site, terrain, lift); porchDog = new PorchDog(LOW); porch.seat(porchDog.group); return porch; },
+    porch => ({ group: porch.group, resolveSolids: car => porch.resolveSolids(car),
+      update: (view, now, car, dt) => { porch.update(view, car); porchDog?.update(dt, car, now / 1000); },
+      get waiting() { return porch.waiting || porchDog?.state === 'loading'; } })),
+  church: lazyPlaceRow(churchSite, () => churchChunk!.take().catch(partFailed), (site, part) => new part.Church(site, terrain)),
+  village: lazyPlaceRow(villageSite, () => villageChunk!.take().catch(partFailed), (site, part) => new part.JudiqueVillage(site, terrain, LOW)),
+  hawkesbury: lazyPlaceRow(hawkesburySite, () => hawkesburyChunk!.take().catch(partFailed), (site, part) => new part.PortHawkesbury(site, terrain, LOW,
+    roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings)),
+  mabouMain: lazyPlaceRow(mabouSite, () => mabouMainChunk!.take().catch(partFailed), (site, part) => new part.MabouMain(site, terrain, LOW, roads.roads)),
+  maryville: placeRow(maryvilleSite, site => new maryvilleFeature!.MaryvilleStore(site, terrain, LOW)),
+};
+// Each site clears its surveyed land.
+const placeSites = sitesOf(placeRows);
 for (const site of Object.values(placeSites)) if (site) clear.push(...site.clear);
 if (quarrySite) clear.push(...quarrySite.clear);
-// Modern Point Tupper only; airport=0 turns it off. The module (and its source extract) loads only here.
-const airportModule = ERA.modern && AREA.airport && params.get('airport') !== '0' ? await import('./airport').catch(partFailed) : null;
+// Modern Point Tupper only; airport=0 turns it off. Only then does the module (and its source extract) load (airportChunk).
+const airportModule = ERA.modern && AREA.airport && params.get('airport') !== '0' ? await airportChunk!.take().catch(partFailed) : null;
 const airportSite = airportModule ? new airportModule.AirportSite(manifest.village) : null;
 // Known before the first tile. Phones: fine tiles and single trees reach less far, and past 600 m, land outside the view is
 // read later, in the background (terrain.ts lazyRange). Desktop: sun shadows, unless ?shadows=0 or a night (it has no sun).
-const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear, { night: nightShading, cartRoads: ERA.cartRoads,
+const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear, { ground: groundRead, night: nightShading, cartRoads: ERA.cartRoads,
   ...(LOW ? { split: AREA.quarry ? 1 : 1.15, low: true, lazyRange: 600 } : {}), shadows: !LOW && params.get('shadows') !== '0' && !nightLook });
 // Complete the approved CPU class mask before any terrain canopy or individual tree is built.
 // Modern land only: the 1884 era keeps today's cover handling, like other modern features.
@@ -442,7 +484,7 @@ if (airport) {
 // Open designated pavement (NSTDB lots): on by default in an area whose bake lists it.
 // paved=0 turns it off; paved=1 forces a load (work-bake previews). Absent data means no request. A missing chunk shows Retry; a bad index warns.
 if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1')) {
-  terrain.paved = await import('./paved').catch(partFailed).then(m => m.loadPaved(base, manifest.village, AREA.id, pavedRead?.take())).catch(e => { console.warn('Paved layer unavailable', e); return null; });
+  terrain.paved = await pavedChunk!.take().catch(partFailed).then(m => m.loadPaved(base, manifest.village, AREA.id, pavedRead?.take())).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
 if (maryvilleSite) terrain.sites.push(maryvilleSite);
@@ -466,7 +508,7 @@ const coast = !AREA.coast || params.get('coast') === '0' ? null : new Coast(new 
 if (coast) { terrain.coast = coast.site; scene.add(coast.group); }
 // Brooks are scenery: when their file is missing or broken, the game still starts, without them.
 // ?brooks=0 leaves them out (to time one build both ways).
-terrain.streams = streamsRead && params.get('brooks') !== '0'
+terrain.streams = streamsRead && wantBrooks
   ? await streamsRead.take().then((d: StreamFile) => new Streams(d, manifest.village)).catch((e: unknown) => { console.warn('streams', e); return null; })
   : null;
 if (buildings) scene.add(buildings.mesh);
@@ -494,7 +536,7 @@ const sunShadows = terrain.shadows ? new SunShadows(renderer, scene, sunLight, s
 if (sunShadows) Object.assign(terrain.uniforms, sunShadows.uniforms);   // every land tile made from here on reads the map
 // Phones do not load the grass module or read the cover image back to the CPU.
 const grassExcludes = stockpiles ? (east: number, north: number) => stockpiles.excludes(east, north) || !!cemeteries?.excludes(east, north) : cemeteries?.excludes;
-const grass = LOW ? null : new (await import('./grass').catch(partFailed)).Grass(terrain, params.get('grass'), grassExcludes);
+const grass = LOW ? null : new (await grassChunk!.take().catch(partFailed)).Grass(terrain, params.get('grass'), grassExcludes);
 if (grass) scene.add(grass.group);
 // Mapped public wharves (today, in the areas that have them); like airport, the dev key exists only there.
 const wharves = ERA.id === 'today' && hasWharves(AREA.id) ? new PublicWharves(AREA.id, terrain, manifest.village, SEA_LEVEL, (buildings ? buildingList ?? [] : []).map(b => b.footprint)) : null;
@@ -530,11 +572,11 @@ if (trafficSignals) {
 // Modern Point Tupper only. A chunk that does not load shows Retry, like the airport.
 // Not on LOW: the Point Tupper phone start is already at PHONE_CAP (tools/frame-budget-policy.mjs) with the AI driver.
 if (ERA.modern && AREA.ptInfrastructure && !LOW) {
-  const loaded = await Promise.all([import('./pt-infrastructure').catch(partFailed), import('./pt-infrastructure-source').catch(partFailed)]);
+  const loaded = await ptInfrastructureChunk!.take().catch(partFailed);
   scene.add(new loaded[0].PointInfrastructure(loaded[1].PT_FEATURES, manifest.village, EXAG, SEA_LEVEL, roads).group);
 }
 
-const history = ERA.id === '1884' ? await (async () => {
+const history = historyLand ? await (async () => {
   await terrain.readCover();
   const streams = streamsRead ? await streamsRead.take() as StreamFile : null;
   const [{ historyGround }, { HistoryBridgeApproaches }, { HistoryScene }] = await historyModules!.take().catch(partFailed);
@@ -701,30 +743,15 @@ const night = nightShading ? new Night(nightShading, {
 if (night) scene.onBeforeRender = (r, _scene, view) => night.update(r, view);
 const yard = yardSite ? new Yard(yardSite, terrain, LOW) : null;
 if (yard) scene.add(yard.group);
-const home = homeSite ? new Home(homeSite, terrain, (metres) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres)) : null;
-const porch = porchSite ? new PorchHouse(porchSite, terrain, (metres) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres)) : null;
-const porchDog = porch ? new PorchDog(LOW) : null;
-if (porch && porchDog) porch.seat(porchDog.group);
-const church = churchSite ? new (await import('./church').catch(partFailed)).Church(churchSite, terrain) : null;
-const village = villageSite ? new (await import('./judique-village').catch(partFailed)).JudiqueVillage(villageSite, terrain, LOW) : null;
-const hawkesbury = hawkesburySite ? new (await import('./port-hawkesbury').catch(partFailed)).PortHawkesbury(hawkesburySite, terrain, LOW,
-  roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings) : null;
-const mabouMain = mabouSite ? new (await import('./mabou-main').catch(partFailed)).MabouMain(mabouSite, terrain, LOW, roads.roads) : null;
-const maryville = maryvilleFeature && maryvilleSite ? new maryvilleFeature.MaryvilleStore(maryvilleSite, terrain, LOW) : null;
-// One slot for each site above, in the same order. A slot keeps its name while its place is off, so the frame's update
-// list keeps the same entries. `dev` is what the dev tools see. The home and the porch house take the car, not the
-// clock, so they are wrapped; the porch's slot also turns its dog and waits for it.
-const places: Record<keyof typeof placeSites, { place: HandBuiltPlace | null; dev: object | null }> = {
-  home: { dev: home, place: home && { group: home.group, resolveSolids: car => home.resolveSolids(car), update: (view, _now, car) => home.update(view, car) } },
-  porch: { dev: porch, place: porch && { group: porch.group, resolveSolids: car => porch.resolveSolids(car),
-    update: (view, now, car, dt) => { porch.update(view, car); porchDog?.update(dt, car, now / 1000); },
-    get waiting() { return porch.waiting || porchDog?.state === 'loading'; } } },
-  church: { dev: church, place: church },
-  village: { dev: village, place: village },
-  hawkesbury: { dev: hawkesbury, place: hawkesbury },
-  mabouMain: { dev: mabouMain, place: mabouMain },
-  maryville: { dev: maryville, place: maryville },
-};
+// Build the places in the rows' order. A lazy row waits here for its chunk, which started early (above); the others add no wait.
+const builtPlaces = {} as BuiltPlaces<typeof placeRows>;
+for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown, object, unknown>][]) {
+  (builtPlaces as Record<string, object | null>)[name] = row.site ? row.build(row.site, row.load && await row.load()) : null;
+}
+const { hawkesbury, mabouMain } = builtPlaces;
+// One slot for each row. A slot keeps its name while its place is off, so the frame's update list keeps the same
+// entries. `dev` is what the dev tools see.
+const places = placeSlots(placeRows, builtPlaces);
 const handBuilt = Object.values(places);
 for (const { place } of handBuilt) if (place) scene.add(place.group);
 // The frame asks this; an index loop makes no array iterator.
@@ -1072,7 +1099,7 @@ vehicle.damage = horse ? null : shift.damage; vehicle.desktopPull = !touchDevice
 if (import.meta.env.DEV) expose({ shift, roadScene, schoolBus, animals, sidewalks, aiDriver });
 if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.mjs and the guard rail night pictures
 // Outside the mail game a door is only a place to look: no shift, no receipt. Mabou has no such door, so it stays quiet.
-const churchRoom = churchSite ? await import('./interior-church').catch(partFailed) : null;
+const churchRoom = churchSite ? await churchRoomChunk!.take().catch(partFailed) : null;
 const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => shift.interiorResult(receipt), bare)
   : churchRoom ? new Interiors(() => 0, () => '', () => {}, bare) : quietInteriors();
 if (testPark && !fleet) {
