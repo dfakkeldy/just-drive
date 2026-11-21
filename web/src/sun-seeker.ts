@@ -211,7 +211,7 @@ export class SunSeeker {
   }
 
   lookSize(): void {
-    this.options.camera.fov = this.options.camera.aspect < .85 ? 98 : 76;
+    this.options.camera.fov = this.options.camera.aspect < .85 ? 110 : 76;
     this.options.camera.updateProjectionMatrix();
     this.aim();
   }

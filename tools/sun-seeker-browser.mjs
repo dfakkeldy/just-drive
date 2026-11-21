@@ -94,7 +94,7 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     assert.deepEqual(await position(), car, 'the car does not move');
 
     await click('.sunFace');
-    for (let i = 0; i < 3; i++) await tapKey('ArrowUp', 'ArrowUp');
+    for (let i = 0; i < (touch ? 2 : 3); i++) await tapKey('ArrowUp', 'ArrowUp');
     await sleep(1200);
     const frame = await read('mmm.renderer.info.render.frame');
     await sleep(400);
@@ -135,6 +135,7 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
       await wait("!!document.querySelector('#sunSeeker[open]')");
       await setTime('2026-06-21', '13:00');
       await wait(hasMap);
+      await wait("mmm.terrain.group.children.some(o => o.visible && o.material?.uniforms?.shadowOn?.value === 1)");
       await tapKey('Escape', 'Escape');
       await wait("!document.querySelector('#sunSeeker')");
       assert.equal(await read(hasMap), false, 'the preview releases its shadow map when it closes');

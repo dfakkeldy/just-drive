@@ -2053,10 +2053,12 @@ function drawSunSeeker(view: SunSeeker, now: number): void {
   if (document.hidden) return;
   // When a turn brings in new tiles, finish their builds and redraw after they settle.
   if (sunViewLoading || sunViewFarLand !== farLand) {
-    terrain.update(camera, true);
-    if (!terrain.pending) {
+    camera.updateMatrixWorld();
+    updateWorld('ending', 0);
+    if (!terrain.pending && !trees?.pending) {
       sunViewLoading = false;
       sunViewFarLand = farLand;
+      (sunShadows ?? sunViewShadows)?.refreshDirection();
       view.refreshGround();
     }
   }
@@ -2066,8 +2068,9 @@ function drawSunSeeker(view: SunSeeker, now: number): void {
   camera.updateMatrixWorld();
   sky.position.copy(camera.position);
   updateWorld('ending', 0);
-  sunViewLoading = terrain.pending > 0;
+  sunViewLoading = terrain.pending > 0 || (trees?.pending ?? 0) > 0;
   const shadows = sunShadows ?? sunViewShadows;
+  const waitingForShadow = shadows?.enabled && !sunLight.shadow.map;
   if (shadows?.enabled) {
     const reach = lookFocus(camera, terrain, SEA_LEVEL, shadowFocus);
     shadows.update(0, shadowFocus, reach, true);
@@ -2086,6 +2089,8 @@ function drawSunSeeker(view: SunSeeker, now: number): void {
   }
   afterWorld();
   view.drawOverlay(renderer);
+  // The renderer allocates the map on its first draw. The terrain can sample it on the next one.
+  if (waitingForShadow && sunLight.shadow.map) view.invalidate();
 }
 
 function drawEnding(dt: number): void {

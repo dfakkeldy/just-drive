@@ -66,6 +66,7 @@ export class SunShadows {
     const range = this.range;
     this.range = 0;
     this.span(range);
+    this.since = 1;
   }
 
   /** Release the temporary map after a daylight preview on a night visit. */
