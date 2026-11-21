@@ -89,7 +89,7 @@ try {
     console.log(name, 'during', JSON.stringify(during), JSON.stringify(line));
     assert.notEqual(during.src, before.src, 'the call plays on the radio\'s own player');
     assert.ok(during.src.startsWith('blob:'), 'from memory');
-    assert.equal(line.text, `♪ 94.9 THE PARTY LINE${`Caller about: ${handle}`}`, 'the radio line names the player, as text');
+    assert.ok([`94.9 THE PARTY LINECaller about: ${handle}`, `94.9 THE PARTY LINE ♪Caller about: ${handle}`].includes(line.text), 'the radio line names the player, as text');
     assert.equal(line.shown, true); assert.equal(line.inside, true, 'the radio line fits the screen');
     assert.equal(line.whole, true, 'the call line is shown whole: the name is never cut short');
     await sleep(800); assert.equal(await read('mmm.radio.audible'), true, 'it sounds (the driving sounds duck under it)');

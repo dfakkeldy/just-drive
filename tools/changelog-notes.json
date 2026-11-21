@@ -1,3 +1,84 @@
 {
-  "62": "Put the mailboxes back at the lane mouths on Highway 252"
+  "62": "Put the mailboxes back at the lane mouths on Highway 252",
+  "54": {
+    "player": "Choose a place on the new Just Drive map, then start driving."
+  },
+  "51": {
+    "player": "Gravel driveways look more like the roads around them."
+  },
+  "45": {
+    "player": "The Boss rides along on mail days."
+  },
+  "50": {
+    "player": "Tune to 92.5 for “Fresh Set of Eyes” in seven styles."
+  },
+  "46": {
+    "player": "Try the Sugar Camp stunt courses in West Bay."
+  },
+  "47": {
+    "player": "The About page shows the mail car and explains the game."
+  },
+  "41": {
+    "player": "Yards have parked vehicles, trailers, mowers and farm dogs."
+  },
+  "36": {
+    "player": "Fences and yard props can break when you hit them."
+  },
+  "43": {
+    "player": "On a phone, choose Off, Coarse or Full for far views in Advanced settings."
+  },
+  "38": {
+    "player": "The Boss has more to say in Get Fired."
+  },
+  "40": {
+    "player": "Two hill driveways now have gravel."
+  },
+  "42": {
+    "player": "Play parcel tag with other drivers in a room."
+  },
+  "37": {
+    "player": "Share a daily run result and read the board for each place and day."
+  },
+  "35": {
+    "player": "Arcade vehicles slide more smoothly through a drift."
+  },
+  "27": {
+    "player": "Mabou road surfaces now match their road types more closely."
+  },
+  "32": {
+    "player": "Find new harbour and glen views in Places."
+  },
+  "29": {
+    "player": "Party Line call-ins react to your Get Fired run."
+  },
+  "30": {
+    "player": "Try Today’s run: five minutes of complaint bingo, the same for everybody."
+  },
+  "5": {
+    "player": "Try Get Fired, where complaints count in your favour."
+  },
+  "21": {
+    "player": "Drive with a controller in browsers that support the Gamepad API."
+  },
+  "7": {
+    "player": "Look for ten harbour lights and their night beacons."
+  },
+  "8": {
+    "player": "Distant forests keep their colours in water reflections."
+  },
+  "11": {
+    "player": "Hear three new call-ins on 94.9 Party Line."
+  },
+  "12": {
+    "player": "Desktop skies have clouds and soft light. You can turn this off in Settings."
+  },
+  "9": {
+    "player": "See wind turbines and far horizons across the water."
+  },
+  "4": {
+    "player": "The camera drone stays above the roofs on Mabou main street."
+  },
+  "1": {
+    "player": "Find sidewalks in Mabou, Port Hood and Port Hawkesbury."
+  }
 }

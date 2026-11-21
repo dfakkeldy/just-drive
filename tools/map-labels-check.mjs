@@ -37,6 +37,13 @@ async function suite(m) {
       .map(([px, py], i) => ({ label: 'Place ' + i, px, py, rank: 1, distance: 500 * (i + 1) }));
     assert.equal(m.placeLabels(spread, layout(176)).length, 4);
   });
+  ok('circular maps keep every label corner inside the rim', () => {
+    const candidates=Array.from({length:25},(_,i)=>({label:'P'+i,px:18+(i%5)*34,py:18+Math.floor(i/5)*34,rank:1,distance:i}));
+    const circle={cx:88,cy:88,r:65}, shown=m.placeLabels(candidates,layout(176,{cap:25,keep:[],circle}));
+    assert.ok(shown.length>0,'some labels fit');
+    for(const b of shown) for(const x of [b.x0,b.x1]) for(const y of [b.y0,b.y1]) assert.ok(Math.hypot(x-circle.cx,y-circle.cy)<=circle.r,'label crosses the ring');
+    assert.ok(m.placeLabels(candidates,layout(176,{cap:25,keep:[]})).length>shown.length,'the circle removes edge labels');
+  });
   ok('no two names overlap', () => {
     for (const size of [124, 176, 600]) {
       const shown = m.placeLabels(village, layout(size));
@@ -126,6 +133,7 @@ const base = await suite(await load(SOURCE));
 if (base.length) { console.log(`FAIL map-labels: ${base.length} cases`); process.exit(1); }
 if (process.argv.includes('--mutations')) {
   const MUTANTS = [
+    ['circle ignored', 'const circle = layout.circle;', 'const circle = undefined;'],
     ['overlap test ignored', 'taken.some(b => overlaps(box, b, PAD)) || ', ''],
     ['no cap', 'if (placed.length >= cap) break;', ''],
     ['car and N mark not kept clear', 'taken: LabelBox[] = [...keep]', 'taken: LabelBox[] = []'],

@@ -80,7 +80,7 @@ let first = await state();
 for (let n = 0; n < 6 && !(first.clock && first.tracks[first.clock.track] === first.title); n++) { await sleep(500); first = await state(); }   // the page draws the clock once a second
 check(list.stations.length > 1 && first.dial === (list.start ?? list.stations[0].dial), `a new listener is on the list's starting station (${first.dial} ${first.name})`);
 check(first.i >= 0 && first.name === list.stations[first.i].name, 'the station name is the list\'s');
-check(!!first.clock && first.tracks[first.clock.track] === first.title && first.state === 'ON THE AIR NOW', `before any tap the page shows what is on the air (${first.title})`);
+check(!!first.clock && first.tracks[first.clock.track] === first.title && first.state === 'Press ▶ to listen', `before any tap the page names the clock piece and asks for Play (${first.title})`);
 check(first.next === first.tracks[(first.clock.track + 1) % first.tracks.length], 'and the piece that comes next');
 check(await read(`document.querySelectorAll('#presets .preset').length`) === list.stations.length, `one key for each station (${list.stations.length})`);
 check(await read(`[...document.querySelectorAll('#presets .preset')].map(k => k.querySelector('b').textContent + ' ' + k.querySelector('span').textContent).join('|')`) === list.stations.map(s => `${s.dial} ${s.name}`).join('|'), 'each key shows its dial and its name, in the list\'s order');
@@ -93,6 +93,10 @@ check(await read(`(() => { const p = document.getElementById('listenMusic'), b =
 check(await read(`document.getElementById('coffee').href === 'https://ko-fi.com/fakkeldy' && document.getElementById('coffee').textContent === 'Buy the developer a coffee'`), 'the coffee link');
 check(await read(`['https://mmm.fakkeldy.ca/', 'https://justdrive.fakkeldy.ca/mabou'].every(h => [...document.querySelectorAll('a.way')].some(a => a.href === h))`), 'links to Mail Madness and to Just Drive');
 check(await read(`document.getElementById('volumeRow').hidden === matchMedia('(pointer: coarse)').matches`), 'a phone has no volume slider (its own buttons set the volume)');
+
+const stillBar=await read(`document.getElementById('bar').getBoundingClientRect().width`);
+await sleep(2100);
+check(await read(`document.getElementById('state').textContent !== 'ON THE AIR NOW' && document.getElementById('bar').getBoundingClientRect().width === ${stillBar}`),'before first Play the prompt is honest and progress stays still for two seconds');
 
 // ---- A station plays, from the middle ----
 await tap('#play');
@@ -198,12 +202,18 @@ await onClock('after LIVE');
 
 // ---- Every phone size, upright and sideways ----
 await read(`document.querySelector('details.card').open = false, scrollTo(0, 0)`);
-const SIZES = [[320, 568], [360, 640], [375, 667], [390, 844], [412, 915], [430, 932], [568, 320], [640, 360], [667, 375], [844, 390], [915, 412], [932, 430], [768, 1024], [1280, 800]];
+const SIZES = [[320, 568], [360, 640], [375, 667], [390, 844], [412, 915], [430, 932], [494, 960], [540, 960], [568, 320], [640, 360], [667, 375], [844, 390], [915, 412], [932, 430], [768, 1024], [1280, 800]];
 for (const [w, h] of SIZES) {
   await phone(w, h);
   await read(`new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => { scrollTo(0, 0); r(true); })))`);
   const bad = await read(`(() => {
     const bad = [], W = innerWidth, H = innerHeight, box = e => e.getBoundingClientRect();
+    const hs=[...document.querySelectorAll('.preset')].map(e=>box(e).height);
+    if (!(W > H && H <= 520) && Math.max(...hs)-Math.min(...hs) > .5) bad.push('preset heights differ by more than 0.5px');
+    // The radio is sounding here, so the lit key shows its status. Where the status sits on the frequency line, it must not touch the frequency.
+    // Any key can be lit, so test the lit key's status width against every key's frequency, the widest dials included.
+    const lit = document.querySelector('.preset[aria-pressed=true]'), st = lit && getComputedStyle(lit, '::after');
+    if (st && st.position === 'absolute' && st.content !== 'none') for (const key of document.querySelectorAll('.preset')) { const t = box(key), r = document.createRange(); r.selectNodeContents(key.querySelector('b')); const right = r.getBoundingClientRect().right, left = t.right - parseFloat(st.right) - parseFloat(st.width); if (right > left - 4) bad.push('a lit status would overlap ' + key.querySelector('b').textContent + ' (' + Math.round(right) + ' > ' + Math.round(left - 4) + ')'); }
     if (document.documentElement.scrollWidth > W) bad.push('the page scrolls sideways (' + document.documentElement.scrollWidth + ' > ' + W + ')');
     const all = [...document.querySelectorAll('#unit, #unit *, .card, .way, .foot a')].filter(e => e.getClientRects().length && !e.closest('svg') && getComputedStyle(e).position !== 'absolute');
     for (const e of all) { const b = box(e); if (b.left < -0.5 || b.right > W + 0.5) bad.push((e.id || e.className || e.tagName) + ' leaves the screen sideways'); }

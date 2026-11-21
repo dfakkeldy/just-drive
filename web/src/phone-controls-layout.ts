@@ -1,6 +1,6 @@
 /** One planner owns control rectangles in both orientations, including safe areas and short toolbars. */
 export interface ControlRect { left: number; top: number; width: number; height: number }
-export interface PhoneControlView { width: number; height: number; left: number; right: number; bottom: number; top?: number; hintHeight?: number; mail: boolean; pull: boolean }
+export interface PhoneControlView { width: number; height: number; left: number; right: number; bottom: number; top?: number; hintHeight?: number; statusHeight?: number; mail: boolean; pull: boolean }
 const IDS = ['tcSteer', 'tcBrake', 'tcGo', 'tcPull', 'tcReset', 'tcView', 'tcHorn', 'cameraButton', 'mailButton', 'droneButton', 'savePictureButton'] as const;
 export function portraitControls(v: PhoneControlView): Record<string, ControlRect> {
   const result: Record<string, ControlRect> = {}, gap = 6, left = v.left + 8, right = v.width - v.right - 8;
@@ -44,9 +44,9 @@ export function phoneReadoutsInSettings(v: PhoneControlView): boolean {
   const stripWidth = Math.min(190, .22 * v.width, .25 * v.width - 12 - v.left);
   if (stripWidth < (landscape ? 118 : 56)) return true;
   const hint = landscape ? Math.max(14, v.hintHeight ?? 14) : v.hintHeight ?? 36;
-  const start = (v.top ?? 6) + 56 + 6 + hint + 6;
+  const start = (v.top ?? 6) + Math.max(56, v.statusHeight ?? 56) + 6 + hint + 6;
   // Worst case: open map, all active chips, and a full photo note. Never rely on clipping a control.
-  const height = landscape ? 174 : v.mail ? v.height <= 700 ? 281 : 307 : 198;
+  const height = landscape ? 174 : v.mail ? v.height <= 700 ? 289 : 315 : 206;
   const left = v.left + 8, end = left + stripWidth;
   const stops = Object.entries(phoneControls(v)).filter(([id, r]) =>
     !(landscape && ['tcReset', 'tcView', 'tcHorn'].includes(id)) && r.left < end && r.left + r.width > left).map(([, r]) => r.top);
@@ -144,7 +144,7 @@ export function installPhoneControls(root: HTMLElement): void {
     const pull = !!document.getElementById('tcPull'), mail = !document.body.classList.contains('exploreMode');
     const style = getComputedStyle(root);
     const view = { width: innerWidth, height: innerHeight, left: Math.max(0, (parseFloat(style.paddingLeft) || 8) - 8),
-      right: Math.max(0, (parseFloat(style.paddingRight) || 8) - 8), bottom: Math.max(0, (parseFloat(style.paddingBottom) || 8) - 8), top: parseFloat(style.paddingTop) || 0, hintHeight: hintHome?.getBoundingClientRect().height ?? 0, mail, pull };
+      right: Math.max(0, (parseFloat(style.paddingRight) || 8) - 8), bottom: Math.max(0, (parseFloat(style.paddingBottom) || 8) - 8), top: parseFloat(style.paddingTop) || 0, hintHeight: hintHome?.getBoundingClientRect().height ?? 0, statusHeight: document.getElementById('phoneTop')?.getBoundingClientRect().height ?? 56, mail, pull };
     const next = JSON.stringify([on, view]); if (next === key) return; key = next;
     const menu = on && !!panel && !!readouts && !!home && phoneReadoutsInSettings(view);
     if (readouts && home && panel) movePhoneReadouts(menu, readouts, home, panel);
@@ -165,7 +165,7 @@ export function installPhoneControls(root: HTMLElement): void {
   if (drive) modes.observe(drive, { childList: true });
   new MutationObserver(layout).observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
   const resize = new ResizeObserver(layout);
-  resize.observe(root); if (hintHome) resize.observe(hintHome);
+  resize.observe(root); const top = document.getElementById('phoneTop'); if (top) resize.observe(top); if (hintHome) resize.observe(hintHome);
   addEventListener('resize', layout); window.visualViewport?.addEventListener('resize', layout);
   layout();
 }

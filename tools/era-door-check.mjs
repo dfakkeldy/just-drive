@@ -1,12 +1,10 @@
-import {FAR_CREDITS} from '../web/src/credits.ts';
+import { priorTitleMarkup, priorTitleStyle } from './ui-title-expectations.mjs';
 // Address identity stays separate from area, room and current driving state.
 import assert from 'node:assert/strict';
-import { readSite, areaAddress, eraAddress, SITE_AREAS } from '../web/src/site.ts';
-import { readEra } from '../web/src/era.ts';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 import { justPage } from './site-pages.mjs';
-const result = await build({stdin:{contents:"export {roomInvitation} from './mp/switch'; export {periodRides} from './garage'; export {createTitle} from './title'; export {bootTripParams} from './quarry-trip';",resolveDir:process.cwd()+'/web/src',loader:'ts'},bundle:true,write:false,format:'esm',platform:'node'});
-const {roomInvitation,periodRides,createTitle,bootTripParams} = await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
+const result = await build({stdin:{contents:"export {FAR_CREDITS} from './credits'; export {readSite,areaAddress,eraAddress,SITE_AREAS} from './site'; export {ERAS,readEra} from './era'; export {AREAS} from './area'; export {roomInvitation} from './mp/switch'; export {periodRides} from './garage'; export {createTitle} from './title'; export {bootTripParams} from './quarry-trip';",resolveDir:process.cwd()+'/web/src',loader:'ts'},bundle:true,write:false,format:'esm',platform:'node'});
+const {AREAS,ERAS,FAR_CREDITS,readSite,areaAddress,eraAddress,SITE_AREAS,readEra,roomInvitation,periodRides,createTitle,bootTripParams} = await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
 for (const host of ['justdrive.fakkeldy.ca','justdrive.localhost','localhost']) {
  const q = new URLSearchParams('site=just&era=today&trip=old&driveAt=1,2&start=old&q=low&vehicle=bike&room=abcd&touch=1');
  const site = readSite(host,'/mabou-1884',q);
@@ -81,8 +79,6 @@ try {
 } finally {rmSync(dir,{recursive:true,force:true});}
 
 // Pin mail HTML/CSS outside the independently checked cross-brand line and phone width fix.
-const {AREAS} = await import('../web/src/area.ts');
-const {ERAS} = await import('../web/src/era.ts');
 const titleBefore = await build({stdin:{contents:execFileSync('git',['show',base+':web/src/title.ts'],{encoding:'utf8'}),resolveDir:process.cwd()+'/web/src',loader:'ts'},bundle:true,write:false,format:'esm',platform:'node'});
 const oldTitle = (await import('data:text/javascript;base64,'+Buffer.from(titleBefore.outputFiles[0].text).toString('base64'))).createTitle;
 const crossBrandStyles = [
@@ -91,14 +87,17 @@ const crossBrandStyles = [
  '#titleOtherGame a:focus-visible{outline:3px solid #fff;outline-offset:3px}\n',
  '/* content-box 100% plus padding overflowed narrow screens on cards without a multiplayer control (1884): */\n@media(max-width:719px){#titleCard{box-sizing:border-box}}\n',
 ];
+const titleWindowListener=globalThis.addEventListener;
 function card(make, just, area, era, mode) {
+ globalThis.addEventListener=()=>{};
  const roots=[],styles=[];
- const node=()=>({style:{},classList:{add(){}},setAttribute(){},addEventListener(){},focus(){},innerHTML:'',textContent:'',hidden:false});
+ const node=()=>({style:{},classList:{add(){}},append(){},setAttribute(){},addEventListener(){},focus(){},innerHTML:'',textContent:'',hidden:false});
  globalThis.document={head:{appendChild(n){styles.push(n.textContent);}},body:{appendChild(n){roots.push(n);}},createElement(){const n=node();n.querySelector=()=>node();return n;}};
  globalThis.localStorage={getItem:()=>null};
  globalThis.location={hostname:just?'justdrive.fakkeldy.ca':'mmm.fakkeldy.ca',pathname:'/'+area.id,search:era.id==='today'?'':'?era=1884'};
  make(true,()=>{},mode,area.name,undefined,just,true,era);
  // The About line holds credits and links (help, coffee); it changes for its own reasons, not the era door's.
+ const normalizedStyles=styles.map(css => priorTitleStyle(css, make === createTitle));
  let html = roots[0].innerHTML.replace(/<p id="titleAbout">[\s\S]*?<\/p>/,'<p id="titleAbout"></p>');
  if (!just) {
   const line = html.match(/<span id="titleOtherGame">[\s\S]*?<\/span>/)?.[0];
@@ -110,9 +109,9 @@ function card(make, just, area, era, mode) {
   }
   if (line) html = html.replace(line, '');
   // Remove only these exact approved rules. Other CSS changes still fail the frozen comparison.
-  for (let i = 0; i < styles.length; i++) for (const css of crossBrandStyles) styles[i] = styles[i].replace(css, '');
+  for (let i = 0; i < normalizedStyles.length; i++) for (const css of crossBrandStyles) normalizedStyles[i] = normalizedStyles[i].replace(css, '');
  }
- return {html,styles};
+ return {html,styles:normalizedStyles};
 }
 for(const area of AREAS)for(const era of ERAS)for(const mode of ['mail','explore']){
  const just=card(createTitle,true,area,era,mode);
@@ -121,7 +120,8 @@ for(const area of AREAS)for(const era of ERAS)for(const mode of ['mail','explore
  assert.equal(current.html.split(FAR_CREDITS).length,2,'far source credits occur once');
  // The far-data licence is an intentional addition to the frozen card.
  for(const c of [current,previous])c.html=c.html.replace(FAR_CREDITS+'\n','').replace(FAR_CREDITS,'');
- assert.deepEqual(current,previous,'mail card HTML/styles outside reviewed cross-brand changes and far-data credit: '+area.id+' '+era.id+' '+mode);
+ assert.deepEqual({...current,html:priorTitleMarkup(current.html,true)},{...previous,html:priorTitleMarkup(previous.html,true,false)},'mail card HTML/styles outside reviewed UI/cross-brand changes and far-data credit: '+area.id+' '+era.id+' '+mode);
 }
 for(const k of ['document','localStorage','location'])delete globalThis[k];
+if(titleWindowListener)globalThis.addEventListener=titleWindowListener;else delete globalThis.addEventListener;
 console.log('PASS every area/era/mode visibility; exact cross-brand line and phone CSS; all other mail HTML/styles match branch base');

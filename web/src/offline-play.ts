@@ -15,8 +15,8 @@ export function offlinePlay(panel: HTMLElement | null, before: HTMLElement | nul
     panel.insertBefore(group,before);return;
   }
   group.innerHTML=`<b>Play Mabou without internet</b><p style="margin:6px 0">On iPhone or iPad, use Share → Add to Home Screen, then download here. Safari tabs can lose saved data after seven days without use; low space can also remove it.</p>
-    <div id="offlineSize"></div><progress id="offlineProgress" max="1" value="0" style="width:100%;height:10px" aria-label="Download progress"></progress>
-    <div id="offlineStatus" role="status" aria-live="polite">Download to play without internet.</div><div id="offlineStorage" style="color:#b9c3cc;margin:5px 0"></div>
+    <div id="offlineSize"></div><progress id="offlineProgress" hidden max="1" value="0" style="width:100%;height:10px" aria-label="Download progress"></progress>
+    <div id="offlineStatus" role="status" aria-live="polite"></div><div id="offlineStorage" style="color:#b9c3cc;margin:5px 0"></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap"><button id="offlineStart" type="button">Download for offline play</button><button id="offlineStop" type="button" hidden>Stop</button><button id="offlineRemove" type="button" hidden>Remove download</button></div>
     <div id="offlineConfirm" role="group" aria-label="Remove download" hidden><p>Remove the download? You will need the internet to download it again.</p><div style="display:flex;gap:6px"><button id="offlineConfirmRemove" type="button">Remove</button><button id="offlineCancelRemove" type="button">Cancel</button></div></div>`;
   for (const button of group.querySelectorAll('button')) button.style.cssText='flex:1;min-height:44px;border-radius:6px;border:1px solid #6b7780;background:none;color:inherit;font:inherit;cursor:pointer;padding:6px';
@@ -32,6 +32,7 @@ export function offlinePlay(panel: HTMLElement | null, before: HTMLElement | nul
     const full=p.downloadBytes ?? p.total,saved=p.bytes+(p.shellBytes ?? 0);
     size.textContent=`Full download: ${mb(full)}`;
     bar.max=full; bar.value=saved;
+    bar.hidden=!(p.running || saved>0);
     if (!p.error) text.textContent=p.done ? 'Done: this game now works without the internet.' : `${mb(saved)} of ${mb(full)}${p.running ? (ownDownload ? ' · Keep this window open.' : ' · Another window is downloading. Reopen Settings for progress.') : p.bytes ? ' · Stopped. Resume when ready.' : ' · Places you drive are saved as you go.'}`;
     start.hidden=p.done || p.running; start.disabled=false; start.textContent='Download for offline play';
     stop.hidden=!p.running; remove.hidden=!(p.removable ?? (p.bytes>0)) || confirming; remove.disabled=p.running;
@@ -70,6 +71,7 @@ export function offlinePlay(panel: HTMLElement | null, before: HTMLElement | nul
   start.addEventListener('click',async()=>{
     if (working || !progress) return;
     start.disabled=true;
+    text.textContent='Getting ready…';
     try {
       await connect();
       const kept=await navigator.storage?.persist?.().catch(()=>false);

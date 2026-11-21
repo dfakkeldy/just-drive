@@ -27,7 +27,7 @@ const CSS = `
 #tcSteer.held #tcKnob{background:var(--maple,#d0632e);color:#fff}
 .tcPedal{display:grid;place-items:center;border-radius:14px;border:2px solid rgba(238,242,246,.3);background:var(--panel,rgba(8,14,20,.72));text-align:center;line-height:1.25}
 .tcPedal.held{background:var(--maple,#d0632e);border-color:#fff}
-.tcSmall{border-radius:10px;border:1px solid rgba(238,242,246,.3);background:var(--panel,rgba(8,14,20,.72));font-size:10.5px;padding:0;color:inherit}
+.tcSmall{border-radius:10px;border:1px solid rgba(238,242,246,.3);background:var(--panel,rgba(8,14,20,.72));padding:0;color:inherit}
 .tcSmall:active{background:var(--maple,#d0632e)}
 `;
 
@@ -44,19 +44,15 @@ export function createTouchControls(actions: TouchActions): TouchControls {
   const knob = steer.querySelector<HTMLElement>('#tcKnob')!, track = steer.querySelector<HTMLElement>('#tcTrack')!;
   const brake = make('div', 'tcBrake', 'tc tcPedal', 'BRAKE<br>REVERSE');
   const go = make('div', 'tcGo', 'tc tcPedal', 'GO');
+  go.setAttribute('role', 'button'); go.setAttribute('aria-label', 'Go');
+  brake.setAttribute('role', 'button'); brake.setAttribute('aria-label', 'Brake, hold to reverse');
   const reset = make('button', 'tcReset', 'tc tcSmall', 'RESET');
   const view = make('button', 'tcView', 'tc tcSmall', 'VIEW');
   const horn = make('button', 'tcHorn', 'tc tcSmall', 'HORN');
-  reset.setAttribute('aria-label', 'Put the car back on the road');
+  reset.setAttribute('aria-label', 'Reset: put the car back on the road');
   view.setAttribute('aria-label', 'Change the camera view');
   const all = [steer, brake, go, reset, view, horn];
-  // END SHIFT moves into the settings panel: among the phone controls it overlapped something at most screen sizes.
-  const end = document.getElementById('endShift'), panel = document.getElementById('settings');
-  if (end && panel) {
-    end.classList.add('inPanel');
-    panel.insertBefore(end, panel.firstChild);
-    end.addEventListener('click', () => panel.classList.remove('open'));
-  }
+  moveEndShiftToSettings();
   createPhoneLayout();
   document.body.classList.add('tcOn');
 
@@ -121,4 +117,17 @@ export function createTouchControls(actions: TouchActions): TouchControls {
       if (!visible) releaseAll();
     },
   };
+}
+
+/** Keep the one END SHIFT control in Settings for every input. */
+export function moveEndShiftToSettings(): void {
+  // Keep END SHIFT in Settings for every input.
+  const end = document.getElementById('endShift'), panel = document.getElementById('settings');
+  if (end && panel && !end.classList.contains('inPanel')) {
+    end.classList.add('inPanel');
+    // Below the sheet's own header (title and Close), which stays first.
+    const header = panel.querySelector('#settingsHeader');
+    if (header) header.after(end); else panel.insertBefore(end, panel.firstChild);
+    end.addEventListener('click', () => panel.classList.remove('open'));
+  }
 }

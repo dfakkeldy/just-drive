@@ -57,6 +57,7 @@ const vehicleAt = (x, z, vx = 0) => ({ x, z, vx, vz: 0, heading: Math.PI / 2, ai
   assert.deepEqual(shift.score.recent.map(e => e.kind).sort(), ['box:down', 'boxDown']);
   shift.update(.1, vehicleAt(0, 0));
   assert.doesNotMatch(document.getElementById('shiftHud').textContent, /FIRED|pts/);
+  assert.match(document.getElementById('shiftHud').textContent, / · ENDS 18:00/);
   for (let i = 0; i < 8; i++) shift.remaining[i] = 1;   // eight stops still due
   shift.end();
   assert.ok(shift.complaints.all.some(c => c.kind === 'missing'), 'mail play still files skipped stops at the end of the day');

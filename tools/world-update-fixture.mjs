@@ -59,7 +59,8 @@ export function spy(source, ending = false, dev = true, absent = false, override
     // The drift dust and meter (drift-feedback.ts): untraced too, nothing slides here.
     driftFeedback: { update() {} },
     pad: { show: trace('pad.show') }, relief: { ...update('relief'), breaks: 0, busy: false },
-    miniMap: { ...update('miniMap'), show: trace('miniMap.show') }, mapTimer: 0, refreshMap: trace('refreshMap'), mapStops: [], mapMarks: [], mapCars: [],
+    drone: { active: false },
+    miniMap: { setFlight() {}, ...update('miniMap'), show: trace('miniMap.show') }, mapTimer: 0, refreshMap: trace('refreshMap'), mapStops: [], mapMarks: [], mapCars: [],
     propertyLayer: null, // Default-off ground mode has no per-frame update.
     placesUI: { ...update('placesUI'), busy: false }, journey: update('journey'),
     bigMap: null, footpaths: null, // The explore map dialog and hike paths: absent in mail mode and history eras.
@@ -68,7 +69,8 @@ export function spy(source, ending = false, dev = true, absent = false, override
     fishing: { ...update('fishing'), judge: { cancel: trace('fishing.cancel') }, group: { visible: true } },
     renderer: { domElement: { width:1280, height:720 }, set localClippingEnabled(v) { trace('clipping')(v); }, render: trace('render') },
     multiplayer: { ...update('multiplayer'), choice: { on: false } }, scene: {}, LOW: true, CLOCK_FACTOR: 120, page: { stopped: false, ready: trace('page.ready'), fail: error => { throw error; } },
-    document: { hidden: false }, keys: new Set(), mailPointers: new Set(), mailButton: null, mailScore: null, phoneMailHud: update('phoneMailHud'),
+    pauseButton: { hidden: true },
+    document: { hidden: false, body: { classList: { toggle() {} } } }, keys: new Set(), mailPointers: new Set(), mailButton: null, mailScore: null, phoneMailHud: update('phoneMailHud'),
     pendingShot: null, mailRequested: false, photoRequested: false, pictureRequested: false, pictureButton: null, touchDevice: false, bare: true,
     flySpeed: 20, SHOTS: [], AREA: {}, EXAG: 1.5,
     requestAnimationFrame: trace('raf'),
@@ -135,7 +137,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
     world('terrain', '@camera', paused), ...wharfLines(spied), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
     world('trees', '@terrain.drawnFine', '@camera.position'), world('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
     call('placesUI', '@vehicle', playing), call('journey', .05, playing), call('relief', dt, playing ? 6 : 0, '@vehicle', playing),
-    call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars'), call('radio', playing, false),
+    call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars', null), call('radio', playing, false),
     world('history', '@camera.position', dt), world('roads', '@camera.position'), canalLine(spied), world('sidewalks'), world('edge', '@camera.position'), world('mineSite', '@camera.position'),
     world('deckhand', dt, '@vehicle', '@camera.position'), world('fishing', dt, '@camera.position'), world('roadScene', '@camera'), world('schoolBus', '@camera'), world('ambientTraffic', '@camera', '@vehicle', true), world('roadAnimals', dt, '@vehicle', true), world('props', '@camera', dt), world('yardProps', '@camera', dt), world('harbourLights', 1.05), world('tall', '@camera', 1.05), call('shift', started ? .05 : 0, '@vehicle'),
     ...(!fly ? [call('shadowFocus', 3, 4, 5), call('sunShadows', .05, '@shadowFocus', 0, paused)] : []),
@@ -173,7 +175,7 @@ const scenarios = [{}, { ending: true }, { hidden: true }, { started: false }, {
 function run(source, s, dev = true) {
   return spy(source, s.ending, dev, s.absent, (context, trace) => {
     Object.assign(context, {
-      ...(s.hidden ? { document: { hidden: true } } : {}), ...(s.started === false ? { started: false } : {}),
+      ...(s.hidden ? { document: { hidden: true, body: { classList: { toggle() {} } } } } : {}), ...(s.started === false ? { started: false } : {}),
       ...(s.fly ? { mode: 'fly', sunShadows: null } : {}),
     });
     if (s.spied) for (const name of ['wharves', 'novemberRoads', 'canal']) context[name] = { update: trace(name) };
