@@ -185,8 +185,6 @@ export class BigMap {
   }
   private constrain(): void { this.center = [Math.max(this.box[0], Math.min(this.box[2], this.center[0])), Math.max(this.box[1], Math.min(this.box[3], this.center[1]))]; }
   private pick(p: Point): Place | undefined {
-    const hit = this.hitMarks.map(m => ({ ...m, d: Math.hypot(m.x - p[0], m.y - p[1]) })).sort((a, b) => a.d - b.d)[0];
-    if (hit?.d < 8) return hit.place;
     const dist = (r: { x: number; y: number; w: number; h: number }) => Math.hypot(r.x + r.w / 2 - p[0], r.y + r.h / 2 - p[1]);
     const inside = (r: { x: number; y: number; w: number; h: number }, xPad: number, yPad: number) =>
       p[0] >= r.x - xPad && p[0] <= r.x + r.w + xPad && p[1] >= r.y - yPad && p[1] <= r.y + r.h + yPad;
@@ -196,6 +194,8 @@ export class BigMap {
     });
     const exact = tags.filter(({ rect: r }) => inside(r!, 0, 0)).sort((a, b) => dist(a.rect!) - dist(b.rect!));
     if (exact[0]) return exact[0].place;
+    const hit = this.hitMarks.map(m => ({ ...m, d: Math.hypot(m.x - p[0], m.y - p[1]) })).sort((a, b) => a.d - b.d)[0];
+    if (hit?.d < 8) return hit.place;
     const padded = tags.sort((a, b) => dist(a.rect!) - dist(b.rect!));
     if (padded[0]) return padded[0].place;
     if (hit?.d < 24) return hit.place;

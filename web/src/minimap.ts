@@ -35,6 +35,7 @@ body.indoorOn #miniMap{display:none}
 /* Mirror #hud's 10px top plus the safe inset (web/index.html, and the touch-flight #hud rule in drone.ts); leave a 10px gap. */
 body.droneOn.droneSticks #miniMap:not(.enlarged){left:max(10px,var(--test-safe-left,env(safe-area-inset-left,0px)));top:calc(20px + env(safe-area-inset-top,0px) + var(--droneHudH,154px));pointer-events:auto}
 @media(orientation:landscape) and (max-height:450px){body.droneOn.droneSticks:not(.droneStack) #miniMap:not(.enlarged){top:calc(10px + env(safe-area-inset-top,0px));left:calc(max(10px, var(--test-safe-left, env(safe-area-inset-left, 0px))) + var(--droneCol) + 8px)}}
+body.droneOn.droneSticks.droneMapTight #miniMap:not(.enlarged) #miniMapCanvas{display:none}
 `;
 
 const RANGES = [450, 1200, 3200];                 // metres from the car to the edge of the map
@@ -171,26 +172,74 @@ export class MiniMap {
   private fit() {
     const safe = (side: string) => parseFloat(getComputedStyle(document.getElementById('phoneHud') ?? document.body).getPropertyValue(`--safe-${side}`)) || 0;
     const sticks = this.flight && document.body.classList.contains('droneSticks');
-    let flightSize = 156, stacked = false;
+    let flightSize = 156, stacked = false, tight = false;
     if (sticks) {
-      const testSafeLeft = parseFloat(getComputedStyle(document.body).getPropertyValue('--test-safe-left')) || 0;
-      const leftEdge = Math.max(10, testSafeLeft || safe('left'));
+      const safeLeft = parseFloat(getComputedStyle(document.body).getPropertyValue('--test-safe-left')) || safe('left');
+      const safeTop = safe('top'), safeBottom = safe('bottom'), safeRight = safe('right');
+      const leftEdge = Math.max(10, safeLeft);
       let rightLimit = innerWidth - 10;
       for (const id of ['bigMapButton', 'pauseButton']) {
         const e = document.getElementById(id), r = e && !e.hidden ? e.getBoundingClientRect() : null;
         if (r?.width) rightLimit = Math.min(rightLimit, r.left);
       }
-      const single = Math.max(72, Math.min(156, Math.floor(rightLimit - leftEdge - 10)));
-      if (innerWidth >= innerHeight && innerHeight <= 450) {
-        const paired = Math.floor((rightLimit - leftEdge - 16) / 2) - 2;
-        if (paired >= 96) flightSize = Math.min(156, paired);
-        else { stacked = true; flightSize = single; }
-      } else {
-        flightSize = single;
+      const stick = Math.min(132, innerWidth * 0.34, innerHeight * 0.42);
+      const stickLabelTop = innerHeight - 14 - safeBottom - stick - 18;
+      const returnLeft = (innerWidth - 112) / 2, returnRight = (innerWidth + 112) / 2;
+      const returnTop = innerWidth <= 420 ? innerHeight - 14 - safeBottom - stick - 24 - 56 : innerHeight - 14 - safeBottom - 56;
+      const leftStickL = Math.min(14 + safeLeft, 14 + safeLeft + stick / 2 - 54), leftStickR = Math.max(14 + safeLeft + stick, 14 + safeLeft + stick / 2 + 54);
+      const rightStickL = Math.min(innerWidth - 14 - safeRight - stick, innerWidth - 14 - safeRight - stick / 2 - 54), rightStickR = Math.max(innerWidth - 14 - safeRight, innerWidth - 14 - safeRight - stick / 2 + 54);
+      const belowLimit = (mapLeft: number, mapRight: number): number => {
+        let limit = innerHeight - 14 - safeBottom;
+        for (const id of ['droneLeft', 'droneRight', 'droneReturn']) {
+          const el = document.getElementById(id);
+          if (!el || el.hidden) continue;
+          for (const node of [el, el.querySelector('span')]) {
+            const r = node?.getBoundingClientRect();
+            if (r?.width && r.height && r.left < mapRight && r.right > mapLeft) limit = Math.min(limit, r.top - 8);
+          }
+        }
+        if (leftStickL < mapRight && leftStickR > mapLeft) limit = Math.min(limit, stickLabelTop - 8);
+        if (rightStickL < mapRight && rightStickR > mapLeft) limit = Math.min(limit, stickLabelTop - 8);
+        if (returnLeft < mapRight && returnRight > mapLeft) limit = Math.min(limit, returnTop - 8);
+        return limit;
+      };
+      const hudEl = document.getElementById('hud'), hudRect = hudEl && !hudEl.hidden ? hudEl.getBoundingClientRect() : null;
+      const hudH = hudRect?.height || parseFloat(getComputedStyle(document.body).getPropertyValue('--droneHudH')) || 154;
+      const sideTop = 10 + safeTop, stackTop = 20 + safeTop + hudH;
+      const landscape = innerWidth >= innerHeight && innerHeight <= 450;
+      const singleW = Math.min(156, Math.floor(rightLimit - leftEdge - 10));
+      let placed = false;
+      if (landscape) {
+        const pairedW = Math.min(156, Math.floor((rightLimit - leftEdge - 16) / 2) - 2);
+        if (pairedW >= 96) {
+          let pairedSize = Math.min(pairedW, Math.floor(belowLimit(leftEdge + pairedW + 10, leftEdge + pairedW * 2 + 12) - sideTop - 28));
+          if (pairedSize >= 96) pairedSize = Math.min(pairedSize, Math.floor(belowLimit(leftEdge + pairedSize + 10, leftEdge + pairedSize * 2 + 12) - sideTop - 28));
+          if (pairedSize >= 96) { flightSize = pairedSize; placed = true; }
+        }
+      }
+      if (!placed) {
+        stacked = landscape;
+        const clearReturnW = Math.min(singleW, Math.floor(returnLeft - 8 - leftEdge - 2));
+        const tryWidth = (w: number) => w >= 56 ? Math.min(w, Math.floor(belowLimit(leftEdge, leftEdge + w + 2) - stackTop - 28)) : -1;
+        const bestStack = Math.max(tryWidth(singleW), tryWidth(clearReturnW));
+        if (bestStack >= 56) {
+          flightSize = bestStack;
+        } else {
+          tight = true;
+          const headerW = Math.max(72, Math.min(singleW, clearReturnW >= 72 ? clearReturnW : singleW));
+          const headerBottom = stackTop + 28;
+          if (landscape && headerBottom > belowLimit(leftEdge, leftEdge + headerW + 2)) {
+            stacked = false;
+            flightSize = Math.max(56, Math.min(156, Math.floor((rightLimit - leftEdge - 16) / 2) - 2));
+          } else {
+            flightSize = headerW;
+          }
+        }
       }
       document.body.style.setProperty('--droneCol', `${flightSize + 2}px`);
     }
     document.body.classList.toggle('droneStack', stacked);
+    document.body.classList.toggle('droneMapTight', tight);
     const small = sticks ? flightSize : Math.min(innerWidth, innerHeight) < 520 ? 124 : 176;
     const phone = document.body.classList.contains('tcOn');
     const css = this.large ? Math.max(1, Math.min(600, innerWidth - 24 - safe('left') - safe('right'),

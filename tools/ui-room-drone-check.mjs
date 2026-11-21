@@ -65,13 +65,16 @@ for(const touch of [false,true]){
  net.count=0;room.updateGear();assert.equal(badge.hidden,true);assert.equal(gear.getAttribute('aria-label'),'Settings and room: nobody else on the road');
  net.status='retry';room.updateGear();assert.equal(gear.getAttribute('aria-label'),'Settings');assert.equal(unreadDot.hidden,true);gear.remove();
 }
-// BigMap.pick prefers painted label rectangles over closer centres of padded neighbours.
+// BigMap.pick prefers painted label rectangles over both hidden dots underneath and closer centres of padded neighbours.
 {
- const longPlace={id:'long'},shortPlace={id:'short'};
+ const longPlace={id:'long'},shortPlace={id:'short'},coveredPlace={id:'covered'};
  const picker={hitMarks:[
   {place:longPlace,x:0,y:0,rect:{x:100,y:100,w:180,h:18}},
   {place:shortPlace,x:0,y:200,rect:{x:240,y:126,w:40,h:18}},
+  {place:coveredPlace,x:200,y:109},
  ]};
+ // Tap inside longPlace's painted rect directly over coveredPlace's hidden dot: painted label wins.
+ assert.equal(BigMap.prototype.pick.call(picker,[200,109]),longPlace,'painted label beats a hidden dot underneath');
  // Inside longPlace's painted rect near its right end, closer to shortPlace's centre (260,135) than longPlace's (190,109).
  assert.equal(BigMap.prototype.pick.call(picker,[265,114]),longPlace,'painted label hit beats closer padded neighbour centre');
  // Outside both painted rects in the shared padding gap, nearest centre wins.
@@ -182,20 +185,41 @@ assert.equal(root.classList.contains('folded'),true);map.setFlight(true);assert.
 assert.equal(document.getElementById('miniMapCanvas').style.width,'156px','flight uses the shared readout column');
 assert.equal(body.style['--droneCol'],'158px');
 assert.equal(body.classList.contains('droneStack'),false);
-// Narrow landscape (440x320) fits both columns cleanly left of Pause; tighter screens stack.
+assert.equal(body.classList.contains('droneMapTight'),false);
+// Narrow landscape fits both columns cleanly left of Pause and above the flight controls (including stick labels).
 {
- const pause=Object.assign(new Element(),{id:'pauseButton',rect:{left:308,right:364,top:10,bottom:66,width:56,height:56}});body.append(pause);
- innerWidth=440;innerHeight=320;resize();
- const col=parseFloat(body.style['--droneCol']);
- assert.equal(body.classList.contains('droneStack'),false,'440x320 keeps side-by-side drone columns');
- assert.ok(10+col+8+col<=pause.rect.left-8,`two landscape columns clear Pause (right=${10+col+8+col}, pause.left=${pause.rect.left})`);
- assert.equal(document.getElementById('miniMapCanvas').style.width,`${col-2}px`);
- pause.rect={...pause.rect,left:210,right:266};innerWidth=360;innerHeight=320;resize();
- assert.equal(body.classList.contains('droneStack'),true,'very narrow landscape stacks drone map below HUD');
- const stackedCol=parseFloat(body.style['--droneCol']);
- assert.ok(10+stackedCol<=pause.rect.left-8,'stacked column clears Pause');
- pause.remove();innerWidth=844;innerHeight=390;resize();
+ const pause=Object.assign(new Element(),{id:'pauseButton',rect:{left:308,right:364,top:10,bottom:66,width:56,height:56}});
+ const hud=Object.assign(new Element(),{id:'hud',rect:{left:10,right:122,top:10,bottom:90,width:112,height:80}});
+ body.append(pause,hud);
+ const assertClear=(w,h,pauseLeft)=>{
+  pause.rect={left:pauseLeft,right:pauseLeft+56,top:10,bottom:66,width:56,height:56};
+  innerWidth=w;innerHeight=h;resize();
+  const col=parseFloat(body.style['--droneCol']),stacked=body.classList.contains('droneStack'),tight=body.classList.contains('droneMapTight');
+  const isStacked=stacked||!(w>=h&&h<=450);
+  const mapL=isStacked?10:10+col+8,mapR=mapL+col,mapT=isStacked?20+hud.rect.height:10;
+  const mapB=mapT+28+(tight?0:parseFloat(document.getElementById('miniMapCanvas').style.width));
+  assert.ok(mapR<=pauseLeft-8,`${w}x${h}: map clears Pause (right=${mapR}, pause=${pauseLeft})`);
+  const stick=Math.min(132,w*.34,h*.42),labelTop=h-14-stick-18;
+  const retL=(w-112)/2,retR=(w+112)/2,retTop=w<=420?h-14-stick-24-56:h-14-56;
+  if(mapL<Math.max(14+stick,14+stick/2+54)&&mapR>Math.min(14,14+stick/2-54))assert.ok(mapB<=labelTop-8,`${w}x${h}: map clears left stick label (bottom=${mapB}, labelTop=${labelTop})`);
+  if(mapL<Math.max(w-14,w-14-stick/2+54)&&mapR>Math.min(w-14-stick,w-14-stick/2-54))assert.ok(mapB<=labelTop-8,`${w}x${h}: map clears right stick label (bottom=${mapB}, labelTop=${labelTop})`);
+  if(mapL<retR&&mapR>retL)assert.ok(mapB<=retTop-8,`${w}x${h}: map clears Return button (bottom=${mapB}, returnTop=${retTop})`);
+  return {col,stacked,tight,mapL,mapR,mapT,mapB};
+ };
+ const narrow=assertClear(440,320,308);
+ assert.equal(narrow.stacked,false,'440x320 keeps side-by-side drone columns');
+ assert.equal(narrow.tight,false,'440x320 keeps an open map');
+ const cramped=assertClear(360,320,210);
+ assert.equal(cramped.tight,true,'360x320 folds the canvas rather than overlapping the left stick');
+ const landscapeStacked=assertClear(400,390,170);
+ assert.equal(landscapeStacked.stacked,true,'400x390 landscape stacks when two columns are too narrow');
+ assert.equal(landscapeStacked.tight,false,'400x390 fits an open stacked map above the sticks');
+ const portraitTight=assertClear(360,440,220);
+ assert.equal(portraitTight.stacked,false,'portrait stacks via media default without droneStack');
+ assert.equal(portraitTight.tight,false,'360x440 portrait fits an open map above the sticks');
+ pause.remove();hud.remove();innerWidth=844;innerHeight=390;resize();
  assert.equal(body.classList.contains('droneStack'),false);
+ assert.equal(body.classList.contains('droneMapTight'),false);
  assert.equal(document.getElementById('miniMapCanvas').style.width,'156px');
 }
 // Keep the 96px flight compass coverage as well as the new flight default.
