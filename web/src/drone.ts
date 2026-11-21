@@ -260,6 +260,7 @@ body.droneOn #hud .dst{font:12px/16px var(--mono);color:#f2b766}
 body.droneOn.droneSticks #hud{left:max(10px,var(--test-safe-left,env(safe-area-inset-left,0px)));top:calc(10px + env(safe-area-inset-top,0px));width:var(--droneCol);max-width:none;box-sizing:border-box;white-space:pre-wrap;font-size:12px;line-height:16px;padding:8px;overflow-wrap:anywhere}
 body.droneOn #hud .dst{display:block}
 body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-right,0px))}
+@media(orientation:landscape) and (max-height:319px){body.droneOn.droneSticks #hud{padding:4px 6px;font-size:10px;line-height:13px}body.droneOn.droneSticks #hud .dh{font-size:16px;line-height:18px}body.droneOn.droneSticks #hud :is(.dk,.dq,.dst){font-size:10px;line-height:13px}}
 body.droneSticks{--drone-stick-size:min(132px,34vw,42vh)}
 .droneStick{position:fixed;z-index:6;bottom:calc(14px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));
   width:var(--drone-stick-size);height:var(--drone-stick-size);border-radius:50%;box-sizing:border-box;
