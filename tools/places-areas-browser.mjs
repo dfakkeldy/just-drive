@@ -140,6 +140,6 @@ for (const url of urls) {
   } finally { await phone.close(); }
 }
 writeFileSync(`${out}/places-areas-browser.json`, JSON.stringify(results, null, 2));
-if (urls.length === 4) assert.equal(results.filter(r => r.researched).length, 20, 'every researched place was tried');
+if (urls.length === 4) assert.equal(results.filter(r => r.researched).length, 21, 'every researched place was tried');
 console.log(`${process.exitCode ? 'FAIL' : 'PASS'} ${results.filter(r => r.pass).length}/${results.length} jumps; pictures in ${out}`);
 exitCheck();
