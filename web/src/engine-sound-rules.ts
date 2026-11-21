@@ -3,8 +3,9 @@
 // engine-sound.ts turns these numbers into a Web Audio graph. Every sound is synthesised: no recordings, no samples.
 
 import { WASHBOARD_WAVE } from './defects';
+import { isMotorKind, type MotorKind } from './ride-kinds';
 
-export type EngineKind = 'car' | 'truck' | 'sxs' | 'bike';
+export type EngineKind = MotorKind;
 
 export interface EngineProfile {
   /** Engine speeds in revolutions per minute. */
@@ -67,7 +68,7 @@ export const ENGINES: Readonly<Record<EngineKind, EngineProfile>> = {
 
 /** The garage id of a motor, or null for the horse (hooves have their own sound, horse-sound.ts) and anything unknown. */
 export function engineKind(id: string): EngineKind | null {
-  return id === 'car' || id === 'truck' || id === 'sxs' || id === 'bike' ? id : null;
+  return isMotorKind(id) ? id : null;
 }
 
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
