@@ -302,32 +302,45 @@ if(family==='all'||family==='phone'){
   await hit('#savePictureButton'); await picture(p, 1, 'share', true);
   for(const text of [null,'Could not save picture']){
    if(text)await p.read(`document.getElementById('savePictureStatus').textContent=${JSON.stringify(text)}`);
+   await sleep(50);
    const noticeBoxes=await readBoxes([...flightIds,'miniMap','savePictureStatus']), noticeFaults=faults(noticeBoxes);
    if(noticeFaults.length)console.log('Flight notice faults',text??'saved',noticeFaults.join(','));
-   check(noticeBoxes.some(b=>b[0]==='miniMap')&&noticeBoxes.some(b=>b[0]==='savePictureStatus')&&noticeFaults.length===0,`${label} flight save notice (${text??'Picture saved'}) clears telemetry, map and flight controls`);
+   check(flightIds.every(id=>noticeBoxes.some(b=>b[0]===id))&&noticeBoxes.some(b=>b[0]==='miniMap')&&noticeBoxes.some(b=>b[0]==='savePictureStatus')&&noticeFaults.length===0,`${label} flight save notice (${text??'Picture saved'}) clears telemetry, map and flight controls`);
   }
   if(w===390&&h===844){
-   const resized=await p.send('Emulation.setDeviceMetricsOverride',{width:390,height:310,deviceScaleFactor:1,mobile:true});
-   assert.ok(!resized.error,JSON.stringify(resized.error));
-   await sleep(200);
-   check(await p.read(`innerWidth===390&&innerHeight===310`),'phone 390x310 flight viewport resized');
-   const shortFaults=boxes=>{
-    const issues=[];
-    for(let i=0;i<boxes.length;i++){
-     const [a,x,y,r,b]=boxes[i];
-     if(x<0||y<0||r>391||b>311)issues.push(a+' offscreen');
-     for(const [c,xx,yy,rr,bb] of boxes.slice(i+1)){
-      if(Math.min(r,rr)-Math.max(x,xx)>1&&Math.min(b,bb)-Math.max(y,yy)>1)issues.push(a+' overlaps '+c);
+   for(const [sw,sh,insets] of [[390,310,{top:0,right:0,bottom:0,left:0}],[320,310,{top:0,right:0,bottom:0,left:44}]]){
+    const resized=await p.send('Emulation.setDeviceMetricsOverride',{width:sw,height:sh,deviceScaleFactor:1,mobile:true});
+    assert.ok(!resized.error,JSON.stringify(resized.error));
+    const insetRes=await p.send('Emulation.setSafeAreaInsetsOverride',{insets});
+    assert.ok(!insetRes.error,JSON.stringify(insetRes.error));
+    await sleep(200);
+    const tag=`phone ${sw}x${sh}${insets.left?` left=${insets.left}`:''}`;
+    check(await p.read(`innerWidth===${sw}&&innerHeight===${sh}`),`${tag} flight viewport resized`);
+    const shortFaults=boxes=>{
+     const issues=[];
+     const notice=boxes.find(x=>x[0]==='savePictureStatus');
+     if(notice&&(notice[1]<insets.left-1||notice[2]<insets.top-1||notice[3]>sw-insets.right+1||notice[4]>sh-insets.bottom+1))issues.push('savePictureStatus outside safe area');
+     for(let i=0;i<boxes.length;i++){
+      const [a,x,y,r,b]=boxes[i];
+      if(x<0||y<0||r>sw+1||b>sh+1)issues.push(a+' offscreen');
+      for(const [c,xx,yy,rr,bb] of boxes.slice(i+1)){
+       const pad=(a==='savePictureStatus'&&c.startsWith('droneLeft')||a==='savePictureStatus'&&c.startsWith('droneRight')||c==='savePictureStatus'&&a.startsWith('droneLeft')||c==='savePictureStatus'&&a.startsWith('droneRight'))?8:0;
+       const eps=pad?0.5:1;
+       if(Math.min(r+pad,rr)-Math.max(x-pad,xx)>eps&&Math.min(b+pad,bb)-Math.max(y-pad,yy)>eps)issues.push(a+(pad?' within 8px of ':' overlaps ')+c);
+      }
      }
+     return issues;
+    };
+    for(const text of ['Picture saved','Could not save picture']){
+     await p.read(`document.getElementById('savePictureStatus').textContent='';document.getElementById('savePictureStatus').textContent=${JSON.stringify(text)}`);
+     await sleep(50);
+     const b=await readBoxes([...flightIds,'miniMap','savePictureStatus']), f=shortFaults(b);
+     if(f.length)console.log(`Flight ${tag} faults`,text,f.join(','));
+     check(flightIds.every(id=>b.some(x=>x[0]===id))&&b.some(x=>x[0]==='miniMap')&&b.some(x=>x[0]==='savePictureStatus')&&f.length===0,`${tag} flight controls and save notice (${text}) fit without overlap`);
     }
-    return issues;
-   };
-   for(const text of ['Picture saved','Could not save picture']){
-    await p.read(`document.getElementById('savePictureStatus').textContent=${JSON.stringify(text)}`);
-    const b=await readBoxes([...flightIds,'miniMap','savePictureStatus']), f=shortFaults(b);
-    if(f.length)console.log('Flight 390x310 faults',text,f.join(','));
-    check(flightIds.every(id=>b.some(x=>x[0]===id))&&b.some(x=>x[0]==='miniMap')&&b.some(x=>x[0]==='savePictureStatus')&&f.length===0,`phone 390x310 flight controls and save notice (${text}) fit without overlap`);
    }
+   const clearInset=await p.send('Emulation.setSafeAreaInsetsOverride',{insets:{top:0,right:0,bottom:0,left:0}});
+   assert.ok(!clearInset.error,JSON.stringify(clearInset.error));
    const restored=await p.send('Emulation.setDeviceMetricsOverride',{width:w,height:h,deviceScaleFactor:1,mobile:true});
    assert.ok(!restored.error,JSON.stringify(restored.error));
    await sleep(200);

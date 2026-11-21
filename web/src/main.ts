@@ -66,7 +66,7 @@ import { Mail } from './mail';
 import { Shift } from './shift';
 import { readMode } from './mode';
 import { readEra, areaInEra } from './era';
-import { FreeDrive, SceneryContact, quietInteriors, quietRelief, quietEndings, prepareExplore, exploreKey } from './explore';
+import { FreeDrive, SceneryContact, quietInteriors, quietRelief, quietEndings, prepareExplore, exploreKey, watchPictureStatus } from './explore';
 import { placesFor, homePlaces, churchPlaces, westBayPlaces, areaPlaces } from './places';
 import { PlacesUI } from './places-ui';
 import { BigMap } from './big-map';
@@ -1312,7 +1312,7 @@ if (pictureButton) {
   pictureButton.addEventListener('click', requestPicture);
 }
 const pictureStatus = !bare && !mailMode ? Object.assign(document.createElement('div'), { id: 'savePictureStatus' }) : null;
-if (pictureStatus) { pictureStatus.setAttribute('role', 'status'); document.body.append(pictureStatus); }
+if (pictureStatus) { pictureStatus.setAttribute('role', 'status'); document.body.append(pictureStatus); watchPictureStatus(pictureStatus); }
 let pictureStatusTimer = 0;
 // A controller (gamepad.ts): the same values and the same actions as the keys. Nothing runs until one is used.
 const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
