@@ -547,6 +547,8 @@ const sidewalks = (() => {
   return null;
 })();
 if (sidewalks) { terrain.sidewalks=sidewalks; scene.add(sidewalks.group); if (mabouSite) mabouSite.sidewalkLayer = true; }
+// If the height worker fails later, the walks hide: give the bridges and Mabou's street their own look back for what is built after.
+if (sidewalks) sidewalks.onDisabled = () => { for (const id of sidewalks.bridgeReservations.keys()) roads.bridgeWalks.delete(id); if (mabouSite) mabouSite.sidewalkLayer = false; };
 // Roadside props are scenery: when their file is missing or broken, the game still starts.
 const props = await (async () => {
   if (!propsRead) return null;

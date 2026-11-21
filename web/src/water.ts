@@ -5,6 +5,14 @@ import { SEA_QUERY_FRAG, SEA_VERT } from './shaders';
 
 /** A clipped mirror of the shore, updated each visible frame. The phone never constructs it. */
 interface Visibility { query: WebGLQuery | null; pending: boolean; active: boolean; visible: boolean }
+/** A tree mesh's packing as numbers: its matrix version, instance count, geometry and material. Written only on a miss. */
+interface Packing { version: number; count: number; geometry: number; material: number }
+const packed = (p: Packing | undefined, s: THREE.InstancedMesh): boolean => p !== undefined && p.version === s.instanceMatrix.version
+  && p.count === s.count && p.geometry === s.geometry.id && p.material === (s.material as THREE.Material).id;
+const pack = (s: THREE.InstancedMesh, p: Packing = { version: 0, count: 0, geometry: 0, material: 0 }): Packing => {
+  p.version = s.instanceMatrix.version; p.count = s.count; p.geometry = s.geometry.id; p.material = (s.material as THREE.Material).id;
+  return p;
+};
 
 export class WaterReflections {
   readonly uniforms = {
@@ -32,7 +40,7 @@ export class WaterReflections {
   private readonly treeCache = new Map<THREE.InstancedMesh, THREE.InstancedMesh>();
   private readonly treeAt = new THREE.Vector3(Infinity, 0, Infinity);
   private treeChildren = -1;
-  private readonly emptyTrees = new Map<THREE.InstancedMesh, string>();
+  private readonly emptyTrees = new Map<THREE.InstancedMesh, Packing>();
   private readonly seaMaterial: THREE.Material;
   private readonly seaQueryMaterial: THREE.ShaderMaterial;
   private on = true;
@@ -205,10 +213,9 @@ export class WaterReflections {
       if (!source.isInstancedMesh || !source.visible) continue;
       // The trees repack a tile's shapes as the car moves (every three metres) and change its material with
       // distance. A proxy made from an older packing is made again, and takes the present shape and material.
-      const packing = `${source.instanceMatrix.version}:${source.count}:${source.geometry.id}:${(source.material as THREE.Material).id}`;
-      if (!rebuild && this.emptyTrees.get(source) === packing) continue;
+      if (!rebuild && packed(this.emptyTrees.get(source), source)) continue;
       let proxy = this.treeCache.get(source);
-      if (!rebuild && proxy && proxy.userData.packing === packing) { proxy.visible = proxy.count > 0; continue; }
+      if (!rebuild && proxy && packed(proxy.userData.packing, source)) { proxy.visible = proxy.count > 0; continue; }
       const matrices = source.instanceMatrix.array, colours = source.instanceColor?.array;
       let selected = 0;
       for (let i = 0; i < source.count; i++) {
@@ -224,9 +231,9 @@ export class WaterReflections {
         if (colours && proxy.instanceColor) for (let j = 0; j < 3; j++) proxy.instanceColor.array[selected * 3 + j] = colours[i * 3 + j];
         selected++;
       }
-      if (!proxy) this.emptyTrees.set(source, packing); else this.emptyTrees.delete(source);
+      if (!proxy) this.emptyTrees.set(source, pack(source, this.emptyTrees.get(source))); else this.emptyTrees.delete(source);
       if (proxy) {
-        proxy.geometry = source.geometry; proxy.material = source.material; proxy.userData.packing = packing;
+        proxy.geometry = source.geometry; proxy.material = source.material; proxy.userData.packing = pack(source, proxy.userData.packing);
         proxy.count = selected; proxy.visible = selected > 0; proxy.instanceMatrix.needsUpdate = true;
         if (proxy.instanceColor) proxy.instanceColor.needsUpdate = true;
         if (selected) proxy.computeBoundingSphere();
