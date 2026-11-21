@@ -104,7 +104,7 @@ export function prepareExplore(): void {
     }
     @media(orientation:landscape) and (max-height:319px){
       body.droneOn.droneSticks #savePictureStatus{left:auto;right:calc(22px + var(--drone-stick-size) + env(safe-area-inset-right,0px));
-        top:calc(134px + env(safe-area-inset-top,0px));bottom:auto;transform:none;box-sizing:border-box;max-width:72px;white-space:normal;text-align:center}
+        top:calc(134px + env(safe-area-inset-top,0px));bottom:auto;transform:none;box-sizing:border-box;max-width:56px;padding:4px;font-size:9px;white-space:normal;overflow-wrap:break-word;text-align:center}
     }
     #savePictureStatus:empty{display:none}
   ` }));
