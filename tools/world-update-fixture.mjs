@@ -34,7 +34,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
     window: {}, performance: { now: () => 1000 + calls.length }, THREE: { Vector3: vec, MathUtils: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) } },
     started: true, last: 1000, fps: 60, quiet: 25, camReady: true, mode: 'drive', vehicle, camera,
     endings: { ...update('endings'), busy: ending }, interiors: { ...update('interiors'), render: trace('interiors.render'), busy: false },
-    wharves: null, novemberRoads: null, maryville: null,
+    airportDrag: null, wharves: null, novemberRoads: null, maryville: null,
     terrain: { ...update('terrain'), drawnFine: new Set(['tile']), surfaceAt: () => ({ level: 8 }), failed: 0 },
     quality: { frame: trace('quality') }, picture: null, lawnDemo: null, mailMode: true, tall: null, farTurbines: null, farVisibility:null, farLoading:false, farKey:null,tallKey:null,
     demo: 0, demoPhoto: false, drove: 0, reliefTest: 0, waitingToDrive: false, loaded: true, beaconT: 0,
