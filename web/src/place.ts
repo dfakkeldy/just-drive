@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import type { Building } from './buildings';
 import type { Pushable } from './parked';
 
 /**
@@ -57,4 +58,11 @@ export function placeSlots<R extends Rows>(rows: R, built: BuiltPlaces<R>): { [K
     const made = (built as Record<string, object | null>)[name];
     return [name, { dev: made, place: made && (row.slot ? row.slot(made) : made as HandBuiltPlace) }];
   })) as { [K in keyof R]: PlaceSlot };
+}
+
+/** The list to draw: all the surveyed boxes but those a hand-built house stands in for, with their wings. Every other
+ *  reader (mail, houses, complaints) keeps the full list. */
+export function drawnWithout(list: Building[], ...boxes: (Building | null)[]): Building[] {
+  const ids = new Set(boxes.filter((b): b is Building => b !== null).map((b) => b.id));
+  return ids.size ? list.filter((b) => !ids.has(b.buildingId ?? b.id)) : list;
 }

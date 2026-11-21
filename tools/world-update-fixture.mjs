@@ -85,7 +85,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
   context.waterReflections.settle = trace('water.settle'); context.waterReflections.afterRender = trace('water.afterRender');
   if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'lotProps', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'yardProps', 'grass', 'waterReflections', 'fishing', 'harbourLights']) context[name] = null;
   // The places rows: their sites are only stored, and each built place is the spy (or null) of the same name, read late so `absent` and the overrides apply.
-  Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null,
+  Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null, drLaneSite: null,
     builtPlaces: new Proxy({}, { get: (_target, name) => context[name] ?? null }) });
   if (typeof overrides === 'function') overrides(context, trace);
   else Object.assign(context, overrides);

@@ -134,12 +134,14 @@ import { Cemeteries } from './cemeteries';
 import { Stockpiles } from './stockpiles';
 import { HomeSite } from './home-site';
 import { PorchDog } from './porch-dog';
-import { lazyPlaceRow, placeRow, placeSlots, sitesOf, type BuiltPlaces, type HandBuiltPlace, type PlaceRow } from './place';
+import { drawnWithout, lazyPlaceRow, placeRow, placeSlots, sitesOf, type BuiltPlaces, type HandBuiltPlace, type PlaceRow } from './place';
 import { YardDogSite } from './yard-dog-site';
 import { YardDog } from './yard-dog';
 import { LotProps } from './lot-props';
 import { chooseLotProps } from './lot-props-rules';
 import { PorchHouse } from './porch-house';
+import { DrLaneSite } from './drlane-site';
+import { DrLaneHouse } from './drlane-house';
 import { PorchSite } from './porch-site';
 import { ChurchSite } from './church-site';
 import { JudiqueVillageSite, VILLAGE_PLACES } from './judique-village-site';
@@ -411,7 +413,10 @@ const bakedBuildingStyles = stylesRead
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
 const porchBox = ERA.modern && AREA.porch && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
-const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
+// One house on D.R.'s Lane (Judique) is built by hand with its yard. ?drlane=0 leaves the surveyed box.
+const drLaneBox = ERA.modern && AREA.drLane && params.get('drlane') !== '0' && buildingList ? DrLaneSite.find(buildingList) : null;
+const drLaneSite = drLaneBox ? new DrLaneSite(drLaneBox, manifest.village) : null;
+const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
 const buildingStyles = buildingAppearance(astra, LOW, sunDir,
   littleMabouArt || wharfArt ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles } : bakedBuildingStyles);
@@ -449,6 +454,7 @@ const placeRows = {
     roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings)),
   mabouMain: lazyPlaceRow(mabouSite, () => mabouMainChunk!.take().catch(partFailed), (site, part) => new part.MabouMain(site, terrain, LOW, roads.roads)),
   maryville: placeRow(maryvilleSite, site => new maryvilleFeature!.MaryvilleStore(site, terrain, LOW)),
+  drLane: placeRow(drLaneSite, site => new DrLaneHouse(site, terrain, lift)),
 };
 // Each site clears its surveyed land.
 const placeSites = sitesOf(placeRows);
@@ -492,6 +498,7 @@ if(stuntPark)scene.add(stuntPark.group);
 if (fishingSite) terrain.sites.push(fishingSite);
 if (homeSite) terrain.sites.push(homeSite);
 if (porchSite) terrain.sites.push(porchSite);
+if (drLaneSite) terrain.sites.push(drLaneSite);
 if (churchSite) terrain.sites.push(churchSite);
 if (quarrySite) { terrain.sites.push(quarrySite); terrain.coast=quarrySite; }
 const cemeteries = ERA.modern ? await Cemeteries.load(manifest, name => cemeteriesRead?.take() ?? getJson(name), terrain, LOW, AREA.id) : null;
