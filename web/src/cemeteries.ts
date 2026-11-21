@@ -17,6 +17,8 @@ interface Fitted {
   mesh: THREE.InstancedMesh; samples: { a: Point; b?: Point; turn?: number }[];
   /** The last fitted ground heights at each sample's a and b. NaN means no height (null); fitted is false until the first fit. */
   ya: Float64Array; yb: Float64Array; fitted: boolean;
+  /** The coarsest land level that may fit each sample's a and b: the finest level that has its tile, at most 6. -1 means no level has it. */
+  capA: Int8Array; capB: Int8Array;
   /** A wall piece's height and thickness (a hedge is lower and thicker than the wall). */
   height?: number; thick?: number;
 }
@@ -38,7 +40,6 @@ export class Cemeteries {
   readonly places: Place[];
   private sites: Site[];
   private next = 0;
-  private levels: { level: number; size: number; have: Set<string> }[];
   private dummy = new THREE.Object3D();
   private zero = new THREE.Matrix4().makeScale(0, 0, 0);
   private material = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -60,7 +61,15 @@ export class Cemeteries {
 
   constructor(readonly list: Cemetery[], private origin: Point, private terrain: Terrain, private low: boolean, area: Place['area']) {
     this.group.name = 'cemeteries';
-    this.levels = Object.entries(terrain.manifest.levels).map(([level, keys]) => ({ level: Number(level), size: terrain.manifest.size / 2 ** Number(level), have: new Set(keys) })).sort((a, b) => b.level - a.level);
+    const levels = Object.entries(terrain.manifest.levels).map(([level, keys]) => ({ level: Number(level), size: terrain.manifest.size / 2 ** Number(level), have: new Set(keys) })).sort((a, b) => b.level - a.level);
+    // The manifest's levels never change, so each sample's cap is worked out once here, not on every tick.
+    // Use mid land while fine tiles stream in, then refit. Requiring level 8 would leave gaps
+    // in an oblique view where the terrain correctly selects coarser tiles.
+    const m = terrain.manifest;
+    const cap = (p: Point): number => {
+      const finest = levels.find(l => l.have.has(`${Math.floor((p[0] - m.origin[0]) / l.size)}_${Math.floor((m.origin[1] - p[1]) / l.size)}`));
+      return finest ? Math.min(finest.level, 6) : -1;
+    };
     this.places = cemeteryPlaces(list, area);
     const kinds = low ? [0, 2] : [0, 1, 2];
     const wall = new THREE.BoxGeometry(1, 1, 1), shapes = kinds.map(k => stoneGeometry(k, low));
@@ -75,7 +84,8 @@ export class Cemeteries {
         const mesh = new THREE.InstancedMesh(geometry, this.material, samples.length);
         // Instance bounds are refreshed after ground fitting, so off-screen sites cost no draw calls.
         samples.forEach((_, i) => { mesh.setMatrixAt(i, this.zero); mesh.setColorAt(i, color(i)); });
-        group.add(mesh); fitted.push({ mesh, samples, ya: new Float64Array(samples.length), yb: new Float64Array(samples.length), fitted: false, height, thick });
+        group.add(mesh); fitted.push({ mesh, samples, ya: new Float64Array(samples.length), yb: new Float64Array(samples.length), fitted: false,
+          capA: Int8Array.from(samples, s => cap(s.a)), capB: Int8Array.from(samples, s => s.b ? cap(s.b) : -1), height, thick });
       };
       // A road-side edge can be open (no wall drawn) or a low clipped hedge (ROAD_EDGES).
       add(wall, segments.filter(([a, b]) => edgeKind(area, a, b) === 'wall').map(([a, b]) => ({ a, b })), () => new THREE.Color(0x73776f));
@@ -107,13 +117,10 @@ export class Cemeteries {
   readonly near = (east: number, north: number, margin: number): boolean => this.sites.some(s => Math.hypot(east - s.center[0], north - s.center[1]) <= s.radius * Math.SQRT2 + margin);
   readonly excludes = (east: number, north: number): boolean => this.sites.some(s => Math.abs(east - s.center[0]) <= s.radius && Math.abs(north - s.center[1]) <= s.radius && inside([east, north], s.cemetery.ring));
 
-  private ground(p: Point): number | null {
+  /** The fitted height at p, or null until land at level `cap` or finer is there. A cap of -1 (no level has the tile) is never fitted. */
+  private ground(p: Point, cap: number): number | null {
     const x = p[0] - this.origin[0], z = this.origin[1] - p[1], s = this.terrain.surfaceAt(x, z);
-    // Use mid land while fine tiles stream in, then refit. Requiring level 8 would leave gaps
-    // in an oblique view where the terrain correctly selects coarser tiles.
-    const m = this.terrain.manifest;
-    const finest = this.levels.find(l => l.have.has(`${Math.floor((p[0] - m.origin[0]) / l.size)}_${Math.floor((m.origin[1] - p[1]) / l.size)}`));
-    return s && finest && s.level >= Math.min(finest.level, 6) ? (this.terrain.meshHeightAt(x, z, true) ?? s.ground) : null;
+    return s && cap >= 0 && s.level >= cap ? (this.terrain.meshHeightAt(x, z, true) ?? s.ground) : null;
   }
   update(camera: { x: number; z: number }, car?: { x: number; z: number }): void {
     const now = performance.now();
@@ -128,7 +135,7 @@ export class Cemeteries {
         // Compare the heights in place: a mesh refits only on its first pass or when a height changed.
         let changed = !f.fitted;
         for (let i = 0; i < f.samples.length; i++) {
-          const s = f.samples[i], ya = this.ground(s.a) ?? NaN, yb = s.b ? this.ground(s.b) ?? NaN : NaN;
+          const s = f.samples[i], ya = this.ground(s.a, f.capA[i]) ?? NaN, yb = s.b ? this.ground(s.b, f.capB[i]) ?? NaN : NaN;
           if (!same(ya, f.ya[i]) || !same(yb, f.yb[i])) changed = true;
           // Keep the newest value (0 and -0 compare equal), so a refit draws exactly what this pass sampled.
           f.ya[i] = ya; f.yb[i] = yb;
