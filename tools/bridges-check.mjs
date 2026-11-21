@@ -64,8 +64,9 @@ async function contracts(replacements={}){
 }
 // The grade solver's shortcuts (a repeat visit skipped, the shared lattice memo, squared length tests, the isSpan
 // box) give the same bits as the plain solver: the same source with each shortcut taken out. Real Point Tupper
-// spans: -100084 runs all 600 passes on every build, 240 retries its approaches. Then the length tests alone, on
-// seeded lengths within a few ulps of their limits, against plain Math.hypot.
+// spans at the default scale 1.5: -100084 runs all 600 passes in each of its 3 builds (2 approach retries),
+// -100080 falls back to the relaxed curve. Then the length tests alone, on seeded lengths within a few ulps of
+// their limits, against plain Math.hypot.
 async function shortcuts(replacements={}){
  const file='web/src/modern-bridges.ts',s=readFileSync(root+file,'utf8'),fast=replacements[file]??s;let plain=s;
  for(const [from,to] of[
@@ -79,8 +80,8 @@ async function shortcuts(replacements={}){
  ]){assert.equal(plain.split(from).length,2,'one plain solver anchor: '+from);plain=plain.replace(from,to);}
  const worlds=[];
  for(const source of[fast,plain]){
-  const f=await fixture('pointtupper',1,{...replacements,[file]:source}),m=f.roads.modern,spans=[-100084,240].map(id=>m.spans.find(r=>r.road.id===id));
-  assert.ok(spans.every(Boolean),'Point Tupper spans -100084 and 240 exist');
+  const f=await fixture('pointtupper',1.5,{...replacements,[file]:source}),m=f.roads.modern,spans=[-100084,-100080,240].map(id=>m.spans.find(r=>r.road.id===id));
+  assert.ok(spans.every(Boolean),'Point Tupper spans -100084, -100080 and 240 exist');
   await f.preload(f.terrain,spans.flatMap(r=>r.pts.map(p=>[p[0],p[1]])),120,8);for(const r of spans)m.ensure(r);worlds.push({m,spans});
  }
  const bits=r=>Buffer.concat([r.triangles,r.triangleDeck,...['position','normal','color'].map(n=>r.geometry.getAttribute(n).array),new Float64Array([r.startLength,r.endLength,r.y0,r.y1])].map(a=>Buffer.from(a.buffer,a.byteOffset,a.byteLength)));
@@ -128,8 +129,8 @@ if(process.argv.includes('--mutations')){
   console.log('KILLED '+name);
  }
  for(const [name,from,to,error] of[
-  ['solver skips a visit when only one corner moved','changed[n1]<last&&changed[n2]<last','changed[n1]<last',/span -100084 bit for bit/],
-  ['solver lattice memo ignores the point',"if(state===0||memoX[slot]!==x||memoZ[slot]!==z||","if(state===0||",/span 240 bit for bit/],
+  ['solver skips a visit when only one corner moved','changed[n1]<last&&changed[n2]<last','changed[n1]<last',/bit for bit/],
+  ['solver lattice memo ignores the point',"if(state===0||memoX[slot]!==x||memoZ[slot]!==z||","if(state===0||",/bit for bit/],
   ['length test without its rounding band','STEP_LO=STEP*STEP*(1-1e-9),STEP_HI=STEP*STEP*(1+1e-9)','STEP_LO=STEP*STEP,STEP_HI=STEP*STEP',/longer|Longer/],
  ]){
   assert.equal(s.split(from).length,2,'one mutation anchor: '+name);
