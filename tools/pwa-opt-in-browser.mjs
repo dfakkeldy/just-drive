@@ -40,13 +40,17 @@ async function run(name){
  ]){console.log(ok?'PASS':'FAIL',name,label);if(!ok)violations.push(label);}
  console.log(name,'first land after script response',info.firstLand,'ms',JSON.stringify(requests));
  const pageRequests=t.events.filter(e=>e.method==='Network.requestWillBeSent'&&e.params.request.url.startsWith(origin+'/')).map(e=>new URL(e.params.request.url).pathname);
- return {t,info,requests:pageRequests,browserContextId,violations};
+ // The order check reads the order the page asked for the files (CDP), not Resource Timing. startTime has a 100 µs clock:
+ // two fetches started together often share it, and the browser then lists them in either order.
+ const gameRequests=pageRequests.filter(p=>/\/(terrain|audio|areas)\//.test(p)).slice(0,6);
+ console.log(name,'game request order',JSON.stringify(gameRequests));
+ return {t,info,requests:pageRequests,gameRequests,browserContextId,violations};
 }
 try{
  for(let i=0;i<50;i++){try{if((await fetch(origin+'/_headers')).status===404)break;}catch{}await delay(100);}
  const normal=await run('normal');await browser.send('Target.disposeBrowserContext',{browserContextId:normal.browserContextId});normal.t.close();const publicPage=await run('public');const timing=publicPage.info.firstLand<normal.info.firstLand+250 && publicPage.info.firstLand<500;
  console.log(timing?'PASS':'FAIL','first-land timing has no offline setup delay');
- assert.deepEqual(publicPage.info.gameRequests,normal.info.gameRequests,'game first-request order matches no-offline build');
+ assert.deepEqual(publicPage.gameRequests,normal.gameRequests,'game first-request order matches no-offline build');
  assert.ok(timing,'offline feature adds no 2.5 second startup wait');
  assert.deepEqual(normal.violations,[],'no-offline oracle stays ordinary');assert.deepEqual(publicPage.violations,[],'ordinary public visitor stays ordinary');
  // Restore real public paths before registration: hashed startup metadata describes this exact Vite app.
