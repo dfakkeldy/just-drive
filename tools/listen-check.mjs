@@ -135,11 +135,12 @@ async function lastSecond(Player, fileSeconds) {
 // Offline, only the songs the download saved arrive, and the clock is mostly on one it did not save. The engine must
 // try the next songs at once, round the whole station, and play a saved one. A station with no saved song at all is
 // tried once round, and then only every few seconds (no tight loop).
-async function missingSongs(Player, saved) {
+async function missingSongs(Player, saved, ended = false) {
   const keep = Object.fromEntries(['Audio', 'document', 'localStorage', 'fetch'].map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
   let radio;
   try {
-    globalThis.Audio = class { constructor() { this.paused = true; this.src = ''; this.currentTime = 0; } addEventListener() {}
+    globalThis.Audio = class { constructor() { this.paused = true; this.src = ''; this.currentTime = 0; this.on = {}; }
+      addEventListener(type, f) { (this.on[type] ??= []).push(f); }
       play() { this.paused = false; return Promise.resolve(); } pause() { this.paused = true; } };
     globalThis.document = { hidden: false };
     globalThis.localStorage = { getItem: () => null, setItem() {} };
@@ -155,6 +156,13 @@ async function missingSongs(Player, saved) {
     radio.live = () => ({ track: 2, at: 10 });   // the clock is on c.mp3
     radio.start();
     for (let n = 0; n < 20; n++) await new Promise(r => setTimeout(r, 0));   // well inside the few seconds of a slow retry
+    if (ended) {
+      // The saved song ends and the clock is still on c.mp3: a song that arrived starts the count again, so the radio
+      // gets a whole new turn and comes round to the saved song at once, not one try every few seconds.
+      asked.length = 0;
+      for (const f of radio.audio.on.ended ?? []) f();
+      for (let n = 0; n < 20; n++) await new Promise(r => setTimeout(r, 0));
+    }
     return { track: radio.track, playing: radio.mine(), asked };
   } finally {
     if (radio) radio.station = -1;   // a retry that is still waiting does nothing
@@ -166,7 +174,10 @@ async function missingSongs(Player, saved) {
     'a clock on a song that is not saved goes on at once, round the station, to the saved song');
   assert.deepEqual(await missingSongs(RadioPlayer, []), { track: 1, playing: false, asked: ['c.mp3', 'd.mp3', 'e.mp3', 'a.mp3', 'b.mp3'] },
     'a station with no song that arrives is tried once round, then waits');
-  console.log('PASS a song that does not arrive: the radio goes on at once to a saved song, and tries a station with none only once round');
+  // The saved song is kept from its first play, so the second turn asks the network only for the four others.
+  assert.deepEqual(await missingSongs(RadioPlayer, ['b.mp3'], true), { track: 1, playing: true, asked: ['c.mp3', 'd.mp3', 'e.mp3', 'a.mp3'] },
+    'after the saved song ends, the radio has a whole new turn and comes round to it again at once');
+  console.log('PASS a song that does not arrive: the radio goes on at once to a saved song, again after that song ends, and tries a station with none only once round');
 }
 
 // ---- The links to the page ----
@@ -270,5 +281,12 @@ if (process.argv.includes('--mutations')) {
     plugins: [{ name: 'endless-turn-mutant', setup(b) { b.onLoad({ filter: /radio-player\.ts$/ }, () => ({ contents: engine.replace(missedAnchor, 'this.tune(this.track + 1, 0);'), loader: 'ts' })); } }] });
   const endlessEngine = await import('data:text/javascript;base64,' + Buffer.from(endless.outputFiles[0].text).toString('base64'));
   assert.notDeepEqual(await missingSongs(endlessEngine.RadioPlayer, []), { track: 1, playing: false, asked: ['c.mp3', 'd.mp3', 'e.mp3', 'a.mp3', 'b.mp3'] }, 'the check must fail when the tries never stop');
-  console.log('PASS the slow-skip and endless-turn mutants are rejected');
+  // Without the new count after a song arrives, the second turn starts where the first one ended and stops at once.
+  const resetAnchor = 'this.missed = 0;   // only a song this tune will play starts the count again';
+  assert.ok(engine.includes(resetAnchor), 'mutation anchor: the count starts again when a song arrives');
+  const noReset = await build({ stdin: { contents: ENGINE, resolveDir: process.cwd() + '/web/src', loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node',
+    plugins: [{ name: 'no-reset-mutant', setup(b) { b.onLoad({ filter: /radio-player\.ts$/ }, () => ({ contents: engine.replace(resetAnchor, ''), loader: 'ts' })); } }] });
+  const noResetEngine = await import('data:text/javascript;base64,' + Buffer.from(noReset.outputFiles[0].text).toString('base64'));
+  assert.notDeepEqual(await missingSongs(noResetEngine.RadioPlayer, ['b.mp3'], true), { track: 1, playing: true, asked: ['c.mp3', 'd.mp3', 'e.mp3', 'a.mp3'] }, 'the check must fail when a song that arrives does not start the count again');
+  console.log('PASS the slow-skip, endless-turn and no-reset mutants are rejected');
 }

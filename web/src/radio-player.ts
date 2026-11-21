@@ -328,8 +328,8 @@ export class RadioPlayer {
     if (this.held || !this.on) return;
     this.sounding(false);
     this.fetchSong(tracks[this.track].file).then((url) => {
-      this.missed = 0;
       if (ticket !== this.ticket || this.held || this.station < 0) return;
+      this.missed = 0;   // only a song this tune will play starts the count again
       if (live && !this.plain.has(this.station)) {
         const now = this.live();
         if (now.track !== this.track) { this.tuneLive(); return; }   // the clock moved on to the next song meanwhile
