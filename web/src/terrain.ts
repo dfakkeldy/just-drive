@@ -378,7 +378,7 @@ export class Terrain {
     this.noBrook = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.noBrook.needsUpdate = true;
     this.uniforms = {
-      airportFrame: { value: new THREE.Vector4() }, airportSize: { value: new THREE.Vector2() }, airportDrag: { value: new THREE.Vector4() },
+      airportFrame: { value: new THREE.Vector4() }, airportSize: { value: new THREE.Vector2() },
       ...shared,
       tCover: { value: cover },
       grassFocus: { value: new THREE.Vector3() },

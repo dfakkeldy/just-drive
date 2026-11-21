@@ -15,7 +15,8 @@ export class Airport {
     const {data,frame:f,village:v}=site,[a]=data.runway.ends;
     terrain.uniforms.airportFrame.value.set(a[0]-v[0],v[1]-a[1],f.ux,-f.un);
     terrain.uniforms.airportSize.value.set(f.length,data.runway.width);
-    if (drag) terrain.uniforms.airportDrag.value.set(...DRAG_PAINT);
+    // Only airport tiles read this uniform. Set it before terrain builds its first tiles.
+    terrain.uniforms.airportDrag = { value: drag ? new THREE.Vector4(...DRAG_PAINT) : new THREE.Vector4() };
     const white:[number,number][]=[],green:[number,number][]=[],red:[number,number][]=[];
     for(let i=0;i<=Math.ceil(f.length/data.lighting.edgeSpacing);i++)for(const side of [-1,1]){
       const u=f.length*i/Math.ceil(f.length/data.lighting.edgeSpacing),w=side*(data.runway.width/2+1.5);
