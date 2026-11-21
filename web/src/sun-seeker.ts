@@ -6,7 +6,7 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { ephemeris, halifaxTime, localDate, localTime, localZone, validStudyDate, validTime, type SunEvent } from './light-study';
 import { directionFromAngles, sunAngles } from './sun';
-import { hillElevation, hillSunEvents, sampleHillLine, sunArc, type HillLine } from './sun-seeker-rules';
+import { apparentUpperLimb, HILL_RANGE, hillElevation, hillSunEvents, sampleHillLine, sunArc, trueEyeHeight, type GroundRay, type HillLine } from './sun-seeker-rules';
 import './sun-seeker.css';
 
 const RADIUS = 180;
@@ -15,7 +15,7 @@ const HILLS = '#f3f5f6';
 const INK = '#25313f';
 const SEASONS = [
   { date: '12-21', name: 'Winter solstice', color: '#a2dbff', labelAt: .38 },
-  { date: '03-20', name: 'Spring equinox', color: '#aaf4d1', labelAt: .50 },
+  { date: '03-20', name: 'Equinox', color: '#aaf4d1', labelAt: .50 },
   { date: '06-21', name: 'Summer solstice', color: '#ffb5ce', labelAt: .53 },
 ];
 const anglesAt = (az: number, el: number) => directionFromAngles(az, el).multiplyScalar(RADIUS);
@@ -33,7 +33,10 @@ interface SunSeekerOptions {
   eye: THREE.Vector3;
   lat: number;
   lon: number;
-  height(x: number, z: number): number | null;
+  groundAtEye: number;
+  seaLevel: number;
+  exag: number;
+  ground(range: number): Promise<GroundRay>;
   close(): void;
   savePicture?: () => void;
 }
@@ -58,21 +61,27 @@ export class SunSeeker {
   private readonly labels: HTMLElement;
   private readonly date: HTMLInputElement;
   private readonly time: HTMLInputElement;
+  private readonly slider: HTMLInputElement;
   private readonly status: HTMLElement;
   private readonly readings: HTMLElement;
   private readonly bearing: HTMLElement;
+  private readonly timesPanel: HTMLDetailsElement;
   private readonly oldCamera: { position: THREE.Vector3; rotation: THREE.Euler; fov: number };
   private readonly seasonLabels: Label[] = [];
   private readonly activeLabels: Label[] = [];
   private readonly scratch = new THREE.Vector3();
   private readonly today: string;
-  private hills: HillLine;
+  private hills: HillLine | null = null;
+  private groundStatus = 'Loading hill line';
+  private clockNote = '';
+  private validClock = true;
   private selected: SunViewLight;
   private pathDate = '';
   private year = '';
   private yaw = -Math.PI;
-  private pitch = .58;
+  private pitch = .38;
   private dirty = true;
+  private compact: boolean | undefined;
 
   constructor(private readonly options: SunSeekerOptions) {
     const { camera, eye, lat, lon } = options;
@@ -89,16 +98,18 @@ export class SunSeeker {
         <div class="sunHead"><h2 id="sunTitle">Sun Seeker</h2><span class="sunBearing" aria-hidden="true"></span><button type="button" autofocus>Back to pause</button></div>
         <div class="sunFields">
           <label><span>Date</span><input aria-label="Sun date" type="date" min="1880-01-01" max="2200-12-31" required></label>
-          <label><span>Halifax time</span><input aria-label="Sun time" type="time" lang="en-GB" step="60" required></label>
+          <label><span>Halifax time · 24-hour</span><input aria-label="Sun time" type="text" maxlength="5" placeholder="HH:mm" autocomplete="off" required></label>
         </div>
+        <input aria-label="Adjust sun time" type="range" min="0" max="1439" step="1">
         <div class="sunActions">
           <button type="button" class="sunFace">Face sun</button>
           <button type="button" class="sunSave">Save picture</button>
-          <small>Drag or use arrows</small>
+          <small>Drag<span class="sunArrowHint"> or use arrows</span></small>
         </div>
         <p role="status"></p>
       </section>
-      <section class="sunPanel sunReadings" aria-label="Sun events and hill line">
+      <details class="sunPanel sunReadings" aria-label="Sun events and hill line">
+        <summary class="sunSummary"></summary>
         <ul class="sunLegend">
           ${SEASONS.map(({ name, color }) => `<li style="--path:${color}"><i></i>${name}</li>`).join('')}
           <li style="--path:${SELECTED}"><i></i><span class="sunDayName"></span></li>
@@ -108,19 +119,21 @@ export class SunSeeker {
           <thead><tr><th scope="col">Halifax</th><th scope="col">Flat horizon</th><th scope="col">Over hills</th></tr></thead>
           <tbody></tbody>
         </table>
-        <small>Bare ground within 6 km at the current hill scale. Far land has no trees.</small>
-      </section>`;
+        <p class="sunNoon"></p>
+        <small>Bare ground within 6 km (no trees or buildings). Times use real heights.</small>
+      </details>`;
     this.labels = this.root.querySelector('.sunLabels')!;
     this.date = this.root.querySelector('[type=date]')!;
-    this.time = this.root.querySelector('[type=time]')!;
+    this.time = this.root.querySelector('[aria-label="Sun time"]')!;
+    this.slider = this.root.querySelector('[type=range]')!;
     this.status = this.root.querySelector('[role=status]')!;
     this.readings = this.root.querySelector('tbody')!;
     this.bearing = this.root.querySelector('.sunBearing')!;
+    this.timesPanel = this.root.querySelector('.sunReadings')!;
 
     this.date.value = today;
     this.time.value = localTime(now);
-    this.hills = sampleHillLine(eye, options.height);
-    this.buildHorizon();
+    this.syncSlider();
     this.updateDay();
     this.updateMarker();
 
@@ -138,6 +151,22 @@ export class SunSeeker {
     this.bindControls();
     document.body.append(this.root);
     this.root.showModal();
+    void options.ground(HILL_RANGE).then(rays => {
+      if (!this.root.open) return;
+      const { eye, groundAtEye, seaLevel, exag } = options;
+      const eyeHeight = trueEyeHeight(eye.y, groundAtEye, exag, seaLevel);
+      this.hills = sampleHillLine({ x: eye.x, y: eyeHeight, z: eye.z }, seaLevel, rays);
+      this.groundStatus = '';
+      this.buildHorizon(sampleHillLine(eye, seaLevel, rays, exag));
+      this.updateDay();
+      this.updateMarker();
+      this.invalidate();
+    }, error => {
+      if (!this.root.open) return;
+      this.groundStatus = 'Hill line unavailable';
+      this.updateMarker();
+      console.warn('Sun Seeker ground survey failed.', error);
+    });
   }
 
   private bindControls(): void {
@@ -152,24 +181,31 @@ export class SunSeeker {
     });
     // Save-picture integration: call the shared frame exporter with this view's draw callback.
     const save = this.root.querySelector<HTMLButtonElement>('.sunSave')!;
-    save.disabled = !savePicture;
-    save.title = savePicture ? '' : 'Picture saving is pending';
-    save.addEventListener('click', () => this.savePicture());
+    save.hidden = !savePicture;
+    if (savePicture) save.addEventListener('click', savePicture);
 
     const change = () => {
-      if (!validStudyDate(this.date.value) || !validTime(this.time.value)) {
-        this.status.textContent = 'Choose a date from 1880–2200 and a valid time.';
-        return;
+      this.validClock = validStudyDate(this.date.value) && validTime(this.time.value);
+      if (this.validClock) {
+        const { when, adjustment } = halifaxTime(this.date.value, this.time.value);
+        const { lat, lon } = this.options;
+        this.selected = { when, sun: sunAngles(when, lat, lon), lat, lon };
+        this.clockNote = adjustment === 'gap' ? 'Clock moved forward' : adjustment === 'fold' ? 'First occurrence' : '';
+        this.syncSlider();
+        if (this.date.value !== this.pathDate) this.updateDay();
+        this.invalidate();
       }
-      const { when, adjustment } = halifaxTime(this.date.value, this.time.value);
-      const { lat, lon } = this.options;
-      this.selected = { when, sun: sunAngles(when, lat, lon), lat, lon };
-      if (this.date.value !== this.pathDate) this.updateDay();
-      this.updateMarker(adjustment === 'gap' ? ' · Clock moved forward' : adjustment === 'fold' ? ' · First occurrence' : '');
-      this.invalidate();
+      this.updateMarker();
     };
     this.date.addEventListener('change', change);
+    this.time.addEventListener('input', change);
     this.time.addEventListener('change', change);
+    this.slider.addEventListener('input', () => {
+      const minutes = +this.slider.value;
+      this.time.value = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+      change();
+    });
+    this.timesPanel.addEventListener('toggle', () => this.invalidate());
 
     const look = this.root.querySelector<HTMLElement>('.sunLook')!;
     let pointer: { id: number; x: number; y: number } | null = null;
@@ -187,11 +223,14 @@ export class SunSeeker {
       pointer.y = event.clientY;
       this.aim();
     });
-    look.addEventListener('lostpointercapture', () => { pointer = null; });
+    const clearPointer = (event: PointerEvent) => { if (pointer?.id === event.pointerId) pointer = null; };
+    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) look.addEventListener(event, clearPointer);
   }
 
-  private savePicture(): void {
-    this.options.savePicture?.();
+  private syncSlider(): void {
+    const [hours, minutes] = this.time.value.split(':').map(Number);
+    this.slider.value = String(hours * 60 + minutes);
+    this.slider.setAttribute('aria-valuetext', this.time.value);
   }
 
   key(event: KeyboardEvent): void {
@@ -213,6 +252,11 @@ export class SunSeeker {
   lookSize(): void {
     this.options.camera.fov = this.options.camera.aspect < .85 ? 110 : 76;
     this.options.camera.updateProjectionMatrix();
+    const compact = matchMedia('(max-width: 760px), (max-height: 500px) and (pointer: coarse)').matches;
+    if (this.timesPanel.classList.toggle('compact', compact) !== this.compact) {
+      this.compact = compact;
+      this.timesPanel.open = !compact;
+    }
     this.aim();
   }
 
@@ -226,14 +270,6 @@ export class SunSeeker {
   }
 
   invalidate(): void { this.dirty = true; }
-
-  refreshGround(): void {
-    this.hills = sampleHillLine(this.options.eye, this.options.height);
-    this.buildHorizon();
-    this.updateDay();
-    this.updateMarker();
-    this.invalidate();
-  }
 
   /** Coalesce pointer moves, input changes and resize events into one paint. */
   takeDraw(): SunViewLight | null {
@@ -256,7 +292,7 @@ export class SunSeeker {
   private projectLabels(): void {
     const { camera } = this.options, width = this.root.clientWidth, height = this.root.clientHeight;
     const taken: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>[] = [...this.root.querySelectorAll('.sunPanel, .sunBearing')].map(el => el.getBoundingClientRect());
-    for (const { element, position, width: labelWidth } of [...this.seasonLabels, ...this.activeLabels]) {
+    for (const { element, position, width: labelWidth } of [...this.activeLabels, ...this.seasonLabels]) {
       const p = this.scratch.copy(position).applyMatrix4(camera.matrixWorldInverse);
       if (p.z >= 0) { element.hidden = true; continue; }
       p.applyMatrix4(camera.projectionMatrix);
@@ -292,11 +328,11 @@ export class SunSeeker {
     }
   }
 
-  private buildHorizon(): void {
+  private buildHorizon(line: HillLine): void {
     this.clear(this.horizon);
     const band: number[] = [], outline: number[] = [];
-    for (let i = 0; i < this.hills.length; i++) {
-      const j = (i + 1) % this.hills.length, a = this.hills[i], b = this.hills[j];
+    for (let i = 0; i < line.length; i++) {
+      const j = (i + 1) % line.length, a = line[i], b = line[j];
       if (a === null || b === null) continue;
       for (const [points, half] of [[band, .15], [outline, .28]] as const) {
         const topA = anglesAt(i, a + half), topB = anglesAt(j, b + half), lowA = anglesAt(i, a - half), lowB = anglesAt(j, b - half);
@@ -313,7 +349,7 @@ export class SunSeeker {
   }
 
   private updateDay(): void {
-    const { lat, lon } = this.options, date = this.date.value;
+    const { lat, lon } = this.options, date = validStudyDate(this.date.value) && this.validClock ? this.date.value : this.pathDate;
     this.pathDate = date;
     const year = date.slice(0, 4);
     if (year !== this.year) {
@@ -327,13 +363,12 @@ export class SunSeeker {
       }
     }
     this.clear(this.activePath, this.activeLabels);
-    const day = ephemeris(date, lat, lon), hills = hillSunEvents(date, lat, lon, this.hills);
+    const day = ephemeris(date, lat, lon), hills = this.hills ? hillSunEvents(date, lat, lon, this.hills) : {};
     const arc = sunArc(date, lat, lon, hills.sunrise?.when, hills.sunset?.when);
     this.line(this.activePath, arc.flatMap(p => anglesAt(p.az, p.el).toArray()), SELECTED, 3.2, 29);
     const name = date === this.today ? 'Today' : 'Selected day';
     this.root.querySelector('.sunDayName')!.textContent = name;
     const label = arc[Math.floor(.60 * (arc.length - 1))];
-    this.label(this.activeLabels, name, SELECTED, label.az, label.el + 1.6);
 
     const ticks: number[] = [];
     for (let hour = 0; hour < 24; hour++) {
@@ -343,6 +378,7 @@ export class SunSeeker {
       ticks.push(...anglesAt(az, el - .56).toArray(), ...anglesAt(az, el + .56).toArray());
       this.label(this.activeLabels, time, SELECTED, az, el - 1.8, true);
     }
+    this.label(this.activeLabels, name, SELECTED, label.az, label.el + 1.6);
     if (ticks.length) {
       const marks = new LineSegments2(new LineSegmentsGeometry().setPositions(ticks),
         new LineMaterial({ color: SELECTED, linewidth: 2, depthTest: false, depthWrite: false, toneMapped: false, transparent: true }));
@@ -351,18 +387,24 @@ export class SunSeeker {
     }
     this.readings.innerHTML = `
       <tr><th scope="row">Sunrise</th><td>${eventTime(day.sunrise)}</td><td>${eventTime(hills.sunrise)}</td></tr>
-      <tr><th scope="row">Solar noon</th><td colspan="2">${eventTime(day.highest)} · ${day.highest.el.toFixed(1)}°</td></tr>
       <tr><th scope="row">Sunset</th><td>${eventTime(day.sunset)}</td><td>${eventTime(hills.sunset)}</td></tr>`;
+    this.root.querySelector('.sunNoon')!.textContent = `Solar noon ${eventTime(day.highest)} · ${day.highest.el.toFixed(1)}°`;
+    const summary = this.root.querySelector('.sunSummary')!;
+    summary.textContent = `Rise ${eventTime(hills.sunrise)} · Noon ${eventTime(day.highest)} · Set ${eventTime(hills.sunset)}`;
+    summary.setAttribute('aria-label', `Sunrise over hills ${eventTime(hills.sunrise)}, solar noon ${eventTime(day.highest)}, sunset over hills ${eventTime(hills.sunset)}`);
   }
 
-  private updateMarker(note = ''): void {
+  private updateMarker(): void {
     const { sun, when } = this.selected;
     this.marker.position.copy(anglesAt(sun.az, sun.el));
-    const hill = hillElevation(this.hills, sun.az);
-    const hidden = hill !== null && sun.el < hill;
+    const hill = this.hills && hillElevation(this.hills, sun.az);
+    const hidden = hill !== null && apparentUpperLimb(sun.el) < hill;
     this.disc.visible = !hidden;
     this.rim.visible = hidden;
-    this.status.textContent = `${localTime(when)} ${localZone(when)} · ${Math.round(sun.az)}° az · ${sun.el.toFixed(1)}° high${hidden ? ' · Below hill line' : ''}${note}`;
+    this.status.textContent = this.validClock
+      ? [`${localTime(when)} ${localZone(when)} · ${Math.round(sun.az)}° az · ${sun.el.toFixed(1)}° high`,
+        hidden ? 'Below hill line' : '', this.clockNote, this.groundStatus].filter(Boolean).join(' · ')
+      : 'Choose a date from 1880–2200 and a time from 00:00 to 23:59.';
   }
 
   private clear(group: THREE.Group, labels: Label[] = []): void {

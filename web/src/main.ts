@@ -1640,10 +1640,9 @@ sunButton.addEventListener('click', async () => {
     const position = utm20ToLatLon(eye.x + VE, VN - eye.z);
     sunSeeker = new SunSeeker({
       camera, eye, ...position,
-      height: (x, z) => {
-        const ground = terrain.bareHeightAt(x, z);
-        return ground === null ? null : Math.max(SEA_LEVEL, ground);
-      },
+      groundAtEye: terrain.bareHeightAt(eye.x, eye.z) ?? SEA_LEVEL,
+      seaLevel: SEA_LEVEL, exag: EXAG,
+      ground: range => terrain.bareGroundRays(eye.x, eye.z, range),
       close: closeSunSeeker,
     });
     sunViewLoading = false;
@@ -1987,6 +1986,12 @@ function closeSunSeeker(): void {
   sunViewShadows = null;
   sky.position.copy(camera.position);
   updateWorld('ending', 0);
+  if (sunShadows?.enabled) {
+    let reach = 0;
+    if (mode === 'drive') shadowFocus.set(vehicle.x, vehicle.y, vehicle.z);
+    else reach = lookFocus(camera, terrain, SEA_LEVEL, shadowFocus);
+    sunShadows.update(0, shadowFocus, reach, true);
+  }
   syncPauseUI();
   if (!pauseScreen.hidden) sunButton.focus();
 }
@@ -2001,8 +2006,11 @@ function previewSunViewLight(light: SunViewLight): void {
     ground: skyFill.groundColor.clone(), fill: skyFill.intensity, material: sky.material,
     shadows: sunShadows?.enabled, haze: shared.fogDensity.value, sunPosition: sunLight.position.clone(),
     air: [su.turbidity.value, su.rayleigh.value, su.mieCoefficient.value, su.mieDirectionalG.value] as const,
+    clouds: finish?.skip.clouds,
   };
   const { sun: angles } = light, palette = nightPalette(angles.el, true);
+  if (finish && palette) finish.skip.clouds = true;
+  night?.setDayPreview(!palette);
   if (!palette && nightLook && !LOW && params.get('shadows') !== '0') {
     sunViewShadows ??= new SunShadows(renderer, scene, sunLight, sunDir, params.get('shadows') === '1', false);
     terrain.setPreviewShadows(sunViewShadows.enabled ? sunViewShadows.uniforms : null);
@@ -2042,25 +2050,29 @@ function previewSunViewLight(light: SunViewLight): void {
     su.sunPosition.value.copy(sunDir);
     [su.turbidity.value, su.rayleigh.value, su.mieCoefficient.value, su.mieDirectionalG.value] = original.air;
     sunLight.position.copy(original.sunPosition);
+    if (finish) finish.skip.clouds = !!original.clouds;
+    night?.setDayPreview(false);
     if (sunViewShadows && sunViewShadows.enabled !== previewShadowsEnabled) sunViewShadows.enabled = !!previewShadowsEnabled;
     if (sunShadows && sunShadows.enabled !== original.shadows) sunShadows.enabled = !!original.shadows;
     sunShadows?.refreshDirection();
-    if (sunShadows) sunShadows.update(0, shadowFocus.set(vehicle.x, vehicle.y, vehicle.z), 0, true);
   };
 }
 
 function drawSunSeeker(view: SunSeeker, now: number): void {
   if (document.hidden) return;
   // When a turn brings in new tiles, finish their builds and redraw after they settle.
-  if (sunViewLoading || sunViewFarLand !== farLand) {
+  if (sunViewLoading) {
     camera.updateMatrixWorld();
     updateWorld('ending', 0);
     if (!terrain.pending && !trees?.pending) {
       sunViewLoading = false;
-      sunViewFarLand = farLand;
       (sunShadows ?? sunViewShadows)?.refreshDirection();
-      view.refreshGround();
+      view.invalidate();
     }
+  }
+  if (sunViewFarLand !== farLand) {
+    sunViewFarLand = farLand;
+    view.invalidate();
   }
   const light = view.takeDraw();
   if (!light) return;

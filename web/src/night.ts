@@ -285,6 +285,7 @@ export class Night {
   private placeWait = 0;
   private readonly lampLights: THREE.PointLight[] = [];
   private readonly townLamps: number;
+  private dayPreview = false;
 
   constructor(private readonly shading: NightShading, private readonly parts: NightParts) {
     const { palette, low } = shading;
@@ -420,6 +421,15 @@ export class Night {
   private readonly yardMatrix = new THREE.Matrix4();
   private readonly yardTurn = new THREE.Euler();
   private readonly glowSize = new THREE.Vector2();
+
+  setDayPreview(day: boolean): void {
+    if (this.dayPreview === day) return;
+    this.dayPreview = day;
+    this.glow.visible = !day;
+    if (this.yardHeads) (this.yardHeads.material as THREE.MeshLambertMaterial).emissiveIntensity = day ? 0 : 1.6;
+    (this.shading.uniforms.nightLamp.value as THREE.Vector4).w = day ? 0 : this.beams.length;
+  }
+
   /** Before every render: the land's copy of the beams follows the car, and the nearest lamps light their pools. */
   update(renderer: THREE.WebGLRenderer, camera: THREE.Camera): void {
     this.cleanBeams();
@@ -454,12 +464,12 @@ export class Night {
     const ready = this.ready;
     nearestLamps(ready, at.x, at.z, pools.length, LAMP_REACH, this.near, this.nearDistance);
     for (let i = 0; i < pools.length; i++) {
-      const lamp = i < this.near.length ? ready[this.near[i]] : null;
+      const lamp = !this.dayPreview && i < this.near.length ? ready[this.near[i]] : null;
       if (lamp) { pools[i].set(lamp.x, lamp.y!, lamp.z, lamp.power); colours[i].set(...lamp.colour); }
       else pools[i].w = 0;
     }
     for (let i = 0; i < this.lampLights.length; i++) {
-      const light = this.lampLights[i], lamp = i < this.near.length ? ready[this.near[i]] : null;
+      const light = this.lampLights[i], lamp = !this.dayPreview && i < this.near.length ? ready[this.near[i]] : null;
       // three.js divides a diffuse surface's light by π; the land's own term does not.
       // The scene's matrices were updated before this hook, so the moved light updates its own.
       if (lamp) { light.position.set(lamp.x, lamp.y! - .3, lamp.z); light.updateMatrixWorld(); light.color.setRGB(...lamp.colour); light.intensity = lamp.power * Math.PI; }

@@ -25,6 +25,7 @@ body:has(#sunSeeker[open]) > :not(#c, #credit, #sunSeeker) { visibility: hidden;
 .sunReadings { right: max(12px, env(safe-area-inset-right)); bottom: calc(26px + env(safe-area-inset-bottom)); }
 .sunHead, .sunFields, .sunActions { display: flex; align-items: center; gap: 7px; }
 .sunHead { justify-content: space-between; }
+.sunHead, .sunActions { flex-wrap: wrap; }
 .sunHead h2 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -.02em; }
 .sunFields { margin-block: 8px 7px; }
 .sunFields label { min-width: 0; flex: 1; }
@@ -37,8 +38,14 @@ body:has(#sunSeeker[open]) > :not(#c, #credit, #sunSeeker) { visibility: hidden;
 #sunSeeker button:disabled { opacity: .55; cursor: default; }
 #sunSeeker button:focus-visible, #sunSeeker input:focus-visible { outline: 2px solid #ffd381; outline-offset: 2px; }
 #sunSeeker input { display: block; width: 100%; font-size: 16px; }
+#sunSeeker input[type=range] { min-height: 28px; margin: 0 0 5px; padding: 0; accent-color: #ffd477; }
 .sunClock p { margin: 7px 0 0; }
 .sunReadings small, .sunClock small { color: #c9d4de; }
+.sunNoon { margin: 7px 0 3px; }
+.sunSummary { display: none; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sunReadings.compact:not([open]) { padding-block: 0; }
+.sunReadings.compact .sunSummary { display: list-item; line-height: 44px; }
+.sunReadings.compact[open] .sunSummary { margin-bottom: 6px; }
 .sunReadings table { border-collapse: collapse; width: 100%; margin: 4px 0; }
 .sunReadings th, .sunReadings td { padding: 3px 2px; text-align: right; white-space: nowrap; }
 .sunReadings th[scope=row] { text-align: left; font-weight: 500; }
@@ -55,12 +62,17 @@ body:has(#sunSeeker[open]) > :not(#c, #credit, #sunSeeker) { visibility: hidden;
   .sunClock { width: auto; right: max(12px, env(safe-area-inset-right)); }
   .sunReadings { width: auto; left: max(12px, env(safe-area-inset-left)); }
   #sunSeeker button, #sunSeeker input { min-height: 44px; }
+  #sunSeeker input[type=range] { min-height: 36px; }
   .sunBearing { position: static; transform: none; padding: 4px; }
+}
+@media (pointer: coarse) {
+  .sunArrowHint { display: none; }
 }
 @media (max-height: 500px) and (orientation: landscape) {
   .sunPanel { width: min(290px, 36%); padding: 8px; }
   .sunClock { right: auto; }
   .sunReadings { left: auto; }
+  .sunReadings.compact { width: max-content; max-width: calc(100% - 24px); }
   .sunFields { flex-wrap: wrap; }
   .sunFields label { flex-basis: 110px; }
 }

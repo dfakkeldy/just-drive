@@ -23,16 +23,18 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
   const key = async (code, key, type = 'keyDown') => c.send('Input.dispatchKeyEvent', { type, code, key });
   const tapKey = async (code, value) => { await key(code, value); await key(code, value, 'keyUp'); };
   const click = selector => read(`document.querySelector(${JSON.stringify(selector)}).click()`);
-  const setTime = async (date, time) => {
+  const setTime = async (date, time, shown = time) => {
     await read(`(() => {
-      const a = document.querySelector('#sunSeeker [type=date]'), b = document.querySelector('#sunSeeker [type=time]');
+      const a = document.querySelector('#sunSeeker [type=date]'), b = document.querySelector('#sunSeeker [aria-label="Sun time"]');
       a.value = ${JSON.stringify(date)}; b.value = ${JSON.stringify(time)};
-      a.dispatchEvent(new Event('change', { bubbles: true }));
+      b.dispatchEvent(new Event('input', { bubbles: true }));
     })()`);
-    await wait(`document.querySelector('#sunSeeker [role=status]').textContent.startsWith('${time}')`);
+    await wait(`document.querySelector('#sunSeeker [role=status]').textContent.startsWith('${shown}')`);
   };
   const position = () => read('[mmm.vehicle.x, mmm.vehicle.y, mmm.vehicle.z, mmm.vehicle.speed]');
   const direction = () => read("mmm.scene.getObjectByName('near-sea').material.uniforms.sunDir.value.toArray()");
+  const table = () => read("document.querySelector('.sunReadings tbody').textContent");
+  const groundReady = () => wait("!!document.querySelector('.sunReadings tbody td:nth-child(3)') && !document.querySelector('#sunSeeker [role=status]').textContent.includes('Loading hill line')", 30_000);
   const shot = async file => {
     const s = await c.send('Page.captureScreenshot', { format: 'png' });
     writeFileSync(join(out, file + '.png'), Buffer.from(s.result.data, 'base64'));
@@ -41,7 +43,7 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     await c.send('Page.enable');
     await c.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: touch });
     if (touch) await c.send('Emulation.setTouchEmulationEnabled', { enabled: true });
-    const visit = `${base}/?test=1&mode=explore&vehicle=bike&road=Mabou%20Harbour%20Road&hud=1&radio=0&exag=1&shadows=1${touch ? '&touch=1&q=low' : '&q=high'}`;
+    const visit = `${base}/?test=1&mode=explore&vehicle=bike&road=Mabou%20Harbour%20Road&hud=1&radio=0&exag=1&shadows=1${touch ? '&touch=1&q=low' : '&q=high&finish=1&clouds=1'}`;
     await c.send('Page.navigate', { url: visit });
     await wait("document.title.startsWith('settled') && !!window.mmm?.vehicle", 120_000);
     if (touch) {
@@ -56,6 +58,9 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     if (touch) assert.ok(drivingView[1] > car[1] + 4, `drone above the car: ${drivingView[1]} vs ${car[1]}`);
     await click('#pauseSun');
     await wait("!!document.querySelector('#sunSeeker[open]')");
+    assert.match(await read("document.querySelector('.sunBearing').textContent"), /^S\s+180°$/);
+    assert.equal(await read("document.querySelector('.sunReadings').open"), !touch);
+    assert.ok(await read("document.querySelector('.sunSave').hidden"));
     const eye = await read('mmm.camera.position.toArray()');
     if (touch) assert.deepEqual(eye, drivingView, 'the survey begins at the drone camera');
     else assert.deepEqual(eye, [car[0], car[1] + 1.7, car[2]], 'the survey begins at player eye height');
@@ -63,12 +68,28 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     assert.match(before, /^\d{4}-\d{2}-\d{2}$/);
     assert.equal(await read("document.querySelector('.sunDayName').textContent"), 'Today');
     assert.equal(await read("document.querySelectorAll('.sunLabels .sunLabel:not(.hour)').length"), 4);
-    const layout = await read(`[...document.querySelectorAll('.sunPanel, #sunSeeker input, #sunSeeker button')].every(el => {
+    const layout = await read(`[...document.querySelectorAll('.sunPanel, #sunSeeker input, #sunSeeker button:not([hidden])')].every(el => {
       const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight;
     })`);
     assert.ok(layout, `${name}: controls stay in the viewport`);
 
-    await setTime('2026-11-21', '11:50');
+    if (touch) {
+      assert.equal(await read("getComputedStyle(document.querySelector('.sunArrowHint')).display"), 'none');
+      await click('.sunSummary');
+      assert.ok(await read("document.querySelector('.sunReadings').open"));
+      await click('.sunSummary');
+      assert.ok(!await read("document.querySelector('.sunReadings').open"));
+    }
+    await setTime('2026-03-08', '02:30', '03:30');
+    await groundReady();
+    assert.match(await read("document.querySelector('#sunSeeker [role=status]').textContent"), /Clock moved forward/);
+    await setTime('2026-11-21', '11:30');
+    await read(`(() => {
+      const slider = document.querySelector('#sunSeeker [type=range]');
+      slider.value = String(11 * 60 + 50);
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    assert.equal(await read("document.querySelector('[aria-label=\"Sun time\"]').value"), '11:50');
     await wait("mmm.scene.getObjectByName('near-sea').material.uniforms.sunDir.value.y > 0.39");
     const noon = await direction();
     if (!touch) {
@@ -79,9 +100,10 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
       assert.ok(shadow.on, 'the sun casts the selected daylight shadows');
       assert.ok(shadow.direction.every((n, i) => Math.abs(n - noon[i]) < .000001), 'the shadow light follows the sky direction');
     }
-    const noonText = await read("document.querySelector('.sunReadings tbody').textContent");
-    assert.match(noonText, /Solar noon\s*11:5\d/);
+    const noonText = await table();
+    assert.match(await read("document.querySelector('.sunNoon').textContent"), /Solar noon\s*11:5\d/);
     assert.match(noonText, /Sunrise\s*\d{2}:\d\d\s*\d{2}:\d\d/);
+    if (touch) await shot('phone-collapsed');
     const turn = () => read('mmm.camera.quaternion.toArray()');
     const facing = await turn();
     if (touch) {
@@ -94,12 +116,13 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     assert.deepEqual(await position(), car, 'the car does not move');
 
     await click('.sunFace');
-    for (let i = 0; i < (touch ? 2 : 3); i++) await tapKey('ArrowUp', 'ArrowUp');
+    await tapKey('ArrowUp', 'ArrowUp');
     await sleep(1200);
     const frame = await read('mmm.renderer.info.render.frame');
     await sleep(400);
     assert.equal(await read('mmm.renderer.info.render.frame'), frame, 'the still scene does not render when idle');
-    await shot(name + '-noon');
+    assert.equal(await table(), noonText, 'panning leaves the surveyed times fixed');
+    if (!touch) await shot('desktop-noon');
 
     if (!touch) {
       await setTime('2026-06-21', '05:20');
@@ -112,12 +135,14 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
       await setTime('2026-06-21', '00:00');
       await wait("mmm.scene.children.some(o => o.material?.name === 'night sky')");
       assert.equal(await read('mmm.scene.children.find(o => o.isDirectionalLight).castShadow'), false, 'night has no sun shadows');
+      assert.equal(await read('mmm.finish.skip.clouds'), true, 'the night preview omits Finish cloud shadows');
     }
 
     await tapKey('Escape', 'Escape');
     await wait("!document.querySelector('#pauseScreen').hidden && !document.querySelector('#sunSeeker')");
     assert.deepEqual(await read('mmm.camera.position.toArray()'), drivingView, 'leaving restores the camera');
     assert.deepEqual(await direction(), originalSun, 'leaving restores the game light');
+    if (!touch) assert.equal(await read('mmm.finish.skip.clouds'), false, 'leaving restores the Finish cloud term');
     assert.deepEqual(await position(), car, 'leaving returns to the frozen car');
     await click('#pauseSettings');
     await wait("document.querySelector('#settings').classList.contains('open')");
@@ -136,9 +161,42 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
       await setTime('2026-06-21', '13:00');
       await wait(hasMap);
       await wait("mmm.terrain.group.children.some(o => o.visible && o.material?.uniforms?.shadowOn?.value === 1)");
+      assert.equal(await read("mmm.scene.getObjectByName('night lamp glow').visible"), false);
+      assert.ok(await read(`mmm.terrain.group.children.filter(o => o.visible).every(o =>
+        o.material.uniforms.nightLamp.value.w === 0 && o.material.uniforms.nightPool.value.every(pool => pool.w === 0))`));
       await tapKey('Escape', 'Escape');
       await wait("!document.querySelector('#sunSeeker')");
       assert.equal(await read(hasMap), false, 'the preview releases its shadow map when it closes');
+      assert.equal(await read("mmm.scene.getObjectByName('night lamp glow').visible"), true);
+
+      const measurements = [];
+      for (const exag of [1, 1.5]) {
+        // 45.867 N, 61.315 W in UTM 20, with the free camera 1.7 m above ground.
+        const church = new URL(visit);
+        church.searchParams.set('exag', exag);
+        church.searchParams.set('camground', '1');
+        church.searchParams.set('cam', '630785.16,5080650.92,1.7,180,-10,51');
+        await c.send('Page.navigate', { url: church.href });
+        await wait("document.title.startsWith('settled') && !!window.mmm?.vehicle", 120_000);
+        const shadowTarget = () => read('mmm.scene.children.find(o => o.isDirectionalLight).target.position.toArray()');
+        const before = await shadowTarget();
+        await tapKey('KeyP', 'p');
+        await click('#pauseSun');
+        await wait("!!document.querySelector('#sunSeeker[open]')");
+        await setTime('2026-11-21', '11:50');
+        await groundReady();
+        measurements.push((await table()).trim().replace(/\s+/g, ' ') + ' / ' + await read("document.querySelector('.sunNoon').textContent"));
+        await tapKey('Escape', 'Escape');
+        const after = await shadowTarget();
+        assert.ok(Math.hypot(...after.map((value, i) => value - before[i])) < 2, 'closing restores the free camera shadow target');
+        console.log(`Church, EXAG ${exag}: ${measurements.at(-1)}`);
+      }
+      assert.equal(measurements[0], measurements[1], 'church table is invariant across hill scales');
+      writeFileSync(join(out, 'church-times.json'), JSON.stringify({
+        latitude: 45.867, longitude: -61.315, eyeAboveGround: 1.7,
+        date: '2026-11-21', zone: 'AST',
+        times: measurements.map((times, i) => ({ exag: [1, 1.5][i], times })),
+      }, null, 2) + '\n');
     }
     console.log(`PASS ${name}: pause and Settings, fixed eye, look input, date and lighting, idle render, close and Resume`);
   } finally {
