@@ -61,10 +61,10 @@ const S = T + 1;
 const MAX_LOADS = 6;
 const BURST_DISTANCE = 150;
 // The two budgets are wall-time caps: a paused or burst update builds tiles until it has used its budget (always at least
-// one). They were set as six and three builds of about 8 ms (p90 9-11 ms). Those builds were measured before the
-// normal-map change (#81) made a build cheaper, so more builds now fit in each cap. A driving capture of Nov 2026 (Apple
-// M1 Pro) bounds a build from above: the whole terrain update, one build and the visit, peaked at 2.2-7.1 ms with
-// desktop detail and 5.9-10.4 ms with phone detail. The dev server keeps the last and the longest single build in
+// one). They were set as six and three builds of about 8 ms (p90 9-11 ms), measured before the normal-map change (#81)
+// made a build cheaper. In a driving capture of Nov 2026 (Apple M1 Pro), no whole terrain update (a build and the visit)
+// took longer than 7.1 ms with desktop detail or 10.4 ms with phone detail. With desktop detail that is below the old
+// 8 ms, so each cap now holds more builds there. The dev server keeps the last and the longest single build in
 // terrain.lastBuildMs and terrain.maxBuildMs.
 // Behind the title or while paused.
 const PAUSED_BUILD_BUDGET_MS = 48;
