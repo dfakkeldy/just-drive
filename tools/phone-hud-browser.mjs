@@ -12,8 +12,8 @@ const wanted=(process.env.SIZES??'').trim().split(/\s+/).filter(Boolean);
 const sizeKey=([w,h,safe])=>`${w}x${h}${safe?'-safe':''}`;
 for(const name of wanted)assert.ok(defaultSizes.some(s=>sizeKey(s)===name),'unknown phone size '+name);
 const sizes=defaultSizes.filter(s=>!wanted.length||wanted.includes(sizeKey(s)));
-const ids=['phoneLine','hud','shiftHud','stopHint','miniMap','relief','radio','photoTag','gear','tcReset','tcView','tcHorn','tcTrack','tcBrake','tcGo','tcPull','cameraButton','mailButton','placesButton','bikeJump'];
-const controls=['gear','tcReset','tcView','tcHorn','tcSteer','tcBrake','tcGo','tcPull','cameraButton','mailButton','miniMapHead','relief','radio','placesButton'];
+const ids=['phoneLine','hud','shiftHud','stopHint','miniMap','relief','radio','photoTag','gear','tcReset','tcView','tcHorn','tcTrack','tcBrake','tcGo','tcPull','cameraButton','mailButton','placesButton','bikeJump','savePictureButton'];
+const controls=['gear','tcReset','tcView','tcHorn','tcSteer','tcBrake','tcGo','tcPull','cameraButton','mailButton','miniMapHead','relief','radio','placesButton','savePictureButton'];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const overlaps=(a,b,epsilon=1)=>Math.min(a.right,b.right)>Math.max(a.left,b.left)+epsilon && Math.min(a.bottom,b.bottom)>Math.max(a.top,b.top)+epsilon;
 const evidence=[],failures=[];
@@ -39,6 +39,7 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
     for(const b of buttons){const minimum=b.id==='mailButton'?64:56;assert.ok(b.width>=minimum&&b.height>=minimum,`${b.id} too small`);}
     assert.deepEqual(await read(`(${JSON.stringify(buttons.map(b=>b.id))}).filter(id=>{const e=document.getElementById(id),b=e.getBoundingClientRect(),at=document.elementFromPoint((b.left+b.right)/2,(b.top+b.bottom)/2);return !(at===e||e.contains(at));})`),[],'control centres receive touches');
     if(name==='mail') {
+      assert.ok(!list.some(b=>b.id==='savePictureButton'),'mail keeps its own camera');
       const m=list.find(b=>b.id==='mailButton'), c=list.find(b=>b.id==='cameraButton'), go=list.find(b=>b.id==='tcGo');
       assert.ok(m&&c&&go,'MAIL, CAMERA and GO present'); assert.ok(m.width>=64&&m.height>=64&&c.width>=64&&c.height>=64);
       assert.ok(m.right>=width-safe.right-24&&m.bottom<=go.top&&go.top-m.bottom<=16,'MAIL directly above GO at right edge');
@@ -53,6 +54,7 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       assert.ok(!list.some(b=>b.id==='hud'||b.id==='shiftHud'),'old stacked status hidden');
     } else {
       assert.ok(!list.some(b=>b.id==='mailButton'||b.id==='cameraButton'||b.id==='shiftHud'||b.id==='relief'),'drive mode hides mail functions');
+      assert.ok(list.some(b=>b.id==='savePictureButton'),'drive mode has a save picture button');
       assert.ok(await read(`document.body.classList.contains('compactPhone')`),'shared compact free-drive grid');
       if(name.endsWith('bike')){assert.equal(await read(`document.body.classList.contains('bikeMode')`),true);assert.ok(list.some(b=>b.id==='tcPull'),'bike pull retained');}
     }

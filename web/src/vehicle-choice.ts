@@ -36,7 +36,7 @@ export function vehicleButtons(choice: VehicleChoice, id = 'vehicleChoice'): HTM
   }
   return group;
 }
-export const bikeHelp = '\nWASD/arrows: ride · Shift + throttle: wheelie · space: rear slide\nAir: W forward / S back · A/D whip · H: horn · T: radio · R: road · V: eyes · F: drone · L: places · M: map';
+export const bikeHelp = '\nWASD/arrows: ride · Shift + throttle: wheelie · space: rear slide\nAir: W forward / S back · A/D whip · H: horn · T: radio · R: road · V: eyes · F: drone · L: places · M: map · O: save picture';
 const PAUSE_KEY: [string, string] = ['Esc / P', 'Pause or resume. Room games do not pause.'];
 const PAUSE_TOUCH: [string, string] = ['PAUSE', 'Pause or resume. Room games do not pause.'];
 export function bikeKeys(touch: boolean): [string, string][] {
@@ -54,7 +54,7 @@ export function bikeKeys(touch: boolean): [string, string][] {
   ];
 }
 
-export const horseHelp = '\nWASD/arrows: ride · space: stop\nH: whinny · R: road · V: rider’s eye · F: drone · L: places';
+export const horseHelp = '\nWASD/arrows: ride · space: stop\nH: whinny · R: road · V: rider’s eye · F: drone · L: places · O: save picture';
 export function horseKeys(touch: boolean, mail = false): [string, string][] {
   if (mail) return touch ? [
     PAUSE_TOUCH,

@@ -14,6 +14,57 @@ const mailBaseline = {"hash":"80ae3b403ba84a165e6735231c15bc9190cc97eb3f048274cd
 const results = [], ownedTabs = [];
 process.on('uncaughtException', async error => { console.error(error.stack); for(const tab of ownedTabs){try{await fetch(`http://127.0.0.1:${port}/json/close/${tab.id}`);tab.ws?.close();}catch{}}process.exit(1); });
 function check(value, name) { results.push({name,pass:!!value}); console.log(`${value?'PASS':'FAIL'} ${name}`); if(process.env.EXPLORE_PROBE===name)throw new Error((value?'MUTATION MISSED: ':'MUTATION DETECTED: ')+name); }
+
+function watchPictures() {
+ const {renderer, camera, drone, vehicle} = window.mmm;
+ const canvas = renderer.domElement;
+ const {render} = renderer, {toBlob} = canvas, {click} = HTMLAnchorElement.prototype;
+ let draw, capture;
+ window.pictures = [];
+ renderer.render = function (scene, view) {
+  if (view === camera) draw = {drone: drone.group.visible, car: vehicle.car.root.visible};
+  return render.call(this, scene, view);
+ };
+ canvas.toBlob = function (...args) {
+  capture = {draw, drone: drone.group.visible};
+  return toBlob.apply(this, args);
+ };
+ async function inspect(blob, filename, delivery) {
+  const atRead = capture, bitmap = await createImageBitmap(blob);
+  const sample = document.createElement('canvas'); sample.width = sample.height = 8;
+  const ctx = sample.getContext('2d'); ctx.drawImage(bitmap, 0, 0, 8, 8);
+  const rgba = ctx.getImageData(0, 0, 8, 8).data;
+  const colors = new Set();
+  for (let i = 0; i < rgba.length; i += 4) colors.add(rgba.slice(i, i + 4).join(','));
+  const valid = blob.type === 'image/png' && blob.size > 0 && bitmap.width === canvas.width && bitmap.height === canvas.height && colors.size > 1;
+  bitmap.close();
+  window.pictures.push({valid, filename, delivery, atRead, restored: drone.group.visible});
+ }
+ HTMLAnchorElement.prototype.click = function () {
+  if (this.download?.endsWith('.png')) {
+   const {download, href} = this;
+   void fetch(href).then(res => res.blob()).then(blob => inspect(blob, download, 'download'));
+  } else click.call(this);
+ };
+ Object.defineProperties(navigator, {
+  canShare: {value: ({files}) => window.pictureShare === true && files.length === 1 && files[0].type === 'image/png'},
+  share: {value: ({files}) => inspect(files[0], files[0].name, 'share')},
+ });
+ window.picturePreservesBuffer = renderer.getContext().getContextAttributes().preserveDrawingBuffer;
+}
+
+async function picture(p, index, delivery, flying) {
+ for (let attempt = 0; attempt < 40 && !await p.read(`pictures.length > ${index}`); attempt++) await sleep(125);
+ const result = await p.read(`pictures[${index}]`);
+ const title = `${flying ? 'drone' : 'drive'} ${delivery}`;
+ check(result?.valid && /^just-drive-mabou-\d{4}-\d\d-\d\d-\d{4}\.png$/.test(result.filename) && result.delivery === delivery,
+  `${title} delivers a non-blank PNG with an area filename`);
+ check(result?.atRead?.draw?.drone === false && result.atRead.drone === false && result.restored === flying &&
+  await p.read(`!picturePreservesBuffer && mmm.drone.group.visible === ${flying}`),
+  `${title} hides the drone at draw and read, then restores it`);
+ if (!flying) check(result?.atRead?.draw?.car, `${title} leaves the car in the picture`);
+}
+
 async function page(query, width=1600, height=1000, init='') {
  const tab=await(await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
  const ws=new WebSocket(tab.webSocketDebuggerUrl);ownedTabs.push({id:tab.id,ws});await new Promise((res,rej)=>{ws.onopen=res;ws.onerror=rej;});
@@ -79,6 +130,14 @@ if(family==='all'||family==='explore'){
  const state=`JSON.stringify([mmm.shift.elapsed,mmm.shift.ended,mmm.shift.damage.total,mmm.shift.evidence.photos.length,mmm.shift.complaints.all.length,mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.heading])`;
  const before=await p.read(state);for(const key of ['KeyE','KeyC','KeyB','KeyG','Enter'])await p.tap(key);await sleep(1500);
  check(await p.read(state)===before,'mail keys do nothing and explore clock stays zero');
+ check(await p.read(`document.getElementById('hud').textContent.includes('O: save picture')`),'drive HUD explains O');
+ await p.read(`(${watchPictures})()`);
+ await p.tap('KeyO'); await picture(p, 0, 'download', false);
+ await p.tap('KeyF'); await sleep(300);
+ check(await p.read(`mmm.drone.active && mmm.drone.group.visible && document.getElementById('hud').textContent.includes('O: save picture')`),'drone is visible and HUD explains O before capture');
+ await p.tap('KeyO'); await picture(p, 1, 'download', true);
+ check(await p.read(`document.getElementById('savePictureStatus').textContent === 'Picture saved'`),'save feedback appears');
+ await p.tap('KeyF'); await sleep(300);
  await p.read(`mmm.shift.damage.hit('impact',30);mmm.shift.damage.drive(40,30,'washboard');mmm.shift.damage.seed('window,alignment');`);
  check(await p.read(`mmm.shift.damage.total===0&&!mmm.shift.damage.windowStuck&&!mmm.shift.damage.pulls&&!mmm.vehicle.damageActive`),'explore damage never accrues');
  await assertMailCar(p.read,'blender','explore');      // the lamp below is the Blender car's: a fallback car fails here
@@ -124,13 +183,20 @@ if(family==='all'||family==='phone'){
   if(w===390)await p.shot('08-phone-explore-title');
   await p.read(`document.getElementById('titleStart').click()`);await sleep(500);
   check((await p.read(`${JSON.stringify(missing)}.filter(${visible})`)).length===0,`phone ${w} has no mail controls`);
-  const boxes=await p.read(`['hud','gear','placesButton','miniMap','radio','placeArrival','tcTrack','tcBrake','tcGo','tcReset','tcView','tcHorn'].filter(${visible}).map(id=>{const r=document.getElementById(id).getBoundingClientRect();return [id,r.left,r.top,r.right,r.bottom]})`);
+  const boxes=await p.read(`['hud','gear','placesButton','miniMap','radio','placeArrival','tcTrack','tcBrake','tcGo','tcReset','tcView','tcHorn','savePictureButton'].filter(${visible}).map(id=>{const r=document.getElementById(id).getBoundingClientRect();return [id,r.left,r.top,r.right,r.bottom]})`);
   const faults=[];for(let i=0;i<boxes.length;i++){const[a,x,y,r,b]=boxes[i];if(x<0||y<0||r>w+1||b>h+1)faults.push(a+' offscreen');for(let j=i+1;j<boxes.length;j++){const[c,xx,yy,rr,bb]=boxes[j];if(Math.min(r,rr)-Math.max(x,xx)>1&&Math.min(b,bb)-Math.max(y,yy)>1)faults.push(a+' overlaps '+c);}}
   if(faults.length)console.log('Phone faults',faults.join(','));check(faults.length===0,`phone ${w} controls and arrival do not overlap`);
   check(['tcTrack','tcGo','tcBrake','placesButton'].every(id=>boxes.some(b=>b[0]===id)),`phone ${w} keeps driving and places controls`);
   if(w===844)await p.shot('07-phone-explore-drive');
   await p.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
   const hit=async selector=>{const r=await p.read(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);await p.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,...r}]});await p.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await sleep(350);};
+  await p.read(`(${watchPictures})()`);
+  await hit('#savePictureButton'); await picture(p, 0, 'download', false);
+  await hit('#droneButton');
+  check(await p.read(`mmm.drone.group.visible && (${visible})('savePictureButton')`),`phone ${w} save button stays visible in drone view`);
+  await p.read('window.pictureShare = true');
+  await hit('#savePictureButton'); await picture(p, 1, 'share', true);
+  await hit('#droneReturn'); await hit('#droneReturn');
   await hit('#placesButton');await hit('[data-place="rail-trail"]');
   check(await p.read(`document.getElementById('placesPanel').hidden&&mmm.vehicle.speed===0&&document.getElementById('placeArrival').innerText.includes('Mabou Rivers Trail')`),`phone ${w} real touch places jump`);
   check(p.errors.length===0,`phone ${w} no runtime exceptions`);await p.close();

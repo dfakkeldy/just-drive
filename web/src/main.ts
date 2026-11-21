@@ -38,6 +38,7 @@ import { detailSetting } from './detail';
 import { offlinePlay } from './offline-play';
 import { bindOfflineVersion } from './offline-version';
 import { pictureSetting } from './picture';
+import { savePicture } from './save-picture';
 import { EdgeSamples, Finish, type CloudLight } from './finish';
 import { FINISH, finishSetting } from './finish-choice';
 import { cloudReflections } from './finish-shaders';
@@ -1217,6 +1218,9 @@ const lawnDemo = lawnHouse ? new LawnDemo(lawnHouse, manifest.village, vehicle) 
 
 // ---- input --------------------------------------------------------------------------------
 const keys = new Set<string>();
+let pictureRequested = false, savingPicture = false;
+const canSavePicture = () => !mailMode && !page.stopped && !scenePaused() && !fleet?.busy && (mode === 'drive' || drone.active);
+const requestPicture = () => { if (canSavePicture() && !savingPicture) pictureRequested = true; };
 // Enter or Space on a control that has the focus (Tab, then the key) belongs to that control, not to the game.
 // The one exception is Space on the mail button, which throws mail by design.
 const ownedByControl = (ev: KeyboardEvent) => (ev.code === 'Enter' || ev.code === 'Space') && ev.target instanceof HTMLElement
@@ -1227,6 +1231,10 @@ addEventListener('keydown', (ev) => {
   if (!live() || typing(ev)) return;   // a modal or text field owns input
   if (fleet?.busy || fleet && ev.repeat && !keys.has(ev.code)) return;
   if (ownedByControl(ev)) return;
+  if (!mailMode && ev.code === 'KeyO' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+    if (!ev.repeat && canSavePicture()) { ev.preventDefault(); requestPicture(); }
+    return;
+  }
   // The drone's own keys (arrows, Q/E turn, C down, R flies home) never reach the mail, explore or interior keys.
   if (mode === 'fly' && drone.active && DRONE_KEYS.includes(ev.code)) {
     ev.preventDefault(); keys.add(ev.code);
@@ -1289,6 +1297,16 @@ if (pad) {
   const top = document.getElementById('phoneTop'), button = createDroneButton(() => { if (live() && !fleet?.busy && !interiors.busy && mode === 'drive') { yardJob?.judge.cancel(); launchDrone(); } });
   top?.insertBefore(button, document.getElementById('gear'));
 }
+const pictureButton = pad && !mailMode ? Object.assign(document.createElement('button'), {
+  id: 'savePictureButton', type: 'button', textContent: 'Save picture', hidden: true,
+}) : null;
+if (pictureButton) {
+  document.getElementById('phoneTop')?.insertBefore(pictureButton, document.getElementById('droneButton'));
+  pictureButton.addEventListener('click', requestPicture);
+}
+const pictureStatus = !bare && !mailMode ? Object.assign(document.createElement('div'), { id: 'savePictureStatus' }) : null;
+if (pictureStatus) { pictureStatus.setAttribute('role', 'status'); document.body.append(pictureStatus); }
+let pictureStatusTimer = 0;
 // A controller (gamepad.ts): the same values and the same actions as the keys. Nothing runs until one is used.
 const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
 const gamepad = createGamepad({
@@ -1569,6 +1587,7 @@ const roomPauseNote = Object.assign(document.createElement('p'), { textContent: 
 settingsPanel.prepend(roomPauseNote);
 function syncPauseUI(): void {
   keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
+  pictureRequested = false;
   touch.steer = touch.throttle = flyTouch = 0;
   const room = !!multiplayer?.choice.on;
   roomPauseNote.hidden = !room;
@@ -1921,6 +1940,26 @@ function drawWorld(): void {
   if (finish?.on) finish.render(scene, camera); else renderer.render(scene, camera);
   drawProbe?.after?.();
 }
+async function drawPicture(): Promise<void> {
+  savingPicture = true;
+  let message = '';
+  const room = multiplayer?.current;
+  try {
+    if (await savePicture({
+      canvas, render: drawWorld, place: AREA.name, touch: touchDevice,
+      hide: [drone.group, room?.ghosts.labels, room?.race.group, room?.games.group, animals?.horn],
+    })) message = 'Picture saved';
+  } catch {
+    message = 'Could not save picture';
+  } finally {
+    savingPicture = false;
+  }
+  if (message && pictureStatus) {
+    pictureStatus.textContent = message;
+    clearTimeout(pictureStatusTimer);
+    pictureStatusTimer = window.setTimeout(() => { pictureStatus.textContent = ''; }, 1800);
+  }
+}
 if (drawProbe) Object.assign((window as unknown as { mmm?: Record<string, unknown> }).mmm ??= {}, { finish, drawProbe });
 
 const shadowFocus = new THREE.Vector3();
@@ -1951,6 +1990,10 @@ const hudState: HudState = {
 function frame(now: number) {
   if (page.stopped) return;
   try {
+  if (pictureButton) {
+    const hidden = !canSavePicture();
+    if (pictureButton.hidden !== hidden) pictureButton.hidden = hidden;
+  }
   gamepad.poll(now);
   const pauseFrame = pause.frame(now, !!multiplayer?.choice.on);
   if (pauseFrame.paused) {
@@ -2144,7 +2187,11 @@ function frame(now: number) {
   renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
   mirrorFlags.driving = driving; mirrorFlags.bossClock = clockRuns && frameLive; mirrorFlags.bossHeld = !driving || interiors.busy || document.hidden;
   updateWorld('mirror', dt, realDt, now);
-  try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
+  try {
+    if (pictureRequested && canSavePicture()) void drawPicture();
+    else drawWorld();
+    pictureRequested = false;
+  } finally { farVisibility?.settle(); waterReflections?.settle(); }
   afterWorld();
   if(started&&!farLoading&&(farKey||tallKey)){farLoading=true;setTimeout(()=>{void loadFarViews();},0);}
   // A photo is evidence of what the driver saw: the free camera takes none.
