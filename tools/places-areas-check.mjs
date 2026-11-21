@@ -20,6 +20,7 @@ import { FishingSite } from '../web/src/fishing-site.ts';
 import { HomeSite } from '../web/src/home-site.ts';
 import { JudiqueVillageSite, VILLAGE_ITEMS } from '../web/src/judique-village-site.ts';
 import { FESTOONS, MAIN_ITEMS, MabouMainSite, SIDEWALK, STREET_LAMPS } from '../web/src/mabou-main-site.ts';
+import { MaryvilleStoreSite } from '../web/src/maryville-store-site.ts';
 import { mineRoadEnd } from '../web/src/mine-site.ts';
 import { PorchSite } from '../web/src/porch-site.ts';
 import { PH_ITEMS, PortHawkesburySite } from '../web/src/port-hawkesbury-site.ts';
@@ -38,7 +39,7 @@ const MIN_SITE = 150, MIN_PLACE = 150, EDGE = 120, START_EDGE = 12;
 
 // Every site file the game has is one that this check knows. A new hand-built site must be added below.
 {
-  const known = ['airport-site.ts', 'church-site.ts', 'coast-site.ts', 'fishing-site.ts', 'home-site.ts', 'judique-village-site.ts', 'mabou-main-site.ts', 'mine-site.ts', 'porch-site.ts',
+  const known = ['airport-site.ts', 'church-site.ts', 'coast-site.ts', 'fishing-site.ts', 'home-site.ts', 'judique-village-site.ts', 'mabou-main-site.ts', 'maryville-store-site.ts', 'mine-site.ts', 'porch-site.ts',
     'port-hawkesbury-site.ts', 'quarry-site.ts', 'yard-dog-site.ts', 'yard-site.ts'];
   assert.deepEqual(readdirSync(`${root}/web/src`).filter(n => /-site\.ts$/.test(n)).sort(), known, 'a hand-built site was added or removed: teach tools/places-areas-check.mjs its position');
 }
@@ -51,6 +52,8 @@ function handBuiltSites() {
   const mabou = read(`${baked}/terrain/manifest.json`), mv = mabou.village;
   const judique = read(`${baked}/areas/judique/manifest.json`).village, westbay = read(`${baked}/areas/westbay/manifest.json`).village;
   const tupper = read(`${baked}/areas/pointtupper/manifest.json`).village;
+  const porthood = read(`${baked}/areas/porthood/manifest.json`).village;
+  fromGame('Maryville tractor dealership', porthood, [new MaryvilleStoreSite(porthood).box]);
   const home = new HomeSite(judique), church = new ChurchSite(judique), wharf = new FishingSite(mv), yard = new YardSite(mv, 'invented'), quarry = new QuarrySite(westbay);
   fromGame('home', judique, [home.box, ...home.clear]);
   fromGame('church', judique, [church.box, ...church.clear]);
