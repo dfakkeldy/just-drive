@@ -38,7 +38,7 @@ export function instrumentMain(source){
  if(!/\bconst loaded\s*=\s*terrain\.pending\s*===\s*0\s*;/.test(source))throw Error('readiness probe missing loaded predicate');
  const quiet=/quiet\s*=\s*waiting\s*\?\s*0\s*:\s*quiet\s*\+\s*1\s*;/,match=source.match(quiet);
  if(!match)throw Error('readiness probe missing actual waiting/quiet update');
- const hook=`\nglobalThis.__walkProbe.observeReady(loaded, waiting, quiet, terrain.pending, globalThis.mmm?.sidewalks?.pending ?? 0, mode === 'fly' && pendingShot !== null && terrain.heightAt(camera.position.x,camera.position.z) === null, mode === 'drive' && demo > 0 && (drove < demo || Math.abs(vehicle.speed) > .15), relief.busy, !!porch?.waiting, porchDog?.state === 'loading', terrain.failed);\n`;
+ const hook=`\nglobalThis.__walkProbe.observeReady(loaded, waiting, quiet, terrain.pending, globalThis.mmm?.sidewalks?.pending ?? 0, mode === 'fly' && pendingShot !== null && terrain.heightAt(camera.position.x,camera.position.z) === null, mode === 'drive' && demo > 0 && (drove < demo || Math.abs(vehicle.speed) > .15), relief.busy, !!globalThis.mmm?.porch?.waiting, porchDog?.state === 'loading', terrain.failed);\n`;
  source=source.replace(quiet,match[0]+hook);insertions.push(hook);
  return {source,markers,strip:modified=>insertions.reduce((s,text)=>s.replace(text,''),modified)};
 }
