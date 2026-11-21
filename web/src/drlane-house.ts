@@ -360,10 +360,10 @@ export class DrLaneHouse implements HandBuiltPlace {
       m.cyl(0, len / 2, 0, 0.04, len, TWIGS, 'y', 4, 0.015, null);
     }
     // Berries in loose bunches all over the outer twigs: many small clusters with the twigs showing between them.
-    for (let i = 0; i < 46; i++) {
-      const a = rnd() * 6.3, d = 0.5 + rnd() * 1.4, h = 0.9 + rnd() * 2.1 - d * 0.25, r = 0.16 + rnd() * 0.14;
+    for (let i = 0; i < 96; i++) {
+      const a = rnd() * 6.3, d = 0.4 + rnd() * 1.5, h = 0.8 + rnd() * 2.2 - d * 0.25, r = 0.07 + rnd() * 0.08;
       m.at(ru + Math.cos(a) * d, ry + h, rv + Math.sin(a) * d, rnd() * 6.3, rnd() * 0.6);
-      m.cyl(0, 0, 0, r, r * 0.8, shade(BERRIES, 0.8 + rnd() * 0.35), 'y', 5, r * 0.45, shade(BERRIES, 0.7));
+      m.cyl(0, 0, 0, r, r * 1.3, shade(BERRIES, 0.62 + rnd() * 0.3), 'y', 4, r * 0.6, shade(BERRIES, 0.55));
     }
     this.bush(m, 3.0, 26.2, 0.75, 1.2, GOLD, rnd);                 // the golden shrub
     this.bush(m, -6.8, 26.9, 0.8, 1.0, BOX, rnd, 2);               // two round green ones near the drive
