@@ -39,17 +39,28 @@ const cases = {
     run.step(0.1, -1.6, true);
     assert.equal(run.phase, 'red', 'a run-up before green fouls even behind the beam');
   },
+  shallowStage({ DragRun }) {
+    const run = new DragRun(-3);
+    run.step(2.4, -3, true);
+    run.step(0.4, -2.6, true);
+    assert.equal(run.phase, 'running', 'clock has started before the painted stripe');
+    close(run.launch, 2.75);
+    run.step(0.4, 1, true);
+    run.step(13, 400, true);
+    run.step(0.2, 404, true);
+    close(run.result.elapsed, 13.55);
+  },
   timing({ DragRun }) {
     const run = new DragRun(-1);
     run.step(2.4, -1, true);
-    run.step(0.2, 1, true); // start beam at 2.5
+    run.step(0.2, 1, true); // staging beam at 2.435
     assert.equal(run.phase, 'running');
     run.step(10, 380, true);
     run.step(0.2, 384, true); // enters trap at 12.6 + (1.8832 / 20)
     run.step(1, 404, true); // finish beam at 13.7
     assert.equal(run.phase, 'finished');
-    close(run.result.reaction, 0.2);
-    close(run.result.elapsed, 11.2);
+    close(run.result.reaction, 0.135);
+    close(run.result.elapsed, 11.265);
     close(run.result.trapKmh, 72);
   },
   recross({ DragRun }) {
@@ -106,6 +117,10 @@ close(strip.across(strip.start.x, strip.start.z), -DRAG_LANE);
 assert.equal(DRAG_PAINT[1] - DRAG_PAINT[0], 402);
 assert.ok(DRAG_PAINT[0] > 185 && DRAG_PAINT[1] + 200 < site.frame.length);
 assert.ok(DRAG_LANE + DRAG_HALF_LANE < AIRPORT.runway.width / 2);
+for (const [along, across, stays] of [[0, -5, true], [602, -5, true], [1200, -5, true], [1300, -5, false], [200, 25, false]]) {
+  const p = strip.point(along, across);
+  assert.equal(strip.onRunway(p.x, p.z), stays, 'runway footprint controls result lifetime');
+}
 for (let along = -15; along <= 602; along += 1) for (const across of [-9, -1, 1, 9]) {
   const p = strip.point(along, across);
   close(strip.along(p.x, p.z), along);
@@ -118,9 +133,10 @@ if (process.argv.includes('--mutations')) {
   const source = readFileSync(`${process.env.MMM_ROOT ?? '.'}/web/src/drag-rules.ts`, 'utf8');
   for (const [name, before, after] of [
     ['tree', 'DRAG_STAGE + 2 * DRAG_AMBER', 'DRAG_STAGE + DRAG_AMBER'],
-    ['jump', 'foul < DRAG_GREEN', 'this.time < DRAG_GREEN'],
+    ['jump', 'launch < DRAG_GREEN', 'this.time < DRAG_GREEN'],
     ['runUp', 'along < this.staged - 0.5', 'false'],
     ['creep', 'Math.min(0, this.staged + 0.35)', '0'],
+    ['shallowStage', 'this.launch = launch;', 'this.launch = crossed(0);'],
     ['timing', 'reaction: this.launch - DRAG_GREEN', 'reaction: this.launch'],
     ['timing', 'elapsed: finish - this.launch', 'elapsed: finish - DRAG_GREEN'],
     ['timing', '3.6 * DRAG_TRAP / (finish - this.trap)', '3.6 * DRAG_DISTANCE / (finish - this.trap)'],

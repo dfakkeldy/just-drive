@@ -144,7 +144,8 @@ export class AirportDrag {
   }
 
   begin(): boolean {
-    if (!this.available || this.run || !this.vehicle || !this.canStage(this.vehicle)) return false;
+    if (!this.available || this.run?.active || !this.vehicle || !this.canStage(this.vehicle)) return false;
+    this.paceTime = 0;
     this.run = new DragRun(this.nose(this.vehicle));
     return true;
   }
@@ -198,22 +199,23 @@ export class AirportDrag {
   }
 
   draw(vehicle: Vehicle, device: Device): void {
-    if (this.run && !this.run.active && (!this.onStrip(vehicle) || (this.run.result && this.nose(vehicle) < 0))) this.reset();
+    if (this.run && !this.run.active && (!this.strip.onRunway(vehicle.x, vehicle.z) || (this.run.result && this.nose(vehicle) < 0))) this.reset();
     const run = this.run;
     this.panel.hidden = !this.available || (!run && !this.nearStart(vehicle));
     this.rival.visible = false;
     if (this.panel.hidden) return;
     const phase = run?.phase ?? 'idle';
-    const staged = phase === 'idle' && this.canStage(vehicle);
+    const ready = !run?.active && this.canStage(vehicle);
+    const terminal = !!run && !run.active;
     this.tree.dataset.phase = phase;
-    if (phase === 'idle') {
-      const shortcut = device === 'gamepad' ? ' · Y / Triangle' : device === 'keyboard' ? ' · Enter' : '';
-      write(this.status, staged ? 'Ready to stage' + shortcut : 'Stop just behind the line in the left lane');
-    }
+    const shortcut = device === 'gamepad' ? ' · Y / Triangle' : device === 'keyboard' ? ' · Enter' : '';
+    if (phase === 'idle') write(this.status, ready ? 'Ready to stage' + shortcut : 'Stop just behind the line in the left lane');
     else if (phase !== 'finished') write(this.status, COPY[phase]);
-    this.stage.hidden = phase !== 'idle';
-    this.stage.disabled = !staged;
-    this.back.hidden = this.leave.hidden = !run || run.active;
+    this.stage.hidden = phase !== 'idle' && !ready;
+    this.stage.disabled = !ready;
+    write(this.stage, terminal ? 'Stage again' + shortcut : 'Stage');
+    this.back.hidden = !terminal || ready;
+    this.leave.hidden = !terminal;
     this.progress.hidden = phase !== 'running' && phase !== 'green';
     this.result.hidden = !run?.result;
     write(this.bestLine, this.best === null ? '' : 'Vehicle best · ' + time(this.best));

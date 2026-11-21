@@ -44,10 +44,11 @@ export class DragRun {
       ? before + dt * (beam - this.previous) / (along - this.previous) : null;
     if (this.launch === null) {
       if (along < this.staged - 0.5) { this.fault = 'aborted'; return; }
-      // Give the car room to settle. A larger move toward the beam before green is a foul.
-      const foul = crossed(Math.min(0, this.staged + 0.35));
-      if (foul !== null && foul < DRAG_GREEN) { this.fault = 'red'; return; }
-      this.launch = crossed(0);
+      // The staging beam allows a little rollout. Time starts here so a shallow stage
+      // cannot gain an untimed run-up to the painted start stripe.
+      const launch = crossed(Math.min(0, this.staged + 0.35));
+      if (launch !== null && launch < DRAG_GREEN) { this.fault = 'red'; return; }
+      this.launch = launch;
     }
     if (this.launch !== null) {
       // Re-entering the speed trap starts a fresh sample, so backing across it cannot inflate the speed.

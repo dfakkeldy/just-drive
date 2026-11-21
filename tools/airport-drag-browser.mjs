@@ -29,6 +29,12 @@ async function openPlaces(tab) {
   await press(tab, 'KeyL', 'l', 76);
   assert.ok(await tab.read("!document.querySelector('#placesPanel').hidden"), 'L opens Places');
 }
+async function brakeToStop(tab) {
+  const key = { code: 'Space', key: ' ', windowsVirtualKeyCode: 32 };
+  await tab.send('Input.dispatchKeyEvent', { ...key, type: 'rawKeyDown' });
+  try { await until(tab, 'Math.hypot(mmm.vehicle.vx, mmm.vehicle.vz) < 0.15', 'the car stops'); }
+  finally { await tab.send('Input.dispatchKeyEvent', { ...key, type: 'keyUp' }); }
+}
 async function pedal(tab, down, phone = false) {
   if (!phone) return tab.send('Input.dispatchKeyEvent', { type: down ? 'rawKeyDown' : 'keyUp', code: 'KeyW', key: 'w', windowsVirtualKeyCode: 87 });
   const point = down ? await tab.read(`(() => {const r=document.querySelector('#tcGo').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`) : null;
@@ -89,8 +95,9 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
       try { await until(tab, `${phase} === 'red'`, 'early throttle trips the red light'); }
       finally { await pedal(tab, false); }
       assert.equal(await tab.read("localStorage.getItem('mmm.drag.402.car')"), null, 'a foul cannot save a best time');
-      await click(tab, '.dragBack');
-      await until(tab, `!!${staged}`, 'back to start stages again');
+      await brakeToStop(tab);
+      await until(tab, `!!${staged}`, 'can stage again behind the line after a red light');
+      await press(tab, 'Enter', 'Enter', 13);
     }
 
     if (vehicle === 'sxs') {
@@ -100,8 +107,8 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
         Object.defineProperty(navigator, 'getGamepads', {configurable:true,value:() => [pad]});
         window.dispatchEvent(new Event('gamepadconnected'));
       })()`);
-    } else await click(tab, '.dragStage');
-    await until(tab, `${phase} === 'staged'`, vehicle === 'sxs' ? 'gamepad Y stages' : 'the stage lamp lights');
+    } else if (vehicle !== 'car') await click(tab, '.dragStage');
+    await until(tab, `${phase} === 'staged'`, vehicle === 'sxs' ? 'gamepad Y stages' : vehicle === 'car' ? 'Enter re-stages after red' : 'the stage lamp lights');
     if (vehicle === 'sxs') await tab.read("delete navigator.getGamepads");
 
     if (vehicle === 'car') {
@@ -156,10 +163,11 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
     } finally { await pedal(tab, false, phone); }
 
     const result = await tab.read(`(() => {
-      const r = document.querySelector('.dragResult').innerText;
-      return {text:r,best:Number(localStorage.getItem('mmm.drag.402.${vehicle}')),status:${status}, along:mmm.airportDrag.strip.along(mmm.vehicle.x,mmm.vehicle.z)};
+      const r = document.querySelector('.dragResult');
+      return {visible:!r.hidden && !r.closest('#airportDrag').hidden,text:r.innerText,best:Number(localStorage.getItem('mmm.drag.402.${vehicle}')),status:${status}, along:mmm.airportDrag.strip.along(mmm.vehicle.x,mmm.vehicle.z)};
     })()`);
     const times = result.text.match(/Reaction\s+(\d+\.\d+) s\s+Elapsed\s+(\d+\.\d+) s\s+Trap speed\s+(\d+\.\d+) km\/h/);
+    assert.ok(result.visible, 'the result card is visible at the finish');
     assert.ok(times, result.text);
     assert.ok(Number(times[1]) >= 0 && Number(times[1]) < 4 && Number(times[3]) > 60 && Number(times[3]) < 190, result.text);
     assert.equal(Number(times[2]), Number(result.best.toFixed(3)), 'the result card prints the saved ET');
@@ -167,6 +175,12 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
     assert.ok(result.best > 7 && result.best < 40 && result.along > 398, JSON.stringify(result));
     if (vehicle === 'car') {
       await tab.shot(join(evidence, '03-result-card.png'));
+      await pedal(tab, true);
+      try {
+        await until(tab, 'mmm.airportDrag.strip.along(mmm.vehicle.x, mmm.vehicle.z) > 550', 'the car passes the early part of the braking run');
+      } finally { await pedal(tab, false); }
+      await brakeToStop(tab);
+      assert.ok(await tab.read("!document.querySelector('#airportDrag').hidden && !document.querySelector('.dragBack').hidden"), 'the card and return button persist through the braking run');
       await tab.navigate(url.href);
       await click(tab, '#titleStart');
       await openPlaces(tab);

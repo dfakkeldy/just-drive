@@ -10,7 +10,7 @@ export const DRAG_START_KEY = 'airport-drag';
 export const DRAG_PAINT = [START, START + DRAG_DISTANCE, DRAG_LANE, DRAG_HALF_LANE] as const;
 
 const [west] = AIRPORT.runway.ends;
-const { ux, un, heading } = runwayFrame(AIRPORT.runway);
+const { ux, un, heading, length } = runwayFrame(AIRPORT.runway);
 function survey(along: number, across: number) {
   return { e: west[0] + ux * (START + along) + un * across, n: west[1] + un * (START + along) - ux * across };
 }
@@ -37,6 +37,11 @@ export class DragStrip {
 
   along(x: number, z: number): number { return (x - this.x) * ux - (z - this.z) * un; }
   across(x: number, z: number): number { return (x - this.x) * un + (z - this.z) * ux; }
+  onRunway(x: number, z: number): boolean {
+    const along = START + this.along(x, z);
+    return along >= 0 && along <= length && Math.abs(this.across(x, z)) <= AIRPORT.runway.width / 2;
+  }
+
   point(along: number, across: number) {
     return { x: this.x + ux * along + un * across, z: this.z - un * along + ux * across, heading: start.heading };
   }
