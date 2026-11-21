@@ -15,7 +15,6 @@ export function advancedSection(panel: HTMLElement | null, before: HTMLElement |
   try { details.open = localStorage.getItem(OPEN_KEY) === '1'; } catch { /* private mode */ }
   const summary = Object.assign(document.createElement('summary'), { textContent: 'Advanced' });
   // Keep the native disclosure marker (display stays list-item); padding makes a 44 px touch target.
-  summary.style.cssText = 'cursor:pointer;padding:' + (touch ? '12px 0' : '4px 0');
   details.append(summary);
   details.addEventListener('toggle', () => { try { localStorage.setItem(OPEN_KEY, details.open ? '1' : '0'); } catch { /* private mode */ } });
   panel.insertBefore(details, before);

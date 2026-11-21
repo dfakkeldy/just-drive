@@ -54,7 +54,8 @@ for(const area of ['pointtupper','mabou','westbay','judique','porthood','cansoca
  const manifest=installed?{paved:{file:'paved/index.json',tiles:1,source:'nstdb-designated-open-v1'}}:{};
  assert.equal(!!enabled({modern},{id:area},p,manifest),modern&&flag!=='0'&&(installed||flag==='1'),'default-on gate');
 }
-const element=()=>({innerHTML:'',setAttribute(){},appendChild(){},focus(){},addEventListener(){},querySelector(){return element();},classList:{add(){}}});
+const element=()=>({style:{},innerHTML:'',setAttribute(){},append(){},appendChild(){},focus(){},addEventListener(){},querySelector(){return element();},classList:{add(){}}});
+const savedWindowListener=globalThis.addEventListener;globalThis.addEventListener=()=>{};
 let titleRoot;globalThis.document={head:element(),body:{appendChild(root){titleRoot=root;}},createElement:element};
 for(const on of [false,true]){
  createTitle(false,()=>{},'explore','Mabou',undefined,false,true,undefined,on);
@@ -63,7 +64,7 @@ for(const on of [false,true]){
  if(on){assert.ok(credit.includes('Contains information licensed under the Open Government Licence – Nova Scotia'));assert.ok(credit.includes('https://support.novascotia.ca/services/open-data-portal-licence'),'credit link');}
  assert.ok(!titleRoot.innerHTML.includes('nsLidarCredit'));
 }
-delete globalThis.document;
+delete globalThis.document;if(savedWindowListener)globalThis.addEventListener=savedWindowListener;else delete globalThis.addEventListener;
 const edgeBody=PAVED_SAMPLE.match(/float edge=([^;]+);/)[1].replaceAll('vnoise(p*.6)','noise');
 const edgeRule=new Function('v','noise','smoothstep','step','return '+edgeBody);
 const ss=(a,b,v)=>{const t=Math.max(0,Math.min(1,(v-a)/(b-a)));return t*t*(3-2*t);};

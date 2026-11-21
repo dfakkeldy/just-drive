@@ -42,6 +42,8 @@ const show = (s) => JSON.stringify(s);
 
 // 1. A Retina screen (ratio 2), nothing saved: the one measurement runs, starting at Sharp, and ends with a saved
 //    choice that is drawn. Which choice depends on this computer; that it is one of the three, drawn and kept, does not.
+const LABEL = { sharp: 'Sharp', balanced: 'Balanced', fast: 'Fast' };
+const named = pressed => Object.keys(LABEL).map(k => `${String(pressed).split(',').includes(k) ? '✓ ' : ''}${LABEL[k]}`).join();
 const RATIO = { sharp: 2, balanced: 1.5, fast: 1 };
 {
   const p = await open(`${base}/?demo=8`, 2);
@@ -50,24 +52,24 @@ const RATIO = { sharp: 2, balanced: 1.5, fast: 1 };
   check(await p.early(), 'and starts again with nothing saved');
   let s = await p.read(STATE);
   check(s.screen === 2, `the screen ratio is 2 in the test (${s.screen})`);
-  check(s.control && s.inPanel && s.names === 'Sharp,Balanced,Fast', `the settings panel has the three choices: ${show(s)}`);
+  check(s.control && s.inPanel && !!s.pressed && s.names === named(s.pressed), `the settings panel has the three choices: ${show(s)}`);
   const began = s.measuring === 'true' ? s : null;
   for (let t = 0; t < 80 && s.measuring === 'true'; t++) { await sleep(1500); s = await p.read(STATE); }
-  check(!!began && near(began.ratio, 2) && began.pressed === 'sharp' && began.saved === null, `the measurement starts at Sharp with nothing saved: ${show(began)}`);
+  check(!!began && near(began.ratio, 2) && began.pressed === 'sharp' && began.names === named(began.pressed) && began.saved === null, `the measurement starts at Sharp with nothing saved: ${show(began)}`);
   const first = s.saved;
-  check(s.measuring === 'false' && Object.hasOwn(RATIO, first) && s.pressed === first && near(s.ratio, RATIO[first]) && near(s.buffer, RATIO[first]),
+  check(s.measuring === 'false' && Object.hasOwn(RATIO, first) && s.pressed === first && s.names === named(s.pressed) && near(s.ratio, RATIO[first]) && near(s.buffer, RATIO[first]),
     `the measurement ends with a saved choice that is drawn: ${show(s)}`);
   check(await p.reload(), 'the page settles after a reload');
   s = await p.read(STATE);
-  check(s.measuring === 'false' && s.saved === first && s.pressed === first && near(s.ratio, RATIO[first]), `the measured choice is kept and not measured again: ${show(s)}`);
+  check(s.measuring === 'false' && s.saved === first && s.pressed === first && s.names === named(s.pressed) && near(s.ratio, RATIO[first]), `the measured choice is kept and not measured again: ${show(s)}`);
   for (const key of ['sharp', 'fast', 'balanced']) {
     await choose(p, key); await sleep(600);
     s = await p.read(STATE);
-    check(near(s.ratio, RATIO[key]) && near(s.buffer, RATIO[key]) && s.pressed === key && s.saved === key, `${key}: ratio ${RATIO[key]}, drawn at once, saved: ${show(s)}`);
+    check(near(s.ratio, RATIO[key]) && near(s.buffer, RATIO[key]) && s.pressed === key && s.names === named(s.pressed) && s.saved === key, `${key}: ratio ${RATIO[key]}, drawn at once, saved: ${show(s)}`);
   }
   check(await p.reload(), 'the page settles after a reload');
   s = await p.read(STATE);
-  check(near(s.ratio, 1.5) && near(s.buffer, 1.5) && s.pressed === 'balanced' && s.measuring === 'false', `a choice by hand is kept over a reload: ${show(s)}`);
+  check(near(s.ratio, 1.5) && near(s.buffer, 1.5) && s.pressed === 'balanced' && s.names === named(s.pressed) && s.measuring === 'false', `a choice by hand is kept over a reload: ${show(s)}`);
   // A saved value that is not a choice (an old or a damaged one) counts as nothing saved: the measurement runs.
   // A choice by hand during the measurement ends it and stays.
   await p.read(`localStorage.setItem('mmm.picture', 'toString')`);
@@ -76,10 +78,10 @@ const RATIO = { sharp: 2, balanced: 1.5, fast: 1 };
   if (s.measuring === 'true') {
     await choose(p, 'fast'); await sleep(600);
     s = await p.read(STATE);
-    check(s.measuring === 'false' && s.saved === 'fast' && s.pressed === 'fast' && near(s.ratio, 1), `a choice by hand during the measurement ends it: ${show(s)}`);
+    check(s.measuring === 'false' && s.saved === 'fast' && s.pressed === 'fast' && s.names === named(s.pressed) && near(s.ratio, 1), `a choice by hand during the measurement ends it: ${show(s)}`);
     await sleep(12000);
     s = await p.read(STATE);
-    check(s.saved === 'fast' && s.pressed === 'fast' && near(s.ratio, 1), `and the measurement does not come back and overrule it: ${show(s)}`);
+    check(s.saved === 'fast' && s.pressed === 'fast' && s.names === named(s.pressed) && near(s.ratio, 1), `and the measurement does not come back and overrule it: ${show(s)}`);
   } else check(false, `the measurement was still running when the page had settled (it needs over five seconds of play): ${show(s)}`);
   await p.close();
 }
@@ -95,7 +97,7 @@ for (const [name, query, scale, saved, ratio, pressed] of [
   const p = await open(`${base}/?${query}`, scale);
   await p.read(`localStorage.setItem('mmm.picture', '${saved}')`);
   const s = await p.reload() ? await p.read(STATE) : null;
-  check(!!s && s.saved === saved && near(s.ratio, ratio) && near(s.buffer, ratio) && s.control === (pressed !== null) && s.pressed === pressed,
+  check(!!s && s.saved === saved && near(s.ratio, ratio) && near(s.buffer, ratio) && s.control === (pressed !== null) && s.pressed === pressed && (pressed === null || s.names === named(s.pressed)),
     `${name}: ratio ${ratio}, ${pressed ? `control at ${pressed}` : 'no control'}: ${show(s)}`);
   if (s) await p.read(`localStorage.removeItem('mmm.picture')`);
   await p.close();

@@ -14,3 +14,13 @@ export function toggle(key: string, text: string, initial: boolean, onChange: (o
   panel.insertBefore(label, document.getElementById('startOver'));
   return box;
 }
+
+/** Wire the sheet’s Close button and Escape key. */
+export function installSettings(): void {
+  const sheet = document.getElementById('settings');
+  const closeSheet = () => { sheet?.classList.remove('open'); document.getElementById('gear')?.focus({ preventScroll: true }); };
+  document.getElementById('settingsClose')?.addEventListener('click', closeSheet);
+  addEventListener('keydown', event => {
+    if (event.code === 'Escape' && sheet?.classList.contains('open')) { event.preventDefault(); closeSheet(); }
+  });
+}

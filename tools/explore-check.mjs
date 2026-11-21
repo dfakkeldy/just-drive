@@ -10,7 +10,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const missing = ['shiftHud','stopHint','cameraButton','endShift','mailButton','mailScore','shiftReport','photoTag','photoFlash','startOver','relief','reliefCard','doorPrompt','interiorHud','endingFrame'];
 const visible = `id => { const e=document.getElementById(id); if(!e || e.hidden)return false;const r=e.getBoundingClientRect();return r.width>0 && r.height>0 && getComputedStyle(e).visibility!=='hidden' && getComputedStyle(e).display!=='none'; }`;
 // Captured from the real page at b2a491b before the mode seam. Hash avoids duplicating its credits.
-const mailBaseline = {"hash":"80ae3b403ba84a165e6735231c15bc9190cc97eb3f048274cddf9d71ea698f1a","shown":["shiftHud","stopHint","cameraButton","endShift","mailButton","mailScore","photoFlash","relief"]};
+// END SHIFT now lives in closed Settings; all other shown mail ids and the title hash stay pinned.
+const mailBaseline = {"hash":"80ae3b403ba84a165e6735231c15bc9190cc97eb3f048274cddf9d71ea698f1a","shown":["shiftHud","stopHint","cameraButton","mailButton","mailScore","photoFlash","relief"]};
 const results = [], ownedTabs = [];
 process.on('uncaughtException', async error => { console.error(error.stack); for(const tab of ownedTabs){try{await fetch(`http://127.0.0.1:${port}/json/close/${tab.id}`);tab.ws?.close();}catch{}}process.exit(1); });
 function check(value, name) { results.push({name,pass:!!value}); console.log(`${value?'PASS':'FAIL'} ${name}`); if(process.env.EXPLORE_PROBE===name)throw new Error((value?'MUTATION MISSED: ':'MUTATION DETECTED: ')+name); }
@@ -53,7 +54,7 @@ if(family==='all'||family==='mail'){
  const p=await page('mode=mail&title=1');
  const snapshot=await p.read(titleState), baseline=mailBaseline;
  console.log('MAIL_TITLE', JSON.stringify({rows:snapshot.rows.filter((_,i)=>i%2===0),heading:snapshot.heading,tag:snapshot.tag,start:snapshot.start,legal:snapshot.legal.slice(0,120)}));
- check(snapshot.heading==='Mabou Mail Madness'&&snapshot.tag==='Preview build · a route you cannot win'&&snapshot.start==='Start the shift'&&snapshot.rows.length===(snapshot.rows.includes('T')?22:20)&&snapshot.rows.includes('M or E')&&snapshot.rows.includes('Enter')&&!snapshot.rows.includes('L')&&snapshot.legal.includes('A work of satire')&&snapshot.legal.includes('Not affiliated with any postal service'),'mail title keeps its own heading, key rows, start button and satire notice');
+ check(snapshot.heading==='Mabou Mail Madness'&&snapshot.tag==='A route you cannot win'&&snapshot.start==='Start the shift'&&snapshot.rows.length===(snapshot.rows.includes('T')?22:20)&&snapshot.rows.includes('M or E')&&snapshot.rows.includes('Enter')&&!snapshot.rows.includes('L')&&snapshot.legal.includes('A work of satire')&&snapshot.legal.includes('Not affiliated with any postal service'),'mail title keeps its own heading, key rows, start button and satire notice');
  check(await p.read(`document.querySelector('#titleLegal > p:first-child#titleContact a')?.getAttribute('href')==='mailto:justdrive@fakkeldy.ca'&&document.getElementById('titleContact').textContent==='Something wrong, or you want a place removed? Write to justdrive@fakkeldy.ca.'`),'mail credits begin with the contact line');
  check(await p.read(`document.querySelector('#titleContact + #titleAbout a')?.getAttribute('href')==='https://mmm.fakkeldy.ca/about'`),'mail credits link the mail About page');
  check(await p.read(`document.querySelector('#titleAbout #titleHelp')?.getAttribute('href')==='https://mmm.fakkeldy.ca/help'`),'mail credits link the mail Help page');
@@ -72,6 +73,7 @@ if(family==='all'||family==='explore'){
  check(await p.read(`document.querySelector('#titleLegal > p:first-child#titleContact a')?.getAttribute('href')==='mailto:justdrive@fakkeldy.ca'&&document.getElementById('titleContact').textContent==='Something wrong, or you want a place removed? Write to justdrive@fakkeldy.ca.'`),'explore credits begin with the contact line');
  await p.shot('02-explore-title');await p.read(`document.getElementById('titleStart').click()`);await sleep(800);
  check((await p.read(`${JSON.stringify(missing)}.filter(${visible})`)).length===0,'explore hides every mail element');
+ check(await p.read(`(()=>{const ids=['bigMapButton','pauseButton','placesButton','gear'],boxes=ids.map(id=>document.getElementById(id)?.getBoundingClientRect());return boxes.every((b,i)=>b&&b.height===44&&b.top===boxes[0].top&&(i===0||Math.abs(b.left-boxes[i-1].right-8)<.1)&&document.getElementById(ids[i]).contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)))})()`),'desktop MAP, PAUSE, PLACES and gear share one clear row');
  check(await p.read(`!document.getElementById('relief')&&!document.getElementById('doorPrompt')&&!document.getElementById('endingFrame')`),'explore never creates mail-only UI');
  check(await p.read(`mmm.shift.stops===0&&!mmm.shift.ended&&mmm.shift.elapsed===0&&mmm.shift.career.day===0&&mmm.shift.complaints.all.length===0`),'explore has no shift or complaints');
  const start=await p.read(`({x:mmm.vehicle.x,z:mmm.vehicle.z,heading:mmm.vehicle.heading})`);
@@ -86,13 +88,25 @@ if(family==='all'||family==='explore'){
  check(await p.read(`!mmm.vehicle.car.root.parent.getObjectByName('Mail and delivery dings')&&!mmm.vehicle.car.root.parent.getObjectByName('Two months of old flyers')`),'explore has no paper meshes');
  await p.key('KeyW');await sleep(700);await p.key('KeyW',false);const comparison=await p.read(`({x:mmm.vehicle.x,z:mmm.vehicle.z,heading:mmm.vehicle.heading})`);await p.shot('03-explore-village');await p.read(`mmm.vehicle.restart(${start.x},${start.z},${start.heading});mmm.vehicle.speed=0`);await sleep(300);
  check(await p.read(`document.getElementById('placeArrival').innerText.includes('Mabou village')&&!document.getElementById('placeArrival').hidden`),'arrival card appears at village');await p.shot('04-arrival');
+ check(await p.read(`document.querySelector('[data-place="village"]').getAttribute('aria-current')==='location'&&document.querySelector('[data-place="village"] .youAreHere').textContent==='You are here'`),'Places marks the current village');
+ await p.tap('KeyL');await p.read(`new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
+ check(await p.read(`!document.getElementById('placesPanel').hidden&&document.querySelector('[data-place="village"]').getAttribute('aria-current')==='location'&&document.querySelector('[data-place="village"] .youAreHere')?.textContent==='You are here'`),'open Places keeps the current village');
+ check(await p.read(`document.getElementById('placeArrival').hidden||getComputedStyle(document.getElementById('placeArrival')).display==='none'`),'open Places hides the arrival toast');
+ check(await p.read(`(()=>{const map=getComputedStyle(document.getElementById('placesMap')),close=getComputedStyle(document.getElementById('placesClose')),row=getComputedStyle(document.querySelector('#placesList button'));return map.backgroundColor==='rgba(0, 0, 0, 0)'&&map.borderTopColor!==row.borderTopColor&&close.backgroundColor==='rgba(0, 0, 0, 0)'&&close.borderTopColor===map.borderTopColor;})()`),'Places map and Close use quiet outlines distinct from place rows');
+ await p.tap('Escape');
+ for(const id of ['settings','pauseScreen','bigMap']){
+  await p.read(`(()=>{const e=document.getElementById('${id}');if('${id}'==='settings')e.classList.add('open');else e.hidden=false;})()`);
+  check(await p.read(`getComputedStyle(document.getElementById('placeArrival')).display==='none'`),'arrival stays hidden under '+id);
+  await p.read(`(()=>{const e=document.getElementById('${id}');if('${id}'==='settings')e.classList.remove('open');else e.hidden=true;})()`);
+ }
  await p.read(`mmm.vehicle.restart(${start.x+400},${start.z},${start.heading})`);await sleep(700);
  check(await p.read(`document.getElementById('placeArrival').hidden`),'arrival card leaves with player');
  await p.read(`mmm.vehicle.restart(${start.x},${start.z},${start.heading})`);await sleep(800);
  // Observe the actual arguments entering the existing MiniMap, plus its real 2D label drawing.
  await p.read(`window.markLabels=[];window.marksSeen=[];const old=mmm.miniMap.update.bind(mmm.miniMap);mmm.miniMap.update=(...a)=>{window.marksSeen=a[5];return old(...a)};const c=document.getElementById('miniMapCanvas').getContext('2d'),text=c.fillText.bind(c);c.fillText=(...a)=>{window.markLabels.push(a[0]);return text(...a)};document.getElementById('miniMapCanvas').click();document.getElementById('miniMapCanvas').click()`);await sleep(900);
  check(await p.read(`window.marksSeen.length===mmm.places.places.length&&mmm.places.places.every(p=>marksSeen.some(m=>m.label===p.name))`),'all place marks reach minimap');
- check(await p.read(`markLabels.includes('Mabou village')&&markLabels.every(l=>!mmm.places.places.every(p=>p.name!==l)||/^[0-9 mk.N]+$/.test(l))&&mmm.miniMap.labels.length>=2&&mmm.miniMap.labels.length<=4`),'minimap draws a few place labels');await p.shot('06-place-map');
+ check(await p.read(`markLabels.includes('Mabou village')&&markLabels.every(l=>!mmm.places.places.every(p=>p.name!==l)||/^(?:[0-9 mk.N]+|[ESW])$/.test(l))&&mmm.miniMap.labels.length>=2&&mmm.miniMap.labels.length<=4`),'minimap draws a few place labels');await p.shot('06-place-map');
+ check(await p.read(`['N','E','S','W'].every(letter=>markLabels.includes(letter))`),'minimap draws all four compass letters');
  await p.key('KeyW');await sleep(1800);
  check(await p.read(`Math.hypot(mmm.vehicle.x-${start.x},mmm.vehicle.z-${start.z})>1&&Math.abs(mmm.vehicle.speed)>0.5`),'W drives in explore');
  // W stays held from before the list opens until after it closes: the pause itself must clear the held key.
@@ -130,7 +144,12 @@ if(family==='all'||family==='phone'){
   check(['tcTrack','tcGo','tcBrake','placesButton'].every(id=>boxes.some(b=>b[0]===id)),`phone ${w} keeps driving and places controls`);
   if(w===844)await p.shot('07-phone-explore-drive');
   await p.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
-  const hit=async selector=>{const r=await p.read(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);await p.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,...r}]});await p.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await sleep(350);};
+  // Tap like a player: if a scrolling list cuts the target off, swipe it into view first. Then require that the
+  // tap point really lands on the target, so a tap on padding can no longer pass or fail by luck of layout.
+  const where=selector=>p.read(`(()=>{const e=document.querySelector(${JSON.stringify(selector)}),r=e.getBoundingClientRect(),c=e.closest('#placesBody')?.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,over:c?Math.max(0,r.bottom-c.bottom):0,sx:c?c.x+c.width/2:0,sy:c?c.bottom-8:0}})()`);
+  const hit=async selector=>{let r=await where(selector);if(r.over>0){await p.send('Input.synthesizeScrollGesture',{x:r.sx,y:r.sy,yDistance:-(r.over+16),speed:800,gestureSourceType:'touch'});await sleep(300);r=await where(selector);}
+   check(await p.read(`!!document.querySelector(${JSON.stringify(selector)}).contains(document.elementFromPoint(${r.x},${r.y}))`),`phone ${w} ${selector} is tappable where the player touches`);
+   await p.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:r.x,y:r.y}]});await p.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await sleep(350);};
   await hit('#placesButton');await hit('[data-place="rail-trail"]');
   check(await p.read(`document.getElementById('placesPanel').hidden&&mmm.vehicle.speed===0&&document.getElementById('placeArrival').innerText.includes('Mabou Rivers Trail')`),`phone ${w} real touch places jump`);
   check(p.errors.length===0,`phone ${w} no runtime exceptions`);await p.close();

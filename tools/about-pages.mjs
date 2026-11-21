@@ -11,7 +11,7 @@ import { justIcon } from './site-pages.mjs';
 
 // The game's own credit strings, bundled from its source (property-lines-rules.ts is more than Node can strip).
 const { outputFiles } = await build({ stdin: { contents: "export { AREAS } from './area'; export * from './credits'; export * from './controls'; export { bikeKeys } from './vehicle-choice'; export { PUBLIC_MUSIC_CREDIT } from './radio-credits.generated'; export { PROPERTY_ATTRIBUTION, PROPERTY_LICENSE_URL } from './property-lines-rules';", resolveDir: fileURLToPath(new URL('../web/src', import.meta.url)), loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node' });
-const { AREAS, ABOUT_URL, HELP_URL, LISTEN_URL, LISTEN_TEXT, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, ENGINE_CREDIT, LAND_CREDITS, FAR_CREDITS, PUBLIC_MUSIC_CREDIT, PROPERTY_ATTRIBUTION, PROPERTY_LICENSE_URL } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
+const { AREAS, ABOUT_URL, HELP_URL, LISTEN_URL, LISTEN_TEXT, keyCaps, KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys, bikeKeys, CONTACT, COFFEE_URL, COFFEE_TEXT, ENGINE_CREDIT, LAND_CREDITS, FAR_CREDITS, PUBLIC_MUSIC_CREDIT, PROPERTY_ATTRIBUTION, PROPERTY_LICENSE_URL } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
 
 const mailIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b1620'/%3E%3Cpath d='M12 22h40v24H12z' fill='%23eef2f6'/%3E%3Cpath d='M12 22l20 15 20-15' fill='none' stroke='%23d0632e' stroke-width='4'/%3E%3C/svg%3E";
 const PICTURES = ['mail.jpg', 'road.jpg', 'village.jpg'];
@@ -23,7 +23,7 @@ const CSS = `
 html{-webkit-text-size-adjust:100%}
 body{margin:0;overflow-x:hidden;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
 a{color:var(--accent);text-underline-offset:3px}
-a:focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:4px}
+:is(a,summary):focus-visible{outline:3px solid #fff;outline-offset:3px;border-radius:4px}
 h1,h2,.serif{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;font-weight:600;letter-spacing:-.01em}
 .page{display:grid;grid-template-columns:minmax(0,1fr);min-height:100vh}
 .picture{position:relative;height:62vh;min-height:360px;max-height:640px;overflow:hidden;background:#1b2a36}
@@ -35,8 +35,10 @@ h1,h2,.serif{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,
 h1{margin:.15em 0 .3em;font-size:clamp(42px,9vw,68px);line-height:1.02}
 h1 span{color:var(--accent)}
 .lead{margin:0;font-size:20px;line-height:1.5;color:var(--ink)}
+.actionCaption{font-size:13px;color:var(--dim)}
 .actions{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 8px}
 .button{display:inline-flex;align-items:center;min-height:48px;padding:0 20px;border-radius:8px;background:var(--accent);color:#0b1620;font-weight:700;text-decoration:none}
+.mail .button:not(.second){background:var(--strong)}
 .button.second{background:transparent;color:var(--ink);border:1px solid var(--line)}
 section{margin-top:56px}
 h2{margin:0 0 12px;font-size:30px;line-height:1.15}
@@ -44,7 +46,7 @@ h2{margin:0 0 12px;font-size:30px;line-height:1.15}
 p{margin:0 0 14px}
 .dim{color:var(--dim)}
 .features{display:grid;gap:12px;margin:20px 0 0;padding:0;list-style:none}
-.features li{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.features li{padding:8px 0}
 .features b{display:block;color:var(--ink)}
 .features span{color:var(--dim)}
 .places{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr));gap:10px;margin:16px 0 0;padding:0;list-style:none}
@@ -59,29 +61,32 @@ p{margin:0 0 14px}
 .inline-picture{margin:20px 0 0;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
 .inline-picture img{display:block;width:100%;height:auto;aspect-ratio:16/10;object-fit:cover;object-position:50% 45%}
 .inline-picture figcaption{padding:8px 14px;font-size:13px;color:var(--quiet);background:var(--panel)}
-.maker{display:grid;gap:4px;padding:20px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(135deg,var(--panel),var(--bg))}
+.maker{display:grid;gap:4px;padding:0}
 .maker .serif{font-size:24px}
 .credits{font-size:14px;line-height:1.55;color:var(--dim)}
-.credits p{margin:0 0 10px}
+.credits p{margin:0 0 10px}#credits{margin-top:56px}.credits{margin-top:0}.credits summary{cursor:pointer;min-height:44px}.signoff{margin-top:32px;font:22px/1.4 "Iowan Old Style",Palatino,Georgia,serif}
 footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:14px;color:var(--quiet);display:flex;flex-wrap:wrap;gap:8px 20px}
 /* Help pages: one column, a contents strip and control tables. */
 .page.plain{grid-template-columns:minmax(0,1fr)}
-.plain .text{margin:0 auto;padding-top:40px}
+.plain .text{max-width:880px;margin:0 auto;padding-top:40px}
 .toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0;padding:0;list-style:none}
 .toc a{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:99px;color:var(--ink);text-decoration:none;font-size:15px}
-.toc a:hover{border-color:var(--accent)}
+.toc a:is(:hover,:focus-visible){border-color:var(--accent);background:var(--accent);color:#0b1620}
+.totop a{display:inline-flex;align-items:center;min-height:44px;font-size:15px}
 .controls{display:grid;gap:16px;margin-top:16px}
 .controls h3{margin:0 0 6px;font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
-.controls dl{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.controls div.row{display:grid;grid-template-columns:minmax(96px,38%) 1fr;gap:12px;padding:10px 14px;background:var(--panel)}
+.controls dl{margin:0}
+.controls div.row{display:grid;grid-template-columns:minmax(96px,38%) 1fr;gap:12px;padding:10px 0;background:none}
 .controls div.row+div.row{border-top:1px solid var(--line)}
 .controls dt{font:700 14px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--ink)}
+.controls dt b{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-weight:600}
 .controls dd{margin:0;color:var(--dim)}
 .qa{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:12px}
-.qa li{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.qa li{padding:8px 0}
 .qa b{display:block}
 .qa span{color:var(--dim)}
-kbd{font:700 .9em ui-monospace,Menlo,Consolas,monospace;padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--panel);color:var(--ink)}
+.keyJoin{color:var(--dim)}
+kbd{font:700 max(12px,.9em) ui-monospace,Menlo,Consolas,monospace;padding:2px 6px;border:1px solid #71818e;border-bottom:2px solid #46566a;border-radius:4px;background:#20303b;color:var(--ink)}
 @media (min-width:960px){
  .page.plain .text{padding:64px 16px}
  .controls{grid-template-columns:1fr 1fr}
@@ -124,15 +129,15 @@ const MADE = (brand) => `<section aria-labelledby="made">
 <p>A road in the wrong place, or you want a place removed? Write to <a href="mailto:${CONTACT}">${CONTACT}</a>.</p>
 <p class="dim">No ads and no accounts. Your settings stay in your own browser. When you drive with others, the server passes car positions between players. A room retains its current race course, player IDs, checkpoint progress and times until the last driver leaves. It keeps no position history.</p>
 ${brand === 'mail' ? `<p class="dim" id="boardData">Today’s board keeps only what you post with <b>Post my result</b> at the end of Today’s run: the name you chose, your points, discipline step, time, bingo squares and vehicle, and a number your device makes from its own random secret for that one board, so a device posts once a day. The number for one day cannot be matched to the number for another (the name you choose can, if you keep it). That number stays with the day’s board even if your row drops out of the top 100. No account, no email and no network address. Each day’s board keeps its top 100, and the whole board is deleted after 60 days.</p>\n` : ''}</section>
-<section aria-labelledby="credits" class="credits">
-<span class="label">Credits and data</span>
-<h2 id="credits" class="sr">Credits and data</h2>
+<h2 id="credits">Credits and data</h2>
+<details open class="credits" aria-labelledby="credits"><summary>Sources and licences</summary>
 ${LAND_CREDITS}
 ${FAR_CREDITS}
 ${PUBLIC_MUSIC_CREDIT}
 ${ENGINE_CREDIT}
 <p>Property lines (optional, online only): ${PROPERTY_ATTRIBUTION} <a href="${PROPERTY_LICENSE_URL}" rel="noopener noreferrer">Licence</a></p>
-</section>`;
+</details>
+<p class="signoff">${brand === 'just' ? 'I made these roads for a slow drive. Take your time.' : 'Mail service. More or less.'}</p>`;
 
 const PAGES = {
   mail: {
@@ -143,7 +148,7 @@ const PAGES = {
 <h1>Mabou <span>Mail</span> Madness</h1>
 <p class="lead">A rural mail route you cannot win, on the real roads around Mabou. The madness is only a little exaggerated.</p>
 <p><b>Two games, one island.</b> Mabou Mail Madness gives you a mail route. <a href="https://justdrive.fakkeldy.ca/">Just Drive</a> has every area, no mail.</p>
-<div class="actions"><a class="button" href="/">Start the shift</a><a class="button second" href="https://justdrive.fakkeldy.ca/mabou">Just drive instead</a></div>
+<div class="actions"><a class="button" href="/">Start the shift</a><a class="button second" href="https://justdrive.fakkeldy.ca/mabou">Just drive instead</a></div><p class="actionCaption">Free. No download.</p>
 <section aria-labelledby="game">
 <span class="label">The game</span>
 <h2 id="game">Deliver the day’s run</h2>
@@ -166,7 +171,7 @@ ${MADE('mail')}`,
 <h1>Just Drive</h1>
 <p class="lead">Drive the real land of Cape Breton. No missions and no clock: choose a place, choose a car or a dirt bike, and go.</p>
 <p><b>Two games, one island.</b> Just Drive has every area, no mail. <a href="https://mmm.fakkeldy.ca/">Mabou Mail Madness</a> is the same land, with a mail route.</p>
-<div class="actions"><a class="button" href="/mabou">Start in Mabou</a><a class="button second" href="#places">Choose a place</a></div>
+<div class="actions"><a class="button" href="/mabou">Start in Mabou</a><a class="button second" href="#places">Choose a place</a></div><p class="actionCaption">Free. No download.</p>
 <section aria-labelledby="places">
 <span class="label">Places</span>
 <h2 id="places">Where you can drive</h2>
@@ -194,7 +199,7 @@ ${MADE('just')}`,
 // ---- Help ----
 const html = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
 /** One control table, rows exactly as the title card shows them. */
-const table = (heading, rows) => `<div><h3>${heading}</h3><dl>${rows.map(([key, what]) => `<div class="row"><dt>${html(key)}</dt><dd>${html(what)}</dd></div>`).join('')}</dl></div>`;
+const table = (heading, rows) => `<div><h3>${heading}</h3><dl>${rows.map(([key, what]) => `<div class="row"><dt>${/touch screen|controller/i.test(heading) ? `<b>${html(key.replace("W A S D", "WASD"))}</b>` : keyCaps(key.replace("W A S D", "WASD"), html)}</dt><dd>${html(what)}</dd></div>`).join('')}</dl></div>`;
 const qa = items => `<ul role="list" class="qa">${items.map(([q, a]) => `<li><b>${q}</b><span>${a}</span></li>`).join('')}</ul>`;
 
 const SETTINGS = (brand) => qa([
@@ -202,7 +207,7 @@ const SETTINGS = (brand) => qa([
   ['Full detail (phone) or Low detail (computer)', 'Full detail gives a phone or tablet sharper land, shadows and reflections; it needs a fast device. Low detail gives a slow computer a simpler picture. The page loads again.'],
   ['Grass, Shadows, Water reflections', 'On a computer, or a phone with Full detail. Turn these off for more speed.'],
   ['Hill height', '1.0 is true scale; the game starts at 1.5, for drama. Trees and buildings keep their real height.'],
-  ...(brand === 'mail' ? [['Throw help', 'On at the start. Aims the throw for you; on a phone it also lights the MAIL button when a box is in reach.'], ['END SHIFT', 'On a phone, END SHIFT is in the settings. Press it when the day is done.'], ['Start over from day 1', 'Clears your career. Your settings stay.']] : []),
+  ...(brand === 'mail' ? [['Throw help', 'On at the start. Aims the throw for you; on a phone it also lights the MAIL button when a box is in reach.'], ['END SHIFT', 'END SHIFT is in the settings and on the pause card; or press Enter.'], ['Start over from day 1', 'Clears your career. Your settings stay.']] : []),
   ['Property lines', 'Optional, online only. Shows the province’s property lines on the small map. The game asks you first.'],
   ['Offline play', 'Download for offline play keeps Mabou on this device, so it works without the internet.'],
 ]);
@@ -223,23 +228,25 @@ const HELP = {
     body: () => `<p class="kicker">Mabou Mail Madness</p>
 <h1>Help</h1>
 <p class="lead">How to deliver the day’s run, and what to do when the day goes wrong.</p>
-<ul role="list" class="toc"><li><a href="#shift">The shift</a></li><li><a href="#controls">Controls</a></li><li><a href="#settings">Settings</a></li><li><a href="#offline">Offline</a></li><li><a href="#others">Drive with others</a></li><li><a href="#trouble">Problems</a></li></ul>
+<ul role="list" class="toc" id="contents"><li><a href="#shift">The shift</a></li><li><a href="#controls">Controls</a></li><li><a href="#settings">Settings</a></li><li><a href="#offline">Offline</a></li><li><a href="#others">Drive with others</a></li><li><a href="#trouble">Problems</a></li></ul>
 <section aria-labelledby="shift">
 <span class="label">How to play</span>
 <h2 id="shift">The shift</h2>
 <ol role="list" class="steps">
 <li><b>Start the shift.</b> <span class="dim">The title card shows the controls. Press the start button.</span></li>
 <li><b>Deliver the mail.</b> <span class="dim">Drive to each box and throw the mail from the driver’s window, on the right: <kbd>M</kbd> or <kbd>E</kbd>, or tap MAIL.</span></li>
-<li><b>Stay off the lawns.</b> <span class="dim">Customers phone in. A photo taken before the damage is your only defence: <kbd>P</kbd> or CAMERA.</span></li>
+<li><b>Stay off the lawns.</b> <span class="dim">Customers phone in. A photo taken before the damage is your only defence: <kbd>C</kbd> or CAMERA.</span></li>
 <li><b>Mind the gauge.</b> <span class="dim">There is no washroom on the route. When the gauge says so, stop and step out (<kbd>B</kbd> or tap the gauge). Look for houses first.</span></li>
-<li><b>End the shift.</b> <span class="dim">Press <kbd>Enter</kbd>, or END SHIFT in the settings on a phone, and read the calls.</span></li>
+<li><b>End the shift.</b> <span class="dim">END SHIFT is in the settings and on the pause card; or press Enter. Read the calls.</span></li>
 </ol>
 <p>Prefer no mail at all? Choose <b>Just drive</b> on the title card, or go to <a href="https://justdrive.fakkeldy.ca/mabou">Just Drive</a>.</p>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="controls">
 <span class="label">Controls</span>
 <h2 id="controls">Keys and buttons</h2>
 <div class="controls">${table('Keyboard', KEYS)}${table('Touch screen', TOUCH)}${table('Controller', padKeys('car', true))}</div>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 ${COMMON('mail')}`,
   },
@@ -249,7 +256,7 @@ ${COMMON('mail')}`,
     body: () => `<p class="kicker">Just Drive</p>
 <h1>Help</h1>
 <p class="lead">How to drive, find places and get the best picture from your device.</p>
-<ul role="list" class="toc"><li><a href="#start">Start</a></li><li><a href="#controls">Controls</a></li><li><a href="#settings">Settings</a></li><li><a href="#offline">Offline</a></li><li><a href="#others">Drive with others</a></li><li><a href="#trouble">Problems</a></li></ul>
+<ul role="list" class="toc" id="contents"><li><a href="#start">Start</a></li><li><a href="#controls">Controls</a></li><li><a href="#settings">Settings</a></li><li><a href="#offline">Offline</a></li><li><a href="#others">Drive with others</a></li><li><a href="#trouble">Problems</a></li></ul>
 <section aria-labelledby="start">
 <span class="label">Start</span>
 <h2 id="start">Choose a place and go</h2>
@@ -258,11 +265,13 @@ ${COMMON('mail')}`,
 <li><b>Choose a ride.</b> <span class="dim">Car or Dirt bike, on the title card.</span></li>
 <li><b>Start driving.</b> <span class="dim">In Mabou, Judique and West Bay, open PLACES (<kbd>L</kbd>) for a list of places to see. Choose one to go straight there. The other places have no list yet: just drive.</span></li>
 </ol>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="controls">
 <span class="label">Controls</span>
 <h2 id="controls">Keys and buttons</h2>
 <div class="controls">${table('Car · keyboard', DRIVING_KEYS)}${table('Car · touch screen', DRIVING_TOUCH)}${table('Dirt bike · keyboard', bikeKeys(false))}${table('Dirt bike · touch screen', bikeKeys(true))}${table('Car · controller', padKeys('car', false))}${table('Dirt bike · controller', padKeys('bike', false))}</div>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 ${COMMON('just')}`,
   },
@@ -273,6 +282,7 @@ const COMMON = (brand) => `<section aria-labelledby="settings">
 <h2 id="settings">The ⚙ button</h2>
 <p class="dim">Your choices are saved in this browser only.</p>
 ${SETTINGS(brand)}
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="offline">
 <span class="label">Offline</span>
@@ -282,16 +292,27 @@ ${SETTINGS(brand)}
 <li><b>Download.</b> <span class="dim">In ⚙, under Play Mabou without internet, press Download for offline play.</span></li>
 <li><b>Play.</b> <span class="dim">Mabou now works without a connection. The other places need the internet.</span></li>
 </ol>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="others">
 <span class="label">Together</span>
 <h2 id="others">Drive with others</h2>
-<p>Turn on <b>Drive with others</b> on the title card, then start. Choose <b>Open road</b> to meet anyone on the same land, or <b>Private room</b> to drive with friends only: press <b>Copy invitation link</b> and send them the link. The first driver with race support is the room host. Open <b>Room race</b>, pick a short road course, then drive to the gold start ring. Stop inside it before the host presses <b>Start</b>. The countdown lasts five seconds. Stay inside the ring until GO, then visit each gold checkpoint in order. Times use the room clock and include network delay. Late arrivals spectate until the next race. A reset or leaving the start early marks you out. Races time out after ten minutes; the host can clear the race and pick another course. If the host leaves, the race clears and another driver becomes host. The room retains its current race course, player IDs, progress and times until the last driver leaves. It keeps no position history.</p>
+<ol role="list" class="steps">
+<li>Turn on <b>Drive with others</b>, then start.</li>
+<li>Choose <b>Open road</b> or <b>Private room</b>.</li>
+<li>For a private room, press <b>Copy invitation link</b> and send the link.</li>
+<li>The host opens <b>Room race</b> and picks a course.</li>
+<li>Drive to the gold start ring and stop inside it before the host presses <b>Start</b>.</li>
+<li>Stay inside until GO, then visit each gold checkpoint in order.</li>
+</ol>
+<p class="dim">Drive with others is on the title card. Open road meets anyone on the same land; Private room is for friends only. Courses are short road courses. The first driver with race support is the room host. The countdown lasts five seconds. Times use the room clock and include network delay. Late arrivals spectate until the next race. A reset or leaving the start early marks you out. Races time out after ten minutes; the host can clear the race and pick another course. If the host leaves, the race clears and another driver becomes host. The room retains its current race course, player IDs, progress and times until the last driver leaves. It keeps no position history.</p>
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>
 <section aria-labelledby="trouble">
 <span class="label">Problems</span>
 <h2 id="trouble">When something goes wrong</h2>
 ${TROUBLE(brand)}
+<p class="totop"><a href="#contents">Back to top</a></p>
 </section>`;
 
 export function helpPage(brand) {

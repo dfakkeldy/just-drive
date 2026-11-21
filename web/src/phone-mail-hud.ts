@@ -3,7 +3,7 @@ import type { DriveSession } from './explore';
 import type { Vehicle } from './vehicle';
 import { toggle } from './settings';
 import { setHud, speedReadout } from './hud-text';
-import { clock, CLOCK_FACTOR } from './shift-rules';
+import { clock, CLOCK_FACTOR, END_TIME, START_TIME } from './shift-rules';
 
 /** Settings work for every input; the compact dashboard exists only on touch mail runs. */
 export class PhoneMailHud {
@@ -40,7 +40,7 @@ export class PhoneMailHud {
     this.elapsed += Math.max(0, shift.elapsed - this.lastElapsed) / CLOCK_FACTOR;
     this.lastElapsed = shift.elapsed;
     document.body.classList.toggle('introDone', this.dismissed || this.elapsed >= 20);
-    const text = `${speedReadout(v.speed, driving ? v.activeTouchSpeedLimit : 0)} · D${shift.career.day} ${shift.done}/${shift.stops} · ${clock(shift.elapsed)} · ${v.roadName ?? 'off road'}`;
+    const text = `${speedReadout(v.speed, driving ? v.activeTouchSpeedLimit : 0)} · D${shift.career.day} ${shift.done}/${shift.stops} · ${clock(shift.elapsed)}${shift.endsAtSix ? ` → ${clock(END_TIME - START_TIME)}` : ''} · ${v.roadName ?? 'off road'}`;
     setHud(this.line, text);
     this.line.title = `${shift.run.short} · Day ${shift.career.day} · ${shift.done}/${shift.stops} stops`;
   }

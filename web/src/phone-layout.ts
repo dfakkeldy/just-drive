@@ -12,6 +12,9 @@ body.tcOn #phoneHud{display:grid}
 #phoneHud .phoneFlow{pointer-events:none;min-width:0;min-height:0}
 #phoneTop{grid-area:1/1/2/3;display:flex;align-items:start;gap:6px}
 #phoneStatus{flex:1;max-width:440px;display:flex;flex-direction:column;gap:3px}
+body.tcOn #phoneStatus{align-items:flex-start}
+body.tcOn #phoneStatus>*{max-width:100%}
+body.tcOn #firedLine{align-self:stretch}
 #phoneTop #gear{margin-left:auto}
 #phoneHint{grid-area:2/1/3/3}
 #phoneMiddle{grid-area:3/1/4/3;display:flex;justify-content:space-between;gap:6px}
@@ -58,11 +61,11 @@ body.tcOn #tcTrack{position:relative;inset:auto;width:100%;height:100%;box-sizin
 body.tcOn #tcKnob{width:52px;height:52px;margin:-26px 0 0 -26px}
 body.tcOn #tcGo,body.tcOn #tcBrake{width:76px;height:84px}
 body.tcOn #tcGo{height:100px}
-#settings{z-index:8;box-sizing:border-box;max-height:calc(100% - 84px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+#settings{z-index:8;box-sizing:border-box;
   overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 body.tcOn #settings{top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-top,env(safe-area-inset-top,0px)));
   right:calc(8px + var(--test-safe-right,env(safe-area-inset-right,0px)));min-width:0;width:min(300px,calc(100% - 16px - var(--test-safe-left,env(safe-area-inset-left,0px)) - var(--test-safe-right,env(safe-area-inset-right,0px))));
-  max-height:calc(100% - 70px - var(--phone-top-gap,6px) - var(--test-safe-top,env(safe-area-inset-top,0px)) - var(--test-safe-bottom,env(safe-area-inset-bottom,0px)))}
+}
 /* The credits button has an inline desktop height. The phone keeps a full touch target. */
 #settings button{min-height:56px!important}
 #endShift.inPanel{position:static;width:100%;margin:0 0 12px}
@@ -76,6 +79,8 @@ body.tcOn #settings{top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-t
   body.tcOn #miniMap{grid-area:1/1/3/2;width:min(96px,100%,max(58px,calc(100cqh - 58px)))}
   body.tcOn #miniMap.folded{width:58px}
   body.tcOn #relief{grid-area:1/2}body.tcOn #radio{grid-area:1/3}
+  body.tcOn #radio:not(.lost):not(.weak):not(.call) span{display:none!important}
+  body.tcOn #radio b{white-space:normal;overflow-wrap:anywhere}
   body.tcOn #photoTag{grid-area:2/2/3/4}
   body.tcOn #photoCaption{-webkit-line-clamp:2}
   body.tcOn #tcGo,body.tcOn #tcBrake,body.tcOn #tcSteer{height:72px}
@@ -102,7 +107,7 @@ body.tcOn #settings{top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-t
   box-sizing:border-box;font-size:10px;line-height:18px;padding:2px 5px;
   background:var(--panel);border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.tcOn :is(#raceReadout,#gameReadout):not([hidden]){display:block}
-body.tcOn.compactPhone #phoneLine{display:block;font-size:10px;line-height:18px;padding:2px 5px;
+body.tcOn.compactPhone #phoneLine{display:block;box-sizing:border-box;width:fit-content;max-width:100%;font-size:10px;line-height:18px;padding:2px 5px;
   background:var(--panel);border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.tcOn.mailPhone :is(#hud,#shiftHud){display:none}
 body.tcOn.mailPhone.introDone #stopHint.intro{display:none}
@@ -121,6 +126,12 @@ body.tcOn.compactPhone #miniMapCanvas{max-height:none}
 body.tcOn.compactPhone #relief{grid-area:2/1}
 body.tcOn.compactPhone #radio{grid-area:3/1}
 body.tcOn.compactPhone #photoTag{grid-area:4/1}
+@media(orientation:portrait){
+  body.tcOn.compactPhone #phoneReadouts{--leftCol:min(86px,100%)}
+  body.tcOn.compactPhone #miniMap:not(.folded),body.tcOn.compactPhone #relief,body.tcOn.compactPhone #radio{width:var(--leftCol)}
+  body.tcOn.compactPhone #phoneHud #radio:not(.lost):not(.weak):not(.call) span{display:none!important}
+  body.tcOn.compactPhone #phoneStatus:has(#bikeJump:not([hidden])){max-height:none;overflow:visible}
+}
 @media(orientation:portrait) and (max-width:343px){
   body.tcOn.compactPhone #phoneHud{grid-template-rows:auto auto minmax(0,1fr) auto auto auto}
   body.tcOn.compactPhone #phoneActions{grid-area:5/1/6/3}
@@ -181,8 +192,9 @@ body.tcOn #settings #miniMapCanvas{touch-action:pan-y}
 body.tcOn #settings #stopHint{width:100%;max-width:none;white-space:pre-line;font-size:11px;line-height:15px;padding:3px 6px}
 body.tcOn #settings #photoCaption{-webkit-line-clamp:unset}
 body.tcOn #settings #placeArrival{height:auto;max-height:none;white-space:normal;font-size:11px;line-height:15px;padding:6px 8px}
-@media(orientation:landscape){body.tcOn.compactPhone #placeArrival{height:14px;max-height:14px;min-height:0;padding:0 4px;border:0;overflow:hidden;white-space:nowrap;font-size:10px;line-height:14px}}
+@media(orientation:landscape){body.tcOn.compactPhone #placeArrival{width:fit-content;min-width:0;height:14px;max-height:14px;min-height:0;padding:0 4px;border:0;overflow:hidden;white-space:nowrap;font-size:10px;line-height:14px}body.tcOn.compactPhone #phoneHud #placeArrival{width:fit-content;min-width:0}body.tcOn.compactPhone #phoneHud #placeArrival p{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}}
 body.tcOn #settings :is(#radio,#relief,#photoTag){width:100%;max-width:none}
+@media(orientation:landscape){body.tcOn #radio:not(.lost):not(.weak):not(.call) span{display:none!important}body.tcOn #radio b,body.tcOn.compactPhone #radio b{display:block!important;white-space:normal;overflow-wrap:anywhere}}
 #phoneReadoutsPanel[hidden]{display:none}
 `;
 

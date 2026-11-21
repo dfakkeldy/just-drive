@@ -80,10 +80,11 @@ export function rideFeatures(vehicle: Ride, entry: GarageEntry, terrain: Terrain
       let line = horse ? (explore ? horseHelp : horseMailHelp) : kind === 'bike' ? bikeHelp : exploreHelp;
       if (just && !radio) line = line.replace(' · T: radio', '');
       if (just) line = line.replace(/\bShift\b/g, '⇧');
-      return line + airLine();
+      return line;
     },
-    /** The same help for a controller (controls.ts padHelp), with the bike's last jump. */
-    get padHelp(): string { return padHelp(kind, !explore, radio && !horse) + airLine(); },
+    /** The same help for a controller (controls.ts padHelp). */
+    get padHelp(): string { return padHelp(kind, !explore, radio && !horse); },
+    get airLine(): string { return airLine(); },
     get jumpLine(): string {
       const j = bike?.lastJump;
       const text = !j || j.airTime <= 1 ? '' : `Air ${j.airTime.toFixed(1)} s · ${j.distance.toFixed(0)} m${j.pitchRotations ? ` · ${Math.abs(j.pitchRotations)} ${j.pitchRotations > 0 ? 'backflip' : 'frontflip'}${Math.abs(j.pitchRotations) > 1 ? 's' : ''}` : ''} · ${j.clean ? 'clean' : 'tumble'}`;

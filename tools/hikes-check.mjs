@@ -8,19 +8,24 @@ const [out, first]=process.argv.slice(2), base=new URL(first).origin;
 process.env.OUT=out;
 const results=[], family=process.env.HIKES_FAMILY??'all';
 function check(value,name){results.push({name,pass:!!value});console.log(`${value?'PASS':'FAIL'} ${name}`);if(process.env.HIKES_PROBE===name){const marker=(value?'MUTATION MISSED: ':'MUTATION DETECTED: ')+name;console.error(marker);throw Error(marker);}assert.ok(value,name);}
+const mapHeaderFits=async p=>check(await p.read(`(()=>{const h=document.getElementById('bigMapHeading'),header=h.closest('header'),b=header.getBoundingClientRect(),items=[...header.children].filter(e=>e.getClientRects().length).map(e=>e.getBoundingClientRect());return getComputedStyle(h).fontFamily===getComputedStyle(document.querySelector('#settingsHeader h2')).fontFamily&&header.scrollWidth<=header.clientWidth&&items.every(r=>r.left>=b.left&&r.right<=b.right&&r.top>=b.top&&r.bottom<=b.bottom)&&items.slice(1).every((r,i)=>r.left>=items[i].right);})()`),'map heading matches Settings; header buttons fit without overlap');
 const run=async(name,query,fn,w=1600,h=1000,init='')=>{if(family!=='all'&&family!==name)return;const p=await hikesPage(base,query,w,h,init);try{await fn(p);check(!p.errors.length,`${name} ${w} has no runtime errors`);}finally{await p.close();}};
 await run('map','mode=explore&at=624271,5103301,0',async p=>{
-  await p.read(`window.mapTexts=[];const g=mmm.bigMap.g,orig=g.fillText.bind(g);g.fillText=(...a)=>{mapTexts.push(a[0]);return orig(...a)};window.trailStrokes=0;const layer=mmm.bigMap.layer.getContext('2d'),stroke=layer.stroke.bind(layer);layer.stroke=(...a)=>{if(layer.getLineDash().length)trailStrokes++;return stroke(...a)};`);
+  await p.read(`window.mapHalos=[];window.mapTexts=[];const g=mmm.bigMap.g,orig=g.fillText.bind(g);g.fillText=(...a)=>{mapTexts.push(a[0]);return orig(...a)};const halo=g.strokeText.bind(g);g.strokeText=(...a)=>{mapHalos.push(a[0]);return halo(...a)};window.trailStrokes=0;const layer=mmm.bigMap.layer.getContext('2d'),stroke=layer.stroke.bind(layer);layer.stroke=(...a)=>{if(layer.getLineDash().length)trailStrokes++;return stroke(...a)};`);
   await p.read(`window.driveThrottles=[];const step=mmm.vehicle.update.bind(mmm.vehicle);mmm.vehicle.update=(...args)=>{driveThrottles.push(args[1].throttle);return step(...args)}`);
   await p.key('KeyW');await sleep(1000);await p.tap('KeyM');await sleep(600);
   check(await p.read(`!document.getElementById('bigMap').hidden`),'M opens big map');
+  await p.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:2,mobile:false});await sleep(150);await mapHeaderFits(p);
+  await p.send('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:2,mobile:false});await sleep(150);
   const paused=await p.read(`JSON.stringify([mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.speed])`);await sleep(700);
   check(await p.read(`JSON.stringify([mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.speed])`)===paused,'big map pauses the game');
   check(await p.read(`document.getElementById('c').inert&&document.activeElement.closest('#bigMap')!==null&&document.getElementById('bigMap').getAttribute('aria-modal')==='true'`),'map owns focus and makes background inert');
   check(await p.read(`mmm.bigMap.canvas.width===Math.round(mmm.bigMap.w*2)&&mmm.bigMap.canvas.height===Math.round(mmm.bigMap.h*2)`),'map canvas is sharp at Retina ratio');
-  check(await p.read(`document.querySelectorAll('#mapIndex [data-map-place]').length===mmm.places.places.length&&document.querySelectorAll('#mapIndex [data-hike]').length===3&&trailStrokes>=mmm.bigMap.lines.length&&mmm.bigMap.lines.length>0&&mmm.bigMap.hitMarks.length===mmm.places.places.length`),'map shows every place and hike');
+  await p.read('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  console.log('map counts',await p.read('JSON.stringify([mmm.places.places.map(p=>p.id).filter(id=>!mmm.bigMap.places.some(q=>q.id===id)),mmm.bigMap.places.length,mmm.bigMap.hitMarks.length,trailStrokes,mmm.bigMap.lines.length])'));
+  check(await p.read(`(()=>{const m=mmm.bigMap,b=m.box,ids=[...document.querySelectorAll('#mapIndex [data-map-place]')].map(e=>e.dataset.mapPlace),own=new Set(m.places.map(p=>p.id));return ids.length===m.places.length&&new Set(ids).size===ids.length&&ids.every(id=>own.has(id))&&mmm.places.places.filter(p=>!p.trip&&!own.has(p.id)).every(p=>p.e<b[0]||p.e>b[2]||p.n<b[1]||p.n>b[3]);})()&&document.querySelectorAll('#mapIndex [data-hike]').length===3&&trailStrokes>=mmm.bigMap.lines.length&&mmm.bigMap.lines.length>0&&mmm.bigMap.hitMarks.length===mmm.bigMap.places.length`),'map shows every place and hike');
   console.log('map labels',await p.read('mapTexts'));await p.shot('01-big-map-whole');
-  check(await p.read(`mapTexts.includes('Highway 19')&&mapTexts.some(t=>t==='Mabou Rivers Trail')&&mapTexts.includes('You are here')&&mapTexts.includes('↑ N')&&mapTexts.some(t=>/ km$/.test(t))`),'map draws road and trail names, heading, scale and north');
+  check(await p.read(`mapHalos.includes('Highway 19')&&mapHalos.includes('Mabou Rivers Trail')&&!mapHalos.includes('You are here')&&mapTexts.includes('Highway 19')&&mapTexts.some(t=>t==='Mabou Rivers Trail')&&mapTexts.includes('You are here')&&mapTexts.includes('↑ N')&&mapTexts.some(t=>/ km$/.test(t))`),'map draws road and trail names, heading, scale and north');
   await p.shot('01-big-map-whole');
   const cache=await p.read(`JSON.stringify([mmm.bigMap.cached,mapTexts.length,trailStrokes])`);await sleep(500);check(cache===await p.read('JSON.stringify([mmm.bigMap.cached,mapTexts.length,trailStrokes])'),'idle map keeps static layer');
   await p.read(`mmm.bigMap.view(624271,5103301,4)`);await sleep(200);await p.shot('02-map-village');
@@ -34,9 +39,9 @@ await run('map','mode=explore&at=624271,5103301,0',async p=>{
   await p.tap('Escape');check(await p.read(`document.getElementById('bigMap').hidden&&!document.getElementById('c').inert`),'Escape closes map and restores background');
   await p.read('driveThrottles=[]');await sleep(600);check(await p.read('driveThrottles.length>0&&driveThrottles.every(t=>t===0)'),'key held before map does not drive after close');await p.key('KeyW',false);
   await p.tap('KeyM');await p.read(`document.getElementById('mapPlacesToggle').click()`);
-  const seen=[];
-  for(let i=0;i<30;i++){await p.tap('Tab');seen.push(await p.read(`document.activeElement?.dataset.mapPlace??null`));}
-  check(await p.read(`mmm.places.places.every(p=>${JSON.stringify(seen)}.includes(p.id))`),'Tab reaches every map place');
+  const seen=[], tabs=await p.read(`[...document.querySelectorAll('#bigMap button')].filter(b=>b.getClientRects().length>0).length`);
+  for(let i=0;i<tabs;i++){await p.tap('Tab');seen.push(await p.read(`document.activeElement?.dataset.mapPlace??null`));}
+  check(await p.read(`mmm.bigMap.places.length>0&&mmm.bigMap.places.every(p=>${JSON.stringify(seen)}.includes(p.id))`),'Tab reaches every map place');
   await p.read(`document.querySelector('[data-map-place="village"]').focus()`);await p.tap('Enter');
   check(await p.read(`!document.getElementById('mapCard').hidden&&document.getElementById('mapCard').textContent.includes('Mabou village')&&document.getElementById('mapGo')!==null`),'Enter opens a place card');await p.shot('04-place-card');
   await p.read(`mmm.bigMap.showCard(mmm.places.places.find(p=>p.id==='highlands-trailhead'))`);
@@ -53,6 +58,26 @@ await run('map','mode=explore&at=624271,5103301,0',async p=>{
   const hit=await p.read(`(()=>{const r=mmm.bigMap.canvas.getBoundingClientRect(),m=mmm.bigMap.hitMarks.find(m=>m.place.id==='west-mabou-beach');return {x:m.x+r.x,y:m.y+r.y}})()`);
   await p.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...hit});await p.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...hit});
   check(await p.read(`document.getElementById('mapCard').dataset.place==='west-mabou-beach'&&!document.getElementById('mapCard').hidden`),'canvas click selects a trailhead');
+  // Fit the full set so a displaced label exercises a hit beyond the dot's 24px fallback.
+  await p.read(`document.getElementById('mapCard').hidden=true;mmm.bigMap.fit()`);await sleep(150);
+  const tag=await p.read(`(()=>{const map=mmm.bigMap,r=map.canvas.getBoundingClientRect(),m=map.hitMarks.find(m=>m.rect&&Math.hypot(m.rect.x+m.rect.w/2-m.x,m.rect.y+m.rect.h/2-m.y)>30);return m?{id:m.place.id,x:r.x+m.rect.x+m.rect.w/2,y:r.y+m.rect.y+m.rect.h/2}:null;})()`);
+  check(!!tag,'a displaced place tag is available');
+  await p.send('Input.dispatchMouseEvent',{type:'mouseMoved',...{x:tag.x,y:tag.y}});
+  const pointed=await p.read(`mmm.bigMap.canvas.style.cursor==='pointer'`);
+  await p.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,x:tag.x,y:tag.y});
+  const dragging=await p.read(`mmm.bigMap.canvas.style.cursor===''`);
+  await p.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,x:tag.x,y:tag.y});
+  check(await p.read(`document.getElementById('mapCard').dataset.place===${JSON.stringify(tag.id)}&&!document.getElementById('mapCard').hidden`),'canvas click on a place tag opens its card');
+  await p.read(`document.getElementById('mapCard').hidden=true`);
+  const empty=await p.read(`(()=>{const map=mmm.bigMap,r=map.canvas.getBoundingClientRect();for(let y=60;y<map.h-80;y+=30)for(let x=40;x<map.w-40;x+=30)if(!map.pick([x,y]))return {x:x+r.x,y:y+r.y};})()`);
+  await p.send('Input.dispatchMouseEvent',{type:'mouseMoved',...empty});
+  check(pointed&&dragging&&await p.read(`mmm.bigMap.canvas.style.cursor===''`),'cursor shows pointer over a tag and grab elsewhere');
+  const center=await p.read('mmm.bigMap.center');
+  await p.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,x:tag.x,y:tag.y});
+  await p.send('Input.dispatchMouseEvent',{type:'mouseMoved',button:'left',buttons:1,x:tag.x+40,y:tag.y+20});
+  await p.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,x:tag.x+40,y:tag.y+20});
+  check(await p.read(`document.getElementById('mapCard').hidden`)&&JSON.stringify(await p.read('mmm.bigMap.center'))!==JSON.stringify(center),'drag from a tag pans without opening a card');
+
 });
 for(const [w,h]of [[844,390],[390,844]].filter(([w])=>!process.env.HIKES_WIDTH||w===Number(process.env.HIKES_WIDTH)))await run('phone','mode=explore&touch=1&at=624271,5103301,0',async p=>{
   await p.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
@@ -64,6 +89,7 @@ for(const [w,h]of [[844,390],[390,844]].filter(([w])=>!process.env.HIKES_WIDTH||
   await p.touch('#placesButton');await sleep(250);
   check(await p.read(`(()=>{const e=document.getElementById('placesMap'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !document.getElementById('placesPanel').hidden&&r.width>=56&&r.height>=56&&r.top>=0&&r.bottom<=innerHeight&&(at===e||e.contains(at))})()`),`phone ${w} MAP control is reachable`);
   await p.touch('#placesMap');await sleep(250);check(await p.read(`!document.getElementById('bigMap').hidden&&document.getElementById('placesPanel').hidden`),`phone ${w} touch opens map`);
+  await mapHeaderFits(p);
   await p.shot(w===844?'13-map-phone-landscape':'14-map-phone-portrait');
   const scale=await p.read('mmm.bigMap.scale'), y=await p.read(`mmm.bigMap.canvas.getBoundingClientRect().y+mmm.bigMap.h/2`);
   await p.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:w/2-40,y},{id:2,x:w/2+40,y}]});
