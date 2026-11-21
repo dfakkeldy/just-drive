@@ -2,9 +2,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
-const output = await build({ stdin: { contents: `export * from './mp/room-cards';export {Multiplayer} from './mp/index';export { SocialView } from './mp/social-view';export { RaceView } from './mp/race';export { GameView } from './mp/games';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, createDroneSticks, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
+const output = await build({ stdin: { contents: `export * from './mp/room-cards';export {Multiplayer} from './mp/index';export { SocialView } from './mp/social-view';export { RaceView } from './mp/race';export { GameView } from './mp/games';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, createDroneSticks, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';export { BigMap } from './big-map';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
 const module = { exports: {} }; new Function('module','exports',output.outputFiles[0].text)(module,module.exports);
-const { Multiplayer, mountRoomCard, removeRoomCard, fitRoomCards, RoomCountdown, RaceView, GameView, Drone, createDroneSticks, DRONE_HELP, MiniMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP } = module.exports;
+const { Multiplayer, mountRoomCard, removeRoomCard, fitRoomCards, RoomCountdown, RaceView, GameView, Drone, createDroneSticks, DRONE_HELP, MiniMap, BigMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP } = module.exports;
 const paint = [];
 const context = new Proxy({ measureText: text => ({width:text.length*6}) }, { get: (o,k) => o[k] ?? ((...args) => paint.push([k,...args])) });
 class Element {
@@ -46,17 +46,36 @@ for(const touch of [false,true]){
  }
  removeRoomCard(cards[0]);assert.ok(home.parentElement,'other cards keep their home');removeRoomCard(cards[1]);removeRoomCard(cards[2]);assert.equal(home.parentElement,null,'disconnect removes the empty home');
 }
-// The gear observes timestamps even when the capped chat array keeps the same length.
+// The gear observes incoming peer messages even when the capped chat array keeps the same length or a local echo follows in the same frame.
 {
  const gear=Object.assign(new Element(),{id:'gear'});body.append(gear);
  const badge=new Element(),unreadDot=new Element(),net={status:'on',count:1,me:{id:1},chats:[]};
- const room=Object.assign(Object.create(Multiplayer.prototype),{gear,badge,unreadDot,net,newestChat:-Infinity,unread:false});
+ const room=Object.assign(Object.create(Multiplayer.prototype),{gear,badge,unreadDot,net,seenPeerChat:null,unread:false});
  room.updateGear();assert.equal(badge.textContent,'1');assert.equal(badge.hidden,false);assert.equal(gear.getAttribute('aria-label'),'Settings and room: 1 other driver');
  net.chats=Array.from({length:6},(_,i)=>({id:1,at:i}));room.updateGear();assert.equal(unreadDot.hidden,true,'own chat is not unread');
  net.chats.shift();net.chats.push({id:2,at:6});room.updateGear();assert.equal(unreadDot.hidden,false);assert.match(gear.getAttribute('aria-label'),/, new message$/);
  settings.classList.add('open');room.updateGear();assert.equal(unreadDot.hidden,true);assert.doesNotMatch(gear.getAttribute('aria-label'),/new message/);settings.classList.remove('open');
+ // Peer chat followed by own echo before the next frame must still mark unread.
+ net.chats.shift();net.chats.push({id:2,at:7});net.chats.shift();net.chats.push({id:1,at:7});room.updateGear();
+ assert.equal(unreadDot.hidden,false,'local echo after peer chat does not mask unread state');assert.match(gear.getAttribute('aria-label'),/, new message$/);
+ settings.classList.add('open');room.updateGear();assert.equal(unreadDot.hidden,true);settings.classList.remove('open');
+ // Another peer message at the same timestamp still marks unread by object identity.
+ net.chats.shift();net.chats.push({id:2,at:7});room.updateGear();assert.equal(unreadDot.hidden,false,'same-timestamp peer message marks unread');
+ settings.classList.add('open');room.updateGear();settings.classList.remove('open');
  net.count=0;room.updateGear();assert.equal(badge.hidden,true);assert.equal(gear.getAttribute('aria-label'),'Settings and room: nobody else on the road');
  net.status='retry';room.updateGear();assert.equal(gear.getAttribute('aria-label'),'Settings');assert.equal(unreadDot.hidden,true);gear.remove();
+}
+// BigMap.pick prefers painted label rectangles over closer centres of padded neighbours.
+{
+ const longPlace={id:'long'},shortPlace={id:'short'};
+ const picker={hitMarks:[
+  {place:longPlace,x:0,y:0,rect:{x:100,y:100,w:180,h:18}},
+  {place:shortPlace,x:0,y:200,rect:{x:240,y:126,w:40,h:18}},
+ ]};
+ // Inside longPlace's painted rect near its right end, closer to shortPlace's centre (260,135) than longPlace's (190,109).
+ assert.equal(BigMap.prototype.pick.call(picker,[265,114]),longPlace,'painted label hit beats closer padded neighbour centre');
+ // Outside both painted rects in the shared padding gap, nearest centre wins.
+ assert.equal(BigMap.prototype.pick.call(picker,[260,123]),shortPlace,'padded fallback picks the nearest label centre');
 }
 // Use CSS-like column geometry to check both the open and folded footprints.
 for(const id of ['endShift','credit'])document.getElementById(id).remove();
@@ -162,6 +181,23 @@ const map=new MiniMap({roads:[]});const root=document.getElementById('miniMap'),
 assert.equal(root.classList.contains('folded'),true);map.setFlight(true);assert.equal(root.parentElement,body);assert.equal(root.classList.contains('folded'),false);
 assert.equal(document.getElementById('miniMapCanvas').style.width,'156px','flight uses the shared readout column');
 assert.equal(body.style['--droneCol'],'158px');
+assert.equal(body.classList.contains('droneStack'),false);
+// Narrow landscape (440x320) fits both columns cleanly left of Pause; tighter screens stack.
+{
+ const pause=Object.assign(new Element(),{id:'pauseButton',rect:{left:308,right:364,top:10,bottom:66,width:56,height:56}});body.append(pause);
+ innerWidth=440;innerHeight=320;resize();
+ const col=parseFloat(body.style['--droneCol']);
+ assert.equal(body.classList.contains('droneStack'),false,'440x320 keeps side-by-side drone columns');
+ assert.ok(10+col+8+col<=pause.rect.left-8,`two landscape columns clear Pause (right=${10+col+8+col}, pause.left=${pause.rect.left})`);
+ assert.equal(document.getElementById('miniMapCanvas').style.width,`${col-2}px`);
+ pause.rect={...pause.rect,left:210,right:266};innerWidth=360;innerHeight=320;resize();
+ assert.equal(body.classList.contains('droneStack'),true,'very narrow landscape stacks drone map below HUD');
+ const stackedCol=parseFloat(body.style['--droneCol']);
+ assert.ok(10+stackedCol<=pause.rect.left-8,'stacked column clears Pause');
+ pause.remove();innerWidth=844;innerHeight=390;resize();
+ assert.equal(body.classList.contains('droneStack'),false);
+ assert.equal(document.getElementById('miniMapCanvas').style.width,'156px');
+}
 // Keep the 96px flight compass coverage as well as the new flight default.
 map.size=96;
 const parked={x:8,z:9};paint.length=0;map.update(1,10,20,Math.PI/2,[],[],[],parked);

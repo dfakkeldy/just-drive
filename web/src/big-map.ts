@@ -187,12 +187,17 @@ export class BigMap {
   private pick(p: Point): Place | undefined {
     const hit = this.hitMarks.map(m => ({ ...m, d: Math.hypot(m.x - p[0], m.y - p[1]) })).sort((a, b) => a.d - b.d)[0];
     if (hit?.d < 8) return hit.place;
-    const tags = this.hitMarks.filter(({rect:r}) => {
+    const dist = (r: { x: number; y: number; w: number; h: number }) => Math.hypot(r.x + r.w / 2 - p[0], r.y + r.h / 2 - p[1]);
+    const inside = (r: { x: number; y: number; w: number; h: number }, xPad: number, yPad: number) =>
+      p[0] >= r.x - xPad && p[0] <= r.x + r.w + xPad && p[1] >= r.y - yPad && p[1] <= r.y + r.h + yPad;
+    const tags = this.hitMarks.filter(({ rect: r }) => {
       if (!r) return false;
-      const pad = Math.max(4, (44 - r.h) / 2);
-      return p[0] >= r.x - 4 && p[0] <= r.x + r.w + 4 && p[1] >= r.y - pad && p[1] <= r.y + r.h + pad;
-    }).sort((a, b) => Math.hypot(a.rect!.x + a.rect!.w / 2 - p[0], a.rect!.y + a.rect!.h / 2 - p[1]) - Math.hypot(b.rect!.x + b.rect!.w / 2 - p[0], b.rect!.y + b.rect!.h / 2 - p[1]));
-    if (tags[0]) return tags[0].place;
+      return inside(r, 4, Math.max(4, (44 - r.h) / 2));
+    });
+    const exact = tags.filter(({ rect: r }) => inside(r!, 0, 0)).sort((a, b) => dist(a.rect!) - dist(b.rect!));
+    if (exact[0]) return exact[0].place;
+    const padded = tags.sort((a, b) => dist(a.rect!) - dist(b.rect!));
+    if (padded[0]) return padded[0].place;
     if (hit?.d < 24) return hit.place;
     return undefined;
   }

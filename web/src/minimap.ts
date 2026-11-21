@@ -33,8 +33,8 @@ body.tcOn #miniMap.enlarged #miniMapCanvas{max-height:none}
 #miniMap[hidden]{display:none}
 body.indoorOn #miniMap{display:none}
 /* Mirror #hud's 10px top plus the safe inset (web/index.html, and the touch-flight #hud rule in drone.ts); leave a 10px gap. */
-body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(20px + env(safe-area-inset-top,0px) + var(--droneHudH,154px));pointer-events:auto}
-@media(orientation:landscape) and (max-height:450px){body.droneOn.droneSticks #miniMap:not(.enlarged){top:calc(10px + env(safe-area-inset-top,0px));left:calc(max(10px, var(--test-safe-left, env(safe-area-inset-left, 0px))) + var(--droneCol) + 8px)}}
+body.droneOn.droneSticks #miniMap:not(.enlarged){left:max(10px,var(--test-safe-left,env(safe-area-inset-left,0px)));top:calc(20px + env(safe-area-inset-top,0px) + var(--droneHudH,154px));pointer-events:auto}
+@media(orientation:landscape) and (max-height:450px){body.droneOn.droneSticks:not(.droneStack) #miniMap:not(.enlarged){top:calc(10px + env(safe-area-inset-top,0px));left:calc(max(10px, var(--test-safe-left, env(safe-area-inset-left, 0px))) + var(--droneCol) + 8px)}}
 `;
 
 const RANGES = [450, 1200, 3200];                 // metres from the car to the edge of the map
@@ -169,18 +169,30 @@ export class MiniMap {
   }
 
   private fit() {
+    const safe = (side: string) => parseFloat(getComputedStyle(document.getElementById('phoneHud') ?? document.body).getPropertyValue(`--safe-${side}`)) || 0;
     const sticks = this.flight && document.body.classList.contains('droneSticks');
-    let flightSize = 156;
+    let flightSize = 156, stacked = false;
     if (sticks) {
+      const testSafeLeft = parseFloat(getComputedStyle(document.body).getPropertyValue('--test-safe-left')) || 0;
+      const leftEdge = Math.max(10, testSafeLeft || safe('left'));
+      let rightLimit = innerWidth - 10;
       for (const id of ['bigMapButton', 'pauseButton']) {
         const e = document.getElementById(id), r = e && !e.hidden ? e.getBoundingClientRect() : null;
-        if (r?.width) flightSize = Math.min(flightSize, r.left - 10 - 8 - 2);
+        if (r?.width) rightLimit = Math.min(rightLimit, r.left);
+      }
+      const single = Math.max(72, Math.min(156, Math.floor(rightLimit - leftEdge - 10)));
+      if (innerWidth >= innerHeight && innerHeight <= 450) {
+        const paired = Math.floor((rightLimit - leftEdge - 16) / 2) - 2;
+        if (paired >= 96) flightSize = Math.min(156, paired);
+        else { stacked = true; flightSize = single; }
+      } else {
+        flightSize = single;
       }
       document.body.style.setProperty('--droneCol', `${flightSize + 2}px`);
     }
+    document.body.classList.toggle('droneStack', stacked);
     const small = sticks ? flightSize : Math.min(innerWidth, innerHeight) < 520 ? 124 : 176;
     const phone = document.body.classList.contains('tcOn');
-    const safe = (side: string) => parseFloat(getComputedStyle(document.getElementById('phoneHud') ?? document.body).getPropertyValue(`--safe-${side}`)) || 0;
     const css = this.large ? Math.max(1, Math.min(600, innerWidth - 24 - safe('left') - safe('right'),
       innerHeight - (phone ? 56 : 28) - 24 - safe('top') - safe('bottom') - this.creditSpace)) : small;
     const dpr = Math.min(devicePixelRatio || 1, 2);

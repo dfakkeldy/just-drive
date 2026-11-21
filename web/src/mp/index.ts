@@ -46,7 +46,7 @@ export class Multiplayer {
   private readonly gear: HTMLElement | null;
   private badge: HTMLElement | null = null;
   private unreadDot: HTMLElement | null = null;
-  private newestChat = -Infinity;
+  private seenPeerChat: { id: number; at: number } | null = null;
   private unread = false;
   private readonly local: Local = { flags: 0, steer: 0, heading: 0, x: 0, z: 0, vx: 0, vz: 0, air: 0 };
   /** For test scripts on the dev server: they play other games by hand. */
@@ -134,10 +134,14 @@ export class Multiplayer {
   private updateGear(): void {
     if (!this.badge || !this.unreadDot || !this.gear) return;
     const on = this.net.status === 'on', open = document.getElementById('settings')?.classList.contains('open');
-    const chat = this.net.chats.at(-1);
-    if (chat && chat.at !== this.newestChat) {
-      this.newestChat = chat.at;
-      if (on && !open && chat.id !== this.net.me?.id) this.unread = true;
+    const me = this.net.me?.id;
+    let peerChat: { id: number; at: number } | null = null;
+    for (let i = this.net.chats.length - 1; i >= 0; i--) {
+      if (this.net.chats[i]!.id !== me) { peerChat = this.net.chats[i]!; break; }
+    }
+    if (peerChat !== this.seenPeerChat) {
+      this.seenPeerChat = peerChat;
+      if (on && !open && peerChat) this.unread = true;
     }
     if (!on || open) this.unread = false;
     this.badge.hidden = !on || this.net.count < 1;
@@ -191,7 +195,7 @@ export class Multiplayer {
     this.host.scene.remove(this.ghosts.group);
     this.ghosts.dispose();
     this.chip?.remove();
-    this.badge?.remove(); this.unreadDot?.remove(); this.unread = false;
+    this.badge?.remove(); this.unreadDot?.remove(); this.seenPeerChat = null; this.unread = false;
     if (this.badge) this.gear?.setAttribute('aria-label', 'Settings');
   }
 }
