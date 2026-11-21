@@ -765,8 +765,11 @@ const siteContacts: [string, ContactSite | null][] = [
 // A place without a row would compile and boot, and the car would drive through it. Stop at boot instead.
 for (const name of Object.keys(places)) if (!siteContacts.some(([row]) => row === name)) throw new Error(`hand-built place '${name}' has no contact row`);
 for (const [, row] of siteContacts) if (row) fleetContacts.add(row);
-// Solo driving (no fleet, no quarry) keeps its own order of the same rows (#57): tall moves after every other site,
-// and the park after tall. A new site row lands in both lists.
+// Solo driving (no fleet, no quarry) keeps its own order of the same rows: tall moves after every other site,
+// and the park after tall. This is kept history, not a known overlap rule. The old hand-written solo resolver got tall
+// at its end with the turbines (#9), and the park after it when Kicker Field opened (#57), so ordinary rides kept their
+// exact poses. No known overlap depends on this order; the works yard and Kicker Field are the one pair where it could.
+// A new site row lands in both lists, with the same neighbours; only its place next to tall and the park differs.
 const soloContacts = new AreaContacts();
 for (const [, row] of [...siteContacts.filter(([name]) => name !== 'tall'), ...siteContacts.filter(([name]) => name === 'tall')]) if (row) soloContacts.add(row);
 if (parkContacts) soloContacts.add(parkContacts);
