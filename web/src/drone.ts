@@ -201,8 +201,9 @@ export class Drone {
 // middle, so letting go hovers. RETURN flies home; a second tap lands at once.
 
 const CSS = `
+body.droneSticks{--drone-stick-size:min(132px,34vw,42vh)}
 .droneStick{position:fixed;z-index:6;bottom:calc(14px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));
-  width:var(--stick);height:var(--stick);--stick:min(132px,34vw,42vh);border-radius:50%;box-sizing:border-box;
+  width:var(--drone-stick-size);height:var(--drone-stick-size);border-radius:50%;box-sizing:border-box;
   background:var(--panel,rgba(8,14,20,.6));border:2px solid rgba(238,242,246,.3);touch-action:none;user-select:none;-webkit-user-select:none}
 .droneStick[hidden],#droneReturn[hidden]{display:none}
 #droneLeft{left:calc(14px + env(safe-area-inset-left,0px))}
@@ -216,7 +217,7 @@ const CSS = `
   min-width:96px;height:56px;border-radius:10px;border:1px solid rgba(238,242,246,.4);background:var(--panel-solid,#0b1219);
   color:var(--ink,#eef2f6);font:700 12px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em}
 #droneReturn:active{background:var(--maple,#d0632e)}
-@media (max-width:420px){#droneReturn{bottom:calc(14px + min(132px,34vw,42vh) + 24px + env(safe-area-inset-bottom,0px))}}
+@media (max-width:420px){#droneReturn{bottom:calc(14px + var(--drone-stick-size) + 24px + env(safe-area-inset-bottom,0px))}}
 #droneButton{flex:none;width:56px;height:56px;border-radius:10px;border:1px solid rgba(238,242,246,.3);background:var(--panel,rgba(8,14,20,.72));
   color:var(--ink,#eef2f6);font:700 10.5px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;padding:0;pointer-events:auto}
 #droneButton:active{background:var(--maple,#d0632e)}

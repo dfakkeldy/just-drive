@@ -69,7 +69,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
     renderer: { domElement: { width:1280, height:720 }, set localClippingEnabled(v) { trace('clipping')(v); }, render: trace('render') },
     multiplayer: { ...update('multiplayer'), choice: { on: false } }, scene: {}, LOW: true, CLOCK_FACTOR: 120, page: { stopped: false, ready: trace('page.ready'), fail: error => { throw error; } },
     document: { hidden: false }, keys: new Set(), mailPointers: new Set(), mailButton: null, mailScore: null, phoneMailHud: update('phoneMailHud'),
-    pendingShot: null, mailRequested: false, photoRequested: false, touchDevice: false, bare: true,
+    pendingShot: null, mailRequested: false, photoRequested: false, pictureRequested: false, pictureButton: null, touchDevice: false, bare: true,
     flySpeed: 20, SHOTS: [], AREA: {}, EXAG: 1.5,
     requestAnimationFrame: trace('raf'),
     // The old picture, straight to the screen (finish-choice.ts): the fixture's page is at low detail.

@@ -40,6 +40,7 @@ body:has(#sunSeeker[open]) > :not(#c, #credit, #sunSeeker) { visibility: hidden;
 #sunSeeker input { display: block; width: 100%; font-size: 16px; }
 #sunSeeker input[type=range] { min-height: 28px; margin: 0 0 5px; padding: 0; accent-color: #ffd477; }
 .sunClock p { margin: 7px 0 0; }
+.sunSaveStatus:not(:empty) { display: block; margin-top: 5px; }
 .sunReadings small, .sunClock small { color: #c9d4de; }
 .sunNoon { margin: 7px 0 3px; }
 .sunSummary { display: none; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }

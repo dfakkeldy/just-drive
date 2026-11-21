@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Real-page mode, session, places and phone regression. Run through yard-shots.sh:
 // RUN=explore-check.mjs HUD=1 VIEWS="explore|mode=explore" WEB_PORT=5241 CDP_PORT=9441 tools/yard-shots.sh 1600 1000
-// EXPLORE_BASE=1 captures the original mail UI before implementation. SHOTS=1 writes the nine requested pictures.
+// EXPLORE_BASE=1 captures the original mail UI before implementation. SHOTS=1 captures the test views.
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { assertMailCar } from './mail-car-body.mjs';
@@ -14,6 +14,97 @@ const mailBaseline = {"hash":"80ae3b403ba84a165e6735231c15bc9190cc97eb3f048274cd
 const results = [], ownedTabs = [];
 process.on('uncaughtException', async error => { console.error(error.stack); for(const tab of ownedTabs){try{await fetch(`http://127.0.0.1:${port}/json/close/${tab.id}`);tab.ws?.close();}catch{}}process.exit(1); });
 function check(value, name) { results.push({name,pass:!!value}); console.log(`${value?'PASS':'FAIL'} ${name}`); if(process.env.EXPLORE_PROBE===name)throw new Error((value?'MUTATION MISSED: ':'MUTATION DETECTED: ')+name); }
+
+function watchPictures() {
+ const {renderer, camera, drone, vehicle} = window.mmm;
+ const canvas = renderer.domElement;
+ const {render} = renderer, {toBlob} = canvas, {click} = HTMLAnchorElement.prototype;
+ let draw, capture;
+ window.pictures = [];
+ window.pictureReads = 0;
+ window.pictureShares = 0;
+ window.pictureDownloads = 0;
+ renderer.render = function (scene, view) {
+  if (view === camera) draw = {drone: drone.group.visible, car: vehicle.car.root.visible};
+  return render.call(this, scene, view);
+ };
+ canvas.toBlob = function (...args) {
+  window.pictureReads++;
+  capture = {draw, drone: drone.group.visible};
+  return toBlob.apply(this, args);
+ };
+ async function inspect(blob, filename, delivery) {
+  const atRead = capture, bitmap = await createImageBitmap(blob);
+  const sample = document.createElement('canvas'); sample.width = sample.height = 8;
+  const ctx = sample.getContext('2d'); ctx.drawImage(bitmap, 0, 0, 8, 8);
+  const rgba = ctx.getImageData(0, 0, 8, 8).data;
+  const colors = new Set();
+  for (let i = 0; i < rgba.length; i += 4) colors.add(rgba.slice(i, i + 4).join(','));
+  const valid = blob.type === 'image/png' && blob.size > 0 && bitmap.width === canvas.width && bitmap.height === canvas.height && colors.size > 1;
+  bitmap.close();
+  window.pictures.push({valid, filename, delivery, atRead, restored: drone.group.visible});
+ }
+ HTMLAnchorElement.prototype.click = function () {
+  if (this.download?.endsWith('.png')) {
+   window.pictureDownloads++;
+   const {download, href} = this;
+   void fetch(href).then(res => res.blob()).then(blob => inspect(blob, download, 'download'));
+  } else click.call(this);
+ };
+ Object.defineProperties(navigator, {
+  canShare: {value: ({files}) => window.pictureShare === true && files.length === 1 && files[0].type === 'image/png'},
+  share: {value: async ({files}) => {
+   window.pictureShares++;
+   if (window.cancelPicture) throw Object.assign(new Error('Share cancelled'), {name: 'AbortError'});
+   await inspect(files[0], files[0].name, 'share');
+  }},
+ });
+ window.picturePreservesBuffer = renderer.getContext().getContextAttributes().preserveDrawingBuffer;
+}
+
+async function checkPictureOptions() {
+ const { savePicture } = await import('/src/save-picture.ts');
+ const canvas = document.createElement('canvas');
+ canvas.width = 2; canvas.height = 1;
+ const context = canvas.getContext('2d');
+ let overlayCanvas, filename, png;
+ const click = HTMLAnchorElement.prototype.click;
+ HTMLAnchorElement.prototype.click = function () {
+  filename = this.download;
+  png = fetch(this.href).then(response => response.blob()).then(blob => createImageBitmap(blob));
+ };
+ try {
+  const saved = await savePicture({
+   canvas, place: 'Mabou', touch: false, prefix: 'sun-seeker', when: new Date('2026-07-01T02:30Z'),
+   render: () => { context.fillStyle = '#00f'; context.fillRect(0, 0, 2, 1); },
+   overlay: (ctx, width, height) => {
+    overlayCanvas = ctx.canvas;
+    ctx.fillStyle = '#f00'; ctx.fillRect(width - 1, 0, 1, height);
+   },
+  });
+  const bitmap = await png;
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return saved && filename === 'sun-seeker-mabou-2026-06-30-2330.png'
+    && canvas.width === 2 && canvas.height === 1 && overlayCanvas?.width === 0 && overlayCanvas.height === 0
+    && String(context.getImageData(0, 0, 2, 1).data) === '0,0,255,255,255,0,0,255';
+ } finally {
+  HTMLAnchorElement.prototype.click = click;
+ }
+}
+
+async function picture(p, index, delivery, flying) {
+ for (let attempt = 0; attempt < 40 && !await p.read(`pictures.length > ${index}`); attempt++) await sleep(125);
+ const result = await p.read(`pictures[${index}]`);
+ const title = `${flying ? 'drone' : 'drive'} ${delivery}`;
+ check(result?.valid && /^just-drive-mabou-\d{4}-\d\d-\d\d-\d{4}\.png$/.test(result.filename) && result.delivery === delivery,
+  `${title} delivers a non-blank PNG with an area filename`);
+ check(result?.atRead?.draw?.drone === false && result.atRead.drone === false && result.restored === flying &&
+  await p.read(`!picturePreservesBuffer && mmm.drone.group.visible === ${flying}`),
+  `${title} hides the drone at draw and read, then restores it`);
+ if (!flying) check(result?.atRead?.draw?.car, `${title} leaves the car in the picture`);
+}
+
 async function page(query, width=1600, height=1000, init='') {
  const tab=await(await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
  const ws=new WebSocket(tab.webSocketDebuggerUrl);ownedTabs.push({id:tab.id,ws});await new Promise((res,rej)=>{ws.onopen=res;ws.onerror=rej;});
@@ -67,6 +158,7 @@ if(family==='all'||family==='mail'){
 if(family==='all'||family==='explore'){
  const p=await page('mode=explore');
  check(await p.read(`!!document.getElementById('title')&&!document.getElementById('title').hidden`),'mode-only query shows title');
+ check((await p.read(titleState)).rows.includes('O'),'explore title lists O');
  check(await p.read(`(async()=>{const {EXPLORE_TITLE}=await import('/src/mode.ts');return document.querySelector('#title h1').textContent===EXPLORE_TITLE&&document.getElementById('titleStart').textContent==='Start driving'})()`),'explore title and start text');
  check(await p.read(`document.getElementById('titleCard').innerText.includes('A toy for getting a feel for the place. It is not a map for navigation or for safety. Roads and trails can differ on the day.')&&!document.getElementById('titleCard').innerText.includes('satire')&&!document.getElementById('titleLegal').textContent.includes('postal service')`),'explore caution is visible and mail satire is absent');
  check(await p.read(`document.querySelector('#titleLegal > p:first-child#titleContact a')?.getAttribute('href')==='mailto:justdrive@fakkeldy.ca'&&document.getElementById('titleContact').textContent==='Something wrong, or you want a place removed? Write to justdrive@fakkeldy.ca.'`),'explore credits begin with the contact line');
@@ -79,6 +171,26 @@ if(family==='all'||family==='explore'){
  const state=`JSON.stringify([mmm.shift.elapsed,mmm.shift.ended,mmm.shift.damage.total,mmm.shift.evidence.photos.length,mmm.shift.complaints.all.length,mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.heading])`;
  const before=await p.read(state);for(const key of ['KeyE','KeyC','KeyB','KeyG','Enter'])await p.tap(key);await sleep(1500);
  check(await p.read(state)===before,'mail keys do nothing and explore clock stays zero');
+ check(await p.read(`document.getElementById('hud').textContent.includes('O: save picture')`),'drive HUD explains O');
+ check(await p.read(`(${checkPictureOptions})()`),'picture options stamp the chosen Halifax time, draw the overlay and release its canvas');
+ await p.read(`(${watchPictures})()`);
+ await p.tap('KeyO'); await picture(p, 0, 'download', false);
+ await p.tap('KeyF'); await sleep(300);
+ check(await p.read(`mmm.drone.active && mmm.drone.group.visible && document.getElementById('hud').textContent.includes('O: save picture')`),'drone is visible and HUD explains O before capture');
+ await p.tap('KeyO'); await picture(p, 1, 'download', true);
+ check(await p.read(`document.getElementById('savePictureStatus').textContent === 'Picture saved'`),'save feedback appears');
+ await p.tap('KeyF'); await sleep(300);
+ // Use Mabou's quiet indoor adapter to make entry occur in the same task as the key, then leave after an indoor frame.
+ check(await p.read(`(async()=> {
+   const reads = pictureReads;
+   const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+   dispatchEvent(new KeyboardEvent('keydown',{code:'KeyO',key:'o'}));
+   mmm.interiors.busy = true;
+   await frame();
+   mmm.interiors.busy = false;
+   await frame();
+   return pictureReads === reads;
+ })()`), 'entering an interior discards the queued picture');
  await p.read(`mmm.shift.damage.hit('impact',30);mmm.shift.damage.drive(40,30,'washboard');mmm.shift.damage.seed('window,alignment');`);
  check(await p.read(`mmm.shift.damage.total===0&&!mmm.shift.damage.windowStuck&&!mmm.shift.damage.pulls&&!mmm.vehicle.damageActive`),'explore damage never accrues');
  await assertMailCar(p.read,'blender','explore');      // the lamp below is the Blender car's: a fallback car fails here
@@ -119,21 +231,68 @@ if(family==='all'||family==='switch'){
  check(await p.read(`localStorage.getItem('mmm.mode')==='explore'&&!new URLSearchParams(location.search).has('mode')&&document.getElementById('titleStart').textContent==='Start driving'`),'switch survives a host without a mode query');await p.close();
 }
 if(family==='all'||family==='phone'){
- for(const [w,h]of [[844,390],[390,844]]){
+ const driveIds=['hud','gear','pauseButton','droneButton','placesButton','miniMap','radio','placeArrival','tcTrack','tcBrake','tcGo','tcReset','tcView','tcHorn','savePictureButton'];
+ const flightIds=['hud','gear','pauseButton','droneLeft','droneLeft span','droneRight','droneRight span','droneReturn','savePictureButton'];
+ for(const [w,h,bottom=0] of [[844,390],[390,844],[320,568],[320,460],[280,653],[568,280,21]]){
   const p=await page('mode=explore&touch=1&title=1',w,h);
+  const label=(w===844||w===390)?`phone ${w}`:`phone ${w}x${h}`;
+  check((await p.read(titleState)).rows.includes('Save picture'),`${label} title lists Save picture`);
   if(w===390)await p.shot('08-phone-explore-title');
+  if(bottom){
+   const override=await p.send('Emulation.setSafeAreaInsetsOverride',{insets:{top:0,right:0,bottom,left:0}});
+   assert.ok(!override.error,JSON.stringify(override.error));
+  }
   await p.read(`document.getElementById('titleStart').click()`);await sleep(500);
-  check((await p.read(`${JSON.stringify(missing)}.filter(${visible})`)).length===0,`phone ${w} has no mail controls`);
-  const boxes=await p.read(`['hud','gear','placesButton','miniMap','radio','placeArrival','tcTrack','tcBrake','tcGo','tcReset','tcView','tcHorn'].filter(${visible}).map(id=>{const r=document.getElementById(id).getBoundingClientRect();return [id,r.left,r.top,r.right,r.bottom]})`);
-  const faults=[];for(let i=0;i<boxes.length;i++){const[a,x,y,r,b]=boxes[i];if(x<0||y<0||r>w+1||b>h+1)faults.push(a+' offscreen');for(let j=i+1;j<boxes.length;j++){const[c,xx,yy,rr,bb]=boxes[j];if(Math.min(r,rr)-Math.max(x,xx)>1&&Math.min(b,bb)-Math.max(y,yy)>1)faults.push(a+' overlaps '+c);}}
-  if(faults.length)console.log('Phone faults',faults.join(','));check(faults.length===0,`phone ${w} controls and arrival do not overlap`);
-  check(['tcTrack','tcGo','tcBrake','placesButton'].every(id=>boxes.some(b=>b[0]===id)),`phone ${w} keeps driving and places controls`);
+  check((await p.read(`${JSON.stringify(missing)}.filter(${visible})`)).length===0,`${label} has no mail controls`);
+  const readBoxes=ids=>p.read(`${JSON.stringify(ids)}.flatMap(id=>{
+   const e=document.querySelector('#'+id), r=e?.getBoundingClientRect();
+   return r?.width && r.height ? [[id,r.left,r.top,r.right,r.bottom]] : [];
+  })`);
+  const faults=boxes=>{
+   const issues=[];
+   for(let i=0;i<boxes.length;i++){
+    const [a,x,y,r,b]=boxes[i];
+    if(x<0||y<0||r>w+1||b>h-bottom+1)issues.push(a+' offscreen');
+    for(const [c,xx,yy,rr,bb] of boxes.slice(i+1)){
+     if(Math.min(r,rr)-Math.max(x,xx)>1&&Math.min(b,bb)-Math.max(y,yy)>1)issues.push(a+' overlaps '+c);
+    }
+   }
+   return issues;
+  };
+  const boxes=await readBoxes(driveIds), driveFaults=faults(boxes);
+  if(driveFaults.length)console.log('Phone faults',driveFaults.join(','));
+  check(driveFaults.length===0,`${label} controls and arrival do not overlap`);
+  check(['tcTrack','tcGo','tcBrake','placesButton','pauseButton','droneButton','savePictureButton'].every(id=>boxes.some(b=>b[0]===id)),`${label} keeps driving and places controls`);
+  check(boxes.some(([id,x,,right])=>id==='hud'&&right-x>=52),`${label} leaves room for driving status`);
   if(w===844)await p.shot('07-phone-explore-drive');
+  if(w===320&&h===568)await p.shot('phone-drive-320x568');
   await p.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
   const hit=async selector=>{const r=await p.read(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);await p.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,...r}]});await p.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await sleep(350);};
-  await hit('#placesButton');await hit('[data-place="rail-trail"]');
-  check(await p.read(`document.getElementById('placesPanel').hidden&&mmm.vehicle.speed===0&&document.getElementById('placeArrival').innerText.includes('Mabou Rivers Trail')`),`phone ${w} real touch places jump`);
-  check(p.errors.length===0,`phone ${w} no runtime exceptions`);await p.close();
+  await p.read(`(${watchPictures})()`);
+  await hit('#savePictureButton'); await picture(p, 0, 'download', false);
+  await hit('#droneButton');
+  check(await p.read(`mmm.drone.group.visible && (${visible})('savePictureButton')`),`${label} save button stays visible in drone view`);
+  const flightBoxes=await readBoxes(flightIds), flightFaults=faults(flightBoxes);
+  if(flightFaults.length)console.log('Flight faults',flightFaults.join(','));
+  check(flightIds.every(id=>flightBoxes.some(b=>b[0]===id))&&flightFaults.length===0,`${label} flight controls and stick captions fit without overlap`);
+  if(bottom&&process.env.SHOTS==='1'){
+   for(let attempt=0;attempt<40&&await p.read("document.getElementById('savePictureStatus').textContent");attempt++)await sleep(125);
+   await p.shot('phone-drone-568x280');
+  }
+  await p.read('window.pictureShare = true');
+  await hit('#savePictureButton'); await picture(p, 1, 'share', true);
+  if(w===320&&h===568){
+   await p.read('window.cancelPicture = true');
+   await hit('#savePictureButton');
+   for(let attempt=0;attempt<40&&!await p.read('pictureShares===2');attempt++)await sleep(125);
+   check(await p.read(`pictureReads===3&&pictureShares===2&&pictureDownloads===1`),`${label} treats a named share error as cancellation`);
+  }
+  await hit('#droneReturn'); await hit('#droneReturn');
+  await hit('#placesButton');
+  await p.read(`document.querySelector('[data-place="rail-trail"]').scrollIntoView({block:'center'})`);
+  await hit('[data-place="rail-trail"]');
+  check(await p.read(`document.getElementById('placesPanel').hidden&&mmm.vehicle.speed===0&&document.getElementById('placeArrival').textContent.includes('Mabou Rivers Trail')`),`${label} real touch places jump`);
+  check(p.errors.length===0,`${label} no runtime exceptions`);await p.close();
  }
 }
 if(family==='all'||family==='parameters'){

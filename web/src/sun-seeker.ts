@@ -38,7 +38,7 @@ interface SunSeekerOptions {
   exag: number;
   ground(range: number): Promise<GroundRay>;
   close(): void;
-  savePicture?: () => void;
+  savePicture?: (view: SunSeeker, when: Date) => Promise<boolean>;
 }
 
 interface Label { element: HTMLElement; position: THREE.Vector3; width: number }
@@ -106,6 +106,7 @@ export class SunSeeker {
           <button type="button" class="sunSave">Save picture</button>
           <small>Drag<span class="sunArrowHint"> or use arrows</span></small>
         </div>
+        <small class="sunSaveStatus" aria-live="polite"></small>
         <p role="status"></p>
       </section>
       <details class="sunPanel sunReadings" aria-label="Sun events and hill line">
@@ -126,7 +127,7 @@ export class SunSeeker {
     this.date = this.root.querySelector('[type=date]')!;
     this.time = this.root.querySelector('[aria-label="Sun time"]')!;
     this.slider = this.root.querySelector('[type=range]')!;
-    this.status = this.root.querySelector('[role=status]')!;
+    this.status = this.root.querySelector('.sunClock p')!;
     this.readings = this.root.querySelector('tbody')!;
     this.bearing = this.root.querySelector('.sunBearing')!;
     this.timesPanel = this.root.querySelector('.sunReadings')!;
@@ -179,10 +180,21 @@ export class SunSeeker {
       this.pitch = THREE.MathUtils.degToRad(this.selected.sun.el);
       this.aim();
     });
-    // Save-picture integration: call the shared frame exporter with this view's draw callback.
     const save = this.root.querySelector<HTMLButtonElement>('.sunSave')!;
+    const saveStatus = this.root.querySelector('.sunSaveStatus')!;
     save.hidden = !savePicture;
-    if (savePicture) save.addEventListener('click', savePicture);
+    if (savePicture) save.addEventListener('click', async () => {
+      save.disabled = true;
+      saveStatus.textContent = '';
+      try {
+        if (await savePicture(this, this.selected.when)) saveStatus.textContent = 'Picture saved';
+      } catch {
+        saveStatus.textContent = 'Could not save picture';
+      } finally {
+        save.disabled = false;
+        this.invalidate();
+      }
+    });
 
     const change = () => {
       this.validClock = validStudyDate(this.date.value) && validTime(this.time.value);
@@ -287,6 +299,74 @@ export class SunSeeker {
     try { renderer.render(this.overlay, camera); }
     finally { renderer.autoClear = clear; }
     this.projectLabels();
+  }
+
+  /** Add the on-screen labels and readings to the PNG without the interactive controls. */
+  drawPictureOverlay(context: CanvasRenderingContext2D, width: number, height: number): void {
+    const rect = this.root.getBoundingClientRect();
+    const path = (x: number, y: number, w: number, h: number, radius: number) => {
+      context.beginPath();
+      context.roundRect(x, y, w, h, radius);
+    };
+    const plaque = (element: HTMLElement) => {
+      const box = element.getBoundingClientRect(), style = getComputedStyle(element);
+      path(box.x, box.y, box.width, box.height, parseFloat(style.borderTopLeftRadius));
+      context.fillStyle = style.backgroundColor;
+      context.fill();
+      if (parseFloat(style.borderTopWidth)) {
+        context.strokeStyle = style.borderTopColor;
+        context.stroke();
+      }
+    };
+    // Layout the words where the browser put them, including wrapped text and selected hour labels.
+    const range = document.createRange();
+    const paintText = (element: HTMLElement) => {
+      const words = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      for (let node = words.nextNode(); node; node = words.nextNode()) {
+        const style = getComputedStyle(node.parentElement!);
+        context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        context.fillStyle = style.color;
+        for (const match of node.textContent!.matchAll(/\S+/g)) {
+          range.setStart(node, match.index);
+          range.setEnd(node, match.index + match[0].length);
+          const box = range.getBoundingClientRect();
+          if (box.width) context.fillText(match[0], box.left, box.top + box.height / 2);
+        }
+      }
+    };
+
+    context.save();
+    try {
+      context.scale(width / rect.width, height / rect.height);
+      context.translate(-rect.left, -rect.top);
+      context.textBaseline = 'middle';
+      for (const { element } of [...this.activeLabels, ...this.seasonLabels]) {
+        if (element.hidden) continue;
+        plaque(element);
+        paintText(element);
+      }
+      plaque(this.timesPanel);
+      if (this.timesPanel.open) {
+        for (const swatch of this.timesPanel.querySelectorAll('i')) {
+          const box = swatch.getBoundingClientRect();
+          context.fillStyle = getComputedStyle(swatch).backgroundColor;
+          context.fillRect(box.left, box.top, box.width, box.height);
+        }
+        paintText(this.timesPanel);
+      } else paintText(this.timesPanel.querySelector('summary')!);
+
+      const when = this.selected.when;
+      const stamp = `Sun Seeker · ${localDate(when)} · ${localTime(when)} ${localZone(when)}`;
+      const clock = this.root.querySelector('.sunClock')!.getBoundingClientRect();
+      context.font = '600 13px system-ui, sans-serif';
+      path(clock.left, clock.top, context.measureText(stamp).width + 20, 28, 6);
+      context.fillStyle = '#101a24ed';
+      context.fill();
+      context.fillStyle = '#f9f6ee';
+      context.fillText(stamp, clock.left + 10, clock.top + 14);
+    } finally {
+      context.restore();
+    }
   }
 
   private projectLabels(): void {

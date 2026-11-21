@@ -29,7 +29,8 @@ export function hudLine(s: HudState): string {
         : s.padHelp ? `   ${s.fps.toFixed(0)} fps` + s.padHelp : s.driveHelp ?? (!s.mailMode ? `   ${s.fps.toFixed(0)} fps` + s.help : `\nWASD/arrows: drive · space: brake · M/E: mail · C: photo · Esc/P: pause · Enter: end shift\nH: horn · R: road · V: seat · F: drone · ${s.fps.toFixed(0)} fps`));
   } else if (s.drone) {
     text = s.touchDevice ? s.drone : `${s.drone}   ${s.fps.toFixed(0)} fps\n` +
-      'WASD: fly · ←/→ or Q/E: turn · ↑/↓: camera · space: up · shift/C: down · wheel: top speed · R: fly back · F: land';
+      'WASD: fly · ←/→ or Q/E: turn · ↑/↓: camera · space: up · shift/C: down · wheel: top speed · R: fly back · F: land' +
+      (s.mailMode ? '' : ' · O: save picture');
   } else {
     text = `E ${s.e.toFixed(0)}  N ${s.n.toFixed(0)}  h ${s.height.toFixed(1)} m   hills x${s.exag}\n` +
       `sun az ${s.sunAz.toFixed(0)} el ${s.sunEl.toFixed(0)}  tiles ${s.drawn}  load ${s.pending}  ${s.fps.toFixed(0)} fps\n` +

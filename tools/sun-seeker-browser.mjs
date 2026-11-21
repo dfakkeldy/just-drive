@@ -39,6 +39,44 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     const s = await c.send('Page.captureScreenshot', { format: 'png' });
     writeFileSync(join(out, file + '.png'), Buffer.from(s.result.data, 'base64'));
   };
+  const capture = async (date, time, zone) => {
+    await read(`(() => {
+      const picture = window.sunPicture = { text: [] };
+      const fillText = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+        picture.text.push(text);
+        return fillText.call(this, text, ...args);
+      };
+      const inspect = async (name, blob, delivery) => {
+        const image = await createImageBitmap(blob);
+        Object.assign(picture, { name, delivery, mime: blob.type, width: image.width, height: image.height });
+        image.close();
+      };
+      if (${touch}) Object.defineProperties(navigator, {
+        canShare: { value: ({ files }) => files[0].type === 'image/png' },
+        share: { value: ({ files }) => inspect(files[0].name, files[0], 'share') },
+      });
+      else {
+        const click = HTMLAnchorElement.prototype.click;
+        HTMLAnchorElement.prototype.click = function () {
+          if (!this.download.startsWith('sun-seeker-')) return click.call(this);
+          void fetch(this.href).then(res => res.blob()).then(blob => inspect(this.download, blob, 'download'));
+        };
+      }
+    })()`);
+    await click('.sunSave');
+    await wait("!!sunPicture.name && document.querySelector('.sunSaveStatus').textContent === 'Picture saved'");
+    const result = await read('sunPicture');
+    assert.equal(result.name, `sun-seeker-mabou-${date}-${time.replace(':', '')}.png`);
+    assert.equal(result.mime, 'image/png');
+    assert.equal(result.delivery, touch ? 'share' : 'download');
+    assert.deepEqual([result.width, result.height], await read('[mmm.renderer.domElement.width, mmm.renderer.domElement.height]'));
+    assert.ok(result.text.includes(`Sun Seeker · ${date} · ${time} ${zone}`));
+    assert.ok(result.text.some(text => /^\d{2}:00$/.test(text)), 'the PNG paints projected hour labels');
+    if (touch) assert.ok(['Rise', 'Noon', 'Set'].every(text => result.text.includes(text)), 'the PNG paints the compact summary');
+    else assert.ok(['Sunrise', 'Solar', 'noon', 'Sunset', 'Flat', 'Over', 'heights.'].every(text => result.text.includes(text)), 'the PNG paints the full readings panel');
+    console.log(`PASS ${name} exported PNG: ${result.name}, ${result.width}×${result.height}, ${result.delivery}`);
+  };
   try {
     await c.send('Page.enable');
     await c.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: touch });
@@ -60,7 +98,7 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     await wait("!!document.querySelector('#sunSeeker[open]')");
     assert.match(await read("document.querySelector('.sunBearing').textContent"), /^S\s+180°$/);
     assert.equal(await read("document.querySelector('.sunReadings').open"), !touch);
-    assert.ok(await read("document.querySelector('.sunSave').hidden"));
+    assert.ok(!await read("document.querySelector('.sunSave').hidden"));
     const eye = await read('mmm.camera.position.toArray()');
     if (touch) assert.deepEqual(eye, drivingView, 'the survey begins at the drone camera');
     else assert.deepEqual(eye, [car[0], car[1] + 1.7, car[2]], 'the survey begins at player eye height');
@@ -132,11 +170,12 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
       await click('.sunFace');
       await sleep(400);
       await shot('desktop-dawn');
+      await capture('2026-06-21', '05:20', 'ADT');
       await setTime('2026-06-21', '00:00');
       await wait("mmm.scene.children.some(o => o.material?.name === 'night sky')");
       assert.equal(await read('mmm.scene.children.find(o => o.isDirectionalLight).castShadow'), false, 'night has no sun shadows');
       assert.equal(await read('mmm.finish.skip.clouds'), true, 'the night preview omits Finish cloud shadows');
-    }
+    } else await capture('2026-11-21', '11:50', 'AST');
 
     await tapKey('Escape', 'Escape');
     await wait("!document.querySelector('#pauseScreen').hidden && !document.querySelector('#sunSeeker')");
