@@ -12,6 +12,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { addFlag } from './flags';
 import type { Terrain } from './terrain';
 import type { Road } from './roads';
 import { pushOut, type Pushable } from './parked';
@@ -36,7 +37,7 @@ const C = {
   olive: 0x7a8644, maroon: 0x8a3b36, charcoal: 0x3f4245, mustard: 0xd6ad3a, porchGreen: 0x6e7a3e, planter: 0x4a3a2c,
   shrub: 0x3f5f36, binRed: 0xa52a24, iceWhite: 0xeeeeea,
   brick: 0xb3533a, brickDark: 0x8e3f2c, roofFlat: 0x55585a, granite: 0x8a8c8e, wreath: 0x2f4a32, poppy: 0xa3201e,
-  flagRed: 0xc8262c, panel: 0x2e3438,
+  panel: 0x2e3438,
   shutter: 0x2f4a36, hallRoof: 0x4a4d50, chimney: 0x8a4b3a,
   metal: 0x4a4744, metalRoof: 0x463f3a, stone: 0x8d8a84, fasciaBlue: 0x1f4f9a, dispenser: 0xe9eaea, blueBin: 0x2456a4,
   lampWhite: 0xe4e4e0, lampHead: 0x6d7175, priceRow: 0x2a2d30,
@@ -146,15 +147,11 @@ function rail(k: Kit, a: V3, b: V3, color = C.iron, post = 0.9): void {
   const n = Math.max(1, Math.round(len / 2));
   for (let i = 0; i <= n; i++) { const p = a.clone().lerp(b, i / n); k.box(0.05, post, 0.05, p.x, p.y - post / 2, p.z, color); }
 }
-/** A white flagpole with the national flag's red-white-red bands (plain; no emblem is drawn). */
 function flagpole(k: Kit, x: number, z: number, h: number): void {
   const g = k.ground(x, z);
   k.cylinder(0.07, 0.04, h, x, g, z, C.white, 8);
   k.add(new THREE.SphereGeometry(0.08, 8, 6), C.white, null, k.matrix(x, g + h + 0.05, z));
-  const y = g + h - 0.75;
-  k.box(0.02, 0.9, 0.45, x, y, z + 0.3, C.flagRed);
-  k.box(0.02, 0.9, 0.9, x, y, z + 0.975, C.white);
-  k.box(0.02, 0.9, 0.45, x, y, z + 1.65, C.flagRed);
+  addFlag(k, 'canada', x, g + h - 0.75, z + 0.075, 0.9);
 }
 function shrub(k: Kit, x: number, z: number, r: number, y?: number): void {
   if (k.low) return;

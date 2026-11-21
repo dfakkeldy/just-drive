@@ -7,6 +7,7 @@
  * small parts (tracery, louvres, quoins, rails, furniture) and keeps the masses, colours and openings.
  */
 import * as THREE from 'three';
+import { addFlag, type Flag } from './flags';
 import type { Terrain } from './terrain';
 import { pushOut, type Pushable } from './parked';
 import type { HandBuiltPlace } from './place';
@@ -156,14 +157,10 @@ function lamp(k: Kit, e: number, n: number, az: number, h = 8.5): void {
   k.box(1.8, 0.08, 0.08, 0.9, h - 0.6, 0, C.lamp);
   k.box(0.6, 0.16, 0.3, 1.9, h - 0.68, 0, C.lamp);
 }
-function flagpole(k: Kit, x: number, z: number, h: number, flags: [number, number][]): void {
+function flagpole(k: Kit, x: number, z: number, h: number, flags: readonly Flag[]): void {
   k.cylinder(0.07, 0.04, h, x, 0, z, C.white, 8);
   k.add(new THREE.SphereGeometry(0.08, 8, 6), C.white, null, k.matrix(x, h + 0.05, z));
-  flags.forEach(([a, b], i) => {
-    const y = h - 0.9 - i * 1.3;
-    k.box(0.02, 0.85, 0.7, x, y, z + 0.4, a);
-    k.box(0.022, 0.85, 0.3, x, y, z + 0.6, b);
-  });
+  flags.forEach((flag, i) => addFlag(k, flag, x, h - 0.9 - i * 1.3, z + 0.05, 0.85));
 }
 function shrub(k: Kit, x: number, z: number, r: number, color: number): void {
   if (k.low) return;
@@ -430,7 +427,7 @@ function musicCentre(k: Kit): void {
     for (const s of [-1, 1]) { k.box(1.8, 0.05, 0.26, x, y + 0.45, z + s * 0.62, C.timber); k.box(0.08, 0.72, 1.4, x + s * 0.7, y + 0.36, z, 0x6b4e33); }
   }
   k.at(VILLAGE_PLACES.music, 0);
-  flagpole(k, 4.5, 16.5, 8.0, [[0xb3262a, 0xf1f0ea], [0x23458f, 0xf1f0ea]]);
+  flagpole(k, 4.5, 16.5, 8.0, ['canada', 'nova-scotia']);
   k.at(VILLAGE_PLACES.music, 0.35);
   for (const [x, z] of [[-11, 15.8], [-1.6, 15.8], [6, 12.2], [14, 12.0]]) shrub(k, x, z, 0.55, 0x6e2a26);
   for (const [x, z] of [[-12.4, 12.6], [2.2, 13.0]]) conifer(k, x, z, 2.2);
@@ -723,7 +720,7 @@ function smallItems(k: Kit): void {
   k.add(new THREE.ConeGeometry(3.0, 1.7, 8, 1, true), C.gazeboRoof, null, k.matrix(0, g + 2.5 + 0.85, 0, { ry: Math.PI / 8 }));
   k.box(0.12, 0.6, 0.12, 0, g + 4.4, 0, C.gazeboRoof);
   k.point(ge + 3.8, gn + 1.5, 0);
-  flagpole(k, 0, 0, 7.0, [[0xb3262a, 0xf1f0ea]]);
+  flagpole(k, 0, 0, 7.0, ['canada']);
   // The blue welcome sign on two posts (blank), seen from both ways.
   const [we, wn] = VILLAGE_ITEMS.welcomeSign;
   k.point(we, wn, 80);
