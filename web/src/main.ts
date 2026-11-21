@@ -362,6 +362,10 @@ const villageSite = ERA.modern && AREA.judiqueVillage && params.get('village') !
 // Port Hawkesbury (the hardware store front, the dealers, the gas bars, the corner garage, the big lots' furniture): built by
 // hand from the dash cam brief. ?hawkesbury=0 leaves the surveyed boxes and bare lots.
 const hawkesburySite = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' ? new PortHawkesburySite(manifest.village) : null;
+// The old store and tractor yard at Maryville Station Road. ?maryville=0 leaves the surveyed land.
+const maryvilleFeature = ERA.modern && AREA.maryville && params.get('maryville') !== '0'
+  ? await import('./maryville-store') : null;
+const maryvilleSite = maryvilleFeature ? new maryvilleFeature.MaryvilleStoreSite(manifest.village) : null;
 let mappedBuildings: Building[] = [];
 // Mabou's main street (the grocery, the post office building and its memorial lawn, the hall, the gas station, the junction
 // group, the pub, the bank branch, lamp posts, sidewalk, string lights): built by hand from the dash cam brief. The boxes
@@ -399,7 +403,7 @@ if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
 // The hand-built places' sites (place.ts), in the order of the places list below. Each clears its surveyed land.
-const placeSites = { home: homeSite, porch: porchSite, church: churchSite, village: villageSite, hawkesbury: hawkesburySite, mabouMain: mabouSite };
+const placeSites = { home: homeSite, porch: porchSite, church: churchSite, village: villageSite, hawkesbury: hawkesburySite, mabouMain: mabouSite, maryville: maryvilleSite };
 for (const site of Object.values(placeSites)) if (site) clear.push(...site.clear);
 if (quarrySite) clear.push(...quarrySite.clear);
 // Modern Point Tupper only; airport=0 turns it off. The module (and its source extract) loads only here.
@@ -424,6 +428,7 @@ if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get
   terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id, pavedRead?.take())).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
+if (maryvilleSite) terrain.sites.push(maryvilleSite);
 const testPark = await createTestPark(terrain, yardSite, LOW, buildingList ?? []);
 const quarryStuntPark = quarryFeature && quarrySite && ERA.modern
   ? quarryFeature.createQuarryStuntPark(terrain, LOW) : null;
@@ -684,6 +689,7 @@ const village = villageSite ? new (await import('./judique-village')).JudiqueVil
 const hawkesbury = hawkesburySite ? new (await import('./port-hawkesbury')).PortHawkesbury(hawkesburySite, terrain, LOW,
   roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings) : null;
 const mabouMain = mabouSite ? new (await import('./mabou-main')).MabouMain(mabouSite, terrain, LOW, roads.roads) : null;
+const maryville = maryvilleFeature && maryvilleSite ? new maryvilleFeature.MaryvilleStore(maryvilleSite, terrain, LOW) : null;
 // One slot for each site above, in the same order. A slot keeps its name while its place is off, so the frame's update
 // list keeps the same entries. `dev` is what the dev tools see. The home and the porch house take the car, not the
 // clock, so they are wrapped; the porch's slot also turns its dog and waits for it.
@@ -696,6 +702,7 @@ const places: Record<keyof typeof placeSites, { place: HandBuiltPlace | null; de
   village: { dev: village, place: village },
   hawkesbury: { dev: hawkesbury, place: hawkesbury },
   mabouMain: { dev: mabouMain, place: mabouMain },
+  maryville: { dev: null, place: maryville },
 };
 const handBuilt = Object.values(places);
 for (const { place } of handBuilt) if (place) scene.add(place.group);
@@ -749,6 +756,7 @@ const siteContacts: [string, ContactSite | null][] = [
   ['village', placeContact(places.village)],
   ['hawkesbury', placeContact(places.hawkesbury)],
   ['mabouMain', placeContact(places.mabouMain)],
+  ['maryville', placeContact(places.maryville)],
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
 ];
@@ -1633,7 +1641,8 @@ if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
 if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
 if (import.meta.env.DEV) expose({ lotProps }, false);   // for tools/lot-props-browser.mjs; not enumerable: ui-check pins the public key set
-if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
+if (import.meta.env.DEV && maryville) expose({ maryville }, false);
+if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).filter(([name]) => name !== 'maryville').map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
   const report = document.getElementById('shiftReport'), footer = report?.querySelector('.reportFooter');
