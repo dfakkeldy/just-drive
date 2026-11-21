@@ -745,7 +745,7 @@ const roomQuiet = () => quietPlaces ??= [
   })(),
 ];
 const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads, quiet: roomQuiet, get vehicle() { return vehicle; }, low: LOW, bare, params, area: AREA.id, touch: touchDevice, label: SITE.brand === 'just' ? (_name, id) => `Driver ${id}` : undefined,
-  ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as 'car' | 'truck' | 'sxs' | 'bike', trailer: towing?.attached ?? false }),
+  ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as import('./mp/wire').RideKind, trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
   ground: (x, z) => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; } }) : null;
 const canal = ERA.modern && AREA.canal ? new Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
