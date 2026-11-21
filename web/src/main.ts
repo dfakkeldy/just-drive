@@ -402,8 +402,10 @@ if (fishingSite) clear.push(...fishingSite.clear);
 const placeSites = { home: homeSite, porch: porchSite, church: churchSite, village: villageSite, hawkesbury: hawkesburySite, mabouMain: mabouSite };
 for (const site of Object.values(placeSites)) if (site) clear.push(...site.clear);
 if (quarrySite) clear.push(...quarrySite.clear);
+// In the published build each import() is a file of its own. A deploy during a start can remove the old file: show Retry.
+const partFailed = (error: unknown) => { console.warn('Area part unavailable', error); return areaScreen('Part of this area could not load. Retry or choose another area.', true); };
 // Modern Point Tupper only; airport=0 turns it off. The module (and its source extract) loads only here.
-const airportModule = ERA.modern && AREA.id === 'pointtupper' && params.get('airport') !== '0' ? await import('./airport').catch(e => { console.warn('Airport unavailable', e); return null; }) : null;
+const airportModule = ERA.modern && AREA.id === 'pointtupper' && params.get('airport') !== '0' ? await import('./airport').catch(partFailed) : null;
 const airportSite = airportModule ? new airportModule.AirportSite(manifest.village) : null;
 const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear);
 // Complete the approved CPU class mask before any terrain canopy or individual tree is built.
@@ -418,9 +420,9 @@ if (airport) {
 }
 terrain.cartRoads = ERA.cartRoads;
 // Open designated pavement (NSTDB lots): on by default in an area whose bake lists it.
-// paved=0 turns it off; paved=1 forces a load (work-bake previews). Absent data means no request.
+// paved=0 turns it off; paved=1 forces a load (work-bake previews). Absent data means no request. A missing chunk shows Retry; a bad index warns.
 if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1')) {
-  terrain.paved = await import('./paved').then(m => m.loadPaved(base, manifest.village, AREA.id, pavedRead?.take())).catch(e => { console.warn('Paved layer unavailable', e); return null; });
+  terrain.paved = await import('./paved').catch(partFailed).then(m => m.loadPaved(base, manifest.village, AREA.id, pavedRead?.take())).catch(e => { console.warn('Paved layer unavailable', e); return null; });
 }
 if (yardSite) terrain.sites.push(yardSite);
 const testPark = await createTestPark(terrain, yardSite, LOW, buildingList ?? []);
@@ -476,8 +478,6 @@ const sunShadows = terrain.shadows ? new SunShadows(renderer, scene, sunLight, s
 if (sunShadows) Object.assign(terrain.uniforms, sunShadows.uniforms);   // every land tile made from here on reads the map
 // Phones do not load the grass module or read the cover image back to the CPU.
 const grassExcludes = stockpiles ? (east: number, north: number) => stockpiles.excludes(east, north) || !!cemeteries?.excludes(east, north) : cemeteries?.excludes;
-// In the published build each import() is a file of its own. A deploy during a start can remove the old file: show Retry.
-const partFailed = () => areaScreen('Part of this area could not load. Retry or choose another area.', true);
 const grass = LOW ? null : new (await import('./grass').catch(partFailed)).Grass(terrain, params.get('grass'), grassExcludes);
 if (grass) scene.add(grass.group);
 // Mapped public wharves (today, in the areas that have them); like airport, the dev key exists only there.
@@ -510,12 +510,11 @@ if (trafficSignals) {
   if (import.meta.env.DEV) expose({ trafficSignals });   // only where signals stand, like fleet: the pinned dev keys stay
 }
 
-// Modern Point Tupper only. Scenery: a failed chunk load warns and the game still starts, like the airport.
+// Modern Point Tupper only. A chunk that does not load shows Retry, like the airport.
 // Not on LOW: the Point Tupper phone start is already at PHONE_CAP (tools/frame-budget-policy.mjs) with the AI driver.
 if (ERA.modern && AREA.id === 'pointtupper' && !LOW) {
-  const loaded = await Promise.all([import('./pt-infrastructure'), import('./pt-infrastructure-source')])
-    .catch(e => { console.warn('Point Tupper infrastructure unavailable', e); return null; });
-  if (loaded) scene.add(new loaded[0].PointInfrastructure(loaded[1].PT_FEATURES, manifest.village, EXAG, SEA_LEVEL, roads).group);
+  const loaded = await Promise.all([import('./pt-infrastructure').catch(partFailed), import('./pt-infrastructure-source').catch(partFailed)]);
+  scene.add(new loaded[0].PointInfrastructure(loaded[1].PT_FEATURES, manifest.village, EXAG, SEA_LEVEL, roads).group);
 }
 
 const history = ERA.id === '1884' ? await (async () => {
