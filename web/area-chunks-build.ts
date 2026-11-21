@@ -1,3 +1,5 @@
+import {rmSync} from 'node:fs';
+import {basename, dirname, isAbsolute, join, resolve} from 'node:path';
 import type {Plugin, Rollup} from 'vite';
 
 /**
@@ -35,10 +37,25 @@ export function sharedCore(): Rollup.GetManualChunk {
   };
 }
 
-/** Fail the build if any chunk imports the entry back (the start would hang), or a chunk leaves its folder. */
+/**
+ * Fail the build if any chunk imports the entry back (the start would hang), or a chunk leaves its folder.
+ * The build keeps its output folder (the private pack holds terrain there), so it first removes the chunks of the
+ * last build, and the park file the old quarry plugin wrote. It removes nothing outside <outDir>/chunks.
+ */
 export function areaChunksBuild(entryFileName: string): Plugin {
+  let outDir: string | undefined;
   return {
     name: 'area-chunks-in-published-build', apply: 'build',
+    configResolved(config) { if (config.build.write !== false) outDir = resolve(config.root, config.build.outDir); },
+    buildStart() {
+      if (!outDir) return;
+      const chunks = join(outDir, CHUNK_FOLDER);
+      if (!isAbsolute(outDir) || dirname(outDir) === outDir || dirname(chunks) !== outDir || basename(chunks) !== CHUNK_FOLDER) {
+        throw Error(`area-chunks: will not clear ${chunks}`);
+      }
+      rmSync(chunks, {recursive: true, force: true});
+      rmSync(join(outDir, 'quarry-feature.json'), {force: true});
+    },
     generateBundle(_options, bundle: Rollup.OutputBundle) {
       for (const file of Object.values(bundle)) {
         if (file.type !== 'chunk') continue;
