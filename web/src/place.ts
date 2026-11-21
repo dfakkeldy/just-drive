@@ -20,6 +20,8 @@ export interface HandBuiltPlace {
  * `load` is the place's own code when it loads by import(): the boot awaits it, and only then calls `build`, as it
  * did before the rows. `build` makes the place once the land and the roads are ready. `slot` wraps a built thing that
  * does not fit HandBuiltPlace as it is (the home and the porch). The dev tools always see the built thing itself.
+ * Make each row with placeRow or lazyPlaceRow: their types check that a row without a slot builds a HandBuiltPlace,
+ * and placeSlots trusts that.
  */
 export interface PlaceRow<S, B extends object, P = undefined> {
   readonly site: S | null;

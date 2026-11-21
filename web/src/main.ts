@@ -413,7 +413,7 @@ if (fishingSite) clear.push(...fishingSite.clear);
 // lines stay apart: the building list reads four sites, the porch needs that list, and Maryville's module loads first.
 // The home and the porch house take the car, not the clock, so their slots wrap them; the porch's slot also turns its
 // dog and waits for it.
-let porchDog: PorchDog | null = null;   // the porch's build seats it
+let porchDog = null as PorchDog | null;   // the porch's build seats it; the cast keeps tsc from narrowing it to null below
 const lift = (metres: number) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres);
 const placeRows = {
   home: placeRow(homeSite, site => new Home(site, terrain, lift),
