@@ -56,7 +56,7 @@ async function checkList(page, area, farViews) {
   }
   const list = await page.read(`({ area:mmm.area.id, shown:mmm.places.places.map(p=>p.id),
     buttons:[...document.querySelectorAll('#placesList button')].map(b=>b.dataset.place), marks:mmm.places.marks.length })`);
-  const expected = [...(area === 'judique' ? ['home', 'church'] : []), ...researched.map(p => p.id), ...cemeteries, ...turbines.map(p => p.id)];
+  const expected = [...(area === 'judique' ? ['home', 'church'] : []), ...researched.map(p => p.id), ...(area === 'pointtupper' ? ['airport-drag'] : []), ...cemeteries, ...turbines.map(p => p.id)];
   assert.ok(cemeteries.length > 0 && cemeteries.every(id => id.startsWith('cemetery-')), `${area}: its cemetery places come from the cemetery pack`);
   assert.equal(list.area, area);
   assert.deepEqual(list.shown, expected, `${area}: researched and cemetery places, then any places from the loaded scenery`);

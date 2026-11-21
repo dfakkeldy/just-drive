@@ -9,23 +9,28 @@ import {StuntPark,PlacedStunt} from '../web/src/stunt-kit.ts';
 import {testParkLayout} from '../web/src/stunt-test-park.ts';
 // PR #144: the mirror crown line is the one reviewed difference from main in these programs (tools/coast-programs.mjs).
 import {reviewedMirrorCrown} from './mirror-crown.mjs';
-// PR #27: ROAD_PAVEMENT (Mabou pavement flags) is new #ifdef text in TERRAIN_FRAG. Without that define, resolve only its
-// own #ifdef/#else/#endif lines (keeping the #else side) and compare everything else as written.
-export function withoutPavement(source){
+// Resolve an absent optional define. Keep every other line, including all unrelated macros, for the exact comparison.
+function withoutFlag(source,flag){
   const out=[],stack=[];
   for(const line of source.split('\n')){
     const m=line.match(/^\s*#\s*(ifdef|ifndef|if|else|elif|endif)\b\s*(\w*)/);
-    if(m&&['ifdef','ifndef','if'].includes(m[1])){stack.push(m[1]==='ifdef'&&m[2]==='ROAD_PAVEMENT'?'pavement':'other');if(stack.at(-1)==='pavement')continue;}
-    else if(m&&m[1]==='else'&&stack.at(-1)==='pavement'){stack[stack.length-1]='kept';continue;}
-    else if(m&&m[1]==='elif')assert.ok(!['pavement','kept'].includes(stack.at(-1)),'ROAD_PAVEMENT never takes #elif');
-    else if(m&&m[1]==='endif'){if(['pavement','kept'].includes(stack.pop()))continue;}
-    if(!stack.includes('pavement'))out.push(line);
+    if(m&&['ifdef','ifndef','if'].includes(m[1])){stack.push(m[1]==='ifdef'&&m[2]===flag?'omit':'other');if(stack.at(-1)==='omit')continue;}
+    else if(m&&m[1]==='else'&&stack.at(-1)==='omit'){stack[stack.length-1]='kept';continue;}
+    else if(m&&m[1]==='elif')assert.ok(!['omit','kept'].includes(stack.at(-1)),flag+' never takes #elif');
+    else if(m&&m[1]==='endif'){if(['omit','kept'].includes(stack.pop()))continue;}
+    if(!stack.includes('omit'))out.push(line);
   }
   assert.equal(stack.length,0,'balanced #if blocks');
   return out.join('\n');
 }
-assert.equal(withoutPavement('a\n#ifdef ROAD_PAVEMENT\nb\n#ifdef X\nc\n#endif\n#else\nd\n#endif\n#ifdef ROAD_PAVEMENT\ne\n#endif\nf'),'a\nd\nf');
-const compiled=(material,defines=material.defines)=>{const source=reviewedMirrorCrown(material.fragmentShader);return defines?.ROAD_PAVEMENT?source:withoutPavement(source);};
+assert.equal(withoutFlag('a\n#ifdef ROAD_PAVEMENT\nb\n#ifdef X\nc\n#endif\n#else\nd\n#endif\n#ifdef ROAD_PAVEMENT\ne\n#endif\nf','ROAD_PAVEMENT'),'a\nd\nf');
+assert.equal(withoutFlag('a\n#ifdef AIRPORT\nb\n#endif\n#ifdef X\nc\n#endif','AIRPORT'),'a\n#ifdef X\nc\n#endif');
+const compiled=(material,defines=material.defines)=>{
+  let source=reviewedMirrorCrown(material.fragmentShader);
+  if(!defines?.AIRPORT)source=withoutFlag(source,'AIRPORT');
+  if(!defines?.ROAD_PAVEMENT)source=withoutFlag(source,'ROAD_PAVEMENT');
+  return source;
+};
 // The gravel driveways' program fix: on the main this compares with, a tile whose only paint bits were a gravel
 // driveway's (a track, kind 4, with bit 64) took ROAD_PAVEMENT and its texture held the raw track byte. Here such a tile
 // takes no ROAD_PAVEMENT and its texture draws the driveway as a gravel road (kind 3, bridge and washboard bits kept).

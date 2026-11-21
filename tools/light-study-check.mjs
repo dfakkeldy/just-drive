@@ -261,7 +261,7 @@ assert.equal(study.readLightStudy(new URLSearchParams('date=2026-03-08&time=02:3
 }
 // Execute main's actual startup block against refusal-aware placement, with no grid work for unsafe inputs.
 const startup = (await transform(main.slice(main.indexOf('const placeVisit ='),main.indexOf('scene.add(shift.group)')),{loader:'ts',define:{'import.meta.env.DEV':'false'}})).code;
-const bootPose = new Function('params','mailMode','vehicle','manifest','roads','journey','placeFirstStop','readDrivePosition','placeUrlPose','startKey','placeAtStart','const fleet=null;\n'+startup);
+const bootPose = new Function('params','mailMode','vehicle','manifest','roads','journey','placeFirstStop','readDrivePosition','placeUrlPose','startKey','placeAtStart','const fleet=null, airportDrag=null;\n'+startup);
 // The block also reads the ?start= key (web/src/start-key.ts). These addresses have none, so no start place may be used.
 const noStartKey=()=>null, noStartPlace=()=>{throw Error('a start place was used with no start key');};
 const origin=[624000,5104000], bounds=[-5000,-5000,5000,5000];

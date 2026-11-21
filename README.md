@@ -37,6 +37,15 @@ The engine is [three.js](https://threejs.org) (MIT licence), installed by `npm c
 The other packages in `web/package-lock.json` keep their own licences (MIT,
 Apache-2.0, ISC and BSD-3-Clause).
 
+## Airport drag races
+
+In Point Tupper, open **Places** (L on a keyboard) and choose **Port Hawkesbury Airport**.
+Select **Stage** in the left lane and wait for green. Enter or Y / Triangle also stages the car.
+Race the pace car over 402 m in the car, pickup, side by side or dirt bike. The result shows reaction time,
+elapsed time and trap speed. The game saves the best elapsed time for each vehicle on this device.
+
+To start there from a link, use `?area=pointtupper&start=airport-drag`.
+
 ## Tools
 
 The scripts run on Linux (the Linux server) and on macOS. The land (`data/`) is not in git: the bakes make it from
