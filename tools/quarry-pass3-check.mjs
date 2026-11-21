@@ -68,6 +68,6 @@ export function pass3Tests(test,read){
  test('P3-6 LOW quarry budget rows fit the existing 1.48 million ceiling',()=>{
   const rows=JSON.parse(read('tools/baseline/frame-budget.json'));const text=JSON.stringify(rows);assert.ok(text.includes('quarry'));
   const visit=o=>{if(!o||typeof o!=='object')return;for(const [key,value]of Object.entries(o)){if(key.toLowerCase().includes('quarry')&&key.toLowerCase().includes('phone'))assert.ok(value.triangles<=1480000,'LOW quarry row '+key+' costs '+value.triangles);else visit(value);}};visit(rows);
-  assert.ok(read('web/src/main.ts').includes('terrain.split = AREA.quarry ?'),'existing split knob is area scoped');
+  assert.ok(read('web/src/main.ts').includes('split: AREA.quarry ?'),'existing split knob is area scoped');
  });
 }
