@@ -76,7 +76,7 @@ export class RoadCuts {
     if(!revision){if(e.allocation){this.free(e.allocation);e.allocation=undefined;}e.raster=null;(t.mesh.material as THREE.ShaderMaterial).uniforms.roadCuts.value=0;e.revision=0;t.roadCutRevision=0;return;}this.startWorker();if(e.allocation){this.free(e.allocation);e.allocation=undefined;}e.raster=null;(t.mesh.material as THREE.ShaderMaterial).uniforms.roadCuts.value=0;this.queue.set(t,e);
   }
   /** This is the only main-thread build/upload pump. No tile arrival performs a field build. It uploads at most
-   *  `pages` atlas pages (64 KB each) per call, within `budgetMs`. The order of jobs and pages does not depend on it. */
+   *  `pages` atlas pages (64 KB each) per call, within `budgetMs`. The order of jobs does not depend on it; which atlas pages a job lands on can. */
   step(budgetMs=2,pages=1):void {
     if(!this.job&&!this.queue.size)return;
     const start=performance.now();let uploads=0,prepared=0,posted=0,validated=0,allocated=0,copied=0;

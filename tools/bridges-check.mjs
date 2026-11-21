@@ -130,9 +130,12 @@ async function shortcuts(replacements={}){
  const bits=r=>Buffer.concat([r.triangles,r.triangleDeck,...['position','normal','color'].map(n=>r.geometry.getAttribute(n).array),new Float64Array([r.startLength,r.endLength,r.y0,r.y1])].map(a=>Buffer.from(a.buffer,a.byteOffset,a.byteLength)));
  worlds[0].spans.forEach((r,i)=>assert.ok(bits(r).equals(bits(worlds[1].spans[i])),`solver shortcuts keep span ${r.road.id} bit for bit`));
  let seed=1306;const rnd=()=>(seed=seed*16807%2147483647)/2147483647;let points=0;
- for(const r of worlds[0].spans){const reach=r.width+.0001;
+ for(const r of worlds[0].m.spans){const reach=r.width+.0001;
   for(let j=1;j<r.pts.length;j++){const a=r.pts[j-1],b=r.pts[j],dx=b[0]-a[0],dz=b[1]-a[1],n=Math.hypot(dx,dz)||1;
-   for(let k=0;k<300;k++){const t=-.05+1.1*rnd(),off=reach*(1+(rnd()-.5)*(k%2?1e-6:.4))*(rnd()<.5?-1:1),x=a[0]+dx*t-dz/n*off,z=a[1]+dz*t+dx/n*off;points++;
+   // Random feet along the segment, then feet aimed at its ends and joints at exactly the reach: a nearly axis-aligned
+   // segment's box edge is decided there, and random feet almost never land on it.
+   const aimed=[];for(const t of[0,1e-8,1-1e-8,1])for(const side of[-1,1])for(const f of[1-1e-9,1+1e-9])aimed.push([t,reach*f*side]);
+   for(let k=0;k<300+aimed.length;k++){const [t,off]=k<300?[-.05+1.1*rnd(),reach*(1+(rnd()-.5)*(k%2?1e-6:.4))*(rnd()<.5?-1:1)]:aimed[k-300],x=a[0]+dx*t-dz/n*off,z=a[1]+dz*t+dx/n*off;points++;
     for(const kind of[-1,1,5])assert.equal(worlds[0].m.isSpan(x,z,kind),worlds[1].m.isSpan(x,z,kind),`isSpan box keeps the plain answer at ${x},${z}`);}
   }}
  const from=fast.indexOf('/** Math.hypot(a,b)>limit'),to=fast.indexOf('/** True when (x,z) is within');assert.ok(from>0&&to>from,'length test slice');
@@ -210,6 +213,7 @@ if(process.argv.includes('--mutations')){
  for(const [name,from,to,error] of[
   ['solver skips a visit when only one corner moved','changed[n1]<last&&changed[n2]<last','changed[n1]<last',/bit for bit/],
   ['solver lattice memo ignores the point',"if(state===0||memoX[slot]!==x||memoZ[slot]!==z||","if(state===0||",/bit for bit/],
+  ['isSpan box 2 cm too small','const e=reach+g[k+9];','const e=reach-.02;',/isSpan box keeps the plain answer/],
   ['length test without its rounding band','STEP_LO=STEP*STEP*(1-1e-9),STEP_HI=STEP*STEP*(1+1e-9)','STEP_LO=STEP*STEP,STEP_HI=STEP*STEP',/longer|Longer/],
  ]){
   assert.equal(s.split(from).length,2,'one mutation anchor: '+name);

@@ -525,7 +525,7 @@ export class ModernBridges {
     // The grade solver visits each quad's triangles [a,c,b] then [b,c,d], in row order, until no height moves.
     // A visit reads only its three corners' heights and floors: x, z and `fixed` never change. So a visit whose
     // corners have not changed since its last visit repeats that visit exactly: it moves nothing and gives the
-    // same steep and toe flags, kept in `flags`. `changed` holds the visit (a count) that last changed a corner's
+    // same toe flags (bits 2 and 4 of `flags`). `changed` holds the visit (a count) that last changed a corner's
     // height or floor; `seen` holds each triangle's last visit.
     const seen=new Int32Array(rows*columns*2),flags=new Uint8Array(seen.length),changed=new Int32Array(floor.length);let visit=0;
     const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoLand=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);
@@ -581,7 +581,6 @@ export class ModernBridges {
           if(free2){const before=grid[t2+1];grid[t2+1]=Math.max(floor[n2],before-hi*(cx2*px+cz2*pz));if(grid[t2+1]!==before)moved=true;if(!Object.is(grid[t2+1],before))changed[n2]=now;}
         }
       }
-      // A fixed floor can keep a triangle steep even when Float32 heights stop moving.
       // A lift in the first pass can raise a corner after a neighbour that shares it was visited. That neighbour can
       // now be steep, though it was not steep at its visit. So a pass that lifted always runs one more pass.
       if(!moved&&!lifted)break;
