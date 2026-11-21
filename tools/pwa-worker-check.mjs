@@ -87,7 +87,7 @@ async function chunkMiss(code) {
 await chunkMiss(source);console.log('PASS a saved chunk needs no binding; a missing chunk is checked against a saved shell index, also after a restart');
 {
  for(const [name,from,to] of [
-  ['a saved chunk not served without a binding',"try { const r=await caches.match(path); if(r) return r; } catch { /* Read failure: verify a network copy. */ }",''],
+  ['a saved chunk not served without a binding',"try { const r=await caches.match(path); if(r) return r; } catch { /* Read failure: check a network copy of the chunk. */ }",''],
   ['a missing chunk passed to the network unchecked','return entry ? checked(entry) : fetch(request);','return fetch(request);'],
   ['no index read from storage','    if(!entry) {\n      const meta=await openStore(META);','    if(false) {\n      const meta=await openStore(META);'],
   ['no index from memory','let entry=[...versions.values()].find(s=>s.entries.has(path))?.entries.get(path);','let entry;']
