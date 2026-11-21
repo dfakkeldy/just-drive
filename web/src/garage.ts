@@ -32,9 +32,10 @@ const ENTRIES = [
   { id: 'bike', name: 'Dirt bike', spec: BIKE_SPEC, build: mailTrim => createBike(mailTrim),
     ride: (rig, terrain, roads, sea, spec) => new BikeRide(rig as Bike, terrain, roads, sea, spec) },
 ] satisfies readonly (GarageEntry & { id: RideId })[];
-/** The compiler fails here when a ride kind has no garage entry. Every entry's id is already a ride kind. */
-const everyRideKind: [Exclude<RideId, typeof ENTRIES[number]['id']>] extends [never] ? true : never = true;
-void everyRideKind;
+/** The compiler fails here when a ride kind has no garage entry. Every entry's id is already a ride kind.
+ *  The check is types only, so nothing ships in the bundle. */
+type NoneMissing<Missing extends never> = Missing;
+export type GarageHasEveryRideKind = NoneMissing<Exclude<RideId, typeof ENTRIES[number]['id']>>;
 export const GARAGE: readonly GarageEntry[] = ENTRIES;
 export const VEHICLE_KEY = 'mmm.vehicle';
 /** Address bar wins in every mode. A saved garage id is read only for explore; ordinary mail keeps the car. */
