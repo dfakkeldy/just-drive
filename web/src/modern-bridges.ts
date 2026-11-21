@@ -47,6 +47,9 @@ const stepLength=(sum:number,xx:number,xz:number,zz:number,gx:number,gz:number,d
   for(let n=0;n<26;n++){const mid=(lo+hi)/2;if(n===0&&mid===longest||stepLonger(mid,sum,xx,xz,zz,gx,gz,determinant,STEP,STEP_LO,STEP_HI))lo=mid;else hi=mid;}
   return hi;
 };
+/** update() holds built decks during a land burst only while the camera stays within HOLD_REACH metres (across the
+ *  map) of where the hold began; a single step longer than HOLD_JUMP starts a new hold there (Terrain's BURST_DISTANCE). */
+const HOLD_REACH = 30, HOLD_JUMP = 150;
 /** True when (x,z) is within `reach` of the polyline. pts[0] comes first with main's own distance formula. */
 const nearLine = (pts:readonly (readonly [number,number])[],x:number,z:number,reach:number):boolean => {
   if(Math.hypot(pts[0][0]-x,pts[0][1]-z)<reach)return true;
@@ -461,12 +464,26 @@ export class ModernBridges {
     if(this.walks&&this.walks.size!==this.walkCount)this.reserveWalks();
     // The box is a cheap prefilter. Only a deck line within DRAW builds here; a query (contact, deck height or
     // placement) still builds any span on demand.
-    // During a land burst (Terrain.burst) a span that has a deck keeps it here: each finer level under its banks would
-    // build it again. The first update after the burst builds it on the settled land. A span with no deck builds at
-    // once, and so does a forced build: its width has changed, and its footprint already uses the new width.
-    const hold=this.terrain.burst===true;
+    // While the game waits for the driver (Terrain.holdBackground) during a land burst (Terrain.burst), a span that has
+    // a deck keeps it here: each finer level under its banks would build it again. The first update after that builds
+    // it on the land of the moment. A span with no deck builds at once, and so does a forced build: its width has
+    // changed, and its footprint already uses the new width. The hold also ends when the camera moves more than
+    // HOLD_REACH across the map from where it began (the drone or the free camera before the first pedal). Height does
+    // not count: the parked camera rises with the car as the land arrives (64 m at Point Tupper). A step of more than
+    // HOLD_JUMP (a placement or a place jump, Terrain's burst rule) starts a new hold where the camera lands.
+    const hold=this.holding(cam);
     for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(hold&&r.geometry&&!r.forceBuild)continue;if(cam.x>r.x0-DRAW&&cam.x<r.x1+DRAW&&cam.z>r.z0-DRAW&&cam.z<r.z1+DRAW&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);}
     if(this.dirty)this.merge();
+  }
+  // Hold state, made on the first hold (a fixture may build this class without its field initialisers).
+  private holdAt:THREE.Vector3|null=null;private holdLast:THREE.Vector3|null=null;private holdEnded=false;
+  private holding(cam:THREE.Vector3):boolean {
+    if(this.terrain.burst!==true||this.terrain.holdBackground!==true){this.holdAt=null;this.holdEnded=false;return false;}
+    const jump=!this.holdAt||!this.holdLast||cam.distanceTo(this.holdLast)>HOLD_JUMP;
+    this.holdLast=(this.holdLast??new THREE.Vector3()).copy(cam);
+    if(jump){this.holdAt=(this.holdAt??new THREE.Vector3()).copy(cam);this.holdEnded=false;}
+    else if(Math.hypot(cam.x-this.holdAt!.x,cam.z-this.holdAt!.z)>HOLD_REACH)this.holdEnded=true;
+    return!this.holdEnded;
   }
   private walkCount=0;
   /** A sidewalk on a bridge (main's sidewalk layer) needs the deck to reach past it, as the old deck's widened parapet

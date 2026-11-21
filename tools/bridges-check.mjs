@@ -60,17 +60,32 @@ async function contracts(replacements={}){
  const box=index.filter(i=>{const r=real.spans[i];return cam.x>r.x0-1500&&cam.x<r.x1+1500&&cam.z>r.z0-1500&&cam.z<r.z1+1500;});
  assert.deepEqual(eager,near,'update() builds only the spans whose deck line is within 1500 m');
  assert.ok(near.length>0&&box.length>near.length,`the start pose has near spans and far spans in the box: ${near}/${box}`);
- // A land burst (Terrain.burst: a start or a jump, until the land in view is in). update() gives a span with no deck
- // its first build at once, keeps a built deck, and builds it again in the first update after the burst. A deck
- // query and a forced build (a new width) still build at once.
- const land={...terrain,dataRevision:1,burst:true},held=new mod.Roads({roads:[road(7,0,20),road(8,20,40)]},[0,0],land),deck=held.modern,camera=new THREE.Vector3(0,20,-20);
+ // A land burst (Terrain.burst: a start or a jump, until the land in view is in) while the game waits for the driver
+ // (Terrain.holdBackground: main holds it until the first pedal). update() gives a span with no deck its first build at
+ // once, keeps a built deck, and builds it again in the first update after the burst or once the driver drives. The
+ // hold also ends when the camera moves more than 30 m across the map; a step over 150 m starts a new hold there.
+ // A deck query and a forced build (a new width) still build at once.
+ const land={...terrain,dataRevision:1,burst:true,holdBackground:true},held=new mod.Roads({roads:[road(7,0,20),road(8,20,40)]},[0,0],land),deck=held.modern,camera=new THREE.Vector3(0,20,-20);
+ const step=(cam=camera)=>{land.dataRevision++;held.update(cam);return deck.audit.builds;};
  held.update(camera);assert.equal(deck.audit.builds,1,'a span with no deck builds at once during a burst');
- for(let i=0;i<3;i++){land.dataRevision++;held.update(camera);}
- assert.equal(deck.audit.builds,1,'update() keeps a built deck while the land bursts');
+ for(let i=0;i<3;i++)step();
+ assert.equal(deck.audit.builds,1,'update() keeps a built deck while the land bursts and the game waits for the driver');
+ camera.y+=64;assert.equal(step(),1,'the parked camera rising with the car keeps the hold');
  land.burst=false;held.update(camera);assert.equal(deck.audit.builds,2,'the first update after the burst builds the deck again');
  held.update(camera);assert.equal(deck.audit.builds,2,'settled land builds nothing more');
- land.burst=true;land.dataRevision++;assert.notEqual(held.deckHeight(0,-20),null);assert.equal(deck.audit.builds,3,'a deck query still builds at once during a burst');
- const span=deck.spans[0];span.forceBuild=true;span.revision=-1;held.update(camera);assert.equal(deck.audit.builds,4,'a forced build does not wait for the burst');
+ land.burst=true;land.holdBackground=false;assert.equal(step(),3,'once the driver drives, update() builds at once during a burst');
+ land.holdBackground=true;assert.equal(step(),3,'a new wait for the driver holds again');
+ const moved=camera.clone().add(new THREE.Vector3(31,0,0));
+ assert.equal(step(moved),4,'the hold ends when the camera moves more than 30 m across the map');
+ assert.equal(step(moved),5,'an ended hold stays ended');
+ const far=moved.clone().add(new THREE.Vector3(-31,0,-200));
+ assert.equal(step(far),5,'a jump of more than 150 m starts a new hold where the camera lands');
+ land.dataRevision++;assert.notEqual(held.deckHeight(0,-20),null);assert.equal(deck.audit.builds,6,'a deck query still builds at once during a burst');
+ const span=deck.spans[0];span.forceBuild=true;span.revision=-1;held.update(far);assert.equal(deck.audit.builds,7,'a forced build does not wait for the burst');
+ // Node tools and stubs that never set holdBackground see no hold.
+ const bareLand={...terrain,dataRevision:1,burst:true},bare=new mod.Roads({roads:[road(9,0,20)]},[0,0],bareLand);
+ bare.update(camera);bareLand.dataRevision++;bare.update(camera);
+ assert.equal(bare.modern.audit.builds,2,'a terrain without holdBackground never holds');
  return{middle,maxRise,draws:roads.group.children.length,atInputs,eager:eager.length,farInBox:box.length-near.length,burstBuilds:deck.audit.builds};
 }
 // The grade solver's shortcuts (a repeat visit skipped, the shared lattice memo, squared length tests, the isSpan
@@ -136,7 +151,12 @@ if(process.argv.includes('--mutations')){
   ['far spans in the box build eagerly','&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);',')this.ensure(r);',/deck line is within 1500 m/],
   ['update() builds a built deck again during a burst','if(hold&&r.geometry&&!r.forceBuild)continue;','',/keeps a built deck while the land bursts/],
   ['update() holds a missing deck during a burst','if(hold&&r.geometry&&','if(hold&&',/no deck builds at once/],
-  ['update() still holds after the burst','const hold=this.terrain.burst===true;','const hold=this.terrain.burst!==undefined;',/builds the deck again/],
+  ['update() still holds after the burst','if(this.terrain.burst!==true||','if(',/builds the deck again/],
+  ['update() holds after the driver drives','||this.terrain.holdBackground!==true)',')',/once the driver drives/],
+  ['a terrain without holdBackground holds','||this.terrain.holdBackground!==true)','||this.terrain.holdBackground===false)',/without holdBackground never holds/],
+  ['the hold has no camera bound','else if(Math.hypot(cam.x-this.holdAt!.x,cam.z-this.holdAt!.z)>HOLD_REACH)this.holdEnded=true;','',/moves more than 30 m/],
+  ['the camera bound counts height','Math.hypot(cam.x-this.holdAt!.x,cam.z-this.holdAt!.z)>HOLD_REACH','cam.distanceTo(this.holdAt!)>HOLD_REACH',/rising with the car/],
+  ['a jump does not start a new hold','const jump=!this.holdAt||!this.holdLast||cam.distanceTo(this.holdLast)>HOLD_JUMP;','const jump=!this.holdAt;',/jump of more than 150 m/],
   ['a forced build waits for the burst','&&!r.forceBuild)continue;',')continue;',/forced build/],
   ['a deck query waits for the burst','if(build)this.ensure(r);','if(build&&!this.terrain.burst)this.ensure(r);',/query still builds/],
  ]){
