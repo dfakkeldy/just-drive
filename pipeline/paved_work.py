@@ -7,7 +7,7 @@ AREAS=('mabou','judique','porthood','westbay','pointtupper','cansocauseway')
 
 
 def key_files(repo):
-    """The recipe files in the key. tools/paved-work-check.py proves they cover every source the site exporter reads."""
+    """The recipe files in the key. tools/hand-sites-check.py proves they cover every source the site exporter reads."""
     repo=Path(repo)
     return sorted({*repo.glob('pipeline/paved*.*'),repo/'pipeline/areas.py',repo/'pipeline/32_bake_paved.py',repo/'pipeline/hand_sites.py',repo/'tools/paved-sites.mjs',
         *repo.glob('web/src/*site.ts'),*repo.glob('web/src/quarry*.ts'),*repo.glob('web/src/mine-*.ts'),
