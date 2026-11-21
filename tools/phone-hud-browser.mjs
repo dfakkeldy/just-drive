@@ -92,7 +92,16 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       const before=(await boxes()).find(b=>b.id==='phoneLine');
       // Render fixture only: physics/activation is checked by phone-speed-cap. Feed the real
       // frame and PhoneMailHud a held-cap reading so every viewport paints the longest marker.
-      await read(`(()=>{const v=mmm.vehicle,update=v.update;window.restoreCapRender=()=>{delete v.activeTouchSpeedLimit;delete v.update;};Object.defineProperty(v,'activeTouchSpeedLimit',{value:100/3.6,configurable:true});v.update=function(...args){update.apply(this,args);this.speed=100/3.6;};})()`);
+      await read(`(async()=>{
+        const {PhoneMailHud}=await import('/src/phone-mail-hud.ts');
+        const {update}=PhoneMailHud.prototype;
+        window.restoreCapRender=()=>{PhoneMailHud.prototype.update=update;};
+        PhoneMailHud.prototype.update=function(shift,vehicle,driving){
+          // The parked-start loop restores the real vehicle's speed before the HUD reads it.
+          const displayVehicle=Object.create(vehicle,{speed:{value:100/3.6},activeTouchSpeedLimit:{value:100/3.6}});
+          update.call(this,shift,displayVehicle,driving);
+        };
+      })()`);
       await until(`document.getElementById('phoneLine').textContent.startsWith('100 km/h ▸ LIMIT 100')`);
       const marked=(await boxes()).find(b=>b.id==='phoneLine');
       assert.equal(marked.width,before.width,'marker does not widen status');
@@ -135,6 +144,7 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       await read(`document.getElementById('gear').click()`);
       assert.equal(await read(`(()=>{const s=document.querySelector('#settings .mpControl');if(!s)return false;const toggle=s.querySelector('.mpToggle');toggle.scrollIntoView({block:'center'});const r=toggle.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return toggle.getAttribute('aria-checked')==='true'&&(at===toggle||toggle.contains(at));})()`),true,'multiplayer controls shown and reachable');
       await shot('-multiplayer');await read(`document.getElementById('gear').click()`);
+      if(name!=='mail')await until(`!document.getElementById('savePictureButton').hidden`);
       await inspect('multiplayer settings closed');
     }
     if(width<height) {
