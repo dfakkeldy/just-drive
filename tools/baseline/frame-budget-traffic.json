@@ -31,7 +31,7 @@
 
   "mines-lookoff-south/phone-mail":{"calls":175,"triangles":1198073,"geometries":97,"textures":70,"programs":21,"readyTiles":75,"requests":160},
 
-  "new-player-start/desktop-explore-truck":{"calls":794,"triangles":3627768,"geometries":237,"textures":192,"programs":41,"readyTiles":366,"requests":696},
+  "new-player-start/desktop-explore-truck":{"calls":797,"triangles":3632476,"geometries":240,"textures":192,"programs":41,"readyTiles":366,"requests":696},
 
   "new-player-start/desktop-mail":{"calls":635,"triangles":2859368,"geometries":233,"textures":154,"programs":41,"readyTiles":170,"requests":280},
 
