@@ -60,7 +60,18 @@ async function contracts(replacements={}){
  const box=index.filter(i=>{const r=real.spans[i];return cam.x>r.x0-1500&&cam.x<r.x1+1500&&cam.z>r.z0-1500&&cam.z<r.z1+1500;});
  assert.deepEqual(eager,near,'update() builds only the spans whose deck line is within 1500 m');
  assert.ok(near.length>0&&box.length>near.length,`the start pose has near spans and far spans in the box: ${near}/${box}`);
- return{middle,maxRise,draws:roads.group.children.length,atInputs,eager:eager.length,farInBox:box.length-near.length};
+ // A land burst (Terrain.burst: a start or a jump, until the land in view is in). update() gives a span with no deck
+ // its first build at once, keeps a built deck, and builds it again in the first update after the burst. A deck
+ // query and a forced build (a new width) still build at once.
+ const land={...terrain,dataRevision:1,burst:true},held=new mod.Roads({roads:[road(7,0,20),road(8,20,40)]},[0,0],land),deck=held.modern,camera=new THREE.Vector3(0,20,-20);
+ held.update(camera);assert.equal(deck.audit.builds,1,'a span with no deck builds at once during a burst');
+ for(let i=0;i<3;i++){land.dataRevision++;held.update(camera);}
+ assert.equal(deck.audit.builds,1,'update() keeps a built deck while the land bursts');
+ land.burst=false;held.update(camera);assert.equal(deck.audit.builds,2,'the first update after the burst builds the deck again');
+ held.update(camera);assert.equal(deck.audit.builds,2,'settled land builds nothing more');
+ land.burst=true;land.dataRevision++;assert.notEqual(held.deckHeight(0,-20),null);assert.equal(deck.audit.builds,3,'a deck query still builds at once during a burst');
+ const span=deck.spans[0];span.forceBuild=true;span.revision=-1;held.update(camera);assert.equal(deck.audit.builds,4,'a forced build does not wait for the burst');
+ return{middle,maxRise,draws:roads.group.children.length,atInputs,eager:eager.length,farInBox:box.length-near.length,burstBuilds:deck.audit.builds};
 }
 // The grade solver's shortcuts (a repeat visit skipped, the shared lattice memo, squared length tests, the isSpan
 // box) give the same bits as the plain solver: the same source with each shortcut taken out. Real Point Tupper
@@ -123,6 +134,11 @@ if(process.argv.includes('--mutations')){
  for(const [name,from,to,error] of[
   ['at() segment tie rule','if(s>cum[mid+1])lo=mid+1','if(s>=cum[mid+1])lo=mid+1',/at\(\) segment rule/],
   ['far spans in the box build eagerly','&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);',')this.ensure(r);',/deck line is within 1500 m/],
+  ['update() builds a built deck again during a burst','if(hold&&r.geometry&&!r.forceBuild)continue;','',/keeps a built deck while the land bursts/],
+  ['update() holds a missing deck during a burst','if(hold&&r.geometry&&','if(hold&&',/no deck builds at once/],
+  ['update() still holds after the burst','const hold=this.terrain.burst===true;','const hold=this.terrain.burst!==undefined;',/builds the deck again/],
+  ['a forced build waits for the burst','&&!r.forceBuild)continue;',')continue;',/forced build/],
+  ['a deck query waits for the burst','if(build)this.ensure(r);','if(build&&!this.terrain.burst)this.ensure(r);',/query still builds/],
  ]){
   assert.equal(s.split(from).length,2,'one mutation anchor: '+name);
   await assert.rejects(()=>contracts({[file]:s.replace(from,to)}),error,name+' must fail');

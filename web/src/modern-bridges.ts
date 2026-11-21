@@ -461,7 +461,11 @@ export class ModernBridges {
     if(this.walks&&this.walks.size!==this.walkCount)this.reserveWalks();
     // The box is a cheap prefilter. Only a deck line within DRAW builds here; a query (contact, deck height or
     // placement) still builds any span on demand.
-    for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(cam.x>r.x0-DRAW&&cam.x<r.x1+DRAW&&cam.z>r.z0-DRAW&&cam.z<r.z1+DRAW&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);}
+    // During a land burst (Terrain.burst) a span that has a deck keeps it here: each finer level under its banks would
+    // build it again. The first update after the burst builds it on the settled land. A span with no deck builds at
+    // once, and so does a forced build: its width has changed, and its footprint already uses the new width.
+    const hold=this.terrain.burst===true;
+    for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(hold&&r.geometry&&!r.forceBuild)continue;if(cam.x>r.x0-DRAW&&cam.x<r.x1+DRAW&&cam.z>r.z0-DRAW&&cam.z<r.z1+DRAW&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);}
     if(this.dirty)this.merge();
   }
   private walkCount=0;
