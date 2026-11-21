@@ -132,8 +132,8 @@ async function shortcuts(replacements={}){
  let seed=1306;const rnd=()=>(seed=seed*16807%2147483647)/2147483647;let points=0;
  for(const r of worlds[0].m.spans){const reach=r.width+.0001;
   for(let j=1;j<r.pts.length;j++){const a=r.pts[j-1],b=r.pts[j],dx=b[0]-a[0],dz=b[1]-a[1],n=Math.hypot(dx,dz)||1;
-   // Random feet along the segment, then feet aimed at its ends and joints at exactly the reach: a nearly axis-aligned
-   // segment's box edge is decided there, and random feet almost never land on it.
+   // Every span's segments (isSpan reads them all; the nearly axis-aligned ones decide whether a box too small is caught),
+   // random feet along each, then feet aimed at its ends and joints at exactly the reach, which catch it without the seed.
    const aimed=[];for(const t of[0,1e-8,1-1e-8,1])for(const side of[-1,1])for(const f of[1-1e-9,1+1e-9])aimed.push([t,reach*f*side]);
    for(let k=0;k<300+aimed.length;k++){const [t,off]=k<300?[-.05+1.1*rnd(),reach*(1+(rnd()-.5)*(k%2?1e-6:.4))*(rnd()<.5?-1:1)]:aimed[k-300],x=a[0]+dx*t-dz/n*off,z=a[1]+dz*t+dx/n*off;points++;
     for(const kind of[-1,1,5])assert.equal(worlds[0].m.isSpan(x,z,kind),worlds[1].m.isSpan(x,z,kind),`isSpan box keeps the plain answer at ${x},${z}`);}
