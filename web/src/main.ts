@@ -430,7 +430,7 @@ if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
 // One row per hand-built place (place.ts): its site from above, and how to build it once the land and roads are ready
-// (below). The rows' order is the places list's order. A lazy row's import() is awaited just before its build. The site
+// (below). The rows' order is the places list's order. A lazy row waits for its chunk, which started early, just before its build. The site
 // lines stay apart: the building list reads four sites, the porch needs that list, and Maryville's module loads first.
 // The home and the porch house take the car, not the clock, so their slots wrap them; the porch's slot also turns its
 // dog and waits for it.
@@ -738,7 +738,7 @@ const night = nightShading ? new Night(nightShading, {
 if (night) scene.onBeforeRender = (r, _scene, view) => night.update(r, view);
 const yard = yardSite ? new Yard(yardSite, terrain, LOW) : null;
 if (yard) scene.add(yard.group);
-// Build the places in the rows' order. A lazy row awaits its import() here, as before; the others add no wait.
+// Build the places in the rows' order. A lazy row waits here for its chunk, which started early (above); the others add no wait.
 const builtPlaces = {} as BuiltPlaces<typeof placeRows>;
 for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown, object, unknown>][]) {
   (builtPlaces as Record<string, object | null>)[name] = row.site ? row.build(row.site, row.load && await row.load()) : null;
