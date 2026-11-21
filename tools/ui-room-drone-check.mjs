@@ -201,7 +201,8 @@ assert.equal(body.classList.contains('droneStack'),false);
   assert.equal(mapHeadBtn.getAttribute('aria-expanded'),String(!folded),`${w}x${h}: aria-expanded matches actual canvas visibility`);
   // Mirror CSS Media Queries Level 4: orientation:landscape is strictly width > height.
   const isStacked=stacked||!(w>h&&h<=450);
-  const mapW=folded?col:parseFloat(document.getElementById('miniMapCanvas').style.width)+2;
+  // Folded MAP ▸ tab is a fixed 58 px wide in CSS; open maps match their canvas width + 2 px border.
+  const mapW=folded?58:parseFloat(document.getElementById('miniMapCanvas').style.width)+2;
   const mapL=isStacked?10:10+col+8,mapR=mapL+mapW,mapT=isStacked?20+hud.rect.height:10;
   const mapB=mapT+28+(folded?0:parseFloat(document.getElementById('miniMapCanvas').style.width));
   assert.ok(mapR<=pauseLeft-8,`${w}x${h}: map clears Pause (right=${mapR}, pause=${pauseLeft})`);
@@ -250,22 +251,28 @@ assert.equal(body.classList.contains('droneStack'),false);
  hud.rect={left:10,right:122,top:10,bottom:124,width:112,height:114};
  notifyResize(hud);
  assertClear(360,440,220,false);
- // Width-dependent HUD text wrapping at 360x420 must settle with zero oscillation.
+ // Tight landscape with tall HUD (130 px) and Pause at x=188 moves the compact header beside HUD to clear the stick label.
+ hud.rect={left:10,right:114,top:10,bottom:140,width:104,height:130};
+ const crampedSide=assertClear(360,320,188);
+ assert.equal(crampedSide.stacked,false,'360x320 with tall HUD moves compact header to the side position');
+ assert.equal(crampedSide.folded,true,'360x320 with tall HUD keeps compact header folded');
+ // Width-dependent HUD text wrapping at 360x420 must settle with zero oscillation across a real height transition.
  {
-  const heightForCol=c=>c<95?180:110;
-  hud.rect={left:10,right:116,top:10,bottom:120,width:106,height:110};
+  const heightForCol=c=>c<95?180:120;
+  hud.rect={left:10,right:116,top:10,bottom:190,width:106,height:180};
   let prev=assertClear(360,420,220);
-  let settled=false;
+  let transitions=0,settled=false;
   for(let step=0;step<6;step++){
    const nextH=heightForCol(prev.col);
-   if(nextH===hud.rect.height&&step>0){settled=true;break;}
+   if(nextH===hud.rect.height){settled=true;break;}
+   transitions++;
    hud.rect={left:10,right:10+prev.col,top:10,bottom:10+nextH,width:prev.col,height:nextH};
    notifyResize(hud);
    const next=assertClear(360,420,220,false);
    assert.equal(next.col,prev.col,'HUD column width stays stable during height-driven refit');
-   if(next.col===prev.col&&next.folded===prev.folded&&next.mapB===prev.mapB){settled=true;break;}
    prev=next;
   }
+  assert.ok(transitions>=1,'oscillation regression exercises a real HUD height change');
   assert.equal(settled,true,'360x420 width-dependent HUD resize settles without oscillation');
  }
  pause.remove();hud.remove();innerWidth=844;innerHeight=390;resize();

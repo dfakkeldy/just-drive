@@ -243,16 +243,21 @@ export class MiniMap {
       if (!placed) {
         stacked = landscape;
         const clearReturnW = Math.min(singleW, Math.floor(returnLeft - 8 - leftEdge - 2));
-        // Keep the HUD column width independent of measured HUD height so height-driven refits cannot oscillate.
-        const stackW = Math.max(72, innerHeight <= 450 && clearReturnW >= 96 ? clearReturnW : singleW);
+        // Keep the HUD column width independent of measured HUD height so height-driven refits cannot oscillate,
+        // while leaving room for the 58 px folded map header beside it in landscape.
+        let stackW = Math.max(72, innerHeight <= 450 && clearReturnW >= 96 ? clearReturnW : singleW);
+        if (landscape) {
+          const maxSideHudW = Math.floor(rightLimit - leftEdge - 76);
+          if (maxSideHudW >= 72) stackW = Math.min(stackW, maxSideHudW);
+        }
         hudCol = stackW + 2;
         const tryWidth = (w: number) => w >= 56 ? Math.min(w, Math.floor(belowLimit(leftEdge, leftEdge + w + 2) - stackTop - 28)) : -1;
-        const bestStack = Math.max(tryWidth(stackW), tryWidth(clearReturnW));
+        const bestStack = Math.max(tryWidth(stackW), tryWidth(Math.min(stackW, clearReturnW)));
         if (bestStack >= 56) {
           flightSize = bestStack;
         } else {
           tight = true;
-          const headerW = Math.max(72, Math.min(stackW, clearReturnW >= 72 ? clearReturnW : stackW));
+          const headerW = Math.max(56, Math.min(stackW, clearReturnW >= 56 ? clearReturnW : stackW));
           const headerBottom = stackTop + 28;
           const sideSpace = Math.floor(rightLimit - leftEdge - hudCol - 18);
           if (landscape && sideSpace >= 56 && headerBottom > belowLimit(leftEdge, leftEdge + headerW + 2)) {
