@@ -362,11 +362,27 @@ async function resetResource(request,path,event) {
   try {const r=await checked(entry);return request.headers.has('Range')?range(r,request.headers.get('Range')):r;}
   catch(e) {if(e.integrity)return unavailable(event);throw e;}
 }
+// A chunk of app.js (web/area-chunks-build.ts) is named by its content hash: any saved copy is the right file, so it
+// needs no page binding. A late import must not meet a binding race and be told to update.
+async function chunk(request,path) {
+  try { const r=await caches.match(path); if(r) return r; } catch { /* Read failure: verify a network copy. */ }
+  // Not saved: check the network copy against the chunk's entry (sha256 and byte count), as for every other shell file.
+  // Any saved shell index that lists the name has the same entry. Only a page from a saved shell asks for /offline/
+  // files, and saving that shell stored its index. Only with storage blocked is there no index: then the network copy.
+  let entry=[...versions.values()].find(s=>s.entries.has(path))?.entries.get(path);
+  try {
+    if(!entry) {
+      const meta=await openStore(META);
+      for(const key of await meta.keys()) if(new URL(key.url).pathname.startsWith('/__mmm_version/')) {
+        const r=await matchStore(meta,key); entry=r ? prepare(await r.json()).entries.get(path) : undefined; if(entry) break;
+      }
+    }
+  } catch { /* Storage is blocked: no saved index names the file. */ }
+  return entry ? checked(entry) : fetch(request);
+}
 async function resource(request,path,event={}) {
   if(path.startsWith('/areas/')) return fetch(request);
-  // A chunk of app.js (web/area-chunks-build.ts) is named by its content hash: any saved copy is the right file, so it
-  // needs no page binding. A late import must not meet a binding race and be told to update.
-  if(path.startsWith('/offline/chunks/')) { try { const r=await caches.match(path); if(r) return r; } catch { /* Read failure: the network copy. */ } return fetch(request); }
+  if(path.startsWith('/offline/chunks/')) return chunk(request,path);
   const isData=path.startsWith('/terrain/') || path.startsWith('/audio/') || path.startsWith('/models/') || path.startsWith('/areas/');
   if(disabled) return isData ? resetResource(request,path,event) : fetch(request);
   const token=new URL(request.url).searchParams.get('mmm-page'), id=event.clientId || '__non_client__';

@@ -66,6 +66,33 @@ await savedBeforeTheCar(source);console.log('PASS a page saved before the mail c
   ['an unlisted model passed to the network when the worker is switched off',"path.endsWith('/packs.json')?fetch(request):unavailable(event);","path.endsWith('/packs.json')||path.startsWith('/models/')?fetch(request):unavailable(event);"]
  ]) {assert.ok(source.includes(from),name+' applies');let caught=false;try{await savedBeforeTheCar(source.replace(from,to));}catch{caught=true;}assert.ok(caught,'escaped: '+name);console.log('caught mutation:',name);}
 }
+async function chunkMiss(code) {
+ // A chunk of app.js is served from any saved copy, with no page binding. A chunk that is not saved is checked
+ // against its entry in a saved shell index (sha256 and byte count), as every other shell file is.
+ const h=await harness(code),a=h.build('A','land A',{chunk:true});await h.api.latest();await h.nav('a');
+ const shell=h.bins.get('mmm-offline-shell-'+a.v.revision),miss=()=>shell.delete(a.chunkUrl),wrong=()=>h.routes.set(a.chunkUrl,new Response('X'.repeat(Buffer.byteLength(a.chunk))));
+ assert.ok(shell.has(a.chunkUrl),'the shell saved the chunk');
+ h.network(false);assert.equal(await(await h.get(a.chunkUrl,'stranger')).text(),a.chunk,'a saved chunk needs no binding and no network');h.network(true);
+ miss();assert.equal(await(await h.get(a.chunkUrl,'stranger')).text(),a.chunk,'a missing chunk comes from the network when its bytes match');
+ for(const [name,set] of [['same-length wrong bytes',wrong],['404',()=>h.routes.set(a.chunkUrl,new Response('gone',{status:404}))],['206',()=>h.routes.set(a.chunkUrl,new Response(a.chunk,{status:206}))]]) {
+  miss();set();await assert.rejects(h.get(a.chunkUrl,'stranger'),/./,'a missing chunk is never served unchecked: '+name);
+ }
+ // After a restart the worker holds no index in memory: it reads the saved one.
+ h.restart();miss();wrong();await assert.rejects(h.get(a.chunkUrl,'stranger'),/./,'after a restart the saved index still checks the chunk');
+ // An index held in memory checks the chunk even when the saved ones cannot be listed.
+ h.fault({op:'keys',bucket:'meta'});miss();wrong();await assert.rejects(h.get(a.chunkUrl,'stranger'),/./,'the index in memory checks the chunk');
+ // Storage blocked and no index in memory: nothing names the file, so the network copy (the documented fallback).
+ h.restart();h.routes.set(a.chunkUrl,new Response(a.chunk));assert.equal(await(await h.get(a.chunkUrl,'stranger')).text(),a.chunk,'storage blocked: the network copy');h.fault(undefined);
+}
+await chunkMiss(source);console.log('PASS a saved chunk needs no binding; a missing chunk is checked against a saved shell index, also after a restart');
+{
+ for(const [name,from,to] of [
+  ['a saved chunk not served without a binding',"try { const r=await caches.match(path); if(r) return r; } catch { /* Read failure: verify a network copy. */ }",''],
+  ['a missing chunk passed to the network unchecked','return entry ? checked(entry) : fetch(request);','return fetch(request);'],
+  ['no index read from storage','    if(!entry) {\n      const meta=await openStore(META);','    if(false) {\n      const meta=await openStore(META);'],
+  ['no index from memory','let entry=[...versions.values()].find(s=>s.entries.has(path))?.entries.get(path);','let entry;']
+ ]) {assert.ok(source.includes(from),name+' applies');let caught=false;try{await chunkMiss(source.replace(from,to));}catch{caught=true;}assert.ok(caught,'escaped: '+name);console.log('caught mutation:',name);}
+}
 const mpGuard="if(url.pathname==='/mp' || url.pathname.startsWith('/mp/')) return;";assert.ok(source.includes(mpGuard));let mpCaught=false;
 try{await mpBypass(source.replace(mpGuard,"if(url.pathname.startsWith('/mp')) {event.respondWith(new Response('wrong'));return;}"));}catch{mpCaught=true;}assert.ok(mpCaught,'mp interception mutation caught');console.log('caught mutation: room interception');
 await test(source);console.log('PASS core shell, offline, full-response integrity, ranges, resume, removal and kill');
