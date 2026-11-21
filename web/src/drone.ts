@@ -257,7 +257,7 @@ body.droneOn #hud .dh{display:block;font:700 24px/26px var(--mono);font-variant-
 body.droneOn #hud :is(.dk,.dq){font:12px/16px var(--mono);color:var(--ink-dim)}
 body.droneOn #hud .dsep{display:none}
 body.droneOn #hud .dst{font:12px/16px var(--mono);color:#f2b766}
-body.droneOn.droneSticks #hud{width:var(--droneCol);max-width:none;box-sizing:border-box;white-space:pre-wrap;font-size:12px;line-height:16px;padding:8px;overflow-wrap:anywhere}
+body.droneOn.droneSticks #hud{left:max(10px,var(--test-safe-left,env(safe-area-inset-left,0px)));top:calc(10px + env(safe-area-inset-top,0px));width:var(--droneCol);max-width:none;box-sizing:border-box;white-space:pre-wrap;font-size:12px;line-height:16px;padding:8px;overflow-wrap:anywhere}
 body.droneOn #hud .dst{display:block}
 body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-right,0px))}
 
@@ -334,7 +334,7 @@ export function createDroneSticks(home: () => void): DroneSticks {
     document.body.appendChild(el);
     return { el, end };
   };
-  const left = stick('droneLeft', '↕ CLIMB · ↔ TURN', (x, y) => { command.turn = -x; command.up = y; });
+  const left = stick('droneLeft', '↕CLIMB · ↔TURN', (x, y) => { command.turn = -x; command.up = y; });
   const right = stick('droneRight', 'FLY', (x, y) => { command.right = x; command.forward = y; });
   const ret = Object.assign(document.createElement('button'), { id: 'droneReturn', textContent: 'RETURN TO CAR', hidden: true });
   ret.setAttribute('aria-label', 'Fly the drone back to the vehicle. Tap again to land at once');

@@ -58,6 +58,9 @@ async function audit(root){
  await read(`window.accessScroll=[[document.scrollingElement,scrollX,scrollY],...[...document.querySelectorAll('*')].filter(e=>e.scrollTop||e.scrollLeft).map(e=>[e,e.scrollLeft,e.scrollTop])]`);
  const failures=[];
  for(let index=0;index<count;index++){
+  // The audit's own scrolling can hide a More below band that was visible when the list was made.
+  // Put the saved scroll positions back and let the band refresh before it is sampled.
+  if(!await read(`document.querySelector('[data-contrast-index="${index}"]').getClientRects().length`))await read(`for(const e of document.querySelectorAll('*'))if(e.scrollTop||e.scrollLeft){e.scrollTop=0;e.scrollLeft=0;}for(const [e,x,y] of accessScroll){e.scrollLeft=x;e.scrollTop=y;}new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
   await read(`document.querySelector('[data-contrast-index="${index}"]').scrollIntoView({block:'center',inline:'nearest'});window.accessHide=document.createElement('style');accessHide.textContent='*{-webkit-text-fill-color:transparent!important;text-shadow:none!important}';document.head.append(accessHide)`);
   const background=(await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).result.data;
   await read('accessHide.remove()');
@@ -72,6 +75,8 @@ async function audit(root){
    const large=parseFloat(cs.fontSize)>=24||(parseFloat(cs.fontSize)>=18.66&&+cs.fontWeight>=700);
    let left=0,top=0,right=innerWidth,bottom=innerHeight;
    for(let p=el.parentElement;p;p=p.parentElement){const st=getComputedStyle(p),r=p.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(st.overflowX)){left=Math.max(left,r.left);right=Math.min(right,r.right);}if(/auto|scroll|hidden|clip/.test(st.overflowY)){top=Math.max(top,r.top);bottom=Math.min(bottom,r.bottom);}}
+   // A pointer-events:none cue (the More below band) is painted, but elementFromPoint skips it. Hit-test the measured element itself. Other pointer-events:none covers are still invisible to this test, as before.
+   const pe=[el.style.getPropertyValue('pointer-events'),el.style.getPropertyPriority('pointer-events')];el.style.setProperty('pointer-events','auto','important');try{
    for(const node of el.childNodes){
     if(node.nodeType!==3||!node.textContent.trim())continue;
     const range=document.createRange();range.selectNodeContents(node);
@@ -81,6 +86,7 @@ async function audit(root){
      if(ratio+.01<(large?3:4.5)){errors.push([node.textContent.trim().slice(0,45),Number(ratio.toFixed(2))]);break;}
     }
    }
+   }finally{el.style.setProperty('pointer-events',...pe);}
    if(!samples)errors.push(['unmeasured text',el.textContent.trim().slice(0,45)]);
    return errors;
   })()`));

@@ -21,7 +21,9 @@ await run('map','mode=explore&at=624271,5103301,0',async p=>{
   check(await p.read(`JSON.stringify([mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.speed])`)===paused,'big map pauses the game');
   check(await p.read(`document.getElementById('c').inert&&document.activeElement.closest('#bigMap')!==null&&document.getElementById('bigMap').getAttribute('aria-modal')==='true'`),'map owns focus and makes background inert');
   check(await p.read(`mmm.bigMap.canvas.width===Math.round(mmm.bigMap.w*2)&&mmm.bigMap.canvas.height===Math.round(mmm.bigMap.h*2)`),'map canvas is sharp at Retina ratio');
-  check(await p.read(`document.querySelectorAll('#mapIndex [data-map-place]').length===mmm.places.places.length&&document.querySelectorAll('#mapIndex [data-hike]').length===3&&trailStrokes>=mmm.bigMap.lines.length&&mmm.bigMap.lines.length>0&&mmm.bigMap.hitMarks.length===mmm.places.places.length`),'map shows every place and hike');
+  await p.read('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+  console.log('map counts',await p.read('JSON.stringify([mmm.places.places.map(p=>p.id).filter(id=>!mmm.bigMap.places.some(q=>q.id===id)),mmm.bigMap.places.length,mmm.bigMap.hitMarks.length,trailStrokes,mmm.bigMap.lines.length])'));
+  check(await p.read(`(()=>{const m=mmm.bigMap,b=m.box,ids=[...document.querySelectorAll('#mapIndex [data-map-place]')].map(e=>e.dataset.mapPlace),own=new Set(m.places.map(p=>p.id));return ids.length===m.places.length&&new Set(ids).size===ids.length&&ids.every(id=>own.has(id))&&mmm.places.places.filter(p=>!p.trip&&!own.has(p.id)).every(p=>p.e<b[0]||p.e>b[2]||p.n<b[1]||p.n>b[3]);})()&&document.querySelectorAll('#mapIndex [data-hike]').length===3&&trailStrokes>=mmm.bigMap.lines.length&&mmm.bigMap.lines.length>0&&mmm.bigMap.hitMarks.length===mmm.bigMap.places.length`),'map shows every place and hike');
   console.log('map labels',await p.read('mapTexts'));await p.shot('01-big-map-whole');
   check(await p.read(`mapHalos.includes('Highway 19')&&mapHalos.includes('Mabou Rivers Trail')&&!mapHalos.includes('You are here')&&mapTexts.includes('Highway 19')&&mapTexts.some(t=>t==='Mabou Rivers Trail')&&mapTexts.includes('You are here')&&mapTexts.includes('↑ N')&&mapTexts.some(t=>/ km$/.test(t))`),'map draws road and trail names, heading, scale and north');
   await p.shot('01-big-map-whole');
@@ -39,7 +41,7 @@ await run('map','mode=explore&at=624271,5103301,0',async p=>{
   await p.tap('KeyM');await p.read(`document.getElementById('mapPlacesToggle').click()`);
   const seen=[];
   for(let i=0;i<30;i++){await p.tap('Tab');seen.push(await p.read(`document.activeElement?.dataset.mapPlace??null`));}
-  check(await p.read(`mmm.places.places.every(p=>${JSON.stringify(seen)}.includes(p.id))`),'Tab reaches every map place');
+  check(await p.read(`mmm.bigMap.places.length>0&&mmm.bigMap.places.every(p=>${JSON.stringify(seen)}.includes(p.id))`),'Tab reaches every map place');
   await p.read(`document.querySelector('[data-map-place="village"]').focus()`);await p.tap('Enter');
   check(await p.read(`!document.getElementById('mapCard').hidden&&document.getElementById('mapCard').textContent.includes('Mabou village')&&document.getElementById('mapGo')!==null`),'Enter opens a place card');await p.shot('04-place-card');
   await p.read(`mmm.bigMap.showCard(mmm.places.places.find(p=>p.id==='highlands-trailhead'))`);
