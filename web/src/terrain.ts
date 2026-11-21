@@ -47,6 +47,7 @@ export interface Surface {
   bridge: boolean;
   washboard: boolean;   // a road shaken into ridges
   gravel?: boolean;     // a gravel driveway or pad: a track (4) carrying the gravel bit; drives as gravel. Absent otherwise
+  rough?: boolean;      // a rough stretch of gravel or track (rough-roads.ts: bit 128): more and deeper holes, puddles. Absent otherwise
   brook: number;        // metres from the edge of a brook's water: negative in the water; 99 when none is near
   /** True only when an accepted hand-built deck supplies the driving surface. */
   deck?: boolean;
@@ -128,7 +129,12 @@ export interface SiteSurface {
   gravelDrive?: boolean;
   /** Reclassify a mapped gravel sample without moving the centre line or changing its width. */
   paveGravel?: boolean;
+  /** Mark a mapped gravel road or track sample rough (bit 128). Its distance, width and kind stay as baked. */
+  rough?: boolean;
 }
+
+/** The rough bit on a road sample's flag byte. Only gravel roads (3) and tracks (4) without a high bit carry it. */
+export const ROUGH_BIT = 128;
 
 /**
  * A hand-built place that changes the ground under it: graded pads, and surfaces painted through the road field
@@ -179,6 +185,11 @@ export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:SiteSurface,z
   if(f.coverage!==undefined)road[k+3]=Math.round(Math.max(0,Math.min(1,f.coverage))*255);
   if(f.kind===11){road[k+3]=Math.max(0,Math.min(255,Math.round((2+f.half-f.dist)*255/4)));return;}
   const flags=road[k+2];
+  if (f.rough) {
+    const kind = flags & 15;
+    if ((kind === 3 || kind === 4) && (flags & 192) === 0 && Math.abs(road[k] - zero) * dScale < road[k + 1] * wScale + 1.2) road[k + 2] = flags | ROUGH_BIT;
+    return;
+  }
   if (f.paveGravel) {
     if (flags === 3) road[k+2] = 2;
     return;
@@ -715,7 +726,8 @@ export class Terrain {
         if(clearsGroundTrees(this.groundClassAt(x,z))){c=0;px[k*4+2]=0;}
       }
       if (road && road[k * 4 + 2] > 0) {
-        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) !== 4;
+        // Only pavement (kind 2) carries the pavement bits; a rough gravel or track sample keeps its tile's program.
+        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) === 2;
         // Nothing stands on a road: fade the tree layer out from the shoulder to the road edge.
         const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;
         c *= THREE.MathUtils.smoothstep(d, hw + 0.8, hw + 4.5);
@@ -1146,6 +1158,7 @@ export class Terrain {
         out.washboard = (raw & 32) !== 0;
         // A gravel driveway, drawn as a gravel road (drawnRoadBytes); in 1884 it is drawn and driven as the track it is.
         if (!this.cartRoads && (raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
+        if ((raw & 192) === ROUGH_BIT && ((raw & 15) === 3 || (raw & 15) === 4)) out.rough = true;
       }
     }
     // Mail and every other ground reader see the same exact deck as the wheels.

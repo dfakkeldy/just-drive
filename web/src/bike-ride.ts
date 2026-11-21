@@ -8,7 +8,9 @@ import type { VehiclePlacement } from './vehicle';
 import type { Terrain, Surface } from './terrain';
 import type { Roads } from './roads';
 import type { Damage } from './damage-rules';
-import { washboard, potholeDepth, potholeDensity } from './defects';
+import { ROUGH_DEPTH, washboard, potholeDepth, potholeDensity } from './defects';
+import { puddleDip } from './rough-roads';
+import { PUDDLE_DRAG } from './vehicle';
 
 export const BIKE_STEP = 1 / 120, BIKE_WHEELBASE = BIKE_SPEC.wheelbase, BIKE_RADIUS = BIKE_SPEC.wheelRadius;
 const G = 9.81, TAU = Math.PI * 2;
@@ -25,6 +27,8 @@ const SURFACES = {
   grass: { top: 122.13 / 3.6, accel: 5.2, grip: .85, rough: .045, name: 'grass' },
   brush: { top: 38 / 3.6, accel: 3, grip: .7, rough: .07, name: 'brush' },
   washboard: { top: 78 / 3.6, accel: 4.9, grip: .7, rough: .095, name: 'washboard' },
+  // A rough stretch (rough-roads.ts): broken ruts, mud and loose stone. Heard and thrown as a dirt track.
+  rough: { top: 70 / 3.6, accel: 4.6, grip: .75, rough: .07, name: 'dirt track' },
 };
 /** Two wheel samples, fixed-step dynamics and independent air attitude. The car class is untouched. */
 export class BikeRide implements Ride {
@@ -40,6 +44,8 @@ export class BikeRide implements Ride {
   bounds: [number, number, number, number] | null = null;
   placementGuard: ((pose: VehiclePlacement) => boolean) | null = null;
   surfaceName = ''; roadName: string | null = null;
+  /** Water under the wheels this step, metres, in the car's order (the bike uses front left and rear left). */
+  readonly wheelWater = new Float32Array(4);
   wheelie = 0; wheelieRate = 0; pitchRate = 0; whip = 0;
   frontTravel = 0; rearTravel = 0; compression = 0;
   crashTime = 0; crashes = 0;
@@ -155,7 +161,7 @@ export class BikeRide implements Ride {
     if (s.deck) return SURFACES.concrete;
     if (this.roads.deckHeight(this.x, this.z) !== null) return SURFACES.paved;
     if (s.kind === 0 || s.roadDist > s.halfWidth + .4) return s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
-    return s.kind === 9 ? SURFACES.concrete : s.kind <= 2 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 5 ? SURFACES.trail : s.kind === 4 && (!s.gravel || this.terrain.cartRoads) ? SURFACES.track : SURFACES.gravel;
+    return s.kind === 9 ? SURFACES.concrete : s.kind <= 2 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.rough ? SURFACES.rough : s.kind === 5 ? SURFACES.trail : s.kind === 4 && (!s.gravel || this.terrain.cartRoads) ? SURFACES.track : SURFACES.gravel;
   }
   private beginJump(): void {
     this.airborne = true; this.launchX = this.x; this.launchZ = this.z; this.airPitch = 0;
@@ -244,9 +250,14 @@ export class BikeRide implements Ride {
       // Real ridges remain. Deterministic vibration and small lateral skips are less harsh than the car.
       const phase = this.x * Math.sin(this.heading) - this.z * Math.cos(this.heading);
       const ridge = s.washboard ? washboard(phase) : 0;
-      const hole = s.kind > 0 && s.roadDist < s.halfWidth ? potholeDepth(this.x, this.z, potholeDensity(s.kind, s.washboard, s.gravel)) : 0;
+      const hole = !(s.kind > 0 && s.roadDist < s.halfWidth) ? 0 : s.rough ? potholeDepth(this.x, this.z, potholeDensity(s.kind, s.washboard, s.gravel, true), ROUGH_DEPTH)
+        : potholeDepth(this.x, this.z, potholeDensity(s.kind, s.washboard, s.gravel));
+      // Water holds both wheels back (vehicle.ts PUDDLE_DRAG, for two wheels) and the front dips into it.
+      const water = puddleDip(this.x, this.z);
+      this.wheelWater[0] = this.wheelWater[2] = water;
+      if (water > 0) forward *= Math.max(0, 1 - dt * 2 * water * PUDDLE_DRAG * Math.abs(forward));
       const rough = Math.sin(phase * 4.1) * surf.rough * Math.min(speed / 10, 1);
-      this.frontTravel = clamp(rough + ridge * .6 + hole * .4 + this.compression + (t < 0 ? .08 : 0), -.09, .24);
+      this.frontTravel = clamp(rough + ridge * .6 + (hole + water) * .4 + this.compression + (t < 0 ? .08 : 0), -.09, .24);
       this.rearTravel = clamp(-rough * .7 + ridge * .4 + this.compression * .7, -.09, .20);
       if (s.washboard) { sideways += Math.sin(phase * 2.3) * speed * dt * .11; forward *= 1 - dt * Math.abs(ridge) * .32; }
       this.stand += ((s.washboard || surf.rough > .02 ? .85 : 0) - this.stand) * Math.min(1, dt * 5);

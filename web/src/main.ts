@@ -147,7 +147,9 @@ import { LotProps } from './lot-props';
 import { chooseLotProps } from './lot-props-rules';
 import { PorchHouse } from './porch-house';
 import { PorchSite } from './porch-site';
-import { ChurchSite } from './church-site';
+import { CHURCH_START, ChurchSite } from './church-site';
+import { roughRoads, setPuddleField } from './rough-roads';
+import { Puddles, splashLevel } from './puddles';
 import { JudiqueVillageSite, VILLAGE_PLACES } from './judique-village-site';
 import { PortHawkesburySite, aimDrops } from './port-hawkesbury-site';
 import { MabouMainSite, MAIN_ITEMS, aimDrops as aimMabouDrops } from './mabou-main-site';
@@ -518,6 +520,11 @@ const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
 const novemberRoads = ERA.modern && AREA.november
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
 if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
+// Rough stretches of gravel and track, and their puddles (rough-roads.ts). Their sites paint the road samples, so they go
+// in before the first tile loads. No puddle lies on the church start.
+const rough = ERA.modern ? roughRoads(roadData.roads, AREA.id, manifest.village,
+  [{ x: CHURCH_START.e - manifest.village[0], z: manifest.village[1] - CHURCH_START.n, r: 40 }]) : null;
+if (rough) { terrain.sites.push(...rough.sites); setPuddleField(rough.field); }
 const treeExcludes = novemberRoads
   ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
   : stockpiles?.excludes;
@@ -1199,6 +1206,10 @@ scene.add(shift.group);
 const driftFeedback = new DriftFeedback(LOW, !bare);
 scene.add(driftFeedback.mesh);
 if (import.meta.env.DEV) expose({ driftFeedback });
+// The water on the rough stretches and the spray a wheel throws from it: one draw each, only where there is water.
+const puddles = rough ? new Puddles(rough.field, terrain, LOW) : null;
+if (puddles) scene.add(puddles.group);
+if (import.meta.env.DEV) expose({ puddles, roughRoads: rough });
 animals?.registerEvidence(shift.evidence);
 document.getElementById('cameraButton')!.addEventListener('click', () => { if (live()) photoRequested = true; });
 for (const id of ['cameraButton', 'endShift', 'shiftReport', 'settings']) {
@@ -2123,6 +2134,7 @@ function frame(now: number) {
     // A fleet keeps the trailer on the truck while another member drives: only the truck pulls it.
     m.grade = vehicle.pitch; m.towing = !!towing?.attached && ride.kind === 'truck'; m.radio = !!radio?.audible;
     m.slide = vehicle.drift.slide(vehicle.spec.drift);
+    m.splash = splashLevel(vehicle);
     engineSound.update(realDt, playing && mode === 'drive' && !interiors.busy && !document.hidden ? m : null);
   }
   if (interiors.busy) {
@@ -2188,6 +2200,7 @@ function frame(now: number) {
   if (dt > 0 && driving) replay.record(vehicle, car, horse ? 'horse' : ride.kind, now / 1000, clockDt, quietGround);
   gamepad.feel(vehicle, dt, playing && mode === 'drive' && !interiors.busy, now);
   driftFeedback.update(dt, vehicle, camera, playing && mode === 'drive' && !interiors.busy);
+  puddles?.update(dt, camera, playing && mode === 'drive' && !interiors.busy ? vehicle : null);
   updateWorld('before-camera', dt, realDt, now);
   camera.updateMatrixWorld();
   sky.position.copy(camera.position);

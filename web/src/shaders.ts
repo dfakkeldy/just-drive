@@ -904,6 +904,8 @@ void main() {
 #endif
 #endif
   float wash = step(32.0, mod(rflags, 64.0));   // washboard road
+  // A rough stretch of gravel or track (rough-roads.ts, bit 128). On pavement the same bit means faded asphalt.
+  float rough = rkind > 2.5 && rkind < 4.5 && rflags >= 128.0 ? 1.0 : 0.0;
   float onRoad = 0.0;
   if (rkind > 0.5 && rdist < 11.5) {
     float aa = max(fwidth(rdist), 0.02);
@@ -933,6 +935,13 @@ void main() {
       // Gravel road: two packed wheel paths, loose stone between and outside, potholes.
       float track = smoothstep(0.55, 0.15, abs(rdist - rhalf * 0.5));
       surface = mix(gravel, gravel * 0.72, track);
+      if (rough > 0.5) {
+        // Rough: the road has gone back to two ruts a car's width apart (rough-roads.ts RUT), dark wet mud in them, and a
+        // ridge of stone and dead grass left between them.
+        vec3 mud = mix(vec3(0.115, 0.085, 0.060), vec3(0.165, 0.120, 0.080), grit) * (1.0 - 0.3 * smoothstep(0.35, 0.75, vnoise(p * 0.45)));
+        surface = mix(gravel * 0.92, mud, smoothstep(0.62, 0.18, abs(rdist - 0.8)) * 0.85);
+        surface = mix(surface, mix(vec3(0.200, 0.185, 0.120), vec3(0.150, 0.160, 0.070), speck), smoothstep(0.45, 0.1, rdist) * (0.25 + 0.3 * vnoise(p * 0.6)));
+      }
     } else if (rkind > 4.5) {
       // Rail trail: fine crusher dust, packed flat and kept that way. Paler than a gravel road; no ruts, no holes.
       vec3 dust = mix(vec3(0.300, 0.280, 0.240), vec3(0.380, 0.360, 0.315), grit) * (0.92 + 0.16 * speck);
@@ -946,6 +955,8 @@ void main() {
 #else
       surface = mix(mix(albedo, vec3(0.160, 0.170, 0.060), 0.5), vec3(0.170, 0.130, 0.090), rut);
 #endif
+      // Rough: the ruts are cut wider and deeper, and hold dark wet mud.
+      if (rough > 0.5) surface = mix(surface, vec3(0.105, 0.078, 0.055) * (0.8 + 0.3 * grit), smoothstep(0.62, 0.22, abs(rdist - 0.75)) * 0.85);
 #ifdef ROAD_PAVEMENT
     } else if (rkind < 1.5 || (rkind == 2.0 && mod(rflags, 128.0) >= 64.0)) {
 #else
@@ -997,7 +1008,7 @@ void main() {
     }
 #endif
     // Potholes: dark, broken bottoms. The wheels drop into the same ones.
-    float density = rkind > 7.5 ? 0.0 : (rkind < 1.5 ? 0.17 : rkind < 2.5 ? 0.28 : rkind < 3.5 ? 0.42 : rkind < 4.5 ? 0.36 : 0.0) + 0.2 * wash;
+    float density = rkind > 7.5 ? 0.0 : (rkind < 1.5 ? 0.17 : rkind < 2.5 ? 0.28 : rkind < 3.5 ? 0.42 : rkind < 4.5 ? 0.36 : 0.0) + 0.2 * wash + 0.3 * rough;   // defects.ts ROUGH_POTHOLES
     float hole = rdist < rhalf - 0.2 && density > 0.0 ? pothole(p, density) : 0.0;
     surface = mix(surface, mix(vec3(0.060, 0.052, 0.045), vec3(0.105, 0.092, 0.078), speck), smoothstep(0.0, 0.03, hole) * (1.0 - smoothstep(120.0, 400.0, dist)));
     albedo = mix(albedo, gravel, shoulder * 0.85 * step(rkind, 11.5));   // a lawn has no gravel shoulder
