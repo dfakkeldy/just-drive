@@ -138,6 +138,9 @@ body.tcOn.compactPhone #photoTag{grid-area:4/1}
   body.tcOn.compactPhone #phoneActions{grid-area:5/1/6/3}
   body.tcOn.compactPhone #phoneDrive{grid-area:6/1/7/3}
 }
+@media(orientation:landscape) and (max-width:600px) and (max-height:345px){
+  body.tcOn.compactPhone #phoneHud #phoneLine{font-size:8.5px;padding:2px 3px}
+}
 body.tcOn.compactPhone #relief,body.tcOn.compactPhone #radio{font-size:10px}
 body.tcOn.compactPhone #radio:not(.expanded) span{display:none}
 body.tcOn.compactPhone #radio{height:56px;overflow:hidden;flex-direction:column;align-items:flex-start;justify-content:center;flex-wrap:nowrap;gap:2px}
