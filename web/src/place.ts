@@ -17,24 +17,30 @@ export interface HandBuiltPlace {
 
 /**
  * One row of main.ts's places list. `site` is the place's site, or null while the place is off (its gate said no).
- * `build` makes the place once the land and the roads are ready; it returns a promise only when the place's code
- * loads by import(). `slot` wraps a built thing that does not fit HandBuiltPlace as it is (the home and the porch).
- * The dev tools always see the built thing itself.
+ * `load` is the place's own code when it loads by import(): the boot awaits it, and only then calls `build`, as it
+ * did before the rows. `build` makes the place once the land and the roads are ready. `slot` wraps a built thing that
+ * does not fit HandBuiltPlace as it is (the home and the porch). The dev tools always see the built thing itself.
  */
-export interface PlaceRow<S, B extends object> {
+export interface PlaceRow<S, B extends object, P = undefined> {
   readonly site: S | null;
-  build(site: S): B | Promise<B>;
+  load?(): Promise<P>;
+  build(site: S, part: P): B;
   slot?(built: B): HandBuiltPlace;
 }
-export function placeRow<S, B extends HandBuiltPlace>(site: S | null, build: (site: S) => B | Promise<B>): PlaceRow<S, B>;
-export function placeRow<S, B extends object>(site: S | null, build: (site: S) => B | Promise<B>, slot: (built: B) => HandBuiltPlace): PlaceRow<S, B>;
-export function placeRow<S, B extends object>(site: S | null, build: (site: S) => B | Promise<B>, slot?: (built: B) => HandBuiltPlace): PlaceRow<S, B> {
+/** A place whose code is in the boot already. */
+export function placeRow<S, B extends HandBuiltPlace>(site: S | null, build: (site: S) => B): PlaceRow<S, B>;
+export function placeRow<S, B extends object>(site: S | null, build: (site: S) => B, slot: (built: B) => HandBuiltPlace): PlaceRow<S, B>;
+export function placeRow<S, B extends object>(site: S | null, build: (site: S) => B, slot?: (built: B) => HandBuiltPlace): PlaceRow<S, B> {
   return slot ? { site, build, slot } : { site, build };
 }
+/** A place whose code loads by import() (`load`), only when its site is there. */
+export function lazyPlaceRow<S, P, B extends HandBuiltPlace>(site: S | null, load: () => Promise<P>, build: (site: S, part: P) => B): PlaceRow<S, B, P> {
+  return { site, load, build };
+}
 
-type Rows = Record<string, PlaceRow<unknown, object>>;
+type Rows = Record<string, PlaceRow<unknown, object, unknown>>;
 /** Each row's built thing, or null while its place is off. */
-export type BuiltPlaces<R extends Rows> = { [K in keyof R]: R[K] extends PlaceRow<unknown, infer B> ? B | null : never };
+export type BuiltPlaces<R extends Rows> = { [K in keyof R]: R[K] extends PlaceRow<unknown, infer B, unknown> ? B | null : never };
 /** The frame's slot for a place: what it updates and what the dev tools see. A slot is there while its place is off. */
 export interface PlaceSlot { place: HandBuiltPlace | null; dev: object | null }
 

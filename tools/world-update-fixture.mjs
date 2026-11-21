@@ -19,12 +19,12 @@ export function frameSource(source, dev = true) {
     ts.isVariableStatement(n) && n.declarationList.declarations.some(d => vars.has(d.name.getText(ast)))
   ).map(n => n.getText(ast)).join('\n').replaceAll('import.meta.env.DEV', String(dev)), { loader: 'ts', target: 'es2022' }).code;
 }
-// The places rows' helpers (placeRow, placeSlots), read from the real place.ts like the dev hooks below.
+// The places rows' helpers (placeRow, lazyPlaceRow, placeSlots), read from the real place.ts like the dev hooks below.
 export function placeHelpers() {
   const source = readFileSync(new URL('../web/src/place.ts', import.meta.url), 'utf8');
   const ast = ts.createSourceFile('place.ts', source, ts.ScriptTarget.Latest, true);
   const code = transformSync(ast.statements.filter(n => !ts.isImportDeclaration(n)).map(n => n.getText(ast)).join('\n').replaceAll(/^export /gm, ''), { loader: 'ts', target: 'es2022' }).code;
-  return new Function(`${code}; return { placeRow, placeSlots };`)();
+  return new Function(`${code}; return { placeRow, lazyPlaceRow, placeSlots };`)();
 }
 export const hooksSource = () => readFileSync(new URL('../web/src/dev-hooks.ts', import.meta.url), 'utf8');
 export function hookFactory(source = hooksSource()) {
@@ -84,11 +84,11 @@ export function spy(source, ending = false, dev = true, absent = false, override
   context.roadScene.setPaused = trace('roadScene.pause');
   context.waterReflections.settle = trace('water.settle'); context.waterReflections.afterRender = trace('water.afterRender');
   if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'lotProps', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'yardProps', 'grass', 'waterReflections', 'fishing', 'harbourLights']) context[name] = null;
-  if (typeof overrides === 'function') overrides(context, trace);
-  else Object.assign(context, overrides);
-  // The places rows: their sites are only stored, and each built place is the spy (or null) of the same name.
+  // The places rows: their sites are only stored, and each built place is the spy (or null) of the same name, read late so `absent` and the overrides apply.
   Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null,
     builtPlaces: new Proxy({}, { get: (_target, name) => context[name] ?? null }) });
+  if (typeof overrides === 'function') overrides(context, trace);
+  else Object.assign(context, overrides);
   if (source.includes('devHooks.')) {
     if (context.demo && !context.params.has('demo')) context.params.set('demo', String(context.demo));
     const Hooks = hookFactory(context.hooksSource)(context);

@@ -138,7 +138,7 @@ import { Cemeteries } from './cemeteries';
 import { Stockpiles } from './stockpiles';
 import { HomeSite } from './home-site';
 import { PorchDog } from './porch-dog';
-import { placeRow, placeSlots, sitesOf, type BuiltPlaces, type HandBuiltPlace, type PlaceRow } from './place';
+import { lazyPlaceRow, placeRow, placeSlots, sitesOf, type BuiltPlaces, type HandBuiltPlace, type PlaceRow } from './place';
 import { YardDogSite } from './yard-dog-site';
 import { YardDog } from './yard-dog';
 import { LotProps } from './lot-props';
@@ -409,7 +409,7 @@ if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
 // One row per hand-built place (place.ts): its site from above, and how to build it once the land and roads are ready
-// (below). The rows' order is the places list's order. A row whose code loads by import() returns a promise. The site
+// (below). The rows' order is the places list's order. A lazy row's import() is awaited just before its build. The site
 // lines stay apart: the building list reads four sites, the porch needs that list, and Maryville's module loads first.
 // The home and the porch house take the car, not the clock, so their slots wrap them; the porch's slot also turns its
 // dog and waits for it.
@@ -422,11 +422,11 @@ const placeRows = {
     porch => ({ group: porch.group, resolveSolids: car => porch.resolveSolids(car),
       update: (view, now, car, dt) => { porch.update(view, car); porchDog?.update(dt, car, now / 1000); },
       get waiting() { return porch.waiting || porchDog?.state === 'loading'; } })),
-  church: placeRow(churchSite, async site => new (await import('./church').catch(partFailed)).Church(site, terrain)),
-  village: placeRow(villageSite, async site => new (await import('./judique-village').catch(partFailed)).JudiqueVillage(site, terrain, LOW)),
-  hawkesbury: placeRow(hawkesburySite, async site => new (await import('./port-hawkesbury').catch(partFailed)).PortHawkesbury(site, terrain, LOW,
+  church: lazyPlaceRow(churchSite, () => import('./church').catch(partFailed), (site, part) => new part.Church(site, terrain)),
+  village: lazyPlaceRow(villageSite, () => import('./judique-village').catch(partFailed), (site, part) => new part.JudiqueVillage(site, terrain, LOW)),
+  hawkesbury: lazyPlaceRow(hawkesburySite, () => import('./port-hawkesbury').catch(partFailed), (site, part) => new part.PortHawkesbury(site, terrain, LOW,
     roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings)),
-  mabouMain: placeRow(mabouSite, async site => new (await import('./mabou-main').catch(partFailed)).MabouMain(site, terrain, LOW, roads.roads)),
+  mabouMain: lazyPlaceRow(mabouSite, () => import('./mabou-main').catch(partFailed), (site, part) => new part.MabouMain(site, terrain, LOW, roads.roads)),
   maryville: placeRow(maryvilleSite, site => new maryvilleFeature!.MaryvilleStore(site, terrain, LOW)),
 };
 // Each site clears its surveyed land.
@@ -710,11 +710,10 @@ const night = nightShading ? new Night(nightShading, {
 if (night) scene.onBeforeRender = (r, _scene, view) => night.update(r, view);
 const yard = yardSite ? new Yard(yardSite, terrain, LOW) : null;
 if (yard) scene.add(yard.group);
-// Build the places in the rows' order. Only a build that loads by import() is awaited, so the others add no wait.
+// Build the places in the rows' order. A lazy row awaits its import() here, as before; the others add no wait.
 const builtPlaces = {} as BuiltPlaces<typeof placeRows>;
-for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown, object>][]) {
-  const made = row.site ? row.build(row.site) : null;
-  (builtPlaces as Record<string, object | null>)[name] = made instanceof Promise ? await made : made;
+for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown, object, unknown>][]) {
+  (builtPlaces as Record<string, object | null>)[name] = row.site ? row.build(row.site, row.load && await row.load()) : null;
 }
 const { hawkesbury, mabouMain } = builtPlaces;
 // One slot for each row. A slot keeps its name while its place is off, so the frame's update list keeps the same
