@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { Object3D } from '../web/node_modules/three/build/three.module.js';
 import { ROUGH_STRETCHES, PUDDLE_POND, PUDDLE_RUT, PUDDLE_POOL, resolveStretch, roughRoads, setPuddleField, puddleDip, puddlesFor, roughSite } from '../web/src/rough-roads.ts';
 import { ROUGH_POTHOLES, potholeDensity, potholeDepth } from '../web/src/defects.ts';
-import { ROUGH_BIT, paintSiteSurface } from '../web/src/terrain.ts';
+import { ROUGH_BIT, paintSiteSurface, placeBoxes } from '../web/src/terrain.ts';
 import { Vehicle } from '../web/src/vehicle.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
 import { CHURCH_START } from '../web/src/church-site.ts';
@@ -28,11 +28,13 @@ for (let i = 0; i < 4000; i++) { const x = 13.7 + i * 0.37, z = -200 + (i % 61) 
 {
   const zero = 128, dScale = 0.1, wScale = 0.05;
   const sample = (flags, dist = 1, half = 2.6) => { const r = new Uint8ClampedArray(4); r[0] = zero + Math.round(dist / dScale); r[1] = Math.round(half / wScale); r[2] = flags; return r; };
-  const paint = (r) => { paintSiteSurface(r, 0, { dist: 0, half: 0, kind: 0, rough: true }, zero, dScale, wScale); return r[2]; };
+  const paint = (r, dist = Math.abs(r[0] - zero) * dScale) => { paintSiteSurface(r, 0, { dist, half: 2.6, kind: 3, rough: true }, zero, dScale, wScale); return r[2]; };
   ok(paint(sample(3)) === (3 | ROUGH_BIT) && paint(sample(4)) === (4 | ROUGH_BIT), 'gravel and track samples turn rough');
   ok(paint(sample(3 | 32)) === (3 | 32 | ROUGH_BIT), 'washboard keeps its bit and turns rough');
   for (const f of [0, 1, 2, 2 | 64, 2 | 128, 4 | 64, 5, 8, 9, 10, 12]) ok(paint(sample(f)) === f, `flags ${f} stay`);
   ok(paint(sample(3, 4.5)) === 3, 'a sample beyond the road edge stays');
+  ok(paint(sample(3, 1), 3.5) === 3 && paint(sample(4, 0.5), 2) === 4, 'a sample nearer another road than this stretch stays');
+  ok(paint(sample(3, 1), 1.8) === (3 | ROUGH_BIT), 'a small distance mismatch still turns rough');
   const r = sample(3); paint(r); ok(r[0] === zero + 10 && r[1] === 52, 'distance and width stay');
 }
 
@@ -64,6 +66,7 @@ const testStretch = { area: 'test', road: 'Test Road', from: [0, 0], to: [2000, 
   ok(Math.abs(puddleDip(pond.x, pond.z) - pond.depth) < 1e-9 && puddleDip(pond.x, pond.z + pond.b + 3) === 0, 'a wheel sinks into the middle of a pond, and not beside it');
   // The site marks only the stretch.
   const site = roughSite(resolveStretch(testRoads, testStretch, [0, 0]));
+  ok(site.roadPaint === true && placeBoxes([site]).length === 0 && placeBoxes([{ box: [0, 0, 1, 1] }]).length === 1, 'a rough site box is no placement clearing');
   ok(site.surface(500, 1)?.rough === true && site.surface(500, 30) === null, 'the site reaches the road, not the forest');
   ok(site.affectsTile(256, -128, 256, 8) && !site.affectsTile(256, 512, 256, 8), 'only tiles the stretch crosses are built with it');
   setPuddleField(null);
