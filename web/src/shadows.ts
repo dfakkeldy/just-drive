@@ -33,21 +33,20 @@ export class SunShadows {
 
   /** `forced` is true when the address bar asked for shadows (?shadows=1): they then stay on, however slow. */
   constructor(private readonly renderer: THREE.WebGLRenderer, private readonly scene: THREE.Scene,
-    private readonly light: THREE.DirectionalLight, private readonly sunDir: THREE.Vector3, forced = false) {
+    private readonly light: THREE.DirectionalLight, private readonly sunDir: THREE.Vector3, forced = false, settings = true) {
     // The light looks down its own z axis. On level ground a strip `half` tall in the light's view is
     // half / sin(elevation) long, so a low sun needs only a short box.
-    this.span(RANGE);
+    this.range = RANGE;
     light.shadow.mapSize.set(SIZE, SIZE);
     light.shadow.bias = -0.00012;
     light.shadow.normalBias = 0.16;
-    this.right.crossVectors(new THREE.Vector3(0, 1, 0), sunDir).normalize();
-    this.up.crossVectors(sunDir, this.right).normalize();
+    this.refreshDirection();
     scene.add(light.target);
     const saved = (() => { try { return localStorage.getItem('mmm.shadows'); } catch { return null; } })();
     this.enabled = forced || saved !== '0';
     this.chosen = forced || saved !== null;
     // A switch in the settings panel, remembered in the browser.
-    this.box = toggle('shadows', 'Shadows', this.on, on => { this.enabled = on; this.chosen = true; });
+    if (settings) this.box = toggle('shadows', 'Shadows', this.on, on => { this.enabled = on; this.chosen = true; });
   }
 
   /** Sets how far the box reaches to each side. A view from the air takes a wider box, with coarser shadows. */
@@ -58,6 +57,25 @@ export class SunShadows {
     const cam = this.light.shadow.camera;
     cam.left = -range; cam.right = range; cam.top = this.half; cam.bottom = -this.half; cam.near = 1; cam.far = (BACK + range) * 2;
     cam.updateProjectionMatrix();
+  }
+
+  /** Refit the box after the still view changes the direction it shares with the land. */
+  refreshDirection(): void {
+    this.right.set(this.sunDir.z, 0, -this.sunDir.x).normalize();
+    this.up.crossVectors(this.sunDir, this.right).normalize();
+    const range = this.range;
+    this.range = 0;
+    this.span(range);
+  }
+
+  /** Release the temporary map after a daylight preview on a night visit. */
+  disposePreview(): void {
+    this.enabled = false;
+    this.light.target.removeFromParent();
+    this.light.target.position.set(0, 0, 0);
+    this.light.target.updateMatrixWorld();
+    this.light.shadow.dispose();
+    this.light.shadow.map = this.light.shadow.mapPass = null;
   }
 
   get enabled(): boolean { return this.on; }

@@ -235,6 +235,30 @@ void main() {
   gl_FragColor = vec4(vColour * a, 1.0);
 }`;
 
+/** The same dusk and star dome can also be drawn for a still sky preview. */
+export function nightSkyMaterial(palette: NightPalette, fog: THREE.IUniform, sunDir: THREE.Vector3,
+  when: Date, lat: number, lon: number): THREE.ShaderMaterial {
+  const galaxy = milkyWay(when, lat, lon);
+  const uniforms = {
+    fogColor: fog,
+    nightZenith: { value: new THREE.Color().setRGB(...palette.zenith) },
+    nightSun: { value: sunDir.clone() },
+    nightGlowColour: { value: new THREE.Color(.95, .42, .16) },
+    nightGlow: { value: palette.glow },
+    nightBand: { value: new THREE.Color().setRGB(...palette.band) },
+    nightHorizon: { value: new THREE.Color().setRGB(...palette.horizon) },
+    nightBands: { value: new THREE.Vector2(palette.warm, palette.pink) },
+    nightStars: { value: palette.stars },
+    nightGalaxy: { value: directionFromAngles(galaxy.pole.az, galaxy.pole.el) },
+    nightCentre: { value: directionFromAngles(galaxy.centre.az, galaxy.centre.el) },
+    nightTown: { value: new THREE.Vector4() },
+  };
+  return new THREE.ShaderMaterial({
+    name: 'night sky', vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms,
+    side: THREE.BackSide, depthWrite: false,
+  });
+}
+
 /** Everything a night page adds beyond the land shaders. Built once; `update` runs before each render. */
 export class Night {
   readonly lamps: NightLamp[];
@@ -318,25 +342,9 @@ export class Night {
     scene.add(this.glow);
 
     // The sky: twilight, town glow, the Milky Way and stars. The fog colour is its horizon, so far land meets it.
-    const galaxy = milkyWay(parts.when, parts.lat, parts.lon);
-    this.skyUniforms = {
-      fogColor: parts.fog,
-      nightZenith: { value: new THREE.Color().setRGB(...palette.zenith) },
-      nightSun: { value: parts.sunDir.clone() },
-      nightGlowColour: { value: new THREE.Color(.95, .42, .16) },
-      nightGlow: { value: palette.glow },
-      nightBand: { value: new THREE.Color().setRGB(...palette.band) },
-      nightHorizon: { value: new THREE.Color().setRGB(...palette.horizon) },
-      nightBands: { value: new THREE.Vector2(palette.warm, palette.pink) },
-      nightStars: { value: palette.stars },
-      nightGalaxy: { value: directionFromAngles(galaxy.pole.az, galaxy.pole.el) },
-      nightCentre: { value: directionFromAngles(galaxy.centre.az, galaxy.centre.el) },
-      nightTown: { value: new THREE.Vector4() },
-    };
-    parts.sky.material = new THREE.ShaderMaterial({
-      name: 'night sky', vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: this.skyUniforms,
-      side: THREE.BackSide, depthWrite: false,
-    });
+    const skyMaterial = nightSkyMaterial(palette, parts.fog, parts.sunDir, parts.when, parts.lat, parts.lon);
+    this.skyUniforms = skyMaterial.uniforms;
+    parts.sky.material = skyMaterial;
   }
 
   /** Rebind the night beams when the player selects another rig. World lamps are unchanged. */

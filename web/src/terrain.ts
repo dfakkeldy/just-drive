@@ -352,6 +352,31 @@ export class Terrain {
   readonly night: NightShading | null = null;
   /** Desktop only: the land's shader reads the sun's shadow map (the uniforms come in with `shared`). */
   readonly shadows: boolean = false;
+  private previewShadows: Record<string, THREE.IUniform> | null = null;
+
+  /** Daylight preview on a night visit. The terrain keeps its ordinary shader outside the preview. */
+  setPreviewShadows(uniforms: Record<string, THREE.IUniform> | null): void {
+    const previous = this.previewShadows;
+    if (previous === uniforms) return;
+    this.previewShadows = uniforms;
+    for (const tile of this.tiles.values()) {
+      if (!tile.mesh) continue;
+      const material = tile.mesh.material as THREE.ShaderMaterial;
+      if (uniforms) this.applyPreviewShadows(material, uniforms);
+      else if (previous) {
+        delete material.defines.SHADOWS;
+        for (const key of Object.keys(previous)) delete material.uniforms[key];
+        material.needsUpdate = true;
+      }
+    }
+  }
+
+  private applyPreviewShadows(material: THREE.ShaderMaterial, uniforms: Record<string, THREE.IUniform>): void {
+    material.defines.SHADOWS = 1;
+    Object.assign(material.uniforms, uniforms);
+    material.needsUpdate = true;
+  }
+
   /** The early ground class read, if main.ts started one. */
   private readonly groundEarly: EarlyRead<ArrayBuffer> | null;
 
@@ -893,6 +918,7 @@ export class Terrain {
     this.paved?.applyGround(mat);
     this.sidewalks?.tileReady?.(t.level,t.i,t.j);
     this.night?.applyGround(mat);
+    if (this.previewShadows) this.applyPreviewShadows(mat, this.previewShadows);
     this.propertyOverlay?.applyGround(mat);
     this.fleetGroundChanged?.(t.x0, t.z0, t.size);
   }
@@ -925,6 +951,11 @@ export class Terrain {
   hasFinest(x: number, z: number): boolean {
     const m = this.manifest, size = m.size / 2 ** this.maxLevel;
     return this.exists.has(`${this.maxLevel}/${Math.floor((x + m.village[0] - m.origin[0]) / size)}_${Math.floor((z - (m.village[1] - m.origin[1])) / size)}`);
+  }
+
+  /** Bare ground for sight lines, without roofs, canopy or raised decks. */
+  bareHeightAt(x: number, z: number): number | null {
+    return this.landHeightAt(x, z);
   }
 
   /** Ground height in metres at a world position, from the finest tile in memory. */

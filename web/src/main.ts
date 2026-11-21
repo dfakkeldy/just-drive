@@ -108,8 +108,9 @@ import { early } from './boot-tasks';
 import { Edge } from './edge';
 import { directionFromAngles, sunAngles } from './sun';
 import { readLightStudy, studyScale, studyLightingElevation, lightStudyUI, readDrivePosition } from './light-study';
+import type { SunSeeker, SunViewLight } from './sun-seeker';
 import { chooseYardLights, nightPalette } from './night-rules';
-import { Night, NightShading } from './night';
+import { Night, NightShading, nightSkyMaterial } from './night';
 import { HarbourLights } from './harbour-lights';
 import { Terrain, type Manifest } from './terrain';
 import { createTitle } from './title';
@@ -300,13 +301,17 @@ if (!mailMode && !bare) lightStudyUI(lightStudy, when, lat, lon, () => ({ e: veh
 const chosenClock = lightStudy.active || weather.chosen;
 const sunDir = directionFromAngles(sun.az, studyLightingElevation(sun.el, chosenClock));
 // Low sun is warmer and weaker; the sky fill grows in share as the sun drops.
+function solarColors(low: number, night: ReturnType<typeof nightPalette>) {
+  const sunColor = new THREE.Color().setRGB(1.0, 0.62 + 0.3 * low, 0.36 + 0.5 * low).multiplyScalar(2.2 + 2.3 * low);
+  const skyColor = new THREE.Color().setRGB(0.30, 0.44, 0.72).multiplyScalar(0.55 + 0.5 * low);
+  const fogColor = new THREE.Color().setRGB(0.62, 0.66, 0.72).multiplyScalar(0.75 + 0.35 * low);
+  if (night) { sunColor.multiplyScalar(night.sunScale); skyColor.setRGB(...night.sky); fogColor.setRGB(...night.fog); }
+  return { sunColor, skyColor, fogColor };
+}
 const low = THREE.MathUtils.clamp(sun.el / 35, 0, 1);
-const sunColor = new THREE.Color().setRGB(1.0, 0.62 + 0.3 * low, 0.36 + 0.5 * low).multiplyScalar(2.2 + 2.3 * low);
-const skyColor = new THREE.Color().setRGB(0.30, 0.44, 0.72).multiplyScalar(0.55 + 0.5 * low);
-const fogColor = new THREE.Color().setRGB(0.62, 0.66, 0.72).multiplyScalar(0.75 + 0.35 * low);
 // The night of a chosen clock (night-rules.ts). On every other page this is null and none of the night is built.
 const nightLook = nightPalette(sun.el, chosenClock);
-if (nightLook) { sunColor.multiplyScalar(nightLook.sunScale); skyColor.setRGB(...nightLook.sky); fogColor.setRGB(...nightLook.fog); }
+const { sunColor, skyColor, fogColor } = solarColors(low, nightLook);
 // Drive around: Apply keeps the player's place, as the light study does. A mail shift starts its day again.
 if (!bare && !lightStudy.active) weatherUI(weather, mailMode ? undefined : () => ({ e: vehicle.x + manifest.village[0], n: manifest.village[1] - vehicle.z, heading: THREE.MathUtils.radToDeg(vehicle.heading) }));
 // A weather mood changes numbers the light already has. Clear gives null: nothing below runs and the frame is as before.
@@ -338,7 +343,8 @@ if (nightShading) Object.assign(shared, nightShading.uniforms);   // before the 
 
 const sky = new Sky();
 sky.scale.setScalar(300000);
-const su = sky.material.uniforms;
+const daySkyMaterial = sky.material;
+const su = daySkyMaterial.uniforms;
 su.turbidity.value = 5.5; su.rayleigh.value = 1.7; su.mieCoefficient.value = 0.006; su.mieDirectionalG.value = 0.82;
 if (coastalAir) {
   su.turbidity.value = 3.4; su.rayleigh.value = 2.25; su.mieCoefficient.value = 0.0038;
@@ -524,7 +530,8 @@ const toWorld = (e: number, n: number) => new THREE.Vector3(e - VE, 0, VN - n);
 // Models use the standard materials, so they need scene lights that agree with the terrain shader.
 const sunLight = new THREE.DirectionalLight(sunColor, 1.0);
 sunLight.position.copy(sunDir);
-scene.add(sunLight, new THREE.HemisphereLight(skyColor, new THREE.Color(0.22, 0.20, 0.15), 3.2));
+const skyFill = new THREE.HemisphereLight(skyColor, new THREE.Color(0.22, 0.20, 0.15), 3.2);
+scene.add(sunLight, skyFill);
 // Desktop quality: real shadows from the low sun. The phone build keeps its speed and goes without.
 // ?shadows=0 turns them off; ?shadows=1 keeps them on even on a slow computer (pictures are taken that way).
 const sunShadows = terrain.shadows ? new SunShadows(renderer, scene, sunLight, sunDir, params.get('shadows') === '1') : null;
@@ -1271,7 +1278,7 @@ addEventListener('keyup', (ev) => heldAtLanding.delete(ev.code));
 addEventListener('blur', () => heldAtLanding.clear());
 addEventListener('blur', () => keys.clear());
 // Only a wheel over the picture sets the drone's speed: scrolling Settings must not.
-addEventListener('wheel', (ev) => { if (drone.active) { if (ev.target === canvas) drone.wheel(ev.deltaY); } else flySpeed = THREE.MathUtils.clamp(flySpeed * (ev.deltaY < 0 ? 1.25 : 0.8), 2, 4000); }, { passive: true });
+addEventListener('wheel', (ev) => { if (sunSeeker) return; if (drone.active) { if (ev.target === canvas) drone.wheel(ev.deltaY); } else flySpeed = THREE.MathUtils.clamp(flySpeed * (ev.deltaY < 0 ? 1.25 : 0.8), 2, 4000); }, { passive: true });
 
 const pointers = new Map<number, { x: number; y: number; sx: number; sy: number }>();
 let flyTouch = 0, droneTurn = 0;   // droneTurn: how far a drag has turned the drone since its last frame
@@ -1289,6 +1296,7 @@ if (pad) {
   const top = document.getElementById('phoneTop'), button = createDroneButton(() => { if (live() && !fleet?.busy && !interiors.busy && mode === 'drive') { yardJob?.judge.cancel(); launchDrone(); } });
   top?.insertBefore(button, document.getElementById('gear'));
 }
+let sunSeeker: SunSeeker | null = null;
 // A controller (gamepad.ts): the same values and the same actions as the keys. Nothing runs until one is used.
 const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
 const gamepad = createGamepad({
@@ -1296,13 +1304,13 @@ const gamepad = createGamepad({
   mail: padAct(() => { if (mailMode) mailRequested = true; else airportDrag?.begin(); }),
   // B changes the view; inside a building (where every other driving button rests) it climbs out, as Esc does.
   view: () => { if (interiors.busy) interiors.leave(); else if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
-  pause: () => { if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
+  pause: () => { if (sunSeeker) closeSunSeeker(); else if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
   reset: padAct(resetToRoad),
   radio: padAct(() => radio?.next()),
   photo: padAct(() => { if (mailMode) photoRequested = true; }),
   relief: padAct(() => relief.request()),
   places: padAct(() => placesUI?.open()),
-  back: () => { if (replay.active) replay.close(); else if (placesUI?.busy) placesUI.close(); else if (bigMap?.busy) bigMap.close(); else if (pause.blocked && pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
+  back: () => { if (sunSeeker) closeSunSeeker(); else if (replay.active) replay.close(); else if (placesUI?.busy) placesUI.close(); else if (bigMap?.busy) bigMap.close(); else if (pause.blocked && pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
 }, touchDevice, () => mode === 'drive' && live());
 if (import.meta.env.DEV) expose({ gamepad });   // for tools/gamepad-browser.mjs
 ride.configure(!fleet);
@@ -1371,6 +1379,7 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  sunSeeker?.lookSize();
 }
 addEventListener('resize', resize);
 
@@ -1562,6 +1571,8 @@ const pauseScreen = document.createElement('div');
 pauseScreen.id = 'pauseScreen';
 pauseScreen.hidden = true;
 pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>Room games do not pause</p><pre id="pauseState"></pre><button id="resumeGame">Resume</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button></section>';
+const sunButton = Object.assign(document.createElement('button'), { id: 'pauseSun', type: 'button', textContent: 'Sun' });
+if (!mailMode) pauseScreen.querySelector('section')!.append(sunButton);
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
@@ -1574,17 +1585,25 @@ function syncPauseUI(): void {
   roomPauseNote.hidden = !room;
   pauseScreen.querySelector<HTMLElement>('.roomPauseNote')!.hidden = !room;
   settingsPanel.classList.toggle('open', pause.blocked && !pause.screen && !document.hidden);
-  pauseScreen.hidden = !pause.screen || document.hidden || replay.active;
+  pauseScreen.hidden = !pause.screen || document.hidden || replay.active || !!sunSeeker;
   if (!pauseScreen.hidden) {
     // Rooms do not pause, so they have no replay; a fresh start has nothing to show yet.
     const watch = document.getElementById('pauseReplay') as HTMLButtonElement;
     watch.hidden = room; watch.disabled = !replay.available;
+    sunButton.hidden = room || interiors.busy;
     document.getElementById('pauseState')!.textContent = [document.getElementById('shiftHud')?.textContent || (mailMode ? 'Shift ready' : 'Free drive'), document.querySelector('#racePanel [role=status]')?.textContent || 'No active race'].join('\n');
     document.getElementById('resumeGame')!.focus();
   }
   syncRoadScenePause();
 }
 addEventListener('keydown', ev => {
+  if (sunSeeker) {
+    const eventIsInput = ev.target instanceof HTMLInputElement;
+    if (ev.code !== 'Escape' && eventIsInput) return;
+    sunSeeker.key(ev);
+    ev.stopImmediatePropagation();
+    return;
+  }
   // The replay owns every key while it shows; Tab, and Enter or Space on its focused control, keep their usual action.
   if (replay.active) { replay.key(ev); ev.stopImmediatePropagation(); return; }
   const typing = ev.target instanceof HTMLElement && ev.target.closest('input,select,textarea');
@@ -1611,6 +1630,31 @@ new MutationObserver(() => {
 document.getElementById('resumeGame')!.addEventListener('click', () => { pause.resume(); syncPauseUI(); });
 document.getElementById('pauseSettings')!.addEventListener('click', () => { pause.setSettings(true); syncPauseUI(); });
 document.getElementById('pauseReplay')!.addEventListener('click', () => { openReplay(); });
+sunButton.addEventListener('click', async () => {
+  if (!pause.screen || sunSeeker || multiplayer?.choice.on || interiors.busy) return;
+  sunButton.disabled = true;
+  try {
+    const { SunSeeker } = await import('./sun-seeker');
+    if (pauseScreen.hidden || sunSeeker || multiplayer?.choice.on || interiors.busy) return;
+    const eye = mode === 'fly' ? camera.position.clone() : new THREE.Vector3(vehicle.x, vehicle.y + 1.7, vehicle.z);
+    const position = utm20ToLatLon(eye.x + VE, VN - eye.z);
+    sunSeeker = new SunSeeker({
+      camera, scene, eye, ...position,
+      height: (x, z) => {
+        const ground = terrain.bareHeightAt(x, z);
+        return ground === null ? null : Math.max(SEA_LEVEL, ground);
+      },
+      close: closeSunSeeker,
+    });
+    sunViewLoading = false;
+    sunViewFarLand = farLand;
+    syncPauseUI();
+  } catch (error) {
+    console.warn('Sun Seeker could not open.', error);
+  } finally {
+    sunButton.disabled = false;
+  }
+});
 for (const element of [pauseScreen, pauseButton]) for (const event of ['pointerdown', 'pointerup', 'pointermove']) element.addEventListener(event, ev => ev.stopPropagation());
 
 // ---- settings -----------------------------------------------------------------------------
@@ -1804,7 +1848,9 @@ function syncRoadScenePause(paused = scenePaused()): void { roadScene?.setPaused
 document.addEventListener('visibilitychange', () => {
   // A tab hidden under the replay comes back to the pause screen when the replay closes, as any hidden tab does.
   if (document.hidden && replay.active) replayResume = false;
-  pause.setHidden(document.hidden); syncPauseUI();
+  pause.setHidden(document.hidden);
+  if (!document.hidden) sunSeeker?.invalidate();
+  syncPauseUI();
 });
 
 // Segments keep the drive frame's camera, activity and render work between the same updates.
@@ -1924,6 +1970,124 @@ function drawWorld(): void {
 if (drawProbe) Object.assign((window as unknown as { mmm?: Record<string, unknown> }).mmm ??= {}, { finish, drawProbe });
 
 const shadowFocus = new THREE.Vector3();
+let sunViewLoading = false;
+let sunViewFarLand: FarLand | null = farLand;
+let sunViewLight: SunViewLight | null = null;
+let restoreSunViewLight: (() => void) | null = null;
+let sunViewShadows: SunShadows | null = null;
+
+function closeSunSeeker(): void {
+  if (!sunSeeker) return;
+  sunSeeker.dispose();
+  sunSeeker = null;
+  restoreSunViewLight?.();
+  restoreSunViewLight = sunViewLight = null;
+  terrain.setPreviewShadows(null);
+  sunViewShadows?.disposePreview();
+  sunViewShadows = null;
+  sky.position.copy(camera.position);
+  updateWorld('ending', 0);
+  syncPauseUI();
+  if (!pauseScreen.hidden) sunButton.focus();
+}
+
+/** Use the light study's sun direction and colours without changing the visit's clock or its terrain scale. */
+function previewSunViewLight(light: SunViewLight): void {
+  if (light === sunViewLight) return;
+  restoreSunViewLight?.();
+  sunViewLight = light;
+  const original = {
+    direction: sunDir.clone(), sun: sunColor.clone(), sky: skyColor.clone(), fog: fogColor.clone(),
+    ground: skyFill.groundColor.clone(), fill: skyFill.intensity, material: sky.material,
+    shadows: sunShadows?.enabled, haze: shared.fogDensity.value, sunPosition: sunLight.position.clone(),
+    air: [su.turbidity.value, su.rayleigh.value, su.mieCoefficient.value, su.mieDirectionalG.value] as const,
+  };
+  const { sun: angles } = light, palette = nightPalette(angles.el, true);
+  if (!palette && nightLook && !LOW && params.get('shadows') !== '0') {
+    sunViewShadows ??= new SunShadows(renderer, scene, sunLight, sunDir, params.get('shadows') === '1', false);
+    terrain.setPreviewShadows(sunViewShadows.enabled ? sunViewShadows.uniforms : null);
+  }
+  const colors = solarColors(THREE.MathUtils.clamp(angles.el / 35, 0, 1), palette);
+  sunColor.copy(colors.sunColor);
+  skyColor.copy(colors.skyColor);
+  fogColor.copy(colors.fogColor);
+  sunDir.copy(directionFromAngles(angles.az, studyLightingElevation(angles.el, true)));
+  sunLight.color.copy(sunColor);
+  if (!sunShadows?.enabled) sunLight.position.copy(sunDir);
+  skyFill.color.copy(skyColor);
+  skyFill.groundColor.setRGB(...(palette?.ground ?? [0.22, 0.20, 0.15] as const));
+  skyFill.intensity = 3.2 * (1 - .45 * (palette?.level ?? 0));
+  shared.fogDensity.value = CLEAR_HAZE;
+  su.sunPosition.value.copy(sunDir);
+  [su.turbidity.value, su.rayleigh.value, su.mieCoefficient.value, su.mieDirectionalG.value] = [5.5, 1.7, .006, .82];
+  const nightPreview = palette ? nightSkyMaterial(palette, shared.fogColor, directionFromAngles(angles.az, angles.el), light.when, light.lat, light.lon) : null;
+  sky.material = nightPreview ?? daySkyMaterial;
+  const previewShadowsEnabled = sunViewShadows?.enabled;
+  if (palette) {
+    if (sunViewShadows?.enabled) sunViewShadows.enabled = false;
+    if (sunShadows?.enabled) sunShadows.enabled = false;
+    terrain.setPreviewShadows(null);
+  }
+  const shadows = sunShadows ?? sunViewShadows;
+  shadows?.refreshDirection();
+
+  restoreSunViewLight = () => {
+    sky.material = original.material;
+    nightPreview?.dispose();
+    sunDir.copy(original.direction);
+    sunColor.copy(original.sun); skyColor.copy(original.sky); fogColor.copy(original.fog);
+    sunLight.color.copy(sunColor);
+    skyFill.color.copy(skyColor); skyFill.groundColor.copy(original.ground); skyFill.intensity = original.fill;
+    shared.fogDensity.value = original.haze;
+    su.sunPosition.value.copy(sunDir);
+    [su.turbidity.value, su.rayleigh.value, su.mieCoefficient.value, su.mieDirectionalG.value] = original.air;
+    sunLight.position.copy(original.sunPosition);
+    if (sunViewShadows && sunViewShadows.enabled !== previewShadowsEnabled) sunViewShadows.enabled = !!previewShadowsEnabled;
+    if (sunShadows && sunShadows.enabled !== original.shadows) sunShadows.enabled = !!original.shadows;
+    sunShadows?.refreshDirection();
+    if (sunShadows) sunShadows.update(0, shadowFocus.set(vehicle.x, vehicle.y, vehicle.z), 0, true);
+  };
+}
+
+function drawSunSeeker(view: SunSeeker, now: number): void {
+  if (document.hidden) return;
+  // When a turn brings in new tiles, finish their builds and redraw after they settle.
+  if (sunViewLoading || sunViewFarLand !== farLand) {
+    terrain.update(camera, true);
+    if (!terrain.pending) {
+      sunViewLoading = false;
+      sunViewFarLand = farLand;
+      view.refreshGround();
+    }
+  }
+  const light = view.takeDraw();
+  if (!light) return;
+  previewSunViewLight(light);
+  camera.updateMatrixWorld();
+  sky.position.copy(camera.position);
+  updateWorld('ending', 0);
+  sunViewLoading = terrain.pending > 0;
+  const shadows = sunShadows ?? sunViewShadows;
+  if (shadows?.enabled) {
+    const reach = lookFocus(camera, terrain, SEA_LEVEL, shadowFocus);
+    shadows.update(0, shadowFocus, reach, true);
+  }
+  renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
+  const showCar = car.root.visible, showDrone = drone.group.visible;
+  car.root.visible = false;
+  drone.group.visible = false;
+  try {
+    updateWorld('ending-mirror', 0);
+    farVisibility?.update(camera, now / 1000);
+    drawWorld();
+  } finally {
+    farVisibility?.settle(); waterReflections?.settle();
+    car.root.visible = showCar; drone.group.visible = showDrone;
+  }
+  afterWorld();
+  view.projectLabels();
+}
+
 function drawEnding(dt: number): void {
   if (ride.update) updateWorld('ride', 0);
   engineSound?.update(dt, null);
@@ -1956,6 +2120,10 @@ function frame(now: number) {
   if (pauseFrame.paused) {
     syncRoadScenePause(true);
     engineSound?.update(1 / 60, null);   // the pause screen is quiet (paused frames carry no clock: count one display frame)
+    if (sunSeeker) {
+      drawSunSeeker(sunSeeker, now);
+      requestAnimationFrame(frame); return;
+    }
     if (replay.active) {
       // The world holds still; the recorded ride and the replay camera move. Drawn like an ending: frozen world, moving camera.
       replay.frame(now);
