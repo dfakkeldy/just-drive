@@ -9,6 +9,8 @@
 //
 // Version 1 limit: the replay moves the ride over the world as it is now. A mailbox that fell stays down.
 
+import { RIDE_KINDS } from './ride-kinds';
+
 export const REPLAY = {
   seconds: 30,
   hz: 25,
@@ -57,7 +59,7 @@ export const SHOT = {
 /** The saved clip: from this long before the slow moment to this long after it; without one, the last 8 s. */
 export const CLIP = { before: 4, after: 3, plain: 8, fps: 30, desktopEdge: 1280, phoneEdge: 960 } as const;
 
-export const RIDE_KINDS = ['car', 'truck', 'sxs', 'bike', 'horse'] as const;
+export { RIDE_KINDS };   // the order is the frame's kind code (ride-kinds.ts)
 export const rideCode = (kind: string): number => (RIDE_KINDS as readonly string[]).indexOf(kind);
 const HORSE = rideCode('horse');
 

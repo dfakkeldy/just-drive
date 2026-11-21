@@ -85,6 +85,8 @@ export class Sidewalks {
   private deckRevision=-1;
   /** Each bridge's walk, for Roads.bridgeWalks. main.ts hands them over only once it accepts the layer. */
   readonly bridgeReservations=new Map<number,{side:number;width:number}>();
+  /** Called once if the height worker fails after main.ts accepted the layer, so the town can take back what it gave up. */
+  onDisabled?:()=>void;
   private topOwners:number[][]=[];private caches:HeightCache[]=[];private wanted:Uint8Array;
   private coverage:WalkCoverage|null=null;private coverageLevels=new Uint8Array(0);
   private activeCache:HeightCache|null=null;private activeHeights:ReturnType<typeof createSidewalkHeights>|null=null;
@@ -300,7 +302,7 @@ export class Sidewalks {
       else if(data.type==='done'){this.workerPending--;this.audit.heightReads=data.reads;this.audit.heightJobs=data.completed;}
       else if(data.type==='heights'||data.type==='active')this.incoming.push({...data,active:data.type==='active'});
     };
-    this.worker.onerror=()=>{if(!this.warned){console.warn('Sidewalk height worker failed; skipping sidewalks');this.warned=true;}this.audit.disabled=true;this.group.visible=false;this.workerPending=0;this.worker?.terminate();};
+    this.worker.onerror=()=>{if(!this.warned){console.warn('Sidewalk height worker failed; skipping sidewalks');this.warned=true;}this.audit.disabled=true;this.group.visible=false;this.workerPending=0;this.worker?.terminate();const hook=this.onDisabled;this.onDisabled=undefined;hook?.();};
     this.worker.postMessage({type:'init',points:this.points,topCount:this.topCount,topOwners:this.topOwners,coverage:this.coverage,manifest:{origin:this.terrain.manifest.origin,village:this.terrain.manifest.village,size:this.terrain.manifest.size,levels:this.terrain.manifest.levels},jobs:this.jobs.map(j=>({refs:j.refs,surfaces:j.surfaces,bridge:j.bridge}))});
   }
   private receiveHeights():void {

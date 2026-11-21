@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Buildings } from '../web/src/buildings.ts';
-import { NovemberBuildings, novemberFootprints } from '../web/src/november-buildings.ts';
-import { NovemberRoadDetails } from '../web/src/november-road-details.ts';
+import { Buildings, buildingSites } from '../web/src/buildings.ts';
+import { littleMabouBuildingArt, NovemberBuildings, novemberFootprints } from '../web/src/november-buildings.ts';
+import { littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
 import { areaPlaces, nearestPlacement, placesFor } from '../web/src/places.ts';
+import { planRails, railPoint } from '../web/src/guardrail-rules.ts';
+import { railLand } from './guardrail-land.mjs';
 import { Roads } from '../web/src/roads.ts';
 import { drawnRoadBytes, paintSiteSurface } from '../web/src/terrain.ts';
 
@@ -115,4 +117,41 @@ for (const area of ['mabou', 'porthood']) {
     assert.ok(hit.dist < .03 && Math.abs(hit.heading * 180 / Math.PI - bearing) < 1e-6);
   }
 }
+const portHoodBuildings = read('areas/porthood', 'buildings').buildings;
+const art = littleMabouBuildingArt(portHoodBuildings);
+const at = (list, x, y) => list.find(b => Math.hypot(b.x - x, b.y - y) < 2);
+for (const [x, y] of [[615817.26, 5102552.32], [616081.34, 5102382.38]]) {
+  const before = at(portHoodBuildings, x, y), after = at(art.buildings, x, y);
+  assert.deepEqual(after, { ...before, kind: 'house' }, 'keep the surveyed envelope');
+  assert.equal(art.styles[after.buildingId ?? after.id].wall, '#f4f1e9');
+}
+const shed = at(art.buildings, 615779, 5102552);
+assert.equal(shed.kind, 'shed');
+assert.equal(art.styles[shed.id].wall, '#a13832');
+const mobile = at(art.buildings, 616081.34, 5102382.38), wing = at(art.buildings, 616086.6, 5102381.7);
+assert.equal(art.styles[mobile.id].skirting, true);
+assert.equal(wing.buildingId, mobile.id);
+assert.ok(wing.ridge + wing.ground < mobile.ridge + mobile.ground);
+assert.ok(!buildingSites(art.buildings).includes(wing), 'the addition is part of the same property');
+
+const land = railLand(), road = land.roads.roads.find(r => r.id === 44);
+const roadData = read('terrain', 'roads').roads;
+const source = roadData.find(r => r.id === road.id), observed = littleMabouMarshRail(source);
+assert.notEqual(source, observed, 'apply the observation without editing the input');
+assert.equal(littleMabouMarshRail(observed), observed, 'keep an existing observed run');
+for (const other of roadData.filter(r => r !== source)) assert.equal(littleMabouMarshRail(other), other);
+const plan = () => planRails(road, land.ground, land.access, undefined, undefined, land.context);
+const key = span => `${span.side}/${span.a.along}`;
+const before = new Set(plan().map(key));
+road.guardrailRuns = observed.guardrailRuns;
+const added = plan().filter(span => !before.has(key(span)));
+assert.ok(added.length > 60, 'the existing planner seats at least 114 m of new rail');
+for (const {a, b, side} of added) {
+  assert.equal(side, 1, 'the run stays on the south shoulder');
+  assert.ok(!land.access(road, a));
+  for (const p of [a, b]) assert.ok(land.ground(p.x, p.z) > 0);
+  assert.ok(railPoint(road, a.along).x + land.village[0] >= 622263, 'the rail starts clear of the bridge');
+  assert.ok(railPoint(road, b.along).x + land.village[0] <= 622400, 'the rail stays in the observed stretch');
+}
+console.log('PASS Little Mabou homes, shed and marsh rail; access and bridge exclusions');
 console.log('PASS two Highway 19 aprons both land packs, gravel driveway, hillside gravel, building batches and three view starts');

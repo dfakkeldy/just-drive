@@ -69,6 +69,7 @@ function context(s, module, bare = false, started = true) {
     mode: s.mode, mailMode: s.mailMode, touchDevice: s.touchDevice, fps: s.fps, bare, started, stuntPark: null, scenePaused: () => !ctx.started,
     ERA: { id: s.era ?? 'today' }, historyRoadName: periodNames.historyRoadName,
     vehicle: { speed: s.speed, activeTouchSpeedLimit: s.activeTouchSpeedLimit, roadName: s.rawRoad, surfaceName: s.surfaceName, airborne: s.airborne, atEdge: s.atEdge, x: 3, z: 4 },
+    airportDrag: null,
     yardSite: s.yard === null ? null : { surface: () => s.yard }, homeSite: s.home === null ? null : { surface: () => s.home },
     ride: { help: s.help, jumpLine: s.jumpLine },
     camera: { position: { x: s.e - 100, z: 200 - s.n, y: s.height } }, VE: 100, VN: 200, EXAG: s.exag,
