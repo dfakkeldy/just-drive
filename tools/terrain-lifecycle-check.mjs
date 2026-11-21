@@ -231,8 +231,11 @@ function terrainOptions() {
   const night = { shading: 'night' };
   assert.deepEqual(fields(new Terrain(manifest(), 'synthetic', {}, 1, 0, [], { night, cartRoads: true, split: 1, low: true, lazyRange: 600, shadows: true })),
     { night, cartRoads: true, split: 1, low: true, lazyRange: 600, shadows: true }, 'every terrain option reaches its field');
-  assert.deepEqual(fields(new Terrain(manifest(), 'synthetic', {}, 1, 0, [], { night: null, split: 1.15, low: false, shadows: false })),
-    { night: null, cartRoads: false, split: 1.15, low: false, lazyRange: 0, shadows: false }, 'false, null and left-out options keep or set their values');
+  // Mixed values, so two options swapped in the constructor fail too.
+  assert.deepEqual(fields(new Terrain(manifest(), 'synthetic', {}, 1, 0, [], { night: null, cartRoads: true, split: 1.15, low: false, shadows: true })),
+    { night: null, cartRoads: true, split: 1.15, low: false, lazyRange: 0, shadows: true }, 'mixed, null and left-out options keep or set their values');
+  assert.deepEqual(fields(new Terrain(manifest(), 'synthetic', {}, 1, 0, [], { cartRoads: false, low: true, shadows: false, lazyRange: 600 })),
+    { night: null, cartRoads: false, split: 1.6, low: true, lazyRange: 600, shadows: false }, 'each boolean option reaches its own field');
   assert.deepEqual(fields(new Terrain(manifest(), 'synthetic', {}, 1, 0)),
     { night: null, cartRoads: false, split: 1.6, low: false, lazyRange: 0, shadows: false }, 'no options keep every default');
   console.log('PASS terrain options: all six reach their fields; false, null and left-out ones keep their values');
