@@ -2,6 +2,7 @@ import { untoned } from './finish-shaders';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { AirportSite } from './airport-site';
+import { DRAG_PAINT } from './drag-strip';
 export { AirportSite };
 import type { Terrain } from './terrain';
 /** Regular lamp positions are an honest visual approximation, not a surveyed lighting plan. */
@@ -10,10 +11,11 @@ export class Airport {
   private matrix=new THREE.Matrix4();
   private lamps:{mesh:THREE.InstancedMesh;points:[number,number][]}[]=[];
   private sock:THREE.Mesh;
-  constructor(readonly site:AirportSite,private terrain:Terrain,night:boolean){
+  constructor(readonly site:AirportSite,private terrain:Terrain,night:boolean,drag=false){
     const {data,frame:f,village:v}=site,[a]=data.runway.ends;
     terrain.uniforms.airportFrame.value.set(a[0]-v[0],v[1]-a[1],f.ux,-f.un);
     terrain.uniforms.airportSize.value.set(f.length,data.runway.width);
+    if (drag) terrain.uniforms.airportDrag.value.set(...DRAG_PAINT);
     const white:[number,number][]=[],green:[number,number][]=[],red:[number,number][]=[];
     for(let i=0;i<=Math.ceil(f.length/data.lighting.edgeSpacing);i++)for(const side of [-1,1]){
       const u=f.length*i/Math.ceil(f.length/data.lighting.edgeSpacing),w=side*(data.runway.width/2+1.5);

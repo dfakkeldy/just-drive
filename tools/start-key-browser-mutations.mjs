@@ -26,7 +26,7 @@ const cases = [
     'Just Drive: the car points at the end of the road'],
   ['an unknown road gets the village', 'just', 'start-key.ts', 'if (!piece) return null;', 'if (!piece) return { x: 0, z: 0, heading: 0, distance: 0 };',
     'Just Drive, unknown road: the normal start'],
-  ['the mail site ignores the key', 'mail', 'main.ts', "const asked = startKey(params.get('start'), roads.roads, vehicle.bounds);", "const asked = mailMode ? null : startKey(params.get('start'), roads.roads, vehicle.bounds);",
+  ['the mail site ignores the key', 'mail', 'main.ts', ": startKey(params.get('start'), roads.roads, vehicle.bounds);", ": mailMode ? null : startKey(params.get('start'), roads.roads, vehicle.bounds);",
     'mail site: the car stands on Beaton Road'],
 ];
 const rows = [];

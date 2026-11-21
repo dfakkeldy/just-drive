@@ -30,7 +30,7 @@ async function placement(main) {
   const begin = main.indexOf('const placeVisit ='), end = main.indexOf('scene.add(shift.group);');
   assert.ok(begin > 0 && end > begin, 'the placement block is found');
   const { code } = await transform(main.slice(begin, end), { loader: 'ts', define: { 'import.meta.env.DEV': 'false' } });
-  return new Function(...PLACEMENT, 'const fleet = null;\n' + code);
+  return new Function(...PLACEMENT, 'const fleet = null, airportDrag = null;\n' + code);
 }
 
 const turn = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));   // the angle between two headings
