@@ -96,6 +96,7 @@ export function prepareExplore(): void {
     #savePictureButton[hidden],body:not(.tcOn,.droneOn) #savePictureButton{display:none}
     #savePictureStatus{position:fixed;z-index:7;left:50%;top:calc(72px + env(safe-area-inset-top,0px));transform:translateX(-50%);
       padding:8px 12px;border-radius:6px;background:var(--panel-solid);color:var(--ink);font:13px var(--mono);pointer-events:none}
+    body.droneOn.droneSticks #savePictureStatus{top:auto;bottom:calc(var(--drone-stick-size) + 40px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));white-space:nowrap}
     #savePictureStatus:empty{display:none}
   ` }));
 }
