@@ -108,7 +108,7 @@ export function prepareExplore(): void {
     }
     @media(orientation:landscape) and (max-width:420px) and (max-height:319px){
       body.droneOn.droneSticks #savePictureStatus{left:50%;right:auto;top:auto;bottom:calc(14px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));
-        transform:translateX(-50%);box-sizing:border-box;max-width:84px;padding:4px;font-size:9px;white-space:normal;overflow-wrap:break-word;text-align:center}
+        transform:translateX(-50%);box-sizing:border-box;max-width:min(84px,calc(100vw - 44px - 2 * var(--drone-stick-size) - 2 * max(env(safe-area-inset-left,0px),env(safe-area-inset-right,0px))));padding:4px;font-size:9px;white-space:normal;overflow-wrap:break-word;text-align:center}
     }
     #savePictureStatus:empty{display:none}
   ` }));

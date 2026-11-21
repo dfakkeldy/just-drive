@@ -304,10 +304,13 @@ if(family==='all'||family==='phone'){
    if(text)await p.read(`document.getElementById('savePictureStatus').textContent=${JSON.stringify(text)}`);
    const noticeBoxes=await readBoxes([...flightIds,'miniMap','savePictureStatus']), noticeFaults=faults(noticeBoxes);
    if(noticeFaults.length)console.log('Flight notice faults',text??'saved',noticeFaults.join(','));
-   check(noticeBoxes.some(b=>b[0]==='savePictureStatus')&&noticeFaults.length===0,`${label} flight save notice (${text??'Picture saved'}) clears telemetry, map and flight controls`);
+   check(noticeBoxes.some(b=>b[0]==='miniMap')&&noticeBoxes.some(b=>b[0]==='savePictureStatus')&&noticeFaults.length===0,`${label} flight save notice (${text??'Picture saved'}) clears telemetry, map and flight controls`);
   }
   if(w===390&&h===844){
-   await p.send('Emulation.setDeviceMetricsOverride',{width:390,height:310,deviceScaleFactor:1,mobile:true});await sleep(200);
+   const resized=await p.send('Emulation.setDeviceMetricsOverride',{width:390,height:310,deviceScaleFactor:1,mobile:true});
+   assert.ok(!resized.error,JSON.stringify(resized.error));
+   await sleep(200);
+   check(await p.read(`innerWidth===390&&innerHeight===310`),'phone 390x310 flight viewport resized');
    const shortFaults=boxes=>{
     const issues=[];
     for(let i=0;i<boxes.length;i++){
@@ -323,9 +326,12 @@ if(family==='all'||family==='phone'){
     await p.read(`document.getElementById('savePictureStatus').textContent=${JSON.stringify(text)}`);
     const b=await readBoxes([...flightIds,'miniMap','savePictureStatus']), f=shortFaults(b);
     if(f.length)console.log('Flight 390x310 faults',text,f.join(','));
-    check(flightIds.every(id=>b.some(x=>x[0]===id))&&b.some(x=>x[0]==='savePictureStatus')&&f.length===0,`phone 390x310 flight controls and save notice (${text}) fit without overlap`);
+    check(flightIds.every(id=>b.some(x=>x[0]===id))&&b.some(x=>x[0]==='miniMap')&&b.some(x=>x[0]==='savePictureStatus')&&f.length===0,`phone 390x310 flight controls and save notice (${text}) fit without overlap`);
    }
-   await p.send('Emulation.setDeviceMetricsOverride',{width:w,height:h,deviceScaleFactor:1,mobile:true});await sleep(200);
+   const restored=await p.send('Emulation.setDeviceMetricsOverride',{width:w,height:h,deviceScaleFactor:1,mobile:true});
+   assert.ok(!restored.error,JSON.stringify(restored.error));
+   await sleep(200);
+   check(await p.read(`innerWidth===${w}&&innerHeight===${h}`),'phone 390x844 flight viewport restored');
   }
   await p.read(`document.getElementById('savePictureStatus').textContent=''`);
   if(w===320&&h===568){
