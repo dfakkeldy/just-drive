@@ -17,7 +17,7 @@ export class Element {
   addEventListener(name,fn){this.listeners[name]=fn;}setAttribute(){}
 }
 export function environment(store,href='https://example.test/'){
- const win=new EventTarget(),doc=new EventTarget();doc.hidden=false;doc.createElement=()=>new Element();
+ const win=new EventTarget(),doc=new EventTarget();doc.hidden=false;doc.body={classList:{toggle(){}}};doc.createElement=()=>new Element();
  let time=0;const nav=[];
  Object.assign(globalThis,{document:doc,localStorage:store,addEventListener:win.addEventListener.bind(win),location:{href,search:new URL(href).search,replace(url){nav.push(url);}},history:{replaceState(_a,_b,url){globalThis.location.href=url;globalThis.location.search=new URL(url).search;}}});
  return {win,doc,nav,clock:()=>time,advance:ms=>{time+=ms;},hide(){doc.hidden=true;doc.dispatchEvent(new Event('visibilitychange'));},show(){doc.hidden=false;doc.dispatchEvent(new Event('visibilitychange'));},leave(){win.dispatchEvent(new Event('pagehide'));},freeze(){doc.dispatchEvent(new Event('freeze'));}};

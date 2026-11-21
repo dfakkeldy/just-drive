@@ -27,6 +27,7 @@ export interface ShiftWatcher {
 }
 
 export class Shift {
+  endsAtSix = true;
   readonly damage = new Damage();
   private readonly roadsideReport = document.createElement('p');
   private readonly bossReport = document.createElement('p');
@@ -352,7 +353,7 @@ export class Shift {
   }
   private refreshUI(v?: Vehicle): void {
     const type = this.career.double ? 'DOUBLE MAIL' : dayType(this.career.day) === 'flyers' ? 'FLYER DAY' : dayType(this.career.day) === 'light' ? 'LIGHT MAIL' : 'DAILY MAIL';
-    this.hud.textContent = `DAY ${this.career.day} · ${this.done}/${this.stops} STOPS · ${clock(this.elapsed)}\n${this.run.short} · ${this.fired ? 'GET FIRED' : type}${this.roadsideScore && !this.fired ? ` · Roadside score ${this.roadsideScore}` : ''}`;
+    this.hud.textContent = `DAY ${this.career.day} · ${this.done}/${this.stops} STOPS · ${clock(this.elapsed)}${this.endsAtSix ? ` · ENDS ${clock(END_TIME - START_TIME)}` : ''}\n${this.run.short} · ${this.fired ? 'GET FIRED' : type}${this.roadsideScore && !this.fired ? ` · Roadside score ${this.roadsideScore}` : ''}`;
     this.endButton.hidden = this.ended;
     this.cameraButton.hidden = false;
     if (this.damage.hintTime > 0) this.progress.textContent = (this.phone || this.low) && this.damage.hint.includes('pulls left')

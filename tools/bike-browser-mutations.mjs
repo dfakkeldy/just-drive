@@ -12,7 +12,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const cases=[
  ['bike selection','ride','garage.ts','ride: (rig, terrain, roads, sea, spec) => new BikeRide(rig as Bike, terrain, roads, sea, spec)','ride: undefined','explore bike shows bike and rider instead of car'],
  ['title buttons','ride','title.ts','if (explore && ride)', 'if (false && ride)', 'title ride choice and bike keys'],
- ['title multiplayer layout','ride','title.ts','{grid-row:7}','{grid-row:5}','explore title keeps choice and multiplayer controls in order'],
+ ['title multiplayer layout','ride','title.ts','const buttons = vehicleButtons(ride);','const buttons = vehicleButtons(ride); buttons.style.position = "fixed"; buttons.style.top = "0";','explore title keeps choice and multiplayer controls in order'],
  ['title keys','ride','title.ts',"ride?.kind === 'bike' ? bikeKeys(touch)","ride?.kind === 'never' ? bikeKeys(touch)", 'title ride choice and bike keys'],
  ['driving input','ride','main.ts','vehicle.update(dt, ride.input(input), resolveYardSolids)','vehicle.update(0, ride.input(input), resolveYardSolids)','W drives the bike'],
  ['map releases pull','ride','bike-controls.ts',',#bigMap:not([hidden])','','a Shift held through the map needs a fresh press to pull'],

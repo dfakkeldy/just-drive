@@ -16,18 +16,21 @@ const jobs=[
   ['ui','ui-check.mjs',{}],
   ['touch-path','touch-path-check.mjs',{}],
   ['phone-help','phone-help-browser.mjs',{}],
-  ['desktop-layout','desktop-layout-check.mjs',{}],
+  ['desktop-layout','desktop-layout-check.mjs',{},{name:'desktop',demo:'2',relief:'0.5'}],
   ['settings-pictures','touch-quality-browser.mjs',{TOUCH_SHOTS:'1'}],
 ];
 let bad=0;
 const selected=process.env.QUALITY_JOBS?process.env.QUALITY_JOBS.split(',').map(name=>{const job=jobs.find(j=>j[0]===name);if(!job)throw new Error('Unknown check '+name);return job;}):jobs.filter(([name])=>name==='quality'||name==='quality-explore');
-for(const [name,script,env] of selected) {
+for(const [name,script,env,view] of selected) {
   const started=performance.now();
   console.log(`Checking UI job ${name} ${JSON.stringify(env)}`);
   const folder=['touch-path','phone-help','desktop-layout'].includes(name)?`${out}/${name}`:out;
   mkdirSync(folder,{recursive:true});
   const log=createWriteStream(`${out}/${name}.log`);
-  const child=spawn(process.execPath,[fileURLToPath(new URL(script,import.meta.url)),folder,first],{env:{...process.env,...env},stdio:['ignore','pipe','pipe']});
+  // Use the driving view while preserving the caller's quality and extra query values.
+  let url=first;
+  if(view){const u=new URL(first);u.searchParams.delete('shot');for(const [k,v] of Object.entries(view))u.searchParams.set(k,v);url=u.href;}
+  const child=spawn(process.execPath,[fileURLToPath(new URL(script,import.meta.url)),folder,url],{env:{...process.env,...env},stdio:['ignore','pipe','pipe']});
   child.stdout.pipe(log,{end:false});child.stderr.pipe(log,{end:false});
   child.stdout.pipe(process.stdout,{end:false});child.stderr.pipe(process.stderr,{end:false});
   const code=await new Promise(r=>child.on('close',(code,signal)=>r(signal?128:code)));

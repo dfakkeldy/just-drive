@@ -38,6 +38,7 @@ const STATE = `(() => { const r = window.mmm.radio, c = document.getElementById(
   return { cls: c.className.split(/\\s+/), dial: b.textContent, song: s.textContent, songShown: getComputedStyle(s).display !== 'none', nameColour: getComputedStyle(b).color,
     label: c.getAttribute('aria-label'), box: c.getBoundingClientRect().toJSON(), volume: a.volume, muted: a.muted, paused: a.paused, time: a.currentTime,
     set: r.volume, audible: r.audible, on: r.on, station: r.station < 0 ? 'off' : r.stations[r.station].dial, ...r.reception }; })()`;
+const onDial = (d) => `document.querySelector('#radio b').textContent.split(' ').includes(${JSON.stringify(d)})`;
 // A test map round the car. Every station but the starting one has a transmitter: far away (lost here), or 1500 m away
 // with a range of 1000 to 2000 m (half a signal here: weak).
 const useMap = (weak = []) => `(() => { const r = window.mmm.radio, p = r.reception, start = r.stations[r.first].dial, transmitters = {};
@@ -82,7 +83,7 @@ const has = (state, name) => state.cls.includes(name);
   check(walk.length < dials.length - 1, `the game's table passes over a station at the start (${dials.length - 1 - walk.length} of them)`);
   for (const dial of walk) {
     await key();
-    await until(`document.querySelector('#radio b').textContent.includes(' ${dial} ')`, `T goes to ${dial}`);
+    await until(onDial(dial), `T goes to ${dial}`);
     if (dial !== walk[0]) continue;
     await until(`${playing} && document.getElementById('radio').classList.contains('live')`, `${dial} plays`);
     const s = await read(STATE);
@@ -92,12 +93,12 @@ const has = (state, name) => state.cls.includes(name);
   await key();
   await until(`document.getElementById('radio').classList.contains('off')`, 'after the last station that comes in, the radio is off');
   await key();
-  await until(`document.querySelector('#radio b').textContent.includes(' ${start} ')`, `and T from off is the starting station (${start})`);
+  await until(onDial(start), `and T from off is the starting station (${start})`);
 
   // From here on, the test map. One station is weak; the one before it on the dial is lost.
   await read(useMap([weak]));
   await key();
-  await until(`document.querySelector('#radio b').textContent.includes(' ${weak} ')`, `the dial passes over ${dead} (lost) and stops at ${weak} (weak)`);
+  await until(onDial(weak), `the dial passes over ${dead} (lost) and stops at ${weak} (weak)`);
   await until(`${playing} && document.getElementById('radio').classList.contains('live')`, 'the weak station plays');
   let s = await read(STATE);
   console.log('weak', JSON.stringify(s));
@@ -113,7 +114,7 @@ const has = (state, name) => state.cls.includes(name);
   s = await read(STATE);
   console.log('lost', JSON.stringify(s));
   await shot('reception-lost');
-  check(s.station === weak && s.dial.includes(` ${weak} `), 'a station that fades is not changed for the player');
+  check(s.station === weak && s.dial.split(' ').includes(weak), 'a station that fades is not changed for the player');
   check(s.band === 'lost' && has(s, 'lost') && !has(s, 'live') && !has(s, 'weak') && s.song === 'NO SIGNAL', `the readout says NO SIGNAL (${s.song})`);
   check(s.label.includes('does not come in here'), 'and so does its spoken label');
   check(s.muted === true && s.volume === 0 && s.music === 0 && s.audible === false, 'no music is left, and the driving sounds do not duck');
@@ -155,9 +156,9 @@ const has = (state, name) => state.cls.includes(name);
   // With no map, the dial is the dial it always was.
   await read(`(window.mmm.radio.useReception(null), true)`);
   await key();
-  await until(`document.querySelector('#radio b').textContent.includes(' ${start} ')`, 'T from off');
+  await until(onDial(start), 'T from off');
   await key();
-  await until(`document.querySelector('#radio b').textContent.includes(' ${dead} ')`, `with no map, the next station is the next on the dial (${dead})`);
+  await until(onDial(dead), `with no map, the next station is the next on the dial (${dead})`);
   await until(`${playing} && document.getElementById('radio').classList.contains('live')`, 'and it plays');
   s = await read(STATE);
   check(s.band === 'clear' && s.signal === 1 && s.static === 0 && !s.muted && !/NO SIGNAL|WEAK/.test(s.song), 'clear, with no static');
@@ -200,10 +201,11 @@ const has = (state, name) => state.cls.includes(name);
 
   await read(useMap([weak]));
   await tap('first tap');
-  await until(`document.querySelector('#radio b').textContent.includes(' ${weak} ')`, `a tap passes over the lost station and stops at ${weak}`);
+  await until(onDial(weak), `a tap passes over the lost station and stops at ${weak}`);
   await until(`${playing}`, 'the weak station plays on the phone');
   let s = await read(STATE);
   console.log('phone weak', JSON.stringify(s));
+  check(await read(`(()=>{const e=document.getElementById('radio');return e.scrollHeight<=e.clientHeight;})()`),'reception status fits the phone radio');
   check(s.band === 'weak' && s.songShown && s.song.startsWith('WEAK · '), 'the open readout says WEAK');
   check(s.static > 0 && s.context === 'running', `static sounds after a tap (${s.context})`);
   check(s.box.x >= 0 && s.box.right <= width && s.box.bottom <= height, 'the open readout is inside the screen');
@@ -217,6 +219,7 @@ const has = (state, name) => state.cls.includes(name);
   await until(`document.getElementById('radio').classList.contains('expanded')`, 'a station that goes opens the readout', 5000);
   s = await read(STATE);
   console.log('phone lost', JSON.stringify(s));
+  check(await read(`(()=>{const e=document.getElementById('radio');return e.scrollHeight<=e.clientHeight;})()`),'reception status fits the phone radio');
   await shot('reception-phone-lost');
   check(has(s, 'expanded') && s.songShown && s.song === 'NO SIGNAL', 'a station that goes opens the readout: NO SIGNAL');
   check(same(s, clear) && s.muted, 'in the same box, and the music is muted (a phone ignores the volume)');
@@ -224,13 +227,13 @@ const has = (state, name) => state.cls.includes(name);
   s = await read(STATE);
   await shot('reception-phone-lost-folded');
   check(same(s, clear) && !s.songShown && s.nameColour !== clear.nameColour, `folded, the lost station's name is dim (${clear.nameColour} to ${s.nameColour})`);
-  check(s.dial.includes(` ${weak} `), 'and it is still the station the player chose');
+  check(s.dial.split(' ').includes(weak), 'and it is still the station the player chose');
   await tap('tap on the lost station');
   await until(`document.getElementById('radio').classList.contains('off')`, 'a tap leaves the lost station: off, with nothing else here');
   s = await read(STATE);
   check(s.static === 0 && same(s, clear), 'off: no static, same box');
   await tap('tap from off');
-  await until(`document.querySelector('#radio b').textContent.includes(' ${start} ')`, 'and a tap from off is the starting station');
+  await until(onDial(start), 'and a tap from off is the starting station');
   await close();
 }
 

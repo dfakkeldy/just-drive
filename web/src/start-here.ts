@@ -194,52 +194,40 @@ export function startHereAddress(site: Site, area: string, url: URL, multiplayer
 }
 
 const CSS = `
-#startHere{min-width:0;margin-top:10px;overflow-wrap:anywhere}
-#startHere button{box-sizing:border-box;width:100%;min-height:44px;border:1px solid #a7d9bc;border-radius:7px;background:transparent;color:inherit;font:700 14px system-ui,sans-serif;padding:7px;cursor:pointer}
+#startHere{min-width:0;margin-top:10px;overflow-wrap:anywhere;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;text-align:left}
+#startHere>:not(#titleStartHere,#startHereHint){flex-basis:100%}
+#startHere button{box-sizing:border-box;width:auto;flex:none;text-align:left;min-height:44px;border:0;border-radius:0;background:transparent;color:inherit;font:700 14px system-ui,sans-serif;padding:7px 0;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 #startHere button:focus-visible{outline:3px solid white;outline-offset:2px}
 #startHere button:disabled{opacity:.6;cursor:wait}
-#startHere small{display:block;margin-top:4px;font:12px/1.35 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
+#startHere small{display:block;flex:1 1 220px;margin-top:0;font:13px/1.4 system-ui,sans-serif;color:var(--ink-dim,#b9c3cc)}
 #startHereStatus{position:fixed;z-index:30;top:max(12px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:calc(100% - 24px);margin:0;padding:8px 12px;border-radius:6px;background:#0c141c;color:#eef2f6;font:13px/1.4 system-ui,sans-serif;pointer-events:none}
 #startHereStatus:empty{display:none}
 /* Phones. At 390x844 the card reached 847px once the two-line DRONE row came (#219): spacing is tight upright, and in both
    orientations the card scrolls inside itself rather than run off the screen when it still grows. Buttons keep 44px. */
 @media(max-width:649px){
- #title.justDrive:has(#startHere){padding:10px;align-items:safe center}
- #title.justDrive #titleCard:has(>#startHere){padding:14px 16px 12px;max-width:100%;max-height:calc(100dvh - 20px);overflow-y:auto;overscroll-behavior:contain}
+ /* Clear the top tile row (62 px plus the phone top gap: 6 px in a tab, 16 px from the home screen). */
+ #title.justDrive:has(#startHere){padding:calc(62px + var(--phone-top-gap,6px) + env(safe-area-inset-top,0px)) 10px max(10px,env(safe-area-inset-bottom,0px));align-items:safe center}
+ #title.justDrive #titleCard:has(>#startHere){padding:14px 16px 12px;max-width:100%;max-height:calc(100dvh - 62px - var(--phone-top-gap,6px) - env(safe-area-inset-top,0px) - max(10px,env(safe-area-inset-bottom,0px)));height:auto;overflow-y:auto;overscroll-behavior:contain}
+ /* No empty foot under the card: a stuck Start rises 26 px instead, so it still clears the More below band. */
+ body:has(#phoneTop) #title.justDrive #titleCard:has(>#startHere){padding-bottom:12px!important}
+ body:has(#phoneTop) #title.justDrive:has(#startHere) #titleStart{bottom:32px}
  #title.justDrive:has(#startHere) h1{font-size:30px}
  #title.justDrive:has(#startHere) .tag{margin-bottom:6px}
- #title.justDrive:has(#startHere) p:not(.tag){font-size:12px;line-height:1.4;margin-top:5px}
+ #title.justDrive:has(#startHere) p:not(.tag){font-size:13px;line-height:1.4;margin-top:5px}
  #title.justDrive:has(#startHere) dl{font-size:12px;line-height:1.35;gap:2px 10px;margin-top:8px}
  #title.justDrive:has(#startHere) dt{font-size:11px}
- #title.justDrive:has(#startHere) #vehicleChoice{margin-bottom:6px!important}
+ #title.justDrive:has(#startHere) #vehicleChoice{margin-top:8px!important;margin-bottom:6px!important}
  #title.justDrive:has(#startHere) .mpControl{margin-top:6px;padding-top:6px}
  #title.justDrive:has(#startHere) .mpControl small{font-size:11px;line-height:1.3;margin:4px 0}
  #title.justDrive:has(#startHere) #startHere{margin-top:6px}
  #title.justDrive:has(#startHere) #titleStart{min-height:44px;margin-top:8px}
- #title.justDrive:has(#startHere) #titleCredits{margin-top:6px;padding:4px 0}
+ #title.justDrive:has(#startHere) #titleCredits{padding:4px 0}
+ /* The 1884 link shares the Start where I am row; the hint follows. Tab order matches what you see. */
+ #title.justDrive:has(#startHere) #titleEra{order:1;flex:0 1 auto}
+ #title.justDrive:has(#startHere) #startHereHint{order:2;flex-basis:100%}
+ #title.justDrive:has(#startHere) #titleOtherGame{order:3;margin-top:4px}
 }
-@media(min-width:760px){
- #titleCard:has(.mpControl)>#startHere{grid-column:1/-1;grid-row:6}
- #titleCard:has(.mpControl)>#titleStart{grid-row:7}
- #titleCard:has(.mpControl)>#titleCredits{grid-row:8}
- #titleCard:has(.mpControl)>#titleLegal{grid-row:9}
- #titleCard:has(>#vehicleChoice):has(>.mpControl)>#startHere{grid-row:8}
- #titleCard:has(>#vehicleChoice):has(>.mpControl)>#titleStart{grid-row:9}
- #titleCard:has(>#vehicleChoice):has(>.mpControl)>#titleCredits{grid-row:10}
- #titleCard:has(>#vehicleChoice):has(>.mpControl)>#titleLegal{grid-row:11}
-}
-@media(max-height:500px) and (min-width:650px){
- #title.justDrive #titleCard{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);column-gap:10px;max-height:calc(100dvh - 20px);overflow-y:auto;overscroll-behavior:contain}
- #title.justDrive #titleCard>*{grid-column:1/3!important}
- #title.justDrive #titleCard>dl{grid-column:3!important;grid-row:1/6!important}
- #title.justDrive #titleCard>.mpControl{grid-column:3!important;grid-row:6/9!important;box-sizing:border-box;min-height:0;max-height:min(120px,calc(100dvh - 260px));overflow-y:auto}
- #title.justDrive #titleCard>#startHere{display:contents}
- #title.justDrive #titleCard>#titleStart{grid-column:1!important;grid-row:6!important;font-size:14px;margin-top:6px}
- #title.justDrive #titleStartHere{grid-column:2;grid-row:6;margin-top:6px}
- #title.justDrive #startHereHint{grid-column:1/3;grid-row:7;font-size:11px}
- #title.justDrive #titleCard>#titleCredits{grid-row:8!important}
- #title.justDrive #titleCard>#titleLegal{grid-column:1/-1!important;grid-row:9!important}
-}`;
+`;
 
 interface StartHereOptions {
   mode: string; era: string; area: string; site: Site;
@@ -260,9 +248,11 @@ export function startHere(options: StartHereOptions): void {
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
   const group = Object.assign(document.createElement('div'), { id: 'startHere' });
   const button = Object.assign(document.createElement('button'), { id: 'titleStartHere', type: 'button', textContent: 'Start where I am' });
-  const hint = Object.assign(document.createElement('small'), { id: 'startHereHint', textContent: 'With “Drive with others” on, other players see your car where you start.' });
+  const hint = Object.assign(document.createElement('small'), { id: 'startHereHint', textContent: 'Use your location to start on a nearby public road. Other players see your car if you drive with others.' });
   button.setAttribute('aria-describedby', hint.id);
-  group.append(button, hint); start.before(group);
+  group.append(button, hint); start.after(group);
+  const eraDoor = document.getElementById('titleEra');
+  if (eraDoor) { hint.after(eraDoor); const other = document.getElementById('titleOtherGame'); if (other) eraDoor.after(other); }
   const status = Object.assign(document.createElement('p'), { id: 'startHereStatus' });
   status.setAttribute('role', 'status'); document.body.appendChild(status);
   let generation = 0, messageTimer: ReturnType<typeof setTimeout> | undefined;
