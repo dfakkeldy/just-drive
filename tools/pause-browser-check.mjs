@@ -19,7 +19,7 @@ for (const [name, width, height, touch] of [['desktop',1280,900,false],['phone',
   const origin = new URL(base); if(name.startsWith('just-')) origin.hostname = 'localhost';
   await c.send('Page.navigate',{url:`${origin.origin}/?test=1&vehicle=bike&road=Mabou%20Harbour%20Road&hud=1&radio=0&q=low${name.startsWith('just-')?'&site=just&mode=explore':''}${touch?'&touch=1':''}`});
   let ready = false;
-  for(let i=0;i<240;i++){ await sleep(500); if(await read(`document.title.startsWith('settled') && !!window.mmm?.vehicle`)){ready=true;break;} }
+  for(let i=0;i<240;i++){ await sleep(500); if(await read(`(document.documentElement.dataset.mmmReady==='true' || document.title.startsWith('settled')) && !!window.mmm?.vehicle`)){ready=true;break;} }
   assert.ok(ready,`${name} settled`);
   // Real pedal input releases daily-start parking. Then let the bike roll without a pedal.
   await c.send('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyW',key:'w'}); await sleep(1800);
