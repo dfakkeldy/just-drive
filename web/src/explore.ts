@@ -86,7 +86,11 @@ export function prepareExplore(): void {
     #savePictureButton{position:fixed;z-index:6;top:calc(72px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));
       flex:none;width:56px;height:56px;border-radius:10px;border:1px solid var(--ink-dim);background:var(--panel-solid);
       color:var(--ink);font:700 11px/1.2 var(--mono);padding:0;pointer-events:auto}
-    body.tcOn #savePictureButton{position:static}
+    body.tcOn #savePictureButton{right:auto}
+    /* Place Save picture beside the flight stick on short landscape screens, clear of its caption. */
+    @media(orientation:landscape) and (max-height:319px){
+      body.droneOn #savePictureButton{right:calc(22px + var(--drone-stick-size) + env(safe-area-inset-right,0px))}
+    }
     #savePictureButton:active{background:var(--maple)}
     #savePictureButton[hidden],body:not(.tcOn,.droneOn) #savePictureButton{display:none}
     #savePictureStatus{position:fixed;z-index:7;left:50%;top:calc(72px + env(safe-area-inset-top,0px));transform:translateX(-50%);

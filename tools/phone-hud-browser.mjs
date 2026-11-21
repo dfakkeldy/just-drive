@@ -7,13 +7,13 @@ import { cdp, cdpFetch } from './cdp.mjs';
 import { mpLayoutScript } from './mp-layout-fixture.mjs';
 const [out,first]=process.argv.slice(2), base=new URL(first).origin, port=process.env.CDP_PORT??'9568';
 mkdirSync(out,{recursive:true});
-const defaultSizes=[[844,390],[932,430],[1000,462],[390,844],[430,932],[375,553],[375,667],[390,664],[553,375],[667,375,true],[568,320],[640,360]];
+const defaultSizes=[[844,390],[932,430],[1000,462],[390,844],[430,932],[375,553],[375,667],[390,664],[553,375],[667,375,true],[568,320],[640,360],[320,568],[320,460],[280,653]];
 const wanted=(process.env.SIZES??'').trim().split(/\s+/).filter(Boolean);
 const sizeKey=([w,h,safe])=>`${w}x${h}${safe?'-safe':''}`;
 for(const name of wanted)assert.ok(defaultSizes.some(s=>sizeKey(s)===name),'unknown phone size '+name);
 const sizes=defaultSizes.filter(s=>!wanted.length||wanted.includes(sizeKey(s)));
-const ids=['phoneLine','hud','shiftHud','stopHint','miniMap','relief','radio','photoTag','gear','tcReset','tcView','tcHorn','tcTrack','tcBrake','tcGo','tcPull','cameraButton','mailButton','placesButton','bikeJump','savePictureButton'];
-const controls=['gear','tcReset','tcView','tcHorn','tcSteer','tcBrake','tcGo','tcPull','cameraButton','mailButton','miniMapHead','relief','radio','placesButton','savePictureButton'];
+const ids=['phoneLine','hud','shiftHud','stopHint','miniMap','relief','radio','photoTag','gear','pauseButton','droneButton','tcReset','tcView','tcHorn','tcTrack','tcBrake','tcGo','tcPull','cameraButton','mailButton','placesButton','bikeJump','savePictureButton'];
+const controls=['gear','pauseButton','droneButton','tcReset','tcView','tcHorn','tcSteer','tcBrake','tcGo','tcPull','cameraButton','mailButton','miniMapHead','relief','radio','placesButton','savePictureButton'];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const overlaps=(a,b,epsilon=1)=>Math.min(a.right,b.right)>Math.max(a.left,b.left)+epsilon && Math.min(a.bottom,b.bottom)>Math.max(a.top,b.top)+epsilon;
 const evidence=[],failures=[];
@@ -35,7 +35,7 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
     const all=await boxes(), list=all.filter(b=>ids.includes(b.id)), buttons=all.filter(b=>controls.includes(b.id));
     for(const b of list) assert.ok(b.left>=safe.left-1&&b.top>=safe.top-1&&b.right<=width-safe.right+1&&b.bottom<=height-safe.bottom+1,`${b.id} outside viewport`);
     for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++)assert.ok(!overlaps(list[i],list[j]),`${list[i].id} overlaps ${list[j].id}`);
-    for(const id of ['tcTrack','tcBrake','tcGo','gear','tcReset','tcView','tcHorn'])assert.ok(list.some(b=>b.id===id),'missing '+id);
+    for(const id of ['tcTrack','tcBrake','tcGo','gear','pauseButton','droneButton','tcReset','tcView','tcHorn'])assert.ok(list.some(b=>b.id===id),'missing '+id);
     for(const b of buttons){const minimum=b.id==='mailButton'?64:56;assert.ok(b.width>=minimum&&b.height>=minimum,`${b.id} too small`);}
     assert.deepEqual(await read(`(${JSON.stringify(buttons.map(b=>b.id))}).filter(id=>{const e=document.getElementById(id),b=e.getBoundingClientRect(),at=document.elementFromPoint((b.left+b.right)/2,(b.top+b.bottom)/2);return !(at===e||e.contains(at));})`),[],'control centres receive touches');
     if(name==='mail') {
@@ -55,6 +55,7 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
     } else {
       assert.ok(!list.some(b=>b.id==='mailButton'||b.id==='cameraButton'||b.id==='shiftHud'||b.id==='relief'),'drive mode hides mail functions');
       assert.ok(list.some(b=>b.id==='savePictureButton'),'drive mode has a save picture button');
+      assert.ok(list.find(b=>b.id==='hud')?.width>=52,'drive status keeps its width');
       assert.ok(await read(`document.body.classList.contains('compactPhone')`),'shared compact free-drive grid');
       if(name.endsWith('bike')){assert.equal(await read(`document.body.classList.contains('bikeMode')`),true);assert.ok(list.some(b=>b.id==='tcPull'),'bike pull retained');}
     }
@@ -147,7 +148,8 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       if(name!=='mail')await until(`!document.getElementById('savePictureButton').hidden`);
       await inspect('multiplayer settings closed');
     }
-    if(width<height) {
+    // The 320x460 case represents a short browser viewport without a notch.
+    if(width<height&&height>460) {
       await read(`document.documentElement.style.setProperty('--test-safe-top','47px');document.documentElement.style.setProperty('--test-safe-bottom','34px')`);
       safe.top=47; safe.bottom=34;
       const browserTop=await read(`document.getElementById('phoneTop').getBoundingClientRect().top`);

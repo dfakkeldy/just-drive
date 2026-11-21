@@ -29,7 +29,7 @@ const mutations=process.argv.includes('--mutations') ? [
  ['landscape-stacking-removed','sideDrive || rightSpace < 142','false'],
  ['native-safe-area-unobserved','resize.observe(root);','/* native padding changes not observed */'],
  ['readout-overflow-ignored','return start + height + 6 > Math.min(...stops);','return false;'],
- ['writer-not-positioned',"position: 'absolute'","position: 'static'"],
+ ['writer-not-positioned',": 'absolute',",": 'static',"],
 ] : [];
 async function verify(text) {
  const {outputFiles}=await build({stdin:{contents:text,loader:'ts'},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
@@ -55,7 +55,7 @@ async function verify(text) {
   const find=id=>{if(!elements.has(id))elements.set(id,{style:{removeProperty(k){delete this[k];}}});return elements.get(id);};
   placePhoneControls(phoneControls({width,height,left,right,bottom,top,hintHeight,mail,pull}),find);
   const boxes=[...elements.entries()].filter(([,e])=>e.style.position).map(([id,e])=>{
-   assert.equal(e.style.position,'absolute','the applied rectangle must own placement');
+   assert.equal(e.style.position,id==='savePictureButton'?'fixed':'absolute','the applied rectangle must own placement');
    const x=parseFloat(e.style.left),y=parseFloat(e.style.top),w=parseFloat(e.style.width),h=parseFloat(e.style.height);
    return {id,x,y,w,h};
   });
@@ -107,6 +107,7 @@ async function verify(text) {
   }
   assert.equal(boxes.some(b=>b.id==='tcPull'),pull,'PULL presence');
   assert.equal(boxes.some(b=>b.id==='mailButton'),mail,'MAIL presence');
+  assert.equal(boxes.some(b=>b.id==='savePictureButton'),!mail,'Save picture presence');
   placePhoneControls(null,find);assert.ok([...elements.values()].every(e=>!e.style.position),'orientation/mode change restores grid placement');
   cases++;
  }

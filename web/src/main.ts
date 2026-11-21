@@ -1219,7 +1219,7 @@ const lawnDemo = lawnHouse ? new LawnDemo(lawnHouse, manifest.village, vehicle) 
 // ---- input --------------------------------------------------------------------------------
 const keys = new Set<string>();
 let pictureRequested = false, savingPicture = false;
-const canSavePicture = () => !mailMode && !page.stopped && !scenePaused() && !fleet?.busy && (mode === 'drive' || drone.active);
+const canSavePicture = () => !mailMode && !page.stopped && !scenePaused() && !fleet?.busy && !interiors.busy && (mode === 'drive' || drone.active);
 const requestPicture = () => { if (canSavePicture() && !savingPicture) pictureRequested = true; };
 // Enter or Space on a control that has the focus (Tab, then the key) belongs to that control, not to the game.
 // The one exception is Space on the mail button, which throws mail by design.
@@ -1301,7 +1301,7 @@ const pictureButton = pad && !mailMode ? Object.assign(document.createElement('b
   id: 'savePictureButton', type: 'button', textContent: 'Save picture', hidden: true,
 }) : null;
 if (pictureButton) {
-  document.getElementById('phoneTop')?.insertBefore(pictureButton, document.getElementById('droneButton'));
+  document.body.append(pictureButton);
   pictureButton.addEventListener('click', requestPicture);
 }
 const pictureStatus = !bare && !mailMode ? Object.assign(document.createElement('div'), { id: 'savePictureStatus' }) : null;
@@ -2095,7 +2095,7 @@ function frame(now: number) {
     terrain.update(camera, true);
     sidewalks?.update();
     quiet = loaded && terrain.pending === 0 ? quiet + 1 : 0; page.ready(quiet > 20 && terrain.failed === 0 && terrain.pending === 0 && (sidewalks?.pending ?? 0) === 0);
-    mailRequested = photoRequested = false;
+    mailRequested = photoRequested = pictureRequested = false;
     if (!interiors.busy) { keys.clear(); touch.steer = touch.throttle = 0; camReady = false; }
     requestAnimationFrame(frame); return;
   }
