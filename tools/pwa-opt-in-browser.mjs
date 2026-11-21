@@ -29,9 +29,14 @@ async function run(name){
  const {targetId}=await browser.send('Target.createTarget',{url:'about:blank',browserContextId});const list=await(await fetch(`http://127.0.0.1:${port}/json/list`)).json(),t=cdp(list.find(t=>t.id===targetId).webSocketDebuggerUrl);tabs.push(t);
  await t.send('Page.enable');await t.send('Network.enable');await t.send('Page.addScriptToEvaluateOnNewDocument',{source:`window.__offlineAccess=[];window.__cacheKeys=caches.keys.bind(caches);for(const n of ['open','match','keys']){const f=caches[n].bind(caches);caches[n]=(...a)=>{window.__offlineAccess.push(n);return f(...a)}}`});
  await t.send('Page.navigate',{url:origin+'/?title=1&q=low'});await until(t,`!!document.getElementById('titleStart')&&!document.getElementById('boot')`);await delay(600);
- const info=await value(t,`(async()=>{const entries=performance.getEntriesByType('resource');const app=entries.find(e=>e.name.endsWith('/app.js')),land=entries.find(e=>e.name.includes('/terrain/manifest.json'));return {registrations:(await navigator.serviceWorker.getRegistrations()).length,caches:await window.__cacheKeys(),access:window.__offlineAccess,firstLand:land.startTime-app.responseEnd,gameRequests:entries.filter(e=>/\\/(terrain|audio|areas)\\//.test(e.name)).slice(0,6).map(e=>new URL(e.name).pathname)}})()`);
+ const info=await value(t,`(async()=>{const entries=performance.getEntriesByType('resource');const app=entries.find(e=>e.name.endsWith('/app.js')),land=entries.find(e=>e.name.includes('/terrain/manifest.json'));return {registrations:(await navigator.serviceWorker.getRegistrations()).length,caches:await window.__cacheKeys(),access:window.__offlineAccess,firstLand:land.startTime-app.responseEnd}})()`);
  const requests=read(trace,'utf8').trim().split('\n').filter(Boolean).map(l=>JSON.parse(l).path);
- if(baseline&&name==='public')write(out+'/opt-in-pass3-browser-baseline.json',JSON.stringify({info,requests},null,2));
+ const pageRequests=t.events.filter(e=>e.method==='Network.requestWillBeSent'&&e.params.request.url.startsWith(origin+'/')).map(e=>new URL(e.params.request.url).pathname);
+ // The order check reads the order the page asked for the files (CDP), not Resource Timing. startTime has a 100 µs clock:
+ // two fetches started together often share it, and the browser then lists them in either order.
+ const gameRequests=pageRequests.filter(p=>/\/(terrain|audio|areas)\//.test(p)).slice(0,6);
+ console.log(name,'game request order',JSON.stringify(gameRequests));
+ if(baseline&&name==='public')write(out+'/opt-in-pass3-browser-baseline.json',JSON.stringify({info,requests,gameRequests},null,2));
  console.log(name,'fresh load',JSON.stringify(info),JSON.stringify(requests));
  const violations=[];
  for(const [ok,label]of[
@@ -39,17 +44,13 @@ async function run(name){
   [!requests.some(p=>p==='/sw.js'||p==='/version.json'||/^\/offline\/(start|files|page|app)\./.test(p)),'zero offline network requests']
  ]){console.log(ok?'PASS':'FAIL',name,label);if(!ok)violations.push(label);}
  console.log(name,'first land after script response',info.firstLand,'ms',JSON.stringify(requests));
- const pageRequests=t.events.filter(e=>e.method==='Network.requestWillBeSent'&&e.params.request.url.startsWith(origin+'/')).map(e=>new URL(e.params.request.url).pathname);
- // The order check reads the order the page asked for the files (CDP), not Resource Timing. startTime has a 100 µs clock:
- // two fetches started together often share it, and the browser then lists them in either order.
- const gameRequests=pageRequests.filter(p=>/\/(terrain|audio|areas)\//.test(p)).slice(0,6);
- console.log(name,'game request order',JSON.stringify(gameRequests));
  return {t,info,requests:pageRequests,gameRequests,browserContextId,violations};
 }
 try{
  for(let i=0;i<50;i++){try{if((await fetch(origin+'/_headers')).status===404)break;}catch{}await delay(100);}
  const normal=await run('normal');await browser.send('Target.disposeBrowserContext',{browserContextId:normal.browserContextId});normal.t.close();const publicPage=await run('public');const timing=publicPage.info.firstLand<normal.info.firstLand+250 && publicPage.info.firstLand<500;
  console.log(timing?'PASS':'FAIL','first-land timing has no offline setup delay');
+ assert.ok(normal.gameRequests.includes('/terrain/manifest.json'),'game request order was captured');
  assert.deepEqual(publicPage.gameRequests,normal.gameRequests,'game first-request order matches no-offline build');
  assert.ok(timing,'offline feature adds no 2.5 second startup wait');
  assert.deepEqual(normal.violations,[],'no-offline oracle stays ordinary');assert.deepEqual(publicPage.violations,[],'ordinary public visitor stays ordinary');
@@ -60,6 +61,6 @@ try{
  assert.ok(after.includes('/sw.js')&&after.some(p=>/^\/offline\/files\./.test(p)),'Download tap registers and fetches inventory');
  const version=JSON.parse(read(out+'/site/version.json')),inventory=JSON.parse(read(out+'/site'+version.index));
  downloaded(await until(publicPage.t,downloadState,downloadBudget(inventory)));
- write(out+'/opt-in-pass3-browser.json',JSON.stringify({normal:normal.info,public:publicPage.info,ordinaryRequests:publicPage.requests,clickStarts:true},null,2));
+ write(out+'/opt-in-pass3-browser.json',JSON.stringify({normal:normal.info,public:publicPage.info,gameRequests:{normal:normal.gameRequests,public:publicPage.gameRequests},ordinaryRequests:publicPage.requests,clickStarts:true},null,2));
  console.log('PASS fresh public visit, no-click storage/network isolation, delayed routes, no-offline order/timing oracle, click registers and completes');
 }finally{for(const c of contexts)await browser.send('Target.disposeBrowserContext',{browserContextId:c}).catch(()=>{});tabs.forEach(t=>t.close());browser.close();await new Promise(r=>{server.once('exit',r);server.kill();});}
