@@ -454,7 +454,7 @@ const placeRows = {
     roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings)),
   mabouMain: lazyPlaceRow(mabouSite, () => mabouMainChunk!.take().catch(partFailed), (site, part) => new part.MabouMain(site, terrain, LOW, roads.roads)),
   maryville: placeRow(maryvilleSite, site => new maryvilleFeature!.MaryvilleStore(site, terrain, LOW)),
-  drLane: placeRow(drLaneSite, site => new DrLaneHouse(site, terrain, lift)),
+  drLane: placeRow(drLaneSite, site => new DrLaneHouse(site, terrain, lift, LOW)),
 };
 // Each site clears its surveyed land.
 const placeSites = sitesOf(placeRows);

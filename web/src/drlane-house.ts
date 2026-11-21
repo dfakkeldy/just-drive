@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DrLaneDog } from './drlane-dog';
 import { BED, type DrLaneSite } from './drlane-site';
 import { pushOut, type Pushable, type Solid } from './parked';
 import type { HandBuiltPlace } from './place';
@@ -9,7 +10,8 @@ import { Mesher, seeded, type RGB } from './yard-kit';
  * The house on D.R.'s Lane, built by hand in place of its surveyed box, with its yard: a sage-green bungalow with white
  * trim and a dark roof, a taller split-level part at its south-east end with its gable toward the lane, a stove pipe, a
  * low deck with a red skirt and a white swing, a stained board shed, the gravel drive, a woodpile under a green tarp,
- * the garden bed along the lane with its stone edge, its shrubs and its red-berried bush, two pines and a flagpole.
+ * the garden bed along the lane with its stone edge, its shrubs and its red-berried bush, two pines, a flagpole, and the
+ * household's white dog (drlane-dog.ts).
  *
  * Layout is in house metres (see drlane-site.ts): u toward the taller end (south-east), v toward the lane. Heights are
  * above the level pad. The roofs, the walls and the yard follow the elevation survey; the windows, the doors and the
@@ -27,14 +29,19 @@ const BOX = hex(0x3e5e32), GOLD = hex(0xb9b23a), STRAW = hex(0xa89a72), SEDUM = 
 const WOOD_ENDS = hex(0xa89a84), TARP = hex(0x3c9a68), POST = hex(0x7d7466), STAKE = hex(0xe0582a), FLAG_RED = hex(0xc8202a);
 
 /** The bungalow: its walls, floor, eave and ridge (the ridge runs along u). */
-const MAIN = { u0: -9.4, u1: 0.95, half: 4.6, floor: 0.3, eave: 2.6, ridge: 4.45, over: 0.45, gableOver: 0.3 };
+export const MAIN = { u0: -9.4, u1: 0.95, half: 4.6, floor: 0.3, eave: 2.6, ridge: 4.45, over: 0.45, gableOver: 0.3 };
 /** The taller part: its ridge runs across, along v, so its gable faces the lane. Its front is set back from the bungalow's. */
-const TALL = { u0: 1.0, u1: 10.4, v0: -4.3, v1: 3.7, eave: 3.6, ridge: 5.65, over: 0.35, band: 1.6 };
+export const TALL = { u0: 1.0, u1: 10.4, v0: -4.3, v1: 3.7, eave: 3.6, ridge: 5.65, over: 0.35, band: 1.6 };
 /** The low deck along the bungalow's front, round into the corner under the bungalow's roof. */
-const DECK = { u0: -6.2, u1: 2.3, v0: MAIN.half, v1: 6.6, top: 0.28 };
+export const DECK = { u0: -6.2, u1: 2.3, v0: MAIN.half, v1: 6.6, top: 0.28 };
 /** The shed: its ridge runs along v, its doors face the lane. */
-const SHED = { u0: 8.2, u1: 13.4, v0: 11.3, v1: 17.7, eave: 2.3, ridge: 3.6 };
+export const SHED = { u0: 8.2, u1: 13.4, v0: 11.3, v1: 17.7, eave: 2.3, ridge: 3.6 };
+/** Tree trunks [u, v, height, crown radius, crown from], and the woodpile [u, v, length, depth]. */
+export const PINES: readonly (readonly [number, number, number, number, number])[] = [[7.3, 18.8, 11.5, 3.6, 2.6], [-0.6, 17.2, 7.2, 2.2, 0.7]];
+export const WOODPILE = [-14, 8.8, 3.8, 1.0] as const;
 const SLOPE = (MAIN.ridge - MAIN.eave) / MAIN.half;
+/** A car's half length, as the farm dogs at houses take it when they slip away (lot-props.ts). */
+const CAR_REACH = 3.4;
 
 export class DrLaneHouse implements HandBuiltPlace {
   readonly group = new THREE.Group();
@@ -43,16 +50,20 @@ export class DrLaneHouse implements HandBuiltPlace {
   private built = false; private fine = -1; private near = false;
   private material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   private probes: { x: number; z: number }[];
+  readonly dog: DrLaneDog;
   triangles = 0;
 
   /** `lift` turns a true height above the sea into the game's stretched height. */
-  constructor(readonly site: DrLaneSite, private terrain: Terrain, private lift: (metres: number) => number) {
+  constructor(readonly site: DrLaneSite, private terrain: Terrain, private lift: (metres: number) => number, low: boolean) {
     const o = site.origin;
     this.local.position.set(o.x, 0, o.z);
     this.local.rotation.y = site.yaw;
     this.group.add(this.local);
     this.group.visible = false;
     this.probes = ([[0, 0], [12, 15], [-12, 8], [0, 28], [-6, 22]] as [number, number][]).map(([u, v]) => site.world(u, v));
+    this.dog = new DrLaneDog(low);
+    this.dog.group.visible = false;
+    this.local.add(this.dog.group);
   }
 
   /** True while the house is near and its model is still to come: a picture should wait. */
@@ -70,14 +81,21 @@ export class DrLaneHouse implements HandBuiltPlace {
     return fine;
   }
 
-  update(view: THREE.Vector3, _now: number, car: { x: number; z: number }): void {
-    const o = this.site.origin, far = Math.min(Math.hypot(view.x - o.x, view.z - o.z), Math.hypot(car.x - o.x, car.z - o.z));
+  update(view: THREE.Vector3, _now: number, car: { x: number; z: number }, dt: number): void {
+    const o = this.site.origin, carFar = Math.hypot(car.x - o.x, car.z - o.z), far = Math.min(Math.hypot(view.x - o.x, view.z - o.z), carFar);
     this.near = far < 900;
     if (this.near) {
       const fine = this.ready();
       if (fine !== null && fine > this.fine) { this.build(); this.built = true; this.fine = fine; }
     }
     this.group.visible = this.built && far < 1600;
+    // The dog only while it is near enough to see: it keeps to its yard and its spot when no one is about.
+    if (this.built && far < 250) {
+      const rules = this.dog.rules;
+      rules.update(dt, carFar < 120 ? this.site.local(car.x, car.z) : null, CAR_REACH);
+      const w = this.site.world(rules.u, rules.v);
+      this.dog.pose(dt, this.terrain.heightAt(w.x, w.z) ?? this.lift(this.site.level));
+    } else this.dog.group.visible = false;
   }
 
   /** The walls, the deck, the shed, the woodpile and the trunks stop the car. */
@@ -94,7 +112,7 @@ export class DrLaneHouse implements HandBuiltPlace {
   }
 
   private build(): void {
-    for (const child of [...this.local.children]) { this.local.remove(child); (child as THREE.Mesh).geometry?.dispose(); }
+    for (const child of [...this.local.children]) { if (child === this.dog.group) continue; this.local.remove(child); (child as THREE.Mesh).geometry?.dispose(); }
     this.solids = [];
     const m = new Mesher(), y = this.lift(this.site.level), rnd = seeded(273);
     this.house(m, y);
@@ -312,8 +330,7 @@ export class DrLaneHouse implements HandBuiltPlace {
 
   private yard(m: Mesher, rnd: () => number): void {
     // Two pines between the house and the lane, the larger one in front of the shed.
-    this.pine(m, 7.3, 18.8, 11.5, 3.6, 2.6, rnd);
-    this.pine(m, -0.6, 17.2, 7.2, 2.2, 0.7, rnd, true);
+    PINES.forEach(([u, v, height, radius, from], i) => this.pine(m, u, v, height, radius, from, rnd, i === 1));
     // The garden bed: stones along both its edges, then its plants.
     for (let i = 0; i < BED.length; i++) {
       const [au, av] = BED[i], [bu, bv] = BED[(i + 1) % BED.length], len = Math.hypot(bu - au, bv - av);
@@ -343,7 +360,7 @@ export class DrLaneHouse implements HandBuiltPlace {
     this.bush(m, -0.6, 13.6, 0.7, 1.0, BOX, rnd, 2);               // a shrub on the lawn
 
     // The woodpile past the drive: split wood in a long stack, half of it under a green tarp.
-    const wu = -14, wv = 8.8, wy = this.g(wu, wv);
+    const [wu, wv] = WOODPILE, wy = this.g(wu, wv);
     m.at(wu, wy, wv);
     m.box(0, 0.6, 0, 3.8, 1.2, 1.0, WOOD_ENDS);
     for (let i = 0; i < 18; i++) m.box(-1.8 + (i % 9) * 0.4 + 0.2, 0.3 + Math.floor(i / 9) * 0.55, 0.505, 0.3, 0.02, 0.01, shade(WOOD_ENDS, 0.7));
