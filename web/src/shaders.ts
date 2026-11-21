@@ -2,6 +2,16 @@ import { CURVE_GLSL } from './far-rules';
 
 // GLSL for the terrain and the sea. Colours are linear; three.js applies tone mapping and sRGB at the end.
 
+// Shared by the land and the water mask, which read the road field the same way.
+const ROAD_CODE = /* glsl */ `
+// A road sample's flag byte as one road: the rough bit (rough-roads.ts, 128 on gravel and tracks) marks a stretch of the
+// same road, so it must not count as a seam where a stretch starts or ends.
+float roadCode(float b) {
+  float f = floor(b * 255.0 + 0.5), k = mod(f, 16.0);
+  return k > 2.5 && k < 4.5 && f >= 128.0 ? f - 128.0 : f;
+}
+`;
+
 export const LAND_LIGHT = /* glsl */ `
 uniform vec3 sunDir;
 uniform vec3 sunColor;
@@ -705,6 +715,7 @@ float pothole(vec2 p, float density) {
   return (0.05 + 0.09 * r2) * min(1.0, (1.0 - d / radius) * 2.2);
 }
 
+${ROAD_CODE}
 vec3 crownCell(vec2 p, out vec2 off) {
   vec2 g = floor(p), f = fract(p);
   float md = 8.0;
@@ -865,7 +876,8 @@ void main() {
   // A sample with no road counts as far away.
   float sa = qa.b > 0.0 ? (qa.r - roadZero) * 25.5 : 13.0, sb = qb.b > 0.0 ? (qb.r - roadZero) * 25.5 : 13.0;
   float sc = qc.b > 0.0 ? (qc.r - roadZero) * 25.5 : 13.0, sd = qd.b > 0.0 ? (qd.r - roadZero) * 25.5 : 13.0;
-  bool oneRoad = qa.b > 0.0 && qa.b == qb.b && qa.b == qc.b && qa.b == qd.b && qa.g == qb.g && qa.g == qc.g && qa.g == qd.g
+  float ca = roadCode(qa.b), cb = roadCode(qb.b), cc = roadCode(qc.b), cd = roadCode(qd.b);
+  bool oneRoad = qa.b > 0.0 && ca == cb && ca == cc && ca == cd && qa.g == qb.g && qa.g == qc.g && qa.g == qd.g
     && max(max(abs(sa - sb), abs(sa - sc)), max(abs(sd - sb), abs(sd - sc))) < 1.6 * texel + 0.2;
   float rsigned = mix(mix(sa, sb, rw.x), mix(sc, sd, rw.x), rw.y);
   float rdist = oneRoad ? abs(rsigned) : mix(mix(abs(sa), abs(sb), rw.x), mix(abs(sc), abs(sd), rw.x), rw.y);
@@ -1211,6 +1223,7 @@ uniform float seaLevel;
 varying vec2 vUv;
 varying vec3 vWorld;
 varying float vGround;
+${ROAD_CODE}
 void main() {
   float quarter = step(0.5, vUv.x) + 2.0 * step(0.5, vUv.y);
   if ((quarter < 0.5 ? hideQuad.x : quarter < 1.5 ? hideQuad.y : quarter < 2.5 ? hideQuad.z : hideQuad.w) > 0.5) discard;
@@ -1229,7 +1242,8 @@ void main() {
   // A sample with no road counts as far away.
   float sa = qa.b > 0.0 ? (qa.r - roadZero) * 25.5 : 13.0, sb = qb.b > 0.0 ? (qb.r - roadZero) * 25.5 : 13.0;
   float sc = qc.b > 0.0 ? (qc.r - roadZero) * 25.5 : 13.0, sd = qd.b > 0.0 ? (qd.r - roadZero) * 25.5 : 13.0;
-  bool oneRoad = qa.b > 0.0 && qa.b == qb.b && qa.b == qc.b && qa.b == qd.b && qa.g == qb.g && qa.g == qc.g && qa.g == qd.g
+  float ca = roadCode(qa.b), cb = roadCode(qb.b), cc = roadCode(qc.b), cd = roadCode(qd.b);
+  bool oneRoad = qa.b > 0.0 && ca == cb && ca == cc && ca == cd && qa.g == qb.g && qa.g == qc.g && qa.g == qd.g
     && max(max(abs(sa - sb), abs(sa - sc)), max(abs(sd - sb), abs(sd - sc))) < 1.6 * texel + 0.2;
   float rsigned = mix(mix(sa, sb, rw.x), mix(sc, sd, rw.x), rw.y);
   float rdist = oneRoad ? abs(rsigned) : mix(mix(abs(sa), abs(sb), rw.x), mix(abs(sc), abs(sd), rw.x), rw.y);

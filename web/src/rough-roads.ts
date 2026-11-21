@@ -9,8 +9,8 @@
 // rut, or a pond across the lane. Puddles come from a seeded rule, so the same stretch always holds the same water, and
 // the wheels and the picture read the same list (puddles.ts draws them).
 //
-// Survey of the River Denys Road stretches: Dan's dash cams, 21 Nov 2026 (private notes; no footage in git). The worst
-// parts held pothole pools every 4 to 8 m, long water in the ruts, and ponds across the whole lane; he drove them at
+// Survey of the River Denys Road stretches: a survey drive with dash cameras, 21 Nov 2026 (no footage in git). The worst
+// parts held pothole pools every 4 to 8 m, long water in the ruts, and ponds across the whole lane; the survey car drove them at
 // 10 to 19 km/h.
 
 import { POTHOLE_CELL, potholeDensity, potholeIn } from './defects';
@@ -25,7 +25,7 @@ export interface RoughStretch { area: string; road: string; from: Point; to: Poi
 
 // Chainage in the notes is metres along River Denys Road from Highway 19 (game roads 97, 98, 99).
 export const ROUGH_STRETCHES: readonly RoughStretch[] = Object.freeze([
-  // 4.8 to 6.8 km: narrower gravel, potholes, soft mud, small muddy puddles. Dan drove 20 to 35 km/h.
+  // 4.8 to 6.8 km: narrower gravel, potholes, soft mud, small muddy puddles. The survey car drove 20 to 35 km/h.
   { area: 'judique', road: 'River Denys Road', from: [621534.52, 5080698.42], to: [623137.92, 5079717.18], level: 'rough' },
   // 6.8 to 8.3 km: a rutted two-track. Water in the ruts, pothole pools, four ponds across the lane near 7.8 km. 11 to 19 km/h.
   { area: 'judique', road: 'River Denys Road', from: [623137.92, 5079717.18], to: [624572.72, 5079312.0], level: 'severe' },
@@ -244,7 +244,7 @@ export function roughSite(r: ResolvedStretch): Site {
       }
   });
   return {
-    box, maxTexel: 2,
+    box, maxTexel: 2, roadPaint: true,
     // Only tiles that a segment's padded box reaches: a long stretch's box spans many forest tiles with no road.
     affectsTile: (x, z, size) => segs.some(s => s[0] <= x + size && s[2] >= x && s[1] <= z + size && s[3] >= z),
     height: (_x, _z, ground) => ground,

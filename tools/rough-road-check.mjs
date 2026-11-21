@@ -1,7 +1,7 @@
 // Rough stretches and puddles (web/src/rough-roads.ts, puddles.ts): the stretches resolve on the baked roads, the puddle
 // rule is seeded and keeps clear of bridges, junctions and the church start, the road bit is painted only where it
 // belongs, roads that are not rough drive exactly as before, and the real Vehicle at fixed speeds shakes on a rough
-// stretch about as Dan's car did (21 Nov 2026: 0.10-0.16 g at 11-19 km/h; ordinary gravel 0.08-0.12 g at 45-55 km/h).
+// stretch about as the survey car did (21 Nov 2026: 0.10-0.16 g at 11-19 km/h; ordinary gravel 0.08-0.12 g at 45-55 km/h).
 // Run: node tools/run-node-check.mjs tools/rough-road-check.mjs   (the baked-road part SKIPs without data/baked)
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -93,7 +93,7 @@ function shake(kmh, kind, { washboard = false, rough = false, water = false } = 
     vys.push(v.vy);
   }
   setPuddleField(null);
-  // 10 Hz samples, as the Nextbase records: vertical acceleration from the mean vertical speed over each tenth of a second.
+  // 10 Hz samples, as the survey dash camera records: vertical acceleration from the mean vertical speed over each tenth of a second.
   const tenth = []; for (let i = 0; i + 12 <= vys.length; i += 12) tenth.push(vys.slice(i, i + 12).reduce((a, b) => a + b) / 12);
   const acc = tenth.slice(1).map((y, i) => (y - tenth[i]) / 0.1);
   const k = 15, jolt = acc.map((a, i) => { const w = acc.slice(Math.max(0, i - 7), Math.min(acc.length, i + 8)); return a - w.reduce((p, q) => p + q) / w.length; });

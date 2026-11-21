@@ -174,10 +174,17 @@ export interface Site {
   groundHeight?(x:number,z:number):number|null;
   /** Driving metadata is applied only when this same deck passes the body-height gate. */
   deckDriving?: {kind:number;halfWidth:number} | ((x:number,z:number) => {kind:number;halfWidth:number});
+  /** The site only repaints flags on roads that already exist. Its box is not a clearing, so lots, props and animals may use it. */
+  roadPaint?: boolean;
   /** True water elevation for a mapped inland pool; null outside its polygon. */
   waterLevel?(x:number,z:number):number|null;
   /** Optional exact deck on top of the land. The callback samples land only, without any decks. */
   deckHeight?(x: number, z: number, ground: (x: number, z: number) => number | null, ceiling?: number): number | null;
+}
+
+/** Site boxes that placement must avoid. Sites that only repaint existing roads are left out. */
+export function placeBoxes(sites: readonly Site[]): Site['box'][] {
+  return sites.filter(s => !s.roadPaint).map(s => s.box);
 }
 
 /** Apply a runtime field sample. Kind 11 only paints; it cannot change a mapped road's driving samples. */
@@ -187,7 +194,9 @@ export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:SiteSurface,z
   const flags=road[k+2];
   if (f.rough) {
     const kind = flags & 15;
-    if ((kind === 3 || kind === 4) && (flags & 192) === 0 && Math.abs(road[k] - zero) * dScale < road[k + 1] * wScale + 1.2) road[k + 2] = flags | ROUGH_BIT;
+    const baked = Math.abs(road[k] - zero) * dScale;
+    // The baked distance must match the stretch's own, so a nearby gravel road or lane keeps its plain surface.
+    if ((kind === 3 || kind === 4) && (flags & 192) === 0 && baked < road[k + 1] * wScale + 1.2 && Math.abs(baked - f.dist) < 1) road[k + 2] = flags | ROUGH_BIT;
     return;
   }
   if (f.paveGravel) {

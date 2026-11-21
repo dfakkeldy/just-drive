@@ -116,7 +116,7 @@ import { readLightStudy, studyScale, studyLightingElevation, lightStudyUI, readD
 import { chooseYardLights, nightPalette } from './night-rules';
 import { Night, NightShading } from './night';
 import { HarbourLights } from './harbour-lights';
-import { Terrain, type Manifest } from './terrain';
+import { Terrain, placeBoxes, type Manifest } from './terrain';
 import { createTitle } from './title';
 import { Endings } from './ending';
 import { YardJob } from './yard-job';
@@ -693,7 +693,7 @@ async function loadFarViews(): Promise<void> {
 const yardDogSite = ERA.modern && AREA.yardDog && buildingList && props ? YardDogSite.create({
   roads: roads.roads, village: manifest.village, mail: [...props.mail,...props.sites],
   houses: properties.filter(b=>b.kind==='house').map(b=>({x:b.x-manifest.village[0],z:manifest.village[1]-b.y})),
-  excluded: [...terrain.sites.map(s=>s.box), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
+  excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
 }) : null;
 if (yardDogSite) { clear.push(...yardDogSite.clear); terrain.sites.push(yardDogSite); }
 // Lot props at houses: parked cars, SUVs and pickups, now and then a trailer, a motorhome or a ride-on mower, and a few
@@ -708,7 +708,7 @@ const lotPropList = ERA.modern && buildingList && params.get('lotprops') !== '0'
   // elsewhere, never a reason to choose a house.
   obstacles: props ? [...props.poleSites, ...props.mail, ...props.sites].map(p => [p.x, p.z] as [number, number]) : [],
   // A hand-built place that is not a terrain site keeps props off through its clear boxes (village, hawkesbury, mabouMain).
-  excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
+  excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []), ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
 }) : [];
 // No single tree stands in a parked car; the canopy is left as it is.
 // Kept apart: these only clear trees. Mail play's breakable yard props must not give way to them (they give way to those).
@@ -744,7 +744,7 @@ const night = nightShading ? new Night(nightShading, {
   streets: props?.poleSites.filter(p => p.light) ?? [],
   yards: props ? chooseYardLights(props.poleSites, {
     protectedPlaces: [...properties.map(b => ({ x: b.x - VE, z: VN - b.y })), ...props.mail, ...props.sites],
-    excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : [])], village: { x: 0, z: 0 },
+    excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : [])], village: { x: 0, z: 0 },
   }) : [],
   village: { x: 0, z: 0 }, when, lat, lon,
 }) : null;
@@ -1041,7 +1041,7 @@ if (shift instanceof Shift) {
       publicRoad: near(k => k >= 1 && k <= 3), anyRoad: near(() => true), place: shift.placeAt,
       // Hand-built sites and landmarks stay clear; ordinary buildings are kept clear by the oriented rule instead
       // (their own clear boxes would push most yard props out of the yards).
-      excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []),
+      excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []),
         ...clear.filter((b: number[]) => !houseBoxes.has(b) && !lotTreeClear.has(b)).map((b: number[]): [number, number, number, number] => [b[0], b[1], b[2], b[3]])],
     });
     yardProps = new YardProps(yardList, terrain, LOW || touchDevice);

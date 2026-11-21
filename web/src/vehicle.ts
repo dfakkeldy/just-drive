@@ -374,7 +374,7 @@ export class Vehicle {
     // A drift has its own step (driftStep); every other step is the ordinary grip model below, unchanged.
     let slid = false;
     if (this.airborne) { this.drift.airborne(this.x, this.z); this.drift.watch(input, dt); }   // the flick's clocks run in the air too
-    else if (this.driftStep(dt, input, surf, slopeF, deepest, vf, vl, touchLimit)) { slid = true; vf = this.slideSpeed.forward; vl = this.slideSpeed.right; }
+    else if (this.driftStep(dt, input, surf, slopeF, deepest, vf, vl, touchLimit, wet)) { slid = true; vf = this.slideSpeed.forward; vl = this.slideSpeed.right; }
     if (!this.airborne && !slid) {
       // On washboard the tyres skip from ridge to ridge: the faster the car, the less they hold.
       const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
@@ -536,7 +536,7 @@ export class Vehicle {
    * The body keeps one speed along its path; the rules turn the path and set the slide angle between path and heading.
    * No driving help acts here: the light and the strong help would pull the nose back to the road and fight the slide.
    */
-  private driftStep(dt: number, input: Input, surf: (typeof SURFACES)[keyof typeof SURFACES], slopeF: number, deepest: number, vf: number, vl: number, touchLimit: number): boolean {
+  private driftStep(dt: number, input: Input, surf: (typeof SURFACES)[keyof typeof SURFACES], slopeF: number, deepest: number, vf: number, vl: number, touchLimit: number, wet = 0): boolean {
     const spec = this.spec.drift, d = this.drift;
     if (!spec || !this.canDrift || this.spec.locomotion === 'horse') return false;
     d.watch(input, dt);
@@ -578,7 +578,7 @@ export class Vehicle {
     a -= G * Math.sin(slopeF);
     const measured = slideAngle(vf, vl), m = d.step(spec, input, g, measured, dt);
     const aero = this.towLoad && this.spec.mass ? this.spec.aeroDrag * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag;
-    const drag = surf.roll * G + aero * v * v + (surf === SURFACES.brush ? .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + m.scrub;
+    const drag = surf.roll * G + aero * v * v + (surf === SURFACES.brush ? .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + m.scrub + wet * PUDDLE_DRAG * v;
     v = Math.max(0, v + (a - drag) * dt);
     // The path turns; the nose leads it by the new slide angle.
     this.heading = this.heading - measured + m.pathRate * dt + m.angle;

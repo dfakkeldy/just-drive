@@ -12,15 +12,12 @@
 // LOW detail drops the upper voice and the rasp: two sources and two filters in all.
 // The context is suspended (no CPU, no sound) while the page is hidden, off the road, indoors or at an ending.
 
-import { ENGINES, OUTPUT_TRIM, RADIO_DUCK, UPPER, engineKind, engineState, engineWave, tyreState, voicePulses, type EngineKind } from './engine-sound-rules';
+import { ENGINES, OUTPUT_TRIM, RADIO_DUCK, SPLASH_DUCK, SPLASH_GAIN, UPPER, engineKind, engineState, engineWave, tyreState, voicePulses, type EngineKind } from './engine-sound-rules';
 
 const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
 const KEY = 'mmm.engine.vol';
 const GLIDE = .06;        // seconds: how quickly the voice follows a new engine speed
 const QUIET_AFTER = .4;   // seconds of silence before the context is suspended
-// The water at a full splash, before the master volume. A splash comes on a rough stretch (a dirt track's tyres, never
-// washboard's), so the sum stays inside engine-sound-rules.ts OUTPUT_TRIM's headroom.
-const SPLASH_GAIN = .5;
 
 export interface DrivingMoment {
   /** Garage id of the vehicle driven now (car, truck, sxs, bike, horse). */
@@ -192,8 +189,8 @@ export class EngineSound {
     // The pulse gain swings between 1 - depth and 1 (its base 1 - depth/2, the square LFO adds +-depth/2).
     g.pulse.gain.setTargetAtTime(1 - ty.depth / 2, t, .08);
     g.lfoDepth.gain.setTargetAtTime(ty.depth / 2, t, .08);
-    g.tyre.gain.setTargetAtTime(ty.gain, t, .08);
-    const wash = Math.min(1, Math.max(0, moment.splash ?? 0)) * SPLASH_GAIN;
+    const splash = Math.min(1, Math.max(0, moment.splash ?? 0)), wash = splash * SPLASH_GAIN;
+    g.tyre.gain.setTargetAtTime(ty.gain * (1 - SPLASH_DUCK * splash), t, .08);
     g.splash.gain.setTargetAtTime(wash, t, wash > this.last.splash ? .015 : .2);
     this.last.splash = wash;
     g.master.gain.setTargetAtTime(this.volume * OUTPUT_TRIM * (moment.radio ? RADIO_DUCK : 1), t, .08);
