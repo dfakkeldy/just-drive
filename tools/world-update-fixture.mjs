@@ -258,6 +258,32 @@ export function verify(source, { drive = expectedDrive, ending = expectedEnding 
   }
   return { drive: drive().filter(x => !x.quiet).map(x => x.name), ending: ending().filter(x => !x.quiet).map(x => x.name), iteratorsPerFrame: 0, iteratorStepsPerFrame: 0 };
 }
+// The places rows at boot and in the frame (grok-bots#1308 C52). verify() does not run the boot's build loop: its
+// spies stand in for what the loop built. This lifts the real loop and the porch slot's waiting test.
+export async function verifyPlaces(source) {
+  // The porch slot waits for the dog too: a loading dog keeps the page from settling, as the porch does.
+  const ready = (porchWaiting, dog) => spy(source, false, true, false, context => {
+    context.porch.waiting = porchWaiting; context.porchDog.state = dog;
+  }).args['page.ready'][0][0];
+  assert.equal(ready(false, 'here'), true, 'porch and dog done: the page settles');
+  assert.equal(ready(true, 'here'), false, 'porch still building: the page waits');
+  assert.equal(ready(false, 'loading'), false, 'porch dog still loading: the page waits');
+  // The build loop: a row without a site builds nothing and imports nothing; a row without load() adds no wait.
+  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
+  const loops = ast.statements.filter(n => ts.isForOfStatement(n) && /\bplaceRows\b/.test(n.expression.getText(ast)));
+  assert.equal(loops.length, 1, 'one boot loop over the places rows');
+  const code = transformSync(loops[0].getText(ast), { loader: 'ts', target: 'es2022' }).code;
+  const log = [], row = (name, site, lazy) => ({ site,
+    build: (at, part) => { log.push(`build ${name} ${at === site} ${part}`); return { name }; },
+    ...(lazy ? { load: () => { log.push('load ' + name); return Promise.resolve('part-' + name); } } : {}) });
+  const context = { builtPlaces: {}, placeRows: { first: row('first', {}), offLazy: row('offLazy', null, true), off: row('off', null),
+    lazy: row('lazy', {}, true), after: row('after', {}) } };
+  const done = new Function('context', `return (async () => { with (context) { ${code} } })();`)(context);
+  assert.deepEqual(log, ['build first true undefined', 'load lazy'], 'before any wait: the rows up to the first lazy one with a site');
+  await done;
+  assert.deepEqual(log, ['build first true undefined', 'load lazy', 'build lazy true part-lazy', 'build after true undefined'], 'places build loop order');
+  assert.deepEqual(context.builtPlaces, { first: { name: 'first' }, offLazy: null, off: null, lazy: { name: 'lazy' }, after: { name: 'after' } }, 'built places');
+}
 function hotLoop(source) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const fn = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'updateWorld');
@@ -344,6 +370,8 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   if (mutation !== -1) verify(mutated(current(), process.argv[mutation + 1]));
   console.log(JSON.stringify(verify(current())));
   console.log('PASS ongoing frame regression (no historical comparison)');
+  await verifyPlaces(current());
+  console.log('PASS places rows: porch dog waiting, boot build loop');
   {
     const scheduled=[];let loads=0;
     const actual=spy(current(),false,true,false,{farKey:{file:'far-land.json'},farLoading:false,setTimeout:fn=>{scheduled.push(fn);return 1;},loadFarViews:()=>{loads++;return Promise.resolve();}},frame=>{frame(1050);frame(1067);});
