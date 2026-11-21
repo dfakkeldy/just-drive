@@ -2009,7 +2009,7 @@ function frame(now: number) {
       else if (waitingToDrive) {
         const { x, z, heading } = vehicle;
         driveVehicle(dt, { ...input, throttle: 0, handbrake: true });
-        vehicle.place(x, z, heading);
+        if (vehicle.place(x, z, heading)) vehicle.speed = 0;
       } else driveVehicle(dt, relief.busy ? { throttle: 0, steer: 0, handbrake: true } : input);
       if ((loaded || lawnDemo?.driving) && !animals?.waitingForTerrain) drove += dt;
     }
