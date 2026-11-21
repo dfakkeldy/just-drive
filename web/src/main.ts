@@ -643,7 +643,8 @@ const lotPropList = ERA.modern && buildingList && params.get('lotprops') !== '0'
   // Drawn things a prop must not stand in: power poles, mailboxes and community boxes. Only ever a reason to stand
   // elsewhere, never a reason to choose a house.
   obstacles: props ? [...props.poleSites, ...props.mail, ...props.sites].map(p => [p.x, p.z] as [number, number]) : [],
-  excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...[villageSite, hawkesburySite, mabouSite].flatMap(s => s?.clear ?? [])],
+  // A hand-built place that is not a terrain site keeps props off through its clear boxes (village, hawkesbury, mabouMain).
+  excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
 }) : [];
 // No single tree stands in a parked car; the canopy is left as it is.
 // Kept apart: these only clear trees. Mail play's breakable yard props must not give way to them (they give way to those).
@@ -708,7 +709,7 @@ const places: Record<keyof typeof placeSites, { place: HandBuiltPlace | null; de
   village: { dev: village, place: village },
   hawkesbury: { dev: hawkesbury, place: hawkesbury },
   mabouMain: { dev: mabouMain, place: mabouMain },
-  maryville: { dev: null, place: maryville },
+  maryville: { dev: maryville, place: maryville },
 };
 const handBuilt = Object.values(places);
 for (const { place } of handBuilt) if (place) scene.add(place.group);
@@ -766,9 +767,14 @@ const siteContacts: [string, ContactSite | null][] = [
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
 ];
+// A place without a row would compile and boot, and the car would drive through it. Stop at boot instead.
+for (const name of Object.keys(places)) if (!siteContacts.some(([row]) => row === name)) throw new Error(`hand-built place '${name}' has no contact row`);
 for (const [, row] of siteContacts) if (row) fleetContacts.add(row);
-// Solo driving (no fleet, no quarry) keeps its own order of the same rows (#57): tall moves after every other site,
-// and the park after tall. A new site row lands in both lists.
+// Solo driving (no fleet, no quarry) keeps its own order of the same rows: tall moves after every other site,
+// and the park after tall. This is kept history, not a known overlap rule. The old hand-written solo resolver got tall
+// at its end with the turbines (#9), and the park after it when Kicker Field opened (#57), so ordinary rides kept their
+// exact poses. No known overlap depends on this order; the works yard and Kicker Field are the one pair where it could.
+// A new site row lands in both lists, with the same neighbours; only its place next to tall and the park differs.
 const soloContacts = new AreaContacts();
 for (const [, row] of [...siteContacts.filter(([name]) => name !== 'tall'), ...siteContacts.filter(([name]) => name === 'tall')]) if (row) soloContacts.add(row);
 if (parkContacts) soloContacts.add(parkContacts);
@@ -1647,8 +1653,7 @@ if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
 if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
 if (import.meta.env.DEV) expose({ lotProps }, false);   // for tools/lot-props-browser.mjs; not enumerable: ui-check pins the public key set
-if (import.meta.env.DEV && maryville) expose({ maryville }, false);
-if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).filter(([name]) => name !== 'maryville').map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
+if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
   const report = document.getElementById('shiftReport'), footer = report?.querySelector('.reportFooter');
