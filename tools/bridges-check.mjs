@@ -85,8 +85,20 @@ async function contracts(replacements={}){
  walk.x+=149;assert.equal(step(walk),16,'one step shorter than 150 m keeps an ended hold ended');
  const far=walk.clone().add(new THREE.Vector3(-31,0,-200));
  assert.equal(step(far),16,'a jump of more than 150 m starts a new hold where the camera lands');
- land.dataRevision++;assert.notEqual(held.deckHeight(0,-20),null);assert.equal(deck.audit.builds,17,'a deck query still builds at once during a burst');
- const span=deck.spans[0];span.forceBuild=true;span.revision=-1;held.update(far);assert.equal(deck.audit.builds,18,'a forced build does not wait for the burst');
+ // The jump moved the hold's anchor to where the camera landed: 29 m from there still holds, 31 m from there builds.
+ const landed=far.clone();
+ assert.equal(step(landed.clone().add(new THREE.Vector3(29,0,0))),16,'a jump re-anchors the hold: 29 m from where it landed keeps the hold');
+ const off=landed.clone().add(new THREE.Vector3(31,0,0));
+ assert.equal(step(off),17,'a jump re-anchors the hold: 31 m from where it landed ends it');
+ // From an ended hold, one step of 149 m is not a jump and one of 151 m is: HOLD_JUMP is 150 m from the last camera
+ // position, counted on both axes (each axis of this diagonal step is under 150 m).
+ const short=off.clone().add(new THREE.Vector3(0,0,149));
+ assert.equal(step(short),18,'one step of 149 m keeps an ended hold ended');
+ const diagonal=short.clone().add(new THREE.Vector3(106.8,0,106.8));
+ assert.ok(Math.abs(diagonal.distanceTo(short)-151.04)<.01);
+ assert.equal(step(diagonal),18,'one diagonal step of 151 m starts a new hold');
+ land.dataRevision++;assert.notEqual(held.deckHeight(0,-20),null);assert.equal(deck.audit.builds,19,'a deck query still builds at once during a burst');
+ const span=deck.spans[0];span.forceBuild=true;span.revision=-1;held.update(diagonal);assert.equal(deck.audit.builds,20,'a forced build does not wait for the burst');
  // Node tools and stubs that never set holdBackground see no hold.
  const bareLand={...terrain,dataRevision:1,burst:true},bare=new mod.Roads({roads:[road(9,0,20)]},[0,0],bareLand);
  bare.update(camera);bareLand.dataRevision++;bare.update(camera);
@@ -184,6 +196,10 @@ if(process.argv.includes('--mutations')){
   ['a jump is measured from where the hold began','cam.distanceTo(this.holdLast)>HOLD_JUMP','cam.distanceTo(this.holdAt)>HOLD_JUMP',/steps of 20 m keep an ended hold ended/],
   ['the last camera position moves only on a jump','this.holdLast=(this.holdLast??new THREE.Vector3()).copy(cam);\n    if(jump){','if(jump){this.holdLast=(this.holdLast??new THREE.Vector3()).copy(cam);',/steps of 20 m keep an ended hold ended/],
   ['a jump is a step of more than 40 m','HOLD_REACH = 30, HOLD_JUMP = 150;','HOLD_REACH = 30, HOLD_JUMP = 40;',/one step shorter than 150 m/],
+  ['a jump keeps the old anchor','if(jump){this.holdAt=(this.holdAt??new THREE.Vector3()).copy(cam);','if(jump){if(!this.holdAt)this.holdAt=new THREE.Vector3().copy(cam);',/29 m from where it landed keeps the hold/],
+  ['a jump is a step of more than 160 m','HOLD_REACH = 30, HOLD_JUMP = 150;','HOLD_REACH = 30, HOLD_JUMP = 160;',/diagonal step of 151 m starts a new hold/],
+  ['a jump is a step of more than 200 m','HOLD_REACH = 30, HOLD_JUMP = 150;','HOLD_REACH = 30, HOLD_JUMP = 200;',/diagonal step of 151 m starts a new hold/],
+  ['a jump counts one axis only','cam.distanceTo(this.holdLast)>HOLD_JUMP','Math.abs(cam.z-this.holdLast.z)>HOLD_JUMP',/diagonal step of 151 m starts a new hold/],
   ['a forced build waits for the burst','&&!r.forceBuild)continue;',')continue;',/forced build/],
   ['a deck query waits for the burst','if(build)this.ensure(r);','if(build&&!this.terrain.burst)this.ensure(r);',/query still builds/],
  ]){
