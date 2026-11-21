@@ -319,6 +319,7 @@ if(family==='all'||family==='phone'){
     const shortFaults=boxes=>{
      const issues=[];
      const notice=boxes.find(x=>x[0]==='savePictureStatus');
+     if(notice&&(notice[3]-notice[1]<36))issues.push('savePictureStatus narrower than 36px');
      if(notice&&(notice[1]<insets.left-1||notice[2]<insets.top-1||notice[3]>sw-insets.right+1||notice[4]>sh-insets.bottom+1))issues.push('savePictureStatus outside safe area');
      for(let i=0;i<boxes.length;i++){
       const [a,x,y,r,b]=boxes[i];
@@ -337,6 +338,28 @@ if(family==='all'||family==='phone'){
      const b=await readBoxes([...flightIds,'miniMap','savePictureStatus']), f=shortFaults(b);
      if(f.length)console.log(`Flight ${tag} faults`,text,f.join(','));
      check(flightIds.every(id=>b.some(x=>x[0]===id))&&b.some(x=>x[0]==='miniMap')&&b.some(x=>x[0]==='savePictureStatus')&&f.length===0,`${tag} flight controls and save notice (${text}) fit without overlap`);
+    }
+    if(sw===390&&sh===310){
+     await p.read(`document.getElementById('savePictureStatus').textContent='';document.getElementById('savePictureStatus').textContent='Picture saved'`);
+     await sleep(50);
+     await p.read(`document.getElementById('miniMapHead').click()`);
+     await sleep(100);
+     check(await p.read(`document.getElementById('miniMap').classList.contains('enlarged')`),'phone 390x310 folded map enlarges while save notice is visible');
+     const enlarged=await readBoxes([...flightIds,'miniMap','savePictureStatus']);
+     const enlargedNotice=enlarged.find(x=>x[0]==='savePictureStatus');
+     const enlargedFaults=enlargedNotice?[
+      ...(enlargedNotice[3]-enlargedNotice[1]<36?['savePictureStatus narrower than 36px']:[]),
+      ...(enlargedNotice[1]<0||enlargedNotice[2]<0||enlargedNotice[3]>391||enlargedNotice[4]>311?['savePictureStatus offscreen']:[]),
+      ...enlarged.filter(x=>x[0]!=='savePictureStatus').flatMap(([c,xx,yy,rr,bb])=>{
+       const pad=(c.startsWith('droneLeft')||c.startsWith('droneRight'))?8:0, eps=pad?0.5:1;
+       return Math.min(enlargedNotice[3]+pad,rr)-Math.max(enlargedNotice[1]-pad,xx)>eps&&Math.min(enlargedNotice[4]+pad,bb)-Math.max(enlargedNotice[2]-pad,yy)>eps?[`savePictureStatus${pad?' within 8px of ':' overlaps '}${c}`]:[];
+      }),
+     ]:['savePictureStatus missing'];
+     if(enlargedFaults.length)console.log('Flight 390x310 enlarged faults',enlargedFaults.join(','));
+     check(!!enlargedNotice&&enlarged.some(x=>x[0]==='miniMap')&&enlargedFaults.length===0,'phone 390x310 enlarged map moves active save notice clear of map and controls');
+     await p.read(`document.getElementById('miniMapHead').click()`);
+     await sleep(100);
+     check(await p.read(`!document.getElementById('miniMap').classList.contains('enlarged')`),'phone 390x310 enlarged map closes');
     }
    }
    const clearInset=await p.send('Emulation.setSafeAreaInsetsOverride',{insets:{top:0,right:0,bottom:0,left:0}});

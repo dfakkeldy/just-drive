@@ -118,7 +118,7 @@ export function watchPictureStatus(status: HTMLElement): void {
   const probe = Object.assign(document.createElement('span'), { ariaHidden: 'true' });
   probe.style.cssText = 'position:fixed;inset:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);pointer-events:none;visibility:hidden';
   document.body.append(probe);
-  const props = ['left', 'right', 'top', 'bottom', 'transform', 'maxWidth', 'whiteSpace', 'fontSize', 'padding', 'boxSizing', 'textAlign'] as const;
+  const props = ['left', 'right', 'top', 'bottom', 'transform', 'maxWidth', 'whiteSpace', 'fontSize', 'lineHeight', 'padding', 'boxSizing', 'textAlign'] as const;
   const reset = () => { for (const p of props) status.style[p] = ''; };
   const box = (sel: string): DOMRect | null => {
     const e = document.querySelector<HTMLElement>(sel);
@@ -144,8 +144,9 @@ export function watchPictureStatus(status: HTMLElement): void {
     };
     if (fits()) return;
     const leftStick = box('#droneLeft'), rightStick = box('#droneRight'), ret = box('#droneReturn');
-    const saveBtn = box('#savePictureButton'), pauseBtn = box('#pauseButton');
+    const saveBtn = box('#savePictureButton'), pauseBtn = box('#pauseButton'), mapRect = box('#miniMap'), hudRect = box('#hud');
     const compact = { boxSizing: 'border-box', padding: '4px', fontSize: '9px', whiteSpace: 'normal', textAlign: 'center' };
+    const tight = { ...compact, padding: '2px 4px', lineHeight: '10px' };
     const tries: Partial<CSSStyleDeclaration>[] = [];
     if (leftStick && rightStick && rightStick.left - leftStick.right - 16 >= 48) {
       tries.push({ ...compact, left: `${(leftStick.right + rightStick.left) / 2}px`, right: 'auto', top: 'auto', bottom: `${innerHeight - safe.bottom + 14}px`, transform: 'translateX(-50%)', maxWidth: `${Math.min(84, rightStick.left - leftStick.right - 16)}px` });
@@ -157,6 +158,11 @@ export function watchPictureStatus(status: HTMLElement): void {
     if (saveBtn) {
       const mw = Math.min(84, Math.max(48, ret && ret.right < saveBtn.right ? saveBtn.right - ret.right - 8 : 56));
       tries.push({ ...compact, left: 'auto', right: `${innerWidth - saveBtn.right}px`, top: `${saveBtn.bottom + 6}px`, bottom: 'auto', transform: 'none', maxWidth: `${mw}px` });
+      const tightW = Math.min(56, Math.max(46, mapRect && mapRect.right < saveBtn.right ? saveBtn.right - mapRect.right - 8 : 56));
+      tries.push({ ...tight, left: 'auto', right: `${innerWidth - saveBtn.right}px`, top: `${saveBtn.bottom + 4}px`, bottom: 'auto', transform: 'none', maxWidth: `${tightW}px` });
+    }
+    if (mapRect && hudRect && mapRect.left - safe.left - 8 >= 46) {
+      tries.push({ ...tight, left: `${safe.left + 4}px`, right: 'auto', top: `${hudRect.bottom + 4}px`, bottom: 'auto', transform: 'none', maxWidth: `${Math.min(84, mapRect.left - safe.left - 8)}px` });
     }
     if (pauseBtn) {
       tries.push({ ...compact, left: 'auto', right: `${innerWidth - pauseBtn.right}px`, top: `${pauseBtn.bottom + 6}px`, bottom: 'auto', transform: 'none', maxWidth: `${Math.min(140, pauseBtn.right - safe.left - 8)}px` });
@@ -164,9 +170,19 @@ export function watchPictureStatus(status: HTMLElement): void {
     for (const style of tries) { reset(); Object.assign(status.style, style); if (fits()) return; }
     reset();
   };
+  let watchedMap: HTMLElement | null = null;
+  const mapMut = typeof MutationObserver === 'function' ? new MutationObserver(place) : null;
+  const mapResize = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
+  const attachMap = () => {
+    const map = document.getElementById('miniMap');
+    if (map === watchedMap) return;
+    mapMut?.disconnect(); mapResize?.disconnect(); watchedMap = map;
+    if (map) { mapMut?.observe(map, { attributes: true, attributeFilter: ['class', 'style'] }); mapResize?.observe(map); }
+  };
+  attachMap();
   if (typeof MutationObserver === 'function') {
     new MutationObserver(place).observe(status, { childList: true, characterData: true, subtree: true });
-    new MutationObserver(place).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(() => { attachMap(); place(); }).observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true });
   }
   addEventListener('resize', place);
 }
