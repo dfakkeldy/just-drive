@@ -26,10 +26,11 @@ class Element {
   attributes={};setAttribute(k,v){this.attributes[k]=v;} getAttribute(k){return this.attributes[k];} addEventListener(k,v){this.listeners[k]=v;} getContext(){return context;}
   getBoundingClientRect(){this.reads++;return this.rect;} getClientRects(){return this.hidden?[]:[this.rect];}
 }
-const windowListeners=new Map();
+const windowListeners=new Map(),resizeObservers=[];
 const resize=()=>{for(const listener of windowListeners.get('resize')??[])listener();};
+const notifyResize=target=>{for(const ob of resizeObservers)if(ob.targets.has(target))ob.cb();};
 const body=new Element(),head=new Element(),settings=new Element(),header=new Element('header');settings.id='settings';header.id='settingsHeader';settings.append(header);body.append(settings);
-Object.assign(globalThis,{document:{body,head,hidden:false,addEventListener(){},createElement:t=>new Element(t),createComment:()=>new Element('comment'),createTextNode:t=>Object.assign(new Element('text'),{textContent:t}),getElementById:id=>body.querySelector('#'+id)??head.querySelector('#'+id)},innerWidth:1440,innerHeight:900,devicePixelRatio:1,localStorage:{getItem:()=> 'folded',setItem(){}},addEventListener(type,listener){if(!windowListeners.has(type))windowListeners.set(type,new Set());windowListeners.get(type).add(listener);},removeEventListener(type,listener){windowListeners.get(type)?.delete(listener);},getComputedStyle:()=>({getPropertyValue:()=>'',overflowX:'visible',overflowY:'visible'})});
+Object.assign(globalThis,{document:{body,head,hidden:false,addEventListener(){},createElement:t=>new Element(t),createComment:()=>new Element('comment'),createTextNode:t=>Object.assign(new Element('text'),{textContent:t}),getElementById:id=>body.querySelector('#'+id)??head.querySelector('#'+id)},innerWidth:1440,innerHeight:900,devicePixelRatio:1,localStorage:{getItem:()=> 'folded',setItem(){}},matchMedia:query=>({matches:query==='(orientation: landscape) and (max-height: 450px)'?innerWidth>innerHeight&&innerHeight<=450:false}),ResizeObserver:class{targets=new Set();constructor(cb){this.cb=cb;resizeObservers.push(this);}observe(t){this.targets.add(t);}disconnect(){this.targets.clear();}},addEventListener(type,listener){if(!windowListeners.has(type))windowListeners.set(type,new Set());windowListeners.get(type).add(listener);},removeEventListener(type,listener){windowListeners.get(type)?.delete(listener);},getComputedStyle:()=>({getPropertyValue:()=>'',overflowX:'visible',overflowY:'visible'})});
 for(const touch of [false,true]){
  const cards=['gamePanel','racePanel','mpSocial'].map(id=>Object.assign(new Element('details'),{id}));
  for(const card of cards)mountRoomCard(card,touch);
@@ -185,41 +186,59 @@ assert.equal(root.classList.contains('folded'),true);map.setFlight(true);assert.
 assert.equal(document.getElementById('miniMapCanvas').style.width,'156px','flight uses the shared readout column');
 assert.equal(body.style['--droneCol'],'158px');
 assert.equal(body.classList.contains('droneStack'),false);
-assert.equal(body.classList.contains('droneMapTight'),false);
-// Narrow landscape fits both columns cleanly left of Pause and above the flight controls (including stick labels).
+// Narrow landscape, square, tight, and dynamic flight-HUD resize cases clear Pause and flight controls.
 {
+ const mapHeadBtn=document.getElementById('miniMapHead');
+ assert.ok(head.children.some(n=>n.textContent?.includes('#miniMap.folded #miniMapCanvas{display:none}')),'folded map CSS hides the canvas');
  const pause=Object.assign(new Element(),{id:'pauseButton',rect:{left:308,right:364,top:10,bottom:66,width:56,height:56}});
  const hud=Object.assign(new Element(),{id:'hud',rect:{left:10,right:122,top:10,bottom:90,width:112,height:80}});
  body.append(pause,hud);
- const assertClear=(w,h,pauseLeft)=>{
+ map.setFlight(false);map.setFlight(true);
+ const assertClear=(w,h,pauseLeft,doResize=true)=>{
   pause.rect={left:pauseLeft,right:pauseLeft+56,top:10,bottom:66,width:56,height:56};
-  innerWidth=w;innerHeight=h;resize();
-  const col=parseFloat(body.style['--droneCol']),stacked=body.classList.contains('droneStack'),tight=body.classList.contains('droneMapTight');
-  const isStacked=stacked||!(w>=h&&h<=450);
+  innerWidth=w;innerHeight=h;if(doResize)resize();
+  const col=parseFloat(body.style['--droneCol']),stacked=body.classList.contains('droneStack'),folded=root.classList.contains('folded');
+  assert.equal(mapHeadBtn.getAttribute('aria-expanded'),String(!folded),`${w}x${h}: aria-expanded matches actual canvas visibility`);
+  // Mirror CSS Media Queries Level 4: orientation:landscape is strictly width > height.
+  const isStacked=stacked||!(w>h&&h<=450);
   const mapL=isStacked?10:10+col+8,mapR=mapL+col,mapT=isStacked?20+hud.rect.height:10;
-  const mapB=mapT+28+(tight?0:parseFloat(document.getElementById('miniMapCanvas').style.width));
+  const mapB=mapT+28+(folded?0:parseFloat(document.getElementById('miniMapCanvas').style.width));
   assert.ok(mapR<=pauseLeft-8,`${w}x${h}: map clears Pause (right=${mapR}, pause=${pauseLeft})`);
   const stick=Math.min(132,w*.34,h*.42),labelTop=h-14-stick-18;
   const retL=(w-112)/2,retR=(w+112)/2,retTop=w<=420?h-14-stick-24-56:h-14-56;
   if(mapL<Math.max(14+stick,14+stick/2+54)&&mapR>Math.min(14,14+stick/2-54))assert.ok(mapB<=labelTop-8,`${w}x${h}: map clears left stick label (bottom=${mapB}, labelTop=${labelTop})`);
   if(mapL<Math.max(w-14,w-14-stick/2+54)&&mapR>Math.min(w-14-stick,w-14-stick/2-54))assert.ok(mapB<=labelTop-8,`${w}x${h}: map clears right stick label (bottom=${mapB}, labelTop=${labelTop})`);
   if(mapL<retR&&mapR>retL)assert.ok(mapB<=retTop-8,`${w}x${h}: map clears Return button (bottom=${mapB}, returnTop=${retTop})`);
-  return {col,stacked,tight,mapL,mapR,mapT,mapB};
+  return {col,stacked,folded,mapL,mapR,mapT,mapB};
  };
  const narrow=assertClear(440,320,308);
  assert.equal(narrow.stacked,false,'440x320 keeps side-by-side drone columns');
- assert.equal(narrow.tight,false,'440x320 keeps an open map');
+ assert.equal(narrow.folded,false,'440x320 keeps an open map');
+ const square=assertClear(390,390,250);
+ assert.equal(square.stacked,false,'390x390 square follows CSS portrait stacking without droneStack');
  const cramped=assertClear(360,320,210);
- assert.equal(cramped.tight,true,'360x320 folds the canvas rather than overlapping the left stick');
+ assert.equal(cramped.folded,true,'360x320 folds the canvas rather than overlapping the left stick');
+ mapHeadBtn.listeners.click();
+ assert.equal(root.classList.contains('enlarged'),true,'tapping compact flight map header opens enlarged view');
+ assert.equal(root.classList.contains('folded'),false,'enlarged view reveals the canvas');
+ assert.equal(mapHeadBtn.getAttribute('aria-expanded'),'true');
+ mapHeadBtn.listeners.click();
+ assert.equal(root.classList.contains('enlarged'),false,'second tap closes enlarged view');
+ assert.equal(root.classList.contains('folded'),true,'closing enlarged view returns to compact header');
+ assert.equal(mapHeadBtn.getAttribute('aria-expanded'),'false');
  const landscapeStacked=assertClear(400,390,170);
  assert.equal(landscapeStacked.stacked,true,'400x390 landscape stacks when two columns are too narrow');
- assert.equal(landscapeStacked.tight,false,'400x390 fits an open stacked map above the sticks');
- const portraitTight=assertClear(360,440,220);
- assert.equal(portraitTight.stacked,false,'portrait stacks via media default without droneStack');
- assert.equal(portraitTight.tight,false,'360x440 portrait fits an open map above the sticks');
+ assert.equal(landscapeStacked.folded,false,'400x390 fits an open stacked map above the sticks');
+ // Dynamic flight HUD growth after launch refits the stacked map so it still clears Return.
+ hud.rect={left:10,right:122,top:10,bottom:50,width:112,height:40};
+ assertClear(360,440,220);
+ hud.rect={left:10,right:122,top:10,bottom:124,width:112,height:114};
+ notifyResize(hud);
+ assertClear(360,440,220,false);
  pause.remove();hud.remove();innerWidth=844;innerHeight=390;resize();
  assert.equal(body.classList.contains('droneStack'),false);
- assert.equal(body.classList.contains('droneMapTight'),false);
+ assert.equal(root.classList.contains('folded'),false);
+ assert.equal(mapHeadBtn.getAttribute('aria-expanded'),'true');
  assert.equal(document.getElementById('miniMapCanvas').style.width,'156px');
 }
 // Keep the 96px flight compass coverage as well as the new flight default.

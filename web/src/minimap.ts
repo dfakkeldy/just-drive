@@ -35,7 +35,6 @@ body.indoorOn #miniMap{display:none}
 /* Mirror #hud's 10px top plus the safe inset (web/index.html, and the touch-flight #hud rule in drone.ts); leave a 10px gap. */
 body.droneOn.droneSticks #miniMap:not(.enlarged){left:max(10px,var(--test-safe-left,env(safe-area-inset-left,0px)));top:calc(20px + env(safe-area-inset-top,0px) + var(--droneHudH,154px));pointer-events:auto}
 @media(orientation:landscape) and (max-height:450px){body.droneOn.droneSticks:not(.droneStack) #miniMap:not(.enlarged){top:calc(10px + env(safe-area-inset-top,0px));left:calc(max(10px, var(--test-safe-left, env(safe-area-inset-left, 0px))) + var(--droneCol) + 8px)}}
-body.droneOn.droneSticks.droneMapTight #miniMap:not(.enlarged) #miniMapCanvas{display:none}
 `;
 
 const RANGES = [450, 1200, 3200];                 // metres from the car to the edge of the map
@@ -54,6 +53,8 @@ export class MiniMap {
   private folded: boolean;
   private large = false;
   private flight = false;
+  private tight = false;
+  private hudObserver: ResizeObserver | null = null;
   private flightHome: Comment | null = null;
   private flightFolded = false;
   private home: Comment | null = null;
@@ -118,14 +119,18 @@ export class MiniMap {
     // Open by default, except on a short screen (a phone held sideways), where the room is needed for the road.
     // Folded at first on a screen too short for the open map and the controls under it (a small phone, or any phone sideways).
     this.folded = saved ? saved === 'folded' : innerHeight < 570;
-    this.root.classList.toggle('folded', this.folded);
-    this.root.querySelector('#miniMapHead')!.setAttribute('aria-expanded', String(!this.folded));
+    this.syncFold();
     head.addEventListener('click', () => {
-      if (this.large) this.setLarge(false);
+      if (this.large) {
+        this.setLarge(false);
+        if (this.tight) return;
+      } else if (this.tight) {
+        this.setLarge(true);
+        return;
+      }
       this.folded = !this.folded;
       if (this.flight) this.flightFolded = this.folded;
-      this.root.classList.toggle('folded', this.folded);
-      this.root.querySelector('#miniMapHead')!.setAttribute('aria-expanded', String(!this.folded));
+      this.syncFold();
       try { localStorage.setItem('mmm.map', this.folded ? 'folded' : 'open'); } catch { /* the choice lasts for this visit */ }
       this.since = 1;
     });
@@ -137,6 +142,12 @@ export class MiniMap {
     }).observe(this.canvas);
   }
 
+  private syncFold(): void {
+    const collapsed = !this.large && (this.folded || this.tight);
+    this.root.classList.toggle('folded', collapsed);
+    this.root.querySelector('#miniMapHead')!.setAttribute('aria-expanded', String(!collapsed));
+  }
+
   /** Flight uses the same map outside the hidden phone driving HUD. */
   setFlight(on: boolean): void {
     if (this.flight === on) return;
@@ -145,11 +156,16 @@ export class MiniMap {
     if (on) {
       this.flightFolded = this.folded; this.folded = false;
       this.flightHome = document.createComment('flight map home'); this.root.before(this.flightHome); document.body.append(this.root);
+      const hud = document.getElementById('hud');
+      if (hud && typeof ResizeObserver === 'function') {
+        this.hudObserver = new ResizeObserver(() => { if (this.flight) this.fit(); });
+        this.hudObserver.observe(hud);
+      }
     } else {
+      this.hudObserver?.disconnect(); this.hudObserver = null;
       this.folded = this.flightFolded; this.flightHome?.replaceWith(this.root); this.flightHome = null;
     }
-    this.root.classList.toggle('folded', this.folded);
-    this.root.querySelector('#miniMapHead')!.setAttribute('aria-expanded', String(!this.folded)); this.fit();
+    this.fit();
   }
 
   reserveCredit(pixels: number): void { this.creditSpace = pixels; if (this.large) this.fit(); }
@@ -204,9 +220,11 @@ export class MiniMap {
         return limit;
       };
       const hudEl = document.getElementById('hud'), hudRect = hudEl && !hudEl.hidden ? hudEl.getBoundingClientRect() : null;
-      const hudH = hudRect?.height || parseFloat(getComputedStyle(document.body).getPropertyValue('--droneHudH')) || 154;
+      const hudH = hudRect?.height || hudEl?.offsetHeight || parseFloat(getComputedStyle(document.body).getPropertyValue('--droneHudH')) || 154;
       const sideTop = 10 + safeTop, stackTop = 20 + safeTop + hudH;
-      const landscape = innerWidth >= innerHeight && innerHeight <= 450;
+      const landscape = typeof matchMedia === 'function'
+        ? matchMedia('(orientation: landscape) and (max-height: 450px)').matches
+        : innerWidth > innerHeight && innerHeight <= 450;
       const singleW = Math.min(156, Math.floor(rightLimit - leftEdge - 10));
       let placed = false;
       if (landscape) {
@@ -238,8 +256,9 @@ export class MiniMap {
       }
       document.body.style.setProperty('--droneCol', `${flightSize + 2}px`);
     }
+    this.tight = tight;
     document.body.classList.toggle('droneStack', stacked);
-    document.body.classList.toggle('droneMapTight', tight);
+    this.syncFold();
     const small = sticks ? flightSize : Math.min(innerWidth, innerHeight) < 520 ? 124 : 176;
     const phone = document.body.classList.contains('tcOn');
     const css = this.large ? Math.max(1, Math.min(600, innerWidth - 24 - safe('left') - safe('right'),
@@ -273,7 +292,7 @@ export class MiniMap {
   /** Call every frame; it redraws about eight times a second. `heading` is the car's (0 = north, clockwise). */
   update(dt: number, x: number, z: number, heading: number, stops: readonly MapStop[], marks: readonly MapMark[], cars?: readonly { x: number; z: number }[], parked: { x: number; z: number } | null = null) {
     this.since += dt;
-    if (this.folded || this.root.hidden || document.hidden || document.body.classList.contains('indoorOn')) {
+    if (!this.large && (this.folded || this.tight) || this.root.hidden || document.hidden || document.body.classList.contains('indoorOn')) {
       if (!this.idle) { this.underlay?.idle(); this.idle = true; } return;
     }
     if (this.since < 0.12) return;
