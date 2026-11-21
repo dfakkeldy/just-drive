@@ -70,6 +70,57 @@ export function littleMabouBuildingArt(list: Building[]): { buildings: Building[
   return { buildings, styles };
 }
 
+const plainShed = {
+  entrance: 'none', chimney: false, dormer: false, shutters: false, satelliteDish: false, skirting: false, silo: false,
+} as const;
+// Baxters Cove harbour, 21 Nov 2026 dash cam. The long gear shed has ochre board walls, a rust-red metal roof,
+// a white eave trim and board doors along its lot side.
+const gearShed: BuildingStyle = {
+  ...plainShed, wall: '#ae8e51', roof: '#9a5a40', trim: '#e3dfd2', door: '#a3854c',
+  roofMaterial: 'metal', boardAndBatten: true, front: { end: false, side: 1 }, barnDoors: 5,
+};
+const whiteShed: BuildingStyle = { ...plainShed, wall: '#e9e7df', roof: '#3b3d40', trim: '#f4f2ec', door: '#d8d5cb', roofMaterial: 'shingle' };
+// Grey board ends with faded red doors, red long sides, a dark shingle gambrel roof.
+const gambrelShed: BuildingStyle = {
+  ...plainShed, wall: '#a13832', roof: '#3a3d42', trim: '#c9c3b6', door: '#c27d76', roofMaterial: 'shingle',
+  roofShape: 'gambrel', boardAndBatten: true, bareEnd: { side: -1, wall: '#a7a69c' }, front: { end: true, side: -1 },
+};
+// At the Highway 19 end: a weathered grey-brown outbuilding and a two-storey cream house with a dark brown roof.
+const greyBrownShed: BuildingStyle = { ...plainShed, wall: '#8a7b68', roof: '#45413c', trim: '#a89c8a', door: '#6f6455', roofMaterial: 'shingle' };
+const creamHouse: BuildingStyle = {
+  ...plainShed, wall: '#d9d0b6', roof: '#4a3a30', trim: '#f2efe6', door: '#e6e2d8', roofMaterial: 'shingle',
+  front: { end: false, side: -1 },
+};
+// The 1 m surface model shows a compact roof about 3.5 m high on the grass east of the harbour road.
+const GAMBREL_SHED: Model = { id: 900421, x: 616282, y: 5079339, ground: 2.56, axisDeg: 35, length: 4.8, width: 3.6, eave: 2.1, ridge: 3.6 };
+
+/** Baxters Cove Road (Judique pack). Match by place, because each area and rebake has its own IDs. Drawing only:
+ *  the property list keeps the survey kinds, so a shed drawn as a barn gets no field bales. */
+export function baxtersCoveBuildingArt(list: Building[]): { buildings: Building[]; styles: Record<string, BuildingStyle> } {
+  const at = (e: number, n: number, ok: (b: Building) => boolean) =>
+    list.find(b => !b.shape && b.buildingId === undefined && Math.hypot(b.x - e, b.y - n) < 4 && ok(b));
+  const long = at(616254.85, 5079386.99, b => b.length > 50);
+  const white = at(616233.9, 5079329.5, b => b.length < 20);
+  const outbuilding = at(617039, 5079229.5, b => b.length < 15);
+  const house = at(617083, 5079233.8, b => b.kind === 'house');
+  const styles: Record<string, BuildingStyle> = {};
+  const buildings = list.map(b => {
+    if (b === long) return { ...b, kind: 'barn' as const };
+    // Two full storeys and a lower roof: the survey eave sits at one storey under the measured ridge.
+    if (b === house) return { ...b, eave: Math.max(b.eave, 5.3) };
+    return b;
+  });
+  if (long) styles[long.id] = gearShed;
+  if (white) styles[white.id] = whiteShed;
+  if (outbuilding) styles[outbuilding.id] = greyBrownShed;
+  if (house) styles[house.id] = creamHouse;
+  if (long && !at(GAMBREL_SHED.x, GAMBREL_SHED.y, () => true)) {
+    buildings.push(surveyedBox(GAMBREL_SHED, 'shed', 'gable'));
+    styles[GAMBREL_SHED.id] = gambrelShed;
+  }
+  return { buildings, styles };
+}
+
 function wallPanel(m: Mesher, end: boolean, at: number, u0: number, u1: number, y0: number, y1: number, colour: RGB) {
   const corners = [[u0,y0], [u1,y0], [u1,y1], [u0,y1]].map(([u, y]) => end ? [at, y, u] : [u, y, at]);
   m.quad((end ? at > 0 : at < 0) ? corners.reverse() : corners, colour);
@@ -226,6 +277,69 @@ function hillsideShed(m: Mesher, b: Model, low: boolean) {
 
 type Footprint = { e: number; n: number; az: number; length: number; width: number };
 
+// The Judique Flyer Trail where it crosses Baxters Cove Road: a mown lot south of the road and west of the trail,
+// a post-and-rail fence, a kiosk under a teal metal roof, and an open picnic shelter. The kiosk and shelter stand on
+// the two compact roofs in the 1 m surface model; ground heights are the bare-earth model's (EPSG:2961, metres).
+const teal = paint(0x2f8c8a), fascia = paint(0x7d5638), post = paint(0x9a958a), notice = paint(0x3f8798);
+const KIOSK = { e: 616453, n: 5079126.5, ground: 3.35 };
+const SHELTER = { e: 616450, n: 5079117.5, ground: 3.34 };
+// The mown lot, kept clear of trees: [east0, north0, east1, north1].
+const TRAILHEAD_BOX = [616426, 5079113, 616456, 5079160] as const;
+type Post = readonly [east: number, north: number, ground: number];
+// Along the trail side, then west along the lot's south edge, with a gap to the shelter.
+export const TRAILHEAD_FENCE: readonly (readonly Post[])[] = [
+  [[616441, 5079157, 2.7], [616452.5, 5079131, 3.36], [616448.4, 5079130.8, 3.2]],
+  [[616445.6, 5079130.7, 3.1], [616428, 5079130.5, 2.92]],
+];
+
+function trailhead(m: Mesher, place: (e: number, n: number, y: number, az?: number) => void,
+  solid: (b: Footprint) => void, exag: number, sea: number, low: boolean) {
+  const lift = (g: number) => sea + (g - sea) * exag;
+  // Local x runs east, local -z faces the lot to the north.
+  place(KIOSK.e, KIOSK.n, lift(KIOSK.ground), 90);
+  for (const x of [-1.05, 1.05]) m.box(x, .85, 0, .16, 3.3, .16, post);
+  m.box(0, 1.55, 0, 2.3, 1.3, .1, timber);
+  m.box(0, 1.62, -.06, 2.1, 1.05, .02, notice);
+  if (!low) for (const x of [-.6, .15, .75]) m.box(x, 1.62, -.075, .5, .8, .01, x > .5 ? paint(0xd9cf55) : cream);
+  m.box(0, .55, -.06, 2.1, .5, .02, white);
+  m.box(0, 2.38, 0, 2.6, .12, .9, fascia);
+  m.quad([[-1.45, 2.44, -.62], [1.45, 2.44, -.62], [1.45, 2.78, 0], [-1.45, 2.78, 0]], teal);
+  m.quad([[-1.45, 2.78, 0], [1.45, 2.78, 0], [1.45, 2.44, .62], [-1.45, 2.44, .62]], teal);
+  solid({ e: KIOSK.e, n: KIOSK.n, az: 90, length: 2.3, width: .3 });
+  // The shelter: four posts, a hipped teal roof and a picnic table.
+  place(SHELTER.e, SHELTER.n, lift(SHELTER.ground), 90);
+  for (const [x, z] of [[-1.5, -1.25], [1.5, -1.25], [-1.5, 1.25], [1.5, 1.25]]) {
+    m.box(x, .7, z, .16, 3, .16, post);
+    const [e, n] = frameToMap({ e: SHELTER.e, n: SHELTER.n, az: 90 }, x, z);
+    solid({ e, n, az: 90, length: .16, width: .16 });
+  }
+  m.box(0, 2.25, 0, 3.4, .14, 2.9, fascia);
+  const [L, W, eave, top] = [1.95, 1.7, 2.32, 3.15];
+  m.quad([[-L, eave, -W], [L, eave, -W], [.6, top, 0], [-.6, top, 0]], teal);
+  m.quad([[-.6, top, 0], [.6, top, 0], [L, eave, W], [-L, eave, W]], teal);
+  m.tri(-L, eave, -W, -.6, top, 0, -L, eave, W, teal);
+  m.tri(L, eave, W, .6, top, 0, L, eave, -W, teal);
+  m.box(0, .76, 0, 1.9, .07, .78, timber);
+  for (const z of [-.66, .66]) m.box(0, .46, z, 1.9, .06, .28, timber);
+  for (const x of [-.7, .7]) m.box(x, .38, 0, .1, .76, 1.5, timber);
+  // Grey split rails between round posts, about 2.4 m apart.
+  for (const run of TRAILHEAD_FENCE) for (let i = 1; i < run.length; i++) {
+    const [ae, an, ag] = run[i - 1], [be, bn, bg] = run[i];
+    const len = Math.hypot(be - ae, bn - an), az = Math.atan2(be - ae, bn - an) * 180 / Math.PI;
+    const posts = Math.max(1, Math.round(len / 2.4));
+    // A run's corner post is drawn once.
+    for (let j = i > 1 ? 1 : 0; j <= posts; j++) {
+      const t = j / posts, e = ae + (be - ae) * t, n = an + (bn - an) * t;
+      place(e, n, lift(ag + (bg - ag) * t), az);
+      m.cyl(0, .35, 0, .09, 1.6, post, 'y', low ? 5 : 8);
+      solid({ e, n, az, length: .18, width: .18 });
+    }
+    place((ae + be) / 2, (an + bn) / 2, lift((ag + bg) / 2), az);
+    for (const y of [.5, .95]) m.box(0, y, 0, len, .1, .1, post);
+    solid({ e: (ae + be) / 2, n: (an + bn) / 2, az, length: len, width: .12 });
+  }
+}
+
 function riverPark(m: Mesher, place: (e: number, n: number, y: number, az?: number) => void,
   solid: (b: Footprint) => void, exag: number, sea: number) {
   const y = sea + (1.4-sea)*exag;
@@ -291,6 +405,12 @@ export class NovemberBuildings {
         opening(m,true,front,0,1.33,3.35,2.46,trim,stone);
         for (let y=.36;y<2.45;y+=.27) wallPanel(m,true,front+.094,-1.6,1.6,y,y+.028,greyCedar);
       });
+      return;
+    }
+    if (area === 'judique') {
+      trailhead(m, (e, n, y, az) => place(m, e, n, y, az), solid, exag, sea, low);
+      this.clear.push([TRAILHEAD_BOX[0] - village[0], village[1] - TRAILHEAD_BOX[3],
+        TRAILHEAD_BOX[2] - village[0], village[1] - TRAILHEAD_BOX[1]]);
       return;
     }
     if (area !== 'mabou') return;

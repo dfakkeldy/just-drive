@@ -27,7 +27,7 @@ import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
 import { ABOUT_URL } from './credits';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
+import { baxtersCoveBuildingArt, isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
 import { littleMabouMarshRail, NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals, CatTileUnread } from './animals';
@@ -419,9 +419,11 @@ const porchBox = ERA.modern && AREA.porch && params.get('porch') !== '0' && buil
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
-const buildingStyles = buildingAppearance(astra, LOW, sunDir,
-  littleMabouArt || wharfArt ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles } : bakedBuildingStyles);
-const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
+// Baxters Cove harbour and the Highway 19 end of its road (Judique, 21 Nov dash cam): the drawing only.
+const coveArt = ERA.modern && AREA.id === 'judique' && drawnBuildings ? baxtersCoveBuildingArt(drawnBuildings) : null;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir, littleMabouArt || wharfArt || coveArt
+  ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles, ...coveArt?.styles } : bakedBuildingStyles);
+const sceneryBuildings = wharfArt?.buildings ?? coveArt?.buildings ?? drawnBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
