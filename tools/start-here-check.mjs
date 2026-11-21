@@ -194,7 +194,7 @@ function captureMain(text,vehicle,placeAtStart,multiplayer={choice:{on:false,roo
   // (compiled from TypeScript, with no fleet, as in an ordinary one-vehicle visit), not from a hand-written copy.
   const declaration=text.match(/^const startPlacement = [\s\S]*?^\}? ?: vehicle;$/m)?.[0];assert.ok(declaration,'main startPlacement declaration exists');
   const startPlacement=ts.transpileModule(declaration,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
-  const run=new Function('startHere','placeAtStart','vehicle','multiplayer',`const gameMode='explore',ERA={id:'today'},AREA={id:'mabou'},SITE={brand:'mail'},manifest={village:[624271,5103301]},roads={roads:[]},buildings=null,fleet=null;let waitingToDrive=false,camReady=true,mode='fly';${startPlacement}\n${call};return ()=>({waitingToDrive,camReady,mode});`);
+  const run=new Function('startHere','placeAtStart','vehicle','multiplayer',`const gameMode='explore',ERA={id:'today'},AREA={id:'mabou'},SITE={brand:'mail'},manifest={village:[624271,5103301]},roads={roads:[]},buildings=null,fleet=null,airportDrag=null;let waitingToDrive=false,camReady=true,mode='fly';${startPlacement}\n${call};return ()=>({waitingToDrive,camReady,mode});`);
   const state=run(value=>options=value,placeAtStart,vehicle,multiplayer);return {options,state};
 }
 function mainAdapter(text,m) {

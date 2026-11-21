@@ -563,6 +563,7 @@ export const TERRAIN_FRAG = /* glsl */ `
 // Only tiles that overlap the airport site compile this (terrain.ts sets AIRPORT); other programs are unchanged.
 uniform vec4 airportFrame; // threshold world xz, unit direction world xz
 uniform vec2 airportSize; // length, width; zero outside Point Tupper
+uniform vec4 airportDrag; // start, finish, lane centre, lane half-width
 float airportBox(vec2 p, vec2 c, vec2 h) { return 1.0-step(0.0,max(abs(p.x-c.x)-h.x,abs(p.y-c.y)-h.y)); }
 float airportDigit(vec2 p,float digit){
   // Seven straight strokes. Local x across the runway, y along the reading direction.
@@ -876,11 +877,10 @@ void main() {
 #ifdef AIRPORT
   // Inside the runway rectangle the field is exact: sampled paint would stair-step its 0.9 degree
   // edges. rdist reaches rhalf at the true edge, so the road edge and its stripe follow the line.
-  {
-    vec2 ad=vWorld.xz-airportFrame.xy;
-    float aAlong=dot(ad,airportFrame.zw),aEdge=abs(dot(ad,vec2(-airportFrame.w,airportFrame.z)))-airportSize.y*.5;
-    if(airportSize.x>0.&&aAlong>=0.&&aAlong<=airportSize.x&&aEdge<=0.){rkind=13.;rflags=13.;rhalf=2.;rdist=max(0.,aEdge+2.);}
-  }
+  vec2 ad=vWorld.xz-airportFrame.xy;
+  float aAlong=dot(ad,airportFrame.zw),aAcross=dot(ad,vec2(-airportFrame.w,airportFrame.z));
+  float aEdge=abs(aAcross)-airportSize.y*.5;
+  if(airportSize.x>0.&&aAlong>=0.&&aAlong<=airportSize.x&&aEdge<=0.){rkind=13.;rflags=13.;rhalf=2.;rdist=max(0.,aEdge+2.);}
 #endif
 #ifdef SITE_GRAVEL
   float gravelOverlay=0.0;
@@ -981,7 +981,20 @@ void main() {
       surface *= 1.0 - 0.30 * (1.0 - crest) * (1.0 - smoothstep(25.0, 90.0, dist)) * (1.0 - jump);
     }
 #ifdef AIRPORT
-    if(rkind>12.5) surface=mix(surface,vec3(.82),airportPaint(vWorld.xz));
+    if(rkind>12.5) {
+      surface=mix(surface,vec3(.82),airportPaint(vWorld.xz));
+      if(airportDrag.y>0.) {
+        float lane=abs(abs(aAcross)-airportDrag.z), halfLane=airportDrag.w;
+        // Warm paint for the start bars and thin lane markings; white checks at the finish.
+        float lanes=step(airportDrag.x-15.,aAlong)*(1.-step(airportDrag.y,aAlong))
+          *(1.-step(.11,abs(lane-halfLane)))*(1.-step(8.,mod(aAlong-airportDrag.x+15.,20.)));
+        float start=(1.-step(.4,abs(aAlong-airportDrag.x)))*(1.-step(halfLane,lane));
+        float finish=(1.-step(.75,abs(aAlong-airportDrag.y)))*(1.-step(halfLane,lane))
+          *mod(floor((aAlong-airportDrag.y+.75)/.75)+floor(aAcross/.75),2.);
+        surface=mix(surface,vec3(.82,.59,.23),max(start,lanes));
+        surface=mix(surface,vec3(.82),finish);
+      }
+    }
 #endif
     // Potholes: dark, broken bottoms. The wheels drop into the same ones.
     float density = rkind > 7.5 ? 0.0 : (rkind < 1.5 ? 0.17 : rkind < 2.5 ? 0.28 : rkind < 3.5 ? 0.42 : rkind < 4.5 ? 0.36 : 0.0) + 0.2 * wash;
