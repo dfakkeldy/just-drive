@@ -1,4 +1,5 @@
 import { isPhraseId, type PhraseId } from './social';
+import { isMotorKind, type MotorKind } from '../ride-kinds';
 // The multiplayer wire format, shared by the game (web/src/mp) and the room server (server/src).
 // No DOM, no three.js: this file must load in a browser, in a Cloudflare Worker and in node.
 //
@@ -36,14 +37,14 @@ export interface CarState {
   flags: number; steer: number; heading: number; t: number;
   x: number; z: number; vx: number; vz: number; air: number;
 }
-export type RideKind = 'car' | 'truck' | 'sxs' | 'bike';
+export type RideKind = MotorKind;
 export interface Ride { kind: RideKind; trailer: boolean }
 /** Missing/invalid metadata is the legacy generic car. Never forward arbitrary strings. */
 export function readRide(value: unknown): Ride | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const r = value as Record<string, unknown>;
-  if (!['car', 'truck', 'sxs', 'bike'].includes(r.kind as string) || typeof r.trailer !== 'boolean') return undefined;
-  return { kind: r.kind as RideKind, trailer: r.kind === 'truck' && r.trailer };
+  if (!isMotorKind(r.kind) || typeof r.trailer !== 'boolean') return undefined;
+  return { kind: r.kind, trailer: r.kind === 'truck' && r.trailer };
 }
 export function parseRideChange(text: string): Ride | undefined {
   if (text.length > 128) return undefined;
