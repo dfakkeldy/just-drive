@@ -735,7 +735,6 @@ export class Terrain {
         if(clearsGroundTrees(this.groundClassAt(x,z))){c=0;px[k*4+2]=0;}
       }
       if (road && road[k * 4 + 2] > 0) {
-        // Only pavement (kind 2) carries the pavement bits; a rough gravel or track sample keeps its tile's program.
         roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) === 2;
         // Nothing stands on a road: fade the tree layer out from the shoulder to the road edge.
         const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;

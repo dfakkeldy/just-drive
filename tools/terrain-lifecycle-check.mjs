@@ -642,7 +642,9 @@ async function builds(count) {
     // (64/128 on a paved lane; a gravel driveway's 64 on a track does not take it): a flag read and a colour define; no
     // ground, canopy or road maths change. Once each, ordinary program only.
     ['    let lo = Infinity, hi = -Infinity',', roadPavement = false',';\n'],
-    ['      if (road && road[k * 4 + 2] > 0) {\n','        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) !== 4;\n','        // Nothing stands on a road'],
+    // The rough stretches (rough-roads.ts) put bit 128 on gravel and tracks, so the test names kind 2 instead of "not 4". In
+    // baked land only kinds 2 and 4 carry these bits, so the define lands on the same tiles as before.
+    ['      if (road && road[k * 4 + 2] > 0) {\n','        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) === 2;\n','        // Nothing stands on a road'],
     // The gravel driveways' fix: the texture draws a gravel driveway as a gravel road (drawnRoadBytes); the CPU
     // samples keep their bytes. On such a tile the texture holds a copy, despite the pinned comment above the hook
     // ("CPU samples and the texture only read these same bytes"); watch() checks the only bytes that differ. No ground,
