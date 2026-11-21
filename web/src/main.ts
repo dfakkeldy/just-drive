@@ -1662,6 +1662,7 @@ sunButton.addEventListener('click', async () => {
       groundAtEye: terrain.bareHeightAt(eye.x, eye.z) ?? SEA_LEVEL,
       seaLevel: SEA_LEVEL, exag: EXAG,
       ground: range => terrain.bareGroundRays(eye.x, eye.z, range),
+      place: AREA.name,
       close: closeSunSeeker,
       savePicture: (view, when) => savePicture({
         canvas, place: AREA.name, touch: touchDevice, when, prefix: 'sun-seeker',

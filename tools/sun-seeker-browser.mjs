@@ -71,7 +71,8 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     assert.equal(result.mime, 'image/png');
     assert.equal(result.delivery, touch ? 'share' : 'download');
     assert.deepEqual([result.width, result.height], await read('[mmm.renderer.domElement.width, mmm.renderer.domElement.height]'));
-    assert.ok(result.text.includes(`Sun Seeker · ${date} · ${time} ${zone}`));
+    assert.ok(result.text.some(text => text.startsWith('Sun Seeker · Mabou')), 'the PNG names the area');
+    assert.ok(result.text.some(text => text.includes(`${date} · ${time} ${zone} · facing `)), 'the PNG stamps the Halifax time and the view direction');
     assert.ok(result.text.some(text => /^\d{2}:00$/.test(text)), 'the PNG paints projected hour labels');
     if (touch) assert.ok(['Rise', 'Noon', 'Set'].every(text => result.text.includes(text)), 'the PNG paints the compact summary');
     else assert.ok(['Sunrise', 'Solar', 'noon', 'Sunset', 'Flat', 'Over', 'heights.'].every(text => result.text.includes(text)), 'the PNG paints the full readings panel');
@@ -229,6 +230,10 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
         const after = await shadowTarget();
         assert.ok(Math.hypot(...after.map((value, i) => value - before[i])) < 2, 'closing restores the free camera shadow target');
         console.log(`Church, EXAG ${exag}: ${measurements.at(-1)}`);
+        // An independent sight-line survey of the baked tiles gives 07:17–07:18 and 15:53–15:54 here (PR #102).
+        const [, rise, set] = measurements.at(-1).match(/Sunrise\s*\d\d:\d\d\s*(\d\d:\d\d)\s*Sunset\s*\d\d:\d\d\s*(\d\d:\d\d)/);
+        assert.ok(rise >= '07:15' && rise <= '07:21', `church sunrise over hills ${rise}`);
+        assert.ok(set >= '15:50' && set <= '15:58', `church sunset over hills ${set}: the ridge 460 m to the WSW stands about 4.8° high`);
       }
       assert.equal(measurements[0], measurements[1], 'church table is invariant across hill scales');
       writeFileSync(join(out, 'church-times.json'), JSON.stringify({

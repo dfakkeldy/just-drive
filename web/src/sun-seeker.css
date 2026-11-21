@@ -61,7 +61,8 @@ body:has(#sunSeeker[open]) > :not(#c, #credit, #sunSeeker) { visibility: hidden;
 }
 @media (max-width: 760px) {
   .sunClock { width: auto; right: max(12px, env(safe-area-inset-right)); }
-  .sunReadings { width: auto; left: max(12px, env(safe-area-inset-left)); }
+  /* The map credit wraps to about three lines on a phone. Keep the times panel above it. */
+  .sunReadings { width: auto; left: max(12px, env(safe-area-inset-left)); bottom: calc(54px + env(safe-area-inset-bottom)); }
   #sunSeeker button, #sunSeeker input { min-height: 44px; }
   #sunSeeker input[type=range] { min-height: 36px; }
   .sunBearing { position: static; transform: none; padding: 4px; }

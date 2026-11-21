@@ -18,6 +18,8 @@ const SEASONS = [
   { date: '03-20', name: 'Equinox', color: '#aaf4d1', labelAt: .50 },
   { date: '06-21', name: 'Summer solstice', color: '#ffb5ce', labelAt: .53 },
 ];
+/** Other places along a path for its name, tried in turn when the first is off screen or covered. */
+const NAME_SPOTS = [0, -.12, .12, -.24, .24, -.36, .36];
 const anglesAt = (az: number, el: number) => directionFromAngles(az, el).multiplyScalar(RADIUS);
 const eventTime = (event?: SunEvent) => event ? localTime(new Date(Math.round(+event.when / 60_000) * 60_000)) : '—';
 
@@ -37,11 +39,14 @@ interface SunSeekerOptions {
   seaLevel: number;
   exag: number;
   ground(range: number): Promise<GroundRay>;
+  /** The public area name for the saved picture. */
+  place?: string;
   close(): void;
   savePicture?: (view: SunSeeker, when: Date) => Promise<boolean>;
 }
 
-interface Label { element: HTMLElement; position: THREE.Vector3; width: number }
+/** A label can sit at one of several points. It keeps its last point while that still fits, so it does not jump. */
+interface Label { element: HTMLElement; positions: THREE.Vector3[]; width: number; spot: number }
 
 /** A still view over the game canvas. The existing pause gate owns the simulation. */
 export class SunSeeker {
@@ -355,15 +360,19 @@ export class SunSeeker {
         paintText(this.timesPanel);
       } else paintText(this.timesPanel.querySelector('summary')!);
 
-      const when = this.selected.when;
-      const stamp = `Sun Seeker · ${localDate(when)} · ${localTime(when)} ${localZone(when)}`;
+      // Say where, when and which way the picture looks. Two lines when one would not fit a phone.
+      const when = this.selected.when, place = this.options.place;
+      const first = `Sun Seeker${place ? ` · ${place}` : ''}`;
+      const second = `${localDate(when)} · ${localTime(when)} ${localZone(when)} · facing ${this.bearing.textContent!.replace(/\s+/, ' ')}`;
       const clock = this.root.querySelector('.sunClock')!.getBoundingClientRect();
       context.font = '600 13px system-ui, sans-serif';
-      path(clock.left, clock.top, context.measureText(stamp).width + 20, 28, 6);
+      const room = rect.width - 2 * (clock.left - rect.left);
+      const lines = context.measureText(`${first} · ${second}`).width + 20 <= room ? [`${first} · ${second}`] : [first, second];
+      path(clock.left, clock.top, Math.max(...lines.map(line => context.measureText(line).width)) + 20, 10 + 18 * lines.length, 6);
       context.fillStyle = '#101a24ed';
       context.fill();
       context.fillStyle = '#f9f6ee';
-      context.fillText(stamp, clock.left + 10, clock.top + 14);
+      lines.forEach((line, i) => context.fillText(line, clock.left + 10, clock.top + 14 + 18 * i));
     } finally {
       context.restore();
     }
@@ -372,30 +381,46 @@ export class SunSeeker {
   private projectLabels(): void {
     const { camera } = this.options, width = this.root.clientWidth, height = this.root.clientHeight;
     const taken: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>[] = [...this.root.querySelectorAll('.sunPanel, .sunBearing')].map(el => el.getBoundingClientRect());
-    for (const { element, position, width: labelWidth } of [...this.activeLabels, ...this.seasonLabels]) {
+    const place = (position: THREE.Vector3, labelWidth: number) => {
       const p = this.scratch.copy(position).applyMatrix4(camera.matrixWorldInverse);
-      if (p.z >= 0) { element.hidden = true; continue; }
+      if (p.z >= 0) return null;
       p.applyMatrix4(camera.projectionMatrix);
       const x = (p.x + 1) * width / 2, y = (1 - p.y) * height / 2;
       const box = { left: x - labelWidth / 2, right: x + labelWidth / 2, top: y - 8, bottom: y + 8 };
       const fits = box.left > 4 && box.right < width - 4 && box.top > 4 && box.bottom < height - 4
         && !taken.some(r => box.right >= r.left && box.left <= r.right && box.bottom >= r.top && box.top <= r.bottom);
-      element.hidden = !fits;
-      if (!fits) continue;
-      element.style.left = `${x}px`;
-      element.style.top = `${y}px`;
-      taken.push(box);
+      return fits ? { x, y, box } : null;
+    };
+    for (const label of [...this.activeLabels, ...this.seasonLabels]) {
+      const { element, positions } = label;
+      let found = place(positions[label.spot], label.width);
+      for (let i = 0; !found && i < positions.length; i++) {
+        if (i === label.spot) continue;
+        found = place(positions[i], label.width);
+        if (found) label.spot = i;
+      }
+      element.hidden = !found;
+      if (!found) continue;
+      element.style.left = `${found.x}px`;
+      element.style.top = `${found.y}px`;
+      taken.push(found.box);
     }
   }
 
-  private label(labels: Label[], text: string, color: string, az: number, el: number, hour = false): void {
+  private label(labels: Label[], text: string, color: string, spots: readonly { az: number; el: number }[], hour = false): void {
     const element = document.createElement('span');
     element.className = hour ? 'sunLabel hour' : 'sunLabel';
     element.textContent = text;
     element.style.setProperty('--path', color);
-    const position = anglesAt(az, el).add(this.options.eye);
+    const positions = spots.map(({ az, el }) => anglesAt(az, el).add(this.options.eye));
     this.labels.append(element);
-    labels.push({ element, position, width: text.length * 6.6 + 14 });
+    labels.push({ element, positions, width: text.length * 6.6 + 14, spot: 0 });
+  }
+
+  /** Name a path just above it, first at its usual point, then nearer each end, then below it. */
+  private nameSpots(arc: readonly SunEvent[], at: number): { az: number; el: number }[] {
+    const points = NAME_SPOTS.map(offset => arc[Math.round(THREE.MathUtils.clamp(at + offset, .04, .96) * (arc.length - 1))]);
+    return [1.6, -1.8].flatMap(lift => points.map(({ az, el }) => ({ az, el: el + lift })));
   }
 
   private line(group: THREE.Group, points: number[], color: string, width: number, order: number): void {
@@ -438,8 +463,7 @@ export class SunSeeker {
       for (const { date: season, color, name, labelAt } of SEASONS) {
         const arc = sunArc(`${year}-${season}`, lat, lon);
         this.line(this.seasons, arc.flatMap(p => anglesAt(p.az, p.el).toArray()), color, 2, 28);
-        const { az, el } = arc[Math.floor(labelAt * (arc.length - 1))];
-        this.label(this.seasonLabels, name, color, az, el + 1.6);
+        this.label(this.seasonLabels, name, color, this.nameSpots(arc, labelAt));
       }
     }
     this.clear(this.activePath, this.activeLabels);
@@ -448,7 +472,6 @@ export class SunSeeker {
     this.line(this.activePath, arc.flatMap(p => anglesAt(p.az, p.el).toArray()), SELECTED, 3.2, 29);
     const name = date === this.today ? 'Today' : 'Selected day';
     this.root.querySelector('.sunDayName')!.textContent = name;
-    const label = arc[Math.floor(.60 * (arc.length - 1))];
 
     const ticks: number[] = [];
     for (let hour = 0; hour < 24; hour++) {
@@ -456,9 +479,9 @@ export class SunSeeker {
       if (adjustment === 'gap' || when < arc[0].when || when > arc.at(-1)!.when) continue;
       const { az, el } = sunAngles(when, lat, lon);
       ticks.push(...anglesAt(az, el - .56).toArray(), ...anglesAt(az, el + .56).toArray());
-      this.label(this.activeLabels, time, SELECTED, az, el - 1.8, true);
+      this.label(this.activeLabels, time, SELECTED, [{ az, el: el - 1.8 }], true);
     }
-    this.label(this.activeLabels, name, SELECTED, label.az, label.el + 1.6);
+    this.label(this.activeLabels, name, SELECTED, this.nameSpots(arc, .6));
     if (ticks.length) {
       const marks = new LineSegments2(new LineSegmentsGeometry().setPositions(ticks),
         new LineMaterial({ color: SELECTED, linewidth: 2, depthTest: false, depthWrite: false, toneMapped: false, transparent: true }));

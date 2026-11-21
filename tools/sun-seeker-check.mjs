@@ -74,5 +74,17 @@ assert.equal(+split.sunrise.when, +overPlain.sunrise.when);
 assert.equal(+split.sunset.when, +overPlain.sunset.when);
 const covered = hillSunEvents(date, lat, lon, plain.map(() => 80));
 assert.deepEqual(covered, { sunrise: undefined, sunset: undefined });
+// River Denys Mountain church: a ridge about 38 m above the eye, 455-475 m to the WSW, sets the sun near 15:54 AST.
+// The baked survey gives 15:53-15:54 by an independent sight-line script; the flat horizon gives 16:28.
+const churchEye = { x: 0, y: 207, z: 0 };
+const churchGround = (x, z) => {
+  const range = Math.hypot(x, z), bearing = (Math.atan2(x, -z) * 180 / Math.PI + 360) % 360;
+  return bearing > 220 && bearing < 260 && range > 455 && range < 475 ? 245.5 : 205;
+};
+const church = hillSunEvents(date, lat, lon, sample(churchEye, churchGround));
+const churchSet = localTime(church.sunset.when);
+assert.ok(churchSet >= '15:51' && churchSet <= '15:57', `church ridge sunset ${churchSet}`);
+assert.ok(Math.abs(+church.sunrise.when - +flat.sunrise.when) < 3 * 60_000, 'no ridge to the ESE');
+eps(hillElevation(sample(churchEye, churchGround), 240), Math.atan((245.5 - 207 - 455 * 455 * 0.87 / 12_742_000) / 455) * 180 / Math.PI, .25);
 console.log(`PASS Sun Seeker arcs and terrain crossings: flat noon ${localTime(flat.highest.when)} AST at ${flat.highest.el.toFixed(1)}°, sunrise azimuth ${flat.sunrise.az.toFixed(1)}°`);
-console.log('PASS exaggeration invariance, flat-sea rise and set within one minute, 200 m dip and curvature drop');
+console.log(`PASS exaggeration invariance, flat-sea rise and set within one minute, 200 m dip and curvature drop, church ridge sunset ${churchSet} AST`);
