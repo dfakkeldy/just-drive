@@ -103,7 +103,7 @@ export class Ghosts {
   private readonly cars: THREE.InstancedMesh;
   private readonly morph: THREE.Mesh;
   private readonly legacy: THREE.InstancedBufferAttribute;
-  private readonly labels: THREE.InstancedMesh;
+  readonly labels: THREE.InstancedMesh;
   private readonly atlas: THREE.CanvasTexture;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly slots: Slot[];

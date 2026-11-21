@@ -236,7 +236,7 @@ function createDroneHelp(): HTMLElement {
   const rows = document.createElement('dl');
   help.append(Object.assign(document.createElement('h3'), { textContent: 'Drone keys' }), rows);
   help.setAttribute('aria-label', 'Drone keys');
-  for (const [key, action] of DRONE_HELP) {
+  for (const [key, action] of [...DRONE_HELP, ...(document.body?.classList?.contains('exploreMode') ? [['O', 'Save picture'] as const] : [])]) {
     const term = document.createElement('dt'), text = document.createElement('dd');
     term.innerHTML = keyCaps(key);
     text.textContent = action; rows.append(term, text);
@@ -260,9 +260,9 @@ body.droneOn #hud .dst{font:12px/16px var(--mono);color:#f2b766}
 body.droneOn.droneSticks #hud{left:max(10px,var(--test-safe-left,env(safe-area-inset-left,0px)));top:calc(10px + env(safe-area-inset-top,0px));width:var(--droneCol);max-width:none;box-sizing:border-box;white-space:pre-wrap;font-size:12px;line-height:16px;padding:8px;overflow-wrap:anywhere}
 body.droneOn #hud .dst{display:block}
 body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-right,0px))}
-
+body.droneSticks{--drone-stick-size:min(132px,34vw,42vh)}
 .droneStick{position:fixed;z-index:6;bottom:calc(14px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));
-  width:var(--stick);height:var(--stick);--stick:min(132px,34vw,42vh);border-radius:50%;box-sizing:border-box;
+  width:var(--drone-stick-size);height:var(--drone-stick-size);border-radius:50%;box-sizing:border-box;
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23eef2f6' fill-opacity='.4' d='M50 10l-4 6h8zM50 90l-4-6h8zM10 50l6-4v8zM90 50l-6-4v8z'/%3E%3C/svg%3E") center/100% 100% no-repeat,var(--panel,rgba(8,14,20,.6));border:2px solid rgba(238,242,246,.3);touch-action:none;user-select:none;-webkit-user-select:none}
 .droneStick[hidden],#droneReturn[hidden]{display:none}
 #droneLeft{left:calc(14px + env(safe-area-inset-left,0px))}
@@ -275,7 +275,7 @@ body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-righ
   min-width:112px;height:56px;padding:0 8px;border-radius:10px;border:1px solid rgba(238,242,246,.4);background:var(--panel-solid,#0b1219);
   color:var(--ink,#eef2f6);font:700 12px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em}
 #droneReturn:active{background:var(--maple,#d0632e)}
-@media (max-width:420px){#droneReturn{bottom:calc(14px + min(132px,34vw,42vh) + 24px + env(safe-area-inset-bottom,0px))}}
+@media (max-width:420px){#droneReturn{bottom:calc(14px + var(--drone-stick-size) + 24px + env(safe-area-inset-bottom,0px))}}
 #droneButton{flex:none;width:56px;height:56px;border-radius:10px;border:1px solid rgba(238,242,246,.3);background:var(--panel,rgba(8,14,20,.72));
   color:var(--ink,#eef2f6);font:700 10.5px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;padding:0;pointer-events:auto}
 #droneButton:active{background:var(--maple,#d0632e)}
