@@ -90,7 +90,9 @@ if [[ $MUTATIONS == 1 ]]; then
   # 3. A room that holds every car's report back for 0.6 s before it passes it on. Its runtime answers pings at
   #    once, so nothing is excused: the cars are drawn too far in the past.
   perl -0pi -e 's/  private toOthers\(from: WebSocket, data: string \| ArrayBuffer\): void \{\n/  private toOthers(from: WebSocket, data: string | ArrayBuffer): void {\n    if (data instanceof ArrayBuffer) { setTimeout(() => this.passOn(from, data), 600); return; }\n    this.passOn(from, data);\n  }\n  private passOn(from: WebSocket, data: string | ArrayBuffer): void {\n/' "$M/server/src/index.ts"
-  grep -q 'setTimeout(() => this.passOn' "$M/server/src/index.ts" || { echo "the late-room mutant did not apply" >&2; exit 2; }
+  # Car reports go out per seat (with or without heights), so hold those back too.
+  perl -0pi -e 's/  private reportToOthers\(from: WebSocket, id: number, body: Uint8Array\): void \{\n/  private reportToOthers(from: WebSocket, id: number, body: Uint8Array): void {\n    setTimeout(() => this.reportNow(from, id, body), 600);\n  }\n  private reportNow(from: WebSocket, id: number, body: Uint8Array): void {\n/' "$M/server/src/index.ts"
+  grep -q 'setTimeout(() => this.passOn' "$M/server/src/index.ts" && grep -q 'setTimeout(() => this.reportNow' "$M/server/src/index.ts" || { echo "the late-room mutant did not apply" >&2; exit 2; }
   serve "$M/server" "$((PORT + 1))" "$WORK/mutant-server.log"
   PORT_USED=$((PORT + 1)) mutant late-room fail 'ms in the past' check "$WORK/check.mjs"
   kill "$SERVED" 2>/dev/null || true; SERVERS=" $SERVERS "; SERVERS="${SERVERS/ $SERVED / }"

@@ -39,6 +39,7 @@ IGNORE = {
     'sxs-game-pictures.mjs': 'standalone picture helper with two assertions',
     'sxs-pictures.mjs': 'pictures only',
     'fishing-survey.py': 'survey/picture helper with one assertion',
+    'bridges-missing-survey.py': 'read-only source/DTM census requiring --source-data; bridge contracts run in bridges-source',
     'damage-timing-browser.mjs': 'assertion library executed by damage-browser',
     'tree-triangles.mjs': 'prints far tree triangle counts; no verdict',
 }
@@ -353,7 +354,8 @@ def main():
     # a picture) is kept and the rest (browser profiles, builds, logs) is removed; only the newest EVIDENCE_KEEP of
     # each row stay in the scratch folder.
     keep = Path(tmp) / 'evidence'
-    if any(r[1] != 'PASS' for r in rows): print('Evidence kept at ' + tmp)
+    # Rows marked retain-evidence (picture deliverables) keep their whole folder after a pass too.
+    if any(r[1] != 'PASS' for r in rows) or any('retain-evidence' in c.get('notes', '').split('; ') for c in chosen): print('Evidence kept at ' + tmp)
     elif keep.is_dir():
         for item in Path(tmp).iterdir():
             if item == keep: continue

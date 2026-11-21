@@ -1,10 +1,12 @@
+import {deckCounts} from './bridge-contact';
+import {MAX_GROUND_RISE_SPEED} from './ground-motion';
 import { Drift, type DriftFacts } from './drift-rules';
 import { safePlacement } from './placement-pose';
 import * as THREE from 'three';
 import { BIKE_SPEC, type Bike } from './bike';
 import type { VehicleSpec } from './vehicle-spec';
 import type { Ride, RideInput, JumpRecord } from './ride';
-import type { VehiclePlacement } from './vehicle';
+import { placementDeckReference, type VehiclePlacement } from './vehicle';
 import type { Terrain, Surface } from './terrain';
 import type { Roads } from './roads';
 import type { Damage } from './damage-rules';
@@ -49,6 +51,8 @@ export class BikeRide implements Ride {
   private acc = 0; private stepping = false; private elapsed = 0; private spin = 0;
   private prevGround = 0;
   private ready = false;
+  /** The reference height of the last placement or resume; a retry while land loads keeps it. */
+  private placeReference: number | undefined;
   private frontHeight = 0; private rearHeight = 0; private sampledY = 0;
   private contacts = [{ x: 0, z: 0, y: 0, h: null as number | null }, { x: 0, z: 0, y: 0, h: null as number | null }];
   private lastSafe: VehiclePlacement | null = null;
@@ -58,41 +62,42 @@ export class BikeRide implements Ride {
 
   constructor(readonly car: Bike, private terrain: Pick<Terrain, 'heightAt' | 'surfaceAt' | 'withContactHeight'> & {readonly cartRoads?:boolean}, readonly roads: Pick<Roads, 'nearest' | 'deckHeight'> & Partial<Pick<Roads, 'guardrails'>>, private seaLevel: number, readonly spec: VehicleSpec = BIKE_SPEC) {}
 
-  private groundAt(x: number, z: number): number | null {
-    const g = this.terrain.heightAt(x, z), deck = this.roads.deckHeight(x, z);
-    return g === null ? null : deck === null ? g : Math.max(g, deck);
+  private groundAt(x: number, z: number,referenceY=this.y): number | null {
+    const g = this.terrain.heightAt(x, z,referenceY), deck = this.roads.deckHeight(x, z);
+    return g === null ? null : deckCounts(deck,referenceY,this.terrain.cartRoads) ? Math.max(g,deck) : g;
   }
-  place(x: number, z: number, heading: number): boolean {
-    if (!safePlacement(x, z, heading, this.bounds)) return false;
-    const pose = { x, z, heading };
+  place(x: number, z: number, heading: number, referenceY?:number): boolean {
+    if (!safePlacement(x, z, heading, this.bounds) || referenceY!==undefined&&!Number.isFinite(referenceY)) return false;
+    const pose:VehiclePlacement = { x, z, heading, y:referenceY };
     if (this.placementGuard && !this.placementGuard(pose)) return false;
-    if (!safePlacement(pose.x, pose.z, pose.heading, this.bounds)) return false;
-    this.x = pose.x; this.z = pose.z; this.heading = pose.heading;
+    if (!safePlacement(pose.x, pose.z, pose.heading, this.bounds) || pose.y!==undefined&&!Number.isFinite(pose.y)) return false;
+    this.x = pose.x; this.z = pose.z; this.heading = pose.heading;this.placeReference=pose.y;this.placeInfer=false;
     this.vx = this.vz = this.vy = this.speed = this.pitchRate = this.wheelie = this.wheelieRate = this.whip = 0;
     this.pitch = this.roll = this.steerAngle = this.compression = this.crashTime = this.sunk = 0;
     if (!this.stepping) this.acc = 0;
     this.airborne = false;
-    this.y = this.groundAt(this.x, this.z) ?? this.y;
+    const land=this.terrain.heightAt(this.x,this.z);
+    this.y = (land===null?null:this.groundAt(this.x,this.z,pose.y??land)) ?? this.y;
     this.ready = this.capture();
     if (this.ready) {
       this.y = this.prevGround = Math.max((this.frontHeight + this.rearHeight) / 2, this.groundAt(this.x, this.z) ?? -Infinity);
       this.pitch = Math.atan2(this.frontHeight - this.rearHeight, this.spec.wheelbase);
       this.sampledY = this.y;
-      if (this.y > this.seaLevel + .05) this.lastSafe = { ...pose };
+      if (this.y > this.seaLevel + .05) this.lastSafe = { ...pose, y:this.y };
     }
     this.sync(0);
     return true;
   }
   /** Restore support history only; selection never searches for or installs a new pose. */
   resumeAfterParking(travel?: readonly number[], spin?: number): boolean {
-    this.ready = this.capture(); if (!this.ready) return false;
+    this.placeReference = this.y; this.ready = this.capture(); if (!this.ready) return false;
     this.prevGround = (this.frontHeight + this.rearHeight) / 2; this.acc = 0; if (spin !== undefined) this.spin = spin;
     if (travel) { this.frontTravel = travel[0] ?? 0; this.rearTravel = travel[2] ?? 0; }
     return true;
   }
   resetControlHistory(): void { this.helpYaw = this.lightHelpYaw = 0; this.lastJump = null; }
   resetVisit(): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.jump = { airTime: 0, peakHeight: 0, distance: 0, pitchRotations: 0, clean: false }; this.crashTime = this.sunk = 0; }
-  restart(x: number, z: number, heading: number): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.place(x, z, heading); }
+  restart(x: number, z: number, heading: number): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.placeAt(x, z, heading); }
   respawn(): void {
     let distance = 0;
     while (this.roadTrail.length > 1 && distance < 35) { const a = this.roadTrail.pop()!, b = this.roadTrail[this.roadTrail.length - 1]; distance += Math.hypot(a.x - b.x, a.z - b.z); }
@@ -100,13 +105,13 @@ export class BikeRide implements Ride {
     const near = this.roads.nearest(this.x, this.z, 1600, r => r.kind <= 5 && !r.bridge);
     const b = this.bounds;
     const usable = (p: VehiclePlacement | null | undefined) => p && (!b || p.x > b[0] + 2 && p.x < b[2] - 2 && p.z > b[1] + 2 && p.z < b[3] - 2)
-      && (this.groundAt(p.x, p.z) ?? -Infinity) > this.seaLevel - .1;
+      && (this.groundAt(p.x, p.z,p.y??(this.terrain.heightAt(p.x,p.z)??-Infinity)) ?? -Infinity) > this.seaLevel - .1;
     let safe = [crumb, near, this.lastSafe].find(usable);
     if (!safe && b) {
       const point = this.roads.nearest(clamp(this.x, b[0] + 60, b[2] - 60), clamp(this.z, b[1] + 60, b[3] - 60), 2000, r => r.kind <= 3 && !r.bridge);
       if (usable(point)) safe = point!;
     }
-    if (safe) this.place(safe.x, safe.z, safe.heading);
+    if (safe) this.place(safe.x, safe.z, safe.heading,'y'in safe?safe.y:undefined);
   }
   onSolidImpact(speed: number): void { if (this.damageActive) this.damage?.hit('impact', speed); if (speed > 7 && !this.crashTime) this.crash(); }
   private crash(): void {
@@ -121,7 +126,7 @@ export class BikeRide implements Ride {
       const p = this.contacts[i], along = (i ? -1 : 1) * this.spec.wheelbase / 2;
       p.x = this.x + fx * along; p.z = this.z + fz * along;
       p.y = this.y + this.spec.contactPlane * Math.sin(this.pitch - this.wheelie) * along;
-      p.h = this.terrain.withContactHeight(p, () => this.groundAt(p.x, p.z));
+      p.h = this.terrain.withContactHeight(p, () => this.groundAt(p.x, p.z,p.y));
     }
     this.sampledY = this.y;
     if (this.contacts.some(p => p.h === null)) return false;
@@ -132,14 +137,37 @@ export class BikeRide implements Ride {
     // Re-sample the SAME old positions at the old body height. A finer tile is not a take-off impulse.
     let correction = 0, known = true;
     this.terrain.withContactHeight({ y: this.sampledY }, () => {
-      for (const p of this.contacts) { const now = this.terrain.withContactHeight(p, () => this.groundAt(p.x, p.z)); if (now === null || p.h === null) known = false; else correction += (now - p.h) / 2; }
+      for (const p of this.contacts) { const now = this.terrain.withContactHeight(p, () => this.groundAt(p.x, p.z,p.y)); if (now === null || p.h === null) known = false; else correction += (now - p.h) / 2; }
     });
     if (known && Math.abs(correction) > 1e-6) { this.y += correction; this.prevGround += correction; }
+  }
+  /** The reference for a re-place at the current pose (see Vehicle.retryHeight). */
+  get retryHeight(): number | undefined { return this.ready ? this.y : this.inferring(this.x, this.z) ? placementDeckReference(this.roads, this.x, this.z) ?? this.placeReference : this.placeReference; }
+  private placeInfer = false;
+  private inferX = 0; private inferZ = 0;
+  private inferring(x: number, z: number): boolean { return this.placeInfer && Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5; }
+  /** See Vehicle.placeAt: a height-free placement stands on the deck it lies on, else on land. */
+  placeAt(x: number, z: number, heading: number): boolean {
+    const placed = this.place(x, z, heading, placementDeckReference(this.roads, x, z));
+    if (placed && this.placeReference === undefined) { this.placeInfer = true; this.inferX = this.x; this.inferZ = this.z; }
+    return placed;
+  }
+  parkedPlace(x: number, z: number, heading: number, y: number): boolean {
+    const infer = this.inferring(x, z), deck = infer ? placementDeckReference(this.roads, x, z) : undefined;
+    const placed = this.place(x, z, heading, deck ?? y);
+    this.placeInfer = infer && deck === undefined;
+    return placed;
+  }
+  retryPlace(): boolean {
+    const infer = this.inferring(this.x, this.z), deck = infer ? placementDeckReference(this.roads, this.x, this.z) : undefined;
+    const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);
+    this.placeInfer = infer && deck === undefined;
+    return placed;
   }
   update(dt: number, input: RideInput, afterStep?: () => void): void {
     if (!Number.isFinite(dt) || dt < 0) return;
     const safeInput = { throttle: Number.isFinite(input.throttle) ? clamp(input.throttle, -1, 1) : 0, steer: Number.isFinite(input.steer) ? clamp(input.steer, -1, 1) : 0, handbrake: !!input.handbrake, pull: !!input.pull };
-    if (!this.ready) { this.place(this.x, this.z, this.heading); return; }
+    if (!this.ready) { this.retryPlace(); return; }
     this.acc = Math.min(.1, this.acc + dt);
     while (this.acc + 1e-10 >= BIKE_STEP) {
       const safeBefore = this.lastSafe;
@@ -151,9 +179,9 @@ export class BikeRide implements Ride {
     this.sync(dt);
   }
   private surface(s: Surface): typeof SURFACES[keyof typeof SURFACES] {
-    if (this.terrain.cartRoads && this.roads.deckHeight(this.x,this.z)!==null) return s.kind===4?SURFACES.track:s.washboard?SURFACES.washboard:SURFACES.gravel;
-    if (s.deck) return SURFACES.concrete;
-    if (this.roads.deckHeight(this.x, this.z) !== null) return SURFACES.paved;
+    if (this.terrain.cartRoads && deckCounts(this.roads.deckHeight(this.x,this.z),this.y,this.terrain.cartRoads)) return s.kind===4?SURFACES.track:s.washboard?SURFACES.washboard:SURFACES.gravel;
+    if (s.deck) return s.washboard?SURFACES.washboard:s.kind===9?SURFACES.concrete:s.kind<=2?SURFACES.paved:s.kind===5?SURFACES.trail:s.kind===4?SURFACES.track:SURFACES.gravel;
+    if (!s.deck && deckCounts(this.roads.deckHeight(this.x, this.z),this.y,this.terrain.cartRoads)) return SURFACES.paved;
     if (s.kind === 0 || s.roadDist > s.halfWidth + .4) return s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
     return s.kind === 9 ? SURFACES.concrete : s.kind <= 2 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 5 ? SURFACES.trail : s.kind === 4 && (!s.gravel || this.terrain.cartRoads) ? SURFACES.track : SURFACES.gravel;
   }
@@ -168,7 +196,7 @@ export class BikeRide implements Ride {
     this.lastJump = { ...this.jump };
   }
   private step(dt: number, input: RideInput): void {
-    const s = this.terrain.surfaceAt(this.x, this.z);
+    const s = this.terrain.surfaceAt(this.x, this.z,this.y);
     if (!s) { this.vx = this.vz = this.speed = 0; return; }
     this.correctGround();
     if (!this.capture()) { this.vx = this.vz = this.speed = 0; return; }
@@ -181,14 +209,14 @@ export class BikeRide implements Ride {
     const slope = this.frontHeight < centre - .25 && this.rearHeight >= centre - .25
       ? Math.atan2((centre - this.rearHeight) * 2, this.spec.wheelbase)
       : Math.atan2(this.frontHeight - this.rearHeight, this.spec.wheelbase);
-    const gvel = clamp((ground - this.prevGround) / dt, -30, 30); this.prevGround = ground;
+    const gvel = clamp((ground - this.prevGround) / dt, -30, MAX_GROUND_RISE_SPEED); this.prevGround = ground;
     if (this.crashTime > 0) {
       this.crashTime += dt; this.vx *= .97; this.vz *= .97;
       if (this.damageActive) this.damage?.drive(dt, 0, surf.name, 0, false);   // repair cooldowns run on through a tumble
       this.x += this.vx * dt; this.z += this.vz * dt; this.y = Math.max(ground, centre, this.groundAt(this.x, this.z) ?? -Infinity); this.pitch = this.roll = 0;
       this.roads.guardrails?.block(this, dt);
       this.wall(); this.speed = Math.hypot(this.vx, this.vz);
-      if (this.crashTime >= 1.6) { const safe = this.lastSafe ?? { x: this.x, z: this.z, heading: this.crashHeading }; this.place(safe.x, safe.z, safe.heading); }
+      if (this.crashTime >= 1.6) { const safe = this.lastSafe ?? { x: this.x, z: this.z, heading: this.crashHeading,y:this.y }; this.place(safe.x, safe.z, safe.heading,'y'in safe?safe.y:undefined); }
       return;
     }
     // On a convex crest the contact plane drops out from under the free ballistic path.
@@ -279,13 +307,13 @@ export class BikeRide implements Ride {
       }
       this.y = newGround;
     }
-    if (!s.bridge && ((s.water && this.y < (s.waterLimit ?? s.ground+.25)) || s.ground < this.seaLevel - .25 && this.y < this.seaLevel + .1) && this.roads.deckHeight(this.x, this.z) === null) {
+    if (!s.deck && !deckCounts(this.roads.deckHeight(this.x,this.z),this.y,this.terrain.cartRoads) && ((s.water && this.y < (s.waterLimit ?? s.ground+.25)) || s.ground < this.seaLevel - .25 && this.y < this.seaLevel + .1) ) {
       this.sunk += dt; this.vx *= 1 - dt * 3; this.vz *= 1 - dt * 3; this.speed *= 1 - dt * 3;
       if (this.sunk > 1.4) this.respawn();
     } else {
       this.sunk = 0;
       if (!this.airborne && this.wheelie < .15 && newGround !== null && newGround > this.seaLevel + .05 && Math.abs(slope) < .45 && this.speed > 2 && !this.atEdge) {
-        this.lastSafe = { x: this.x, z: this.z, heading: this.heading };
+        this.lastSafe = { x: this.x, z: this.z, heading: this.heading, y:this.y };
         if (s.kind > 0 && s.kind <= 5 && s.roadDist <= s.halfWidth) {
           const tip = this.roadTrail[this.roadTrail.length - 1];
           if (!tip || Math.hypot(tip.x - this.x, tip.z - this.z) > 8) { this.roadTrail.push({ ...this.lastSafe }); if (this.roadTrail.length > 80) this.roadTrail.shift(); }

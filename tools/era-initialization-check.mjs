@@ -10,6 +10,7 @@ try{
  const importCalls=calls;calls=0;new Roads({roads:[]},[0,0],{cartRoads:false});
  console.log('BOOTSTRAP',JSON.stringify({stockThreeDraws,unusedEraImport:importCalls,todayRoadConstructor:calls}));
  assert.equal(importCalls,0,'unused era and all its static dependencies consume no random draws');
- assert.equal(calls,12,'original Group and two road materials keep their UUID draws');
- console.log('PASS spy begins before imports; unused era has no random side effects; today keeps 12 UUID draws');
+ assert.equal(calls,8,'modern Group plus one merged bridge material use eight UUID draws (formerly twelve for two materials)');
+ calls=0;new Roads({roads:[]},[0,0],{cartRoads:true});assert.equal(calls,4,'historical Group uses four UUID draws; removed two obsolete material placeholders');
+ console.log('PASS spy begins before imports; unused era has no random side effects; modern merged material uses 8 UUID draws; historical Group uses 4');
 }finally{Math.random=original;}

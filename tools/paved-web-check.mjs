@@ -23,12 +23,12 @@ const changes={
  M1:['paved.ts','e.data![r*SIDE+c]','e.data![(SIDE-1-r)*SIDE+c]','atlas orientation'],
  M2:['paved-weight.ts','f={x:fract(qx),y:fract(qz)}','f={x:1-fract(qx),y:fract(qz)}','east edge'],
  M3:['paved-shader.ts','hardPaved=cls==4.0?0.0:pavedWeight(p)','hardPaved=pavedWeight(p)','water guard'],
- W1:['paved-shader.ts',"  return replace(out,'    albedo *=","  out=replace(out,'    albedo = mix(albedo, surface, onRoad);','    albedo = vec3(.1);');\n  return replace(out,'    albedo *=",'native lane paint'],
+ W1:['paved-shader.ts',"  return replace(out,'    albedo *=","  out=replace(out,'    albedo = mix(albedo, surface, onRoad * roadPaint);','    albedo = vec3(.1);');\n  return replace(out,'    albedo *=",'native lane paint'],
  W2:['paved.ts','Math.min(30000,1000*2**(e.attempts-1))','1000*2**(e.attempts-1)','retry cap'],
  W3:['paved-shader.ts','dx=p.x-pavedCar.x, dz=p.y-pavedCar.y','dx=p.x+pavedCar.x, dz=p.y+pavedCar.y','ground car fade'],
  W4:['paved-weight.ts','*(1-smooth(380,480,Math.hypot(x-carX,z-carZ)))','','CPU car fade'],
- W5:['paved-shader.ts',"  return replace(out,'    albedo *=","  out=replace(out,'    albedo = mix(albedo, surface, onRoad);','    albedo = mix(albedo,vec3(.1),onRoad);');\n  return replace(out,'    albedo *=",'native lane paint'],
- W6:['paved-shader.ts',"  return replace(out,'    albedo *=","  out=replace(out,'    albedo = mix(albedo, surface, onRoad);','    albedo = mix(albedo,vec3(.1),pavedCarFade(p));');\n  return replace(out,'    albedo *=",'native lane paint'],
+ W5:['paved-shader.ts',"  return replace(out,'    albedo *=","  out=replace(out,'    albedo = mix(albedo, surface, onRoad * roadPaint);','    albedo = mix(albedo,vec3(.1),onRoad);');\n  return replace(out,'    albedo *=",'native lane paint'],
+ W6:['paved-shader.ts',"  return replace(out,'    albedo *=","  out=replace(out,'    albedo = mix(albedo, surface, onRoad * roadPaint);','    albedo = mix(albedo,vec3(.1),pavedCarFade(p));');\n  return replace(out,'    albedo *=",'native lane paint'],
  M5:['paved.ts','this.index.origin[1]-this.vy+z','this.index.origin[1]-this.vy-z','tile name'],
  OPTIN:['main.ts','','','default-on gate'],
  NOOFF:['main.ts','','','default-on gate'],
@@ -74,17 +74,23 @@ for(const v of [.1,.25,.4,.5,.6,.75,.9])assert.ok(Math.abs(edgeRule(v,.5,ss,(a,b
 const roots=new Uint8Array(16384);roots[10*128+10]=1;
 assert.ok(pavedTreeCell(roots,21,21),'tree root cut');assert.ok(pavedTreeCell(roots,23,21),'tree root cut margin');assert.ok(!pavedTreeCell(roots,27,21));assert.ok(!pavedTreeCell(null,21,21));
 assert.ok(readFileSync(root+'/web/src/trees.ts','utf8').includes('if (pavedTreeCell(pavedMask,x-x0,z-z0)) continue;'),'production tree planting cut');
-// Compare compiled off-mode programs, not raw text: GROUND_CLASSES blocks carry #else branches.
-// AIRPORT (Point Tupper airfield tiles) and GROUND_CLASSES variants are new; tools/baseline/programs.json pins them.
+// The shared committed pin (tools/baseline/programs.json) includes the reviewed bridge cuts (#156), so it replaces
+// main's merge-base pin, which that PR fails on purpose. It hashes the non-coast program variants with comments
+// stripped: an unreviewed change to those fails before any mutant. COAST_SHORE code is not hashed here (see
+// coast-source-check). The patch below must leave the native lane block byte-identical.
+const {checkShaderBaseline}=await import(pathToFileURL(root+'/tools/coast-programs.mjs').href);
+checkShaderBaseline(readFileSync(root+'/web/src/shaders.ts','utf8'),{report:()=>{}});
+// Main's off-mode comparison against the merge base, with this PR's marked modern road blocks removed from both
+// sides (the merge base has none), as the era and quarry checks do.
 const base=execFileSync('git',['merge-base','HEAD','origin/main'],{cwd:root,encoding:'utf8'}).trim();
 const source=execFileSync('git',['show',base+':web/src/shaders.ts'],{cwd:root,encoding:'utf8'});
 const shaderTools=await import(pathToFileURL(root+'/tools/coast-programs.mjs').href);
+const unmarked=text=>text.replace(/\/\* MODERN_ROAD_(?:CUT|PAINT)_BEGIN \*\/[\s\S]*?\/\* MODERN_ROAD_(?:CUT|PAINT)_END \*\//g,'').replaceAll(' * roadPaint','');
 const currentShader=readFileSync(root+'/web/src/shaders.ts','utf8');
-shaderTools.checkShaderBaseline(currentShader,{report:()=>{}});
 for(const {name,flags}of shaderTools.coastPrograms().filter(p=>!p.flags.includes('GROUND_CLASSES')&&!p.flags.includes('AIRPORT')&&!p.flags.includes('ROAD_PAVEMENT'))){
- assert.equal(shaderTools.normalized(shaderTools.preprocess(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(currentShader)),name),flags)),
-              shaderTools.normalized(shaderTools.preprocess(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(source)),name),flags)),
-              'off compiled shader equals merge base except the pinned distant bend: '+name+' '+flags);
+ assert.equal(shaderTools.normalized(shaderTools.preprocess(unmarked(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(currentShader)),name)),flags)),
+              shaderTools.normalized(shaderTools.preprocess(unmarked(shaderTools.program(shaderTools.withoutFarBend(shaderTools.reviewedMirrorCrown(source)),name)),flags)),
+              'off compiled shader equals merge base except the pinned distant bend and the marked bridge blocks: '+name+' '+flags);
 }
 const on=pavedGroundShader(TERRAIN_FRAG);assert.ok(on.indexOf('float hardPaved=')>on.indexOf('groundColor(p'));
 assert.ok(on.indexOf('float hardPaved=')<on.indexOf('// ---- roads: painted'));assert.ok(on.includes('ring *= 1.0-hardPaved;'));
@@ -98,7 +104,7 @@ const roadBlock=s=>s.slice(s.indexOf('// ---- roads: painted'),s.indexOf('// ---
 assert.equal(roadBlock(on),roadBlock(TERRAIN_FRAG),'native lane paint remains byte-identical; no lane conversion');
 // Execute the production shoulder operations in their actual order, not a string pin.
 const shoulderOps=on.slice(on.indexOf('// ---- roads: painted'),on.indexOf('// ---- brooks:')).split('\n').filter(line=>/^\s*shoulder \*= .*hardPaved;/.test(line)||/^\s*albedo = mix\(albedo, gravel, shoulder/.test(line)).join('\n');
-const paint=new Function('hardPaved', 'let shoulder=1,albedo=0,gravel=1,rkind=3;const mix=(a,b,t)=>a*(1-t)+b*t,step=(a,b)=>b<a?0:1;'+shoulderOps+'\n;return albedo;');
+const paint=new Function('hardPaved', 'let shoulder=1,albedo=0,gravel=1,rkind=3,roadPaint=1;const mix=(a,b,t)=>a*(1-t)+b*t,step=(a,b)=>b<a?0:1;'+shoulderOps+'\n;return albedo;');
 assert.equal(paint(1),0,'paved junction shoulder must not paint gravel');assert.ok(paint(0)>.8);
 assert.ok(PAVED_SAMPLE.includes('smoothstep(380.0,480.0'));
 const grass=pavedGrassShader('void main() {\n  vec2 toCar = x;\n}');
@@ -198,7 +204,7 @@ try{
  assert.equal(moving.pending,0);assert.ok(maxInflight<=4);assert.equal(moving.entries.size,25);assert.ok(moving.texture.image.data.every((v,i)=>v===(i%2?0:255)));
  moving.update(100*256,100*256);assert.equal(moving.entries.size,0);assert.ok(moving.texture.image.data.every(v=>v===0));
 }finally{globalThis.fetch=oldFetch;moving.texture.dispose();}
-console.log('PASS paved web: default-on gate with paved=0 way out, merge-base off pin, actual water guard, asymmetric RG atlas/world orientation with a gravel channel, 1 m laid edges, stall rows, mown verge, car fade and retry');
+console.log('PASS paved web: default-on gate with paved=0 way out, committed shader pin, actual water guard, asymmetric RG atlas/world orientation with a gravel channel, 1 m laid edges, stall rows, mown verge, car fade and retry');
 if(process.argv.includes('--mutations')){
  const results={};for(const [name,[,,,diagnostic]] of Object.entries(changes)){
   const r=spawnSync(process.execPath,['tools/run-node-check.mjs','tools/paved-web-check.mjs','--mutation',name],{cwd:root,encoding:'utf8'});

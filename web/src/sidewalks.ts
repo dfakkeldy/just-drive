@@ -81,11 +81,12 @@ export class Sidewalks {
   private materials:THREE.MeshLambertMaterial[]=[];
   private jobs:Job[]=[];private points:Point[]=[];private bridgeRefs:boolean[]=[];private topCount=0;
   private bridgeJobs:number[]=[];
+  /** Roads.bridgeRevision when the bridge pieces were last queued: they stand on the modern deck mesh. */
+  private deckRevision=-1;
   /** Each bridge's walk, for Roads.bridgeWalks. main.ts hands them over only once it accepts the layer. */
   readonly bridgeReservations=new Map<number,{side:number;width:number}>();
   /** Called once if the height worker fails after main.ts accepted the layer, so the town can take back what it gave up. */
   onDisabled?:()=>void;
-  private bridgeBanks=new Map<string,number[]>();
   private topOwners:number[][]=[];private caches:HeightCache[]=[];private wanted:Uint8Array;
   private coverage:WalkCoverage|null=null;private coverageLevels=new Uint8Array(0);
   private activeCache:HeightCache|null=null;private activeHeights:ReturnType<typeof createSidewalkHeights>|null=null;
@@ -111,7 +112,7 @@ export class Sidewalks {
     this.materials=['concrete','asphalt'].map(kind=>new THREE.MeshLambertMaterial({color:kind==='concrete'?0xbcbab3:0x414244,side:THREE.DoubleSide,vertexColors:true}));
     const compiled=data?.compiled?.[low?1:0];this.threaded=!!compiled&&modern&&!compiling&&typeof Worker!=='undefined';
     if(compiled&&modern&&!compiling) {
-      this.restore(compiled);this.indexBridgeBanks();this.audit.geometryMs=performance.now()-start-this.audit.planMs;
+      this.restore(compiled);this.audit.geometryMs=performance.now()-start-this.audit.planMs;
       const maskStart=performance.now();this.decodeMasks(data!);this.audit.maskMs=performance.now()-maskStart;
       // Opened last, so nothing after it can throw and leak a worker; a synchronous refusal falls back to the main thread.
       if(this.threaded&&!this.audit.disabled){if(this.openWorker())this.startWorker();else{this.threaded=false;this.mainThreadHeights(compiled);}}
@@ -182,7 +183,7 @@ export class Sidewalks {
     });
     this.audit.geometryMs=performance.now()-start-this.audit.planMs;
     const maskStart=performance.now();if(data&&modern)this.decodeMasks(data);this.audit.maskMs=performance.now()-maskStart;
-    this.indexBridgeBanks();this.buffers=[];this.audit.startupMs=performance.now()-start;
+    this.buffers=[];this.audit.startupMs=performance.now()-start;
   }
   private bytes(text:string):Uint8Array {
     const native=(Uint8Array as unknown as {fromBase64?:(s:string)=>Uint8Array}).fromBase64;
@@ -209,15 +210,6 @@ export class Sidewalks {
     });
     // Reserve the bridge parapet, exactly as in the offline compiler. Roads reads it when it first makes a deck.
     for(const id of this.bridgeJobs){const p=this.plan.pieces[id],road=this.network.roads?.find(r=>r.id===p.a.road.id);if(!road)continue;const a=road.pts[0],b=road.pts.at(-1)!;this.bridgeReservations.set(road.id,{side:p.a.normal[0]*(-(b[1]-a[1]))-p.a.normal[1]*(b[0]-a[0])>0?1:-1,width:p.run.width+p.run.buffer});}
-  }
-  private indexBridgeBanks():void {
-    const byRoad=new Map<number,number[]>();for(const id of this.bridgeJobs){const road=this.plan.pieces[id].a.road.id,ids=byRoad.get(road)??[];ids.push(id);byRoad.set(road,ids);}
-    for(const [roadId,ids]of byRoad){const road=this.network.roads?.find(r=>r.id===roadId);if(!road||road.pts.length<2)continue;
-      const p=road.pts,ends=[[p[0],p[1]],[p.at(-1)!,p.at(-2)!]];
-      for(const [a,b]of ends){const len=Math.hypot(a[0]-b[0],a[1]-b[1])||1,x=a[0]+(a[0]-b[0])*3/len,z=a[1]+(a[1]-b[1])*3/len,m=this.terrain.manifest;
-        for(let level=6;level<=8;level++){const size=m.size/2**level,key=`${level}/${Math.floor((x+this.village[0]-m.origin[0])/size)}_${Math.floor((z-(this.village[1]-m.origin[1]))/size)}`;this.bridgeBanks.set(key,[...new Set([...(this.bridgeBanks.get(key)??[]),...ids])]);}
-      }
-    }
   }
   private checkBudget():boolean {
     if(this.audit.draws<=WALK_BUDGET.draws&&this.audit.triangles<=(this.audit.low?WALK_BUDGET.low:WALK_BUDGET.desktop))return true;
@@ -257,16 +249,11 @@ export class Sidewalks {
   private mark(id:number):void {if(!this.dirtyFlags[id]){this.dirtyFlags[id]=1;this.dirty[this.dirtyWrite++%this.dirty.length]=id;}}
   tileReady(level:number,i:number,j:number):void {
     if(level<0||level>8||this.audit.disabled)return;const start=performance.now(),record=this.data?.terrain[`${level}/${i}_${j}`],members=(record?.heightMembers??record?.members)?.[this.audit.low?1:0];
-    const banks=this.bridgeBanks.get(`${level}/${i}_${j}`)??[];
     if(this.worker){
-      if(members||banks.length){const tile=this.terrain.walkTileData(level,i,j,!!banks.length);if(tile){const transfer:Transferable[]=[tile.positions.buffer as ArrayBuffer];if(tile.ground)transfer.push(tile.ground.buffer as ArrayBuffer);this.workerPending++;this.worker.postMessage({type:'tile',tile,members:members??[[],[]],pieceCount:this.plan.pieces.length,bridgeJobs:banks},transfer);}}
+      if(members){const tile=this.terrain.walkTileData(level,i,j);if(tile){this.workerPending++;this.worker.postMessage({type:'tile',tile,members,pieceCount:this.plan.pieces.length},[tile.positions.buffer as ArrayBuffer]);}}
       this.workOutsideUpdate+=performance.now()-start;return;
     }
     if(members){for(const id of [...members[0],...members[1].map(f=>this.plan.pieces.length+f)]){if(level>=6)this.queue(id,level);this.queueActive(id,level);}}
-    // A deck depends on its two banks, which can lie in adjacent tiles.
-    for(const id of this.bridgeBanks.get(`${level}/${i}_${j}`)??[])for(let l=6;l<=8;l++){
-      const cache=this.caches[l-6];cache.ready[id]=0;for(const s of this.jobs[id].surfaces)for(const top of s.tops)cache.top[top]=NaN;this.queue(id,l);
-    }
     this.workOutsideUpdate+=performance.now()-start;
   }
   tileSelected(level:number,i:number,j:number,part=0):void {
@@ -310,14 +297,13 @@ export class Sidewalks {
   }
   private startWorker():void {
     if(!this.worker)return;this.workerPending=1;
-    const bridges=[...new Set(this.bridgeJobs.map(i=>this.plan.pieces[i].a.road.id))].flatMap(id=>{const r=this.network.roads?.find(r=>r.id===id);if(!r)return [];const p=r.pts,banks=[[p[0],p[1]],[p.at(-1)!,p.at(-2)!]].map(([a,b])=>{const len=Math.hypot(a[0]-b[0],a[1]-b[1])||1;return [a[0]+(a[0]-b[0])*3/len,a[1]+(a[1]-b[1])*3/len];});return [{id,points:p,banks}];});
     this.worker.onmessage=({data})=>{
       if(data.type==='ready'){this.workerPending--;URL.revokeObjectURL(this.workerURL);this.workerURL='';}
       else if(data.type==='done'){this.workerPending--;this.audit.heightReads=data.reads;this.audit.heightJobs=data.completed;}
       else if(data.type==='heights'||data.type==='active')this.incoming.push({...data,active:data.type==='active'});
     };
     this.worker.onerror=()=>{if(!this.warned){console.warn('Sidewalk height worker failed; skipping sidewalks');this.warned=true;}this.audit.disabled=true;this.group.visible=false;this.workerPending=0;this.worker?.terminate();const hook=this.onDisabled;this.onDisabled=undefined;hook?.();};
-    this.worker.postMessage({type:'init',points:this.points,topCount:this.topCount,topOwners:this.topOwners,coverage:this.coverage,manifest:{origin:this.terrain.manifest.origin,village:this.terrain.manifest.village,size:this.terrain.manifest.size,levels:this.terrain.manifest.levels},bridges,jobs:this.jobs.map((j,i)=>({refs:j.refs,surfaces:j.surfaces,bridge:j.bridge,road:this.plan.pieces[i]?.a.road.id}))});
+    this.worker.postMessage({type:'init',points:this.points,topCount:this.topCount,topOwners:this.topOwners,coverage:this.coverage,manifest:{origin:this.terrain.manifest.origin,village:this.terrain.manifest.village,size:this.terrain.manifest.size,levels:this.terrain.manifest.levels},jobs:this.jobs.map(j=>({refs:j.refs,surfaces:j.surfaces,bridge:j.bridge}))});
   }
   private receiveHeights():void {
     const packet=this.incoming[this.incomingAt++],a=packet.data,cache=packet.active?this.activeCache!:this.caches[packet.level-6];let at=0;
@@ -358,6 +344,14 @@ export class Sidewalks {
   }
   update():void {
     const start=performance.now();if(!this.checkBudget())return;
+    // Bridge pieces read the modern deck (Roads.deckHeight) on this thread. A deck builds or rebuilds when its banks'
+    // land arrives, so each new build queues them again at every level and in the active cache (resolve() replaces
+    // a piece's old contribution); until their deck exists they stay unready. No slab corner is shared with a street
+    // piece (sidewalks-check), so a worker packet never overwrites a deck height.
+    const deckRevision=this.network.bridgeRevision??0;
+    if(deckRevision!==this.deckRevision){this.deckRevision=deckRevision;
+      for(const id of this.bridgeJobs){for(let l=6;l<=8;l++){const cache=this.caches[l-6];cache.ready[id]=0;for(const s of this.jobs[id].surfaces)for(const top of s.tops)cache.top[top]=NaN;this.queue(id,l);}this.queueActive(id);}
+    }
     const end=start+.35;
     while(performance.now()<end&&(this.taskAt<this.tasks.length||this.dirtyAt<this.dirtyWrite||this.selectionAt<this.selections.length||this.incomingAt<this.incoming.length||this.activeAt<this.activeTasks.length)) {
       if(this.selectionAt<this.selections.length)this.selectSome();

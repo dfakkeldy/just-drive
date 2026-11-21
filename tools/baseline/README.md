@@ -69,13 +69,17 @@ above. Never edit it. `node tools/roads-key-check.mjs` checks its `frozen.json`
 hash, bundles it with the installed web esbuild/three.js, and rejects imports
 from current game modules. The Terrain import is type-only and erased.
 
-The check compares old/current nearest hits (all numeric fields with Object.is
-and the same source road/segment identity) and deck heights on 2,400 seeded
-points per registered real area, every bridge segment, boundaries and synthetic
-crossing decks. The query fixture supplies identical sloping bank heights;
-actual baked Mabou terrain is also used for paired Vehicle updates. Grid Map.get
-and deckHeight wrappers count string keys, deck calls and empty bridge-grid
-returns only in the Node harness; no counting hook is included in the game.
+The check compares old/current nearest hits (all numeric fields with Object.is and the
+same source road/segment identity) on 2,400 seeded points per real area, every bridge
+segment, boundaries and synthetic crossings. The frozen key and source-identity
+oracle stays unchanged. Bridge height parity was retired by bridges-fix: connected
+abutments, exact top triangles and smooth approaches intentionally replace the old
+per-record planes. `bridges-check.mjs` and `bridges-real-check.mjs` verify that new
+contract, including a channel-height mutant and real driving/raycast probes.
+
+Grid Map.get and deckHeight wrappers count numeric keys, calls and empty returns
+only in the Node harness. Road-only paired Vehicle states retain exact parity;
+bridge cases check finite state and bounded calls under the new support contract.
 `--mutations` changes only esbuild's in-memory input. Timing is not a gate.
 
 ## Frozen mailbox rule

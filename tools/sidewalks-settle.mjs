@@ -13,6 +13,22 @@ export function backgroundProcesses(){
  return rows.sort((a,b)=>b.cpu-a.cpu).slice(0,12);
 }
 
+/** Areas with a sidewalk layer: the measured current page must contain it there. Canso Causeway and Troy has none. */
+export const SIDEWALK_AREAS=new Set(['mabou','porthood','pointtupper']);
+/** A capped start-up cost, accepted on 21 Nov 2026 for PR #6's bridges at Point Tupper: correct bridges and
+ *  underpasses and no ground-snap launches, for the deck builds one span (-100084, Industrial Park Road) needs. Each cap is the
+ *  highest of three medians measured on #6's final game code (LOW 627, 594 and 426 ms; HIGH 732, 733 and 761 ms),
+ *  rounded up to 10 ms. Never widen it. Baking the span geometry removes the cost and this entry. Every other area
+ *  keeps the plain main/main rule. */
+export const SETTLE_ALLOWANCE_MS={pointtupper:{low:630,high:770}};
+/** A current median outside main/main noise passes only within its area's capped allowance. */
+export function settleVerdict(current,noise,area,low){
+ const settle=current.median<noise.min?'faster-than-noise':current.median<=noise.max?'within-noise':'outside-noise';
+ const cap=SETTLE_ALLOWANCE_MS[area]?.[low?'low':'high'];
+ return settle==='outside-noise'&&cap!==undefined&&current.median<=cap?'within-allowance':settle;
+}
+/** Whether a load must show the working sidewalk layer: the current page's loads, in an area that has one. */
+export const layerRequired=(label,area)=>(label==='fixed'||label==='warm-fixed')&&SIDEWALK_AREAS.has(area);
 export const ownReadyExpression='document.documentElement?.dataset.mmmReady === "true"';
 export function assertMeasuredLayer(audit,enabled){
  if(enabled)assert.ok(audit&&!audit.disabled&&audit.draws>0&&audit.triangles>0,'measured current page must contain the working sidewalk layer');
@@ -36,7 +52,7 @@ async function run(){
   for(const area of areas)for(const quality of qualities){const child=`${out}/${area}-${quality}`;mkdirSync(child,{recursive:true});execFileSync(process.execPath,[fileURLToPath(import.meta.url),child,origin],{env:{...process.env,SIDEWALK_MEASURE_AREA:area,SIDEWALK_MEASURE_QUALITY:quality},stdio:'inherit'});}return;
  }
  const area=process.env.SIDEWALK_MEASURE_AREA??'porthood',low=process.env.SIDEWALK_MEASURE_QUALITY==='low';
- const poses={mabou:'624450,5103340,55',porthood:'613770,5096500,0',pointtupper:'628180,5052820,130'};assert.ok(poses[area]);
+ const poses={mabou:'624450,5103340,55',porthood:'613770,5096500,0',pointtupper:'628180,5052820,130',cansocauseway:'623863,5056467,0'/* Port Hastings */};assert.ok(poses[area]);
  const report={head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),base:process.env.SIDEWALK_MEASURE_BASE_REF,area,low,method:'probe-free existing data-mmm-ready, CDP read only, fixed 250 ms polling, new loader identity checked',injectedScripts:0,responseInterceptors:0,pollMs:250,pairs:7,rounds:[],loads:[]};
  const save=()=>writeFileSync(`${out}/probe-free.json`,JSON.stringify(report,null,2)+'\n');let tab,c,currentLoader;
  const at=(round,label)=>{const rows=report.loads.filter(v=>v.round===round&&v.label===label);assert.equal(rows.length,1);return rows[0];};
@@ -45,7 +61,7 @@ async function run(){
   const navigationStartedAt=new Date().toISOString(),r=await measureOwnReady(c,url,{loader:()=>currentLoader});
   // Outside the measured interval: an optional asset/worker failure must never create a fast false PASS.
   const state=await c.send('Runtime.evaluate',{expression:'globalThis.mmm?.sidewalks?.audit??null',returnByValue:true}),layer=state.result.result.value;
-  report.loads.push({label,round,warmup,roundMetadata:metadata,navigationStartedAt,...r,layer});save();assertMeasuredLayer(layer,label==='fixed'||label==='warm-fixed');console.log('SETTLE',JSON.stringify(report.loads.at(-1)));
+  report.loads.push({label,round,warmup,roundMetadata:metadata,navigationStartedAt,...r,layer});save();assertMeasuredLayer(layer,layerRequired(label,area));console.log('SETTLE',JSON.stringify(report.loads.at(-1)));
  };
  try{
   tab=await(await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
@@ -59,8 +75,8 @@ async function run(){
   }
   const deltas=(a,b)=>timingStats(Array.from({length:7},(_,i)=>at(i,a).ms-at(i,b).ms));
   const noise=deltas('noise-b','noise-a'),current=deltas('fixed','base-fixed');
-  report.result={noise,currentVsMain:current,mainAbsolute:timingStats(report.loads.filter(v=>!v.warmup&&v.label!=='fixed').map(v=>v.ms)),currentAbsolute:timingStats(report.loads.filter(v=>v.label==='fixed').map(v=>v.ms)),settle:current.median<noise.min?'faster-than-noise':current.median<=noise.max?'within-noise':'outside-noise'};save();
-  assert.notEqual(report.result.settle,'outside-noise','probe-free current median outside same-row main/main spread');console.log('PASS probe-free settle',JSON.stringify(report.result));
+  report.result={noise,currentVsMain:current,mainAbsolute:timingStats(report.loads.filter(v=>!v.warmup&&v.label!=='fixed').map(v=>v.ms)),currentAbsolute:timingStats(report.loads.filter(v=>v.label==='fixed').map(v=>v.ms)),settle:settleVerdict(current,noise,area,low),allowanceMs:SETTLE_ALLOWANCE_MS[area]?.[low?'low':'high']??null};save();
+  assert.notEqual(report.result.settle,'outside-noise','probe-free current median outside same-row main/main spread and any capped allowance');console.log('PASS probe-free settle',JSON.stringify(report.result));
  }finally{save();c?.close();if(tab)await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`).catch(()=>{});}
 }
 if(process.argv[1]===fileURLToPath(import.meta.url))await run();

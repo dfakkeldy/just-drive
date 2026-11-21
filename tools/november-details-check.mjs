@@ -16,6 +16,21 @@ const byte = (sample, flags) => {
   return bytes;
 };
 
+// The bridge paint mask and pavement flags must be independent on the same tile.
+const road = new Uint8Array([128, 52, 68, 0, 128, 52, 65, 0, 128, 52, 33, 0]);
+const paintMask = new Uint8Array([0, 0, 1]);
+assert.deepEqual([...drawnRoadBytes(road, paintMask)], [128, 52, 3, 0, 128, 52, 65, 0, 128, 52, 32, 0]);
+assert.deepEqual([...road], [128, 52, 68, 0, 128, 52, 65, 0, 128, 52, 33, 0], 'CPU road flags stay intact');
+
+// Boot-time driveways must keep the surveyed span inventory from the installed network.
+const launch = readFileSync('web/src/main.ts', 'utf8').match(/^const roads = new Roads\((.*), manifest.village, terrain\);$/m);
+assert.ok(launch, 'road network startup expression');
+const supplied = { roads: [{ id: 1 }], bridgeSpans: [{ id: 2 }] };
+const driveways = { added: [{ id: 3 }] };
+const combined = new Function('roadData', 'novemberRoads', 'return (' + launch[1] + ')')(supplied, driveways);
+assert.equal(combined.bridgeSpans, supplied.bridgeSpans, 'surveyed spans survive the driveway additions');
+assert.deepEqual(combined.roads.map(road => road.id), [1, 3]);
+
 for (const area of ['mabou', 'porthood']) {
   const dir = area === 'mabou' ? 'terrain' : 'areas/porthood';
   const { village, mid } = read(dir, 'manifest'), data = read(dir, 'roads');

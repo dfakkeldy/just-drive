@@ -551,7 +551,7 @@ export class Animals {
     this.horn.position.set(vehicle.x, vehicle.y + 2.7, vehicle.z);
     const requested = this.testResident, s = this.testStart;
     if (requested && s && !this.spawnReady) {
-      vehicle.place(s.x, s.z, s.heading); vehicle.speed = 0;
+      vehicle.place(s.x, s.z, s.heading,vehicle.y); vehicle.speed = 0;
       this.spawnReady = this.terrain.pending === 0 && (this.terrain.surfaceAt(s.x, s.z)?.level ?? 0) >= 7
         && (this.terrain.surfaceAt(requested.home.x, requested.home.z)?.level ?? 0) >= 7;
     }
@@ -612,7 +612,7 @@ export class Animals {
       else if (a.kind === 'cow') this.cow(a, dt, vehicle, stopped, d);
       else if (a.kind !== 'farm') this.dog(a, dt, vehicle, stopped, d);
       if (a.kind === 'cow' || a.kind === 'farm') this.pasture(dt, a, vehicle, stopped);
-      const ground = this.animalGround(p.x, p.z, a.kind === 'bull');
+      const ground = this.animalGround(p.x, p.z, a.kind === 'bull',p.y-a.roof);
       if (ground !== null) p.y = ground + a.roof;
       if (!a.roof && a.kind !== 'farm') this.groundRig(rig, !a.moving, a.kind === 'bull');
       if (a.kind === 'cow' || a.kind === 'bull') {
@@ -630,7 +630,7 @@ export class Animals {
       if (!s.active) { s.blocking = false; continue; }
       if (p) {
         s.x = p.x; s.z = p.z; s.y = p.y + (a.rig?.shoulder ?? .3) * .8;
-        const surface = this.terrain.surfaceAt(p.x, p.z);
+        const surface = this.terrain.surfaceAt(p.x, p.z,p.y);
         s.blocking = a.kind !== 'roofcat' && a.kind !== 'farm' && a.kind !== 'bull' && !!surface && surface.roadDist <= surface.halfWidth + .5;
       }
     }
@@ -706,18 +706,18 @@ export class Animals {
     return group;
   }
 
-  private animalGround(x: number, z: number, drawn: boolean): number | null {
-    return (drawn ? this.terrain.meshHeightAt(x, z, true) : null) ?? this.terrain.heightAt(x, z);
+  private animalGround(x: number, z: number, drawn: boolean,referenceY?:number): number | null {
+    return (drawn ? this.terrain.meshHeightAt(x, z, true) : null) ?? this.terrain.heightAt(x, z,referenceY);
   }
 
   private groundRig(rig: Rig, standing: boolean, drawn = false): void {
     const p = rig.root.position, heading = -rig.root.rotation.y;
     const fx = Math.sin(heading), fz = -Math.cos(heading), rx = Math.cos(heading), rz = Math.sin(heading);
     const reach = rig.shoulder > 1 ? .72 : rig.shoulder * .5, width = rig.shoulder * .25;
-    const front = this.animalGround(p.x + fx * reach, p.z + fz * reach, drawn) ?? p.y;
-    const back = this.animalGround(p.x - fx * reach, p.z - fz * reach, drawn) ?? p.y;
-    const right = this.animalGround(p.x + rx * width, p.z + rz * width, drawn) ?? p.y;
-    const left = this.animalGround(p.x - rx * width, p.z - rz * width, drawn) ?? p.y;
+    const front = this.animalGround(p.x + fx * reach, p.z + fz * reach, drawn,p.y) ?? p.y;
+    const back = this.animalGround(p.x - fx * reach, p.z - fz * reach, drawn,p.y) ?? p.y;
+    const right = this.animalGround(p.x + rx * width, p.z + rz * width, drawn,p.y) ?? p.y;
+    const left = this.animalGround(p.x - rx * width, p.z - rz * width, drawn,p.y) ?? p.y;
     rig.root.rotation.x = clamp(Math.atan2(front - back, reach * 2), -.55, .55);
     rig.root.rotation.z = clamp(Math.atan2(right - left, width * 2), -.55, .55);
     const sheep = rig.root.name === 'sheep' || rig.root.name === 'lamb';
@@ -730,7 +730,7 @@ export class Animals {
         for (let index=0;index<rig.legs.length;index++) { const leg=rig.legs[index];
           for (let i = 0; i < 2; i++) {
             const sole=rig.hoofSoles?.[index];if(sole)this.hoof.copy(sole);else this.hoof.set(0,-rig.shoulder*(sheep ? .63 : .635),0);leg.localToWorld(this.hoof);
-            const ground = this.animalGround(this.hoof.x, this.hoof.z, drawn);
+            const ground = this.animalGround(this.hoof.x, this.hoof.z, drawn,this.hoof.y);
             if (ground !== null) leg.position.y += clamp((ground + .002 - this.hoof.y) * up, -.2, .2);
           }
         }
@@ -753,7 +753,7 @@ export class Animals {
       const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz), step = Math.min(d, dt * .35);
       if (d > .01) { p.x += dx / d * step; p.z += dz / d * step; rig.root.rotation.y = -Math.atan2(dx, -dz); }
     }
-    p.y = this.terrain.heightAt(p.x, p.z) ?? p.y;
+    p.y = this.terrain.heightAt(p.x, p.z,p.y) ?? p.y;
     this.groundRig(rig, !moving);
     const look = stopped && distance(p, v) < 55;
     const target = -angle(p, v) - rig.root.rotation.y;
@@ -1020,15 +1020,15 @@ export class Animals {
       if (Math.abs(dr) > .00001) { const t1 = (startR - width) / dr, t2 = (startR + width) / dr; enter = Math.max(enter, Math.min(t1, t2)); leave = Math.min(leave, Math.max(t1, t2)); }
       else if (Math.abs(startR) >= width) leave = -1;
       if (enter <= leave && leave >= 0 && enter <= 1 && (Math.abs(startF) >= end || Math.abs(startR) >= width)) {
-        const t = Math.max(0, enter - .001); v.place(this.lastVehicle.x + moveX * t, this.lastVehicle.z + moveZ * t, v.heading); v.speed = 0;
+        const t = Math.max(0, enter - .001); v.place(this.lastVehicle.x + moveX * t, this.lastVehicle.z + moveZ * t, v.heading,v.y); v.speed = 0;
       }
     }
     const dx = p.x - v.x, dz = p.z - v.z, f = dx * fx + dz * fz, r = dx * rx + dz * rz;
     if (Math.abs(r) < width && Math.abs(f) < end) {
       // Prefer the nearest free edge. Door visitors remain beside the car.
       if (width - Math.abs(r) < end - Math.abs(f) && Math.abs(r) > .15) {
-        const shift = (width - Math.abs(r)) * (r < 0 ? -1 : 1); v.place(v.x - rx * shift, v.z - rz * shift, v.heading);
-      } else { const shift = (end - Math.abs(f)) * (f < 0 ? -1 : 1); v.place(v.x - fx * shift, v.z - fz * shift, v.heading); }
+        const shift = (width - Math.abs(r)) * (r < 0 ? -1 : 1); v.place(v.x - rx * shift, v.z - rz * shift, v.heading,v.y);
+      } else { const shift = (end - Math.abs(f)) * (f < 0 ? -1 : 1); v.place(v.x - fx * shift, v.z - fz * shift, v.heading,v.y); }
       v.speed = 0;
     }
   }

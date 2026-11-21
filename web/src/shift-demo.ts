@@ -10,7 +10,7 @@ export class LawnDemo {
   private readonly z: number;
   constructor(house: Building, village: [number, number], vehicle: Vehicle) {
     this.x = house.x - village[0]; this.z = village[1] - house.y;
-    vehicle.place(this.x - 20, this.z, 0);
+    vehicle.place(this.x - 20, this.z, 0,vehicle.y);
   }
   prepare(terrain: Terrain, vehicle: Vehicle): boolean {
     if (this.ready || (terrain.surfaceAt(this.x, this.z)?.level ?? 0) < 8) return false;
@@ -23,7 +23,7 @@ export class LawnDemo {
         if (!s || s.level < 8 || s.canopy >= 1.6 || s.roadDist <= s.halfWidth + 1 || s.ground < 1) { clear = false; break; }
       }
       if (clear) {
-        vehicle.place(cx - fx * 12, cz - fz * 12, Math.atan2(fx, -fz)); vehicle.speed = vehicle.steerAngle = 0; this.ready = true; return true;
+        vehicle.place(cx - fx * 12, cz - fz * 12, Math.atan2(fx, -fz),vehicle.y); vehicle.speed = vehicle.steerAngle = 0; this.ready = true; return true;
       }
     }
     return false;

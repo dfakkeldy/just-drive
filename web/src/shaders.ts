@@ -557,6 +557,44 @@ void coastSurface(vec2 p, float drawnHeight, float fine, float distance, inout v
 #endif
 `;
 
+const ROAD_CUT_PARS = /* glsl */ `
+/* MODERN_ROAD_CUT_BEGIN */
+uniform highp sampler2DArray tRoadCut;
+uniform vec4 roadCutLayout;
+uniform vec4 roadCutRect;
+uniform float roadCuts;
+vec4 cutPixel(int pixel){
+  int side=int(roadCutLayout.w),pageSize=side*side,layer=pixel/pageSize,at=pixel-layer*pageSize;
+  return texelFetch(tRoadCut,ivec3(at%side,at/side,int(roadCutLayout.z)+layer),0);
+}
+/* MODERN_ROAD_CUT_END */
+`;
+const ROAD_CUT_FRAG = /* glsl */ `
+/* MODERN_ROAD_CUT_BEGIN */
+bool roadCutDiscard=false;
+if (roadCuts > 0.5) {
+  ivec2 cell=ivec2(floor(vWorld.xz-roadCutRect.xy)),dims=ivec2(roadCutLayout.xy);
+  if(min(cell.x,cell.y)>=0 && cell.x<dims.x && cell.y<dims.y){
+    int cols=(dims.x+15)/16,head=(cell.y/16)*cols+cell.x/16;
+    int block=int(cutPixel(head).r);
+    if(block>=0){
+      vec4 record=cutPixel(block+(cell.y%16)*16+cell.x%16);
+      int offset=int(record.r),count=int(record.g);float lowest=1e20;
+      for(int i=0;i<count;i++){
+        int ix=offset+i;vec4 ids=cutPixel(ix/4);int vertex=int(ids[ix%4]);
+        vec3 a=cutPixel(vertex).xyz,b=cutPixel(vertex+1).xyz,c=cutPixel(vertex+2).xyz;
+        vec2 ab=b.xz-a.xz,ac=c.xz-a.xz,p=vWorld.xz-a.xz;float det=ab.x*ac.y-ab.y*ac.x;
+        if(abs(det)<1e-8)continue;
+        float u=(p.x*ac.y-p.y*ac.x)/det,v=(ab.x*p.y-ab.y*p.x)/det;
+        if(u>=0.0&&v>=0.0&&u+v<=1.0)lowest=min(lowest,a.y+u*(b.y-a.y)+v*(c.y-a.y));
+      }
+      if(vWorld.y>lowest-.035)roadCutDiscard=true;
+    }
+  }
+}
+/* MODERN_ROAD_CUT_END */
+`;
+
 export const TERRAIN_FRAG = /* glsl */ `
 #ifdef AIRPORT
 // Point Tupper airport markings, shaded on the land itself so they cannot float above a changing LOD.
@@ -601,6 +639,11 @@ ${COAST_SURFACE}
 #if !defined(LOW) && !defined(MIRROR)
 uniform vec3 grassFocus;   // camera xz and local grass shade strength; zero when off
 #endif
+${ROAD_CUT_PARS}
+/* MODERN_ROAD_PAINT_BEGIN */
+// The road field is horizontal. Limit colour, keeping road occupancy/water logic unchanged.
+bool roadPaintOnGrade(float grade) { return grade <= 0.70020754; } // tan(35 degrees)
+/* MODERN_ROAD_PAINT_END */
 uniform sampler2D tNormal;   // RG normal xz, B canopy height / 51 m, A ground slope
 uniform sampler2D tCover;    // R red-turning share, G yellow-turning share, B class
 uniform sampler2D tRoad;     // R distance to the road centreline (signed about roadZero when baked so), G half width / 12.75 m, B kind (1-5)
@@ -793,6 +836,13 @@ void main() {
 #if defined(SEA_WATER) && !defined(LOW) && !defined(MIRROR)
   float waterFootprint = max(length(dFdx(vWorld.xz)), length(dFdy(vWorld.xz))), groundEdge = fwidth(vGround);
 #endif
+/* MODERN_ROAD_PAINT_BEGIN */
+  // Use the rendered face, not the smoothed lighting normal or the clamped DTM slope.
+  // Derivatives precede all quadrant/material discards, including the mirror pass.
+  vec3 roadFace = cross(dFdx(vWorld), dFdy(vWorld));
+  float roadGrade = length(roadFace.xz) / max(abs(roadFace.y), 0.000001);
+  float roadPaint = roadPaintOnGrade(roadGrade) ? 1.0 : 0.0;
+/* MODERN_ROAD_PAINT_END */
 #ifdef QUARRY
   // The plane bounds ordinary clipping; higher survey noise needs a water-backed footprint too.
   if(vCoast.z>0.0 && quarryWaterBacked(vWorld))discard;
@@ -803,6 +853,7 @@ void main() {
   float quarter = step(0.5, vUv.x) + 2.0 * step(0.5, vUv.y);
   if ((quarter < 0.5 ? hideQuad.x : quarter < 1.5 ? hideQuad.y : quarter < 2.5 ? hideQuad.z : hideQuad.w) > 0.5) discard;
   #include <logdepthbuf_fragment>
+  ${ROAD_CUT_FRAG}
   vec2 tuv = (vUv * 256.0 + 0.5) / 257.0;
   vec4 nm = texture2D(tNormal, tuv);
   vec2 nxz = nm.xy * 2.0 - 1.0;
@@ -1000,7 +1051,7 @@ void main() {
     float density = rkind > 7.5 ? 0.0 : (rkind < 1.5 ? 0.17 : rkind < 2.5 ? 0.28 : rkind < 3.5 ? 0.42 : rkind < 4.5 ? 0.36 : 0.0) + 0.2 * wash;
     float hole = rdist < rhalf - 0.2 && density > 0.0 ? pothole(p, density) : 0.0;
     surface = mix(surface, mix(vec3(0.060, 0.052, 0.045), vec3(0.105, 0.092, 0.078), speck), smoothstep(0.0, 0.03, hole) * (1.0 - smoothstep(120.0, 400.0, dist)));
-    albedo = mix(albedo, gravel, shoulder * 0.85 * step(rkind, 11.5));   // a lawn has no gravel shoulder
+    albedo = mix(albedo, gravel, shoulder * 0.85 * step(rkind, 11.5) * roadPaint);   // a lawn has no gravel shoulder
 #ifdef QUARRY
     if(inQuarry && ((rkind > 2.5 && rkind < 4.5) || rkind == 8.0)) {
       vec3 dust=vec3(.74,.72,.66)*(0.92+speck*.14);
@@ -1009,10 +1060,10 @@ void main() {
 #ifdef SITE_GRAVEL
       if(rkind==8.0)onRoad*=gravelOverlay;
 #endif
-      albedo=mix(albedo,dust*(.86+grit*.25),shoulder*.9);
+      albedo=mix(albedo,dust*(.86+grit*.25),shoulder*.9 * roadPaint);
     }
 #endif
-    albedo = mix(albedo, surface, onRoad);
+    albedo = mix(albedo, surface, onRoad * roadPaint);
     canopy *= 1.0 - max(onRoad, shoulder);
   }
 
@@ -1149,6 +1200,9 @@ void main() {
   if (brookWater > 0.0) col = mix(col, brookColor(vWorld, cameraPosition, brookFlow, brookMid, clamp(dot(n.xz, brookFlow) / max(n.y, 0.3) * 4.0, 0.0, 1.0), light), brookWater * (1.0 - tree));
 
   col = applyFog(col, vWorld, cameraPosition);
+  /* MODERN_ROAD_CUT_BEGIN */
+  if(roadCutDiscard)discard;
+  /* MODERN_ROAD_CUT_END */
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -1189,6 +1243,7 @@ void main() {
 export const WATER_MASK_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
+${ROAD_CUT_PARS}
 uniform sampler2D tNormal;
 uniform sampler2D tCover;
 uniform sampler2D tRoad;
@@ -1204,6 +1259,7 @@ void main() {
   float quarter = step(0.5, vUv.x) + 2.0 * step(0.5, vUv.y);
   if ((quarter < 0.5 ? hideQuad.x : quarter < 1.5 ? hideQuad.y : quarter < 2.5 ? hideQuad.z : hideQuad.w) > 0.5) discard;
   #include <logdepthbuf_fragment>
+  ${ROAD_CUT_FRAG}
   if (vGround >= seaLevel + 0.02) {
     if (vGround > seaLevel + 2.0) discard;
     vec4 nm = texture2D(tNormal, (vUv * 256.0 + 0.5) / 257.0);
@@ -1237,6 +1293,9 @@ void main() {
     }
     if (onRoad >= 0.5 || nm.b * 51.0 * (1.0 - max(onRoad, shoulder)) >= 1.5) discard;
   }
+  /* MODERN_ROAD_CUT_BEGIN */
+  if(roadCutDiscard)discard;
+  /* MODERN_ROAD_CUT_END */
   gl_FragColor = vec4(0.0);
 }
 `;

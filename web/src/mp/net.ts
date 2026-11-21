@@ -80,7 +80,7 @@ class Peer {
     let i = buf.length - 1;
     while (i > 0 && buf[i].t > T) i--;
     const a = buf[i], b = buf[i + 1] as CarState | undefined;
-    let x: number, z: number, heading: number, vx = a.vx, vz = a.vz, steer = a.steer, air = a.air, flags = a.flags, jump = false;
+    let x: number, z: number, heading: number, vx = a.vx, vz = a.vz, steer = a.steer, air = a.air, y=a.y, flags = a.flags, jump = false;
     if (b && T >= a.t) {
       // Between two reports: a curve through both places that leaves and arrives at the reported velocities.
       // After a long silence (a parked car that drives off) the move belongs to the last moments before b.
@@ -96,6 +96,7 @@ class Peer {
         heading = a.heading + angle(b.heading - a.heading) * u;
         vx = a.vx + (b.vx - a.vx) * u; vz = a.vz + (b.vz - a.vz) * u;
         steer = a.steer + (b.steer - a.steer) * u; air = a.air + (b.air - a.air) * u;
+        if(a.y!==undefined&&b.y!==undefined)y=a.y+(b.y-a.y)*u;
         if (u > 0.5) flags = b.flags;
       }
     } else if (T < a.t) {
@@ -121,6 +122,7 @@ class Peer {
     v.heading = this.drawn && !far ? v.heading + angle(heading - v.heading) * k : heading;
     v.speed = vx * Math.sin(v.heading) - vz * Math.cos(v.heading);
     v.steer = steer; v.air = air; v.flags = flags;
+    if(y===undefined)delete v.y;else v.y=y;
     this.drawn = true;
     return v;
   }
@@ -165,6 +167,7 @@ export class Net {
   room = '';
   /** Messages sent and heard, for the readout and the checks. */
   sent = 0; heard = 0;
+  private heightSupported=false;
   private readonly peers = new Map<number, Peer>();
   private readonly out: PeerView[] = [];
   private ws: SocketLike | null = null;
@@ -214,7 +217,7 @@ export class Net {
 
   private drop(): void {
     const ws = this.ws;
-    this.ws = null; this.rideSupported = false; this.chatSupported = false; this.heartbeatSupported = false; this.gamesSupported = false; this.game = null; this.race = null; this.names.clear(); this.chats.length = 0; this.bubbles.clear(); this.lastChat = -Infinity; this.lastSync = -Infinity;
+    this.ws = null; this.rideSupported = false; this.heightSupported = false; this.chatSupported = false; this.heartbeatSupported = false; this.gamesSupported = false; this.game = null; this.race = null; this.names.clear(); this.chats.length = 0; this.bubbles.clear(); this.lastChat = -Infinity; this.lastSync = -Infinity;
     if (ws) { ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null; try { ws.close(); } catch { /* already gone */ } }
   }
 
@@ -241,7 +244,9 @@ export class Net {
       handle ? 'handle=' + encodeURIComponent(handle) : '',
       identity ? `browser=${encodeURIComponent(identity.browserId)}&session=${encodeURIComponent(identity.sessionKey)}` : '',
     ].filter(Boolean).join('&');
-    try { ws = this.make(this.options.urls[this.room_i] + (query ? '?' + query : '')); } catch { this.lost(now, false); return; }
+    // A room address may carry its own query (?heights=1): join with & so neither part is lost.
+    const url = this.options.urls[this.room_i];
+    try { ws = this.make(url + (query ? (url.includes('?') ? '&' : '?') + query : '')); } catch { this.lost(now, false); return; }
     this.ws = ws;
     ws.binaryType = 'arraybuffer';
     this.lastHeard = this.lastPing = this.opened = now;
@@ -271,7 +276,7 @@ export class Net {
       if (m.t === 'hello') {
         this.me = { id: m.id, name: m.name, hue: m.hue }; this.room = m.room;
         this.status = 'on'; this.fails = 0;
-        this.rideSupported = m.rides === true; this.chatSupported = m.chat === true; this.heartbeatSupported = m.heartbeat === true; this.sentRide = undefined; this.lastRideSend = -Infinity;
+        this.heightSupported = m.heights === true; this.rideSupported = m.rides === true; this.chatSupported = m.chat === true; this.heartbeatSupported = m.heartbeat === true; this.sentRide = undefined; this.lastRideSend = -Infinity;
         // A room that runs games sends their state only to a game that asks once: an older game never hears a game frame.
         this.gamesSupported = m.games === true; this.game = null;
         if (this.gamesSupported && this.ws?.readyState === 1) this.ws.send('{"t":"game-sync"}');
@@ -319,12 +324,13 @@ export class Net {
     const moving = !held && (Math.hypot(s.vx, s.vz) > 0.3 || s.air > 0.05);
     const t = this.told;
     const changed = !t || Math.hypot(s.x - t.x, s.z - t.z) > 0.05 || Math.abs(angle(s.heading - t.heading)) > 0.01
+      || (s.y!==undefined&&t.y!==undefined&&Math.abs(s.y-t.y)>.05)
       || ((s.flags ^ t.flags) & ~FLAG.parked) !== 0 || this.pending !== 0 || !(t.flags & FLAG.parked);
     if (!(moving || changed)) return;
     if (now - this.lastSend < (this.pending & FLAG.teleport ? 50 : SEND_MS)) return;
     const flags = (s.flags & ~FLAG.parked) | this.pending | (moving ? 0 : FLAG.parked);
     const state: CarState = { ...s, flags, t: Math.round(now - this.epoch) };
-    this.ws.send(encodeState(state));
+    this.ws.send(encodeState(state,this.heightSupported&&Number.isFinite(state.y)));
     this.sent++; this.lastSend = now; this.pending = 0;
     this.told = { ...s, flags };
   }

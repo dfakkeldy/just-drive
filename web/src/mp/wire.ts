@@ -15,6 +15,10 @@ import { isMotorKind, type MotorKind } from '../ride-kinds';
 //   18 i16  vz              cm/s
 //   20 i16  air             height of the wheels above the ground, cm (players may stretch the hills differently,
 //                           so a height above sea would mean nothing to the receiver)
+// New clients opt in with ?heights=1; hello.heights advertises server support.
+// That optional body appends f32 surveyed support y at byte22 (26 body bytes).
+// Snapshot entry length distinguishes the two formats. The room sends legacy
+// 24-byte entries to old clients, so v1 rooms and mixed clients remain compatible.
 // Game to room:  [u8 TYPE.state][u8 VERSION][body]                      = 24 bytes
 // Room to game:  [u8 TYPE.snapshot][u8 count] then count x [u16 id][body] = 2 + 24 n bytes
 // Rare events (hello, join, leave) are small JSON texts: see ServerText.
@@ -22,6 +26,7 @@ import { isMotorKind, type MotorKind } from '../ride-kinds';
 export const VERSION = 1;
 // TYPE.game: a room-game frame (game-wire.ts), with its own version byte. Only a game that sent game-sync hears one.
 export const TYPE = { state: 1, snapshot: 2, game: 3 } as const;
+export const HEIGHT_BODY = 26;
 export const BODY = 22, STATE_BYTES = 2 + BODY, ENTRY_BYTES = 2 + BODY;
 export const FLAG = { air: 1, brake: 2, horn: 4, parked: 8, teleport: 16, window: 32 } as const;
 
@@ -36,6 +41,8 @@ export const CLOSE = { inactive: 4006, replaced: 4005, version: 4000, full: 4001
 export interface CarState {
   flags: number; steer: number; heading: number; t: number;
   x: number; z: number; vx: number; vz: number; air: number;
+  /** Optional surveyed support y (before air), negotiated without breaking v1 peers. */
+  y?: number;
 }
 export type RideKind = MotorKind;
 export interface Ride { kind: RideKind; trailer: boolean }
@@ -53,7 +60,7 @@ export function parseRideChange(text: string): Ride | undefined {
 export interface PeerInfo { id: number; name: string; hue: number; ride?: Ride }
 /** Only hello.rides === true permits client ride announcements, hello.chat === true quick chat, hello.heartbeat === true liveness texts, and hello.games === true room games and their phrases; an absent flag denotes an older server. */
 export type ServerText =
-  | { t: 'hello'; v: number; id: number; name: string; hue: number; ride?: Ride; room: string; cap: number; rides?: boolean; chat?: boolean; heartbeat?: boolean; games?: boolean; peers: PeerInfo[] }
+  | { t: 'hello'; v: number; id: number; name: string; hue: number; ride?: Ride; room: string; cap: number; rides?: boolean; heights?: boolean; chat?: boolean; heartbeat?: boolean; games?: boolean; peers: PeerInfo[] }
   | { t: 'join'; id: number; name: string; hue: number; ride?: Ride }
   | { t: 'ride'; id: number; ride?: Ride }
   | { t: 'leave'; id: number }
@@ -63,7 +70,7 @@ export type ServerText =
 const TAU = Math.PI * 2;
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
-export function writeBody(view: DataView, at: number, s: CarState): void {
+export function writeBody(view: DataView, at: number, s: CarState, height=false): void {
   view.setUint8(at, s.flags & 255);
   view.setInt8(at + 1, Math.round(clamp(s.steer / LIMIT.steer, -1, 1) * 127));
   view.setUint16(at + 2, Math.round((((s.heading % TAU) + TAU) % TAU) / TAU * 65536) & 65535, true);
@@ -73,10 +80,12 @@ export function writeBody(view: DataView, at: number, s: CarState): void {
   view.setInt16(at + 16, Math.round(clamp(s.vx * 100, -32767, 32767)), true);
   view.setInt16(at + 18, Math.round(clamp(s.vz * 100, -32767, 32767)), true);
   view.setInt16(at + 20, Math.round(clamp(s.air * 100, 0, 32767)), true);
+  if(height)view.setFloat32(at+22,s.y??NaN,true);
 }
 
-export function readBody(view: DataView, at: number): CarState {
+export function readBody(view: DataView, at: number, height=false): CarState {
   return {
+    ...(height&&Number.isFinite(view.getFloat32(at+22,true))&&Math.abs(view.getFloat32(at+22,true))<=10000?{y:view.getFloat32(at+22,true)}:{}),
     flags: view.getUint8(at),
     steer: view.getInt8(at + 1) / 127 * LIMIT.steer,
     heading: view.getUint16(at + 2, true) / 65536 * TAU,
@@ -89,10 +98,10 @@ export function readBody(view: DataView, at: number): CarState {
   };
 }
 
-export function encodeState(s: CarState): ArrayBuffer {
-  const buf = new ArrayBuffer(STATE_BYTES), view = new DataView(buf);
+export function encodeState(s: CarState, height=false): ArrayBuffer {
+  const buf = new ArrayBuffer(height?2+HEIGHT_BODY:STATE_BYTES), view = new DataView(buf);
   view.setUint8(0, TYPE.state); view.setUint8(1, VERSION);
-  writeBody(view, 2, s);
+  writeBody(view, 2, s,height);
   return buf;
 }
 
@@ -104,24 +113,27 @@ export type Bounds = number;
  * send: a wrong size, type or version, a place off the map, an impossible speed or height.
  */
 export function checkState(data: ArrayBuffer, bounds: Bounds): Uint8Array | null {
-  if (data.byteLength !== STATE_BYTES) return null;
+  if (data.byteLength !== STATE_BYTES&&data.byteLength!==2+HEIGHT_BODY) return null;
   const view = new DataView(data);
   if (view.getUint8(0) !== TYPE.state || view.getUint8(1) !== VERSION) return null;
-  const s = readBody(view, 2);
+  const height=data.byteLength===2+HEIGHT_BODY,s = readBody(view, 2,height);
+  if(height&&(!Number.isFinite(s.y)||Math.abs(s.y!)>10000))return null;
   if (Math.abs(s.x) > bounds || Math.abs(s.z) > bounds) return null;
   if (Math.hypot(s.vx, s.vz) > LIMIT.speed) return null;
   if (s.air < 0 || s.air > LIMIT.air) return null;
   if (view.getUint8(2) & ~63) return null;   // flag bits this version does not know
-  return new Uint8Array(data, 2, BODY);
+  return new Uint8Array(data, 2, height?HEIGHT_BODY:BODY);
 }
 
-export function encodeSnapshot(entries: { id: number; body: Uint8Array }[]): ArrayBuffer {
-  const buf = new ArrayBuffer(2 + entries.length * ENTRY_BYTES), view = new DataView(buf), bytes = new Uint8Array(buf);
+export function encodeSnapshot(entries: { id: number; body: Uint8Array }[],height=false): ArrayBuffer {
+  const stride=height?2+HEIGHT_BODY:ENTRY_BYTES;
+  const buf = new ArrayBuffer(2 + entries.length * stride), view = new DataView(buf), bytes = new Uint8Array(buf);
   view.setUint8(0, TYPE.snapshot); view.setUint8(1, entries.length);
   entries.forEach((e, i) => {
-    const at = 2 + i * ENTRY_BYTES;
+    const at = 2 + i * stride;
     view.setUint16(at, e.id, true);
-    bytes.set(e.body, at + 2);
+    bytes.set(e.body.subarray(0,height?HEIGHT_BODY:BODY), at + 2);
+    if(height&&e.body.length===BODY)view.setFloat32(at+2+22,NaN,true);
   });
   return buf;
 }
@@ -132,11 +144,12 @@ export function decodeSnapshot(data: ArrayBuffer): { id: number; state: CarState
   const view = new DataView(data);
   if (view.getUint8(0) !== TYPE.snapshot) return [];
   const count = view.getUint8(1);
-  if (data.byteLength !== 2 + count * ENTRY_BYTES) return [];
+  const height=count>0&&data.byteLength===2+count*(2+HEIGHT_BODY),stride=height?2+HEIGHT_BODY:ENTRY_BYTES;
+  if (data.byteLength !== 2 + count * stride) return [];
   const out: { id: number; state: CarState }[] = [];
   for (let i = 0; i < count; i++) {
-    const at = 2 + i * ENTRY_BYTES;
-    out.push({ id: view.getUint16(at, true), state: readBody(view, at + 2) });
+    const at = 2 + i * stride;
+    out.push({ id: view.getUint16(at, true), state: readBody(view, at + 2,height) });
   }
   return out;
 }
@@ -150,6 +163,7 @@ export function parseServerText(text: string): ServerText | null {
   const peer = (p: unknown): p is PeerInfo => typeof p === 'object' && p !== null
     && Number.isInteger((p as PeerInfo).id) && typeof (p as PeerInfo).name === 'string' && (p as PeerInfo).name.length <= 40
     && Number.isInteger((p as PeerInfo).hue);
+  if(o.t==='hello'&&o.heights!==undefined&&typeof o.heights!=='boolean')return null;
   if (o.t === 'hello' && peer(o) && typeof o.v === 'number' && typeof o.room === 'string' && typeof o.cap === 'number'
     && Array.isArray(o.peers) && o.peers.every(peer)) return { ...o, rides: o.rides === true, chat: o.chat === true, heartbeat: o.heartbeat === true, games: o.games === true, ride: readRide(o.ride),
       peers: o.peers.map(p => ({ ...p, ride: readRide(p.ride) })) } as unknown as ServerText;
@@ -168,7 +182,7 @@ export function parseServerText(text: string): ServerText | null {
 /** What the drawing code gets for each other car, once the network code has smoothed it. */
 export interface PeerView {
   id: number; name: string; hue: number; ride?: Ride;
-  x: number; z: number; heading: number;
+  x: number; z: number; heading: number; y?:number;
   /** Forward speed in m/s (negative in reverse), for wheel spin and body lean. */
   speed: number;
   steer: number; air: number; flags: number;

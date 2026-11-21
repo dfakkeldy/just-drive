@@ -186,7 +186,7 @@ export class RoadAnimals {
       // Both fields and the whole road between them must be proved, so it can always go away from the car. Proved once per
       // terrain revision; a pending rail plan or missing ground retries next frame, and does not revoke a proved route.
       if (a.revision !== this.terrain.dataRevision) {
-        const boxes = this.terrain.sites.map(site => site.box), near = this.check(a.route, boxes), far = this.check(farRoute(a.route), boxes);
+        const boxes = this.terrain.sites.flatMap(site => site.sitingBoxes ?? [site.box]), near = this.check(a.route, boxes), far = this.check(farRoute(a.route), boxes);
         const safety = near === 'blocked' || far === 'blocked' ? 'blocked' : near === 'pending' || far === 'pending' ? 'pending' : 'clear';
         if (safety !== 'pending') { a.safe = safety === 'clear'; a.revision = this.terrain.dataRevision; }
       }
@@ -235,7 +235,7 @@ export class RoadAnimals {
   private choose(day: number): void {
     this.day = day; this.residents.length = 0; this.named = null;
     if (this.terrain.cartRoads) return;
-    const boxes = [...this.boxes, ...this.terrain.sites.map(s => s.box), ...this.terrain.clear];
+    const boxes = [...this.boxes, ...this.terrain.sites.flatMap(s => s.sitingBoxes ?? [s.box]), ...this.terrain.clear];
     for (const route of animalRoutes(this.roads.roads, day, boxes, this.apart, this.fine)) {
       const subject = this.subjects[this.residents.length];
       subject.label = LABEL[route.species]; subject.road = route.road.id; subject.radius = route.species === 'moose' ? 1.5 : 1;

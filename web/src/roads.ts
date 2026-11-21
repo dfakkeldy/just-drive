@@ -1,3 +1,4 @@
+import {ModernBridges} from './modern-bridges';
 import { Guardrails } from './guardrails';
 import {HistoryContacts} from './eras/history-contacts';
 import * as THREE from 'three';
@@ -14,6 +15,7 @@ export interface Road {
   guardrailRuns?: { start: number; end: number; side: number; posts: 'metal' }[];
   halfWidth: number;
   bridge: boolean;
+  washboard?: boolean;
   pts: [number, number][];   // world x, z (converted on load)
 }
 
@@ -42,10 +44,8 @@ export class Roads {
   private minCX = Infinity; private minCZ = Infinity;
   private maxCX = -Infinity; private maxCZ = -Infinity;
   private columns = 0;
-  private decks = new Map<number, Deck>();
-  private deckMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3c, side: THREE.DoubleSide });
-  // Bridges on tracks and on the rail trail are timber, not asphalt.
-  private timberMat = new THREE.MeshLambertMaterial({ color: 0xb8a482, side: THREE.DoubleSide });
+  private eraDecks = new Map<number, Deck>();
+  private modern:ModernBridges|null=null;
 
   readonly audit={heightCandidatesMax:0,connectivityBuilds:0};
   // Per-span contacts and stamps belong to the shared bridge grid, not a second spatial index.
@@ -56,7 +56,7 @@ export class Roads {
 
   private eraBridgeHit:RoadHit|null=null;private bridgeQuery=0;
 
-  constructor(data: { roads: Road[] },
+  constructor(data: { roads: Road[]; bridgeSpans?: Road[] },
     village: [number, number], private terrain: Terrain) {
     for (const r of data.roads) {
       if (terrain.cartRoads && r.kind === 5) continue;
@@ -104,7 +104,7 @@ export class Roads {
         for(const p of timberGroundPoints(road,cum,record.len,startExtra,endExtra))this.bridgeContacts.watch(p.x,p.z,record.notify,p.land);
       }
       const first=this.roads[0];if(first)this.eraBridgeHit={road:first,dist:0,x:0,z:0,heading:0,seg:0,t:0};
-    }
+    }else this.modern=new ModernBridges(this.roads,terrain,this.group,data.bridgeSpans,this.nearest.bind(this),this.bridgeWalks);
   }
 
   // key = (cx - minCX) + columns * (cz - minCZ), in [0, columns * rows - 1].
@@ -162,98 +162,49 @@ export class Roads {
 
   /** Height of a bridge deck under a point, or null when the point is not on a bridge. */
   deckHeight(x: number, z: number): number | null {
+    if(this.modern)return this.modern.deckHeightAt(x,z);
     // Empty bridge buckets skip all ordinary road segments and deck work.
     const hit = this.query(this.bridgeCells, x, z, 12, bridgeRoad);
-    if (!hit || !this.terrain.cartRoads && hit.dist > hit.road.halfWidth + 1.2) return null;
-    const deck = this.deck(hit.road);
+    if (!hit) return null;
+    const deck = this.eraDeck(hit.road);
     if (!deck) return null;
-    const [ax, az] = hit.road.pts[hit.seg], [bx, bz] = hit.road.pts[hit.seg + 1];
-    const s = deck.cum[hit.seg] + (this.terrain.cartRoads?deck.cum[hit.seg+1]-deck.cum[hit.seg]:Math.hypot(bx - ax, bz - az)) * hit.t;
-    const plane=this.terrain.cartRoads?deck.y0+(deck.y1-deck.y0)*s/deck.len:deck.y0 + (deck.y1 - deck.y0) * (s / deck.len);
-    if(!this.terrain.cartRoads||s>=0&&s<=deck.len)return plane;
+    const s = deck.cum[hit.seg] + (deck.cum[hit.seg+1]-deck.cum[hit.seg]) * hit.t;
+    const plane=deck.y0+(deck.y1-deck.y0)*s/deck.len;
+    if(s>=0&&s<=deck.len)return plane;
     const land=this.terrain.heightAt(x,z);if(land===null)return null;
     const u=Math.max(0,Math.min(1,(s<0?s+3:deck.len+3-s)/3)),blend=u*u*(3-2*u);
     return Math.max(land,land+(plane-land)*blend);
   }
 
-  /** Temporary canal clearance; the swing geometry awaits drawings. */
+  /** Modern bridge spans: centre line, carried road ids and deck half width. Empty in the era modes. */
+  bridgeRuns():readonly {pts:readonly (readonly [number,number])[];roads:ReadonlySet<number>;halfWidth:number}[]{return this.modern?.runs??[];}
+  get bridgeRevision():number{return this.modern?.audit.builds??0;}
+  bridgeArea(x:number,z:number,pad=0):boolean{return this.modern?.overlaps(x,z,pad)??false;}
+  /** Temporary canal clearance; the swing geometry awaits drawings. Modern decks are one merged mesh, so the deck of
+   *  the span that carries this road leaves it; its approaches stay drawn over their road cuts. Drawing only. */
   showCanalDeck(id: number, visible: boolean) {
-    const deck = this.decks.get(id);
-    if (deck) deck.mesh.visible = visible;
+    this.modern?.setHidden(id, !visible);
   }
 
   /** Build decks for bridges near the camera, once the fine terrain at both ends has loaded. */
   update(cam: THREE.Vector3) {
     this.guardrails?.update(cam);
+    if(this.modern){this.modern.update(cam);return;}
     if(this.terrain.cartRoads){
       this.terrain.bridgeApproaches?.update(cam);
       this.bridgeContacts!.update();
       const rev=this.terrain.dataRevision??0,x=Math.floor(cam.x/64),z=Math.floor(cam.z/64);
       if(rev===this.updateRevision&&x===this.updateX&&z===this.updateZ&&!this.bridgeDirty)return;
       this.updateRevision=rev;this.updateX=x;this.updateZ=z;this.bridgeDirty=false;
-      for(const r of this.bridgeRecords.values())if(Math.hypot(r.road.pts[0][0]-cam.x,r.road.pts[0][1]-cam.z)<1500)this.deck(r.road);
+      for(const r of this.bridgeRecords.values())if(Math.hypot(r.road.pts[0][0]-cam.x,r.road.pts[0][1]-cam.z)<1500)this.eraDeck(r.road);
       return;
     }
-    for (const r of this.roads) {
-      if (!r.bridge || (this.decks.get(r.id)?.level ?? 0) >= 8) continue;
-      const [x, z] = r.pts[0];
-      if (Math.hypot(x - cam.x, z - cam.z) < 1500) this.deck(r);
-    }
+
   }
 
-  private deck(road: Road): Deck | null {
-    if(this.terrain.cartRoads)return this.eraDeck(road);
-    const have = this.decks.get(road.id);
-    if (have && have.level >= 8) return have;
-    const p = road.pts, n = p.length;
-    // The banks: a few metres past each end of the bridge, along its line.
-    const end = (a: [number, number], b: [number, number]) => {
-      const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1;
-      return this.terrain.surfaceAt(a[0] + ((a[0] - b[0]) / d) * 3, a[1] + ((a[1] - b[1]) / d) * 3);
-    };
-    const s0 = end(p[0], p[1]), s1 = end(p[n - 1], p[n - 2]);
-    // Level 6 (4 m) is the finest ground some bridges ever get; finer data, when it comes, rebuilds the deck.
-    if (!s0 || !s1 || s0.level < 6 || s1.level < 6) return have ?? null;
-    const level = Math.min(s0.level, s1.level);
-    if (have) {
-      if (level <= have.level) return have;
-      this.group.remove(have.mesh);
-      have.mesh.geometry.dispose();
-    }
-    const cum = [0];
-    for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
-    const len = cum[n - 1] || 1, y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
-    const w = road.halfWidth + 0.9, pos: number[] = [], idx: number[] = [];
-    // Cross-section: deck top, thick sides, and a low rail on each edge.
-    const walk=this.bridgeWalks.get(road.id), left=walk && walk.side<0?Math.max(w,road.halfWidth+walk.width+.3):w, right=walk && walk.side>0?Math.max(w,road.halfWidth+walk.width+.3):w;
-    const profile: [number, number][] = [[-left, -0.9], [-left, 0.75], [-left + 0.18, 0.75], [-left + 0.18, 0], [right - 0.18, 0], [right - 0.18, 0.75], [right, 0.75], [right, -0.9]];
-    for (let i = 0; i < n; i++) {
-      const a = p[Math.max(i - 1, 0)], b = p[Math.min(i + 1, n - 1)];
-      const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-      const nx = -(b[1] - a[1]) / d, nz = (b[0] - a[0]) / d;
-      const y = y0 + (y1 - y0) * (cum[i] / len);
-      for (const [u, v] of profile) pos.push(p[i][0] + nx * u, y + v, p[i][1] + nz * u);
-      if (i < n - 1) for (let k = 0; k < profile.length - 1; k++) {
-        const q = i * profile.length + k;
-        idx.push(q, q + 1, q + profile.length, q + 1, q + profile.length + 1, q + profile.length);
-      }
-    }
-    const shared = new THREE.BufferGeometry();
-    shared.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    shared.setIndex(idx);
-    // Flat faces: with shared corners the thin rails took the average of up and sideways, and went dark.
-    const geo = shared.toNonIndexed();
-    shared.dispose();
-    geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, road.kind >= 4 ? this.timberMat : this.deckMat);
-    this.group.add(mesh);
-    const deck: Deck = { road, y0, y1, len, cum, mesh, level };
-    this.decks.set(road.id, deck);
-    return deck;
-  }
   private eraDeck(road:Road):Deck|null {
     this.bridgeContacts!.update();
-    const r=this.bridgeRecords.get(road.id)!,have=this.decks.get(road.id),revision=this.terrain.dataRevision??0;
+    const r=this.bridgeRecords.get(road.id)!,have=this.eraDecks.get(road.id),revision=this.terrain.dataRevision??0;
     if(r.revision===revision&&!r.dirty)return have??null;const changedGround=r.dirty;r.revision=revision;r.dirty=false;
     const plane=periodBridgePlane(road,this.roads,this.terrain);if(!plane)return have??null;
     if(have&&!changedGround&&(plane.level<have.level||plane.level===have.level&&Math.abs(plane.y0-have.y0)+Math.abs(plane.y1-have.y1)<.0001))return have;
@@ -265,6 +216,6 @@ export class Roads {
     },plan.before<.001&&!this.terrain.bridgeApproaches?.hasApron(road,'start')?3:0,plan.total-plan.before-plan.own<.001&&!this.terrain.bridgeApproaches?.hasApron(road,'end')?3:0,(x,z)=>this.bridgeContacts!.read(x,z));
     this.periodMat??=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
     const mesh=new THREE.Mesh(geo,this.periodMat);mesh.name='timber-bridge-'+road.id;this.group.add(mesh);
-    const deck={road,y0:plane.y0,y1:plane.y1,len:r.len,cum:r.cum,mesh,level:plane.level};this.decks.set(road.id,deck);return deck;
+    const deck={road,y0:plane.y0,y1:plane.y1,len:r.len,cum:r.cum,mesh,level:plane.level};this.eraDecks.set(road.id,deck);return deck;
   }
 }

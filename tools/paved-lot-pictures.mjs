@@ -44,7 +44,12 @@ for(const pose of chosen)for(const q of ['desktop','low'])for(const on of [true,
  const url=`http://127.0.0.1:${port}/?area=${pose.area}&at=${pose.at.join(',')}&${base}${q==='low'?'&q=low':''}${on?'':'&paved=0'}`;
  const page=await open(url);
  try{
+  // A dev page loads more modules than the default 250-entry resource timing buffer holds, so the paved fetch can drop
+  // out of it (it does with the bridge cut worker and atlas). Reload with a larger buffer, as paved-capture does.
+  await page.send('Page.addScriptToEvaluateOnNewDocument',{source:'performance.setResourceTimingBufferSize(100000)'});
+  await page.navigate(url+'&timingBuffer=1');
   assert.equal(await page.read(`document.getElementById('gameError')?.hidden`),true,'game error');
+  assert.ok(await page.read(`performance.getEntriesByType('resource').length`)<100000,'resource timing buffer holds every request');
   const requests=await page.read(`performance.getEntriesByType('resource').map(r=>r.name).filter(n=>n.includes('/paved/'))`);
   // Default on exactly where the land is installed; paved=0 never requests; uninstalled land never requests.
   assert.equal(requests.length>0,on&&installed[pose.area],on?(installed[pose.area]?'default must load the installed paved layer':'uninstalled land must make no paved request'):'paved=0 must make no paved request');

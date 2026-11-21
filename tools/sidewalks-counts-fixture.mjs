@@ -5,6 +5,13 @@ for(const [key,value]of [['programs',1],['textures',1],['geometries',3],['calls'
 assert.throws(()=>checkCountDelta(delta,true,{}),/explained/);checkCountDelta({...delta,calls:4,triangles:12000},false,{sidewalks:2,'sidewalks (shadow)':2});
 assert.throws(()=>checkCountDelta({...delta,triangles:12001},false,{sidewalks:2}));console.log('PASS same-host render deltas and program, texture, geometry, unexplained draw and LOW/desktop triangle mutants');
 
+const widenedLow={...delta,triangles:4816+960};
+checkCountDelta(widenedLow,true,{sidewalks:2},{bridgeDeckTriangles:960});
+assert.throws(()=>checkCountDelta({...widenedLow,triangles:4817+960},true,{sidewalks:2},{bridgeDeckTriangles:960}),/per-view triangle/);
+assert.throws(()=>checkCountDelta(widenedLow,true,{sidewalks:2},{bridgeDeckTriangles:1920}),/widened deck/);
+assert.throws(()=>checkCountDelta(widenedLow,true,{sidewalks:2},{bridgeDeckTriangles:961}),/widened deck/);
+checkCountDelta({...delta,triangles:12000+1920},false,{sidewalks:2},{bridgeDeckTriangles:1920});
+
 const context={view:'highway19-far-land',mode:'desktop-mail',addedPrograms:[sidewalkDepthProgramKey],removedPrograms:[]};
 checkCountDelta({...delta,programs:1},false,{sidewalks:2},context);
 for(const mutant of [{...context,view:'village-start'},{...context,mode:'desktop-explore-truck'},{...context,addedPrograms:['other-depth-key']},{...context,addedPrograms:[sidewalkDepthProgramKey,'extra-key']},{...context,removedPrograms:['hidden-change']}])assert.throws(()=>checkCountDelta({...delta,programs:1},false,{sidewalks:2},mutant));

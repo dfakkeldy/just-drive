@@ -4,10 +4,12 @@ import type { Road } from './roads';
 import type { Streams } from './streams';
 
 export interface Crossing { x: number; z: number; heading: number; scale: number; length: number; road: number; cover: { x: number; z: number }[] }
+/** A deck centre line. Modern bridge spans (#156) also cover crossings whose map roads carry no bridge flag. */
+export interface BridgeLine { readonly pts: readonly (readonly [number, number])[]; readonly halfWidth: number }
 /** The bake removes open-water segments beneath roads. Its mouth pairs restore those stream runs.
  * Use the shipped pairs, not open-water intersections, which mostly find unpiped farm tracks. */
-export function streamCrossings(streams: Streams, roads: readonly Road[]): Crossing[] {
-  const bridges = roads.filter(r => r.bridge), byId = new Map(roads.map(r => [r.id, r]));
+export function streamCrossings(streams: Streams, roads: readonly Road[], spans: readonly BridgeLine[] = []): Crossing[] {
+  const bridges: readonly BridgeLine[] = [...roads.filter(r => r.bridge), ...spans], byId = new Map(roads.map(r => [r.id, r]));
   // Bounding boxes of every non-bridge road, so each run tests only the roads near it.
   const boxes = roads.filter(r => !r.bridge && r.pts.length > 1).map(r => {
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
@@ -22,12 +24,12 @@ export function streamCrossings(streams: Streams, roads: readonly Road[]): Cross
     const dx = pipe.endX - pipe.x, dz = pipe.endZ - pipe.z;
     const x = (pipe.x + pipe.endX) / 2, z = (pipe.z + pipe.endZ) / 2;
     const length = Math.hypot(dx, dz), scale = Math.min(1, pipe.dia / 4.1);
-    if (bridges.some(b => distanceToRoad(x, z, b) <= b.halfWidth + Math.hypot(length / 2 + .3, 6.1 * scale) + 3)) continue;
+    if (bridges.some(b => withinRoad(x, z, b, b.halfWidth + Math.hypot(length / 2 + .3, 6.1 * scale) + 3))) continue;
     // A later road-bed bake moved one shipped pair away from its road. It is no longer a crossing.
     let own = false;
     for (let d = 0; d <= Math.ceil(length) && !own; d++) {
       const t = Math.min(1, d / length);
-      own = distanceToRoad(pipe.x + dx * t, pipe.z + dz * t, road) <= road.halfWidth + .5;
+      own = withinRoad(pipe.x + dx * t, pipe.z + dz * t, road, road.halfWidth + .5);
     }
     if (!own) continue;
     // Fill and crown samples under every road the arch passes beneath, not only the road it was mapped to: a long
@@ -41,7 +43,7 @@ export function streamCrossings(streams: Streams, roads: readonly Road[]): Cross
       const t = Math.min(1, d / length);
       for (const o of [0, -side, side]) {
         const px = pipe.x + dx * t + nx * o, pz = pipe.z + dz * t + nz * o;
-        if (near.some(r => distanceToRoad(px, pz, r) <= r.halfWidth + .5)) cover.push({ x: px, z: pz });
+        if (near.some(r => withinRoad(px, pz, r, r.halfWidth + .5))) cover.push({ x: px, z: pz });
       }
     }
     result.push({ x, z, heading: Math.atan2(dx, -dz), scale, length, road: road.id, cover });
@@ -49,19 +51,28 @@ export function streamCrossings(streams: Streams, roads: readonly Road[]): Cross
   return result;
 }
 
-function nearestRoadPoint(x: number, z: number, road: Road): { x: number; z: number } {
-  let best = Infinity, point = { x, z };
-  for (let k = 1; k < road.pts.length; k++) {
-    const [ax, az] = road.pts[k - 1], dx = road.pts[k][0] - ax, dz = road.pts[k][1] - az;
+/** The old nearest-point scan's answer to `distance from (x, z) to the line <= reach`, for coordinates below about 1e15
+ *  (anything on a map; far beyond that the old scan's rounding moves its nearest point), but it stops at the first finite
+ *  segment within reach and skips any segment whose box lies more than reach + 1 m away along an axis (such a segment is
+ *  farther than reach, so it could never decide). Like that
+ *  scan, a line with no finite segment distance measures from the point to itself: 0, or NaN for a NaN or infinite point.
+ *  This runs for every culvert before the first frame: the full scan over every bridge and road point took most of a second. */
+export function withinRoad(x: number, z: number, line: Pick<BridgeLine, 'pts'>, reach: number): boolean {
+  const pts = line.pts, far = reach + 1;
+  let finite = false;
+  for (let k = 1; k < pts.length; k++) {
+    const ax = pts[k - 1][0], az = pts[k - 1][1], bx = pts[k][0], bz = pts[k][1];
+    if (x < ax - far && x < bx - far || x > ax + far && x > bx + far || z < az - far && z < bz - far || z > az + far && z > bz + far) {
+      // A skipped segment has a finite distance whenever the point and its own ends are finite.
+      if (x - x + z - z + ax - ax + az - az + bx - bx + bz - bz === 0) finite = true;
+      continue;
+    }
+    const dx = bx - ax, dz = bz - az;
     const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
-    const px = ax + t * dx, pz = az + t * dz, distance = Math.hypot(x - px, z - pz);
-    if (distance < best) { best = distance; point = { x: px, z: pz }; }
+    const distance = Math.hypot(x - (ax + t * dx), z - (az + t * dz));
+    if (distance < Infinity) { if (distance <= reach) return true; finite = true; }
   }
-  return point;
-}
-function distanceToRoad(x: number, z: number, road: Road): number {
-  const p = nearestRoadPoint(x, z, road);
-  return Math.hypot(p.x - x, p.z - z);
+  return !finite && Math.hypot(x - x, z - z) <= reach;
 }
 
 /** Scenery only. Wheels keep the surveyed land contact, including washboard and potholes. */
@@ -72,8 +83,8 @@ export class StreamCulverts {
   private graded = new Map<Crossing, number>();
   /** `revision` changes whenever land tiles arrive or leave (terrain.dataRevision). Without it, every frame regrades. */
   constructor(streams: Streams, roads: readonly Road[], private ground: (x: number, z: number) => number | null, private low: boolean,
-    private revision?: () => number) {
-    this.crossings = streamCrossings(streams, roads);
+    private revision?: () => number, spans: readonly BridgeLine[] = []) {
+    this.crossings = streamCrossings(streams, roads, spans);
     this.group.name = 'stream-culverts';
   }
   update(camera: THREE.Vector3): void {
