@@ -139,8 +139,27 @@ async function shortcuts(replacements={}){
  }
  return{spans:worlds[0].spans.map(r=>r.road.id),isSpanPoints:points,lengths,solves};
 }
+// The grade solver stops after a pass that moves no height, but a pass that lifted a corner runs once more. A lift in
+// the first pass can raise a corner after the visit of a neighbour that shares it, and so make that neighbour steep.
+// Real Point Tupper span 240 (Reeves Street) at the default scale 1.5 on level-7 land: the first pass lifts two
+// corners by 7-9 cm after such a visit. A stop there leaves a triangle at slope .308, reads it as a steep toe and
+// grows both approaches to 96 m over 11 builds. One more pass solves it in one build with 16 m approaches.
+async function liftedPass(replacements={}){
+ const f=await fixture('pointtupper',1.5,replacements),m=f.roads.modern,r=m.spans.find(s=>s.road.id===240),proto=Object.getPrototypeOf(m);
+ assert.ok(r,'Point Tupper span 240 exists');
+ let builds=0;m.build=function(){builds++;return proto.build.apply(this,arguments);};
+ await f.preload(f.terrain,r.pts.map(p=>[p[0],p[1]]),120,7);m.ensure(r);
+ assert.equal(r.level,7,'span 240 is built on level-7 land');
+ const t=r.triangles;let steepest=0;
+ for(let k=0;k<t.length;k+=9){const dx=t[k+3]-t[k],dy=t[k+4]-t[k+1],dz=t[k+5]-t[k+2],ex=t[k+6]-t[k],ey=t[k+7]-t[k+1],ez=t[k+8]-t[k+2],det=dx*ez-dz*ex;
+  if(Math.abs(det)>=1e-8)steepest=Math.max(steepest,Math.hypot((dy*ez-ey*dz)/det,(dx*ey-ex*dy)/det));}
+ assert.ok(steepest<=.246,`a pass that lifted runs once more: every span 240 triangle within the solver limit .246: ${steepest}`);
+ assert.equal(builds,1,`a pass that lifted runs once more: span 240 builds once (approaches ${r.startLength}/${r.endLength})`);
+ return{builds,steepest,approaches:[r.startLength,r.endLength]};
+}
 console.log('PASS',await contracts());
 console.log('PASS solver shortcuts',await shortcuts());
+console.log('PASS lifted pass',await liftedPass());
 if(process.argv.includes('--mutations')){
  const file='web/src/modern-bridges.ts',s=readFileSync(root+file,'utf8'),anchor="if(along>=0&&along<=r.length){const t=along/r.length,smooth=r.road.kind<=3&&r.length>=20&&Math.abs(r.y1-r.y0)/r.length<.06;return r.y0+(r.y1-r.y0)*(smooth?t*t*(3-2*t):t);}";
  assert.equal(s.split(anchor).length,2,'one deck plane mutation');
@@ -171,6 +190,13 @@ if(process.argv.includes('--mutations')){
  ]){
   assert.equal(s.split(from).length,2,'one mutation anchor: '+name);
   await assert.rejects(()=>shortcuts({[file]:s.replace(from,to)}),error,name+' must fail');
+  console.log('KILLED '+name);
+ }
+ for(const [name,from,to,error] of[
+  ['solver stops after a lifting pass that moved nothing','if(!moved&&!lifted)break;','if(!moved&&!(lifted&&flags.some(f=>(f&1)!==0)))break;',/a pass that lifted runs once more/],
+ ]){
+  assert.equal(s.split(from).length,2,'one mutation anchor: '+name);
+  await assert.rejects(()=>liftedPass({[file]:s.replace(from,to)}),error,name+' must fail');
   console.log('KILLED '+name);
  }
 }

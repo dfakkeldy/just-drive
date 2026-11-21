@@ -531,7 +531,7 @@ export class ModernBridges {
     const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoLand=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);
     let badStart=false,badEnd=false;
     for(let pass=0;pass<600;pass++){
-      let moved=false,lifted=false,steep=false;badStart=badEnd=false;
+      let moved=false,lifted=false;badStart=badEnd=false;
       for(let i=0;i<rows;i++)for(let j=0;j<columns;j++){
         const a=(i*(columns+1)+j)*3,b=a+3,c=a+(columns+1)*3,d=c+3;
         for(let half=0;half<2;half++){
@@ -559,14 +559,14 @@ export class ModernBridges {
             }
           }
           const last=seen[id];
-          if(last!==0&&changed[n0]<last&&changed[n1]<last&&changed[n2]<last){const f=flags[id];if(f&1)steep=true;if(f&2)badStart=true;if(f&4)badEnd=true;continue;}
+          if(last!==0&&changed[n0]<last&&changed[n1]<last&&changed[n2]<last){const f=flags[id];if(f&2)badStart=true;if(f&4)badEnd=true;continue;}
           const now=seen[id]=++visit;flags[id]=0;
           // slope(t0,t1,t2), inline.
           const dx=grid[t1]-grid[t0],dz=grid[t1+2]-grid[t0+2],ex=grid[t2]-grid[t0],ez=grid[t2+2]-grid[t0+2],det=dx*ez-dz*ex;
           if(Math.abs(det)<1e-8)continue;
           const dy=grid[t1+1]-grid[t0+1],ey=grid[t2+1]-grid[t0+1];
           if(noLonger((dy*ez-ey*dz)/det,(dx*ey-ex*dy)/det,STEEP,STEEP_LO,STEEP_HI))continue;
-          steep=true;flags[id]=1;
+          flags[id]=1;
           // That slope test already rejected a near-zero det.
           const cx0=(dz-ez)/det,cx1=ez/det,cx2=-dz/det,cz0=(ex-dx)/det,cz1=-ex/det,cz2=dx/det,free0=!fixed[n0],free1=!fixed[n1],free2=!fixed[n2];
           let gx=0,gz=0,xx=0,xz=0,zz=0;gx+=cx0*grid[t0+1];gz+=cz0*grid[t0+1];gx+=cx1*grid[t1+1];gz+=cz1*grid[t1+1];gx+=cx2*grid[t2+1];gz+=cz2*grid[t2+1];
@@ -582,8 +582,9 @@ export class ModernBridges {
         }
       }
       // A fixed floor can keep a triangle steep even when Float32 heights stop moving.
-      // The first pass can still have changed a shared floor after visiting its neighbour.
-      if(!moved&&!(lifted&&steep))break;
+      // A lift in the first pass can raise a corner after a neighbour that shares it was visited. That neighbour can
+      // now be steep, though it was not steep at its visit. So a pass that lifted always runs one more pass.
+      if(!moved&&!lifted)break;
     }
     // A toe with a steep crossfall needs a longer approach to find a sound road section.
     let invalid=false;
