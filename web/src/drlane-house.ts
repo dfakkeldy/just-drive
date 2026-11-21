@@ -4,6 +4,7 @@ import { BED, type DrLaneSite } from './drlane-site';
 import { pushOut, type Pushable, type Solid } from './parked';
 import type { HandBuiltPlace } from './place';
 import type { Terrain } from './terrain';
+import type { VehicleSpec } from './vehicle-spec';
 import { Mesher, seeded, type RGB } from './yard-kit';
 
 /**
@@ -40,7 +41,7 @@ export const SHED = { u0: 8.2, u1: 13.4, v0: 11.3, v1: 17.7, eave: 2.3, ridge: 3
 export const PINES: readonly (readonly [number, number, number, number, number])[] = [[7.3, 18.8, 11.5, 3.6, 2.6], [-0.6, 17.2, 7.2, 2.2, 0.7]];
 export const WOODPILE = [-14, 8.8, 3.8, 1.0] as const;
 const SLOPE = (MAIN.ridge - MAIN.eave) / MAIN.half;
-/** A car's half length, as the farm dogs at houses take it when they slip away (lot-props.ts). */
+/** A car's half length when the vehicle has no spec, as the farm dogs at houses take it (lot-props.ts). */
 const CAR_REACH = 3.4;
 
 export class DrLaneHouse implements HandBuiltPlace {
@@ -81,7 +82,7 @@ export class DrLaneHouse implements HandBuiltPlace {
     return fine;
   }
 
-  update(view: THREE.Vector3, _now: number, car: { x: number; z: number }, dt: number): void {
+  update(view: THREE.Vector3, _now: number, car: { x: number; z: number; spec?: VehicleSpec }, dt: number): void {
     const o = this.site.origin, carFar = Math.hypot(car.x - o.x, car.z - o.z), far = Math.min(Math.hypot(view.x - o.x, view.z - o.z), carFar);
     this.near = far < 900;
     if (this.near) {
@@ -92,7 +93,7 @@ export class DrLaneHouse implements HandBuiltPlace {
     // The dog only while it is near enough to see: it keeps to its yard and its spot when no one is about.
     if (this.built && far < 250) {
       const rules = this.dog.rules;
-      rules.update(dt, carFar < 120 ? this.site.local(car.x, car.z) : null, CAR_REACH);
+      rules.update(dt, carFar < 120 ? this.site.local(car.x, car.z) : null, car.spec?.envelope.reach ?? CAR_REACH);
       const w = this.site.world(rules.u, rules.v);
       this.dog.pose(dt, this.terrain.heightAt(w.x, w.z) ?? this.lift(this.site.level));
     } else this.dog.group.visible = false;
