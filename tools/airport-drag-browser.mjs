@@ -53,6 +53,7 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
       await click(tab, '[data-place=airport-drag]');
     }
     await until(tab, `!!${staged}`, vehicle + ' can stage on the runway');
+    assert.equal(await tab.read("getComputedStyle(document.querySelector('#airportDrag')).position"), 'fixed', 'the airport chunk paints its HUD');
     if (phone) assert.ok(await tab.read(`(() => {
       const card = document.querySelector('#airportDrag').getBoundingClientRect();
       const go = document.querySelector('#tcGo').getBoundingClientRect();

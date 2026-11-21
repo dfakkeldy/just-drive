@@ -6,7 +6,60 @@ import { parkedMatrix, vehicleShape } from './parked';
 import { Mesher } from './yard-kit';
 import type { Terrain } from './terrain';
 import type { Vehicle } from './vehicle';
-import './airport-drag.css';
+// The public and offline builds ship this area as a JavaScript chunk.
+const CSS = `
+#airportDrag {
+  position: fixed;
+  z-index: 5;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 28px);
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 1px solid var(--ink-dim);
+  border-radius: 8px;
+  background: var(--panel-solid);
+  color: var(--ink);
+  font: 12px/1.4 var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  pointer-events: none;
+}
+#airportDrag h2 { margin: 0 0 6px; font: bold 15px var(--mono); }
+#airportDrag h2 span { margin-left: 7px; color: var(--ink-dim); font-size: 12px; font-weight: normal; }
+#airportDrag .dragTree { display: flex; justify-content: center; gap: 8px; margin: 8px 0; }
+#airportDrag .dragTree i { width: 13px; height: 13px; border-radius: 50%; background: #495059; border: 1px solid #78818a; }
+#airportDrag .dragTree[data-phase="staged"] i:first-child { background: #f6f3ce; }
+#airportDrag .dragTree[data-phase="amber-1"] i:nth-child(2),
+#airportDrag .dragTree[data-phase="amber-2"] i:nth-child(3),
+#airportDrag .dragTree[data-phase="amber-3"] i:nth-child(4) { background: #ffc254; }
+#airportDrag .dragTree[data-phase="green"] i:nth-child(5),
+#airportDrag .dragTree[data-phase="running"] i:nth-child(5),
+#airportDrag .dragTree[data-phase="finished"] i:nth-child(5) { background: #66e28e; }
+#airportDrag .dragTree[data-phase="red"] i:last-child { background: #ff5855; }
+#airportDrag .dragResult { white-space: pre; margin: 7px 0; text-align: left; }
+#airportDrag .dragBest { color: var(--ink-dim); }
+#airportDrag .dragBest:not(:empty) { margin-top: 5px; }
+#airportDrag button {
+  pointer-events: auto;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 12px;
+  cursor: pointer;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--ink-dim);
+  border-radius: 5px;
+  font: bold 12px var(--mono);
+}
+#airportDrag button:disabled { opacity: .55; cursor: default; }
+body.tcOn #airportDrag { top: calc(62px + env(safe-area-inset-top, 0px)); }
+@media (max-height: 460px) {
+  body.tcOn #airportDrag { top: calc(62px + env(safe-area-inset-top, 0px)); padding: 6px 10px; }
+}
+`;
 
 const COPY = {
   staged: 'Staged · wait for green',
@@ -81,6 +134,7 @@ export class AirportDrag {
     this.back.onclick = () => { this.reset(); goToStart(this.strip.start); };
     this.leave.onclick = () => { this.reset(); this.dismissed = true; };
     for (const event of ['pointerdown', 'pointerup', 'pointermove']) this.panel.addEventListener(event, ev => ev.stopPropagation());
+    document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
     document.body.append(this.panel);
   }
 
