@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { railStation } from './guardrail-rules';
 import type { Road } from './roads';
 import type { Site, Terrain } from './terrain';
 
@@ -38,6 +39,23 @@ function distance(points: ReturnType<typeof segments>, x: number, z: number): nu
     min = Math.min(min, Math.hypot(dx - ux * t, dz - uz * t));
   }
   return min;
+}
+
+// The marsh rail follows the south shoulder. Start clear of the bridge at the west end.
+export function littleMabouMarshRail(road: Road): Road {
+  if (road.name !== 'Little Mabou Road' || road.kind !== 2 || road.bridge) return road;
+  const onRoad = (e: number, n: number): number | undefined => {
+    for (let i = 0; i < road.pts.length - 1; i++) {
+      const [ae, an] = road.pts[i], [be, bn] = road.pts[i + 1];
+      const t = (e - ae) / (be - ae);
+      if (t >= 0 && t <= 1 && Math.abs(an + t * (bn - an) - n) < 5) return railStation(road, i, t);
+    }
+  };
+  const west = onRoad(622264, 5102049), east = onRoad(622400, 5101997);
+  if (west === undefined || east === undefined) return road;
+  const start = Math.min(west, east), end = Math.max(west, east), side = east > west ? 1 : -1;
+  if (road.guardrailRuns?.some(r => r.side === side && r.start <= start && r.end >= end)) return road;
+  return { ...road, guardrailRuns: [...road.guardrailRuns ?? [], { start, end, side, posts: 'metal' }] };
 }
 
 type StopBar = { points: Point[]; box: Box; mesh?: THREE.Mesh; stamp?: string };
