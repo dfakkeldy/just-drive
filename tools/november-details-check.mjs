@@ -158,7 +158,7 @@ for (const {a, b, side} of added) {
   assert.deepEqual(mapped, copy, 'the survey list is not edited');
   const at = (x, y) => art.buildings.find(b => Math.hypot(b.x - x, b.y - y) < 2);
   const long = at(616254.85, 5079386.99), gambrel = at(616282, 5079339), house = at(617083, 5079233.8);
-  assert.deepEqual([long.kind, art.styles[long.id].wall, art.styles[long.id].barnDoors], ['barn', '#ae8e51', 5]);
+  assert.deepEqual([long.kind, art.styles[long.id].wall, art.styles[long.id].barnDoors], ['barn', '#9a8559', 5]);
   assert.equal(art.styles[at(616233.9, 5079329.5).id].wall, '#e9e7df');
   assert.equal(art.styles[at(617039, 5079229.5).id].wall, '#8a7b68');
   assert.deepEqual([house.kind, house.eave, house.ridge], ['house', 5.3, 7.81]);

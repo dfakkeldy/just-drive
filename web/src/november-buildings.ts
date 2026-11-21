@@ -74,9 +74,9 @@ const plainShed = {
   entrance: 'none', chimney: false, dormer: false, shutters: false, satelliteDish: false, skirting: false, silo: false,
 } as const;
 // Baxters Cove harbour, 21 Nov 2026 dash cam. The long gear shed has ochre board walls, a rust-red metal roof,
-// a white eave trim and board doors along its lot side.
+// a white eave trim and board doors along its lot side. The paint is a little duller than the sunlit sample (#ae8e51).
 const gearShed: BuildingStyle = {
-  ...plainShed, wall: '#ae8e51', roof: '#9a5a40', trim: '#e3dfd2', door: '#a3854c',
+  ...plainShed, wall: '#9a8559', roof: '#8c5543', trim: '#e3dfd2', door: '#8f7a52',
   roofMaterial: 'metal', boardAndBatten: true, front: { end: false, side: 1 }, barnDoors: 5,
 };
 const whiteShed: BuildingStyle = { ...plainShed, wall: '#e9e7df', roof: '#3b3d40', trim: '#f4f2ec', door: '#d8d5cb', roofMaterial: 'shingle' };
@@ -280,7 +280,7 @@ type Footprint = { e: number; n: number; az: number; length: number; width: numb
 // The Judique Flyer Trail where it crosses Baxters Cove Road: a mown lot south of the road and west of the trail,
 // a post-and-rail fence, a kiosk under a teal metal roof, and an open picnic shelter. The kiosk and shelter stand on
 // the two compact roofs in the 1 m surface model; ground heights are the bare-earth model's (EPSG:2961, metres).
-const teal = paint(0x2f8c8a), fascia = paint(0x7d5638), post = paint(0x9a958a), notice = paint(0x3f8798);
+const teal = paint(0x2f9a7c), fascia = paint(0x7d5638), post = paint(0xb4afa4), notice = paint(0x3f8798);
 const KIOSK = { e: 616453, n: 5079126.5, ground: 3.35 };
 const SHELTER = { e: 616450, n: 5079117.5, ground: 3.34 };
 // The mown lot, kept clear of trees: [east0, north0, east1, north1].
