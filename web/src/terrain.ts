@@ -1,6 +1,7 @@
 import type { Paved } from './paved';
 import type { NightShading } from './night';
 import type {HistoryBridgeApproaches} from './eras/history-approaches';
+import type { EarlyRead } from './boot-tasks';
 import { CART_TERRAIN_FRAG, CART_WATER_MASK_FRAG } from './eras/cart-shaders';
 import * as THREE from 'three';
 import {STUNT_TERRAIN_FRAG} from './stunt-ground-style';
@@ -202,6 +203,8 @@ export function drawnRoadBytes(road: Uint8Array): Uint8Array {
 /** The settings main.ts knows before the first tile is built. Each one left out keeps its field's default. */
 export interface TerrainOptions {
   night?: NightShading | null; cartRoads?: boolean; split?: number; low?: boolean; lazyRange?: number; shadows?: boolean;
+  /** The ground class file, already being read with the other boot reads (main.ts). Without it, readGroundCover fetches it. */
+  ground?: EarlyRead<ArrayBuffer> | null;
 }
 
 export class Terrain {
@@ -327,28 +330,30 @@ export class Terrain {
   private m4 = new THREE.Matrix4();
   drawn = 0;
   /** A tile splits into finer tiles when the camera is nearer than split x its size. */
-  split = 1.6;
+  readonly split: number = 1.6;
   /** Phone mode: cheaper shading. Set before the first tile loads. */
-  low = false;
+  readonly low: boolean = false;
   /**
    * Phones: a missing tile farther than this from the camera (metres) and outside the view is not waited for. The
    * parent keeps that quarter, and the tile is read in the background, behind every tile in view; it does not count as
    * pending. 0 (desktop) waits for every tile, as before. Everything in view is selected exactly as with 0.
    */
-  lazyRange = 0;
+  readonly lazyRange: number = 0;
   /** While true, background tiles are not read at all: main.ts holds them until the first pedal after a start or jump. */
   holdBackground = false;
   /** Period-only road field and shader. Set before any tile loads. */
-  cartRoads = false;
+  readonly cartRoads: boolean = false;
   /** Optional Point Tupper class atlas, installed before any tile builds. */
   paved: Paved | null = null;
   propertyOverlay: { applyGround(material: THREE.ShaderMaterial): void } | null = null;
   /** Measured stockpile faces replace surface returns, in map coordinates. Set before tile loads. */
   canopyExcludes?: (east: number, north: number) => boolean;
   /** The light study's night: adds the lamps' light to every land tile made from here on (night.ts). */
-  night: NightShading | null = null;
+  readonly night: NightShading | null = null;
   /** Desktop only: the land's shader reads the sun's shadow map (the uniforms come in with `shared`). */
-  shadows = false;
+  readonly shadows: boolean = false;
+  /** The early ground class read, if main.ts started one. */
+  private readonly groundEarly: EarlyRead<ArrayBuffer> | null;
 
   /** exag stretches ground heights about sea level; trees and roofs keep their true height. */
   constructor(readonly manifest: Manifest, readonly base: string, shared: Record<string, THREE.IUniform>,
@@ -386,9 +391,10 @@ export class Terrain {
       // World x = east - village east; world z = village north - north. The cover image starts at its north-west corner.
       coverRect: { value: new THREE.Vector4(c.xmin - vx, vy - c.ymax, 1 / (c.xmax - c.xmin), 1 / (c.ymax - c.ymin)) },
     };
-    // The fields stay writable: the node checks set them on a terrain they made.
+    // Game code sets these fields only through TerrainOptions. The node checks (plain .mjs) still write them on a terrain they made.
     this.night = options.night ?? this.night; this.cartRoads = options.cartRoads ?? this.cartRoads; this.split = options.split ?? this.split;
     this.low = options.low ?? this.low; this.lazyRange = options.lazyRange ?? this.lazyRange; this.shadows = options.shadows ?? this.shadows;
+    this.groundEarly = options.ground ?? null;
   }
 
   /** Tiny derived row runs on phones too. No full RGBA readback or extra GPU texture. */
@@ -396,10 +402,13 @@ export class Terrain {
     return this.groundRead??=(async()=>{
       const m=this.manifest.cover.ground;if(!m)return;
       if(m.version!==1)throw Error('Unsupported ground classes');
-      // Root files are copied beside packs.json, not listed inside terrain packs.
-      const response=await fetch(`${this.base}/${m.file}`);
-      if(!response.ok)throw Error('Ground classes unavailable');
-      this.groundCover=new GroundCover(await response.arrayBuffer(),m.width,m.height);
+      // Root files are copied beside packs.json, not listed inside terrain packs. main.ts usually started the read already.
+      const bytes=this.groundEarly?await this.groundEarly.take():await(async()=>{
+        const response=await fetch(`${this.base}/${m.file}`);
+        if(!response.ok)throw Error('Ground classes unavailable');
+        return response.arrayBuffer();
+      })();
+      this.groundCover=new GroundCover(bytes,m.width,m.height);
     })();
   }
   /** True once the class runs are read. Modern land only: main.ts skips the read in the 1884 era. */

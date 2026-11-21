@@ -48,6 +48,27 @@ if(['OPTIN','NOOFF','NODATA'].includes(mutation))assert.notEqual(main,readFileSy
 const criterion=main.match(/\/\/ Open designated pavement[^\n]*\n[^\n]*\nif \(([^\n]*)\) \{\n  terrain\.paved = /)[1];
 const enabled=new Function('ERA','AREA','params','manifest','return '+criterion);
 assert.equal(main.match(/\nconst pavedRead = ([^\n]*) \? early\(readFile\(base, 'paved\/index\.json'\)\) : null;\n/)?.[1],criterion,'the early index read has the same gate');
+// The paved chunk and the other area chunks start early the same way: `const xChunk = <gate> ? early(import(...)) : null`, and one
+// later line takes it with `xChunk!.take()`. If the two gates drift, take() meets a null chunk and the boot ends with no Retry
+// screen. So each chunk's gate must equal the gate of the line that takes it (or of the site that line asks for). A take line
+// that moves (for example into a place row) needs this pin moved with it.
+const chunkGates={},flat=s=>s.replace(/\s+/g,' ');
+for(const [,name,body] of main.matchAll(/\nconst (\w+Chunk) = ([^;]*);/g)){
+ const inverted=body.match(/^(\w+) \? null : early\(/),gate=inverted?'!'+inverted[1]:body.match(/^([\s\S]*?)\s+\? early\(/)?.[1];
+ assert.ok(gate,name+': an early chunk has the shape <gate> ? early(...) : null');chunkGates[name]=flat(gate);
+}
+assert.ok(Object.keys(chunkGates).length>=11,'the early area chunks are found');
+assert.deepEqual([...main.matchAll(/(\w+Chunk)!\.take\(\)/g)].map(m=>m[1]).sort(),Object.keys(chunkGates).sort(),'each early chunk is taken exactly once');
+const siteGate=site=>main.match(new RegExp('\\nconst '+site+' = (.+?) \\? new '))?.[1];
+const resolveGate=g=>g in chunkGates?resolveGate(chunkGates[g]):flat(g==='pavedRead'?criterion:/^\w+Site$/.test(g)?siteGate(g)??g:g);
+for(const name of Object.keys(chunkGates)){
+ const guard=main.match(new RegExp('\\nconst \\w+ = ([^\\n]+?)\\n?\\s*\\? (?:await |new \\(await )'+name+'!\\.take\\(\\)'))?.[1]
+  ??main.match(new RegExp('\\nconst \\w+ = (\\w+) \\? null : new \\(await '+name+'!\\.take\\(\\)'))?.[1]?.replace(/^/,'!')
+  ??main.match(new RegExp('\\nif \\(([^\\n]+)\\) \\{\\n  [^\\n]*'+name+'!\\.take\\(\\)'))?.[1]
+  ??main.match(new RegExp('lazyPlaceRow\\((\\w+Site), \\(\\) => '+name+'!\\.take\\(\\)'))?.[1];
+ assert.ok(guard,name+': the line that takes the chunk is found under its gate');
+ assert.equal(resolveGate(guard),resolveGate(chunkGates[name]),name+': the early chunk gate equals the gate of the line that takes it');
+}
 // Default on where the area's bake lists the layer; paved=0 is the way out; no data means no request unless forced.
 for(const area of ['pointtupper','mabou','westbay','judique','porthood','cansocauseway'])for(const modern of [true,false])for(const installed of [true,false])for(const flag of [null,'0','1','true']){
  const p=new URLSearchParams();if(flag!==null)p.set('paved',flag);
