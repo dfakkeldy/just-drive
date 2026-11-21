@@ -20,7 +20,7 @@ import { Mesher, seeded, type RGB } from './yard-kit';
  */
 const hex = (value: number): RGB => { const c = new THREE.Color(value); return [c.r, c.g, c.b]; };
 const shade = (k: RGB, f: number): RGB => [k[0] * f, k[1] * f, k[2] * f];
-const SAGE = hex(0x8a9b87), TRIM = hex(0xecece6), ROOF = hex(0x4e5054), GLASS: RGB = [0.07, 0.11, 0.14], FOUNDATION = hex(0x8d8c86);
+const SAGE = hex(0x8a9b87), TRIM = hex(0xecece6), ROOF = hex(0x626468), GLASS: RGB = [0.07, 0.11, 0.14], FOUNDATION = hex(0x8d8c86);
 const PANEL = hex(0x5c6a66), DOOR = hex(0xe4e4de), DARK_DOOR = hex(0x3b4446), STEEL = hex(0xb9bcbf), SOOT = hex(0x2a2a2b);
 const DECK_WOOD = hex(0x8a7d6c), SKIRT = hex(0x8e2a26), SLATS = hex(0xd8cdb4), CHAIR = hex(0xd9b43a);
 const STAIN = hex(0x8a6a4c), SHED_ROOF = hex(0x5e5f62), BARK = hex(0x5a4636), PINE_BARK = hex(0xa0603c);
@@ -308,12 +308,23 @@ export class DrLaneHouse implements HandBuiltPlace {
     const y = this.g(u, v);
     m.at(u, y, v, rnd() * 6.3);
     m.cyl(0, height * 0.42, 0, 0.24 * radius / 3.5, height * 0.84, round ? BARK : PINE_BARK, 'y', 7, 0.08);
-    const layers = round ? 5 : 6;
-    for (let i = 0; i < layers; i++) {
-      const t = i / (layers - 1), h0 = from + (height - from) * t * 0.86, r = radius * (round ? 1 - 0.75 * t * t : 1 - 0.6 * t) * (0.85 + rnd() * 0.3);
-      const k = i % 2 ? NEEDLES_LIGHT : NEEDLES, thick = (height - from) / layers * (round ? 1.5 : 1.05);
-      m.at(u + (rnd() - 0.5) * 0.4, y, v + (rnd() - 0.5) * 0.4, rnd() * 6.3);
-      m.cyl(0, h0 + thick / 2, 0, r, thick, k, 'y', 8, r * (round ? 0.55 : 0.35), shade(k, 0.8));
+    if (round) {
+      // A young pine, full to the ground: rounded tiers that narrow to the top.
+      for (let i = 0; i < 5; i++) {
+        const t = i / 4, h0 = from + (height - from) * t * 0.86, r = radius * (1 - 0.75 * t * t) * (0.85 + rnd() * 0.3), k = i % 2 ? NEEDLES_LIGHT : NEEDLES, thick = (height - from) / 3.3;
+        m.at(u + (rnd() - 0.5) * 0.4, y, v + (rnd() - 0.5) * 0.4, rnd() * 6.3);
+        m.cyl(0, h0 + thick / 2, 0, r, thick, k, 'y', 8, r * 0.55, shade(k, 0.8));
+      }
+    } else {
+      // An old pine: a bare trunk, then loose rounded clumps of needles on its branches, wide and flat, a crown on top.
+      for (let i = 0; i < 11; i++) {
+        const t = i / 10, h0 = from + (height - from - 1.2) * t, out = radius * (1 - 0.55 * t) * (0.35 + rnd() * 0.65), a = rnd() * 6.3;
+        const r = radius * (0.42 - 0.12 * t) * (0.8 + rnd() * 0.4), k = i % 2 ? NEEDLES_LIGHT : NEEDLES;
+        m.at(u + Math.cos(a) * out, y, v + Math.sin(a) * out, rnd() * 6.3);
+        m.cyl(0, h0 + r * 0.3, 0, r, r * 0.65, k, 'y', 7, r * 0.6, shade(k, 0.8));
+      }
+      m.at(u, y, v, rnd() * 6.3);
+      m.cyl(0, height - 0.6, 0, radius * 0.35, 1.2, NEEDLES, 'y', 7, radius * 0.12, shade(NEEDLES, 0.8));
     }
     this.solid(u - 0.3, u + 0.3, v - 0.3, v + 0.3);
   }
@@ -347,10 +358,11 @@ export class DrLaneHouse implements HandBuiltPlace {
       m.at(ru, ry, rv, a, 0, lean);
       m.cyl(0, len / 2, 0, 0.04, len, TWIGS, 'y', 4, 0.015, null);
     }
-    for (let i = 0; i < 9; i++) {
-      const a = rnd() * 6.3, d = 0.6 + rnd() * 1.1, h = 1.6 + rnd() * 1.3, r = 0.55 + rnd() * 0.4;
-      m.at(ru + Math.cos(a) * d, ry + h, rv + Math.sin(a) * d, rnd() * 6.3);
-      m.cyl(0, 0, 0, r, r * 0.9, shade(BERRIES, 0.85 + rnd() * 0.3), 'y', 6, r * 0.4, shade(BERRIES, 0.75));
+    // Berries in loose bunches all over the outer twigs: many small clusters with the twigs showing between them.
+    for (let i = 0; i < 46; i++) {
+      const a = rnd() * 6.3, d = 0.5 + rnd() * 1.4, h = 0.9 + rnd() * 2.1 - d * 0.25, r = 0.16 + rnd() * 0.14;
+      m.at(ru + Math.cos(a) * d, ry + h, rv + Math.sin(a) * d, rnd() * 6.3, rnd() * 0.6);
+      m.cyl(0, 0, 0, r, r * 0.8, shade(BERRIES, 0.8 + rnd() * 0.35), 'y', 5, r * 0.45, shade(BERRIES, 0.7));
     }
     this.bush(m, 3.0, 26.2, 0.75, 1.2, GOLD, rnd);                 // the golden shrub
     this.bush(m, -6.8, 26.9, 0.8, 1.0, BOX, rnd, 2);               // two round green ones near the drive

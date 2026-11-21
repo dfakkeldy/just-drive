@@ -11,6 +11,8 @@ import { dogBlob } from './yard-dog';
  * Local forward is -z; its origin is on the ground.
  */
 const COAT = 0xefebe2, SHADOW = 0xd9d3c6, DARK = 0x1d1b1a, TONGUE = 0xc77977;
+/** The parts below are drawn for a dog a little larger than this one: about 55 cm at the shoulder after the scale. */
+const SIZE = 0.82;
 type Pivot = 'body' | 'head' | 'tail' | 'leg0' | 'leg1' | 'leg2' | 'leg3';
 
 export class DrLaneDog {
@@ -24,6 +26,7 @@ export class DrLaneDog {
   constructor(low: boolean) {
     this.rules = new DrLaneDogRules(seeded(5));
     this.build(low ? 0 : 1, low ? 10 : 34);
+    this.group.scale.setScalar(SIZE);
   }
 
   private build(detail: number, curls: number): void {
@@ -35,12 +38,12 @@ export class DrLaneDog {
     };
     // A rounded, fluffy body a little higher at the shoulder, and a deep chest.
     add('body', COAT, 0, 0.56, 0.04, 0.2, 0.22, 0.4);
-    add('body', COAT, 0, 0.58, -0.24, 0.19, 0.24, 0.18);
+    add('body', COAT, 0, 0.58, -0.24, 0.18, 0.2, 0.18);
     add('body', SHADOW, 0, 0.42, 0.0, 0.15, 0.1, 0.3);
     // Curls all over the coat: small knots that stand out from the outline.
     for (let i = 0; i < curls; i++) {
       const a = rnd() * Math.PI * 2, z = -0.36 + rnd() * 0.72, r = 0.035 + rnd() * 0.025;
-      add('body', rnd() < 0.3 ? SHADOW : COAT, Math.cos(a) * 0.19, 0.56 + Math.sin(a) * 0.2, z, r, r, r, 0, 0);
+      add('body', rnd() < 0.3 ? SHADOW : COAT, Math.cos(a) * 0.17, 0.56 + Math.sin(a) * 0.18, z, r, r, r, 0, 0);
     }
     // Four legs, thick with coat, each from its own hip or shoulder.
     for (let i = 0; i < 4; i++) {
