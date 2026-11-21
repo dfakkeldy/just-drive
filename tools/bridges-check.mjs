@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import {fixture,rig,root} from './bridges-fixture.mjs';
 import {readFileSync} from 'node:fs';
+import {transformSync} from '../web/node_modules/esbuild/lib/main.js';
 async function contracts(replacements={}){
  const mod=await fixture('mabou',1,replacements);
  // Two adjoining records cross ONE channel. The middle endpoint is not a bank.
@@ -61,7 +62,58 @@ async function contracts(replacements={}){
  assert.ok(near.length>0&&box.length>near.length,`the start pose has near spans and far spans in the box: ${near}/${box}`);
  return{middle,maxRise,draws:roads.group.children.length,atInputs,eager:eager.length,farInBox:box.length-near.length};
 }
+// The grade solver's shortcuts (a repeat visit skipped, the shared lattice memo, squared length tests, the isSpan
+// box) give the same bits as the plain solver: the same source with each shortcut taken out. Real Point Tupper
+// spans: -100084 runs all 600 passes on every build, 240 retries its approaches. Then the length tests alone, on
+// seeded lengths within a few ulps of their limits, against plain Math.hypot.
+async function shortcuts(replacements={}){
+ const file='web/src/modern-bridges.ts',s=readFileSync(root+file,'utf8'),fast=replacements[file]??s;let plain=s;
+ for(const [from,to] of[
+  ['=>{const q=a*a+b*b;return q>hi||!(q<lo)&&Math.hypot(a,b)>limit;};','=>Math.hypot(a,b)>limit;'],
+  ['=>{const q=a*a+b*b;return q<lo||!(q>hi)&&Math.hypot(a,b)<=limit;};','=>Math.hypot(a,b)<=limit;'],
+  ['if(d>=1&&d<1e150){','if(false){'],
+  ['if(n===0&&mid===longest||stepLonger(','if(stepLonger('],
+  ['if(x>g[k+6]+e||x<g[k+5]-e||z>g[k+8]+e||z<g[k+7]-e)continue;',''],
+  ['if(state===0||memoX[slot]!==x||','if(true||memoX[slot]!==x||'],
+  ['if(last!==0&&changed[n0]<last&&changed[n1]<last&&changed[n2]<last){','if(false){'],
+ ]){assert.equal(plain.split(from).length,2,'one plain solver anchor: '+from);plain=plain.replace(from,to);}
+ const worlds=[];
+ for(const source of[fast,plain]){
+  const f=await fixture('pointtupper',1,{...replacements,[file]:source}),m=f.roads.modern,spans=[-100084,240].map(id=>m.spans.find(r=>r.road.id===id));
+  assert.ok(spans.every(Boolean),'Point Tupper spans -100084 and 240 exist');
+  await f.preload(f.terrain,spans.flatMap(r=>r.pts.map(p=>[p[0],p[1]])),120,8);for(const r of spans)m.ensure(r);worlds.push({m,spans});
+ }
+ const bits=r=>Buffer.concat([r.triangles,r.triangleDeck,...['position','normal','color'].map(n=>r.geometry.getAttribute(n).array),new Float64Array([r.startLength,r.endLength,r.y0,r.y1])].map(a=>Buffer.from(a.buffer,a.byteOffset,a.byteLength)));
+ worlds[0].spans.forEach((r,i)=>assert.ok(bits(r).equals(bits(worlds[1].spans[i])),`solver shortcuts keep span ${r.road.id} bit for bit`));
+ let seed=1306;const rnd=()=>(seed=seed*16807%2147483647)/2147483647;let points=0;
+ for(const r of worlds[0].spans){const reach=r.width+.0001;
+  for(let j=1;j<r.pts.length;j++){const a=r.pts[j-1],b=r.pts[j],dx=b[0]-a[0],dz=b[1]-a[1],n=Math.hypot(dx,dz)||1;
+   for(let k=0;k<300;k++){const t=-.05+1.1*rnd(),off=reach*(1+(rnd()-.5)*(k%2?1e-6:.4))*(rnd()<.5?-1:1),x=a[0]+dx*t-dz/n*off,z=a[1]+dz*t+dx/n*off;points++;
+    for(const kind of[-1,1,5])assert.equal(worlds[0].m.isSpan(x,z,kind),worlds[1].m.isSpan(x,z,kind),`isSpan box keeps the plain answer at ${x},${z}`);}
+  }}
+ const from=fast.indexOf('/** Math.hypot(a,b)>limit'),to=fast.indexOf('/** True when (x,z) is within');assert.ok(from>0&&to>from,'length test slice');
+ const lib=new Function(transformSync(fast.slice(from,to),{loader:'ts'}).code+'\nreturn{longer,noLonger,stepLonger,stepLength,STEP,STEP_LO,STEP_HI,STEEP,STEEP_LO,STEEP_HI};')();
+ let lengths=0;
+ for(const [limit,lo,hi] of[[lib.STEP,lib.STEP_LO,lib.STEP_HI],[lib.STEEP,lib.STEEP_LO,lib.STEEP_HI]])for(let i=0;i<60000;i++){
+  const angle=rnd()*7,length=i%3?limit*(1+(rnd()-.5)*2e-13):limit*Math.sqrt(1+(i%2?1e-9:-1e-9))*(1+(rnd()-.5)*1e-15),a=length*Math.cos(angle),b=length*Math.sin(angle);lengths++;
+  assert.equal(lib.longer(a,b,limit,lo,hi),Math.hypot(a,b)>limit,`longer(${a},${b},${limit})`);assert.equal(lib.noLonger(a,b,limit,lo,hi),Math.hypot(a,b)<=limit,`noLonger(${a},${b},${limit})`);
+ }
+ const norm=(l,xx,xz,zz,gx,gz,det)=>{const d=1+l*(xx+zz)+l*l*det;return Math.hypot(((1+l*zz)*gx-l*xz*gz)/d,((1+l*xx)*gz-l*xz*gx)/d);};
+ let solves=0;
+ for(let i=0;i<4000;i++){
+  const scale=Math.exp((rnd()-.5)*20),c=[0,1,2].map(()=>[(rnd()-.5)*scale,(rnd()-.5)*scale]),free=[0,1,2].filter(()=>rnd()<.8);let gx=0,gz=0,xx=0,xz=0,zz=0;
+  for(const [x,z] of c){const y=(rnd()-.5)*3*scale;gx+=x*y;gz+=z*y;}for(const k of free){xx+=c[k][0]*c[k][0];xz+=c[k][0]*c[k][1];zz+=c[k][1]*c[k][1];}
+  const det=free.length===1?0:Math.max(0,xx*zz-xz*xz),args=[xx,xz,zz,gx,gz,det];let lo=0,hi=1/Math.max(xx,zz,1e-12);
+  for(let n=0;n<32&&norm(hi,...args)>.245;n++)hi*=2;
+  if(norm(hi,...args)>.246)hi=-1;else for(let n=0;n<26;n++){const mid=(lo+hi)/2;
+   for(const [limit,a,b] of[[lib.STEP,lib.STEP_LO,lib.STEP_HI],[lib.STEEP,lib.STEEP_LO,lib.STEEP_HI]])assert.equal(lib.stepLonger(mid,xx+zz,...args,limit,a,b),norm(mid,...args)>limit,`stepLonger(${mid},${args},${limit})`);
+   if(norm(mid,...args)>.245)lo=mid;else hi=mid;}
+  assert.ok(Object.is(lib.stepLength(xx+zz,...args),hi),`stepLength(${args})`);solves++;
+ }
+ return{spans:worlds[0].spans.map(r=>r.road.id),isSpanPoints:points,lengths,solves};
+}
 console.log('PASS',await contracts());
+console.log('PASS solver shortcuts',await shortcuts());
 if(process.argv.includes('--mutations')){
  const file='web/src/modern-bridges.ts',s=readFileSync(root+file,'utf8'),anchor="if(along>=0&&along<=r.length){const t=along/r.length,smooth=r.road.kind<=3&&r.length>=20&&Math.abs(r.y1-r.y0)/r.length<.06;return r.y0+(r.y1-r.y0)*(smooth?t*t*(3-2*t):t);}";
  assert.equal(s.split(anchor).length,2,'one deck plane mutation');
@@ -73,6 +125,15 @@ if(process.argv.includes('--mutations')){
  ]){
   assert.equal(s.split(from).length,2,'one mutation anchor: '+name);
   await assert.rejects(()=>contracts({[file]:s.replace(from,to)}),error,name+' must fail');
+  console.log('KILLED '+name);
+ }
+ for(const [name,from,to,error] of[
+  ['solver skips a visit when only one corner moved','changed[n1]<last&&changed[n2]<last','changed[n1]<last',/span -100084 bit for bit/],
+  ['solver lattice memo ignores the point',"if(state===0||memoX[slot]!==x||memoZ[slot]!==z||","if(state===0||",/span 240 bit for bit/],
+  ['length test without its rounding band','STEP_LO=STEP*STEP*(1-1e-9),STEP_HI=STEP*STEP*(1+1e-9)','STEP_LO=STEP*STEP,STEP_HI=STEP*STEP',/longer|Longer/],
+ ]){
+  assert.equal(s.split(from).length,2,'one mutation anchor: '+name);
+  await assert.rejects(()=>shortcuts({[file]:s.replace(from,to)}),error,name+' must fail');
   console.log('KILLED '+name);
  }
 }

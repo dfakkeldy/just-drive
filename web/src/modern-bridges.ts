@@ -17,6 +17,36 @@ const key = (x:number,z:number,size:number) => {const cx=Math.floor(x/size),cz=M
 const segmentAt = (cum:readonly number[],last:number,s:number):number => {let lo=0,hi=last;while(lo<hi){const mid=(lo+hi)>>1;if(s>cum[mid+1])lo=mid+1;else hi=mid;}return lo;};
 /** Spans whose deck line comes this close to the camera build each frame (main drew a deck within 1500 m of pts[0]). */
 const DRAW = 1500;
+/** The lift test points of a solver triangle (build): its centre, then a 4-step barycentric lattice, 3 weights each. */
+const CHECKS=(()=>{const w=[1/3,1/3,1/3];for(let a=0;a<=4;a++)for(let b=0;b<=4-a;b++)w.push(a/4,b/4,(4-a-b)/4);return new Float64Array(w);})();
+/** Each lattice test point's place in quarter cells from its quad's first corner: row and column in [a,c,b], then
+ *  row and column in [b,c,d]. Neighbouring triangles share edge and corner points. */
+const CHECK_CELLS=(()=>{const o:number[]=[];for(let a=0;a<=4;a++)for(let b=0;b<=4-a;b++){const c=4-a-b;o.push(b,c,b+c,a+c);}return new Int8Array(o);})();
+/** Math.hypot(a,b)>limit and Math.hypot(a,b)<=limit, for lo and hi equal to limit² times 1-1e-9 and 1+1e-9. The
+ *  rounding error of a*a+b*b and of Math.hypot is below 1e-15 of the value, so outside lo..hi the answer is already
+ *  certain. Math.hypot runs only inside that band, or for NaN, with the same arguments. */
+const longer=(a:number,b:number,limit:number,lo:number,hi:number):boolean=>{const q=a*a+b*b;return q>hi||!(q<lo)&&Math.hypot(a,b)>limit;};
+const noLonger=(a:number,b:number,limit:number,lo:number,hi:number):boolean=>{const q=a*a+b*b;return q<lo||!(q>hi)&&Math.hypot(a,b)<=limit;};
+const STEP=.245,STEP_LO=STEP*STEP*(1-1e-9),STEP_HI=STEP*STEP*(1+1e-9),STEEP=.246,STEEP_LO=STEEP*STEEP*(1-1e-9),STEEP_HI=STEEP*STEEP*(1+1e-9);
+/** Whether the grade solver's step for a damping lambda (build) is longer than a limit: Math.hypot(a/d,b/d) of its
+ *  old norm closure, as one function instead of a closure per triangle. For d in 1..1e150 it first compares a*a+b*b
+ *  with lo*d*d and hi*d*d, which carry a few 1e-16 of rounding like a/d and b/d, so a sure answer skips the
+ *  divisions; an overflowed a*a+b*b means a step far over the limit. Otherwise (or NaN) longer() decides. */
+const stepLonger=(lambda:number,sum:number,xx:number,xz:number,zz:number,gx:number,gz:number,determinant:number,limit:number,lo:number,hi:number):boolean=>{
+  const d=1+lambda*sum+lambda*lambda*determinant,a=(1+lambda*zz)*gx-lambda*xz*gz,b=(1+lambda*xx)*gz-lambda*xz*gx;
+  if(d>=1&&d<1e150){const q=a*a+b*b,dd=d*d;if(q>hi*dd)return true;if(q<lo*dd)return false;}
+  return longer(a/d,b/d,limit,lo,hi);
+};
+/** The grade solver's damping for a steep triangle (build): hi after doubling it while the step is longer than .245,
+ *  then 26 bisections, or -1 when 32 doublings leave a step longer than .246. A loop that stops on its test has a
+ *  step of at most .245 (or NaN), so that second test is false. The first midpoint is often the last hi found too
+ *  long (`longest`), whose answer is known. A small function of its own, so the engine can inline stepLonger. */
+const stepLength=(sum:number,xx:number,xz:number,zz:number,gx:number,gz:number,determinant:number):number=>{
+  let lo=0,hi=1/Math.max(xx,zz,1e-12),longest=NaN;
+  for(let n=0;;n++){if(n===32){if(stepLonger(hi,sum,xx,xz,zz,gx,gz,determinant,STEEP,STEEP_LO,STEEP_HI))return -1;break;}if(!stepLonger(hi,sum,xx,xz,zz,gx,gz,determinant,STEP,STEP_LO,STEP_HI))break;longest=hi;hi*=2;}
+  for(let n=0;n<26;n++){const mid=(lo+hi)/2;if(n===0&&mid===longest||stepLonger(mid,sum,xx,xz,zz,gx,gz,determinant,STEP,STEP_LO,STEP_HI))lo=mid;else hi=mid;}
+  return hi;
+};
 /** True when (x,z) is within `reach` of the polyline. pts[0] comes first with main's own distance formula. */
 const nearLine = (pts:readonly (readonly [number,number])[],x:number,z:number,reach:number):boolean => {
   if(Math.hypot(pts[0][0]-x,pts[0][1]-z)<reach)return true;
@@ -32,6 +62,8 @@ interface Span {
   skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
   /** Half width of each carried road, for a sidewalk reserved on the deck (Roads.bridgeWalks). */
   halves:readonly (readonly [number,number])[];
+  /** isSpan's numbers for each segment of pts: a, b-a, its squared length (or 1), its box and that box's margin. */
+  segments:Float64Array;
   start?:Approach;end?:Approach;
 }
 
@@ -98,7 +130,9 @@ export class ModernBridges {
       const carried=found.sort((a,b)=>a-b).map(i=>all[i]);
       const width=Math.max(...carried.map(r=>r.halfWidth))+.45;
       const timber=road.kind>=4||road.name==='Railroad'||carried.some(r=>r.inferred);
-      const r:Span={road,members,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
+      const segments=new Float64Array((pts.length-1)*10);
+      for(let j=1;j<pts.length;j++){const a=pts[j-1],b=pts[j],dx=b[0]-a[0],dz=b[1]-a[1];segments.set([a[0],a[1],dx,dz,dx*dx+dz*dz||1,Math.min(a[0],b[0]),Math.max(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[1],b[1]),.01+2e-7*(Math.abs(dx)+Math.abs(dz))],(j-1)*10);}
+      const r:Span={road,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
       const probes:number[]=[];
@@ -167,9 +201,13 @@ export class ModernBridges {
   /** Footprint only: safe while terrain tiles are being decoded, before deck heights exist. */
   private isSpan(x:number,z:number,kind:number):boolean {
     const list=this.cells.get(key(x,z,CELL));if(!list)return false;
-    for(const index of list){const r=this.spans[index];if(kind>=0&&!r.kinds.includes(kind))continue;for(let j=1;j<r.pts.length;j++){
-      const a=r.pts[j-1],b=r.pts[j],dx=b[0]-a[0],dz=b[1]-a[1],n=dx*dx+dz*dz||1,t=((x-a[0])*dx+(z-a[1])*dz)/n;
-      if(t>=-1e-7&&t<=1.0000001&&Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t)<=r.width+.0001)return true;
+    for(const index of list){const r=this.spans[index];if(kind>=0&&!r.kinds.includes(kind))continue;const g=r.segments,reach=r.width+.0001;for(let k=0;k<g.length;k+=10){
+      // A point outside the segment's box grown by the reach and a margin is farther than the reach: within t's
+      // 1e-7 slack the foot stays 2e-7 of the length inside the box, and rounding here is far below 1 cm. Then
+      // |x-a-dx*t| or |z-a-dz*t| is above the reach, and so is Math.hypot. A NaN point is never skipped.
+      const e=reach+g[k+9];if(x>g[k+6]+e||x<g[k+5]-e||z>g[k+8]+e||z<g[k+7]-e)continue;
+      const ax=g[k],az=g[k+1],dx=g[k+2],dz=g[k+3],t=((x-ax)*dx+(z-az)*dz)/g[k+4];
+      if(t>=-1e-7&&t<=1.0000001&&Math.hypot(x-ax-dx*t,z-az-dz*t)<=reach)return true;
     }}return false;
   }
 
@@ -347,13 +385,16 @@ export class ModernBridges {
       clearance=Math.min(.4,clearance);r.y0+=clearance;r.y1+=clearance;
       r.outer0=bank(-APPROACH);r.outer1=bank(r.length+APPROACH);
       r.level=Math.min(s0.level,s1.level);
-      r.forceBuild=false;r.startLength=this.toeLength(r,false);r.endLength=this.toeLength(r,true);r.triangles=null;let geometry=this.build(r);
+      r.forceBuild=false;r.startLength=this.toeLength(r,false);r.endLength=this.toeLength(r,true);r.triangles=null;let grid=this.build(r);
+      // Only the last attempt is drawn. An earlier attempt only says whether an approach grows. emit() writes only
+      // span fields that the next emit() rewrites, and toeLength() and build() read none of them.
       for(let attempt=0;attempt<12&&(r.extendStart||r.extendEnd);attempt++){
         if(r.extendStart&&r.startLength<MAX_APPROACH)r.startLength=this.toeLength(r,false,Math.min(MAX_APPROACH,r.startLength+8));
         if(r.extendEnd&&r.endLength<MAX_APPROACH)r.endLength=this.toeLength(r,true,Math.min(MAX_APPROACH,r.endLength+8));
         if(r.startLength===MAX_APPROACH&&r.endLength===MAX_APPROACH&&!r.extendStart&&!r.extendEnd)break;
-        geometry.dispose();r.triangles=null;geometry=this.build(r);
+        r.triangles=null;grid=this.build(r);
       }
+      const geometry=this.emit(r,grid);
       this.prepareCorridor(r);r.geometry?.dispose();r.geometry=geometry;r.serial=++this.audit.builds;this.dirty=true;
     }finally{this.sampling=false;}
   }
@@ -447,8 +488,10 @@ export class ModernBridges {
     if(!this.mesh){this.mesh=new THREE.Mesh(geometry,this.material);this.mesh.name='Modern bridge decks';this.mesh.receiveShadow=true;this.group.add(this.mesh);}
     else{this.mesh.geometry.dispose();this.mesh.geometry=geometry;}this.audit.merges++;this.terrain.updateRoadCuts?.();
   }
-  private build(r:Span,relaxCurve=false):THREE.BufferGeometry {
-    const m=new Mesher(),top: number[]=[],deckFlags:number[]=[],coreRows=Math.ceil(r.length),rows=coreRows+r.startLength+r.endLength,columns=Math.ceil(2*r.width/.75),grid=new Float32Array((rows+1)*(columns+1)*3);
+  /** The span's solved height grid (x, y, z per point; rows along the span, columns across). It also sets
+   *  r.extendStart and r.extendEnd. ensure() turns the last attempt into a mesh with emit(). */
+  private build(r:Span,relaxCurve=false):Float32Array {
+    const coreRows=Math.ceil(r.length),rows=coreRows+r.startLength+r.endLength,columns=Math.ceil(2*r.width/.75),grid=new Float32Array((rows+1)*(columns+1)*3);
     const curves0=r.smoothStart?Array.from({length:columns+1},(_,j)=>this.curveData(r,false,r.startLength,-1+2*j/columns)):null,curves1=r.smoothEnd?Array.from({length:columns+1},(_,j)=>this.curveData(r,true,r.endLength,-1+2*j/columns)):null;
     const along=(i:number)=>i<=r.startLength?i-r.startLength:i<=r.startLength+coreRows?r.length*(i-r.startLength)/coreRows:r.length+i-r.startLength-coreRows;
     for(let i=0;i<=rows;i++){const s=along(i),p=this.at(r,s);
@@ -457,31 +500,64 @@ export class ModernBridges {
     const floor=new Float64Array((rows+1)*(columns+1));floor.fill(-Infinity);
     const fixed=new Uint8Array(floor.length);
     for(let i=0;i<=rows;i++)for(let j=0;j<=columns;j++){const n=i*(columns+1)+j,s=along(i);if(s>=0&&s<=r.length||this.isSpan(grid[n*3],grid[n*3+2],-1))floor[n]=grid[n*3+1];if(!relaxCurve&&(s<0?r.smoothStart:s>r.length?r.smoothEnd:false)&&Math.abs(j-columns/2)<=.51)fixed[n]=1;if(i===0||i===rows){const width=this.widthAt(r,s),u=-width+2*width*j/columns;if(Math.abs(u)<=width-.25)fixed[n]=1;}}
-    const checks:[number,number,number][]=[[1/3,1/3,1/3]];for(let a=0;a<=4;a++)for(let b=0;b<=4-a;b++)checks.push([a/4,b/4,(4-a-b)/4]);
     const slope=(a:number,b:number,c:number)=>{const dx=grid[b]-grid[a],dz=grid[b+2]-grid[a+2],ex=grid[c]-grid[a],ez=grid[c+2]-grid[a+2],det=dx*ez-dz*ex;if(Math.abs(det)<1e-8)return 0;const dy=grid[b+1]-grid[a+1],ey=grid[c+1]-grid[a+1];return Math.hypot((dy*ez-ey*dz)/det,(dx*ey-ex*dy)/det);};
+    // The grade solver visits each quad's triangles [a,c,b] then [b,c,d], in row order, until no height moves.
+    // A visit reads only its three corners' heights and floors: x, z and `fixed` never change. So a visit whose
+    // corners have not changed since its last visit repeats that visit exactly: it moves nothing and gives the
+    // same steep and toe flags, kept in `flags`. `changed` holds the visit (a count) that last changed a corner's
+    // height or floor; `seen` holds each triangle's last visit.
+    const seen=new Int32Array(rows*columns*2),flags=new Uint8Array(seen.length),changed=new Int32Array(floor.length);let visit=0;
+    const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoLand=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);
     let badStart=false,badEnd=false;
     for(let pass=0;pass<600;pass++){
       let moved=false,lifted=false,steep=false;badStart=badEnd=false;
       for(let i=0;i<rows;i++)for(let j=0;j<columns;j++){
         const a=(i*(columns+1)+j)*3,b=a+3,c=a+(columns+1)*3,d=c+3;
-        for(const tri of[[a,c,b],[b,c,d]]){
-          if(pass===0)for(const w of checks){
-            let x=0,y=0,z=0;for(let k=0;k<3;k++){x+=grid[tri[k]]*w[k];y+=grid[tri[k]+1]*w[k];z+=grid[tri[k]+2]*w[k];}
-            if(!this.isSpan(x,z,-1))continue;const lift=(this.land(x,z)??-Infinity)+.05-y;if(lift>0){lifted=true;for(const k of tri){grid[k+1]+=lift;floor[k/3]=Math.max(floor[k/3],grid[k+1]);}}
+        for(let half=0;half<2;half++){
+          const t0=half===0?a:b,t1=c,t2=half===0?b:d,n0=t0/3,n1=t1/3,n2=t2/3,id=(i*columns+j)*2+half;
+          if(pass===0)for(let q=0;q<CHECKS.length;q+=3){
+            const w0=CHECKS[q],w1=CHECKS[q+1],w2=CHECKS[q+2];let x=0,y=0,z=0;
+            x+=grid[t0]*w0;y+=grid[t0+1]*w0;z+=grid[t0+2]*w0;x+=grid[t1]*w1;y+=grid[t1+1]*w1;z+=grid[t1+2]*w1;x+=grid[t2]*w2;y+=grid[t2+1]*w2;z+=grid[t2+2]*w2;
+            // A lattice point shared with a neighbour takes isSpan and land from the memo when its x and z are the
+            // same bits. Both are fixed for a fixed point during a build. The memo keeps the last 5 lattice rows.
+            let ground:number|null;
+            if(q===0){if(!this.isSpan(x,z,-1))continue;ground=this.land(x,z);}
+            else{
+              const e=(q/3-1)*4+half*2,slot=((4*i+CHECK_CELLS[e])%5)*memoRow+4*j+CHECK_CELLS[e+1];let state=memoState[slot];
+              if(state===0||memoX[slot]!==x||memoZ[slot]!==z||x===0&&!Object.is(memoX[slot],x)||z===0&&!Object.is(memoZ[slot],z)){
+                if(!this.isSpan(x,z,-1))state=1;else{const h=this.land(x,z);state=h==null?3:2;memoLand[slot]=h??0;}
+                memoState[slot]=state;memoX[slot]=x;memoZ[slot]=z;
+              }
+              if(state===1)continue;ground=state===2?memoLand[slot]:null;
+            }
+            const lift=(ground??-Infinity)+.05-y;
+            if(lift>0){lifted=true;visit++;
+              grid[t0+1]+=lift;floor[n0]=Math.max(floor[n0],grid[t0+1]);changed[n0]=visit;
+              grid[t1+1]+=lift;floor[n1]=Math.max(floor[n1],grid[t1+1]);changed[n1]=visit;
+              grid[t2+1]+=lift;floor[n2]=Math.max(floor[n2],grid[t2+1]);changed[n2]=visit;
+            }
           }
-          const grade=slope(...tri as[number,number,number]);if(grade<=.246)continue;
-          steep=true;
-          const [u,v,w]=tri,dx=grid[v]-grid[u],dz=grid[v+2]-grid[u+2],ex=grid[w]-grid[u],ez=grid[w+2]-grid[u+2],det=dx*ez-dz*ex;
+          const last=seen[id];
+          if(last!==0&&changed[n0]<last&&changed[n1]<last&&changed[n2]<last){const f=flags[id];if(f&1)steep=true;if(f&2)badStart=true;if(f&4)badEnd=true;continue;}
+          const now=seen[id]=++visit;flags[id]=0;
+          // slope(t0,t1,t2), inline.
+          const dx=grid[t1]-grid[t0],dz=grid[t1+2]-grid[t0+2],ex=grid[t2]-grid[t0],ez=grid[t2+2]-grid[t0+2],det=dx*ez-dz*ex;
           if(Math.abs(det)<1e-8)continue;
-          const cx=[(dz-ez)/det,ez/det,-dz/det],cz=[(ex-dx)/det,-ex/det,dx/det],free=tri.map((k,i)=>fixed[k/3]?-1:i).filter(i=>i>=0);
-          let gx=0,gz=0,xx=0,xz=0,zz=0;for(let n=0;n<3;n++){gx+=cx[n]*grid[tri[n]+1];gz+=cz[n]*grid[tri[n]+1];}for(const n of free){xx+=cx[n]*cx[n];xz+=cx[n]*cz[n];zz+=cz[n]*cz[n];}
-          const determinant=free.length===1?0:Math.max(0,xx*zz-xz*xz);
-          const norm=(lambda:number)=>{const d=1+lambda*(xx+zz)+lambda*lambda*determinant;return Math.hypot(((1+lambda*zz)*gx-lambda*xz*gz)/d,((1+lambda*xx)*gz-lambda*xz*gx)/d);};
-          let lo=0,hi=1/Math.max(xx,zz,1e-12);for(let n=0;n<32&&norm(hi)>.245;n++)hi*=2;
-          if(norm(hi)>.246){if(i===0)badStart=true;else if(i===rows-1)badEnd=true;continue;}
-          for(let n=0;n<26;n++){const mid=(lo+hi)/2;if(norm(mid)>.245)lo=mid;else hi=mid;}
-          const d=1+hi*(xx+zz)+hi*hi*determinant,px=((1+hi*zz)*gx-hi*xz*gz)/d,pz=((1+hi*xx)*gz-hi*xz*gx)/d;
-          for(const n of free){const k=tri[n],before=grid[k+1];grid[k+1]=Math.max(floor[k/3],before-hi*(cx[n]*px+cz[n]*pz));if(grid[k+1]!==before)moved=true;}
+          const dy=grid[t1+1]-grid[t0+1],ey=grid[t2+1]-grid[t0+1];
+          if(noLonger((dy*ez-ey*dz)/det,(dx*ey-ex*dy)/det,STEEP,STEEP_LO,STEEP_HI))continue;
+          steep=true;flags[id]=1;
+          // That slope test already rejected a near-zero det.
+          const cx0=(dz-ez)/det,cx1=ez/det,cx2=-dz/det,cz0=(ex-dx)/det,cz1=-ex/det,cz2=dx/det,free0=!fixed[n0],free1=!fixed[n1],free2=!fixed[n2];
+          let gx=0,gz=0,xx=0,xz=0,zz=0;gx+=cx0*grid[t0+1];gz+=cz0*grid[t0+1];gx+=cx1*grid[t1+1];gz+=cz1*grid[t1+1];gx+=cx2*grid[t2+1];gz+=cz2*grid[t2+1];
+          if(free0){xx+=cx0*cx0;xz+=cx0*cz0;zz+=cz0*cz0;}if(free1){xx+=cx1*cx1;xz+=cx1*cz1;zz+=cz1*cz1;}if(free2){xx+=cx2*cx2;xz+=cx2*cz2;zz+=cz2*cz2;}
+          const determinant=(free0?1:0)+(free1?1:0)+(free2?1:0)===1?0:Math.max(0,xx*zz-xz*xz),sum=xx+zz;
+          const hi=stepLength(sum,xx,xz,zz,gx,gz,determinant);
+          if(hi===-1){if(i===0){badStart=true;flags[id]|=2;}else if(i===rows-1){badEnd=true;flags[id]|=4;}continue;}
+          const den=1+hi*sum+hi*hi*determinant,px=((1+hi*zz)*gx-hi*xz*gz)/den,pz=((1+hi*xx)*gz-hi*xz*gx)/den;
+          // A store that keeps the value but flips the sign of zero still counts as a change for `changed`.
+          if(free0){const before=grid[t0+1];grid[t0+1]=Math.max(floor[n0],before-hi*(cx0*px+cz0*pz));if(grid[t0+1]!==before)moved=true;if(!Object.is(grid[t0+1],before))changed[n0]=now;}
+          if(free1){const before=grid[t1+1];grid[t1+1]=Math.max(floor[n1],before-hi*(cx1*px+cz1*pz));if(grid[t1+1]!==before)moved=true;if(!Object.is(grid[t1+1],before))changed[n1]=now;}
+          if(free2){const before=grid[t2+1];grid[t2+1]=Math.max(floor[n2],before-hi*(cx2*px+cz2*pz));if(grid[t2+1]!==before)moved=true;if(!Object.is(grid[t2+1],before))changed[n2]=now;}
         }
       }
       // A fixed floor can keep a triangle steep even when Float32 heights stop moving.
@@ -495,14 +571,20 @@ export class ModernBridges {
     // curve as the initial shape, then let the full-width grade constraint win.
     if(!relaxCurve&&(r.smoothStart||r.smoothEnd)&&invalid)return this.build(r,true);
     r.extendStart=badStart&&r.startLength<MAX_APPROACH;r.extendEnd=badEnd&&r.endLength<MAX_APPROACH;
+    return grid;
+  }
+  /** The mesh of a solved grid. It sets the span's wheel triangles, their cells, skin box and approach ranges. */
+  private emit(r:Span,grid:Float32Array):THREE.BufferGeometry {
+    const m=new Mesher(),coreRows=Math.ceil(r.length),rows=coreRows+r.startLength+r.endLength,columns=Math.ceil(2*r.width/.75),top=new Float32Array(rows*columns*18),deckFlags=new Uint8Array(rows*columns*2);let count=0;
+    const along=(i:number)=>i<=r.startLength?i-r.startLength:i<=r.startLength+coreRows?r.length*(i-r.startLength)/coreRows:r.length+i-r.startLength-coreRows;
     // Vertex ranges of the approaches (surface, stripes and fill), which stay drawn when the span's deck is hidden.
     const approachRanges:number[]=[];
     const approach=(emit:()=>void)=>{const from=m.pos.length/3;emit();const to=m.pos.length/3;if(to===from)return;
       if(approachRanges.length&&approachRanges[approachRanges.length-1]===from)approachRanges[approachRanges.length-1]=to;else approachRanges.push(from,to);};
     const triangle=(a:number,b:number,c:number,color:RGB,part:number)=>{
-      deckFlags.push(part);
+      deckFlags[count/9]=part;
       if((grid[b+2]-grid[a+2])*(grid[c]-grid[a])-(grid[b]-grid[a])*(grid[c+2]-grid[a+2])<0){const swap=b;b=c;c=swap;}
-      top.push(...grid.subarray(a,a+3),...grid.subarray(b,b+3),...grid.subarray(c,c+3));
+      top[count]=grid[a];top[count+1]=grid[a+1];top[count+2]=grid[a+2];top[count+3]=grid[b];top[count+4]=grid[b+1];top[count+5]=grid[b+2];top[count+6]=grid[c];top[count+7]=grid[c+1];top[count+8]=grid[c+2];count+=9;
       const draw=()=>m.tri(grid[a],grid[a+1],grid[a+2],grid[b],grid[b+1],grid[b+2],grid[c],grid[c+1],grid[c+2],color);
       if(part===1)draw();else approach(draw);
     };
@@ -513,7 +595,7 @@ export class ModernBridges {
       const color:RGB=deck?(r.timber?[.31+(i%3)*.012,.225+(i%3)*.008,.14]:[.205,.215,.21]):kind<=2?[.16,.16,.17]:kind===3?[.25,.225,.19]:kind===5?[.34,.32,.28]:[.17,.13,.09];
       triangle(a,c,b,color,part);triangle(b,c,d,color,part);
     }
-    r.triangleDeck=new Uint8Array(deckFlags);r.triangles=new Float32Array(top);r.cells.clear();r.skinBox.set([Infinity,Infinity,-Infinity,-Infinity]);
+    r.triangleDeck=deckFlags;r.triangles=top;r.cells.clear();r.skinBox.set([Infinity,Infinity,-Infinity,-Infinity]);
     for(let i=0;i<top.length;i+=9){
       r.skinBox[0]=Math.min(r.skinBox[0],top[i],top[i+3],top[i+6]);r.skinBox[1]=Math.min(r.skinBox[1],top[i+2],top[i+5],top[i+8]);r.skinBox[2]=Math.max(r.skinBox[2],top[i],top[i+3],top[i+6]);r.skinBox[3]=Math.max(r.skinBox[3],top[i+2],top[i+5],top[i+8]);
       const x0=Math.floor(Math.min(top[i],top[i+3],top[i+6])/TRI_CELL),x1=Math.floor(Math.max(top[i],top[i+3],top[i+6])/TRI_CELL);
