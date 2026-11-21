@@ -300,9 +300,13 @@ if(family==='all'||family==='phone'){
   }
   await p.read('window.pictureShare = true');
   await hit('#savePictureButton'); await picture(p, 1, 'share', true);
-  const noticeBoxes=await readBoxes([...flightIds,'miniMap','savePictureStatus']), noticeFaults=faults(noticeBoxes);
-  if(noticeFaults.length)console.log('Flight notice faults',noticeFaults.join(','));
-  check(noticeBoxes.some(b=>b[0]==='savePictureStatus')&&noticeFaults.length===0,`${label} flight save notice clears telemetry, map and flight controls`);
+  for(const text of [null,'Could not save picture']){
+   if(text)await p.read(`document.getElementById('savePictureStatus').textContent=${JSON.stringify(text)}`);
+   const noticeBoxes=await readBoxes([...flightIds,'miniMap','savePictureStatus']), noticeFaults=faults(noticeBoxes);
+   if(noticeFaults.length)console.log('Flight notice faults',text??'saved',noticeFaults.join(','));
+   check(noticeBoxes.some(b=>b[0]==='savePictureStatus')&&noticeFaults.length===0,`${label} flight save notice (${text??'Picture saved'}) clears telemetry, map and flight controls`);
+  }
+  await p.read(`document.getElementById('savePictureStatus').textContent=''`);
   if(w===320&&h===568){
    await p.read('window.cancelPicture = true');
    await hit('#savePictureButton');
