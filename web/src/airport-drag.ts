@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Device } from './gamepad-rules';
 import { DragRun, DRAG_DISTANCE, paceDistance, PACE_ET, PACE_REACTION, recordDragBest } from './drag-rules';
 export { airportDragPlace, DRAG_START_KEY } from './drag-strip';
 import { DRAG_LANE, DRAG_HALF_LANE, DragStrip } from './drag-strip';
@@ -69,7 +70,7 @@ const COPY = {
   green: 'Green · go!',
   running: 'Race in progress',
   red: 'Red light · jump start',
-  aborted: 'Run cancelled · left the lane',
+  aborted: 'Run cancelled · left the staging area or lane',
 } as const;
 const time = (seconds: number) => seconds.toFixed(3) + ' s';
 const write = (element: HTMLElement, value: string) => { if (element.textContent !== value) element.textContent = value; };
@@ -93,7 +94,6 @@ export class AirportDrag {
   private kind = '';
   private vehicle: Vehicle | null = null;
   private placement = -1;
-  private dismissed = false;
   private available = false;
 
   constructor(private terrain: Terrain, goToStart: (pose: DragStrip['start']) => void) {
@@ -128,11 +128,9 @@ export class AirportDrag {
     this.stage = this.panel.querySelector('.dragStage')!;
     this.back = this.panel.querySelector('.dragBack')!;
     this.leave = this.panel.querySelector('.dragLeave')!;
-    this.stage.onclick = () => {
-      if (this.available && !this.run && this.vehicle && this.canStage(this.vehicle)) this.run = new DragRun(this.nose(this.vehicle));
-    };
+    this.stage.onclick = () => this.begin();
     this.back.onclick = () => { this.reset(); goToStart(this.strip.start); };
-    this.leave.onclick = () => { this.reset(); this.dismissed = true; };
+    this.leave.onclick = () => this.reset();
     for (const event of ['pointerdown', 'pointerup', 'pointermove']) this.panel.addEventListener(event, ev => ev.stopPropagation());
     document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
     document.body.append(this.panel);
@@ -141,9 +139,14 @@ export class AirportDrag {
   reset(): void {
     this.run = null;
     this.paceTime = 0;
-    this.dismissed = false;
     this.panel.hidden = true;
     this.rival.visible = false;
+  }
+
+  begin(): boolean {
+    if (!this.available || this.run || !this.vehicle || !this.canStage(this.vehicle)) return false;
+    this.run = new DragRun(this.nose(this.vehicle));
+    return true;
   }
 
   private nose(vehicle: Vehicle): number {
@@ -157,7 +160,7 @@ export class AirportDrag {
 
   onStrip(vehicle: Vehicle): boolean {
     const along = this.strip.along(vehicle.x, vehicle.z);
-    return along >= -28 && along <= DRAG_DISTANCE + 110 && Math.abs(this.strip.across(vehicle.x, vehicle.z)) <= 21;
+    return along >= -28 && along <= DRAG_DISTANCE + 140 && Math.abs(this.strip.across(vehicle.x, vehicle.z)) <= 21;
   }
 
   private nearStart(vehicle: Vehicle): boolean {
@@ -185,7 +188,8 @@ export class AirportDrag {
   }
 
   step(dt: number, vehicle: Vehicle): void {
-    if (!this.available || !this.run || this.run.fault) return;
+    // The fixed-step callback only runs when the vehicle moves through the physics loop.
+    if (!this.run || this.run.fault) return;
     this.paceTime += dt;
     if (!this.run.active) return;
     this.run.step(dt, this.nose(vehicle), this.inLane(vehicle));
@@ -193,17 +197,19 @@ export class AirportDrag {
     if (elapsed !== undefined && (this.best === null || elapsed < this.best)) this.best = recordDragBest(this.storage, this.kind, elapsed);
   }
 
-  draw(vehicle: Vehicle): void {
+  draw(vehicle: Vehicle, device: Device): void {
+    if (this.run && !this.run.active && (!this.onStrip(vehicle) || (this.run.result && this.nose(vehicle) < 0))) this.reset();
     const run = this.run;
-    const near = this.nearStart(vehicle);
-    if (!near) this.dismissed = false;
-    this.panel.hidden = !this.available || (!run && (!near || this.dismissed));
+    this.panel.hidden = !this.available || (!run && !this.nearStart(vehicle));
     this.rival.visible = false;
     if (this.panel.hidden) return;
     const phase = run?.phase ?? 'idle';
     const staged = phase === 'idle' && this.canStage(vehicle);
     this.tree.dataset.phase = phase;
-    if (phase === 'idle') write(this.status, staged ? 'Ready to stage' : 'Stop just behind the line in the left lane');
+    if (phase === 'idle') {
+      const shortcut = device === 'gamepad' ? ' · Y / Triangle' : device === 'keyboard' ? ' · Enter' : '';
+      write(this.status, staged ? 'Ready to stage' + shortcut : 'Stop just behind the line in the left lane');
+    }
     else if (phase !== 'finished') write(this.status, COPY[phase]);
     this.stage.hidden = phase !== 'idle';
     this.stage.disabled = !staged;

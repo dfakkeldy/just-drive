@@ -1199,6 +1199,7 @@ addEventListener('keydown', (ev) => {
     if (!ev.repeat) { ev.preventDefault(); interiors.enter(); if (interiors.busy) { keys.clear(); touch.steer = touch.throttle = 0; } }
     return;
   }
+  if (mode === 'drive' && !interiors.busy && ev.code === 'Enter' && !ev.repeat && airportDrag?.begin()) { ev.preventDefault(); return; }
   if (!mailMode && exploreKey(ev.code)) return;
   if (interiors.busy) {
     if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight', 'Space'].includes(ev.code)) { ev.preventDefault(); keys.add(ev.code); }
@@ -1251,7 +1252,7 @@ if (pad) {
 const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
 const gamepad = createGamepad({
   horn: honk,
-  mail: padAct(() => { if (mailMode) mailRequested = true; }),
+  mail: padAct(() => { if (mailMode) mailRequested = true; else airportDrag?.begin(); }),
   // B changes the view; inside a building (where every other driving button rests) it climbs out, as Esc does.
   view: () => { if (interiors.busy) interiors.leave(); else if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
   pause: () => { if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
@@ -2046,7 +2047,7 @@ function frame(now: number) {
     camera.rotation.set(pitch, yaw, 0);
   }
   if (endings.busy) { drawEnding(0); requestAnimationFrame(frame); return; }
-  airportDrag?.draw(vehicle);
+  airportDrag?.draw(vehicle, gamepad.device);
   const impactSpeed = Math.hypot(vehicle.vx, vehicle.vz);
   const impact = shift.ended ? 1 : mail.update(dt, vehicle,
     mailControls && (mailRequested || keys.has('KeyM') || keys.has('KeyE') ||

@@ -20,10 +20,13 @@ async function until(tab, condition, label, ms = 45000) {
   assert.fail(label + ': ' + JSON.stringify(await tab.read(`({phase:${phase},status:${status},x:mmm.vehicle.x,z:mmm.vehicle.z,speed:mmm.vehicle.speed})`)));
 }
 const click = (tab, selector) => tab.read(`document.querySelector(${JSON.stringify(selector)}).click()`);
-async function openPlaces(tab) {
-  const key = { code: 'KeyL', key: 'l', windowsVirtualKeyCode: 76 };
+async function press(tab, code, keyName, number) {
+  const key = { code, key: keyName, windowsVirtualKeyCode: number };
   await tab.send('Input.dispatchKeyEvent', { ...key, type: 'rawKeyDown' });
   await tab.send('Input.dispatchKeyEvent', { ...key, type: 'keyUp' });
+}
+async function openPlaces(tab) {
+  await press(tab, 'KeyL', 'l', 76);
   assert.ok(await tab.read("!document.querySelector('#placesPanel').hidden"), 'L opens Places');
 }
 async function pedal(tab, down, phone = false) {
@@ -63,6 +66,24 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
     await tab.read(`localStorage.removeItem('mmm.drag.402.${vehicle}')`);
 
     if (vehicle === 'car') {
+      assert.match(await tab.read("document.querySelector('#hud').innerText"), /airport runway/);
+      await press(tab, 'Enter', 'Enter', 13);
+      await until(tab, `${phase} === 'staged'`, 'Enter stages');
+      await openPlaces(tab);
+      await click(tab, '[data-place=airport-drag]');
+      await until(tab, `!!${staged} && ${phase} === 'idle'`, 'a Places jump clears staging');
+
+      await click(tab, '.dragStage');
+      const reverse = { code: 'KeyS', key: 's', windowsVirtualKeyCode: 83 };
+      await tab.send('Input.dispatchKeyEvent', { ...reverse, type: 'rawKeyDown' });
+      try { await until(tab, `${phase} === 'aborted'`, 'backing out of staging cancels the run'); }
+      finally { await tab.send('Input.dispatchKeyEvent', { ...reverse, type: 'keyUp' }); }
+      await click(tab, '.dragLeave');
+      await until(tab, `${phase} === 'idle'`, 'Close clears the cancelled run');
+      await openPlaces(tab);
+      await click(tab, '[data-place=airport-drag]');
+      await until(tab, `!!${staged}`, 'can stage after returning');
+
       await click(tab, '.dragStage');
       await pedal(tab, true);
       try { await until(tab, `${phase} === 'red'`, 'early throttle trips the red light'); }
@@ -72,8 +93,17 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
       await until(tab, `!!${staged}`, 'back to start stages again');
     }
 
-    await click(tab, '.dragStage');
-    await until(tab, `${phase} === 'staged'`, 'the stage lamp lights');
+    if (vehicle === 'sxs') {
+      await tab.read(`(() => {
+        const buttons = Array.from({length:16}, (_, i) => ({pressed:i===3,value:i===3?1:0}));
+        const pad = {index:0,mapping:'standard',connected:true,axes:[0,0,0,0],buttons};
+        Object.defineProperty(navigator, 'getGamepads', {configurable:true,value:() => [pad]});
+        window.dispatchEvent(new Event('gamepadconnected'));
+      })()`);
+    } else await click(tab, '.dragStage');
+    await until(tab, `${phase} === 'staged'`, vehicle === 'sxs' ? 'gamepad Y stages' : 'the stage lamp lights');
+    if (vehicle === 'sxs') await tab.read("delete navigator.getGamepads");
+
     if (vehicle === 'car') {
       // Fixed view of both lanes at staging. The shader paint adds no mesh.
       // Isolate the pace car's draw and triangles in the same scene and camera.
@@ -112,6 +142,15 @@ for (const vehicle of ['car', 'truck', 'sxs', 'bike']) {
       if (vehicle === 'car') {
         await until(tab, `${phase} === 'running' && mmm.airportDrag.strip.along(mmm.vehicle.x, mmm.vehicle.z) > 145`, 'real drive reaches mid-strip');
         await tab.shot(join(evidence, '02-mid-run.png'));
+        await pedal(tab, false);
+        await press(tab, 'KeyP', 'p', 80);
+        await until(tab, "!document.querySelector('#pauseScreen').hidden", 'P pauses the solo race');
+        const before = await tab.read('[mmm.airportDrag.run.time, mmm.vehicle.x, mmm.vehicle.z]');
+        await sleep(250);
+        assert.deepEqual(await tab.read('[mmm.airportDrag.run.time, mmm.vehicle.x, mmm.vehicle.z]'), before, 'the race clock and car both freeze');
+        await press(tab, 'KeyP', 'p', 80);
+        await until(tab, "document.querySelector('#pauseScreen').hidden", 'P resumes the race');
+        await pedal(tab, true);
       }
       await until(tab, `${phase} === 'finished'`, vehicle + ' drives through the finish', 90000);
     } finally { await pedal(tab, false, phone); }

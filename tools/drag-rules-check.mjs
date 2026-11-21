@@ -16,13 +16,28 @@ const cases = {
     }
   },
   jump({ DragRun }) {
-    const run = new DragRun(-1);
-    run.step(2.29, -0.5, true);
-    run.step(0.02, 1.5, true); // crosses at 2.295, even though this step ends after green
+    const run = new DragRun(-0.3);
+    run.step(2.29, -0.3, true);
+    run.step(0.02, 0.9, true); // crosses at 2.295, even though this step ends after green
     assert.equal(run.phase, 'red');
     assert.equal(run.active, false);
     run.step(30, 403, true);
     assert.equal(run.result, null);
+  },
+  runUp({ DragRun }) {
+    const run = new DragRun(-1);
+    run.step(2.4, -16, true);
+    assert.equal(run.phase, 'aborted');
+    run.step(0.2, 1, true);
+    run.step(14, 403, true);
+    assert.equal(run.result, null, 'a rolling start cannot produce a best');
+  },
+  creep({ DragRun }) {
+    const run = new DragRun(-2);
+    run.step(1.7, -1.8, true);
+    assert.equal(run.phase, 'amber-2', 'allow a small settling movement');
+    run.step(0.1, -1.6, true);
+    assert.equal(run.phase, 'red', 'a run-up before green fouls even behind the beam');
   },
   timing({ DragRun }) {
     const run = new DragRun(-1);
@@ -58,7 +73,10 @@ const cases = {
     close(paceDistance(2.55), 0);
     close(paceDistance(2.55 + 16.4), 402);
     const stop = paceDistance(30);
-    assert.ok(stop > 402 && stop < 530);
+    assert.ok(stop > 510 && stop < 540);
+    const finishTime = 2.55 + 16.4;
+    const trapKmh = (paceDistance(finishTime) - paceDistance(finishTime - 0.1)) * 36;
+    assert.ok(trapKmh > 125 && trapKmh < 140, 'pace car has a plausible finish speed');
     close(paceDistance(60), stop);
   },
   best({ recordDragBest }) {
@@ -100,13 +118,15 @@ if (process.argv.includes('--mutations')) {
   const source = readFileSync(`${process.env.MMM_ROOT ?? '.'}/web/src/drag-rules.ts`, 'utf8');
   for (const [name, before, after] of [
     ['tree', 'DRAG_STAGE + 2 * DRAG_AMBER', 'DRAG_STAGE + DRAG_AMBER'],
-    ['jump', 'launch < DRAG_GREEN', 'this.time < DRAG_GREEN'],
+    ['jump', 'foul < DRAG_GREEN', 'this.time < DRAG_GREEN'],
+    ['runUp', 'along < this.staged - 0.5', 'false'],
+    ['creep', 'Math.min(0, this.staged + 0.35)', '0'],
     ['timing', 'reaction: this.launch - DRAG_GREEN', 'reaction: this.launch'],
     ['timing', 'elapsed: finish - this.launch', 'elapsed: finish - DRAG_GREEN'],
     ['timing', '3.6 * DRAG_TRAP / (finish - this.trap)', '3.6 * DRAG_DISTANCE / (finish - this.trap)'],
     ['recross', 'along < entry ? null : this.trap ?? crossed(entry)', 'this.trap ?? crossed(entry)'],
     ['lane', '!inLane || along < -20', 'along < -20'],
-    ['pace', 'const PACE_RAMP = 3.5;', 'const PACE_RAMP = 35;'],
+    ['pace', 'const PACE_RAMP = 7;', 'const PACE_RAMP = 35;'],
     ['best', 'elapsed < best', 'elapsed > best'],
   ]) {
     const { transformSync } = await import('../web/node_modules/esbuild/lib/main.js');
