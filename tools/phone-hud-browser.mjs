@@ -134,6 +134,7 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       await read(`(()=>{const v=mmm.vehicle,saved=Object.getOwnPropertyDescriptor(v,'roadName');window.restoreStatusRoad=()=>{if(saved)Object.defineProperty(v,'roadName',saved);else delete v.roadName;};Object.defineProperty(v,'roadName',{get:()=> 'Long road name '.repeat(12),set(){},configurable:true});})()`);
       await until(`document.getElementById('phoneLine').textContent.includes('Long road name')`);
       const before=(await boxes()).find(b=>b.id==='phoneLine');
+      assert.equal(await read(`(()=>{const e=document.getElementById('phoneLine'),r=document.createRange(),end=e.textContent.indexOf('→ 18:00');if(end<0)return false;r.setStart(e.firstChild,0);r.setEnd(e.firstChild,end+7);return r.getBoundingClientRect().right<=e.getBoundingClientRect().right-5;})()`),true,'end time paints before the road ellipsis');
       // Render fixture only: physics/activation is checked by phone-speed-cap. Feed the real
       // frame and PhoneMailHud a held-cap reading so every viewport paints the longest marker.
       await read(`(()=>{const v=mmm.vehicle,savedSpeed=Object.getOwnPropertyDescriptor(v,'speed');window.restoreCapRender=()=>{delete v.activeTouchSpeedLimit;if(savedSpeed)Object.defineProperty(v,'speed',savedSpeed);else delete v.speed;};Object.defineProperty(v,'activeTouchSpeedLimit',{value:100/3.6,configurable:true});Object.defineProperty(v,'speed',{get:()=>100/3.6,set(){},configurable:true});})()`);
@@ -142,7 +143,6 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       assert.equal(marked.width,before.width,'marker does not widen status');
       assert.equal(marked.height,before.height,'marker does not increase status height');
       assert.equal(await read(`(()=>{const e=document.getElementById('phoneLine'),r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,e.textContent.indexOf('LIMIT 100')+9);return r.getBoundingClientRect().right<=e.getBoundingClientRect().right-5;})()`),true,'full speed and LIMIT marker paint before ellipsis');
-      assert.equal(await read(`(()=>{const e=document.getElementById('phoneLine'),r=document.createRange(),end=e.textContent.indexOf('→ 18:00');if(end<0)return false;r.setStart(e.firstChild,0);r.setEnd(e.firstChild,end+7);return r.getBoundingClientRect().right<=e.getBoundingClientRect().right-5;})()`),true,'end time paints before the road ellipsis');
       await inspect('held limit render fixture');await shot('-limit');
       await read('restoreCapRender();delete window.restoreCapRender');
       await until(`!document.getElementById('phoneLine').textContent.includes('LIMIT')`);

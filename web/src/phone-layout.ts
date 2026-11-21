@@ -134,6 +134,7 @@ body.tcOn.compactPhone #photoTag{grid-area:4/1}
 }
 @media(orientation:portrait) and (max-width:343px){
   body.tcOn.compactPhone #phoneHud{grid-template-rows:auto auto minmax(0,1fr) auto auto auto}
+  body.tcOn.compactPhone #phoneHud #phoneLine{font-size:8.5px;padding:2px 3px}
   body.tcOn.compactPhone #phoneActions{grid-area:5/1/6/3}
   body.tcOn.compactPhone #phoneDrive{grid-area:6/1/7/3}
 }
