@@ -124,8 +124,10 @@ console.log('PASS deferred boot, actual material hooks/late additions, clip reco
 
 function tallContacts(text){
  const {AreaContacts}=moduleAt('web/src/world-contacts.ts'),{TallLandmarks}=moduleAt('web/src/tall.ts'),{CAR_SPEC}=moduleAt('web/src/vehicle-spec.ts');
- const state={tallKey:{file:'tall.json'},tall:null,fleetContacts:new AreaContacts()},registration=text.match(/^if \(tallKey\) fleetContacts.add\([^\n]+\);$/m)?.[0]??'';
- new Function('state',`with(state){${registration}}`)(state);
+ const state={tallKey:{file:'tall.json'},tall:null,fleetContacts:new AreaContacts()},row=text.match(/^  \['tall', ([^\n]+)\],$/m)?.[1]??'null';
+ // main.ts writes each site's contact row once (siteContacts) and adds every row to the registry.
+ assert.match(text,/^for \(const \[, row\] of siteContacts\) if \(row\) fleetContacts\.add\(row\);$/m,'every site row joins the registry');
+ new Function('state',`with(state){const row=${row};if(row)fleetContacts.add(row);}`)(state);
  const contacts=state.fleetContacts,revision=contacts.revision,body={x:0,z:0,y:0,heading:0,vx:0,vz:0,speed:0,spec:CAR_SPEC,car:{root:{position:{x:0,z:0}}}};
  assert.equal(contacts.allows(body),true,'unloaded optional pack has no invisible solid');
  state.tall={solids:[{x:0,z:0,half:2.3,halfWidth:2.3,heading:0}],resolveSolids:TallLandmarks.prototype.resolveSolids};

@@ -16,7 +16,7 @@ import { siteRadio } from './site';
 import { isTestVisit } from './visit';
 import { pageState } from './page-state';
 import { Towing, trailerHelpSetting } from './towing';
-import { AreaContacts } from './world-contacts';
+import { AreaContacts, type ContactSite } from './world-contacts';
 import { pushOut } from './parked';
 import { Fleet } from './fleet';
 import { fleetEnabled, fleetRig } from './fleet-models';
@@ -138,6 +138,7 @@ import { Cemeteries } from './cemeteries';
 import { Stockpiles } from './stockpiles';
 import { HomeSite } from './home-site';
 import { PorchDog } from './porch-dog';
+import type { HandBuiltPlace } from './place';
 import { YardDogSite } from './yard-dog-site';
 import { YardDog } from './yard-dog';
 import { LotProps } from './lot-props';
@@ -358,15 +359,15 @@ const quarrySite = quarryFeature && params.get('quarry') !== '0' ? new quarryFea
 const churchSite = ERA.modern && AREA.church && params.get('church') !== '0' ? new ChurchSite(manifest.village) : null;
 // The heart of Judique on Highway 19 (stone church, music centre, community centre, store, garage): built by hand from
 // the dash cam brief. ?village=0 leaves the surveyed boxes.
-const villageSite = ERA.modern && AREA.id === 'judique' && params.get('village') !== '0' ? new JudiqueVillageSite(manifest.village) : null;
+const villageSite = ERA.modern && AREA.judiqueVillage && params.get('village') !== '0' ? new JudiqueVillageSite(manifest.village) : null;
 // Port Hawkesbury (the hardware store front, the dealers, the gas bars, the corner garage, the big lots' furniture): built by
 // hand from the dash cam brief. ?hawkesbury=0 leaves the surveyed boxes and bare lots.
-const hawkesburySite = ERA.modern && AREA.id === 'pointtupper' && params.get('hawkesbury') !== '0' ? new PortHawkesburySite(manifest.village) : null;
+const hawkesburySite = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' ? new PortHawkesburySite(manifest.village) : null;
 let mappedBuildings: Building[] = [];
 // Mabou's main street (the grocery, the post office building and its memorial lawn, the hall, the gas station, the junction
 // group, the pub, the bank branch, lamp posts, sidewalk, string lights): built by hand from the dash cam brief. The boxes
 // it replaces leave the drawing only; they stay properties. ?mabou=0 leaves the surveyed boxes.
-const mabouSite = ERA.modern && AREA.id === 'mabou' && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
+const mabouSite = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
 const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then((data: { buildings: Building[] }) => {
   mappedBuildings = data.buildings;
   const list = homeSite ? Home.buildings(data.buildings, homeSite, manifest.village) : yardSite ? Yard.buildings(data.buildings, yardSite, manifest.village) : data.buildings;
@@ -378,7 +379,7 @@ const bakedBuildingStyles = stylesRead
     .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
   : undefined;
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
-const porchBox = ERA.modern && AREA.id === 'mabou' && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
+const porchBox = ERA.modern && AREA.porch && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
@@ -388,9 +389,9 @@ const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
-const novemberBuildings = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+const novemberBuildings = ERA.modern && AREA.november
   ? new NovemberBuildings(AREA.id, properties, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
-const finalBuildings = novemberBuildings && AREA.id === 'mabou' ? sceneryBuildings?.filter(b => !isHillsideBuilding(b)) : sceneryBuildings;
+const finalBuildings = novemberBuildings && AREA.hillside ? sceneryBuildings?.filter(b => !isHillsideBuilding(b)) : sceneryBuildings;
 const buildings = ERA.modern && finalBuildings ? new Buildings(mabouSite ? mabouSite.drawn(finalBuildings) : finalBuildings,
   manifest.village, EXAG, SEA_LEVEL, buildingStyles, novemberBuildings?.drawing) : null;
 if (buildings) clear.push(...buildings.clear);
@@ -398,28 +399,26 @@ if (novemberBuildings) clear.push(...novemberBuildings.clear);
 if (yardSite) clear.push(...yardSite.clear);
 const fishingSite = AREA.fishing ? new FishingSite(manifest.village, EXAG, SEA_LEVEL) : null;
 if (fishingSite) clear.push(...fishingSite.clear);
-if (homeSite) clear.push(...homeSite.clear);
-if (porchSite) clear.push(...porchSite.clear);
-if (churchSite) clear.push(...churchSite.clear);
-if (villageSite) clear.push(...villageSite.clear);
-if (hawkesburySite) clear.push(...hawkesburySite.clear);
-if (mabouSite) clear.push(...mabouSite.clear);
+// The hand-built places' sites (place.ts), in the order of the places list below. Each clears its surveyed land.
+const placeSites = { home: homeSite, porch: porchSite, church: churchSite, village: villageSite, hawkesbury: hawkesburySite, mabouMain: mabouSite };
+for (const site of Object.values(placeSites)) if (site) clear.push(...site.clear);
 if (quarrySite) clear.push(...quarrySite.clear);
 // Modern Point Tupper only; airport=0 turns it off. The module (and its source extract) loads only here.
-const airportModule = ERA.modern && AREA.id === 'pointtupper' && params.get('airport') !== '0' ? await import('./airport').catch(e => { console.warn('Airport unavailable', e); return null; }) : null;
+const airportModule = ERA.modern && AREA.airport && params.get('airport') !== '0' ? await import('./airport').catch(e => { console.warn('Airport unavailable', e); return null; }) : null;
 const airportSite = airportModule ? new airportModule.AirportSite(manifest.village) : null;
-const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear);
+// Known before the first tile. Phones: fine tiles and single trees reach less far, and past 600 m, land outside the view is
+// read later, in the background (terrain.ts lazyRange). Desktop: sun shadows, unless ?shadows=0 or a night (it has no sun).
+const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear, { night: nightShading, cartRoads: ERA.cartRoads,
+  ...(LOW ? { split: AREA.quarry ? 1 : 1.15, low: true, lazyRange: 600 } : {}), shadows: !LOW && params.get('shadows') !== '0' && !nightLook });
 // Complete the approved CPU class mask before any terrain canopy or individual tree is built.
 // Modern land only: the 1884 era keeps today's cover handling, like other modern features.
 if (ERA.modern) await terrain.readGroundCover().catch(() => areaScreen('The land could not load. Retry this area.', true));
-terrain.night = nightShading;
 if (airportSite) terrain.sites.push(airportSite);
 const airport = airportModule && airportSite ? new airportModule.Airport(airportSite, terrain, !!nightLook) : null;
 if (airport) {
   scene.add(airport.group);
   if (import.meta.env.DEV) expose({ airport });   // only where the airfield stands, like fleet: the pinned dev keys stay
 }
-terrain.cartRoads = ERA.cartRoads;
 // Open designated pavement (NSTDB lots): on by default in an area whose bake lists it.
 // paved=0 turns it off; paved=1 forces a load (work-bake previews). Absent data means no request.
 if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1')) {
@@ -449,15 +448,10 @@ if (coast) { terrain.coast = coast.site; scene.add(coast.group); }
 terrain.streams = streamsRead && params.get('brooks') !== '0'
   ? await streamsRead.take().then((d: StreamFile) => new Streams(d, manifest.village)).catch((e: unknown) => { console.warn('streams', e); return null; })
   : null;
-if (LOW) { terrain.split = AREA.quarry ? 1 : 1.15; terrain.low = true; }   // fine tiles and single trees reach less far
-else if (params.get('shadows') !== '0') terrain.shadows = true;
-// Phone cold start: past 600 m, land outside the view is read later, in the background (terrain.ts lazyRange).
-if (LOW) terrain.lazyRange = 600;
-if (nightLook) terrain.shadows = false;   // a night has no sun to cast shadows
 if (buildings) scene.add(buildings.mesh);
 crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, off by default
 const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
-const novemberRoads = ERA.modern && (AREA.id === 'mabou' || AREA.id === 'porthood')
+const novemberRoads = ERA.modern && AREA.november
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
 if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
 const treeExcludes = novemberRoads
@@ -515,7 +509,7 @@ if (trafficSignals) {
 
 // Modern Point Tupper only. Scenery: a failed chunk load warns and the game still starts, like the airport.
 // Not on LOW: the Point Tupper phone start is already at PHONE_CAP (tools/frame-budget-policy.mjs) with the AI driver.
-if (ERA.modern && AREA.id === 'pointtupper' && !LOW) {
+if (ERA.modern && AREA.ptInfrastructure && !LOW) {
   const loaded = await Promise.all([import('./pt-infrastructure'), import('./pt-infrastructure-source')])
     .catch(e => { console.warn('Point Tupper infrastructure unavailable', e); return null; });
   if (loaded) scene.add(new loaded[0].PointInfrastructure(loaded[1].PT_FEATURES, manifest.village, EXAG, SEA_LEVEL, roads).group);
@@ -534,13 +528,14 @@ const sidewalkData = await sidewalkDataReady;
 // An optional layer: a failure or a refused budget warns once and leaves the town as main draws it (no clearing, no pole moves).
 const sidewalks = (() => {
   if (!ERA.modern || !sidewalkData) return null;
-  const bridgeWalks = new Map(roads.bridgeWalks);   // the layer widens bridge parapets while it builds
   try {
     const layer = new Sidewalks(sidewalkData, manifest.village, terrain, roads, LOW);
-    if (!layer.audit.disabled) return layer;
+    if (!layer.audit.disabled) {
+      for (const [id, walk] of layer.bridgeReservations) roads.bridgeWalks.set(id, walk);   // its walks widen the bridge parapets
+      return layer;
+    }
     layer.dispose();
   } catch (error) { console.warn('Sidewalks failed to start; skipping sidewalks', error); }
-  roads.bridgeWalks.clear(); for (const [id, walk] of bridgeWalks) roads.bridgeWalks.set(id, walk);
   return null;
 })();
 if (sidewalks) { terrain.sidewalks=sidewalks; scene.add(sidewalks.group); if (mabouSite) mabouSite.sidewalkLayer = true; }
@@ -623,7 +618,7 @@ async function loadFarViews(): Promise<void> {
 }
 
 // One invented driveway, guarded against all mailboxes, houses and existing site clearings.
-const yardDogSite = ERA.modern && AREA.id === 'mabou' && buildingList && props ? YardDogSite.create({
+const yardDogSite = ERA.modern && AREA.yardDog && buildingList && props ? YardDogSite.create({
   roads: roads.roads, village: manifest.village, mail: [...props.mail,...props.sites],
   houses: properties.filter(b=>b.kind==='house').map(b=>({x:b.x-manifest.village[0],z:manifest.village[1]-b.y})),
   excluded: [...terrain.sites.flatMap(s=>s.sitingBoxes??[s.box]), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
@@ -684,19 +679,32 @@ if (night) scene.onBeforeRender = (r, _scene, view) => night.update(r, view);
 const yard = yardSite ? new Yard(yardSite, terrain, LOW) : null;
 if (yard) scene.add(yard.group);
 const home = homeSite ? new Home(homeSite, terrain, (metres) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres)) : null;
-if (home) scene.add(home.group);
 const porch = porchSite ? new PorchHouse(porchSite, terrain, (metres) => (metres > SEA_LEVEL ? SEA_LEVEL + (metres - SEA_LEVEL) * EXAG : metres)) : null;
 const porchDog = porch ? new PorchDog(LOW) : null;
-if (porch) { scene.add(porch.group); if (porchDog) porch.seat(porchDog.group); }
+if (porch && porchDog) porch.seat(porchDog.group);
 const church = churchSite ? new (await import('./church')).Church(churchSite, terrain) : null;
-if (church) scene.add(church.group);
 const village = villageSite ? new (await import('./judique-village')).JudiqueVillage(villageSite, terrain, LOW) : null;
-if (village) scene.add(village.group);
 const hawkesbury = hawkesburySite ? new (await import('./port-hawkesbury')).PortHawkesbury(hawkesburySite, terrain, LOW,
   roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings) : null;
-if (hawkesbury) scene.add(hawkesbury.group);
 const mabouMain = mabouSite ? new (await import('./mabou-main')).MabouMain(mabouSite, terrain, LOW, roads.roads) : null;
-if (mabouMain) scene.add(mabouMain.group);
+// One slot for each site above, in the same order. A slot keeps its name while its place is off, so the frame's update
+// list keeps the same entries. `dev` is what the dev tools see. The home and the porch house take the car, not the
+// clock, so they are wrapped; the porch's slot also turns its dog and waits for it.
+const places: Record<keyof typeof placeSites, { place: HandBuiltPlace | null; dev: object | null }> = {
+  home: { dev: home, place: home && { group: home.group, resolveSolids: car => home.resolveSolids(car), update: (view, _now, car) => home.update(view, car) } },
+  porch: { dev: porch, place: porch && { group: porch.group, resolveSolids: car => porch.resolveSolids(car),
+    update: (view, now, car, dt) => { porch.update(view, car); porchDog?.update(dt, car, now / 1000); },
+    get waiting() { return porch.waiting || porchDog?.state === 'loading'; } } },
+  church: { dev: church, place: church },
+  village: { dev: village, place: village },
+  hawkesbury: { dev: hawkesbury, place: hawkesbury },
+  mabouMain: { dev: mabouMain, place: mabouMain },
+};
+const handBuilt = Object.values(places);
+for (const { place } of handBuilt) if (place) scene.add(place.group);
+// The frame asks this; an index loop makes no array iterator.
+const placesWaiting = (): boolean => { for (let i = 0; i < handBuilt.length; i++) if (handBuilt[i].place?.waiting) return true; return false; };
+const placeContact = ({ place }: { place: HandBuiltPlace | null }): ContactSite | null => place && { resolve: body => place.resolveSolids(body) };
 const quarry = quarryFeature && quarrySite ? new quarryFeature.Quarry(quarrySite, terrain, roads) : null;
 if (quarry) quarry.attach(scene, waterReflections);
 // The small switch loads other players' cars only after consent.
@@ -709,7 +717,7 @@ const roomQuiet = () => quietPlaces ??= [
   ...churchZones(landmarkList, manifest.village).map(({ x, z, radius }) => ({ x, z, radius })),
   ...cemeteries?.zones() ?? [],
   ...(() => {
-    if (AREA.id !== 'mabou') return [];
+    if (!AREA.schoolBus) return [];
     const loop = roads.roads.find(r => r.name === BUS.road && r.pts.length > 2 && Math.hypot(r.pts[0][0] - r.pts[r.pts.length - 1][0], r.pts[0][1] - r.pts[r.pts.length - 1][1]) < 1);
     if (!loop) return [];
     const stop = { x: 0, z: 0, heading: 0 }; new SceneRoad(loop.pts, 0, 1).at(BUS.stop, BUS.lane, stop);
@@ -720,10 +728,11 @@ const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as 'car' | 'truck' | 'sxs' | 'bike', trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
   heightScale:EXAG,seaLevel:SEA_LEVEL,ground: (x, z, referenceY) => terrain.heightAt(x,z,referenceY) }) : null;
-const canal = ERA.modern && AREA.id === 'cansocauseway' ? new Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
+const canal = ERA.modern && AREA.canal ? new Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
 if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
-// A site registers here once. Fleet sweeps and fixed-step driving use this same list.
+// Each solid site's contact row is written once, here. The registry (fleet sweeps, fleet driving and the quarry) adds
+// the park, the quarry and then these rows in this order. Solo driving and a solo trailer use soloContacts (below).
 const fleetContacts = new AreaContacts();
 const parkContacts = stuntPark?.contactProvider();
 if (parkContacts) fleetContacts.add(parkContacts);
@@ -731,19 +740,27 @@ if (quarry) {
   fleetContacts.add(quarry.contactProvider());
   if (!fleetEnabled(garageEntry, params, !mailMode, ERA.modern)) quarry.bindVehicle(vehicle, fleetContacts);
 }
-if (yard) fleetContacts.add({ revision: () => yard.collisionVersion(), resolve: body => yard.resolveSolids(body), allows: body => yard.allowsBody(body, body.spec, body.y) });
-if (history) fleetContacts.add({ resolve: body => history.resolve(body as unknown as Vehicle) });
-if (home) fleetContacts.add({ resolve: body => home.resolveSolids(body) });
-if (porch) fleetContacts.add({ resolve: body => porch.resolveSolids(body) });
-if (lotProps) fleetContacts.add({ revision: () => lotProps.dropped, resolve: body => lotProps.resolveSolids(body) });
-if (church) fleetContacts.add({ resolve: body => church.resolveSolids(body) });
-// The optional pack arrives after boot; the registry must see its new solids.
-if (tallKey) fleetContacts.add({ revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) });
-if (village) fleetContacts.add({ resolve: body => village.resolveSolids(body) });
-if (hawkesbury) fleetContacts.add({ resolve: body => hawkesbury.resolveSolids(body) });
-if (mabouMain) fleetContacts.add({ resolve: body => mabouMain.resolveSolids(body) });
-if (novemberBuildings) fleetContacts.add({ resolve: body => novemberBuildings.resolveSolids(body) });
-if (cemeteries) fleetContacts.add({ resolve: body => cemeteries.resolveSolids(body) });
+const siteContacts: [string, ContactSite | null][] = [
+  ['yard', yard && { revision: () => yard.collisionVersion(), resolve: body => yard.resolveSolids(body), allows: body => yard.allowsBody(body, body.spec, body.y) }],
+  ['history', history && { resolve: body => history.resolve(body as unknown as Vehicle) }],
+  ['home', placeContact(places.home)],
+  ['porch', placeContact(places.porch)],
+  ['lotProps', lotProps && { revision: () => lotProps.dropped, resolve: body => lotProps.resolveSolids(body) }],
+  ['church', placeContact(places.church)],
+  // The optional pack arrives after boot; the registry must see its new solids.
+  ['tall', tallKey ? { revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) } : null],
+  ['village', placeContact(places.village)],
+  ['hawkesbury', placeContact(places.hawkesbury)],
+  ['mabouMain', placeContact(places.mabouMain)],
+  ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
+  ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
+];
+for (const [, row] of siteContacts) if (row) fleetContacts.add(row);
+// Solo driving (no fleet, no quarry) keeps its own order of the same rows (#57): tall moves after every other site,
+// and the park after tall. A new site row lands in both lists.
+const soloContacts = new AreaContacts();
+for (const [, row] of [...siteContacts.filter(([name]) => name !== 'tall'), ...siteContacts.filter(([name]) => name === 'tall')]) if (row) soloContacts.add(row);
+if (parkContacts) soloContacts.add(parkContacts);
 if (props) fleetContacts.add({ revision: () => props.downCount, resolve: () => {}, allows: body => props.allowsFleetBody(body) });
 if (roads.guardrails) {
   const rails = roads.guardrails, probe = { x: 0, z: 0, y: 0, heading: 0, spec: vehicleSpec, vx: 0, vz: 0, speed: 0 };
@@ -778,10 +795,7 @@ const resolveYardSolids = () => {
   if (aiDriverOn()) aiDriver?.resolve(vehicle);
   boss?.driver.resolve(vehicle);
   if (fleet || quarry) fleetContacts.resolve(vehicle);
-  else {
-    yard?.resolveSolids(vehicle); history?.resolve(vehicle); home?.resolveSolids(vehicle); porch?.resolveSolids(vehicle); lotProps?.resolveSolids(vehicle); church?.resolveSolids(vehicle); village?.resolveSolids(vehicle); hawkesbury?.resolveSolids(vehicle); mabouMain?.resolveSolids(vehicle); novemberBuildings?.resolveSolids(vehicle); cemeteries?.resolveSolids(vehicle); tall?.resolveSolids(vehicle);
-    parkContacts?.resolve(vehicle);
-  }
+  else soloContacts.resolve(vehicle);
   stuntPark?.step(1/120,vehicle,started&&mode==='drive',jumpPlacement,false);
   fishing?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || fishingCheck), jumpPlacement);
   yardJob?.step(1 / 120, started && !shift.ended && !demo && mode === 'drive' && (!hookPlaced || jumpCheck), jumpPlacement);
@@ -937,7 +951,7 @@ if (aiDriver) {
   }
 }
 if (import.meta.env.DEV) expose({ ambientTraffic });
-const schoolBus = ERA.modern && AREA.id === 'mabou' && shift instanceof Shift ? new SchoolBus(roads, terrain, shift) : null;
+const schoolBus = ERA.modern && AREA.schoolBus && shift instanceof Shift ? new SchoolBus(roads, terrain, shift) : null;
 if (shift instanceof Shift) {
   // The score stream names real places where nothing scores: church grounds, cemeteries and the school bus stop.
   const stop = { x: 0, z: 0, heading: 0 }; schoolBus?.road?.at(BUS.stop, BUS.lane, stop);
@@ -998,8 +1012,8 @@ if (roadAnimals) scene.add(roadAnimals.group);
 if (import.meta.env.DEV) expose({ roadAnimals });
 if (ERA.modern && garageEntry.id === 'truck' && ['1', 'empty'].includes(params.get('trailer') ?? '')) {
   if (!mailMode && roadScene) fleetContacts.add({ resolve: body => { if (roadScene.rules.enabled) pushOut(body, roadScene.placementSolids, true); } });
-  const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts
-    : parkContacts && { allows: parkContacts.allows, resolve: parkContacts.resolve };
+  // Without the fleet the trailer meets the same solid sites as the truck: soloContacts.
+  const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts : soloContacts;
   towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? hawkesbury.solids : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts }, true, LOW);
   if (towing.attached) scene.add(towing.trailer.root);
   trailerHelpSetting(towing, document.getElementById('settings'), document.getElementById('startOver'));
@@ -1624,7 +1638,7 @@ if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
 if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
 if (import.meta.env.DEV) expose({ lotProps }, false);   // for tools/lot-props-browser.mjs; not enumerable: ui-check pins the public key set
-if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, home, church, village, hawkesbury, mabouMain, porch, porchDog, porchSite });
+if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
 {
   const report = document.getElementById('shiftReport'), footer = report?.querySelector('.reportFooter');
@@ -1733,12 +1747,7 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   ...(ride.update ? [{ name: 'ride', segment: 'ride' as const, ending: false, update: (_dt: number, realDt: number) => ride.update!(realDt, !scenePaused() && mode === 'drive') }] : []),
   { name: 'yard', segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
   { name: 'yardDog', segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
-  { name: 'home', segment: 'before-camera', ending: false, update: () => home?.update(camera.position, vehicle) },
-  { name: 'porch', segment: 'before-camera', ending: false, update: (dt, _realDt, now) => { porch?.update(camera.position, vehicle); porchDog?.update(dt, vehicle, now / 1000); } },
-  { name: 'church', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => church?.update(camera.position, now) },
-  { name: 'village', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => village?.update(camera.position, now) },
-  { name: 'hawkesbury', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => hawkesbury?.update(camera.position, now) },
-  { name: 'mabouMain', segment: 'before-camera', ending: false, update: (_dt, _realDt, now) => mabouMain?.update(camera.position, now) },
+  ...Object.entries(places).map(([name, { place }]) => ({ name, segment: 'before-camera' as const, ending: false, update: (dt: number, _realDt: number, now: number) => place?.update(camera.position, now, vehicle, dt) })),
   { name: 'stockpiles', segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
   { name: 'cemeteries', segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
   { name: 'terrain', segment: 'landscape', ending: true, update: () => terrain.update(camera, scenePaused()) },
@@ -2074,7 +2083,7 @@ function frame(now: number) {
   // A page is "settled" when nothing has been loading for a while; screenshots wait for this.
   const waiting = !loaded || (grass?.pending ?? 0) > 0 || (trees?.pending ?? 0) > 0 || (mode === 'fly' && pendingShot !== null && terrain.heightAt(camera.position.x, camera.position.z) === null)
     || (mode === 'drive' && demo > 0 && (drove < demo || Math.abs(vehicle.speed) > 0.15)) || relief.busy
-    || !!porch?.waiting || porchDog?.state === 'loading' || !!mabouMain?.waiting;
+    || placesWaiting();
   quiet = waiting ? 0 : quiet + 1;
   page.ready(quiet > 20 && terrain.failed === 0 && terrain.pending === 0 && (sidewalks?.pending ?? 0) === 0);
   // The clock or report can end the shift above: these final HUD reads must use the new state.

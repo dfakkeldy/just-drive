@@ -92,6 +92,14 @@ function runtimeGrass(m,blocked){const terrain={clear:[],seaLevel:0,surfaceAt:()
  const grass=Object.create(m.Grass.prototype);Object.assign(grass,{terrain,clock:{value:1},geometry:new m.THREE.PlaneGeometry(1,1),material:new m.THREE.MeshBasicMaterial(),nearMaterial:new m.THREE.MeshBasicMaterial(),group:new m.THREE.Group()});const patch=grass.patch(0,0,true);grass.populate(patch,Infinity);const count=patch.count;patch.mesh?.geometry.dispose();grass.geometry.dispose();grass.material.dispose();grass.nearMaterial.dispose();return count;}
 assert.ok(runtimeGrass(M,false)>100,'grass control produces real roots');assert.equal(runtimeGrass(M,true),0,'no runtime grass root on a slab');
 {const t=terrain('mabou'),w=new M.Sidewalks(raw.mabou.cache,raw.mabou.manifest.village,t,{roads:[],bridgeWalks:new Map()},false,false);assert.equal(w.group.children.length,0,'1884 has no meshes');assert.equal(w.plan.pieces.length,0);assert.equal(w.vegetationAt(0,0),false);w.dispose();}
+// Construction never writes the roads' bridge map: the layer keeps its bridge walks until main.ts accepts it. The compiled
+// and uncompiled paths stage the same walks, one for each bridge the plan's pieces stand on.
+for(const area of areas)for(const low of [false,true]){const d=raw[area],staged=[];
+ for(const cache of [d.cache,{...d.cache,compiled:undefined}]){const net={roads:d.cache.roads.map(r=>({id:r[0],pts:[[0,0],[1,1]]})),bridgeWalks:new Map(),deckHeight:()=>32};
+  const w=new M.Sidewalks(cache,d.manifest.village,terrain(area),net,low);assert.equal(net.bridgeWalks.size,0,`${area} construction leaves Roads.bridgeWalks alone`);
+  assert.deepEqual([...w.bridgeReservations.keys()].sort((x,y)=>x-y),[...new Set(w.plan.pieces.filter(p=>p.a.road.bridge).map(p=>p.a.road.id))].sort((x,y)=>x-y),`${area} one walk per bridge`);
+  staged.push([...w.bridgeReservations].sort((x,y)=>x[0]-y[0]));w.dispose();}
+ assert.deepEqual(staged[0],staged[1],`${area} compiled and uncompiled bridge walks agree`);}
 M.validateWalks();assert.throws(()=>M.validateWalks([{...M.WALK_RUNS[0],confidence:'low'}]));
 const summary=[];
 for(const area of areas)for(const low of [false,true]){const {walk,t}=make(M,area,low,true);ready(walk,area);upAndBudget(walk,low);const sweep=groundSweep(walk,t);assert.ok(sweep.probes>10000,'non-vacuous actual slab sweep');assert.equal(sweep.buried,0,`${area} ${low} no ground above slab: ${JSON.stringify(sweep)}`);

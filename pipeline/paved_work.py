@@ -6,6 +6,14 @@ from pathlib import Path
 AREAS=('mabou','judique','porthood','westbay','pointtupper','cansocauseway')
 
 
+def key_files(repo):
+    """The recipe files in the key. tools/hand-sites-check.py proves they cover every source the site exporter reads."""
+    repo=Path(repo)
+    return sorted({*repo.glob('pipeline/paved*.*'),repo/'pipeline/areas.py',repo/'pipeline/32_bake_paved.py',repo/'pipeline/hand_sites.py',repo/'tools/paved-sites.mjs',
+        *repo.glob('web/src/*site.ts'),*repo.glob('web/src/quarry*.ts'),*repo.glob('web/src/mine-*.ts'),
+        repo/'web/src/area.ts',repo/'web/src/site.ts',repo/'web/src/eras/history-areas.ts'})
+
+
 def cache_key(repo, data):
     """Content key, including every baked dependency and prospective tree audit tile.
 
@@ -14,7 +22,7 @@ def cache_key(repo, data):
     audit, rather than re-reading gigabytes on every runtime check.
     """
     repo,data=Path(repo),Path(data)
-    files=sorted([*repo.glob('pipeline/paved*.*'),repo/'pipeline/areas.py',repo/'pipeline/32_bake_paved.py',repo/'pipeline/hand_sites.py',repo/'tools/paved-sites.mjs',*repo.glob('web/src/*site.ts'),*repo.glob('web/src/quarry*.ts')])
+    files=key_files(repo)
     h=hashlib.sha256()
     def add(path,relative):
         h.update(relative.encode()+b'\0')

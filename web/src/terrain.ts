@@ -227,6 +227,11 @@ export function drawnRoadBytes(road: Uint8Array | Uint8ClampedArray, bridgePaint
   return out;
 }
 
+/** The settings main.ts knows before the first tile is built. Each one left out keeps its field's default. */
+export interface TerrainOptions {
+  night?: NightShading | null; cartRoads?: boolean; split?: number; low?: boolean; lazyRange?: number; shadows?: boolean;
+}
+
 export class Terrain {
   readonly group = new THREE.Group();
   bridgeApproaches:HistoryBridgeApproaches|null=null;
@@ -381,7 +386,7 @@ export class Terrain {
   constructor(readonly manifest: Manifest, readonly base: string, shared: Record<string, THREE.IUniform>,
     readonly exag = 1, readonly seaLevel = 0,
     /** World-space boxes [x0, z0, x1, z1] where the canopy layer is removed, because a model stands there. */
-    readonly clear: number[][] = []) {
+    readonly clear: number[][] = [], options: TerrainOptions = {}) {
     for (const [level, names] of Object.entries(manifest.levels)) {
       this.maxLevel = Math.max(this.maxLevel, +level);
       for (const n of names) this.exists.add(`${level}/${n}`);
@@ -414,6 +419,9 @@ export class Terrain {
       // World x = east - village east; world z = village north - north. The cover image starts at its north-west corner.
       coverRect: { value: new THREE.Vector4(c.xmin - vx, vy - c.ymax, 1 / (c.xmax - c.xmin), 1 / (c.ymax - c.ymin)) },
     };
+    // The fields stay writable: the node checks set them on a terrain they made.
+    this.night = options.night ?? this.night; this.cartRoads = options.cartRoads ?? this.cartRoads; this.split = options.split ?? this.split;
+    this.low = options.low ?? this.low; this.lazyRange = options.lazyRange ?? this.lazyRange; this.shadows = options.shadows ?? this.shadows;
   }
 
   /** Tiny derived row runs on phones too. No full RGBA readback or extra GPU texture. */

@@ -83,6 +83,8 @@ export class Sidewalks {
   private bridgeJobs:number[]=[];
   /** Roads.bridgeRevision when the bridge pieces were last queued: they stand on the modern deck mesh. */
   private deckRevision=-1;
+  /** Each bridge's walk, for Roads.bridgeWalks. main.ts hands them over only once it accepts the layer. */
+  readonly bridgeReservations=new Map<number,{side:number;width:number}>();
   private topOwners:number[][]=[];private caches:HeightCache[]=[];private wanted:Uint8Array;
   private coverage:WalkCoverage|null=null;private coverageLevels=new Uint8Array(0);
   private activeCache:HeightCache|null=null;private activeHeights:ReturnType<typeof createSidewalkHeights>|null=null;
@@ -156,7 +158,7 @@ export class Sidewalks {
         quad(job,g,0,[0,0,0,0],[color.r,color.g,color.b]);
       }
       job.refs=[...new Set(job.surfaces.flatMap(s=>s.refs))];this.jobs.push(job);
-      if(bridge){this.bridgeJobs.push(id);const road=p.a.road,other=network.roads?.find(r=>r.id===road.id);if(other){const a=other.pts[0],b=other.pts.at(-1)!,nx=-(b[1]-a[1]),nz=b[0]-a[0];network.bridgeWalks?.set(road.id,{side:p.a.normal[0]*nx-p.a.normal[1]*nz>0?1:-1,width:p.run.width+p.run.buffer});}}
+      if(bridge){this.bridgeJobs.push(id);const road=p.a.road,other=network.roads?.find(r=>r.id===road.id);if(other){const a=other.pts[0],b=other.pts.at(-1)!,nx=-(b[1]-a[1]),nz=b[0]-a[0];this.bridgeReservations.set(road.id,{side:p.a.normal[0]*nx-p.a.normal[1]*nz>0?1:-1,width:p.run.width+p.run.buffer});}}
     });
     this.plan.furniture.forEach((f,index)=>{
       const id=this.plan.pieces.length+index,ground=ref(f.point),job:Job={surfaces:[],ranges:[],refs:[ground],centre:this.points[ground],bridge:false};
@@ -204,8 +206,8 @@ export class Sidewalks {
       geo.setAttribute('position',new THREE.BufferAttribute(positions,3).setUsage(THREE.DynamicDrawUsage));geo.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(positions.length),3).setUsage(THREE.DynamicDrawUsage));geo.setAttribute('uv',new THREE.BufferAttribute(uv,2));geo.setAttribute('color',new THREE.BufferAttribute(colors,3));geo.setIndex(new THREE.BufferAttribute(new Uint32Array(positions.length/3),1).setUsage(THREE.DynamicDrawUsage));
       geo.boundingSphere=new THREE.Sphere(new THREE.Vector3(...g.sphere.slice(0,3)),g.sphere[3]);const mesh=new THREE.Mesh(geo,this.materials[i]);mesh.name=i?'sidewalk-asphalt':'sidewalk-concrete';mesh.receiveShadow=true;this.meshes[i]=mesh;this.group.add(mesh);
     });
-    // Reserve the bridge parapet before Roads creates a deck, exactly as in the offline compiler.
-    for(const id of this.bridgeJobs){const p=this.plan.pieces[id],road=this.network.roads?.find(r=>r.id===p.a.road.id);if(!road)continue;const a=road.pts[0],b=road.pts.at(-1)!;this.network.bridgeWalks?.set(road.id,{side:p.a.normal[0]*(-(b[1]-a[1]))-p.a.normal[1]*(b[0]-a[0])>0?1:-1,width:p.run.width+p.run.buffer});}
+    // Reserve the bridge parapet, exactly as in the offline compiler. Roads reads it when it first makes a deck.
+    for(const id of this.bridgeJobs){const p=this.plan.pieces[id],road=this.network.roads?.find(r=>r.id===p.a.road.id);if(!road)continue;const a=road.pts[0],b=road.pts.at(-1)!;this.bridgeReservations.set(road.id,{side:p.a.normal[0]*(-(b[1]-a[1]))-p.a.normal[1]*(b[0]-a[0])>0?1:-1,width:p.run.width+p.run.buffer});}
   }
   private checkBudget():boolean {
     if(this.audit.draws<=WALK_BUDGET.draws&&this.audit.triangles<=(this.audit.low?WALK_BUDGET.low:WALK_BUDGET.desktop))return true;

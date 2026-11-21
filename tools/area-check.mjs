@@ -11,9 +11,12 @@ console.warn = message => warnings.push(message);
 for (const id of ['unknown', '../terrain', 'JUDIQUE', '']) assert.equal(read(`area=${id}`), mabou);
 console.warn = warn;
 assert.equal(warnings.length, 4);
+// The areas of each flag that is not Mabou's alone. The site flags keep the AREA.id tests main.ts made before them.
+const owners = { quarry: ['westbay'], home: ['judique'], church: ['judique'], judiqueVillage: ['judique'], november: ['mabou', 'porthood'],
+  hawkesbury: ['pointtupper'], airport: ['pointtupper'], ptInfrastructure: ['pointtupper'], canal: ['cansocauseway'] };
+for (const key of Object.keys(owners)) assert.equal(typeof mabou[key], 'boolean', `${key} is an area flag`);
 for (const a of AREAS) for (const key of Object.keys(a).filter(key => typeof a[key] === 'boolean')) {
-  // Area-owned places: the Judique house/church and the West Bay quarry.
-  assert.equal(a[key], a.id === (key === 'quarry' ? 'westbay' : (key === 'home' || key === 'church') ? 'judique' : 'mabou'), `${a.id}.${key}`);
+  assert.equal(a[key], (owners[key] ?? ['mabou']).includes(a.id), `${a.id}.${key}`);
 }
 assert.equal(AREAS.some(a => a.id === 'fixture'), process.env.AREA_DEV === '1');
 const position = utm20ToLatLon(624271, 5103301);

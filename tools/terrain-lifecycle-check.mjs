@@ -30,6 +30,9 @@ const mutations = {
   'queue-bound-ignored': ['terrain', /this.active \+ this.builds.length(?= [<>]=? MAX_LOADS)/g, 'this.active', 'cold-bound'],
   'car-rank-camera-only': ['terrain', 'const rank = under ? 0 :', 'const rank = (cam.z >= t.z0 && cam.z < t.z0 + t.size && cam.x >= t.x0 && cam.x < t.x0 + t.size) ? 0 :', 'car-order'],
   'interior-quiet-unconditional': ['main', 'quiet = loaded && terrain.pending === 0 ? quiet + 1 : 0;', 'quiet++;', 'interior-quiet'],
+  // main.ts gives the terrain its settings in the constructor (TerrainOptions); the field writes must stay.
+  'option-night-dropped': ['terrain', 'this.night = options.night ?? this.night;', '', 'options'],
+  'option-shadows-dropped': ['terrain', ' this.shadows = options.shadows ?? this.shadows;', '', 'options'],
   'burst-never-ends': ['terrain', 'if (this.pending === 0) this.bursting = false;', '', 'burst'],
   'burst-no-jump': ['terrain', 'Math.hypot(cam.x - this.focusX, cam.y - this.focusY, cam.z - this.focusZ) > BURST_DISTANCE', 'false', 'burst-camera'],
   'burst-small-step': ['terrain', 'BURST_DISTANCE = 150', 'BURST_DISTANCE = 0.1', 'burst'],
@@ -221,6 +224,22 @@ function manifest(depth = 5) {
     cover: { file: 'cover.png', xmin: 0, ymin: -8192, xmax: 8192, ymax: 0, res: 1 },
     roads: { file: '', levels: { 5: levels[5]?.filter((_, k) => k % 2) ?? [] }, encoding: { distance: .1, halfWidth: .05 } } };
 }
+// main.ts passes the settings it knows before the first tile to the constructor. Each one must reach its field, and
+// each one left out must keep the field's default (the checks above set the public fields on terrains they make).
+function terrainOptions() {
+  const fields = t => ({ night: t.night, cartRoads: t.cartRoads, split: t.split, low: t.low, lazyRange: t.lazyRange, shadows: t.shadows });
+  const night = { shading: 'night' };
+  assert.deepEqual(fields(new Terrain(manifest(), 'synthetic', {}, 1, 0, [], { night, cartRoads: true, split: 1, low: true, lazyRange: 600, shadows: true })),
+    { night, cartRoads: true, split: 1, low: true, lazyRange: 600, shadows: true }, 'every terrain option reaches its field');
+  // Mixed values, so two options swapped in the constructor fail too.
+  assert.deepEqual(fields(new Terrain(manifest(), 'synthetic', {}, 1, 0, [], { night: null, cartRoads: true, split: 1.15, low: false, shadows: true })),
+    { night: null, cartRoads: true, split: 1.15, low: false, lazyRange: 0, shadows: true }, 'mixed, null and left-out options keep or set their values');
+  assert.deepEqual(fields(new Terrain(manifest(), 'synthetic', {}, 1, 0, [], { cartRoads: false, low: true, shadows: false, lazyRange: 600 })),
+    { night: null, cartRoads: false, split: 1.6, low: true, lazyRange: 600, shadows: false }, 'each boolean option reaches its own field');
+  assert.deepEqual(fields(new Terrain(manifest(), 'synthetic', {}, 1, 0)),
+    { night: null, cartRoads: false, split: 1.6, low: false, lazyRange: 0, shadows: false }, 'no options keep every default');
+  console.log('PASS terrain options: all six reach their fields; false, null and left-out ones keep their values');
+}
 function ground(low = true, m = manifest()) { const t = new Terrain(m, 'synthetic', {}, 1, 0); t.low = low; return t; }
 function camera(x = 128, z = 128, y = 10) {
   const c = new THREE.PerspectiveCamera(51, 1.5, .1, 60000); c.position.set(x, y, z); c.lookAt(x + 20, y - 1, z); c.updateMatrixWorld(); return c;
@@ -305,7 +324,7 @@ async function retry() {
   try {
     await tick(t, c); assert.equal(t.pending, 0); assert.equal(t.failed, 1, 'back-off count');
     const main = readFileSync(`${root}web/src/main.ts`, 'utf8');
-    const context = { loaded: true, terrain: t, sidewalks: null, grass: null, trees: null, mode: 'drive', demo: 0, drove: 0, pendingShot: null, camera: c, vehicle: { speed: 0 }, relief: { busy: false }, porch: null, porchDog: null, mabouMain: null, quiet: 21 };
+    const context = { loaded: true, terrain: t, sidewalks: null, grass: null, trees: null, mode: 'drive', demo: 0, drove: 0, pendingShot: null, camera: c, vehicle: { speed: 0 }, relief: { busy: false }, placesWaiting: () => false, quiet: 21 };
     const evaluate = expression => Function(...Object.keys(context), `return (${expression});`)(...Object.values(context));
     assert.equal(evaluate(main.match(/const waiting = ([\s\S]*?);/)[1]), false, 'network failure must not reset quiet');
     assert.equal(evaluate(main.match(/const qualityReady = ([^;]+);/)[1]), true, 'network failure must not blame the Full detail trial');
@@ -563,6 +582,7 @@ if (scenario === 'synthetic' || scenario === 'site-texel') await siteTexel();
 if (scenario === 'synthetic' || scenario === 'tree-wait') await treeWait();
 if (scenario === 'synthetic' || scenario === 'gravel-driveway') await gravelDriveway();
 if (scenario === 'synthetic' || scenario === 'interior-quiet') interiorQuiet();
+if (scenario === 'synthetic' || scenario === 'options') terrainOptions();
 if (scenario === 'laps') { await laps(true); await laps(false); }
 if (scenario.startsWith('trees-')) await realTrees(Number(scenario.split('-')[2]), scenario.split('-')[1] === 'low');
 

@@ -15,9 +15,9 @@
 
   "harbour-water/phone-mail":{"calls":60,"triangles":889764,"geometries":58,"textures":50,"programs":14,"readyTiles":65,"requests":135},
 
-  "highway19-far-land/desktop-explore-truck":{"calls":719,"triangles":3315348,"geometries":197,"textures":159,"programs":35,"readyTiles":358,"requests":673},
+  "highway19-far-land/desktop-explore-truck":{"calls":719,"triangles":3315428,"geometries":197,"textures":159,"programs":35,"readyTiles":358,"requests":673},
 
-  "highway19-far-land/desktop-mail":{"calls":716,"triangles":3366256,"geometries":186,"textures":159,"programs":37,"readyTiles":358,"requests":675},
+  "highway19-far-land/desktop-mail":{"calls":716,"triangles":3366336,"geometries":186,"textures":159,"programs":37,"readyTiles":358,"requests":675},
 
   "highway19-far-land/phone-explore-truck":{"calls":202,"triangles":1282904,"geometries":84,"textures":75,"programs":14,"readyTiles":92,"requests":218},
 
@@ -31,7 +31,7 @@
 
   "mines-lookoff-south/phone-mail":{"calls":175,"triangles":1198073,"geometries":97,"textures":70,"programs":21,"readyTiles":75,"requests":160},
 
-  "new-player-start/desktop-explore-truck":{"calls":794,"triangles":3627688,"geometries":237,"textures":193,"programs":41,"readyTiles":366,"requests":696},
+  "new-player-start/desktop-explore-truck":{"calls":794,"triangles":3627768,"geometries":237,"textures":193,"programs":41,"readyTiles":366,"requests":696},
 
   "new-player-start/desktop-mail":{"calls":635,"triangles":2859368,"geometries":233,"textures":154,"programs":41,"readyTiles":170,"requests":280},
 

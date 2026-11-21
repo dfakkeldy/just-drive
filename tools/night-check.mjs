@@ -166,7 +166,8 @@ function wiring() {
   assert.match(main, /const nightLook = nightPalette\(sun\.el, chosenClock\);/);
   assert.match(main, /const nightShading = nightLook \? new NightShading\(nightLook, LOW\) : null;/);
   assert.match(main, /const night = nightShading \? new Night\(/);
-  assert.match(main, /\nif \(nightLook\) terrain\.shadows = false;[^\n]*\nif \(buildings\)/);
+  // A night has no sun to cast shadows: the terrain is made without them.
+  assert.match(main, /\nconst terrain = new Terrain\([^\n]*\n[^\n]*shadows: !LOW && params\.get\('shadows'\) !== '0' && !nightLook \}\);\n/);
   assert.match(main, /directionFromAngles\(sun\.az, studyLightingElevation\(sun\.el, chosenClock\)\)/, 'the light still never comes from below');
   // The privacy inputs: every property (in world x/z), every mailbox and community box, and the sites' boxes.
   assert.match(main, /protectedPlaces: \[\.\.\.properties\.map\(b => \(\{ x: b\.x - VE, z: VN - b\.y \}\)\), \.\.\.props\.mail, \.\.\.props\.sites\]/);

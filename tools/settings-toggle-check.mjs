@@ -135,7 +135,7 @@ function compare(d, s, factory, gated) {
 }
 
 // Pin main creation order and LOW/quarry/URL gates, including the optional cemetery and stockpile exclusion.
-assert.match(main, /if \(LOW\) \{ terrain\.split = AREA\.quarry \? 1 : 1\.15; terrain\.low = true; \}[^\n]*\nelse if \(params\.get\('shadows'\) !== '0'\) terrain\.shadows = true;/);
+assert.match(main, /\.\.\.\(LOW \? \{ split: AREA\.quarry \? 1 : 1\.15, low: true, lazyRange: 600 \} : \{\}\), shadows: !LOW && params\.get\('shadows'\) !== '0' && !nightLook \}\);/);
 assert.match(main, /const sunShadows = terrain\.shadows \? new SunShadows\(renderer, scene, sunLight, sunDir, params\.get\('shadows'\) === '1'\) : null;/);
 assert.match(main, /const grass = LOW \? null : new \(await import\('\.\/grass'\)\)\.Grass\(terrain, params\.get\('grass'\)(?:, (?:cemeteries\?\.excludes|grassExcludes))?\);/);
 assert.match(main, /const waterReflections = LOW \? null : new WaterReflections\(/);
