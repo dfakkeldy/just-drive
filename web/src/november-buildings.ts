@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clearBoxes, type Building } from './buildings';
+import { clearBoxes, type Building, type BuildingStyle } from './buildings';
 import { pushOut, type Solid } from './parked';
 import { frameToMap } from './site-kit';
 import { Mesher, type RGB } from './yard-kit';
@@ -26,6 +26,49 @@ const DUNMORE: Model = { id: 900018, x: 614477, y: 5096378, ground: 25.72, axisD
 const HILLSIDE = new Set([900007, 900008, 900009]);
 export const isHillsideBuilding = (b: Building): boolean => HILLSIDE.has(b.id);
 export const novemberFootprints = { mabou: [VILLAGE_HOUSE, VILLAGE_BARN, NORTH_HOUSE, VALLEY_HOUSE, VALLEY_SHED], porthood: [DUNMORE] };
+
+const plainHouse: BuildingStyle = {
+  wall: '#f4f1e9', roof: '#535354', trim: '#fcfaf5', door: '#dfddd5', roofMaterial: 'shingle',
+  entrance: 'none', front: { end: false, side: 1 }, chimney: false, dormer: false, shutters: false,
+  satelliteDish: false, skirting: false, silo: false,
+};
+
+function surveyedBox(model: Model, kind: Building['kind'], roof: Building['roof']): Building {
+  const frame = { e: model.x, n: model.y, az: model.axisDeg };
+  const footprint = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, v]) =>
+    frameToMap(frame, u * model.length / 2, v * model.width / 2));
+  return { ...model, kind, roof, footprint, confidence: 0.9 };
+}
+
+/** Keep the measured Port Hood envelopes. Match by position because each area and rebake has its own IDs. */
+export function littleMabouBuildingArt(list: Building[]): { buildings: Building[]; styles: Record<string, BuildingStyle> } {
+  const at = (e: number, n: number, radius = 4) => list.find(b => !b.shape && Math.hypot(b.x - e, b.y - n) < radius);
+  const house = at(615817.26, 5102552.32);
+  const mobile = at(616081.34, 5102382.38);
+  const buildings = list.map(b => b === house || b === mobile ? { ...b, kind: 'house' as const } : b);
+  const styles: Record<string, BuildingStyle> = {};
+  if (house) {
+    styles[house.buildingId ?? house.id] = plainHouse;
+    // A separate compact, peaked LiDAR roof sits west of the house.
+    const shed = at(615779, 5102552) ?? surveyedBox({ id: 900419, x: 615779, y: 5102552, ground: 41.9,
+      axisDeg: 90, length: 6.2, width: 5.3, eave: 2.35, ridge: 4.1 }, 'shed', 'gable');
+    if (!list.includes(shed)) buildings.push(shed);
+    styles[shed.buildingId ?? shed.id] = { ...plainHouse, wall: '#a13832', boardAndBatten: true };
+  }
+  if (mobile) {
+    const id = mobile.buildingId ?? mobile.id;
+    styles[id] = { ...plainHouse, roofShape: 'flat', skirting: true };
+    // The lower roof return projects from the east side near the end of the mobile home.
+    const [x, y] = frameToMap({ e: mobile.x, n: mobile.y, az: mobile.axisDeg }, 3.7, -3.82);
+    const wing = at(x, y, 2);
+    if (!wing) {
+      const extension = surveyedBox({ id: 900420, x, y, ground: 32.18, axisDeg: mobile.axisDeg,
+        length: 4.25, width: 1.65, eave: 2.02, ridge: 2.21 }, 'shed', 'flat');
+      buildings.push({ ...extension, buildingId: id });
+    }
+  }
+  return { buildings, styles };
+}
 
 function wallPanel(m: Mesher, end: boolean, at: number, u0: number, u1: number, y0: number, y1: number, colour: RGB) {
   const corners = [[u0,y0], [u1,y0], [u1,y1], [u0,y1]].map(([u, y]) => end ? [at, y, u] : [u, y, at]);
