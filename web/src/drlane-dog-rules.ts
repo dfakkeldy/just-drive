@@ -24,6 +24,8 @@ export class DrLaneDogRules {
   /** Out of sight: a car came right up to it. */
   away = false;
   private at = 0; private next = 0; private step = 1; private rest: number;
+  /** Where the car was last seen near, so the dog can come back far from it after the car has gone off. */
+  private lastCar: { u: number; v: number } | null = null;
 
   constructor(private rnd: () => number) {
     [this.u, this.v] = DOG_SPOTS[0];
@@ -33,10 +35,11 @@ export class DrLaneDogRules {
   /** `car` is the car's middle in house metres, or null when it is far; `reach` its half length. */
   update(dt: number, car: { u: number; v: number } | null, reach: number): void {
     const gap = car ? Math.hypot(car.u - this.u, car.v - this.v) - reach : Infinity;
+    if (car) this.lastCar = { u: car.u, v: car.v };
     const was = this.away;
     this.away = dogAway(this.away, gap);
     if (this.away) { this.moving = false; return; }
-    if (was && car) this.reappear(car);
+    if (was && this.lastCar) this.reappear(this.lastCar);
     if (!this.moving) {
       // At rest the dog watches a car that is near, as a dog in a yard does.
       if (car && gap < 30) { const d = Math.hypot(car.u - this.u, car.v - this.v) || 1; this.fu = (car.u - this.u) / d; this.fv = (car.v - this.v) / d; }

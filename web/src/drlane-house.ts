@@ -10,12 +10,12 @@ import { Mesher, seeded, type RGB } from './yard-kit';
  * The house on D.R.'s Lane, built by hand in place of its surveyed box, with its yard: a sage-green bungalow with white
  * trim and a dark roof, a taller split-level part at its south-east end with its gable toward the lane, a stove pipe, a
  * low deck with a red skirt and a white swing, a stained board shed, the gravel drive, a woodpile under a green tarp,
- * the garden bed along the lane with its stone edge, its shrubs and its red-berried bush, two pines, a flagpole, and the
- * household's white dog (drlane-dog.ts).
+ * the garden bed along the lane with its stone edge, its shrubs and its red-berried bush, two pines, a flagpole and a
+ * white dog (drlane-dog.ts).
  *
  * Layout is in house metres (see drlane-site.ts): u toward the taller end (south-east), v toward the lane. Heights are
  * above the level pad. The roofs, the walls and the yard follow the elevation survey; the windows, the doors and the
- * shed follow pictures from the lane. The back of the house, its north-east side, its two ends and the back of the
+ * shed follow pictures. The back of the house, its north-east side, its two ends and the back of the
  * shed are not seen from the lane: their windows are invented. No sign, number or name.
  */
 const hex = (value: number): RGB => { const c = new THREE.Color(value); return [c.r, c.g, c.b]; };
@@ -257,7 +257,7 @@ export class DrLaneHouse implements HandBuiltPlace {
     // The white swing in its arched frame, facing the lane.
     const su = -4.0, sv = 5.75, half = 0.95, top = d.top + 2.0;
     for (const s of [-1, 1]) for (const lean of [-1, 1]) {
-      m.at(su + s * half, y + d.top, sv + lean * 0.3, 0, lean * 0.18);
+      m.at(su + s * half, y + d.top, sv + lean * 0.3, 0, -lean * 0.16);   // the two legs of each end meet at the top
       m.box(0, 0.95, 0, 0.06, 1.9, 0.06, TRIM);
     }
     m.at(0, y, 0);

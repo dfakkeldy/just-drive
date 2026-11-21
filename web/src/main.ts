@@ -807,6 +807,7 @@ const siteContacts: [string, ContactSite | null][] = [
   ['hawkesbury', placeContact(places.hawkesbury)],
   ['mabouMain', placeContact(places.mabouMain)],
   ['maryville', placeContact(places.maryville)],
+  ['drLane', placeContact(places.drLane)],
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
 ];

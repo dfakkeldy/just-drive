@@ -272,6 +272,12 @@ export async function verifyPlaces(source) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const loops = ast.statements.filter(n => ts.isForOfStatement(n) && /\bplaceRows\b/.test(n.expression.getText(ast)));
   assert.equal(loops.length, 1, 'one boot loop over the places rows');
+  // Every row has a contact row: the boot throws on one without (a place in every area, on or off, has a slot).
+  const rows = ast.statements.flatMap(n => ts.isVariableStatement(n) ? n.declarationList.declarations : []).find(d => d.name.getText(ast) === 'placeRows');
+  const contacts = ast.statements.flatMap(n => ts.isVariableStatement(n) ? n.declarationList.declarations : []).find(d => d.name.getText(ast) === 'siteContacts');
+  assert.ok(rows && contacts && ts.isObjectLiteralExpression(rows.initializer) && ts.isArrayLiteralExpression(contacts.initializer), 'placeRows and siteContacts are where this check reads them');
+  const named = new Set(contacts.initializer.elements.map(e => ts.isArrayLiteralExpression(e) && ts.isStringLiteral(e.elements[0]) ? e.elements[0].text : null));
+  for (const p of rows.initializer.properties) assert.ok(named.has(p.name.getText(ast)), `places row '${p.name.getText(ast)}' has no contact row: the boot would throw`);
   const code = transformSync(loops[0].getText(ast), { loader: 'ts', target: 'es2022' }).code;
   const log = [], row = (name, site, lazy) => ({ site,
     build: (at, part) => { log.push(`build ${name} ${at === site} ${part}`); return { name }; },

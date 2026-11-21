@@ -78,5 +78,12 @@ console.log(`PASS ${DOG_SPOTS.length} spots and their walks keep clear and stay 
   const c = car(DOG_BACK + 0.5), far = Math.max(...DOG_SPOTS.map(([u, v]) => Math.hypot(u - c.u, v - c.v)));
   assert.equal(Math.hypot(dog.u - c.u, dog.v - c.v), far, 'it is back on the spot farthest from the car');
   assert.equal(dog.moving, false, 'and at rest there');
+  // The car jumps far off (a new start) while the dog is away: it is back far from where the car last was.
+  const gone = new DrLaneDogRules(() => 0.5);
+  gone.update(0.1, car(ANIMAL.shy - 0.05), reach);
+  assert.equal(gone.away, true);
+  gone.update(0.1, null, reach);
+  assert.equal(gone.away, false, 'back once the car is gone');
+  assert.equal(Math.hypot(gone.u - u0, gone.v - v0 - reach - ANIMAL.shy + 0.05), Math.max(...DOG_SPOTS.map(([u, v]) => Math.hypot(u - u0, v - v0 - reach - ANIMAL.shy + 0.05))), 'on the spot farthest from where the car was');
   console.log('PASS it slips away from a car right beside it and comes back far from it');
 }

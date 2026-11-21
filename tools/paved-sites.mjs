@@ -1,6 +1,6 @@
 /** Export current authored site boxes for a subtractive bake; never load reference media. */
 import {build} from '../web/node_modules/esbuild/lib/main.js';
-import {readFileSync} from 'node:fs';
+import {existsSync,readFileSync} from 'node:fs';
 import {resolve,relative} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 const repo=resolve(fileURLToPath(new URL('..',import.meta.url)));
@@ -40,7 +40,9 @@ const main=resolve(root,'data/baked/terrain'),mm=JSON.parse(readFileSync(main+'/
 const list=JSON.parse(readFileSync(main+'/buildings.json','utf8')).buildings;
 const b=api.porch.PorchSite.find(list);if(b)add('porch',new api.porch.PorchSite(b,v).box);
 // The house on D.R.'s Lane uses the Judique source catalog in the same way.
-if(ground){const jl=JSON.parse(readFileSync(resolve(root,'data/baked/areas/judique/buildings.json'),'utf8')).buildings,jb=api.drlane.DrLaneSite.find(jl);if(jb)add('drlane',new api.drlane.DrLaneSite(jb,v).box);}
+// A host without the Judique pack has no such house to keep.
+const judiqueList=resolve(root,'data/baked/areas/judique/buildings.json');
+if(ground&&existsSync(judiqueList)){const jb=api.drlane.DrLaneSite.find(JSON.parse(readFileSync(judiqueList,'utf8')).buildings);if(jb)add('drlane',new api.drlane.DrLaneSite(jb,v).box);}
 const roads=JSON.parse(readFileSync(main+'/roads.json','utf8')).roads.map(r=>({...r,pts:r.pts.map(([e,n])=>[e-mm.village[0],mm.village[1]-n])}));
 const [l,bottom,r,t]=mm.mid, mv=mm.village;
 // The yard dog's driveway snaps to Southwest Ridge Road. Reserve it whenever that placement holds:
