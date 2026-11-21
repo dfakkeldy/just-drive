@@ -1639,7 +1639,7 @@ sunButton.addEventListener('click', async () => {
     const eye = mode === 'fly' ? camera.position.clone() : new THREE.Vector3(vehicle.x, vehicle.y + 1.7, vehicle.z);
     const position = utm20ToLatLon(eye.x + VE, VN - eye.z);
     sunSeeker = new SunSeeker({
-      camera, scene, eye, ...position,
+      camera, eye, ...position,
       height: (x, z) => {
         const ground = terrain.bareHeightAt(x, z);
         return ground === null ? null : Math.max(SEA_LEVEL, ground);
@@ -2085,7 +2085,7 @@ function drawSunSeeker(view: SunSeeker, now: number): void {
     car.root.visible = showCar; drone.group.visible = showDrone;
   }
   afterWorld();
-  view.projectLabels();
+  view.drawOverlay(renderer);
 }
 
 function drawEnding(dt: number): void {

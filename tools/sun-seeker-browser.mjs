@@ -41,12 +41,13 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     await c.send('Page.enable');
     await c.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: touch });
     if (touch) await c.send('Emulation.setTouchEmulationEnabled', { enabled: true });
-    await c.send('Page.navigate', { url: `${base}/?test=1&mode=explore&vehicle=bike&road=Mabou%20Harbour%20Road&hud=1&radio=0&exag=1&shadows=1${touch ? '&touch=1&q=low' : '&q=high'}` });
+    const visit = `${base}/?test=1&mode=explore&vehicle=bike&road=Mabou%20Harbour%20Road&hud=1&radio=0&exag=1&shadows=1${touch ? '&touch=1&q=low' : '&q=high'}`;
+    await c.send('Page.navigate', { url: visit });
     await wait("document.title.startsWith('settled') && !!window.mmm?.vehicle", 120_000);
     if (touch) {
       await tapKey('KeyF', 'f');
       await key('Space', ' ');
-      await sleep(1800);
+      await sleep(3600);
       await key('Space', ' ', 'keyUp');
     }
     await tapKey('KeyP', 'p');
@@ -93,6 +94,7 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     assert.deepEqual(await position(), car, 'the car does not move');
 
     await click('.sunFace');
+    for (let i = 0; i < 3; i++) await tapKey('ArrowUp', 'ArrowUp');
     await sleep(1200);
     const frame = await read('mmm.renderer.info.render.frame');
     await sleep(400);
@@ -123,6 +125,20 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     await wait("!document.querySelector('#pauseScreen').hidden");
     await click('#resumeGame');
     await wait("document.querySelector('#pauseScreen').hidden");
+    if (!touch) {
+      const hasMap = "mmm.scene.children.some(o => o.isDirectionalLight && o.castShadow && o.shadow.map)";
+      await c.send('Page.navigate', { url: visit + '&date=2026-06-21&time=00:00' });
+      await wait("document.title.startsWith('settled') && !!window.mmm?.vehicle", 120_000);
+      assert.equal(await read(hasMap), false, 'night visit starts without a shadow map');
+      await tapKey('KeyP', 'p');
+      await click('#pauseSun');
+      await wait("!!document.querySelector('#sunSeeker[open]')");
+      await setTime('2026-06-21', '13:00');
+      await wait(hasMap);
+      await tapKey('Escape', 'Escape');
+      await wait("!document.querySelector('#sunSeeker')");
+      assert.equal(await read(hasMap), false, 'the preview releases its shadow map when it closes');
+    }
     console.log(`PASS ${name}: pause and Settings, fixed eye, look input, date and lighting, idle render, close and Resume`);
   } finally {
     c.close();

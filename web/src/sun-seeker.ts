@@ -12,6 +12,7 @@ import './sun-seeker.css';
 const RADIUS = 180;
 const SELECTED = '#ffd477';
 const HILLS = '#f3f5f6';
+const INK = '#25313f';
 const SEASONS = [
   { date: '12-21', name: 'Winter solstice', color: '#a2dbff', labelAt: .38 },
   { date: '03-20', name: 'Spring equinox', color: '#aaf4d1', labelAt: .50 },
@@ -29,7 +30,6 @@ export interface SunViewLight {
 
 interface SunSeekerOptions {
   camera: THREE.PerspectiveCamera;
-  scene: THREE.Scene;
   eye: THREE.Vector3;
   lat: number;
   lon: number;
@@ -43,12 +43,18 @@ interface Label { element: HTMLElement; position: THREE.Vector3; width: number }
 /** A still view over the game canvas. The existing pause gate owns the simulation. */
 export class SunSeeker {
   readonly root = document.createElement('dialog');
+  private readonly overlay = new THREE.Scene();
   private readonly paths = new THREE.Group();
   private readonly seasons = new THREE.Group();
   private readonly activePath = new THREE.Group();
   private readonly horizon = new THREE.Group();
-  private readonly marker = new THREE.Mesh(new THREE.SphereGeometry(2, 16, 10),
+  private readonly marker = new THREE.Group();
+  private readonly disc = new THREE.Mesh(new THREE.CircleGeometry(1.32, 32),
     new THREE.MeshBasicMaterial({ color: SELECTED, depthTest: false, depthWrite: false, toneMapped: false }));
+  private readonly rim = new THREE.Mesh(new THREE.RingGeometry(1.27, 1.65, 32),
+    new THREE.MeshBasicMaterial({ color: SELECTED, depthTest: false, depthWrite: false, toneMapped: false }));
+  private readonly outline = new THREE.Mesh(new THREE.CircleGeometry(2.02, 32),
+    new THREE.MeshBasicMaterial({ color: INK, depthTest: false, depthWrite: false, toneMapped: false, transparent: true, opacity: .92 }));
   private readonly labels: HTMLElement;
   private readonly date: HTMLInputElement;
   private readonly time: HTMLInputElement;
@@ -65,11 +71,11 @@ export class SunSeeker {
   private pathDate = '';
   private year = '';
   private yaw = -Math.PI;
-  private pitch = .44;
+  private pitch = .58;
   private dirty = true;
 
   constructor(private readonly options: SunSeekerOptions) {
-    const { camera, eye, scene, lat, lon } = options;
+    const { camera, eye, lat, lon } = options;
     const now = new Date(), today = localDate(now);
     this.today = today;
     this.selected = { when: now, sun: sunAngles(now, lat, lon), lat, lon };
@@ -120,9 +126,14 @@ export class SunSeeker {
 
     camera.position.copy(eye);
     this.paths.position.copy(eye);
-    this.marker.renderOrder = 32;
+    this.outline.renderOrder = 32;
+    for (const part of [this.disc, this.rim]) {
+      part.material.transparent = true;
+      part.renderOrder = 33;
+    }
+    this.marker.add(this.outline, this.disc, this.rim);
     this.paths.add(this.seasons, this.activePath, this.horizon, this.marker);
-    scene.add(this.paths);
+    this.overlay.add(this.paths);
     this.lookSize();
     this.bindControls();
     document.body.append(this.root);
@@ -200,7 +211,7 @@ export class SunSeeker {
   }
 
   lookSize(): void {
-    this.options.camera.fov = this.options.camera.aspect < .85 ? 76 : 62;
+    this.options.camera.fov = this.options.camera.aspect < .85 ? 98 : 76;
     this.options.camera.updateProjectionMatrix();
     this.aim();
   }
@@ -231,7 +242,18 @@ export class SunSeeker {
     return this.selected;
   }
 
-  projectLabels(): void {
+  /** Draw after the game's finish pass so glare cannot wash out the paths. */
+  drawOverlay(renderer: THREE.WebGLRenderer): void {
+    const { camera } = this.options;
+    this.marker.quaternion.copy(camera.quaternion);
+    const clear = renderer.autoClear;
+    renderer.autoClear = false;
+    try { renderer.render(this.overlay, camera); }
+    finally { renderer.autoClear = clear; }
+    this.projectLabels();
+  }
+
+  private projectLabels(): void {
     const { camera } = this.options, width = this.root.clientWidth, height = this.root.clientHeight;
     const taken: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>[] = [...this.root.querySelectorAll('.sunPanel, .sunBearing')].map(el => el.getBoundingClientRect());
     for (const { element, position, width: labelWidth } of [...this.seasonLabels, ...this.activeLabels]) {
@@ -262,26 +284,32 @@ export class SunSeeker {
 
   private line(group: THREE.Group, points: number[], color: string, width: number, order: number): void {
     const geometry = new LineGeometry().setPositions(points);
-    const material = new LineMaterial({ color, linewidth: width, depthTest: false, depthWrite: false, toneMapped: false, transparent: true });
-    const line = new Line2(geometry, material);
-    line.renderOrder = order;
-    group.add(line);
+    for (const [stroke, size] of [[INK, width + 2.1], [color, width]] as const) {
+      const material = new LineMaterial({ color: stroke, linewidth: size, depthTest: false, depthWrite: false, toneMapped: false, transparent: true });
+      const line = new Line2(geometry, material);
+      line.renderOrder = order + (stroke === color ? .1 : 0);
+      group.add(line);
+    }
   }
 
   private buildHorizon(): void {
     this.clear(this.horizon);
-    const band: number[] = [];
+    const band: number[] = [], outline: number[] = [];
     for (let i = 0; i < this.hills.length; i++) {
       const j = (i + 1) % this.hills.length, a = this.hills[i], b = this.hills[j];
       if (a === null || b === null) continue;
-      const topA = anglesAt(i, a + .24), topB = anglesAt(j, b + .24), lowA = anglesAt(i, a - .24), lowB = anglesAt(j, b - .24);
-      for (const p of [topA, topB, lowA, topB, lowB, lowA]) band.push(p.x, p.y, p.z);
+      for (const [points, half] of [[band, .15], [outline, .28]] as const) {
+        const topA = anglesAt(i, a + half), topB = anglesAt(j, b + half), lowA = anglesAt(i, a - half), lowB = anglesAt(j, b - half);
+        for (const p of [topA, topB, lowA, topB, lowB, lowA]) points.push(p.x, p.y, p.z);
+      }
     }
-    const geometry = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(band, 3));
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: HILLS, side: THREE.DoubleSide,
-      depthTest: false, depthWrite: false, transparent: true, opacity: .72, toneMapped: false }));
-    mesh.renderOrder = 27;
-    this.horizon.add(mesh);
+    for (const [points, color, order] of [[outline, INK, 26], [band, HILLS, 27]] as const) {
+      const geometry = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+      const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide,
+        depthTest: false, depthWrite: false, transparent: true, opacity: .78, toneMapped: false }));
+      mesh.renderOrder = order;
+      this.horizon.add(mesh);
+    }
   }
 
   private updateDay(): void {
@@ -332,16 +360,19 @@ export class SunSeeker {
     this.marker.position.copy(anglesAt(sun.az, sun.el));
     const hill = hillElevation(this.hills, sun.az);
     const hidden = hill !== null && sun.el < hill;
-    this.marker.material.wireframe = hidden;
+    this.disc.visible = !hidden;
+    this.rim.visible = hidden;
     this.status.textContent = `${localTime(when)} ${localZone(when)} · ${Math.round(sun.az)}° az · ${sun.el.toFixed(1)}° high${hidden ? ' · Below hill line' : ''}${note}`;
   }
 
   private clear(group: THREE.Group, labels: Label[] = []): void {
+    const geometries = new Set<THREE.BufferGeometry>();
     for (const object of [...group.children] as (THREE.Mesh<THREE.BufferGeometry, THREE.Material>)[]) {
-      object.geometry.dispose();
+      geometries.add(object.geometry);
       object.material.dispose();
       object.removeFromParent();
     }
+    for (const geometry of geometries) geometry.dispose();
     for (const { element } of labels) element.remove();
     labels.length = 0;
   }
@@ -351,8 +382,7 @@ export class SunSeeker {
     this.clear(this.seasons, this.seasonLabels);
     this.clear(this.activePath, this.activeLabels);
     this.clear(this.horizon);
-    this.marker.geometry.dispose();
-    this.marker.material.dispose();
+    this.clear(this.marker);
     this.root.close();
     this.root.remove();
     const { camera } = this.options;
