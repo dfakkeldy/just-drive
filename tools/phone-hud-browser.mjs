@@ -136,7 +136,7 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       const before=(await boxes()).find(b=>b.id==='phoneLine');
       // Render fixture only: physics/activation is checked by phone-speed-cap. Feed the real
       // frame and PhoneMailHud a held-cap reading so every viewport paints the longest marker.
-      await read(`(()=>{const v=mmm.vehicle,update=v.update;window.restoreCapRender=()=>{delete v.activeTouchSpeedLimit;delete v.update;};Object.defineProperty(v,'activeTouchSpeedLimit',{value:100/3.6,configurable:true});v.update=function(...args){update.apply(this,args);this.speed=100/3.6;};})()`);
+      await read(`(()=>{const v=mmm.vehicle,savedSpeed=Object.getOwnPropertyDescriptor(v,'speed');window.restoreCapRender=()=>{delete v.activeTouchSpeedLimit;if(savedSpeed)Object.defineProperty(v,'speed',savedSpeed);else delete v.speed;};Object.defineProperty(v,'activeTouchSpeedLimit',{value:100/3.6,configurable:true});Object.defineProperty(v,'speed',{get:()=>100/3.6,set(){},configurable:true});})()`);
       await until(`document.getElementById('phoneLine').textContent.startsWith('100 km/h ▸ LIMIT 100')`);
       const marked=(await boxes()).find(b=>b.id==='phoneLine');
       assert.equal(marked.width,before.width,'marker does not widen status');

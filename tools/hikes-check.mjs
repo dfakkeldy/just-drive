@@ -39,8 +39,8 @@ await run('map','mode=explore&at=624271,5103301,0',async p=>{
   await p.tap('Escape');check(await p.read(`document.getElementById('bigMap').hidden&&!document.getElementById('c').inert`),'Escape closes map and restores background');
   await p.read('driveThrottles=[]');await sleep(600);check(await p.read('driveThrottles.length>0&&driveThrottles.every(t=>t===0)'),'key held before map does not drive after close');await p.key('KeyW',false);
   await p.tap('KeyM');await p.read(`document.getElementById('mapPlacesToggle').click()`);
-  const seen=[];
-  for(let i=0;i<30;i++){await p.tap('Tab');seen.push(await p.read(`document.activeElement?.dataset.mapPlace??null`));}
+  const seen=[], tabs=await p.read(`[...document.querySelectorAll('#bigMap button')].filter(b=>b.getClientRects().length>0).length`);
+  for(let i=0;i<tabs;i++){await p.tap('Tab');seen.push(await p.read(`document.activeElement?.dataset.mapPlace??null`));}
   check(await p.read(`mmm.bigMap.places.length>0&&mmm.bigMap.places.every(p=>${JSON.stringify(seen)}.includes(p.id))`),'Tab reaches every map place');
   await p.read(`document.querySelector('[data-map-place="village"]').focus()`);await p.tap('Enter');
   check(await p.read(`!document.getElementById('mapCard').hidden&&document.getElementById('mapCard').textContent.includes('Mabou village')&&document.getElementById('mapGo')!==null`),'Enter opens a place card');await p.shot('04-place-card');

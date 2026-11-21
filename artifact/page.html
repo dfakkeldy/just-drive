@@ -134,10 +134,10 @@ body.exploreMode{--settings-accent:#a7d9bc}#settings input{accent-color:var(--se
 body.tcOn.compactPhone #phoneHud #phoneHint:has(#placeArrival:not([hidden])){width:calc(100% - 62px)}
 body.tcOn.compactPhone #placeArrival{width:min(360px,100%);min-width:min(220px,100%);overflow-wrap:normal}
 body.tcOn.compactPhone #phoneHint #stopHint{font-size:11px;line-height:15px;padding:3px 6px;white-space:pre-line;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:36px;overflow:hidden;text-overflow:clip}
-body.tcOn.compactPhone #phoneHud #radio{width:max-content;max-width:100%;min-width:56px;justify-self:start}
+body.tcOn.compactPhone #phoneHud #radio{width:max-content;max-width:100%;min-width:56px;height:auto;min-height:56px;padding:2px 4px;justify-self:start}
 @media(orientation:portrait){body.tcOn.compactPhone #phoneHud #radio{width:var(--leftCol);text-align:left}}
 @media(orientation:landscape){body.tcOn.compactPhone #phoneHud #radio{width:100%;text-align:left}}
-body.tcOn.compactPhone #phoneHud #radio b{width:auto;white-space:normal;overflow:visible;text-overflow:clip}
+body.tcOn.compactPhone #phoneHud #radio b{width:auto;white-space:normal;overflow:visible;text-overflow:clip;line-height:11px}
 @media(orientation:landscape){body.tcOn.compactPhone #phoneHud:not([hidden]){grid-template-rows:56px auto minmax(0,1fr) 72px var(--mail-pedal-height)}body.tcOn.compactPhone #phoneHud #phoneHint{min-height:14px}body.tcOn.compactPhone.mailPhone #phoneHud #phoneHint{min-height:36px}}
 @media(orientation:landscape) and (max-height:319px){body.tcOn.compactPhone #phoneHud:not([hidden]){grid-template-rows:56px auto minmax(0,1fr) 64px 60px}}
 
