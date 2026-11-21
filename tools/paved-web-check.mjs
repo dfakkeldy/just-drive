@@ -64,7 +64,8 @@ const resolveGate=g=>g in chunkGates?resolveGate(chunkGates[g]):flat(g==='pavedR
 for(const name of Object.keys(chunkGates)){
  const guard=main.match(new RegExp('\\nconst \\w+ = ([^\\n]+?)\\n?\\s*\\? (?:await |new \\(await )'+name+'!\\.take\\(\\)'))?.[1]
   ??main.match(new RegExp('\\nconst \\w+ = (\\w+) \\? null : new \\(await '+name+'!\\.take\\(\\)'))?.[1]?.replace(/^/,'!')
-  ??main.match(new RegExp('\\nif \\(([^\\n]+)\\) \\{\\n  [^\\n]*'+name+'!\\.take\\(\\)'))?.[1];
+  ??main.match(new RegExp('\\nif \\(([^\\n]+)\\) \\{\\n  [^\\n]*'+name+'!\\.take\\(\\)'))?.[1]
+  ??main.match(new RegExp('lazyPlaceRow\\((\\w+Site), \\(\\) => '+name+'!\\.take\\(\\)'))?.[1];
  assert.ok(guard,name+': the line that takes the chunk is found under its gate');
  assert.equal(resolveGate(guard),resolveGate(chunkGates[name]),name+': the early chunk gate equals the gate of the line that takes it');
 }
