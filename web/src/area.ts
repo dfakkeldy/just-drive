@@ -20,11 +20,40 @@ export interface Area {
   readonly home: boolean;
   readonly church: boolean;
   readonly quarry: boolean;
+  // The hand-built sites and layers main.ts adds. Each stands in the areas named below, in the modern eras only.
+  /** Mabou's main street (mabou-main.ts). */
+  readonly mabouMain: boolean;
+  /** The house with a dog on its porch at the end of Beaton Road (Mabou). */
+  readonly porch: boolean;
+  /** The yard dog's invented driveway (Mabou). */
+  readonly yardDog: boolean;
+  /** The school bus on its loop, and its stop as a quiet place in room games (Mabou). */
+  readonly schoolBus: boolean;
+  /** The November buildings and road details (Mabou and Port Hood). */
+  readonly november: boolean;
+  /** The November hillside buildings take the place of their surveyed boxes (Mabou). */
+  readonly hillside: boolean;
+  /** The heart of Judique on Highway 19 (judique-village.ts). */
+  readonly judiqueVillage: boolean;
+  /** Port Hawkesbury's stores, dealers and gas bars (port-hawkesbury.ts). */
+  readonly hawkesbury: boolean;
+  /** The tractor dealership at Maryville Station Road (Port Hood). */
+  readonly maryville: boolean;
+  /** The airfield (airport.ts). */
+  readonly airport: boolean;
+  /** Point Tupper's dams, conveyors, pipelines and piers (pt-infrastructure.ts). */
+  readonly ptInfrastructure: boolean;
+  /** The Canso Canal (canal.ts). */
+  readonly canal: boolean;
 }
 const features = (enabled: boolean) => ({ worksYard: enabled, colliery: enabled, animals: enabled, roadScene: enabled, fishing: enabled, coast: enabled,
   landmarks: enabled, fixedShots: enabled, gulfTint: enabled, fixedSun: enabled, route: enabled, mailTitle: enabled });
+const mabouSites = (enabled: boolean) => ({ mabouMain: enabled, porch: enabled, yardDog: enabled, schoolBus: enabled, hillside: enabled });
+const pointTupperSites = (enabled: boolean) => ({ hawkesbury: enabled, airport: enabled, ptInfrastructure: enabled });
 const area = (id: string, name: string): Area => Object.freeze({ id, name, base: id === 'mabou' ? 'terrain' : `areas/${id}`,
-  mail: id === 'mabou', ...features(id === 'mabou'), home: id === 'judique', church: id === 'judique', quarry: id === 'westbay' });
+  mail: id === 'mabou', ...features(id === 'mabou'), home: id === 'judique', church: id === 'judique', quarry: id === 'westbay',
+  ...mabouSites(id === 'mabou'), november: id === 'mabou' || id === 'porthood', judiqueVillage: id === 'judique', maryville: id === 'porthood',
+  ...pointTupperSites(id === 'pointtupper'), canal: id === 'cansocauseway' });
 export const AREAS: readonly Area[] = Object.freeze([
   area('mabou', 'Mabou'), area('judique', 'Judique'), area('porthood', 'Port Hood'),
   area('pointtupper', 'Point Tupper and Port Hawkesbury'),

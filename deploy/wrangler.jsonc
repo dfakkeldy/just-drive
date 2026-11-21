@@ -1,5 +1,5 @@
 {
-  // Mabou Mail Madness: the public site. Static files (the game page, one script, the baked land, the songs) and,
+  // Mabou Mail Madness: the public site. Static files (the game page, its script and chunks, the baked land, the songs) and,
   // for "Drive with others" and Today's board, a small script (the door) with two Durable Object classes (the rooms and
   // the boards): server/src/.
   //

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assemble the public site in data/site/: the game page, the script, and the baked terrain as single files.
+# Assemble the public site in data/site/: the game page, the script and its chunks, and the baked terrain as single files.
 # The terrain is hard-linked, so the folder takes no extra disk space. Deploy it with deploy/wrangler.jsonc.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,9 +24,10 @@ mkdir -p "$SITE"
 find "$SITE" -mindepth 1 -maxdepth 1 -exec rm -r {} +
 # The temporary bundle is beside the site root, so output cleaning cannot remove it.
 cp "$BUNDLE/app.js" "$SITE/app.js"
+# The shared core and the code each import() loads (web/area-chunks-build.ts). app.js imports them as ./chunks/.
+cp -R "$BUNDLE/chunks" "$SITE/chunks"
 mkdir -p "$SITE/changes"
 cp "$BUNDLE/changes/index.html" "$SITE/changes/index.html"
-cp "$BUNDLE/quarry-feature.json" "$SITE/quarry-feature.json"
 # The models (web/public/models): small site files beside the land. The game goes on without one that is missing.
 if [ -d "$BUNDLE/models" ]; then cp -R "$BUNDLE/models" "$SITE/models"; fi
 cp -al "$ROOT/data/baked/terrain" "$SITE/terrain"

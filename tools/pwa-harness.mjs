@@ -29,10 +29,13 @@ export async function harness(code=source,shared={}) {
   const app='globalThis.build='+JSON.stringify(label),appUrl='/offline/app.'+hash(app)+'.js',pageKey=hash(label+data+builtAt);
   const page=(options.legacy?'':`<meta name="mmm-page" content="${pageKey}">`)+`<script src="${appUrl}"></script>`,pageUrl='/offline/page.'+hash(page)+'.html';
   const files=[entry('/terrain/tile.bin',data),entry('/terrain/unseen.bin',data+' unseen'),entry('/audio/song.mp3','0123456789'),...(options.areas?[entry('/areas/fixture/manifest.json',JSON.stringify({land:data}))]:[])],shell=[entry(pageUrl,page),entry(appUrl,app)];
+  // options.chunk: one chunk of app.js in the shell (web/area-chunks-build.ts), named by its build's label.
+  const chunk='export const build='+JSON.stringify(label),chunkUrl='/offline/chunks/core-'+label+'.js';if(options.chunk)shell.push(entry(chunkUrl,chunk));
   const index={schema:1,...(options.legacy?{}:{builtAt}),...(options.legacy?{}:{pageKey}),page:pageUrl,shell,files},encoded=JSON.stringify(index),revision=hash(encoded),v={schema:1,revision,dataRevision:hash(JSON.stringify(files)),...(options.legacy?{}:{pageKey}),index:'/offline/files.'+revision+'.json'};
   for(const [url,b] of [[pageUrl,page],[appUrl,app],['/terrain/tile.bin',data],['/terrain/unseen.bin',data+' unseen'],['/audio/song.mp3','0123456789'],[v.index,encoded],['/version.json',JSON.stringify(v)],['/offline/start.'+pageKey+'.json',JSON.stringify(v)],['/',page],['/index.html',page]])routes.set(url,new Response(b));
+  if(options.chunk)routes.set(chunkUrl,new Response(chunk));
   if(options.areas)routes.set('/areas/fixture/manifest.json',new Response(JSON.stringify({land:data})));
-  return {v,index,pageUrl,appUrl,pageKey};
+  return {v,index,pageUrl,appUrl,pageKey,chunk,chunkUrl};
  }
  async function nav(id,query='') {
   live.set(id,origin+'/'+query);let response;const waits=[];

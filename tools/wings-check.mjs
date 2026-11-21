@@ -42,7 +42,7 @@ assert.ok(sites.every((b) => b.buildingId === undefined || b.buildingId === b.id
     // The public wharves keep clear of every surveyed footprint, wings included (footprints only, nothing is counted).
     /^const wharves = .*\(buildings \? buildingList \?\? \[\] : \[\]\)\.map\(b => b\.footprint\)\) : null;$/,
     // The yard dog's invented driveway only asks if the list exists. Its houses come from `properties` (next assert).
-    /^const yardDogSite = ERA\.modern && AREA\.id === 'mabou' && buildingList && props \? YardDogSite\.create\(\{$/,
+    /^const yardDogSite = ERA\.modern && AREA\.yardDog && buildingList && props \? YardDogSite\.create\(\{$/,
     // Lot props need every footprint for clearance. Only properties can supply a candidate house.
     /^const lotPropList = ERA\.modern && buildingList && params\.get\('lotprops'\) !== '0' \? chooseLotProps\(\{$/,
     /^buildings: buildingList\.map\(b => \(\{ id: b\.buildingId \?\? b\.id, footprint: b\.footprint\.map\(\(\[e, n\]\): \[number, number\] => \[e - VE, VN - n\]\) \}\)\),$/];

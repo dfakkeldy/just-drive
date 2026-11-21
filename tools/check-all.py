@@ -127,7 +127,7 @@ def covers(check, path, dependencies):
         return any(fnmatch.fnmatchcase(path, pattern) for pattern in check['globs'].split()
                    if pattern.startswith('tools/baseline/source/'))
     web = path.startswith(('web/src/', 'web/pwa/')) or path == 'web/index.html' or any(
-        fnmatch.fnmatchcase(path, p) for p in ('web/package*.json', 'web/vite*.ts', 'web/tsconfig*'))
+        fnmatch.fnmatchcase(path, p) for p in ('web/package*.json', 'web/vite*.ts', 'web/*-build.ts', 'web/tsconfig*'))
     if web: return True
     if path.startswith(('server/', 'deploy/')) and check['name'].startswith(('site', 'pwa', 'mp')): return True
     if startup_path(path) and (check['name'] in STARTUP_PROOFS or check['mode'] == 'browser'): return True
