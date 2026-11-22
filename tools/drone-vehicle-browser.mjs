@@ -146,7 +146,7 @@ const PROBE_EXPR = `(x, z) => {
   })`);
   check(titleState.vehicleId === 'drone' && titleState.stored === 'drone' && titleState.pressed === 'true',
     'selecting Drone switches to standalone drone vehicle: ' + JSON.stringify({ vehicleId: titleState.vehicleId, stored: titleState.stored, pressed: titleState.pressed }));
-  check(titleState.startLabel === 'Start flying' && titleState.keysText.includes('W A S D') && titleState.keysText.includes('nearest road') && titleState.noOverlap,
+  check(titleState.startLabel === 'Start flying' && titleState.keysText.includes('WASD') && titleState.keysText.includes('nearest road') && titleState.noOverlap,
     'title card shows drone controls and Start flying without overlap');
   check(picker.room && !titleState.room, 'the car title card offers a room, the standalone drone title card does not: ' + JSON.stringify({ car: picker.room, drone: titleState.room }));
   check(titleState.active && titleState.free && !titleState.carInScene && titleState.engineSound === null,
