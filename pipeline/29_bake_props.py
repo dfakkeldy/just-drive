@@ -14,7 +14,6 @@ import os
 import math
 from pathlib import Path
 import random
-import re
 import importlib.util
 
 from osgeo import gdal
@@ -373,7 +372,29 @@ def building_exclusions(exclusions):
 
 
 
-def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
+def pole_track(r):
+    """A kind-4 road that may carry a pole run: named, not a props driveway, not a bridge."""
+    return r['kind'] == 4 and bool((r.get('name') or '').strip()) and not r.get('propsDriveway') and not r['bridge']
+
+
+def unpowered_roads(net, entries):
+    """Road ids of AREA.unpowered_tracks entries, ((east, north) on the line, expected name). Any entry that does not
+    resolve within 5 m to a pole track of exactly that name stops the bake."""
+    ids = set()
+    for entry in entries:
+        if not (isinstance(entry, tuple) and len(entry) == 2 and isinstance(entry[1], str) and entry[1].strip()):
+            raise RuntimeError(f'unpowered_tracks entry is not ((east, north), name): {entry!r}')
+        point, name = entry
+        hit = net.nearest(point, 5)
+        if hit is None or not pole_track(hit['road']) or hit['road']['name'] != name:
+            raise RuntimeError(f'unpowered_tracks entry {entry!r} is not on a named kind-4 pole track called {name!r}')
+        ids.add(hit['road']['id'])
+    return ids
+
+
+def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpowered=None):
+    """`unpowered`: unpowered_tracks entries (AREA.unpowered_tracks when None). Public roads are unaffected."""
+    unpowered = unpowered_roads(net, AREA.unpowered_tracks if unpowered is None else unpowered)
     # Public endpoint-to-segment joins also cover T junctions and split road pieces.
     corners = collections.defaultdict(list)
     for r in roads:
@@ -393,7 +414,7 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
     # Finish the unchanged public pass first: kind-4 candidates cannot displace its poles.
     extensions = []
     for r in roads:
-        if r['kind'] != 4 or not (r.get('name') or '').strip() or r.get('propsDriveway') or r['bridge']:
+        if not pole_track(r) or r['id'] in unpowered:
             continue
         local_net = Network([r])
         # About 60 m, with 15 m allowance for mapped setbacks (River Denys's last house is 72.6 m).
@@ -440,28 +461,17 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
     return poles
 
 def powered_buildings(buildings, area):
-    """One property, possibly several real roof blocks; sheds, barns and tanks get no drop."""
+    """One property, possibly several real roof blocks; sheds, barns, tanks and the church get no drop."""
     groups = collections.defaultdict(list)
     for b in buildings:
         groups[b.get('buildingId', b['id'])].append(b)
     if area == 'judique':
-        # The game replaces this surveyed envelope by its owner-measured church model.
+        # The game replaces this surveyed envelope by its owner-measured church model. The church has no power
+        # (Dan, 21 Nov 2026), so neither the envelope nor the model gets a drop, whatever kind the survey gives it.
         groups = {k: bs for k, bs in groups.items() if not any(
             distance((b.get('site', b)['x'], b.get('site', b)['y']), (630844.2, 5080637.2)) <= 8 for b in bs)}
-        text = (ROOT / 'web/src/church-site.ts').read_text()
-        origin = json.loads(re.search(r'CHURCH_ORIGIN = (\[.*?\])', text)[1])
-        scale = float(re.search(r'CHURCH_SCALE = ([\d.]+)', text)[1])
-        angle = float(re.search(r'CHURCH_HEADING = ([\d.]+)', text)[1])
-        nave = json.loads(re.search(r'CHURCH_GEOM = (\{.*?\}) as const;', text, re.S)[1])['nave']
-        a = math.radians(angle)
-        u, v = (nave['x0'] + nave['x1']) / 2, (nave['zs'] - nave['zn']) / 2
-        groups[-1] = [dict(id=-1, kind='church', x=origin[0] + scale * (u * math.sin(a) + v * math.cos(a)),
-                           y=origin[1] + scale * (u * math.cos(a) - v * math.sin(a)),
-                           length=(nave['x1'] - nave['x0']) * scale, width=(nave['zs'] + nave['zn']) * scale,
-                           axisDeg=angle, eave=nave['eave'] * scale, ridge=nave['ridge'] * scale,
-                           roof='gable', ground=None, groundX=origin[0], groundY=origin[1])]
     return {k: bs for k, bs in groups.items() if any(
-        b['kind'] in ('house', 'large', 'church') and b.get('shape') != 'tank' for b in bs)}
+        b['kind'] in ('house', 'large') and b.get('shape') != 'tank' for b in bs)}
 
 
 def roof_edge(b, pole, styles):

@@ -21,8 +21,8 @@ for(const url of urls){
    assert.equal(await page.read('mmm.church.site.buildings([{id:9009,x:630844.2,y:5080637.2},{id:9,x:630864.2,y:5080637.2}]).length'),1);
    const contacts=await page.read(`(()=>{const c=mmm.church,v=mmm.vehicle,saved={x:v.x,z:v.z,heading:v.heading,vx:v.vx,vz:v.vz,speed:v.speed};let tested=0;try{for(const solid of c.site.solids.slice(0,3)){Object.assign(v,{x:solid.x,z:solid.z,vx:0,vz:0,speed:0});c.resolveSolids(v);if(Math.hypot(v.x-solid.x,v.z-solid.z)<.3)throw Error('church did not block real vehicle');tested++;}}finally{Object.assign(v,saved);}return tested;})()`);
    assert.equal(contacts,3);
-   // The rig reverses onto the church's southern long side: the northern side has the church's service-drop pole
-   // (power bake, road 99) on the reversing line. A refused or moved placement fails here, never silently elsewhere.
+   // The rig reverses onto the church's southern long side. (Before 21 Nov 2026 a power bake put a church
+   // service-drop pole on the northern side; the church now has no power.) A refused or moved placement fails here.
    // Step the actual classes directly: a fixed screenshot tab can be hidden and pause driveVehicle.
    // Prescribe reverse velocity each step to test contact independently of the exaggerated hillside grade.
    const towing=new URL(url).searchParams.has('trailer') ? await page.read(`(()=>{const c=mmm.church,t=mmm.towing,v=mmm.vehicle;if(!t?.attached)throw Error('test needs attached trailer');if(!c.site.solids.every(s=>t.world.solids.includes(s)))throw Error('church solids not wired to towing');const saved={x:v.x,z:v.z,heading:v.heading};const s=c.site.solids[0],heading=s.heading-Math.PI/2,fx=Math.sin(heading),fz=-Math.cos(heading);let impacts=0;const notify=v.onSolidImpact;try{
