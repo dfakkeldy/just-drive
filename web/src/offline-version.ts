@@ -90,7 +90,8 @@ export function showGameUpdate(target?: string, fromWorker = false): void {
   stopVersionWatch();
   if (document.getElementById('offlineUpdate')) {
     const button = document.getElementById('offlineReload') as HTMLButtonElement | null;
-    if (button && updateTarget && alreadyTried(updateTarget)) {
+    // A newer target, or a worker that has now saved the tried one, can unlock a locked button.
+    if (button && updateTarget) {
       if (reloadSpent(updateTarget)) markReloadUnavailable(button, document.getElementById('offlineUpdateText'));
       else markReloadReady(button, document.getElementById('offlineUpdateText'));
     }

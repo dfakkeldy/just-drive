@@ -38,8 +38,9 @@ function harness(code = source, storage = new Map(), own = { pageKey: 'a'.repeat
     location: {
       reload: () => {
         if (code === source && storage.get('mmm.update.tried.untargeted:' + own.pageKey) !== '1') {
-          assert.equal(storage.get('mmm.update.tried.' + next.pageKey), '1', 'mark before reload');
-          assert.equal(JSON.parse(storage.get('mmm.update.target')).target, next.pageKey, 'target before reload');
+          const target = JSON.parse(storage.get('mmm.update.target')).target;
+          assert.ok([next.pageKey, 'c'.repeat(64)].includes(target), 'target before reload');
+          assert.equal(storage.get('mmm.update.tried.' + target), '1', 'mark before reload');
         }
         reloads++;
       }
@@ -111,10 +112,17 @@ async function workerRetry(code = source) {
   again.module.showGameUpdate(next.pageKey, true);
   assert.equal(again.elements.get('offlineReload').disabled, true, 'second fallback stays locked');
   await again.elements.get('offlineReload').press(); assert.equal(again.reloads(), 0);
-  const page = harness(code, storage);
-  page.start(false); await flush();
+  // Only the worker's word unlocks the retry: a page check for the tried build keeps the lock.
+  const own = new Map([['mmm.update.tried.' + next.pageKey, '1']]), page = harness(code, own);
   page.module.showGameUpdate(next.pageKey, false);
   assert.equal(page.elements.get('offlineReload').disabled, true, 'a page check alone cannot unlock');
+  // A still newer build C is untried, so it unlocks the locked notice at once.
+  const newer = 'c'.repeat(64);
+  page.module.showGameUpdate(newer, true);
+  assert.equal(page.elements.get('offlineReload').disabled, false, 'a newer target unlocks the button');
+  await page.elements.get('offlineReload').press();
+  assert.equal(page.reloads(), 1, 'the newer target reloads once');
+  assert.equal(own.get('mmm.update.tried.' + newer), '1');
 }
 const noRetryGuard = source.replace("workerReady === target && sessionStorage.getItem(RETRY_PREFIX + target) !== '1'", 'workerReady === target');
 assert.notEqual(noRetryGuard, source, 'no-retry-guard mutant applies');
