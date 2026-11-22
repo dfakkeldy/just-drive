@@ -215,6 +215,8 @@ export interface ChurchRoomParts { groups: Record<Zone, THREE.Group>; letter: TH
 
 /** The vestry chest of drawers along the right wall: its start from the far wall, and its length. The letter lies on it. */
 const CHEST = { from: .85, long: 1.1 };
+/** Half the width of a spire at its foot. */
+const SPIRE_FOOT = .2;
 const DRAWN = new Map<string, HTMLCanvasElement>();
 
 export class ChurchRoomArt {
@@ -444,6 +446,7 @@ export class ChurchRoomArt {
     const nose = (z: number) => st.riser + Math.max(0, z - st.foot) * st.riser / st.tread, x = st.inner;
     const z0 = st.foot - .05, z1 = st.landingZ, h0 = nose(z0) + .08, h1 = s.landing + .08;
     this.face('bead', PAINT.front, [x - .05, 0, z0], [x - .05, 0, z1], [x - .05, h1, z1], [x - .05, h0, z0], 'y');
+    this.face('bead', PAINT.front, [x, 0, z1], [x, 0, z0], [x, h0, z0], [x, h1, z1], 'y');
     this.face('plain', PAINT.post, [x - .05, h0, z0], [x - .05, h1, z1], [x, h1, z1], [x, h0, z0], 'z');
     const rail = (z: number) => nose(z) + .85;
     this.face('plain', PAINT.post, [st.outer - .06, rail(z0) - .05, z0], [st.outer - .06, rail(z1) - .05, z1], [st.outer - .06, rail(z1), z1], [st.outer - .06, rail(z0), z0], 'z');
@@ -454,9 +457,10 @@ export class ChurchRoomArt {
       this.box('bead', PAINT.front, x1, y - st.upperRiser - .3, st.landingZ, x0, y - .03, N.z1, 'y', .9);
       this.box('bare', 0xffffff, x1, y - .03, st.landingZ, x0 + .02, y, N.z1, 'x', .85);
     }
-    const lowA = s.landing - .33, lowB = top - .33;
-    this.face('bead', PAINT.front, [st.inner, lowA, st.landingZ], [st.top, lowB, st.landingZ], [st.top, under, st.landingZ], [st.inner, under, st.landingZ], 'y');
-    this.face('bead', PAINT.front, [st.top, lowB, st.landingZ + .002], [st.inner, lowA, st.landingZ + .002], [st.inner, under, st.landingZ + .002], [st.top, under, st.landingZ + .002], 'y');
+    // The step blocks hang .3 below each riser: the board's lower edge runs along their bottoms, just in front of them.
+    const lowA = s.landing - .33, lowB = s.landing + (s.upper - 2) * st.upperRiser - .33, zs = st.landingZ - .01;
+    this.face('bead', PAINT.front, [st.inner, lowA, zs], [st.top, lowB, zs], [st.top, under, zs], [st.inner, under, zs], 'y');
+    this.face('bead', PAINT.front, [st.top, lowB, zs + .002], [st.inner, lowA, zs + .002], [st.inner, under, zs + .002], [st.top, under, zs + .002], 'y');
     this.zone = 'loft';
     // Plain old benches for the gallery.
     const bench = (x0: number, z0: number, x1: number, z1: number) => {
@@ -512,7 +516,7 @@ export class ChurchRoomArt {
     // Two gradines behind it, and the small tabernacle in the middle with a pointed top and gold finials.
     const g1 = at + .12, g2 = g1 + .14;
     this.box('plain', PAINT.white, w, rise, c - a.width / 2 + .1, ax, g1, c + a.width / 2 - .1);
-    this.box('plain', PAINT.white, w, g1, c - a.width / 2 + .3, w + .26, g2, c + a.width / 2 - .3);
+    this.box('plain', PAINT.white, w, g1, c - a.width / 2 + .1, w + .26, g2, c + a.width / 2 - .1);
     this.box('plain', PAINT.white, w + .02, g1, c - .2, w + .4, g1 + .5, c + .2);
     this.face('plain', PAINT.white, [w + .4, g1 + .5, c + .2], [w + .4, g1 + .5, c - .2], [w + .4, g1 + .7, c], [w + .4, g1 + .7, c], 'z');
     for (const dz of [-.18, .18]) this.box('plain', PAINT.gold, w + .37, g1 + .5, c + dz - .012, w + .4, g1 + .68, c + dz + .012);
@@ -522,8 +526,8 @@ export class ChurchRoomArt {
       const z = c + (i - 2) * a.spacing, base = g2, tiers = Math.round(tall / .17), step = tall / tiers;
       // Each tier a little narrower: the steps read as the scalloped edge. A thin gold line edges each side.
       for (let k = 0; k < tiers; k++) {
-        const half = .2 - .17 * k / (tiers - 1), y0 = base + k * step;
-        this.box('plain', PAINT.gold, w + .01, y0, z - half - .012, w + .03, y0 + step, z + half + .012);
+        const half = SPIRE_FOOT - .17 * k / (tiers - 1), y0 = base + k * step;
+        this.box('plain', PAINT.gold, w + .01, y0 + .002, z - half - .012, w + .03, y0 + step - .002, z + half + .012);
         this.box('plain', PAINT.white, w + .012, y0, z - half, w + .045, y0 + step, z + half);
       }
       this.box('plain', PAINT.gold, w + .02, base + tall, z - .009, w + .038, base + tall + .13, z + .009);
@@ -537,7 +541,7 @@ export class ChurchRoomArt {
     this.sheet('altar3', [tx + t.depth + .006, rise + .1, c + t.width / 2 - .04], [0, 0, -(t.width - .08)], [0, t.height - .12, 0]);
     // A framed picture high on each side of the spires, between the last spire and the vestry door's trim.
     const d = f.vestryDoor, back = room.shell.vestry.x1;
-    const spireEdge = 2 * a.spacing + .184, trimEdge = d.z - d.width / 2 - .1 - c;
+    const spireEdge = 2 * a.spacing + SPIRE_FOOT + .012, trimEdge = d.z - d.width / 2 - .1 - c;
     const half = Math.min(.33, (trimEdge - spireEdge) / 2 - .03), off = (spireEdge + trimEdge) / 2;
     for (const side of [-1, 1]) {
       const z = c + side * off;
@@ -601,7 +605,7 @@ export class ChurchRoomArt {
     this.face('boards', PAINT.vestry, [V.x1, 0, V.z1], [V.x0, 0, V.z1], [V.x0, h, V.z1], [V.x1, h, V.z1], 'x');
     this.face('boards', PAINT.vestry, [V.x0, 0, V.z1], [V.x0, 0, V.z0], [V.x0, h, V.z0], [V.x0, h, V.z1], 'z');
     const d0 = d.z - d.width / 2, d1 = d.z + d.width / 2;
-    for (const [z0, z1, y0] of [[V.z0, d0, 0], [d1, V.z1, 0], [d0, d1, d.height]]) this.face('boards', PAINT.vestry, [V.x1, y0, z0], [V.x1, y0, z1], [V.x1, h, z1], [V.x1, h, z0], 'z');
+    for (const [z0, z1, y0] of [[V.z0, d0, 0], [d1, V.z1, 0], [d0, d1, d.height]]) if (y0 < h) this.face('boards', PAINT.vestry, [V.x1, y0, z0], [V.x1, y0, z1], [V.x1, h, z1], [V.x1, h, z0], 'z');
     // A dark baseboard.
     this.box('plain', PAINT.base, V.x0, 0, V.z0, V.x1, .13, V.z0 + .02); this.box('plain', PAINT.base, V.x0, 0, V.z1 - .02, V.x1, .13, V.z1);
     this.box('plain', PAINT.base, V.x0, 0, V.z0, V.x0 + .02, .13, V.z1);

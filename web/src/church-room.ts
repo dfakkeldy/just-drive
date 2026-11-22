@@ -39,7 +39,7 @@ export const CHURCH_ROOM = {
     gable: CHURCH_FEATURES.openings.filter(o => o.kind === 'rect' && o.face === 'west')
       .map((o): EndWindow => ({ z: metres(o.u), sill: height(o.y0), top: height(o.y1), width: metres(o.w) })),
     porch: {
-      x0: metres(n.x1), x1: metres(t.x1 - W.tower), z0: metres(-t.zn + W.tower), z1: metres(t.zs - W.tower),
+      x1: metres(t.x1 - W.tower), z0: metres(-t.zn + W.tower), z1: metres(t.zs - W.tower),
       door: { z: metres(entry.u), width: metres(entry.w), height: height(entry.y1) },
       /** The side door to the ramp (-z wall) and the small round-headed window (+z wall). */
       side: { x: metres(opening('tower_n', 'door').u), width: metres(opening('tower_n', 'door').w), height: height(opening('tower_n', 'door').y1) },
@@ -67,8 +67,8 @@ export const CHURCH_ROOM = {
     ceiling: { wall: 4.0, flat: 5.5, flatHalf: 1.85 },
     /** The aisle between the pew ends. */
     aisle: 1.6,
-    /** Twelve rows on the -z side. On the +z side the stair takes the first row, and the stair's upper flight shortens
-     * the second. `rear` is from the door wall to the first pew back; pews face the altar. */
+    /** Twelve rows on the -z side. On the +z side the stair takes the first row; the second row runs on under the
+     * upper flight. `rear` is from the door wall to the first pew back; pews face the altar. */
     pews: { rows: 12, pitch: 0.7, rear: 0.59, back: 0.88, seat: 0.47, depth: 0.42 },
     /** Heights above the floor. `rear` is the back gallery's depth from the door wall, `side` the side galleries'
      * depth from the long walls, `sideEnd` where they stop, from the altar wall. `front` is the parapet. */
@@ -81,7 +81,7 @@ export const CHURCH_ROOM = {
      * `inner` is the landing's inner edge from the +z wall (the scan: 1.05 m; widened 0.15 m for the walk).
      */
     stair: { width: 1.0, foot: 0.55, steps: 9, landing: 1.7, inner: 1.2, upper: 6, tread: 0.18, well: 0.95 },
-    /** The iron tie rod across the nave, over the back gallery's front, between the two posts that rise to the ceiling. */
+    /** The iron tie rod across the nave over the back gallery's front: through the two posts that rise to the ceiling, out to the slopes. */
     tieRod: { height: 5.15 },
     /** The chancel floor runs the full width; the altar platform on it is narrower. Depths from the altar wall. */
     chancel: { depth: 2.43, rise: 0.15 },
@@ -105,7 +105,7 @@ export function ceilingAt(room: ChurchRoom, z: number): number {
   return flat - (flat - wall) * Math.min(1, (off - flatHalf) / (half - flatHalf));
 }
 
-/** Eye height above the path at a point: standing, or stooped under the sloped ceiling. */
+/** Eye height above the path at a point: standing, or stooped under the nave's sloped ceiling. Only the nave ceiling counts. */
 export function eyeAt(room: ChurchRoom, p: { y: number; z: number }): number {
   return Math.min(room.fit.eye, ceilingAt(room, p.z) - p.y - room.fit.stoop);
 }
@@ -160,7 +160,7 @@ export function churchRail(room: ChurchRoom = CHURCH_ROOM): Rail {
   const total = lengths[lengths.length - 1];
   const stops: RailStop[] = [
     { id: 'door', at: 0, look: { x: nave.x0, y: 2.1, z: c },
-      text: 'One room. Pale blue pews stand in two blocks on each side of a wide aisle, and the altar is at the far end.\nThe gallery runs above you on three sides, on square posts.' },
+      text: 'One room. Pale blue pews stand in two blocks, one on each side of a wide aisle, and the altar is at the far end.\nThe gallery runs above you on three sides, on square posts.' },
     { id: 'altar', at: lengths[points.indexOf(altar)], look: { x: nave.x0, y: 2.0, z: c },
       text: 'A white altar with three pointed arches outlined in gold. Behind it stand five thin spires with scalloped edges; the middle one is the tallest.\nA red chair, a small red table and a white candle stand are near it.' },
     { id: 'vestry', at: lengths[points.indexOf(inVestry)], look: { x: vestry.x0, y: 0.8, z: (vestry.z0 + vestry.z1) / 2 - 0.75 },

@@ -22,7 +22,10 @@ assert.ok(V.x0 > (v.x0 + .1) * S && V.z0 > v.z0 * S && V.z1 < v.z1 * S, 'the ves
 // The floor is the tower door's sill, the top of the front steps: walking in there is no step and no gap.
 close(entry.y0, CHURCH_FEATURES.steps.rise, 'the door sill is the top of the front steps');
 close(R.shell.porch.door.height, (entry.y1 - entry.y0) * S, 'door height above the floor');
-assert.ok(F.ceiling.wall < (n.eave - entry.y0) * S && F.ceiling.flat < (n.ridge - entry.y0) * S, 'the ceiling stays under the roof outside');
+// The ceiling stays under the roof outside, also at the flat panel's edge, where the roof comes closest.
+const roofAt = z => (n.eave - entry.y0 + (n.ridge - n.eave) * (1 - Math.abs(z) / n.zs)) * S;
+assert.ok(F.ceiling.wall < roofAt(N.z1) && F.ceiling.flat < roofAt(N.ridgeZ + F.ceiling.flatHalf) - .1, 'the ceiling stays under the roof outside');
+assert.ok(V.ceiling < (v.eave - entry.y0) * S && V.head + .07 < V.ceiling && V.doorHead < V.ceiling, 'the vestry ceiling stays under its eave and over its window and door');
 assert.equal(R.shell.windows.length, 6, 'three round-headed windows on each side');
 for (const w of R.shell.windows) {
   const o = CHURCH_FEATURES.openings.find(o => o.kind === 'arch' && o.face === (w.side > 0 ? 'nave_s' : 'nave_n') && Math.abs(o.u * S - w.x) < 1e-9);
@@ -69,6 +72,7 @@ for (let i = 1; i < rail.stops.length; i++) assert.ok(rail.stops[i].at > rail.st
 close(rail.stops.at(-1).at, rail.total, 'the walk ends at the door');
 for (let d = 0; d <= rail.total; d += .05) {
   const p = railPoint(rail, d), eye = p.y + eyeAt(R, p), inVestry = p.x < N.x0;
+  // In the nave the eye stoops under the slope, so the headroom there rests on the lowest eye height (asserted below).
   if (inVestry) assert.ok(p.x > V.x0 + .4 && p.z > V.z0 + .4 && p.z < V.z1 - .4 && eye < V.ceiling - .25, `in the vestry at ${d.toFixed(2)}`);
   else assert.ok(p.x < N.x1 - .3 && p.z > N.z0 + .25 && p.z < N.z1 - .25 && eye < ceilingAt(R, p.z) - .3, `in the nave with headroom at ${d.toFixed(2)} (${JSON.stringify(p)})`);
 }
@@ -134,6 +138,10 @@ assert.ok(box.min.x >= V.x0 - .01 && box.max.x <= porch.x1 + .01 && box.min.z >=
 const ray = new THREE.Raycaster(), hit = (from, to) => { ray.set(new THREE.Vector3(...from), new THREE.Vector3(...to).normalize()); ray.far = 30; return ray.intersectObjects(room.scene.children, true)[0]; };
 const mid = [(N.x0 + N.x1) / 2 - 1.3, 1.6, N.ridgeZ];
 close(hit(mid, [0, -1, 0]).distance, 1.6, 'floor below', 1e-6); close(hit(mid, [0, 1, 0]).point.y, top, 'flat ceiling above', 1e-6);
+// The drawn stair is the stair the walk climbs: a ray down the middle of every tread, the landing and the upper treads.
+for (let k = 0; k < F.stair.steps - 1; k++) close(hit([(stair.outer + stair.inner) / 2, (k + 1) * stair.riser + .3, stair.foot + (k + .5) * stair.tread], [0, -1, 0]).distance, .3, `lower tread ${k + 1}`, 1e-6);
+close(hit([(stair.outer + stair.inner) / 2, F.stair.landing + .3, (stair.landingZ + N.z1) / 2], [0, -1, 0]).distance, .3, 'landing', 1e-6);
+for (let j = 0; j < F.stair.upper - 1; j++) close(hit([stair.inner - (j + .5) * F.stair.tread, F.stair.landing + (j + 1) * stair.upperRiser + .3, (stair.landingZ + N.z1) / 2], [0, -1, 0]).distance, .3, `upper tread ${j + 1}`, 1e-6);
 // Past the end of the side galleries, so nothing stands between the aisle and the walls.
 const clearX = N.x0 + F.gallery.sideEnd - 1.2;
 close(hit([clearX, 2.6, mid[2]], [0, 0, 1]).point.z, N.z1, 'left wall', .02); close(hit([clearX, 2.6, mid[2]], [0, 0, -1]).point.z, N.z0, 'right wall', .02);
