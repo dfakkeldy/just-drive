@@ -118,6 +118,7 @@ assert.equal(ptIndustryCanopyExcludes(629137.0, 5048138.0), true, 'canopy exclud
 assert.equal(ptIndustryCanopyExcludes(628603.0, 5048844.5), true, 'canopy excludes must cover coal pier ship unloader');
 assert.equal(ptIndustryCanopyExcludes(628545.0, 5048861.0), true, 'canopy excludes must cover coal pier hopper');
 assert.equal(ptIndustryCanopyExcludes(629520.0, 5048220.0), false, 'canopy excludes must not clear onshore forest behind oil terminal');
+assert.equal(ptIndustryCanopyExcludes(629360.0, 5048120.0), false, 'canopy excludes must not clear dry shoreline near oil abutment');
 assert.equal(ptIndustryCanopyExcludes(629120.0, 5049350.0), false, 'canopy excludes must not clear onshore plant/yard area');
 
 /** Verify shoreline wharf/pier decks and oil approach ramp stay cleanly above baked terrain across all exaggerations. */
@@ -363,13 +364,42 @@ const withStockpiles = new PointTupperIndustry(land.village, 1.5, SEA, false, fa
 checkPlan(nightHigh.plan, { night: true, exag: 1.5 });
 checkPlan(dayLow.plan, { night: false, exag: 1.5 });
 
-// On LOW (where sea omits depth write), marine piles/cribs must clip near the waterline rather than extending to -14 m.
+// Verify oil shore-joint continuity: every sloped transition pipe starts at an exact onshore pipe end (<= 0.005 m).
+function checkOilPipeJoint(plan, exag) {
+  const shoreEnd = OIL_TERMINAL.onshorePipe[OIL_TERMINAL.onshorePipe.length - 1];
+  const shorePrev = OIL_TERMINAL.onshorePipe[OIL_TERMINAL.onshorePipe.length - 2];
+  const jointY = industryGround(shoreEnd.g, exag, SEA) + shoreEnd.lift;
+  const sdx = shoreEnd.e - shorePrev.e, sdn = shoreEnd.n - shorePrev.n, sl = Math.hypot(sdx, sdn);
+  const spe = -sdn / sl, spn = sdx / sl;
+  const onshoreEnds = plan.pieces
+    .filter((p) => p.site === 'oil-pier' && p.kind === 'cyl' && p.spanEnds && Math.abs(p.spanEnds[1].y - jointY) < 0.05)
+    .map((p) => p.spanEnds[1]);
+  const transStarts = plan.pieces
+    .filter((p) => p.site === 'oil-pier' && p.kind === 'cyl' && p.spanEnds && Math.abs(p.spanEnds[0].y - jointY) < 0.05 && Math.abs(p.spanEnds[1].y - jointY) > 0.2)
+    .map((p) => p.spanEnds[0]);
+  assert.ok(onshoreEnds.length >= 3 && transStarts.length >= 4, `expected onshore (${onshoreEnds.length}) and transition (${transStarts.length}) pipes at shore joint`);
+  for (const ts of transStarts) {
+    const minDist = Math.min(...onshoreEnds.map((oe) => oe.distanceTo(ts)));
+    assert.ok(minDist < 0.005, `oil pipe transition separated from onshore pipe at shore joint by ${minDist.toFixed(3)} m`);
+  }
+  // Ensure joint points lie on the onshore rack's own perpendicular.
+  for (const oe of onshoreEnds) {
+    const de = oe.x + VE - shoreEnd.e, dn = VN - oe.z - shoreEnd.n;
+    const along = Math.abs(de * (sdx / sl) + dn * (sdn / sl));
+    assert.ok(along < 0.01 && Math.hypot(de - (de * spe + dn * spn) * spe, dn - (de * spe + dn * spn) * spn) < 0.01, 'onshore pipe end off shore-joint axis');
+  }
+}
+
+checkOilPipeJoint(dayHigh.plan, 1.5);
+checkOilPipeJoint(dayLow.plan, 1.5);
+
+// On LOW (where sea omits depth write), every marine pile/crib (including coal trestle piles) must clip at sea level (-0.15 m).
 for (const p of dayLow.plan.pieces) {
   if (p.baseG <= SEA && p.site !== 'plant' && p.site !== 'coal') {
-    for (const y of [-0.5, 0.5]) {
-      const vy = new THREE.Vector3(0, y, 0).applyMatrix4(p.matrix).y;
-      assert.ok(vy >= SEA - 1.5, `LOW marine piece extends below waterline (y=${vy.toFixed(2)}) in ${p.site}/${p.kind}`);
-    }
+    const minY = Math.min(
+      ...[-0.5, 0.5].map((y) => new THREE.Vector3(0, y, 0).applyMatrix4(p.matrix).y),
+    );
+    assert.ok(minY >= SEA - 0.25, `LOW marine piece extends below waterline (y=${minY.toFixed(2)}, sea=${SEA}) in ${p.site}/${p.kind}`);
   }
 }
 
@@ -514,7 +544,7 @@ if (process.argv.includes('--mutations')) {
     assert.throws(() => checkBuilt(bad, { low: false, night: false, hasStockpiles: false, exag: 1.5 }), undefined, 'flat-shading mutant survived');
     console.log('killed coal-flat-shading');
   }
-  // 14. Stockpiles duplicate coal mesh
+  // 15. Stockpiles duplicate coal mesh
   {
     assert.throws(() => checkBuilt(dayHigh, { low: false, night: false, hasStockpiles: true, exag: 1.5 }), undefined, 'stockpiles-duplicate mutant survived');
     console.log('killed stockpiles-duplicate');

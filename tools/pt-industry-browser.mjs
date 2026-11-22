@@ -68,17 +68,18 @@ async function measure(url) {
   }
 }
 
-// Target world-space verification points [east, north, yAboveSeaOrGround, isDryGround] per Point Tupper view.
-// Raycast from the active camera to each target must have zero terrain mesh occlusion in front of it.
+// Target world-space verification points [east, north, yAboveSeaOrGround, isDryGround] aiming directly at each
+// terminal's own rendered industrial geometry. The camera ray must hit the Point Tupper industry mesh first, with
+// zero terrain mesh occlusion in front of that hit.
 const TARGET_VISIBILITY = {
-  'plant-desktop-day': [628901.5, 5049449.0, 50.0, true],
-  'plant-desktop-night': [628901.5, 5049449.0, 50.0, true],
-  'plant-phone-day': [628901.5, 5049449.0, 50.0, true],
-  'coal-pier-desktop-day': [628603.0, 5048844.5, 6.5, false],
-  'oil-desktop-day': [629212.5, 5047991.2, 6.2, false],
-  'oil-phone-night': [629212.5, 5047991.2, 6.2, false],
-  'paper-wharf-desktop-day': [627701.3, 5050384.4, 5.0, false],
-  'north-bulk-desktop-day': [626893.0, 5051388.0, 5.8, false],
+  'plant-desktop-day': [628901.5, 5049449.0, 50.0, true],          // 101 m concrete stack shaft
+  'plant-desktop-night': [628901.5, 5049449.0, 50.0, true],        // 101 m concrete stack shaft
+  'plant-phone-day': [628901.5, 5049449.0, 50.0, true],            // 101 m concrete stack shaft
+  'coal-pier-desktop-day': [628603.0, 5048844.5, 13.0, false],     // Coal pier ship-unloader portal & deck
+  'oil-desktop-day': [629220.0, 5048002.0, 5.0, false],            // Oil terminal Berth 1 concrete loading deck
+  'oil-phone-night': [629220.0, 5048002.0, 5.0, false],            // Oil terminal Berth 1 concrete loading deck
+  'paper-wharf-desktop-day': [627709.7, 5050391.9, 9.0, false],    // Paper mill wharf ship-loader tower
+  'north-bulk-desktop-day': [626894.0, 5051392.0, 12.0, false],    // North bulk berth shiploader tower
 };
 
 async function checkTargetVisible(c, name) {
@@ -88,6 +89,8 @@ async function checkTargetVisible(c, name) {
   const vis = await c.read(`(async () => {
     const THREE = await import('/node_modules/three/build/three.module.js');
     const m = mmm;
+    const grp = m.scene.getObjectByName('Point Tupper industry');
+    if (!grp) return { inFrustum: false, industryHit: null, nearestTerrain: null, dist: 0 };
     const [VE, VN] = m.terrain.manifest.village;
     const tx = ${e} - VE, tz = VN - ${n};
     const ty = ${isDry} ? (m.terrain.heightAt(tx, tz) ?? 0) + ${y} : ${y};
@@ -96,15 +99,25 @@ async function checkTargetVisible(c, name) {
     const dir = target.clone().sub(m.camera.position);
     const dist = dir.length();
     dir.normalize();
-    const rc = new THREE.Raycaster(m.camera.position, dir, 1, dist - 2);
+    const rc = new THREE.Raycaster(m.camera.position, dir, 1, dist + 25);
+    const indHits = rc.intersectObject(grp, true);
+    const industryHit = indHits.length ? indHits[0].distance : null;
     const terrainMeshes = [];
     m.terrain.group.traverseVisible(o => { if (o.isMesh) terrainMeshes.push(o); });
-    const hits = rc.intersectObjects(terrainMeshes, false);
-    const nearestTerrain = hits.length ? hits[0].distance : null;
-    return { inFrustum: Math.abs(ndc.x) < 0.95 && Math.abs(ndc.y) < 0.95 && ndc.z < 1, dist: +dist.toFixed(1), nearestTerrain: nearestTerrain !== null ? +nearestTerrain.toFixed(1) : null };
+    const rcTerr = new THREE.Raycaster(m.camera.position, dir, 1, (industryHit ?? dist) - 0.5);
+    const tHits = rcTerr.intersectObjects(terrainMeshes, false);
+    const nearestTerrain = tHits.length ? tHits[0].distance : null;
+    return {
+      inFrustum: Math.abs(ndc.x) < 0.95 && Math.abs(ndc.y) < 0.95 && ndc.z < 1,
+      dist: +dist.toFixed(1),
+      industryHit: industryHit !== null ? +industryHit.toFixed(1) : null,
+      nearestTerrain: nearestTerrain !== null ? +nearestTerrain.toFixed(1) : null,
+    };
   })()`);
   assert.ok(vis.inFrustum, `${name}: target structure not in camera frustum (${JSON.stringify(vis)})`);
-  assert.equal(vis.nearestTerrain, null, `${name}: terrain mesh occludes target terminal at ${vis.nearestTerrain} m (target at ${vis.dist} m)`);
+  assert.ok(vis.industryHit !== null && Math.abs(vis.industryHit - vis.dist) < 35,
+    `${name}: camera ray missed target terminal mesh (${JSON.stringify(vis)})`);
+  assert.equal(vis.nearestTerrain, null, `${name}: terrain mesh occludes target terminal at ${vis.nearestTerrain} m (industry hit at ${vis.industryHit} m)`);
   return vis;
 }
 

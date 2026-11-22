@@ -48,13 +48,13 @@ export function industryGround(base: number, exag: number, sea: number): number 
  */
 export function ptIndustryCanopyExcludes(east: number, north: number): boolean {
   // Oil Marine Terminal offshore water zone (Berth 1, Berth 2, offshore approach & 11 dolphins; strictly seaward of shore).
-  if (east >= 628985 && east <= 629375 && north >= 5047795 && north <= 5048315) {
-    // Keep strictly SW of the shoreline diagonal passing through (629356, 5048109) and (629410, 5047990).
-    if ((east - 629356) * 0.85 + (north - 5048109) * 0.52 <= 10) return true;
+  if (east >= 628985 && east <= 629360 && north >= 5047795 && north <= 5048315) {
+    // Strictly SW of the shoreline boundary passing through (629356, 5048109) so dry shore around (629360, 5048120) stays untouched.
+    if ((east - 629356) * 0.85 + (north - 5048109) * 0.52 <= 0) return true;
   }
-  // Coal Marine Terminal offshore pier head, crane, hopper, flanking dolphins & offshore trestle.
-  if (east >= 628395 && east <= 629005 && north >= 5048800 && north <= 5049015) {
-    if ((east - 628995) * 0.90 + (north - 5048998) * 0.44 <= 8) return true;
+  // Coal Marine Terminal offshore pier head, ship unloader, hopper, flanking dolphins & offshore trestle.
+  if (east >= 628395 && east <= 629000 && north >= 5048800 && north <= 5049015) {
+    if ((east - 628995) * 0.90 + (north - 5048998) * 0.44 <= 0) return true;
   }
   return false;
 }
@@ -424,7 +424,10 @@ export function planPointTupperIndustry(
       for (const s of [-1, 1]) {
         const le = p.e + perpE * halfSpread * s, ln = p.n + perpN * halfSpread * s;
         if (isWater) {
-          upright('cyl', site, le, ln, p.g, footY, 0.72, topY - footY, 0.72, 0, C.steelDark);
+          // On LOW (where sea omits depth write), anchor pile bottom to sea level (-0.15 m) rather than submerged seabed.
+          const pileBase = low ? sea : p.g;
+          const topAboveBase = wy(p.g, topY) - wy(pileBase);
+          upright('cyl', site, le, ln, pileBase, footY, 0.72, topAboveBase - footY, 0.72, 0, C.steelDark);
         } else {
           upright('box', site, le, ln, p.g, footY, 0.36, topY - footY, 0.36, yaw, C.steelDark);
         }
@@ -514,10 +517,11 @@ export function planPointTupperIndustry(
       for (const f of pileRows) {
         upright('cyl', site, pe + perpE * width * f, pn + perpN * width * f, sea, pileFoot, 0.78, deckTop - 1.5 - pileFoot, 0.78, 0, C.steelDark);
       }
-      // Marine rubber fenders along the docking face
+      // Marine rubber fenders along the docking face (clipped to waterline on LOW)
       if (opts.fenders) {
         const fe = pe + perpE * (width / 2 + 0.55) * opts.fenders, fn = pn + perpN * (width / 2 + 0.55) * opts.fenders;
-        upright('box', site, fe, fn, baseG, deckY - 3.6, 0.95, 3.8, 1.7, yaw, C.fenderBlack);
+        const fBot = low && baseG <= sea ? Math.max(-0.15, deckY - 3.6) : deckY - 3.6;
+        upright('box', site, fe, fn, baseG, fBot, 0.95, deckY + 0.2 - fBot, 1.7, yaw, C.fenderBlack);
       }
       if (opts.bollards && i % 2 === 0) {
         const side = opts.fenders || 1;
@@ -732,17 +736,19 @@ export function planPointTupperIndustry(
     {
       const dx = approachEnd[0] - approachStart[0], dn = approachEnd[1] - approachStart[1], l = Math.hypot(dx, dn);
       const pe = -dn / l, pn = dx / l;
-      const shoreEnd = onshorePipe[onshorePipe.length - 1];
+      const shorePrev = onshorePipe[onshorePipe.length - 2], shoreEnd = onshorePipe[onshorePipe.length - 1];
+      const sdx = shoreEnd.e - shorePrev.e, sdn = shoreEnd.n - shorePrev.n, sl = Math.hypot(sdx, sdn) || 1;
+      const spe = -sdn / sl, spn = sdx / sl;
       const pipeRows = low
         ? [[-3.6, 1.4], [-2.2, 1.4], [-3.6, 2.8], [-2.2, 2.8]]
         : [[-4.4, 1.4], [-3.3, 1.4], [-2.2, 1.4], [-4.4, 2.7], [-3.3, 2.7], [-2.2, 2.7]];
       const shoreOffsets = low ? [-1.6, 0, 0, 1.6] : [-2.2, -1.1, 0, 0, 1.1, 2.2];
-      // Continuous sloped pipe transition from shore bulkhead rack down onto the offshore two-tier trestle rack
+      // Continuous sloped pipe transition starting at the exact last onshore pipe endpoints (0 m joint gap).
       for (let i = 0; i < pipeRows.length; i++) {
         const [off, py] = pipeRows[i];
         const sOff = shoreOffsets[i];
         span('cyl', 'oil-pier',
-          shoreEnd.e + pe * sOff, shoreEnd.n + pn * sOff, shoreEnd.g, shoreEnd.lift,
+          shoreEnd.e + spe * sOff, shoreEnd.n + spn * sOff, shoreEnd.g, shoreEnd.lift,
           approachStart[0] + pe * off, approachStart[1] + pn * off, sea, deckY + py,
           0.56, 0.56, py > 2 ? C.pipeWhite : C.pipeGrey);
       }
