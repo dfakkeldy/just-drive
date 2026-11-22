@@ -153,7 +153,7 @@ export function lightStudyUI(study: LightStudy, when: Date, lat: number, lon: nu
   if (!panel) return;
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
   const control = document.createElement('details'); control.id = 'lightStudy';
-  control.innerHTML = `<summary>Light study</summary><div class="lightFields"><label>Date<input aria-label="Light study date" type="date" min="1880-01-01" max="2200-12-31" required></label><label>Time<input aria-label="Light study time" type="time" lang="en-GB" step="60" required><small class="lightClock"></small></label></div><button type="button">Apply</button> <button type="button" class="lightLeave">Leave study</button><output aria-live="polite"></output><small>One land season: October leaves, no snow.</small><small>Sun direction and height fit the date; the land’s look does not.</small><small>Level horizon (−0.83°); hills can hide the sun.</small>`;
+  control.innerHTML = `<summary>Light study</summary><div class="lightFields"><label>Date<input aria-label="Light study date" type="date" min="1880-01-01" max="2200-12-31" required></label><label>Time<input aria-label="Light study time" type="time" lang="en-GB" step="60" required><small class="lightClock"></small></label></div><button type="button">Apply</button> <button type="button" class="lightLeave">Leave study</button><output aria-live="polite"></output><small>Light study uses the October landscape.</small><small>Level horizon (−0.83°); hills can hide the sun.</small>`;
   const date = control.querySelector<HTMLInputElement>('[type=date]')!, time = control.querySelector<HTMLInputElement>('[type=time]')!;
   date.value = study.date; time.value = study.time;
   let notice = study.message;

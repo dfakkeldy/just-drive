@@ -288,6 +288,42 @@ export function treeGeometry(kind: number, variant: number, small = false, near 
   return merged;
 }
 
+function winterTreeGeometry(kind: number, variant: number, small: boolean, near: boolean) {
+  if (kind === 0) {
+    const geometry = treeGeometry(kind, variant, small, near);
+    const pos = geometry.getAttribute('position'), normal = geometry.getAttribute('normal');
+    const colour = geometry.getAttribute('color'), leaf = geometry.getAttribute('leafTint');
+    for (let i = 0; i < pos.count; i++) {
+      if (!leaf.getX(i)) continue;
+      const top = THREE.MathUtils.smoothstep(pos.getY(i), 0.40, 0.88);
+      const shelf = THREE.MathUtils.smoothstep(normal.getY(i), 0.12, 0.62);
+      const snow = Math.min(0.92, top * 0.68 + shelf * 0.30);
+      const dark = colour.getX(i);
+      colour.setXYZ(i, dark * 0.042 + snow * 0.58, dark * 0.10 + snow * 0.63, dark * 0.065 + snow * 0.67);
+      leaf.setX(i, 0);    // Snow and needles are already in linear light.
+    }
+    return geometry;
+  }
+  const birch = kind === 2, shrub = kind === 4, larch = kind === 3;
+  const top = shrub ? 0.62 : 1;
+  const lean = birch ? 0.09 : -0.05, phase = variant * 2.17;
+  const parts = [stem(0, -0.025, 0, lean, top, 0, shrub ? 0.031 : 0.055, birch)];
+  const branches = small ? 3 : near ? 8 : 5;
+  for (let i = 0; i < branches; i++) {
+    const t = i / branches, a = phase + i * 2.4;
+    const start = (0.24 + 0.50 * t) * top;
+    const spread = (1 - t * 0.64) * (shrub ? 0.77 : 0.81);
+    const x = Math.cos(a) * spread, z = Math.sin(a) * spread;
+    const tip = Math.min(top, start + (larch ? 0.15 : 0.28) * top);
+    parts.push(stem(lean * t, start, 0, x, tip, z, 0.021 - t * 0.009, birch));
+    if (near && !small) parts.push(stem(x * 0.67, (start + tip) * 0.5, z * 0.67, x * 1.03, tip + 0.08,
+      z * 0.80, 0.009, birch));
+  }
+  const geometry = mergeGeometries(parts)!;
+  for (const part of parts) part.dispose();
+  return geometry;
+}
+
 // Three silhouettes per species, plus a cheaper sapling for trees below 5 m.
 function variantFor(kind: number, seed: number, height: number) {
   const crown = kind === 1 || kind === 2 ? (seed % 13 === 0 ? 2 : seed % 2) : seed % 3;
@@ -310,8 +346,7 @@ export class Trees {
   private tiles = new Map<string, TreeTile | 'loading'>();
   private decoded = new Map<string, DataView>();   // Keep late files until their fine ground is ready; never fetch twice.
   private retry = new Map<string, { at: number; tries: number }>();   // failed tiles and when to ask again
-  // Built here, after main.ts has read ?crowns=1.
-  private shapes = Array.from({ length: 20 }, (_, i) => treeGeometry(Math.floor(i / 4), i % 4, i % 4 === 3));
+  private shapes: THREE.BufferGeometry[];
   private material = new THREE.MeshLambertMaterial({ vertexColors: true });
   private nearShapes: THREE.BufferGeometry[];
   private eye = { value: new THREE.Vector3() };
@@ -324,7 +359,9 @@ export class Trees {
   count = 0;
 
   constructor(tiles: string[], private base: string, private terrain: Terrain, private detail = true, private excludes?: (east: number, north: number) => boolean) {
-    this.nearShapes = terrain.low || !detail ? [] : Array.from({ length: 20 }, (_, i) => treeGeometry(Math.floor(i / 4), i % 4, i % 4 === 3, true));
+    const shape = terrain.uniforms?.winterCover ? winterTreeGeometry : treeGeometry;
+    this.shapes = Array.from({ length: 20 }, (_, i) => shape(Math.floor(i / 4), i % 4, i % 4 === 3, false));
+    this.nearShapes = terrain.low || !detail ? [] : Array.from({ length: 20 }, (_, i) => shape(Math.floor(i / 4), i % 4, i % 4 === 3, true));
     for (const t of tiles) this.have.add(t);
     this.material.onBeforeCompile = (shader) => {
       shader.vertexShader = 'attribute float leafTint;\n' + shader.vertexShader;

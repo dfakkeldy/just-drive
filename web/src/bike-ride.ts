@@ -8,6 +8,7 @@ import type { VehiclePlacement } from './vehicle';
 import type { Terrain, Surface } from './terrain';
 import type { Roads } from './roads';
 import type { Damage } from './damage-rules';
+import { winterRoadGrip } from './weather-surfaces';
 import { ROUGH_DEPTH, washboard, potholeDepth, potholeDensity } from './defects';
 import { puddleDip } from './rough-roads';
 import { PUDDLE_DRAG } from './vehicle';
@@ -63,7 +64,7 @@ export class BikeRide implements Ride {
   private launchX = 0; private launchZ = 0; private airPitch = 0;
   private crashHeading = 0; private stand = 0;
 
-  constructor(readonly car: Bike, private terrain: Pick<Terrain, 'heightAt' | 'surfaceAt' | 'withContactHeight'> & {readonly cartRoads?:boolean}, readonly roads: Pick<Roads, 'nearest' | 'deckHeight'> & Partial<Pick<Roads, 'guardrails'>>, private seaLevel: number, readonly spec: VehicleSpec = BIKE_SPEC) {}
+  constructor(readonly car: Bike, private terrain: Pick<Terrain, 'heightAt' | 'surfaceAt' | 'withContactHeight'> & {readonly cartRoads?:boolean; readonly uniforms?: Terrain['uniforms']}, readonly roads: Pick<Roads, 'nearest' | 'deckHeight'> & Partial<Pick<Roads, 'guardrails'>>, private seaLevel: number, readonly spec: VehicleSpec = BIKE_SPEC) {}
 
   private groundAt(x: number, z: number): number | null {
     const g = this.terrain.heightAt(x, z), deck = this.roads.deckHeight(x, z);
@@ -229,19 +230,21 @@ export class BikeRide implements Ride {
       }
     } else {
       const t = input.throttle, speed = Math.abs(forward);
-      let acceleration = t >= 0 ? t * surf.accel * Math.max(0, 1 - (speed / surf.top) ** 2) : forward > .1 ? t * 10 : forward > -5 ? t * 3 : 0;
+      const snowGrip = winterRoadGrip(this.terrain.uniforms?.winterCover,
+        s.kind > 0 && s.roadDist <= s.halfWidth + 0.4 && !s.deck && !s.bridge, input.touch);
+      let acceleration = t >= 0 ? t * surf.accel * Math.max(0, 1 - (speed / surf.top) ** 2) : forward > .1 ? t * 10 * snowGrip : forward > -5 ? t * 3 : 0;
       if (input.handbrake) { acceleration -= Math.sign(forward) * Math.min(5, speed / dt); sideways += input.steer * speed * dt * 1.4; }
       acceleration -= G * Math.sin(slope);
       if (t === 0 && speed < .08 && Math.abs(slope) < .1) forward = 0;
       else { acceleration -= Math.sign(forward) * .18; forward += acceleration * dt; }
       forward = clamp(forward, -5, MAX_HORIZONTAL_SPEED);
-      const maxYaw = Math.min(1.8, surf.grip * G / Math.max(speed, 2));
+      const maxYaw = Math.min(1.8, surf.grip * snowGrip * G / Math.max(speed, 2));
       const targetRoll = speed > 2 ? -Math.atan(speed * input.steer * maxYaw / G) : 0;
       this.roll += (targetRoll - this.roll) * Math.min(1, dt * (speed > 8 ? 3 : 6));
       const yaw = speed > 5 ? -Math.tan(this.roll) * G / Math.max(speed, 2) * Math.sign(forward) : forward * Math.tan(input.steer * .65) / this.spec.wheelbase;
       this.steerAngle += (input.steer * Math.min(.65, Math.atan(this.spec.wheelbase * maxYaw / Math.max(speed, 1))) - this.steerAngle) * Math.min(1, dt * 5);
       this.heading += yaw * dt;
-      sideways *= Math.max(0, 1 - dt * (input.handbrake ? 1.1 : 8));
+      sideways *= Math.max(0, 1 - dt * (input.handbrake ? 1.1 : 8) * snowGrip);
       if (input.pull && forward > 3 && t > 0) this.wheelieRate += ((t - .42) * 2.8 + Math.max(0, this.wheelie - .6) * 2 - this.wheelieRate * 2.6) * dt;
       else this.wheelieRate += (-this.wheelie * 8 - this.wheelieRate * 4) * dt;
       this.wheelie = Math.max(0, this.wheelie + this.wheelieRate * dt);
