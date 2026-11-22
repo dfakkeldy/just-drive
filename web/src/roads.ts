@@ -57,6 +57,8 @@ export class Roads {
   private updateRevision=-1;private updateX=Infinity;private updateZ=Infinity;
   private periodMat: THREE.MeshLambertMaterial | null = null;
 
+  private readonly readTerrainHeight = (x: number, z: number) => this.terrain.heightAt(x, z);
+
   private eraBridgeHit:RoadHit|null=null;private bridgeQuery=0;
 
   constructor(data: { roads: Road[] },
@@ -185,7 +187,7 @@ export class Roads {
     if (!this.terrain.cartRoads && !hit.road.ponyTruss && hit.dist > hit.road.halfWidth + 1.2) return null;
     const deck = this.deck(hit.road);
     if (!deck) return null;
-    if (!this.terrain.cartRoads && hit.road.ponyTruss) return ponyTrussDeckHeight(hit.road, deck.y0, deck.y1, x, z);
+    if (!this.terrain.cartRoads && hit.road.ponyTruss) return ponyTrussDeckHeight(hit.road, deck.y0, deck.y1, x, z, this.readTerrainHeight);
     const [ax, az] = hit.road.pts[hit.seg], [bx, bz] = hit.road.pts[hit.seg + 1];
     const s = deck.cum[hit.seg] + (this.terrain.cartRoads?deck.cum[hit.seg+1]-deck.cum[hit.seg]:Math.hypot(bx - ax, bz - az)) * hit.t;
     const plane=this.terrain.cartRoads?deck.y0+(deck.y1-deck.y0)*s/deck.len:deck.y0 + (deck.y1 - deck.y0) * (s / deck.len);
@@ -244,7 +246,7 @@ export class Roads {
     const len = cum[n - 1] || 1, y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
     let mesh: THREE.Mesh;
     if (road.ponyTruss) {
-      const geo = buildPonyTrussBridge(p, y0, y1, len);
+      const geo = buildPonyTrussBridge(p, y0, y1, len, this.readTerrainHeight);
       this.periodMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
       mesh = new THREE.Mesh(geo, this.periodMat);
       mesh.name = 'pony-truss-' + road.id;
