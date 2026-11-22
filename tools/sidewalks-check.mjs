@@ -42,7 +42,7 @@ function terrain(area,shape=false){const manifest=raw[area].manifest,grid=manife
   const at=(i,j)=>30+(((i*19+j*31)%7+7)%7)*.13;const h00=at(a,b),h10=at(a+1,b),h01=at(a,b+1),h11=at(a+1,b+1);return u+v<=1?h00+(h10-h00)*u+(h01-h00)*v:h11+(h01-h11)*(1-u)+(h10-h11)*(1-v);};
  return {manifest,walkHeightAt:(_l,x,z)=>height(x,z),meshHeightAt:height,heightAt:height,surfaceAt:(x,z)=>({level:8,ground:height(x,z)}),dataRevision:1,drawnRevision:'0',height};
 }
-function make(m,area,low=false,shape=false){const d=raw[area],t=terrain(area,shape),net={roads:d.cache.roads.map(r=>({id:r[0],pts:[[0,0],[1,1]]})),bridgeWalks:new Map(),deckHeight:()=>32};return {walk:new m.Sidewalks(d.cache,d.manifest.village,t,net,low),t};}
+function make(m,area,low=false,shape=false){const d=raw[area],t=terrain(area,shape),net={roads:d.cache.roads.map(r=>({id:r[0],pts:[[0,0],[1,1]]})),bridgeWalks:new Map(),builtDeckHeight:()=>32,deckHeight:()=>{throw Error('the sidewalk layer must not build a deck: use Roads.builtDeckHeight');}};return {walk:new m.Sidewalks(d.cache,d.manifest.village,t,net,low),t};}
 function ready(walk,area){for(const key of Object.keys(raw[area].cache.terrain)){const [l,xy]=key.split('/'),[i,j]=xy.split('_').map(Number);if(Number(l)<6)continue;walk.tileReady(+l,i,j);walk.coverageSelected?.(+l,i,j);walk.tileSelected(+l,i,j);}
  let loops=0;while(walk.pending&&loops++<100000)walk.update();assert.equal(walk.pending,0,'bounded geometry queue drains');}
 function upAndBudget(walk,low){
@@ -70,12 +70,12 @@ async function workerExecution(area,low,m=M){
   for(const key of keys){const [l,xy]=key.split('/'),[i,j]=xy.split('_').map(Number);if(+l<6)continue;walk.tileReady(+l,i,j);walk.coverageSelected?.(+l,i,j);walk.tileSelected(+l,i,j);}
   const end=Date.now()+120000;while(walk.pending&&Date.now()<end){walk.update();await pause(1);}
   assert.equal(walk.pending,0,'real worker drains all terrain updates');
-  // Bridge pieces read the modern deck (Roads.deckHeight) on the page, and every new deck build re-reads them.
+  // Bridge pieces read the modern deck (Roads.builtDeckHeight, which never builds) on the page, and every new deck build re-reads them.
   {const bridge=new Set(walk.bridgeJobs);for(const owners of walk.topOwners)assert.ok(owners.every(o=>bridge.has(o))||!owners.some(o=>bridge.has(o)),'no slab corner is shared by a bridge piece and a street piece');}
   if(walk.bridgeJobs.length){const deckRefs=()=>walk.bridgeJobs.flatMap(id=>walk.jobs[id].refs.map(r=>walk.caches[2].ground[r]));
-   assert.ok(deckRefs().every(y=>y===32),'bridge pieces stand on Roads.deckHeight, not a bank plane');
-   walk.network.deckHeight=()=>33.5;walk.network.bridgeRevision=7;const until=Date.now()+20000;while((walk.pending||!deckRefs().every(y=>y===33.5))&&Date.now()<until){walk.update();await pause(1);}
-   assert.ok(deckRefs().every(y=>y===33.5),'a deck rebuild re-reads the bridge pieces');walk.network.deckHeight=()=>32;walk.network.bridgeRevision=8;console.log('PASS bridge pieces follow the modern deck',area,walk.bridgeJobs.length);}assert.equal(walk.audit.disabled,false);upAndBudget(walk,low);const sweep=groundSweep(walk,t);assert.equal(sweep.buried,0,'worker slab envelope');assert.ok(sweep.probes>10000);console.log('PASS real worker execution',area,low,sweep.probes,'ground probes');
+   assert.ok(deckRefs().every(y=>y===32),'bridge pieces stand on Roads.builtDeckHeight, not a bank plane');
+   walk.network.builtDeckHeight=()=>33.5;walk.network.bridgeRevision=7;const until=Date.now()+20000;while((walk.pending||!deckRefs().every(y=>y===33.5))&&Date.now()<until){walk.update();await pause(1);}
+   assert.ok(deckRefs().every(y=>y===33.5),'a deck rebuild re-reads the bridge pieces');walk.network.builtDeckHeight=()=>32;walk.network.bridgeRevision=8;console.log('PASS bridge pieces follow the modern deck',area,walk.bridgeJobs.length);}assert.equal(walk.audit.disabled,false);upAndBudget(walk,low);const sweep=groundSweep(walk,t);assert.equal(sweep.buried,0,'worker slab envelope');assert.ok(sweep.probes>10000);console.log('PASS real worker execution',area,low,sweep.probes,'ground probes');
  } finally {walk?.dispose();globalThis.Worker=previous;}
 }
 // This oracle works on submitted triangle positions, not the builder's stored corner heights.
@@ -95,7 +95,7 @@ assert.ok(runtimeGrass(M,false)>100,'grass control produces real roots');assert.
 // Construction never writes the roads' bridge map: the layer keeps its bridge walks until main.ts accepts it. The compiled
 // and uncompiled paths stage the same walks, one for each bridge the plan's pieces stand on.
 for(const area of areas)for(const low of [false,true]){const d=raw[area],staged=[];
- for(const cache of [d.cache,{...d.cache,compiled:undefined}]){const net={roads:d.cache.roads.map(r=>({id:r[0],pts:[[0,0],[1,1]]})),bridgeWalks:new Map(),deckHeight:()=>32};
+ for(const cache of [d.cache,{...d.cache,compiled:undefined}]){const net={roads:d.cache.roads.map(r=>({id:r[0],pts:[[0,0],[1,1]]})),bridgeWalks:new Map(),builtDeckHeight:()=>32,deckHeight:()=>{throw Error('the sidewalk layer must not build a deck: use Roads.builtDeckHeight');}};
   const w=new M.Sidewalks(cache,d.manifest.village,terrain(area),net,low);assert.equal(net.bridgeWalks.size,0,`${area} construction leaves Roads.bridgeWalks alone`);
   assert.deepEqual([...w.bridgeReservations.keys()].sort((x,y)=>x-y),[...new Set(w.plan.pieces.filter(p=>p.a.road.bridge).map(p=>p.a.road.id))].sort((x,y)=>x-y),`${area} one walk per bridge`);
   staged.push([...w.bridgeReservations].sort((x,y)=>x[0]-y[0]));w.dispose();}
@@ -154,7 +154,7 @@ if(process.argv.includes('--review-replays')) {
  const run={...old.WALK_RUNS[0],id:'fixture',road:'Test',side:'north-east',start:[624000,5103000],end:[624050,5103000]},road={id:1,name:'Test',kind:2,halfWidth:3,bridge:false,pts:[run.start,run.end]},obstacle={id:'building-0',polygon:[[624010,5103004.23],[624030,5103004.23],[624030,5103010],[624010,5103010]]};
  const oldNarrow=old.planWalks('mabou',[road],[obstacle],false,[run]);assert.ok(oldNarrow.lengths.fixture<49,'pre-fix building gap loses a usable one-metre path');console.log('REJECTED pre-fix building gap:',oldNarrow.lengths.fixture,'of 50 m retained');
  globalThis.__walkPlans=0;
- const area='mabou',d=raw[area],t=terrain(area,true),net={roads:[],bridgeWalks:new Map(),deckHeight:()=>32};let reads=0;
+ const area='mabou',d=raw[area],t=terrain(area,true),net={roads:[],bridgeWalks:new Map(),builtDeckHeight:()=>32,deckHeight:()=>{throw Error('the sidewalk layer must not build a deck: use Roads.builtDeckHeight');}};let reads=0;
  t.meshHeightAt=(x,z)=>{reads++;return t.height(x,z);};
  const w=new old.Sidewalks(area,d.roads,old.sidewalkObstacles(d.buildings,d.props),d.manifest.village,t,net,false,true);w.update(1000);
  assert.equal(globalThis.__walkPlans,1,'pre-fix constructor really runs the planner');console.log('REJECTED pre-fix startup planner: real planWalks call');

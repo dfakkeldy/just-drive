@@ -404,6 +404,10 @@ export class ModernBridges {
 
   /** No temporary vectors, hits, arrays or keys are created on a cached wheel query. */
   deckHeightAt(x:number,z:number,minimum=false,metadata=false):number|null {return this.query(x,z,minimum,metadata);}
+  /** The deck height from a deck that is already built; never builds or rebuilds a span. For layers that follow the
+   * deck (the sidewalks): Roads builds each deck within DRAW of the camera and bumps bridgeRevision, and they read it
+   * again then. A query that builds would solve a deck inside their frame budget and skip the start-burst hold. */
+  builtDeckHeightAt(x:number,z:number):number|null {return this.query(x,z,false,false,undefined,false,0,false);}
   private contactHeightAt(x:number,z:number,referenceY?:number):number|null {return this.query(x,z,false,true,referenceY,true,0,referenceY!==undefined);}
   private query(x:number,z:number,minimum:boolean,metadata:boolean,referenceY?:number,contact=false,partFilter=0,build=true):number|null {
     if(this.sampling||this.terrain.cartRoads)return null;const list=this.cells.get(key(x,z,CELL));if(!list)return null;

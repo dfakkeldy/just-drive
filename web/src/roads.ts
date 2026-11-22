@@ -175,6 +175,11 @@ export class Roads {
   /** A constructed abutment supplies its own exact contact; omit the old three-metre extrapolation there. */
   trimTimberApproaches(id:number,start:boolean,end:boolean):void{const r=this.bridgeRecords.get(id);if(!r)return;if(start){r.startExtra=0;r.apronStart=true;}if(end){r.endExtra=0;r.apronEnd=true;}r.dirty=true;this.bridgeDirty=true;}
 
+  /** Like deckHeight, but a modern span is never built for the call: null until Roads.update has built it. */
+  builtDeckHeight(x: number, z: number): number | null {
+    return this.modern ? this.modern.builtDeckHeightAt(x, z) : this.deckHeight(x, z);
+  }
+
   /** Height of a bridge deck under a point, or null when the point is not on a bridge. */
   deckHeight(x: number, z: number): number | null {
     if(this.modern)return this.modern.deckHeightAt(x,z);

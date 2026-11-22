@@ -312,10 +312,10 @@ export class Sidewalks {
   private queueActive(id:number,level?:number):void {if(this.activeHeights&&(level===undefined||this.activeHeights.usesLevel(id,level))&&!this.activeFlags[id]){this.activeFlags[id]=1;this.activeTasks.push(id);}}
   private resolveActive():void {
     const id=this.activeTasks[this.activeAt++];this.activeFlags[id]=0;
-    const result=this.activeHeights?.resolve(id,(level,p)=>{this.audit.heightReads++;return this.jobs[id].bridge?this.network.deckHeight(p[0],p[1]):this.terrain.walkHeightAt(level,p[0],p[1]);});
+    const result=this.activeHeights?.resolve(id,(level,p)=>{this.audit.heightReads++;return this.jobs[id].bridge?this.network.builtDeckHeight(p[0],p[1]):this.terrain.walkHeightAt(level,p[0],p[1]);});
     if(result)this.incoming.push({active:true,level:8,data:new Float64Array(result),count:1});
   }
-  private sample(level:number,ref:number):number|null {const p=this.points[ref];this.audit.heightReads++;return this.bridgeRefs[ref]?this.network.deckHeight(p[0],p[1]):this.terrain.walkHeightAt(level,p[0],p[1]);}
+  private sample(level:number,ref:number):number|null {const p=this.points[ref];this.audit.heightReads++;return this.bridgeRefs[ref]?this.network.builtDeckHeight(p[0],p[1]):this.terrain.walkHeightAt(level,p[0],p[1]);}
   private heights(id:number,level:number):void {
     const job=this.jobs[id],cache=this.caches[level-6];
     for(const ref of job.refs){const y=this.sample(level,ref);if(y===null)return;cache.ground[ref]=y;}
@@ -323,7 +323,7 @@ export class Sidewalks {
       const c=this.cornersScratch,y=this.yScratch;for(let i=0;i<4;i++){c[i]=this.points[surface.refs[i]];y[i]=cache.ground[surface.refs[i]]+surface.lifts[i];}
       if(!surface.probes.length)surface.probes=slabProbes(c,this.origin,this.gridStep);
       let lift=0;
-      for(const p of surface.probes) {const h=job.bridge?this.network.deckHeight(p[0],p[1]):this.terrain.walkHeightAt(level,p[0],p[1]);this.audit.heightReads++;if(h===null)return;lift=Math.max(lift,h+.015-planeHeight(p,c,y));}
+      for(const p of surface.probes) {const h=job.bridge?this.network.builtDeckHeight(p[0],p[1]):this.terrain.walkHeightAt(level,p[0],p[1]);this.audit.heightReads++;if(h===null)return;lift=Math.max(lift,h+.015-planeHeight(p,c,y));}
       for(let i=0;i<surface.tops.length;i++){const t=surface.tops[i],value=y[i]+lift;if(!Number.isFinite(cache.top[t])||cache.top[t]<value){cache.top[t]=value;for(const owner of this.topOwners[t])this.mark(owner);}}
     }
     cache.ready[id]=1;this.audit.heightJobs++;this.mark(id);
@@ -344,7 +344,7 @@ export class Sidewalks {
   }
   update():void {
     const start=performance.now();if(!this.checkBudget())return;
-    // Bridge pieces read the modern deck (Roads.deckHeight) on this thread. A deck builds or rebuilds when its banks'
+    // Bridge pieces read the modern deck (Roads.builtDeckHeight, which never builds) on this thread. Roads.update builds or rebuilds a deck when its banks'
     // land arrives, so each new build queues them again at every level and in the active cache (resolve() replaces
     // a piece's old contribution); until their deck exists they stay unready. No slab corner is shared with a street
     // piece (sidewalks-check), so a worker packet never overwrites a deck height.
