@@ -293,6 +293,9 @@ mabou-main	portable	no	no browser; apple-check-host PASS on the Mabou village de
 mabou-main-browser	unproven	no	apple-check-host Edge PASS on the Mabou village delta branch (desktop 17,742 triangles in 9 meshes, LOW 9,084 in 6); counts are deterministic; not yet run on the MacBook or on Linux
 replay-browser	unproven	no	apple-check-host M4 PASS 152 s on f2d2abf9 (with main's Mabou main street), 2026-11-18 UTC; earlier PASS 912 s on 3000a109 and 260 s on 55fc99f4; hardware Metal / Edge 157.0.4341.60; desktop car, phone car (LOW, touch) and bike: drawn ride within 16 mm of the driven path, 0.25x at the mark, ride and mark in frame, every rig node, lamp and the camera restored, MP4 clips with the caption; not yet run on the MacBook or on Linux
 pt-infrastructure-browser	unproven	no	Apple M6 Mac PASS 15 Nov (pre-merge, six batches); apple-check-host M4 Edge 157 PASS 852 s on 97133dd1, 18 Nov 2026 (three batches on desktop, none on phone LOW or in Judique); Linux unmeasured
+pt-industry	portable	no	Node check over baked Point Tupper land, roads and merged #112 power lines; no browser
+pt-industry-mutations	portable	no	Node mutation controls over baked Point Tupper land; no browser
+pt-industry-browser	unproven	no	Point Tupper industrial site desktop and phone, day and night, paired on/off render deltas; not yet measured on another host
 wharves	portable	no	real baked meshes; no browser
 wharves-mutations	portable	no	real baked meshes and broken planner variants; no browser
 wharves-browser	apple	no	apple-check-host (Apple M4, Edge 157) PASS 348 s on 73cba0a4 and 522 s on c5af1ffa (receipts in tools/evidence/wharves): real GPU pictures and matched main costs, one browser slot
