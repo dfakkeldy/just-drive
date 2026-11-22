@@ -54,7 +54,7 @@ animals	portable	no	Linux GTX 980M PASS 234 s on df9507d; no same-commit Mac run
 terrain-browser	portable	no	Linux GTX 980M PASS 551 s on 7ef33bb; no same-commit Mac run
 mine-shots	portable	no	Linux GTX 980M PASS 144 s on 7ef33bb; no same-commit Mac run
 church-interior-shots	portable	no	apple-check-host M4 PASS 53.64 s on its first branch, 2026-11-17 UTC; not yet measured on Linux
-plant	portable	yes	Node rules, scene budget and Shift integration, no land data needed
+plant	portable	no	Node rules, scene budget and Shift integration, no land data needed; no measured run recorded yet
 plant-shots	unproven	no	Harbour Ridge steel plant browser views (desktop, win/loss Shift return, phone portrait and landscape)
 shift-shots	portable	no	Linux GTX 980M PASS 84 s on 7ef33bb; no same-commit Mac run
 era-browser	portable	no	Linux GTX 980M PASS 1208 s on 7ef33bb; no same-commit Mac run
