@@ -108,6 +108,7 @@ export class Vehicle {
   #hasSafe = false;
   #waterStopped = false;
   #awaitingLoad = true;
+  #recovering = false;
   /** m/s while Strong touch help holds the throttle near its cap; zero otherwise. */
   get activeTouchSpeedLimit(): number { return this.#heldTouchSpeedLimit; }
   helpYaw = 0; // additional Strong yaw, radians/second, for fixed-step checks
@@ -127,14 +128,19 @@ export class Vehicle {
   place(x: number, z: number, heading: number): boolean {
     if (!safePlacement(x, z, heading, this.bounds)) return false;
     // Live driving calls place() at the current spot when tiles disappear under the ride; recover instead of freezing off-map.
-    if (this instanceof Vehicle && this.terrain?.surfaceAt && !this.terrain.surfaceAt(x, z) && !this.#awaitingLoad && (this.#hasSafe || this.lastGood || this.trail.length > 0) && Math.hypot(x - this.x, z - this.z) <= 1) {
-      if (this.bounds) {
-        this.clampBounds();
-        const clampedG = this.groundAt(this.x, this.z);
-        if (clampedG !== null && this.isDryPose(this.x, this.z, clampedG)) return this.place(this.x, this.z, this.heading);
+    if (this instanceof Vehicle && !this.#recovering && this.terrain?.surfaceAt && !this.terrain.surfaceAt(x, z) && !this.#awaitingLoad && (this.#hasSafe || this.lastGood || this.trail.length > 0) && Math.hypot(x - this.x, z - this.z) <= 1) {
+      this.#recovering = true;
+      try {
+        if (this.bounds) {
+          this.clampBounds();
+          const clampedG = this.groundAt(this.x, this.z);
+          if (this.terrain.surfaceAt(this.x, this.z) && clampedG !== null && this.isDryPose(this.x, this.z, clampedG)) return this.place(this.x, this.z, this.heading);
+        }
+        this.respawn();
+        return this.terrain.surfaceAt(this.x, this.z) !== null;
+      } finally {
+        this.#recovering = false;
       }
-      this.respawn();
-      return this.terrain.surfaceAt(this.x, this.z) !== null;
     }
     const pose = this.placementPose; pose.x = x; pose.z = z; pose.heading = heading;
     if (this.placementGuard && !this.placementGuard(pose)) return false;
@@ -228,6 +234,7 @@ export class Vehicle {
 
   private tryDryPlace(x: number, z: number, heading: number): boolean {
     if (!safePlacement(x, z, heading, this.bounds)) return false;
+    if (!this.terrain.surfaceAt(x, z)) return false;
     const g = this.groundAt(x, z);
     if (!this.isDryPose(x, z, g)) return false;
     return this.place(x, z, heading);

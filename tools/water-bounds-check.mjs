@@ -277,6 +277,46 @@ for (const rideKind of RIDES) {
   }
   assert.ok(leftLoaded && recoveredLive, `${rideKind} recovers instead of sticking when live loop calls place() on missing tile`);
 
+  // 4b-bridge. Bounded horse on a cached bridge deck (and bounded bike with missing surface) never recurses in place().
+  if (rideKind === 'horse') {
+    let tilesLost = false;
+    const bridgeTerrain = makeTerrain((x, z) => (tilesLost
+      ? null
+      : { ground: 6, canopy: 0, roadDist: Math.abs(z), halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+    const deckRoads = { ...roads, deckHeight: (x, z) => (x >= 40 && x <= 70 && Math.abs(z) <= 5 ? 8 : null) };
+    const hDeck = makeRide('horse', bridgeTerrain, deckRoads);
+    hDeck.bounds = [-100, -100, 100, 100];
+    assert.equal(hDeck.place(55, 0, Math.PI / 2), true, 'bounded horse places on loaded bridge deck');
+    tilesLost = true;
+    assert.equal(hDeck.place(hDeck.x, hDeck.z, hDeck.heading), false, 'bounded horse on cached bridge deck with all tiles lost returns false without stack overflow');
+
+    // Partial tile loss: bridge tile disappears while nearby dry road remains loaded -> recovers cleanly to loaded road.
+    let bridgeLost = false;
+    const partialTerrain = makeTerrain((x, z) => (bridgeLost && x >= 40
+      ? null
+      : { ground: 6, canopy: 0, roadDist: Math.abs(z), halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+    const hPartial = makeRide('horse', partialTerrain, deckRoads);
+    hPartial.bounds = [-100, -100, 100, 100];
+    assert.equal(hPartial.place(20, 0, Math.PI / 2), true);
+    for (let step = 0; step < 180; step++) hPartial.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+    assert.equal(hPartial.place(55, 0, Math.PI / 2), true);
+    bridgeLost = true;
+    assert.equal(hPartial.place(hPartial.x, hPartial.z, hPartial.heading), true, 'bounded horse on vanished bridge tile recovers to loaded road');
+    assert.ok(partialTerrain.surfaceAt(hPartial.x, hPartial.z) !== null && hPartial.x < 40, `recovered horse lands on loaded road: x=${hPartial.x}`);
+  } else if (rideKind === 'bike') {
+    let surfaceLost = false;
+    const synthTerrain = {
+      ...makeTerrain(() => ({ ground: 6, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false })),
+      heightAt: () => 6,
+      surfaceAt: () => (surfaceLost ? null : { ground: 6, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }),
+    };
+    const bLost = makeRide('bike', synthTerrain, roads);
+    bLost.bounds = [-100, -100, 100, 100];
+    assert.equal(bLost.place(55, 0, Math.PI / 2), true);
+    surfaceLost = true;
+    assert.equal(bLost.place(bLost.x, bLost.z, bLost.heading), false, 'bounded bike with lost surface returns false without stack overflow');
+  }
+
   // 4c. Narrow missing strip into a 20 m rising bank: every ride (including horse) crosses onto the 20 m bank and stays above ground.
   const narrowTerrain = makeTerrain((x, z) => {
     if (x > 55 && x < 56) return null;

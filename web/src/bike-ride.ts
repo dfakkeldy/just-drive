@@ -63,7 +63,7 @@ export class BikeRide implements Ride {
   private roadTrail: VehiclePlacement[] = [];
   private launchX = 0; private launchZ = 0; private airPitch = 0;
   private crashHeading = 0; private stand = 0;
-  #waterStopped = false; #awaitingLoad = true;
+  #waterStopped = false; #awaitingLoad = true; #recovering = false;
 
   constructor(readonly car: Bike, private terrain: Pick<Terrain, 'heightAt' | 'surfaceAt' | 'withContactHeight'> & { readonly cartRoads?: boolean; coverAt?: (x: number, z: number) => number }, readonly roads: Pick<Roads, 'nearest' | 'deckHeight'> & Partial<Pick<Roads, 'guardrails'>>, private seaLevel: number, readonly spec: VehicleSpec = BIKE_SPEC) {}
 
@@ -95,11 +95,16 @@ export class BikeRide implements Ride {
   }
   place(x: number, z: number, heading: number): boolean {
     if (!safePlacement(x, z, heading, this.bounds)) return false;
-    if (this instanceof BikeRide && this.terrain?.surfaceAt && !this.terrain.surfaceAt(x, z) && !this.#awaitingLoad && (this.lastSafe || this.roadTrail.length > 0) && Math.hypot(x - this.x, z - this.z) <= 1) {
-      this.wall();
-      if (this.terrain.surfaceAt(this.x, this.z) && this.isDryPose(this.x, this.z)) return this.place(this.x, this.z, this.heading);
-      this.respawn();
-      return this.terrain.surfaceAt(this.x, this.z) !== null;
+    if (this instanceof BikeRide && !this.#recovering && this.terrain?.surfaceAt && !this.terrain.surfaceAt(x, z) && !this.#awaitingLoad && (this.lastSafe || this.roadTrail.length > 0) && Math.hypot(x - this.x, z - this.z) <= 1) {
+      this.#recovering = true;
+      try {
+        this.wall();
+        if (this.terrain.surfaceAt(this.x, this.z) && this.isDryPose(this.x, this.z)) return this.place(this.x, this.z, this.heading);
+        this.respawn();
+        return this.terrain.surfaceAt(this.x, this.z) !== null;
+      } finally {
+        this.#recovering = false;
+      }
     }
     const pose = { x, z, heading };
     if (this.placementGuard && !this.placementGuard(pose)) return false;
@@ -140,6 +145,7 @@ export class BikeRide implements Ride {
     const mx = b ? safeClampMargin(b[0], b[2], 2) : 0, mz = b ? safeClampMargin(b[1], b[3], 2) : 0;
     const usable = (p: VehiclePlacement | null | undefined): p is VehiclePlacement => !!p
       && (!b || (p.x > b[0] + mx && p.x < b[2] - mx && p.z > b[1] + mz && p.z < b[3] - mz))
+      && !!this.terrain.surfaceAt(p.x, p.z)
       && this.isDryPose(p.x, p.z);
     while (this.roadTrail.length > 0) {
       const crumb = this.roadTrail[this.roadTrail.length - 1];
