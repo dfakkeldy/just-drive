@@ -315,12 +315,15 @@ export function buildChurchParts(ground: (x: number, z: number) => number = () =
   // and a weathered metal figure of Christ on the front (+Z) face, turned toward the church and approaching lane.
   const ws = CHURCH_GROUNDS.wayside;
   {
-    const g = ground(ws.x, ws.z), low = lowest(ws.x - 0.55, ws.x + 0.55, ws.z - 0.55, ws.z + 0.55);
+    // The surrounding square includes the corners of the rotated skirt.
+    const half = 0.68;
+    const g = ground(ws.x, ws.z), low = lowest(ws.x - half, ws.x + half, ws.z - half, ws.z + half);
     const cross = new THREE.Group(); cross.position.set(ws.x, g, ws.z); cross.rotation.y = ws.ry; group.add(cross);
     // Grounded skirt under the tapered red plinth so it sits cleanly on the hillside.
     const plinthGroup = new THREE.Group(); plinthGroup.name = 'waysidePlinth'; cross.add(plinthGroup);
     const skirtH = Math.max(0.15, g - low);
-    box(0.96, skirtH, 0.96, mat.plinth, 0, -skirtH / 2, 0, { parent: plinthGroup });
+    const skirt = box(0.96, skirtH, 0.96, mat.plinth, 0, -skirtH / 2, 0, { parent: plinthGroup });
+    skirt.name = 'waysideSkirt';
     const plinth = add(new THREE.CylinderGeometry(0.52, 0.68, 0.48, 4), mat.plinth, 0, 0.24, 0, { parent: plinthGroup, ry: Math.PI / 4 });
     plinth.scale.set(1, 1, 1);
     // Steel baseplate and four tapered steel gusset fins clamping the post.
@@ -396,12 +399,14 @@ export function buildChurchParts(ground: (x: number, z: number) => number = () =
   for (const [x, z, h, w, d, ry] of CHURCH_GROUNDS.rocks) {
     if (w > 1.5) {
       const boulderGroup = new THREE.Group(); boulderGroup.name = 'largeBoulder'; group.add(boulderGroup);
-      const g = ground(x, z), low = lowest(x - w / 2, x + w / 2, z - d / 2, z + d / 2);
+      const half = Math.max(w, d) / 2;
+      const g = ground(x, z), low = lowest(x - half, x + half, z - half, z + half);
       const b = add(boulderGeo, mat.boulder, x, g, z, { ry, parent: boulderGroup });
       b.scale.set(w, h, d);
       // Solid lower base so the boulder never floats on sloping grass.
       const baseH = Math.max(0.25, g + h * 0.2 - low);
       const skirt = add(new THREE.CylinderGeometry(0.42, 0.46, baseH, 8), mat.boulder, x, low + baseH / 2, z, { ry, parent: boulderGroup });
+      skirt.name = 'boulderSkirt';
       skirt.scale.set(w * 0.92, 1, d * 0.92);
     } else {
       const r = add(rockGeo, mat.rock, x, ground(x, z) + 0.2 * h, z, { ry });

@@ -1014,7 +1014,8 @@ export class ChurchRoomArt {
     this.box('plain', PAINT.white, w, g1, c - a.width / 2 + gr2.inset, w + gr2.depth, g2, c + a.width / 2 - gr2.inset);
 
     // The Gothic tabernacle in the centre: pointed-arch doorway, doorknob, scalloped top crest, gold corner pinnacles and side finials.
-    const tb = a.tabernacle, tx0 = w + .24, tx1 = tx0 + tb.depth, ty0 = at, ty1 = ty0 + tb.height;
+    // Set the face just past the lower gradine to keep the two painted surfaces from overlapping.
+    const tb = a.tabernacle, tx1 = w + gr1.depth + .01, tx0 = tx1 - tb.depth, ty0 = at, ty1 = ty0 + tb.height;
     this.box('plain', PAINT.white, tx0, ty0, c - tb.width / 2, tx1, ty1, c + tb.width / 2);
     // Pointed Gothic arch door on the tabernacle front with small dark keyhole/knob
     this.box('plain', PAINT.white, tx1, ty0 + .02, c - .13, tx1 + .012, ty0 + .30, c + .13, 'y', .92);
@@ -1144,9 +1145,9 @@ export class ChurchRoomArt {
       }
     }
     // Pale-blue door casing around both doors on the -z face
-    this.box('plain', PAINT.post, cx0, fl, cz0 - .032, dStart, cTop - .10, cz0);
-    this.box('plain', PAINT.post, midX - mullion / 2, fl, cz0 - .032, midX + mullion / 2, cTop - .10, cz0);
-    this.box('plain', PAINT.post, midX + mullion / 2 + dW, fl, cz0 - .032, cx1, cTop - .10, cz0);
+    this.box('plain', PAINT.post, cx0, fl, cz0 - .032, dStart, fl + dH, cz0);
+    this.box('plain', PAINT.post, midX - mullion / 2, fl, cz0 - .032, midX + mullion / 2, fl + dH, cz0);
+    this.box('plain', PAINT.post, midX + mullion / 2 + dW, fl, cz0 - .032, cx1, fl + dH, cz0);
     this.box('plain', PAINT.post, cx0, fl + dH, cz0 - .032, cx1, cTop - .10, cz0);
     // Solid pew-facing (+x) wall fixtures: metal donation box, small plain plaque, and two small framed notices (no text)
     const fz = (cz0 + cz1) / 2;
@@ -1203,7 +1204,7 @@ export class ChurchRoomArt {
       // Upper scrolled support bracket
       this.box('plain', PAINT.white, lx - .09, fl + lh - .24, lz - .15, lx + .09, fl + lh - .10, lz + .15);
       // Slanted white book-rest top with front frieze showing five gold crosses
-      this.turned([lx, fl + lh - .04, lz], 'z', -.22, () => {
+      this.turned([lx, fl + lh - .04, lz], 'z', .22, () => {
         this.box('plain', PAINT.white, lx - .18, fl + lh - .08, lz - .27, lx + .18, fl + lh, lz + .27);
         this.box('plain', PAINT.white, lx - .21, fl + lh, lz - .30, lx + .21, fl + lh + .025, lz + .30);
         this.sheet('lectern', [lx + .184, fl + lh - .08, lz + .27], [0, 0, -.54], [0, .08, 0], true, [.01, .52, .99, .98]);
@@ -1253,12 +1254,17 @@ export class ChurchRoomArt {
     // 5. Small red and dark-metal folding chair beside the cushioned bench (dx=2.16, z=-3.60)
     {
       const kx = w + 2.16, kz = N.z0 + .25;
-      for (const dx of [-.18, .18]) {
-        this.turned([kx + dx, fl + .40, kz], 'x', .22, () => this.box('plain', PAINT.dark, kx + dx - .015, fl, kz - .015, kx + dx + .015, fl + .82, kz + .015));
-        this.turned([kx + dx, fl + .40, kz], 'x', -.35, () => this.box('plain', PAINT.dark, kx + dx - .015, fl, kz - .015, kx + dx + .015, fl + .48, kz + .015));
-      }
+      const pivot: V3 = [kx, fl + .40, kz];
+      const leg = (dx: number, height: number) =>
+        this.box('plain', PAINT.dark, kx + dx - .015, fl - .03, kz - .015, kx + dx + .015, fl + height, kz + .015);
+      this.turned(pivot, 'x', -.22, () => {
+        for (const dx of [-.18, .18]) leg(dx, .82);
+        this.box('plain', PAINT.red, kx - .18, fl + .66, kz - .026, kx + .18, fl + .80, kz - .006);
+      });
+      this.turned(pivot, 'x', .35, () => {
+        for (const dx of [-.18, .18]) leg(dx, .48);
+      });
       this.box('plain', PAINT.red, kx - .18, fl + .42, kz - .17, kx + .18, fl + .45, kz + .17);
-      this.box('plain', PAINT.red, kx - .18, fl + .66, kz - .14, kx + .18, fl + .80, kz - .10);
     }
   }
 

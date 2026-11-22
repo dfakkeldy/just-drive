@@ -111,11 +111,11 @@ export const CHURCH_ROOM = {
      * Measured from the inside scan and video: 1.90 m along the +z wall from the altar wall, 1.23 m deep from the +z wall,
      * 2.28 m high above the chancel step (2.43 m above the floor), topped by a white cross. Two white four-panel doors face -z
      * (toward the altar and vestry doorway), both hinged at the centre mullion and opening outward. */
-    confessional: { length: 1.90, depth: 1.23, height: 2.28, doors: 2, doorWidth: 0.76, doorHeight: 2.02, crossHeight: 0.36 },
+    confessional: { length: 1.90, depth: 1.23, height: 2.28, doorWidth: 0.76, doorHeight: 2.02, crossHeight: 0.36 },
     /** Eleven hanging Stations of the Cross at their scan-measured places (side wall dx from inner altar wall; west wall z offset). */
     stations: {
       width: 0.52, height: 0.42, bottom: 1.98,
-      sidePos: [[4.02, 0], [6.55, 1], [7.50, 2], [9.55, 3]] as readonly (readonly [number, number])[],
+      sidePos: [[4.02, 0], [6.55, 1], [7.50, 2], [9.51, 3]] as readonly (readonly [number, number])[],
       west: [[1.08, 4], [-2.25, 5]] as readonly (readonly [number, number])[],
       sideNeg: [[10.60, 6], [9.50, 7], [7.45, 8], [6.50, 9], [3.92, 10]] as readonly (readonly [number, number])[],
     },

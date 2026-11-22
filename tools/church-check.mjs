@@ -200,6 +200,26 @@ const afterBuild=reads;for(let i=0;i<100;i++)church.update(near,3000+i*16);asser
  near(top((n.x0+n.x1)/2,(n.zs-n.zn)/2),n.ridge+.19,.01,'ridge cap');
  console.log('PASS church parts: ramp falls from the tower door; landing, monument, wayside cross, cupola cross, tower cap and ridge at their measured heights');
 }
+// A steep z slope crosses the rotated skirts' long ends. Check the built bottom ring against the land under each vertex.
+for (const rise of [-2,2]) {
+ const ground=(_x,z)=>-100+rise*z;
+ const parts=buildChurchParts(ground);parts.updateMatrixWorld(true);
+ for(const name of ['waysideSkirt','boulderSkirt']){
+  const mesh=parts.getObjectByName(name);
+  assert.ok(mesh,`${name} exists`);
+  const pos=mesh.geometry.attributes.position,v=new THREE.Vector3();
+  mesh.geometry.computeBoundingBox();
+  const bottom=mesh.geometry.boundingBox.min.y;
+  let contacts=0;
+  for(let i=0;i<pos.count;i++){
+   if(Math.abs(pos.getY(i)-bottom)>1e-5)continue;
+   v.fromBufferAttribute(pos,i).applyMatrix4(mesh.matrixWorld);
+   assert.ok(v.y<ground(v.x,v.z)-.10,`${name} reaches below the slope at x=${v.x.toFixed(3)}, z=${v.z.toFixed(3)}`);
+   contacts++;
+  }
+  assert.ok(contacts>=4,`${name} has a ground ring`);
+ }
+}
 // Build through Church.update on sloping terrain, so the local/world and exaggeration conversion is exercised.
 for(const exag of [1,1.5,3]){
  const heightAt=(x,z)=>{const p=site.local(x,z);return 206.4*exag+(-.1*p.x+.025*p.z)*exag;};

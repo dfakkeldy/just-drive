@@ -36,7 +36,6 @@ for (const w of R.shell.windows) {
 const frontPosWindow = R.shell.windows.filter(w => w.side > 0).sort((a, b) => a.x - b.x)[0];
 assert.ok(N.x0 + F.confessional.length < frontPosWindow.x - frontPosWindow.width / 2, 'confessional clears the front +z window');
 assert.ok(N.z1 - F.confessional.depth > F.vestryDoor.z + F.vestryDoor.width / 2 + .1, 'confessional clears the vestry door trim');
-assert.equal(F.confessional.doors, 2, 'confessional has two doors');
 // Porch ceiling clears the round-headed porch window arch.
 const pw = R.shell.porch.window;
 assert.ok(R.shell.porch.ceiling > pw.spring + pw.width / 2, 'porch ceiling clears the porch window arch');
@@ -70,6 +69,9 @@ const stair = churchStair(R);
 close(stair.riser * F.stair.steps, F.stair.landing, 'lower flight reaches the landing'); close(F.stair.landing + stair.upperRiser * F.stair.upper, F.gallery.floor, 'upper flight reaches the gallery');
 assert.ok(stair.riser < .21 && stair.upperRiser < .21 && stair.tread > .2 && F.stair.tread >= .17, 'the stair is steep but walkable');
 assert.ok(stair.top > N.x1 - F.gallery.rear + .5, 'the stair arrives on the back gallery');
+for (const [dx] of F.stations.sidePos) {
+  assert.ok(N.x0 + dx + F.stations.width / 2 < stair.top, 'left-wall Stations clear the upper stair');
+}
 console.log(`PASS: room ${(N.x1 - N.x0).toFixed(2)} x ${(N.z1 - N.z0).toFixed(2)} m, ceiling ${F.ceiling.wall}-${top} m, gallery ${F.gallery.floor} m, ${F.pews.rows} rows, stair ${F.stair.steps}+${F.stair.upper} risers; walls from church-site.ts less the measured thickness.`);
 
 // 2. The door: at the foot of the tower steps, and a car parked on the gravel can reach it.
@@ -108,7 +110,8 @@ const walkTo = (visit, id) => { for (let i = 0; i < 60 * 300 && visit.stop.id !=
   visit.update(600, rest); assert.equal(visit.distance, 0, 'standing still for ten minutes changes nothing'); assert.equal(visit.result, null);
   for (let i = 0; i < 60 * 60; i++) visit.update(step, hold);
   assert.equal(visit.stop.id, 'altar', 'holding forward stops at the altar and goes no further'); close(visit.distance, rail.stops[1].at, 'held at the altar');
-  assert.match(visit.message, /three pointed arches outlined in gold/); assert.equal(visit.speed, 0);
+  assert.match(visit.message, /Seven gold-outlined arches line the white altar\. The table in front has three\./);
+  assert.equal(visit.speed, 0);
   visit.update(step, rest); visit.update(.5, hold); assert.ok(visit.distance > rail.stops[1].at, 'letting go and pressing again walks on');
   const there = visit.distance; visit.update(2, { walk: -1, look: 0 }); assert.ok(visit.distance < there, 'the visitor can step back');
   for (let i = 0; i < 60 * 200; i++) visit.update(step, { walk: -1, look: 0 });
@@ -202,6 +205,20 @@ room.scene.traverse(o => { if (o.isMesh) o.material.side = THREE.FrontSide; });
 for (const y of [.5, 1.2, 1.9]) for (const dz of [-.35, 0, .35]) {
   const through = hit([N.x0 + 1, y, F.vestryDoor.z + dz], [-1, 0, 0]);
   assert.ok(through.point.x < V.x1 - .5, `the vestry doorway is open at height ${y}, ${dz} from its middle (met something at x ${through.point.x.toFixed(2)})`);
+}
+// Check the built confessional against the survey. The -z face has two doors with outer knobs and inner hinges.
+{
+  const fl = F.chancel.rise, x1 = N.x0 + 1.90, front = N.z1 - 1.23, midX = N.x0 + .95;
+  const face = (dx, y) => hit([midX + dx, fl + y, front - .12], [0, 0, 1]).point.z;
+  for (const side of [-1, 1]) {
+    close(face(side * .435, .56), front - .022, 'door leaf faces -z', .003);
+    close(face(side * .745, .91), front - .059, 'door knob sits on the outer edge', .003);
+    close(face(side * .065, 1.05), front - .030, 'door hinge sits beside the centre mullion', .003);
+  }
+  for (const dz of [.16, .60, 1.14]) {
+    close(hit([x1 + .12, fl + .55, front + dz], [-1, 0, 0]).point.x, x1, 'pew-facing wall is solid', .003);
+  }
+  close(hit([midX, fl + 2.40, front + .60], [0, -1, 0]).point.y, fl + 2.28, 'confessional roof height', .003);
 }
 // Front arched table exists and every vertex emitted for it (base plinth at floor level through top corners) stays inside [platform.depth, chancel.depth].
 {
