@@ -25,7 +25,8 @@ try{
    for(let i=0;i<cases.length;i++)for(const [label,origin] of [['main',mainOrigin],['branch',branchOrigin]]){
     // Main needs the same representative view per area. Additional branch views supply the full gallery.
     if((label==='main'||costsOnly)&&i>0)continue;
-    const s=cases[i],[e,n]=s.centroid,query=new URLSearchParams({area,mode:'explore',cam:`${e+80},${n-100},75,320,-30,60`,at:`${e},${n},0`,hud:'0',radio:'0',title:'0',res:'1',q:phone?'low':'high',touch:phone?'1':'0',exag:'1.5',hour:'12'});
+    // Disable grass: the manual settle loop below does not step grass, so fast cover readback must not race main vs branch on Mabou's inland control view.
+    const s=cases[i],[e,n]=s.centroid,query=new URLSearchParams({area,mode:'explore',cam:`${e+80},${n-100},75,320,-30,60`,at:`${e},${n},0`,hud:'0',radio:'0',title:'0',res:'1',grass:'0',q:phone?'low':'high',touch:phone?'1':'0',exag:'1.5',hour:'12'});
     const page=await open(origin+'/?'+query);
     try{
      await page.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:phone});
