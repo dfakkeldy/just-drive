@@ -1,40 +1,55 @@
 // Bundle with web/node_modules/.bin/esbuild, then run with Node (tools/check-church-interior.sh). No browser, no map fetches.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { ChurchSite, CHURCH_GEOM, CHURCH_FEATURES, CHURCH_SCALE } from '../web/src/church-site.ts';
-import { CHURCH_ROOM, CHURCH_WALL, CHURCH_DOOR_RADIUS, ceilingAt, churchDoorPosition, churchRail, railPoint } from '../web/src/church-room.ts';
+import { CHURCH_ROOM, CHURCH_WALLS, CHURCH_DOOR_RADIUS, ceilingAt, churchDoorPosition, churchRail, churchStair, eyeAt, railPoint } from '../web/src/church-room.ts';
 import { ChurchVisit, WALK_PACE } from '../web/src/church-room-rules.ts';
 import { Interiors } from '../web/src/interiors.ts';
 
 const close = (a, b, what, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${what}: ${a} is not ${b}`);
 const S = CHURCH_SCALE, { nave: n, tower: t, vestry: v } = CHURCH_GEOM, R = CHURCH_ROOM, N = R.shell.nave, V = R.shell.vestry, F = R.fit;
 
-// 1. Inside and outside agree: every shell number is the exterior's number, scaled, less the wall.
-assert.match(readFileSync('src/church.ts', 'utf8'), /const T = 0\.25;/, 'church.ts wall thickness');
-assert.equal(CHURCH_WALL, 0.25, 'the room uses the exterior wall thickness');
+// 1. Inside and outside agree: the shell is the exterior less the measured walls, and the room holds the measured sizes.
 const entry = CHURCH_FEATURES.openings.find(o => o.kind === 'door');
-close(N.x1 - N.x0, (n.x1 - n.x0 - 2 * CHURCH_WALL) * S, 'nave length');
-close(N.z1 - N.z0, (n.zn + n.zs - 2 * CHURCH_WALL) * S, 'nave width');
-close(N.eave, (n.eave - entry.y0) * S, 'eave height above the floor');
-close(N.ridge, (n.ridge - entry.y0) * S, 'ridge height above the floor');
-close(V.x1 - V.x0, (n.x0 - v.x0 - CHURCH_WALL) * S, 'vestry length');
-close(V.z1 - V.z0, (v.z1 - v.z0 - 2 * CHURCH_WALL) * S, 'vestry width');
-close(V.ceiling, (v.eave - entry.y0) * S, 'vestry ceiling');
+for (const [what, t] of Object.entries(CHURCH_WALLS)) assert.ok(t >= 0.05 && t <= 0.25, `${what} wall thickness ${t}`);
+close(N.x1 - N.x0, (n.x1 - n.x0 - 2 * CHURCH_WALLS.end) * S, 'nave length');
+close(N.z1 - N.z0, (n.zn + n.zs - 2 * CHURCH_WALLS.side) * S, 'nave width');
+// The inside scan: 11.7 x 7.7 m inside the walls, a 5.5 m flat ceiling, a 2.85 m gallery floor, a 2.1 m vestry ceiling.
+close(N.x1 - N.x0, 11.7, 'measured nave length', .05); close(N.z1 - N.z0, 7.7, 'measured nave width', .05);
+close(F.ceiling.flat, 5.5, 'measured ceiling'); close(F.gallery.floor, 2.85, 'measured gallery floor'); close(F.gallery.under, 2.55, 'measured gallery underside');
+close(V.ceiling, 2.1, 'measured vestry ceiling'); close(V.x1 - V.x0, 3.5, 'measured vestry length', .01); close(V.z1 - V.z0, 3.4, 'measured vestry width', .01);
+assert.ok(V.x0 > (v.x0 + .1) * S && V.z0 > v.z0 * S && V.z1 < v.z1 * S, 'the vestry room lies inside the vestry walls outside');
+// The floor is the tower door's sill, the top of the front steps: walking in there is no step and no gap.
+close(entry.y0, CHURCH_FEATURES.steps.rise, 'the door sill is the top of the front steps');
+close(R.shell.porch.door.height, (entry.y1 - entry.y0) * S, 'door height above the floor');
+// The ceiling stays under the roof outside, also at the flat panel's edge, where the roof comes closest.
+const roofAt = z => (n.eave - entry.y0 + (n.ridge - n.eave) * (1 - Math.abs(z) / n.zs)) * S;
+assert.ok(F.ceiling.wall < roofAt(N.z1) && F.ceiling.flat < roofAt(N.ridgeZ + F.ceiling.flatHalf) - .1, 'the ceiling stays under the roof outside');
+assert.ok(V.ceiling < (v.eave - entry.y0) * S && V.head + .07 < V.ceiling && V.doorHead < V.ceiling, 'the vestry ceiling stays under its eave and over its window and door');
 assert.equal(R.shell.windows.length, 6, 'three round-headed windows on each side');
 for (const w of R.shell.windows) {
   const o = CHURCH_FEATURES.openings.find(o => o.kind === 'arch' && o.face === (w.side > 0 ? 'nave_s' : 'nave_n') && Math.abs(o.u * S - w.x) < 1e-9);
   assert.ok(o, 'each inside window is an outside window'); close(w.width, o.w * S, 'window width'); close(w.sill, (o.y0 - entry.y0) * S, 'window sill');
+  assert.ok(w.x > N.x0 + w.width / 2 && w.x < N.x1 - w.width / 2, 'each window lies inside the room');
 }
-assert.ok(N.x1 - N.x0 > 10.5 && N.x1 - N.x0 < 12.5 && N.z1 - N.z0 > 6.8 && N.z1 - N.z0 < 8.3, 'the nave is metres, as scanned (11.4 x 7.5 m)');
+assert.equal(R.shell.gable.length, 2, 'two small windows in the door wall');
+for (const w of R.shell.gable) assert.ok(w.sill > F.gallery.floor + F.gallery.front && w.top <= F.ceiling.flat && Math.abs(w.z) + w.width / 2 < F.ceiling.flatHalf, 'gable windows over the back gallery');
+for (const x of [V.door, V.window, V.windowN]) assert.ok(x - .47 > V.x0 && x + .47 < V.x1, 'vestry openings lie on the vestry walls');
 // The vestry lies on +z, which is the left when you walk toward the altar (-x): the same side as its door in the room.
 assert.ok(F.vestryDoor.z - F.vestryDoor.width / 2 > V.z0 && F.vestryDoor.z + F.vestryDoor.width / 2 < V.z1 && F.vestryDoor.z > N.ridgeZ, 'vestry door opens into the vestry, left of the altar');
-// The ceiling: a flat panel under the ridge, sloped sides down to the eaves, never above the roof.
+assert.ok(F.vestryDoor.z - F.vestryDoor.width / 2 - .1 > N.ridgeZ + F.platform.width / 2, 'the vestry door is beside the altar platform');
+// The ceiling: a flat panel in the middle, sloped sides down to the walls.
 const top = ceilingAt(R, N.ridgeZ);
-close(ceilingAt(R, N.ridgeZ + F.ceiling.flatHalf), top, 'flat panel edge'); close(ceilingAt(R, N.z0), N.eave - F.ceiling.drop, 'ceiling meets the eave');
-close(ceilingAt(R, N.z1), N.eave - F.ceiling.drop, 'ceiling meets the other eave'); assert.ok(top < N.ridge && top > N.eave + 1, 'flat panel lies between eave and ridge');
-assert.ok(F.gallery.floor + F.gallery.front < N.eave, 'gallery rail is below the eave');
-console.log(`PASS: room ${(N.x1 - N.x0).toFixed(2)} x ${(N.z1 - N.z0).toFixed(2)} m, eave ${N.eave.toFixed(2)} m, ridge ${N.ridge.toFixed(2)} m, flat ceiling ${top.toFixed(2)} m; all from church-site.ts.`);
+close(top, F.ceiling.flat, 'flat panel'); close(ceilingAt(R, N.ridgeZ + F.ceiling.flatHalf), top, 'flat panel edge');
+close(ceilingAt(R, N.z0), F.ceiling.wall, 'ceiling meets the wall'); close(ceilingAt(R, N.z1), F.ceiling.wall, 'ceiling meets the other wall');
+assert.ok(F.gallery.floor + F.gallery.front < F.ceiling.wall, 'gallery rail is below where the ceiling meets the walls');
+// Two blocks of twelve rows; the stair takes one row on its side.
+assert.equal(F.pews.rows, 12, 'twelve rows of pews'); assert.ok(N.x1 - F.pews.rear - (F.pews.rows - 1) * F.pews.pitch - F.pews.depth > N.x0 + F.chancel.depth + .3, 'the front pew stands clear of the chancel step');
+const stair = churchStair(R);
+close(stair.riser * F.stair.steps, F.stair.landing, 'lower flight reaches the landing'); close(F.stair.landing + stair.upperRiser * F.stair.upper, F.gallery.floor, 'upper flight reaches the gallery');
+assert.ok(stair.riser < .21 && stair.upperRiser < .21 && stair.tread > .2 && F.stair.tread >= .17, 'the stair is steep but walkable');
+assert.ok(stair.top > N.x1 - F.gallery.rear + .5, 'the stair arrives on the back gallery');
+console.log(`PASS: room ${(N.x1 - N.x0).toFixed(2)} x ${(N.z1 - N.z0).toFixed(2)} m, ceiling ${F.ceiling.wall}-${top} m, gallery ${F.gallery.floor} m, ${F.pews.rows} rows, stair ${F.stair.steps}+${F.stair.upper} risers; walls from church-site.ts less the measured thickness.`);
 
 // 2. The door: at the foot of the tower steps, and a car parked on the gravel can reach it.
 const site = new ChurchSite([630000, 5080000]), door = churchDoorPosition(site), local = site.local(door.x, door.z);
@@ -56,7 +71,8 @@ assert.deepEqual(rail.stops.map(s => s.id), ['door', 'altar', 'vestry', 'gallery
 for (let i = 1; i < rail.stops.length; i++) assert.ok(rail.stops[i].at > rail.stops[i - 1].at, 'stops are in walking order');
 close(rail.stops.at(-1).at, rail.total, 'the walk ends at the door');
 for (let d = 0; d <= rail.total; d += .05) {
-  const p = railPoint(rail, d), eye = p.y + F.eye, inVestry = p.x < N.x0;
+  const p = railPoint(rail, d), eye = p.y + eyeAt(R, p), inVestry = p.x < N.x0;
+  // In the nave the eye stoops under the slope, so the headroom there rests on the lowest eye height (asserted below).
   if (inVestry) assert.ok(p.x > V.x0 + .4 && p.z > V.z0 + .4 && p.z < V.z1 - .4 && eye < V.ceiling - .25, `in the vestry at ${d.toFixed(2)}`);
   else assert.ok(p.x < N.x1 - .3 && p.z > N.z0 + .25 && p.z < N.z1 - .25 && eye < ceilingAt(R, p.z) - .3, `in the nave with headroom at ${d.toFixed(2)} (${JSON.stringify(p)})`);
 }
@@ -67,7 +83,7 @@ const step = 1 / 60, hold = { walk: 1, look: 0 }, rest = { walk: 0, look: 0 };
 const walkTo = (visit, id) => { for (let i = 0; i < 60 * 300 && visit.stop.id !== id && !visit.result; i++) visit.update(step, visit.halted && i % 2 ? rest : hold); return visit; };
 {
   const visit = new ChurchVisit(rail, false);
-  assert.equal(visit.stop.id, 'door'); assert.match(visit.message, /Box pews/);
+  assert.equal(visit.stop.id, 'door'); assert.match(visit.message, /two blocks/);
   visit.update(600, rest); assert.equal(visit.distance, 0, 'standing still for ten minutes changes nothing'); assert.equal(visit.result, null);
   for (let i = 0; i < 60 * 60; i++) visit.update(step, hold);
   assert.equal(visit.stop.id, 'altar', 'holding forward stops at the altar and goes no further'); close(visit.distance, rail.stops[1].at, 'held at the altar');
@@ -117,15 +133,19 @@ assert.ok(triangles > 3000 && triangles < 30000, `triangles ${triangles}`); asse
 room.scene.traverse(o => { if (o.isMesh) { assert.equal(o.castShadow, false); assert.equal(o.receiveShadow, false); } if (o.isLight) assert.ok(!o.castShadow, 'no light casts a shadow'); });
 // Every vertex lies inside the building's own outline (with the tower porch and the vestry).
 const box = new THREE.Box3().setFromObject(room.scene), porch = R.shell.porch;
-assert.ok(box.min.x >= V.x0 - .01 && box.max.x <= porch.x1 + .01 && box.min.z >= N.z0 - .01 && box.max.z <= N.z1 + .01 && box.min.y >= -.03 && box.max.y <= N.ridge, `scene bounds ${JSON.stringify(box)}`);
+assert.ok(box.min.x >= V.x0 - .01 && box.max.x <= porch.x1 + .01 && box.min.z >= N.z0 - .01 && box.max.z <= N.z1 + .01 && box.min.y >= -.03 && box.max.y <= F.ceiling.flat + .01, `scene bounds ${JSON.stringify(box)}`);
 // Painted faces look inward: a ray from the aisle meets floor, both walls, the altar wall and the flat ceiling.
 const ray = new THREE.Raycaster(), hit = (from, to) => { ray.set(new THREE.Vector3(...from), new THREE.Vector3(...to).normalize()); ray.far = 30; return ray.intersectObjects(room.scene.children, true)[0]; };
 const mid = [(N.x0 + N.x1) / 2 - 1.3, 1.6, N.ridgeZ];
 close(hit(mid, [0, -1, 0]).distance, 1.6, 'floor below', 1e-6); close(hit(mid, [0, 1, 0]).point.y, top, 'flat ceiling above', 1e-6);
+// The drawn stair is the stair the walk climbs: a ray down the middle of every tread, the landing and the upper treads.
+for (let k = 0; k < F.stair.steps - 1; k++) close(hit([(stair.outer + stair.inner) / 2, (k + 1) * stair.riser + .3, stair.foot + (k + .5) * stair.tread], [0, -1, 0]).distance, .3, `lower tread ${k + 1}`, 1e-6);
+close(hit([(stair.outer + stair.inner) / 2, F.stair.landing + .3, (stair.landingZ + N.z1) / 2], [0, -1, 0]).distance, .3, 'landing', 1e-6);
+for (let j = 0; j < F.stair.upper - 1; j++) close(hit([stair.inner - (j + .5) * F.stair.tread, F.stair.landing + (j + 1) * stair.upperRiser + .3, (stair.landingZ + N.z1) / 2], [0, -1, 0]).distance, .3, `upper tread ${j + 1}`, 1e-6);
 // Past the end of the side galleries, so nothing stands between the aisle and the walls.
 const clearX = N.x0 + F.gallery.sideEnd - 1.2;
 close(hit([clearX, 2.6, mid[2]], [0, 0, 1]).point.z, N.z1, 'left wall', .02); close(hit([clearX, 2.6, mid[2]], [0, 0, -1]).point.z, N.z0, 'right wall', .02);
-close(hit([mid[0], 5.6, mid[2]], [-1, 0, 0]).point.x, N.x0, 'altar wall', 1e-6);
+close(hit([mid[0], 5.0, mid[2]], [-1, 0, 0]).point.x, N.x0, 'altar wall', 1e-6);
 const vestryMid = [(V.x0 + V.x1) / 2, 1.2, V.z0 + 1.6];
 close(hit(vestryMid, [0, 1, 0]).point.y, V.ceiling, 'vestry ceiling', 1e-6); close(hit(vestryMid, [0, -1, 0]).point.y, 0, 'vestry floor', 1e-6);
 // The rail never passes through a pew, a post, a tread, the altar, the chest or a picture: from shin to head, nothing
@@ -138,20 +158,24 @@ const probe = (from, to, far, what) => {
   assert.ok(!blocked, `something is ${blocked?.distance.toFixed(2)} m ${what} (${from.toArray().map(v => v.toFixed(2))})`);
 };
 const upward = new THREE.Vector3(0, 1, 0), downward = new THREE.Vector3(0, -1, 0);
-let deepest = 0;
+let deepest = 0, lowest = F.eye;
+const maxRiser = Math.max(stair.riser, stair.upperRiser, F.chancel.rise);
 for (let d = 0; d <= rail.total; d += .05) {
   const p = railPoint(rail, d);
-  for (const h of [.35, .9, F.eye, 1.85]) for (let a = 0; a < 8; a++) {
+  const e = eyeAt(R, p);
+  for (const h of [.35, .9, e, e + .25]) for (let a = 0; a < 8; a++) {
     probe(new THREE.Vector3(p.x, p.y + h, p.z), new THREE.Vector3(Math.cos(a * Math.PI / 4), 0, Math.sin(a * Math.PI / 4)), .3, `from the visitor at height ${h}, ${d.toFixed(2)} m along the rail`);
   }
-  probe(new THREE.Vector3(p.x, p.y + F.eye, p.z), upward, .3, `above the eye ${d.toFixed(2)} m along the rail`);
+  probe(new THREE.Vector3(p.x, p.y + e, p.z), upward, .3, `above the eye ${d.toFixed(2)} m along the rail`);
+  lowest = Math.min(lowest, e);
   // The feet are on something: the floor, a tread or the gallery lies at most one riser below the path.
   ray.set(new THREE.Vector3(p.x, p.y + .3, p.z), downward); ray.far = 2;
   const ground = ray.intersectObjects(room.scene.children, true)[0];
   assert.ok(ground, `nothing under the feet ${d.toFixed(2)} m along the rail`);
   const sink = ground.distance - .3; deepest = Math.max(deepest, sink);
-  assert.ok(sink > -.03 && sink < F.gallery.floor / F.stair.steps + .03, `the path is ${sink.toFixed(2)} m above what is under it at ${d.toFixed(2)} m (${JSON.stringify(p)})`);
+  assert.ok(sink > -.03 && sink < maxRiser + .03, `the path is ${sink.toFixed(2)} m above what is under it at ${d.toFixed(2)} m (${JSON.stringify(p)})`);
 }
+assert.ok(lowest > 1.2, `the visitor stoops no lower than 1.2 m (${lowest.toFixed(2)})`);
 room.scene.traverse(o => { if (o.isMesh) o.material.side = THREE.FrontSide; });
 // No picture hangs in a doorway: across the vestry door, the first thing a level ray meets is the vestry's far wall.
 for (const y of [.5, 1.2, 1.9]) for (const dz of [-.35, 0, .35]) {
@@ -166,7 +190,7 @@ walkTo(room.visit, 'gallery'); room.update(0, { ...idle, touch: true }); assert.
 assert.ok(room.camera.position.y > F.gallery.floor + 1.5 && room.camera.getWorldDirection(new THREE.Vector3()).x < -.8, 'the gallery view looks down the nave');
 assert.match(room.readout, /WALK: go on/, 'phone words on a phone');
 room.leave(); assert.equal(room.result.delivered, true); room.dispose(); assert.equal(room.scene.children.length, 0);
-console.log(`PASS: scene ${triangles} triangles in ${drawCalls} draw calls, no shadows; faces look inward; 0.3 m clear from shin to head along the whole rail, feet on the floor or a tread; vestry doorway open; loft and letter appear when they should.`);
+console.log(`PASS: scene ${triangles} triangles in ${drawCalls} draw calls, no shadows; faces look inward; 0.3 m clear from shin to head along the whole rail, feet on the floor, a step or a tread; eye no lower than ${lowest.toFixed(2)} m under the slope; vestry doorway open; loft and letter appear when they should.`);
 
 // 6. The shared door code: a church visit outside the mail game repeats, names its own controls, and files no receipt.
 const receipts = [], doors = new Interiors(() => 0, () => '', r => receipts.push(r));
