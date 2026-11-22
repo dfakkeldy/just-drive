@@ -503,11 +503,20 @@ def check_keep_boxes(web=lambda name: open(os.path.join(ROOT, 'web', 'src', name
     assert quarry.extra_fine[0] in quarry.keep_roads, 'the West Bay quarry keeps its roads and ground'
     # Cover the complete reservation, including the outer edges, at each new site.
     # The source geometry has its own tolerances. Leave another 10 m in the keep box.
-    for site in site_reservations():
-        area, name, (e0, n0, e1, n1) = site['area'], site['name'], site['box']
-        boxes = areas.AREAS[area].keep_roads
-        assert any(x0 + 10 <= e0 and y0 + 10 <= n0 and e1 <= x1 - 10 and n1 <= y1 - 10
-                   for x0, y0, x1, y1 in boxes), f'{area}: {name} reservation is not covered with a 10 m margin'
+    def covers(box, site):
+        (x0, y0, x1, y1), (e0, n0, e1, n1) = box, site['box']
+        return x0 + 10 <= e0 and y0 + 10 <= n0 and e1 <= x1 - 10 and n1 <= y1 - 10
+    sites = site_reservations()
+    for site in sites:
+        area, name = site['area'], site['name']
+        assert any(covers(box, site) for box in areas.AREAS[area].keep_roads), f'{area}: {name} reservation is not covered with a 10 m margin'
+    # The other way round: the site reader still finds sites in each area, and every box still holds one. A reader that
+    # finds fewer sites would otherwise pass with nothing to test, and a box left after its site is gone would hold road.
+    for area in ('pointtupper', 'porthood', 'cansocauseway'):
+        mine = [site for site in sites if site['area'] == area]
+        assert mine, f'{area}: the site reader found no hand-built site'
+        for box in areas.AREAS[area].keep_roads:
+            assert any(covers(box, site) for site in mine), f'{area}: keep box {box} holds no hand-built site'
 
 
 def check_keeps():
@@ -705,6 +714,8 @@ MUTATIONS = [
         lambda grid: [grid.setdefault(tuple(np.floor(point / cell).astype(np.int64)), set()).add(n) for n, line in enumerate(lines) if line is not None for point in line.p[:-1]] and grid)({})), check_joins),
     ('the measure of the junctions passes everything', lambda: (lambda real: setattr(rg, 'junctions', lambda *a, **k: {**real(*a, **k), 'whole': True}))(rg.junctions), check_nodes),
     ('the works yard has no keep box', lambda: None, lambda: (lambda a: (setattr(a, 'AREAS', {**a.AREAS, 'mabou': __import__('dataclasses').replace(a.AREAS['mabou'], keep_roads=a.AREAS['mabou'].keep_roads[1:])}), check_keep_boxes()))(__import__('areas'))),
+    ('a Point Tupper site has no keep box', lambda: None, lambda: (lambda a: (setattr(a, 'AREAS', {**a.AREAS, 'pointtupper': __import__('dataclasses').replace(a.AREAS['pointtupper'], keep_roads=a.AREAS['pointtupper'].keep_roads[1:])}), check_keep_boxes()))(__import__('areas'))),
+    ('a Port Hood keep box holds no site', lambda: None, lambda: (lambda a: (setattr(a, 'AREAS', {**a.AREAS, 'porthood': __import__('dataclasses').replace(a.AREAS['porthood'], keep_roads=a.AREAS['porthood'].keep_roads + ((600000, 5000000, 600100, 5000100),))}), check_keep_boxes()))(__import__('areas'))),
     ('a short road keeps part of its far end\'s move', lambda: setattr(rg, '_end_weights', lambda arc, length, taper: (0.5 + 0 * arc, 0.5 + 0 * arc)), check_bed),
     ('the shoulder is level, not crowned', lambda: setattr(rg, 'SHOULDER', {k: 0.0 for k in rg.SHOULDER}), check_shape),
     ('no smoothing along the road', lambda: setattr(rg, 'ALONG_SIGMA', 0.01), check_smooth),

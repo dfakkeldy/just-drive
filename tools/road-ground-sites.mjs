@@ -71,7 +71,9 @@ for (const feature of PT_FEATURES.filter(f => !f.existing)) {
 }
 
 // Both packs use the same surveyed movable span. The endpoints are from step
-// 23; tools/bridge-source-check.py checks that span on installed land.
+// 23. tools/bridge-source-check.py checks only that one Highway 104 span of
+// 85 to 100 m exists; it does not check these ends. The 10 m margin of the
+// box takes up a small move; a new snap of the span needs these ends again.
 // Run the production snap and use the 35 m approaches used by causeway-browser.
 const span = { id: 1, pts: [[623624.81, 5056078.34], [623711.31, 5056108.04]],
   name: 'Highway 104', bridge: true, kind: 1, halfWidth: 3.6 };
