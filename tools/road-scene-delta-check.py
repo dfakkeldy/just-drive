@@ -11,7 +11,7 @@ from pathlib import Path
 import random
 import sys
 
-from land_receipt_pins import previous_digest
+from land_receipt_pins import canonical_digest, previous_digest
 
 ROOT = Path(__file__).resolve().parents[1]
 # Installed on the MacBook by the main thread on 17 Nov 2026 (55 delta files + the step-29 pins): only 'after' land passes.
@@ -251,10 +251,6 @@ STEP29 = 'step29 properties'
 REFERENCES = dict(cemeteries=('cemeteries','road.id'), buildings=('buildings','nearRoad'), streams=('culverts','road'), props=('poles','road'))
 
 
-def canonical_digest(records):
-    return dict(count=len(records), sha256=hashlib.sha256(json.dumps(records, separators=(',', ':'), sort_keys=True).encode()).hexdigest())
-
-
 def step29_properties(props, roads):
     """What step 29 settles for this receipt: public poles (kinds 1-3) and both box arrays. Power poles and
     service drops (#183) are other step-29 output; power-network-land checks them by rule, so no output byte pin."""
@@ -316,8 +312,9 @@ def owned_counts(manifest):
 # before the 18 Nov promotion), not here.
 VILLAGE = ROOT/'tools/mabou-village-delta/hashes.json'
 NOV18 = ROOT/'tools/mabou-dashcam-18nov/hashes.json'
+COMM1347 = ROOT/'tools/community-mailboxes/hashes.json'
 NOV19 = ROOT/'tools/mabou-wharf/roads.json'
-LATER = (VILLAGE, NOV18, NOV19)
+LATER = (VILLAGE, NOV18, COMM1347, NOV19)
 
 
 def superseded(root, entries, hashes, later=LATER):
@@ -335,7 +332,7 @@ def superseded(root, entries, hashes, later=LATER):
                 names[name].append(path)
         for m in report['manifests']:
             name = m['folder']+'/manifest.json'
-            if name in owned and owned[name] == {k: m['after'][k]['count'] for k in owned[name] if k in m['after']} | {k: v for k, v in owned[name].items() if k not in m['after']}:
+            if name in owned and any(k in m['after'] for k in owned[name]) and owned[name] == {k: m['after'][k]['count'] for k in owned[name] if k in m['after']} | {k: v for k, v in owned[name].items() if k not in m['after']}:
                 owned[name] = {k: (m['before'][k]['count'] if k in m['before'] else v) for k, v in owned[name].items()}
                 names[name].append(path)
     for name in names:
@@ -347,19 +344,29 @@ def superseded(root, entries, hashes, later=LATER):
 
 
 def step29_view(root, name, later):
-    """A props file and its roads as step 29 left them: the 18 Nov bake moved poles onto a split piece and paved
-    Weaver Lane, so its receipt's undo is applied when that bake replaced this file."""
+    """A props file and its roads as step 29 left them: later Mabou deltas (wharf, community mailboxes, 18 Nov)
+    each have an exact undo that rebuilds their before props byte for byte."""
     props = json.loads((root/name).read_bytes())
     roads = json.loads((root/Path(name).with_name('roads.json')).read_bytes())['roads']
-    if NOV18 in later.get(name, ()) or NOV19 in later.get(name, ()):
+    applied = later.get(name, ())
+    if any(p in applied for p in (NOV19, COMM1347, NOV18)):
         spec = importlib.util.spec_from_file_location('nov18_receipt', ROOT/'tools/mabou-dashcam-18nov/receipt.py')
         receipt = importlib.util.module_from_spec(spec); spec.loader.exec_module(receipt)
-        for path in (NOV19, NOV18):
-            if path not in later.get(name, ()):
+        comm_receipt = None
+        if COMM1347 in applied:
+            cspec = importlib.util.spec_from_file_location('comm_receipt', ROOT/'tools/community-mailboxes/receipt.py')
+            comm_receipt = importlib.util.module_from_spec(cspec); cspec.loader.exec_module(comm_receipt)
+        for path in (NOV19, COMM1347, NOV18):
+            if path not in applied:
                 continue
             report = json.loads(path.read_text())
-            props, roads = receipt.undo(props, roads, report['undo'])
-            before = next(f['before'] for f in report['files'] if f['file'] == name)
+            current_sha = hashlib.sha256(receipt.compact(props)).hexdigest()
+            before = previous_digest(report, name, current_sha)
+            assert before is not None, f'{name}: {path.parent.name} undo did not match a pinned after digest'
+            if path == COMM1347:
+                props = comm_receipt.undo(props, report['undo'])
+            else:
+                props, roads = receipt.undo(props, roads, report['undo'])
             assert hashlib.sha256(receipt.compact(props)).hexdigest() == before, f'{name}: {path.parent.name} undo did not rebuild before props'
     return props, roads
 
@@ -394,9 +401,16 @@ def land(root=None):
                 # Mabou village delta changes two community sites (and drops), never a mailbox or public pole (its maker checks
                 # that); the file is its exact pinned after bytes, so its own community digest is the receipt's.
                 expected = dict(expected, communityBoxes=canonical_digest(props['communityBoxes']))
-            expect29[name] = expected
-            powers[name] = step29_state(props, roads, expected)
-            if powers[name]: hashes[name] = STEP29
+            candidates = [expected]
+            if name == 'areas/judique/props.json':
+                candidates.append(dict(expected, publicPoles=receipt['judiqueRoad98']['publicPoles']))
+            for expected in candidates:
+                power = step29_state(props, roads, expected)
+                if power:
+                    expect29[name] = expected
+                    powers[name] = power
+                    hashes[name] = STEP29
+                    break
     mode = state(hashes,entries,step29)
     if STEP29 in hashes.values(): one_power_state(powers)
     expectation(mode,EXPECT)

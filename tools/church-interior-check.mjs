@@ -29,8 +29,28 @@ assert.ok(V.ceiling < (v.eave - entry.y0) * S && V.head + .07 < V.ceiling && V.d
 assert.equal(R.shell.windows.length, 6, 'three round-headed windows on each side');
 for (const w of R.shell.windows) {
   const o = CHURCH_FEATURES.openings.find(o => o.kind === 'arch' && o.face === (w.side > 0 ? 'nave_s' : 'nave_n') && Math.abs(o.u * S - w.x) < 1e-9);
-  assert.ok(o, 'each inside window is an outside window'); close(w.width, o.w * S, 'window width'); close(w.sill, (o.y0 - entry.y0) * S, 'window sill');
+  assert.ok(o, 'each inside window matches an outside window exactly'); close(w.width, o.w * S, 'window width'); close(w.sill, (o.y0 - entry.y0) * S, 'window sill');
   assert.ok(w.x > N.x0 + w.width / 2 && w.x < N.x1 - w.width / 2, 'each window lies inside the room');
+}
+// The confessional stands in the +z chancel corner, clear of both the front +z window and the vestry doorway trim.
+const frontPosWindow = R.shell.windows.filter(w => w.side > 0).sort((a, b) => a.x - b.x)[0];
+assert.ok(N.x0 + F.confessional.length < frontPosWindow.x - frontPosWindow.width / 2, 'confessional clears the front +z window');
+assert.ok(N.z1 - F.confessional.depth > F.vestryDoor.z + F.vestryDoor.width / 2 + .1, 'confessional clears the vestry door trim');
+// Porch ceiling clears the round-headed porch window arch.
+const pw = R.shell.porch.window;
+assert.ok(R.shell.porch.ceiling > pw.spring + pw.width / 2, 'porch ceiling clears the porch window arch');
+// The front arched table stands on the chancel floor clear of the raised altar platform and within the chancel step.
+assert.ok(F.altar.table.fromWall >= F.platform.depth && F.altar.table.fromWall + F.altar.table.depth <= F.chancel.depth + 1e-9, 'front arched table stands on the chancel floor clear of the platform');
+// The five spires stay below the flat ceiling with room for their gold crosses.
+const gradineTop = F.platform.rise + F.altar.height + F.altar.gradines.reduce((sum, g) => sum + g.rise, 0);
+assert.ok(gradineTop + Math.max(...F.altar.spires) + .2 < F.ceiling.flat, 'the tallest spire and its cross stay below the flat ceiling');
+// Side-wall Stations of the Cross (using the renderer's own placement table) clear every side window on their wall.
+for (const [side, entries] of [[1, F.stations.sidePos], [-1, F.stations.sideNeg]]) {
+  const wins = R.shell.windows.filter(w => w.side === side);
+  for (const [dx] of entries) {
+    const sx = N.x0 + dx;
+    for (const w of wins) assert.ok(Math.abs(sx - w.x) > w.width / 2 + F.stations.width / 2 + .04, `station at dx=${dx} on side ${side} clears window at x=${w.x}`);
+  }
 }
 assert.equal(R.shell.gable.length, 2, 'two small windows in the door wall');
 for (const w of R.shell.gable) assert.ok(w.sill > F.gallery.floor + F.gallery.front && w.top <= F.ceiling.flat && Math.abs(w.z) + w.width / 2 < F.ceiling.flatHalf, 'gable windows over the back gallery');
@@ -49,6 +69,9 @@ const stair = churchStair(R);
 close(stair.riser * F.stair.steps, F.stair.landing, 'lower flight reaches the landing'); close(F.stair.landing + stair.upperRiser * F.stair.upper, F.gallery.floor, 'upper flight reaches the gallery');
 assert.ok(stair.riser < .21 && stair.upperRiser < .21 && stair.tread > .2 && F.stair.tread >= .17, 'the stair is steep but walkable');
 assert.ok(stair.top > N.x1 - F.gallery.rear + .5, 'the stair arrives on the back gallery');
+for (const [dx] of F.stations.sidePos) {
+  assert.ok(N.x0 + dx + F.stations.width / 2 < stair.top, 'left-wall Stations clear the upper stair');
+}
 console.log(`PASS: room ${(N.x1 - N.x0).toFixed(2)} x ${(N.z1 - N.z0).toFixed(2)} m, ceiling ${F.ceiling.wall}-${top} m, gallery ${F.gallery.floor} m, ${F.pews.rows} rows, stair ${F.stair.steps}+${F.stair.upper} risers; walls from church-site.ts less the measured thickness.`);
 
 // 2. The door: at the foot of the tower steps, and a car parked on the gravel can reach it.
@@ -87,7 +110,8 @@ const walkTo = (visit, id) => { for (let i = 0; i < 60 * 300 && visit.stop.id !=
   visit.update(600, rest); assert.equal(visit.distance, 0, 'standing still for ten minutes changes nothing'); assert.equal(visit.result, null);
   for (let i = 0; i < 60 * 60; i++) visit.update(step, hold);
   assert.equal(visit.stop.id, 'altar', 'holding forward stops at the altar and goes no further'); close(visit.distance, rail.stops[1].at, 'held at the altar');
-  assert.match(visit.message, /three pointed arches outlined in gold/); assert.equal(visit.speed, 0);
+  assert.match(visit.message, /Seven gold-outlined arches line the white altar\. The table in front has three\./);
+  assert.equal(visit.speed, 0);
   visit.update(step, rest); visit.update(.5, hold); assert.ok(visit.distance > rail.stops[1].at, 'letting go and pressing again walks on');
   const there = visit.distance; visit.update(2, { walk: -1, look: 0 }); assert.ok(visit.distance < there, 'the visitor can step back');
   for (let i = 0; i < 60 * 200; i++) visit.update(step, { walk: -1, look: 0 });
@@ -181,6 +205,46 @@ room.scene.traverse(o => { if (o.isMesh) o.material.side = THREE.FrontSide; });
 for (const y of [.5, 1.2, 1.9]) for (const dz of [-.35, 0, .35]) {
   const through = hit([N.x0 + 1, y, F.vestryDoor.z + dz], [-1, 0, 0]);
   assert.ok(through.point.x < V.x1 - .5, `the vestry doorway is open at height ${y}, ${dz} from its middle (met something at x ${through.point.x.toFixed(2)})`);
+}
+// Check the built confessional against the survey. The -z face has two doors with outer knobs and inner hinges.
+{
+  const fl = F.chancel.rise, x1 = N.x0 + 1.90, front = N.z1 - 1.23, midX = N.x0 + .95;
+  const face = (dx, y) => hit([midX + dx, fl + y, front - .12], [0, 0, 1]).point.z;
+  for (const side of [-1, 1]) {
+    close(face(side * .435, .56), front - .022, 'door leaf faces -z', .003);
+    close(face(side * .745, .91), front - .059, 'door knob sits on the outer edge', .003);
+    close(face(side * .065, 1.05), front - .030, 'door hinge sits beside the centre mullion', .003);
+  }
+  for (const dz of [.16, .60, 1.14]) {
+    close(hit([x1 + .12, fl + .55, front + dz], [-1, 0, 0]).point.x, x1, 'pew-facing wall is solid', .003);
+  }
+  close(hit([midX, fl + 2.40, front + .60], [0, -1, 0]).point.y, fl + 2.28, 'confessional roof height', .003);
+  // The cornice top must be below the boarded roof, even where the two boxes overlap.
+  const roofFaces = ray.intersectObjects(room.scene.children, true).filter(h => Math.abs(h.point.y - (fl + 2.28)) < .003);
+  assert.equal(new Set(roofFaces.map(h => h.object)).size, 1, 'no second surface at the confessional roof height');
+}
+// Front arched table exists and every vertex emitted for it (base plinth at floor level through top corners) stays inside [platform.depth, chancel.depth].
+{
+  const fl = F.chancel.rise, th = F.altar.table.height, tw = F.altar.table.width;
+  const p0 = F.platform.depth, p1 = F.chancel.depth;
+  const topDown = hit([N.x0 + (p0 + p1) / 2, fl + th + .5, N.ridgeZ], [0, -1, 0]);
+  close(topDown.point.y, fl + th, 'rendered table top height', .01);
+  assert.ok(room.parts.tableRanges.length >= 2, 'front table vertex ranges recorded across body and arched panel');
+  let verts = 0, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const { mesh, start, count } of room.parts.tableRanges) {
+    const pos = mesh.geometry.attributes.position;
+    for (let i = start; i < start + count; i++) {
+      const dx = pos.getX(i) - N.x0, y = pos.getY(i), dz = Math.abs(pos.getZ(i) - N.ridgeZ);
+      assert.ok(dx >= p0 - 1e-6 && dx <= p1 + 1e-6, `table vertex at dx=${dx.toFixed(4)} y=${y.toFixed(3)} dz=${dz.toFixed(3)} stays in [${p0}, ${p1}]`);
+      assert.ok(dz <= tw / 2 + 1e-6, `table vertex dz=${dz.toFixed(4)} stays within half-width ${tw / 2}`);
+      assert.ok(y >= fl - 1e-6 && y <= fl + th + 1e-6, `table vertex y=${y.toFixed(4)} stays in [${fl}, ${fl + th}]`);
+      minX = Math.min(minX, dx); maxX = Math.max(maxX, dx); minY = Math.min(minY, y); maxY = Math.max(maxY, y); verts++;
+    }
+  }
+  assert.ok(verts > 100, `checked all ${verts} front table vertices`);
+  assert.ok(minX <= p0 + .01 && maxX >= p1 - .01, `rendered table spans [${minX.toFixed(3)}, ${maxX.toFixed(3)}]`);
+  close(minY, fl, 'rendered table base min y', 1e-5);
+  close(maxY, fl + th, 'rendered table top max y', 1e-5);
 }
 // The gallery's own furniture is drawn only from up there; the letter appears only once it is left.
 room.update(0, idle); assert.equal(room.parts.groups.loft.visible, false, 'loft furniture is not drawn from the floor'); assert.equal(room.parts.letter.visible, false);

@@ -3,7 +3,7 @@
 import {readFileSync} from 'node:fs';import {execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';import assert from 'node:assert/strict';
 import {program,preprocess,normalized,checkShaderBaseline,withoutFarBend} from './coast-programs.mjs';
-const metrics=s=>({lines:s.split('\n').filter(l=>l.trim()).length,textureReads:(s.match(/\b(?:texture|texture2D|texelFetch)\s*\(/g)??[]).length});
+const metrics=s=>({lines:s.split('\n').filter(l=>l.trim()).length,textureReads:(s.match(/\b(?:texture|texture2D|textureLod|texelFetch)\s*\(/g)??[]).length});
 export function compareWaterShaders(current,main=null,report=console.log){
  if(main===null)checkShaderBaseline(current,{report});
  const variants=[];

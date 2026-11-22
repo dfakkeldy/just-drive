@@ -71,6 +71,15 @@ def expectation(mode, expected):
 
 def fixture():
     """Two synthetic areas through the real maker and installer."""
+    road = 'terrain/roads.json'
+    original = dict(file=road, before='original', sha256='corrected')
+    repaired = dict(file=road, sha256='repaired')
+    later = dict(files=[original], roadBed=dict(files=[repaired]))
+    assert patch.before_file(road, 'repaired', [later]) == 'original'
+    assert patch.before_file(road, 'unknown', [later]) == 'unknown'
+    created = dict(files=[dict(file=road, before=None, sha256='added')])
+    assert patch.before_file(road, 'added', [created]) is None
+
     tmp = Path(tempfile.mkdtemp(prefix='paved-land-'))
     try:
         baked, work = tmp/'data/baked', tmp/'work'

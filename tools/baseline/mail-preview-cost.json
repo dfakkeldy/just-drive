@@ -76,6 +76,12 @@
     }
   },
   "stage2Digest": "837ed89453fddf539a3364d796cf6a1400075bf874cf76afe364fdfcdda78773",
+  "communityDelta": {
+    "mailboxes": 468,
+    "sites": 7,
+    "dataHash": "8e89c116e38e42e770034001f7c6fd79ebc220b0886b6390fa0f9e48623555d8",
+    "stage2Digest": "82c925829c2c5e62bd07efaf35b99f4783cf101d5615668fb4a8db5622faa906"
+  },
   "frozenInput": {
     "dataHash": "b0acc9dba8ff6f9df1b66a4fe85541ab28cc2dfd12ac1228a04ab2872cf8b7dd",
     "mailboxes": 467

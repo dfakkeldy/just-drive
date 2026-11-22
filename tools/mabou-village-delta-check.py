@@ -333,7 +333,13 @@ def land(baked):
     report = json.loads(patch.RECEIPT.read_text())
     refreshed = patch.paved_patch.refresh_installed(baked)
     nov18 = json.loads((ROOT/'tools/mabou-dashcam-18nov/hashes.json').read_text())
-    later = [nov18, patch.paved_patch.refresh_delta()] if refreshed else [nov18]
+    later = [nov18]
+    if refreshed: later.append(patch.paved_patch.refresh_delta())
+    comm = ROOT/'tools/community-mailboxes/hashes.json'
+    if comm.exists(): later.append(json.loads(comm.read_text()))
+    wharf_path = ROOT/'tools/mabou-wharf/roads.json'
+    wharf = json.loads(wharf_path.read_text()) if wharf_path.exists() else None
+    if wharf: later.append(wharf)
     mode = patch.state(baked, report, later)
     if EXPECT is not None and mode != EXPECT: raise AssertionError(f'land is {mode}, expected {EXPECT}')
     corr = baked.parent/patch.MIRROR[len('data/'):]
@@ -354,7 +360,7 @@ def land(baked):
     made = patch.compact(dict(doc, buildings=mabou_main.correct_buildings(doc['buildings'], 'mabou')))
     want = next(f['sha256'] for f in report['files'] if f['file'] == building_file)
     digest = sha(current)
-    if mode == 'after' and patch.paved_patch.before_file(building_file, digest, [nov18]) == want:
+    if mode == 'after' and patch.paved_patch.before_file(building_file, digest, [nov18] + ([wharf] if wharf else [])) == want:
         want = digest
     if sha(made) != want: raise AssertionError('pipeline/mabou_main.py does not give the receipt buildings.json from this land')
     props = json.loads((baked/'terrain/props.json').read_bytes())['communityBoxes']

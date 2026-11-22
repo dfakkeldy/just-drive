@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import {ChurchSite, CHURCH_GEOM, CHURCH_FEATURES, CHURCH_SCALE, CHURCH_ORIGIN, CHURCH_START, CHURCH_LANE, CHURCH_GROUNDS} from '../web/src/church-site.ts';
-import {buildChurchModel, Church} from '../web/src/church.ts';
+import {buildChurchModel, buildChurchParts, Church} from '../web/src/church.ts';
 import {churchPlaces, nearestPlacement} from '../web/src/places.ts';
 import {Roads} from '../web/src/roads.ts';
 import {pushOut} from '../web/src/parked.ts';
@@ -17,7 +17,25 @@ const original = read('data/work/church-scan-20261121/church-site.json');
 const siteData=readFileSync('web/src/church-site.ts','utf8').split('export class ChurchSite')[0];
 assert.ok(!/Math\.(sin|cos|atan2)\s*\(/.test(siteData),'no trigonometry at site import');
 assert.deepEqual(CHURCH_GEOM, original.geom);
-assert.deepEqual(CHURCH_FEATURES, original.features);assert.deepEqual(CHURCH_ORIGIN, original.origin);
+assert.deepEqual(CHURCH_ORIGIN, original.origin);
+assert.deepEqual(CHURCH_FEATURES.steps, original.features.steps);
+assert.deepEqual(CHURCH_FEATURES.ramp, original.features.ramp);
+assert.deepEqual(CHURCH_FEATURES.landing, original.features.landing);
+assert.equal(CHURCH_FEATURES.openings.length, original.features.openings.length);
+for (let i = 0; i < CHURCH_FEATURES.openings.length; i++) {
+  const cur = CHURCH_FEATURES.openings[i], orig = original.features.openings[i];
+  if (cur.kind === 'arch' && (cur.face === 'nave_n' || cur.face === 'nave_s')) {
+    assert.deepEqual({ kind: cur.kind, face: cur.face, y0: cur.y0, y1: cur.y1, w: cur.w }, { kind: orig.kind, face: orig.face, y0: orig.y0, y1: orig.y1, w: orig.w });
+    assert.ok(Math.abs(cur.u - orig.u) < 0.55, `reconciled ${cur.face} window u=${cur.u} stays within 0.55 m of outside scan ${orig.u}`);
+  } else {
+    assert.deepEqual(cur, orig);
+  }
+}
+{
+  const nWins = CHURCH_FEATURES.openings.filter(o => o.kind === 'arch' && o.face === 'nave_n').map(o => o.u).sort((a, b) => a - b);
+  const sWins = CHURCH_FEATURES.openings.filter(o => o.kind === 'arch' && o.face === 'nave_s').map(o => o.u).sort((a, b) => a - b);
+  for (let i = 0; i < 3; i++) assert.ok(Math.abs(nWins[i] - sWins[i]) < 0.1, `side windows pair ${i} align across nave_n and nave_s (${nWins[i]} vs ${sWins[i]})`);
+}
 const manifest=read('data/baked/areas/judique/manifest.json'), site=new ChurchSite(manifest.village);
 const close=(a,b,message)=>assert.ok(Math.abs(a-b)<1e-7,`${message}: ${a} vs ${b}`);
 for(const [x,z] of [[0,0],[-29.1,7],[2.4,0],[0,1]]) {
@@ -110,9 +128,97 @@ const afterBuild=reads;for(let i=0;i<100;i++)church.update(near,3000+i*16);asser
  near(rampAt(.1),rp.rise-(rp.rise-.03)*.1,.01,'ramp top by the tower door');near(rampAt(.9),rp.rise-(rp.rise-.03)*.9,.01,'ramp foot');
  near(top(ld.u,CHURCH_GEOM.vestry.z1+ld.depth/2),ld.rise,.01,'vestry landing');
  near(top(m.x+.02,m.z+.02),m.h,.06,'monument top');near(top(w.x,w.z),w.h,.01,'wayside cross top');
+ // Verify wayside crucifix world orientation using fixed surveyed bearings (independent of w.ry):
+ // arms along bearing 58.4 / 238.4 deg, corpus protruding on the 328.4 deg (NNW, toward the church and lane) face.
+ {
+  const wc=site.world(w.x,w.z);
+  const bVec=deg=>new THREE.Vector3(Math.sin(deg*Math.PI/180),0,-Math.cos(deg*Math.PI/180));
+  const armDir=bVec(58.4), frontDir=bVec(328.4); // world unit vectors
+  const castWorld=(alongArm,ly,alongFront,dir)=>{
+   const o=new THREE.Vector3(wc.x+armDir.x*alongArm+frontDir.x*alongFront,church.group.position.y+ly*CHURCH_SCALE,wc.z+armDir.z*alongArm+frontDir.z*alongFront);
+   return new THREE.Raycaster(o,dir,0,2.2*CHURCH_SCALE).intersectObject(church.group,true)[0];
+  };
+  assert.ok(castWorld(.9,w.armAt,1,frontDir.clone().negate())&&castWorld(-.9,w.armAt,1,frontDir.clone().negate()),'wayside arms span along surveyed 58.4/238.4 deg bearing');
+  assert.ok(!castWorld(1,w.armAt,.9,armDir.clone().negate()),'wayside arms are not edge-on to the NNW lane approach');
+  const frontHit=castWorld(0,w.armAt-.45,1,frontDir.clone().negate()), backHit=castWorld(0,w.armAt-.45,-1,frontDir);
+  assert.ok(frontHit&&backHit&&frontHit.distance<backHit.distance-.05,'corpus protrudes toward 328.4 deg (NNW, facing the church and lane)');
+ }
+ // Verify large boulder surveyed footprint/crown (independent of build constants) and check every above-ground vertex
+ // of the unmerged waysidePlinth and largeBoulder parts (dome + skirt) against their respective colliders on both axes.
+ {
+  const big=CHURCH_GROUNDS.rocks[10], bw=site.world(big[0],big[1]);
+  near(top(big[0],big[1]),0.85,.04,'large boulder centre height vs surveyed 0.85 m');
+  const wsSolid=site.solids[7], bSolid=site.solids[8];
+  const inBox=(solid,vx,vz)=>{
+   const fx=Math.sin(solid.heading), fz=-Math.cos(solid.heading), rx=-fz, rz=fx;
+   const dx=vx-solid.x, dz=vz-solid.z;
+   return [Math.abs(dx*fx+dz*fz), Math.abs(dx*rx+dz*rz)];
+  };
+  const wrap=new THREE.Group();
+  wrap.position.set(site.origin.x,church.group.position.y,site.origin.z);
+  wrap.rotation.y=site.yaw; wrap.scale.setScalar(CHURCH_SCALE);
+  const parts=buildChurchParts(); wrap.add(parts); wrap.updateMatrixWorld(true);
+  const plinthPart=parts.getObjectByName('waysidePlinth'), boulderPart=parts.getObjectByName('largeBoulder');
+  assert.ok(plinthPart&&boulderPart,'named waysidePlinth and largeBoulder parts exist before merge');
+  const v=new THREE.Vector3();
+  let wVerts=0, bVerts=0, bMinX=Infinity, bMaxX=-Infinity, bMinZ=Infinity, bMaxZ=-Infinity, bMaxY=-Infinity;
+  plinthPart.traverse(mesh=>{
+   if(!mesh.isMesh)return;
+   const pos=mesh.geometry.attributes.position;
+   for(let i=0;i<pos.count;i++){
+    v.fromBufferAttribute(pos,i).applyMatrix4(mesh.matrixWorld);
+    const hy=(v.y-church.group.position.y)/CHURCH_SCALE;
+    if(hy<-.01)continue;
+    const [au,av]=inBox(wsSolid,v.x,v.z);
+    assert.ok(au<=wsSolid.half+.01&&av<=wsSolid.halfWidth+.01,`waysidePlinth vertex (${au.toFixed(3)},${av.toFixed(3)}) stays inside collider (${wsSolid.half}x${wsSolid.halfWidth})`);
+    wVerts++;
+   }
+  });
+  const bYaw=site.yaw+big[5], cb=Math.cos(bYaw), sb=Math.sin(bYaw);
+  boulderPart.traverse(mesh=>{
+   if(!mesh.isMesh)return;
+   const pos=mesh.geometry.attributes.position;
+   for(let i=0;i<pos.count;i++){
+    v.fromBufferAttribute(pos,i).applyMatrix4(mesh.matrixWorld);
+    const hy=(v.y-church.group.position.y)/CHURCH_SCALE;
+    if(hy<-.01)continue;
+    const [au,av]=inBox(bSolid,v.x,v.z);
+    assert.ok(au<=bSolid.half+.01&&av<=bSolid.halfWidth+.01,`largeBoulder vertex (${au.toFixed(3)},${av.toFixed(3)}) stays inside collider (${bSolid.half}x${bSolid.halfWidth})`);
+    const dx=v.x-bw.x, dz=v.z-bw.z;
+    const lx=dx*cb-dz*sb, lz=dx*sb+dz*cb;
+    bMinX=Math.min(bMinX,lx); bMaxX=Math.max(bMaxX,lx); bMinZ=Math.min(bMinZ,lz); bMaxZ=Math.max(bMaxZ,lz); bMaxY=Math.max(bMaxY,hy);
+    bVerts++;
+   }
+  });
+  assert.ok(wVerts>20&&bVerts>40,'sampled waysidePlinth and largeBoulder vertices');
+  // Compare against independent surveyed dimensions (2.55 x 1.86 x 0.85 m), not CHURCH_GROUNDS.rocks[10].
+  near(bMaxX-bMinX,2.55,.02,'boulder surveyed width span');
+  near(bMaxZ-bMinZ,1.86,.02,'boulder surveyed depth span');
+  near(bMaxY,0.85,.02,'boulder surveyed crown max y');
+ }
  near(top(c.x,c.z),c.cross,.01,'cupola cross tip');near(top(t.x1-.05,-t.zn+.05),c.base,.01,'tower cap');
  near(top((n.x0+n.x1)/2,(n.zs-n.zn)/2),n.ridge+.19,.01,'ridge cap');
  console.log('PASS church parts: ramp falls from the tower door; landing, monument, wayside cross, cupola cross, tower cap and ridge at their measured heights');
+}
+// A steep z slope crosses the rotated skirts' long ends. Check the built bottom ring against the land under each vertex.
+for (const rise of [-2,2]) {
+ const ground=(_x,z)=>-100+rise*z;
+ const parts=buildChurchParts(ground);parts.updateMatrixWorld(true);
+ for(const name of ['waysideSkirt','boulderSkirt']){
+  const mesh=parts.getObjectByName(name);
+  assert.ok(mesh,`${name} exists`);
+  const pos=mesh.geometry.attributes.position,v=new THREE.Vector3();
+  mesh.geometry.computeBoundingBox();
+  const bottom=mesh.geometry.boundingBox.min.y;
+  let contacts=0;
+  for(let i=0;i<pos.count;i++){
+   if(Math.abs(pos.getY(i)-bottom)>1e-5)continue;
+   v.fromBufferAttribute(pos,i).applyMatrix4(mesh.matrixWorld);
+   assert.ok(v.y<ground(v.x,v.z)-.10,`${name} reaches below the slope at x=${v.x.toFixed(3)}, z=${v.z.toFixed(3)}`);
+   contacts++;
+  }
+  assert.ok(contacts>=4,`${name} has a ground ring`);
+ }
 }
 // Build through Church.update on sloping terrain, so the local/world and exaggeration conversion is exercised.
 for(const exag of [1,1.5,3]){

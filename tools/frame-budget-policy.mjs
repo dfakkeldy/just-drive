@@ -24,6 +24,11 @@ export const scenes = [
   // +5544 triangles, no textures. The pins carry exactly that share: phone calls 211 -> 212 and geometries 122 -> 123; desktop calls
   // 988 -> 990, geometries 279 -> 280 and programs 45 -> 46. Triangles and phone programs stay within their pins. On that host main
   // itself measured desktop 997 calls / 283 geometries / 150 textures / 46 programs, above its own pins; that excess is not pinned here.
+  // Point Tupper industrial site (pt-industry.ts: power plant stack & boiler dressing, coal yard & conveyors, and four
+  // marine terminals; shared Lambert material, no textures, no new day shader programs) enters pointtupper-start's view
+  // from Port Hawkesbury with 2 instanced batches: phone +2 calls (203 -> 205, 22 below PHONE_CAP), +20,820 triangles
+  // (1,123,375 -> 1,144,195), +2 geometries (120 -> 122), +0 textures (57), +0 programs (17); desktop +2 calls,
+  // +31,192 triangles, +0 programs, staying well inside its existing pin (five identical runs on M1 Pro / Edge 158).
   {id:'pointtupper-start',area:'pointtupper',exploreOnly:true,chase:true},
 ];
 // Breakable yard and field props (mail play and Get Fired; yard-props.ts: three instanced meshes, one shared Lambert material)

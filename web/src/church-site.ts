@@ -22,16 +22,17 @@ export const CHURCH_GEOM = {
 /** Faces: nave_n and tower_n are the SSW (-z) walls, nave_s, tower_s and vestry_s the NNE (+z) walls. On a long wall
  * `u` is x; on the front gable (west) and the tower front (tower_w) `u` is z. `y0` and `y1` are heights above the
  * ground at the origin; an arch's `y1` is where its round head starts. The tower door stays the first door: the interior
- * takes its floor and entry from the first door it finds. */
+ * takes its floor and entry from the first door it finds. The six nave side windows use the inside scan's longitudinal
+ * positions so both wall faces share one exact opening without the outside scan's far-side drift. */
 export const CHURCH_FEATURES = {
   "openings": [
     { "kind": "door", "face": "tower_w", "u": 0.02, "y0": 0.4, "y1": 2.4, "w": 0.95 },
-    { "kind": "arch", "face": "nave_n", "u": -9.49, "y0": 1.3, "y1": 3.0, "w": 0.9 },
-    { "kind": "arch", "face": "nave_n", "u": -6.49, "y0": 1.3, "y1": 3.0, "w": 0.9 },
+    { "kind": "arch", "face": "nave_n", "u": -9.32, "y0": 1.3, "y1": 3.0, "w": 0.9 },
+    { "kind": "arch", "face": "nave_n", "u": -6.33, "y0": 1.3, "y1": 3.0, "w": 0.9 },
     { "kind": "arch", "face": "nave_n", "u": -3.38, "y0": 1.3, "y1": 3.0, "w": 0.9 },
-    { "kind": "arch", "face": "nave_s", "u": -9.84, "y0": 1.3, "y1": 3.0, "w": 0.9 },
-    { "kind": "arch", "face": "nave_s", "u": -6.57, "y0": 1.3, "y1": 3.0, "w": 0.9 },
-    { "kind": "arch", "face": "nave_s", "u": -3.63, "y0": 1.3, "y1": 3.0, "w": 0.9 },
+    { "kind": "arch", "face": "nave_s", "u": -9.30, "y0": 1.3, "y1": 3.0, "w": 0.9 },
+    { "kind": "arch", "face": "nave_s", "u": -6.27, "y0": 1.3, "y1": 3.0, "w": 0.9 },
+    { "kind": "arch", "face": "nave_s", "u": -3.37, "y0": 1.3, "y1": 3.0, "w": 0.9 },
     { "kind": "rect", "face": "west", "u": 1.51, "y0": 4.82, "y1": 5.9, "w": 0.62 },
     { "kind": "rect", "face": "west", "u": -1.28, "y0": 4.82, "y1": 5.9, "w": 0.62 },
     { "kind": "sign", "face": "west", "u": 2.64, "y0": 1.36, "y1": 2.3, "w": 2.4 },
@@ -50,10 +51,11 @@ export const CHURCH_FEATURES = {
 } as const;
 
 /**
- * What stands on the grounds, in model metres, from the same scan: the row of rocks along the lot, a rock beside the
- * lane, the granite monument in front, and the tall wayside cross on the lane. `h` is the height above the ground, `w`
- * and `t` the footprint, `ry` the turn in the model frame (for the rocks it only varies their look). The wayside cross
- * faces bearing 85.8 degrees, toward the lane, so its arms run along bearing 175.8: ry = 297.65 - 175.8 degrees.
+ * What stands on the grounds, in model metres, from the same scan: the row of rocks along the lot, a large granite boulder
+ * beside the lane, the granite monument in front, and the tall wayside crucifix on the lane. `h` is the height above the
+ * ground, `w` and `t` the footprint, `ry` the turn in the model frame (for the rocks it only varies their look). The wayside
+ * crucifix faces bearing 328.4 degrees (NNW, toward the church and the approaching lane), so its arms run along bearing
+ * 58.4 / 238.4 degrees (ry = 1.03 rad puts local +X along 238.4 degrees and local +Z facing 328.4 degrees).
  * The last twelve rocks lie outside the scan: they keep the positions from the owner's earlier drone model.
  */
 export const CHURCH_GROUNDS = {
@@ -61,14 +63,14 @@ export const CHURCH_GROUNDS = {
     [19.56, 7.69, 0.18, 0.43, 0.31, 0.5], [18.23, 7.46, 0.18, 0.26, 0.24, 1.9], [16.49, 7.08, 0.31, 0.77, 0.65, 3.1],
     [14.19, 6.6, 0.31, 0.88, 0.69, 0.3], [11.55, 6.33, 0.42, 0.86, 0.61, 2.2], [9.4, 6.18, 0.21, 0.95, 0.87, 1.2],
     [7.63, 5.8, 0.24, 0.96, 0.85, 2.6], [5.83, 5.71, 0.34, 0.85, 0.74, 0.8], [4.48, 5.35, 0.25, 0.94, 0.9, 1.7],
-    [1.28, 5.01, 0.32, 0.88, 0.78, 2.9], [-40.43, -34.7, 0.76, 2.14, 1.77, 1.3],
+    [1.28, 5.01, 0.32, 0.88, 0.78, 2.9], [-40.43, -34.7, 0.85, 2.55, 1.86, 1.3],
     [22.2, 7.9, 0.3, 0.9, 0.7, 0.4], [23.78, 8.14, 0.3, 0.9, 0.7, 2.4], [26.23, 8.64, 0.3, 0.9, 0.7, 1.1],
     [7.26, 18.1, 0.3, 0.9, 0.7, 2.0], [10.75, 17.01, 0.3, 0.9, 0.7, 0.2], [12.92, 16.58, 0.3, 0.9, 0.7, 2.7],
     [16.48, 15.69, 0.3, 0.9, 0.7, 1.5], [18.19, 14.94, 0.3, 0.9, 0.7, 0.9], [20.23, 14.46, 0.3, 0.9, 0.7, 2.2],
     [22.2, 13.97, 0.3, 0.9, 0.7, 0.6], [24.17, 13.02, 0.3, 0.9, 0.7, 1.8], [26.08, 12.21, 0.3, 0.9, 0.7, 2.9]
   ],
   "monument": { "x": 11.85, "z": 0.78, "h": 1.99, "w": 0.85 },
-  "wayside": { "x": -42.47, "z": -39.9, "h": 4.25, "arm": 1.6, "armAt": 3.25, "ry": 2.13 }
+  "wayside": { "x": -42.47, "z": -39.9, "h": 4.25, "arm": 2.05, "armAt": 3.25, "ry": 1.03 }
 } as const;
 
 /**
@@ -135,9 +137,9 @@ export class ChurchSite implements Site {
       solid(ramp.u - ramp.width / 2 - 0.1, ramp.u + ramp.width / 2 + 0.1, -t.zn - ramp.run, -t.zn),
       solid(landing.u - landing.width / 2 - 0.1, landing.u + landing.width / 2 + 0.1, v.z1, v.z1 + landing.depth),
       solid(m.x - m.w / 2, m.x + m.w / 2, m.z - m.w / 2, m.z + m.w / 2),
-      solid(w.x - 0.3, w.x + 0.3, w.z - 0.3, w.z + 0.3),
-      // The big boulder is drawn turned; a square of its mean width blocks the same ground at any turn.
-      solid(big[0] - (big[3] + big[4]) / 4, big[0] + (big[3] + big[4]) / 4, big[1] - (big[3] + big[4]) / 4, big[1] + (big[3] + big[4]) / 4)];
+      solid(w.x - 0.68, w.x + 0.68, w.z - 0.68, w.z + 0.68),
+      // The big boulder is drawn turned; a square of its largest half-span blocks every above-ground vertex at any turn.
+      solid(big[0] - Math.max(big[3], big[4]) / 2, big[0] + Math.max(big[3], big[4]) / 2, big[1] - Math.max(big[3], big[4]) / 2, big[1] + Math.max(big[3], big[4]) / 2)];
   }
   /** Model metres to game metres. +X -> WNW (297.65°), +Z -> NNE (27.65°). */
   world(x: number, z: number): { x: number; z: number } {
