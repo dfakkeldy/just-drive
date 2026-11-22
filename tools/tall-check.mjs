@@ -170,8 +170,10 @@ function checkStrait(merge){
     const newSegs=merged.lines.filter(l=>l.source&&!RESTORED_REFS.includes(l.ref)).flatMap(l=>l.towers.slice(1).map((t,i)=>[l.towers[i],t]));
     for(const l of merged.lines){
       if(l.source){for(const t of l.towers)assert.ok(rules.inBox(t,d.mid),area+' new tower inside the mid box');continue;}
-      l.towers.forEach((t,i)=>{if(i===0||i===l.towers.length-1)return;
-        assert.ok(!newSegs.some(([a,b])=>rules.pointSegment(t.e,t.n,[a.e,a.n],[b.e,b.n])<=55),`${area} baked tower (${t.e},${t.n}) under a new route`);});
+      // An end may meet a new route only when its neighbour leaves it (a kept part's joint), so a stub of two is caught.
+      const near=t=>newSegs.some(([a,b])=>rules.pointSegment(t.e,t.n,[a.e,a.n],[b.e,b.n])<=55);
+      l.towers.forEach((t,i)=>{const end=i===0?l.towers[1]:i===l.towers.length-1?l.towers[i-1]:null;
+        assert.ok(!near(t)||(end&&!near(end)),`${area} baked tower (${t.e},${t.n}) under a new route`);});
     }
     for(const l of merged.lines){
       assert.equal(l.spans.length,l.towers.length-1,area+' merged span count');
