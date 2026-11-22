@@ -7,13 +7,15 @@ import { CHURCH_FEATURES, CHURCH_GEOM, CHURCH_SCALE, type ChurchSite } from './c
  * altar; walking up the aisle, +z is on the left. y = 0 is the floor, which is the sill of the tower door.
  *
  * `shell` is computed from church-site.ts, so the room and the building outside always agree. `fit` holds what only
- * the inside shows; those numbers are read off reference stills by eye. A measured scan corrects `fit` (and, if the
- * building itself was wrong, church-site.ts); nothing else in the interior holds a dimension of the room.
+ * the inside shows; those numbers are read off reference stills by eye. The outside scan made the room about 0.8 times
+ * the old size, so the horizontal `fit` numbers and the gallery height were scaled to it (21 Nov 2026); a scan of the
+ * inside can correct them. Nothing else in the interior holds a dimension of the room.
  */
 const S = CHURCH_SCALE;
 /** Wall thickness in model units: the same T as web/src/church.ts (tools/church-interior-check.mjs compares them). */
 export const CHURCH_WALL = 0.25;
 const { nave: n, tower: t, vestry: v } = CHURCH_GEOM;
+// The tower door is the first door in CHURCH_FEATURES (church-site.ts keeps it first).
 const entry = CHURCH_FEATURES.openings.find(o => o.kind === 'door')!;
 const metres = (units: number): number => units * S;
 const height = (y: number): number => (y - entry.y0) * S;
@@ -38,22 +40,25 @@ export const CHURCH_ROOM = {
     vestry: {
       x0: metres(v.x0 + CHURCH_WALL), x1: metres(n.x0),
       z0: metres(v.z0 + CHURCH_WALL), z1: metres(v.z1 - CHURCH_WALL), ceiling: height(v.eave),
+      /** Where the sash window and the outside door stand on the left (+z) wall: the same places as outside. */
+      window: metres(CHURCH_FEATURES.openings.find(o => o.face === 'vestry_s' && o.kind === 'rect')!.u),
+      door: metres(CHURCH_FEATURES.openings.find(o => o.face === 'vestry_s' && o.kind === 'door')!.u),
     },
   },
   fit: {
     eye: 1.6,
     /** The boarded ceiling follows the roof, `drop` below it, up to a flat panel `flatHalf` each side of the ridge. */
-    ceiling: { flatHalf: 1.9, drop: 0.22 },
-    aisle: 1.3,
-    pews: { rows: 8, pitch: 0.8, rear: 4.0, back: 0.95, seat: 0.43, depth: 0.42 },
+    ceiling: { flatHalf: 1.5, drop: 0.22 },
+    aisle: 1.1,
+    pews: { rows: 6, pitch: 0.8, rear: 3.2, back: 0.95, seat: 0.43, depth: 0.42 },
     /** `floor` is the walking surface. `sideEnd` is how far the side galleries stop short of the altar wall. */
-    gallery: { floor: 3.2, thick: 0.2, rear: 3.0, side: 2.2, sideEnd: 4.6, front: 0.95, post: 0.22 },
+    gallery: { floor: 2.5, thick: 0.2, rear: 2.4, side: 1.75, sideEnd: 3.7, front: 0.95, post: 0.22 },
     /** Against the door wall, on the right as you come in. It starts `gap` from the side wall (room to step on) and rises toward the middle, where there is headroom. */
-    stair: { side: -1 as const, gap: 0.8, run: 3.2, width: 0.85, steps: 16 },
-    tieRod: { fromAltar: 5.2, aboveRail: 0.25 },
-    platform: { depth: 2.6, width: 4.2, rise: 0.18 },
-    altar: { width: 3.3, height: 1.0, depth: 0.55, table: { width: 1.9, height: 1.04, depth: 0.8 }, spires: [1.75, 2.75, 3.75, 2.75, 1.75], spacing: 0.62 },
-    vestryDoor: { z: 2.6, width: 0.9, height: 2.0 },
+    stair: { side: -1 as const, gap: 0.7, run: 2.4, width: 0.85, steps: 12 },
+    tieRod: { fromAltar: 4.2, aboveRail: 0.25 },
+    platform: { depth: 2.1, width: 3.4, rise: 0.18 },
+    altar: { width: 2.7, height: 1.0, depth: 0.55, table: { width: 1.9, height: 1.04, depth: 0.8 }, spires: [1.75, 2.75, 3.75, 2.75, 1.75], spacing: 0.5 },
+    vestryDoor: { z: 2.1, width: 0.9, height: 2.0 },
     cupboard: { height: 2.15, depth: 0.6 },
   },
 } as const;

@@ -26,7 +26,7 @@ for (const w of R.shell.windows) {
   const o = CHURCH_FEATURES.openings.find(o => o.kind === 'arch' && o.face === (w.side > 0 ? 'nave_s' : 'nave_n') && Math.abs(o.u * S - w.x) < 1e-9);
   assert.ok(o, 'each inside window is an outside window'); close(w.width, o.w * S, 'window width'); close(w.sill, (o.y0 - entry.y0) * S, 'window sill');
 }
-assert.ok(N.x1 - N.x0 > 13 && N.x1 - N.x0 < 15.5 && N.z1 - N.z0 > 8.5 && N.z1 - N.z0 < 10.5, 'the nave is metres, not model units');
+assert.ok(N.x1 - N.x0 > 10.5 && N.x1 - N.x0 < 12.5 && N.z1 - N.z0 > 6.8 && N.z1 - N.z0 < 8.3, 'the nave is metres, as scanned (11.4 x 7.5 m)');
 // The vestry lies on +z, which is the left when you walk toward the altar (-x): the same side as its door in the room.
 assert.ok(F.vestryDoor.z - F.vestryDoor.width / 2 > V.z0 && F.vestryDoor.z + F.vestryDoor.width / 2 < V.z1 && F.vestryDoor.z > N.ridgeZ, 'vestry door opens into the vestry, left of the altar');
 // The ceiling: a flat panel under the ridge, sloped sides down to the eaves, never above the roof.
@@ -43,12 +43,12 @@ const st = CHURCH_FEATURES.steps;
 // The site's own solids, each read back into model units.
 const inSolid = (x, z) => site.solids.some(s => { const c = site.local(s.x, s.z); return Math.abs(x - c.x) < s.half / S && Math.abs(z - c.z) < s.halfWidth / S; });
 assert.ok(inSolid((n.x0 + n.x1) / 2, 0) && inSolid(t.x1 + st.run / 2, 0), 'the nave and the steps are solid');
-for (const [x, z] of [[8, 12], [t.x1 + st.run + 4, 0], [10, -4]]) {
+for (const [x, z] of [[6, 8], [t.x1 + st.run + 4, 0], [7, -3]]) {
   const p = site.world(x, z);
   assert.ok(!inSolid(x, z), `parking point ${x},${z} is outside every solid of the site`);
   assert.ok(Math.hypot(p.x - door.x, p.z - door.z) < CHURCH_DOOR_RADIUS - 2.5, `a car at model ${x},${z} is in reach of the door`);
 }
-const far = site.world(st.run + 40, 20); assert.ok(Math.hypot(far.x - door.x, far.z - door.z) > CHURCH_DOOR_RADIUS, 'the far end of the lot is out of reach');
+const far = site.world(st.run + 26, 13); assert.ok(Math.hypot(far.x - door.x, far.z - door.z) > CHURCH_DOOR_RADIUS, 'the far end of the lot is out of reach');
 
 // 3. The rail stays inside the room, with headroom, and visits the four places in order.
 const rail = churchRail();
