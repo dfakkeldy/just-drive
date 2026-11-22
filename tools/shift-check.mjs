@@ -1,6 +1,6 @@
 // Run: web/node_modules/.bin/esbuild tools/shift-check.mjs --bundle --platform=node --format=esm --outfile=/tmp/mmm-shift-check.mjs && node /tmp/mmm-shift-check.mjs
 import assert from 'node:assert/strict';
-import { makeDay, nextCareer, freshCareer, verdict, readCareer, saveCareer, clock, dayType, missedCustomers } from '../web/src/shift-rules.ts';
+import { makeDay, nextCareer, freshCareer, migrateCareer, MABOU_REMOVED_RURAL_1347, verdict, readCareer, saveCareer, clock, dayType, missedCustomers } from '../web/src/shift-rules.ts';
 import { Complaints, dismissed, complaintLine } from '../web/src/complaints.ts';
 const lawn = { kind: 'lawnDamage', at: 100, target: 8, x: 3, z: 4, road: 7 };
 const cat = { id: 'cat', kind: 'animal', x: 0, z: 0, road: 7, radius: 1, blocking: true };
@@ -61,6 +61,28 @@ stored=JSON.stringify({day:2,pay:345,warnings:0,double:false,suspended:false});
 assert.deepEqual(readCareer().carryover,[]);
 const saved={...freshCareer(),carryover:[0,4,0,2]};saveCareer(saved);assert.deepEqual(readCareer(),saved);
 stored=JSON.stringify({...saved,carryover:[null]});assert.deepEqual(readCareer(),freshCareer());
+stored=JSON.stringify({...saved,mailCount:-1});assert.deepEqual(readCareer(),freshCareer());
+// Old Mabou 469+6 careers shift indices above removed rural box 217 down by one on 468+7 land, once only.
+const oldCarry=Array(475).fill(0);
+oldCarry[0]=1;oldCarry[216]=3;oldCarry[MABOU_REMOVED_RURAL_1347]=5;oldCarry[230]=2;oldCarry[468]=4;oldCarry[469]=6;oldCarry[474]=7;
+const oldCareer={day:5,pay:1000,warnings:1,double:false,suspended:false,carryover:oldCarry};
+assert.equal(migrateCareer(oldCareer,469,6),oldCareer,'before-install land leaves carryover alone');
+const migrated=migrateCareer(oldCareer,468,7);
+assert.equal(migrated.mailCount,468);assert.equal(migrated.carryover.length,475);
+assert.deepEqual([migrated.carryover[0],migrated.carryover[216],migrated.carryover[229],migrated.carryover[230],migrated.carryover[467],migrated.carryover[468],migrated.carryover[473],migrated.carryover[474]],[1,3,2,0,4,6,7,0]);
+assert.equal(migrateCareer(migrated,468,7),migrated,'migration is idempotent on reload');
+saveCareer(migrated);assert.deepEqual(readCareer(),migrated);
+assert.equal(nextCareer(migrated,'clear').mailCount,468,'nextCareer preserves mailCount');
+// Restoring the 469+6 land shifts a tagged 468+7 save back so customer 230 returns to 231, and re-upgrading reverses it cleanly.
+const stagedCarry=Array(475).fill(0);stagedCarry[0]=1;stagedCarry[216]=3;stagedCarry[230]=31;stagedCarry[468]=6;stagedCarry[473]=7;stagedCarry[474]=9;
+const stagedSave={...migrated,carryover:stagedCarry,mailCount:468};
+const rolledBack=migrateCareer(stagedSave,469,6);
+assert.equal(rolledBack.mailCount,469);assert.equal(rolledBack.carryover.length,475);
+assert.deepEqual([rolledBack.carryover[0],rolledBack.carryover[216],rolledBack.carryover[217],rolledBack.carryover[230],rolledBack.carryover[231],rolledBack.carryover[469],rolledBack.carryover[474]],[1,3,0,0,31,6,7]);
+assert.equal(migrateCareer(rolledBack,469,6),rolledBack,'rollback is idempotent on reload');
+const reUpgraded=migrateCareer(rolledBack,468,7);
+assert.equal(reUpgraded.mailCount,468);assert.equal(reUpgraded.carryover[230],31);assert.equal(reUpgraded.carryover[468],6);assert.equal(reUpgraded.carryover[474],0);
+const emptyMig=migrateCareer(freshCareer(),468,7);assert.deepEqual(emptyMig,{...freshCareer(),mailCount:468});
 // Simulate an iframe which rejects every storage access.
 Object.defineProperty(globalThis, 'localStorage', { get() { throw Error('SecurityError'); } });
 assert.deepEqual(readCareer(), freshCareer()); assert.doesNotThrow(() => saveCareer(next));

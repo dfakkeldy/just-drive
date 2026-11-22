@@ -63,6 +63,10 @@ export function placesFor(village: readonly [number, number]): Place[] {
       spawn: { e: 618732.67, n: 5104952.35, road: null, roadId: 922, heading: 199 * Math.PI / 180 } },
     view('mines-road-view', 'Mabou Mines Road above the harbour', 'Mabou Mines Road', 620332.5, 5104839.9, 125, 'Mabou Mines Road climbs north from the harbour road here. Look back south-east over the harbour.', ['terrain/roads.json#55']),
     view('shore-bends', 'Mabou Harbour Road shore bends', 'Mabou Harbour Road', 619602.1, 5105013.5, 240, 'The road follows the bends of the harbour shore here.', ['terrain/roads.json#49']),
+    // Views on Little Mabou Road from the dash cam build list, each checked in the game's own pictures.
+    view('little-mabou-marsh', 'Little Mabou Road marsh', 'Little Mabou Road', 622408.43, 5101991.96, 30, 'Look north-east over the marsh and the river.', ['terrain/roads.json#44']),
+    view('harbour-mouth-view', 'Harbour mouth from Little Mabou Road', 'Little Mabou Road', 617032.38, 5102935.05, 10, 'Look north across the mouth of Mabou Harbour to the far headland.', ['terrain/roads.json#47']),
+    view('little-mabou-gulf', 'Gulf view from Little Mabou Road', 'Little Mabou Road', 616651.76, 5102878.7, 350, 'Look north over open fields to the Gulf and Cape Mabou.', ['terrain/roads.json#47']),
     view('harbour-road-end', 'West end of Mabou Harbour Road', 'Mabou Harbour Road', 617500.4, 5105590.6, 290, 'The road ends on high ground above the shore, looking out to sea.', ['terrain/roads.json#51']),
     place('highlands-trailhead', 'Cape Mabou highlands trailhead', 'trail', 619964.9, 5111008.8, 'The southern way into the Cape Mabou highlands trails. Most of the trails are north of this map. Ask the people who keep a trail before you go.', ['https://www.cbisland.com/en/listing/cape-mabou-highlands', 'https://novascotia.ca/nse/protectedareas/wa_capemabou.asp'], 500),
   ];
