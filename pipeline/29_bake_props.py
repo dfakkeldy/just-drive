@@ -416,14 +416,14 @@ def corrected_road(net, entry):
 
 
 def pole_side(local, r, p):
-    """(s, side, rule-free foot) of a pole beside road r: side +1 left, -1 right, looking along the road. A pole whose
-    side is not clear (at a bend vertex, or more than 20 m from the line) stops the bake."""
+    """(s, side) of a pole beside road r: side +1 left, -1 right, looking along the road. A pole whose side is not
+    clear (on the line, off a bend vertex, or more than 20 m from the line) stops the bake."""
     at = local.nearest((p['x'], p['y']), 20)
     if at is None:
         raise RuntimeError(f'pole {p!r} is not within 20 m of its road {r["name"]!r}')
     u = at['u']
     cross = u[0] * (p['y'] - at['p'][1]) - u[1] * (p['x'] - at['p'][0])
-    if abs(cross) < .5 * at['dist']:
+    if at['dist'] == 0 or abs(cross) < .5 * at['dist']:
         raise RuntimeError(f'pole {p!r} stands off a bend of {r["name"]!r}; its side is not clear')
     return at['s'], 1 if cross > 0 else -1
 

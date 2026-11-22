@@ -82,7 +82,8 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
             other = lambda poles: {(q['x'], q['y']) for q in poles if p.public(net.roads[q['road']]) and q['road'] not in fixed}
             assert other(before['poles']) == other(props['poles']), area + ': public pole positions changed'
             if 'serviceDrops' in props:
-                expect = p.correct_public_poles(net, before['poles'], p.AREA.public_pole_corrections)
+                expect = p.correct_public_poles(net, [q for q in before['poles'] if p.public(net.roads[q['road']])],
+                                                 p.AREA.public_pole_corrections)
             else:
                 expect = before['poles']
             pick = lambda poles: sorted((json.dumps(q, sort_keys=True) for q in poles if q['road'] in fixed))
@@ -100,7 +101,8 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
         expected = p.service_drops(net, props['poles'], buildings, area, styles)
         assert props['serviceDrops'] == expected, area + ': drops do not match current poles, buildings, roof styles or side/reach rules'
         assert not any(d['building'] == -1 for d in props['serviceDrops']), area + ': the church has no power'
-        assert p.correct_public_poles(net, props['poles'], p.AREA.public_pole_corrections) == props['poles'], \
+        installed_public = [q for q in props['poles'] if p.public(net.roads[q['road']])]
+        assert p.correct_public_poles(net, installed_public, p.AREA.public_pole_corrections) == installed_public, \
             area + ': a pole stands where public_pole_corrections removes it or on the wrong side'
         unpowered = p.unpowered_roads(net, p.AREA.unpowered_tracks)
         bounds = {}
