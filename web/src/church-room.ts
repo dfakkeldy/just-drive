@@ -190,7 +190,7 @@ export function churchRail(room: ChurchRoom = CHURCH_ROOM): Rail {
     { id: 'door', at: 0, look: { x: nave.x0, y: 2.1, z: c },
       text: 'One room. Pale blue pews stand in two blocks, one on each side of a wide aisle, and the altar is at the far end.\nThe gallery runs above you on three sides, on square posts.' },
     { id: 'altar', at: lengths[points.indexOf(altar)], look: { x: nave.x0, y: 2.0, z: c },
-      text: 'A white altar with three pointed arches outlined in gold. Behind it stand five scalloped spires topped with gold crosses, a statue, and framed devotional prints.\nA wooden armchair, a white lectern and a small red table with statues stand to the right; the confessional stands in the left corner.' },
+      text: 'Seven gold-outlined arches line the white altar. The table in front has three. Behind them stand five spires with gold crosses, a statue and framed devotional prints.\nA wooden armchair, a white lectern and a small red table with statues stand to the right; the confessional stands in the left corner.' },
     { id: 'vestry', at: lengths[points.indexOf(inVestry)], look: { x: vestry.x0, y: 0.8, z: (vestry.z0 + vestry.z1) / 2 - 0.75 },
       text: 'The vestry. Bare worn planks, two sash windows, a folding chair, and a white chest of drawers with peeling paint.\nA framed map leans on the wall, drawn by hand: houses and roads in pencil.' },
     { id: 'gallery', at: lengths[points.indexOf(rail)], look: { x: nave.x0 + 1, y: 0.9, z: c },
