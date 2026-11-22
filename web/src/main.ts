@@ -266,6 +266,8 @@ const pavedChunk = pavedRead ? early(import('./paved')) : null;
 const grassChunk = LOW ? null : early(import('./grass'));
 const ptInfrastructureChunk = ERA.modern && AREA.ptInfrastructure && !LOW
   ? early(Promise.all([import('./pt-infrastructure'), import('./pt-infrastructure-source')])) : null;
+const ptIndustryChunk = ERA.modern && AREA.ptInfrastructure && params.get('ptIndustry') !== '0'
+  ? early(import('./pt-industry')) : null;
 const churchChunk = ERA.modern && AREA.church && params.get('church') !== '0' ? early(import('./church')) : null;
 const churchRoomChunk = churchChunk ? early(import('./interior-church')) : null;
 const villageChunk = ERA.modern && AREA.judiqueVillage && params.get('village') !== '0' ? early(import('./judique-village')) : null;
@@ -607,6 +609,17 @@ if (trafficSignals) {
 if (ERA.modern && AREA.ptInfrastructure && !LOW) {
   const loaded = await ptInfrastructureChunk!.take().catch(partFailed);
   scene.add(new loaded[0].PointInfrastructure(loaded[1].PT_FEATURES, manifest.village, EXAG, SEA_LEVEL, roads).group);
+}
+// Point Tupper industrial waterfront: power plant stack & boiler house parts, coal yard & conveyors, and marine terminal piers.
+if (ERA.modern && AREA.ptInfrastructure && params.get('ptIndustry') !== '0') {
+  const { PointTupperIndustry } = await ptIndustryChunk!.take().catch(partFailed);
+  const ptIndustry = new PointTupperIndustry(manifest.village, EXAG, SEA_LEVEL, LOW, nightLook !== null, !!stockpiles);
+  scene.add(ptIndustry.group);
+  const prevCanopyExcludes = terrain.canopyExcludes;
+  terrain.canopyExcludes = prevCanopyExcludes
+    ? (e, n) => prevCanopyExcludes(e, n) || ptIndustry.excludesCanopy(e, n)
+    : ptIndustry.excludesCanopy;
+  if (import.meta.env.DEV) expose({ ptIndustry }, false);
 }
 
 const history = historyLand ? await (async () => {
