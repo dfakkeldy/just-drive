@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { Buildings, buildingSites } from '../web/src/buildings.ts';
 import { baxtersCoveBuildingArt, littleMabouBuildingArt, NovemberBuildings, novemberFootprints, TRAILHEAD_FENCE } from '../web/src/november-buildings.ts';
 import { BAXTERS_COVE_LOT, littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
-import { isPonyTrussBridge, PONY_TRUSS } from '../web/src/november-bridges.ts';
+import { littleMabouPonyTruss, PONY_TRUSS } from '../web/src/november-bridges.ts';
+import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
+import { TRUCK_SPEC } from '../web/src/truck.ts';
+import { TRAILER_SPEC } from '../web/src/trailer.ts';
 import { WHARF_SOURCES } from '../web/src/wharf-source.ts';
 import { areaPlaces, nearestPlacement, placesFor } from '../web/src/places.ts';
 import { planRails, railPoint } from '../web/src/guardrail-rules.ts';
@@ -196,43 +200,97 @@ for (const {a, b, side} of added) {
 // Little Mabou Road grey steel pony-truss bridges (Mabou pack, ids 45 and 46).
 {
   const mabouManifest = read('terrain', 'manifest'), mabouRoads = read('terrain', 'roads');
-  const flatGround = { level: 8, heightAt: () => 2.5, surfaceAt: () => ({ ground: 2.5, level: 8, kind: 2, halfWidth: 3, roadDist: 0, canopy: 0, washboard: false }) };
-  const net = new Roads(mabouRoads, mabouManifest.village, flatGround);
-  const matched = net.roads.filter(r => isPonyTrussBridge(r, mabouManifest.village));
+  const tagged = mabouRoads.roads.map(littleMabouPonyTruss);
+  const matched = tagged.filter(r => r.ponyTruss);
   assert.deepEqual(matched.map(r => r.id).sort((a, b) => a - b), [45, 46], 'only Little Mabou Road bridges 45 and 46 match');
   for (const r of matched) {
-    assert.ok(isPonyTrussBridge({ ...r, pts: [...r.pts].reverse() }, mabouManifest.village), `reversed span ${r.id} still matches`);
+    const raw = mabouRoads.roads.find(x => x.id === r.id);
+    assert.notEqual(r, raw, `bridge ${r.id} tagged without mutating source`);
+    assert.equal(littleMabouPonyTruss(r), r, `bridge ${r.id} tag is idempotent`);
+    assert.ok(littleMabouPonyTruss({ ...raw, pts: [...raw.pts].reverse() }).ponyTruss, `reversed span ${r.id} still matches`);
+  }
+  for (const other of mabouRoads.roads.filter(r => r.id !== 45 && r.id !== 46)) {
+    assert.equal(littleMabouPonyTruss(other), other, `road ${other.id} stays unchanged`);
+  }
+  const flatGround = {
+    level: 8, manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+    heightAt: () => 2.5,
+    surfaceAt: () => ({ ground: 2.5, level: 8, kind: 2, halfWidth: 3, roadDist: 0, canopy: 0, washboard: false }),
+  };
+  const net = new Roads({ roads: tagged }, mabouManifest.village, flatGround);
+  const rails = net.guardrails;
+  assert.ok(rails, 'modern Mabou roads construct guardrails with pony-truss rail solids');
+  const ray = new THREE.Raycaster();
+  const down = new THREE.Vector3(0, -1, 0);
+  for (const id of [45, 46]) {
+    const r = net.roads.find(x => x.id === id);
     const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
-    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
-    assert.equal(net.deckHeight(mx, mz), 2.55, `bridge ${r.id} keeps exact deckHeight`);
-    const mesh = net.group.children.find(c => c.name === `pony-truss-${r.id}`);
-    assert.ok(mesh?.geometry, `bridge ${r.id} builds one pony-truss mesh`);
-    const pos = mesh.geometry.getAttribute('position'), col = mesh.geometry.getAttribute('color');
-    assert.ok(pos && col && pos.array.every(Number.isFinite), `bridge ${r.id} has finite vertex-coloured geometry`);
-    assert.ok(pos.count / 3 < 800, `bridge ${r.id} stays within triangle budget (${pos.count / 3})`);
-    let maxY = -Infinity, maxHalf = 0;
     const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, heading = Math.atan2(dx, -dz);
+    assert.equal(net.deckHeight(mx, mz), 2.55, `bridge ${id} keeps exact deckHeight`);
+    const mesh = net.group.children.find(c => c.name === `pony-truss-${id}`);
+    assert.ok(mesh?.geometry, `bridge ${id} builds one pony-truss mesh`);
+    mesh.updateMatrixWorld(true);
+    const pos = mesh.geometry.getAttribute('position'), col = mesh.geometry.getAttribute('color');
+    assert.ok(pos && col && pos.array.every(Number.isFinite), `bridge ${id} has finite vertex-coloured geometry`);
+    assert.ok(pos.count / 3 < 800, `bridge ${id} stays within triangle budget (${pos.count / 3})`);
+    let maxY = -Infinity, maxHalf = 0;
     for (let i = 0; i < pos.count; i++) {
       const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
       maxY = Math.max(maxY, py);
       maxHalf = Math.max(maxHalf, Math.abs(-(px - ax) * uz + (pz - az) * ux));
     }
-    assert.ok(maxY - 2.55 >= 2.0 && maxY - 2.55 <= 2.6, `bridge ${r.id} truss height matches pony-truss proportions (${(maxY - 2.55).toFixed(2)} m)`);
-    assert.ok(maxHalf < r.halfWidth && maxHalf >= PONY_TRUSS.half, `bridge ${r.id} is narrow one-lane (${(maxHalf * 2).toFixed(2)} m wide)`);
+    assert.ok(maxY - 2.55 >= 2.0 && maxY - 2.55 <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${(maxY - 2.55).toFixed(2)} m)`);
+    assert.ok(maxHalf < r.halfWidth && maxHalf >= PONY_TRUSS.half, `bridge ${id} is narrow one-lane (${(maxHalf * 2).toFixed(2)} m wide)`);
+    // Lateral wheel support matches the rendered asphalt lane: supported inside clearHalf, null beyond the deck.
+    for (const offset of [0, -1.5, 1.5, -2.0, 2.0]) {
+      const x = mx - uz * offset, z = mz + ux * offset;
+      const y = net.deckHeight(x, z);
+      assert.equal(y, 2.55, `bridge ${id} supports lane at offset ${offset}`);
+      ray.set(new THREE.Vector3(x, y + 0.5, z), down);
+      const hit = ray.intersectObject(mesh)[0];
+      assert.ok(hit && Math.abs(hit.point.y - y) < 1e-4, `bridge ${id} asphalt mesh matches deckHeight at offset ${offset}`);
+    }
+    for (const offset of [-2.75, 2.75]) {
+      const x = mx - uz * offset, z = mz + ux * offset;
+      assert.equal(net.deckHeight(x, z), null, `bridge ${id} gives no wheel support at ${offset} m beyond rendered deck`);
+      ray.set(new THREE.Vector3(x, 10, z), down);
+      assert.equal(ray.intersectObject(mesh).length, 0, `bridge ${id} has no mesh at ${offset} m beyond deck`);
+    }
+    // Centred car, truck and loaded trailer pass cleanly; off-centre 1.10 m truck and trailer are pushed back from the rail.
+    const probeAt = (offset, spec) => {
+      const p = { x: mx - uz * offset, z: mz + ux * offset, heading, vx: 0, vz: 0, speed: 0, spec };
+      rails.block(p, 1 / 120);
+      return { moved: Math.hypot(p.x - (mx - uz * offset), p.z - (mz + ux * offset)), lat: -(p.x - mx) * uz + (p.z - mz) * ux };
+    };
+    for (const [label, spec] of [['car', CAR_SPEC], ['truck', TRUCK_SPEC], ['trailer', TRAILER_SPEC]]) {
+      const centred = probeAt(0, spec);
+      assert.ok(centred.moved < 1e-7, `bridge ${id} accepts centred ${label}`);
+      const halfTrack = ((spec.rearTrack ?? spec.track) / 2);
+      for (const side of [-1, 1]) {
+        assert.equal(net.deckHeight(mx - uz * side * halfTrack, mz + ux * side * halfTrack), 2.55, `bridge ${id} supports centred ${label} wheels`);
+      }
+    }
+    for (const [label, spec] of [['truck', TRUCK_SPEC], ['trailer', TRAILER_SPEC]]) {
+      for (const side of [-1, 1]) {
+        const off = probeAt(side * 1.1, spec);
+        assert.ok(off.moved > 0.25, `bridge ${id} rejects ${side * 1.1} m off-centre ${label} overlapping inner rail`);
+        assert.ok(Math.abs(off.lat) + spec.envelope.radius <= PONY_TRUSS.railInner + 0.01, `bridge ${id} keeps resolved ${label} inside inner rail`);
+      }
+    }
   }
   // Other Mabou bridges keep the generic modern deck.
   const otherBridge = net.roads.find(r => r.id === 50);
-  assert.ok(otherBridge && !isPonyTrussBridge(otherBridge, mabouManifest.village), 'Mabou Harbour Road bridge stays generic');
+  assert.ok(otherBridge && !otherBridge.ponyTruss, 'Mabou Harbour Road bridge stays generic');
   assert.equal(net.deckHeight(otherBridge.pts[0][0], otherBridge.pts[0][1]), 2.55);
   assert.ok(!net.group.children.some(c => c.name === 'pony-truss-50'));
   for (const child of [...net.group.children]) child.geometry?.dispose();
   // No bridge in any other area pack matches (including Highway 19 ids 45/46 in Judique and Canso Causeway).
   for (const dir of ['areas/judique', 'areas/porthood', 'areas/pointtupper', 'areas/westbay', 'areas/cansocauseway']) {
-    const m = read(dir, 'manifest'), d = read(dir, 'roads');
-    const areaNet = new Roads(d, m.village, flatGround);
-    assert.deepEqual(areaNet.roads.filter(r => isPonyTrussBridge(r, m.village)), [], `${dir} has no Little Mabou pony truss`);
+    const d = read(dir, 'roads');
+    assert.deepEqual(d.roads.map(littleMabouPonyTruss).filter(r => r.ponyTruss), [], `${dir} has no Little Mabou pony truss`);
   }
-  console.log('PASS Little Mabou Road steel pony-truss bridges (ids 45 and 46; narrow one-lane, area-scoped)');
+  console.log('PASS Little Mabou Road steel pony-truss bridges (ids 45 and 46; lane support, rail solids, truck/trailer poses)');
 }
 console.log('PASS Little Mabou homes, shed and marsh rail; access and bridge exclusions');
 console.log('PASS two Highway 19 aprons both land packs, gravel driveway, hillside gravel, building batches and three view starts');

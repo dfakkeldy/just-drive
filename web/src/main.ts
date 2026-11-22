@@ -29,6 +29,7 @@ import { ABOUT_URL } from './credits';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { baxtersCoveBuildingArt, isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
 import { littleMabouMarshRail, NovemberRoadDetails } from './november-road-details';
+import { littleMabouPonyTruss } from './november-bridges';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals, CatTileUnread } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
@@ -610,7 +611,7 @@ if (waterReflections) {
   Object.assign(terrain.uniforms, waterReflections.uniforms);
 }
 
-const roadLines = ERA.modern && AREA.id === 'mabou' ? roadData.roads.map(littleMabouMarshRail) : roadData.roads;
+const roadLines = ERA.modern && AREA.id === 'mabou' ? roadData.roads.map(littleMabouMarshRail).map(littleMabouPonyTruss) : roadData.roads;
 const roads = new Roads({ roads: novemberRoads?.added.length ? [...roadLines, ...novemberRoads.added] : roadLines }, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
   ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW, () => terrain.dataRevision)

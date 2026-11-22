@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Solid } from './parked';
 import type { Road } from './roads';
 import { Mesher, type RGB } from './yard-kit';
 
@@ -12,8 +13,14 @@ export const PONY_TRUSS_BRIDGES = [
 ] as const;
 
 export const PONY_TRUSS = {
-  /** Half-width to truss centreline: 4.4 m centre-to-centre, ~4.16 m clear one-lane roadway. */
+  /** Half-width to truss centreline: 4.4 m centre-to-centre, 4.16 m clear asphalt roadway. */
   half: 2.2,
+  /** Clear asphalt half-width between bottom chords (exact lateral deckHeight limit). */
+  clearHalf: 2.08,
+  /** Inner collision face of the steel inner guard rail along each truss side. */
+  railInner: 2.005,
+  /** Outer face of the bottom chord and deck fascia. */
+  outerHalf: 2.32,
   /** Target panel length (matching yard-build.ts `bridgeLot` ~3.5 m panels). */
   targetPanel: 3.4,
   chordSize: 0.24,
@@ -34,15 +41,34 @@ const DECK_ASPHALT: RGB = [0.085, 0.082, 0.078];
 
 const MATCH_TOLERANCE = 5;
 
-/** True only for the two Little Mabou Road steel pony-truss spans in the Mabou pack. */
-export function isPonyTrussBridge(road: Road, village: readonly [number, number]): boolean {
-  if (!road.bridge || road.kind !== 2 || road.pts.length < 2 || road.name !== 'Little Mabou Road') return false;
+/** Tag the two Little Mabou Road pony-truss bridges in raw EPSG:2961 road data without editing the input. */
+export function littleMabouPonyTruss(road: Road): Road {
+  if (!road.bridge || road.kind !== 2 || road.pts.length < 2 || road.name !== 'Little Mabou Road') return road;
   const first = road.pts[0], last = road.pts[road.pts.length - 1];
-  const e0 = first[0] + village[0], n0 = village[1] - first[1];
-  const e1 = last[0] + village[0], n1 = village[1] - last[1];
-  return PONY_TRUSS_BRIDGES.some(b =>
-    (Math.hypot(e0 - b.start[0], n0 - b.start[1]) <= MATCH_TOLERANCE && Math.hypot(e1 - b.end[0], n1 - b.end[1]) <= MATCH_TOLERANCE) ||
-    (Math.hypot(e0 - b.end[0], n0 - b.end[1]) <= MATCH_TOLERANCE && Math.hypot(e1 - b.start[0], n1 - b.start[1]) <= MATCH_TOLERANCE));
+  const matched = PONY_TRUSS_BRIDGES.some(b =>
+    (Math.hypot(first[0] - b.start[0], first[1] - b.start[1]) <= MATCH_TOLERANCE && Math.hypot(last[0] - b.end[0], last[1] - b.end[1]) <= MATCH_TOLERANCE) ||
+    (Math.hypot(first[0] - b.end[0], first[1] - b.end[1]) <= MATCH_TOLERANCE && Math.hypot(last[0] - b.start[0], last[1] - b.start[1]) <= MATCH_TOLERANCE));
+  if (!matched || road.ponyTruss) return road;
+  return { ...road, ponyTruss: true };
+}
+
+/** Two solid side-rail walls for a world-space pony-truss bridge, aligned to the inner rail and outer chord faces. */
+export function ponyTrussSolids(road: Road): Solid[] {
+  if (!road.ponyTruss || road.pts.length < 2) return [];
+  const a = road.pts[0], b = road.pts[road.pts.length - 1];
+  const dx = b[0] - a[0], dz = b[1] - a[1], span = Math.hypot(dx, dz);
+  if (!span) return [];
+  const ux = dx / span, uz = dz / span, heading = Math.atan2(dx, -dz);
+  const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+  const centre = (PONY_TRUSS.railInner + PONY_TRUSS.outerHalf) / 2;
+  const halfWidth = (PONY_TRUSS.outerHalf - PONY_TRUSS.railInner) / 2;
+  return [-1, 1].map(side => ({
+    x: mx - uz * side * centre,
+    z: mz + ux * side * centre,
+    half: span / 2,
+    halfWidth,
+    heading,
+  }));
 }
 
 /**
@@ -73,8 +99,10 @@ export function buildPonyTrussBridge(pts: readonly [number, number][], y0: numbe
   const deckLen = Math.hypot(span, dy);
 
   // Asphalt deck top and steel deck slab between the two trusses.
-  const clearHalf = half - chord / 2;
+  const clearHalf = PONY_TRUSS.clearHalf;
   const deckThick = PONY_TRUSS.deckThickness;
+  const fasciaTop = -0.025;
+  const fasciaBottom = fasciaTop - deckThick;
   m.at(mx, deckMidY, mz, yaw, 0, slope);
   // Top driving surface at exact local y = 0 (matches Roads.deckHeight).
   m.quad([
@@ -84,20 +112,20 @@ export function buildPonyTrussBridge(pts: readonly [number, number][], y0: numbe
     [-deckLen / 2, 0, -clearHalf],
   ], DECK_ASPHALT);
   // Deck slab sides and underside (steel deck fascia under the trusses, 2.5 cm below asphalt to avoid z-fighting).
-  m.box(0, -deckThick / 2 - 0.025, 0, deckLen, deckThick, half * 2 + chord, STEEL_DARK, false);
+  m.box(0, fasciaTop - deckThick / 2, 0, deckLen, deckThick, half * 2 + chord, STEEL_DARK, false);
 
-  // Transverse floor beams beneath the deck at every panel point, plus concrete end abutments.
+  // Transverse floor beams beneath the fascia at every panel point (inset from fascia sides so no faces coincide).
   const beamW = half * 2 + chord;
   for (let i = 0; i <= panels; i++) {
     const s = i * panel;
     const bx = a[0] + ux * s, bz = a[1] + uz * s, by = deckY(s);
     m.at(bx, by, bz, yaw);
-    m.box(0, -deckThick - 0.14, 0, 0.20, 0.28, beamW, STEEL_DARK, false);
+    m.box(0, fasciaBottom - 0.14, 0, 0.20, 0.28, beamW - 0.04, STEEL_DARK, false);
   }
   for (const s of [0.32, span - 0.32]) {
     const ax = a[0] + ux * s, az = a[1] + uz * s, ay = deckY(s);
     m.at(ax, ay, az, yaw);
-    m.box(0, -deckThick - 0.58, 0, 0.64, 1.16, beamW + 0.08, ABUTMENT, true);
+    m.box(0, fasciaBottom - 0.58, 0, 0.64, 1.16, beamW + 0.08, ABUTMENT, true);
   }
 
   // Two grey steel pony-truss sides: bottom chord, top chord, inclined end posts, Warren diagonals, vertical posts, inner guard rail.
@@ -115,8 +143,8 @@ export function buildPonyTrussBridge(pts: readonly [number, number][], y0: numbe
     m.at(mx + nx, deckMidY + h, mz + nz, yaw, 0, slope);
     m.box(0, 0, 0, topLen, chord, chord, STEEL_CHORD, false);
 
-    // Inner steel guard rail running full span inside the truss posts.
-    const railZ = side * (half - chord / 2 - 0.04);
+    // Inner steel guard rail running full span inside the truss posts (inner face at PONY_TRUSS.railInner).
+    const railZ = side * (PONY_TRUSS.railInner + 0.035);
     m.at(mx - uz * railZ, deckMidY + PONY_TRUSS.railHeight, mz + ux * railZ, yaw, 0, slope);
     m.box(0, 0, 0, deckLen, 0.22, 0.07, STEEL_RAIL, false);
 

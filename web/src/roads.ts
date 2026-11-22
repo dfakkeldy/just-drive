@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import { eraRoadHalf } from './era';
 import { timberBridge, periodBridgePlane, prepareTimberPlans, timberPlan, timberGroundPoints } from './eras/timber-bridge';
-import { buildPonyTrussBridge, isPonyTrussBridge } from './november-bridges';
+import { buildPonyTrussBridge, PONY_TRUSS } from './november-bridges';
 
 export interface Road {
   id: number;
@@ -13,6 +13,7 @@ export interface Road {
   tags?: { railway?: string | boolean };
   kind: number;          // 1 highway, 2 paved, 3 gravel, 4 track, 5 rail trail
   guardrailRuns?: { start: number; end: number; side: number; posts: 'metal' }[];
+  ponyTruss?: boolean;
   halfWidth: number;
   bridge: boolean;
   pts: [number, number][];   // world x, z (converted on load)
@@ -59,7 +60,7 @@ export class Roads {
   private eraBridgeHit:RoadHit|null=null;private bridgeQuery=0;
 
   constructor(data: { roads: Road[] },
-    private readonly village: readonly [number, number], private terrain: Terrain) {
+    village: [number, number], private terrain: Terrain) {
     for (const r of data.roads) {
       if (terrain.cartRoads && r.kind === 5) continue;
       const road: Road = { ...r, halfWidth: terrain.cartRoads ? eraRoadHalf(r.kind, r.halfWidth) : r.halfWidth, pts: r.pts.map(([e, n]) => [e - village[0], village[1] - n]) };
@@ -180,7 +181,7 @@ export class Roads {
   deckHeight(x: number, z: number): number | null {
     // Empty bridge buckets skip all ordinary road segments and deck work.
     const hit = this.query(this.bridgeCells, x, z, 12, bridgeRoad);
-    if (!hit || !this.terrain.cartRoads && hit.dist > hit.road.halfWidth + 1.2) return null;
+    if (!hit || !this.terrain.cartRoads && hit.dist > (hit.road.ponyTruss ? PONY_TRUSS.clearHalf : hit.road.halfWidth + 1.2)) return null;
     const deck = this.deck(hit.road);
     if (!deck) return null;
     const [ax, az] = hit.road.pts[hit.seg], [bx, bz] = hit.road.pts[hit.seg + 1];
@@ -240,7 +241,7 @@ export class Roads {
     for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
     const len = cum[n - 1] || 1, y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
     let mesh: THREE.Mesh;
-    if (isPonyTrussBridge(road, this.village)) {
+    if (road.ponyTruss) {
       const geo = buildPonyTrussBridge(p, y0, y1, len);
       this.periodMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
       mesh = new THREE.Mesh(geo, this.periodMat);
