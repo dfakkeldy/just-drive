@@ -332,3 +332,5 @@ airport-drag-browser	unproven	no	Hardware WebGL, Point Tupper land and live inpu
 version-notice	portable	no	pure Node: real offline-version.ts module and main.ts predicate with mutations
 version-browser	unproven	no	local public build and actual browser/worker; native hardware GPU
 drlane-browser	unproven	no	not yet measured on another host
+prince	portable	no	Node check over baked Point Tupper land; no browser
+prince-browser	unproven	no	not yet measured on another host

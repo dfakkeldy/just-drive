@@ -7,7 +7,7 @@
 const TEST_KEYS = new Set([
   'animal', 'at', 'break', 'brooks', 'cam', 'camground', 'cap', 'cat', 'church', 'coast', 'damage', 'day',
   'aiDriver', 'aiDriverCheck', 'airport', 'boss', 'rideAlong', 'demo', 'dir', 'dirt', 'double', 'drlane', 'f', 'fishingCheck', 'trafficCheck', 'wildlife', 'grass', 'hawkesbury', 'home', 'hour', 'hud', 'interior',
-  'jumpCheck', 'knock', 'lawn', 'low', 'mabou', 'maryville', 'mpserver', 'n', 'name', 'pair', 'park', 'photo', 'porch', 'reflections',
+  'jumpCheck', 'knock', 'lawn', 'low', 'mabou', 'maryville', 'mpserver', 'n', 'name', 'pair', 'park', 'photo', 'porch', 'prince', 'reflections',
   'relief', 'report', 'res', 'road', 'run', 'scene', 'shadows', 'sidewalks', 'ptIndustry', 'shot', 'still', 'stuffed', 'test',
   'quarry', 'throw', 'trees', 'village', 'x', 'yard', 'yardProps', 'lotprops',
   'canvasAA', 'clouds', 'finishSamples', 'finishSmooth', 'finishType', 'leaves',

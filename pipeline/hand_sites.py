@@ -52,7 +52,7 @@ def records(root):
 # The ground-class bake keeps the old ground under every hand-built site, including those
 # added after the paved layer (its list above is unchanged). Many-box sites are one union.
 GROUND_SITES = ('yard','home','church','porch','fishing','coast','quarry','mine',
-                'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store','drlane')
+                'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store','drlane','prince')
 
 
 def ground_records(root):
@@ -75,6 +75,10 @@ def source_files(root):
 
 def catalog_inputs(root):
     return [Path(p) for p in _export(str(Path(root).absolute()))['inputs']]
+
+
+def ground_catalog_inputs(root):
+    return [Path(p) for p in _export(str(Path(root).absolute()),'ground')['inputs']]
 
 
 def clear_cache(): _export.cache_clear()
