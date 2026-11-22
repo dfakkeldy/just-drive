@@ -47,7 +47,7 @@
 
   "quarry-air/phone-explore-truck":{"calls":97,"triangles":927911,"geometries":54,"textures":51,"programs":14,"readyTiles":72,"requests":148},
 
-  "quarry-gate/desktop-explore-truck":{"calls":644,"triangles":4714156,"geometries":198,"textures":176,"programs":36,"readyTiles":342,"requests":616},
+  "quarry-gate/desktop-explore-truck":{"calls":645,"triangles":4487276,"geometries":197,"textures":176,"programs":37,"readyTiles":342,"requests":616},
 
   "quarry-gate/phone-explore-truck":{"calls":133,"triangles":1325613,"geometries":98,"textures":56,"programs":22,"readyTiles":194,"requests":337},
 
