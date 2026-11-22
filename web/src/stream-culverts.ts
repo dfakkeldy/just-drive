@@ -74,8 +74,8 @@ export function streamCrossings(streams: Streams, roads: readonly Road[]): Cross
     const dx = pipe.endX - pipe.x, dz = pipe.endZ - pipe.z;
     const x = (pipe.x + pipe.endX) / 2, z = (pipe.z + pipe.endZ) / 2;
     const length = Math.hypot(dx, dz), scale = Math.min(1, pipe.dia / 4.1);
-    const bridgeMargin = Math.hypot(length / 2 + .3, 6.1 * scale) + 3;
-    if (bridges.some(b => { const ir = indexed.get(b); return ir ? withinIndexedRoad(x, z, ir, b.halfWidth + bridgeMargin) : distanceToRoad(x, z, b) <= b.halfWidth + bridgeMargin; })) continue;
+    const bridgeReach = Math.hypot(length / 2 + .3, 6.1 * scale);
+    if (bridges.some(b => { const ir = indexed.get(b); return ir ? withinIndexedRoad(x, z, ir, b.halfWidth + bridgeReach + 3) : distanceToRoad(x, z, b) <= b.halfWidth + bridgeReach + 3; })) continue;
     // A later road-bed bake moved one shipped pair away from its road. It is no longer a crossing.
     const ownIndexed = indexed.get(road);
     const steps = Math.ceil(length), ownLimit = road.halfWidth + .5;

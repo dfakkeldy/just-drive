@@ -463,15 +463,17 @@ export class Terrain {
     return this.coverRead ??= this.coverReady.then(async (image) => {
       if (!image) throw new Error('land cover did not load');
       const pixels = new ImageData(image.width, image.height);
-      const strip = 512;
+      const strip = 64;
       const canvas = new OffscreenCanvas(image.width, Math.min(strip, image.height));
       const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-      // Strip readback avoids one long stall while finishing in a few yields so grass does not starve behind the burst.
+      // Small strips, as many as fit in about 6 ms, then a yield: no long stall in a drive frame, and few
+      // enough yields that the read does not starve behind the start-up terrain burst (32-row yields did).
+      let slice = performance.now();
       for (let row = 0; row < image.height; row += strip) {
         const rows = Math.min(strip, image.height - row);
         ctx.drawImage(image, 0, row, image.width, rows, 0, 0, image.width, rows);
         pixels.data.set(ctx.getImageData(0, 0, image.width, rows).data, row * image.width * 4);
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (performance.now() - slice > 6) { await new Promise<void>((resolve) => setTimeout(resolve, 0)); slice = performance.now(); }
       }
       this.coverPixels = pixels;
       canvas.width = canvas.height = 0;

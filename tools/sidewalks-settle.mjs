@@ -25,20 +25,19 @@ export const POSES=Object.freeze({
 });
 export const SIDEWALK_AREAS=new Set(['mabou','porthood','pointtupper']);
 export const DEFAULT_AREAS=['mabou','porthood','pointtupper','cansocauseway','judique','westbay'];
-// Written probe-free data-mmm-ready ceilings (ms) on Apple silicon hardware Metal at load1 < 20.
-// Measured baselines (M1 Pro, 21 Nov 2026): mabou 2404/5370, porthood 1727/3505, pointtupper 1952/4855,
-// cansocauseway 1728/3924, judique 2003/4208, westbay 2705/5576 (LOW/HIGH medians), with ~35-45% headroom.
+// Start-up ceilings: median probe-free data-mmm-ready in ms, hardware Metal, measured on the MacBook M1 Pro
+// (a faster Mac passes more easily, so the row's timing proof stays on that machine; see checks-hosts.tsv).
+// Each ceiling sits below the time before PR #105, so losing that PR's cuts fails, and about 20% or more
+// above the median after it, for load noise on a busy Mac. Medians LOW/HIGH, 21-22 Nov 2026:
+//   before #105: mabou 6058/8238, porthood 2375/5457, pointtupper 2982/6510, cansocauseway 2566/5842, judique 2480/5651, westbay 3924/8561
+//   after #105:  mabou 2410/5719, porthood 1766/3710, pointtupper 1941/5013, cansocauseway 1637/3805, judique 1953/4404, westbay 2403/5396
 // Raise a ceiling only with a PR that says what the player gets for the slower start.
-// Start-up ceilings (ms, median data-mmm-ready, MacBook M1 Pro). Each sits below the time before PR #105
-// (so losing that PR's cuts fails) and at least 20% above the median after it (load noise on a busy Mac).
-// Before #105 (LOW / HIGH): mabou 6058/8238, porthood 2375/5457, pointtupper 2982/6510,
-// cansocauseway 2566/5842, judique 2480/5651, westbay 3924/8561.
 export const STARTUP_BUDGET_MS=Object.freeze({
  mabou:Object.freeze({low:3300,high:7000}),
- porthood:Object.freeze({low:2300,high:4700}),
+ porthood:Object.freeze({low:2200,high:4700}),
  pointtupper:Object.freeze({low:2600,high:6000}),
  cansocauseway:Object.freeze({low:2300,high:5000}),
- judique:Object.freeze({low:2400,high:5300}),
+ judique:Object.freeze({low:2350,high:5300}),
  westbay:Object.freeze({low:3500,high:7000}),
 });
 export function budgetFor(area,quality){

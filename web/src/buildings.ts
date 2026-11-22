@@ -669,12 +669,12 @@ export class Buildings {
           // Three latitude bands form a rounded striped dome, 14 m total height.
           for (let j = 0; j < 3; j++) {
             const t0 = j * Math.PI / 6, t1 = (j + 1) * Math.PI / 6;
-            const r0 = radius * Math.cos(t0), y0 = base + cap + 2 * Math.sin(t0);
+            const r0 = radius * Math.cos(t0), y0 = base + (cap + 2 * Math.sin(t0));
             const p0x = sX(u + c0 * r0, v + s0 * r0), p0z = sZ(u + c0 * r0, v + s0 * r0);
             const p1x = sX(u + c1 * r0, v + s1 * r0), p1z = sZ(u + c1 * r0, v + s1 * r0);
             if (j === 2) triN(p0x, y0, p0z, p1x, y0, p1z, topX, topY, topZ, colour);
             else {
-              const r1 = radius * Math.cos(t1), y1 = base + cap + 2 * Math.sin(t1);
+              const r1 = radius * Math.cos(t1), y1 = base + (cap + 2 * Math.sin(t1));
               quadN(p0x, y0, p0z, p1x, y0, p1z,
                 sX(u + c1 * r1, v + s1 * r1), y1, sZ(u + c1 * r1, v + s1 * r1),
                 sX(u + c0 * r1, v + s0 * r1), y1, sZ(u + c0 * r1, v + s0 * r1), colour);
