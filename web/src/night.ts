@@ -235,6 +235,30 @@ void main() {
   gl_FragColor = vec4(vColour * a, 1.0);
 }`;
 
+/** The same dusk and star dome can also be drawn for a still sky preview. */
+export function nightSkyMaterial(palette: NightPalette, fog: THREE.IUniform, sunDir: THREE.Vector3,
+  when: Date, lat: number, lon: number): THREE.ShaderMaterial {
+  const galaxy = milkyWay(when, lat, lon);
+  const uniforms = {
+    fogColor: fog,
+    nightZenith: { value: new THREE.Color().setRGB(...palette.zenith) },
+    nightSun: { value: sunDir.clone() },
+    nightGlowColour: { value: new THREE.Color(.95, .42, .16) },
+    nightGlow: { value: palette.glow },
+    nightBand: { value: new THREE.Color().setRGB(...palette.band) },
+    nightHorizon: { value: new THREE.Color().setRGB(...palette.horizon) },
+    nightBands: { value: new THREE.Vector2(palette.warm, palette.pink) },
+    nightStars: { value: palette.stars },
+    nightGalaxy: { value: directionFromAngles(galaxy.pole.az, galaxy.pole.el) },
+    nightCentre: { value: directionFromAngles(galaxy.centre.az, galaxy.centre.el) },
+    nightTown: { value: new THREE.Vector4() },
+  };
+  return new THREE.ShaderMaterial({
+    name: 'night sky', vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms,
+    side: THREE.BackSide, depthWrite: false,
+  });
+}
+
 /** Everything a night page adds beyond the land shaders. Built once; `update` runs before each render. */
 export class Night {
   readonly lamps: NightLamp[];
@@ -261,6 +285,7 @@ export class Night {
   private placeWait = 0;
   private readonly lampLights: THREE.PointLight[] = [];
   private readonly townLamps: number;
+  private dayPreview = false;
 
   constructor(private readonly shading: NightShading, private readonly parts: NightParts) {
     const { palette, low } = shading;
@@ -318,25 +343,9 @@ export class Night {
     scene.add(this.glow);
 
     // The sky: twilight, town glow, the Milky Way and stars. The fog colour is its horizon, so far land meets it.
-    const galaxy = milkyWay(parts.when, parts.lat, parts.lon);
-    this.skyUniforms = {
-      fogColor: parts.fog,
-      nightZenith: { value: new THREE.Color().setRGB(...palette.zenith) },
-      nightSun: { value: parts.sunDir.clone() },
-      nightGlowColour: { value: new THREE.Color(.95, .42, .16) },
-      nightGlow: { value: palette.glow },
-      nightBand: { value: new THREE.Color().setRGB(...palette.band) },
-      nightHorizon: { value: new THREE.Color().setRGB(...palette.horizon) },
-      nightBands: { value: new THREE.Vector2(palette.warm, palette.pink) },
-      nightStars: { value: palette.stars },
-      nightGalaxy: { value: directionFromAngles(galaxy.pole.az, galaxy.pole.el) },
-      nightCentre: { value: directionFromAngles(galaxy.centre.az, galaxy.centre.el) },
-      nightTown: { value: new THREE.Vector4() },
-    };
-    parts.sky.material = new THREE.ShaderMaterial({
-      name: 'night sky', vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: this.skyUniforms,
-      side: THREE.BackSide, depthWrite: false,
-    });
+    const skyMaterial = nightSkyMaterial(palette, parts.fog, parts.sunDir, parts.when, parts.lat, parts.lon);
+    this.skyUniforms = skyMaterial.uniforms;
+    parts.sky.material = skyMaterial;
   }
 
   /** Rebind the night beams when the player selects another rig. World lamps are unchanged. */
@@ -412,6 +421,15 @@ export class Night {
   private readonly yardMatrix = new THREE.Matrix4();
   private readonly yardTurn = new THREE.Euler();
   private readonly glowSize = new THREE.Vector2();
+
+  setDayPreview(day: boolean): void {
+    if (this.dayPreview === day) return;
+    this.dayPreview = day;
+    this.glow.visible = !day;
+    if (this.yardHeads) (this.yardHeads.material as THREE.MeshLambertMaterial).emissiveIntensity = day ? 0 : 1.6;
+    (this.shading.uniforms.nightLamp.value as THREE.Vector4).w = day ? 0 : this.beams.length;
+  }
+
   /** Before every render: the land's copy of the beams follows the car, and the nearest lamps light their pools. */
   update(renderer: THREE.WebGLRenderer, camera: THREE.Camera): void {
     this.cleanBeams();
@@ -446,12 +464,12 @@ export class Night {
     const ready = this.ready;
     nearestLamps(ready, at.x, at.z, pools.length, LAMP_REACH, this.near, this.nearDistance);
     for (let i = 0; i < pools.length; i++) {
-      const lamp = i < this.near.length ? ready[this.near[i]] : null;
+      const lamp = !this.dayPreview && i < this.near.length ? ready[this.near[i]] : null;
       if (lamp) { pools[i].set(lamp.x, lamp.y!, lamp.z, lamp.power); colours[i].set(...lamp.colour); }
       else pools[i].w = 0;
     }
     for (let i = 0; i < this.lampLights.length; i++) {
-      const light = this.lampLights[i], lamp = i < this.near.length ? ready[this.near[i]] : null;
+      const light = this.lampLights[i], lamp = !this.dayPreview && i < this.near.length ? ready[this.near[i]] : null;
       // three.js divides a diffuse surface's light by π; the land's own term does not.
       // The scene's matrices were updated before this hook, so the moved light updates its own.
       if (lamp) { light.position.set(lamp.x, lamp.y! - .3, lamp.z); light.updateMatrixWorld(); light.color.setRGB(...lamp.colour); light.intensity = lamp.power * Math.PI; }

@@ -138,12 +138,14 @@ if(process.argv.includes('--mutations')){const mutant=main.replace('resolve: bod
 
 function renderCleanup(text){
  const blocks=[...text.matchAll(/try \{([^{}]*)\} finally \{[^}]+\}/g)].filter(([,draw])=>draw.includes('drawWorld();'));
- assert.equal(blocks.length,3,'drive, ending and replay render guards');
+ assert.equal(blocks.length,4,'drive, ending, replay and Sun Seeker render guards');
  for(const [body,draw] of blocks) for(const pictureRequested of draw.includes('drawPicture()')?[false,true]:[false]){
   let far=0,sea=0;
   const fail=()=>{throw Error('render failed');};
-  const state={drawWorld:fail,drawPicture:fail,pictureRequested,canSavePicture:()=>true,
-   farVisibility:{settle(){far++;}},waterReflections:{settle(){sea++;}}};
+  // The Sun Seeker path also updates the mirror and far queries and restores the car and drone it hid.
+  const state={drawWorld:fail,drawPicture:fail,pictureRequested,canSavePicture:()=>true,updateWorld(){},camera:{},now:0,
+   car:{root:{}},drone:{group:{}},showCar:true,showDrone:false,
+   farVisibility:{update(){},settle(){far++;}},waterReflections:{settle(){sea++;}}};
   assert.throws(()=>new Function('state',`with(state){${body}}`)(state),/render failed/);
   assert.deepEqual({far,sea},{far:1,sea:1},'each render path releases far and water queries on failure');
  }

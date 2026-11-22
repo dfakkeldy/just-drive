@@ -22,7 +22,8 @@ async function navigate(query=''){await active.send('Page.navigate',{url:origin+
 async function navigateLatest(query,expected){
  await navigate(query);
  if(await value(`document.querySelector('meta[name="mmm-page"]').content`)!==expected.pageKey){
-  await until(`!!document.getElementById('offlineReload')`,'background build is ready');await click('offlineReload');
+  await until(`document.querySelector('meta[name="mmm-page"]')?.content===${JSON.stringify(expected.pageKey)}||!!document.getElementById('offlineReload')`,'background build is ready');
+  if(await value(`document.querySelector('meta[name="mmm-page"]')?.content!==${JSON.stringify(expected.pageKey)}&&!!document.getElementById('offlineReload')`)) await click('offlineReload');
   await until(`document.querySelector('meta[name="mmm-page"]')?.content===${JSON.stringify(expected.pageKey)}&&!document.getElementById('boot')`,'user restart takes the prepared build');
  }
 }
@@ -163,7 +164,7 @@ try {
   const saved=read(bRoot+badApp);write(bRoot+badApp,'broken');
   // Make revision new by changing the page source and regenerate inventory, then remove its script.
   write(bRoot+'/app.js',read(aRoot+'/app.js','utf8')+'\nglobalThis.__pwaBuild="C";\n');execFileSync(process.execPath,['tools/build-pwa.mjs',bRoot]);const cv=JSON.parse(read(bRoot+'/version.json'));const ci=JSON.parse(read(bRoot+cv.index));unlinkSync(bRoot+ci.shell.find(f=>f.url.endsWith('.js')).url);
-  await navigate('?title=1&q=low');good(await value('window.__pwaBuild')==='B','incomplete deployment keeps complete B instead of half C');
+  await navigate('?title=1&q=low');await until(`window.__pwaBuild==='B'&&!document.getElementById('boot')&&!!document.getElementById('titleStart')`,'incomplete deployment keeps complete B instead of half C');good(await value('window.__pwaBuild')==='B','incomplete deployment keeps complete B instead of half C');
   // Server kill switch bypasses the game-owned storage and unregisters on the next start.
   write(bRoot+ci.shell.find(f=>f.url.endsWith('.js')).url,read(bRoot+'/app.js'));
   write(bRoot+'/version.json',JSON.stringify({disabled:true}));await active.send('Page.navigate',{url:origin+'/?q=low'});await until(`navigator.serviceWorker.getRegistrations().then(a=>a.length===0)`,'kill unregisters');
