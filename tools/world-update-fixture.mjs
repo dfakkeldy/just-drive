@@ -77,6 +77,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
     // The old picture, straight to the screen (finish-choice.ts): the fixture's page is at low detail.
     FINISH: { low: true, mode: null, clouds: false, canvasSamples: false, samples: undefined, oneSample: false, offered: false },
     // The instant replay records without spy calls, so the established call orders stay as they were.
+    sunSeeker: null,
     replay: { active: false, record() {}, frame() {}, afterRender() {} }, quietGround: () => false,
     // An open pause gate keeps the old clock: dt from `last`, simulation time equal to the frame's time.
     pause: { blocked: false, time: 0, frame(now) { const dt = Math.max(0, (now - context.last) / 1000); context.last = now; this.time = now; return { paused: false, dt }; } },
@@ -87,7 +88,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
   context.waterReflections.settle = trace('water.settle'); context.waterReflections.afterRender = trace('water.afterRender');
   if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'lotProps', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'yardProps', 'grass', 'waterReflections', 'fishing', 'harbourLights']) context[name] = null;
   // The places rows: their sites are only stored, and each built place is the spy (or null) of the same name, read late so `absent` and the overrides apply.
-  Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null,
+  Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null, drLaneSite: null,
     builtPlaces: new Proxy({}, { get: (_target, name) => context[name] ?? null }) });
   if (typeof overrides === 'function') overrides(context, trace);
   else Object.assign(context, overrides);
@@ -132,7 +133,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
       : [call('driveVehicle', dt, input), call('animals', dt, '@vehicle', '@camera'), call('chase', dt)]),
     call('mail', dt, '@vehicle', false, '@camera'),
     world('yard', dt, '@vehicle', '@camera.position'), world('yardDog', dt, '@vehicle'), world('home', '@camera.position', '@vehicle'),
-    world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050, '@vehicle', dt), world('village', '@camera.position', 1050, '@vehicle', dt), world('hawkesbury', '@camera.position', 1050, '@vehicle', dt), world('mabouMain', '@camera.position', 1050, '@vehicle', dt), quiet('maryville'), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
+    world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050, '@vehicle', dt), world('village', '@camera.position', 1050, '@vehicle', dt), world('hawkesbury', '@camera.position', 1050, '@vehicle', dt), world('mabouMain', '@camera.position', 1050, '@vehicle', dt), quiet('maryville'), quiet('drLane'), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
     call('camera.matrix'), call('sky', '@camera.position'), call('shared.time', 1.05), call('beacon', dt ? 2.2 : .15),
     world('terrain', '@camera', paused), ...wharfLines(spied), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
     world('trees', '@terrain.drawnFine', '@camera.position'), world('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
@@ -274,6 +275,12 @@ export async function verifyPlaces(source) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const loops = ast.statements.filter(n => ts.isForOfStatement(n) && /\bplaceRows\b/.test(n.expression.getText(ast)));
   assert.equal(loops.length, 1, 'one boot loop over the places rows');
+  // Every row has a contact row: the boot throws on one without (a place in every area, on or off, has a slot).
+  const rows = ast.statements.flatMap(n => ts.isVariableStatement(n) ? n.declarationList.declarations : []).find(d => d.name.getText(ast) === 'placeRows');
+  const contacts = ast.statements.flatMap(n => ts.isVariableStatement(n) ? n.declarationList.declarations : []).find(d => d.name.getText(ast) === 'siteContacts');
+  assert.ok(rows && contacts && ts.isObjectLiteralExpression(rows.initializer) && ts.isArrayLiteralExpression(contacts.initializer), 'placeRows and siteContacts are where this check reads them');
+  const named = new Set(contacts.initializer.elements.map(e => ts.isArrayLiteralExpression(e) && ts.isStringLiteral(e.elements[0]) ? e.elements[0].text : null));
+  for (const p of rows.initializer.properties) assert.ok(named.has(p.name.getText(ast)), `places row '${p.name.getText(ast)}' has no contact row: the boot would throw`);
   const code = transformSync(loops[0].getText(ast), { loader: 'ts', target: 'es2022' }).code;
   const log = [], row = (name, site, lazy) => ({ site,
     build: (at, part) => { log.push(`build ${name} ${at === site} ${part}`); return { name }; },
