@@ -407,7 +407,16 @@ export class ModernBridges {
   /** The deck height from a deck that is already built; never builds or rebuilds a span. For layers that follow the
    * deck (the sidewalks): Roads builds each deck within DRAW of the camera and bumps bridgeRevision, and they read it
    * again then. A query that builds would solve a deck inside their frame budget and skip the start-burst hold. */
-  builtDeckHeightAt(x:number,z:number):number|null {return this.query(x,z,false,false,undefined,false,0,false);}
+  builtDeckHeightAt(x:number,z:number):number|null {
+    const h=this.query(x,z,false,false,undefined,false,0,false);if(h!==null||this.sampling||this.terrain.cartRoads)return h;
+    // No built deck here yet: ask update() for the unbuilt spans of this cell, at any distance (a far crossing seen
+    // through a narrow view still gets its deck and walk). The build happens there, outside the caller's frame budget.
+    const list=this.cells.get(key(x,z,CELL));if(list)for(let i=0;i<list.length;i++){const r=this.spans[list[i]];if(!r.geometry)(this.wanted??=new Set()).add(r);}
+    return null;
+  }
+  /** Unbuilt spans a built-deck reader asked for; update() builds them whatever the camera distance. Made on first
+   * use (a fixture may build this class without its field initialisers). */
+  private wanted?:Set<Span>;
   private contactHeightAt(x:number,z:number,referenceY?:number):number|null {return this.query(x,z,false,true,referenceY,true,0,referenceY!==undefined);}
   private query(x:number,z:number,minimum:boolean,metadata:boolean,referenceY?:number,contact=false,partFilter=0,build=true):number|null {
     if(this.sampling||this.terrain.cartRoads)return null;const list=this.cells.get(key(x,z,CELL));if(!list)return null;
@@ -466,8 +475,8 @@ export class ModernBridges {
   }
   update(cam:THREE.Vector3):void {
     if(this.walks&&this.walks.size!==this.walkCount)this.reserveWalks();
-    // The box is a cheap prefilter. Only a deck line within DRAW builds here; a query (contact, deck height or
-    // placement) still builds any span on demand.
+    // The box is a cheap prefilter. Only a deck line within DRAW builds here, plus any span a built-deck reader asked
+    // for (wanted); a query (contact, deck height or placement) still builds any span on demand.
     // While the game waits for the driver (Terrain.holdBackground) during a land burst (Terrain.burst), a span that has
     // a deck keeps it here: each finer level under its banks would build it again. The first update after that builds
     // it on the land of the moment. A span with no deck builds at once, and so does a forced build: its width has
@@ -476,6 +485,7 @@ export class ModernBridges {
     // not count: the parked camera rises with the car as the land arrives (64 m at Point Tupper). A step of more than
     // HOLD_JUMP (a placement or a place jump, Terrain's burst rule) starts a new hold where the camera lands.
     const hold=this.holding(cam);
+    if(this.wanted?.size){for(const r of this.wanted){this.ensure(r);if(r.geometry)this.wanted.delete(r);}}
     for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(hold&&r.geometry&&!r.forceBuild)continue;if(cam.x>r.x0-DRAW&&cam.x<r.x1+DRAW&&cam.z>r.z0-DRAW&&cam.z<r.z1+DRAW&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);}
     if(this.dirty)this.merge();
   }

@@ -154,7 +154,7 @@ if(process.argv.includes('--review-replays')) {
  const run={...old.WALK_RUNS[0],id:'fixture',road:'Test',side:'north-east',start:[624000,5103000],end:[624050,5103000]},road={id:1,name:'Test',kind:2,halfWidth:3,bridge:false,pts:[run.start,run.end]},obstacle={id:'building-0',polygon:[[624010,5103004.23],[624030,5103004.23],[624030,5103010],[624010,5103010]]};
  const oldNarrow=old.planWalks('mabou',[road],[obstacle],false,[run]);assert.ok(oldNarrow.lengths.fixture<49,'pre-fix building gap loses a usable one-metre path');console.log('REJECTED pre-fix building gap:',oldNarrow.lengths.fixture,'of 50 m retained');
  globalThis.__walkPlans=0;
- const area='mabou',d=raw[area],t=terrain(area,true),net={roads:[],bridgeWalks:new Map(),builtDeckHeight:()=>32,deckHeight:()=>{throw Error('the sidewalk layer must not build a deck: use Roads.builtDeckHeight');}};let reads=0;
+ const area='mabou',d=raw[area],t=terrain(area,true),net={roads:[],bridgeWalks:new Map(),deckHeight:()=>32};let reads=0;   // the old implementation (2cd5725) read deckHeight
  t.meshHeightAt=(x,z)=>{reads++;return t.height(x,z);};
  const w=new old.Sidewalks(area,d.roads,old.sidewalkObstacles(d.buildings,d.props),d.manifest.village,t,net,false,true);w.update(1000);
  assert.equal(globalThis.__walkPlans,1,'pre-fix constructor really runs the planner');console.log('REJECTED pre-fix startup planner: real planWalks call');

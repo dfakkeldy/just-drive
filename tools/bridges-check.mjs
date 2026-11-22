@@ -11,6 +11,16 @@ async function contracts(replacements={}){
  const terrain={cartRoads:false,dataRevision:1,seaLevel:-.2,heightAt:height,withContactHeight:(_,f)=>f(),surfaceAt:(x,z)=>({ground:height(x,z),level:8,canopy:0,roadDist:0,halfWidth:3.6,kind:1,bridge:true,washboard:false})};
  const road=(id,from,to)=>({id,name:'Fixture bridge',kind:1,halfWidth:3.6,bridge:true,pts:[[0,from],[0,to]]});
  const roads=new mod.Roads({roads:[road(1,0,20),road(2,20,40)]},[0,0],terrain);
+ {// A built-deck read (the sidewalk layer's) never builds a span, even an unbuilt one; it asks update() for it, and
+  // update() builds it whatever the camera distance (a far crossing still gets its deck).
+  const lazy=new mod.Roads({roads:[road(1,0,20),road(2,20,40)]},[0,0],terrain),M=lazy.modern,builds=M.audit.builds,revision=lazy.bridgeRevision;
+  assert.equal(lazy.builtDeckHeight(0,-20),null,'a built-deck read of an unbuilt span is null');
+  assert.equal(M.audit.builds,builds,'a built-deck read builds nothing');assert.equal(lazy.bridgeRevision,revision,'and moves no revision');
+  assert.ok(M.spans.every(r=>!r.geometry),'no span was built by the read');
+  lazy.update(new THREE.Vector3(5000,20,5000));
+  assert.ok(M.spans.some(r=>r.geometry),'update() builds the span a built-deck read asked for, 5 km away');
+  const built=lazy.builtDeckHeight(0,-20);assert.ok(built!==null&&Math.abs(built-lazy.deckHeight(0,-20))<1e-9,'then the built-deck read gives the deck');
+  console.log('PASS built-deck reads never build; update() builds what they asked for');}
  const middle=roads.deckHeight(0,-20);
  assert.ok(middle>9.9,`joined span must use external abutments, not channel: ${middle}`);
  const support=[];
