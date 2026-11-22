@@ -84,6 +84,7 @@ try {
       assert.ok(await read("document.getElementById('phoneStatus').contains(document.getElementById('firedLine'))"));
       assert.ok(await read("(()=>{const s=document.getElementById('phoneStatus');return s.scrollHeight<=s.clientHeight+1})()"), 'the phone status block holds both lines');
     } else {
+  assert.ok(await read(`document.getElementById('endShift').classList.contains('inPanel')&&document.getElementById('endShift').getBoundingClientRect().width===0`),'END SHIFT stays in closed Settings');
       const hud = await visible('firedHud'); assert.equal(hud.shown, true); assert.equal(hud.inside, true); assert.match(hud.text, /pts/);
       const overlap = await read(`(()=>{const a=document.getElementById('firedHud').getBoundingClientRect();
         return ['hud','shiftHud','stopHint','miniMap','relief','radio','photoTag','mailScore','endShift','pauseButton','gear','credit','mailButton','cameraButton'].filter(id=>{

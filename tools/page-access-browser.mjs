@@ -1,3 +1,4 @@
+import { checkScrollMore } from './scroll-more-browser.mjs';
 // tools/check-page-access.sh
 // Production static pages and PlacesUI, with real browser input and accessibility names.
 import assert from 'node:assert/strict';
@@ -48,14 +49,51 @@ async function audit(root){
  assert.deepEqual(await read(`(()=>{const root=document.querySelector(${JSON.stringify(root)});let last=0;const errors=[];for(const h of root.querySelectorAll('h1,h2,h3,h4,h5,h6')){const level=+h.tagName[1];if(last&&level>last+1)errors.push(h.textContent);last=level;}for(const img of root.querySelectorAll('img'))if(!img.hasAttribute('alt'))errors.push('missing alt');for(const list of root.querySelectorAll('ul,ol'))if([...list.children].some(x=>x.tagName!=='LI'))errors.push('list child');return errors;})()`),[],'headings, image alternatives and list children');
  if(root==='body')assert.equal(await read(`document.querySelectorAll('main h1').length`),1,'one page heading');
  await names();
- // Read background pixels with text fill hidden. This includes the photograph, gradients and translucent fills.
- await read(`window.scrollTo(0,0);window.accessHide=document.createElement('style');accessHide.textContent='*{ -webkit-text-fill-color:transparent!important;text-shadow:none!important }';document.head.append(accessHide)`);
- const layout=(await send('Page.getLayoutMetrics')).result.cssContentSize;
- const background=(await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width:layout.width,height:layout.height,scale:1}})).result.data;
- await read('accessHide.remove()');
- const failures=await read(`(async()=>{const image=new Image();image.src='data:image/png;base64,${background}';await image.decode();const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(image,0,0);const errors=[];const rgb=s=>s.match(/[\\d.]+/g).map(Number);const blend=(a,b)=>{const alpha=a[3]??1;return a.slice(0,3).map((v,i)=>v*alpha+b[i]*(1-alpha));};const lum=c=>c.map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);for(const el of document.querySelectorAll(${JSON.stringify(root)}+' *')){if(!el.getClientRects().length||!Array.from(el.childNodes).some(n=>n.nodeType===3&&n.textContent.trim()))continue;const cs=getComputedStyle(el),large=parseFloat(cs.fontSize)>=24||(parseFloat(cs.fontSize)>=18.66&&+cs.fontWeight>=700);for(const node of el.childNodes){if(node.nodeType!==3||!node.textContent.trim())continue;const range=document.createRange();range.selectNodeContents(node);for(const rect of range.getClientRects()){for(let y=Math.max(0,Math.ceil(rect.top+scrollY)+2);y<Math.min(canvas.height,rect.bottom+scrollY-2);y+=4)for(let x=Math.max(0,Math.ceil(rect.left+scrollX)+2);x<Math.min(canvas.width,rect.right+scrollX-2);x+=4){const bg=Array.from(ctx.getImageData(x,y,1,1).data).slice(0,3),fg=blend(rgb(cs.color),bg),a=lum(fg),b=lum(bg),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);if(ratio+.01<(large?3:4.5)){errors.push([node.textContent.trim().slice(0,45),Number(ratio.toFixed(2))]);break;}}}}}return errors;})()`);
+ // A full-page screenshot does not expand an inner scroll view. Offscreen text ranges
+ // used to sample the dim overlay outside Places, rather than their painted card.
+ // Bring every text element into view and sample only pixels inside its scroll clips.
+ // Screen-reader-only text (a 1px box clipped to nothing) is never painted, so it has no contrast to measure.
+ const count=await read(`(()=>{const hidden=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width<=1&&r.height<=1&&(s.clip!=='auto'||s.clipPath!=='none');};const list=[...document.querySelectorAll(${JSON.stringify(root)}+' *')].filter(el=>el.getClientRects().length&&!hidden(el)&&[...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim()));list.forEach((el,i)=>el.dataset.contrastIndex=i);return list.length;})()`);
+ // Keep every scroll position, so sampling does not move what the focus checks below see.
+ await read(`window.accessScroll=[[document.scrollingElement,scrollX,scrollY],...[...document.querySelectorAll('*')].filter(e=>e.scrollTop||e.scrollLeft).map(e=>[e,e.scrollLeft,e.scrollTop])]`);
+ const failures=[];
+ for(let index=0;index<count;index++){
+  // The audit's own scrolling can hide a More below band that was visible when the list was made.
+  // Put the saved scroll positions back and let the band refresh before it is sampled.
+  if(!await read(`document.querySelector('[data-contrast-index="${index}"]').getClientRects().length`))await read(`for(const e of document.querySelectorAll('*'))if(e.scrollTop||e.scrollLeft){e.scrollTop=0;e.scrollLeft=0;}for(const [e,x,y] of accessScroll){e.scrollLeft=x;e.scrollTop=y;}new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
+  await read(`document.querySelector('[data-contrast-index="${index}"]').scrollIntoView({block:'center',inline:'nearest'});window.accessHide=document.createElement('style');accessHide.textContent='*{-webkit-text-fill-color:transparent!important;text-shadow:none!important}';document.head.append(accessHide)`);
+  const background=(await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).result.data;
+  await read('accessHide.remove()');
+  failures.push(...await read(`(async()=>{
+   const image=new Image();image.src='data:image/png;base64,${background}';await image.decode();
+   const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+   const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(image,0,0);
+   const el=document.querySelector('[data-contrast-index="${index}"]'),cs=getComputedStyle(el),errors=[];let samples=0;
+   const rgb=s=>s.match(/[\\d.]+/g).map(Number);
+   const blend=(a,b)=>a.slice(0,3).map((v,i)=>v*(a[3]??1)+b[i]*(1-(a[3]??1)));
+   const lum=c=>c.map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
+   const large=parseFloat(cs.fontSize)>=24||(parseFloat(cs.fontSize)>=18.66&&+cs.fontWeight>=700);
+   let left=0,top=0,right=innerWidth,bottom=innerHeight;
+   for(let p=el.parentElement;p;p=p.parentElement){const st=getComputedStyle(p),r=p.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(st.overflowX)){left=Math.max(left,r.left);right=Math.min(right,r.right);}if(/auto|scroll|hidden|clip/.test(st.overflowY)){top=Math.max(top,r.top);bottom=Math.min(bottom,r.bottom);}}
+   // A pointer-events:none cue (the More below band) is painted, but elementFromPoint skips it. Hit-test the measured element itself. Other pointer-events:none covers are still invisible to this test, as before.
+   const pe=[el.style.getPropertyValue('pointer-events'),el.style.getPropertyPriority('pointer-events')];el.style.setProperty('pointer-events','auto','important');try{
+   for(const node of el.childNodes){
+    if(node.nodeType!==3||!node.textContent.trim())continue;
+    const range=document.createRange();range.selectNodeContents(node);
+    for(const rect of range.getClientRects())for(let y=Math.max(top,Math.ceil(rect.top)+2);y<Math.min(bottom,rect.bottom-2);y+=4)for(let x=Math.max(left,Math.ceil(rect.left)+2);x<Math.min(right,rect.right-2);x+=4){
+     const at=document.elementFromPoint(x,y);if(at!==el&&!el.contains(at))continue;
+     samples++;const bg=[...ctx.getImageData(Math.floor(x*image.width/innerWidth),Math.floor(y*image.height/innerHeight),1,1).data].slice(0,3),fg=blend(rgb(cs.color),bg),a=lum(fg),b=lum(bg),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+     if(ratio+.01<(large?3:4.5)){errors.push([node.textContent.trim().slice(0,45),Number(ratio.toFixed(2))]);break;}
+    }
+   }
+   }finally{el.style.setProperty('pointer-events',...pe);}
+   if(!samples)errors.push(['unmeasured text',el.textContent.trim().slice(0,45)]);
+   return errors;
+  })()`));
+ }
+ await read(`for(const e of document.querySelectorAll('*'))if(e.scrollTop||e.scrollLeft){e.scrollTop=0;e.scrollLeft=0;}for(const [e,x,y] of accessScroll){e.scrollLeft=x;e.scrollTop=y;}`);
  assert.deepEqual(failures,[],'rendered text contrast');
- const controls=await read(`Array.from(document.querySelectorAll(${JSON.stringify(root)}+' a[href],'+${JSON.stringify(root)}+' button')).filter(e=>e.getClientRects().length).map((e,i)=>{e.dataset.accessIndex=String(i);return e.textContent.trim()})`);
+ const controls=await read(`Array.from(document.querySelectorAll(${JSON.stringify(root)}+' a[href],'+${JSON.stringify(root)}+' button,'+${JSON.stringify(root)}+' summary')).filter(e=>e.getClientRects().length).map((e,i)=>{e.dataset.accessIndex=String(i);return e.textContent.trim()})`);
  assert.ok(controls.length,'visible controls exist');
  if(root==='body')await read('document.activeElement.blur(); window.scrollTo(0,0)');
  for(let i=0;i<controls.length;i++){
@@ -67,7 +105,7 @@ async function audit(root){
 }
 try {
  await send('Page.enable');
- for(const [size,width,height] of [['desktop',1280,800],['phone',390,844]]){
+ for(const [size,width,height] of [['desktop',1280,800],['wide',1440,900],['phone',390,844]]){
   await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
   for(const brand of ['mail','just'])for(const kind of ['about','help']){
    await load(`/${kind}/${brand}`);await shot(`${kind}-${brand}-${size}`);
@@ -82,6 +120,10 @@ try {
   }
   await load('/panel');await key('Tab');assert.equal(await read('document.activeElement.id'),'placesButton');await key('Enter');assert.equal(await read(`document.querySelector('#placesPanel').hidden`),false,'Enter opens Places');await shot(`places-${size}`);
   assert.equal(await read(`document.querySelector('#placesList').tagName`),'UL','Places is a real list');assert.equal(await read(`document.querySelector('#placesList').getAttribute('role')`),'list','Places list keeps its role');assert.equal(await read(`document.getElementById(document.querySelector('#placesButton').getAttribute('aria-controls'))===document.querySelector('#placesPanel')`),true,'PLACES controls the panel');await dialog();assert.equal(await read(`document.querySelector('#placesButton').getAttribute('aria-expanded')`),'true','PLACES reports open');
+  await checkScrollMore(read,'placesBody','placesMore');
+  await read(`document.querySelector('#placesBody').scrollTop=1e6`);
+  assert.equal(await read(`(()=>{const e=document.querySelector('#placesClose'),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.top>=0&&r.bottom<=innerHeight&&(at===e||e.contains(at));})()`),true,'Back stays in view at the end of Places');
+  await read(`document.querySelector('#placesBody').scrollTop=0`);
   await audit('#placesCard');assert.equal(await trapHolds(),true,'Tab stays in Places');await key('Escape');assert.equal(await read(`document.querySelector('#placesButton').getAttribute('aria-expanded')`),'false','PLACES reports closed');assert.equal(await read('document.activeElement.id'),'placesButton','Escape restores opener');
   for(const [k,code] of [[' ','Space'],['Enter','Enter']]){await key(k,code);assert.equal(await read('document.querySelector("#placesPanel").hidden'),false,'open '+code);await read(`document.querySelector('#placesClose').focus()`);await key(k,code);assert.equal(await read('document.querySelector("#placesPanel").hidden'),true,'close '+code);}
   await read('document.activeElement.blur()');await key('l','KeyL');await key('Escape');assert.equal(await read('document.activeElement===document.body'),true,'L restores earlier focus');await key(' ','Space');assert.equal(await read(`document.querySelector('#placesPanel').hidden`),true,'Space after L/Escape does not reopen');

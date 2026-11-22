@@ -117,6 +117,7 @@ guardrail-browser	portable	no	Mac M1 Pro PASS corrected eight-view row; prior Li
 guardrail-look-browser	unproven	no	Mac M1 Pro PASS; not yet measured on another host
 guardrail-night-browser	unproven	no	Mac M1 Pro PASS; not yet measured on another host
 guardrail-fix-browser	unproven	no	Mac M1 Pro Metal, observed terminal and restored-herd views; other hosts unmeasured
+sun-seeker-browser	unproven	no	desktop and emulated phone; no host-specific dependency
 light-study-browser	unproven	no	Mac M1 Pro Metal PASS; safe-area, position reload and night direction; other hosts unmeasured
 light-study-public-browser	unproven	no	public default-brand study flow; hardware Mac execution only, other hosts unmeasured
 porch-dog-browser	unproven	no	not yet measured on another host
@@ -323,3 +324,6 @@ ride-along-budget-low	unproven	no	apple-check-host M4 / Edge 157 PASS 27 s on th
 drag-rules	portable	yes	Node timing and runway data in source
 drag-rules-mutations	portable	yes	Node mutation controls, source only
 airport-drag-browser	unproven	no	Hardware WebGL, Point Tupper land and live input
+version-notice	portable	no	pure Node: real offline-version.ts module and main.ts predicate with mutations
+version-browser	unproven	no	local public build and actual browser/worker; native hardware GPU
+drlane-browser	unproven	no	not yet measured on another host

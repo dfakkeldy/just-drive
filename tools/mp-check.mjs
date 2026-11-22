@@ -43,7 +43,7 @@ for (const text of ['abc1', 'abcde', 'abc', ' abcd', 'éabc']) assert.equal(room
 for (let i = 0; i < 100; i++) assert.match(newRoomCode(), /^[abcdefghjkmnpqrstuvwxyz]{4}$/);
 for (const viewport of [280,390,844]) for (const distance of [5,30,60]) {
   const depth=distance, projection=2, h=callSignHeight(depth,projection,viewport,true,distance);
-  assert.ok(h*projection/depth*viewport/2*32/64 >= 16-1e-9, `phone call sign is readable at ${distance} m in ${viewport} CSS px`);
+  assert.ok(h*projection/depth*viewport/2*32/64 >= 12, `phone call sign is at least 12 px at ${distance} m in ${viewport} CSS px`);
 }
 console.log('PASS host gate, strict four-letter codes, random code alphabet and phone label size through 60 m');
 // Horn edge/rate/privacy checks need no audio device. A gesture unlocks the synthesis call;

@@ -26,19 +26,20 @@ assert.equal(styleFault(styles), null, 'every style key is a property id, and ev
 assert.deepEqual(buildingSites(sites), sites);
 assert.ok(sites.every((b) => b.buildingId === undefined || b.buildingId === b.id), 'no wing is a property');
 // The game's house counters (mail, lawn ruts, the roadside break and complaints) must read the property list.
-// The porch house finds its surveyed box in the full list and takes that box out of the drawing.
+// The porch house and the house on D.R.'s Lane find their surveyed boxes in the full list and take them out of the drawing.
 {
   const main = fs.readFileSync(`${process.env.MMM_ROOT}/web/src/main.ts`, 'utf8');
   const uses = main.split('\n').filter((line) => /\bbuildingList\b/.test(line));
-  const allowed = [/^const buildingList\b/, /new Buildings\((?:porchBox \? PorchHouse\.drawn\(buildingList, porchBox\) : )?buildingList,/, /buildingSites\(buildingList \?\? \[\]\)/, /new Animals\(roads, terrain, buildingList,/, /createTestPark\(terrain, yardSite, LOW, buildingList \?\? \[\]\)/,
+  const allowed = [/^const buildingList\b/, /new Buildings\(buildingList,/, /buildingSites\(buildingList \?\? \[\]\)/, /new Animals\(roads, terrain, buildingList,/, /createTestPark\(terrain, yardSite, LOW, buildingList \?\? \[\]\)/,
     // The 1884 scene clears trees under every roof: one record per building and the further blocks of a large one, never a wing.
     /new HistoryScene\(terrain, roads, streams, roofSites\(buildingList \?\? \[\]\), ground\)/,
     /^const porchBox = .*\? PorchSite\.find\(buildingList\) : null;$/,
+    /^const drLaneBox = .*\? DrLaneSite\.find\(buildingList\) : null;$/,
     // The camera drone keeps over every drawn roof: each wing and block has its own height, and none of them is counted.
     // The boxes Mabou's main street replaces are left out; its own roofs come from mabouMain.roofAt.
     /^const boxRoofAt = roofHeights\(ERA\.modern && buildingList \? mabouSite \? mabouSite\.drawn\(buildingList\) : buildingList : \[\], manifest\.village, EXAG, SEA_LEVEL\);/,
-    // The drawing: less the porch house and the places Mabou's main street models (both stay properties).
-    /^const drawnBuildings = buildingList && porchBox \? PorchHouse\.drawn\(buildingList, porchBox\) : buildingList;$/,
+    // The drawing: less the porch house, the house on D.R.'s Lane and the places Mabou's main street models (all stay properties).
+    /^const drawnBuildings = buildingList \? drawnWithout\(buildingList, porchBox, drLaneBox\) : buildingList;$/,
     // The public wharves keep clear of every surveyed footprint, wings included (footprints only, nothing is counted).
     /^const wharves = .*\(buildings \? buildingList \?\? \[\] : \[\]\)\.map\(b => b\.footprint\)\) : null;$/,
     // The yard dog's invented driveway only asks if the list exists. Its houses come from `properties` (next assert).

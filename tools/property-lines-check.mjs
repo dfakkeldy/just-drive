@@ -301,6 +301,7 @@ function offWork(mapText = map, viewText = view) {
     constructor() { nodes.push(this); }
     append(...items) { for (const item of items) if (item instanceof Element) { item.parentElement = this; this.children.push(item); } }
     appendChild(item) { this.append(item); }
+    querySelector(selector) { return this.children.find(n => '#'+n.id === selector) ?? this.children.map(n => n.querySelector(selector)).find(Boolean) ?? null; }
     after() {} setAttribute() {} focus() {}
     addEventListener(name, callback) { this.listeners[name] = callback; }
     getContext() { return context; }
@@ -324,7 +325,7 @@ function offWork(mapText = map, viewText = view) {
   assert.equal(m.underlay, null, 'off does not attach a property underlay');
   for (let i = 0; i < 60; i++) m.update(1 / 60, 0, 0, 0, [], []);
   assert.equal(calls, 0, 'off redraws never call property modules');
-  assert.equal(trig, 16, 'off redraws retain only the ordinary north-marker trigonometry');
+  assert.equal(trig, 64, 'off redraws retain only the ordinary compass trigonometry (N, E, S and W)');
   document.getElementById('miniMapHead').listeners.click(); trig = 0;
   for (let i = 0; i < 60; i++) m.update(1 / 60, 0, 0, 0, [], []);
   assert.equal(calls, 0, 'folded off frames never idle property modules'); assert.equal(trig, 0);

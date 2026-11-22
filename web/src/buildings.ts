@@ -346,8 +346,9 @@ export class Buildings {
           roofFace(-L - over, L + over, side * (W + over), side * bend, e - 0.1, h, side === 1 ? 0.85 : 1);
           roofFace(-L - over, L + over, side * bend, 0, h, r, side === 1 ? 0.85 : 1);
           const u = side * L;
-          quad(P(u, -W, e), P(u, W, e), P(u, bend, h), P(u, -bend, h), wall);
-          tri(P(u, -bend, h), P(u, bend, h), P(u, 0, r), wall);
+          // The gable above the eave takes the end wall's paint, as the plain gable does.
+          quad(P(u, -W, e), P(u, W, e), P(u, bend, h), P(u, -bend, h), endWall(side));
+          tri(P(u, -bend, h), P(u, bend, h), P(u, 0, r), endWall(side));
         }
       } else if (stepped) {
         // Two parallel shed roofs. Close the step with a wall above the lower roof.

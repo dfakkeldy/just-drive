@@ -136,5 +136,18 @@ function tallContacts(text){
 tallContacts(main);console.log('PASS late tall provider: fleet revision, preflight and actual tower resolver');
 if(process.argv.includes('--mutations')){const mutant=main.replace('resolve: body => tall?.resolveSolids(body)','resolve: () => {}');assert.throws(()=>tallContacts(mutant),{name:'AssertionError'});console.log('KILLED fleet tower resolver omitted');}
 
-function renderCleanup(text){const blocks=[...text.matchAll(/try \{ drawWorld\(\); \} finally \{[^}]+\}/g)];assert.equal(blocks.length,3,'drive, ending and replay render guards');for(const[body]of blocks){let far=0,sea=0;const state={drawWorld(){throw Error('render failed');},scene:{},camera:{},farVisibility:{settle(){far++;}},waterReflections:{settle(){sea++;}}};assert.throws(()=>new Function('state',`with(state){${body}}`)(state),/render failed/);assert.deepEqual({far,sea},{far:1,sea:1},'both render paths release far and water queries on failure');}}
+function renderCleanup(text){
+ const blocks=[...text.matchAll(/try \{([^{}]*)\} finally \{[^}]+\}/g)].filter(([,draw])=>draw.includes('drawWorld();'));
+ assert.equal(blocks.length,4,'drive, ending, replay and Sun Seeker render guards');
+ for(const [body,draw] of blocks) for(const pictureRequested of draw.includes('drawPicture()')?[false,true]:[false]){
+  let far=0,sea=0;
+  const fail=()=>{throw Error('render failed');};
+  // The Sun Seeker path also updates the mirror and far queries and restores the car and drone it hid.
+  const state={drawWorld:fail,drawPicture:fail,pictureRequested,canSavePicture:()=>true,updateWorld(){},camera:{},now:0,
+   car:{root:{}},drone:{group:{}},showCar:true,showDrone:false,
+   farVisibility:{update(){},settle(){far++;}},waterReflections:{settle(){sea++;}}};
+  assert.throws(()=>new Function('state',`with(state){${body}}`)(state),/render failed/);
+  assert.deepEqual({far,sea},{far:1,sea:1},'each render path releases far and water queries on failure');
+ }
+}
 renderCleanup(main);if(process.argv.includes('--mutations')){assert.throws(()=>renderCleanup(main.replaceAll('farVisibility?.settle();','')),{name:'AssertionError'});console.log('KILLED missing far-query finally wiring');}

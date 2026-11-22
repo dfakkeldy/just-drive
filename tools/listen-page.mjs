@@ -48,26 +48,26 @@ a{color:var(--amber-soft);text-underline-offset:3px}
 .fm{font:700 13px/1 var(--mono);letter-spacing:.14em;color:var(--amber-low);text-shadow:none}
 .name{flex:1 1 100%;min-width:0;font:700 clamp(15px,4.4vw,19px)/1.25 var(--mono);letter-spacing:.09em;overflow-wrap:anywhere}
 .now{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:4px 10px;margin:10px 0 0}
-.state{grid-column:1;font:700 11px/1.3 var(--mono);letter-spacing:.16em;color:var(--amber-low);text-shadow:none}
+.state{grid-column:1;font:700 12px/1.3 var(--mono);letter-spacing:.16em;color:var(--amber-low);text-shadow:none}
 .title{grid-column:1/-1;margin:0;min-height:2.6em;font:600 18px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--amber-soft);
  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
 #live{grid-column:2;grid-row:1;min-height:24px;padding:0 8px;border:1px solid var(--amber-dim);border-radius:99px;background:transparent;
- font:700 11px/1 var(--mono);letter-spacing:.12em;color:var(--amber-low);cursor:pointer;position:relative}
+ font:700 12px/1 var(--mono);letter-spacing:.12em;color:var(--amber-low);cursor:pointer;position:relative}
 #live::after{content:"";position:absolute;inset:-12px -8px}
 #live[aria-pressed=true]{color:#1a1206;background:var(--amber);border-color:var(--amber);text-shadow:none}
 [data-state=silent] #live[aria-pressed=true]{color:var(--amber-low);background:transparent;border-color:var(--amber-dim)}
-.progress{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin-top:8px;font:500 11px/1 var(--mono);color:var(--amber-low);text-shadow:none}
+.progress{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin-top:8px;font:500 12px/1 var(--mono);color:var(--amber-low);text-shadow:none}
 .progress div{height:3px;border-radius:2px;background:rgba(255,178,63,.16);overflow:hidden}
 .progress i{display:block;height:100%;width:0;background:var(--amber)}
 .next{display:flex;gap:8px;margin:8px 0 0;font:500 13px/1.3 system-ui,sans-serif;color:var(--amber-low);text-shadow:none}
-.next b{flex:none;font:700 11px/1.5 var(--mono);letter-spacing:.16em}
+.next b{flex:none;font:700 12px/1.5 var(--mono);letter-spacing:.16em}
 .next span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#c99445}
 
 /* The dial's scale: a tick at each megahertz, a mark at each station, and the needle. */
 .band{position:relative;height:44px;margin:10px 4px 0;cursor:pointer;text-shadow:none}
 .band svg{position:absolute;inset:0 0 auto 0;width:100%;height:18px;overflow:visible}
 .band line{stroke:var(--amber-dim);stroke-width:1;vector-effect:non-scaling-stroke}
-.band .num{position:absolute;top:21px;transform:translateX(-50%);font:500 10px/1 var(--mono);color:var(--amber-low)}
+.band .num{position:absolute;top:21px;transform:translateX(-50%);font:500 12px/1 var(--mono);color:var(--amber-low)}
 .band .mark{position:absolute;top:0;width:7px;height:7px;margin:-1px 0 0 -3.5px;border-radius:50%;background:var(--amber-dim)}
 .band .mark.on{background:var(--amber);box-shadow:0 0 8px var(--amber)}
 .needle{position:absolute;top:-4px;bottom:6px;left:50%;width:2px;margin-left:-1px;border-radius:1px;background:var(--needle);box-shadow:0 0 8px var(--needle);transition:left .38s cubic-bezier(.3,1.3,.5,1)}
@@ -83,12 +83,16 @@ a{color:var(--amber-soft);text-underline-offset:3px}
 #play .pause,#play[aria-pressed=true] .go{display:none}
 #play[aria-pressed=true] .pause{display:block}
 .presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
-.preset{display:grid;align-content:center;gap:2px;min-height:54px;padding:6px 10px;text-align:left;position:relative}
+.preset{display:grid;align-content:start;gap:2px;min-height:82px;padding:6px 10px;text-align:left;position:relative}
 .preset b{font:700 16px/1.1 var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
-.preset span{font:600 10.5px/1.25 var(--mono);letter-spacing:.06em;color:var(--dim);overflow-wrap:anywhere}
+.preset span{font:600 12px/1.25 var(--mono);letter-spacing:.06em;color:var(--dim);overflow-wrap:anywhere}
 .preset[aria-pressed=true]{border-color:var(--amber-dim);box-shadow:inset 0 0 0 1px rgba(255,178,63,.35),inset 0 0 18px rgba(255,178,63,.12),0 2px 0 #06080a}
 .preset[aria-pressed=true] b{color:var(--amber)}
-.volume{display:flex;align-items:center;gap:12px;margin:12px 2px 0;font:700 11px/1 var(--mono);letter-spacing:.16em;color:var(--dim)}
+[data-state=silent] .preset[aria-pressed=true]::after,[data-state=tuning] .preset[aria-pressed=true]::after{content:"Tuned";font:600 12px/1.3 var(--mono);color:var(--amber)}
+[data-state=sound] .preset[aria-pressed=true]::after{content:"▶ Playing";font:600 12px/1.3 var(--mono);color:var(--amber)}
+/* Phone portrait: the status sits on the frequency line, so tiles size to their names; 1fr rows keep them one height. */
+@media(min-width:360px) and (max-width:599px) and (orientation:portrait){.presets{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));grid-auto-rows:1fr}.preset{min-height:0}.preset[aria-pressed=true]::after{position:absolute;top:6px;right:10px}}
+.volume{display:flex;align-items:center;gap:12px;margin:16px 2px;font:700 12px/1 var(--mono);letter-spacing:.16em;color:var(--dim)}
 .volume input{flex:1;min-width:0;accent-color:var(--amber)}
 
 /* Below the unit: the programme, the credits and the ways on. */
@@ -107,10 +111,14 @@ summary span{color:var(--amber-soft);letter-spacing:.06em;text-transform:none;mi
 #programme time{flex:none;font:500 12px/1 var(--mono);color:var(--quiet)}
 #programme [aria-current] span{color:var(--amber)}
 #programme [aria-current] span::before{content:"▸ "}
-.credits p{margin:8px 0 0;font-size:14px;line-height:1.55;color:var(--dim)}
+.card.credits{border:0;background:transparent;padding:14px 0}
+.way::after{content:"→";color:var(--amber);grid-column:2;grid-row:1/3}
+.way:is(:hover,:focus-visible){background:#263d34}
+.credits p,.about{margin:8px 0 0;font-size:14px;line-height:1.55;color:var(--dim)}
+.about{margin:0}
 .ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:10px}
-.way{display:grid;gap:2px;min-height:64px;align-content:center;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);text-decoration:none;font-weight:700}
-.way span{font-weight:400;font-size:14px;color:var(--dim)}
+.way{display:grid;grid-template-columns:1fr auto;gap:2px;min-height:64px;align-content:center;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);text-decoration:none;font-weight:700}
+.way span{grid-column:1;font-weight:400;font-size:14px;color:var(--dim)}
 .way:hover{border-color:var(--amber-dim)}
 .foot{display:flex;flex-wrap:wrap;gap:6px 20px;margin:0;font-size:15px}
 .foot a{display:inline-flex;align-items:center;min-height:44px}
@@ -129,6 +137,8 @@ summary span{color:var(--amber-soft);letter-spacing:.06em;text-transform:none;mi
  .preset{min-height:44px;padding:4px 10px}
  .presets{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:6px}
  .volume{margin-top:8px}
+}
+@media(max-width:599px) and (orientation:portrait){.volume{margin:0 2px 16px}
 }
 /* A wide window: the unit stays in view beside the lists. */
 @media (min-width:980px) and (min-height:521px){
@@ -173,7 +183,7 @@ export async function listenPage() {
 <div class="brand"><i class="lamp" aria-hidden="true"></i><h1>JUST LISTEN</h1><span>FM · MABOU</span></div>
 <section class="glass" aria-label="Now on the radio">
 <div class="tuned"><span id="dial" class="dial">--.-</span><span class="fm">FM</span><span id="name" class="name">&nbsp;</span></div>
-<div class="now"><span id="state" class="state">TUNING…</span><button id="live" type="button" aria-pressed="true">LIVE</button><p id="title" class="title" aria-live="polite">Finding the stations…</p></div>
+<div class="now"><span id="state" class="state">Press ▶ to listen</span><button id="live" type="button" aria-pressed="true">LIVE</button><p id="title" class="title" aria-live="polite">Finding the stations…</p></div>
 <div class="progress"><time id="timeNow">0:00</time><div><i id="bar"></i></div><time id="timeAll">0:00</time></div>
 <p class="next"><b>NEXT</b><span id="next"></span></p>
 <div id="band" class="band" aria-hidden="true"><i id="needle" class="needle"></i></div>
@@ -183,8 +193,8 @@ export async function listenPage() {
 <button id="play" class="key" type="button" aria-label="Play the radio" aria-pressed="false"><svg class="go" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.5v13l11-6.5z"/></svg><svg class="pause" viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 3.5h4v13h-4zM11.5 3.5h4v13h-4z"/></svg></button>
 <button id="up" class="key" type="button" aria-label="Station up">${tri('M7 3l8 7-8 7z')}</button>
 </div>
-<div id="presets" class="presets" role="group" aria-label="Stations"></div>
 <label id="volumeRow" class="volume">VOLUME <input id="volume" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+<div id="presets" class="presets" role="group" aria-label="Stations"></div>
 </main>
 <div class="side">
 <details class="card">
@@ -192,15 +202,15 @@ export async function listenPage() {
 <p class="hint">Choose a piece to hear it from its start. LIVE goes back to what is on the air now.</p>
 <ol id="programme"></ol>
 </details>
-<section class="card credits" aria-labelledby="creditsHead">
-<h2 id="creditsHead">Credits</h2>
-${PUBLIC_MUSIC_CREDIT.replace(' id="titleMusic"', ' id="listenMusic"')}
-<p>This is the car radio from two driving games on the real land of Cape Breton. The page and a car in the game play the same thing at the same moment.</p>
-</section>
+<p class="about">This is the car radio from two driving games on the real land of Cape Breton. The page and a car in the game play the same thing at the same moment.</p>
 <nav class="ways" aria-label="The games">
 <a class="way" href="https://mmm.fakkeldy.ca/">Mabou Mail Madness<span>A rural mail route you cannot win.</span></a>
 <a class="way" href="https://justdrive.fakkeldy.ca/mabou">Just Drive<span>The same land, no mail and no clock.</span></a>
 </nav>
+<section class="card credits" aria-labelledby="creditsHead">
+<h2 id="creditsHead">Credits</h2>
+${PUBLIC_MUSIC_CREDIT.replace(' id="titleMusic"', ' id="listenMusic"')}
+</section>
 <p class="foot"><a id="coffee" href="${COFFEE_URL}" rel="noopener">${COFFEE_TEXT}</a><a href="${ABOUT_URL.mail}">About: who made it and how</a></p>
 </div>
 </div>

@@ -28,7 +28,6 @@ export const roomInvitation = (origin: string, path: string, code: string, area:
 };
 
 const CSS = `
-body:not(.tcOn) #settings:has(>.mpControl){box-sizing:border-box;max-height:calc(100% - 84px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain}
 .mpControl{margin:14px 0 0;padding-top:12px;border-top:1px solid #eef2f633;font:13px/1.4 system-ui,sans-serif;min-width:0}
 .mpControl [hidden]{display:none!important}
 .mpControl .mpHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700}
@@ -36,6 +35,9 @@ body:not(.tcOn) #settings:has(>.mpControl){box-sizing:border-box;max-height:calc
 .mpControl button{cursor:pointer;min-width:58px}
 .mpControl button[aria-pressed=true],.mpControl button[aria-checked=true]{background:#3d6f8f}
 .mpControl :is(button,input):focus-visible{outline:3px solid #f4be79;outline-offset:-3px}
+.mpControl .mpToggle{display:flex;align-items:center;gap:8px;min-height:44px;border:0;background:transparent!important}
+.mpToggle::before{content:"";display:block;flex:none;width:40px;height:24px;border:1px solid currentColor;border-radius:20px;background:radial-gradient(circle at 12px 12px,currentColor 8px,transparent 9px)}
+.mpToggle[aria-checked=true]::before{color:var(--title-accent,#a7d9bc);background:radial-gradient(circle at 28px 12px,currentColor 8px,transparent 9px)}
 .mpControl button:disabled{opacity:.5;cursor:default}
 .mpControl small{display:block;margin:7px 0;color:#b9c3cc;font:12px/1.4 system-ui,sans-serif}
 .mpControl .mpChoices,.mpControl .mpJoin,.mpControl .mpNameRow{display:flex;gap:6px;margin-top:8px}
@@ -51,15 +53,7 @@ body:not(.tcOn) #settings:has(>.mpControl){box-sizing:border-box;max-height:calc
 .mpControl .mpError{color:#ffbc99}
 #title:has(.mpControl){display:flex;align-items:safe center;justify-content:center}
 #titleCard:has(.mpControl){flex:none;max-width:100%;box-sizing:border-box}
-@media(min-width:760px){
- #titleCard:has(.mpControl){width:800px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:24px}
- #titleCard:has(.mpControl)>:not(dl):not(.mpControl){grid-column:1/-1}
- #titleCard:has(.mpControl)>dl{grid-column:1;grid-row:5;font-size:12px;gap:5px 10px}
- #titleCard>.mpControl{grid-column:2;grid-row:5;align-self:start}
- #titleCard:has(.mpControl)>#titleStart{grid-row:6}
- #titleCard:has(.mpControl)>#titleCredits{grid-row:7}
- #titleCard:has(.mpControl)>#titleLegal{grid-row:8}
-}
+
 `;
 
 // True on the development server only. (A node check loads this file with no build at all: then it is false.)
@@ -197,7 +191,7 @@ export function multiplayerSwitch(host: Host) {
       const start = document.getElementById('titleStart');
       if (!start || titleMounted) return;
       titleMounted = true;
-      block(start.parentElement!, start, true); paint();
+      block(start.parentElement!, start.parentElement!.querySelector('.titleFooter'), true); paint();
     };
     const observer = new MutationObserver(() => { mountTitle(); if (titleMounted) observer.disconnect(); });
     mountTitle();

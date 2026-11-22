@@ -27,6 +27,16 @@ async function ui(source,area) {
 }
 const done={bytes:100,total:100,count:1,files:1,done:true,running:false};
 const tests={
+ async track(source) {
+  if(process.argv.includes('--baseline'))return;
+  const u=await ui(source),c=u.controls;
+  assert.match(u.group.innerHTML,/<progress id="offlineProgress"[^>]*\bhidden/);
+  assert.match(u.group.innerHTML,/<div id="offlineStatus"[^>]*><\/div>/);
+  const reply=u.requests.shift().reply;
+  for(const [bytes,running,hidden] of [[0,false,true],[0,true,false],[20,false,false],[0,false,true]]) {
+   reply({bytes,total:100,count:0,files:1,done:false,running});assert.equal(c.offlineProgress.hidden,hidden);
+  }
+ },
  async size(source) {const u=await ui(source),c=u.controls;u.requests.shift().reply({bytes:0,total:1048576,count:0,files:1,done:false,running:false,downloadBytes:2097152,shellBytes:1048576});assert.equal(c.offlineSize.textContent,'Full download: 2.0 MB');assert.equal(c.offlineProgress.max,2097152);assert.equal(c.offlineProgress.value,1048576);},
  async area(source) {const u=await ui(source,'judique');assert.match(u.group.innerHTML,/This area needs a connection/);assert.doesNotMatch(u.group.innerHTML,/offlineStart/);assert.equal(u.requests.length,0,'another area never prepares or starts a download');},
  async observer(source) {
@@ -56,6 +66,7 @@ let failures=0;
 for(const [name,test] of Object.entries(tests)){try{await test(source);console.log('PASS',name);}catch(e){failures++;console.log('FAIL',name,e.message);}}
 if(!failures && !process.argv.includes('--baseline')) {
  const changes=[
+  ['track','bar.hidden=!(p.running || saved>0);',''],
   ['size','p.downloadBytes ?? p.total','p.total'],
   ['area',"if(area!=='mabou') {",'if(false) {'],
   ['observer','if(!ownDownload && navigator.serviceWorker.controller)', 'if(!working && navigator.serviceWorker.controller)'],

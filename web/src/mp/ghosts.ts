@@ -15,14 +15,16 @@ export interface GhostOptions {
   label?: (name: string, id: number) => string;
 }
 
-const PALETTE = [0x305b83, 0x8f2935, 0x326052, 0xe6e5df, 0x303842, 0xb17a32, 0x73536d, 0x557e80];
+export const PALETTE = [0x305b83, 0x8f2935, 0x326052, 0xe6e5df, 0x303842, 0xb17a32, 0x73536d, 0x557e80];
 const WB = 2.62, TRACK = 1.57;
 const ROW = 64, WIDTH = 320;
 
-/** World height of a call-sign plane. Phone text keeps about 12 px of ink through 60 m, then shrinks. */
+export interface TagBox { id: number; left: number; right: number; top: number; bottom: number }
+
+/** Phone names use 12 CSS px of ink through 60 m, then shrink. */
 export function callSignHeight(depth: number, projection: number, cssHeight: number, low: boolean, distance: number): number {
   const height = Math.max(.01, Math.min(6, .060 * depth / projection));
-  return low ? Math.max(height, 64 * depth / (Math.max(1, cssHeight) * projection) * Math.min(1, 60 / Math.max(.001, distance))) : height;
+  return low ? 48 * depth / (Math.max(1, cssHeight) * projection) * Math.min(1, 60 / Math.max(.001, distance)) : height;
 }
 
 
@@ -92,6 +94,8 @@ export class Ghosts {
   readonly group = new THREE.Group();
   drawn = 0;
   private labelCount = 0;
+  readonly tagBoxes: TagBox[] = [];
+  private readonly tagPool: TagBox[];
   private blend = 0;
   private readonly cap: number;
   private readonly low: boolean;
@@ -99,7 +103,7 @@ export class Ghosts {
   private readonly cars: THREE.InstancedMesh;
   private readonly morph: THREE.Mesh;
   private readonly legacy: THREE.InstancedBufferAttribute;
-  private readonly labels: THREE.InstancedMesh;
+  readonly labels: THREE.InstancedMesh;
   private readonly atlas: THREE.CanvasTexture;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly slots: Slot[];
@@ -130,6 +134,7 @@ export class Ghosts {
     this.chosen = new Array(this.cap).fill(null);
     this.scores = new Float64Array(this.cap);
     this.labelBounds = new Float64Array(this.cap * 4);
+    this.tagPool = Array.from({ length: this.cap }, () => ({ id: 0, left: 0, right: 0, top: 0, bottom: 0 }));
     this.fades = new THREE.InstancedBufferAttribute(new Float32Array(this.cap), 1);
     this.brakes = new THREE.InstancedBufferAttribute(new Float32Array(this.cap), 1);
     this.tints = new THREE.InstancedBufferAttribute(new Float32Array(this.cap * 3), 3);
@@ -227,6 +232,7 @@ export class Ghosts {
     }
     for (let i = 0; i < this.cap; i++) if (!this.slots[i].used) this.slots[i].id = -1;
     this.cars.count = this.drawn; this.labels.count = this.labelCount;
+    if (this.tagBoxes.length !== this.labelCount) this.tagBoxes.length = this.labelCount;
     if (this.cars.morphTexture) this.cars.morphTexture.needsUpdate = true;
     this.legacy.needsUpdate = true;
     this.cars.instanceMatrix.needsUpdate = true; this.labels.instanceMatrix.needsUpdate = true;
@@ -271,26 +277,29 @@ export class Ghosts {
       const ctx = this.ctx, top = at * ROW;
       ctx.clearRect(0, top, WIDTH, ROW);
       ctx.fillStyle = '#16262eef'; ctx.beginPath(); ctx.roundRect(4, top + 4, WIDTH - 8, ROW - 8, 14); ctx.fill();
-      ctx.strokeStyle = '#' + this.palette[((peer.hue % 8) + 8) % 8 | 0].getHexString(); ctx.lineWidth = 5; ctx.stroke();
+      ctx.strokeStyle = '#' + this.palette[((peer.hue % 8) + 8) % 8 | 0].getHexString() + '99'; ctx.lineWidth = 2; ctx.stroke();
       ctx.fillStyle = '#f5f3e6'; ctx.font = '600 32px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(name, WIDTH / 2, top + ROW / 2, WIDTH - 36);
       this.atlas.needsUpdate = true;
     }
     // Scale by view depth, with a small near limit. The bottom stays above the roof.
     this.labelPosition.applyMatrix4(camera.matrixWorldInverse);
-    const depth = camera.projectionMatrix.elements[15] === 0 ? Math.abs(this.labelPosition.z) : 1;
+    const perspective = camera.projectionMatrix.elements[15] === 0, projection = Math.abs(camera.projectionMatrix.elements[5]);
     // The 32/64 atlas font takes half the plane height; use CSS px, not drawing-buffer pixels.
-    const height = callSignHeight(depth, Math.abs(camera.projectionMatrix.elements[5]), innerHeight, this.low, distance);
+    const base = this.labelPosition.z, rise = camera.matrixWorldInverse.elements[6];
+    let height = callSignHeight(perspective ? Math.abs(base) : 1, projection, innerHeight, this.low, distance);
+    // Size it again at the plane's centre, half a plane above the base, where it is drawn (view z moves by rise per metre up).
+    if (perspective) height = callSignHeight(Math.abs(base + rise * height / 2), projection, innerHeight, this.low, distance);
     this.billboard.position.set(peer.x, y + roof + .25 + height / 2, peer.z);
     this.billboard.quaternion.copy(this.cameraRotation); this.billboard.scale.set(height * WIDTH / ROW, height, 1);
-    this.arrangeLabel(camera);
+    this.arrangeLabel(camera, peer.id);
     this.billboard.updateMatrix(); this.labels.setMatrixAt(this.labelCount, this.billboard.matrix);
     this.rows.setX(this.labelCount, this.cap - 1 - at);
     this.labelFades.setX(this.labelCount, Math.min(1, peer.alpha) * Math.min(1, (150 - distance) / 20));
     this.labelCount++;
   }
 
-  private arrangeLabel(camera: THREE.Camera): void {
+  private arrangeLabel(camera: THREE.Camera, id: number): void {
     const height = this.billboard.scale.y;
     // Lift a crowded label above earlier ones, without hiding any names.
     this.labelPosition.copy(this.billboard.position).applyMatrix4(camera.matrixWorldInverse);
@@ -312,6 +321,11 @@ export class Ghosts {
     const b = this.labelCount * 4;
     this.labelBounds[b] = left; this.labelBounds[b + 1] = right;
     this.labelBounds[b + 2] = bottom + lift; this.labelBounds[b + 3] = top + lift;
+    const tag = this.tagPool[this.labelCount];
+    tag.id = id; tag.left = (left + 1) * innerWidth / 2; tag.right = (right + 1) * innerWidth / 2;
+    tag.top = (1 - top - lift) * innerHeight / 2; tag.bottom = (1 - bottom - lift) * innerHeight / 2;
+    // Write in place: emptying the array each frame would make V8 allocate a new backing store.
+    this.tagBoxes[this.labelCount] = tag;
   }
 
   dispose(): void {

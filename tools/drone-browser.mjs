@@ -72,10 +72,19 @@ const state = `JSON.stringify({active:mmm.drone.active,returning:mmm.drone.retur
   car:{x:mmm.vehicle.x,z:mmm.vehicle.z,y:mmm.vehicle.y,speed:mmm.vehicle.speed},hud:document.getElementById('hud').textContent,
   tcOn:document.body.classList.contains('tcOn'),delivered:mmm.shift?.mail?.delivered??null,mail:document.getElementById('mailButton')?.hidden??null})`;
 
+async function flightMap(p, phone) {
+  const sample=await p.read(`(()=>{const e=document.getElementById('miniMap'),r=e.getBoundingClientRect(),c=document.getElementById('miniMapCanvas'),g=c.getContext('2d');window.flightMapSample=null;const map=mmm.miniMap,original=map.update.bind(map);map.update=(...args)=>{window.flightMapSample=args;return original(...args)};const fill=g.fillText.bind(g);window.flightNorth=0;g.fillText=(text,...args)=>{if(text==='N')flightNorth++;return fill(text,...args)};return {visible:!e.hidden&&r.width>0&&r.height>0,parent:e.parentElement===document.body,folded:e.classList.contains('folded')}})()`);
+  check(sample.visible&&sample.parent&&!sample.folded,'flight map is open and painted outside the hidden driving HUD');
+  await sleep(400);
+  // mmm.vehicle is a dev Proxy over the car, never === the raw object the map gets: match its class and place.
+  check(await p.read(`flightNorth>0&&Math.abs(flightMapSample[1]-mmm.drone.state.x)<2&&Math.abs(flightMapSample[2]-mmm.drone.state.z)<2&&Math.abs(flightMapSample[3]+mmm.drone.state.yaw)<.1&&!!flightMapSample[7]&&flightMapSample[7]!==mmm.drone.state&&Object.getPrototypeOf(flightMapSample[7])===Object.getPrototypeOf(mmm.vehicle)&&Math.abs(flightMapSample[7].x-mmm.vehicle.x)<.01&&Math.abs(flightMapSample[7].z-mmm.vehicle.z)<.01`),'map follows drone position and heading, paints north and marks the parked car');
+  if(phone)check(await p.read(`(()=>{const b=document.getElementById('miniMap').getBoundingClientRect();return ['droneLeft','droneRight','droneReturn','hud','gear','pauseButton'].every(id=>{const r=document.getElementById(id).getBoundingClientRect();return b.right<=r.left||b.left>=r.right||b.bottom<=r.top||b.top>=r.bottom})})()`),'phone flight map clears sticks, Return, chip, Pause and gear');
+}
+
 // ---- desktop, keyboard only -------------------------------------------------------------------------
 {
   const p = await page(1280, 720, false);
-  await p.load({ q: 'high' });
+  await p.load({ q: 'high',mode:'mail',site:'mail',area:'mabou' });
   // On the paved road nearest Mabou village's centre (the land's origin), so the flight passes over the village.
   await p.read(`(()=>{const r=mmm.roads.nearest(0,0,400,r=>r.kind<=2);if(!r)throw Error('no village road');mmm.vehicle.place(r.x,r.z,r.heading);mmm.driveVehicle(0,{throttle:0,steer:0,handbrake:true});})()`);
   await sleep(1000); await p.until(`String(document.title).startsWith('settled')`, 120000); await sleep(800);
@@ -86,6 +95,19 @@ const state = `JSON.stringify({active:mmm.drone.active,returning:mmm.drone.retur
   await p.tap('KeyF');
   check(await p.until('mmm.drone.active'), 'F launches the drone');
   await sleep(1600);
+  await flightMap(p, false);
+  check(await p.read(`!document.getElementById('droneHints').hidden&&document.querySelectorAll('#droneHints kbd').length===12&&!([...document.querySelectorAll('#droneHints kbd')].some(e=>e.textContent==='Mouse wheel'))&&document.querySelector('#droneHints').textContent.includes('Mouse wheel')`),'grouped desktop keycaps appear at launch');
+  check(await p.read(`(()=>{const dl=document.querySelector('#droneHints dl'),terms=[...dl.querySelectorAll('dt')];return terms.every((dt,i)=>{const a=dt.getBoundingClientRect(),b=dt.nextElementSibling.getBoundingClientRect();return Math.abs(a.top-b.top)<4&&b.left-a.right>=0&&b.left-a.right<=12&&(!i||a.top>terms[i-1].nextElementSibling.getBoundingClientRect().top);});})()`),'drone keys and labels share one close pair per row');
+  for(const [width,height] of [[1280,720],[844,390]]){
+    await p.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await sleep(250);
+    check(await p.read(`(()=>{const r=document.getElementById('droneHints').getBoundingClientRect();return r.width<=270&&r.left>=0&&r.right<=innerWidth;})()`),`keyboard drone help fits the 270px reserve at ${width}x${height}`);
+  }
+  await p.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});await sleep(250);
+
+  check(await p.read(`(()=>{const e=document.getElementById('shiftHud'),h=document.getElementById('droneHints'),a=e.getBoundingClientRect(),b=h.getBoundingClientRect();return mmm.gameMode==='mail'&&!e.hidden&&!h.hidden&&a.width>0&&a.height>0&&b.width>0&&b.height>0&&(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom)})()`),'mail day card and drone hints are visible and clear of each other');
+  await p.read(`document.getElementById('pauseButton').click();document.querySelector('#pauseKeys summary').click()`);
+  check(await p.read(`document.querySelector('#pauseKeys dl').textContent.includes('Mouse wheelTop speed')&&document.querySelector('#pauseKeys dl').textContent.includes('RFly back')`),'pause Keys lists drone controls');
+  await p.read(`document.getElementById('resumeGame').click()`);
   let a = await s();
   check(a.y > parked.car.y + 3 && Math.hypot(a.x - parked.car.x, a.z - parked.car.z) < 0.5, `it lifts straight off the roof: ${(a.y - parked.car.y).toFixed(1)} m over the car`);
   // ↓ tilts the camera down: the drone and the car below it.
@@ -97,7 +119,9 @@ const state = `JSON.stringify({active:mmm.drone.active,returning:mmm.drone.retur
   await p.hold('Space', 2500); await sleep(500);
   const climbed = await s();
   check(climbed.height > 12, `Space climbs: ${climbed.height?.toFixed(1)} m above the ground`);
-  check(/^DRONE   height \d+ m   distance \d+ m/.test(climbed.hud) && climbed.hud.includes('↑/↓: camera'), 'HUD shows height, distance and the keyboard keys: ' + climbed.hud.split('\n')[0]);
+  // The readout keeps the numbers; the keys sit in the docked Drone keys panel.
+  const keysDocked = await p.read(`(()=>{const h=document.getElementById('droneHints');return !h.hidden&&h.getClientRects().length>0&&h.textContent.includes('↑/↓Camera')&&h.textContent.includes('SpaceUp')})()`);
+  check(/^DRONE · Height \d+ m · From the car \d+ m · Speed \d+ m\/s · Heading (N|NE|E|SE|S|SW|W|NW)\b/.test(climbed.hud) && !climbed.hud.includes('(max') && !climbed.hud.includes('↑/↓') && keysDocked, 'HUD shows height, distance, speed and heading, and the docked panel the keyboard keys: ' + climbed.hud.split('\n')[0]);
   // ↑ tilts back up, without moving it.
   await p.hold('ArrowUp', 700); await sleep(400);
   a = await s();
@@ -125,6 +149,7 @@ const state = `JSON.stringify({active:mmm.drone.active,returning:mmm.drone.retur
   await p.read(`mmm.drone.state.yaw=${toVillage}`);
   const farFromCar = Math.hypot(parked.car.x, parked.car.z);
   for (let i = 0; i < 3; i++) await p.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 640, y: 360, deltaX: 0, deltaY: -100 });
+  check(await p.until(`document.getElementById('hud').textContent.includes('(max 29)')`), 'three wheel steps show the changed top speed');
   const flyFor = Math.max(2500, Math.min(14000, farFromCar / 25 * 1000));
   await p.hold('KeyW', flyFor); await sleep(2500);
   await p.hold('ArrowUp', 500);
@@ -137,6 +162,7 @@ const state = `JSON.stringify({active:mmm.drone.active,returning:mmm.drone.retur
   // R: the flight home; it sets down on the roof and driving resumes.
   await p.tap('KeyR');
   check(await p.until('mmm.drone.returning'), 'R starts the flight home');
+  check(await p.until(`(()=>{const h=document.getElementById('hud');return h.querySelector('.dst')?.textContent==='returning'&&/Heading [NESW]{1,2}\\s+returning/.test(h.innerText);})()`), 'desktop heading and return state have a visible space or line break');
   await p.until(`mmm.drone.distance < 25`, 60000);
   await p.shot('05-desktop-coming-home');
   check(await p.until('!mmm.drone.active', 30000), 'the return flight lands it and driving resumes');
@@ -167,10 +193,15 @@ const state = `JSON.stringify({active:mmm.drone.active,returning:mmm.drone.retur
 }
 
 // ---- phone, touch only ------------------------------------------------------------------------------
-for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
+for (const [w, h, name, mode, safeLeft = 0] of [[390, 844, 'portrait', 'mail'], [844, 390, 'landscape', 'mail'], [390, 844, 'portrait-places', 'explore'], [844, 390, 'landscape-places', 'explore'], [667,375,'small-landscape','mail'], [320,568,'small-portrait','mail'], [667,375,'small-landscape-places','explore'], [320,568,'small-portrait-places','explore'], [844,390,'landscape-left-safe','mail',47]]) {
   const p = await page(w, h, true);
-  await p.load({ q: 'low', touch: '1' });
+  await p.load({ q: 'low', touch: '1', mode });
+  if (safeLeft) {
+    await p.read(`document.documentElement.style.setProperty('--test-safe-left','${safeLeft}px')`);
+    await sleep(150);
+  }
   const s = async () => JSON.parse(await p.read(state));
+  const snugReadout=async label=>check(await p.read(`(()=>{const h=document.getElementById('hud'),box=h.getBoundingClientRect(),walker=document.createTreeWalker(h,NodeFilter.SHOW_TEXT),bottoms=[];let node;while(node=walker.nextNode()){if(!node.textContent.trim())continue;const range=document.createRange();range.selectNodeContents(node);bottoms.push(...[...range.getClientRects()].filter(r=>r.width>0&&r.height>0).map(r=>r.bottom));}const m=document.getElementById('miniMap').getBoundingClientRect(),last=Math.max(...bottoms),boxes=['hud','miniMap','droneLeft','droneRight','droneReturn','gear','pauseButton','placesButton','bigMapButton'].map(id=>document.getElementById(id)).filter(e=>e&&!e.hidden&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').map(e=>e.getBoundingClientRect()),labels=[...document.querySelectorAll('.droneStick span')].map(e=>{const r=document.createRange();r.selectNodeContents(e);return r.getBoundingClientRect();});const overlap=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top,clear=boxes.every((a,i)=>a.left>=0&&a.top>=0&&a.right<=innerWidth&&a.bottom<=innerHeight&&boxes.slice(i+1).every(b=>!overlap(a,b)))&&labels.every(a=>['miniMap','droneReturn','gear','pauseButton'].every(id=>!overlap(a,document.getElementById(id).getBoundingClientRect())));return clear&&bottoms.length>0&&box.bottom>=last&&box.bottom-last<=12&&(innerWidth>innerHeight?Math.abs(box.top-m.top)<=1:m.top-box.bottom>=8&&m.top-box.bottom<=12);})()`),name+': '+label+' readout fits its text and map follows');
   const button = await p.centre('droneButton');
   check(button.w >= 56 && button.h >= 56, `${name}: DRONE button is a full touch target (${button.w}x${button.h})`);
   const overlap = await p.read(`(()=>{const b=document.getElementById('droneButton').getBoundingClientRect();return ['gear','pauseButton','hud','phoneLine','tcReset','tcView','tcHorn','miniMap','mailButton','cameraButton'].filter(id=>{const e=document.getElementById(id);if(!e||!e.getClientRects().length)return false;const r=e.getBoundingClientRect();return r.width>1&&r.left<b.right-1&&r.right>b.left+1&&r.top<b.bottom-1&&r.bottom>b.top+1;})})()`);
@@ -182,6 +213,21 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   check(await p.until('mmm.drone.active'), `${name}: DRONE launches it`);
   check(await p.until(`!document.body.classList.contains('tcOn') && !document.getElementById('droneLeft').hidden && !document.getElementById('droneRight').hidden && !document.getElementById('droneReturn').hidden`), `${name}: driving controls give way to the two sticks and RETURN`);
   await sleep(1500);
+  await flightMap(p, true);
+  await snugReadout('idle');
+  if (safeLeft) check(await p.read(`(()=>{const h=document.getElementById('hud').getBoundingClientRect(),m=document.getElementById('miniMap').getBoundingClientRect();return h.left>=${safeLeft}&&h.right+7<=m.left&&Math.abs(h.top-m.top)<=1;})()`), `${name}: inset moves both readout and map without overlap`);
+  check(await p.read(`document.querySelector('#droneLeft span').textContent==='↕CLIMB · ↔TURN'&&document.getElementById('droneReturn').textContent==='RETURN TO CAR'`),'touch labels explain climb, turn and return');
+  check(await p.read(`Array.from(document.querySelectorAll('.droneStick span')).every(e=>{const s=getComputedStyle(e);return s.fontSize==='12px'&&s.lineHeight==='14px'&&e.getBoundingClientRect().height<=18;})`),'stick labels use 12px type in labels no taller than 18px');
+  check(await p.read(`(()=>Array.from(document.querySelectorAll('.droneStick')).every(stick=>{const e=stick.querySelector('span'),range=document.createRange();range.selectNodeContents(e);const r=range.getBoundingClientRect(),s=stick.getBoundingClientRect();return Math.abs((r.left+r.right-s.left-s.right)/2)<=1&&r.width<=s.width+4&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&getComputedStyle(e).textShadow!=='none'&&getComputedStyle(e).borderTopWidth==='0px';}))()`),'stick text is centred, fits the stick and viewport, and has a halo without a rim');
+  check(await p.read(`(()=>{const h=document.getElementById('hud'),m=document.getElementById('miniMap'),r=h.getBoundingClientRect(),b=m.getBoundingClientRect();return !!h.querySelector('.dh')&&parseFloat(getComputedStyle(h.querySelector('.dh')).fontSize)>=24&&parseFloat(getComputedStyle(h).fontSize)>=12&&[...h.querySelectorAll('span')].every(e=>parseFloat(getComputedStyle(e).fontSize)>=12)&&h.scrollWidth<=h.clientWidth&&Math.abs(r.width-b.width)<=1&&(innerWidth>innerHeight?Math.abs(r.top-b.top)<=1&&r.right+7<=b.left:b.top-r.bottom>=8&&b.top-r.bottom<=12);})()`),'drone height figure, readable text and matching columns clear each other');
+  await p.read(`document.getElementById('pauseButton').click();document.querySelector('#pauseKeys summary').click()`);
+  check(await p.read(`JSON.stringify([...document.querySelectorAll('#pauseKeys dt')].map(e=>e.textContent))===JSON.stringify(['Left stick','Right stick','RETURN TO CAR'])&&document.querySelector('#pauseKeys dl').textContent.includes('Climb and turn')`),'phone pause help lists sticks and Return to car');
+  await p.read(`document.getElementById('resumeGame').click()`);
+  // Keep the widest values in the same readout path, including the separate state line.
+  await p.read(`window.savedDroneReadout=mmm.drone.readout;mmm.drone.readout=()=> 'DRONE · Height 120 m\\nFrom the car 2000 m\\nSpeed 12 m/s (max 16)\\nHeading NW · at range limit'`);await sleep(100);
+  check(await p.read(`(()=>{const h=document.getElementById('hud'),r=h.getBoundingClientRect(),m=document.getElementById('miniMap').getBoundingClientRect();return h.scrollWidth<=h.clientWidth&&h.scrollHeight<=h.clientHeight&&!!h.querySelector('.dst')&&h.querySelector('.dh').textContent==='120 m'&&(innerWidth>innerHeight?r.right+7<=m.left&&Math.abs(r.top-m.top)<=1:m.top-r.bottom>=8&&m.top-r.bottom<=12);})()`),'worst drone values fit without clipping; the map follows the readout');
+  await snugReadout('worst values');
+  await p.read(`mmm.drone.readout=savedDroneReadout;delete window.savedDroneReadout`);await sleep(50);
   // Left stick up: climb.
   const left = await p.centre('droneLeft'), right = await p.centre('droneRight');
   const push = async (c, dx, dy, ms) => {
@@ -200,18 +246,21 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   const d = await s();
   check(d.yaw < c.yaw - 0.3, `${name}: left stick right turns right`);
   await sleep(1500);
-  check(/^DRONE height \d+ m\ndistance \d+ m/.test(d.hud) && !d.hud.includes('WASD'), `${name}: phone HUD shows the readout, two short lines, without keys: ${JSON.stringify(d.hud)}`);
+  check(/^DRONE · Height \d+ m\nFrom the car \d+ m\nSpeed \d+ m\/s\nHeading [NESW]{1,2}/.test(d.hud) && !d.hud.includes('(max') && !d.hud.includes('WASD'), `${name}: phone HUD shows the readout, two short lines, without keys: ${JSON.stringify(d.hud)}`);
   const hidden = await p.read(`['cameraButton','stopHint','mailScore'].filter(id=>{const e=document.getElementById(id);return e&&e.getClientRects().length>0})`);
   check(hidden.length === 0, `${name}: CAMERA, the stop hint and the score give the sticks room ${JSON.stringify(hidden)}`);
   const hudClear = await p.read(`(()=>{const h=document.getElementById('hud').getBoundingClientRect();return ['pauseButton','gear'].filter(id=>{const r=document.getElementById(id).getBoundingClientRect();return h.left<r.right&&h.right>r.left&&h.top<r.bottom&&h.bottom>r.top})})()`);
   check(hudClear.length === 0, `${name}: the readout clears Pause and the gear ${JSON.stringify(hudClear)}`);
   await p.shot(`11-phone-${name}-flying`);
   const ret = await p.centre('droneReturn');
-  const sticksClear = await p.read(`(()=>{const ids=['droneLeft','droneRight','droneReturn','gear','pauseButton'];const r=ids.map(i=>document.getElementById(i).getBoundingClientRect());const out=[];for(let i=0;i<r.length;i++)for(let j=i+1;j<r.length;j++)if(r[i].left<r[j].right&&r[i].right>r[j].left&&r[i].top<r[j].bottom&&r[i].bottom>r[j].top)out.push(ids[i]+'/'+ids[j]);for(const x of r)if(x.left<0||x.top<0||x.right>innerWidth||x.bottom>innerHeight)out.push('off screen');return out})()`);
-  check(sticksClear.length === 0, `${name}: sticks, RETURN, gear and Pause do not overlap and stay on screen ${JSON.stringify(sticksClear)}`);
+  const sticksClear = await p.read(`(()=>{const ids=['hud','droneLeft','droneRight','droneReturn','gear','pauseButton','miniMap','placesButton','bigMapButton'].filter(id=>!['placesButton','bigMapButton'].includes(id)||mmm.gameMode==='explore');const r=ids.map(i=>document.getElementById(i).getBoundingClientRect());const out=[];for(let i=0;i<r.length;i++)for(let j=i+1;j<r.length;j++)if(r[i].left<r[j].right&&r[i].right>r[j].left&&r[i].top<r[j].bottom&&r[i].bottom>r[j].top)out.push(ids[i]+'/'+ids[j]);const chips=[document.querySelector('#droneLeft span'),document.querySelector('#droneRight span')].map(e=>{const r=document.createRange();r.selectNodeContents(e);return r.getBoundingClientRect();});for(const chip of chips)for(const id of ['droneReturn','miniMap','gear','pauseButton']){const b=document.getElementById(id).getBoundingClientRect();if(chip.left<b.right&&chip.right>b.left&&chip.top<b.bottom&&chip.bottom>b.top)out.push('label/'+id);}for(const x of [...r,...chips])if(x.left<0||x.top<0||x.right>innerWidth||x.bottom>innerHeight)out.push('off screen');return out})()`);
+  check(sticksClear.length === 0, `${name}: sticks, RETURN, gear, Pause, PLACES and MAP do not overlap and stay on screen ${JSON.stringify(sticksClear)}`);
   await p.touchAt('touchStart', [ret]); await p.touchAt('touchEnd', []);
   check(await p.until('mmm.drone.returning'), `${name}: RETURN flies it home`);
+  // The sticks relabel on the next frame (main.ts flyDrone), so wait for it rather than read at once.
+  check(await p.until(`document.getElementById('droneReturn').textContent==='LAND NOW'&&document.getElementById('droneReturn').getAttribute('aria-label')==='Land now'`, 1000),'return flight offers Land now');
   await sleep(1200);
+  await snugReadout('returning');
   await p.shot(`12-phone-${name}-returning`);
   await p.touchAt('touchStart', [ret]); await p.touchAt('touchEnd', []);
   check(await p.until(`!mmm.drone.active && document.body.classList.contains('tcOn') && document.getElementById('droneLeft').hidden`), `${name}: RETURN again lands it and the driving controls come back`);

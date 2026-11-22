@@ -19,12 +19,10 @@ const CSS = `
 #propertyCredit{position:fixed;z-index:7;box-sizing:border-box;left:max(8px,var(--test-safe-left,env(safe-area-inset-left,0px)));right:max(8px,var(--test-safe-right,env(safe-area-inset-right,0px)));
   bottom:max(8px,var(--test-safe-bottom,env(safe-area-inset-bottom,0px)));max-width:640px;margin:0 auto;padding:6px 8px;font:10px/1.35 system-ui,sans-serif;letter-spacing:0;color:#e0ece8;background:#0b1620;border:1px solid #8ca49e}
 #propertyCredit a{white-space:nowrap}body.tcOn.propertyLinesOn #phoneHud{padding-bottom:calc(8px + var(--safe-bottom,0px) + var(--map-credit-space,0px))}
-body.propertyLinesOn #settings{max-height:calc(100% - 84px - var(--map-credit-space,0px))}
 /* The credit line sits above the licence, centred in its column, and ends before the place card at the right (334 px). */
 body.propertyLinesOn #credit{left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));
   max-width:max(240px,min(640px,calc(100vw - 692px)));margin:0 auto;text-align:center;bottom:calc(6px + var(--map-credit-space,0px) + env(safe-area-inset-bottom,0px))}
 @media(max-width:907px){body.propertyLinesOn #credit{max-width:calc(100vw - 360px);margin:0;text-align:left}}
-body.tcOn.propertyLinesOn #settings{max-height:calc(100% - 70px - var(--phone-top-gap,6px) - var(--map-credit-space,0px) - var(--test-safe-top,env(safe-area-inset-top,0px)) - var(--test-safe-bottom,env(safe-area-inset-bottom,0px)))}
 #propertyCredit a,#propertyDialog a{color:#bceaff}
 #propertyDialog{color:#eef2f6;background:#13232c;border:1px solid #8ca49e;border-radius:8px;padding:22px;
   width:min(560px,calc(100vw - 56px));max-height:80dvh;overflow:auto;font:15px/1.5 system-ui,sans-serif}

@@ -140,7 +140,7 @@ add('ending-dialog-crawl-injection',()=>{
   const store=new FailureStore(),p=page(store);health(p);let draws=0;
   // The pause gate stays open here: an ending frame is never a paused frame.
   const pause={blocked:false,time:0,previous:undefined,frame(now){const dt=this.previous===undefined?0:(now-this.previous)/1000;this.previous=now;this.time=now;return {paused:false,dt};}};
-  const context={pause,gamepad:{poll(){}},multiplayer:null,last:0,fps:60,started:true,mode:'drive',mailMode:true,demo:0,waitingToDrive:false,placesUI:null,bigMap:null,shift:{ended:false},endings:{busy:true},document:globalThis.document,vehicle:{vx:0,vz:0,speed:0},camReady:true,quiet:50,terrain:{pending:0},grass:null,trees:null,interiors:{busy:false},page:{stopped:false,ready(){},fail(error){throw error;}},quality:p.q,drawEnding(){draws++;},requestAnimationFrame(){}};
+  const context={pauseButton:{hidden:true},bare:false,pause,pictureButton:null,gamepad:{poll(){}},multiplayer:null,last:0,fps:60,started:true,mode:'drive',mailMode:true,demo:0,waitingToDrive:false,placesUI:null,bigMap:null,shift:{ended:false},endings:{busy:true},document:globalThis.document,vehicle:{vx:0,vz:0,speed:0},camReady:true,quiet:50,terrain:{pending:0},grass:null,trees:null,interiors:{busy:false},page:{stopped:false,ready(){},fail(error){throw error;}},quality:p.q,drawEnding(){draws++;},requestAnimationFrame(){}};
   const frame=new Function('context',`with(context){${compiled.code};return frame;}`)(context);
   for(let n=1;n<=100;n++){p.advance(200);frame(n*200);}
   assert.equal(draws,100);assert.equal(store.data.get('mmm.detail'),'low','ending frames must reach the monitor');assert.equal(p.nav.length,1);

@@ -161,13 +161,14 @@ const PROBE_EXPR = `(x, z) => {
   await sleep(600);
   const flightHud = await p.read(`({
     hud: document.getElementById('hud').textContent,
+    hints: document.getElementById('droneHints')?.hidden ? '' : document.getElementById('droneHints')?.textContent ?? '',
     driveCalls: window.__driveCalls,
     settingsPressed: document.querySelector('#settingsVehicleChoice [data-vehicle="drone"]')?.getAttribute('aria-pressed'),
     miniMapVisible: document.getElementById('miniMap')?.getClientRects().length > 0,
   })`);
   check(flightHud.driveCalls === 0, 'no car physics ran during drone flight (driveCalls=' + flightHud.driveCalls + ')');
-  check(/^DRONE   height \d+ m   \d+ m\/s/.test(flightHud.hud) && !flightHud.hud.includes('distance') && flightHud.hud.includes('R: road') && flightHud.hud.includes('L: places') && flightHud.hud.includes('M: map'),
-    'standalone drone HUD shows height, speed, and road/places/map help: ' + flightHud.hud.replace(/\n/g, ' | '));
+  check(/^DRONE · Height \d+ m · Speed \d+ m\/s/.test(flightHud.hud) && !flightHud.hud.includes('From the car') && flightHud.hints.includes('Nearest road') && flightHud.hints.includes('Places / map') && !flightHud.hints.includes('Land') && !flightHud.hints.includes('Fly back'),
+    'standalone drone HUD shows height and speed with no car distance, and the key panel shows road/places/map: ' + flightHud.hud.replace(/\n/g, ' | ') + ' / ' + flightHud.hints);
   check(flightHud.settingsPressed === 'true' && flightHud.miniMapVisible, 'Settings highlights Drone and desktop minimap stays visible');
 
   // Capture desktop screenshot over Mabou village!
@@ -369,7 +370,7 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   })()`);
   check(uiCheck.faults.length === 0 && uiCheck.returnText === 'ROAD' && !uiCheck.hasDroneBtn && !uiCheck.hasDrivingHelp && !uiCheck.tcOn,
     `phone ${name}: sticks, ROAD, PLACES, Pause, gear and HUD clear with no overlaps (${JSON.stringify(uiCheck.faults)}, button=${uiCheck.returnText})`);
-  check(/^DRONE height \d+ m\n\d+ m\/s/.test(uiCheck.hud), `phone ${name}: 2-line standalone phone HUD (${JSON.stringify(uiCheck.hud)})`);
+  check(/^DRONE · Height \d+ m\nSpeed \d+ m\/s/.test(uiCheck.hud) && !uiCheck.hud.includes('From the car'), `phone ${name}: standalone phone HUD has no car distance (${JSON.stringify(uiCheck.hud)})`);
 
   // Touch right stick forward, verify flight, take portrait screenshot, tap ROAD to return to road.
   const right = await p.centre('droneRight');

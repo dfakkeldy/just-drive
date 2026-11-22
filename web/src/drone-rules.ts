@@ -140,13 +140,14 @@ export function stepDrone(s: DroneState, cmd: DroneCommand, dt: number, speed: n
   return land ? Math.hypot(land.x - s.x, land.y - s.y, land.z - s.z) : toLand;
 }
 
-/** The readout: height over the ground under the drone and optional distance from the vehicle, whole metres. */
-export function droneReadout(heightAboveGround: number | null, distance: number | null, speed: number, maxSpeed: number, returning: boolean, loading = false): string {
+/** The readout: height over the ground under the drone, distance from the vehicle (null in standalone drone mode), whole metres. */
+export function droneReadout(heightAboveGround: number | null, distance: number | null, speed: number, maxSpeed: number, returning: boolean, yaw = 0, loading = false): string {
   const h = heightAboveGround === null ? '–' : `${Math.max(0, heightAboveGround).toFixed(0)} m`;
   const state = returning ? 'returning'
     : distance !== null && distance >= DRONE.range - 1 ? 'at range limit'
     : heightAboveGround !== null && heightAboveGround >= DRONE.ceiling - 1 ? 'at height limit'
-    : loading ? `${speed.toFixed(0)} m/s (loading land)`
-    : `${speed.toFixed(0)} m/s (max ${maxSpeed.toFixed(0)})`;
-  return distance === null ? `DRONE   height ${h}   ${state}` : `DRONE   height ${h}   distance ${distance.toFixed(0)} m   ${state}`;
+    : loading ? 'loading land' : '';
+  const heading = ['N','NE','E','SE','S','SW','W','NW'][((Math.round(-yaw / (Math.PI / 4)) % 8) + 8) % 8];
+  const from = distance === null ? '' : ` · From the car ${distance.toFixed(0)} m`;
+  return `DRONE · Height ${h}${from} · Speed ${speed.toFixed(0)} m/s${Math.round(maxSpeed) !== DRONE.speed ? ` (max ${maxSpeed.toFixed(0)})` : ''} · Heading ${heading}${state ? ` · ${state}` : ''}`;
 }
