@@ -392,8 +392,90 @@ def unpowered_roads(net, entries):
     return ids
 
 
-def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpowered=None):
-    """`unpowered`: unpowered_tracks entries (AREA.unpowered_tracks when None). Public roads are unaffected."""
+def corrected_road(net, entry):
+    """The public road of one AREA.public_pole_corrections entry and its checked rules. A wrong entry stops the bake."""
+    if not (isinstance(entry, tuple) and len(entry) == 4 and isinstance(entry[1], str) and entry[1].strip()
+            and isinstance(entry[3], tuple) and entry[3]):
+        raise RuntimeError(f'public_pole_corrections entry is not ((east, north), name, kind, rules): {entry!r}')
+    point, name, kind, rules = entry
+    hit = net.nearest(point, 5)
+    road = hit and hit['road']
+    if not road or not public(road) or road['bridge'] or road['name'] != name or road['kind'] != kind:
+        raise RuntimeError(f'public_pole_corrections entry {entry[:3]!r} is not on a public kind-{kind} road called {name!r}')
+    end = 0
+    for rule in rules:
+        number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+        if not (end is not None and isinstance(rule, tuple) and len(rule) == 3 and rule[2] in ('left', 'right', 'none')
+                and number(rule[0]) and rule[0] == end and (rule[1] is None or number(rule[1]) and rule[1] > rule[0])):
+            raise RuntimeError(f'public_pole_corrections rules must run from s=0 to the end (s1 None) without gaps or '
+                               f'overlaps: {rule!r}')
+        end = rule[1]
+    if end is not None:
+        raise RuntimeError('public_pole_corrections rules must reach the end of the road (last s1 None)')
+    return road, rules
+
+
+def pole_side(local, r, p):
+    """(s, side) of a pole beside road r: side +1 left, -1 right, looking along the road. A pole whose side is not
+    clear (on the line, off a bend vertex, or more than 20 m from the line) stops the bake."""
+    at = local.nearest((p['x'], p['y']), 20)
+    if at is None:
+        raise RuntimeError(f'pole {p!r} is not within 20 m of its road {r["name"]!r}')
+    u = at['u']
+    cross = u[0] * (p['y'] - at['p'][1]) - u[1] * (p['x'] - at['p'][0])
+    if at['dist'] == 0 or abs(cross) < .5 * at['dist']:
+        raise RuntimeError(f'pole {p!r} stands off a bend of {r["name"]!r}; its side is not clear')
+    return at['s'], 1 if cross > 0 else -1
+
+
+def wanted(rules, s):
+    return next(rule[2] for rule in rules if rule[0] <= s and (rule[1] is None or s < rule[1]))
+
+
+def correct_public_poles(net, poles, corrections, safe=None):
+    """Apply AREA.public_pole_corrections to the public poles (place_poles calls it between the public pass and the
+    kind-4 runs). It is absolute, so a second run changes nothing: a pole in a 'none' stretch goes, a pole on the
+    wrong side moves straight across at the same s, and every other pole keeps its bytes. A moved pole that does not
+    then stand where its rule wants it, that stands within 9 m of another pole, or that is not `safe` stops the bake."""
+    poles = list(poles)
+    roads = [corrected_road(net, entry) for entry in corrections]
+    if len({r['id'] for r, _ in roads}) != len(roads):
+        raise RuntimeError('public_pole_corrections lists one road twice')
+    moved = []
+    for r, rules in roads:
+        local = Network([r])
+        kept = []
+        for p in poles:
+            if p['road'] != r['id']:
+                kept.append(p)
+                continue
+            s, side = pole_side(local, r, p)
+            want = wanted(rules, s)
+            if want == 'none':
+                continue
+            if side == (1 if want == 'left' else -1):
+                kept.append(p)
+                continue
+            # The frozen pass's setback: 3.2 m beyond the road edge.
+            q, u = shifted(r, s, -side, 3.2)
+            p = dict(p, x=round(q[0], 3), y=round(q[1], 3), heading=heading(u))
+            s2, side2 = pole_side(local, r, p)
+            if wanted(rules, s2) != want or side2 != -side:
+                raise RuntimeError(f'corrected pole {p!r} on {r["name"]!r} does not stay where its rule wants it')
+            kept.append(p)
+            moved.append(p)
+        poles = kept
+    for p in moved:
+        close = [q for q in poles if q is not p and distance((p['x'], p['y']), (q['x'], q['y'])) < 9]
+        if close or (safe is not None and not safe((p['x'], p['y']))):
+            raise RuntimeError(f'corrected pole {p!r} is not safe or is within 9 m of {close!r}')
+    return poles
+
+
+def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpowered=None, corrections=()):
+    """`unpowered`: unpowered_tracks entries (AREA.unpowered_tracks when None). Public roads are unaffected.
+    `corrections`: AREA.public_pole_corrections, applied after the public pass and before the kind-4 runs, so a full
+    bake and a power-only bake on corrected land place the same kind-4 poles. The default keeps the frozen pass."""
     unpowered = unpowered_roads(net, AREA.unpowered_tracks if unpowered is None else unpowered)
     # Public endpoint-to-segment joins also cover T junctions and split road pieces.
     corners = collections.defaultdict(list)
@@ -427,7 +509,13 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpower
         hi = r['cum'][-1] if joined[1] else max(hits)
         extensions.append((r, lo, hi))
     runs = ([] if public_poles is not None else [(r, 0, r['cum'][-1]) for r in roads if public(r) and not r['bridge']]) + extensions
-    for r, lo, hi in runs:
+    for k, (r, lo, hi) in enumerate(runs):
+        if corrections and k == len(runs) - len(extensions):
+            # The public pass is done: correct it, then let the kind-4 runs see only the corrected poles.
+            poles = correct_public_poles(net, poles, corrections, safe)
+            occupied = collections.defaultdict(list)
+            for p in poles:
+                occupied[math.floor(p['x'] / 16), math.floor(p['y'] / 16)].append((p['x'], p['y']))
         spacing = 55 if r['kind'] == 1 else 65
         local = random.Random(SEED + r['id'] * 101)
         side = local.choice((-1, 1))
@@ -457,7 +545,8 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpower
                     break
         for n, (_, pole) in enumerate(placed):
             poles.append(dict(**pole, n=n))
-
+    if corrections and not extensions:
+        poles = correct_public_poles(net, poles, corrections, safe)
     return poles
 
 def powered_buildings(buildings, area):
@@ -709,7 +798,8 @@ def main(output=None, report_dir=None, power_only=False):
 
     # A power-only delta keeps the installed public poles even if another stage has since changed its inputs.
     public_poles = [p for p in previous['poles'] if public(net.roads[p['road']])] if power_only else None
-    poles = place_poles(roads, net, buildings, safe, VILLAGE, public_poles)
+    # AREA.public_pole_corrections: the documented exception to the frozen public pass, where a drive filmed the line.
+    poles = place_poles(roads, net, buildings, safe, VILLAGE, public_poles, corrections=AREA.public_pole_corrections)
     drops = service_drops(net, poles, buildings, AREA.id, styles)
 
     result = dict(crs='EPSG:2961', mailboxes=mailboxes, communityBoxes=community, poles=poles, serviceDrops=drops)

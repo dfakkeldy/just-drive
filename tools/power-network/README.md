@@ -12,18 +12,46 @@ point is within 5 m of a named kind-4 piece of that name that is no props drivew
 Other pieces with the same name keep the usual rule. Judique lists the kind-4 piece of
 River Denys Road to the church. The dash cam drive of 21 Nov 2026 saw the line end at the
 last house with power, about 2.8 km along the public piece of River Denys Road. It saw no
-pole after that, on the public piece or on the kind-4 piece to the church.
+pole after that, on the public piece or on the kind-4 piece to the church. The public piece
+itself is the filmed exception below.
 
-**Known gap (frozen public poles).** The public piece of River Denys Road (kind 3) still
-has frozen public poles to its end, about 7.6 km past the real end of the line. Removing
-them would change the frozen public pass, so this change leaves them. It needs a separate,
-explicit decision about the frozen public positions.
+### The filmed exception: River Denys Road's public piece (game road 98)
 
-The public-road pass runs first with its original seeds and order.
+This is the one place where the game does not keep the frozen public poles. `AREA.public_pole_corrections`
+(pipeline/areas.py) lists it. Step 29 applies it after the frozen pass, in full and power-only bakes alike.
+Each entry names the road by a point on its line, its name and its kind, and step 29 stops if they do not match.
+Its rules cover the road from its first point to its end, without gaps. In a `none` stretch every pole goes.
+A pole on the wrong side moves straight across the road at the same distance along it, with the same setback
+and marks. Every other pole keeps its frozen bytes. The rules are absolute, so a second run changes nothing.
+A moved pole that is not safe, or that stands within 9 m of another pole, stops the bake.
+
+The evidence is Dan's dash cam drive of 21 Nov 2026 (Garmin, about 11:51-11:56 AST in, 14:13-14:18 AST back).
+Frames at two per second were read on both passes, and the last pole was checked at full size.
+Distances are along the road from its end at the paved piece (road 97). The real line:
+
+| Along road 98 | Real line | Game change |
+|---|---|---|
+| 0-612 m | south side | 10 poles move from the north side |
+| 612-1,100 m | north side; for 612-870 m it runs back in the trees | none |
+| 1,100-1,160 m | crosses to the south side for one pole | 1 pole moves |
+| 1,160-1,530 m | north side | none |
+| 1,530-1,975 m | south side | 7 poles move |
+| 1,975-2,340 m | leaves the road through the woods; no pole by the road | 5 poles removed |
+| 2,340-2,560 m | south side | 4 poles move |
+| 2,560-2,745 m | through the woods again; no pole by the road | 2 poles removed |
+| 2,745-2,840 m | the end, at a bend: a transformer pole on the north side, then the last pole on the south side by the last house with power | the north pole stays; the next pole moves south and keeps that house's drop |
+| 2,840 m to the end (10,423 m) | no pole and no wire | 117 poles removed |
+
+In all, 124 poles are removed and 23 move. Road 98 keeps 38 poles. No other road changes. Every house keeps its drop,
+from the same pole. The game's pole for the real last pole stands 30-40 m past it, beside the game's twin of that last
+house. A side changes only where both passes agree. Where a stretch's line runs in the trees, its poles stay on
+the side where it runs. The game poles keep their frozen spacing; only their side and their end follow the footage.
+
+Apart from that exception, the public-road pass runs first with its original seeds and order.
 `poles-before.py` freezes that algorithm from main `868f823e`. Rules and delta
 generation compare original/new public poles **byte for byte on the same inputs**.
-A power-only delta also preserves installed public poles, mailbox arrays and
-cabinet arrays. Ordinary full step 29 still uses the original rules on current
+A power-only delta also preserves installed public poles (apart from the filmed exception),
+mailbox arrays and cabinet arrays. Ordinary full step 29 still uses the original rules on current
 inputs, so unrelated input changes can legitimately change their own outputs.
 
 Each eligible house or large building gets at most one sagging drop,
@@ -62,7 +90,8 @@ python3 tools/power-network/make_delta.py /path/to/data/baked --check --after --
 ```
 
 The check compares public pole **position sets**, and compares mailbox/cabinet
-arrays directly. It also recomputes drops from current geometry, checks schema
+arrays directly. It first applies the filmed exception to the baseline, so the exception's road is
+compared too. It also checks that installed poles already follow every correction. It also recomputes drops from current geometry, checks schema
 counts, named-road bounds and the River Denys 39-pole endpoint. It also checks that no
 pole stands on an unpowered track, no pole stands within 500 m of the church and no
 drop belongs to the church. Without `--after`, before-install packs are accepted.
@@ -90,7 +119,8 @@ keys. If inputs change first, rerun step 29 instead of copying an old manifest.
 
 - `power-network-rules`: frozen public-pole bytes; terminal/reversed roads; unnamed
   and driveway exclusions; unpowered tracks; 45 m reach; side/crossing; roof/group/datum;
-  no church drop.
+  no church drop; the filmed public-pole corrections (removed stretches, side moves, other roads' bytes,
+  a second run changes nothing, and a wrong entry or an unsafe move stops the bake).
 - `power-network-land`: properties on installed land. Passes on a legacy pack with no
   drops; main runs the explicit `--after --baseline` command for acceptance. The pack
   installed before 21 Nov 2026 (church drop, River Denys Road track poles) fails this row
