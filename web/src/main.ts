@@ -1172,7 +1172,7 @@ let pendingInterrogation: { reason: InterrogationReason; complaints: readonly In
 let pendingOfficeJump = false;
 let depotOpening = false;
 let depotGen = 0;   // a reset while a depot room loads cancels that opening and its fallback
-resets[resetSlot.interiors] = () => { pendingOfficeJump = false; depotGen++; depotOpening = false; interiors.reset(); };
+resets[resetSlot.interiors] = () => { pendingOfficeJump = false; pendingInterrogation = null; depotGen++; depotOpening = false; interiors.reset(); };
 function registerDepotRooms(mod: typeof import('./interior-depot')): void {
   if (!interiors.doors.has('depot-loading')) {
     interiors.register({
@@ -1234,7 +1234,7 @@ async function openDepotInterrogation(info: { reason: InterrogationReason; compl
   let startDay = false;
   try {
     const mod = await ensureDepotRoom();
-    if (gen !== depotGen) { pendingInterrogation = null; return; }
+    if (gen !== depotGen) return;   // the reset cleared this opening; a newer one may own pendingInterrogation
     if (interiors.busy) {
       if (report && hadReport) report.hidden = false;
       pendingInterrogation = null;
@@ -1244,8 +1244,8 @@ async function openDepotInterrogation(info: { reason: InterrogationReason; compl
     interiors.enter('depot-interrogation');
   } catch (e) {
     console.warn('Depot interrogation room unavailable', e);
-    pendingInterrogation = null;
     if (gen !== depotGen) return;
+    pendingInterrogation = null;
     // From "Start day N": the day still turns over, so a room that cannot load never strands the report.
     if (info.advanceAfter && shift instanceof Shift) startDay = true;
     else if (report && hadReport) report.hidden = false;
