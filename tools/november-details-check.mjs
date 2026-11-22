@@ -4,7 +4,7 @@ import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { Buildings, buildingSites } from '../web/src/buildings.ts';
 import { baxtersCoveBuildingArt, littleMabouBuildingArt, NovemberBuildings, novemberFootprints, TRAILHEAD_FENCE } from '../web/src/november-buildings.ts';
 import { BAXTERS_COVE_LOT, littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
-import { littleMabouPonyTruss, PONY_TRUSS } from '../web/src/november-bridges.ts';
+import { littleMabouPonyTruss, PONY_TRUSS, registerRailContacts } from '../web/src/november-bridges.ts';
 import { AreaContacts } from '../web/src/world-contacts.ts';
 import { Vehicle } from '../web/src/vehicle.ts';
 import { Towing } from '../web/src/towing.ts';
@@ -215,32 +215,24 @@ for (const {a, b, side} of added) {
   for (const other of mabouRoads.roads.filter(r => r.id !== 45 && r.id !== 46)) {
     assert.equal(littleMabouPonyTruss(other), other, `road ${other.id} stays unchanged`);
   }
-  const flatGround = {
+  // Real baked Mabou LiDAR heights via railLand() so bridge approaches and drops are tested on actual terrain.
+  const realTerrain = {
     level: 8, manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
-    heightAt: (x, z) => 2.5 + (x + 2860) * 0.01 + (z - 1200) * 0.005,
-    surfaceAt(x, z) { return { ground: this.heightAt(x, z), level: 8, kind: 2, halfWidth: 3, roadDist: 0, canopy: 0, washboard: false }; },
+    heightAt: (x, z) => { const h = land.ground(x, z, true); return h === null ? null : h > -0.2 ? -0.2 + (h + 0.2) * 1.5 : h; },
+    surfaceAt(x, z) { const s = land.sample(x, z, true); if (!s) return null; const g = s.height > -0.2 ? -0.2 + (s.height + 0.2) * 1.5 : s.height; return { ground: g, level: s.level, kind: 2, halfWidth: 3, roadDist: 0, canopy: s.canopy, washboard: false }; },
     withContactHeight: (_, read) => read(),
     withGroundContact: (_, read) => read(),
   };
-  const net = new Roads({ roads: tagged }, mabouManifest.village, flatGround);
+  const net = new Roads({ roads: tagged }, mabouManifest.village, realTerrain);
   const rails = net.guardrails;
   assert.ok(rails, 'modern Mabou roads construct guardrails with pony-truss rail solids');
-  // Verify main.ts wires bridge rails into both fleetContacts and soloContacts (for solo trailers).
+  // Exercise the shared production contact registration helper and verify main.ts calls it.
   const mainSource = readFileSync('web/src/main.ts', 'utf8');
-  assert.match(mainSource, /soloContacts\.add\(\{[\s\S]*rails\.blockBridge\(/, 'main.ts wires pony-truss rail contacts into soloContacts');
-  const soloContacts = new AreaContacts(), fleetContacts = new AreaContacts();
-  const railProbe = { x: 0, z: 0, y: 0, heading: 0, spec: TRUCK_SPEC, vx: 0, vz: 0, speed: 0 };
-  soloContacts.add({
-    resolve: body => rails.blockBridge(body),
-    allows: body => { railProbe.x = body.x; railProbe.z = body.z; railProbe.y = body.y; railProbe.heading = body.heading; railProbe.spec = body.spec; railProbe.vx = railProbe.vz = railProbe.speed = 0; rails.blockBridge(railProbe); return Math.hypot(railProbe.x - body.x, railProbe.z - body.z) < 1e-7; },
-  });
-  fleetContacts.add({
-    resolve: body => rails.block(body),
-    allows: body => { railProbe.x = body.x; railProbe.z = body.z; railProbe.y = body.y; railProbe.heading = body.heading; railProbe.spec = body.spec; railProbe.vx = railProbe.vz = railProbe.speed = 0; rails.block(railProbe); return Math.hypot(railProbe.x - body.x, railProbe.z - body.z) < 1e-7; },
-  });
+  assert.match(mainSource, /if \(roads\.guardrails\) registerRailContacts\(fleetContacts, soloContacts, roads\.guardrails,/, 'main.ts uses shared registerRailContacts');
   const rig = () => { const n = () => new THREE.Object3D(); return { root: n(), body: n(), steer: { fl: n(), fr: n() }, wheels: { fl: n(), fr: n(), rl: n(), rr: n() }, brakeLights: [] }; };
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
+  const ap = PONY_TRUSS.approach;
   for (const id of [45, 46]) {
     const r = net.roads.find(x => x.id === id);
     const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
@@ -255,18 +247,20 @@ for (const {a, b, side} of added) {
     assert.ok(pos && col && pos.array.every(Number.isFinite), `bridge ${id} has finite vertex-coloured geometry`);
     assert.ok(pos.count / 3 < 800, `bridge ${id} stays within triangle budget (${pos.count / 3})`);
     let maxAboveDeck = -Infinity, maxHalf = 0;
-    const y0 = net.deckHeight(ax + ux * 0.01, az + uz * 0.01), y1 = net.deckHeight(bx - ux * 0.01, bz - uz * 0.01);
+    const y0 = net.deckHeight(ax, az), y1 = net.deckHeight(bx, bz);
     for (let i = 0; i < pos.count; i++) {
       const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
       const along = (px - ax) * ux + (pz - az) * uz;
       const deckAt = y0 + (y1 - y0) * Math.max(0, Math.min(1, along / span));
+      assert.ok(along >= -ap - 0.01 && along <= span + ap + 0.01, `bridge ${id} mesh vertex stays inside approach bounds (${along.toFixed(3)})`);
+      if (py > deckAt + 0.02) assert.ok(along >= -1e-4 && along <= span + 1e-4, `bridge ${id} steel truss vertex stays inside [0, span] (${along.toFixed(3)})`);
       maxAboveDeck = Math.max(maxAboveDeck, py - deckAt);
       maxHalf = Math.max(maxHalf, Math.abs(-(px - ax) * uz + (pz - az) * ux));
     }
     assert.ok(maxAboveDeck >= 2.0 && maxAboveDeck <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${maxAboveDeck.toFixed(2)} m)`);
     assert.ok(maxHalf < r.halfWidth && maxHalf >= PONY_TRUSS.half, `bridge ${id} is narrow one-lane (${(maxHalf * 2).toFixed(2)} m wide)`);
-    // Lateral and longitudinal wheel support matches the rendered asphalt square ends and edges across the whole span.
-    for (const s of [0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05]) {
+    // Wheel support matches rendered asphalt across the whole span and both 3 m approach aprons.
+    for (const s of [-ap + 0.05, -1.0, 0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05, span + 1.0, span + ap - 0.05]) {
       for (const offset of [0, -(PONY_TRUSS.clearHalf - 0.01), PONY_TRUSS.clearHalf - 0.01]) {
         const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
         const y = net.deckHeight(x, z);
@@ -280,42 +274,59 @@ for (const {a, b, side} of added) {
         assert.equal(net.deckHeight(x, z), null, `bridge ${id} gives no wheel support at s=${s.toFixed(2)}, offset=${offset}`);
       }
     }
-    for (const s of [-1.0, -0.05, span + 0.05, span + 1.0]) {
-      const x = ax + ux * s, z = az + uz * s;
-      assert.equal(net.deckHeight(x, z), null, `bridge ${id} gives no deck support past end s=${s.toFixed(2)}`);
-      ray.set(new THREE.Vector3(x, 20, z), down);
-      assert.equal(ray.intersectObject(mesh).length, 0, `bridge ${id} has no mesh past end s=${s.toFixed(2)}`);
+    for (const s of [-ap - 0.05, -ap - 1.0, span + ap + 0.05, span + ap + 1.0]) {
+      for (const offset of [0, -PONY_TRUSS.half, PONY_TRUSS.half]) {
+        const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
+        assert.equal(net.deckHeight(x, z), null, `bridge ${id} gives no deck support past apron s=${s.toFixed(2)}`);
+        ray.set(new THREE.Vector3(x, 20, z), down);
+        assert.equal(ray.intersectObject(mesh).length, 0, `bridge ${id} has no mesh past apron s=${s.toFixed(2)} offset=${offset}`);
+      }
     }
-    // Real Towing.allowsPose through both soloContacts (solo Explore/Mail trailer) and fleetContacts.
-    for (const [mode, contacts] of [['solo', soloContacts], ['fleet', fleetContacts]]) {
-      const truck = new Vehicle(rig(), flatGround, net, -0.2, TRUCK_SPEC);
-      const towing = new Towing(truck, flatGround, net, true, false, { contacts }, true, true);
+    // Drive a real centred car across the bridge on real baked terrain at 5 m/s: stays grounded through both approaches.
+    const car = new Vehicle(rig(), realTerrain, net, -0.2, CAR_SPEC);
+    car.place(ax - ux * 6, az - uz * 6, heading);
+    car.vx = ux * 5; car.vz = uz * 5; car.speed = 5;
+    let airborneSteps = 0;
+    for (let step = 0; step < 900; step++) {
+      car.update(1 / 120, { throttle: 0.25, steer: 0, handbrake: false, touch: false });
+      const at = (car.x - ax) * ux + (car.z - az) * uz;
+      if (at >= -4 && at <= span + 4 && car.airborne) airborneSteps++;
+      if (at > span + 5) break;
+    }
+    assert.equal(airborneSteps, 0, `bridge ${id} drive stays grounded across both approaches (${airborneSteps} airborne steps)`);
+    // Shared production registerRailContacts: test Towing.allowsPose AND a live coupled step in both solo and fleet modes.
+    for (const mode of ['solo', 'fleet']) {
+      let active = null;
+      const soloContacts = new AreaContacts(), fleetContacts = new AreaContacts();
+      registerRailContacts(fleetContacts, soloContacts, rails, body => body === active, TRUCK_SPEC);
+      const contacts = mode === 'solo' ? soloContacts : fleetContacts;
+      const truck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+      active = truck;
+      const towing = new Towing(truck, realTerrain, net, true, false, { contacts }, true, true);
       const centred = { x: mx, z: mz, heading };
       assert.equal(towing.allowsPose(centred), true, `bridge ${id} ${mode} Towing accepts centred truck+trailer`);
       for (const offset of [-0.72, 0.72, -1.1, 1.1]) {
         const off = { x: mx - uz * offset, z: mz + ux * offset, heading };
         assert.equal(towing.allowsPose(off), false, `bridge ${id} ${mode} Towing rejects ${offset} m off-centre truck+trailer`);
       }
-    }
-    // Centred car, truck and loaded trailer pass cleanly; off-centre 1.10 m truck and trailer are pushed back inside the rail.
-    const probeAt = (offset, spec) => {
-      const p = { x: mx - uz * offset, z: mz + ux * offset, heading, vx: 0, vz: 0, speed: 0, spec };
-      rails.block(p, 1 / 120);
-      return { moved: Math.hypot(p.x - (mx - uz * offset), p.z - (mz + ux * offset)), lat: -(p.x - mx) * uz + (p.z - mz) * ux };
-    };
-    for (const [label, spec] of [['car', CAR_SPEC], ['truck', TRUCK_SPEC], ['trailer', TRAILER_SPEC]]) {
-      const centred = probeAt(0, spec);
-      assert.ok(centred.moved < 1e-7, `bridge ${id} accepts centred ${label}`);
-      const halfTrack = ((spec.rearTrack ?? spec.track) / 2);
-      for (const side of [-1, 1]) {
-        assert.ok(net.deckHeight(mx - uz * side * halfTrack, mz + ux * side * halfTrack) !== null, `bridge ${id} supports centred ${label} wheels`);
-      }
-    }
-    for (const [label, spec] of [['truck', TRUCK_SPEC], ['trailer', TRAILER_SPEC]]) {
-      for (const side of [-1, 1]) {
-        const off = probeAt(side * 1.1, spec);
-        assert.ok(off.moved > 0.25, `bridge ${id} rejects ${side * 1.1} m off-centre ${label} overlapping inner rail`);
-        assert.ok(Math.abs(off.lat) + spec.envelope.radius <= PONY_TRUSS.railInner + 0.01, `bridge ${id} keeps resolved ${label} inside inner rail`);
+      // Single physics step glancing the rail: active truck receives at most one step of rail yaw (0.25 deg) and stays inside rail.
+      const glanceYaw = heading + 0.12;
+      truck.place(mx - uz * 0.9, mz + ux * 0.9, glanceYaw);
+      truck.vx = Math.sin(glanceYaw) * 4; truck.vz = -Math.cos(glanceYaw) * 4; truck.speed = 4;
+      const beforeYaw = truck.heading;
+      truck.update(1 / 120, { throttle: 0, steer: 0, handbrake: false, touch: false });
+      contacts.resolve(truck);
+      const yawDelta = Math.abs(Math.atan2(Math.sin(truck.heading - beforeYaw), Math.cos(truck.heading - beforeYaw)));
+      assert.ok(yawDelta <= Math.PI / 6 / 120 + 1e-6, `bridge ${id} ${mode} active vehicle gets rail steering once per step (${(yawDelta * 180 / Math.PI).toFixed(3)} deg)`);
+      // Coupled step steering toward the rail keeps both truck and trailer inside the rails.
+      truck.place(mx, mz, heading);
+      assert.equal(towing.place(), true, `bridge ${id} ${mode} towing.place succeeds on bridge`);
+      truck.vx = ux * 4; truck.vz = uz * 4; truck.speed = 4;
+      truck.update(1 / 120, { throttle: 0.1, steer: 0.2, handbrake: false, touch: false });
+      towing.step(1 / 120);
+      for (const body of towing.bodies()) {
+        const lat = Math.abs(-(body.x - ax) * uz + (body.z - az) * ux);
+        assert.ok(lat + body.spec.envelope.radius <= PONY_TRUSS.railInner + 0.02, `bridge ${id} ${mode} coupled step stays inside rails`);
       }
     }
   }
@@ -330,7 +341,7 @@ for (const {a, b, side} of added) {
     const d = read(dir, 'roads');
     assert.deepEqual(d.roads.map(littleMabouPonyTruss).filter(r => r.ponyTruss), [], `${dir} has no Little Mabou pony truss`);
   }
-  console.log('PASS Little Mabou Road steel pony-truss bridges (ids 45 and 46; square-end lane support, solo+fleet Towing rail contacts)');
+  console.log('PASS Little Mabou Road steel pony-truss bridges (ids 45 and 46; 3 m approaches, grounded real-terrain drive, solo+fleet Towing)');
 }
 console.log('PASS Little Mabou homes, shed and marsh rail; access and bridge exclusions');
 console.log('PASS two Highway 19 aprons both land packs, gravel driveway, hillside gravel, building batches and three view starts');
