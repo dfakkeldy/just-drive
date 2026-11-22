@@ -520,7 +520,7 @@ export function planPointTupperIndustry(
       // Marine rubber fenders along the docking face (clipped to waterline on LOW)
       if (opts.fenders) {
         const fe = pe + perpE * (width / 2 + 0.55) * opts.fenders, fn = pn + perpN * (width / 2 + 0.55) * opts.fenders;
-        const fBot = low && baseG <= sea ? Math.max(-0.15, deckY - 3.6) : deckY - 3.6;
+        const fBot = low ? Math.max(wy(sea, -0.15) - wy(baseG), deckY - 3.6) : deckY - 3.6;
         upright('box', site, fe, fn, baseG, fBot, 0.95, deckY + 0.2 - fBot, 1.7, yaw, C.fenderBlack);
       }
       if (opts.bollards && i % 2 === 0) {
@@ -736,11 +736,15 @@ export function planPointTupperIndustry(
       }
       span('box', 'oil-pier', a.e, a.n, a.g, a.lift - 0.55, b.e, b.n, b.g, b.lift - 0.55, 5.4, 0.35, C.steelDark);
     }
-    for (const p of onshorePipe) {
+    for (const [i, p] of onshorePipe.entries()) {
       if (!p.bent) continue;
-      upright('box', 'oil-pier', p.e - 1.5, p.n + 2.2, p.g, -1.5, 0.45, p.lift + 1.4, 0.45, 0.4, C.steelDark);
-      upright('box', 'oil-pier', p.e + 1.5, p.n - 2.2, p.g, -1.5, 0.45, p.lift + 1.4, 0.45, 0.4, C.steelDark);
-      upright('box', 'oil-pier', p.e, p.n, p.g, p.lift - 0.7, 5.8, 0.5, 0.5, 0.4, C.steelDark);
+      const [pe, pn] = jointPerp(i);
+      const yaw = Math.atan2(pn, pe);
+      for (const offset of [-2.65, 2.65]) {
+        upright('box', 'oil-pier', p.e + pe * offset, p.n + pn * offset, p.g,
+          -1.5, 0.45, p.lift + 1.4, 0.45, yaw, C.steelDark);
+      }
+      upright('box', 'oil-pier', p.e, p.n, p.g, p.lift - 0.7, 5.8, 0.5, 0.5, yaw, C.steelDark);
     }
 
     // Shore abutment concrete bulkhead + sloped transition ramp & continuous pipe transition onto the offshore trestle
@@ -788,10 +792,12 @@ export function planPointTupperIndustry(
       }
     }
 
+    // The three oil berths run SE to NW. Their channel face is left of that axis.
+    const channelSide = 1;
     // Berth 1 Main Outer Loading Platform (74 m x 32 m concrete deck on heavy pile grid)
     const b1f = frame(berth1Center[0], berth1Center[1], berth1AxisDeg);
     const b1Start = b1f.pt(-berth1Length / 2, 0), b1End = b1f.pt(berth1Length / 2, 0);
-    buildPierSpan('oil-pier', b1Start, b1End, berth1Width, deckY + 0.2, 14.0, { fenders: -1, bollards: true, lamps: true });
+    buildPierSpan('oil-pier', b1Start, b1End, berth1Width, deckY + 0.2, 14.0, { fenders: channelSide, bollards: true, lamps: true });
 
     // Dress the existing control/equipment house (id 49) on the loading head with steel frame, rooftop mast & monitor.
     // Anchor to buildingBaseY(-0.77) matching web/src/buildings.ts:236 so trim stays locked to id 49 at every exaggeration.
@@ -838,11 +844,12 @@ export function planPointTupperIndustry(
     addLight((berth1Arms.start[0] + berth1Arms.end[0]) / 2, (berth1Arms.start[1] + berth1Arms.end[1]) / 2, sea, deckY + 18.0, 0.9, C.lightFlood);
 
     // North Berth 2 Pier Arm (195 m long x 15 m wide) + 4-pipe rack + 4 medium articulated loading arms
-    buildPierSpan('oil-pier', berth2Start, berth2End, berth2Width, deckY - 0.2, 16.0, { fenders: -1, rails: true, bollards: true, lamps: true });
+    buildPierSpan('oil-pier', berth2Start, berth2End, berth2Width, deckY - 0.2, 16.0, { fenders: channelSide, rails: true, bollards: true, lamps: true });
     {
       const dx = berth2End[0] - berth2Start[0], dn = berth2End[1] - berth2Start[1], l = Math.hypot(dx, dn);
       const pe = -dn / l, pn = dx / l;
-      for (const [off, py] of [[3.2, 1.2], [4.3, 1.2], [3.2, 2.3], [4.3, 2.3]] as const) {
+      // Route the service pipes on the back of the loading arms.
+      for (const [off, py] of [[-3.2, 1.2], [-4.3, 1.2], [-3.2, 2.3], [-4.3, 2.3]] as const) {
         if (low && py > 2) continue;
         span('cyl', 'oil-pier',
           berth2Start[0] + pe * off, berth2Start[1] + pn * off, sea, deckY - 0.2 + py,
@@ -858,7 +865,7 @@ export function planPointTupperIndustry(
     }
 
     // Small tug/launch service wharf (NSTDB WAWH40)
-    buildPierSpan('oil-pier', launchWharf.start, launchWharf.end, launchWharf.width, launchWharf.deckY, 15.0, { fenders: -1, bollards: true });
+    buildPierSpan('oil-pier', launchWharf.start, launchWharf.end, launchWharf.width, launchWharf.deckY, 15.0, { fenders: channelSide, bollards: true });
 
     // All 11 NSTDB STBP60 mooring & breasting dolphins + steel truss catwalks spanning the 585 m berth line
     for (const d of dolphins) buildDolphin('oil-pier', d, 4.5);

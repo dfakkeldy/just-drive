@@ -198,16 +198,19 @@ function checkPlan(plan, { night, exag }) {
       }
     }
 
-    // Verify all 8 bounding corners stay inside Point Tupper bounds.
+    // Keep the centre margin and test the footprint of uprights near a road.
+    const lowUpright = !p.spanEnds && p.clearance < 4.5;
+    const roadDistance = lowUpright ? roadClearance(p.e, p.n) : Infinity;
+    assert.ok(roadDistance >= 1.0,
+      `low piece too close to road (${roadDistance.toFixed(2)} m) at ${p.site} (${p.e}, ${p.n})`);
+    const footprintNearRoad = roadDistance <= Math.hypot(scale.x, scale.z) / 2;
     for (const x of [-0.5, 0.5]) for (const y of [-0.5, 0.5]) for (const z of [-0.5, 0.5]) {
       const v = new THREE.Vector3(x, y, z).applyMatrix4(p.matrix);
       inside(v.x + VE, VN - v.z, `${p.site} corner`);
-    }
-
-    // Low upright pieces must clear road carriageways.
-    if (!p.spanEnds && p.clearance < 4.5) {
-      const rd = roadClearance(p.e, p.n);
-      assert.ok(rd >= 1.0, `low piece too close to road (${rd.toFixed(2)} m) at ${p.site} (${p.e}, ${p.n})`);
+      if (y < 0 && footprintNearRoad) {
+        const clearance = roadClearance(v.x + VE, VN - v.z);
+        assert.ok(clearance >= 0, `upright footprint enters road in ${p.site} (${clearance.toFixed(2)} m)`);
+      }
     }
 
     // Every industrial piece must clear #112 transmission towers.
@@ -420,16 +423,96 @@ function checkOilPipeContinuity(plan, exag, low) {
 checkOilPipeContinuity(dayHigh.plan, 1.5, false);
 checkOilPipeContinuity(dayLow.plan, 1.5, true);
 
-// On LOW (where sea omits depth write), every corner of every marine piece must clip at sea level (-0.15 m).
-const UNIT_CORNERS = [-0.5, 0.5].flatMap((x) => [-0.5, 0.5].flatMap((y) => [-0.5, 0.5].map((z) => new THREE.Vector3(x, y, z))));
-for (const p of dayLow.plan.pieces) {
-  if (p.baseG <= SEA && p.site !== 'plant' && p.site !== 'coal') {
-    let minY = Infinity;
-    for (const c of UNIT_CORNERS) {
-      const y = c.clone().applyMatrix4(p.matrix).y;
-      if (y < minY) minY = y;
+const sizeOf = (piece) => new THREE.Vector3().setFromMatrixScale(piece.matrix);
+const matchesSize = (piece, x, y, z) => {
+  const size = sizeOf(piece);
+  return Math.abs(size.x - x) < 0.001
+    && (y === undefined || Math.abs(size.y - y) < 0.001)
+    && Math.abs(size.z - z) < 0.001;
+};
+const isFender = (piece) => piece.kind === 'box' && matchesSize(piece, 0.95, undefined, 1.7);
+
+function checkOilBerthSides(plan, low) {
+  const { berth1Center, berth1AxisDeg, berth1Length, berth1Width, berth1Arms,
+    berth2Start, berth2End, berth2Width, berth2Arms, launchWharf, deckY } = OIL_TERMINAL;
+  const angle = berth1AxisDeg * Math.PI / 180;
+  const berth1Endpoint = (sign) => [
+    berth1Center[0] + sign * berth1Length / 2 * Math.sin(angle),
+    berth1Center[1] + sign * berth1Length / 2 * Math.cos(angle),
+  ];
+  const piers = [
+    ['Berth 1', berth1Endpoint(-1), berth1Endpoint(1), berth1Width, berth1Arms.faceDeg, deckY + 0.2],
+    ['Berth 2', berth2Start, berth2End, berth2Width, berth2Arms.faceDeg, deckY - 0.2],
+    ['launch wharf', launchWharf.start, launchWharf.end, launchWharf.width, berth1Arms.faceDeg, launchWharf.deckY],
+  ];
+  for (const [name, start, end, width, faceDeg, height] of piers) {
+    const dx = end[0] - start[0], dn = end[1] - start[1], length = Math.hypot(dx, dn);
+    const ux = dx / length, un = dn / length;
+    const face = faceDeg * Math.PI / 180;
+    const sign = Math.sign(-un * Math.sin(face) + ux * Math.cos(face));
+    const pieces = plan.pieces.filter((p) => p.site === 'oil-pier').flatMap((piece) => {
+      const de = piece.matrix.elements[12] + VE - start[0];
+      const north = VN - piece.matrix.elements[14] - start[1];
+      const along = de * ux + north * un;
+      const across = sign * (-de * un + north * ux);
+      return along >= -0.01 && along <= length + 0.01 && Math.abs(across) < width / 2 + 1
+        ? [{ piece, across }] : [];
+    });
+    const checkSide = (label, match, side) => {
+      const fittings = pieces.filter(({ piece }) => match(piece));
+      assert.ok(fittings.length > 0, `${name}: no ${label} to check`);
+      for (const { across } of fittings) {
+        assert.ok(side * across > 0, `${name}: ${label} on the wrong deck side`);
+      }
+    };
+    const fromDeck = (p) => Math.abs(p.clearance - height) < 0.001;
+    checkSide('fenders', (p) => isFender(p)
+      && Math.abs(p.clearance + sizeOf(p).y - height - 0.2) < 0.001, 1);
+    checkSide('bollards', (p) => p.kind === 'cyl' && fromDeck(p) && matchesSize(p, 0.55, 0.85, 0.55), 1);
+    if (name !== 'launch wharf') {
+      checkSide('lamp poles', (p) => p.kind === 'cyl' && fromDeck(p) && matchesSize(p, 0.24, 9.5, 0.24), -1);
     }
-    assert.ok(minY >= SEA - 0.25, `LOW marine piece extends below waterline (minY=${minY.toFixed(2)}, sea=${SEA}) in ${p.site}/${p.kind}`);
+    if (name === 'Berth 2') {
+      checkSide('pipe rack', (p) => p.kind === 'cyl' && matchesSize(p, 0.48, length, 0.48), -1);
+      if (!low) checkSide('guardrail', (p) => p.kind === 'box' && matchesSize(p, 0.14, 0.14, length), -1);
+    }
+  }
+}
+
+function checkOnshoreOilBents(plan) {
+  const boxes = plan.pieces.filter((p) => p.site === 'oil-pier' && p.kind === 'box' && !p.spanEnds);
+  for (const node of OIL_TERMINAL.onshorePipe.filter((node) => node.bent)) {
+    const offset = (p) => Math.hypot(p.e - node.e, p.n - node.n);
+    const beam = boxes.find((p) => offset(p) < 0.01 && matchesSize(p, 5.8, 0.5, 0.5));
+    assert.ok(beam, 'onshore oil bent crossbeam missing');
+    const legs = boxes.filter((p) => offset(p) < 3 && matchesSize(p, 0.45, node.lift + 1.4, 0.45));
+    assert.equal(legs.length, 2, 'onshore oil bent needs two legs');
+    const inverse = beam.matrix.clone().invert();
+    const legEnds = legs.map((leg) => new THREE.Vector3(0, 0.5, 0).applyMatrix4(leg.matrix).applyMatrix4(inverse));
+    for (const end of legEnds) {
+      assert.ok(Math.abs(end.x) <= 0.5 && Math.abs(end.z) <= 0.5 && end.y >= -0.5,
+        'onshore oil bent leg misses crossbeam');
+    }
+    assert.ok(legEnds[0].x * legEnds[1].x < 0, 'onshore oil bent legs must support opposite beam ends');
+  }
+}
+
+checkOilBerthSides(dayHigh.plan, false);
+checkOilBerthSides(dayLow.plan, true);
+checkOnshoreOilBents(dayHigh.plan);
+
+// LOW sea omits depth writes. Include fenders on decks anchored above sea level.
+const UNIT_CORNERS = [-0.5, 0.5].flatMap((x) => [-0.5, 0.5].flatMap((y) => [-0.5, 0.5].map((z) => new THREE.Vector3(x, y, z))));
+for (const exag of [1, 1.5, 3]) {
+  const plan = exag === 1.5 ? dayLow.plan : planPointTupperIndustry(land.village, exag, SEA, true, false);
+  for (const p of plan.pieces) {
+    if (p.site === 'plant' || p.site === 'coal') continue;
+    const fender = isFender(p);
+    if (p.baseG > SEA && !fender) continue;
+    const minY = Math.min(...UNIT_CORNERS.map((c) => c.clone().applyMatrix4(p.matrix).y));
+    const floor = SEA - (fender ? 0.15 : 0.25);
+    assert.ok(minY >= floor - 1e-6,
+      `LOW marine piece extends below waterline at exag=${exag}: ${p.site}/${p.kind} (minY=${minY.toFixed(2)})`);
   }
 }
 
