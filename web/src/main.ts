@@ -519,7 +519,11 @@ crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, o
 const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
 const novemberRoads = ERA.modern && AREA.november
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
-if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
+if (novemberRoads) {
+  terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group);
+  // Not enumerable: tools/ui-check.mjs pins the listed dev keys. tools/area-browser.mjs counts its surfaces in Judique.
+  if (import.meta.env.DEV) expose({ novemberRoads }, false);
+}
 const treeExcludes = novemberRoads
   ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
   : stockpiles?.excludes;
