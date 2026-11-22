@@ -76,6 +76,7 @@ export class SunSeeker {
   private readonly activeLabels: Label[] = [];
   private readonly scratch = new THREE.Vector3();
   private readonly today: string;
+  private readonly creditObserver: ResizeObserver | null = null;
   private hills: HillLine | null = null;
   private groundStatus = 'Loading hill line';
   private clockNote = '';
@@ -157,6 +158,15 @@ export class SunSeeker {
     this.bindControls();
     document.body.append(this.root);
     this.root.showModal();
+    this.syncCreditSpace();
+    const credit = document.getElementById('credit');
+    if (credit && typeof ResizeObserver !== 'undefined') {
+      this.creditObserver = new ResizeObserver(() => {
+        this.syncCreditSpace();
+        this.invalidate();
+      });
+      this.creditObserver.observe(credit);
+    }
     void options.ground(HILL_RANGE).then(rays => {
       if (!this.root.open) return;
       const { eye, groundAtEye, seaLevel, exag } = options;
@@ -274,7 +284,19 @@ export class SunSeeker {
       this.compact = compact;
       this.timesPanel.open = !compact;
     }
+    this.syncCreditSpace();
     this.aim();
+  }
+
+  /** Keep the times panel above the live map credit chip on every width and orientation. */
+  private syncCreditSpace(): void {
+    const creditBox = document.getElementById('credit')?.getBoundingClientRect();
+    const rootBottom = this.root.getBoundingClientRect().bottom || innerHeight;
+    if (creditBox && creditBox.height > 0 && rootBottom > 0) {
+      this.root.style.setProperty('--sun-credit-space', `${Math.max(12, Math.ceil(rootBottom - creditBox.top + 8))}px`);
+    } else {
+      this.root.style.removeProperty('--sun-credit-space');
+    }
   }
 
   private aim(): void {
@@ -340,13 +362,40 @@ export class SunSeeker {
       }
     };
 
+    const overlaps = (a: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>, b: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>) =>
+      a.right >= b.left && a.left <= b.right && a.bottom >= b.top && a.top <= b.bottom;
+
     context.save();
     try {
       context.scale(width / rect.width, height / rect.height);
       context.translate(-rect.left, -rect.top);
       context.textBaseline = 'middle';
+
+      // Say where, when and which way the picture looks. Two lines when one would not fit a phone; shrink on narrow screens.
+      const when = this.selected.when, place = this.options.place;
+      const first = `Sun Seeker${place ? ` · ${place}` : ''}`;
+      const second = `${localDate(when)} · ${localTime(when)} ${localZone(when)} · facing ${this.bearing.textContent!.replace(/\s+/, ' ')}`;
+      const clock = this.root.querySelector('.sunClock')!.getBoundingClientRect();
+      const readings = this.timesPanel.getBoundingClientRect();
+      const leftMargin = Math.max(0, clock.left - rect.left);
+      const rightMargin = Math.max(leftMargin, rect.right - readings.right);
+      const room = Math.max(120, rect.width - leftMargin - rightMargin);
+      let captionSize = 13;
+      context.font = `600 ${captionSize}px system-ui, sans-serif`;
+      const lines = context.measureText(`${first} · ${second}`).width + 20 <= room ? [`${first} · ${second}`] : [first, second];
+      let widest = Math.max(...lines.map(line => context.measureText(line).width));
+      if (widest + 20 > room) {
+        captionSize = Math.max(9.5, Math.floor(captionSize * (room - 20) / widest * 2) / 2);
+        context.font = `600 ${captionSize}px system-ui, sans-serif`;
+        widest = Math.max(...lines.map(line => context.measureText(line).width));
+      }
+      const lineStep = Math.ceil(captionSize * 1.38);
+      const captionW = Math.min(room, widest + 20);
+      const captionH = 10 + lineStep * lines.length;
+      const captionBox = { left: clock.left, top: clock.top, right: clock.left + captionW, bottom: clock.top + captionH };
+
       for (const { element } of [...this.activeLabels, ...this.seasonLabels]) {
-        if (element.hidden) continue;
+        if (element.hidden || overlaps(element.getBoundingClientRect(), captionBox)) continue;
         plaque(element);
         paintText(element);
       }
@@ -360,19 +409,12 @@ export class SunSeeker {
         paintText(this.timesPanel);
       } else paintText(this.timesPanel.querySelector('summary')!);
 
-      // Say where, when and which way the picture looks. Two lines when one would not fit a phone.
-      const when = this.selected.when, place = this.options.place;
-      const first = `Sun Seeker${place ? ` · ${place}` : ''}`;
-      const second = `${localDate(when)} · ${localTime(when)} ${localZone(when)} · facing ${this.bearing.textContent!.replace(/\s+/, ' ')}`;
-      const clock = this.root.querySelector('.sunClock')!.getBoundingClientRect();
-      context.font = '600 13px system-ui, sans-serif';
-      const room = rect.width - 2 * (clock.left - rect.left);
-      const lines = context.measureText(`${first} · ${second}`).width + 20 <= room ? [`${first} · ${second}`] : [first, second];
-      path(clock.left, clock.top, Math.max(...lines.map(line => context.measureText(line).width)) + 20, 10 + 18 * lines.length, 6);
+      context.font = `600 ${captionSize}px system-ui, sans-serif`;
+      path(clock.left, clock.top, captionW, captionH, 6);
       context.fillStyle = '#101a24ed';
       context.fill();
       context.fillStyle = '#f9f6ee';
-      lines.forEach((line, i) => context.fillText(line, clock.left + 10, clock.top + 14 + 18 * i));
+      lines.forEach((line, i) => context.fillText(line, clock.left + 10, clock.top + 5 + lineStep * (i + 0.5), captionW - 20));
     } finally {
       context.restore();
     }
@@ -381,12 +423,14 @@ export class SunSeeker {
   private projectLabels(): void {
     const { camera } = this.options, width = this.root.clientWidth, height = this.root.clientHeight;
     const taken: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>[] = [...this.root.querySelectorAll('.sunPanel, .sunBearing')].map(el => el.getBoundingClientRect());
+    const credit = document.getElementById('credit')?.getBoundingClientRect();
+    if (credit && credit.width > 0 && credit.height > 0) taken.push(credit);
     const place = (position: THREE.Vector3, labelWidth: number) => {
       const p = this.scratch.copy(position).applyMatrix4(camera.matrixWorldInverse);
       if (p.z >= 0) return null;
       p.applyMatrix4(camera.projectionMatrix);
       const x = (p.x + 1) * width / 2, y = (1 - p.y) * height / 2;
-      const box = { left: x - labelWidth / 2, right: x + labelWidth / 2, top: y - 8, bottom: y + 8 };
+      const box = { left: x - labelWidth / 2, right: x + labelWidth / 2, top: y - 10, bottom: y + 10 };
       const fits = box.left > 4 && box.right < width - 4 && box.top > 4 && box.bottom < height - 4
         && !taken.some(r => box.right >= r.left && box.left <= r.right && box.bottom >= r.top && box.top <= r.bottom);
       return fits ? { x, y, box } : null;
@@ -400,7 +444,7 @@ export class SunSeeker {
         if (found) label.spot = i;
       }
       element.hidden = !found;
-      if (!found) continue;
+      if (!found) { label.spot = 0; continue; }
       element.style.left = `${found.x}px`;
       element.style.top = `${found.y}px`;
       taken.push(found.box);
@@ -523,6 +567,7 @@ export class SunSeeker {
   }
 
   dispose(): void {
+    this.creditObserver?.disconnect();
     this.paths.removeFromParent();
     this.clear(this.seasons, this.seasonLabels);
     this.clear(this.activePath, this.activeLabels);

@@ -22,7 +22,7 @@ body:has(#sunSeeker[open]) > :not(#c, #credit, #sunSeeker) { visibility: hidden;
   box-shadow: 0 4px 20px #0004;
 }
 .sunClock { top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); }
-.sunReadings { right: max(12px, env(safe-area-inset-right)); bottom: calc(26px + env(safe-area-inset-bottom)); }
+.sunReadings { right: max(12px, env(safe-area-inset-right)); bottom: var(--sun-credit-space, max(12px, env(safe-area-inset-bottom))); }
 .sunHead, .sunFields, .sunActions { display: flex; align-items: center; gap: 7px; }
 .sunHead { justify-content: space-between; }
 .sunHead, .sunActions { flex-wrap: wrap; }
@@ -61,8 +61,7 @@ body:has(#sunSeeker[open]) > :not(#c, #credit, #sunSeeker) { visibility: hidden;
 }
 @media (max-width: 760px) {
   .sunClock { width: auto; right: max(12px, env(safe-area-inset-right)); }
-  /* The map credit wraps to about three lines on a phone. Keep the times panel above it. */
-  .sunReadings { width: auto; left: max(12px, env(safe-area-inset-left)); bottom: calc(54px + env(safe-area-inset-bottom)); }
+  .sunReadings { width: auto; left: max(12px, env(safe-area-inset-left)); }
   #sunSeeker button, #sunSeeker input { min-height: 44px; }
   #sunSeeker input[type=range] { min-height: 36px; }
   .sunBearing { position: static; transform: none; padding: 4px; }

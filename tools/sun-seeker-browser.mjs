@@ -41,11 +41,16 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
   };
   const capture = async (date, time, zone) => {
     await read(`(() => {
-      const picture = window.sunPicture = { text: [] };
+      const picture = window.sunPicture = { text: [], boxes: [] };
       const fillText = CanvasRenderingContext2D.prototype.fillText;
       CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
         picture.text.push(text);
         return fillText.call(this, text, ...args);
+      };
+      const roundRect = CanvasRenderingContext2D.prototype.roundRect;
+      CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, ...args) {
+        picture.boxes.push({ x, y, w, h });
+        return roundRect.call(this, x, y, w, h, ...args);
       };
       const inspect = async (name, blob, delivery) => {
         const image = await createImageBitmap(blob);
@@ -74,6 +79,9 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     assert.ok(result.text.some(text => text.startsWith('Sun Seeker · Mabou')), 'the PNG names the area');
     assert.ok(result.text.some(text => text.includes(`${date} · ${time} ${zone} · facing `)), 'the PNG stamps the Halifax time and the view direction');
     assert.ok(result.text.some(text => /^\d{2}:00$/.test(text)), 'the PNG paints projected hour labels');
+    assert.ok(result.boxes.length >= 2 && result.boxes.every(b => b.x >= 0 && b.x + b.w <= width && b.y >= 0 && b.y + b.h <= height), 'every PNG plaque stays inside the viewport');
+    const caption = result.boxes.at(-1);
+    assert.ok(result.boxes.slice(0, -1).every(b => b.x + b.w < caption.x || b.x > caption.x + caption.w || b.y + b.h < caption.y || b.y > caption.y + caption.h), 'the PNG caption overlaps no label or readings panel');
     if (touch) assert.ok(['Rise', 'Noon', 'Set'].every(text => result.text.includes(text)), 'the PNG paints the compact summary');
     else assert.ok(['Sunrise', 'Solar', 'noon', 'Sunset', 'Flat', 'Over', 'heights.'].every(text => result.text.includes(text)), 'the PNG paints the full readings panel');
     console.log(`PASS ${name} exported PNG: ${result.name}, ${result.width}×${result.height}, ${result.delivery}`);
@@ -107,10 +115,19 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     assert.match(before, /^\d{4}-\d{2}-\d{2}$/);
     assert.equal(await read("document.querySelector('.sunDayName').textContent"), 'Today');
     assert.equal(await read("document.querySelectorAll('.sunLabels .sunLabel:not(.hour)').length"), 4);
-    const layout = await read(`[...document.querySelectorAll('.sunPanel, #sunSeeker input, #sunSeeker button:not([hidden])')].every(el => {
-      const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight;
-    })`);
-    assert.ok(layout, `${name}: controls stay in the viewport`);
+    const layout = await read(`(() => {
+      const inView = [...document.querySelectorAll('.sunPanel, #sunSeeker input, #sunSeeker button:not([hidden])')].every(el => {
+        const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight;
+      });
+      const credit = document.getElementById('credit').getBoundingClientRect();
+      const readings = document.querySelector('.sunReadings').getBoundingClientRect();
+      const labelsClearCredit = credit.height === 0 || [...document.querySelectorAll('.sunLabel:not([hidden])')].every(el => {
+        const r = el.getBoundingClientRect();
+        return r.right < credit.left || r.left > credit.right || r.bottom < credit.top || r.top > credit.bottom;
+      });
+      return inView && (credit.height === 0 || readings.bottom <= credit.top) && labelsClearCredit;
+    })()`);
+    assert.ok(layout, `${name}: controls stay in the viewport and clear the map credit`);
 
     if (touch) {
       assert.equal(await read("getComputedStyle(document.querySelector('.sunArrowHint')).display"), 'none');
