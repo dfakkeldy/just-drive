@@ -334,13 +334,14 @@ function trailhead(m: Mesher, place: (e: number, n: number, y: number, az?: numb
       m.cyl(0, .35, 0, .09, 1.6, post, 'y', low ? 5 : 8);
       solid({ e, n, az, length: .18, width: .18 });
     }
-    // Each bay's rails run post to post, so they follow the slope at every Hill height.
+    // The rails slope from end post to end post, so they meet every post at every Hill height. Faces point outward.
     place(ae, an, lift(ag), az);
     const rise = lift(bg) - lift(ag);
-    for (let j = 0; j < posts; j++) for (const h of [.5, .95]) {
-      const x0 = len * j / posts, x1 = len * (j + 1) / posts, y0 = h + rise * j / posts, y1 = h + rise * (j + 1) / posts;
-      m.quad([[x0, y0 + .05, -.05], [x1, y1 + .05, -.05], [x1, y1 + .05, .05], [x0, y0 + .05, .05]], post);
-      for (const z of [-.05, .05]) m.quad([[x0, y0 - .05, z], [x1, y1 - .05, z], [x1, y1 + .05, z], [x0, y0 + .05, z]], post);
+    for (const h of [.5, .95]) {
+      const y0 = h, y1 = h + rise;
+      m.quad([[0, y0 + .05, .05], [len, y1 + .05, .05], [len, y1 + .05, -.05], [0, y0 + .05, -.05]], post);
+      m.quad([[0, y0 - .05, .05], [len, y1 - .05, .05], [len, y1 + .05, .05], [0, y0 + .05, .05]], post);
+      m.quad([[0, y0 + .05, -.05], [len, y1 + .05, -.05], [len, y1 - .05, -.05], [0, y0 - .05, -.05]], post);
     }
     solid({ e: (ae + be) / 2, n: (an + bn) / 2, az, length: len, width: .12 });
   }
