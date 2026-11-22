@@ -5,12 +5,51 @@
 import * as THREE from 'three';
 import { DRONE, GIMBAL, droneReadout, stepDrone, stepGimbal, wheelSpeed, type DroneCommand, type DroneGround, type DroneState } from './drone-rules';
 import type { Building } from './buildings';
+import type { Terrain } from './terrain';
+import type { Rig } from './vehicle-spec';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /** Where the camera sits behind the drone, metres along the view and up. */
 const BACK = 2.4, UP = 0.55;
 /** The take-off climb: the drone rises this far over the roof before the sticks get it. */
 const LIFT = 3;
+/** Hover height over the road when starting or resetting in standalone drone mode, metres. */
+const HOVER = 4;
+
+/**
+ * Checks whether the finest tile that exists in `terrain.manifest` at (x, z) is loaded and (for level 8) currently
+ * selected in `terrain.drawnFine`. Read-only: never marks tiles as used. Returns true off the map where nothing loads.
+ */
+export function createTerrainReady(terrain: Terrain): (x: number, z: number) => boolean {
+  const m = terrain.manifest, exists = new Set<string>();
+  let maxLevel = 0;
+  for (const [level, names] of Object.entries(m.levels)) {
+    const l = +level;
+    if (l > maxLevel) maxLevel = l;
+    for (const n of names) exists.add(`${l}/${n}`);
+  }
+  return (x: number, z: number): boolean => {
+    const e = x + m.village[0] - m.origin[0], s = z - (m.village[1] - m.origin[1]);
+    for (let level = maxLevel; level >= 0; level--) {
+      const size = m.size / 2 ** level;
+      const i = Math.floor(e / size), j = Math.floor(s / size);
+      const coord = `${i}_${j}`;
+      if (!exists.has(`${level}/${coord}`)) continue;
+      if (terrain.levelAt(x, z) < level) return false;
+      return level === 8 ? terrain.drawnFine.has(coord) : true;
+    }
+    return true;
+  };
+}
+
+/** Empty zero-mesh vehicle rig used when the drone is the standalone vehicle (no car model loaded or drawn). */
+export function createDroneRig(): Rig {
+  const root = new THREE.Group(), body = new THREE.Group(), driverEye = new THREE.Object3D();
+  const fl = new THREE.Group(), fr = new THREE.Group(), rl = new THREE.Group(), rr = new THREE.Group();
+  const sfl = new THREE.Group(), sfr = new THREE.Group();
+  root.add(body);
+  return { root, body, wheels: { fl, fr, rl, rr }, steer: { fl: sfl, fr: sfr }, driverEye, brakeLights: [] };
+}
 
 function model(): { group: THREE.Group; rotors: THREE.Mesh[] } {
   // About 0.45 m across the rotors: a small, plain grey camera drone. No maker's name, no badge. The still parts are
@@ -69,9 +108,9 @@ const NO_ROOFS: Roof[] = [];
  * The roof heights of the drawn buildings, for the drone's floor (the terrain's tree layer is removed under them). Each
  * building counts as its own turned rectangle, a metre larger all round; a tank as its circle. -Infinity off any roof.
  */
-export function roofHeights(list: Building[], village: [number, number], exag: number, sea: number): (x: number, z: number) => number {
+export function roofHeights(list: readonly Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[], village: [number, number], exag: number, sea: number): (x: number, z: number) => number {
   const CELL = 48, cells = new Map<number, Roof[]>();
-  const key = (i: number, j: number) => (i + 4096) * 8192 + (j + 4096);
+  const key = (i: number, j: number) => i >= -4096 && i < 4096 && j >= -4096 && j < 4096 ? (i + 4096) * 8192 + (j + 4096) : -1;
   for (const b of list) {
     const a = b.axisDeg * Math.PI / 180;
     const roof: Roof = { x: b.x - village[0], z: village[1] - b.y, ux: Math.sin(a), uz: -Math.cos(a), half: b.length / 2 + 1, halfWidth: b.width / 2 + 1,
@@ -79,13 +118,16 @@ export function roofHeights(list: Building[], village: [number, number], exag: n
     const r = Math.hypot(roof.half, roof.halfWidth);
     if (!Number.isFinite(roof.x + roof.z + r + roof.top + roof.ux)) continue;
     for (let i = Math.floor((roof.x - r) / CELL); i <= Math.floor((roof.x + r) / CELL); i++) for (let j = Math.floor((roof.z - r) / CELL); j <= Math.floor((roof.z + r) / CELL); j++) {
-      const cell = cells.get(key(i, j));
-      if (cell) cell.push(roof); else cells.set(key(i, j), [roof]);
+      const k = key(i, j);
+      if (k < 0) continue;
+      const cell = cells.get(k);
+      if (cell) cell.push(roof); else cells.set(k, [roof]);
     }
   }
   return (x, z) => {
     let top = -Infinity;
-    const cell = cells.get(key(Math.floor(x / CELL), Math.floor(z / CELL))) ?? NO_ROOFS;
+    const k = key(Math.floor(x / CELL), Math.floor(z / CELL));
+    const cell = (k < 0 ? undefined : cells.get(k)) ?? NO_ROOFS;
     for (let k = 0; k < cell.length; k++) {
       const b = cell[k];
       if (b.top <= top) continue;
@@ -103,6 +145,12 @@ export class Drone {
   private readonly rotors: THREE.Mesh[];
   readonly state: DroneState = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, yawRate: 0 };
   active = false;
+  /** True when the drone is the standalone vehicle in Just Drive (no 2 km range limit, no car roof to land on). */
+  free = false;
+  /** True while standalone drone speed is held back waiting for land ahead to finish loading. */
+  loading = false;
+  /** Optional HUD help line override for standalone drone mode. */
+  help = '';
   /** Flying home by itself (R or RETURN). */
   returning = false;
   maxSpeed: number = DRONE.speed;
@@ -122,17 +170,31 @@ export class Drone {
     this.group = m.group; this.rotors = m.rotors;
   }
 
-  /** Lifts off a roof at (x, roof, z), facing the vehicle's way (`yaw` in the camera's convention). */
-  launch(x: number, roof: number, z: number, yaw: number): void {
+  /** Lifts off a roof at (x, roof, z), or starts hovering above a road when `free` is true. */
+  launch(x: number, roof: number, z: number, yaw: number, free = false): void {
     document.body.classList.add('droneOn');
-    Object.assign(this.state, { x, y: roof + DRONE_FOOT, z, vx: 0, vy: 0, vz: 0, yaw, yawRate: 0 });
-    this.active = true; this.returning = false; this.lift = roof + DRONE_FOOT + LIFT; this.pitch = -0.3; this.tilt.rate = 0;
+    this.free = free; this.loading = false;
+    const y = free ? roof + DRONE_FOOT + HOVER : roof + DRONE_FOOT;
+    Object.assign(this.state, { x, y, z, vx: 0, vy: 0, vz: 0, yaw, yawRate: 0 });
+    this.active = true; this.returning = false; this.lift = free ? -Infinity : roof + DRONE_FOOT + LIFT;
+    this.pitch = free ? -0.18 : -0.3; this.tilt.rate = 0;
     this.maxSpeed = DRONE.speed;
+    this.group.position.set(x, y, z);
+    this.group.rotation.set(0, yaw, 0, 'YXZ');
     this.group.visible = true;
   }
 
+  /** Moves an active standalone drone to hover over (x, ground, z) facing `yaw`, at rest. */
+  place(x: number, ground: number, z: number, yaw: number): void {
+    const y = ground + DRONE_FOOT + HOVER;
+    Object.assign(this.state, { x, y, z, vx: 0, vy: 0, vz: 0, yaw, yawRate: 0 });
+    this.returning = false; this.loading = false; this.lift = -Infinity; this.tilt.rate = 0;
+    this.group.position.set(x, y, z);
+    this.group.rotation.set(0, yaw, 0, 'YXZ');
+  }
+
   /** Back on the roof: the drone is put away. */
-  stow(): void { this.active = false; this.returning = false; this.group.visible = false; document.body.classList.remove('droneOn'); }
+  stow(): void { this.active = false; this.free = false; this.loading = false; this.returning = false; this.group.visible = false; document.body.classList.remove('droneOn'); }
 
   /**
    * The gimbal for one frame: `tilt` from the held arrow keys (-1 down, 1 up), after `dragged`, the pitch a mouse or
@@ -154,20 +216,29 @@ export class Drone {
   }
 
   /**
-   * One frame. `roof` is the landing spot on the vehicle. Returns true when the return flight has set it down.
-   * `look` turns the drone with the mouse or a finger (radians this frame).
+   * One frame. `roof` is the landing spot on the vehicle (null in standalone drone mode). Returns true when the return
+   * flight has set it down. `look` turns the drone with the mouse or a finger (radians this frame). `speedCap` slows
+   * standalone flight near land that is still loading.
    */
-  update(dt: number, cmd: DroneCommand, under: DroneGround, roof: { x: number; y: number; z: number }, look: number): boolean {
+  update(dt: number, cmd: DroneCommand, under: DroneGround, roof: { x: number; y: number; z: number } | null, look: number, speedCap = this.maxSpeed): boolean {
     const s = this.state;
     if (this.returning) look = 0;
     s.yaw += look;
     const lifting = !this.returning && s.y < this.lift && cmd.up >= 0 && Math.hypot(cmd.forward, cmd.right) < 0.1;
     if (lifting) { Object.assign(this.lifted, cmd); this.lifted.up = Math.max(cmd.up, 0.6); cmd = this.lifted; }
     else this.lift = -Infinity;   // the first touch of a stick ends the automatic climb
-    this.pad.x = roof.x; this.pad.y = roof.y + DRONE_FOOT; this.pad.z = roof.z;
-    const left = stepDrone(s, cmd, dt, this.maxSpeed, under, roof, this.returning ? this.pad : undefined);
+    const top = Math.min(this.maxSpeed, speedCap);
+    this.loading = this.free && speedCap < this.maxSpeed - 0.1;
+    let left = Infinity;
+    if (this.free || !roof) {
+      stepDrone(s, cmd, dt, top, under, null);
+      this.distance = 0;
+    } else {
+      this.pad.x = roof.x; this.pad.y = roof.y + DRONE_FOOT; this.pad.z = roof.z;
+      left = stepDrone(s, cmd, dt, top, under, roof, this.returning ? this.pad : undefined);
+      this.distance = Math.hypot(s.x - roof.x, s.z - roof.z);
+    }
     this.height = under.ground === null ? null : s.y - DRONE_FOOT - under.ground;
-    this.distance = Math.hypot(s.x - roof.x, s.z - roof.z);
     // The model: tilted into its motion as a real drone leans, rotors spinning.
     this.spin += dt * 70;
     for (let i = 0; i < this.rotors.length; i++) this.rotors[i].rotation.y = (i % 2 ? 1 : -1) * this.spin;
@@ -175,7 +246,7 @@ export class Drone {
     const ahead = -sin * s.vx - cos * s.vz, side = cos * s.vx - sin * s.vz;
     this.group.position.set(s.x, s.y, s.z);
     this.group.rotation.set(-ahead * 0.012, s.yaw, -side * 0.012, 'YXZ');
-    return this.returning && left < 0.35;
+    return !this.free && this.returning && left < 0.35;
   }
 
   /** Puts the camera a little behind and over the drone, looking along the gimbal. Keeps it over the ground. */
@@ -189,8 +260,12 @@ export class Drone {
   /** The HUD line; on a phone a shorter one in two lines, clear of Pause and the gear. */
   readout(phone = false): string {
     const speed = Math.hypot(this.state.vx, this.state.vz);
-    if (!phone) return droneReadout(this.height, this.distance, speed, this.maxSpeed, this.returning);
+    if (!phone) return droneReadout(this.height, this.free ? null : this.distance, speed, this.maxSpeed, this.returning, this.loading);
     const height = this.height === null ? '–' : `${Math.max(0, this.height).toFixed(0)} m`;
+    if (this.free) {
+      const state = this.height !== null && this.height >= DRONE.ceiling - 1 ? ' · at height limit' : this.loading ? ' · loading land' : '';
+      return `DRONE height ${height}\n${speed.toFixed(0)} m/s${state}`;
+    }
     const state = this.returning ? ' · returning' : this.distance >= DRONE.range - 1 ? ' · at range limit' : '';
     return `DRONE height ${height}\ndistance ${this.distance.toFixed(0)} m${state}`;
   }
@@ -223,7 +298,9 @@ const CSS = `
 body:not(.tcOn) #droneButton{display:none}
 /* While the drone flies there is no photo or stop to show; on a phone the sticks need the bottom corners. */
 body.droneOn :is(#cameraButton,#stopHint){display:none!important}
-body.droneOn.droneSticks :is(#mailScore,#credit){display:none!important}
+body.droneOn.droneSticks :is(#mailScore,#credit,#placeArrival,#bigMapButton){display:none!important}
+body.droneOn.droneSticks #placesButton{right:calc(144px + env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px));min-height:56px;pointer-events:auto}
+body.droneOn.droneSticks #hud{max-width:calc(100% - 230px)}
 #phoneTop #droneButton{margin-left:auto}#phoneTop #droneButton~#gear{margin-left:0}
 /* Upright, the phone planner (phone-controls-layout.ts) places DRONE; the gear then keeps the row's right end. */
 #phoneTop #droneButton[style*="absolute"]~#gear{margin-left:auto}
@@ -236,11 +313,11 @@ export interface DroneSticks {
   release(): void;
 }
 
-/** The phone sticks and RETURN. `home` is RETURN's action. */
+/** The phone sticks and RETURN (or ROAD in standalone drone mode). `home` is its action. */
 let styled = false;
 const style = () => { if (!styled) { styled = true; document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS })); } };
 
-export function createDroneSticks(home: () => void): DroneSticks {
+export function createDroneSticks(home: () => void, standalone = false): DroneSticks {
   style();
   document.body.classList.add('droneSticks');
   const command: DroneCommand = { forward: 0, right: 0, up: 0, turn: 0 };
@@ -273,8 +350,8 @@ export function createDroneSticks(home: () => void): DroneSticks {
   };
   const left = stick('droneLeft', 'UP · TURN', (x, y) => { command.turn = -x; command.up = y; });
   const right = stick('droneRight', 'FLY', (x, y) => { command.right = x; command.forward = y; });
-  const ret = Object.assign(document.createElement('button'), { id: 'droneReturn', textContent: 'RETURN', hidden: true });
-  ret.setAttribute('aria-label', 'Fly the drone back to the vehicle. Tap again to land at once');
+  const ret = Object.assign(document.createElement('button'), { id: 'droneReturn', textContent: standalone ? 'ROAD' : 'RETURN', hidden: true });
+  ret.setAttribute('aria-label', standalone ? 'Put the drone back on the nearest road. R on a keyboard' : 'Fly the drone back to the vehicle. Tap again to land at once');
   ret.addEventListener('pointerdown', (ev) => ev.stopPropagation());
   ret.addEventListener('click', () => home());
   document.body.appendChild(ret);

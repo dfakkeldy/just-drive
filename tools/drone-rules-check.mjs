@@ -77,6 +77,26 @@ function suite(m) {
   assert.equal(m.droneReadout(null, 10, 0, 15, true), 'DRONE   height –   distance 10 m   returning');
   assert.match(m.droneReadout(5, D.range, 0, 15, false), /at range limit$/);
   assert.match(m.droneReadout(D.ceiling, 10, 0, 15, false), /at height limit$/);
+  // Standalone drone mode (home = null): no 2 km range limit, keeps the 120 m ceiling and roof floor.
+  s = fresh(40);
+  for (let t = 0; t < 100; t += 1 / 60) m.stepDrone(s, { ...idle, forward: 1 }, 1 / 60, D.maxSpeed, open, null);
+  assert.ok(Math.hypot(s.x, s.z) > 5000, 'standalone drone flies past 5 km with no range limit: ' + Math.hypot(s.x, s.z));
+  s = fresh(110);
+  for (let t = 0; t < 30; t += 1 / 60) m.stepDrone(s, { ...idle, up: 1 }, 1 / 60, D.speed, open, null);
+  assert.ok(s.y <= D.ceiling + 1 && s.y > D.ceiling - 2, 'standalone drone still keeps the 120 m ceiling: ' + s.y);
+  s = fresh(30);
+  for (let t = 0; t < 15; t += 1 / 60) m.stepDrone(s, { ...idle, up: -1 }, 1 / 60, D.speed, { ground: 0, floor: 18 }, null);
+  assert.ok(s.y >= 17.5, 'standalone drone still keeps the roof floor: ' + s.y);
+  // Loading speed cap: stops near unready land, ramps smoothly, full speed when clear ahead.
+  assert.equal(m.loadSpeedCap(60, -1), 0);
+  assert.equal(m.loadSpeedCap(60, m.DRONE_LOAD.stop), 0);
+  assert.equal(m.loadSpeedCap(60, m.DRONE_LOAD.full), 60);
+  const midCap = m.loadSpeedCap(60, (m.DRONE_LOAD.stop + m.DRONE_LOAD.full) / 2);
+  assert.ok(midCap > 20 && midCap < 40, 'half-clear slows speed smoothly: ' + midCap);
+  // Standalone readout: no distance, shows loading state when slowed.
+  assert.equal(m.droneReadout(12.4, null, 9.04, 15, false), 'DRONE   height 12 m   9 m/s (max 15)');
+  assert.equal(m.droneReadout(12.4, null, 4.1, 60, false, true), 'DRONE   height 12 m   4 m/s (loading land)');
+  assert.match(m.droneReadout(D.ceiling, null, 0, 15, false), /^DRONE   height 120 m   at height limit$/);
   // The gimbal on held arrow keys: smooth start, about 60 degrees a second, stops at straight down and just above level.
   const g = { pitch: -0.3, rate: 0 }; m.stepGimbal(g, 1, 1 / 60);
   assert.ok(g.rate > 0 && g.rate < 0.3 * m.GIMBAL.rate, 'the tilt starts gently');
@@ -93,7 +113,21 @@ function suite(m) {
 
 const real = await load(source);
 suite(real);
-console.log('PASS drone rules: gimbal tilt on held keys, level flight relative to its heading, smooth speed-up and braking, hover hold, climb, turn, floor, ceiling, range, return flight, wheel, readout');
+console.log('PASS drone rules: gimbal tilt on held keys, level flight relative to its heading, smooth speed-up and braking, hover hold, climb, turn, floor, ceiling, range, return flight, wheel, readout, standalone drone and load speed cap');
+
+// Standalone drone choice: explore / Just Drive only, never in mail play (URL or saved storage).
+const garageSource = readFileSync(new URL('../web/src/garage.ts', import.meta.url), 'utf8');
+const isDroneMatch = garageSource.match(/export function isDroneVehicle[\s\S]*?\n\}/);
+assert.ok(isDroneMatch, 'isDroneVehicle exists in garage.ts');
+const garageHelper = await load(`const VEHICLE_KEY = 'mmm.vehicle'; const GARAGE = [{ id: 'car', mail: true }, { id: 'bike', mail: true }, { id: 'horse', mail: true }]; const periodRides = () => GARAGE;\n${isDroneMatch[0]}`);
+const mem = v => ({ getItem: () => v });
+assert.equal(garageHelper.isDroneVehicle(new URLSearchParams('vehicle=drone'), true, () => mem(null)), true, 'URL vehicle=drone in explore');
+assert.equal(garageHelper.isDroneVehicle(new URLSearchParams('vehicle=drone'), false, () => mem('drone')), false, 'never drone in mail play');
+assert.equal(garageHelper.isDroneVehicle(new URLSearchParams(''), true, () => mem('drone')), true, 'saved drone restored in explore');
+assert.equal(garageHelper.isDroneVehicle(new URLSearchParams(''), false, () => mem('drone')), false, 'saved drone ignored in mail play');
+assert.equal(garageHelper.isDroneVehicle(new URLSearchParams('vehicle=car'), true, () => mem('drone')), false, 'explicit car overrides saved drone');
+assert.equal(garageHelper.isDroneVehicle(new URLSearchParams('vehicle=bike'), true, () => mem('drone')), false, 'explicit bike overrides saved drone');
+console.log('PASS isDroneVehicle: explore only, URL overrides storage, never mail play');
 
 // The help text says drone, not fly, and F launches it.
 const main = readFileSync(new URL('../web/src/main.ts', import.meta.url), 'utf8');
@@ -117,6 +151,7 @@ const mutants = [
   ['no floor', 'if (under.floor !== null && !landing && s.y < under.floor) {', 'if (false) {'],
   ['no braking', "ease(want > now ? DRONE.accel : DRONE.brake, dt)", "ease(want > now ? DRONE.accel : 0, dt)"],
   ['no range', 'if (out > DRONE.range) {', 'if (false) {'],
+  ['no load speed cap', 'if (clear <= DRONE_LOAD.stop) return 0;', 'if (false) return 0;'],
   ['gimbal past straight down', 'if (g.pitch <= GIMBAL.min) {', 'if (false) {'],
   ['gimbal jumps', 'g.rate += (Math.max(-1, Math.min(1, input)) * GIMBAL.rate - g.rate) * (1 - Math.exp(-GIMBAL.ease * dt));', 'g.rate = Math.max(-1, Math.min(1, input)) * GIMBAL.rate;'],
   ['no height hold', 's.vy += (wantY - s.vy) * ease(DRONE.vertical, dt);', 's.vy += (wantY - s.vy) * ease(DRONE.vertical, dt) - 0.01;'],

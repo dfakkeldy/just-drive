@@ -53,13 +53,34 @@ export function wheelSpeed(speed: number, deltaY: number): number {
 const ease = (rate: number, dt: number) => 1 - Math.exp(-rate * dt);
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/** Standalone drone mode: how far ahead land must be ready for full speed, and how close it brakes to a hover. */
+export const DRONE_LOAD = {
+  /** Probe distances ahead (metres); stays inside the phone tile-split radius even at the 120 m ceiling. */
+  probes: [0, 50, 110, 180, 250, 320] as readonly number[],
+  /** Full top speed when at least this many metres ahead are ready. */
+  full: 320,
+  /** Hold still when unready land is within this distance (metres). */
+  stop: 50,
+} as const;
+
 /**
- * One step. `home` is the vehicle (x, z) the range is measured from. `land` is a point to fly to instead of the sticks
- * (the return flight); near it the floor no longer holds the drone up, so it can set down on the roof.
- * Returns the distance to `land`, or Infinity.
+ * Caps horizontal speed when land ahead is still loading (`clear` is the farthest ready probe distance, metres;
+ * negative when the ground directly under the drone is not ready). Returns 0 near unready land so the drone brakes
+ * to a hover before crossing onto coarse or unloaded ground.
+ */
+export function loadSpeedCap(speed: number, clear: number): number {
+  if (clear <= DRONE_LOAD.stop) return 0;
+  if (clear >= DRONE_LOAD.full) return speed;
+  return Math.min(speed, speed * ((clear - DRONE_LOAD.stop) / (DRONE_LOAD.full - DRONE_LOAD.stop)));
+}
+
+/**
+ * One step. `home` is the vehicle (x, z) the range is measured from, or null in standalone drone mode (no range limit).
+ * `land` is a point to fly to instead of the sticks (the return flight); near it the floor no longer holds the drone up,
+ * so it can set down on the roof. Returns the distance to `land`, or Infinity.
  */
 export function stepDrone(s: DroneState, cmd: DroneCommand, dt: number, speed: number, under: DroneGround,
-  home: { x: number; z: number }, land?: { x: number; y: number; z: number }): number {
+  home: { x: number; z: number } | null, land?: { x: number; y: number; z: number }): number {
   if (dt <= 0) return land ? Math.hypot(land.x - s.x, land.y - s.y, land.z - s.z) : Infinity;
   const climb = climbRate(speed);
   let wantX: number, wantZ: number, wantY: number, wantTurn: number;
@@ -96,11 +117,13 @@ export function stepDrone(s: DroneState, cmd: DroneCommand, dt: number, speed: n
   s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
 
   // The radio link: past the range it is held at the edge, and the outward part of its speed is taken away.
-  const hx = s.x - home.x, hz = s.z - home.z, out = Math.hypot(hx, hz);
-  if (out > DRONE.range) {
-    const nx = hx / out, nz = hz / out, along = s.vx * nx + s.vz * nz;
-    s.x = home.x + nx * DRONE.range; s.z = home.z + nz * DRONE.range;
-    if (along > 0) { s.vx -= along * nx; s.vz -= along * nz; }
+  if (home) {
+    const hx = s.x - home.x, hz = s.z - home.z, out = Math.hypot(hx, hz);
+    if (out > DRONE.range) {
+      const nx = hx / out, nz = hz / out, along = s.vx * nx + s.vz * nz;
+      s.x = home.x + nx * DRONE.range; s.z = home.z + nz * DRONE.range;
+      if (along > 0) { s.vx -= along * nx; s.vz -= along * nz; }
+    }
   }
   // A soft floor over the ground, trees and roofs, except right over the landing spot.
   const landing = land !== undefined && flat < 4;
@@ -117,9 +140,13 @@ export function stepDrone(s: DroneState, cmd: DroneCommand, dt: number, speed: n
   return land ? Math.hypot(land.x - s.x, land.y - s.y, land.z - s.z) : toLand;
 }
 
-/** The readout: height over the ground under the drone and distance from the vehicle, whole metres. */
-export function droneReadout(heightAboveGround: number | null, distance: number, speed: number, maxSpeed: number, returning: boolean): string {
+/** The readout: height over the ground under the drone and optional distance from the vehicle, whole metres. */
+export function droneReadout(heightAboveGround: number | null, distance: number | null, speed: number, maxSpeed: number, returning: boolean, loading = false): string {
   const h = heightAboveGround === null ? '–' : `${Math.max(0, heightAboveGround).toFixed(0)} m`;
-  const state = returning ? 'returning' : distance >= DRONE.range - 1 ? 'at range limit' : heightAboveGround !== null && heightAboveGround >= DRONE.ceiling - 1 ? 'at height limit' : `${speed.toFixed(0)} m/s (max ${maxSpeed.toFixed(0)})`;
-  return `DRONE   height ${h}   distance ${distance.toFixed(0)} m   ${state}`;
+  const state = returning ? 'returning'
+    : distance !== null && distance >= DRONE.range - 1 ? 'at range limit'
+    : heightAboveGround !== null && heightAboveGround >= DRONE.ceiling - 1 ? 'at height limit'
+    : loading ? `${speed.toFixed(0)} m/s (loading land)`
+    : `${speed.toFixed(0)} m/s (max ${maxSpeed.toFixed(0)})`;
+  return distance === null ? `DRONE   height ${h}   ${state}` : `DRONE   height ${h}   distance ${distance.toFixed(0)} m   ${state}`;
 }

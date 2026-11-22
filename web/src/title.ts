@@ -10,7 +10,7 @@ import { KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys } from './controls';
 export { CONTACT } from './credits';
 import { EXPLORE_TITLE, chooseDaily, chooseMode, type GameMode } from './mode';
 import { CARD_BONUS, LINE_BONUS, shortDate } from './daily-rules';
-import { horseKeys, bikeKeys, vehicleButtons, type VehicleChoice } from './vehicle-choice';
+import { horseKeys, bikeKeys, droneKeys, vehicleButtons, type VehicleChoice } from './vehicle-choice';
 
 // The first thing a visitor sees: the name, how to drive, and whose data this is.
 // Built here in script so the test page and the published page cannot drift apart.
@@ -130,10 +130,11 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   let radioAvailable = radio, padRows = false;
   const rows = (available: boolean) => {
     radioAvailable = available;
-    if (padRows) return padKeys(ride?.kind, !explore && !areaName, available).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
-  let keys = explore ? (ride?.kind === 'bike' ? bikeKeys(touch) : touch ? drivingTouch : drivingKeys) : areaName ? areaRows : touch ? TOUCH : KEYS;
+    if (padRows && ride?.kind !== 'drone') return padKeys(ride?.kind, !explore && !areaName, available).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  let keys = explore ? (ride?.kind === 'drone' ? droneKeys(touch) : ride?.kind === 'bike' ? bikeKeys(touch) : touch ? drivingTouch : drivingKeys) : areaName ? areaRows : touch ? TOUCH : KEYS;
   if (ride?.kind === 'horse') { keys = horseKeys(touch, !explore && !areaName); available = false; }
-  if(historical&&ride?.kind !== 'horse'&&touch&&!keys.some(([key])=>key.includes('HORN')))keys=keys.concat([['HORN','Honk.']]);
+  if (ride?.kind === 'drone') available = false;
+  if(historical&&ride?.kind !== 'horse'&&ride?.kind !== 'drone'&&touch&&!keys.some(([key])=>key.includes('HORN')))keys=keys.concat([['HORN','Honk.']]);
     return keys.filter(([k]) => available || !['T', 'RADIO'].includes(k)).map(([k, v]) => {
     if (!available && k === 'HORN / RADIO') [k, v] = ['HORN', 'Honk.'];
     if (!available && k === 'H / T') [k, v] = ['H', historical ? 'Horn.' : 'Small horn.'];
@@ -183,7 +184,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     ${daily ? `<div id="titleBingo" role="list" aria-label="Today’s complaint bingo card">${daily.squares.map(s => `<span role="listitem">${s.label.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</span>`).join('')}</div>
     ` : ''}<p id="waysOut" hidden></p>
     <dl>${rows(radio)}</dl>
-    <button id="titleStart">${ride?.kind === 'horse' ? 'Start riding' : explore || areaName ? 'Start driving' : daily ? 'Start today’s run' : 'Start the shift'}</button>
+    <button id="titleStart">${ride?.kind === 'drone' ? 'Start flying' : ride?.kind === 'horse' ? 'Start riding' : explore || areaName ? 'Start driving' : daily ? 'Start today’s run' : 'Start the shift'}</button>
     ${door ? `<a id="titleEra" href="${door.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">${historical ? 'Back to today →' : eraDoorText(eraWords!.name)}</a>
     ` : ''}<button id="titleCredits" aria-expanded="false">Credits and data</button>
     <div id="titleLegal" hidden>${CONTACT_LINE}${aboutLine(just)}${historical ? `${(historyArea(eraAreaId(era)) ?? HISTORY_AREAS.mabou).credits}${LAND_CREDITS}${FAR_CREDITS}${MUSIC_CREDIT}${ENGINE_CREDIT}` : just ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : areaName ? LEGAL.replace(/<p>.*?<\/p>/, '<p>The land, roads and mapped building shapes are real.</p>') : explore ? LEGAL.replace(/<p><b>A work of satire[\s\S]*?<\/p>/, '<p>The land, the roads and the mapped buildings are real. The mine site and interiors are fictional.</p>') : LEGAL}${paved ? PAVED_CREDIT : ''}</div>
@@ -217,7 +218,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     open() {
       if (explore) root.querySelector('dl')!.innerHTML = rows(radioAvailable);
       refreshWays();
-      start.textContent = ride?.kind === 'horse' ? (started ? 'Back to riding' : 'Start riding') : explore || areaName ? (started ? 'Back to driving' : 'Start driving') : daily ? (started ? 'Back to today’s run' : 'Start today’s run') : started ? 'Back to the shift' : 'Start the shift';
+      start.textContent = ride?.kind === 'drone' ? (started ? 'Back to flying' : 'Start flying') : ride?.kind === 'horse' ? (started ? 'Back to riding' : 'Start riding') : explore || areaName ? (started ? 'Back to driving' : 'Start driving') : daily ? (started ? 'Back to today’s run' : 'Start today’s run') : started ? 'Back to the shift' : 'Start the shift';
       legal.hidden = false;
       credits.setAttribute('aria-expanded', 'true');
       root.hidden = false;
