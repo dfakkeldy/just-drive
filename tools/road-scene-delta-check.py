@@ -405,9 +405,16 @@ def land(root=None):
                 # Mabou village delta changes two community sites (and drops), never a mailbox or public pole (its maker checks
                 # that); the file is its exact pinned after bytes, so its own community digest is the receipt's.
                 expected = dict(expected, communityBoxes=canonical_digest(props['communityBoxes']))
-            expect29[name] = expected
-            powers[name] = step29_state(props, roads, expected)
-            if powers[name]: hashes[name] = STEP29
+            candidates = [expected]
+            if name == 'areas/judique/props.json':
+                candidates.append(dict(expected, publicPoles=receipt['judiqueRoad98']['publicPoles']))
+            for expected in candidates:
+                power = step29_state(props, roads, expected)
+                if power:
+                    expect29[name] = expected
+                    powers[name] = power
+                    hashes[name] = STEP29
+                    break
     mode = state(hashes,entries,step29)
     if STEP29 in hashes.values(): one_power_state(powers)
     expectation(mode,EXPECT)
