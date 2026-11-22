@@ -44,7 +44,7 @@ try {
     await active.send('Page.navigate',{url:`http://justdrive.localhost:${process.env.WEB_PORT??5230}/${area}?title=1&q=low&reception=0&era=${era}&vehicle=${vehicle}`});
     if(vehicle==='horse'){
       await until(`!document.getElementById('boot')&&!!document.getElementById('titleStart')`,'1884 horse title');
-      good(await value(`!document.getElementById('radio')&&!/radio|station|horn/i.test(document.querySelector('#title dl').textContent)`),'published 1884 horse has no radio or horn controls');
+      good(await value(`(()=>{const l=[...document.querySelectorAll('#title dl')],t=l.map(e=>e.textContent).join(' ');return !document.getElementById('radio')&&l.length>0&&/\\S/.test(t)&&!/radio|station|horn/i.test(t);})()`),'published 1884 horse has no radio or horn controls');
       await click('titleStart');
       good(await value(`!document.getElementById('radio')&&performance.getEntriesByType('resource').every(e=>!new URL(e.name).pathname.startsWith('/audio/radio'))`),'published 1884 horse never loads a radio list');
       await browser.send('Target.closeTarget',{targetId:active.id});continue;
@@ -133,7 +133,7 @@ try {
   const estimateBefore=await value('navigator.storage.estimate()');console.log('storage before remove',estimateBefore);
   await stopServer();await offline(true);
   await navigate('?era=1884&vehicle=bike&title=1&q=low&touch=1');
-  good(await value(`document.querySelector('#title h1').textContent==='Mabou, 1884'&&/radio|station/i.test(document.querySelector('#title dl').textContent)`),'1884 bike title starts from the saved app with the server stopped');
+  good(await value(`document.querySelector('#title h1').textContent==='Mabou, 1884'&&/radio|station/i.test([...document.querySelectorAll('#title dl')].map(e=>e.textContent).join(' '))`),'1884 bike title starts from the saved app with the server stopped');
   await until(`!!document.getElementById('radio')`,'1884 shared radio offline');await startShift();good(await value(`getComputedStyle(document.getElementById('shiftHud')).display==='none'&&!!document.getElementById('radio')`),'offline era offers radio without the mail HUD');await shot('offline-era-bike');
   await navigate('?demo=95&at=625613.24,5108489.99,-41.75265721465165&q=low&title=1&touch=1');await startShift();await drive300('offline never-visited far start');await shot('offline-far-driving');
   await offline(false);await startServer(out+'/site');

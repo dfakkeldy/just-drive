@@ -73,8 +73,8 @@ try {
     await page(phone, 'mode=mail');
     await read("localStorage.removeItem('mmm.daily.v1');localStorage.removeItem('mmm.fired.best.v1')");
     const career = await read("localStorage.getItem('mmm.shift.v1')");
-    const mailOrder = await read(`(()=>{const y=s=>document.querySelector(s).getBoundingClientRect();return {mode:y('#modeChoice').bottom,daily:y('#dailyChoice').top,dailyEnd:y('#dailyChoice').bottom,tag:y('#title .tag').top,h1:y('#title h1').bottom,start:y('#titleStart').top,keys:y('#title dl').top};})()`);
-    assert.ok(mailOrder.mode <= mailOrder.daily && mailOrder.dailyEnd <= mailOrder.tag && mailOrder.h1 < mailOrder.keys && mailOrder.keys < mailOrder.start, `mail title order: ${JSON.stringify(mailOrder)}`);
+    const mailOrder = await read(`(()=>{const y=s=>document.querySelector(s).getBoundingClientRect();return {tagEnd:y('#title .tag').bottom,h1Top:y('#title h1').top,h1:y('#title h1').bottom,modeTop:y('#modeChoice').top,mode:y('#modeChoice').bottom,daily:y('#dailyChoice').top,dailyEnd:y('#dailyChoice').bottom,keys:y('#title dl').top,start:y('#titleStart').top};})()`);
+    assert.ok(mailOrder.tagEnd <= mailOrder.h1Top && mailOrder.h1 < mailOrder.modeTop && mailOrder.mode <= mailOrder.daily && mailOrder.dailyEnd < mailOrder.keys && mailOrder.keys < mailOrder.start, `mail title order: ${JSON.stringify(mailOrder)}`);
     await read("document.getElementById('modeChoice').scrollIntoView({block:'start'})"); await sleep(200);
     await shot(`daily-${name}-mail-title`);
     // The phone card scrolls (it opens at its start button): bring the choice into view, as a thumb would.
@@ -107,10 +107,10 @@ try {
     assert.deepEqual(title.squares, rules.card.map(s => s.label)); assert.equal(title.start, 'Start today’s run');
     assert.match(title.text, /Five minutes on the clock/);
     for (const id of ['#titleBingo', '#titleStart']) { const b = await box(id); assert.ok(b.shown && b.left >= 0 && b.right <= (phone ? 390 : 1280), `${id} fits across`); }
-    const order = await read(`(()=>{const y=s=>document.querySelector(s).getBoundingClientRect();return {mode:y('#modeChoice').bottom,daily:y('#dailyChoice').top,dailyEnd:y('#dailyChoice').bottom,
-      tag:y('#title .tag').top,text:y('#titleCard>p:nth-of-type(2)').top,bingo:y('#titleBingo').top,bingoEnd:y('#titleBingo').bottom,start:y('#titleStart').top};})()`);
-    assert.ok(order.mode <= order.daily && order.dailyEnd <= order.tag && order.tag < order.text && order.text < order.bingo && order.bingoEnd <= order.start,
-      `title order: modes, today's run, tag, words, card, start: ${JSON.stringify(order)}`);
+    const order = await read(`(()=>{const y=s=>document.querySelector(s).getBoundingClientRect();return {tag:y('#title .tag').top,text:y('#titleCard>p:nth-of-type(2)').top,textEnd:y('#titleCard>p:nth-of-type(2)').bottom,modeTop:y('#modeChoice').top,mode:y('#modeChoice').bottom,daily:y('#dailyChoice').top,dailyEnd:y('#dailyChoice').bottom,
+      bingo:y('#titleBingo').top,bingoEnd:y('#titleBingo').bottom,start:y('#titleStart').top};})()`);
+    assert.ok(order.tag < order.text && order.textEnd <= order.modeTop && order.mode <= order.daily && order.dailyEnd <= order.bingo && order.bingoEnd <= order.start,
+      `title order: tag, words, modes, today's run, card, start: ${JSON.stringify(order)}`);
     await read("document.getElementById('titleBingo').scrollIntoView({block:'center'})"); await sleep(200);
     await shot(`daily-${name}-title`);
     await read("document.getElementById('titleStart').click();document.activeElement?.blur()"); await sleep(600);
