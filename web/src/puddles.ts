@@ -1,13 +1,16 @@
 // The puddles of the rough stretches (rough-roads.ts), and the spray a wheel throws when it goes through one.
 //
 // Cost: one instanced draw for every puddle near the camera (a 20-sided disc each; none drawn, and no draw, away from a
-// rough stretch), and one instanced draw for the spray, drawn only while a drop is in the air. The near set is chosen
-// again at most four times a second. Nothing is made per frame.
+// rough stretch), and one instanced draw for the spray, drawn only while a drop is in the air. The near set is laid
+// again only when the drawn land near the camera changes or the camera moves 10 m. Nothing is made per frame.
 
 import * as THREE from 'three';
 import { LAND_LIGHT } from './shaders';
 import { PUDDLE_POND, PUDDLE_POOL, type PuddleField, type Puddle } from './rough-roads';
 import type { Terrain } from './terrain';
+
+/** The drawn disc's radius in puddle sizes: the ragged edge (FRAG) bulges up to this far past the unit ellipse. */
+const DISC = 1.3;
 
 const VERT = /* glsl */ `
 #include <common>
@@ -28,6 +31,7 @@ void main() {
 
 const FRAG = /* glsl */ `
 #include <common>
+const float DISC = ${DISC.toFixed(2)};
 #include <logdepthbuf_pars_fragment>
 ${LAND_LIGHT}
 varying vec2 vLocal;
@@ -40,6 +44,9 @@ void main() {
   vec2 m = vLocal * vSize + vInfo.x * 41.0;
   vec2 warp = vec2(vnoise(m * 0.55) - 0.5, vnoise(m * 0.55 + 5.3) - 0.5) * 0.7;
   float r = length(vLocal + warp) + ((vnoise(m * 1.7) - 0.5) * 0.55 + (vnoise(m * 4.6) - 0.5) * 0.25) / max(min(vSize.x, vSize.y), 0.35) * 0.4;
+  // The disc reaches past the unit ellipse (DISC), so the edge can bulge out. Near the disc's own rim the edge is drawn
+  // in, so the water never ends on a straight side of the 20-gon.
+  r = max(r, length(vLocal) - (DISC - 1.02));
   if (r > 1.0) discard;
   // Survey, 21 Nov 2026: every puddle mirrors the blue sky, with the dark brush along the road mirrored at its sides;
   // brown silt shows where it is shallow, and a ring of wet orange-brown clay holds it. A pond's ring is wide.
@@ -101,6 +108,7 @@ export function splashLevel(v: Wading): number {
 }
 
 const NEAR = 150;          // metres: puddles drawn around the camera
+const REACH = 8;           // metres: more than the longest puddle's half length (rough-roads.ts ponds are up to 11 m long)
 const LIFT = 0.035;        // metres above the drawn ground
 const LIFE = .75;          // seconds a drop flies
 
@@ -114,7 +122,8 @@ export class Puddles {
   private readonly info: THREE.InstancedBufferAttribute;
   private readonly dummy = new THREE.Object3D();
   private readonly basis = { x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4() };
-  private wait = 0;
+  /** The drawn land near the camera, and where the camera stood, when the puddles were last laid. */
+  private stamp = ''; private readonly at = new THREE.Vector3(Infinity, 0, Infinity);
   private readonly box: [number, number, number, number];
   // Spray pool.
   private readonly size: number;
@@ -123,10 +132,10 @@ export class Puddles {
   private readonly zero = new THREE.Matrix4().makeScale(0, 0, 0);
   private readonly color = new THREE.Color();
 
-  constructor(private readonly field: PuddleField, private readonly terrain: Pick<Terrain, 'meshHeightAt' | 'uniforms'>, low: boolean) {
+  constructor(private readonly field: PuddleField, private readonly terrain: Pick<Terrain, 'meshHeightAt' | 'uniforms' | 'drawnOver'>, low: boolean) {
     this.group.name = 'Puddles on rough roads';
     this.max = low ? 160 : 400;
-    const geo = new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2);
+    const geo = new THREE.CircleGeometry(DISC, 20).rotateX(-Math.PI / 2);
     this.info = new THREE.InstancedBufferAttribute(new Float32Array(this.max * 2), 2);
     this.info.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('aInfo', this.info);
@@ -157,15 +166,25 @@ export class Puddles {
     this.group.add(this.spray);
   }
 
-  /** Once a frame, after the camera moved. `ride` is the driven ride, or null when nobody drives (no spray then).
-   *  `realDt` times the re-placing: behind the title card, in the free camera and on a still the world clock (dt)
-   *  stands, but finer ground tiles still arrive, and water laid on a coarser tile would stay buried under them. */
-  update(dt: number, camera: THREE.Camera, ride: Wading | null, realDt = dt): void {
-    this.wait -= realDt;
-    const c = camera.position;
+  /** Every frame right after the terrain update (main.ts world table; endings and the replay too). The puddles are laid
+   *  again when the drawn land near the camera changes (a tile load, an LOD switch, a turn that shows other tiles) or the
+   *  camera moves 10 m. So stills, the free camera and the title card show the water on the land they show. */
+  refit(c: THREE.Vector3): void {
     const away = c.x < this.box[0] - NEAR || c.x > this.box[2] + NEAR || c.z < this.box[1] - NEAR || c.z > this.box[3] + NEAR;
-    if (away) { if (this.mesh.visible) { this.mesh.visible = false; this.mesh.count = 0; this.shown = 0; } }
-    else if (this.wait <= 0) { this.wait = .25; this.place(c); }
+    if (away) {
+      if (this.mesh.visible) { this.mesh.visible = false; this.mesh.count = 0; this.shown = 0; }
+      this.stamp = ''; this.at.set(Infinity, 0, Infinity);
+      return;
+    }
+    const reach = NEAR + REACH;
+    const stamp = this.terrain.drawnOver(c.x - reach, c.z - reach, c.x + reach, c.z + reach);
+    if (stamp === this.stamp && Math.hypot(c.x - this.at.x, c.z - this.at.z) < 10) return;
+    this.stamp = stamp; this.at.copy(c);
+    this.place(c);
+  }
+
+  /** Once a frame in the drive, after the camera moved: the spray. `ride` is the driven ride, or null when nobody drives. */
+  update(dt: number, camera: THREE.Camera, ride: Wading | null): void {
     if (ride && dt > 0) this.emit(dt, ride);
     if (this.drops || this.spray.visible) this.fly(dt, camera);
   }
@@ -184,12 +203,13 @@ export class Puddles {
       if (n >= this.max) break;
       const fx = Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = Math.sin(p.yaw);
       const la = Math.max(p.a * .8, .3), lb = Math.max(p.b * .8, .3);
+      // Both ends of each axis: a long pond on a crest or a crowned road then sits on its mean slope, not on one half.
       const h0 = this.terrain.meshHeightAt(p.x, p.z, true);
-      const h1 = this.terrain.meshHeightAt(p.x + fx * la, p.z + fz * la, true);
-      const h2 = this.terrain.meshHeightAt(p.x + rx * lb, p.z + rz * lb, true);
-      if (h0 === null || h1 === null || h2 === null) continue;
-      az.set(fx * la, h1 - h0, fz * la);
-      ax.set(rx * lb, h2 - h0, rz * lb).normalize();
+      const hf = this.terrain.meshHeightAt(p.x + fx * la, p.z + fz * la, true), hb = this.terrain.meshHeightAt(p.x - fx * la, p.z - fz * la, true);
+      const hr = this.terrain.meshHeightAt(p.x + rx * lb, p.z + rz * lb, true), hl = this.terrain.meshHeightAt(p.x - rx * lb, p.z - rz * lb, true);
+      if (h0 === null || hf === null || hb === null || hr === null || hl === null) continue;
+      az.set(fx * la, (hf - hb) / 2, fz * la);
+      ax.set(rx * lb, (hr - hl) / 2, rz * lb).normalize();
       ay.crossVectors(az, ax).normalize();
       if (ay.y < 0) ay.negate();
       // A right-handed basis keeps the disc's top face up (a mirrored one would be culled). The ellipse is symmetric,

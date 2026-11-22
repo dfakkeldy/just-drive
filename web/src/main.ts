@@ -1215,7 +1215,8 @@ if (import.meta.env.DEV) expose({ driftFeedback });
 // The water on the rough stretches and the spray a wheel throws from it: one draw each, only where there is water.
 const puddles = rough ? new Puddles(rough.field, terrain, LOW) : null;
 if (puddles) scene.add(puddles.group);
-if (import.meta.env.DEV) expose({ puddles, roughRoads: rough });
+// Not enumerable: tools/ui-check.mjs pins the listed dev keys. tools/rough-road-check.mjs and the browser probes read them.
+if (import.meta.env.DEV) expose({ puddles, roughRoads: rough }, false);
 animals?.registerEvidence(shift.evidence);
 document.getElementById('cameraButton')!.addEventListener('click', () => { if (live()) photoRequested = true; });
 for (const id of ['cameraButton', 'endShift', 'shiftReport', 'settings']) {
@@ -1898,6 +1899,8 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   { name: 'terrain', segment: 'landscape', ending: true, update: () => terrain.update(camera, scenePaused()) },
   { name: 'wharves', segment: 'landscape', ending: true, update: () => wharves?.update(camera.position) },
   { name: 'novemberRoads', segment: 'landscape', ending: true, update: () => novemberRoads?.update(terrain, camera.position) },
+  // After the terrain update, so the water lies on the tiles drawn this frame; endings and the replay keep it too.
+  { name: 'puddles', segment: 'landscape', ending: true, update: () => puddles?.refit(camera.position) },
   ...(fleet ? [{ name: 'fleet', segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { name: 'coast', segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
   { name: 'lotProps', segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
@@ -2228,7 +2231,7 @@ function frame(now: number) {
   if (dt > 0 && driving) replay.record(vehicle, car, horse ? 'horse' : ride.kind, now / 1000, clockDt, quietGround);
   gamepad.feel(vehicle, dt, playing && mode === 'drive' && !interiors.busy, now);
   driftFeedback.update(dt, vehicle, camera, playing && mode === 'drive' && !interiors.busy);
-  puddles?.update(dt, camera, playing && mode === 'drive' && !interiors.busy ? vehicle : null, realDt);
+  puddles?.update(dt, camera, playing && mode === 'drive' && !interiors.busy ? vehicle : null);
   updateWorld('before-camera', dt, realDt, now);
   camera.updateMatrixWorld();
   sky.position.copy(camera.position);

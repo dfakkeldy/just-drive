@@ -201,8 +201,10 @@ export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:SiteSurface,z
   if (f.rough) {
     const kind = flags & 15;
     const baked = Math.abs(road[k] - zero) * dScale;
-    // The baked distance must match the stretch's own, so a nearby gravel road or lane keeps its plain surface.
-    if ((kind === 3 || kind === 4) && (flags & 192) === 0 && baked < road[k + 1] * wScale + 1.2 && Math.abs(baked - f.dist) < 1) road[k + 2] = flags | ROUGH_BIT;
+    // The baked distance must match the stretch's own, so a nearby gravel road or lane keeps its plain surface. The bit
+    // reaches 2.6 m past the edge: the drawn shoulder (1.1 m) plus half a 2 m texel's diagonal, as the shader takes the
+    // nearest sample's flags. Beyond the edge the wheels read grass, so only the paint uses it there.
+    if ((kind === 3 || kind === 4) && (flags & 192) === 0 && baked < road[k + 1] * wScale + 2.6 && Math.abs(baked - f.dist) < 1) road[k + 2] = flags | ROUGH_BIT;
     return;
   }
   if (f.paveGravel) {

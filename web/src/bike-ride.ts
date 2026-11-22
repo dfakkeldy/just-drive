@@ -191,6 +191,7 @@ export class BikeRide implements Ride {
     const gvel = clamp((ground - this.prevGround) / dt, -30, 30); this.prevGround = ground;
     if (this.crashTime > 0) {
       this.crashTime += dt; this.vx *= .97; this.vz *= .97;
+      this.wheelWater.fill(0);   // a tumbling bike throws no spray and makes no splash
       if (this.damageActive) this.damage?.drive(dt, 0, surf.name, 0, false);   // repair cooldowns run on through a tumble
       this.x += this.vx * dt; this.z += this.vz * dt; this.y = Math.max(ground, centre, this.groundAt(this.x, this.z) ?? -Infinity); this.pitch = this.roll = 0;
       this.roads.guardrails?.block(this, dt);

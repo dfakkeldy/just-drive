@@ -35,7 +35,8 @@ for (let i = 0; i < 4000; i++) { const x = 13.7 + i * 0.37, z = -200 + (i % 61) 
   ok(paint(sample(3)) === (3 | ROUGH_BIT) && paint(sample(4)) === (4 | ROUGH_BIT), 'gravel and track samples turn rough');
   ok(paint(sample(3 | 32)) === (3 | 32 | ROUGH_BIT), 'washboard keeps its bit and turns rough');
   for (const f of [0, 1, 2, 2 | 64, 2 | 128, 4 | 64, 5, 8, 9, 10, 12]) ok(paint(sample(f)) === f, `flags ${f} stay`);
-  ok(paint(sample(3, 4.5)) === 3, 'a sample beyond the road edge stays');
+  ok(paint(sample(3, 4.5)) === (3 | ROUGH_BIT), 'a shoulder sample a coarse texel out turns rough, so the drawn shoulder is verge');
+  ok(paint(sample(3, 5.4)) === 3, 'a sample beyond the shoulder reach stays');
   ok(paint(sample(3, 1), 3.5) === 3 && paint(sample(4, 0.5), 2) === 4, 'a sample nearer another road than this stretch stays');
   ok(paint(sample(3, 1), 1.8) === (3 | ROUGH_BIT), 'a small distance mismatch still turns rough');
   const r = sample(3); paint(r); ok(r[0] === zero + 10 && r[1] === 52, 'distance and width stay');
