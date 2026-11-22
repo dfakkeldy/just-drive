@@ -1,5 +1,5 @@
 import { inBox, pointSegment, type LightClass, type Mast, type PowerLine, type TallFile, type TowerKind } from './tall-rules';
-import { MISCLASSIFIED_POWER_MASTS, STRAIT_LINES, STRAIT_MASTS } from './tall-strait-data';
+import { MISCLASSIFIED_POWER_MASTS, RESTORED_LINES, STRAIT_LINES, STRAIT_MASTS } from './tall-strait-data';
 
 const STRAIT_BOUNDS: readonly [number, number, number, number] = [616076, 5045988, 654988, 5078756];
 const KINDS: readonly TowerKind[] = ['standard', 'double', 'crossing'];
@@ -20,7 +20,11 @@ export function mergeStraitTall(data: TallFile): TallFile {
   const extraLines: PowerLine[] = [];
   const straitSegments: [number, number, number, number][] = [];
 
-  for (const raw of STRAIT_LINES) {
+  const sameBox = (a: readonly number[], b: readonly number[]) => a.every((v, i) => Math.abs(v - b[i]) < 1);
+  for (const raw of [...STRAIT_LINES, ...RESTORED_LINES]) {
+    // A restored legacy piece is drawn only in the area it was baked for (pieces from neighbouring areas overlap).
+    if (raw.m && !sameBox(raw.m, data.mid)) continue;
+    const restored = Boolean(raw.m);
     // Split into maximal consecutive tower runs that fall inside this area's mid box.
     let runStart = -1;
     const flush = (end: number) => {
@@ -34,7 +38,8 @@ export function mergeStraitTall(data: TallFile): TallFile {
         if (i > runStart) {
           const prev = raw.t[i - 1];
           station += Math.hypot(e - prev[0], n - prev[1]);
-          straitSegments.push([prev[0], prev[1], e, n]);
+          // Restored legacy pieces never replace a kept baked line; only the verified OSM/Strait routes do.
+          if (!restored) straitSegments.push([prev[0], prev[1], e, n]);
           const sp = raw.s[i - 1];
           const g = sp.slice(1);
           spans.push({ sag: sp[0], ground: g, clearance: g });
@@ -59,15 +64,28 @@ export function mergeStraitTall(data: TallFile): TallFile {
     flush(raw.t.length);
   }
 
-  // Keep non-overlapping legacy lines (those not replaced by our verified OSM/restored routes).
-  const keptLines = extraLines.length ? data.lines.filter(line => {
-    if (!line.towers.length) return false;
-    let covered = 0;
-    for (const t of line.towers) {
-      if (straitSegments.some(s => pointSegment(t.e, t.n, [s[0], s[1]], [s[2], s[3]]) <= 55)) covered++;
+  // Keep the parts of baked lines that no verified OSM/Strait route replaces. A covered tower stays when it is the
+  // neighbour of an uncovered one, so a kept part still meets the new route. A part that never strays more than
+  // 120 m from the new routes is the same route drawn from another source (NSTDB vs OSM offsets), so it is dropped.
+  const offset = (t: Mast) => Math.min(Infinity, ...straitSegments.map(s => pointSegment(t.e, t.n, [s[0], s[1]], [s[2], s[3]])));
+  const keptLines: PowerLine[] = [];
+  for (const line of data.lines) {
+    if (!line.towers.length) continue;
+    const dist = line.towers.map(offset);
+    const cov = dist.map(d => d <= 55);
+    if (!cov.some(Boolean)) { keptLines.push(line); continue; }
+    const keep = cov.map((c, i) => !c || cov[i - 1] === false || cov[i + 1] === false);
+    for (let i = 0; i < keep.length;) {
+      if (!keep[i]) { i++; continue; }
+      let j = i;
+      while (j + 1 < keep.length && keep[j + 1]) j++;
+      if (j > i && Math.max(...dist.slice(i, j + 1)) > 120) {
+        const towers = line.towers.slice(i, j + 1);
+        keptLines.push({ ...line, towers, pts: towers.map(t => [t.e, t.n]), spans: line.spans.slice(i, j) });
+      }
+      i = j + 1;
     }
-    return covered / line.towers.length < 0.5;
-  }) : data.lines;
+  }
 
   // Communication masts: add verified Strait/West Bay/south Judique masts, drop the 4 misclassified L8004 power towers,
   // and deduplicate legacy NSTDB masts within 35 m of an upgraded sourced mast.

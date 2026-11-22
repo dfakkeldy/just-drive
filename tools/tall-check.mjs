@@ -220,6 +220,13 @@ function checkStrait(merge){
         assert.ok(merged.lines.some(l=>l.source===key),'restored omitted NSTDB line '+key);
       }
     }
+    // Omitted legacy lines that no OSM route replaces come back in the area they were baked for, and only there.
+    const restoredHere={pointtupper:['13608c0e','ef3022bd'],cansocauseway:['5a4c3b03'],westbay:['e1de57ef','5a4c3b03'],judique:[]}[area];
+    for(const ref of restoredHere)assert.ok(merged.lines.some(l=>l.ref===ref&&l.source.startsWith('UTTR50:')),area+' restored omitted line '+ref);
+    if(area==='westbay'){const wider={...d,mid:[d.mid[0]-50,d.mid[1]-50,d.mid[2]+50,d.mid[3]+50]};assert.ok(!merge(wider).lines.some(l=>l.ref==='e1de57ef'),'a restored piece is drawn only for the area box it was baked for');}
+    if(area==='westbay')assert.ok(merged.lines.filter(l=>l.ref==='e1de57ef'||l.ref==='5a4c3b03').reduce((s,l)=>s+l.towers.length,0)>=60,'West Bay L6537 corridor back (two NSTDB lines, 60+ supports)');
+    // A baked line half covered by a new route keeps its other part: the line into the Point Tupper station.
+    if(area==='pointtupper')assert.ok(merged.lines.some(l=>!l.source&&l.towers.some(t=>Math.hypot(t.e-629961,t.n-5052405)<30)),'pointtupper keeps the uncovered part of a half-replaced baked line');
     if(area==='westbay'){
       for(const src of ['osm:w77466754','osm:w269128918','osm:w269811580','osm:w271063034']){
         assert.ok(merged.lines.some(l=>l.source===src),'westbay OSM transmission line '+src);
@@ -257,6 +264,17 @@ if(process.argv.includes('--mutations')){
   ];
   for(const [label,a,b]of mutations){assert.equal(source.split(a).length,2,label+' unique');assert.throws(()=>maths(compile(source.replace(a,b))),{name:'AssertionError'},label+' rejected');console.log('KILLED '+label);}
   assert.throws(()=>checkStrait(x=>x),{name:'AssertionError'},'Strait merge omitted rejected');console.log('KILLED Strait merge omitted');
+  const straitSource=readFileSync(root+'web/src/tall-strait.ts','utf8');
+  for(const [label,a,b] of [
+    ['half-replaced baked line dropped whole','if (j > i && Math.max(...dist.slice(i, j + 1)) > 120) {','if (false) {'],
+    ['restored piece drawn in every area','if (raw.m && !sameBox(raw.m, data.mid)) continue;',''],
+    ['restored lines left out','[...STRAIT_LINES, ...RESTORED_LINES]','[...STRAIT_LINES]'],
+  ]){
+    assert.equal(straitSource.split(a).length,2,label+' unique');
+    const code=buildSync({stdin:{contents:straitSource.replace(a,b),resolveDir:root+'web/src',loader:'ts'},bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;
+    const mm={exports:{}};new Function('require','module','exports',code)(require,mm,mm.exports);
+    assert.throws(()=>checkStrait(mm.exports.mergeStraitTall),{name:'AssertionError'},label+' rejected');console.log('KILLED '+label);
+  }
   const d=read(tallBase('mabou')+'/tall.json'),m=tallManifest('mabou');
   for(const [label,change]of [
     ['identity leak',x=>x.turbines[0].manufacturer='forbidden'],
