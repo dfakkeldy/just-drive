@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import { eraRoadHalf } from './era';
 import { timberBridge, periodBridgePlane, prepareTimberPlans, timberPlan, timberGroundPoints } from './eras/timber-bridge';
-import { buildPonyTrussBridge, ponyTrussDeckHeight } from './november-bridges';
+import { buildPonyTrussBridge, ponyTrussDeckHeight, type PonyTrussAprons } from './november-bridges';
 
 export interface Road {
   id: number;
@@ -24,7 +24,7 @@ export interface RoadHit { road: Road; dist: number; x: number; z: number; headi
 const CELL = 64;
 const bridgeRoad = (road: Road) => road.bridge;
 
-interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number }
+interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number; aprons?: PonyTrussAprons }
 
 /** The road network: name lookup, a place to put the car back, and bridge decks (the LiDAR ground has no bridges). */
 const NO_SEGMENTS: [number, number][] = [];   // one shared empty bucket: a query over empty cells makes no arrays
@@ -187,7 +187,7 @@ export class Roads {
     if (!this.terrain.cartRoads && !hit.road.ponyTruss && hit.dist > hit.road.halfWidth + 1.2) return null;
     const deck = this.deck(hit.road);
     if (!deck) return null;
-    if (!this.terrain.cartRoads && hit.road.ponyTruss) return ponyTrussDeckHeight(hit.road, deck.y0, deck.y1, x, z, this.readTerrainHeight);
+    if (!this.terrain.cartRoads && hit.road.ponyTruss && deck.aprons) return ponyTrussDeckHeight(hit.road, deck.y0, deck.y1, x, z, deck.aprons);
     const [ax, az] = hit.road.pts[hit.seg], [bx, bz] = hit.road.pts[hit.seg + 1];
     const s = deck.cum[hit.seg] + (this.terrain.cartRoads?deck.cum[hit.seg+1]-deck.cum[hit.seg]:Math.hypot(bx - ax, bz - az)) * hit.t;
     const plane=this.terrain.cartRoads?deck.y0+(deck.y1-deck.y0)*s/deck.len:deck.y0 + (deck.y1 - deck.y0) * (s / deck.len);
@@ -245,10 +245,12 @@ export class Roads {
     for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
     const len = cum[n - 1] || 1, y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
     let mesh: THREE.Mesh;
+    let aprons: PonyTrussAprons | undefined;
     if (road.ponyTruss) {
-      const geo = buildPonyTrussBridge(p, y0, y1, len, this.readTerrainHeight);
+      const built = buildPonyTrussBridge(p, y0, y1, len, this.readTerrainHeight);
+      aprons = built.aprons;
       this.periodMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      mesh = new THREE.Mesh(geo, this.periodMat);
+      mesh = new THREE.Mesh(built.geometry, this.periodMat);
       mesh.name = 'pony-truss-' + road.id;
       mesh.castShadow = mesh.receiveShadow = true;
     } else {
@@ -277,7 +279,7 @@ export class Roads {
       mesh = new THREE.Mesh(geo, road.kind >= 4 ? this.timberMat : this.deckMat);
     }
     this.group.add(mesh);
-    const deck: Deck = { road, y0, y1, len, cum, mesh, level };
+    const deck: Deck = { road, y0, y1, len, cum, mesh, level, aprons };
     this.decks.set(road.id, deck);
     return deck;
   }

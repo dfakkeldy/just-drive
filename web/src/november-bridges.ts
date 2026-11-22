@@ -36,6 +36,12 @@ export const PONY_TRUSS = {
   deckThickness: 0.26,
 } as const;
 
+/** Shared height grids for the start and end 3 m approach aprons so rendered triangles and wheel support match exactly. */
+export interface PonyTrussAprons {
+  readonly start: Float64Array;
+  readonly end: Float64Array;
+}
+
 // Linear RGB vertex colours, slightly warm-neutral so the game's blue sky fill renders true grey steel.
 const STEEL_CHORD: RGB = [0.33, 0.31, 0.27];
 const STEEL_WEB: RGB = [0.27, 0.255, 0.22];
@@ -47,6 +53,7 @@ const DECK_ASPHALT: RGB = [0.085, 0.082, 0.078];
 const MATCH_TOLERANCE = 5;
 const APRON_ALONG_STEPS = 4;
 const APRON_ACROSS_STEPS = 4;
+const APRON_COLS = APRON_ACROSS_STEPS + 1;
 
 /** Smoothly blend the 3 m approach apron from the bridge deck edge into the local bank height across the lane width. */
 function apronSurfaceY(endY: number, distPastEnd: number, land: number | null): number {
@@ -54,6 +61,21 @@ function apronSurfaceY(endY: number, distPastEnd: number, land: number | null): 
   const blend = u * u * (3 - 2 * u);
   if (land === null) return endY;
   return Math.max(land, land + (endY - land) * blend);
+}
+
+/** Evaluate the exact triangle plane built by Mesher.quad([A(0,1), B(1,1), C(1,0), D(0,0)]) inside an apron grid. */
+function sampleApronGrid(grid: Float64Array, uNorm: number, vNorm: number): number {
+  const fi = Math.max(0, Math.min(APRON_ALONG_STEPS, uNorm * APRON_ALONG_STEPS));
+  const fj = Math.max(0, Math.min(APRON_ACROSS_STEPS, vNorm * APRON_ACROSS_STEPS));
+  const i = Math.min(APRON_ALONG_STEPS - 1, Math.floor(fi));
+  const j = Math.min(APRON_ACROSS_STEPS - 1, Math.floor(fj));
+  const u = fi - i, v = fj - j;
+  const hD = grid[i * APRON_COLS + j];
+  const hA = grid[i * APRON_COLS + j + 1];
+  const hC = grid[(i + 1) * APRON_COLS + j];
+  const hB = grid[(i + 1) * APRON_COLS + j + 1];
+  if (u + v >= 1) return hB + (1 - u) * (hA - hB) + (1 - v) * (hC - hB);
+  return hD + u * (hC - hD) + v * (hA - hD);
 }
 
 /** Tag the two Little Mabou Road pony-truss bridges in raw EPSG:2961 road data without editing the input. */
@@ -69,7 +91,7 @@ export function littleMabouPonyTruss(road: Road): Road {
 
 /**
  * Exact wheel support on a pony-truss bridge and its 3 m approach aprons.
- * Uses the same straight span, clear asphalt width and smoothstep bank blend as buildPonyTrussBridge().
+ * Evaluates the exact same triangle mesh surface built by buildPonyTrussBridge() (zero divergence, zero allocations).
  */
 export function ponyTrussDeckHeight(
   road: Road,
@@ -77,7 +99,7 @@ export function ponyTrussDeckHeight(
   y1: number,
   x: number,
   z: number,
-  heightAt: (x: number, z: number) => number | null,
+  aprons: PonyTrussAprons,
 ): number | null {
   const a = road.pts[0], b = road.pts[road.pts.length - 1];
   const dx = b[0] - a[0], dz = b[1] - a[1], len2 = dx * dx + dz * dz;
@@ -87,9 +109,10 @@ export function ponyTrussDeckHeight(
   const ap = PONY_TRUSS.approach;
   if (along < -ap || along > span + ap) return null;
   const across = (-(x - a[0]) * dz + (z - a[1]) * dx) / span;
-  if (Math.abs(across) > PONY_TRUSS.clearHalf) return null;
-  if (along < 0) return apronSurfaceY(y0, -along, heightAt(x, z));
-  if (along > span) return apronSurfaceY(y1, along - span, heightAt(x, z));
+  const clearHalf = PONY_TRUSS.clearHalf;
+  if (Math.abs(across) > clearHalf) return null;
+  if (along < 0) return sampleApronGrid(aprons.start, (along + ap) / ap, (across + clearHalf) / (2 * clearHalf));
+  if (along > span) return sampleApronGrid(aprons.end, (along - span) / ap, (across + clearHalf) / (2 * clearHalf));
   return y0 + (y1 - y0) * (along / span);
 }
 
@@ -144,7 +167,7 @@ export function registerRailContacts(
 
 /**
  * Build one merged vertex-coloured geometry for a narrow one-lane grey steel pony-truss bridge and its 3 m approach aprons.
- * Deck and apron surfaces stay on the exact piecewise surface used by ponyTrussDeckHeight().
+ * Returns both the geometry and the exact apron height grids shared with ponyTrussDeckHeight().
  */
 export function buildPonyTrussBridge(
   pts: readonly [number, number][],
@@ -152,7 +175,7 @@ export function buildPonyTrussBridge(
   y1: number,
   len: number,
   heightAt: (x: number, z: number) => number | null,
-): THREE.BufferGeometry {
+): { geometry: THREE.BufferGeometry; aprons: PonyTrussAprons } {
   const m = new Mesher();
   const a = pts[0], b = pts[pts.length - 1];
   const dx = b[0] - a[0], dz = b[1] - a[1];
@@ -196,13 +219,12 @@ export function buildPonyTrussBridge(
 
   // Paved 3 m approach aprons whose far edges match the bank height across the full lane width.
   const ap = PONY_TRUSS.approach;
+  const startGrid = new Float64Array((APRON_ALONG_STEPS + 1) * APRON_COLS);
+  const endGrid = new Float64Array((APRON_ALONG_STEPS + 1) * APRON_COLS);
   m.at(0, 0, 0);
-  const sampleApron = (s: number, across: number, endY: number, distPast: number): [number, number, number] => {
-    const wx = a[0] + ux * s - uz * across, wz = a[1] + uz * s + ux * across;
-    return [wx, apronSurfaceY(endY, distPast, heightAt(wx, wz)), wz];
-  };
   for (const end of [-1, 1] as const) {
     const endY = end < 0 ? y0 : y1;
+    const heights = end < 0 ? startGrid : endGrid;
     const grid: [number, number, number][][] = [];
     for (let i = 0; i <= APRON_ALONG_STEPS; i++) {
       const t = i / APRON_ALONG_STEPS;
@@ -211,13 +233,16 @@ export function buildPonyTrussBridge(
       const row: [number, number, number][] = [];
       for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
         const across = -clearHalf + (2 * clearHalf * j) / APRON_ACROSS_STEPS;
-        row.push(sampleApron(s, across, endY, distPast));
+        const wx = a[0] + ux * s - uz * across, wz = a[1] + uz * s + ux * across;
+        const wy = apronSurfaceY(endY, distPast, heightAt(wx, wz));
+        heights[i * APRON_COLS + j] = wy;
+        row.push([wx, wy, wz]);
       }
       grid.push(row);
     }
     for (let i = 0; i < APRON_ALONG_STEPS; i++) {
       for (let j = 0; j < APRON_ACROSS_STEPS; j++) {
-        // Counter-clockwise from above (+Y normal).
+        // Counter-clockwise from above (+Y normal); diagonal A(0,1)->C(1,0) matches sampleApronGrid().
         m.quad([grid[i][j + 1], grid[i + 1][j + 1], grid[i + 1][j], grid[i][j]], DECK_ASPHALT);
       }
       // Side skirts drop cleanly down into the bank beneath the outer apron edges.
@@ -296,5 +321,5 @@ export function buildPonyTrussBridge(
     }
   }
 
-  return m.geometry();
+  return { geometry: m.geometry(), aprons: { start: startGrid, end: endGrid } };
 }

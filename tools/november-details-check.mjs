@@ -261,19 +261,19 @@ for (const {a, b, side} of added) {
     }
     assert.ok(maxAboveDeck >= 2.0 && maxAboveDeck <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${maxAboveDeck.toFixed(2)} m)`);
     assert.ok(maxHalf < r.halfWidth && maxHalf >= PONY_TRUSS.half, `bridge ${id} is narrow one-lane (${(maxHalf * 2).toFixed(2)} m wide)`);
-    // Wheel support matches rendered asphalt across the whole span and both 3 m bank-blended approach aprons.
-    for (const s of [-ap + 0.05, -1.5, 0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05, span + 1.5, span + ap - 0.05]) {
-      for (const offset of [0, -(PONY_TRUSS.clearHalf - 0.01), PONY_TRUSS.clearHalf - 0.01]) {
+    // Wheel support matches rendered asphalt triangle-for-triangle across the span and off-grid apron points.
+    for (const s of [-ap + 0.05, -2.625, -1.875, -1.125, -0.375, 0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05, span + 0.375, span + 1.125, span + 1.875, span + 2.625, span + ap - 0.05]) {
+      for (const offset of [0, -0.52, 0.52, -1.56, 1.56, -(PONY_TRUSS.clearHalf - 0.01), PONY_TRUSS.clearHalf - 0.01]) {
         const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
         const y = net.deckHeight(x, z);
-        assert.ok(y !== null, `bridge ${id} supports asphalt at s=${s.toFixed(2)}, offset=${offset}`);
+        assert.ok(y !== null, `bridge ${id} supports asphalt at s=${s.toFixed(3)}, offset=${offset}`);
         ray.set(new THREE.Vector3(x, y + 0.5, z), down);
         const hit = ray.intersectObject(mesh)[0];
-        assert.ok(hit && Math.abs(hit.point.y - y) < 0.02, `bridge ${id} asphalt mesh matches deckHeight at s=${s.toFixed(2)}, offset=${offset} (diff=${hit ? Math.abs(hit.point.y - y).toFixed(4) : 'miss'})`);
+        assert.ok(hit && Math.abs(hit.point.y - y) < 1e-4, `bridge ${id} asphalt mesh matches deckHeight at s=${s.toFixed(3)}, offset=${offset} (diff=${hit ? Math.abs(hit.point.y - y).toFixed(6) : 'miss'})`);
       }
       for (const offset of [-(PONY_TRUSS.clearHalf + 0.05), PONY_TRUSS.clearHalf + 0.05, -2.75, 2.75]) {
         const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
-        assert.equal(net.deckHeight(x, z), null, `bridge ${id} gives no wheel support at s=${s.toFixed(2)}, offset=${offset}`);
+        assert.equal(net.deckHeight(x, z), null, `bridge ${id} gives no wheel support at s=${s.toFixed(3)}, offset=${offset}`);
       }
     }
     for (const s of [-ap - 0.05, -ap - 1.0, span + ap + 0.05, span + ap + 1.0]) {
@@ -332,23 +332,42 @@ for (const {a, b, side} of added) {
         const off = { x: mx - uz * offset, z: mz + ux * offset, heading };
         assert.equal(towing.allowsPose(off), false, `bridge ${id} ${mode} Towing rejects ${offset} m off-centre truck+trailer`);
       }
-      // Live coupled trailer rail contact: start clear near the rail, steer so the trailer contacts the rail, assert resolver corrects it and pair continues.
-      truck.place(mx - uz * 0.55, mz + ux * 0.55, heading);
+      // Live coupled trailer rail contact: place the whole rig inside [0, span] near the rail, then angle the trailer into the rail side.
+      const rigS = span - 3.5;
+      const rigX = ax + ux * rigS, rigZ = az + uz * rigS;
+      truck.place(rigX - uz * 0.55, rigZ + ux * 0.55, heading);
       assert.equal(towing.place(), true, `bridge ${id} ${mode} towing.place succeeds at clear 0.55 m offset`);
-      truck.vx = ux * 4; truck.vz = uz * 4; truck.speed = 4;
-      const beforeAlong = (truck.x - ax) * ux + (truck.z - az) * uz;
-      for (let step = 0; step < 30; step++) {
-        truck.update(1 / 120, { throttle: 0.15, steer: 0.25, handbrake: false, touch: false });
-        // Nudge trailer laterally toward the rail on step 5 to force real trailer-rail contact during towing.step().
-        if (step === 5) { towing.x -= uz * 0.15; towing.z += ux * 0.15; }
+      const startTruckAlong = (truck.x - ax) * ux + (truck.z - az) * uz;
+      const startTrailerAlong = (towing.x - ax) * ux + (towing.z - az) * uz;
+      assert.ok(startTrailerAlong > 2 && startTruckAlong < span - 1, `bridge ${id} ${mode} whole rig sits inside [0, span]`);
+      // Turn the trailer slightly outward with glancing velocity into the rail so hitch solve seats its side into the rail while the truck stays clear.
+      const preTruckLat = -(truck.x - ax) * uz + (truck.z - az) * ux;
+      towing.heading = heading - 0.05;
+      truck.vx = (ux * Math.cos(0.08) - uz * Math.sin(0.08)) * 4;
+      truck.vz = (uz * Math.cos(0.08) + ux * Math.sin(0.08)) * 4;
+      truck.speed = 4;
+      const preImpactCount = towing.impacts;
+      towing.step(1 / 120);
+      const postTruckLat = -(truck.x - ax) * uz + (truck.z - az) * ux;
+      assert.ok(towing.impacts > preImpactCount, `bridge ${id} ${mode} live trailer rail contact registers an impact`);
+      assert.ok(postTruckLat < preTruckLat - 0.05, `bridge ${id} ${mode} live trailer rail contact pushes the coupled rig inward (${(preTruckLat - postTruckLat).toFixed(3)} m)`);
+      for (const body of towing.bodies()) {
+        const lat = Math.abs(-(body.x - ax) * uz + (body.z - az) * ux);
+        assert.ok(lat + body.spec.envelope.radius <= PONY_TRUSS.railInner + 0.02, `bridge ${id} ${mode} contact step keeps body inside rail (${(lat + body.spec.envelope.radius).toFixed(3)})`);
+      }
+      // Continue driving forward while steering gently away from the rail: both truck and trailer advance cleanly inside the rails.
+      for (let step = 0; step < 90; step++) {
+        truck.update(1 / 120, { throttle: 0.4, steer: -0.15, handbrake: false, touch: false });
         towing.step(1 / 120);
         for (const body of towing.bodies()) {
           const lat = Math.abs(-(body.x - ax) * uz + (body.z - az) * ux);
-          assert.ok(lat + body.spec.envelope.radius <= PONY_TRUSS.railInner + 0.02, `bridge ${id} ${mode} coupled step ${step} keeps body inside rail (${(lat + body.spec.envelope.radius).toFixed(3)})`);
+          assert.ok(lat + body.spec.envelope.radius <= PONY_TRUSS.railInner + 0.02, `bridge ${id} ${mode} follow-up step ${step} keeps body inside rail`);
         }
       }
-      assert.ok(towing.impacts > 0 || ((truck.x - ax) * ux + (truck.z - az) * uz) > beforeAlong + 0.3, `bridge ${id} ${mode} coupled pair resolves trailer rail contact and continues`);
-      assert.ok(((truck.x - ax) * ux + (truck.z - az) * uz) > beforeAlong + 0.3, `bridge ${id} ${mode} coupled pair continues forward after rail contact`);
+      const endTruckAlong = (truck.x - ax) * ux + (truck.z - az) * uz;
+      const endTrailerAlong = (towing.x - ax) * ux + (towing.z - az) * uz;
+      assert.ok(endTruckAlong > startTruckAlong + 0.3, `bridge ${id} ${mode} truck continues forward after rail contact (${(endTruckAlong - startTruckAlong).toFixed(3)} m)`);
+      assert.ok(endTrailerAlong > startTrailerAlong + 0.3, `bridge ${id} ${mode} trailer continues forward after rail contact (${(endTrailerAlong - startTrailerAlong).toFixed(3)} m)`);
     }
   }
   // Other Mabou bridges keep the generic modern deck.
