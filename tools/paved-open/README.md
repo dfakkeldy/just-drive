@@ -262,6 +262,15 @@ by hand:
 4. Run `paved-open-land` and the other land rows. They must report the
    pre-refresh land.
 
+### Re-pin for the Port Hood and West Bay large buildings (22 Nov, grok-bots#1341)
+
+Large buildings in Port Hood (3 buildings, 11 blocks) and West Bay (2 buildings, 8 blocks) change those areas'
+`buildings.json` and manifest `buildings` key, which this receipt pins. Step 32 re-baked on the rehearsed land changes
+one Port Hood tile (`85_152.r8`, 36 m2 of lot under the new roof margin) and the two `index.json` files (their
+provenance). `hashes-refresh.json` keeps its other four areas byte for byte and replaces only the Port Hood and West
+Bay entries (files and inputs), recorded with `patch.record(work, baked, areas_=['porthood', 'westbay'])`. The land
+delta installs those three files with the buildings, props and colours in one install.
+
 ## Judique lots delta (Judique lots delta)
 
 The owner (17 Nov): the store lot is gravel, the other village lots asphalt; parking lots must read as lots.

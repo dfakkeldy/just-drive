@@ -821,7 +821,7 @@
     {
      "file": "areas/porthood/paved/85_152.r8",
      "bytes": 16384,
-     "sha256": "be8c0fa2b879fef318c299e7690303ce711e3b1c5c37fafb1096b8196a7fdeb7"
+     "sha256": "0b7db708bd93986777405086c3fe12cac7c5b8a53160492e03b8beeb75137442"
     },
     {
      "file": "areas/porthood/paved/86_151.r8",
@@ -951,7 +951,7 @@
     {
      "file": "areas/porthood/paved/index.json",
      "bytes": 1431,
-     "sha256": "22a487b55b21d1202da98a2dfb49a1d15713b4559edfc98903fad832cb14d3e3"
+     "sha256": "62d028a3c6e9ccd6bf3f22e7b5ad8cb08af41013e67432ed1cf153d8575d88fd"
     }
    ],
    "inputs": [
@@ -1109,12 +1109,12 @@
     },
     {
      "file": "areas/porthood/buildings.json",
-     "sha256": "bed7e514e9d39bae87302f53be9eddb0a2c02381d1f0098948bfd28fc8bc6f3e"
+     "sha256": "391683c3bc3a8cffbea6a8459d71929bf8231c056f2035c0c5ce0271dc3918c6"
     },
     {
      "file": "areas/porthood/manifest.json",
      "lattice": true,
-     "sha256": "897d218f4643756a7e47755cd28d46247f4ecd7355e58c45bcbca843d127f870"
+     "sha256": "79acf716e42f4e3fba9236f0f48e5224d6d79998912acc2a4898937a8100a76d"
     },
     {
      "file": "areas/porthood/roads.json",
@@ -1134,7 +1134,7 @@
      "sha256": "a8d27d0b1cc0d7690cfc1656c04d30887e914203a49def1c65eccb173e6a9ed9"
     }
    ],
-   "lots_m2": 15768,
+   "lots_m2": 15732,
    "apron_m2": 3432,
    "omitted": []
   },
@@ -1340,7 +1340,7 @@
     {
      "file": "areas/westbay/paved/index.json",
      "bytes": 1459,
-     "sha256": "20a2a0c935888f4968ada31cebcbe6f8535cbed26967c1e84aea29c3f27053a6"
+     "sha256": "4256332c6de735765c26249762ec4819d31ff77ce74dd936fa4398e7f04e8253"
     }
    ],
    "inputs": [
@@ -1494,12 +1494,12 @@
     },
     {
      "file": "areas/westbay/buildings.json",
-     "sha256": "f3c5f4024c514f350fca6febbcaf6d64cd635a6d2b5d64cdda2a849a79970bd3"
+     "sha256": "012c81332da6a8cf1c388931a146e17c33635f4fc1f1488c20bff75162fa833a"
     },
     {
      "file": "areas/westbay/manifest.json",
      "lattice": true,
-     "sha256": "979aa52b6173c2776db97d0bdf1140503bbf78471e44f59ce67adec5fbea3f58"
+     "sha256": "d7e838fdd7f38bd2e7538b752db51cfca664811d4436aaf1aabfdfedc69e5e53"
     },
     {
      "file": "areas/westbay/roads.json",

@@ -225,7 +225,9 @@ PORTHOOD = Area(
     observed_styles='pipeline/observed_styles_porthood.json',
     id='porthood', name='Port Hood', origin=MABOU.origin, mid_tiles=(8, 16, 14, 24),
     anchor=(613722, 5096896), fetch_box=(-61.615, 45.921, -61.439, 46.080),
-    wide_source='mabou', anchor_highway=19)
+    wide_source='mabou', anchor_highway=19,
+    # The school, the arena and one more hall (3 buildings, 11 blocks). On together with that land delta (grok-bots#1341).
+    big_buildings=True)
 
 POINTTUPPER = Area(
     observed_styles='pipeline/observed_styles_pointtupper.json',
@@ -249,6 +251,8 @@ WESTBAY = Area(
     fine_tile_limit=2200,  # twice Judique's land: 2,042 tiles on the first bake
     # The quarry and its entrance; the shore lane north of the village that Dan asked to see well.
     extra_fine=((630200, 5061400, 633200, 5066500), (643600, 5067500, 644500, 5068350)),
+    # Two large halls (2 buildings, 8 blocks). On together with that land delta (grok-bots#1341).
+    big_buildings=True,
     # The quarry and its entrance: another thread builds there. (The last line of an area stays a bare `)`:
     # tools/start-here-check.mjs reads each area up to it.)
     keep_roads=((630200, 5061400, 633200, 5066500),))
