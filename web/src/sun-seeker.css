@@ -43,7 +43,7 @@ body:has(#sunSeeker[open]) > :not(#c, #credit, #sunSeeker) { visibility: hidden;
 .sunSaveStatus:not(:empty) { display: block; margin-top: 5px; }
 .sunReadings small, .sunClock small { color: #c9d4de; }
 .sunNoon { margin: 7px 0 3px; }
-.sunSummary { display: none; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sunSummary { display: none; cursor: pointer; white-space: nowrap; }
 .sunReadings.compact:not([open]) { padding-block: 0; }
 .sunReadings.compact .sunSummary { display: list-item; line-height: 44px; }
 .sunReadings.compact[open] .sunSummary { margin-bottom: 6px; }

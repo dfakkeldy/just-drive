@@ -1597,7 +1597,7 @@ pauseScreen.id = 'pauseScreen';
 pauseScreen.hidden = true;
 pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>A room keeps going when you pause.</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button><button id="pauseEndShift" hidden>End shift</button></section>';
 if (SITE.brand === 'just') pauseScreen.querySelector('section')!.insertAdjacentHTML('beforeend', `<a id="pauseHome" href="${new URL(ABOUT_URL.just).origin}/">All places (front page)</a>`);
-const sunButton = Object.assign(document.createElement('button'), { id: 'pauseSun', type: 'button', textContent: 'Sun' });
+const sunButton = Object.assign(document.createElement('button'), { id: 'pauseSun', type: 'button', textContent: 'Sun Seeker' });
 if (!mailMode) pauseScreen.querySelector('#pauseSettings')!.after(sunButton);
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
