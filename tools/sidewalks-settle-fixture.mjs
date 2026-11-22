@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {measureOwnReady,ownReadyExpression,assertMeasuredLayer,POSES,DEFAULT_AREAS,SIDEWALK_AREAS,STARTUP_BUDGET_MS,budgetFor,evaluateBudget,assertWithinBudget} from './sidewalks-settle.mjs';
+import {measureOwnReady,ownReadyExpression,assertMeasuredLayer,POSES,DEFAULT_AREAS,SIDEWALK_AREAS,STARTUP_BUDGET_MS,budgetFor,evaluateBudget,assertWithinBudget,parseSelection,parseRuns} from './sidewalks-settle.mjs';
 let time=0,read=0;const commands=[];
 const c={async send(method,args){commands.push(method);if(method==='Page.navigate')return {result:{loaderId:'new'}};assert.equal(method,'Runtime.evaluate');assert.equal(args.expression,ownReadyExpression);return {result:{result:{value:++read===2}}};}};
 const result=await measureOwnReady(c,'http://example.invalid',{now:()=>time,pause:async ms=>{time+=ms;},loader:()=> 'new'});assert.equal(result.ms,500);assert.equal(result.polls,2);assert.deepEqual(commands,['Page.navigate','Runtime.evaluate','Runtime.evaluate']);
@@ -21,6 +21,11 @@ for(const area of DEFAULT_AREAS){
 }
 assert.throws(()=>budgetFor('unknown','low'),/no start-up budget/);
 assert.throws(()=>budgetFor('mabou','ultra'),/no start-up budget/);
+assert.deepEqual(parseSelection(undefined,DEFAULT_AREAS,'area'),DEFAULT_AREAS);
+assert.deepEqual(parseSelection('mabou, porthood',DEFAULT_AREAS,'area'),['mabou','porthood']);
+for(const empty of [',',', ,','   '])assert.throws(()=>parseSelection(empty,DEFAULT_AREAS,'area'),/empty area selection/);
+assert.equal(parseRuns(undefined),5);assert.equal(parseRuns('3'),3);
+for(const bad of ['0','-1','1.5','abc'])assert.throws(()=>parseRuns(bad),/invalid STARTUP_BUDGET_RUNS/);
 assert.equal(SIDEWALK_AREAS.has('mabou')&&SIDEWALK_AREAS.has('porthood')&&SIDEWALK_AREAS.has('pointtupper'),true);
 assert.equal(SIDEWALK_AREAS.has('westbay'),false);
 assert.ok(Object.keys(STARTUP_BUDGET_MS).length===DEFAULT_AREAS.length);

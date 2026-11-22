@@ -66,22 +66,35 @@ export async function measureOwnReady(c,url,{now=()=>performance.now(),pause=sle
  }throw Error('own ready timeout '+url);
 }
 
+export function parseSelection(raw,fallback,label){
+ if(raw===undefined||raw==='')return fallback;
+ const list=raw.split(',').map(v=>v.trim()).filter(Boolean);
+ assert.ok(list.length>0,`empty ${label} selection`);
+ return list;
+}
+export function parseRuns(raw,fallback=5){
+ if(raw===undefined||raw==='')return fallback;
+ const runs=Number(raw);
+ assert.ok(Number.isInteger(runs)&&runs>0,`invalid STARTUP_BUDGET_RUNS: ${raw}`);
+ return runs;
+}
+
 async function run(){
  const [out,origin]=process.argv.slice(2),port=process.env.CDP_PORT;
  const rawArea=process.env.SIDEWALK_MEASURE_AREA,rawQuality=process.env.SIDEWALK_MEASURE_QUALITY;
+ const areas=parseSelection(rawArea,DEFAULT_AREAS,'SIDEWALK_MEASURE_AREA');
+ const qualities=parseSelection(rawQuality,['high','low'],'SIDEWALK_MEASURE_QUALITY');
  if(!rawArea||rawArea.includes(',')||!rawQuality||rawQuality.includes(',')){
-  const areas=rawArea?rawArea.split(',').filter(Boolean):DEFAULT_AREAS;
-  const qualities=rawQuality?rawQuality.split(',').filter(Boolean):['high','low'];
   for(const area of areas)for(const quality of qualities){
    const child=`${out}/${area}-${quality}`;mkdirSync(child,{recursive:true});
    execFileSync(process.execPath,[fileURLToPath(import.meta.url),child,origin],{env:{...process.env,SIDEWALK_MEASURE_AREA:area,SIDEWALK_MEASURE_QUALITY:quality},stdio:'inherit'});
   }
   return;
  }
- const area=rawArea,quality=rawQuality,low=quality==='low';
+ const area=areas[0],quality=qualities[0],low=quality==='low';
  assert.ok(POSES[area],`unknown timing pose for area ${area}`);
  assert.ok(quality==='low'||quality==='high',`unknown quality ${quality}`);
- const runs=Number(process.env.STARTUP_BUDGET_RUNS??5),ceilingMs=budgetFor(area,quality),requireLayer=SIDEWALK_AREAS.has(area);
+ const runs=parseRuns(process.env.STARTUP_BUDGET_RUNS),ceilingMs=budgetFor(area,quality),requireLayer=SIDEWALK_AREAS.has(area);
  const report={head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),area,quality,low,ceilingMs,runs,method:'probe-free existing data-mmm-ready, CDP read only, fixed 250 ms polling, new loader identity checked, plain start-up budget',injectedScripts:0,responseInterceptors:0,pollMs:250,rounds:[],loads:[]};
  const save=()=>writeFileSync(`${out}/probe-free.json`,JSON.stringify(report,null,2)+'\n');let tab,c,currentLoader;
  const load=async(label,round,warmup,metadata)=>{

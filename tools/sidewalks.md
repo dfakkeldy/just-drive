@@ -29,16 +29,19 @@ queries and event-only height reads, and proves safe budget handling. Use `--rev
 while those branch-only commits are available. The normal mutation gate does not
 require unmerged history after a squash landing.
 
-`OUT=/path/to/task-output tools/sidewalks-fix-browser.sh` measures settlement with
+`OUT=/path/to/task-output tools/sidewalks-fix-browser.sh` measures start-up with
 no injected script, response interceptor, query timer, or game hook. The external
 CDP client reads the page's own `data-mmm-ready` signal every 250 ms and checks the
-new document's loader identity. Each desktop and LOW case uses seven adjacent
-main/main controls and seven main/current pairs, reversing block order on alternate
-rounds. Two warm-ups are recorded separately. Reports keep all paired deltas,
-their median and min/max spread, absolute load times, and process names/birthtimes.
-A current median within the same row's control spread (or faster) passes. Use
-`SIDEWALK_MEASURE_AREA=mabou` and `SIDEWALK_MEASURE_QUALITY=high` (or `low`) for one
-case. Without filters the runner checks all six town/quality cases.
+new document's loader identity. Each area and quality runs one warm-up load
+(recorded separately) followed by five measured loads against the written
+`STARTUP_BUDGET_MS` ceiling table in `tools/sidewalks-settle.mjs`. Raise a ceiling
+only with a PR that says what the player gets for the slower start. For Mabou,
+Port Hood and Point Tupper, the check also confirms outside the measured interval
+that the sidewalk layer is active (`draws > 0` and `triangles > 0`). Reports keep
+all load times, median, min/max, margin to ceiling, and process names/birthtimes.
+Use `SIDEWALK_MEASURE_AREA=mabou` and `SIDEWALK_MEASURE_QUALITY=high` (or `low`)
+for a subset (comma-separated lists allowed; empty selections are rejected).
+Without filters the runner checks all six areas on LOW and HIGH (12 cases).
 
 The earlier per-query profiler is retained as a diagnostic only: its clock calls
 consume part of Grass.populate's 1.5 ms budget and can delay patch completion,

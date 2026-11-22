@@ -34,9 +34,9 @@ function indexRoad(r: Road): IndexedRoad {
 }
 
 function withinIndexedRoad(x: number, z: number, ir: IndexedRoad, limit: number): boolean {
-  if (x < ir.x0 - limit || x > ir.x1 + limit || z < ir.z0 - limit || z > ir.z1 + limit) return false;
-  const pts = ir.r.pts, chunks = ir.chunks;
   const eps = limit + 1e-6, epsSq = eps * eps;
+  if (x < ir.x0 - eps || x > ir.x1 + eps || z < ir.z0 - eps || z > ir.z1 + eps) return false;
+  const pts = ir.r.pts, chunks = ir.chunks;
   for (let o = 0; o < chunks.length; o += 6) {
     if (x < chunks[o] - eps || x > chunks[o + 2] + eps || z < chunks[o + 1] - eps || z > chunks[o + 3] + eps) continue;
     const k0 = chunks[o + 4], k1 = chunks[o + 5];
