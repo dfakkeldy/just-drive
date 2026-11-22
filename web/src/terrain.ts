@@ -12,6 +12,7 @@ import { updateCoastView } from './coast-view';
 import { coastRecessUniforms, quarryGypsumFill, QUARRY_GRAVEL_FILL, RECESSES, type RockSite } from './coast-site';
 import { BROOK_SAMPLE, brookBlend, brookDistance, brookField, Streams } from './streams';
 import { GroundCover, type GroundMeta, clearsGroundTrees } from './ground-cover';
+import type { GroundRay } from './sun-seeker-rules';
 
 export interface Manifest {
   area?: { id: string; name: string };
@@ -386,6 +387,31 @@ export class Terrain {
   readonly night: NightShading | null = null;
   /** Desktop only: the land's shader reads the sun's shadow map (the uniforms come in with `shared`). */
   readonly shadows: boolean = false;
+  private previewShadows: Record<string, THREE.IUniform> | null = null;
+
+  /** Daylight preview on a night visit. The terrain keeps its ordinary shader outside the preview. */
+  setPreviewShadows(uniforms: Record<string, THREE.IUniform> | null): void {
+    const previous = this.previewShadows;
+    if (previous === uniforms) return;
+    this.previewShadows = uniforms;
+    for (const tile of this.tiles.values()) {
+      if (!tile.mesh) continue;
+      const material = tile.mesh.material as THREE.ShaderMaterial;
+      if (uniforms) this.applyPreviewShadows(material, uniforms);
+      else if (previous) {
+        delete material.defines.SHADOWS;
+        for (const key of Object.keys(previous)) delete material.uniforms[key];
+        material.needsUpdate = true;
+      }
+    }
+  }
+
+  private applyPreviewShadows(material: THREE.ShaderMaterial, uniforms: Record<string, THREE.IUniform>): void {
+    material.defines.SHADOWS = 1;
+    Object.assign(material.uniforms, uniforms);
+    material.needsUpdate = true;
+  }
+
   /** The early ground class read, if main.ts started one. */
   private readonly groundEarly: EarlyRead<ArrayBuffer> | null;
 
@@ -935,6 +961,7 @@ export class Terrain {
     this.paved?.applyGround(mat);
     this.sidewalks?.tileReady?.(t.level,t.i,t.j);
     this.night?.applyGround(mat);
+    if (this.previewShadows) this.applyPreviewShadows(mat, this.previewShadows);
     this.propertyOverlay?.applyGround(mat);
     this.fleetGroundChanged?.(t.x0, t.z0, t.size);
   }
@@ -952,13 +979,13 @@ export class Terrain {
   }
 
   /** The finest tile in memory that holds a world position. */
-  private find(x: number, z: number): Tile | null {
+  private find(x: number, z: number, touch = true): Tile | null {
     const m = this.manifest;
     const e = x + m.village[0] - m.origin[0], s = z - (m.village[1] - m.origin[1]);
     for (let level = this.maxLevel; level >= 0; level--) {
       const size = m.size / 2 ** level;
       const t = this.tiles.get(`${level}/${Math.floor(e / size)}_${Math.floor(s / size)}`);
-      if (t?.ready && t.ground) { this.use(t); return t; }
+      if (t?.ready && t.ground) { if (touch) this.use(t); return t; }
     }
     return null;
   }
@@ -967,6 +994,65 @@ export class Terrain {
   hasFinest(x: number, z: number): boolean {
     const m = this.manifest, size = m.size / 2 ** this.maxLevel;
     return this.exists.has(`${this.maxLevel}/${Math.floor((x + m.village[0] - m.origin[0]) / size)}_${Math.floor((z - (m.village[1] - m.origin[1])) / size)}`);
+  }
+
+  /** Bare ground for sight lines, without roofs, canopy or raised decks. */
+  bareHeightAt(x: number, z: number): number | null {
+    const tile = this.find(x, z, false);
+    return tile ? this.bilinearHeight(tile, x, z) : null;
+  }
+
+  /** Read a fixed set of survey tiles in every direction. Camera turns and the render LRU cannot change it. */
+  async bareGroundRays(x: number, z: number, range: number): Promise<GroundRay> {
+    const m = this.manifest;
+    const west = m.origin[0] - m.village[0], north = m.village[1] - m.origin[1];
+    const pages = new Map<string, Uint8ClampedArray>();
+    const needed = new Set<string>();
+    const bands = [[256, 256], [1024, 1024], [range, 2048]].map(([reach, tileSize]) => {
+      const level = Math.max(0, Math.min(this.maxLevel, Math.floor(Math.log2(m.size / tileSize))));
+      const size = m.size / 2 ** level;
+      const tiles = new Map<string, { key: string; size: number; i: number; j: number }>();
+      for (let j = Math.floor((z - reach - north) / size); j <= Math.floor((z + reach - north) / size); j++) {
+        for (let i = Math.floor((x - reach - west) / size); i <= Math.floor((x + reach - west) / size); i++) {
+          for (let l = level, ti = i, tj = j, span = size; l >= 0; l--, ti = Math.floor(ti / 2), tj = Math.floor(tj / 2), span *= 2) {
+            const key = `${l}/${ti}_${tj}`;
+            if (!this.exists.has(key)) continue;
+            needed.add(key);
+            tiles.set(`${i}_${j}`, { key, size: span, i: ti, j: tj });
+            break;
+          }
+        }
+      }
+      return { reach, size, tiles };
+    });
+    const queue = needed.values();
+    await Promise.all(Array.from({ length: MAX_LOADS }, async () => {
+      for (const key of queue) pages.set(key, await readPng(this.base, `${key}.png`));
+    }));
+    return () => {
+      let lastBand = -1, lastI = NaN, lastJ = NaN, tileSize = 0, x0 = 0, z0 = 0;
+      let pixels: Uint8ClampedArray | undefined;
+      return (x, z, distance) => {
+        const index = distance <= bands[0].reach ? 0 : distance <= bands[1].reach ? 1 : 2;
+        const { size, tiles } = bands[index];
+        const e = x - west, s = z - north;
+        const i = Math.floor(e / size), j = Math.floor(s / size);
+        if (index !== lastBand || i !== lastI || j !== lastJ) {
+          lastBand = index; lastI = i; lastJ = j;
+          const tile = tiles.get(`${i}_${j}`);
+          pixels = tile && pages.get(tile.key);
+          if (tile) { tileSize = tile.size; x0 = tile.i * tileSize; z0 = tile.j * tileSize; }
+        }
+        if (!pixels) return null;
+        const u = T * (e - x0) / tileSize, v = T * (s - z0) / tileSize;
+        const a = Math.min(T - 1, Math.floor(u)), b = Math.min(T - 1, Math.floor(v));
+        const dx = u - a, dz = v - b, k = (b * S + a) * 4;
+        const top = (pixels[k] * 256 + pixels[k + 1]) * (1 - dx) + (pixels[k + 4] * 256 + pixels[k + 5]) * dx;
+        const q = k + S * 4;
+        const bottom = (pixels[q] * 256 + pixels[q + 1]) * (1 - dx) + (pixels[q + 4] * 256 + pixels[q + 5]) * dx;
+        return (top * (1 - dz) + bottom * dz) * m.height.scale + m.height.offset;
+      };
+    };
   }
 
   /** Ground height in metres at a world position, from the finest tile in memory. */
@@ -1014,15 +1100,19 @@ export class Terrain {
     if (this.drawnContact) { const drawn = this.drawnTile(x, z); if (drawn) return this.triangleHeight(drawn, x, z); }
     const t = this.find(x,z);
     if (!t) return null;
-    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
-    const a = Math.min(Math.floor(fa), T - 1), b = Math.min(Math.floor(fb), T - 1);
-    const u = fa - a, v = fb - b, g = t.ground!;
-    let ground=(g[b * S + a] * (1 - u) + g[b * S + a + 1] * u) * (1 - v) + (g[(b + 1) * S + a] * (1 - u) + g[(b + 1) * S + a + 1] * u) * v;
+    let ground = this.bilinearHeight(t, x, z);
     if (this.groundContact && this.wantsDrawnContact(x,z)) {
       const drawn=this.drawnTile(x,z);if(drawn)ground+=(this.triangleHeight(drawn,x,z)-ground)*this.wantsDrawnContact(x,z);
     }
     return ground;
   };
+
+  private bilinearHeight(t: Tile, x: number, z: number): number {
+    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
+    const a = Math.min(Math.floor(fa), T - 1), b = Math.min(Math.floor(fb), T - 1);
+    const u = fa - a, v = fb - b, g = t.ground!;
+    return (g[b * S + a] * (1 - u) + g[b * S + a + 1] * u) * (1 - v) + (g[(b + 1) * S + a] * (1 - u) + g[(b + 1) * S + a + 1] * u) * v;
+  }
 
   /** Indexed primary terrain coverage, including off-screen tiles and partial parents. */
   walkSelectedLevelAt(x:number,z:number):number|null {

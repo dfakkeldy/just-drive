@@ -1,9 +1,10 @@
 import type * as THREE from 'three';
+import type { Building } from './buildings';
 import type { Pushable } from './parked';
 
 /**
  * A place built by hand over a surveyed site: the church, Judique village, Port Hawkesbury, Mabou main street, the home,
- * the porch house and Maryville. main.ts keeps them in one list: it adds each to the scene, updates it before the camera,
+ * the porch house, Maryville and the house on D.R.'s Lane. main.ts keeps them in one list: it adds each to the scene, updates it before the camera,
  * exposes it for the dev tools and waits for it before a picture, the same way for all. Each site still clears its own land.
  */
 export interface HandBuiltPlace {
@@ -57,4 +58,11 @@ export function placeSlots<R extends Rows>(rows: R, built: BuiltPlaces<R>): { [K
     const made = (built as Record<string, object | null>)[name];
     return [name, { dev: made, place: made && (row.slot ? row.slot(made) : made as HandBuiltPlace) }];
   })) as { [K in keyof R]: PlaceSlot };
+}
+
+/** The list to draw: all the surveyed boxes but those a hand-built house stands in for, with their wings. Every other
+ *  reader (mail, houses, complaints) keeps the full list. */
+export function drawnWithout(list: Building[], ...boxes: (Building | null)[]): Building[] {
+  const ids = new Set(boxes.filter((b): b is Building => b !== null).map((b) => b.id));
+  return ids.size ? list.filter((b) => !ids.has(b.buildingId ?? b.id)) : list;
 }
