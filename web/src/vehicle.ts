@@ -578,7 +578,7 @@ export class Vehicle {
     a -= G * Math.sin(slopeF);
     const measured = slideAngle(vf, vl), m = d.step(spec, input, g, measured, dt);
     const aero = this.towLoad && this.spec.mass ? this.spec.aeroDrag * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag;
-    const drag = surf.roll * G + aero * v * v + (surf === SURFACES.brush ? .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + m.scrub + wet * PUDDLE_DRAG * v;
+    const drag = surf.roll * G + aero * v * v + (surf === SURFACES.brush ? .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + wet * PUDDLE_DRAG * v + m.scrub;
     v = Math.max(0, v + (a - drag) * dt);
     // The path turns; the nose leads it by the new slide angle.
     this.heading = this.heading - measured + m.pathRate * dt + m.angle;
