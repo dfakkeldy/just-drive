@@ -1,7 +1,9 @@
 const MESSAGE = 'A new version of the game is ready. Start again to get it.';
-const PENDING_TARGET = 'mmm.update.target', ATTEMPT_PREFIX = 'mmm.update.tried.';
+const PENDING_TARGET = 'mmm.update.target', ATTEMPT_PREFIX = 'mmm.update.tried.', RETRY_PREFIX = 'mmm.update.retried.';
 const validKey = (key: unknown): key is string => typeof key === 'string' && /^[a-f0-9]{64}$/.test(key);
 let updateTarget: string | undefined;
+// The offline worker says it has saved this build, so the next start can serve it in time.
+let workerReady: string | undefined;
 let stopVersionWatch = () => {};
 let versionURL = '/version.json';
 
@@ -30,18 +32,68 @@ function reloadToBuild(target: string): boolean {
   } catch { return false; }
 }
 
+/** One more press, never automatic: a slow worker that finished saving the build after the first reload. */
+function canRetry(target: string): boolean {
+  try { return workerReady === target && sessionStorage.getItem(RETRY_PREFIX + target) !== '1'; }
+  catch { return false; }
+}
+
+function retryToBuild(target: string): boolean {
+  try {
+    if (!validKey(target) || !canRetry(target)) return false;
+    const from = document.querySelector<HTMLMetaElement>('meta[name="mmm-page"]')?.content ?? '';
+    sessionStorage.setItem(PENDING_TARGET, JSON.stringify({ from, target }));
+    sessionStorage.setItem(RETRY_PREFIX + target, '1');
+    location.reload();
+    return true;
+  } catch { return false; }
+}
+
+/** The live build's key, or nothing when the version file cannot be read (offline, a portal, an old browser). */
+async function liveTarget(): Promise<string | undefined> {
+  try {
+    const endpoint = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.href.includes('manifest-just') ? '/version-just.json' : versionURL;
+    const response = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+    if (!response.ok) return undefined;
+    const version = await response.json() as { schema?: number; pageKey?: string };
+    return version.schema === 1 && validKey(version.pageKey) ? version.pageKey : undefined;
+  } catch { return undefined; }
+}
+
+/** Without a target, the button still starts again once per page in this tab, as it did before targets. */
+function plainReload(): boolean {
+  try {
+    const key = ATTEMPT_PREFIX + 'untargeted:' + (document.querySelector<HTMLMetaElement>('meta[name="mmm-page"]')?.content ?? '');
+    if (sessionStorage.getItem(key) === '1') return false;
+    sessionStorage.setItem(key, '1');
+    location.reload();
+    return true;
+  } catch { return false; }
+}
+
 function markReloadUnavailable(button: HTMLButtonElement, text: HTMLElement | null): void {
   if (text) text.textContent = 'This tab could not finish the update. You can keep playing or use your browser’s reload control.';
   button.disabled = true; button.textContent = 'Use browser reload to update';
 }
 
+function markReloadReady(button: HTMLButtonElement, text: HTMLElement | null): void {
+  if (text) text.textContent = MESSAGE;
+  button.disabled = false; button.textContent = 'Start again';
+}
+
+/** True when the button can no longer navigate to the target. */
+const reloadSpent = (target: string | undefined): boolean => !!target && alreadyTried(target) && !canRetry(target);
+
 /** A failed/slow worker navigation must never turn the old saved title into a reload loop. */
-export function showGameUpdate(target?: string): void {
-  if (validKey(target)) updateTarget = target;
+export function showGameUpdate(target?: string, fromWorker = false): void {
+  if (validKey(target)) { updateTarget = target; if (fromWorker) workerReady = target; }
   stopVersionWatch();
   if (document.getElementById('offlineUpdate')) {
     const button = document.getElementById('offlineReload') as HTMLButtonElement | null;
-    if (button && updateTarget && alreadyTried(updateTarget)) markReloadUnavailable(button, document.getElementById('offlineUpdateText'));
+    if (button && updateTarget && alreadyTried(updateTarget)) {
+      if (reloadSpent(updateTarget)) markReloadUnavailable(button, document.getElementById('offlineUpdateText'));
+      else markReloadReady(button, document.getElementById('offlineUpdateText'));
+    }
     return;
   }
   document.getElementById('boot')?.remove();
@@ -59,33 +111,13 @@ body.tcOn #offlineUpdate{left:calc(25% + 4px);right:calc(70px + var(--test-safe-
   const button = Object.assign(document.createElement('button'), { type:'button', textContent:'Start again', id:'offlineReload' });
   button.style.cssText = 'min-width:100px;max-width:100%;min-height:44px;padding:8px 12px;background:#d0632e;color:white;border:0;border-radius:6px;font:inherit;cursor:pointer';
   const unavailable = () => markReloadUnavailable(button, text);
-  if (updateTarget && alreadyTried(updateTarget)) unavailable();
+  if (reloadSpent(updateTarget)) unavailable();
   button.addEventListener('click', async () => {
     button.disabled = true;
-    try {
-      // Worker messages can precede the page's version check and do not carry a target key.
-      if (!updateTarget) {
-        const endpoint = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.href.includes('manifest-just') ? '/version-just.json' : versionURL;
-        const response = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
-        if (!response.ok) { button.disabled = false; return; }
-        const version = await response.json() as { schema?: number; pageKey?: string };
-        if (version.schema !== 1 || !validKey(version.pageKey)) { button.disabled = false; return; }
-        updateTarget = version.pageKey;
-      }
-      if (!reloadToBuild(updateTarget)) unavailable();
-    } catch {
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        const from = document.querySelector<HTMLMetaElement>('meta[name="mmm-page"]')?.content ?? '';
-        const key = ATTEMPT_PREFIX + 'offline:' + from;
-        try {
-          if (sessionStorage.getItem(key) === '1') { unavailable(); return; }
-          sessionStorage.setItem(key, '1');
-          location.reload();
-          return;
-        } catch { unavailable(); return; }
-      }
-      button.disabled = false;
-    } // A failed manual check stays quiet too.
+    // Worker messages can precede the page's version check and do not carry a target key.
+    const target = updateTarget ?? await liveTarget();
+    if (target) updateTarget = target;
+    if (target ? !reloadToBuild(target) && !retryToBuild(target) : !plainReload()) unavailable();
   });
   notice.append(text, button); document.body.appendChild(notice);
 }
@@ -95,7 +127,10 @@ export function bindOfflineVersion(area='mabou'): string {
   if (area!=='mabou' || !isSecureContext || !('serviceWorker' in navigator)) return '';
   const pageKey = document.querySelector<HTMLMetaElement>('meta[name="mmm-page"]')?.content ?? '';
   navigator.serviceWorker.addEventListener('message', event => {
-    if (event.data?.type === 'version-unavailable' || event.data?.type === 'update-ready') showGameUpdate(event.data?.pageKey);
+    const type = event.data?.type, target = event.data?.pageKey;
+    // This page already runs the build the worker saved: nothing to start again for.
+    if (type === 'update-ready' && validKey(target) && target === pageKey) return;
+    if (type === 'version-unavailable' || type === 'update-ready') showGameUpdate(target, type === 'update-ready');
   });
   if (!pageKey) return '';
   const network = window.fetch.bind(window);

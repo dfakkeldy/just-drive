@@ -378,6 +378,19 @@ try {
         console.error('FALLBACK TIMEOUT', { variant, brand, mode, manual, host, before, navCount: t.navigationCount(), appFaults: appFaults.filter(f => f.host === host), diag });
       }
       assert.ok(fallback, 'fallback A shows notice');
+      if (mode === 'slow') {
+        // The worker finishes saving B after the deadline and says so: one more press takes B, never by itself.
+        await t.until(`document.getElementById('offlineReload')?.disabled===false`);
+        assert.equal(t.navigationCount(), before + 1, 'worker ready does not reload by itself');
+        assert.equal(await t.read(`document.querySelector('meta[name="mmm-page"]').content`), publishers[variant][brand].A.version.pageKey, 'worker returned saved A first');
+        await t.read(`document.getElementById('offlineReload').click()`);
+        const B = publishers[variant][brand].B.version.pageKey;
+        await t.until(`document.querySelector('meta[name="mmm-page"]')?.content===${JSON.stringify(B)}&&!document.getElementById('boot')`);
+        assert.equal(t.navigationCount(), before + 2);
+        assert.equal(await t.read('location.href'), base + address);
+        assert.equal(await t.read(`!!document.getElementById('offlineUpdate')`), false, 'B shows no notice');
+        return { case: `worker slow B app, ${manual ? 'button' : 'title'} reload once, then one press after the worker saves B`, brand, variant, result: 'PASS', reloads: t.navigationCount() - before };
+      }
       await sleep(3000);
       assert.ok(t.navigationCount() <= before + 1, 'at most one reload per target after worker fallback');
       assert.equal(await t.read(`document.querySelector('meta[name="mmm-page"]').content`), publishers[variant][brand].A.version.pageKey, 'worker returned saved A');

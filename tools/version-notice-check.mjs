@@ -37,7 +37,7 @@ function harness(code = source, storage = new Map(), own = { pageKey: 'a'.repeat
     module, exports: module.exports, document, sessionStorage, Date: { now: () => clock },
     location: {
       reload: () => {
-        if (code === source) {
+        if (code === source && storage.get('mmm.update.tried.untargeted:' + own.pageKey) !== '1') {
           assert.equal(storage.get('mmm.update.tried.' + next.pageKey), '1', 'mark before reload');
           assert.equal(JSON.parse(storage.get('mmm.update.target')).target, next.pageKey, 'target before reload');
         }
@@ -93,6 +93,34 @@ assert.notEqual(noReloadGuard, source, 'no-reload-guard mutant applies');
 await fallbackRegression();
 await assert.rejects(() => fallbackRegression(noReloadGuard), assert.AssertionError);
 console.log('PASS no-reload-guard mutant rejected: worker fallback boots repeat a target reload');
+
+// A slow worker serves saved A, then finishes saving B and says update-ready for B: one more press, never automatic.
+async function workerRetry(code = source) {
+  const storage = new Map(), first = harness(code, storage);
+  first.start(false); await flush(); assert.equal(first.reloads(), 1);
+  const fallback = harness(code, storage);
+  fallback.start(false); await flush();
+  assert.equal(fallback.elements.get('offlineReload').disabled, true, 'fallback locks first');
+  fallback.module.showGameUpdate(next.pageKey, true);
+  assert.equal(fallback.reloads(), 0, 'worker ready never reloads by itself');
+  assert.equal(fallback.elements.get('offlineReload').disabled, false, 'worker ready unlocks one press');
+  await fallback.elements.get('offlineReload').press(); assert.equal(fallback.reloads(), 1);
+  assert.equal(storage.get('mmm.update.retried.' + next.pageKey), '1', 'mark retry before reload');
+  const again = harness(code, storage);
+  again.start(false); await flush();
+  again.module.showGameUpdate(next.pageKey, true);
+  assert.equal(again.elements.get('offlineReload').disabled, true, 'second fallback stays locked');
+  await again.elements.get('offlineReload').press(); assert.equal(again.reloads(), 0);
+  const page = harness(code, storage);
+  page.start(false); await flush();
+  page.module.showGameUpdate(next.pageKey, false);
+  assert.equal(page.elements.get('offlineReload').disabled, true, 'a page check alone cannot unlock');
+}
+const noRetryGuard = source.replace("workerReady === target && sessionStorage.getItem(RETRY_PREFIX + target) !== '1'", 'workerReady === target');
+assert.notEqual(noRetryGuard, source, 'no-retry-guard mutant applies');
+await workerRetry();
+await assert.rejects(() => workerRetry(noRetryGuard), assert.AssertionError);
+console.log('PASS worker-ready retry: one press after a slow worker saves the build; no-retry-guard mutant rejected');
 
 async function activeSafety(code = source) {
   const h = harness(code); h.allow(false); h.start(false); await flush();
@@ -163,12 +191,24 @@ await worker.elements.get('offlineReload').press(); assert.equal(worker.reloads(
   module.exports.showGameUpdate();
   await elements.get('offlineReload').press();
   assert.equal(reloads, 1, 'offline worker-only notice reloads once');
-  assert.equal(storage.get('mmm.update.tried.offline:' + own.pageKey), '1');
+  assert.equal(storage.get('mmm.update.tried.untargeted:' + own.pageKey), '1');
   // Second click in same tab/fallback locks instead of looping.
   elements.get('offlineReload').disabled = false;
   await elements.get('offlineReload').press();
   assert.equal(reloads, 1, 'offline worker-only notice refuses second reload');
   assert.equal(elements.get('offlineReload').disabled, true);
+}
+
+{
+  // Online but the version file fails (a portal, a server error): the worker notice still starts again once.
+  const storage = new Map(), failed = () => Promise.resolve(new Response('portal', { status: 503 }));
+  const first = harness(source, storage); first.respond(failed);
+  first.module.showGameUpdate(); await first.elements.get('offlineReload').press();
+  assert.equal(first.reloads(), 1, 'untargeted notice reloads once when the version file fails');
+  const again = harness(source, storage); again.respond(failed);
+  again.module.showGameUpdate(); await again.elements.get('offlineReload').press();
+  assert.equal(again.reloads(), 0, 'untargeted reload does not repeat on the same page');
+  assert.equal(again.elements.get('offlineReload').disabled, true);
 }
 
 const late = harness();
@@ -191,12 +231,19 @@ error.start(false); await flush(); assert.equal(error.elements.size, 0); assert.
 function settingsProbe(main) {
   const match = main.match(/watchGameVersion\(SITE\.brand === 'just', (.+)\);/);
   assert.ok(match);
-  let open = false;
-  const doc = { getElementById: id => id === 'title' ? { hidden: false } : id === 'settings' ? { classList: { contains: () => open } } : null };
+  let open = false, legal = true, typing = false;
+  const doc = {
+    getElementById: id => id === 'title' ? { hidden: false } : id === 'settings' ? { classList: { contains: () => open } } : id === 'titleLegal' ? { hidden: legal } : null,
+    get activeElement() { return { matches: () => typing }; }
+  };
   const may = vm.runInNewContext(match[1], { hasStarted: false, document: doc });
   assert.equal(may(), true);
   open = true;
   assert.equal(may(), false, 'open settings excludes automatic refresh');
+  open = false; legal = false;
+  assert.equal(may(), false, 'open credits exclude automatic refresh');
+  legal = true; typing = true;
+  assert.equal(may(), false, 'a focused field excludes automatic refresh');
 }
 const mainSource = readFileSync('web/src/main.ts', 'utf8');
 settingsProbe(mainSource);
