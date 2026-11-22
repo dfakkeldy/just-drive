@@ -12,6 +12,7 @@ import { updateCoastView } from './coast-view';
 import { coastRecessUniforms, quarryGypsumFill, QUARRY_GRAVEL_FILL, RECESSES, type RockSite } from './coast-site';
 import { BROOK_SAMPLE, brookBlend, brookDistance, brookField, Streams } from './streams';
 import { GroundCover, type GroundMeta, clearsGroundTrees } from './ground-cover';
+import type { GroundRay } from './sun-seeker-rules';
 
 export interface Manifest {
   area?: { id: string; name: string };
@@ -47,6 +48,7 @@ export interface Surface {
   bridge: boolean;
   washboard: boolean;   // a road shaken into ridges
   gravel?: boolean;     // a gravel driveway or pad: a track (4) carrying the gravel bit; drives as gravel. Absent otherwise
+  rough?: boolean;      // a rough stretch of gravel or track (rough-roads.ts: bit 128): more and deeper holes, puddles. Absent otherwise
   brook: number;        // metres from the edge of a brook's water: negative in the water; 99 when none is near
   /** True only when an accepted hand-built deck supplies the driving surface. */
   deck?: boolean;
@@ -60,9 +62,15 @@ const T = 256;          // intervals per tile; a tile has 257 samples per side
 const S = T + 1;
 const MAX_LOADS = 6;
 const BURST_DISTANCE = 150;
-// Real builds measured ~8 ms median (p90 9–11 ms): allow six median builds behind the title or while paused.
+// The two budgets are wall-time caps: a paused or burst update builds tiles until it has used its budget (always at least
+// one). They were set as six and three builds of about 8 ms (p90 9-11 ms), measured before the normal-map change (#81)
+// made a build cheaper. In a driving capture of Nov 2026 (Apple M1 Pro, two runs per view), no whole terrain.update
+// (builds included) took longer than 7.1 ms with desktop detail or 12.5 ms with phone detail. With desktop detail that
+// is below the old 8 ms, so each cap now holds more builds there. The dev server keeps the last and the longest single
+// build in terrain.lastBuildMs and terrain.maxBuildMs, and counts timed builds in terrain.buildCount.
+// Behind the title or while paused.
 const PAUSED_BUILD_BUDGET_MS = 48;
-// At the measured ~8 ms median, allow three builds after a jump without stretching the coarse-land wait.
+// After a jump: short, so the coarse-land wait does not stretch.
 const BURST_BUILD_BUDGET_MS = 24;
 // A real-paced 1.2 km return needs about 86 spare tiles.
 // Measured wanted land + 96 spares stays below the former 500-record bound.
@@ -128,7 +136,12 @@ export interface SiteSurface {
   gravelDrive?: boolean;
   /** Reclassify a mapped gravel sample without moving the centre line or changing its width. */
   paveGravel?: boolean;
+  /** Mark a mapped gravel road or track sample rough (bit 128). Its distance, width and kind stay as baked. */
+  rough?: boolean;
 }
+
+/** The rough bit on a road sample's flag byte. Only gravel roads (3) and tracks (4) without a high bit carry it. */
+export const ROUGH_BIT = 128;
 
 /**
  * A hand-built place that changes the ground under it: graded pads, and surfaces painted through the road field
@@ -168,10 +181,17 @@ export interface Site {
   groundHeight?(x:number,z:number):number|null;
   /** Driving metadata is applied only when this same deck passes the body-height gate. */
   deckDriving?: {kind:number;halfWidth:number} | ((x:number,z:number) => {kind:number;halfWidth:number});
+  /** The site only repaints flags on roads that already exist. Its box is not a clearing, so lots, props and animals may use it. */
+  roadPaint?: boolean;
   /** True water elevation for a mapped inland pool; null outside its polygon. */
   waterLevel?(x:number,z:number):number|null;
   /** Optional exact deck on top of the land. The callback samples land only, without any decks. */
   deckHeight?(x: number, z: number, ground: (x: number, z: number) => number | null, ceiling?: number): number | null;
+}
+
+/** Site boxes that placement must avoid. Sites that only repaint existing roads are left out. */
+export function placeBoxes(sites: readonly Site[]): Site['box'][] {
+  return sites.filter(s => !s.roadPaint).map(s => s.box);
 }
 
 /** Apply a runtime field sample. Kind 11 only paints; it cannot change a mapped road's driving samples. */
@@ -179,6 +199,15 @@ export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:SiteSurface,z
   if(f.coverage!==undefined)road[k+3]=Math.round(Math.max(0,Math.min(1,f.coverage))*255);
   if(f.kind===11){road[k+3]=Math.max(0,Math.min(255,Math.round((2+f.half-f.dist)*255/4)));return;}
   const flags=road[k+2];
+  if (f.rough) {
+    const kind = flags & 15;
+    const baked = Math.abs(road[k] - zero) * dScale;
+    // The baked distance must match the stretch's own, so a nearby gravel road or lane keeps its plain surface. The bit
+    // reaches 2.6 m past the edge: the drawn shoulder (1.1 m) plus half a 2 m texel's diagonal, as the shader takes the
+    // nearest sample's flags. Beyond the edge the wheels read grass, so only the paint uses it there.
+    if ((kind === 3 || kind === 4) && (flags & 192) === 0 && baked < road[k + 1] * wScale + 2.6 && Math.abs(baked - f.dist) < 1) road[k + 2] = flags | ROUGH_BIT;
+    return;
+  }
   if (f.paveGravel) {
     if (flags === 3) road[k+2] = 2;
     return;
@@ -320,6 +349,12 @@ export class Terrain {
   /** The budget used by the last update, including the update that ended a burst. */
   private lastBuildMode: 'driving' | 'paused' | 'burst' = 'driving';
   get buildMode() { return this.lastBuildMode; }
+  /** Dev server only: the last and the longest single tile build, in milliseconds (buildWaiting), and how many builds
+   *  were timed. A driving update builds at most one tile, so a reader that sees buildCount go up by one reads that build
+   *  in lastBuildMs once. Never set in production. */
+  declare lastBuildMs?: number;
+  declare maxBuildMs?: number;
+  declare buildCount?: number;
   private readyCount = 0;
   private wantedCount = 0;
   private lastEvict = 0;
@@ -352,6 +387,31 @@ export class Terrain {
   readonly night: NightShading | null = null;
   /** Desktop only: the land's shader reads the sun's shadow map (the uniforms come in with `shared`). */
   readonly shadows: boolean = false;
+  private previewShadows: Record<string, THREE.IUniform> | null = null;
+
+  /** Daylight preview on a night visit. The terrain keeps its ordinary shader outside the preview. */
+  setPreviewShadows(uniforms: Record<string, THREE.IUniform> | null): void {
+    const previous = this.previewShadows;
+    if (previous === uniforms) return;
+    this.previewShadows = uniforms;
+    for (const tile of this.tiles.values()) {
+      if (!tile.mesh) continue;
+      const material = tile.mesh.material as THREE.ShaderMaterial;
+      if (uniforms) this.applyPreviewShadows(material, uniforms);
+      else if (previous) {
+        delete material.defines.SHADOWS;
+        for (const key of Object.keys(previous)) delete material.uniforms[key];
+        material.needsUpdate = true;
+      }
+    }
+  }
+
+  private applyPreviewShadows(material: THREE.ShaderMaterial, uniforms: Record<string, THREE.IUniform>): void {
+    material.defines.SHADOWS = 1;
+    Object.assign(material.uniforms, uniforms);
+    material.needsUpdate = true;
+  }
+
   /** The early ground class read, if main.ts started one. */
   private readonly groundEarly: EarlyRead<ArrayBuffer> | null;
 
@@ -635,7 +695,15 @@ export class Terrain {
       }
       const decoded = this.builds[best], t = decoded.tile;
       try {
-        this.build(decoded);
+        // Guard at the call site, as updateWorld does: the production bundle keeps no clock. The `?.` lets the node
+        // checks bundle this file with no import.meta.env; there the guard is false and nothing is timed.
+        if (import.meta.env?.DEV) {
+          const start = performance.now();
+          this.build(decoded);
+          this.lastBuildMs = performance.now() - start;
+          this.maxBuildMs = Math.max(this.maxBuildMs ?? 0, this.lastBuildMs);
+          this.buildCount = (this.buildCount ?? 0) + 1;
+        } else this.build(decoded);
         // The pin pass ran before this tile was ready; protect a newly built camera/car column too.
         if (bestUnder) this.use(t);
       }
@@ -715,7 +783,7 @@ export class Terrain {
         if(clearsGroundTrees(this.groundClassAt(x,z))){c=0;px[k*4+2]=0;}
       }
       if (road && road[k * 4 + 2] > 0) {
-        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) !== 4;
+        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && ((road[k * 4 + 2] & 15) !== 4 || (road[k * 4 + 2] & 192) === 128);
         // Nothing stands on a road: fade the tree layer out from the shoulder to the road edge.
         const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;
         c *= THREE.MathUtils.smoothstep(d, hw + 0.8, hw + 4.5);
@@ -893,6 +961,7 @@ export class Terrain {
     this.paved?.applyGround(mat);
     this.sidewalks?.tileReady?.(t.level,t.i,t.j);
     this.night?.applyGround(mat);
+    if (this.previewShadows) this.applyPreviewShadows(mat, this.previewShadows);
     this.propertyOverlay?.applyGround(mat);
     this.fleetGroundChanged?.(t.x0, t.z0, t.size);
   }
@@ -910,13 +979,13 @@ export class Terrain {
   }
 
   /** The finest tile in memory that holds a world position. */
-  private find(x: number, z: number): Tile | null {
+  private find(x: number, z: number, touch = true): Tile | null {
     const m = this.manifest;
     const e = x + m.village[0] - m.origin[0], s = z - (m.village[1] - m.origin[1]);
     for (let level = this.maxLevel; level >= 0; level--) {
       const size = m.size / 2 ** level;
       const t = this.tiles.get(`${level}/${Math.floor(e / size)}_${Math.floor(s / size)}`);
-      if (t?.ready && t.ground) { this.use(t); return t; }
+      if (t?.ready && t.ground) { if (touch) this.use(t); return t; }
     }
     return null;
   }
@@ -925,6 +994,65 @@ export class Terrain {
   hasFinest(x: number, z: number): boolean {
     const m = this.manifest, size = m.size / 2 ** this.maxLevel;
     return this.exists.has(`${this.maxLevel}/${Math.floor((x + m.village[0] - m.origin[0]) / size)}_${Math.floor((z - (m.village[1] - m.origin[1])) / size)}`);
+  }
+
+  /** Bare ground for sight lines, without roofs, canopy or raised decks. */
+  bareHeightAt(x: number, z: number): number | null {
+    const tile = this.find(x, z, false);
+    return tile ? this.bilinearHeight(tile, x, z) : null;
+  }
+
+  /** Read a fixed set of survey tiles in every direction. Camera turns and the render LRU cannot change it. */
+  async bareGroundRays(x: number, z: number, range: number): Promise<GroundRay> {
+    const m = this.manifest;
+    const west = m.origin[0] - m.village[0], north = m.village[1] - m.origin[1];
+    const pages = new Map<string, Uint8ClampedArray>();
+    const needed = new Set<string>();
+    const bands = [[256, 256], [1024, 1024], [range, 2048]].map(([reach, tileSize]) => {
+      const level = Math.max(0, Math.min(this.maxLevel, Math.floor(Math.log2(m.size / tileSize))));
+      const size = m.size / 2 ** level;
+      const tiles = new Map<string, { key: string; size: number; i: number; j: number }>();
+      for (let j = Math.floor((z - reach - north) / size); j <= Math.floor((z + reach - north) / size); j++) {
+        for (let i = Math.floor((x - reach - west) / size); i <= Math.floor((x + reach - west) / size); i++) {
+          for (let l = level, ti = i, tj = j, span = size; l >= 0; l--, ti = Math.floor(ti / 2), tj = Math.floor(tj / 2), span *= 2) {
+            const key = `${l}/${ti}_${tj}`;
+            if (!this.exists.has(key)) continue;
+            needed.add(key);
+            tiles.set(`${i}_${j}`, { key, size: span, i: ti, j: tj });
+            break;
+          }
+        }
+      }
+      return { reach, size, tiles };
+    });
+    const queue = needed.values();
+    await Promise.all(Array.from({ length: MAX_LOADS }, async () => {
+      for (const key of queue) pages.set(key, await readPng(this.base, `${key}.png`));
+    }));
+    return () => {
+      let lastBand = -1, lastI = NaN, lastJ = NaN, tileSize = 0, x0 = 0, z0 = 0;
+      let pixels: Uint8ClampedArray | undefined;
+      return (x, z, distance) => {
+        const index = distance <= bands[0].reach ? 0 : distance <= bands[1].reach ? 1 : 2;
+        const { size, tiles } = bands[index];
+        const e = x - west, s = z - north;
+        const i = Math.floor(e / size), j = Math.floor(s / size);
+        if (index !== lastBand || i !== lastI || j !== lastJ) {
+          lastBand = index; lastI = i; lastJ = j;
+          const tile = tiles.get(`${i}_${j}`);
+          pixels = tile && pages.get(tile.key);
+          if (tile) { tileSize = tile.size; x0 = tile.i * tileSize; z0 = tile.j * tileSize; }
+        }
+        if (!pixels) return null;
+        const u = T * (e - x0) / tileSize, v = T * (s - z0) / tileSize;
+        const a = Math.min(T - 1, Math.floor(u)), b = Math.min(T - 1, Math.floor(v));
+        const dx = u - a, dz = v - b, k = (b * S + a) * 4;
+        const top = (pixels[k] * 256 + pixels[k + 1]) * (1 - dx) + (pixels[k + 4] * 256 + pixels[k + 5]) * dx;
+        const q = k + S * 4;
+        const bottom = (pixels[q] * 256 + pixels[q + 1]) * (1 - dx) + (pixels[q + 4] * 256 + pixels[q + 5]) * dx;
+        return (top * (1 - dz) + bottom * dz) * m.height.scale + m.height.offset;
+      };
+    };
   }
 
   /** Ground height in metres at a world position, from the finest tile in memory. */
@@ -972,15 +1100,19 @@ export class Terrain {
     if (this.drawnContact) { const drawn = this.drawnTile(x, z); if (drawn) return this.triangleHeight(drawn, x, z); }
     const t = this.find(x,z);
     if (!t) return null;
-    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
-    const a = Math.min(Math.floor(fa), T - 1), b = Math.min(Math.floor(fb), T - 1);
-    const u = fa - a, v = fb - b, g = t.ground!;
-    let ground=(g[b * S + a] * (1 - u) + g[b * S + a + 1] * u) * (1 - v) + (g[(b + 1) * S + a] * (1 - u) + g[(b + 1) * S + a + 1] * u) * v;
+    let ground = this.bilinearHeight(t, x, z);
     if (this.groundContact && this.wantsDrawnContact(x,z)) {
       const drawn=this.drawnTile(x,z);if(drawn)ground+=(this.triangleHeight(drawn,x,z)-ground)*this.wantsDrawnContact(x,z);
     }
     return ground;
   };
+
+  private bilinearHeight(t: Tile, x: number, z: number): number {
+    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
+    const a = Math.min(Math.floor(fa), T - 1), b = Math.min(Math.floor(fb), T - 1);
+    const u = fa - a, v = fb - b, g = t.ground!;
+    return (g[b * S + a] * (1 - u) + g[b * S + a + 1] * u) * (1 - v) + (g[(b + 1) * S + a] * (1 - u) + g[(b + 1) * S + a + 1] * u) * v;
+  }
 
   /** Indexed primary terrain coverage, including off-screen tiles and partial parents. */
   walkSelectedLevelAt(x:number,z:number):number|null {
@@ -1146,6 +1278,7 @@ export class Terrain {
         out.washboard = (raw & 32) !== 0;
         // A gravel driveway, drawn as a gravel road (drawnRoadBytes); in 1884 it is drawn and driven as the track it is.
         if (!this.cartRoads && (raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
+        if ((raw & 192) === ROUGH_BIT && ((raw & 15) === 3 || (raw & 15) === 4)) out.rough = true;
       }
     }
     // Mail and every other ground reader see the same exact deck as the wheels.

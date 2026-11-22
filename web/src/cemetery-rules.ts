@@ -1,5 +1,6 @@
 import type { Place } from './places';
 import type { Solid } from './parked';
+import { MEASURED_STONES, measuredPoint, measuredTurn } from './cemetery-graves';
 
 export type Point = [number, number];
 export interface Cemetery {
@@ -15,7 +16,8 @@ export interface Cemetery {
 }
 export interface Region { outer: Point[]; holes: Point[][] }
 export interface CemeteryFile { crs: 'EPSG:2961'; area: string; roadsSha256: string; cemeteries: Cemetery[] }
-export interface Stone { point: Point; turn: number; kind: number; shade: number }
+/** A measured marker also carries its size (width, height, thickness in metres) and its tone (cemetery-graves.ts). */
+export interface Stone { point: Point; turn: number; kind: number; shade: number; size?: [number, number, number]; tone?: number }
 export function nearestPoint(p: Point, a: Point, b: Point): Point {
   const dx = b[0] - a[0], dy = b[1] - a[1], ll = dx * dx + dy * dy;
   const t = ll ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / ll)) : 0;
@@ -56,6 +58,9 @@ function random(id: string): () => number {
 /** Tidy rows follow the longest mapped edge. Decorative shapes are never burial records. */
 export function stoneLayout(c: Cemetery, low = false): Stone[] {
   if (!c.wall.length || c.suppressed) return [];
+  // A cemetery with a measured table shows its real markers, the same in both detail levels.
+  const measured = MEASURED_STONES[c.id];
+  if (measured) return measured.map(r => ({ point: measuredPoint(r), turn: measuredTurn(r[7]), kind: r[2], shade: 0.5, size: [r[4], r[5], r[6]], tone: r[3] }));
   let longest = 0, turn = 0;
   for (let i = 1; i < c.ring.length; i++) {
     const a = c.ring[i - 1], b = c.ring[i], len = distance(a, b);
@@ -82,13 +87,16 @@ export function stoneLayout(c: Cemetery, low = false): Stone[] {
  * Road-side edges where the dash cam shows something other than the baked wall (map points along a baked wall line):
  * 'open' draws nothing there, 'hedge' draws a low clipped hedge. The bake's wall, openings and checks are unchanged.
  */
-export const ROAD_EDGES: { area: string; a: Point; b: Point; kind: 'open' | 'hedge' }[] = [
+/** `lane` names a site's lane that enters through the edge, for an edge that is not on a road. */
+export const ROAD_EDGES: { area: string; a: Point; b: Point; kind: 'open' | 'hedge'; lane?: 'church' }[] = [
   // Judique, the church cemetery east of Highway 19: open lawn to the road, no wall (the project brief brief, item 8).
   { area: 'judique', a: [617103.58, 5081701.95], b: [617115.91, 5081785.47], kind: 'open' },
   // Judique, the larger cemetery opposite: a low clipped hedge along the road, not a wall.
   { area: 'judique', a: [617092.78, 5081792.26], b: [617083.11, 5081745.14], kind: 'hedge' },
   { area: 'judique', a: [617095.34, 5081820.2], b: [617093.38, 5081796.45], kind: 'hedge' },
   { area: 'judique', a: [617096.22, 5081858.37], b: [617095.67, 5081826.8], kind: 'hedge' },
+  // River Denys Mountain: the mown lane from the church enters the cemetery here (church-site.ts, CHURCH_LANE).
+  { area: 'judique', a: [630853.52, 5080570.2], b: [630858.31, 5080572.81], kind: 'open', lane: 'church' },
 ];
 /** What stands on one wall segment: the baked wall unless a road-side edge covers both its ends. */
 export function edgeKind(area: string, a: Point, b: Point): 'wall' | 'open' | 'hedge' {
@@ -112,8 +120,9 @@ export function fenceSolids(c: Cemetery, origin: Point): Solid[] {
 }
 /** The solids a site actually draws: none on an open road edge, and as thick as the hedge on a hedge edge. */
 export const HEDGE_THICK = 0.75;
-export function drawnSolids(c: Cemetery, origin: Point, area: string): Solid[] {
-  return fenceSegments(c).flatMap(([a, b]) => {
+/** `step` must be the renderer's wall step (6 m on the phone), so an open edge opens the same pieces it draws. */
+export function drawnSolids(c: Cemetery, origin: Point, area: string, step = 3): Solid[] {
+  return fenceSegments(c, step).flatMap(([a, b]) => {
     const kind = edgeKind(area, a, b);
     if (kind === 'open') return [];
     return [{ x: (a[0] + b[0]) / 2 - origin[0], z: origin[1] - (a[1] + b[1]) / 2, half: distance(a, b) / 2,

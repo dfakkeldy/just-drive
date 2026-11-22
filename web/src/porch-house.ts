@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import type { Building } from './buildings';
 import { pushOut, type Pushable, type Solid } from './parked';
 import { FENCE, type PorchSite } from './porch-site';
 import type { Terrain } from './terrain';
@@ -55,9 +54,6 @@ export class PorchHouse {
     this.group.visible = false;
     this.probes = ([[0, 0], [12, -4], [-15, -8], [8, -20], [-6, 9]] as [number, number][]).map(([u, v]) => site.world(u, v));
   }
-
-  /** The list to draw: all the surveyed boxes but this house's own. Every other reader keeps the full list. */
-  static drawn(list: Building[], box: Building): Building[] { return list.filter((b) => (b.buildingId ?? b.id) !== box.id); }
 
   /** Put something on the boards at the top of the steps. It faces the road, less the seat's turn: its own forward is -z. */
   seat(guest: THREE.Object3D): void {
