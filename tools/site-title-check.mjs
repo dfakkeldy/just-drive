@@ -85,12 +85,12 @@ const groundCredits=[
 ];
 const noContact=(html,reviewed=true)=>priorTitleMarkup(groundCredits.reduce((s,c)=>s.replace(c+'\n',''),html).replace(/<span id="titleOtherGame">[\s\S]*?<\/span>/,'').replace(/<p id="titleMusic">[\s\S]*?<\/p>/,'').replace(/<p id="titleContact">[\s\S]*?<\/p>/,'').replace(/<p id="titleAbout">[\s\S]*?<\/p>/,'').replace(' id="titleMusic"','').replace(/<p id="ns(?:Lidar|Paved)Credit">[\s\S]*?<\/p>\n?/,''),true,reviewed);
 // The ground classes (pits, open wetland, rail and quarry ground) name every source they read.
-const OGL_NS=/Roads, railways, water, building locations, utility lines and towers, forest types, designated areas, and Point Tupper dams, culverts, conveyors and some fences and gates: Province of Nova Scotia\. Contains information licensed under the Open Government Licence – Nova Scotia\./;
+const OGL_NS=/Roads, railways, water, building locations, utility lines and towers, forest types, designated areas, and Point Tupper dams, culverts, conveyors, industrial stack, marine dolphins, wharves and some fences and gates: Province of Nova Scotia\. Contains information licensed under the Open Government Licence – Nova Scotia\./;
 function groundAttribution(title){
  for(const just of [false,true])for(const historical of [false,true]){
   const roots=dom();title.createTitle(false,()=>{},'explore','Mabou',undefined,just,true,{id:historical?'1884':'today',title:null,radio:true});
   for(const credit of groundCredits)assert.equal(roots[0].innerHTML.split(credit).length,2,'exact ground credit once in every brand and era');
-  assert.match(roots[0].innerHTML,OGL_NS,'the Nova Scotia line names railways and designated areas');
+  assert.match(roots[0].innerHTML,OGL_NS,'the Nova Scotia line credits the ground and Point Tupper industrial data');
  }
 }
 groundAttribution(current);
