@@ -41,14 +41,18 @@ export const ROUGH_STRETCHES: readonly RoughStretch[] = Object.freeze([
 /** How much water each level holds: the share of potholes that hold water (on average: pools come in clusters), and
  *  metres along the road between rut streaks and between ponds. Survey: 1-2 rut streaks or ponds per 100 m on the
  *  rough stretches and 2-4 on the severe ones, plus the pools in potholes (rough-road-check prints the totals). */
-export const PUDDLE_RULES: Readonly<Record<Roughness, { poolShare: number; rut: [number, number]; pond: [number, number]; pondWidth: [number, number] }>> = Object.freeze({
-  rough: { poolShare: 0.08, rut: [60, 120], pond: [150, 280], pondWidth: [0.45, 0.7] },
-  severe: { poolShare: 0.2, rut: [25, 50], pond: [55, 120], pondWidth: [0.7, 0.92] },
+export const PUDDLE_RULES: Readonly<Record<Roughness, { poolShare: number; rut: [number, number]; rutLength: [number, number]; rutPair: number; pond: [number, number]; pondLength: [number, number]; pondWidth: [number, number] }>> = Object.freeze({
+  rough: { poolShare: 0.08, rut: [60, 120], rutLength: [3, 9], rutPair: 0.2, pond: [150, 280], pondLength: [4, 8], pondWidth: [0.45, 0.7] },
+  // Severe: rut water 3 to 10 m long, often in both ruts; ponds the width of the worn lane and 5 to 10 m long.
+  severe: { poolShare: 0.28, rut: [25, 50], rutLength: [4, 10], rutPair: 0.45, pond: [55, 120], pondLength: [6, 11], pondWidth: [0.85, 1.05] },
 });
 
 export const PUDDLE_POOL = 0, PUDDLE_RUT = 1, PUDDLE_POND = 2;
 /** Metres from the centre line to each wheel rut on a rough stretch (shaders.ts draws them there): a car's half track. */
 export const RUT = 0.8;
+/** Half width of the worn lane on a rough stretch. A wider gravel road has gone back to a two-track: shaders.ts paints
+ *  dead grass beyond this (roughLane), and the water lies inside it. The wheels still drive the mapped width. */
+export const TWO_TRACK = 1.75;
 /** One puddle, in world metres. `a` is the half length along `yaw` (0 = north, clockwise), `b` the half width across.
  *  `depth` is how far a wheel sinks at the middle (a pool sits in a pothole that already holds the wheel). */
 export interface Puddle { x: number; z: number; a: number; b: number; yaw: number; depth: number; kind: number; seed: number }
@@ -161,8 +165,9 @@ export function puddlesFor(r: ResolvedStretch, clear: PuddleClearance): Puddle[]
       const hole = potholeIn(cx, cz, density);
       if (!hole || cellShare(cx, cz) >= rule.poolShare * cluster(st.s) || ends(st.s, 0)) continue;
       const { dist } = toLine(r.pts, hole.x, hole.z);
-      // The picture draws a hole only well inside the road edge (shaders.ts: rdist < rhalf - 0.2).
-      if (dist > st.half - 0.2 - hole.radius * 0.6 || !free(hole.x, hole.z, hole.radius)) continue;
+      // The picture draws a hole only well inside the road edge (shaders.ts: rdist < rhalf - 0.2), and water only in the
+      // worn lane: a hole in the dead grass beside it stays a muddy hole.
+      if (dist > Math.min(st.half, TWO_TRACK) - 0.2 - hole.radius * 0.6 || !free(hole.x, hole.z, hole.radius)) continue;
       out.push({ x: hole.x, z: hole.z, a: hole.radius * 1.1, b: hole.radius * 0.9, yaw: cellShare(cz, cx) * Math.PI, depth: 0.015, kind: PUDDLE_POOL, seed: cellShare(cx + 7, cz) });
     }
   }
@@ -170,15 +175,19 @@ export function puddlesFor(r: ResolvedStretch, clear: PuddleClearance): Puddle[]
   const pick = (range: [number, number]) => range[0] + (range[1] - range[0]) * rnd();
   const at = (s: number) => along[Math.min(along.length - 1, Math.max(0, Math.round(s)))];
   for (let s = pick(rule.rut); s < r.length; s += pick(rule.rut)) {
-    const st = at(s), a = 1.5 + 3 * rnd(), b = 0.17 + 0.09 * rnd(), side = rnd() < 0.5 ? -1 : 1;
-    const off = side * RUT + (rnd() - 0.5) * 0.2;
-    const x = st.x + Math.cos(st.yaw) * off, z = st.z + Math.sin(st.yaw) * off;
-    if (ends(s, a) || !free(x, z, a)) continue;
-    out.push({ x, z, a, b, yaw: st.yaw, depth: 0.04 + 0.02 * rnd(), kind: PUDDLE_RUT, seed: rnd() });
+    const side = rnd() < 0.5 ? -1 : 1, pair = rnd() < rule.rutPair;
+    for (const [k, ds] of pair ? [[side, 0], [-side, (rnd() - 0.5) * 4]] : [[side, 0]]) {
+      const st = at(s + ds), a = pick(rule.rutLength) / 2, b = 0.17 + 0.09 * rnd();
+      const off = k * RUT + (rnd() - 0.5) * 0.2;
+      const x = st.x + Math.cos(st.yaw) * off, z = st.z + Math.sin(st.yaw) * off;
+      if (ends(s + ds, a) || !free(x, z, a)) continue;
+      out.push({ x, z, a, b, yaw: st.yaw, depth: 0.04 + 0.02 * rnd(), kind: PUDDLE_RUT, seed: rnd() });
+    }
   }
   // A pond across the lane.
   for (let s = pick(rule.pond); s < r.length; s += pick(rule.pond)) {
-    const st = at(s), a = 2 + 2.5 * rnd(), b = st.half * pick(rule.pondWidth), off = (rnd() - 0.5) * (st.half - b) * 2;
+    const st = at(s), lane = Math.min(st.half, TWO_TRACK), a = pick(rule.pondLength) / 2, b = lane * pick(rule.pondWidth);
+    const off = (rnd() - 0.5) * Math.max(0, lane - b) * 2;
     const x = st.x + Math.cos(st.yaw) * off, z = st.z + Math.sin(st.yaw) * off;
     if (ends(s, a) || !free(x, z, a)) continue;
     out.push({ x, z, a, b, yaw: st.yaw + (rnd() - 0.5) * 0.3, depth: 0.08 + 0.05 * rnd(), kind: PUDDLE_POND, seed: rnd() });

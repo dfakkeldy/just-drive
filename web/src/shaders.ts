@@ -712,6 +712,31 @@ float roadCode(float b) {
   float f = floor(b * 255.0 + 0.5), k = mod(f, 16.0);
   return k > 2.5 && k < 4.5 && f >= 128.0 ? f - 128.0 : f;
 }
+// A rough stretch (rough-roads.ts). Survey, 21 Nov 2026: brown packed earth and loose stone, not grey gravel; two wet
+// ruts a car's width apart (RUT), a ridge of stone and dead grass between them, and dead grass and brush right up to
+// the ruts. A wide gravel road worn back to a two-track keeps only TWO_TRACK metres either side of its centre line;
+// beyond that the paint is verge, although the wheels can still drive it.
+vec3 roughVerge(vec2 p, float speck) {
+  float n = vnoise(p * 0.7);
+  vec3 grass = mix(vec3(0.340, 0.270, 0.140), vec3(0.215, 0.180, 0.085), n) * (0.8 + 0.4 * speck);
+  return mix(grass, vec3(0.120, 0.085, 0.055), smoothstep(0.62, 0.8, vnoise(p * 0.31 + 4.0)) * 0.7);   // soft mud patches
+}
+vec3 roughLane(vec3 gravel, float rdist, float rhalf, vec2 p, float grit, float speck) {
+  vec3 earth = mix(vec3(0.180, 0.132, 0.085), vec3(0.265, 0.195, 0.125), grit) * (0.8 + 0.4 * speck);
+  vec3 lane = mix(earth, gravel * vec3(1.0, 0.95, 0.86), 0.35 * smoothstep(0.4, 0.8, vnoise(p * 0.23)));
+  // Wet orange clay where the stone has washed off.
+  lane = mix(lane, mix(vec3(0.235, 0.135, 0.068), vec3(0.300, 0.180, 0.092), grit), smoothstep(0.55, 0.78, vnoise(p * 0.17 + 9.0)) * 0.8);
+  // Wet ruts: dark brown mud, glossy in places, a little wider where the road is worse.
+  vec3 mud = mix(vec3(0.088, 0.062, 0.040), vec3(0.140, 0.098, 0.062), grit) * (1.0 - 0.3 * smoothstep(0.35, 0.75, vnoise(p * 0.45)));
+  float rut = smoothstep(0.55 + 0.12 * vnoise(p * 0.9), 0.16, abs(rdist - 0.8));
+  lane = mix(lane, mud, rut * 0.92);
+  // The centre ridge: dead grass and stone, broken by bare patches.
+  vec3 ridge = mix(vec3(0.215, 0.185, 0.100), vec3(0.135, 0.145, 0.060), speck);
+  lane = mix(lane, ridge, smoothstep(0.42, 0.12, rdist) * (0.45 + 0.4 * vnoise(p * 0.6)));
+  // The worn lane ends in a ragged line of dead grass (rough-roads.ts TWO_TRACK = 1.75 m).
+  float edge = min(rhalf, 1.75) + (vnoise(p * 0.5) - 0.5) * 0.5;
+  return mix(lane, roughVerge(p, speck), smoothstep(edge - 0.15, edge + 0.25, rdist));
+}
 #endif
 vec3 crownCell(vec2 p, out vec2 off) {
   vec2 g = floor(p), f = fract(p);
@@ -951,13 +976,7 @@ void main() {
       float track = smoothstep(0.55, 0.15, abs(rdist - rhalf * 0.5));
       surface = mix(gravel, gravel * 0.72, track);
 #ifdef ROAD_PAVEMENT
-      if (rough > 0.5) {
-        // Rough: the road has gone back to two ruts a car's width apart (rough-roads.ts RUT), dark wet mud in them, and a
-        // ridge of stone and dead grass left between them.
-        vec3 mud = mix(vec3(0.115, 0.085, 0.060), vec3(0.165, 0.120, 0.080), grit) * (1.0 - 0.3 * smoothstep(0.35, 0.75, vnoise(p * 0.45)));
-        surface = mix(gravel * 0.92, mud, smoothstep(0.62, 0.18, abs(rdist - 0.8)) * 0.85);
-        surface = mix(surface, mix(vec3(0.200, 0.185, 0.120), vec3(0.150, 0.160, 0.070), speck), smoothstep(0.45, 0.1, rdist) * (0.25 + 0.3 * vnoise(p * 0.6)));
-      }
+      if (rough > 0.5) surface = roughLane(gravel, rdist, rhalf, p, grit, speck);
 #endif
     } else if (rkind > 4.5) {
       // Rail trail: fine crusher dust, packed flat and kept that way. Paler than a gravel road; no ruts, no holes.
@@ -973,8 +992,7 @@ void main() {
       surface = mix(mix(albedo, vec3(0.160, 0.170, 0.060), 0.5), vec3(0.170, 0.130, 0.090), rut);
 #endif
 #ifdef ROAD_PAVEMENT
-      // Rough: the ruts are cut wider and deeper, and hold dark wet mud.
-      if (rough > 0.5) surface = mix(surface, vec3(0.105, 0.078, 0.055) * (0.8 + 0.3 * grit), smoothstep(0.62, 0.22, abs(rdist - 0.75)) * 0.85);
+      if (rough > 0.5) surface = roughLane(gravel, rdist, rhalf, p, grit, speck);
 #endif
 #ifdef ROAD_PAVEMENT
     } else if (rkind < 1.5 || (rkind == 2.0 && mod(rflags, 128.0) >= 64.0)) {
@@ -1034,6 +1052,10 @@ void main() {
 #endif
     float hole = rdist < rhalf - 0.2 && density > 0.0 ? pothole(p, density) : 0.0;
     surface = mix(surface, mix(vec3(0.060, 0.052, 0.045), vec3(0.105, 0.092, 0.078), speck), smoothstep(0.0, 0.03, hole) * (1.0 - smoothstep(120.0, 400.0, dist)));
+#ifdef ROAD_PAVEMENT
+    // A rough stretch has no graded shoulder: the dead grass and brush come up to the ruts.
+    if (rough > 0.5) gravel = roughVerge(p, speck);
+#endif
     albedo = mix(albedo, gravel, shoulder * 0.85 * step(rkind, 11.5));   // a lawn has no gravel shoulder
 #ifdef QUARRY
     if(inQuarry && ((rkind > 2.5 && rkind < 4.5) || rkind == 8.0)) {

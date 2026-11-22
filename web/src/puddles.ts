@@ -41,26 +41,32 @@ void main() {
   vec2 warp = vec2(vnoise(m * 0.55) - 0.5, vnoise(m * 0.55 + 5.3) - 0.5) * 0.7;
   float r = length(vLocal + warp) + ((vnoise(m * 1.7) - 0.5) * 0.55 + (vnoise(m * 4.6) - 0.5) * 0.25) / max(min(vSize.x, vSize.y), 0.35) * 0.4;
   if (r > 1.0) discard;
-  // Wet orange-brown mud around the water, darkest at the water line.
-  float rim = smoothstep(0.5, 0.86, r);
+  // Survey, 21 Nov 2026: every puddle mirrors the blue sky, with the dark brush along the road mirrored at its sides;
+  // brown silt shows where it is shallow, and a ring of wet orange-brown clay holds it. A pond's ring is wide.
+  float pond = step(1.5, vInfo.y), rutw = step(0.5, vInfo.y) * (1.0 - pond);
+  float rim = smoothstep(mix(0.62, 0.7, pond), 0.9, r);
   vec3 v = normalize(cameraPosition - vWorld);
-  // Still water with a faint shiver; brown silt where it is shallow.
+  // Still water with a faint shiver.
   float t = time * 0.4;
   vec2 g = vec2(vnoise(m * 2.2 + t) - 0.5, vnoise(m * 2.2 - t + 9.0) - 0.5) * 0.06;
   vec3 n = normalize(vec3(g.x, 1.0, g.y));
   float fres = 0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
   vec3 refl = reflect(-v, n); refl.y = abs(refl.y);
   vec3 light = sunColor * max(sunDir.y, 0.0) * 0.55 + skyColor * 0.75;
-  vec3 silt = mix(vec3(0.085, 0.062, 0.040), vec3(0.120, 0.085, 0.052), vnoise(m * 0.9)) * light;
-  vec3 mud = mix(vec3(0.110, 0.075, 0.045), vec3(0.150, 0.098, 0.058), vnoise(m * 3.1)) * light;
-  // The sky is far brighter than the mud, so even from above a puddle reads as a mirror of it. A pool in a pothole is
-  // half silt; a pond is deep and still enough to hold the sky. Patches of the surface are muddier than others.
-  float mirror = (vInfo.y > 1.5 ? 0.55 : vInfo.y > 0.5 ? 0.45 : 0.3) * (0.75 + 0.5 * vnoise(m * 0.8));
-  // The sky it mirrors, dark low down where the trees and brush stand round the road.
-  vec3 sky = skyAt(refl) * mix(0.28 + 0.25 * vnoise(vec2(atan(refl.x, refl.z) * 40.0, 0.0)), 1.0, smoothstep(0.06, 0.4, refl.y));
-  float k = clamp(mirror + fres, 0.0, 1.0);
-  vec3 water = silt * 0.6 * (1.0 - k) + sky * k + sunColor * pow(max(dot(refl, sunDir), 0.0), 280.0) * 1.8;
-  vec3 col = mix(water, mud * mix(0.7, 1.0, smoothstep(0.5, 1.0, r)), rim);
+  vec3 silt = mix(vec3(0.150, 0.095, 0.050), vec3(0.215, 0.140, 0.075), vnoise(m * 0.9)) * light;
+  vec3 clay = mix(vec3(0.165, 0.098, 0.052), vec3(0.250, 0.155, 0.082), vnoise(m * 3.1)) * light;
+  // The sky. A game camera sits higher than a dash camera, and its low sky is pale haze, so the mirror looks a little
+  // higher into the sky than a true reflection would: the water stays blue from the chase camera too.
+  // Muddy water darkens and deepens what it mirrors (the survey's ponds are a deeper blue than the sky over them).
+  vec3 sky = skyAt(normalize(vec3(refl.x, refl.y + 0.45, refl.z))) * vec3(0.56, 0.64, 0.78);
+  // The brush and trees on both banks, mirrored along the sides of the water (across it: vLocal.x).
+  float bank = smoothstep(0.2, 0.8, abs(vLocal.x + warp.x)) * mix(mix(0.6, 0.3, rutw), 0.85, pond) * (0.7 + 0.3 * vnoise(m * 1.3));
+  vec3 mirrored = mix(sky, vec3(0.040, 0.046, 0.026) * light, bank);
+  // A pond is deep and still enough to hold the sky; a pool in a pothole is half silt. Silt shows toward the edge.
+  float mirror = mix(mix(0.6, 0.72, rutw), 0.82, pond) * (0.85 + 0.3 * vnoise(m * 0.8)) * (1.0 - 0.45 * smoothstep(0.3, 0.8, r));
+  float k = clamp(mirror + fres * 0.5, 0.0, 1.0);
+  vec3 water = silt * (1.0 - k) + mirrored * k + sunColor * pow(max(dot(refl, sunDir), 0.0), 280.0) * 1.8;
+  vec3 col = mix(water, clay * mix(0.65, 1.0, smoothstep(0.6, 1.0, r)), rim);
   col = applyFog(col, vWorld, cameraPosition);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -151,9 +157,11 @@ export class Puddles {
     this.group.add(this.spray);
   }
 
-  /** Once a frame, after the camera moved. `ride` is the driven ride, or null when nobody drives (no spray then). */
-  update(dt: number, camera: THREE.Camera, ride: Wading | null): void {
-    this.wait -= dt;
+  /** Once a frame, after the camera moved. `ride` is the driven ride, or null when nobody drives (no spray then).
+   *  `realDt` times the re-placing: behind the title card, in the free camera and on a still the world clock (dt)
+   *  stands, but finer ground tiles still arrive, and water laid on a coarser tile would stay buried under them. */
+  update(dt: number, camera: THREE.Camera, ride: Wading | null, realDt = dt): void {
+    this.wait -= realDt;
     const c = camera.position;
     const away = c.x < this.box[0] - NEAR || c.x > this.box[2] + NEAR || c.z < this.box[1] - NEAR || c.z > this.box[3] + NEAR;
     if (away) { if (this.mesh.visible) { this.mesh.visible = false; this.mesh.count = 0; this.shown = 0; } }

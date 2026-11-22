@@ -2200,7 +2200,7 @@ function frame(now: number) {
   if (dt > 0 && driving) replay.record(vehicle, car, horse ? 'horse' : ride.kind, now / 1000, clockDt, quietGround);
   gamepad.feel(vehicle, dt, playing && mode === 'drive' && !interiors.busy, now);
   driftFeedback.update(dt, vehicle, camera, playing && mode === 'drive' && !interiors.busy);
-  puddles?.update(dt, camera, playing && mode === 'drive' && !interiors.busy ? vehicle : null);
+  puddles?.update(dt, camera, playing && mode === 'drive' && !interiors.busy ? vehicle : null, realDt);
   updateWorld('before-camera', dt, realDt, now);
   camera.updateMatrixWorld();
   sky.position.copy(camera.position);
