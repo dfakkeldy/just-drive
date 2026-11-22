@@ -922,8 +922,7 @@ export class MabouMain implements HandBuiltPlace {
     const reach = this.low ? 320 : 450;
     // Every frame: a unit in reach whose land is ready is about to be built, so a picture (or a count) must wait.
     this.waiting = this.pending.some(p => Math.hypot(view.x - p.x, view.z - p.z) <= reach && this.ready(p));
-    if (!this.pending.length || now < this.nextProbe) return;
-    this.nextProbe = now + 400;
+    if (!this.pending.length || (!this.waiting && now < this.nextProbe)) return;
     for (const item of [...this.pending]) {
       if (Math.hypot(view.x - item.x, view.z - item.z) > reach || !this.ready(item)) continue;
       const fallback = this.terrain.constructionHeightAt(item.x, item.z);
@@ -934,8 +933,10 @@ export class MabouMain implements HandBuiltPlace {
       if (item.unit !== 'streetWest' && item.unit !== 'streetEast') this.roofs.push(...roofTops(MAIN_PLACES[item.unit], geos, this.site.village));
       this.place(item.unit, geos);
       this.waiting = this.pending.some(p => Math.hypot(view.x - p.x, view.z - p.z) <= reach && this.ready(p));
+      this.nextProbe = this.waiting ? 0 : now + 400;
       return;
     }
+    this.nextProbe = now + 400;
   }
   private pendingOrBuilt(c: Cluster): { x: number; z: number }[] {
     return [...this.centres].filter(([u]) => clusterOf(u) === c).map(([, p]) => p);

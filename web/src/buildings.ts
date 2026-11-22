@@ -173,6 +173,14 @@ const TANKS: RGB[] = [[0.80, 0.80, 0.77], [0.71, 0.73, 0.73], [0.62, 0.65, 0.63]
 const ROOFS: [number, number, number][] = [[0.11, 0.11, 0.12], [0.16, 0.15, 0.14], [0.20, 0.13, 0.10], [0.13, 0.20, 0.16], [0.30, 0.09, 0.07], [0.30, 0.31, 0.32]];
 
 const hash = (n: number) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+// THREE.Color converts sRGB hex paint to the linear vertex colours expected by the material.
+const rgbCache = new Map<string, RGB>();
+const scratchColor = new THREE.Color();
+const rgb = (hex: string): RGB => {
+  let c = rgbCache.get(hex);
+  if (!c) { scratchColor.set(hex); c = [scratchColor.r, scratchColor.g, scratchColor.b]; rgbCache.set(hex, c); }
+  return c;
+};
 
 /** Measured LiDAR envelopes with stable, inexpensive rural facade details. */
 export class Buildings {
@@ -185,17 +193,24 @@ export class Buildings {
     details?: { pos: readonly number[]; col: readonly number[] }) {
     const { styles = {}, study, low, sunDir } = isFacadeStudy(paint) ? paint : { styles: paint, study: undefined, low: false, sunDir: undefined };
     const pos: number[] = [], col: number[] = [];
-    const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, colourA: RGB, shade = 1, colourB = colourA, colourC = colourA) => {
-      pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    const triN = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number,
+      colourA: RGB, shade = 1, colourB = colourA, colourC = colourA) => {
+      pos.push(ax, ay, az, bx, by, bz, cx, cy, cz);
       col.push(
         colourA[0] * shade, colourA[1] * shade, colourA[2] * shade,
         colourB[0] * shade, colourB[1] * shade, colourB[2] * shade,
         colourC[0] * shade, colourC[1] * shade, colourC[2] * shade,
       );
     };
-    const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3, k: RGB, shade = 1, top = k) => {
-      tri(a, b, c, k, shade, k, top);
-      tri(a, c, d, k, shade, top, top);
+    const quadN = (ax: number, ay: number, az: number, bx: number, by: number, bz: number,
+      cx: number, cy: number, cz: number, dx: number, dy: number, dz: number, k: RGB, shade = 1, top = k) => {
+      triN(ax, ay, az, bx, by, bz, cx, cy, cz, k, shade, k, top);
+      triN(ax, ay, az, cx, cy, cz, dx, dy, dz, k, shade, top, top);
+    };
+    const reverseQuadN = (ax: number, ay: number, az: number, bx: number, by: number, bz: number,
+      cx: number, cy: number, cz: number, dx: number, dy: number, dz: number, k: RGB, shade = 1, top = k) => {
+      triN(ax, ay, az, cx, cy, cz, bx, by, bz, k, shade, top, k);
+      triN(ax, ay, az, dx, dy, dz, cx, cy, cz, k, shade, top, top);
     };
 
     const windowLight = study === 'window-light';
@@ -206,13 +221,10 @@ export class Buildings {
     const closedWallRanges: number[] | undefined = wallShadows ? [] : undefined;
     // The two-sided paint hides an inward face, but the shadow lookup still offsets along its normal.
     // Keep the same diagonal and vertices. Swap the winding so a wall receives the sun from outside.
-    const reverseQuad: typeof quad = (a, b, c, d, k, shade = 1, top = k) => {
-      tri(a, c, b, k, shade, top, k);
-      tri(a, d, c, k, shade, top, top);
-    };
-    const shellWall = wallShadows ? reverseQuad : quad;
-    const shellEnd = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, colour: RGB) =>
-      wallShadows ? tri(a, c, b, colour) : tri(a, b, c, colour);
+    const shellWallN = wallShadows ? reverseQuadN : quadN;
+    const shellEndN = (ax: number, ay: number, az: number, bx: number, by: number, bz: number,
+      cx: number, cy: number, cz: number, colour: RGB) =>
+      wallShadows ? triN(ax, ay, az, cx, cy, cz, bx, by, bz, colour) : triN(ax, ay, az, bx, by, bz, cx, cy, cz, colour);
 
     // The game's Lambert material interpolates these six existing pane vertices in linear light.
     const upperPane: RGB = [0.19, 0.30, 0.37], lowerPane: RGB = [0.027, 0.046, 0.045];
@@ -226,16 +238,37 @@ export class Buildings {
       const ux = Math.sin(a), uz = -Math.cos(a), vx = Math.cos(a), vz = Math.sin(a);   // along the ridge, across it
       const L = b.length / 2, W = b.width / 2;
       // u along the ridge, v across, h above the ground at the building.
-      const P = (u: number, v: number, h: number) => new THREE.Vector3(cx + ux * u + vx * v, base + h, cz + uz * u + vz * v);
+      const triP = (au: number, av: number, ah: number, bu: number, bv: number, bh: number, cu: number, cv: number, ch: number, colour: RGB, shade = 1) =>
+        triN(cx + ux * au + vx * av, base + ah, cz + uz * au + vz * av,
+          cx + ux * bu + vx * bv, base + bh, cz + uz * bu + vz * bv,
+          cx + ux * cu + vx * cv, base + ch, cz + uz * cu + vz * cv, colour, shade);
+      const quadP = (au: number, av: number, ah: number, bu: number, bv: number, bh: number,
+        cu: number, cv: number, ch: number, du: number, dv: number, dh: number, colour: RGB, shade = 1, top = colour) =>
+        quadN(cx + ux * au + vx * av, base + ah, cz + uz * au + vz * av,
+          cx + ux * bu + vx * bv, base + bh, cz + uz * bu + vz * bv,
+          cx + ux * cu + vx * cv, base + ch, cz + uz * cu + vz * cv,
+          cx + ux * du + vx * dv, base + dh, cz + uz * du + vz * dv, colour, shade, top);
+      const shellWallP = (au: number, av: number, ah: number, bu: number, bv: number, bh: number,
+        cu: number, cv: number, ch: number, du: number, dv: number, dh: number, colour: RGB, shade = 1) =>
+        shellWallN(cx + ux * au + vx * av, base + ah, cz + uz * au + vz * av,
+          cx + ux * bu + vx * bv, base + bh, cz + uz * bu + vz * bv,
+          cx + ux * cu + vx * cv, base + ch, cz + uz * cu + vz * cv,
+          cx + ux * du + vx * dv, base + dh, cz + uz * du + vz * dv, colour, shade);
+      const shellEndP = (au: number, av: number, ah: number, bu: number, bv: number, bh: number, cu: number, cv: number, ch: number, colour: RGB) =>
+        shellEndN(cx + ux * au + vx * av, base + ah, cz + uz * au + vz * av,
+          cx + ux * bu + vx * bv, base + bh, cz + uz * bu + vz * bv,
+          cx + ux * cu + vx * cv, base + ch, cz + uz * cu + vz * cv, colour);
       if (b.shape === 'tank') {
         // A storage tank: a steel shell up to the measured rim, and a low cone up to the measured top.
         const radius = b.length / 2, shell = TANKS[Math.floor(hash(b.id) * TANKS.length)];
-        const cap: RGB = [shell[0] * 0.86, shell[1] * 0.86, shell[2] * 0.86], top = new THREE.Vector3(cx, base + b.ridge, cz);
+        const cap: RGB = [shell[0] * 0.86, shell[1] * 0.86, shell[2] * 0.86], topY = base + b.ridge;
         const segments = 32;
-        const ring = (i: number, h: number) => { const t = i * Math.PI * 2 / segments; return new THREE.Vector3(cx + Math.cos(t) * radius, base + h, cz + Math.sin(t) * radius); };
         for (let i = 0; i < segments; i++) {
-          quad(ring(i, -3), ring(i + 1, -3), ring(i + 1, b.eave), ring(i, b.eave), shell, 0.8 + 0.2 * Math.cos((i + 0.5) * Math.PI * 2 / segments));
-          tri(ring(i, b.eave), ring(i + 1, b.eave), top, cap);
+          const t0 = i * Math.PI * 2 / segments, t1 = (i + 1) * Math.PI * 2 / segments;
+          const x0 = cx + Math.cos(t0) * radius, z0 = cz + Math.sin(t0) * radius;
+          const x1 = cx + Math.cos(t1) * radius, z1 = cz + Math.sin(t1) * radius;
+          quadN(x0, base - 3, z0, x1, base - 3, z1, x1, base + b.eave, z1, x0, base + b.eave, z0, shell, 0.8 + 0.2 * Math.cos((i + 0.5) * Math.PI * 2 / segments));
+          triN(x0, base + b.eave, z0, x1, base + b.eave, z1, cx, topY, cz, cap);
         }
         this.clear.push(...clearBoxes(b, village, 2.5));
         continue;
@@ -250,8 +283,6 @@ export class Buildings {
         chimney: primary && paint.chimney, silo: primary && paint.silo,
         roofShape: paint.roofShape === 'flat' || b.roof === 'flat' ? 'flat' as const : 'gable' as const,
       } : paint;
-      // THREE.Color converts sRGB hex paint to the linear vertex colours expected by the material.
-      const rgb = (hex: string): RGB => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
       const wall = style ? rgb(style.wall) : WALLS[b.kind][Math.floor(hash(identity) * WALLS[b.kind].length)];
       const endWall = (side: number) => style?.bareEnd?.side === side ? rgb(style.bareEnd.wall) : wall;
       const roofPalette = b.kind === 'barn' ? [ROOFS[3], ROOFS[4], ROOFS[5]] : ROOFS;
@@ -265,10 +296,10 @@ export class Buildings {
       const split = L * 0.23, upperEave = e + 1.0, lowerHigh = e + 1.1;
       // Walls. The two long walls are a little darker so the corners read.
       const wallStart = pos.length / 3;
-      shellWall(P(-L, -W, foot), P(L, -W, foot), P(L, -W, e), P(-L, -W, e), wall, 0.92);
-      shellWall(P(L, W, foot), P(-L, W, foot), P(-L, W, e), P(L, W, e), wall, 0.92);
-      shellWall(P(L, -W, foot), P(L, W, foot), P(L, W, e), P(L, -W, e), endWall(1));
-      shellWall(P(-L, W, foot), P(-L, -W, foot), P(-L, -W, e), P(-L, W, e), endWall(-1));
+      shellWallP(-L, -W, foot, L, -W, foot, L, -W, e, -L, -W, e, wall, 0.92);
+      shellWallP(L, W, foot, -L, W, foot, -L, W, e, L, W, e, wall, 0.92);
+      shellWallP(L, -W, foot, L, W, foot, L, W, e, L, -W, e, endWall(1));
+      shellWallP(-L, W, foot, -L, -W, foot, -L, -W, e, -L, W, e, endWall(-1));
       closedWallRanges?.push(wallStart, pos.length / 3);
       const trim: RGB = style ? rgb(style.trim) : b.kind === 'house' ? [0.79, 0.77, 0.69] : [0.56, 0.54, 0.47];
       const foundation: RGB = style?.skirting ? rgb('#dddeda') : [0.23, 0.23, 0.21];
@@ -276,17 +307,28 @@ export class Buildings {
       const door: RGB = style?.door ? rgb(style.door) : b.kind === 'house' ? (hash(identity + 3) > 0.5 ? [0.17, 0.22, 0.20] : [0.29, 0.12, 0.09]) : [wall[0] * 0.52, wall[1] * 0.52, wall[2] * 0.52];
       // Facade rectangles use a local horizontal coordinate and an outward offset.
       const panel = (end: boolean, side: number, u0: number, u1: number, y0: number, y1: number, colour: RGB, offset = 0.025) => {
-        const F = (u: number, h: number) => end ? P(side * (L + offset), u, h) : P(u, side * (W + offset), h);
         const pane = windowLight && colour === glass;
-        const face = wallShadows && (end ? side > 0 : side < 0) ? reverseQuad : quad;
-        face(F(u0, y0), F(u1, y0), F(u1, y1), F(u0, y1), pane ? lowerPane : colour, 1, pane ? upperPane : colour);
+        const face = wallShadows && (end ? side > 0 : side < 0) ? reverseQuadN : quadN;
+        const lo = pane ? lowerPane : colour, hi = pane ? upperPane : colour;
+        const by0 = base + y0, by1 = base + y1;
+        if (end) {
+          const s = side * (L + offset);
+          const ax = cx + ux * s + vx * u0, az = cz + uz * s + vz * u0;
+          const bx = cx + ux * s + vx * u1, bz = cz + uz * s + vz * u1;
+          face(ax, by0, az, bx, by0, bz, bx, by1, bz, ax, by1, az, lo, 1, hi);
+        } else {
+          const s = side * (W + offset);
+          const ax = cx + ux * u0 + vx * s, az = cz + uz * u0 + vz * s;
+          const bx = cx + ux * u1 + vx * s, bz = cz + uz * u1 + vz * s;
+          face(ax, by0, az, bx, by0, bz, bx, by1, bz, ax, by1, az, lo, 1, hi);
+        }
       };
       const box = (u0: number, u1: number, v0: number, v1: number, y0: number, y1: number, colour: RGB) => {
-        quad(P(u0, v0, y0), P(u1, v0, y0), P(u1, v0, y1), P(u0, v0, y1), colour, 0.9);
-        quad(P(u1, v1, y0), P(u0, v1, y0), P(u0, v1, y1), P(u1, v1, y1), colour, 0.9);
-        quad(P(u1, v0, y0), P(u1, v1, y0), P(u1, v1, y1), P(u1, v0, y1), colour);
-        quad(P(u0, v1, y0), P(u0, v0, y0), P(u0, v0, y1), P(u0, v1, y1), colour);
-        quad(P(u0, v0, y1), P(u1, v0, y1), P(u1, v1, y1), P(u0, v1, y1), colour);
+        quadP(u0, v0, y0, u1, v0, y0, u1, v0, y1, u0, v0, y1, colour, 0.9);
+        quadP(u1, v1, y0, u0, v1, y0, u0, v1, y1, u1, v1, y1, colour, 0.9);
+        quadP(u1, v0, y0, u1, v1, y0, u1, v1, y1, u1, v0, y1, colour);
+        quadP(u0, v1, y0, u0, v0, y0, u0, v0, y1, u0, v1, y1, colour);
+        quadP(u0, v0, y1, u1, v0, y1, u1, v1, y1, u0, v1, y1, colour);
       };
       const opening = (end: boolean, side: number, u: number, bottom: number, width: number, height: number, isDoor = false) => {
         const half = width / 2, t = isDoor ? 0.105 : 0.09;
@@ -313,13 +355,13 @@ export class Buildings {
       // Blocks of one building stand wall to wall: an eave that hangs over would cut into the next block's roof.
       const over = b.shape === 'block' ? 0 : flat ? 0.20 : 0.30;
       const roofFace = (u0: number, u1: number, v0: number, v1: number, h0: number, h1: number, shade = 1) => {
-        quad(P(u0, v0, h0), P(u1, v0, h0), P(u1, v1, h1), P(u0, v1, h1), roof, shade);
+        quadP(u0, v0, h0, u1, v0, h0, u1, v1, h1, u0, v1, h1, roof, shade);
         if (style?.roofMaterial === 'metal' || (!style && b.kind === 'barn')) {
           const seamStart = pos.length / 3;
           const seam: RGB = [Math.min(1, roof[0] * 1.17 + 0.012), Math.min(1, roof[1] * 1.17 + 0.012), Math.min(1, roof[2] * 1.17 + 0.012)];
           // Sparse standing seams read from the road without subpixel strips across every 0.5 m panel.
           for (let u = u0 + 0.65; u < u1 - 0.1; u += 1.5) {
-            quad(P(u, v0, h0 + 0.025), P(u + 0.035, v0, h0 + 0.025), P(u + 0.035, v1, h1 + 0.025), P(u, v1, h1 + 0.025), seam, shade);
+            quadP(u, v0, h0 + 0.025, u + 0.035, v0, h0 + 0.025, u + 0.035, v1, h1 + 0.025, u, v1, h1 + 0.025, seam, shade);
           }
           nearPaint?.(seamStart);
         }
@@ -336,9 +378,9 @@ export class Buildings {
         roofFace(-L + inset, L - inset, 0, W, r, e, 0.85);
         for (const side of [-1, 1]) {
           const tip = side * (L - inset);
-          tri(P(side * L, -W, e), P(side * L, W, e), P(tip, 0, r), roof);
-          tri(P(side * L, -W, e), P(tip, 0, r), P(tip, -W, e), roof);
-          tri(P(side * L, W, e), P(tip, W, e), P(tip, 0, r), roof, 0.85);
+          triP(side * L, -W, e, side * L, W, e, tip, 0, r, roof);
+          triP(side * L, -W, e, tip, 0, r, tip, -W, e, roof);
+          triP(side * L, W, e, tip, W, e, tip, 0, r, roof, 0.85);
         }
       } else if (shape === 'gambrel') {
         const bend = W * 0.62, h = e + (r - e) * 0.72;
@@ -346,8 +388,8 @@ export class Buildings {
           roofFace(-L - over, L + over, side * (W + over), side * bend, e - 0.1, h, side === 1 ? 0.85 : 1);
           roofFace(-L - over, L + over, side * bend, 0, h, r, side === 1 ? 0.85 : 1);
           const u = side * L;
-          quad(P(u, -W, e), P(u, W, e), P(u, bend, h), P(u, -bend, h), wall);
-          tri(P(u, -bend, h), P(u, bend, h), P(u, 0, r), wall);
+          quadP(u, -W, e, u, W, e, u, bend, h, u, -bend, h, wall);
+          triP(u, -bend, h, u, bend, h, u, 0, r, wall);
         }
       } else if (stepped) {
         // Two parallel shed roofs. Close the step with a wall above the lower roof.
@@ -357,29 +399,30 @@ export class Buildings {
         panel(false, -1, -L, split, e, upperEave, wall);
         panel(false, 1, -L, split, e, r, wall);
         panel(false, 1, split, L, e, lowerHigh, wall);
-        quad(P(-L, -W, e), P(-L, W, e), P(-L, W, r), P(-L, -W, upperEave), wall);
-        tri(P(L, -W, e), P(L, W, e), P(L, W, lowerHigh), wall);
-        quad(P(split, -W, e), P(split, W, lowerHigh), P(split, W, r), P(split, -W, upperEave), wall);
+        quadP(-L, -W, e, -L, W, e, -L, W, r, -L, -W, upperEave, wall);
+        triP(L, -W, e, L, W, e, L, W, lowerHigh, wall);
+        quadP(split, -W, e, split, W, lowerHigh, split, W, r, split, -W, upperEave, wall);
         panel(false, 1, -L - over, split, r - 0.17, r, trim, 0.035);
         panel(false, 1, split, L + over, lowerHigh - 0.17, lowerHigh, trim, 0.035);
       } else if (shed) {
         const slope = (r - e) / (2 * W);
         roofFace(-L - over, L + over, -W - over, W, e - over * slope, r);
         panel(false, 1, -L, L, e, r, wall);
-        for (const side of [-1, 1]) tri(P(side * L, -W, e), P(side * L, W, e), P(side * L, W, r), wall);
+        for (const side of [-1, 1]) triP(side * L, -W, e, side * L, W, e, side * L, W, r, wall);
       } else {
         const gableStart = pos.length / 3;
-        shellEnd(P(L, -W, e), P(L, W, e), P(L, 0, r), endWall(1));
-        shellEnd(P(-L, W, e), P(-L, -W, e), P(-L, 0, r), endWall(-1));
+        shellEndP(L, -W, e, L, W, e, L, 0, r, endWall(1));
+        shellEndP(-L, W, e, -L, -W, e, -L, 0, r, endWall(-1));
         closedWallRanges?.push(gableStart, pos.length / 3);
         const drop = (over * (r - e)) / W;
         roofFace(-L - over, L + over, -W - over, 0, e - drop, r);
         roofFace(-L - over, L + over, W + over, 0, e - drop, r, 0.85);
         if (style?.solarSide && W >= 2.5 && L >= 2.5) {
           const side = style.solarSide;
-          const point = (u: number, v: number, lift: number) => P(u, side * v, r - (r - e) * v / W + lift);
-          const row = (u0: number, u1: number, v0: number, v1: number, lift: number, colour: RGB) =>
-            quad(point(u0, v0, lift), point(u1, v0, lift), point(u1, v1, lift), point(u0, v1, lift), colour);
+          const row = (u0: number, u1: number, v0: number, v1: number, lift: number, colour: RGB) => {
+            const h0 = r - (r - e) * v0 / W + lift, h1 = r - (r - e) * v1 / W + lift;
+            quadP(u0, side * v0, h0, u1, side * v0, h0, u1, side * v1, h1, u0, side * v1, h1, colour);
+          };
           const frame = rgb('#727a7d'), cell = rgb('#26394d');
           for (let column = 0; column < 4; column++) {
             const u = -2.18 + column * 1.10;
@@ -404,7 +447,7 @@ export class Buildings {
         if (!stepped) panel(false, side, -L - over, L + over, edgeHeight - 0.14, edgeHeight, trim, shed && side === 1 ? 0.01 : over + 0.01);
         if (!stepped && !flat && shape !== 'hip' && shape !== 'gambrel') {
           const v = L + over + 0.01;
-          const rake = (v0: number, v1: number, y0: number, y1: number) => quad(P(side * v, v0, y0), P(side * v, v1, y1), P(side * v, v1, y1 - 0.14), P(side * v, v0, y0 - 0.14), trim);
+          const rake = (v0: number, v1: number, y0: number, y1: number) => quadP(side * v, v0, y0, side * v, v1, y1, side * v, v1, y1 - 0.14, side * v, v0, y0 - 0.14, trim);
           if (shed) rake(-W - over, W, e - over * (r - e) / (2 * W), r);
           else {
             const low = e - over * (r - e) / W;
@@ -427,11 +470,11 @@ export class Buildings {
           }
         }
       } else if (!simpleSiding && (b.kind === 'house' || b.kind === 'barn')) {
+        const course: RGB = [wall[0] * 0.95, wall[1] * 0.95, wall[2] * 0.95];
+        const sides = style && b.kind === 'house' ? [style.front?.side ?? 1] : [-1, 1];
         for (let y = 0.65; y < e - 0.15; y += style ? 0.64 : b.kind === 'barn' ? 0.44 : 0.32) {
-          const course: RGB = [wall[0] * 0.95, wall[1] * 0.95, wall[2] * 0.95];
           // Spend siding detail on one long wall and one end wall. The other walls
           // keep their paint; this pays for porches and windows without more draw calls.
-          const sides = style && b.kind === 'house' ? [style.front?.side ?? 1] : [-1, 1];
           for (const side of sides) {
             panel(false, side, -L + 0.14, L - 0.14, y, y + 0.018, course, 0.022);
             panel(true, side, -W + 0.14, W - 0.14, y, y + 0.018, course, 0.022);
@@ -446,7 +489,14 @@ export class Buildings {
         const tallFront = stepped && !!style?.windowWall && !frontEnd && front === 1;
         const deckHeight = tallFront ? 0.62 : 0.23;
         const doorU = tallFront ? span * 0.57 : span > 4 ? -span * 0.25 : 0;
-        const F = (u: number, v: number, h: number) => frontEnd ? P(v, u, h) : P(u, v, h);
+        const quadF = (au: number, av: number, ah: number, bu: number, bv: number, bh: number,
+          cu: number, cv: number, ch: number, du: number, dv: number, dh: number, colour: RGB) =>
+          frontEnd ? quadP(av, au, ah, bv, bu, bh, cv, cu, ch, dv, du, dh, colour)
+            : quadP(au, av, ah, bu, bv, bh, cu, cv, ch, du, dv, dh, colour);
+        const triF = (au: number, av: number, ah: number, bu: number, bv: number, bh: number,
+          cu: number, cv: number, ch: number, colour: RGB) =>
+          frontEnd ? triP(av, au, ah, bv, bu, bh, cv, cu, ch, colour)
+            : triP(au, av, ah, bu, bv, bh, cu, cv, ch, colour);
         const frontBox = (u0: number, u1: number, v0: number, v1: number, y0: number, y1: number, colour: RGB) => {
           if (frontEnd) box(v0, v1, u0, u1, y0, y1, colour);
           else box(u0, u1, v0, v1, y0, y1, colour);
@@ -515,7 +565,7 @@ export class Buildings {
               const v = front * (depth + reach - 0.12);
               frontBox(u - 0.07, u + 0.07, v - 0.07, v + 0.07, 0.23, top, trim);
             }
-            quad(F(u0 - 0.15, front * depth, top + 0.23), F(u1 + 0.15, front * depth, top + 0.23), F(u1 + 0.15, front * (depth + reach + 0.15), top), F(u0 - 0.15, front * (depth + reach + 0.15), top), roof);
+            quadF(u0 - 0.15, front * depth, top + 0.23, u1 + 0.15, front * depth, top + 0.23, u1 + 0.15, front * (depth + reach + 0.15), top, u0 - 0.15, front * (depth + reach + 0.15), top, roof);
           }
         }
         if (style?.dormer && !flat && !shed && shape !== 'hip' && span > 3) {
@@ -525,18 +575,18 @@ export class Buildings {
           panel(false, front, -0.65, 0.65, y + 0.12, top - 0.12, trim, Math.abs(v) - W + 0.035);
           panel(false, front, -0.48, 0.48, y + 0.22, top - 0.21, glass, Math.abs(v) - W + 0.05);
           const peak = Math.min(r, top + 0.4);
-          tri(P(-1, v, top), P(1, v, top), P(0, v, peak), wall);
-          for (const side of [-1, 1]) quad(P(side, v + front * 0.15, top), P(side, v - front * d, top), P(0, v - front * d, peak), P(0, v + front * 0.15, peak), roof);
+          triP(-1, v, top, 1, v, top, 0, v, peak, wall);
+          for (const side of [-1, 1]) quadP(side, v + front * 0.15, top, side, v - front * d, top, 0, v - front * d, peak, 0, v + front * 0.15, peak, roof);
         }
         if (style?.satelliteDish) {
           const u = doorU + 1.4, v = front * (depth + 0.35), y = Math.min(e - 0.3, 2.5);
           frontBox(u - 0.035, u + 0.035, v - 0.04, v + 0.04, y - 0.5, y, foundation);
-          const centre = F(u, v - front * 0.12, y);
+          const dish = rgb('#a3aaa9');
           for (let i = 0; i < 8; i++) {
             const a0 = i * Math.PI / 4, a1 = (i + 1) * Math.PI / 4;
-            tri(centre, F(u + Math.cos(a0) * 0.38, v, y + Math.sin(a0) * 0.32), F(u + Math.cos(a1) * 0.38, v, y + Math.sin(a1) * 0.32), rgb('#a3aaa9'));
+            triF(u, v - front * 0.12, y, u + Math.cos(a0) * 0.38, v, y + Math.sin(a0) * 0.32, u + Math.cos(a1) * 0.38, v, y + Math.sin(a1) * 0.32, dish);
           }
-          tri(F(u, v, y - 0.28), F(u + 0.04, v, y - 0.28), F(u, v + front * 0.4, y - 0.08), foundation);
+          triF(u, v, y - 0.28, u + 0.04, v, y - 0.28, u, v + front * 0.4, y - 0.08, foundation);
         }
         if (primary && (style?.chimney ?? (hash(identity + 4) > 0.45)) && L > 3 && W > 2) {
           const u = L * 0.45, v = W * 0.3;
@@ -599,29 +649,42 @@ export class Buildings {
       }
       if (primary && style?.silo && style.siloPosition) {
         const site = b.site ?? b, angle = site.axisDeg * Math.PI / 180;
-        const S = (u: number, v: number, h: number) => new THREE.Vector3(
-          site.x - village[0] + Math.sin(angle) * u + Math.cos(angle) * v, base + h,
-          village[1] - site.y - Math.cos(angle) * u + Math.sin(angle) * v);
+        const sx = site.x - village[0], sz = village[1] - site.y;
+        const sa = Math.sin(angle), ca = Math.cos(angle);
+        const sX = (u: number, v: number) => sx + sa * u + ca * v;
+        const sZ = (u: number, v: number) => sz - ca * u + sa * v;
         const { u, v, diameter, height } = style.siloPosition;
         const radius = diameter / 2, cap = height - 2;
         const concrete = rgb('#c3c5bf'), red = rgb('#a04438'), white = rgb('#e2e1d8');
         const segments = 16;
+        const topX = sX(u, v), topZ = sZ(u, v), topY = base + height;
         for (let i = 0; i < segments; i++) {
           const a0 = i * Math.PI * 2 / segments, a1 = (i + 1) * Math.PI * 2 / segments;
-          const ring = (a: number, radius: number, y: number) => S(u + Math.cos(a) * radius, v + Math.sin(a) * radius, y);
-          quad(ring(a0, radius, -1), ring(a1, radius, -1), ring(a1, radius, cap), ring(a0, radius, cap), concrete, 0.83 + 0.17 * Math.cos(a0));
+          const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+          const x0 = sX(u + c0 * radius, v + s0 * radius), z0 = sZ(u + c0 * radius, v + s0 * radius);
+          const x1 = sX(u + c1 * radius, v + s1 * radius), z1 = sZ(u + c1 * radius, v + s1 * radius);
+          quadN(x0, base - 1, z0, x1, base - 1, z1, x1, base + cap, z1, x0, base + cap, z0, concrete, 0.83 + 0.17 * c0);
           const colour = i % 2 === 0 ? red : white;
           // Three latitude bands form a rounded striped dome, 14 m total height.
           for (let j = 0; j < 3; j++) {
             const t0 = j * Math.PI / 6, t1 = (j + 1) * Math.PI / 6;
-            const p0 = ring(a0, radius * Math.cos(t0), cap + 2 * Math.sin(t0));
-            const p1 = ring(a1, radius * Math.cos(t0), cap + 2 * Math.sin(t0));
-            if (j === 2) tri(p0, p1, S(u, v, height), colour);
-            else quad(p0, p1, ring(a1, radius * Math.cos(t1), cap + 2 * Math.sin(t1)), ring(a0, radius * Math.cos(t1), cap + 2 * Math.sin(t1)), colour);
+            const r0 = radius * Math.cos(t0), y0 = base + cap + 2 * Math.sin(t0);
+            const p0x = sX(u + c0 * r0, v + s0 * r0), p0z = sZ(u + c0 * r0, v + s0 * r0);
+            const p1x = sX(u + c1 * r0, v + s1 * r0), p1z = sZ(u + c1 * r0, v + s1 * r0);
+            if (j === 2) triN(p0x, y0, p0z, p1x, y0, p1z, topX, topY, topZ, colour);
+            else {
+              const r1 = radius * Math.cos(t1), y1 = base + cap + 2 * Math.sin(t1);
+              quadN(p0x, y0, p0z, p1x, y0, p1z,
+                sX(u + c1 * r1, v + s1 * r1), y1, sZ(u + c1 * r1, v + s1 * r1),
+                sX(u + c0 * r1, v + s0 * r1), y1, sZ(u + c0 * r1, v + s0 * r1), colour);
+            }
           }
         }
-        const corners = [S(u - radius - 1, v - radius - 1, 0), S(u + radius + 1, v + radius + 1, 0), S(u - radius - 1, v + radius + 1, 0), S(u + radius + 1, v - radius - 1, 0)];
-        this.clear.push([Math.min(...corners.map((p) => p.x)), Math.min(...corners.map((p) => p.z)), Math.max(...corners.map((p) => p.x)), Math.max(...corners.map((p) => p.z))]);
+        const x0 = sX(u - radius - 1, v - radius - 1), z0 = sZ(u - radius - 1, v - radius - 1);
+        const x1 = sX(u + radius + 1, v + radius + 1), z1 = sZ(u + radius + 1, v + radius + 1);
+        const x2 = sX(u - radius - 1, v + radius + 1), z2 = sZ(u - radius - 1, v + radius + 1);
+        const x3 = sX(u + radius + 1, v - radius - 1), z3 = sZ(u + radius + 1, v - radius - 1);
+        this.clear.push([Math.min(x0, x1, x2, x3), Math.min(z0, z1, z2, z3), Math.max(x0, x1, x2, x3), Math.max(z0, z1, z2, z3)]);
       }
       this.clear.push(...clearBoxes(b, village, 2.5));
     }
@@ -634,13 +697,22 @@ export class Buildings {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     // The LOW paint stays in linear light. A normalized byte retains the ramp at a quarter of the colour bandwidth.
-    geo.setAttribute('color', low
-      ? new THREE.BufferAttribute(Uint8Array.from(col, c => Math.round(255 * THREE.MathUtils.clamp(c, 0, 1))), 3, true)
-      : new THREE.Float32BufferAttribute(col, 3));
+    if (low) {
+      const bytes = new Uint8Array(col.length);
+      for (let i = 0; i < col.length; i++) {
+        const v = col[i];
+        bytes[i] = Math.round(255 * (v < 0 ? 0 : v > 1 ? 1 : v));
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(bytes, 3, true));
+    } else {
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    }
     geo.computeVertexNormals();
     if (low) {
-      const normals = geo.getAttribute('normal');
-      geo.setAttribute('normal', new THREE.BufferAttribute(Int8Array.from(normals.array, n => Math.round(n * 127)), 3, true));
+      const normals = geo.getAttribute('normal').array;
+      const packed = new Int8Array(normals.length);
+      for (let i = 0; i < normals.length; i++) packed[i] = Math.round(normals[i] * 127);
+      geo.setAttribute('normal', new THREE.BufferAttribute(packed, 3, true));
     }
     this.mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
     if (closedWallRanges && sunDir) {

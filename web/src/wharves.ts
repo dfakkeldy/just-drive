@@ -77,7 +77,7 @@ export class PublicWharves {
     for(const st of this.state){
       const [x0,z0,x1,z1]=st.box,near=Math.hypot(Math.max(x0-camera.x,0,camera.x-x1),Math.max(z0-camera.z,0,camera.z-z1))<1200;
       if(near!==st.near){st.near=near;dirty=true;}
-      if(!near)continue;
+      if(!near||this.terrain.burst)continue;
       const stamp=this.terrain.drawnOver(x0,z0,x1,z1);
       if(stamp===''||stamp===st.stamp)continue;
       st.stamp=stamp;this.plans++;dirty=true;

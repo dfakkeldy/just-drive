@@ -4,17 +4,69 @@ import type { Road } from './roads';
 import type { Streams } from './streams';
 
 export interface Crossing { x: number; z: number; heading: number; scale: number; length: number; road: number; cover: { x: number; z: number }[] }
+interface IndexedRoad {
+  r: Road;
+  x0: number; z0: number; x1: number; z1: number;
+  // Chunks of 16 segments: [x0, z0, x1, z1, startSeg, endSeg]
+  chunks: Float64Array;
+}
+
+function indexRoad(r: Road): IndexedRoad {
+  const pts = r.pts, segs = Math.max(0, pts.length - 1);
+  const CHUNK = 16, nChunks = Math.ceil(segs / CHUNK);
+  const chunks = new Float64Array(nChunks * 6);
+  let rx0 = Infinity, rz0 = Infinity, rx1 = -Infinity, rz1 = -Infinity;
+  for (let c = 0; c < nChunks; c++) {
+    const k0 = c * CHUNK + 1, k1 = Math.min(pts.length - 1, (c + 1) * CHUNK);
+    let cx0 = pts[k0 - 1][0], cz0 = pts[k0 - 1][1], cx1 = cx0, cz1 = cz0;
+    for (let k = k0; k <= k1; k++) {
+      const px = pts[k][0], pz = pts[k][1];
+      if (px < cx0) cx0 = px; if (px > cx1) cx1 = px;
+      if (pz < cz0) cz0 = pz; if (pz > cz1) cz1 = pz;
+    }
+    const o = c * 6;
+    chunks[o] = cx0; chunks[o + 1] = cz0; chunks[o + 2] = cx1; chunks[o + 3] = cz1;
+    chunks[o + 4] = k0; chunks[o + 5] = k1;
+    if (cx0 < rx0) rx0 = cx0; if (cx1 > rx1) rx1 = cx1;
+    if (cz0 < rz0) rz0 = cz0; if (cz1 > rz1) rz1 = cz1;
+  }
+  return { r, x0: rx0, z0: rz0, x1: rx1, z1: rz1, chunks };
+}
+
+function withinIndexedRoad(x: number, z: number, ir: IndexedRoad, limit: number): boolean {
+  if (x < ir.x0 - limit || x > ir.x1 + limit || z < ir.z0 - limit || z > ir.z1 + limit) return false;
+  const pts = ir.r.pts, chunks = ir.chunks;
+  const eps = limit + 1e-6, epsSq = eps * eps;
+  for (let o = 0; o < chunks.length; o += 6) {
+    if (x < chunks[o] - eps || x > chunks[o + 2] + eps || z < chunks[o + 1] - eps || z > chunks[o + 3] + eps) continue;
+    const k0 = chunks[o + 4], k1 = chunks[o + 5];
+    for (let k = k0; k <= k1; k++) {
+      const a = pts[k - 1], b = pts[k];
+      const ax = a[0], az = a[1], bx = b[0], bz = b[1];
+      if (x < (ax < bx ? ax : bx) - eps || x > (ax > bx ? ax : bx) + eps
+        || z < (az < bz ? az : bz) - eps || z > (az > bz ? az : bz) + eps) continue;
+      const dx = bx - ax, dz = bz - az;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+      const ex = x - (ax + t * dx), ez = z - (az + t * dz);
+      if (ex * ex + ez * ez <= epsSq && Math.hypot(ex, ez) <= limit) return true;
+    }
+  }
+  return false;
+}
+
 /** The bake removes open-water segments beneath roads. Its mouth pairs restore those stream runs.
  * Use the shipped pairs, not open-water intersections, which mostly find unpiped farm tracks. */
 export function streamCrossings(streams: Streams, roads: readonly Road[]): Crossing[] {
   const bridges = roads.filter(r => r.bridge), byId = new Map(roads.map(r => [r.id, r]));
+  const indexed = new Map<Road, IndexedRoad>();
+  for (const r of roads) if (r.pts.length > 1) indexed.set(r, indexRoad(r));
   // Bounding boxes of every non-bridge road, so each run tests only the roads near it.
-  const boxes = roads.filter(r => !r.bridge && r.pts.length > 1).map(r => {
-    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
-    for (const [x, z] of r.pts) { x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); }
-    const pad = r.halfWidth + .5;
-    return { r, x0: x0 - pad, z0: z0 - pad, x1: x1 + pad, z1: z1 + pad };
-  });
+  const boxes: Array<{ ir: IndexedRoad; x0: number; z0: number; x1: number; z1: number }> = [];
+  for (const r of roads) {
+    if (r.bridge || r.pts.length <= 1) continue;
+    const ir = indexed.get(r)!, pad = r.halfWidth + .5;
+    boxes.push({ ir, x0: ir.x0 - pad, z0: ir.z0 - pad, x1: ir.x1 + pad, z1: ir.z1 + pad });
+  }
   const result: Crossing[] = [];
   for (const pipe of streams.pipes) {
     const road = byId.get(pipe.road);
@@ -22,26 +74,39 @@ export function streamCrossings(streams: Streams, roads: readonly Road[]): Cross
     const dx = pipe.endX - pipe.x, dz = pipe.endZ - pipe.z;
     const x = (pipe.x + pipe.endX) / 2, z = (pipe.z + pipe.endZ) / 2;
     const length = Math.hypot(dx, dz), scale = Math.min(1, pipe.dia / 4.1);
-    if (bridges.some(b => distanceToRoad(x, z, b) <= b.halfWidth + Math.hypot(length / 2 + .3, 6.1 * scale) + 3)) continue;
+    const bridgeMargin = Math.hypot(length / 2 + .3, 6.1 * scale) + 3;
+    if (bridges.some(b => { const ir = indexed.get(b); return ir ? withinIndexedRoad(x, z, ir, b.halfWidth + bridgeMargin) : distanceToRoad(x, z, b) <= b.halfWidth + bridgeMargin; })) continue;
     // A later road-bed bake moved one shipped pair away from its road. It is no longer a crossing.
+    const ownIndexed = indexed.get(road);
+    const steps = Math.ceil(length), ownLimit = road.halfWidth + .5;
     let own = false;
-    for (let d = 0; d <= Math.ceil(length) && !own; d++) {
+    for (let d = 0; d <= steps && !own; d++) {
       const t = Math.min(1, d / length);
-      own = distanceToRoad(pipe.x + dx * t, pipe.z + dz * t, road) <= road.halfWidth + .5;
+      const px = pipe.x + dx * t, pz = pipe.z + dz * t;
+      own = ownIndexed ? withinIndexedRoad(px, pz, ownIndexed, ownLimit) : distanceToRoad(px, pz, road) <= ownLimit;
     }
     if (!own) continue;
     // Fill and crown samples under every road the arch passes beneath, not only the road it was mapped to: a long
     // run can also pass under a highway beside it. Samples either side of the axis catch a road that crosses the
     // arch at an angle and falls away across its width.
     const side = .5 * 4.822 * scale, nx = -dz / length, nz = dx / length;
-    const near = boxes.filter(b => Math.max(pipe.x, pipe.endX) + side >= b.x0 && Math.min(pipe.x, pipe.endX) - side <= b.x1
-      && Math.max(pipe.z, pipe.endZ) + side >= b.z0 && Math.min(pipe.z, pipe.endZ) - side <= b.z1).map(b => b.r);
+    const pxMin = Math.min(pipe.x, pipe.endX) - side, pxMax = Math.max(pipe.x, pipe.endX) + side;
+    const pzMin = Math.min(pipe.z, pipe.endZ) - side, pzMax = Math.max(pipe.z, pipe.endZ) + side;
+    const near: IndexedRoad[] = [];
+    for (let i = 0; i < boxes.length; i++) {
+      const b = boxes[i];
+      if (pxMax >= b.x0 && pxMin <= b.x1 && pzMax >= b.z0 && pzMin <= b.z1) near.push(b.ir);
+    }
     const cover: { x: number; z: number }[] = [];
-    for (let d = 0; d <= Math.ceil(length); d++) {
-      const t = Math.min(1, d / length);
-      for (const o of [0, -side, side]) {
-        const px = pipe.x + dx * t + nx * o, pz = pipe.z + dz * t + nz * o;
-        if (near.some(r => distanceToRoad(px, pz, r) <= r.halfWidth + .5)) cover.push({ x: px, z: pz });
+    const offsets = [0, -side, side];
+    for (let d = 0; d <= steps; d++) {
+      const t = Math.min(1, d / length), bx = pipe.x + dx * t, bz = pipe.z + dz * t;
+      for (let oi = 0; oi < 3; oi++) {
+        const o = offsets[oi], px = bx + nx * o, pz = bz + nz * o;
+        for (let ni = 0; ni < near.length; ni++) {
+          const ir = near[ni];
+          if (withinIndexedRoad(px, pz, ir, ir.r.halfWidth + .5)) { cover.push({ x: px, z: pz }); break; }
+        }
       }
     }
     result.push({ x, z, heading: Math.atan2(dx, -dz), scale, length, road: road.id, cover });
