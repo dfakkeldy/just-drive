@@ -4,8 +4,11 @@
 Each rule is tested, and then broken on purpose (--mutations, also run by default) to prove the test can fail.
 """
 import copy
+from functools import cache
+import json
 import os
 import re
+import subprocess
 import sys
 
 import numpy as np
@@ -459,6 +462,12 @@ def check_place():
     assert np.array_equal(north[:cut], whole[:cut]) and np.array_equal(south[rg.HALO:], whole[cut:]), 'blocks agree at a keep box too'
 
 
+@cache
+def site_reservations():
+    return json.loads(subprocess.check_output(
+        ['node', 'tools/run-node-check.mjs', 'tools/road-ground-sites.mjs'], cwd=ROOT))
+
+
 def check_keep_boxes(web=lambda name: open(os.path.join(ROOT, 'web', 'src', name)).read()):
     # Every hand-built place that is fixed to map coordinates lies inside a keep box of its area, with room to spare.
     # The anchors are read from the game's own source, so a place that moves must take its box with it.
@@ -492,6 +501,13 @@ def check_keep_boxes(web=lambda name: open(os.path.join(ROOT, 'web', 'src', name
         assert any(x0 + 20 <= e <= x1 - 20 and y0 + 20 <= n <= y1 - 20 for x0, y0, x1, y1 in boxes), f'{name} ({e}, {n}) is not inside a keep box of {area}'
     quarry = areas.AREAS['westbay']
     assert quarry.extra_fine[0] in quarry.keep_roads, 'the West Bay quarry keeps its roads and ground'
+    # Cover the complete reservation, including the outer edges, at each new site.
+    # The source geometry has its own tolerances. Leave another 10 m in the keep box.
+    for site in site_reservations():
+        area, name, (e0, n0, e1, n1) = site['area'], site['name'], site['box']
+        boxes = areas.AREAS[area].keep_roads
+        assert any(x0 + 10 <= e0 and y0 + 10 <= n0 and e1 <= x1 - 10 and n1 <= y1 - 10
+                   for x0, y0, x1, y1 in boxes), f'{area}: {name} reservation is not covered with a 10 m margin'
 
 
 def check_keeps():
