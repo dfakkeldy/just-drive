@@ -549,6 +549,8 @@ for (const {a, b, side} of added) {
           let yInMid = null;
           prodTerrain.withGroundContact({ y: 100 }, () => { yInMid = netInside.deckHeight(mx, mz); }, true);
           assert.equal(yInMid, yOutMid, `bridge ${id} exag=${exag} midspan deckHeight is caller-independent`);
+          const prodMesh = netOutside.group.children.find(c => c.name === `pony-truss-${id}`);
+          prodMesh.updateMatrixWorld(true);
           const clearSpan = PONY_TRUSS.clearHalf - 1e-4;
           for (const end of [-1, 1]) {
             for (let di = 0; di <= 20; di++) {
@@ -560,6 +562,17 @@ for (const {a, b, side} of added) {
                 assert.equal(yIn, yOut, `bridge ${id} exag=${exag} apron deckHeight is caller-independent at s=${s.toFixed(2)}, off=${offset.toFixed(2)}`);
                 const drawn = prodTerrain.meshHeightAt(x, z, true), h = prodTerrain.heightAt(x, z);
                 assert.ok(drawn !== null && h !== null && yOut >= Math.max(drawn, h) - 1e-4, `bridge ${id} exag=${exag} end=${end} dp=${dp.toFixed(2)} off=${offset.toFixed(2)} clears drawn triangles (${(yOut - Math.max(drawn, h)).toFixed(4)} m)`);
+              }
+            }
+            // Bound wheel-contact vs rendered-asphalt gap across the traveled lane (including Bridge 45 east 2.26 m).
+            for (const dp of [0.25, 1.15, 2.26, 2.95]) {
+              const s = end < 0 ? -dp : span + dp;
+              for (const offset of [-1.0, 0, 1.0]) {
+                const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
+                const y = netOutside.deckHeight(x, z);
+                ray.set(new THREE.Vector3(x, y + 1, z), down);
+                const hit = ray.intersectObject(prodMesh)[0];
+                assert.ok(hit && Math.abs(hit.point.y - y) < 1e-4, `bridge ${id} exag=${exag} end=${end} dp=${dp} off=${offset} asphalt matches wheel contact (${hit ? Math.abs(hit.point.y - y).toFixed(4) : 'miss'} m)`);
               }
             }
           }
@@ -651,17 +664,43 @@ for (const {a, b, side} of added) {
           if (mabouManifest.levels[7]?.includes(`${ci}_${cj}`)) await selTerrain.loadNow(7, ci, cj);
         }
         selTerrain.update(cam);
+        selTerrain.queue.length = 0;
         assert.equal(selTerrain.drawnLevelAt(edgeOutX, edgeOutZ), 7, 'loaded siblings switch production selector to level 7');
-        // Refresh triggers automatically even via deckHeight() without Roads.update(), and also via Roads.update().
+        // Measure terrain sample count on the LOD rebuild: must stay bounded (< 1500 surface/mesh calls, not tens of thousands).
+        const origSurf = selTerrain.surfaceAt.bind(selTerrain);
+        const origMesh = selTerrain.meshHeightAt.bind(selTerrain);
+        const origDrawnLvl = selTerrain.drawnLevelAt.bind(selTerrain);
+        let surfCalls = 0, meshCalls = 0, drawnLvlCalls = 0;
+        selTerrain.surfaceAt = (x, z) => { surfCalls++; return origSurf(x, z); };
+        selTerrain.meshHeightAt = (x, z, d) => { meshCalls++; return origMesh(x, z, d); };
+        selTerrain.drawnLevelAt = (x, z) => { drawnLvlCalls++; return origDrawnLvl(x, z); };
         const supportInL7 = selNet.deckHeight(edgeInX, edgeInZ);
         const meshReady = selNet.group.children.find(c => c.name === 'pony-truss-46');
         assert.notEqual(meshReady, meshPending, 'selection transition 6->7 rebuilds Bridge 46 mesh');
+        assert.ok(surfCalls < 1500 && meshCalls < 1500, `LOD rebuild bounds terrain lookups (surface=${surfCalls}, mesh=${meshCalls})`);
         meshReady.updateMatrixWorld(true);
-        const landL7 = selTerrain.meshHeightAt(edgeOutX, edgeOutZ, true);
+        const landL7 = origMesh(edgeOutX, edgeOutZ, true);
         ray.set(new THREE.Vector3(edgeInX, 20, edgeInZ), down);
         const hitL7 = ray.intersectObject(meshReady)[0];
-        assert.ok(hitL7 && Math.abs(hitL7.point.y - landL7) < 0.03, `level-7 selected east apron meets level-7 road (${hitL7?.point.y.toFixed(3)} vs ${landL7?.toFixed(3)})`);
+        assert.ok(hitL7 && Math.abs(hitL7.point.y - supportInL7) < 1e-4, `level-7 settled east apron matches wheel contact (${hitL7?.point.y.toFixed(3)} vs ${supportInL7?.toFixed(3)})`);
+        assert.ok(hitL7 && Math.abs(hitL7.point.y - landL7) < 0.14, `level-7 settled east apron stays close to level-7 road (${hitL7?.point.y.toFixed(3)} vs ${landL7?.toFixed(3)})`);
         assert.ok(supportInL7 !== null && supportInL7 >= supportOut - 0.02, `level-7 selected east apron preserves wheel support (${supportInL7?.toFixed(3)} vs ${supportOut?.toFixed(3)})`);
+        // Camera-only steady LOD selection (h=1750 selects level 6 while level 7 remains cached): 1000 wheel queries must hit O(1) cache.
+        let prevMesh = meshReady;
+        for (const [stepIdx, h] of [8, 1750, 1750, 8].entries()) {
+          cam.position.y = h; cam.lookAt(bx, 2, bz); cam.updateMatrixWorld(true);
+          selTerrain.update(cam); selTerrain.queue.length = 0;
+          surfCalls = meshCalls = drawnLvlCalls = 0;
+          selNet.update(cam.position);
+          const curMesh = selNet.group.children.find(c => c.name === 'pony-truss-46');
+          if (stepIdx === 2) assert.equal(curMesh, prevMesh, `steady camera at h=${h} keeps cached pony-truss mesh`);
+          prevMesh = curMesh;
+          assert.ok(surfCalls < 1500 && meshCalls < 1500, `camera LOD step ${stepIdx} (h=${h}) bounds rebuild lookups (surface=${surfCalls}, mesh=${meshCalls})`);
+          surfCalls = meshCalls = drawnLvlCalls = 0;
+          for (let i = 0; i < 1000; i++) selNet.deckHeight(edgeInX, edgeInZ);
+          assert.equal(surfCalls, 0, `1000 steady wheel queries at h=${h} make zero surfaceAt calls (got ${surfCalls})`);
+          assert.equal(drawnLvlCalls, 0, `1000 steady wheel queries at h=${h} make zero drawnLevelAt calls (got ${drawnLvlCalls})`);
+        }
         for (const child of [...selNet.group.children]) child.geometry?.dispose();
       }
       // 1 cm scan on Bridge 45 east apron at 3.0x (both level 6 and level 7) to catch pockets between grid samples.

@@ -58,16 +58,13 @@ export class Roads {
   private updateRevision=-1;private updateX=Infinity;private updateZ=Infinity;
   private periodMat: THREE.MeshLambertMaterial | null = null;
 
-  // Explicit, caller-independent terrain samplers: wheel support clears both drawn triangles and bilinear ground; visual apron meets selected triangles.
+  // Explicit, caller-independent terrain samplers: wheel support clears both drawn triangles and bilinear ground; visual apron meets selected triangles during LOD lag.
   private readonly readTerrainHeight = (x: number, z: number): number | null => {
-    const mesh = this.terrain.meshHeightAt?.(x, z, false) ?? null;
     const drawn = this.terrain.meshHeightAt?.(x, z, true) ?? null;
+    const mesh = drawn ?? this.terrain.meshHeightAt?.(x, z, false) ?? null;
     const surf = this.terrain.surfaceAt(x, z)?.ground ?? null;
-    let best = -Infinity;
-    if (mesh !== null && mesh > best) best = mesh;
-    if (drawn !== null && drawn > best) best = drawn;
-    if (surf !== null && surf > best) best = surf;
-    return best > -Infinity ? best : this.terrain.heightAt(x, z);
+    if (mesh !== null && surf !== null) return Math.max(mesh, surf);
+    return mesh ?? surf ?? this.terrain.heightAt(x, z);
   };
   private readonly readDrawnHeight = (x: number, z: number): number | null =>
     this.terrain.meshHeightAt?.(x, z, true) ?? this.readTerrainHeight(x, z);
@@ -252,8 +249,13 @@ export class Roads {
   private deck(road: Road, checkDrawn = false): Deck | null {
     if(this.terrain.cartRoads)return this.eraDeck(road);
     const have = this.decks.get(road.id), rev = this.terrain.dataRevision;
-    const pendingDrawn = have?.drawnSig !== undefined && have.drawnSig !== have.bankSig;
-    if (have && !checkDrawn && !pendingDrawn && (have.level >= 8 || (rev !== undefined && have.revision === rev))) return have;
+    // Wheel queries (checkDrawn=false) stay on the O(1) cache whenever terrain data revision is unchanged.
+    if (have && !checkDrawn && (have.level >= 8 || (rev !== undefined && have.revision === rev))) return have;
+    let drawn: { minLevel: number; sig: number } | null = null;
+    if (have && checkDrawn && road.ponyTruss) {
+      drawn = ponyTrussBankState(road, this.readDrawnLevel);
+      if (drawn.sig === have.drawnSig && (have.level >= 8 || (rev !== undefined && have.revision === rev))) return have;
+    }
     const p = road.pts, n = p.length;
     // The banks: a few metres past each end of the bridge, along its line.
     const end = (a: [number, number], b: [number, number]) => {
@@ -264,7 +266,7 @@ export class Roads {
     // Level 6 (4 m) is the finest ground some bridges ever get; finer data, when it comes, rebuilds the deck.
     if (!s0 || !s1 || s0.level < 6 || s1.level < 6) return have ?? null;
     const bank = road.ponyTruss ? ponyTrussBankState(road, this.readSurfaceLevel) : null;
-    const drawn = road.ponyTruss ? ponyTrussBankState(road, this.readDrawnLevel) : null;
+    if (road.ponyTruss && !drawn) drawn = ponyTrussBankState(road, this.readDrawnLevel);
     const level = bank ? Math.min(s0.level, s1.level, bank.minLevel, drawn!.minLevel) : Math.min(s0.level, s1.level);
     if (have) {
       const upgraded = bank ? (bank.sig !== have.bankSig || drawn!.sig !== have.drawnSig || level > have.level) : level > have.level;
@@ -279,7 +281,10 @@ export class Roads {
     let mesh: THREE.Mesh;
     let aprons: PonyTrussAprons | undefined;
     if (road.ponyTruss) {
-      const built = buildPonyTrussBridge(p, y0, y1, len, this.readTerrainHeight, typeof this.terrain.meshHeightAt === 'function' ? this.readDrawnHeight : this.readTerrainHeight);
+      // When the selected tile matches loaded detail, visual asphalt and wheel support share one exact surface (zero floating wheels).
+      // While a coarser parent is still drawn (streaming lag), visual outer apron meets the selected road while preserving wheel support.
+      const drawnLags = drawn!.sig !== bank!.sig && typeof this.terrain.meshHeightAt === 'function';
+      const built = buildPonyTrussBridge(p, y0, y1, len, this.readTerrainHeight, drawnLags ? this.readDrawnHeight : this.readTerrainHeight);
       y0 = built.y0; y1 = built.y1;
       aprons = built.aprons;
       this.periodMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
