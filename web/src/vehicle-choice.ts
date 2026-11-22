@@ -37,8 +37,8 @@ export function vehicleButtons(choice: VehicleChoice, id = 'vehicleChoice'): HTM
   return group;
 }
 export const bikeHelp = '\nWASD/arrows: ride · Shift + throttle: wheelie · space: rear slide\nAir: W forward / S back · A/D whip · H: horn · T: radio · R: road · V: eyes · F: drone · L: places · M: map · O: save picture';
-const PAUSE_KEY: [string, string] = ['Esc / P', 'Pause or resume. Room games do not pause.'];
-const PAUSE_TOUCH: [string, string] = ['PAUSE', 'Pause or resume. Room games do not pause.'];
+const PAUSE_KEY: [string, string] = ['Esc / P', 'Pause or resume. A room keeps going when you pause.'];
+const PAUSE_TOUCH: [string, string] = ['PAUSE', 'Pause or resume. A room keeps going when you pause.'];
 export function bikeKeys(touch: boolean): [string, string][] {
   return touch ? [
     PAUSE_TOUCH,

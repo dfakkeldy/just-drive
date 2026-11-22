@@ -97,6 +97,7 @@ const overlap = `(()=>{const a=document.getElementById('driftMeter').getBounding
 const inside = "(()=>{const r=document.getElementById('driftMeter').getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight})()";
 
 async function keyboardDrift(name, pictures) {
+  assert.ok(await read(`document.getElementById('endShift').classList.contains('inPanel')&&document.getElementById('endShift').getBoundingClientRect().width===0`),'END SHIFT stays in closed Settings');
   const at = await onGravel(); console.log(name, 'gravel', JSON.stringify(at));
   const before = await read(lastDrift);
   await key('keyDown', 'ArrowUp'); assert.equal(await launch(16), 'gravel', 'standing on gravel');
@@ -128,6 +129,7 @@ try {
 
   // Get Fired on a LOW phone: GO and BRAKE together are the handbrake.
   await page(true, 'mode=fired');
+  assert.ok(await read(`document.getElementById('endShift').classList.contains('inPanel')&&document.getElementById('endShift').getBoundingClientRect().width===0`),'END SHIFT stays in closed Settings');
   const at = await onGravel(); console.log('phone gravel', JSON.stringify(at));
   const pads = await read(`(()=>{const p=id=>{const r=document.getElementById(id).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:r.width}};return {steer:p('tcTrack'),go:p('tcGo'),brake:p('tcBrake')}})()`);
   const range = Math.max(60, pads.steer.w * .36);

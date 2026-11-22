@@ -1,7 +1,7 @@
 // Node only. The old DOM expressions are frozen verbatim, not reconstructed from the new formatter.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { transform } from '../web/node_modules/esbuild/lib/main.js';
+import { build, transform } from '../web/node_modules/esbuild/lib/main.js';
 
 // Frozen from main 53bdb7e875c69dd409d55eadbf2c7d1c1c85d158, web/src/main.ts lines 897-914.
 const oldSource = [
@@ -25,20 +25,20 @@ const oldSource = [
   "  if (mailMode && params.has('lawn') && !bare) hud.textContent += `\\nTyre strips: ${shift.ruts.count} · Lawns damaged: ${shift.ruts.lawns}`;"
 ].join('\n');
 const oldFrame = new Function('context', `with(context) { ${oldSource} }`);
-// Intentional phone-feedback follow-up: desktop free driving gains FPS on its first line.
-// Keep the original oracle frozen and apply only this explicit, one-site text change.
-const fpsSite = ': !mailMode ? ride.help :';
-assert.equal(oldSource.split(fpsSite).length, 2);
-const expectedSource = oldSource.replace(fpsSite, ': !mailMode ? `   ${fps.toFixed(0)} fps` + ride.help :');
-// The new phone-only cap marker is the second deliberate change to this frozen oracle.
+// Keep the old oracle frozen. These exact edits describe the new player readout.
+const expectedSource = oldSource
+ .replace('   ${vehicle.surfaceName}', "${touchDevice ? '' : `   ${vehicle.surfaceName}`}")
+ .replace('(touchDevice ? `   ${fps.toFixed(0)} fps${ride.jumpLine}`', '(touchDevice ? ride.jumpLine')
+ .replace(': !mailMode ? ride.help :', ": drove >= 60 ? '' : !mailMode ? ride.help :")
+ .replace('F: fly · ${fps.toFixed(0)} fps', 'F: drone')
+ .replace('    } else {', "      if (!touchDevice) hud.textContent += ride.airLine || '';\n    } else {");
 const speedSite = '${Math.abs(vehicle.speed * 3.6).toFixed(0)} km/h';
 assert.equal(expectedSource.split(speedSite).length, 2);
 const capExpectedSource = expectedSource.replace(speedSite, speedSite + '${touchDevice && mailMode && !scenePaused() && vehicle.activeTouchSpeedLimit > 0 ? ` ▸ LIMIT ${(vehicle.activeTouchSpeedLimit * 3.6).toFixed(0)}` : ""}');
-// The third: F launches the camera drone now, so the mail game's key line says so.
-const flySite = 'V: seat · F: fly ·';
-assert.equal(capExpectedSource.split(flySite).length, 2);
-const droneExpectedSource = capExpectedSource.replace(flySite, 'V: seat · F: drone ·');
-const expectedFrame = new Function('context', `with(context) { ${droneExpectedSource} }`);
+// The day card and tally own these counts in all mail modes. Keep the frozen source intact.
+const countLine = capExpectedSource.split('\n').find(line => line.includes('pieces delivered'));
+assert.ok(countLine, 'frozen count row found');
+const expectedFrame = new Function('context', `with(context) { ${capExpectedSource.replace(countLine, '')} }`);
 const main = readFileSync(new URL('../web/src/main.ts', import.meta.url), 'utf8');
 const source = readFileSync(new URL('../web/src/hud-text.ts', import.meta.url), 'utf8');
 const start = main.indexOf('  if (!bare) {', main.indexOf('if (mailScore && !bare'));
@@ -54,11 +54,14 @@ async function load(text) {
   const { code } = await transform(text, { loader: 'ts', format: 'esm', target: 'es2022' });
   return import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 }
+const {outputFiles:droneFiles}=await build({stdin:{contents:"export {droneSpans} from './web/src/drone.ts'",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false,logLevel:'silent'});
+const {droneSpans}=await import('data:text/javascript;base64,'+Buffer.from(droneFiles[0].text).toString('base64'));
 const periodNames = await load(readFileSync(new URL('../web/src/eras/history-road-names.ts', import.meta.url), 'utf8'));
 function element(initial = '') {
-  let text = initial, writes = 0, reads = 0;
+  let text = initial, writes = 0, reads = 0, fpsWrites = 0;
+  const dataset = new Proxy({}, { set(target, key, value) { if (key === 'fps') fpsWrites++; target[key] = value; return true; } });
   return {
-    style: {},
+    style: {}, dataset, fpsWrites: () => fpsWrites,
     get textContent() { reads++; return text; },
     set textContent(value) { writes++; text = value; },
     inspect: () => ({ text, writes, reads }),
@@ -66,17 +69,17 @@ function element(initial = '') {
 }
 function context(s, module, bare = false, started = true) {
   const ctx = {
-    mode: s.mode, mailMode: s.mailMode, touchDevice: s.touchDevice, fps: s.fps, bare, started, stuntPark: null, scenePaused: () => !ctx.started,
+    mode: s.mode, mailMode: s.mailMode, touchDevice: s.touchDevice, fps: s.fps, drove: s.hintsHidden ? 60 : 0, bare, started, stuntPark: null, scenePaused: () => !ctx.started,
     ERA: { id: s.era ?? 'today' }, historyRoadName: periodNames.historyRoadName,
     vehicle: { speed: s.speed, activeTouchSpeedLimit: s.activeTouchSpeedLimit, roadName: s.rawRoad, surfaceName: s.surfaceName, airborne: s.airborne, atEdge: s.atEdge, x: 3, z: 4 },
     airportDrag: null,
     yardSite: s.yard === null ? null : { surface: () => s.yard }, homeSite: s.home === null ? null : { surface: () => s.home },
-    ride: { help: s.help, jumpLine: s.jumpLine },
+    ride: { help: s.help, jumpLine: s.jumpLine, airLine: s.airLine ?? '' },
     camera: { position: { x: s.e - 100, z: 200 - s.n, y: s.height } }, VE: 100, VN: 200, EXAG: s.exag,
     sun: { az: s.sunAz, el: s.sunEl }, terrain: { drawn: s.drawn, pending: s.pending }, flySpeed: s.flySpeed,
     SHOTS: { length: s.views }, shift: { done: s.done, stops: s.stops, ruts: { count: s.ruts, lawns: s.lawns } },
     mail: { delivered: s.delivered, lawn: s.lawn, ditch: s.ditch }, towing: { reason: s.trailerReason }, AREA: { route: s.route },
-    params: new URLSearchParams(s.showRuts ? 'lawn=0' : ''), hud: element('unchanged'), fleet: null, drone: { active: false, readout: () => 'DRONE' }, ...module,
+    params: new URLSearchParams(s.showRuts ? 'lawn=0' : ''), hud: element('unchanged'), fleet: null, droneSpans, drone: { active: false, readout: () => 'DRONE' }, ...module,
   };
   // Execute the production initializer too: do not duplicate its wiring in the fixture.
   ctx.hudState = initState(ctx);
@@ -103,7 +106,7 @@ function verifyState(s, module, frame, integration = false) {
   }
 }
 function writes(module) {
-  const s = { ...base }, hud = element();
+  const s = { ...base, debugFps: true }, hud = element();
   for (let i = 0; i < 120; i++) module.setHud(hud, module.hudLine(s));
   assert.deepEqual(hud.inspect(), { text: module.hudLine(s), writes: 1, reads: 0 }, '120 stable frames');
   const changed = element();
@@ -149,6 +152,9 @@ function sequence(module, frame) {
       if (rnd() < .1) { const v = rnd() < .5; set(c => { c.started = v; }); }
       for (const c of [old, now]) for (const edit of edits) edit(c);   // about one frame in ten repeats the state exactly
       expectedFrame(old); frame(now); frames++;
+      // Counts moved off the hint text. The shared adapter must still track every live value.
+      if (!bare) assert.deepEqual([now.hudState.done, now.hudState.stops, now.hudState.delivered, now.hudState.lawn, now.hudState.ditch],
+        [now.shift.done, now.shift.stops, now.mail.delivered, now.mail.lawn, now.mail.ditch], 'live counter adapter');
       const want = old.hud.inspect().text, got = now.hud.inspect().text;
       if (got !== want) assert.equal(got, want, `frame ${f} of session ${session}: ${JSON.stringify({ mailMode: s.mailMode, touchDevice: s.touchDevice, mode: now.mode })}`);
       if (now.hud.style.visibility !== old.hud.style.visibility) assert.fail('HUD visibility differs');
@@ -175,6 +181,37 @@ function caps(module, frame) {
   assert.equal(c.hud.inspect().text.includes('LIMIT'), true, 'running scene can show held telemetry again');
 }
 const module = await load(source), frame = frameFor();
+for (const mailMode of [false,true]) {
+ const s={...base,mailMode,touchDevice:false};
+ assert.doesNotMatch(module.hudLine(s), /fps/);
+ assert.match(module.hudLine({...s,debugFps:true}), /60 fps/);
+ const c=context(s,module);c.drove=59.99;frame(c);assert.match(c.hud.inspect().text,/WASD/);
+ c.drove=60;frame(c);assert.doesNotMatch(c.hud.inspect().text,/WASD/);
+ assert.equal(c.hud.dataset.fps,'60','diagnostic rate stays available');
+ for(let i=0;i<120;i++)frame(c);
+ assert.equal(c.hud.fpsWrites(),1,'stable FPS writes its data attribute once');
+ c.fps=42;frame(c);assert.equal(c.hud.dataset.fps,'42','diagnostic rate stays live');
+ assert.equal(c.hud.fpsWrites(),2,'changed FPS writes its data attribute once');
+ assert.match(module.hudLine({...c.hudState,hintsHidden:false}), /WASD/,'pause restores keys');
+}
+
+function airFeedback(module, frame) {
+ for (const mailMode of [false, true]) for (const pad of [false, true]) {
+  const airLine='\nAir 2.4 s · 19 m · 1 backflip · clean';
+  const s={...base,mailMode,touchDevice:false,hintsHidden:true,airLine};
+  const c=context(s,module);c.ride.padHelp='\nRT: drive';
+  c.hudState.padHelp=pad?c.ride.padHelp:'';frame(c);
+  assert.equal(c.hudState.hintsHidden,true);
+  assert.match(c.hud.inspect().text,/\nAir 2\.4 s · 19 m · 1 backflip · clean/,'jump result survives hidden keys');
+  assert.doesNotMatch(c.hud.inspect().text,/WASD|RT: drive/);
+  c.drove=0;frame(c);
+  assert.equal(c.hud.inspect().text.split(airLine).length-1,1,'jump result appears once with hints');
+  c.ride.airLine='';frame(c);
+  assert.doesNotMatch(c.hud.inspect().text,/Air 2\.4/,'expired jump feedback clears');
+ }
+}
+airFeedback(module, frame);
+
 {
   const c=context(base,module);c.stuntPark={hudLine:'gap-tanks: CLEAN'};
   for(let i=0;i<120;i++)frame(c);
@@ -205,7 +242,7 @@ for (const fps of [0, 29.49, 60.5]) for (const speed of [0, -12.5, .1389, 27.77]
   const jump = bits & 2 ? '\nAir 2.4 s · 19 m · 1 backflip · clean' : '';
   const s = { ...base, brand, mailMode, mode, touchDevice, fps, speed, rawRoad,
     surfaceName: bits & 1 ? 'asphalt' : 'gravel', airborne: !!(bits & 1),
-    help: `\nWASD: drive · ${vehicle} · ${brand === 'just' ? '⇧' : 'Shift'}` + jump,
+    help: `\nWASD: drive · ${vehicle} · ${brand === 'just' ? '⇧' : 'Shift'}`, airLine: jump,
     jumpLine: jump ? ' · ' + jump.slice(1) : '', trailerReason: bits & 4 ? 'Too steep & uneven' : undefined,
     atEdge: !!(bits & 8), route: !!(bits & 16), showRuts: !!(bits & 32), views: bits & 64 ? 9 : 0,
   };
@@ -265,14 +302,16 @@ fleetFrames(module, frame);
 function droneFrames(module, frame) {
   for (const touchDevice of [false, true]) for (const mailMode of [false, true]) {
     const ctx = context({ ...base, mode: 'fly', mailMode, touchDevice }, module);
-    let line = 'DRONE   height 12 m   distance 85 m   9 m/s (max 15)';
+    let line = 'DRONE · Height 12 m · From the car 85 m · Speed 9 m/s · Heading N';
     ctx.drone = { active: true, readout: () => line };
     frame(ctx);
     const text = ctx.hud.inspect().text;
     assert.ok(text.startsWith(line), 'drone readout: ' + text);
-    assert.equal(text.includes('R: fly back · F: land'), !touchDevice, 'desktop drone keys');
+    assert.equal(text, line, 'drone chip contains metrics only; keys have their own grouped block');
     assert.doesNotMatch(text, /sun az|tiles/, 'no free camera lines while the drone flies');
-    line = 'DRONE   height 3 m   distance 0 m   returning'; frame(ctx);
+    ctx.drove = 60; frame(ctx);
+    assert.equal(ctx.hud.inspect().text, line, 'metrics remain after hints hide');
+    line = 'DRONE · Height 3 m · From the car 0 m · Speed 0 m/s · Heading N · returning'; frame(ctx);
     assert.ok(ctx.hud.inspect().text.startsWith(line), 'the readout follows the drone');
     ctx.drone.active = false; frame(ctx);
     assert.match(ctx.hud.inspect().text, /^E -?\d+  N/, 'a fixed view after the drone shows the free camera lines');
@@ -281,10 +320,23 @@ function droneFrames(module, frame) {
   }
 }
 droneFrames(module, frame);
+{
+ const saved=globalThis.document;
+ globalThis.document={createElement:()=>({textContent:''}),createTextNode:textContent=>({textContent})};
+ try {
+  let text='',writes=0,rich=false;
+  const hud={get textContent(){return text;},set textContent(v){text=v;writes++;rich=false;},replaceChildren(...nodes){text=nodes.map(n=>n.textContent).join('');writes++;rich=true;assert.ok(nodes.some(n=>n.className==='dh'));}};
+  for(const line of ['DRONE · Height 6 m · From the car 2000 m · Speed 0 m/s · Heading N · at range limit','DRONE · Height 6 m\nFrom the car 2000 m\nSpeed 0 m/s\nHeading N · returning']) {
+   module.setHud(hud,'drive');module.setHud(hud,line,droneSpans);assert.equal(hud.textContent,line);assert.equal(rich,true,'drone uses the rich path');
+   const count=writes;module.setHud(hud,line,droneSpans);assert.equal(writes,count);
+   module.setHud(hud,'drive');assert.equal(hud.textContent,'drive');assert.equal(rich,false,'drive restores plain text after the drone');
+  }
+ } finally {globalThis.document=saved;}
+}
 console.log('PASS drone readout replaces the free camera lines, desktop keys, phone readout, clears on landing');
 console.log('PASS fleet selection, handbrake and refusal lines follow live state and share the HUD cache');
-console.log(`PASS ${sequenceFrames} frames in 1,500 kept contexts with changing values: old text plus the intended desktop free-drive FPS in every frame`);
-console.log(`PASS ${states} frozen-old states with the explicit FPS addition; ${adapters} actual frame adapter states; bare/title guards and lazy ride hooks`);
+console.log(`PASS ${sequenceFrames} frames in 1,500 kept contexts with changing values: the player readout in every frame`);
+console.log(`PASS ${states} frozen-old states with explicit player text changes; ${adapters} actual frame adapter states; bare/title guards and lazy ride hooks`);
 console.log('PASS 120 rest frames: old 120 writes, new 1; all optional lines: old 600 writes/480 reads, new 1 write/0 reads');
 console.log('PASS changing FPS: 12 writes for 12 values, 120 for 120 changes; zero DOM text reads; per-element/shared-writer cache');
 if (process.argv.includes('--mutations')) {
@@ -302,7 +354,9 @@ if (process.argv.includes('--mutations')) {
   const mutations = [
     ['limit marker always shown', "activeTouchSpeedLimit > 0 ?", "true ?"],
     ['limit marker never shown', "activeTouchSpeedLimit > 0 ?", "false ?"],
-    ['desktop explore FPS removed', '(!s.mailMode ? `   ${s.fps.toFixed(0)} fps` + s.help :', '(!s.mailMode ? s.help :'],
+    ['debug FPS removed', 's.debugFps ? `   ${s.fps.toFixed(0)} fps`', "false ? `   ${s.fps.toFixed(0)} fps`"],
+    ['air feedback dropped', "(s.airLine || '')", "''"],
+    ['key hints never hide', "s.hintsHidden ? '' :", "false ? '' :"],
     ['part dropped', trailer, ''],
     ['parts swapped', optional, edge + trailer],
     ['wrong cache comparison', 'lastText.get(hud) === text', 'lastText.get(hud) !== undefined'],
@@ -311,10 +365,11 @@ if (process.argv.includes('--mutations')) {
   for (const [name, from, to] of mutations) {
     assert.equal(source.split(from).length, 2, name + ' unique source site');
     const bad = await load(source.replace(from, to));
-    assert.throws(() => { caps(bad, frameFor()); verifyState(full, bad, frameFor(), true); verifyState({ ...base, mailMode: false, touchDevice: false }, bad, frameFor(), true); writes(bad); }, undefined, name + ' must fail');
+    assert.throws(() => { caps(bad, frameFor()); verifyState(full, bad, frameFor(), true); verifyState({ ...base, mailMode: false, touchDevice: false }, bad, frameFor(), true); verifyState({ ...base, touchDevice: false, hintsHidden: true }, bad, frameFor(), true); writes(bad); airFeedback(bad, frameFor()); }, undefined, name + ' must fail');
     console.log('KILLED ' + name);
   }  // Wiring faults in the frame block of main.ts: a field of the reused state that is no longer refreshed.
   const wiring = [
+    ['air feedback not refreshed', "      hudState.airLine = touchDevice ? '' : ride.airLine;", ''],
     ['fps and mode not refreshed', 'hudState.mode = mode; hudState.fps = fps;', ''],
     ['limit not refreshed', ' hudState.activeTouchSpeedLimit = scenePaused() ? 0 : vehicle.activeTouchSpeedLimit;', ''],
     ['paused limit remains visible', 'scenePaused() ? 0 : vehicle.activeTouchSpeedLimit', 'vehicle.activeTouchSpeedLimit'],
@@ -329,7 +384,7 @@ if (process.argv.includes('--mutations')) {
   for (const [name, from, to] of wiring) {
     assert.equal(frameSource.split(from).length, 2, name + ' unique source site');
     const bad = new Function('context', `with(context) { ${frameSource.replace(from, to)} }`);
-    assert.throws(() => { caps(module, bad); sequence(module, bad); droneFrames(module, bad); }, undefined, name + ' must fail');
+    assert.throws(() => { caps(module, bad); sequence(module, bad); droneFrames(module, bad); airFeedback(module, bad); }, undefined, name + ' must fail');
     console.log('KILLED ' + name);
   }
 }

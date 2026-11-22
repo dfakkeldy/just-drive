@@ -14,9 +14,36 @@ const out = mkdtempSync(join(tmpdir(), 'mmm-just-home-'));
 try {
   execFileSync('node', ['tools/just-home.mjs', out], { stdio: 'pipe' });
   const html = readFileSync(`${out}/just/home/index.html`, 'utf8');
+  assert.match(html,/\.legend\{position:absolute;[^}]*pointer-events:none/);
+  assert.doesNotMatch(html.match(/\.legend\{[^}]*\}/)[0],/background/);
+  assert.match(html,/<figure class="map">[\s\S]*?<figcaption class="legend">[\s\S]*?<\/figcaption><\/figure>/);
+  assert.ok(html.includes('viewBox="180 80 520 680"'));
+  assert.match(html,/@media\(max-width:599px\)\{footer nav\{display:grid;grid-template-columns:1fr 1fr/);
+  assert.match(html,/@media\(min-width:600px\)\{\.roadPicture img\{object-position:50% 52%\}/);
+  assert.match(html, /@media \(min-width:1000px\)\{header\{max-width:none;display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\);column-gap:40px;align-items:start\}header>\*\{grid-column:1\}header>\.roadPicture\{grid-column:2;grid-row:1\/span 4;align-self:center\}\}/);
+  assert.doesNotMatch(html.match(/\.place \.mailCaption\{[^}]*\}/)[0],/font-size/);
+  assert.match(html,/@media print\{header\{display:block\}/);
+  // Optional parent-owned browser run: node tools/just-home-check.mjs --browser with CDP_PORT set.
+  if(process.argv.includes('--browser')) {
+    const {cdp,cdpFetch}=await import('./cdp.mjs');
+    const port=process.env.CDP_PORT;assert.ok(port,'--browser needs the parent CDP_PORT');
+    const tab=await(await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
+    const c=await cdp(tab.webSocketDebuggerUrl);
+    try {
+      await c.send('Page.enable');await c.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+      const frame=(await c.send('Page.getFrameTree')).result.frameTree.frame.id;
+      await c.send('Page.setDocumentContent',{frameId:frame,html});
+      const result=await c.send('Runtime.evaluate',{expression:`(()=>{return [...document.querySelectorAll('.button.second')].map(e=>{const r=e.getBoundingClientRect(),drive=e.parentElement.querySelector('.button').getBoundingClientRect(),row=e.parentElement.getBoundingClientRect();return {height:r.height,width:r.width,driveWidth:drive.width,rowWidth:row.width,position:Math.abs(r.top-drive.top)<=1||r.top>=drive.bottom,fit:r.left>=row.left&&r.right<=row.right};});})()`,returnByValue:true});
+      assert.ok(!result.result.exceptionDetails,JSON.stringify(result.result.exceptionDetails));
+      const rows=result.result.result.value;assert.ok(rows.length);
+      assert.ok(rows.every(r=>r.height>=44&&r.width<r.rowWidth&&r.position&&r.fit),'390px era actions keep their own width, row flow and full touch height: '+JSON.stringify(rows));
+      // Report both widths. The longer era label cannot be narrower than Drive under width:auto alone.
+      console.log('HOME_ACTION_WIDTHS '+JSON.stringify(rows));
+    } finally {c.close();await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`);}
+  }
   const areas = AREAS.filter(a => a.id !== 'fixture');
   assert.equal([...html.matchAll(/<title>/g)].length, 1, 'one title');
-  assert.match(html, /<title>Just Drive<\/title>/);
+  assert.match(html, /<title>Just Drive: a free 3D driving game on the real roads of Cape Breton<\/title>/);
   assert.match(html, /<meta name="viewport"/);
   for (const tag of ['title', 'description', 'type', 'url']) assert.match(html, new RegExp(`property="og:${tag}"`), 'og:' + tag);
   assert.match(html, /property="og:url" content="https:\/\/justdrive\.fakkeldy\.ca\/"/);
@@ -29,7 +56,7 @@ try {
   for (const area of areas) {
     const cardHtml = html.match(new RegExp(`<li class="place" id="place-${area.id}">([\\s\\S]*?)</div></li>`))?.[1];
     assert.ok(cardHtml, area.id + ' card');
-    assert.ok(cardHtml.includes(`<a class="button" href="/${area.id}">Drive</a>`), area.id + ' Drive link');
+    assert.ok(cardHtml.includes(`<a class="button" href="/${area.id}" aria-label="Drive in ${area.name}">Drive</a>`), area.id + ' Drive link');
     assert.match(html, new RegExp(`<a class="pin[^"]*" id="pin-${area.id}" href="/${area.id}"`), area.id + ' pin');
     assert.equal(cardHtml.includes(`href="${MAIL_URL}"`), !!area.mail, area.id + ': mail link only where the mail route is');
     const era = Object.values(HISTORY_AREAS).find(e => e.id === area.id);
@@ -37,8 +64,43 @@ try {
     const [x, y] = MAP.pins[area.id];
     assert.ok(x > 180 && x < 700 && y > 80 && y < 720, area.id + ' pin inside the map view');
   }
+  assert.match(html, /Start in Mabou<\/a>/);
+  assert.match(html, /<a href="\/about">built from the province’s LiDAR laser survey<\/a>/);
+  assert.match(html, /No missions and no clock\./);
+  assert.match(html, /property="og:image" content="https:\/\/justdrive\.fakkeldy\.ca\/about\/img\/road\.jpg"/);
+  assert.match(html, /<figure class="roadPicture"><img src="\/about\/img\/road\.jpg"[^>]+><figcaption>The shore road near Mabou, in the game\.<\/figcaption>/);
+  assert.equal((html.match(/class="mailCentre"/g)??[]).length,1,'only the mail pin has a filled centre');
+  assert.doesNotMatch(html, /<li>Mail route<\/li>/,'mail caption and action keep the meaning');
+  assert.match(html, /free 3D driving game/);
+  assert.match(html, /\.pin \.hit\{[^}]*stroke-width:44px;vector-effect:non-scaling-stroke/);
+  const luminance=hex=>hex.match(/../g).map(n=>parseInt(n,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
+  assert.ok((luminance(html.match(/--maple:#([0-9a-f]{6})/)[1])+.05)/(luminance('0b1620')+.05)>=4.5,'mail action text contrast');
+  assert.match(html, /aria-label="Drive in Mabou, mail route too"/);
+  assert.match(html, /\.pin:focus-visible \.halo\{[^}]*stroke:#fff;stroke-width:3/);
+  assert.match(html, /\.button.mail\{background:var\(--maple\);color:#0b1620/);
+  assert.equal((html.match(/>Drive in 1884<\/a>/g) ?? []).length, Object.keys(HISTORY_AREAS).length);
+  for (const place of ['Mabou', 'Judique']) assert.ok(html.includes(`aria-label="Drive in ${place}, 1884"`));
+  assert.match(html, /Mabou Mail Madness: the same roads, with a mail route you cannot win\./);
+  assert.match(html, /Choose a pin to drive/);
+  assert.match(html, /\.button.second\{background:transparent;border:1px solid #e9d2ad/);
+  assert.match(html, /@media\(max-width:599px\)\{[^\n]*\.button.second\{width:auto;justify-content:center\}/, 'phone era action keeps its own width');
+  assert.match(html, /\.actions\{display:flex;flex-wrap:wrap;gap:8px;/, 'phone era action can wrap to the next row');
+  assert.match(html, /\.button\{[^}]*min-height:44px;/, 'era action retains the 44px target floor');
+  const colour = pattern => {
+    const match = html.match(pattern);
+    assert.ok(match, `built page colour: ${pattern}`);
+    return match[1];
+  };
+  const waterLabel = colour(/\.water-label\{fill:#([0-9a-f]{6})\b/i);
+  for (const name of ['sea', 'land']) {
+    const background = colour(new RegExp(`--${name}:#([0-9a-f]{6})\\b`, 'i'));
+    const values = [luminance(waterLabel), luminance(background)];
+    assert.ok((Math.max(...values)+.05)/(Math.min(...values)+.05)>=4.5, `water labels contrast on ${name}`);
+  }
+  const lead = html.match(/<p class="lead">([\s\S]*?)<\/p>/)[1].replace(/<[^>]*>/g,'');
+  for (const tag of ['name="description"', 'property="og:description"']) assert.ok(html.includes(`<meta ${tag} content="${lead}">`));
   // Every same-site link is an address the Worker serves; nothing names a home, a civic number or a private path.
-  const known = new Set(['/about', '/help', '/listen/', '/manifest-just.webmanifest', ...areas.map(a => '/' + a.id), ...Object.values(HISTORY_AREAS).map(e => '/' + e.address)]);
+  const known = new Set(['/changes/', '/about', '/help', '/listen/', '/manifest-just.webmanifest', ...areas.map(a => '/' + a.id), ...Object.values(HISTORY_AREAS).map(e => '/' + e.address)]);
   for (const [, href] of html.matchAll(/href="(\/[^"]*)"/g)) assert.ok(known.has(href), 'unknown link ' + href);
   assert.doesNotMatch(html, /red roof|\/Users\/|\b\d{3,5} [A-Z][a-z]+ (Road|Rd|Street|St)\b/i);
   console.log(`PASS Just Drive front page: ${areas.length} areas with card, pin and Drive link; mail link on ${areas.filter(a => a.mail).map(a => a.id)}; 1884 links on ${Object.keys(HISTORY_AREAS)}; no script; known links only`);

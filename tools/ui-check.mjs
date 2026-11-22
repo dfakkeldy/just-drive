@@ -39,12 +39,15 @@ for (const just of [false, true]) for (const area of ['mabou', 'judique']) for (
     const line = await p.read(`(() => {
       const line = document.getElementById('titleOtherGame'), a = line?.querySelector('a');
       return {text:line?.textContent, href:a?.href, visible:!!line?.getClientRects().length && !document.getElementById('title').hidden,
-        position:line?.parentElement === document.querySelector('#titleCard>h1')?.nextElementSibling,
+        // The line follows the main action: right after the 1884 link when there is one, else right after Start (or its 'Start where I am' group)
+        // ('Start where I am' moves the 1884 link and this line into its own group, in the same order).
+        position:(()=>{const prev=line?.previousElementSibling?.id, era=!!document.getElementById('titleEra'), parent=line?.parentElement?.id;
+          return era ? prev === 'titleEra' && (parent === 'titleCard' || parent === 'startHere') : (prev === 'titleStart' || prev === 'startHere') && parent === 'titleCard';})(),
         mode:document.getElementById('modeExplore')?.textContent};
     })()`);
     const expected = just ? `https://mmm.fakkeldy.ca/${historical ? `?era=1884&area=${area}` : ''}`
       : `https://justdrive.fakkeldy.ca/${!historical && area === 'mabou' ? '' : area + (historical ? '-1884' : '')}`;
-    check(line?.href === expected && line.visible && line.position, `${just?'just':'mail'} ${area} ${historical?'1884':'today'}: visible reciprocal link in the introduction (${JSON.stringify(line)})`);
+    check(line?.href === expected && line.visible && line.position, `${just?'just':'mail'} ${area} ${historical?'1884':'today'}: visible reciprocal link right after the main action (${JSON.stringify(line)})`);
     check(line?.text === (just ? 'Want a job with your drive? Mabou Mail Madness: the same land, with a mail route.' : 'Just want to drive? Just Drive has every area, no mail.'), 'exact cross-brand words');
     if (!just && area === 'mabou' && !historical) check(line.mode === 'Just drive', 'mail keeps its in-game Just drive choice');
     // Phone fit: the added line must not widen, clip or push the start button out of reach.

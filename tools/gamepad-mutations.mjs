@@ -62,8 +62,10 @@ const mutants = [
   ['rumble off by default', "return stored !== '0';", "return stored === '1';"],
   ['mail on Just Drive', "if (mail) rows.push(['Y'", "if (true) rows.push(['Y'", 'controls'],
   ['horse radio', "if (radio && !horse) rows.push(['D-pad up'", "if (radio) rows.push(['D-pad up'", 'controls'],
-  ['HUD ignores controller', ': s.padHelp ? `   ${s.fps.toFixed(0)} fps` + s.padHelp : s.driveHelp ??', ': s.driveHelp ??', 'hud-text'],
-  ['phone HUD gets it', "(s.touchDevice ? `   ${s.fps.toFixed(0)} fps${s.jumpLine}`", "(s.touchDevice && !s.padHelp ? `   ${s.fps.toFixed(0)} fps${s.jumpLine}`", 'hud-text'],
+  ['day card loses stop count', '${this.done}/${this.stops} STOPS', 'STOPS', 'shift'],
+  ['tally loses customer count', 'Customers ${this.customers}/${this.total}', 'Customers', 'mail'],
+  ['HUD ignores controller', 's.padHelp || s.driveHelp ||', 's.driveHelp ||', 'hud-text'],
+  ['phone HUD gets it', "(s.touchDevice ? `${rate}${s.jumpLine}`", "(s.touchDevice && !s.padHelp ? `${rate}${s.jumpLine}`", 'hud-text'],
 ];
 try {
   for (const mutant of [null, ...(process.argv.includes('--mutations') ? mutants : [])]) {

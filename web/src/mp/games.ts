@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mountRoomCard, removeRoomCard, RoomCountdown } from './room-cards';
 import { GAMES, PHASE, gameName, type GameName } from './game-wire';
 import { RACE_LIMIT } from './race-wire';
 import { TAG } from './tag-rules';
@@ -9,7 +10,7 @@ import type { PeerView } from './wire';
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const clock = (ms: number) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-const BUTTON = 'font:inherit;max-width:100%;min-height:38px;margin:4px 2px;color:#fff;background:#254657;border:1px solid #91b2bb;border-radius:5px';
+
 
 /**
  * Room games in the game: the host's controls, the live and final score table, the parcel over the holder's car (big
@@ -23,6 +24,7 @@ export class GameView {
   private readonly readout: HTMLDivElement | null;
   private readonly results: HTMLDivElement | null;
   private readonly status = document.createElement('p');
+  private readonly countdown: RoomCountdown;
   private readonly table = document.createElement('ol');
   private readonly select = document.createElement('select');
   private readonly start = document.createElement('button');
@@ -34,7 +36,8 @@ export class GameView {
   private shown = ''; private tableText = ''; private readoutText = ''; private resultText = ''; private summaryText = '';
   /** The room answers a refused start with the same state: after a moment the host is told what a start needs. */
   private refused = false;
-  private serial = -1; private phase = -1; private overAt = 0; private fit = 0; private asked = 0;
+  private goAt = -Infinity;
+  private serial = -1; private phase = -1; private overAt = 0; private asked = 0;
   /** Where the parcel is drawn, for the small map. */
   private where: { x: number; z: number } | null = null;
 
@@ -49,6 +52,7 @@ export class GameView {
     this.disposables.push(box, strap, band, card, this.tape, cone, gold);
     this.group.add(this.parcel, this.arrow); this.group.visible = false;
     host.scene.add(this.group);
+    this.countdown = new RoomCountdown('gameCountdown', !!host.bare);
     // On a phone the controls live in Settings after the race, like the race; the readout sits beside the race's.
     const settings = host.touch ? document.getElementById('settings') : null;
     this.panel = host.bare ? null : document.createElement('details');
@@ -58,25 +62,19 @@ export class GameView {
     if (this.results) {
       this.results.setAttribute('role', 'status');
       this.results.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 58px);transform:translateX(-50%);z-index:6;pointer-events:none;'
-        + 'background:#102531ed;color:#fff;border:1px solid #70939e;border-radius:10px;padding:8px 14px;font:13px/1.45 system-ui;max-width:min(320px,70vw);box-sizing:border-box';
+        + 'background:var(--panel-solid);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:13px/1.45 system-ui;max-width:min(320px,70vw);box-sizing:border-box';
     }
     if (!this.panel) return;
     const panel = this.panel;
     panel.id = 'gamePanel'; panel.hidden = true;
-    panel.style.cssText = 'position:fixed;right:10px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:7;background:#102531ed;color:#fff;border:1px solid #70939e;border-radius:10px;padding:10px;max-width:min(310px,80vw);max-height:40vh;overflow:auto;font:13px/1.4 system-ui;box-sizing:border-box';
-    if (settings) {
-      const race = settings.querySelector('#racePanel');
-      if (race) race.after(panel); else settings.prepend(panel);
-      panel.style.position = 'static'; panel.style.maxWidth = '100%'; panel.style.maxHeight = 'none'; panel.style.marginBottom = '12px'; panel.style.overflow = 'visible';
-      this.summary.style.cssText = 'min-height:56px;box-sizing:border-box;padding:16px 0;cursor:pointer';
-    } else document.body.appendChild(panel);
+    mountRoomCard(panel, host.touch);
     this.summary.textContent = 'Room games';
     const label = document.createElement('label'); label.textContent = 'Game ';
     this.select.setAttribute('aria-label', 'Room game');
     for (const [key, g] of Object.entries(GAMES)) this.select.add(new Option(g.name, key));
     label.append(this.select);
     this.start.textContent = 'Start · 5 seconds'; this.stop.textContent = 'Stop game';
-    for (const e of [this.select, this.start, this.stop]) e.style.cssText = BUTTON;
+
     if (settings) for (const e of [this.select, this.start, this.stop]) e.style.minHeight = '56px';
     this.status.setAttribute('role', 'status'); this.status.style.margin = '6px 0';
     this.table.id = 'gameTable'; this.table.style.cssText = 'margin:4px 0;padding-left:22px';
@@ -111,8 +109,10 @@ export class GameView {
   update(dt: number, peers: readonly PeerView[], camera: THREE.Camera): void {
     const f = this.net.game, me = this.net.me, on = this.net.status === 'on' && this.net.gamesSupported && !!f && !!me;
     if (this.panel) this.panel.hidden = !on;
-    if (!on || !f || !me) { this.group.visible = false; this.where = null; if (this.readout) this.readout.hidden = true; if (this.results) this.results.hidden = true; return; }
+    if (!on || !f || !me) { this.countdown.update(null); this.group.visible = false; this.where = null; if (this.readout) this.readout.hidden = true; if (this.results) this.results.hidden = true; return; }
     const left = this.net.gameLeft(), host = f.host === me.id, game = gameName(f.kind), title = game ? GAMES[game].name : 'Room games';
+    if (f.phase === PHASE.play && this.phase === PHASE.countdown) this.goAt = performance.now();
+    this.countdown.update(f.phase === PHASE.countdown ? left : f.phase === PHASE.play ? -(performance.now() - this.goAt) : null);
     if (f.serial !== this.serial || f.phase !== this.phase) {
       // A new countdown opens the desktop panel, so the table is in sight; a phone keeps Settings closed.
       if (f.phase === PHASE.countdown && this.panel && !this.host.touch) this.panel.open = true;
@@ -138,7 +138,7 @@ export class GameView {
     const reach = TAG.startReachM;
     if (f.phase === PHASE.free) say = host ? (this.net.count < 1 ? 'Room games need one more driver in the room.' : raceBusy ? 'A race is on. Games wait for it.'
       : this.refused ? `No game. It needs another driver within ${reach} m of you on this version of the game, and a road nearby.` : `Pick a game. Drivers within ${reach} m of you play.`) : 'The room host starts games.';
-    else if (f.phase === PHASE.countdown) say = `${title} in ${Math.ceil(left / 1000)}. The parcel waits on the road, ${target ? this.toward(target).text : 'nearby'}.`;
+    else if (f.phase === PHASE.countdown) say = 'The parcel waits on the road until GO.';
     else if (f.phase === PHASE.play) {
       const where = target && !mine ? ` ${this.toward(target).text}.` : '';
       say = `${clock(left)} left. ` + (mine ? (tag!.immune > 0 ? 'You signed for the parcel. Nobody can take it for a moment.' : 'You have the parcel. Keep moving, keep to the roads.')
@@ -148,7 +148,7 @@ export class GameView {
       say = winners.length ? `Round over. ${winners.join(' and ')} ${winners.length > 1 || winners[0] === 'You' ? 'win' : 'wins'} with ${best}.` : 'Round over. Nobody held the parcel long enough to count.';
     }
     if (say !== this.shown) this.status.textContent = this.shown = say;
-    const summary = f.phase === PHASE.free ? 'Room games' : f.phase === PHASE.countdown ? `${title} in ${Math.ceil(left / 1000)}` : f.phase === PHASE.play ? `${title} · ${clock(left)}` : `${title} · results`;
+    const summary = f.phase === PHASE.free ? 'Room games' : f.phase === PHASE.countdown ? `${title} in ${Math.min(5, Math.ceil(left / 1000))}` : f.phase === PHASE.play ? `${title} · ${clock(left)}` : `${title} · results`;
     if (summary !== this.summaryText) this.summary.textContent = this.summaryText = summary;
     // The table, highest first: live while playing, final after.
     const rows = [...f.table].sort((a, b) => b.score - a.score || a.id - b.id);
@@ -157,7 +157,7 @@ export class GameView {
     if (text !== this.tableText) { this.tableText = text; this.table.replaceChildren(...lines.map(t => Object.assign(document.createElement('li'), { textContent: t }))); }
     const place = rows.findIndex(r => r.id === me.id), myScore = place >= 0 ? rows[place].score : 0;
     if (this.readout) {
-      const r = f.phase === PHASE.free ? '' : f.phase === PHASE.countdown ? `${title} in ${Math.ceil(left / 1000)}`
+      const r = f.phase === PHASE.free ? '' : f.phase === PHASE.countdown ? `${title} in ${Math.min(5, Math.ceil(left / 1000))}${target ? ` · ${this.toward(target).text}` : ''}`
         // Where the parcel is comes first: a narrow phone cuts the end of the line.
         : f.phase === PHASE.play ? `Tag ${clock(left)}${mine ? ' · parcel!' : target ? ` · ${this.toward(target).text}` : ''}${place >= 0 ? ` · #${place + 1}` : ''} · ${myScore} pts`
         : `Tag over · ${myScore} pts${place >= 0 ? ` · #${place + 1}` : ''}`;
@@ -190,20 +190,14 @@ export class GameView {
       this.arrow.position.set(this.host.vehicle.x, this.host.vehicle.y + 2.6, this.host.vehicle.z);
       this.arrow.rotation.y = -to.angle;
     }
-    // On a desktop the panel stands above the race panel, never over it.
-    this.fit -= dt;
-    if (this.panel && !this.host.touch && this.fit <= 0) {
-      this.fit = .5;
-      const race = document.getElementById('racePanel'), r = race && !race.hidden ? race.getBoundingClientRect() : null;
-      this.panel.style.bottom = r && r.height ? `${Math.max(80, innerHeight - r.top + 8)}px` : 'calc(80px + env(safe-area-inset-bottom,0px))';
-    }
   }
   /** The parcel on the small map. */
   marks(out: { x: number; z: number; label: string; rank?: number; colour?: string }[]): void {
     if (this.where) out.push({ x: this.where.x, z: this.where.z, label: 'Parcel', rank: 0, colour: '#ffca64' });
   }
   dispose(): void {
-    this.panel?.remove(); this.readout?.remove(); this.results?.remove();
+    this.countdown.dispose();
+    removeRoomCard(this.panel); this.readout?.remove(); this.results?.remove();
     this.host.scene.remove(this.group); this.group.clear();
     for (const d of this.disposables) d.dispose();
   }

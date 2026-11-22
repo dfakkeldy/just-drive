@@ -9,6 +9,7 @@ export function pageDom(address, local, session) {
     append(...nodes){for(const n of nodes){this.children.push(n);n.parent=this;}}
     appendChild(n){this.append(n);return n;}
     insertBefore(n,before){const i=before===null?this.children.length:this.children.indexOf(before);if(i<0)throw Error('missing reference node');this.children.splice(i,0,n);n.parent=this;}
+    after(n){const i=this.parent.children.indexOf(this);this.parent.insertBefore(n,this.parent.children[i+1]??null);}
     before(n){this.parent.insertBefore(n,this);}
     setAttribute(k,v){this.attributes[k]=String(v);}
     getAttribute(k){return this.attributes[k]??null;}
