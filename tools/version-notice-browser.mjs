@@ -412,7 +412,9 @@ try {
 
   for (const brand of ['mail', 'just']) for (const mode of ['slow', 'fail']) table.push(await workerFallback('fixed', brand, mode));
   for (const brand of ['mail', 'just']) table.push(await workerFallback('fixed', brand, 'fail', true));
-  for (const [mode, manual] of [['slow', false], ['fail', false], ['fail', true]]) {
+  // A slow worker now unlocks one more press when it has saved B, so only the failing worker shows a loop
+  // deterministically. The retry guard has its own mutant in tools/version-notice-check.mjs.
+  for (const [mode, manual] of [['fail', false], ['fail', true]]) {
     await assert.rejects(
       () => workerFallback('no-reload-guard', 'mail', mode, manual),
       error => error instanceof assert.AssertionError && (error.message.includes('at most one reload per target') || error.message.includes('no second button reload to same target'))
