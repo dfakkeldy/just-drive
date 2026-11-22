@@ -24,7 +24,13 @@ export function mergeStraitTall(data: TallFile): TallFile {
   for (const raw of [...STRAIT_LINES, ...RESTORED_LINES]) {
     // A restored legacy piece is drawn only in the area it was baked for (pieces from neighbouring areas overlap).
     if (raw.m && !sameBox(raw.m, data.mid)) continue;
-    const restored = Boolean(raw.m);
+    // Every verified OSM/Strait span that reaches this mid box replaces baked towers, also a span that crosses the box
+    // edge and is not drawn here. Restored legacy pieces never replace a kept baked line.
+    if (!raw.m) for (let i = 1; i < raw.t.length; i++) {
+      const a = raw.t[i - 1], b = raw.t[i];
+      const box = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+      if (boxesOverlap(box, [data.mid[0] - 150, data.mid[1] - 150, data.mid[2] + 150, data.mid[3] + 150])) straitSegments.push([a[0], a[1], b[0], b[1]]);
+    }
     // Split into maximal consecutive tower runs that fall inside this area's mid box.
     let runStart = -1;
     const flush = (end: number) => {
@@ -38,8 +44,6 @@ export function mergeStraitTall(data: TallFile): TallFile {
         if (i > runStart) {
           const prev = raw.t[i - 1];
           station += Math.hypot(e - prev[0], n - prev[1]);
-          // Restored legacy pieces never replace a kept baked line; only the verified OSM/Strait routes do.
-          if (!restored) straitSegments.push([prev[0], prev[1], e, n]);
           const sp = raw.s[i - 1];
           const g = sp.slice(1);
           spans.push({ sag: sp[0], ground: g, clearance: g });

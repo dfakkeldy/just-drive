@@ -186,12 +186,13 @@ export class TallLandmarks {
 
     // Deduplicate shared junction supports (e.g. L7004/L7003 joining the causeway double-circuit tower) keeping the tallest tower.
     type PowerTower = Mast & { yaw: number };
+    const posKey = (p: TallPoint) => `${Math.round(p.e * 10)},${Math.round(p.n * 10)}`;
     const powerByPos = new Map<string, PowerTower>();
     for (const l of data.lines) {
       l.towers.forEach((p, i) => {
         const a = l.towers[Math.max(0, i - 1)], b = l.towers[Math.min(l.towers.length - 1, i + 1)];
         const yaw = Math.atan2(a.e - b.e, b.n - a.n);
-        const key = `${Math.round(p.e * 10)},${Math.round(p.n * 10)}`;
+        const key = posKey(p);
         const prev = powerByPos.get(key);
         if (!prev) powerByPos.set(key, { ...p, yaw });
         else {
@@ -312,9 +313,11 @@ export class TallLandmarks {
         const bucketKey = `${Math.floor(mx / 2500)},${Math.floor(mz / 2500)}`;
         let positions = wireBuckets.get(bucketKey);
         if (!positions) { positions = []; wireBuckets.set(bucketKey, positions); }
+        // A shared junction support is drawn once at the tallest height; every line's wires end at that drawn top.
+        const hA = powerByPos.get(posKey(a))?.height ?? a.height, hB = powerByPos.get(posKey(b))?.height ?? b.height;
         for (const tier of tiers) {
-          const attachA = a.kind === 'crossing' ? a.height * 0.82 : a.height * tier;
-          const attachB = b.kind === 'crossing' ? b.height * 0.82 : b.height * tier;
+          const attachA = a.kind === 'crossing' ? hA * 0.82 : hA * tier;
+          const attachB = b.kind === 'crossing' ? hB * 0.82 : hB * tier;
           for (const side of [-1, 0, 1]) for (let j = 0; j < steps; j++) for (const t of [j / steps, (j + 1) / steps]) {
             // Stretch ground only; keep structure sizes and sag in real metres.
             const index = t * (span.ground.length - 1), idx = Math.min(span.ground.length - 2, Math.floor(index));

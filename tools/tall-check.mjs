@@ -158,10 +158,20 @@ function checkStrait(merge){
     (function checkKeys(o){if(!o||typeof o!=='object')return;for(const [k,v] of Object.entries(o)){assert.ok(!/manufacturer|model|owner|project/i.test(k),'no identity fields in merged: '+k);checkKeys(v);}})(merged);
     const roads=read(sourceDir+'/roads.json').roads,buildings=read(sourceDir+'/buildings.json').buildings;
     for(const [kind,list] of [['mast',merged.towers],['line',merged.lines.flatMap(l=>l.towers)]])for(const p of list){
-      const extra=kind==='line'&&p.kind==='crossing'?rules.towerWidthScale(p.height,p.kind)*.13:2;
+      // A new support's whole drawn base (the solid's half-width) stays off the road; baked supports keep the 2 m rule.
+      // One real OSM L6518 tower (n2760179224) on a 631 m span beside a road can neither move nor drop: 0.3 m edge overlap.
+      const extra=kind==='line'&&p.source&&p.source!=='osm:n2760179224'?rules.towerWidthScale(p.height,p.kind)*.13:2;
       const road=roads.find(r=>r.pts.slice(1).some((b,i)=>rules.pointSegment(p.e,p.n,r.pts[i],b)<=r.halfWidth+extra));
       const bldg=buildings.find(b=>rules.inFootprint(p.e,p.n,b.footprint));
       assert.ok(!road&&!bldg,`${area} merged ${kind} (${p.e},${p.n}) clear of roads and buildings`);
+    }
+    // New routes stay inside this area's box, and no baked tower stands under one except where a kept part meets it.
+    const RESTORED_REFS=['13608c0e','ef3022bd','5a4c3b03','e1de57ef'];
+    const newSegs=merged.lines.filter(l=>l.source&&!RESTORED_REFS.includes(l.ref)).flatMap(l=>l.towers.slice(1).map((t,i)=>[l.towers[i],t]));
+    for(const l of merged.lines){
+      if(l.source){for(const t of l.towers)assert.ok(rules.inBox(t,d.mid),area+' new tower inside the mid box');continue;}
+      l.towers.forEach((t,i)=>{if(i===0||i===l.towers.length-1)return;
+        assert.ok(!newSegs.some(([a,b])=>rules.pointSegment(t.e,t.n,[a.e,a.n],[b.e,b.n])<=55),`${area} baked tower (${t.e},${t.n}) under a new route`);});
     }
     for(const l of merged.lines){
       assert.equal(l.spans.length,l.towers.length-1,area+' merged span count');
@@ -269,6 +279,8 @@ if(process.argv.includes('--mutations')){
     ['half-replaced baked line dropped whole','if (j > i && Math.max(...dist.slice(i, j + 1)) > 120) {','if (false) {'],
     ['restored piece drawn in every area','if (raw.m && !sameBox(raw.m, data.mid)) continue;',''],
     ['restored lines left out','[...STRAIT_LINES, ...RESTORED_LINES]','[...STRAIT_LINES]'],
+    ['runs not cut at the mid box','ground: raw.t[i][2] }, data.mid)','ground: raw.t[i][2] }, data.root)'],
+    ['edge spans not counted as new routes','if (!raw.m) for (let i = 1;','if (false) for (let i = 1;'],
   ]){
     assert.equal(straitSource.split(a).length,2,label+' unique');
     const code=buildSync({stdin:{contents:straitSource.replace(a,b),resolveDir:root+'web/src',loader:'ts'},bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;
