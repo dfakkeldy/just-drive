@@ -41,6 +41,24 @@ export function industryGround(base: number, exag: number, sea: number): number 
   return base > sea ? sea + (base - sea) * exag : base;
 }
 
+/**
+ * Clears bogus HRDEM DSM canopy returns over the open-water oil and coal marine piers where our
+ * instanced pier, crane and loading-arm meshes replace the baked water-surface returns.
+ * Strictly seaward of the shoreline so onshore trees are untouched.
+ */
+export function ptIndustryCanopyExcludes(east: number, north: number): boolean {
+  // Oil Marine Terminal offshore water zone (Berth 1, Berth 2, offshore approach & 11 dolphins; strictly seaward of shore).
+  if (east >= 628985 && east <= 629375 && north >= 5047795 && north <= 5048315) {
+    // Keep strictly SW of the shoreline diagonal passing through (629356, 5048109) and (629410, 5047990).
+    if ((east - 629356) * 0.85 + (north - 5048109) * 0.52 <= 10) return true;
+  }
+  // Coal Marine Terminal offshore pier head, crane, hopper, flanking dolphins & offshore trestle.
+  if (east >= 628395 && east <= 629005 && north >= 5048800 && north <= 5049015) {
+    if ((east - 628995) * 0.90 + (north - 5048998) * 0.44 <= 8) return true;
+  }
+  return false;
+}
+
 // Industrial palette: weathered reinforced concrete, Maritime thermal-plant blue-grey cladding, dark structural steel,
 // galvanized conveyor galleries, safety-yellow/orange crane & loading-arm accents, black marine rubber fenders.
 const C = {
@@ -402,7 +420,7 @@ export function planPointTupperIndustry(
       const topY = p.lift - run.height / 2 - 0.1;
       const halfSpread = run.width * 0.52;
       const isWater = p.g <= sea;
-      const footY = isWater ? -11.0 : -1.5;
+      const footY = isWater ? (low ? -0.15 : -11.0) : -1.5;
       for (const s of [-1, 1]) {
         const le = p.e + perpE * halfSpread * s, ln = p.n + perpN * halfSpread * s;
         if (isWater) {
@@ -485,7 +503,8 @@ export function planPointTupperIndustry(
         upright('box', site, ce, cn, baseG, deckY, 0.45, 0.32, len, yaw, C.concreteDark);
       }
     }
-    // Pile bents extending well below the Strait sea floor (-14 m)
+    // Pile bents extending below sea floor on desktop; clipped to waterline on LOW where sea omits depth write.
+    const pileFoot = low ? -0.15 : -14.0;
     const bents = Math.max(2, Math.round(len / pileSpacing));
     const pileRows = width > 11 ? [-0.42, -0.14, 0.14, 0.42] : [-0.38, 0.38];
     for (let i = 0; i <= bents; i++) {
@@ -493,7 +512,7 @@ export function planPointTupperIndustry(
       // Concrete transverse cap beam under deck
       upright('box', site, pe, pn, baseG, deckY - 2.1, width - 0.4, 1.0, 1.35, yaw, C.concreteDark);
       for (const f of pileRows) {
-        upright('cyl', site, pe + perpE * width * f, pn + perpN * width * f, sea, -14.0, 0.78, deckTop + 12.5, 0.78, 0, C.steelDark);
+        upright('cyl', site, pe + perpE * width * f, pn + perpN * width * f, sea, pileFoot, 0.78, deckTop - 1.5 - pileFoot, 0.78, 0, C.steelDark);
       }
       // Marine rubber fenders along the docking face
       if (opts.fenders) {
@@ -527,12 +546,15 @@ export function planPointTupperIndustry(
     const dep = d.kind === 'breasting' ? 8.5 : 8.0;
     // Heavy reinforced concrete pile cap
     upright('box', site, d.e, d.n, sea, deckY - 2.0, sz, 2.0, dep, df.yaw, C.concreteMid);
-    // 4 battered steel pipe piles extending below the sea floor
+    // 4 battered steel pipe piles (clipped to waterline on LOW where sea omits depth write)
+    const pileFoot = low ? -0.15 : -14.0;
+    const batterFrac = (deckY - 1.6 - pileFoot) / (deckY - 1.6 - (-14.0));
+    const spread = 1 + 0.45 * batterFrac;
     for (const u of [-dep * 0.34, dep * 0.34]) {
       for (const v of [-sz * 0.34, sz * 0.34]) {
         const [topE, topN] = df.pt(u, v);
-        const [botE, botN] = df.pt(u * 1.45, v * 1.45);
-        span('cyl', site, botE, botN, sea, -14.0, topE, topN, sea, deckY - 1.6, 0.75, 0.75, C.steelDark);
+        const [botE, botN] = df.pt(u * spread, v * spread);
+        span('cyl', site, botE, botN, sea, pileFoot, topE, topN, sea, deckY - 1.6, 0.75, 0.75, C.steelDark);
       }
     }
     // Ship-facing heavy black marine fender panel on breasting dolphins
@@ -611,9 +633,10 @@ export function planPointTupperIndustry(
     // Concrete caisson cribs along the pier face for massive visual weight
     const dx = headEnd[0] - headStart[0], dn = headEnd[1] - headStart[1];
     const headYaw = -Math.atan2(dx, dn);
+    const cribFoot = low ? -0.15 : -10.0;
     for (let k = 0; k < 4; k++) {
       const t = (k + 0.5) / 4;
-      upright('box', 'coal-pier', headStart[0] + dx * t, headStart[1] + dn * t, sea, -10.0, headWidth - 1.2, deckY + 9.0, 14.0, headYaw, C.concreteDark);
+      upright('box', 'coal-pier', headStart[0] + dx * t, headStart[1] + dn * t, sea, cribFoot, headWidth - 1.2, deckY - 1.0 - cribFoot, 14.0, headYaw, C.concreteDark);
     }
     // Service walkway trestle parallel to the offshore coal conveyor bridge
     buildPierSpan('coal-pier', headEnd, trestleEnd, trestleWidth, 4.4, 24.0, { rails: true });
@@ -676,7 +699,7 @@ export function planPointTupperIndustry(
   // ==========================================================================================================
   {
     const {
-      onshorePipe, approachStart, approachEnd, approachWidth, deckY,
+      onshorePipe, shoreAbutment, approachStart, approachEnd, approachWidth, deckY,
       berth1Center, berth1Length, berth1Width, berth1AxisDeg,
       berth2Start, berth2End, berth2Width, controlHouse, gangwayTower,
       berth1Arms, berth2Arms, launchWharf, dolphins, catwalks,
@@ -700,17 +723,32 @@ export function planPointTupperIndustry(
       upright('box', 'oil-pier', p.e, p.n, p.g, p.lift - 0.7, 5.8, 0.5, 0.5, 0.4, C.steelDark);
     }
 
-    // Shore abutment concrete bulkhead
-    upright('box', 'oil-pier', approachStart[0], approachStart[1], 2.89, -2.0, 16.0, 5.2, 10.0, -234 * Math.PI / 180, C.concreteMid);
-
-    // 175 m Offshore Approach Trestle + Two-Tier 6-Pipe Rack
-    buildPierSpan('oil-pier', approachStart, approachEnd, approachWidth, deckY, 16.0, { rails: true, lamps: true });
+    // Shore abutment concrete bulkhead + sloped transition ramp & continuous pipe transition onto the offshore trestle
+    upright('box', 'oil-pier', shoreAbutment.e, shoreAbutment.n, shoreAbutment.g, -2.0, 16.0, shoreAbutment.deckLift + 2.0, 8.0, -234 * Math.PI / 180, C.concreteMid);
+    span('box', 'oil-pier',
+      shoreAbutment.e, shoreAbutment.n, shoreAbutment.g, shoreAbutment.deckLift - 0.55,
+      approachStart[0], approachStart[1], sea, deckY - 0.55,
+      approachWidth, 1.1, C.concreteLight);
     {
       const dx = approachEnd[0] - approachStart[0], dn = approachEnd[1] - approachStart[1], l = Math.hypot(dx, dn);
-      const pe = -dn / l, pn = dx / l, yaw = -Math.atan2(dx, dn);
+      const pe = -dn / l, pn = dx / l;
+      const shoreEnd = onshorePipe[onshorePipe.length - 1];
       const pipeRows = low
         ? [[-3.6, 1.4], [-2.2, 1.4], [-3.6, 2.8], [-2.2, 2.8]]
         : [[-4.4, 1.4], [-3.3, 1.4], [-2.2, 1.4], [-4.4, 2.7], [-3.3, 2.7], [-2.2, 2.7]];
+      const shoreOffsets = low ? [-1.6, 0, 0, 1.6] : [-2.2, -1.1, 0, 0, 1.1, 2.2];
+      // Continuous sloped pipe transition from shore bulkhead rack down onto the offshore two-tier trestle rack
+      for (let i = 0; i < pipeRows.length; i++) {
+        const [off, py] = pipeRows[i];
+        const sOff = shoreOffsets[i];
+        span('cyl', 'oil-pier',
+          shoreEnd.e + pe * sOff, shoreEnd.n + pn * sOff, shoreEnd.g, shoreEnd.lift,
+          approachStart[0] + pe * off, approachStart[1] + pn * off, sea, deckY + py,
+          0.56, 0.56, py > 2 ? C.pipeWhite : C.pipeGrey);
+      }
+      // 149 m Offshore Approach Trestle (100% over water) + Two-Tier 6-Pipe Rack
+      buildPierSpan('oil-pier', approachStart, approachEnd, approachWidth, deckY, 16.0, { rails: true, lamps: true });
+      const yaw = -Math.atan2(dx, dn);
       for (const [off, py] of pipeRows) {
         span('cyl', 'oil-pier',
           approachStart[0] + pe * off, approachStart[1] + pn * off, sea, deckY + py,
@@ -813,7 +851,8 @@ export function planPointTupperIndustry(
     const { start, end, width, baseG, deckLift, dolphin, conveyor, loader } = PAPER_WHARF;
     buildPierSpan('paper-wharf', start, end, width, deckLift, 16.0, { fenders: -1, bollards: true, lamps: true, baseG });
     // Circular concrete mooring dolphin (OSM way 1084321647) + sloped steel truss catwalk to NW wharf corner
-    upright('cyl', 'paper-wharf', dolphin.e, dolphin.n, sea, -10.0, dolphin.radius * 2, dolphin.deckY + 10.0, dolphin.radius * 2, 0, C.concreteMid);
+    const dolFoot = low ? -0.15 : -10.0;
+    upright('cyl', 'paper-wharf', dolphin.e, dolphin.n, sea, dolFoot, dolphin.radius * 2, dolphin.deckY - dolFoot, dolphin.radius * 2, 0, C.concreteMid);
     upright('cyl', 'paper-wharf', dolphin.e, dolphin.n, sea, dolphin.deckY, 1.0, 0.9, 1.0, 0, C.accentYellow);
     addLight(dolphin.e, dolphin.n, sea, dolphin.deckY + 3.8, 0.72, C.lightRed);
     buildCatwalk('paper-wharf', dolphin.e, dolphin.n, start[0], start[1], dolphin.deckY + 0.3, deckLift + 0.1, sea, baseG);
@@ -886,7 +925,7 @@ function buildCoalYardMesh(
     const isRim = (r: number, c: number) => !active(r - 1, c) || !active(r + 1, c) || !active(r, c - 1) || !active(r, c + 1);
     const pt = (r: number, c: number): [number, number, number] => {
       const e = m.e0 + c * m.step, n = m.n0 + r * m.step, g = val(r, c) / 10;
-      const lift = isRim(r, c) ? -0.22 : 0.14 + 0.45 * exag;
+      const lift = isRim(r, c) ? -0.22 : 0.18 + 0.50 * exag;
       return [e - VE, industryGround(g, exag, sea) + lift, VN - n];
     };
     const pushTri = (a: [number, number, number], b: [number, number, number], c: [number, number, number], e: number, n: number) => {
@@ -899,9 +938,9 @@ function buildCoalYardMesh(
         if (!active(r, c) || !active(r, c + 1) || !active(r + 1, c + 1) || !active(r + 1, c)) continue;
         const p0 = pt(r, c), p1 = pt(r, c + 1), p2 = pt(r + 1, c + 1), p3 = pt(r + 1, c);
         const ce = m.e0 + (c + 0.5) * m.step, cn = m.n0 + (r + 0.5) * m.step;
-        // Split along p1-p3 diagonal (matching terrain ridge direction) with strictly upward (+Y) CCW winding.
-        pushTri(p0, p1, p3, ce, cn);
-        pushTri(p1, p2, p3, ce + 1, cn + 1);
+        // Split along p0-p2 (SW-NE) matching web/src/terrain.ts:529-530, with strictly upward (+Y) CCW winding.
+        pushTri(p0, p1, p2, ce, cn);
+        pushTri(p0, p2, p3, ce + 1, cn + 1);
       }
     }
   }
@@ -927,6 +966,7 @@ function buildCoalYardMesh(
 export class PointTupperIndustry {
   readonly group = new THREE.Group();
   readonly plan: IndustryPlan;
+  readonly excludesCanopy = ptIndustryCanopyExcludes;
 
   constructor(
     village: readonly [number, number],

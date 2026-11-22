@@ -612,6 +612,10 @@ if (ERA.modern && AREA.ptInfrastructure && params.get('ptIndustry') !== '0') {
   const { PointTupperIndustry } = await ptIndustryChunk!.take().catch(partFailed);
   const ptIndustry = new PointTupperIndustry(manifest.village, EXAG, SEA_LEVEL, LOW, nightLook !== null, !!stockpiles);
   scene.add(ptIndustry.group);
+  const prevCanopyExcludes = terrain.canopyExcludes;
+  terrain.canopyExcludes = prevCanopyExcludes
+    ? (e, n) => prevCanopyExcludes(e, n) || ptIndustry.excludesCanopy(e, n)
+    : ptIndustry.excludesCanopy;
   if (import.meta.env.DEV) expose({ ptIndustry }, false);
 }
 

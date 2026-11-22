@@ -361,8 +361,10 @@ export const OIL_TERMINAL = {
     { e: 629384.0, n: 5048124.0, g: 4.38, lift: 7.2, bent: false },
     { e: 629368.0, n: 5048118.0, g: 2.89, lift: 7.2, bent: true },
   ] as readonly ConveyorPoint[],
-  /** Offshore approach trestle carrying roadway + 6-pipe rack to the main loading head. */
-  approachStart: [629368.0, 5048118.0] as const,
+  /** Shore abutment bulkhead (g = 2.89 m) where the sloped transition ramp meets the offshore approach trestle. */
+  shoreAbutment: { e: 629368.0, n: 5048118.0, g: 2.89, deckLift: 1.6 },
+  /** Offshore approach trestle (100% over open water) carrying roadway + 6-pipe rack to the main loading head. */
+  approachStart: [629345.0, 5048101.7] as const,
   approachEnd: [629224.0, 5048016.0] as const,
   approachWidth: 12.5,
   deckY: 5.4,

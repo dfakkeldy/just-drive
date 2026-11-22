@@ -68,6 +68,46 @@ async function measure(url) {
   }
 }
 
+// Target world-space verification points [east, north, yAboveSeaOrGround, isDryGround] per Point Tupper view.
+// Raycast from the active camera to each target must have zero terrain mesh occlusion in front of it.
+const TARGET_VISIBILITY = {
+  'plant-desktop-day': [628901.5, 5049449.0, 50.0, true],
+  'plant-desktop-night': [628901.5, 5049449.0, 50.0, true],
+  'plant-phone-day': [628901.5, 5049449.0, 50.0, true],
+  'coal-pier-desktop-day': [628603.0, 5048844.5, 6.5, false],
+  'oil-desktop-day': [629212.5, 5047991.2, 6.2, false],
+  'oil-phone-night': [629212.5, 5047991.2, 6.2, false],
+  'paper-wharf-desktop-day': [627701.3, 5050384.4, 5.0, false],
+  'north-bulk-desktop-day': [626893.0, 5051388.0, 5.8, false],
+};
+
+async function checkTargetVisible(c, name) {
+  const spec = TARGET_VISIBILITY[name];
+  if (!spec) return null;
+  const [e, n, y, isDry] = spec;
+  const vis = await c.read(`(async () => {
+    const THREE = await import('/node_modules/three/build/three.module.js');
+    const m = mmm;
+    const [VE, VN] = m.terrain.manifest.village;
+    const tx = ${e} - VE, tz = VN - ${n};
+    const ty = ${isDry} ? (m.terrain.heightAt(tx, tz) ?? 0) + ${y} : ${y};
+    const target = new THREE.Vector3(tx, ty, tz);
+    const ndc = target.clone().project(m.camera);
+    const dir = target.clone().sub(m.camera.position);
+    const dist = dir.length();
+    dir.normalize();
+    const rc = new THREE.Raycaster(m.camera.position, dir, 1, dist - 2);
+    const terrainMeshes = [];
+    m.terrain.group.traverseVisible(o => { if (o.isMesh) terrainMeshes.push(o); });
+    const hits = rc.intersectObjects(terrainMeshes, false);
+    const nearestTerrain = hits.length ? hits[0].distance : null;
+    return { inFrustum: Math.abs(ndc.x) < 0.95 && Math.abs(ndc.y) < 0.95 && ndc.z < 1, dist: +dist.toFixed(1), nearestTerrain: nearestTerrain !== null ? +nearestTerrain.toFixed(1) : null };
+  })()`);
+  assert.ok(vis.inFrustum, `${name}: target structure not in camera frustum (${JSON.stringify(vis)})`);
+  assert.equal(vis.nearestTerrain, null, `${name}: terrain mesh occludes target terminal at ${vis.nearestTerrain} m (target at ${vis.dist} m)`);
+  return vis;
+}
+
 const summary = {};
 for (const url of urls) {
   const parsed = new URL(url);
@@ -77,12 +117,14 @@ for (const url of urls) {
   const isNight = parsed.searchParams.get('time') === '22:30';
 
   const { c, result } = await measure(url);
+  let visibility = null;
   try {
     assert.equal(result.area, expectedArea, `${name}: wrong area`);
     if (expectOn) {
       assert.ok(result.industryMeshes.length >= (isNight ? 4 : 3), `${name}: industry meshes missing`);
       assert.equal(result.industryMeshes.some((m) => m.name === 'pt-industry-lights'), isNight, `${name}: night light mesh mismatch`);
       assert.ok(result.calls > 10 && result.triangles > 10000, `${name}: whole-frame render counts missing`);
+      visibility = await checkTargetVisible(c, name);
     } else {
       assert.equal(result.industryMeshes.length, 0, `${name}: unexpected industry meshes`);
     }
@@ -112,6 +154,7 @@ for (const url of urls) {
 
   const entry = {
     ...result,
+    ...(visibility ? { visibility } : {}),
     ...(baseline ? {
       off: {
         calls: baseline.calls,

@@ -5,7 +5,7 @@ import {
   COAL_CONVEYORS, COAL_MOUNDS, COAL_YARD, NORTH_BULK_PIER, OIL_TERMINAL, PAPER_WHARF, POWER_PLANT,
   PT_INDUSTRY_BOUNDS,
 } from '../web/src/pt-industry-data.ts';
-import { PointTupperIndustry, industryGround, planPointTupperIndustry } from '../web/src/pt-industry.ts';
+import { PointTupperIndustry, industryGround, planPointTupperIndustry, ptIndustryCanopyExcludes } from '../web/src/pt-industry.ts';
 import { mergeStraitTall } from '../web/src/tall-strait.ts';
 import { railLand } from './guardrail-land.mjs';
 
@@ -112,11 +112,20 @@ function checkLoadingArmSupport(berth1Arms, berth2Arms) {
 }
 checkLoadingArmSupport(OIL_TERMINAL.berth1Arms, OIL_TERMINAL.berth2Arms);
 
-/** Verify shoreline wharf/pier decks stay cleanly above baked terrain across all exaggerations. */
+/** Verify canopy exclusions clear offshore marine pier returns without clearing dry inland forest. */
+assert.equal(ptIndustryCanopyExcludes(629212.5, 5047991.2), true, 'canopy excludes must cover Berth 1 loading arms');
+assert.equal(ptIndustryCanopyExcludes(629137.0, 5048138.0), true, 'canopy excludes must cover Berth 2');
+assert.equal(ptIndustryCanopyExcludes(628603.0, 5048844.5), true, 'canopy excludes must cover coal pier ship unloader');
+assert.equal(ptIndustryCanopyExcludes(628545.0, 5048861.0), true, 'canopy excludes must cover coal pier hopper');
+assert.equal(ptIndustryCanopyExcludes(629520.0, 5048220.0), false, 'canopy excludes must not clear onshore forest behind oil terminal');
+assert.equal(ptIndustryCanopyExcludes(629120.0, 5049350.0), false, 'canopy excludes must not clear onshore plant/yard area');
+
+/** Verify shoreline wharf/pier decks and oil approach ramp stay cleanly above baked terrain across all exaggerations. */
 function checkShorelineDecks(exag) {
   const decks = [
     ['paper-wharf', PAPER_WHARF.start, PAPER_WHARF.end, PAPER_WHARF.width, industryGround(PAPER_WHARF.baseG, exag, SEA) + PAPER_WHARF.deckLift],
     ['north-bulk', NORTH_BULK_PIER.berthStart, NORTH_BULK_PIER.berthEnd, NORTH_BULK_PIER.berthWidth, industryGround(NORTH_BULK_PIER.baseG, exag, SEA) + NORTH_BULK_PIER.deckLift],
+    ['oil-approach', OIL_TERMINAL.approachStart, OIL_TERMINAL.approachEnd, OIL_TERMINAL.approachWidth, SEA + OIL_TERMINAL.deckY],
   ];
   for (const [name, a, b, width, deckTopY] of decks) {
     const dx = b[0] - a[0], dn = b[1] - a[1], len = Math.hypot(dx, dn), px = -dn / len, pn = dx / len;
@@ -129,6 +138,17 @@ function checkShorelineDecks(exag) {
         assert.ok(deckTopY - gY >= 0.5, `${name} deck buried at exag=${exag} (${e.toFixed(1)},${n.toFixed(1)}): deckY=${deckTopY.toFixed(2)} groundY=${gY.toFixed(2)}`);
       }
     }
+  }
+  // Verify oil shore-transition ramp clears terrain from shore abutment to approachStart at every exaggeration.
+  const ab = OIL_TERMINAL.shoreAbutment, ap = OIL_TERMINAL.approachStart;
+  const y0 = industryGround(ab.g, exag, SEA) + ab.deckLift;
+  const y1 = SEA + OIL_TERMINAL.deckY;
+  for (let k = 0; k <= 10; k++) {
+    const t = k / 10;
+    const e = ab.e + (ap[0] - ab.e) * t, n = ab.n + (ap[1] - ab.n) * t;
+    const gY = industryGround(land.ground(e - VE, VN - n, true), exag, SEA);
+    const deckY = y0 + (y1 - y0) * t;
+    assert.ok(deckY - gY >= 0.8, `oil shore ramp buried at exag=${exag} t=${t}: deckY=${deckY.toFixed(2)} groundY=${gY.toFixed(2)}`);
   }
 }
 
@@ -223,28 +243,49 @@ function checkPlan(plan, { night, exag }) {
   }
 }
 
+// Precompute grid-topological rim flags for every emitted coal triangle so contact checks never classify sunk triangles as rim.
+const coalTriIsInterior = (() => {
+  const flags = [];
+  for (const m of COAL_MOUNDS) {
+    const grid = new Int16Array(m.rows * m.cols).fill(-999);
+    for (const sp of m.spans) for (let i = 2; i < sp.length; i++) grid[sp[0] * m.cols + sp[1] + i - 2] = sp[i];
+    const active = (r, c) => r >= 0 && r < m.rows && c >= 0 && c < m.cols && grid[r * m.cols + c] > -900;
+    const isRim = (r, c) => !active(r - 1, c) || !active(r + 1, c) || !active(r, c - 1) || !active(r, c + 1);
+    for (let r = 0; r < m.rows - 1; r++) {
+      for (let c = 0; c < m.cols - 1; c++) {
+        if (!active(r, c) || !active(r, c + 1) || !active(r + 1, c + 1) || !active(r + 1, c)) continue;
+        const r0 = isRim(r, c), r1 = isRim(r, c + 1), r2 = isRim(r + 1, c + 1), r3 = isRim(r + 1, c);
+        flags.push(!r0 && !r1 && !r2);
+        flags.push(!r0 && !r2 && !r3);
+      }
+    }
+  }
+  return flags;
+})();
+
 function checkCoalContact(coalMesh, exag) {
   const pos = coalMesh.geometry.attributes.position;
+  assert.equal(pos.count / 3, coalTriIsInterior.length, 'coal mesh triangle count matches grid topology');
   let minGap = 999, maxGap = -999, sampled = 0;
-  for (let i = 0; i < pos.count; i += 3) {
+  for (let ti = 0; ti < coalTriIsInterior.length; ti++) {
+    if (!coalTriIsInterior[ti]) continue;
+    sampled++;
+    const i = ti * 3;
     const ax = pos.getX(i), ay = pos.getY(i), az = pos.getZ(i);
     const bx = pos.getX(i + 1), by = pos.getY(i + 1), bz = pos.getZ(i + 1);
     const cx = pos.getX(i + 2), cy = pos.getY(i + 2), cz = pos.getZ(i + 2);
-    // Check vertex and centroid heights against baked terrain.
-    const ga = industryGround(land.ground(ax, az, true), exag, SEA);
-    const gb = industryGround(land.ground(bx, bz, true), exag, SEA);
-    const gc = industryGround(land.ground(cx, cz, true), exag, SEA);
-    // Skip outer tucked rim triangles (where one vertex intentionally tucks -0.22 m below terrain).
-    if (ay - ga < 0 || by - gb < 0 || cy - gc < 0) continue;
-    sampled++;
-    const mx = (ax + bx + cx) / 3, my = (ay + by + cy) / 3, mz = (az + bz + cz) / 3;
-    const gm = industryGround(land.ground(mx, mz, true), exag, SEA);
-    const gap = my - gm;
-    if (gap < minGap) minGap = gap;
-    if (gap > maxGap) maxGap = gap;
+    for (const [wx, wy, wz] of [
+      [ax, ay, az], [bx, by, bz], [cx, cy, cz],
+      [(ax + bx + cx) / 3, (ay + by + cy) / 3, (az + bz + cz) / 3],
+    ]) {
+      const gm = industryGround(land.ground(wx, wz, true), exag, SEA);
+      const gap = wy - gm;
+      if (gap < minGap) minGap = gap;
+      if (gap > maxGap) maxGap = gap;
+    }
   }
-  assert.ok(sampled >= 2000, `too few interior coal triangles sampled: ${sampled}`);
-  const minAllowed = exag <= 1.5 ? -0.15 : -0.40;
+  assert.ok(sampled >= 3500, `too few interior coal triangles sampled: ${sampled}`);
+  const minAllowed = exag <= 1.5 ? -0.15 : -0.45;
   const maxAllowed = exag <= 1.5 ? 2.0 : 3.6;
   assert.ok(minGap >= minAllowed, `coal mesh dipped too far below terrain at exag=${exag}: minGap=${minGap.toFixed(2)} m`);
   assert.ok(maxGap <= maxAllowed, `coal mesh floated too high above terrain at exag=${exag}: maxGap=${maxGap.toFixed(2)} m`);
@@ -321,6 +362,16 @@ const withStockpiles = new PointTupperIndustry(land.village, 1.5, SEA, false, fa
 
 checkPlan(nightHigh.plan, { night: true, exag: 1.5 });
 checkPlan(dayLow.plan, { night: false, exag: 1.5 });
+
+// On LOW (where sea omits depth write), marine piles/cribs must clip near the waterline rather than extending to -14 m.
+for (const p of dayLow.plan.pieces) {
+  if (p.baseG <= SEA && p.site !== 'plant' && p.site !== 'coal') {
+    for (const y of [-0.5, 0.5]) {
+      const vy = new THREE.Vector3(0, y, 0).applyMatrix4(p.matrix).y;
+      assert.ok(vy >= SEA - 1.5, `LOW marine piece extends below waterline (y=${vy.toFixed(2)}) in ${p.site}/${p.kind}`);
+    }
+  }
+}
 
 const statsHigh = checkBuilt(dayHigh, { low: false, night: false, hasStockpiles: false, exag: 1.5 });
 const statsNight = checkBuilt(nightHigh, { low: false, night: true, hasStockpiles: false, exag: 1.5 });
@@ -441,7 +492,21 @@ if (process.argv.includes('--mutations')) {
     assert.throws(() => checkBuilt(bad, { low: false, night: false, hasStockpiles: false, exag: 1.5 }), undefined, 'floating-coal mutant survived');
     console.log('killed floating-coal');
   }
-  // 13. Coal mesh flatShading extra program
+  // 13. Sunk interior coal triangles (-10 m below terrain)
+  {
+    const bad = new PointTupperIndustry(land.village, 1.5, SEA, false, false, false);
+    const coal = bad.group.children.find((m) => m.name === 'pt-industry-coal');
+    const pos = coal.geometry.attributes.position;
+    let lowered = 0;
+    for (let ti = 0; ti < coalTriIsInterior.length && lowered < 110; ti++) {
+      if (!coalTriIsInterior[ti]) continue;
+      for (let k = 0; k < 3; k++) pos.setY(ti * 3 + k, pos.getY(ti * 3 + k) - 10);
+      lowered++;
+    }
+    assert.throws(() => checkBuilt(bad, { low: false, night: false, hasStockpiles: false, exag: 1.5 }), undefined, 'sunk-coal mutant survived');
+    console.log('killed sunk-coal');
+  }
+  // 14. Coal mesh flatShading extra program
   {
     const bad = new PointTupperIndustry(land.village, 1.5, SEA, false, false, false);
     const coal = bad.group.children.find((m) => m.name === 'pt-industry-coal');
