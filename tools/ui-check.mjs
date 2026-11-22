@@ -73,8 +73,8 @@ for (const just of [false, true]) for (const area of ['mabou', 'judique']) for (
 // Mabou's main street adds mabouMain. The camera drone adds drone, and freeCamera (the old F camera, for picture tools that hold the car still).
 // The road animals (#118) add roadAnimals (null on test visits without wildlife=1).
 // Kicker Field opens in Mabou by default (#57), so both boots add stuntPark and sunShadows. Maryville's place slot adds
-// maryville (null outside Port Hood), like the other hand-built places.
-const devKeys = 'bigMap footpaths gamepad driftFeedback sidewalks hikes drawProbe finish farLand farTurbines farVisibility tall aiDriver ambientTraffic animals area buildings camera canal cemeteries chase church coast cost culverts deckhand detail driveVehicle drone edge endings engineSound era fishing freeCamera gameMode grass harbourLights hawkesbury history home interiors journey landmarks low mabouMain maryville mineSite miniMap mp picture places porch porchDog porchSite props quality quarry radio relief renderer roadAnimals roadScene roads scene schoolBus shift stockpiles stuntPark sunShadows terrain trees vehicle vehicleId village water yard yardDog yardDogSite yardJob'.split(' ').sort();
+// maryville and depot (null outside Port Hood), like the other hand-built places.
+const devKeys = 'bigMap footpaths gamepad driftFeedback sidewalks hikes drawProbe finish farLand farTurbines farVisibility tall aiDriver ambientTraffic animals area buildings camera canal cemeteries chase church coast cost culverts deckhand depot detail driveVehicle drone edge endings engineSound era fishing freeCamera gameMode grass harbourLights hawkesbury history home interiors journey landmarks low mabouMain maryville mineSite miniMap mp picture places porch porchDog porchSite props quality quarry radio relief renderer roadAnimals roadScene roads scene schoolBus shift stockpiles stuntPark sunShadows terrain trees vehicle vehicleId village water yard yardDog yardDogSite yardJob'.split(' ').sort();
 const resetOrder = ['interiors', 'relief', 'yardJob', 'fishing', 'roadScene', 'schoolBus'];
 for (const mode of ['mail', 'explore']) {
   const url = new URL(base);

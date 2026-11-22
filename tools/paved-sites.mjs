@@ -8,7 +8,7 @@ const [root,area,scope]=process.argv.slice(2);
 // The paved layer reserves the first eight. The ground-class bake ('ground' scope) reserves every
 // web/src/*-site.ts module; tools/ground-classes-check.py holds this list to the folder.
 const PAVED_SITES=['yard','home','church','porch','fishing','coast','quarry','mine'];
-const GROUND_SITES=[...PAVED_SITES,'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store'];
+const GROUND_SITES=[...PAVED_SITES,'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store','depot'];
 const ground=scope==='ground';
 const imports=(ground?GROUND_SITES:PAVED_SITES).map(s=>`export * as ${s.replace(/-(\w)/g,(_,c)=>c.toUpperCase())} from './web/src/${s}-site';`).join('\n');
 const result=await build({stdin:{contents:imports,resolveDir:repo,loader:'ts'},bundle:true,write:false,platform:'node',format:'esm',metafile:true,logLevel:'silent',plugins:[{name:'external-three',setup(b){b.onResolve({filter:/^three$/},()=>({path:pathToFileURL(repo+'/web/node_modules/three/build/three.module.js').href,external:true}));}}]});
@@ -33,6 +33,7 @@ for(const b of new api.judiqueVillage.JudiqueVillageSite(v).clear)add('judique-v
 for(const b of new api.portHawkesbury.PortHawkesburySite(v).clear)add('port-hawkesbury',b);
 for(const b of new api.mabouMain.MabouMainSite(v).clear)add('mabou-main',b);
 add('maryville-store',new api.maryvilleStore.MaryvilleStoreSite(v).box);
+add('depot',new api.depot.DepotSite(v).box);
 add('airport',new api.airport.AirportSite(v).box);
 }
 // Porch and mine use the Mabou source catalog, even when baking overlapping Port Hood.

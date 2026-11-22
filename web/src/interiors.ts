@@ -20,6 +20,8 @@ export interface Door {
   controls?: { go?: string; brake: string; steer: string };
   /** A room that may be entered again in the same shift. */
   repeat?: boolean;
+  /** A room entered after the shift has ended (e.g. the Boss's office from the shift report), when frame dt is 0. */
+  afterShift?: boolean;
   create(day: number): InteriorGame;
 }
 export type InteriorReceipt = { door: Pick<Door, 'id' | 'name' | 'position'>; result: InteriorResult };
@@ -49,6 +51,7 @@ export class Interiors {
   private passage: Passage = { kind: 'drive' };
   private nearby: Door | null = null;
   private returnFade = 0;
+  private lastWall = 0;
   private readonly prompt = document.createElement('div');
   private readonly hud = document.createElement('div');
   private readonly fade = document.createElement('div');
@@ -75,9 +78,10 @@ export class Interiors {
     this.doors.set(door.id, door);
   }
   get busy(): boolean { return this.passage.kind !== 'drive'; }
+  get doorId(): string | null { return this.passage.kind === 'drive' ? null : this.passage.door.id; }
   get game(): InteriorGame | null { return this.passage.kind === 'drive' ? null : this.passage.game; }
   reset(): void {
-    this.game?.dispose(); this.passage = { kind: 'drive' }; this.visited.clear(); this.nearby = null;
+    this.game?.dispose(); this.passage = { kind: 'drive' }; this.visited.clear(); this.nearby = null; this.lastWall = 0;
     this.hud.hidden = this.prompt.hidden = true; this.returnFade = 0; this.fade.style.opacity = '0'; this.dress(null);
   }
   /** The shared indoor page state: hidden driving controls, and this room's names for the ones that stay. */
@@ -94,6 +98,7 @@ export class Interiors {
     const door = id ? this.doors.get(id) : this.nearby;
     if (!door || this.busy || this.visited.has(door.id)) return;
     if (!door.repeat) this.visited.add(door.id);
+    this.lastWall = 0;
     this.passage = { kind: 'entering', door, game: door.create(this.day()), time: 0 };
     this.prompt.hidden = true; this.dress(door);
   }
@@ -109,15 +114,16 @@ export class Interiors {
   private finish(): void {
     if (this.passage.kind === 'drive') return;
     const { door, game } = this.passage;
-    this.receive({ door, result: game.result ?? { delivered: false, note: 'Shift ended at the door.' } });
-    game.dispose(); this.passage = { kind: 'drive' }; this.returnFade = .4;
+    const result = game.result ?? { delivered: false, note: 'Shift ended at the door.' };
+    game.dispose(); this.passage = { kind: 'drive' }; this.returnFade = .4; this.lastWall = 0;
     this.hud.hidden = true; this.dress(null);
+    this.receive({ door, result });
   }
   update(dt: number, input: Input, player: { x: number; z: number; speed: number }, enabled: boolean): void {
     const p = this.passage;
     if (p.kind === 'drive') {
       this.returnFade = Math.max(0, this.returnFade - dt); this.fade.style.opacity = String(this.returnFade / .4);
-      this.nearby = enabled && Math.abs(player.speed) * 3.6 < 3 ? [...this.doors.values()].find(d => Math.hypot(d.position.x - player.x, d.position.z - player.z) <= d.radius) ?? null : null;
+      this.nearby = enabled && Math.abs(player.speed) * 3.6 < 3 ? [...this.doors.values()].find(d => d.radius > 0 && Math.hypot(d.position.x - player.x, d.position.z - player.z) <= d.radius) ?? null : null;
       this.prompt.hidden = !this.nearby || this.bare;
       if (this.nearby) {
         const done = this.visited.has(this.nearby.id);
@@ -127,7 +133,11 @@ export class Interiors {
       }
       return;
     }
-    p.time += dt;
+    const now = typeof performance !== 'undefined' ? performance.now() : 0;
+    const step = dt > 0 ? dt : p.door.afterShift && typeof document !== 'undefined' && !document.hidden && this.lastWall
+      ? Math.min(0.05, Math.max(0, (now - this.lastWall) / 1000)) : 0;
+    this.lastWall = now;
+    p.time += step;
     if (p.kind === 'entering') {
       this.fade.style.opacity = String(Math.min(1, p.time / .4));
       if (p.time >= .4) this.passage = { ...p, kind: 'inside', time: 0 };
@@ -136,7 +146,7 @@ export class Interiors {
       if (p.time >= .4) this.finish();
     } else {
       this.fade.style.opacity = String(Math.max(0, 1 - p.time / .4));
-      p.game.update(dt, input);
+      p.game.update(step, input);
       this.hud.hidden = this.bare;
       // Day 0 is a drive with no shift: there is no day or clock to show.
       this.clockText.textContent = this.day() > 0 ? `${p.door.name.toUpperCase()} · DAY ${this.day()} · ${this.clock()}` : p.door.name.toUpperCase();
