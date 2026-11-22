@@ -538,7 +538,7 @@ export class ChurchRoomArt {
     this.box('plain', PAINT.red, sx - .13, .76, sz - .03, sx + .13, .86, sz + .03);
     this.disc(PAINT.white, sx, .88, sz, .27, .035, 'y');
     // A tall white pedestal with a shelf top, by the right wall.
-    const px = w + .42, pz = c - 3.6;
+    const px = w + .42, pz = N.z0 + .4;
     this.box('plain', PAINT.white, px - .16, 0, pz - .16, px + .16, .06, pz + .16);
     this.box('plain', PAINT.white, px - .05, .06, pz - .05, px + .05, 1.22, pz + .05);
     this.box('plain', PAINT.white, px - .2, 1.22, pz - .3, px + .2, 1.27, pz + .3);
@@ -571,12 +571,12 @@ export class ChurchRoomArt {
     this.box('plain', PAINT.base, V.x0, 0, V.z0, V.x1, .13, V.z0 + .02); this.box('plain', PAINT.base, V.x0, 0, V.z1 - .02, V.x1, .13, V.z1);
     this.box('plain', PAINT.base, V.x0, 0, V.z0, V.x0 + .02, .13, V.z1);
     // The sash window and a closed four-panel door on the left wall.
-    const wx = (V.x0 + V.x1) / 2 - .35;
+    const wx = V.window;
     this.sheet('sash', [wx + .4, .85, V.z1 - .03], [-.8, 0, 0], [0, 1.3, 0], false);
     this.box('plain', PAINT.white, wx - .47, .78, V.z1 - .09, wx + .47, .85, V.z1);
     for (const x of [wx - .47, wx + .4]) this.box('plain', PAINT.white, x, .85, V.z1 - .04, x + .07, 2.2, V.z1);
     this.box('plain', PAINT.white, wx - .47, 2.15, V.z1 - .04, wx + .47, 2.22, V.z1);
-    const dx = V.x1 - .62;
+    const dx = V.door;
     this.box('peel', PAINT.white, dx - .41, 0, V.z1 - .05, dx + .41, 1.98, V.z1);
     for (const [x, y0, y1] of [[-.19, .2, .85], [.19, .2, .85], [-.19, 1.05, 1.8], [.19, 1.05, 1.8]]) this.box('plain', PAINT.white, dx + x - .14, y0, V.z1 - .058, dx + x + .14, y1, V.z1 - .05, 'x', .86);
     this.box('plain', PAINT.wood, dx - .34, .95, V.z1 - .1, dx - .29, 1, V.z1 - .05);

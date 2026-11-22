@@ -1,21 +1,22 @@
-/** The owner's hand-built church, ported from his own model. No scan transforms or image pixels. */
+/** The owner's church, measured from their phone scan and dash cam stills. No scan transforms or image pixels. */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Terrain } from './terrain';
 import { pushOut, type Pushable } from './parked';
 import type { HandBuiltPlace } from './place';
-import { CHURCH_GEOM, CHURCH_FEATURES, CHURCH_SCALE, type ChurchSite } from './church-site';
+import { CHURCH_GEOM, CHURCH_FEATURES, CHURCH_GROUNDS, CHURCH_SCALE, type ChurchSite } from './church-site';
 
 type Opening = typeof CHURCH_FEATURES.openings[number];
 type Point = [number, number];
 interface AddOptions { cast?: boolean; receive?: boolean; ry?: number; parent?: THREE.Group }
 const COL = {
   wall: 0xf7f7f3, trim: 0xffffff, roof: 0x343d40, cap: 0x1f2526, dome: 0x1b2022,
-  glass: 0x34444c, steps: 0x8d3d2b,
+  glass: 0x34444c, steps: 0x9a968c,
   stone: 0x8e8079, rock: 0x8f9396, sign: 0xffffff, door: 0xf7f7f4,
+  granite: 0x5e4440, cross: 0x3a3633, plinth: 0x9c4a3c,
 };
-
-// Shingle courses as a repeating texture, one tile = 1 x 1 scene unit.
+// Shingle courses as a repeating texture; COURSE tiles per metre keep the courses at their old size.
+const COURSE = 1 / 0.66;
 function shingleTexture() {
   const c = document.createElement("canvas"); c.width = c.height = 128;
   const g = c.getContext("2d");
@@ -64,6 +65,9 @@ export function buildChurchModel(ground: (x: number, z: number) => number = () =
     rock: new THREE.MeshLambertMaterial({ color: COL.rock }),
     sign: new THREE.MeshLambertMaterial({ map: signTexture() }),
     door: new THREE.MeshLambertMaterial({ color: COL.door }),
+    granite: new THREE.MeshLambertMaterial({ color: COL.granite }),
+    cross: new THREE.MeshLambertMaterial({ color: COL.cross }),
+    plinth: new THREE.MeshLambertMaterial({ color: COL.plinth }),
   };
   const add = (geo: THREE.BufferGeometry, m: THREE.MeshLambertMaterial, x = 0, y = 0, z = 0, opts: AddOptions = {}) => {
     const mesh = new THREE.Mesh(geo, m); mesh.position.set(x, y, z);
@@ -72,11 +76,11 @@ export function buildChurchModel(ground: (x: number, z: number) => number = () =
     (opts.parent || group).add(mesh); return mesh;
   };
   const box = (sx: number, sy: number, sz: number, m: THREE.MeshLambertMaterial, x: number, y: number, z: number, opts: AddOptions = {}) => add(new THREE.BoxGeometry(sx, sy, sz), m, x, y, z, opts);
-  // Shingled boxes: scale UVs to scene units so the courses keep their real size on every face.
+  // Shingled boxes: scale UVs to metres so the courses keep their real size on every face.
   const shingledBox = (sx: number, sy: number, sz: number, x: number, y: number, z: number) => {
     const g = new THREE.BoxGeometry(sx, sy, sz), uv = g.attributes.uv;
     const dims = [[sz, sy], [sz, sy], [sx, sz], [sx, sz], [sx, sy], [sx, sy]];   // +x -x +y -y +z -z
-    for (let i = 0; i < uv.count; i++) { const [du, dv] = dims[Math.floor(i / 4)]; uv.setXY(i, uv.getX(i) * du, uv.getY(i) * dv); }
+    for (let i = 0; i < uv.count; i++) { const [du, dv] = dims[Math.floor(i / 4)]; uv.setXY(i, uv.getX(i) * du * COURSE, uv.getY(i) * dv * COURSE); }
     return add(g, mat.wall, x, y, z);
   };
 
@@ -97,11 +101,13 @@ export function buildChurchModel(ground: (x: number, z: number) => number = () =
   };
   const isHole = (o: Opening) => o.kind === "arch" || o.kind === "rect";
 
-  // Shingled wall shells retain the source's actual openings. Interior lining is omitted.
+  // Shingled wall shells keep the real openings. Interior lining is omitted.
   function wall(outline: Point[], holes: THREE.Path[], place: (mesh: THREE.Mesh, inset: number) => void) {
     const shape = new THREE.Shape(outline.map(([a, b]) => new THREE.Vector2(a, b)));
     shape.holes = holes;
-    const outer = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: T, bevelEnabled: false }), mat.wall);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: T, bevelEnabled: false }), uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * COURSE, uv.getY(i) * COURSE);
+    const outer = new THREE.Mesh(geo, mat.wall);
     place(outer, 0); group.add(outer);
   }
 
@@ -111,7 +117,7 @@ export function buildChurchModel(ground: (x: number, z: number) => number = () =
   wall(longOutline, openingsOn("nave_s").map(o => archPath(o)), (m, d) => { m.position.z = zS - d; m.scale.z = -1; });
   wall(longOutline, openingsOn("nave_n").map(o => archPath(o)), (m, d) => { m.position.z = zN + d; });
 
-  // Gable ends: face coordinates u = z. The source's west front gets its openings.
+  // Gable ends: face coordinates u = z. The front gable gets its openings.
   const gable = (flip: number): Point[] => {
     const a = zN, b = zS;
     return [[a * flip, 0], [b * flip, 0], [b * flip, n.eave], [zM * flip, n.ridge], [a * flip, n.eave]];
@@ -123,49 +129,57 @@ export function buildChurchModel(ground: (x: number, z: number) => number = () =
     m.rotation.y = Math.PI / 2; m.position.x = n.x0 + d;       // local +Z -> world +X; local x -> world -z
   });
 
-  // Window glass and white frames in each opening, set back into the wall.
+  // Window glass and white frames in each opening, set back into the wall. Vestry openings sit on its face.
   const facePose: Record<Opening['face'], { pos: (u: number, y: number) => THREE.Vector3; ry: number }> = {
-    // local +Z points out of the wall; glass sits 0.08 inside the outer face
-    nave_s: { pos: (u, y) => new THREE.Vector3(u, y, zS - 0.08), ry: 0 },
-    nave_n: { pos: (u, y) => new THREE.Vector3(u, y, zN + 0.08), ry: Math.PI },
-    west: { pos: (u, y) => new THREE.Vector3(n.x1 - 0.08, y, u), ry: Math.PI / 2 },
-    tower_w: { pos: (u, y) => new THREE.Vector3(t.x1 + 0.02, y, u), ry: Math.PI / 2 },
-    tower_n: { pos: (u, y) => new THREE.Vector3(u, y, -t.zn - 0.02), ry: Math.PI },
-    tower_s: { pos: (u, y) => new THREE.Vector3(u, y, t.zs + 0.02), ry: 0 },
+    // local +Z points out of the wall; glass sits 0.05 inside the outer face
+    nave_s: { pos: (u, y) => new THREE.Vector3(u, y, zS - 0.05), ry: 0 },
+    nave_n: { pos: (u, y) => new THREE.Vector3(u, y, zN + 0.05), ry: Math.PI },
+    west: { pos: (u, y) => new THREE.Vector3(n.x1 - 0.05, y, u), ry: Math.PI / 2 },
+    tower_w: { pos: (u, y) => new THREE.Vector3(t.x1 + 0.01, y, u), ry: Math.PI / 2 },
+    tower_n: { pos: (u, y) => new THREE.Vector3(u, y, -t.zn - 0.01), ry: Math.PI },
+    tower_s: { pos: (u, y) => new THREE.Vector3(u, y, t.zs + 0.01), ry: 0 },
+    vestry_s: { pos: (u, y) => new THREE.Vector3(u, y, v.z1 + 0.01), ry: 0 },
+    vestry_n: { pos: (u, y) => new THREE.Vector3(u, y, v.z0 - 0.01), ry: Math.PI },
   };
   for (const o of features.openings) {
-    const pose = facePose[o.face]; if (!pose) continue;
-    const r = o.w / 2, cy = (o.y0 + o.y1) / 2, onTower = o.face.startsWith("tower");
+    const pose = facePose[o.face];
+    const r = o.w / 2, cy = (o.y0 + o.y1) / 2, dark = o.face.startsWith("tower") || o.face.startsWith("vestry");
     const local = new THREE.Group(); local.position.copy(pose.pos(o.u, 0)); local.rotation.y = pose.ry; group.add(local);
     if (o.kind === "sign") {
-      add(new THREE.PlaneGeometry(o.w, o.y1 - o.y0), mat.sign, 0, cy, 0.16, { parent: local });
+      add(new THREE.PlaneGeometry(o.w, o.y1 - o.y0), mat.sign, 0, cy, 0.1, { parent: local });
       continue;
     }
     if (o.kind === "door") {
-      box(o.w, o.y1 - o.y0, 0.08, mat.door, 0, cy, 0.04, { parent: local });
-      for (const yy of [o.y0 + 0.7, o.y0 + 1.9]) box(o.w * 0.7, 0.5, 0.03, mat.trim, 0, yy, 0.1, { parent: local });
+      box(o.w, o.y1 - o.y0, 0.05, mat.door, 0, cy, 0.03, { parent: local });
+      for (const yy of [o.y0 + 0.46, o.y0 + 1.25]) box(o.w * 0.7, 0.33, 0.02, mat.trim, 0, yy, 0.07, { parent: local });
+      box(o.w + 0.16, 0.08, 0.06, mat.trim, 0, o.y1 + 0.04, 0.04, { parent: local });
       continue;
     }
     // glass
     const glassGeo = new THREE.ShapeGeometry(archShape(o), 16);
-    add(glassGeo, onTower ? mat.darkGlass : mat.glass, 0, 0, onTower ? 0.03 : 0, { parent: local, cast: false });
+    add(glassGeo, dark ? mat.darkGlass : mat.glass, 0, 0, dark ? 0.02 : 0, { parent: local, cast: false });
     // frame: sides, sill, head, and muntins
-    const fw = 0.09, top = o.kind === "arch" ? o.y1 + r : o.y1;
-    box(fw, o.y1 - o.y0, 0.12, mat.trim, -r, (o.y0 + o.y1) / 2, 0.06, { parent: local });   // side posts up to the spring line
-    box(fw, o.y1 - o.y0, 0.12, mat.trim, r, (o.y0 + o.y1) / 2, 0.06, { parent: local });
-    box(o.w + 0.25, 0.1, 0.18, mat.trim, 0, o.y0 - 0.03, 0.08, { parent: local });
-    box(0.05, top - o.y0 - 0.1, 0.06, mat.trim, 0, (o.y0 + top) / 2, 0.04, { parent: local });
-    for (let k = 1; k < 4; k++) box(o.w, 0.05, 0.06, mat.trim, 0, o.y0 + (o.y1 - o.y0) * k / 4, 0.04, { parent: local });
+    const fw = 0.06, top = o.kind === "arch" ? o.y1 + r : o.y1;
+    box(fw, o.y1 - o.y0, 0.08, mat.trim, -r, (o.y0 + o.y1) / 2, 0.04, { parent: local });   // side posts up to the spring line
+    box(fw, o.y1 - o.y0, 0.08, mat.trim, r, (o.y0 + o.y1) / 2, 0.04, { parent: local });
+    box(o.w + 0.16, 0.07, 0.12, mat.trim, 0, o.y0 - 0.02, 0.05, { parent: local });
+    box(0.035, top - o.y0 - 0.07, 0.04, mat.trim, 0, (o.y0 + top) / 2, 0.03, { parent: local });
+    for (let k = 1; k < 4; k++) box(o.w, 0.035, 0.04, mat.trim, 0, o.y0 + (o.y1 - o.y0) * k / 4, 0.03, { parent: local });
     if (o.kind === "arch") {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 6, 20, Math.PI), mat.trim);
-      ring.position.set(0, o.y1, 0.06); local.add(ring);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.035, 6, 20, Math.PI), mat.trim);
+      ring.position.set(0, o.y1, 0.04); local.add(ring);
+      // The pointed hood moulding over each round head.
+      for (const side of [-1, 1]) {
+        const hood = box(Math.hypot(r + 0.12, r * 0.8), 0.07, 0.05, mat.trim, side * (r + 0.12) / 2, o.y1 + r + 0.05 + r * 0.4, 0.05, { parent: local });
+        hood.rotation.z = -side * Math.atan2(r * 0.8, r + 0.12);
+      }
     } else {
-      box(o.w + 0.2, 0.1, 0.14, mat.trim, 0, o.y1 + 0.03, 0.07, { parent: local });
+      box(o.w + 0.13, 0.07, 0.09, mat.trim, 0, o.y1 + 0.02, 0.05, { parent: local });
     }
   }
 
   // Roof: two slabs with overhang, ridge cap, white fascia and rake boards.
-  const over = 0.45, roofT = 0.22;
+  const over = 0.3, roofT = 0.15;
   const slope = (zEave: number) => {
     const dz = zM - zEave, dy = n.ridge - n.eave, len = Math.hypot(dz, dy) + over;
     const ang = Math.atan2(dy, Math.abs(dz)) * Math.sign(dz);
@@ -176,18 +190,18 @@ export function buildChurchModel(ground: (x: number, z: number) => number = () =
     const along = new THREE.Vector3(0, -dy, -dz).normalize();                          // down-slope
     m.position.copy(mid).addScaledVector(out, roofT / 2).addScaledVector(along, over / 2);
     m.rotation.x = -ang;
-    const fascia = box(n.x1 - n.x0 + 2 * over, 0.28, 0.08, mat.trim, (n.x0 + n.x1) / 2, 0, 0);
-    fascia.position.copy(m.position).addScaledVector(along, len / 2).addScaledVector(out, -0.05);
+    const fascia = box(n.x1 - n.x0 + 2 * over, 0.18, 0.05, mat.trim, (n.x0 + n.x1) / 2, 0, 0);
+    fascia.position.copy(m.position).addScaledVector(along, len / 2).addScaledVector(out, -0.03);
     // Rake boards: white trim along each gable edge of the slab, hanging just below it.
-    for (const x of [n.x0 - over + 0.05, n.x1 + over - 0.05]) {   // outer face 1 cm past the slab end
-      const rake = box(0.12, 0.32, len, mat.trim, 0, 0, 0);
+    for (const x of [n.x0 - over + 0.03, n.x1 + over - 0.03]) {   // outer face 1 cm past the slab end
+      const rake = box(0.08, 0.21, len, mat.trim, 0, 0, 0);
       rake.rotation.x = -ang;
-      rake.position.copy(m.position).addScaledVector(out, -0.06); rake.position.x = x;
+      rake.position.copy(m.position).addScaledVector(out, -0.04); rake.position.x = x;
     }
   };
   slope(zN); slope(zS);
-  box(n.x1 - n.x0 + 2 * over, 0.18, 0.5, mat.cap, (n.x0 + n.x1) / 2, n.ridge + 0.2, zM);
-  for (const [x, z] of [[n.x0, zN], [n.x0, zS], [n.x1, zN], [n.x1, zS]]) box(0.32, n.eave, 0.32, mat.trim, x, n.eave / 2, z);
+  box(n.x1 - n.x0 + 2 * over, 0.12, 0.33, mat.cap, (n.x0 + n.x1) / 2, n.ridge + 0.13, zM);
+  for (const [x, z] of [[n.x0, zN], [n.x0, zS], [n.x1, zN], [n.x1, zS]]) box(0.21, n.eave, 0.21, mat.trim, x, n.eave / 2, z);
 
   // Tower: shingled shaft, corner boards, dark cap, cornice band.
   const tx0 = n.x1, tw = t.x1 - tx0, tz = t.zn + t.zs, tzc = (t.zs - t.zn) / 2;
@@ -200,52 +214,61 @@ export function buildChurchModel(ground: (x: number, z: number) => number = () =
   const roofAt = (z: number) => n.ridge - (n.ridge - n.eave) * Math.abs(z - zM) / (z < zM ? zM - zN : zS - zM);
   wall([[-t.zs, roofAt(t.zs)], [-zM, n.ridge], [t.zn, roofAt(-t.zn)], [t.zn, t.top], [-t.zs, t.top]], [],
     (m, d) => { m.rotation.y = Math.PI / 2; m.position.x = tx0 + d; });
-  for (const [x, z] of [[t.x1, -t.zn], [t.x1, t.zs]]) box(0.26, t.top, 0.26, mat.trim, x, t.top / 2, z);
-  box(tw + 0.5, 0.4, tz + 0.5, mat.cap, tx0 + tw / 2, c.base - 0.2, tzc);   // cap top meets the drum at c.base
-  box(tw + 0.3, 0.22, tz + 0.3, mat.trim, tx0 + tw / 2, t.top - 0.55, tzc);
+  for (const [x, z] of [[t.x1, -t.zn], [t.x1, t.zs]]) box(0.17, t.top, 0.17, mat.trim, x, t.top / 2, z);
+  box(tw + 0.33, 0.26, tz + 0.33, mat.cap, tx0 + tw / 2, c.base - 0.13, tzc);   // cap top meets the drum at c.base
+  box(tw + 0.2, 0.15, tz + 0.2, mat.trim, tx0 + tw / 2, t.top - 0.36, tzc);
 
-  // Cupola: white octagonal drum with dark louvres, onion dome, finial and cross.
+  // Cupola: white octagonal drum with dark openings between its posts, black onion dome, finial and cross.
   const drumH = c.top - c.base;
   const drum = add(new THREE.CylinderGeometry(c.r, c.r * 1.04, drumH, 8), mat.trim, c.x, c.base + drumH / 2, c.z);
   drum.rotation.y = Math.PI / 8;
-  for (let i = 0; i < 8; i += 2) {
-    const a = i * Math.PI / 4, rr = c.r * 1.03 * Math.cos(Math.PI / 8) + 0.03;   // face centres (corners are at odd multiples of pi/8)
-    const l = box(0.45, drumH * 0.6, 0.04, mat.cap, c.x + rr * Math.cos(a), c.base + drumH / 2, c.z + rr * Math.sin(a));
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4, rr = c.r * 1.03 * Math.cos(Math.PI / 8) + 0.02;   // face centres (corners are at odd multiples of pi/8)
+    const l = box(c.r * 0.55, drumH * 0.6, 0.03, mat.cap, c.x + rr * Math.cos(a), c.base + drumH / 2, c.z + rr * Math.sin(a));
     l.rotation.y = -a + Math.PI / 2;
   }
-  const domeBase = c.top;
-  const prof = [[c.r * 1.08, 0], [c.r * 1.18, 0.35], [c.r * 1.12, 0.9], [c.r * 0.8, 1.55], [c.r * 0.35, 2.05], [0.08, 2.35], [0, 2.4]]
-    .map(([x, y]) => new THREE.Vector2(x, y));
+  const domeBase = c.top, k = (c.dome - c.top) / 2.4;
+  const prof = [[c.r * 1.08, 0], [c.r * 1.18, 0.35], [c.r * 1.12, 0.9], [c.r * 0.8, 1.55], [c.r * 0.35, 2.05], [c.r * 0.1, 2.35], [0, 2.4]]
+    .map(([x, y]) => new THREE.Vector2(x, y * k));
   add(new THREE.LatheGeometry(prof, 32), mat.dome, c.x, domeBase, c.z);
-  box(c.r * 2.3, 0.15, c.r * 2.3, mat.trim, c.x, domeBase, c.z);
-  add(new THREE.SphereGeometry(0.14, 12, 8), mat.trim, c.x, domeBase + 2.45, c.z);
-  box(0.11, 2.4, 0.11, mat.trim, c.x, domeBase + 3.6, c.z);
-  box(0.11, 0.11, 1.1, mat.trim, c.x, domeBase + 4.1, c.z);
+  box(c.r * 2.3, 0.1, c.r * 2.3, mat.trim, c.x, domeBase, c.z);
+  add(new THREE.SphereGeometry(0.07, 12, 8), mat.trim, c.x, c.dome + 0.03, c.z);
+  const crossH = c.cross - c.dome;
+  box(0.06, crossH, 0.06, mat.trim, c.x, c.dome + crossH / 2, c.z);
+  box(0.06, 0.06, crossH * 0.55, mat.trim, c.x, c.dome + crossH * 0.7, c.z);
 
-  // Vestry: small shingled box on the east end with a low gable roof, a window and a back door.
+  // Vestry: small shingled box on the east end with a low gable roof; its door and windows are openings.
   const vx0 = v.x0, vx1 = n.x0, vzm = (v.z0 + v.z1) / 2, vw = v.z1 - v.z0;
   shingledBox(vx1 - vx0, v.eave, vw, (vx0 + vx1) / 2, v.eave / 2, vzm);
   for (const zE of [v.z0, v.z1]) {
-    const dz = vzm - zE, dy = v.ridge - v.eave, len = Math.hypot(dz, dy) + 0.35;
+    const dz = vzm - zE, dy = v.ridge - v.eave, len = Math.hypot(dz, dy) + 0.23;
     const ang = Math.atan2(dy, Math.abs(dz)) * Math.sign(dz);
-    const b = box(vx1 - vx0 + 0.6, 0.18, len, mat.roof, (vx0 + vx1) / 2 - 0.3, (v.eave + v.ridge) / 2 + 0.1, (zE + vzm) / 2 - Math.sign(dz) * 0.15);
+    const b = box(vx1 - vx0 + 0.4, 0.12, len, mat.roof, (vx0 + vx1) / 2 - 0.2, (v.eave + v.ridge) / 2 + 0.07, (zE + vzm) / 2 - Math.sign(dz) * 0.1);
     b.rotation.x = -ang;
   }
-  box(0.08, 2.2, 1.0, mat.door, vx0 - 0.04, 1.1 + 0.3, vzm);
-  box(1.0, 0.25, 1.6, mat.steps, vx0 - 0.6, 0.15, vzm);
-  box(0.9, 0.9, 0.06, mat.darkGlass, (vx0 + vx1) / 2, v.eave * 0.62, v.z1 + 0.03);
-  box(1.05, 1.05, 0.04, mat.trim, (vx0 + vx1) / 2, v.eave * 0.62, v.z1 + 0.01);
+  // The vestry's rear gable, above its box.
+  const gableGeo = new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(v.z0, v.eave), new THREE.Vector2(v.z1, v.eave), new THREE.Vector2(vzm, v.ridge)]));
+  for (const x of [vx0 - 0.005]) { const g = add(gableGeo, mat.trim, x, 0, 0, { ry: -Math.PI / 2, cast: false }); g.rotation.y = -Math.PI / 2; }
 
   // A plain solid base reaches below the lowest sampled land across its footprint.
   // Treads and wall tops stay level; only the hidden bottom follows terrain/exaggeration.
-  const groundedBox = (x0: number, x1: number, z0: number, z1: number, top: number, material: THREE.MeshLambertMaterial) => {
+  const lowest = (x0: number, x1: number, z0: number, z1: number) => {
     let bottom = 0;
-    const nx = Math.ceil((x1 - x0) / 0.5), nz = Math.ceil((z1 - z0) / 0.5);
+    const nx = Math.ceil((x1 - x0) / 0.33), nz = Math.ceil((z1 - z0) / 0.33);
     for (let ix = 0; ix <= nx; ix++) for (let iz = 0; iz <= nz; iz++) {
       bottom = Math.min(bottom, ground(x0 + (x1 - x0) * ix / nx, z0 + (z1 - z0) * iz / nz));
     }
-    bottom -= 0.2;
+    return bottom - 0.13;
+  };
+  const groundedBox = (x0: number, x1: number, z0: number, z1: number, top: number, material: THREE.MeshLambertMaterial) => {
+    const bottom = lowest(x0, x1, z0, z1);
     box(x1 - x0, top - bottom, z1 - z0, material, (x0 + x1) / 2, (top + bottom) / 2, (z0 + z1) / 2);
+  };
+  // A white railing: posts at both ends and one rail, `rise` to `fall` above the deck from a to b.
+  const railing = (ax: number, az: number, ay: number, bx: number, bz: number, by: number) => {
+    for (const [x, y, z] of [[ax, ay, az], [bx, by, bz]]) box(0.07, 0.9, 0.07, mat.trim, x, y + 0.45, z);
+    const len = Math.hypot(bx - ax, by - ay, bz - az), rail = box(len, 0.06, 0.06, mat.trim, (ax + bx) / 2, (ay + by) / 2 + 0.9, (az + bz) / 2);
+    rail.rotation.set(0, -Math.atan2(bz - az, bx - ax), Math.atan2(by - ay, Math.hypot(bx - ax, bz - az)), 'YZX');
   };
 
   // Front steps with railings, rising to the tower door.
@@ -256,31 +279,53 @@ export function buildChurchModel(ground: (x: number, z: number) => number = () =
     else box(d, h, st.width, mat.steps, t.x1 + d / 2, h / 2, st.u);
   }
   for (const side of [-1, 1]) {
-    const z = st.u + side * (st.width / 2 + 0.05);
-    for (const k of [0, 1]) box(0.1, 1.1, 0.1, mat.steps, t.x1 + 0.2 + k * (st.run - 0.4), (k ? 0.2 : st.rise) + 0.55, z);
-    const rail = box(Math.hypot(st.run, st.rise), 0.08, 0.08, mat.steps, t.x1 + st.run / 2, st.rise / 2 + 1.1, z);
-    rail.rotation.z = -Math.atan2(st.rise, st.run);
+    const z = st.u + side * (st.width / 2 + 0.04);
+    railing(t.x1 + 0.1, z, st.rise, t.x1 + st.run - 0.05, z, st.rise / st.count);
   }
 
-  // Unmarked stone monument and generic boulders at the source model positions.
-  const mon = new THREE.Group(); mon.position.set(20.3, ground(20.3, 1), 1); group.add(mon);
-  box(1.4, 0.5, 1.4, mat.stone, 0, 0.25, 0, { parent: mon });
-  box(1.0, 0.8, 1.0, mat.stone, 0, 0.9, 0, { parent: mon });
-  add(new THREE.CylinderGeometry(0.32, 0.42, 2.6, 4), mat.stone, 0, 2.6, 0, { parent: mon, ry: Math.PI / 4 });
-  add(new THREE.ConeGeometry(0.34, 0.5, 4), mat.stone, 0, 4.15, 0, { parent: mon, ry: Math.PI / 4 });
-  const BOULDERS = [[4.2, 9.0], [6.7, 9.4], [9.4, 10.2], [13.0, 10.0], [16.1, 10.4], [19.1, 11.4], [24.3, 11.8],
-    [28.3, 12.1], [31.6, 12.6], [34.0, 13.0], [37.7, 13.8],
-    [8.8, 27.8], [14.1, 26.2], [17.4, 25.6], [22.8, 24.3], [25.4, 23.2], [28.5, 22.5], [31.5, 21.8], [34.5, 20.4], [37.4, 19.2]];
+  // The ramp from the tower's side door, down along the front gable, with a railing on each side.
+  const rp = features.ramp, rz0 = -t.zn, rz1 = -t.zn - rp.run, rx0 = rp.u - rp.width / 2;
+  {
+    const bottom = lowest(rx0, rx0 + rp.width, rz1, rz0);
+    const shape = new THREE.Shape([new THREE.Vector2(0, bottom), new THREE.Vector2(rp.run, bottom), new THREE.Vector2(rp.run, 0.03), new THREE.Vector2(0, rp.rise)]);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: rp.width, bevelEnabled: false });
+    geo.rotateY(Math.PI / 2); geo.translate(rx0, 0, rz0);   // shape x -> out from the tower (-z), extrusion -> +x
+    add(geo, mat.steps);
+    for (const x of [rx0 - 0.04, rx0 + rp.width + 0.04]) railing(x, rz0 - 0.1, rp.rise, x, rz1 + 0.1, 0.04);
+  }
+  // The vestry's side landing, with a railing on its open edge.
+  const ld = features.landing;
+  groundedBox(ld.u - ld.width / 2, ld.u + ld.width / 2, v.z1, v.z1 + ld.depth, ld.rise, mat.steps);
+  railing(ld.u - ld.width / 2, v.z1 + ld.depth - 0.04, ld.rise, ld.u + ld.width / 2 - 0.4, v.z1 + ld.depth - 0.04, ld.rise);
+
+  // The granite monument in front: a plinth, a die, a shaft and a low cap. No plaque text.
+  const gm = CHURCH_GROUNDS.monument;
+  {
+    const g = ground(gm.x, gm.z), base = 0.22, die = 0.55, cap = 0.12, shaft = gm.h - base - die - cap;
+    const low = lowest(gm.x - gm.w / 2, gm.x + gm.w / 2, gm.z - gm.w / 2, gm.z + gm.w / 2);
+    box(gm.w, g + base - low, gm.w, mat.granite, gm.x, (g + base + low) / 2, gm.z);
+    box(gm.w * 0.73, die, gm.w * 0.73, mat.granite, gm.x, g + base + die / 2, gm.z);
+    box(gm.w * 0.47, shaft, gm.w * 0.47, mat.granite, gm.x, g + base + die + shaft / 2, gm.z);
+    add(new THREE.ConeGeometry(gm.w * 0.34, cap, 4), mat.granite, gm.x, g + gm.h - cap / 2, gm.z, { ry: Math.PI / 4 });
+  }
+  // The tall wayside cross on the lane: a red plinth, a dark post and its arms.
+  const ws = CHURCH_GROUNDS.wayside;
+  {
+    const g = ground(ws.x, ws.z), cross = new THREE.Group(); cross.position.set(ws.x, g, ws.z); cross.rotation.y = ws.ry; group.add(cross);
+    box(0.5, 0.42, 0.5, mat.plinth, 0, 0.09, 0, { parent: cross });
+    box(0.16, ws.h, 0.16, mat.cross, 0, ws.h / 2, 0, { parent: cross });
+    box(ws.arm, 0.16, 0.16, mat.cross, 0, ws.armAt, 0, { parent: cross });
+  }
+  // Rocks at the scan's positions and sizes; half of each sits in the ground.
   const rockGeo = new THREE.DodecahedronGeometry(0.5, 0);
-  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (const [x, z] of BOULDERS) {
-    const r = add(rockGeo, mat.rock, x, ground(x, z) + 0.2, z, { ry: rnd() * Math.PI });
-    r.scale.set(1.1 + rnd() * 0.5, 0.75 + rnd() * 0.3, 0.9 + rnd() * 0.4); r.rotation.x = (rnd() - 0.5) * 0.4;
+  for (const [x, z, h, w, d, ry] of CHURCH_GROUNDS.rocks) {
+    const r = add(rockGeo, mat.rock, x, ground(x, z) + 0.2 * h, z, { ry });
+    r.scale.set(w, 1.6 * h, d);
   }
 
   // Plain foundation skirts cover all three volumes, including the tower, down to sampled land.
   for (const [x0, x1, z0, z1] of [[n.x0, n.x1, zN, zS], [n.x1, t.x1, -t.zn, t.zs], [v.x0, n.x0, v.z0, v.z1]]) {
-    groundedBox(x0 - 0.03, x1 + 0.03, z0 - 0.03, z1 + 0.03, 0.1, mat.stone);
+    groundedBox(x0 - 0.02, x1 + 0.02, z0 - 0.02, z1 + 0.02, 0.07, mat.stone);
   }
   return mergeChurch(group);
 }
@@ -338,7 +383,7 @@ export class Church implements HandBuiltPlace {
     this.group.position.set(site.origin.x, 0, site.origin.z);
     this.group.rotation.y = site.yaw;
     this.group.scale.setScalar(CHURCH_SCALE);
-    this.probes = [[0, 0], [-30, -8], [-30, 8], [40, 0], [40, 30], [0, 30]].map(([x, z]) => site.world(x, z));
+    this.probes = [[0, 0], [-20, -5], [-20, 5], [26, 0], [26, 20], [0, 20], [-42, -40]].map(([x, z]) => site.world(x, z));
   }
   update(view: { x: number; z: number }, now: number): void {
     if (this.built) return;
