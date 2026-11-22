@@ -74,7 +74,22 @@ try {
   roots.push(readFileSync(folder+'/index.html'));
   assert.equal(JSON.parse(readFileSync(folder+'/manifest.webmanifest')).start_url,'/');
  }
- assert.deepEqual(roots[1],roots[0],'mail page bytes unchanged when build/app/data identities are fixed');
+ // Before the version-notice change lands on main, the branch intentionally adds <meta name="mmm-built-at">
+ // (which also adds its exact byte length to the two offline-bytes previews). Everything else stays byte-identical.
+ const builtAtTag='<meta name="mmm-built-at" content="1794672000000">\n';
+ let [beforeHtml,afterHtml]=roots.map(b=>b.toString('utf8'));
+ if(!beforeHtml.includes(builtAtTag)&&afterHtml.includes(builtAtTag)){
+  const delta=Buffer.byteLength(builtAtTag);
+  for(const attr of ['mmm-offline-bytes','mmm-just-offline-bytes']){
+   const m0=beforeHtml.match(new RegExp(`name="${attr}" content="([0-9]+)"`)),m1=afterHtml.match(new RegExp(`name="${attr}" content="([0-9]+)"`));
+   assert.ok(m0&&m1,attr);assert.equal(Number(m1[1]),Number(m0[1])+delta,attr+' grows only by mmm-built-at bytes');
+   afterHtml=afterHtml.replace(`name="${attr}" content="${m1[1]}"`,`name="${attr}" content="${m0[1]}"`);
+  }
+  afterHtml=afterHtml.replace(builtAtTag,'');
+  assert.equal(afterHtml,beforeHtml,'mail page bytes unchanged outside mmm-built-at when build/app/data identities are fixed');
+ }else{
+  assert.deepEqual(roots[1],roots[0],'mail page bytes unchanged when build/app/data identities are fixed');
+ }
  console.log('PASS MAIL_PAGE_BYTE_PARITY '+JSON.stringify({base,bytes:roots[0].length,sha256:createHash('sha256').update(roots[0]).digest('hex'),actualPublicBundle:!!process.env.ERA_DOOR_PUBLIC_APP}));
 } finally {rmSync(dir,{recursive:true,force:true});}
 

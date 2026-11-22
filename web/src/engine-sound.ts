@@ -7,11 +7,12 @@
 //   note itself, so this carries it; the truck has none) -> lowpass -> engine gain
 //   noise -> bandpass -> engine rasp gain (full detail only; it follows the load)
 //   noise -> bandpass -> pulse gain (opened and shut by a square LFO: gravel chatter, washboard rattle) -> tyre gain
+//   noise -> lowpass -> splash gain (wheels through a puddle: rough-roads.ts; quick to rise, slow to die away)
 //   all -> master (the "Engine sound" volume times OUTPUT_TRIM, ducked under the radio) -> speakers
-// LOW detail drops the upper voice and the rasp: two sources and two filters in all.
+// LOW detail drops the upper voice and the rasp: two sources and three filters (with the splash lowpass) in all.
 // The context is suspended (no CPU, no sound) while the page is hidden, off the road, indoors or at an ending.
 
-import { ENGINES, OUTPUT_TRIM, RADIO_DUCK, UPPER, engineKind, engineState, engineWave, tyreState, voicePulses, type EngineKind } from './engine-sound-rules';
+import { ENGINES, OUTPUT_TRIM, RADIO_DUCK, SPLASH_DUCK, SPLASH_GAIN, UPPER, engineKind, engineState, engineWave, tyreState, voicePulses, type EngineKind } from './engine-sound-rules';
 
 const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
 const KEY = 'mmm.engine.vol';
@@ -26,13 +27,15 @@ export interface DrivingMoment {
   radio: boolean;
   /** How far a drift is open, 0 to 1 (drift-rules.ts): the tyres squeal or spray. Absent or 0: rolling. */
   slide?: number;
+  /** How hard the wheels go through water now, 0 to 1 (puddles.ts splashLevel). Absent or 0: dry. */
+  splash?: number;
 }
 
 interface Graph {
   voice: OscillatorNode; upper: OscillatorNode | null; upperGain: GainNode | null; tone: BiquadFilterNode; engine: GainNode;
   rasp: GainNode | null; raspFilter: BiquadFilterNode | null;
   tyreFilter: BiquadFilterNode; pulse: GainNode; lfo: OscillatorNode; lfoDepth: GainNode; tyre: GainNode;
-  master: GainNode;
+  splash: GainNode; master: GainNode;
 }
 
 /** The volume a new player hears. At this setting the horse's hooves are as loud as they were before the slider. */
@@ -61,7 +64,7 @@ export class EngineSound {
   private live = false;     // the last update asked for sound
   private unlocked = false; // the context has really run once (a phone allows that only inside a tap's release)
   private parked = false;   // silenced and asked to suspend: quiet frames have nothing more to do
-  private last = { rpm: 0, gear: 1, load: 0, tyre: 0, surface: '' };   // numbers only: snapshot rounds them
+  private last = { rpm: 0, gear: 1, load: 0, tyre: 0, surface: '', splash: 0 };   // numbers only: snapshot rounds them
   private readonly unlock = () => this.start();
 
   constructor(private readonly low: boolean) {
@@ -118,8 +121,13 @@ export class EngineSound {
     const lfo = a.createOscillator(); lfo.type = 'square';
     const lfoDepth = a.createGain(); lfoDepth.gain.value = 0; lfo.connect(lfoDepth).connect(pulse.gain);
 
+    // Water: a low, broad wash of the same noise. Silent until a wheel is in a puddle.
+    const splash = a.createGain(); splash.gain.value = 0; splash.connect(master);
+    const splashFilter = a.createBiquadFilter(); splashFilter.type = 'lowpass'; splashFilter.frequency.value = 900; splashFilter.Q.value = .7;
+    noise.connect(splashFilter).connect(splash);
+
     noise.start(); voice.start(); upper?.start(); lfo.start();
-    return { voice, upper, upperGain, tone, engine, rasp, raspFilter, tyreFilter, pulse, lfo, lfoDepth, tyre, master };
+    return { voice, upper, upperGain, tone, engine, rasp, raspFilter, tyreFilter, pulse, lfo, lfoDepth, tyre, splash, master };
   }
 
   /** Silences at once and suspends: the page is hidden, or the game has stopped driving. */
@@ -181,7 +189,10 @@ export class EngineSound {
     // The pulse gain swings between 1 - depth and 1 (its base 1 - depth/2, the square LFO adds +-depth/2).
     g.pulse.gain.setTargetAtTime(1 - ty.depth / 2, t, .08);
     g.lfoDepth.gain.setTargetAtTime(ty.depth / 2, t, .08);
-    g.tyre.gain.setTargetAtTime(ty.gain, t, .08);
+    const splash = Math.min(1, Math.max(0, moment.splash ?? 0)), wash = splash * SPLASH_GAIN;
+    g.tyre.gain.setTargetAtTime(ty.gain * (1 - SPLASH_DUCK * splash), t, .08);
+    g.splash.gain.setTargetAtTime(wash, t, wash > this.last.splash ? .015 : .2);
+    this.last.splash = wash;
     g.master.gain.setTargetAtTime(this.volume * OUTPUT_TRIM * (moment.radio ? RADIO_DUCK : 1), t, .08);
     const last = this.last; last.rpm = e.rpm; last.gear = e.gear; last.load = e.load; last.tyre = ty.gain; last.surface = moment.surface;
   }
@@ -198,7 +209,8 @@ export class EngineSound {
       master: this.graph ? +this.graph.master.gain.value.toFixed(3) : 0, wave: this.graph?.voice.type ?? '',
       // The firing frequency the voice plays now: a pulse train's oscillator runs once per engine cycle.
       frequency: this.graph ? +(this.graph.voice.frequency.value * (this.kind ? voicePulses(ENGINES[this.kind]) : 1)).toFixed(1) : 0,
-      rpm: Math.round(this.last.rpm), gear: this.last.gear, load: +this.last.load.toFixed(3), tyre: +this.last.tyre.toFixed(3), surface: this.last.surface };
+      rpm: Math.round(this.last.rpm), gear: this.last.gear, load: +this.last.load.toFixed(3), tyre: +this.last.tyre.toFixed(3), surface: this.last.surface,
+      splash: +this.last.splash.toFixed(3) };
   }
 }
 

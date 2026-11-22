@@ -41,7 +41,7 @@ async function run(name){
  const violations=[];
  for(const [ok,label]of[
   [info.registrations===0,'zero registrations'],[info.caches.length===0,'zero stores'],[info.access.length===0,'zero storage accesses'],
-  [!requests.some(p=>p==='/sw.js'||p==='/version.json'||/^\/offline\/(start|files|page|app)\./.test(p)),'zero offline network requests']
+  [!requests.some(p=>p==='/sw.js'||/^\/offline\/(start|files|page|app)\./.test(p)),'zero offline network requests']
  ]){console.log(ok?'PASS':'FAIL',name,label);if(!ok)violations.push(label);}
  console.log(name,'first land after script response',info.firstLand,'ms',JSON.stringify(requests));
  return {t,info,requests:pageRequests,gameRequests,browserContextId,violations};

@@ -176,6 +176,11 @@ function numericState({ v, rig, terrain, roads }) {
     assert.equal(v.drift.active, false, 'no drift begins in the motor oracle scripts');
     for (const o of [v.drift, v.driftGround, v.slideSpeed]) seen.add(o);
   }
+  // Water under the wheels (rough-roads.ts puddles) came after these goldens. The scripts have no puddle field, so it stays zero.
+  if (v.wheelWater) {
+    assert.ok(v.wheelWater.every(n => n === 0), 'no puddle water under a wheel in the motor oracle scripts');
+    seen.add(v.wheelWater);
+  }
   function walk(o, path) {
     if (typeof o === 'number') { assert.ok(Number.isFinite(o), `non-finite ${path}`); fields.push(path); values.push(o); }
     else if (o && typeof o === 'object' && !seen.has(o)) {
