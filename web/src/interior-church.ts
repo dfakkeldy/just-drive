@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Door, InteriorGame, InteriorResult } from './interiors';
-import { CHURCH_DOOR_RADIUS, CHURCH_ROOM, churchDoorPosition, churchRail, railPoint, type ChurchRoom } from './church-room';
+import { CHURCH_DOOR_RADIUS, CHURCH_ROOM, churchDoorPosition, churchRail, eyeAt, railPoint, type ChurchRoom } from './church-room';
 import { ChurchRoomArt, type ChurchRoomParts } from './church-room-art';
 import { ChurchVisit } from './church-room-rules';
 import type { ChurchSite } from './church-site';
@@ -44,8 +44,9 @@ export class ChurchInterior implements InteriorGame {
     this.view(dt);
   }
   private view(dt: number): void {
-    const visit = this.visit, p = visit.position, eye = this.room.fit.eye;
-    this.eye.set(p.x, p.y + eye, p.z);
+    // Under the sloped ceiling by the stair head the visitor stoops.
+    const visit = this.visit, p = visit.position;
+    this.eye.set(p.x, p.y + eyeAt(this.room, p), p.z);
     // At a stop the visitor faces what the words describe; between stops, the way ahead.
     if (visit.halted || visit.distance < .05) { const look = visit.stop.look; this.want.set(look.x, look.y, look.z); }
     else {
@@ -59,7 +60,7 @@ export class ChurchInterior implements InteriorGame {
     this.camera.position.copy(this.eye);
     this.want.copy(this.aim).sub(this.eye).applyAxisAngle(this.up, -visit.lookAngle).add(this.eye);
     this.camera.lookAt(this.want);
-    this.parts.groups.loft.visible = this.eye.y > 2.3;
+    this.parts.groups.loft.visible = this.eye.y > this.room.fit.gallery.floor;
     this.parts.letter.visible = visit.letter;
   }
   render(renderer: THREE.WebGLRenderer, draw?: (scene: THREE.Scene, camera: THREE.Camera) => void): void {

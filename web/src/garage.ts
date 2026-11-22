@@ -38,6 +38,15 @@ type NoneMissing<Missing extends never> = Missing;
 export type GarageHasEveryRideKind = NoneMissing<Exclude<RideId, typeof ENTRIES[number]['id']>>;
 export const GARAGE: readonly GarageEntry[] = ENTRIES;
 export const VEHICLE_KEY = 'mmm.vehicle';
+/** True when Just Drive (explore mode) chose the standalone camera drone. Never active in mail play. */
+export function isDroneVehicle(params: URLSearchParams, explore = false, storage: () => Pick<Storage, 'getItem'> = () => localStorage): boolean {
+  if (!explore) return false;
+  const param = params.get('vehicle');
+  if (param === 'drone') return true;
+  const period = periodRides(params);
+  if (GARAGE.some(entry => entry.id === param && (entry.id !== 'horse' || period))) return false;
+  try { return storage().getItem(VEHICLE_KEY) === 'drone'; } catch { return false; }
+}
 /** Address bar wins in every mode. A saved garage id is read only for explore; ordinary mail keeps the car. */
 export function readVehicle(params: URLSearchParams, explore = false, storage: () => Pick<Storage, 'getItem'> = () => localStorage): GarageEntry {
   // The horse is the 1884 ride only: its hoof contact needs the era's camera-free tile selection (terrain.ts),

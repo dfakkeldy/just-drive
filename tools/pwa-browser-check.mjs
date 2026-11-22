@@ -22,7 +22,8 @@ async function navigate(query=''){await active.send('Page.navigate',{url:origin+
 async function navigateLatest(query,expected){
  await navigate(query);
  if(await value(`document.querySelector('meta[name="mmm-page"]').content`)!==expected.pageKey){
-  await until(`!!document.getElementById('offlineReload')`,'background build is ready');await click('offlineReload');
+  await until(`document.querySelector('meta[name="mmm-page"]')?.content===${JSON.stringify(expected.pageKey)}||!!document.getElementById('offlineReload')`,'background build is ready');
+  if(await value(`document.querySelector('meta[name="mmm-page"]')?.content!==${JSON.stringify(expected.pageKey)}&&!!document.getElementById('offlineReload')`)) await click('offlineReload');
   await until(`document.querySelector('meta[name="mmm-page"]')?.content===${JSON.stringify(expected.pageKey)}&&!document.getElementById('boot')`,'user restart takes the prepared build');
  }
 }
@@ -43,7 +44,7 @@ try {
     await active.send('Page.navigate',{url:`http://justdrive.localhost:${process.env.WEB_PORT??5230}/${area}?title=1&q=low&reception=0&era=${era}&vehicle=${vehicle}`});
     if(vehicle==='horse'){
       await until(`!document.getElementById('boot')&&!!document.getElementById('titleStart')`,'1884 horse title');
-      good(await value(`!document.getElementById('radio')&&!/radio|station|horn/i.test(document.querySelector('#title dl').textContent)`),'published 1884 horse has no radio or horn controls');
+      good(await value(`(()=>{const l=[...document.querySelectorAll('#title dl')],t=l.map(e=>e.textContent).join(' ');return !document.getElementById('radio')&&l.length>0&&/\\S/.test(t)&&!/radio|station|horn/i.test(t);})()`),'published 1884 horse has no radio or horn controls');
       await click('titleStart');
       good(await value(`!document.getElementById('radio')&&performance.getEntriesByType('resource').every(e=>!new URL(e.name).pathname.startsWith('/audio/radio'))`),'published 1884 horse never loads a radio list');
       await browser.send('Target.closeTarget',{targetId:active.id});continue;
@@ -132,7 +133,7 @@ try {
   const estimateBefore=await value('navigator.storage.estimate()');console.log('storage before remove',estimateBefore);
   await stopServer();await offline(true);
   await navigate('?era=1884&vehicle=bike&title=1&q=low&touch=1');
-  good(await value(`document.querySelector('#title h1').textContent==='Mabou, 1884'&&/radio|station/i.test(document.querySelector('#title dl').textContent)`),'1884 bike title starts from the saved app with the server stopped');
+  good(await value(`document.querySelector('#title h1').textContent==='Mabou, 1884'&&/radio|station/i.test([...document.querySelectorAll('#title dl')].map(e=>e.textContent).join(' '))`),'1884 bike title starts from the saved app with the server stopped');
   await until(`!!document.getElementById('radio')`,'1884 shared radio offline');await startShift();good(await value(`getComputedStyle(document.getElementById('shiftHud')).display==='none'&&!!document.getElementById('radio')`),'offline era offers radio without the mail HUD');await shot('offline-era-bike');
   await navigate('?demo=95&at=625613.24,5108489.99,-41.75265721465165&q=low&title=1&touch=1');await startShift();await drive300('offline never-visited far start');await shot('offline-far-driving');
   await offline(false);await startServer(out+'/site');
@@ -163,7 +164,7 @@ try {
   const saved=read(bRoot+badApp);write(bRoot+badApp,'broken');
   // Make revision new by changing the page source and regenerate inventory, then remove its script.
   write(bRoot+'/app.js',read(aRoot+'/app.js','utf8')+'\nglobalThis.__pwaBuild="C";\n');execFileSync(process.execPath,['tools/build-pwa.mjs',bRoot]);const cv=JSON.parse(read(bRoot+'/version.json'));const ci=JSON.parse(read(bRoot+cv.index));unlinkSync(bRoot+ci.shell.find(f=>f.url.endsWith('.js')).url);
-  await navigate('?title=1&q=low');good(await value('window.__pwaBuild')==='B','incomplete deployment keeps complete B instead of half C');
+  await navigate('?title=1&q=low');await until(`window.__pwaBuild==='B'&&!document.getElementById('boot')&&!!document.getElementById('titleStart')`,'incomplete deployment keeps complete B instead of half C');good(await value('window.__pwaBuild')==='B','incomplete deployment keeps complete B instead of half C');
   // Server kill switch bypasses the game-owned storage and unregisters on the next start.
   write(bRoot+ci.shell.find(f=>f.url.endsWith('.js')).url,read(bRoot+'/app.js'));
   write(bRoot+'/version.json',JSON.stringify({disabled:true}));await active.send('Page.navigate',{url:origin+'/?q=low'});await until(`navigator.serviceWorker.getRegistrations().then(a=>a.length===0)`,'kill unregisters');

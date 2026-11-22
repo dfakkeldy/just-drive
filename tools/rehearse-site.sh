@@ -121,9 +121,13 @@ expect() {   # expect <status> <path> [what]
   if [[ "$got" == "$1" ]]; then echo "ok   $2 gives $got"; else echo "FAIL $2 gives $got, not $1 ${3:-}"; fail=1; fi
 }
 expect 200 /
+expect 200 /version.json
+expect 200 /version-just.json
 expect 200 /app.js
 cmp -s "$WORK/body" "$SITE_PATH/app.js" && echo "ok   /app.js is the built script, byte for byte" || { echo "FAIL /app.js differs from $SITE_PATH/app.js"; fail=1; }
 # Exact root dispatch selects the HTML brand; all other real assets still win first.
+# Checks both version files for no-store and the unhashed app for revalidation on both brands.
+# site-http-check.mjs also verifies no-store on the served game HTML.
 node "$ROOT/tools/site-http-check.mjs" "$BASE" "$SITE_PATH" "${HTTP_TABLE_OUT:-$WORK/http-table.json}"
 # Relative page/code paths have root resolution at the canonical non-slash address.
 node --input-type=module - <<'JS'

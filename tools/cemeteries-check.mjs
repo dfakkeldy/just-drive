@@ -7,6 +7,7 @@ import {pathToFileURL} from 'node:url';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import {inside,boundaryDistance,gateLane,stoneLayout,fenceSegments,fenceSolids,cemeteryPlaces,distance,nearestPoint,inRegions} from '../web/src/cemetery-rules.ts';
 import {Cemeteries,stoneGeometry} from '../web/src/cemeteries.ts';
+import {MEASURED_STONES,TONES} from '../web/src/cemetery-graves.ts';
 import {Props} from '../web/src/props.ts';
 import {pushOut} from '../web/src/parked.ts';
 const read=p=>JSON.parse(readFileSync(p,'utf8'));
@@ -74,6 +75,31 @@ function stonesCheck(c,stones,cap,near=[]){
   }
  }
 }
+// A measured table shows real markers where they stand, so the decorative spacing rules do not apply.
+// Each marker must stand inside the mapped ring, clear of the drawn wall and of roads, with a real size, shape and tone.
+// Markers in the baked gate lane or within 2 m of the baked wall are reported, not failed.
+function measuredCheck(c,stones,near,area){
+ const rows=MEASURED_STONES[c.id],walls=fenceSegments(c);assert.equal(stones.length,rows.length,'every measured row is shown');
+ let lane=0,close=0;
+ stones.forEach((s,i)=>{
+  // The drawn face looks toward the table's bearing (or its back does): rotate the shape's -z the way the renderer does.
+  const o=new THREE.Object3D();o.rotation.y=s.turn;o.updateMatrix();const d=new THREE.Vector3(0,0,-1).applyMatrix4(new THREE.Matrix4().extractRotation(o.matrix));
+  const bearing=(Math.atan2(d.x,-d.z)*180/Math.PI+360)%360,off=Math.abs(((bearing-rows[i][7])%180+270)%180-90);
+  assert.ok(off<1e-6,`measured marker ${i} faces ${bearing.toFixed(1)}, not ${rows[i][7]}`);
+ });
+ for(const s of stones){
+  assert.ok(inside(s.point,c.ring),'measured marker inside the mapped ring');
+  assert.ok(s.size.every(n=>n>0.1&&n<3),'measured size in metres');assert.ok([3,4,5,6,7].includes(s.kind),'measured shape');assert.ok(TONES[s.tone],'measured tone');
+  const co=Math.cos(s.turn),si=Math.sin(s.turn),corners=[-.5,.5].flatMap(u=>[-.5,.5].map(v=>[s.point[0]+u*s.size[0]*co-v*s.size[2]*si,s.point[1]+u*s.size[0]*si+v*s.size[2]*co]));
+  for(const p of corners){
+   assert.ok(inRegions(p,c.interior),'whole measured marker inside the mapped ground');
+   assert.ok(walls.every(([a,b])=>distance(p,nearestPoint(p,a,b))>=.15+1e-6),'whole measured marker clear of the drawn wall');
+   for(const r of near)assert.ok(distance(p,nearestPoint(p,r.a,r.b))>=r.half+1,'whole measured marker clears roads/tracks');
+  }
+  if(gateLane(s.point,c))lane++;else if(walls.some(([a,b])=>distance(s.point,nearestPoint(s.point,a,b))<2))close++;
+ }
+ console.log(`MEASURED ${area}/${c.id}: ${stones.length} markers; ${lane} in the baked gate lane, ${close} more within 2 m of the baked wall (reported, not failed)`);
+}
 function mailboxCheck(cs,props,area){for(const p of[...props.mailboxes,...props.communityBoxes])for(const c of cs)assert.ok(!inside([p.x,p.y],c.ring),`${area}: baked mailbox (${p.x},${p.y}) inside ${c.id}; report, do not move`);}
 function stoneSourceCheck(source){assert.ok(!/CanvasTexture|fillText/.test(source),'no text or canvas');const builder=source.slice(source.indexOf('export function stoneGeometry'),source.indexOf('interface Fitted'));assert.ok(!/(['"`])[^'"`]*\d[^'"`]*\1/.test(builder),'no digit strings in stone builder');}
 let count=0,stoneCount=0,roadSamples=0;const suppressed=[];
@@ -87,7 +113,7 @@ for(const area of (process.env.MMM_CEMETERY_FIXTURES_ONLY==='1'?[]:areas)){
   const signed=c.ring.slice(1).reduce((s,b,i)=>s+c.ring[i][0]*b[1]-b[0]*c.ring[i][1],0);assert.ok(signed>0&&Math.abs(signed/2-c.area)<.02,'consistent winding and area');
   if(c.gate.track!==undefined){const t=roads.find(r=>r.id===c.gate.track);assert.ok(t&&t.kind===4&&boundaryDistance(c.gate.point,t.pts)<1e-5,'main gate uses real track crossing');}
   const near=nearSegments(c,roads);wallCheck(c,near);
-  const high=stoneLayout(c),low=stoneLayout(c,true);stonesCheck(c,high,220,near);stonesCheck(c,low,55,near);assert.deepEqual(high,stoneLayout(c));assert.deepEqual(low,stoneLayout(c,true));
+  const high=stoneLayout(c),low=stoneLayout(c,true);if(MEASURED_STONES[c.id]){measuredCheck(c,high,near,area);assert.deepEqual(low,high,'measured markers are the same in both detail levels');}else{stonesCheck(c,high,220,near);stonesCheck(c,low,55,near);}assert.deepEqual(high,stoneLayout(c));assert.deepEqual(low,stoneLayout(c,true));
   if(c.suppressed){assert.ok(c.groundArea<150||c.interior.length===0);suppressed.push(`${area}/${c.id}`);}
   if(c.road){const r=roads.find(r=>r.id===c.road.id);assert.ok(r&&r.kind>=1&&r.kind<=3&&r.name===c.road.name);assert.ok(boundaryDistance(c.road.point,r.pts)<.02);assert.ok(Math.abs(boundaryDistance(c.road.point,c.ring)-c.road.distance)<.02);}
   count++;stoneCount+=high.length;roadSamples+=near.reduce((n,r)=>n+Math.ceil(distance(r.a,r.b)/.5)+1,0);
@@ -107,6 +133,8 @@ const scenery=new Cemeteries([square],[0,0],terrain,false,'mabou');scenery.updat
 const coarse=new Cemeteries([square],[0,0],{...terrain,manifest:{...terrain.manifest,levels:{6:['0_0']}}},true,'mabou');level=6;coarse.update({x:20,z:-20});assert.ok(coarse.group.children[0].children[0].instanceMatrix.array.some(n=>n>15));assert.equal(coarse.group.children[0].children.length,3);
 const props=new Props({crs:'EPSG:2961',mailboxes:[],communityBoxes:[],poles:[{x:20,y:20,heading:0,road:1,n:0,transformer:false,light:false}]},[0,0],terrain,scenery.excludes);assert.equal(props.poles.length,0);
 assert.ok(stoneGeometry(1,true).attributes.position.count<stoneGeometry(1,false).attributes.position.count);
+for(const k of [3,4,5,6,7]){const hi=stoneGeometry(k,false),lo=stoneGeometry(k,true);assert.ok(lo.attributes.position.count<=hi.attributes.position.count,'low stone is no heavier');hi.computeBoundingBox();const b=hi.boundingBox;assert.ok(Math.abs(b.min.y)<1e-6&&Math.abs(b.max.y-1)<1e-6&&Math.abs(b.max.x-.5)<1e-6&&Math.abs(b.max.z-.5)<1e-6,'measured shape is a unit shape');}
+assert.equal(Object.keys(MEASURED_STONES).length>0,true);
 if(process.argv.includes('--mutations')){
  const bad=(name,fn)=>{assert.throws(fn,undefined,name+' must fail');console.log(`PASS cemeteries negative: ${name} rejected`);};
  bad('open ring',()=>ringCheck({...square,ring:ring.slice(0,-1)},[-1,-1,41,41]));

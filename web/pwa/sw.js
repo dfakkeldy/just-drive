@@ -122,8 +122,8 @@ async function checked(entry, signal) {
   const headers = new Headers(r.headers); headers.delete('Content-Encoding'); headers.set('Content-Length',String(bytes.byteLength));
   return new Response(bytes,{status:200,headers});
 }
-async function notify(id, type) {
-  try { const client = await self.clients.get?.(id); client?.postMessage({type,text:UPDATE_TEXT}); } catch { /* Closed page. */ }
+async function notify(id, type, pageKey) {
+  try { const client = await self.clients.get?.(id); client?.postMessage({type,text:UPDATE_TEXT,...(pageKey?{pageKey}:{})}); } catch { /* Closed page. */ }
 }
 async function unavailable(event) {
   hold(event,notify(event?.clientId,'version-unavailable'));
@@ -317,7 +317,7 @@ async function navigation(event) {
   hold(event,probe.then(async ({state:next,verified})=>{
     if(verified && next && old && next.version.revision!==old.version.revision) {
       const clients=await self.clients.matchAll?.({type:'window',includeUncontrolled:true}) || [];
-      await Promise.all(clients.map(c=>notify(c.id,'update-ready')));
+      await Promise.all(clients.map(c=>notify(c.id,'update-ready',next.pageKey)));
     }
     await collect();
   }));
@@ -380,9 +380,15 @@ async function chunk(request,path) {
   } catch { /* Storage is blocked: no saved index names the file. */ }
   return entry ? checked(entry) : fetch(request);
 }
+async function hashedApp(path,digestHex) {
+  try { const r=await caches.match(path); if(r) return r; } catch { /* Read failure: verify a network copy. */ }
+  return checked({url:path,hash:digestHex});
+}
 async function resource(request,path,event={}) {
   if(path.startsWith('/areas/')) return fetch(request);
   if(path.startsWith('/offline/chunks/')) return chunk(request,path);
+  const earlyHashed=/^\/offline\/app\.([a-f0-9]{64})\.js$/.exec(path);
+  if(earlyHashed) return hashedApp(path,earlyHashed[1]);
   const isData=path.startsWith('/terrain/') || path.startsWith('/audio/') || path.startsWith('/models/') || path.startsWith('/areas/');
   if(disabled) return isData ? resetResource(request,path,event) : fetch(request);
   const token=new URL(request.url).searchParams.get('mmm-page'), id=event.clientId || '__non_client__';
@@ -392,7 +398,7 @@ async function resource(request,path,event={}) {
   let s;
   try { s=await forPage(token,id,event); } catch { /* Read failures fall back to healthy network. */ }
   if(disabled) return isData ? resetResource(request,path,event) : fetch(request);
-  if(s===null) return unavailable(event);
+  if(s===null) return isData ? unavailable(event) : fetch(request);
   const entry=s?.entries.get(path);
   if(!entry) {
     if(isData && s) {
@@ -404,10 +410,7 @@ async function resource(request,path,event={}) {
       return unavailable(event);
     }
     const hashed=/^\/offline\/app\.([a-f0-9]{64})\.js$/.exec(path);
-    if(hashed) {
-      try { const r=await caches.match(path); if(r) return r; } catch { /* Read failure: verify a network copy. */ }
-      return checked({url:path,hash:hashed[1]});
-    }
+    if(hashed) return hashedApp(path,hashed[1]);
     return fetch(request);
   }
   const ticket=generation;
@@ -524,8 +527,8 @@ self.addEventListener('message',event=>{
     if(!s) {hold(event,notify(id,'version-unavailable'));throw Error(UPDATE_TEXT);}
     if(event.data.type==='prepare') {
       let current;try {current=await stored();}catch {}
-      if(!current) hold(event,saveDelivered(s).then(async next=>{if(next && next.version.revision!==s.version.revision) await notify(id,'update-ready');await collect();}));
-      else if(ready && ready.version.revision!==s.version.revision) hold(event,notify(id,'update-ready'));
+      if(!current) hold(event,saveDelivered(s).then(async next=>{if(next && next.version.revision!==s.version.revision) await notify(id,'update-ready',next.pageKey);await collect();}));
+      else if(ready && ready.version.revision!==s.version.revision) hold(event,notify(id,'update-ready',ready.pageKey));
       port.postMessage({bound:true});port.close();return;
     }
     if(event.data.type==='start') return download(s,port,event.data.visited);

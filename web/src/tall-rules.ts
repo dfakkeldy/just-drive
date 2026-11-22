@@ -3,14 +3,35 @@ export const WIND_HEADING = 247.5 * Math.PI / 180;
 /** The near renderer never adds outside-root turbines; FarTurbines owns curved far instances. */
 export const FAR_TURBINES = false;
 export const TIP_SPEED = 70;
+export type LightClass = 'A0' | 'A1' | 'A2' | 'W';
+export type TowerKind = 'standard' | 'double' | 'crossing';
+export interface ObstructionLight { readonly frac: number; readonly kind: 'red-steady' | 'red-flash' | 'white-strobe' }
 export interface TallPoint { e: number; n: number; ground: number | null }
 export interface Turbine extends TallPoint { hub: number; diameter: number; farm?: string; source?: string; date?: string; confidence?: string }
-export interface Mast extends TallPoint { height: number; station?: number; reason?: string }
-export interface PowerLine { pts: [number, number][]; towers: Mast[]; spans: { sag: number; ground: number[]; clearance: number[] }[] }
+export interface Mast extends TallPoint { height: number; station?: number; reason?: string; light?: LightClass; kind?: TowerKind; source?: string }
+export interface PowerLine { pts: [number, number][]; towers: Mast[]; spans: { sag: number; ground: number[]; clearance: number[] }[]; circuits?: 1 | 2; ref?: string; source?: string }
 export interface TallFile {
   version?: number;
   crs: string; root: [number, number, number, number]; mid: [number, number, number, number]; anchor: [number, number];
   turbines: Turbine[]; far: Turbine[]; towers: Mast[]; lines: PowerLine[];
+}
+/** Transport Canada Standard 621 §5.3 / Figure 5-1 red night-light height classes (metres AGL). */
+export function mastLightClass(height: number): 'A0' | 'A1' | 'A2' {
+  if (height <= 45) return 'A0';
+  if (height <= 105) return 'A1';
+  return 'A2';
+}
+/** Vertical light levels for communication masts (A0/A1/A2 red) and Auld's Cove crossing towers (W white strobes). */
+export function obstructionLights(lightClass: LightClass): readonly ObstructionLight[] {
+  if (lightClass === 'A0') return [{ frac: 1, kind: 'red-steady' }];
+  if (lightClass === 'A1') return [{ frac: 1, kind: 'red-flash' }, { frac: 0.5, kind: 'red-steady' }];
+  if (lightClass === 'A2') return [{ frac: 1, kind: 'red-flash' }, { frac: 0.75, kind: 'red-steady' }, { frac: 0.5, kind: 'red-flash' }, { frac: 0.25, kind: 'red-steady' }];
+  return [{ frac: 1, kind: 'white-strobe' }, { frac: 0.67, kind: 'white-strobe' }, { frac: 0.33, kind: 'white-strobe' }];
+}
+/** Horizontal scale for a transmission tower: keeps 158 m Strait crossing towers and 48 m causeway towers slender. */
+export function towerWidthScale(height: number, kind?: TowerKind): number {
+  if (kind === 'crossing') return 44;
+  return Math.min(height, 36);
 }
 export function rotorRate(diameter: number): number { return TIP_SPEED / (diameter / 2); }
 export function rotorPhase(e: number, n: number): number {
