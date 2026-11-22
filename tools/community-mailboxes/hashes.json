@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "issue": "dfakkeldy/grok-bots#1347",
+  "files": [
+    {
+      "file": "terrain/props.json",
+      "before": "9b5c6c22d0de2b8b9163c572bd1af0ed01c680b5fa904721c2c8e5935c5fb0e8",
+      "sha256": "4beff0bce2a66a646003d5af2a78a6168a7f92be4f523019801806554bcf6574"
+    },
+    {
+      "file": "areas/porthood/props.json",
+      "before": "19d6193cee0ace6c930ee05ca714b320b457997431e5451595fdfc15153ad94e",
+      "sha256": "cf75c913805e98a07fa08f99ef6d9137ed790b33d204a3b14966c616e5a987c9"
+    }
+  ],
+  "manifests": [
+    {
+      "folder": "terrain",
+      "before": {
+        "props": {
+          "file": "props.json",
+          "mailboxes": 469,
+          "poles": 2789,
+          "serviceDrops": 283
+        }
+      },
+      "after": {
+        "props": {
+          "file": "props.json",
+          "mailboxes": 468,
+          "poles": 2789,
+          "serviceDrops": 283
+        }
+      }
+    }
+  ]
+}

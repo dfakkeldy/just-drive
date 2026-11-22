@@ -333,7 +333,10 @@ def land(baked):
     report = json.loads(patch.RECEIPT.read_text())
     refreshed = patch.paved_patch.refresh_installed(baked)
     nov18 = json.loads((ROOT/'tools/mabou-dashcam-18nov/hashes.json').read_text())
-    later = [nov18, patch.paved_patch.refresh_delta()] if refreshed else [nov18]
+    later = [nov18]
+    if refreshed: later.append(patch.paved_patch.refresh_delta())
+    comm = ROOT/'tools/community-mailboxes/hashes.json'
+    if comm.exists(): later.append(json.loads(comm.read_text()))
     mode = patch.state(baked, report, later)
     if EXPECT is not None and mode != EXPECT: raise AssertionError(f'land is {mode}, expected {EXPECT}')
     corr = baked.parent/patch.MIRROR[len('data/'):]

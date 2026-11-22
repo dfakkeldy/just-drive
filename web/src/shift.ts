@@ -10,7 +10,7 @@ import { Route, type Run } from './route';
 import { Ruts } from './ruts';
 import { BALE_STRIKE, DAMAGE_COMPLAINT } from './yard-props-rules';
 import { ScoreStream } from './score-events';
-import { CLOCK_FACTOR, DAILY_PAY, VEHICLE_ALLOWANCE, END_TIME, START_TIME, clock, dayType, draw, freshCareer, makeDay, missedCustomers, nextCareer, readCareer, saveCareer, verdict, type Career, type DayDraw } from './shift-rules';
+import { CLOCK_FACTOR, DAILY_PAY, VEHICLE_ALLOWANCE, END_TIME, START_TIME, clock, dayType, draw, freshCareer, makeDay, migrateCareer, missedCustomers, nextCareer, readCareer, saveCareer, verdict, type Career, type DayDraw } from './shift-rules';
 import type { Terrain } from './terrain';
 import type { InteriorReceipt } from './interiors';
 import type { Vehicle } from './vehicle';
@@ -104,7 +104,7 @@ export class Shift {
     this.roadsideReport.hidden = this.bossReport.hidden = true;
     this.bossReport.id = 'reportBoss';
     document.getElementById('reportMissed')!.after(this.roadsideReport, this.bossReport);
-    this.career = this.routeEnabled ? readCareer() : freshCareer();   // an area with no route never touches the saved Mabou career
+    this.career = this.routeEnabled ? migrateCareer(readCareer(), props?.mail.length ?? 0, props?.sites.length ?? 0) : freshCareer();   // an area with no route never touches the saved Mabou career
     const requested = Number(params.get('day'));
     if (Number.isSafeInteger(requested) && requested > 0) {
       this.career = { ...freshCareer(), day: requested };
@@ -164,7 +164,7 @@ export class Shift {
   /** The settings button and every ending use the same complete career reset. */
   startOver(): void {
     // Get Fired keeps the day's route and never writes the career.
-    if (!this.fired) { this.career = freshCareer(); if (this.routeEnabled) saveCareer(this.career); }
+    if (!this.fired) { this.career = this.routeEnabled ? migrateCareer(freshCareer(), this.props?.mail.length ?? 0, this.props?.sites.length ?? 0) : freshCareer(); if (this.routeEnabled) saveCareer(this.career); }
     this.start(); this.restart();
     document.getElementById('settings')!.classList.remove('open');
   }
@@ -413,6 +413,7 @@ export class Shift {
     for (const stop of this.run.stops) this.next.carryover[stop.index] = this.remaining[stop.index];
     // Dense arrays survive JSON round trips and storage validation.
     this.next.carryover = Array.from({ length: this.remaining.length }, (_, i) => this.next.carryover[i] ?? 0);
+    if (this.props && this.props.mail.length === 468 && this.props.sites.length === 7) this.next.mailCount = 468;
     if (this.routeEnabled) saveCareer(this.next);
     this.ended = true; for (const scene of this.roadside) scene.setPaused?.(true);
     this.endButton.hidden = true; this.cameraButton.hidden = true;

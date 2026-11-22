@@ -369,16 +369,18 @@ def check_community_sites():
     # and Judique's existing 10-cabinet bank in web/src/judique-village-site.ts (no duplicate in community_sites).
     import areas, math, re
     mabou = areas.AREAS['mabou'].community_sites
-    assert len(mabou) == 7 and mabou[0]['modules'] == 2
-    assert mabou[3] == dict(exact=(624896.85, 5103595.12), heading=70.0, modules=4, flush=True)
-    hall = mabou[6]
-    assert hall['road'] == 'Little Mabou Road' and hall['toward'] == 'same' and hall['modules'] == 4
-    assert math.hypot(hall['point'][0] - 620347, hall['point'][1] - 5102381) < 10
+    expected_prefix = (
+        dict(point=(624452.9, 5103395.2), road='Highway 19', toward='same', modules=2),
+        dict(point=(631521.0, 5101180.2), road='Highway 252', toward='across'),
+        dict(point=(627079.3, 5103643.5), road='Smithville Road', toward='same'),
+        dict(exact=(624896.85, 5103595.12), heading=70.0, modules=4, flush=True),
+        dict(exact=(619316.7, 5104955.3), heading=60.0, modules=3),
+        dict(point=(623789.1, 5103515.2), road='Birch Street', toward='same'),
+    )
+    assert mabou[:6] == expected_prefix, 'existing Mabou community_sites order and RNG prefix must stay unchanged'
+    assert len(mabou) == 7 and mabou[6] == dict(point=(620351.0, 5102377.5), road='Little Mabou Road', toward='same', modules=4)
     porthood = areas.AREAS['porthood'].community_sites
-    assert len(porthood) == 1
-    jct = porthood[0]
-    assert jct['road'] == 'Little Mabou Road' and jct['toward'] == 'same' and 'modules' not in jct
-    assert math.hypot(jct['point'][0] - 613341, jct['point'][1] - 5098861) < 1
+    assert porthood == (dict(point=(613341.0, 5098861.0), road='Little Mabou Road', toward='same'),)
     assert areas.AREAS['judique'].community_sites == (), 'Judique keeps its hand-built mailbox bank in judique-village-site.ts'
     jv = open(os.path.join(ROOT, 'web', 'src', 'judique-village-site.ts')).read()
     m_pos = re.search(r'mailboxes:\s*\[\s*([\d.]+)\s*,\s*([\d.]+)\s*\]', jv)

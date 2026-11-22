@@ -5,8 +5,20 @@ export const END_TIME = 18 * 3600;
 /** What the carrier is paid for a worked day, and for the use of their own car on it (the owner's figures). */
 export const DAILY_PAY = 210;
 export const VEHICLE_ALLOWANCE = 135;
-export interface Career { day: number; pay: number; warnings: number; double: boolean; suspended: boolean; carryover: number[] }
+export interface Career { day: number; pay: number; warnings: number; double: boolean; suspended: boolean; carryover: number[]; mailCount?: number }
 export const freshCareer = (): Career => ({ day: 1, pay: 0, warnings: 0, double: false, suspended: false, carryover: [] });
+/** Mabou rural mailbox removed when Little Mabou Hall became a community site (grok-bots#1347: 469+6 -> 468+7). */
+export const MABOU_REMOVED_RURAL_1347 = 217;
+export function migrateCareer(career: Career, mailCount: number, siteCount: number): Career {
+  if (mailCount !== 468 || siteCount !== 7) return career;
+  if (career.mailCount === 468) return career;
+  if (career.mailCount !== undefined && career.mailCount !== 469) return career;
+  const old = career.carryover;
+  const carryover = old.length === 475
+    ? [...old.slice(0, MABOU_REMOVED_RURAL_1347), ...old.slice(MABOU_REMOVED_RURAL_1347 + 1), 0]
+    : old.slice();
+  return { ...career, carryover, mailCount: 468 };
+}
 export function draw(seed: number, id: number, salt = 0): number {
   let n = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(id + 1, 0xc2b2ae35) ^ Math.imul(salt + 1, 0x27d4eb2d);
   n = Math.imul(n ^ n >>> 16, 0x7feb352d); n = Math.imul(n ^ n >>> 15, 0x846ca68b);
@@ -61,8 +73,10 @@ export function verdict(upheld: { kind: string }[]): 'clear' | 'warning' | 'susp
 }
 export function nextCareer(career: Career, outcome: ReturnType<typeof verdict>, repairs = 0, bonus = 0): Career {
   const suspended = outcome === 'suspension';
-  return { day: career.day + (suspended ? 2 : 1), pay: career.pay + DAILY_PAY + VEHICLE_ALLOWANCE - repairs + bonus,
+  const next: Career = { day: career.day + (suspended ? 2 : 1), pay: career.pay + DAILY_PAY + VEHICLE_ALLOWANCE - repairs + bonus,
     warnings: career.warnings + (outcome === 'warning' ? 1 : 0), double: suspended, suspended, carryover: career.carryover.slice() };
+  if (career.mailCount !== undefined) next.mailCount = career.mailCount;
+  return next;
 }
 const KEY = 'mmm.shift.v1';
 export function readCareer(): Career {
@@ -70,7 +84,8 @@ export function readCareer(): Career {
     const c = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Career | null;
     if (c && Number.isSafeInteger(c.day) && c.day > 0 && Number.isFinite(c.pay) && c.pay >= 0 &&
       Number.isSafeInteger(c.warnings) && c.warnings >= 0 && typeof c.double === 'boolean' && typeof c.suspended === 'boolean' &&
-      (c.carryover === undefined || Array.isArray(c.carryover) && c.carryover.every((n) => Number.isSafeInteger(n) && n >= 0)))
+      (c.carryover === undefined || Array.isArray(c.carryover) && c.carryover.every((n) => Number.isSafeInteger(n) && n >= 0)) &&
+      (c.mailCount === undefined || Number.isSafeInteger(c.mailCount) && c.mailCount >= 0))
       return { ...c, carryover: c.carryover ?? [] };
   } catch { /* A sandbox may refuse storage. */ }
   return freshCareer();
