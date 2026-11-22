@@ -22,6 +22,7 @@ const measure=`(async()=>{
  const riverRoad=roads.roads.find(r=>r.kind===4&&r.name==='River Denys Mountain Road');
  if(!riverRoad)throw Error('River Denys Mountain Road (kind 4) missing');
  const track=new Set(roads.roads.filter(r=>r.kind===4&&r.name==='River Denys Road').map(r=>r.id));
+ if(!track.size)throw Error('River Denys Road (kind 4) missing');
  return {state:after?'after':'before',drops:after?data.serviceDrops.length:0,churchDrop:after&&data.serviceDrops.some(d=>d.building===-1),
   riverPoles:data.poles.filter(p=>p.road===riverRoad.id).length,trackPoles:data.poles.filter(p=>track.has(p.road)).length,
   nearChurch,cells,lines,dropWires,dropLines,churchTriangles:mmm.church?.triangles??0,gpuError:mmm.renderer.getContext().getError(),low:mmm.terrain.low};
@@ -30,9 +31,9 @@ async function view(url,ready,name){
  const page=await open(url);
  try{
   for(let i=0;i<120&&!await page.read(ready);i++)await sleep(500);
-  // Wires build once both poles stand on fine land (level >= 6); a pack with drops waits for a wire draw here.
-  // The drop view waits for a built drop wire (60 vertices), not only a span wire, when the pack has drops.
-  const wired=`!mmm.props.data.serviceDrops.length||[...mmm.props.cells.values()].some(c=>c.group&&c.wires.some(w=>w.drop&&w.vertices.length===60))`;
+  // Wires build once both poles stand on fine land (level >= 6). The drop view waits for a built trunk wire (a cell
+  // with its wire draw), and, when the pack has drops, for a built drop wire (60 vertices) too.
+  const wired=`(()=>{const cells=[...mmm.props.cells.values()].filter(c=>c.group);return cells.some(c=>c.line)&&(!mmm.props.data.serviceDrops.length||cells.some(c=>c.wires.some(w=>w.drop&&w.vertices.length===60)));})()`;
   if(name==='drop')for(let i=0;i<120&&!await page.read(wired);i++)await sleep(500);
   else await sleep(3000);
   const result=await page.read(measure);
@@ -59,5 +60,6 @@ if(church.state==='after'){
 }else{
  assert.equal(church.dropWires,0,'a legacy pack has no service drops');
  assert.equal(church.riverPoles,0,'a legacy pack has no named kind-4 pole run');
+ if(drop){assert.ok(drop.lines>0,'a legacy pack still draws trunk wires by Highway 19');assert.equal(drop.dropWires,0,'a legacy pack has no drop wires');}
 }
 console.log(`PASS Judique power (${church.state} the step-29 power bake): merged wire draws per cell`+(church.state==='after'?', no line at the church, a rendered house drop and the River Denys Mountain run':', legacy pack without drops'),JSON.stringify(result));

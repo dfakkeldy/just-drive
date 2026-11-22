@@ -372,12 +372,29 @@ def building_exclusions(exclusions):
 
 
 
+def pole_track(r):
+    """A kind-4 road that may carry a pole run: named, not a props driveway, not a bridge."""
+    return r['kind'] == 4 and bool((r.get('name') or '').strip()) and not r.get('propsDriveway') and not r['bridge']
+
+
+def unpowered_roads(net, entries):
+    """Road ids of AREA.unpowered_tracks entries, ((east, north) on the line, expected name). Any entry that does not
+    resolve within 5 m to a pole track of exactly that name stops the bake."""
+    ids = set()
+    for entry in entries:
+        if not (isinstance(entry, tuple) and len(entry) == 2 and isinstance(entry[1], str) and entry[1].strip()):
+            raise RuntimeError(f'unpowered_tracks entry is not ((east, north), name): {entry!r}')
+        point, name = entry
+        hit = net.nearest(point, 5)
+        if hit is None or not pole_track(hit['road']) or hit['road']['name'] != name:
+            raise RuntimeError(f'unpowered_tracks entry {entry!r} is not on a named kind-4 pole track called {name!r}')
+        ids.add(hit['road']['id'])
+    return ids
+
+
 def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpowered=None):
-    """`unpowered`: names of kind-4 roads with no run (AREA.unpowered_tracks when None). Public roads are unaffected."""
-    unpowered = set(AREA.unpowered_tracks if unpowered is None else unpowered)
-    tracks = {r.get('name') for r in roads if r['kind'] == 4}
-    if unpowered - tracks:
-        raise RuntimeError(f'unpowered_tracks names no kind-4 road here: {sorted(unpowered - tracks)}')
+    """`unpowered`: unpowered_tracks entries (AREA.unpowered_tracks when None). Public roads are unaffected."""
+    unpowered = unpowered_roads(net, AREA.unpowered_tracks if unpowered is None else unpowered)
     # Public endpoint-to-segment joins also cover T junctions and split road pieces.
     corners = collections.defaultdict(list)
     for r in roads:
@@ -397,9 +414,7 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpower
     # Finish the unchanged public pass first: kind-4 candidates cannot displace its poles.
     extensions = []
     for r in roads:
-        if r['kind'] != 4 or not (r.get('name') or '').strip() or r.get('propsDriveway') or r['bridge']:
-            continue
-        if r['name'] in unpowered:
+        if not pole_track(r) or r['id'] in unpowered:
             continue
         local_net = Network([r])
         # About 60 m, with 15 m allowance for mapped setbacks (River Denys's last house is 72.6 m).

@@ -45,15 +45,26 @@ assert data(old)==data([p for p in new if p['road']<=3]), 'public pole bytes, in
 added=[p for p in new if p['road']==4]
 assert len(added)>3 and max(p['x'] for p in added)==302, 'stop at last building within 75 m, not at a distant building'
 assert not any(p['road'] in (5,6) for p in new), 'unnamed tracks and explicit named driveways get no poles'
-# A named kind-4 road listed as unpowered (AREA.unpowered_tracks) gets no run; the public pass keeps its bytes.
-quiet=P.place_poles(list(net.roads.values()),net,buildings,safe,(-10000,-10000),unpowered=('Invented Road',))
+# A kind-4 piece listed as unpowered (AREA.unpowered_tracks: a point on its line and its name) gets no run;
+# the public pass keeps its bytes, and another kind-4 piece with the same name keeps the usual rule.
+quiet=P.place_poles(list(net.roads.values()),net,buildings,safe,(-10000,-10000),unpowered=(((250,0),'Invented Road'),))
 assert not any(p['road']==4 for p in quiet), 'an unpowered named track gets no poles'
 assert data(old)==data([p for p in quiet if p['road']<=3]), 'leaving a track unpowered keeps the public pole bytes'
-try:
-    P.place_poles(list(net.roads.values()),net,buildings,safe,(-10000,-10000),unpowered=('Misspelt Road',))
-    raise AssertionError('an unpowered name that matches no kind-4 road must stop the bake')
-except RuntimeError:
-    pass
+twin=[road(4,[[0,0],[500,0]],4),road(1,[[-100,0],[0,0]],1),road(7,[[0,400],[500,400]],4)]
+twin_net=P.Network(copy.deepcopy(twin))
+kept=P.place_poles(list(twin_net.roads.values()),twin_net,[house(1,302,20),house(2,302,420)],safe,(-10000,-10000),unpowered=(((250,0),'Invented Road'),))
+assert not any(p['road']==4 for p in kept) and any(p['road']==7 for p in kept), 'only the listed piece of that name loses its run'
+odd=P.Network(copy.deepcopy(roads+[dict(road(8,[[0,500],[500,500]],4),bridge=True)]))
+for entry in (((250,300),'Invented Road'),   # a props driveway with that name
+              ((250,500),'Invented Road'),   # a bridge with that name
+              ((250,0),'Misspelt Road'),     # the right line, the wrong name
+              ((250,40),'Invented Road'),    # no road within 5 m
+              ((250,0),None),((250,0),'  '),None,'Invented Road'):
+    try:
+        P.place_poles(list(odd.roads.values()),odd,buildings,safe,(-10000,-10000),unpowered=(entry,))
+        raise AssertionError(f'unpowered entry {entry!r} must stop the bake')
+    except RuntimeError:
+        pass
 reverse=[road(4,[[500,0],[0,0]],4),road(1,[[-100,0],[0,0]],1)]
 net=P.Network(reverse)
 back=P.place_poles(reverse,net,[house(1,302,20)],safe,(-10000,-10000))

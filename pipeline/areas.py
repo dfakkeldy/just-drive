@@ -37,7 +37,8 @@ class Area:
     # Hand-built house sites, as (east, north, radius in metres): no roadside box for the hand-built house site.
     # A house inside the radius gets no mailbox, and step 29 stops if any box stands inside.
     no_box_sites: tuple = ()
-    # Named kind-4 roads that step 29 gives no pole run, by road name, when a drive showed no power line along them.
+    # Named kind-4 road pieces that step 29 gives no pole run, when a drive showed no power line along them:
+    # ((east, north) on the piece's line, its expected name). Other pieces with the same name keep the usual rule.
     # Public roads keep their frozen poles (tools/power-network/README.md); only the kind-4 extension is left out.
     unpowered_tracks: tuple = ()
     extra_fine: tuple = ()  # boxes (xmin, ymin, xmax, ymax) that get 1 m land whatever roads they hold
@@ -215,7 +216,9 @@ JUDIQUE = Area(
     # The dash cam drive of 21 Nov 2026 saw the line end at the last house with power, near the start of
     # River Denys Road's public piece. No pole stands along its kind-4 piece to the church, and the church has
     # no power (Dan, 21 Nov 2026). The public piece keeps its frozen poles.
-    unpowered_tracks=('River Denys Road',),
+    # The point is a vertex of that kind-4 piece in the baked roads. The other kind-4 pieces of the same name are a
+    # 12 m bridge (never poled) and a piece beyond the church that the drive did not reach (no building near it).
+    unpowered_tracks=(((629728.21, 5080744.94), 'River Denys Road'),),
     wide_source='mabou', anchor_highway=19)
 
 PORTHOOD = Area(
