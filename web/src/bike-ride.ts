@@ -63,7 +63,7 @@ export class BikeRide implements Ride {
   private roadTrail: VehiclePlacement[] = [];
   private launchX = 0; private launchZ = 0; private airPitch = 0;
   private crashHeading = 0; private stand = 0;
-  #waterStopped = false; #awaitingLoad = true; #recovering = false;
+  #waterStopped = false; #awaitingLoad = true; #recovering = false; #recovered = false;
 
   constructor(readonly car: Bike, private terrain: Pick<Terrain, 'heightAt' | 'surfaceAt' | 'withContactHeight'> & { readonly cartRoads?: boolean; coverAt?: (x: number, z: number) => number }, readonly roads: Pick<Roads, 'nearest' | 'deckHeight'> & Partial<Pick<Roads, 'guardrails'>>, private seaLevel: number, readonly spec: VehicleSpec = BIKE_SPEC) {}
 
@@ -79,6 +79,12 @@ export class BikeRide implements Ride {
     const coverClass = this.terrain.coverAt?.(x, z) ?? 0;
     const slope = coverClass === WATER_COVER_CLASS ? localGroundSlope(x, z, (px, pz) => this.groundAt(px, pz)) : 0;
     return isDryGround({ ground: g, surface: s, onDeck, seaLevel: this.seaLevel, coverClass, slope });
+  }
+  private bothWheelsSupported(x: number, z: number, heading: number, y: number): boolean {
+    const fx = Math.sin(heading), fz = -Math.cos(heading), half = this.spec.wheelbase / 2;
+    const probe = { y };
+    return this.terrain.withContactHeight(probe, () => this.groundAt(x + fx * half, z + fz * half)) !== null
+      && this.terrain.withContactHeight(probe, () => this.groundAt(x - fx * half, z - fz * half)) !== null;
   }
   /** Hold a sunk bike at rest in water until an explicit reset returns it to dry land. */
   stopInWater(): void {
@@ -98,11 +104,14 @@ export class BikeRide implements Ride {
     if (this instanceof BikeRide && !this.#recovering && this.terrain?.surfaceAt && !this.terrain.surfaceAt(x, z) && !this.#awaitingLoad && (this.lastSafe || this.roadTrail.length > 0) && Math.hypot(x - this.x, z - this.z) <= 1) {
       this.#recovering = true;
       try {
-        this.wall();
-        if (this.terrain.surfaceAt(this.x, this.z) && this.isDryPose(this.x, this.z) && this.place(this.x, this.z, this.heading)) return true;
+        if (this.bounds) {
+          const cx = clamp(this.x, this.bounds[0], this.bounds[2]);
+          const cz = clamp(this.z, this.bounds[1], this.bounds[3]);
+          if (this.terrain.surfaceAt(cx, cz) && this.isDryPose(cx, cz) && this.place(cx, cz, this.heading)) return true;
+        }
+        this.#recovered = false;
         this.respawn();
-        this.sync(0);
-        return this.terrain.surfaceAt(this.x, this.z) !== null;
+        return this.#recovered;
       } finally {
         this.#recovering = false;
       }
@@ -111,7 +120,9 @@ export class BikeRide implements Ride {
     if (this.placementGuard && !this.placementGuard(pose)) return false;
     if (!safePlacement(pose.x, pose.z, pose.heading, this.bounds)) return false;
     const gAt = this.groundAt(pose.x, pose.z);
-    if (this instanceof BikeRide && this.#recovering && (gAt === null || !this.terrain.surfaceAt(pose.x, pose.z))) return false;
+    if (this instanceof BikeRide && this.#recovering) {
+      if (gAt === null || !this.terrain.surfaceAt(pose.x, pose.z) || !this.bothWheelsSupported(pose.x, pose.z, pose.heading, gAt)) return false;
+    }
     if (gAt !== null && !this.isDryPose(pose.x, pose.z)) return false;
     this.x = pose.x; this.z = pose.z; this.heading = pose.heading;
     this.vx = this.vz = this.vy = this.speed = this.pitchRate = this.wheelie = this.wheelieRate = this.whip = 0;
@@ -128,6 +139,7 @@ export class BikeRide implements Ride {
       if (this.isDryPose(this.x, this.z)) this.lastSafe = { ...pose };
     } else this.#awaitingLoad = true;
     this.sync(0);
+    if (this.#recovering) this.#recovered = true;
     return true;
   }
   /** Restore support history only; selection never searches for or installs a new pose. */
@@ -439,7 +451,7 @@ export class BikeRide implements Ride {
       if (this.sunk > 1.4) this.respawn();
     } else {
       this.sunk = 0;
-      if (!this.airborne && this.wheelie < .15 && newGround !== null && newGround > this.seaLevel + .05 && Math.abs(slope) < .45 && this.speed > 2 && !this.atEdge && this.isDryPose(this.x, this.z)) {
+      if (!this.airborne && this.wheelie < .15 && newGround !== null && newGround > this.seaLevel + .05 && Math.abs(slope) < .45 && this.speed > 2 && !this.atEdge && this.isDryPose(this.x, this.z) && this.bothWheelsSupported(this.x, this.z, this.heading, newGround)) {
         this.lastSafe = { x: this.x, z: this.z, heading: this.heading };
         if (s.kind > 0 && s.kind <= 5 && s.roadDist <= s.halfWidth) {
           const tip = this.roadTrail[this.roadTrail.length - 1];

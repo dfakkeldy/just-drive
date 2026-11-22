@@ -335,6 +335,28 @@ for (const rideKind of RIDES) {
     assert.equal(hEdge.place(105, 0, Math.PI / 2), true, 'horse falls through to respawn() when clamped edge placement is shifted off-map by guard');
     assert.ok(edgeTerrain.surfaceAt(hEdge.x, hEdge.z) !== null && hEdge.x < 99, `horse recovered to dry fallback after edge rejection: x=${hEdge.x}`);
     assert.ok(Math.abs(hEdge.car.root.position.x - hEdge.x) < 1e-3, `horse model synced after edge recovery: modelX=${hEdge.car.root.position.x} x=${hEdge.x}`);
+
+    // Guard rejecting EVERY candidate returns false and does not move physics or model to the rejected edge.
+    const hRejectAll = makeRide('horse', edgeTerrain, makeRoads(-100, 100));
+    hRejectAll.bounds = [-100, -100, 100, 100];
+    assert.equal(hRejectAll.place(20, 0, Math.PI / 2), true);
+    hRejectAll.x = 105;
+    hRejectAll.placementGuard = () => false;
+    assert.equal(hRejectAll.place(105, 0, Math.PI / 2), false, 'horse returns false when guard rejects every recovery candidate');
+    assert.equal(hRejectAll.x, 105, 'rejected horse physics never moves to unapproved edge');
+    assert.ok(Math.abs(hRejectAll.car.root.position.x - 100) > 1, 'rejected horse model never moves to unapproved edge x=100');
+
+    // Guard shifting clamped pose to x=99.8 (centre loaded, front wheels over void x>100) rejects and falls back to x=20.
+    const hOverhang = makeRide('horse', edgeTerrain, makeRoads(-100, 100));
+    hOverhang.bounds = [-100, -100, 100, 100];
+    assert.equal(hOverhang.place(20, 0, Math.PI / 2), true);
+    hOverhang.x = 105;
+    hOverhang.placementGuard = (pose) => {
+      if (Math.abs(pose.x - 100) < 1) { pose.x = 99.8; }
+      return true;
+    };
+    assert.equal(hOverhang.place(105, 0, Math.PI / 2), true, 'horse skips overhanging x=99.8 edge pose and recovers to dry fallback');
+    assert.ok(hOverhang.x < 98, `horse recovered away from void overhang: x=${hOverhang.x}`);
   } else if (rideKind === 'bike') {
     let surfaceLost = false;
     const synthTerrain = {
@@ -387,6 +409,31 @@ for (const rideKind of RIDES) {
     assert.equal(bEdge.place(105, 0, Math.PI / 2), true, 'bike falls through to respawn() when clamped edge placement is shifted off-map by guard');
     assert.ok(bikeEdgeTerrain.surfaceAt(bEdge.x, bEdge.z) !== null && bEdge.x < 99, `bike recovered to dry fallback after edge rejection: x=${bEdge.x}`);
     assert.ok(Math.abs(bEdge.car.root.position.x - bEdge.x) < 1e-3, `bike model synced after edge recovery: modelX=${bEdge.car.root.position.x} x=${bEdge.x}`);
+
+    // Guard rejecting EVERY candidate returns false and does not move bike physics or model to the rejected edge.
+    const bRejectAll = makeRide('bike', bikeEdgeTerrain, makeRoads(-100, 100));
+    bRejectAll.bounds = [-100, -100, 100, 100];
+    assert.equal(bRejectAll.place(20, 0, Math.PI / 2), true);
+    bRejectAll.x = 105;
+    bRejectAll.placementGuard = () => false;
+    assert.equal(bRejectAll.place(105, 0, Math.PI / 2), false, 'bike returns false when guard rejects every recovery candidate');
+    assert.equal(bRejectAll.x, 105, 'rejected bike physics never moves to unapproved edge');
+    assert.ok(Math.abs(bRejectAll.car.root.position.x - 100) > 1, 'rejected bike model never moves to unapproved edge x=100');
+
+    // Guard shifting clamped pose to x=99.8 (centre loaded, front wheel over void x>100) rejects so bike never strands with ready=false.
+    const bOverhang = makeRide('bike', bikeEdgeTerrain, makeRoads(-100, 100));
+    bOverhang.bounds = [-100, -100, 100, 100];
+    assert.equal(bOverhang.place(20, 0, Math.PI / 2), true);
+    bOverhang.x = 105;
+    bOverhang.placementGuard = (pose) => {
+      if (Math.abs(pose.x - 100) < 1) { pose.x = 99.8; }
+      return true;
+    };
+    assert.equal(bOverhang.place(105, 0, Math.PI / 2), true, 'bike skips overhanging x=99.8 edge pose and recovers to dry fallback');
+    assert.ok(bOverhang.x < 98, `bike recovered away from void overhang: x=${bOverhang.x}`);
+    const xBeforeDrive = bOverhang.x;
+    for (let step = 0; step < 60; step++) bOverhang.update(1 / 60, { throttle: 0.5, steer: 0, handbrake: false });
+    assert.ok(Math.abs(bOverhang.x - xBeforeDrive) > 0.5, `bike remains drivable (ready=true) after overhang recovery: dx=${Math.abs(bOverhang.x - xBeforeDrive)}`);
   }
 
   // 4c. Narrow missing strip into a 20 m rising bank: every ride (including horse) crosses onto the 20 m bank and stays above ground.

@@ -109,6 +109,7 @@ export class Vehicle {
   #waterStopped = false;
   #awaitingLoad = true;
   #recovering = false;
+  #recovered = false;
   /** m/s while Strong touch help holds the throttle near its cap; zero otherwise. */
   get activeTouchSpeedLimit(): number { return this.#heldTouchSpeedLimit; }
   helpYaw = 0; // additional Strong yaw, radians/second, for fixed-step checks
@@ -132,13 +133,14 @@ export class Vehicle {
       this.#recovering = true;
       try {
         if (this.bounds) {
-          this.clampBounds();
-          const clampedG = this.groundAt(this.x, this.z);
-          if (this.terrain.surfaceAt(this.x, this.z) && clampedG !== null && this.isDryPose(this.x, this.z, clampedG) && this.place(this.x, this.z, this.heading)) return true;
+          const cx = THREE.MathUtils.clamp(this.x, this.bounds[0], this.bounds[2]);
+          const cz = THREE.MathUtils.clamp(this.z, this.bounds[1], this.bounds[3]);
+          const clampedG = this.groundAt(cx, cz);
+          if (this.terrain.surfaceAt(cx, cz) && clampedG !== null && this.isDryPose(cx, cz, clampedG) && this.place(cx, cz, this.heading)) return true;
         }
+        this.#recovered = false;
         this.respawn();
-        this.sync(0);
-        return this.terrain.surfaceAt(this.x, this.z) !== null;
+        return this.#recovered;
       } finally {
         this.#recovering = false;
       }
@@ -148,7 +150,7 @@ export class Vehicle {
     x = pose.x; z = pose.z; heading = pose.heading;
     if (!safePlacement(x, z, heading, this.bounds)) return false;
     const g = this.groundAt(x, z);
-    if (this instanceof Vehicle && this.#recovering && (g === null || !this.terrain.surfaceAt(x, z))) return false;
+    if (this instanceof Vehicle && this.#recovering && (g === null || !this.terrain.surfaceAt(x, z) || !this.allWheelsSupported(x, z, heading, g))) return false;
     if (g !== null && !this.isDryPose(x, z, g)) return false;
     this.#heldTouchSpeedLimit = 0;
     this.drift.reset();
@@ -180,6 +182,7 @@ export class Vehicle {
     }
     this.sync(0);
     this.onPlaced?.();
+    if (this.#recovering) this.#recovered = true;
     return true;
   }
 
@@ -232,6 +235,19 @@ export class Vehicle {
     const coverClass = this.terrain.coverAt?.(x, z) ?? 0;
     const slope = coverClass === WATER_COVER_CLASS ? localGroundSlope(x, z, this.hoofGround) : 0;
     return isDryGround({ ground: g, surface: s, onDeck, seaLevel: this.seaLevel, coverClass, slope });
+  }
+
+  private allWheelsSupported(x: number, z: number, heading: number, y: number): boolean {
+    const fx = Math.sin(heading), fz = -Math.cos(heading), rx = Math.cos(heading), rz = Math.sin(heading);
+    const probe = this.spec.contactPlane ? { y } : null;
+    for (let i = 0; i < 4; i++) {
+      const a = (i < 2 ? 1 : -1) * this.spec.wheelbase / 2;
+      const b = (i % 2 ? 1 : -1) * (i < 2 ? this.spec.track : this.spec.rearTrack ?? this.spec.track) / 2;
+      const wx = x + fx * a + rx * b, wz = z + fz * a + rz * b;
+      const wh = probe ? this.terrain.withContactHeight(probe, () => this.groundAt(wx, wz)) : this.groundAt(wx, wz);
+      if (wh === null) return false;
+    }
+    return true;
   }
 
   private tryDryPlace(x: number, z: number, heading: number): boolean {
