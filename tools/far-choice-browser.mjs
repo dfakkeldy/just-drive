@@ -7,7 +7,7 @@
 //  3. Keyboard: arrow from Coarse to Full moves the choice only; Tab to Apply and Enter: the page reloads into the LOW far
 //     scene (LOW level, near tall draws).
 //  4. Tap Off, Apply: the page reloads with no far views. ?far=coarse overrides the saved choice and says so.
-//  5. Desktop detail: no Advanced section, and the desktop far scene as before.
+//  5. Desktop detail: no Far views on phone setting, and the desktop far scene as before.
 // FAR_CHOICE_PICTURES=1 instead saves the pictures for the pull request: the Point Tupper start and a Mabou hill view
 // at Off, Coarse and Full on a phone, and one desktop view (OUT folder).
 import assert from 'node:assert/strict';
@@ -32,7 +32,7 @@ async function scene(){
  return read(`(()=>{const m=mmm,draws=g=>{let n=0;g?.traverse(o=>{if(o.isMesh||o.isLine)n++;});return n;};
   return {low:m.low,farLand:m.farLand?.level??null,farTurbineDraws:draws(m.farTurbines?.group),farTurbines:m.farTurbines?.count??0,tallDraws:draws(m.tall?.group),tallSolids:m.tall?.solids.length??0,
    seaTriangles:(()=>{const s=m.scene.getObjectByName('near-sea');return s?s.geometry.index.count/3:null;})(),
-   advanced:!!document.getElementById('advanced'),advancedOpen:!!document.getElementById('advanced')?.open,
+   advanced:!!document.getElementById('advanced'),advancedOpen:!!document.getElementById('advanced')?.open,farPhone:!!document.getElementById('farPhone'),
    checked:document.querySelector('#farPhone input:checked')?.value??null,typed:/Set by the page address/.test(document.getElementById('farPhone')?.textContent??''),
    saved:(()=>{try{return localStorage.getItem('mmm.farPhone');}catch{return 'blocked';}})(),openSaved:(()=>{try{return localStorage.getItem('mmm.advancedOpen');}catch{return 'blocked';}})()};})()`);
 }
@@ -83,7 +83,7 @@ async function check(){
  s=await scene();assert.deepEqual([s.farLand,s.checked,s.typed,s.saved],['coarse','coarse',true,'off'],'?far= overrides the saved choice and says so');
  await page(DESKTOP,`${base}/?${MABOU_HILLS}&mode=explore&vehicle=truck&res=1&q=high&radio=0`,{far:true});
  s=await scene();console.log('DESKTOP',JSON.stringify(s));
- assert.deepEqual([s.low,s.farLand,s.advanced],[false,'desktop',false],'desktop: no Advanced section, desktop far scene');
+ assert.deepEqual([s.low,s.farLand,s.farPhone],[false,'desktop',false],'desktop: no Far views on phone setting, desktop far scene');
  assert.ok(s.tallDraws>0&&s.farTurbineDraws===1);
  writeFileSync(out+'/far-choice.json',JSON.stringify({off:true,coarse,full,desktop:s,logs:c.logs},null,2));
  console.log('PASS far views on phone: Off default; touch and keyboard choice + Apply, each in force after the page reloads; ?far= override; desktop unchanged');

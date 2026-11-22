@@ -59,9 +59,9 @@ export function verdict(upheld: { kind: string }[]): 'clear' | 'warning' | 'susp
     avoidable.filter((c) => c.kind === 'propertyDamage').length >= PROPERTY_SUSPENSION) return 'suspension';
   return avoidable.length ? 'warning' : 'clear';
 }
-export function nextCareer(career: Career, outcome: ReturnType<typeof verdict>, repairs = 0): Career {
+export function nextCareer(career: Career, outcome: ReturnType<typeof verdict>, repairs = 0, bonus = 0): Career {
   const suspended = outcome === 'suspension';
-  return { day: career.day + (suspended ? 2 : 1), pay: career.pay + DAILY_PAY + VEHICLE_ALLOWANCE - repairs,
+  return { day: career.day + (suspended ? 2 : 1), pay: career.pay + DAILY_PAY + VEHICLE_ALLOWANCE - repairs + bonus,
     warnings: career.warnings + (outcome === 'warning' ? 1 : 0), double: suspended, suspended, carryover: career.carryover.slice() };
 }
 const KEY = 'mmm.shift.v1';

@@ -80,6 +80,8 @@ export class PublicWharves {
       if(!near)continue;
       const stamp=this.terrain.drawnOver(x0,z0,x1,z1);
       if(stamp===''||stamp===st.stamp)continue;
+      // During a start/jump burst, skip intermediate coarse LODs; still plan immediately once this wharf's own land is fine (level 8).
+      if(this.terrain.burst&&stamp.split('|').some(s=>s!==''&&!s.startsWith('8/')))continue;
       st.stamp=stamp;this.plans++;dirty=true;
       const ground=(e:number,n:number)=>this.terrain.meshHeightAt(e-this.village[0],this.village[1]-n,true);
       st.parts=planWharf(st.source,ground,this.sea,st.blocked).map(p=>({...p,source:st.source.id}));

@@ -25,10 +25,19 @@ try{
    for(let i=0;i<cases.length;i++)for(const [label,origin] of [['main',mainOrigin],['branch',branchOrigin]]){
     // Main needs the same representative view per area. Additional branch views supply the full gallery.
     if((label==='main'||costsOnly)&&i>0)continue;
-    const s=cases[i],[e,n]=s.centroid,query=new URLSearchParams({area,mode:'explore',cam:`${e+80},${n-100},75,320,-30,60`,at:`${e},${n},0`,hud:'0',radio:'0',title:'0',res:'1',q:phone?'low':'high',touch:phone?'1':'0',exag:'1.5',hour:'12'});
+    // Disable grass: the manual settle loop below does not step grass, so fast cover readback must not race main vs branch on Mabou's inland control view.
+    const s=cases[i],[e,n]=s.centroid,query=new URLSearchParams({area,mode:'explore',cam:`${e+80},${n-100},75,320,-30,60`,at:`${e},${n},0`,hud:'0',radio:'0',title:'0',res:'1',grass:'0',q:phone?'low':'high',touch:phone?'1':'0',exag:'1.5',hour:'12'});
     const page=await open(origin+'/?'+query);
     try{
      await page.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:phone});
+     if(!phone&&manifest.farLand){
+      const until=Date.now()+60000;
+      while(!await page.read('!!(window.mmm&&mmm.farVisibility&&mmm.farLand&&mmm.tall&&mmm.farTurbines)')){
+       assert.ok(Date.now()<until,`${area}/${label}: far views never loaded on after land`);
+       await new Promise(resolve=>setTimeout(resolve,200));
+      }
+      await page.read(`(()=>{const v=mmm.farVisibility;v.update=()=>{};if(!v.records.length)throw Error('far views have no query meshes');for(const r of v.records)r.mesh.visible=true;})()`);
+     }
      const result=await page.read(`(async()=>{
       window.requestAnimationFrame=()=>0;
       const m=mmm,{terrain:t,camera:c,renderer:r,trees,water}=m;let scene=m.vehicle.car.root;while(scene.parent)scene=scene.parent;

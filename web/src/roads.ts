@@ -42,6 +42,7 @@ export class Roads {
   private minCX = Infinity; private minCZ = Infinity;
   private maxCX = -Infinity; private maxCZ = -Infinity;
   private columns = 0;
+  private maxHalfWidth = 0;
   private decks = new Map<number, Deck>();
   private deckMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3c, side: THREE.DoubleSide });
   // Bridges on tracks and on the rail trail are timber, not asphalt.
@@ -62,6 +63,7 @@ export class Roads {
       if (terrain.cartRoads && r.kind === 5) continue;
       const road: Road = { ...r, halfWidth: terrain.cartRoads ? eraRoadHalf(r.kind, r.halfWidth) : r.halfWidth, pts: r.pts.map(([e, n]) => [e - village[0], village[1] - n]) };
       this.roads.push(road);
+      this.maxHalfWidth = Math.max(this.maxHalfWidth, road.halfWidth);
       for (const [x, z] of road.pts) {
         const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
         this.minCX = Math.min(this.minCX, cx); this.maxCX = Math.max(this.maxCX, cx);
@@ -118,6 +120,19 @@ export class Roads {
   /** Nearest road within `reach` metres, optionally only roads that pass `filter`. */
   nearest(x: number, z: number, reach = 60, filter?: (r: Road) => boolean): RoadHit | null {
     return this.query(this.cells, x, z, reach, filter);
+  }
+
+  /** Cold placement query: visit every nearby segment once, including tracks, trails and driveways.
+   * Reach is measured from road edges, so wide roads in adjacent cells are included. */
+  forEachNearbySegment(x: number, z: number, reach: number, visit: (road: Road, segment: number) => void, exclude?: Road): void {
+    const radius = reach + this.maxHalfWidth, seen = new Set<number>();
+    for (let cz = Math.floor((z - radius) / CELL); cz <= Math.floor((z + radius) / CELL); cz++)
+      for (let cx = Math.floor((x - radius) / CELL); cx <= Math.floor((x + radius) / CELL); cx++)
+        for (const [ri, segment] of this.cells.get(this.cellKey(cx, cz)) ?? NO_SEGMENTS) {
+          const road = this.roads[ri], key = segment * this.roads.length + ri;
+          if (road === exclude || seen.has(key)) continue;
+          seen.add(key); visit(road, segment);
+        }
   }
 
   private query(cells: Map<number, [number, number][]>, x: number, z: number, reach: number, filter?: (r: Road) => boolean): RoadHit | null {
