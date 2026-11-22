@@ -1170,8 +1170,9 @@ if (churchSite && churchRoom) interiors.register(churchRoom.churchDoor(churchSit
 if (churchRoom && params.get('interior') === 'church') interiors.enter('church');
 let pendingInterrogation: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; advanceAfter: boolean } | null = null;
 let pendingOfficeJump = false;
+let depotOpening = false;
 let depotGen = 0;   // a reset while a depot room loads cancels that opening and its fallback
-resets[resetSlot.interiors] = () => { pendingOfficeJump = false; depotGen++; interiors.reset(); };
+resets[resetSlot.interiors] = () => { pendingOfficeJump = false; depotGen++; depotOpening = false; interiors.reset(); };
 function registerDepotRooms(mod: typeof import('./interior-depot')): void {
   if (!interiors.doors.has('depot-loading')) {
     interiors.register({
@@ -1207,7 +1208,6 @@ function registerDepotRooms(mod: typeof import('./interior-depot')): void {
     });
   }
 }
-let depotOpening = false;
 async function openDepotLoading(): Promise<void> {
   if (depotOpening || interiors.busy || !(interiors instanceof Interiors)) return;
   depotOpening = true;
@@ -1220,7 +1220,7 @@ async function openDepotLoading(): Promise<void> {
   } catch (e) {
     console.warn('Depot loading bay unavailable', e);
   } finally {
-    depotOpening = false;
+    if (gen === depotGen) depotOpening = false;   // a reset already released the lock, maybe to a newer opening
   }
 }
 async function openDepotInterrogation(info: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; advanceAfter: boolean }): Promise<void> {
@@ -1250,7 +1250,7 @@ async function openDepotInterrogation(info: { reason: InterrogationReason; compl
     if (info.advanceAfter && shift instanceof Shift) startDay = true;
     else if (report && hadReport) report.hidden = false;
   } finally {
-    depotOpening = false;
+    if (gen === depotGen) depotOpening = false;   // a reset already released the lock, maybe to a newer opening
   }
   if (startDay && shift instanceof Shift) {
     shift.advanceToNextDay();
