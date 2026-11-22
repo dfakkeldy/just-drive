@@ -19,6 +19,8 @@ export interface PlannedPiece {
   readonly clearance: number;
   readonly matrix: THREE.Matrix4;
   readonly color: number;
+  /** World-space endpoints [A, B] for span pieces, so checks can verify transformed orientation and length. */
+  readonly spanEnds?: readonly [THREE.Vector3, THREE.Vector3];
 }
 
 export interface PlannedLight {
@@ -99,12 +101,15 @@ export function planPointTupperIndustry(
   const wx = (e: number) => e - VE;
   const wz = (n: number) => VN - n;
   const wy = (base: number, lift = 0) => industryGround(base, exag, sea) + lift;
+  /** Matches web/src/buildings.ts:236 verbatim (stretches all building bases about seaLevel, even below sea). */
+  const buildingBaseY = (g: number) => sea + (g - sea) * exag;
 
   const pushMatrix = (
     kind: IndustryKind, site: PlannedPiece['site'], e: number, n: number, baseG: number,
     clearance: number, matrix: THREE.Matrix4, color: number,
+    spanEnds?: readonly [THREE.Vector3, THREE.Vector3],
   ) => {
-    pieces.push({ kind, site, e, n, baseG, clearance, matrix: matrix.clone(), color });
+    pieces.push({ kind, site, e, n, baseG, clearance, matrix: matrix.clone(), color, ...(spanEnds ? { spanEnds } : {}) });
   };
 
   /** Place an upright box/cylinder/frustum centred at (e, n), base at wy(baseG, yBot), total height h. */
@@ -147,7 +152,7 @@ export function planPointTupperIndustry(
     }
     obj.updateMatrix();
     const clear = Math.min(aLift, bLift) - height / 2;
-    pushMatrix(kind, site, (ae + be) / 2, (an + bn) / 2, (ag + bg) / 2, clear, obj.matrix, color);
+    pushMatrix(kind, site, (ae + be) / 2, (an + bn) / 2, (ag + bg) / 2, clear, obj.matrix, color, [vA.clone(), vB.clone()]);
   };
 
   const addLight = (e: number, n: number, baseG: number, lift: number, radius: number, color: number) => {
@@ -462,19 +467,22 @@ export function planPointTupperIndustry(
     site: PlannedPiece['site'],
     a: readonly [number, number], b: readonly [number, number],
     width: number, deckY: number, pileSpacing: number,
-    opts: { fenders?: -1 | 0 | 1; rails?: boolean; bollards?: boolean; lamps?: boolean } = {},
+    opts: { fenders?: -1 | 0 | 1; rails?: boolean; bollards?: boolean; lamps?: boolean; baseG?: number } = {},
   ) => {
+    const baseG = opts.baseG ?? sea;
+    const baseLift = wy(baseG) - wy(sea);
+    const deckTop = deckY + baseLift;
     const dx = b[0] - a[0], dn = b[1] - a[1], len = Math.hypot(dx, dn);
     const ux = dx / len, un = dn / len, perpE = -un, perpN = ux;
     const yaw = -Math.atan2(dx, dn);
     const midE = (a[0] + b[0]) / 2, midN = (a[1] + b[1]) / 2;
 
     // Main concrete pier deck slab + edge beam coping
-    upright('box', site, midE, midN, sea, deckY - 1.15, width, 1.15, len, yaw, C.concreteLight);
+    upright('box', site, midE, midN, baseG, deckY - 1.15, width, 1.15, len, yaw, C.concreteLight);
     if (!low) {
       for (const s of [-1, 1]) {
         const ce = midE + perpE * (width / 2 - 0.25) * s, cn = midN + perpN * (width / 2 - 0.25) * s;
-        upright('box', site, ce, cn, sea, deckY, 0.45, 0.32, len, yaw, C.concreteDark);
+        upright('box', site, ce, cn, baseG, deckY, 0.45, 0.32, len, yaw, C.concreteDark);
       }
     }
     // Pile bents extending well below the Strait sea floor (-14 m)
@@ -483,32 +491,32 @@ export function planPointTupperIndustry(
     for (let i = 0; i <= bents; i++) {
       const t = i / bents, pe = a[0] + dx * t, pn = a[1] + dn * t;
       // Concrete transverse cap beam under deck
-      upright('box', site, pe, pn, sea, deckY - 2.1, width - 0.4, 1.0, 1.35, yaw, C.concreteDark);
+      upright('box', site, pe, pn, baseG, deckY - 2.1, width - 0.4, 1.0, 1.35, yaw, C.concreteDark);
       for (const f of pileRows) {
-        upright('cyl', site, pe + perpE * width * f, pn + perpN * width * f, sea, -14.0, 0.78, deckY + 12.5, 0.78, 0, C.steelDark);
+        upright('cyl', site, pe + perpE * width * f, pn + perpN * width * f, sea, -14.0, 0.78, deckTop + 12.5, 0.78, 0, C.steelDark);
       }
       // Marine rubber fenders along the docking face
       if (opts.fenders) {
         const fe = pe + perpE * (width / 2 + 0.55) * opts.fenders, fn = pn + perpN * (width / 2 + 0.55) * opts.fenders;
-        upright('box', site, fe, fn, sea, deckY - 3.6, 0.95, 3.8, 1.7, yaw, C.fenderBlack);
+        upright('box', site, fe, fn, baseG, deckY - 3.6, 0.95, 3.8, 1.7, yaw, C.fenderBlack);
       }
       if (opts.bollards && i % 2 === 0) {
         const side = opts.fenders || 1;
         const be = pe + perpE * (width / 2 - 0.9) * side, bn = pn + perpN * (width / 2 - 0.9) * side;
-        upright('cyl', site, be, bn, sea, deckY, 0.55, 0.85, 0.55, 0, C.accentYellow);
+        upright('cyl', site, be, bn, baseG, deckY, 0.55, 0.85, 0.55, 0, C.accentYellow);
       }
       if (opts.lamps && i % 3 === 1) {
         const side = -(opts.fenders || 1);
         const le = pe + perpE * (width / 2 - 0.8) * side, ln = pn + perpN * (width / 2 - 0.8) * side;
-        upright('cyl', site, le, ln, sea, deckY, 0.24, 9.5, 0.24, 0, C.steelGalv);
-        addLight(le, ln, sea, deckY + 9.8, 0.72, C.lightFlood);
+        upright('cyl', site, le, ln, baseG, deckY, 0.24, 9.5, 0.24, 0, C.steelGalv);
+        addLight(le, ln, baseG, deckY + 9.8, 0.72, C.lightFlood);
       }
     }
     if (opts.rails && !low) {
       for (const s of [-1, 1]) {
         if (s === opts.fenders) continue;
         const re = midE + perpE * (width / 2 - 0.25) * s, rn = midN + perpN * (width / 2 - 0.25) * s;
-        upright('box', site, re, rn, sea, deckY + 0.95, 0.14, 0.14, len, yaw, C.steelGalv);
+        upright('box', site, re, rn, baseG, deckY + 0.95, 0.14, 0.14, len, yaw, C.steelGalv);
       }
     }
   };
@@ -543,19 +551,22 @@ export function planPointTupperIndustry(
     }
   };
 
-  const buildCatwalk = (site: PlannedPiece['site'], e0: number, n0: number, e1: number, n1: number, y = 4.6) => {
-    span('box', site, e0, n0, sea, y, e1, n1, sea, y, 1.8, 0.38, C.steelGalv);
+  const buildCatwalk = (
+    site: PlannedPiece['site'], e0: number, n0: number, e1: number, n1: number,
+    y0 = 4.6, y1 = y0, g0 = sea, g1 = sea,
+  ) => {
+    span('box', site, e0, n0, g0, y0, e1, n1, g1, y1, 1.8, 0.38, C.steelGalv);
     if (!low) {
       const dx = e1 - e0, dn = n1 - n0, l = Math.hypot(dx, dn) || 1;
       const pe = -dn / l * 0.82, pn = dx / l * 0.82;
       for (const s of [-1, 1]) {
-        span('box', site, e0 + pe * s, n0 + pn * s, sea, y + 1.05, e1 + pe * s, n1 + pn * s, sea, y + 1.05, 0.12, 0.12, C.steelMid);
+        span('box', site, e0 + pe * s, n0 + pn * s, g0, y0 + 1.05, e1 + pe * s, n1 + pn * s, g1, y1 + 1.05, 0.12, 0.12, C.steelMid);
       }
     }
   };
 
   /**
-   * Articulated Chiksan-style Marine Loading Arm in parked vertical-V attitude:
+   * Counterweighted Articulated Marine Loading Arm in parked vertical-V attitude:
    * riser standpipe, inclined inboard boom, apex swivel joint, suspended outboard arm with triple-swivel coupler,
    * and rear pantograph counterweight beam + safety-orange counterweight box.
    */
@@ -591,7 +602,7 @@ export function planPointTupperIndustry(
   };
 
   // ==========================================================================================================
-  // 5. POINT TUPPER COAL MARINE TERMINAL (Pier head, E-Crane ship unloader, hopper, trestle & dolphins)
+  // 5. POINT TUPPER COAL MARINE TERMINAL (Pier head, equilibrium ship unloader, hopper, trestle & dolphins)
   // ==========================================================================================================
   {
     const { headStart, headEnd, headWidth, deckY, trestleEnd, trestleWidth, crane, hopper, elbowTower, dolphins } = COAL_PIER;
@@ -624,7 +635,7 @@ export function planPointTupperIndustry(
       upright('box', 'coal-pier', le, ln, sea, deckY, 0.55, 5.2, 0.55, headYaw, C.steelDark);
     }
 
-    // Rail-mounted E-Crane Ship Unloader (HRDEM DSM 24.9 m peak at 628603, 5048844.5)
+    // Rail-mounted equilibrium balance-boom ship unloader (HRDEM DSM 24.9 m peak at 628603, 5048844.5)
     const crf = frame(crane.e, crane.n, 196); // faces SW out over the docked bulk carrier berth
     // Portal gantry legs straddling the pier rails
     for (const u of [-4.5, 4.5]) for (const v of [-5.2, 5.2]) {
@@ -723,12 +734,21 @@ export function planPointTupperIndustry(
     const b1Start = b1f.pt(-berth1Length / 2, 0), b1End = b1f.pt(berth1Length / 2, 0);
     buildPierSpan('oil-pier', b1Start, b1End, berth1Width, deckY + 0.2, 14.0, { fenders: -1, bollards: true, lamps: true });
 
-    // Dress the existing control/equipment house (id 49) on the loading head with steel frame, rooftop mast & monitor
+    // Dress the existing control/equipment house (id 49) on the loading head with steel frame, rooftop mast & monitor.
+    // Anchor to buildingBaseY(-0.77) matching web/src/buildings.ts:236 so trim stays locked to id 49 at every exaggeration.
     const chf = frame(controlHouse.e, controlHouse.n, controlHouse.axisDeg);
-    upright('box', 'oil-pier', controlHouse.e, controlHouse.n, -0.77, controlHouse.eave, controlHouse.width + 0.6, 0.75, controlHouse.length + 0.6, chf.yaw, C.plantTrim);
-    upright('box', 'oil-pier', controlHouse.e, controlHouse.n, -0.77, controlHouse.eave * 0.72, controlHouse.width + 0.45, 2.4, controlHouse.length + 0.45, chf.yaw, C.plantLouver);
-    upright('cyl', 'oil-pier', controlHouse.e, controlHouse.n, -0.77, controlHouse.eave + 0.7, 0.45, 7.5, 0.45, 0, C.pipeWhite);
-    addLight(controlHouse.e, controlHouse.n, -0.77, controlHouse.eave + 8.4, 0.85, C.lightRed);
+    const chBase = buildingBaseY(-0.77);
+    const uprightBuilding = (kind: IndustryKind, yBot: number, sx: number, h: number, sz: number, yawRad: number, color: number) => {
+      obj.position.set(wx(controlHouse.e), chBase + yBot + h / 2, wz(controlHouse.n));
+      obj.rotation.set(0, yawRad, 0);
+      obj.scale.set(sx, h, sz);
+      obj.updateMatrix();
+      pushMatrix(kind, 'oil-pier', controlHouse.e, controlHouse.n, -0.77, yBot, obj.matrix, color);
+    };
+    uprightBuilding('box', controlHouse.eave, controlHouse.width + 0.6, 0.75, controlHouse.length + 0.6, chf.yaw, C.plantTrim);
+    uprightBuilding('box', controlHouse.eave * 0.72, controlHouse.width + 0.45, 2.4, controlHouse.length + 0.45, chf.yaw, C.plantLouver);
+    uprightBuilding('cyl', controlHouse.eave + 0.7, 0.45, 7.5, 0.45, 0, C.pipeWhite);
+    if (night) lights.push({ e: controlHouse.e, n: controlHouse.n, y: chBase + controlHouse.eave + 8.4, radius: 0.85, color: C.lightRed });
 
     // Tall Gangway / Hose-Handling Crane & Fire-Monitor Tower on Berth 1 (HRDEM DSM 31.5 m peak)
     const gtf = frame(gangwayTower.e, gangwayTower.n, 234);
@@ -790,49 +810,48 @@ export function planPointTupperIndustry(
   // 7. PAPER MILL MARINE WHARF (130 m apron, circular mooring dolphin, 149 m marine conveyor & ship-loader)
   // ==========================================================================================================
   {
-    const { start, end, width, deckY, dolphin, conveyor, loader } = PAPER_WHARF;
-    buildPierSpan('paper-wharf', start, end, width, deckY, 16.0, { fenders: -1, bollards: true, lamps: true });
-    // Circular concrete mooring dolphin (OSM way 1084321647) + steel truss catwalk to NW wharf corner
+    const { start, end, width, baseG, deckLift, dolphin, conveyor, loader } = PAPER_WHARF;
+    buildPierSpan('paper-wharf', start, end, width, deckLift, 16.0, { fenders: -1, bollards: true, lamps: true, baseG });
+    // Circular concrete mooring dolphin (OSM way 1084321647) + sloped steel truss catwalk to NW wharf corner
     upright('cyl', 'paper-wharf', dolphin.e, dolphin.n, sea, -10.0, dolphin.radius * 2, dolphin.deckY + 10.0, dolphin.radius * 2, 0, C.concreteMid);
     upright('cyl', 'paper-wharf', dolphin.e, dolphin.n, sea, dolphin.deckY, 1.0, 0.9, 1.0, 0, C.accentYellow);
     addLight(dolphin.e, dolphin.n, sea, dolphin.deckY + 3.8, 0.72, C.lightRed);
-    buildCatwalk('paper-wharf', dolphin.e, dolphin.n, start[0], start[1], dolphin.deckY + 0.3);
+    buildCatwalk('paper-wharf', dolphin.e, dolphin.n, start[0], start[1], dolphin.deckY + 0.3, deckLift + 0.1, sea, baseG);
 
     // 149 m enclosed marine conveyor gallery from mill building id 147 to the wharf ship-loading tower
     buildConveyor(conveyor, 'paper-wharf');
     const lf = frame(loader.e, loader.n, loader.faceDeg);
-    upright('box', 'paper-wharf', loader.e, loader.n, sea, deckY, 8.0, 14.5, 8.0, lf.yaw, C.galleryWall);
+    upright('box', 'paper-wharf', loader.e, loader.n, baseG, deckLift, 8.0, 14.5, 8.0, lf.yaw, C.galleryWall);
     const [chE, chN] = lf.pt(14.5, 0);
-    span('box', 'paper-wharf', loader.e, loader.n, sea, deckY + 12.5, chE, chN, sea, deckY + 15.0, 2.2, 1.8, C.craneBlue);
-    upright('cyl', 'paper-wharf', chE, chN, sea, deckY + 6.5, 1.2, 8.5, 1.2, 0, C.steelGalv);
-    addLight(loader.e, loader.n, sea, deckY + 15.6, 0.75, C.lightFlood);
+    span('box', 'paper-wharf', loader.e, loader.n, baseG, deckLift + 12.5, chE, chN, baseG, deckLift + 15.0, 2.2, 1.8, C.craneBlue);
+    upright('cyl', 'paper-wharf', chE, chN, baseG, deckLift + 6.5, 1.2, 8.5, 1.2, 0, C.steelGalv);
+    addLight(loader.e, loader.n, baseG, deckLift + 15.6, 0.75, C.lightFlood);
   }
 
   // ==========================================================================================================
-  // 8. NORTH BULK / GYPSUM MARINE TERMINAL PIER (OSM way 181364913, shiploader, approach conveyor & dolphins)
+  // 8. NORTH BULK / GYPSUM MARINE TERMINAL PIER (OSM way 181364913, shiploader, peninsula conveyor & dolphins)
   // ==========================================================================================================
   {
-    const { approachStart, approachElbow, berthStart, berthEnd, berthWidth, deckY, loader, conveyor, dolphins } = NORTH_BULK_PIER;
-    buildPierSpan('north-bulk', approachStart, approachElbow, 12.0, deckY, 18.0, { rails: true, lamps: true });
-    buildPierSpan('north-bulk', berthStart, berthEnd, berthWidth, deckY, 16.0, { fenders: -1, bollards: true, lamps: true });
+    const { berthStart, berthEnd, berthWidth, baseG, deckLift, loader, conveyor, dolphins } = NORTH_BULK_PIER;
+    buildPierSpan('north-bulk', berthStart, berthEnd, berthWidth, deckLift, 16.0, { fenders: -1, bollards: true, lamps: true, baseG });
     buildConveyor(conveyor, 'north-bulk');
 
-    // Bulk shiploader tower & luffing boom on the berth head
+    // Bulk shiploader tower & luffing boom on the berth head (anchored to the same peninsula bulkhead baseG)
     const lf = frame(loader.e, loader.n, loader.faceDeg);
-    upright('box', 'north-bulk', loader.e, loader.n, sea, deckY, 8.4, 17.5, 8.4, lf.yaw, C.galleryWall);
-    upright('box', 'north-bulk', loader.e, loader.n, sea, deckY + 17.4, 9.0, 0.7, 9.0, lf.yaw, C.plantTrim);
+    upright('box', 'north-bulk', loader.e, loader.n, baseG, deckLift, 8.4, 17.5, 8.4, lf.yaw, C.galleryWall);
+    upright('box', 'north-bulk', loader.e, loader.n, baseG, deckLift + 17.4, 9.0, 0.7, 9.0, lf.yaw, C.plantTrim);
     const [bE, bN] = lf.pt(20.0, 0);
-    span('box', 'north-bulk', loader.e, loader.n, sea, deckY + 13.5, bE, bN, sea, deckY + 18.2, 2.5, 2.1, C.accentYellow);
-    span('cyl', 'north-bulk', loader.e, loader.n, sea, deckY + 22.5, bE, bN, sea, deckY + 18.5, 0.22, 0.22, C.steelDark);
-    upright('box', 'north-bulk', loader.e, loader.n, sea, deckY + 17.5, 1.4, 5.5, 1.4, lf.yaw, C.steelDark);
-    upright('cyl', 'north-bulk', bE, bN, sea, deckY + 7.5, 1.4, 10.8, 1.4, 0, C.steelGalv);
-    addLight(loader.e, loader.n, sea, deckY + 23.2, 0.85, C.lightRed);
-    addLight(bE, bN, sea, deckY + 19.0, 0.8, C.lightFlood);
+    span('box', 'north-bulk', loader.e, loader.n, baseG, deckLift + 13.5, bE, bN, baseG, deckLift + 18.2, 2.5, 2.1, C.accentYellow);
+    span('cyl', 'north-bulk', loader.e, loader.n, baseG, deckLift + 22.5, bE, bN, baseG, deckLift + 18.5, 0.22, 0.22, C.steelDark);
+    upright('box', 'north-bulk', loader.e, loader.n, baseG, deckLift + 17.5, 1.4, 5.5, 1.4, lf.yaw, C.steelDark);
+    upright('cyl', 'north-bulk', bE, bN, baseG, deckLift + 7.5, 1.4, 10.8, 1.4, 0, C.steelGalv);
+    addLight(loader.e, loader.n, baseG, deckLift + 23.2, 0.85, C.lightRed);
+    addLight(bE, bN, baseG, deckLift + 19.0, 0.8, C.lightFlood);
 
-    buildDolphin('north-bulk', dolphins[0], deckY + 0.5);
-    buildDolphin('north-bulk', dolphins[1], deckY + 0.5);
-    buildCatwalk('north-bulk', dolphins[0].e, dolphins[0].n, berthStart[0], berthStart[1], deckY + 0.4);
-    buildCatwalk('north-bulk', dolphins[1].e, dolphins[1].n, berthEnd[0], berthEnd[1], deckY + 0.4);
+    buildDolphin('north-bulk', dolphins[0], 4.5);
+    buildDolphin('north-bulk', dolphins[1], 4.5);
+    buildCatwalk('north-bulk', dolphins[0].e, dolphins[0].n, berthStart[0], berthStart[1], 4.5, deckLift + 0.1, sea, baseG);
+    buildCatwalk('north-bulk', dolphins[1].e, dolphins[1].n, berthEnd[0], berthEnd[1], 4.5, deckLift + 0.1, sea, baseG);
   }
 
   return { pieces, lights };
@@ -857,12 +876,17 @@ function buildCoalYardMesh(
   const pos: number[] = [], col: number[] = [];
   const [VE, VN] = village;
   for (const m of mounds) {
-    const val = (r: number, c: number) => (r >= 0 && r < m.rows && c >= 0 && c < m.cols ? m.dtmDm[r * m.cols + c] : -999);
+    const grid = new Int16Array(m.rows * m.cols).fill(-999);
+    for (const sp of m.spans) {
+      const r = sp[0], c0 = sp[1];
+      for (let i = 2; i < sp.length; i++) grid[r * m.cols + c0 + i - 2] = sp[i];
+    }
+    const val = (r: number, c: number) => (r >= 0 && r < m.rows && c >= 0 && c < m.cols ? grid[r * m.cols + c] : -999);
     const active = (r: number, c: number) => val(r, c) > -900;
     const isRim = (r: number, c: number) => !active(r - 1, c) || !active(r + 1, c) || !active(r, c - 1) || !active(r, c + 1);
     const pt = (r: number, c: number): [number, number, number] => {
       const e = m.e0 + c * m.step, n = m.n0 + r * m.step, g = val(r, c) / 10;
-      const lift = isRim(r, c) ? -0.28 : 0.88;
+      const lift = isRim(r, c) ? -0.22 : 0.14 + 0.45 * exag;
       return [e - VE, industryGround(g, exag, sea) + lift, VN - n];
     };
     const pushTri = (a: [number, number, number], b: [number, number, number], c: [number, number, number], e: number, n: number) => {
@@ -872,12 +896,12 @@ function buildCoalYardMesh(
     };
     for (let r = 0; r < m.rows - 1; r++) {
       for (let c = 0; c < m.cols - 1; c++) {
-        const a0 = active(r, c), a1 = active(r, c + 1), a2 = active(r + 1, c + 1), a3 = active(r + 1, c);
-        if (!a0 || !a1 || !a2 || !a3) continue;
+        if (!active(r, c) || !active(r, c + 1) || !active(r + 1, c + 1) || !active(r + 1, c)) continue;
         const p0 = pt(r, c), p1 = pt(r, c + 1), p2 = pt(r + 1, c + 1), p3 = pt(r + 1, c);
         const ce = m.e0 + (c + 0.5) * m.step, cn = m.n0 + (r + 0.5) * m.step;
-        pushTri(p0, p1, p2, ce, cn);
-        pushTri(p0, p2, p3, ce + 3, cn + 3);
+        // Split along p1-p3 diagonal (matching terrain ridge direction) with strictly upward (+Y) CCW winding.
+        pushTri(p0, p1, p3, ce, cn);
+        pushTri(p1, p2, p3, ce + 1, cn + 1);
       }
     }
   }

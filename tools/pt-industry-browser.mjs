@@ -106,7 +106,8 @@ for (const url of urls) {
     assert.ok(result.programs - baseline.programs <= maxProgDelta, `${name}: added WebGL shader programs (${baseline.programs} -> ${result.programs})`);
     assert.equal(result.textures - baseline.textures, 0, `${name}: added GPU texture (${baseline.textures} -> ${result.textures})`);
     const maxCalls = isNight ? 10 : 8;
-    assert.ok(callDelta >= 0 && callDelta <= maxCalls, `${name}: unexpected draw call delta ${callDelta}`);
+    assert.ok(callDelta >= 1 && callDelta <= maxCalls, `${name}: unexpected draw call delta ${callDelta} (must be 1..${maxCalls})`);
+    assert.ok(triDelta >= 1000, `${name}: unexpected triangle delta ${triDelta} (expected >= 1000 visible triangles)`);
   }
 
   const entry = {
