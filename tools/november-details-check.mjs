@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { Buildings, buildingSites } from '../web/src/buildings.ts';
 import { baxtersCoveBuildingArt, littleMabouBuildingArt, NovemberBuildings, novemberFootprints, TRAILHEAD_FENCE } from '../web/src/november-buildings.ts';
 import { BAXTERS_COVE_LOT, littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
+import { isPonyTrussBridge, PONY_TRUSS } from '../web/src/november-bridges.ts';
 import { WHARF_SOURCES } from '../web/src/wharf-source.ts';
 import { areaPlaces, nearestPlacement, placesFor } from '../web/src/places.ts';
 import { planRails, railPoint } from '../web/src/guardrail-rules.ts';
@@ -191,6 +192,47 @@ for (const {a, b, side} of added) {
     }
   }
   console.log('PASS Baxters Cove harbour lot, shed art, gambrel shed, trailhead lane, kiosk, shelter and fence');
+}
+// Little Mabou Road grey steel pony-truss bridges (Mabou pack, ids 45 and 46).
+{
+  const mabouManifest = read('terrain', 'manifest'), mabouRoads = read('terrain', 'roads');
+  const flatGround = { level: 8, heightAt: () => 2.5, surfaceAt: () => ({ ground: 2.5, level: 8, kind: 2, halfWidth: 3, roadDist: 0, canopy: 0, washboard: false }) };
+  const net = new Roads(mabouRoads, mabouManifest.village, flatGround);
+  const matched = net.roads.filter(r => isPonyTrussBridge(r, mabouManifest.village));
+  assert.deepEqual(matched.map(r => r.id).sort((a, b) => a - b), [45, 46], 'only Little Mabou Road bridges 45 and 46 match');
+  for (const r of matched) {
+    assert.ok(isPonyTrussBridge({ ...r, pts: [...r.pts].reverse() }, mabouManifest.village), `reversed span ${r.id} still matches`);
+    const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    assert.equal(net.deckHeight(mx, mz), 2.55, `bridge ${r.id} keeps exact deckHeight`);
+    const mesh = net.group.children.find(c => c.name === `pony-truss-${r.id}`);
+    assert.ok(mesh?.geometry, `bridge ${r.id} builds one pony-truss mesh`);
+    const pos = mesh.geometry.getAttribute('position'), col = mesh.geometry.getAttribute('color');
+    assert.ok(pos && col && pos.array.every(Number.isFinite), `bridge ${r.id} has finite vertex-coloured geometry`);
+    assert.ok(pos.count / 3 < 800, `bridge ${r.id} stays within triangle budget (${pos.count / 3})`);
+    let maxY = -Infinity, maxHalf = 0;
+    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+    for (let i = 0; i < pos.count; i++) {
+      const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
+      maxY = Math.max(maxY, py);
+      maxHalf = Math.max(maxHalf, Math.abs(-(px - ax) * uz + (pz - az) * ux));
+    }
+    assert.ok(maxY - 2.55 >= 2.0 && maxY - 2.55 <= 2.6, `bridge ${r.id} truss height matches pony-truss proportions (${(maxY - 2.55).toFixed(2)} m)`);
+    assert.ok(maxHalf < r.halfWidth && maxHalf >= PONY_TRUSS.half, `bridge ${r.id} is narrow one-lane (${(maxHalf * 2).toFixed(2)} m wide)`);
+  }
+  // Other Mabou bridges keep the generic modern deck.
+  const otherBridge = net.roads.find(r => r.id === 50);
+  assert.ok(otherBridge && !isPonyTrussBridge(otherBridge, mabouManifest.village), 'Mabou Harbour Road bridge stays generic');
+  assert.equal(net.deckHeight(otherBridge.pts[0][0], otherBridge.pts[0][1]), 2.55);
+  assert.ok(!net.group.children.some(c => c.name === 'pony-truss-50'));
+  for (const child of [...net.group.children]) child.geometry?.dispose();
+  // No bridge in any other area pack matches (including Highway 19 ids 45/46 in Judique and Canso Causeway).
+  for (const dir of ['areas/judique', 'areas/porthood', 'areas/pointtupper', 'areas/westbay', 'areas/cansocauseway']) {
+    const m = read(dir, 'manifest'), d = read(dir, 'roads');
+    const areaNet = new Roads(d, m.village, flatGround);
+    assert.deepEqual(areaNet.roads.filter(r => isPonyTrussBridge(r, m.village)), [], `${dir} has no Little Mabou pony truss`);
+  }
+  console.log('PASS Little Mabou Road steel pony-truss bridges (ids 45 and 46; narrow one-lane, area-scoped)');
 }
 console.log('PASS Little Mabou homes, shed and marsh rail; access and bridge exclusions');
 console.log('PASS two Highway 19 aprons both land packs, gravel driveway, hillside gravel, building batches and three view starts');

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import { eraRoadHalf } from './era';
 import { timberBridge, periodBridgePlane, prepareTimberPlans, timberPlan, timberGroundPoints } from './eras/timber-bridge';
+import { buildPonyTrussBridge, isPonyTrussBridge } from './november-bridges';
 
 export interface Road {
   id: number;
@@ -58,7 +59,7 @@ export class Roads {
   private eraBridgeHit:RoadHit|null=null;private bridgeQuery=0;
 
   constructor(data: { roads: Road[] },
-    village: [number, number], private terrain: Terrain) {
+    private readonly village: readonly [number, number], private terrain: Terrain) {
     for (const r of data.roads) {
       if (terrain.cartRoads && r.kind === 5) continue;
       const road: Road = { ...r, halfWidth: terrain.cartRoads ? eraRoadHalf(r.kind, r.halfWidth) : r.halfWidth, pts: r.pts.map(([e, n]) => [e - village[0], village[1] - n]) };
@@ -238,29 +239,38 @@ export class Roads {
     const cum = [0];
     for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
     const len = cum[n - 1] || 1, y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
-    const w = road.halfWidth + 0.9, pos: number[] = [], idx: number[] = [];
-    // Cross-section: deck top, thick sides, and a low rail on each edge.
-    const walk=this.bridgeWalks.get(road.id), left=walk && walk.side<0?Math.max(w,road.halfWidth+walk.width+.3):w, right=walk && walk.side>0?Math.max(w,road.halfWidth+walk.width+.3):w;
-    const profile: [number, number][] = [[-left, -0.9], [-left, 0.75], [-left + 0.18, 0.75], [-left + 0.18, 0], [right - 0.18, 0], [right - 0.18, 0.75], [right, 0.75], [right, -0.9]];
-    for (let i = 0; i < n; i++) {
-      const a = p[Math.max(i - 1, 0)], b = p[Math.min(i + 1, n - 1)];
-      const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-      const nx = -(b[1] - a[1]) / d, nz = (b[0] - a[0]) / d;
-      const y = y0 + (y1 - y0) * (cum[i] / len);
-      for (const [u, v] of profile) pos.push(p[i][0] + nx * u, y + v, p[i][1] + nz * u);
-      if (i < n - 1) for (let k = 0; k < profile.length - 1; k++) {
-        const q = i * profile.length + k;
-        idx.push(q, q + 1, q + profile.length, q + 1, q + profile.length + 1, q + profile.length);
+    let mesh: THREE.Mesh;
+    if (isPonyTrussBridge(road, this.village)) {
+      const geo = buildPonyTrussBridge(p, y0, y1, len);
+      this.periodMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      mesh = new THREE.Mesh(geo, this.periodMat);
+      mesh.name = 'pony-truss-' + road.id;
+      mesh.castShadow = mesh.receiveShadow = true;
+    } else {
+      const w = road.halfWidth + 0.9, pos: number[] = [], idx: number[] = [];
+      // Cross-section: deck top, thick sides, and a low rail on each edge.
+      const walk=this.bridgeWalks.get(road.id), left=walk && walk.side<0?Math.max(w,road.halfWidth+walk.width+.3):w, right=walk && walk.side>0?Math.max(w,road.halfWidth+walk.width+.3):w;
+      const profile: [number, number][] = [[-left, -0.9], [-left, 0.75], [-left + 0.18, 0.75], [-left + 0.18, 0], [right - 0.18, 0], [right - 0.18, 0.75], [right, 0.75], [right, -0.9]];
+      for (let i = 0; i < n; i++) {
+        const a = p[Math.max(i - 1, 0)], b = p[Math.min(i + 1, n - 1)];
+        const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const nx = -(b[1] - a[1]) / d, nz = (b[0] - a[0]) / d;
+        const y = y0 + (y1 - y0) * (cum[i] / len);
+        for (const [u, v] of profile) pos.push(p[i][0] + nx * u, y + v, p[i][1] + nz * u);
+        if (i < n - 1) for (let k = 0; k < profile.length - 1; k++) {
+          const q = i * profile.length + k;
+          idx.push(q, q + 1, q + profile.length, q + 1, q + profile.length + 1, q + profile.length);
+        }
       }
+      const shared = new THREE.BufferGeometry();
+      shared.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      shared.setIndex(idx);
+      // Flat faces: with shared corners the thin rails took the average of up and sideways, and went dark.
+      const geo = shared.toNonIndexed();
+      shared.dispose();
+      geo.computeVertexNormals();
+      mesh = new THREE.Mesh(geo, road.kind >= 4 ? this.timberMat : this.deckMat);
     }
-    const shared = new THREE.BufferGeometry();
-    shared.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    shared.setIndex(idx);
-    // Flat faces: with shared corners the thin rails took the average of up and sideways, and went dark.
-    const geo = shared.toNonIndexed();
-    shared.dispose();
-    geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, road.kind >= 4 ? this.timberMat : this.deckMat);
     this.group.add(mesh);
     const deck: Deck = { road, y0, y1, len, cum, mesh, level };
     this.decks.set(road.id, deck);
