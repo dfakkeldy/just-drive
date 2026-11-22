@@ -319,6 +319,22 @@ for (const rideKind of RIDES) {
     };
     assert.equal(hGuard.place(hGuard.x, hGuard.z, hGuard.heading), true, 'horse recovery rejects guard-shifted missing-surface deck and finds earlier dry fallback');
     assert.ok(guardShiftedHorse === 1 && partialTerrain.surfaceAt(hGuard.x, hGuard.z) !== null && hGuard.x < 40, `horse skipped shifted candidate to dry fallback: x=${hGuard.x} shifted=${guardShiftedHorse}`);
+
+    // Rejected map-edge clamped placement falls through to respawn() dry fallback (never strands with desynced model).
+    const edgeTerrain = makeTerrain((x, z) => (x > 100
+      ? null
+      : { ground: 6, canopy: 0, roadDist: Math.abs(z), halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+    const hEdge = makeRide('horse', edgeTerrain, makeRoads(-100, 100));
+    hEdge.bounds = [-100, -100, 100, 100];
+    assert.equal(hEdge.place(20, 0, Math.PI / 2), true);
+    hEdge.x = 105;
+    hEdge.placementGuard = (pose) => {
+      if (Math.abs(pose.x - 100) < 1) { pose.x = 105; }
+      return true;
+    };
+    assert.equal(hEdge.place(105, 0, Math.PI / 2), true, 'horse falls through to respawn() when clamped edge placement is shifted off-map by guard');
+    assert.ok(edgeTerrain.surfaceAt(hEdge.x, hEdge.z) !== null && hEdge.x < 99, `horse recovered to dry fallback after edge rejection: x=${hEdge.x}`);
+    assert.ok(Math.abs(hEdge.car.root.position.x - hEdge.x) < 1e-3, `horse model synced after edge recovery: modelX=${hEdge.car.root.position.x} x=${hEdge.x}`);
   } else if (rideKind === 'bike') {
     let surfaceLost = false;
     const synthTerrain = {
@@ -355,6 +371,22 @@ for (const rideKind of RIDES) {
     };
     assert.equal(bGuard.place(bGuard.x, bGuard.z, bGuard.heading), true, 'bike recovery rejects guard-shifted missing-surface tile and finds earlier dry fallback');
     assert.ok(guardShiftedBike === 1 && bikePartial.surfaceAt(bGuard.x, bGuard.z) !== null && bGuard.x < 40, `bike skipped shifted candidate to dry fallback: x=${bGuard.x} shifted=${guardShiftedBike}`);
+
+    // Rejected map-edge clamped placement on bike falls through to respawn() dry fallback with synced model.
+    const bikeEdgeTerrain = makeTerrain((x, z) => (x > 100
+      ? null
+      : { ground: 6, canopy: 0, roadDist: Math.abs(z), halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+    const bEdge = makeRide('bike', bikeEdgeTerrain, makeRoads(-100, 100));
+    bEdge.bounds = [-100, -100, 100, 100];
+    assert.equal(bEdge.place(20, 0, Math.PI / 2), true);
+    bEdge.x = 105;
+    bEdge.placementGuard = (pose) => {
+      if (Math.abs(pose.x - 100) < 1) { pose.x = 105; }
+      return true;
+    };
+    assert.equal(bEdge.place(105, 0, Math.PI / 2), true, 'bike falls through to respawn() when clamped edge placement is shifted off-map by guard');
+    assert.ok(bikeEdgeTerrain.surfaceAt(bEdge.x, bEdge.z) !== null && bEdge.x < 99, `bike recovered to dry fallback after edge rejection: x=${bEdge.x}`);
+    assert.ok(Math.abs(bEdge.car.root.position.x - bEdge.x) < 1e-3, `bike model synced after edge recovery: modelX=${bEdge.car.root.position.x} x=${bEdge.x}`);
   }
 
   // 4c. Narrow missing strip into a 20 m rising bank: every ride (including horse) crosses onto the 20 m bank and stays above ground.

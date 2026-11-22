@@ -134,9 +134,10 @@ export class Vehicle {
         if (this.bounds) {
           this.clampBounds();
           const clampedG = this.groundAt(this.x, this.z);
-          if (this.terrain.surfaceAt(this.x, this.z) && clampedG !== null && this.isDryPose(this.x, this.z, clampedG)) return this.place(this.x, this.z, this.heading);
+          if (this.terrain.surfaceAt(this.x, this.z) && clampedG !== null && this.isDryPose(this.x, this.z, clampedG) && this.place(this.x, this.z, this.heading)) return true;
         }
         this.respawn();
+        this.sync(0);
         return this.terrain.surfaceAt(this.x, this.z) !== null;
       } finally {
         this.#recovering = false;

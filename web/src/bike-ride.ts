@@ -99,8 +99,9 @@ export class BikeRide implements Ride {
       this.#recovering = true;
       try {
         this.wall();
-        if (this.terrain.surfaceAt(this.x, this.z) && this.isDryPose(this.x, this.z)) return this.place(this.x, this.z, this.heading);
+        if (this.terrain.surfaceAt(this.x, this.z) && this.isDryPose(this.x, this.z) && this.place(this.x, this.z, this.heading)) return true;
         this.respawn();
+        this.sync(0);
         return this.terrain.surfaceAt(this.x, this.z) !== null;
       } finally {
         this.#recovering = false;
