@@ -30,10 +30,14 @@ try {
   await read(`for(const [side,value] of Object.entries({top:59,bottom:34,left:0,right:0}))document.documentElement.style.setProperty('--test-safe-'+side,value+'px');document.getElementById('gear').click();true`);
   await sleep(300);const phone=await read(`(${bounds})()`);assert.ok(phone.panel.bottom<=810&&phone.last.bottom<=818);receipts.push({name:'phone panel',...phone});
   await read('document.getElementById("settings").scrollTop=0');await shot('phone-panel-public');
-  // Fly hides the touch pad and removes tcOn. The same panel must remain scrollable and onscreen.
-  await read(`document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyF',key:'f',bubbles:true}));document.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyF',key:'f',bubbles:true}));true`);await sleep(400);
+  // Fly hides the touch pad and removes tcOn; Settings pauses keys, so close it to enter fly, then reopen it there.
+  await read(`document.getElementById('gear').click();document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyF',key:'f',bubbles:true}));document.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyF',key:'f',bubbles:true}));true`);
+  await until('!document.body.classList.contains("tcOn")');
+  await read(`document.getElementById('gear').click();true`);await sleep(300);
   const fly=await read(`(${bounds})()`);assert.equal(fly.tcOn,false);assert.ok(fly.panel.bottom<=818&&fly.last.bottom<=818);receipts.push({name:'phone pad hidden in fly',...fly});
-  await read(`document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyF',key:'f',bubbles:true}));document.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyF',key:'f',bubbles:true}));true`);await sleep(300);
+  await read(`document.getElementById('gear').click();document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyF',key:'f',bubbles:true}));document.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyF',key:'f',bubbles:true}));true`);
+  await until('document.body.classList.contains("tcOn")');
+  await read(`document.getElementById('gear').click();true`);await sleep(300);
   // Leave at the current place, removing only the study controls and preserving the PLAYER placement.
   const beforeLeave=await read('new URLSearchParams(location.search).get("driveAt")');
   await read('document.querySelector("#lightStudy .lightLeave").click();true');await sleep(700);const left=await playerState('Leave study reload');
