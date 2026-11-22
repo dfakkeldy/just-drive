@@ -322,3 +322,4 @@ ride-along-budget-low	unproven	no	apple-check-host M4 / Edge 157 PASS 27 s on th
 drag-rules	portable	yes	Node timing and runway data in source
 drag-rules-mutations	portable	yes	Node mutation controls, source only
 airport-drag-browser	unproven	no	Hardware WebGL, Point Tupper land and live input
+drlane-browser	unproven	no	not yet measured on another host
