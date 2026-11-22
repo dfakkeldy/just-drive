@@ -330,7 +330,7 @@ def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None)
     if check_source is None and report is None and CHECK_SOURCE.exists():
         check_source = json.loads(CHECK_SOURCE.read_text())
     matches = lambda h: h == cached or (check_source is not None and previous_digest(check_source, file, h) == cached)
-    reports = [report] if report else [json.loads(p.read_text()) for p in (COMM1347, NOV19, NOV18) if p.exists()]
+    reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, COMM1347, NOV18) if p.exists()]
     manifest = None
     for current in reports:
         before = previous_digest(current, file.removeprefix('data/baked/'), digest, cached=cached) if file.startswith('data/baked/') else None

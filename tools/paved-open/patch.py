@@ -124,7 +124,10 @@ def refresh_delta():
 def before_file(name, digest, later):
     """Walk back exact file pins through later receipts, newest first."""
     for report in reversed(later):
-        for f in report['files']:
+        entries = list(report['files'])
+        for variant in ('roadBed', 'communityMailboxes'):
+            entries = list(report.get(variant, {}).get('files', ())) + entries
+        for f in entries:
             if name == f['file'] and digest == f['sha256']:
                 digest = f['before']
                 break

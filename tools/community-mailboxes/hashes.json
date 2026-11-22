@@ -33,5 +33,28 @@
         }
       }
     }
-  ]
+  ],
+  "undo": {
+    "removedMailbox": {
+      "index": 217,
+      "record": {
+        "x": 620373.003,
+        "y": 5102360.258,
+        "heading": 223.69,
+        "style": 5,
+        "tilt": 3.99,
+        "group": null,
+        "parcelBox": false
+      }
+    },
+    "addedCommunityBox": {
+      "index": 6,
+      "record": {
+        "x": 620353.154,
+        "y": 5102379.869,
+        "heading": 222.28,
+        "modules": 4
+      }
+    }
+  }
 }

@@ -316,8 +316,9 @@ def owned_counts(manifest):
 # before the 18 Nov promotion), not here.
 VILLAGE = ROOT/'tools/mabou-village-delta/hashes.json'
 NOV18 = ROOT/'tools/mabou-dashcam-18nov/hashes.json'
+COMM1347 = ROOT/'tools/community-mailboxes/hashes.json'
 NOV19 = ROOT/'tools/mabou-wharf/roads.json'
-LATER = (VILLAGE, NOV18, NOV19)
+LATER = (VILLAGE, NOV18, COMM1347, NOV19)
 
 
 def superseded(root, entries, hashes, later=LATER):
@@ -335,7 +336,7 @@ def superseded(root, entries, hashes, later=LATER):
                 names[name].append(path)
         for m in report['manifests']:
             name = m['folder']+'/manifest.json'
-            if name in owned and owned[name] == {k: m['after'][k]['count'] for k in owned[name] if k in m['after']} | {k: v for k, v in owned[name].items() if k not in m['after']}:
+            if name in owned and any(k in m['after'] for k in owned[name]) and owned[name] == {k: m['after'][k]['count'] for k in owned[name] if k in m['after']} | {k: v for k, v in owned[name].items() if k not in m['after']}:
                 owned[name] = {k: (m['before'][k]['count'] if k in m['before'] else v) for k, v in owned[name].items()}
                 names[name].append(path)
     for name in names:
@@ -347,19 +348,29 @@ def superseded(root, entries, hashes, later=LATER):
 
 
 def step29_view(root, name, later):
-    """A props file and its roads as step 29 left them: the 18 Nov bake moved poles onto a split piece and paved
-    Weaver Lane, so its receipt's undo is applied when that bake replaced this file."""
+    """A props file and its roads as step 29 left them: later Mabou deltas (wharf, community mailboxes, 18 Nov)
+    each have an exact undo that rebuilds their before props byte for byte."""
     props = json.loads((root/name).read_bytes())
     roads = json.loads((root/Path(name).with_name('roads.json')).read_bytes())['roads']
-    if NOV18 in later.get(name, ()) or NOV19 in later.get(name, ()):
+    applied = later.get(name, ())
+    if any(p in applied for p in (NOV19, COMM1347, NOV18)):
         spec = importlib.util.spec_from_file_location('nov18_receipt', ROOT/'tools/mabou-dashcam-18nov/receipt.py')
         receipt = importlib.util.module_from_spec(spec); spec.loader.exec_module(receipt)
-        for path in (NOV19, NOV18):
-            if path not in later.get(name, ()):
+        comm_receipt = None
+        if COMM1347 in applied:
+            cspec = importlib.util.spec_from_file_location('comm_receipt', ROOT/'tools/community-mailboxes/receipt.py')
+            comm_receipt = importlib.util.module_from_spec(cspec); cspec.loader.exec_module(comm_receipt)
+        for path in (NOV19, COMM1347, NOV18):
+            if path not in applied:
                 continue
             report = json.loads(path.read_text())
-            props, roads = receipt.undo(props, roads, report['undo'])
-            before = next(f['before'] for f in report['files'] if f['file'] == name)
+            current_sha = hashlib.sha256(receipt.compact(props)).hexdigest()
+            before = previous_digest(report, name, current_sha)
+            assert before is not None, f'{name}: {path.parent.name} undo did not match a pinned after digest'
+            if path == COMM1347:
+                props = comm_receipt.undo(props, report['undo'])
+            else:
+                props, roads = receipt.undo(props, roads, report['undo'])
             assert hashlib.sha256(receipt.compact(props)).hexdigest() == before, f'{name}: {path.parent.name} undo did not rebuild before props'
     return props, roads
 

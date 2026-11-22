@@ -333,8 +333,8 @@ def fixture():
 def land(baked):
     fixture()
     report = json.loads(RECEIPT.read_text())
-    followups = [json.loads(p.read_text()) for p in (HERE.parent / 'mabou-wharf' / 'roads.json',
-                 HERE.parent / 'community-mailboxes' / 'hashes.json') if p.exists()]
+    followups = [json.loads(p.read_text()) for p in (HERE.parent / 'community-mailboxes' / 'hashes.json',
+                 HERE.parent / 'mabou-wharf' / 'roads.json') if p.exists()]
     companion = target(baked, PRE_BED)
     bed = report['roadBed']
     repaired = companion.is_file() and sha(companion.read_bytes()) == bed['companion']['sha256']
