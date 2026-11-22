@@ -14,7 +14,6 @@ export interface HudState {
   stuntLine?:string;
   /** The drone's readout while it flies (empty for the free camera of the fixed views). */
   drone?: string;
-  /** Optional help line for standalone drone mode (defaults to the car-launched drone line). */
   /** A controller's help line (controls.ts padHelp), while a controller is the device used last. Desktop only. */
   padHelp?: string;
 }

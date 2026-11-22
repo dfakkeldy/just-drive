@@ -115,6 +115,7 @@ const PROBE_EXPR = `(x, z) => {
     labels: [...document.querySelectorAll('#vehicleChoice button')].map(b => b.textContent),
     kinds: [...document.querySelectorAll('#vehicleChoice button')].map(b => b.dataset.vehicle),
     hasDrone: !!document.querySelector('#vehicleChoice [data-vehicle="drone"]'),
+    room: !!document.querySelector('#titleCard .mpControl'),
   })`);
   check(JSON.stringify(picker.kinds) === JSON.stringify(['car', 'bike', 'drone']) && JSON.stringify(picker.labels) === JSON.stringify(['Car', 'Dirt bike', 'Drone']),
     'desktop Just Drive title card offers Car, Dirt bike, Drone: ' + JSON.stringify(picker.labels));
@@ -129,7 +130,8 @@ const PROBE_EXPR = `(x, z) => {
     stored: localStorage.getItem('mmm.vehicle'),
     pressed: document.querySelector('#vehicleChoice [data-vehicle="drone"]')?.getAttribute('aria-pressed'),
     startLabel: document.getElementById('titleStart')?.textContent,
-    keysText: document.querySelector('#title dl')?.textContent ?? '',
+    keysText: document.getElementById('titleControls')?.textContent ?? '',
+    room: !!document.querySelector('#titleCard .mpControl'),
     active: mmm.drone.active,
     free: mmm.drone.free,
     carInScene: mmm.scene.children.includes(mmm.vehicle.car.root),
@@ -146,6 +148,7 @@ const PROBE_EXPR = `(x, z) => {
     'selecting Drone switches to standalone drone vehicle: ' + JSON.stringify({ vehicleId: titleState.vehicleId, stored: titleState.stored, pressed: titleState.pressed }));
   check(titleState.startLabel === 'Start flying' && titleState.keysText.includes('W A S D') && titleState.keysText.includes('nearest road') && titleState.noOverlap,
     'title card shows drone controls and Start flying without overlap');
+  check(picker.room && !titleState.room, 'the car title card offers a room, the standalone drone title card does not: ' + JSON.stringify({ car: picker.room, drone: titleState.room }));
   check(titleState.active && titleState.free && !titleState.carInScene && titleState.engineSound === null,
     'standalone drone starts active and free, with no car mesh or engine sound');
 
@@ -155,7 +158,9 @@ const PROBE_EXPR = `(x, z) => {
   await sleep(500);
 
   // Verify HUD text & no car physics (driveVehicle never called during normal flight).
-  await p.read(`(() => { const orig = mmm.driveVehicle; window.__driveCalls = 0; mmm.driveVehicle = (...a) => { window.__driveCalls++; return orig(...a); }; })()`);
+  // Wrap the player's own car physics step on the instance: main.ts calls vehicle.update directly, so wrapping an exposed
+  // function would not catch it.
+  await p.read(`(() => { const v = mmm.vehicle, orig = v.update.bind(v); window.__driveCalls = 0; v.update = (...a) => { window.__driveCalls++; return orig(...a); }; })()`);
   await p.hold('Space', 1000);
   await p.hold('KeyW', 1200);
   await sleep(600);
@@ -216,8 +221,8 @@ const PROBE_EXPR = `(x, z) => {
   const afterRoof = await p.read(`({ y: mmm.drone.state.y, ground: mmm.terrain.surfaceAt(${distantBuilding.wx}, ${distantBuilding.wz})?.ground ?? null, height: mmm.drone.height })`);
   const expectedRoofTop = -0.2 + (distantBuilding.ground - (-0.2)) * 1.5 + distantBuilding.h;
   const expectedFloor = expectedRoofTop + 2;
-  check(afterRoof.y >= expectedFloor - 1.6 && afterRoof.y > (afterRoof.ground ?? 0) + 5,
-    `distant roof floor (${(distantBuilding.dist / 1000).toFixed(2)} km from village, roof +${distantBuilding.h.toFixed(1)} m): y=${afterRoof.y.toFixed(1)} >= floor ${(expectedFloor - 1.6).toFixed(1)}, ground=${afterRoof.ground?.toFixed(1)}`);
+  check(afterRoof.y >= expectedFloor - 1.6 && afterRoof.y <= expectedFloor + 3 && afterRoof.y > (afterRoof.ground ?? 0) + 5,
+    `distant roof floor (${(distantBuilding.dist / 1000).toFixed(2)} km from village, roof +${distantBuilding.h.toFixed(1)} m): y=${afterRoof.y.toFixed(1)} within floor ${(expectedFloor - 1.6).toFixed(1)}..${(expectedFloor + 3).toFixed(1)}, ground=${afterRoof.ground?.toFixed(1)}`);
 
   // R puts the drone back on the nearest road.
   await p.read(`(() => { const s = mmm.drone.state; const hit = mmm.roads.nearest(s.x, s.z, 500); if (hit) { s.x = hit.x + 90; s.z = hit.z + 90; s.vx = 10; } })()`);
@@ -322,6 +327,13 @@ const PROBE_EXPR = `(x, z) => {
   const savedMail = await p.read(`({ vehicleId: mmm.vehicleId, active: mmm.drone.active, free: mmm.drone.free })`);
   check(savedMail.vehicleId === 'car' && !savedMail.active && !savedMail.free,
     'mail play ignores saved mmm.vehicle=drone: ' + JSON.stringify(savedMail));
+  // The control for the "no car physics" check: the same counter on the car does count while it drives.
+  await p.read(`document.getElementById('titleStart').click();document.activeElement?.blur()`);
+  assert.ok(await p.until(`String(document.title).startsWith('settled')`, 300000), 'mail play settled');
+  await p.read(`(() => { const v = mmm.vehicle, orig = v.update.bind(v); window.__driveCalls = 0; v.update = (...a) => { window.__driveCalls++; return orig(...a); }; })()`);
+  await sleep(1500);
+  const carCalls = await p.read('window.__driveCalls');
+  check(carCalls > 10, 'the car physics counter counts in mail play (control for the drone check): ' + carCalls);
   await p.close();
 }
 
