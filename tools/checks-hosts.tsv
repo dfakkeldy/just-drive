@@ -276,6 +276,7 @@ map-labels	portable	no	pure Node (no browser, no land); rented Mac mini (apple-c
 map-labels-mutations	portable	no	pure Node (no browser, no land); rented Mac mini (apple-check-host) PASS
 map-labels-browser	unproven	no	rented Mac mini (apple-check-host) only so far; not yet run on the MacBook or on Linux
 drone-browser	unproven	no	apple-check-host PASS on the drone-mode branch (desktop keyboard-only flight, phone portrait and landscape); not yet run on the MacBook or on Linux
+drone-vehicle-browser	unproven	no	MacBook M1 Pro / Edge 158 PASS (Just Drive desktop & phone Drone choice, excluded from mail play, 120 m ceiling, distant roof floor, R/ROAD nearest road, 5 km full-speed flight & throttled flight keeping finest ground loaded); not yet run on Linux
 painter-browser	apple	no	apple-check-host M4 PASS on e860ece0 (204 s via check-all on the tree before its last hint fix; final tree via yard-shots), 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; desktop and phone seat/chase; one draw and 384 triangles each; #1147 hint in the real HUD on desktop 1400x950 and phone 390x844 and 844x390, no control overlapped, none with scene=0, approach grade 3.9%; pictures inspected; earlier PASS on cf29cc4
 airport-browser	unproven	no	rented Mac mini (apple-check-host) run in PR #147; not yet run on the MacBook or on Linux
 fired-browser	apple	no	apple-check-host M4 Edge 157.0.4341.60 hardware Metal: PASS 199 s on b98cffb2 and 38 s on 1afdd553, 2026-11-18 UTC (desktop 1280x800, phone 390x844 LOW)
