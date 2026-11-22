@@ -115,19 +115,34 @@ for (const [name, width, height, touch] of [['desktop', 1360, 900, false], ['pho
     assert.match(before, /^\d{4}-\d{2}-\d{2}$/);
     assert.equal(await read("document.querySelector('.sunDayName').textContent"), 'Today');
     assert.equal(await read("document.querySelectorAll('.sunLabels .sunLabel:not(.hour)').length"), 4);
-    const layout = await read(`(() => {
+    const creditLayout = `(() => {
+      const box = el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, height: r.height }; };
+      const credit = box(document.getElementById('credit')), readings = box(document.querySelector('.sunReadings'));
       const inView = [...document.querySelectorAll('.sunPanel, #sunSeeker input, #sunSeeker button:not([hidden])')].every(el => {
         const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight;
       });
-      const credit = document.getElementById('credit').getBoundingClientRect();
-      const readings = document.querySelector('.sunReadings').getBoundingClientRect();
-      const labelsClearCredit = credit.height === 0 || [...document.querySelectorAll('.sunLabel:not([hidden])')].every(el => {
-        const r = el.getBoundingClientRect();
-        return r.right < credit.left || r.left > credit.right || r.bottom < credit.top || r.top > credit.bottom;
-      });
-      return inView && (credit.height === 0 || readings.bottom <= credit.top) && labelsClearCredit;
-    })()`);
-    assert.ok(layout, `${name}: controls stay in the viewport and clear the map credit`);
+      const labels = [...document.querySelectorAll('.sunLabel:not([hidden])')].map(box);
+      const clear = labels.every(r => r.right < credit.left || r.left > credit.right || r.bottom < credit.top || r.top > credit.bottom);
+      const space = document.getElementById('sunSeeker').style.getPropertyValue('--sun-credit-space');
+      return { credit, readings, inView, labels: labels.length, clear, space, above: readings.bottom <= credit.top };
+    })()`;
+    const natural = await read(creditLayout);
+    assert.ok(natural.inView, `${name}: controls stay in the viewport`);
+    if (natural.credit.height) assert.ok(natural.above && natural.clear && natural.space, `${name}: the times panel and labels clear the map credit`);
+    else assert.equal(natural.space, '', `${name}: no credit space is kept while the credit is hidden`);
+    // The credit is hidden in some views (touch pad, drone sticks). Force it on and off so both paths and the observer are tested here.
+    const setCredit = display => read(`(() => { const s = document.getElementById('credit').style; ${display ? `s.setProperty('display', '${display}', 'important')` : "s.removeProperty('display')"}; return true; })()`);
+    await setCredit('block');
+    await wait(`(() => { const r = ${creditLayout}; return r.credit.height > 0 && r.above && r.clear && r.space !== ''; })()`);
+    const shown = await read(creditLayout);
+    assert.ok(shown.inView, `${name}: controls stay in the viewport with the credit shown`);
+    await setCredit('none');
+    await wait(`(() => { const r = ${creditLayout}; return r.credit.height === 0 && r.space === ''; })()`);
+    const hidden = await read(creditLayout);
+    assert.ok(hidden.readings.bottom > shown.readings.bottom, `${name}: the times panel drops when the credit hides: ${hidden.readings.bottom} vs ${shown.readings.bottom}`);
+    await setCredit(null);
+    await wait(`(() => { const r = ${creditLayout}; return r.credit.height === ${natural.credit.height} && r.space === ${JSON.stringify(natural.space)}; })()`);
+    console.log(`PASS ${name} credit space: natural ${natural.credit.height ? 'shown' : 'hidden'}, shown ${shown.space} (${shown.labels} labels clear), hidden drops ${Math.round(hidden.readings.bottom - shown.readings.bottom)} px`);
 
     if (touch) {
       assert.equal(await read("getComputedStyle(document.querySelector('.sunArrowHint')).display"), 'none');
