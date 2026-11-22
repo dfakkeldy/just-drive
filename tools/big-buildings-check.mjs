@@ -24,6 +24,7 @@ import { HomeSite } from '../web/src/home-site.ts';
 import { Home } from '../web/src/home.ts';
 import { mineRoadEnd } from '../web/src/mine-site.ts';
 import { PorchSite } from '../web/src/porch-site.ts';
+import { DrLaneSite } from '../web/src/drlane-site.ts';
 import { QuarrySite } from '../web/src/quarry-site.ts';
 import { YardDogSite, YARD_DOG } from '../web/src/yard-dog-site.ts';
 import { YardSite } from '../web/src/yard-site.ts';
@@ -44,6 +45,7 @@ function sites(area, manifest, list, roads, landmarks, mail) {
   if (area.worksYard) { const site = new YardSite(v, 'invented'); whole.push(site.box); add('works yard', site.clear); filters.push(['works yard', (l) => Yard.buildings(l, site, v)]); }
   if (area.home) { const site = new HomeSite(v); whole.push(site.box); add('home', site.clear); filters.push(['home', (l) => Home.buildings(l, site, v)]); }
   if (area.church) { const site = new ChurchSite(v); whole.push(site.box); add('church', site.clear); filters.push(['church', (l) => site.buildings(l)]); }
+  if (area.drLane) { const box = DrLaneSite.find(list); if (box) { const site = new DrLaneSite(box, v); whole.push(site.box); add('house on D.R.\'s Lane', site.clear); } }
   if (area.id === 'judique') { const site = new JudiqueVillageSite(v); add('Judique village', site.clear); filters.push(['Judique village', (l) => site.buildings(l)]); }
   if (area.id === 'porthood') { add('Maryville tractor dealership', new MaryvilleStoreSite(v).clear); add('Port Hood Mail Depot', new DepotSite(v).clear); }
   if (area.id === 'pointtupper') { const site = new PortHawkesburySite(v); add('Port Hawkesbury', site.clear); filters.push(['Port Hawkesbury', (l) => site.buildings(l)]); }
@@ -82,7 +84,7 @@ assert.ok(source('mine-site.ts').includes('offset = p.halfWidth + 18') && source
 // Every site file that the game has is one that this check knows. A new hand-built site must be added above.
 // airport-site.ts only paints the baked ground and pushes no clear box: it removes no building, so it has no zone.
 {
-  const known = ['airport-site.ts', 'church-site.ts', 'coast-site.ts', 'depot-site.ts', 'fishing-site.ts', 'home-site.ts', 'judique-village-site.ts', 'mabou-main-site.ts', 'maryville-store-site.ts', 'mine-site.ts', 'porch-site.ts', 'port-hawkesbury-site.ts', 'quarry-site.ts', 'yard-dog-site.ts', 'yard-site.ts'];
+  const known = ['airport-site.ts', 'church-site.ts', 'coast-site.ts', 'depot-site.ts', 'drlane-site.ts', 'fishing-site.ts', 'home-site.ts', 'judique-village-site.ts', 'mabou-main-site.ts', 'maryville-store-site.ts', 'mine-site.ts', 'porch-site.ts', 'port-hawkesbury-site.ts', 'quarry-site.ts', 'yard-dog-site.ts', 'yard-site.ts'];
   const found = fs.readdirSync(`${root}/web/src`).filter((name) => /-site\.ts$/.test(name)).sort();
   assert.deepEqual(found, known, 'a hand-built site was added or removed: teach tools/big-buildings-check.mjs its zones');
 }

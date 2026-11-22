@@ -28,7 +28,7 @@ const boundary=make([pole(255,0),pole(257,0,1)],[{...drop,x:250},{...drop,buildi
 assert.equal(lines(boundary).length,2,'two cells still have only one merged wire draw each');
 terrain.surfaceAt=()=>({level:5});const pending=make();tick(pending);assert.equal(lines(pending).length,0,'no wire on coarse/unavailable ground');
 terrain.surfaceAt=()=>({level:8});tick(pending);assert.equal(lines(pending).length,1,'wire appears with local ground');
-// Church uses its model-origin terrain, rather than the removed survey envelope's datum.
+// A drop with no surveyed datum (the church drop in packs from before 21 Nov 2026) uses its model-origin terrain.
 const church=make([pole(0,0)],[{...drop,ground:null,groundX:10,groundY:10}]);tick(church);
 assert.equal(Array.from(lines(church)[0].geometry.attributes.position.array).at(-2),34);
 // A split that kept the old road's pole numbers (18 Nov pavement limit) stays one wired line over the cut;
@@ -48,7 +48,7 @@ if(process.argv.includes('--delta')){
   const data=JSON.parse(readFileSync(`${root}/${relative}/props.json`));
   const land=new Props(data,[0,0],terrain);
   assert.equal(land.data.serviceDrops.length,data.serviceDrops.length);
-  if(relative==='areas/judique')assert.ok(data.serviceDrops.some(d=>d.building===-1),'Judique church has a real drop');
+  assert.ok(!data.serviceDrops.some(d=>d.building===-1),'the church has no power (21 Nov 2026)');
  }
 }
 console.log('PASS merged-cell wires, sag/endpoints, roof datum, stable updates/disposal, LOW/desktop, quiet-site references, cell boundary and legacy data');

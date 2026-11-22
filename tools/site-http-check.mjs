@@ -7,13 +7,13 @@ import {AREAS} from '../web/src/area.ts';
 const [base,site,out]=process.argv.slice(2),table=[];
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const request=(host,path,extra={})=>new Promise((resolve,reject)=>{http.get(base+path,{headers:{Host:host,...extra}},response=>{const chunks=[];response.on('data',b=>chunks.push(b));response.on('end',()=>resolve({status:response.statusCode,headers:response.headers,body:Buffer.concat(chunks)}));}).on('error',reject);});
-const paths=['/sugar-camp-quarry','/','/mabou','/mabou/','/mabou-1884','/mabou-1884/','/mabou-1885','/mabou-1884/x','/judique-1884','/judique-1884/','/judique','/nowhere','/?area=judique','/?utm_source=x','/app.js','/sw.js','/mp/v1/mabou/world','/about','/about/','/help','/help/'];
+const paths=['/sugar-camp-quarry','/','/mabou','/mabou/','/mabou-1884','/mabou-1884/','/mabou-1885','/mabou-1884/x','/judique-1884','/judique-1884/','/judique','/nowhere','/?area=judique','/?utm_source=x','/app.js','/sw.js','/version.json','/version-just.json','/mp/v1/mabou/world','/about','/about/','/help','/help/'];
 for(const host of ['mmm.fakkeldy.ca','justdrive.fakkeldy.ca','localhost'])for(const path of [...paths,...(host==='justdrive.fakkeldy.ca'?AREAS.map(a=>'/'+a.id):[])]){
  const asked=path+(host==='localhost'?(path.includes('?')?'&':'?')+'site=just':'');const r=await request(host,asked),just=host!=='mmm.fakkeldy.ca',u=new URL(path,'https://example.test');
  let expected=200,asset;
  if(/^\/(about|help)$/.test(u.pathname))asset=site+u.pathname+'/'+(just?'just':'mail')+'/index.html';
  else if(/^\/(about|help)\/$/.test(u.pathname))expected=308;
- else if(u.pathname==='/app.js'||u.pathname==='/sw.js')asset=site+u.pathname;
+ else if(['/app.js','/sw.js','/version.json','/version-just.json'].includes(u.pathname))asset=site+u.pathname;
  else if(u.pathname.startsWith('/mp/'))expected=426;
  else if(!just){if(u.pathname==='/')asset=site+'/index.html';else expected=404;}
  else if(['/mabou/','/mabou-1884/','/judique-1884/'].includes(u.pathname))expected=308;
@@ -24,6 +24,8 @@ for(const host of ['mmm.fakkeldy.ca','justdrive.fakkeldy.ca','localhost'])for(co
  else if(u.pathname==='/')asset=site+'/just/home/index.html';
  else {const id=u.pathname.split('/').filter(Boolean)[0]?.toLowerCase()??'mabou',area=AREAS.find(a=>a.id===id);asset=site+'/just/'+(area?.id??'unknown')+'/index.html';if(!area)expected=404;}
  assert.equal(r.status,expected,host+asked);
+ if (u.pathname==='/app.js') assert.equal(r.headers['cache-control'],'no-cache','unhashed app must revalidate');
+ if (u.pathname.startsWith('/version')) assert.equal(r.headers['cache-control'],'no-store','version must be fresh');
  if(asset){let expected=readFileSync(asset);if(host==='localhost'&&['/','/nowhere','/mabou-1885'].includes(u.pathname))expected=Buffer.from(expected.toString().replace(/(<a\b[^>]*href="\/[^"?]+)(")/g,'$1?site=just$2'));assert.equal(sha(r.body),sha(expected),host+asked+' asset bytes');}
  if(!just && expected===404)assert.equal(r.body.length,0,'mail empty 404 unchanged');
  if(expected===308)assert.equal(r.headers.location,u.pathname==='/'?`http://${host}/mabou${u.search}${host==='localhost'?'&site=just':''}`:`http://${host}${u.pathname.slice(0,-1)}${host==='localhost'?'?site=just':''}`);
@@ -53,4 +55,9 @@ for(const [path,want] of [['/nowhere',404],['/mabou',304],['/mabou-1884',304],['
  if(want===404){assert.equal(sha(again.body),sha(first.body),'conditional 404 keeps its page');assert.match(again.body.toString(),/href="\/mabou"/);}
  else assert.equal(again.body.length,0);
 }
+// A changed published script must not reuse the old body's validator.
+const app=await request('mmm.fakkeldy.ca','/app.js');
+assert.ok(app.headers.etag,'app validator exists');
+assert.equal((await request('mmm.fakkeldy.ca','/app.js',{'If-None-Match':'"previous-build"'})).status,200);
+assert.equal((await request('mmm.fakkeldy.ca','/app.js',{'If-None-Match':app.headers.etag})).status,304);
 if(out)writeFileSync(out,JSON.stringify(table,null,2));console.table(table.map(({host,path,status,title,cache,location})=>({host,path,status,title,cache,location})));console.log('PASS both hosts and localhost override: pages, no-script metadata, unchanged mail/asset bytes, path-only root, canonical redirect, repeat visits and multiplayer');

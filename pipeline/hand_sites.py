@@ -52,7 +52,7 @@ def records(root):
 # The ground-class bake keeps the old ground under every hand-built site, including those
 # added after the paved layer (its list above is unchanged). Many-box sites are one union.
 GROUND_SITES = ('yard','home','church','porch','fishing','coast','quarry','mine',
-                'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store','depot')
+                'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store','drlane','depot')
 
 
 def ground_records(root):
