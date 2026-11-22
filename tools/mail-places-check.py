@@ -364,9 +364,31 @@ def check_bake_reads_the_lines():
         assert roads.count(needle) == 1, f'23_bake_roads.py: {what}'
 
 
+def check_community_sites():
+    # 20 Nov dash-cam community mailbox groups (grok-bots#1347): Mabou hall (4 units), Port Hood junction (uncounted),
+    # and Judique's existing 10-cabinet bank in web/src/judique-village-site.ts (no duplicate in community_sites).
+    import areas, math, re
+    mabou = areas.AREAS['mabou'].community_sites
+    assert len(mabou) == 7 and mabou[0]['modules'] == 2
+    assert mabou[3] == dict(exact=(624896.85, 5103595.12), heading=70.0, modules=4, flush=True)
+    hall = mabou[6]
+    assert hall['road'] == 'Little Mabou Road' and hall['toward'] == 'same' and hall['modules'] == 4
+    assert math.hypot(hall['point'][0] - 620347, hall['point'][1] - 5102381) < 10
+    porthood = areas.AREAS['porthood'].community_sites
+    assert len(porthood) == 1
+    jct = porthood[0]
+    assert jct['road'] == 'Little Mabou Road' and jct['toward'] == 'same' and 'modules' not in jct
+    assert math.hypot(jct['point'][0] - 613341, jct['point'][1] - 5098861) < 1
+    assert areas.AREAS['judique'].community_sites == (), 'Judique keeps its hand-built mailbox bank in judique-village-site.ts'
+    jv = open(os.path.join(ROOT, 'web', 'src', 'judique-village-site.ts')).read()
+    m_pos = re.search(r'mailboxes:\s*\[\s*([\d.]+)\s*,\s*([\d.]+)\s*\]', jv)
+    m_cnt = re.search(r'export const MAILBOX_CABINETS\s*=\s*(\d+)', jv)
+    assert m_pos and m_cnt and int(m_cnt[1]) == 10 and math.hypot(float(m_pos[1]) - 617120, float(m_pos[2]) - 5081510) < 40
+
+
 def main():
     global P, RG
-    for check in CHECKS + [check_bake_reads_the_lines]:
+    for check in CHECKS + [check_bake_reads_the_lines, check_community_sites]:
         check()
         print(f'PASS {check.__name__}')
     real = P, RG
@@ -387,7 +409,7 @@ def main():
                 sys.exit(1)
         finally:
             P, RG = real
-    print(f'mail-places: {len(CHECKS) + 1} rules and {len(MUTATIONS)} mutations')
+    print(f'mail-places: {len(CHECKS) + 2} rules and {len(MUTATIONS)} mutations')
 
 
 if __name__ == '__main__':
