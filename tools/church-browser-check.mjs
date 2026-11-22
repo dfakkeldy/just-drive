@@ -16,7 +16,7 @@ for(const url of urls){
   if(new URL(url).searchParams.get('area')==='judique'){
    for(let i=0;i<120&&!await page.read('mmm.church?.triangles>0');i++)await sleep(500);
    const state=await page.read(`(()=>{const c=mmm.church,o=c.site.origin;let meshes=0,triangles=0;c.group.traverse(m=>{if(m.isMesh){meshes++;triangles+=m.geometry.attributes.position.count/3;}});return {meshes,triangles,base:c.group.position.y,ground:mmm.terrain.heightAt(o.x,o.z),scale:c.group.scale.toArray(),yaw:c.group.rotation.y,solids:c.site.solids.length};})()`);
-   assert.equal(state.meshes,3);assert.ok(state.triangles>3000);assert.ok(Math.abs(state.base-state.ground)<.001);assert.deepEqual(state.scale,[.66,.66,.66]);assert.equal(state.solids,5);
+   assert.equal(state.meshes,3);assert.ok(state.triangles>3000);assert.ok(Math.abs(state.base-state.ground)<.001);assert.deepEqual(state.scale,[1,1,1]);assert.equal(state.solids,9);   // metres since the scan; nave, tower, vestry, steps, ramp, landing, monument, wayside cross, boulder
    // The replacement box cannot remain in the generated building list.
    assert.equal(await page.read('mmm.church.site.buildings([{id:9009,x:630844.2,y:5080637.2},{id:9,x:630864.2,y:5080637.2}]).length'),1);
    const contacts=await page.read(`(()=>{const c=mmm.church,v=mmm.vehicle,saved={x:v.x,z:v.z,heading:v.heading,vx:v.vx,vz:v.vz,speed:v.speed};let tested=0;try{for(const solid of c.site.solids.slice(0,3)){Object.assign(v,{x:solid.x,z:solid.z,vx:0,vz:0,speed:0});c.resolveSolids(v);if(Math.hypot(v.x-solid.x,v.z-solid.z)<.3)throw Error('church did not block real vehicle');tested++;}}finally{Object.assign(v,saved);}return tested;})()`);

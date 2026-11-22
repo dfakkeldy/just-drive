@@ -62,12 +62,14 @@ for(const e of ROAD_EDGES){
  const on=cem.some(c=>c.wall.some(line=>line.some((p,i)=>i>0&&distance(e.a,nearestPoint(e.a,line[i-1],p))<0.05&&distance(e.b,nearestPoint(e.b,line[i-1],p))<0.05)));
  assert.ok(on,`road edge ${e.kind} lies on a baked wall line`);
  const hw=roads.find(r=>r.id===39);
- for(const p of [e.a,e.b])assert.ok(hw.pts.slice(1).some((q,i)=>distance(p,nearestPoint(p,hw.pts[i],q))<20),'edge faces Highway 19');
+ // A lane entry (church-check.mjs proves its lane crosses it) is not on the highway.
+ if(!e.lane)for(const p of [e.a,e.b])assert.ok(hw.pts.slice(1).some((q,i)=>distance(p,nearestPoint(p,hw.pts[i],q))<20),'edge faces Highway 19');
 }
 const counts={};
 for(const c of cem)for(const [a,b] of fenceSegments(c)){const k=`${c.id}:${edgeKind('judique',a,b)}`;counts[k]=(counts[k]??0)+1;}
-assert.deepEqual(Object.keys(counts).filter(k=>!k.endsWith(':wall')).sort(),['cemetery-14a82b80c872:open','cemetery-3d9dfda0d9e5:hedge']);
-assert.ok(counts['cemetery-14a82b80c872:open']>=25&&counts['cemetery-3d9dfda0d9e5:hedge']>=30);
+assert.deepEqual(Object.keys(counts).filter(k=>!k.endsWith(':wall')).sort(),['cemetery-14a82b80c872:open','cemetery-3d9dfda0d9e5:hedge','cemetery-e26f6ceae9b8:open']);
+// The church cemetery opens only where the mown lane enters: two 2.7 m wall pieces.
+assert.ok(counts['cemetery-14a82b80c872:open']>=25&&counts['cemetery-3d9dfda0d9e5:hedge']>=30&&counts['cemetery-e26f6ceae9b8:open']===2);
 for(const area of ['mabou','porthood','westbay'])for(const c of cem)for(const [a,b] of fenceSegments(c))assert.equal(edgeKind(area,a,b),'wall');
 // The renderer's solids (drawnSolids): none along the open edge, hedge-thick along the hedge, the rest unchanged.
 for(const c of cem){
