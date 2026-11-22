@@ -248,7 +248,7 @@ export function mergeSeenOffences(
       kind: s.kind,
       customer: 'The Boss · observed on the route',
       line: s.kind === 'speeding'
-        ? `Clocked ${s.label} right past my windshield. Route rules still apply.`
+        ? `Clocked ${s.label.replace(/^Speeding past the Boss:\s*/, 'at ')}, right past my windshield. Route rules still apply.`
         : `Observed on the route: ${s.label}. Flashing reds are not a suggestion.`,
       seen: true,
     });

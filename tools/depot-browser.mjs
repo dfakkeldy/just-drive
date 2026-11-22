@@ -142,6 +142,9 @@ try {
   await shot('interrogation');
 
   // Answer all complaints -> closing verdict unchanged -> leave returns to shift report cleanly.
+  // The next day's career (day, pay, warnings, double) must be the same before and after the answers.
+  const nextBefore = await read('JSON.stringify(mmm.shift.next)');
+  assert.ok(nextBefore && nextBefore !== 'null', 'next career computed before the hearing');
   for (let step = 0; step < 12; step++) {
     const busy = await read('mmm.interiors.busy');
     if (!busy) break;
@@ -152,6 +155,7 @@ try {
   }
   await until('returned to shift report after interrogation', "!mmm.interiors.busy && !document.getElementById('shiftReport').hidden", 10);
   assert.equal(await read("document.getElementById('reportVerdict').textContent"), 'One-day suspension. Without pay.', 'verdict unchanged after answers');
+  assert.equal(await read('JSON.stringify(mmm.shift.next)'), nextBefore, 'next career (day, pay, record) unchanged after answers');
   console.log(`PASS ${tag}: shift-start loading bay (skip) and suspension interrogation room`);
 
   assert.deepEqual(errors, [], 'no runtime exceptions');

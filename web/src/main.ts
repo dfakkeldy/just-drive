@@ -99,7 +99,7 @@ import { MiniMap, type MapMark, type MapStop } from './minimap';
 import { propertyLines } from './property-lines';
 import { PropertyGround } from './property-lines-ground';
 import { Relief } from './relief';
-import { CLOCK_FACTOR, clock } from './shift-rules';
+import { CLOCK_FACTOR, END_TIME, START_TIME, clock } from './shift-rules';
 import { Interiors } from './interiors';
 import { MineSite } from './mine-site';
 import { MineInterior } from './interior-mine';
@@ -1161,7 +1161,6 @@ if (testPark && !fleet) {
     fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z) : actor.y ?? 0);
   }
 }
-resets[resetSlot.interiors] = () => interiors.reset();
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
 if (mineSite) scene.add(mineSite.group);
 if (mineSite?.roadPoint) interiors.register({ id: 'mine', name: 'Mabou Mines', position: mineSite.roadPoint, radius: 14,
@@ -1171,6 +1170,7 @@ if (churchSite && churchRoom) interiors.register(churchRoom.churchDoor(churchSit
 if (churchRoom && params.get('interior') === 'church') interiors.enter('church');
 let pendingInterrogation: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; advanceAfter: boolean } | null = null;
 let pendingOfficeJump = false;
+resets[resetSlot.interiors] = () => { pendingOfficeJump = false; interiors.reset(); };
 function registerDepotRooms(mod: typeof import('./interior-depot')): void {
   if (!interiors.doors.has('depot-loading')) {
     interiors.register({
@@ -1240,7 +1240,11 @@ async function openDepotInterrogation(info: { reason: InterrogationReason; compl
   } catch (e) {
     console.warn('Depot interrogation room unavailable', e);
     pendingInterrogation = null;
-    if (report && hadReport) report.hidden = false;
+    // From "Start day N": the day still turns over, so a room that cannot load never strands the report.
+    if (info.advanceAfter && shift instanceof Shift) {
+      shift.advanceToNextDay();
+      if (depotAutoLoad) void openDepotLoading();
+    } else if (report && hadReport) report.hidden = false;
   } finally {
     depotOpening = false;
   }
@@ -1947,7 +1951,7 @@ onDepotExit = doorId => {
     void openDepotInterrogation({ reason: 'visit', day: Math.max(1, shift.career.day), complaints: [], advanceAfter: false });
     return;
   }
-  if (doorId === 'depot-loading' && shift instanceof Shift && !shift.ended && shift.done === 0 && shift.complaints.all.length === 0) {
+  if (doorId === 'depot-loading' && shift instanceof Shift && !shift.ended && shift.elapsed < END_TIME - START_TIME && shift.done === 0 && shift.complaints.all.length === 0) {
     shift.elapsed = 0;
   }
   if (doorId === 'depot-interrogation') {
@@ -1977,7 +1981,7 @@ onDepotExit = doorId => {
     footer.prepend(officeBtn);
     if (shift instanceof Shift && !firedMode) {
       shift.onReport = info => {
-        const due = !bare && params.get('boss') !== '0' && params.get('depot') !== '0' && needsInterrogation(info.outcome, info.bossSeen);
+        const due = !bare && ERA.modern && params.get('boss') !== '0' && params.get('depot') !== '0' && needsInterrogation(info.outcome, info.bossSeen);
         lastReportHearing = due ? {
           reason: info.outcome === 'suspension' ? 'suspension' : 'bossVerdict',
           complaints: mergeSeenOffences(info.complaints, info.seenNotes),
@@ -1988,6 +1992,7 @@ onDepotExit = doorId => {
       };
       shift.onNextDay = () => {
         if (depotAutoLoad && lastReportHearing && !lastReportHearing.visited) {
+          lastReportHearing.visited = true;   // asked once: if the room cannot open now, the next click starts the day
           void openDepotInterrogation({ reason: lastReportHearing.reason, complaints: lastReportHearing.complaints, day: lastReportHearing.day, advanceAfter: true });
           return true;
         }
