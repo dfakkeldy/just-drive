@@ -929,9 +929,6 @@ void main() {
   // Derivatives must precede the material branches and quadrant discard, including in the mirror.
   coastPixel = fwidth(vec3(vWorld.x, vGround, vWorld.z));
 #endif
-#if defined(SEA_WATER) && !defined(LOW) && !defined(MIRROR)
-  float waterFootprint = max(length(dFdx(vWorld.xz)), length(dFdy(vWorld.xz))), groundEdge = fwidth(vGround);
-#endif
 /* MODERN_ROAD_PAINT_BEGIN */
   // Use the rendered face, not the smoothed lighting normal or the clamped DTM slope.
   // Derivatives precede all quadrant/material discards, including the mirror pass.
@@ -939,6 +936,9 @@ void main() {
   float roadGrade = length(roadFace.xz) / max(abs(roadFace.y), 0.000001);
   float roadPaint = roadPaintOnGrade(roadGrade) ? 1.0 : 0.0;
 /* MODERN_ROAD_PAINT_END */
+#if defined(SEA_WATER) && !defined(LOW) && !defined(MIRROR)
+  float waterFootprint = max(length(dFdx(vWorld.xz)), length(dFdy(vWorld.xz))), groundEdge = fwidth(vGround);
+#endif
   // A pixel's size on the land, in metres, taken before any discard: its short side (x) and long side (y).
   // Far crowns fade by it. On a far slope seen low, the long side is many times the short one.
   float footprintX = length(dFdx(vWorld.xz)), footprintY = length(dFdy(vWorld.xz));
