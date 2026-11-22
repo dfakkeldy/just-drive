@@ -18,11 +18,11 @@ def receipt_for(report, with_bed, *, with_community=False):
     return result
 
 
-def previous_digest(report, name, digest, *, cached=None):
+def previous_digest(report, name, digest, *, cached=None, default=None):
     """Walk back a pinned after hash, also recognizing road-bed and community-mailbox variants."""
     original = next((entry for entry in report['files'] if entry['file'] == name), None)
     if original is None:
-        return None
+        return default
     for variant in ('roadBed', 'communityMailboxes'):
         repaired = next((entry for entry in report.get(variant, {}).get('files', [])
                          if entry['file'] == name), None)
@@ -32,4 +32,4 @@ def previous_digest(report, name, digest, *, cached=None):
             return repaired.get('before', original['before'])
     if digest == original['sha256']:
         return original['before']
-    return None
+    return default

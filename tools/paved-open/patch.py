@@ -31,7 +31,9 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT/'tools'))
 sys.path.insert(0, str(ROOT/'pipeline'))
+from land_receipt_pins import previous_digest
 from paved_provenance import validate  # role-scoped path patterns and the denied historical payload hashes
 RECEIPT = ROOT/'tools/paved-open/hashes.json'
 REFRESH = ROOT/'tools/paved-open/hashes-refresh.json'
@@ -124,13 +126,7 @@ def refresh_delta():
 def before_file(name, digest, later):
     """Walk back exact file pins through later receipts, newest first."""
     for report in reversed(later):
-        entries = list(report['files'])
-        for variant in ('roadBed', 'communityMailboxes'):
-            entries = list(report.get(variant, {}).get('files', ())) + entries
-        for f in entries:
-            if name == f['file'] and digest == f['sha256']:
-                digest = f['before']
-                break
+        digest = previous_digest(report, name, digest, default=digest)
     return digest
 
 
