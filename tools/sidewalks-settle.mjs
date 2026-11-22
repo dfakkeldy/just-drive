@@ -29,13 +29,17 @@ export const DEFAULT_AREAS=['mabou','porthood','pointtupper','cansocauseway','ju
 // Measured baselines (M1 Pro, 21 Nov 2026): mabou 2404/5370, porthood 1727/3505, pointtupper 1952/4855,
 // cansocauseway 1728/3924, judique 2003/4208, westbay 2705/5576 (LOW/HIGH medians), with ~35-45% headroom.
 // Raise a ceiling only with a PR that says what the player gets for the slower start.
+// Start-up ceilings (ms, median data-mmm-ready, MacBook M1 Pro). Each sits below the time before PR #105
+// (so losing that PR's cuts fails) and at least 20% above the median after it (load noise on a busy Mac).
+// Before #105 (LOW / HIGH): mabou 6058/8238, porthood 2375/5457, pointtupper 2982/6510,
+// cansocauseway 2566/5842, judique 2480/5651, westbay 3924/8561.
 export const STARTUP_BUDGET_MS=Object.freeze({
- mabou:Object.freeze({low:3500,high:7000}),
- porthood:Object.freeze({low:2500,high:5000}),
- pointtupper:Object.freeze({low:3000,high:6500}),
- cansocauseway:Object.freeze({low:2600,high:5500}),
- judique:Object.freeze({low:2800,high:5600}),
- westbay:Object.freeze({low:3800,high:7500}),
+ mabou:Object.freeze({low:3300,high:7000}),
+ porthood:Object.freeze({low:2300,high:4700}),
+ pointtupper:Object.freeze({low:2600,high:6000}),
+ cansocauseway:Object.freeze({low:2300,high:5000}),
+ judique:Object.freeze({low:2400,high:5300}),
+ westbay:Object.freeze({low:3500,high:7000}),
 });
 export function budgetFor(area,quality){
  const row=STARTUP_BUDGET_MS[area];assert.ok(row,`no start-up budget for area ${area}`);

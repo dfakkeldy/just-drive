@@ -34,8 +34,9 @@ no injected script, response interceptor, query timer, or game hook. The externa
 CDP client reads the page's own `data-mmm-ready` signal every 250 ms and checks the
 new document's loader identity. Each area and quality runs one warm-up load
 (recorded separately) followed by five measured loads against the written
-`STARTUP_BUDGET_MS` ceiling table in `tools/sidewalks-settle.mjs`. Raise a ceiling
-only with a PR that says what the player gets for the slower start. For Mabou,
+`STARTUP_BUDGET_MS` ceiling table in `tools/sidewalks-settle.mjs`. Each ceiling sits below
+the area's start-up time before PR #105 and at least 20% above its median after it.
+Raise a ceiling only with a PR that says what the player gets for the slower start. For Mabou,
 Port Hood and Point Tupper, the check also confirms outside the measured interval
 that the sidewalk layer is active (`draws > 0` and `triangles > 0`). Reports keep
 all load times, median, min/max, margin to ceiling, and process names/birthtimes.
