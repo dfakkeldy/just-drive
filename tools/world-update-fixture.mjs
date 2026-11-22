@@ -58,6 +58,8 @@ export function spy(source, ending = false, dev = true, absent = false, override
     gamepad: { device: 'keyboard', poll() {}, feel() {} },
     // The drift dust and meter (drift-feedback.ts): untraced too, nothing slides here.
     driftFeedback: { update() {} },
+    // Puddles stand only on an area's rough stretches (rough-roads.ts); the fixture's area has none.
+    puddles: null, splashLevel: () => 0,
     pad: { show: trace('pad.show') }, relief: { ...update('relief'), breaks: 0, busy: false },
     drone: { active: false },
     miniMap: { setFlight() {}, ...update('miniMap'), show: trace('miniMap.show') }, mapTimer: 0, refreshMap: trace('refreshMap'), mapStops: [], mapMarks: [], mapCars: [],
@@ -135,7 +137,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
     world('yard', dt, '@vehicle', '@camera.position'), world('yardDog', dt, '@vehicle'), world('home', '@camera.position', '@vehicle'),
     world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050, '@vehicle', dt), world('village', '@camera.position', 1050, '@vehicle', dt), world('hawkesbury', '@camera.position', 1050, '@vehicle', dt), world('mabouMain', '@camera.position', 1050, '@vehicle', dt), quiet('maryville'), quiet('drLane'), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
     call('camera.matrix'), call('sky', '@camera.position'), call('shared.time', 1.05), call('beacon', dt ? 2.2 : .15),
-    world('terrain', '@camera', paused), ...wharfLines(spied), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
+    world('terrain', '@camera', paused), ...wharfLines(spied), quiet('puddles'), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
     world('trees', '@terrain.drawnFine', '@camera.position'), world('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
     call('placesUI', '@vehicle', playing), call('journey', .05, playing), call('relief', dt, playing ? 6 : 0, '@vehicle', playing),
     call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars', null), call('radio', playing, false),
@@ -150,7 +152,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
 export function expectedEnding({ absent = false, spied = false } = {}) {
   return [
     call('quality', .05, true), call('roadScene.pause', true), call('endings', .05), call('pad.show', false), call('radio', false, true),
-    call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), ...wharfLines(spied), world('trees', '@terrain.drawnFine', '@camera.position'),
+    call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), ...wharfLines(spied), world('trees', '@terrain.drawnFine', '@camera.position'), quiet('puddles'),
     world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'), world('landmarks', '@camera'), world('roads', '@camera.position'),
     canalLine(spied), world('props', '@camera', 0), world('sidewalks'), world('fishing', 0, '@camera.position'), call('clipping', !absent), world('mirror', '@camera'),
     call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'), call('raf', '@function'),

@@ -65,7 +65,7 @@ era-density-startup-browser	portable	no	Linux GTX 980M PASS 58 s on df9507d; no 
 phone-hud-browser	portable	no	Linux GTX 980M PASS 704 s on df9507d; no same-commit Mac run
 start-here-browser	portable	no	Linux GTX 980M PASS 206 s on df9507d; no same-commit Mac run
 mp-rides-browser	unproven	no	needs Wrangler, which Linux does not have (CANNOT RUN on df9507d)
-church	mac-only	no	reads data/work/areas/church/church.json, and data/work never leaves the Mac; the project brief audit: not run on apple-check-host; private data/work never transfers
+church	mac-only	no	reads data/work/church-scan-20261121/church-site.json, and data/work never leaves the Mac; the project brief audit: not run on apple-check-host; private data/work never transfers
 wings	apple	no	needs the GDAL Python bindings (osgeo); Linux has none, and adding them needs rpm-ostree layering (ask Dan); the project brief audit: apple-check-host M4 PASS 0.85 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
 bridge-source-check	apple	no	needs the GDAL Python bindings (osgeo); Linux has none, and adding them needs rpm-ostree layering (ask Dan); the project brief audit: apple-check-host M4 PASS 0.11 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
 building-wing-check	apple	no	needs the GDAL Python bindings (osgeo); Linux has none, and adding them needs rpm-ostree layering (ask Dan); the project brief audit: apple-check-host M4 PASS 0.23 s on 68bc9eb, 2026-11-17 UTC; GDAL Python bindings available (owner setup: 3.13.3)
@@ -323,4 +323,6 @@ ride-along-budget-low	unproven	no	apple-check-host M4 / Edge 157 PASS 27 s on th
 drag-rules	portable	yes	Node timing and runway data in source
 drag-rules-mutations	portable	yes	Node mutation controls, source only
 airport-drag-browser	unproven	no	Hardware WebGL, Point Tupper land and live input
+version-notice	portable	no	pure Node: real offline-version.ts module and main.ts predicate with mutations
+version-browser	unproven	no	local public build and actual browser/worker; native hardware GPU
 drlane-browser	unproven	no	not yet measured on another host
