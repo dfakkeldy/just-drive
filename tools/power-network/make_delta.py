@@ -75,9 +75,18 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
         public = lambda data: {(q['x'], q['y']) for q in data['poles'] if p.public(net.roads[q['road']])}
         before = json.loads(((baseline or source) / relative / 'props.json').read_text()) if baseline or overlay else None
         if before is not None:
-            # The one exception: AREA.public_pole_corrections (README "The filmed exception"). Equal on every other road.
-            corrected = dict(poles=p.correct_public_poles(net, before['poles'], p.AREA.public_pole_corrections))
-            assert public(corrected) == public(props), area + ': public pole positions changed'
+            # The one exception: AREA.public_pole_corrections (README "The filmed exception"). Every other public road
+            # must keep its positions, compared directly. A corrected road must equal the baseline corrected, field by
+            # field; a pack from before step 29's power output is compared uncorrected.
+            fixed = {r['id'] for r, _ in (p.corrected_road(net, e) for e in p.AREA.public_pole_corrections)}
+            other = lambda poles: {(q['x'], q['y']) for q in poles if p.public(net.roads[q['road']]) and q['road'] not in fixed}
+            assert other(before['poles']) == other(props['poles']), area + ': public pole positions changed'
+            if 'serviceDrops' in props:
+                expect = p.correct_public_poles(net, before['poles'], p.AREA.public_pole_corrections)
+            else:
+                expect = before['poles']
+            pick = lambda poles: sorted((json.dumps(q, sort_keys=True) for q in poles if q['road'] in fixed))
+            assert pick(expect) == pick(props['poles']), area + ': a corrected road differs from its corrected baseline'
             for key in ('mailboxes', 'communityBoxes'):
                 assert before[key] == props[key], area + ': ' + key + ' changed'
         row = dict(area=area, publicPoles=len(public(props)), poles=len(props['poles']), preservationCompared=before is not None)
@@ -153,11 +162,11 @@ def make(source, output):
         initial = {name: (p.OUT / name).read_bytes() for name in
                    ('roads.json', 'buildings.json', 'building-styles.json', 'props.json', 'manifest.json')}
         original = p.place_poles
-        def verified(roads, net, buildings, safe, village, public_poles=None):
+        def verified(roads, net, buildings, safe, village, public_poles=None, corrections=()):
             old = oracle.place_poles(roads, net, safe, village, p.SEED, p.public, p.shifted, p.heading, p.distance)
             regenerated = original(roads, net, buildings, safe, village)
             assert encoded(old) == encoded([q for q in regenerated if p.public(net.roads[q['road']])]), area + ': frozen public-pole bytes changed'
-            result = original(roads, net, buildings, safe, village, public_poles)
+            result = original(roads, net, buildings, safe, village, public_poles, corrections=corrections)
             report['proof'].append(dict(area=area, frozenPublicByteEqual=True, preservedPublicPoles=len(public_poles)))
             return result
         p.place_poles = verified
