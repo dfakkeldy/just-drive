@@ -11,7 +11,7 @@ const cases=[
  ['cow downhill side restored','animals.ts','a.side = l.ground < r.ground ? 1 : -1;','a.side = l.ground < r.ground ? -1 : 1;','cow'],
  ['cow imaginary rails restored','guardrails.ts','if (c.revision === this.terrain.dataRevision) {','if (false) {','cow'],
  ['cow road margin removed','cow-rest.ts','roadGap: .5,','roadGap: 0,','cow'],
- ['cow final herd-side guard removed','animals.ts','if (ownSide <= 0 || !inward || !outward || outward.ground < inward.ground) return false;','void ownSide;','cow'],
+ ['cow final herd-side guard removed','animals.ts','if (ownSide <= 0 || inward === null || outward === null || outward < inward) return false;','void ownSide;','cow'],
  ['cow ditch grazing restored','cow-rest.ts','if (h < roadHeight || outward < inward ||','if (','cow'],
  ['cow non-rail road kinds excluded','roads.ts','if (road === exclude || seen.has(key)) continue;','if (road.kind > 3 || road === exclude || seen.has(key)) continue;','cow','other-roads'],
  ['cow road-centre grazing filter restored','guardrails.ts','}, (x, z) => this.terrain.heightAt(x, z));','}, ground);','cow','centre'],

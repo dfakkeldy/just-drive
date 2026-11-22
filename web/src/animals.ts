@@ -666,8 +666,9 @@ export class Animals {
       });
       if (!home) return false;
       const ownSide = ((home.x - baseX) * rx + (home.z - baseZ) * rz) * a.side;
-      const inward = this.terrain.surfaceAt(home.x - rx * a.side, home.z - rz * a.side), outward = this.terrain.surfaceAt(home.x + rx * a.side, home.z + rz * a.side);
-      if (ownSide <= 0 || !inward || !outward || outward.ground < inward.ground) return false;
+      // Same height source as cowRest's own slope test, so the two never disagree on flat land.
+      const inward = this.terrain.heightAt(home.x - rx * a.side, home.z - rz * a.side), outward = this.terrain.heightAt(home.x + rx * a.side, home.z + rz * a.side);
+      if (ownSide <= 0 || inward === null || outward === null || outward < inward) return false;
       a.home.x = a.place.x = home.x; a.home.z = a.place.z = home.z; a.homeHeading = home.heading;
     }
     const fieldSide = a.side;
