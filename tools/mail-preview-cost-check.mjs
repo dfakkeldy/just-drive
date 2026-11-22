@@ -41,8 +41,9 @@ async function run(mutation) {
  const report=JSON.parse(r.stdout.trim().split('\n').at(-1)); if(!baseline)report.source='working-tree'; return report;
 }
 function verify(actual,old) {
- assert.equal(actual.dataHash,old.dataHash,'benchmark inputs changed: explicitly regenerate the 5d678ed baseline');
- assert.equal(actual.digest,old.stage2Digest,'Stage 2 opening preview decisions/flights changed, including invalidation cases');
+ const pin=old.communityDelta&&actual.mailboxes===old.communityDelta.mailboxes&&actual.sites===old.communityDelta.sites?old.communityDelta:old;
+ assert.equal(actual.dataHash,pin.dataHash,'benchmark inputs changed: explicitly regenerate the 5d678ed baseline');
+ assert.equal(actual.digest,pin.stage2Digest,'Stage 2 opening preview decisions/flights changed, including invalidation cases');
  assert.ok(actual.profiles.moving.boxes.mean<old.profiles.moving.boxes.mean*.1,'moving collision tests must fall by at least 90%');
  assert.equal(actual.profiles['unchanged-warm'].ticks.max,0,'unchanged inputs reuse exact predictions');
  assert.ok(actual.profiles['same-frame-repeat'].hits.mean>.8,'same-frame throw preparation reuses nontrivial previews');

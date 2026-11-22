@@ -323,25 +323,42 @@ def bake():
 # change) for the same manifest with those counts set back.
 NOV18=ROOT/'tools/mabou-dashcam-18nov/hashes.json'
 NOV19=ROOT/'tools/mabou-wharf/roads.json'
+COMM1347=ROOT/'tools/community-mailboxes/hashes.json'
 CHECK_SOURCE=ROOT/'tools/sidewalks-check-source.json'
 
-def nov18_stands_for(file,digest,cached,root=ROOT,report=None):
-    reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, NOV18) if p.exists()]
+def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None):
+    if check_source is None and report is None and CHECK_SOURCE.exists():
+        check_source = json.loads(CHECK_SOURCE.read_text())
+    matches = lambda h: h == cached or (check_source is not None and previous_digest(check_source, file, h) == cached)
+    reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, COMM1347, NOV18) if p.exists()]
+    manifest = None
     for current in reports:
         before = previous_digest(current, file.removeprefix('data/baked/'), digest, cached=cached) if file.startswith('data/baked/') else None
         if before is not None:
             digest = before
-            if digest == cached:
+            if matches(digest):
                 return True
-        for m in current['manifests']:
+        for m in current.get('manifests', ()):
             if file != f"data/baked/{m['folder']}/manifest.json" or m['before'] == m['after']:
                 continue
-            manifest = json.loads((root/file).read_bytes())
-            if any(manifest[k]['count'] != v['count'] for k,v in m['after'].items()):
-                return False
-            for k,v in m['before'].items():
-                manifest[k]['count'] = v['count']
-            return hashlib.sha256((json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()).hexdigest() == cached
+            if manifest is None:
+                manifest = json.loads((root/file).read_bytes())
+            matched = True
+            for k, v in m['after'].items():
+                if isinstance(v, dict) and set(v) == {'count'}:
+                    if not isinstance(manifest.get(k), dict) or manifest[k].get('count') != v['count']:
+                        matched = False; break
+                elif manifest.get(k) != v:
+                    matched = False; break
+            if not matched:
+                continue
+            for k, v in m['before'].items():
+                if isinstance(v, dict) and set(v) == {'count'}:
+                    manifest[k] = dict(manifest[k], count=v['count'])
+                else:
+                    manifest[k] = v
+            if matches(hashlib.sha256((json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()).hexdigest()):
+                return True
     return False
 
 def nov18_cases():
@@ -362,6 +379,12 @@ def nov18_cases():
         assert not nov18_stands_for('data/baked/terrain/roads.json','c'*64,'b'*64,root,report),'unknown roads'
         assert not nov18_stands_for('data/baked/terrain/roads.json','a'*64,'c'*64,root,report),'a plan made on other land'
         assert not nov18_stands_for('web/src/terrain.ts','a'*64,'b'*64,root,report),'source files never map'
+        full_before=compact({'props':{'file':'props.json','mailboxes':469},'other':'x'})
+        full_after=compact({'props':{'file':'props.json','mailboxes':468},'other':'x'})
+        prop_report={'files':[],'manifests':[{'folder':'terrain','before':{'props':{'file':'props.json','mailboxes':469}},'after':{'props':{'file':'props.json','mailboxes':468}}}]}
+        (root/name).write_bytes(full_after);assert nov18_stands_for(name,sha(full_after),sha(full_before),root,prop_report),'manifest at full props key'
+        (root/name).write_bytes(full_after);assert nov18_stands_for(name,sha(full_after),'e'*64,root,prop_report,{'files':[{'file':name,'before':'e'*64,'sha256':sha(full_before)}]}),'manifest chained through check_source'
+        (root/name).write_bytes(compact({'props':{'file':'props.json','mailboxes':468},'other':'y'}));assert not nov18_stands_for(name,'',sha(full_before),root,prop_report),'another key changed beside props'
     print('PASS 18 Nov receipt stands for its before land: receipt files and counts only; other keys, unknown bytes and other land refused')
 
 if __name__=='__main__':

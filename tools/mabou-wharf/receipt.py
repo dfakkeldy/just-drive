@@ -26,7 +26,10 @@ def pins_for(report, roads, baked=None):
         pin = json.loads(receipt.RECEIPT.read_text())['roadBed']['companion']['sha256']
         if not companion.is_file() or receipt.sha(companion.read_bytes()) != pin:
             raise ValueError('The repaired roads need their matching pre-bed lines')
-    return receipt.receipt_for(report, with_bed)
+    props = roads.with_name('props.json')
+    comm = next((f for f in report.get('communityMailboxes', {}).get('files', ()) if f['file'] == 'terrain/props.json'), None)
+    with_community = bool(comm and props.is_file() and receipt.sha(props.read_bytes()) in (comm['before'], comm['sha256']))
+    return receipt.receipt_for(report, with_bed, with_community=with_community)
 
 
 def verify(source, stage, pins):

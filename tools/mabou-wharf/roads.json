@@ -15,6 +15,15 @@
    }
   ]
  },
+ "communityMailboxes": {
+  "files": [
+   {
+    "file": "terrain/props.json",
+    "before": "4beff0bce2a66a646003d5af2a78a6168a7f92be4f523019801806554bcf6574",
+    "sha256": "9ee9fc575d652dbd4a2d277663c08294108a597bef90ea104e664133c6a169ee"
+   }
+  ]
+ },
  "files": [
   {
    "file": "terrain/5/12_15.r.png",
