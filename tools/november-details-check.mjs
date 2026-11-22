@@ -598,6 +598,92 @@ for (const {a, b, side} of added) {
         }
         for (const child of [...streamNet.group.children]) child.geometry?.dispose();
       }
+      // Production Terrain.update() selector transition on Bridge 46 at 1.5x: east level-7 cached with siblings pending (level-6 visible) -> siblings ready (level-7 visible).
+      {
+        const selTerrain = new Terrain(mabouManifest, 'data/baked/terrain', {}, 1.5, -0.2);
+        selTerrain.pump = () => {};
+        const raw46 = mabouRoads.roads.find(r => r.id === 46);
+        const eastPt = raw46.pts[raw46.pts.length - 1];
+        const eastL7 = tileKeyAt(eastPt[0] + 3, eastPt[1], 7);
+        assert.ok(eastL7, 'Bridge 46 east bank has level-7 tile');
+        // Load full ancestor chain 0..6 for both Bridge 46 banks plus the single east level-7 tile (without its 3 siblings).
+        const needed = new Map();
+        for (const pt of [raw46.pts[0], eastPt]) {
+          for (let l = 0; l <= 6; l++) {
+            const k = tileKeyAt(pt[0], pt[1], l);
+            if (k) needed.set(k.join('/'), k);
+            // Also include parent's 4 children up to level 6 so level 6 is selectable by visit().
+            if (l < 6 && k) for (let q = 0; q < 4; q++) {
+              const ci = k[1] * 2 + (q & 1), cj = k[2] * 2 + (q >> 1);
+              if (mabouManifest.levels[l + 1]?.includes(`${ci}_${cj}`)) needed.set(`${l + 1}/${ci}/${cj}`, [l + 1, ci, cj]);
+            }
+          }
+        }
+        for (const k of [...needed.values()].sort((a, b) => a[0] - b[0])) await selTerrain.loadNow(k[0], k[1], k[2]);
+        await selTerrain.loadNow(eastL7[0], eastL7[1], eastL7[2]);
+        const selNet = new Roads({ roads: tagged }, mabouManifest.village, selTerrain);
+        const b46 = selNet.roads.find(x => x.id === 46);
+        const [ax, az] = b46.pts[0], [bx, bz] = b46.pts[b46.pts.length - 1];
+        const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+        const cam = new THREE.PerspectiveCamera(58, 16 / 9, 0.5, 50000);
+        cam.position.set(bx + ux * 10, 8, bz + uz * 10);
+        cam.lookAt(bx, 2, bz);
+        cam.updateMatrixWorld(true);
+        selTerrain.update(cam);
+        selTerrain.queue.length = 0;
+        selNet.update(cam.position);
+        const edgeInX = ax + ux * (span + 2.998), edgeInZ = az + uz * (span + 2.998);
+        const edgeOutX = ax + ux * (span + 3.002), edgeOutZ = az + uz * (span + 3.002);
+        assert.equal(selTerrain.drawnLevelAt(edgeOutX, edgeOutZ), 6, 'missing siblings keep level 6 selected at Bridge 46 east');
+        const meshPending = selNet.group.children.find(c => c.name === 'pony-truss-46');
+        meshPending.updateMatrixWorld(true);
+        const landL6 = selTerrain.meshHeightAt(edgeOutX, edgeOutZ, true);
+        const supportOut = selTerrain.heightAt(edgeOutX, edgeOutZ);
+        const supportIn = selNet.deckHeight(edgeInX, edgeInZ);
+        ray.set(new THREE.Vector3(edgeInX, 20, edgeInZ), down);
+        const hitL6 = ray.intersectObject(meshPending)[0];
+        assert.ok(hitL6 && Math.abs(hitL6.point.y - landL6) < 0.03, `level-6 selected east apron meets level-6 road (${hitL6?.point.y.toFixed(3)} vs ${landL6?.toFixed(3)})`);
+        assert.ok(supportIn !== null && supportIn >= supportOut - 0.02, `level-6 selected east apron preserves wheel support (${supportIn?.toFixed(3)} vs ${supportOut?.toFixed(3)})`);
+        // Now load the remaining 3 level-7 siblings so production Terrain.update() transitions selection to level 7.
+        const pi = Math.floor(eastL7[1] / 2), pj = Math.floor(eastL7[2] / 2);
+        for (let q = 0; q < 4; q++) {
+          const ci = pi * 2 + (q & 1), cj = pj * 2 + (q >> 1);
+          if (mabouManifest.levels[7]?.includes(`${ci}_${cj}`)) await selTerrain.loadNow(7, ci, cj);
+        }
+        selTerrain.update(cam);
+        assert.equal(selTerrain.drawnLevelAt(edgeOutX, edgeOutZ), 7, 'loaded siblings switch production selector to level 7');
+        // Refresh triggers automatically even via deckHeight() without Roads.update(), and also via Roads.update().
+        const supportInL7 = selNet.deckHeight(edgeInX, edgeInZ);
+        const meshReady = selNet.group.children.find(c => c.name === 'pony-truss-46');
+        assert.notEqual(meshReady, meshPending, 'selection transition 6->7 rebuilds Bridge 46 mesh');
+        meshReady.updateMatrixWorld(true);
+        const landL7 = selTerrain.meshHeightAt(edgeOutX, edgeOutZ, true);
+        ray.set(new THREE.Vector3(edgeInX, 20, edgeInZ), down);
+        const hitL7 = ray.intersectObject(meshReady)[0];
+        assert.ok(hitL7 && Math.abs(hitL7.point.y - landL7) < 0.03, `level-7 selected east apron meets level-7 road (${hitL7?.point.y.toFixed(3)} vs ${landL7?.toFixed(3)})`);
+        assert.ok(supportInL7 !== null && supportInL7 >= supportOut - 0.02, `level-7 selected east apron preserves wheel support (${supportInL7?.toFixed(3)} vs ${supportOut?.toFixed(3)})`);
+        for (const child of [...selNet.group.children]) child.geometry?.dispose();
+      }
+      // 1 cm scan on Bridge 45 east apron at 3.0x (both level 6 and level 7) to catch pockets between grid samples.
+      for (const lvl of [6, 7]) {
+        const t45 = new Terrain(mabouManifest, 'data/baked/terrain', {}, 3.0, -0.2);
+        for (const k of bridgeTiles(45, 6)) { await loadTile(t45, k); t45.tile(k[0], k[1], k[2]).mesh.visible = (lvl === 6); }
+        if (lvl === 7) for (const k of bridgeTiles(45, 7)) await loadTile(t45, k);
+        const n45 = new Roads({ roads: tagged }, mabouManifest.village, t45);
+        const b45 = n45.roads.find(x => x.id === 45);
+        const [ax, az] = b45.pts[0], [bx, bz] = b45.pts[b45.pts.length - 1];
+        const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+        assert.ok(Number.isFinite(n45.deckHeight((ax + bx) / 2, (az + bz) / 2)));
+        for (let di = 0; di <= 300; di++) {
+          const dp = (2.999 * di) / 300, s = span + dp;
+          for (const offset of [-2.079, -1.767, -1.35, -0.8, 0, 0.8, 1.35, 1.767, 2.079]) {
+            const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
+            const y = n45.deckHeight(x, z), g = t45.heightAt(x, z), d = t45.meshHeightAt(x, z, true);
+            assert.ok(y !== null && g !== null && d !== null && y >= Math.max(g, d) - 1e-4, `bridge 45 3x lvl=${lvl} east dp=${dp.toFixed(3)} off=${offset} clears wheel support (${(y - Math.max(g, d)).toFixed(4)} m)`);
+          }
+        }
+        for (const child of [...n45.group.children]) child.geometry?.dispose();
+      }
     } finally {
       globalThis.fetch = prevFetch; globalThis.createImageBitmap = prevBitmap; globalThis.OffscreenCanvas = prevCanvas;
       THREE.TextureLoader.prototype.load = prevTexLoad;

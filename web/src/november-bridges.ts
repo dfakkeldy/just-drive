@@ -210,16 +210,79 @@ export function registerRailContacts(
   });
 }
 
+/** Build one 8x8 apron height grid, lifting interior vertices wherever sub-sampled terrain rises above a triangle. */
+function buildApronGrid(
+  a: readonly [number, number],
+  ux: number,
+  uz: number,
+  span: number,
+  end: -1 | 1,
+  endY: number,
+  sampleY: (x: number, z: number) => number | null,
+  pinOuter: boolean,
+  padMin: number,
+  padTarget: number,
+): Float64Array {
+  const ap = PONY_TRUSS.approach, clearHalf = PONY_TRUSS.clearHalf;
+  const heights = new Float64Array((APRON_ALONG_STEPS + 1) * APRON_COLS);
+  const joinRow = end < 0 ? APRON_ALONG_STEPS : 0;
+  const outerRow = end < 0 ? 0 : APRON_ALONG_STEPS;
+  for (let i = 0; i <= APRON_ALONG_STEPS; i++) {
+    const t = i / APRON_ALONG_STEPS;
+    const s = end < 0 ? -ap * (1 - t) : span + ap * t;
+    const distPast = end < 0 ? -s : s - span;
+    for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
+      const across = -clearHalf + (2 * clearHalf * j) / APRON_ACROSS_STEPS;
+      const wx = a[0] + ux * s - uz * across, wz = a[1] + uz * s + ux * across;
+      const h = sampleY(wx, wz);
+      heights[i * APRON_COLS + j] = i === joinRow ? endY : pinOuter && i === outerRow && h !== null ? h : apronSurfaceY(endY, distPast, h);
+    }
+  }
+  const subSteps = 8;
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < APRON_ALONG_STEPS; i++) {
+      for (let j = 0; j < APRON_ACROSS_STEPS; j++) {
+        for (let si = 0; si <= subSteps; si++) {
+          const su = si / subSteps, uNorm = (i + su) / APRON_ALONG_STEPS;
+          const s = end < 0 ? -ap * (1 - uNorm) : span + ap * uNorm;
+          for (let sj = 0; sj <= subSteps; sj++) {
+            const sv = sj / subSteps, vNorm = (j + sv) / APRON_ACROSS_STEPS;
+            const across = -clearHalf + 2 * clearHalf * vNorm;
+            const land = sampleY(a[0] + ux * s - uz * across, a[1] + uz * s + ux * across);
+            if (land === null) continue;
+            const triY = sampleApronGrid(heights, uNorm, vNorm);
+            if (land + padMin <= triY) continue;
+            const excess = land + padTarget - triY;
+            const verts: [number, number, number][] = su + sv >= 1
+              ? [[i + 1, j + 1, su + sv - 1], [i, j + 1, 1 - su], [i + 1, j, 1 - sv]]
+              : [[i, j, 1 - su - sv], [i + 1, j, su], [i, j + 1, sv]];
+            let freeWeight = 0;
+            for (const [vi, , w] of verts) if (vi !== joinRow && (!pinOuter || vi !== outerRow)) freeWeight += w;
+            if (freeWeight > 0.01) {
+              const lift = excess / freeWeight;
+              for (const [vi, vj, w] of verts) {
+                if (vi !== joinRow && (!pinOuter || vi !== outerRow) && w > 0) heights[vi * APRON_COLS + vj] += lift;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return heights;
+}
+
 /**
  * Build one merged vertex-coloured geometry for a narrow one-lane grey steel pony-truss bridge and its 3 m approach aprons.
- * Returns the geometry, exact apron height grids, and bank-cleared end elevations shared with ponyTrussDeckHeight().
+ * Returns the geometry, wheel-support apron height grids, and bank-cleared end elevations shared with ponyTrussDeckHeight().
  */
 export function buildPonyTrussBridge(
   pts: readonly [number, number][],
   rawY0: number,
   rawY1: number,
   len: number,
-  heightAt: (x: number, z: number) => number | null,
+  supportHeightAt: (x: number, z: number) => number | null,
+  drawnHeightAt: (x: number, z: number) => number | null = supportHeightAt,
 ): { geometry: THREE.BufferGeometry; aprons: PonyTrussAprons; y0: number; y1: number } {
   const m = new Mesher();
   const a = pts[0], b = pts[pts.length - 1];
@@ -234,10 +297,14 @@ export function buildPonyTrussBridge(
   const seamSamples = APRON_ACROSS_STEPS * 2;
   for (let j = 0; j <= seamSamples; j++) {
     const across = -clearHalf + (2 * clearHalf * j) / seamSamples;
-    const h0 = heightAt(a[0] - uz * across, a[1] + ux * across);
-    if (h0 !== null && h0 + 0.02 > y0) y0 = h0 + 0.02;
-    const h1 = heightAt(b[0] - uz * across, b[1] + ux * across);
-    if (h1 !== null && h1 + 0.02 > y1) y1 = h1 + 0.02;
+    const h0 = supportHeightAt(a[0] - uz * across, a[1] + ux * across);
+    const d0 = drawnHeightAt(a[0] - uz * across, a[1] + ux * across);
+    const top0 = h0 !== null && d0 !== null ? Math.max(h0, d0) : h0 ?? d0;
+    if (top0 !== null && top0 + 0.02 > y0) y0 = top0 + 0.02;
+    const h1 = supportHeightAt(b[0] - uz * across, b[1] + ux * across);
+    const d1 = drawnHeightAt(b[0] - uz * across, b[1] + ux * across);
+    const top1 = h1 !== null && d1 !== null ? Math.max(h1, d1) : h1 ?? d1;
+    if (top1 !== null && top1 + 0.02 > y1) y1 = top1 + 0.02;
   }
   const dy = y1 - y0, slope = Math.atan2(dy, span);
   const deckY = (s: number) => y0 + dy * (s / span);
@@ -272,57 +339,16 @@ export function buildPonyTrussBridge(
   // Deck slab sides and underside (steel deck fascia under the trusses, 2.5 cm below asphalt to avoid z-fighting).
   m.box(0, fasciaTop - deckThick / 2, 0, fasciaLen, deckThick, half * 2 + chord, STEEL_DARK, false);
 
-  // Paved 3 m approach aprons whose triangles conform to and stay cleanly above the local bank across the full width.
+  // Paved 3 m approach aprons: visual mesh meets the selected rendered road at the outer edge while wheel support clears bilinear ground.
   const ap = PONY_TRUSS.approach;
-  const startGrid = new Float64Array((APRON_ALONG_STEPS + 1) * APRON_COLS);
-  const endGrid = new Float64Array((APRON_ALONG_STEPS + 1) * APRON_COLS);
+  const startGrid = buildApronGrid(a, ux, uz, span, -1, y0, supportHeightAt, false, 0.012, 0.018);
+  const endGrid = buildApronGrid(a, ux, uz, span, 1, y1, supportHeightAt, false, 0.012, 0.018);
+  const sameSurface = drawnHeightAt === supportHeightAt;
+  const startVis = sameSurface ? startGrid : buildApronGrid(a, ux, uz, span, -1, y0, drawnHeightAt, true, 0.005, 0.012);
+  const endVis = sameSurface ? endGrid : buildApronGrid(a, ux, uz, span, 1, y1, drawnHeightAt, true, 0.005, 0.012);
   m.at(0, 0, 0);
   for (const end of [-1, 1] as const) {
-    const endY = end < 0 ? y0 : y1;
-    const heights = end < 0 ? startGrid : endGrid;
-    const joinRow = end < 0 ? APRON_ALONG_STEPS : 0;
-    for (let i = 0; i <= APRON_ALONG_STEPS; i++) {
-      const t = i / APRON_ALONG_STEPS;
-      const s = end < 0 ? -ap * (1 - t) : span + ap * t;
-      const distPast = end < 0 ? -s : s - span;
-      for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
-        const across = -clearHalf + (2 * clearHalf * j) / APRON_ACROSS_STEPS;
-        const wx = a[0] + ux * s - uz * across, wz = a[1] + uz * s + ux * across;
-        heights[i * APRON_COLS + j] = i === joinRow ? endY : apronSurfaceY(endY, distPast, heightAt(wx, wz));
-      }
-    }
-    // Lift non-join vertices wherever a bank ridge pokes above an apron triangle between grid corners.
-    const subSteps = 4;
-    for (let pass = 0; pass < 2; pass++) {
-      for (let i = 0; i < APRON_ALONG_STEPS; i++) {
-        for (let j = 0; j < APRON_ACROSS_STEPS; j++) {
-          for (let si = 0; si <= subSteps; si++) {
-            const su = si / subSteps, uNorm = (i + su) / APRON_ALONG_STEPS;
-            const s = end < 0 ? -ap * (1 - uNorm) : span + ap * uNorm;
-            for (let sj = 0; sj <= subSteps; sj++) {
-              const sv = sj / subSteps, vNorm = (j + sv) / APRON_ACROSS_STEPS;
-              const across = -clearHalf + 2 * clearHalf * vNorm;
-              const land = heightAt(a[0] + ux * s - uz * across, a[1] + uz * s + ux * across);
-              if (land === null) continue;
-              const triY = sampleApronGrid(heights, uNorm, vNorm);
-              if (land + 0.005 <= triY) continue;
-              const excess = land + 0.012 - triY;
-              const verts: [number, number, number][] = su + sv >= 1
-                ? [[i + 1, j + 1, su + sv - 1], [i, j + 1, 1 - su], [i + 1, j, 1 - sv]]
-                : [[i, j, 1 - su - sv], [i + 1, j, su], [i, j + 1, sv]];
-              let freeWeight = 0;
-              for (const [vi, , w] of verts) if (vi !== joinRow) freeWeight += w;
-              if (freeWeight > 0.01) {
-                const lift = excess / freeWeight;
-                for (const [vi, vj, w] of verts) {
-                  if (vi !== joinRow && w > 0) heights[vi * APRON_COLS + vj] += lift;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    const visHeights = end < 0 ? startVis : endVis;
     const grid: [number, number, number][][] = [];
     for (let i = 0; i <= APRON_ALONG_STEPS; i++) {
       const t = i / APRON_ALONG_STEPS;
@@ -330,7 +356,7 @@ export function buildPonyTrussBridge(
       const row: [number, number, number][] = [];
       for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
         const across = -clearHalf + (2 * clearHalf * j) / APRON_ACROSS_STEPS;
-        row.push([a[0] + ux * s - uz * across, heights[i * APRON_COLS + j], a[1] + uz * s + ux * across]);
+        row.push([a[0] + ux * s - uz * across, visHeights[i * APRON_COLS + j], a[1] + uz * s + ux * across]);
       }
       grid.push(row);
     }
@@ -342,7 +368,7 @@ export function buildPonyTrussBridge(
       // Side skirts drop cleanly down into the bank beneath the outer apron edges.
       for (const side of [0, APRON_ACROSS_STEPS]) {
         const p0 = grid[i][side], p1 = grid[i + 1][side];
-        const b0 = [p0[0], p0[1] - 1.5, p0[2]], b1 = [p1[0], p1[1] - 1.5, p1[2]];
+        const b0 = [p0[0], p0[1] - 2.5, p0[2]], b1 = [p1[0], p1[1] - 2.5, p1[2]];
         if (side === APRON_ACROSS_STEPS) m.quad([b0, b1, p1, p0], ABUTMENT);
         else m.quad([b1, b0, p0, p1], ABUTMENT);
       }
