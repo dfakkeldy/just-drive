@@ -219,6 +219,9 @@ for (const y of [.5, 1.2, 1.9]) for (const dz of [-.35, 0, .35]) {
     close(hit([x1 + .12, fl + .55, front + dz], [-1, 0, 0]).point.x, x1, 'pew-facing wall is solid', .003);
   }
   close(hit([midX, fl + 2.40, front + .60], [0, -1, 0]).point.y, fl + 2.28, 'confessional roof height', .003);
+  // The cornice top must be below the boarded roof, even where the two boxes overlap.
+  const roofFaces = ray.intersectObjects(room.scene.children, true).filter(h => Math.abs(h.point.y - (fl + 2.28)) < .003);
+  assert.equal(new Set(roofFaces.map(h => h.object)).size, 1, 'no second surface at the confessional roof height');
 }
 // Front arched table exists and every vertex emitted for it (base plinth at floor level through top corners) stays inside [platform.depth, chancel.depth].
 {

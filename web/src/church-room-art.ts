@@ -1114,7 +1114,7 @@ export class ChurchRoomArt {
     // Pale-blue vertical-boarded enclosure (solid +x end wall facing the pews, flat roof, and molded top cornice)
     this.box('bead', PAINT.side, cx0, fl, cz0, cx1, cTop - .10, cz1, 'y');
     this.box('boards', PAINT.green, cx0, cTop - .10, cz0, cx1, cTop, cz1, 'x', .85);
-    this.box('plain', PAINT.post, cx0, cTop - .11, cz0 - .045, cx1 + .045, cTop, cz1);
+    this.box('plain', PAINT.post, cx0, cTop - .11, cz0 - .045, cx1 + .045, cTop - .015, cz1);
     // Low white pediment and upright white Latin cross centred on top of the confessional facing -z
     const midX = (cx0 + cx1) / 2;
     this.box('plain', PAINT.white, midX - .27, cTop, cz0 + .01, midX + .27, cTop + .04, cz0 + .06);
