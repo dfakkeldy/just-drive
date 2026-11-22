@@ -299,7 +299,8 @@ export class TallLandmarks {
       nightLights.forEach((l, i) => seat(lightMesh, i, l.p, l.offset, [l.size, l.size, l.size]));
     }
 
-    // Static sag curves: spatially bucketed merged LineSegments sharing one wire shader material.
+    // Static sag curves: merged LineSegments sharing one wire shader material. Desktop draws every wire, so one draw;
+    // LOW hides wires past 1800 m, so it keeps 2.5 km buckets it can switch off.
     const wireBuckets = new Map<string, number[]>();
     for (const line of data.lines) {
       const tiers = line.circuits === 2 ? [0.82, 1.0] : [1.0];
@@ -310,7 +311,7 @@ export class TallLandmarks {
         const spreadA = a.kind === 'crossing' ? 11 : line.circuits === 2 ? 5.5 : 4;
         const spreadB = b.kind === 'crossing' ? 11 : line.circuits === 2 ? 5.5 : 4;
         const mx = (a.e + b.e) * 0.5 - village[0], mz = village[1] - (a.n + b.n) * 0.5;
-        const bucketKey = `${Math.floor(mx / 2500)},${Math.floor(mz / 2500)}`;
+        const bucketKey = low ? `${Math.floor(mx / 2500)},${Math.floor(mz / 2500)}` : 'all';
         let positions = wireBuckets.get(bucketKey);
         if (!positions) { positions = []; wireBuckets.set(bucketKey, positions); }
         // A shared junction support is drawn once at the tallest height; every line's wires end at that drawn top.
