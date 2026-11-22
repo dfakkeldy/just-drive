@@ -776,9 +776,9 @@ vec3 treeColor(vec2 p, vec2 world, float red, float yel, float stand, float dist
   float far = clamp(smoothstep(200.0, 1400.0, dist) + step(6.0, texel), 0.0, 1.0);
 #endif
 #ifndef MIRROR
-  // Crowns 5.5 m apart need about three pixels each. Finer, they shimmer into streaks on a far slope.
+  // Crowns 5.5 m apart need about four pixels each. Finer, they shimmer into speckles and streaks on a far slope.
   // The reflection is drawn at half size, so its pixels are twice as wide; it keeps the distance rule alone.
-  far = max(far, smoothstep(1.2, 2.4, footprint.y));
+  far = max(far, smoothstep(0.7, 1.5, footprint.y));
 #endif
   vec3 avg = farForest(p, world, red, yel, stand, footprint);
   if (far > 0.999) return avg;
@@ -791,9 +791,9 @@ vec3 treeColor(vec2 p, vec2 world, float red, float yel, float stand, float dist
   float side = 1.0 + 0.35 * dot(normalize(-off + 1e-4), normalize(sunDir.xz + 1e-4)) * smoothstep(0.05, 0.5, cell.z);
   c *= rim * side * (0.85 + 0.3 * vnoise(p * 1.3));
   // Crowns in a forest's raised surface shade one another: 0.75 brings their mean (about 0.80) to FAR_SHADE, so the
-  // fade to the far colour leaves no band, and a third of the clump colour keeps one bright crown from standing
+  // fade to the far colour leaves no band, and nearly half the clump colour keeps one bright crown from standing
   // out against dark conifers as a block.
-  return mix(mix(c * 0.75, avg, 0.3), avg, far);
+  return mix(mix(c * 0.75, avg, 0.45), avg, far);
 }
 
 // A brook: shallow tea-brown water over stones. The pattern runs downstream; where the bed falls fast it breaks white.

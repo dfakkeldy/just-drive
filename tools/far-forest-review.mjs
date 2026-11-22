@@ -8,11 +8,11 @@ export const FAR_FOREST_REVIEWED = [
   "\nvec3 treeColor(vec2 p, float red, float yel, float dist) {\n  // The average colour of the stand, for distances where one pixel holds many crowns.\n  vec3 conifer = vec3(0.030, 0.068, 0.032), lateGreen = vec3(0.120, 0.150, 0.035);\n  vec3 avg = conifer * max(1.0 - red - yel, 0.0)\n    + red * mix(lateGreen, vec3(0.300, 0.085, 0.027), 0.82)\n    + yel * mix(lateGreen, vec3(0.390, 0.260, 0.050), 0.78);\n  avg *= 0.80;   // gaps between crowns are in shade\n#if defined(MIRROR)"
  ],
  [
-  "#endif\n#ifndef MIRROR\n  // Crowns 5.5 m apart need about three pixels each. Finer, they shimmer into streaks on a far slope.\n  // The reflection is drawn at half size, so its pixels are twice as wide; it keeps the distance rule alone.\n  far = max(far, smoothstep(1.2, 2.4, footprint.y));\n#endif\n  vec3 avg = farForest(p, world, red, yel, stand, footprint);\n  if (far > 0.999) return avg;\n  vec2 off;",
+  "#endif\n#ifndef MIRROR\n  // Crowns 5.5 m apart need about four pixels each. Finer, they shimmer into speckles and streaks on a far slope.\n  // The reflection is drawn at half size, so its pixels are twice as wide; it keeps the distance rule alone.\n  far = max(far, smoothstep(0.7, 1.5, footprint.y));\n#endif\n  vec3 avg = farForest(p, world, red, yel, stand, footprint);\n  if (far > 0.999) return avg;\n  vec2 off;",
   "#endif\n  if (far > 0.999) return avg * (0.9 + 0.2 * vnoise(p * 0.02));\n  vec2 off;"
  ],
  [
-  "  c *= rim * side * (0.85 + 0.3 * vnoise(p * 1.3));\n  // Crowns in a forest's raised surface shade one another: 0.75 brings their mean (about 0.80) to FAR_SHADE, so the\n  // fade to the far colour leaves no band, and a third of the clump colour keeps one bright crown from standing\n  // out against dark conifers as a block.\n  return mix(mix(c * 0.75, avg, 0.3), avg, far);\n}",
+  "  c *= rim * side * (0.85 + 0.3 * vnoise(p * 1.3));\n  // Crowns in a forest's raised surface shade one another: 0.75 brings their mean (about 0.80) to FAR_SHADE, so the\n  // fade to the far colour leaves no band, and nearly half the clump colour keeps one bright crown from standing\n  // out against dark conifers as a block.\n  return mix(mix(c * 0.75, avg, 0.45), avg, far);\n}",
   "  c *= rim * side * (0.85 + 0.3 * vnoise(p * 1.3));\n  return mix(c, avg, far);\n}"
  ],
  [
