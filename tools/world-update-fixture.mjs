@@ -58,6 +58,8 @@ export function spy(source, ending = false, dev = true, absent = false, override
     gamepad: { device: 'keyboard', poll() {}, feel() {} },
     // The drift dust and meter (drift-feedback.ts): untraced too, nothing slides here.
     driftFeedback: { update() {} },
+    // Puddles stand only on an area's rough stretches (rough-roads.ts); the fixture's area has none.
+    puddles: null, splashLevel: () => 0,
     pad: { show: trace('pad.show') }, relief: { ...update('relief'), breaks: 0, busy: false },
     drone: { active: false },
     miniMap: { setFlight() {}, ...update('miniMap'), show: trace('miniMap.show') }, mapTimer: 0, refreshMap: trace('refreshMap'), mapStops: [], mapMarks: [], mapCars: [],
