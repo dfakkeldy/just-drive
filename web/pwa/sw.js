@@ -409,8 +409,6 @@ async function resource(request,path,event={}) {
       // answer is the same as for any other file it does not own, and the update it is told about has the car.
       return unavailable(event);
     }
-    const hashed=/^\/offline\/app\.([a-f0-9]{64})\.js$/.exec(path);
-    if(hashed) return hashedApp(path,hashed[1]);
     return fetch(request);
   }
   const ticket=generation;
