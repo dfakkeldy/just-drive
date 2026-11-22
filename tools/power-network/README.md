@@ -6,11 +6,13 @@ is **75 m from the mapped centre**: River Denys Mountain Road's last house is
 kind-4 piece. Unnamed tracks, bridges and `props_driveways` get no poles.
 The connected public end feeds the run; reversed source points work too.
 
-A named kind-4 road listed in `AREA.unpowered_tracks` (pipeline/areas.py) gets no run.
-Judique lists River Denys Road. The dash cam drive of 21 Nov 2026 saw the line end at
-the last house with power, about 2.8 km along the public piece of River Denys Road. It saw no
-pole after that, on the public piece or on the kind-4 piece to the church. A name that
-matches no kind-4 road stops the bake.
+A named kind-4 piece listed in `AREA.unpowered_tracks` (pipeline/areas.py) gets no run.
+Each entry is a point on the piece's line and its expected name. Step 29 stops unless the
+point is within 5 m of a named kind-4 piece of that name that is no props driveway or bridge.
+Other pieces with the same name keep the usual rule. Judique lists the kind-4 piece of
+River Denys Road to the church. The dash cam drive of 21 Nov 2026 saw the line end at the
+last house with power, about 2.8 km along the public piece of River Denys Road. It saw no
+pole after that, on the public piece or on the kind-4 piece to the church.
 
 **Known gap (frozen public poles).** The public piece of River Denys Road (kind 3) still
 has frozen public poles to its end, about 7.6 km past the real end of the line. Removing
