@@ -18,17 +18,18 @@ const byte = (sample, flags) => {
 };
 
 // The bridge paint mask and pavement flags must be independent on the same tile.
-const road = new Uint8Array([128, 52, 68, 0, 128, 52, 65, 0, 128, 52, 33, 0]);
+const deckRoad = new Uint8Array([128, 52, 68, 0, 128, 52, 65, 0, 128, 52, 33, 0]);
 const paintMask = new Uint8Array([0, 0, 1]);
-assert.deepEqual([...drawnRoadBytes(road, paintMask)], [128, 52, 3, 0, 128, 52, 65, 0, 128, 52, 32, 0]);
-assert.deepEqual([...road], [128, 52, 68, 0, 128, 52, 65, 0, 128, 52, 33, 0], 'CPU road flags stay intact');
+assert.deepEqual([...drawnRoadBytes(deckRoad, paintMask)], [128, 52, 3, 0, 128, 52, 65, 0, 128, 52, 32, 0]);
+assert.deepEqual([...deckRoad], [128, 52, 68, 0, 128, 52, 65, 0, 128, 52, 33, 0], 'CPU road flags stay intact');
 
 // Boot-time driveways must keep the surveyed span inventory from the installed network.
 const launch = readFileSync('web/src/main.ts', 'utf8').match(/^const roads = new Roads\((.*), manifest.village, terrain\);$/m);
 assert.ok(launch, 'road network startup expression');
 const supplied = { roads: [{ id: 1 }], bridgeSpans: [{ id: 2 }] };
 const driveways = { added: [{ id: 3 }] };
-const combined = new Function('roadData', 'novemberRoads', 'return (' + launch[1] + ')')(supplied, driveways);
+// roadLines is main.ts's road list after the Little Mabou marsh rail mapping (#96); here it is the supplied roads.
+const combined = new Function('roadData', 'novemberRoads', 'roadLines', 'return (' + launch[1] + ')')(supplied, driveways, supplied.roads);
 assert.equal(combined.bridgeSpans, supplied.bridgeSpans, 'surveyed spans survive the driveway additions');
 assert.deepEqual(combined.roads.map(road => road.id), [1, 3]);
 
