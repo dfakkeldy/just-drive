@@ -57,7 +57,7 @@ async function page(query, width, height, phone, use) {
     const url = `${base}/?${query}&mp=1&hud=1${phone ? '&touch=1' : ''}${server ? `&mpserver=${encodeURIComponent(server)}` : ''}`;
     await c.send('Page.navigate', { url });
     assert.ok(await waitForSettled(read, url), `${query} ${width}x${height} settled`);
-    if (server && !phone) for (let n = 0; n < 40 && !await read(`!!document.getElementById('mpChatButton')?.offsetParent`); n++) await sleep(500);
+    if (server && !phone) for (let n = 0; n < 40 && !await read(`(()=>{const card=document.getElementById('mpSocial');if(card)card.open=true;return !!document.getElementById('mpChatButton')?.offsetParent})()`); n++) await sleep(500);
     await read(`document.getElementById('propertyLines').click()`);
     for (let n = 0; n < 3 && await read(`document.getElementById('miniMapHead').textContent`) !== 'MAP3.2 km'; n++) {
       await read(`document.getElementById('miniMapCanvas').click()`); await sleep(300);

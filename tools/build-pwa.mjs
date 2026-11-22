@@ -11,6 +11,7 @@ import { offlineModel } from './offline-models.mjs';
 const site = resolve(process.argv[2]);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const file = url => { const b = read(site + url); return { url, bytes: b.length, hash: hash(b) }; };
+const builtAt = Date.now(); // Included in immutable addresses: an old tab cannot make an older build newest.
 function build(just = false) {
 const files = [];
 function walk(dir, keep = () => true) { for (const e of readdirSync(site + dir, { withFileTypes: true })) { const p = `${dir}/${e.name}`; if (statSync(site+p).isDirectory()) walk(p, keep); else if (keep(e.name)) files.push(file(p)); } }
@@ -34,7 +35,6 @@ try {
 } catch (e) { if (e.code !== 'ENOENT') throw e; }
 files.sort((a,b) => a.url.localeCompare(b.url));
 const dataRevision = hash(JSON.stringify(files));
-const builtAt = Date.now(); // Included in immutable addresses: an old tab cannot make an older build newest.
 const app = read(site + '/app.js');
 const appUrl = `/offline/app.${hash(app)}.js`; write(site + appUrl, app);
 // The code each import() loads (web/area-chunks-build.ts). Their names carry a content hash, and app.js imports them by
@@ -57,7 +57,7 @@ page = page.replace('</head>', preloads.map(p => `<link rel="modulepreload" href
 // app.js names every chunk by its content hash, so the app's hash pins the chunks too.
 const pageKey = hash(JSON.stringify({ builtAt, page, dataRevision, app:hash(app), manifest, icons:shellIconHashes() }));
 function shellIconHashes() { return ['180','192','512'].map(n=>file(`/offline/icons/icon-${n}.png`).hash).concat(file('/offline/icons/maskable-512.png').hash); }
-page = page.replace('</head>', `<link rel="manifest" href="${manifestUrl}">\n<link rel="apple-touch-icon" sizes="180x180" href="/offline/icons/icon-180.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="${just ? 'Just Drive: Mabou' : 'Mabou Mail'}">\n<meta name="mmm-offline-bytes" content="${files.reduce((n,f)=>n+f.bytes,0)}">\n<meta name="mmm-page" content="${pageKey}">\n<meta name="mmm-build" content="${hash(app).slice(0,16)}">\n</head>`);
+page = page.replace('</head>', `<link rel="manifest" href="${manifestUrl}">\n<link rel="apple-touch-icon" sizes="180x180" href="/offline/icons/icon-180.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="${just ? 'Just Drive: Mabou' : 'Mabou Mail'}">\n<meta name="mmm-offline-bytes" content="${files.reduce((n,f)=>n+f.bytes,0)}">\n<meta name="mmm-page" content="${pageKey}">\n<meta name="mmm-built-at" content="${builtAt}">\n<meta name="mmm-build" content="${hash(app).slice(0,16)}">\n</head>`);
 // The preview includes the saved page, app, manifest and icons as well as terrain and radio.
 const dataBytes=files.reduce((n,f)=>n+f.bytes,0);
 const iconUrls=[...['180','192','512'].map(n=>`/offline/icons/icon-${n}.png`),'/offline/icons/maskable-512.png'];
@@ -75,13 +75,13 @@ const inventory = { schema:1, offlineArea:'mabou', builtAt, pageKey, page:pageUr
 if(inventory.totalBytes!==previewBytes)throw Error('Offline size preview did not settle.');
 const encoded = JSON.stringify(inventory), revision = hash(encoded), indexUrl = `/offline/files.${revision}.json`;
 write(site+indexUrl, encoded);
-const version = { schema:1, revision, dataRevision, pageKey, index:indexUrl, disabled:process.env.OFFLINE_DISABLED==='1' };
+const version = { schema:1, revision, builtAt, dataRevision, pageKey, index:indexUrl, disabled:process.env.OFFLINE_DISABLED==='1' };
 write(site+(just ? '/version-just.json' : '/version.json'),JSON.stringify(version));
 // This address describes an immutable build; only version.json carries the live kill switch.
 write(site+`/offline/start.${pageKey}.json`,JSON.stringify({...version,disabled:false}));
 console.log(`offline: ${files.length} data files; ${inventory.totalBytes} bytes; shell ${shell.reduce((n,f)=>n+f.bytes,0)} bytes; inventory ${encoded.length} bytes; worker ${statSync(site+'/sw.js').size} bytes`);
 
-return { pageKey, bytes: previewBytes };
+return { pageKey, builtAt, bytes: previewBytes };
 }
 const originalPage = read(site + '/index.html', 'utf8');
 build();
@@ -94,6 +94,7 @@ const publicPage = read(site + '/index.html', 'utf8');
 for (const area of [...AREAS, null]) {
   const folder = site + '/just/' + (area?.id ?? 'unknown'); mkdirSync(folder, { recursive: true });
   let page = justPage(publicPage, area);
+  page = page.replace(/(<meta name="mmm-built-at" content=")[^"]+("[>])/, `$1${just.builtAt}$2`);
   page = page.replace(/(<meta name="mmm-page" content=")[^"]+("[>])/, `$1${just.pageKey}$2`).replace(/(<meta name="mmm-offline-bytes" content=")[0-9]+("[>])/, `$1${just.bytes}$2`);
   write(folder + '/index.html', page);
 }

@@ -1,8 +1,11 @@
+import { bikeKeys, horseKeys } from './vehicle-choice';
+import { installSettings } from './settings';
 import { Sidewalks } from './sidewalks';
 import { loadSidewalkData } from './sidewalks-cache';
 import { StreamCulverts } from './stream-culverts';
 import { sugarCampStart } from './sugar-camp-start';
 import { PointTupperDriver, driverEnabled, driverLive } from './point-tupper-driver';
+import { KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys } from './controls';
 import { PauseGate } from './pause';
 import { TrafficSignals } from './traffic-signals';
 import { CLEAR_HAZE, MOODS, moodLook, weatherMoment, weatherSettings, weatherUI } from './weather';
@@ -22,8 +25,9 @@ import { Fleet } from './fleet';
 import { fleetEnabled, fleetRig } from './fleet-models';
 import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
+import { ABOUT_URL } from './credits';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
+import { baxtersCoveBuildingArt, isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
 import { littleMabouMarshRail, NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals, CatTileUnread } from './animals';
@@ -36,7 +40,7 @@ import { Landmarks } from './landmarks';
 import { Roads } from './roads';
 import { detailSetting } from './detail';
 import { offlinePlay } from './offline-play';
-import { bindOfflineVersion } from './offline-version';
+import { bindOfflineVersion, watchGameVersion } from './offline-version';
 import { pictureSetting } from './picture';
 import { savePicture } from './save-picture';
 import { EdgeSamples, Finish, type CloudLight } from './finish';
@@ -62,7 +66,7 @@ import { Mail } from './mail';
 import { Shift } from './shift';
 import { readMode } from './mode';
 import { readEra, areaInEra } from './era';
-import { FreeDrive, SceneryContact, quietInteriors, quietRelief, quietEndings, prepareExplore, exploreKey } from './explore';
+import { FreeDrive, SceneryContact, quietInteriors, quietRelief, quietEndings, prepareExplore, exploreKey, watchPictureStatus } from './explore';
 import { placesFor, homePlaces, churchPlaces, westBayPlaces, areaPlaces } from './places';
 import { PlacesUI } from './places-ui';
 import { BigMap } from './big-map';
@@ -109,8 +113,9 @@ import { early } from './boot-tasks';
 import { Edge } from './edge';
 import { directionFromAngles, sunAngles } from './sun';
 import { readLightStudy, studyScale, studyLightingElevation, lightStudyUI, readDrivePosition } from './light-study';
+import type { SunSeeker, SunViewLight } from './sun-seeker';
 import { chooseYardLights, nightPalette } from './night-rules';
-import { Night, NightShading } from './night';
+import { Night, NightShading, nightSkyMaterial } from './night';
 import { HarbourLights } from './harbour-lights';
 import { Terrain, type Manifest } from './terrain';
 import { createTitle } from './title';
@@ -121,7 +126,8 @@ import { wharfBuildingArt } from './mabou-wharf-buildings';
 import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
-import { createTouchControls } from './touch';
+import { createTouchControls, moveEndShiftToSettings } from './touch';
+import { scrollMore } from './scroll-more';
 import { createGamepad } from './gamepad';
 import { drivingHelpSetting } from './driving-help';
 import { Trees, crownTest, treeLook } from './trees';
@@ -135,12 +141,14 @@ import { Cemeteries } from './cemeteries';
 import { Stockpiles } from './stockpiles';
 import { HomeSite } from './home-site';
 import { PorchDog } from './porch-dog';
-import { lazyPlaceRow, placeRow, placeSlots, sitesOf, type BuiltPlaces, type HandBuiltPlace, type PlaceRow } from './place';
+import { drawnWithout, lazyPlaceRow, placeRow, placeSlots, sitesOf, type BuiltPlaces, type HandBuiltPlace, type PlaceRow } from './place';
 import { YardDogSite } from './yard-dog-site';
 import { YardDog } from './yard-dog';
 import { LotProps } from './lot-props';
 import { chooseLotProps } from './lot-props-rules';
 import { PorchHouse } from './porch-house';
+import { DrLaneSite } from './drlane-site';
+import { DrLaneHouse } from './drlane-house';
 import { PorchSite } from './porch-site';
 import { ChurchSite } from './church-site';
 import { JudiqueVillageSite, VILLAGE_PLACES } from './judique-village-site';
@@ -150,7 +158,7 @@ import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
 import {createTestPark,testParkPlaces} from './stunt-test-park';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
-import { Drone, createDroneButton, createDroneSticks, roofHeights } from './drone';
+import { Drone, createDroneButton, createDroneSticks, roofHeights, droneSpans, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';
 import { DRONE } from './drone-rules';
 
 // Mabou village, and the game's moment: the second week of October, late afternoon (Atlantic Daylight Time, UTC-3).
@@ -301,13 +309,17 @@ if (!mailMode && !bare) lightStudyUI(lightStudy, when, lat, lon, () => ({ e: veh
 const chosenClock = lightStudy.active || weather.chosen;
 const sunDir = directionFromAngles(sun.az, studyLightingElevation(sun.el, chosenClock));
 // Low sun is warmer and weaker; the sky fill grows in share as the sun drops.
+function solarColors(low: number, night: ReturnType<typeof nightPalette>) {
+  const sunColor = new THREE.Color().setRGB(1.0, 0.62 + 0.3 * low, 0.36 + 0.5 * low).multiplyScalar(2.2 + 2.3 * low);
+  const skyColor = new THREE.Color().setRGB(0.30, 0.44, 0.72).multiplyScalar(0.55 + 0.5 * low);
+  const fogColor = new THREE.Color().setRGB(0.62, 0.66, 0.72).multiplyScalar(0.75 + 0.35 * low);
+  if (night) { sunColor.multiplyScalar(night.sunScale); skyColor.setRGB(...night.sky); fogColor.setRGB(...night.fog); }
+  return { sunColor, skyColor, fogColor };
+}
 const low = THREE.MathUtils.clamp(sun.el / 35, 0, 1);
-const sunColor = new THREE.Color().setRGB(1.0, 0.62 + 0.3 * low, 0.36 + 0.5 * low).multiplyScalar(2.2 + 2.3 * low);
-const skyColor = new THREE.Color().setRGB(0.30, 0.44, 0.72).multiplyScalar(0.55 + 0.5 * low);
-const fogColor = new THREE.Color().setRGB(0.62, 0.66, 0.72).multiplyScalar(0.75 + 0.35 * low);
 // The night of a chosen clock (night-rules.ts). On every other page this is null and none of the night is built.
 const nightLook = nightPalette(sun.el, chosenClock);
-if (nightLook) { sunColor.multiplyScalar(nightLook.sunScale); skyColor.setRGB(...nightLook.sky); fogColor.setRGB(...nightLook.fog); }
+const { sunColor, skyColor, fogColor } = solarColors(low, nightLook);
 // Drive around: Apply keeps the player's place, as the light study does. A mail shift starts its day again.
 if (!bare && !lightStudy.active) weatherUI(weather, mailMode ? undefined : () => ({ e: vehicle.x + manifest.village[0], n: manifest.village[1] - vehicle.z, heading: THREE.MathUtils.radToDeg(vehicle.heading) }));
 // A weather mood changes numbers the light already has. Clear gives null: nothing below runs and the frame is as before.
@@ -339,7 +351,8 @@ if (nightShading) Object.assign(shared, nightShading.uniforms);   // before the 
 
 const sky = new Sky();
 sky.scale.setScalar(300000);
-const su = sky.material.uniforms;
+const daySkyMaterial = sky.material;
+const su = daySkyMaterial.uniforms;
 su.turbidity.value = 5.5; su.rayleigh.value = 1.7; su.mieCoefficient.value = 0.006; su.mieDirectionalG.value = 0.82;
 if (coastalAir) {
   su.turbidity.value = 3.4; su.rayleigh.value = 2.25; su.mieCoefficient.value = 0.0038;
@@ -412,11 +425,16 @@ const bakedBuildingStyles = stylesRead
 // One house at the end of Beaton Road is built by hand, with a dog on its porch (Mabou today). ?porch=0 leaves the surveyed box.
 const porchBox = ERA.modern && AREA.porch && params.get('porch') !== '0' && buildingList ? PorchSite.find(buildingList) : null;
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
-const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
+// One house on D.R.'s Lane (Judique) is built by hand with its yard. ?drlane=0 leaves the surveyed box.
+const drLaneBox = ERA.modern && AREA.drLane && params.get('drlane') !== '0' && buildingList ? DrLaneSite.find(buildingList) : null;
+const drLaneSite = drLaneBox ? new DrLaneSite(drLaneBox, manifest.village) : null;
+const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
-const buildingStyles = buildingAppearance(astra, LOW, sunDir,
-  littleMabouArt || wharfArt ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles } : bakedBuildingStyles);
-const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
+// Baxters Cove harbour and the Highway 19 end of its road (Judique, 21 Nov dash cam): the drawing only.
+const coveArt = ERA.modern && AREA.id === 'judique' && drawnBuildings ? baxtersCoveBuildingArt(drawnBuildings) : null;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir, littleMabouArt || wharfArt || coveArt
+  ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles, ...coveArt?.styles } : bakedBuildingStyles);
+const sceneryBuildings = wharfArt?.buildings ?? coveArt?.buildings ?? drawnBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
@@ -450,6 +468,7 @@ const placeRows = {
     roads.roads.map(r => ({ halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + manifest.village[0], manifest.village[1] - z]) })), mappedBuildings)),
   mabouMain: lazyPlaceRow(mabouSite, () => mabouMainChunk!.take().catch(partFailed), (site, part) => new part.MabouMain(site, terrain, LOW, roads.roads)),
   maryville: placeRow(maryvilleSite, site => new maryvilleFeature!.MaryvilleStore(site, terrain, LOW)),
+  drLane: placeRow(drLaneSite, site => new DrLaneHouse(site, terrain, lift, LOW)),
 };
 // Each site clears its surveyed land.
 const placeSites = sitesOf(placeRows);
@@ -493,6 +512,7 @@ if(stuntPark)scene.add(stuntPark.group);
 if (fishingSite) terrain.sites.push(fishingSite);
 if (homeSite) terrain.sites.push(homeSite);
 if (porchSite) terrain.sites.push(porchSite);
+if (drLaneSite) terrain.sites.push(drLaneSite);
 if (churchSite) terrain.sites.push(churchSite);
 if (quarrySite) { terrain.sites.push(quarrySite); terrain.coast=quarrySite; }
 const cemeteries = ERA.modern ? await Cemeteries.load(manifest, name => cemeteriesRead?.take() ?? getJson(name), terrain, LOW, AREA.id) : null;
@@ -512,7 +532,11 @@ crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, o
 const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
 const novemberRoads = ERA.modern && AREA.november
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
-if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
+if (novemberRoads) {
+  terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group);
+  // Not enumerable: tools/ui-check.mjs pins the listed dev keys. tools/area-browser.mjs counts its surfaces in Judique.
+  if (import.meta.env.DEV) expose({ novemberRoads }, false);
+}
 const treeExcludes = novemberRoads
   ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
   : stockpiles?.excludes;
@@ -525,7 +549,8 @@ const toWorld = (e: number, n: number) => new THREE.Vector3(e - VE, 0, VN - n);
 // Models use the standard materials, so they need scene lights that agree with the terrain shader.
 const sunLight = new THREE.DirectionalLight(sunColor, 1.0);
 sunLight.position.copy(sunDir);
-scene.add(sunLight, new THREE.HemisphereLight(skyColor, new THREE.Color(0.22, 0.20, 0.15), 3.2));
+const skyFill = new THREE.HemisphereLight(skyColor, new THREE.Color(0.22, 0.20, 0.15), 3.2);
+scene.add(sunLight, skyFill);
 // Desktop quality: real shadows from the low sun. The phone build keeps its speed and goes without.
 // ?shadows=0 turns them off; ?shadows=1 keeps them on even on a slow computer (pictures are taken that way).
 const sunShadows = terrain.shadows ? new SunShadows(renderer, scene, sunLight, sunDir, params.get('shadows') === '1') : null;
@@ -801,6 +826,7 @@ const siteContacts: [string, ContactSite | null][] = [
   ['hawkesbury', placeContact(places.hawkesbury)],
   ['mabouMain', placeContact(places.mabouMain)],
   ['maryville', placeContact(places.maryville)],
+  ['drLane', placeContact(places.drLane)],
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
 ];
@@ -988,6 +1014,7 @@ const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, prop
   resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; devHooks.reset();
 }, AREA.route, firedMode, DAILY?.day ?? 0) : new FreeDrive(roads, manifest.village);
+if (shift instanceof Shift) shift.endsAtSix = !DAILY;
 const roadScene = AREA.roadScene && shift instanceof Shift ? new RoadScene(roads, terrain, shift, params) : null;
 resets[resetSlot.roadScene] = () => roadScene?.reset();
 if (roadScene) { scene.add(roadScene.group, roadScene.painter.group); vehicle.placementGuard = pose => roadScene.allowPlacement(pose, vehicleSpec); }
@@ -1279,12 +1306,13 @@ addEventListener('keyup', (ev) => heldAtLanding.delete(ev.code));
 addEventListener('blur', () => heldAtLanding.clear());
 addEventListener('blur', () => keys.clear());
 // Only a wheel over the picture sets the drone's speed: scrolling Settings must not.
-addEventListener('wheel', (ev) => { if (drone.active) { if (ev.target === canvas) drone.wheel(ev.deltaY); } else flySpeed = THREE.MathUtils.clamp(flySpeed * (ev.deltaY < 0 ? 1.25 : 0.8), 2, 4000); }, { passive: true });
+addEventListener('wheel', (ev) => { if (sunSeeker) return; if (drone.active) { if (ev.target === canvas) drone.wheel(ev.deltaY); } else flySpeed = THREE.MathUtils.clamp(flySpeed * (ev.deltaY < 0 ? 1.25 : 0.8), 2, 4000); }, { passive: true });
 
 const pointers = new Map<number, { x: number; y: number; sx: number; sy: number }>();
 let flyTouch = 0, droneTurn = 0;   // droneTurn: how far a drag has turned the drone since its last frame
 // On a phone the visible pad and pedals own the driving input; with a mouse the old drag on the picture still works.
 const honk = () => { if (live() && !fleet?.busy && !document.hidden && !interiors.busy && mode === 'drive') { animals?.honk(vehicle); roadScene?.honk(vehicle); roadAnimals?.honk(vehicle); multiplayer?.horn(); ride.honk(); } };
+moveEndShiftToSettings();
 const pad = touchDevice && !bare ? createTouchControls({
   reset: resetToRoad,
   view: () => { if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
@@ -1297,6 +1325,7 @@ if (pad) {
   const top = document.getElementById('phoneTop'), button = createDroneButton(() => { if (live() && !fleet?.busy && !interiors.busy && mode === 'drive') { yardJob?.judge.cancel(); launchDrone(); } });
   top?.insertBefore(button, document.getElementById('gear'));
 }
+let sunSeeker: SunSeeker | null = null;
 const pictureButton = pad && !mailMode ? Object.assign(document.createElement('button'), {
   id: 'savePictureButton', type: 'button', textContent: 'Save picture', hidden: true,
 }) : null;
@@ -1305,7 +1334,7 @@ if (pictureButton) {
   pictureButton.addEventListener('click', requestPicture);
 }
 const pictureStatus = !bare && !mailMode ? Object.assign(document.createElement('div'), { id: 'savePictureStatus' }) : null;
-if (pictureStatus) { pictureStatus.setAttribute('role', 'status'); document.body.append(pictureStatus); }
+if (pictureStatus) { pictureStatus.setAttribute('role', 'status'); document.body.append(pictureStatus); watchPictureStatus(pictureStatus); }
 let pictureStatusTimer = 0;
 // A controller (gamepad.ts): the same values and the same actions as the keys. Nothing runs until one is used.
 const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
@@ -1314,13 +1343,13 @@ const gamepad = createGamepad({
   mail: padAct(() => { if (mailMode) mailRequested = true; else airportDrag?.begin(); }),
   // B changes the view; inside a building (where every other driving button rests) it climbs out, as Esc does.
   view: () => { if (interiors.busy) interiors.leave(); else if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
-  pause: () => { if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
+  pause: () => { if (sunSeeker) closeSunSeeker(); else if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
   reset: padAct(resetToRoad),
   radio: padAct(() => radio?.next()),
   photo: padAct(() => { if (mailMode) photoRequested = true; }),
   relief: padAct(() => relief.request()),
   places: padAct(() => placesUI?.open()),
-  back: () => { if (replay.active) replay.close(); else if (placesUI?.busy) placesUI.close(); else if (bigMap?.busy) bigMap.close(); else if (pause.blocked && pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
+  back: () => { if (sunSeeker) closeSunSeeker(); else if (replay.active) replay.close(); else if (placesUI?.busy) placesUI.close(); else if (bigMap?.busy) bigMap.close(); else if (pause.blocked && pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
 }, touchDevice, () => mode === 'drive' && live());
 if (import.meta.env.DEV) expose({ gamepad });   // for tools/gamepad-browser.mjs
 ride.configure(!fleet);
@@ -1389,6 +1418,7 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  sunSeeker?.lookSize();
 }
 addEventListener('resize', resize);
 
@@ -1419,7 +1449,7 @@ const droneCommand = { forward: 0, right: 0, up: 0, turn: 0 }, droneRoofAt = { x
 const droneUnder: { ground: number | null; floor: number | null } = { ground: null, floor: null };
 const droneKey = (code: string) => keys.has(code) ? 1 : 0;
 function flyDrone(dt: number) {
-  droneSticks?.show(!shift.ended);
+  droneSticks?.show(!shift.ended, drone.returning);
   if (pause.blocked) return;
   const stick = droneSticks?.command;
   // Keyboard alone flies it: WASD move it level, ←/→ (or Q/E) turn it, ↑/↓ tilt the camera, Space/Shift (or C) climb
@@ -1575,35 +1605,67 @@ const replayButton = (id: string): HTMLButtonElement => {
 const pause = new PauseGate();
 // The title card, an ending and the places panel are their own modals and keep their own keys.
 const pauseAllowed = (): boolean => started && !endings.busy && !placesUI?.busy && !bigMap?.busy;
-const pauseButton = Object.assign(document.createElement('button'), { id: 'pauseButton', textContent: 'Pause', ariaLabel: 'Pause game. Esc or P' });
+const pauseButton = Object.assign(document.createElement('button'), { id: 'pauseButton', hidden: true, textContent: 'Pause', ariaLabel: 'Pause game. Esc or P' });
 const pauseScreen = document.createElement('div');
 pauseScreen.id = 'pauseScreen';
 pauseScreen.hidden = true;
-pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>Room games do not pause</p><pre id="pauseState"></pre><button id="resumeGame">Resume</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button></section>';
+pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>A room keeps going when you pause.</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button><button id="pauseEndShift" hidden>End shift</button></section>';
+if (SITE.brand === 'just') pauseScreen.querySelector('section')!.insertAdjacentHTML('beforeend', `<a id="pauseHome" href="${new URL(ABOUT_URL.just).origin}/">All places (front page)</a>`);
+const sunButton = Object.assign(document.createElement('button'), { id: 'pauseSun', type: 'button', textContent: 'Sun Seeker' });
+if (!mailMode) pauseScreen.querySelector('#pauseSettings')!.after(sunButton);
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
-const roomPauseNote = Object.assign(document.createElement('p'), { textContent: 'Room games do not pause', hidden: true });
-settingsPanel.prepend(roomPauseNote);
+scrollMore(settingsPanel, () => settingsPanel.classList.contains('open'), 'settingsMore', document.body);
+const settingsRoomPauseNote = touchDevice ? null : Object.assign(document.createElement('p'), { className: 'roomPauseNote', hidden: true, textContent: 'A room keeps going when you pause.' });
+if (settingsRoomPauseNote) settingsPanel.querySelector('#settingsHeader')!.after(settingsRoomPauseNote);
 function syncPauseUI(): void {
   keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   pictureRequested = false;
   touch.steer = touch.throttle = flyTouch = 0;
   const room = !!multiplayer?.choice.on;
-  roomPauseNote.hidden = !room;
   pauseScreen.querySelector<HTMLElement>('.roomPauseNote')!.hidden = !room;
+  if (settingsRoomPauseNote) settingsRoomPauseNote.hidden = !room;
   settingsPanel.classList.toggle('open', pause.blocked && !pause.screen && !document.hidden);
-  pauseScreen.hidden = !pause.screen || document.hidden || replay.active;
+  pauseScreen.hidden = !pause.screen || document.hidden || replay.active || !!sunSeeker;
+  document.getElementById('pauseEndShift')!.hidden = !mailMode || document.getElementById('endShift')!.hidden || interiors.busy || bare;
   if (!pauseScreen.hidden) {
     // Rooms do not pause, so they have no replay; a fresh start has nothing to show yet.
     const watch = document.getElementById('pauseReplay') as HTMLButtonElement;
     watch.hidden = room; watch.disabled = !replay.available;
-    document.getElementById('pauseState')!.textContent = [document.getElementById('shiftHud')?.textContent || (mailMode ? 'Shift ready' : 'Free drive'), document.querySelector('#racePanel [role=status]')?.textContent || 'No active race'].join('\n');
+    sunButton.hidden = room || interiors.busy;
+    const station = radio?.tunedDial;
+    document.getElementById('pauseTitle')!.textContent = mode === 'drive' && !room && !interiors.busy && ride.kind === 'car'
+      ? `Pulled over${vehicle.roadName ? ' on ' + vehicle.roadName : ''}` : 'Paused';
+    document.getElementById('pauseState')!.textContent = DAILY ? 'Today’s run' : firedMode ? 'Get fired' : mailMode ? 'Deliver the mail' : 'Free drive';
+    document.getElementById('pauseRadio')!.textContent = station ? `On the radio: ${radio!.stationNamed(station)!}` : 'Radio quiet';
+    const race = document.querySelector('#racePanel [role=status]')?.textContent;
+    const raceLine = document.getElementById('pauseRace')!;
+    raceLine.hidden = !multiplayer?.current?.net.race?.startAt || !race || /no active race/i.test(race);
+    raceLine.textContent = raceLine.hidden ? '' : race!;
+    const hints = drone.active && !touchDevice ? DRONE_HELP : drone.active && touchDevice ? DRONE_TOUCH_HELP
+      : gamepad.device === 'gamepad' ? padKeys(ride.kind, mailMode, !!radio)
+      : ride.kind === 'horse' ? horseKeys(touchDevice, mailMode) : ride.kind === 'bike' ? bikeKeys(touchDevice)
+      : touchDevice ? (mailMode ? TOUCH : DRIVING_TOUCH) : (mailMode ? KEYS : DRIVING_KEYS);
+    document.querySelector<HTMLDetailsElement>('#pauseKeys')!.open = false;
+    const list = document.querySelector('#pauseKeys dl')!;
+    list.replaceChildren(...hints.flatMap(([key, help]) => {
+      const term = document.createElement('dt'), text = document.createElement('dd');
+      term.textContent = key; text.textContent = help;
+      return [term, text];
+    }));
     document.getElementById('resumeGame')!.focus();
   }
   syncRoadScenePause();
 }
 addEventListener('keydown', ev => {
+  if (sunSeeker) {
+    const eventIsInput = ev.target instanceof HTMLInputElement;
+    if (ev.code !== 'Escape' && eventIsInput) return;
+    sunSeeker.key(ev);
+    ev.stopImmediatePropagation();
+    return;
+  }
   // The replay owns every key while it shows; Tab, and Enter or Space on its focused control, keep their usual action.
   if (replay.active) { replay.key(ev); ev.stopImmediatePropagation(); return; }
   const typing = ev.target instanceof HTMLElement && ev.target.closest('input,select,textarea');
@@ -1612,11 +1674,15 @@ addEventListener('keydown', ev => {
   const escapeOwned = ev.code === 'Escape' && !pause.blocked && interiors.busy;
   if ((ev.code === 'Escape' && !escapeOwned || ev.code === 'KeyP' && !typing) && pauseAllowed()) {
     ev.preventDefault(); ev.stopImmediatePropagation();
-    if (!ev.repeat) { pause.toggle(); syncPauseUI(); }
+    if (!ev.repeat) {
+      const settingsClosed = ev.code === 'Escape' && settingsPanel.classList.contains('open');
+      pause.toggle(); syncPauseUI();
+      if (settingsClosed) document.getElementById('gear')!.focus();
+    }
   } else if (ev.code === 'Tab' && !pauseScreen.hidden) {
     ev.preventDefault();
-    const list = [...pauseScreen.querySelectorAll<HTMLButtonElement>('button:not([disabled]):not([hidden])')];
-    const at = list.indexOf(document.activeElement as HTMLButtonElement);
+    const list = [...pauseScreen.querySelectorAll<HTMLElement>('button:not([disabled]):not([hidden]), a[href], summary')];
+    const at = list.indexOf(document.activeElement as HTMLElement);
     list[(at + (ev.shiftKey ? list.length - 1 : 1) + list.length) % list.length]?.focus();
   }
 }, { capture: true });
@@ -1628,11 +1694,51 @@ new MutationObserver(() => {
   if (open !== (pause.blocked && !pause.screen && !document.hidden)) { pause.setSettings(open); syncPauseUI(); }
 }).observe(settingsPanel, { attributes: true, attributeFilter: ['class'] });
 document.getElementById('resumeGame')!.addEventListener('click', () => { pause.resume(); syncPauseUI(); });
+document.getElementById('pauseEndShift')!.addEventListener('click', () => { pause.resume(); syncPauseUI(); shift.end(); });
 document.getElementById('pauseSettings')!.addEventListener('click', () => { pause.setSettings(true); syncPauseUI(); });
 document.getElementById('pauseReplay')!.addEventListener('click', () => { openReplay(); });
+sunButton.addEventListener('click', async () => {
+  if (!pause.screen || sunSeeker || multiplayer?.choice.on || interiors.busy) return;
+  sunButton.disabled = true;
+  try {
+    const { SunSeeker } = await import('./sun-seeker');
+    if (pauseScreen.hidden || sunSeeker || multiplayer?.choice.on || interiors.busy) return;
+    const eye = mode === 'fly' ? camera.position.clone() : new THREE.Vector3(vehicle.x, vehicle.y + 1.7, vehicle.z);
+    const position = utm20ToLatLon(eye.x + VE, VN - eye.z);
+    sunSeeker = new SunSeeker({
+      camera, eye, ...position,
+      groundAtEye: terrain.bareHeightAt(eye.x, eye.z) ?? SEA_LEVEL,
+      seaLevel: SEA_LEVEL, exag: EXAG,
+      ground: range => terrain.bareGroundRays(eye.x, eye.z, range),
+      place: AREA.name,
+      close: closeSunSeeker,
+      savePicture: (view, when) => savePicture({
+        canvas, place: AREA.name, touch: touchDevice, when, prefix: 'sun-seeker',
+        render: () => {
+          view.invalidate();
+          drawSunSeeker(view, performance.now());
+        },
+        overlay: (context, width, height) => view.drawPictureOverlay(context, width, height),
+      }),
+    });
+    sunViewLoading = false;
+    sunViewFarLand = farLand;
+    syncPauseUI();
+  } catch (error) {
+    console.warn('Sun Seeker could not open.', error);
+  } finally {
+    sunButton.disabled = false;
+  }
+});
 for (const element of [pauseScreen, pauseButton]) for (const event of ['pointerdown', 'pointerup', 'pointermove']) element.addEventListener(event, ev => ev.stopPropagation());
 
 // ---- settings -----------------------------------------------------------------------------
+installSettings();
+// Reserve the credit chip's full height, including when it wraps beside property lines.
+const creditChip = document.getElementById('credit');
+if (creditChip) new ResizeObserver(() => {
+  settingsPanel.style.setProperty('--settings-credit-height', `${creditChip.getBoundingClientRect().height + 24}px`);
+}).observe(creditChip);
 {
   const slider = document.getElementById('exag') as HTMLInputElement, label = document.getElementById('exagValue')!;
   const panel = document.getElementById('settings')!;
@@ -1732,10 +1838,12 @@ const beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined
 // skip it; ?title=1 shows it in a test.
 const plainVisit = !isTestVisit(params);
 let started = bare || (!plainVisit && !params.has('room') && params.get('title') !== '1');
+let hasStarted = started;
 // Today's run shows its card, vehicle and weather on the title card.
 const titleDaily = DAILY && dailySquares ? { date: DAILY.date, squares: dailySquares, vehicle: GARAGE.find(g => g.id === DAILY.vehicle)?.name ?? 'Mail car',
   mood: MOODS.find(([m]) => m === DAILY.mood)?.[1] ?? 'Clear' } : undefined;
-const title = started ? null : createTitle(touchDevice, () => { started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
+const title = started ? null : createTitle(touchDevice, () => { hasStarted = true; started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
+if (__PUBLIC_APP__) watchGameVersion(SITE.brand === 'just', () => !hasStarted && document.getElementById('title')?.hidden === false && !document.getElementById('settings')?.classList.contains('open') && document.getElementById('titleLegal')?.hidden !== false && !document.activeElement?.matches('input,textarea,select'));
 // A ride-along day says so on the start card.
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { airportDrag?.reset(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
@@ -1823,7 +1931,9 @@ function syncRoadScenePause(paused = scenePaused()): void { roadScene?.setPaused
 document.addEventListener('visibilitychange', () => {
   // A tab hidden under the replay comes back to the pause screen when the replay closes, as any hidden tab does.
   if (document.hidden && replay.active) replayResume = false;
-  pause.setHidden(document.hidden); syncPauseUI();
+  pause.setHidden(document.hidden);
+  if (!document.hidden) sunSeeker?.invalidate();
+  syncPauseUI();
 });
 
 // Segments keep the drive frame's camera, activity and render work between the same updates.
@@ -1908,6 +2018,20 @@ for (let i = 0; i < endingWorldUpdates.length; i++) {
 }
 const worldCost: Record<string, number> = {};
 if (import.meta.env.DEV) expose({ cost: worldCost });
+// The frame's own blocks outside the table (the drive steps, animals, chase, mail, sun shadows), in milliseconds, on the
+// dev server only. A separate record, so mmm.cost keeps exactly the table's entries. Not enumerable: ui-check pins the
+// public key set. Each call site is guarded like updateWorld: the production bundle keeps no clock. A key keeps its last
+// value on frames that skip its block (drive and chase while flying; some or all keys on frames that return early, such
+// as interior or ending frames), so a reader counts only the keys written this frame.
+const frameCost: Record<string, number> = {};
+if (import.meta.env.DEV) expose({ frameCost }, false);
+let frameClock = 0;
+// Writes the time since frameClock under `name` and restarts the clock for the next block.
+function frameLap(name: string): void {
+  const end = performance.now();
+  frameCost[name] = end - frameClock;
+  frameClock = end;
+}
 function updateWorld(segment: WorldSegment | 'ending' | 'ending-mirror', dt: number, realDt = dt, now = 0): void {
   const list = worldSegments[segment];
   for (let i = 0; i < list.length; i++) {
@@ -1963,6 +2087,142 @@ async function drawPicture(): Promise<void> {
 if (drawProbe) Object.assign((window as unknown as { mmm?: Record<string, unknown> }).mmm ??= {}, { finish, drawProbe });
 
 const shadowFocus = new THREE.Vector3();
+let sunViewLoading = false;
+let sunViewFarLand: FarLand | null = farLand;
+let sunViewLight: SunViewLight | null = null;
+let restoreSunViewLight: (() => void) | null = null;
+let sunViewShadows: SunShadows | null = null;
+
+function closeSunSeeker(): void {
+  if (!sunSeeker) return;
+  sunSeeker.dispose();
+  sunSeeker = null;
+  restoreSunViewLight?.();
+  restoreSunViewLight = sunViewLight = null;
+  terrain.setPreviewShadows(null);
+  sunViewShadows?.disposePreview();
+  sunViewShadows = null;
+  sky.position.copy(camera.position);
+  updateWorld('ending', 0);
+  if (sunShadows?.enabled) {
+    let reach = 0;
+    if (mode === 'drive') shadowFocus.set(vehicle.x, vehicle.y, vehicle.z);
+    else reach = lookFocus(camera, terrain, SEA_LEVEL, shadowFocus);
+    sunShadows.update(0, shadowFocus, reach, true);
+  }
+  syncPauseUI();
+  if (!pauseScreen.hidden) sunButton.focus();
+}
+
+/** Use the light study's sun direction and colours without changing the visit's clock or its terrain scale. */
+function previewSunViewLight(light: SunViewLight): void {
+  if (light === sunViewLight) return;
+  restoreSunViewLight?.();
+  sunViewLight = light;
+  const original = {
+    direction: sunDir.clone(), sun: sunColor.clone(), sky: skyColor.clone(), fog: fogColor.clone(),
+    ground: skyFill.groundColor.clone(), fill: skyFill.intensity, material: sky.material,
+    shadows: sunShadows?.enabled, haze: shared.fogDensity.value, sunPosition: sunLight.position.clone(),
+    air: [su.turbidity.value, su.rayleigh.value, su.mieCoefficient.value, su.mieDirectionalG.value] as const,
+    clouds: finish?.skip.clouds,
+  };
+  const { sun: angles } = light, palette = nightPalette(angles.el, true);
+  if (finish && palette) finish.skip.clouds = true;
+  night?.setDayPreview(!palette);
+  if (!palette && nightLook && !LOW && params.get('shadows') !== '0') {
+    sunViewShadows ??= new SunShadows(renderer, scene, sunLight, sunDir, params.get('shadows') === '1', false);
+    terrain.setPreviewShadows(sunViewShadows.enabled ? sunViewShadows.uniforms : null);
+  }
+  const colors = solarColors(THREE.MathUtils.clamp(angles.el / 35, 0, 1), palette);
+  sunColor.copy(colors.sunColor);
+  skyColor.copy(colors.skyColor);
+  fogColor.copy(colors.fogColor);
+  sunDir.copy(directionFromAngles(angles.az, studyLightingElevation(angles.el, true)));
+  sunLight.color.copy(sunColor);
+  if (!sunShadows?.enabled) sunLight.position.copy(sunDir);
+  skyFill.color.copy(skyColor);
+  skyFill.groundColor.setRGB(...(palette?.ground ?? [0.22, 0.20, 0.15] as const));
+  skyFill.intensity = 3.2 * (1 - .45 * (palette?.level ?? 0));
+  shared.fogDensity.value = CLEAR_HAZE;
+  su.sunPosition.value.copy(sunDir);
+  [su.turbidity.value, su.rayleigh.value, su.mieCoefficient.value, su.mieDirectionalG.value] = [5.5, 1.7, .006, .82];
+  const nightPreview = palette ? nightSkyMaterial(palette, shared.fogColor, directionFromAngles(angles.az, angles.el), light.when, light.lat, light.lon) : null;
+  sky.material = nightPreview ?? daySkyMaterial;
+  const previewShadowsEnabled = sunViewShadows?.enabled;
+  if (palette) {
+    if (sunViewShadows?.enabled) sunViewShadows.enabled = false;
+    if (sunShadows?.enabled) sunShadows.enabled = false;
+    terrain.setPreviewShadows(null);
+  }
+  const shadows = sunShadows ?? sunViewShadows;
+  shadows?.refreshDirection();
+
+  restoreSunViewLight = () => {
+    sky.material = original.material;
+    nightPreview?.dispose();
+    sunDir.copy(original.direction);
+    sunColor.copy(original.sun); skyColor.copy(original.sky); fogColor.copy(original.fog);
+    sunLight.color.copy(sunColor);
+    skyFill.color.copy(skyColor); skyFill.groundColor.copy(original.ground); skyFill.intensity = original.fill;
+    shared.fogDensity.value = original.haze;
+    su.sunPosition.value.copy(sunDir);
+    [su.turbidity.value, su.rayleigh.value, su.mieCoefficient.value, su.mieDirectionalG.value] = original.air;
+    sunLight.position.copy(original.sunPosition);
+    if (finish) finish.skip.clouds = !!original.clouds;
+    night?.setDayPreview(false);
+    if (sunViewShadows && sunViewShadows.enabled !== previewShadowsEnabled) sunViewShadows.enabled = !!previewShadowsEnabled;
+    if (sunShadows && sunShadows.enabled !== original.shadows) sunShadows.enabled = !!original.shadows;
+    sunShadows?.refreshDirection();
+  };
+}
+
+function drawSunSeeker(view: SunSeeker, now: number): void {
+  if (document.hidden) return;
+  // When a turn brings in new tiles, finish their builds and redraw after they settle.
+  if (sunViewLoading) {
+    camera.updateMatrixWorld();
+    updateWorld('ending', 0);
+    if (!terrain.pending && !trees?.pending) {
+      sunViewLoading = false;
+      (sunShadows ?? sunViewShadows)?.refreshDirection();
+      view.invalidate();
+    }
+  }
+  if (sunViewFarLand !== farLand) {
+    sunViewFarLand = farLand;
+    view.invalidate();
+  }
+  const light = view.takeDraw();
+  if (!light) return;
+  previewSunViewLight(light);
+  camera.updateMatrixWorld();
+  sky.position.copy(camera.position);
+  updateWorld('ending', 0);
+  sunViewLoading = terrain.pending > 0 || (trees?.pending ?? 0) > 0;
+  const shadows = sunShadows ?? sunViewShadows;
+  const waitingForShadow = shadows?.enabled && !sunLight.shadow.map;
+  if (shadows?.enabled) {
+    const reach = lookFocus(camera, terrain, SEA_LEVEL, shadowFocus);
+    shadows.update(0, shadowFocus, reach, true);
+  }
+  renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
+  const showCar = car.root.visible, showDrone = drone.group.visible;
+  car.root.visible = false;
+  drone.group.visible = false;
+  try {
+    updateWorld('ending-mirror', 0);
+    farVisibility?.update(camera, now / 1000);
+    drawWorld();
+  } finally {
+    farVisibility?.settle(); waterReflections?.settle();
+    car.root.visible = showCar; drone.group.visible = showDrone;
+  }
+  afterWorld();
+  view.drawOverlay(renderer);
+  // The renderer allocates the map on its first draw. The terrain can sample it on the next one.
+  if (waitingForShadow && sunLight.shadow.map) view.invalidate();
+}
+
 function drawEnding(dt: number): void {
   if (ride.update) updateWorld('ride', 0);
   engineSound?.update(dt, null);
@@ -1982,12 +2242,15 @@ function drawEnding(dt: number): void {
 
 // Reuse this record: the HUD path allocates no per-frame state object.
 const hudState: HudState = {
+  // Set debugFps: true here to show FPS in the player readout.
   mode, mailMode, touchDevice, fps, speed: 0, activeTouchSpeedLimit: 0, roadName: '', surfaceName: '', airborne: false, help: '', jumpLine: '',
   e: 0, n: 0, height: 0, exag: EXAG, sunAz: 0, sunEl: 0, drawn: 0, pending: 0, flySpeed, views: SHOTS.length,
   done: 0, stops: 0, delivered: 0, lawn: 0, ditch: 0, trailerReason: '', atEdge: false, route: !!AREA.route,
   showRuts: params.has('lawn'), ruts: 0, lawns: 0, drone: '',
 };
 function frame(now: number) {
+  pauseButton.hidden = !started || bare;
+  document.body.classList.toggle('gameStarted', started);
   if (page.stopped) return;
   try {
   if (pictureButton) {
@@ -1999,6 +2262,10 @@ function frame(now: number) {
   if (pauseFrame.paused) {
     syncRoadScenePause(true);
     engineSound?.update(1 / 60, null);   // the pause screen is quiet (paused frames carry no clock: count one display frame)
+    if (sunSeeker) {
+      drawSunSeeker(sunSeeker, now);
+      requestAnimationFrame(frame); return;
+    }
     if (replay.active) {
       // The world holds still; the recorded ride and the replay camera move. Drawn like an ending: frozen world, moving camera.
       replay.frame(now);
@@ -2110,6 +2377,7 @@ function frame(now: number) {
       input.handbrake = true; input.held = true;   // a stop for an animal, not a drift
     }
     if (input.throttle !== 0 && (!demo || loaded)) waitingToDrive = false;
+    if (import.meta.env.DEV) frameClock = performance.now();
     // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.
     if (fleet) { const active = !fleet.busy; driveVehicle(dt, input); if (active && loaded && !animals?.waitingForTerrain) drove += dt; }
     else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.place(vehicle.x, vehicle.z, vehicle.heading);
@@ -2122,20 +2390,27 @@ function frame(now: number) {
       } else driveVehicle(dt, relief.busy ? { throttle: 0, steer: 0, handbrake: true } : input);
       if ((loaded || lawnDemo?.driving) && !animals?.waitingForTerrain) drove += dt;
     }
+    if (import.meta.env.DEV) frameLap('drive');
     animals?.update(dt, vehicle, camera);
+    if (import.meta.env.DEV) frameLap('animals');
     chase(dt);
+    if (import.meta.env.DEV) frameLap('chase');
   } else {
     fly(dt);
+    if (import.meta.env.DEV) frameClock = performance.now();
     animals?.update(dt, vehicle, camera);
+    if (import.meta.env.DEV) frameLap('animals');
     camera.rotation.set(pitch, yaw, 0);
   }
   if (endings.busy) { drawEnding(0); requestAnimationFrame(frame); return; }
   airportDrag?.draw(vehicle, gamepad.device);
   const impactSpeed = Math.hypot(vehicle.vx, vehicle.vz);
+  if (import.meta.env.DEV) frameClock = performance.now();
   const impact = shift.ended ? 1 : mail.update(dt, vehicle,
     mailControls && (mailRequested || keys.has('KeyM') || keys.has('KeyE') ||
       keys.has('Space') && document.activeElement === mailButton ||
       mailPointers.size > 0 || !!(demo && drove < demo && loaded && devHooks.throwMail)), camera);
+  if (import.meta.env.DEV) frameLap('mail');
   mailRequested = false;
   if (impact < 1 && vehicle.damageActive) shift.damage.hit('impact', impactSpeed);
   if (impact < 1) vehicle.drift.hit(vehicle.x, vehicle.z);   // a mailbox knock ends a drift, not clean
@@ -2161,11 +2436,13 @@ function frame(now: number) {
     footpaths?.update(realDt, camera.position);
     relief.update(dt, playing ? clockDt * CLOCK_FACTOR : 0, vehicle, playing && (!demo || reliefTest > 0));
     if (miniMap) {
-      miniMap.show(playing);
+      miniMap.setFlight(drone.active);
+      miniMap.show(playing || drone.active && clockRuns);
       mapTimer -= realDt;
       if (mapTimer <= 0) { mapTimer = 0.25; refreshMap(); }
       miniMap.boss = boss?.mapSpot ?? null;
-      miniMap.update(realDt, vehicle.x, vehicle.z, vehicle.heading, mapStops, mapMarks, mapCars);
+      const focus = drone.active ? drone.state : vehicle;
+      miniMap.update(realDt, focus.x, focus.z, drone.active ? -drone.state.yaw : vehicle.heading, mapStops, mapMarks, mapCars, drone.active ? vehicle : null);
     }
     // Paused frames return early, but a multiplayer room keeps running them: ground property lines still stop while Settings is open.
     propertyLayer?.update?.(vehicle.x, vehicle.z, playing && !pause.blocked && !interiors.busy);
@@ -2176,11 +2453,13 @@ function frame(now: number) {
   if (loaded) shiftReady = true;
   if (shiftReady) shift.update(clockRuns ? clockDt : 0, vehicle);
   if (sunShadows) {
+    if (import.meta.env.DEV) frameClock = performance.now();
     // The shadow box follows the car; with the free camera it sits a little ahead of the lens.
     let reach = 0;
     if (mode === 'drive') shadowFocus.set(vehicle.x, vehicle.y, vehicle.z);
     else reach = lookFocus(camera, terrain, SEA_LEVEL, shadowFocus);
     sunShadows.update(realDt, shadowFocus, reach, pictureBusy);
+    if (import.meta.env.DEV) frameLap('sunShadows');
   }
   updateWorld('grass', dt, realDt, now);
   // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
@@ -2213,6 +2492,9 @@ function frame(now: number) {
     // Behind the title card the readout said "0 km/h off the map" while the land was still loading: keep it out of sight.
     hud.style.visibility = started ? '' : 'hidden';
     hudState.mode = mode; hudState.fps = fps;
+    const fpsText = fps.toFixed(0);
+    if (hud.dataset.fps !== fpsText) hud.dataset.fps = fpsText;
+    hudState.hintsHidden = drove >= 60;
     if (mode === 'drive') {
       hudState.speed = vehicle.speed; hudState.activeTouchSpeedLimit = scenePaused() ? 0 : vehicle.activeTouchSpeedLimit; hudState.surfaceName = vehicle.surfaceName; hudState.airborne = vehicle.airborne;
       hudState.roadName = vehicle.roadName ?? (yardSite?.surface(vehicle.x, vehicle.z) ? 'works yard' : homeSite?.surface(vehicle.x, vehicle.z) ? 'house yard' : 'off the map');
@@ -2220,6 +2502,7 @@ function frame(now: number) {
       if (ERA.id === '1884') hudState.roadName = historyRoadName(hudState.roadName, AREA.id);
       if (touchDevice) hudState.jumpLine = ride.jumpLine;
       else if (!mailMode) hudState.help = ride.help;
+      hudState.airLine = touchDevice ? '' : ride.airLine;
     } else {
       hudState.e = camera.position.x + VE; hudState.n = VN - camera.position.z; hudState.height = camera.position.y;
       hudState.sunAz = sun.az; hudState.sunEl = sun.el; hudState.drawn = terrain.drawn; hudState.pending = terrain.pending; hudState.flySpeed = flySpeed;
@@ -2234,7 +2517,7 @@ function frame(now: number) {
       hudState.fleetLine = fleet.driven.id === 'truck' && fleet.handbrake && !line.includes('Handbrake on') ? `Handbrake on · ${line}` : line;
     } else hudState.fleetLine = '';
     ride.hud?.(hudState);
-    setHud(hud, hudLine(hudState));
+    setHud(hud, hudLine(hudState), drone.active && hudState.drone ? droneSpans : undefined);
   }
 
   requestAnimationFrame(frame);
@@ -2242,6 +2525,8 @@ function frame(now: number) {
 }
 // Settings > Advanced: on phone detail, once the far views pack is installed (desktop always draws it).
 if (!bare && LOW && farPack) farPhoneSetting(advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice), farPhone.choice, farPhone.fromUrl, touchDevice);
+const graphics = document.getElementById('graphics');
+if (graphics) (document.getElementById('advanced') ?? advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice))?.append(graphics);
 resize();
 document.getElementById('boot')?.remove();
 // Finalize all initial material hooks before their first compile. Activation only flips a uniform.

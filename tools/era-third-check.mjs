@@ -27,15 +27,16 @@ test('bridge-loose',()=>{for(const p of ['tools/era-deck-check.mjs','tools/era-b
 test('changing-offscreen',()=>{const text=source('tools/era-review-check.mjs'),body=text.match(/function fixture\(\)\{([\s\S]*?)\n\}/)[1],f=new Function('Roads','HistoryScene','THREE','historyLayout',body)(Roads,HistoryScene,THREE,historyLayout),p={height:0,source:0,drawn:false};f.terrain.meshContactAt(f.model.site.x,f.model.site.z,p);const a=p.height;f.mode.drawn=true;f.terrain.meshContactAt(f.model.site.x,f.model.site.z,p);assert(Math.abs(p.height-a)>.5,'arriving land in the off-screen regression must have different heights');assert.match(text,/anvil|accessor/,'off-screen regression checks accessory geometry too');});
 test('title-radio',()=>{
  const savedLocation=globalThis.location;globalThis.location={search:'?era=1884',hostname:'127.0.0.1',pathname:'/'};
- const made=[];const node=()=>({style:{},dataset:{},classList:{add(){}},parts:new Map(),append(){},after(){},focus(){},setAttribute(){},appendChild(){},prepend(){},querySelector(key){if(!this.parts.has(key))this.parts.set(key,node());return this.parts.get(key);},addEventListener(){},innerHTML:'',hidden:false});
+ const made=[];const node=()=>({style:{},dataset:{},classList:{add(){}},parts:new Map(),append(){},after(){},before(){},focus(){},setAttribute(){},appendChild(){},prepend(){},querySelector(key){if(!this.parts.has(key))this.parts.set(key,node());return this.parts.get(key);},addEventListener(){},innerHTML:'',get textContent(){return this.innerHTML.replace(/<[^>]*>/g,'');},set textContent(value){this.innerHTML=String(value);},hidden:false});
+ globalThis.addEventListener ??= () => {};
  globalThis.document={createElement:()=>{const n=node();made.push(n);return n;},head:{appendChild(){}},body:{appendChild(){}}};
  for(const touch of [false,true])for(const kind of ['car','bike','truck','sxs'])for(const just of [false,true]){
   made.length=0;const title=createTitle(touch,()=>{},'explore',undefined,{kind,choose(){}},just,true,readEra(new URLSearchParams('era=1884')));
-  const root=made.find(n=>n.id==='title'),rows=root.innerHTML.match(/<dl>([\s\S]*?)<\/dl>/)[1];
+  const root=made.find(n=>n.id==='title'),rows=[...root.innerHTML.matchAll(/<dl>([\s\S]*?)<\/dl>/g)].map(m=>m[1].replace(/<[^>]*>/g,'')).join('');
   assert(/radio|station|H \/ T/i.test(rows),'era '+kind+' '+touch+' offers radio');assert(/horn|honk/i.test(rows));
   assert(root.innerHTML.includes('Mabou, 1884')&&root.innerHTML.includes('A work of fiction'));
-  title.setRadio(false);assert(!/radio|station|H \/ T/i.test(root.querySelector('dl').innerHTML),'missing audio hides era radio hints');
-  title.setRadio(true);assert(/radio|station|H \/ T/i.test(root.querySelector('dl').innerHTML),'late availability restores era radio hints');
+  title.setRadio(false);assert(!/radio|station|H \/ T/i.test(root.querySelector('#titleControls').textContent),'missing audio hides era radio hints');
+  title.setRadio(true);assert(/radio|station|H \/ T/i.test(root.querySelector('#titleControls').textContent),'late availability restores era radio hints');
  }
  globalThis.document={createElement:cv};globalThis.location=savedLocation;
 });

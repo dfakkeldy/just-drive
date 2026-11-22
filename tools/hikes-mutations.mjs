@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// --validate checks source anchors without a browser or source writes.
 // Negative controls. Pure bundles substitute one source edit in memory. Browser controls edit one file,
 // run the relevant real-page assertion, then restore it in finally. No extra browser or server is started.
 // RUN=hikes-mutations.mjs HUD=1 VIEWS="mutations|mode=explore" WEB_PORT=5243 CDP_PORT=9443 tools/yard-shots.sh 1600 1000
@@ -7,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { resolve, basename } from 'node:path';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
+const validate=process.argv.includes('--validate');
 const [out,first]=process.argv.slice(2), root=resolve(new URL('..',import.meta.url).pathname), work=mkdtempSync(tmpdir()+'/mmm-hikes-mutations-');
 let previous=[];if(process.env.HIKES_MUTATION_FAMILY||process.env.HIKES_MUTATION_RESUME){try{previous=JSON.parse(readFileSync(out+'/hikes-mutations.json','utf8')).filter(x=>x.pass);}catch{}}
 const results=[...previous];
@@ -23,6 +25,7 @@ const pure=[
 ];
 try {
  for(const [name,mutation]of ((process.env.HIKES_MUTATION_FAMILY||process.env.HIKES_MUTATION_RESUME)?[]:pure)){
+  if(validate){const text=readFileSync(root+'/web/src/'+mutation.file,'utf8');if(!text.includes(mutation.from))throw Error('missing mutation '+name);results.push({name,pass:true});console.log('VALID '+name);continue;}
   let applied=false;
   const bundle=await build({entryPoints:[root+'/tools/hikes-rules-check.mjs'],bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'mutation',setup(b){b.onLoad({filter:/web\/src\/hikes\.ts$/},args=>{let text=readFileSync(args.path,'utf8');if(basename(args.path)===mutation.file){if(!text.includes(mutation.from))throw Error('missing mutation '+name);text=text.replace(mutation.from,mutation.to);applied=true;}return {contents:text,loader:'ts',resolveDir:resolve(args.path,'..')};});}}]});
   const path=work+'/check.mjs';writeFileSync(path,bundle.outputFiles[0].text);
@@ -56,7 +59,9 @@ try {
   ['map','M and L typed into the weather list and time box stay with them',edit('places-ui.ts',"actions.canOpen() && !(ev.target instanceof HTMLElement && ev.target.closest('input,select,textarea,[contenteditable]'))","actions.canOpen()")],
   ['mail','mail M retains mail behavior',edit('main.ts',"(mailRequested || keys.has('KeyM') || keys.has('KeyE') ||","(keys.has('KeyE') ||")],
   ['map','explore corner map receives hike lines',edit('minimap.ts','this.fit();','this.hikeLines = []; this.fit();')],
-  ['map','canvas click selects a trailhead',edit('big-map.ts','if (hit?.d < 24) this.showCard(hit.place);','if (hit?.d < 0) this.showCard(hit.place);')],
+  ['map','canvas click on a place tag opens its card',edit('big-map.ts','if (!r) return false;','return false; if (!r) return false;')],
+  ['map','cursor shows pointer over a tag and grab elsewhere',edit('big-map.ts',"this.pick(local(ev)) ? 'pointer' : ''","this.pick(local(ev)) ? '' : ''")],
+  ['map','canvas click selects a trailhead',edit('big-map.ts','const p = local(ev); this.pointers.delete(ev.pointerId);','const p = [-10000,-10000] as Point; this.pointers.delete(ev.pointerId);')],
   ['phone','phone 844 controls do not overlap',edit('places-ui.ts','body.tcOn #placesButton{position:static;','body.tcOn #placesButton{position:fixed;left:0;top:0;')],
   ['phone','phone 844 top row has no MAP button',edit('main.ts','bigMap.phoneTop = false;','')],
   ['phone','phone 844 MAP control is reachable',edit('places-ui.ts','#placesMap{width:100%;','#placesMap{pointer-events:none;width:100%;')],
@@ -80,6 +85,7 @@ try {
   if(process.env.HIKES_MUTATION_FAMILY && family!==process.env.HIKES_MUTATION_FAMILY)continue;
   if(process.env.HIKES_MUTATION_RESUME && results.some(r=>r.name===probe&&r.pass))continue;
   const path=root+'/web/src/'+mutation.file, original=readFileSync(path,'utf8');if(!original.includes(mutation.from))throw Error('missing mutation '+probe);
+  if(validate){results.push({name:probe,pass:true});console.log('VALID '+probe);continue;}
   let run;
   try {writeFileSync(path,original.replace(mutation.from,mutation.to));run=spawnSync(process.execPath,[root+'/tools/hikes-check.mjs',out,first],{encoding:'utf8',env:{...process.env,SHOTS:'0',HIKES_FAMILY:family,HIKES_PROBE:probe,HIKES_WIDTH:family==='phone'?(probe.includes('390')?'390':'844'):''},timeout:600000});}
   finally {writeFileSync(path,original);}
@@ -88,4 +94,4 @@ try {
   if(!pass)throw Error('browser mutation not proved: '+probe+'\n'+log.slice(-2000));
  }
  }
-}finally {rmSync(work,{recursive:true,force:true});writeFileSync(out+'/hikes-mutations.json',JSON.stringify(results,null,2));}
+}finally {rmSync(work,{recursive:true,force:true});if(!validate)writeFileSync(out+'/hikes-mutations.json',JSON.stringify(results,null,2));}

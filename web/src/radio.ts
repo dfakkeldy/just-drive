@@ -63,13 +63,17 @@ const CSS = `
 #radio b{flex:none;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 #radio span{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-weight:500;letter-spacing:.02em;color:var(--ink-dim,#b9c3cc)}
 #radio.off span{display:none}
-#radio:not(.live) span{opacity:.55}
+#radio:not(.live) span{color:#9aa6b1}
 #radio.lost b{color:var(--ink-dim,#b9c3cc)}
 #radio.lost span{letter-spacing:.08em}
 body.indoorOn #radio{display:none}
 /* A call about the run: its line (the player's name) is shown whole, on a line of its own under the station. */
 #radio.call{flex-wrap:wrap;row-gap:1px;padding:3px 8px}
 #radio.call span{flex:1 0 100%;text-align:left;white-space:normal;overflow-wrap:anywhere;color:var(--ink,#eef2f6);opacity:1}
+body:not(.tcOn) #radio{box-sizing:border-box;width:178px;flex-wrap:wrap;padding-block:4px}
+body:not(.tcOn) #radio b{white-space:normal}
+@media (max-width:519px),(max-height:519px){body:not(.tcOn) #radio{width:126px}}
+body:not(.tcOn) #radio span{white-space:normal;overflow:visible;text-overflow:clip;flex:1 0 100%;line-height:1.4;text-align:left}
 #radioVolume{display:block;margin-top:12px}
 `;
 
@@ -298,7 +302,7 @@ export class Radio extends RadioPlayer {
     this.chip.classList.toggle('weak', weak);
     this.chip.classList.toggle('call', !off && !lost && !!this.callLine);
     // The station's name keeps its place when the signal goes, so the readout keeps its size; only the song's line changes.
-    this.dial.textContent = off ? '♪ RADIO OFF' : `♪ ${this.stations[this.station].dial} ${this.stations[this.station].name}`;
+    this.dial.textContent = off ? '♪ RADIO OFF' : `${this.stations[this.station].dial} ${this.stations[this.station].name}${document.body.classList.contains('tcOn') ? ' ♪' : ''}`;
     const title = off ? '' : this.callLine || this.stations[this.station].tracks[this.track].title;
     // A call line is shown as it is: the player's name has the room.
     this.song.textContent = lost ? 'NO SIGNAL' : weak && !this.callLine ? `WEAK · ${title}` : title;
