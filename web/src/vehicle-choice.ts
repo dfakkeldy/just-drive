@@ -6,7 +6,7 @@ const area = () => { const q = new URLSearchParams(location.search); const site 
 export interface VehicleChoice { kind: string; choose(kind: string): void }
 export function vehicleChoice(kind: string, vehicle: Ride): VehicleChoice {
   return { kind, choose(next) {
-    if (next === kind || !GARAGE.some(entry => entry.id === next)) return;
+    if (next === kind || next !== 'drone' && !GARAGE.some(entry => entry.id === next)) return;
     let saved = false;
     try { localStorage.setItem(VEHICLE_KEY, next); saved = localStorage.getItem(VEHICLE_KEY) === next; } catch { /* query fallback */ }
     try { sessionStorage.setItem(POSE, JSON.stringify({ x: vehicle.x, z: vehicle.z, heading: vehicle.heading, y:vehicle.y, when: Date.now(), area: area() })); } catch { /* no session storage */ }
@@ -27,10 +27,10 @@ export function restoreVehiclePose(vehicle: Ride): boolean {
 }
 export function vehicleButtons(choice: VehicleChoice, id = 'vehicleChoice'): HTMLElement {
   const group = document.createElement('div'); group.id = id; group.setAttribute('role', 'group'); group.setAttribute('aria-label', 'Ride');
-  // Today's picker stays exactly as it was (car and dirt bike); only the 1884 era adds the horse in front.
+  // Today's picker offers car, dirt bike and drone; the 1884 era puts the horse in front.
   const period = periodRides(new URLSearchParams(location.search));
   group.style.cssText = `display:flex;${period ? 'flex-wrap:wrap;' : ''}gap:6px;margin:0 0 16px`;
-  for (const [kind, name] of [...(period ? [['horse', 'Horse']] as const : []), ['car', 'Car'], ['bike', 'Dirt bike']] as const) {
+  for (const [kind, name] of [...(period ? [['horse', 'Horse']] as const : []), ['car', 'Car'], ['bike', 'Dirt bike'], ['drone', 'Drone']] as const) {
     const b = document.createElement('button'); b.type = 'button'; b.dataset.vehicle = kind; b.textContent = name; b.setAttribute('aria-pressed', String(kind === choice.kind));
     b.style.cssText = `flex:1;min-height:44px;border:1px solid ${kind === choice.kind ? '#a7d9bc' : '#6b7780'};border-radius:6px;background:${kind === choice.kind ? '#31463a' : 'transparent'};color:inherit;font:700 13px system-ui;cursor:pointer;padding:8px`;
     b.addEventListener('click', () => choice.choose(kind)); group.appendChild(b);
@@ -80,3 +80,23 @@ export function horseKeys(touch: boolean, mail = false): [string, string][] {
 }
 
 export const horseMailHelp = '\nWASD/arrows: ride · space: stop · M/E: mail from saddle · C: photo · Esc/P: pause · B: step off · Enter: end shift\nH: whinny · R: road · V: rider’s eye · F: drone';
+
+export function droneKeys(touch: boolean): [string, string][] {
+  return touch ? [
+    PAUSE_TOUCH,
+    ['Left stick', 'Climb, descend and turn. Let go to hover.'],
+    ['Right stick', 'Fly level.'],
+    ['Drag', 'Turn and tilt the camera.'],
+    ['ROAD', 'Back on the nearest road.'],
+    ['PLACES / ⚙', 'Places and the big map / settings.'],
+  ] : [
+    PAUSE_KEY,
+    ['W A S D', 'Fly level. Let go to hover.'],
+    ['← / → or Q / E', 'Turn left or right.'],
+    ['↑ / ↓', 'Tilt the camera.'],
+    ['Space / Shift', 'Climb / descend (C also lowers).'],
+    ['Wheel', 'Top speed.'],
+    ['R', 'Back on the nearest road.'],
+    ['L / M', 'Places / the big map.'],
+  ];
+}
