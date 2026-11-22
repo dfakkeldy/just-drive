@@ -52,8 +52,8 @@ const ABUTMENT: RGB = [0.28, 0.27, 0.24];
 const DECK_ASPHALT: RGB = [0.085, 0.082, 0.078];
 
 const MATCH_TOLERANCE = 5;
-const APRON_ALONG_STEPS = 4;
-const APRON_ACROSS_STEPS = 4;
+const APRON_ALONG_STEPS = 8;
+const APRON_ACROSS_STEPS = 8;
 const APRON_COLS = APRON_ACROSS_STEPS + 1;
 
 /** Smoothly blend the 3 m approach apron from the bridge deck edge into the local bank height across the lane width. */
@@ -204,10 +204,11 @@ export function buildPonyTrussBridge(
   const yaw = Math.atan2(-uz, ux);
   const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
   const clearHalf = PONY_TRUSS.clearHalf;
-  // Lift either span end above the highest bank vertex across its seam so apron and steel deck meet with zero step.
+  // Lift either span end above the highest bank point across its seam so apron and steel deck meet with zero step.
   let y0 = rawY0, y1 = rawY1;
-  for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
-    const across = -clearHalf + (2 * clearHalf * j) / APRON_ACROSS_STEPS;
+  const seamSamples = APRON_ACROSS_STEPS * 2;
+  for (let j = 0; j <= seamSamples; j++) {
+    const across = -clearHalf + (2 * clearHalf * j) / seamSamples;
     const h0 = heightAt(a[0] - uz * across, a[1] + ux * across);
     if (h0 !== null && h0 + 0.02 > y0) y0 = h0 + 0.02;
     const h1 = heightAt(b[0] - uz * across, b[1] + ux * across);
@@ -246,7 +247,7 @@ export function buildPonyTrussBridge(
   // Deck slab sides and underside (steel deck fascia under the trusses, 2.5 cm below asphalt to avoid z-fighting).
   m.box(0, fasciaTop - deckThick / 2, 0, fasciaLen, deckThick, half * 2 + chord, STEEL_DARK, false);
 
-  // Paved 3 m approach aprons whose far edges match the bank height across the full lane width.
+  // Paved 3 m approach aprons whose triangles conform to and stay cleanly above the local bank across the full width.
   const ap = PONY_TRUSS.approach;
   const startGrid = new Float64Array((APRON_ALONG_STEPS + 1) * APRON_COLS);
   const endGrid = new Float64Array((APRON_ALONG_STEPS + 1) * APRON_COLS);
@@ -254,18 +255,57 @@ export function buildPonyTrussBridge(
   for (const end of [-1, 1] as const) {
     const endY = end < 0 ? y0 : y1;
     const heights = end < 0 ? startGrid : endGrid;
-    const grid: [number, number, number][][] = [];
+    const joinRow = end < 0 ? APRON_ALONG_STEPS : 0;
     for (let i = 0; i <= APRON_ALONG_STEPS; i++) {
       const t = i / APRON_ALONG_STEPS;
       const s = end < 0 ? -ap * (1 - t) : span + ap * t;
       const distPast = end < 0 ? -s : s - span;
-      const row: [number, number, number][] = [];
       for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
         const across = -clearHalf + (2 * clearHalf * j) / APRON_ACROSS_STEPS;
         const wx = a[0] + ux * s - uz * across, wz = a[1] + uz * s + ux * across;
-        const wy = apronSurfaceY(endY, distPast, heightAt(wx, wz));
-        heights[i * APRON_COLS + j] = wy;
-        row.push([wx, wy, wz]);
+        heights[i * APRON_COLS + j] = i === joinRow ? endY : apronSurfaceY(endY, distPast, heightAt(wx, wz));
+      }
+    }
+    // Lift non-join vertices wherever a bank ridge pokes above an apron triangle between grid corners.
+    const subSteps = 4;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < APRON_ALONG_STEPS; i++) {
+        for (let j = 0; j < APRON_ACROSS_STEPS; j++) {
+          for (let si = 0; si <= subSteps; si++) {
+            const su = si / subSteps, uNorm = (i + su) / APRON_ALONG_STEPS;
+            const s = end < 0 ? -ap * (1 - uNorm) : span + ap * uNorm;
+            for (let sj = 0; sj <= subSteps; sj++) {
+              const sv = sj / subSteps, vNorm = (j + sv) / APRON_ACROSS_STEPS;
+              const across = -clearHalf + 2 * clearHalf * vNorm;
+              const land = heightAt(a[0] + ux * s - uz * across, a[1] + uz * s + ux * across);
+              if (land === null) continue;
+              const triY = sampleApronGrid(heights, uNorm, vNorm);
+              if (land <= triY) continue;
+              const excess = land - triY + 0.005;
+              const verts: [number, number, number][] = su + sv >= 1
+                ? [[i + 1, j + 1, su + sv - 1], [i, j + 1, 1 - su], [i + 1, j, 1 - sv]]
+                : [[i, j, 1 - su - sv], [i + 1, j, su], [i, j + 1, sv]];
+              let freeWeight = 0;
+              for (const [vi, , w] of verts) if (vi !== joinRow) freeWeight += w;
+              if (freeWeight > 0.01) {
+                const lift = excess / freeWeight;
+                for (const [vi, vj, w] of verts) {
+                  if (vi !== joinRow && w > 0) heights[vi * APRON_COLS + vj] += lift;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    const grid: [number, number, number][][] = [];
+    for (let i = 0; i <= APRON_ALONG_STEPS; i++) {
+      const t = i / APRON_ALONG_STEPS;
+      const s = end < 0 ? -ap * (1 - t) : span + ap * t;
+      const row: [number, number, number][] = [];
+      for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
+        const across = -clearHalf + (2 * clearHalf * j) / APRON_ACROSS_STEPS;
+        row.push([a[0] + ux * s - uz * across, heights[i * APRON_COLS + j], a[1] + uz * s + ux * across]);
       }
       grid.push(row);
     }
@@ -341,12 +381,26 @@ export function buildPonyTrussBridge(
       m.box(0, 0, 0, dLen, size, size, endPost ? STEEL_CHORD : STEEL_WEB, false);
     }
 
-    // Plumb vertical posts at every interior panel joint.
+    // Plumb vertical posts at every interior panel joint, plus steel standoff brackets tying the inner rail to each post.
+    const railOuter = PONY_TRUSS.railInner + 0.07;
+    const postInner = half - PONY_TRUSS.postSize / 2;
+    const bracketWidth = postInner - railOuter + 0.025;
+    const bracketZ = side * (railOuter + (postInner - railOuter) / 2 + 0.0075);
+    const bnx = -uz * bracketZ, bnz = ux * bracketZ;
     for (let i = 1; i < panels; i++) {
       const s = i * panel;
       const y = deckY(s);
       m.at(a[0] + ux * s + nx, y + yBase + (h - yBase) / 2, a[1] + uz * s + nz, yaw);
       m.box(0, 0, 0, PONY_TRUSS.postSize, h - yBase, PONY_TRUSS.postSize, STEEL_WEB, false);
+      m.at(a[0] + ux * s + bnx, y + PONY_TRUSS.railHeight, a[1] + uz * s + bnz, yaw);
+      m.box(0, 0, 0, 0.12, 0.18, bracketWidth, STEEL_DARK, false);
+    }
+    // Tie the inner rail ends into the inclined end posts where they cross railHeight.
+    const endRailS = panel * ((PONY_TRUSS.railHeight - yBase) / (h - yBase));
+    for (const s of [endRailS, span - endRailS]) {
+      const y = deckY(s);
+      m.at(a[0] + ux * s + bnx, y + PONY_TRUSS.railHeight, a[1] + uz * s + bnz, yaw);
+      m.box(0, 0, 0, 0.14, 0.18, bracketWidth, STEEL_DARK, false);
     }
   }
 

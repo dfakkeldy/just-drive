@@ -22,9 +22,9 @@ export interface Road {
 export interface RoadHit { road: Road; dist: number; x: number; z: number; heading: number; seg: number; t: number }
 
 const CELL = 64;
-const bridgeRoad = (road: Road) => road.bridge;
+const bridgeRoad = (road: Road) => road.bridge && !road.ponyTruss;
 
-interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number; aprons?: PonyTrussAprons }
+interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number; revision?: number; aprons?: PonyTrussAprons }
 
 /** The road network: name lookup, a place to put the car back, and bridge decks (the LiDAR ground has no bridges). */
 const NO_SEGMENTS: [number, number][] = [];   // one shared empty bucket: a query over empty cells makes no arrays
@@ -46,6 +46,7 @@ export class Roads {
   private columns = 0;
   private maxHalfWidth = 0;
   private decks = new Map<number, Deck>();
+  private ponyTrussRoads: Road[] = [];
   private deckMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3c, side: THREE.DoubleSide });
   // Bridges on tracks and on the rail trail are timber, not asphalt.
   private timberMat = new THREE.MeshLambertMaterial({ color: 0xb8a482, side: THREE.DoubleSide });
@@ -67,6 +68,7 @@ export class Roads {
       if (terrain.cartRoads && r.kind === 5) continue;
       const road: Road = { ...r, halfWidth: terrain.cartRoads ? eraRoadHalf(r.kind, r.halfWidth) : r.halfWidth, pts: r.pts.map(([e, n]) => [e - village[0], village[1] - n]) };
       this.roads.push(road);
+      if (road.ponyTruss) this.ponyTrussRoads.push(road);
       this.maxHalfWidth = Math.max(this.maxHalfWidth, road.halfWidth);
       for (const [x, z] of road.pts) {
         const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
@@ -181,14 +183,21 @@ export class Roads {
 
   /** Height of a bridge deck under a point, or null when the point is not on a bridge. */
   deckHeight(x: number, z: number): number | null {
+    // Reject off-deck pony-truss queries before any RoadHit allocation or terrain lookup.
+    if (!this.terrain.cartRoads && this.ponyTrussRoads.length) {
+      for (let i = 0; i < this.ponyTrussRoads.length; i++) {
+        const road = this.ponyTrussRoads[i];
+        if (!inPonyTrussBounds(road, x, z)) continue;
+        const deck = this.deck(road);
+        return deck && deck.aprons ? ponyTrussDeckHeight(road, deck.y0, deck.y1, x, z, deck.aprons) : null;
+      }
+    }
     // Empty bridge buckets skip all ordinary road segments and deck work.
     const hit = this.query(this.bridgeCells, x, z, 12, bridgeRoad);
     if (!hit) return null;
-    if (!this.terrain.cartRoads && !hit.road.ponyTruss && hit.dist > hit.road.halfWidth + 1.2) return null;
-    if (!this.terrain.cartRoads && hit.road.ponyTruss && !inPonyTrussBounds(hit.road, x, z)) return null;
+    if (!this.terrain.cartRoads && hit.dist > hit.road.halfWidth + 1.2) return null;
     const deck = this.deck(hit.road);
     if (!deck) return null;
-    if (!this.terrain.cartRoads && hit.road.ponyTruss && deck.aprons) return ponyTrussDeckHeight(hit.road, deck.y0, deck.y1, x, z, deck.aprons);
     const [ax, az] = hit.road.pts[hit.seg], [bx, bz] = hit.road.pts[hit.seg + 1];
     const s = deck.cum[hit.seg] + (this.terrain.cartRoads?deck.cum[hit.seg+1]-deck.cum[hit.seg]:Math.hypot(bx - ax, bz - az)) * hit.t;
     const plane=this.terrain.cartRoads?deck.y0+(deck.y1-deck.y0)*s/deck.len:deck.y0 + (deck.y1 - deck.y0) * (s / deck.len);
@@ -225,8 +234,8 @@ export class Roads {
 
   private deck(road: Road): Deck | null {
     if(this.terrain.cartRoads)return this.eraDeck(road);
-    const have = this.decks.get(road.id);
-    if (have && have.level >= 8) return have;
+    const have = this.decks.get(road.id), rev = this.terrain.dataRevision;
+    if (have && (have.level >= 8 || (rev !== undefined && have.revision === rev))) return have;
     const p = road.pts, n = p.length;
     // The banks: a few metres past each end of the bridge, along its line.
     const end = (a: [number, number], b: [number, number]) => {
@@ -238,7 +247,7 @@ export class Roads {
     if (!s0 || !s1 || s0.level < 6 || s1.level < 6) return have ?? null;
     const level = Math.min(s0.level, s1.level);
     if (have) {
-      if (level <= have.level) return have;
+      if (level <= have.level) { have.revision = rev; return have; }
       this.group.remove(have.mesh);
       have.mesh.geometry.dispose();
     }
@@ -282,7 +291,7 @@ export class Roads {
       mesh = new THREE.Mesh(geo, road.kind >= 4 ? this.timberMat : this.deckMat);
     }
     this.group.add(mesh);
-    const deck: Deck = { road, y0, y1, len, cum, mesh, level, aprons };
+    const deck: Deck = { road, y0, y1, len, cum, mesh, level, revision: rev, aprons };
     this.decks.set(road.id, deck);
     return deck;
   }
