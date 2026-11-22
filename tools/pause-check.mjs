@@ -22,7 +22,8 @@ console.log('PASS pause gate: Settings, explicit pause, hidden latch, no catch-u
 
 // Run the live capture handler. A later Settings listener cannot repair its focus.
 const main=readFileSync('web/src/main.ts','utf8');
-const start=main.indexOf("addEventListener('keydown', ev => {\n  // The replay owns");
+// Sun Seeker's branch comes first in the same handler; find the handler that holds the replay rule.
+const start=main.lastIndexOf("addEventListener('keydown', ev => {",main.indexOf("  // The replay owns"));
 const finish="}, { capture: true });";
 const end=main.indexOf(finish,start);
 assert.ok(start>=0&&end>start,'pause capture handler found');
@@ -33,7 +34,7 @@ for (const nested of [false,true]) {
  pause.setSettings(true);
  let handler,focused='settingsClose',open=true;
  class Element { closest(){return null;} }
- const context={pause,replay:{active:false},HTMLElement:Element,interiors:{busy:false},pauseAllowed:()=>true,
+ const context={pause,replay:{active:false},sunSeeker:null,HTMLInputElement:Element,HTMLElement:Element,interiors:{busy:false},pauseAllowed:()=>true,
   settingsPanel:{classList:{contains:()=>open}},
   document:{getElementById:id=>({focus:()=>{focused=id;}})},
   syncPauseUI:()=>{open=pause.blocked&&!pause.screen;},
@@ -44,6 +45,20 @@ for (const nested of [false,true]) {
  assert.equal(open,false,'Escape closes Settings');
  assert.equal(focused,'gear','Escape returns focus to the gear');
  assert.ok(prevented&&stopped,'capture owns Escape');
+}
+{
+ // While Sun Seeker is open it owns every key outside its inputs, and Escape everywhere.
+ let handler,keys=[],stopped=0;
+ class Element { closest(){return null;} }
+ class Input extends Element {}
+ const context={pause:new PauseGate(),replay:{active:false},sunSeeker:{key:ev=>keys.push(ev.code)},HTMLInputElement:Input,HTMLElement:Element,
+  interiors:{busy:false},pauseAllowed:()=>true,settingsPanel:{classList:{contains:()=>false}},document:{getElementById:()=>({focus(){}})},
+  syncPauseUI(){},addEventListener:(name,callback)=>{handler=callback;}};
+ new Function('context',`with(context){${capture}}`)(context);
+ const press=(code,target)=>handler({code,target,repeat:false,preventDefault(){},stopImmediatePropagation(){stopped++;}});
+ press('ArrowLeft',new Element());press('Escape',new Input());press('KeyP',new Input());
+ assert.deepEqual(keys,['ArrowLeft','Escape'],'Sun Seeker takes arrows and Escape, not typing in its fields');
+ assert.equal(stopped,2);assert.equal(context.pause.blocked,false,'P typed in a Sun Seeker field does not pause');
 }
 const title=main.match(/document\.getElementById\('pauseTitle'\)!\.textContent = ([\s\S]*?);/);
 assert.ok(title,'pause title expression found');
