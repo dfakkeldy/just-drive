@@ -45,7 +45,7 @@ const mutants=[
  ['every touch rocks','damage === 0 && fresh','damage === 0','props'],
  ['no ruts',"if (this.ruts.count - this.rutMark >= 8) { this.rutMark = this.ruts.count; this.reportScore('rut', vehicle.x, vehicle.z, this.speed); }",'','shift'],
  ['no place',"const place = this.placeAt(x, z);","const place = 'route';",'shift'],
- ['fired saves career','if (!this.fired) { this.career = freshCareer();','{ this.career = freshCareer();','shift'],
+ ['fired saves career','if (!this.fired) { this.career = ','{ this.career = ','shift'],
  ['landing ignored',"place === 'route' && also ? this.placeAt(also.x, also.z) : place",'place','shift'],
  ['pre-existing box scores','      if (c.preExisting) return;\n','','shift'],
  ['fired shows the report','    if (this.fired) {\n','    if (false) {\n','shift'],

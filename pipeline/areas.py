@@ -196,7 +196,10 @@ MABOU = Area(
         # wall normal 70.0 degrees, pad back 5 cm off the wall). `flush` keeps the step-out from pushing it into the lot.
         dict(exact=(624896.85, 5103595.12), heading=70.0, modules=4, flush=True),
         dict(exact=(619316.7, 5104955.3), heading=60.0, modules=3),
-        dict(point=(623789.1, 5103515.2), road='Birch Street', toward='same')),
+        dict(point=(623789.1, 5103515.2), road='Birch Street', toward='same'),
+        # Little Mabou Hall (20 Nov dash cam): four units on Little Mabou Road, 6 m SE of 620347, 5102381 to clear the
+        # transformer pole at 620350.8, 5102383.2.
+        dict(point=(620351.0, 5102377.5), road='Little Mabou Road', toward='same', modules=4)),
     observed_styles='pipeline/observed_styles.json',
     comparison_centres=((624271, 5103301), (623100, 5104200), (626000, 5104000)),
     require_farm_sample=True, require_forest_samples=True,
@@ -236,6 +239,9 @@ JUDIQUE = Area(
         (0, 612, 'right'), (612, 1100, 'left'), (1100, 1160, 'right'), (1160, 1530, 'left'), (1530, 1975, 'right'),
         (1975, 2340, 'none'), (2340, 2560, 'right'), (2560, 2745, 'none'), (2745, 2790, 'left'),
         (2790, 2840, 'right'), (2840, None, 'none'))),),
+    # The community mailbox bank in the gravel lot at the Keltic Drive / Highway 19 corner (10 units, owner-counted
+    # 17 Nov) is built by hand in web/src/judique-village-site.ts (VILLAGE_ITEMS.mailboxes at 617095.0, 5081493.0)
+    # and lies inside the 550 m village mailbox exclusion radius, so community_sites stays empty here.
     wide_source='mabou', anchor_highway=19)
 
 PORTHOOD = Area(
@@ -253,6 +259,10 @@ PORTHOOD = Area(
         (612649, 5097944, 612672, 5097968),   # harbour light 876.8 (web/src/harbour-lights-data.ts)
         (608449, 5092444, 608475, 5092469),   # harbour light 881 (web/src/harbour-lights-data.ts)
         (614020, 5090510, 614044, 5090534),   # harbour light 881.1 (web/src/harbour-lights-data.ts)
+    ),
+    community_sites=(
+        # Little Mabou Road junction (20 Nov dash cam; units not counted).
+        dict(point=(613341.0, 5098861.0), road='Little Mabou Road', toward='same'),
     ),
 )
 

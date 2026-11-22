@@ -364,9 +364,33 @@ def check_bake_reads_the_lines():
         assert roads.count(needle) == 1, f'23_bake_roads.py: {what}'
 
 
+def check_community_sites():
+    # 20 Nov dash-cam community mailbox groups (grok-bots#1347): Mabou hall (4 units), Port Hood junction (uncounted),
+    # and Judique's existing 10-cabinet bank in web/src/judique-village-site.ts (no duplicate in community_sites).
+    import areas, math, re
+    mabou = areas.AREAS['mabou'].community_sites
+    expected_prefix = (
+        dict(point=(624452.9, 5103395.2), road='Highway 19', toward='same', modules=2),
+        dict(point=(631521.0, 5101180.2), road='Highway 252', toward='across'),
+        dict(point=(627079.3, 5103643.5), road='Smithville Road', toward='same'),
+        dict(exact=(624896.85, 5103595.12), heading=70.0, modules=4, flush=True),
+        dict(exact=(619316.7, 5104955.3), heading=60.0, modules=3),
+        dict(point=(623789.1, 5103515.2), road='Birch Street', toward='same'),
+    )
+    assert mabou[:6] == expected_prefix, 'existing Mabou community_sites order and RNG prefix must stay unchanged'
+    assert len(mabou) == 7 and mabou[6] == dict(point=(620351.0, 5102377.5), road='Little Mabou Road', toward='same', modules=4)
+    porthood = areas.AREAS['porthood'].community_sites
+    assert porthood == (dict(point=(613341.0, 5098861.0), road='Little Mabou Road', toward='same'),)
+    assert areas.AREAS['judique'].community_sites == (), 'Judique keeps its hand-built mailbox bank in judique-village-site.ts'
+    jv = open(os.path.join(ROOT, 'web', 'src', 'judique-village-site.ts')).read()
+    m_pos = re.search(r'mailboxes:\s*\[\s*([\d.]+)\s*,\s*([\d.]+)\s*\]', jv)
+    m_cnt = re.search(r'export const MAILBOX_CABINETS\s*=\s*(\d+)', jv)
+    assert m_pos and m_cnt and int(m_cnt[1]) == 10 and math.hypot(float(m_pos[1]) - 617120, float(m_pos[2]) - 5081510) < 40
+
+
 def main():
     global P, RG
-    for check in CHECKS + [check_bake_reads_the_lines]:
+    for check in CHECKS + [check_bake_reads_the_lines, check_community_sites]:
         check()
         print(f'PASS {check.__name__}')
     real = P, RG
@@ -387,7 +411,7 @@ def main():
                 sys.exit(1)
         finally:
             P, RG = real
-    print(f'mail-places: {len(CHECKS) + 1} rules and {len(MUTATIONS)} mutations')
+    print(f'mail-places: {len(CHECKS) + 2} rules and {len(MUTATIONS)} mutations')
 
 
 if __name__ == '__main__':
