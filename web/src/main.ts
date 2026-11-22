@@ -102,6 +102,7 @@ import { CLOCK_FACTOR, clock } from './shift-rules';
 import { Interiors } from './interiors';
 import { MineSite } from './mine-site';
 import { MineInterior } from './interior-mine';
+import { plantDoor } from './interior-plant';
 import { LawnDemo } from './shift-demo';
 import { Route } from './route';
 import { SEA_FRAG, SEA_VERT } from './shaders';
@@ -1119,6 +1120,8 @@ if (mineSite) scene.add(mineSite.group);
 if (mineSite?.roadPoint) interiors.register({ id: 'mine', name: 'Mabou Mines', position: mineSite.roadPoint, radius: 14,
   prompt: 'Parcel for the night shift. Signature required.', create: day => new MineInterior(day) });
 if (AREA.colliery && params.get('interior') === 'mine') interiors.enter('mine');
+if (yardSite && yardSite.mode !== 'closed') interiors.register(plantDoor(yardSite));
+if (yardSite && yardSite.mode !== 'closed' && params.get('interior') === 'plant') interiors.enter('plant');
 if (churchSite && churchRoom) interiors.register(churchRoom.churchDoor(churchSite, mailMode));
 if (churchRoom && params.get('interior') === 'church') interiors.enter('church');
 // The mini map and the bladder gauge build their own parts of the page.
