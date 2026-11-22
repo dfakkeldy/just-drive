@@ -1,5 +1,13 @@
 """Read the original, road-bed, and community-mailbox variants of a land receipt."""
 
+import hashlib
+import json
+
+
+def canonical_digest(records):
+    data = json.dumps(records, separators=(',', ':'), sort_keys=True).encode()
+    return dict(count=len(records), sha256=hashlib.sha256(data).hexdigest())
+
 
 def receipt_for(report, with_bed, *, with_community=False):
     """Return one complete receipt, with the selected file pins."""

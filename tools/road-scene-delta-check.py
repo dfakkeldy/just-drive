@@ -11,7 +11,7 @@ from pathlib import Path
 import random
 import sys
 
-from land_receipt_pins import previous_digest
+from land_receipt_pins import canonical_digest, previous_digest
 
 ROOT = Path(__file__).resolve().parents[1]
 # Installed on the MacBook by the main thread on 17 Nov 2026 (55 delta files + the step-29 pins): only 'after' land passes.
@@ -249,10 +249,6 @@ def rules():
 STEP29 = 'step29 properties'
 # The four per-road reference schemas: list key and road-ID field.
 REFERENCES = dict(cemeteries=('cemeteries','road.id'), buildings=('buildings','nearRoad'), streams=('culverts','road'), props=('poles','road'))
-
-
-def canonical_digest(records):
-    return dict(count=len(records), sha256=hashlib.sha256(json.dumps(records, separators=(',', ':'), sort_keys=True).encode()).hexdigest())
 
 
 def step29_properties(props, roads):
