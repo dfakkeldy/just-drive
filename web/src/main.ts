@@ -264,7 +264,8 @@ const weatherActive = ERA.modern && !lightStudy.active && !DAILY;
 const winter = weatherActive && winterCover(weather);
 const falling = weatherActive && (weather.mood === 'rain' || weather.mood === 'snow') ? weather.mood : null;
 const wetness = falling === 'rain' ? rainAmount(weather.rain) : 0;
-const grassChunk = LOW || winter ? null : early(import('./grass'));
+const grassEnabled = !LOW && !winter;
+const grassChunk = grassEnabled ? early(import('./grass')) : null;
 const ptInfrastructureChunk = ERA.modern && AREA.ptInfrastructure && !LOW
   ? early(Promise.all([import('./pt-infrastructure'), import('./pt-infrastructure-source')])) : null;
 const churchChunk = ERA.modern && AREA.church && params.get('church') !== '0' ? early(import('./church')) : null;
@@ -574,7 +575,7 @@ const sunShadows = terrain.shadows ? new SunShadows(renderer, scene, sunLight, s
 if (sunShadows) Object.assign(terrain.uniforms, sunShadows.uniforms);   // every land tile made from here on reads the map
 // Phones do not load the grass module or read the cover image back to the CPU.
 const grassExcludes = stockpiles ? (east: number, north: number) => stockpiles.excludes(east, north) || !!cemeteries?.excludes(east, north) : cemeteries?.excludes;
-const grass = !grassChunk ? null : new (await grassChunk.take().catch(partFailed)).Grass(terrain, params.get('grass'), grassExcludes);
+const grass = grassEnabled ? new (await grassChunk!.take().catch(partFailed)).Grass(terrain, params.get('grass'), grassExcludes) : null;
 if (grass) scene.add(grass.group);
 // Mapped public wharves (today, in the areas that have them); like airport, the dev key exists only there.
 const wharves = ERA.id === 'today' && hasWharves(AREA.id) ? new PublicWharves(AREA.id, terrain, manifest.village, SEA_LEVEL, (buildings ? buildingList ?? [] : []).map(b => b.footprint)) : null;
