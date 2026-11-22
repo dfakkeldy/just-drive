@@ -109,6 +109,31 @@ export function inPonyTrussBounds(road: Road, x: number, z: number): boolean {
   return Math.abs(across) <= PONY_TRUSS.clearHalf;
 }
 
+/** Packed tile-level signature across both span ends and apron corners so streaming either bank refreshes the deck. */
+export function ponyTrussBankState(
+  road: Road,
+  levelAt: (x: number, z: number) => number,
+): { minLevel: number; sig: number } {
+  const a = road.pts[0], b = road.pts[road.pts.length - 1];
+  const dx = b[0] - a[0], dz = b[1] - a[1], span = Math.hypot(dx, dz) || 1;
+  const ux = dx / span, uz = dz / span, ap = PONY_TRUSS.approach, cw = PONY_TRUSS.clearHalf;
+  let minLevel = 15, sig = 0;
+  const sample = (s: number, off: number) => {
+    const lvl = Math.max(0, Math.min(15, levelAt(a[0] + ux * s - uz * off, a[1] + uz * s + ux * off)));
+    if (lvl < minLevel) minLevel = lvl;
+    sig = sig * 16 + lvl;
+  };
+  sample(0, 0);
+  sample(span, 0);
+  sample(-ap, 0);
+  sample(span + ap, 0);
+  sample(-ap, -cw);
+  sample(-ap, cw);
+  sample(span + ap, -cw);
+  sample(span + ap, cw);
+  return { minLevel, sig };
+}
+
 /**
  * Exact wheel support on a pony-truss bridge and its 3 m approach aprons.
  * Evaluates the exact same triangle mesh surface built by buildPonyTrussBridge() (zero divergence, zero allocations).
@@ -280,8 +305,8 @@ export function buildPonyTrussBridge(
               const land = heightAt(a[0] + ux * s - uz * across, a[1] + uz * s + ux * across);
               if (land === null) continue;
               const triY = sampleApronGrid(heights, uNorm, vNorm);
-              if (land <= triY) continue;
-              const excess = land - triY + 0.005;
+              if (land + 0.005 <= triY) continue;
+              const excess = land + 0.012 - triY;
               const verts: [number, number, number][] = su + sv >= 1
                 ? [[i + 1, j + 1, su + sv - 1], [i, j + 1, 1 - su], [i + 1, j, 1 - sv]]
                 : [[i, j, 1 - su - sv], [i + 1, j, su], [i, j + 1, sv]];

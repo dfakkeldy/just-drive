@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import { eraRoadHalf } from './era';
 import { timberBridge, periodBridgePlane, prepareTimberPlans, timberPlan, timberGroundPoints } from './eras/timber-bridge';
-import { buildPonyTrussBridge, inPonyTrussBounds, ponyTrussDeckHeight, type PonyTrussAprons } from './november-bridges';
+import { buildPonyTrussBridge, inPonyTrussBounds, ponyTrussBankState, ponyTrussDeckHeight, type PonyTrussAprons } from './november-bridges';
 
 export interface Road {
   id: number;
@@ -24,7 +24,7 @@ export interface RoadHit { road: Road; dist: number; x: number; z: number; headi
 const CELL = 64;
 const bridgeRoad = (road: Road) => road.bridge && !road.ponyTruss;
 
-interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number; revision?: number; aprons?: PonyTrussAprons }
+interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number; revision?: number; bankSig?: number; aprons?: PonyTrussAprons }
 
 /** The road network: name lookup, a place to put the car back, and bridge decks (the LiDAR ground has no bridges). */
 const NO_SEGMENTS: [number, number][] = [];   // one shared empty bucket: a query over empty cells makes no arrays
@@ -58,7 +58,14 @@ export class Roads {
   private updateRevision=-1;private updateX=Infinity;private updateZ=Infinity;
   private periodMat: THREE.MeshLambertMaterial | null = null;
 
-  private readonly readTerrainHeight = (x: number, z: number) => this.terrain.heightAt(x, z);
+  // Explicit, caller-independent terrain height: clears both drawn mesh triangles and bilinear wheel support.
+  private readonly readTerrainHeight = (x: number, z: number): number | null => {
+    const mesh = this.terrain.meshHeightAt?.(x, z, false) ?? null;
+    const surf = this.terrain.surfaceAt(x, z)?.ground ?? null;
+    if (mesh !== null && surf !== null) return Math.max(mesh, surf);
+    return mesh ?? surf ?? this.terrain.heightAt(x, z);
+  };
+  private readonly readSurfaceLevel = (x: number, z: number): number => this.terrain.surfaceAt(x, z)?.level ?? 0;
 
   private eraBridgeHit:RoadHit|null=null;private bridgeQuery=0;
 
@@ -245,9 +252,11 @@ export class Roads {
     const s0 = end(p[0], p[1]), s1 = end(p[n - 1], p[n - 2]);
     // Level 6 (4 m) is the finest ground some bridges ever get; finer data, when it comes, rebuilds the deck.
     if (!s0 || !s1 || s0.level < 6 || s1.level < 6) return have ?? null;
-    const level = Math.min(s0.level, s1.level);
+    const bank = road.ponyTruss ? ponyTrussBankState(road, this.readSurfaceLevel) : null;
+    const level = bank ? Math.min(s0.level, s1.level, bank.minLevel) : Math.min(s0.level, s1.level);
     if (have) {
-      if (level <= have.level) { have.revision = rev; return have; }
+      const upgraded = bank ? (bank.sig !== have.bankSig || level > have.level) : level > have.level;
+      if (!upgraded) { have.revision = rev; return have; }
       this.group.remove(have.mesh);
       have.mesh.geometry.dispose();
     }
@@ -291,7 +300,7 @@ export class Roads {
       mesh = new THREE.Mesh(geo, road.kind >= 4 ? this.timberMat : this.deckMat);
     }
     this.group.add(mesh);
-    const deck: Deck = { road, y0, y1, len, cum, mesh, level, revision: rev, aprons };
+    const deck: Deck = { road, y0, y1, len, cum, mesh, level, revision: rev, bankSig: bank?.sig, aprons };
     this.decks.set(road.id, deck);
     return deck;
   }

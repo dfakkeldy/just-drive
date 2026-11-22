@@ -15,8 +15,9 @@ import { WHARF_SOURCES } from '../web/src/wharf-source.ts';
 import { areaPlaces, nearestPlacement, placesFor } from '../web/src/places.ts';
 import { planRails, railPoint } from '../web/src/guardrail-rules.ts';
 import { railLand } from './guardrail-land.mjs';
+import { png } from './quarry-height-read.mjs';
 import { Roads } from '../web/src/roads.ts';
-import { drawnRoadBytes, paintSiteSurface } from '../web/src/terrain.ts';
+import { drawnRoadBytes, paintSiteSurface, Terrain } from '../web/src/terrain.ts';
 
 const read = (dir, file) => JSON.parse(readFileSync(`data/baked/${dir}/${file}.json`, 'utf8'));
 const byte = (sample, flags) => {
@@ -207,6 +208,8 @@ for (const {a, b, side} of added) {
   const mainSource = readFileSync('web/src/main.ts', 'utf8');
   assert.match(mainSource, /const roadLines = mabouRoadOverrides\(roadData\.roads, ERA\.modern, AREA\.id\);/, 'main.ts uses mabouRoadOverrides production gate');
   const tagged = mabouRoadOverrides(mabouRoads.roads, true, 'mabou');
+  assert.ok(tagged.find(r => r.id === 44)?.guardrailRuns?.some(run => run.side === 1), 'modern Mabou override retains Little Mabou marsh south-shoulder rail');
+  assert.notEqual(tagged.find(r => r.id === 44)?.guardrailRuns, mabouRoads.roads.find(r => r.id === 44)?.guardrailRuns, 'modern Mabou override applies marsh rail onto road 44');
   assert.deepEqual(mabouRoadOverrides(mabouRoads.roads, false, 'mabou').filter(r => r.ponyTruss), [], '1884 Mabou gets no pony-truss override');
   assert.equal(mabouRoadOverrides(mabouRoads.roads, false, 'mabou').find(r => r.id === 44)?.guardrailRuns, mabouRoads.roads.find(r => r.id === 44)?.guardrailRuns, '1884 Mabou gets no marsh rail override');
   assert.deepEqual(mabouRoadOverrides(mabouRoads.roads, true, 'judique').filter(r => r.ponyTruss), [], 'non-Mabou area gets no pony-truss override');
@@ -312,10 +315,13 @@ for (const {a, b, side} of added) {
     }
     assert.ok(maxAboveDeck >= 2.0 && maxAboveDeck <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${maxAboveDeck.toFixed(2)} m)`);
     assert.ok(maxHalf < r.halfWidth && maxHalf >= PONY_TRUSS.half, `bridge ${id} is narrow one-lane (${(maxHalf * 2).toFixed(2)} m wide)`);
-    // Verify inner steel rails are tied to every interior upright post across the 45 mm standoff gap (no floating rail).
+    // Verify inner steel rails are tied to every interior upright post AND both inclined end posts (no floating rail).
     const panels = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2);
     const panelLen = span / panels;
+    const trussH = Math.min(2.4, Math.max(2.1, 1.85 + span * 0.015));
+    const endRailS = panelLen * ((PONY_TRUSS.railHeight - PONY_TRUSS.chordSize / 2) / (trussH - PONY_TRUSS.chordSize / 2));
     const gapMid = (PONY_TRUSS.railInner + 0.07 + PONY_TRUSS.half - PONY_TRUSS.postSize / 2) / 2;
+    const endGapMid = (PONY_TRUSS.railInner + 0.07 + PONY_TRUSS.half - PONY_TRUSS.endPostSize / 2) / 2;
     for (const side of [-1, 1]) {
       for (let i = 1; i < panels; i++) {
         const s = i * panelLen, yRail = y0 + (y1 - y0) * (s / span) + PONY_TRUSS.railHeight;
@@ -323,6 +329,13 @@ for (const {a, b, side} of added) {
         ray.set(new THREE.Vector3(bx, yRail + 0.25, bz), down);
         const hits = ray.intersectObject(mesh).filter(h => h.point.y >= yRail - 0.12 && h.point.y <= yRail + 0.12);
         assert.ok(hits.length > 0, `bridge ${id} side=${side} post ${i} has steel bracket tying inner rail to upright`);
+      }
+      for (const s of [endRailS, span - endRailS]) {
+        const yRail = y0 + (y1 - y0) * (s / span) + PONY_TRUSS.railHeight;
+        const bx = ax + ux * s - uz * side * endGapMid, bz = az + uz * s + ux * side * endGapMid;
+        ray.set(new THREE.Vector3(bx, yRail + 0.25, bz), down);
+        const hits = ray.intersectObject(mesh).filter(h => h.point.y >= yRail - 0.12 && h.point.y <= yRail + 0.12);
+        assert.ok(hits.length > 0, `bridge ${id} side=${side} inclined end post at s=${s.toFixed(2)} has steel bracket tying inner rail`);
       }
     }
     // Wheel support matches rendered asphalt triangle-for-triangle across the span and off-grid apron points.
@@ -489,6 +502,107 @@ for (const {a, b, side} of added) {
   assert.ok(net.deckHeight(otherBridge.pts[0][0], otherBridge.pts[0][1]) !== null);
   assert.ok(!net.group.children.some(c => c.name === 'pony-truss-50'));
   for (const child of [...net.group.children]) child.geometry?.dispose();
+  // Real production Terrain test: caller-independence (outside vs inside withGroundContact), drawn-triangle apron clearance, and separate-bank streaming.
+  {
+    const prevFetch = globalThis.fetch, prevBitmap = globalThis.createImageBitmap, prevCanvas = globalThis.OffscreenCanvas;
+    const prevTexLoad = THREE.TextureLoader.prototype.load;
+    globalThis.fetch = async (url) => new Response(readFileSync(String(url)));
+    globalThis.createImageBitmap = async (blob) => ({ ...png(Buffer.from(await blob.arrayBuffer())), close() {} });
+    globalThis.OffscreenCanvas = class { getContext() { let image; return { clearRect() {}, drawImage(b) { image = b; }, getImageData() { return { data: image.pixels }; } }; } };
+    THREE.TextureLoader.prototype.load = () => new THREE.Texture();
+    const tileKeyAt = (e, n, level) => {
+      const size = mabouManifest.size / 2 ** level;
+      const i = Math.floor((e - mabouManifest.origin[0]) / size), j = Math.floor((mabouManifest.origin[1] - n) / size);
+      return mabouManifest.levels[level]?.includes(`${i}_${j}`) ? [level, i, j] : null;
+    };
+    const loadTile = async (terrain, key) => {
+      await terrain.loadNow(key[0], key[1], key[2]);
+      const tile = terrain.tile(key[0], key[1], key[2]);
+      tile.mesh.visible = true;
+      tile.mesh.material.uniforms.hideQuad.value.set(0, 0, 0, 0);
+    };
+    const bridgeTiles = (id, level) => {
+      const raw = mabouRoads.roads.find(r => r.id === id), seen = new Map();
+      for (const [e, n] of raw.pts) for (const de of [-8, 0, 8]) for (const dn of [-8, 0, 8]) {
+        const k = tileKeyAt(e + de, n + dn, level);
+        if (k) seen.set(k.join('/'), k);
+      }
+      return [...seen.values()];
+    };
+    try {
+      for (const exag of [1.5, 3.0]) {
+        const prodTerrain = new Terrain(mabouManifest, 'data/baked/terrain', {}, exag, -0.2);
+        for (const id of [45, 46]) {
+          for (const k of bridgeTiles(id, 6)) await loadTile(prodTerrain, k);
+          for (const k of bridgeTiles(id, 7)) await loadTile(prodTerrain, k);
+        }
+        // Hide level-6 parents where level-7 children exist so drawnBoundsTile picks level-7 drawn triangles cleanly.
+        for (const id of [45, 46]) for (const k of bridgeTiles(id, 6)) prodTerrain.tile(k[0], k[1], k[2]).mesh.visible = false;
+        const netOutside = new Roads({ roads: tagged }, mabouManifest.village, prodTerrain);
+        const netInside = new Roads({ roads: tagged }, mabouManifest.village, prodTerrain);
+        for (const id of [45, 46]) {
+          const r = netOutside.roads.find(x => x.id === id);
+          const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+          const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+          const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+          const yOutMid = netOutside.deckHeight(mx, mz);
+          let yInMid = null;
+          prodTerrain.withGroundContact({ y: 100 }, () => { yInMid = netInside.deckHeight(mx, mz); }, true);
+          assert.equal(yInMid, yOutMid, `bridge ${id} exag=${exag} midspan deckHeight is caller-independent`);
+          const clearSpan = PONY_TRUSS.clearHalf - 1e-4;
+          for (const end of [-1, 1]) {
+            for (let di = 0; di <= 20; di++) {
+              const dp = ((ap - 1e-3) * di) / 20, s = end < 0 ? -dp : span + dp;
+              for (let dj = 0; dj <= 16; dj++) {
+                const offset = -clearSpan + (2 * clearSpan * dj) / 16;
+                const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
+                const yOut = netOutside.deckHeight(x, z), yIn = netInside.deckHeight(x, z);
+                assert.equal(yIn, yOut, `bridge ${id} exag=${exag} apron deckHeight is caller-independent at s=${s.toFixed(2)}, off=${offset.toFixed(2)}`);
+                const drawn = prodTerrain.meshHeightAt(x, z, true), h = prodTerrain.heightAt(x, z);
+                assert.ok(drawn !== null && h !== null && yOut >= Math.max(drawn, h) - 1e-4, `bridge ${id} exag=${exag} end=${end} dp=${dp.toFixed(2)} off=${offset.toFixed(2)} clears drawn triangles (${(yOut - Math.max(drawn, h)).toFixed(4)} m)`);
+              }
+            }
+          }
+        }
+        for (const child of [...netOutside.group.children]) child.geometry?.dispose();
+        for (const child of [...netInside.group.children]) child.geometry?.dispose();
+      }
+      // Separate-bank streaming on Bridge 46 at 3.0x: start with level-6 both banks, then stream ONLY the east bank's level-7 tile.
+      {
+        const streamTerrain = new Terrain(mabouManifest, 'data/baked/terrain', {}, 3.0, -0.2);
+        const l6 = bridgeTiles(46, 6);
+        for (const k of l6) await loadTile(streamTerrain, k);
+        const streamNet = new Roads({ roads: tagged }, mabouManifest.village, streamTerrain);
+        const b46 = streamNet.roads.find(x => x.id === 46);
+        const [ax, az] = b46.pts[0], [bx, bz] = b46.pts[b46.pts.length - 1];
+        const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+        assert.ok(Number.isFinite(streamNet.deckHeight((ax + bx) / 2, (az + bz) / 2)), 'Bridge 46 builds at level 6');
+        const meshL6 = streamNet.group.children.find(c => c.name === 'pony-truss-46');
+        const raw46 = mabouRoads.roads.find(r => r.id === 46);
+        const eastPt = raw46.pts[raw46.pts.length - 1];
+        const eastL7 = tileKeyAt(eastPt[0] + 3, eastPt[1], 7);
+        assert.ok(eastL7, 'Bridge 46 east bank has a level-7 tile');
+        await loadTile(streamTerrain, eastL7);
+        for (const k of l6) {
+          const parent = streamTerrain.tile(k[0], k[1], k[2]);
+          const q = (eastL7[1] & 1) + ((eastL7[2] & 1) << 1);
+          if (Math.floor(eastL7[1] / 2) === k[1] && Math.floor(eastL7[2] / 2) === k[2]) parent.mesh.material.uniforms.hideQuad.value.setComponent(q, 1);
+        }
+        assert.ok(Number.isFinite(streamNet.deckHeight((ax + bx) / 2, (az + bz) / 2)), 'Bridge 46 refreshes when only east bank upgrades to level 7');
+        const meshL7East = streamNet.group.children.find(c => c.name === 'pony-truss-46');
+        assert.notEqual(meshL7East, meshL6, 'single-bank level-7 stream replaces stale level-6 bridge mesh');
+        for (const offset of [-2.05, 0, 2.05]) {
+          const x = ax + ux * (span + 2.999) - uz * offset, z = az + uz * (span + 2.999) + ux * offset;
+          const y = streamNet.deckHeight(x, z), drawn = streamTerrain.meshHeightAt(x, z, true);
+          assert.ok(y !== null && drawn !== null && y >= drawn - 1e-4, `streamed east apron clears level-7 drawn bank at +2.999 m, off=${offset} (${(y - drawn).toFixed(4)} m)`);
+        }
+        for (const child of [...streamNet.group.children]) child.geometry?.dispose();
+      }
+    } finally {
+      globalThis.fetch = prevFetch; globalThis.createImageBitmap = prevBitmap; globalThis.OffscreenCanvas = prevCanvas;
+      THREE.TextureLoader.prototype.load = prevTexLoad;
+    }
+  }
   // No bridge in any other area pack matches (including Highway 19 ids 45/46 in Judique and Canso Causeway).
   for (const dir of ['areas/judique', 'areas/porthood', 'areas/pointtupper', 'areas/westbay', 'areas/cansocauseway']) {
     const d = read(dir, 'roads');
