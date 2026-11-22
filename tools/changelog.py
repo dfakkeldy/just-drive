@@ -50,18 +50,26 @@ def read_history():
     return history
 
 
-def entries(history, notes):
+def entries(history, notes, players=False):
     if not isinstance(notes, dict) or any(
-        not re.fullmatch(r'[1-9]\d*', key) or (value is not None and not isinstance(value, str))
+        not re.fullmatch(r'[1-9]\d*', key) or (value is not None and not isinstance(value, str)
+        and not (isinstance(value, dict) and set(value) == {'player'} and isinstance(value['player'], str)))
         for key, value in notes.items()
     ):
-        raise ValueError('notes must map PR numbers to text or null')
+        raise ValueError('notes must map PR numbers to text, a player note, or null')
     groups = defaultdict(list)
     for commit in history:
         title = commit['title']
         match = PR.fullmatch(title)
         number = match[2] if match else None
-        line = notes.get(number, match[1] if match else title)
+        note = notes.get(number)
+        if players and number not in notes:
+            continue
+        if isinstance(note, dict):
+            safe_line(note['player'])
+            line = note['player'] if players else match[1] if match else title
+        else:
+            line = notes.get(number, match[1] if match else title)
         if line is None:
             continue
         safe_line(line)
@@ -89,7 +97,9 @@ def page(groups):
     for day, changes in groups:
         items = ''.join(f'<li>{html.escape(line)}' + (f' <small>#{number}</small>' if number else '')
                         + '</li>\n' for line, number in changes)
-        sections.append(f'<section><h2><time datetime="{day}">{day}</time></h2><ul>{items}</ul></section>')
+        date = datetime.strptime(day, "%Y-%m-%d")
+        display_day = f"{date.day} {date.strftime('%B %Y')}"
+        sections.append(f'<section><h2><time datetime="{day}">{display_day}</time></h2><ul>{items}</ul></section>')
     return '''<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -98,11 +108,10 @@ def page(groups):
 <style>html{color-scheme:dark;background:#0b1620;color:#eef2f6;font:17px/1.6 system-ui,sans-serif}
 body{max-width:48rem;margin:auto;padding:24px max(20px,env(safe-area-inset-right)) 48px max(20px,env(safe-area-inset-left))}
 a{color:#b8dfcf}a:focus-visible{outline:3px solid white;outline-offset:4px}
-h1{font-size:2.4rem;line-height:1.1}h2{font-size:1.2rem;margin-top:2rem}li{margin:.65rem 0;overflow-wrap:anywhere}
-small{color:#b9c3cc}ul{padding-left:1.3rem}section{border-top:1px solid #34434e}</style>
-</head><body><nav aria-label="Game"><a href="/">Back to the game</a> · <a href="/about">About</a></nav>
-<main><h1>What's new</h1><p>Changes to the game, newest first. Dates use Atlantic time.</p>
-''' + '\n'.join(sections) + '\n</main></body></html>\n'
+h1{font:600 clamp(40px,7vw,64px)/1.08 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:-.01em}.overline{font:700 13px/1.4 system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#b8dfcf}h2{font:600 1.4rem/1.3 "Iowan Old Style",Palatino,Georgia,serif;margin-top:2rem}li{margin:.65rem 0;overflow-wrap:anywhere}
+.topNav{font-size:15px;margin-bottom:24px}.topNav a{display:inline-flex;align-items:center;min-height:44px}small{color:#b9c3cc;font-size:12px}ul{padding-left:1.3rem}section{border-top:1px solid #34434e}footer{margin-top:40px;padding-top:16px;border-top:1px solid #34434e}footer nav{font-size:15px}footer a{display:inline-flex;align-items:center;min-height:44px}</style>
+</head><body><nav class="topNav" aria-label="Back"><a href="/">Back to the game</a> · <a href="/about">About</a></nav><main><p class="overline">From the roads of Cape Breton</p><h1>What's new</h1><p>Changes to the game, newest first. Dates use Atlantic time.</p>
+''' + '\n'.join(sections) + '\n</main><footer><nav aria-label="More"><a href="/">Back to the game</a> · <a href="/about">About</a> · <a href="/help">Help and controls</a> · <a href="/listen/">Just Listen</a></nav></footer></body></html>\n'
 
 
 def main():
@@ -115,10 +124,11 @@ def main():
     args = parser.parse_args()
     try:
         history = json.loads(args.fixture.read_text()) if args.fixture else read_history()
-        groups = entries(history, json.loads(args.notes.read_text()))
+        notes = json.loads(args.notes.read_text())
+        groups = entries(history, notes)
         outputs = [(args.output, markdown(groups))]
         if args.html:
-            outputs.append((args.html, page(groups)))
+            outputs.append((args.html, page(entries(history, notes, players=True))))
         # Render and validate everything before touching either destination.
         for path, content in outputs:
             encoded = content.encode('utf-8')

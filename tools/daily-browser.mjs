@@ -125,6 +125,7 @@ try {
       assert.match(line.text, /^\d:\d\d · [\d,]+ pts/);
       assert.ok(await read("(()=>{const s=document.getElementById('phoneStatus');return s.scrollHeight<=s.clientHeight+1})()"), 'the phone status block holds its lines');
     } else {
+  assert.ok(await read(`document.getElementById('endShift').classList.contains('inPanel')&&document.getElementById('endShift').getBoundingClientRect().width===0`),'END SHIFT stays in closed Settings');
       const hud = await box('#firedHud'), grid = await box('#bingoGrid');
       assert.ok(hud.shown && hud.inside && grid.shown && grid.inside, JSON.stringify({ hud, grid }));
       assert.match(hud.text, /\d:\d\d left/);

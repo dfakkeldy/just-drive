@@ -1,8 +1,11 @@
+import { bikeKeys, horseKeys } from './vehicle-choice';
+import { installSettings } from './settings';
 import { Sidewalks } from './sidewalks';
 import { loadSidewalkData } from './sidewalks-cache';
 import { StreamCulverts } from './stream-culverts';
 import { sugarCampStart } from './sugar-camp-start';
 import { PointTupperDriver, driverEnabled, driverLive } from './point-tupper-driver';
+import { KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys } from './controls';
 import { PauseGate } from './pause';
 import { TrafficSignals } from './traffic-signals';
 import { CLEAR_HAZE, MOODS, moodLook, weatherMoment, weatherSettings, weatherUI } from './weather';
@@ -22,6 +25,7 @@ import { Fleet } from './fleet';
 import { fleetEnabled, fleetRig } from './fleet-models';
 import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
+import { ABOUT_URL } from './credits';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
 import { littleMabouMarshRail, NovemberRoadDetails } from './november-road-details';
@@ -38,6 +42,7 @@ import { detailSetting } from './detail';
 import { offlinePlay } from './offline-play';
 import { bindOfflineVersion } from './offline-version';
 import { pictureSetting } from './picture';
+import { savePicture } from './save-picture';
 import { EdgeSamples, Finish, type CloudLight } from './finish';
 import { FINISH, finishSetting } from './finish-choice';
 import { cloudReflections } from './finish-shaders';
@@ -61,7 +66,7 @@ import { Mail } from './mail';
 import { Shift } from './shift';
 import { readMode } from './mode';
 import { readEra, areaInEra } from './era';
-import { FreeDrive, SceneryContact, quietInteriors, quietRelief, quietEndings, prepareExplore, exploreKey } from './explore';
+import { FreeDrive, SceneryContact, quietInteriors, quietRelief, quietEndings, prepareExplore, exploreKey, watchPictureStatus } from './explore';
 import { placesFor, homePlaces, churchPlaces, westBayPlaces, areaPlaces } from './places';
 import { PlacesUI } from './places-ui';
 import { BigMap } from './big-map';
@@ -120,7 +125,8 @@ import { wharfBuildingArt } from './mabou-wharf-buildings';
 import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
-import { createTouchControls } from './touch';
+import { createTouchControls, moveEndShiftToSettings } from './touch';
+import { scrollMore } from './scroll-more';
 import { createGamepad } from './gamepad';
 import { drivingHelpSetting } from './driving-help';
 import { Trees, crownTest, treeLook } from './trees';
@@ -151,7 +157,7 @@ import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
 import {createTestPark,testParkPlaces} from './stunt-test-park';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
-import { Drone, createDroneButton, createDroneSticks, roofHeights } from './drone';
+import { Drone, createDroneButton, createDroneSticks, roofHeights, droneSpans, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';
 import { DRONE } from './drone-rules';
 
 // Mabou village, and the game's moment: the second week of October, late afternoon (Atlantic Daylight Time, UTC-3).
@@ -995,6 +1001,7 @@ const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, prop
   resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; devHooks.reset();
 }, AREA.route, firedMode, DAILY?.day ?? 0) : new FreeDrive(roads, manifest.village);
+if (shift instanceof Shift) shift.endsAtSix = !DAILY;
 const roadScene = AREA.roadScene && shift instanceof Shift ? new RoadScene(roads, terrain, shift, params) : null;
 resets[resetSlot.roadScene] = () => roadScene?.reset();
 if (roadScene) { scene.add(roadScene.group, roadScene.painter.group); vehicle.placementGuard = pose => roadScene.allowPlacement(pose, vehicleSpec); }
@@ -1225,6 +1232,9 @@ const lawnDemo = lawnHouse ? new LawnDemo(lawnHouse, manifest.village, vehicle) 
 
 // ---- input --------------------------------------------------------------------------------
 const keys = new Set<string>();
+let pictureRequested = false, savingPicture = false;
+const canSavePicture = () => !mailMode && !page.stopped && !scenePaused() && !fleet?.busy && !interiors.busy && (mode === 'drive' || drone.active);
+const requestPicture = () => { if (canSavePicture() && !savingPicture) pictureRequested = true; };
 // Enter or Space on a control that has the focus (Tab, then the key) belongs to that control, not to the game.
 // The one exception is Space on the mail button, which throws mail by design.
 const ownedByControl = (ev: KeyboardEvent) => (ev.code === 'Enter' || ev.code === 'Space') && ev.target instanceof HTMLElement
@@ -1235,6 +1245,10 @@ addEventListener('keydown', (ev) => {
   if (!live() || typing(ev)) return;   // a modal or text field owns input
   if (fleet?.busy || fleet && ev.repeat && !keys.has(ev.code)) return;
   if (ownedByControl(ev)) return;
+  if (!mailMode && ev.code === 'KeyO' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+    if (!ev.repeat && canSavePicture()) { ev.preventDefault(); requestPicture(); }
+    return;
+  }
   // The drone's own keys (arrows, Q/E turn, C down, R flies home) never reach the mail, explore or interior keys.
   if (mode === 'fly' && drone.active && DRONE_KEYS.includes(ev.code)) {
     ev.preventDefault(); keys.add(ev.code);
@@ -1285,6 +1299,7 @@ const pointers = new Map<number, { x: number; y: number; sx: number; sy: number 
 let flyTouch = 0, droneTurn = 0;   // droneTurn: how far a drag has turned the drone since its last frame
 // On a phone the visible pad and pedals own the driving input; with a mouse the old drag on the picture still works.
 const honk = () => { if (live() && !fleet?.busy && !document.hidden && !interiors.busy && mode === 'drive') { animals?.honk(vehicle); roadScene?.honk(vehicle); roadAnimals?.honk(vehicle); multiplayer?.horn(); ride.honk(); } };
+moveEndShiftToSettings();
 const pad = touchDevice && !bare ? createTouchControls({
   reset: resetToRoad,
   view: () => { if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
@@ -1297,6 +1312,16 @@ if (pad) {
   const top = document.getElementById('phoneTop'), button = createDroneButton(() => { if (live() && !fleet?.busy && !interiors.busy && mode === 'drive') { yardJob?.judge.cancel(); launchDrone(); } });
   top?.insertBefore(button, document.getElementById('gear'));
 }
+const pictureButton = pad && !mailMode ? Object.assign(document.createElement('button'), {
+  id: 'savePictureButton', type: 'button', textContent: 'Save picture', hidden: true,
+}) : null;
+if (pictureButton) {
+  document.body.append(pictureButton);
+  pictureButton.addEventListener('click', requestPicture);
+}
+const pictureStatus = !bare && !mailMode ? Object.assign(document.createElement('div'), { id: 'savePictureStatus' }) : null;
+if (pictureStatus) { pictureStatus.setAttribute('role', 'status'); document.body.append(pictureStatus); watchPictureStatus(pictureStatus); }
+let pictureStatusTimer = 0;
 // A controller (gamepad.ts): the same values and the same actions as the keys. Nothing runs until one is used.
 const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
 const gamepad = createGamepad({
@@ -1409,7 +1434,7 @@ const droneCommand = { forward: 0, right: 0, up: 0, turn: 0 }, droneRoofAt = { x
 const droneUnder: { ground: number | null; floor: number | null } = { ground: null, floor: null };
 const droneKey = (code: string) => keys.has(code) ? 1 : 0;
 function flyDrone(dt: number) {
-  droneSticks?.show(!shift.ended);
+  droneSticks?.show(!shift.ended, drone.returning);
   if (pause.blocked) return;
   const stick = droneSticks?.command;
   // Keyboard alone flies it: WASD move it level, ←/→ (or Q/E) turn it, ↑/↓ tilt the camera, Space/Shift (or C) climb
@@ -1565,29 +1590,52 @@ const replayButton = (id: string): HTMLButtonElement => {
 const pause = new PauseGate();
 // The title card, an ending and the places panel are their own modals and keep their own keys.
 const pauseAllowed = (): boolean => started && !endings.busy && !placesUI?.busy && !bigMap?.busy;
-const pauseButton = Object.assign(document.createElement('button'), { id: 'pauseButton', textContent: 'Pause', ariaLabel: 'Pause game. Esc or P' });
+const pauseButton = Object.assign(document.createElement('button'), { id: 'pauseButton', hidden: true, textContent: 'Pause', ariaLabel: 'Pause game. Esc or P' });
 const pauseScreen = document.createElement('div');
 pauseScreen.id = 'pauseScreen';
 pauseScreen.hidden = true;
-pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>Room games do not pause</p><pre id="pauseState"></pre><button id="resumeGame">Resume</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button></section>';
+pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>A room keeps going when you pause.</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button><button id="pauseEndShift" hidden>End shift</button></section>';
+if (SITE.brand === 'just') pauseScreen.querySelector('section')!.insertAdjacentHTML('beforeend', `<a id="pauseHome" href="${new URL(ABOUT_URL.just).origin}/">All places (front page)</a>`);
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
-const roomPauseNote = Object.assign(document.createElement('p'), { textContent: 'Room games do not pause', hidden: true });
-settingsPanel.prepend(roomPauseNote);
+scrollMore(settingsPanel, () => settingsPanel.classList.contains('open'), 'settingsMore', document.body);
+const settingsRoomPauseNote = touchDevice ? null : Object.assign(document.createElement('p'), { className: 'roomPauseNote', hidden: true, textContent: 'A room keeps going when you pause.' });
+if (settingsRoomPauseNote) settingsPanel.querySelector('#settingsHeader')!.after(settingsRoomPauseNote);
 function syncPauseUI(): void {
   keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
+  pictureRequested = false;
   touch.steer = touch.throttle = flyTouch = 0;
   const room = !!multiplayer?.choice.on;
-  roomPauseNote.hidden = !room;
   pauseScreen.querySelector<HTMLElement>('.roomPauseNote')!.hidden = !room;
+  if (settingsRoomPauseNote) settingsRoomPauseNote.hidden = !room;
   settingsPanel.classList.toggle('open', pause.blocked && !pause.screen && !document.hidden);
   pauseScreen.hidden = !pause.screen || document.hidden || replay.active;
+  document.getElementById('pauseEndShift')!.hidden = !mailMode || document.getElementById('endShift')!.hidden || interiors.busy || bare;
   if (!pauseScreen.hidden) {
     // Rooms do not pause, so they have no replay; a fresh start has nothing to show yet.
     const watch = document.getElementById('pauseReplay') as HTMLButtonElement;
     watch.hidden = room; watch.disabled = !replay.available;
-    document.getElementById('pauseState')!.textContent = [document.getElementById('shiftHud')?.textContent || (mailMode ? 'Shift ready' : 'Free drive'), document.querySelector('#racePanel [role=status]')?.textContent || 'No active race'].join('\n');
+    const station = radio?.tunedDial;
+    document.getElementById('pauseTitle')!.textContent = mode === 'drive' && !room && !interiors.busy && ride.kind === 'car'
+      ? `Pulled over${vehicle.roadName ? ' on ' + vehicle.roadName : ''}` : 'Paused';
+    document.getElementById('pauseState')!.textContent = DAILY ? 'Today’s run' : firedMode ? 'Get fired' : mailMode ? 'Deliver the mail' : 'Free drive';
+    document.getElementById('pauseRadio')!.textContent = station ? `On the radio: ${radio!.stationNamed(station)!}` : 'Radio quiet';
+    const race = document.querySelector('#racePanel [role=status]')?.textContent;
+    const raceLine = document.getElementById('pauseRace')!;
+    raceLine.hidden = !multiplayer?.current?.net.race?.startAt || !race || /no active race/i.test(race);
+    raceLine.textContent = raceLine.hidden ? '' : race!;
+    const hints = drone.active && !touchDevice ? DRONE_HELP : drone.active && touchDevice ? DRONE_TOUCH_HELP
+      : gamepad.device === 'gamepad' ? padKeys(ride.kind, mailMode, !!radio)
+      : ride.kind === 'horse' ? horseKeys(touchDevice, mailMode) : ride.kind === 'bike' ? bikeKeys(touchDevice)
+      : touchDevice ? (mailMode ? TOUCH : DRIVING_TOUCH) : (mailMode ? KEYS : DRIVING_KEYS);
+    document.querySelector<HTMLDetailsElement>('#pauseKeys')!.open = false;
+    const list = document.querySelector('#pauseKeys dl')!;
+    list.replaceChildren(...hints.flatMap(([key, help]) => {
+      const term = document.createElement('dt'), text = document.createElement('dd');
+      term.textContent = key; text.textContent = help;
+      return [term, text];
+    }));
     document.getElementById('resumeGame')!.focus();
   }
   syncRoadScenePause();
@@ -1601,11 +1649,15 @@ addEventListener('keydown', ev => {
   const escapeOwned = ev.code === 'Escape' && !pause.blocked && interiors.busy;
   if ((ev.code === 'Escape' && !escapeOwned || ev.code === 'KeyP' && !typing) && pauseAllowed()) {
     ev.preventDefault(); ev.stopImmediatePropagation();
-    if (!ev.repeat) { pause.toggle(); syncPauseUI(); }
+    if (!ev.repeat) {
+      const settingsClosed = ev.code === 'Escape' && settingsPanel.classList.contains('open');
+      pause.toggle(); syncPauseUI();
+      if (settingsClosed) document.getElementById('gear')!.focus();
+    }
   } else if (ev.code === 'Tab' && !pauseScreen.hidden) {
     ev.preventDefault();
-    const list = [...pauseScreen.querySelectorAll<HTMLButtonElement>('button:not([disabled]):not([hidden])')];
-    const at = list.indexOf(document.activeElement as HTMLButtonElement);
+    const list = [...pauseScreen.querySelectorAll<HTMLElement>('button:not([disabled]):not([hidden]), a[href], summary')];
+    const at = list.indexOf(document.activeElement as HTMLElement);
     list[(at + (ev.shiftKey ? list.length - 1 : 1) + list.length) % list.length]?.focus();
   }
 }, { capture: true });
@@ -1617,11 +1669,18 @@ new MutationObserver(() => {
   if (open !== (pause.blocked && !pause.screen && !document.hidden)) { pause.setSettings(open); syncPauseUI(); }
 }).observe(settingsPanel, { attributes: true, attributeFilter: ['class'] });
 document.getElementById('resumeGame')!.addEventListener('click', () => { pause.resume(); syncPauseUI(); });
+document.getElementById('pauseEndShift')!.addEventListener('click', () => { pause.resume(); syncPauseUI(); shift.end(); });
 document.getElementById('pauseSettings')!.addEventListener('click', () => { pause.setSettings(true); syncPauseUI(); });
 document.getElementById('pauseReplay')!.addEventListener('click', () => { openReplay(); });
 for (const element of [pauseScreen, pauseButton]) for (const event of ['pointerdown', 'pointerup', 'pointermove']) element.addEventListener(event, ev => ev.stopPropagation());
 
 // ---- settings -----------------------------------------------------------------------------
+installSettings();
+// Reserve the credit chip's full height, including when it wraps beside property lines.
+const creditChip = document.getElementById('credit');
+if (creditChip) new ResizeObserver(() => {
+  settingsPanel.style.setProperty('--settings-credit-height', `${creditChip.getBoundingClientRect().height + 24}px`);
+}).observe(creditChip);
 {
   const slider = document.getElementById('exag') as HTMLInputElement, label = document.getElementById('exagValue')!;
   const panel = document.getElementById('settings')!;
@@ -1929,6 +1988,26 @@ function drawWorld(): void {
   if (finish?.on) finish.render(scene, camera); else renderer.render(scene, camera);
   drawProbe?.after?.();
 }
+async function drawPicture(): Promise<void> {
+  savingPicture = true;
+  let message = '';
+  const room = multiplayer?.current;
+  try {
+    if (await savePicture({
+      canvas, render: drawWorld, place: AREA.name, touch: touchDevice,
+      hide: [drone.group, room?.ghosts.labels, room?.race.group, room?.games.group, animals?.horn],
+    })) message = 'Picture saved';
+  } catch {
+    message = 'Could not save picture';
+  } finally {
+    savingPicture = false;
+  }
+  if (message && pictureStatus) {
+    pictureStatus.textContent = message;
+    clearTimeout(pictureStatusTimer);
+    pictureStatusTimer = window.setTimeout(() => { pictureStatus.textContent = ''; }, 1800);
+  }
+}
 if (drawProbe) Object.assign((window as unknown as { mmm?: Record<string, unknown> }).mmm ??= {}, { finish, drawProbe });
 
 const shadowFocus = new THREE.Vector3();
@@ -1951,14 +2030,21 @@ function drawEnding(dt: number): void {
 
 // Reuse this record: the HUD path allocates no per-frame state object.
 const hudState: HudState = {
+  // Set debugFps: true here to show FPS in the player readout.
   mode, mailMode, touchDevice, fps, speed: 0, activeTouchSpeedLimit: 0, roadName: '', surfaceName: '', airborne: false, help: '', jumpLine: '',
   e: 0, n: 0, height: 0, exag: EXAG, sunAz: 0, sunEl: 0, drawn: 0, pending: 0, flySpeed, views: SHOTS.length,
   done: 0, stops: 0, delivered: 0, lawn: 0, ditch: 0, trailerReason: '', atEdge: false, route: !!AREA.route,
   showRuts: params.has('lawn'), ruts: 0, lawns: 0, drone: '',
 };
 function frame(now: number) {
+  pauseButton.hidden = !started || bare;
+  document.body.classList.toggle('gameStarted', started);
   if (page.stopped) return;
   try {
+  if (pictureButton) {
+    const hidden = !canSavePicture();
+    if (pictureButton.hidden !== hidden) pictureButton.hidden = hidden;
+  }
   gamepad.poll(now);
   const pauseFrame = pause.frame(now, !!multiplayer?.choice.on);
   if (pauseFrame.paused) {
@@ -2060,7 +2146,7 @@ function frame(now: number) {
     terrain.update(camera, true);
     sidewalks?.update();
     quiet = loaded && terrain.pending === 0 ? quiet + 1 : 0; page.ready(quiet > 20 && terrain.failed === 0 && terrain.pending === 0 && (sidewalks?.pending ?? 0) === 0);
-    mailRequested = photoRequested = false;
+    mailRequested = photoRequested = pictureRequested = false;
     if (!interiors.busy) { keys.clear(); touch.steer = touch.throttle = 0; camReady = false; }
     requestAnimationFrame(frame); return;
   }
@@ -2126,11 +2212,13 @@ function frame(now: number) {
     footpaths?.update(realDt, camera.position);
     relief.update(dt, playing ? clockDt * CLOCK_FACTOR : 0, vehicle, playing && (!demo || reliefTest > 0));
     if (miniMap) {
-      miniMap.show(playing);
+      miniMap.setFlight(drone.active);
+      miniMap.show(playing || drone.active && clockRuns);
       mapTimer -= realDt;
       if (mapTimer <= 0) { mapTimer = 0.25; refreshMap(); }
       miniMap.boss = boss?.mapSpot ?? null;
-      miniMap.update(realDt, vehicle.x, vehicle.z, vehicle.heading, mapStops, mapMarks, mapCars);
+      const focus = drone.active ? drone.state : vehicle;
+      miniMap.update(realDt, focus.x, focus.z, drone.active ? -drone.state.yaw : vehicle.heading, mapStops, mapMarks, mapCars, drone.active ? vehicle : null);
     }
     // Paused frames return early, but a multiplayer room keeps running them: ground property lines still stop while Settings is open.
     propertyLayer?.update?.(vehicle.x, vehicle.z, playing && !pause.blocked && !interiors.busy);
@@ -2152,7 +2240,11 @@ function frame(now: number) {
   renderer.localClippingEnabled = LOW && !!fishing?.group.visible;
   mirrorFlags.driving = driving; mirrorFlags.bossClock = clockRuns && frameLive; mirrorFlags.bossHeld = !driving || interiors.busy || document.hidden;
   updateWorld('mirror', dt, realDt, now);
-  try { drawWorld(); } finally { farVisibility?.settle(); waterReflections?.settle(); }
+  try {
+    if (pictureRequested && canSavePicture()) void drawPicture();
+    else drawWorld();
+    pictureRequested = false;
+  } finally { farVisibility?.settle(); waterReflections?.settle(); }
   afterWorld();
   if(started&&!farLoading&&(farKey||tallKey)){farLoading=true;setTimeout(()=>{void loadFarViews();},0);}
   // A photo is evidence of what the driver saw: the free camera takes none.
@@ -2174,6 +2266,9 @@ function frame(now: number) {
     // Behind the title card the readout said "0 km/h off the map" while the land was still loading: keep it out of sight.
     hud.style.visibility = started ? '' : 'hidden';
     hudState.mode = mode; hudState.fps = fps;
+    const fpsText = fps.toFixed(0);
+    if (hud.dataset.fps !== fpsText) hud.dataset.fps = fpsText;
+    hudState.hintsHidden = drove >= 60;
     if (mode === 'drive') {
       hudState.speed = vehicle.speed; hudState.activeTouchSpeedLimit = scenePaused() ? 0 : vehicle.activeTouchSpeedLimit; hudState.surfaceName = vehicle.surfaceName; hudState.airborne = vehicle.airborne;
       hudState.roadName = vehicle.roadName ?? (yardSite?.surface(vehicle.x, vehicle.z) ? 'works yard' : homeSite?.surface(vehicle.x, vehicle.z) ? 'house yard' : 'off the map');
@@ -2181,6 +2276,7 @@ function frame(now: number) {
       if (ERA.id === '1884') hudState.roadName = historyRoadName(hudState.roadName, AREA.id);
       if (touchDevice) hudState.jumpLine = ride.jumpLine;
       else if (!mailMode) hudState.help = ride.help;
+      hudState.airLine = touchDevice ? '' : ride.airLine;
     } else {
       hudState.e = camera.position.x + VE; hudState.n = VN - camera.position.z; hudState.height = camera.position.y;
       hudState.sunAz = sun.az; hudState.sunEl = sun.el; hudState.drawn = terrain.drawn; hudState.pending = terrain.pending; hudState.flySpeed = flySpeed;
@@ -2195,7 +2291,7 @@ function frame(now: number) {
       hudState.fleetLine = fleet.driven.id === 'truck' && fleet.handbrake && !line.includes('Handbrake on') ? `Handbrake on · ${line}` : line;
     } else hudState.fleetLine = '';
     ride.hud?.(hudState);
-    setHud(hud, hudLine(hudState));
+    setHud(hud, hudLine(hudState), drone.active && hudState.drone ? droneSpans : undefined);
   }
 
   requestAnimationFrame(frame);
@@ -2203,6 +2299,8 @@ function frame(now: number) {
 }
 // Settings > Advanced: on phone detail, once the far views pack is installed (desktop always draws it).
 if (!bare && LOW && farPack) farPhoneSetting(advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice), farPhone.choice, farPhone.fromUrl, touchDevice);
+const graphics = document.getElementById('graphics');
+if (graphics) (document.getElementById('advanced') ?? advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice))?.append(graphics);
 resize();
 document.getElementById('boot')?.remove();
 // Finalize all initial material hooks before their first compile. Activation only flips a uniform.

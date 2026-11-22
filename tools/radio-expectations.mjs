@@ -85,7 +85,7 @@ export function checkStations(stations, expected=CATALOGUE.stations.filter(s=>s.
 /** Remove only exact catalogue fields from the radio scan; keep all surrounding text. */
 export function radioTextToCheck(body, radio, catalogue) {
   let residual = radio.text;
-  if (catalogue.stations.some(s => radio.station === `♪ ${s.dial} ${s.name}`)) residual = residual.replace(radio.station, '');
+  if (catalogue.stations.some(s => radio.station === `${s.dial} ${s.name}`)) residual = residual.replace(radio.station, '');
   if (radio.track && catalogue.stations.some(s => s.tracks.some(t => t.title === radio.track))) residual = residual.replace(radio.track, '');
   return { body: radio.text ? body.replace(radio.text, residual) : body, radio: residual };
 }

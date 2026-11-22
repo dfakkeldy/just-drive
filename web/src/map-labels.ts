@@ -16,6 +16,7 @@ export interface LabelCandidate {
 export interface PlacedLabel extends LabelBox { label: string; slot: number; px: number; py: number }
 export interface LabelLayout {
   size: number;
+  circle?: { cx: number; cy: number; r: number };
   cap: number;
   /** Text width in CSS pixels. */
   measure(text: string): number;
@@ -87,6 +88,8 @@ export function placeLabels(candidates: readonly LabelCandidate[], layout: Label
       const box = { x0, y0, x1: x0 + w, y1: y0 + h };
       // Inside the map whole: a name too long for this map is left out, never squeezed or cut.
       if (box.x0 < EDGE || box.y0 < EDGE || box.x1 > size - EDGE || box.y1 > size - EDGE) continue;
+      const circle = layout.circle;
+      if (circle && [box.x0, box.x1].some(x => [box.y0, box.y1].some(y => Math.hypot(x - circle.cx, y - circle.cy) > circle.r))) continue;
       if (taken.some(b => overlaps(box, b, PAD)) || dots.some(d => d.rank <= c.rank && d.label !== c.label && overlaps(box, d, 0))) continue;
       placed.push({ ...box, label: c.label, slot, px: c.px, py: c.py });
       names.push(box); taken.push(box, anchor); seen.add(c.label);
