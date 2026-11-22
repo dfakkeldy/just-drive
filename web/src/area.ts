@@ -29,7 +29,7 @@ export interface Area {
   readonly yardDog: boolean;
   /** The school bus on its loop, and its stop as a quiet place in room games (Mabou). */
   readonly schoolBus: boolean;
-  /** The November buildings and road details (Mabou and Port Hood). */
+  /** The November buildings and road details (Mabou, Port Hood, and Baxters Cove Road in Judique). */
   readonly november: boolean;
   /** The November hillside buildings take the place of their surveyed boxes (Mabou). */
   readonly hillside: boolean;
@@ -54,7 +54,7 @@ const mabouSites = (enabled: boolean) => ({ mabouMain: enabled, porch: enabled, 
 const pointTupperSites = (enabled: boolean) => ({ hawkesbury: enabled, airport: enabled, ptInfrastructure: enabled });
 const area = (id: string, name: string): Area => Object.freeze({ id, name, base: id === 'mabou' ? 'terrain' : `areas/${id}`,
   mail: id === 'mabou', ...features(id === 'mabou'), home: id === 'judique', church: id === 'judique', quarry: id === 'westbay',
-  ...mabouSites(id === 'mabou'), november: id === 'mabou' || id === 'porthood', judiqueVillage: id === 'judique', drLane: id === 'judique', maryville: id === 'porthood',
+  ...mabouSites(id === 'mabou'), november: id === 'mabou' || id === 'porthood' || id === 'judique', judiqueVillage: id === 'judique', drLane: id === 'judique', maryville: id === 'porthood',
   ...pointTupperSites(id === 'pointtupper'), canal: id === 'cansocauseway' });
 export const AREAS: readonly Area[] = Object.freeze([
   area('mabou', 'Mabou'), area('judique', 'Judique'), area('porthood', 'Port Hood'),

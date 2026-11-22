@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Buildings, buildingSites } from '../web/src/buildings.ts';
-import { littleMabouBuildingArt, NovemberBuildings, novemberFootprints } from '../web/src/november-buildings.ts';
-import { littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
+import { baxtersCoveBuildingArt, littleMabouBuildingArt, NovemberBuildings, novemberFootprints, TRAILHEAD_FENCE } from '../web/src/november-buildings.ts';
+import { BAXTERS_COVE_LOT, littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
+import { WHARF_SOURCES } from '../web/src/wharf-source.ts';
 import { areaPlaces, nearestPlacement, placesFor } from '../web/src/places.ts';
 import { planRails, railPoint } from '../web/src/guardrail-rules.ts';
 import { railLand } from './guardrail-land.mjs';
@@ -137,6 +138,59 @@ for (const {a, b, side} of added) {
   for (const p of [a, b]) assert.ok(land.ground(p.x, p.z) > 0);
   assert.ok(railPoint(road, a.along).x + land.village[0] >= 622263, 'the rail starts clear of the bridge');
   assert.ok(railPoint(road, b.along).x + land.village[0] <= 622400, 'the rail stays in the observed stretch');
+}
+// Baxters Cove Road (Judique pack, 21 Nov dash cam).
+{
+  const dir = 'areas/judique', { village } = read(dir, 'manifest'), data = read(dir, 'roads');
+  const [east, north] = village, world = ([e, n]) => [e - east, north - n];
+  const details = new NovemberRoadDetails(data.roads, 'judique', village);
+  assert.deepEqual([details.bars.length, details.added.length, details.sites.length], [0, 0, 2], 'two Judique surfaces, no stop lines');
+  const [lot, lane] = details.sites;
+  for (const p of [[616250, 5079340], [616245, 5079390], [616222, 5079422], [616260, 5079325]]) {
+    assert.equal(lot.surface(...world(p))?.kind, 8, `yard gravel at ${p}`);
+  }
+  assert.equal(lot.surface(...world([616237, 5079352])), null, 'the slipway keeps its own surface');
+  for (const source of WHARF_SOURCES.filter(s => s.area === 'judique')) {
+    for (const [i, [ae, an]] of source.outline.entries()) {
+      const [be, bn] = source.outline[(i + 1) % source.outline.length], steps = Math.ceil(Math.hypot(be - ae, bn - an) / .5);
+      for (let j = 0; j <= steps; j++) {
+        const p = [ae + (be - ae) * j / steps, an + (bn - an) * j / steps];
+        assert.equal(lot.surface(...world(p)), null, `the lot stays off the wharf edge at ${p}`);
+      }
+    }
+  }
+  const mapped = read(dir, 'buildings').buildings, copy = structuredClone(mapped);
+  const art = baxtersCoveBuildingArt(mapped);
+  assert.deepEqual(mapped, copy, 'the survey list is not edited');
+  const at = (x, y) => art.buildings.find(b => Math.hypot(b.x - x, b.y - y) < 2);
+  const long = at(616254.85, 5079386.99), gambrel = at(616282, 5079339), house = at(617083, 5079233.8);
+  assert.deepEqual([long.kind, art.styles[long.id].wall, art.styles[long.id].barnDoors], ['barn', '#9a8559', 5]);
+  assert.equal(art.styles[at(616233.9, 5079329.5).id].wall, '#e9e7df');
+  assert.equal(art.styles[at(617039, 5079229.5).id].wall, '#8a7b68');
+  assert.deepEqual([house.kind, house.eave, house.ridge], ['house', 5.3, 7.81]);
+  assert.equal(art.styles[gambrel.id].roofShape, 'gambrel');
+  assert.ok(mapped.every(b => Math.hypot(b.x - gambrel.x, b.y - gambrel.y) >= 5), 'the gambrel shed is new');
+  for (const p of gambrel.footprint) assert.equal(lot.surface(...world(p)), null, 'grass round the gambrel shed');
+  assert.equal(baxtersCoveBuildingArt(art.buildings).buildings.filter(b => b.id === gambrel.id).length, 1, 'added once');
+  assert.ok(lane.surface(...world([616433, 5079150]))?.gravelDrive, 'the trailhead lane is gravel');
+  const roads = new Roads(data, village, {});
+  for (const run of TRAILHEAD_FENCE) for (const [e, n] of run) {
+    assert.ok(!roads.nearest(...world([e, n]), 4, r => r.kind <= 3), 'fence posts stand off Baxters Cove Road');
+    const trail = roads.nearest(...world([e, n]), 4, r => r.name === 'Judique Flyer Trail');
+    assert.ok(!trail || trail.dist > trail.road.halfWidth + 1, 'fence posts stand off the trail');
+  }
+  for (const low of [true, false]) {
+    const models = new NovemberBuildings('judique', mapped, village, 1.5, 0, low);
+    assert.ok(models.drawing.pos.every(Number.isFinite));
+    assert.equal(models.solids.length, 31, 'kiosk, four shelter posts, fence posts and rails');
+    assert.ok(models.drawing.triangles < 1500, `trailhead triangles: ${models.drawing.triangles}`);
+    for (const solid of models.solids) {
+      const radius = Math.hypot(solid.half, solid.halfWidth);
+      const hit = roads.nearest(solid.x, solid.z, radius + 8, r => r.kind <= 3);
+      assert.ok(!hit || hit.dist > radius + hit.road.halfWidth, 'trailhead solids stay clear of the road');
+    }
+  }
+  console.log('PASS Baxters Cove harbour lot, shed art, gambrel shed, trailhead lane, kiosk, shelter and fence');
 }
 console.log('PASS Little Mabou homes, shed and marsh rail; access and bridge exclusions');
 console.log('PASS two Highway 19 aprons both land packs, gravel driveway, hillside gravel, building batches and three view starts');

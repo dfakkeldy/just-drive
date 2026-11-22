@@ -27,7 +27,7 @@ import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
 import { ABOUT_URL } from './credits';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
+import { baxtersCoveBuildingArt, isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
 import { littleMabouMarshRail, NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals, CatTileUnread } from './animals';
@@ -424,9 +424,11 @@ const drLaneBox = ERA.modern && AREA.drLane && params.get('drlane') !== '0' && b
 const drLaneSite = drLaneBox ? new DrLaneSite(drLaneBox, manifest.village) : null;
 const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
-const buildingStyles = buildingAppearance(astra, LOW, sunDir,
-  littleMabouArt || wharfArt ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles } : bakedBuildingStyles);
-const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
+// Baxters Cove harbour and the Highway 19 end of its road (Judique, 21 Nov dash cam): the drawing only.
+const coveArt = ERA.modern && AREA.id === 'judique' && drawnBuildings ? baxtersCoveBuildingArt(drawnBuildings) : null;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir, littleMabouArt || wharfArt || coveArt
+  ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles, ...coveArt?.styles } : bakedBuildingStyles);
+const sceneryBuildings = wharfArt?.buildings ?? coveArt?.buildings ?? drawnBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
@@ -524,7 +526,11 @@ crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, o
 const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
 const novemberRoads = ERA.modern && AREA.november
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
-if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
+if (novemberRoads) {
+  terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group);
+  // Not enumerable: tools/ui-check.mjs pins the listed dev keys. tools/area-browser.mjs counts its surfaces in Judique.
+  if (import.meta.env.DEV) expose({ novemberRoads }, false);
+}
 const treeExcludes = novemberRoads
   ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
   : stockpiles?.excludes;
