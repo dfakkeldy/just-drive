@@ -89,8 +89,10 @@ keys. If inputs change first, rerun step 29 instead of copying an old manifest.
 - `power-network-rules`: frozen public-pole bytes; terminal/reversed roads; unnamed
   and driveway exclusions; unpowered tracks; 45 m reach; side/crossing; roof/group/datum;
   no church drop.
-- `power-network-land`: properties on installed land. Passes before installation;
-  main runs the explicit `--after --baseline` command for acceptance.
+- `power-network-land`: properties on installed land. Passes on a legacy pack with no
+  drops; main runs the explicit `--after --baseline` command for acceptance. The pack
+  installed before 21 Nov 2026 (church drop, River Denys Road track poles) fails this row
+  and `power-network-browser` until main installs the new Judique pack.
 - `power-network-runtime`: actual Props geometry, sag/end heights, one draw per
   cell, stable updates/disposal, LOW restoration, quiet-site references.
 - `power-network-browser` (**apple-check-host / Edge**): the installed Judique land. Before

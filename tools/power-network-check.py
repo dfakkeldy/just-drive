@@ -3,6 +3,7 @@
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import types
@@ -12,6 +13,8 @@ import io
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'pipeline'))
+# The rules run on invented land: a shell left on another area must not lend it its AREA lists.
+os.environ.pop('MMM_AREA', None)
 sys.modules.setdefault('osgeo', types.SimpleNamespace(gdal=types.SimpleNamespace(UseExceptions=lambda: None)))
 def load(path, name):
     spec = importlib.util.spec_from_file_location(name, path)

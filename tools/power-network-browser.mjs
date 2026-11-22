@@ -31,7 +31,8 @@ async function view(url,ready,name){
  try{
   for(let i=0;i<120&&!await page.read(ready);i++)await sleep(500);
   // Wires build once both poles stand on fine land (level >= 6); a pack with drops waits for a wire draw here.
-  const wired=`!mmm.props.data.serviceDrops.length||[...mmm.props.cells.values()].some(c=>c.group&&c.group.children.some(o=>o.isLineSegments||o===c.line))`;
+  // The drop view waits for a built drop wire (60 vertices), not only a span wire, when the pack has drops.
+  const wired=`!mmm.props.data.serviceDrops.length||[...mmm.props.cells.values()].some(c=>c.group&&c.wires.some(w=>w.drop&&w.vertices.length===60))`;
   if(name==='drop')for(let i=0;i<120&&!await page.read(wired);i++)await sleep(500);
   else await sleep(3000);
   const result=await page.read(measure);
