@@ -62,10 +62,9 @@ const ROUND2_STRIPPED_EDITS = [
  ]
 ];
 export function priorTitleStyle(css, reviewed = true) {
- if (!reviewed) return css;
  if (css.includes('#titleControls kbd')) for (const [index, [now, before]] of ROUND3_STYLE_EDITS.entries()) {
-  assert.ok(css.includes(now), `required round-3 title CSS swap ${index}`);
-  css = css.replace(now, before);
+  if (reviewed) assert.ok(css.includes(now), `required round-3 title CSS swap ${index}`);
+  if (css.includes(now)) css = css.replace(now, before);
  }
  const edits = css.includes("\n#titleOtherGame{display:block") ? ROUND2_STYLE_EDITS : ROUND2_STRIPPED_EDITS;
  // Each injected stylesheet has its own required swaps; a missing new rule must fail.
@@ -76,12 +75,15 @@ export function priorTitleStyle(css, reviewed = true) {
  if (css.includes('#titleEra{')) indices.push(full ? 6 : 5);
  for (const index of indices) {
   const [now, before] = edits[index];
-  assert.ok(css.includes(now), `required round-2 title CSS swap ${index}`);
-  css = css.replace(now, before);
+  const needsSwap = css.includes(now) && (!before || !css.includes(before));
+  if (reviewed) assert.ok(needsSwap, `required round-2 title CSS swap ${index}`);
+  if (needsSwap) css = css.replace(now, before);
  }
  if (!css.includes(UI_START_CSS)) return css;
- assert.equal(css.split(UI_START_CSS).length,2,'approved start styles occur once');
- assert.ok(css.includes(tagNow),'plain promise style');
+ if (reviewed) {
+  assert.equal(css.split(UI_START_CSS).length,2,'approved start styles occur once');
+  assert.ok(css.includes(tagNow),'plain promise style');
+ }
  return css.replace(UI_START_CSS,'').replace(tagNow,tagBefore);
 }
 export function priorTitleMarkup(html, touch, reviewed = true) {
