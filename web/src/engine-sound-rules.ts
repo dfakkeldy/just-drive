@@ -230,3 +230,7 @@ export const RADIO_DUCK = .55;
  * washboard, with the rasp) sums to about 1.5 before it, so the output stays under full scale without a compressor.
  */
 export const OUTPUT_TRIM = .6;
+
+/** Wheels through a puddle (puddles.ts splashLevel, 0 to 1): a low wash at up to SPLASH_GAIN, and the tyres' own crunch
+ *  muffled by up to SPLASH_DUCK, as water does. Together they stay inside OUTPUT_TRIM's headroom (engine-sound-check). */
+export const SPLASH_GAIN = .35, SPLASH_DUCK = .8;

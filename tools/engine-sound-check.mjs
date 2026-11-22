@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ENGINES, engineKind, engineState, engineWave, gearFor, tyreState, voicePulses, RADIO_DUCK, OUTPUT_TRIM, RASP, UPPER } from '../web/src/engine-sound-rules.ts';
+import { ENGINES, engineKind, engineState, engineWave, gearFor, tyreState, voicePulses, RADIO_DUCK, OUTPUT_TRIM, RASP, UPPER, SPLASH_GAIN, SPLASH_DUCK } from '../web/src/engine-sound-rules.ts';
 import { WASHBOARD_WAVE } from '../web/src/defects.ts';
 import { EngineSound } from '../web/src/engine-sound.ts';
 
@@ -64,6 +64,11 @@ for (const [kind, p] of Object.entries(ENGINES)) {
   const tyreMax = Math.max(...['pavement', 'gravel', 'dirt track', 'washboard', 'grass'].map(s => tyreState(s, 30, false, p.tyres).gain));
   const peak = (loud.gain * (1 + (p.upper ?? UPPER)) + tyreMax + p.level * .12 * loud.load ** 2) * OUTPUT_TRIM;
   ok(peak <= 1, `${kind} peak ${peak.toFixed(2)} stays under full scale`);
+  // Through a puddle (rough stretches only: a dirt track's tyres): the wash rises as the tyres are muffled.
+  const dirt = tyreState('dirt track', 30, false, p.tyres).gain;
+  const wet = Math.max(...[0, .25, .5, .75, 1].map(s => dirt * (1 - SPLASH_DUCK * s) + SPLASH_GAIN * s));
+  const splashPeak = (loud.gain * (1 + (p.upper ?? UPPER)) + wet + p.level * .12 * loud.load ** 2) * OUTPUT_TRIM;
+  ok(splashPeak <= 1, `${kind} peak through a puddle ${splashPeak.toFixed(2)} stays under full scale`);
 
   // Load: full pedal > part pedal > coasting; uphill and towing add; louder with load.
   const at = (o) => engineState(p, { ...flat, speed: 12, ...o }, 2);

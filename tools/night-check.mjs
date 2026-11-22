@@ -171,7 +171,8 @@ function wiring() {
   assert.match(main, /directionFromAngles\(sun\.az, studyLightingElevation\(sun\.el, chosenClock\)\)/, 'the light still never comes from below');
   // The privacy inputs: every property (in world x/z), every mailbox and community box, and the sites' boxes.
   assert.match(main, /protectedPlaces: \[\.\.\.properties\.map\(b => \(\{ x: b\.x - VE, z: VN - b\.y \}\)\), \.\.\.props\.mail, \.\.\.props\.sites\]/);
-  assert.match(main, /excluded: \[\.\.\.terrain\.sites\.map\(s => s\.box\), \.\.\.\(coast \? \[coast\.site\.box\] : \[\]\)\]/);
+  // placeBoxes (terrain.ts) is the sites' boxes, less the sites that only repaint existing roads (rough-roads.ts).
+  assert.match(main, /excluded: \[\.\.\.placeBoxes\(terrain\.sites\), \.\.\.\(coast \? \[coast\.site\.box\] : \[\]\)\]/);
   assert.match(read('web/src/terrain.ts'), /this\.night\?\.applyGround\(mat\);/);
   assert.match(read('web/src/terrain.ts'), /this\.paved\?\.applyGround\(material\);\n\s*this\.night\?\.applyGround\(material\);/, 'the land seen in the water is lit too');
   assert.match(read('web/src/grass.ts'), /terrain\.night\?\.applyGrass\(this\.material\);/);
