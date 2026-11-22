@@ -61,9 +61,15 @@ const T = 256;          // intervals per tile; a tile has 257 samples per side
 const S = T + 1;
 const MAX_LOADS = 6;
 const BURST_DISTANCE = 150;
-// Real builds measured ~8 ms median (p90 9–11 ms): allow six median builds behind the title or while paused.
+// The two budgets are wall-time caps: a paused or burst update builds tiles until it has used its budget (always at least
+// one). They were set as six and three builds of about 8 ms (p90 9-11 ms), measured before the normal-map change (#81)
+// made a build cheaper. In a driving capture of Nov 2026 (Apple M1 Pro, two runs per view), no whole terrain.update
+// (builds included) took longer than 7.1 ms with desktop detail or 12.5 ms with phone detail. With desktop detail that
+// is below the old 8 ms, so each cap now holds more builds there. The dev server keeps the last and the longest single
+// build in terrain.lastBuildMs and terrain.maxBuildMs, and counts timed builds in terrain.buildCount.
+// Behind the title or while paused.
 const PAUSED_BUILD_BUDGET_MS = 48;
-// At the measured ~8 ms median, allow three builds after a jump without stretching the coarse-land wait.
+// After a jump: short, so the coarse-land wait does not stretch.
 const BURST_BUILD_BUDGET_MS = 24;
 // A real-paced 1.2 km return needs about 86 spare tiles.
 // Measured wanted land + 96 spares stays below the former 500-record bound.
@@ -321,6 +327,12 @@ export class Terrain {
   /** The budget used by the last update, including the update that ended a burst. */
   private lastBuildMode: 'driving' | 'paused' | 'burst' = 'driving';
   get buildMode() { return this.lastBuildMode; }
+  /** Dev server only: the last and the longest single tile build, in milliseconds (buildWaiting), and how many builds
+   *  were timed. A driving update builds at most one tile, so a reader that sees buildCount go up by one reads that build
+   *  in lastBuildMs once. Never set in production. */
+  declare lastBuildMs?: number;
+  declare maxBuildMs?: number;
+  declare buildCount?: number;
   private readyCount = 0;
   private wantedCount = 0;
   private lastEvict = 0;
@@ -661,7 +673,15 @@ export class Terrain {
       }
       const decoded = this.builds[best], t = decoded.tile;
       try {
-        this.build(decoded);
+        // Guard at the call site, as updateWorld does: the production bundle keeps no clock. The `?.` lets the node
+        // checks bundle this file with no import.meta.env; there the guard is false and nothing is timed.
+        if (import.meta.env?.DEV) {
+          const start = performance.now();
+          this.build(decoded);
+          this.lastBuildMs = performance.now() - start;
+          this.maxBuildMs = Math.max(this.maxBuildMs ?? 0, this.lastBuildMs);
+          this.buildCount = (this.buildCount ?? 0) + 1;
+        } else this.build(decoded);
         // The pin pass ran before this tile was ready; protect a newly built camera/car column too.
         if (bestUnder) this.use(t);
       }
