@@ -58,6 +58,10 @@ check('a (0, 0) fix is no fix', d.fixes_from_exif(nofix) == [])
 
 # ---- clip start ----
 check('sub-second clock: median of (UTC - clip time)', near(d.clip_start([(0, 100.4, 0, 0), (1, 101.4, 0, 0), (2, 107, 0, 0)]), 100.4, 1e-9))
+check('sub-second clock that starts on a whole second is not read as whole-second',
+      near(d.clip_start(d.fixes_from_exif(piqo)), d.parse_utc('2026:01:02 03:04:05Z').timestamp(), 1e-6))
+check('whole-second clock with clip times off the second', near(d.clip_start([(0.3 + i, 1000 + i, 0, 0) for i in range(5)]), 1000.2, 1e-9))
+check('whole-second clock, disagreeing fixes: median plus 0.5', near(d.clip_start([(0, 100, 0, 0), (1, 103, 0, 0), (2, 102, 0, 0)]), 100.5, 1e-9))
 check('whole-second clock: middle of the one-second window', near(d.clip_start([(0, 100, 0, 0), (1, 101, 0, 0)]), 100.5, 1e-9))
 check('whole-second clock: a drift across a second narrows the window',
       near(d.clip_start([(0, 100, 0, 0), (1, 102, 0, 0), (2, 102, 0, 0)]), 101, 1e-9))
@@ -79,7 +83,7 @@ check('one target per 25 m', [round(m - 1000, 3) for m in marks] == [0, 2.5, 5, 
 stop_go = d.Track([(t, north(0), LON0) for t in range(10)] + [(9 + t, north(10 * t), LON0) for t in range(1, 4)])
 check('a stop gives no targets; counting starts when the car moves',
       [round(m, 3) for m in d.targets_by_distance(stop_go, 25, 1.5)] == [9, 11.5])
-gappy = d.Track([(0, north(0), LON0), (1, north(10), LON0), (5, north(400), LON0), (6, north(410), LON0)])
+gappy = d.Track([(1000, north(0), LON0), (1001, north(10), LON0), (1005, north(400), LON0), (1006, north(410), LON0)])
 check('no target is invented inside a GPS gap', all(not (1 < m < 5) for m in d.targets_by_distance(gappy, 5, 1.5)))
 check('time targets', d.targets_by_time(track, 5, 1.5) == [1000, 1005, 1010, 1015])
 
@@ -98,7 +102,27 @@ sparse = dict(name='S', start_utc=1000, pts=[0, 1, 2, 3], width=1)
 _, skipped = d.choose_frames([sparse], track, [1001.5], 0.1, 1.5)
 check('no frame within the tolerance is skipped', skipped.get('no frame within 100 ms') == 1)
 _, skipped = d.choose_frames([clip_fh], gappy, [1003], 0.1, 1.5)
-check('a frame far from any fix is skipped', len(skipped) == 1)
+check('a frame inside a GPS gap is skipped', skipped == {'nearest GPS fix more than 1.5 s away': 1}, str(skipped))
+check('no position inside a GPS gap', d.interpolate(gappy, 1001.4, 1.5) is None and d.interpolate(gappy, 1000.5, 1.5) is not None)
+check('heading and speed at the edge of a gap stay inside the run',
+      near(d.travel_heading(gappy, 1001), 0, 0.01) and near(d.speed_kmh(gappy, 1001), 36, 0.01))
+c1 = dict(name='C001', start_utc=1000, pts=[i / 30 for i in range(1800)], width=100)
+c2 = dict(name='C002', start_utc=1060.05, pts=[i / 30 for i in range(1800)], width=100)
+long_track = d.Track([(1000 + t, north(10 * t), LON0) for t in range(130)])
+fr, _ = d.choose_frames([c1, c2], long_track, [1059.96], 0.1, 1.5)
+check('neighbouring clips: the nearer frame wins', fr and fr[0]['clip'] == 'C001', str(fr))
+fh_drop = dict(name='D_FH', start_utc=1000, pts=[i / 30 for i in range(300) if not 70 <= i <= 80], width=2560)
+fr, _ = d.choose_frames([fh_drop, clip_fl], track, [1002.5], 0.1, 1.5)
+check('frames missing in FH: FL is used', fr and fr[0]['clip'] == 'C_FL', str(fr))
+
+# ---- turns and runs ----
+bend = [(t, 1000 + t, north(10 * t * math.cos(math.radians(a))), LON0 + 10 * t * math.sin(math.radians(a)) * DEG_PER_M / math.cos(math.radians(LAT0)))
+        for t, a in enumerate([-20, -10, 0, 10, 20])]
+rates = d.turn_rates(bend, 1000)
+check('turn rate across north (350 to 10 deg) is small and positive', rates and all(0 < r[1] < 0.5 for r in rates), str(rates))
+check('runs split at gaps', [len(x) for x in d.segments(d.Track([(0, 0, 0), (1, 0, 0), (9, 0, 0), (10, 0, 0)]))] == [2, 2])
+names = d.clip_names([Path('/a/100/GRMN0001.MP4'), Path('/a/101/GRMN0001.MP4'), Path('/a/101/GRMN0002.MP4')])
+check('same file name in two folders: unique clip names', sorted(names.values()) == ['100_GRMN0001', '101_GRMN0001', 'GRMN0002'])
 
 # ---- lag from turns ----
 rates = [(t / 2, math.sin(t / 7) * 0.2 + math.sin(t / 3.1) * 0.05, 15.0) for t in range(130)]
@@ -115,6 +139,18 @@ try:
     check('refuses an output folder in the repository outside data/', False)
 except SystemExit as e:
     check('refuses an output folder in the repository outside data/', e.code == 2 and not (ROOT / 'tools' / 'tmp-out').exists())
+
+check('privacy guard sees through ..', d.inside(ROOT / 'data' / '..' / 'tools' / 'x', ROOT) and not d.inside(ROOT / 'data' / '..' / 'tools', ROOT / 'data'))
+check('privacy guard accepts data/', d.inside(ROOT / 'data' / 'work' / 'x', ROOT / 'data') or not (ROOT / 'data').exists())
+other_case = Path(str(ROOT).swapcase())
+check('privacy guard sees through letter case on a case-insensitive disk',
+      not other_case.exists() or d.inside(other_case / 'tools', ROOT))
+for bad in (['--every-m', '0'], ['--every-s', '-1']):
+    try:
+        d.main(['--camera', 'garmin', '--out', '/nonexistent-dir', *bad, 'x.MP4'])
+        check('refuses ' + ' '.join(bad), False)
+    except SystemExit as e:
+        check('refuses ' + ' '.join(bad), e.code == 2)
 
 print(f'{len(FAILS)} failed' if FAILS else 'all passed')
 sys.exit(1 if FAILS else 0)

@@ -41,6 +41,7 @@ import datetime as dt
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -89,14 +90,17 @@ def fixes_from_exif(doc):
         t, utc, lat, lon = d.get('SampleTime'), d.get('GPSDateTime'), d.get('GPSLatitude'), d.get('GPSLongitude')
         if not utc or lat in (None, '') or lon in (None, ''):
             continue
-        lat, lon = float(lat), float(lon)
+        try:
+            lat, lon = float(lat), float(lon)
+            fix = (None if t in (None, '') else float(t), parse_utc(str(utc)).timestamp(), lat, lon)
+        except (TypeError, ValueError):            # a placeholder before the GPS locks, e.g. '0000:00:00 00:00:00Z'
+            continue
         if (lat, lon) == (0.0, 0.0) or not (-90 <= lat <= 90 and -180 <= lon <= 180):
             continue
-        fix = (None if t in (None, '') else float(t), parse_utc(str(utc)).timestamp(), lat, lon)
         (untimed if fix[0] is None else timed).append(fix)
     if untimed and timed:
         pairs = [(a, b) for a, b in zip(untimed, timed) if (a[2], a[3]) == (b[2], b[3])]
-        if len(pairs) >= 0.9 * min(len(untimed), len(timed)):
+        if len(pairs) >= 0.9 * max(len(untimed), len(timed)):
             return [(b[0], a[1], b[2], b[3]) for a, b in pairs]
     return timed
 
@@ -108,7 +112,7 @@ def clip_start(fixes):
     in [u, u + 1) and the start in [u - t, u - t + 1). Returns the middle of the window all fixes allow; when the
     camera's second drifts across a GPS second the window is narrow. If the fixes disagree, the median plus 0.5."""
     starts = sorted(u - t for t, u, _, _ in fixes)
-    if any(abs(x - round(x)) > 0.01 for x in starts):
+    if any(abs(u - round(u)) > 0.01 for _, u, _, _ in fixes):
         return starts[len(starts) // 2]
     lo, hi = starts[-1], starts[0] + 1
     return (lo + hi) / 2 if lo <= hi else starts[len(starts) // 2] + 0.5
@@ -130,8 +134,9 @@ class Track(list):
         self.times = [p[0] for p in self]
 
 
-def interpolate(track, u):
-    """(lat, lon, gap_s) at UTC seconds u on a Track, gap_s = time to the nearest fix. None outside the track."""
+def interpolate(track, u, max_gap=None):
+    """(lat, lon, gap_s) at UTC seconds u on a Track, gap_s = time to the nearest fix. None outside the track, and
+    None inside a gap between fixes longer than max_gap (the car may have gone anywhere)."""
     times = track.times
     i = bisect.bisect_left(times, u)
     if i < len(times) and times[i] == u:
@@ -139,14 +144,31 @@ def interpolate(track, u):
     if i == 0 or i == len(times):
         return None
     (u0, a0, o0), (u1, a1, o1) = track[i - 1], track[i]
+    if max_gap is not None and u1 - u0 > max_gap:
+        return None
     f = (u - u0) / (u1 - u0)
     return a0 + f * (a1 - a0), o0 + f * (o1 - o0), min(u - u0, u1 - u)
 
 
-def travel_heading(track, u, window=1.0, min_move=1.5):
-    """Direction of travel in degrees (0 = north, clockwise) from the positions window seconds either side of u.
-    None when the car moved less than min_move metres (stopped: no honest heading)."""
-    a, b = interpolate(track, max(u - window, track[0][0])), interpolate(track, min(u + window, track[-1][0]))
+def run_bounds(track, u, max_gap):
+    """First and last fix time of the run of fixes around u with no gap longer than max_gap."""
+    times = track.times
+    i = max(0, min(len(times) - 1, bisect.bisect_left(times, u)))
+    if i > 0 and times[i] > u:
+        i -= 1
+    lo = hi = i
+    while lo > 0 and times[lo] - times[lo - 1] <= max_gap:
+        lo -= 1
+    while hi < len(times) - 1 and times[hi + 1] - times[hi] <= max_gap:
+        hi += 1
+    return times[lo], times[hi]
+
+
+def travel_heading(track, u, window=1.0, min_move=1.5, max_gap=1.5):
+    """Direction of travel in degrees (0 = north, clockwise) from the positions window seconds either side of u,
+    within the fix run around u. None when the car moved less than min_move metres (stopped: no honest heading)."""
+    first, last = run_bounds(track, u, max_gap)
+    a, b = interpolate(track, max(u - window, first)), interpolate(track, min(u + window, last))
     if a is None or b is None:
         return None
     e, n = metres(a[0], a[1], b[0], b[1])
@@ -155,8 +177,9 @@ def travel_heading(track, u, window=1.0, min_move=1.5):
     return math.degrees(math.atan2(e, n)) % 360
 
 
-def speed_kmh(track, u, window=1.0):
-    t0, t1 = max(u - window, track[0][0]), min(u + window, track[-1][0])
+def speed_kmh(track, u, window=1.0, max_gap=1.5):
+    first, last = run_bounds(track, u, max_gap)
+    t0, t1 = max(u - window, first), min(u + window, last)
     a, b = interpolate(track, t0), interpolate(track, t1)
     if a is None or b is None or t1 <= t0:
         return None
@@ -209,16 +232,21 @@ def choose_frames(clips, track, targets, tolerance, max_gap):
         if not hits:
             skip('no clip covers this time')
             continue
-        clip = max(hits, key=lambda c: (c['width'], c['name']))      # FH over FL when both are given
-        idx, pts = nearest_frame(clip['pts'], u - clip['start_utc'])
-        frame_u = clip['start_utc'] + pts
-        if abs(frame_u - u) > tolerance:
+        cands = []
+        for c in hits:
+            i, p = nearest_frame(c['pts'], u - c['start_utc'])
+            if abs(c['start_utc'] + p - u) <= tolerance:
+                cands.append((c['width'], -abs(c['start_utc'] + p - u), c, i, p))
+        if not cands:
             skip(f'no frame within {tolerance * 1000:.0f} ms')
             continue
+        # FH over FL when both are given, then the nearest frame; another clip only when the best has no frame near.
+        _, _, clip, idx, pts = max(cands, key=lambda x: (x[0], x[1]))
+        frame_u = clip['start_utc'] + pts
         if (clip['name'], idx) in seen:
             skip('same frame as the previous target')
             continue
-        at = interpolate(track, frame_u)
+        at = interpolate(track, frame_u, max_gap)
         if at is None or at[2] > max_gap:
             skip(f'nearest GPS fix more than {max_gap:g} s away')
             continue
@@ -290,15 +318,18 @@ def best_lag(video_t, video_slide, rates, min_speed=6.0, span=3.0, step=0.05, mi
 
 # ---------- footage I/O ----------
 
-def read_gps(paths, cache):
+def read_gps(paths, cache, names):
     """{path: fixes} with exiftool, run in batches; cached per clip by size and modification time."""
     cache.mkdir(parents=True, exist_ok=True)
     out, todo = {}, []
     for p in paths:
         st = p.stat()
-        cf = cache / f'{p.stem}.json'
-        if cf.exists():
-            c = json.loads(cf.read_text())
+        cf = cache / f'{names[p]}.json'
+        try:
+            c = json.loads(cf.read_text()) if cf.exists() else {}
+        except ValueError:
+            c = {}
+        if c:
             if c.get('v') == CACHE_VERSION and c.get('size') == st.st_size and c.get('mtime') == int(st.st_mtime):
                 out[p] = [tuple(f) for f in c['fixes']]
                 continue
@@ -308,36 +339,57 @@ def read_gps(paths, cache):
         r = subprocess.run(['exiftool', '-ee', '-n', '-j', '-G3', '-api', 'LargeFileSupport=1', '-SampleTime',
                             '-GPSDateTime', '-GPSLatitude', '-GPSLongitude', *map(str, batch)],
                            capture_output=True, text=True)
+        if r.returncode and not r.stdout.strip():
+            sys.exit(f'exiftool failed: {r.stderr.strip()[:300]}')
         docs = {Path(d['SourceFile']).resolve(): d for d in json.loads(r.stdout or '[]')}
         for p in batch:
-            fixes = fixes_from_exif(docs.get(p.resolve(), {}))
+            if p.resolve() not in docs:                  # not read this time: no cache entry, no GPS
+                out[p] = []
+                continue
+            fixes = fixes_from_exif(docs[p.resolve()])
             st = p.stat()
-            (cache / f'{p.stem}.json').write_text(json.dumps(dict(v=CACHE_VERSION, size=st.st_size,
-                                                                  mtime=int(st.st_mtime), fixes=fixes)))
+            write_json(cache / f'{names[p]}.json', dict(v=CACHE_VERSION, size=st.st_size, mtime=int(st.st_mtime), fixes=fixes))
             out[p] = fixes
         print(f'GPS read: {min(i + 20, len(todo))}/{len(todo)} clips', file=sys.stderr, flush=True)
     return out
 
 
+def _num(text, default=0.0):
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return default
+
+
 def read_frames(path):
-    """Sorted presentation times of the video frames, from the start of the stream (packets only: no decoding)."""
+    """Video frame times from the packets (no decoding): (pts from the stream start, sorted; width; seek offset)
+    or None when the file has no video stream. A seek with ffmpeg -ss counts from the container start, so the seek
+    offset is the stream start minus the container start."""
     probe = ['ffprobe', '-v', 'error', '-select_streams', 'v:0']
-    info = json.loads(subprocess.run(probe + ['-show_entries', 'stream=width,start_time,r_frame_rate', '-of', 'json', str(path)],
-                                     capture_output=True, text=True, check=True).stdout)['streams'][0]
+    r = subprocess.run(probe + ['-show_entries', 'stream=width,start_time:format=start_time', '-of', 'json', str(path)],
+                       capture_output=True, text=True)
+    info = json.loads(r.stdout or '{}')
+    if r.returncode or not info.get('streams'):
+        return None
+    stream = info['streams'][0]
     raw = subprocess.run(probe + ['-show_entries', 'packet=pts_time', '-of', 'csv=p=0', str(path)],
                          capture_output=True, text=True, check=True).stdout.split()
     pts = sorted(float(x.strip(',')) for x in raw if x.strip(',') not in ('', 'N/A'))
-    start = float(info.get('start_time') or 0)
-    num, den = (info.get('r_frame_rate') or '30/1').split('/')
-    return [round(p - start, 6) for p in pts], int(info.get('width') or 0), float(num) / float(den)
+    if not pts:
+        return None
+    start = _num(stream.get('start_time'), pts[0])
+    offset = start - _num(info.get('format', {}).get('start_time'), start)
+    return [round(p - start, 6) for p in pts], int(stream.get('width') or 0), offset
 
 
-def save_still(path, pts, fps, dst):
-    """Decode exactly the frame at pts: an accurate seek returns the first frame at or after its time."""
+def save_still(path, pts, idx, offset, dst):
+    """Decode exactly frame idx: an accurate seek to halfway after the previous frame returns the first frame at or
+    after that time, which is frame idx whatever the frame spacing."""
     if dst.exists():
         return
+    seek = offset + (pts[idx] if idx == 0 else (pts[idx - 1] + pts[idx]) / 2)
     tmp = dst.with_suffix('.tmp.jpg')
-    subprocess.run(['nice', '-n', '15', 'ffmpeg', '-v', 'error', '-y', '-ss', f'{max(0.0, pts - 0.5 / fps):.6f}', '-i',
+    subprocess.run(['nice', '-n', '15', 'ffmpeg', '-v', 'error', '-y', '-ss', f'{max(0.0, seek):.6f}', '-i',
                     str(path), '-frames:v', '1', '-q:v', '2', str(tmp)], check=True)
     os.replace(tmp, dst)
 
@@ -347,7 +399,8 @@ def video_slide(path, fps=10):
     above the horizon, with the clip times of the slides. Needs numpy."""
     import numpy as np
     raw = subprocess.run(['nice', '-n', '15', 'ffmpeg', '-v', 'error', '-i', str(path), '-vf',
-                          f'fps={fps},scale=320:180,format=gray', '-f', 'rawvideo', '-'], capture_output=True).stdout
+                          f'fps={fps},scale=320:180,format=gray', '-f', 'rawvideo', '-'], capture_output=True, check=True).stdout
+    raw = raw[:len(raw) - len(raw) % (180 * 320)]
     fr = np.frombuffer(raw, np.uint8).reshape(-1, 180, 320)[:, 45:90, :].astype(np.float32) * np.hanning(320)
     out = []
     for a, b in zip(fr[1:], fr[:-1]):
@@ -371,6 +424,23 @@ def grid_transform():
     dst.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
     tr = osr.CoordinateTransformation(src, dst)
     return lambda lat, lon: tr.TransformPoint(lon, lat)[:2]
+
+
+def inside(path, folder):
+    """True when path is folder or below it, compared by the file system (case-insensitive disks, links, '..')."""
+    folder = Path(folder)
+    for p in (Path(os.path.abspath(path)), *Path(os.path.abspath(path)).parents):
+        if p.exists() and folder.exists() and os.path.samefile(p, folder):
+            return True
+    return False
+
+
+def clip_names(paths):
+    """A unique name per clip: the file stem, or folder_stem when two folders hold the same file name."""
+    stems = {}
+    for p in paths:
+        stems.setdefault(p.stem, []).append(p)
+    return {p: (p.stem if len(group) == 1 else f'{p.parent.name}_{p.stem}') for group in stems.values() for p in group}
 
 
 def write_json(path, obj):
@@ -411,28 +481,51 @@ def main(argv=None):
     g.add_argument('--every-m', type=float, default=10.0, help='one frame per this many metres driven (default 10)')
     g.add_argument('--every-s', type=float, help='one frame per this many seconds instead')
     ap.add_argument('--tolerance-ms', type=float, default=100.0, help='largest gap between target and frame time')
-    ap.add_argument('--max-gap-s', type=float, default=1.5, help='largest gap to the nearest GPS fix')
+    ap.add_argument('--max-gap-s', type=float, default=1.5,
+                    help='longest time between two GPS fixes that is still driven through (default 1.5 s)')
     ap.add_argument('--stills', action='store_true', help='also write the chosen frames as JPEGs')
     ap.add_argument('--measure-lag', action='store_true', help='only measure the video-to-GPS lag from turns')
     a = ap.parse_args(argv)
+    for flag, value in (('--every-m', a.every_m), ('--every-s', a.every_s), ('--max-gap-s', a.max_gap_s)):
+        if value is not None and value <= 0:
+            ap.error(f'{flag} must be more than 0')
+    if a.tolerance_ms < 0:
+        ap.error('--tolerance-ms must not be negative')
     cam = CAMERAS[a.camera]
     mount = cam['mount'] if a.mount_deg is None else a.mount_deg
     shift = cam['shift'] if a.shift_s is None else a.shift_s
     repo = Path(__file__).resolve().parent.parent
-    if a.out.resolve().is_relative_to(repo) and not a.out.resolve().is_relative_to(repo / 'data'):
+    if inside(a.out, repo) and not inside(a.out, repo / 'data'):
         ap.error('--out inside the repository must be under data/ (footage results are private)')
+    need = ['exiftool', 'ffprobe'] + (['ffmpeg'] if a.stills or a.measure_lag else [])
+    missing = [t for t in need if not shutil.which(t)]
+    if missing:
+        ap.error('missing tools: ' + ', '.join(missing))
+    if a.measure_lag:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            ap.error('--measure-lag needs numpy')
+    clips_in = sorted({p.resolve() for p in a.clips if p.suffix.lower() == '.mp4'})
+    absent = [str(p) for p in clips_in if not p.is_file()]
+    if absent:
+        ap.error('no such clip: ' + absent[0])
     a.out.mkdir(parents=True, exist_ok=True)
 
-    clips_in = sorted({p.resolve() for p in a.clips if p.suffix.lower() == '.mp4'})
-    gps = read_gps(clips_in, a.out / 'gps-cache')
-    clips, no_gps, fixes = [], [], []
+    names = clip_names(clips_in)
+    gps = read_gps(clips_in, a.out / 'gps-cache', names)
+    clips, no_gps, no_video, fixes = [], [], [], []
     for p in clips_in:
         f = gps.get(p) or []
         if len(f) < 2:
             no_gps.append(p.name)
             continue
-        pts, width, fps = read_frames(p)
-        clips.append(dict(name=p.stem, path=p, start_utc=clip_start(f) + shift, pts=pts, width=width, fps=fps))
+        frames_info = read_frames(p)
+        if frames_info is None:
+            no_video.append(p.name)
+            continue
+        pts, width, offset = frames_info
+        clips.append(dict(name=names[p], path=p, start_utc=clip_start(f) + shift, pts=pts, width=width, offset=offset))
         fixes += [(u, lat, lon) for _, u, lat, lon in f]
     if not clips:
         sys.exit('no clip with GPS')
@@ -450,8 +543,8 @@ def main(argv=None):
         (a.out / 'stills').mkdir(exist_ok=True)
     feats = []
     for i, fr in enumerate(frames, 1):
-        travel = travel_heading(track, fr['utc'])
-        speed = speed_kmh(track, fr['utc'])
+        travel = travel_heading(track, fr['utc'], max_gap=a.max_gap_s)
+        speed = speed_kmh(track, fr['utc'], max_gap=a.max_gap_s)
         when = dt.datetime.fromtimestamp(fr['utc'], dt.timezone.utc)
         props = dict(clip=fr['clip'], frame=fr['frame'], pts=fr['pts'],
                      utc=when.isoformat(timespec='milliseconds').replace('+00:00', 'Z'),
@@ -467,7 +560,7 @@ def main(argv=None):
         if a.stills:
             name = f"{fr['clip']}-f{fr['frame']:05d}.jpg"
             c = by_name[fr['clip']]
-            save_still(c['path'], fr['pts'], c['fps'], a.out / 'stills' / name)
+            save_still(c['path'], c['pts'], fr['frame'], c['offset'], a.out / 'stills' / name)
             props['still'] = f'stills/{name}'
             if i % 50 == 0:
                 print(f'stills: {i}/{len(frames)}', file=sys.stderr, flush=True)
@@ -479,7 +572,7 @@ def main(argv=None):
              geometry=dict(type='LineString', coordinates=[[round(o, 7), round(la, 7)] for _, la, o in s]))
         for s in segments(track)]))
     report = dict(camera=a.camera, mount_deg=mount, shift_s=shift, timing_accuracy_s=cam['accuracy'],
-                  clips=len(clips_in), clips_with_gps=len(clips), clips_without_gps=no_gps, gps_fixes=len(track),
+                  clips=len(clips_in), clips_with_gps=len(clips), clips_without_gps=no_gps, clips_without_video=no_video, gps_fixes=len(track),
                   rule=f'every {a.every_s:g} s' if a.every_s else f'every {a.every_m:g} m',
                   tolerance_ms=a.tolerance_ms, max_gap_s=a.max_gap_s, targets=len(targets), frames=len(frames),
                   skipped=skipped, grid='EPSG:2961' if to_grid else None)
