@@ -322,3 +322,5 @@ ride-along-budget-low	unproven	no	apple-check-host M4 / Edge 157 PASS 27 s on th
 drag-rules	portable	yes	Node timing and runway data in source
 drag-rules-mutations	portable	yes	Node mutation controls, source only
 airport-drag-browser	unproven	no	Hardware WebGL, Point Tupper land and live input
+version-notice	portable	no	pure Node: real offline-version.ts module and main.ts predicate with mutations
+version-browser	unproven	no	local public build and actual browser/worker; native hardware GPU

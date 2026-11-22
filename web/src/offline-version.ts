@@ -1,16 +1,92 @@
 const MESSAGE = 'A new version of the game is ready. Start again to get it.';
+const PENDING_TARGET = 'mmm.update.target', ATTEMPT_PREFIX = 'mmm.update.tried.';
+const validKey = (key: unknown): key is string => typeof key === 'string' && /^[a-f0-9]{64}$/.test(key);
+let updateTarget: string | undefined;
+let stopVersionWatch = () => {};
+let versionURL = '/version.json';
 
-/** No automatic reload: a drive in progress belongs to its player. */
-export function showGameUpdate(): void {
-  if (document.getElementById('offlineUpdate')) return;
+function savedTarget(): { from: string; target: string } | undefined {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(PENDING_TARGET) ?? 'null') as { from?: string; target?: string } | null;
+    return value && validKey(value.from) && validKey(value.target) ? { from: value.from, target: value.target } : undefined;
+  }
+  catch { return undefined; }
+}
+
+function alreadyTried(target: string): boolean {
+  try { return sessionStorage.getItem(ATTEMPT_PREFIX + target) === '1'; }
+  catch { return true; } // Without durable tab memory, automatic reload cannot be made safe.
+}
+
+/** Both automatic refresh and the button must pass this guard before any navigation. */
+function reloadToBuild(target: string): boolean {
+  try {
+    if (!validKey(target) || sessionStorage.getItem(ATTEMPT_PREFIX + target) === '1') return false;
+    const from = document.querySelector<HTMLMetaElement>('meta[name="mmm-page"]')?.content ?? '';
+    sessionStorage.setItem(PENDING_TARGET, JSON.stringify({ from, target }));
+    sessionStorage.setItem(ATTEMPT_PREFIX + target, '1');
+    location.reload();
+    return true;
+  } catch { return false; }
+}
+
+function markReloadUnavailable(button: HTMLButtonElement, text: HTMLElement | null): void {
+  if (text) text.textContent = 'This tab could not finish the update. You can keep playing or use your browser’s reload control.';
+  button.disabled = true; button.textContent = 'Use browser reload to update';
+}
+
+/** A failed/slow worker navigation must never turn the old saved title into a reload loop. */
+export function showGameUpdate(target?: string): void {
+  if (validKey(target)) updateTarget = target;
+  stopVersionWatch();
+  if (document.getElementById('offlineUpdate')) {
+    const button = document.getElementById('offlineReload') as HTMLButtonElement | null;
+    if (button && updateTarget && alreadyTried(updateTarget)) markReloadUnavailable(button, document.getElementById('offlineUpdateText'));
+    return;
+  }
   document.getElementById('boot')?.remove();
   const notice = document.createElement('aside');
   notice.id = 'offlineUpdate'; notice.setAttribute('role', 'status');
-  notice.style.cssText = 'position:fixed;z-index:100;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));top:calc(68px + env(safe-area-inset-top));max-width:620px;margin:0 auto;padding:12px;background:#0b1620;color:#eef2f6;border:1px solid #d0632e;border-radius:8px;font:14px/1.4 system-ui;display:flex;gap:12px;align-items:center;flex-wrap:wrap';
-  const text = Object.assign(document.createElement('span'), { textContent: MESSAGE });
+  const style = document.createElement('style');
+  style.textContent = `
+#offlineUpdate{position:fixed;z-index:100;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));top:calc(68px + env(safe-area-inset-top));max-width:620px;margin:0 auto;padding:12px;background:#0b1620;color:#eef2f6;border:1px solid #d0632e;border-radius:8px;font:14px/1.4 system-ui;display:flex;gap:12px;align-items:center;flex-wrap:wrap;box-sizing:border-box}
+/* The left quarter holds readouts; the top rows hold status, stop hint and place arrival; the right edge holds Drone and Save picture; the lower edge holds driving controls. */
+body.tcOn #offlineUpdate{left:calc(25% + 4px);right:calc(70px + var(--test-safe-right,env(safe-area-inset-right,0px)));top:calc(132px + var(--phone-top-gap,6px) + var(--test-safe-top,env(safe-area-inset-top,0px)));font-size:13px;margin:0}
+@media(orientation:landscape){body.tcOn #offlineUpdate{top:calc(68px + var(--phone-top-gap,6px) + var(--test-safe-top,env(safe-area-inset-top,0px)))}}
+`;
+  notice.appendChild(style);
+  const text = Object.assign(document.createElement('span'), { id: 'offlineUpdateText', textContent: MESSAGE });
   const button = Object.assign(document.createElement('button'), { type:'button', textContent:'Start again', id:'offlineReload' });
-  button.style.cssText = 'min-width:100px;min-height:44px;padding:8px 12px;background:#d0632e;color:white;border:0;border-radius:6px;font:inherit;cursor:pointer';
-  button.addEventListener('click', () => location.reload());
+  button.style.cssText = 'min-width:100px;max-width:100%;min-height:44px;padding:8px 12px;background:#d0632e;color:white;border:0;border-radius:6px;font:inherit;cursor:pointer';
+  const unavailable = () => markReloadUnavailable(button, text);
+  if (updateTarget && alreadyTried(updateTarget)) unavailable();
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    try {
+      // Worker messages can precede the page's version check and do not carry a target key.
+      if (!updateTarget) {
+        const endpoint = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.href.includes('manifest-just') ? '/version-just.json' : versionURL;
+        const response = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+        if (!response.ok) { button.disabled = false; return; }
+        const version = await response.json() as { schema?: number; pageKey?: string };
+        if (version.schema !== 1 || !validKey(version.pageKey)) { button.disabled = false; return; }
+        updateTarget = version.pageKey;
+      }
+      if (!reloadToBuild(updateTarget)) unavailable();
+    } catch {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        const from = document.querySelector<HTMLMetaElement>('meta[name="mmm-page"]')?.content ?? '';
+        const key = ATTEMPT_PREFIX + 'offline:' + from;
+        try {
+          if (sessionStorage.getItem(key) === '1') { unavailable(); return; }
+          sessionStorage.setItem(key, '1');
+          location.reload();
+          return;
+        } catch { unavailable(); return; }
+      }
+      button.disabled = false;
+    } // A failed manual check stays quiet too.
+  });
   notice.append(text, button); document.body.appendChild(notice);
 }
 
@@ -19,7 +95,7 @@ export function bindOfflineVersion(area='mabou'): string {
   if (area!=='mabou' || !isSecureContext || !('serviceWorker' in navigator)) return '';
   const pageKey = document.querySelector<HTMLMetaElement>('meta[name="mmm-page"]')?.content ?? '';
   navigator.serviceWorker.addEventListener('message', event => {
-    if (event.data?.type === 'version-unavailable' || event.data?.type === 'update-ready') showGameUpdate();
+    if (event.data?.type === 'version-unavailable' || event.data?.type === 'update-ready') showGameUpdate(event.data?.pageKey);
   });
   if (!pageKey) return '';
   const network = window.fetch.bind(window);
@@ -40,4 +116,50 @@ export function bindOfflineVersion(area='mabou'): string {
   };
   addEventListener('pagehide', () => navigator.serviceWorker.controller?.postMessage({type:'collect'}));
   return pageKey;
+}
+
+/** Page identity is in the HTML, including saved shells and every brand/area page. */
+export function watchGameVersion(just: boolean, mayReload: () => boolean): void {
+  versionURL = just ? '/version-just.json' : '/version.json';
+  const pageKey = document.querySelector<HTMLMetaElement>('meta[name="mmm-page"]')?.content;
+  const builtAt = Number(document.querySelector<HTMLMetaElement>('meta[name="mmm-built-at"]')?.content);
+  if (!validKey(pageKey) || !Number.isSafeInteger(builtAt) || builtAt <= 0) return;
+  let timer: ReturnType<typeof setTimeout> | undefined, checking = false, reloading = false, stopped = false;
+  let lastChecked = -Infinity;
+  const stop = () => {
+    stopped = true; clearTimeout(timer);
+    document.removeEventListener('visibilitychange', visibilityChanged);
+  };
+  stopVersionWatch = stop;
+  const pending = savedTarget();
+  if (pending?.from === pageKey && pending.target !== pageKey) { showGameUpdate(pending.target); return; }
+  if (pending) { try { sessionStorage.removeItem(PENDING_TARGET); } catch { /* Keep the per-target guard. */ } }
+  if (document.getElementById('offlineUpdate')) { stop(); return; }
+  const check = async () => {
+    if (document.visibilityState !== 'visible' || checking || reloading || stopped) return;
+    if (Date.now() - lastChecked < 60000) return;
+    checking = true; lastChecked = Date.now();
+    try {
+      const response = await fetch(versionURL, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+      if (!response.ok) return;
+      const next = await response.json() as { schema?: number; pageKey?: string; builtAt?: number };
+      if (stopped || next.schema !== 1 || !validKey(next.pageKey) ||
+          !Number.isSafeInteger(next.builtAt) || next.builtAt! <= builtAt || next.pageKey === pageKey) return;
+      // Recheck after the request: Start or a visibility change can happen in flight.
+      if (document.visibilityState === 'visible' && mayReload() && reloadToBuild(next.pageKey)) { reloading = true; stop(); }
+      else showGameUpdate(next.pageKey);
+    } catch { /* A failed check must not interrupt a drive or show a warning. */ }
+    finally { checking = false; }
+  };
+  function schedule() {
+    clearTimeout(timer);
+    if (document.visibilityState !== 'visible' || stopped) return;
+    timer = setTimeout(() => { void check(); schedule(); }, 10 * 60 * 1000);
+  }
+  function visibilityChanged() {
+    if (document.visibilityState === 'visible') void check();
+    schedule();
+  }
+  document.addEventListener('visibilitychange', visibilityChanged);
+  void check(); schedule();
 }
