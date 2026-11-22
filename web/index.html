@@ -123,8 +123,8 @@ body.tcOn #settings details>summary{min-height:56px}
 #settings details[open]{padding-bottom:12px}
 body:not(.tcOn):not(.droneOn) #mailCard{width:min(346px,calc(100% - 120px))}
 /* Sheets use one content width and leave the credit chip clear. */
-body #settings.open[aria-labelledby]{max-height:calc(100dvh - var(--settings-top,calc(58px + env(safe-area-inset-top,0px))) - max(76px,var(--settings-credit-height,0px)) - var(--map-credit-space,0px) - var(--test-safe-bottom,env(safe-area-inset-bottom,0px)))}
-@media(max-width:600px){body{--settings-top:calc(72px + env(safe-area-inset-top,0px))}}
+body #settings.open[aria-labelledby]{max-height:calc(100dvh - var(--settings-top,calc(58px + var(--test-safe-top,env(safe-area-inset-top,0px)))) - max(76px,var(--settings-credit-height,0px)) - var(--map-credit-space,0px) - var(--test-safe-bottom,env(safe-area-inset-bottom,0px)))}
+@media(max-width:600px){body{--settings-top:calc(72px + var(--test-safe-top,env(safe-area-inset-top,0px)))}}
 body.tcOn{--settings-top:calc(62px + var(--phone-top-gap,6px) + var(--test-safe-top,env(safe-area-inset-top,0px)))}
 body #settings{width:320px;min-width:0;max-width:calc(100% - 32px);overflow-y:auto;overscroll-behavior:contain;border-radius:10px;box-sizing:border-box;font-family:var(--text)}
 #settings>*{box-sizing:border-box;max-width:100%}

@@ -27,7 +27,7 @@ import { fleetHud } from './fleet-hud';
 import * as THREE from 'three';
 import { ABOUT_URL } from './credits';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
+import { baxtersCoveBuildingArt, isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
 import { littleMabouMarshRail, NovemberRoadDetails } from './november-road-details';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals, CatTileUnread } from './animals';
@@ -421,9 +421,11 @@ const porchBox = ERA.modern && AREA.porch && params.get('porch') !== '0' && buil
 const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 const drawnBuildings = buildingList && porchBox ? PorchHouse.drawn(buildingList, porchBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
-const buildingStyles = buildingAppearance(astra, LOW, sunDir,
-  littleMabouArt || wharfArt ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles } : bakedBuildingStyles);
-const sceneryBuildings = wharfArt?.buildings ?? drawnBuildings;
+// Baxters Cove harbour and the Highway 19 end of its road (Judique, 21 Nov dash cam): the drawing only.
+const coveArt = ERA.modern && AREA.id === 'judique' && drawnBuildings ? baxtersCoveBuildingArt(drawnBuildings) : null;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir, littleMabouArt || wharfArt || coveArt
+  ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles, ...coveArt?.styles } : bakedBuildingStyles);
+const sceneryBuildings = wharfArt?.buildings ?? coveArt?.buildings ?? drawnBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
@@ -519,7 +521,11 @@ crownTest.lobed = params.get('crowns') === '1';   // a test: lobed far crowns, o
 const roadData = roadsRead ? await roadsRead.take() : { roads: [] };
 const novemberRoads = ERA.modern && AREA.november
   ? new NovemberRoadDetails(roadData.roads, AREA.id, manifest.village) : null;
-if (novemberRoads) { terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group); }
+if (novemberRoads) {
+  terrain.sites.push(...novemberRoads.sites); scene.add(novemberRoads.group);
+  // Not enumerable: tools/ui-check.mjs pins the listed dev keys. tools/area-browser.mjs counts its surfaces in Judique.
+  if (import.meta.env.DEV) expose({ novemberRoads }, false);
+}
 // Rough stretches of gravel and track, and their puddles (rough-roads.ts). Their sites paint the road samples, so they go
 // in before the first tile loads. No puddle lies on the church start.
 const rough = ERA.modern ? roughRoads(roadData.roads, AREA.id, manifest.village,
@@ -1959,6 +1965,20 @@ for (let i = 0; i < endingWorldUpdates.length; i++) {
 }
 const worldCost: Record<string, number> = {};
 if (import.meta.env.DEV) expose({ cost: worldCost });
+// The frame's own blocks outside the table (the drive steps, animals, chase, mail, sun shadows), in milliseconds, on the
+// dev server only. A separate record, so mmm.cost keeps exactly the table's entries. Not enumerable: ui-check pins the
+// public key set. Each call site is guarded like updateWorld: the production bundle keeps no clock. A key keeps its last
+// value on frames that skip its block (drive and chase while flying; some or all keys on frames that return early, such
+// as interior or ending frames), so a reader counts only the keys written this frame.
+const frameCost: Record<string, number> = {};
+if (import.meta.env.DEV) expose({ frameCost }, false);
+let frameClock = 0;
+// Writes the time since frameClock under `name` and restarts the clock for the next block.
+function frameLap(name: string): void {
+  const end = performance.now();
+  frameCost[name] = end - frameClock;
+  frameClock = end;
+}
 function updateWorld(segment: WorldSegment | 'ending' | 'ending-mirror', dt: number, realDt = dt, now = 0): void {
   const list = worldSegments[segment];
   for (let i = 0; i < list.length; i++) {
@@ -2165,6 +2185,7 @@ function frame(now: number) {
       input.handbrake = true; input.held = true;   // a stop for an animal, not a drift
     }
     if (input.throttle !== 0 && (!demo || loaded)) waitingToDrive = false;
+    if (import.meta.env.DEV) frameClock = performance.now();
     // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.
     if (fleet) { const active = !fleet.busy; driveVehicle(dt, input); if (active && loaded && !animals?.waitingForTerrain) drove += dt; }
     else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.place(vehicle.x, vehicle.z, vehicle.heading);
@@ -2177,20 +2198,27 @@ function frame(now: number) {
       } else driveVehicle(dt, relief.busy ? { throttle: 0, steer: 0, handbrake: true } : input);
       if ((loaded || lawnDemo?.driving) && !animals?.waitingForTerrain) drove += dt;
     }
+    if (import.meta.env.DEV) frameLap('drive');
     animals?.update(dt, vehicle, camera);
+    if (import.meta.env.DEV) frameLap('animals');
     chase(dt);
+    if (import.meta.env.DEV) frameLap('chase');
   } else {
     fly(dt);
+    if (import.meta.env.DEV) frameClock = performance.now();
     animals?.update(dt, vehicle, camera);
+    if (import.meta.env.DEV) frameLap('animals');
     camera.rotation.set(pitch, yaw, 0);
   }
   if (endings.busy) { drawEnding(0); requestAnimationFrame(frame); return; }
   airportDrag?.draw(vehicle, gamepad.device);
   const impactSpeed = Math.hypot(vehicle.vx, vehicle.vz);
+  if (import.meta.env.DEV) frameClock = performance.now();
   const impact = shift.ended ? 1 : mail.update(dt, vehicle,
     mailControls && (mailRequested || keys.has('KeyM') || keys.has('KeyE') ||
       keys.has('Space') && document.activeElement === mailButton ||
       mailPointers.size > 0 || !!(demo && drove < demo && loaded && devHooks.throwMail)), camera);
+  if (import.meta.env.DEV) frameLap('mail');
   mailRequested = false;
   if (impact < 1 && vehicle.damageActive) shift.damage.hit('impact', impactSpeed);
   if (impact < 1) vehicle.drift.hit(vehicle.x, vehicle.z);   // a mailbox knock ends a drift, not clean
@@ -2234,11 +2262,13 @@ function frame(now: number) {
   if (loaded) shiftReady = true;
   if (shiftReady) shift.update(clockRuns ? clockDt : 0, vehicle);
   if (sunShadows) {
+    if (import.meta.env.DEV) frameClock = performance.now();
     // The shadow box follows the car; with the free camera it sits a little ahead of the lens.
     let reach = 0;
     if (mode === 'drive') shadowFocus.set(vehicle.x, vehicle.y, vehicle.z);
     else reach = lookFocus(camera, terrain, SEA_LEVEL, shadowFocus);
     sunShadows.update(realDt, shadowFocus, reach, pictureBusy);
+    if (import.meta.env.DEV) frameLap('sunShadows');
   }
   updateWorld('grass', dt, realDt, now);
   // LOW water is a backdrop. Enable site clipping only while the wharf/boat is visible.
