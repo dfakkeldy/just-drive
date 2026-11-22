@@ -147,6 +147,7 @@ export class Vehicle {
     x = pose.x; z = pose.z; heading = pose.heading;
     if (!safePlacement(x, z, heading, this.bounds)) return false;
     const g = this.groundAt(x, z);
+    if (this instanceof Vehicle && this.#recovering && (g === null || !this.terrain.surfaceAt(x, z))) return false;
     if (g !== null && !this.isDryPose(x, z, g)) return false;
     this.#heldTouchSpeedLimit = 0;
     this.drift.reset();
@@ -237,7 +238,10 @@ export class Vehicle {
     if (!this.terrain.surfaceAt(x, z)) return false;
     const g = this.groundAt(x, z);
     if (!this.isDryPose(x, z, g)) return false;
-    return this.place(x, z, heading);
+    const wasRecovering = this.#recovering;
+    this.#recovering = true;
+    try { return this.place(x, z, heading); }
+    finally { this.#recovering = wasRecovering; }
   }
 
   /**

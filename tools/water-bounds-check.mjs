@@ -303,6 +303,22 @@ for (const rideKind of RIDES) {
     bridgeLost = true;
     assert.equal(hPartial.place(hPartial.x, hPartial.z, hPartial.heading), true, 'bounded horse on vanished bridge tile recovers to loaded road');
     assert.ok(partialTerrain.surfaceAt(hPartial.x, hPartial.z) !== null && hPartial.x < 40, `recovered horse lands on loaded road: x=${hPartial.x}`);
+
+    // Guard shifting a recovery candidate back onto a missing-surface cached deck is rejected, continuing to the dry fallback.
+    let guardShiftedHorse = 0;
+    const hGuard = makeRide('horse', partialTerrain, deckRoads);
+    hGuard.bounds = [-100, -100, 100, 100];
+    bridgeLost = false;
+    assert.equal(hGuard.place(-60, 0, Math.PI / 2), true);
+    for (let step = 0; step < 900 && hGuard.x < 30; step++) hGuard.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+    assert.equal(hGuard.place(55, 0, Math.PI / 2), true);
+    bridgeLost = true;
+    hGuard.placementGuard = (pose) => {
+      if (guardShiftedHorse === 0) { guardShiftedHorse++; pose.x = 55; }
+      return true;
+    };
+    assert.equal(hGuard.place(hGuard.x, hGuard.z, hGuard.heading), true, 'horse recovery rejects guard-shifted missing-surface deck and finds earlier dry fallback');
+    assert.ok(guardShiftedHorse === 1 && partialTerrain.surfaceAt(hGuard.x, hGuard.z) !== null && hGuard.x < 40, `horse skipped shifted candidate to dry fallback: x=${hGuard.x} shifted=${guardShiftedHorse}`);
   } else if (rideKind === 'bike') {
     let surfaceLost = false;
     const synthTerrain = {
@@ -315,6 +331,30 @@ for (const rideKind of RIDES) {
     assert.equal(bLost.place(55, 0, Math.PI / 2), true);
     surfaceLost = true;
     assert.equal(bLost.place(bLost.x, bLost.z, bLost.heading), false, 'bounded bike with lost surface returns false without stack overflow');
+
+    // Guard shifting a loaded bike recovery candidate onto a missing-surface tile with cached height is rejected, continuing to the dry fallback.
+    let bikeBridgeLost = false, guardShiftedBike = 0;
+    const bikePartial = {
+      ...makeTerrain((x, z) => (bikeBridgeLost && x >= 40
+        ? null
+        : { ground: 6, canopy: 0, roadDist: Math.abs(z), halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false })),
+      heightAt: () => 6,
+      surfaceAt: (x, z) => (bikeBridgeLost && x >= 40
+        ? null
+        : { ground: 6, canopy: 0, roadDist: Math.abs(z), halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }),
+    };
+    const bGuard = makeRide('bike', bikePartial, roads);
+    bGuard.bounds = [-100, -100, 100, 100];
+    assert.equal(bGuard.place(-60, 0, Math.PI / 2), true);
+    for (let step = 0; step < 600 && bGuard.x < 30; step++) bGuard.update(1 / 60, { throttle: 0.4, steer: 0, handbrake: false });
+    assert.equal(bGuard.place(55, 0, Math.PI / 2), true);
+    bikeBridgeLost = true;
+    bGuard.placementGuard = (pose) => {
+      if (guardShiftedBike === 0) { guardShiftedBike++; pose.x = 55; }
+      return true;
+    };
+    assert.equal(bGuard.place(bGuard.x, bGuard.z, bGuard.heading), true, 'bike recovery rejects guard-shifted missing-surface tile and finds earlier dry fallback');
+    assert.ok(guardShiftedBike === 1 && bikePartial.surfaceAt(bGuard.x, bGuard.z) !== null && bGuard.x < 40, `bike skipped shifted candidate to dry fallback: x=${bGuard.x} shifted=${guardShiftedBike}`);
   }
 
   // 4c. Narrow missing strip into a 20 m rising bank: every ride (including horse) crosses onto the 20 m bank and stays above ground.

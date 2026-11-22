@@ -110,6 +110,7 @@ export class BikeRide implements Ride {
     if (this.placementGuard && !this.placementGuard(pose)) return false;
     if (!safePlacement(pose.x, pose.z, pose.heading, this.bounds)) return false;
     const gAt = this.groundAt(pose.x, pose.z);
+    if (this instanceof BikeRide && this.#recovering && (gAt === null || !this.terrain.surfaceAt(pose.x, pose.z))) return false;
     if (gAt !== null && !this.isDryPose(pose.x, pose.z)) return false;
     this.x = pose.x; this.z = pose.z; this.heading = pose.heading;
     this.vx = this.vz = this.vy = this.speed = this.pitchRate = this.wheelie = this.wheelieRate = this.whip = 0;
@@ -147,26 +148,33 @@ export class BikeRide implements Ride {
       && (!b || (p.x > b[0] + mx && p.x < b[2] - mx && p.z > b[1] + mz && p.z < b[3] - mz))
       && !!this.terrain.surfaceAt(p.x, p.z)
       && this.isDryPose(p.x, p.z);
+    const placeCandidate = (p: VehiclePlacement | null | undefined): boolean => {
+      if (!usable(p)) return false;
+      const wasRecovering = this.#recovering;
+      this.#recovering = true;
+      try { return this.place(p.x, p.z, p.heading); }
+      finally { this.#recovering = wasRecovering; }
+    };
     while (this.roadTrail.length > 0) {
       const crumb = this.roadTrail[this.roadTrail.length - 1];
-      if (usable(crumb) && this.place(crumb.x, crumb.z, crumb.heading)) return;
+      if (placeCandidate(crumb)) return;
       this.roadTrail.pop();
     }
     const near = this.roads.nearest(this.x, this.z, 1600, r => r.kind <= 5 && !r.bridge);
     for (const candidate of [near, this.lastSafe]) {
-      if (usable(candidate) && this.place(candidate.x, candidate.z, candidate.heading)) return;
+      if (placeCandidate(candidate)) return;
     }
     if (b) {
       const cxMargin = safeClampMargin(b[0], b[2], 60), czMargin = safeClampMargin(b[1], b[3], 60);
       const cx = clamp(this.x, b[0] + cxMargin, b[2] - cxMargin), cz = clamp(this.z, b[1] + czMargin, b[3] - czMargin);
       for (const radius of [2000, 8000]) {
         const point = this.roads.nearest(cx, cz, radius, r => r.kind <= 3 && !r.bridge);
-        if (usable(point) && this.place(point.x, point.z, point.heading)) return;
+        if (placeCandidate(point)) return;
       }
     }
     const wide = this.roads.nearest(this.x, this.z, 8000, r => r.kind <= 3 && !r.bridge)
       ?? this.roads.nearest(this.x, this.z, 8000, r => r.kind <= 5 && !r.bridge);
-    if (usable(wide) && this.place(wide.x, wide.z, wide.heading)) return;
+    if (placeCandidate(wide)) return;
     this.stopInWater();
   }
   onSolidImpact(speed: number): void { if (this.damageActive) this.damage?.hit('impact', speed); if (speed > 7 && !this.crashTime) this.crash(); }
