@@ -98,7 +98,16 @@ async function capture(mode, [view, camera], [clock, time], mood, save = true) {
       const result = await client.send('Page.captureScreenshot', { format: 'png' });
       writeFileSync(join(pictures, name + '.png'), Buffer.from(result.result.data, 'base64'));
     }
-    return { name, ...state, ...peak };
+    const brake = view === 'village' && clock === 'noon' && mood.name !== 'rain' ? await read(`(()=>{
+      const v=mmm.vehicle,t=mmm.terrain, [e,n,,az]=${JSON.stringify(camera.split(',').map(Number))};
+      const [ve,vn]=t.manifest.village, heading=az*Math.PI/180;
+      if(!v.place(e-ve,vn-n,heading)) throw Error('village road brake position refused');
+      v.assist=0;
+      v.vx=13*Math.sin(heading);v.vz=-13*Math.cos(heading);v.speed=13;
+      for(let i=0;i<24;i++) v.update(1/120,{throttle:-1,steer:0,handbrake:false,touch:${mode.low}});
+      return { surface:v.surfaceName, speed:v.speed };
+    })()`) : undefined;
+    return { name, ...state, ...peak, brake };
   } finally {
     client.close();
     await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`).catch(() => {});
@@ -113,6 +122,14 @@ for (const mode of modes) {
       const row = await capture(mode, view, clock, mood);
       const control = group[0] ?? row;
       assert.deepEqual(row.view, control.view, row.name + ' matches the clear camera');
+      if (row.brake) {
+        assert.equal(row.brake.surface, 'pavement', row.name + ' brakes on paved Highway 19');
+        if (mood.name === 'snow') {
+          assert.ok(row.brake.speed > control.brake.speed, row.name + ' grips less on snow');
+          assert.ok(row.brake.speed < 13, row.name + ' still brakes on snow');
+          console.log(row.name, 'brake speed, clear/snow', control.brake.speed.toFixed(3), row.brake.speed.toFixed(3), 'm/s');
+        }
+      }
       console.log(row.name, `${row.calls} draws (${row.ownCalls} weather), ${row.triangles} tris (${row.ownTris} weather), ${row.textures} textures, ${row.programs} programs`);
       row.delta = Object.fromEntries(['calls', 'triangles', 'textures', 'programs'].map(key => [key, row[key] - control[key]]));
       group.push(row);
