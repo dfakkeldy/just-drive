@@ -364,44 +364,95 @@ const withStockpiles = new PointTupperIndustry(land.village, 1.5, SEA, false, fa
 checkPlan(nightHigh.plan, { night: true, exag: 1.5 });
 checkPlan(dayLow.plan, { night: false, exag: 1.5 });
 
-// Verify oil shore-joint continuity: every sloped transition pipe starts at an exact onshore pipe end (<= 0.005 m).
-function checkOilPipeJoint(plan, exag) {
+// Verify oil pipe rack continuity across the entire run: every inland bend, shore joint and offshore trestle joint (<= 0.005 m).
+function checkOilPipeContinuity(plan, exag, low) {
+  const expectedOnshore = low ? 3 : 5;
+  const expectedOffshore = low ? 4 : 6;
+  const pipeCyls = plan.pieces.filter((p) => p.site === 'oil-pier' && p.kind === 'cyl' && p.spanEnds);
+  const nearNode = (pt, e, n, y) => Math.hypot(pt.x + VE - e, VN - pt.z - n) < 5.0 && Math.abs(pt.y - y) < 0.05;
+
+  // 1. Every interior inland bend along onshorePipe
+  for (let i = 1; i < OIL_TERMINAL.onshorePipe.length - 1; i++) {
+    const node = OIL_TERMINAL.onshorePipe[i];
+    const ny = industryGround(node.g, exag, SEA) + node.lift;
+    const incoming = pipeCyls.filter((p) => nearNode(p.spanEnds[1], node.e, node.n, ny)).map((p) => p.spanEnds[1]);
+    const outgoing = pipeCyls.filter((p) => nearNode(p.spanEnds[0], node.e, node.n, ny)).map((p) => p.spanEnds[0]);
+    assert.equal(incoming.length, expectedOnshore, `inland oil bend #${i}: expected ${expectedOnshore} incoming pipes, got ${incoming.length}`);
+    assert.equal(outgoing.length, expectedOnshore, `inland oil bend #${i}: expected ${expectedOnshore} outgoing pipes, got ${outgoing.length}`);
+    for (const endPt of incoming) {
+      const minDist = Math.min(...outgoing.map((s) => endPt.distanceTo(s)));
+      assert.ok(minDist < 0.005, `oil pipe gap at inland bend #${i}: ${minDist.toFixed(3)} m`);
+    }
+  }
+
+  // 2. Shore joint: onshore pipe ends -> sloped transition starts
   const shoreEnd = OIL_TERMINAL.onshorePipe[OIL_TERMINAL.onshorePipe.length - 1];
   const shorePrev = OIL_TERMINAL.onshorePipe[OIL_TERMINAL.onshorePipe.length - 2];
   const jointY = industryGround(shoreEnd.g, exag, SEA) + shoreEnd.lift;
   const sdx = shoreEnd.e - shorePrev.e, sdn = shoreEnd.n - shorePrev.n, sl = Math.hypot(sdx, sdn);
   const spe = -sdn / sl, spn = sdx / sl;
-  const onshoreEnds = plan.pieces
-    .filter((p) => p.site === 'oil-pier' && p.kind === 'cyl' && p.spanEnds && Math.abs(p.spanEnds[1].y - jointY) < 0.05)
-    .map((p) => p.spanEnds[1]);
-  const transStarts = plan.pieces
-    .filter((p) => p.site === 'oil-pier' && p.kind === 'cyl' && p.spanEnds && Math.abs(p.spanEnds[0].y - jointY) < 0.05 && Math.abs(p.spanEnds[1].y - jointY) > 0.2)
-    .map((p) => p.spanEnds[0]);
-  assert.ok(onshoreEnds.length >= 3 && transStarts.length >= 4, `expected onshore (${onshoreEnds.length}) and transition (${transStarts.length}) pipes at shore joint`);
-  for (const ts of transStarts) {
-    const minDist = Math.min(...onshoreEnds.map((oe) => oe.distanceTo(ts)));
+  const onshoreEnds = pipeCyls.filter((p) => nearNode(p.spanEnds[1], shoreEnd.e, shoreEnd.n, jointY)).map((p) => p.spanEnds[1]);
+  const transPipes = pipeCyls.filter((p) => nearNode(p.spanEnds[0], shoreEnd.e, shoreEnd.n, jointY) && Math.abs(p.spanEnds[1].y - jointY) > 0.2);
+  assert.equal(onshoreEnds.length, expectedOnshore, `expected ${expectedOnshore} onshore pipes at shore joint, got ${onshoreEnds.length}`);
+  assert.equal(transPipes.length, expectedOffshore, `expected ${expectedOffshore} transition pipes at shore joint, got ${transPipes.length}`);
+  for (const tp of transPipes) {
+    const minDist = Math.min(...onshoreEnds.map((oe) => oe.distanceTo(tp.spanEnds[0])));
     assert.ok(minDist < 0.005, `oil pipe transition separated from onshore pipe at shore joint by ${minDist.toFixed(3)} m`);
   }
-  // Ensure joint points lie on the onshore rack's own perpendicular.
   for (const oe of onshoreEnds) {
     const de = oe.x + VE - shoreEnd.e, dn = VN - oe.z - shoreEnd.n;
     const along = Math.abs(de * (sdx / sl) + dn * (sdn / sl));
     assert.ok(along < 0.01 && Math.hypot(de - (de * spe + dn * spn) * spe, dn - (de * spe + dn * spn) * spn) < 0.01, 'onshore pipe end off shore-joint axis');
   }
-}
 
-checkOilPipeJoint(dayHigh.plan, 1.5);
-checkOilPipeJoint(dayLow.plan, 1.5);
-
-// On LOW (where sea omits depth write), every marine pile/crib (including coal trestle piles) must clip at sea level (-0.15 m).
-for (const p of dayLow.plan.pieces) {
-  if (p.baseG <= SEA && p.site !== 'plant' && p.site !== 'coal') {
-    const minY = Math.min(
-      ...[-0.5, 0.5].map((y) => new THREE.Vector3(0, y, 0).applyMatrix4(p.matrix).y),
-    );
-    assert.ok(minY >= SEA - 0.25, `LOW marine piece extends below waterline (y=${minY.toFixed(2)}, sea=${SEA}) in ${p.site}/${p.kind}`);
+  // 3. Offshore trestle start: sloped transition ends -> offshore approach trestle pipe starts
+  const [ae, an] = OIL_TERMINAL.approachStart;
+  const offshoreStarts = pipeCyls
+    .filter((p) => !transPipes.includes(p) && Math.hypot(p.spanEnds[0].x + VE - ae, VN - p.spanEnds[0].z - an) < 6.0 && p.spanEnds[0].y > OIL_TERMINAL.deckY)
+    .map((p) => p.spanEnds[0]);
+  assert.equal(offshoreStarts.length, expectedOffshore, `expected ${expectedOffshore} offshore trestle pipe starts, got ${offshoreStarts.length}`);
+  for (const tp of transPipes) {
+    const minDist = Math.min(...offshoreStarts.map((os) => os.distanceTo(tp.spanEnds[1])));
+    assert.ok(minDist < 0.005, `oil pipe transition separated from offshore trestle pipe by ${minDist.toFixed(3)} m`);
   }
 }
+
+checkOilPipeContinuity(dayHigh.plan, 1.5, false);
+checkOilPipeContinuity(dayLow.plan, 1.5, true);
+
+// On LOW (where sea omits depth write), every corner of every marine piece must clip at sea level (-0.15 m).
+const UNIT_CORNERS = [-0.5, 0.5].flatMap((x) => [-0.5, 0.5].flatMap((y) => [-0.5, 0.5].map((z) => new THREE.Vector3(x, y, z))));
+for (const p of dayLow.plan.pieces) {
+  if (p.baseG <= SEA && p.site !== 'plant' && p.site !== 'coal') {
+    let minY = Infinity;
+    for (const c of UNIT_CORNERS) {
+      const y = c.clone().applyMatrix4(p.matrix).y;
+      if (y < minY) minY = y;
+    }
+    assert.ok(minY >= SEA - 0.25, `LOW marine piece extends below waterline (minY=${minY.toFixed(2)}, sea=${SEA}) in ${p.site}/${p.kind}`);
+  }
+}
+
+// Verify the north-bulk-desktop-day camera ray hits the North Bulk shiploader tower itself (not the conveyor truss).
+function checkNorthBulkLoaderRay(built) {
+  const cam = new THREE.Vector3(626700 - VE, 55, VN - 5051280);
+  const target = new THREE.Vector3(626892.0 - VE, 15.0, VN - 5051395.0);
+  const dir = target.clone().sub(cam).normalize();
+  const dist = target.distanceTo(cam);
+  built.group.updateMatrixWorld(true);
+  const rc = new THREE.Raycaster(cam, dir, 1, dist + 25);
+  const hits = rc.intersectObject(built.group, true);
+  assert.ok(hits.length > 0, 'north-bulk camera ray missed industry group');
+  assert.equal(hits[0].object.name, 'pt-industry-boxes', `north-bulk ray hit ${hits[0].object.name} instead of shiploader box`);
+  const offset = hits[0].point.distanceTo(target);
+  assert.ok(offset < 6.0, `north-bulk ray hit ${offset.toFixed(2)} m from shiploader tower target`);
+  const m = new THREE.Matrix4();
+  const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scale = new THREE.Vector3();
+  hits[0].object.getMatrixAt(hits[0].instanceId, m);
+  m.decompose(pos, quat, scale);
+  assert.ok(scale.x > 7.5 && scale.y > 16.0 && scale.z > 7.5, `north-bulk ray hit non-tower instance scale=(${scale.x.toFixed(1)},${scale.y.toFixed(1)},${scale.z.toFixed(1)})`);
+}
+checkNorthBulkLoaderRay(dayHigh);
 
 const statsHigh = checkBuilt(dayHigh, { low: false, night: false, hasStockpiles: false, exag: 1.5 });
 const statsNight = checkBuilt(nightHigh, { low: false, night: true, hasStockpiles: false, exag: 1.5 });
@@ -548,6 +599,26 @@ if (process.argv.includes('--mutations')) {
   {
     assert.throws(() => checkBuilt(dayHigh, { low: false, night: false, hasStockpiles: true, exag: 1.5 }), undefined, 'stockpiles-duplicate mutant survived');
     console.log('killed stockpiles-duplicate');
+  }
+  // 16. Missing North Bulk shiploader tower (conveyor still present; camera ray must fail)
+  {
+    const bad = new PointTupperIndustry(land.village, 1.5, SEA, false, false, false);
+    const boxes = bad.group.children.find((m) => m.name === 'pt-industry-boxes');
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    const m = new THREE.Matrix4(), pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scale = new THREE.Vector3();
+    let removed = 0;
+    for (let i = 0; i < boxes.count; i++) {
+      boxes.getMatrixAt(i, m);
+      m.decompose(pos, quat, scale);
+      if (Math.hypot(pos.x + VE - 626894.0, VN - pos.z - 5051392.0) < 12 && pos.y > 6 && scale.y > 5) {
+        boxes.setMatrixAt(i, zero);
+        removed++;
+      }
+    }
+    boxes.instanceMatrix.needsUpdate = true;
+    assert.ok(removed > 0, 'failed to remove North Bulk loader tower for mutant');
+    assert.throws(() => checkNorthBulkLoaderRay(bad), undefined, 'missing-north-bulk-loader mutant survived');
+    console.log('killed missing-north-bulk-loader');
   }
 }
 

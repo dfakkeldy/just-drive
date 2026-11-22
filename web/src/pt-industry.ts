@@ -709,14 +709,30 @@ export function planPointTupperIndustry(
       berth1Arms, berth2Arms, launchWharf, dolphins, catwalks,
     } = OIL_TERMINAL;
 
-    // Onshore overhead multi-pipe rack from shore abutment up toward the tank farm
+    // Onshore overhead multi-pipe rack from shore abutment up toward the tank farm.
+    // Share one joint perpendicular at each node so adjacent pipe segments meet with 0 m gap at every bend.
+    const jointPerp = (idx: number): [number, number] => {
+      let pe = 0, pn = 0;
+      if (idx > 0) {
+        const a = onshorePipe[idx - 1], b = onshorePipe[idx];
+        const dx = b.e - a.e, dn = b.n - a.n, l = Math.hypot(dx, dn) || 1;
+        pe += -dn / l; pn += dx / l;
+      }
+      if (idx + 1 < onshorePipe.length) {
+        const a = onshorePipe[idx], b = onshorePipe[idx + 1];
+        const dx = b.e - a.e, dn = b.n - a.n, l = Math.hypot(dx, dn) || 1;
+        pe += -dn / l; pn += dx / l;
+      }
+      const pl = Math.hypot(pe, pn) || 1;
+      return [pe / pl, pn / pl];
+    };
+    const pipeOffsets = low ? [-1.6, 0, 1.6] : [-2.2, -1.1, 0, 1.1, 2.2];
     for (let i = 1; i < onshorePipe.length; i++) {
       const a = onshorePipe[i - 1], b = onshorePipe[i];
-      const dx = b.e - a.e, dn = b.n - a.n, l = Math.hypot(dx, dn) || 1;
-      const pe = -dn / l, pn = dx / l;
-      const pipeOffsets = low ? [-1.6, 0, 1.6] : [-2.2, -1.1, 0, 1.1, 2.2];
+      const [ape, apn] = jointPerp(i - 1);
+      const [bpe, bpn] = jointPerp(i);
       for (const off of pipeOffsets) {
-        span('cyl', 'oil-pier', a.e + pe * off, a.n + pn * off, a.g, a.lift, b.e + pe * off, b.n + pn * off, b.g, b.lift, 0.56, 0.56, off === 0 ? C.pipeWhite : C.pipeGrey);
+        span('cyl', 'oil-pier', a.e + ape * off, a.n + apn * off, a.g, a.lift, b.e + bpe * off, b.n + bpn * off, b.g, b.lift, 0.56, 0.56, off === 0 ? C.pipeWhite : C.pipeGrey);
       }
       span('box', 'oil-pier', a.e, a.n, a.g, a.lift - 0.55, b.e, b.n, b.g, b.lift - 0.55, 5.4, 0.35, C.steelDark);
     }
@@ -736,9 +752,8 @@ export function planPointTupperIndustry(
     {
       const dx = approachEnd[0] - approachStart[0], dn = approachEnd[1] - approachStart[1], l = Math.hypot(dx, dn);
       const pe = -dn / l, pn = dx / l;
-      const shorePrev = onshorePipe[onshorePipe.length - 2], shoreEnd = onshorePipe[onshorePipe.length - 1];
-      const sdx = shoreEnd.e - shorePrev.e, sdn = shoreEnd.n - shorePrev.n, sl = Math.hypot(sdx, sdn) || 1;
-      const spe = -sdn / sl, spn = sdx / sl;
+      const shoreEnd = onshorePipe[onshorePipe.length - 1];
+      const [spe, spn] = jointPerp(onshorePipe.length - 1);
       const pipeRows = low
         ? [[-3.6, 1.4], [-2.2, 1.4], [-3.6, 2.8], [-2.2, 2.8]]
         : [[-4.4, 1.4], [-3.3, 1.4], [-2.2, 1.4], [-4.4, 2.7], [-3.3, 2.7], [-2.2, 2.7]];
