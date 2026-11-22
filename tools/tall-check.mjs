@@ -31,6 +31,16 @@ function maths(r) {
   assert.equal(r.pointSegment(5,3,[0,0],[10,0]),3);
   assert.equal(r.inFootprint(1,1,[[0,0],[2,0],[2,2],[0,2]]),true);
   assert.equal(r.inFootprint(3,1,[[0,0],[2,0],[2,2],[0,2]]),false);
+  assert.equal(r.mastLightClass(28),'A0','<=45 m steady red top');
+  assert.equal(r.mastLightClass(45),'A0','45 m boundary');
+  assert.equal(r.mastLightClass(46),'A1','>45 m flashing red top + steady mid');
+  assert.equal(r.mastLightClass(105),'A1','105 m boundary');
+  assert.equal(r.mastLightClass(125),'A2','>105 m four-level red');
+  assert.equal(r.obstructionLights('A0').length,1);assert.equal(r.obstructionLights('A0')[0].kind,'red-steady');
+  assert.equal(r.obstructionLights('A1').length,2);assert.equal(r.obstructionLights('A1')[0].kind,'red-flash');
+  assert.equal(r.obstructionLights('A2').length,4);assert.equal(r.obstructionLights('A2')[2].kind,'red-flash');
+  assert.equal(r.obstructionLights('W').length,3);assert.ok(r.obstructionLights('W').every(l=>l.kind==='white-strobe'),'Auld Cove white strobes');
+  assert.equal(r.towerWidthScale(32,'standard'),32);assert.equal(r.towerWidthScale(48,'double'),36);assert.equal(r.towerWidthScale(158,'crossing'),44);
 }
 maths(rules);
 const read = p=>JSON.parse(readFileSync(p,'utf8'));
@@ -134,6 +144,95 @@ function drawing(){
   }
 }
 drawing();
+// Verify merged Strait of Canso crossings, restored omitted lines, road/building clearance and mast/crossing night lights.
+const straitCode=buildSync({entryPoints:[root+'web/src/tall-strait.ts'],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;
+const straitMod={exports:{}};new Function('require','module','exports',straitCode)(require,straitMod,straitMod.exports);
+function checkStrait(merge){
+  const mabou=read(tallBase('mabou')+'/tall.json');
+  assert.equal(merge(mabou),mabou,'Mabou outside Strait bounds is unchanged');
+  const porthood=read(tallBase('porthood')+'/tall.json');
+  assert.equal(merge(porthood),porthood,'Port Hood outside Strait bounds is unchanged');
+  for(const area of ['pointtupper','cansocauseway','westbay','judique']){
+    const sourceDir=root+'data/baked/'+tallPath(area);
+    const d=read(tallBase(area)+'/tall.json'),m=tallManifest(area),merged=merge(d);
+    (function checkKeys(o){if(!o||typeof o!=='object')return;for(const [k,v] of Object.entries(o)){assert.ok(!/manufacturer|model|owner|project/i.test(k),'no identity fields in merged: '+k);checkKeys(v);}})(merged);
+    const roads=read(sourceDir+'/roads.json').roads,buildings=read(sourceDir+'/buildings.json').buildings;
+    for(const [kind,list] of [['mast',merged.towers],['line',merged.lines.flatMap(l=>l.towers)]])for(const p of list){
+      const extra=kind==='line'&&p.kind==='crossing'?rules.towerWidthScale(p.height,p.kind)*.13:2;
+      const road=roads.find(r=>r.pts.slice(1).some((b,i)=>rules.pointSegment(p.e,p.n,r.pts[i],b)<=r.halfWidth+extra));
+      const bldg=buildings.find(b=>rules.inFootprint(p.e,p.n,b.footprint));
+      assert.ok(!road&&!bldg,`${area} merged ${kind} (${p.e},${p.n}) clear of roads and buildings`);
+    }
+    for(const l of merged.lines){
+      assert.equal(l.spans.length,l.towers.length-1,area+' merged span count');
+      for(let k=0;k<l.spans.length;k++){
+        const a=l.towers[k],b=l.towers[k+1],sp=l.spans[k];
+        const fracA=a.kind==='crossing'||l.circuits===2?.82:1,fracB=b.kind==='crossing'||l.circuits===2?.82:1;
+        sp.ground.forEach((g,j)=>{
+          const t=j/(sp.ground.length-1);
+          const y=rules.wireHeight(a.ground+a.height*fracA,b.ground+b.height*fracB,sp.sag,t);
+          assert.ok(y-g>=5.99,`${area} ${l.ref??'legacy'} span ${k} clearance ${y-g}`);
+          for(const exag of [1,1.5,3])assert.ok(rules.wireWorldHeight(a.ground+a.height*fracA,b.ground+b.height*fracB,sp.sag,t,g,exag,0)-(g>0?g*exag:g)>=5.99,`${area} ${l.ref??'legacy'} span ${k} exag ${exag}`);
+        });
+      }
+    }
+    if(area==='pointtupper'||area==='cansocauseway'){
+      const l8004=merged.lines.filter(l=>l.source==='osm:w77466754');
+      const l7005=merged.lines.filter(l=>l.source==='osm:w185892575');
+      const causewayDouble=merged.lines.find(l=>l.source==='osm:w185892766');
+      const causeway138=merged.lines.find(l=>l.source==='osm:w271063033');
+      assert.ok(l8004.length&&l7005.length&&causewayDouble&&causeway138,area+' has all Strait and causeway crossings');
+      assert.equal(causewayDouble.circuits,2,area+' L7004;L7003 double circuit');
+      const maxSpanOf=list=>Math.max(...list.flatMap(l=>l.towers.slice(1).map((t,i)=>Math.hypot(t.e-l.towers[i].e,t.n-l.towers[i].n))));
+      const maxL8004=maxSpanOf(l8004),maxL7005=maxSpanOf(l7005);
+      assert.ok(maxL8004>1440&&maxL8004<1470,area+' L8004 1454 m Strait water span');
+      assert.ok(maxL7005>1435&&maxL7005<1460,area+' L7005 1446 m Strait water span');
+      const crossingTowers=[...l8004,...l7005].flatMap(l=>l.towers).filter(t=>t.kind==='crossing');
+      assert.equal(crossingTowers.length,4,area+' four 158 m Auld Cove suspension towers');
+      assert.ok(crossingTowers.every(t=>t.height===158&&t.light==='W'),area+' 158 m towers with white strobes');
+      // All four misclassified NSTDB UTTO60 power towers removed from masts
+      for(const [e,n] of [[620697.61,5056148.44],[620875.71,5056289.64],[621754.11,5056765.24],[623034.11,5057460.24]]){
+        assert.ok(!merged.towers.some(t=>Math.hypot(t.e-e,t.n-n)<20),`${area} misclassified UTTO60 power tower (${e},${n}) removed from masts`);
+      }
+      // Night renderer: white strobes + red beacons at night, zero beacons in daylight, low & coarse smoke check
+      const terrain={manifest:m,seaLevel:0,exag:1.5,heightAt:()=>null};
+      for(const low of [false,true]){
+        const dayT=new mod.exports.TallLandmarks(d,terrain,low,{},false);
+        assert.equal(dayT.group.children.filter(c=>c.material?.defines?.BEACON).length,0,area+' no beacons in daylight');
+        for(const mesh of dayT.group.children){mesh.geometry?.dispose();mesh.material?.dispose();}
+      }
+      const coarseT=new mod.exports.TallLandmarks(d,terrain,true,{},false,false,true);
+      assert.equal(coarseT.group.children.length,0,area+' coarse draws nothing');
+      const nightT=new mod.exports.TallLandmarks(d,terrain,false,{},true);
+      const beaconMeshes=nightT.group.children.filter(c=>c.material?.defines?.BEACON);
+      assert.equal(beaconMeshes.length,2,area+' turbine beacon mesh + mast/crossing beacon mesh');
+      const mastLights=nightT.group.getObjectByName('tall-beacons');
+      assert.ok(mastLights?.isInstancedMesh,area+' mast/crossing night beacons');
+      const col=mastLights.geometry.getAttribute('beaconColor');
+      let white=0,red=0;
+      for(let i=0;i<mastLights.count;i++){if(col.getX(i)>0.9&&col.getY(i)>0.9&&col.getZ(i)>0.9)white++;else if(col.getX(i)>0.75&&col.getY(i)<0.05&&col.getZ(i)<0.05)red++;}
+      assert.equal(white,12,area+' 4 crossing towers x 3 white strobes');
+      assert.ok(red>=10,area+' linear-space red communication mast beacons');
+      for(const mesh of nightT.group.children){mesh.geometry?.dispose();mesh.material?.dispose();}
+    }
+    if(area==='pointtupper'){
+      for(const key of ['UTTR50:sha256:efbf9c0bab840efb','UTTR50:sha256:a2985e44d3528a98','UTTR50:sha256:10ea29cc1fdd9147','UTTR50:sha256:9a7bbb629102d4d5','UTTR50:sha256:a66018f870e70e61']){
+        assert.ok(merged.lines.some(l=>l.source===key),'restored omitted NSTDB line '+key);
+      }
+    }
+    if(area==='westbay'){
+      for(const src of ['osm:w77466754','osm:w269128918','osm:w269811580','osm:w271063034']){
+        assert.ok(merged.lines.some(l=>l.source===src),'westbay OSM transmission line '+src);
+      }
+    }
+    if(area==='judique'){
+      assert.ok(merged.towers.some(t=>t.height===122&&t.light==='A2'),'judique upgraded 122 m A2 mast');
+      assert.ok(merged.towers.some(t=>t.height===100&&t.light==='A1'),'judique upgraded 100 m A1 mast');
+    }
+  }
+}
+checkStrait(straitMod.exports.mergeStraitTall);
+console.log('PASS Strait crossings, causeway lines, restored omitted lines, mast lights and white strobes');
 assert.match(main,/ERA.modern && tallKey/,'modern construction gate');
 // One tall contact row serves the registry and solo driving (siteContacts in main.ts).
 assert.match(main,/\['tall', tallKey \? \{[^\n]*resolve: body => tall\?\.resolveSolids\(body\)/,'real vehicle collision hook');
@@ -152,8 +251,12 @@ if(process.argv.includes('--mutations')){
     ['bounds ignored','p.e <= b[2]','p.e <= b[2] + 100'],
     ['footprints ignored','return hit;','return false;'],
     ['ground stretch omitted','+ stretched - ground','+ 0'],
+    ['mast A0 threshold broken','if (height <= 45) return \'A0\';','if (height <= 90) return \'A0\';'],
+    ['white strobes replaced with red','{ frac: 1, kind: \'white-strobe\' }','{ frac: 1, kind: \'red-flash\' }'],
+    ['crossing tower width uncapped','if (kind === \'crossing\') return 44;','if (kind === \'crossing\') return height;'],
   ];
   for(const [label,a,b]of mutations){assert.equal(source.split(a).length,2,label+' unique');assert.throws(()=>maths(compile(source.replace(a,b))),{name:'AssertionError'},label+' rejected');console.log('KILLED '+label);}
+  assert.throws(()=>checkStrait(x=>x),{name:'AssertionError'},'Strait merge omitted rejected');console.log('KILLED Strait merge omitted');
   const d=read(tallBase('mabou')+'/tall.json'),m=tallManifest('mabou');
   for(const [label,change]of [
     ['identity leak',x=>x.turbines[0].manufacturer='forbidden'],
