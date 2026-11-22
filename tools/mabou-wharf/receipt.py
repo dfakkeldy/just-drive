@@ -53,7 +53,9 @@ if __name__ == '__main__':
     if sys.argv[1:2] == ['land'] and len(sys.argv) == 3:
         baked = Path(sys.argv[2])
         pins = pins_for(report, baked/'terrain/roads.json', baked)
-        print(f'PASS 19 Nov wharf road land: {receipt.state(baked, pins)}')
+        comm = HERE.parent / 'community-mailboxes' / 'hashes.json'
+        followups = [json.loads(comm.read_text())] if comm.exists() else []
+        print(f'PASS 19 Nov wharf road land: {receipt.state(baked, pins, followups)}')
     elif len(sys.argv) == 4 and sys.argv[1] in ('verify', 'install', 'uninstall'):
         op, a, b = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
         if op == 'verify':

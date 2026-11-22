@@ -73,6 +73,15 @@ assert.deepEqual([migrated.carryover[0],migrated.carryover[216],migrated.carryov
 assert.equal(migrateCareer(migrated,468,7),migrated,'migration is idempotent on reload');
 saveCareer(migrated);assert.deepEqual(readCareer(),migrated);
 assert.equal(nextCareer(migrated,'clear').mailCount,468,'nextCareer preserves mailCount');
+// Restoring the 469+6 land shifts a tagged 468+7 save back so customer 230 returns to 231, and re-upgrading reverses it cleanly.
+const stagedCarry=Array(475).fill(0);stagedCarry[0]=1;stagedCarry[216]=3;stagedCarry[230]=31;stagedCarry[468]=6;stagedCarry[473]=7;stagedCarry[474]=9;
+const stagedSave={...migrated,carryover:stagedCarry,mailCount:468};
+const rolledBack=migrateCareer(stagedSave,469,6);
+assert.equal(rolledBack.mailCount,469);assert.equal(rolledBack.carryover.length,475);
+assert.deepEqual([rolledBack.carryover[0],rolledBack.carryover[216],rolledBack.carryover[217],rolledBack.carryover[230],rolledBack.carryover[231],rolledBack.carryover[469],rolledBack.carryover[474]],[1,3,0,0,31,6,7]);
+assert.equal(migrateCareer(rolledBack,469,6),rolledBack,'rollback is idempotent on reload');
+const reUpgraded=migrateCareer(rolledBack,468,7);
+assert.equal(reUpgraded.mailCount,468);assert.equal(reUpgraded.carryover[230],31);assert.equal(reUpgraded.carryover[468],6);assert.equal(reUpgraded.carryover[474],0);
 const emptyMig=migrateCareer(freshCareer(),468,7);assert.deepEqual(emptyMig,{...freshCareer(),mailCount:468});
 // Simulate an iframe which rejects every storage access.
 Object.defineProperty(globalThis, 'localStorage', { get() { throw Error('SecurityError'); } });

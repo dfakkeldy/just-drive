@@ -10,14 +10,22 @@ export const freshCareer = (): Career => ({ day: 1, pay: 0, warnings: 0, double:
 /** Mabou rural mailbox removed when Little Mabou Hall became a community site (grok-bots#1347: 469+6 -> 468+7). */
 export const MABOU_REMOVED_RURAL_1347 = 217;
 export function migrateCareer(career: Career, mailCount: number, siteCount: number): Career {
-  if (mailCount !== 468 || siteCount !== 7) return career;
-  if (career.mailCount === 468) return career;
-  if (career.mailCount !== undefined && career.mailCount !== 469) return career;
   const old = career.carryover;
-  const carryover = old.length === 475
-    ? [...old.slice(0, MABOU_REMOVED_RURAL_1347), ...old.slice(MABOU_REMOVED_RURAL_1347 + 1), 0]
-    : old.slice();
-  return { ...career, carryover, mailCount: 468 };
+  if (mailCount === 468 && siteCount === 7) {
+    if (career.mailCount === 468) return career;
+    if (career.mailCount !== undefined && career.mailCount !== 469) return career;
+    const carryover = old.length === 475
+      ? [...old.slice(0, MABOU_REMOVED_RURAL_1347), ...old.slice(MABOU_REMOVED_RURAL_1347 + 1), 0]
+      : old.slice();
+    return { ...career, carryover, mailCount: 468 };
+  }
+  if (mailCount === 469 && siteCount === 6 && career.mailCount === 468) {
+    const carryover = old.length === 475
+      ? [...old.slice(0, MABOU_REMOVED_RURAL_1347), 0, ...old.slice(MABOU_REMOVED_RURAL_1347, 474)]
+      : old.slice();
+    return { ...career, carryover, mailCount: 469 };
+  }
+  return career;
 }
 export function draw(seed: number, id: number, salt = 0): number {
   let n = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(id + 1, 0xc2b2ae35) ^ Math.imul(salt + 1, 0x27d4eb2d);

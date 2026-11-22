@@ -413,7 +413,10 @@ export class Shift {
     for (const stop of this.run.stops) this.next.carryover[stop.index] = this.remaining[stop.index];
     // Dense arrays survive JSON round trips and storage validation.
     this.next.carryover = Array.from({ length: this.remaining.length }, (_, i) => this.next.carryover[i] ?? 0);
-    if (this.props && this.props.mail.length === 468 && this.props.sites.length === 7) this.next.mailCount = 468;
+    if (this.props && (this.props.mail.length === 468 && this.props.sites.length === 7 ||
+      this.props.mail.length === 469 && this.props.sites.length === 6 && this.career.mailCount !== undefined)) {
+      this.next.mailCount = this.props.mail.length;
+    }
     if (this.routeEnabled) saveCareer(this.next);
     this.ended = true; for (const scene of this.roadside) scene.setPaused?.(true);
     this.endButton.hidden = true; this.cameraButton.hidden = true;
