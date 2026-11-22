@@ -18,13 +18,13 @@ agent.
 - Have your own fixes reviewed by another agent before a PR lands. This
   also applies to fixes you make after a review. A review of your own work
   by you does not count. Name the reviewer in the `Reviewed-by:` line.
-- Land a PR only with `python3 ~/.claude/guardrails/land_pr.py`. Run it
-  again after each push. Do not use GitHub auto-merge, `--admin` or a
-  force-push to a shared branch.
+- Land a PR only with the landing script (`land_pr.py`), after every gate
+  has passed. If you push again while it lands, run it again. Do not use
+  GitHub auto-merge, `--admin` or a force-push to a shared branch.
 - Do not open `reference/`, dash-cam footage, private photos or private
   notes under `data/work/`, unless your task says to. Never commit,
   upload or post them.
 - Do not publish the site or deploy. Install land data only when your
   task gives the steps for it.
-- Ask questions in the tracking issue your task names, not in the PR.
+- If your task names a tracking issue, ask questions there, not in the PR.
 - Give times in Halifax time (`America/Halifax`).
