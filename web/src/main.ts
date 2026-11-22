@@ -784,7 +784,8 @@ if (quarry) quarry.attach(scene, waterReflections);
 // The small switch loads other players' cars only after consent.
 // A build made with VITE_MP=0 has the code compiled out (web/vite.artifact.config.ts sets the default, which is on).
 // Off in a history era: rooms are per area, not per era, so two eras would meet in one room.
-const MULTIPLAYER = (import.meta.env.DEV || import.meta.env.VITE_MP === '1') && ERA.modern;
+// No rooms for the standalone drone: the room code sends a car on the ground, and races would let it fly over the course.
+const MULTIPLAYER = (import.meta.env.DEV || import.meta.env.VITE_MP === '1') && !droneVehicle && ERA.modern;
 // Room games keep off the real places where nothing scores: church grounds, cemeteries and the school bus stop.
 let quietPlaces: { x: number; z: number; radius: number }[] | null = null;
 const roomQuiet = () => quietPlaces ??= [
@@ -798,8 +799,7 @@ const roomQuiet = () => quietPlaces ??= [
     return [{ x: stop.x, z: stop.z, radius: BUS_STOP_RADIUS }];
   })(),
 ];
-// No rooms for the standalone drone: the room code sends a car on the ground, and races would let it fly over the course.
-const multiplayer = MULTIPLAYER && !droneVehicle ? multiplayerSwitch({ scene, roads: roads.roads, quiet: roomQuiet, get vehicle() { return vehicle; }, low: LOW, bare, params, area: AREA.id, touch: touchDevice, label: SITE.brand === 'just' ? (_name, id) => `Driver ${id}` : undefined,
+const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads, quiet: roomQuiet, get vehicle() { return vehicle; }, low: LOW, bare, params, area: AREA.id, touch: touchDevice, label: SITE.brand === 'just' ? (_name, id) => `Driver ${id}` : undefined,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as import('./mp/wire').RideKind, trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
   ground: (x, z) => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; } }) : null;
