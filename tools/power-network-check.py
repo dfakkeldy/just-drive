@@ -65,6 +65,40 @@ for entry in (((250,300),'Invented Road'),   # a props driveway with that name
         raise AssertionError(f'unpowered entry {entry!r} must stop the bake')
     except RuntimeError:
         pass
+# A filmed public road (AREA.public_pole_corrections): after the frozen pass, 'none' stretches lose their poles and
+# poles on the wrong side move straight across. Other poles and other roads keep their bytes; a second run is a no-op.
+net=P.Network(copy.deepcopy(roads))
+fix=(((250,100),'Invented Road',3,((0,150,'left'),(150,300,'right'),(300,None,'none'))),)
+road3=[p for p in new if p['road']==3]
+assert {p['y']>100 for p in road3}=={True}, 'the invented kind-3 road starts with every pole on its left'
+fixed=P.correct_public_poles(net,new,fix,safe)
+assert data([p for p in fixed if p['road']!=3])==data([p for p in new if p['road']!=3]), 'other roads keep their bytes'
+along=lambda p: p['x']+100
+assert all(along(p)<300 for p in fixed if p['road']==3) and any(along(p)>=300 for p in road3), "a 'none' stretch loses its poles"
+assert all(p in road3 for p in fixed if p['road']==3 and along(p)<150), 'poles already on the right side keep their bytes'
+moved=[p for p in fixed if p['road']==3 and along(p)>=150]
+assert moved and all(p['y']==round(100-3-3.2,3) and p not in road3 for p in moved), 'wrong-side poles move straight across'
+assert all(q['n']==p['n'] and q['transformer']==p['transformer'] for q in moved for p in road3 if p['x']==q['x']), 'a moved pole keeps its marks'
+assert P.correct_public_poles(net,fixed,fix,safe)==fixed, 'a second run changes nothing'
+assert P.correct_public_poles(net,new,(),safe)==new, 'no correction, no change'
+try:
+    P.correct_public_poles(net,new,fix,lambda p: p[1]>100)
+    raise AssertionError('an unsafe moved pole must stop the bake')
+except RuntimeError:
+    pass
+for entry in (((250,100),'Misspelt Road',3,((0,None,'none'),)),   # the right line, the wrong name
+              ((250,100),'Invented Road',2,((0,None,'none'),)),   # the wrong kind
+              ((250,0),'Invented Road',4,((0,None,'none'),)),     # a kind-4 track is no public road
+              ((250,140),'Invented Road',3,((0,None,'none'),)),   # no road within 5 m
+              ((250,100),'Invented Road',3,((0,100,'left'),(120,None,'none'))),   # a gap
+              ((250,100),'Invented Road',3,((0,100,'left'),)),                    # not to the end
+              ((250,100),'Invented Road',3,((0,None,'north'),)),                  # no such side
+              ((250,100),'Invented Road',3),None):
+    try:
+        P.correct_public_poles(net,new,(entry,),safe)
+        raise AssertionError(f'correction entry {entry!r} must stop the bake')
+    except RuntimeError:
+        pass
 reverse=[road(4,[[500,0],[0,0]],4),road(1,[[-100,0],[0,0]],1)]
 net=P.Network(reverse)
 back=P.place_poles(reverse,net,[house(1,302,20)],safe,(-10000,-10000))
@@ -93,6 +127,6 @@ assert P.roof_edge(flat,pole(100,40),{'20':{'roofShape':'gable'}})['height']==7,
 R = load(ROOT/'tools/power-network/rehearse.py', 'power_rehearse')
 assert R.replacement(Path('/invented/delta'),Path('terrain'),'roads.json') is None, 'extra delta inputs are never served'
 assert R.replacement(Path('/invented/delta'),Path('terrain'),'props.json') == Path('/invented/delta/terrain/props.json')
-print('PASS power rules, unchanged public pole bytes, direction, bounds, service reach, roof seam, group/datum, unpowered tracks and the unpowered church')
+print('PASS power rules, unchanged public pole bytes, direction, bounds, service reach, roof seam, group/datum, unpowered tracks, the filmed public-pole corrections and the unpowered church')
 if '--land' in sys.argv:
     D.check_properties(ROOT/'data/baked')

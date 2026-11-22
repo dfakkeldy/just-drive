@@ -392,6 +392,65 @@ def unpowered_roads(net, entries):
     return ids
 
 
+def corrected_road(net, entry):
+    """The public road of one AREA.public_pole_corrections entry and its checked rules. A wrong entry stops the bake."""
+    if not (isinstance(entry, tuple) and len(entry) == 4 and isinstance(entry[1], str) and entry[1].strip()):
+        raise RuntimeError(f'public_pole_corrections entry is not ((east, north), name, kind, rules): {entry!r}')
+    point, name, kind, rules = entry
+    hit = net.nearest(point, 5)
+    road = hit and hit['road']
+    if not road or not public(road) or road['bridge'] or road['name'] != name or road['kind'] != kind:
+        raise RuntimeError(f'public_pole_corrections entry {entry[:3]!r} is not on a public kind-{kind} road called {name!r}')
+    end = 0
+    for rule in rules:
+        if not (len(rule) == 3 and rule[2] in ('left', 'right', 'none') and rule[0] == end
+                and (rule[1] is None or rule[1] > rule[0])):
+            raise RuntimeError(f'public_pole_corrections rules must run from s=0 without gaps: {rule!r}')
+        end = rule[1]
+    if end is not None:
+        raise RuntimeError('public_pole_corrections rules must reach the end of the road (last s1 None)')
+    return road, rules
+
+
+def correct_public_poles(net, poles, corrections, safe=None):
+    """Apply AREA.public_pole_corrections after the frozen public pass, in full and power-only bakes alike. It is
+    absolute, so a second run changes nothing: a pole in a 'none' stretch goes, a pole on the wrong side moves
+    straight across at the same s, and every other pole keeps its bytes. With `safe`, a moved pole that is not safe
+    or stands within 9 m of another pole stops the bake."""
+    poles = list(poles)
+    for entry in corrections:
+        r, rules = corrected_road(net, entry)
+        local = Network([r])
+        kept, moved = [], []
+        for p in poles:
+            if p['road'] != r['id']:
+                kept.append(p)
+                continue
+            at = local.nearest((p['x'], p['y']), 20)
+            if at is None:
+                raise RuntimeError(f'pole {p!r} is not beside its road {r["name"]!r}')
+            want = next(rule[2] for rule in rules if rule[0] <= at['s'] and (rule[1] is None or at['s'] < rule[1]))
+            if want == 'none':
+                continue
+            u = at['u']
+            side = 1 if u[0] * (p['y'] - at['p'][1]) - u[1] * (p['x'] - at['p'][0]) > 0 else -1
+            if side == (1 if want == 'left' else -1):
+                kept.append(p)
+                continue
+            # The frozen pass's setback: 3.2 m beyond the road edge.
+            q, u = shifted(r, at['s'], -side, 3.2)
+            p = dict(p, x=round(q[0], 3), y=round(q[1], 3), heading=heading(u))
+            kept.append(p)
+            moved.append(p)
+        if safe is not None:
+            for p in moved:
+                close = [q for q in kept if q is not p and distance((p['x'], p['y']), (q['x'], q['y'])) < 9]
+                if not safe((p['x'], p['y'])) or close:
+                    raise RuntimeError(f'corrected pole {p!r} on {r["name"]!r} is not safe or is within 9 m of {close!r}')
+        poles = kept
+    return poles
+
+
 def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpowered=None):
     """`unpowered`: unpowered_tracks entries (AREA.unpowered_tracks when None). Public roads are unaffected."""
     unpowered = unpowered_roads(net, AREA.unpowered_tracks if unpowered is None else unpowered)
@@ -710,6 +769,8 @@ def main(output=None, report_dir=None, power_only=False):
     # A power-only delta keeps the installed public poles even if another stage has since changed its inputs.
     public_poles = [p for p in previous['poles'] if public(net.roads[p['road']])] if power_only else None
     poles = place_poles(roads, net, buildings, safe, VILLAGE, public_poles)
+    # The documented exception to the frozen public pass, where a drive filmed the real line.
+    poles = correct_public_poles(net, poles, AREA.public_pole_corrections, safe)
     drops = service_drops(net, poles, buildings, AREA.id, styles)
 
     result = dict(crs='EPSG:2961', mailboxes=mailboxes, communityBoxes=community, poles=poles, serviceDrops=drops)

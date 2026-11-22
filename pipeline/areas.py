@@ -39,8 +39,15 @@ class Area:
     no_box_sites: tuple = ()
     # Named kind-4 road pieces that step 29 gives no pole run, when a drive showed no power line along them:
     # ((east, north) on the piece's line, its expected name). Other pieces with the same name keep the usual rule.
-    # Public roads keep their frozen poles (tools/power-network/README.md); only the kind-4 extension is left out.
+    # Public roads keep their frozen poles (tools/power-network/README.md), apart from public_pole_corrections; only
+    # the kind-4 extension is left out.
     unpowered_tracks: tuple = ()
+    # The one exception to the frozen public-pole pass (tools/power-network/README.md), where a drive filmed the real
+    # line: ((east, north) on the public road's line, its expected name, its kind, rules). Each rule is
+    # (s0, s1, 'left' | 'right' | 'none') on [s0, s1) metres from the road's first point (s1 None: to its end). Left
+    # and right are seen looking along the road from that point. A pole in a 'none' stretch is removed; a pole on the
+    # wrong side moves straight across to the other side; any other pole keeps its frozen bytes.
+    public_pole_corrections: tuple = ()
     extra_fine: tuple = ()  # boxes (xmin, ymin, xmax, ymax) that get 1 m land whatever roads they hold
     fine_tile_limit: int = 1500  # guard: most 256 m tiles of 1 m land that one bake may select
     # Boxes (xmin, ymin, xmax, ymax) round hand-built places beside a road. Only the optional road-shaped ground
@@ -215,10 +222,20 @@ JUDIQUE = Area(
     no_box_sites=((618687.3, 5074423.9, 150),),   # the origin of the hand-built house site (web/src/home-site.ts)
     # The dash cam drive of 21 Nov 2026 saw the line end at the last house with power, near the start of
     # River Denys Road's public piece. No pole stands along its kind-4 piece to the church, and the church has
-    # no power (Dan, 21 Nov 2026). The public piece keeps its frozen poles.
+    # no power (Dan, 21 Nov 2026).
     # The point is a vertex of that kind-4 piece in the baked roads. The other kind-4 pieces of the same name are a
     # 12 m bridge (never poled) and a piece beyond the church that the drive did not reach (no building near it).
     unpowered_tracks=(((629728.21, 5080744.94), 'River Denys Road'),),
+    # River Denys Road's public piece (game road 98, from its end at the paved piece): where the 21 Nov 2026 dash cam
+    # saw the line, both ways. Right is the south side, left the north side. The line leaves the road through the
+    # woods at 1975-2340 m and 2560-2745 m. It ends at a bend about 2.78 km along: a transformer pole on the left, then
+    # the last pole on the right, by the last house with power. The game's nearest frozen pole for that last pole
+    # stands at 2815 m, 30-40 m on, beside that house's game twin, so it stays and feeds the house. No pole stands
+    # after it (tools/power-network/README.md). The point is a vertex of that piece.
+    public_pole_corrections=(((623149.01, 5079712.61), 'River Denys Road', 3, (
+        (0, 612, 'right'), (612, 1100, 'left'), (1100, 1160, 'right'), (1160, 1530, 'left'), (1530, 1975, 'right'),
+        (1975, 2340, 'none'), (2340, 2560, 'right'), (2560, 2745, 'none'), (2745, 2790, 'left'),
+        (2790, 2840, 'right'), (2840, None, 'none'))),),
     wide_source='mabou', anchor_highway=19)
 
 PORTHOOD = Area(

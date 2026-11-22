@@ -75,7 +75,9 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
         public = lambda data: {(q['x'], q['y']) for q in data['poles'] if p.public(net.roads[q['road']])}
         before = json.loads(((baseline or source) / relative / 'props.json').read_text()) if baseline or overlay else None
         if before is not None:
-            assert public(before) == public(props), area + ': public pole positions changed'
+            # The one exception: AREA.public_pole_corrections (README "The filmed exception"). Equal on every other road.
+            corrected = dict(poles=p.correct_public_poles(net, before['poles'], p.AREA.public_pole_corrections))
+            assert public(corrected) == public(props), area + ': public pole positions changed'
             for key in ('mailboxes', 'communityBoxes'):
                 assert before[key] == props[key], area + ': ' + key + ' changed'
         row = dict(area=area, publicPoles=len(public(props)), poles=len(props['poles']), preservationCompared=before is not None)
@@ -89,6 +91,8 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
         expected = p.service_drops(net, props['poles'], buildings, area, styles)
         assert props['serviceDrops'] == expected, area + ': drops do not match current poles, buildings, roof styles or side/reach rules'
         assert not any(d['building'] == -1 for d in props['serviceDrops']), area + ': the church has no power'
+        assert p.correct_public_poles(net, props['poles'], p.AREA.public_pole_corrections) == props['poles'], \
+            area + ': a pole stands where public_pole_corrections removes it or on the wrong side'
         unpowered = p.unpowered_roads(net, p.AREA.unpowered_tracks)
         bounds = {}
         for pole in props['poles']:
@@ -116,9 +120,16 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
             assert len(unpowered) == 1 and net.roads[next(iter(unpowered))]['name'] == 'River Denys Road', \
                 'Judique lists the kind-4 piece of River Denys Road to the church as unpowered'
             assert not any(q['road'] in unpowered for q in props['poles']), 'River Denys Road kind-4 piece has no poles'
+            # The same drive saw the public piece's line end at a bend about 2.78 km along (README "The filmed exception").
+            assert len(p.AREA.public_pole_corrections) == 1, 'Judique corrects River Denys Road only'
+            road98, _ = p.corrected_road(net, p.AREA.public_pole_corrections[0])
+            assert road98['name'] == 'River Denys Road' and road98['kind'] == 3
+            along = p.Network([road98])
+            filmed = sorted(along.nearest((q['x'], q['y']), 20)['s'] for q in props['poles'] if q['road'] == road98['id'])
+            assert filmed and 2790 <= filmed[-1] < 2840, 'River Denys Road public poles end at the last house with power'
             nearest = min(p.distance((q['x'], q['y']), CHURCH) for q in props['poles'])
             assert nearest > 500, 'no pole stands near the church'
-            row.update(riverDenysPoles=len(run), lastBuildingS=round(last, 3), lastPoleS=round(end, 3),
+            row.update(riverDenysRoadPublicPoles=len(filmed), riverDenysRoadLastPoleS=round(filmed[-1], 1), riverDenysPoles=len(run), lastBuildingS=round(last, 3), lastPoleS=round(end, 3),
                        riverDenysRoadTrackPoles=0, nearestPoleToChurchMetres=round(nearest, 1))
         rows.append(row)
     print(json.dumps(rows, indent=2))
