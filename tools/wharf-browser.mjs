@@ -29,6 +29,14 @@ try{
     const page=await open(origin+'/?'+query);
     try{
      await page.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:phone});
+     if(!phone&&manifest.farLand){
+      const until=Date.now()+60000;
+      while(!await page.read('!!(window.mmm&&mmm.farVisibility&&mmm.farLand&&mmm.tall&&mmm.farTurbines)')){
+       assert.ok(Date.now()<until,`${area}/${label}: far views never loaded on after land`);
+       await new Promise(resolve=>setTimeout(resolve,200));
+      }
+      await page.read(`(()=>{const v=mmm.farVisibility;v.update=()=>{};if(!v.records.length)throw Error('far views have no query meshes');for(const r of v.records)r.mesh.visible=true;})()`);
+     }
      const result=await page.read(`(async()=>{
       window.requestAnimationFrame=()=>0;
       const m=mmm,{terrain:t,camera:c,renderer:r,trees,water}=m;let scene=m.vehicle.car.root;while(scene.parent)scene=scene.parent;
