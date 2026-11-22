@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import { eraRoadHalf } from './era';
 import { timberBridge, periodBridgePlane, prepareTimberPlans, timberPlan, timberGroundPoints } from './eras/timber-bridge';
-import { buildPonyTrussBridge, PONY_TRUSS } from './november-bridges';
+import { buildPonyTrussBridge, ponyTrussDeckHeight } from './november-bridges';
 
 export interface Road {
   id: number;
@@ -181,9 +181,11 @@ export class Roads {
   deckHeight(x: number, z: number): number | null {
     // Empty bridge buckets skip all ordinary road segments and deck work.
     const hit = this.query(this.bridgeCells, x, z, 12, bridgeRoad);
-    if (!hit || !this.terrain.cartRoads && hit.dist > (hit.road.ponyTruss ? PONY_TRUSS.clearHalf : hit.road.halfWidth + 1.2)) return null;
+    if (!hit) return null;
+    if (!this.terrain.cartRoads && !hit.road.ponyTruss && hit.dist > hit.road.halfWidth + 1.2) return null;
     const deck = this.deck(hit.road);
     if (!deck) return null;
+    if (!this.terrain.cartRoads && hit.road.ponyTruss) return ponyTrussDeckHeight(hit.road, deck.y0, deck.y1, x, z);
     const [ax, az] = hit.road.pts[hit.seg], [bx, bz] = hit.road.pts[hit.seg + 1];
     const s = deck.cum[hit.seg] + (this.terrain.cartRoads?deck.cum[hit.seg+1]-deck.cum[hit.seg]:Math.hypot(bx - ax, bz - az)) * hit.t;
     const plane=this.terrain.cartRoads?deck.y0+(deck.y1-deck.y0)*s/deck.len:deck.y0 + (deck.y1 - deck.y0) * (s / deck.len);

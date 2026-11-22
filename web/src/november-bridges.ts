@@ -52,6 +52,19 @@ export function littleMabouPonyTruss(road: Road): Road {
   return { ...road, ponyTruss: true };
 }
 
+/** Exact wheel support on a pony-truss bridge, using the same straight span and square ends as the rendered asphalt. */
+export function ponyTrussDeckHeight(road: Road, y0: number, y1: number, x: number, z: number): number | null {
+  const a = road.pts[0], b = road.pts[road.pts.length - 1];
+  const dx = b[0] - a[0], dz = b[1] - a[1], len2 = dx * dx + dz * dz;
+  if (!len2) return null;
+  const span = Math.sqrt(len2);
+  const along = ((x - a[0]) * dx + (z - a[1]) * dz) / span;
+  if (along < 0 || along > span) return null;
+  const across = (-(x - a[0]) * dz + (z - a[1]) * dx) / span;
+  if (Math.abs(across) > PONY_TRUSS.clearHalf) return null;
+  return y0 + (y1 - y0) * (along / span);
+}
+
 /** Two solid side-rail walls for a world-space pony-truss bridge, aligned to the inner rail and outer chord faces. */
 export function ponyTrussSolids(road: Road): Solid[] {
   if (!road.ponyTruss || road.pts.length < 2) return [];
@@ -114,18 +127,19 @@ export function buildPonyTrussBridge(pts: readonly [number, number][], y0: numbe
   // Deck slab sides and underside (steel deck fascia under the trusses, 2.5 cm below asphalt to avoid z-fighting).
   m.box(0, fasciaTop - deckThick / 2, 0, deckLen, deckThick, half * 2 + chord, STEEL_DARK, false);
 
-  // Transverse floor beams beneath the fascia at every panel point (inset from fascia sides so no faces coincide).
+  // Transverse floor beams beneath the fascia at every panel point (tilted with the slope and inset so no faces overlap).
   const beamW = half * 2 + chord;
   for (let i = 0; i <= panels; i++) {
-    const s = i * panel;
+    const s = i === 0 ? 0.10 : i === panels ? span - 0.10 : i * panel;
     const bx = a[0] + ux * s, bz = a[1] + uz * s, by = deckY(s);
-    m.at(bx, by, bz, yaw);
-    m.box(0, fasciaBottom - 0.14, 0, 0.20, 0.28, beamW - 0.04, STEEL_DARK, false);
+    m.at(bx, by, bz, yaw, 0, slope);
+    m.box(0, fasciaBottom - 0.145, 0, 0.20, 0.28, beamW - 0.04, STEEL_DARK, false);
   }
+  const abutmentDrop = 0.01 + 0.34 * Math.abs(dy / span);
   for (const s of [0.32, span - 0.32]) {
     const ax = a[0] + ux * s, az = a[1] + uz * s, ay = deckY(s);
     m.at(ax, ay, az, yaw);
-    m.box(0, fasciaBottom - 0.58, 0, 0.64, 1.16, beamW + 0.08, ABUTMENT, true);
+    m.box(0, fasciaBottom - abutmentDrop - 0.58, 0, 0.64, 1.16, beamW + 0.08, ABUTMENT, true);
   }
 
   // Two grey steel pony-truss sides: bottom chord, top chord, inclined end posts, Warren diagonals, vertical posts, inner guard rail.
@@ -137,7 +151,7 @@ export function buildPonyTrussBridge(pts: readonly [number, number][], y0: numbe
 
     // Bottom chord along deck edge.
     m.at(mx + nx, deckMidY + yBase, mz + nz, yaw, 0, slope);
-    m.box(0, 0, 0, deckLen + 0.08, chord, chord, STEEL_CHORD, false);
+    m.box(0, 0, 0, deckLen, chord, chord, STEEL_CHORD, false);
 
     // Top chord spanning the interior panels between the inclined end posts.
     m.at(mx + nx, deckMidY + h, mz + nz, yaw, 0, slope);

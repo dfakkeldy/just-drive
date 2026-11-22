@@ -905,8 +905,12 @@ if (props) fleetContacts.add({ revision: () => props.downCount, resolve: () => {
 if (roads.guardrails) {
   const rails = roads.guardrails, probe = { x: 0, z: 0, y: 0, heading: 0, spec: vehicleSpec, vx: 0, vz: 0, speed: 0 };
   fleetContacts.add({ revision: () => rails.audit.planned + rails.audit.samples,
-    resolve: body => { if (body !== vehicle) rails.block(body); },
+    resolve: body => { if (body !== vehicle) rails.block(body); else rails.blockBridge(body); },
     allows: body => { probe.x=body.x; probe.z=body.z; probe.y=body.y; probe.heading=body.heading; probe.spec=body.spec; probe.vx=probe.vz=probe.speed=0; rails.block(probe); return Math.hypot(probe.x-body.x,probe.z-body.z)<1e-7; },
+  });
+  soloContacts.add({
+    resolve: body => rails.blockBridge(body),
+    allows: body => { probe.x=body.x; probe.z=body.z; probe.y=body.y; probe.heading=body.heading; probe.spec=body.spec; probe.vx=probe.vz=probe.speed=0; rails.blockBridge(probe); return Math.hypot(probe.x-body.x,probe.z-body.z)<1e-7; },
   });
 }
 fleetContacts.add({ resolve: () => {}, allows: body => { const b = vehicle.bounds, r = body.spec.envelope.reach; return !b || body.x - r >= b[0] && body.z - r >= b[1] && body.x + r <= b[2] && body.z + r <= b[3]; } });

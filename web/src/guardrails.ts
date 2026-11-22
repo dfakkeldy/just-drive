@@ -285,6 +285,16 @@ export class Guardrails {
     }
     return pending ? 'pending' : 'clear';
   }
+  /** Push a body out of only the pony-truss bridge rails (used by soloContacts for solo trailers). */
+  blockBridge(car: Pushable, dt = 1 / 120): void {
+    if (!this.bridgeSolids.length) return;
+    const heading = car.heading;
+    pushOut(car, this.bridgeSolids, true, dt);
+    const yaw = Math.atan2(Math.sin(car.heading - heading), Math.cos(car.heading - heading));
+    const limitedYaw = Math.max(-Math.PI / 6 * dt, Math.min(Math.PI / 6 * dt, yaw));
+    car.heading = heading + limitedYaw;
+    if (yaw !== limitedYaw) car.speed = car.vx * Math.sin(car.heading) - car.vz * Math.cos(car.heading);
+  }
   /** Physics stays active outside LOW's drawing radius. The existing three-circle body envelope prevents step-through. */
   block(car: Pushable, dt = 1 / 120): void {
     const heading = car.heading;
