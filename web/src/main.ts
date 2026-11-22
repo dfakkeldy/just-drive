@@ -1170,7 +1170,8 @@ if (churchSite && churchRoom) interiors.register(churchRoom.churchDoor(churchSit
 if (churchRoom && params.get('interior') === 'church') interiors.enter('church');
 let pendingInterrogation: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; advanceAfter: boolean } | null = null;
 let pendingOfficeJump = false;
-resets[resetSlot.interiors] = () => { pendingOfficeJump = false; interiors.reset(); };
+let depotGen = 0;   // a reset while a depot room loads cancels that opening and its fallback
+resets[resetSlot.interiors] = () => { pendingOfficeJump = false; depotGen++; interiors.reset(); };
 function registerDepotRooms(mod: typeof import('./interior-depot')): void {
   if (!interiors.doors.has('depot-loading')) {
     interiors.register({
@@ -1210,9 +1211,10 @@ let depotOpening = false;
 async function openDepotLoading(): Promise<void> {
   if (depotOpening || interiors.busy || !(interiors instanceof Interiors)) return;
   depotOpening = true;
+  const gen = depotGen;
   try {
     const mod = await ensureDepotRoom();
-    if (interiors.busy || (shift instanceof Shift && shift.ended)) return;
+    if (gen !== depotGen || interiors.busy || (shift instanceof Shift && shift.ended)) return;
     registerDepotRooms(mod);
     interiors.enter('depot-loading');
   } catch (e) {
@@ -1224,12 +1226,15 @@ async function openDepotLoading(): Promise<void> {
 async function openDepotInterrogation(info: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; advanceAfter: boolean }): Promise<void> {
   if (depotOpening || interiors.busy || !(interiors instanceof Interiors)) return;
   depotOpening = true;
+  const gen = depotGen;
   pendingInterrogation = info;
   const report = document.getElementById('shiftReport');
   const hadReport = !!report && !report.hidden;
   if (report) report.hidden = true;
+  let startDay = false;
   try {
     const mod = await ensureDepotRoom();
+    if (gen !== depotGen) { pendingInterrogation = null; return; }
     if (interiors.busy) {
       if (report && hadReport) report.hidden = false;
       pendingInterrogation = null;
@@ -1240,13 +1245,16 @@ async function openDepotInterrogation(info: { reason: InterrogationReason; compl
   } catch (e) {
     console.warn('Depot interrogation room unavailable', e);
     pendingInterrogation = null;
+    if (gen !== depotGen) return;
     // From "Start day N": the day still turns over, so a room that cannot load never strands the report.
-    if (info.advanceAfter && shift instanceof Shift) {
-      shift.advanceToNextDay();
-      if (depotAutoLoad) void openDepotLoading();
-    } else if (report && hadReport) report.hidden = false;
+    if (info.advanceAfter && shift instanceof Shift) startDay = true;
+    else if (report && hadReport) report.hidden = false;
   } finally {
     depotOpening = false;
+  }
+  if (startDay && shift instanceof Shift) {
+    shift.advanceToNextDay();
+    if (depotAutoLoad) void openDepotLoading();
   }
 }
 if (depotRoom) {
@@ -2542,7 +2550,8 @@ function frame(now: number) {
   if (interiors.busy) {
     radio?.update(false, true);
     pad?.show(!shift.ended && gamepad.device !== 'gamepad');
-    if (shift.updateIndoors(clockRuns ? clockDt : 0)) { quality.frame(0, false); interiors.closeForDay(); shift.end(); }
+    // Closing time only while the shift runs: a room opened from the report (the Boss's office) is not closed by it.
+    if (!shift.ended && shift.updateIndoors(clockRuns ? clockDt : 0)) { quality.frame(0, false); interiors.closeForDay(); shift.end(); }
     else {
       interiors.update(dt, driveInput(), vehicle, false);
       interiors.render(renderer, interiorDraw);
