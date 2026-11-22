@@ -235,7 +235,7 @@
   },
   "village-start/phone-explore-truck": {
     "calls": 2,
-    "triangles": 4882,
+    "triangles": 3922,
     "geometries": 2,
     "textures": 0,
     "programs": 0,
@@ -244,7 +244,7 @@
   },
   "village-start/phone-mail": {
     "calls": 2,
-    "triangles": 4882,
+    "triangles": 3922,
     "geometries": 2,
     "textures": 0,
     "programs": 0,
