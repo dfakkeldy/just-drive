@@ -272,7 +272,7 @@ const PROBE_EXPR = `(x, z) => {
   check(samples.every(s => s.treesVisible), 'trees stayed loaded/visible along the 5 km desktop flight');
 
   // Throttled network proof (4G: 150 ms latency, 3 Mbps down) flying east 1.2 km into fresh tiles at 60 m/s:
-  // proves loadSpeedCap actually slows the drone when tiles lag and still keeps ground under the drone loaded.
+  // the ground under the drone must stay loaded. The slowed count is printed; on the MacBook the cap has not had to act.
   await p.send('Network.enable');
   await p.send('Network.emulateNetworkConditions', { offline: false, latency: 150, downloadThroughput: 375000, uploadThroughput: 150000 });
   await p.read(`(() => { const g = mmm.terrain.heightAt(0, -2500) ?? 30; mmm.drone.place(0, g + 35, -2500, -Math.PI / 2); mmm.drone.maxSpeed = 60; })()`);

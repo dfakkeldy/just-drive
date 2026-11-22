@@ -371,9 +371,7 @@ body.droneSticks{--drone-stick-size:min(132px,34vw,42vh)}
 body:not(.tcOn) #droneButton{display:none}
 /* While the drone flies there is no photo or stop to show; on a phone the sticks need the bottom corners. */
 body.droneOn :is(#cameraButton,#stopHint){display:none!important}
-body.droneOn.droneSticks :is(#mailScore,#credit,#placeArrival,#bigMapButton){display:none!important}
-body.droneOn.droneSticks #placesButton{right:calc(144px + env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px));min-height:56px;pointer-events:auto}
-body.droneOn.droneSticks #hud{max-width:calc(100% - 230px)}
+body.droneOn.droneSticks :is(#mailScore,#credit){display:none!important}
 #phoneTop #droneButton{margin-left:auto}#phoneTop #droneButton~#gear{margin-left:0}
 /* Upright, the phone planner (phone-controls-layout.ts) places DRONE; the gear then keeps the row's right end. */
 #phoneTop #droneButton[style*="absolute"]~#gear{margin-left:auto}
