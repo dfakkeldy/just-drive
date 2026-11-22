@@ -127,8 +127,7 @@ export class Vehicle {
   place(x: number, z: number, heading: number): boolean {
     if (!safePlacement(x, z, heading, this.bounds)) return false;
     // Live driving calls place() at the current spot when tiles disappear under the ride; recover instead of freezing off-map.
-    const sBefore = this.terrain.surfaceAt(x, z);
-    if (!sBefore && !this.#awaitingLoad && (this.#hasSafe || this.lastGood || this.trail.length > 0) && Math.hypot(x - this.x, z - this.z) <= 1) {
+    if (this instanceof Vehicle && this.terrain?.surfaceAt && !this.terrain.surfaceAt(x, z) && !this.#awaitingLoad && (this.#hasSafe || this.lastGood || this.trail.length > 0) && Math.hypot(x - this.x, z - this.z) <= 1) {
       if (this.bounds) {
         this.clampBounds();
         const clampedG = this.groundAt(this.x, this.z);

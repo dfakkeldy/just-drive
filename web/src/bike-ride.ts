@@ -95,8 +95,7 @@ export class BikeRide implements Ride {
   }
   place(x: number, z: number, heading: number): boolean {
     if (!safePlacement(x, z, heading, this.bounds)) return false;
-    const sBefore = this.terrain.surfaceAt(x, z);
-    if (!sBefore && !this.#awaitingLoad && (this.lastSafe || this.roadTrail.length > 0) && Math.hypot(x - this.x, z - this.z) <= 1) {
+    if (this instanceof BikeRide && this.terrain?.surfaceAt && !this.terrain.surfaceAt(x, z) && !this.#awaitingLoad && (this.lastSafe || this.roadTrail.length > 0) && Math.hypot(x - this.x, z - this.z) <= 1) {
       this.wall();
       if (this.terrain.surfaceAt(this.x, this.z) && this.isDryPose(this.x, this.z)) return this.place(this.x, this.z, this.heading);
       this.respawn();
