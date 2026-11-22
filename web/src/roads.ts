@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import { eraRoadHalf } from './era';
 import { timberBridge, periodBridgePlane, prepareTimberPlans, timberPlan, timberGroundPoints } from './eras/timber-bridge';
-import { buildPonyTrussBridge, ponyTrussDeckHeight, type PonyTrussAprons } from './november-bridges';
+import { buildPonyTrussBridge, inPonyTrussBounds, ponyTrussDeckHeight, type PonyTrussAprons } from './november-bridges';
 
 export interface Road {
   id: number;
@@ -185,6 +185,7 @@ export class Roads {
     const hit = this.query(this.bridgeCells, x, z, 12, bridgeRoad);
     if (!hit) return null;
     if (!this.terrain.cartRoads && !hit.road.ponyTruss && hit.dist > hit.road.halfWidth + 1.2) return null;
+    if (!this.terrain.cartRoads && hit.road.ponyTruss && !inPonyTrussBounds(hit.road, x, z)) return null;
     const deck = this.deck(hit.road);
     if (!deck) return null;
     if (!this.terrain.cartRoads && hit.road.ponyTruss && deck.aprons) return ponyTrussDeckHeight(hit.road, deck.y0, deck.y1, x, z, deck.aprons);
@@ -243,11 +244,13 @@ export class Roads {
     }
     const cum = [0];
     for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
-    const len = cum[n - 1] || 1, y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
+    const len = cum[n - 1] || 1;
+    let y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
     let mesh: THREE.Mesh;
     let aprons: PonyTrussAprons | undefined;
     if (road.ponyTruss) {
       const built = buildPonyTrussBridge(p, y0, y1, len, this.readTerrainHeight);
+      y0 = built.y0; y1 = built.y1;
       aprons = built.aprons;
       this.periodMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
       mesh = new THREE.Mesh(built.geometry, this.periodMat);

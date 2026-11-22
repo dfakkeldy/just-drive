@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Guardrails } from './guardrails';
+import { littleMabouMarshRail } from './november-road-details';
 import type { Solid } from './parked';
 import type { Road } from './roads';
 import type { VehicleSpec } from './vehicle-spec';
@@ -89,6 +90,25 @@ export function littleMabouPonyTruss(road: Road): Road {
   return { ...road, ponyTruss: true };
 }
 
+/** Apply modern Mabou road overrides (marsh guardrail and Little Mabou pony-truss bridges). */
+export function mabouRoadOverrides(roads: readonly Road[], modern: boolean, areaId: string): Road[] {
+  if (!modern || areaId !== 'mabou') return roads as Road[];
+  return roads.map(littleMabouMarshRail).map(littleMabouPonyTruss);
+}
+
+/** Fast zero-allocation bounds test for a pony-truss span and its 3 m aprons, run before deck construction. */
+export function inPonyTrussBounds(road: Road, x: number, z: number): boolean {
+  const a = road.pts[0], b = road.pts[road.pts.length - 1];
+  const dx = b[0] - a[0], dz = b[1] - a[1], len2 = dx * dx + dz * dz;
+  if (!len2) return false;
+  const span = Math.sqrt(len2);
+  const along = ((x - a[0]) * dx + (z - a[1]) * dz) / span;
+  const ap = PONY_TRUSS.approach;
+  if (along < -ap || along > span + ap) return false;
+  const across = (-(x - a[0]) * dz + (z - a[1]) * dx) / span;
+  return Math.abs(across) <= PONY_TRUSS.clearHalf;
+}
+
 /**
  * Exact wheel support on a pony-truss bridge and its 3 m approach aprons.
  * Evaluates the exact same triangle mesh surface built by buildPonyTrussBridge() (zero divergence, zero allocations).
@@ -167,15 +187,15 @@ export function registerRailContacts(
 
 /**
  * Build one merged vertex-coloured geometry for a narrow one-lane grey steel pony-truss bridge and its 3 m approach aprons.
- * Returns both the geometry and the exact apron height grids shared with ponyTrussDeckHeight().
+ * Returns the geometry, exact apron height grids, and bank-cleared end elevations shared with ponyTrussDeckHeight().
  */
 export function buildPonyTrussBridge(
   pts: readonly [number, number][],
-  y0: number,
-  y1: number,
+  rawY0: number,
+  rawY1: number,
   len: number,
   heightAt: (x: number, z: number) => number | null,
-): { geometry: THREE.BufferGeometry; aprons: PonyTrussAprons } {
+): { geometry: THREE.BufferGeometry; aprons: PonyTrussAprons; y0: number; y1: number } {
   const m = new Mesher();
   const a = pts[0], b = pts[pts.length - 1];
   const dx = b[0] - a[0], dz = b[1] - a[1];
@@ -183,6 +203,16 @@ export function buildPonyTrussBridge(
   const ux = dx / span, uz = dz / span;
   const yaw = Math.atan2(-uz, ux);
   const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+  const clearHalf = PONY_TRUSS.clearHalf;
+  // Lift either span end above the highest bank vertex across its seam so apron and steel deck meet with zero step.
+  let y0 = rawY0, y1 = rawY1;
+  for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
+    const across = -clearHalf + (2 * clearHalf * j) / APRON_ACROSS_STEPS;
+    const h0 = heightAt(a[0] - uz * across, a[1] + ux * across);
+    if (h0 !== null && h0 + 0.02 > y0) y0 = h0 + 0.02;
+    const h1 = heightAt(b[0] - uz * across, b[1] + ux * across);
+    if (h1 !== null && h1 + 0.02 > y1) y1 = h1 + 0.02;
+  }
   const dy = y1 - y0, slope = Math.atan2(dy, span);
   const deckY = (s: number) => y0 + dy * (s / span);
 
@@ -199,7 +229,6 @@ export function buildPonyTrussBridge(
   const deckLen = Math.hypot(span, dy);
 
   // Asphalt deck top and steel deck slab between the two trusses.
-  const clearHalf = PONY_TRUSS.clearHalf;
   const deckThick = PONY_TRUSS.deckThickness;
   const fasciaTop = -0.025;
   const fasciaBottom = fasciaTop - deckThick;
@@ -321,5 +350,5 @@ export function buildPonyTrussBridge(
     }
   }
 
-  return { geometry: m.geometry(), aprons: { start: startGrid, end: endGrid } };
+  return { geometry: m.geometry(), aprons: { start: startGrid, end: endGrid }, y0, y1 };
 }

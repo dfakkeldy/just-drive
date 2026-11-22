@@ -4,7 +4,7 @@ import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { Buildings, buildingSites } from '../web/src/buildings.ts';
 import { baxtersCoveBuildingArt, littleMabouBuildingArt, NovemberBuildings, novemberFootprints, TRAILHEAD_FENCE } from '../web/src/november-buildings.ts';
 import { BAXTERS_COVE_LOT, littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
-import { littleMabouPonyTruss, PONY_TRUSS, registerRailContacts } from '../web/src/november-bridges.ts';
+import { littleMabouPonyTruss, mabouRoadOverrides, PONY_TRUSS, registerRailContacts } from '../web/src/november-bridges.ts';
 import { AreaContacts } from '../web/src/world-contacts.ts';
 import { Vehicle } from '../web/src/vehicle.ts';
 import { Towing } from '../web/src/towing.ts';
@@ -203,7 +203,14 @@ for (const {a, b, side} of added) {
 // Little Mabou Road grey steel pony-truss bridges (Mabou pack, ids 45 and 46).
 {
   const mabouManifest = read('terrain', 'manifest'), mabouRoads = read('terrain', 'roads');
-  const tagged = mabouRoads.roads.map(littleMabouPonyTruss);
+  // Verify the production modern-Mabou gate in mabouRoadOverrides and main.ts.
+  const mainSource = readFileSync('web/src/main.ts', 'utf8');
+  assert.match(mainSource, /const roadLines = mabouRoadOverrides\(roadData\.roads, ERA\.modern, AREA\.id\);/, 'main.ts uses mabouRoadOverrides production gate');
+  const tagged = mabouRoadOverrides(mabouRoads.roads, true, 'mabou');
+  assert.deepEqual(mabouRoadOverrides(mabouRoads.roads, false, 'mabou').filter(r => r.ponyTruss), [], '1884 Mabou gets no pony-truss override');
+  assert.equal(mabouRoadOverrides(mabouRoads.roads, false, 'mabou').find(r => r.id === 44)?.guardrailRuns, mabouRoads.roads.find(r => r.id === 44)?.guardrailRuns, '1884 Mabou gets no marsh rail override');
+  assert.deepEqual(mabouRoadOverrides(mabouRoads.roads, true, 'judique').filter(r => r.ponyTruss), [], 'non-Mabou area gets no pony-truss override');
+  assert.equal(mabouRoadOverrides(mabouRoads.roads, true, 'judique').find(r => r.id === 44)?.guardrailRuns, mabouRoads.roads.find(r => r.id === 44)?.guardrailRuns, 'non-Mabou area gets no marsh rail override');
   const matched = tagged.filter(r => r.ponyTruss);
   assert.deepEqual(matched.map(r => r.id).sort((a, b) => a - b), [45, 46], 'only Little Mabou Road bridges 45 and 46 match');
   for (const r of matched) {
@@ -216,18 +223,34 @@ for (const {a, b, side} of added) {
     assert.equal(littleMabouPonyTruss(other), other, `road ${other.id} stays unchanged`);
   }
   // Real baked Mabou LiDAR heights via railLand() so bridge approaches and drops are tested on actual terrain.
-  const realTerrain = {
-    level: 8, manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
-    heightAt: (x, z) => { const h = land.ground(x, z, true); return h === null ? null : h > -0.2 ? -0.2 + (h + 0.2) * 1.5 : h; },
-    surfaceAt(x, z) { const s = land.sample(x, z, true); if (!s) return null; const g = s.height > -0.2 ? -0.2 + (s.height + 0.2) * 1.5 : s.height; return { ground: g, level: s.level, kind: 2, halfWidth: 3, roadDist: 0, canopy: s.canopy, washboard: false }; },
+  const makeRealTerrain = (exag, level = 8, counters = null) => ({
+    level, manifest: mabouManifest, dataRevision: 1, exag, seaLevel: -0.2, low: false,
+    heightAt: (x, z) => { if (counters) counters.height++; const h = land.ground(x, z, true); return h === null ? null : h > -0.2 ? -0.2 + (h + 0.2) * exag : h; },
+    surfaceAt(x, z) { if (counters) counters.surface++; const s = land.sample(x, z, true); if (!s) return null; const g = s.height > -0.2 ? -0.2 + (s.height + 0.2) * exag : s.height; return { ground: g, level: Math.min(level, s.level), kind: 2, halfWidth: 3, roadDist: 0, canopy: s.canopy, washboard: false }; },
     withContactHeight: (_, read) => read(),
     withGroundContact: (_, read) => read(),
-  };
+  });
+  // Off-deck queries at 10 m away must never allocate terrain samples, even when baked tiles sit at level 7.
+  {
+    const counts = { surface: 0, height: 0 };
+    const missNet = new Roads({ roads: tagged }, mabouManifest.village, makeRealTerrain(1.5, 7, counts));
+    for (const id of [45, 46]) {
+      const r = missNet.roads.find(x => x.id === id);
+      const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+      const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      for (let i = 0; i < 100; i++) {
+        assert.equal(missNet.deckHeight(mx - uz * 10, mz + ux * 10), null, `bridge ${id} 10 m off-deck returns null`);
+      }
+    }
+    assert.equal(counts.surface, 0, `off-deck queries trigger zero surfaceAt calls (got ${counts.surface})`);
+    assert.equal(counts.height, 0, `off-deck queries trigger zero heightAt calls (got ${counts.height})`);
+  }
+  const realTerrain = makeRealTerrain(1.5, 8);
   const net = new Roads({ roads: tagged }, mabouManifest.village, realTerrain);
   const rails = net.guardrails;
   assert.ok(rails, 'modern Mabou roads construct guardrails with pony-truss rail solids');
   // Exercise the shared production contact registration helper and verify main.ts calls it.
-  const mainSource = readFileSync('web/src/main.ts', 'utf8');
   assert.match(mainSource, /if \(roads\.guardrails\) registerRailContacts\(fleetContacts, soloContacts, roads\.guardrails,/, 'main.ts uses shared registerRailContacts');
   const rig = () => { const n = () => new THREE.Object3D(); return { root: n(), body: n(), steer: { fl: n(), fr: n() }, wheels: { fl: n(), fr: n(), rl: n(), rr: n() }, brakeLights: [] }; };
   const ray = new THREE.Raycaster();
@@ -283,6 +306,34 @@ for (const {a, b, side} of added) {
         ray.set(new THREE.Vector3(x, 20, z), down);
         assert.equal(ray.intersectObject(mesh).length, 0, `bridge ${id} has no mesh past apron s=${s.toFixed(2)} offset=${offset}`);
       }
+    }
+    // Check apron-to-span seam continuity and bank clearance at both default 1.5x and steep 3.0x hill scales.
+    for (const exag of [1.5, 3.0]) {
+      const tScale = exag === 1.5 ? realTerrain : makeRealTerrain(exag, 8);
+      const nScale = exag === 1.5 ? net : new Roads({ roads: tagged }, mabouManifest.village, tScale);
+      const yProbe = nScale.deckHeight(mx, mz);
+      assert.ok(Number.isFinite(yProbe), `bridge ${id} exag=${exag} builds deck`);
+      const mScale = nScale.group.children.find(c => c.name === `pony-truss-${id}`);
+      mScale.updateMatrixWorld(true);
+      for (const joinS of [0, span]) {
+        const apronS = joinS === 0 ? -0.005 : span + 0.005;
+        const spanS = joinS === 0 ? 0.005 : span - 0.005;
+        for (const offset of [-(PONY_TRUSS.clearHalf - 0.01), -1.04, 0, 1.04, PONY_TRUSS.clearHalf - 0.01]) {
+          const xa = ax + ux * apronS - uz * offset, za = az + uz * apronS + ux * offset;
+          const xs = ax + ux * spanS - uz * offset, zs = az + uz * spanS + ux * offset;
+          const ya = nScale.deckHeight(xa, za), ys = nScale.deckHeight(xs, zs);
+          const groundS = tScale.heightAt(xs, zs);
+          ray.set(new THREE.Vector3(xa, ya + 0.5, za), down);
+          const hitA = ray.intersectObject(mScale)[0];
+          ray.set(new THREE.Vector3(xs, ys + 0.5, zs), down);
+          const hitS = ray.intersectObject(mScale)[0];
+          assert.ok(hitA && Math.abs(hitA.point.y - ya) < 1e-4, `bridge ${id} exag=${exag} apron join matches deckHeight`);
+          assert.ok(hitS && Math.abs(hitS.point.y - ys) < 1e-4, `bridge ${id} exag=${exag} span join matches deckHeight`);
+          assert.ok(Math.abs(hitA.point.y - hitS.point.y) < 0.005, `bridge ${id} exag=${exag} join at s=${joinS.toFixed(1)} off=${offset} has zero step (${Math.abs(hitA.point.y - hitS.point.y).toFixed(4)} m)`);
+          assert.ok(ys >= groundS, `bridge ${id} exag=${exag} span join at s=${joinS.toFixed(1)} off=${offset} clears bank (${(ys - groundS).toFixed(4)} m)`);
+        }
+      }
+      if (nScale !== net) for (const child of [...nScale.group.children]) child.geometry?.dispose();
     }
     // Drive a real car across each bridge on real baked terrain in BOTH directions and with lateral offset ±0.5 m.
     for (const dir of [1, -1]) {
