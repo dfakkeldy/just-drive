@@ -612,9 +612,10 @@ export class Animals {
       else if (a.kind === 'cow') this.cow(a, dt, vehicle, stopped, d);
       else if (a.kind !== 'farm') this.dog(a, dt, vehicle, stopped, d);
       if (a.kind === 'cow' || a.kind === 'farm') this.pasture(dt, a, vehicle, stopped);
-      const ground = this.animalGround(p.x, p.z, a.kind === 'bull');
+      const drawn = a.kind === 'bull' || a.kind === 'cow';
+      const ground = this.animalGround(p.x, p.z, drawn);
       if (ground !== null) p.y = ground + a.roof;
-      if (!a.roof && a.kind !== 'farm') this.groundRig(rig, !a.moving, a.kind === 'bull');
+      if (!a.roof && a.kind !== 'farm') this.groundRig(rig, !a.moving, drawn);
       if (a.kind === 'cow' || a.kind === 'bull') {
         const target = -angle(p, vehicle) - rig.root.rotation.y;
         rig.head.rotation.y += (clamp(Math.atan2(Math.sin(target), Math.cos(target)), -1.2, 1.2) - rig.head.rotation.y) * Math.min(1, dt * 2);
@@ -657,15 +658,19 @@ export class Animals {
       const w = a.spot.road.halfWidth + 8;
       const l = this.terrain.surfaceAt(baseX - rx * w, baseZ - rz * w), r = this.terrain.surfaceAt(baseX + rx * w, baseZ + rz * w);
       if (!l || !r || Math.min(l.level, r.level) < 7) return false;
-      a.side = l.ground < r.ground ? -1 : 1;
+      // Rest on the uphill herd/farm side, away from the downhill guard rail.
+      a.side = l.ground < r.ground ? 1 : -1;
       const home = this.roads.guardrails?.cowRest(a.spot.road, a.along, a.side, (x, z) => {
         const surface = this.terrain.surfaceAt(x, z), height = this.terrain.heightAt(x, z);
-        return surface && surface.level >= 8 && height !== null && height > this.terrain.seaLevel + .5 ? height : null;
+        return surface && surface.level >= 8 && surface.canopy < 1.5 && height !== null && height > this.terrain.seaLevel + .5 ? height : null;
       });
       if (!home) return false;
+      const ownSide = ((home.x - baseX) * rx + (home.z - baseZ) * rz) * a.side;
+      const inward = this.terrain.surfaceAt(home.x - rx * a.side, home.z - rz * a.side), outward = this.terrain.surfaceAt(home.x + rx * a.side, home.z + rz * a.side);
+      if (ownSide <= 0 || !inward || !outward || outward.ground < inward.ground) return false;
       a.home.x = a.place.x = home.x; a.home.z = a.place.z = home.z; a.homeHeading = home.heading;
     }
-    const fieldSide = cow ? -a.side : a.side;
+    const fieldSide = a.side;
     let x = 0, z = 0, found = false;
     // Stay between the road and the farm: nearest open patch on the building side wins.
     for (let reach = 18; reach <= (cow ? 60 : 100) && !found; reach += 8) {
@@ -707,7 +712,7 @@ export class Animals {
   }
 
   private animalGround(x: number, z: number, drawn: boolean): number | null {
-    return (drawn ? this.terrain.meshHeightAt(x, z, true) : null) ?? this.terrain.heightAt(x, z);
+    return (drawn ? this.terrain.meshHeightAt?.(x, z, true) : null) ?? this.terrain.heightAt(x, z);
   }
 
   private groundRig(rig: Rig, standing: boolean, drawn = false): void {

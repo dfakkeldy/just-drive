@@ -1,6 +1,6 @@
 import { readBaseline } from './baseline-source.mjs';
 import {build} from '../web/node_modules/esbuild/lib/main.js';
-import {readFileSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs';
+import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve,dirname} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -8,6 +8,18 @@ import {spawnSync} from 'node:child_process';
 import assert from 'node:assert/strict';
 const root=resolve(import.meta.dirname,'..'),dir=mkdtempSync(`${tmpdir()}/mmm-rail-fix-mutants-`);
 const cases=[
+ ['cow downhill side restored','animals.ts','a.side = l.ground < r.ground ? 1 : -1;','a.side = l.ground < r.ground ? -1 : 1;','cow'],
+ ['cow imaginary rails restored','guardrails.ts','if (c.revision === this.terrain.dataRevision) {','if (false) {','cow'],
+ ['cow road margin removed','cow-rest.ts','roadGap: .5,','roadGap: 0,','cow'],
+ ['cow final herd-side guard removed','animals.ts','if (ownSide <= 0 || !inward || !outward || outward.ground < inward.ground) return false;','void ownSide;','cow'],
+ ['cow ditch grazing restored','cow-rest.ts','if (h < roadHeight || outward < inward ||','if (','cow'],
+ ['cow non-rail road kinds excluded','roads.ts','if (road === exclude || seen.has(key)) continue;','if (road.kind > 3 || road === exclude || seen.has(key)) continue;','cow','other-roads'],
+ ['cow road-centre grazing filter restored','guardrails.ts','}, (x, z) => this.terrain.heightAt(x, z));','}, ground);','cow','centre'],
+ ['cow road margin reduced to30cm','cow-rest.ts','roadGap: .5,','roadGap: .3,','cow','margin'],
+ ['cow wait gate removed','guardrails.ts','if (!local.length || local.some(c => c.revision !== this.terrain.dataRevision)) return null;','void local;','cow','gate'],
+ ['cow cross-road check removed','guardrails.ts','if (this.cowRoadClearance(body, road) < COW_REST.roadGap - 1e-6) return false;','void road;','cow','other-roads'],
+ ['cow failed search cache removed','guardrails.ts','if (this.cowFailures.get(road)?.has(key)) return null;','if (false) return null;','cow','cache'],
+ ['cow own road measured twice','guardrails.ts','}, ownRoad);','});','cow','other-roads'],
  ["nit seam aggregate yaw clamp removed", "guardrails.ts", "const limitedYaw = Math.max(-Math.PI / 6 * dt, Math.min(Math.PI / 6 * dt, yaw));", "const limitedYaw = yaw;", "physics"],
  ["nit washboard reduced to20percent with rails", "vehicle.ts", "        this.heading += (this.random() - 0.5) * this.spec.washboardYaw * Math.abs(vf) * (1.2 - skip) * dt * 6;\n        vl += (this.random() - 0.5) * this.spec.washboardSideways * Math.abs(vf) * (1.1 - skip) * dt * 4;", "        this.heading += (this.random() - 0.5) * (this.roads.guardrails ? .2 : 1) * this.spec.washboardYaw * Math.abs(vf) * (1.2 - skip) * dt * 6;\n        vl += (this.random() - 0.5) * (this.roads.guardrails ? .2 : 1) * this.spec.washboardSideways * Math.abs(vf) * (1.1 - skip) * dt * 4;", "physics"],
  ["nit seam speed reprojection removed", "guardrails.ts", "if (yaw !== limitedYaw) car.speed = car.vx * Math.sin(car.heading) - car.vz * Math.cos(car.heading);", "void limitedYaw;", "physics"],
@@ -42,16 +54,23 @@ const cases=[
  ['mailbox opening removed','guardrail-access.ts','if (Math.abs((prop.x - p.x) * Math.cos(p.heading)', 'if (false && Math.abs((prop.x - p.x) * Math.cos(p.heading)','props'],
 ];
 const entry={seams:'guardrail-seams-check.mjs',allocation:'guardrail-allocation-check.mjs',physics:'guardrail-physics-check.mjs',look:'guardrail-check.mjs',stream:'guardrail-stream-check.mjs',props:'guardrail-props-check.mjs',cow:'guardrail-cow-check.mjs',railway:'guardrail-railway-check.mjs'};
-const selectedCases=cases.filter(c=>!process.argv.includes('--r2')||['cow','railway'].includes(c[4]));
+const selectedCases=cases.filter(c=>(!process.argv.includes('--r2')||['cow','railway'].includes(c[4]))&&(!process.argv.includes('--cow-only')||c[4]==='cow'));
 try {
  if(process.argv.includes('--measure-allocation-r2')||process.argv.includes('--measure-r2')||process.argv.includes('--measure-before')||process.argv.includes('--measure-work-before')) {
   const sources=new Map(['guardrails.ts','guardrail-rules.ts','guardrail-look.ts','guardrail-access.ts','guardrail-damage.ts','parked.ts','vehicle.ts','bike-ride.ts'].map(f=>[resolve(root,'web/src',f),readBaseline(process.argv.some(a=>a==='--measure-r2'||a==='--measure-allocation-r2')?'guardrail-allocation':'guardrail-fix',`web/src/${f}`)]));
   await build({entryPoints:[resolve(root,process.argv.includes('--measure-allocation-r2')?'tools/guardrail-allocation-check.mjs':process.argv.includes('--measure-work-before')?'tools/guardrail-work-measure.mjs':'tools/guardrail-physics-check.mjs')],bundle:true,platform:'node',format:'esm',outfile:`${dir}/before.mjs`,logLevel:'silent',plugins:[{name:'before',setup(b){b.onLoad({filter:/\.ts$/},a=>sources.has(a.path)?{contents:sources.get(a.path),loader:'ts',resolveDir:dirname(a.path)}:undefined)}}]});
   const r=spawnSync(process.execPath,[`${dir}/before.mjs`],{encoding:'utf8',env:{...process.env,RAIL_MEASURE_ONLY:'1',RAIL_ALLOC_MEASURE_ONLY:'1'}});assert.equal(r.status,0,r.stderr);process.stdout.write(r.stdout);
- } else for(const [name,file,from,to,check]of selectedCases){
+ } else for(const [name,file,from,to,check,assertion]of selectedCases){
   const path=resolve(root,'web/src',file),source=readFileSync(path,'utf8');assert.equal(source.split(from).length,2,name+' anchor');
-  await build({entryPoints:[resolve(root,'tools',entry[check])],bundle:true,platform:'node',format:'esm',outfile:`${dir}/check.mjs`,logLevel:'silent',plugins:[{name:'mutate',setup(b){b.onResolve({filter:/esbuild\/lib\/main\.js$/},a=>({path:resolve(a.resolveDir,a.path),external:true}));b.onLoad({filter:/\.mjs$/},a=>({contents:readFileSync(a.path,'utf8').replaceAll('import.meta.url',JSON.stringify(pathToFileURL(a.path).href)),loader:'js',resolveDir:dirname(a.path)}));b.onLoad({filter:/\.ts$/},a=>a.path===path?{contents:source.replace(from,to),loader:'ts',resolveDir:dirname(path)}:undefined)}}]});
-  const r=spawnSync(process.execPath,[`${dir}/check.mjs`],{encoding:'utf8'});assert.notEqual(r.status,0,name+' must fail');assert.match(r.stderr,/AssertionError/,name+' assertion failure');console.log('REJECTED',name,'by',entry[check]);if(name.startsWith('nit '))console.log(r.stderr.split('\n').find(l=>l.includes('AssertionError')));
+  let mutated=source.replace(from,to);
+  if(name==='cow downhill side restored'){
+   assert.equal(source.split('const fieldSide = a.side;').length,2,'old-side mutant restores both old lines');
+   mutated=mutated.replace('const fieldSide = a.side;','const fieldSide = cow ? -a.side : a.side;');
+  }
+  await build({entryPoints:[resolve(root,'tools',entry[check])],bundle:true,platform:'node',format:'esm',outfile:`${dir}/check.mjs`,logLevel:'silent',plugins:[{name:'mutate',setup(b){b.onResolve({filter:/esbuild\/lib\/main\.js$/},a=>({path:resolve(a.resolveDir,a.path),external:true}));b.onLoad({filter:/\.mjs$/},a=>({contents:readFileSync(a.path,'utf8').replaceAll('import.meta.url',JSON.stringify(pathToFileURL(a.path).href)),loader:'js',resolveDir:dirname(a.path)}));b.onLoad({filter:/\.ts$/},a=>a.path===path?{contents:mutated,loader:'ts',resolveDir:dirname(path)}:undefined)}}]});
+  const r=spawnSync(process.execPath,[`${dir}/check.mjs`,...(assertion?['--assert',assertion]:[])],{encoding:'utf8'});assert.notEqual(r.status,0,name+' must fail');assert.match(r.stderr,/AssertionError/,name+' assertion failure');
+  if(name==='cow downhill side restored')assert.match(r.stderr,/real placement hook builds pasture|pasture cow body in road-to-rail strip/,'both-line old-side mutant must fail the cow check');
+  console.log('REJECTED',name,'by',entry[check]);if(name.startsWith('nit '))console.log(r.stderr.split('\n').find(l=>l.includes('AssertionError')));
  }
 } finally {rmSync(dir,{recursive:true,force:true});}
 if(!process.argv.some(a=>a.startsWith('--measure')))console.log('PASS',selectedCases.length,'guardrail fix mutations');
