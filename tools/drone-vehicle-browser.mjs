@@ -337,6 +337,18 @@ const PROBE_EXPR = `(x, z) => {
   await p.close();
 }
 
+// ---- 2b. A drone link opened by a player whose saved ride is the dirt bike still flies the drone ----
+{
+  const p = await page(1280, 720, false);
+  await p.open({ mode: 'explore', q: 'low' }, false);
+  await p.read(`localStorage.setItem('mmm.vehicle', 'bike')`);
+  await p.open({ mode: 'explore', vehicle: 'drone', title: '1', q: 'low' });
+  const linked = await p.read(`({ vehicleId: mmm.vehicleId, active: mmm.drone.active, free: mmm.drone.free, errors: window.qaErrors ?? [] })`);
+  check(linked.vehicleId === 'drone' && linked.active && linked.free && linked.errors.length === 0,
+    'a drone link with a saved dirt bike starts the standalone drone without errors: ' + JSON.stringify(linked));
+  await p.close();
+}
+
 // ---- 3. Phone Just Drive: portrait (390x844) & landscape (844x390), sticks, ROAD, 2+ km flight ----
 for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   const p = await page(w, h, true);

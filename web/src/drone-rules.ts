@@ -55,8 +55,9 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 /** Standalone drone mode: how far ahead land must be ready for full speed, and how close it brakes to a hover. */
 export const DRONE_LOAD = {
-  /** Probe distances ahead (metres); stays inside the phone tile-split radius even at the 120 m ceiling. */
-  probes: [0, 50, 110, 180, 250, 320] as readonly number[],
+  /** Probe distances ahead (metres), close together near the drone so a path past a tile corner is not missed; stays
+   * inside the phone tile-split radius even at the 120 m ceiling. */
+  probes: [0, 12, 25, 38, 50, 80, 110, 145, 180, 215, 250, 285, 320] as readonly number[],
   /** Full top speed when at least this many metres ahead are ready. */
   full: 320,
   /** Hold still when unready land is within this distance (metres). */

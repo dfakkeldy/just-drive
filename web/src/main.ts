@@ -737,7 +737,9 @@ const lotTreeClear = new Set<number[]>();
 for (const p of lotPropList) { const r = Math.hypot(p.half, p.halfWidth) + 0.6, box: [number, number, number, number] = [p.x - r, p.z - r, p.x + r, p.z + r]; lotTreeClear.add(box); terrain.addTreeClear(box); }
 const lotProps = lotPropList.length ? new LotProps(lotPropList, terrain, LOW, SEA_LEVEL) : null;
 if (lotProps) scene.add(lotProps.group);
-let garageEntry = readVehicle(params, !mailMode), vehicleSpec = garageEntry.spec;
+// The standalone drone keeps the car entry underneath (a hidden, zero-mesh rig): a saved bike or horse ride cannot
+// drive an empty rig.
+let garageEntry = droneVehicle ? GARAGE.find(e => e.id === 'car') ?? GARAGE[0] : readVehicle(params, !mailMode), vehicleSpec = garageEntry.spec;
 // A vehicle whose model is a file (the mail car): its download began at the top of this file. A load that fails must
 // never stop the game: the entry builds its fallback, and a rejection is swallowed here.
 if (!droneVehicle) await garageEntry.ready?.(params, LOW).catch((error: unknown) => { console.warn('The vehicle model did not load.', error); });
@@ -1511,7 +1513,12 @@ function droneHome(): void {
   if (mode !== 'fly' || !drone.active) return;
   if (droneVehicle) {
     const s = drone.state;
-    const hit = roads.nearest(s.x, s.z, 900) ?? roads.nearest(s.x, s.z, 4000) ?? roads.nearest(s.x, s.z, 8000);
+    let hit = roads.nearest(s.x, s.z, 900) ?? roads.nearest(s.x, s.z, 4000) ?? roads.nearest(s.x, s.z, 8000);
+    if (!hit) {   // farther than 8 km from every road: the closest road point of all, then the road through it
+      let best = Infinity, bx = 0, bz = 0;
+      for (const r of roads.roads) for (const [x, z] of r.pts) { const d = (x - s.x) ** 2 + (z - s.z) ** 2; if (d < best) { best = d; bx = x; bz = z; } }
+      if (best < Infinity) hit = roads.nearest(bx, bz, 60);
+    }
     if (hit) placeDroneAt(hit.x, hit.z, hit.heading);
     else { const start = roadStart(roads.roads) ?? { x: 0, z: 0, heading: 0 }; placeDroneAt(start.x, start.z, start.heading); }
     return;
