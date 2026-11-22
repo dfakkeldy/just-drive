@@ -10,6 +10,7 @@ import { CAR_SPEC, type Rig, type VehicleSpec } from './vehicle-spec';
 import { bodyGap, pushOutBodies, type ContactBody } from './parked';
 import { touchesPlayer } from './road-scene-rules';
 import { FleetSupport, type FleetPose, type Ground } from './fleet-support';
+import { WATER_COVER_CLASS, isDryGround, localGroundSlope } from './water-bounds';
 import { movement as fleetMove, teleport, boxTouchesBody, type TeleportKind, type BodySweep, type GateSweep, type SweepPose } from './fleet-motion';
 import { FleetSurface } from './fleet-surface';
 import { checkpoint, reusableCheckpoint } from './fleet-checkpoint';
@@ -195,7 +196,10 @@ export class Fleet {
       const place = member.vehicle.place.bind(member.vehicle); this.nativePlace.set(member.vehicle, place);
       member.vehicle.place = (x, z, heading) => { return this.teleportTrial ? place(x, z, heading) : this.placeMovement(member, x, z, heading); };
       this.nativeRespawn.set(member.vehicle, member.vehicle.respawn.bind(member.vehicle));
-      member.vehicle.respawn = () => { this.message = 'Use R or RESET to recover this vehicle'; };
+      member.vehicle.respawn = () => {
+        member.vehicle.stopInWater();
+        this.message = 'Use R or RESET to recover this vehicle';
+      };
       const prior = member.vehicle.placementGuard;
       member.vehicle.placementGuard = pose => {
         if (prior && !prior(pose)) return false;
@@ -1088,7 +1092,11 @@ export class Fleet {
     let parkedPose: FleetPose | null = null;
     const reason = fleetMove({ rollback: () => { before(); undoModel?.(); if (m.id === 'truck') this.writeGates(); }, propose: () => {
       const guard = v.placementGuard; let proposed = false;
-      try { v.placementGuard = p => { proposed = m.id !== 'truck' || this.tow.allowsPose(p); return proposed; }; this.withRampContact(() => this.nativePlace.get(v)!(x, z, heading)); }
+      try {
+        v.placementGuard = p => { proposed = m.id !== 'truck' || this.tow.allowsPose(p); return proposed; };
+        const placed = this.withRampContact(() => this.nativePlace.get(v)!(x, z, heading));
+        if (!placed) proposed = false;
+      }
       finally { v.placementGuard = guard; }
       if (m.state === 'PARKED' && m.id !== 'truck') { parkedPose = m.support!.fit(v.x,v.z,v.heading,this.ground,m.pose?.spin??0); if (parkedPose) { Object.assign(v,{y:parkedPose.y,pitch:parkedPose.pitch,roll:parkedPose.roll}); m.support!.draw(parkedPose); } else proposed=false; }
       if (m.id === 'truck') this.tow.update();
@@ -1116,6 +1124,11 @@ export class Fleet {
       const x = body.x + fx * along + rx * side, z = body.z + fz * along + rz * side, h = this.ground(x, z);
       if (h === null) return 'Destination land is still loading';
       if (h <= this.seaLevel + .08) return 'Water at the destination';
+      const surface = this.terrain.surfaceAt(x, z);
+      const onDeck = this.roads.deckHeight(x, z) !== null || surface?.deck === true;
+      const coverClass = this.terrain.coverAt?.(x, z) ?? 0;
+      const slope = coverClass === WATER_COVER_CLASS ? localGroundSlope(x, z, this.ground) : 0;
+      if (!isDryGround({ ground: h, surface, onDeck, seaLevel: this.seaLevel, coverClass, slope })) return 'Water at the destination';
     }
     return '';
   }
@@ -1161,8 +1174,10 @@ export class Fleet {
           if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw })) { failure = 'The trailer destination is blocked'; continue; }
           // This loop owns the road/turn search; do not invoke a nested endpoint-searching guard.
           const guard = actor.vehicle.placementGuard;
-          try { actor.vehicle.placementGuard = () => true; actor.vehicle.place(x, z, yaw); }
+          let placed = false;
+          try { actor.vehicle.placementGuard = () => true; placed = actor.vehicle.place(x, z, yaw); }
           finally { actor.vehicle.placementGuard = guard; }
+          if (!placed) { failure = 'Water at the destination'; continue; }
           if (Math.hypot(actor.vehicle.x - x, actor.vehicle.z - z) > 125) continue;
           actor.vehicle.vx=actor.vehicle.vz=actor.vehicle.vy=actor.vehicle.speed=0;
           if (actor.id === 'truck') this.tow.update();

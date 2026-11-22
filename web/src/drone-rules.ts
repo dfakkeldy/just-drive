@@ -81,7 +81,8 @@ export function loadSpeedCap(speed: number, clear: number): number {
  * so it can set down on the roof. Returns the distance to `land`, or Infinity.
  */
 export function stepDrone(s: DroneState, cmd: DroneCommand, dt: number, speed: number, under: DroneGround,
-  home: { x: number; z: number } | null, land?: { x: number; y: number; z: number }): number {
+  home: { x: number; z: number } | null, land?: { x: number; y: number; z: number },
+  sampleUnder?: (x: number, z: number) => DroneGround): number {
   if (dt <= 0) return land ? Math.hypot(land.x - s.x, land.y - s.y, land.z - s.z) : Infinity;
   const climb = climbRate(speed);
   let wantX: number, wantZ: number, wantY: number, wantTurn: number;
@@ -133,11 +134,20 @@ export function stepDrone(s: DroneState, cmd: DroneCommand, dt: number, speed: n
     s.y = Math.max(s.y, under.floor - 1.5);   // never far into a tree, whatever the frame time
     if (s.vy < 0) s.vy = 0;
   }
+  const post = sampleUnder ? sampleUnder(s.x, s.z) : under;
+  const gNow = under.ground !== null && post.ground !== null ? Math.max(under.ground, post.ground) : (post.ground ?? under.ground);
   // A soft ceiling over the ground under it.
-  if (under.ground !== null) {
-    const top = under.ground + DRONE.ceiling;
+  if (gNow !== null) {
+    const top = gNow + DRONE.ceiling;
     if (s.y > top) { s.y += (top - s.y) * ease(3, dt); if (s.vy > 0) s.vy = 0; }
   }
+  // Final floor constraint: never pass under known ground (even on final approach), or below sea level over void.
+  const hasFloor = under.floor !== null || post.floor !== null;
+  const hardFloor = landing
+    ? (post.ground !== null ? post.ground + 0.5 : under.ground !== null ? under.ground + 0.5 : -0.2 + 0.5)
+    : gNow !== null ? gNow + 0.5
+    : !hasFloor ? -0.2 + DRONE.clearance : -Infinity;
+  if (s.y < hardFloor) { s.y = hardFloor; if (s.vy < 0) s.vy = 0; }
   return land ? Math.hypot(land.x - s.x, land.y - s.y, land.z - s.z) : toLand;
 }
 
