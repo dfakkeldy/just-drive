@@ -55,6 +55,12 @@ f = d.fixes_from_exif(exif_doc(mixed + synth))
 check('garmin: sets that do not pair up fall back to the timed set', len(f) == 6 and near(f[0][1] % 60, 8, 1e-6))
 nofix = exif_doc([dict(SampleTime=0, GPSDateTime='2026:01:02 03:04:05Z', GPSLatitude=0.0, GPSLongitude=0.0)])
 check('a (0, 0) fix is no fix', d.fixes_from_exif(nofix) == [])
+placeholder = exif_doc([dict(SampleTime=0, GPSDateTime='0000:00:00 00:00:00Z', GPSLatitude=LAT0, GPSLongitude=LON0),
+                        dict(SampleTime=1, GPSDateTime='2026:01:02 03:04:05Z', GPSLatitude='n/a', GPSLongitude=LON0),
+                        dict(SampleTime=2, GPSDateTime='2026:01:02 03:04:06Z', GPSLatitude=LAT0, GPSLongitude=LON0)])
+check('placeholder fixes are skipped, not fatal', len(d.fixes_from_exif(placeholder)) == 1)
+f = d.fixes_from_exif(exif_doc(real[:2] + synth))
+check('garmin: too few real fixes to pair with all timed ones falls back to the timed set', len(f) == 6 and near(f[0][1] % 60, 8, 1e-6))
 
 # ---- clip start ----
 check('sub-second clock: median of (UTC - clip time)', near(d.clip_start([(0, 100.4, 0, 0), (1, 101.4, 0, 0), (2, 107, 0, 0)]), 100.4, 1e-9))
@@ -84,7 +90,7 @@ stop_go = d.Track([(t, north(0), LON0) for t in range(10)] + [(9 + t, north(10 *
 check('a stop gives no targets; counting starts when the car moves',
       [round(m, 3) for m in d.targets_by_distance(stop_go, 25, 1.5)] == [9, 11.5])
 gappy = d.Track([(1000, north(0), LON0), (1001, north(10), LON0), (1005, north(400), LON0), (1006, north(410), LON0)])
-check('no target is invented inside a GPS gap', all(not (1 < m < 5) for m in d.targets_by_distance(gappy, 5, 1.5)))
+check('no target is invented inside a GPS gap', [round(m, 3) for m in d.targets_by_distance(gappy, 5, 1.5)] == [1000, 1000.5, 1001, 1005, 1005.5, 1006])
 check('time targets', d.targets_by_time(track, 5, 1.5) == [1000, 1005, 1010, 1015])
 
 # ---- frames ----
@@ -106,6 +112,9 @@ check('a frame inside a GPS gap is skipped', skipped == {'nearest GPS fix more t
 check('no position inside a GPS gap', d.interpolate(gappy, 1001.4, 1.5) is None and d.interpolate(gappy, 1000.5, 1.5) is not None)
 check('heading and speed at the edge of a gap stay inside the run',
       near(d.travel_heading(gappy, 1001), 0, 0.01) and near(d.speed_kmh(gappy, 1001), 36, 0.01))
+check('no heading or speed inside a gap, outside the track or on no track',
+      all(f(gappy, u) is None for f in (d.travel_heading, d.speed_kmh) for u in (1003, 1001.2, 999.5, 1006.5))
+      and d.run_bounds(d.Track([]), 1, 1.5) is None)
 c1 = dict(name='C001', start_utc=1000, pts=[i / 30 for i in range(1800)], width=100)
 c2 = dict(name='C002', start_utc=1060.05, pts=[i / 30 for i in range(1800)], width=100)
 long_track = d.Track([(1000 + t, north(10 * t), LON0) for t in range(130)])
@@ -123,6 +132,10 @@ check('turn rate across north (350 to 10 deg) is small and positive', rates and 
 check('runs split at gaps', [len(x) for x in d.segments(d.Track([(0, 0, 0), (1, 0, 0), (9, 0, 0), (10, 0, 0)]))] == [2, 2])
 names = d.clip_names([Path('/a/100/GRMN0001.MP4'), Path('/a/101/GRMN0001.MP4'), Path('/a/101/GRMN0002.MP4')])
 check('same file name in two folders: unique clip names', sorted(names.values()) == ['100_GRMN0001', '101_GRMN0001', 'GRMN0002'])
+names = d.clip_names([Path('/day1/DCIM/100/G1.MP4'), Path('/day2/DCIM/100/G1.MP4')])
+check('same file and folder name on two days: still unique', len({n.casefold() for n in names.values()}) == 2, str(names))
+names = d.clip_names([Path('/a/100/X.MP4'), Path('/b/101/X.MP4'), Path('/c/100_X.MP4')])
+check('a prefixed name cannot meet another clip name', len({n.casefold() for n in names.values()}) == 3, str(names))
 
 # ---- lag from turns ----
 rates = [(t / 2, math.sin(t / 7) * 0.2 + math.sin(t / 3.1) * 0.05, 15.0) for t in range(130)]
@@ -141,11 +154,20 @@ except SystemExit as e:
     check('refuses an output folder in the repository outside data/', e.code == 2 and not (ROOT / 'tools' / 'tmp-out').exists())
 
 check('privacy guard sees through ..', d.inside(ROOT / 'data' / '..' / 'tools' / 'x', ROOT) and not d.inside(ROOT / 'data' / '..' / 'tools', ROOT / 'data'))
-check('privacy guard accepts data/', d.inside(ROOT / 'data' / 'work' / 'x', ROOT / 'data') or not (ROOT / 'data').exists())
+with tempfile.TemporaryDirectory() as tmp:
+    fake = Path(tmp) / 'repo'
+    (fake / 'tools').mkdir(parents=True)
+    check('privacy guard accepts data/ before it exists',
+          d.inside(fake / 'data' / 'work', fake / 'data') and not d.inside(fake / 'tools' / 'x', fake / 'data'))
+    (Path(tmp) / 'link').symlink_to(fake / 'tools')
+    check('privacy guard follows symbolic links', d.inside(Path(tmp) / 'link' / 'out', fake))
+    (fake / 'data').mkdir()
+    (fake / 'data' / 'sub').symlink_to(fake / 'tools')
+    check('a link from data/ into the repo is not data/', not d.inside(fake / 'data' / 'sub' / 'out', fake / 'data'))
 other_case = Path(str(ROOT).swapcase())
 check('privacy guard sees through letter case on a case-insensitive disk',
       not other_case.exists() or d.inside(other_case / 'tools', ROOT))
-for bad in (['--every-m', '0'], ['--every-s', '-1']):
+for bad in (['--every-m', '0'], ['--every-s', '-1'], ['--max-gap-s', '0'], ['--tolerance-ms', '-1']):
     try:
         d.main(['--camera', 'garmin', '--out', '/nonexistent-dir', *bad, 'x.MP4'])
         check('refuses ' + ' '.join(bad), False)

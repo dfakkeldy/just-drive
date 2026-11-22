@@ -38,6 +38,7 @@ them the points carry only longitude and latitude. The clips are only read.
 import argparse
 import bisect
 import datetime as dt
+import hashlib
 import json
 import math
 import os
@@ -151,11 +152,14 @@ def interpolate(track, u, max_gap=None):
 
 
 def run_bounds(track, u, max_gap):
-    """First and last fix time of the run of fixes around u with no gap longer than max_gap."""
+    """First and last fix time of the run of fixes around u with no gap longer than max_gap, or None when u is
+    outside the track or inside such a gap."""
     times = track.times
-    i = max(0, min(len(times) - 1, bisect.bisect_left(times, u)))
-    if i > 0 and times[i] > u:
-        i -= 1
+    if not times or u < times[0] or u > times[-1]:
+        return None
+    i = bisect.bisect_right(times, u) - 1
+    if times[i] != u and times[i + 1] - times[i] > max_gap:
+        return None
     lo = hi = i
     while lo > 0 and times[lo] - times[lo - 1] <= max_gap:
         lo -= 1
@@ -167,8 +171,10 @@ def run_bounds(track, u, max_gap):
 def travel_heading(track, u, window=1.0, min_move=1.5, max_gap=1.5):
     """Direction of travel in degrees (0 = north, clockwise) from the positions window seconds either side of u,
     within the fix run around u. None when the car moved less than min_move metres (stopped: no honest heading)."""
-    first, last = run_bounds(track, u, max_gap)
-    a, b = interpolate(track, max(u - window, first)), interpolate(track, min(u + window, last))
+    run = run_bounds(track, u, max_gap)
+    if run is None:
+        return None
+    a, b = interpolate(track, max(u - window, run[0]), max_gap), interpolate(track, min(u + window, run[1]), max_gap)
     if a is None or b is None:
         return None
     e, n = metres(a[0], a[1], b[0], b[1])
@@ -178,9 +184,11 @@ def travel_heading(track, u, window=1.0, min_move=1.5, max_gap=1.5):
 
 
 def speed_kmh(track, u, window=1.0, max_gap=1.5):
-    first, last = run_bounds(track, u, max_gap)
-    t0, t1 = max(u - window, first), min(u + window, last)
-    a, b = interpolate(track, t0), interpolate(track, t1)
+    run = run_bounds(track, u, max_gap)
+    if run is None:
+        return None
+    t0, t1 = max(u - window, run[0]), min(u + window, run[1])
+    a, b = interpolate(track, t0, max_gap), interpolate(track, t1, max_gap)
     if a is None or b is None or t1 <= t0:
         return None
     return math.hypot(*metres(a[0], a[1], b[0], b[1])) / (t1 - t0) * 3.6
@@ -195,8 +203,8 @@ def targets_by_distance(track, every_m, max_gap):
             run, next_mark = 0.0, 0.0
             continue
         step = math.hypot(*metres(a0, o0, a1, o1))
-        while step > 0 and run + step >= next_mark:
-            out.append(u0 + (next_mark - run) / step * (u1 - u0))
+        while step > 0 and run + step >= next_mark - 1e-6:      # 1 micrometre: a mark that lands on a fix counts
+            out.append(u0 + min(1.0, (next_mark - run) / step) * (u1 - u0))
             next_mark += every_m
         run += step
     return out
@@ -339,9 +347,12 @@ def read_gps(paths, cache, names):
         r = subprocess.run(['exiftool', '-ee', '-n', '-j', '-G3', '-api', 'LargeFileSupport=1', '-SampleTime',
                             '-GPSDateTime', '-GPSLatitude', '-GPSLongitude', *map(str, batch)],
                            capture_output=True, text=True)
-        if r.returncode and not r.stdout.strip():
-            sys.exit(f'exiftool failed: {r.stderr.strip()[:300]}')
-        docs = {Path(d['SourceFile']).resolve(): d for d in json.loads(r.stdout or '[]')}
+        if r.returncode:
+            print(f'exiftool: {r.stderr.strip()[:300]}', file=sys.stderr)
+        try:
+            docs = {Path(d['SourceFile']).resolve(): d for d in json.loads(r.stdout or '[]')}
+        except (ValueError, KeyError, TypeError):
+            sys.exit(f'exiftool gave no readable answer: {r.stderr.strip()[:300]}')
         for p in batch:
             if p.resolve() not in docs:                  # not read this time: no cache entry, no GPS
                 out[p] = []
@@ -368,12 +379,19 @@ def read_frames(path):
     probe = ['ffprobe', '-v', 'error', '-select_streams', 'v:0']
     r = subprocess.run(probe + ['-show_entries', 'stream=width,start_time:format=start_time', '-of', 'json', str(path)],
                        capture_output=True, text=True)
-    info = json.loads(r.stdout or '{}')
-    if r.returncode or not info.get('streams'):
+    if r.returncode:
+        return None
+    try:
+        info = json.loads(r.stdout or '{}')
+    except ValueError:
+        return None
+    if not info.get('streams'):
         return None
     stream = info['streams'][0]
-    raw = subprocess.run(probe + ['-show_entries', 'packet=pts_time', '-of', 'csv=p=0', str(path)],
-                         capture_output=True, text=True, check=True).stdout.split()
+    q = subprocess.run(probe + ['-show_entries', 'packet=pts_time', '-of', 'csv=p=0', str(path)], capture_output=True, text=True)
+    if q.returncode:
+        return None
+    raw = q.stdout.split()
     pts = sorted(float(x.strip(',')) for x in raw if x.strip(',') not in ('', 'N/A'))
     if not pts:
         return None
@@ -427,20 +445,38 @@ def grid_transform():
 
 
 def inside(path, folder):
-    """True when path is folder or below it, compared by the file system (case-insensitive disks, links, '..')."""
-    folder = Path(folder)
-    for p in (Path(os.path.abspath(path)), *Path(os.path.abspath(path)).parents):
-        if p.exists() and folder.exists() and os.path.samefile(p, folder):
-            return True
+    """True when path is folder or below it. Symbolic links and '..' are resolved first; existing folders are compared
+    by the file system (so letter case on a case-insensitive disk cannot slip past); parts of folder that do not
+    exist yet must follow by name."""
+    p, f = Path(path).resolve(), Path(folder).resolve()
+    rest = []
+    while not f.exists():
+        rest.insert(0, f.name)
+        f = f.parent
+    for q in (p, *p.parents):
+        if q.exists() and os.path.samefile(q, f):
+            return list(p.relative_to(q).parts[:len(rest)]) == rest
     return False
 
 
 def clip_names(paths):
-    """A unique name per clip: the file stem, or folder_stem when two folders hold the same file name."""
-    stems = {}
-    for p in paths:
-        stems.setdefault(p.stem, []).append(p)
-    return {p: (p.stem if len(group) == 1 else f'{p.parent.name}_{p.stem}') for group in stems.values() for p in group}
+    """A unique name per clip (compared without letter case): the file stem; where stems repeat, as many parent
+    folder names as it takes (folder_stem, day_folder_stem, ...); a short hash of the full path as the last resort."""
+    paths = list(paths)
+    depth = {p: 0 for p in paths}
+    def name(p):
+        parts = [x.name for x in list(p.parents)[:depth[p]]][::-1]
+        return '_'.join(parts + [p.stem]) if depth[p] <= len(p.parents) else f'{p.stem}_{hashlib.sha1(str(p).encode()).hexdigest()[:8]}'
+    for _ in range(64):
+        groups = {}
+        for p in paths:
+            groups.setdefault(name(p).casefold(), []).append(p)
+        clash = [p for g in groups.values() if len(g) > 1 for p in g]
+        if not clash:
+            break
+        for p in clash:
+            depth[p] += 1
+    return {p: name(p) for p in paths}
 
 
 def write_json(path, obj):
