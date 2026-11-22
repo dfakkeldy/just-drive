@@ -117,7 +117,7 @@ export class Mail {
   get down(): number { return this.props?.downCount ?? 0; }
   get total(): number { return this.props?.totalCustomers ?? 0; }
   get tally(): string {
-    return `Delivered ${this.delivered} · Lawn ${this.lawn} · Ditch ${this.ditch} · Boxes down ${this.down}\nCustomers ${this.customers}/${this.total}${this.status ? ` · ${this.status}` : ''}`;
+    return `Delivered ${this.delivered} · Lawn ${this.lawn} · Ditch ${this.ditch}\nBoxes down ${this.down} · Customers ${this.customers}/${this.total}\n${this.status || ' '}`;
   }
 
   reset(): void {

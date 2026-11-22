@@ -39,12 +39,14 @@ for(const saved of [null,'0','1','invalid']) for(const phone of [false,true]) fo
   const box=f.all.find(e=>e.type==='checkbox'); assert.ok(box); assert.equal(box.checked,expected);
   box.checked=false; box.listeners.change(); assert.equal(mail.throwHelp,false); if(!blocked)assert.equal(f.store.get('mmm.throwHelp'),'0');
   box.checked=true; box.listeners.change(); assert.equal(mail.throwHelp,true);
-  const shift={elapsed:0,career:{day:1},done:2,stops:80,run:{short:'HILL LOOP'}};
+  const shift={endsAtSix:true,elapsed:0,career:{day:1},done:2,stops:80,run:{short:'HILL LOOP'}};
   const v={speed:10,activeTouchSpeedLimit:0,roadName:'Hill Road'};
   ui.update(shift,v,true); assert.ok(document.getElementById('mailButton').classList.contains('throwNow'));
   ui.update(shift,v,false); assert.ok(!document.getElementById('mailButton').classList.contains('throwNow'));
   if(!phone) { assert.ok(!document.body.classList.contains('mailPhone')); assert.equal(document.getElementById('phoneLine'),null); continue; }
   assert.match(document.getElementById('phoneLine').textContent,/36 km\/h · D1 2\/80/);
+  assert.match(document.getElementById('phoneLine').textContent,/10:00 → 18:00 · Hill Road/);
+  shift.endsAtSix=false;ui.update(shift,v,true);assert.ok(!document.getElementById('phoneLine').textContent.includes('→'));shift.endsAtSix=true;
   for(const limit of [90/3.6,0,100/3.6,0]) {
     v.activeTouchSpeedLimit=limit; ui.update(shift,v,true);
     assert.equal(document.getElementById('phoneLine').textContent.includes('LIMIT'),limit>0,'visible phone status follows limiter');
@@ -101,6 +103,7 @@ verify(awaitedPhone);
 console.log('PASS 16 storage/phone combinations, helper persistence, blocked storage, cue, 20 s hint, camera/gear dismissal and restart; desktop adapter placement intact; shared grid geometry belongs to browser rows');
 
 if(process.argv.includes('--mutations')) for(const [name,from,to] of [
+  ['end time missing',"${shift.endsAtSix ? ` → ${clock(END_TIME - START_TIME)}` : ''}",''],
   ['phone marker missing','driving ? v.activeTouchSpeedLimit : 0','0'],
   ['phone marker always shown','driving ? v.activeTouchSpeedLimit : 0','90/3.6'],
   ['phone marker outside driving','driving ? v.activeTouchSpeedLimit : 0','v.activeTouchSpeedLimit'],

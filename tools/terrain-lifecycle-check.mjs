@@ -612,7 +612,9 @@ if (scenario === 'arrival') await arrival();
 async function builds(count) {
   // Portable data pin: no dependency on an unmerged branch commit surviving a squash merge.
   // The perf-tile-normal-map PR (#81) moved main's pin: the normal-map loop clamps its row and column offsets once
-  // instead of in two closures per read. The maths and their order stay; the pin's reason records each move.
+  // instead of in two closures per read. The start-up perf PR (#105) moved it again: the normal-map loop uses Math.sqrt,
+  // and the 5x5 canopy averaging loop is skipped when neither hull nor mirror crowns are used (LOW fine tiles) or when a
+  // tile has zero canopy. The maths and their order stay; the pin's reason records each move.
   const pin=JSON.parse(readFileSync(root+'tools/baseline/terrain-tile-maths.json','utf8'));
   // Approved class-mask additions are checked by the real-terrain ground-canopy
   // suite and its three mutants. Strip only those exact additions (every
@@ -640,7 +642,10 @@ async function builds(count) {
     // (64/128 on a paved lane; a gravel driveway's 64 on a track does not take it): a flag read and a colour define; no
     // ground, canopy or road maths change. Once each, ordinary program only.
     ['    let lo = Infinity, hi = -Infinity',', roadPavement = false',';\n'],
-    ['      if (road && road[k * 4 + 2] > 0) {\n','        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) !== 4;\n','        // Nothing stands on a road'],
+    // The rough stretches (rough-roads.ts) paint bit 128 on gravel and tracks at tile build, and their shader code stands
+    // under the same define, so a track's lone 128 now takes it too. Baked land has no 128 on a track, so the define lands
+    // on the same baked tiles as before.
+    ['      if (road && road[k * 4 + 2] > 0) {\n','        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && ((road[k * 4 + 2] & 15) !== 4 || (road[k * 4 + 2] & 192) === 128);\n','        // Nothing stands on a road'],
     ['...(airportMarkings ? { AIRPORT: 1 } : {})',', ...(roadPavement && !this.cartRoads ? { ROAD_PAVEMENT: 1 } : {})',' },uniforms:tileUniforms}'],
     // PR #147 (reviewed): the AIRPORT shader define for tiles that overlap the airfield site; no maths change. With the
     // park's two tile programs (ordinary and STUNT_PARK) the define stands in each, so twice at most.

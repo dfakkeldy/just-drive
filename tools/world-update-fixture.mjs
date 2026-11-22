@@ -10,13 +10,21 @@ export function frameSource(source, dev = true) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const names = new Set(['expose', 'live', 'scenePaused', 'syncRoadScenePause', 'updateWorld', 'drawEnding', 'frame']);
   // The hand-built places list (built once at boot) feeds the before-camera updates and the frame's waiting test.
-  const vars = new Set(['shadowFocus', 'hudState', 'places', 'handBuilt', 'placesWaiting']);
+  // Its rows hold the home and porch wrappers; spy() gives the rows' helpers from place.ts and what the boot built.
+  const vars = new Set(['shadowFocus', 'hudState', 'placeRows', 'places', 'handBuilt', 'placesWaiting']);
   const setupStart = source.indexOf('type WorldSegment ='), setupEnd = source.indexOf('const shadowFocus =');
   return transformSync(ast.statements.filter(n =>
     setupStart >= 0 && n.getStart(ast) >= setupStart && n.end <= setupEnd ||
     ts.isFunctionDeclaration(n) && names.has(n.name?.text) ||
     ts.isVariableStatement(n) && n.declarationList.declarations.some(d => vars.has(d.name.getText(ast)))
   ).map(n => n.getText(ast)).join('\n').replaceAll('import.meta.env.DEV', String(dev)), { loader: 'ts', target: 'es2022' }).code;
+}
+// The places rows' helpers (placeRow, lazyPlaceRow, placeSlots), read from the real place.ts like the dev hooks below.
+export function placeHelpers() {
+  const source = readFileSync(new URL('../web/src/place.ts', import.meta.url), 'utf8');
+  const ast = ts.createSourceFile('place.ts', source, ts.ScriptTarget.Latest, true);
+  const code = transformSync(ast.statements.filter(n => !ts.isImportDeclaration(n)).map(n => n.getText(ast)).join('\n').replaceAll(/^export /gm, ''), { loader: 'ts', target: 'es2022' }).code;
+  return new Function(`${code}; return { placeRow, lazyPlaceRow, placeSlots };`)();
 }
 export const hooksSource = () => readFileSync(new URL('../web/src/dev-hooks.ts', import.meta.url), 'utf8');
 export function hookFactory(source = hooksSource()) {
@@ -50,8 +58,11 @@ export function spy(source, ending = false, dev = true, absent = false, override
     gamepad: { device: 'keyboard', poll() {}, feel() {} },
     // The drift dust and meter (drift-feedback.ts): untraced too, nothing slides here.
     driftFeedback: { update() {} },
+    // Puddles stand only on an area's rough stretches (rough-roads.ts); the fixture's area has none.
+    puddles: null, splashLevel: () => 0,
     pad: { show: trace('pad.show') }, relief: { ...update('relief'), breaks: 0, busy: false },
-    miniMap: { ...update('miniMap'), show: trace('miniMap.show') }, mapTimer: 0, refreshMap: trace('refreshMap'), mapStops: [], mapMarks: [], mapCars: [],
+    drone: { active: false },
+    miniMap: { setFlight() {}, ...update('miniMap'), show: trace('miniMap.show') }, mapTimer: 0, refreshMap: trace('refreshMap'), mapStops: [], mapMarks: [], mapCars: [],
     propertyLayer: null, // Default-off ground mode has no per-frame update.
     placesUI: { ...update('placesUI'), busy: false }, journey: update('journey'),
     bigMap: null, footpaths: null, // The explore map dialog and hike paths: absent in mail mode and history eras.
@@ -60,13 +71,15 @@ export function spy(source, ending = false, dev = true, absent = false, override
     fishing: { ...update('fishing'), judge: { cancel: trace('fishing.cancel') }, group: { visible: true } },
     renderer: { domElement: { width:1280, height:720 }, set localClippingEnabled(v) { trace('clipping')(v); }, render: trace('render') },
     multiplayer: { ...update('multiplayer'), choice: { on: false } }, scene: {}, LOW: true, CLOCK_FACTOR: 120, page: { stopped: false, ready: trace('page.ready'), fail: error => { throw error; } },
-    document: { hidden: false }, keys: new Set(), mailPointers: new Set(), mailButton: null, mailScore: null, phoneMailHud: update('phoneMailHud'),
-    pendingShot: null, mailRequested: false, photoRequested: false, touchDevice: false, bare: true,
+    pauseButton: { hidden: true },
+    document: { hidden: false, body: { classList: { toggle() {} } } }, keys: new Set(), mailPointers: new Set(), mailButton: null, mailScore: null, phoneMailHud: update('phoneMailHud'),
+    pendingShot: null, mailRequested: false, photoRequested: false, pictureRequested: false, pictureButton: null, touchDevice: false, bare: true,
     flySpeed: 20, SHOTS: [], AREA: {}, EXAG: 1.5,
     requestAnimationFrame: trace('raf'),
     // The old picture, straight to the screen (finish-choice.ts): the fixture's page is at low detail.
     FINISH: { low: true, mode: null, clouds: false, canvasSamples: false, samples: undefined, oneSample: false, offered: false },
     // The instant replay records without spy calls, so the established call orders stay as they were.
+    sunSeeker: null,
     replay: { active: false, record() {}, frame() {}, afterRender() {} }, quietGround: () => false,
     // An open pause gate keeps the old clock: dt from `last`, simulation time equal to the frame's time.
     pause: { blocked: false, time: 0, frame(now) { const dt = Math.max(0, (now - context.last) / 1000); context.last = now; this.time = now; return { paused: false, dt }; } },
@@ -76,6 +89,9 @@ export function spy(source, ending = false, dev = true, absent = false, override
   context.roadScene.setPaused = trace('roadScene.pause');
   context.waterReflections.settle = trace('water.settle'); context.waterReflections.afterRender = trace('water.afterRender');
   if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'lotProps', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'yardProps', 'grass', 'waterReflections', 'fishing', 'harbourLights']) context[name] = null;
+  // The places rows: their sites are only stored, and each built place is the spy (or null) of the same name, read late so `absent` and the overrides apply.
+  Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null, drLaneSite: null,
+    builtPlaces: new Proxy({}, { get: (_target, name) => context[name] ?? null }) });
   if (typeof overrides === 'function') overrides(context, trace);
   else Object.assign(context, overrides);
   if (source.includes('devHooks.')) {
@@ -119,12 +135,12 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
       : [call('driveVehicle', dt, input), call('animals', dt, '@vehicle', '@camera'), call('chase', dt)]),
     call('mail', dt, '@vehicle', false, '@camera'),
     world('yard', dt, '@vehicle', '@camera.position'), world('yardDog', dt, '@vehicle'), world('home', '@camera.position', '@vehicle'),
-    world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050, '@vehicle', dt), world('village', '@camera.position', 1050, '@vehicle', dt), world('hawkesbury', '@camera.position', 1050, '@vehicle', dt), world('mabouMain', '@camera.position', 1050, '@vehicle', dt), quiet('maryville'), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
+    world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050, '@vehicle', dt), world('village', '@camera.position', 1050, '@vehicle', dt), world('hawkesbury', '@camera.position', 1050, '@vehicle', dt), world('mabouMain', '@camera.position', 1050, '@vehicle', dt), quiet('maryville'), quiet('drLane'), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
     call('camera.matrix'), call('sky', '@camera.position'), call('shared.time', 1.05), call('beacon', dt ? 2.2 : .15),
-    world('terrain', '@camera', paused), ...wharfLines(spied), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
+    world('terrain', '@camera', paused), ...wharfLines(spied), quiet('puddles'), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
     world('trees', '@terrain.drawnFine', '@camera.position'), world('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
     call('placesUI', '@vehicle', playing), call('journey', .05, playing), call('relief', dt, playing ? 6 : 0, '@vehicle', playing),
-    call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars'), call('radio', playing, false),
+    call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars', null), call('radio', playing, false),
     world('history', '@camera.position', dt), world('roads', '@camera.position'), canalLine(spied), world('sidewalks'), world('edge', '@camera.position'), world('mineSite', '@camera.position'),
     world('deckhand', dt, '@vehicle', '@camera.position'), world('fishing', dt, '@camera.position'), world('roadScene', '@camera'), world('schoolBus', '@camera'), world('ambientTraffic', '@camera', '@vehicle', true), world('roadAnimals', dt, '@vehicle', true), world('props', '@camera', dt), world('yardProps', '@camera', dt), world('harbourLights', 1.05), world('tall', '@camera', 1.05), call('shift', started ? .05 : 0, '@vehicle'),
     ...(!fly ? [call('shadowFocus', 3, 4, 5), call('sunShadows', .05, '@shadowFocus', 0, paused)] : []),
@@ -136,7 +152,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
 export function expectedEnding({ absent = false, spied = false } = {}) {
   return [
     call('quality', .05, true), call('roadScene.pause', true), call('endings', .05), call('pad.show', false), call('radio', false, true),
-    call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), ...wharfLines(spied), world('trees', '@terrain.drawnFine', '@camera.position'),
+    call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), ...wharfLines(spied), world('trees', '@terrain.drawnFine', '@camera.position'), quiet('puddles'),
     world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'), world('landmarks', '@camera'), world('roads', '@camera.position'),
     canalLine(spied), world('props', '@camera', 0), world('sidewalks'), world('fishing', 0, '@camera.position'), call('clipping', !absent), world('mirror', '@camera'),
     call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'), call('raf', '@function'),
@@ -162,7 +178,7 @@ const scenarios = [{}, { ending: true }, { hidden: true }, { started: false }, {
 function run(source, s, dev = true) {
   return spy(source, s.ending, dev, s.absent, (context, trace) => {
     Object.assign(context, {
-      ...(s.hidden ? { document: { hidden: true } } : {}), ...(s.started === false ? { started: false } : {}),
+      ...(s.hidden ? { document: { hidden: true, body: { classList: { toggle() {} } } } } : {}), ...(s.started === false ? { started: false } : {}),
       ...(s.fly ? { mode: 'fly', sunShadows: null } : {}),
     });
     if (s.spied) for (const name of ['wharves', 'novemberRoads', 'canal']) context[name] = { update: trace(name) };
@@ -246,6 +262,38 @@ export function verify(source, { drive = expectedDrive, ending = expectedEnding 
     assert.throws(()=>checkSignals(source.replace(line,'')),/traffic signals follow roads/,'missing signal update must fail');
   }
   return { drive: drive().filter(x => !x.quiet).map(x => x.name), ending: ending().filter(x => !x.quiet).map(x => x.name), iteratorsPerFrame: 0, iteratorStepsPerFrame: 0 };
+}
+// The places rows at boot and in the frame (grok-bots#1308 C52). verify() does not run the boot's build loop: its
+// spies stand in for what the loop built. This lifts the real loop and the porch slot's waiting test.
+export async function verifyPlaces(source) {
+  // The porch slot waits for the dog too: a loading dog keeps the page from settling, as the porch does.
+  const ready = (porchWaiting, dog) => spy(source, false, true, false, context => {
+    context.porch.waiting = porchWaiting; context.porchDog.state = dog;
+  }).args['page.ready'][0][0];
+  assert.equal(ready(false, 'here'), true, 'porch and dog done: the page settles');
+  assert.equal(ready(true, 'here'), false, 'porch still building: the page waits');
+  assert.equal(ready(false, 'loading'), false, 'porch dog still loading: the page waits');
+  // The build loop: a row without a site builds nothing and imports nothing; a row without load() adds no wait.
+  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
+  const loops = ast.statements.filter(n => ts.isForOfStatement(n) && /\bplaceRows\b/.test(n.expression.getText(ast)));
+  assert.equal(loops.length, 1, 'one boot loop over the places rows');
+  // Every row has a contact row: the boot throws on one without (a place in every area, on or off, has a slot).
+  const rows = ast.statements.flatMap(n => ts.isVariableStatement(n) ? n.declarationList.declarations : []).find(d => d.name.getText(ast) === 'placeRows');
+  const contacts = ast.statements.flatMap(n => ts.isVariableStatement(n) ? n.declarationList.declarations : []).find(d => d.name.getText(ast) === 'siteContacts');
+  assert.ok(rows && contacts && ts.isObjectLiteralExpression(rows.initializer) && ts.isArrayLiteralExpression(contacts.initializer), 'placeRows and siteContacts are where this check reads them');
+  const named = new Set(contacts.initializer.elements.map(e => ts.isArrayLiteralExpression(e) && ts.isStringLiteral(e.elements[0]) ? e.elements[0].text : null));
+  for (const p of rows.initializer.properties) assert.ok(named.has(p.name.getText(ast)), `places row '${p.name.getText(ast)}' has no contact row: the boot would throw`);
+  const code = transformSync(loops[0].getText(ast), { loader: 'ts', target: 'es2022' }).code;
+  const log = [], row = (name, site, lazy) => ({ site,
+    build: (at, part) => { log.push(`build ${name} ${at === site} ${part}`); return { name }; },
+    ...(lazy ? { load: () => { log.push('load ' + name); return Promise.resolve('part-' + name); } } : {}) });
+  const context = { builtPlaces: {}, placeRows: { first: row('first', {}), offLazy: row('offLazy', null, true), off: row('off', null),
+    lazy: row('lazy', {}, true), after: row('after', {}) } };
+  const done = new Function('context', `return (async () => { with (context) { ${code} } })();`)(context);
+  assert.deepEqual(log, ['build first true undefined', 'load lazy'], 'before any wait: the rows up to the first lazy one with a site');
+  await done;
+  assert.deepEqual(log, ['build first true undefined', 'load lazy', 'build lazy true part-lazy', 'build after true undefined'], 'places build loop order');
+  assert.deepEqual(context.builtPlaces, { first: { name: 'first' }, offLazy: null, off: null, lazy: { name: 'lazy' }, after: { name: 'after' } }, 'built places');
 }
 function hotLoop(source) {
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
@@ -333,6 +381,8 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   if (mutation !== -1) verify(mutated(current(), process.argv[mutation + 1]));
   console.log(JSON.stringify(verify(current())));
   console.log('PASS ongoing frame regression (no historical comparison)');
+  await verifyPlaces(current());
+  console.log('PASS places rows: porch dog waiting, boot build loop');
   {
     const scheduled=[];let loads=0;
     const actual=spy(current(),false,true,false,{farKey:{file:'far-land.json'},farLoading:false,setTimeout:fn=>{scheduled.push(fn);return 1;},loadFarViews:()=>{loads++;return Promise.resolve();}},frame=>{frame(1050);frame(1067);});

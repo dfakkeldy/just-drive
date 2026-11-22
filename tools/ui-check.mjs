@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { cdp, cdpFetch, exitCheck } from './cdp.mjs';
-import { current, verify, mutations } from './world-update-fixture.mjs';
+import { current, verify, verifyPlaces, mutations } from './world-update-fixture.mjs';
 import { verifyPlayFlags, playMutations } from './play-flags-fixture.mjs';
-verify(current()); mutations();
+verify(current()); await verifyPlaces(current()); mutations();
 verifyPlayFlags(current()); playMutations();
 // The fixed-ending picture A/B replays an older drawEnding from git history, so it is an explicit refactor audit:
 // MMM_WORLD_AUDIT=<revision> (for example f7428e7). Ordinary UI checks do not depend on git history.
@@ -39,12 +39,15 @@ for (const just of [false, true]) for (const area of ['mabou', 'judique']) for (
     const line = await p.read(`(() => {
       const line = document.getElementById('titleOtherGame'), a = line?.querySelector('a');
       return {text:line?.textContent, href:a?.href, visible:!!line?.getClientRects().length && !document.getElementById('title').hidden,
-        position:line?.parentElement === document.querySelector('#titleCard>h1')?.nextElementSibling,
+        // The line follows the main action: right after the 1884 link when there is one, else right after Start (or its 'Start where I am' group)
+        // ('Start where I am' moves the 1884 link and this line into its own group, in the same order).
+        position:(()=>{const prev=line?.previousElementSibling?.id, era=!!document.getElementById('titleEra'), parent=line?.parentElement?.id;
+          return era ? prev === 'titleEra' && (parent === 'titleCard' || parent === 'startHere') : (prev === 'titleStart' || prev === 'startHere') && parent === 'titleCard';})(),
         mode:document.getElementById('modeExplore')?.textContent};
     })()`);
     const expected = just ? `https://mmm.fakkeldy.ca/${historical ? `?era=1884&area=${area}` : ''}`
       : `https://justdrive.fakkeldy.ca/${!historical && area === 'mabou' ? '' : area + (historical ? '-1884' : '')}`;
-    check(line?.href === expected && line.visible && line.position, `${just?'just':'mail'} ${area} ${historical?'1884':'today'}: visible reciprocal link in the introduction (${JSON.stringify(line)})`);
+    check(line?.href === expected && line.visible && line.position, `${just?'just':'mail'} ${area} ${historical?'1884':'today'}: visible reciprocal link right after the main action (${JSON.stringify(line)})`);
     check(line?.text === (just ? 'Want a job with your drive? Mabou Mail Madness: the same land, with a mail route.' : 'Just want to drive? Just Drive has every area, no mail.'), 'exact cross-brand words');
     if (!just && area === 'mabou' && !historical) check(line.mode === 'Just drive', 'mail keeps its in-game Just drive choice');
     // Phone fit: the added line must not widen, clip or push the start button out of reach.
@@ -70,8 +73,8 @@ for (const just of [false, true]) for (const area of ['mabou', 'judique']) for (
 // Mabou's main street adds mabouMain. The camera drone adds drone, and freeCamera (the old F camera, for picture tools that hold the car still).
 // The road animals (#118) add roadAnimals (null on test visits without wildlife=1).
 // Kicker Field opens in Mabou by default (#57), so both boots add stuntPark and sunShadows. Maryville's place slot adds
-// maryville (null outside Port Hood), like the other hand-built places.
-const devKeys = 'bigMap footpaths gamepad driftFeedback sidewalks hikes drawProbe finish farLand farTurbines farVisibility tall aiDriver ambientTraffic animals area buildings camera canal cemeteries chase church coast cost culverts deckhand detail driveVehicle drone edge endings engineSound era fishing freeCamera gameMode grass harbourLights hawkesbury history home interiors journey landmarks low mabouMain maryville mineSite miniMap mp picture places porch porchDog porchSite props quality quarry radio relief renderer roadAnimals roadScene roads scene schoolBus shift stockpiles stuntPark sunShadows terrain trees vehicle vehicleId village water yard yardDog yardDogSite yardJob'.split(' ').sort();
+// maryville (null outside Port Hood), like the other hand-built places. The house on D.R.'s Lane adds drLane (null outside Judique).
+const devKeys = 'bigMap footpaths gamepad driftFeedback sidewalks hikes drawProbe finish farLand farTurbines farVisibility tall aiDriver ambientTraffic animals area buildings camera canal cemeteries chase church coast cost culverts deckhand detail drLane driveVehicle drone edge endings engineSound era fishing freeCamera gameMode grass harbourLights hawkesbury history home interiors journey landmarks low mabouMain maryville mineSite miniMap mp picture places porch porchDog porchSite props quality quarry radio relief renderer roadAnimals roadScene roads scene schoolBus shift stockpiles stuntPark sunShadows terrain trees vehicle vehicleId village water yard yardDog yardDogSite yardJob'.split(' ').sort();
 const resetOrder = ['interiors', 'relief', 'yardJob', 'fishing', 'roadScene', 'schoolBus'];
 for (const mode of ['mail', 'explore']) {
   const url = new URL(base);
@@ -86,7 +89,7 @@ for (const mode of ['mail', 'explore']) {
     }
     const keys = await p.read('Object.keys(mmm).sort()');
     console.log(`MMM_KEYS ${mode} ${JSON.stringify(keys)}`);
-    check(JSON.stringify(keys) === JSON.stringify(devKeys), `${mode}: full-boot dev API keeps main 9826d95 keys plus G14 cost, porch, yard-dog, cemeteries, ambient traffic, Judique village, Port Hawkesbury, Mabou main street, engine sound, fleet driver, stockpiles, deckhand, drone, road animal inspection, sidewalks, gamepad, drift feedback, Kicker Field (stuntPark, sunShadows) and Maryville keys`);
+    check(JSON.stringify(keys) === JSON.stringify(devKeys), `${mode}: full-boot dev API keeps main 9826d95 keys plus G14 cost, porch, yard-dog, cemeteries, ambient traffic, Judique village, Port Hawkesbury, Mabou main street, engine sound, fleet driver, stockpiles, deckhand, drone, road animal inspection, sidewalks, gamepad, drift feedback, Kicker Field (stuntPark, sunShadows), Maryville and D.R.'s Lane keys`);
     check(await p.read('mmm.gameMode') === (mode === 'explore' ? 'explore' : 'mail'), `${mode}: intended game mode booted`);
     if (mode === 'explore') {
       check(await p.read(`['yardJob', 'fishing', 'roadScene', 'schoolBus'].every(name => mmm[name] === null)`), 'Just Drive keeps optional mail features absent');

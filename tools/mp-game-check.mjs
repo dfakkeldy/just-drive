@@ -186,7 +186,7 @@ try {
     }
     return sizes;
   })()`);
-  check(labelPixels.length===2 && labelPixels.every(px=>px>=15.9), `phone call-sign font is at least 16 CSS px: ${JSON.stringify(labelPixels)}`);
+  check(labelPixels.length===2 && labelPixels.every(px=>px>=11.9&&px<=12.1), `phone call-sign font is the 12 CSS px floor: ${JSON.stringify(labelPixels)}`);
   await p.shot('switch-driving-phone');
   await p.read(`window.__phoneHorn=0;const n=mmm.mp.current.net,send=n.ws.send.bind(n.ws);n.ws.send=data=>{if(data instanceof ArrayBuffer && (new DataView(data).getUint8(2)&4)) __phoneHorn++;send(data)}`);
   await p.click('#tcHorn'); check(await p.until('__phoneHorn === 1'), 'phone HORN sends the horn flag');

@@ -43,11 +43,11 @@
 
   "pointtupper-start/phone-explore-truck":{"calls":204,"triangles":1123375,"geometries":121,"textures":58,"programs":17,"readyTiles":88,"requests":206},
 
-  "quarry-air/desktop-explore-truck":{"calls":846,"triangles":4398223,"geometries":169,"textures":169,"programs":31,"readyTiles":344,"requests":603},
+  "quarry-air/desktop-explore-truck":{"calls":844,"triangles":4152803,"geometries":168,"textures":169,"programs":32,"readyTiles":344,"requests":603},
 
   "quarry-air/phone-explore-truck":{"calls":97,"triangles":927911,"geometries":54,"textures":52,"programs":14,"readyTiles":72,"requests":148},
 
-  "quarry-gate/desktop-explore-truck":{"calls":646,"triangles":4714156,"geometries":198,"textures":177,"programs":36,"readyTiles":342,"requests":616},
+  "quarry-gate/desktop-explore-truck":{"calls":647,"triangles":4487276,"geometries":197,"textures":177,"programs":37,"readyTiles":342,"requests":616},
 
   "quarry-gate/phone-explore-truck":{"calls":133,"triangles":1325613,"geometries":98,"textures":57,"programs":22,"readyTiles":194,"requests":337},
 

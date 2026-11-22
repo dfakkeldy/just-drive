@@ -178,7 +178,7 @@ function page(radio: ListenRadio): () => void {
   action('nexttrack', () => radio.step(1));
   const art = (size: number) => ({ src: new URL(`icon-${size}.png`, location.href).href, sizes: `${size}x${size}`, type: 'image/png' });
 
-  let listed = -1, told = '';
+  let listed = -1, told = '', started = false;
   const rows: HTMLButtonElement[] = [];
   const draw = () => {
     const now = radio.shown(), station = stations[now.station], tracks = station.tracks, piece: RadioTrack = tracks[now.track];
@@ -195,7 +195,7 @@ function page(radio: ListenRadio): () => void {
     }
     say(dial, station.dial); say(name, station.name);
     say(title, piece.title); say(next, tracks[(now.track + 1) % tracks.length].title);
-    say(state, !now.wanted ? (now.onClock ? 'ON THE AIR NOW' : 'PAUSED') : !now.sound ? 'TUNING…' : now.onClock ? 'NOW PLAYING' : 'FROM THE START');
+    say(state, !now.wanted ? (now.onClock ? 'Press ▶ to listen' : 'PAUSED') : !now.sound ? 'TUNING…' : now.onClock ? 'NOW PLAYING' : 'FROM THE START');
     unit.dataset.state = !now.wanted ? 'silent' : now.sound ? 'sound' : 'tuning';
     needle.style.left = `${place(now.station)}%`;
     marks.forEach((mark, i) => mark.classList.toggle('on', i === now.station));
@@ -205,8 +205,10 @@ function page(radio: ListenRadio): () => void {
     play.setAttribute('aria-pressed', String(now.wanted));
     live.setAttribute('aria-pressed', String(now.onClock));
     say(live, now.onClock ? 'LIVE' : 'GO TO LIVE');
-    bar.style.width = `${Math.min(100, now.at / piece.seconds * 100).toFixed(1)}%`;
-    say(timeNow, clock(Math.min(now.at, piece.seconds))); say(timeAll, clock(piece.seconds));
+    if (now.wanted) started = true;
+    if (started) bar.style.width = `${Math.min(100, now.at / piece.seconds * 100).toFixed(1)}%`;
+    // Before the first Play the bar is empty, so the elapsed time reads 0:00 too.
+    say(timeNow, started ? clock(Math.min(now.at, piece.seconds)) : clock(0)); say(timeAll, clock(piece.seconds));
     const tab = `${station.dial} ${station.name} · Just Listen`;
     if (document.title !== tab) document.title = tab;
     if (media) {

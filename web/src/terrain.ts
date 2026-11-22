@@ -2,6 +2,7 @@ import {RoadCuts,CUT_ATLAS_PAGES,inMask,maskTouches,type RoadCutSource} from './
 import type { Paved } from './paved';
 import type { NightShading } from './night';
 import type {HistoryBridgeApproaches} from './eras/history-approaches';
+import type { EarlyRead } from './boot-tasks';
 import { CART_TERRAIN_FRAG, CART_WATER_MASK_FRAG } from './eras/cart-shaders';
 import * as THREE from 'three';
 import {STUNT_TERRAIN_FRAG} from './stunt-ground-style';
@@ -12,6 +13,7 @@ import { updateCoastView } from './coast-view';
 import { coastRecessUniforms, quarryGypsumFill, QUARRY_GRAVEL_FILL, RECESSES, type RockSite } from './coast-site';
 import { BROOK_SAMPLE, brookBlend, brookDistance, brookField, Streams } from './streams';
 import { GroundCover, type GroundMeta, clearsGroundTrees } from './ground-cover';
+import type { GroundRay } from './sun-seeker-rules';
 
 export interface Manifest {
   area?: { id: string; name: string };
@@ -47,6 +49,7 @@ export interface Surface {
   bridge: boolean;
   washboard: boolean;   // a road shaken into ridges
   gravel?: boolean;     // a gravel driveway or pad: a track (4) carrying the gravel bit; drives as gravel. Absent otherwise
+  rough?: boolean;      // a rough stretch of gravel or track (rough-roads.ts: bit 128): more and deeper holes, puddles. Absent otherwise
   brook: number;        // metres from the edge of a brook's water: negative in the water; 99 when none is near
   /** True only when an accepted hand-built deck supplies the driving surface. */
   deck?: boolean;
@@ -64,9 +67,15 @@ const T = 256;          // intervals per tile; a tile has 257 samples per side
 const S = T + 1;
 const MAX_LOADS = 6;
 const BURST_DISTANCE = 150;
-// Real builds measured ~8 ms median (p90 9–11 ms): allow six median builds behind the title or while paused.
+// The two budgets are wall-time caps: a paused or burst update builds tiles until it has used its budget (always at least
+// one). They were set as six and three builds of about 8 ms (p90 9-11 ms), measured before the normal-map change (#81)
+// made a build cheaper. In a driving capture of Nov 2026 (Apple M1 Pro, two runs per view), no whole terrain.update
+// (builds included) took longer than 7.1 ms with desktop detail or 12.5 ms with phone detail. With desktop detail that
+// is below the old 8 ms, so each cap now holds more builds there. The dev server keeps the last and the longest single
+// build in terrain.lastBuildMs and terrain.maxBuildMs, and counts timed builds in terrain.buildCount.
+// Behind the title or while paused.
 const PAUSED_BUILD_BUDGET_MS = 48;
-// At the measured ~8 ms median, allow three builds after a jump without stretching the coarse-land wait.
+// After a jump: short, so the coarse-land wait does not stretch.
 const BURST_BUILD_BUDGET_MS = 24;
 // A real-paced 1.2 km return needs about 86 spare tiles.
 // Measured wanted land + 96 spares stays below the former 500-record bound.
@@ -119,10 +128,11 @@ interface Grid { index: THREE.BufferAttribute; uvs: THREE.BufferAttribute }
 interface MirrorSave { tile: Tile | null; mesh: THREE.Mesh | null; visible: boolean; hide: THREE.Vector4; geometry: THREE.BufferGeometry | null; material: THREE.Material | THREE.Material[] | null }
 type MirrorHeld = { [K in keyof MirrorSave]: NonNullable<MirrorSave[K]> };
 
+let pngCtx: OffscreenCanvasRenderingContext2D | null = null;
 async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
   const bmp = await createImageBitmap(await readFile(base, path), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
-  const cv = new OffscreenCanvas(S, S);
-  const ctx = cv.getContext('2d', { willReadFrequently: true })!;
+  const ctx = pngCtx ??= new OffscreenCanvas(S, S).getContext('2d', { willReadFrequently: true })!;
+  ctx.clearRect?.(0, 0, S, S);
   ctx.drawImage(bmp, 0, 0);
   bmp.close();
   return ctx.getImageData(0, 0, S, S).data;
@@ -133,7 +143,12 @@ export interface SiteSurface {
   gravelDrive?: boolean;
   /** Reclassify a mapped gravel sample without moving the centre line or changing its width. */
   paveGravel?: boolean;
+  /** Mark a mapped gravel road or track sample rough (bit 128). Its distance, width and kind stay as baked. */
+  rough?: boolean;
 }
+
+/** The rough bit on a road sample's flag byte. Only gravel roads (3) and tracks (4) without a high bit carry it. */
+export const ROUGH_BIT = 128;
 
 /**
  * A hand-built place that changes the ground under it: graded pads, and surfaces painted through the road field
@@ -188,6 +203,8 @@ export interface Site extends RoadCutSource {
   /** deckClear's answer at every point of a grid (xs and zs ascending; row b, column a at index b * xs.length + a), or
    *  null when no point is cleared. It must match deckClear point for point; it only skips points no corridor reaches. */
   deckClearGrid?(xs:Float64Array,zs:Float64Array,pad:number):Uint8Array|null;
+  /** The site only repaints flags on roads that already exist. Its box is not a clearing, so lots, props and animals may use it. */
+  roadPaint?: boolean;
   /** True water elevation for a mapped inland pool; null outside its polygon. */
   waterLevel?(x:number,z:number):number|null;
   /** Optional exact deck on top of the land. The callback samples land only, without any decks. `ceiling` is the highest
@@ -195,11 +212,26 @@ export interface Site extends RoadCutSource {
   deckHeight?(x: number, z: number, ground: (x: number, z: number) => number | null, ceiling?: number): number | null;
 }
 
+/** Site boxes that placement must avoid. Sites that only repaint existing roads are left out. A site spread over many
+ *  places (the bridges: one query box over the whole area) gives its own footprints (sitingBoxes) instead of its box. */
+export function placeBoxes(sites: readonly Site[]): (readonly [number, number, number, number])[] {
+  return sites.filter(s => !s.roadPaint).flatMap(s => s.sitingBoxes ?? [s.box]);
+}
+
 /** Apply a runtime field sample. Kind 11 only paints; it cannot change a mapped road's driving samples. */
 export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:SiteSurface,zero:number,dScale:number,wScale:number):void {
   if(f.coverage!==undefined)road[k+3]=Math.round(Math.max(0,Math.min(1,f.coverage))*255);
   if(f.kind===11){road[k+3]=Math.max(0,Math.min(255,Math.round((2+f.half-f.dist)*255/4)));return;}
   const flags=road[k+2];
+  if (f.rough) {
+    const kind = flags & 15;
+    const baked = Math.abs(road[k] - zero) * dScale;
+    // The baked distance must match the stretch's own, so a nearby gravel road or lane keeps its plain surface. The bit
+    // reaches 2.6 m past the edge: the drawn shoulder (1.1 m) plus half a 2 m texel's diagonal, as the shader takes the
+    // nearest sample's flags. Beyond the edge the wheels read grass, so only the paint uses it there.
+    if ((kind === 3 || kind === 4) && (flags & 192) === 0 && baked < road[k + 1] * wScale + 2.6 && Math.abs(baked - f.dist) < 1) road[k + 2] = flags | ROUGH_BIT;
+    return;
+  }
   if (f.paveGravel) {
     if (flags === 3) road[k+2] = 2;
     return;
@@ -230,6 +262,8 @@ export function drawnRoadBytes(road: Uint8Array | Uint8ClampedArray, bridgePaint
 /** The settings main.ts knows before the first tile is built. Each one left out keeps its field's default. */
 export interface TerrainOptions {
   night?: NightShading | null; cartRoads?: boolean; split?: number; low?: boolean; lazyRange?: number; shadows?: boolean;
+  /** The ground class file, already being read with the other boot reads (main.ts). Without it, readGroundCover fetches it. */
+  ground?: EarlyRead<ArrayBuffer> | null;
 }
 
 export class Terrain {
@@ -349,6 +383,12 @@ export class Terrain {
   /** The budget used by the last update, including the update that ended a burst. */
   private lastBuildMode: 'driving' | 'paused' | 'burst' = 'driving';
   get buildMode() { return this.lastBuildMode; }
+  /** Dev server only: the last and the longest single tile build, in milliseconds (buildWaiting), and how many builds
+   *  were timed. A driving update builds at most one tile, so a reader that sees buildCount go up by one reads that build
+   *  in lastBuildMs once. Never set in production. */
+  declare lastBuildMs?: number;
+  declare maxBuildMs?: number;
+  declare buildCount?: number;
   private readyCount = 0;
   private wantedCount = 0;
   private lastEvict = 0;
@@ -359,28 +399,55 @@ export class Terrain {
   private m4 = new THREE.Matrix4();
   drawn = 0;
   /** A tile splits into finer tiles when the camera is nearer than split x its size. */
-  split = 1.6;
+  readonly split: number = 1.6;
   /** Phone mode: cheaper shading. Set before the first tile loads. */
-  low = false;
+  readonly low: boolean = false;
   /**
    * Phones: a missing tile farther than this from the camera (metres) and outside the view is not waited for. The
    * parent keeps that quarter, and the tile is read in the background, behind every tile in view; it does not count as
    * pending. 0 (desktop) waits for every tile, as before. Everything in view is selected exactly as with 0.
    */
-  lazyRange = 0;
+  readonly lazyRange: number = 0;
   /** While true, background tiles are not read at all: main.ts holds them until the first pedal after a start or jump. */
   holdBackground = false;
   /** Period-only road field and shader. Set before any tile loads. */
-  cartRoads = false;
+  readonly cartRoads: boolean = false;
   /** Optional Point Tupper class atlas, installed before any tile builds. */
   paved: Paved | null = null;
   propertyOverlay: { applyGround(material: THREE.ShaderMaterial): void } | null = null;
   /** Measured stockpile faces replace surface returns, in map coordinates. Set before tile loads. */
   canopyExcludes?: (east: number, north: number) => boolean;
   /** The light study's night: adds the lamps' light to every land tile made from here on (night.ts). */
-  night: NightShading | null = null;
+  readonly night: NightShading | null = null;
   /** Desktop only: the land's shader reads the sun's shadow map (the uniforms come in with `shared`). */
-  shadows = false;
+  readonly shadows: boolean = false;
+  private previewShadows: Record<string, THREE.IUniform> | null = null;
+
+  /** Daylight preview on a night visit. The terrain keeps its ordinary shader outside the preview. */
+  setPreviewShadows(uniforms: Record<string, THREE.IUniform> | null): void {
+    const previous = this.previewShadows;
+    if (previous === uniforms) return;
+    this.previewShadows = uniforms;
+    for (const tile of this.tiles.values()) {
+      if (!tile.mesh) continue;
+      const material = tile.mesh.material as THREE.ShaderMaterial;
+      if (uniforms) this.applyPreviewShadows(material, uniforms);
+      else if (previous) {
+        delete material.defines.SHADOWS;
+        for (const key of Object.keys(previous)) delete material.uniforms[key];
+        material.needsUpdate = true;
+      }
+    }
+  }
+
+  private applyPreviewShadows(material: THREE.ShaderMaterial, uniforms: Record<string, THREE.IUniform>): void {
+    material.defines.SHADOWS = 1;
+    Object.assign(material.uniforms, uniforms);
+    material.needsUpdate = true;
+  }
+
+  /** The early ground class read, if main.ts started one. */
+  private readonly groundEarly: EarlyRead<ArrayBuffer> | null;
 
   /** exag stretches ground heights about sea level; trees and roofs keep their true height. */
   constructor(readonly manifest: Manifest, readonly base: string, shared: Record<string, THREE.IUniform>,
@@ -419,9 +486,10 @@ export class Terrain {
       // World x = east - village east; world z = village north - north. The cover image starts at its north-west corner.
       coverRect: { value: new THREE.Vector4(c.xmin - vx, vy - c.ymax, 1 / (c.xmax - c.xmin), 1 / (c.ymax - c.ymin)) },
     };
-    // The fields stay writable: the node checks set them on a terrain they made.
+    // Game code sets these fields only through TerrainOptions. The node checks (plain .mjs) still write them on a terrain they made.
     this.night = options.night ?? this.night; this.cartRoads = options.cartRoads ?? this.cartRoads; this.split = options.split ?? this.split;
     this.low = options.low ?? this.low; this.lazyRange = options.lazyRange ?? this.lazyRange; this.shadows = options.shadows ?? this.shadows;
+    this.groundEarly = options.ground ?? null;
   }
 
   /** Tiny derived row runs on phones too. No full RGBA readback or extra GPU texture. */
@@ -429,10 +497,13 @@ export class Terrain {
     return this.groundRead??=(async()=>{
       const m=this.manifest.cover.ground;if(!m)return;
       if(m.version!==1)throw Error('Unsupported ground classes');
-      // Root files are copied beside packs.json, not listed inside terrain packs.
-      const response=await fetch(`${this.base}/${m.file}`);
-      if(!response.ok)throw Error('Ground classes unavailable');
-      this.groundCover=new GroundCover(await response.arrayBuffer(),m.width,m.height);
+      // Root files are copied beside packs.json, not listed inside terrain packs. main.ts usually started the read already.
+      const bytes=this.groundEarly?await this.groundEarly.take():await(async()=>{
+        const response=await fetch(`${this.base}/${m.file}`);
+        if(!response.ok)throw Error('Ground classes unavailable');
+        return response.arrayBuffer();
+      })();
+      this.groundCover=new GroundCover(bytes,m.width,m.height);
     })();
   }
   /** True once the class runs are read. Modern land only: main.ts skips the read in the 1884 era. */
@@ -448,14 +519,17 @@ export class Terrain {
     return this.coverRead ??= this.coverReady.then(async (image) => {
       if (!image) throw new Error('land cover did not load');
       const pixels = new ImageData(image.width, image.height);
-      const canvas = new OffscreenCanvas(image.width, 32);
+      const strip = 64;
+      const canvas = new OffscreenCanvas(image.width, Math.min(strip, image.height));
       const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-      // Small strips keep the one-time readback from stopping the first drive frame.
-      for (let row = 0; row < image.height; row += 32) {
-        const rows = Math.min(32, image.height - row);
+      // Small strips, as many as fit in about 6 ms, then a yield: no long stall in a drive frame, and few
+      // enough yields that the read does not starve behind the start-up terrain burst (32-row yields did).
+      let slice = performance.now();
+      for (let row = 0; row < image.height; row += strip) {
+        const rows = Math.min(strip, image.height - row);
         ctx.drawImage(image, 0, row, image.width, rows, 0, 0, image.width, rows);
         pixels.data.set(ctx.getImageData(0, 0, image.width, rows).data, row * image.width * 4);
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (performance.now() - slice > 6) { await new Promise<void>((resolve) => setTimeout(resolve, 0)); slice = performance.now(); }
       }
       this.coverPixels = pixels;
       canvas.width = canvas.height = 0;
@@ -659,7 +733,15 @@ export class Terrain {
       }
       const decoded = this.builds[best], t = decoded.tile;
       try {
-        this.build(decoded);
+        // Guard at the call site, as updateWorld does: the production bundle keeps no clock. The `?.` lets the node
+        // checks bundle this file with no import.meta.env; there the guard is false and nothing is timed.
+        if (import.meta.env?.DEV) {
+          const start = performance.now();
+          this.build(decoded);
+          this.lastBuildMs = performance.now() - start;
+          this.maxBuildMs = Math.max(this.maxBuildMs ?? 0, this.lastBuildMs);
+          this.buildCount = (this.buildCount ?? 0) + 1;
+        } else this.build(decoded);
         // The pin pass ran before this tile was ready; protect a newly built camera/car column too.
         if (bestUnder) this.use(t);
       }
@@ -741,7 +823,7 @@ export class Terrain {
         if(clearsGroundTrees(this.groundClassAt(x,z))){c=0;px[k*4+2]=0;}
       }
       if (road && road[k * 4 + 2] > 0) {
-        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && (road[k * 4 + 2] & 15) !== 4;
+        roadPavement ||= (road[k * 4 + 2] & 192) !== 0 && ((road[k * 4 + 2] & 15) !== 4 || (road[k * 4 + 2] & 192) === 128);
         // Nothing stands on a road: fade the tree layer out from the shoulder to the road edge.
         const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;
         c *= THREE.MathUtils.smoothstep(d, hw + 0.8, hw + 4.5);
@@ -788,7 +870,7 @@ export class Terrain {
 
     // Lighting detail comes from a normal map at full sample density.
     // This loop is most of a tile build. The edge clamps are worked out once per row and per column, not per read.
-    // The maths, its order and Math.hypot stay as they were, so the texture bytes do not change.
+    // Math.sqrt replaces Math.hypot here (finite ground/canopy slopes, byte-identical across baked tiles).
     const nm = new Uint8Array(S * S * 4);
     for (let b = 0; b < S; b++) {
       const b0 = Math.max(b - 1, 0), b1 = Math.min(b + 1, T), h = (b1 - b0) * mpp;
@@ -800,9 +882,10 @@ export class Terrain {
         const sl = gl + (hull ? 0.6 * canopy[row + a0] : 0), sr = gr + (hull ? 0.6 * canopy[row + a1] : 0);
         const su = gu + (hull ? 0.6 * canopy[up + a] : 0), sd = gd + (hull ? 0.6 * canopy[down + a] : 0);
         let nx = -(sr - sl) / w, nz = -(sd - su) / h;
-        const inv = 1 / Math.hypot(nx, 1, nz);
+        const inv = 1 / Math.sqrt(nx * nx + 1 + nz * nz);
         nx *= inv; nz *= inv;
-        const gs = Math.hypot((gr - gl) / w, (gd - gu) / h);
+        const gx = (gr - gl) / w, gz = (gd - gu) / h;
+        const gs = Math.sqrt(gx * gx + gz * gz);
         const k = (row + a) * 4;
         nm[k] = Math.round((nx * 0.5 + 0.5) * 255);
         nm[k + 1] = Math.round((nz * 0.5 + 0.5) * 255);
@@ -836,21 +919,33 @@ export class Terrain {
     const gattr = new Float32Array(n * n), crowns = this.low ? null : new Float32Array(n * n);
     const drop = Math.max(t.size * 0.04, 6);
     const win = Math.max(2, Math.round(6 / Math.max(mpp, 1))), stride = Math.max(1, Math.round(win / 2));
+    const needCanopy = !!(hull || crowns);
+    let anyCanopy = false;
+    if (needCanopy) for (let k = 0; k < S * S; k++) if (canopy[k] > 0) { anyCanopy = true; break; }
     for (let b = 0; b < n; b++) {
+      const gb = Math.min(Math.max(b - 1, 0), seg) * step;
+      const skirtB = b === 0 || b === n - 1;
       for (let a = 0; a < n; a++) {
-        const ga = Math.min(Math.max(a - 1, 0), seg) * step, gb = Math.min(Math.max(b - 1, 0), seg) * step;
-        const skirt = a === 0 || b === 0 || a === n - 1 || b === n - 1;
+        const ga = Math.min(Math.max(a - 1, 0), seg) * step;
+        const skirt = skirtB || a === 0 || a === n - 1;
         // The mesh is coarser than the data, so trees and roofs are averaged into a soft canopy surface.
         // Single trees come in Stage 1C.
-        let c = 0, cnt = 0;
-        for (let v = -win; v <= win; v += stride) for (let u = -win; u <= win; u += stride) {
-          const aa = ga + u, bb = gb + v;
-          if (aa >= 0 && aa <= T && bb >= 0 && bb <= T) { c += canopy[bb * S + aa]; cnt++; }
-        }
-        c /= cnt;
+        let c = 0;
+        const k0 = gb * S + ga;
+        if (anyCanopy) {
+          let cnt = 0;
+          for (let v = -win; v <= win; v += stride) {
+            const bb = gb + v;
+            if (bb < 0 || bb > T) continue;
+            const row = bb * S;
+            for (let u = -win; u <= win; u += stride) {
+              const aa = ga + u;
+              if (aa >= 0 && aa <= T) { c += canopy[row + aa]; cnt++; }
+            }
+          }
+          c /= cnt;
         // Averaging must not grow the neighbouring forest hull back over a cleared cell.
         if(this.groundCover&&clearsGroundTrees(this.groundClassAt(t.x0+ga*mpp,t.z0+gb*mpp)))c=0;
-        const k0 = gb * S + ga;
         if (road && road[k0 * 4 + 2] > 0) {
           // Keep the averaged canopy off the driving surface.
           const hw = road[k0 * 4 + 1] * wScale;
@@ -864,6 +959,7 @@ export class Terrain {
         if(walkMask?.[k0])c=0;
         if (crowns) crowns[b * n + a] = hull ? 0 : c;
         if (!hull) c = 0;
+        }
         const g = ground[k0];
         const k = b * n + a;
         pos[k * 3] = t.x0 + ga * mpp;
@@ -925,6 +1021,7 @@ export class Terrain {
     this.paved?.applyGround(mat);
     this.sidewalks?.tileReady?.(t.level,t.i,t.j);
     this.night?.applyGround(mat);
+    if (this.previewShadows) this.applyPreviewShadows(mat, this.previewShadows);
     this.propertyOverlay?.applyGround(mat);
     this.fleetGroundChanged?.(t.x0, t.z0, t.size);
   }
@@ -1003,13 +1100,13 @@ export class Terrain {
   }
 
   /** The finest tile in memory that holds a world position. */
-  private find(x: number, z: number): Tile | null {
+  private find(x: number, z: number, touch = true): Tile | null {
     const m = this.manifest;
     const e = x + m.village[0] - m.origin[0], s = z - (m.village[1] - m.origin[1]);
     for (let level = this.maxLevel; level >= 0; level--) {
       const size = m.size / 2 ** level;
       const t = this.tiles.get(`${level}/${Math.floor(e / size)}_${Math.floor(s / size)}`);
-      if (t?.ready && t.ground) { this.use(t); return t; }
+      if (t?.ready && t.ground) { if (touch) this.use(t); return t; }
     }
     return null;
   }
@@ -1021,6 +1118,65 @@ export class Terrain {
   }
 
   updateRoadCuts():void {if(!this.cartRoads)for(const t of this.tiles.values())if(t.ready)this.roadCuts.update(t);}
+
+  /** Bare ground for sight lines, without roofs, canopy or raised decks. */
+  bareHeightAt(x: number, z: number): number | null {
+    const tile = this.find(x, z, false);
+    return tile ? this.bilinearHeight(tile, x, z) : null;
+  }
+
+  /** Read a fixed set of survey tiles in every direction. Camera turns and the render LRU cannot change it. */
+  async bareGroundRays(x: number, z: number, range: number): Promise<GroundRay> {
+    const m = this.manifest;
+    const west = m.origin[0] - m.village[0], north = m.village[1] - m.origin[1];
+    const pages = new Map<string, Uint8ClampedArray>();
+    const needed = new Set<string>();
+    const bands = [[256, 256], [1024, 1024], [range, 2048]].map(([reach, tileSize]) => {
+      const level = Math.max(0, Math.min(this.maxLevel, Math.floor(Math.log2(m.size / tileSize))));
+      const size = m.size / 2 ** level;
+      const tiles = new Map<string, { key: string; size: number; i: number; j: number }>();
+      for (let j = Math.floor((z - reach - north) / size); j <= Math.floor((z + reach - north) / size); j++) {
+        for (let i = Math.floor((x - reach - west) / size); i <= Math.floor((x + reach - west) / size); i++) {
+          for (let l = level, ti = i, tj = j, span = size; l >= 0; l--, ti = Math.floor(ti / 2), tj = Math.floor(tj / 2), span *= 2) {
+            const key = `${l}/${ti}_${tj}`;
+            if (!this.exists.has(key)) continue;
+            needed.add(key);
+            tiles.set(`${i}_${j}`, { key, size: span, i: ti, j: tj });
+            break;
+          }
+        }
+      }
+      return { reach, size, tiles };
+    });
+    const queue = needed.values();
+    await Promise.all(Array.from({ length: MAX_LOADS }, async () => {
+      for (const key of queue) pages.set(key, await readPng(this.base, `${key}.png`));
+    }));
+    return () => {
+      let lastBand = -1, lastI = NaN, lastJ = NaN, tileSize = 0, x0 = 0, z0 = 0;
+      let pixels: Uint8ClampedArray | undefined;
+      return (x, z, distance) => {
+        const index = distance <= bands[0].reach ? 0 : distance <= bands[1].reach ? 1 : 2;
+        const { size, tiles } = bands[index];
+        const e = x - west, s = z - north;
+        const i = Math.floor(e / size), j = Math.floor(s / size);
+        if (index !== lastBand || i !== lastI || j !== lastJ) {
+          lastBand = index; lastI = i; lastJ = j;
+          const tile = tiles.get(`${i}_${j}`);
+          pixels = tile && pages.get(tile.key);
+          if (tile) { tileSize = tile.size; x0 = tile.i * tileSize; z0 = tile.j * tileSize; }
+        }
+        if (!pixels) return null;
+        const u = T * (e - x0) / tileSize, v = T * (s - z0) / tileSize;
+        const a = Math.min(T - 1, Math.floor(u)), b = Math.min(T - 1, Math.floor(v));
+        const dx = u - a, dz = v - b, k = (b * S + a) * 4;
+        const top = (pixels[k] * 256 + pixels[k + 1]) * (1 - dx) + (pixels[k + 4] * 256 + pixels[k + 5]) * dx;
+        const q = k + S * 4;
+        const bottom = (pixels[q] * 256 + pixels[q + 1]) * (1 - dx) + (pixels[q + 4] * 256 + pixels[q + 5]) * dx;
+        return (top * (1 - dz) + bottom * dz) * m.height.scale + m.height.offset;
+      };
+    };
+  }
 
   /** Unreferenced queries return land. A finite caller height can select a reachable deck. */
   heightAt(x: number, z: number, referenceY?:number): number | null {
@@ -1073,15 +1229,19 @@ export class Terrain {
     if (this.drawnContact) { const drawn = this.drawnTile(x, z); if (drawn) return this.triangleHeight(drawn, x, z); }
     const t = this.find(x,z);
     if (!t) return null;
-    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
-    const a = Math.min(Math.floor(fa), T - 1), b = Math.min(Math.floor(fb), T - 1);
-    const u = fa - a, v = fb - b, g = t.ground!;
-    let ground=(g[b * S + a] * (1 - u) + g[b * S + a + 1] * u) * (1 - v) + (g[(b + 1) * S + a] * (1 - u) + g[(b + 1) * S + a + 1] * u) * v;
+    let ground = this.bilinearHeight(t, x, z);
     if (this.groundContact && this.wantsDrawnContact(x,z)) {
       const drawn=this.drawnTile(x,z);if(drawn)ground+=(this.triangleHeight(drawn,x,z)-ground)*this.wantsDrawnContact(x,z);
     }
     return this.surveying||this.cartRoads?ground:this.roadCuts.land(x,z,ground);
   };
+
+  private bilinearHeight(t: Tile, x: number, z: number): number {
+    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
+    const a = Math.min(Math.floor(fa), T - 1), b = Math.min(Math.floor(fb), T - 1);
+    const u = fa - a, v = fb - b, g = t.ground!;
+    return (g[b * S + a] * (1 - u) + g[b * S + a + 1] * u) * (1 - v) + (g[(b + 1) * S + a] * (1 - u) + g[(b + 1) * S + a + 1] * u) * v;
+  }
 
   /** Indexed primary terrain coverage, including off-screen tiles and partial parents. */
   walkSelectedLevelAt(x:number,z:number):number|null {
@@ -1252,6 +1412,7 @@ export class Terrain {
         out.washboard = (raw & 32) !== 0;
         // A gravel driveway, drawn as a gravel road (drawnRoadBytes); in 1884 it is drawn and driven as the track it is.
         if (!this.cartRoads && (raw & 15) === 4 && (raw & 192) === 64) out.gravel = true;
+        if ((raw & 192) === ROUGH_BIT && ((raw & 15) === 3 || (raw & 15) === 4)) out.rough = true;
       }
     }
     // Mail and every other ground reader see the same exact deck as the wheels.

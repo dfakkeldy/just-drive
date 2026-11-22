@@ -43,6 +43,17 @@ try {
   assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
   assert.ok(html.includes(`<link rel="canonical" href="${LISTEN_URL.mail}">`));
 
+  assert.match(html, /\.state\{[^}]*12px/);
+  assert.match(html, /\.progress\{[^}]*12px/);
+  assert.match(html, /\.band \.num\{[^}]*12px/);
+  assert.match(html, /\[data-state=silent\] \.preset\[aria-pressed=true\]::after,[^}]*content:"Tuned"/);
+  assert.match(html, /\.volume\{[^}]*margin:16px 2px/);
+  assert.match(html, /\.preset span\{[^}]*12px/);
+  assert.match(html, /\[data-state=sound\] \.preset\[aria-pressed=true\]::after\{content:"▶ Playing"/);
+  const aboutAt=html.indexOf('class="about"'), waysAt=html.indexOf('class="ways"'), creditsAt=html.indexOf('id="creditsHead"');
+  assert.ok(aboutAt>=0 && waysAt>aboutAt && creditsAt>waysAt,'about and games precede credits');
+  assert.match(html, /\.preset\{[^}]*align-content:start[^}]*min-height:82px/);
+  assert.match(html, /@media\(min-width:360px\) and \(max-width:599px\) and \(orientation:portrait\)\{\.presets\{grid-template-columns:repeat\(auto-fill,minmax\(140px,1fr\)\);grid-auto-rows:1fr\}\.preset\{min-height:0\}\.preset\[aria-pressed=true\]::after\{position:absolute;top:6px;right:10px\}\}/, 'upright phone presets size to their names, keep one height and leave room for the status');
   // One catalogue: the page asks for the car radio's lists, in the car radio's folder, and holds no station of its own.
   assert.match(html, /"\.\.\/audio"/, 'the songs are in the site audio folder');
   assert.match(html, /radio\.json/); assert.doesNotMatch(html, /radio-just\.json/, 'one list on both hosts: the page is the same page');

@@ -37,6 +37,8 @@ export class Guardrails {
   private lastBridge=0;
   private lastLow = false;
   private lastX = Infinity; private lastZ = Infinity; private revision = -1;
+  private cowFailureRevision = -1;
+  private cowFailures = new WeakMap<Road, Set<string>>();
   constructor(private readonly roads: Roads, private readonly terrain: Terrain) {
     this.group.name = 'Rule placed steel guardrails';
     this.planning = this.makePlanning();
@@ -58,6 +60,7 @@ export class Guardrails {
   private readonly planning: ReturnType<Guardrails['makePlanning']>;
   private access: ReturnType<typeof railAccess>;
   setObstacles(points: readonly { x: number; z: number; radius?: number }[]): void {
+    this.cowFailures = new WeakMap();
     this.work = null;
     this.access = railAccess(this.roads, this.planning.ground, this.terrain.manifest?.village, true, points);
     for (const c of this.chunks) c.revision = -1;
@@ -248,20 +251,51 @@ export class Guardrails {
     return { ground, context, profile, turnDown, damage, revision: -1,
       clear: () => { coastCache.clear(); edges.clear(); terminalFalls.clear(); } };
   }
-  /** Placement uses the complete potential rail corridor, independent of streaming/LOW.
-   * Every actual span is a subset of this grid; no rail is removed to seat an animal. */
+  /** Use real plans, including empty uphill plans. Wait for the local plan before choosing a home. */
   cowRest(road: Road, along: number, side: number, ground: CowGround): CowRest | null {
-    return cowRest(road, along, side, ground, body => this.cowClearance(body) >= COW_REST.clearance - 1e-6);
+    const local = this.chunks.filter(c => c.road === road && c.end >= along - COW_REST.localReach && c.start <= along + COW_REST.localReach);
+    if (!local.length || local.some(c => c.revision !== this.terrain.dataRevision)) return null;
+    if (this.cowFailureRevision !== this.terrain.dataRevision) {
+      this.cowFailureRevision = this.terrain.dataRevision; this.cowFailures = new WeakMap();
+    }
+    const key = `${along},${side}`;
+    if (this.cowFailures.get(road)?.has(key)) return null;
+    let pending = false;
+    const home = cowRest(road, along, side, ground, body => {
+      if (this.cowRoadClearance(body, road) < COW_REST.roadGap - 1e-6) return false;
+      const gap = this.cowClearance(body); pending ||= gap === -Infinity;
+      return gap >= COW_REST.clearance - 1e-6;
+    }, (x, z) => this.terrain.heightAt(x, z));
+    // Unknown rail plans can finish without a terrain revision; retry those instead of caching them.
+    if (!home && !pending) {
+      let failures = this.cowFailures.get(road);
+      if (!failures) this.cowFailures.set(road, failures = new Set());
+      failures.add(key);
+    }
+    return home;
+  }
+  private cowRoadClearance(body: CowBody, ownRoad: Road): number {
+    let minimum = Infinity;
+    this.roads.forEachNearbySegment(body.x, body.z, Math.hypot(body.halfWidth, body.halfLength) + COW_REST.roadGap, (road, segment) => {
+      const a = road.pts[segment], b = road.pts[segment + 1];
+      minimum = Math.min(minimum, cowRailGap(body, { x: a[0], z: a[1] }, { x: b[0], z: b[1] }) + COW_REST.railHalf - road.halfWidth);
+    }, ownRoad); // cowRest already measured the entire own road once for this candidate.
+    return minimum;
   }
   cowClearance(body: CowBody): number {
     const x = Math.floor(body.x / CHUNK), z = Math.floor(body.z / CHUNK);
     let minimum = Infinity;
     for (let j = z - 1; j <= z + 1; j++) for (let i = x - 1; i <= x + 1; i++) for (const c of this.cells.get(cellKey(i, j)) ?? NO_CHUNKS) {
+      if (c.revision === this.terrain.dataRevision) {
+        for (const span of c.spans) minimum = Math.min(minimum, cowRailGap(body, span.a, span.b));
+        continue;
+      }
+      // An unplanned close corridor is unknown, never proof that a rail is absent.
       for (let side = -1; side <= 1; side += 2) {
         const offset = side * (c.road.halfWidth + RAIL.shoulder);
         for (let station = Math.round(c.start / RAIL.pitch); station < Math.floor((c.end + 1e-7) / RAIL.pitch); station++) {
           const a = railPoint(c.road, station * RAIL.pitch, offset), b = railPoint(c.road, (station + 1) * RAIL.pitch, offset);
-          minimum = Math.min(minimum, cowRailGap(body, a, b));
+          if (cowRailGap(body, a, b) < COW_REST.clearance) return -Infinity;
         }
       }
     }

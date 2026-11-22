@@ -27,7 +27,7 @@ export function validStudyDate(date: string): boolean {
   const instant = new Date(`${date}T00:00:00Z`);
   return Number.isFinite(+instant) && instant.toISOString().slice(0, 10) === date;
 }
-const validTime = (time: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
+export const validTime = (time: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
 function wallStamp(instant: number): number {
   const parts = formats().wall.formatToParts(instant);
   const part = (name: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === name)!.value;
@@ -50,6 +50,7 @@ export function halifaxTime(date: string, time: string): WallTime {
   if (forward === undefined) throw new RangeError('Halifax time could not be resolved');
   return { when: new Date(forward), adjustment: 'gap' };
 }
+export const localDate = (when: Date): string => new Date(wallStamp(+when)).toISOString().slice(0, 10);
 export const localTime = (when: Date): string => formats().time.format(when);
 export const localZone = (when: Date): string => formats().zone.formatToParts(when).find(p => p.type === 'timeZoneName')!.value;
 export interface LightStudy { active: boolean; date: string; time: string; when?: Date; adjustment?: WallTime['adjustment']; message?: string }
@@ -118,15 +119,14 @@ export function ephemeris(date: string, lat: number, lon: number): Ephemeris {
 }
 
 const CSS = `
-#lightStudy{border-bottom:1px solid #71897e;padding:0 0 10px;margin:0 0 12px;font:13px/1.4 var(--text);max-width:300px}
-#lightStudy summary{cursor:pointer;font-weight:700;min-height:32px;display:list-item}
+#lightStudy{font:13px/1.4 var(--text)}
+#lightStudy summary{cursor:pointer;font-weight:700;display:list-item}
 #lightStudy .lightFields{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 #settings #lightStudy label{flex:1;min-width:100px;margin:0}
 #settings #lightStudy input{display:block;box-sizing:border-box;min-width:0;width:100%;max-width:100%;min-height:40px;padding:5px;color:inherit;background:var(--panel-solid);border:1px solid #89afa2;border-radius:4px;font:inherit;color-scheme:dark}
 #lightStudy button{font:700 13px var(--text);min-height:40px;margin:8px 0;padding:5px 14px;background:#20362e;border:1px solid #89afa2;border-radius:5px;color:inherit;cursor:pointer}
 #lightStudy p{margin:5px 0}#lightStudy small{display:block;font-size:11px;line-height:1.4;margin-top:5px}
 #lightStudy [hidden]{display:none}#lightStudy output{display:block}#lightStudy .lightNight{color:#ffddaf}
-body:not(.tcOn) #settings:has(#lightStudy){box-sizing:border-box;max-height:calc(100% - 84px - var(--map-credit-space,0px) - var(--test-safe-top,env(safe-area-inset-top,0px)) - var(--test-safe-bottom,env(safe-area-inset-bottom,0px)));overflow-y:auto;overscroll-behavior:contain}
 `;
 /** Existing settings owns opening/closing and driving input isolation. Nothing runs per frame. */
 export interface StudyPosition { e: number; n: number; heading: number }
@@ -202,7 +202,8 @@ export function lightStudyUI(study: LightStudy, when: Date, lat: number, lon: nu
   leave.addEventListener('click', () => { location.search = studyQuery(new URLSearchParams(location.search), getPosition?.(), true).toString(); });
   control.open = study.active || !!study.message;
   render();
-  panel.insertBefore(control, panel.firstChild);
+  const weather = panel.querySelector('#weatherSet');
+  (weather ?? panel.querySelector('#endShift.inPanel') ?? panel.querySelector('#settingsHeader'))?.after(control);
   if (study.active) {
     // Capture before the game's existing slider listener, which remembers ordinary game preferences.
     panel.addEventListener('change', event => {

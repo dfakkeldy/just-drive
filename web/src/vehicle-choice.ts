@@ -37,25 +37,25 @@ export function vehicleButtons(choice: VehicleChoice, id = 'vehicleChoice'): HTM
   }
   return group;
 }
-export const bikeHelp = '\nWASD/arrows: ride · Shift + throttle: wheelie · space: rear slide\nAir: W forward / S back · A/D whip · H: horn · T: radio · R: road · V: eyes · F: drone · L: places · M: map';
-const PAUSE_KEY: [string, string] = ['Esc / P', 'Pause or resume. Room games do not pause.'];
-const PAUSE_TOUCH: [string, string] = ['PAUSE', 'Pause or resume. Room games do not pause.'];
+export const bikeHelp = '\nWASD/arrows: ride · Shift + throttle: wheelie · space: rear slide\nAir: W forward / S back · A/D whip · H: horn · T: radio · R: road · V: eyes · F: drone · L: places · M: map · O: save picture';
+const PAUSE_KEY: [string, string] = ['Esc / P', 'Pause or resume. A room keeps going when you pause.'];
+const PAUSE_TOUCH: [string, string] = ['PAUSE', 'Pause or resume. A room keeps going when you pause.'];
 export function bikeKeys(touch: boolean): [string, string][] {
   return touch ? [
     PAUSE_TOUCH,
     ['Left thumb', 'Slide the pad to steer. In the air, whip left or right.'],
     ['GO / BRAKE', 'Ride. In the air, GO pitches forward; BRAKE pitches back.'],
     ['PULL + GO', 'Lift the front wheel. Ease GO to balance; too far causes a tumble.'],
-    ['RESET / VIEW', 'Back to the road / rider’s eye.'], ['HORN / RADIO', 'Honk / next station.'], ['DRONE', 'Camera drone.'], ['PLACES / ⚙', 'Places and the big map / settings.'],
+    ['RESET / VIEW', 'Back to the road / rider’s eye.'], ['HORN / RADIO', 'Honk / next station.'], ['DRONE', 'Camera drone.'], ['PLACES / ⚙', 'Places and the big map / settings.'], ['Save picture', 'Save a picture.'],
   ] : [
     PAUSE_KEY,
     ['W A S D / arrows', 'Ride. Hold S at rest to reverse.'], ['Shift + throttle', 'Wheelie. Ease throttle to balance; too far causes a tumble.'],
     ['Space', 'Rear brake and slide. S is the front brake.'], ['In the air', 'W pitches forward; S pitches back. A/D makes a whip.'],
-    ['H / T', 'Small horn / next radio station.'], ['R / V', 'Back on the road / rider’s eye.'], ['F / L / M', 'Camera drone / places / the big map.'],
+    ['H / T', 'Small horn / next radio station.'], ['R / V', 'Back on the road / rider’s eye.'], ['F / L / M', 'Camera drone / places / the big map.'], ['O', 'Save a picture.'],
   ];
 }
 
-export const horseHelp = '\nWASD/arrows: ride · space: stop\nH: whinny · R: road · V: rider’s eye · F: drone · L: places';
+export const horseHelp = '\nWASD/arrows: ride · space: stop\nH: whinny · R: road · V: rider’s eye · F: drone · L: places · O: save picture';
 export function horseKeys(touch: boolean, mail = false): [string, string][] {
   if (mail) return touch ? [
     PAUSE_TOUCH,
@@ -71,11 +71,11 @@ export function horseKeys(touch: boolean, mail = false): [string, string][] {
   return touch ? [
     PAUSE_TOUCH,
     ['Left thumb', 'Slide the pad to guide the horse.'], ['GO / WHOA', 'Walk, trot, canter, gallop. Hold WHOA at rest to back up.'],
-    ['WHINNY', 'Call to the other horses.'], ['RESET / VIEW', 'Back to the road / rider’s eye.'], ['DRONE', 'Camera drone.'], ['PLACES / ⚙', 'Places / settings.'],
+    ['WHINNY', 'Call to the other horses.'], ['RESET / VIEW', 'Back to the road / rider’s eye.'], ['DRONE', 'Camera drone.'], ['PLACES / ⚙', 'Places / settings.'], ['Save picture', 'Save a picture.'],
   ] : [
     PAUSE_KEY,
     ['W A S D / arrows', 'Ride. Hold S at rest to back up.'], ['Space', 'Stop.'], ['H', 'Whinny.'],
-    ['R / V', 'Back to the road / rider’s eye.'], ['F / L', 'Camera drone / places.'],
+    ['R / V', 'Back to the road / rider’s eye.'], ['F / L', 'Camera drone / places.'], ['O', 'Save a picture.'],
   ];
 }
 

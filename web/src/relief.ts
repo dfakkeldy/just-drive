@@ -11,8 +11,11 @@ const CSS = `
   display:flex;align-items:center;gap:8px;min-height:26px;padding:0 8px;border:1px solid rgba(238,242,246,.22);border-radius:6px;
   background:var(--panel,rgba(8,14,20,.72));color:var(--ink,#eef2f6);font:700 10.5px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;
   user-select:none;-webkit-user-select:none;cursor:default}
+body:not(.tcOn) #relief{box-sizing:border-box;width:178px}
+body:not(.tcOn) #relief i{flex:1 1 64px}
+@media (max-width:519px),(max-height:519px){body:not(.tcOn) #relief{width:126px}}
 #relief[hidden],#reliefCard[hidden]{display:none}
-#relief i{display:block;width:64px;height:7px;border-radius:4px;background:rgba(238,242,246,.16);overflow:hidden}
+#relief i{box-shadow:inset 0 0 0 1px #8a99a6;display:block;width:64px;height:7px;border-radius:4px;background:rgba(238,242,246,.16);overflow:hidden}
 #relief b{display:block;height:100%;width:0;background:#9fc7dc;border-radius:4px}
 #relief.soon b{background:#e9b65c}
 #relief.now b{background:#ff5a4a}
@@ -51,6 +54,7 @@ export class Relief {
   private forced = false;
   private ready = false;
   private layout = 1;
+  private labelledLevel = -1;
   private readonly chip = document.createElement('div');
   private readonly bar = document.createElement('b');
   private readonly card = document.createElement('div');
@@ -63,7 +67,7 @@ export class Relief {
     document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS }));
     this.chip.id = 'relief';
     this.chip.setAttribute('role', 'button');
-    this.chip.setAttribute('aria-label', 'Bladder. When the car is stopped, press to step out.');
+    this.labelLevel();
     const track = document.createElement('i');
     track.appendChild(this.bar);
     this.chip.append(Object.assign(document.createElement('span'), { textContent: 'BLADDER' }), track);
@@ -75,6 +79,12 @@ export class Relief {
     document.body.append(this.chip, this.card);
   }
 
+  private labelLevel(): void {
+    const percent = Math.round(this.level * 10) * 10;
+    if (percent === this.labelledLevel) return;
+    this.labelledLevel = percent;
+    this.chip.setAttribute('aria-label', `Bladder, level ${percent} percent. When the car is stopped, press to step out.`);
+  }
   private wanted = false;
   /** The B key, or a tap on the gauge. It does nothing unless the car is stopped and the gauge has reached the mark. */
   request(): void { this.wanted = true; }
@@ -83,7 +93,7 @@ export class Relief {
 
   reset(): void {
     this.level = START; this.full = this.busyFor = this.cardFor = this.breaks = 0; this.forced = this.ready = this.wanted = false;
-    this.card.hidden = true; this.chip.className = '';
+    this.card.hidden = true; this.chip.className = ''; this.labelLevel();
   }
 
   private say(head: string, text: string, seconds: number): void {
@@ -144,6 +154,7 @@ export class Relief {
       }
       this.wanted = false;
     }
+    this.labelLevel();
     this.bar.style.width = `${Math.round(this.level * 100)}%`;
     this.chip.className = `${this.level >= 1 ? 'now' : this.level >= SOON ? 'soon' : ''}${this.ready && !this.busy ? ' ready' : ''}`;
     // The phone grid owns placement. The desktop gauge still follows the map.

@@ -556,7 +556,7 @@
         "LOW",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "3fe36f3437be2f3ca6c555932fff170a03ae073318b99ca920a9f85f0ae8a71c"
+      "sha256": "e753bad7ade984b36f3d96f88677bc26a4651da054401c923b4ed5016080fcaf"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -567,7 +567,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "918b9aea74f899fdd261da70d241ed7d4041049e8314ff66d374ebffb7bda53c"
+      "sha256": "bb1a9976978ca00611a3a1b1ab4e1dc1d5315ecd64a12268879e673fcbb03d32"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -596,7 +596,7 @@
         "MIRROR",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "7bcc4917386646d3f31492358ddfc8bbcb972bc277a656950a50aa389f44074b"
+      "sha256": "4113356553dc1d7de347cf75abdcef4f18206012e68d0d2a59f96a5be04feef9"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -607,7 +607,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "996ffab60a80d93be206954b0679850cbe985c2105d884b63b0761cb82d85b0a"
+      "sha256": "808a2d2ca36e3b15a00350a77555668aadd369d98fb6a7378d9c797886ed6dc4"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -626,7 +626,7 @@
         "GROUND_CLASSES",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "b34690b45b713cba0207feab32a7fa67d847e5768bf1705ef55042c6168dace0"
+      "sha256": "6e8ed40cc279334b506f9a948f8f3adddcab59a21926fb63fc624aa323c02683"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -636,7 +636,7 @@
         "ROAD_PAVEMENT",
         "SEA_WATER"
       ],
-      "sha256": "cf97c58feeac442867cd07b1ac4c8451723db461ac440dc2033b1aeda25d0dbb"
+      "sha256": "a7a807cafd2ce1b1721f050d36c43cae6c28a4a6bab295515d0f2410ec5aac28"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -647,7 +647,7 @@
         "SEA_WATER",
         "SHADOWS"
       ],
-      "sha256": "b1dcbe4fa3fcd7bc1b0352f1c79edc7ff588757e19d3f59ea476b7fb44439201"
+      "sha256": "31192b57131ece058ec9c2ef9a6b371d150a23c1ff719d27a35f591c17166c02"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -659,7 +659,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "73a71c176fdbac782ed576eec952e7c33fe1bb852b4a5892a35edfcd3f4f033f"
+      "sha256": "9118f3e805871c7dc4356c6717a8bd3018606e163e2d3284c1b642a6877056d0"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -670,7 +670,7 @@
         "SEA_WATER",
         "SITE_GRAVEL"
       ],
-      "sha256": "d32e219e9a903dee7af6985b7f762772a78b908ee51181a4a800ce0159ba7c25"
+      "sha256": "532953522b1541e42cc6b4e182454caa3c0dc93bdfdaebf719b5e9e7dd1b370a"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -680,7 +680,7 @@
         "ROAD_PAVEMENT",
         "SHADOWS"
       ],
-      "sha256": "5aecc3c5058cefabb02f4545001fd9605f28df8ffe16799ac5da8bd74789d274"
+      "sha256": "e2d43b5a4ebd8a3e3a4f99fc63e7023f9a6253de9758f517f349a4fdb88d0924"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -691,7 +691,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "d548807273a865eafe8d438543f7553781a227154c57a0b4bdab8ad9fc203c19"
+      "sha256": "09ae4f6d33428ebbe431233b643810cfe306fc39595dd5d7c955da861d1dcc0e"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -701,7 +701,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "805123cd126505c3d2db74b24fe2088b55e510b68175935d89ed3818672640f4"
+      "sha256": "83ad45062cce80b7fc6648649be79907c3488729e36a1e9a070eb0e17c75916d"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -786,7 +786,7 @@
         "LOW",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "ac27d8b7ff01131bd4b5668e9b05a16a3000e27e4d729f01a22b98493b16e066"
+      "sha256": "87edbf82b20fb50a1f9a693b124d98a2f53e5bcc9e31e820f6919897c243f927"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -796,7 +796,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "cc26ddb978a2e850a10af52bf0671a3e2256b534a0dfb9aba80c313c92cc46cf"
+      "sha256": "31500d2341b9e50dc57f5224e162a64fe11756ceabacd8f757da023232d58173"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -822,7 +822,7 @@
         "MIRROR",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "601e97168344d50ba5d4bda7a2d20015b85f0669f5fcf9a39967ecca2bd86342"
+      "sha256": "62f84035d84933317195ab7efa9ffd12f823fee003e8a330b13892734b22838f"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -832,7 +832,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "6982853ea185f1d4690122b28038b629f2ee2f8e43d7b0b7741a0bfb3cee7629"
+      "sha256": "80cee581f546349284fa9a929457661a6fdf83ab319224a31908d8a99745def7"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -849,7 +849,7 @@
         "AIRPORT",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "874ac1b36db8e3386ce8fd52272f86dfda33b24fc29e33aff429829187f789bb"
+      "sha256": "5d3fde126d343dcd93e5416058ef6cb5c1da0f6cca110fe9aa6783b436440ac6"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -858,7 +858,7 @@
         "ROAD_PAVEMENT",
         "SEA_WATER"
       ],
-      "sha256": "d5cc9cfd865322db0390312f14b127b1446ad419bcf522dc9633f8e4a44d95b0"
+      "sha256": "0a98066a3672977039aa4e5c1a93525070ceabae0fd9df1fe616a75e00975bd6"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -868,7 +868,7 @@
         "SEA_WATER",
         "SHADOWS"
       ],
-      "sha256": "68157bbe7ba6ae2515d2cd3deceeada56a2550cb21b5d1107cb5345a15e9291e"
+      "sha256": "d409851acb2586ca78eef968a572c610f2d091bcc388311adc367519ed8b2f49"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -879,7 +879,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "63c57e56c69c01a32bdd06cf7b18664a00ac1377cf1f3f876a73f4dcfb58279f"
+      "sha256": "b79fbf7597c1b22dbe2a1f445fc648d6a775bb23ca107244faea6d98aae19c23"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -889,7 +889,7 @@
         "SEA_WATER",
         "SITE_GRAVEL"
       ],
-      "sha256": "e4cb3a974a304e533d2638d9e5c7fdfeef5a37612b37a6fbfa0bf7dd9211d0c4"
+      "sha256": "69ce1f4d8a8dad7b73f9c191e28baec8ecb8677f34f4e33b00e2cd8ab2dcbb14"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -898,7 +898,7 @@
         "ROAD_PAVEMENT",
         "SHADOWS"
       ],
-      "sha256": "4a4bb5019623d37da3364411ecedd54d173e82cae6ceb67b36ddc193f15ea4e3"
+      "sha256": "35bda7ddeb7103a6fd650828c1d76df084015e2334cce69681598377bc147b41"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -908,7 +908,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "61578f682ce546a45d04e94f9e9d6ed25a2a70f805a2236686b5434d363c5fe3"
+      "sha256": "56d6eb18625a43e9049e83ada76f6e5d4637952e4fef79cabe8d5ceebf33da84"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -917,7 +917,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "a15c0e75d6c19b60a4aaa70fcb7a282bc8fe8d5becdd55bbd1eed287ef593c3e"
+      "sha256": "e8e6bde5edf19533dcffee5262a8a9443779a79081c774c6dd40aa4992db8024"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1002,7 +1002,7 @@
         "LOW",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "632c60de0b3cb5b1a0fe0715cee445054e745174386dd8e26055e3b2d54d53b2"
+      "sha256": "37227d6fca6f50cd593b8387b220e4baa697896314a22dfaab0cb7947b9aae10"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1012,7 +1012,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "603b37ab3f11186cd95fbe8874e1597555840732dfc2a1c13149d0b75947d7f2"
+      "sha256": "133f95d8ad47991c78d4737ed358b795d0a0a086351a2aa239460dda3b4133bf"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1038,7 +1038,7 @@
         "MIRROR",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "5afc52e2f47255df1991c4f8bccaa3fe953cd29407ec391640a057cd59da6f3e"
+      "sha256": "c17d1f224c1e8331dc208bdcf5cf199730c0048b5f3976be151d38225d0d4a5c"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1048,7 +1048,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "b9527a8ca8b98c5040e47cd921c1bd16811d264d5d93d90833ba8558be45a626"
+      "sha256": "8d5962e783ba710e9f711d224f679e1c9f792428adaf9e4727cd51e21fa83203"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1065,7 +1065,7 @@
         "GROUND_CLASSES",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "ed9f74d5abc548e7d66eb217b047d3b77e1a39407b15e15cb06e93e9771011f0"
+      "sha256": "0e8bc4b067585281c5850bd7937a615beee848e82e461dc027a59068c6e1e41b"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1074,7 +1074,7 @@
         "ROAD_PAVEMENT",
         "SEA_WATER"
       ],
-      "sha256": "45f83e46bc73198db7ecc7354dbbd80664dc8c349a75602973cd6f11784328b9"
+      "sha256": "2bd2e8caa1678658190e4957cff455490a38af9043a7c92384ec7035670e6183"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1084,7 +1084,7 @@
         "SEA_WATER",
         "SHADOWS"
       ],
-      "sha256": "a7f3bdeb90ef451fc0f5d791af4d08c3ffaf9356cbdb3e97462a0a615a3d2dc4"
+      "sha256": "c5d543445e398674d70650647f0421865d3e2afa6fc8942ea0eee069c4523101"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1095,7 +1095,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "7b9b23b4392aaa0f38519d0d7b93f746566320763eb087e4b784ac3249dfda3d"
+      "sha256": "84ec2fc4027ae137084359596d4b7a05d921521201d47d17a218e23c8a8d5b6b"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1105,7 +1105,7 @@
         "SEA_WATER",
         "SITE_GRAVEL"
       ],
-      "sha256": "420ec144a11d0b543bd628f0efb23d2b9829b2f707a17b9066edf1e459a9cb28"
+      "sha256": "13bc9471823cc9df07e5f659c9b6020d96e585941f16eb2847a6137bfacb4474"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1114,7 +1114,7 @@
         "ROAD_PAVEMENT",
         "SHADOWS"
       ],
-      "sha256": "10f9399f0ef6a21065310591eb92de037d796b3ada6f15b7eafc80da8d25f1e6"
+      "sha256": "13329971934e9a26c0b577786ab9fd859cd8784714ceebc3da4db8315b9691ed"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1124,7 +1124,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "a61e6a7d35b009b660a26c51b39db438c3f9716d8a769f92ef91686ac5bb0edb"
+      "sha256": "7225a6f21695f3a66d6ce5edc107f7c5a31a842399a89d131e6fee48a49aaffa"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1133,7 +1133,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "889c4cb1946bc2634bb7d2b6a72db1ae7229404fbee1c6b1fe877c0ebebada4e"
+      "sha256": "374e91823fcef2f5a70fd6825c34dc05a332e257106b02c5efca06ac98d41398"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1209,7 +1209,7 @@
         "LOW",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "0ec30f6f0a4d4ab56c069c9cd147661dc80355a006ba5b413f434452f8c56407"
+      "sha256": "fc89d395a715bddcf813780ac4a661f52294537e298a97489a403bbd4854b2a6"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1218,7 +1218,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "371baf7ae0260040d7e2fcea290cf3bef82b9a8e49b9e018659bceca8fbf2327"
+      "sha256": "38f94fb6c045a38b48fce3f8f47ce18331d24d9a9c9afafc0d1b54fe2e57ed0b"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1241,7 +1241,7 @@
         "MIRROR",
         "ROAD_PAVEMENT"
       ],
-      "sha256": "e6b06ac696aaefb979454ee09354d9d6ffbcc136455f4a8e9046ed1ea5f998f9"
+      "sha256": "0815e0e16836d9517e82ce47339c9a20236ad0bcb4d86097b336decd571bdc07"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1250,7 +1250,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "6e331d4a25d7ba431a018950869531c3c9aefc056ef6be4046c59553932f95c0"
+      "sha256": "6c39ace6390414322c6b955f382ce3a88e2a45783a239a145181ec8811bda0bf"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1265,7 +1265,7 @@
       "flags": [
         "ROAD_PAVEMENT"
       ],
-      "sha256": "202eee439a0842fa16ddca13e2dc0191a34208fb79999c5d6c40f2b236a2c8be"
+      "sha256": "68f87920bf0f941bdd133fdedd9163f726652c78abd1755f860eeb9b55a8ec24"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1273,7 +1273,7 @@
         "ROAD_PAVEMENT",
         "SEA_WATER"
       ],
-      "sha256": "f883844d1382f6be004b615ebad8731abf20628341ecc259089f2d97d716c0be"
+      "sha256": "d6c79d029b27b44a6755cc071aa9fa667d4d0b40c23788616973a3c174690d27"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1282,7 +1282,7 @@
         "SEA_WATER",
         "SHADOWS"
       ],
-      "sha256": "63dcbe16f819d9138fab733b01c4b13abdf1c6a5b93380ebf3ca1d41be2c7c12"
+      "sha256": "664b5a0cecd73c3bad73cc070b3c1ba453159c676b5968cde4b62cb5b3deb454"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1292,7 +1292,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "4e7fa56998f192d082a29426d94343a54d39d0db6f53454af6b449c47cd0f12d"
+      "sha256": "0d3a0ea4cad7e6f9fe479955aea9f726d4d3d56c4b1857209fa88eff4aa0e3ed"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1301,7 +1301,7 @@
         "SEA_WATER",
         "SITE_GRAVEL"
       ],
-      "sha256": "730ad573088a4f397784bf2c9a67a562dfdc2a855f3e0aece164bef74f8436b9"
+      "sha256": "c31766b70c4cca1cb9986ba647a6bf34f8154bd6f9aa8e8de5bda43040445bc7"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1309,7 +1309,7 @@
         "ROAD_PAVEMENT",
         "SHADOWS"
       ],
-      "sha256": "0769df6895c0363522c6cc78c5f613a30d27b476f289d381496116b20d32bcc5"
+      "sha256": "272e5f4eec983d58a0e6e560cd1b39032e968e2648ad8ac884a5bbd909c74356"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1318,7 +1318,7 @@
         "SHADOWS",
         "SITE_GRAVEL"
       ],
-      "sha256": "4d1b5cc754e8cde0347784da7d7555b4d7295b4d2d70a3ef83b549c4ea527a32"
+      "sha256": "0be68b76a8efb974282417f93e51bba427b0c0091d1f70deaefe42462ab35f23"
     },
     {
       "name": "TERRAIN_FRAG",
@@ -1326,7 +1326,7 @@
         "ROAD_PAVEMENT",
         "SITE_GRAVEL"
       ],
-      "sha256": "f0d0456d180b07bfce9de7ea34bcb27b6e4c939d7cea0c83e989cefc05a2d189"
+      "sha256": "5ebe5176b1a8f0360043cfa5054c88eecf4171be34ff155e6e23f78685531252"
     },
     {
       "name": "TERRAIN_FRAG",

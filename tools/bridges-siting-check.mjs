@@ -25,7 +25,10 @@ const placementFiles=['web/src/main.ts','web/src/road-animals.ts','web/src/lot-p
 assert.deepEqual(wholeSiteBoxes(placementFiles),[],'site exclusions use sitingBoxes, not the whole bridge query box');
 assert.equal(wholeSiteBoxes([['mutant',"excluded: [...terrain.sites.map(s => s.box), ...x]"]]).length,1,'the whole-box lint sees the old lot and yard prop expression');
 assert.equal(wholeSiteBoxes([['mutant',"this.terrain.sites.map(site => site.box)"]]).length,1,'the whole-box lint sees the old road animal expression');
-const sitingUses=placementFiles.map(([,text])=>text.split('sitingBoxes ?? [').length+text.split('sitingBoxes??[').length-2).reduce((a,b)=>a+b,0);
+// Main's placeBoxes (terrain.ts) is the one place that turns sites into placement boxes; it must give the footprints.
+const placeAnchor='.filter(s => !s.roadPaint).flatMap(s => s.sitingBoxes ?? [s.box])';
+assert.equal(readFileSync(root+'web/src/terrain.ts','utf8').split(placeAnchor).length,2,'placeBoxes uses sitingBoxes');
+const sitingUses=placementFiles.map(([,text])=>text.split('sitingBoxes ?? [').length+text.split('sitingBoxes??[').length+text.split('placeBoxes(terrain.sites)').length+text.split('placeBoxes(this.terrain.sites)').length-4).reduce((a,b)=>a+b,0);
 assert.ok(sitingUses>=6,'yard dog, lot props, yard lights, yard props and both road animal checks use sitingBoxes ('+sitingUses+')');
 async function probe(mutant=''){
  const replacements={};
@@ -49,11 +52,15 @@ async function probe(mutant=''){
   const anchor='sitingBoxes:this.spans.map(r=>[r.x0,r.z0,r.x1,r.z1] as const),';assert.equal(text.split(anchor).length,2);
   replacements[file]=text.replace(anchor,mutant==='missing footprints'?'':'sitingBoxes:[],');
  }
+ if(mutant==='whole place box'){
+  const file='web/src/terrain.ts',text=readFileSync(root+file,'utf8');assert.equal(text.split(placeAnchor).length,2);
+  replacements[file]=text.replace(placeAnchor,'.filter(s => !s.roadPaint).map(s => s.box)');
+ }
  const f=await fixture('mabou',1,replacements);
  try{
   const regular={box:[100000,100000,100010,100010],height:(_x,_z,h)=>h,surface:()=>null};f.terrain.sites.push(regular);
-  const select=Function('terrain','return '+(mutant==='coarse query box'?'terrain.sites.map(s=>s.box)':expression));
-  const excluded=select(f.terrain),json=name=>JSON.parse(readFileSync(root+'data/baked/terrain/'+name+'.json'));
+  const select=Function('terrain','placeBoxes','return '+(mutant==='coarse query box'?'terrain.sites.map(s=>s.box)':expression));
+  const excluded=select(f.terrain,f.placeBoxes),json=name=>JSON.parse(readFileSync(root+'data/baked/terrain/'+name+'.json'));
   const village=f.manifest.village,props=json('props'),buildings=json('buildings').buildings;
   const mail=[...props.mailboxes,...props.communityBoxes].map(p=>({x:p.x-village[0],z:village[1]-p.y}));
   const houses=buildings.filter(b=>b.kind==='house').map(b=>({x:b.x-village[0],z:village[1]-b.y}));
@@ -82,7 +89,7 @@ async function probe(mutant=''){
 const at=process.argv.indexOf('--case');
 if(at>=0)await probe(process.argv[at+1]);
 else {
- const cases=['',...(process.argv.includes('--mutations')?['missing footprints','coarse query box','empty footprints','eager field','unresolved field','no resolved field']:[])];
+ const cases=['',...(process.argv.includes('--mutations')?['missing footprints','coarse query box','whole place box','empty footprints','eager field','unresolved field','no resolved field']:[])];
  for(const mutant of cases){
   const r=spawnSync(process.execPath,[process.argv[1],'--case',mutant],{encoding:'utf8'});
   if(!mutant){assert.equal(r.status,0,r.stdout+r.stderr);process.stdout.write(r.stdout);}

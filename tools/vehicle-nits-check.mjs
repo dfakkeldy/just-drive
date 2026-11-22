@@ -176,6 +176,11 @@ function numericState({ v, rig, terrain, roads }) {
     assert.equal(v.drift.active, false, 'no drift begins in the motor oracle scripts');
     for (const o of [v.drift, v.driftGround, v.slideSpeed]) seen.add(o);
   }
+  // Water under the wheels (rough-roads.ts puddles) came after these goldens. The scripts have no puddle field, so it stays zero.
+  if (v.wheelWater) {
+    assert.ok(v.wheelWater.every(n => n === 0), 'no puddle water under a wheel in the motor oracle scripts');
+    seen.add(v.wheelWater);
+  }
   function walk(o, path) {
     // Saved pose height is new bridge ownership metadata. Its behaviour is pinned by
     // bridges-underdeck; omit only that extra field to preserve every pre-existing

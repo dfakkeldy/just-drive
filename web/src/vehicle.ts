@@ -5,7 +5,8 @@ import { wideDemo } from './vehicle-demo';
 import * as THREE from 'three';
 import { CAR_SPEC, type Rig, type VehicleSpec } from './vehicle-spec';
 import { type Damage, steeringPull } from './damage-rules';
-import { potholeDensity, potholeDepth, washboard } from './defects';
+import { ROUGH_DEPTH, potholeDensity, potholeDepth, washboard } from './defects';
+import { puddleDip } from './rough-roads';
 import type { Road, RoadHit, Roads } from './roads';
 import { horseSpeedLimit } from './horse-motion';
 import { DrivingHelp, forwardTangent } from './driving-help';
@@ -19,6 +20,10 @@ export const LIMIT_BRAKE = 1.2;
 export interface Input { throttle: number; steer: number; handbrake: boolean; touch?: boolean; held?: boolean }
 
 const G = 9.81;
+/** Water drag per metre of wheel sunk in a puddle, per m/s: a lane-wide pond at 50 km/h slows the car about 0.4 g. */
+export const PUDDLE_DRAG = 0.7;
+/** Yaw per metre of water on one side more than the other, per m/s: the wet side holds the car back and turns it in. */
+export const PUDDLE_PULL = 0.12;
 const STEP = 1 / 120;
 // Cornering grip, as a multiple of what real tyres give. At 1 the car was calm but could not take a bend at
 // speed (the owner's second drive, 10 Nov 2026); this is a game, so the tyres hold harder than life.
@@ -32,6 +37,8 @@ const SURFACES = {
   track: { mu: 0.62, roll: 0.05, rough: 0.03, name: 'dirt track' },
   trail: { mu: 0.8, roll: 0.02, rough: 0.004, name: 'rail trail' },   // fine crusher dust, graded: the best surface off the pavement
   washboard: { mu: 0.6, roll: 0.06, rough: 0.09, name: 'washboard' },
+  // A rough stretch (rough-roads.ts): mud and loose stone in broken ruts. It sounds and throws dirt as a dirt track.
+  rough: { mu: 0.55, roll: 0.075, rough: 0.05, name: 'dirt track' },
   grass: { mu: 0.5, roll: 0.09, rough: 0.04, name: 'grass' },
   brush: { mu: 0.42, roll: 0.5, rough: 0.07, name: 'brush' },
 };
@@ -95,6 +102,8 @@ export class Vehicle {
   /** The last finished drift, once (Shift reports it to the score stream). */
   takeDrift(): DriftFacts | null { return this.drift.take(); }
   surfaceName = '';
+  /** Water under each wheel this step, metres (front left, front right, rear left, rear right): for the splash. */
+  readonly wheelWater = new Float32Array(4);
   roadName: string | null = null;
   sunk = 0;                  // seconds spent in water
   private lean = new THREE.Vector2();
@@ -372,16 +381,22 @@ export class Vehicle {
     const ax = Math.sin(along), az = -Math.cos(along);
     let deepest = 0;
     let contact = 0;
+    let wet = 0, wetSide = 0;   // metres of water under the wheels, and right minus left
+    this.wheelWater.fill(0);
     const h = (a: number, b: number) => {
       const wx = this.x + fx * a + rx * b, wz = this.z + fz * a + rz * b;
+      const wheel = contact;
       const g = this.groundContacts[contact++].height;
       if (g === null) return this.y;
       if (this.spec.locomotion === 'horse') return g;
       const sw = this.terrain.surfaceAt(wx, wz,this.y);
       if (!sw || sw.kind === 0 || sw.roadDist > sw.halfWidth - 0.2) return g;
-      let d = potholeDepth(wx, wz, potholeDensity(sw.kind, sw.washboard, sw.gravel));
+      let d = sw.rough ? potholeDepth(wx, wz, potholeDensity(sw.kind, sw.washboard, sw.gravel, true), ROUGH_DEPTH)
+        : potholeDepth(wx, wz, potholeDensity(sw.kind, sw.washboard, sw.gravel));
       if (d > deepest) deepest = d;
       if (sw.washboard) d += washboard(wx * ax + wz * az);
+      const water = puddleDip(wx, wz);
+      if (water > 0) { d += water; wet += water; wetSide += b > 0 ? water : -water; this.wheelWater[wheel] = water; }
       return g - d;
     };
     const rearHW = (this.spec.rearTrack ?? this.spec.track) / 2;
@@ -392,7 +407,7 @@ export class Vehicle {
     const slopeR = Math.atan2((fr + rr) / 2 - (fl + rl) / 2, (this.spec.rearTrack === undefined ? this.spec.track : (this.spec.track + this.spec.rearTrack) / 2));       // right side up is positive
 
     const onRoad = onDeck || (s.kind > 0 && s.roadDist <= s.halfWidth + 0.4);
-    const surf = this.terrain.cartRoads && onRoad ? (s.washboard ? SURFACES.washboard : s.kind === 4 ? SURFACES.track : SURFACES.gravel) : siteDeck && s.kind===9 ? SURFACES.concrete : onRoad ? (s.kind <= 2 || s.kind === 9 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.kind === 12 ? SURFACES.grass : s.kind === 3 || s.kind >= 8 || s.gravel ? SURFACES.gravel : s.kind === 5 ? SURFACES.trail : SURFACES.track)
+    const surf = this.terrain.cartRoads && onRoad ? (s.washboard ? SURFACES.washboard : s.kind === 4 ? SURFACES.track : SURFACES.gravel) : siteDeck && s.kind===9 ? SURFACES.concrete : onRoad ? (s.kind <= 2 || s.kind === 9 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.rough ? SURFACES.rough : s.kind === 12 ? SURFACES.grass : s.kind === 3 || s.kind >= 8 || s.gravel ? SURFACES.gravel : s.kind === 5 ? SURFACES.trail : SURFACES.track)
       : s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
     this.surfaceName = surf.name;
 
@@ -424,11 +439,11 @@ export class Vehicle {
     // No limiter on works-yard surfaces (8/9/10): the slipway needs its full run-up.
     // A road bridge deck limits as the road it carries (its own kind 9 is the concrete works-yard surface).
     const kind = siteDeck && s.deckRoadKind !== undefined ? s.deckRoadKind : s.kind;
-    const touchLimit = !(input.touch && this.strongHelp && this.touchSpeedLimit) || kind >= 8 && kind <= 10 ? 0 : !onRoad ? 50 / 3.6 : s.washboard ? 50 / 3.6 : kind === 1 ? 100 / 3.6 : kind === 2 ? 90 / 3.6 : kind === 13 ? 90 / 3.6 : kind === 3 ? 75 / 3.6 : kind === 5 ? 55 / 3.6 : 50 / 3.6;
+    const touchLimit = !(input.touch && this.strongHelp && this.touchSpeedLimit) || kind >= 8 && kind <= 10 ? 0 : !onRoad ? 50 / 3.6 : s.washboard ? 50 / 3.6 : s.rough ? 35 / 3.6 : kind === 1 ? 100 / 3.6 : kind === 2 ? 90 / 3.6 : kind === 13 ? 90 / 3.6 : kind === 3 ? 75 / 3.6 : kind === 5 ? 55 / 3.6 : 50 / 3.6;
     // A drift has its own step (driftStep); every other step is the ordinary grip model below, unchanged.
     let slid = false;
     if (this.airborne) { this.drift.airborne(this.x, this.z); this.drift.watch(input, dt); }   // the flick's clocks run in the air too
-    else if (this.driftStep(dt, input, surf, slopeF, deepest, vf, vl, touchLimit)) { slid = true; vf = this.slideSpeed.forward; vl = this.slideSpeed.right; }
+    else if (this.driftStep(dt, input, surf, slopeF, deepest, vf, vl, touchLimit, wet)) { slid = true; vf = this.slideSpeed.forward; vl = this.slideSpeed.right; }
     if (!this.airborne && !slid) {
       // On washboard the tyres skip from ridge to ridge: the faster the car, the less they hold.
       const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
@@ -459,7 +474,8 @@ export class Vehicle {
       const hard = Math.abs(input.steer);
       if (hard > 0.6 && Math.abs(vf) > 13) a -= Math.sign(vf) * this.spec.hardSteerDrag * ((hard - 0.6) / 0.4) * Math.min(1, (Math.abs(vf) - 13) / 10);
       const drag = (horse ? .022 : surf.roll) * G + (this.towLoad && this.spec.mass ? this.spec.aeroDrag * vf * vf * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag * vf * vf) + (!horse && surf === SURFACES.brush ? 0.9 * Math.abs(vf) : 0)
-        + deepest * 45 * Math.min(1, Math.abs(vf) / 3);   // a wheel in a pothole drags hard
+        + deepest * 45 * Math.min(1, Math.abs(vf) / 3)   // a wheel in a pothole drags hard
+        + wet * PUDDLE_DRAG * Math.abs(vf);              // and water holds the wheels back
       // Resistance cannot reverse the car: it only brings it to rest.
       if (Math.abs(vf) > 0.05 || Math.abs(a) > drag) a -= Math.sign(vf || a) * Math.min(drag, Math.abs(vf) / dt + Math.abs(a));
       vf += a * dt;
@@ -516,6 +532,8 @@ export class Vehicle {
         this.heading += (this.random() - 0.5) * this.spec.washboardYaw * Math.abs(vf) * (1.2 - skip) * dt * 6;
         vl += (this.random() - 0.5) * this.spec.washboardSideways * Math.abs(vf) * (1.1 - skip) * dt * 4;
       }
+      // Water on one side holds that side back: the car turns toward it. A pure function of where the wheels are.
+      if (wetSide !== 0) this.heading += wetSide * PUDDLE_PULL * vf * dt;
       if (deepest > 0.03 && Math.abs(vf) > 2) this.jolt = Math.max(this.jolt, deepest * 6);
       this.lean.y = vf * yaw;
 
@@ -587,7 +605,7 @@ export class Vehicle {
    * The body keeps one speed along its path; the rules turn the path and set the slide angle between path and heading.
    * No driving help acts here: the light and the strong help would pull the nose back to the road and fight the slide.
    */
-  private driftStep(dt: number, input: Input, surf: (typeof SURFACES)[keyof typeof SURFACES], slopeF: number, deepest: number, vf: number, vl: number, touchLimit: number): boolean {
+  private driftStep(dt: number, input: Input, surf: (typeof SURFACES)[keyof typeof SURFACES], slopeF: number, deepest: number, vf: number, vl: number, touchLimit: number, wet = 0): boolean {
     const spec = this.spec.drift, d = this.drift;
     if (!spec || !this.canDrift || this.spec.locomotion === 'horse') return false;
     d.watch(input, dt);
@@ -629,7 +647,7 @@ export class Vehicle {
     a -= G * Math.sin(slopeF);
     const measured = slideAngle(vf, vl), m = d.step(spec, input, g, measured, dt);
     const aero = this.towLoad && this.spec.mass ? this.spec.aeroDrag * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag;
-    const drag = surf.roll * G + aero * v * v + (surf === SURFACES.brush ? .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + m.scrub;
+    const drag = surf.roll * G + aero * v * v + (surf === SURFACES.brush ? .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + wet * PUDDLE_DRAG * v + m.scrub;
     v = Math.max(0, v + (a - drag) * dt);
     // The path turns; the nose leads it by the new slide angle.
     this.heading = this.heading - measured + m.pathRate * dt + m.angle;

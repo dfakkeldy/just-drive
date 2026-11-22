@@ -14,7 +14,6 @@ import os
 import math
 from pathlib import Path
 import random
-import re
 import importlib.util
 
 from osgeo import gdal
@@ -373,7 +372,111 @@ def building_exclusions(exclusions):
 
 
 
-def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
+def pole_track(r):
+    """A kind-4 road that may carry a pole run: named, not a props driveway, not a bridge."""
+    return r['kind'] == 4 and bool((r.get('name') or '').strip()) and not r.get('propsDriveway') and not r['bridge']
+
+
+def unpowered_roads(net, entries):
+    """Road ids of AREA.unpowered_tracks entries, ((east, north) on the line, expected name). Any entry that does not
+    resolve within 5 m to a pole track of exactly that name stops the bake."""
+    ids = set()
+    for entry in entries:
+        if not (isinstance(entry, tuple) and len(entry) == 2 and isinstance(entry[1], str) and entry[1].strip()):
+            raise RuntimeError(f'unpowered_tracks entry is not ((east, north), name): {entry!r}')
+        point, name = entry
+        hit = net.nearest(point, 5)
+        if hit is None or not pole_track(hit['road']) or hit['road']['name'] != name:
+            raise RuntimeError(f'unpowered_tracks entry {entry!r} is not on a named kind-4 pole track called {name!r}')
+        ids.add(hit['road']['id'])
+    return ids
+
+
+def corrected_road(net, entry):
+    """The public road of one AREA.public_pole_corrections entry and its checked rules. A wrong entry stops the bake."""
+    if not (isinstance(entry, tuple) and len(entry) == 4 and isinstance(entry[1], str) and entry[1].strip()
+            and isinstance(entry[3], tuple) and entry[3]):
+        raise RuntimeError(f'public_pole_corrections entry is not ((east, north), name, kind, rules): {entry!r}')
+    point, name, kind, rules = entry
+    hit = net.nearest(point, 5)
+    road = hit and hit['road']
+    if not road or not public(road) or road['bridge'] or road['name'] != name or road['kind'] != kind:
+        raise RuntimeError(f'public_pole_corrections entry {entry[:3]!r} is not on a public kind-{kind} road called {name!r}')
+    end = 0
+    for rule in rules:
+        number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+        if not (end is not None and isinstance(rule, tuple) and len(rule) == 3 and rule[2] in ('left', 'right', 'none')
+                and number(rule[0]) and rule[0] == end and (rule[1] is None or number(rule[1]) and rule[1] > rule[0])):
+            raise RuntimeError(f'public_pole_corrections rules must run from s=0 to the end (s1 None) without gaps or '
+                               f'overlaps: {rule!r}')
+        end = rule[1]
+    if end is not None:
+        raise RuntimeError('public_pole_corrections rules must reach the end of the road (last s1 None)')
+    return road, rules
+
+
+def pole_side(local, r, p):
+    """(s, side) of a pole beside road r: side +1 left, -1 right, looking along the road. A pole whose side is not
+    clear (on the line, off a bend vertex, or more than 20 m from the line) stops the bake."""
+    at = local.nearest((p['x'], p['y']), 20)
+    if at is None:
+        raise RuntimeError(f'pole {p!r} is not within 20 m of its road {r["name"]!r}')
+    u = at['u']
+    cross = u[0] * (p['y'] - at['p'][1]) - u[1] * (p['x'] - at['p'][0])
+    if at['dist'] == 0 or abs(cross) < .5 * at['dist']:
+        raise RuntimeError(f'pole {p!r} stands off a bend of {r["name"]!r}; its side is not clear')
+    return at['s'], 1 if cross > 0 else -1
+
+
+def wanted(rules, s):
+    return next(rule[2] for rule in rules if rule[0] <= s and (rule[1] is None or s < rule[1]))
+
+
+def correct_public_poles(net, poles, corrections, safe=None):
+    """Apply AREA.public_pole_corrections to the public poles (place_poles calls it between the public pass and the
+    kind-4 runs). It is absolute, so a second run changes nothing: a pole in a 'none' stretch goes, a pole on the
+    wrong side moves straight across at the same s, and every other pole keeps its bytes. A moved pole that does not
+    then stand where its rule wants it, that stands within 9 m of another pole, or that is not `safe` stops the bake."""
+    poles = list(poles)
+    roads = [corrected_road(net, entry) for entry in corrections]
+    if len({r['id'] for r, _ in roads}) != len(roads):
+        raise RuntimeError('public_pole_corrections lists one road twice')
+    moved = []
+    for r, rules in roads:
+        local = Network([r])
+        kept = []
+        for p in poles:
+            if p['road'] != r['id']:
+                kept.append(p)
+                continue
+            s, side = pole_side(local, r, p)
+            want = wanted(rules, s)
+            if want == 'none':
+                continue
+            if side == (1 if want == 'left' else -1):
+                kept.append(p)
+                continue
+            # The frozen pass's setback: 3.2 m beyond the road edge.
+            q, u = shifted(r, s, -side, 3.2)
+            p = dict(p, x=round(q[0], 3), y=round(q[1], 3), heading=heading(u))
+            s2, side2 = pole_side(local, r, p)
+            if wanted(rules, s2) != want or side2 != -side:
+                raise RuntimeError(f'corrected pole {p!r} on {r["name"]!r} does not stay where its rule wants it')
+            kept.append(p)
+            moved.append(p)
+        poles = kept
+    for p in moved:
+        close = [q for q in poles if q is not p and distance((p['x'], p['y']), (q['x'], q['y'])) < 9]
+        if close or (safe is not None and not safe((p['x'], p['y']))):
+            raise RuntimeError(f'corrected pole {p!r} is not safe or is within 9 m of {close!r}')
+    return poles
+
+
+def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpowered=None, corrections=()):
+    """`unpowered`: unpowered_tracks entries (AREA.unpowered_tracks when None). Public roads are unaffected.
+    `corrections`: AREA.public_pole_corrections, applied after the public pass and before the kind-4 runs, so a full
+    bake and a power-only bake on corrected land place the same kind-4 poles. The default keeps the frozen pass."""
+    unpowered = unpowered_roads(net, AREA.unpowered_tracks if unpowered is None else unpowered)
     # Public endpoint-to-segment joins also cover T junctions and split road pieces.
     corners = collections.defaultdict(list)
     for r in roads:
@@ -393,7 +496,7 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
     # Finish the unchanged public pass first: kind-4 candidates cannot displace its poles.
     extensions = []
     for r in roads:
-        if r['kind'] != 4 or not (r.get('name') or '').strip() or r.get('propsDriveway') or r['bridge']:
+        if not pole_track(r) or r['id'] in unpowered:
             continue
         local_net = Network([r])
         # About 60 m, with 15 m allowance for mapped setbacks (River Denys's last house is 72.6 m).
@@ -406,7 +509,13 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
         hi = r['cum'][-1] if joined[1] else max(hits)
         extensions.append((r, lo, hi))
     runs = ([] if public_poles is not None else [(r, 0, r['cum'][-1]) for r in roads if public(r) and not r['bridge']]) + extensions
-    for r, lo, hi in runs:
+    for k, (r, lo, hi) in enumerate(runs):
+        if corrections and k == len(runs) - len(extensions):
+            # The public pass is done: correct it, then let the kind-4 runs see only the corrected poles.
+            poles = correct_public_poles(net, poles, corrections, safe)
+            occupied = collections.defaultdict(list)
+            for p in poles:
+                occupied[math.floor(p['x'] / 16), math.floor(p['y'] / 16)].append((p['x'], p['y']))
         spacing = 55 if r['kind'] == 1 else 65
         local = random.Random(SEED + r['id'] * 101)
         side = local.choice((-1, 1))
@@ -436,32 +545,22 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
                     break
         for n, (_, pole) in enumerate(placed):
             poles.append(dict(**pole, n=n))
-
+    if corrections and not extensions:
+        poles = correct_public_poles(net, poles, corrections, safe)
     return poles
 
 def powered_buildings(buildings, area):
-    """One property, possibly several real roof blocks; sheds, barns and tanks get no drop."""
+    """One property, possibly several real roof blocks; sheds, barns, tanks and the church get no drop."""
     groups = collections.defaultdict(list)
     for b in buildings:
         groups[b.get('buildingId', b['id'])].append(b)
     if area == 'judique':
-        # The game replaces this surveyed envelope by its owner-measured church model.
+        # The game replaces this surveyed envelope by its owner-measured church model. The church has no power
+        # (Dan, 21 Nov 2026), so neither the envelope nor the model gets a drop, whatever kind the survey gives it.
         groups = {k: bs for k, bs in groups.items() if not any(
             distance((b.get('site', b)['x'], b.get('site', b)['y']), (630844.2, 5080637.2)) <= 8 for b in bs)}
-        text = (ROOT / 'web/src/church-site.ts').read_text()
-        origin = json.loads(re.search(r'CHURCH_ORIGIN = (\[.*?\])', text)[1])
-        scale = float(re.search(r'CHURCH_SCALE = ([\d.]+)', text)[1])
-        angle = float(re.search(r'CHURCH_HEADING = ([\d.]+)', text)[1])
-        nave = json.loads(re.search(r'CHURCH_GEOM = (\{.*?\}) as const;', text, re.S)[1])['nave']
-        a = math.radians(angle)
-        u, v = (nave['x0'] + nave['x1']) / 2, (nave['zs'] - nave['zn']) / 2
-        groups[-1] = [dict(id=-1, kind='church', x=origin[0] + scale * (u * math.sin(a) + v * math.cos(a)),
-                           y=origin[1] + scale * (u * math.cos(a) - v * math.sin(a)),
-                           length=(nave['x1'] - nave['x0']) * scale, width=(nave['zs'] + nave['zn']) * scale,
-                           axisDeg=angle, eave=nave['eave'] * scale, ridge=nave['ridge'] * scale,
-                           roof='gable', ground=None, groundX=origin[0], groundY=origin[1])]
     return {k: bs for k, bs in groups.items() if any(
-        b['kind'] in ('house', 'large', 'church') and b.get('shape') != 'tank' for b in bs)}
+        b['kind'] in ('house', 'large') and b.get('shape') != 'tank' for b in bs)}
 
 
 def roof_edge(b, pole, styles):
@@ -699,7 +798,8 @@ def main(output=None, report_dir=None, power_only=False):
 
     # A power-only delta keeps the installed public poles even if another stage has since changed its inputs.
     public_poles = [p for p in previous['poles'] if public(net.roads[p['road']])] if power_only else None
-    poles = place_poles(roads, net, buildings, safe, VILLAGE, public_poles)
+    # AREA.public_pole_corrections: the documented exception to the frozen public pass, where a drive filmed the line.
+    poles = place_poles(roads, net, buildings, safe, VILLAGE, public_poles, corrections=AREA.public_pole_corrections)
     drops = service_drops(net, poles, buildings, AREA.id, styles)
 
     result = dict(crs='EPSG:2961', mailboxes=mailboxes, communityBoxes=community, poles=poles, serviceDrops=drops)

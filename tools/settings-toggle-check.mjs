@@ -28,8 +28,9 @@ const definitions = [
 ].map(([file, key, old]) => {
   const current = read(file);
   const initial = current.match(/    const saved = .*\n    this\.(?:enabled|on) = .*;(?:\n    this\.chosen = .*;)?/)[0];
-  const row = current.match(/^    (?:this\.box = )?toggle\(.*$/m)[0];
-  const compile = ({ initial, row }) => new Function('document', 'localStorage', 'forced', 'asked', 'toggle', 'location', initial + '\n' + row);
+  const row = current.match(/^    (?:if \(settings\) )?(?:this\.box = )?toggle\(.*$/m)?.[0];
+  assert.ok(row, file + ': settings row exists');
+  const compile = ({ initial, row }) => new Function('document', 'localStorage', 'forced', 'asked', 'toggle', 'location', 'settings = true', initial + '\n' + row);
   return { file, key, old: compile(old), current: compile({ initial, row }) };
 });
 
@@ -135,10 +136,12 @@ function compare(d, s, factory, gated) {
 }
 
 // Pin main creation order and LOW/quarry/URL gates, including the optional cemetery and stockpile exclusion. A grass
-// chunk that does not load shows the Retry screen (partFailed); the gate and the arguments are the same.
+// chunk that does not load shows the Retry screen (partFailed); the gate and the arguments are the same. The chunk starts
+// downloading early in the boot under the same LOW gate (boot-tasks.ts early()), and this line takes it.
+assert.match(main, /\nconst grassChunk = LOW \? null : early\(import\('\.\/grass'\)\);/);
 assert.match(main, /\.\.\.\(LOW \? \{ split: AREA\.quarry \? 1 : 1\.15, low: true, lazyRange: 600 \} : \{\}\), shadows: !LOW && params\.get\('shadows'\) !== '0' && !nightLook \}\);/);
 assert.match(main, /const sunShadows = terrain\.shadows \? new SunShadows\(renderer, scene, sunLight, sunDir, params\.get\('shadows'\) === '1'\) : null;/);
-assert.match(main, /const grass = LOW \? null : new \(await import\('\.\/grass'\)(?:\.catch\(partFailed\))?\)\.Grass\(terrain, params\.get\('grass'\)(?:, (?:cemeteries\?\.excludes|grassExcludes))?\);/);
+assert.match(main, /const grass = LOW \? null : new \(await grassChunk!\.take\(\)\.catch\(partFailed\)\)\.Grass\(terrain, params\.get\('grass'\)(?:, (?:cemeteries\?\.excludes|grassExcludes))?\);/);
 assert.match(main, /const waterReflections = LOW \? null : new WaterReflections\(/);
 const order = [...main.matchAll(/const (sunShadows|grass|waterReflections) = /g)].map(match => match[1]);
 assert.deepEqual(order, ['sunShadows', 'grass', 'waterReflections']);
@@ -168,6 +171,15 @@ for (const panel of ['anchor', 'no-anchor']) {
   assert.deepEqual(results[1], results[0], 'combined constructor order: ' + panel);
 }
 console.log('PASS two combined-panel insertion orders; main constructor order and gates unchanged');
+
+// The still view can use the same shadow map without offering a new choice in Settings.
+const preview = environment({ stored: '0', panel: 'anchor' }, false);
+const shadows = definitions.find(d => d.key === 'shadows');
+shadows.current.call(preview.state, preview.document, preview.localStorage, false, null,
+  () => assert.fail('the shadow preview added a Settings row'), preview.location, false);
+assert.equal(preview.state.on, false, 'the shadow preview reads the saved state');
+assert.deepEqual(preview.boxes(), []);
+console.log('PASS shadow preview keeps the saved choice and adds no Settings row');
 if (process.argv.includes('--mutations')) {
   const mutations = [
     ['wrong storage prefix', '`mmm.${key}`', '`wrong.${key}`'],

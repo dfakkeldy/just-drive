@@ -1,3 +1,4 @@
+import { priorTitleMarkup } from './ui-title-expectations.mjs';
 import { CATALOGUE, musicCreditText, effectiveCredit, checkMusicContent, SOURCE_WORDS, checkCatalogueKeys, checkMusicCreditLength, MUSIC_CREDIT_MAX, MUSIC_CREDIT_TEXT } from './radio-expectations.mjs';
 import { AREAS } from '../web/src/area.ts';
 // Compare real title templates and actual main.ts radio wiring, including absent/disabled radio.
@@ -24,16 +25,31 @@ const tallCredits=['<p>Contains modified Copernicus Sentinel data 2026.</p>','<p
 function withoutTallCredits(text,required=false){for(const row of tallCredits){if(required)assert.equal(text.split(row).length,2,'required tall credit occurs once');text=text.replace(row+'\n','');}return text;}
 
 const before=await load(original),current=await load(readFileSync('web/src/title.ts','utf8'));
-
-function dom(){const roots=[];const node=()=>({style:{},classList:{add(){}},setAttribute(){},addEventListener(){},focus(){},append(){},after(){},prepend(){},hidden:false,innerHTML:'',textContent:''});globalThis.document={head:{appendChild(){}},body:{appendChild:n=>roots.push(n)},createElement:()=>{const n=node(),parts=new Map();n.querySelector=key=>{if(!parts.has(key))parts.set(key,node());return parts.get(key);};n.parts=parts;return n;}};globalThis.localStorage={getItem:()=>null};return roots;}
+function dom(){globalThis.addEventListener=()=>{};const roots=[];const node=()=>({style:{},dataset:{},appendChild(){},classList:{add(){}},setAttribute(){},addEventListener(){},focus(){},append(){},after(){},before(){},prepend(){},hidden:false,innerHTML:'',textContent:''});globalThis.document={head:{appendChild(){}},body:{appendChild:n=>roots.push(n)},createElement:()=>{const n=node(),parts=new Map();n.querySelector=key=>{if(!parts.has(key))parts.set(key,node());return parts.get(key);};n.parts=parts;return n;}};globalThis.localStorage={getItem:()=>null};return roots;}
 const expressions=text=>{const tree=ts.createSourceFile('main.ts',text,ts.ScriptTarget.Latest,true),out={};function visit(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==='expose')out.expose=n.getText(tree);if(ts.isCallExpression(n)&&n.expression.getText(tree)==='createTitle')out.title=n.getText(tree);if(ts.isIfStatement(n)&&n.expression.getText(tree)==="!bare && params.get('radio') !== '0'")out.radio=n.getText(tree);ts.forEachChild(n,visit);}visit(tree);return out;};
 async function actual(main,query,radio,title=current){const roots=dom(),expr=expressions(main);const c=vm.createContext({ERA:{id:'today',title:null,radio:true,modern:true},createTitle:title.createTitle,touchDevice:true,gameMode:'mail',SITE:{brand:'mail'},AREA:{name:'Mabou',mailTitle:true},ride:{choice:{kind:'car'},setRadio(){}},titleDaily:undefined,bare:false,started:false,terrain:{paved:new URLSearchParams(query).get('paved')!=='0'?{}:null},params:new URLSearchParams(query),loadRadio:()=>Promise.resolve(radio),siteRadio:()=>({}),title:null,radio:null,fired:null});
  const compile=async text=>(await transform(text,{loader:'ts',target:'es2022',define:{'import.meta.env.DEV':'false','import.meta.env.BASE_URL':JSON.stringify('./')}})).code;
  // Include the real dev-only helper now referenced by the extracted radio block.
  if(expr.expose)vm.runInContext(await compile(expr.expose),c);
  vm.runInContext(await compile('title = '+expr.title),c);vm.runInContext(await compile(expr.radio),c);await Promise.resolve();await Promise.resolve();
- const root=roots[0];return withoutTallCredits(root.innerHTML.replace(/<dl>[\s\S]*?<\/dl>/,()=>`<dl>${root.parts.get('dl')?.innerHTML || root.innerHTML.match(/<dl>([\s\S]*?)<\/dl>/)[1]}</dl>`),true);
+ const root=roots[0];if(root.parts.get('#titleControls')?.innerHTML)root.innerHTML=root.innerHTML.replace(/<div id="titleControls">[\s\S]*?<\/details><\/div>/,'<div id="titleControls">'+root.parts.get('#titleControls').innerHTML+'</div>');return withoutTallCredits(root.innerHTML.replace(/<dl>[\s\S]*?<\/dl>/,()=>`<dl>${root.parts.get('dl')?.innerHTML || root.innerHTML.match(/<dl>([\s\S]*?)<\/dl>/)[1]}</dl>`),true);
 }
+// Exercise keyboard markup too, including the bike's plain text between single-key caps.
+for(const just of [false,true])for(const kind of ['car','bike']) {
+ globalThis.location=new URL('/mabou',just?'https://justdrive.fakkeldy.ca':'https://mmm.fakkeldy.ca');
+ const roots=dom();current.createTitle(false,()=>{},'explore','Mabou',{kind,choose(){}},just);
+ const html=roots[0].innerHTML;
+ priorTitleMarkup(html,false);
+ if(kind==='bike') {
+  assert.ok(html.includes('<dt>In the air</dt>'),'bike keeps its non-key row label');
+  assert.ok(html.includes('<span class="keyJoin"> + </span>throttle</dt>'),'throttle stays plain beside its modifier cap');
+ }
+ const cap=html.match(/<kbd>[^<]+<\/kbd>/)[0];
+ assert.throws(()=>priorTitleMarkup(html.replace(cap,'<kbd>G/P</kbd>'),false),{name:'AssertionError'},'combined keys fail the keyboard contract');
+ assert.throws(()=>priorTitleMarkup(html.replace(cap,cap.replace(/<\/?kbd>/g,'')),false),{name:'AssertionError'},'uncapped key fails the keyboard contract');
+}
+delete globalThis.location;
+console.log('PASS keyboard title caps for both brands and both rides, plain bike labels, and rejected combined/uncapped keys');
 // Cross-brand navigation uses clean addresses, never a trip, room, or local test query.
 for (const [just, area, era, path, href, words] of [
  [false, undefined, 'today', '/', 'https://justdrive.fakkeldy.ca/', 'Just want to drive? Just Drive has every area, no mail.'],
@@ -51,7 +67,7 @@ for (const [just, area, era, path, href, words] of [
  assert.ok(line, 'visible cross-brand line');
  assert.equal(line.replace(/<[^>]*>/g, ''), words);
  assert.equal(line.match(/href="([^"]+)"/)[1].replaceAll('&amp;', '&'), href);
- assert.ok(html.indexOf('titleOtherGame') < html.indexOf('<dl>'), 'same position before controls');
+ assert.ok(html.indexOf('titleOtherGame') > html.indexOf('id="titleStart"'), 'cross-sell follows the main action');
  if (!just && !area) assert.match(html, /id="modeExplore"[^>]*>Just drive<\/button>/);
 }
 delete globalThis.location;
@@ -64,10 +80,10 @@ for (const [brand, host] of [['mail', 'justdrive'], ['just', 'mmm']]) {
 }
 // Contact is checked on the real page. Music is checked against the catalogue below; edits must not break other title copy.
 const groundCredits=[
- '<p>Environment and Climate Change Canada - Environnement et Changement climatique Canada. (2025) “Canadian National Wetlands Inventory - Inventaire national des terres humides du Canada”. Available at: <a href="https://open.canada.ca/data/en/dataset/d5af4ac5-ebdb-4645-bb0a-8ec5cac5e29f">Canadian National Wetlands Inventory</a> (Accessed 14 November 2026). Contains information licensed under the Open Government Licence – Canada.</p>',
+ '<p>Environment and Climate Change Canada - <span lang="fr">Environnement et Changement climatique Canada</span>. (2025) “Canadian National Wetlands Inventory - <span lang="fr">Inventaire national des terres humides du Canada</span>”. Available at: <a href="https://open.canada.ca/data/en/dataset/d5af4ac5-ebdb-4645-bb0a-8ec5cac5e29f">Canadian National Wetlands Inventory</a> (Accessed 14 November 2026). Contains information licensed under the Open Government Licence – Canada.</p>',
  '<p>Contains modified Copernicus Sentinel data 2025, 2026. Only derived ground classes are used.</p>',
 ];
-const noContact=html=>groundCredits.reduce((s,c)=>s.replace(c+'\n',''),html).replace(/<span id="titleOtherGame">[\s\S]*?<\/span>/,'').replace(/<p id="titleMusic">[\s\S]*?<\/p>/,'').replace(/<p id="titleContact">[\s\S]*?<\/p>/,'').replace(/<p id="titleAbout">[\s\S]*?<\/p>/,'').replace(' id="titleMusic"','').replace(/<p id="ns(?:Lidar|Paved)Credit">[\s\S]*?<\/p>\n?/,'');
+const noContact=(html,reviewed=true)=>priorTitleMarkup(groundCredits.reduce((s,c)=>s.replace(c+'\n',''),html).replace(/<span id="titleOtherGame">[\s\S]*?<\/span>/,'').replace(/<p id="titleMusic">[\s\S]*?<\/p>/,'').replace(/<p id="titleContact">[\s\S]*?<\/p>/,'').replace(/<p id="titleAbout">[\s\S]*?<\/p>/,'').replace(' id="titleMusic"','').replace(/<p id="ns(?:Lidar|Paved)Credit">[\s\S]*?<\/p>\n?/,''),true,reviewed);
 // The ground classes (pits, open wetland, rail and quarry ground) name every source they read.
 const OGL_NS=/Roads, railways, water, building locations, utility lines and towers, forest types, designated areas, and Point Tupper dams, culverts, conveyors and some fences and gates: Province of Nova Scotia\. Contains information licensed under the Open Government Licence – Nova Scotia\./;
 function groundAttribution(title){
@@ -115,7 +131,7 @@ function expected(){const roots=dom();before.createTitle(true,()=>{});let html=r
 assert.equal(noContact(await actual(source,'',null)).split(firedChoice).length,2,'the mail title offers Get Fired exactly once');
 assert.equal(noContact(await actual(source,'',null)).split(dailyChoice).length,2,'the mail title offers Today’s run exactly once');
 assert.equal(noContact(await actual(source,'',null)).split(propertyCredit).length,2,'the current title holds the complete property credit exactly once');
-for(const [label,query,radio] of [['present','',{start(){}}],['disabled','radio=0',null],['missing','',null]])assert.equal(noContact(await actual(source,query,radio)),noContact(withoutTallCredits(expected())),'mail title matches origin/main: '+label);
+for(const [label,query,radio] of [['present','',{start(){}}],['disabled','radio=0',null],['missing','',null]])assert.equal(noContact(await actual(source,query,radio)),noContact(withoutTallCredits(expected()),false),'mail title matches origin/main: '+label);
 console.log('PASS actual main radio wiring and title HTML match main with reviewed music geography and the exact property credit for present, disabled and missing lists');
 if(process.argv.includes('--mutations')){
  for(const [i,row] of tallCredits.entries()){
@@ -124,7 +140,7 @@ if(process.argv.includes('--mutations')){
   console.log('PASS rejected missing tall credit:',i);
  }
  for(const [label,from,to] of [['initial hints',"ride.choice, SITE.brand === 'just', SITE.brand !== 'just'","ride.choice, SITE.brand === 'just', false"],['shared availability update',"if (SITE.brand === 'just') { title?.setRadio",'if (true) { title?.setRadio']]){
-  assert.ok(source.includes(from));assert.notEqual(noContact(await actual(source.replace(from,to),'',null)),noContact(withoutTallCredits(expected())),label);console.log('PASS rejected title mutation:',label);
+  assert.ok(source.includes(from));assert.notEqual(noContact(await actual(source.replace(from,to),'',null)),noContact(withoutTallCredits(expected()),false),label);console.log('PASS rejected title mutation:',label);
  }
 }
 
@@ -295,3 +311,18 @@ if(process.argv.includes('--mutations')){
  console.log('PASS rejected horse-radio-load mutation');
 }
 console.log('PASS car/bike load radio; horse does not request its list');
+
+// Rebuilds keep the player's full control list open or closed.
+for (const open of [false, true]) {
+ const roots=dom(), title=current.createTitle(false,()=>{},'explore');
+ const root=roots[0], details=root.querySelector('#titleControls details');
+ details.open=open;
+ for (const rebuild of [()=>title.setRadio(false),()=>title.setDevice(true),()=>title.open()]) {
+  rebuild();
+  assert.equal(root.querySelector('#titleControls').innerHTML.includes('<details open>'),open,'full controls keep their open state');
+ }
+}
+const titleCSS=tallTitleSource.match(/const CSS = `([\s\S]*?)`;/)[1];
+assert.match(titleCSS,/body\.exploreMode #title #titleStart,#title\.justDrive #titleStart\{background:#a7d9bc;color:#0b1620\}/,'both driving modes use the green start button');
+assert.match(readFileSync('web/index.html','utf8'),/body\.exploreMode\{--settings-accent:#a7d9bc\}/,'Settings uses the same green');
+console.log('PASS full controls survive radio, device and title rebuilds; driving accents agree');

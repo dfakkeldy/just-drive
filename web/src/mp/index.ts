@@ -1,3 +1,4 @@
+import { fitRoomCards } from './room-cards';
 import { SocialView, savedHandle } from './social-view';
 import { RaceView } from './race';
 import { GameView } from './games';
@@ -43,6 +44,11 @@ export class Multiplayer {
   private peers: readonly import('./wire').PeerView[] = [];
   status = 'Looking for other drivers…';
   private readonly chip: HTMLElement | null;
+  private readonly gear: HTMLElement | null;
+  private badge: HTMLElement | null = null;
+  private unreadDot: HTMLElement | null = null;
+  private seenPeerChat: { id: number; at: number } | null = null;
+  private unread = false;
   private readonly local: Local = { flags: 0, steer: 0, heading: 0, x: 0, z: 0, vx: 0, vz: 0, air: 0 };
   /** For test scripts on the dev server: they play other games by hand. */
   readonly encode = encodeState;
@@ -66,15 +72,21 @@ export class Multiplayer {
     window.addEventListener('pageshow', this.pageshow);
     this.heartbeatTimer = setInterval(() => this.net.heartbeat(), 20000);
     this.race = new RaceView(this.net,host);
-    // After the race: on a phone both live in Settings, race first.
+    // All room cards share one ordered column.
     // A sender's height, in this view's land scale. Ghosts and chat bubbles read decks within reach of it.
     const sea = host.seaLevel ?? 0, height = (y: number) => y > sea ? sea + (y - sea) * (host.heightScale ?? 1) : y;
     this.social = host.bare ? null : new SocialView(this.net, host.ground, host.touch, height);
-    // Room games: on a phone, in Settings between the race and the drivers.
+    // The phone uses the Room group in Settings.
     this.games = new GameView(this.net, host);
     this.ghosts = new Ghosts({ ground: host.ground, low: host.low, height, label: host.label });
     host.scene.add(this.ghosts.group);
     this.chip = host.bare || host.touch ? null : document.body.appendChild(Object.assign(document.createElement('div'), { id: 'mpChip' }));
+    this.gear = host.touch && !host.bare ? document.getElementById('gear') : null;
+    if (this.gear) {
+      this.badge = Object.assign(document.createElement('span'), { id: 'gearRoom', hidden: true });
+      this.unreadDot = Object.assign(document.createElement('span'), { id: 'gearUnread', hidden: true });
+      for (const e of [this.badge, this.unreadDot]) { e.setAttribute('aria-hidden', 'true'); this.gear.append(e); }
+    }
     if (this.chip) {
       this.chip.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 6px);transform:translateX(-50%);z-index:5;'
         + 'padding:3px 10px;border-radius:10px;background:rgba(11,22,32,.72);color:#eef2f6;font:12px/1.4 system-ui,sans-serif;'
@@ -102,11 +114,12 @@ export class Multiplayer {
     s.flags = (v.airborne ? FLAG.air : 0) | (this.brake > 0 ? FLAG.brake : 0);
     const ride = this.host.ride?.(); if (ride) this.net.setRide(ride);
     this.net.report(s, now, !running);
+    this.updateGear();
     this.race.update();
     this.peers = this.net.views(now);
     this.games.update(dt, this.peers, camera);
-    this.social?.update(camera, this.peers, v);
     this.ghosts.update(dt, this.peers, camera, v, ride);
+    this.social?.update(camera, this.peers, v, this.ghosts.tagBoxes);
     this.horns.update(this.peers, v.x, v.z, now);
     {
       const n = this.net.count, st = this.net.status;
@@ -118,8 +131,30 @@ export class Multiplayer {
       this.status = say;
       if (this.chip && say !== this.shown) this.chip.textContent = this.shown = say;
       this.chipFit -= dt;
-      if (this.chipFit <= 0) { this.chipFit = .5; this.fitChip(); }
+      if (this.chipFit <= 0) { this.chipFit = .5; this.fitChip(); if (!this.host.bare) fitRoomCards(); }
     }
+  }
+
+  private updateGear(): void {
+    if (!this.badge || !this.unreadDot || !this.gear) return;
+    const on = this.net.status === 'on', open = document.getElementById('settings')?.classList.contains('open');
+    const me = this.net.me?.id;
+    let peerChat: { id: number; at: number } | null = null;
+    for (let i = this.net.chats.length - 1; i >= 0; i--) {
+      if (this.net.chats[i]!.id !== me) { peerChat = this.net.chats[i]!; break; }
+    }
+    if (peerChat !== this.seenPeerChat) {
+      this.seenPeerChat = peerChat;
+      if (on && !open && peerChat) this.unread = true;
+    }
+    if (!on || open) this.unread = false;
+    this.badge.hidden = !on || this.net.count < 1;
+    const count = String(this.net.count);
+    if (this.badge.textContent !== count) this.badge.textContent = count;
+    this.unreadDot.hidden = !this.unread;
+    const peers = this.net.count === 0 ? 'nobody else on the road' : this.net.count === 1 ? '1 other driver' : `${this.net.count} other drivers`;
+    const label = on ? `Settings and room: ${peers}${this.unread ? ', new message' : ''}` : 'Settings';
+    if (this.gear.getAttribute('aria-label') !== label) this.gear.setAttribute('aria-label', label);
   }
 
   /** Keep the desktop chip between the real readouts, including narrow desktop windows. */
@@ -129,7 +164,7 @@ export class Multiplayer {
     this.chip.style.top = 'calc(env(safe-area-inset-top,0px) + 6px)';
     const box = this.chip.getBoundingClientRect();
     let top = box.top;
-    const readouts = ['hud', 'gear', 'shiftHud', 'stopHint', 'miniMap', 'radio', 'photoTag'];
+    const readouts = ['hud', 'gear', 'shiftHud', 'stopHint', 'miniMap', 'radio', 'photoTag', 'pauseButton', 'placesButton', 'endShift', 'gameResults'];
     // A wide development HUD can reach past the centre. Keep the chip centred, below that HUD.
     for (let pass = 0; pass < readouts.length; pass++) {
       let next = top;
@@ -164,5 +199,7 @@ export class Multiplayer {
     this.host.scene.remove(this.ghosts.group);
     this.ghosts.dispose();
     this.chip?.remove();
+    this.badge?.remove(); this.unreadDot?.remove(); this.seenPeerChat = null; this.unread = false;
+    if (this.badge) this.gear?.setAttribute('aria-label', 'Settings');
   }
 }
