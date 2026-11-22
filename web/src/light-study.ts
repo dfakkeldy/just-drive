@@ -27,7 +27,7 @@ export function validStudyDate(date: string): boolean {
   const instant = new Date(`${date}T00:00:00Z`);
   return Number.isFinite(+instant) && instant.toISOString().slice(0, 10) === date;
 }
-const validTime = (time: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
+export const validTime = (time: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
 function wallStamp(instant: number): number {
   const parts = formats().wall.formatToParts(instant);
   const part = (name: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === name)!.value;
@@ -50,6 +50,7 @@ export function halifaxTime(date: string, time: string): WallTime {
   if (forward === undefined) throw new RangeError('Halifax time could not be resolved');
   return { when: new Date(forward), adjustment: 'gap' };
 }
+export const localDate = (when: Date): string => new Date(wallStamp(+when)).toISOString().slice(0, 10);
 export const localTime = (when: Date): string => formats().time.format(when);
 export const localZone = (when: Date): string => formats().zone.formatToParts(when).find(p => p.type === 'timeZoneName')!.value;
 export interface LightStudy { active: boolean; date: string; time: string; when?: Date; adjustment?: WallTime['adjustment']; message?: string }
