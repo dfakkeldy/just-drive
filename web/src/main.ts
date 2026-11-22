@@ -117,7 +117,7 @@ import type { SunSeeker, SunViewLight } from './sun-seeker';
 import { chooseYardLights, nightPalette } from './night-rules';
 import { Night, NightShading, nightSkyMaterial } from './night';
 import { HarbourLights } from './harbour-lights';
-import { Terrain, type Manifest } from './terrain';
+import { Terrain, placeBoxes, type Manifest } from './terrain';
 import { createTitle } from './title';
 import { Endings } from './ending';
 import { YardJob } from './yard-job';
@@ -150,7 +150,9 @@ import { PorchHouse } from './porch-house';
 import { DrLaneSite } from './drlane-site';
 import { DrLaneHouse } from './drlane-house';
 import { PorchSite } from './porch-site';
-import { ChurchSite } from './church-site';
+import { CHURCH_START, ChurchSite } from './church-site';
+import { roughRoads, setPuddleField } from './rough-roads';
+import { Puddles, splashLevel } from './puddles';
 import { JudiqueVillageSite, VILLAGE_PLACES } from './judique-village-site';
 import { PortHawkesburySite, aimDrops } from './port-hawkesbury-site';
 import { MabouMainSite, MAIN_ITEMS, aimDrops as aimMabouDrops } from './mabou-main-site';
@@ -537,6 +539,11 @@ if (novemberRoads) {
   // Not enumerable: tools/ui-check.mjs pins the listed dev keys. tools/area-browser.mjs counts its surfaces in Judique.
   if (import.meta.env.DEV) expose({ novemberRoads }, false);
 }
+// Rough stretches of gravel and track, and their puddles (rough-roads.ts). Their sites paint the road samples, so they go
+// in before the first tile loads. No puddle lies on the church start.
+const rough = ERA.modern ? roughRoads(roadData.roads, AREA.id, manifest.village,
+  [{ x: CHURCH_START.e - manifest.village[0], z: manifest.village[1] - CHURCH_START.n, r: 40 }]) : null;
+if (rough) { terrain.sites.push(...rough.sites); setPuddleField(rough.field); }
 const treeExcludes = novemberRoads
   ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
   : stockpiles?.excludes;
@@ -706,7 +713,7 @@ async function loadFarViews(): Promise<void> {
 const yardDogSite = ERA.modern && AREA.yardDog && buildingList && props ? YardDogSite.create({
   roads: roads.roads, village: manifest.village, mail: [...props.mail,...props.sites],
   houses: properties.filter(b=>b.kind==='house').map(b=>({x:b.x-manifest.village[0],z:manifest.village[1]-b.y})),
-  excluded: [...terrain.sites.map(s=>s.box), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
+  excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []), ...clear.map((b: number[]):[number,number,number,number]=>[b[0],b[1],b[2],b[3]])],
 }) : null;
 if (yardDogSite) { clear.push(...yardDogSite.clear); terrain.sites.push(yardDogSite); }
 // Lot props at houses: parked cars, SUVs and pickups, now and then a trailer, a motorhome or a ride-on mower, and a few
@@ -721,7 +728,7 @@ const lotPropList = ERA.modern && buildingList && params.get('lotprops') !== '0'
   // elsewhere, never a reason to choose a house.
   obstacles: props ? [...props.poleSites, ...props.mail, ...props.sites].map(p => [p.x, p.z] as [number, number]) : [],
   // A hand-built place that is not a terrain site keeps props off through its clear boxes (village, hawkesbury, mabouMain).
-  excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []), ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
+  excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []), ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
 }) : [];
 // No single tree stands in a parked car; the canopy is left as it is.
 // Kept apart: these only clear trees. Mail play's breakable yard props must not give way to them (they give way to those).
@@ -757,7 +764,7 @@ const night = nightShading ? new Night(nightShading, {
   streets: props?.poleSites.filter(p => p.light) ?? [],
   yards: props ? chooseYardLights(props.poleSites, {
     protectedPlaces: [...properties.map(b => ({ x: b.x - VE, z: VN - b.y })), ...props.mail, ...props.sites],
-    excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : [])], village: { x: 0, z: 0 },
+    excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : [])], village: { x: 0, z: 0 },
   }) : [],
   village: { x: 0, z: 0 }, when, lat, lon,
 }) : null;
@@ -1055,7 +1062,7 @@ if (shift instanceof Shift) {
       publicRoad: near(k => k >= 1 && k <= 3), anyRoad: near(() => true), place: shift.placeAt,
       // Hand-built sites and landmarks stay clear; ordinary buildings are kept clear by the oriented rule instead
       // (their own clear boxes would push most yard props out of the yards).
-      excluded: [...terrain.sites.map(s => s.box), ...(coast ? [coast.site.box] : []),
+      excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []),
         ...clear.filter((b: number[]) => !houseBoxes.has(b) && !lotTreeClear.has(b)).map((b: number[]): [number, number, number, number] => [b[0], b[1], b[2], b[3]])],
     });
     yardProps = new YardProps(yardList, terrain, LOW || touchDevice);
@@ -1220,6 +1227,11 @@ scene.add(shift.group);
 const driftFeedback = new DriftFeedback(LOW, !bare);
 scene.add(driftFeedback.mesh);
 if (import.meta.env.DEV) expose({ driftFeedback });
+// The water on the rough stretches and the spray a wheel throws from it: one draw each, only where there is water.
+const puddles = rough ? new Puddles(rough.field, terrain, LOW) : null;
+if (puddles) scene.add(puddles.group);
+// Not enumerable: tools/ui-check.mjs pins the listed dev keys. tools/rough-road-check.mjs and the browser probes read them.
+if (import.meta.env.DEV) expose({ puddles, roughRoads: rough }, false);
 animals?.registerEvidence(shift.evidence);
 document.getElementById('cameraButton')!.addEventListener('click', () => { if (live()) photoRequested = true; });
 for (const id of ['cameraButton', 'endShift', 'shiftReport', 'settings']) {
@@ -1951,6 +1963,8 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   { name: 'terrain', segment: 'landscape', ending: true, update: () => terrain.update(camera, scenePaused()) },
   { name: 'wharves', segment: 'landscape', ending: true, update: () => wharves?.update(camera.position) },
   { name: 'novemberRoads', segment: 'landscape', ending: true, update: () => novemberRoads?.update(terrain, camera.position) },
+  // After the terrain update, so the water lies on the tiles drawn this frame; endings and the replay keep it too.
+  { name: 'puddles', segment: 'landscape', ending: true, update: () => puddles?.refit(camera.position) },
   ...(fleet ? [{ name: 'fleet', segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { name: 'coast', segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
   { name: 'lotProps', segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
@@ -2347,6 +2361,7 @@ function frame(now: number) {
     // A fleet keeps the trailer on the truck while another member drives: only the truck pulls it.
     m.grade = vehicle.pitch; m.towing = !!towing?.attached && ride.kind === 'truck'; m.radio = !!radio?.audible;
     m.slide = vehicle.drift.slide(vehicle.spec.drift);
+    m.splash = splashLevel(vehicle);
     engineSound.update(realDt, playing && mode === 'drive' && !interiors.busy && !document.hidden ? m : null);
   }
   if (interiors.busy) {
@@ -2420,6 +2435,7 @@ function frame(now: number) {
   if (dt > 0 && driving) replay.record(vehicle, car, horse ? 'horse' : ride.kind, now / 1000, clockDt, quietGround);
   gamepad.feel(vehicle, dt, playing && mode === 'drive' && !interiors.busy, now);
   driftFeedback.update(dt, vehicle, camera, playing && mode === 'drive' && !interiors.busy);
+  puddles?.update(dt, camera, playing && mode === 'drive' && !interiors.busy ? vehicle : null);
   updateWorld('before-camera', dt, realDt, now);
   camera.updateMatrixWorld();
   sky.position.copy(camera.position);
