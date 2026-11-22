@@ -216,7 +216,14 @@ const PROBE_EXPR = `(x, z) => {
   await p.until(`String(document.title).startsWith('settled')`, 60000);
   await sleep(400);
   const beforeRoof = await p.read(`({ ground: mmm.terrain.surfaceAt(${distantBuilding.wx}, ${distantBuilding.wz})?.ground ?? null, y: mmm.drone.state.y })`);
-  await p.hold('ShiftLeft', 5500);
+  // Hold down until the drone stops sinking (it rests on the floor), not for a fixed time: a busy machine descends slower.
+  await p.key('ShiftLeft', true);
+  for (let i = 0, last = Infinity, still = 0; i < 70 && still < 3; i++) {
+    await sleep(300);
+    const y = await p.read('mmm.drone.state.y');
+    still = Math.abs(y - last) < 0.05 ? still + 1 : 0; last = y;
+  }
+  await p.key('ShiftLeft', false);
   await sleep(500);
   const afterRoof = await p.read(`({ y: mmm.drone.state.y, ground: mmm.terrain.surfaceAt(${distantBuilding.wx}, ${distantBuilding.wz})?.ground ?? null, height: mmm.drone.height })`);
   const expectedRoofTop = -0.2 + (distantBuilding.ground - (-0.2)) * 1.5 + distantBuilding.h;
