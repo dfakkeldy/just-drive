@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { Input } from './vehicle';
-export interface InteriorResult { delivered: boolean; note: string }
+export interface InteriorResult { delivered: boolean; note: string; bonus?: number; score?: number }
 export interface InteriorGame {
   readonly scene: THREE.Scene;
   readonly camera: THREE.Camera;

@@ -203,25 +203,29 @@ try{
    await new Promise(r=>setTimeout(r,100));
   }
   if(quiet<5)throw Error('cow home land and rule-placed rails did not settle');
-  a.update(0,v,c);
+  cow.buildAfter=0;a.update(0,v,c);
   window.legacyCow=()=>{
    const rig=cow.rig,p=rig.root.position;rig.root.updateMatrixWorld(true);
    let railDistance=Infinity,railSpans=0;
    if(g.group.visible)for(const chunk of g.chunks)if(chunk.mesh?.visible)for(const s of chunk.spans){
     if(s.road!==cow.spot.road)continue;
-    const dx=s.b.x-s.a.x,dz=s.b.z-s.a.z,u=Math.max(0,Math.min(1,((cow.home.x-s.a.x)*dx+(cow.home.z-s.a.z)*dz)/(dx*dx+dz*dz)));
-    const distance=Math.hypot(cow.home.x-s.a.x-u*dx,cow.home.z-s.a.z-u*dz);
+    const dx=s.b.x-s.a.x,dz=s.b.z-s.a.z,u=Math.max(0,Math.min(1,((cow.spot.x-s.a.x)*dx+(cow.spot.z-s.a.z)*dz)/(dx*dx+dz*dz)));
+    const distance=Math.hypot(cow.spot.x-s.a.x-u*dx,cow.spot.z-s.a.z-u*dz);
     if(distance<5){railDistance=Math.min(railDistance,distance);railSpans++;}
    }
+   const rx=Math.cos(cow.spot.heading),rz=Math.sin(cow.spot.heading);
    const body=cowBody(cow.home.x,cow.home.z,cow.homeHeading,(x,z)=>t.heightAt(x,z));
    return {state:cow.state,home:{...cow.home},homeDistance:Math.hypot(p.x-cow.home.x,p.z-cow.home.z),distance:Math.hypot(p.x-cow.spot.x,p.z-cow.spot.z),decor:!!cow.decor,herd:cow.herd.length,
-    railSpans,railDistance,bodyGap:body?g.cowClearance(body):null,
+    railSpans,railDistance,fieldSide:((cow.home.x-cow.spot.x)*rx+(cow.home.z-cow.spot.z)*rz)*cow.side,
+    herdSameSide:cow.herd.every(h=>((h.home.x-cow.spot.x)*rx+(h.home.z-cow.spot.z)*rz)*cow.side>0),
+    bodyGap:body?g.cowClearance(body):null,
     feet:rig.legs.map((leg,i)=>{const sole=rig.hoofSoles?.[i]?.clone()??p.clone().set(0,-rig.shoulder*.635,0);leg.localToWorld(sole);return {y:sole.y,ground:t.meshHeightAt(sole.x,sole.z,true)};})};
   };
  })()`);
  const supportedCow=s=>{
   assert.equal(s.decor,false,'no duplicate decorative rail after #113');assert.equal(s.herd,4,'original herd');
-  assert.ok(s.railSpans>0&&s.railDistance<5,'drawn rule-placed rail beside the cow home');
+  assert.ok(s.railSpans>0&&s.railDistance<5,'drawn rule-placed rail beside the cow spot');
+  assert.ok(s.fieldSide>0&&s.herdSameSide,'cow home rests on the uphill herd field side');
   assert.ok(s.bodyGap!==null&&s.bodyGap>=.2-1e-6,'whole cow home clear of the rail');
   assert.equal(s.feet.length,4);for(const f of s.feet)assert.ok(f.ground!==null&&Math.abs(f.y-f.ground)<.05,'cow hoof meets drawn ground within 5 cm');
  };

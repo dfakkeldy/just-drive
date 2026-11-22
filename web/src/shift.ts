@@ -74,6 +74,9 @@ export class Shift {
   complaints = new Complaints();
   elapsed = 0;
   indoorParcels = 0;
+  indoorBonus = 0;
+  private indoorHint = '';
+  private indoorHintTime = 0;
   private readonly indoorVisits = new Set<string>();
   done = 0; stops = 0;
   ended = false;
@@ -179,7 +182,7 @@ export class Shift {
   }
 
   private start(): void {
-    this.elapsed = this.done = this.indoorParcels = 0; this.indoorVisits.clear(); this.ended = false; this.lastDelivery = null;
+    this.elapsed = this.done = this.indoorParcels = this.indoorBonus = 0; this.indoorHint = ''; this.indoorHintTime = 0; this.indoorVisits.clear(); this.ended = false; this.lastDelivery = null;
     this.cleanIndex = -1; this.cleanTime = this.uiTimer = this.paperTimer = this.flashTimer = this.photoCooldown = 0;
     this.damage.reset();
     // A box that was down before the shift is not the player's offence.
@@ -276,13 +279,21 @@ export class Shift {
   interiorResult({ door, result }: InteriorReceipt): void {
     if (this.ended || this.indoorVisits.has(door.id)) return;
     this.indoorVisits.add(door.id);
-    if (result.delivered) { this.indoorParcels++; this.lastDelivery = this.elapsed; }
-    else {
+    if (result.delivered) {
+      this.indoorParcels++; this.lastDelivery = this.elapsed;
+      const bonus = result.bonus !== undefined && Number.isFinite(result.bonus) && result.bonus > 0 ? Math.round(result.bonus) : 0;
+      this.indoorBonus += bonus;
+      this.indoorHint = bonus > 0 ? `${door.name}: parcel delivered · +$${bonus} bonus` : `${door.name}: parcel delivered`;
+      this.indoorHintTime = 6;
+    } else {
       let target = 0;
       for (const char of door.id) target = (Math.imul(target, 31) + char.charCodeAt(0)) >>> 0;
       this.complaints.add({ kind: 'indoors', target, at: this.elapsed, x: door.position.x, z: door.position.z,
         road: -1, customer: `the indoor mail desk at ${door.name}`, line: complaintLine('indoors', this.career.day, target) + ` ${result.note}` });
+      this.indoorHint = `${door.name}: ${result.note}`;
+      this.indoorHintTime = 6;
     }
+    this.refreshUI();
   }
   /** Clock only. The caller closes the interior before opening the 18:00 report. */
   updateIndoors(dt: number): boolean {
@@ -309,6 +320,7 @@ export class Shift {
     if (this.ended) return;
     this.elapsed = Math.min(END_TIME - START_TIME, this.elapsed + dt * CLOCK_FACTOR);
     this.damage.updateHint(dt);
+    if (this.indoorHintTime > 0) this.indoorHintTime = Math.max(0, this.indoorHintTime - dt);
     this.photoCooldown = Math.max(0, this.photoCooldown - dt);
     this.flashTimer -= dt; if (this.flashTimer <= 0) this.flash.classList.remove('exposed');
     this.ruts.update(vehicle, this.elapsed);
@@ -371,6 +383,7 @@ export class Shift {
     if (this.damage.hintTime > 0) this.progress.textContent = (this.phone || this.low) && this.damage.hint.includes('pulls left')
       ? 'Something in the front end. The garage will check it.' : this.damage.hint;
     else if (this.roadside.some(s => s.hint)) this.progress.textContent = this.roadside.find(s => s.hint)!.hint;
+    else if (this.indoorHintTime > 0) this.progress.textContent = this.indoorHint;
     else if (this.cleanIndex >= 0) this.progress.textContent = `Clearing old flyers: ${Math.min(100, this.cleanTime / 4 * 100).toFixed(0)}% · stay stopped`;
     else if (v) {
       const p = this.props?.nearestMailbox(v.x, v.z, 35);
@@ -407,7 +420,7 @@ export class Shift {
     const upheld = this.complaints.all.filter((c) => !dismissed(c, this.evidence.photos));
     // What the Boss saw on a ride-along day adds to the verdict; the career rules stay the verdict's.
     const base = verdict(upheld), outcome = this.watcher ? this.watcher.verdict(base) : base;
-    this.next = nextCareer(this.career, outcome, this.damage.total);
+    this.next = nextCareer(this.career, outcome, this.damage.total, this.indoorBonus);
     // Other runs retain their undelivered bundles until that customer's next visit.
     for (const stop of this.run.stops) this.next.carryover[stop.index] = this.remaining[stop.index];
     // Dense arrays survive JSON round trips and storage validation.
@@ -419,11 +432,12 @@ export class Shift {
     document.getElementById('reportVerdict')!.textContent = outcome === 'suspension' ? 'One-day suspension. Without pay.' : outcome === 'warning' ? 'Written warning.' : 'No action taken.';
     const stats = document.getElementById('reportStats')!; stats.replaceChildren();
     for (const [label, value] of [['Stops done', `${this.done} / ${this.stops}`], ['Pieces delivered', this.mail.delivered],
-      ['Parcels delivered indoors', this.indoorParcels], ['Pieces on ground', this.mail.lawn + this.mail.ditch], ['Mailboxes down', this.mail.down],
+      ['Parcels delivered indoors', this.indoorParcels],
+      ...(this.indoorBonus ? [['Indoor bonus', `$${this.indoorBonus}`]] : []), ['Pieces on ground', this.mail.lawn + this.mail.ditch], ['Mailboxes down', this.mail.down],
       ['Lawns damaged', this.complaints.all.filter((c) => c.kind === 'lawnDamage').length],
       ...(this.complaints.all.some((c) => c.kind === DAMAGE_COMPLAINT) ? [['Yards damaged', this.complaints.all.filter((c) => c.kind === DAMAGE_COMPLAINT).length]] : []),
       ['Photos taken', this.evidence.photos.length],
-      ...(this.roadsideScore ? [['Roadside score', this.roadsideScore]] : []), ['Last delivery', this.lastDelivery === null ? 'None' : clock(this.lastDelivery)], ['Daily pay', `$${DAILY_PAY}`], ['Vehicle allowance', `$${VEHICLE_ALLOWANCE}`], ['Allowance less repairs', money(VEHICLE_ALLOWANCE - this.damage.total)], ['Day pay', money(DAILY_PAY + VEHICLE_ALLOWANCE - this.damage.total)], ['Total pay', `$${this.next.pay}`]]) {
+      ...(this.roadsideScore ? [['Roadside score', this.roadsideScore]] : []), ['Last delivery', this.lastDelivery === null ? 'None' : clock(this.lastDelivery)], ['Daily pay', `$${DAILY_PAY}`], ['Vehicle allowance', `$${VEHICLE_ALLOWANCE}`], ['Allowance less repairs', money(VEHICLE_ALLOWANCE - this.damage.total)], ['Day pay', money(DAILY_PAY + VEHICLE_ALLOWANCE - this.damage.total + this.indoorBonus)], ['Total pay', `$${this.next.pay}`]]) {
       const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = String(label); dd.textContent = String(value); stats.append(dt, dd);
     }
     const repairs = document.getElementById('reportRepairs')!; repairs.replaceChildren();

@@ -1,10 +1,10 @@
 import type { Road } from './roads';
-import { RAIL, railPoint, roadLength } from './guardrail-rules';
+import { railPoint, roadLength } from './guardrail-rules';
 
 /** Whole stock-cow model bounds, including head tracking, tail and up to .4m hoof adjustment.
  * Tests enclose the real rig over its full allowed pitch/roll/head range. */
 export const COW_REST = { shoulder: 1.4, width: .65, length: 1.8, height: 1.9, padding: .05,
-  railHalf: .15, clearance: .2, lateralStep: .1, alongStep: .25, localReach: 4 } as const;
+  railHalf: .15, clearance: .2, roadGap: .5, lateralStep: .1, alongStep: .25, localReach: 4 } as const;
 export interface CowBody { x: number; z: number; heading: number; halfWidth: number; halfLength: number }
 export type CowGround = (x: number, z: number) => number | null;
 export interface CowRest extends CowBody { along: number }
@@ -48,25 +48,43 @@ export function cowRailGap(body: CowBody, a: { x: number; z: number }, b: { x: n
   return distance - COW_REST.railHalf;
 }
 
-/** First move inward from the old home; then search the nearest quarter-metre road stations.
- * `clear` can conservatively include rails that have not streamed in yet. */
-export function cowRest(road: Road, along: number, side: number, ground: CowGround, clear: (body: CowBody) => boolean): CowRest | null {
+/** Whole body to the actual road ribbon, including bends through the body box. */
+export function cowRoadGap(body: CowBody, road: Road): number {
+  let gap = Infinity;
+  for (let i = 1; i < road.pts.length; i++) {
+    const a = road.pts[i - 1], b = road.pts[i];
+    gap = Math.min(gap, cowRailGap(body, { x: a[0], z: a[1] }, { x: b[0], z: b[1] }) + COW_REST.railHalf - road.halfWidth);
+  }
+  return gap;
+}
+
+/** Search outward into the field, then nearby stations. Never relocate to a distant pasture. */
+export function cowRest(road: Road, along: number, side: number, ground: CowGround, clear: (body: CowBody) => boolean, roadGround: CowGround = ground): CowRest | null {
   const length = roadLength(road), start = Math.max(0, Math.min(length, along));
   const at = (s: number): CowRest | null => {
-    const line = road.halfWidth + RAIL.shoulder;
-    const outer = line - COW_REST.width - COW_REST.padding - COW_REST.railHalf - COW_REST.clearance;
-    const inner = Math.max(0, line - COW_REST.localReach), steps = Math.ceil((outer - inner) / COW_REST.lateralStep);
+    const centre = railPoint(road, s), roadHeight = roadGround(centre.x, centre.z);
+    if (roadHeight === null) return null;
+    const inner = road.halfWidth + COW_REST.roadGap + COW_REST.width + COW_REST.padding;
+    const steps = Math.ceil(COW_REST.localReach / COW_REST.lateralStep);
     for (let step = 0; step <= steps; step++) {
-      const offset = Math.max(inner, outer - step * COW_REST.lateralStep);
+      const offset = inner + step * COW_REST.lateralStep;
       const p = railPoint(road, s, side * offset), body = cowBody(p.x, p.z, p.heading, ground);
-      if (body && clear(body)) return { ...body, along: s };
+      if (!body || offset - body.halfWidth < road.halfWidth + COW_REST.roadGap - 1e-6) continue;
+      const rx = Math.cos(p.heading), rz = Math.sin(p.heading), fx = Math.sin(p.heading), fz = -Math.cos(p.heading);
+      const h = ground(p.x, p.z), inward = ground(p.x - rx * side, p.z - rz * side), outward = ground(p.x + rx * side, p.z + rz * side);
+      const front = ground(p.x + fx * .72, p.z + fz * .72), back = ground(p.x - fx * .72, p.z - fz * .72);
+      const w = COW_REST.shoulder * .25, right = ground(p.x + rx * w, p.z + rz * w), left = ground(p.x - rx * w, p.z - rz * w);
+      if (h === null || inward === null || outward === null || front === null || back === null || right === null || left === null) continue;
+      // A local ditch or a bank steeper than the rig can stand on is not grazing land.
+      if (h < roadHeight || outward < inward || Math.abs(front - back) > Math.tan(.55) * 1.44 || Math.abs(right - left) > Math.tan(.55) * w * 2) continue;
+      if (cowRoadGap(body, road) >= COW_REST.roadGap - 1e-6 && clear(body)) return { ...body, along: s };
     }
     return null;
   };
   const centre = railPoint(road, start);
-  if (ground(centre.x, centre.z) === null) return null; // Wait for local land before searching.
+  if (roadGround(centre.x, centre.z) === null) return null; // Wait for unknown road height, not for grazing land on the road.
   const local = at(start); if (local) return local;
-  const extent = Math.max(start, length - start);
+  const extent = Math.min(COW_REST.localReach, Math.max(start, length - start));
   for (let distance = COW_REST.alongStep; distance < extent + COW_REST.alongStep; distance += COW_REST.alongStep) {
     for (const sign of [1, -1]) {
       const target = start + sign * distance, previous = target - sign * COW_REST.alongStep;

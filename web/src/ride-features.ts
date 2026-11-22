@@ -17,9 +17,9 @@ import type { Ride } from './ride';
 import type { Terrain } from './terrain';
 
 /** UI, input and camera hooks for the solver selected by the garage. No second vehicle registry. */
-export function rideFeatures(vehicle: Ride, entry: GarageEntry, terrain: Terrain, explore: boolean, radio = true, just = false) {
-  let bike = vehicle instanceof BikeRide ? vehicle : null;
-  let kind = entry.id;
+export function rideFeatures(vehicle: Ride, entry: GarageEntry, terrain: Terrain, explore: boolean, radio = true, just = false, drone = false) {
+  let bike = !drone && vehicle instanceof BikeRide ? vehicle : null;
+  let kind: string = drone ? 'drone' : entry.id;
   const horse = kind === 'horse';
   const sound = horse ? new HorseSound() : null;
   let playing = false;

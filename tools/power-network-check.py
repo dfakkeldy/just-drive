@@ -65,6 +65,124 @@ for entry in (((250,300),'Invented Road'),   # a props driveway with that name
         raise AssertionError(f'unpowered entry {entry!r} must stop the bake')
     except RuntimeError:
         pass
+# A filmed public road (AREA.public_pole_corrections): after the frozen pass, 'none' stretches lose their poles and
+# poles on the wrong side move straight across. Other poles and other roads keep their bytes; a second run is a no-op.
+net=P.Network(copy.deepcopy(roads))
+fix=(((250,100),'Invented Road',3,((0,150,'left'),(150,300,'right'),(300,None,'none'))),)
+road3=[p for p in new if p['road']==3]
+assert {p['y']>100 for p in road3}=={True}, 'the invented kind-3 road starts with every pole on its left'
+fixed=P.correct_public_poles(net,new,fix,safe)
+assert data([p for p in fixed if p['road']!=3])==data([p for p in new if p['road']!=3]), 'other roads keep their bytes'
+along=lambda p: p['x']+100
+assert all(along(p)<300 for p in fixed if p['road']==3) and any(along(p)>=300 for p in road3), "a 'none' stretch loses its poles"
+assert all(p in road3 for p in fixed if p['road']==3 and along(p)<150), 'poles already on the right side keep their bytes'
+moved=[p for p in fixed if p['road']==3 and along(p)>=150]
+assert moved and all(p['y']==round(100-3-3.2,3) and p not in road3 for p in moved), 'wrong-side poles move straight across'
+assert all(q['n']==p['n'] and q['transformer']==p['transformer'] for q in moved for p in road3 if p['x']==q['x']), 'a moved pole keeps its marks'
+assert P.correct_public_poles(net,fixed,fix,safe)==fixed, 'a second run changes nothing'
+assert P.correct_public_poles(net,new,(),safe)==new, 'no correction, no change'
+try:
+    P.correct_public_poles(net,new,fix,lambda p: p[1]>100)
+    raise AssertionError('an unsafe moved pole must stop the bake')
+except RuntimeError:
+    pass
+for entry in (((250,100),'Misspelt Road',3,((0,None,'none'),)),   # the right line, the wrong name
+              ((250,100),'Invented Road',2,((0,None,'none'),)),   # the wrong kind
+              ((250,0),'Invented Road',4,((0,None,'none'),)),     # a kind-4 track is no public road
+              ((250,140),'Invented Road',3,((0,None,'none'),)),   # no road within 5 m
+              ((250,100),'Invented Road',3,((0,100,'left'),(120,None,'none'))),   # a gap
+              ((250,100),'Invented Road',3,((0,100,'left'),)),                    # not to the end
+              ((250,100),'Invented Road',3,((0,None,'north'),)),                  # no such side
+              ((250,100),'Invented Road',3,((0,None,'left'),(None,None,'right'))),  # a rule after the end
+              ((250,100),'Invented Road',3,((0,'50','left'),('50',None,'none'))),  # not a number
+              ((250,100),'Invented Road',3,()),((250,100),'Invented Road',3,None),
+              ((250,100),'Invented Road',3),None):
+    try:
+        P.correct_public_poles(net,new,(entry,),safe)
+        raise AssertionError(f'correction entry {entry!r} must stop the bake')
+    except RuntimeError:
+        pass
+# Exact slices: the kept stretch keeps every pole's bytes, the moved stretch keeps n, heading, transformer and light.
+assert sorted(p['n'] for p in fixed if p['road']==3)==[p['n'] for p in road3 if along(p)<300], 'exactly the none stretch goes'
+for q in moved:
+    p=next(p for p in road3 if p['n']==q['n'])
+    assert (q['x'],q['heading'],q['transformer'],q['light'])==(p['x'],p['heading'],p['transformer'],p['light']), 'a moved pole keeps its marks'
+assert len([p for p in fixed if p['road']==3 and along(p)<150])==len([p for p in road3 if along(p)<150])>0, 'the kept stretch keeps all its poles'
+# A road drawn the other way (westbound): right-side poles (north of the line) move to the left (south).
+west=[road(9,[[500,0],[0,0]],3)]
+wnet=P.Network(copy.deepcopy(west))
+wpoles=[dict(pole(500-s,6.2,k,9),heading=270) for k,s in enumerate((20,85,150))]  # north of a westbound line = right
+wfix=(((250,0),'Invented Road',3,((0,None,'left'),)),)
+wout=P.correct_public_poles(wnet,wpoles,wfix,safe)
+assert [p['y'] for p in wout]==[-6.2]*3 and [p['heading'] for p in wout]==[270.0]*3, 'westbound right poles move to the left (south)'
+assert P.correct_public_poles(wnet,wout,wfix,safe)==wout, 'westbound: a second run changes nothing'
+assert P.correct_public_poles(wnet,wout,(((250,0),'Invented Road',3,((0,None,'right'),)),),safe)==[dict(p,heading=270.0) for p in wpoles], 'and back'
+for bad,why in (([dict(pole(415,6.2,0,9)),dict(pole(415,-2.8,1,4))],'a moved pole within 9 m of another pole'),
+                ([dict(pole(415,30,0,9))],'a pole more than 20 m from its road')):
+    try:
+        P.correct_public_poles(wnet,bad,wfix)
+        raise AssertionError(why+' must stop the bake')
+    except RuntimeError:
+        pass
+try:
+    P.correct_public_poles(wnet,wpoles,wfix+wfix,safe)
+    raise AssertionError('one road listed twice must stop the bake')
+except RuntimeError:
+    pass
+bnet=P.Network([dict(road(10,[[0,600],[100,600]],3),bridge=True)])
+try:
+    P.correct_public_poles(bnet,[],(((50,600),'Invented Road',3,((0,None,'none'),)),),safe)
+    raise AssertionError('a bridge entry must stop the bake')
+except RuntimeError:
+    pass
+# A pole off a bend vertex has no clear side: stop, never guess (90 degree turn, pole on the outside corner).
+knee=P.Network([road(11,[[0,0],[100,0],[100,-100]],3)])
+try:
+    P.correct_public_poles(knee,[pole(106.2,0,0,11)],(((50,0),'Invented Road',3,((0,None,'right'),)),),safe)
+    raise AssertionError('a pole off a bend vertex must stop the bake')
+except RuntimeError:
+    pass
+# A move that lands in another stretch (outside to inside of a bend) must stop the bake, not write an unstable pack.
+bend=P.Network([road(12,[[0,0],[100,0],[186.603,50]],3)])
+try:
+    P.correct_public_poles(bend,[pole(99,-6.2,0,12)],(((50,0),'Invented Road',3,((0,100,'left'),(100,None,'none'))),),safe)
+    raise AssertionError('an unstable move across a bend must stop the bake')
+except RuntimeError:
+    pass
+# A hairpin: the moved pole would land beside the other leg, on its wrong side. Stop rather than move it twice.
+pin=P.Network([road(13,[[0,0],[100,0],[23.396,64.279]],3)])
+try:
+    P.correct_public_poles(pin,[pole(99.5,-6.2,0,13)],(((50,0),'Invented Road',3,((0,None,'left'),)),),safe)
+    raise AssertionError('a move that lands on the wrong side of another leg must stop the bake')
+except RuntimeError:
+    pass
+# A pole on a centre line has no side, and a move may not land on another piece's centre line.
+for rpts,pp in (([[0,0],[100,0]],pole(50,0,0,14)),([[0,0],[128,0],[128,-6.2],[0,-6.2]],pole(64,6.2,0,14))):
+    try:
+        P.correct_public_poles(P.Network([road(14,rpts,3)]),[pp],(((50,0),'Invented Road',3,((0,None,'right'),)),))
+        raise AssertionError(f'a pole on or moved onto a centre line must stop the bake: {pp!r}')
+    except RuntimeError:
+        pass
+# Kind-4 runs see the corrected public poles: a full bake and a power-only bake on its own output agree.
+side_roads=[road(1,[[0,0],[200,0]],3,'Main Road'),road(2,[[65,10],[200,10]],4,'Side Road')]
+snet=P.Network(copy.deepcopy(side_roads)); sfix=(((50,0),'Main Road',3,((0,None,'none'),)),)
+full=P.place_poles(list(snet.roads.values()),snet,[house(1,150,25)],safe,(-10000,-10000),corrections=sfix)
+again=P.place_poles(list(snet.roads.values()),snet,[house(1,150,25)],safe,(-10000,-10000),
+                    [p for p in full if p['road']==1],corrections=sfix)
+assert not any(p['road']==1 for p in full) and data(full)==data(again), 'full and power-only bakes place the same kind-4 poles'
+# The baseline check corrects only the public poles: kind-4 poles placed before the correction cannot trip the 9 m rule.
+beside=[road(1,[[0,0],[200,0]],3,'Main Road'),road(2,[[0,-10],[200,-10]],4,'Side Road')]
+bnet2=P.Network(copy.deepcopy(beside)); rfix=(((50,0),'Main Road',3,((0,None,'right'),)),)
+stale=P.place_poles(list(bnet2.roads.values()),bnet2,[house(1,150,-25)],safe,(-10000,-10000))
+assert any(p['road']==2 for p in stale) and any(p['road']==1 and p['y']>0 for p in stale), 'the stale pack has both runs'
+P.correct_public_poles(bnet2,[p for p in stale if p['road']==1],rfix)
+try:
+    P.correct_public_poles(bnet2,stale,rfix)
+    raise AssertionError('with the stale kind-4 poles left in, the move would trip the 9 m rule (why make_delta filters)')
+except RuntimeError:
+    pass
+assert "if p.public(net.roads[q['road']])],\n" in (ROOT/'tools/power-network/make_delta.py').read_text(), 'make_delta corrects public poles only'
+
 reverse=[road(4,[[500,0],[0,0]],4),road(1,[[-100,0],[0,0]],1)]
 net=P.Network(reverse)
 back=P.place_poles(reverse,net,[house(1,302,20)],safe,(-10000,-10000))
@@ -93,6 +211,6 @@ assert P.roof_edge(flat,pole(100,40),{'20':{'roofShape':'gable'}})['height']==7,
 R = load(ROOT/'tools/power-network/rehearse.py', 'power_rehearse')
 assert R.replacement(Path('/invented/delta'),Path('terrain'),'roads.json') is None, 'extra delta inputs are never served'
 assert R.replacement(Path('/invented/delta'),Path('terrain'),'props.json') == Path('/invented/delta/terrain/props.json')
-print('PASS power rules, unchanged public pole bytes, direction, bounds, service reach, roof seam, group/datum, unpowered tracks and the unpowered church')
+print('PASS power rules, unchanged public pole bytes, direction, bounds, service reach, roof seam, group/datum, unpowered tracks, the filmed public-pole corrections and the unpowered church')
 if '--land' in sys.argv:
     D.check_properties(ROOT/'data/baked')

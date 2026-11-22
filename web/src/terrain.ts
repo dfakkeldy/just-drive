@@ -122,10 +122,11 @@ interface Grid { index: THREE.BufferAttribute; uvs: THREE.BufferAttribute }
 interface MirrorSave { tile: Tile | null; mesh: THREE.Mesh | null; visible: boolean; hide: THREE.Vector4; geometry: THREE.BufferGeometry | null; material: THREE.Material | THREE.Material[] | null }
 type MirrorHeld = { [K in keyof MirrorSave]: NonNullable<MirrorSave[K]> };
 
+let pngCtx: OffscreenCanvasRenderingContext2D | null = null;
 async function readPng(base: string, path: string): Promise<Uint8ClampedArray> {
   const bmp = await createImageBitmap(await readFile(base, path), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
-  const cv = new OffscreenCanvas(S, S);
-  const ctx = cv.getContext('2d', { willReadFrequently: true })!;
+  const ctx = pngCtx ??= new OffscreenCanvas(S, S).getContext('2d', { willReadFrequently: true })!;
+  ctx.clearRect?.(0, 0, S, S);
   ctx.drawImage(bmp, 0, 0);
   bmp.close();
   return ctx.getImageData(0, 0, S, S).data;
@@ -484,14 +485,17 @@ export class Terrain {
     return this.coverRead ??= this.coverReady.then(async (image) => {
       if (!image) throw new Error('land cover did not load');
       const pixels = new ImageData(image.width, image.height);
-      const canvas = new OffscreenCanvas(image.width, 32);
+      const strip = 64;
+      const canvas = new OffscreenCanvas(image.width, Math.min(strip, image.height));
       const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-      // Small strips keep the one-time readback from stopping the first drive frame.
-      for (let row = 0; row < image.height; row += 32) {
-        const rows = Math.min(32, image.height - row);
+      // Small strips, as many as fit in about 6 ms, then a yield: no long stall in a drive frame, and few
+      // enough yields that the read does not starve behind the start-up terrain burst (32-row yields did).
+      let slice = performance.now();
+      for (let row = 0; row < image.height; row += strip) {
+        const rows = Math.min(strip, image.height - row);
         ctx.drawImage(image, 0, row, image.width, rows, 0, 0, image.width, rows);
         pixels.data.set(ctx.getImageData(0, 0, image.width, rows).data, row * image.width * 4);
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (performance.now() - slice > 6) { await new Promise<void>((resolve) => setTimeout(resolve, 0)); slice = performance.now(); }
       }
       this.coverPixels = pixels;
       canvas.width = canvas.height = 0;
@@ -830,7 +834,7 @@ export class Terrain {
 
     // Lighting detail comes from a normal map at full sample density.
     // This loop is most of a tile build. The edge clamps are worked out once per row and per column, not per read.
-    // The maths, its order and Math.hypot stay as they were, so the texture bytes do not change.
+    // Math.sqrt replaces Math.hypot here (finite ground/canopy slopes, byte-identical across baked tiles).
     const nm = new Uint8Array(S * S * 4);
     for (let b = 0; b < S; b++) {
       const b0 = Math.max(b - 1, 0), b1 = Math.min(b + 1, T), h = (b1 - b0) * mpp;
@@ -842,9 +846,10 @@ export class Terrain {
         const sl = gl + (hull ? 0.6 * canopy[row + a0] : 0), sr = gr + (hull ? 0.6 * canopy[row + a1] : 0);
         const su = gu + (hull ? 0.6 * canopy[up + a] : 0), sd = gd + (hull ? 0.6 * canopy[down + a] : 0);
         let nx = -(sr - sl) / w, nz = -(sd - su) / h;
-        const inv = 1 / Math.hypot(nx, 1, nz);
+        const inv = 1 / Math.sqrt(nx * nx + 1 + nz * nz);
         nx *= inv; nz *= inv;
-        const gs = Math.hypot((gr - gl) / w, (gd - gu) / h);
+        const gx = (gr - gl) / w, gz = (gd - gu) / h;
+        const gs = Math.sqrt(gx * gx + gz * gz);
         const k = (row + a) * 4;
         nm[k] = Math.round((nx * 0.5 + 0.5) * 255);
         nm[k + 1] = Math.round((nz * 0.5 + 0.5) * 255);
@@ -876,21 +881,33 @@ export class Terrain {
     const gattr = new Float32Array(n * n), crowns = this.low ? null : new Float32Array(n * n);
     const drop = Math.max(t.size * 0.04, 6);
     const win = Math.max(2, Math.round(6 / Math.max(mpp, 1))), stride = Math.max(1, Math.round(win / 2));
+    const needCanopy = !!(hull || crowns);
+    let anyCanopy = false;
+    if (needCanopy) for (let k = 0; k < S * S; k++) if (canopy[k] > 0) { anyCanopy = true; break; }
     for (let b = 0; b < n; b++) {
+      const gb = Math.min(Math.max(b - 1, 0), seg) * step;
+      const skirtB = b === 0 || b === n - 1;
       for (let a = 0; a < n; a++) {
-        const ga = Math.min(Math.max(a - 1, 0), seg) * step, gb = Math.min(Math.max(b - 1, 0), seg) * step;
-        const skirt = a === 0 || b === 0 || a === n - 1 || b === n - 1;
+        const ga = Math.min(Math.max(a - 1, 0), seg) * step;
+        const skirt = skirtB || a === 0 || a === n - 1;
         // The mesh is coarser than the data, so trees and roofs are averaged into a soft canopy surface.
         // Single trees come in Stage 1C.
-        let c = 0, cnt = 0;
-        for (let v = -win; v <= win; v += stride) for (let u = -win; u <= win; u += stride) {
-          const aa = ga + u, bb = gb + v;
-          if (aa >= 0 && aa <= T && bb >= 0 && bb <= T) { c += canopy[bb * S + aa]; cnt++; }
-        }
-        c /= cnt;
+        let c = 0;
+        const k0 = gb * S + ga;
+        if (anyCanopy) {
+          let cnt = 0;
+          for (let v = -win; v <= win; v += stride) {
+            const bb = gb + v;
+            if (bb < 0 || bb > T) continue;
+            const row = bb * S;
+            for (let u = -win; u <= win; u += stride) {
+              const aa = ga + u;
+              if (aa >= 0 && aa <= T) { c += canopy[row + aa]; cnt++; }
+            }
+          }
+          c /= cnt;
         // Averaging must not grow the neighbouring forest hull back over a cleared cell.
         if(this.groundCover&&clearsGroundTrees(this.groundClassAt(t.x0+ga*mpp,t.z0+gb*mpp)))c=0;
-        const k0 = gb * S + ga;
         if (road && road[k0 * 4 + 2] > 0) {
           // Keep the averaged canopy off the driving surface.
           const hw = road[k0 * 4 + 1] * wScale;
@@ -901,6 +918,7 @@ export class Terrain {
         if(walkMask?.[k0])c=0;
         if (crowns) crowns[b * n + a] = hull ? 0 : c;
         if (!hull) c = 0;
+        }
         const g = ground[k0];
         const k = b * n + a;
         pos[k * 3] = t.x0 + ga * mpp;
