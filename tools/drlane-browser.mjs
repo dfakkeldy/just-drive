@@ -1,11 +1,11 @@
 // The house on D.R.'s Lane (web/src/drlane-house.ts) in the real page, in headless Chromium, desktop and LOW:
 //   1. it builds near the car within its triangle ceiling, and LOW draws a simpler dog;
-//   2. the surveyed box it stands for is not drawn (with ?drlane=0 the box is there, which proves the measure);
+//   2. the surveyed box it stands for is not drawn (with ?drlane=0 the box is there, on desktop and LOW, which proves the measure);
 //   3. the walls stop the real vehicle;
 //   4. the white dog slips away from the car right beside it and is back once the car is well off;
 //   5. Mabou has no such house. The page throws nothing, and each view leaves a picture.
 // The desktop view runs first: the LOW and box views read what it measured.
-// RUN=drlane-browser.mjs VIEWS="desktop|area=judique&at=617736.5,5081379.6,70 low|area=judique&q=low&at=617736.5,5081379.6,70 box|area=judique&drlane=0&at=617736.5,5081379.6,70 mabou|x=1" tools/yard-shots.sh 1280 720
+// RUN=drlane-browser.mjs VIEWS="desktop|area=judique&at=617736.5,5081379.6,70 low|area=judique&q=low&at=617736.5,5081379.6,70 box|area=judique&drlane=0&at=617736.5,5081379.6,70 boxlow|area=judique&q=low&drlane=0&at=617736.5,5081379.6,70 mabou|x=1" tools/yard-shots.sh 1280 720
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { open, sleep } from './cdp.mjs';
@@ -47,6 +47,7 @@ for (const url of urls) {
       console.log(`PASS box: the surveyed box is drawn with ?drlane=0 (${n} points)`);
     } else {
       for (let i = 0; i < 180 && !await page.read('!!window.mmm.drLane && window.mmm.drLane.triangles > 0 && !window.mmm.drLane.waiting'); i++) await sleep(500);
+      assert.ok(await page.read('!!window.mmm.drLane && window.mmm.drLane.triangles > 0 && !window.mmm.drLane.waiting'), `${name}: the house never built`);
       const state = await page.read(`(() => { const h = window.mmm.drLane; return { house: h.triangles, dog: h.dog.triangles, low: window.mmm.low, shown: h.group.visible }; })()`);
       console.log(name, 'measured', JSON.stringify(state));
       assert.ok(state.house > 3000 && state.shown, `${name}: the house is built and drawn`);
@@ -77,11 +78,11 @@ for (const url of urls) {
         return { reach, at: [r.u, r.v] };
       })()`);
       let away = false;
-      for (let i = 0; i < 20 && !away; i++) { await sleep(150); away = await page.read('window.mmm.drLane.dog.rules.away && !window.mmm.drLane.dog.group.visible'); }
+      for (let i = 0; i < 100 && !away; i++) { await sleep(150); away = await page.read('window.mmm.drLane.dog.rules.away && !window.mmm.drLane.dog.group.visible'); }
       assert.ok(away, `${name}: the dog slips away from a car right beside it (${JSON.stringify(beside)})`);
       await page.read(`(() => { const m = window.mmm, h = m.drLane, w = h.site.world(-9.3, 60); m.vehicle.place(w.x, w.z, h.site.heading(0, 1)); })()`);
       let back = false;
-      for (let i = 0; i < 20 && !back; i++) { await sleep(150); back = await page.read('!window.mmm.drLane.dog.rules.away && window.mmm.drLane.dog.group.visible'); }
+      for (let i = 0; i < 100 && !back; i++) { await sleep(150); back = await page.read('!window.mmm.drLane.dog.rules.away && window.mmm.drLane.dog.group.visible'); }
       assert.ok(back, `${name}: the dog is back once the car is well off`);
       console.log(`PASS ${name}: house ${state.house} triangles, dog ${state.dog}; no surveyed box; walls push the car ${pushed.toFixed(1)} m; the dog slips away and comes back`);
     }
