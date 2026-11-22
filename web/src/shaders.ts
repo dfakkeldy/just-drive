@@ -760,7 +760,7 @@ vec3 farForest(vec2 p, vec2 world, float red, float yel, float stand, vec2 footp
   float clump = smoothstep(0.22, 0.78, 0.65 * vnoise(p * 0.06) + 0.35 * vnoise(p * 0.17 + 5.3));
   float hardwood = smoothstep(con - 0.1, con + 0.1, clump);
   float redShare = red / max(red + yel, 0.001);
-  vec3 turned = mix(FAR_YELLOW, FAR_RED, smoothstep(0.85 - redShare, 1.15 - redShare, vnoise(p * 0.09 + 17.0) * 1.3));
+  vec3 turned = mix(FAR_YELLOW, FAR_RED, smoothstep(0.9 - redShare, 1.1 - redShare, vnoise(p * 0.09 + 17.0)));
   float shade = 0.55 + 0.9 * vnoise(p * 0.21 + 9.1);
   return mix(plain, mix(FAR_CONIFER, turned, hardwood) * shade * FAR_SHADE, detail);
 }
@@ -775,8 +775,11 @@ vec3 treeColor(vec2 p, vec2 world, float red, float yel, float stand, float dist
 #else
   float far = clamp(smoothstep(200.0, 1400.0, dist) + step(6.0, texel), 0.0, 1.0);
 #endif
+#ifndef MIRROR
   // Crowns 5.5 m apart need about three pixels each. Finer, they shimmer into streaks on a far slope.
+  // The reflection is drawn at half size, so its pixels are twice as wide; it keeps the distance rule alone.
   far = max(far, smoothstep(1.2, 2.4, footprint.y));
+#endif
   vec3 avg = farForest(p, world, red, yel, stand, footprint);
   if (far > 0.999) return avg;
   vec2 off;
@@ -827,6 +830,10 @@ void main() {
 #if defined(SEA_WATER) && !defined(LOW) && !defined(MIRROR)
   float waterFootprint = max(length(dFdx(vWorld.xz)), length(dFdy(vWorld.xz))), groundEdge = fwidth(vGround);
 #endif
+  // A pixel's size on the land, in metres, taken before any discard: its short side (x) and long side (y).
+  // Far crowns fade by it. On a far slope seen low, the long side is many times the short one.
+  float footprintX = length(dFdx(vWorld.xz)), footprintY = length(dFdy(vWorld.xz));
+  vec2 landFootprint = vec2(min(footprintX, footprintY), max(footprintX, footprintY));
 #ifdef QUARRY
   // The plane bounds ordinary clipping; higher survey noise needs a water-backed footprint too.
   if(vCoast.z>0.0 && quarryWaterBacked(vWorld))discard;
@@ -834,10 +841,6 @@ void main() {
   if(vWorld.x>=quarryBox.x&&vWorld.x<=quarryBox.z&&vWorld.z>=quarryBox.y&&vWorld.z<=quarryBox.w&&vGround<quarryReflectionLevel)discard;
 #endif
 #endif
-  // A pixel's size on the land, in metres, taken before any discard: its short side (x) and long side (y).
-  // Far crowns fade by it. On a far slope seen low, the long side is many times the short one.
-  float footprintX = length(dFdx(vWorld.xz)), footprintY = length(dFdy(vWorld.xz));
-  vec2 landFootprint = vec2(min(footprintX, footprintY), max(footprintX, footprintY));
   float quarter = step(0.5, vUv.x) + 2.0 * step(0.5, vUv.y);
   if ((quarter < 0.5 ? hideQuad.x : quarter < 1.5 ? hideQuad.y : quarter < 2.5 ? hideQuad.z : hideQuad.w) > 0.5) discard;
   #include <logdepthbuf_fragment>
@@ -1108,7 +1111,8 @@ void main() {
   float under = smoothstep(1.8, 3.5, canopy) * (1.0 - hull);
   albedo = mix(albedo, vec3(0.170, 0.125, 0.070) * (0.8 + 0.4 * fine), under * 0.55);
   // Height shifts the crown pattern, so the steep side of a forest edge is not striped.
-  albedo = mix(albedo, treeColor(p + vWorld.y * vec2(0.71, 0.37), p, red, yel, stand, dist, landFootprint), tree);
+  // Open land skips the forest colour: it would be mixed in at zero weight, and its noise costs most on phones.
+  if (tree > 0.001) albedo = mix(albedo, treeColor(p + vWorld.y * vec2(0.71, 0.37), p, red, yel, stand, dist, landFootprint), tree);
 
 #ifdef QUARRY
   float mineralFill = 0.0;
