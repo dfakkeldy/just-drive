@@ -42,6 +42,15 @@ assert data(old)==data([p for p in new if p['road']<=3]), 'public pole bytes, in
 added=[p for p in new if p['road']==4]
 assert len(added)>3 and max(p['x'] for p in added)==302, 'stop at last building within 75 m, not at a distant building'
 assert not any(p['road'] in (5,6) for p in new), 'unnamed tracks and explicit named driveways get no poles'
+# A named kind-4 road listed as unpowered (AREA.unpowered_tracks) gets no run; the public pass keeps its bytes.
+quiet=P.place_poles(list(net.roads.values()),net,buildings,safe,(-10000,-10000),unpowered=('Invented Road',))
+assert not any(p['road']==4 for p in quiet), 'an unpowered named track gets no poles'
+assert data(old)==data([p for p in quiet if p['road']<=3]), 'leaving a track unpowered keeps the public pole bytes'
+try:
+    P.place_poles(list(net.roads.values()),net,buildings,safe,(-10000,-10000),unpowered=('Misspelt Road',))
+    raise AssertionError('an unpowered name that matches no kind-4 road must stop the bake')
+except RuntimeError:
+    pass
 reverse=[road(4,[[500,0],[0,0]],4),road(1,[[-100,0],[0,0]],1)]
 net=P.Network(reverse)
 back=P.place_poles(reverse,net,[house(1,302,20)],safe,(-10000,-10000))
@@ -61,13 +70,15 @@ assert P.service_drops(net,[pole(100,-5)],[h],'mabou',{}), 'opposite-side connec
 # Crossing at a shared highway vertex must count too (the road bends right at the crossing).
 bend=P.Network([road(1,[[0,0],[100,0],[200,0]],1)])
 assert P.crosses_highway(bend,(90,-10),(110,10)), 'a highway vertex is still a centre line'
-church=P.powered_buildings([house(99,630844.2,5080637.2,'barn')], 'judique')
-assert set(church)=={-1} and church[-1][0]['kind']=='church', 'church replaces its removed surveyed barn'
+# The church has no power (Dan, 21 Nov 2026): no drop for the model, nor for its surveyed envelope as any kind.
+for kind in ('barn','house','large'):
+    assert P.powered_buildings([house(99,630844.2,5080637.2,kind)], 'judique')=={}, 'the church gets no drop'
+assert set(P.powered_buildings([house(99,630844.2,5080637.2)], 'mabou'))=={99}, 'only Judique leaves that site unpowered'
 flat=house(20,100,20,buildingId=20);flat.update(roof='flat')
 assert P.roof_edge(flat,pole(100,40),{'20':{'roofShape':'gable'}})['height']==7, 'flat wings keep the renderer roof height'
 R = load(ROOT/'tools/power-network/rehearse.py', 'power_rehearse')
 assert R.replacement(Path('/invented/delta'),Path('terrain'),'roads.json') is None, 'extra delta inputs are never served'
 assert R.replacement(Path('/invented/delta'),Path('terrain'),'props.json') == Path('/invented/delta/terrain/props.json')
-print('PASS power rules, unchanged public pole bytes, direction, bounds, service reach, roof seam, group/datum and church replacement')
+print('PASS power rules, unchanged public pole bytes, direction, bounds, service reach, roof seam, group/datum, unpowered tracks and the unpowered church')
 if '--land' in sys.argv:
     D.check_properties(ROOT/'data/baked')

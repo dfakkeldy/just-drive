@@ -6,6 +6,17 @@ is **75 m from the mapped centre**: River Denys Mountain Road's last house is
 kind-4 piece. Unnamed tracks, bridges and `props_driveways` get no poles.
 The connected public end feeds the run; reversed source points work too.
 
+A named kind-4 road listed in `AREA.unpowered_tracks` (pipeline/areas.py) gets no run.
+Judique lists River Denys Road. The dash cam drive of 21 Nov 2026 saw the line end at
+the last house with power, about 2.8 km along the public piece of River Denys Road. It saw no
+pole after that, on the public piece or on the kind-4 piece to the church. A name that
+matches no kind-4 road stops the bake.
+
+**Known gap (frozen public poles).** The public piece of River Denys Road (kind 3) still
+has frozen public poles to its end, about 7.6 km past the real end of the line. Removing
+them would change the frozen public pass, so this change leaves them. It needs a separate,
+explicit decision about the frozen public positions.
+
 The public-road pass runs first with its original seeds and order.
 `poles-before.py` freezes that algorithm from main `868f823e`. Rules and delta
 generation compare original/new public poles **byte for byte on the same inputs**.
@@ -13,13 +24,15 @@ A power-only delta also preserves installed public poles, mailbox arrays and
 cabinet arrays. Ordinary full step 29 still uses the original rules on current
 inputs, so unrelated input changes can legitimately change their own outputs.
 
-Each eligible house, large building or church gets at most one sagging drop,
+Each eligible house or large building gets at most one sagging drop,
 from a pole within 45 m of its roof seam. Selection prefers no highway crossing,
 then the building's side of its nearest road, then distance, with stable ID ties.
 Sheds, barns and tanks get none. Wings share one property drop. Highway vertices
-count as centre-line crossings. The Judique church uses its existing measured
-model frame and ground datum; its removed surveyed barn gets none. Its drop is
-about 12.08 m. No identity, civic number, occupant or business name is added.
+count as centre-line crossings. The Judique church has no power (Dan, 21 Nov 2026):
+neither its model nor its removed surveyed envelope gets a drop. Step 29 no longer reads
+`web/src/church-site.ts`. Packs from before 21 Nov 2026 hold a church drop with no ground
+datum; the renderer still draws it from the model origin's terrain until the new pack is
+installed. No identity, civic number, occupant or business name is added.
 
 Four span wires and all service drops share **one `LineSegments` draw per cell**.
 LOW hides drops; desktop restores them. Roof heights match the building renderer.
@@ -48,8 +61,9 @@ python3 tools/power-network/make_delta.py /path/to/data/baked --check --after --
 
 The check compares public pole **position sets**, and compares mailbox/cabinet
 arrays directly. It also recomputes drops from current geometry, checks schema
-counts, named-road bounds, the River Denys 39-pole endpoint and the church's
-approximately 12 m drop. Without `--after`, before-install packs are accepted.
+counts, named-road bounds and the River Denys 39-pole endpoint. It also checks that no
+pole stands on an unpowered track, no pole stands within 500 m of the church and no
+drop belongs to the church. Without `--after`, before-install packs are accepted.
 Without `--baseline`, it states that preservation was not compared.
 Changes caused by other land stages must be separated from the power change.
 
@@ -73,15 +87,17 @@ keys. If inputs change first, rerun step 29 instead of copying an old manifest.
 ## Checks
 
 - `power-network-rules`: frozen public-pole bytes; terminal/reversed roads; unnamed
-  and driveway exclusions; 45 m reach; side/crossing; roof/group/datum; church.
+  and driveway exclusions; unpowered tracks; 45 m reach; side/crossing; roof/group/datum;
+  no church drop.
 - `power-network-land`: properties on installed land. Passes before installation;
   main runs the explicit `--after --baseline` command for acceptance.
 - `power-network-runtime`: actual Props geometry, sag/end heights, one draw per
   cell, stable updates/disposal, LOW restoration, quiet-site references.
 - `power-network-browser` (**apple-check-host / Edge**): the installed Judique land. Before
   main's power bake it proves a legacy pack (no drops, no River Denys poles)
-  still draws at most one merged wire line per cell. After it, the rendered
-  church drop and the River Denys run must be present.
+  still draws at most one merged wire line per cell. After it, two views: at the church,
+  no pole within 500 m, no River Denys Road track pole and no drop; on River Denys
+  Road by Highway 19, a real house drop renders. The River Denys Mountain run stays.
 - Budget: the ordinary `budget`, `budget-mutations`, `traffic-budget` and
   `traffic-budget-desktop` rows. Their ceilings are pinned for this code on the
   current (pre-power) land. **Main's power bake adds poles and drops, so main

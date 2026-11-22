@@ -11,6 +11,8 @@ import types
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'pipeline'))
+# The church model's origin (web/src/church-site.ts); only for the "no pole near the church" property.
+CHURCH = (630835.5, 5080641.6)
 AREAS = [('mabou', 'terrain'), ('cansocauseway', 'areas/cansocauseway'), ('judique', 'areas/judique'),
          ('pointtupper', 'areas/pointtupper'), ('porthood', 'areas/porthood'), ('westbay', 'areas/westbay')]
 
@@ -86,11 +88,13 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
         assert manifest['props']['serviceDrops'] == len(props['serviceDrops'])
         expected = p.service_drops(net, props['poles'], buildings, area, styles)
         assert props['serviceDrops'] == expected, area + ': drops do not match current poles, buildings, roof styles or side/reach rules'
+        assert not any(d['building'] == -1 for d in props['serviceDrops']), area + ': the church has no power'
         bounds = {}
         for pole in props['poles']:
             road = net.roads[pole['road']]
             if not p.public(road):
                 assert road['kind'] == 4 and (road.get('name') or '').strip() and not road.get('propsDriveway') and not road['bridge'], area + ': pole on track/driveway'
+                assert road['name'] not in p.AREA.unpowered_tracks, area + ': pole on ' + road['name'] + ', which has no power line'
                 if road['id'] not in bounds:
                     local = p.Network([road])
                     hits = [h['s'] for b in buildings if (h := local.nearest((b['x'], b['y']), 75))]
@@ -107,11 +111,14 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
             run = [q for q in props['poles'] if q['road'] == river['id']]
             end = max(local.nearest((q['x'], q['y']), 20)['s'] for q in run)
             assert len(run) == 39 and abs(end - last) < .02, 'River Denys must end its 39-pole run at the last house'
-            church = next(d for d in props['serviceDrops'] if d['building'] == -1)
-            pole = next(q for q in props['poles'] if q['road'] == church['road'] and q['n'] == church['n'])
-            span = p.distance((pole['x'], pole['y']), (church['x'], church['y']))
-            assert 10 <= span <= 14, 'Judique church must have its approximately 12 m service drop'
-            row.update(riverDenysPoles=len(run), lastBuildingS=round(last, 3), lastPoleS=round(end, 3), churchDropMetres=round(span, 3))
+            # The dash cam (21 Nov 2026) saw no line on River Denys Road's kind-4 piece and none at the church.
+            assert p.AREA.unpowered_tracks == ('River Denys Road',), 'Judique lists River Denys Road as unpowered'
+            track = [r['id'] for r in roads if r['kind'] == 4 and r['name'] == 'River Denys Road']
+            assert track and not any(q['road'] in track for q in props['poles']), 'River Denys Road kind-4 piece has no poles'
+            nearest = min(p.distance((q['x'], q['y']), CHURCH) for q in props['poles'])
+            assert nearest > 500, 'no pole stands near the church'
+            row.update(riverDenysPoles=len(run), lastBuildingS=round(last, 3), lastPoleS=round(end, 3),
+                       riverDenysRoadTrackPoles=0, nearestPoleToChurchMetres=round(nearest, 1))
         rows.append(row)
     print(json.dumps(rows, indent=2))
     print('PASS power properties' + ('; public positions and mailbox arrays compared' if baseline or overlay else '; supply --baseline for preservation comparison'))

@@ -37,6 +37,9 @@ class Area:
     # Hand-built house sites, as (east, north, radius in metres): no roadside box for the hand-built house site.
     # A house inside the radius gets no mailbox, and step 29 stops if any box stands inside.
     no_box_sites: tuple = ()
+    # Named kind-4 roads that step 29 gives no pole run, by road name, when a drive showed no power line along them.
+    # Public roads keep their frozen poles (tools/power-network/README.md); only the kind-4 extension is left out.
+    unpowered_tracks: tuple = ()
     extra_fine: tuple = ()  # boxes (xmin, ymin, xmax, ymax) that get 1 m land whatever roads they hold
     fine_tile_limit: int = 1500  # guard: most 256 m tiles of 1 m land that one bake may select
     # Boxes (xmin, ymin, xmax, ymax) round hand-built places beside a road. Only the optional road-shaped ground
@@ -209,6 +212,10 @@ JUDIQUE = Area(
     renamed_roads=(((618553.0, 5074368.5), 'Old Chisholm Mill Road', 3),),
     props_driveways=((618553.0, 5074368.5),),
     no_box_sites=((618687.3, 5074423.9, 150),),   # the origin of the hand-built house site (web/src/home-site.ts)
+    # The dash cam drive of 21 Nov 2026 saw the line end at the last house with power, near the start of
+    # River Denys Road's public piece. No pole stands along its kind-4 piece to the church, and the church has
+    # no power (Dan, 21 Nov 2026). The public piece keeps its frozen poles.
+    unpowered_tracks=('River Denys Road',),
     wide_source='mabou', anchor_highway=19)
 
 PORTHOOD = Area(

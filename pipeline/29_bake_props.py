@@ -14,7 +14,6 @@ import os
 import math
 from pathlib import Path
 import random
-import re
 import importlib.util
 
 from osgeo import gdal
@@ -373,7 +372,12 @@ def building_exclusions(exclusions):
 
 
 
-def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
+def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None, unpowered=None):
+    """`unpowered`: names of kind-4 roads with no run (AREA.unpowered_tracks when None). Public roads are unaffected."""
+    unpowered = set(AREA.unpowered_tracks if unpowered is None else unpowered)
+    tracks = {r.get('name') for r in roads if r['kind'] == 4}
+    if unpowered - tracks:
+        raise RuntimeError(f'unpowered_tracks names no kind-4 road here: {sorted(unpowered - tracks)}')
     # Public endpoint-to-segment joins also cover T junctions and split road pieces.
     corners = collections.defaultdict(list)
     for r in roads:
@@ -394,6 +398,8 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
     extensions = []
     for r in roads:
         if r['kind'] != 4 or not (r.get('name') or '').strip() or r.get('propsDriveway') or r['bridge']:
+            continue
+        if r['name'] in unpowered:
             continue
         local_net = Network([r])
         # About 60 m, with 15 m allowance for mapped setbacks (River Denys's last house is 72.6 m).
@@ -440,28 +446,17 @@ def place_poles(roads, net, buildings, safe, VILLAGE, public_poles=None):
     return poles
 
 def powered_buildings(buildings, area):
-    """One property, possibly several real roof blocks; sheds, barns and tanks get no drop."""
+    """One property, possibly several real roof blocks; sheds, barns, tanks and the church get no drop."""
     groups = collections.defaultdict(list)
     for b in buildings:
         groups[b.get('buildingId', b['id'])].append(b)
     if area == 'judique':
-        # The game replaces this surveyed envelope by its owner-measured church model.
+        # The game replaces this surveyed envelope by its owner-measured church model. The church has no power
+        # (Dan, 21 Nov 2026), so neither the envelope nor the model gets a drop, whatever kind the survey gives it.
         groups = {k: bs for k, bs in groups.items() if not any(
             distance((b.get('site', b)['x'], b.get('site', b)['y']), (630844.2, 5080637.2)) <= 8 for b in bs)}
-        text = (ROOT / 'web/src/church-site.ts').read_text()
-        origin = json.loads(re.search(r'CHURCH_ORIGIN = (\[.*?\])', text)[1])
-        scale = float(re.search(r'CHURCH_SCALE = ([\d.]+)', text)[1])
-        angle = float(re.search(r'CHURCH_HEADING = ([\d.]+)', text)[1])
-        nave = json.loads(re.search(r'CHURCH_GEOM = (\{.*?\}) as const;', text, re.S)[1])['nave']
-        a = math.radians(angle)
-        u, v = (nave['x0'] + nave['x1']) / 2, (nave['zs'] - nave['zn']) / 2
-        groups[-1] = [dict(id=-1, kind='church', x=origin[0] + scale * (u * math.sin(a) + v * math.cos(a)),
-                           y=origin[1] + scale * (u * math.cos(a) - v * math.sin(a)),
-                           length=(nave['x1'] - nave['x0']) * scale, width=(nave['zs'] + nave['zn']) * scale,
-                           axisDeg=angle, eave=nave['eave'] * scale, ridge=nave['ridge'] * scale,
-                           roof='gable', ground=None, groundX=origin[0], groundY=origin[1])]
     return {k: bs for k, bs in groups.items() if any(
-        b['kind'] in ('house', 'large', 'church') and b.get('shape') != 'tank' for b in bs)}
+        b['kind'] in ('house', 'large') and b.get('shape') != 'tank' for b in bs)}
 
 
 def roof_edge(b, pole, styles):
