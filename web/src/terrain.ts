@@ -957,7 +957,6 @@ export class Terrain {
         coastExag: { value:this.exag }, coastOn: { value:1 }, ...(this.low ? {coastPixelScale:{value:0}} : {}), ...coastRecessUniforms(),
       } : {}), tNormal: { value: tex }, tRoad: { value: roadTex }, tBrook: { value: brookTex }, brook: { value: brook ? 1 : 0 }, texel: { value: mpp }, hull: { value: hull ? 1 : 0 }, hideQuad: { value: new THREE.Vector4() } };
     const mat=!styleTex?new THREE.ShaderMaterial({vertexShader: TERRAIN_VERT,fragmentShader: this.cartRoads ? CART_TERRAIN_FRAG : TERRAIN_FRAG,defines: { ...(this.groundCover ? { GROUND_CLASSES: 1 } : {}), ...(coastal ? { COAST_SHORE: 1, ...(coastal.quarry ? { QUARRY: 1 } : {}) } : {}), ...(this.low ? { LOW: 1 } : { ...(this.shadows ? { SHADOWS: 1 } : {}), ...(lo <= this.seaLevel + 2 ? { SEA_WATER: 1 } : {}) }), ...(gravelOverlay ? { SITE_GRAVEL: 1 } : {}), ...(airportMarkings ? { AIRPORT: 1 } : {}), ...(roadPavement && !this.cartRoads ? { ROAD_PAVEMENT: 1 } : {}) },uniforms:tileUniforms}):new THREE.ShaderMaterial({vertexShader: TERRAIN_VERT,fragmentShader: STUNT_TERRAIN_FRAG,defines: {STUNT_PARK:1, ...(this.groundCover ? { GROUND_CLASSES: 1 } : {}), ...(coastal ? { COAST_SHORE: 1, ...(coastal.quarry ? { QUARRY: 1 } : {}) } : {}), ...(this.low ? { LOW: 1 } : { ...(this.shadows ? { SHADOWS: 1 } : {}), ...(lo <= this.seaLevel + 2 ? { SEA_WATER: 1 } : {}) }), ...(gravelOverlay ? { SITE_GRAVEL: 1 } : {}), ...(airportMarkings ? { AIRPORT: 1 } : {}) },uniforms:tileUniforms});
-    this.applyWeather(mat);
     const mesh = new THREE.Mesh(geo, mat);
     if(coastal && this.low)mesh.onBeforeRender=(renderer,_scene,camera,_geometry,material)=>updateCoastView(renderer,camera,material);
     coastal?.prepareMesh?.(mesh);
@@ -984,6 +983,7 @@ export class Terrain {
     // The request touched an unready tile; count its completion in this frame's wanted set.
     if (t.lastUsed === this.frame) this.use(t);
     this.group.add(mesh);
+    this.applyWeather(mat);
     this.paved?.applyGround(mat);
     this.sidewalks?.tileReady?.(t.level,t.i,t.j);
     this.night?.applyGround(mat);
