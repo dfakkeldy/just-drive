@@ -732,13 +732,41 @@ vec3 leafColor(float r, float v, float turned, float dull, float red, float yel)
   return c;
 }
 
-vec3 treeColor(vec2 p, float red, float yel, float dist) {
-  // The average colour of the stand, for distances where one pixel holds many crowns.
-  vec3 conifer = vec3(0.030, 0.068, 0.032), lateGreen = vec3(0.120, 0.150, 0.035);
-  vec3 avg = conifer * max(1.0 - red - yel, 0.0)
-    + red * mix(lateGreen, vec3(0.300, 0.085, 0.027), 0.82)
-    + yel * mix(lateGreen, vec3(0.390, 0.260, 0.050), 0.78);
-  avg *= 0.80;   // gaps between crowns are in shade
+// Far forest colours: conifer, red-turning and yellow-turning crowns seen together.
+const vec3 FAR_CONIFER = vec3(0.030, 0.068, 0.032);
+const vec3 FAR_RED = vec3(0.2676, 0.0967, 0.0285);   // mix(late green, red, 0.82)
+const vec3 FAR_YELLOW = vec3(0.3306, 0.2358, 0.0467); // mix(late green, yellow, 0.78)
+// Crowns shade each other and the gaps between them. From a distance this keeps a forest darker than a field,
+// as in the dash cam, where the old 0.80 left turned stands as light as dry grass.
+const float FAR_SHADE = 0.60;
+// A forest too far for single crowns. The stand's shares are read up to 18 m off the pixel, by smooth noise, so
+// the cover image's straight stand outlines become ragged edges. Within a stand, hardwood clumps of about 6-17 m
+// stand among the conifers in the stand's shares, with soft shade between crown groups. Where a pixel is wider
+// than the clumps they fade to the stand's mean.
+vec3 farForest(vec2 p, vec2 world, float red, float yel, float stand, vec2 footprint) {
+  if (stand > 0.0) {
+    vec2 at = (world + (vec2(vnoise(world * 0.045), vnoise(world * 0.045 + 31.7)) - 0.5) * 36.0 - coverRect.xy) * coverRect.zw;
+    if (at.x > 0.0 && at.y > 0.0 && at.x < 1.0 && at.y < 1.0) {
+      vec4 c = textureLod(tCover, at, 0.0);
+      float k = floor(c.b * 255.0 + 0.5);
+      if (k == 1.0 || k == 9.0) { red = mix(red, c.r * 255.0 / 250.0, stand); yel = mix(yel, c.g * 255.0 / 250.0, stand); }
+    }
+  }
+  float con = max(1.0 - red - yel, 0.0);
+  vec3 plain = (FAR_CONIFER * con + FAR_RED * red + FAR_YELLOW * yel) * FAR_SHADE * (0.9 + 0.2 * vnoise(p * 0.02));
+  // Clumps are soft noise, so they may fade by the pixel's mean size rather than its long side.
+  float detail = 1.0 - smoothstep(4.0, 12.0, sqrt(footprint.x * footprint.y));
+  if (detail <= 0.0) return plain;
+  float clump = smoothstep(0.22, 0.78, 0.65 * vnoise(p * 0.06) + 0.35 * vnoise(p * 0.17 + 5.3));
+  float hardwood = smoothstep(con - 0.1, con + 0.1, clump);
+  float redShare = red / max(red + yel, 0.001);
+  vec3 turned = mix(FAR_YELLOW, FAR_RED, smoothstep(0.85 - redShare, 1.15 - redShare, vnoise(p * 0.09 + 17.0) * 1.3));
+  float shade = 0.55 + 0.9 * vnoise(p * 0.21 + 9.1);
+  return mix(plain, mix(FAR_CONIFER, turned, hardwood) * shade * FAR_SHADE, detail);
+}
+
+vec3 treeColor(vec2 p, vec2 world, float red, float yel, float stand, float dist, vec2 footprint) {
+  // Crown cells near; crown groups or their mean where one pixel holds many crowns.
 #if defined(MIRROR)
   // Keep crown cells as long as the main view. Early averaging reads as bare land across water.
   float far = clamp(smoothstep(200.0, 1400.0, dist) + step(6.0, texel), 0.0, 1.0);
@@ -747,7 +775,10 @@ vec3 treeColor(vec2 p, float red, float yel, float dist) {
 #else
   float far = clamp(smoothstep(200.0, 1400.0, dist) + step(6.0, texel), 0.0, 1.0);
 #endif
-  if (far > 0.999) return avg * (0.9 + 0.2 * vnoise(p * 0.02));
+  // Crowns 5.5 m apart need about three pixels each. Finer, they shimmer into streaks on a far slope.
+  far = max(far, smoothstep(1.2, 2.4, footprint.y));
+  vec3 avg = farForest(p, world, red, yel, stand, footprint);
+  if (far > 0.999) return avg;
   vec2 off;
   vec3 cell = crownCell(p / 5.5, off);
   vec2 id = cell.xy;
@@ -756,7 +787,10 @@ vec3 treeColor(vec2 p, float red, float yel, float dist) {
   float rim = 1.0 - 0.5 * smoothstep(0.22, 0.72, cell.z);
   float side = 1.0 + 0.35 * dot(normalize(-off + 1e-4), normalize(sunDir.xz + 1e-4)) * smoothstep(0.05, 0.5, cell.z);
   c *= rim * side * (0.85 + 0.3 * vnoise(p * 1.3));
-  return mix(c, avg, far);
+  // Crowns in a forest's raised surface shade one another: 0.75 brings their mean (about 0.80) to FAR_SHADE, so the
+  // fade to the far colour leaves no band, and a third of the clump colour keeps one bright crown from standing
+  // out against dark conifers as a block.
+  return mix(mix(c * 0.75, avg, 0.3), avg, far);
 }
 
 // A brook: shallow tea-brown water over stones. The pattern runs downstream; where the bed falls fast it breaks white.
@@ -800,6 +834,10 @@ void main() {
   if(vWorld.x>=quarryBox.x&&vWorld.x<=quarryBox.z&&vWorld.z>=quarryBox.y&&vWorld.z<=quarryBox.w&&vGround<quarryReflectionLevel)discard;
 #endif
 #endif
+  // A pixel's size on the land, in metres, taken before any discard: its short side (x) and long side (y).
+  // Far crowns fade by it. On a far slope seen low, the long side is many times the short one.
+  float footprintX = length(dFdx(vWorld.xz)), footprintY = length(dFdy(vWorld.xz));
+  vec2 landFootprint = vec2(min(footprintX, footprintY), max(footprintX, footprintY));
   float quarter = step(0.5, vUv.x) + 2.0 * step(0.5, vUv.y);
   if ((quarter < 0.5 ? hideQuad.x : quarter < 1.5 ? hideQuad.y : quarter < 2.5 ? hideQuad.z : hideQuad.w) > 0.5) discard;
   #include <logdepthbuf_fragment>
@@ -818,17 +856,22 @@ void main() {
 #ifdef GROUND_CLASSES
   if(cls==6.0||cls==8.0)canopy=0.0;
 #endif
-  // 25 steps per tenth in the texture, so 250 = all of the stand.
-  float red = mix(0.22, cov.r * 255.0 / 250.0, inCover * step(0.5, cls));
-  float yel = mix(0.30, cov.g * 255.0 / 250.0, inCover * step(0.5, cls));
-#ifdef GROUND_CLASSES
-  if (cls > 1.5 && cls != 9.0) { red = 0.30; yel = 0.40; }   // class 9 retains the previous canopy palette in R/G
-#else
-  if (cls > 1.5) { red = 0.30; yel = 0.40; }   // trees outside forest stands: yards and fence lines
-#endif
-
   vec2 p = vWorld.xz;
   float big = fbm(p * 0.004), mid = fbm(p * 0.03), fine = vnoise(p * 0.9);
+  // Land with no stand record (outside the cover image, or class unknown) gets stands of about 250 m from the
+  // regional shares: about a fifth pure conifer, the rest mixed, red-turning 0.21 and yellow-turning 0.26 on average.
+  // The record fades in over 150 m inside the image's edge, so no straight seam crosses the land there.
+  float hardwood = smoothstep(0.36, 0.60, big);
+  vec2 coverEdge = min(cuv, 1.0 - cuv) / coverRect.zw;
+  float stand = inCover * step(0.5, cls) * smoothstep(0.0, 150.0, min(coverEdge.x, coverEdge.y));
+  // 25 steps per tenth in the texture, so 250 = all of the stand.
+  float red = mix(0.45 * hardwood, cov.r * 255.0 / 250.0, stand);
+  float yel = mix(0.55 * hardwood, cov.g * 255.0 / 250.0, stand);
+#ifdef GROUND_CLASSES
+  if (cls > 1.5 && cls != 9.0) { red = 0.30; yel = 0.40; stand = 0.0; }   // class 9 retains the previous canopy palette in R/G
+#else
+  if (cls > 1.5) { red = 0.30; yel = 0.40; stand = 0.0; }   // trees outside forest stands: yards and fence lines
+#endif
 
   vec3 soil = vec3(0.150, 0.110, 0.075);
   vec3 albedo = groundColor(p, cls, big, mid, fine);
@@ -1065,7 +1108,7 @@ void main() {
   float under = smoothstep(1.8, 3.5, canopy) * (1.0 - hull);
   albedo = mix(albedo, vec3(0.170, 0.125, 0.070) * (0.8 + 0.4 * fine), under * 0.55);
   // Height shifts the crown pattern, so the steep side of a forest edge is not striped.
-  albedo = mix(albedo, treeColor(p + vWorld.y * vec2(0.71, 0.37), red, yel, dist), tree);
+  albedo = mix(albedo, treeColor(p + vWorld.y * vec2(0.71, 0.37), p, red, yel, stand, dist, landFootprint), tree);
 
 #ifdef QUARRY
   float mineralFill = 0.0;
