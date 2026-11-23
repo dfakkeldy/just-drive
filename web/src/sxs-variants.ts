@@ -295,16 +295,20 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
     box([s * W * .56, wheelClearY + .04, cfg.hoodFrontZ - .018], [.17, .052, .016], white);
   }
 
-  // --- Wheel-arch fender flares (clear of tyres at rest, full compression and steering lock) ---
+  // --- Wheel-arch fender flares (tucked flush into hood/body, clear of tyres at all poses) ---
   for (const s of [-1, 1]) {
     for (const axleZ of [-halfBase, halfBase]) {
-      const archTopY = wheelClearY + .055;
-      const archW = .15;
-      const flareX = s * (W - .01);
-      const legOff = wr + .02;
-      box([flareX, archTopY, axleZ], [archW, .045, wr * 1.16], cab);
-      box([flareX, archTopY - .06, axleZ - legOff], [archW, .045, .14], cab, body, -.78);
-      box([flareX, archTopY - .06, axleZ + legOff], [archW, .045, .14], cab, body, .78);
+      const archTopY = wheelClearY + .045;
+      const archW = .14;
+      const flareX = s * (W - .03);
+      const halfSpan = wr * .54;
+      box([flareX, archTopY, axleZ], [archW, .042, halfSpan * 2], cab);
+      // Tuck inner angled lip back toward cab/body without protruding past nose or tail.
+      if (axleZ < 0) {
+        box([flareX, archTopY - .055, axleZ + halfSpan + .04], [archW, .042, .12], cab, body, .72);
+      } else {
+        box([flareX, archTopY - .055, axleZ - halfSpan - .04], [archW, .042, .12], cab, body, -.72);
+      }
     }
   }
 
@@ -484,10 +488,12 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
     box([0, bedFloorY + bedWallH / 2, bedEndZ - .03], [bedW * 1.84, bedWallH, .07], paint);
     box([0, bedWallTopY + .02, bedEndZ - .03], [bedW * 1.88, .04, .08], cab);
     box([0, bedWallTopY - .08, bedEndZ + .012], [.16, .045, .02], alloy);
-    // Under-bed rear steel bumper & vertical corner tail lamps.
+    // Under-bed rear steel bumper & mounting struts + vertical corner tail lamps.
     const rearBumpZ = Math.max(cfg.rearEndZ - .02, rearArchRearZ + .07);
-    box([0, floorY + .24, rearBumpZ], [W * 1.66, .11, .11], cab);
+    box([0, floorY + .24, rearBumpZ], [W * 1.56, .11, .10], cab);
     for (const s of [-1, 1]) {
+      rod([s * .32, floorY + .24, rearBumpZ - .04], [s * .32, floorY + .04, rearBumpZ - .26], .026, cab);
+      rod([s * .32, floorY + .24, rearBumpZ - .04], [s * .32, bedFloorY - .02, bedEndZ - .14], .022, cab);
       box([s * (bedW - .10), bedFloorY + bedWallH * .55, bedEndZ + .012], [.095, .20, .025], rubber);
       box([s * (bedW - .10), bedFloorY + bedWallH * .55, bedEndZ + .026], [.06, .15, .014], red);
     }
