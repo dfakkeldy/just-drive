@@ -264,17 +264,35 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
     result=run('--list');assert result.returncode==1 and 'UNREGISTERED check: orphan-check.mjs' in result.stderr
     (fixture/'tools/orphan-check.mjs').unlink()
 
-    # --jobs: parallel CPU rows run faster, isolate scratch/evidence per row, keep mutual-exclusion groups
-    # and browser rows serial, preserve canonical table order, and clean up every process group on INT/TERM.
+    # --jobs: parallel CPU rows overlap (proven via rendezvous barrier, not wall-clock timing), isolate scratch/evidence
+    # per row, keep mutual-exclusion groups and browser rows serial, preserve canonical table order, handle parallel
+    # timeouts, and clean up every process group (including detached children via SIGTERM handler) on INT/TERM.
     expect(['--jobs','0'],2)
+    barrier_dir=fixture/'barrier';barrier_dir.mkdir(exist_ok=True)
+    bar_py=fixture/'par_barrier.py'
+    bar_py.write_text(
+        'import sys,time\nfrom pathlib import Path\n'
+        'd=Path(sys.argv[1]); n=sys.argv[2]; (d/n).write_text("1")\n'
+        'end=time.monotonic()+5\n'
+        'while time.monotonic()<end:\n'
+        '  if all((d/k).exists() for k in ("a","b","c","d")): sys.exit(0)\n'
+        '  time.sleep(0.02)\n'
+        'sys.exit(1)\n'
+    )
     table([('a',0,'node','*',''),('b',0,'node','*',''),('c',0,'node','*',''),('d',0,'node','*','')])
-    for name in ('a','b','c','d'): change_row(name,'sleep 0.35')
-    t0=time.monotonic();result=run('--jobs','4');dt=time.monotonic()-t0
-    assert result.returncode==0 and dt<1.1,(result.returncode,dt,result.stdout,result.stderr)
+    for name in ('a','b','c','d'):
+        change_row(name,f'{shlex.quote(sys.executable)} {shlex.quote(str(bar_py))} {shlex.quote(str(barrier_dir))} {name}')
+    result=run('--jobs','4')
+    assert result.returncode==0,(result.returncode,result.stdout,result.stderr)
     table_names=[l.split(' | ')[0] for l in result.stdout.splitlines() if ' | PASS | ' in l]
     assert table_names==['tsc','a','b','c','d'],table_names
     result_lines=[l[len('RESULT '):] for l in result.stderr.splitlines() if l.startswith('RESULT ')]
     assert len(result_lines)==5 and {l.split(' | ')[0] for l in result_lines}=={'tsc','a','b','c','d'},result_lines
+    # Parallel timeout beside a healthy sibling row: timed-out row fails cleanly while sibling passes.
+    table([('sleeper',0,'node','*',''),('healthy',0,'node','*','')])
+    change_row('sleeper','sleep 20','0.25')
+    change_row('healthy','sleep 0.1')
+    expect(['--jobs','2'],1,('sleeper | FAIL | 1','timed out after 0.25 s','healthy | PASS'))
     # Isolated per-row scratch ($OUT/$TMPDIR/$MMM_CHECK_OUT) and merged evidence/<row>/ on pass.
     table([('iso1',0,'node','*',''),('iso2',0,'node','*','')])
     for name in ('iso1','iso2'):
@@ -308,25 +326,44 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
     assert disjoint('br1','br2'),spans
     # Browser rows start only after all CPU rows finish.
     assert max(spans[k][1] for k in ('mp','mp-mutations','browser-runtime','browser-ownership')) <= min(spans['br1'][0],spans['br2'][0]),spans
-    # Interrupting a parallel run terminates every active process group and exits 130.
-    table([('p1',0,'node','*',''),('p2',0,'node','*',''),('p3',0,'node','*','')])
-    r1=fixture/'p1.ready';r2=fixture/'p2.ready';pid1=fixture/'p1.pid';pid2=fixture/'p2.pid';m3=fixture/'p3.ran'
-    for p in (r1,r2,pid1,pid2,m3): p.unlink(missing_ok=True)
-    w_src='import os,signal,sys,time; from pathlib import Path; signal.signal(signal.SIGTERM,signal.SIG_IGN); Path(sys.argv[1]).write_text(str(os.getpid())); Path(sys.argv[2]).write_text("1"); time.sleep(30)\n'
-    w_py=fixture/'par_worker.py';w_py.write_text(w_src)
-    change_row('p1',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_py))} {shlex.quote(str(pid1))} {shlex.quote(str(r1))} & wait')
-    change_row('p2',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_py))} {shlex.quote(str(pid2))} {shlex.quote(str(r2))} & wait')
-    change_row('p3',f'touch {shlex.quote(str(m3))}')
+    # Interrupting a parallel run (SIGINT and SIGTERM) terminates every active process group and lets a
+    # SIGTERM-handling parent stop its detached-session child before exit; never starts queued rows.
     par_code=('import importlib.util,sys,os;from pathlib import Path;'
               's=importlib.util.spec_from_file_location("checks",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);'
               'm.ROOT=Path(sys.argv[2]);os.chdir(m.ROOT);sys.argv=[sys.argv[1],"--jobs","2"];sys.exit(m.main())')
-    p=subprocess.Popen([sys.executable,'-c',par_code,str(ROOT/'tools/check-all.py'),str(fixture)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env={**os.environ,'PATH':str(fixture/'bin')+os.pathsep+os.environ['PATH'],'MMM_CHECK_SCRATCH':str(scratch[0])})
-    for _ in range(150):
-        if r1.exists() and r2.exists(): break
-        time.sleep(.02)
-    assert r1.exists() and r2.exists()
-    p.send_signal(signal.SIGTERM);out,err=p.communicate(timeout=8)
-    assert p.returncode==130 and not m3.exists(),(p.returncode,out,err)
-    assert not alive(int(pid1.read_text())) and not alive(int(pid2.read_text())),'parallel SIGTERM left descendant alive'
-    print('PASS --jobs: parallel speedup, per-row isolation/evidence, group & browser serialization, SIGTERM cleanup')
+    w_stubborn=fixture/'par_stubborn.py'
+    w_stubborn.write_text('import os,signal,sys,time\nfrom pathlib import Path\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\nPath(sys.argv[1]).write_text(str(os.getpid()))\nPath(sys.argv[2]).write_text("1")\ntime.sleep(30)\n')
+    w_detached=fixture/'par_detached.py'
+    w_detached.write_text(
+        'import signal,subprocess,sys,time\nfrom pathlib import Path\n'
+        'child=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"],start_new_session=True)\n'
+        'def on_sig(_s,_f):\n signal.signal(signal.SIGTERM,signal.SIG_IGN)\n raise SystemExit(143)\n'
+        'signal.signal(signal.SIGTERM,on_sig)\n'
+        'try:\n Path(sys.argv[1]).write_text(str(child.pid))\n Path(sys.argv[2]).write_text("1")\n time.sleep(30)\n'
+        'finally:\n child.terminate()\n try: child.wait(timeout=1)\n except subprocess.TimeoutExpired: child.kill(); child.wait()\n'
+    )
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        table([('p1',0,'node','*',''),('p2',0,'node','*',''),('p3',0,'node','*','')])
+        r1=fixture/'p1.ready';r2=fixture/'p2.ready';pid1=fixture/'p1.pid';pid2=fixture/'p2.pid';m3=fixture/'p3.ran'
+        for fpath in (r1,r2,pid1,pid2,m3): fpath.unlink(missing_ok=True)
+        change_row('p1',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_stubborn))} {shlex.quote(str(pid1))} {shlex.quote(str(r1))} & wait')
+        change_row('p2',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_detached))} {shlex.quote(str(pid2))} {shlex.quote(str(r2))}')
+        change_row('p3',f'touch {shlex.quote(str(m3))}')
+        p=subprocess.Popen([sys.executable,'-c',par_code,str(ROOT/'tools/check-all.py'),str(fixture)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env={**os.environ,'PATH':str(fixture/'bin')+os.pathsep+os.environ['PATH'],'MMM_CHECK_SCRATCH':str(scratch[0])})
+        try:
+            for _ in range(150):
+                if r1.exists() and r2.exists(): break
+                time.sleep(.02)
+            assert r1.exists() and r2.exists(),sig
+            p.send_signal(sig);out,err=p.communicate(timeout=8)
+            assert p.returncode==130 and not m3.exists(),(sig,p.returncode,out,err)
+            assert not alive(int(pid1.read_text())),f'parallel {sig} left stubborn descendant alive'
+            assert not alive(int(pid2.read_text())),f'parallel {sig} left detached-session child alive'
+        finally:
+            if p.poll() is None: p.kill(); p.wait()
+            for pf in (pid1,pid2):
+                if pf.exists():
+                    try: os.kill(int(pf.read_text()),signal.SIGKILL)
+                    except (ValueError,ProcessLookupError,PermissionError): pass
+    print('PASS --jobs: parallel rendezvous, timeout, per-row isolation/evidence, group & browser serialization, INT/TERM cleanup')
 print('PASS runner: one tsc, default/quick/browser/only/coverage selection, unknown names, inventory drift, exit precedence and missing data')

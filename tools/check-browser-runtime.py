@@ -30,6 +30,11 @@ CLONE=['cp','-c'] if sys.platform=='darwin' else ['cp','--reflink=auto']
 BASE={k:v for k,v in os.environ.items() if k not in ['WEB_PORT','CDP_PORT','SOFTWARE_GL','MMM_CHECK_SUPERVISOR','MMM_CHECK_PORTS_LOCKED','CHROMIUM_BIN','MMM_BROWSER_SLOTS','MMM_BROWSER_WAIT','MMM_BROWSER_OVERFLOW']}
 parser=argparse.ArgumentParser(); parser.add_argument('--ownership',action='store_true'); parser.add_argument('--slots',action='store_true'); parser.add_argument('--minute',action='store_true'); parser.add_argument('--listeners',action='store_true'); parser.add_argument('--kill-everything',action='store_true')
 args=parser.parse_args(); trees=[]; jobs=[]
+# Run finally cleanup on SIGTERM (stopping detached stand-in jobs and removing temp worktrees).
+def _on_term(_sig, _frame):
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    raise SystemExit(143)
+signal.signal(signal.SIGTERM, _on_term)
 
 
 def until(condition, seconds=12):
