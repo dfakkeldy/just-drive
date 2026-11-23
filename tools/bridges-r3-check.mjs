@@ -117,7 +117,7 @@ if(process.argv.includes('--mutations')){
  ['web/src/vehicle.ts','    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','    return placed;\n  }\n  private deckReference','car cold placement'],
  ['web/src/vehicle.ts','const infer = this.inferring(x, z), deck = infer ? this.deckReference(x, z) : undefined;','const infer = this.inferring(x, z), deck = undefined;','car cold placement rises onto the built deck'],
  ['web/src/bike-ride.ts','const infer = this.inferring(x, z), deck = infer ? placementDeckReference(this.roads, x, z) : undefined;','const infer = this.inferring(x, z), deck = undefined;','bike cold placement rises onto the built deck'],
- ['web/src/bike-ride.ts','this.#awaitingLoad = true; this.placeAt(x, z, heading); }','this.#awaitingLoad = true; this.place(x, z, heading); }','bike restart takes its deck'],
+ ['web/src/bike-ride.ts','this.#awaitingLoad = true; return this.placeAt(x, z, heading); }','this.#awaitingLoad = true; return this.place(x, z, heading); }','bike restart takes its deck'],
  ['web/src/vehicle.ts','Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5;','true;','car a moved car never asks'],
  ['web/src/bike-ride.ts','Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5;','true;','bike a moved car never asks'],
  ['web/src/vehicle.ts','return hit ? spanDeckReference(roads, hit) : undefined;','return roads.deckHeight(x, z) ?? undefined;','height-free placement under an overpass stays on land'],
