@@ -33,14 +33,16 @@ args=parser.parse_args(); trees=[]; jobs=[]
 # Run finally cleanup on SIGTERM/SIGINT (stopping detached stand-in jobs and removing temp worktrees).
 _defer = 0
 _pending_sig = None
-def _on_stop(sig, _frame):
-    global _pending_sig
+def _begin_stop(sig):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    if _defer:
-        _pending_sig = sig
-        return
     raise SystemExit(128 + sig)
+def _on_stop(sig, _frame):
+    global _pending_sig
+    if _defer:
+        if _pending_sig is None: _pending_sig = sig
+        return
+    _begin_stop(sig)
 class _defer_stop:
     def __enter__(self):
         global _defer
@@ -52,7 +54,7 @@ class _defer_stop:
         _defer -= 1
         if _defer == 0 and _pending_sig is not None and exc[0] is None:
             sig, _pending_sig = _pending_sig, None
-            raise SystemExit(128 + sig)
+            _begin_stop(sig)
 signal.signal(signal.SIGTERM, _on_stop)
 signal.signal(signal.SIGINT, _on_stop)
 
@@ -292,10 +294,23 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             script=tmp/'stdio.sh'
             script.write_text('set -euo pipefail\nROOT='+shlex.quote(str(ROOT))+'\nsource "$ROOT/tools/browser.sh"\nbrowser_ports "$@"\nstart_check 600 400\nrun_check node --input-type=module <<\'JS\'\nconsole.log("PASS heredoc stdin preserved");\nconsole.error("PASS stderr preserved");\nJS\nrun_check node "$ROOT/tools/check-cdp.mjs" --late\n')
             environment={**BASE,'WEB_PORT':str(free_port()),'CDP_PORT':str(free_port()),'MMM_CHECK_STANDIN':'1','CHROMIUM_BIN':str(ROOT/'tools/check-browser-standin.py'),'MMM_BROWSER_SLOTS':'0'}
-            result=subprocess.run(['/bin/bash',str(script)],env=environment,capture_output=True,text=True,timeout=20,start_new_session=True)
-            assert result.returncode==1,(result.returncode,result.stdout,result.stderr)
-            assert 'PASS heredoc stdin preserved' in result.stdout and 'PASS the page settled' in result.stdout
-            assert 'PASS stderr preserved' in result.stderr and 'check-cdp.mjs: page error: late fixture page error' in result.stderr
+            stdio_proc=None
+            try:
+                with _defer_stop():
+                    stdio_proc=subprocess.Popen(['/bin/bash',str(script)],env=environment,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+                out_stdio,err_stdio=stdio_proc.communicate(timeout=20)
+            finally:
+                if stdio_proc and stdio_proc.poll() is None:
+                    try: os.killpg(stdio_proc.pid, signal.SIGTERM)
+                    except (ProcessLookupError, PermissionError): pass
+                    try: stdio_proc.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        try: os.killpg(stdio_proc.pid, signal.SIGKILL)
+                        except (ProcessLookupError, PermissionError): pass
+                        stdio_proc.wait()
+            assert stdio_proc.returncode==1,(stdio_proc.returncode,out_stdio,err_stdio)
+            assert 'PASS heredoc stdin preserved' in out_stdio and 'PASS the page settled' in out_stdio
+            assert 'PASS stderr preserved' in err_stdio and 'check-cdp.mjs: page error: late fixture page error' in err_stdio
             print('PASS supervised heredoc stdin/stderr preserved; late page error prints check/reason and exits 1',flush=True)
 
             stream_script=tmp/'stream.sh'
