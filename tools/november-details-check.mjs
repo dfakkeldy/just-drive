@@ -512,6 +512,26 @@ for (const {a, b, side} of added) {
       const endTrailerAlong = (towing.x - ax) * ux + (towing.z - az) * uz;
       assert.ok(endTruckAlong > startTruckAlong + 0.3, `bridge ${id} ${mode} truck continues forward after rail contact (${(endTruckAlong - startTruckAlong).toFixed(3)} m)`);
       assert.ok(endTrailerAlong > startTrailerAlong + 0.3, `bridge ${id} ${mode} trailer continues forward after rail contact (${(endTrailerAlong - startTrailerAlong).toFixed(3)} m)`);
+      // Full loaded-rig crossing from 6 m before Bridge 45 at both -0.55 m and +0.55 m offsets (65% throttle, 0 steer):
+      // shallow rail scrapes preserve tangential forward speed and cross cleanly instead of stalling.
+      if (id === 45 && mode === 'solo') {
+        for (const latOff of [-0.55, 0.55]) {
+          const rigTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+          active = rigTruck;
+          const rigTow = new Towing(rigTruck, realTerrain, net, true, false, { contacts }, true, true);
+          rigTruck.place(ax - ux * 6 - uz * latOff, az - uz * 6 + ux * latOff, heading);
+          assert.equal(rigTow.place(), true, `bridge 45 loaded rig places at 6 m approach lat=${latOff}`);
+          let crossed = false;
+          for (let step = 0; step < 120 * 10; step++) {
+            rigTruck.update(1 / 120, { throttle: 0.65, steer: 0, handbrake: false, touch: false }, () => rigTow.step(1 / 120));
+            const alongNow = (rigTruck.x - ax) * ux + (rigTruck.z - az) * uz;
+            if (alongNow > span + 2) { crossed = true; break; }
+          }
+          const finalAlong = (rigTruck.x - ax) * ux + (rigTruck.z - az) * uz;
+          assert.equal(crossed, true, `bridge 45 loaded rig crosses cleanly from lat=${latOff} without stalling (reached ${finalAlong.toFixed(2)} m)`);
+        }
+        active = truck;
+      }
     }
   }
   // Level 6 -> 7 -> 8 streaming upgrades: each finer bank level replaces and disposes the previous mesh and updates deckHeight to exact bank ground + 0.05.
@@ -726,6 +746,13 @@ for (const {a, b, side} of added) {
     const penAfter = independentInnerRailOverlap(wedged, ax, az, ux, uz, span);
     assert.ok(penAfter <= 1e-4, `bridge ${id} blockBridge resolves 65-deg wedged pose to zero independent overlap (${penAfter.toFixed(5)} m)`);
     assert.equal(rails.allowsBridge(wedged), true, `bridge ${id} allowsBridge accepts resolved pose`);
+    // Position-only pass (dt = 0, used for active driven vehicle) must clear the 65-deg wedge with ZERO heading change.
+    const wedgedZeroDt = { x: ax + ux * wS - uz * 0.6, z: az + uz * wS + ux * 0.6, y: wY, heading: hdg + (65 * Math.PI) / 180, vx: ux * 8, vz: uz * 8, speed: 0, spec: CAR_SPEC };
+    const startHdg0 = wedgedZeroDt.heading;
+    rails.blockBridge(wedgedZeroDt, 0);
+    assert.equal(wedgedZeroDt.heading, startHdg0, `bridge ${id} dt=0 position-only bridge correction preserves exact heading`);
+    assert.ok(independentInnerRailOverlap(wedgedZeroDt, ax, az, ux, uz, span) <= 1e-4, `bridge ${id} dt=0 position-only bridge correction clears overlap`);
+    assert.equal(rails.allowsBridge(wedgedZeroDt), true, `bridge ${id} dt=0 resolved pose clears allowsBridge`);
     // Case C: Multi-circle side-by-side variants straddling the start portal rail at 170/175 deg must clear on the first blockBridge call.
     const yStart = net.deckHeight(ax, az);
     for (const [label, spec, sOff, deg] of [

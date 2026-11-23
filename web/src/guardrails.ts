@@ -438,8 +438,8 @@ export class Guardrails {
     }
     return touched;
   }
-  /** Guarantee final clearance after yaw clamping: if opposing rails still wedge the body, restore its last clear pose or align along the span. */
-  private settleBridgeClearance(car: Pushable): void {
+  /** Guarantee final clearance after yaw clamping: if opposing rails still wedge the body, restore its last clear pose or exit cleanly. */
+  private settleBridgeClearance(car: Pushable, allowTurn: boolean): void {
     const reach = (car.spec?.envelope.reach ?? 3.5) + (car.spec?.envelope.radius ?? 1.4);
     const carHeight = car.spec?.height ?? 1.8;
     for (let i = 0; i < this.bridgeSpans.length; i++) {
@@ -462,35 +462,40 @@ export class Guardrails {
         clear = this.bridgePoseClear(car.x, car.z, car.y, car.heading, car.spec, b, y0, y1);
       }
       if (!clear) {
-        // Opposing rails stalled translation (body angled wider than the one-lane corridor).
+        // Opposing rails stalled translation (body angled wider than the one-lane corridor or straddling a rail).
         const prev = this.bridgeClearPoses.get(car);
-        if (prev && Math.hypot(prev.x - car.x, prev.z - car.z) < 2.0 &&
+        const sameHeading = !prev || Math.abs(Math.atan2(Math.sin(prev.heading - car.heading), Math.cos(prev.heading - car.heading))) < 1e-7;
+        if (prev && (allowTurn || sameHeading) && Math.hypot(prev.x - car.x, prev.z - car.z) < 2.0 &&
             this.bridgePoseClear(prev.x, prev.z, car.y, prev.heading, car.spec, b, y0, y1)) {
           car.x = prev.x; car.z = prev.z; car.heading = prev.heading;
           const alongV = car.vx * b.ux + car.vz * b.uz;
           car.vx = b.ux * alongV * 0.85; car.vz = b.uz * alongV * 0.85;
           clear = true;
         } else {
-          // No nearby prior clear pose: align heading toward the nearest bridge axis until both rails clear.
-          let target = b.heading;
-          if (Math.cos(target - car.heading) < 0) target += Math.PI;
-          const baseHeading = car.heading;
-          const delta = Math.atan2(Math.sin(target - baseHeading), Math.cos(target - baseHeading));
-          for (let k = 1; k <= 12 && !clear; k++) {
-            car.heading = baseHeading + delta * (k / 12);
-            for (let pass = 0; pass < 8 && !clear; pass++) {
-              this.runBridgePass(car, b, y0, y1, carHeight, 0);
-              clear = this.bridgePoseClear(car.x, car.z, car.y, car.heading, car.spec, b, y0, y1);
+          if (allowTurn) {
+            // Align heading toward the nearest bridge axis until both rails clear.
+            let target = b.heading;
+            if (Math.cos(target - car.heading) < 0) target += Math.PI;
+            const baseHeading = car.heading;
+            const delta = Math.atan2(Math.sin(target - baseHeading), Math.cos(target - baseHeading));
+            for (let k = 1; k <= 12 && !clear; k++) {
+              car.heading = baseHeading + delta * (k / 12);
+              for (let pass = 0; pass < 8 && !clear; pass++) {
+                this.runBridgePass(car, b, y0, y1, carHeight, 0);
+                clear = this.bridgePoseClear(car.x, car.z, car.y, car.heading, car.spec, b, y0, y1);
+              }
             }
           }
-          // If a multi-circle envelope still straddles one rail wall when aligned parallel to the span,
-          // move to the nearest provably clear aligned exit (roadway centre, outside near rail, or clear of near portal).
+          // Move to the nearest provably clear exit at the current heading (roadway centre, outside near rail, or clear of near portal).
           if (!clear) {
             const env = (car.spec ?? CAR_SPEC).envelope;
+            const sinH = Math.sin(car.heading), cosH = Math.cos(car.heading);
             let latMax = 0, lonMax = 0;
             for (let c = 0; c < env.circles.length; c++) {
-              lonMax = Math.max(lonMax, Math.abs(env.circles[c]));
-              latMax = Math.max(latMax, Math.abs(env.circleSides?.[c] ?? 0));
+              const off = env.circles[c], side = env.circleSides?.[c] ?? 0;
+              const rx = sinH * off + cosH * side, rz = -cosH * off + sinH * side;
+              lonMax = Math.max(lonMax, Math.abs(rx * b.ux + rz * b.uz));
+              latMax = Math.max(latMax, Math.abs(-rx * b.uz + rz * b.ux));
             }
             const latHalf = latMax + env.radius, lonHalf = lonMax + env.radius;
             const curS = (car.x - b.ax) * b.ux + (car.z - b.az) * b.uz;
@@ -534,7 +539,7 @@ export class Guardrails {
     const heading = car.heading;
     const touched = this.pushBridge(car, dt);
     this.clampRailYaw(car, heading, dt);
-    if (touched) this.settleBridgeClearance(car);
+    if (touched) this.settleBridgeClearance(car, dt > 0);
   }
   /** Physics stays active outside LOW's drawing radius. The existing three-circle body envelope prevents step-through. */
   block(car: Pushable, dt = 1 / 120): void {
@@ -544,6 +549,6 @@ export class Guardrails {
       for (const c of this.cells.get(cellKey(i, j)) ?? NO_CHUNKS) pushOut(car, c.solids, false, dt);
     const touched = this.bridgeSpans.length ? this.pushBridge(car, dt) : false;
     this.clampRailYaw(car, heading, dt);
-    if (touched) this.settleBridgeClearance(car);
+    if (touched) this.settleBridgeClearance(car, dt > 0);
   }
 }
