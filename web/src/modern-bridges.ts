@@ -415,7 +415,8 @@ export class ModernBridges {
     // far crossing seen through a narrow view still gets its deck and walk, and later finer bank land or a walk widening
     // reaches it). The build happens there, outside the caller's frame budget. On a hit, only the spans under the point
     // (another span in the same cell is not this read's deck); on a miss, the unbuilt spans of the cell, since one of
-    // them may be the deck. A span stays followed, so the extra triangle test runs once per span.
+    // them may be the deck. A followed span is skipped after that; another built span in the cell pays one triangle
+    // lookup (its own 2 m cell) per hit, the same work as the read itself.
     const list=this.cells.get(key(x,z,CELL));
     if(list)for(let i=0;i<list.length;i++){const r=this.spans[list[i]];if(!r.followed&&(h===null?!r.geometry:this.ownHeight(r,x,z)!==null))r.followed=true;}
     return h;
