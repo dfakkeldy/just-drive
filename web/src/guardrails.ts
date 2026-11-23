@@ -26,7 +26,8 @@ export class Guardrails {
   readonly group = new THREE.Group();
   private readonly chunks: Chunk[] = [];
   private readonly bridgeSpans: PonyTrussSpan[] = [];
-  private readonly bridgeClip: [number, number, number] = [0, 0, 0];
+  private readonly bridgeDeckRev: number[] = [];
+  private readonly bridgeClip: [number, number, number, number] = [0, 0, 0, 0];
   private readonly trimmedBridgeSolids: [Solid, Solid] = [
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
@@ -45,7 +46,7 @@ export class Guardrails {
     this.access = railAccess(this.roads, this.planning.ground, this.terrain.manifest?.village, true);
     if (terrain.cartRoads) return;
     for (const road of roads.roads) {
-      if (road.bridge) { if (road.ponyTruss) { const span = ponyTrussSpan(road); if (span) this.bridgeSpans.push(span); } continue; }
+      if (road.bridge) { if (road.ponyTruss) { const span = ponyTrussSpan(road); if (span) { this.bridgeSpans.push(span); this.bridgeDeckRev.push(-1); } } continue; }
       if (road.kind > 3 || railwayRoad(road)) continue;
       const len = roadLength(road);
       for (let index = 0; index * CHUNK < len; index++) {
@@ -290,10 +291,21 @@ export class Guardrails {
     }
     return pending ? 'pending' : 'clear';
   }
-  /** Check horizontal bounds and exact inclined-truss vertical overlap before pushing against pony-truss rails. */
+  private pushTrimmedSpan(car: Pushable, b: PonyTrussSpan, sLeft: number, sRight: number, inner: number, dt: number): void {
+    const midS = (sLeft + sRight) * 0.5, half = (sRight - sLeft) * 0.5;
+    const mx = b.ax + b.ux * midS, mz = b.az + b.uz * midS;
+    const centre = (inner + PONY_TRUSS.outerHalf) * 0.5;
+    const halfWidth = (PONY_TRUSS.outerHalf - inner) * 0.5;
+    const left = this.trimmedBridgeSolids[0], right = this.trimmedBridgeSolids[1];
+    left.x = mx + b.uz * centre; left.z = mz - b.ux * centre; left.half = half; left.halfWidth = halfWidth; left.heading = b.heading;
+    right.x = mx - b.uz * centre; right.z = mz + b.ux * centre; right.half = half; right.halfWidth = halfWidth; right.heading = b.heading;
+    pushOut(car, this.trimmedBridgeSolids, true, dt);
+  }
+  /** Check horizontal bounds and separate inner-rail / inclined-truss vertical overlap before pushing against pony-truss rails. */
   private pushBridge(car: Pushable, dt: number): void {
     const reach = (car.spec?.envelope.reach ?? 3.5) + (car.spec?.envelope.radius ?? 1.4);
     const carHeight = car.spec?.height ?? 1.8;
+    const rev = this.terrain.dataRevision ?? 0;
     for (let i = 0; i < this.bridgeSpans.length; i++) {
       const b = this.bridgeSpans[i];
       const dx = car.x - b.ax, dz = car.z - b.az;
@@ -304,39 +316,41 @@ export class Guardrails {
       if (car.y !== undefined) {
         let y0 = this.roads.bridgeElevation(b.roadId, 0);
         let y1 = this.roads.bridgeElevation(b.roadId, 1);
-        if (y0 === null || y1 === null) {
+        if ((y0 === null || y1 === null) && this.bridgeDeckRev[i] !== rev) {
+          this.bridgeDeckRev[i] = rev;
           this.roads.deckHeight(b.ax + b.ux * (b.span * 0.5), b.az + b.uz * (b.span * 0.5));
           y0 = this.roads.bridgeElevation(b.roadId, 0);
           y1 = this.roads.bridgeElevation(b.roadId, 1);
         }
         if (y0 === null || y1 === null) continue;
         if (!ponyTrussVerticalClip(b, y0, y1, car.y, carHeight, this.bridgeClip)) continue;
-        const [sLeft, sRight, railActive] = this.bridgeClip;
-        if (sLeft > 0 || sRight < b.span || !railActive) {
-          const midS = (sLeft + sRight) * 0.5, half = (sRight - sLeft) * 0.5;
-          const mx = b.ax + b.ux * midS, mz = b.az + b.uz * midS;
-          const inner = railActive ? PONY_TRUSS.railInner : PONY_TRUSS.clearHalf;
-          const centre = (inner + PONY_TRUSS.outerHalf) * 0.5;
-          const halfWidth = (PONY_TRUSS.outerHalf - inner) * 0.5;
-          const left = this.trimmedBridgeSolids[0], right = this.trimmedBridgeSolids[1];
-          left.x = mx + b.uz * centre; left.z = mz - b.ux * centre; left.half = half; left.halfWidth = halfWidth; left.heading = b.heading;
-          right.x = mx - b.uz * centre; right.z = mz + b.ux * centre; right.half = half; right.halfWidth = halfWidth; right.heading = b.heading;
-          pushOut(car, this.trimmedBridgeSolids, true, dt);
+        const [railLeft, railRight, trussLeft, trussRight] = this.bridgeClip;
+        if (railLeft === 0 && railRight === b.span) {
+          pushOut(car, b.solids, true, dt);
           continue;
         }
+        if (railRight > railLeft) this.pushTrimmedSpan(car, b, railLeft, railRight, PONY_TRUSS.railInner, dt);
+        if (trussRight > trussLeft && (trussLeft < railLeft - 1e-4 || trussRight > railRight + 1e-4)) {
+          this.pushTrimmedSpan(car, b, trussLeft, trussRight, PONY_TRUSS.clearHalf, dt);
+        }
+        continue;
       }
       pushOut(car, b.solids, true, dt);
     }
+  }
+  private clampRailYaw(car: Pushable, heading: number, dt: number): void {
+    const yaw = Math.atan2(Math.sin(car.heading - heading), Math.cos(car.heading - heading));
+    const limitedYaw = Math.max(-Math.PI / 6 * dt, Math.min(Math.PI / 6 * dt, yaw));
+    car.heading = heading + limitedYaw;
+    // pushOut already projects speed; an aggregate seam clamp changes that frame again.
+    if (yaw !== limitedYaw) car.speed = car.vx * Math.sin(car.heading) - car.vz * Math.cos(car.heading);
   }
   /** Push a body out of only the pony-truss bridge rails (used by soloContacts for solo trailers). */
   blockBridge(car: Pushable, dt = 1 / 120): void {
     if (!this.bridgeSpans.length) return;
     const heading = car.heading;
     this.pushBridge(car, dt);
-    const yaw = Math.atan2(Math.sin(car.heading - heading), Math.cos(car.heading - heading));
-    const limitedYaw = Math.max(-Math.PI / 6 * dt, Math.min(Math.PI / 6 * dt, yaw));
-    car.heading = heading + limitedYaw;
-    if (yaw !== limitedYaw) car.speed = car.vx * Math.sin(car.heading) - car.vz * Math.cos(car.heading);
+    this.clampRailYaw(car, heading, dt);
   }
   /** Physics stays active outside LOW's drawing radius. The existing three-circle body envelope prevents step-through. */
   block(car: Pushable, dt = 1 / 120): void {
@@ -345,10 +359,6 @@ export class Guardrails {
     for (let j = z - 1; j <= z + 1; j++) for (let i = x - 1; i <= x + 1; i++)
       for (const c of this.cells.get(cellKey(i, j)) ?? NO_CHUNKS) pushOut(car, c.solids, false, dt);
     if (this.bridgeSpans.length) this.pushBridge(car, dt);
-    const yaw = Math.atan2(Math.sin(car.heading - heading), Math.cos(car.heading - heading));
-    const limitedYaw = Math.max(-Math.PI / 6 * dt, Math.min(Math.PI / 6 * dt, yaw));
-    car.heading = heading + limitedYaw;
-    // pushOut already projects speed; an aggregate seam clamp changes that frame again.
-    if (yaw !== limitedYaw) car.speed = car.vx * Math.sin(car.heading) - car.vz * Math.cos(car.heading);
+    this.clampRailYaw(car, heading, dt);
   }
 }

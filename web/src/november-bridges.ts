@@ -113,9 +113,9 @@ export function ponyTrussSpan(road: Road): PonyTrussSpan | null {
 }
 
 /**
- * Compute the longitudinal steel collision interval [sLeft, sRight] for a vehicle vertical slice [carY, carY + carHeight]
- * against the bridge's inner guard rail, inclined end posts, and horizontal top chord.
- * Writes [sLeft, sRight, railActive ? 1 : 0] into `out` and returns true when steel overlaps vertically.
+ * Compute separate longitudinal steel collision intervals for the inner guard rail ([railLeft, railRight]) and the
+ * upper truss structure ([trussLeft, trussRight]) against a vehicle vertical slice [carY, carY + carHeight].
+ * Writes [railLeft, railRight, trussLeft, trussRight] into `out` and returns true when either overlaps vertically.
  */
 export function ponyTrussVerticalClip(
   b: PonyTrussSpan,
@@ -123,29 +123,45 @@ export function ponyTrussVerticalClip(
   y1: number,
   carY: number,
   carHeight: number,
-  out: [number, number, number],
+  out: [number, number, number, number],
 ): boolean {
   const span = b.span, panel = b.panel, h = b.height;
-  const yBase = PONY_TRUSS.chordSize / 2;
-  const topPad = PONY_TRUSS.chordSize / 2;
-  const topOverhang = PONY_TRUSS.chordSize * 0.35;
+  const chord = PONY_TRUSS.chordSize;
+  const yBase = chord / 2;
+  const topPad = chord / 2;
+  const topOverhang = chord * 0.35;
+  const railBottom = PONY_TRUSS.railHeight - 0.11;
   const railTop = PONY_TRUSS.railHeight + 0.11;
   const deckSlope = (y1 - y0) / span;
   const carTop = carY + carHeight;
   if (carTop < Math.min(y0, y1) - 0.15) return false;
   if (carY > Math.max(y0, y1) + h + topPad) return false;
 
-  let sLeft = 0, sRight = span;
-  if (deckSlope > 1e-7) {
-    sRight = Math.min(sRight, (carTop - (y0 - 0.15)) / deckSlope);
-    sLeft = Math.max(sLeft, (carY - (y0 + h + topPad)) / deckSlope);
+  // 1. Inner steel guard rail interval: [deckY(s) + railBottom, deckY(s) + railTop] overlaps [carY, carTop].
+  let railLeft = 0, railRight = span;
+  if (carTop < Math.min(y0, y1) + railBottom || carY > Math.max(y0, y1) + railTop) {
+    railRight = 0;
+  } else if (deckSlope > 1e-7) {
+    railRight = Math.min(span, (carTop - (y0 + railBottom)) / deckSlope);
+    railLeft = Math.max(0, (carY - (y0 + railTop)) / deckSlope);
   } else if (deckSlope < -1e-7) {
-    sLeft = Math.max(sLeft, (carTop - (y0 - 0.15)) / deckSlope);
-    sRight = Math.min(sRight, (carY - (y0 + h + topPad)) / deckSlope);
+    railLeft = Math.max(0, (carTop - (y0 + railBottom)) / deckSlope);
+    railRight = Math.min(span, (carY - (y0 + railTop)) / deckSlope);
   }
+  railLeft = Math.max(0, Math.min(span, railLeft));
+  railRight = Math.max(0, Math.min(span, railRight));
+  if (railRight <= railLeft + 1e-4) { railLeft = 0; railRight = 0; }
 
-  // Follow the inclined end posts when the vehicle bottom clears the inner steel guard rail.
-  if (carY > y0 + railTop) {
+  // 2. Truss structure interval (bottom chord, inclined end posts, interior web, top chord).
+  let trussLeft = 0, trussRight = span;
+  if (deckSlope > 1e-7) {
+    trussRight = Math.min(trussRight, (carTop - (y0 - 0.15)) / deckSlope);
+    trussLeft = Math.max(trussLeft, (carY - (y0 + h + topPad)) / deckSlope);
+  } else if (deckSlope < -1e-7) {
+    trussLeft = Math.max(trussLeft, (carTop - (y0 - 0.15)) / deckSlope);
+    trussRight = Math.min(trussRight, (carY - (y0 + h + topPad)) / deckSlope);
+  }
+  if (carY > y0 + chord) {
     const rawAng = Math.atan2(deckSlope * panel + h - yBase, panel);
     const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
     const run = panel - endInset;
@@ -154,10 +170,10 @@ export function ponyTrussVerticalClip(
     const startSlope = deckSlope + (h - yBase) / run;
     let sIncl = endInset + (carY - (y0 + deckSlope * endInset + yBase + endVertHalf)) / startSlope;
     if (carY >= y0 + deckSlope * (panel - topOverhang) + h - topPad) sIncl = Math.min(sIncl, panel - topOverhang);
-    if (deckSlope > 1e-7) sIncl = Math.min(sIncl, (carY - (y0 + railTop)) / deckSlope);
-    sLeft = Math.max(sLeft, sIncl);
+    if (deckSlope > 1e-7) sIncl = Math.min(sIncl, (carY - (y0 + chord)) / deckSlope);
+    trussLeft = Math.max(trussLeft, sIncl);
   }
-  if (carY > y1 + railTop) {
+  if (carY > y1 + chord) {
     const rawAng = Math.atan2(-deckSlope * panel + h - yBase, panel);
     const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
     const run = panel - endInset;
@@ -166,17 +182,18 @@ export function ponyTrussVerticalClip(
     const endSlope = -deckSlope + (h - yBase) / run;
     let uIncl = endInset + (carY - (y1 - deckSlope * endInset + yBase + endVertHalf)) / endSlope;
     if (carY >= y1 - deckSlope * (panel - topOverhang) + h - topPad) uIncl = Math.min(uIncl, panel - topOverhang);
-    if (deckSlope < -1e-7) uIncl = Math.min(uIncl, (carY - (y1 + railTop)) / -deckSlope);
-    sRight = Math.min(sRight, span - uIncl);
+    if (deckSlope < -1e-7) uIncl = Math.min(uIncl, (carY - (y1 + chord)) / -deckSlope);
+    trussRight = Math.min(trussRight, span - uIncl);
   }
+  trussLeft = Math.max(0, Math.min(span, trussLeft));
+  trussRight = Math.max(0, Math.min(span, trussRight));
+  if (trussRight <= trussLeft + 1e-4) { trussLeft = 0; trussRight = 0; }
 
-  sLeft = Math.max(0, Math.min(span, sLeft));
-  sRight = Math.max(0, Math.min(span, sRight));
-  if (sRight <= sLeft + 1e-4) return false;
-  const railActive = carY <= Math.max(y0 + deckSlope * sLeft, y0 + deckSlope * sRight) + railTop;
-  out[0] = sLeft;
-  out[1] = sRight;
-  out[2] = railActive ? 1 : 0;
+  if (railRight <= railLeft && trussRight <= trussLeft) return false;
+  out[0] = railLeft;
+  out[1] = railRight;
+  out[2] = trussLeft;
+  out[3] = trussRight;
   return true;
 }
 

@@ -382,11 +382,18 @@ for (const {a, b, side} of added) {
       const soloContacts = new AreaContacts(), fleetContacts = new AreaContacts();
       registerRailContacts(fleetContacts, soloContacts, rails, body => body === active, TRUCK_SPEC);
       const contacts = mode === 'solo' ? soloContacts : fleetContacts;
+      const lowIsStart = y0 <= y1;
+      const slopeS = lowIsStart ? 3.5 : span - 3.5;
+      const slopeDeckY = y0 + (y1 - y0) * (slopeS / span);
+      // At slopeDeckY + 0.78 (above inner rail at the lower end, still below inner rail at the higher end),
+      // a car clear of the 2.08 m truss face (across = 2.08 - radius - 0.02) must NOT be pushed by the high end's inner rail.
+      const slopeAcross = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius - 0.02;
       for (const [label, px, pz, py] of [
         ['start portal 1.8 m', ax - ux * 0.6 - uz * 1.6, az - uz * 0.6 + ux * 1.6, y0 + 1.8],
         ['end portal 1.8 m', bx + ux * 0.6 - uz * 1.6, bz + uz * 0.6 + ux * 1.6, y1 + 1.8],
+        ['low-end slope clear of upper truss', ax + ux * slopeS - uz * slopeAcross, az + uz * slopeS + ux * slopeAcross, slopeDeckY + 0.78],
       ]) {
-        assert.equal(contacts.allows({ x: px, z: pz, y: py, heading, spec: CAR_SPEC }), true, `bridge ${id} ${mode} contacts allow ${label} above inclined end post`);
+        assert.equal(contacts.allows({ x: px, z: pz, y: py, heading, spec: CAR_SPEC }), true, `bridge ${id} ${mode} contacts allow ${label}`);
       }
       const truck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
       active = truck;
@@ -443,6 +450,24 @@ for (const {a, b, side} of added) {
       assert.ok(endTruckAlong > startTruckAlong + 0.3, `bridge ${id} ${mode} truck continues forward after rail contact (${(endTruckAlong - startTruckAlong).toFixed(3)} m)`);
       assert.ok(endTrailerAlong > startTrailerAlong + 0.3, `bridge ${id} ${mode} trailer continues forward after rail contact (${(endTrailerAlong - startTrailerAlong).toFixed(3)} m)`);
     }
+  }
+  // Unloaded banks: repeated collision calls during the same terrain revision do not keep re-sampling bank endpoints.
+  {
+    let surfaceCalls = 0;
+    const coarseTerrain = {
+      level: 5, manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      surfaceAt: (x, z) => { surfaceCalls++; const s = realTerrain.surfaceAt(x, z); return s ? { ...s, level: 5 } : null; },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const coarseNet = new Roads({ roads: tagged }, mabouManifest.village, coarseTerrain);
+    const r45 = coarseNet.roads.find(x => x.id === 45);
+    const mx = (r45.pts[0][0] + r45.pts[r45.pts.length - 1][0]) / 2;
+    const mz = (r45.pts[0][1] + r45.pts[r45.pts.length - 1][1]) / 2;
+    const probe = { x: mx, z: mz, y: 3.5, heading: 0, vx: 0, vz: 0, speed: 0, spec: CAR_SPEC };
+    for (let i = 0; i < 120; i++) coarseNet.guardrails.block(probe, 1 / 120);
+    assert.ok(surfaceCalls <= 2, `unloaded bridge banks sample at most once per revision (got ${surfaceCalls})`);
+    for (const child of [...coarseNet.group.children]) child.geometry?.dispose();
   }
   // Other Mabou bridges keep the generic modern deck.
   const otherBridge = net.roads.find(r => r.id === 50);
