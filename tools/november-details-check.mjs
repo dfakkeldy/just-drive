@@ -9,6 +9,7 @@ import { AreaContacts } from '../web/src/world-contacts.ts';
 import { Vehicle } from '../web/src/vehicle.ts';
 import { Towing } from '../web/src/towing.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
+import { SXS_CABIN_SPEC, SXS_CREW_SPEC, SXS_UTILITY_SPEC } from '../web/src/sxs-variants.ts';
 import { TRUCK_SPEC } from '../web/src/truck.ts';
 import { WHARF_SOURCES } from '../web/src/wharf-source.ts';
 import { areaPlaces, nearestPlacement, placesFor } from '../web/src/places.ts';
@@ -640,6 +641,46 @@ for (const {a, b, side} of added) {
     assert.equal(freshNet.bridgeDeckVersion, verBefore, 'allowsBridge does not advance bridgeDeckVersion');
     for (const child of [...freshNet.group.children]) child.geometry?.dispose();
   }
+  // Streaming eviction (7 -> 6 before deck build) and single-bank upgrade (6,6 -> 8,6 before deck build):
+  // contacts stay in sync with the exact elevations Roads.deck() will build, and bridgeRevision advances in both orders.
+  {
+    let lvlStart = 7, lvlEnd = 7, biasStart = 1.5, biasEnd = 1.5;
+    let m5x = 0, m6x = 0;
+    const evTerrain = {
+      manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      surfaceAt: (x, z) => {
+        const s = realTerrain.surfaceAt(x, z);
+        if (!s) return null;
+        const isStart = Math.abs(x - m5x) < 100 ? x < m5x : x < m6x;
+        return { ...s, ground: s.ground + (isStart ? biasStart : biasEnd), level: isStart ? lvlStart : lvlEnd };
+      },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const evNet = new Roads({ roads: tagged }, mabouManifest.village, evTerrain);
+    const r45 = evNet.roads.find(x => x.id === 45), r46 = evNet.roads.find(x => x.id === 46);
+    const [a5x, a5z] = r45.pts[0], [b5x, b5z] = r45.pts[r45.pts.length - 1];
+    m5x = (a5x + b5x) / 2; const m5z = (a5z + b5z) / 2, h5 = Math.atan2(b5x - a5x, -(b5z - a5z));
+    const [a6x, a6z] = r46.pts[0], [b6x, b6z] = r46.pts[r46.pts.length - 1];
+    m6x = (a6x + b6x) / 2; const m6z = (a6z + b6z) / 2, h6 = Math.atan2(b6x - a6x, -(b6z - a6z));
+    const u5x = (b5x - a5x) / Math.hypot(b5x - a5x, b5z - a5z), u5z = (b5z - a5z) / Math.hypot(b5x - a5x, b5z - a5z);
+    // Order 1: Cache level 7 (+1.5 m) before deck build, then evict fine tile back to level 6 (+0.0 m) before deck build.
+    const rev1 = evNet.guardrails.bridgeRevision;
+    lvlStart = 6; lvlEnd = 6; biasStart = 0; biasEnd = 0; evTerrain.dataRevision++;
+    const rev2 = evNet.guardrails.bridgeRevision;
+    assert.notEqual(rev2, rev1, 'fine-tile eviction before deck construction advances bridgeRevision');
+    const y45Built = evNet.deckHeight(m5x, m5z);
+    // A pose sitting at the evicted level-6 deck height (overlapping the real level-6 steel!) must be rejected.
+    assert.equal(evNet.guardrails.allowsBridge({ x: m5x - u5z * 1.6, z: m5z + u5x * 1.6, y: y45Built, heading: h5, spec: CAR_SPEC }), false, 'evicted level-6 deck rejects overlapping pose');
+    // Order 2: On bridge 46 (unbuilt), upgrade ONLY the start bank (6,6 -> 8,6; minLevel stays 6 while start elevation rises +1.5 m).
+    const u6x = (b6x - a6x) / Math.hypot(b6x - a6x, b6z - a6z), u6z = (b6z - a6z) / Math.hypot(b6x - a6x, b6z - a6z);
+    lvlStart = 8; biasStart = 1.5; evTerrain.dataRevision++;
+    const rev3 = evNet.guardrails.bridgeRevision;
+    assert.notEqual(rev3, rev2, 'single-bank upgrade before deck construction advances bridgeRevision');
+    const y46Built = evNet.deckHeight(m6x, m6z);
+    assert.equal(evNet.guardrails.allowsBridge({ x: m6x - u6z * 1.6, z: m6z + u6x * 1.6, y: y46Built - CAR_SPEC.height - 0.15, heading: h6, spec: CAR_SPEC }), true, 'single-bank upgrade accepts pose clear below raised deck');
+    for (const child of [...evNet.group.children]) child.geometry?.dispose();
+  }
   // Independent circle-vs-rail overlap calculator (does not call allowsBridge or pushOut).
   const independentInnerRailOverlap = (pose, ax, az, ux, uz, span) => {
     const env = pose.spec.envelope, sinH = Math.sin(pose.heading), cosH = Math.cos(pose.heading);
@@ -685,6 +726,23 @@ for (const {a, b, side} of added) {
     const penAfter = independentInnerRailOverlap(wedged, ax, az, ux, uz, span);
     assert.ok(penAfter <= 1e-4, `bridge ${id} blockBridge resolves 65-deg wedged pose to zero independent overlap (${penAfter.toFixed(5)} m)`);
     assert.equal(rails.allowsBridge(wedged), true, `bridge ${id} allowsBridge accepts resolved pose`);
+    // Case C: Multi-circle side-by-side variants straddling the start portal rail at 170/175 deg must clear on the first blockBridge call.
+    const yStart = net.deckHeight(ax, az);
+    for (const [label, spec, sOff, deg] of [
+      ['sxs-utility', SXS_UTILITY_SPEC, -0.9, 170],
+      ['sxs-crew', SXS_CREW_SPEC, -1.45, 170],
+      ['sxs-cabin', SXS_CABIN_SPEC, -1.45, 175],
+    ]) {
+      const p = {
+        x: ax + ux * sOff + uz * 1.5, z: az + uz * sOff - ux * 1.5,
+        y: yStart, heading: hdg + (deg * Math.PI) / 180,
+        vx: ux * 10, vz: uz * 10, speed: 10, spec,
+      };
+      rails.blockBridge(p, 1 / 120);
+      const sxsPen = independentInnerRailOverlap(p, ax, az, ux, uz, span);
+      assert.ok(sxsPen <= 1e-4, `bridge ${id} ${label} portal straddle resolves to zero independent overlap (${sxsPen.toFixed(5)} m)`);
+      assert.equal(rails.allowsBridge(p), true, `bridge ${id} ${label} portal straddle clears allowsBridge on first call`);
+    }
   }
   // Exact finite rotated bottom-chord underside and high-portal inner-rail tests at 3.0x: measure the rendered steel directly
   // and verify paired clear/contact probes right below/above it (catches flat or untrimmed cutoffs).

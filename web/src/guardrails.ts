@@ -334,16 +334,21 @@ export class Guardrails {
     right.x = mx - b.uz * centre; right.z = mz + b.ux * centre; right.half = half; right.halfWidth = halfWidth; right.heading = b.heading;
     pushOut(car, this.trimmedBridgeSolids, true, dt);
   }
-  /** Read-only bank elevation cache per bridge; upgrades at most once per dataRevision without mutating scene meshes. */
+  /** Read-only bank elevation cache per bridge; stays in sync with built decks and bank changes at most once per dataRevision. */
   private readBridgeEnds(index: number, rev: number): boolean {
+    const id = this.bridgeSpans[index].roadId;
+    const builtLevel = this.roads.bridgeDeckLevel(id);
     const curLevel = this.bridgeCachedLevel[index];
-    if (curLevel < 8 && this.bridgeDeckRev[index] !== rev) {
+    if (builtLevel >= 8 && curLevel >= 8) return true;
+    if (this.bridgeDeckRev[index] !== rev || (builtLevel >= 6 && builtLevel !== curLevel)) {
       this.bridgeDeckRev[index] = rev;
-      const lvl = this.roads.bridgeBankElevations(this.bridgeSpans[index].roadId, this.bridgeEndsScratch);
-      if (lvl > curLevel) {
+      const lvl = this.roads.bridgeBankElevations(id, this.bridgeEndsScratch);
+      const y0 = lvl >= 6 ? this.bridgeEndsScratch[0] : 0;
+      const y1 = lvl >= 6 ? this.bridgeEndsScratch[1] : 0;
+      if (lvl !== curLevel || (lvl >= 6 && (Math.abs(y0 - this.bridgeCachedY0[index]) > 1e-9 || Math.abs(y1 - this.bridgeCachedY1[index]) > 1e-9))) {
         this.bridgeCachedLevel[index] = lvl;
-        this.bridgeCachedY0[index] = this.bridgeEndsScratch[0];
-        this.bridgeCachedY1[index] = this.bridgeEndsScratch[1];
+        this.bridgeCachedY0[index] = y0;
+        this.bridgeCachedY1[index] = y1;
         this.bridgeContactVersion++;
       }
     }
@@ -477,6 +482,34 @@ export class Guardrails {
               this.runBridgePass(car, b, y0, y1, carHeight, 0);
               clear = this.bridgePoseClear(car.x, car.z, car.y, car.heading, car.spec, b, y0, y1);
             }
+          }
+          // If a multi-circle envelope still straddles one rail wall when aligned parallel to the span,
+          // move to the nearest provably clear aligned exit (roadway centre, outside near rail, or clear of near portal).
+          if (!clear) {
+            const env = (car.spec ?? CAR_SPEC).envelope;
+            let latMax = 0, lonMax = 0;
+            for (let c = 0; c < env.circles.length; c++) {
+              lonMax = Math.max(lonMax, Math.abs(env.circles[c]));
+              latMax = Math.max(latMax, Math.abs(env.circleSides?.[c] ?? 0));
+            }
+            const latHalf = latMax + env.radius, lonHalf = lonMax + env.radius;
+            const curS = (car.x - b.ax) * b.ux + (car.z - b.az) * b.uz;
+            const curAcross = -(car.x - b.ax) * b.uz + (car.z - b.az) * b.ux;
+            const sideSign = curAcross < 0 ? -1 : 1;
+            const exitS = curS < b.span * 0.5 ? -(lonHalf + 0.01) : b.span + lonHalf + 0.01;
+            const outAcross = sideSign * (PONY_TRUSS.outerHalf + latHalf + 0.01);
+            let bestDist = Infinity, bestX = car.x, bestZ = car.z;
+            for (let opt = 0; opt < 3; opt++) {
+              const sCand = opt === 2 ? exitS : curS;
+              const aCand = opt === 0 ? 0 : opt === 1 ? outAcross : curAcross;
+              const cx = b.ax + b.ux * sCand - b.uz * aCand;
+              const cz = b.az + b.uz * sCand + b.ux * aCand;
+              const d = Math.hypot(cx - car.x, cz - car.z);
+              if (d < bestDist && this.bridgePoseClear(cx, cz, car.y, car.heading, car.spec, b, y0, y1)) {
+                bestDist = d; bestX = cx; bestZ = cz;
+              }
+            }
+            if (bestDist < Infinity) { car.x = bestX; car.z = bestZ; clear = true; }
           }
         }
         car.speed = car.vx * Math.sin(car.heading) - car.vz * Math.cos(car.heading);
