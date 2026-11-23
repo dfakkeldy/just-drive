@@ -1,4 +1,4 @@
-// RUN=port-hawkesbury-mail-browser.mjs VIEWS="mabou|x=1 desktop|area=pointtupper&mode=mail&at=627834,5052408,315 low|area=pointtupper&mode=mail&q=low&touch=1&at=627834,5052408,315" tools/yard-shots.sh 1600 900
+// RUN=port-hawkesbury-mail-browser.mjs VIEWS="mabou|x=1 desktop|area=pointtupper&mode=mail low|area=pointtupper&mode=mail&q=low&touch=1" tools/yard-shots.sh 1600 900
 // Proves in the live browser (desktop 1600x900 and LOW phone 390x844) that:
 // - No roadside mailbox or post stands inside the Town of Port Hawkesbury's legal limits.
 // - Mailboxes outside the town limits (Point Tupper, Port Hastings side, rural roads) stay intact.
@@ -132,20 +132,16 @@ for (const url of urls) {
     assert.ok(mailAudit.shiftStops >= 100, `${level}: Shift route active with stops (${mailAudit.shiftStops})`);
     assert.equal(mailAudit.mailControlPresent, true, `${level}: mail delivery control visible in mail mode`);
 
-    // 2. Deliver to the Port Hawkesbury Post Office using the normal mail control (KeyM) from Pitt Street.
-    // Place car in the NW lane of Pitt Street heading SW (227 deg), so the right window faces the front entrance apron.
-    await page.read(`(() => {
-      const V = mmm.terrain.manifest.village;
-      const a = 47 * Math.PI / 180, s = Math.sin(a), c = Math.cos(a);
-      const lx = 12.2, lz = 21.0;
-      const e = 627806.27 + lx * s + lz * c, n = 5052413.92 + lx * c - lz * s;
-      const x = e - V[0], z = V[1] - n;
-      mmm.vehicle.place(x, z, 227 * Math.PI / 180);
-      Object.assign(mmm.vehicle, { vx: 0, vz: 0, speed: 0 });
-      return true;
+    // 2. Deliver to the Port Hawkesbury Post Office straight from the default ?area=pointtupper&mode=mail spawn using normal KeyM presses.
+    const startCheck = await page.read(`(() => {
+      const v = mmm.vehicle, po = mmm.props.sites.find(s => s.kind === 'postOffice');
+      const rightDot = (po.x - v.x) * Math.cos(v.heading) + (po.z - v.z) * Math.sin(v.heading);
+      return { x: v.x, z: v.z, headingDeg: v.heading * 180 / Math.PI, rightDot, dist: Math.hypot(po.x - v.x, po.z - v.z) };
     })()`);
-    await sleep(300);
-    // Throw 3 pieces via normal KeyM presses (a site stop requires 3 pieces to complete).
+    console.log(name, 'defaultStart', JSON.stringify(startCheck));
+    assert.ok(startCheck.rightDot > 2, `${level}: default mail start puts Post Office apron on right side (${JSON.stringify(startCheck)})`);
+    assert.ok(startCheck.dist < 15, `${level}: default mail start spawns right beside the Post Office (${startCheck.dist.toFixed(1)} m)`);
+    // Throw 3 pieces via normal KeyM presses without repositioning the car (a site stop requires 3 pieces to complete).
     for (let t = 0; t < 4; t++) {
       await page.read(`(() => { dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', key: 'm' })); return true; })()`);
       await sleep(160);

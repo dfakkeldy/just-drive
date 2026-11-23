@@ -1089,7 +1089,7 @@ if (edge) { const [bx0, bz0, bx1, bz1] = edge.bounds; Route.reachable = (x, z) =
 const resets: Array<() => void> = [];
 // Named slots preserve the old reset order, independent of feature construction order.
 const resetSlot = { interiors: 0, relief: 1, yardJob: 2, fishing: 3, roadScene: 4, schoolBus: 5, stuntPark: 6, roadAnimals: 7 };
-const pointTupperRun = pointTupperMail ? buildPointTupperRoute(roads, props, manifest.village) : undefined;
+const pointTupperRun = pointTupperMail ? buildPointTupperRoute(roads, props, manifest.village, properties) : undefined;
 const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, properties, manifest.village, LOW, params, () => {
   multiplayer?.reset();
   resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;

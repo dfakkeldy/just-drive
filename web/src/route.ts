@@ -183,6 +183,8 @@ export class Route {
 /**
  * Mail route stops for the Point Tupper / Port Hawkesbury area:
  * - No house or rural mailbox inside the Town of Port Hawkesbury's legal limits is ever a route stop.
+ * - Any roadside box standing just outside the town line whose household lies inside Port Hawkesbury stays in the
+ *   scenery but receives its mail at the Post Office drop instead of as a rural stop.
  * - The Town of Port Hawkesbury gets one mail stop: the Port Hawkesbury Post Office drop on Pitt Street.
  * - Rural mailboxes outside the town limits (Point Tupper, Port Hastings side, rural roads) remain stops on their roads.
  */
@@ -190,13 +192,25 @@ export function buildPointTupperRoute(
   roads: Roads,
   props: Pick<Props, 'mail' | 'sites'> | null,
   village: readonly [number, number],
+  buildings?: readonly { x: number; y: number; kind: string }[],
 ): Run {
   const run: Run = { name: 'Point Tupper and Port Hawkesbury', short: 'POINT TUPPER / PORT HAWKESBURY', rural: [], sites: [], stops: [], start: null };
   if (!props) return run;
   const toMap = (p: { x: number; z: number }): [number, number] => [village[0] + p.x, village[1] - p.z];
+  const houses = buildings ? buildings.filter((b) => b.kind === 'house') : [];
+  const belongsToTownHouse = (e: number, n: number): boolean => {
+    if (!houses.length) return false;
+    let bestD2 = 250 * 250, bestInside = false;
+    for (let i = 0; i < houses.length; i++) {
+      const h = houses[i], d2 = (h.x - e) ** 2 + (h.y - n) ** 2;
+      if (d2 < bestD2) { bestD2 = d2; bestInside = inPortHawkesbury(h.x, h.y); }
+    }
+    return bestInside;
+  };
   props.mail.forEach((p, index) => {
     const [e, n] = toMap(p);
     if (inPortHawkesbury(e, n)) return;
+    if (belongsToTownHouse(e, n)) return;
     const hit = roads.nearest(p.x, p.z, 256, isPublicRoad);
     if (!hit) return;
     if (Route.reachable && !(Route.reachable(p.x, p.z) && Route.reachable(hit.x, hit.z))) return;
@@ -216,6 +230,14 @@ export function buildPointTupperRoute(
   });
   run.stops.sort((a, b) => a.section - b.section || a.index - b.index);
   const firstStop = run.stops[0];
-  if (firstStop) run.start = { x: firstStop.hit.x, z: firstStop.hit.z, heading: firstStop.hit.heading };
+  if (firstStop) {
+    const target = firstStop.index < props.mail.length ? props.mail[firstStop.index] : props.sites[firstStop.index - props.mail.length];
+    let heading = firstStop.hit.heading;
+    // Mail throws launch from the right-hand passenger window: orient the start so the first stop lies on the right.
+    const rightDot = (target.x - firstStop.hit.x) * Math.cos(heading) + (target.z - firstStop.hit.z) * Math.sin(heading);
+    if (rightDot < 0) heading = (heading + Math.PI) % (2 * Math.PI);
+    const lane = Math.max(0, Math.min(1.5, firstStop.hit.road.halfWidth - 1.2));
+    run.start = { x: firstStop.hit.x + Math.cos(heading) * lane, z: firstStop.hit.z + Math.sin(heading) * lane, heading };
+  }
   return run;
 }

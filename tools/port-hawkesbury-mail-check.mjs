@@ -172,13 +172,17 @@ for (const rel of ['web/src/port-hawkesbury-mail.ts', 'web/src/ph-post-office.ts
   assert.ok(!drawnNames.includes('post') && !drawnNames.includes('wood'), `Post Office cell must draw no mailbox posts, saw ${drawnNames}`);
 }
 
-// 4. Route: buildPointTupperRoute and Route(roads, props, false, customRun) exclude town houses and include the Post Office + outside rural stops.
+// 4. Route: buildPointTupperRoute and Route(roads, props, false, customRun) exclude town houses (including an outside-line
+// physical box serving an inside-town house), orient the default start so the Post Office apron sits on the right window,
+// and include the Post Office + outside rural stops.
 {
   const drop = postOfficeDropMap();
   const roadData = {
     roads: [
-      { id: 1, name: 'Pitt Street', kind: 2, halfWidth: 3.0, bridge: false, pts: [[drop.x - 30, drop.y + 12], [drop.x + 30, drop.y + 12]] },
+      // Digitized SW -> NE (az 47 deg), so the Post Office apron sits to the left until start orientation flips it SW.
+      { id: 1, name: 'Pitt Street', kind: 2, halfWidth: 3.0, bridge: false, pts: [[drop.x - 20, drop.y - 25], [drop.x + 25, drop.y + 17]] },
       { id: 2, name: 'Point Tupper Road', kind: 2, halfWidth: 3.0, bridge: false, pts: [[628900, 5049600], [629200, 5049600]] },
+      { id: 3, name: 'Railroad Street', kind: 2, halfWidth: 3.0, bridge: false, pts: [[628600, 5051690], [628660, 5051720]] },
     ],
   };
   const roads = new Roads(roadData, VILLAGE, stubTerrain);
@@ -186,25 +190,37 @@ for (const rel of ['web/src/port-hawkesbury-mail.ts', 'web/src/ph-post-office.ts
     mail: [
       { x: 627850 - VILLAGE[0], z: VILLAGE[1] - 5052450, heading: 0, served: false, motion: {} }, // inside Port Hawkesbury
       { x: 628950 - VILLAGE[0], z: VILLAGE[1] - 5049605, heading: 0, served: false, motion: {} }, // outside (Point Tupper)
+      { x: 628627.2 - VILLAGE[0], z: VILLAGE[1] - 5051703.6, heading: 0, served: false, motion: {} }, // outside box whose house is inside PH
     ],
     sites: [
       { x: drop.x - VILLAGE[0], z: VILLAGE[1] - drop.y, heading: drop.heading, served: false, customers: 1004, kind: 'postOffice', reach: drop.radius, label: drop.label },
       { x: 627880 - VILLAGE[0], z: VILLAGE[1] - 5052470, heading: 0, served: false, customers: 16, kind: 'community', reach: 4 }, // spurious in-town cabinet
     ],
   };
+  const houses = [
+    { x: 628950, y: 5049585, kind: 'house' }, // outside Point Tupper house
+    { x: 628670.9, y: 5051753.0, kind: 'house' }, // inside Port Hawkesbury house served by outside box #2
+  ];
+  assert.equal(inPortHawkesbury(628627.2, 5051703.6), false, 'Railroad physical box is outside town limits');
+  assert.equal(inPortHawkesbury(628670.9, 5051753.0), true, 'its house is inside town limits');
   Route.reachable = null;
-  const run = buildPointTupperRoute(roads, unfilteredProps, VILLAGE);
-  assert.deepEqual(run.rural, [1], 'only the outside-town rural mailbox is on the route; town house box excluded');
-  assert.deepEqual(run.sites, [2], 'only the Post Office drop is a town site stop');
+  const run = buildPointTupperRoute(roads, unfilteredProps, VILLAGE, houses);
+  assert.deepEqual(run.rural, [1], 'only the outside-town household box is on the route; town-house boxes excluded');
+  assert.deepEqual(run.sites, [3], 'only the Post Office drop is a town site stop');
   assert.equal(run.stops.length, 2);
   assert.equal(run.stops[0].hit.road.name, 'Pitt Street', 'Post Office stop snaps to Pitt Street');
   assert.equal(run.stops[1].hit.road.name, 'Point Tupper Road');
+  assert.ok(run.start, 'default start pose computed');
+  const poSite = unfilteredProps.sites[0];
+  const rightDot = (poSite.x - run.start.x) * Math.cos(run.start.heading) + (poSite.z - run.start.z) * Math.sin(run.start.heading);
+  assert.ok(rightDot > 2, `default start must place Post Office apron on driver right side (rightDot=${rightDot.toFixed(2)})`);
 
   const routeObj = new Route(roads, unfilteredProps, false, run);
   assert.equal(routeObj.runs.length, 1);
   assert.equal(routeObj.forDay(1).stops.length, 2);
-  assert.equal(routeObj.members.get(2)?.hit.road.name, 'Pitt Street');
-  assert.equal(routeObj.members.has(0), false, 'town house stop absent from Route.members');
+  assert.equal(routeObj.members.get(3)?.hit.road.name, 'Pitt Street');
+  assert.equal(routeObj.members.has(0), false, 'in-town box absent from Route.members');
+  assert.equal(routeObj.members.has(2), false, 'outside box belonging to town house absent from Route.members');
 }
 
 // 5. Post Office solids (including rear loading dock platform and SW lobby landing), clear boxes, and lazy proximity gate.
@@ -270,14 +286,29 @@ if (HAS_DATA) {
   assert.equal(propsObj.sites.filter(s => s.kind === 'postOffice').length, 1);
   assert.equal(propsObj.totalCustomers, rawOutside.length + townHouses);
 
-  // Route on real Point Tupper roads.
+  // Route on real Point Tupper roads (passing properties so outside-line boxes for town households are excluded from rural stops).
+  const propertyList = rawBuildings.filter(b => b.buildingId === undefined || b.buildingId === b.id);
   const roads = new Roads(rawRoads, V, stubTerrain);
   Route.reachable = null;
-  const ptRoute = buildPointTupperRoute(roads, propsObj, V);
-  assert.equal(ptRoute.rural.filter(i => inPortHawkesbury(V[0] + propsObj.mail[i].x, V[1] - propsObj.mail[i].z)).length, 0, 'zero town houses in route');
+  const ptRoute = buildPointTupperRoute(roads, propsObj, V, propertyList);
+  assert.equal(ptRoute.rural.filter(i => inPortHawkesbury(V[0] + propsObj.mail[i].x, V[1] - propsObj.mail[i].z)).length, 0, 'zero town boxes in route');
+  const realHouses = propertyList.filter(b => b.kind === 'house');
+  const ruralTownHouseStops = ptRoute.rural.filter(i => {
+    const e = V[0] + propsObj.mail[i].x, n = V[1] - propsObj.mail[i].z;
+    let bestD2 = 250 * 250, bestIn = false;
+    for (const h of realHouses) {
+      const d2 = (h.x - e) ** 2 + (h.y - n) ** 2;
+      if (d2 < bestD2) { bestD2 = d2; bestIn = inPortHawkesbury(h.x, h.y); }
+    }
+    return bestIn;
+  });
+  assert.equal(ruralTownHouseStops.length, 0, 'zero town households receive rural stops (even via outside-boundary boxes)');
   assert.equal(ptRoute.sites.length, 1, 'one town Post Office stop in route');
   assert.equal(ptRoute.stops[0].hit.road.name, 'Pitt Street');
   assert.ok(ptRoute.rural.length >= 600, `outside rural stops kept (${ptRoute.rural.length})`);
+  const poTarget = propsObj.sites[0];
+  const realRightDot = (poTarget.x - ptRoute.start.x) * Math.cos(ptRoute.start.heading) + (poTarget.z - ptRoute.start.z) * Math.sin(ptRoute.start.heading);
+  assert.ok(realRightDot > 2, `real Point Tupper start places Post Office on driver right side (rightDot=${realRightDot.toFixed(2)})`);
 
   // Building replacement removes 149, 3081, 3082 (and works when renumbered).
   const kept = postOfficeReplaceBuildings(rawBuildings);
@@ -389,7 +420,8 @@ execFileSync('python3', ['-c', pipelineCheckScript('pipeline/29_bake_props.py')]
 {
   const mainSrc = readFileSync(MAIN_TS, 'utf8');
   assert.match(mainSrc, /filterPointTupperProps\(/, 'main.ts filters Point Tupper props');
-  assert.match(mainSrc, /buildPointTupperRoute\(/, 'main.ts wires buildPointTupperRoute into Shift');
+  assert.match(mainSrc, /buildPointTupperRoute\(roads,\s*props,\s*manifest\.village,\s*properties\)/, 'main.ts builds Point Tupper route with properties');
+  assert.match(mainSrc, /new Shift\([\s\S]*?pointTupperRun\)/, 'main.ts passes pointTupperRun into new Shift');
   assert.match(mainSrc, /postOfficeReplaceBuildings\(/, 'main.ts replaces the surveyed Post Office building');
   assert.match(mainSrc, /postOfficeClear\(/, 'main.ts clears trees and lot props under the Post Office');
   assert.match(mainSrc, /import\('\.\/ph-post-office'\)/, 'main.ts lazily loads the Post Office chunk');
@@ -437,6 +469,18 @@ if (process.argv.includes('--mutations')) {
       to: 'if (false && inPortHawkesbury(e, n)) return;',
     },
     {
+      name: 'route-keeps-town-house-outside-box',
+      file: 'web/src/route.ts',
+      from: 'if (belongsToTownHouse(e, n)) return;',
+      to: 'if (false && belongsToTownHouse(e, n)) return;',
+    },
+    {
+      name: 'route-start-faces-wrong-way',
+      file: 'web/src/route.ts',
+      from: 'if (rightDot < 0) heading = (heading + Math.PI) % (2 * Math.PI);',
+      to: 'if (false && rightDot < 0) heading = (heading + Math.PI) % (2 * Math.PI);',
+    },
+    {
       name: 'draw-community-cabinet-at-post-office',
       file: 'web/src/props.ts',
       from: "this.sites.forEach((p, i) => { if (p.kind === 'community') this.cell(p).sites.push(i); });",
@@ -459,6 +503,14 @@ if (process.argv.includes('--mutations')) {
       file: 'web/src/main.ts',
       from: 'const data = filterPointTupperProps(mabouAimed, AREA.id, countPortHawkesburyHouses(properties), !!postOfficeChunk);',
       to: 'const data = mabouAimed;',
+      expectError: /main\.ts filters Point Tupper props/,
+    },
+    {
+      name: 'skip-shift-custom-run',
+      file: 'web/src/main.ts',
+      from: '}, AREA.route, firedMode, DAILY?.day ?? 0, pointTupperRun) : new FreeDrive(roads, manifest.village);',
+      to: '}, AREA.route, firedMode, DAILY?.day ?? 0) : new FreeDrive(roads, manifest.village);',
+      expectError: /main\.ts passes pointTupperRun into new Shift/,
     },
   ];
 
@@ -489,7 +541,7 @@ if (process.argv.includes('--mutations')) {
         const ctrl = spawnSync(process.execPath, [baseBundle], { env: { ...process.env, MMM_ROOT: ROOT, MMM_MAIN_TS: targetAbs }, stdio: 'pipe' });
         assert.equal(ctrl.status, 0, `main.ts control failed: ${ctrl.stderr}`);
         res = spawnSync(process.execPath, [baseBundle], { env: { ...process.env, MMM_ROOT: ROOT, MMM_MAIN_TS: mutMain }, stdio: 'pipe' });
-        assert.match(res.stderr.toString(), /main\.ts filters Point Tupper props/, `mutant ${m.name} failed for wrong reason: ${res.stderr}`);
+        assert.match(res.stderr.toString(), m.expectError, `mutant ${m.name} failed for wrong reason: ${res.stderr}`);
       } else {
         const out = join(dir, `${m.name}.mjs`);
         await build({
