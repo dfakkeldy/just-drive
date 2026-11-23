@@ -8,6 +8,7 @@ import { SXS_SPEC } from '../web/src/sxs.ts';
 import { SXS_UTILITY_SPEC, SXS_CREW_SPEC, SXS_CABIN_SPEC } from '../web/src/sxs-variants.ts';
 import { TRUCK_SPEC } from '../web/src/truck.ts';
 import { Towing } from '../web/src/towing.ts';
+import { crestVelocity } from '../web/src/ground-motion.ts';
 
 const dt = 1 / 120;
 const coast = { throttle: 0, steer: 0, handbrake: false };
@@ -109,3 +110,11 @@ for (const [name, spec] of fleet) {
 }
 const largeCrest = drive('car', CAR_SPEC, profiles.largeCrest, 32);
 assert.ok(largeCrest.takeoff && largeCrest.takeoff.vy <= Math.sqrt(2 * 9.81 * 3), 'large crest keeps the takeoff limit');
+
+const approach = x => .25 + .025 * x;
+const crestX = -.05;
+const gentleLip = x => x < 0 ? approach(x) : 0;
+const notch = x => x < 0 ? approach(x) : x < .2 ? 0 : .21;
+const probe = (height, speed) => crestVelocity(height, crestX, 0, speed, 0, dt, height(crestX), height(crestX));
+assert.ok(Math.abs(probe(gentleLip, 10) - .25) < 1e-9, 'a sustained 25 cm lip releases the ride at 36 km/h');
+assert.equal(probe(notch, 15), null, 'a narrow notch with support beyond it does not release the ride');

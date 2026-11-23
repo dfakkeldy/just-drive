@@ -2,6 +2,7 @@ export const GRAVITY = 9.81;
 const LANDING_DROP = 1.25; // metres below the top of the flight
 const MAX_LAUNCH_SPEED = Math.sqrt(2 * GRAVITY * 3); // limit the rise above takeoff to three metres
 const APPROACH = .5;
+const LIP_DROP = .15;
 export const LEDGE_DROP = .5;
 
 /** Compare the incoming tangent with the support the ride is about to reach. */
@@ -17,8 +18,9 @@ export function crestVelocity(
   if (next === null) return null;
   const drop = height - next;
   const ledge = drop >= LEDGE_DROP;
+  const lip = drop > LIP_DROP;
   if (speed <= 3 && !ledge) return null;
-  if (edgeOnly && drop <= .15) return null;
+  if (edgeOnly && !lip) return null;
 
   const back = heightAt(x - dx * APPROACH, z - dz * APPROACH, referenceY - supportGrade * APPROACH);
   if (back === null) return null;
@@ -34,12 +36,18 @@ export function crestVelocity(
   const velocity = Math.min(launchGrade * speed, MAX_LAUNCH_SPEED);
   if (ledge) return speed <= 3 ? 0 : velocity;
   if (velocity * dt + drop <= gravityDrop + .0001) return null;
-  if (launchGrade < .025) return null;
-  if (drop <= .15 || !edgeOnly) {
+  // An exact 2.5% approach can round slightly below its grade at a sampled point.
+  if (launchGrade + 1e-9 < .025) return null;
+  if (!edgeOnly) {
     const look = 1.5;
     const ahead = heightAt(x + dx * look, z + dz * look, referenceY + supportGrade * look);
     if (ahead === null || ahead > height + .035 * look) return null;
-    if (height + launchGrade * look - .5 * GRAVITY * (look / speed) ** 2 - ahead < .18) return null;
+    // A drop confirmed by both forward samples can release the ride as soon
+    // as its ballistic path clears the lower support. Smooth ground needs a
+    // clearance margin to reject noise.
+    const confirmedLip = lip && height - ahead > LIP_DROP;
+    const clearance = height + launchGrade * look - .5 * GRAVITY * (look / speed) ** 2 - ahead;
+    if (confirmedLip ? clearance <= 0 : clearance < .18) return null;
   }
   return velocity;
 }
