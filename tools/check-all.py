@@ -288,22 +288,27 @@ def main():
                'MMM_COAST_OUT': tmp + '/coast'}
         interrupted = []
         active_pids = set()
+        signalled_pids = set()
         def signal_group(pid, sig):
             try: os.killpg(pid, sig)
             except (ProcessLookupError, PermissionError): pass
         def stop(sig, _frame):
-            interrupted.append(sig)
-            send = signal.SIGKILL if len(interrupted) > 1 else sig
+            send = signal.SIGKILL if interrupted else sig
             pids = ()
             for _ in range(5):
                 try: pids = tuple(active_pids); break
                 except RuntimeError: pass
-            for pid in pids: signal_group(pid, send)
+            for pid in pids:
+                signalled_pids.add(pid)
+                signal_group(pid, send)
+            interrupted.append(sig)
         old = {s: signal.signal(s, stop) for s in (signal.SIGINT, signal.SIGTERM)}
-        def terminate(p):
-            signal_group(p.pid, signal.SIGTERM)
+        def terminate(p, grace=2):
+            if p.pid not in signalled_pids:
+                signalled_pids.add(p.pid)
+                signal_group(p.pid, signal.SIGTERM)
             # Kill descendants too, even when the group leader exits before its child.
-            try: p.wait(timeout=2)
+            try: p.wait(timeout=grace)
             except subprocess.TimeoutExpired: pass
             signal_group(p.pid, signal.SIGKILL)
             p.wait()
@@ -348,15 +353,18 @@ def main():
                 try:
                     while True:
                         if interrupted:
-                            terminate(p); code = 130; break
+                            terminate(p, grace=5); code = 130; break
                         remaining = deadline - time.monotonic()
                         if remaining <= 0:
-                            timed_out = True; terminate(p); code = 1; break
+                            timed_out = True; terminate(p, grace=2); code = 1; break
                         try: code = p.wait(timeout=min(.1, remaining)); break
                         except subprocess.TimeoutExpired: pass
-                    if interrupted: terminate(p); code = 130
+                    if interrupted and not timed_out and code != 130:
+                        terminate(p, grace=5); code = 130
                 finally:
-                    with active_lock: active_pids.discard(p.pid)
+                    with active_lock:
+                        active_pids.discard(p.pid)
+                        signalled_pids.discard(p.pid)
                 log.seek(0); output = log.read()
             if row_tmp is not None:
                 row_evidence = row_tmp / 'evidence'

@@ -30,11 +30,13 @@ CLONE=['cp','-c'] if sys.platform=='darwin' else ['cp','--reflink=auto']
 BASE={k:v for k,v in os.environ.items() if k not in ['WEB_PORT','CDP_PORT','SOFTWARE_GL','MMM_CHECK_SUPERVISOR','MMM_CHECK_PORTS_LOCKED','CHROMIUM_BIN','MMM_BROWSER_SLOTS','MMM_BROWSER_WAIT','MMM_BROWSER_OVERFLOW']}
 parser=argparse.ArgumentParser(); parser.add_argument('--ownership',action='store_true'); parser.add_argument('--slots',action='store_true'); parser.add_argument('--minute',action='store_true'); parser.add_argument('--listeners',action='store_true'); parser.add_argument('--kill-everything',action='store_true')
 args=parser.parse_args(); trees=[]; jobs=[]
-# Run finally cleanup on SIGTERM (stopping detached stand-in jobs and removing temp worktrees).
-def _on_term(_sig, _frame):
+# Run finally cleanup on SIGTERM/SIGINT (stopping detached stand-in jobs and removing temp worktrees).
+def _on_stop(sig, _frame):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    raise SystemExit(143)
-signal.signal(signal.SIGTERM, _on_term)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    raise SystemExit(128 + sig)
+signal.signal(signal.SIGTERM, _on_stop)
+signal.signal(signal.SIGINT, _on_stop)
 
 
 def until(condition, seconds=12):
@@ -193,7 +195,8 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
                     suffix+=1
                 used_ports.update(pair)
                 label=tree.name
-                subprocess.run(['git','worktree','add','--detach',str(tree),'HEAD'],cwd=ROOT,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);trees.append(tree)
+                trees.append(tree)
+                subprocess.run(['git','worktree','add','--detach',str(tree),'HEAD'],cwd=ROOT,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
                 for source in (ROOT/'tools').rglob('*'):
                     if source.is_file() and not source.is_symlink() and '__pycache__' not in source.parts:
                         dest=tree/source.relative_to(ROOT);dest.parent.mkdir(exist_ok=True,parents=True)
@@ -272,6 +275,7 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             pair=free_pair();state=tmp/'stream-state.json'
             env={**BASE,'WEB_PORT':str(pair[0]),'CDP_PORT':str(pair[1]),'MMM_CHECK_STANDIN':'1','CHROMIUM_BIN':str(ROOT/'tools/check-browser-standin.py'),'MMM_BROWSER_SLOTS':'0','MMM_PROOF_STATE':str(state),'OUT':str(tmp)}
             stream=subprocess.Popen(['/bin/bash',str(stream_script)],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+            jobs.append({'process':stream,'state':state,'log':tmp/'stream.log','name':'stream'})
             captured=[];errors=[]
             def collect(pipe,dest):
                 for line in pipe:dest.append((time.monotonic(),line))
@@ -356,5 +360,15 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
         print('PASS all requested stand-in proofs',flush=True)
     finally:
         for job in jobs:
-            if job['process'].poll() is None:stop(job)
-        for tree in trees:subprocess.run(['git','worktree','remove','--force',str(tree)],cwd=ROOT,check=True,stdout=subprocess.DEVNULL)
+            if job['process'].poll() is None: stop(job)
+        pruned = False
+        for tree in trees:
+            removed = subprocess.run(['git', 'worktree', 'remove', '--force', '--force', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if removed.returncode != 0:
+                subprocess.run(['git', 'worktree', 'unlock', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                removed = subprocess.run(['git', 'worktree', 'remove', '--force', '--force', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if removed.returncode != 0:
+                shutil.rmtree(tree, ignore_errors=True)
+                pruned = True
+        if pruned:
+            subprocess.run(['git', 'worktree', 'prune'], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

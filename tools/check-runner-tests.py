@@ -334,13 +334,15 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
     w_stubborn=fixture/'par_stubborn.py'
     w_stubborn.write_text('import os,signal,sys,time\nfrom pathlib import Path\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\nPath(sys.argv[1]).write_text(str(os.getpid()))\nPath(sys.argv[2]).write_text("1")\ntime.sleep(30)\n')
     w_detached=fixture/'par_detached.py'
+    # Sleep 2.5s inside finally without masking SIGTERM on SIGINT: proves (a) SIGINT is not followed by a
+    # second SIGTERM that would abort finally, and (b) graceful cleanup taking >2s finishes before SIGKILL.
     w_detached.write_text(
         'import signal,subprocess,sys,time\nfrom pathlib import Path\n'
         'child=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"],start_new_session=True)\n'
-        'def on_sig(_s,_f):\n signal.signal(signal.SIGTERM,signal.SIG_IGN)\n raise SystemExit(143)\n'
-        'signal.signal(signal.SIGTERM,on_sig)\n'
+        'def on_term(_s,_f):\n signal.signal(signal.SIGTERM,signal.SIG_IGN)\n raise SystemExit(143)\n'
+        'signal.signal(signal.SIGTERM,on_term)\n'
         'try:\n Path(sys.argv[1]).write_text(str(child.pid))\n Path(sys.argv[2]).write_text("1")\n time.sleep(30)\n'
-        'finally:\n child.terminate()\n try: child.wait(timeout=1)\n except subprocess.TimeoutExpired: child.kill(); child.wait()\n'
+        'finally:\n time.sleep(2.5)\n child.terminate()\n try: child.wait(timeout=1)\n except subprocess.TimeoutExpired: child.kill(); child.wait()\n'
     )
     for sig in (signal.SIGTERM, signal.SIGINT):
         table([('p1',0,'node','*',''),('p2',0,'node','*',''),('p3',0,'node','*','')])
@@ -355,7 +357,7 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
                 if r1.exists() and r2.exists(): break
                 time.sleep(.02)
             assert r1.exists() and r2.exists(),sig
-            p.send_signal(sig);out,err=p.communicate(timeout=8)
+            p.send_signal(sig);out,err=p.communicate(timeout=10)
             assert p.returncode==130 and not m3.exists(),(sig,p.returncode,out,err)
             assert not alive(int(pid1.read_text())),f'parallel {sig} left stubborn descendant alive'
             assert not alive(int(pid2.read_text())),f'parallel {sig} left detached-session child alive'
