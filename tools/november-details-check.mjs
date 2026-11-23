@@ -572,25 +572,34 @@ for (const {a, b, side} of added) {
         // Mixed pony-truss + cancelling yard/solid corrections (zero solid onSolidImpact: into > 0) must NOT receive the pony-truss slide.
         const mixTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
         const mixContacts = new AreaContacts(), mixSolo = new AreaContacts();
+        let yardNudge = 0, yardFired = false, yardDeltaX = 0, yardDeltaZ = 0, bridgeDx = 0, bridgeDz = 0, exactWallX = NaN, exactWallZ = NaN, afterBridgeX0 = 0, afterBridgeZ0 = 0, liveOldX = 0, liveOldZ = 0, oldCaptured = false;
+        mixContacts.add({ resolve: b => { if (yardNudge && !oldCaptured) { oldCaptured = true; liveOldX = b.x; liveOldZ = b.z; } }, allows: () => true });
         registerRailContacts(mixContacts, mixSolo, rails, body => body === mixTruck, TRUCK_SPEC);
-        let yardNudge = 0, yardFired = false, yardDeltaX = 0, yardDeltaZ = 0, bridgeDx = 0, bridgeDz = 0;
         const mixWall = { x: 1e6, z: 1e6, half: 30, halfWidth: 0.3, heading: 0 };
         const mixYard = {
           resolveTowBody: b => {
             if (!yardNudge || yardFired) return;
             yardFired = true;
             const bx0 = b.x, bz0 = b.z;
-            bridgeDx = bx0 - preMixTrailerX; bridgeDz = bz0 - preMixTrailerZ;
+            afterBridgeX0 = bx0; afterBridgeZ0 = bz0;
+            bridgeDx = bx0 - liveOldX; bridgeDz = bz0 - liveOldZ;
             const env = b.spec.envelope, sinB = Math.sin(b.heading), cosB = Math.cos(b.heading);
             let minX = Infinity;
             for (let ci = 0; ci < env.circles.length; ci++) {
               minX = Math.min(minX, sinB * env.circles[ci] + cosB * (env.circleSides?.[ci] ?? 0) - env.radius);
             }
             // Place wall flush on -x of post-bridge pose (moving in +x so pushOut normal is +x, into > 0, zero onSolidImpact):
-            // yard shifts -0.05 on X, then pushOut(solids) pushes +0.05 back to exact (bx0, bz0).
+            // yard shifts -0.0625 on X, then pushOut(solids) pushes +0.0625 back to bit-exact (bx0, bz0).
             mixWall.x = bx0 + minX - mixWall.halfWidth; mixWall.z = bz0;
             b.x -= yardNudge;
             yardDeltaX = b.x - bx0; yardDeltaZ = b.z - bz0;
+            for (let iter = 0; iter < 4; iter++) {
+              const probe = { x: b.x, z: b.z, heading: b.heading, vx: b.vx, vz: b.vz, speed: b.speed, spec: b.spec };
+              pushOut(probe, [mixWall], true);
+              exactWallX = probe.x; exactWallZ = probe.z;
+              if (probe.x === bx0 && probe.z === bz0) break;
+              mixWall.x += bx0 - probe.x;
+            }
           },
           resolveSolids: () => {},
           allowsBody: () => true,
@@ -605,15 +614,16 @@ for (const {a, b, side} of added) {
         mixTruck.vx = ux * 8 - uz * 0.4; mixTruck.vz = uz * 8 + ux * 0.4; mixTruck.speed = 8;
         assert.ok(mixTruck.vx > 1, 'mixed cancelling rig moves in +x so -x wall emits zero onSolidImpact');
         const preMixTruckX = mixTruck.x, preMixTruckZ = mixTruck.z;
-        const preMixTrailerX = mixTow.bodies()[1].x, preMixTrailerZ = mixTow.bodies()[1].z;
         yardNudge = 0.0625;
         mixTow.step(1 / 120);
         assert.equal(yardFired, true, 'mixed cancelling test ran yard correction');
         assert.equal(yardDeltaX, -0.0625, 'yard moved live trailer by -0.0625 m on X');
         assert.equal(yardDeltaZ, 0, 'yard moved live trailer by 0 m on Z');
+        assert.equal(exactWallX, afterBridgeX0, 'solid push cancels yard X move to bit-exact post-bridge X');
+        assert.equal(exactWallZ, afterBridgeZ0, 'solid push keeps bit-exact post-bridge Z');
         assert.ok(Math.hypot(bridgeDx, bridgeDz) > 1e-4, 'mixed cancelling test hit pony-truss rail');
-        assert.ok(Math.abs((mixTruck.x - preMixTruckX) - bridgeDx) < 1e-6, `live rig net X equals bridge-only displacement (exact yard+solid cancellation)`);
-        assert.ok(Math.abs((mixTruck.z - preMixTruckZ) - bridgeDz) < 1e-6, `live rig net Z equals bridge-only displacement (exact yard+solid cancellation)`);
+        assert.equal(mixTruck.x, preMixTruckX + bridgeDx, 'live rig net X equals exact bridge-only displacement');
+        assert.equal(mixTruck.z, preMixTruckZ + bridgeDz, 'live rig net Z equals exact bridge-only displacement');
         assert.equal(mixTruck.speed, 0, 'mixed pony-truss + cancelling yard/solid corrections still stop the rig as on main');
         // Mixed pony-truss + callback-only AreaContacts site (smaller impact, zero position/velocity change) still stops the rig.
         {
