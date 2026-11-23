@@ -21,8 +21,8 @@ export const PONY_TRUSS = {
   half: 2.2,
   /** Clear asphalt half-width between bottom chords (exact lateral deckHeight limit). */
   clearHalf: 2.08,
-  /** Paved approach apron past each end of the steel span, blended smoothly into the bank across the full width. */
-  approach: 3.0,
+  /** Paved approach apron past each end of the steel span, long enough to meet the drawn road surface cleanly. */
+  approach: 7.0,
   /** Inner collision face of the steel inner guard rail along each truss side. */
   railInner: 2.005,
   /** Outer face of the bottom chord and deck fascia. */
@@ -52,8 +52,8 @@ const ABUTMENT: RGB = [0.28, 0.27, 0.24];
 const DECK_ASPHALT: RGB = [0.085, 0.082, 0.078];
 
 const MATCH_TOLERANCE = 5;
-const APRON_ALONG_STEPS = 8;
-const APRON_ACROSS_STEPS = 8;
+const APRON_ALONG_STEPS = 10;
+const APRON_ACROSS_STEPS = 6;
 const APRON_COLS = APRON_ACROSS_STEPS + 1;
 
 /** Smoothly blend the 3 m approach apron from the bridge deck edge into the local bank height across the lane width. */
@@ -261,18 +261,22 @@ function buildApronGrid(
             const sv = sj / sub, vNorm = (j + sv) / APRON_ACROSS_STEPS;
             const land = samples[(i * sub + si) * sampleCols + j * sub + sj];
             if (Number.isNaN(land)) continue;
+            const onOuter = (end < 0 && i === 0 && si === 0) || (end > 0 && i === APRON_ALONG_STEPS - 1 && si === sub);
+            const pMin = onOuter ? 0.003 : padMin;
+            const pTarget = onOuter ? 0.006 : padTarget;
             const triY = sampleApronGrid(heights, uNorm, vNorm);
-            if (land + padMin <= triY) continue;
-            const excess = land + padTarget - triY;
+            if (land + pMin <= triY) continue;
+            const excess = land + pTarget - triY;
             const verts: [number, number, number][] = su + sv >= 1
               ? [[i + 1, j + 1, su + sv - 1], [i, j + 1, 1 - su], [i + 1, j, 1 - sv]]
               : [[i, j, 1 - su - sv], [i + 1, j, su], [i, j + 1, sv]];
+            const lockOuter = pinOuter || !onOuter;
             let freeWeight = 0;
-            for (const [vi, , w] of verts) if (vi !== joinRow && (!pinOuter || vi !== outerRow)) freeWeight += w;
+            for (const [vi, , w] of verts) if (vi !== joinRow && (!lockOuter || vi !== outerRow)) freeWeight += w;
             if (freeWeight > 0.01) {
               const lift = excess / freeWeight;
               for (const [vi, vj, w] of verts) {
-                if (vi !== joinRow && (!pinOuter || vi !== outerRow) && w > 0) heights[vi * APRON_COLS + vj] += lift;
+                if (vi !== joinRow && (!lockOuter || vi !== outerRow) && w > 0) heights[vi * APRON_COLS + vj] += lift;
               }
             }
           }
@@ -294,6 +298,7 @@ export function buildPonyTrussBridge(
   len: number,
   supportHeightAt: (x: number, z: number) => number | null,
   drawnHeightAt: (x: number, z: number) => number | null = supportHeightAt,
+  reuseSupport?: { aprons: PonyTrussAprons; y0: number; y1: number },
 ): { geometry: THREE.BufferGeometry; aprons: PonyTrussAprons; y0: number; y1: number } {
   const m = new Mesher();
   const a = pts[0], b = pts[pts.length - 1];
@@ -303,19 +308,17 @@ export function buildPonyTrussBridge(
   const yaw = Math.atan2(-uz, ux);
   const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
   const clearHalf = PONY_TRUSS.clearHalf;
-  // Lift either span end above the highest bank point across its seam so apron and steel deck meet with zero step.
-  let y0 = rawY0, y1 = rawY1;
-  const seamSamples = APRON_ACROSS_STEPS * 2;
-  for (let j = 0; j <= seamSamples; j++) {
-    const across = -clearHalf + (2 * clearHalf * j) / seamSamples;
-    const h0 = supportHeightAt(a[0] - uz * across, a[1] + ux * across);
-    const d0 = drawnHeightAt(a[0] - uz * across, a[1] + ux * across);
-    const top0 = h0 !== null && d0 !== null ? Math.max(h0, d0) : h0 ?? d0;
-    if (top0 !== null && top0 + 0.02 > y0) y0 = top0 + 0.02;
-    const h1 = supportHeightAt(b[0] - uz * across, b[1] + ux * across);
-    const d1 = drawnHeightAt(b[0] - uz * across, b[1] + ux * across);
-    const top1 = h1 !== null && d1 !== null ? Math.max(h1, d1) : h1 ?? d1;
-    if (top1 !== null && top1 + 0.02 > y1) y1 = top1 + 0.02;
+  // Lift either span end above the highest loaded bank point across its seam so apron and steel deck meet with zero step.
+  let y0 = reuseSupport ? reuseSupport.y0 : rawY0, y1 = reuseSupport ? reuseSupport.y1 : rawY1;
+  if (!reuseSupport) {
+    const seamSamples = APRON_ACROSS_STEPS * 2;
+    for (let j = 0; j <= seamSamples; j++) {
+      const across = -clearHalf + (2 * clearHalf * j) / seamSamples;
+      const h0 = supportHeightAt(a[0] - uz * across, a[1] + ux * across);
+      if (h0 !== null && h0 + 0.02 > y0) y0 = h0 + 0.02;
+      const h1 = supportHeightAt(b[0] - uz * across, b[1] + ux * across);
+      if (h1 !== null && h1 + 0.02 > y1) y1 = h1 + 0.02;
+    }
   }
   const dy = y1 - y0, slope = Math.atan2(dy, span);
   const deckY = (s: number) => y0 + dy * (s / span);
@@ -350,10 +353,10 @@ export function buildPonyTrussBridge(
   // Deck slab sides and underside (steel deck fascia under the trusses, 2.5 cm below asphalt to avoid z-fighting).
   m.box(0, fasciaTop - deckThick / 2, 0, fasciaLen, deckThick, half * 2 + chord, STEEL_DARK, false);
 
-  // Paved 3 m approach aprons: when settled, rendered asphalt and wheel support share one exact surface; during LOD streaming, visual outer edge meets the selected road.
+  // Paved 7 m approach aprons: when settled, rendered asphalt and wheel support share one exact surface; during LOD streaming, visual outer edge meets the selected road.
   const ap = PONY_TRUSS.approach;
-  const startGrid = buildApronGrid(a, ux, uz, span, -1, y0, supportHeightAt, false, 0.015, 0.022);
-  const endGrid = buildApronGrid(a, ux, uz, span, 1, y1, supportHeightAt, false, 0.015, 0.022);
+  const startGrid = reuseSupport ? reuseSupport.aprons.start : buildApronGrid(a, ux, uz, span, -1, y0, supportHeightAt, false, 0.036, 0.046);
+  const endGrid = reuseSupport ? reuseSupport.aprons.end : buildApronGrid(a, ux, uz, span, 1, y1, supportHeightAt, false, 0.036, 0.046);
   const sameSurface = drawnHeightAt === supportHeightAt;
   const startVis = sameSurface ? startGrid : buildApronGrid(a, ux, uz, span, -1, y0, drawnHeightAt, true, 0.005, 0.012);
   const endVis = sameSurface ? endGrid : buildApronGrid(a, ux, uz, span, 1, y1, drawnHeightAt, true, 0.005, 0.012);

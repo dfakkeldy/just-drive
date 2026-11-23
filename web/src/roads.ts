@@ -58,10 +58,9 @@ export class Roads {
   private updateRevision=-1;private updateX=Infinity;private updateZ=Infinity;
   private periodMat: THREE.MeshLambertMaterial | null = null;
 
-  // Explicit, caller-independent terrain samplers: wheel support clears both drawn triangles and bilinear ground; visual apron meets selected triangles during LOD lag.
+  // Explicit, caller-independent loaded terrain sampler: never reads camera-selected drawn tiles so camera LOD never shifts wheel support.
   private readonly readTerrainHeight = (x: number, z: number): number | null => {
-    const drawn = this.terrain.meshHeightAt?.(x, z, true) ?? null;
-    const mesh = drawn ?? this.terrain.meshHeightAt?.(x, z, false) ?? null;
+    const mesh = this.terrain.meshHeightAt?.(x, z, false) ?? null;
     const surf = this.terrain.surfaceAt(x, z)?.ground ?? null;
     if (mesh !== null && surf !== null) return Math.max(mesh, surf);
     return mesh ?? surf ?? this.terrain.heightAt(x, z);
@@ -70,7 +69,7 @@ export class Roads {
     this.terrain.meshHeightAt?.(x, z, true) ?? this.readTerrainHeight(x, z);
   private readonly readSurfaceLevel = (x: number, z: number): number => this.terrain.surfaceAt(x, z)?.level ?? 0;
   private readonly readDrawnLevel = (x: number, z: number): number =>
-    this.terrain.drawnLevelAt?.(x, z) ?? this.terrain.surfaceAt(x, z)?.level ?? 0;
+    typeof this.terrain.drawnLevelAt === 'function' ? (this.terrain.drawnLevelAt(x, z) ?? 0) : (this.terrain.surfaceAt(x, z)?.level ?? 0);
 
   private eraBridgeHit:RoadHit|null=null;private bridgeQuery=0;
 
@@ -254,7 +253,7 @@ export class Roads {
     let drawn: { minLevel: number; sig: number } | null = null;
     if (have && checkDrawn && road.ponyTruss) {
       drawn = ponyTrussBankState(road, this.readDrawnLevel);
-      if (drawn.sig === have.drawnSig && (have.level >= 8 || (rev !== undefined && have.revision === rev))) return have;
+      if ((drawn.minLevel === 0 || drawn.sig === have.drawnSig) && (have.level >= 8 || (rev !== undefined && have.revision === rev))) return have;
     }
     const p = road.pts, n = p.length;
     // The banks: a few metres past each end of the bridge, along its line.
@@ -267,10 +266,11 @@ export class Roads {
     if (!s0 || !s1 || s0.level < 6 || s1.level < 6) return have ?? null;
     const bank = road.ponyTruss ? ponyTrussBankState(road, this.readSurfaceLevel) : null;
     if (road.ponyTruss && !drawn) drawn = ponyTrussBankState(road, this.readDrawnLevel);
-    const level = bank ? Math.min(s0.level, s1.level, bank.minLevel, drawn!.minLevel) : Math.min(s0.level, s1.level);
+    const level = bank ? Math.min(s0.level, s1.level, bank.minLevel) : Math.min(s0.level, s1.level);
+    const drawnChanged = !!bank && drawn!.minLevel > 0 && drawn!.sig !== have?.drawnSig;
+    const bankChanged = bank ? (bank.sig !== have?.bankSig || level > (have?.level ?? 0)) : level > (have?.level ?? 0);
     if (have) {
-      const upgraded = bank ? (bank.sig !== have.bankSig || drawn!.sig !== have.drawnSig || level > have.level) : level > have.level;
-      if (!upgraded) { have.revision = rev; return have; }
+      if (!bankChanged && !drawnChanged) { have.revision = rev; return have; }
       this.group.remove(have.mesh);
       have.mesh.geometry.dispose();
     }
@@ -281,10 +281,10 @@ export class Roads {
     let mesh: THREE.Mesh;
     let aprons: PonyTrussAprons | undefined;
     if (road.ponyTruss) {
-      // When the selected tile matches loaded detail, visual asphalt and wheel support share one exact surface (zero floating wheels).
-      // While a coarser parent is still drawn (streaming lag), visual outer apron meets the selected road while preserving wheel support.
-      const drawnLags = drawn!.sig !== bank!.sig && typeof this.terrain.meshHeightAt === 'function';
-      const built = buildPonyTrussBridge(p, y0, y1, len, this.readTerrainHeight, drawnLags ? this.readDrawnHeight : this.readTerrainHeight);
+      // Reuse wheel-support apron grids on camera-only LOD switches so camera movement never alters wheel height or repeats support queries.
+      const reuseSupport = have && !bankChanged && have.aprons ? { aprons: have.aprons, y0: have.y0, y1: have.y1 } : undefined;
+      const drawnLags = drawn!.minLevel > 0 && drawn!.sig !== bank!.sig && typeof this.terrain.meshHeightAt === 'function';
+      const built = buildPonyTrussBridge(p, y0, y1, len, this.readTerrainHeight, drawnLags ? this.readDrawnHeight : this.readTerrainHeight, reuseSupport);
       y0 = built.y0; y1 = built.y1;
       aprons = built.aprons;
       this.periodMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
@@ -317,7 +317,7 @@ export class Roads {
       mesh = new THREE.Mesh(geo, road.kind >= 4 ? this.timberMat : this.deckMat);
     }
     this.group.add(mesh);
-    const deck: Deck = { road, y0, y1, len, cum, mesh, level, revision: rev, bankSig: bank?.sig, drawnSig: drawn?.sig, aprons };
+    const deck: Deck = { road, y0, y1, len, cum, mesh, level, revision: rev, bankSig: bank?.sig, drawnSig: drawn?.minLevel ? drawn.sig : have?.drawnSig, aprons };
     this.decks.set(road.id, deck);
     return deck;
   }
