@@ -349,7 +349,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
         r1=fixture/'p1.ready';r2=fixture/'p2.ready';pid1=fixture/'p1.pid';pid2=fixture/'p2.pid';m3=fixture/'p3.ran'
         for fpath in (r1,r2,pid1,pid2,m3): fpath.unlink(missing_ok=True)
         change_row('p1',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_stubborn))} {shlex.quote(str(pid1))} {shlex.quote(str(r1))} & wait')
-        change_row('p2',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_detached))} {shlex.quote(str(pid2))} {shlex.quote(str(r2))}')
+        # Compound shell command so bash cannot exec Python directly: verifies the grace wait keeps the
+        # process group alive until Python finishes its 2.5s cleanup even if bash exits first on SIGTERM.
+        change_row('p2',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_detached))} {shlex.quote(str(pid2))} {shlex.quote(str(r2))} && true')
         change_row('p3',f'touch {shlex.quote(str(m3))}')
         p=subprocess.Popen([sys.executable,'-c',par_code,str(ROOT/'tools/check-all.py'),str(fixture)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env={**os.environ,'PATH':str(fixture/'bin')+os.pathsep+os.environ['PATH'],'MMM_CHECK_SCRATCH':str(scratch[0])})
         try:

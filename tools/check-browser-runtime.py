@@ -140,9 +140,10 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
         pair=free_pair();marker=tmp/('race-server-'+str(pair[0]))
         job=start('foreign-race-'+str(pair[0]),root=root,ports=pair,env={'MMM_PROOF_DELAY_SERVER':str(marker),'EXPECT_CHECKOUT':'checkout-alpha'})
         until(lambda:marker.exists())
-        foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'server',str(pair[0]),str(ROOT)],env=BASE,stdout=subprocess.DEVNULL,start_new_session=True)
-        saved=bp.identity(foreign.pid)
+        foreign=saved=None
         try:
+            foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'server',str(pair[0]),str(ROOT)],env=BASE,stdout=subprocess.DEVNULL,start_new_session=True)
+            saved=bp.identity(foreign.pid)
             def browser_up():
                 try:
                     with urllib.request.urlopen(f'http://127.0.0.1:{pair[1]}/json/version',timeout=.5):return True
@@ -154,7 +155,10 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             assert bool(ready(job))==mutant,job['log'].read_text()
             stop(job);assert bp.alive(saved) is True
             print('PASS foreign-after-probe: '+('always-owned mutant detected' if mutant else 'foreign readiness rejected; listener survives cleanup'),flush=True)
-        finally:bp.signal_pid(saved,signal.SIGTERM);foreign.wait(timeout=3)
+        finally:
+            if saved: bp.signal_pid(saved,signal.SIGTERM)
+            elif foreign and foreign.poll() is None: foreign.terminate()
+            if foreign: foreign.wait(timeout=3)
 
     try:
         if args.kill_everything:
@@ -226,9 +230,10 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
 
             profile=tmp/'foreign';profile.mkdir()
             foreign_port=free_port()
-            foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'--remote-debugging-port='+str(foreign_port),'--user-data-dir='+str(profile)],stdout=subprocess.DEVNULL,start_new_session=True)
-            saved=bp.identity(foreign.pid)
+            foreign=saved=None
             try:
+                foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'--remote-debugging-port='+str(foreign_port),'--user-data-dir='+str(profile)],stdout=subprocess.DEVNULL,start_new_session=True)
+                saved=bp.identity(foreign.pid)
                 def version():
                     try:
                         with urllib.request.urlopen(f'http://127.0.0.1:{foreign_port}/json/version',timeout=.5) as reply:return reply.read()
@@ -237,7 +242,10 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
                 job=start('foreign-refusal',ports=(free_port(),foreign_port));finish(job,2)
                 assert version()==before and bp.alive(saved) is True
                 print('PASS foreign browser stand-in: refused exit 2; endpoint unchanged, PID alive',flush=True)
-            finally:bp.signal_pid(saved,signal.SIGTERM);foreign.wait(timeout=3)
+            finally:
+                if saved: bp.signal_pid(saved,signal.SIGTERM)
+                elif foreign and foreign.poll() is None: foreign.terminate()
+                if foreign: foreign.wait(timeout=3)
 
             for mode in ['TERM','INT','KILL','GROUP-KILL','KEEPER-KILL','INT-IGNORED','TERM-IGNORED']:
                 job=start('kill-'+mode,slot=1,ignore_signal=mode.split('-')[0] if mode.endswith('-IGNORED') else None);until(lambda:ready(job))
@@ -292,8 +300,10 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             assert any('at 3' in line for _,line in captured) and any('err .6' in line for _,line in errors)
             print(f'PASS streaming: .6s line visible at {visible:.2f}s; pre-TERM stdout/stderr retained after TERM at 4s',flush=True)
 
-            child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True);saved=bp.identity(child.pid)
+            child=saved=None
             try:
+                child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True)
+                saved=bp.identity(child.pid)
                 reused={**saved,'start':[0,0] if isinstance(saved['start'],list) else '-1'}
                 assert bp.alive(reused) is False and not bp.signal_pid(reused,signal.SIGKILL) and bp.alive(saved) is True
                 spec=importlib.util.spec_from_file_location('slot_test',ROOT/'tools/browser-slots.py');slots=importlib.util.module_from_spec(spec);spec.loader.exec_module(slots)
@@ -314,7 +324,10 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
                 finally:bp.info=old
                 assert bp.alive(saved) is True
                 print('PASS PID reuse: stale lease reclaimed; reused PID never signalled; unknown identity stays alive and cannot release its lease',flush=True)
-            finally:bp.signal_pid(saved,signal.SIGTERM);child.wait(timeout=3)
+            finally:
+                if saved: bp.signal_pid(saved,signal.SIGTERM)
+                elif child and child.poll() is None: child.terminate()
+                if child: child.wait(timeout=3)
 
             kill_everything('automatic');kill_everything('manual')
 
@@ -361,14 +374,21 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
     finally:
         for job in jobs:
             if job['process'].poll() is None: stop(job)
-        pruned = False
-        for tree in trees:
-            removed = subprocess.run(['git', 'worktree', 'remove', '--force', '--force', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if removed.returncode != 0:
-                subprocess.run(['git', 'worktree', 'unlock', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if trees:
+            common = Path(subprocess.check_output(['git', 'rev-parse', '--git-common-dir'], cwd=ROOT, text=True).strip())
+            if not common.is_absolute(): common = (ROOT / common).resolve()
+            wt_admin = common / 'worktrees'
+            for tree in trees:
                 removed = subprocess.run(['git', 'worktree', 'remove', '--force', '--force', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if removed.returncode != 0:
-                shutil.rmtree(tree, ignore_errors=True)
-                pruned = True
-        if pruned:
-            subprocess.run(['git', 'worktree', 'prune'], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if removed.returncode != 0:
+                    subprocess.run(['git', 'worktree', 'unlock', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    removed = subprocess.run(['git', 'worktree', 'remove', '--force', '--force', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if removed.returncode != 0:
+                    shutil.rmtree(tree, ignore_errors=True)
+                    if wt_admin.is_dir():
+                        tree_real = os.path.realpath(tree)
+                        for entry in wt_admin.iterdir():
+                            try: target = os.path.realpath((entry / 'gitdir').read_text().strip())
+                            except OSError: continue
+                            if target == tree_real or target.startswith(tree_real + os.sep):
+                                shutil.rmtree(entry, ignore_errors=True)

@@ -303,13 +303,19 @@ def main():
                 signal_group(pid, send)
             interrupted.append(sig)
         old = {s: signal.signal(s, stop) for s in (signal.SIGINT, signal.SIGTERM)}
+        def group_alive(pid):
+            try: os.killpg(pid, 0); return True
+            except (ProcessLookupError, PermissionError): return False
         def terminate(p, grace=2):
             if p.pid not in signalled_pids:
                 signalled_pids.add(p.pid)
                 signal_group(p.pid, signal.SIGTERM)
-            # Kill descendants too, even when the group leader exits before its child.
+            deadline = time.monotonic() + grace
+            # Kill descendants too, even when the group leader (e.g. bash) exits before its child finishes cleanup.
             try: p.wait(timeout=grace)
             except subprocess.TimeoutExpired: pass
+            while p.poll() is not None and group_alive(p.pid) and time.monotonic() < deadline:
+                time.sleep(0.05)
             signal_group(p.pid, signal.SIGKILL)
             p.wait()
         def skip_reason(name, needs):
