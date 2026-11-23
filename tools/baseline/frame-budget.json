@@ -45,11 +45,11 @@
 
   "quarry-air/desktop-explore-truck":{"calls":845,"triangles":4157223,"geometries":169,"textures":169,"programs":32,"readyTiles":344,"requests":603},
 
-  "quarry-air/phone-explore-truck":{"calls":94,"triangles":805551,"geometries":51,"textures":52,"programs":11,"readyTiles":72,"requests":148},
+  "quarry-air/phone-explore-truck":{"calls":94,"triangles":805971,"geometries":51,"textures":52,"programs":11,"readyTiles":72,"requests":148},
 
   "quarry-gate/desktop-explore-truck":{"calls":647,"triangles":4501380,"geometries":198,"textures":177,"programs":37,"readyTiles":342,"requests":616},
 
-  "quarry-gate/phone-explore-truck":{"calls":131,"triangles":1209917,"geometries":96,"textures":57,"programs":19,"readyTiles":194,"requests":337},
+  "quarry-gate/phone-explore-truck":{"calls":131,"triangles":1210337,"geometries":96,"textures":57,"programs":19,"readyTiles":194,"requests":337},
 
   "village-start/desktop-explore-truck":{"calls":901,"triangles":4094903,"geometries":235,"textures":166,"programs":43,"readyTiles":366,"requests":696},
 
