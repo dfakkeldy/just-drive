@@ -39,9 +39,9 @@ export function vehicleButtons(choice: VehicleChoice, id = 'vehicleChoice'): HTM
   // Selecting Side by side reveals the four generic side-by-side models directly beneath.
   const period = periodRides(new URLSearchParams(location.search));
   const sxsActive = isSxsKind(choice.kind);
-  group.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin:0 0 16px';
-  const row = document.createElement('div');
-  row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+  group.style.cssText = sxsActive ? 'display:flex;flex-direction:column;gap:6px;margin:0 0 16px' : 'display:flex;gap:6px;margin:0 0 16px';
+  const row = sxsActive ? document.createElement('div') : group;
+  if (sxsActive) row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
   const makeBtn = (label: string, pressed: boolean, onClick: () => void) => {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-pressed', String(pressed));
     b.style.cssText = `flex:1;min-width:72px;min-height:44px;border:1px solid ${pressed ? '#a7d9bc' : '#6b7780'};border-radius:6px;background:${pressed ? '#31463a' : 'transparent'};color:inherit;font:700 13px system-ui;cursor:pointer;padding:8px 6px`;
@@ -56,8 +56,8 @@ export function vehicleButtons(choice: VehicleChoice, id = 'vehicleChoice'): HTM
     else b.dataset.vehicle = kind;
     row.appendChild(b);
   }
-  group.appendChild(row);
   if (sxsActive) {
+    group.appendChild(row);
     const sub = document.createElement('div');
     sub.setAttribute('role', 'group'); sub.setAttribute('aria-label', 'Side by side model');
     sub.dataset.sxsModels = '1';

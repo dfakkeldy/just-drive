@@ -164,9 +164,9 @@ test('12-today-picker',()=>{
   try{const g=vehicleButtons({kind:'car',choose(){}});return {kinds:g.children.map(b=>b.dataset.vehicle),labels:g.children.map(b=>b.textContent),css:g.style.cssText};}
   finally{globalThis.document=saved.document;globalThis.location=saved.location;}};
  for(const q of ['?mode=explore&vehicle=car','?mode=explore&vehicle=truck','?mode=explore']){
-  const p=picker(q);assert.deepEqual(p.kinds,['car','bike','drone'],'today keeps the three-button picker: '+q);
-  assert.deepEqual(p.labels,['Car','Dirt bike','Drone']);assert.equal(p.css,'display:flex;gap:6px;margin:0 0 16px','today picker style unchanged');}
- assert.deepEqual(picker('?mode=explore&era=1884').kinds,['horse','car','bike','drone'],'1884 adds the horse in front');
+  const p=picker(q);assert.deepEqual(p.kinds,['car','sxs','bike','drone'],'today keeps the four-button picker: '+q);
+  assert.deepEqual(p.labels,['Car','Side by side','Dirt bike','Drone']);assert.equal(p.css,'display:flex;gap:6px;margin:0 0 16px','today picker style unchanged');}
+ assert.deepEqual(picker('?mode=explore&era=1884').kinds,['horse','car','sxs','bike','drone'],'1884 adds the horse in front');
 });
 const only=process.env.HORSE_PASS2_CASE;
 for(const c of cases)if(!only||only===c.name){await c.run();console.log('PASS PASS2',c.name);}

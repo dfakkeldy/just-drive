@@ -46,7 +46,7 @@ const car = modelParam === 'sxs-utility' ? createSxsUtility()
   : createSxs();
 scene.add(car.root);
 if (params.get('pair') === '1') { const other = createCar(), truck = createTruck(); other.root.position.x = -2.8; truck.root.position.x = 3.4; scene.add(other.root, truck.root); }
-if (params.get('lineup') === '1') {
+if (modelParam === 'all') {
   const u = createSxsUtility(), cr = createSxsCrew(), ca = createSxsCabin();
   car.root.position.x = -3.9; u.root.position.x = -1.3; cr.root.position.x = 1.3; ca.root.position.x = 3.9;
   scene.add(u.root, cr.root, ca.root);

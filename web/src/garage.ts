@@ -42,12 +42,11 @@ type NoneMissing<Missing extends never> = Missing;
 export type GarageHasEveryRideKind = NoneMissing<Exclude<RideId, typeof ENTRIES[number]['id']>>;
 export const GARAGE: readonly GarageEntry[] = ENTRIES;
 export const VEHICLE_KEY = 'mmm.vehicle';
-const isVehicleParam = (v: string | null): boolean => v === 'drone' || GARAGE.some(entry => entry.id === v);
-const queryVehicle = (params: URLSearchParams): string | null => params.get('vehicle') ?? (isVehicleParam(params.get('car')) ? params.get('car') : null);
 /** True when Just Drive (explore mode) chose the standalone camera drone. Never active in mail play. */
 export function isDroneVehicle(params: URLSearchParams, explore = false, storage: () => Pick<Storage, 'getItem'> = () => localStorage): boolean {
   if (!explore) return false;
-  const param = queryVehicle(params);
+  const rawCar = params.get('car');
+  const param = params.get('vehicle') ?? (rawCar === 'drone' || GARAGE.some(entry => entry.id === rawCar) ? rawCar : null);
   if (param === 'drone') return true;
   const period = periodRides(params);
   if (GARAGE.some(entry => entry.id === param && (entry.id !== 'horse' || period))) return false;
@@ -58,7 +57,8 @@ export function readVehicle(params: URLSearchParams, explore = false, storage: (
   // The horse is the 1884 ride only: its hoof contact needs the era's camera-free tile selection (terrain.ts),
   // so an address or saved choice of 'horse' outside 1884 gives the car, as it did before the horse existed.
   const period = periodRides(params), allowed = (entry?: GarageEntry) => entry && (entry.id !== 'horse' || period) ? entry : undefined;
-  const param = queryVehicle(params);
+  const rawCar = params.get('car');
+  const param = params.get('vehicle') ?? (GARAGE.some(entry => entry.id === rawCar) ? rawCar : null);
   const query = allowed(GARAGE.find(entry => entry.id === param)); if (query) return query;
   if (explore) { try { const saved = storage().getItem(VEHICLE_KEY), entry = allowed(GARAGE.find(e => e.id === saved)); if (entry) return entry; } catch { /* private window */ } }
   return period ? GARAGE.find(e => e.id === 'horse')! : GARAGE[0];
