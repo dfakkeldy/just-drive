@@ -478,15 +478,18 @@ export class Vehicle {
 
   private readonly savedContacts = this.groundContacts.map(p => ({ ...p }));
   private savedReady = false; private savedY = 0; private savedPrevious = 0;
+  private savedFlightPeak: number | null = null;
   private readonly restoreContacts = () => {
     for (let i = 0; i < 4; i++) Object.assign(this.groundContacts[i], this.savedContacts[i]);
     this.contactsReady = this.savedReady; this.contactBody.y = this.savedY; this.prevGround = this.savedPrevious;
+    this.flightPeak = this.savedFlightPeak;
     this.correctGround();
   };
   /** Reusable contact checkpoint, requested only by an attached towing body. */
   checkpointGround(): () => void {
     for (let i = 0; i < 4; i++) Object.assign(this.savedContacts[i], this.groundContacts[i]);
     this.savedReady = this.contactsReady; this.savedY = this.contactBody.y; this.savedPrevious = this.prevGround;
+    this.savedFlightPeak = this.flightPeak;
     return this.restoreContacts;
   }
 
@@ -643,13 +646,13 @@ export class Vehicle {
       if (!helpOff) launch ??= crestVelocity(this.launchGround, this.x, this.z, this.vx, this.vz, dt, centre, this.y);
     }
     if (launch !== null) {
-      if (ramp && centre !== null) this.y = Math.max(this.y, ground, centre);
+      this.y = Math.max(this.y, ground, centre ?? ground);
       this.vy = launch;
       this.flightPeak = this.y;
     }
     const free = this.y + this.vy * dt - 0.5 * G * dt * dt;
     if (this.car.setTravel) this.landingCompression *= Math.exp(-12 * dt);
-    if (launch !== null || this.airborne && this.spec.locomotion !== 'horse' && free > ground + 0.05) {
+    if (launch !== null || this.airborne && this.spec.locomotion !== 'horse' && free > ground + (this.vy > 0 ? 0 : .05)) {
       this.airborne = true;
       this.flightPeak = Math.max(this.flightPeak ?? this.y, this.y, free);
       this.y = free;

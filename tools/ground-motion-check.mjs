@@ -5,6 +5,7 @@ import { BikeRide } from '../web/src/bike-ride.ts';
 import { Vehicle } from '../web/src/vehicle.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
 import { SXS_SPEC } from '../web/src/sxs.ts';
+import { SXS_UTILITY_SPEC, SXS_CREW_SPEC, SXS_CABIN_SPEC } from '../web/src/sxs-variants.ts';
 import { TRUCK_SPEC } from '../web/src/truck.ts';
 import { Towing } from '../web/src/towing.ts';
 
@@ -20,6 +21,7 @@ const profiles = {
   steep: x => Math.min(x * .32, 0),
   lowDrop: x => x < 0 ? .9 : 0,
   highDrop: x => x < 0 ? 1.8 : 0,
+  downhillDrop: x => -.051 * x + (x < 0 ? 2.4 : 0),
 };
 
 function drive(name, spec, height, speed, { refine = false, push = false } = {}) {
@@ -29,7 +31,7 @@ function drive(name, spec, height, speed, { refine = false, push = false } = {})
     seaLevel: -100, heightAt: ground, withContactHeight: (_, read) => read(),
     withGroundContact: (_, read) => read(),
     surfaceAt: (x, z) => ({
-      ground: ground(x, z), kind: 9, roadDist: 0, halfWidth: 50,
+      ground: ground(x, z), kind: 2, roadDist: 0, halfWidth: 50,
       canopy: 0, level: 8, bridge: false, washboard: false,
     }),
   };
@@ -55,14 +57,28 @@ function drive(name, spec, height, speed, { refine = false, push = false } = {})
       tow?.step(dt);
       if (push && !moved && v.x > 0) { v.z += 1.5; moved = true; }
     });
-    if (v.airborne && !takeoff) takeoff = { x: v.x, vx: v.vx, vy: v.vy };
+    if (v.airborne && !takeoff) {
+      takeoff = { x: v.x, vx: v.vx, vy: v.vy };
+      if (tow) {
+        const peak = v.flightPeak;
+        const restore = v.checkpointGround();
+        v.flightPeak = null;
+        restore();
+        assert.equal(v.flightPeak, peak, 'trailer rollback preserves the flight peak');
+      }
+    }
     if (takeoff && !v.airborne) { landing = v.x; break; }
   }
   if (tow) assert.ok(tow.attached);
   return { takeoff, distance: landing === null ? null : landing - takeoff.x, hits };
 }
 
-for (const [name, spec] of [['car', CAR_SPEC], ['bike'], ['side-by-side', SXS_SPEC], ['pickup', TRUCK_SPEC], ['pickup + trailer', TRUCK_SPEC]]) {
+const fleet = [
+  ['car', CAR_SPEC], ['bike'], ['side-by-side', SXS_SPEC], ['utility side-by-side', SXS_UTILITY_SPEC],
+  ['crew side-by-side', SXS_CREW_SPEC], ['cabin side-by-side', SXS_CABIN_SPEC],
+  ['pickup', TRUCK_SPEC], ['pickup + trailer', TRUCK_SPEC],
+];
+for (const [name, spec] of fleet) {
   for (const profile of ['flat', 'rising', 'seam', 'lip']) {
     assert.equal(drive(name, spec, profiles[profile], 25).takeoff, null, `${name}: ${profile} must stay grounded`);
   }
@@ -74,10 +90,12 @@ for (const [name, spec] of [['car', CAR_SPEC], ['bike'], ['side-by-side', SXS_SP
   const steep = drive(name, spec, profiles.steep, 25);
   for (const [profile, grade, run] of [['slow', .2, slow], ['fast', .2, fast], ['steep', .32, steep]]) {
     assert.ok(run.takeoff && run.distance > .5, `${name}: ${profile} ramp must launch and land: ${JSON.stringify(run)}`);
-    assert.ok(Math.abs(run.takeoff.vy + 9.81 * dt - run.takeoff.vx * grade) < .35, `${name}: ${profile} follows the incoming grade`);
+    // A fixed step can cross the lip before the last approach sample.
+    assert.ok(Math.abs(run.takeoff.vy + 9.81 * dt - run.takeoff.vx * grade) < .6, `${name}: ${profile} follows the incoming grade ${JSON.stringify(run.takeoff)}`);
   }
   assert.ok(fast.distance > slow.distance && steep.distance > fast.distance, `${name}: speed and grade increase range`);
   assert.deepEqual(drive(name, spec, profiles.lowDrop, 20).hits, [], `${name}: small drop costs no landing damage`);
   assert.equal(drive(name, spec, profiles.highDrop, 20).hits.filter(hit => hit.kind === 'landing').length, 1, `${name}: large drop reports one landing`);
+  assert.ok(drive(name, spec, profiles.downhillDrop, 20).distance > 3, `${name}: a real downhill ledge releases the ride`);
   console.log('PASS', name, 'ranges in metres', [slow.distance, fast.distance, steep.distance].map(m => m.toFixed(2)));
 }

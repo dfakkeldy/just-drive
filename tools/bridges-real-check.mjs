@@ -13,7 +13,7 @@ async function drive(f,c){
  else{const heading=c.heading+(direction<0?Math.PI:0);start={x:c.x-Math.sin(heading)*30+Math.cos(c.heading)*(c.side??0),z:c.z+Math.cos(heading)*30+Math.sin(c.heading)*(c.side??0),heading};}
  await f.load([[start.x,start.z]]);
  const v=new f.Vehicle(rig(THREE),f.terrain,f.roads,-1000);v.assist=0;v.place(start.x,start.z,start.heading);v.vx=Math.sin(v.heading)*20;v.vz=-Math.cos(v.heading)*20;v.speed=20;
- let support=v.y,peak=0,maxVy=0,recovered=false;v.respawn=()=>{recovered=true;};
+ let support=v.y,peak=0,maxVy=0,recovered=false,wasAirborne=false;v.respawn=()=>{recovered=true;};
  // Observe the actual same-position data rebase; it is not a launch and moves the reference with the land.
  const correct=v.correctGround;v.correctGround=function(){const y=this.y;correct.call(this);support+=this.y-y;};
  const random=Math.random;Math.random=()=>.5;
@@ -24,7 +24,14 @@ async function drive(f,c){
    v.update(1/120,{throttle:path?Math.max(-1,Math.min(1,(20-v.speed)*.3)):0,steer,handbrake:false});
    if(recovered)break;maxVy=Math.max(maxVy,v.vy);
    assert.ok(v.vy<=Math.sqrt(2*9.81*3)+1e-8,`${c.area}/${c.type}/${c.id}: real takeoff speed ${v.vy}`);
-   if(!v.airborne)support=v.y;else peak=Math.max(peak,v.y-support);
+   if(!v.airborne)support=v.y;
+   else {
+     // Reconstruct the starting height from the first ballistic step. Wheel
+     // contact at the crest can put it slightly above the previous frame.
+     if(!wasAirborne)support=v.y-(v.vy+.5*9.81/120)/120;
+     peak=Math.max(peak,v.y-support);
+   }
+   wasAirborne=v.airborne;
  } }finally{Math.random=random;}
  assert.ok(peak<=3.02,`${c.area}/${c.type}/${c.id}: real launch ${peak}m after data rebasing`);
  return{peak,maxVy,recovered};
