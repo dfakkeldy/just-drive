@@ -31,10 +31,28 @@ BASE={k:v for k,v in os.environ.items() if k not in ['WEB_PORT','CDP_PORT','SOFT
 parser=argparse.ArgumentParser(); parser.add_argument('--ownership',action='store_true'); parser.add_argument('--slots',action='store_true'); parser.add_argument('--minute',action='store_true'); parser.add_argument('--listeners',action='store_true'); parser.add_argument('--kill-everything',action='store_true')
 args=parser.parse_args(); trees=[]; jobs=[]
 # Run finally cleanup on SIGTERM/SIGINT (stopping detached stand-in jobs and removing temp worktrees).
+_defer = 0
+_pending_sig = None
 def _on_stop(sig, _frame):
+    global _pending_sig
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    if _defer:
+        _pending_sig = sig
+        return
     raise SystemExit(128 + sig)
+class _defer_stop:
+    def __enter__(self):
+        global _defer
+        self.main = threading.current_thread() is threading.main_thread()
+        if self.main: _defer += 1
+    def __exit__(self, *exc):
+        global _defer, _pending_sig
+        if not self.main: return
+        _defer -= 1
+        if _defer == 0 and _pending_sig is not None and exc[0] is None:
+            sig, _pending_sig = _pending_sig, None
+            raise SystemExit(128 + sig)
 signal.signal(signal.SIGTERM, _on_stop)
 signal.signal(signal.SIGINT, _on_stop)
 
@@ -80,9 +98,11 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
         if barrier:barrier.wait()
         command=['/bin/bash',str(root/'tools'/script),*(['--phone'] if script=='check-budget.sh' else ['600','400'])]
         if ignore_signal:command=['/bin/bash','-c',f'trap "" {ignore_signal}; exec "$@"','ignored-entry',*command]
-        with log.open('w') as stream:
-            process=subprocess.Popen(command,cwd=root,env=environment,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
-        job={'process':process,'state':state,'log':log,'name':name};jobs.append(job);return job
+        with _defer_stop():
+            with log.open('w') as stream:
+                process=subprocess.Popen(command,cwd=root,env=environment,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
+            job={'process':process,'state':state,'log':log,'name':name};jobs.append(job)
+        return job
     def ready(job):return load(job['state'])
     def finish(job, code=0):
         result=job['process'].wait(timeout=15)
@@ -142,8 +162,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
         until(lambda:marker.exists())
         foreign=saved=None
         try:
-            foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'server',str(pair[0]),str(ROOT)],env=BASE,stdout=subprocess.DEVNULL,start_new_session=True)
-            saved=bp.identity(foreign.pid)
+            with _defer_stop():
+                foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'server',str(pair[0]),str(ROOT)],env=BASE,stdout=subprocess.DEVNULL,start_new_session=True)
+                saved=bp.identity(foreign.pid)
             def browser_up():
                 try:
                     with urllib.request.urlopen(f'http://127.0.0.1:{pair[1]}/json/version',timeout=.5):return True
@@ -232,8 +253,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             foreign_port=free_port()
             foreign=saved=None
             try:
-                foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'--remote-debugging-port='+str(foreign_port),'--user-data-dir='+str(profile)],stdout=subprocess.DEVNULL,start_new_session=True)
-                saved=bp.identity(foreign.pid)
+                with _defer_stop():
+                    foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'--remote-debugging-port='+str(foreign_port),'--user-data-dir='+str(profile)],stdout=subprocess.DEVNULL,start_new_session=True)
+                    saved=bp.identity(foreign.pid)
                 def version():
                     try:
                         with urllib.request.urlopen(f'http://127.0.0.1:{foreign_port}/json/version',timeout=.5) as reply:return reply.read()
@@ -282,8 +304,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             stream_script.write_text('set -euo pipefail\nROOT='+shlex.quote(str(ROOT))+'\nsource "$ROOT/tools/browser.sh"\nbrowser_ports "$@"\nstart_check 600 400\npython3 - "$BROWSER_SLOT_LEASE" "$MMM_PROOF_STATE" <<\'PY_STATE\'\nimport json,pathlib,sys\np=pathlib.Path(sys.argv[2]);v=json.loads((pathlib.Path(sys.argv[1])/"ready.json").read_text());p.write_text(json.dumps(v))\nPY_STATE\nrun_check python3 '+shlex.quote(str(worker))+'\n')
             pair=free_pair();state=tmp/'stream-state.json'
             env={**BASE,'WEB_PORT':str(pair[0]),'CDP_PORT':str(pair[1]),'MMM_CHECK_STANDIN':'1','CHROMIUM_BIN':str(ROOT/'tools/check-browser-standin.py'),'MMM_BROWSER_SLOTS':'0','MMM_PROOF_STATE':str(state),'OUT':str(tmp)}
-            stream=subprocess.Popen(['/bin/bash',str(stream_script)],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
-            jobs.append({'process':stream,'state':state,'log':tmp/'stream.log','name':'stream'})
+            with _defer_stop():
+                stream=subprocess.Popen(['/bin/bash',str(stream_script)],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+                jobs.append({'process':stream,'state':state,'log':tmp/'stream.log','name':'stream'})
             captured=[];errors=[]
             def collect(pipe,dest):
                 for line in pipe:dest.append((time.monotonic(),line))
@@ -302,8 +325,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
 
             child=saved=None
             try:
-                child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True)
-                saved=bp.identity(child.pid)
+                with _defer_stop():
+                    child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True)
+                    saved=bp.identity(child.pid)
                 reused={**saved,'start':[0,0] if isinstance(saved['start'],list) else '-1'}
                 assert bp.alive(reused) is False and not bp.signal_pid(reused,signal.SIGKILL) and bp.alive(saved) is True
                 spec=importlib.util.spec_from_file_location('slot_test',ROOT/'tools/browser-slots.py');slots=importlib.util.module_from_spec(spec);spec.loader.exec_module(slots)
@@ -388,7 +412,8 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
                     if wt_admin.is_dir():
                         tree_real = os.path.realpath(tree)
                         for entry in wt_admin.iterdir():
-                            try: target = os.path.realpath((entry / 'gitdir').read_text().strip())
+                            try: raw_target = (entry / 'gitdir').read_text().strip()
                             except OSError: continue
+                            target = os.path.realpath(entry / raw_target)
                             if target == tree_real or target.startswith(tree_real + os.sep):
                                 shutil.rmtree(entry, ignore_errors=True)
