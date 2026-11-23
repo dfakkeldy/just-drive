@@ -100,7 +100,7 @@ import { propertyLines } from './property-lines';
 import { PropertyGround } from './property-lines-ground';
 import { Relief } from './relief';
 import { CLOCK_FACTOR, END_TIME, START_TIME, clock } from './shift-rules';
-import { Interiors } from './interiors';
+import { Interiors, renderInteriorLink } from './interiors';
 import { MineSite } from './mine-site';
 import { MineInterior } from './interior-mine';
 import { plantDoor } from './interior-plant';
@@ -1521,7 +1521,11 @@ let pictureStatusTimer = 0;
 const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
 const gamepad = createGamepad({
   horn: honk,
-  mail: padAct(() => { if (mailMode) mailRequested = true; else airportDrag?.begin(); }),
+  mail: padAct(() => {
+    if (interiors.canEnter && interiors.nearbyId === 'church') { interiors.enter(); if (interiors.busy) { keys.clear(); touch.steer = touch.throttle = 0; } }
+    else if (mailMode) mailRequested = true;
+    else airportDrag?.begin();
+  }),
   // B changes the view; inside a building (where every other driving button rests) it climbs out, as Esc does.
   view: () => { if (interiors.busy) interiors.leave(); else if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
   pause: () => { if (sunSeeker) closeSunSeeker(); else if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
@@ -1876,7 +1880,7 @@ const pauseButton = Object.assign(document.createElement('button'), { id: 'pause
 const pauseScreen = document.createElement('div');
 pauseScreen.id = 'pauseScreen';
 pauseScreen.hidden = true;
-pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>A room keeps going when you pause.</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button><button id="pauseEndShift" hidden>End shift</button></section>';
+pauseScreen.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="pauseTitle"><h2 id="pauseTitle">Paused</h2><p class="roomPauseNote" hidden>A room keeps going when you pause.</p><p id="pauseState"></p><p id="pauseRadio"></p><p id="pauseRace" hidden></p><details id="pauseKeys"><summary>Keys</summary><dl></dl></details><button id="resumeGame">Resume · Esc</button><button id="pauseReplay" aria-label="Watch replay. I">Watch replay</button><button id="pauseSettings">Settings</button><button id="pauseEndShift" hidden>End shift</button><div id="pauseSupport" class="interiorLink" hidden></div></section>';
 if (SITE.brand === 'just') pauseScreen.querySelector('section')!.insertAdjacentHTML('beforeend', `<a id="pauseHome" href="${new URL(ABOUT_URL.just).origin}/">All places (front page)</a>`);
 const sunButton = Object.assign(document.createElement('button'), { id: 'pauseSun', type: 'button', textContent: 'Sun Seeker' });
 if (!mailMode) pauseScreen.querySelector('#pauseSettings')!.after(sunButton);
@@ -1896,6 +1900,8 @@ function syncPauseUI(): void {
   settingsPanel.classList.toggle('open', pause.blocked && !pause.screen && !document.hidden);
   pauseScreen.hidden = !pause.screen || document.hidden || replay.active || !!sunSeeker;
   document.getElementById('pauseEndShift')!.hidden = !mailMode || document.getElementById('endShift')!.hidden || interiors.busy || bare;
+  interiors.syncSpeed?.(vehicle.speed);
+  renderInteriorLink(document.getElementById('pauseSupport'), pauseScreen.hidden || bare ? null : interiors.activeLink, 'pauseSupportLink');
   if (!pauseScreen.hidden) {
     // Rooms do not pause, so they have no replay; a fresh start has nothing to show yet.
     const watch = document.getElementById('pauseReplay') as HTMLButtonElement;
@@ -2757,6 +2763,7 @@ function frame(now: number) {
   if (impact < 1 && vehicle.damageActive) shift.damage.hit('impact', impactSpeed);
   if (impact < 1) vehicle.drift.hit(vehicle.x, vehicle.z);   // a mailbox knock ends a drift, not clean
   vehicle.vx *= impact; vehicle.vz *= impact; vehicle.speed *= impact;
+  interiors.syncSpeed?.(vehicle.speed);
   // The replay recorder reads the ride and its drawn rig once the frame's motion (and any mailbox knock) is final.
   // The clock's own step (not the 0.1 s physics cap): a long frame on a busy phone still follows the one before it.
   if (dt > 0 && driving) replay.record(vehicle, car, horse ? 'horse' : ride.kind, now / 1000, clockDt, quietGround);

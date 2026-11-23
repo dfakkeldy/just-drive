@@ -72,8 +72,8 @@ export class SceneryContact {
   reset(): void { this.oldX = this.oldZ = NaN; }
 }
 
-export type DriveInteriors = Pick<Interiors, 'busy' | 'doors' | 'reset' | 'register' | 'enter' | 'leave' | 'closeForDay' | 'update' | 'render'>;
-export const quietInteriors = (): DriveInteriors => ({ busy: false, doors: new Map(), reset: noop, register: noop, enter: noop, leave: noop, closeForDay: noop, update: noop, render: noop });
+export type DriveInteriors = Pick<Interiors, 'busy' | 'canEnter' | 'nearbyId' | 'activeLink' | 'syncSpeed' | 'doors' | 'reset' | 'register' | 'enter' | 'leave' | 'closeForDay' | 'update' | 'render'>;
+export const quietInteriors = (): DriveInteriors => ({ busy: false, canEnter: false, nearbyId: null, activeLink: null, syncSpeed: noop, doors: new Map(), reset: noop, register: noop, enter: noop, leave: noop, closeForDay: noop, update: noop, render: noop });
 export const quietRelief = (): Pick<Relief, 'busy' | 'level' | 'breaks' | 'reset' | 'request' | 'update'> => ({ busy: false, level: 0, breaks: 0, reset: noop, request: noop, update: noop });
 export const quietEndings = (): Pick<Endings, 'busy' | 'update'> => ({ busy: false, update: noop });
 export const quietYardJob = (): { step: YardJob['step']; reset: YardJob['reset']; judge: Pick<YardJob['judge'], 'cancel'> } => ({ step: noop, reset: noop, judge: { cancel: noop } });

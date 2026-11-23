@@ -123,8 +123,16 @@ export function createGamepad(actions: PadActions, touchDevice: boolean, driving
         }
       } else {
         held.clear();
-        if (menuWasOpen) mark(null);
+        const hud = document.querySelector<HTMLElement>('#interiorHud');
+        const hudHasLink = !!hud && shown(hud) && !!hud.querySelector('a[href]');
+        if (menuWasOpen || (!hudHasLink && marked)) mark(null);
+        else if (marked && (!hud?.contains(marked) || !shown(marked))) mark(null);
         for (const button of pressedEdges(before, down)) {
+          if (drive && hud && hudHasLink && !latched.has(button)) {
+            const what = MENU_MOVES.get(button);
+            if (what === 'previous' || what === 'next') { move(hud, what); continue; }
+            if (what === 'choose' && marked && hud.contains(marked)) { marked.click(); continue; }
+          }
           const action = DRIVE_ACTIONS.get(button);
           if (action && !latched.has(button) && (drive || action === 'pause')) actions[action]();
         }

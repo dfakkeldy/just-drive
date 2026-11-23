@@ -1,5 +1,16 @@
-import type { InteriorResult } from './interiors';
+import type { InteriorLink, InteriorResult } from './interiors';
 import { railPoint, type Rail, type RailPoint, type RailStop } from './church-room';
+
+/** Official Diocese of Antigonish online donation form for parish gifts (no tracking, no third-party scripts). */
+export const CHURCH_DONATE_URL = 'https://fs26.formsite.com/DioceseofAntigonish/jdqh7w8ymr/index.html';
+export const CHURCH_DONATE_LABEL = 'Support this church';
+export const CHURCH_DONATE_NOTE = ": donate through the Diocese of Antigonish. Choose parish St. Mary of the Angels, Glendale, and write 'St. Margaret of Scotland, River Denys Mountain' in the comments.";
+export const CHURCH_DONATE_TEXT = `${CHURCH_DONATE_LABEL}${CHURCH_DONATE_NOTE}`;
+export const CHURCH_DONATE_LINK: InteriorLink = {
+  url: CHURCH_DONATE_URL,
+  label: CHURCH_DONATE_LABEL,
+  note: CHURCH_DONATE_NOTE,
+};
 
 export interface VisitInput { walk: number; look: number }
 /** Metres per second: an unhurried walk. Stepping back is slower. */

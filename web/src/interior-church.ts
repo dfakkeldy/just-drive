@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import type { Door, InteriorGame, InteriorResult } from './interiors';
+import type { Door, InteriorGame, InteriorLink, InteriorResult } from './interiors';
 import { CHURCH_DOOR_RADIUS, CHURCH_ROOM, churchDoorPosition, churchRail, eyeAt, railPoint, type ChurchRoom } from './church-room';
 import { ChurchRoomArt, type ChurchRoomParts } from './church-room-art';
-import { ChurchVisit } from './church-room-rules';
+import { CHURCH_DONATE_LINK, ChurchVisit } from './church-room-rules';
 import type { ChurchSite } from './church-site';
 import type { Input } from './vehicle';
 
@@ -33,6 +33,7 @@ export class ChurchInterior implements InteriorGame {
     this.view(0);
   }
   get result(): InteriorResult | null { return this.visit.result; }
+  get link(): InteriorLink | null { return this.visit.reading?.id === 'gallery' ? CHURCH_DONATE_LINK : null; }
   get readout(): string {
     const keys = this.touch ? 'WALK: go on · BACK: step back · pad: look' : 'W/↑: walk · S/↓: step back · A/D or ←/→: look';
     const words = this.visit.message;
@@ -79,6 +80,7 @@ export function churchDoor(site: Pick<ChurchSite, 'world'>, mail: boolean): Door
     id: 'church', name: 'River Denys Mountain church', position: churchDoorPosition(site), radius: CHURCH_DOOR_RADIUS,
     prompt: mail ? 'One letter for the vestry. Go in quietly.' : 'Step inside for a quiet look.',
     leave: 'STEP OUT · Esc', controls: { go: 'WALK', brake: 'BACK', steer: 'LOOK' }, repeat: !mail,
+    link: CHURCH_DONATE_LINK,
     create: () => new ChurchInterior(mail),
   };
 }
