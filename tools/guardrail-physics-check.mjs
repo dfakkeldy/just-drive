@@ -68,13 +68,15 @@ export function measure(assertions=true){
   for(let i=0;i<120;i++){rough.update(1/120,input);shaking=Math.max(shaking,rough.shake);}
   assert.ok(shaking>.2&&contacts===120,'rail contact cannot suppress real washboard shake or suspension');
   console.error('PASS real washboard retained',JSON.stringify({maxShake:shaking,railCalls:contacts}));
-  // Presence alone must never change road roughness. Use identical private
-  // random streams and a path that makes no physical rail contact for720steps.
+  // Presence alone must never change road roughness. Use identical random
+  // streams and shared steering to keep both cars clear of the rail.
   const rng=()=>{let s=0x6e697473;return()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return s/2**32;};};
   const pair=[roads,{...roads,guardrails:null}].map(r=>{const v=new Vehicle(rig(),terrain,r,0,CAR_SPEC);v.assist=0;v.random=rng();v.place(100,0,Math.PI/2);v.speed=25;v.vx=25;v.vz=0;return v;});
   let washYaw=0,washShake=0;
   for(let i=0;i<720;i++){
-   for(const v of pair)v.update(1/120,input);
+   const {heading,z,vz}=pair[0];
+   const steer=Math.max(-1,Math.min(1,4*(Math.PI/2-heading)-.6*z-.4*vz));
+   for(const v of pair)v.update(1/120,{...input,steer});
    const sample=v=>[v.x,v.z,v.vx,v.vz,v.heading,v.shake,v.car.body.rotation.x,v.car.body.rotation.z,v.car.body.position.y];
    assert.deepEqual(sample(pair[0]),sample(pair[1]),`railed/unrailed washboard yaw, sideways force and shake equal at step${i}`);
    washYaw=Math.max(washYaw,Math.abs(pair[0].heading-Math.PI/2));washShake=Math.max(washShake,pair[0].shake);

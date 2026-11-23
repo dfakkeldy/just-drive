@@ -1,4 +1,5 @@
 import {deckCounts} from './bridge-contact';
+import {crestVelocity, GRAVITY as G, LEDGE_DROP} from './ground-motion';
 import * as THREE from 'three';
 import { TRAILER_SPEC as S, createTrailer, type Trailer } from './trailer';
 import type { Input, Vehicle, VehiclePlacement } from './vehicle';
@@ -23,6 +24,7 @@ export interface TowWorld { contacts?: WorldContacts; yard?: Yard | null; scene?
 export class Towing {
   private safe: ReturnType<Towing['snapshot']> | null = null;
   private impactSpeed = 0;
+  private impactEvents = 0;
   private readonly bodyProvider = () => this.bodies();
   private model: Trailer | null = null;
   get trailer(): Trailer {
@@ -74,9 +76,10 @@ export class Towing {
     const deck = this.roads.deckHeight(this.groundX, this.groundZ),g = this.terrain.heightAt(this.groundX, this.groundZ,this.groundPoint.y);
     return g === null ? null : deckCounts(deck,this.groundPoint.y,this.terrain.cartRoads) ? Math.max(g,deck) : g;
   };
+  private readonly launchGround = (x: number, z: number, y: number) => this.ground(x, z, y);
   private readonly refined = new Float64Array(4);
   private readonly assistedInput: Input = { throttle: 0, steer: 0, handbrake: false };
-  private readonly collectImpact = (speed: number) => { this.impactSpeed = Math.max(this.impactSpeed, speed); };
+  private readonly collectImpact = (speed: number) => { this.impactEvents++; this.impactSpeed = Math.max(this.impactSpeed, speed); };
   private readonly liveBodies: ContactBody[] = [
     { x: 0, z: 0, y: 0, heading: 0, spec: CAR_SPEC, vx: 0, vz: 0 },
     { x: 0, z: 0, y: 0, heading: 0, spec: this.footprint, vx: 0, vz: 0 },
@@ -93,7 +96,7 @@ export class Towing {
     this.low = low;
     this.help = touch; this.liveBodies[0].spec = vehicle.spec; this.saved.bodies[0].spec = vehicle.spec;
     this.probe = { x: 0, z: 0, y: 0, heading: 0, vx: 0, vz: 0, speed: 0, spec: this.footprint,
-      car: { root: { position: { x: 0, z: 0 } } }, onSolidImpact: speed => { this.impactSpeed = Math.max(this.impactSpeed, speed); } };
+      car: { root: { position: { x: 0, z: 0 } } }, onSolidImpact: speed => { this.impactEvents++; this.impactSpeed = Math.max(this.impactSpeed, speed); } };
     for (const key of POSE_NUMBERS) this.saved.trailer[key] = this[key];
     for (const key of POSE_FLAGS) this.saved.trailer[key] = this[key];
     if (attached) this.attach();
@@ -361,13 +364,26 @@ export class Towing {
       for (let i = 0; i < 4; i++) { const p = this.groundSamples[i], contact = this.contacts[i]; p.x = contact.x; p.z = contact.z; p.plane = contact.plane; p.height = contact.height!; }
       this.samplesReady = true;
     }
-    const groundVelocity = placing || !this.grounded || this.supportMissing || Math.hypot(this.vehicle.vx, this.vehicle.vz) < .1 ? 0 : clamp((total - this.previousGround) / dt, -30, 30);
+    const { vx, vz } = this.vehicle;
+    let launch: number | null = null;
+    if (!placing && this.grounded && known && !this.supportMissing && !this.airborne
+      && vx * vx + vz * vz > .05 ** 2
+      && (Math.abs(total - this.previousGround) > .015 || this.y - total >= LEDGE_DROP / 2)) {
+      const centre = this.ground(this.x, this.z);
+      launch = crestVelocity(this.launchGround, this.x, this.z, vx, vz, dt, centre, this.y);
+      if (launch !== null) {
+        this.y = Math.max(this.y, total, centre ?? total);
+        this.vy = launch;
+      }
+    }
     this.supportMissing = false; this.previousGround = total;
-    const free = this.y + this.vy * dt - .5 * 9.81 * dt * dt;
-    if (!placing && this.grounded && free > total + .05) { this.y = free; this.vy -= 9.81 * dt; this.airborne = true; }
+    const free = this.y + this.vy * dt - .5 * G * dt * dt;
+    if (launch !== null || !placing && this.grounded && this.airborne && free > total + (this.vy > 0 ? 0 : .05)) {
+      this.y = free; this.vy -= G * dt; this.airborne = true;
+    }
     else {
       if (this.airborne && this.vy < -3) { this.vehicle.vx *= .96; this.vehicle.vz *= .96; this.vehicle.speed *= .96; }
-      this.y = total; this.vy = groundVelocity; this.airborne = false;
+      this.y = total; this.vy = 0; this.airborne = false;
     }
     this.fitPlane();
     this.grounded = true;
@@ -487,27 +503,47 @@ export class Towing {
     p.x = this.x - fx * S.bodyOffset; p.z = this.z - fz * S.bodyOffset; p.y = this.y;
     p.heading = this.heading; p.vx = v.vx; p.vz = v.vz; p.speed = v.speed;
     const oldX = p.x, oldZ = p.z, impactBefore = this.impactSpeed;
+    const rails = this.roads.guardrails;
+    rails?.clearBridgeHit();
     this.world.contacts?.resolve(p);
+    const contactEvents = this.impactEvents;
+    const activeSites = this.world.contacts && 'lastActiveSites' in this.world.contacts ? (this.world.contacts as { lastActiveSites: number }).lastActiveSites : 1;
+    const bridgeOnly = activeSites === 1 && rails?.bridgeHitMatches(p, p.x - oldX, p.z - oldZ) === true;
+    let otherHit = false, px = p.x, pz = p.z, pvx = p.vx, pvz = p.vz;
     this.world.yard?.resolveTowBody(p);
-    if (this.world.solids) pushOut(p, this.world.solids, true);
-    const scene = this.world.scene; if (scene?.rules.enabled) pushOut(p, scene.placementSolids, true);
-    if (this.world.parked) pushOutBodies(p, this.world.parked());
-    if (this.world.bus) pushOut(p, this.world.bus.placementSolids, true);
+    if (p.x !== px || p.z !== pz || p.vx !== pvx || p.vz !== pvz) { otherHit = true; px = p.x; pz = p.z; pvx = p.vx; pvz = p.vz; }
+    if (this.world.solids) { pushOut(p, this.world.solids, true); if (p.x !== px || p.z !== pz || p.vx !== pvx || p.vz !== pvz) { otherHit = true; px = p.x; pz = p.z; pvx = p.vx; pvz = p.vz; } }
+    const scene = this.world.scene;
+    if (scene?.rules.enabled) { pushOut(p, scene.placementSolids, true); if (p.x !== px || p.z !== pz || p.vx !== pvx || p.vz !== pvz) { otherHit = true; px = p.x; pz = p.z; pvx = p.vx; pvz = p.vz; } }
+    if (this.world.parked) { pushOutBodies(p, this.world.parked()); if (p.x !== px || p.z !== pz || p.vx !== pvx || p.vz !== pvz) { otherHit = true; px = p.x; pz = p.z; pvx = p.vx; pvz = p.vz; } }
+    if (this.world.bus) { pushOut(p, this.world.bus.placementSolids, true); if (p.x !== px || p.z !== pz || p.vx !== pvx || p.vz !== pvz) { otherHit = true; px = p.x; pz = p.z; pvx = p.vx; pvz = p.vz; } }
     const factor = dt > 0 ? this.world.props?.hitCar(p.x, p.z, p.heading, p.vx, p.vz, oldX - p.vx * dt, oldZ - p.vz * dt, this.footprint) ?? 1 : 1;
+    if (factor !== 1) otherHit = true;
     const b = v.bounds;
     if (b) {
       const ex = Math.abs(fx) * S.halfLength + Math.abs(Math.cos(this.heading)) * S.halfWidth;
       const ez = Math.abs(fz) * S.halfLength + Math.abs(Math.sin(this.heading)) * S.halfWidth;
       p.x = clamp(p.x, b[0] + ex, b[2] - ex); p.z = clamp(p.z, b[1] + ez, b[3] - ez);
+      if (p.x !== px || p.z !== pz) otherHit = true;
     }
     const dx = p.x - oldX, dz = p.z - oldZ;
+    const ponyGraze = bridgeOnly && !otherHit && this.impactEvents === contactEvents;
     if (Math.hypot(dx, dz) > 1e-7) {
       // Move the coupled pair out together, then kill the velocity into the contact through the hitch.
       v.x += dx; v.z += dz; this.x += dx; this.z += dz;
       const normal = Math.hypot(dx, dz), into = (v.vx * dx + v.vz * dz) / normal;
-      if (into < 0) { this.impactSpeed = Math.max(this.impactSpeed, -into); v.vx = v.vz = v.speed = 0; }
-    } else { v.vx = p.vx; v.vz = p.vz; v.speed = p.speed; }
-    if (this.impactSpeed > impactBefore) v.vx = v.vz = v.speed = 0;
+      if (into < 0) {
+        this.impactSpeed = Math.max(this.impactSpeed, -into);
+        // Preserve tangential slide only on shallow pony-truss rail grazes; ordinary contacts stop as before.
+        if (ponyGraze && -into <= Math.hypot(v.vx, v.vz) * 0.65) {
+          v.vx -= (dx / normal) * into; v.vz -= (dz / normal) * into;
+          v.speed = v.vx * Math.sin(v.heading) - v.vz * Math.cos(v.heading);
+        } else { v.vx = v.vz = v.speed = 0; }
+      } else if (this.impactSpeed > impactBefore && !ponyGraze) { v.vx = v.vz = v.speed = 0; }
+    } else {
+      v.vx = p.vx; v.vz = p.vz; v.speed = p.speed;
+      if (this.impactSpeed > impactBefore) v.vx = v.vz = v.speed = 0;
+    }
     v.vx *= factor; v.vz *= factor; v.speed *= factor;
   }
   /** Drawing uses only the four cached contact heights. Rays and tread scans belong in tests. */

@@ -1,5 +1,5 @@
 import {deckCounts} from './bridge-contact';
-import {MAX_GROUND_RISE_SPEED} from './ground-motion';
+import {crestVelocity, GRAVITY as G, hardLanding} from './ground-motion';
 import { Drift, type DriftFacts } from './drift-rules';
 import { safePlacement } from './placement-pose';
 import * as THREE from 'three';
@@ -17,7 +17,7 @@ import { PUDDLE_DRAG } from './vehicle';
 import { WATER_COVER_CLASS, WATER_SINK_SECONDS, isDryGround, isSeaHeight, isTidalCoverWater, localGroundSlope, safeClampMargin, unknownGroundHeight } from './water-bounds';
 
 export const BIKE_STEP = 1 / 120, BIKE_WHEELBASE = BIKE_SPEC.wheelbase, BIKE_RADIUS = BIKE_SPEC.wheelRadius;
-const G = 9.81, TAU = Math.PI * 2;
+const TAU = Math.PI * 2;
 const MAX_HORIZONTAL_SPEED = 44; // m/s, with headroom above the 150 km/h level-ground top
 const clamp = THREE.MathUtils.clamp;
 const angle = (v: number) => Math.atan2(Math.sin(v), Math.cos(v));
@@ -59,6 +59,7 @@ export class BikeRide implements Ride {
   lastJump: JumpRecord | null = null;
   private acc = 0; private stepping = false; private elapsed = 0; private spin = 0;
   private prevGround = 0;
+  private flightPeak: number | null = null;
   private ready = false;
   /** The reference height of the last placement or resume; a retry while land loads keeps it. */
   private placeReference: number | undefined;
@@ -83,6 +84,7 @@ export class BikeRide implements Ride {
     const g = this.terrain.heightAt(x, z,referenceY), deck = this.roads.deckHeight(x, z);
     return g === null ? null : deckCounts(deck,referenceY,this.terrain.cartRoads) ? Math.max(g,deck) : g;
   }
+  private readonly launchGround = (x: number, z: number, y: number) => this.groundAt(x, z, y);
   /** Dry ground for a pose standing at g (see Vehicle.isDryPose): a deck counts only where it is that ground. */
   private isDryPose(x: number, z: number, g: number | null): boolean {
     if (g === null) return false;
@@ -106,6 +108,7 @@ export class BikeRide implements Ride {
   /** Hold a sunk bike at rest in water until an explicit reset returns it to dry land. */
   stopInWater(): void {
     this.vx = this.vz = this.vy = this.speed = 0;
+    this.flightPeak = null;
     this.#waterStopped = true;
   }
   /** Save and restore ES private recovery state so fleet rollbacks never leak trial poses. */
@@ -147,6 +150,7 @@ export class BikeRide implements Ride {
     this.pitch = this.roll = this.steerAngle = this.compression = this.crashTime = this.sunk = 0;
     if (!this.stepping) this.acc = 0;
     this.airborne = false;
+    this.flightPeak = null;
     this.y = gAt ?? this.y;
     this.ready = this.capture();
     if (this.ready) {
@@ -165,11 +169,12 @@ export class BikeRide implements Ride {
   resumeAfterParking(travel?: readonly number[], spin?: number): boolean {
     this.placeReference = this.y; this.ready = this.capture(); if (!this.ready) return false;
     this.prevGround = (this.frontHeight + this.rearHeight) / 2; this.acc = 0; if (spin !== undefined) this.spin = spin;
+    this.flightPeak = this.airborne ? this.y : null;
     if (travel) { this.frontTravel = travel[0] ?? 0; this.rearTravel = travel[2] ?? 0; }
     return true;
   }
   resetControlHistory(): void { this.helpYaw = this.lightHelpYaw = 0; this.lastJump = null; }
-  resetVisit(): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.jump = { airTime: 0, peakHeight: 0, distance: 0, pitchRotations: 0, clean: false }; this.crashTime = this.sunk = 0; this.#waterStopped = false; this.#awaitingLoad = true; }
+  resetVisit(): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.jump = { airTime: 0, peakHeight: 0, distance: 0, pitchRotations: 0, clean: false }; this.crashTime = this.sunk = 0; this.flightPeak = null; this.#waterStopped = false; this.#awaitingLoad = true; }
   restart(x: number, z: number, heading: number): boolean { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.#waterStopped = false; this.#awaitingLoad = true; return this.placeAt(x, z, heading); }
   respawn(): void {
     let distance = 0;
@@ -217,6 +222,7 @@ export class BikeRide implements Ride {
     this.crashes++; this.crashTime = BIKE_STEP; this.crashHeading = this.heading;
     if (this.airborne) this.finishJump(false);
     this.airborne = false; this.wheelie = this.wheelieRate = this.pitchRate = 0;
+    this.flightPeak = null;
   }
   private capture(): boolean {
     const fx = Math.sin(this.heading), fz = -Math.cos(this.heading);
@@ -237,7 +243,10 @@ export class BikeRide implements Ride {
     this.terrain.withContactHeight({ y: this.sampledY }, () => {
       for (const p of this.contacts) { const now = this.terrain.withContactHeight(p, () => this.groundAt(p.x, p.z,p.y)); if (now === null || p.h === null) known = false; else correction += (now - p.h) / 2; }
     });
-    if (known && Math.abs(correction) > 1e-6) { this.y += correction; this.prevGround += correction; }
+    if (known && Math.abs(correction) > 1e-6) {
+      this.y += correction; this.prevGround += correction;
+      if (this.flightPeak !== null) this.flightPeak += correction;
+    }
   }
   /** The reference for a re-place at the current pose (see Vehicle.retryHeight). */
   get retryHeight(): number | undefined { return this.ready ? this.y : this.inferring(this.x, this.z) ? placementDeckReference(this.roads, this.x, this.z) ?? this.placeReference : this.placeReference; }
@@ -320,6 +329,7 @@ export class BikeRide implements Ride {
   }
   private beginJump(): void {
     this.airborne = true; this.launchX = this.x; this.launchZ = this.z; this.airPitch = 0;
+    this.flightPeak = this.y;
     this.pitchRate = this.wheelieRate; this.wheelie = this.wheelieRate = 0;
     this.jump = { airTime: 0, peakHeight: 0, distance: 0, pitchRotations: 0, clean: false };
   }
@@ -370,7 +380,8 @@ export class BikeRide implements Ride {
     this.elapsed += dt;
     const fx = Math.sin(this.heading), fz = -Math.cos(this.heading), rx = Math.cos(this.heading), rz = Math.sin(this.heading);
     let forward = this.vx * fx + this.vz * fz, sideways = this.vx * rx + this.vz * rz;
-    const centre = this.groundAt(this.x, this.z) ?? (this.frontHeight + this.rearHeight) / 2;
+    const centreSample = this.groundAt(this.x, this.z);
+    const centre = centreSample ?? (this.frontHeight + this.rearHeight) / 2;
     const ground = Math.max((this.frontHeight + this.rearHeight) / 2, centre);
     const slope = this.frontHeight < centre - .25 && this.rearHeight >= centre - .25
       ? Math.atan2((centre - this.rearHeight) * 2, this.spec.wheelbase)
@@ -388,7 +399,7 @@ export class BikeRide implements Ride {
       if (wetNow) { this.vx = this.vz = this.vy = this.speed = 0; this.y = ground; this.prevGround = ground; this.airborne = false; return; }
       this.#waterStopped = false;
     }
-    const gvel = clamp((ground - this.prevGround) / dt, -30, MAX_GROUND_RISE_SPEED); this.prevGround = ground;
+    this.prevGround = ground;
     if (this.crashTime > 0) {
       this.crashTime += dt; this.vx *= .97; this.vz *= .97;
       this.wheelWater.fill(0);   // a tumbling bike throws no spray and makes no splash
@@ -404,11 +415,20 @@ export class BikeRide implements Ride {
       }
       return;
     }
-    // On a convex crest the contact plane drops out from under the free ballistic path.
-    // A slow walk off an edge follows the ground; a moving bike retains its last real slope velocity.
-    if (!this.airborne && Math.abs(forward) > 3 && this.y + this.vy * dt - .5 * G * dt * dt > ground + Math.max(0, gvel) * dt + .035) this.beginJump();
+    const travelSpeed = Math.hypot(this.vx, this.vz);
+    const supportGrade = s.deck && !s.roadDeck && travelSpeed > .05 ? Math.tan(slope) * forward / travelSpeed : 0;
+    const launch = !this.airborne && travelSpeed > .05
+      ? crestVelocity(this.launchGround, this.x, this.z, this.vx, this.vz, dt, centreSample, this.y, false, supportGrade) : null;
+    if (launch !== null) {
+      this.y = ground;
+      this.vy = launch;
+      this.pitch = Math.atan2(launch, Math.hypot(this.vx, this.vz)) * Math.sign(forward) + this.wheelie;
+      this.beginJump();
+    }
     if (this.airborne) {
+      this.flightPeak = Math.max(this.flightPeak ?? this.y, this.y);
       this.y += this.vy * dt - .5 * G * dt * dt; this.vy -= G * dt;
+      this.flightPeak = Math.max(this.flightPeak, this.y);
       // GO/W noses forward; BRAKE/S pulls back. Release to retain a controlled angular speed briefly.
       this.pitchRate += (-input.throttle * 7.2 - this.pitchRate * (input.throttle ? .65 : 2.8)) * dt;
       this.pitchRate = clamp(this.pitchRate, -6, 6);
@@ -423,13 +443,14 @@ export class BikeRide implements Ride {
       const normalY = Math.sin(this.roll) * Math.cos(this.pitch);
       const tyreHeight = this.spec.wheelRadius * Math.sqrt(Math.max(0, 1 - normalY * normalY)) + .07 * Math.abs(normalY);
       const clearance = Math.abs(Math.sin(this.pitch)) * this.spec.wheelbase / 2 + tyreHeight - this.spec.wheelRadius;
-      if (this.y <= centre + Math.max(0, clearance) && this.vy < 0) {
+      if (launch === null && this.y <= centre + Math.max(0, clearance) && this.vy < 0) {
         const clean = Math.abs(angle(this.pitch - slope)) < .62 && Math.abs(this.roll) < .72 && Math.abs(this.pitchRate) < 5.8;
         this.finishJump(clean); this.airborne = false;
-        if (this.damageActive) this.damage?.hit('landing', -this.vy);   // a bad landing costs as much as a good one
+        if (this.damageActive && hardLanding(this.flightPeak, ground)) this.damage?.hit('landing', -this.vy);
+        this.flightPeak = null;
         if (!clean) { this.crash(); return; }
         this.compression = clamp(-this.vy * .024, .04, .24);
-        this.y = ground; this.vy = gvel; this.pitch = slope; this.pitchRate = 0; this.whip = 0;
+        this.y = ground; this.vy = 0; this.pitch = slope; this.pitchRate = 0; this.whip = 0;
         forward *= .96; sideways *= .6;
       }
     } else {
@@ -457,7 +478,7 @@ export class BikeRide implements Ride {
       if (this.wheelie === 0) this.wheelieRate = Math.max(0, this.wheelieRate);
       if (this.wheelie > 1.38) { this.crash(); return; }
       this.pitch = slope + this.wheelie; this.whip *= Math.max(0, 1 - dt * 8);   // a whip never outlives the flight
-      this.y = ground; this.vy = gvel;
+      this.y = ground; this.vy = 0; this.flightPeak = null;
       // Real ridges remain. Deterministic vibration and small lateral skips are less harsh than the car.
       const phase = this.x * Math.sin(this.heading) - this.z * Math.cos(this.heading);
       const ridge = s.washboard ? washboard(phase) : 0;
@@ -495,9 +516,10 @@ export class BikeRide implements Ride {
       if (this.airborne && this.vy < 0 && this.jump.airTime > .06) {
         const clean = Math.abs(angle(this.pitch - slope)) < .62 && Math.abs(this.roll) < .72 && Math.abs(this.pitchRate) < 5.8;
         this.finishJump(clean); this.airborne = false;
-        if (this.damageActive) this.damage?.hit('landing', -this.vy);
+        if (this.damageActive && hardLanding(this.flightPeak, newGround)) this.damage?.hit('landing', -this.vy);
         if (!clean) this.crash();
         this.compression = clamp(-this.vy * .024, .04, .24); this.pitchRate = 0; this.whip = 0;
+        this.vy = 0; this.flightPeak = null;
       }
       this.y = newGround;
     }

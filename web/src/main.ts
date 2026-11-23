@@ -29,7 +29,8 @@ import * as THREE from 'three';
 import { ABOUT_URL } from './credits';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { baxtersCoveBuildingArt, isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
-import { littleMabouMarshRail, NovemberRoadDetails } from './november-road-details';
+import { NovemberRoadDetails } from './november-road-details';
+import { mabouRoadOverrides, registerRailContacts } from './november-bridges';
 import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals, CatTileUnread } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
@@ -622,7 +623,7 @@ if (waterReflections) {
   Object.assign(terrain.uniforms, waterReflections.uniforms);
 }
 
-const roadLines = ERA.modern && AREA.id === 'mabou' ? roadData.roads.map(littleMabouMarshRail) : roadData.roads;
+const roadLines = mabouRoadOverrides(roadData.roads, ERA.modern, AREA.id);
 const roads = new Roads({ ...roadData, roads: novemberRoads?.added.length ? [...roadLines, ...novemberRoads.added] : roadLines }, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
   ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW,
@@ -917,13 +918,7 @@ const soloContacts = new AreaContacts();
 for (const [, row] of [...siteContacts.filter(([name]) => name !== 'tall'), ...siteContacts.filter(([name]) => name === 'tall')]) if (row) soloContacts.add(row);
 if (parkContacts) soloContacts.add(parkContacts);
 if (props) fleetContacts.add({ revision: () => props.downCount, resolve: () => {}, allows: body => props.allowsFleetBody(body) });
-if (roads.guardrails) {
-  const rails = roads.guardrails, probe = { x: 0, z: 0, y: 0, heading: 0, spec: vehicleSpec, vx: 0, vz: 0, speed: 0 };
-  fleetContacts.add({ revision: () => rails.audit.planned + rails.audit.samples,
-    resolve: body => { if (body !== vehicle) rails.block(body); },
-    allows: body => { probe.x=body.x; probe.z=body.z; probe.y=body.y; probe.heading=body.heading; probe.spec=body.spec; probe.vx=probe.vz=probe.speed=0; rails.block(probe); return Math.hypot(probe.x-body.x,probe.z-body.z)<1e-7; },
-  });
-}
+if (roads.guardrails) registerRailContacts(fleetContacts, soloContacts, roads.guardrails, body => body === vehicle, vehicleSpec);
 fleetContacts.add({ resolve: () => {}, allows: body => { const b = vehicle.bounds, r = body.spec.envelope.reach; return !b || body.x - r >= b[0] && body.z - r >= b[1] && body.x + r <= b[2] && body.z + r <= b[3]; } });
 // LOW (phones) builds the AI from the parked display models, without the car.
 const aiDriver = driverEnabled(AREA.id, ERA.modern, params, import.meta.env.DEV) ? new PointTupperDriver(roads, terrain, fleetContacts, garageEntry.id, SEA_LEVEL, Math.random, undefined, LOW) : null;
