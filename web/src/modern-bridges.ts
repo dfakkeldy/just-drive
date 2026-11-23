@@ -62,7 +62,7 @@ interface Approach {road:Road;cum:number[];distance:number;direction:number;offs
 interface Span {
   road:BridgeRoad;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
   x0:number;z0:number;x1:number;z1:number; y0:number;y1:number;outer0:number;outer1:number;level:number;revision:number;serial:number;
-  skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
+  skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;followed:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
   /** Half width of each carried road, for a sidewalk reserved on the deck (Roads.bridgeWalks). */
   halves:readonly (readonly [number,number])[];
   /** isSpan's numbers for each segment of pts: a, b-a, its squared length (or 1), its box and that box's margin. */
@@ -135,7 +135,7 @@ export class ModernBridges {
       const timber=road.kind>=4||road.name==='Railroad'||carried.some(r=>r.inferred);
       const segments=new Float64Array((pts.length-1)*10);
       for(let j=1;j<pts.length;j++){const a=pts[j-1],b=pts[j],dx=b[0]-a[0],dz=b[1]-a[1];segments.set([a[0],a[1],dx,dz,dx*dx+dz*dz||1,Math.min(a[0],b[0]),Math.max(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[1],b[1]),.01+2e-7*(Math.abs(dx)+Math.abs(dz))],(j-1)*10);}
-      const r:Span={road,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
+      const r:Span={road,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
       const probes:number[]=[];
@@ -408,15 +408,13 @@ export class ModernBridges {
    * deck (the sidewalks): Roads builds each deck within DRAW of the camera and bumps bridgeRevision, and they read it
    * again then. A query that builds would solve a deck inside their frame budget and skip the start-burst hold. */
   builtDeckHeightAt(x:number,z:number):number|null {
-    const h=this.query(x,z,false,false,undefined,false,0,false);if(h!==null||this.sampling||this.terrain.cartRoads)return h;
-    // No built deck here yet: ask update() for the unbuilt spans of this cell, at any distance (a far crossing seen
-    // through a narrow view still gets its deck and walk). The build happens there, outside the caller's frame budget.
-    const list=this.cells.get(key(x,z,CELL));if(list)for(let i=0;i<list.length;i++){const r=this.spans[list[i]];if(!r.geometry)(this.wanted??=new Set()).add(r);}
-    return null;
+    const h=this.query(x,z,false,false,undefined,false,0,false);if(this.sampling||this.terrain.cartRoads)return h;
+    // Mark the spans of this cell as followed: update() keeps them built and current at any camera distance (a far
+    // crossing seen through a narrow view still gets its deck and walk, and later finer bank land or a walk widening
+    // reaches it). The build happens there, outside the caller's frame budget.
+    const list=this.cells.get(key(x,z,CELL));if(list)for(let i=0;i<list.length;i++)this.spans[list[i]].followed=true;
+    return h;
   }
-  /** Unbuilt spans a built-deck reader asked for; update() builds them whatever the camera distance. Made on first
-   * use (a fixture may build this class without its field initialisers). */
-  private wanted?:Set<Span>;
   private contactHeightAt(x:number,z:number,referenceY?:number):number|null {return this.query(x,z,false,true,referenceY,true,0,referenceY!==undefined);}
   private query(x:number,z:number,minimum:boolean,metadata:boolean,referenceY?:number,contact=false,partFilter=0,build=true):number|null {
     if(this.sampling||this.terrain.cartRoads)return null;const list=this.cells.get(key(x,z,CELL));if(!list)return null;
@@ -475,8 +473,8 @@ export class ModernBridges {
   }
   update(cam:THREE.Vector3):void {
     if(this.walks&&this.walks.size!==this.walkCount)this.reserveWalks();
-    // The box is a cheap prefilter. Only a deck line within DRAW builds here, plus any span a built-deck reader asked
-    // for (wanted); a query (contact, deck height or placement) still builds any span on demand.
+    // The box is a cheap prefilter. Only a deck line within DRAW builds here, plus any span a built-deck reader follows
+    // (Span.followed), at any distance; a query (contact, deck height or placement) still builds any span on demand.
     // While the game waits for the driver (Terrain.holdBackground) during a land burst (Terrain.burst), a span that has
     // a deck keeps it here: each finer level under its banks would build it again. The first update after that builds
     // it on the land of the moment. A span with no deck builds at once, and so does a forced build: its width has
@@ -485,8 +483,7 @@ export class ModernBridges {
     // not count: the parked camera rises with the car as the land arrives (64 m at Point Tupper). A step of more than
     // HOLD_JUMP (a placement or a place jump, Terrain's burst rule) starts a new hold where the camera lands.
     const hold=this.holding(cam);
-    if(this.wanted?.size){for(const r of this.wanted){this.ensure(r);if(r.geometry)this.wanted.delete(r);}}
-    for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(hold&&r.geometry&&!r.forceBuild)continue;if(cam.x>r.x0-DRAW&&cam.x<r.x1+DRAW&&cam.z>r.z0-DRAW&&cam.z<r.z1+DRAW&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);}
+    for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(hold&&r.geometry&&!r.forceBuild)continue;if(r.followed||cam.x>r.x0-DRAW&&cam.x<r.x1+DRAW&&cam.z>r.z0-DRAW&&cam.z<r.z1+DRAW&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);}
     if(this.dirty)this.merge();
   }
   // Hold state, made on the first hold (a fixture may build this class without its field initialisers).

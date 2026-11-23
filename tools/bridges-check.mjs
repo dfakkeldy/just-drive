@@ -11,16 +11,22 @@ async function contracts(replacements={}){
  const terrain={cartRoads:false,dataRevision:1,seaLevel:-.2,heightAt:height,withContactHeight:(_,f)=>f(),surfaceAt:(x,z)=>({ground:height(x,z),level:8,canopy:0,roadDist:0,halfWidth:3.6,kind:1,bridge:true,washboard:false})};
  const road=(id,from,to)=>({id,name:'Fixture bridge',kind:1,halfWidth:3.6,bridge:true,pts:[[0,from],[0,to]]});
  const roads=new mod.Roads({roads:[road(1,0,20),road(2,20,40)]},[0,0],terrain);
- {// A built-deck read (the sidewalk layer's) never builds a span, even an unbuilt one; it asks update() for it, and
-  // update() builds it whatever the camera distance (a far crossing still gets its deck).
-  const lazy=new mod.Roads({roads:[road(1,0,20),road(2,20,40)]},[0,0],terrain),M=lazy.modern,builds=M.audit.builds,revision=lazy.bridgeRevision;
+ {// A built-deck read (the sidewalk layer's) never builds a span, even an unbuilt one. It marks the span followed, and
+  // update() keeps a followed span built and current whatever the camera distance (a far crossing still gets its deck,
+  // and later bank land or a walk widening still reaches it), with the start-burst hold of every other span.
+  const lt={...terrain},lazy=new mod.Roads({roads:[road(1,0,20),road(2,20,40)]},[0,0],lt),M=lazy.modern,builds=M.audit.builds,revision=lazy.bridgeRevision,away=new THREE.Vector3(5000,20,5000);
   assert.equal(lazy.builtDeckHeight(0,-20),null,'a built-deck read of an unbuilt span is null');
   assert.equal(M.audit.builds,builds,'a built-deck read builds nothing');assert.equal(lazy.bridgeRevision,revision,'and moves no revision');
   assert.ok(M.spans.every(r=>!r.geometry),'no span was built by the read');
-  lazy.update(new THREE.Vector3(5000,20,5000));
+  lazy.update(away);
   assert.ok(M.spans.some(r=>r.geometry),'update() builds the span a built-deck read asked for, 5 km away');
   const built=lazy.builtDeckHeight(0,-20);assert.ok(built!==null&&Math.abs(built-lazy.deckHeight(0,-20))<1e-9,'then the built-deck read gives the deck');
-  console.log('PASS built-deck reads never build; update() builds what they asked for');}
+  const span=M.spans.find(r=>r.geometry),first=M.audit.builds;
+  lt.dataRevision++;lazy.update(away);assert.equal(M.audit.builds,first+1,'a followed span 5 km away refreshes on new bank land after its first build');
+  span.forceBuild=true;span.revision=-1;lazy.update(away);assert.equal(M.audit.builds,first+2,'a followed span 5 km away refreshes on a forced build (walk widening)');
+  lt.burst=true;lt.holdBackground=true;lazy.update(away);lt.dataRevision++;lazy.update(away);
+  assert.equal(M.audit.builds,first+2,'a followed span with a deck keeps it while the land bursts, like any other span');
+  console.log('PASS built-deck reads never build; update() keeps the spans they follow current, with the burst hold');}
  const middle=roads.deckHeight(0,-20);
  assert.ok(middle>9.9,`joined span must use external abutments, not channel: ${middle}`);
  const support=[];
@@ -198,7 +204,7 @@ if(process.argv.includes('--mutations')){
  for(const [name,from,to,error] of[
   ['at() segment tie rule','if(s>cum[mid+1])lo=mid+1','if(s>=cum[mid+1])lo=mid+1',/at\(\) segment rule/],
   ['far spans in the box build eagerly','&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);',')this.ensure(r);',/deck line is within 1500 m/],
-  ['update() builds a built deck again during a burst','if(hold&&r.geometry&&!r.forceBuild)continue;','',/keeps a built deck while the land bursts/],
+  ['update() builds a built deck again during a burst','if(hold&&r.geometry&&!r.forceBuild)continue;','',/keeps (a built deck|it) while the land bursts/],
   ['update() holds a missing deck during a burst','if(hold&&r.geometry&&','if(hold&&',/no deck builds at once/],
   ['update() still holds after the burst','if(this.terrain.burst!==true||','if(',/builds the deck again/],
   ['update() holds after the driver drives','||this.terrain.holdBackground!==true)',')',/once the driver drives/],
@@ -215,6 +221,10 @@ if(process.argv.includes('--mutations')){
   ['a jump counts one axis only','cam.distanceTo(this.holdLast)>HOLD_JUMP','Math.abs(cam.z-this.holdLast.z)>HOLD_JUMP',/diagonal step of 151 m starts a new hold/],
   ['a forced build waits for the burst','&&!r.forceBuild)continue;',')continue;',/forced build/],
   ['a deck query waits for the burst','if(build)this.ensure(r);','if(build&&!this.terrain.burst)this.ensure(r);',/query still builds/],
+  ['a built-deck read builds','this.query(x,z,false,false,undefined,false,0,false);if(this.sampling','this.query(x,z,false,false,undefined,false,0,true);if(this.sampling',/unbuilt span is null|builds nothing/],
+  ['update() ignores followed spans','if(r.followed||cam.x>','if(cam.x>',/5 km away/],
+  ['a followed span refreshes only until its first build','if(r.followed||cam.x>','if(r.followed&&!r.geometry||cam.x>',/after its first build/],
+  ['a followed span skips the burst hold','const r=this.spans[i];if(hold&&','const r=this.spans[i];if(r.followed){this.ensure(r);continue;}if(hold&&',/keeps it while the land bursts, like any other/],
  ]){
   assert.equal(s.split(from).length,2,'one mutation anchor: '+name);
   await assert.rejects(()=>contracts({[file]:s.replace(from,to)}),error,name+' must fail');
