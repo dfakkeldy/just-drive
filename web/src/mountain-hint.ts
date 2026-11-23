@@ -10,6 +10,7 @@ import {
 export {
   DEFAULT_SXS_ID,
   MOUNTAIN_HINT_TEXT,
+  checkSwapRoom,
   defaultSideBySideId,
   isMountainHintEligibleRide,
   isSideBySideId,
