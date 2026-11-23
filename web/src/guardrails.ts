@@ -338,13 +338,22 @@ export class Guardrails {
         if (y0 === null || y1 === null) continue;
         this.activeBridgeCar = car;
         this.activeBridgeSpan = b;
-        this.activeBridgeDt = dt;
-        forEachPonyTrussSteelClip(b, y0, y1, car.y, carHeight, this.pushBridgeMember);
+        // Iterate until both rails clear (handles high-speed angled portal hits where one rail pushes into the opposite rail).
+        for (let pass = 0; pass < 16; pass++) {
+          const px = car.x, pz = car.z;
+          this.activeBridgeDt = pass === 0 ? dt : 0;
+          forEachPonyTrussSteelClip(b, y0, y1, car.y, carHeight, this.pushBridgeMember);
+          if (Math.hypot(car.x - px, car.z - pz) < 1e-6) break;
+        }
         this.activeBridgeCar = null;
         this.activeBridgeSpan = null;
         continue;
       }
-      pushOut(car, b.solids, true, dt);
+      for (let pass = 0; pass < 16; pass++) {
+        const px = car.x, pz = car.z;
+        pushOut(car, b.solids, true, pass === 0 ? dt : 0);
+        if (Math.hypot(car.x - px, car.z - pz) < 1e-6) break;
+      }
     }
   }
   private clampRailYaw(car: Pushable, heading: number, dt: number): void {

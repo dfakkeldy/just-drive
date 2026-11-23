@@ -590,8 +590,27 @@ for (const {a, b, side} of added) {
       f.dispose();
     }
   }
-  // Revision tracking: unrelated terrain revisions keep contact revisions steady, and opposing planner-count / bridge-version
-  // deltas (48 -> 46 while bridgeDeckVersion rises 2 -> 4) NEVER cancel out in fleetContacts.revision.
+  // Revision tracking: unrelated terrain revisions keep contact revisions steady; a deck-only upgrade with fixed planner counts
+  // advances fleetContacts.revision; and opposing planner-count / bridge-version deltas NEVER cancel out.
+  {
+    const f = makeUpgradeFixture();
+    const r45 = f.upNet.roads.find(x => x.id === 45), r46 = f.upNet.roads.find(x => x.id === 46);
+    const m45x = (r45.pts[0][0] + r45.pts[r45.pts.length - 1][0]) / 2, m45z = (r45.pts[0][1] + r45.pts[r45.pts.length - 1][1]) / 2;
+    const m46x = (r46.pts[0][0] + r46.pts[r46.pts.length - 1][0]) / 2, m46z = (r46.pts[0][1] + r46.pts[r46.pts.length - 1][1]) / 2;
+    assert.ok(f.upNet.deckHeight(m45x, m45z) !== null, 'bridge 45 seeded at level 6');
+    assert.ok(f.upNet.deckHeight(m46x, m46z) !== null, 'bridge 46 seeded at level 6');
+    f.upNet.guardrails.audit.samples = 48;
+    const rev0Fleet = f.fleetUp.revision, rev0Solo = f.soloUp.revision;
+    f.upTerrain.dataRevision++;
+    assert.equal(f.fleetUp.revision, rev0Fleet, 'unrelated terrain revision keeps fleetContacts.revision steady');
+    assert.equal(f.soloUp.revision, rev0Solo, 'unrelated terrain revision keeps soloContacts.revision steady');
+    // 1. Deck-only upgrade with planner counts held fixed at 48 (fails if independent bridge provider is removed).
+    f.upgrade(1.0);
+    const rev1Fleet = f.fleetUp.revision, rev1Solo = f.soloUp.revision;
+    assert.notEqual(rev1Fleet, rev0Fleet, 'deck-only upgrade with fixed planner counts advances fleetContacts.revision');
+    assert.notEqual(rev1Solo, rev0Solo, 'deck-only upgrade advances soloContacts.revision');
+    f.dispose();
+  }
   {
     const f = makeUpgradeFixture();
     for (const id of [45, 46]) {
@@ -601,14 +620,36 @@ for (const {a, b, side} of added) {
     }
     f.upNet.guardrails.audit.samples = 48;
     const revBeforeFleet = f.fleetUp.revision, revBeforeSolo = f.soloUp.revision;
-    f.upTerrain.dataRevision++;
-    assert.equal(f.fleetUp.revision, revBeforeFleet, 'unrelated terrain revision keeps fleetContacts.revision steady');
-    assert.equal(f.soloUp.revision, revBeforeSolo, 'unrelated terrain revision keeps soloContacts.revision steady');
+    // 2. Simultaneous opposing change (samples 48 -> 46 while both decks upgrade +2): independent providers never cancel.
     f.upNet.guardrails.audit.samples = 46;
     f.upgrade(1.0);
     assert.notEqual(f.fleetUp.revision, revBeforeFleet, 'fleetContacts.revision advances even when planner counts fall by the exact deck-version increase');
     assert.notEqual(f.soloUp.revision, revBeforeSolo, 'soloContacts.revision advances on level-8 upgrade');
     f.dispose();
+  }
+  // High-speed 57-degree angled portal hit on both bridges: after driving + solo contact pass, the resolved pose clears both rails.
+  for (const id of [45, 46]) {
+    const r = net.roads.find(x => x.id === id);
+    const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
+    const soloAng = new AreaContacts(), fleetAng = new AreaContacts();
+    const car = new Vehicle(rig(), realTerrain, net, -0.2, CAR_SPEC);
+    registerRailContacts(fleetAng, soloAng, rails, body => body === car, CAR_SPEC);
+    const angle = hdg + (57 * Math.PI) / 180;
+    const fx = Math.sin(angle), fz = -Math.cos(angle);
+    // Find the closest clear pose just outside the start portal at 57 deg, then drive one 120 Hz step at 32 m/s into it.
+    let clearDist = 0;
+    for (let d = 0.2; d <= 5.0; d += 0.05) {
+      const px = ax - ux * d, pz = az - uz * d;
+      const py = net.deckHeight(px, pz) ?? realTerrain.heightAt(px, pz);
+      if (soloAng.allows({ x: px, z: pz, y: py, heading: angle, spec: CAR_SPEC })) { clearDist = d; break; }
+    }
+    assert.ok(clearDist > 0, `bridge ${id} finds clear 57-deg pre-portal pose`);
+    car.place(ax - ux * clearDist, az - uz * clearDist, angle);
+    car.vx = fx * 32; car.vz = fz * 32; car.speed = 32;
+    car.update(1 / 120, { throttle: 0, steer: 0, handbrake: false, touch: false });
+    soloAng.resolve(car);
+    assert.equal(soloAng.allows({ x: car.x, z: car.z, y: car.y, heading: car.heading, spec: CAR_SPEC }), true, `bridge ${id} 57-deg 32 m/s portal hit resolves clear of both rails`);
   }
   // Exact finite rotated bottom-chord underside and high-portal inner-rail tests at 3.0x: measure the rendered steel directly
   // and verify paired clear/contact probes right below/above it (catches flat or untrimmed cutoffs).
