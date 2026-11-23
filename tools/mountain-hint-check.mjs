@@ -1,8 +1,10 @@
 // River Denys Mountain Road side-by-side hint and safe in-place vehicle switch.
-// Run: node tools/run-node-check.mjs tools/mountain-hint-check.mjs
+// Run: node tools/run-node-check.mjs tools/mountain-hint-check.mjs [--mutations]
 // The baked Judique road assertions run when data/baked/areas/judique/roads.json exists and SKIP cleanly in CI.
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { build, transform } from '../web/node_modules/esbuild/lib/main.js';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import {
   DEFAULT_SXS_ID,
@@ -11,12 +13,14 @@ import {
   MOUNTAIN_ROAD_NAME,
   MountainApproach,
   MountainHintState,
+  checkSwapRoom,
   defaultSideBySideId,
   isMountainHintEligibleRide,
   isSideBySideId,
   mountainSwitchLabel,
   safeSwapRide,
 } from '../web/src/mountain-hint-rules.ts';
+import { deckCounts } from '../web/src/bridge-contact.ts';
 import { GARAGE } from '../web/src/garage.ts';
 import { Vehicle } from '../web/src/vehicle.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
@@ -518,23 +522,445 @@ if (!existsSync(roadsPath) || !existsSync(manifestPath)) {
   ok(!approach.outsideChurchClearance(cs), 'baked: CHURCH_START is inside church clearance');
 }
 
-// 9. A switch keeps the ride's own deck (#6 reference heights): on a deck the new ride stands on that deck; under it,
-//    on the road below. Land is at 42 m and a deck at 50 m spans x = 0..100.
-{
-  const terrain = makeFlatTerrain(42, () => true, 0);
-  const roads = makeStraightRoads();
-  roads.deckHeight = (x, z) => x >= 0 && x <= 100 && Math.abs(z) < 4 ? 50 : null;
-  for (const [where, reference, expected] of [['on the deck', 50, 50], ['under the deck', 42, 42]]) {
+// 9. A switch keeps the ride's own deck (#6 reference heights), re-checks a moved target at next.y,
+//    and checks room clearance at the road under an overpass or on the deck when standing on it.
+function verifyDeckSwap(rules, countCheck = ok) {
+  // 9a. Stay on the 50 m deck when switching on it; stay on the 42 m road when switching under it.
+  {
+    const terrain = makeFlatTerrain(42, () => true, 0);
+    const roads = makeStraightRoads();
+    roads.deckHeight = (x, z) => x >= 0 && x <= 100 && Math.abs(z) < 4 ? 50 : null;
+    for (const [where, reference, expected] of [['on the deck', 50, 50], ['under the deck', 42, 42]]) {
+      const current = new Vehicle(makeRig(), terrain, roads, -0.2, CAR_SPEC);
+      current.bounds = [-200, -200, 600, 200];
+      countCheck(current.place(50, 0, Math.PI / 2, reference), `deck swap: car places ${where}`);
+      countCheck(Math.abs(current.y - expected) < 0.15, `deck swap: car stands ${where} (y=${current.y.toFixed(2)})`);
+      const seen = [], checkedY = [];
+      const swapped = rules.safeSwapRide(
+        current,
+        () => new Vehicle(makeRig(), terrain, roads, -0.2, SXS_SPEC),
+        pose => {
+          seen.push(pose.y);
+          return rules.checkSwapRoom(pose, {
+            terrain,
+            roads,
+            allows: body => { checkedY.push(body.y); return true; },
+          });
+        },
+      );
+      countCheck(swapped.ok, `deck swap: car -> sxs ${where} succeeds`);
+      countCheck(Math.abs(swapped.vehicle.y - expected) < 0.15, `deck swap: sxs stands ${where} (y=${swapped.vehicle.y.toFixed(2)}, expected ${expected})`);
+      countCheck(seen.length === 1 && Math.abs(seen[0] - current.y) < 1e-9, `deck swap: the room check gets the ride's height ${where}`);
+      countCheck(checkedY.length === 1 && Math.abs(checkedY[0] - expected) < 0.15, `deck swap: clearance runs at ${expected} m ${where} (got ${checkedY[0]})`);
+    }
+  }
+
+  // 9b. When next.placementGuard moves the target a few metres under the deck, the post-placement canPlace
+  //     gets next.y near the land (not the deck, and not omitted), and checks clearance on the lower road.
+  {
+    const baseTerrain = makeFlatTerrain(42, () => true, 0);
+    const slopedGround = x => 42 + (x - 50) * 0.05;
+    const terrain = {
+      ...baseTerrain,
+      heightAt(x) { return slopedGround(x); },
+      meshHeightAt(x) { return slopedGround(x); },
+      surfaceAt(x, z) { return { ...baseTerrain.surfaceAt(x, z), ground: slopedGround(x) }; },
+    };
+    const roads = makeStraightRoads();
+    roads.deckHeight = (x, z) => x >= 0 && x <= 100 && Math.abs(z) < 4 ? 50 : null;
+
+    // Obstacle on the upper deck at x = 54, clear road below at x = 54 (land = 42.2 m): moved switch succeeds.
     const current = new Vehicle(makeRig(), terrain, roads, -0.2, CAR_SPEC);
     current.bounds = [-200, -200, 600, 200];
-    ok(current.place(50, 0, Math.PI / 2, reference), `deck swap: car places ${where}`);
-    ok(Math.abs(current.y - expected) < 0.15, `deck swap: car stands ${where} (y=${current.y.toFixed(2)})`);
-    const seen = [];
-    const swapped = safeSwapRide(current, () => new Vehicle(makeRig(), terrain, roads, -0.2, SXS_SPEC), pose => { seen.push(pose.y); return true; });
-    ok(swapped.ok, `deck swap: car -> sxs ${where} succeeds`);
-    ok(Math.abs(swapped.vehicle.y - expected) < 0.15, `deck swap: sxs stands ${where} (y=${swapped.vehicle.y.toFixed(2)}, expected ${expected})`);
-    ok(seen.length >= 1 && Math.abs(seen[0] - current.y) < 1e-9, `deck swap: the room check gets the ride's height ${where}`);
+    countCheck(current.place(50, 0, Math.PI / 2, 42), 'moved deck swap: car places under the deck');
+    countCheck(Math.abs(current.y - 42) < 0.15, `moved deck swap: car starts near 42 m land (y=${current.y.toFixed(2)})`);
+    const upperDeckBlocked = new AreaContacts();
+    upperDeckBlocked.add({
+      resolve() {},
+      allows: body => !(Math.abs(body.x - 54) < 1 && Math.abs(body.y - 50) < 1),
+    });
+    const seenPoses = [], checkedBodies = [];
+    const swapped = rules.safeSwapRide(
+      current,
+      () => {
+        const next = new Vehicle(makeRig(), terrain, roads, -0.2, SXS_SPEC);
+        next.bounds = current.bounds;
+        next.placementGuard = pose => { pose.x += 4; return true; };
+        return next;
+      },
+      pose => {
+        seenPoses.push({ ...pose });
+        return rules.checkSwapRoom(pose, {
+          terrain,
+          roads,
+          allows: body => {
+            checkedBodies.push({ ...body });
+            return upperDeckBlocked.allows({ ...body, spec: SXS_SPEC });
+          },
+        });
+      },
+    );
+    countCheck(swapped.ok, `moved deck swap: succeeds under deck despite blocked upper deck (${swapped.ok ? 'ok' : swapped.reason})`);
+    countCheck(Math.abs(swapped.vehicle.x - 54) < 1e-6, `moved deck swap: target moved 4 m under the deck (x=${swapped.vehicle.x.toFixed(2)})`);
+    countCheck(Math.abs(swapped.vehicle.y - 42.2) < 0.15, `moved deck swap: target stands near land, not deck (y=${swapped.vehicle.y.toFixed(2)})`);
+    countCheck(seenPoses.length === 2, `moved deck swap: canPlace runs twice (got ${seenPoses.length})`);
+    countCheck(
+      seenPoses[1].y !== undefined && Math.abs(seenPoses[1].y - swapped.vehicle.y) < 1e-9,
+      `moved deck swap: second canPlace gets next.y (got ${seenPoses[1].y}, expected ${swapped.vehicle.y})`,
+    );
+    countCheck(
+      Math.abs(seenPoses[1].y - 42.2) < 0.15 && Math.abs(seenPoses[1].y - 50) > 5,
+      `moved deck swap: second canPlace y is near land, not deck (y=${seenPoses[1].y})`,
+    );
+    countCheck(
+      Math.abs(seenPoses[1].y - current.y) > 0.1,
+      `moved deck swap: second canPlace y tracks moved ground (${seenPoses[1].y}) rather than start y (${current.y})`,
+    );
+    countCheck(
+      checkedBodies.length === 2 && Math.abs(checkedBodies[1].y - 42.2) < 0.15,
+      `moved deck swap: room check tests the moved target at the lower road (y=${checkedBodies[1]?.y})`,
+    );
+
+    // Obstacle on the lower road at x = 54 while the upper deck at x = 54 is clear: moved switch must refuse.
+    const blockedCar = new Vehicle(makeRig(), terrain, roads, -0.2, CAR_SPEC);
+    blockedCar.bounds = [-200, -200, 600, 200];
+    countCheck(blockedCar.place(50, 0, Math.PI / 2, 42), 'moved deck swap (blocked): car places under the deck');
+    blockedCar.vx = 5; blockedCar.speed = 5;
+    const lowerRoadBlocked = new AreaContacts();
+    lowerRoadBlocked.add({
+      resolve() {},
+      allows: body => !(Math.abs(body.x - 54) < 1 && Math.abs(body.y - 42.2) < 1),
+    });
+    const blockedSeen = [];
+    const blockedRes = rules.safeSwapRide(
+      blockedCar,
+      () => {
+        const next = new Vehicle(makeRig(), terrain, roads, -0.2, SXS_SPEC);
+        next.bounds = blockedCar.bounds;
+        next.placementGuard = pose => { pose.x += 4; return true; };
+        return next;
+      },
+      pose => {
+        blockedSeen.push({ ...pose });
+        return rules.checkSwapRoom(pose, {
+          terrain,
+          roads,
+          allows: body => lowerRoadBlocked.allows({ ...body, spec: SXS_SPEC }),
+        });
+      },
+    );
+    countCheck(!blockedRes.ok && blockedRes.reason === 'No clear room to switch here',
+      `moved deck swap: refuses when moved lower road is blocked even if upper deck is clear (${blockedRes.ok ? 'allowed' : blockedRes.reason})`);
+    countCheck(blockedCar.vx === 5 && blockedCar.speed === 5, 'moved deck swap: refusal restores current ride velocity');
+    countCheck(blockedSeen.length === 2 && blockedSeen[1].y !== undefined && Math.abs(blockedSeen[1].y - 42.2) < 0.15,
+      `moved deck swap (blocked): second canPlace got land height (y=${blockedSeen[1]?.y})`);
   }
 }
 
+function verifyRoomCheckRule(rules, countCheck = ok) {
+  // 9c. Room-check helper rule (main.ts): under an overpass checks at the road; on the deck checks at the deck.
+  const terrain = makeFlatTerrain(42, () => true, 0);
+  const roads = makeStraightRoads();
+  roads.deckHeight = (x, z) => x >= 0 && x <= 100 && Math.abs(z) < 4 ? 50 : null;
+  const upperOnly = new AreaContacts();
+  upperOnly.add({ resolve() {}, allows: body => Math.abs(body.y - 50) > 1 });
+  const lowerOnly = new AreaContacts();
+  lowerOnly.add({ resolve() {}, allows: body => Math.abs(body.y - 42) > 1 });
+
+  // Under an overpass (pose.y = 42): checked at 42 m road; upper-deck obstacle ignored, lower-road obstacle caught.
+  let underY = null;
+  countCheck(
+    rules.checkSwapRoom({ x: 50, z: 0, heading: Math.PI / 2, y: 42 }, {
+      terrain,
+      roads,
+      allows: body => { underY = body.y; return upperOnly.allows({ ...body, spec: SXS_SPEC }); },
+    }) === true,
+    'room check: under overpass ignores upper-deck obstacle',
+  );
+  countCheck(underY === 42, `room check: under overpass checks at road height 42 (got ${underY})`);
+  countCheck(
+    rules.checkSwapRoom({ x: 50, z: 0, heading: Math.PI / 2, y: 42 }, {
+      terrain,
+      roads,
+      allows: body => lowerOnly.allows({ ...body, spec: SXS_SPEC }),
+    }) === 'No clear room to switch here',
+    'room check: under overpass catches lower-road obstacle',
+  );
+
+  // On the deck (pose.y = 50): checked at 50 m deck; lower-road obstacle ignored, upper-deck obstacle caught.
+  let deckY = null;
+  countCheck(
+    rules.checkSwapRoom({ x: 50, z: 0, heading: Math.PI / 2, y: 50 }, {
+      terrain,
+      roads,
+      allows: body => { deckY = body.y; return lowerOnly.allows({ ...body, spec: SXS_SPEC }); },
+    }) === true,
+    'room check: on deck ignores lower-road obstacle',
+  );
+  countCheck(deckY === 50, `room check: on deck checks at deck height 50 (got ${deckY})`);
+  countCheck(
+    rules.checkSwapRoom({ x: 50, z: 0, heading: Math.PI / 2, y: 50 }, {
+      terrain,
+      roads,
+      allows: body => upperOnly.allows({ ...body, spec: SXS_SPEC }),
+    }) === 'No clear room to switch here',
+    'room check: on deck catches upper-deck obstacle',
+  );
+
+  // Reach band boundary (0.5 m): 49.6 takes the 50 m deck; 49.4 stays on the 42 m road.
+  let bandHitY = null, bandMissY = null;
+  rules.checkSwapRoom({ x: 50, z: 0, heading: 0, y: 49.6 }, { terrain, roads, allows: body => { bandHitY = body.y; return true; } });
+  rules.checkSwapRoom({ x: 50, z: 0, heading: 0, y: 49.4 }, { terrain, roads, allows: body => { bandMissY = body.y; return true; } });
+  countCheck(bandHitY === 50 && bandMissY === 42, `room check: deck reach band splits 49.6 -> ${bandHitY} and 49.4 -> ${bandMissY}`);
+
+  // Omitted pose.y keeps topmost fallback; 1884 cartRoads keeps the timber deck.
+  let omittedY = null, eraY = null;
+  rules.checkSwapRoom({ x: 50, z: 0, heading: 0 }, { terrain, roads, allows: body => { omittedY = body.y; return true; } });
+  rules.checkSwapRoom({ x: 50, z: 0, heading: 0, y: 42 }, { terrain: { ...terrain, cartRoads: true }, roads, allows: body => { eraY = body.y; return true; } });
+  countCheck(omittedY === 50 && eraY === 50, `room check: omitted y -> ${omittedY} and 1884 cartRoads -> ${eraY}`);
+
+  // Unloaded or wet ground refuses before calling allows.
+  let allowsCalls = 0;
+  countCheck(
+    rules.checkSwapRoom({ x: 50, z: 0, heading: 0, y: 42 }, {
+      terrain: { ...terrain, heightAt: () => null },
+      roads,
+      allows: () => { allowsCalls++; return true; },
+    }) === 'Wait until solid ground is ready to switch',
+    'room check: unloaded ground refuses before allows',
+  );
+  countCheck(
+    rules.checkSwapRoom({ x: 50, z: 0, heading: 0, y: 42 }, {
+      terrain: { ...terrain, waterAt: () => true },
+      roads,
+      allows: () => { allowsCalls++; return true; },
+    }) === 'Wait until solid ground is ready to switch',
+    'room check: wet ground refuses before allows',
+  );
+  countCheck(allowsCalls === 0, 'room check: allows is not called on unloaded or wet ground');
+}
+
+function extractMainSwapCanPlace(mainSrc) {
+  const fnStart = mainSrc.indexOf('function switchToSideBySide(');
+  const fnEnd = mainSrc.indexOf('const mountainHint =', fnStart);
+  assert.ok(fnStart > 0 && fnEnd > fnStart, 'main.ts: switchToSideBySide block found');
+  const block = mainSrc.slice(fnStart, fnEnd);
+  const callIdx = block.indexOf('safeSwapRide(');
+  assert.ok(callIdx >= 0, 'main.ts: safeSwapRide call found');
+  const openParen = block.indexOf('(', callIdx);
+  const args = [];
+  let depth = 0, argStart = openParen + 1;
+  for (let i = openParen; i < block.length; i++) {
+    const ch = block[i], next = block[i + 1];
+    if (ch === '/' && next === '/') {
+      const nl = block.indexOf('\n', i + 2);
+      i = nl < 0 ? block.length : nl;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      const close = block.indexOf('*/', i + 2);
+      assert.ok(close >= 0, 'main.ts: unterminated block comment in safeSwapRide call');
+      i = close + 1;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch;
+      i++;
+      while (i < block.length && block[i] !== quote) {
+        if (block[i] === '\\') i++;
+        i++;
+      }
+      continue;
+    }
+    if (ch === '(' || ch === '{' || ch === '[') {
+      depth++;
+    } else if (ch === ')' || ch === '}' || ch === ']') {
+      depth--;
+      if (depth === 0) {
+        args.push(block.slice(argStart, i).trim());
+        break;
+      }
+    } else if (ch === ',' && depth === 1) {
+      args.push(block.slice(argStart, i).trim());
+      argStart = i + 1;
+    }
+  }
+  assert.equal(args.length, 3, `main.ts: safeSwapRide has 3 arguments (got ${args.length})`);
+  return args[2];
+}
+
+async function compileMainSwapCanPlace(mainSrc) {
+  const expr = extractMainSwapCanPlace(mainSrc);
+  const { code } = await transform(`return (${expr});`, {
+    loader: 'ts',
+    define: { 'import.meta.env.DEV': 'false' },
+  });
+  return new Function(
+    'checkSwapRoom', 'deckCounts', 'terrain', 'roads', 'nextEntry', 'fleetContacts',
+    'mailMode', 'roadScene', 'pushOut', 'aiDriverOn', 'aiDriver', 'boss',
+    code,
+  );
+}
+
+async function verifyMainRoomCheck(mainSrc, rules = { safeSwapRide, checkSwapRoom }, countCheck = ok) {
+  const makeCanPlace = await compileMainSwapCanPlace(mainSrc);
+  const baseTerrain = makeFlatTerrain(42, () => true, 0);
+  const roads = makeStraightRoads();
+  roads.deckHeight = (x, z) => x >= 0 && x <= 100 && Math.abs(z) < 4 ? 50 : null;
+  const bind = (terrain, fleetContacts) => makeCanPlace(
+    rules.checkSwapRoom, deckCounts, terrain, roads, { spec: SXS_SPEC }, fleetContacts,
+    false, null, pushOut, () => false, null, null,
+  );
+
+  // Under an overpass (y = 42): main.ts delivers y = 42 to fleetContacts.allows; ignores upper deck, catches lower road.
+  const underSeen = [];
+  const underCanPlace = bind(baseTerrain, {
+    allows: body => { underSeen.push(body.y); return Math.abs(body.y - 50) > 1; },
+  });
+  countCheck(
+    underCanPlace({ x: 50, z: 0, heading: Math.PI / 2, y: 42 }) === true,
+    'main.ts room check: under overpass ignores upper-deck obstacle',
+  );
+  countCheck(underSeen.length === 1 && underSeen[0] === 42,
+    `main.ts room check: under overpass delivers road height 42 to fleetContacts.allows (got ${underSeen[0]})`);
+  const underLowerBlocked = bind(baseTerrain, {
+    allows: body => Math.abs(body.y - 42) > 1,
+  });
+  countCheck(
+    underLowerBlocked({ x: 50, z: 0, heading: Math.PI / 2, y: 42 }) === 'No clear room to switch here',
+    'main.ts room check: under overpass catches lower-road obstacle',
+  );
+
+  // On the deck (y = 50): main.ts delivers y = 50 to fleetContacts.allows; ignores lower road, catches upper deck.
+  const deckSeen = [];
+  const deckCanPlace = bind(baseTerrain, {
+    allows: body => { deckSeen.push(body.y); return Math.abs(body.y - 42) > 1; },
+  });
+  countCheck(
+    deckCanPlace({ x: 50, z: 0, heading: Math.PI / 2, y: 50 }) === true,
+    'main.ts room check: on deck ignores lower-road obstacle',
+  );
+  countCheck(deckSeen.length === 1 && deckSeen[0] === 50,
+    `main.ts room check: on deck delivers deck height 50 to fleetContacts.allows (got ${deckSeen[0]})`);
+  const deckUpperBlocked = bind(baseTerrain, {
+    allows: body => Math.abs(body.y - 50) > 1,
+  });
+  countCheck(
+    deckUpperBlocked({ x: 50, z: 0, heading: Math.PI / 2, y: 50 }) === 'No clear room to switch here',
+    'main.ts room check: on deck catches upper-deck obstacle',
+  );
+
+  // End-to-end with safeSwapRide and a moved target under the deck: main.ts callback delivers 42.2 m to fleetContacts.allows.
+  const slopedGround = x => 42 + (x - 50) * 0.05;
+  const slopedTerrain = {
+    ...baseTerrain,
+    heightAt(x) { return slopedGround(x); },
+    meshHeightAt(x) { return slopedGround(x); },
+    surfaceAt(x, z) { return { ...baseTerrain.surfaceAt(x, z), ground: slopedGround(x) }; },
+  };
+  const current = new Vehicle(makeRig(), slopedTerrain, roads, -0.2, CAR_SPEC);
+  current.bounds = [-200, -200, 600, 200];
+  countCheck(current.place(50, 0, Math.PI / 2, 42), 'main.ts moved swap: car places under deck');
+  const movedHeights = [];
+  const movedCanPlace = bind(slopedTerrain, {
+    allows: body => { movedHeights.push(body.y); return !(Math.abs(body.x - 54) < 1 && Math.abs(body.y - 50) < 1); },
+  });
+  const movedRes = rules.safeSwapRide(
+    current,
+    () => {
+      const next = new Vehicle(makeRig(), slopedTerrain, roads, -0.2, SXS_SPEC);
+      next.bounds = current.bounds;
+      next.placementGuard = pose => { pose.x += 4; return true; };
+      return next;
+    },
+    movedCanPlace,
+  );
+  countCheck(movedRes.ok, `main.ts moved swap: succeeds under deck with blocked upper deck (${movedRes.ok ? 'ok' : movedRes.reason})`);
+  countCheck(movedHeights.length === 2 && Math.abs(movedHeights[1] - 42.2) < 0.15,
+    `main.ts moved swap: second room check delivers moved road height to fleetContacts.allows (got ${movedHeights[1]})`);
+}
+
+const root = process.env.MMM_ROOT ?? process.cwd();
+const mainSrc = readFileSync(resolve(root, 'web/src/main.ts'), 'utf8');
+verifyDeckSwap({ safeSwapRide, checkSwapRoom });
+verifyRoomCheckRule({ safeSwapRide, checkSwapRoom });
+await verifyMainRoomCheck(mainSrc, { safeSwapRide, checkSwapRoom });
+
 console.log(`PASS mountain-hint: ${checks} checks`);
+
+// 10. Mutation controls (--mutations): broken copies of the deck-switch rules and main.ts callback must each fail.
+if (process.argv.includes('--mutations')) {
+  const rulesSrc = readFileSync(resolve(root, 'web/src/mountain-hint-rules.ts'), 'utf8');
+  const loadRules = async source => {
+    const out = await build({
+      stdin: { contents: source, resolveDir: resolve(root, 'web/src'), loader: 'ts' },
+      bundle: true,
+      write: false,
+      format: 'esm',
+      platform: 'node',
+      logLevel: 'silent',
+    });
+    return import('data:text/javascript;base64,' + Buffer.from(out.outputFiles[0].text).toString('base64'));
+  };
+  const quietOk = (cond, msg) => { assert.ok(cond, msg); };
+
+  // Unmodified controls must pass through the same esbuild loaders.
+  const controlRules = await loadRules(rulesSrc);
+  verifyDeckSwap(controlRules, quietOk);
+  verifyRoomCheckRule(controlRules, quietOk);
+  await verifyMainRoomCheck(mainSrc, controlRules, quietOk);
+
+  const ruleMutants = [
+    [
+      'drop-second-canPlace-y',
+      'try { placedCheck = canPlace({ x: next.x, z: next.z, heading: next.heading, y: next.y }); } catch { placedCheck = false; }',
+      'try { placedCheck = canPlace({ x: next.x, z: next.z, heading: next.heading }); } catch { placedCheck = false; }',
+      api => verifyDeckSwap(api, quietOk),
+      /^moved deck swap: succeeds under deck despite blocked upper deck/,
+    ],
+    [
+      'room-check-topmost',
+      `  const y = pose.y === undefined
+    ? (deck === null ? ground : Math.max(ground, deck))
+    : deckCounts(deck, pose.y, world.terrain.cartRoads) ? Math.max(ground, deck) : ground;`,
+      '  const y = deck === null ? ground : Math.max(ground, deck);',
+      api => verifyRoomCheckRule(api, quietOk),
+      /^room check: under overpass ignores upper-deck obstacle$/,
+    ],
+    [
+      'drop-place-reference-y',
+      'if (!next.place(pose.x, pose.z, pose.heading, pose.y))',
+      'if (!next.place(pose.x, pose.z, pose.heading))',
+      api => verifyDeckSwap(api, quietOk),
+      /^deck swap: sxs stands on the deck \(y=42\.00, expected 50\)$/,
+    ],
+  ];
+
+  for (const [name, from, to, runCheck, expectMsg] of ruleMutants) {
+    assert.equal(rulesSrc.split(from).length, 2, `${name}: expected unique anchor in web/src/mountain-hint-rules.ts`);
+    const api = await loadRules(rulesSrc.replace(from, to));
+    assert.throws(
+      () => runCheck(api),
+      err => err instanceof assert.AssertionError && expectMsg.test(err.message),
+      `mutant ${name} did not fail on the expected assertion`,
+    );
+    console.log(`KILLED ${name}`);
+  }
+
+  // Valid TypeScript mutant in web/src/main.ts: body overwrites checkSwapRoom's height with the topmost deck.
+  const mainAnchor = 'const body = { ...at, spec: nextEntry.spec };';
+  const mainMutated = mainSrc.replace(
+    mainAnchor,
+    'const body = { ...at, y: Math.max(at.y, roads.deckHeight(at.x, at.z) ?? at.y), spec: nextEntry.spec };',
+  );
+  assert.equal(mainSrc.split(mainAnchor).length, 2, 'main-room-check-topmost: expected unique anchor in web/src/main.ts');
+  await transform(mainMutated, { loader: 'ts', sourcefile: 'main.ts' });
+  await assert.rejects(
+    () => verifyMainRoomCheck(mainMutated, controlRules, quietOk),
+    err => err instanceof assert.AssertionError && /^main\.ts room check: under overpass ignores upper-deck obstacle$/.test(err.message),
+    'mutant main-room-check-topmost did not fail on the expected assertion',
+  );
+  console.log('KILLED main-room-check-topmost');
+
+  console.log(`PASS mountain-hint-mutations: ${ruleMutants.length + 1} mutants killed`);
+}

@@ -2,7 +2,7 @@
 export const stuntStage=tyreContacts=>`(async()=>{
  const THREE=await import('/node_modules/three/build/three.module.js');
  const {vehicle:v,stuntPark:park,terrain,camera,renderer,trees,water,yard,sunShadows}=mmm,scene=park.group.parent;
- window.nativeRAF=requestAnimationFrame.bind(window);window.requestAnimationFrame=callback=>{if(callback.name!=='frame')return window.nativeRAF(callback);window.stoppedFrame=callback;return 0;};
+ window.nativeRAF=requestAnimationFrame;window.requestAnimationFrame=callback=>{window.stoppedFrame=callback;return 0;};
  const tyreContacts=${tyreContacts.toString()};
  window.st={THREE,v,park,terrain,camera,renderer,trees,water,yard,scene,tyreContacts};
  st.frameSnapshot=()=>({vehicle:[v.x,v.y,v.z],camera:camera.position.toArray(),pending:terrain.pending,groundLevel:terrain.surfaceAt(v.x,v.z)?.level,drawnLevel:terrain.drawnLevelAt(v.x,v.z),lastLine:park.lastLine,hudLine:park.hudLine,pieces:park.pieces.map(p=>({id:p.placement.piece.id,ready:p.ready,visible:p.group.visible,near:p.near(v.x,v.z,80),corners:p.supportCorners.map(q=>terrain.drawnLevelAt(q.x,q.z))}))});

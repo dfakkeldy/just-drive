@@ -103,6 +103,7 @@ def cover(masks, cells=None, min_side=MIN_SIDE, min_area=None, max_blocks=MAX_BL
     shared(frame, block, other) gives the cells of frame `other` that the block covers. A piece smaller than
     min_area (default: 60 m2 or 1.5 % of the outline) is left out, not forced in.
     """
+    orig = [mask.copy() for mask in masks]
     masks = [mask.copy() for mask in masks]
     cells = [1.] * len(masks) if cells is None else cells
     floor = max(60, .015 * float(masks[0].sum()) * cells[0]) if min_area is None else min_area
@@ -121,6 +122,45 @@ def cover(masks, cells=None, min_side=MIN_SIDE, min_area=None, max_blocks=MAX_BL
         for other in range(len(masks)):
             if other != frame:
                 masks[other] &= ~shared(frame, block, other)
+    # Close narrow interior seams (1-2 cells) where a single notched edge cell kept a wing 1 cell off its neighbour.
+    def overlaps_any(skip, frame, r0, r1, c0, c1):
+        for k, (f, ar0, ar1, ac0, ac1) in enumerate(blocks):
+            if k == skip:
+                continue
+            if f == frame:
+                if r0 < ar1 and ar0 < r1 and c0 < ac1 and ac0 < c1:
+                    return True
+            elif shared is not None:
+                if shared(frame, (r0, r1, c0, c1), f)[ar0:ar1, ac0:ac1].any():
+                    return True
+        return False
+
+    for i in range(len(blocks)):
+        f, r0, r1, c0, c1 = blocks[i]
+        m = orig[f]
+        for j in range(len(blocks)):
+            if i == j or blocks[j][0] != f:
+                continue
+            _, br0, br1, bc0, bc1 = blocks[j]
+            # Vertical gap (i above j, or i below j)
+            ov_c0, ov_c1 = max(c0, bc0), min(c1, bc1)
+            if ov_c1 - ov_c0 >= min_side:
+                if 0 < br0 - r1 <= 2 and m[r1:br0, ov_c0:ov_c1].all() and float(m[r1:br0, c0:c1].mean()) >= .85:
+                    if not overlaps_any(i, f, r0, br0, c0, c1):
+                        r1 = br0
+                elif 0 < r0 - br1 <= 2 and m[br1:r0, ov_c0:ov_c1].all() and float(m[br1:r0, c0:c1].mean()) >= .85:
+                    if not overlaps_any(i, f, br1, r1, c0, c1):
+                        r0 = br1
+            # Horizontal gap (i left of j, or i right of j)
+            ov_r0, ov_r1 = max(r0, br0), min(r1, br1)
+            if ov_r1 - ov_r0 >= min_side:
+                if 0 < bc0 - c1 <= 2 and m[ov_r0:ov_r1, c1:bc0].all() and float(m[r0:r1, c1:bc0].mean()) >= .85:
+                    if not overlaps_any(i, f, r0, r1, c0, bc0):
+                        c1 = bc0
+                elif 0 < c0 - bc1 <= 2 and m[ov_r0:ov_r1, bc1:c0].all() and float(m[r0:r1, bc1:c0].mean()) >= .85:
+                    if not overlaps_any(i, f, r0, r1, bc1, c1):
+                        c0 = bc1
+        blocks[i] = (f, r0, r1, c0, c1)
     return blocks
 
 
