@@ -4,8 +4,7 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import {fixture,rig,line,dispose,areas,root} from './bridges-fixture.mjs';
 const cases=JSON.parse(readFileSync(root+'tools/fixtures/bridge-launches.json'));
-const motionFile='web/src/ground-motion.ts';
-const source=readFileSync(root+motionFile,'utf8');
+const source=readFileSync(root+'web/src/vehicle.ts','utf8');
 const protrusions=[];
 async function drive(f,c){
  let start,path,direction=c.direction??c.dir;
@@ -13,7 +12,7 @@ async function drive(f,c){
  else{const heading=c.heading+(direction<0?Math.PI:0);start={x:c.x-Math.sin(heading)*30+Math.cos(c.heading)*(c.side??0),z:c.z+Math.cos(heading)*30+Math.sin(c.heading)*(c.side??0),heading};}
  await f.load([[start.x,start.z]]);
  const v=new f.Vehicle(rig(THREE),f.terrain,f.roads,-1000);v.assist=0;v.place(start.x,start.z,start.heading);v.vx=Math.sin(v.heading)*20;v.vz=-Math.cos(v.heading)*20;v.speed=20;
- let support=v.y,peak=0,maxVy=0,recovered=false,wasAirborne=false;v.respawn=()=>{recovered=true;};
+ let support=v.y,peak=0,maxVy=0,recovered=false;v.respawn=()=>{recovered=true;};
  // Observe the actual same-position data rebase; it is not a launch and moves the reference with the land.
  const correct=v.correctGround;v.correctGround=function(){const y=this.y;correct.call(this);support+=this.y-y;};
  const random=Math.random;Math.random=()=>.5;
@@ -23,15 +22,8 @@ async function drive(f,c){
    if(path){const hit=f.roads.nearest(v.x,v.z,50,r=>r.id===c.id),h=hit?hit.heading+(direction<0?Math.PI:0):v.heading,err=Math.atan2(Math.sin(h-v.heading),Math.cos(h-v.heading));steer=Math.max(-.5,Math.min(.5,err*2));}
    v.update(1/120,{throttle:path?Math.max(-1,Math.min(1,(20-v.speed)*.3)):0,steer,handbrake:false});
    if(recovered)break;maxVy=Math.max(maxVy,v.vy);
-   assert.ok(v.vy<=Math.sqrt(2*9.81*3)+1e-8,`${c.area}/${c.type}/${c.id}: real takeoff speed ${v.vy}`);
-   if(!v.airborne)support=v.y;
-   else {
-     // Reconstruct the starting height from the first ballistic step. Wheel
-     // contact at the crest can put it slightly above the previous frame.
-     if(!wasAirborne)support=v.y-(v.vy+.5*9.81/120)/120;
-     peak=Math.max(peak,v.y-support);
-   }
-   wasAirborne=v.airborne;
+   assert.ok(v.vy<=Math.sqrt(2*9.81*3)+1e-8,`${c.area}/${c.type}/${c.id}: real correction speed ${v.vy}`);
+   if(!v.airborne)support=v.y;else peak=Math.max(peak,v.y-support);
  } }finally{Math.random=random;}
  assert.ok(peak<=3.02,`${c.area}/${c.type}/${c.id}: real launch ${peak}m after data rebasing`);
  return{peak,maxVy,recovered};
@@ -84,10 +76,10 @@ if(!process.argv.includes('--mutation-only')){
 if(process.env.OUT)writeFileSync(process.env.OUT+'/protrusions.json',JSON.stringify(protrusions,null,2)+'\n');
 console.log('Terrain protrusion probes:',protrusions.length);
 if(process.argv.includes('--mutations')){
- const anchor='Math.min(launchGrade * speed, MAX_LAUNCH_SPEED)';assert.equal(source.split(anchor).length,2);
- const c=cases.find(c=>c.area==='porthood'&&c.type==='culvert'&&c.id===711);assert.ok(c);
- await assert.rejects(()=>verify('porthood',{[motionFile]:source.replace(anchor,'launchGrade * speed')},c),/real (takeoff speed|launch)/,'the real Port Hood crest must reject an unlimited takeoff');
- console.log('KILLED maximum takeoff speed removed at Port Hood road 711');
+ const anchor='THREE.MathUtils.clamp(groundVel, -30, MAX_GROUND_RISE_SPEED)';assert.equal(source.split(anchor).length,2);
+ const c=cases.find(c=>c.area==='judique'&&c.type==='culvert'&&c.index===21&&c.dir===1);assert.ok(c);
+ await assert.rejects(()=>verify('judique',{'web/src/vehicle.ts':source.replace(anchor,'THREE.MathUtils.clamp(groundVel, -30, 30)')},c),/real correction speed/,'the real Judique Highway19 culvert21 launch must kill the removed cap');
+ console.log('KILLED cap removed on real Judique Highway19 culvert 21');
  const f=await fixture('mabou',1),culverts=JSON.parse(readFileSync(root+'data/baked/terrain/streams.json')).culverts,mabou=cases.find(c=>c.area==='mabou'&&c.type==='culvert'&&c.id===60);
  assert.throws(()=>checkCulvertPin(f,{...mabou,index:mabou.index-1},culverts),/matches its physical pipe and road/,'old culvert array index must fail');dispose(f);console.log('KILLED stale Mabou culvert index after land copy');
 

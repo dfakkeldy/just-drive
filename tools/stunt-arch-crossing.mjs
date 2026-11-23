@@ -51,7 +51,7 @@ try{
      return height;
     }
     towing.ground=function(x,z,y=1e6){return auditGround('trailer',towing,originalTowGround,x,z,[x,z,y]);};
-    groundOwner.groundAt=function(x,z,y){return auditGround('truck',groundOwner,originalTruckGround,x,z,[x,z,y]);};
+    groundOwner.groundAt=function(x,z){return auditGround('truck',groundOwner,originalTruckGround,x,z,[x,z]);};
     park.resolveSolids=body=>{
      const before=park.contacts,pose={x:body.x,z:body.z,y:body.y,heading:body.heading,pitch:body.pitch??0,roll:body.roll??0,vx:body.vx??0,vz:body.vz??0,speed:body.speed??0},spec=body.spec;
      for(const s of steel){

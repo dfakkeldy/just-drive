@@ -11,8 +11,8 @@ import { relative, resolve } from 'node:path';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const GOLDEN_COMMIT = '3c168bba026df8bec5ac4623c533ded6bc8cd948';
-// Review note: Grounded rides carry zero flight velocity. Crests set takeoff from travel speed and slope. Landing wear and scrub use the drop.
+const GOLDEN_COMMIT = 'd8b87e1c4dbe6ceb5bae3f3cb43301acc1a716ac';
+// Review note: Added three new generic side-by-side garage entries (sxs-utility, sxs-crew, sxs-cabin) with setTravel enabled; existing car, sxs, truck and bike goldens are unchanged.
 const RECORD_PROCEDURE = 'A deliberate change to driving: run node tools/vehicle-nits-check.mjs --record on the new code, paste the goldens with the commit SHA and one line that says what changed and why; a reviewer must see that line.';
 const N = 5000, MIXED_N = 4500, dt = 1 / 120;
 // Paste the --record output here. SHA-256 consumes little-endian Float64 values,
@@ -22,14 +22,14 @@ const GOLDEN = {
   "car": {
     "spec": "718a49190e4b6e1d595bbc90dc1efdfe5115f4070d5b48c2041a92696ab14f28",
     "washboard": {
-      "state": "f90da132d4f1e50f01a00ab16f0e259079a3a93931472cfcbccf53022115d8d1",
+      "state": "b3ad93dd4158c590ecd4e49097492b21fc8231e5d7b6e60fe8b2454c60a20456",
       "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
       "histogram": {
         "5": 5000
       }
     },
     "mixed": {
-      "state": "d380c84174a1e8d3e9d4edd474a6e76000adfb5d22499a973bedabfa1adf4b10",
+      "state": "0e9f7c67909aaa98d9ad8cea8979235cd4e8893f93bb8d6461e70cfb3ff0ee43",
       "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
       "histogram": {
         "3": 3150,
@@ -42,99 +42,103 @@ const GOLDEN = {
   "sxs": {
     "spec": "1fadc6d0b6395780f4a29783a8e884148c8e6deb8df266b1beb35a765219b634",
     "washboard": {
-      "state": "58dcebaf774fee920796c258c6746dbab904078ad0248cfd5868757ff847d8f5",
-      "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
+      "state": "f3ed8d256316d4939a02ff401081eade2216645f0e42ca3e6edf593fda82a120",
+      "draws": "381689f6a1744461c12715c985eff4efb3dd99d9a22e6b731a0833143352e8b6",
       "histogram": {
-        "5": 5000
+        "3": 178,
+        "5": 4822
       }
     },
     "mixed": {
-      "state": "4871dbdc294e13c9e9d8c937ffde967e849f4645897e147c6f09ec3b872ef061",
-      "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
+      "state": "d1c0cd6e0176426a2b6093935cc9128a0c8114702182266069c1d741a0b61b83",
+      "draws": "791729ca86a52039ad5de12ef6efc5120580cb5f0d314e380edfc84582e5b7c1",
       "histogram": {
-        "3": 3150,
-        "5": 654,
-        "7": 396,
-        "11": 300
+        "3": 3508,
+        "5": 488,
+        "7": 287,
+        "11": 217
       }
     }
   },
   "sxs-utility": {
     "spec": "c1c1c4a675065a3122426d22b7121c87d2fe34f1d475dd2f926ca93c83ac6c6d",
     "washboard": {
-      "state": "a01aa7a2467c59f57efb5ed98988e507de3713047d7a04174603aa5adb8dc154",
+      "state": "ad1039f1dcf4692b41ab3389f38bdb5ef734b77418d6f531e5666fb73312dcf0",
       "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
       "histogram": {
         "5": 5000
       }
     },
     "mixed": {
-      "state": "fae5bcf53e93db227544fe4106f051c78c9555b40288ae5e349392660c9a596e",
-      "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
+      "state": "8e6844bfa07ed7b11a10ee86b1b7999ae64bd0082d041fd6e94aa0306eebfa39",
+      "draws": "ccff9d2729ad44829e2beca4bb92099de0c6f968a8067ce10dcc813fff1731b0",
       "histogram": {
-        "3": 3150,
-        "5": 654,
-        "7": 396,
-        "11": 300
+        "3": 3351,
+        "5": 560,
+        "7": 336,
+        "9": 1,
+        "11": 252
       }
     }
   },
   "sxs-crew": {
     "spec": "ce318719d6328e7f47811b647b0a83e824b325239fa2007346974539b85cf873",
     "washboard": {
-      "state": "e2558731dd822aa56c1e8d7cb23b1f48ea0f4cbe8c26918d984e503ffb005916",
+      "state": "24e4a4172a03c0c40286b9ea6b7ac188924cc8aadb445353ba4eeb0bb7eb9765",
       "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
       "histogram": {
         "5": 5000
       }
     },
     "mixed": {
-      "state": "101b4fcf23efec3aa73f127302013672cdf88baefc107f0675b1d1a61e5bbc1b",
-      "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
+      "state": "036e7a83558844719339f7dcf41fe835f8cf6db214ee0e9c8369a4d00d07d5b0",
+      "draws": "ee870530fe8fe17f074a44ab36af882def2e18a287a8c0b76695c152b385723b",
       "histogram": {
-        "3": 3150,
-        "5": 654,
-        "7": 396,
-        "11": 300
+        "3": 3394,
+        "5": 534,
+        "7": 325,
+        "9": 3,
+        "11": 244
       }
     }
   },
   "sxs-cabin": {
     "spec": "7942e6687bcf14f32d812d50990a14e5bb2719b4323a089c8329ad49cbcb783e",
     "washboard": {
-      "state": "9519be3b2e6d5521744515888dd9718092860d2357fe697f457e26eccd9cb7da",
+      "state": "f49d13a15b6bc3683d0b2a6e04696a82516f0a6912252c20975e807e5716c3a6",
       "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
       "histogram": {
         "5": 5000
       }
     },
     "mixed": {
-      "state": "29b312e6123c8ebaa095066d8c2b7c14cd52fecbb4a1604fd17177da18f2e48c",
-      "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
+      "state": "8bf7a67aece6b76a78f33048630a860c3f2f3813018b8b53b1fdd553c41a8ed7",
+      "draws": "0f14491c9ab3c0e4279b5733a01155ac51a103d4f174d55788dc77c0fe80b58e",
       "histogram": {
-        "3": 3150,
-        "5": 654,
-        "7": 396,
-        "11": 300
+        "3": 3358,
+        "5": 556,
+        "7": 335,
+        "9": 2,
+        "11": 249
       }
     }
   },
   "truck": {
     "spec": "4de0b8beb50d0b8d8194b6ea14586d031a879a538bc8659a2a02b59ac19b5d93",
     "washboard": {
-      "state": "31d3e40a56b9c7c10bdd40ddc687f16a3294f0f1115d4f0a061ee1057814a8ca",
+      "state": "a0ef5ec7ea5cca187b5b08f5d166061be3d4712f02c6365a849ba60984f01ca1",
       "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
       "histogram": {
         "5": 5000
       }
     },
     "mixed": {
-      "state": "c01217ac090aaec3613cbeabd4b43e8402b7a81f949d2c3c9d4df1abc3941166",
-      "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
+      "state": "d321f55d0157171c69e2dcc52e4c9f5de786e627025ec1ba9c2ba40602f3dcac",
+      "draws": "b1898faf456d55ec843daf3d53c04c02ab848c1b9fec6a5fc63c635676013b47",
       "histogram": {
-        "3": 3150,
-        "5": 654,
-        "7": 396,
+        "3": 3152,
+        "5": 653,
+        "7": 395,
         "11": 300
       }
     }
@@ -149,7 +153,7 @@ const GOLDEN = {
       }
     },
     "mixed": {
-      "state": "6299ecfd74f6af1c6e56e16da4874a18516119d3004115e1f330c0d05fcd1ffb",
+      "state": "0b2b1462b6173941539ecc1f9c74c0277d72fd263fb839dcb2984d1c785dc2cd",
       "draws": "d7967a6f7d2dd3204ed70cc72c705e33a573aef8431b69c5bbd39e5b5cd67384",
       "histogram": {
         "0": 4500
