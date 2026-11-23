@@ -25,7 +25,7 @@ const cases=[
  ['title save','ride','vehicle-choice.ts','localStorage.setItem(VEHICLE_KEY, next)','localStorage.setItem(VEHICLE_KEY, \'car\')','title switch saves reloads and keeps pose'],
  ['mail garage defaults','ride','garage.ts','if (explore) { try','if (true) { try','saved bike leaves ordinary mail on the original car and game'],
  ['ramp engine','ramp','bike-ride.ts','t * surf.accel','t * 0','bike climbs the real slipway and launches'],
- ['ramp launch','ramp','bike-ride.ts',') this.beginJump();',') this.vy = 0;','bike climbs the real slipway and launches'],
+ ['ramp launch','ramp','bike-ride.ts','this.beginJump();','this.vy = 0;','bike climbs the real slipway and launches'],
  ['ramp landing','ramp','bike-ride.ts','const clean = Math.abs(angle(this.pitch - slope)) < .62','const clean = false && Math.abs(angle(this.pitch - slope)) < .62','bike lands the slipway jump cleanly'],
  ['jump telemetry','ramp','bike-ride.ts','this.lastJump = { ...this.jump };','this.lastJump = { ...this.jump, peakHeight: NaN };','jump telemetry is exposed in dev'],
  ['jump HUD','ramp','ride-features.ts','j && j.airTime > 1','j && j.airTime > 100','HUD shows long jump summary'],

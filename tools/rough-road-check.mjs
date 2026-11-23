@@ -95,9 +95,9 @@ function shake(kmh, kind, { washboard = false, rough = false, water = false } = 
   let drag = 0;
   for (let i = 0; i < seconds * 120; i++) {
     v.vx = ms; v.vz = 0; v.speed = ms; v.heading = Math.PI / 2;
-    const before = v.vx; v.update(dt, { throttle: 0, steer: 0, handbrake: false });
+    const before = v.vx, beforeY = v.y; v.update(dt, { throttle: 0, steer: 0, handbrake: false });
     drag += before - v.vx; v.z = 0.4;
-    vys.push(v.vy);
+    vys.push((v.y - beforeY) / dt);
   }
   setPuddleField(null);
   // 10 Hz samples, as the survey dash camera records: vertical acceleration from the mean vertical speed over each tenth of a second.
