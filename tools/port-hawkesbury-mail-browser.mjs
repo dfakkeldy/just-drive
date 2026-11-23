@@ -245,8 +245,8 @@ for (const url of urls) {
     await keyEvent('keyUp', 'KeyF', 'f');
     console.log(name, 'droneEntrance', JSON.stringify({ ...roofMeta, ...afterDescend }));
     assert.ok(
-      afterDescend.y >= roofMeta.roofTop + 1.5,
-      `${level}: drone must stay above NE entrance roof (${afterDescend.y.toFixed(2)} >= ${(roofMeta.roofTop + 1.5).toFixed(2)}, roof ${roofMeta.roofTop.toFixed(2)})`,
+      afterDescend.y >= roofMeta.roofTop + 1.5 && afterDescend.y <= roofMeta.roofTop + 2.3,
+      `${level}: drone must descend to clearance band above NE entrance roof (${afterDescend.y.toFixed(2)} not in [${(roofMeta.roofTop + 1.5).toFixed(2)}, ${(roofMeta.roofTop + 2.3).toFixed(2)}], roof ${roofMeta.roofTop.toFixed(2)})`,
     );
 
     assert.deepEqual(page.errors, []);
