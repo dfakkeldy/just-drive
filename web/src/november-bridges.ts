@@ -133,8 +133,10 @@ export function ponyTrussVerticalClip(
   const railBottom = PONY_TRUSS.railHeight - 0.11;
   const railTop = PONY_TRUSS.railHeight + 0.11;
   const deckSlope = (y1 - y0) / span;
+  // Exact underside of the slope-rotated bottom chord box: yBase - (chord / 2) / cos(slope).
+  const chordBottom = yBase * (1 - Math.hypot(1, deckSlope));
   const carTop = carY + carHeight;
-  if (carTop < Math.min(y0, y1)) return false;
+  if (carTop < Math.min(y0, y1) + chordBottom) return false;
   if (carY > Math.max(y0, y1) + h + topPad) return false;
 
   // 1. Inner steel guard rail interval: [deckY(s) + railBottom, deckY(s) + railTop] overlaps [carY, carTop].
@@ -152,13 +154,13 @@ export function ponyTrussVerticalClip(
   railRight = Math.max(0, Math.min(span, railRight));
   if (railRight <= railLeft + 1e-4) { railLeft = 0; railRight = 0; }
 
-  // 2. Truss structure interval (bottom chord starts at deckY, inclined end posts, interior web, top chord).
+  // 2. Truss structure interval (slope-rotated bottom chord, inclined end posts, interior web, top chord).
   let trussLeft = 0, trussRight = span;
   if (deckSlope > 1e-7) {
-    trussRight = Math.min(trussRight, (carTop - y0) / deckSlope);
+    trussRight = Math.min(trussRight, (carTop - (y0 + chordBottom)) / deckSlope);
     trussLeft = Math.max(trussLeft, (carY - (y0 + h + topPad)) / deckSlope);
   } else if (deckSlope < -1e-7) {
-    trussLeft = Math.max(trussLeft, (carTop - y0) / deckSlope);
+    trussLeft = Math.max(trussLeft, (carTop - (y0 + chordBottom)) / deckSlope);
     trussRight = Math.min(trussRight, (carY - (y0 + h + topPad)) / deckSlope);
   }
   if (carY > y0 + chord) {

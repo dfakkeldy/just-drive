@@ -393,12 +393,18 @@ for (const {a, b, side} of added) {
     const highEndS = y1 >= y0 ? span - 3.0 : 3.0;
     const highEndDeckY = y0 + (y1 - y0) * (highEndS / span);
     const footprintDrop = (CAR_SPEC.envelope.reach + CAR_SPEC.envelope.radius) * Math.abs(y1 - y0) / span;
+    const railOuter = PONY_TRUSS.railInner + 0.07;
+    const railOuterClear = railOuter + CAR_SPEC.envelope.radius + 0.02;
+    const railOuterHit = railOuter + CAR_SPEC.envelope.radius - 0.03;
+    const trussInnerClear = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius - 0.02;
+    const trussInnerHit = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius + 0.04;
     for (const [label, px, pz, probeY] of [
       ['below span', mx - uz * 1.4, mz + ux * 1.4, Math.min(underGround, midY - CAR_SPEC.height - 0.5)],
       ['top 1.5 cm below sloped deck footprint at midspan', mx - uz * 1.6, mz + ux * 1.6, midY - footprintDrop - CAR_SPEC.height - 0.015],
       ['top 1.5 cm below sloped deck footprint near higher end', ax + ux * highEndS - uz * 1.6, az + uz * highEndS + ux * 1.6, highEndDeckY - footprintDrop - CAR_SPEC.height - 0.015],
-      ['outside start portal 0.60 m above deck', ax - ux * 1.5 - uz * 3.21, az - uz * 1.5 + ux * 3.21, y0 + 0.60],
-      ['outside end portal 0.60 m above deck', bx + ux * 1.5 - uz * 3.21, bz + uz * 1.5 + ux * 3.21, y1 + 0.60],
+      ['outside start rail outer face (2 cm clear) at 0.60 m', ax - ux * 1.5 - uz * railOuterClear, az - uz * 1.5 + ux * railOuterClear, y0 + 0.60],
+      ['outside end rail outer face (2 cm clear) at 0.60 m', bx + ux * 1.5 - uz * railOuterClear, bz + uz * 1.5 + ux * railOuterClear, y1 + 0.60],
+      ['inside mid-span upper truss (2 cm clear) at 1.8 m', mx - uz * trussInnerClear, mz + ux * trussInnerClear, midY + 1.8],
       ['above truss', mx - uz * 1.4, mz + ux * 1.4, midY + 5],
       ['above start inclined portal', ax - ux * 0.6 - uz * 1.6, az - uz * 0.6 + ux * 1.6, y0 + 1.8],
       ['above end inclined portal', bx + ux * 0.6 - uz * 1.6, bz + uz * 0.6 + ux * 1.6, y1 + 1.8],
@@ -415,11 +421,13 @@ for (const {a, b, side} of added) {
       assert.equal(probe.vx, svx, `bridge ${id} ${label} probe vx is not cancelled by truss rail`);
       assert.equal(probe.vz, svz, `bridge ${id} ${label} probe vz is not cancelled by truss rail`);
     }
-    // Paired positive probes: car top just above the sloped deck footprint (touching bottom chord) on both slopes AND 1.8 m mid-span DO collide.
-    for (const [label, px, pz, probeY] of [
-      ['top 2.5 cm above sloped deck footprint at midspan', mx - uz * 1.6, mz + ux * 1.6, midY - footprintDrop - CAR_SPEC.height + 0.025],
-      ['top 2.5 cm above sloped deck footprint near higher end', ax + ux * highEndS - uz * 1.6, az + uz * highEndS + ux * 1.6, highEndDeckY - footprintDrop - CAR_SPEC.height + 0.025],
-      ['mid-span 1.8 m upper truss', mx - uz * 1.6, mz + ux * 1.6, midY + 1.8],
+    // Paired positive probes on the colliding side of every vertical and lateral boundary.
+    for (const [label, px, pz, probeY, minPush] of [
+      ['top 2.5 cm above sloped deck footprint at midspan', mx - uz * 1.6, mz + ux * 1.6, midY - footprintDrop - CAR_SPEC.height + 0.025, 0.1],
+      ['top 2.5 cm above sloped deck footprint near higher end', ax + ux * highEndS - uz * 1.6, az + uz * highEndS + ux * 1.6, highEndDeckY - footprintDrop - CAR_SPEC.height + 0.025, 0.1],
+      ['start rail outer face (3 cm overlap) at 0.60 m', ax - ux * 1.5 - uz * railOuterHit, az - uz * 1.5 + ux * railOuterHit, y0 + 0.60, 0.01],
+      ['end rail outer face (3 cm overlap) at 0.60 m', bx + ux * 1.5 - uz * railOuterHit, bz + uz * 1.5 + ux * railOuterHit, y1 + 0.60, 0.01],
+      ['mid-span upper truss inner face (4 cm overlap) at 1.8 m', mx - uz * trussInnerHit, mz + ux * trussInnerHit, midY + 1.8, 0.02],
     ]) {
       const hitProbe = {
         x: px, z: pz, y: probeY, heading,
@@ -427,7 +435,8 @@ for (const {a, b, side} of added) {
       };
       const sx = hitProbe.x, sz = hitProbe.z;
       rails.blockBridge(hitProbe, 1 / 120);
-      assert.ok(Math.hypot(hitProbe.x - sx, hitProbe.z - sz) > 0.1, `bridge ${id} ${label} collides with visible steel`);
+      const moved = Math.hypot(hitProbe.x - sx, hitProbe.z - sz);
+      assert.ok(moved > minPush, `bridge ${id} ${label} collides with visible steel (${moved.toFixed(4)} m)`);
     }
     // Shared production registerRailContacts: test Towing.allowsPose, zero extra yaw on active vehicle, and live coupled trailer rail contact.
     for (const mode of ['solo', 'fleet']) {
