@@ -51,7 +51,12 @@ async function readers(c,replacements={}){
  if(c.area==='cansocauseway'&&c.span===-100094){
   const span=f.roads.modern.spans.find(r=>r.road.id===35);await f.load(span.pts);f.roads.update(new THREE.Vector3(span.pts[0][0],10,span.pts[0][1]));let wet=null;
   for(let s=1;s<span.length-1&&!wet;s++){const p=f.roads.modern.at(span,s),land=f.terrain.heightAt(p.x,p.z),deck=f.roads.deckHeight(p.x,p.z);if(land<f.terrain.seaLevel-.25&&deck!==null&&deck-land>1)wet={...p,land};}
-  assert.ok(wet,'real water under canal deck witness');const swimmer=new f.Vehicle(rig(THREE),f.terrain,f.roads,f.terrain.seaLevel);swimmer.place(wet.x,wet.z,0,wet.land);swimmer.update(1/120,{throttle:0,steer:0,handbrake:true});assert.ok(swimmer.sunk>0,'car on-deck surface gate must not suppress water below a deck');const subBike=new f.BikeRide(f.createBike(),f.terrain,f.roads,f.terrain.seaLevel);subBike.place(wet.x,wet.z,0,wet.land);subBike.update(1/120,{throttle:0,steer:0,handbrake:true});assert.ok(subBike.sunk>0,'source bridge bit is not physical bike support');
+  assert.ok(wet,'real water under canal deck witness');// Main's #130 refuses a placement in water: the deck overhead must not make that water dry ground. The body is then
+  // set in the water directly (as if it drove there) to test the step's own water gate.
+  const swimmer=new f.Vehicle(rig(THREE),f.terrain,f.roads,f.terrain.seaLevel);assert.equal(swimmer.place(wet.x,wet.z,0,wet.land),false,'a deck overhead does not make the water under it a dry placement (car)');
+  Object.assign(swimmer,{x:wet.x,z:wet.z,y:wet.land,heading:0});swimmer.update(1/120,{throttle:0,steer:0,handbrake:true});assert.ok(swimmer.sunk>0,'car on-deck surface gate must not suppress water below a deck');
+  const subBike=new f.BikeRide(f.createBike(),f.terrain,f.roads,f.terrain.seaLevel);assert.equal(subBike.place(wet.x,wet.z,0,wet.land),false,'a deck overhead does not make the water under it a dry placement (bike)');
+  Object.assign(subBike,{x:wet.x,z:wet.z,y:wet.land,heading:0});subBike.ready=subBike.capture();assert.ok(subBike.ready,'the bike in the water has wheel support');subBike.update(1/120,{throttle:0,steer:0,handbrake:true});assert.ok(subBike.sunk>0,'source bridge bit is not physical bike support');
  }
  console.log('PASS readers/placement/cameras: '+c.name);dispose(f);
 }

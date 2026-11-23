@@ -48,7 +48,7 @@ const mutations=[
  ['flip count','one full backflip is counted','bike-ride.ts','Math.floor((Math.abs(this.airPitch) + 1e-6) / TAU)','Math.floor((Math.abs(this.airPitch) + 1e-6) / (TAU * 2))'],
  ['bad landing','bad landing crashes and resets safe upright at rest','bike-ride.ts','Math.abs(angle(this.pitch - slope)) < .62','Math.abs(angle(this.pitch - slope)) < 6.3'],
  ['crash timer recovery','bad landing crashes and resets safe upright at rest','bike-ride.ts','if (this.crashTime >= 1.6)','if (this.crashTime >= 100)'],
- ['safe placement','bad landing crashes and resets safe upright at rest','bike-ride.ts',"this.place(safe.x, safe.z, safe.heading,'y'in safe?safe.y:undefined);",'this.place(safe.x + 40, safe.z, safe.heading);'],
+ ['safe placement','bad landing crashes and resets safe upright at rest','bike-ride.ts','this.place(safe.x, safe.z, safe.heading, safe.y);','this.place(safe.x + 40, safe.z, safe.heading, safe.y);'],
  ['whip','whip returns after air control is released','bike-ride.ts','-input.steer * .85','input.steer * .85'],
  ['edge wall','map edge is a wall','bike-ride.ts','if (!this.bounds) return;','if (this.bounds) return;'],
  ['solid crash','yard solids cannot be crossed and cause a tumble','bike-ride.ts','if (speed > 7 && !this.crashTime)','if (speed > 100 && !this.crashTime)'],

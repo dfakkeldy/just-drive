@@ -771,3 +771,20 @@ console.log('PASS Towing void checks, Fleet water stop without auto-teleport, ex
   assert.equal(loadSpeedCap(DRONE.maxSpeed, distInward), DRONE.maxSpeed, 'standalone drone flies freely back inward');
 }
 console.log('PASS drone flies over water, never passes under land, cliffs or void, and stops at terrain root edge');
+{
+  // A height-free placement (placeAt: a visit start, a restart, a ?at= link) on a bridge span whose deck is not built
+  // yet stands on the land under it and keeps asking for its deck (just-drive#6), so the water there does not refuse it.
+  // A placement with a height in the same water, or a placeAt in water off any span, is still refused.
+  const seabed = makeTerrain(() => ({ ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+  const spanned = makeRoads(-200, 110), elsewhere = makeRoads(-200, 110);
+  spanned.bridgeRuns = () => [{ roads: new Set([1]), pts: [[-50, 0], [50, 0]] }];
+  elsewhere.bridgeRuns = () => [{ roads: new Set([1]), pts: [[150, 0], [250, 0]] }];
+  for (const kind of ['car', 'bike']) {
+    const r = makeRide(kind, seabed, spanned); r.bounds = [-200, -200, 400, 200];
+    assert.equal(r.placeAt(0, 0, Math.PI / 2), true, `${kind}: placeAt on a span with no deck yet stands and waits for its deck`);
+    assert.equal(r.place(0, 0, Math.PI / 2, -3), false, `${kind}: a placement with a height in the water under the span is refused`);
+    const off = makeRide(kind, seabed, elsewhere); off.bounds = [-200, -200, 400, 200];
+    assert.equal(off.placeAt(0, 0, Math.PI / 2), false, `${kind}: placeAt in water off any span is refused`);
+  }
+  console.log('PASS a height-free placement on an unbuilt span waits for its deck; other wet placements are refused');
+}

@@ -52,7 +52,8 @@ async function ownership(replacements={}){
   // point (an overpass above a ground road), or road 54 where its carrying span is elsewhere (a source road runs for
   // kilometres), stands on land, never on the deck overhead. The car's own height never decides it (here it is low).
   const runs=f.roads.bridgeRuns.bind(f.roads),away=runs().map(run=>({...run,pts:run.pts.map(([x,z])=>[x+500,z])}));
-  for(const [kind,id,elsewhere] of[['carried',54,false],['uncarried',-999999,false],['carried elsewhere',54,true]]){v.place(p.x,p.z,p.yaw,land);v.trail.length=0;v.lastGood=null;
+  for(const [kind,id,elsewhere] of[['carried',54,false],['uncarried',-999999,false],['carried elsewhere',54,true]]){v.place(p.x,p.z,p.yaw,land);v.resetVisit();// main's #130 tries its safe points (here the land pose just placed) before the fallbacks: clear them too
+   
    const hit={x:p.x,z:p.z,heading:p.yaw,road:{id,kind:1,bridge:false}};f.roads.nearest=(x,z,reach,...args)=>reach===900?(far?null:hit):reach===2000?hit:nearest.call(f.roads,x,z,reach,...args);
    if(elsewhere)f.roads.bridgeRuns=()=>away;
    try{v.respawn();if(kind==='carried')assert.ok(Math.abs(v.y-deck)<.04,'fallback respawn keeps owned deck '+(far?'bounds':'nearest'));else assert.ok(Math.abs(v.y-land)<.2,`fallback respawn under an overpass stays on land (${kind}) `+(far?'bounds':'nearest')+': '+(v.y-land));}finally{f.roads.nearest=nearest;delete f.roads.bridgeRuns;}
@@ -106,8 +107,8 @@ if(process.argv.includes('--mutations')){
  for(const[file,from,to,why]of[
  ['web/src/vehicle.ts','const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);\n    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','const placed = this.place(this.x, this.z, this.heading);\n    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','stuck re-place'],
  ['web/src/vehicle.ts','const placed = this.place(this.x, this.z, this.heading, deck ?? this.retryHeight);\n    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','const placed = this.place(this.x, this.z, this.heading,Number.isFinite(this.y)?this.y:undefined);\n    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','stale stuck height'],
- ['web/src/vehicle.ts','this.place(hit.x, hit.z, this.inward(hit.x, hit.z, hit.heading),this.fallbackReference(hit))','this.place(hit.x, hit.z, this.inward(hit.x, hit.z, hit.heading))','fallback respawn keeps owned deck'],
- ['web/src/vehicle.ts','this.place(near.x, near.z, this.inward(near.x, near.z, near.heading),this.fallbackReference(near))','this.place(near.x, near.z, this.inward(near.x, near.z, near.heading))','fallback respawn keeps owned deck'],
+ ['web/src/vehicle.ts','this.tryDryPlace(hit.x, hit.z, this.inward(hit.x, hit.z, hit.heading), this.fallbackReference(hit))','this.tryDryPlace(hit.x, hit.z, this.inward(hit.x, hit.z, hit.heading))','fallback respawn keeps owned deck'],
+ ['web/src/vehicle.ts','this.tryDryPlace(near.x, near.z, this.inward(near.x, near.z, near.heading), this.fallbackReference(near))','this.tryDryPlace(near.x, near.z, this.inward(near.x, near.z, near.heading))','fallback respawn keeps owned deck'],
  ['web/src/vehicle.ts','if (!run.roads.has(hit.road.id)) continue;','','under an overpass stays on land'],
  ['web/src/vehicle.ts','<= DECK_REACH) return','<= Infinity) return','fallback respawn under an overpass stays on land \\(carried elsewhere'],
  ['web/src/vehicle.ts','return this.stuck ? (this.inferring','return false ? (this.inferring','stale stuck height'],
@@ -116,7 +117,7 @@ if(process.argv.includes('--mutations')){
  ['web/src/vehicle.ts','    this.placeInfer = infer && deck === undefined;\n    return placed;\n  }\n  private deckReference','    return placed;\n  }\n  private deckReference','car cold placement'],
  ['web/src/vehicle.ts','const infer = this.inferring(x, z), deck = infer ? this.deckReference(x, z) : undefined;','const infer = this.inferring(x, z), deck = undefined;','car cold placement rises onto the built deck'],
  ['web/src/bike-ride.ts','const infer = this.inferring(x, z), deck = infer ? placementDeckReference(this.roads, x, z) : undefined;','const infer = this.inferring(x, z), deck = undefined;','bike cold placement rises onto the built deck'],
- ['web/src/bike-ride.ts','this.lastJump = null; this.placeAt(x, z, heading); }','this.lastJump = null; this.place(x, z, heading); }','bike restart takes its deck'],
+ ['web/src/bike-ride.ts','this.#awaitingLoad = true; this.placeAt(x, z, heading); }','this.#awaitingLoad = true; this.place(x, z, heading); }','bike restart takes its deck'],
  ['web/src/vehicle.ts','Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5;','true;','car a moved car never asks'],
  ['web/src/bike-ride.ts','Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5;','true;','bike a moved car never asks'],
  ['web/src/vehicle.ts','return hit ? spanDeckReference(roads, hit) : undefined;','return roads.deckHeight(x, z) ?? undefined;','height-free placement under an overpass stays on land'],
