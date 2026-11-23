@@ -11,7 +11,7 @@ import { relative, resolve } from 'node:path';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const GOLDEN_COMMIT = '003257cfd0ea16944a0b45e72c141123b027fb88';
+const GOLDEN_COMMIT = '83d6e7d5d56e88106e381c30cd2f844624714a2c';
 // Review note: Grounded rides carry zero flight velocity. Crests set takeoff from travel speed and slope. Landing wear and scrub use the drop.
 const RECORD_PROCEDURE = 'A deliberate change to driving: run node tools/vehicle-nits-check.mjs --record on the new code, paste the goldens with the commit SHA and one line that says what changed and why; a reviewer must see that line.';
 const N = 5000, MIXED_N = 4500, dt = 1 / 120;
