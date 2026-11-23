@@ -2097,39 +2097,6 @@ for (const element of [pauseScreen, pauseButton]) for (const event of ['pointerd
 
 // ---- settings -----------------------------------------------------------------------------
 installSettings();
-async function syncSunPaths(on: boolean): Promise<void> {
-  sunPathsOn = on;
-  if (!on) {
-    drawSkySunPaths = null;
-    skySunPaths?.dispose();
-    skySunPaths = null;
-    return;
-  }
-  if (skySunPaths) return;
-  try {
-    if (!sunPathsMod) {
-      const chunk = sunPathsChunk;
-      sunPathsChunk = null;
-      sunPathsMod = chunk ? await chunk.take() : await import('./sun-paths');
-    }
-    if (!sunPathsOn || skySunPaths) return;
-    skySunPaths = new sunPathsMod.SkySunPaths(gameSunPathDate(lightStudy, weather), lat, lon, sun, innerWidth, innerHeight, !!finish);
-    drawSkySunPaths = () => skySunPaths?.render(renderer, camera, finish?.on ? finish.depthTexture : null, skySunPathsVisible({
-      sunSeeker: !!sunSeeker,
-      bigMap: !!bigMap?.busy,
-      replay: replay.active,
-      pauseScreen: pause.screen,
-      interiors: interiors.busy,
-    }));
-  } catch (error) {
-    console.warn('Sky sun paths could not load.', error);
-  }
-}
-if (!bare) {
-  const sunPathsBox = toggle(SUN_PATHS_KEY, SUN_PATHS_LABEL, sunPathsOn, on => { void syncSunPaths(on); });
-  if (sunPathsBox) sunPathsBox.id = 'sunPaths';
-}
-if (import.meta.env.DEV) expose({ get skySunPaths() { return skySunPaths; } }, false);
 // Reserve the credit chip's full height, including when it wraps beside property lines.
 const creditChip = document.getElementById('credit');
 if (creditChip) new ResizeObserver(() => {
@@ -3004,6 +2971,39 @@ function frame(now: number) {
   requestAnimationFrame(frame);
   } catch (error) { page.fail(error); }
 }
+async function syncSunPaths(on: boolean): Promise<void> {
+  sunPathsOn = on;
+  if (!on) {
+    drawSkySunPaths = null;
+    skySunPaths?.dispose();
+    skySunPaths = null;
+    return;
+  }
+  if (skySunPaths) return;
+  try {
+    if (!sunPathsMod) {
+      const chunk = sunPathsChunk;
+      sunPathsChunk = null;
+      sunPathsMod = chunk ? await chunk.take() : await import('./sun-paths');
+    }
+    if (!sunPathsOn || skySunPaths) return;
+    skySunPaths = new sunPathsMod.SkySunPaths(gameSunPathDate(lightStudy, weather), lat, lon, sun, innerWidth, innerHeight, !!finish);
+    drawSkySunPaths = () => skySunPaths?.render(renderer, camera, finish?.on ? finish.depthTexture : null, skySunPathsVisible({
+      sunSeeker: !!sunSeeker,
+      bigMap: !!bigMap?.busy,
+      replay: replay.active,
+      pauseScreen: pause.screen,
+      interiors: interiors.busy,
+    }));
+  } catch (error) {
+    console.warn('Sky sun paths could not load.', error);
+  }
+}
+if (!bare) {
+  const sunPathsBox = toggle(SUN_PATHS_KEY, SUN_PATHS_LABEL, sunPathsOn, on => { void syncSunPaths(on); });
+  if (sunPathsBox) sunPathsBox.id = 'sunPaths';
+}
+if (import.meta.env.DEV) expose({ get skySunPaths() { return skySunPaths; } }, false);
 // Settings > Advanced: on phone detail, once the far views pack is installed (desktop always draws it).
 if (!bare && LOW && farPack) farPhoneSetting(advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice), farPhone.choice, farPhone.fromUrl, touchDevice);
 const graphics = document.getElementById('graphics');
