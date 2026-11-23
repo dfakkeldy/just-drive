@@ -102,7 +102,19 @@ export class Route {
   /** Set before the route is built: a box the car cannot reach (outside the map's wall) is not on the route. */
   static reachable: ((x: number, z: number) => boolean) | null = null;
 
-  constructor(roads: Roads, props: Pick<Props, 'mail' | 'sites'> | null, enabled = true) {
+  constructor(roads: Roads, props: Pick<Props, 'mail' | 'sites'> | null, enabled = true, customRun?: Run) {
+    if (customRun) {
+      this.runs = [customRun];
+      for (const stop of customRun.stops) this.members.set(stop.index, stop);
+      this.rural.push(...customRun.rural);
+      if (props) {
+        const frames = new Map<object, number>();
+        for (const p of props.mail) frames.set(p.motion, (frames.get(p.motion) ?? 0) + 1);
+        this.downCandidates.push(...this.rural.filter((i) => frames.get(props.mail[i].motion) === 1));
+      }
+      this.late = customRun.rural[0] ?? -1;
+      return;
+    }
     this.runs = enabled ? RUNS.map((r) => ({ ...r, rural: [], sites: [], stops: [], start: null }))
       : [{ name: 'Local roads', short: 'LOCAL ROADS', rural: [], sites: [], stops: [], start: null }];
     if (!enabled) { this.late = -1; return; }

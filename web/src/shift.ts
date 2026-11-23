@@ -106,7 +106,7 @@ export class Shift {
 
   constructor(private readonly props: Props | null, private readonly mail: Mail, private readonly roads: Roads,
     private readonly terrain: Terrain, buildings: Building[], village: [number, number], private readonly low: boolean,
-    params: URLSearchParams, private readonly restart: () => void, private readonly routeEnabled = true, readonly fired = false, fixedDay = 0) {
+    params: URLSearchParams, private readonly restart: () => void, private readonly routeEnabled = true, readonly fired = false, fixedDay = 0, customRun?: Run) {
     this.roadsideReport.hidden = this.bossReport.hidden = true;
     this.bossReport.id = 'reportBoss';
     document.getElementById('reportMissed')!.after(this.roadsideReport, this.bossReport);
@@ -118,7 +118,7 @@ export class Shift {
     // Today's run fixes the day for every player (daily-rules.ts). Get Fired never writes the career, so nothing is saved.
     if (fired && Number.isSafeInteger(fixedDay) && fixedDay > 0) this.career = { ...freshCareer(), day: fixedDay };
     if (params.get('double') === '1') this.career.double = true;
-    this.route = new Route(roads, props, routeEnabled);
+    this.route = new Route(roads, props, routeEnabled, customRun);
     const forced = Number(params.get('run'));
     this.forcedRun = Number.isSafeInteger(forced) && forced >= 1 && forced <= this.route.runs.length ? forced : 0;
     this.ruts = new Ruts(terrain, buildings, village, low, (id, x, z, at) => {

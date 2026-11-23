@@ -105,7 +105,7 @@ import { MineSite } from './mine-site';
 import { MineInterior } from './interior-mine';
 import { plantDoor } from './interior-plant';
 import { LawnDemo } from './shift-demo';
-import { Route } from './route';
+import { Route, buildPointTupperRoute } from './route';
 import { SEA_FRAG, SEA_VERT } from './shaders';
 import { SunShadows, lookFocus } from './shadows';
 import { Streams, type StreamFile } from './streams';
@@ -192,7 +192,8 @@ if (DAILY) {
   params.set('mode', 'fired'); params.set('vehicle', DAILY.vehicle); params.set('weather', DAILY.mood); params.set('start', DAILY.start);
   for (const key of ['playerDate', 'playerTime', 'driveAt']) params.delete(key);
 }
-const gameMode = ERA.explore ? 'explore' : AREA.mail ? readMode(params, undefined, SITE) : 'explore', firedMode = gameMode === 'fired', mailMode = gameMode === 'mail' || firedMode;
+const pointTupperMail = AREA.id === 'pointtupper' && ERA.modern && !ERA.explore && SITE.brand !== 'just' && params.get('mode') === 'mail';
+const gameMode = ERA.explore ? 'explore' : AREA.mail ? readMode(params, undefined, SITE) : pointTupperMail ? 'mail' : 'explore', firedMode = gameMode === 'fired', mailMode = gameMode === 'mail' || firedMode;
 const droneVehicle = isDroneVehicle(params, !mailMode);
 if (!mailMode) prepareExplore();
 // A vehicle whose model is a file starts its download now, beside the land. The game waits for it once, just before
@@ -1076,7 +1077,7 @@ function applyShot(s: Shot) {
 // Today's run starts every try at its seeded place, not at the first stop of the route.
 const dailyPose = DAILY ? startKey(DAILY.start, roads.roads, vehicle.bounds) : null;
 function placeFirstStop(kind: 'start-over' | 'new-visit' = 'start-over'): void {
-  const start = AREA.route ? shift.run.start : roadStart(roads.roads);
+  const start = (AREA.route || pointTupperMail) ? shift.run.start : roadStart(roads.roads);
   const namedStart = AREA.id === 'westbay' && ERA.modern && params.get('poster') === 'sugar-camp-quarry' ? sugarCampStart(roads.roads, manifest.village, vehicle.bounds!) : undefined;
   const pose = namedStart ?? dailyPose ?? start ?? { x: 0, z: 0, heading: Math.PI / 4 };
   // The poster start always faces south, toward the quarry, on Start over too.
@@ -1088,11 +1089,12 @@ if (edge) { const [bx0, bz0, bx1, bz1] = edge.bounds; Route.reachable = (x, z) =
 const resets: Array<() => void> = [];
 // Named slots preserve the old reset order, independent of feature construction order.
 const resetSlot = { interiors: 0, relief: 1, yardJob: 2, fishing: 3, roadScene: 4, schoolBus: 5, stuntPark: 6, roadAnimals: 7 };
+const pointTupperRun = pointTupperMail ? buildPointTupperRoute(roads, props, manifest.village) : undefined;
 const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, properties, manifest.village, LOW, params, () => {
   multiplayer?.reset();
   resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; devHooks.reset();
-}, AREA.route, firedMode, DAILY?.day ?? 0) : new FreeDrive(roads, manifest.village);
+}, AREA.route, firedMode, DAILY?.day ?? 0, pointTupperRun) : new FreeDrive(roads, manifest.village);
 if (shift instanceof Shift) shift.endsAtSix = !DAILY;
 const roadScene = AREA.roadScene && shift instanceof Shift ? new RoadScene(roads, terrain, shift, params) : null;
 resets[resetSlot.roadScene] = () => roadScene?.reset();
@@ -1197,6 +1199,7 @@ if (roadAnimals && towing) roadAnimals.towed = towing;
 if (touchDevice && !bare && !horse && !droneVehicle && ride.drivingHelp) drivingHelpSetting(document.getElementById('settings'), document.getElementById('startOver'), strong => { vehicle.strongHelp = strong; if (fleet) for (const m of fleet.members) m.vehicle.strongHelp = strong; });
 if (horse) shift.damage.reset();
 vehicle.damage = horse ? null : shift.damage; vehicle.desktopPull = !touchDevice && !LOW;
+if (import.meta.env.DEV) expose({ mail }, false);
 if (import.meta.env.DEV) expose({ shift, roadScene, schoolBus, animals, sidewalks, aiDriver });
 if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.mjs and the guard rail night pictures
 // Outside the mail game a door is only a place to look: no shift, no receipt. Mabou has no such door, so it stays quiet.
@@ -2601,6 +2604,7 @@ const hudState: HudState = {
   done: 0, stops: 0, delivered: 0, lawn: 0, ditch: 0, trailerReason: '', atEdge: false, route: !!AREA.route,
   showRuts: params.has('lawn'), ruts: 0, lawns: 0, drone: '',
 };
+if (pointTupperMail) hudState.route = true;
 function frame(now: number) {
   pauseButton.hidden = !started || bare;
   document.body.classList.toggle('gameStarted', started);

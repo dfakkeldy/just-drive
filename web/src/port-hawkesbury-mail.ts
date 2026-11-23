@@ -71,6 +71,11 @@ export const PH_POST_OFFICE = Object.freeze({
     Object.freeze([4.05, 14.08, -25.32, -8.43] as const),
     Object.freeze([14.08, 20.29, -15.8, -6.91] as const),
   ]),
+  /** Raised exterior structures that must also block vehicles: rear 0.85 m concrete loading dock and SW lobby landing/rail. */
+  solidExtras: Object.freeze([
+    Object.freeze([2.25, 4.05, -16.2, -10.6] as const),
+    Object.freeze([-10.8, -2.2, 8.43, 10.43] as const),
+  ]),
   /** Concrete customer entrance walkway and SW paved parking / loading driveway (local [x0, x1, z0, z1]). */
   pads: Object.freeze([
     Object.freeze([10.2, 14.2, 8.8, 20.4] as const),
@@ -83,8 +88,8 @@ export const PH_POST_OFFICE = Object.freeze({
   signText: 'POST OFFICE',
   /** Service drop attachment on the SE front brick wall, below the flat-roof cornice (for baked building 149). */
   serviceDrop: Object.freeze({ building: 149, x: -8.75, z: 8.43, height: 5.2 }),
-  /** Town mail drop point: front postal entrance apron beside the red letter box, facing Pitt Street (SE, 137 deg). */
-  dropLocal: Object.freeze({ x: 12.6, z: 11.4, heading: 137, radius: 6, label: 'Port Hawkesbury Post Office' }),
+  /** Town mail drop point: open front entrance walkway apron (clear of vestibule z <= 8.8), facing Pitt Street (SE, 137 deg). */
+  dropLocal: Object.freeze({ x: 12.2, z: 14.5, heading: 137, radius: 4.5, label: 'Port Hawkesbury Post Office' }),
 });
 
 /** Map coordinates (EPSG:2961) of the Port Hawkesbury Post Office mail drop. */
@@ -107,11 +112,11 @@ export function postOfficeClear(village: readonly [number, number]): [number, nu
   ];
 }
 
-/** Strip-cut collision solids for the Port Hawkesbury Post Office building, flagpole and street letter box. */
+/** Strip-cut collision solids for the Port Hawkesbury Post Office building, loading dock, landing, flagpole and street letter box. */
 export function postOfficeSolids(village: readonly [number, number]): Solid[] {
   const world = (e: number, n: number) => ({ x: e - village[0], z: village[1] - n });
   const heading = (PH_POST_OFFICE.frame.az * Math.PI) / 180;
-  const raw: Solid[] = PH_POST_OFFICE.rects.map(([x0, x1, z0, z1]) => {
+  const raw: Solid[] = [...PH_POST_OFFICE.rects, ...PH_POST_OFFICE.solidExtras].map(([x0, x1, z0, z1]) => {
     const [e, n] = poToMap((x0 + x1) / 2, (z0 + z1) / 2);
     return { ...world(e, n), half: (x1 - x0) / 2, halfWidth: (z1 - z0) / 2, heading };
   });

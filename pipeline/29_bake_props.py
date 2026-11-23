@@ -257,8 +257,8 @@ def place_mailboxes(net, ref, sites, cabinets, cabinets_before, safe, village, e
         home = (b['x'], b['y'])
         if b['kind'] != 'house' and (b['kind'] != 'barn' or any(distance(home, (h['x'], h['y'])) < 60 for h in houses)):
             continue
-        if any(distance(home, (x, y)) < radius for x, y, radius in no_box) or in_no_box_polygon(home, no_box_polys):
-            continue                                        # no roadside box for the hand-built house site or town limit
+        if any(distance(home, (x, y)) < radius for x, y, radius in no_box):
+            continue                                        # no roadside box for the hand-built house site
         found = candidate(b, ref, driveways, cabinets_before, village, exclusion)
         if found:
             pending[found['road']].append(found)
@@ -321,6 +321,18 @@ def place_mailboxes(net, ref, sites, cabinets, cabinets_before, safe, village, e
                     report.append(dict(building=m['id'], road=road, how=how))
             for m in cluster:
                 entries.remove(m)
+    if no_box_polys:
+        kept_boxes, kept_report = [], []
+        for box, row in zip(mailboxes, report):
+            if in_no_box_polygon((box['x'], box['y']), no_box_polys):
+                continue
+            kept_boxes.append(box)
+            kept_report.append(row)
+        group_counts = collections.Counter(b['group'] for b in kept_boxes if b['group'] is not None)
+        for box in kept_boxes:
+            if box['group'] is not None and group_counts[box['group']] < 2:
+                box['group'] = None
+        return kept_boxes, kept_report
     return mailboxes, report
 
 
