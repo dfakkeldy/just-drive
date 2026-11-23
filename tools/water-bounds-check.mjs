@@ -27,6 +27,7 @@ import { BikeRide } from '../web/src/bike-ride.ts';
 import { BIKE_SPEC } from '../web/src/bike.ts';
 import { Towing } from '../web/src/towing.ts';
 import { Fleet } from '../web/src/fleet.ts';
+import { placeAtStart } from '../web/src/start-here.ts';
 import { checkpoint, reusableCheckpoint } from '../web/src/fleet-checkpoint.ts';
 import { DRONE, DRONE_LOAD, loadSpeedCap, stepDrone } from '../web/src/drone-rules.ts';
 import { Drone, createTerrainReady } from '../web/src/drone.ts';
@@ -1333,9 +1334,30 @@ function runDeckWaitTests(api, quiet = false) {
     }
     log('PASS Fleet unbuilt-span wait, camera framing, 8 s dry fallbacks, water-stop recovery and built-deck start');
   }
+
+  // 8j. Solo Start-where-I-am (placeAtStart) skips an unbuilt bridge span candidate so candidate search lands immediately on the next dry road.
+  {
+    const mixedLand = makeTerrain((x) => ({ ground: x <= -10 ? 2 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: x >= -5, deck: false }));
+    const spanRoads = makeRoads(-60, 60);
+    spanRoads.bridgeRuns = () => [{ roads: new Set([1]), pts: [[-5, 0], [50, 0]], halfWidth: 4 }];
+    for (const kind of ['car', 'bike']) {
+      const r = mkRide(kind, mixedLand, spanRoads); r.bounds = [-100, -100, 100, 100];
+      assert.equal(r.place(-40, 0, Math.PI / 2), true);
+      const candidates = [
+        { x: 0, z: 0, heading: Math.PI / 2, distance: 0 },
+        { x: -20, z: 0, heading: Math.PI / 2, distance: 20 },
+      ];
+      const chosen = candidates.find(c => api.placeAtStart(r, c));
+      assert.equal(chosen?.x, -20, `${kind}: placeAtStart skips unbuilt span candidate and selects dry road at x=-20`);
+      assert.equal(r.waitingForDeck, false, `${kind}: placeAtStart dry candidate is not waiting for a deck`);
+      assert.equal(r.skipDeckWait, false, `${kind}: placeAtStart restores skipDeckWait after returning`);
+      assert.ok(Math.abs(r.x - (-20)) < 1e-6 && Math.abs(r.y - 2) < .2, `${kind}: placeAtStart stands immediately on dry road (x=${r.x.toFixed(1)}, y=${r.y.toFixed(2)})`);
+    }
+    log('PASS solo placeAtStart skips unbuilt bridge spans and selects the next dry candidate');
+  }
 }
 
-runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE_SPEC, TRUCK_SPEC, DECK_WAIT_SECONDS });
+runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE_SPEC, TRUCK_SPEC, DECK_WAIT_SECONDS, placeAtStart });
 
 // Mutation checks for every unbuilt-span state across car, bike and Fleet (runs in ~2.5 s).
 {
@@ -1352,6 +1374,7 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
           "export { createTruck, TRUCK_SPEC } from './web/src/truck.ts';",
           "export { CAR_SPEC } from './web/src/vehicle-spec.ts';",
           "export { BIKE_SPEC } from './web/src/bike.ts';",
+          "export { placeAtStart } from './web/src/start-here.ts';",
         ].join('\n'),
         resolveDir: root,
         loader: 'ts',
@@ -1382,7 +1405,7 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     [
       'car-no-wait',
       'web/src/vehicle.ts',
-      `    const waitDeck = !dry && !this.#recovering && pose.y === undefined
+      `    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(x, z) === null && placementOnSpan(this.roads, x, z);`,
       '    const waitDeck = false;',
@@ -1391,11 +1414,32 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     [
       'bike-no-wait',
       'web/src/bike-ride.ts',
-      `    const waitDeck = !dry && !this.#recovering && pose.y === undefined
+      `    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(pose.x, pose.z) === null && placementOnSpan(this.roads, pose.x, pose.z);`,
       '    const waitDeck = false;',
       /bike: placeAt on an unbuilt span over water waits for its deck/,
+    ],
+    [
+      'car-start-here-waits-on-unbuilt-span',
+      'web/src/vehicle.ts',
+      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined',
+      '    const waitDeck = !dry && !this.#recovering && pose.y === undefined',
+      /car: placeAtStart skips unbuilt span candidate and selects dry road at x=-20/,
+    ],
+    [
+      'bike-start-here-waits-on-unbuilt-span',
+      'web/src/bike-ride.ts',
+      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined',
+      '    const waitDeck = !dry && !this.#recovering && pose.y === undefined',
+      /bike: placeAtStart skips unbuilt span candidate and selects dry road at x=-20/,
+    ],
+    [
+      'start-here-no-skip-flag',
+      'web/src/start-here.ts',
+      "  if ('skipDeckWait' in vehicle) vehicle.skipDeckWait = true;",
+      '  // skipDeckWait removed',
+      /car: placeAtStart skips unbuilt span candidate and selects dry road at x=-20/,
     ],
     [
       'car-no-wait-bound',

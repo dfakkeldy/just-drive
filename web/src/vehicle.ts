@@ -191,6 +191,8 @@ export class Vehicle {
   #allowDeckWait = false;
   /** True while waiting for an unbuilt modern bridge span's deck (holds main.ts from bypassing update()). */
   get waitingForDeck(): boolean { return this.#deckWaiting; }
+  /** Set transiently by exact-pose candidate searches (placeAtStart) so an unbuilt span fails immediately and tries the next candidate. */
+  skipDeckWait = false;
   /** m/s while Strong touch help holds the throttle near its cap; zero otherwise. */
   get activeTouchSpeedLimit(): number { return this.#heldTouchSpeedLimit; }
   helpYaw = 0; // additional Strong yaw, radians/second, for fixed-step checks
@@ -244,7 +246,7 @@ export class Vehicle {
     // DECK_WAIT_SECONDS for its deck as for land that is still loading: stuck, no physics, no safe points. Direct
     // place(), explicit heights and recoveries never take this path.
     const dry = g === null || this.isDryPose(x, z, g);
-    const waitDeck = !dry && !this.#recovering && pose.y === undefined
+    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(x, z) === null && placementOnSpan(this.roads, x, z);
     if (!dry && !waitDeck) return false;
