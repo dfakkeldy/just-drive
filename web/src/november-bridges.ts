@@ -112,6 +112,36 @@ export function ponyTrussSpan(road: Road): PonyTrussSpan | null {
   };
 }
 
+const BOX_SPAN: [number, number] = [0, 0];
+
+/** Clip a 2D rotated box centred at (sMid, yMid) with half-extents (hx, hy) to the vertical slice [yLo, yHi]. */
+function clipRotatedBox(
+  sMid: number, yMid: number, hx: number, hy: number, cosS: number, sinS: number,
+  yLo: number, yHi: number, out: [number, number],
+): boolean {
+  const c0s = sMid - hx * cosS + hy * sinS, c0y = yMid - hx * sinS - hy * cosS;
+  const c1s = sMid + hx * cosS + hy * sinS, c1y = yMid + hx * sinS - hy * cosS;
+  const c2s = sMid + hx * cosS - hy * sinS, c2y = yMid + hx * sinS + hy * cosS;
+  const c3s = sMid - hx * cosS - hy * sinS, c3y = yMid - hx * sinS + hy * cosS;
+  if (yHi < Math.min(c0y, c1y, c2y, c3y) || yLo > Math.max(c0y, c1y, c2y, c3y)) return false;
+  let lowS = Infinity, highS = -Infinity;
+  const edge = (as: number, ay: number, bs: number, by: number) => {
+    if (ay >= yLo && ay <= yHi) { if (as < lowS) lowS = as; if (as > highS) highS = as; }
+    if ((ay < yLo) !== (by < yLo)) {
+      const s = as + (bs - as) * ((yLo - ay) / (by - ay));
+      if (s < lowS) lowS = s; if (s > highS) highS = s;
+    }
+    if ((ay > yHi) !== (by > yHi)) {
+      const s = as + (bs - as) * ((yHi - ay) / (by - ay));
+      if (s < lowS) lowS = s; if (s > highS) highS = s;
+    }
+  };
+  edge(c0s, c0y, c1s, c1y); edge(c1s, c1y, c2s, c2y); edge(c2s, c2y, c3s, c3y); edge(c3s, c3y, c0s, c0y);
+  if (highS <= lowS + 1e-6) return false;
+  out[0] = lowS; out[1] = highS;
+  return true;
+}
+
 /**
  * Compute separate longitudinal steel collision intervals for the inner guard rail ([railLeft, railRight]) and the
  * upper truss structure ([trussLeft, trussRight]) against a vehicle vertical slice [carY, carY + carHeight].
@@ -130,87 +160,60 @@ export function ponyTrussVerticalClip(
   const yBase = chord / 2;
   const topPad = chord / 2;
   const topOverhang = chord * 0.35;
-  const railBottom = PONY_TRUSS.railHeight - 0.11;
-  const railTop = PONY_TRUSS.railHeight + 0.11;
   const deckSlope = (y1 - y0) / span;
-  // Exact finite rotated bottom-chord box (matching buildPonyTrussBridge sideLen and slope rotation).
   const dy = y1 - y0, deckLen = Math.hypot(span, dy);
   const cosS = span / deckLen, sinS = dy / deckLen;
   const sideLen = deckLen - chord * Math.abs(sinS) - 0.004;
-  const hx = sideLen * 0.5, hy = yBase;
-  const sMid = span * 0.5, yMid = (y0 + y1) * 0.5 + yBase;
-  const c0s = sMid - hx * cosS + hy * sinS, c0y = yMid - hx * sinS - hy * cosS;
-  const c1s = sMid + hx * cosS + hy * sinS, c1y = yMid + hx * sinS - hy * cosS;
-  const c2s = sMid + hx * cosS - hy * sinS, c2y = yMid + hx * sinS + hy * cosS;
-  const c3s = sMid - hx * cosS - hy * sinS, c3y = yMid - hx * sinS + hy * cosS;
-  const minChordY = Math.min(c0y, c1y);
+  const hx = sideLen * 0.5, sMid = span * 0.5, deckMidY = (y0 + y1) * 0.5;
   const carTop = carY + carHeight;
-  if (carTop < minChordY) return false;
   if (carY > Math.max(y0, y1) + h + topPad) return false;
 
-  // 1. Inner steel guard rail interval: [deckY(s) + railBottom, deckY(s) + railTop] overlaps [carY, carTop].
-  let railLeft = 0, railRight = span;
-  if (carTop < Math.min(y0, y1) + railBottom || carY > Math.max(y0, y1) + railTop) {
-    railRight = 0;
-  } else if (deckSlope > 1e-7) {
-    railRight = Math.min(span, (carTop - (y0 + railBottom)) / deckSlope);
-    railLeft = Math.max(0, (carY - (y0 + railTop)) / deckSlope);
-  } else if (deckSlope < -1e-7) {
-    railLeft = Math.max(0, (carTop - (y0 + railBottom)) / deckSlope);
-    railRight = Math.min(span, (carY - (y0 + railTop)) / deckSlope);
+  // 1. Exact finite rotated inner steel guard rail box (sideLen x 0.22 at deckMidY + railHeight).
+  let railLeft = 0, railRight = 0;
+  if (clipRotatedBox(sMid, deckMidY + PONY_TRUSS.railHeight, hx, 0.11, cosS, sinS, carY, carTop, BOX_SPAN)) {
+    railLeft = Math.max(0, Math.min(span, BOX_SPAN[0]));
+    railRight = Math.max(0, Math.min(span, BOX_SPAN[1]));
+    if (railRight <= railLeft + 1e-4) { railLeft = 0; railRight = 0; }
   }
-  railLeft = Math.max(0, Math.min(span, railLeft));
-  railRight = Math.max(0, Math.min(span, railRight));
-  if (railRight <= railLeft + 1e-4) { railLeft = 0; railRight = 0; }
 
-  // 2. Truss structure interval (clipped to finite rotated bottom chord below carTop, inclined end posts, and top chord).
-  let trussLeft = Math.min(c0s, c3s), trussRight = Math.max(c1s, c2s);
-  // Clip the 4-edge rotated bottom-chord polygon against y <= carTop when carTop cuts across the bottom chord.
-  if (carTop < Math.max(c2y, c3y)) {
-    let lowS = Infinity, highS = -Infinity;
-    const edge = (as: number, ay: number, bs: number, by: number) => {
-      if (ay <= carTop) { lowS = Math.min(lowS, as); highS = Math.max(highS, as); }
-      if ((ay <= carTop) !== (by <= carTop)) {
-        const s = as + (bs - as) * ((carTop - ay) / (by - ay));
-        lowS = Math.min(lowS, s); highS = Math.max(highS, s);
-      }
-    };
-    edge(c0s, c0y, c1s, c1y); edge(c1s, c1y, c2s, c2y); edge(c2s, c2y, c3s, c3y); edge(c3s, c3y, c0s, c0y);
-    trussLeft = Math.max(trussLeft, lowS);
-    trussRight = Math.min(trussRight, highS);
+  // 2. Truss structure interval (finite rotated bottom chord below carTop, inclined end posts, and top chord).
+  let trussLeft = 0, trussRight = 0;
+  if (clipRotatedBox(sMid, deckMidY + yBase, hx, yBase, cosS, sinS, -Infinity, carTop, BOX_SPAN)) {
+    trussLeft = BOX_SPAN[0];
+    trussRight = BOX_SPAN[1];
+    if (deckSlope > 1e-7) {
+      trussLeft = Math.max(trussLeft, (carY - (y0 + h + topPad)) / deckSlope);
+    } else if (deckSlope < -1e-7) {
+      trussRight = Math.min(trussRight, (carY - (y0 + h + topPad)) / deckSlope);
+    }
+    if (carY > y0 + chord) {
+      const rawAng = Math.atan2(deckSlope * panel + h - yBase, panel);
+      const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
+      const run = panel - endInset;
+      const ang = Math.atan2(deckSlope * run + h - yBase, run);
+      const endVertHalf = (PONY_TRUSS.endPostSize / 2) / Math.cos(ang);
+      const startSlope = deckSlope + (h - yBase) / run;
+      let sIncl = endInset + (carY - (y0 + deckSlope * endInset + yBase + endVertHalf)) / startSlope;
+      if (carY >= y0 + deckSlope * (panel - topOverhang) + h - topPad) sIncl = Math.min(sIncl, panel - topOverhang);
+      if (deckSlope > 1e-7) sIncl = Math.min(sIncl, (carY - (y0 + chord)) / deckSlope);
+      trussLeft = Math.max(trussLeft, sIncl);
+    }
+    if (carY > y1 + chord) {
+      const rawAng = Math.atan2(-deckSlope * panel + h - yBase, panel);
+      const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
+      const run = panel - endInset;
+      const ang = Math.atan2(-deckSlope * run + h - yBase, run);
+      const endVertHalf = (PONY_TRUSS.endPostSize / 2) / Math.cos(ang);
+      const endSlope = -deckSlope + (h - yBase) / run;
+      let uIncl = endInset + (carY - (y1 - deckSlope * endInset + yBase + endVertHalf)) / endSlope;
+      if (carY >= y1 - deckSlope * (panel - topOverhang) + h - topPad) uIncl = Math.min(uIncl, panel - topOverhang);
+      if (deckSlope < -1e-7) uIncl = Math.min(uIncl, (carY - (y1 + chord)) / -deckSlope);
+      trussRight = Math.min(trussRight, span - uIncl);
+    }
+    trussLeft = Math.max(0, Math.min(span, trussLeft));
+    trussRight = Math.max(0, Math.min(span, trussRight));
+    if (trussRight <= trussLeft + 1e-4) { trussLeft = 0; trussRight = 0; }
   }
-  if (deckSlope > 1e-7) {
-    trussLeft = Math.max(trussLeft, (carY - (y0 + h + topPad)) / deckSlope);
-  } else if (deckSlope < -1e-7) {
-    trussRight = Math.min(trussRight, (carY - (y0 + h + topPad)) / deckSlope);
-  }
-  if (carY > y0 + chord) {
-    const rawAng = Math.atan2(deckSlope * panel + h - yBase, panel);
-    const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
-    const run = panel - endInset;
-    const ang = Math.atan2(deckSlope * run + h - yBase, run);
-    const endVertHalf = (PONY_TRUSS.endPostSize / 2) / Math.cos(ang);
-    const startSlope = deckSlope + (h - yBase) / run;
-    let sIncl = endInset + (carY - (y0 + deckSlope * endInset + yBase + endVertHalf)) / startSlope;
-    if (carY >= y0 + deckSlope * (panel - topOverhang) + h - topPad) sIncl = Math.min(sIncl, panel - topOverhang);
-    if (deckSlope > 1e-7) sIncl = Math.min(sIncl, (carY - (y0 + chord)) / deckSlope);
-    trussLeft = Math.max(trussLeft, sIncl);
-  }
-  if (carY > y1 + chord) {
-    const rawAng = Math.atan2(-deckSlope * panel + h - yBase, panel);
-    const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
-    const run = panel - endInset;
-    const ang = Math.atan2(-deckSlope * run + h - yBase, run);
-    const endVertHalf = (PONY_TRUSS.endPostSize / 2) / Math.cos(ang);
-    const endSlope = -deckSlope + (h - yBase) / run;
-    let uIncl = endInset + (carY - (y1 - deckSlope * endInset + yBase + endVertHalf)) / endSlope;
-    if (carY >= y1 - deckSlope * (panel - topOverhang) + h - topPad) uIncl = Math.min(uIncl, panel - topOverhang);
-    if (deckSlope < -1e-7) uIncl = Math.min(uIncl, (carY - (y1 + chord)) / -deckSlope);
-    trussRight = Math.min(trussRight, span - uIncl);
-  }
-  trussLeft = Math.max(0, Math.min(span, trussLeft));
-  trussRight = Math.max(0, Math.min(span, trussRight));
-  if (trussRight <= trussLeft + 1e-4) { trussLeft = 0; trussRight = 0; }
 
   if (railRight <= railLeft && trussRight <= trussLeft) return false;
   out[0] = railLeft;
@@ -240,11 +243,12 @@ export function registerRailContacts(
     return Math.hypot(probe.x - body.x, probe.z - body.z) < 1e-7;
   };
   fleetContacts.add({
-    revision: () => rails.audit.planned + rails.audit.samples,
+    revision: () => rails.audit.planned + rails.audit.samples + rails.bridgeRevision,
     resolve: body => { if (!isDriven(body)) rails.block(body); else rails.blockBridge(body, 0); },
     allows: allows(p => rails.block(p)),
   });
   soloContacts.add({
+    revision: () => rails.bridgeRevision,
     resolve: body => rails.blockBridge(body, isDriven(body) ? 0 : 1 / 120),
     allows: allows(p => rails.blockBridge(p)),
   });

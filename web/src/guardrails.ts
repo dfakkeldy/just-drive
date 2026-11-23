@@ -301,6 +301,16 @@ export class Guardrails {
     right.x = mx - b.uz * centre; right.z = mz + b.ux * centre; right.half = half; right.halfWidth = halfWidth; right.heading = b.heading;
     pushOut(car, this.trimmedBridgeSolids, true, dt);
   }
+  /** Revision token for pony-truss bridge deck contact state; advances when pending bridge decks can upgrade or rebuild. */
+  get bridgeRevision(): number {
+    let code = 0, pending = false;
+    for (let i = 0; i < this.bridgeSpans.length; i++) {
+      const level = this.roads.bridgeDeckLevel(this.bridgeSpans[i].roadId);
+      code = code * 16 + level;
+      if (level < 8) pending = true;
+    }
+    return pending ? code + (this.terrain.dataRevision ?? 0) * 1024 : code;
+  }
   /** Check horizontal bounds and separate inner-rail / inclined-truss vertical overlap before pushing against pony-truss rails. */
   private pushBridge(car: Pushable, dt: number): void {
     const reach = (car.spec?.envelope.reach ?? 3.5) + (car.spec?.envelope.radius ?? 1.4);
@@ -314,14 +324,12 @@ export class Guardrails {
       const across = -dx * b.uz + dz * b.ux;
       if (Math.abs(across) > PONY_TRUSS.outerHalf + reach) continue;
       if (car.y !== undefined) {
-        let y0 = this.roads.bridgeElevation(b.roadId, 0);
-        let y1 = this.roads.bridgeElevation(b.roadId, 1);
-        if ((y0 === null || y1 === null) && this.bridgeDeckRev[i] !== rev) {
+        if (this.roads.bridgeDeckLevel(b.roadId) < 8 && this.bridgeDeckRev[i] !== rev) {
           this.bridgeDeckRev[i] = rev;
           this.roads.deckHeight(b.ax + b.ux * (b.span * 0.5), b.az + b.uz * (b.span * 0.5));
-          y0 = this.roads.bridgeElevation(b.roadId, 0);
-          y1 = this.roads.bridgeElevation(b.roadId, 1);
         }
+        const y0 = this.roads.bridgeElevation(b.roadId, 0);
+        const y1 = this.roads.bridgeElevation(b.roadId, 1);
         if (y0 === null || y1 === null) continue;
         if (!ponyTrussVerticalClip(b, y0, y1, car.y, carHeight, this.bridgeClip)) continue;
         const [railLeft, railRight, trussLeft, trussRight] = this.bridgeClip;

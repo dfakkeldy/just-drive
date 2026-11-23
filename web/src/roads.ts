@@ -205,6 +205,11 @@ export class Roads {
     return deck ? deck.y0 + (deck.y1 - deck.y0) * Math.max(0, Math.min(1, t)) : null;
   }
 
+  /** Built terrain detail level of a bridge deck, or 0 before the deck is built. */
+  bridgeDeckLevel(id: number): number {
+    return this.decks.get(id)?.level ?? 0;
+  }
+
   /** Build decks for bridges near the camera, once the fine terrain at both ends has loaded. */
   update(cam: THREE.Vector3) {
     this.guardrails?.update(cam);

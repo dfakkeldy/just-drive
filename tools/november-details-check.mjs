@@ -548,8 +548,43 @@ for (const {a, b, side} of added) {
     }
     for (const child of [...streamNet.group.children]) child.geometry?.dispose();
   }
-  // Exact finite rotated bottom-chord underside test at 3.0x: measure the lowest rendered steel vertex at Bridge 45's low portal
-  // and verify paired clear/contact probes right below and right above it (catches flat or untrimmed lower cutoffs).
+  // Contact-first level 6 -> 8 terrain upgrade: rail contacts refresh stale level-6 deck elevations and bump AreaContacts.revision
+  // WITHOUT any prior deckHeight() call.
+  for (const id of [45, 46]) {
+    let curLevel = 6, bias = 0;
+    const upTerrain = {
+      manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      surfaceAt: (x, z) => { const s = realTerrain.surfaceAt(x, z); return s ? { ...s, ground: s.ground + bias, level: curLevel } : null; },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const upNet = new Roads({ roads: tagged }, mabouManifest.village, upTerrain);
+    const soloUp = new AreaContacts(), fleetUp = new AreaContacts();
+    registerRailContacts(fleetUp, soloUp, upNet.guardrails, () => false, CAR_SPEC);
+    const r = upNet.roads.find(x => x.id === id);
+    const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    // Seed level-6 deck first.
+    const y6 = upNet.deckHeight(mx, mz);
+    assert.ok(y6 !== null, `bridge ${id} seeds level-6 deck`);
+    const revBeforeFleet = fleetUp.revision, revBeforeSolo = soloUp.revision;
+    // Upgrade terrain to level 8 (+1.5 m higher) WITHOUT calling deckHeight() first.
+    curLevel = 8; bias = 1.5; upTerrain.dataRevision++;
+    assert.notEqual(fleetUp.revision, revBeforeFleet, `bridge ${id} fleetContacts.revision advances on level-8 terrain revision`);
+    assert.notEqual(soloUp.revision, revBeforeSolo, `bridge ${id} soloContacts.revision advances on level-8 terrain revision`);
+    // A pose whose top sits 0.5 m below the upgraded level-8 deck (overlapping the old level-6 deck!) must be allowed & unpushed.
+    const pose = { x: mx - uz * 1.6, z: mz + ux * 1.6, y: y6 + 1.5 - CAR_SPEC.height - 0.5, heading: hdg, spec: CAR_SPEC };
+    assert.equal(soloUp.allows(pose), true, `bridge ${id} soloContacts refreshes stale level-6 deck before checking`);
+    assert.equal(fleetUp.allows(pose), true, `bridge ${id} fleetContacts refreshes stale level-6 deck before checking`);
+    const probe = { ...pose, vx: -uz * 4, vz: ux * 4, speed: 0 };
+    upNet.guardrails.blockBridge(probe, 1 / 120);
+    assert.equal(probe.x, pose.x, `bridge ${id} blockBridge uses refreshed level-8 deck`);
+    assert.equal(probe.z, pose.z, `bridge ${id} blockBridge uses refreshed level-8 deck`);
+    for (const child of [...upNet.group.children]) child.geometry?.dispose();
+  }
+  // Exact finite rotated bottom-chord underside and high-portal inner-rail tests at 3.0x: measure the rendered steel directly
+  // and verify paired clear/contact probes right below/above it (catches flat or untrimmed cutoffs).
   {
     const t3 = makeRealTerrain(3.0, 8);
     const net3 = new Roads({ roads: tagged }, mabouManifest.village, t3);
@@ -560,17 +595,21 @@ for (const {a, b, side} of added) {
     assert.ok(y0 !== null && y1 !== null && y1 > y0, 'bridge 45 rises from start to end at 3x');
     const mesh3 = net3.group.children.find(c => c.name === 'pony-truss-45');
     const pos3 = mesh3.geometry.getAttribute('position'), col3 = mesh3.geometry.getAttribute('color');
-    let minSteelY = Infinity;
+    let minSteelY = Infinity, maxHighRailY = -Infinity;
     for (let i = 0; i < pos3.count; i++) {
-      if (col3.getX(i) < 0.30) continue;
+      const rCol = col3.getX(i);
       const px = pos3.getX(i), py = pos3.getY(i), pz = pos3.getZ(i);
       const along = (px - ax) * ux + (pz - az) * uz;
       const across = Math.abs(-(px - ax) * uz + (pz - az) * ux);
-      if (along >= -0.05 && along <= 1.0 && across >= PONY_TRUSS.clearHalf - 0.01 && across <= PONY_TRUSS.outerHalf + 0.01) {
+      if (rCol >= 0.30 && rCol <= 0.35 && along >= -0.05 && along <= 1.0 && across >= PONY_TRUSS.clearHalf - 0.01 && across <= PONY_TRUSS.outerHalf + 0.01) {
         minSteelY = Math.min(minSteelY, py);
+      }
+      if (rCol >= 0.36 && along >= span - 1.0 && along <= span + 0.05 && across >= PONY_TRUSS.railInner - 0.01 && across <= PONY_TRUSS.railInner + 0.08) {
+        maxHighRailY = Math.max(maxHighRailY, py);
       }
     }
     assert.ok(Number.isFinite(minSteelY) && minSteelY > y0, `bridge 45 3x trimmed rotated bottom chord starts slightly above y0 (${(minSteelY - y0).toFixed(6)} m)`);
+    assert.ok(Number.isFinite(maxHighRailY) && maxHighRailY < y1 + PONY_TRUSS.railHeight + 0.11, `bridge 45 3x trimmed rotated high inner rail tops slightly below unclipped band`);
     const probeX = ax + ux * 0.2 - uz * 1.6, probeZ = az + uz * 0.2 + ux * 1.6;
     const clearLow = { x: probeX, z: probeZ, y: minSteelY - CAR_SPEC.height - 0.0005, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
     const sx = clearLow.x, sz = clearLow.z;
@@ -580,6 +619,16 @@ for (const {a, b, side} of added) {
     const hitLow = { x: probeX, z: probeZ, y: minSteelY - CAR_SPEC.height + 0.001, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
     net3.guardrails.blockBridge(hitLow, 1 / 120);
     assert.ok(Math.hypot(hitLow.x - sx, hitLow.z - sz) > 0.01, 'bridge 45 3x low-portal probe 1 mm above trimmed rotated bottom chord collides');
+    // Paired high-portal inner-rail probes: 1 mm above trimmed rotated inner rail (clear of inclined end post) vs 3 mm below it.
+    const hiX = bx + ux * 1.5 - uz * (PONY_TRUSS.railInner - CAR_SPEC.envelope.radius + 0.04);
+    const hiZ = bz + uz * 1.5 + ux * (PONY_TRUSS.railInner - CAR_SPEC.envelope.radius + 0.04);
+    const clearHi = { x: hiX, z: hiZ, y: maxHighRailY + 0.001, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(clearHi, 1 / 120);
+    assert.equal(clearHi.x, hiX, 'bridge 45 3x high-portal probe 1 mm above trimmed rotated inner rail is not pushed');
+    assert.equal(clearHi.z, hiZ, 'bridge 45 3x high-portal probe 1 mm above trimmed rotated inner rail is not pushed');
+    const hitHi = { x: hiX, z: hiZ, y: maxHighRailY - 0.003, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(hitHi, 1 / 120);
+    assert.ok(Math.hypot(hitHi.x - hiX, hitHi.z - hiZ) > 0.005, 'bridge 45 3x high-portal probe 3 mm below trimmed rotated inner rail collides');
     for (const child of [...net3.group.children]) child.geometry?.dispose();
   }
   // Unloaded banks: repeated collision calls during the same terrain revision do not keep re-sampling bank endpoints,
