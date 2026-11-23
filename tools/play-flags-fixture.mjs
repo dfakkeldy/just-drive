@@ -108,7 +108,8 @@ function expected(s) {
   return {
     dt, damage: ending || !!((s.mailMode ?? true) && playing && !inside && !s.demo && !s.waiting),
     playing: ending || inside ? null : playing, roadPaused: paused,
-    clock: ending ? null : clock ? .05 : 0,
+    // Indoors after the shift ended (the Boss's office from the report) skips the closing-time clock.
+    clock: ending || inside && ended ? null : clock ? .05 : 0,
     picturePaused: ending ? null : !clock || hidden || inside,
     enterEnabled: ending ? null : inside ? false : playing,
     pad: ending ? false : inside ? !ended : drive && !ended && !panel,

@@ -203,6 +203,7 @@ export class RideAlong implements ShiftWatcher {
   }
   verdict(base: Verdict): Verdict { return this.today ? seenVerdict(base, this.watch.seen) : base; }
   report(): string[] { return this.today && (this.met || this.watch.seen.length) ? seenReport(this.watch.seen, this.watch.gaveUp) : []; }
+  seenItems(): readonly { kind: string; label: string }[] { return this.today ? this.watch.seen : []; }
   // Shift.roadside: the HUD's hint line, and nothing in the roadside report.
   get hint(): string {
     if (!this.today || !this.live || !this.post) return '';

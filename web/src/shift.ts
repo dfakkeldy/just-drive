@@ -24,6 +24,8 @@ export interface ShiftWatcher {
   verdict(base: ReturnType<typeof verdict>): ReturnType<typeof verdict>;
   /** The report's lines about the Boss; none on other days. */
   report(): string[];
+  /** Offences seen directly by the Boss today (includes speeding and school-bus passes with no customer call). */
+  seenItems?(): readonly { kind: string; label: string }[];
 }
 
 export class Shift {
@@ -51,6 +53,10 @@ export class Shift {
   watcher: ShiftWatcher | null = null;
   /** Get Fired: called once when the run ends, instead of the daily report. */
   onFiredEnd: (() => void) | null = null;
+  /** Mail play: called after the daily report opens, with the verdict, Boss-seen count, upheld complaints and direct Boss sightings. */
+  onReport: ((info: { outcome: 'clear' | 'warning' | 'suspension'; bossSeen: number; complaints: readonly Complaint[]; seenNotes: readonly { kind: string; label: string }[]; day: number }) => void) | null = null;
+  /** Mail play: optional interceptor for clicking #nextDay (return true to take over advancing via advanceToNextDay()). */
+  onNextDay: (() => boolean) | null = null;
   /** Breakable yard and field props (yard-props.ts): everything stands again, with the day's bins and laundry. */
   yard: { reset(day: number): void } | null = null;
   /** Get Fired: each shift step while the day runs, before the 18:00 check (world seconds; 0 while paused). */
@@ -152,13 +158,19 @@ export class Shift {
     };
     this.endButton.addEventListener('click', () => this.end());
     document.getElementById('nextDay')!.addEventListener('click', () => {
-      this.career = this.next; this.start(); this.restart();
+      if (this.onNextDay?.()) return;
+      this.advanceToNextDay();
     });
     document.getElementById('startOver')!.addEventListener('click', () => {
       this.startOver();
     });
     this.start();
     this.damage.seed(params.get('damage') ?? '');
+  }
+
+  /** Advance from the end-of-shift report into the next day. */
+  advanceToNextDay(): void {
+    this.career = this.next; this.start(); this.restart();
   }
 
   /** The settings button and every ending use the same complete career reset. */
@@ -462,6 +474,8 @@ export class Shift {
     document.getElementById('nextDay')!.textContent = `Start day ${this.next.day}${this.next.double ? ' · double mail' : ''}`;
     this.report.hidden = false;
     const panel = document.getElementById('reportPanel')!; panel.scrollTop = 0; panel.focus();
+    const seenNotes = this.watcher?.seenItems?.() ?? [];
+    this.onReport?.({ outcome, bossSeen: Math.max(upheld.filter(c => c.seen).length, seenNotes.length), complaints: upheld, seenNotes, day: this.career.day });
   }
 }
 

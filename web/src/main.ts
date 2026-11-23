@@ -90,6 +90,7 @@ import { DriftFeedback } from './drift-feedback';
 import { phoneHandbrake } from './drift-rules';
 import { Boss, bossEnabled } from './boss';
 import { RideAlong, rideAlongEnabled } from './ride-along';
+import { autoLoadingOnStart, depotEnabled, loadingEnabled, mergeSeenOffences, needsInterrogation, readBossLook, type InterrogationComplaint, type InterrogationReason } from './depot-rules';
 import { Occluders } from './boss-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
@@ -99,7 +100,7 @@ import { MiniMap, type MapMark, type MapStop } from './minimap';
 import { propertyLines } from './property-lines';
 import { PropertyGround } from './property-lines-ground';
 import { Relief } from './relief';
-import { CLOCK_FACTOR, clock } from './shift-rules';
+import { CLOCK_FACTOR, END_TIME, START_TIME, clock } from './shift-rules';
 import { Interiors } from './interiors';
 import { MineSite } from './mine-site';
 import { MineInterior } from './interior-mine';
@@ -260,6 +261,9 @@ const groundRead = ERA.modern && groundEntry?.version === 1 ? early(fetch(`${bas
 // than the manifest, and their top levels only set up constants, so they all download together instead of one by one.
 const quarryChunk = AREA.quarry ? early(import('./quarry-feature')) : null;
 const maryvilleChunk = ERA.modern && AREA.maryville && params.get('maryville') !== '0' ? early(import('./maryville-store')) : null;
+const depotChunk = depotEnabled(AREA.depot, ERA.modern, params) ? early(import('./depot')) : null;
+const depotInteriorParam = params.get('interior');
+const depotRoomChunk = ((depotChunk && SITE.brand !== 'just') || depotInteriorParam === 'depot-loading' || depotInteriorParam === 'depot-interrogation' || depotInteriorParam === 'boss-looks') ? early(import('./interior-depot')) : null;
 const airportChunk = ERA.modern && AREA.airport && params.get('airport') !== '0' ? early(import('./airport')) : null;
 const pavedChunk = pavedRead ? early(import('./paved')) : null;
 const weatherActive = ERA.modern && !lightStudy.active && !DAILY;
@@ -420,6 +424,9 @@ const hawkesburySite = ERA.modern && AREA.hawkesbury && params.get('hawkesbury')
 const maryvilleFeature = ERA.modern && AREA.maryville && params.get('maryville') !== '0'
   ? await maryvilleChunk!.take().catch(partFailed) : null;
 const maryvilleSite = maryvilleFeature ? new maryvilleFeature.MaryvilleStoreSite(manifest.village) : null;
+// The invented Port Hood Mail Depot on Highway 19. ?depot=0 leaves the surveyed land.
+const depotFeature = depotChunk ? await depotChunk!.take().catch(partFailed) : null;
+const depotSite = depotFeature ? new depotFeature.DepotSite(manifest.village) : null;
 let mappedBuildings: Building[] = [];
 let littleMabouArt: ReturnType<typeof littleMabouBuildingArt> | undefined;
 // Mabou's main street (the grocery, the post office building and its memorial lawn, the hall, the gas station, the junction
@@ -486,6 +493,7 @@ const placeRows = {
   mabouMain: lazyPlaceRow(mabouSite, () => mabouMainChunk!.take().catch(partFailed), (site, part) => new part.MabouMain(site, terrain, LOW, roads.roads)),
   maryville: placeRow(maryvilleSite, site => new maryvilleFeature!.MaryvilleStore(site, terrain, LOW)),
   drLane: placeRow(drLaneSite, site => new DrLaneHouse(site, terrain, lift, LOW)),
+  depot: placeRow(depotSite, site => new depotFeature!.PortHoodDepot(site, terrain, LOW, SITE.brand === 'just')),
 };
 // Each site clears its surveyed land.
 const placeSites = sitesOf(placeRows);
@@ -520,6 +528,7 @@ if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get
 }
 if (yardSite) terrain.sites.push(yardSite);
 if (maryvilleSite) terrain.sites.push(maryvilleSite);
+if (depotSite) terrain.sites.push(depotSite);
 const testPark = await createTestPark(terrain, yardSite, LOW, buildingList ?? []);
 const quarryStuntPark = quarryFeature && quarrySite && ERA.modern
   ? quarryFeature.createQuarryStuntPark(terrain, LOW) : null;
@@ -863,6 +872,7 @@ const siteContacts: [string, ContactSite | null][] = [
   ['mabouMain', placeContact(places.mabouMain)],
   ['maryville', placeContact(places.maryville)],
   ['drLane', placeContact(places.drLane)],
+  ['depot', placeContact(places.depot)],
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
 ];
@@ -1179,8 +1189,18 @@ if (import.meta.env.DEV) expose({ shift, roadScene, schoolBus, animals, sidewalk
 if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.mjs and the guard rail night pictures
 // Outside the mail game a door is only a place to look: no shift, no receipt. Mabou has no such door, so it stays quiet.
 const churchRoom = churchSite ? await churchRoomChunk!.take().catch(partFailed) : null;
-const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => shift.interiorResult(receipt), bare)
-  : churchRoom ? new Interiors(() => 0, () => '', () => {}, bare) : quietInteriors();
+const depotRoom = depotRoomChunk ? await depotRoomChunk!.take().catch(partFailed) : null;
+const bossLook = readBossLook(params);
+let depotRoomLoaded: typeof import('./interior-depot') | null = depotRoom;
+const ensureDepotRoom = async () => depotRoomLoaded ??= await import('./interior-depot');
+const DEPOT_DOORS = new Set(['depot', 'depot-loading', 'depot-interrogation', 'boss-looks']);
+let onDepotExit: ((doorId: string) => void) | null = null;
+const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => {
+  if (DEPOT_DOORS.has(receipt.door.id)) onDepotExit?.(receipt.door.id); else shift.interiorResult(receipt);
+}, bare)
+  : (churchRoom || depotRoom) ? new Interiors(() => 0, () => '', receipt => {
+    if (DEPOT_DOORS.has(receipt.door.id)) onDepotExit?.(receipt.door.id);
+  }, bare) : quietInteriors();
 if (testPark && !fleet) {
   // Adding the park must not change other sites' placement checks for an ordinary ride.
   const previousGuard = vehicle.placementGuard;
@@ -1191,7 +1211,6 @@ if (testPark && !fleet) {
     fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z) : actor.y ?? 0);
   }
 }
-resets[resetSlot.interiors] = () => interiors.reset();
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
 if (mineSite) scene.add(mineSite.group);
 if (mineSite?.roadPoint) interiors.register({ id: 'mine', name: 'Mabou Mines', position: mineSite.roadPoint, radius: 14,
@@ -1202,6 +1221,104 @@ if (yardSite?.mode === 'invented') interiors.register(plantDoor(yardSite));
 if (yardSite?.mode === 'invented' && params.get('interior') === 'plant') interiors.enter('plant');
 if (churchSite && churchRoom) interiors.register(churchRoom.churchDoor(churchSite, mailMode));
 if (churchRoom && params.get('interior') === 'church') interiors.enter('church');
+let pendingInterrogation: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; advanceAfter: boolean } | null = null;
+let pendingOfficeJump = false;
+let depotOpening = false;
+let depotGen = 0;   // a reset while a depot room loads cancels that opening and its fallback
+resets[resetSlot.interiors] = () => { pendingOfficeJump = false; pendingInterrogation = null; depotGen++; depotOpening = false; interiors.reset(); };
+function registerDepotRooms(mod: typeof import('./interior-depot')): void {
+  if (!interiors.doors.has('depot-loading')) {
+    interiors.register({
+      id: 'depot-loading', name: 'Port Hood Mail Depot', position: { x: 0, z: 0 }, radius: 0,
+      prompt: '', leave: touchDevice ? 'SKIP' : 'SKIP · Esc', repeat: true,
+      create: day => new mod.DepotLoadingInterior({
+        day: Math.max(1, day || shift.career.day),
+        double: shift instanceof Shift ? shift.career.double : false,
+        stops: shift instanceof Shift ? shift.stops : 0,
+        look: bossLook,
+        touch: touchDevice,
+      }),
+    });
+  }
+  if (!interiors.doors.has('depot-interrogation')) {
+    interiors.register({
+      id: 'depot-interrogation', name: 'The Boss’s office', position: { x: 0, z: 0 }, radius: 0,
+      prompt: '', leave: touchDevice ? 'LEAVE' : 'LEAVE · Esc', repeat: true, afterShift: true,
+      create: day => new mod.DepotInterrogationInterior({
+        reason: pendingInterrogation?.reason ?? 'visit',
+        day: pendingInterrogation?.day ?? Math.max(1, day || shift.career.day),
+        complaints: pendingInterrogation?.complaints ?? [],
+        look: bossLook,
+        touch: touchDevice,
+      }),
+    });
+  }
+  if (!interiors.doors.has('boss-looks')) {
+    interiors.register({
+      id: 'boss-looks', name: 'The Boss · character options', position: { x: 0, z: 0 }, radius: 0,
+      prompt: '', leave: 'CLOSE · Esc', repeat: true, afterShift: true,
+      create: () => new mod.BossLooksInterior(),
+    });
+  }
+}
+async function openDepotLoading(): Promise<void> {
+  if (depotOpening || interiors.busy || !(interiors instanceof Interiors)) return;
+  depotOpening = true;
+  const gen = depotGen;
+  try {
+    const mod = await ensureDepotRoom();
+    if (gen !== depotGen || interiors.busy || (shift instanceof Shift && shift.ended)) return;
+    registerDepotRooms(mod);
+    interiors.enter('depot-loading');
+  } catch (e) {
+    console.warn('Depot loading bay unavailable', e);
+  } finally {
+    if (gen === depotGen) depotOpening = false;   // a reset already released the lock, maybe to a newer opening
+  }
+}
+async function openDepotInterrogation(info: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; advanceAfter: boolean }): Promise<void> {
+  if (depotOpening || interiors.busy || !(interiors instanceof Interiors)) return;
+  depotOpening = true;
+  const gen = depotGen;
+  pendingInterrogation = info;
+  const report = document.getElementById('shiftReport');
+  const hadReport = !!report && !report.hidden;
+  if (report) report.hidden = true;
+  let startDay = false;
+  try {
+    const mod = await ensureDepotRoom();
+    if (gen !== depotGen) return;   // the reset cleared this opening; a newer one may own pendingInterrogation
+    if (interiors.busy) {
+      if (report && hadReport) report.hidden = false;
+      pendingInterrogation = null;
+      return;
+    }
+    registerDepotRooms(mod);
+    interiors.enter('depot-interrogation');
+  } catch (e) {
+    console.warn('Depot interrogation room unavailable', e);
+    if (gen !== depotGen) return;
+    pendingInterrogation = null;
+    // From "Start day N": the day still turns over, so a room that cannot load never strands the report.
+    if (info.advanceAfter && shift instanceof Shift) startDay = true;
+    else if (report && hadReport) report.hidden = false;
+  } finally {
+    if (gen === depotGen) depotOpening = false;   // a reset already released the lock, maybe to a newer opening
+  }
+  if (startDay && shift instanceof Shift) {
+    shift.advanceToNextDay();
+    if (depotAutoLoad) void openDepotLoading();
+  }
+}
+if (depotRoom) {
+  registerDepotRooms(depotRoom);
+  if (depotSite && SITE.brand !== 'just') interiors.register(depotRoom.depotDoor(depotSite, bossLook, () => { pendingOfficeJump = true; interiors.leave(); }, touchDevice));
+  if (depotInteriorParam === 'depot-loading') interiors.enter('depot-loading');
+  else if (depotInteriorParam === 'depot-interrogation') {
+    pendingInterrogation = { reason: 'suspension', day: Math.max(1, shift.career.day), complaints: [], advanceAfter: false };
+    interiors.enter('depot-interrogation');
+  } else if (depotInteriorParam === 'boss-looks') interiors.enter('boss-looks');
+}
 // The mini map and the bladder gauge build their own parts of the page.
 const hikeBox = playableBox(manifest), hikes = mailMode || !ERA.modern ? [] : hikesFor(AREA.id, roads.roads, manifest.village, hikeBox);
 const footpaths = !mailMode && hikes.length ? new Footpaths(hikes, terrain) : null;
@@ -1223,7 +1340,7 @@ function refreshMap(): void {
     if (p) mapStops.push({ x: p.x, z: p.z, due: shift.remaining[i] > 0 });
   }
   // A place that already has its own mark does not get a second one for its door.
-  for (const door of interiors.doors.values()) if (!mapMarks.some(mark => mark.label === door.name)) mapMarks.push({ x: door.position.x, z: door.position.z, label: door.name, rank: 3, radius: door.radius });
+  for (const door of interiors.doors.values()) if (door.radius > 0 && !mapMarks.some(mark => mark.label === door.name)) mapMarks.push({ x: door.position.x, z: door.position.z, label: door.name, rank: 3, radius: door.radius });
 }
 const relief = mailMode ? new Relief(properties.filter((b) => b.kind === 'house').map((b) => ({ x: b.x - manifest.village[0], z: manifest.village[1] - b.y })),
   terrain, (o) => { if (o.seen) shift.seenAtRoadside(o.house, o.x, o.z); if (params.has('relief')) console.log(`[relief] ${JSON.stringify(o)} calls ${shift.complaints.all.length}`); }, bare) : quietRelief();
@@ -1967,13 +2084,73 @@ const fishing = fishingSite && endings instanceof Endings ? new Fishing(fishingS
 resets[resetSlot.fishing] = () => fishing?.reset();
 if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
-if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
+if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap, depotScenes: { openLoading: openDepotLoading, openInterrogation: openDepotInterrogation } }, false);
 if (import.meta.env.DEV) expose({ lotProps }, false);   // for tools/lot-props-browser.mjs; not enumerable: ui-check pins the public key set
 if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
+const depotMailLoading = loadingEnabled(gameMode, ERA.modern, AREA.route, SITE.brand === 'just', bare, params);
+const plainVisit = !isTestVisit(params);
+const depotAutoLoad = autoLoadingOnStart(depotMailLoading, plainVisit, params);
+let lastReportHearing: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; visited: boolean } | null = null;
+onDepotExit = doorId => {
+  if (doorId === 'depot' && pendingOfficeJump) {
+    pendingOfficeJump = false;
+    void openDepotInterrogation({ reason: 'visit', day: Math.max(1, shift.career.day), complaints: [], advanceAfter: false });
+    return;
+  }
+  if (doorId === 'depot-loading' && shift instanceof Shift && !shift.ended && shift.elapsed < END_TIME - START_TIME && shift.done === 0 && shift.complaints.all.length === 0) {
+    shift.elapsed = 0;
+  }
+  if (doorId === 'depot-interrogation') {
+    const info = pendingInterrogation;
+    pendingInterrogation = null;
+    if (lastReportHearing) lastReportHearing.visited = true;
+    if (info?.advanceAfter && shift instanceof Shift) {
+      shift.advanceToNextDay();
+      if (depotAutoLoad) void openDepotLoading();
+    } else if (shift.ended) {
+      const report = document.getElementById('shiftReport');
+      if (report) report.hidden = false;
+    }
+  }
+};
 {
   const report = document.getElementById('shiftReport'), footer = report?.querySelector('.reportFooter');
   if (report && footer && mailMode) {
+    const officeBtn = Object.assign(document.createElement('button'), {
+      id: 'bossOfficeButton', type: 'button', textContent: 'Report to the Boss’s office', hidden: true,
+    });
+    officeBtn.style.cssText = 'width:100%;min-height:48px;margin-bottom:8px;background:#26343e;color:#f5ebd6;border:1px solid #ffa526;border-radius:6px;font:700 14px var(--text);cursor:pointer';
+    officeBtn.addEventListener('click', () => {
+      if (!lastReportHearing) return;
+      void openDepotInterrogation({ reason: lastReportHearing.reason, complaints: lastReportHearing.complaints, day: lastReportHearing.day, advanceAfter: false });
+    });
+    footer.prepend(officeBtn);
+    if (shift instanceof Shift && !firedMode) {
+      shift.onReport = info => {
+        const due = !bare && ERA.modern && params.get('boss') !== '0' && params.get('depot') !== '0' && needsInterrogation(info.outcome, info.bossSeen);
+        lastReportHearing = due ? {
+          reason: info.outcome === 'suspension' ? 'suspension' : 'bossVerdict',
+          complaints: mergeSeenOffences(info.complaints, info.seenNotes),
+          day: info.day,
+          visited: false,
+        } : null;
+        officeBtn.hidden = !due;
+      };
+      shift.onNextDay = () => {
+        if (depotAutoLoad && lastReportHearing && !lastReportHearing.visited) {
+          lastReportHearing.visited = true;   // asked once: if the room cannot open now, the next click starts the day
+          void openDepotInterrogation({ reason: lastReportHearing.reason, complaints: lastReportHearing.complaints, day: lastReportHearing.day, advanceAfter: true });
+          return true;
+        }
+        if (depotAutoLoad) {
+          shift.advanceToNextDay();
+          void openDepotLoading();
+          return true;
+        }
+        return false;
+      };
+    }
     const watch = replayButton('reportReplay');
     footer.append(watch);
     const refresh = () => { watch.hidden = !replay.available || !!multiplayer?.choice.on; };
@@ -1987,13 +2164,19 @@ let shiftReady = false;
 const beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined;
 // The title card holds the game still until the player starts. Test links (any placement or demo parameter)
 // skip it; ?title=1 shows it in a test.
-const plainVisit = !isTestVisit(params);
 let started = bare || (!plainVisit && !params.has('room') && params.get('title') !== '1');
 let hasStarted = started;
+let firstShiftStart = true;
 // Today's run shows its card, vehicle and weather on the title card.
 const titleDaily = DAILY && dailySquares ? { date: DAILY.date, squares: dailySquares, vehicle: GARAGE.find(g => g.id === DAILY.vehicle)?.name ?? 'Mail car',
   mood: MOODS.find(([m]) => m === DAILY.mood)?.[1] ?? 'Clear' } : undefined;
-const title = started ? null : createTitle(touchDevice, () => { hasStarted = true; started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
+const title = started ? null : createTitle(touchDevice, () => {
+  hasStarted = true; started = true; pause.resetClock(); radio?.start();
+  if (firstShiftStart) {
+    firstShiftStart = false;
+    if (depotAutoLoad) void openDepotLoading();
+  }
+}, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
 if (__PUBLIC_APP__) watchGameVersion(SITE.brand === 'just', () => !hasStarted && document.getElementById('title')?.hidden === false && !document.getElementById('settings')?.classList.contains('open') && document.getElementById('titleLegal')?.hidden !== false && !document.activeElement?.matches('input,textarea,select'));
 // A ride-along day says so on the start card.
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
@@ -2510,7 +2693,8 @@ function frame(now: number) {
   if (interiors.busy) {
     radio?.update(false, true);
     pad?.show(!shift.ended && gamepad.device !== 'gamepad');
-    if (shift.updateIndoors(clockRuns ? clockDt : 0)) { quality.frame(0, false); interiors.closeForDay(); shift.end(); }
+    // Closing time only while the shift runs: a room opened from the report (the Boss's office) is not closed by it.
+    if (!shift.ended && shift.updateIndoors(clockRuns ? clockDt : 0)) { quality.frame(0, false); interiors.closeForDay(); shift.end(); }
     else {
       interiors.update(dt, driveInput(), vehicle, false);
       interiors.render(renderer, interiorDraw);
