@@ -1,5 +1,5 @@
 import {deckCounts} from './bridge-contact';
-import {crestVelocity, GRAVITY as G, hardLanding, LEDGE_DROP} from './ground-motion';
+import {MAX_GROUND_RISE_SPEED} from './ground-motion';
 import { safePlacement } from './placement-pose';
 import { wideDemo } from './vehicle-demo';
 import * as THREE from 'three';
@@ -21,6 +21,7 @@ export const LIMIT_BRAKE = 1.2;
 /** `held`: the game holds the car (an animal ahead): its handbrake is a brake and never starts a slide. */
 export interface Input { throttle: number; steer: number; handbrake: boolean; touch?: boolean; held?: boolean }
 
+const G = 9.81;
 /** Water drag per metre of wheel sunk in a puddle, per m/s: a lane-wide pond at 50 km/h slows the car about 0.4 g. */
 export const PUDDLE_DRAG = 0.7;
 /** Yaw per metre of water on one side more than the other, per m/s: the wet side holds the car back and turns it in. */
@@ -124,7 +125,6 @@ export class Vehicle {
   /** True while the car is pressed against the edge of the map. */
   atEdge = false;
   private prevGround = 0;
-  private flightPeak: number | null = null;
   private eraPlacementPending=false;
   // Keep the positions actually sampled, so a new tile can be distinguished from car movement.
   private readonly groundContacts = Array.from({ length: 4 }, () => ({ x: 0, z: 0, y: 0, height: null as number | null }));
@@ -202,7 +202,6 @@ export class Vehicle {
     this.drift.reset();
     this.x = x; this.z = z; this.heading = heading; this.placeReference = pose.y; this.placeInfer = false;
     this.vx = this.vz = this.vy = 0; this.sunk = 0; this.airborne = false;
-    this.flightPeak = null;
     if (this.spec.locomotion === 'horse') { this.speed = 0; this.car.resetPose?.(); }
     if (g !== null) {
       this.y = this.prevGround = g; this.stuck = false;
@@ -240,7 +239,6 @@ export class Vehicle {
     this.captureGround();
     if (this.groundContacts.some(p => p.height === null)) return false;
     this.prevGround = this.groundContacts.reduce((sum, p) => sum + p.height!, 0) / this.groundContacts.length;
-    this.flightPeak = this.airborne ? this.y : null;
     this.acc = 0; this.stuck = false; if (spin !== undefined) this.spin = spin;
     if (travel) for (let i = 0; i < this.suspension.length; i++) this.suspension[i] = travel[i] ?? 0;
     return true;
@@ -248,7 +246,7 @@ export class Vehicle {
 
   /** A new start (a new day): where the car went before no longer counts, so R cannot lead back to yesterday's road. */
   resetControlHistory(): void { this.touchRoad = null; this.junctionClear = 0; this.roadHeading = null; this.helpYaw = this.lightHelpYaw = 0; }
-  resetVisit(): void { this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.touchRoad = null; this.junctionClear = 0; this.helpYaw = this.lightHelpYaw = 0; this.sunk = 0; this.flightPeak = null; }
+  resetVisit(): void { this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.touchRoad = null; this.junctionClear = 0; this.helpYaw = this.lightHelpYaw = 0; this.sunk = 0; }
 
   restart(x: number, z: number, heading: number): boolean {
     this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true;
@@ -285,7 +283,6 @@ export class Vehicle {
   /** Hold a sunk ride at rest in water until an explicit reset returns it to dry land. */
   stopInWater(): void {
     this.vx = this.vz = this.vy = this.speed = 0;
-    this.flightPeak = null;
     this.#waterStopped = true;
   }
 
@@ -415,7 +412,6 @@ export class Vehicle {
   }
 
   private readonly hoofGround = (x: number, z: number) => this.groundAt(x, z);
-  private readonly launchGround = (x: number, z: number, y: number) => this.groundAt(x, z, y);
 
   private groundAt(x: number, z: number, referenceY=this.y): number | null {
     const deck = this.roads.deckHeight(x, z);
@@ -471,28 +467,22 @@ export class Vehicle {
       });
       // Heights changed at the SAME world positions. This is new ground data, not velocity.
       // Rebase both the body and its previous contact height, preserving any real flight velocity.
-      if (known && Math.abs(correction) > 1e-6) {
-        this.y += correction; this.prevGround += correction;
-        if (this.flightPeak !== null) this.flightPeak += correction;
-      }
+      if (known && Math.abs(correction) > 1e-6) { this.y += correction; this.prevGround += correction; }
     }
     this.captureGround();
   }
 
   private readonly savedContacts = this.groundContacts.map(p => ({ ...p }));
   private savedReady = false; private savedY = 0; private savedPrevious = 0;
-  private savedFlightPeak: number | null = null;
   private readonly restoreContacts = () => {
     for (let i = 0; i < 4; i++) Object.assign(this.groundContacts[i], this.savedContacts[i]);
     this.contactsReady = this.savedReady; this.contactBody.y = this.savedY; this.prevGround = this.savedPrevious;
-    this.flightPeak = this.savedFlightPeak;
     this.correctGround();
   };
   /** Reusable contact checkpoint, requested only by an attached towing body. */
   checkpointGround(): () => void {
     for (let i = 0; i < 4; i++) Object.assign(this.savedContacts[i], this.groundContacts[i]);
     this.savedReady = this.contactsReady; this.savedY = this.contactBody.y; this.savedPrevious = this.prevGround;
-    this.savedFlightPeak = this.flightPeak;
     return this.restoreContacts;
   }
 
@@ -521,7 +511,7 @@ export class Vehicle {
       } finally { this.#retrying = false; }
       return;
     }
-    // Advance physics by whole fixed steps.
+    // Whole fixed steps only: a tiny leftover step makes the vertical speed estimate blow up.
     const here = this.roads.nearest(this.x, this.z, 9, (r) => r.kind <= 3);
     this.roadHeading = here && here.dist < here.road.halfWidth + 1 ? here.heading : null;
     if (input.touch && this.strongHelp && here && here.dist <= here.road.halfWidth) {
@@ -633,49 +623,24 @@ export class Vehicle {
     const headingBefore = this.heading;
     let lateralGrip = 0;
 
-    // Only a crest in the actual path can start a flight. Contact corrections just move the body.
+    // Vertical: follow the ground, or fall when it drops away faster than gravity.
+    const groundVel = (ground - this.prevGround) / dt;
     this.prevGround = ground;
-    let launch: number | null = null;
-    let centre: number | null = null;
-    const ramp = helpOff || onRoad && !onDeck && s.kind >= 8 && s.kind <= 10;
-    const acrossLedge = Math.max(fl, fr, rl, rr) - Math.min(fl, fr, rl, rr) >= LEDGE_DROP;
-    const travelSpeed = Math.hypot(this.vx, this.vz);
-    if (!this.airborne && missing === 0 && travelSpeed > .05 && (travelSpeed > 3 || acrossLedge) && this.spec.locomotion !== 'horse') {
-      // On a built ramp, the leading axle loses support before the body reaches the lip.
-      centre = this.groundAt(this.x, this.z);
-      if (ramp) {
-        const reach = hl / travelSpeed;
-        const x = this.x + reach * this.vx, z = this.z + reach * this.vz;
-        const grade = Math.sin(this.pitch) * vf / travelSpeed + Math.sin(this.roll) * vl / travelSpeed;
-        const referenceY = Math.max(this.y, s.ground) + Math.max(0, grade * hl);
-        launch = crestVelocity(this.launchGround, x, z, this.vx, this.vz, dt, this.groundAt(x, z, referenceY), referenceY, true, grade);
-      }
-      launch ??= crestVelocity(this.launchGround, this.x, this.z, this.vx, this.vz, dt, centre, this.y);
-    }
-    if (launch !== null) {
-      this.y = Math.max(this.y, ground, centre ?? ground);
-      this.vy = launch;
-      this.flightPeak = this.y;
-    }
     const free = this.y + this.vy * dt - 0.5 * G * dt * dt;
     if (this.car.setTravel) this.landingCompression *= Math.exp(-12 * dt);
-    if (launch !== null || this.airborne && this.spec.locomotion !== 'horse' && free > ground + (this.vy > 0 ? 0 : .05)) {
+    if (this.spec.locomotion !== 'horse' && free > ground + 0.05) {
       this.airborne = true;
-      this.flightPeak = Math.max(this.flightPeak ?? this.y, this.y, free);
       this.y = free;
       this.vy -= G * dt;
     } else {
       if (this.airborne && this.vy < -3) {
+        if (this.damageActive) this.damage?.hit('landing', -this.vy);
         if (this.car.setTravel) this.landingCompression = Math.min(.20, -this.vy * .022);
-        if (hardLanding(this.flightPeak, ground)) {
-          if (this.damageActive) this.damage?.hit('landing', -this.vy);
-          vf *= this.spec.landingForward; vl *= this.spec.landingSideways;
-        }
+        vf *= this.spec.landingForward; vl *= this.spec.landingSideways;   // a hard landing scrubs speed
       }
       this.airborne = false;
       this.y = ground;
-      this.vy = 0;
-      this.flightPeak = null;
+      this.vy = THREE.MathUtils.clamp(groundVel, -30, MAX_GROUND_RISE_SPEED);
     }
 
     // The touch speed limit for this ground, m/s (0: none): the grip model and a slide both keep to it.
@@ -798,13 +763,9 @@ export class Vehicle {
     this.x += this.vx * dt; this.z += this.vz * dt;
     // The edge of the map is a wall the car cannot pass: beyond it there is no road data to drive on.
     this.clampBounds();
-    // A wide axle can straddle a bank while the chassis is still on its upper surface.
     if (missing > 0) {
       const postG = this.groundAt(this.x, this.z);
       if (postG !== null && this.y < postG) { this.y = postG; if (this.vy < 0) this.vy = 0; }
-    } else if (!this.airborne && this.spec.locomotion !== 'horse' && ground < s.ground - .4) {
-      const postG = this.groundAt(this.x, this.z);
-      if (postG !== null) this.y = Math.max(this.y, postG - .4);
     }
     if (this.spec.locomotion !== 'horse' && this.damageActive && this.damage) {
       let depth = 0;

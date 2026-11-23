@@ -63,7 +63,7 @@ function run(route,skill,mode,config={}){
  }
  return {route:route.name,skill,mode,seconds:+(i*dt).toFixed(2),progress:+progress.toFixed(1),distance:+distance.toFixed(1),offTime:+offTime.toFixed(2),offDistance:+offDistance.toFixed(1),worst:+worst.toFixed(2),ditches,mean:+(distance/(i*dt)*3.6).toFixed(1),max:+maxSpeed.toFixed(1),reversals:+(reversals/(i*dt)).toFixed(2),bill:v.damage.total,hash:hash.digest('hex')};
 }
-// The keyboard path and damage events must match across the Strong-help settings.
+// Exact baseline replay: compare binary Float64 paths AND damage events, never rounded output.
 function keyboard(route,C,strong,frames=[1/60],D=C===Baseline?BaselineDamage:Damage,maxFrames=Infinity){
  Math.random=random(0x4b455953);const v=car(C,D),p=at(route.path,0);v.strongHelp=strong;v.desktopPull=true;
  v.place(p.x,p.z,p.heading);const hash=createHash('sha256'),events=[];let progress=0,pulse=0,seconds=0;
@@ -99,9 +99,9 @@ const unevenRng=random(0x4652414d);
 const frameTimes=[['1/30',[1/30]],['1/60',[1/60]],['1/120',[1/120]],['uneven',Array.from({length:64},()=>1/(30+unevenRng()*90))]];
 const keyboardPins=new Map();
 for(const r of routes)for(const [name,frames]of frameTimes){
- const plain=keyboard(r,Vehicle,false,frames);keyboardPins.set(`${r.name}:${name}`,plain);
- compareKeyboard(keyboard(r,Vehicle,true,frames),plain,r,`${r.name} ${name} Strong help with keyboard`);
- console.log('KEYBOARD',r.name,name,plain.hash,'progress',plain.progress.toFixed(1),'bill',plain.bill,'events',JSON.stringify(plain.events));
+ const old=keyboard(r,Baseline,false,frames);keyboardPins.set(`${r.name}:${name}`,old);
+ for(const strong of [false,true])compareKeyboard(keyboard(r,Vehicle,strong,frames),old,r,`${r.name} ${name} strong=${strong}`);
+ console.log('KEYBOARD',r.name,name,old.hash,'progress',old.progress.toFixed(1),'bill',old.bill,'events',JSON.stringify(old.events));
 }
 
 const firstRoute=routes[0],firstPin=keyboardPins.get(`${firstRoute.name}:1/60`);
@@ -121,7 +121,7 @@ for(const name of ['damage','defects','frame']){
   rejectsMutation(name,()=>compareKeyboard(actual,firstPin,firstRoute,name),/bit-identical keyboard/);
  }
 }
-const shortOld=keyboard(firstRoute,Vehicle,false,[1/60],Damage,10),shortNow=keyboard(firstRoute,Vehicle,true,[1/60],Damage,10);
+const shortOld=keyboard(firstRoute,Baseline,false,[1/60],BaselineDamage,10),shortNow=keyboard(firstRoute,Vehicle,false,[1/60],Damage,10);
 assert.deepEqual(shortNow,shortOld,'legacy comparison accepts a matching short replay');
 console.log('LEGACY short replay: matching hashes pass');
 rejectsMutation('short replay',()=>compareKeyboard(shortNow,shortOld,firstRoute,'short replay'),/baseline completes planned path/);

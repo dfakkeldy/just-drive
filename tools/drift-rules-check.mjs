@@ -397,7 +397,7 @@ ok('after the first drift too, an S-bend, a correction, a slalom off the throttl
 ok('the flick clocks run in the air: a turn before a jump is no feint after it', () => {
   Drift.learned = true;
   const v = ride(CAR_SPEC, 'gravel', 20);
-  drive(v, .7, t => t < .5 ? go(1, 0) : go(0, 1)); v.y += 2; v.vy = 3; v.airborne = true;
+  drive(v, .7, t => t < .5 ? go(1, 0) : go(0, 1)); v.y += 2; v.vy = 3;
   const air = drive(v, 1.2, () => go(0, 0)); assert.ok(air.some((_, i) => i > 0) && v.airborne === false, 'landed');
   // Hard the other way, power, the catch: in time this would be a flick; after the jump it is nothing.
   drive(v, .45, t => t < .05 ? go(0, -1) : t < .3 ? go(1, -1) : go(1, .5)); assert.equal(v.drift.active, false);
@@ -439,7 +439,7 @@ ok('a hit ends the slide and it is not clean; the air ends it too', () => {
   const v = ride(CAR_SPEC); drive(v, 1.5, handbrakeIn());
   assert.equal(v.drift.active, true); v.onSolidImpact(4);
   assert.equal(v.drift.active, false); assert.equal(v.drift.ended, 'hit'); assert.equal(v.takeDrift().clean, false);
-  const w = ride(CAR_SPEC); drive(w, 1.5, handbrakeIn()); w.y += 2; w.vy = 3; w.airborne = true; drive(w, .1, () => go(1, -HOLD_STEER));
+  const w = ride(CAR_SPEC); drive(w, 1.5, handbrakeIn()); w.y += 2; w.vy = 3; drive(w, .1, () => go(1, -HOLD_STEER));
   assert.equal(w.drift.ended, 'airborne');
 });
 

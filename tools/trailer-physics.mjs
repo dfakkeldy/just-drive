@@ -103,31 +103,22 @@ function reverse(help,sloppy,turn){
 const reversing=[];for(const help of [true,false])for(const sloppy of [false,true])for(const turn of [false,true]){const r=reverse(help,sloppy,turn);reversing.push(r);console.log('REVERSE',JSON.stringify(r));}
 if(process.argv.includes('--reverse'))process.exit(0);
 for(const r of reversing)if(r.help||!r.sloppy){assert.ok(r.progress>=(r.turn?36.9:29.9)&&r.error<=.6&&r.maxError<.7,'reverse straight/90-degree bay: centre line within .6 m');assert.equal(r.clunks,0,'help/perfect driver avoids jackknife');}
-// The detached constructor preserves the path and the random stream. The older
-// solver reports ground-following velocity as vy, so compare vy only in flight.
-function path(detached,Kind=Vehicle,route=hwy,start=flat.s,count=1800){const old=Math.random;Math.random=random(775);try{const car=new Kind(createTruck(),terrain,roads,-.2,TRUCK_SPEC);car.assist=0;const p=at(route,start);car.place(p.x,p.z,p.heading);if(detached)new Towing(car,terrain,roads,true,false,{},false);const states=[];for(let i=0;i<count;i++){terrain.withGroundContact(car,()=>car.update(dt,{throttle:i<1200?1:-1,steer:Math.sin(i*.01)*.1,handbrake:false}));states.push([car.x,car.z,car.heading,car.vx,car.vz,car.airborne?car.vy:0,car.y,car.speed,car.airborne]);}return states;}finally{Math.random=old;}}
-function assertBeforeFlight(stock,current,label){
- const takeoff=rows=>rows.findIndex(row=>row.at(-1));
- const oldTakeoff=takeoff(stock),newTakeoff=takeoff(current);
- assert.ok(newTakeoff<0||oldTakeoff>=0&&newTakeoff>=oldTakeoff,label+': no earlier takeoff');
- const steps=oldTakeoff<0?stock.length:oldTakeoff;
- assert.ok(steps>=100,label+': meaningful grounded comparison');
- assert.deepEqual(stock.slice(0,steps),current.slice(0,steps),label);
-}
+// The detached constructor must not change one bit of the truck's production path or consume randomness.
+function path(detached,Kind=Vehicle,route=hwy,start=flat.s,count=1800){const old=Math.random;Math.random=random(775);try{const car=new Kind(createTruck(),terrain,roads,-.2,TRUCK_SPEC);car.assist=0;const p=at(route,start);car.place(p.x,p.z,p.heading);if(detached)new Towing(car,terrain,roads,true,false,{},false);const states=[];for(let i=0;i<count;i++){terrain.withGroundContact(car,()=>car.update(dt,{throttle:i<1200?1:-1,steer:Math.sin(i*.01)*.1,handbrake:false}));states.push([car.x,car.z,car.heading,car.vx,car.vz,car.vy,car.y,car.speed]);}return states;}finally{Math.random=old;}}
 const plain=path(false),detached=path(true);assert.deepEqual(detached,plain,'detached construction: truck path bit identity');
 if(process.env.TRAILER_TRUCK_ORACLE){
  const{Vehicle:Stock,autopilot:stockAutopilot}=await import(process.env.TRAILER_TRUCK_ORACLE);
- assertBeforeFlight(path(false,Stock),plain,'standalone truck matches main before the first flight');
- const demoCar=(Kind,driver,spec=CAR_SPEC)=>{const old=Math.random;Math.random=random(411);try{const car=new Kind(createTruck(),terrain,roads,-.2,spec),p=at(hwy,flat.s);car.place(p.x,p.z,p.heading);const states=[];for(let i=0;i<1800;i++){terrain.withGroundContact(car,()=>car.update(dt,driver(car,roads,16)));states.push([car.x,car.z,car.y,car.vx,car.vz,car.airborne?car.vy:0,car.heading,car.speed,car.airborne]);}return states;}finally{Math.random=old;}};
- assertBeforeFlight(demoCar(Stock,stockAutopilot),demoCar(Vehicle,autopilot),'car autopilot matches main before the first flight');
- assertBeforeFlight(demoCar(Stock,stockAutopilot,TRUCK_SPEC),demoCar(Vehicle,autopilot,TRUCK_SPEC),'untowed truck autopilot matches main before the first flight');
+ assert.deepEqual(path(false,Stock),plain,'standalone truck physics remains bit-identical to landed seam 450f4c3');
+ const demoCar=(Kind,driver,spec=CAR_SPEC)=>{const old=Math.random;Math.random=random(411);try{const car=new Kind(createTruck(),terrain,roads,-.2,spec),p=at(hwy,flat.s);car.place(p.x,p.z,p.heading);const states=[];for(let i=0;i<1800;i++){terrain.withGroundContact(car,()=>car.update(dt,driver(car,roads,16)));states.push([car.x,car.z,car.y,car.vx,car.vz,car.vy,car.heading,car.speed]);}return states;}finally{Math.random=old;}};
+ assert.deepEqual(demoCar(Vehicle,autopilot),demoCar(Stock,stockAutopilot),'car autopilot path remains bit-identical to landed seam 450f4c3');
+ assert.deepEqual(demoCar(Vehicle,autopilot,TRUCK_SPEC),demoCar(Stock,stockAutopilot,TRUCK_SPEC),'untowed truck autopilot path remains bit-identical to landed seam 450f4c3');
  let washStart=1800;for(;washStart<3100;washStart+=10){const p=at(mines,washStart);if(terrain.surfaceAt(p.x,p.z)?.washboard)break;}assert.ok(washStart<3100,'washboard oracle section exists');
  const roughPlain=path(false,Vehicle,mines,washStart,600);
  assert.deepEqual(path(true,Vehicle,mines,washStart,600),roughPlain,'inactive towing preserves the seeded washboard path bit-for-bit');
- assertBeforeFlight(path(false,Stock,mines,washStart,600),roughPlain,'untowed washboard physics matches main before the first flight');
+ assert.deepEqual(path(false,Stock,mines,washStart,600),roughPlain,'untowed washboard physics remains bit-identical to landed seam 450f4c3');
 
  await transformOracle(terrain,roads,flat.a);
- console.log('PASS ground path parity with main before flight, and full detach parity.');
+ console.log('PASS immutable landed-seam truck and car demo path oracles, 1800 steps each.');
 }
 
 const mutation=(name,action,predicate)=>{const value=action();assert.equal(predicate(value),false,'mutation must fail: '+name);console.log('MUTATION rejected',name);};
