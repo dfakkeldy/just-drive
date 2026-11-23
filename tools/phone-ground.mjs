@@ -42,8 +42,8 @@ export function makeGround(groundBase = base) {
   // Tile reads are async; preload the finest route corridor before driving.
   terrain.missing=0;
   const height=terrain.heightAt.bind(terrain),surface=terrain.surfaceAt.bind(terrain);
-  terrain.heightAt=(x,z)=>{if(!find(x,z))throw Error(`Missing sampled ground ${x},${z}`);return height(x,z);};
-  terrain.surfaceAt=(x,z)=>{if(!find(x,z))throw Error(`Missing sampled surface ${x},${z}`);return surface(x,z);};
+  terrain.heightAt=(x,z,referenceY)=>{if(!find(x,z))throw Error(`Missing sampled ground ${x},${z}`);return height(x,z,referenceY);};
+  terrain.surfaceAt=(x,z,referenceY)=>{if(!find(x,z))throw Error(`Missing sampled surface ${x},${z}`);return surface(x,z,referenceY);};
   return {terrain,roads:new Roads(groundRoads,manifest.village,terrain)};
 }
 export async function preload(terrain, points, margin=120, maxLevel=8) {

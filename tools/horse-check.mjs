@@ -66,6 +66,8 @@ assert.equal(HORSE_SPEC.hitch,undefined);
 // A coarse bank triangle can lie above a narrow rendered timber deck. The deck
 // remains the mount's support, rather than raising its root to that unrelated bank.
 const deckHorse=new Vehicle(createHorse(),{heightAt:()=>12,meshHeightAt:()=>14,surfaceAt:()=>({deck:false})},{deckHeight:()=>10},-.2,HORSE_SPEC);
+assert.equal(deckHorse.groundAt(0,0),14,'a horse below the deck stays on land');
+deckHorse.y=10;
 assert.equal(deckHorse.groundAt(0,0),10,'timber deck remains authoritative under coarse land');
 // The horse cannot create motor repair items, even if a caller enables damage.
 const v=new Vehicle(rig,{}, {},-.2,HORSE_SPEC);v.damage=new Damage();v.damageActive=true;v.onSolidImpact(30);

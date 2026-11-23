@@ -40,7 +40,7 @@ def flags_valid(flags):
 
 class Field:
     def __init__(self, network):
-        entries = []
+        entries, overlays = [], []
         for road in network:
             flags = road['kind'] | (16 if road['bridge'] else 0) | (32 if road.get('washboard') else 0)
             if 'pavement' in road:
@@ -50,7 +50,10 @@ class Field:
             for a,c in zip(road['pts'][:-1],road['pts'][1:]):
                 if a!=c:
                     entries.append([*a,*c,road['halfWidth'],flags])
+                    overlays.append(bool(road.get('sources')) and road['bridge'])
         self.a = np.array(entries,dtype=np.float64)
+        self.overlays=np.array(overlays,dtype=bool)
+        self.has_overlays=bool(self.overlays.any())
         self.lo = np.minimum(self.a[:,:2],self.a[:,2:4])
         self.hi = np.maximum(self.a[:,:2],self.a[:,2:4])
         self.bins = collections.defaultdict(list)
@@ -111,6 +114,13 @@ class Field:
                     d=self.d2(xx[0,cc],yy[rr,0],n)
                     old=best[rr,cc]
                     take=(d<old)|((d==old)&(n<winner[rr,cc]))
+                    if self.has_overlays:
+                        # Projected endpoints are rounded to 1 mm. The R8 field resolves only 10 cm;
+                        # a sub-centimetre offset must not erase an overlapping source bridge flag.
+                        previous=np.minimum(winner[rr,cc],len(self.a)-1)
+                        close=np.abs(np.sqrt(d)-np.sqrt(old))<=.01
+                        was=self.overlays[previous]&(winner[rr,cc]<len(self.a))
+                        take=(take&~(close&was&~self.overlays[n]))|(close&self.overlays[n]&~was)
                     r,c=rr[take],cc[take]
                     best[r,c]=d[take]
                     winner[r,c]=n
@@ -127,9 +137,16 @@ class Field:
 
 
 
+def bridge_network(data):
+    """Source spans win a coincident field tie; original roads and their ids stay unchanged."""
+    return [*data.get('bridgeSpans', []), *data['roads']]
+
+
 def main():
     manifest=json.load(open(f'{b.OUT}/manifest.json'))
-    network=json.load(open(f'{b.OUT}/roads.json'))['roads']
+    data=json.load(open(f'{b.OUT}/roads.json'))
+    # Coincident source bridge spans win a distance tie, retaining the bridge bit on an existing trail.
+    network=bridge_network(data)
     field=Field(network)
     print(f'{len(field.a)} road segments',flush=True)
     levels={}

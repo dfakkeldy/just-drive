@@ -1,0 +1,8 @@
+[
+ {"area":"cansocauseway","road":33,"span":-100094,"x":-2842.9,"z":-333.6,"name":"Highway 104 under Railroad","trailer":true},
+ {"area":"pointtupper","road":74,"span":-100080,"x":-7131.1,"z":-4049.8,"name":"Highway 104 under Railroad"},
+ {"area":"pointtupper","road":91,"span":72,"x":1832.8,"z":-983.4,"name":"Highway 4 under ramp 72","trailer":true},
+ {"area":"cansocauseway","road":33,"span":54,"x":-4916.7,"z":-2708.9,"name":"Highway 104 under Highway 4 span 54","trailer":true},
+ {"area":"pointtupper","road":207,"span":106,"x":377,"z":958.8,"name":"Railroad under Industrial Park Road 106"},
+ {"area":"pointtupper","road":216,"span":-100084,"x":270.3,"z":1120.4,"name":"Railroad under Industrial Park Road -100084"}
+]

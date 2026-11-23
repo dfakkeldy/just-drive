@@ -1,3 +1,4 @@
+import {deckCounts} from './bridge-contact';
 import * as THREE from 'three';
 import { TRAILER_SPEC as S, createTrailer, type Trailer } from './trailer';
 import type { Input, Vehicle, VehiclePlacement } from './vehicle';
@@ -70,8 +71,8 @@ export class Towing {
   private readonly groundPoint = { y: 0 };
   private groundX = 0; private groundZ = 0;
   private readonly readGround = () => {
-    const g = this.terrain.heightAt(this.groundX, this.groundZ), deck = this.roads.deckHeight(this.groundX, this.groundZ);
-    return g === null ? null : deck === null ? g : Math.max(g, deck);
+    const deck = this.roads.deckHeight(this.groundX, this.groundZ),g = this.terrain.heightAt(this.groundX, this.groundZ,this.groundPoint.y);
+    return g === null ? null : deckCounts(deck,this.groundPoint.y,this.terrain.cartRoads) ? Math.max(g,deck) : g;
   };
   private readonly refined = new Float64Array(4);
   private readonly assistedInput: Input = { throttle: 0, steer: 0, handbrake: false };
@@ -101,7 +102,7 @@ export class Towing {
     const v = this.vehicle;
     if (this.attached || !v.spec.hitch || !v.spec.mass) return;
     this.priorGuard = v.placementGuard; this.priorPlaced = v.onPlaced; this.priorBefore = v.beforeStep;
-    const pose = { x: v.x, z: v.z, heading: v.heading };
+    const pose = { x: v.x, z: v.z, heading: v.heading, y:v.y };
     if (!this.allowPlacement(pose)) { this.reason = 'No room to attach the trailer here.'; return; }
     this.attached = true; this.reason = '';
     if (this.model) this.model.root.visible = true;
@@ -110,7 +111,7 @@ export class Towing {
     let placed = false;
     v.onPlaced = () => { this.priorPlaced?.(); placed = this.place(); };
     v.beforeStep = (dt, input) => this.control(dt, this.priorBefore ? this.priorBefore(dt, input) : input);
-    v.place(pose.x, pose.z, pose.heading);
+    v.place(pose.x, pose.z, pose.heading,pose.y);
     if (!placed) { this.detach(); this.reason = 'The trailer placement was refused.'; if (this.model) this.model.root.visible = false; }
     else {
       if (this.world.scene) this.world.scene.coupledBody = this.probe;
@@ -127,13 +128,17 @@ export class Towing {
     if (this.world.yard?.coupledBodies === this.bodyProvider) this.world.yard.coupledBodies = null;
     this.attached = false;
   }
+  /** The host hooks installed before this trailer attached, so an in-place swap never copies trailer guards. */
+  cleanHooks(): { placementGuard: Vehicle['placementGuard']; onPlaced: Vehicle['onPlaced'] } {
+    return { placementGuard: this.attached ? this.priorGuard : this.vehicle.placementGuard, onPlaced: this.attached ? this.priorPlaced : this.vehicle.onPlaced };
+  }
   get angle(): number { return wrap(this.vehicle.heading - this.heading); }
   private hitch(): THREE.Vector3 {
     const v = this.vehicle, h = v.spec.hitch!;
     this.local.set(0, h.height, h.back).applyEuler(this.euler.set(v.pitch, -v.heading, v.roll, 'YXZ'));
     return this.hitchPoint.set(v.x + this.local.x, v.y + this.local.y, v.z + this.local.z);
   }
-  private ground(x: number, z: number, y = 1e6): number | null {
+  private ground(x: number, z: number, y = this.y): number | null {
     this.groundX = x; this.groundZ = z; this.groundPoint.y = y;
     return this.terrain.withGroundContact(this.groundPoint, this.readGround, true);
   }
@@ -141,7 +146,7 @@ export class Towing {
   private buildPlacement(): void {
     const v = this.vehicle, h = this.hitch(); this.heading = v.heading;
     this.x = h.x - Math.sin(this.heading) * S.drawbar; this.z = h.z + Math.cos(this.heading) * S.drawbar;
-    this.y = this.ground(this.x, this.z) ?? v.y; this.vy = 0; this.pitch = v.pitch; this.roll = v.roll;
+    this.y = this.ground(this.x, this.z,v.y) ?? v.y; this.vy = 0; this.pitch = v.pitch; this.roll = v.roll;
     this.sway = this.swayRate = this.yawRate = this.filteredThumb = this.reverseTime = 0; this.reverseHeading = null;
     this.airborne = false; this.grounded = false; this.jackContact = false; this.hx = h.x; this.hz = h.z; this.hitchY = h.y;
     this.previous.x = v.x; this.previous.z = v.z; this.previous.y = v.y; this.previous.heading = v.heading;
@@ -158,7 +163,7 @@ export class Towing {
   place(): boolean {
     if (!this.attached) return false;
     // Vehicle.place kept its former pitch/roll; validPair uses those exact values before any installation.
-    if (!this.validPair({ x: this.vehicle.x, z: this.vehicle.z, heading: this.vehicle.heading })) return false;
+    if (!this.validPair({ x: this.vehicle.x, z: this.vehicle.z, heading: this.vehicle.heading, y:this.vehicle.y })) return false;
     this.copyPose(this.placementTrial!); this.prepareProbe();
     this.rememberValid(); this.update(); return true;
   }
@@ -201,8 +206,8 @@ export class Towing {
     const v = this.vehicle;
     if (!this.placementTrial) this.placementTrial = new Towing(Object.create(v) as Vehicle, this.terrain, this.roads, this.loaded, this.touch, this.world, false);
     const trial = this.placementTrial, body = trial.vehicle;
-    const land = this.terrain.heightAt(pose.x, pose.z), deck = this.roads.deckHeight(pose.x, pose.z);
-    body.x = pose.x; body.z = pose.z; body.heading = pose.heading; body.y = land === null ? v.y : deck === null ? land : Math.max(land, deck);
+    const deck = this.roads.deckHeight(pose.x, pose.z),land = this.terrain.heightAt(pose.x, pose.z,pose.y);
+    body.x = pose.x; body.z = pose.z; body.heading = pose.heading; body.y = land === null ? v.y : deckCounts(deck,pose.y??land,this.terrain.cartRoads) ? Math.max(land,deck) : land;
     body.pitch = v.pitch; body.roll = v.roll; body.vx = body.vz = body.vy = body.speed = 0;
     trial.buildPlacement();
     if (!trial.pairClear()) return false;
@@ -215,13 +220,14 @@ export class Towing {
       for (const a of [-spec.halfLength, 0, spec.halfLength]) for (const w of [-spec.halfWidth, spec.halfWidth]) {
         const x = p.x + fx * a + Math.cos(p.heading) * w, z = p.z + fz * a + Math.sin(p.heading) * w;
         if (bounds && (x < bounds[0] || x > bounds[2] || z < bounds[1] || z > bounds[3])) return false;
-        const g = this.ground(x, z);
+        const g = this.ground(x, z,p.y);
         if(g===null){if(!waitingRoad)return false;continue;}
-        const deck=this.roads.deckHeight(x,z),surface=this.terrain.surfaceAt?.(x,z)??null;
+        // The pose's own height picks the deck or the land under it (#6); #130's dry-ground rule then judges it.
+        const deck=this.roads.deckHeight(x,z),surface=this.terrain.surfaceAt?.(x,z,p.y)??null;
         const onDeck=(deck!==null&&Math.abs(g-deck)<.02)||(surface?.deck===true&&Math.abs(surface.ground-g)<.02);
         const sea=typeof this.terrain.seaLevel==='number'?this.terrain.seaLevel:DEFAULT_SEA_LEVEL;
         const coverClass=this.terrain.coverAt?.(x,z)??0;
-        const slope=coverClass===WATER_COVER_CLASS?localGroundSlope(x,z,(px,pz)=>this.ground(px,pz)):0;
+        const slope=coverClass===WATER_COVER_CLASS?localGroundSlope(x,z,(px,pz)=>this.ground(px,pz,p.y)):0;
         if(!isDryGround({ground:g,surface,onDeck,seaLevel:sea,coverClass,slope})||this.terrain.waterAt?.(x,z,g,onDeck))return false;
       }
     }
@@ -274,7 +280,7 @@ export class Towing {
     const fx = Math.sin(this.heading), fz = -Math.cos(this.heading), rx = Math.cos(this.heading), rz = Math.sin(this.heading);
     let mu = 0;
     for (const wheel of this.contacts) {
-      const surface = this.terrain.surfaceAt(wheel.x, wheel.z);
+      const surface = this.terrain.surfaceAt(wheel.x, wheel.z,wheel.y);
       mu += (surface && surface.roadDist <= surface.halfWidth + .4 ? surface.washboard ? .38 : surface.kind <= 2 || surface.kind === 9 || surface.kind === 13 ? 1 : .72 : .5) / 4;
     }
     const truckYaw = wrap(v.heading - this.previous.heading) / dt;
@@ -472,9 +478,9 @@ export class Towing {
     if (this.impactSpeed > 0) { this.impacts++; notify.call(v, this.impactSpeed); }
   }
   private recoverPlacement(): void {
-    const v = this.vehicle, pose = { x: v.x, z: v.z, heading: v.heading };
+    const v = this.vehicle, pose = { x: v.x, z: v.z, heading: v.heading, y:v.y };
     if (!this.allowPlacement(pose)) throw new Error('No clear coupled pose after static scene change');
-    v.place(pose.x, pose.z, pose.heading);
+    v.place(pose.x, pose.z, pose.heading,pose.y);
   }
   private projectTrailer(dt: number): void {
     const v = this.vehicle, p = this.probe, fx = Math.sin(this.heading), fz = -Math.cos(this.heading);

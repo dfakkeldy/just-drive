@@ -8,6 +8,7 @@ export async function pavedR1Gpu(){
  const initial=actual.slice(actual.indexOf('  float hardPaved='),actual.indexOf('  // ---- roads: painted'));
  const canopy=actual.slice(actual.indexOf('  float tree = smoothstep'),actual.indexOf('#if !defined(LOW)',actual.indexOf('  float tree = smoothstep')));
  const shoulder=actual.slice(actual.indexOf('    shoulder *= 1.0-hardPaved;'),actual.indexOf('#ifdef QUARRY',actual.indexOf('    albedo = mix(albedo, gravel, shoulder')));
+ // roadPaint is the lower-road paint mask (#156): 1 on an ordinary road, as here.
  const renderer=new T.WebGLRenderer({antialias:false});renderer.setSize(1,1,false);
  const target=new T.WebGLRenderTarget(1,1),scene=new T.Scene(),camera=new T.Camera(),geo=new T.PlaneGeometry(2,2),pixel=new Uint8Array(4);
  const render=(chunk,height=0)=>{
@@ -20,8 +21,8 @@ export async function pavedR1Gpu(){
   const canopyHeights=[4,12,20,25].map(h=>render(initial+canopy+'albedo *=1.-.25*under;',h));
   const halfMutant=render(initial.replace('1.0-hardPaved;','1.0-0.5*hardPaved;')+canopy+'albedo *=1.-.25*under;',25);
   const canopyMutant=render(initial.replace('  canopy *= 1.0-hardPaved;','')+canopy+'albedo *=1.-.25*under;',4);
-  const mouth=render(initial+'float shoulder=1.,rkind=3.;vec3 gravel=vec3(.8);'+shoulder);
-  const shoulderMutant=render(initial+'float shoulder=1.,rkind=3.;vec3 gravel=vec3(.8);'+shoulder.replace('    shoulder *= 1.0-hardPaved;',''));
+  const mouth=render(initial+'float shoulder=1.,rkind=3.,roadPaint=1.;vec3 gravel=vec3(.8);'+shoulder);
+  const shoulderMutant=render(initial+'float shoulder=1.,rkind=3.,roadPaint=1.;vec3 gravel=vec3(.8);'+shoulder.replace('    shoulder *= 1.0-hardPaved;',''));
   const equal=(a,b)=>a.every((x,i)=>Math.abs(x-b[i])<=1);
   if(!canopyHeights.every(p=>equal(clean,p)))throw Error('canopy shading returned on pavement');
   if(equal(clean,halfMutant))throw Error('canopy-half mutant survived');

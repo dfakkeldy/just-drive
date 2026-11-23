@@ -10,20 +10,21 @@ assert.equal(driverEnabled('pointtupper',true,new URLSearchParams('aiDriverCheck
 // LOW builds the AI too (from the display models): the gate no longer reads the quality.
 assert.equal(driverEnabled('pointtupper',true,new URLSearchParams(),false),true,'production (desktop or LOW) builds the AI');
 assert.equal(driverEnabled('pointtupper',true,new URLSearchParams('aiDriverCheck=1'),true),true,'a check page builds it');
-for(const player of ['car','truck','sxs','bike']) {
+const motorIds = GARAGE.filter(e => e.id !== 'horse').map(e => e.id);
+for(const player of motorIds) {
  const selected=new Set();
- for(const random of [0,.26,.51,.99]) {
- const e=chooseDriver(player,()=>random);
+ for(let i=0;i<motorIds.length*4;i++) {
+ const e=chooseDriver(player,()=>i/(motorIds.length*4));
  assert.notEqual(e.id,player);assert.notEqual(e.id,'horse');selected.add(e.id);
  }
- assert.equal(selected.size,3);
+ assert.equal(selected.size,motorIds.length-1);
 }
 // LOW picks only kinds with a display model: an allow-list, so a new garage vehicle never reaches drivableDisplay.
 {
  const { DISPLAY_KINDS, drivableDisplay } = await import('../web/src/fleet-models.ts');
  GARAGE.push({id:'tractor',name:'Invented test vehicle',spec:GARAGE[0].spec,build:()=>{throw Error('not built');}});
  try {
-  for(const player of ['car','truck','sxs','bike']) for(let i=0;i<40;i++) {
+  for(const player of motorIds) for(let i=0;i<40;i++) {
    const e=chooseDriver(player,()=>i/40,true); assert.ok(DISPLAY_KINDS.includes(e.id),`LOW pick ${e.id} has a display model`);
   }
   assert.ok([...Array(40).keys()].some(i=>chooseDriver('car',()=>i/40,false).id==='tractor'),'desktop still picks any motor vehicle');
@@ -31,10 +32,13 @@ for(const player of ['car','truck','sxs','bike']) {
  } finally { GARAGE.pop(); }
 }
 // LOW leaves the car out: no display model.
-for(const player of ['car','truck','sxs','bike']) {
- const selected=new Set();
- for(let i=0;i<20;i++){const e=chooseDriver(player,()=>i/20,true);assert.notEqual(e.id,'car','LOW never picks the car');assert.notEqual(e.id,player);selected.add(e.id);}
- assert.equal(selected.size,player==='car'?3:2,`LOW pool for a ${player} player`);
+{
+ const { DISPLAY_KINDS } = await import('../web/src/fleet-models.ts');
+ for(const player of motorIds) {
+  const selected=new Set();
+  for(let i=0;i<40;i++){const e=chooseDriver(player,()=>i/40,true);assert.notEqual(e.id,'car','LOW never picks the car');assert.notEqual(e.id,player);selected.add(e.id);}
+  assert.equal(selected.size,player==='car'?DISPLAY_KINDS.length:DISPLAY_KINDS.length-1,`LOW pool for a ${player} player`);
+ }
 }
 console.log('PASS enable gates and all non-player motor vehicle selection');
 // Contact regression: a horizontal push up a bank cannot leave the player's root under ground.
@@ -73,17 +77,36 @@ console.log('PASS T-junction segment connectivity, width filter, perpendicular l
 player.x=500;player.z=500;player.y=1;actor.terrain.heightAt=()=>20;
 PointTupperDriver.prototype.resolve.call(actor,player);
 assert.equal(player.y,1,'distant AI cannot alter player ground or bridge support');
+// Bridges (#156): a push reads the ground at the body's own height. A deck overhead (an overpass) never lifts it; a
+// deck within reach does.
+{
+const refs=[];
+const deckActor={active:true,vehicle:{...ai,y:5},terrain:{heightAt:(_x,_z,ref)=>{refs.push(ref);return 5;}},roads:{deckHeight:()=>20}};
+player.x=.1;player.z=0;player.y=5;
+PointTupperDriver.prototype.resolve.call(deckActor,player);
+assert.equal(player.y,5,'a push under an overpass leaves the player on the lower road');
+assert.deepEqual(refs,[5],'the ground is read at the body height');
+deckActor.roads.deckHeight=()=>5.3;player.x=.1;player.z=0;player.y=5;
+PointTupperDriver.prototype.resolve.call(deckActor,player);
+assert.equal(player.y,5.3,'a deck within reach still carries the pushed player');
+console.log('PASS pushed bodies keep their own deck: no lift onto an overpass');
+}
 const camera=new THREE.PerspectiveCamera(60,1,.1,2000);
 camera.position.set(0,3,0);camera.lookAt(0,2,-200);camera.updateMatrixWorld();
 let placements=0;
 const spawnVehicle={...ai,place(x,z,heading){placements++;Object.assign(this,{x,z,heading});return true;}};
-const spawner={active:false,parked:0,cursor:0,vehicle:spawnVehicle,entry:{id:'truck'},group:{visible:false},
+const spawner={active:false,parked:0,cursor:0,vehicle:spawnVehicle,entry:{id:'truck'},group:{visible:false},roads:{deckHeight:()=>null},
  frustum:new THREE.Frustum(),matrix:new THREE.Matrix4(),sphere:new THREE.Sphere(new THREE.Vector3(),12),
  paths:[{cumulative:[0,1000],at:(_along,_side,out)=>Object.assign(out,{x:0,z:-200,heading:0})}],
  terrain:{heightAt:()=>0},contacts:{allows:()=>true},obstacles:()=>[],traffic:[],onRoad:[],hide:PointTupperDriver.prototype.hide};
 PointTupperDriver.prototype.update.call(spawner,camera,{...ai,x:0,z:200},true,'car');
 assert.equal(placements,0,'in-view spawn is refused');
 camera.lookAt(0,2,200);camera.updateMatrixWorld();
+// A hidden start at a deck (or under one) is refused: a place with no reference stands on land.
+spawner.roads.deckHeight=()=>3;
+PointTupperDriver.prototype.update.call(spawner,camera,{...ai,x:0,z:200},true,'car');
+assert.equal(placements,0,'no start at a bridge deck');assert.equal(spawner.active,false);assert.equal(spawner.cursor,2,'the next try moves along');
+spawner.roads.deckHeight=()=>null;
 PointTupperDriver.prototype.update.call(spawner,camera,{...ai,x:0,z:200},true,'car');
 assert.equal(spawner.active,true,'hidden start can appear');assert.deepEqual(spawner.onRoad,[spawnVehicle],'the traffic sees the AI once it is on the road');
 camera.lookAt(0,2,-200);camera.updateMatrixWorld();
@@ -115,8 +138,9 @@ const make=entry=>{
 };
 // The narrow road admits the side by side (half width .915 + 1.8) but not the pickup (1.22 + 1.8).
 const narrow={kind:2,halfWidth:2.9,pts:[[400,-300],[400,300]]};
-const roads={roads:[{kind:2,halfWidth:6,pts:[[0,-1500],[0,1500]]},narrow]};
-const d=new PointTupperDriver(roads,{heightAt:()=>0},{allows:()=>true},'truck',0,()=>.5,make);assert.equal(d.low,false);
+const roads={roads:[{kind:2,halfWidth:6,pts:[[0,-1500],[0,1500]]},narrow],deckHeight:()=>null};
+let pickCall = 0;
+const d=new PointTupperDriver(roads,{heightAt:()=>0},{allows:()=>true},'truck',0,()=>pickCall++===0?1/6:4/6,make);assert.equal(d.low,false);
 assert.equal(d.entry.id,'sxs','boot pick with a pickup player');assert.equal(d.builds,1);
 assert.equal(d.paths.length,4,'side by side samples both roads, both ways');assert.equal(d.eligible(narrow),true);
 const cam=new THREE.PerspectiveCamera(60,1,.1,2000);cam.position.set(0,3,0);
@@ -225,6 +249,26 @@ assert.equal(stepWith([car(-1.6,-18,true,Math.PI)],null).handbrake,false,'oncomi
 stops[0].z=-4;
 assert.equal(stepWith([],hook(30)).handbrake,true,'red line 4 m ahead: brake');
 assert.equal(stepWith([],hook(5)).handbrake,false,'green line 4 m ahead: no brake');
+// Bridges (#156): every re-place in a step passes the body's height, so a deck the AI drives on still carries it.
+// 'stray': the nearest road runs across the AI's heading and it is off the road, so it rolls back to the old pose.
+for(const allows of [true,false,'stray']) {
+ const refs=[];
+ const v={x:1.6,z:0,y:12.5,heading:0,spec,speed:6,vx:0,vz:-6,update:()=>{v.y=12.6;},place(x,z,heading,ref){refs.push(ref);Object.assign(this,{x,z,heading});return true;}};
+ const actor={active:true,vehicle:v,parked:0,contact:{y:0},obstacles:()=>[],traffic:[],signals:null,eligible:()=>true,
+  contacts:{resolve:()=>{},allows:()=>allows!==false},terrain:{withGroundContact:(_c,run)=>run()},
+  roads:{nearest:(x,z)=>allows==='stray'?{road:straightRoad,x:1.6,z,dist:9,heading:Math.PI/2}:{road:straightRoad,x:1.6,z,dist:Math.abs(x-1.6),heading:0}}};
+ PointTupperDriver.prototype.step.call(actor,1/120,{...ai,x:500,z:500});
+ assert.deepEqual(refs,[allows===true?12.6:12.5],allows===true?'lane keeping re-places at the body height':`a rollback (${allows}) re-places at the old pose height`);
+}
+// The Boss's hidden turn round (update) re-places at the body height too, so a wait on a deck keeps it on the deck.
+{
+ const refs=[],camera=new THREE.PerspectiveCamera(60,1,.1,2000);camera.position.set(300,10,0);camera.lookAt(1000,10,0);camera.updateMatrixWorld();
+ const v={x:0,z:0,y:12.5,heading:0,spec,place(x,z,heading,ref){refs.push(ref);Object.assign(this,{x,z,heading});return true;}};
+ const actor={active:true,vehicle:v,parked:0,leaving:false,turnCheck:0,steerRoad:null,entry:{id:'boss'},matrix:new THREE.Matrix4(),frustum:new THREE.Frustum(),sphere:new THREE.Sphere(new THREE.Vector3(),3),
+  tune:{kind:'car',goal:()=>({x:0,z:500})},contacts:{allows:()=>true},hide:()=>{throw new Error('hidden');}};
+ PointTupperDriver.prototype.update.call(actor,camera,{...ai,x:300,z:0},true,'truck');
+ assert.deepEqual(refs,[12.5],'the hidden turn round re-places at the body height');
+}
 // A tuned driver (the Boss) keeps a closer gap to bodies, but still stops short of a red line, not in the junction.
 {
  const { followSpeed } = await import('../web/src/boss-rules.ts');
@@ -236,7 +280,7 @@ assert.equal(stepWith([],hook(5)).handbrake,false,'green line 4 m ahead: no brak
  assert.ok(near.handbrake||near.throttle<=0,'tuned: red line 8 m ahead: no more throttle');
  stops[0].z=-4;
 }
-console.log('PASS ambient traffic gap in the own line only; red and amber stop lines from the real signal rule');
+console.log('PASS ambient traffic gap in the own line only; red and amber stop lines from the real signal rule; re-places keep the deck');
 }
 
 // LOW rigs: the parked display models with their riders, drivable. Front wheels steer about their own centre.
@@ -258,7 +302,7 @@ for(const id of DISPLAY_KINDS) {
   for(const w of ['fl','fr']) { const before=world(rig.wheels[w]); rig.steer[w].rotation.y=.5; assert.ok(world(rig.wheels[w]).distanceTo(before)<1e-6,`${id} ${w}: steering turns the wheel about itself`); rig.steer[w].rotation.y=0; }
   // The display batches drop the rider for the parked copies; the AI's keeps it, in the body batch.
   let tri=0,ptri=0; rig.body.traverse(o=>{if(o.isMesh)tri+=(o.geometry.attributes.position.count)/3;}); parked.body.traverse(o=>{if(o.isMesh)ptri+=(o.geometry.attributes.position.count)/3;});
-  if(id==='sxs') assert.ok(tri>ptri,'side by side: the rider is in the AI body batch');
+  if(id.startsWith('sxs')) assert.ok(tri>ptri,`${id}: the rider is in the AI body batch`);
  } else assert.equal(rig.bikeMesh && rig.root.getObjectsByProperty('isSkinnedMesh',true).filter(m=>m.visible).length,2,'dirt bike: bike and rider');
  const v=entry.ride?legacyVehicle(entry.ride(rig,flat,noRoads,-5,entry.spec)):new Vehicle(rig,flat,noRoads,-5,entry.spec);
  assert.ok(v.place(0,0,0),`${id}: placed`);
@@ -271,10 +315,10 @@ for(const id of DISPLAY_KINDS) {
  for(let i=0;i<240;i++) v.update(1/60,{throttle:v.speed>.1?-1:0,steer:0,handbrake:true},()=>{});
  assert.ok(Math.abs(v.speed)<.5,`${id}: the LOW rig stops (${v.speed.toFixed(2)} m/s)`);
 }
-assert.deepEqual(draws,{truck:7,sxs:5,bike:2},'LOW AI draws per kind');
+assert.deepEqual(draws,{truck:7,sxs:5,'sxs-utility':5,'sxs-crew':5,'sxs-cabin':5,bike:2},'LOW AI draws per kind');
 assert.throws(()=>drivableDisplay('car'),/No display model for car/,'only the display kinds are drivable on LOW');
 // A LOW driver builds display rigs and never the car.
-const lowDriver=new PointTupperDriver({roads:[{kind:2,halfWidth:6,pts:[[0,-1500],[0,1500]]}]},{heightAt:()=>0},{allows:()=>true},'truck',0,()=>.5,undefined,true);
+const lowDriver=new PointTupperDriver({roads:[{kind:2,halfWidth:6,pts:[[0,-1500],[0,1500]]}],nearest:()=>null},{heightAt:()=>0},{allows:()=>true},'truck',0,()=>.5,undefined,true);
 assert.equal(lowDriver.low,true);assert.notEqual(lowDriver.entry.id,'car');lowDriver.group.visible=true;assert.equal(count(lowDriver.group),draws[lowDriver.entry.id],'LOW driver mounts the display rig');
 console.log('PASS LOW AI: display models with riders drive, steer and stop; pivots on the wheels; truck 7, side by side 5, bike 2 draws; no car');
 }

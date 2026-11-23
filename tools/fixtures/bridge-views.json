@@ -1,0 +1,56 @@
+[
+  {
+    "area": "mabou",
+    "id": 976,
+    "name": "Mabou Rivers Trail",
+    "query": "at=619252.310,5098747.940,166.57507&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat",
+    "url": "http://localhost:5296/mabou?at=619252.310,5098747.940,166.57507&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat"
+  },
+  {
+    "area": "judique",
+    "id": 36,
+    "name": "Highway 105",
+    "query": "at=629534.080,5073466.534,-7.58521&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat",
+    "url": "http://localhost:5296/judique?at=629534.080,5073466.534,-7.58521&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat"
+  },
+  {
+    "area": "porthood",
+    "id": 712,
+    "name": "Mabou Rivers Trail",
+    "query": "at=619251.149,5098752.803,166.57507&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat",
+    "url": "http://localhost:5296/porthood?at=619251.149,5098752.803,166.57507&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat"
+  },
+  {
+    "area": "westbay",
+    "id": 81,
+    "name": "Highway 105",
+    "query": "at=629534.080,5073466.534,-7.58521&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat",
+    "url": "http://localhost:5296/westbay?at=629534.080,5073466.534,-7.58521&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat"
+  },
+  {
+    "area": "pointtupper",
+    "id": 106,
+    "name": "Industrial Park Road",
+    "query": "at=628515.881,5051776.501,46.53708&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat",
+    "url": "http://localhost:5296/pointtupper?at=628515.881,5051776.501,46.53708&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat"
+  },
+  {
+    "area": "cansocauseway",
+    "id": 54,
+    "name": "Highway 4",
+    "query": "at=618898.382,5059196.261,117.66427&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat",
+    "url": "http://localhost:5296/cansocauseway?at=618898.382,5059196.261,117.66427&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat"
+  },
+  {
+    "area": "cansocauseway",
+    "id": "missing-655",
+    "name": "Ceilidh Coastal Trail",
+    "url": "http://localhost:5296/cansocauseway?at=623048.011,5056896.612,132.06173&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=bike&view=seat"
+  },
+  {
+    "area": "mabou",
+    "id": "missing-968",
+    "name": "Mabou Rivers Trail",
+    "url": "http://localhost:5296/mabou?at=620893.501,5100576.869,173.53312&hud=0&radio=0&shadows=1&exag=1&hour=13&res=1&mode=explore&site=just&vehicle=car&view=seat"
+  }
+]

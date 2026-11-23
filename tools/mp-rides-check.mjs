@@ -23,7 +23,7 @@ const m = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputF
 canvasStub();globalThis.innerWidth = 1280;modelFiles();await m.prepareCar();   // the mail car is a model file: load it before its ghost is measured
 const {THREE,Net,Ghosts,readRide,parseServerText,judge,Meter,takeSeat,hello,encodeState,encodeSnapshot,checkState,rideIndex,nearbyOpacity,footprintsOverlap,easeOpacity} = m;
 const car={kind:'car',trailer:false},truck={kind:'truck',trailer:true};
-for(const kind of ['car','truck','sxs','bike']) assert.deepEqual(readRide({kind,trailer:false,secret:'discard'}),{kind,trailer:false});
+for(const kind of ['car','truck','sxs','sxs-utility','sxs-crew','sxs-cabin','bike']) assert.deepEqual(readRide({kind,trailer:false,secret:'discard'}),{kind,trailer:false});
 for(const value of [null,{},'bike',{kind:'boat',trailer:false},{kind:'horse',trailer:false},{kind:'car',trailer:'yes'},{kind:'bike'}])assert.equal(readRide(value),undefined);
 assert.deepEqual(readRide({kind:'bike',trailer:true}),{kind:'bike',trailer:false});
 const join=ride=>JSON.stringify({t:'join',id:2,name:'Driver 2',hue:2,...(ride?{ride}:{})});
@@ -73,7 +73,7 @@ function judgedClient(api){
   }}});
   const state={...local,vx:2};client.setRide({kind:'truck',trailer:false});client.report(state,at);
   ws.onmessage({data:api.hello(seat,'mabou/compat',[])});client.report(state,at);
-  return {client,meter,received,closed,games,tick(time,trailer){at=time;client.setRide({kind:'truck',trailer});client.report(state,at);}};
+  return {client,meter,received,closed,games,tick(time,trailer,kind='truck'){at=time;client.setRide({kind,trailer});client.report(state,at);}};
 }
 {
   const old=judgedClient(legacyRoom);
@@ -86,6 +86,47 @@ function judgedClient(api){
   console.log('PASS new client against the frozen old judge: 2000 toggles, zero ride texts/strikes/disconnects');
 }
 {
+  // A server advertising rides:true WITHOUT sxsVariants (the previous live server) accepts only car/truck/sxs/bike.
+  const preVariantKinds = new Set(['car', 'truck', 'sxs', 'bike']);
+  const preVariantApi = {
+    Meter, takeSeat,
+    hello: (s, room, others) => JSON.stringify({ t: 'hello', v: 1, id: s.id, name: s.name, hue: s.hue, ride: s.ride, room, cap: 24, rides: true, chat: true, heartbeat: true, games: true, peers: others }),
+    judge: (s, meter, data, at, bounds) => {
+      if (typeof data === 'string') {
+        let parsed; try { parsed = JSON.parse(data); } catch { parsed = null; }
+        if (parsed?.t === 'ride' && !preVariantKinds.has(parsed.ride?.kind)) {
+          meter.strikes++;
+          return { drop: true, close: meter.strikes >= 4 ? 4003 : 0 };
+        }
+      }
+      return judge(s, meter, data, at, bounds);
+    },
+  };
+  let at = 0, ws; const meter = new Meter(), seat = takeSeat([]), received = [], closed = [];
+  const client = new Net({ urls: ['ws://pre-variants'], now: () => at, socket: () => ws = {
+    readyState: 1, binaryType: '', onopen: null, onclose: null, onerror: null, onmessage: null,
+    close() { this.readyState = 3; },
+    send(data) {
+      if (data === 'ping') { this.onmessage?.({ data: 'pong' }); return; }
+      if (data === '{"t":"game-sync"}') { meter.allow(at); return; }
+      received.push(data);
+      const v = preVariantApi.judge(seat, meter, data, at, 10000);
+      if (v.close) { closed.push(v.close); this.readyState = 3; this.onclose?.({ code: v.close }); }
+      if ('ride' in v) seat.ride = v.ride;
+    },
+  } });
+  client.setRide({ kind: 'sxs-utility', trailer: false }); client.report({ ...local, vx: 2 }, at);
+  ws.onmessage({ data: preVariantApi.hello(seat, 'mabou/prev', []) }); client.report({ ...local, vx: 2 }, at);
+  for (const [i, kind] of ['sxs-crew', 'sxs-cabin', 'sxs-utility'].entries()) {
+    at = (i + 1) * 1500; client.setRide({ kind, trailer: false }); client.report({ ...local, vx: 2 }, at);
+  }
+  const sentRides = received.filter(d => typeof d === 'string').map(d => JSON.parse(d).ride);
+  assert.deepEqual(closed, [], 'rides-only server never disconnects new SxS variants');
+  assert.equal(meter.strikes, 0, 'rides-only server records zero strikes for new SxS variants');
+  assert.deepEqual(sentRides, [{ kind: 'sxs', trailer: false }], 'new SxS variants announce as legacy sxs to a rides-only server');
+  client.stop();
+}
+{
   const current=judgedClient({Meter,takeSeat,hello,judge});
   for(let i=1;i<=2000;i++)current.tick(i*10,i%3===0);
   current.tick(22000,true);
@@ -93,6 +134,14 @@ function judgedClient(api){
   assert.deepEqual(current.closed,[],'new server never disconnects rapid toggles plus moving state');
   assert.equal(current.meter.strikes,0,'coalesced ride changes plus five-Hz states stay inside the real meter');
   assert.equal(current.games.length,1,'one game-sync per connection');
+  // Current server with sxsVariants:true accepts every new side-by-side kind directly.
+  assert.equal(JSON.parse(hello(takeSeat([]),'mabou/new',[])).sxsVariants,true,'new server advertises sxsVariants');
+  for(const [i,kind] of ['sxs-utility','sxs-crew','sxs-cabin'].entries()){
+    current.tick(24000+i*1500,false,kind);
+  }
+  const sxsEvents=current.received.filter(e=>typeof e.data==='string').map(e=>JSON.parse(e.data).ride.kind).slice(-3);
+  assert.deepEqual(sxsEvents,['sxs-utility','sxs-crew','sxs-cabin'],'sxsVariants server receives exact new side-by-side kinds');
+  assert.equal(current.meter.strikes,0,'zero strikes announcing new side-by-side variants to updated server');
   assert.ok(events.length>10&&events.length<=23,'ride changes are bounded and continue after a burst');
   for(let i=1;i<events.length;i++)assert.ok(events[i].at-events[i-1].at>=1000,'ride sends have at least one-second spacing');
   assert.deepEqual(events.at(-1).ride,{kind:'truck',trailer:true},'coalescing sends the final trailer state');
@@ -128,15 +177,15 @@ const baked=JSON.parse(readFileSync(root+'web/src/mp/ride-models.json','utf8'));
 assert.equal(baked.source,fingerprint(),'snapshots match production builders and reducer; regenerate explicitly if shapes change');
 const camera=new THREE.PerspectiveCamera(55,1,.1,500);camera.position.set(0,12,30);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
 const peer=(id,ride)=>({id,name:'Driver '+id,hue:id%8,ride,x:(id%4)*3,z:-Math.floor(id/4)*4,heading:0,speed:8,steer:.3,air:0,flags:0,alpha:1});
-const rides=[undefined,{kind:'horse',trailer:false},car,{kind:'bike',trailer:false},truck,{kind:'sxs',trailer:false},{kind:'truck',trailer:false}];
+const rides=[undefined,{kind:'horse',trailer:false},car,{kind:'bike',trailer:false},truck,{kind:'sxs',trailer:false},{kind:'sxs-utility',trailer:false},{kind:'sxs-crew',trailer:false},{kind:'sxs-cabin',trailer:false},{kind:'truck',trailer:false}];
 for(const low of [false,true])for(const n of [1,4,low?6:16,24]){
   const cap=n===24?24:undefined,g=new Ghosts({low,cap,ground:()=>0}),peers=Array.from({length:n},(_,i)=>peer(i+1,rides[i%rides.length]));g.update(1/60,peers,camera);
   const [body,labels]=g.group.children,drawn=Math.min(n,cap??(low?6:16));
   assert.equal(g.drawn,drawn);assert.equal(body.count,drawn);assert.ok(body.geometry.attributes.position.count/3<=700);
   assert.equal(g.group.children.filter(o=>o.count>0).length,2,'shared body and label draws for mixed vehicles');
   assert.ok((body.geometry.attributes.position.count/3*drawn+labels.count*2)<=drawn*702);
-  assert.equal(body.geometry.morphAttributes.position.length,5);
-  const morph=new THREE.Mesh(body.geometry);for(let i=0;i<drawn;i++){body.getMorphAt(i,morph);assert.deepEqual(morph.morphTargetInfluences,rides.map(()=>0).slice(0,5).map((_,j)=>j===rideIndex(peers[i].ride)?1:0),'GPU selects announced ride');}
+  assert.equal(body.geometry.morphAttributes.position.length,8);
+  const morph=new THREE.Mesh(body.geometry);for(let i=0;i<drawn;i++){body.getMorphAt(i,morph);assert.deepEqual(morph.morphTargetInfluences,Array.from({length:8},(_,j)=>j===rideIndex(peers[i].ride)?1:0),'GPU selects announced ride');}
   console.log(`${low?'phone':'desktop'} n=${n} cap=${cap??(low?6:16)} drawn=${drawn} calls=2 triangles=${drawn*696+labels.count*2}`);
   const positions=body.geometry.morphAttributes.position;
   for(let k=0;k<positions.length;k++){

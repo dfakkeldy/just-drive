@@ -124,6 +124,16 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
     result=run('--only','browser-runtime');assert result.returncode==0 and 'browser-runtime | PASS' in result.stdout,result.stdout
     result=run('--only','truck');assert 'Evidence kept at' not in result.stdout
 
+    # Successful picture deliverables must survive for the remote evidence copier.
+    with manifest.open() as f: picture_rows=list(csv.DictReader(f,delimiter='\t'))
+    for row in picture_rows: row['notes']='retain-evidence' if row['name']=='truck' else ''
+    with manifest.open('w') as f:
+        writer=csv.DictWriter(f,fieldnames=picture_rows[0].keys(),delimiter='\t');writer.writeheader();writer.writerows(picture_rows)
+    result=run('--only','truck');assert result.returncode==0,result.stdout
+    evidence=Path(result.stdout.split('Evidence kept at ')[1].strip())
+    assert evidence.is_dir() and (evidence/'truck.log').is_file()
+    result=run('--only','phone');assert 'Evidence kept at' not in result.stdout
+
     table([('sleeper',0,'node','*',''),('next',0,'node','*','')])
     # Replace just fixture commands; no source copy or real browser is involved.
     manifest=fixture/'tools/checks.tsv'
@@ -240,14 +250,14 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
     assert {'phone','roads-key','sxs','trailer','truck'} <= selected('tools/phone-ground.mjs')
     assert {'explore-browser-mutations','bike-browser-mutations','trailer-review-browser'} <= selected('tools/mutation-session.mjs')
     assert {'store','store-mutations'} <= selected('tools/pack_terrain.py')
-    for helper,count in [('truck-cdp.mjs',19),('shift-fixture.mjs',8)]:
+    for helper,count in [('truck-cdp.mjs',20),('shift-fixture.mjs',8)]:
         importers={str(p.relative_to(ROOT)) for p in (ROOT/'tools').glob('*.mjs') if "./"+helper in p.read_text()}
         assert len(importers)==count,(helper,importers)
         covered=set().union(*(deps[name] for name in selected('tools/'+helper)))
         for importer in importers: assert 'tools/'+helper in scan.command('node '+importer),importer
         executable=importers-{str(Path('tools')/name) for name in module.IGNORE}
         assert executable <= covered,(helper,executable-covered)
-    print('PASS five helper dependency selections, including 19 truck-cdp and 8 shift-fixture importers')
+    print('PASS five helper dependency selections, including 20 truck-cdp and 8 shift-fixture importers')
 
     # A real tiny Git fixture proves --changed includes untracked input files.
     table([('untracked',0,'node','new-input.bin','')])

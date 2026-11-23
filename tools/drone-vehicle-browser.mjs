@@ -117,8 +117,8 @@ const PROBE_EXPR = `(x, z) => {
     hasDrone: !!document.querySelector('#vehicleChoice [data-vehicle="drone"]'),
     room: !!document.querySelector('#titleCard .mpControl'),
   })`);
-  check(JSON.stringify(picker.kinds) === JSON.stringify(['car', 'bike', 'drone']) && JSON.stringify(picker.labels) === JSON.stringify(['Car', 'Dirt bike', 'Drone']),
-    'desktop Just Drive title card offers Car, Dirt bike, Drone: ' + JSON.stringify(picker.labels));
+  check(JSON.stringify(picker.kinds) === JSON.stringify(['car', 'sxs', 'bike', 'drone']) && JSON.stringify(picker.labels) === JSON.stringify(['Car', 'Side by side', 'Dirt bike', 'Drone']),
+    'desktop Just Drive title card offers Car, Side by side, Dirt bike, Drone: ' + JSON.stringify(picker.labels));
 
   // Click Drone on the title card -> saves, reloads, opens in standalone drone mode.
   await p.read(`document.querySelector('#vehicleChoice [data-vehicle="drone"]').click()`);
@@ -366,7 +366,7 @@ for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
     startLabel: document.getElementById('titleStart')?.textContent,
     scroll: document.getElementById('titleCard').scrollHeight - document.getElementById('titleCard').clientHeight,
   })`);
-  check(JSON.stringify(titleCheck.kinds) === JSON.stringify(['car', 'bike', 'drone']) && titleCheck.pressed === 'true' && titleCheck.startLabel === 'Start flying',
+  check(JSON.stringify(titleCheck.kinds) === JSON.stringify(['car', 'sxs', 'bike', 'drone']) && titleCheck.pressed === 'true' && titleCheck.startLabel === 'Start flying',
     `phone ${name}: title card shows Drone choice and Start flying`);
 
   await p.read(`document.getElementById('titleStart').click();document.activeElement?.blur()`);

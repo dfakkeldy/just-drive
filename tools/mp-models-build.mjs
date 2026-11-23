@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 const root = new URL('../', import.meta.url);
-export const inputs = ['web/src/car-model.ts','web/src/glb-model.ts','web/public/models/mail-car-low.glb','web/src/truck.ts','web/src/truck-surfaces.ts','web/src/truck-reflections.ts','web/src/sxs.ts','web/src/bike.ts','web/src/trailer.ts','web/src/vehicle-spec.ts','tools/mp-model-source.ts','tools/mp-models-build.mjs','web/package-lock.json'];
+export const inputs = ['web/src/car-model.ts','web/src/glb-model.ts','web/public/models/mail-car-low.glb','web/src/truck.ts','web/src/truck-surfaces.ts','web/src/truck-reflections.ts','web/src/sxs.ts','web/src/sxs-variants.ts','web/src/bike.ts','web/src/trailer.ts','web/src/vehicle-spec.ts','tools/mp-model-source.ts','tools/mp-models-build.mjs','web/package-lock.json'];
 export const fingerprint = () => createHash('sha256').update(inputs.map(p=>readFileSync(new URL(p,root))).join('\n')).digest('hex');
 export function canvasStub() {
   const ctx = new Proxy({}, { get: (o,k) => k==='createLinearGradient' ? ()=>({addColorStop(){}}) : k==='measureText' ? ()=>({width:100}) : o[k]??(()=>{}), set:(o,k,v)=>(o[k]=v,true) });
@@ -33,7 +33,7 @@ export async function generate() {
   const mod = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
   canvasStub(); modelFiles(); await mod.prepareCar();
   const models={};
-  for(const kind of ['car','truck','trailer','sxs','bike']) {
+  for(const kind of ['car','truck','trailer','sxs','bike','sxs-utility','sxs-crew','sxs-cabin']) {
     const t=performance.now(),source=mod.sourceModel(kind),g=mod.reduceModel(source);
     models[kind]={...source.userData.ghostSpec,...Object.fromEntries(['position','color'].map(k=>[k,Array.from(g.attributes[k].array,v=>Math.round(v*100000)/100000)]))};
     g.dispose();console.log(kind,Math.round(performance.now()-t)+' ms');

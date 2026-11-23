@@ -36,7 +36,7 @@ export interface FleetMember {
 export interface FleetAction { kind: 'drive' | 'unload' | 'load' | 'park'; id: FleetId; label: string; reason: string }
 interface Move { member: FleetMember; frames: FleetPose[]; duration: number; end: 'PARKED' | 'STRAPPED' }
 type Snapshot = Saved[] & { world: Map<FleetMember, SweepPose>; gatePose: number[]; supportRevision: number; trailerWorld: SweepPose; trailerMatrix: THREE.Matrix4; presentation(): void; rollback(publish?: boolean): void };
-interface Plan { abortReason?: string; history: { member: FleetMember; from: SweepPose; to: SweepPose }[]; moves: Move[]; saved: Snapshot; elapsed: number; index: number; gateTime: number; after: FleetMember }
+interface Plan { abortReason?: string; history: { member: FleetMember; from: SweepPose; to: SweepPose }[]; moves: Move[]; saved: Snapshot; elapsed: number; index: number; gateTime: number; after: FleetMember; restoreOnAbort?: () => void; onSettled?: (ok: boolean, reason?: string) => void }
 interface Saved { member: FleetMember; dirty: boolean; needsSettling?: boolean; state: FleetState; pose: FleetPose | null; body: ContactBody & { pitch: number; roll: number }; parent: THREE.Object3D | null; position: THREE.Vector3; quaternion: THREE.Quaternion }
 const STEP = 1 / 120, wrap = (n: number) => Math.atan2(Math.sin(n), Math.cos(n));
 const FOOT = 4.15, ZONE = 6.8;
@@ -94,7 +94,7 @@ export class Fleet {
     if ((this.bodiesChanged || membersChanged) && this.needsSettling) this.solidsChanged();
   }
   private readonly trailerSupport: FleetSupport;
-  private readonly nativePlace = new Map<Vehicle, (x: number, z: number, heading: number) => boolean>();
+  private readonly nativePlace = new Map<Vehicle, (x: number, z: number, heading: number, referenceY?: number) => boolean>();
   private teleportTrial = false;
   private readonly nativeRespawn = new Map<Vehicle, () => void>();
   teleportAttempts = 0;
@@ -140,13 +140,16 @@ export class Fleet {
   private readonly groundPoint = { y: 0 };
   private gx = 0; private gz = 0;
   private readonly readGround = () => {
-    const ground = this.terrain.heightAt(this.gx, this.gz), deck = this.roads.deckHeight(this.gx, this.gz);
+    // The reference is the 1e6 contact height: any site deck counts, as on main (no overpass rule here yet).
+    const ground = this.terrain.heightAt(this.gx, this.gz, this.groundPoint.y), deck = this.roads.deckHeight(this.gx, this.gz);
     return ground === null ? null : deck === null ? ground : Math.max(ground, deck);
   };
   readonly ground: Ground = (x, z) => {
     this.gx = x; this.gz = z; this.groundPoint.y = 1e6;
     return this.terrain.withGroundContact(this.groundPoint, this.readGround, true);
   };
+  /** A fleet placement stands where fleet ground does (the topmost deck, as on main), so it passes that height on. */
+  private reference(x: number, z: number): number | undefined { return this.ground(x, z) ?? undefined; }
   private readonly changed = (x: number, z: number, size: number) => {
     this.supportRevision++;
     if (this.visitPending && this.visitPending.x + 150 >= x && this.visitPending.x - 150 <= x + size && this.visitPending.z + 150 >= z && this.visitPending.z - 150 <= z + size) this.visitDirty = true;
@@ -194,7 +197,7 @@ export class Fleet {
     if (tow.world.yard) tow.world.yard.coupledBodies = this.worldBodiesProvider;
     for (const member of this.members) {
       const place = member.vehicle.place.bind(member.vehicle); this.nativePlace.set(member.vehicle, place);
-      member.vehicle.place = (x, z, heading) => { return this.teleportTrial ? place(x, z, heading) : this.placeMovement(member, x, z, heading); };
+      member.vehicle.place = (x, z, heading, referenceY) => { return this.teleportTrial ? place(x, z, heading, referenceY ?? this.reference(x, z)) : this.placeMovement(member, x, z, heading); };
       this.nativeRespawn.set(member.vehicle, member.vehicle.respawn.bind(member.vehicle));
       member.vehicle.respawn = () => {
         member.vehicle.stopInWater();
@@ -529,8 +532,13 @@ export class Fleet {
     const revision = this.contacts?.revision ?? 0;
     if (revision !== this.contactRevision) { this.contactRevision = revision; this.solidsChanged(); }
     if (this.visitPending) { if (this.visitDirty) this.initializeVisit(this.visitPending, this.visitAccepts); if (this.visitPending) return; }
-    if (this.plan?.abortReason && this.scriptGroundDirty) { this.scriptGroundDirty = false; this.abort(this.plan.abortReason); }
-    if (this.plan && !this.plan.abortReason && this.scriptGroundDirty) this.validatePlanGround();
+    if (this.plan?.abortReason && this.scriptGroundDirty) {
+      this.scriptGroundDirty = false;
+      try { this.abort(this.plan.abortReason); } catch (err) { this.abortOnError(err); }
+    }
+    if (this.plan && !this.plan.abortReason && this.scriptGroundDirty) {
+      try { this.validatePlanGround(); } catch (err) { this.abortOnError(err); }
+    }
     // Terrain calls occur only after a relevant tile/deck change, not while a parked vehicle sleeps.
     for (const m of this.members) if (m.state === 'PARKED' && m.dirty && !this.busy) {
       m.dirty = false;
@@ -582,10 +590,7 @@ export class Fleet {
     }
     if (!stationary) return;
     for (const m of this.members) if (m.state === 'PARKED') {
-      let gap = bodyGap(this.driven.vehicle, m.vehicle);
-      if (m.id === 'truck') gap = Math.min(gap, bodyGap(this.driven.vehicle, this.trailerPose()));
-      else if (this.driven.id === 'truck') gap = Math.min(gap, bodyGap(this.trailerPose(), m.vehicle));
-      if (gap <= 6 && this.standingValid(m)) add('drive', m.id, `DRIVE: ${m.entry.name}`);
+      if (this.driveReachGap(m) <= 6 && this.standingValid(m)) add('drive', m.id, `DRIVE: ${m.entry.name}`);
     }
     const index = this.actions.findIndex(a => `${a.kind}:${a.id}` === old); this.actionIndex = index < 0 ? 0 : index;
   }
@@ -709,6 +714,62 @@ export class Fleet {
   }
   activate(): boolean {
     try { return this.activateAction(); } finally { this.checkedTransition(); }
+  }
+  private driveReachGap(m: FleetMember): number {
+    let gap = bodyGap(this.driven.vehicle, m.vehicle);
+    if (m.id === 'truck') gap = Math.min(gap, bodyGap(this.driven.vehicle, this.trailerPose()));
+    else if (this.driven.id === 'truck') gap = Math.min(gap, bodyGap(this.trailerPose(), m.vehicle));
+    return gap;
+  }
+  /** Fleet-aware handoff to a carried or parked member (e.g. mountain-road SxS hint) without leaving the session. */
+  switchToMember(id: 'sxs' | 'bike', onSettled?: (ok: boolean, reason?: string) => void): { ok: boolean; pending?: boolean; reason?: string } {
+    try {
+      if (this.busy) return { ok: false, reason: 'Wait for the trailer move to finish' };
+      const member = this.members.find(m => m.id === id);
+      if (!member) return { ok: false, reason: 'No side-by-side on the trailer' };
+      if (this.driven === member) return { ok: true };
+      const v = this.driven.vehicle;
+      if (v.airborne || v.sunk > 0) return { ok: false, reason: 'Stop on solid ground to switch' };
+      const saved = { vx: v.vx, vz: v.vz, vy: v.vy, speed: v.speed, steerAngle: v.steerAngle, handbrake: this.handbrake };
+      const restore = () => {
+        v.vx = saved.vx; v.vz = saved.vz; v.vy = saved.vy; v.speed = saved.speed; v.steerAngle = saved.steerAngle;
+        this.handbrake = saved.handbrake; this.rampDirty = true;
+      };
+      try {
+        v.vx = v.vz = v.vy = v.speed = 0;
+        if (this.driven.id === 'truck') this.handbrake = true;
+        this.rampDirty = true; this.promptTime = 0;
+        if (member.state === 'PARKED') {
+          if (this.driveReachGap(member) > 6) {
+            restore();
+            return { ok: false, reason: 'Side-by-side is too far away to switch' };
+          }
+          if (!this.handoff(member)) { restore(); return { ok: false, reason: this.message || 'Cannot switch to the side-by-side here' }; }
+          this.switchCameraReady = false; this.switchTo = member; this.switching = 1;
+          this.message = `Taking the wheel: ${member.entry.name}`;
+          return { ok: true };
+        }
+        if (member.state === 'STRAPPED') {
+          if (this.driven.id !== 'truck') { restore(); return { ok: false, reason: 'Park the pickup on level ground to unload' }; }
+          if (!this.begin('unload', member)) {
+            const reason = this.message || 'Pull onto level ground to unload the side-by-side';
+            restore();
+            return { ok: false, reason };
+          }
+          if (this.plan) {
+            this.plan.after = member;
+            this.plan.restoreOnAbort = restore;
+            this.plan.onSettled = onSettled;
+          }
+          return { ok: true, pending: true };
+        }
+        restore();
+        return { ok: false, reason: 'Side-by-side is not ready to switch' };
+      } catch {
+        restore();
+        return { ok: false, reason: 'Could not switch right now' };
+      }
+    } finally { this.checkedTransition(); }
   }
   private activateAction(): boolean {
     const cached = this.action; if (!cached || this.busy) return false;
@@ -973,22 +1034,30 @@ export class Fleet {
     if (reason) this.message = reason;
     return !reason;
   }
+  private abortOnError(err: unknown): void {
+    if (!this.plan?.onSettled) throw err;
+    this.abort('Could not finish switching; vehicles returned safely');
+  }
   private advance(dt: number, checked = false): void {
     const run = () => {
       this.acc = Math.min(.1, this.acc + Math.max(0, dt));
       while (this.acc + 1e-10 >= STEP) { this.acc -= STEP; this.advanceStep(); }
       this.promptTime = 0;
     };
-    // A single checked angular interval owns all the fixed steps in this synchronous frame.
-    if (!checked && (this.folding || this.lowering || this.plan && this.plan.gateTime < 1)) {
-      const duration = Math.min(.1, this.acc + Math.max(0, dt));
-      const end = THREE.MathUtils.clamp(this.gates + (this.folding ? -duration : duration), 0, 1);
-      const reason = this.gateClear(this.gates, end, run);
-      if (reason) {
-        if (this.plan) this.abort(reason + '; vehicles returned safely');
-        else { this.folding = this.lowering = false; this.handbrake = true; this.message = reason; }
-      }
-    } else fleetMove({ commit: run });
+    try {
+      // A single checked angular interval owns all the fixed steps in this synchronous frame.
+      if (!checked && (this.folding || this.lowering || this.plan && this.plan.gateTime < 1)) {
+        const duration = Math.min(.1, this.acc + Math.max(0, dt));
+        const end = THREE.MathUtils.clamp(this.gates + (this.folding ? -duration : duration), 0, 1);
+        const reason = this.gateClear(this.gates, end, run);
+        if (reason) {
+          if (this.plan) this.abort(reason + '; vehicles returned safely');
+          else { this.folding = this.lowering = false; this.handbrake = true; this.message = reason; }
+        }
+      } else fleetMove({ commit: run });
+    } catch (err) {
+      this.abortOnError(err);
+    }
   }
   private validatePlanGround(): boolean {
     const plan = this.plan; if (!plan) return true;
@@ -1006,7 +1075,7 @@ export class Fleet {
     return true;
   }
   private advanceStep(): void {
-    try { this.advanceTransition(); } finally { this.checkedTransition(); }
+    try { this.advanceTransition(); } catch (err) { this.abortOnError(err); } finally { this.checkedTransition(); }
   }
   private advanceTransition(): void {
     if (this.switching > 0) {
@@ -1030,7 +1099,7 @@ export class Fleet {
     if (plan.gateTime < 1) return;
     const move = plan.moves[plan.index]; if (!move) {
       if (!this.take(plan.after)) { this.abort(this.message + '; load cancelled'); return; }
-      this.plan = null; this.mass(); return;
+      this.plan = null; this.mass(); plan.onSettled?.(true); return;
     }
     plan.elapsed = Math.min(move.duration, plan.elapsed + STEP);
     const at = Math.min(move.frames.length - 1, Math.round(plan.elapsed / move.duration * (move.frames.length - 1))), pose = move.frames[at];
@@ -1077,11 +1146,14 @@ export class Fleet {
     try { this.abortTransition(reason); } finally { this.checkedTransition(); }
   }
   private abortTransition(reason: string): void {
+    let settled: ((ok: boolean, reason?: string) => void) | undefined;
     if (this.plan) { const plan = this.plan; if (!this.restore(plan.saved)) { plan.abortReason = reason; return; }
       if(this.returnHeld){const resumed=this.resumeSupportedPlan(plan);plan.abortReason=resumed?undefined:'Ground changed; return blocked; use Start over';this.message=resumed?'Ground changed; former place blocked; continuing on checked support':plan.abortReason!;return;}
-      plan.history.length = 0; this.plan = null; this.switching = 0; this.switchTo = null; this.folding = this.lowering = false; }
+      plan.history.length = 0; this.plan = null; this.switching = 0; this.switchTo = null; this.folding = this.lowering = false;
+      plan.restoreOnAbort?.(); settled = plan.onSettled; }
     if (reason.startsWith('Ground changed')) { this.rampDirty = this.gatesDirty = true; this.zoneReady = false; }
     this.message = this.returnHeld ? 'Ground changed; former place blocked; drive the machine clear of the ramp' : reason;
+    settled?.(false, this.message);
   }
   /** External contact consumers (including animals) cannot turn a correction into a placement search. */
   private placeMovement(m: FleetMember, x: number, z: number, heading: number): boolean {
@@ -1094,7 +1166,7 @@ export class Fleet {
       const guard = v.placementGuard; let proposed = false;
       try {
         v.placementGuard = p => { proposed = m.id !== 'truck' || this.tow.allowsPose(p); return proposed; };
-        const placed = this.withRampContact(() => this.nativePlace.get(v)!(x, z, heading));
+        const placed = this.withRampContact(() => this.nativePlace.get(v)!(x, z, heading, this.reference(x, z)));
         if (!placed) proposed = false;
       }
       finally { v.placementGuard = guard; }
@@ -1165,17 +1237,19 @@ export class Fleet {
               left -= available; seg += forward ? 1 : -1; fraction = forward ? 0 : 1;
             }
           }
-          if (accepts && !accepts({x,z,heading:yaw})) { failure = 'Requested start pose is blocked'; continue; }
+          // Fleet's own ground height (a deck where there is one) goes with the pose to the caller's guard (the trailer
+          // check judges the pose at its height), as it does to the trailer check below and to place().
           const height = this.ground(x, z);
           if (height === null) { failure = 'Destination land is still loading'; continue; }
           if (height <= this.seaLevel + .08) { failure = 'Water at the destination'; continue; }
+          if (accepts && !accepts({x,z,heading:yaw,y:height})) { failure = 'Requested start pose is blocked'; continue; }
           const invalid = this.validTeleport({ x, z, y: height, heading: yaw, spec: actor.entry.spec }, actor, this.bodiesExcept(actor));
           if (invalid) { failure = invalid; continue; }
-          if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw })) { failure = 'The trailer destination is blocked'; continue; }
+          if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw, y: this.ground(x, z) ?? undefined })) { failure = 'The trailer destination is blocked'; continue; }
           // This loop owns the road/turn search; do not invoke a nested endpoint-searching guard.
           const guard = actor.vehicle.placementGuard;
           let placed = false;
-          try { actor.vehicle.placementGuard = () => true; placed = actor.vehicle.place(x, z, yaw); }
+          try { actor.vehicle.placementGuard = () => true; placed = actor.vehicle.place(x, z, yaw, height); }
           finally { actor.vehicle.placementGuard = guard; }
           if (!placed) { failure = 'Water at the destination'; continue; }
           if (Math.hypot(actor.vehicle.x - x, actor.vehicle.z - z) > 125) continue;
@@ -1194,9 +1268,11 @@ export class Fleet {
     } }); } finally { this.teleportTrial = false; }
     if (!accepted) { this.message = failure || 'No valid destination found'; return false; }
     const chosen = accepted as Snapshot;
+    let cancelledPlan: Plan | null = null;
     const reason = teleport({ kind, targets: targets.map(t => ({ body: t.body, valid: () => this.validTeleport(t.body, t.member, t.others, t.attached) || (accepts && t.body.spec === actor.entry.spec && !accepts(t.body) ? 'Requested start pose changed' : '') })), commit: () => {
       chosen.rollback(); this.surfaceDirty = true; this.actualSurface = null; for (const m of movers) { m.needsSettling=false; m.dirty=false; m.vehicle.airborne = m.vehicle.atEdge = false; } if (actor.id === 'truck') this.gatesNeedSettling=false; this.spawned = true; this.tow.trailer.root.visible = true;
       if (all) {
+        cancelledPlan = this.plan;
         this.visitPending = null; this.visitAccepts = undefined; this.visitDirty = false;
         this.plan = null; this.switching = 0; this.switchTo = null; this.folding = this.lowering = false; this.acc = 0;
         this.driven = this.members[0]; this.driven.state = 'DRIVEN'; this.handbrake = true; this.previousThrottle = 0; this.reversing = false; this.tow.resetControls();
@@ -1205,6 +1281,7 @@ export class Fleet {
       this.refreshBodies(); this.cacheSafe(); this.mass(); this.releaseInput?.(); this.checkedTransition();
     } });
     if (reason) { this.message = reason; return false; }
+    (cancelledPlan as Plan | null)?.onSettled?.(false);
     return true;
   }
   startVisit(x: number, z: number, heading: number, accepts?: (pose: VehiclePlacement) => boolean): boolean { if ([x,z,heading].every(Number.isFinite)) return this.initializeVisit({ x, z, heading }, accepts); this.message = 'Invalid starting position'; return false; }
@@ -1214,9 +1291,11 @@ export class Fleet {
     this.message = 'Handbrake on'; return true;
   }
   /** Start-over and place jumps discard the old visit only after the complete new assembly is valid. */
-  restart(x: number, z: number, heading: number, kind: 'start-over' | 'place-jump' = 'start-over', accepts?: (pose: VehiclePlacement) => boolean): void {
+  restart(x: number, z: number, heading: number, kind: 'start-over' | 'place-jump' = 'start-over', accepts?: (pose: VehiclePlacement) => boolean): boolean {
     const recovered = this.members.filter(m => m.id !== 'truck' && m.state !== 'STRAPPED' && (m.vehicle.y <= this.seaLevel || m.vehicle.atEdge || !this.inside(m.vehicle)));
-    if (this.teleport(kind, { x, z, heading }, accepts)) this.message = recovered.length ? 'Recovered to trailer: ' + recovered.map(m => m.entry.name).join(', ') : 'All vehicles back on the trailer';
+    if (!this.teleport(kind, { x, z, heading }, accepts)) return false;
+    this.message = recovered.length ? 'Recovered to trailer: ' + recovered.map(m => m.entry.name).join(', ') : 'All vehicles back on the trailer';
+    return true;
   }
   private inside(v: VehiclePlacement): boolean { const b = this.truck.bounds; return !b || v.x >= b[0] && v.x <= b[2] && v.z >= b[1] && v.z <= b[3]; }
   respawn(): void { if (this.busy) { this.message = 'Finish loading or use Start over to recover the whole rig'; return; } if (this.teleport('road-reset')) this.message = `Back on the road: ${this.driven.entry.name}`; }

@@ -14,11 +14,13 @@ export function safePlacement(x: number, z: number, heading: number, bounds: Pla
 interface Placeable {
   bounds: PlacementBounds;
   place(x: number, z: number, heading: number): boolean | void;
+  /** Vehicle.placeAt: a height-free placement that may stand on the deck it lies on. */
+  placeAt?(x: number, z: number, heading: number): boolean | void;
 }
 /** Both URL keys use this path. A refusal must let startup choose its normal fallback. */
 export function placeUrlPose(vehicle: Placeable, origin: readonly [number, number], pose: readonly number[]): boolean {
   const heading = pose[2] ?? 0;
   if (!finitePose(pose[0], pose[1], heading)) return false;
   const x = pose[0] - origin[0], z = origin[1] - pose[1], radians = heading * Math.PI / 180;
-  return safePlacement(x, z, radians, vehicle.bounds) && vehicle.place(x, z, radians) === true;
+  return safePlacement(x, z, radians, vehicle.bounds) && (vehicle.placeAt ? vehicle.placeAt(x, z, radians) : vehicle.place(x, z, radians)) === true;
 }

@@ -5,6 +5,9 @@ export function rawProgram(source:string,name:string):string {
   return m[1].replace(/\$\{(\w+)\}/g,(_,key:string)=>rawProgram(source,key));
 }
 export function cartProgram(original:string,kind:'terrain'|'mask'):string {
+  original=original.replace(/\/\* MODERN_ROAD_CUT_BEGIN \*\/[\s\S]*?\/\* MODERN_ROAD_CUT_END \*\//g,'');
+  original=original.replace(/\/\* MODERN_ROAD_PAINT_BEGIN \*\/[\s\S]*?\/\* MODERN_ROAD_PAINT_END \*\//g,'');
+  original=original.replaceAll(' * roadPaint','');
   let out=original.replace('  float rkind = mod(rflags, 16.0);',`  float rkind = mod(rflags, 16.0);
   if (rkind > 4.5 && rkind < 5.5) { rkind = 0.0; rhalf = 0.0; }
   if (rkind > 0.5 && rkind < 3.5) { rkind = 3.0; rhalf = min(rhalf, 2.1); }`);

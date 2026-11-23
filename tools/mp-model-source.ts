@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadBlenderCar, type BlenderCar } from '../web/src/car-model';
 import { createTruck, TRUCK_SPEC } from '../web/src/truck';
 import { createSxs, SXS_SPEC } from '../web/src/sxs';
+import { createSxsCabin, createSxsCrew, createSxsUtility, SXS_CABIN_SPEC, SXS_CREW_SPEC, SXS_UTILITY_SPEC } from '../web/src/sxs-variants';
 import { CAR_SPEC } from '../web/src/vehicle-spec';
 import { createBike, BIKE_SPEC } from '../web/src/bike';
 import { createTrailer, TRAILER_SPEC } from '../web/src/trailer';
@@ -26,7 +27,13 @@ function ghostCar() {
 }
 
 export function sourceModel(kind: string): THREE.Group {
-  const rig = kind==='car' ? ghostCar() : kind==='sxs' ? createSxs() : kind==='bike' ? createBike() : createTruck();
+  const rig = kind === 'car' ? ghostCar()
+    : kind === 'sxs' ? createSxs()
+    : kind === 'sxs-utility' ? createSxsUtility()
+    : kind === 'sxs-crew' ? createSxsCrew()
+    : kind === 'sxs-cabin' ? createSxsCabin()
+    : kind === 'bike' ? createBike()
+    : createTruck();
   const root=rig.root;
   const wheelGroups: THREE.Object3D[] = kind==='bike' ? [] : [...new Set(Object.values(rig.wheels))];
   if (kind === 'bike') {
@@ -41,7 +48,13 @@ export function sourceModel(kind: string): THREE.Group {
   }
   if(rig.extraWheels)wheelGroups.push(...rig.extraWheels);
   root.userData.ghostWheels = new Set(wheelGroups);
-  const spec=kind==='car'?CAR_SPEC:kind==='sxs'?SXS_SPEC:kind==='bike'?BIKE_SPEC:TRUCK_SPEC;
+  const spec = kind === 'car' ? CAR_SPEC
+    : kind === 'sxs' ? SXS_SPEC
+    : kind === 'sxs-utility' ? SXS_UTILITY_SPEC
+    : kind === 'sxs-crew' ? SXS_CREW_SPEC
+    : kind === 'sxs-cabin' ? SXS_CABIN_SPEC
+    : kind === 'bike' ? BIKE_SPEC
+    : TRUCK_SPEC;
   root.userData.ghostSpec={wheelbase:spec.wheelbase,track:spec.track};
   return root;
 }

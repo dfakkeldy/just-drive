@@ -13,7 +13,8 @@ let bundle = 0;
 const mutations = [
   ['explore cap left on', 'main.ts', 'if (!mailMode) vehicle.touchSpeedLimit = false;', ''],
   ['mail cap removed', 'main.ts', 'if (!mailMode) vehicle.touchSpeedLimit = false;', 'vehicle.touchSpeedLimit = false;'],
-  ['old paved limit', 'vehicle.ts', 's.kind === 2 ? 90 / 3.6', 's.kind === 2 ? 70 / 3.6'],
+  ['old paved limit', 'vehicle.ts', 'kind === 2 ? 90 / 3.6', 'kind === 2 ? 70 / 3.6'],
+  ['bridge deck limits as concrete', 'vehicle.ts', 'const kind = siteDeck && s.deckRoadKind !== undefined ? s.deckRoadKind : s.kind;', 'const kind = s.kind;'],
   ['limiter removed', 'vehicle.ts', 'if (limit > 0) a -=', 'if (false) a -='],
   ['hard limiter brake', 'vehicle.ts', 'export const LIMIT_BRAKE = 1.2;', 'export const LIMIT_BRAKE = 8;'],
   ['washboard too slow', 'vehicle.ts', 's.washboard ? 50 / 3.6 :', 's.washboard ? 10 :'],
@@ -96,6 +97,13 @@ function verify(m, report = false) {
     const p = fresh(); speed(p, kmh / 3.6); p.update(dt,input);
     assert.equal(p.activeTouchSpeedLimit, kmh / 3.6, `kind ${kind}, washboard ${washboard}, distance ${roadDist}: actual cap`);
   }
+  // A road bridge deck (concrete kind 9) limits as the road it carries; a wharf's concrete deck has no cap.
+  for (const [deckRoadKind, kmh] of [[1,100],[3,75],[undefined,0]]) {
+    Object.assign(surface, {kind:9,washboard:false,roadDist:0,deck:true,roadDeck:deckRoadKind!==undefined,deckRoadKind});
+    const p = fresh(); speed(p, (kmh || 90) / 3.6); p.update(dt,input);
+    assert.equal(p.activeTouchSpeedLimit, kmh / 3.6, `bridge deck carrying kind ${deckRoadKind}: actual cap`);
+  }
+  for (const key of ['deck','roadDeck','deckRoadKind']) delete surface[key];
   Object.assign(surface, {kind:2,washboard:false,roadDist:0});
   // The read-only number follows the actual limiter, including release without any physics step.
   const v = fresh(); speed(v, 90 / 3.6); v.update(dt, input);

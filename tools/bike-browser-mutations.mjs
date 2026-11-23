@@ -21,7 +21,7 @@ const cases=[
  ['car help hidden','phone','ride-features.ts','get drivingHelp(): boolean { return !bike; }','get drivingHelp(): boolean { return true; }','PULL target and no car steering help'],
  ['choice storage','ride','vehicle-choice.ts','localStorage.setItem(VEHICLE_KEY, next)','localStorage.setItem(VEHICLE_KEY, \'bike\')','settings switch saves reloads and keeps pose'],
  ['choice reload','ride','vehicle-choice.ts','location.search = q.toString();','void q.toString();','settings switch saves reloads and keeps pose'],
- ['position restore','ride','vehicle-choice.ts','vehicle.place(p.x, p.z, p.heading);','vehicle.place(p.x + 20, p.z, p.heading);','settings switch saves reloads and keeps pose'],
+ ['position restore','ride','vehicle-choice.ts','vehicle.place(p.x, p.z, p.heading,p.y);','vehicle.place(p.x + 20, p.z, p.heading,p.y);','settings switch saves reloads and keeps pose'],
  ['title save','ride','vehicle-choice.ts','localStorage.setItem(VEHICLE_KEY, next)','localStorage.setItem(VEHICLE_KEY, \'car\')','title switch saves reloads and keeps pose'],
  ['mail garage defaults','ride','garage.ts','if (explore) { try','if (true) { try','saved bike leaves ordinary mail on the original car and game'],
  ['ramp engine','ramp','bike-ride.ts','t * surf.accel','t * 0','bike climbs the real slipway and launches'],

@@ -39,19 +39,20 @@ test('R1 explicit player choices cancel a preset',()=>{
 });
 test('R2 bridge support stays dry for quarry and complete trailer footprint',()=>{
  const terrain={heightAt:()=>27,sites:[{box:[-100,-100,100,100],waterLevel:()=>27}],seaLevel:0,exag:1,waterAt:Terrain.prototype.waterAt,waterLevelAt:Terrain.prototype.waterLevelAt},roads={deckHeight:()=>32};
- assert.equal(Quarry.prototype.allowPlacement.call({terrain,roads,solids:[]},{x:0,z:0,heading:0},TRUCK_SPEC),true,'quarry guard accepts bridge');
+ assert.equal(Quarry.prototype.allowPlacement.call({terrain,roads,solids:[]},{x:0,z:0,heading:0,y:32},TRUCK_SPEC),true,'quarry guard accepts bridge');
+ assert.equal(Quarry.prototype.allowPlacement.call({terrain,roads,solids:[]},{x:0,z:0,heading:0},TRUCK_SPEC),false,'unknown pose uses submerged land beneath bridge');
  const body={spec:TRUCK_SPEC,x:0,z:0,heading:0,y:32},trailer={...body,z:10,spec:{...TRUCK_SPEC,halfLength:4.3,halfWidth:1.1}},trial={vehicle:body,buildPlacement(){},pairClear:()=>true,bodies:()=>[body,trailer]};
  const towing={vehicle:{spec:TRUCK_SPEC,y:32,pitch:0,roll:0},terrain,roads,placementTrial:trial,world:{},ground:()=>32};
- assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0}),true,'rig accepts supporting bridge');
+ assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0,y:32}),true,'rig accepts supporting bridge');
  roads.deckHeight=()=>27.3;towing.ground=()=>27.3;
- assert.equal(Quarry.prototype.allowPlacement.call({terrain,roads,solids:[]},{x:0,z:0,heading:0},TRUCK_SPEC),true,'a dry deck thirty centimetres above the lake is not survey noise');
- assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0}),true,'both bodies stay dry on the low supporting deck');
+ assert.equal(Quarry.prototype.allowPlacement.call({terrain,roads,solids:[]},{x:0,z:0,heading:0,y:32},TRUCK_SPEC),true,'a dry deck thirty centimetres above the lake is not survey noise');
+ assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0,y:32}),true,'both bodies stay dry on the low supporting deck');
  roads.deckHeight=()=>26;terrain.heightAt=()=>25;towing.ground=()=>26;
- assert.equal(Quarry.prototype.allowPlacement.call({terrain,roads,solids:[]},{x:0,z:0,heading:0},TRUCK_SPEC),false,'a submerged deck still counts as water');
- assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0}),false,'submerged supporting deck cannot accept the rig');
+ assert.equal(Quarry.prototype.allowPlacement.call({terrain,roads,solids:[]},{x:0,z:0,heading:0,y:32},TRUCK_SPEC),false,'a submerged deck still counts as water');
+ assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0,y:32}),false,'submerged supporting deck cannot accept the rig');
  terrain.heightAt=()=>27;roads.deckHeight=()=>32;
- towing.ground=(_x,z)=>z>5?27:32;assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0}),false,'wet trailer footprint is rejected even with a dry truck');
- towing.ground=()=>27;assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0}),false,'wet land still rejected');
+ towing.ground=(_x,z)=>z>5?27:32;assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0,y:32}),false,'wet trailer footprint is rejected even with a dry truck');
+ towing.ground=()=>27;assert.equal(Towing.prototype.validPair.call(towing,{x:0,z:0,heading:0,y:32}),false,'wet land still rejected');
 });
 const road=(id,pts,extra={})=>({id,pts,name:id===1?'Eagle Creek Road':id===1672?null:'fixture road',kind:3,bridge:false,halfWidth:2,...extra});
 test('R3 nearby overpass ends never create a junction',()=>{

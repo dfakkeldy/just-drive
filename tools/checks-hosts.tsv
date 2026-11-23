@@ -245,6 +245,21 @@ race-layout-browser	unproven	no	phone RaceView in Settings; first hardware brows
 traffic-budget	apple	no	wraps check-budget.sh (pins and the radio fixture are Mac-only, as for budget); traffic-on LOW and desktop whole-frame counts; the project brief audit: apple-check-host M4 PASS 73.62 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; all 8 selected rows exactly match every traffic-baseline metric; power network delta re-pin: five-load --update on apple-check-host (8 rows, calls/geometries lowered), PASS 112 s on 700208a4
 traffic-frame-time	unproven	no	rented Mac mini (apple-check-host) PASS about 78 s in PR #155 (hardware WebGL, active traffic timing); not yet run on the MacBook or on Linux
 traffic-budget-desktop	apple	no	wraps check-budget.sh (pins and the radio fixture are Mac-only, as for budget); traffic-on desktop counts; the project brief audit: apple-check-host M4 PASS 64.98 s on 68bc9eb, 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; all 4 selected rows exactly match every traffic-baseline metric; power network delta: apple-check-host PASS 75 s on 700208a4 against the re-pinned traffic ceilings
+bridges-pictures	mac-only	no	native Metal picture evidence on the Mac; no software render or FPS gate
+bridges-r3	portable	no	Node real-land r3 regression; browser timings separately use native Metal budget
+bridges-r3-mutations	portable	no	Node real-land r3 regression; browser timings separately use native Metal budget
+bridges-cuts	portable	no	Node real-land r3 regression; browser timings separately use native Metal budget
+bridges-cuts-mutations	portable	no	Node real-land r3 regression; browser timings separately use native Metal budget
+bridges-curves	portable	no	Node real-land r3 regression; browser timings separately use native Metal budget
+bridges-curves-mutations	portable	no	Node real-land r3 regression; browser timings separately use native Metal budget
+bridges-cut-runtime	mac-only	no	Native Metal cut-worker loading and negative control; all six areas
+bridges-underpass-pictures	mac-only	no	paired native-hardware bank-paint evidence; rented Mac allowed
+bridges-budget-textures	mac-only	no	native GPU owner inventory for the exact frame-budget subset
+bridges-worker-package	portable	no	Node real Vite artifact build and external-worker negative; no browser or data
+bridges-westbay	portable	no	Node real-land and QuarrySite authority comparison; no browser
+bridges-source	mac-only	no	needs the GDAL Python bindings (osgeo.ogr): pipeline/bridge_spans.py source geometry fixtures; absent in clean-clone CI
+bridges-source-mutations	mac-only	no	needs the GDAL Python bindings (osgeo.ogr): real source geometry mutations; absent in clean-clone CI
+bridges-hosts	portable	no	stdlib host-selection regression and missing-declaration negatives; no GDAL/data
 traffic-signals-pictures	unproven	no	apple-check-host PASS 116.16 s on 38c41cdc (16 pictures); writes data/work/traffic-signals-1175, which stays on the host that ran it; not yet run on the MacBook or on Linux
 weather	portable	no	Node only, no data: Halifax time through Intl; PASS on apple-check-host and on the MacBook (Node 26.13.1); Linux first runs in hosted CI
 weather-pictures	unproven	no	pictures only; rented Mac mini (apple-check-host) PASS 145 s on ed632d1e (22 views, hardware WebGL); not yet run on the MacBook or on Linux
@@ -342,3 +357,5 @@ prince-browser	unproven	no	not yet measured on another host
 port-hawkesbury-mail	portable	no	Node only; runs with or without data/baked/areas/pointtupper
 port-hawkesbury-mail-mutations	portable	no	Node mutation controls; runs with or without data/baked/areas/pointtupper
 port-hawkesbury-mail-browser	unproven	no	Hardware WebGL, Point Tupper and Mabou land, desktop and phone LOW
+sxs-variants	portable	yes	Node check for all four side-by-side models, specs, outward solids, posed envelopes, display batches and ?car= links
+sxs-variants-browser	unproven	no	Hardware WebGL and Mabou land: all four side-by-side models in studio preview, title/settings picker, ?car= links and live driving

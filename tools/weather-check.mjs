@@ -129,6 +129,8 @@ assert.ok(clearBikeSpeed < snowTouchSpeed && snowTouchSpeed < snowKeyboardSpeed,
   'the bike brakes less on snow and retains more braking grip with touch');
 assert.equal(brakeBike(true, false, 10), brakeBike(false, false, 10),
   'a supporting road deck keeps ordinary bike traction in winter');
+assert.equal(brakeBike(true, false, 20), snowKeyboardSpeed,
+  'an overhead deck does not change the winter grip of the road below');
 // A failed light study (a bad date) must not replace a player's own clock: main.ts gives the player's moment then.
 const main = (await import('node:fs')).readFileSync('web/src/main.ts', 'utf8');
 assert.match(main, /const when = \(weather\.chosen && !lightStudy\.active \? undefined : lightStudy\.when\) \?\? weatherMoment\(weather\);/);
