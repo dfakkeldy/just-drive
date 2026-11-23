@@ -285,10 +285,10 @@ for (const {a, b, side} of added) {
     }
     assert.ok(maxAboveDeck >= 2.0 && maxAboveDeck <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${maxAboveDeck.toFixed(2)} m)`);
     assert.ok(maxTrussHalf < r.halfWidth && maxTrussHalf >= PONY_TRUSS.half, `bridge ${id} steel pony truss stays narrow one-lane (${(maxTrussHalf * 2).toFixed(2)} m wide)`);
-    assert.ok(maxHalf >= r.halfWidth + 0.9 - 1e-3, `bridge ${id} deck keeps baseline shoulder width visible (${(maxHalf * 2).toFixed(2)} m)`);
-    // Rendered deck (asphalt inside trusses + concrete outer shoulders) matches Roads.deckHeight() across the full baseline width.
+    assert.ok(maxHalf >= r.halfWidth + 1.2 - 1e-3, `bridge ${id} deck covers full deckHeight support width (${(maxHalf * 2).toFixed(2)} m)`);
+    // Rendered deck (asphalt inside trusses + concrete outer shoulders) matches Roads.deckHeight() across the full supported width.
     for (const s of [0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05]) {
-      for (const offset of [-3.85, -3.4, -3.0, -(PONY_TRUSS.clearHalf - 0.01), -1.0, 0, 1.0, PONY_TRUSS.clearHalf - 0.01, 3.0, 3.4, 3.85]) {
+      for (const offset of [-4.19, -4.05, -3.4, -3.0, -(PONY_TRUSS.clearHalf - 0.01), -1.0, 0, 1.0, PONY_TRUSS.clearHalf - 0.01, 3.0, 3.4, 4.05, 4.19]) {
         const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
         const y = net.deckHeight(x, z);
         assert.ok(y !== null, `bridge ${id} supports deck at s=${s.toFixed(2)}, offset=${offset}`);
@@ -451,22 +451,31 @@ for (const {a, b, side} of added) {
       assert.ok(endTrailerAlong > startTrailerAlong + 0.3, `bridge ${id} ${mode} trailer continues forward after rail contact (${(endTrailerAlong - startTrailerAlong).toFixed(3)} m)`);
     }
   }
-  // Unloaded banks: repeated collision calls during the same terrain revision do not keep re-sampling bank endpoints.
+  // Unloaded banks: repeated collision calls during the same terrain revision do not keep re-sampling bank endpoints,
+  // and advancing to a loaded revision retries once, builds the deck, and blocks an overlapping vehicle.
   {
     let surfaceCalls = 0;
     const coarseTerrain = {
       level: 5, manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
       heightAt: (x, z) => realTerrain.heightAt(x, z),
-      surfaceAt: (x, z) => { surfaceCalls++; const s = realTerrain.surfaceAt(x, z); return s ? { ...s, level: 5 } : null; },
+      surfaceAt: (x, z) => { surfaceCalls++; const s = realTerrain.surfaceAt(x, z); return s ? { ...s, level: coarseTerrain.level } : null; },
       withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
     };
     const coarseNet = new Roads({ roads: tagged }, mabouManifest.village, coarseTerrain);
     const r45 = coarseNet.roads.find(x => x.id === 45);
-    const mx = (r45.pts[0][0] + r45.pts[r45.pts.length - 1][0]) / 2;
-    const mz = (r45.pts[0][1] + r45.pts[r45.pts.length - 1][1]) / 2;
-    const probe = { x: mx, z: mz, y: 3.5, heading: 0, vx: 0, vz: 0, speed: 0, spec: CAR_SPEC };
+    const [ax, az] = r45.pts[0], [bx, bz] = r45.pts[r45.pts.length - 1];
+    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, hdg = Math.atan2(dx, -dz);
+    const probe = { x: mx - uz * 1.6, z: mz + ux * 1.6, y: 3.55, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    const startX = probe.x, startZ = probe.z;
     for (let i = 0; i < 120; i++) coarseNet.guardrails.block(probe, 1 / 120);
     assert.ok(surfaceCalls <= 2, `unloaded bridge banks sample at most once per revision (got ${surfaceCalls})`);
+    assert.equal(probe.x, startX, 'unloaded bank does not push before deck exists');
+    assert.equal(probe.z, startZ, 'unloaded bank does not push before deck exists');
+    coarseTerrain.level = 8;
+    coarseTerrain.dataRevision = 2;
+    coarseNet.guardrails.block(probe, 1 / 120);
+    assert.ok(Math.hypot(probe.x - startX, probe.z - startZ) > 0.1, 'loaded revision retries deck lookup and blocks overlapping vehicle');
     for (const child of [...coarseNet.group.children]) child.geometry?.dispose();
   }
   // Other Mabou bridges keep the generic modern deck.
