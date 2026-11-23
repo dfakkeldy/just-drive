@@ -134,7 +134,7 @@ export function ponyTrussVerticalClip(
   const railTop = PONY_TRUSS.railHeight + 0.11;
   const deckSlope = (y1 - y0) / span;
   const carTop = carY + carHeight;
-  if (carTop < Math.min(y0, y1) - 0.15) return false;
+  if (carTop < Math.min(y0, y1)) return false;
   if (carY > Math.max(y0, y1) + h + topPad) return false;
 
   // 1. Inner steel guard rail interval: [deckY(s) + railBottom, deckY(s) + railTop] overlaps [carY, carTop].
@@ -152,13 +152,13 @@ export function ponyTrussVerticalClip(
   railRight = Math.max(0, Math.min(span, railRight));
   if (railRight <= railLeft + 1e-4) { railLeft = 0; railRight = 0; }
 
-  // 2. Truss structure interval (bottom chord, inclined end posts, interior web, top chord).
+  // 2. Truss structure interval (bottom chord starts at deckY, inclined end posts, interior web, top chord).
   let trussLeft = 0, trussRight = span;
   if (deckSlope > 1e-7) {
-    trussRight = Math.min(trussRight, (carTop - (y0 - 0.15)) / deckSlope);
+    trussRight = Math.min(trussRight, (carTop - y0) / deckSlope);
     trussLeft = Math.max(trussLeft, (carY - (y0 + h + topPad)) / deckSlope);
   } else if (deckSlope < -1e-7) {
-    trussLeft = Math.max(trussLeft, (carTop - (y0 - 0.15)) / deckSlope);
+    trussLeft = Math.max(trussLeft, (carTop - y0) / deckSlope);
     trussRight = Math.min(trussRight, (carY - (y0 + h + topPad)) / deckSlope);
   }
   if (carY > y0 + chord) {
@@ -251,7 +251,11 @@ export function buildPonyTrussBridge(
 
   const half = PONY_TRUSS.half;
   const chord = PONY_TRUSS.chordSize;
-  const outerHalf = Math.max(PONY_TRUSS.outerHalf, deckHalf);
+  let chordSlack = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    chordSlack = Math.max(chordSlack, Math.abs(-(pts[i][0] - a[0]) * uz + (pts[i][1] - a[1]) * ux));
+  }
+  const outerHalf = Math.max(PONY_TRUSS.outerHalf, deckHalf + (deckHalf > PONY_TRUSS.outerHalf ? chordSlack + 0.01 : 0));
   const panels = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2);
   const panel = span / panels;
   const h = ponyTrussHeight(span);

@@ -286,7 +286,8 @@ for (const {a, b, side} of added) {
     assert.ok(maxAboveDeck >= 2.0 && maxAboveDeck <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${maxAboveDeck.toFixed(2)} m)`);
     assert.ok(maxTrussHalf < r.halfWidth && maxTrussHalf >= PONY_TRUSS.half, `bridge ${id} steel pony truss stays narrow one-lane (${(maxTrussHalf * 2).toFixed(2)} m wide)`);
     assert.ok(maxHalf >= r.halfWidth + 1.2 - 1e-3, `bridge ${id} deck covers full deckHeight support width (${(maxHalf * 2).toFixed(2)} m)`);
-    // Rendered deck (asphalt inside trusses + concrete outer shoulders) matches Roads.deckHeight() across the full supported width.
+    // Rendered deck (asphalt inside trusses + concrete outer shoulders) matches Roads.deckHeight() across the full supported width,
+    // including offsets measured from the baked road polyline segments out to ±4.199 m.
     for (const s of [0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05]) {
       for (const offset of [-4.19, -4.05, -3.4, -3.0, -(PONY_TRUSS.clearHalf - 0.01), -1.0, 0, 1.0, PONY_TRUSS.clearHalf - 0.01, 3.0, 3.4, 4.05, 4.19]) {
         const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
@@ -295,6 +296,19 @@ for (const {a, b, side} of added) {
         ray.set(new THREE.Vector3(x, y + 0.5, z), down);
         const hit = ray.intersectObject(mesh)[0];
         assert.ok(hit && Math.abs(hit.point.y - y) < 0.005, `bridge ${id} deck mesh matches deckHeight at s=${s.toFixed(2)}, offset=${offset} (diff=${hit ? Math.abs(hit.point.y - y).toFixed(5) : 'miss'})`);
+      }
+    }
+    for (let seg = 0; seg < r.pts.length - 1; seg++) {
+      const [pa0, pa1] = r.pts[seg], [pb0, pb1] = r.pts[seg + 1];
+      const sdx = pb0 - pa0, sdz = pb1 - pa1, slen = Math.hypot(sdx, sdz) || 1;
+      const sux = sdx / slen, suz = sdz / slen, smx = (pa0 + pb0) / 2, smz = (pa1 + pb1) / 2;
+      for (const offset of [-4.199, 4.199]) {
+        const x = smx - suz * offset, z = smz + sux * offset;
+        const y = net.deckHeight(x, z);
+        assert.ok(y !== null, `bridge ${id} seg ${seg} supports polyline edge offset=${offset}`);
+        ray.set(new THREE.Vector3(x, y + 0.5, z), down);
+        const hit = ray.intersectObject(mesh)[0];
+        assert.ok(hit && Math.abs(hit.point.y - y) < 0.005, `bridge ${id} seg ${seg} polyline edge offset=${offset} hits visible deck`);
       }
     }
     // Verify inner steel rails are tied to every interior upright post AND both inclined end posts (no floating rail).
@@ -346,10 +360,15 @@ for (const {a, b, side} of added) {
         assert.equal(reachedFar, true, `bridge ${id} dir=${dir} lat=${lat} car reaches far bank`);
       }
     }
-    // Off-height rail checks: probes below the span on terrain, 5 m above the deck, and 0.6 m before either inclined portal at 1.8 m above deck must not hit truss rail walls.
+    // Off-height rail checks: probes below the span on terrain, with car top 10 cm below the deck on both slopes,
+    // 5 m above the deck, and 0.6 m before either inclined portal at 1.8 m above deck must not hit truss rail walls.
     const underGround = realTerrain.heightAt(mx, mz);
+    const highEndS = y1 >= y0 ? span - 3.0 : 3.0;
+    const highEndDeckY = y0 + (y1 - y0) * (highEndS / span);
     for (const [label, px, pz, probeY] of [
       ['below span', mx - uz * 1.4, mz + ux * 1.4, Math.min(underGround, midY - CAR_SPEC.height - 0.5)],
+      ['top 10 cm below deck at midspan', mx - uz * 1.6, mz + ux * 1.6, midY - CAR_SPEC.height - 0.10],
+      ['top 10 cm below deck near higher end', ax + ux * highEndS - uz * 1.6, az + uz * highEndS + ux * 1.6, highEndDeckY - CAR_SPEC.height - 0.10],
       ['above truss', mx - uz * 1.4, mz + ux * 1.4, midY + 5],
       ['above start inclined portal', ax - ux * 0.6 - uz * 1.6, az - uz * 0.6 + ux * 1.6, y0 + 1.8],
       ['above end inclined portal', bx + ux * 0.6 - uz * 1.6, bz + uz * 0.6 + ux * 1.6, y1 + 1.8],
@@ -450,6 +469,41 @@ for (const {a, b, side} of added) {
       assert.ok(endTruckAlong > startTruckAlong + 0.3, `bridge ${id} ${mode} truck continues forward after rail contact (${(endTruckAlong - startTruckAlong).toFixed(3)} m)`);
       assert.ok(endTrailerAlong > startTrailerAlong + 0.3, `bridge ${id} ${mode} trailer continues forward after rail contact (${(endTrailerAlong - startTrailerAlong).toFixed(3)} m)`);
     }
+  }
+  // Level 6 -> 7 -> 8 streaming upgrades: each finer bank level replaces and disposes the previous mesh and updates deckHeight to exact bank ground + 0.05.
+  {
+    let curLevel = 6, bias = 0;
+    const streamTerrain = {
+      manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      surfaceAt: (x, z) => { const s = realTerrain.surfaceAt(x, z); return s ? { ...s, ground: s.ground + bias, level: curLevel } : null; },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const streamNet = new Roads({ roads: tagged }, mabouManifest.village, streamTerrain);
+    for (const id of [45, 46]) {
+      const r = streamNet.roads.find(x => x.id === id);
+      const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      const bankEnd = (a, b) => { const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1; return [a[0] + ((a[0] - b[0]) / d) * 3, a[1] + ((a[1] - b[1]) / d) * 3]; };
+      const b0 = bankEnd(r.pts[0], r.pts[1]), b1 = bankEnd(r.pts[r.pts.length - 1], r.pts[r.pts.length - 2]);
+      let prevMesh = null;
+      for (const [lvl, bOff] of [[6, 0.0], [7, 0.25], [8, 0.5]]) {
+        curLevel = lvl; bias = bOff; streamTerrain.dataRevision++;
+        let disposed = false;
+        if (prevMesh) { const orig = prevMesh.geometry.dispose.bind(prevMesh.geometry); prevMesh.geometry.dispose = () => { disposed = true; orig(); }; }
+        const h = streamNet.deckHeight(mx, mz);
+        const expected = ((streamTerrain.surfaceAt(b0[0], b0[1]).ground + 0.05) + (streamTerrain.surfaceAt(b1[0], b1[1]).ground + 0.05)) / 2;
+        assert.ok(Math.abs(h - expected) < 1e-6, `bridge ${id} level ${lvl} deckHeight updates to bank ground + 0.05`);
+        const mesh = streamNet.group.children.find(c => c.name === `pony-truss-${id}`);
+        assert.ok(mesh, `bridge ${id} level ${lvl} has mesh`);
+        if (prevMesh) {
+          assert.notEqual(mesh, prevMesh, `bridge ${id} level ${lvl} replaces coarser mesh`);
+          assert.equal(disposed, true, `bridge ${id} level ${lvl} disposes replaced mesh geometry`);
+        }
+        prevMesh = mesh;
+      }
+    }
+    for (const child of [...streamNet.group.children]) child.geometry?.dispose();
   }
   // Unloaded banks: repeated collision calls during the same terrain revision do not keep re-sampling bank endpoints,
   // and advancing to a loaded revision retries once, builds the deck, and blocks an overlapping vehicle.
