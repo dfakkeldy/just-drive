@@ -198,18 +198,27 @@ function captureMain(text,vehicle,placeAtStart,multiplayer={choice:{on:false,roo
   // (compiled from TypeScript, with no fleet, as in an ordinary one-vehicle visit), not from a hand-written copy.
   const declaration=text.match(/^const startPlacement = [\s\S]*?^\}? ?: vehicle;$/m)?.[0];assert.ok(declaration,'main startPlacement declaration exists');
   const startPlacement=ts.transpileModule(declaration,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
-  const run=new Function('startHere','placeAtStart','vehicle','multiplayer',`const gameMode='explore',ERA={id:'today'},AREA={id:'mabou'},SITE={brand:'mail'},manifest={village:[624271,5103301]},roads={roads:[]},buildings=null,fleet=null,airportDrag=null;let waitingToDrive=false,camReady=true,mode='fly';${startPlacement}\n${call};return ()=>({waitingToDrive,camReady,mode});`);
-  const state=run(value=>options=value,placeAtStart,vehicle,multiplayer);return {options,state};
+  const run=new Function('startHere','placeAtStart','vehicle','multiplayer',`const gameMode='explore',ERA={id:'today'},AREA={id:'mabou'},SITE={brand:'mail'},manifest={village:[624271,5103301]},roads={roads:[]},buildings=null,fleet=null,airportDrag=null,mountainHint=null;let waitingToDrive=false,camReady=true,mode='fly';${startPlacement}\n${call};return {state:()=>({waitingToDrive,camReady,mode}),setVehicle(next){vehicle=next;}};`);
+  const {state,setVehicle}=run(value=>options=value,placeAtStart,vehicle,multiplayer);return {options,state,setVehicle};
 }
 function mainAdapter(text,m) {
   const bounds=[-50,-50,50,50],multiplayer={choice:{on:false,room:null}},calls=[];
   const vehicle={bounds,x:0,z:0,heading:0,placementGuard:null,restart(x,z,heading){calls.push([x,z,heading]);const p={x,z,heading};if(this.placementGuard&&!this.placementGuard(p))return;Object.assign(this,p);}};
   const guard=function(){assert.equal(this,vehicle,'preserve the original guard receiver');return true;};vehicle.placementGuard=guard;
-  const {options,state}=captureMain(text,vehicle,m.placeAtStart,multiplayer);
+  const {options,state,setVehicle}=captureMain(text,vehicle,m.placeAtStart,multiplayer);
   assert.equal(options.bounds,bounds,'main passes the actual vehicle bounds');assert.equal(options.multiplayer,multiplayer);
   assert.equal(options.place({x:10,z:20,heading:1}),true,'main returns the observed placement outcome');
   assert.deepEqual(calls,[[10,20,1]],'main place calls real restart path with selected point');assert.equal(vehicle.placementGuard,guard);
   assert.deepEqual(state(),{waitingToDrive:true,camReady:false,mode:'drive'});
+  // Replacing the solo driven vehicle (e.g. mountain-road SxS swap) redirects Start Here to the new vehicle.
+  const swappedCalls=[];
+  const swapped={bounds,x:0,z:0,heading:0,placementGuard:null,restart(x,z,heading){swappedCalls.push([x,z,heading]);const p={x,z,heading};if(this.placementGuard&&!this.placementGuard(p))return;Object.assign(this,p);}};
+  const swappedGuard=function(){assert.equal(this,swapped,'preserve replacement vehicle guard receiver');return true;};swapped.placementGuard=swappedGuard;
+  setVehicle(swapped);
+  assert.equal(options.place({x:30,z:40,heading:2}),true,'Start Here places the replacement vehicle');
+  assert.deepEqual(calls,[[10,20,1]],'old vehicle is not moved after solo ride swap');
+  assert.deepEqual(swappedCalls,[[30,40,2]],'replacement vehicle receives Start Here placement');
+  assert.equal(swapped.placementGuard,swappedGuard);
 }
 async function realPlacement(m,text=main,kinds=['nearest','nearest-reversed','next','none','same-refused']) {
   const {createStartRig}=await realRig();
@@ -514,10 +523,10 @@ if(process.argv.includes('--mutations')) {
   assert.equal(source.split(tap).length,2);assert.equal(source.split(fresh).length,2);
   const stale=await compile(source.replace(tap,tap+' const tapChoice = options.multiplayer?.choice ?? { on: false, room: null };').replace(fresh,'const multiplayer = tapChoice;'));
   await assert.rejects(()=>multiplayerHandoff(stale),assert.AssertionError);console.log('KILLED tap-time multiplayer snapshot');
-  const anchor='placeAtStart(startPlacement, s)';assert.equal(main.split(anchor).length,2);
+  const anchor='placeAtStart(fleet ? startPlacement : vehicle, s)';assert.equal(main.split(anchor).length,2);
   assert.throws(()=>mainAdapter(main.replace(anchor,'false'),m),assert.AssertionError);
   console.log('KILLED main placement skipped');
-  await assert.rejects(()=>realPlacement(m,main.replace(anchor,'(placeAtStart(startPlacement, s), true)'),['next','none']),assert.AssertionError);
+  await assert.rejects(()=>realPlacement(m,main.replace(anchor,'(placeAtStart(fleet ? startPlacement : vehicle, s), true)'),['next','none']),assert.AssertionError);
   console.log('KILLED main placement lies about refusal');
   const bounds='buildings: buildings?.clear ?? [], bounds: vehicle.bounds';assert.equal(main.split(bounds).length,2);
   assert.throws(()=>mainAdapter(main.replace(bounds,'buildings: buildings?.clear ?? [], bounds: null'),m),assert.AssertionError);

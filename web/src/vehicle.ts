@@ -200,9 +200,9 @@ export class Vehicle {
   resetControlHistory(): void { this.touchRoad = null; this.junctionClear = 0; this.roadHeading = null; this.helpYaw = this.lightHelpYaw = 0; }
   resetVisit(): void { this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.touchRoad = null; this.junctionClear = 0; this.helpYaw = this.lightHelpYaw = 0; this.sunk = 0; }
 
-  restart(x: number, z: number, heading: number) {
+  restart(x: number, z: number, heading: number): boolean {
     this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true;
-    this.place(x, z, heading);
+    return this.place(x, z, heading);
   }
 
   /** Hold a sunk ride at rest in water until an explicit reset returns it to dry land. */
