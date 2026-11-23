@@ -147,24 +147,44 @@ function decodePng(file) {
   }
   return { width, height, channels, data: out };
 }
-function terrainSampler(dir, manifest) {
-  const [ox, oy] = manifest.origin, { size, height: { scale, offset } } = manifest, cache = new Map();
-  const readTile = (lvl, tx, ty) => {
-    const key = `${lvl}/${tx}_${ty}`;
+function terrainSampler(areaId, dir, manifest) {
+  const [ox, oy] = manifest.origin, { size, height: { scale, offset }, levels = {} } = manifest, cache = new Map();
+  const levelSets = new Map(Object.entries(levels).map(([lvl, keys]) => [Number(lvl), new Set(keys)]));
+  const availLevels = [...levelSets.keys()].sort((a, b) => b - a);
+  const readTile = (lvl, tx, ty, bId) => {
+    const tileKey = `${tx}_${ty}`;
+    if (!levelSets.get(lvl)?.has(tileKey)) return null;
+    const key = `${lvl}/${tileKey}`;
     if (!cache.has(key)) {
-      const file = `${dir}/${lvl}/${tx}_${ty}.png`;
-      cache.set(key, fs.existsSync(file) ? decodePng(file) : null);
+      const file = `${dir}/${lvl}/${tileKey}.png`;
+      assert.ok(fs.existsSync(file), `${areaId} ${bId}: missing manifest terrain tile ${key}.png`);
+      cache.set(key, decodePng(file));
     }
     return cache.get(key);
   };
-  return (e, n, lvl) => {
-    const tsize = size / (1 << lvl), tx = Math.floor((e - ox) / tsize), ty = Math.floor((oy - n) / tsize);
-    const tile = readTile(lvl, tx, ty);
-    if (!tile) return null;
-    const u = (e - (ox + tx * tsize)) / tsize * 256, v = ((oy - ty * tsize) - n) / tsize * 256;
-    const i0 = Math.max(0, Math.min(255, Math.floor(u))), j0 = Math.max(0, Math.min(255, Math.floor(v)));
-    const at = (i, j) => { const k = (j * tile.width + i) * tile.channels; return (tile.data[k] * 256 + tile.data[k + 1]) * scale + offset; };
-    return Math.min(at(i0, j0), at(i0 + 1, j0), at(i0, j0 + 1), at(i0 + 1, j0 + 1));
+  return (e, n, bId) => {
+    let lowest = Infinity;
+    for (const lvl of [8, 7]) {
+      const tsize = size / (1 << lvl), tx = Math.floor((e - ox) / tsize), ty = Math.floor((oy - n) / tsize);
+      const tile = readTile(lvl, tx, ty, bId);
+      if (!tile) continue;
+      const u = (e - (ox + tx * tsize)) / tsize * 256, v = ((oy - ty * tsize) - n) / tsize * 256;
+      const i0 = Math.max(0, Math.min(255, Math.floor(u))), j0 = Math.max(0, Math.min(255, Math.floor(v)));
+      const at = (i, j) => { const k = (j * tile.width + i) * tile.channels; return (tile.data[k] * 256 + tile.data[k + 1]) * scale + offset; };
+      lowest = Math.min(lowest, at(i0, j0), at(i0 + 1, j0), at(i0, j0 + 1), at(i0 + 1, j0 + 1));
+    }
+    if (Number.isFinite(lowest)) return lowest;
+    for (const lvl of availLevels) {
+      if (lvl === 8 || lvl === 7) continue;
+      const tsize = size / (1 << lvl), tx = Math.floor((e - ox) / tsize), ty = Math.floor((oy - n) / tsize);
+      const tile = readTile(lvl, tx, ty, bId);
+      if (!tile) continue;
+      const u = (e - (ox + tx * tsize)) / tsize * 256, v = ((oy - ty * tsize) - n) / tsize * 256;
+      const i0 = Math.max(0, Math.min(255, Math.floor(u))), j0 = Math.max(0, Math.min(255, Math.floor(v)));
+      const at = (i, j) => { const k = (j * tile.width + i) * tile.channels; return (tile.data[k] * 256 + tile.data[k + 1]) * scale + offset; };
+      return Math.min(at(i0, j0), at(i0 + 1, j0), at(i0, j0 + 1), at(i0 + 1, j0 + 1));
+    }
+    return null;
   };
 }
 function perimeterPoints(b) {
@@ -317,7 +337,7 @@ for (const area of AREAS) {
   const dir = `${baked}/${area.base}`, read = (name) => JSON.parse(fs.readFileSync(`${dir}/${name}`, 'utf8'));
   if (!fs.existsSync(`${dir}/buildings.json`) || !fs.existsSync(`${dir}/manifest.json`)) continue;
   const manifest = read('manifest.json'), list = read('buildings.json').buildings, roads = read('roads.json').roads;
-  const sampleGround = manifest.origin && manifest.height ? terrainSampler(dir, manifest) : null;
+  const sampleGround = manifest.origin && manifest.height ? terrainSampler(area.id, dir, manifest) : null;
   const landmarks = fs.existsSync(`${dir}/landmarks.json`) ? read('landmarks.json') : [];
   // The mail points as main.ts hands them to the yard dog's driveway: every mailbox and community box.
   const mail = manifest.props && fs.existsSync(`${dir}/${manifest.props.file}`) ? (({ mailboxes, communityBoxes }) => [...mailboxes, ...communityBoxes]
@@ -355,20 +375,18 @@ for (const area of AREAS) {
     assert.ok(b.shape !== 'tank' || (b.footprint.length === 32 && b.footprint.every(([e, n]) => Math.abs(Math.hypot(e - b.x, n - b.y) - b.length / 2) < .03)),
       `${area.id} ${b.id}: a tank's footprint is 32 points on its circle`);
     rays += roofed(b, v, 2.5).rays;
-    if (sampleGround) {
-      let lowest = Infinity;
-      for (const [e, n] of perimeterPoints(b)) for (const lvl of [8, 7]) {
-        const h = sampleGround(e, n, lvl);
-        if (h !== null && h < lowest) lowest = h;
-      }
-      if (Number.isFinite(lowest)) {
-        for (const exag of [1.5, 2.5]) {
-          const footY = minY(b, v, exag), groundY = lowest * exag;
-          assert.ok(footY <= groundY - 0.5, `${area.id} ${b.id} (${b.shape}) floats at exag=${exag}: foot ${footY.toFixed(2)} > ground ${groundY.toFixed(2)}`);
-        }
-        grounded++;
-      }
+    assert.ok(sampleGround, `${area.id} ${b.id} (${b.shape}): manifest missing origin or height for terrain grounding check`);
+    let lowest = Infinity;
+    for (const [e, n] of perimeterPoints(b)) {
+      const h = sampleGround(e, n, b.id);
+      assert.ok(h !== null && Number.isFinite(h), `${area.id} ${b.id} (${b.shape}): missing terrain tile coverage at (${e.toFixed(1)}, ${n.toFixed(1)})`);
+      if (h < lowest) lowest = h;
     }
+    for (const exag of [1.5, 2.5]) {
+      const footY = minY(b, v, exag), groundY = lowest * exag;
+      assert.ok(footY <= groundY - 0.5, `${area.id} ${b.id} (${b.shape}) floats at exag=${exag}: foot ${footY.toFixed(2)} > ground ${groundY.toFixed(2)}`);
+    }
+    grounded++;
   }
   assert.equal(roofSites(list).length, buildingSites(list).length + list.filter((b) => b.shape && b.buildingId !== undefined && b.buildingId !== b.id).length);
   assert.ok(list.filter((b) => b.shape).every((b) => roofSites(list).includes(b)), `${area.id}: every block and tank is cleared in the 1884 scene`);
