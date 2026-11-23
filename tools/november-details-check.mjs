@@ -627,7 +627,8 @@ for (const {a, b, side} of added) {
     assert.notEqual(f.soloUp.revision, revBeforeSolo, 'soloContacts.revision advances on level-8 upgrade');
     f.dispose();
   }
-  // High-speed 57-degree angled portal hit on both bridges: after driving + solo contact pass, the resolved pose clears both rails.
+  // High-speed angled portal hits and 75-step full-steer wedge prevention on both bridges:
+  // after every step, the resolved pose clears both rails (0 overlap, allows === true).
   for (const id of [45, 46]) {
     const r = net.roads.find(x => x.id === id);
     const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
@@ -635,21 +636,25 @@ for (const {a, b, side} of added) {
     const soloAng = new AreaContacts(), fleetAng = new AreaContacts();
     const car = new Vehicle(rig(), realTerrain, net, -0.2, CAR_SPEC);
     registerRailContacts(fleetAng, soloAng, rails, body => body === car, CAR_SPEC);
-    const angle = hdg + (57 * Math.PI) / 180;
-    const fx = Math.sin(angle), fz = -Math.cos(angle);
-    // Find the closest clear pose just outside the start portal at 57 deg, then drive one 120 Hz step at 32 m/s into it.
-    let clearDist = 0;
-    for (let d = 0.2; d <= 5.0; d += 0.05) {
-      const px = ax - ux * d, pz = az - uz * d;
-      const py = net.deckHeight(px, pz) ?? realTerrain.heightAt(px, pz);
-      if (soloAng.allows({ x: px, z: pz, y: py, heading: angle, spec: CAR_SPEC })) { clearDist = d; break; }
+    // Case A: Sol's 38-deg, 32 m/s, 75-step half-throttle full-left-steer opposing-rail wedge scenario.
+    const angle38 = hdg + (38 * Math.PI) / 180;
+    const f38x = Math.sin(angle38), f38z = -Math.cos(angle38);
+    car.place(ax - ux * 1.0 + uz * 0.30, az - uz * 1.0 - ux * 0.30, angle38);
+    assert.equal(soloAng.allows({ x: car.x, z: car.z, y: car.y, heading: car.heading, spec: CAR_SPEC }), true, `bridge ${id} 38-deg start pose is clear`);
+    car.vx = f38x * 32; car.vz = f38z * 32; car.speed = 32;
+    for (let step = 0; step < 75; step++) {
+      car.update(1 / 120, { throttle: 0.5, steer: -1, handbrake: false, touch: false });
+      soloAng.resolve(car);
+      assert.equal(soloAng.allows({ x: car.x, z: car.z, y: car.y, heading: car.heading, spec: CAR_SPEC }), true, `bridge ${id} 38-deg 32 m/s step ${step} resolves clear of both rails`);
+      assert.equal(rails.allowsBridge({ x: car.x, z: car.z, y: car.y, heading: car.heading, spec: CAR_SPEC }), true, `bridge ${id} 38-deg step ${step} has zero remaining rail overlap`);
     }
-    assert.ok(clearDist > 0, `bridge ${id} finds clear 57-deg pre-portal pose`);
-    car.place(ax - ux * clearDist, az - uz * clearDist, angle);
-    car.vx = fx * 32; car.vz = fz * 32; car.speed = 32;
-    car.update(1 / 120, { throttle: 0, steer: 0, handbrake: false, touch: false });
-    soloAng.resolve(car);
-    assert.equal(soloAng.allows({ x: car.x, z: car.z, y: car.y, heading: car.heading, spec: CAR_SPEC }), true, `bridge ${id} 57-deg 32 m/s portal hit resolves clear of both rails`);
+    // Case B: Direct opposing-rail pinch (no prior clear pose, angled 62 deg at midspan wider than the 4.01 m corridor):
+    // allowsBridge rejects the wedged pose, and blockBridge aligns + clears both rails to zero overlap.
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, midY = net.deckHeight(mx, mz);
+    const wedged = { x: mx, z: mz, y: midY, heading: hdg + (62 * Math.PI) / 180, vx: ux * 8, vz: uz * 8, speed: 0, spec: CAR_SPEC };
+    assert.equal(rails.allowsBridge(wedged), false, `bridge ${id} rejects 62-deg wedged midspan pose`);
+    rails.blockBridge(wedged, 1 / 120);
+    assert.equal(rails.allowsBridge(wedged), true, `bridge ${id} blockBridge un-wedges 62-deg midspan pose to zero overlap`);
   }
   // Exact finite rotated bottom-chord underside and high-portal inner-rail tests at 3.0x: measure the rendered steel directly
   // and verify paired clear/contact probes right below/above it (catches flat or untrimmed cutoffs).
