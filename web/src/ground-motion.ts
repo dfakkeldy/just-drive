@@ -42,12 +42,14 @@ export function crestVelocity(
     const look = 1.5;
     const ahead = heightAt(x + dx * look, z + dz * look, referenceY + supportGrade * look);
     if (ahead === null || ahead > height + .035 * look) return null;
-    // A drop confirmed by both forward samples can release the ride as soon
-    // as its ballistic path clears the lower support. Smooth ground needs a
-    // clearance margin to reject noise.
-    const confirmedLip = lip && height - ahead > LIP_DROP;
     const clearance = height + launchGrade * look - .5 * GRAVITY * (look / speed) ** 2 - ahead;
-    if (confirmedLip ? clearance <= 0 : clearance < .18) return null;
+    if (clearance < .18) {
+      // A lip can release the ride with less clearance if the lower support
+      // persists between the step and the longer probe.
+      if (!lip || clearance <= 0 || height - ahead <= LIP_DROP) return null;
+      const between = heightAt(x + dx * APPROACH, z + dz * APPROACH, referenceY + supportGrade * APPROACH);
+      if (between === null || height - between <= LIP_DROP) return null;
+    }
   }
   return velocity;
 }
