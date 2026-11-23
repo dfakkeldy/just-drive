@@ -251,7 +251,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     open() {
       if (explore) root.querySelector('#titleControls')!.innerHTML = controls();
       refreshWays();
-      start.textContent = ride?.kind === 'drone' ? (started ? 'Back to flying' : 'Start flying') : ride?.kind === 'horse' ? (started ? 'Back to riding' : 'Start riding') : explore || areaName ? (started ? 'Back to driving' : 'Start driving') : daily ? (started ? 'Back to today’s run' : 'Start today’s run') : started ? 'Back to the shift' : 'Start the shift';
+      start.textContent = ride?.kind === 'drone' ? (started ? 'Back to flying' : 'Start flying') : ride?.kind === 'horse' ? (started ? 'Back to riding' : 'Start riding') : areaMailRoute ? (started ? 'Back to the shift' : 'Start the shift') : explore || areaName ? (started ? 'Back to driving' : 'Start driving') : daily ? (started ? 'Back to today’s run' : 'Start today’s run') : started ? 'Back to the shift' : 'Start the shift';
       legal.hidden = false;
       credits.setAttribute('aria-expanded', 'true');
       root.hidden = false;

@@ -76,6 +76,17 @@ for (const url of urls) {
     assert.equal(titleCard.hasDaily, false, `${level}: unavailable Today's run hidden on Point Tupper card`);
     await page.read(`(() => { document.getElementById('titleStart').click(); return true; })()`);
     await sleep(300);
+    // Reopen the title card from Settings to verify the resume button says "Back to the shift", then resume.
+    const reopenStart = await page.read(`(() => {
+      const btn = [...document.querySelectorAll('#settings button')].find(b => /Controls, credits and data/i.test(b.textContent ?? ''));
+      if (!btn) return 'MISSING_BUTTON';
+      btn.click();
+      const label = document.getElementById('titleStart')?.textContent ?? '';
+      document.getElementById('titleStart')?.click();
+      return label;
+    })()`);
+    assert.equal(reopenStart, 'Back to the shift', `${level}: reopened mail title card says Back to the shift`);
+    await sleep(200);
 
     // Hold car still while verifying.
     await page.read(`(() => { mmm.vehicle.update = () => {}; return true; })()`);
