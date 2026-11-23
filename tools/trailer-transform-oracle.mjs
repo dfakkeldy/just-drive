@@ -21,7 +21,9 @@ export async function transformOracle(terrain,roads,start){
   function compare(a,b,limit=steps){assert.deepEqual(a.states.slice(0,limit),b.states.slice(0,limit),'all driving-state components match');assert.equal(a.mask.length,b.mask.length);let displacement=0,maxFrame=0;const ma=new THREE.Matrix4(),mb=new THREE.Matrix4();for(let f=0;f<limit;f++){for(let i=0;i<a.frames[f].length;i++){assert.ok(Object.is(a.frames[f][i],b.frames[f][i]),`transform differs: frame ${f}, component ${i}`);}for(const w of a.corners){ma.fromArray(a.frames[f],w.index*32+16);mb.fromArray(b.frames[f],w.index*32+16);for(const p of w.points){const distance=p.clone().applyMatrix4(ma).distanceTo(p.clone().applyMatrix4(mb));if(distance>displacement){displacement=distance;maxFrame=f;}}}}assert.ok(displacement<.02,JSON.stringify({displacement,maxFrame,state:a.states[maxFrame]}));return{steps:limit,nodes:a.mask.length,maxTyreDisplacement:displacement};}
   function beforeFlight(stock,current){
    const takeoff=run=>run.states.findIndex(row=>row[9]);
-   const limit=Math.min(steps,...[takeoff(stock),takeoff(current)].filter(i=>i>=0));
+   const oldTakeoff=takeoff(stock),newTakeoff=takeoff(current);
+   assert.ok(newTakeoff<0||oldTakeoff>=0&&newTakeoff>=oldTakeoff,'no earlier takeoff on the stock test route');
+   const limit=oldTakeoff<0?steps:oldTakeoff;
    assert.ok(limit>=100,'meaningful grounded transform comparison');
    return compare(stock,current,limit);
   }

@@ -108,7 +108,9 @@ for(const r of reversing)if(r.help||!r.sloppy){assert.ok(r.progress>=(r.turn?36.
 function path(detached,Kind=Vehicle,route=hwy,start=flat.s,count=1800){const old=Math.random;Math.random=random(775);try{const car=new Kind(createTruck(),terrain,roads,-.2,TRUCK_SPEC);car.assist=0;const p=at(route,start);car.place(p.x,p.z,p.heading);if(detached)new Towing(car,terrain,roads,true,false,{},false);const states=[];for(let i=0;i<count;i++){terrain.withGroundContact(car,()=>car.update(dt,{throttle:i<1200?1:-1,steer:Math.sin(i*.01)*.1,handbrake:false}));states.push([car.x,car.z,car.heading,car.vx,car.vz,car.airborne?car.vy:0,car.y,car.speed,car.airborne]);}return states;}finally{Math.random=old;}}
 function assertBeforeFlight(stock,current,label){
  const takeoff=rows=>rows.findIndex(row=>row.at(-1));
- const steps=Math.min(stock.length,...[takeoff(stock),takeoff(current)].filter(i=>i>=0));
+ const oldTakeoff=takeoff(stock),newTakeoff=takeoff(current);
+ assert.ok(newTakeoff<0||oldTakeoff>=0&&newTakeoff>=oldTakeoff,label+': no earlier takeoff');
+ const steps=oldTakeoff<0?stock.length:oldTakeoff;
  assert.ok(steps>=100,label+': meaningful grounded comparison');
  assert.deepEqual(stock.slice(0,steps),current.slice(0,steps),label);
 }

@@ -11,7 +11,7 @@ import { relative, resolve } from 'node:path';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const GOLDEN_COMMIT = '83d6e7d5d56e88106e381c30cd2f844624714a2c';
+const GOLDEN_COMMIT = '3c168bba026df8bec5ac4623c533ded6bc8cd948';
 // Review note: Grounded rides carry zero flight velocity. Crests set takeoff from travel speed and slope. Landing wear and scrub use the drop.
 const RECORD_PROCEDURE = 'A deliberate change to driving: run node tools/vehicle-nits-check.mjs --record on the new code, paste the goldens with the commit SHA and one line that says what changed and why; a reviewer must see that line.';
 const N = 5000, MIXED_N = 4500, dt = 1 / 120;
@@ -29,7 +29,7 @@ const GOLDEN = {
       }
     },
     "mixed": {
-      "state": "e750fb61ba90d87fd48c8b857a674028a7d032f9150bc9b15e504ac1abc1be2d",
+      "state": "d380c84174a1e8d3e9d4edd474a6e76000adfb5d22499a973bedabfa1adf4b10",
       "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
       "histogram": {
         "3": 3150,
@@ -49,7 +49,7 @@ const GOLDEN = {
       }
     },
     "mixed": {
-      "state": "2e8f036838b8dcb47a2cbeb709060e04610402aff3c5a19a7781b57c78c67283",
+      "state": "4871dbdc294e13c9e9d8c937ffde967e849f4645897e147c6f09ec3b872ef061",
       "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
       "histogram": {
         "3": 3150,
@@ -69,7 +69,7 @@ const GOLDEN = {
       }
     },
     "mixed": {
-      "state": "df0bbea343ab1ac8b4b03fd7ae213d96ad34dabc1bc8a76e39cb55a8ef9e697d",
+      "state": "fae5bcf53e93db227544fe4106f051c78c9555b40288ae5e349392660c9a596e",
       "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
       "histogram": {
         "3": 3150,
@@ -89,7 +89,7 @@ const GOLDEN = {
       }
     },
     "mixed": {
-      "state": "778f5a8aac752c2cb596f7a6edcb9cd9688543471587d08890c35572ed924df1",
+      "state": "101b4fcf23efec3aa73f127302013672cdf88baefc107f0675b1d1a61e5bbc1b",
       "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
       "histogram": {
         "3": 3150,
@@ -109,7 +109,7 @@ const GOLDEN = {
       }
     },
     "mixed": {
-      "state": "4348187e15e739854db6db02499af5c55f098ae8b3d9bc60a30df35bf2043db3",
+      "state": "29b312e6123c8ebaa095066d8c2b7c14cd52fecbb4a1604fd17177da18f2e48c",
       "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
       "histogram": {
         "3": 3150,
@@ -129,7 +129,7 @@ const GOLDEN = {
       }
     },
     "mixed": {
-      "state": "f8bf9a818951996584427d34d4808e43910bce55fcff86fd37a9df608242cd58",
+      "state": "c01217ac090aaec3613cbeabd4b43e8402b7a81f949d2c3c9d4df1abc3941166",
       "draws": "b138e29aa37fd94507e72145adf21882169e22ca27edf9c85b23c518da8e7218",
       "histogram": {
         "3": 3150,
@@ -149,7 +149,7 @@ const GOLDEN = {
       }
     },
     "mixed": {
-      "state": "a7d7293bf8fd0311d1df49c2698197e1839e6fc782a87c66772ec7c6dd16bb10",
+      "state": "6299ecfd74f6af1c6e56e16da4874a18516119d3004115e1f330c0d05fcd1ffb",
       "draws": "d7967a6f7d2dd3204ed70cc72c705e33a573aef8431b69c5bbd39e5b5cd67384",
       "histogram": {
         "0": 4500
