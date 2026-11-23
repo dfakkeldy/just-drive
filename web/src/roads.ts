@@ -25,7 +25,24 @@ export interface RoadHit { road: Road; dist: number; x: number; z: number; headi
 const CELL = 64;
 const bridgeRoad = (road: Road) => road.bridge;
 
-interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number }
+interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number; startApproach: Float64Array | null; endApproach: Float64Array | null }
+
+/** Linearly interpolate a cached 1D approach profile [s0, y0, s1, y1, ...] with zero allocations. */
+function sampleApproach(profile: Float64Array, s: number): number | null {
+  const last = profile.length - 2;
+  if (last < 0) return null;
+  if (s <= profile[0]) return Number.isNaN(profile[1]) ? null : profile[1];
+  if (s >= profile[last]) return Number.isNaN(profile[last + 1]) ? null : profile[last + 1];
+  for (let i = 0; i < last; i += 2) {
+    const s0 = profile[i], s1 = profile[i + 2];
+    if (s <= s1) {
+      const y0 = profile[i + 1], y1 = profile[i + 3];
+      if (Number.isNaN(y0) || Number.isNaN(y1)) return null;
+      return y0 + (y1 - y0) * ((s - s0) / (s1 - s0 || 1));
+    }
+  }
+  return null;
+}
 
 /** The road network: name lookup, a place to put the car back, and bridge decks (the LiDAR ground has no bridges). */
 const NO_SEGMENTS: [number, number][] = [];   // one shared empty bucket: a query over empty cells makes no arrays
@@ -192,6 +209,8 @@ export class Roads {
     const s = deck.cum[hit.seg] + (deck.cum[hit.seg+1]-deck.cum[hit.seg]) * hit.t;
     const plane=deck.y0+(deck.y1-deck.y0)*s/deck.len;
     if(s>=0&&s<=deck.len)return plane;
+    const profile=s<0?deck.startApproach:deck.endApproach;
+    if(profile&&this.terrain.levelAt&&this.terrain.levelAt(x,z)<deck.level)return sampleApproach(profile,s);
     const land=this.terrain.heightAt(x,z);if(land===null)return null;
     const u=Math.max(0,Math.min(1,(s<0?s+3:deck.len+3-s)/3)),blend=u*u*(3-2*u);
     return Math.max(land,land+(plane-land)*blend);
@@ -253,15 +272,31 @@ export class Roads {
     const r=this.bridgeRecords.get(road.id)!,have=this.eraDecks.get(road.id),revision=this.terrain.dataRevision??0;
     if(r.revision===revision&&!r.dirty)return have??null;const changedGround=r.dirty;r.revision=revision;r.dirty=false;
     const plane=periodBridgePlane(road,this.roads,this.terrain);if(!plane)return have??null;
-    if(have&&!changedGround&&(plane.level<have.level||plane.level===have.level&&Math.abs(plane.y0-have.y0)+Math.abs(plane.y1-have.y1)<.0001))return have;
+    const samePlane=!!have&&Math.abs(plane.y0-have.y0)+Math.abs(plane.y1-have.y1)<.0001;
+    if(have&&(plane.level<have.level?(samePlane||!changedGround):plane.level===have.level&&!changedGround&&samePlane))return have;
     if(have){this.group.remove(have.mesh);have.mesh.geometry.dispose();}
     const plan=timberPlan(road,this.roads);
+    const startExtra=plan.before<.001&&!this.terrain.bridgeApproaches?.hasApron(road,'start')?3:0;
+    const endExtra=plan.total-plan.before-plan.own<.001&&!this.terrain.bridgeApproaches?.hasApron(road,'end')?3:0;
+    // Record the exact approach plank heights used to build this mesh so contact stays synced if bank tiles evict.
+    const startKnots:[number,number][]=[],endKnots:[number,number][]=[];
+    const record=(knots:[number,number][],along:number,y:number)=>{if(!knots.some(([k])=>Math.abs(k-along)<1e-9))knots.push([along,y]);};
     const geo=timberBridge(road,this.terrain,r.cum,r.len,plane.y0,plane.y1,(along,x,z)=>{
       const top=plane.y0+(plane.y1-plane.y0)*along/r.len;if(along>=0&&along<=r.len)return top;
-      const land=this.bridgeContacts!.read(x,z,true)??top,u=Math.max(0,Math.min(1,(along<0?along+3:r.len+3-along)/3));return Math.max(land,land+(top-land)*u*u*(3-2*u));
-    },plan.before<.001&&!this.terrain.bridgeApproaches?.hasApron(road,'start')?3:0,plan.total-plan.before-plan.own<.001&&!this.terrain.bridgeApproaches?.hasApron(road,'end')?3:0,(x,z)=>this.bridgeContacts!.read(x,z));
+      const raw=this.bridgeContacts!.read(x,z,true),land=raw??top,u=Math.max(0,Math.min(1,(along<0?along+3:r.len+3-along)/3));
+      const y=Math.max(land,land+(top-land)*u*u*(3-2*u));
+      record(along<0?startKnots:endKnots,along,raw===null?NaN:y);
+      return y;
+    },startExtra,endExtra,(x,z)=>this.bridgeContacts!.read(x,z));
+    const pack=(knots:[number,number][],edgeS:number,edgeY:number):Float64Array|null=>{
+      if(!knots.length||knots.every(([,y])=>Number.isNaN(y)))return null;
+      record(knots,edgeS,edgeY);knots.sort((a,b)=>a[0]-b[0]);
+      const out=new Float64Array(knots.length*2);for(let i=0;i<knots.length;i++){out[i*2]=knots[i][0];out[i*2+1]=knots[i][1];}return out;
+    };
+    const startApproach=startExtra?pack(startKnots,0,plane.y0):null;
+    const endApproach=endExtra?pack(endKnots,r.len,plane.y1):null;
     this.periodMat??=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
     const mesh=new THREE.Mesh(geo,this.periodMat);mesh.name='timber-bridge-'+road.id;this.group.add(mesh);
-    const deck={road,y0:plane.y0,y1:plane.y1,len:r.len,cum:r.cum,mesh,level:plane.level};this.eraDecks.set(road.id,deck);return deck;
+    const deck={road,y0:plane.y0,y1:plane.y1,len:r.len,cum:r.cum,mesh,level:plane.level,startApproach,endApproach};this.eraDecks.set(road.id,deck);return deck;
   }
 }

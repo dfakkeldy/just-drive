@@ -159,7 +159,7 @@ import { PorchSite } from './porch-site';
 import { CHURCH_START, ChurchSite } from './church-site';
 import { roughRoads, setPuddleField } from './rough-roads';
 import { Puddles, splashLevel } from './puddles';
-import { MountainHint, defaultSideBySideId, safeSwapRide } from './mountain-hint';
+import { MountainHint, checkSwapRoom, defaultSideBySideId, safeSwapRide } from './mountain-hint';
 import { JudiqueVillageSite, VILLAGE_PLACES } from './judique-village-site';
 import { PortHawkesburySite, aimDrops } from './port-hawkesbury-site';
 import { filterPointTupperProps, postOfficeClear, postOfficeReplaceBuildings, postOfficeReplacedIds } from './port-hawkesbury-mail';
@@ -1453,21 +1453,19 @@ function switchToSideBySide(onSettled?: (ok: boolean, reason?: string) => void):
     next.canDrift = vehicle.canDrift;
     next.onPlaced = cleanHooks.onPlaced;
     return next;
-  }, pose => {
-    const ground = terrain.heightAt(pose.x, pose.z);
-    if (ground === null || terrain.waterAt(pose.x, pose.z)) return 'Wait until solid ground is ready to switch';
-    const deck = roads.deckHeight(pose.x, pose.z);
-    // The ride's own height picks the deck (#6): under an overpass the room is checked on the road, not on the deck above.
-    const y = pose.y === undefined ? (deck === null ? ground : Math.max(ground, deck)) : deckCounts(deck, pose.y, terrain.cartRoads) ? Math.max(ground, deck) : ground;
-    const body = { x: pose.x, z: pose.z, y, heading: pose.heading, spec: nextEntry.spec };
-    if (!fleetContacts.allows(body)) return 'No clear room to switch here';
-    const probe = { ...body, vx: 0, vz: 0, speed: 0, car: { root: { position: { x: pose.x, z: pose.z } } } };
-    if (mailMode && roadScene?.rules.enabled) pushOut(probe, roadScene.placementSolids, true);
-    if (aiDriverOn()) aiDriver?.resolve(probe as unknown as Vehicle);
-    boss?.driver.resolve(probe as unknown as Vehicle);
-    if (Math.hypot(probe.x - pose.x, probe.z - pose.z) > 1e-7) return 'No clear room to switch here';
-    return true;
-  });
+  }, pose => checkSwapRoom(pose, {
+    terrain,
+    roads,
+    allows: at => {
+      const body = { ...at, spec: nextEntry.spec };
+      if (!fleetContacts.allows(body)) return false;
+      const probe = { ...body, vx: 0, vz: 0, speed: 0, car: { root: { position: { x: at.x, z: at.z } } } };
+      if (mailMode && roadScene?.rules.enabled) pushOut(probe, roadScene.placementSolids, true);
+      if (aiDriverOn()) aiDriver?.resolve(probe as unknown as Vehicle);
+      boss?.driver.resolve(probe as unknown as Vehicle);
+      return Math.hypot(probe.x - at.x, probe.z - at.z) <= 1e-7;
+    },
+  }));
   if (!swapped.ok || !nextCar) return { ok: false, reason: swapped.ok ? 'Could not switch right now' : swapped.reason };
   if (towing) {
     towing.detach();

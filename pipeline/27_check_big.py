@@ -560,6 +560,15 @@ assert bake_main(with_large, '', area_switch=True) == 'runs', "after the go the 
 assert bake_main(plain, '') == 'runs', 'a land without large buildings: the bake of another task is not stopped'
 assert bake_main(with_large, '', guard=False) == 'runs', 'this test tells a bake with the guard from one without it'
 assert b.guard_big(Path(tempfile.gettempdir()) / 'mmm-no-such-land/buildings.json', '', False) is None, 'a first bake has no file yet'
+# A single notched edge cell beside a wing must not leave a 1-cell interior roof seam between touching blocks.
+notched = np.zeros((45, 70), dtype=bool)
+notched[20:40, 5:60] = True
+notched[8:20, 30:64] = True
+notched[19, 60] = False  # one missing cell near the far corner used to keep the wing 1 row off the main hall
+closed_blocks = big.cover([notched], cells=[1.], min_area=60)
+assert len(closed_blocks) == 2, closed_blocks
+spans = sorted((r0, r1, c0, c1) for _, r0, r1, c0, c1 in closed_blocks)
+assert spans[0][1] == spans[1][0], f'expected zero seam between wing and main block, got {spans}'
 print('PASS: halls, L with two levels, roof step (no strips), gable, gone buildings at the measured shares, the '
       'threshold from both sides, two levels in a narrow block, a bent building, tanks, every guard of add_big, '
       'and the switch with its guard (not set, 1, 0).')

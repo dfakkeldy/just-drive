@@ -267,12 +267,13 @@ export class Buildings {
         // A storage tank: a steel shell up to the measured rim, and a low cone up to the measured top.
         const radius = b.length / 2, shell = TANKS[Math.floor(hash(b.id) * TANKS.length)];
         const cap: RGB = [shell[0] * 0.86, shell[1] * 0.86, shell[2] * 0.86], topY = base + b.ridge;
+        const tankFoot = -7 * Math.max(1, exag);
         const segments = 32;
         for (let i = 0; i < segments; i++) {
           const t0 = i * Math.PI * 2 / segments, t1 = (i + 1) * Math.PI * 2 / segments;
           const x0 = cx + Math.cos(t0) * radius, z0 = cz + Math.sin(t0) * radius;
           const x1 = cx + Math.cos(t1) * radius, z1 = cz + Math.sin(t1) * radius;
-          quadN(x0, base - 3, z0, x1, base - 3, z1, x1, base + b.eave, z1, x0, base + b.eave, z0, shell, 0.8 + 0.2 * Math.cos((i + 0.5) * Math.PI * 2 / segments));
+          quadN(x0, base + tankFoot, z0, x1, base + tankFoot, z1, x1, base + b.eave, z1, x0, base + b.eave, z0, shell, 0.8 + 0.2 * Math.cos((i + 0.5) * Math.PI * 2 / segments));
           triN(x0, base + b.eave, z0, x1, base + b.eave, z1, cx, topY, cz, cap);
         }
         this.clear.push(...clearBoxes(b, village, 2.5));
@@ -292,7 +293,9 @@ export class Buildings {
       const endWall = (side: number) => style?.bareEnd?.side === side ? rgb(style.bareEnd.wall) : wall;
       const roofPalette = b.kind === 'barn' ? [ROOFS[3], ROOFS[4], ROOFS[5]] : ROOFS;
       const roof = style ? rgb(style.roof) : roofPalette[Math.floor(hash(identity + 0.5) * roofPalette.length)];
-      const foot = -3;   // walls run below the ground line, so a slope never shows a gap
+      // Walls and foundation run below the ground line so a slope never shows a gap.
+      // Large mapped blocks span wide slopes and coarse parent terrain meshes, so scale depth with exaggeration.
+      const foot = b.shape === 'block' ? -7 * Math.max(1, exag) : -3;
       const shape = style?.roofShape ?? (b.buildingId !== undefined && b.roof !== 'flat' ? 'gable' : b.roof);
       const flat = shape === 'flat';
       const shed = shape === 'shed';

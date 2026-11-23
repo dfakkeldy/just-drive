@@ -1,3 +1,4 @@
+import { deckCounts } from './bridge-contact';
 import { CHURCH_ORIGIN } from './church-site';
 import { ROUGH_STRETCHES } from './rough-roads';
 import type { Road, Roads } from './roads';
@@ -213,6 +214,27 @@ export interface SwappableRide {
 }
 
 export interface SwapPose { x: number; z: number; heading: number; y?: number }
+
+export interface SwapRoomWorld {
+  terrain: { heightAt(x: number, z: number): number | null; waterAt(x: number, z: number): boolean; cartRoads?: boolean };
+  roads: { deckHeight(x: number, z: number): number | null };
+  allows(body: { x: number; z: number; y: number; heading: number }): boolean;
+}
+
+/**
+ * Room check for an in-place ride swap: reject unloaded or wet ground, pick a deck
+ * only within reach of pose.y (or topmost when pose.y is omitted), and check clearance there.
+ */
+export function checkSwapRoom(pose: SwapPose, world: SwapRoomWorld): true | string {
+  const ground = world.terrain.heightAt(pose.x, pose.z);
+  if (ground === null || world.terrain.waterAt(pose.x, pose.z)) return 'Wait until solid ground is ready to switch';
+  const deck = world.roads.deckHeight(pose.x, pose.z);
+  // The ride's own height picks the deck (#6): under an overpass the room is checked on the road, not on the deck above.
+  const y = pose.y === undefined
+    ? (deck === null ? ground : Math.max(ground, deck))
+    : deckCounts(deck, pose.y, world.terrain.cartRoads) ? Math.max(ground, deck) : ground;
+  return world.allows({ x: pose.x, z: pose.z, y, heading: pose.heading }) ? true : 'No clear room to switch here';
+}
 
 export type SwapResult<T extends SwappableRide> =
   | { ok: true; vehicle: T; pose: SwapPose }
