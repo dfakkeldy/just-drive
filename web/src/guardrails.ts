@@ -301,15 +301,18 @@ export class Guardrails {
     right.x = mx - b.uz * centre; right.z = mz + b.ux * centre; right.half = half; right.halfWidth = halfWidth; right.heading = b.heading;
     pushOut(car, this.trimmedBridgeSolids, true, dt);
   }
-  /** Revision token for pony-truss bridge deck contact state; advances when pending bridge decks can upgrade or rebuild. */
-  get bridgeRevision(): number {
-    let code = 0, pending = false;
-    for (let i = 0; i < this.bridgeSpans.length; i++) {
-      const level = this.roads.bridgeDeckLevel(this.bridgeSpans[i].roadId);
-      code = code * 16 + level;
-      if (level < 8) pending = true;
+  private refreshBridgeDeck(index: number, rev: number): void {
+    const b = this.bridgeSpans[index];
+    if (this.roads.bridgeDeckLevel(b.roadId) < 8 && this.bridgeDeckRev[index] !== rev) {
+      this.bridgeDeckRev[index] = rev;
+      this.roads.deckHeight(b.ax + b.ux * (b.span * 0.5), b.az + b.uz * (b.span * 0.5));
     }
-    return pending ? code + (this.terrain.dataRevision ?? 0) * 1024 : code;
+  }
+  /** Revision token for pony-truss bridge deck contact state; advances only when a pony-truss deck is built or upgraded. */
+  get bridgeRevision(): number {
+    const rev = this.terrain.dataRevision ?? 0;
+    for (let i = 0; i < this.bridgeSpans.length; i++) this.refreshBridgeDeck(i, rev);
+    return this.roads.bridgeDeckVersion;
   }
   /** Check horizontal bounds and separate inner-rail / inclined-truss vertical overlap before pushing against pony-truss rails. */
   private pushBridge(car: Pushable, dt: number): void {
@@ -324,10 +327,7 @@ export class Guardrails {
       const across = -dx * b.uz + dz * b.ux;
       if (Math.abs(across) > PONY_TRUSS.outerHalf + reach) continue;
       if (car.y !== undefined) {
-        if (this.roads.bridgeDeckLevel(b.roadId) < 8 && this.bridgeDeckRev[i] !== rev) {
-          this.bridgeDeckRev[i] = rev;
-          this.roads.deckHeight(b.ax + b.ux * (b.span * 0.5), b.az + b.uz * (b.span * 0.5));
-        }
+        this.refreshBridgeDeck(i, rev);
         const y0 = this.roads.bridgeElevation(b.roadId, 0);
         const y1 = this.roads.bridgeElevation(b.roadId, 1);
         if (y0 === null || y1 === null) continue;

@@ -569,6 +569,10 @@ for (const {a, b, side} of added) {
     const y6 = upNet.deckHeight(mx, mz);
     assert.ok(y6 !== null, `bridge ${id} seeds level-6 deck`);
     const revBeforeFleet = fleetUp.revision, revBeforeSolo = soloUp.revision;
+    // Unrelated terrain tile load (dataRevision increments while bridge banks stay at level 6) must NOT invalidate contacts.
+    upTerrain.dataRevision++;
+    assert.equal(fleetUp.revision, revBeforeFleet, `bridge ${id} unrelated terrain revision keeps fleetContacts.revision steady`);
+    assert.equal(soloUp.revision, revBeforeSolo, `bridge ${id} unrelated terrain revision keeps soloContacts.revision steady`);
     // Upgrade terrain to level 8 (+1.5 m higher) WITHOUT calling deckHeight() first.
     curLevel = 8; bias = 1.5; upTerrain.dataRevision++;
     assert.notEqual(fleetUp.revision, revBeforeFleet, `bridge ${id} fleetContacts.revision advances on level-8 terrain revision`);
@@ -629,6 +633,27 @@ for (const {a, b, side} of added) {
     const hitHi = { x: hiX, z: hiZ, y: maxHighRailY - 0.003, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
     net3.guardrails.blockBridge(hitHi, 1 / 120);
     assert.ok(Math.hypot(hitHi.x - hiX, hitHi.z - hiZ) > 0.005, 'bridge 45 3x high-portal probe 3 mm below trimmed rotated inner rail collides');
+    // High-portal bottom-chord top clearance at 3x (carY just above the trimmed rotated bottom chord top, clearing inclined end post).
+    let maxHighChordY = -Infinity;
+    for (let i = 0; i < pos3.count; i++) {
+      const rCol = col3.getX(i);
+      if (rCol < 0.30 || rCol > 0.35) continue;
+      const px = pos3.getX(i), py = pos3.getY(i), pz = pos3.getZ(i);
+      const along = (px - ax) * ux + (pz - az) * uz;
+      const across = Math.abs(-(px - ax) * uz + (pz - az) * ux);
+      if (along >= span - 0.05 && along <= span + 0.05 && across >= PONY_TRUSS.clearHalf - 0.01 && across <= PONY_TRUSS.outerHalf + 0.01) {
+        maxHighChordY = Math.max(maxHighChordY, py);
+      }
+    }
+    const hiChordX = bx + ux * 1.58 - uz * (PONY_TRUSS.outerHalf + CAR_SPEC.envelope.radius - 0.04);
+    const hiChordZ = bz + uz * 1.58 + ux * (PONY_TRUSS.outerHalf + CAR_SPEC.envelope.radius - 0.04);
+    const clearHiChord = { x: hiChordX, z: hiChordZ, y: maxHighChordY + 0.001, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(clearHiChord, 1 / 120);
+    assert.equal(clearHiChord.x, hiChordX, 'bridge 45 3x high-portal probe 1 mm above trimmed rotated bottom chord is not pushed');
+    assert.equal(clearHiChord.z, hiChordZ, 'bridge 45 3x high-portal probe 1 mm above trimmed rotated bottom chord is not pushed');
+    const hitHiChord = { x: hiChordX, z: hiChordZ, y: maxHighChordY - 0.01, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(hitHiChord, 1 / 120);
+    assert.ok(Math.hypot(hitHiChord.x - hiChordX, hitHiChord.z - hiChordZ) > 0.005, 'bridge 45 3x high-portal probe 1 cm below trimmed rotated bottom chord collides');
     for (const child of [...net3.group.children]) child.geometry?.dispose();
   }
   // Unloaded banks: repeated collision calls during the same terrain revision do not keep re-sampling bank endpoints,

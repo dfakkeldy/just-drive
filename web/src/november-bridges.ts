@@ -158,15 +158,11 @@ export function ponyTrussVerticalClip(
   const span = b.span, panel = b.panel, h = b.height;
   const chord = PONY_TRUSS.chordSize;
   const yBase = chord / 2;
-  const topPad = chord / 2;
-  const topOverhang = chord * 0.35;
-  const deckSlope = (y1 - y0) / span;
   const dy = y1 - y0, deckLen = Math.hypot(span, dy);
   const cosS = span / deckLen, sinS = dy / deckLen;
   const sideLen = deckLen - chord * Math.abs(sinS) - 0.004;
   const hx = sideLen * 0.5, sMid = span * 0.5, deckMidY = (y0 + y1) * 0.5;
   const carTop = carY + carHeight;
-  if (carY > Math.max(y0, y1) + h + topPad) return false;
 
   // 1. Exact finite rotated inner steel guard rail box (sideLen x 0.22 at deckMidY + railHeight).
   let railLeft = 0, railRight = 0;
@@ -176,42 +172,43 @@ export function ponyTrussVerticalClip(
     if (railRight <= railLeft + 1e-4) { railLeft = 0; railRight = 0; }
   }
 
-  // 2. Truss structure interval (finite rotated bottom chord below carTop, inclined end posts, and top chord).
+  // 2. Exact union of the 4 finite outer-frame truss boxes clipped to [carY, carTop]:
+  //    bottom chord, top chord, start inclined end post, finish inclined end post.
+  //    Every interior vertical post and Warren diagonal lies inside their convex hull.
+  let trussMin = Infinity, trussMax = -Infinity;
+  const includeBox = (cs: number, cy: number, bhx: number, bhy: number, bc: number, bs: number) => {
+    if (clipRotatedBox(cs, cy, bhx, bhy, bc, bs, carY, carTop, BOX_SPAN)) {
+      if (BOX_SPAN[0] < trussMin) trussMin = BOX_SPAN[0];
+      if (BOX_SPAN[1] > trussMax) trussMax = BOX_SPAN[1];
+    }
+  };
+  // Bottom chord.
+  includeBox(sMid, deckMidY + yBase, hx, yBase, cosS, sinS);
+  // Top chord.
+  const topSpan = span - 2 * panel;
+  const topLen = Math.hypot(topSpan, dy * (topSpan / span)) + chord * 0.7;
+  includeBox(sMid, deckMidY + h, topLen * 0.5, yBase, cosS, sinS);
+  // Start and finish inclined end posts (matching buildPonyTrussBridge exact insets and angles).
+  const endHalf = PONY_TRUSS.endPostSize * 0.5;
+  const deckAt = (s: number) => y0 + dy * (s / span);
+  {
+    const rawAng = Math.atan2(deckAt(panel) + h - (deckAt(0) + yBase), panel);
+    const s0 = endHalf * Math.abs(Math.sin(rawAng)) + 0.02, s1 = panel;
+    const ya = deckAt(s0) + yBase, yb = deckAt(s1) + h;
+    const dLen = Math.hypot(s1 - s0, yb - ya);
+    includeBox((s0 + s1) * 0.5, (ya + yb) * 0.5, dLen * 0.5, endHalf, (s1 - s0) / dLen, (yb - ya) / dLen);
+  }
+  {
+    const rawAng = Math.atan2(deckAt(span) + yBase - (deckAt(span - panel) + h), panel);
+    const s0 = span - panel, s1 = span - (endHalf * Math.abs(Math.sin(rawAng)) + 0.02);
+    const ya = deckAt(s0) + h, yb = deckAt(s1) + yBase;
+    const dLen = Math.hypot(s1 - s0, yb - ya);
+    includeBox((s0 + s1) * 0.5, (ya + yb) * 0.5, dLen * 0.5, endHalf, (s1 - s0) / dLen, (yb - ya) / dLen);
+  }
   let trussLeft = 0, trussRight = 0;
-  if (clipRotatedBox(sMid, deckMidY + yBase, hx, yBase, cosS, sinS, -Infinity, carTop, BOX_SPAN)) {
-    trussLeft = BOX_SPAN[0];
-    trussRight = BOX_SPAN[1];
-    if (deckSlope > 1e-7) {
-      trussLeft = Math.max(trussLeft, (carY - (y0 + h + topPad)) / deckSlope);
-    } else if (deckSlope < -1e-7) {
-      trussRight = Math.min(trussRight, (carY - (y0 + h + topPad)) / deckSlope);
-    }
-    if (carY > y0 + chord) {
-      const rawAng = Math.atan2(deckSlope * panel + h - yBase, panel);
-      const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
-      const run = panel - endInset;
-      const ang = Math.atan2(deckSlope * run + h - yBase, run);
-      const endVertHalf = (PONY_TRUSS.endPostSize / 2) / Math.cos(ang);
-      const startSlope = deckSlope + (h - yBase) / run;
-      let sIncl = endInset + (carY - (y0 + deckSlope * endInset + yBase + endVertHalf)) / startSlope;
-      if (carY >= y0 + deckSlope * (panel - topOverhang) + h - topPad) sIncl = Math.min(sIncl, panel - topOverhang);
-      if (deckSlope > 1e-7) sIncl = Math.min(sIncl, (carY - (y0 + chord)) / deckSlope);
-      trussLeft = Math.max(trussLeft, sIncl);
-    }
-    if (carY > y1 + chord) {
-      const rawAng = Math.atan2(-deckSlope * panel + h - yBase, panel);
-      const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
-      const run = panel - endInset;
-      const ang = Math.atan2(-deckSlope * run + h - yBase, run);
-      const endVertHalf = (PONY_TRUSS.endPostSize / 2) / Math.cos(ang);
-      const endSlope = -deckSlope + (h - yBase) / run;
-      let uIncl = endInset + (carY - (y1 - deckSlope * endInset + yBase + endVertHalf)) / endSlope;
-      if (carY >= y1 - deckSlope * (panel - topOverhang) + h - topPad) uIncl = Math.min(uIncl, panel - topOverhang);
-      if (deckSlope < -1e-7) uIncl = Math.min(uIncl, (carY - (y1 + chord)) / -deckSlope);
-      trussRight = Math.min(trussRight, span - uIncl);
-    }
-    trussLeft = Math.max(0, Math.min(span, trussLeft));
-    trussRight = Math.max(0, Math.min(span, trussRight));
+  if (trussMax > trussMin + 1e-4) {
+    trussLeft = Math.max(0, Math.min(span, trussMin));
+    trussRight = Math.max(0, Math.min(span, trussMax));
     if (trussRight <= trussLeft + 1e-4) { trussLeft = 0; trussRight = 0; }
   }
 

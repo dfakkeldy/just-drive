@@ -56,6 +56,7 @@ export class Roads {
   private bridgeContacts:HistoryContacts|null=null;private bridgeDirty=true;
   private updateRevision=-1;private updateX=Infinity;private updateZ=Infinity;
   private periodMat: THREE.MeshLambertMaterial | null = null;
+  private ponyDeckVersion = 0;
 
   private eraBridgeHit:RoadHit|null=null;private bridgeQuery=0;
 
@@ -210,6 +211,11 @@ export class Roads {
     return this.decks.get(id)?.level ?? 0;
   }
 
+  /** Version counter incremented only when a pony-truss bridge deck is built or upgraded. */
+  get bridgeDeckVersion(): number {
+    return this.ponyDeckVersion;
+  }
+
   /** Build decks for bridges near the camera, once the fine terrain at both ends has loaded. */
   update(cam: THREE.Vector3) {
     this.guardrails?.update(cam);
@@ -257,6 +263,7 @@ export class Roads {
       mesh = new THREE.Mesh(buildPonyTrussBridge(p, y0, y1, len, road.halfWidth + 1.2), this.periodMat);
       mesh.name = 'pony-truss-' + road.id;
       mesh.castShadow = mesh.receiveShadow = true;
+      this.ponyDeckVersion++;
     } else {
       const w = road.halfWidth + 0.9, pos: number[] = [], idx: number[] = [];
       // Cross-section: deck top, thick sides, and a low rail on each edge.
