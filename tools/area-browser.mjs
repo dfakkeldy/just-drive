@@ -113,14 +113,56 @@ for (const url of urls) {
           assert.ok(Math.hypot(result.x-initial.x,result.z-initial.z) > 3, 'demo car moved');
           // Probe after the picture, so the temporary placement cannot alter the photographed HUD.
           afterShot = async () => {
-            const edge = await evaluate(`(() => {const v=mmm.vehicle, b=v.bounds;
-              const mx=(b[0]+b[2])/2, mz=(b[1]+b[3])/2;
-              return [ ['west',b[0]-10,mz,-Math.PI/2,-10,0], ['east',b[2]+10,mz,Math.PI/2,10,0],
-                ['north',mx,b[1]-10,0,0,-10], ['south',mx,b[3]+10,Math.PI,0,10] ].map(([side,x,z,heading,vx,vz])=>{
-                  v.place(x,z,heading);v.vx=vx;v.vz=vz;v.speed=10;
-                  mmm.driveVehicle(1/120,{throttle:0,steer:0,handbrake:false});
-                  return {side,stopped:v.x>=b[0]&&v.x<=b[2]&&v.z>=b[1]&&v.z<=b[3]&&v.atEdge};
-                });})()`);
+            const edge = await evaluate(`(() => {
+              const v = mmm.vehicle, t = mmm.terrain, b = v.bounds;
+              const mx = (b[0] + b[2]) / 2, mz = (b[1] + b[3]) / 2;
+              const isWet = (px, pz) => {
+                const land = t.heightAt(px, pz), s = t.surfaceAt(px, pz), cover = t.coverAt?.(px, pz) ?? 0;
+                if (land === null || s?.deck) return false;
+                if (land < t.seaLevel + 0.02 || s?.water || (s && s.ground < t.seaLevel + 0.02)) return true;
+                if (cover !== 4 || !s || s.mineral || s.canopy >= 1.5 || (s.kind > 0 && s.roadDist <= s.halfWidth + 0.4)) return false;
+                const gx0 = t.heightAt(px - 1, pz), gx1 = t.heightAt(px + 1, pz), gz0 = t.heightAt(px, pz - 1), gz1 = t.heightAt(px, pz + 1);
+                const slope = gx0 !== null && gx1 !== null && gz0 !== null && gz1 !== null ? Math.hypot((gx1 - gx0) * 0.5, (gz1 - gz0) * 0.5) : 0;
+                return slope < 0.07;
+              };
+              const fracs = [0.5];
+              for (let i = 1; i < 32; i++) if (i !== 16) fracs.push(i / 32);
+              const sides = [
+                { side: 'west', heading: -Math.PI / 2, vx: -10, vz: 0, out: f => [b[0] - 10, b[1] + f * (b[3] - b[1])], inside: [b[0] + 0.01, mz], onEdge: () => Math.abs(v.x - b[0]) < 1e-6 },
+                { side: 'east', heading: Math.PI / 2, vx: 10, vz: 0, out: f => [b[2] + 10, b[1] + f * (b[3] - b[1])], inside: [b[2] - 0.01, mz], onEdge: () => Math.abs(v.x - b[2]) < 1e-6 },
+                { side: 'north', heading: 0, vx: 0, vz: -10, out: f => [b[0] + f * (b[2] - b[0]), b[1] - 10], inside: [mx, b[1] + 0.01], onEdge: () => Math.abs(v.z - b[1]) < 1e-6 },
+                { side: 'south', heading: Math.PI, vx: 0, vz: 10, out: f => [b[0] + f * (b[2] - b[0]), b[3] + 10], inside: [mx, b[3] - 0.01], onEdge: () => Math.abs(v.z - b[3]) < 1e-6 },
+              ];
+              return sides.map(({ side, heading, vx, vz, out, inside, onEdge }) => {
+                // Vehicle.place refuses wet poses (water-bounds). Pick a dry point outside the edge when one exists.
+                // When an entire edge sits in open water (such as Judique's west edge in the Gulf), verify the wet
+                // refusal leaves the car put, then step across that edge from just inside to test the bounds wall.
+                let dry = null;
+                for (const f of fracs) {
+                  const [px, pz] = out(f);
+                  if (t.heightAt(px, pz) !== null && !isWet(px, pz)) { dry = [px, pz]; break; }
+                }
+                if (dry) {
+                  const [x, z] = dry, land = t.heightAt(x, z), cover = t.coverAt?.(x, z) ?? 0;
+                  const placed = v.place(x, z, heading);
+                  if (!placed) return { side, placed, wetRefused: false, land, cover, stopped: false };
+                  v.atEdge = false; v.vx = vx; v.vz = vz; v.speed = 10; v.steerAngle = 0;
+                  mmm.driveVehicle(1 / 120, { throttle: 0, steer: 0, handbrake: false });
+                  return { side, placed, wetRefused: false, land, cover,
+                    stopped: v.x >= b[0] && v.x <= b[2] && v.z >= b[1] && v.z <= b[3] && onEdge() && v.atEdge };
+                }
+                const [x, z] = out(0.5), land = t.heightAt(x, z), cover = t.coverAt?.(x, z) ?? 0, wet = isWet(x, z);
+                const prevX = v.x, prevZ = v.z, placed = v.place(x, z, heading);
+                const wetRefused = wet && !placed && v.x === prevX && v.z === prevZ;
+                if (!wetRefused) return { side, placed, wet, wetRefused, land, cover, stopped: false };
+                const [ix, iz] = inside, inLand = t.heightAt(ix, iz);
+                v.x = ix; v.z = iz; if (inLand !== null) v.y = inLand;
+                v.atEdge = false; v.heading = heading; v.vx = vx; v.vz = vz; v.vy = 0; v.speed = 10; v.steerAngle = 0; v.airborne = false; v.sunk = 0;
+                mmm.driveVehicle(1 / 120, { throttle: 0, steer: 0, handbrake: false });
+                return { side, placed, wet, wetRefused, land, cover,
+                  stopped: v.x >= b[0] && v.x <= b[2] && v.z >= b[1] && v.z <= b[3] && onEdge() && v.atEdge };
+              });
+            })()`);
             assert.ok(edge.every(row=>row.stopped), 'all four edges stop the car: '+JSON.stringify(edge));
             result.edgeTests=edge; result.edgeStopsCar=true;
             writeFileSync(`${out}/${name}.json`, JSON.stringify({initial, ...result, errors}, null, 2));
