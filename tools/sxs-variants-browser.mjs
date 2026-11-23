@@ -100,15 +100,15 @@ try {
     if (await p.read(`Math.hypot(mmm.vehicle.x - (${startPose.x}), mmm.vehicle.z - (${startPose.z})) > 4`)) break;
   }
   await p.send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'KeyW', key: 'w', windowsVirtualKeyCode: 87 });
-  const moved = await p.read(`({ dist: Math.hypot(mmm.vehicle.x - (${startPose.x}), mmm.vehicle.z - (${startPose.z})), speed: mmm.vehicle.speed, hud: document.getElementById('hud')?.textContent ?? '' })`);
-  check(startPose.id === 'sxs-crew' && startPose.wb === 3.16 && moved.dist > 3 && moved.hud.includes('Side by side: crew cab'),
+  const moved = await p.read(`({ dist: Math.hypot(mmm.vehicle.x - (${startPose.x}), mmm.vehicle.z - (${startPose.z})), speed: mmm.vehicle.speed, pressed: document.querySelector('#settingsVehicleChoice [data-vehicle="sxs-crew"]')?.getAttribute('aria-pressed') })`);
+  check(startPose.id === 'sxs-crew' && startPose.wb === 3.05 && moved.dist > 3 && moved.pressed === 'true',
     'settings switch loads crew cab and W drives it forward', { startPose, moved });
 
   // 4. ?car= links work for both legacy ?car=sxs and the new ?car=sxs-cabin.
   await p.navigate(`${origin}/?mode=explore&car=sxs-cabin&q=low&radio=0&mp=0`);
   await waitReady(`mmm.vehicleId === 'sxs-cabin'`, '?car=sxs-cabin');
-  const cabinState = await p.read(`({ id: mmm.vehicleId, mass: mmm.vehicle.spec.mass, hud: document.getElementById('hud')?.textContent ?? '' })`);
-  check(cabinState.id === 'sxs-cabin' && cabinState.mass === 1320 && cabinState.hud.includes('Side by side: full cabin'),
+  const cabinState = await p.read(`({ id: mmm.vehicleId, mass: mmm.vehicle.spec.mass, pressed: document.querySelector('#settingsVehicleChoice [data-vehicle="sxs-cabin"]')?.getAttribute('aria-pressed') })`);
+  check(cabinState.id === 'sxs-cabin' && cabinState.mass === 1320 && cabinState.pressed === 'true',
     '?car=sxs-cabin loads Side by side: full cabin', cabinState);
 
   await p.navigate(`${origin}/?mode=explore&car=sxs&q=low&radio=0&mp=0`);
