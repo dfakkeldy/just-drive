@@ -1,4 +1,4 @@
-// RUN=port-hawkesbury-mail-browser.mjs VIEWS="mabou|x=1 desktop|area=pointtupper&mode=mail low|area=pointtupper&mode=mail&q=low&touch=1" tools/yard-shots.sh 1600 900
+// HUD=1 RUN=port-hawkesbury-mail-browser.mjs VIEWS="mabou|x=1 desktop|area=pointtupper&mode=mail&title=1 low|area=pointtupper&mode=mail&q=low&touch=1&title=1" tools/yard-shots.sh 1600 900
 // Proves in the live browser (desktop 1600x900 and LOW phone 390x844) that:
 // - No roadside mailbox or post stands inside the Town of Port Hawkesbury's legal limits.
 // - Mailboxes outside the town limits (Point Tupper, Port Hastings side, rural roads) stay intact.
@@ -56,6 +56,27 @@ for (const url of urls) {
     }
 
     const level = isLow ? 'low' : 'desktop';
+    // Verify the visible title card before clicking Start the shift (real player flow).
+    const titleCard = await page.read(`(() => ({
+      visible: !document.getElementById('title')?.hidden,
+      heading: document.querySelector('#titleCard h1')?.textContent ?? '',
+      lede: document.getElementById('titleLede')?.textContent ?? '',
+      start: document.getElementById('titleStart')?.textContent ?? '',
+      controls: document.getElementById('titleControls')?.textContent ?? '',
+      hasFired: !!document.getElementById('modeFired'),
+      hasDaily: !!document.getElementById('modeDaily'),
+    }))()`);
+    console.log(name, 'titleCard', JSON.stringify(titleCard));
+    assert.equal(titleCard.visible, true, `${level}: title card visible before start`);
+    assert.match(titleCard.heading, /Point Tupper and Port Hawkesbury/, `${level}: title card names Point Tupper and Port Hawkesbury`);
+    assert.doesNotMatch(titleCard.lede, /\bMabou\b/, `${level}: title card lede does not claim Mabou`);
+    assert.equal(titleCard.start, 'Start the shift', `${level}: title card shows Start the shift`);
+    assert.match(titleCard.controls, isLow ? /MAIL.*Throw mail/i : /M or E.*Throw mail/i, `${level}: title card lists mail throw control`);
+    assert.equal(titleCard.hasFired, false, `${level}: unavailable Get Fired mode hidden on Point Tupper card`);
+    assert.equal(titleCard.hasDaily, false, `${level}: unavailable Today's run hidden on Point Tupper card`);
+    await page.read(`(() => { document.getElementById('titleStart').click(); return true; })()`);
+    await sleep(300);
+
     // Hold car still while verifying.
     await page.read(`(() => { mmm.vehicle.update = () => {}; return true; })()`);
 
