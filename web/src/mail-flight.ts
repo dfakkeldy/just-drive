@@ -24,11 +24,11 @@ export function stepMail(p: Flight, kind: number, dt: number): Flight {
 }
 
 export interface CatchTarget { x: number; z: number; y?: number; ground?: boolean }
-type Ground = (x: number, z: number) => number | null;
+type Ground = (x: number, z: number, referenceY?:number) => number | null;
 export type FlightHit = (a: Flight, b: Flight, landed: boolean) => number;
 /** One complete physics/contact tick. Prediction and assisted pieces use this same operation. */
 export function advanceMail(p: Flight, kind: number, dt: number, ground: Ground, hit: FlightHit) {
-  const flight = stepMail(p, kind, dt), floor = ground(flight.x, flight.z);
+  const flight = stepMail(p, kind, dt), floor = ground(flight.x, flight.z,flight.y);
   const landed = floor !== null && flight.y - MAIL_SIZES[kind][1] / 2 <= floor;
   return { flight, ground: floor, landed, hit: hit(p, flight, landed) };
 }

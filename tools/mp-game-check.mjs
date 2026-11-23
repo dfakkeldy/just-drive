@@ -79,10 +79,11 @@ try {
   await sleep(300);
   check(await p.read('mmm.mp.current === null && __sockets.length === 0'), 'On on the title remains pending until Start');
   await p.click('#titleStart'); await joined(p);
-  check(await p.read('mmm.mp.current.net.room') === 'mabou/world' && (await p.read('mmm.mp.current.net.options.urls[0]')).endsWith('/mabou/world'), 'open road is mabou/world');
+  const openRoom = new URL(await p.read('mmm.mp.current.net.options.urls[0]'));
+  check(await p.read('mmm.mp.current.net.room') === 'mabou/world' && openRoom.pathname.endsWith('/mabou/world') && openRoom.searchParams.get('heights') === '1', 'open road is mabou/world with height negotiation');
   check(await p.until(`document.querySelector('${settings} .mpStatus').textContent.includes(mmm.mp.current.net.me.name)`), 'settings show the server call sign');
   // Freeze just the pose for a deterministic byte comparison of the existing map canvas.
-  await p.read('mmm.vehicle.place(mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.heading)');
+  await p.read('mmm.vehicle.place(mmm.vehicle.x,mmm.vehicle.z,mmm.vehicle.heading,mmm.vehicle.y)');
   await sleep(650);
   const mapBefore = await p.read('document.getElementById("miniMapCanvas").toDataURL()');
   await bots(p); await sleep(600);

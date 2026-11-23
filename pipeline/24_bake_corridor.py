@@ -85,7 +85,8 @@ def warp_exact(path, bb):
 
 def main():
     manifest = json.load(open(f'{b.OUT}/manifest.json'))
-    network = json.load(open(f'{b.OUT}/roads.json'))['roads']
+    road_data = json.load(open(f'{b.OUT}/roads.json'))
+    network = road_data['roads']
     selected = select(manifest,network)
     print('Selection:', {k:len(v) for k,v in selected.items()}, flush=True)
     if len(selected[8]) > b.AREA.fine_tile_limit:
@@ -109,7 +110,10 @@ def main():
         import road_ground
         streams = road_ground.baked_brooks(f'{b.OUT}/streams.json')
         profiles, flagged = road_ground.profiles(road_ground.DemSampler(str(AREA.elevation('dtm'))), network)
-        shaping = dict(profiles=profiles, streams=streams, blocks=[])
+        from bridge_spans import bridge_keep_boxes, runtime_crossings
+        saved_bridges = road_data.get('bridgeSpans')
+        bridge_keep = bridge_keep_boxes(saved_bridges if saved_bridges is not None else runtime_crossings(AREA.id))
+        shaping = dict(profiles=profiles, streams=streams, blocks=[], keep=(*AREA.keep_roads, *bridge_keep))
         print(f'Road ground: {len(profiles)} roads get a height line; {len(flagged)} stretches held at the {road_ground.LIMIT} m limit', flush=True)
     # <<< road-ground trial
     for n, ((bi,bj),tiles) in enumerate(sorted(blocks.items()),1):
@@ -122,7 +126,7 @@ def main():
             # The shaping reads ground further out than the 2 m the tiles need; the tiles are cut from the middle.
             wide = (bb[0]-road_ground.HALO,bb[1]-road_ground.HALO,bb[2]+road_ground.HALO,bb[3]+road_ground.HALO)
             shaped, stats = road_ground.shape_block(warp_exact(str(AREA.elevation("dtm")), wide), wide[0], wide[3],
-                                                    shaping['profiles'], shaping['streams'], AREA.keep_roads)
+                                                    shaping['profiles'], shaping['streams'], shaping['keep'])
             cut = road_ground.HALO-2
             shaped = np.ascontiguousarray(shaped[cut:-cut,cut:-cut])
             # Trees and roofs keep their height above the ground that moved under them.

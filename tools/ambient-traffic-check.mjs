@@ -38,6 +38,17 @@ function cases({ AmbientTraffic }, THREE) {
     if (slowest < 11.5 || c.along < 360) throw Error(`car slowed at a bridge join: ${slowest.toFixed(2)} m/s, at ${c.along.toFixed(0)}`);
     return { slowest };
   });
+  check('decks', () => {   // own bridge: on the deck (also a two-point piece, 10 m past its mapped end, and a recovered span with no bridge piece); an overpass: on the land below
+    const roads = [[[0, 0], [0, -300]], [[0, -300], [0, -400]], [[0, -400], [0, -800]]].map((pts, i) => ({ id: 10 + i, kind: 1, halfWidth: 3.6, bridge: i === 1, pts }));
+    const deckHeight = (x, z) => z >= -415 && z <= -300 ? 4 : Math.abs(z + 600) < 6 ? 6 : z <= -650 && z >= -700 ? 5 : null;
+    const bridgeRuns = () => [{ pts: [[0, -650], [0, -700]], roads: new Set([12]) }, { pts: [[-6, -600], [6, -600]], roads: new Set([99]) }];
+    const t = new AmbientTraffic({ roads, deckHeight, bridgeRuns }, flat, false), length = t.paths[0].cumulative.at(-1);
+    for (const [along, want] of [[330, 4], [410, 4], [600, 0], [200, 0], [675, 5]]) for (const [path, at] of [[t.paths[0], along], [t.paths[1], length - along]]) {
+      const c = start(t, path, at);
+      if (c.y !== want) throw Error(`decks: a car ${along} m along stands at ${c.y}, not ${want}`);
+    }
+    return 'own deck, overpass';
+  });
   check('opposing', () => {   // two cars meeting in opposite lanes keep going (the old slot priority deadlocked)
     const t = make(straight(1000)); const a = start(t, t.paths[0], 400, 12, 0), b = start(t, t.paths[1], 560, 12, 1);
     run(t, { x: 1000, z: 1000 }, 1200);
@@ -400,6 +411,11 @@ if (process.argv.includes('--mutations')) {
     ['give way to any player near a junction (old rule)', 'if (out > 3 && out < 20 && Math.abs(px * j.sz - pz * j.sx) < 5)', 'if (Math.hypot(px, pz) < 20)'],
     ['brake into the mouth', 'if (a - 10 < c.speed * c.speed / 16 && c.speed > 1 || a < 8) continue;', ''],
     ['crossroads deduped as one', '&& j.sx * sx + j.sz * sz > 0)) continue;', ')) continue;'],
+    ['topmost deck everywhere (stands on an overpass)', 'if (y === null || !deck) return y;', 'if (y === null) return y;'],
+    ['land only (falls through its own deck)', 'const top = this.roads.deckHeight(x, z);', 'const top = null;'],
+    ['joined piece loses its first segment', 'if (near(pts[lo - 1], end)) lo--; else if (near(pts[hi + 1], end)) hi++;', ''],
+    ['no pad past the mapped piece', 'const DECK_PAD = 20;', 'const DECK_PAD = 0;'],
+    ['recovered spans ignored', 'let carried = false; for (const id of run.roads) if (ids.has(id)) { carried = true; break; }', 'const carried = false;'],
     ['six cars', 'i < (low ? 2 : 4)', 'i < (low ? 2 : 6)'],
     ['other drivers ignored', 'for (const o of this.others) {\n        const dx = o.x - c.solid.x, dz = o.z - c.solid.z, gap = dx * fx + dz * fz, along', 'for (const o of []) {\n        const dx = o.x - c.solid.x, dz = o.z - c.solid.z, gap = dx * fx + dz * fz, along'],
     ['other drivers in either lane', 'along > .5 ? Math.abs(bendOffset(dx, dz, c.solid.heading, o.heading) - (LANE - c.side)) < CLEAR', 'along > .5 ? true'],

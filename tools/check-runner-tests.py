@@ -124,6 +124,16 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
     result=run('--only','browser-runtime');assert result.returncode==0 and 'browser-runtime | PASS' in result.stdout,result.stdout
     result=run('--only','truck');assert 'Evidence kept at' not in result.stdout
 
+    # Successful picture deliverables must survive for the remote evidence copier.
+    with manifest.open() as f: picture_rows=list(csv.DictReader(f,delimiter='\t'))
+    for row in picture_rows: row['notes']='retain-evidence' if row['name']=='truck' else ''
+    with manifest.open('w') as f:
+        writer=csv.DictWriter(f,fieldnames=picture_rows[0].keys(),delimiter='\t');writer.writeheader();writer.writerows(picture_rows)
+    result=run('--only','truck');assert result.returncode==0,result.stdout
+    evidence=Path(result.stdout.split('Evidence kept at ')[1].strip())
+    assert evidence.is_dir() and (evidence/'truck.log').is_file()
+    result=run('--only','phone');assert 'Evidence kept at' not in result.stdout
+
     table([('sleeper',0,'node','*',''),('next',0,'node','*','')])
     # Replace just fixture commands; no source copy or real browser is involved.
     manifest=fixture/'tools/checks.tsv'

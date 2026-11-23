@@ -1,6 +1,6 @@
 import { readChat, CHAT_COOLDOWN } from '../../web/src/mp/social';
 // What a room decides, without any Cloudflare type in it: so the same rules run in the Worker and in a node check.
-import { BODY, CLOSE, ROOM_CAP, parseRideChange, checkState, encodeSnapshot, type PeerInfo, type ServerText } from '../../web/src/mp/wire';
+import { CLOSE, ROOM_CAP, parseRideChange, checkState, encodeSnapshot, type PeerInfo, type ServerText } from '../../web/src/mp/wire';
 
 /** What the room remembers about one connection. It is small: it rides on the socket through a sleep. */
 export interface Seat extends PeerInfo { last: Uint8Array | null; races?: boolean; games?: boolean; lastChat?: number }
@@ -31,13 +31,13 @@ export function takeSeat(taken: Seat[], random: () => number = Math.random): Sea
 
 export const text = (m: ServerText) => JSON.stringify(m);
 export const hello = (seat: Seat, room: string, others: Seat[]): string => text({
-  t: 'hello', v: 1, id: seat.id, name: seat.name, hue: seat.hue, ride: seat.ride, room, cap: ROOM_CAP, rides: true, sxsVariants: true, chat: true, heartbeat: true, games: true,
+  t: 'hello', v: 1, id: seat.id, name: seat.name, hue: seat.hue, ride: seat.ride, room, cap: ROOM_CAP, rides: true, heights: true, sxsVariants: true, chat: true, heartbeat: true, games: true,
   peers: others.map(({ id, name, hue, ride }) => ({ id, name, hue, ride })),
 });
 /** Where everybody was last heard: a newcomer sees parked cars at once. */
-export const lastKnown = (others: Seat[]): ArrayBuffer | null => {
+export const lastKnown = (others: Seat[],height=false): ArrayBuffer | null => {
   const entries = others.filter((s) => s.last).map((s) => ({ id: s.id, body: s.last! }));
-  return entries.length ? encodeSnapshot(entries) : null;
+  return entries.length ? encodeSnapshot(entries,height) : null;
 };
 
 /** How often one connection may speak. A game sends 5 a second; a script that floods is dropped, then shown the door. */
@@ -82,7 +82,7 @@ export function judge(seat: Seat, meter: Meter, message: ArrayBuffer | string, n
   const body = checkState(message, bounds);
   if (!body) { meter.strikes += 4; return out(CLOSE.bad); }
   if (!meter.inOrder(new DataView(message).getUint32(2 + 4, true))) return out(CLOSE.bad);
-  const copy = new Uint8Array(BODY);
+  const copy = new Uint8Array(body.length);
   copy.set(body);
   return { relay: encodeSnapshot([{ id: seat.id, body: copy }]), body: copy };
 }

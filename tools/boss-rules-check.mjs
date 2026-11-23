@@ -175,8 +175,9 @@ ok('the cost: the clock jumps more at higher steps; speed rises with the step an
   // Following: closes on the player, holds back near the keep gap, stops for a stopped car.
   assert.equal(R.followSpeed(R.FOLLOW_KEEP, 0, 30), 0); assert.equal(R.followSpeed(2, 10, 30), 7.6);
   assert.ok(R.followSpeed(40, 20, 25) <= 25, 'never over its limit');
-  // The phone's touch help limits the player's car by road kind: the Boss's table is vehicle.ts's.
-  const vehicle = readFileSync('src/vehicle.ts', 'utf8').match(/s\.kind === 1 \? 100 \/ 3\.6 : s\.kind === 2 \? 90 \/ 3\.6 : s\.kind === 13 \? 90 \/ 3\.6 : s\.kind === 3 \? 75 \/ 3\.6 : s\.kind === 5 \? 55 \/ 3\.6 : 50 \/ 3\.6/);
+  // The phone's touch help limits the player's car by road kind: the Boss's table is vehicle.ts's. (On a road bridge
+  // deck vehicle.ts keys the table on the carried road's kind, so the table may read `kind` rather than `s.kind`.)
+  const vehicle = readFileSync('src/vehicle.ts', 'utf8').match(/(?:s\.)?kind === 1 \? 100 \/ 3\.6 : (?:s\.)?kind === 2 \? 90 \/ 3\.6 : (?:s\.)?kind === 13 \? 90 \/ 3\.6 : (?:s\.)?kind === 3 \? 75 \/ 3\.6 : (?:s\.)?kind === 5 \? 55 \/ 3\.6 : 50 \/ 3\.6/);
   assert.ok(vehicle, 'vehicle.ts touch limit table unchanged');
   assert.deepEqual([1, 2, 13, 3, 5, 4].map(k => Math.round(R.roadTop(k) * 3.6)), [100, 90, 90, 75, 55, 50]);
 });
