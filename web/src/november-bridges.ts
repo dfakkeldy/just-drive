@@ -387,13 +387,13 @@ export function buildPonyTrussBridge(
         else m.quad([b1, b0, p0, p1], ABUTMENT);
       }
     }
-    // End skirt seals the outer apron edge down into the embankment so no open gap ever shows beneath it.
+    // End skirt seals the outer apron edge down into the embankment in dark asphalt so the seam blends smoothly into the road.
     const outerRow = end < 0 ? 0 : APRON_ALONG_STEPS;
     for (let j = 0; j < APRON_ACROSS_STEPS; j++) {
       const p0 = grid[outerRow][j], p1 = grid[outerRow][j + 1];
       const b0 = [p0[0], p0[1] - 2.5, p0[2]], b1 = [p1[0], p1[1] - 2.5, p1[2]];
-      if (end < 0) m.quad([b0, b1, p1, p0], ABUTMENT);
-      else m.quad([b1, b0, p0, p1], ABUTMENT);
+      if (end < 0) m.quad([b0, b1, p1, p0], DECK_ASPHALT);
+      else m.quad([b1, b0, p0, p1], DECK_ASPHALT);
     }
   }
 
