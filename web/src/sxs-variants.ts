@@ -235,57 +235,76 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
   const beltY = cfg.beltY;
   const roofY = cfg.roofY;
   const hoodMidZ = (cfg.hoodFrontZ + cfg.hoodRearZ) / 2;
+  // Minimum underside height above the tyres at full upward suspension compression.
+  const wheelClearY = wr * 2 + cfg.travelLimit + .035;
+  const frontSteerClearZ = -halfBase + wr + .09;
+  const rearArchFrontZ = halfBase - wr - .04;
+  const rearArchRearZ = halfBase + wr + .04;
 
-  // --- Chassis floor pan, frame rails, rock sliders & skid plate ---
+  // --- Chassis floor pan, central frame spine, rock sliders & skid plate ---
   const chassisLen = cfg.rearEndZ - cfg.hoodFrontZ - .18;
   const chassisMidZ = (cfg.hoodFrontZ + cfg.rearEndZ) / 2;
-  box([0, floorY, chassisMidZ], [W * 1.48, .08, chassisLen], cab);
-  box([0, floorY - .04, chassisMidZ - .06], [W * 1.12, .035, chassisLen * .88], alloy);
+  // Narrow central chassis spine clears front tyres at full lock and rear tyres at full compression.
+  const spineW = Math.min(W * 1.06, (halfTrack - .33) * 2);
+  box([0, floorY, chassisMidZ], [spineW, .08, chassisLen], cab);
+  box([0, floorY - .04, chassisMidZ - .06], [spineW * .84, .035, chassisLen * .88], alloy);
+  // Full-width cabin floor strictly between front and rear wheel arches.
+  const cabFloorStartZ = Math.max(cfg.hoodRearZ + .02, frontSteerClearZ);
+  const cabFloorEndZ = Math.min(cfg.cabRearZ, rearArchFrontZ);
+  if (cabFloorEndZ > cabFloorStartZ + .1) {
+    box([0, floorY, (cabFloorStartZ + cabFloorEndZ) / 2], [W * 1.56, .08, cabFloorEndZ - cabFloorStartZ], cab);
+  }
+  const sillStartZ = Math.max(cfg.hoodRearZ, frontSteerClearZ);
+  const sillEndZ = Math.min(cfg.cabRearZ, rearArchFrontZ);
   for (const s of [-1, 1]) {
-    rod([s * (W - .04), floorY + .02, cfg.hoodRearZ - .05], [s * (W - .04), floorY + .02, cfg.cabRearZ + .05], .038, cab);
+    rod([s * (W - .04), floorY + .02, sillStartZ], [s * (W - .04), floorY + .02, sillEndZ], .038, cab);
     // Raised sill & step plate under doors.
-    box([s * (W - .03), floorY + .09, (cfg.hoodRearZ + cfg.cabRearZ) / 2], [.10, .12, cfg.cabRearZ - cfg.hoodRearZ], cab);
+    box([s * (W - .03), floorY + .09, (sillStartZ + sillEndZ) / 2], [.10, .12, sillEndZ - sillStartZ], cab);
   }
 
-  // --- Faceted utility hood & grille ---
+  // --- Faceted utility hood & narrow lower nose / grille ---
   shell([
-    { z: cfg.hoodFrontZ, w: W * .78, y: beltY - .15, crown: .04, bottom: floorY + .24 },
-    { z: hoodMidZ, w: W * .94, y: beltY - .04, crown: .065, bottom: floorY + .25 },
-    { z: cfg.hoodRearZ, w: W * .96, y: beltY + .03, crown: .05, bottom: floorY + .24 },
+    { z: cfg.hoodFrontZ, w: W * .78, y: Math.max(beltY - .12, wheelClearY + .05), crown: .04, bottom: wheelClearY },
+    { z: hoodMidZ, w: W * .94, y: beltY - .03, crown: .065, bottom: wheelClearY },
+    { z: cfg.hoodRearZ, w: W * .96, y: beltY + .03, crown: .05, bottom: wheelClearY },
   ], paint);
-  // Front nose grille panel & slats.
-  box([0, (beltY - .15 + floorY + .28) / 2, cfg.hoodFrontZ + .01], [W * 1.24, .28, .06], cab);
+  // Narrow central nose core & grille between the front wheel wells.
+  const noseW = Math.min(W * 1.04, (halfTrack - .33) * 2);
+  const noseBotY = floorY + .24;
+  const noseTopY = wheelClearY + .04;
+  box([0, (noseBotY + noseTopY) / 2, (cfg.hoodFrontZ + cfg.hoodRearZ) / 2], [noseW, noseTopY - noseBotY, cfg.hoodRearZ - cfg.hoodFrontZ], cab);
   for (let i = 0; i < 6; i++) {
-    box([-W * .42 + i * (W * .84 / 5), (beltY - .15 + floorY + .30) / 2, cfg.hoodFrontZ - .02], [.045, .17, .02], rubber);
+    box([-noseW * .36 + i * (noseW * .72 / 5), (noseBotY + noseTopY) / 2, cfg.hoodFrontZ - .015], [.038, (noseTopY - noseBotY) * .58, .02], rubber);
   }
 
   // --- Heavy front steel brush guard, winch bumper & skid plate ---
-  const bumpZ = cfg.hoodFrontZ - .08;
-  box([0, floorY + .24, bumpZ], [W * 1.62, .12, .11], cab);
-  box([0, floorY + .11, bumpZ + .08], [.62, .22, .04], alloy, body, -.42);
+  const bumpZ = Math.min(cfg.hoodFrontZ - .06, -halfBase - wr - .075);
+  box([0, floorY + .24, bumpZ], [noseW * 1.08, .12, .10], cab);
+  box([0, floorY + .11, bumpZ + .07], [.56, .22, .04], alloy, body, -.42);
   // Recessed winch drum & steel roller fairlead.
   box([0, floorY + .25, bumpZ - .055], [.26, .085, .04], alloy);
   rod([-.09, floorY + .25, bumpZ - .072], [.09, floorY + .25, bumpZ - .072], .014, rubber);
   // Upper bullbar loop & twin vertical push uprights.
-  rod([-W * .66, beltY - .14, bumpZ + .01], [W * .66, beltY - .14, bumpZ + .01], .026, cab);
+  const bullTopY = Math.max(beltY - .11, wheelClearY + .05);
+  rod([-noseW * .54, bullTopY, bumpZ + .01], [noseW * .54, bullTopY, bumpZ + .01], .026, cab);
   for (const s of [-1, 1]) {
-    rod([s * .27, floorY + .24, bumpZ], [s * .27, beltY - .14, bumpZ + .01], .024, cab);
-    rod([s * W * .78, floorY + .24, bumpZ + .02], [s * W * .66, beltY - .14, bumpZ + .01], .024, cab);
-    rod([s * W * .78, floorY + .24, bumpZ + .02], [s * W * .82, floorY + .26, cfg.hoodFrontZ + .14], .026, cab);
-    // Stepped dual LED headlamps inside dark bezels.
-    box([s * W * .60, beltY - .19, cfg.hoodFrontZ + .02], [.24, .11, .07], rubber);
-    box([s * W * .60, beltY - .19, cfg.hoodFrontZ - .018], [.19, .065, .016], white);
+    rod([s * .24, floorY + .24, bumpZ], [s * .24, bullTopY, bumpZ + .01], .024, cab);
+    rod([s * noseW * .52, floorY + .24, bumpZ + .02], [s * noseW * .54, bullTopY, bumpZ + .01], .024, cab);
+    // Stepped dual LED headlamps mounted above the front wheel well.
+    box([s * W * .56, wheelClearY + .04, cfg.hoodFrontZ + .02], [.22, .085, .07], rubber);
+    box([s * W * .56, wheelClearY + .04, cfg.hoodFrontZ - .018], [.17, .052, .016], white);
   }
 
-  // --- Wheel-arch fender flares (squared rugged arches matching utility/adventure UTVs) ---
+  // --- Wheel-arch fender flares (clear of tyres at rest, full compression and steering lock) ---
   for (const s of [-1, 1]) {
     for (const axleZ of [-halfBase, halfBase]) {
-      const archTopY = wr * 2 + .21;
-      const archW = .16;
+      const archTopY = wheelClearY + .055;
+      const archW = .15;
       const flareX = s * (W - .01);
-      box([flareX, archTopY, axleZ], [archW, .055, .46], cab);
-      box([flareX, archTopY - .095, axleZ - .31], [archW, .055, .26], cab, body, -.76);
-      box([flareX, archTopY - .095, axleZ + .31], [archW, .055, .26], cab, body, .76);
+      const legOff = wr + .02;
+      box([flareX, archTopY, axleZ], [archW, .045, wr * 1.16], cab);
+      box([flareX, archTopY - .06, axleZ - legOff], [archW, .045, .14], cab, body, -.78);
+      box([flareX, archTopY - .06, axleZ + legOff], [archW, .045, .14], cab, body, .78);
     }
   }
 
@@ -302,18 +321,18 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
   rod([-.08, beltY + .07, wsBotZ - .015], [-.52, beltY + .12, wsBotZ + .005], .010, rubber);
 
   // Full hard doors (1 pair for utility cab; 2 pairs for crew cab & full cabin).
-  const doorStartZ = cfg.hoodRearZ + .04;
-  const doorEndZ = cfg.cabRearZ - .04;
+  const doorStartZ = Math.max(cfg.hoodRearZ + .04, frontSteerClearZ);
+  const doorEndZ = Math.min(cfg.cabRearZ - .04, rearArchFrontZ);
   const midPillarZ = (doorStartZ + doorEndZ) / 2;
   const doorSpans: [number, number][] = cfg.rows === 2
     ? [[doorStartZ, midPillarZ - .03], [midPillarZ + .03, doorEndZ]]
     : [[doorStartZ, doorEndZ]];
 
   for (const s of [-1, 1]) {
-    // A-pillar & rear cab pillar.
-    rod([s * W * .94, floorY + .12, wsBotZ], [s * W * .94, beltY + .02, wsBotZ], .034, cab);
+    // A-pillar & rear cab pillar (lower vertical posts stay clear of wheel wells).
+    rod([s * W * .94, floorY + .12, doorStartZ], [s * W * .94, beltY + .02, wsBotZ], .034, cab);
     rod([s * W * .94, beltY + .02, wsBotZ], [s * roofW, roofY - .04, wsTopZ], .034, cab);
-    rod([s * W * .94, floorY + .12, cfg.cabRearZ], [s * roofW, roofY - .04, cfg.cabRearZ], .038, cab);
+    rod([s * W * .94, floorY + .12, Math.min(cfg.cabRearZ, rearArchFrontZ)], [s * roofW, roofY - .04, cfg.cabRearZ], .038, cab);
     // Roof cant rail.
     const railEndZ = cfg.enclosedBack ? cfg.rearEndZ - .14 : cfg.cabRearZ;
     rod([s * roofW, roofY - .04, wsTopZ], [s * roofW, roofY - .04, railEndZ], .034, cab);
@@ -376,16 +395,28 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
     }
   }
 
-  // --- Rear body: EITHER enclosed SUV/minivan cargo cabin OR open rear dump bed ---
+  // --- Rear body: EITHER enclosed cargo cabin OR open rear dump bed ---
   if (cfg.enclosedBack) {
     const qStartZ = cfg.cabRearZ + .02;
-    const qEndZ = cfg.rearEndZ - .08;
+    const qEndZ = cfg.rearEndZ - .06;
     const qMidZ = (qStartZ + qEndZ) / 2;
     const qLen = qEndZ - qStartZ;
-    const lowerH = beltY - (floorY + .16);
+    const upperBandH = Math.max(.14, beltY - wheelClearY + .02);
+    const lowerSkirtH = wheelClearY - .004 - (floorY + .16);
+    const innerTubW = Math.min(W * 1.44, (halfTrack - .20) * 2);
+    // Enclosed inner cargo floor and inner wheel-well walls (clear of rear tyres).
+    box([0, floorY + .18, qMidZ], [innerTubW, .06, qLen], rubber);
     for (const s of [-1, 1]) {
-      // Lower rear quarter panels.
-      box([s * (W - .02), floorY + .16 + lowerH / 2, qMidZ], [.07, lowerH, qLen], paint);
+      box([s * (innerTubW / 2 - .03), floorY + .18 + lowerSkirtH / 2, qMidZ], [.06, lowerSkirtH, qLen], cab);
+      // Upper painted rear quarter belt cleanly above the rear wheel arch cutout.
+      box([s * (W - .02), wheelClearY + upperBandH / 2, qMidZ], [.07, upperBandH, qLen], paint);
+      // Solid lower spandrels ahead of and behind the rear wheel cutout.
+      if (rearArchFrontZ - qStartZ > .04) {
+        box([s * (W - .02), floorY + .16 + lowerSkirtH / 2, (qStartZ + rearArchFrontZ) / 2], [.07, lowerSkirtH, rearArchFrontZ - qStartZ], paint);
+      }
+      if (qEndZ - rearArchRearZ > .03) {
+        box([s * (W - .02), floorY + .16 + lowerSkirtH / 2, (rearArchRearZ + qEndZ) / 2], [.07, lowerSkirtH, qEndZ - rearArchRearZ], paint);
+      }
       // Angled D-pillar from rear beltline up to roof end.
       rod([s * W * .94, beltY, qEndZ], [s * roofW, roofY - .04, qEndZ - .08], .044, cab);
       // Rear-quarter cargo window glass.
@@ -394,18 +425,24 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
       const winTilt = s * Math.atan2(W * .94 - roofW, roofY - beltY);
       box([winX, winBotY + winH / 2, qMidZ - .02], [.012, winH - .03, qLen - .14], glass, body, 0, 0, winTilt);
     }
-    // Enclosed rear tailgate & upper hatchback window.
-    box([0, floorY + .16 + lowerH / 2, qEndZ], [W * 1.88, lowerH, .08], paint);
+    // Enclosed rear tailgate & upper hatchback window (lower tailgate stays clear of tyres).
+    const tailBotY = qEndZ - .04 > rearArchRearZ ? floorY + .16 : wheelClearY;
+    const tailH = beltY + .02 - tailBotY;
+    box([0, tailBotY + tailH / 2, qEndZ], [W * 1.88, tailH, .08], paint);
+    if (tailBotY > floorY + .20) {
+      const lowH = tailBotY - .005 - (floorY + .16);
+      box([0, floorY + .16 + lowH / 2, qEndZ - .004], [innerTubW, lowH, .072], paint);
+    }
     box([0, beltY + (roofY - .06 - beltY) / 2, qEndZ - .04], [roofW * 1.82, roofY - .12 - beltY, .014], glass, body, -.10);
     // Hatch frame & upper rear spoiler lip.
-    rod([-roofW, roofY - .04, qEndZ - .08], [roofW, roofY - .04, qEndZ - .08], .034, cab);
+    rod([-roofW + .02, roofY - .04, qEndZ - .09], [roofW - .02, roofY - .04, qEndZ - .09], .034, cab);
     rod([-W * .94, beltY + .02, qEndZ], [W * .94, beltY + .02, qEndZ], .032, cab);
     // Rear steel bumper & recessed licence/handle panel (blank).
-    box([0, floorY + .24, cfg.rearEndZ - .01], [W * 1.72, .12, .11], cab);
-    box([0, beltY - .16, qEndZ + .042], [.34, .18, .02], cab);
+    box([0, floorY + .24, cfg.rearEndZ - .01], [W * 1.72, .11, .09], cab);
+    box([0, beltY - .10, qEndZ + .042], [.34, .16, .02], cab);
     for (const s of [-1, 1]) {
-      box([s * (W - .14), beltY - .10, qEndZ + .042], [.10, .28, .025], rubber);
-      box([s * (W - .14), beltY - .10, qEndZ + .056], [.065, .22, .014], red);
+      box([s * (W - .14), beltY - .04, qEndZ + .042], [.10, .24, .025], rubber);
+      box([s * (W - .14), beltY - .04, qEndZ + .056], [.065, .18, .014], red);
     }
   } else {
     // Solid rear cab bulkhead with framed rear cab window looking into the dump bed.
@@ -415,13 +452,13 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
     box([0, (rwBot + rwTop) / 2, cfg.cabRearZ], [roofW * 1.66, rwTop - rwBot, .014], glass);
     rod([-roofW, roofY - .04, cfg.cabRearZ], [roofW, roofY - .04, cfg.cabRearZ], .032, cab);
 
-    // Boxy open rear dump cargo bed.
+    // Boxy open rear dump cargo bed seated cleanly above the compressed rear wheels.
     const bedStartZ = cfg.cabRearZ + .06;
     const bedEndZ = cfg.rearEndZ - .04;
     const bedLen = bedEndZ - bedStartZ;
     const bedMidZ = (bedStartZ + bedEndZ) / 2;
-    const bedFloorY = Math.max(wr * 2 + .06, .84);
-    const bedWallTopY = beltY + .06;
+    const bedFloorY = wheelClearY + .03;
+    const bedWallTopY = beltY + .12;
     const bedWallH = bedWallTopY - bedFloorY;
     const bedW = W - .04;
     // Bed floor + dark ribbed bed liner.
@@ -434,19 +471,28 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
     for (const s of [-1, 1]) {
       box([s * (bedW - .03), bedFloorY + bedWallH / 2, bedMidZ], [.08, bedWallH, bedLen], paint);
       box([s * (bedW - .03), bedWallTopY + .02, bedMidZ], [.095, .04, bedLen + .02], cab);
+      // Lower painted wheel-arch spandrels ahead of and behind the rear wheel cutout.
+      const skirtH = bedFloorY - .03 - (floorY + .18);
+      if (rearArchFrontZ - bedStartZ > .05) {
+        box([s * (bedW - .03), floorY + .18 + skirtH / 2, (bedStartZ + rearArchFrontZ) / 2], [.07, skirtH, rearArchFrontZ - bedStartZ], paint);
+      }
+      if (bedEndZ - rearArchRearZ > .05) {
+        box([s * (bedW - .03), floorY + .18 + skirtH / 2, (rearArchRearZ + bedEndZ) / 2], [.07, skirtH, bedEndZ - rearArchRearZ], paint);
+      }
     }
     // Rear tailgate + steel latches.
     box([0, bedFloorY + bedWallH / 2, bedEndZ - .03], [bedW * 1.84, bedWallH, .07], paint);
     box([0, bedWallTopY + .02, bedEndZ - .03], [bedW * 1.88, .04, .08], cab);
     box([0, bedWallTopY - .08, bedEndZ + .012], [.16, .045, .02], alloy);
     // Under-bed rear steel bumper & vertical corner tail lamps.
-    box([0, floorY + .24, cfg.rearEndZ - .02], [W * 1.66, .11, .11], cab);
+    const rearBumpZ = Math.max(cfg.rearEndZ - .02, rearArchRearZ + .07);
+    box([0, floorY + .24, rearBumpZ], [W * 1.66, .11, .11], cab);
     for (const s of [-1, 1]) {
-      box([s * (bedW - .10), bedFloorY + bedWallH * .55, bedEndZ + .012], [.095, .24, .025], rubber);
-      box([s * (bedW - .10), bedFloorY + bedWallH * .55, bedEndZ + .026], [.06, .19, .014], red);
+      box([s * (bedW - .10), bedFloorY + bedWallH * .55, bedEndZ + .012], [.095, .20, .025], rubber);
+      box([s * (bedW - .10), bedFloorY + bedWallH * .55, bedEndZ + .026], [.06, .15, .014], red);
     }
     if (cfg.bedRails) {
-      // Tubular steel utility headache rack & bed side rails (matches Survey S1).
+      // Tubular steel utility headache rack & bed side rails.
       for (const s of [-1, 1]) {
         rod([s * (bedW - .04), bedWallTopY + .03, bedStartZ + .08], [s * (bedW - .04), bedWallTopY + .25, bedStartZ + .08], .018, alloy);
         rod([s * (bedW - .04), bedWallTopY + .26, bedStartZ + .06], [s * (bedW - .04), bedWallTopY + .26, bedEndZ - .12], .018, alloy);
@@ -456,9 +502,9 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
     }
     if (cfg.bedCargo) {
       // Plain generic utility toolbox & trail pack strapped in the front of the crew bed (no logos/text).
-      box([-.26, bedFloorY + .17, bedStartZ + .26], [.54, .26, .34], cab);
-      box([-.26, bedFloorY + .305, bedStartZ + .26], [.56, .025, .36], alloy);
-      box([.34, bedFloorY + .18, bedStartZ + .22], [.22, .28, .18], paint);
+      box([-.26, bedFloorY + .15, bedStartZ + .26], [.54, .22, .34], cab);
+      box([-.26, bedFloorY + .265, bedStartZ + .26], [.56, .025, .36], alloy);
+      box([.34, bedFloorY + .16, bedStartZ + .22], [.22, .24, .18], paint);
     }
   }
 
@@ -474,8 +520,8 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
 
   const seatZs = cfg.rows === 2 ? [cfg.driverZ, cfg.driverZ + .92] : [cfg.driverZ];
   for (const sz of seatZs) {
-    if (cfg.enclosedBack) {
-      // Touring high-back bucket seats (two per row).
+    if (cfg.rows === 2) {
+      // Four high-back seats (two per row for 4-seat crew cab and 4-seat full cabin).
       for (const sx of [-.31, .31]) {
         box([sx, floorY + .30, sz], [.44, .11, .44], rubber);
         box([sx, floorY + .68, sz + .20], [.42, .66, .12], rubber, body, -.12);
@@ -515,7 +561,7 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
     const pivot = new THREE.Group(), spin = new THREE.Group();
     root.add(pivot); pivot.position.set(x, 0, z); spin.position.y = wr; pivot.add(spin);
     const r0 = wr * .51, r1 = wr * .72, r2 = wr * .91, r3 = wr * .965;
-    const profile = [[r0, -.14], [r1, -.155], [r2, -.14], [r3, -.098], [r3, .098], [r2, .14], [r1, .155], [r0, .14]].map(p => new THREE.Vector2(p[0], p[1]));
+    const profile = [[r0, -.14], [r1, -.155], [r2, -.14], [r3, -.098], [r3, .098], [r2, .14], [r1, .155], [r0, .14], [r0, -.14]].map(p => new THREE.Vector2(p[0], p[1]));
     const tyre = new THREE.LatheGeometry(profile, display ? 12 : low ? 16 : 28);
     tyre.rotateZ(Math.PI / 2);
     add(tyre, rubber, spin);
@@ -592,15 +638,25 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
     .map(mesh => ({ mesh, base: Float32Array.from(mesh.geometry.attributes.position.array), weights: mesh.geometry.attributes.travelWeight })));
   const bodyPoint = new THREE.Vector3();
   const limit = cfg.travelLimit;
+  let lastA = 0, lastB = 0, lastC = 0, lastD = 0;
   const rig: Rig = {
     root, body,
     wheels: { fl: fl.spin, fr: fr.spin, rl: rl.spin, rr: rr.spin },
     steer: { fl: fl.pivot, fr: fr.pivot },
     driverEye, brakeLights,
     ...(rider !== body ? { setRiderVisible(visible: boolean) { rider.visible = visible; } } : {}),
-    checkpointPose() { return () => {}; },
+    checkpointPose() {
+      const a = lastA, b = lastB, c = lastC, d = lastD;
+      const by = body.position.y, rx = body.rotation.x, ry = body.rotation.y, rz = body.rotation.z;
+      return () => {
+        body.position.y = by;
+        body.rotation.set(rx, ry, rz);
+        rig.setTravel!(a, b, c, d);
+      };
+    },
     // Hot path: no arrays, closures or new objects.
     setTravel(a, b, c, d) {
+      lastA = a; lastB = b; lastC = c; lastD = d;
       for (let i = 0; i < 4; i++) {
         const travel = THREE.MathUtils.clamp(i === 0 ? a : i === 1 ? b : i === 2 ? c : d, -limit, limit);
         const bodyOffset = body.position.y + bodyPoint.set((i % 2 ? 1 : -1) * halfTrack, 0, (i < 2 ? -1 : 1) * halfBase).applyEuler(body.rotation).y;
@@ -657,7 +713,7 @@ export function createSxsUtility(_mailTrim = true, options?: SxsBuildOptions): R
   return buildSxsVariant(UTILITY_LAYOUT, options);
 }
 
-/** 4-6 seat crew-cab side by side with four full doors, windshield and open dump bed. Forward is -Z. */
+/** 4-seat crew-cab side by side with four full doors, windshield and open dump bed. Forward is -Z. */
 export function createSxsCrew(_mailTrim = true, options?: SxsBuildOptions): Rig {
   return buildSxsVariant(CREW_LAYOUT, options);
 }

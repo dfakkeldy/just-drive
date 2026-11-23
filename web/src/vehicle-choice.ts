@@ -39,7 +39,7 @@ export function vehicleButtons(choice: VehicleChoice, id = 'vehicleChoice'): HTM
   // Selecting Side by side reveals the four generic side-by-side models directly beneath.
   const period = periodRides(new URLSearchParams(location.search));
   const sxsActive = isSxsKind(choice.kind);
-  group.style.cssText = sxsActive ? 'display:flex;flex-direction:column;gap:6px;margin:0 0 16px' : 'display:flex;gap:6px;margin:0 0 16px';
+  group.style.cssText = sxsActive ? 'display:flex;flex-direction:column;gap:6px;margin:0 0 16px' : 'display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px';
   const row = sxsActive ? document.createElement('div') : group;
   if (sxsActive) row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
   const makeBtn = (label: string, pressed: boolean, onClick: () => void) => {

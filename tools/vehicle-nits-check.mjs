@@ -206,7 +206,7 @@ function fixture(mod, entry, mixed = false) {
   const rig = { root, body, wheels: Object.fromEntries(['fl', 'fr', 'rl', 'rr'].map(k => [k, new THREE.Group()])),
     steer: { fl: new THREE.Group(), fr: new THREE.Group() }, driverEye: new THREE.Object3D(), brakeLights: [] };
   if (entry.id === 'truck') rig.extraWheels = [new THREE.Group(), new THREE.Group()];
-  if (entry.id === 'sxs') rig.setTravel = (...values) => { rig.travel = values; };
+  if (entry.id === 'sxs' || entry.id === 'sxs-utility' || entry.id === 'sxs-crew' || entry.id === 'sxs-cabin') rig.setTravel = (...values) => { rig.travel = values; };
   if (entry.ride) rig.pose = values => { rig.poseValues = values; };
   const world = { phase: 0 };
   // A physical 12 m ramp rises 2.4 m, then ends: no artificial vertical impulse.

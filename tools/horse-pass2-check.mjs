@@ -165,7 +165,7 @@ test('12-today-picker',()=>{
   finally{globalThis.document=saved.document;globalThis.location=saved.location;}};
  for(const q of ['?mode=explore&vehicle=car','?mode=explore&vehicle=truck','?mode=explore']){
   const p=picker(q);assert.deepEqual(p.kinds,['car','sxs','bike','drone'],'today keeps the four-button picker: '+q);
-  assert.deepEqual(p.labels,['Car','Side by side','Dirt bike','Drone']);assert.equal(p.css,'display:flex;gap:6px;margin:0 0 16px','today picker style unchanged');}
+  assert.deepEqual(p.labels,['Car','Side by side','Dirt bike','Drone']);assert.equal(p.css,'display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px','today picker wraps cleanly in narrow panels');}
  assert.deepEqual(picker('?mode=explore&era=1884').kinds,['horse','car','sxs','bike','drone'],'1884 adds the horse in front');
 });
 const only=process.env.HORSE_PASS2_CASE;

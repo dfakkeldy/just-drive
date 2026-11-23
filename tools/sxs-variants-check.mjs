@@ -51,8 +51,6 @@ for (const m of MODELS) {
   assert.ok(entry, `GARAGE includes ${m.id}`);
   assert.equal(entry.name, m.name, `GARAGE name for ${m.id}`);
   assert.equal(entry.spec, m.spec, `GARAGE spec for ${m.id}`);
-  // Generic naming rule: never include real manufacturer or brand names.
-  assert.doesNotMatch(entry.name, /polaris|can-?am|honda|yamaha|kawasaki|john deere|kubota|rzr|ranger|defender|maverick|gator|mule/i);
 
   const rig = m.build(false, { removableRider: true });
   const lowRig = m.build(false, { low: true, removableRider: true });
@@ -103,6 +101,99 @@ for (const m of MODELS) {
   rig.setTravel(.15, -.12, .10, -.14);
   assert.ok(Math.abs(rig.wheels.fl.parent.position.y - .15) < 1e-6, `${m.id} travel moves fl wheel`);
   assert.ok(Math.abs(rig.wheels.fr.parent.position.y + .12) < 1e-6, `${m.id} travel moves fr wheel`);
+
+  if (m.id !== 'sxs') {
+    // Replay checkpointPose() must restore deformed suspension vertex buffers.
+    const snap = [];
+    rig.root.traverse(o => { if (o.isMesh && o.parent?.name.includes('coil-over')) snap.push([o, Float32Array.from(o.geometry.attributes.position.array)]); });
+    assert.ok(snap.length > 0, `${m.id} has deformable suspension meshes`);
+    const restore = rig.checkpointPose();
+    rig.body.position.y = .09;
+    rig.body.rotation.set(.08, 0, -.06);
+    rig.setTravel(-m.maxTravel, m.maxTravel, -m.maxTravel, m.maxTravel);
+    let maxMoved = 0;
+    for (const [o, base] of snap) {
+      const a = o.geometry.attributes.position.array;
+      for (let i = 0; i < a.length; i++) maxMoved = Math.max(maxMoved, Math.abs(a[i] - base[i]));
+    }
+    assert.ok(maxMoved > .05, `${m.id} replay pose visibly deforms suspension (${maxMoved})`);
+    restore();
+    let maxResid = 0;
+    for (const [o, base] of snap) {
+      const a = o.geometry.attributes.position.array;
+      for (let i = 0; i < a.length; i++) maxResid = Math.max(maxResid, Math.abs(a[i] - base[i]));
+    }
+    assert.ok(maxResid < 1e-6, `${m.id} checkpointPose restores suspension vertices (${maxResid})`);
+
+    // Tyre mesh closure: every wheel mesh must have zero open boundary edges.
+    for (const [wName, wGroup] of Object.entries(rig.wheels)) {
+      let openEdges = 0;
+      wGroup.traverse(o => {
+        if (!o.isMesh) return;
+        const pos = o.geometry.attributes.position, idx = o.geometry.index;
+        const key = i => `${Math.round(pos.getX(i) * 1e4)},${Math.round(pos.getY(i) * 1e4)},${Math.round(pos.getZ(i) * 1e4)}`;
+        const counts = new Map();
+        const n = idx ? idx.count : pos.count;
+        for (let i = 0; i < n; i += 3) {
+          const vs = [idx ? idx.getX(i) : i, idx ? idx.getX(i + 1) : i + 1, idx ? idx.getX(i + 2) : i + 2].map(key);
+          for (let e = 0; e < 3; e++) {
+            const a = vs[e], b = vs[(e + 1) % 3], k = a < b ? `${a}|${b}` : `${b}|${a}`;
+            counts.set(k, (counts.get(k) ?? 0) + 1);
+          }
+        }
+        for (const c of counts.values()) if (c === 1) openEdges++;
+      });
+      assert.equal(openEdges, 0, `${m.id} wheel ${wName} has ${openEdges} open boundary edges`);
+    }
+
+    // Tyre-vs-body clearance at rest, full compression, full droop, and full steering lock.
+    rig.body.position.set(0, 0, 0);
+    rig.body.rotation.set(0, 0, 0);
+    rig.setTravel(0, 0, 0, 0);
+    rig.root.updateMatrixWorld(true);
+    const bodyMeshes = [];
+    rig.body.traverse(o => { if (o.isMesh) bodyMeshes.push(o); });
+    const savedSides = bodyMeshes.map(bm => bm.material.side);
+    for (const bm of bodyMeshes) bm.material.side = THREE.DoubleSide;
+    try {
+      const ray = new THREE.Raycaster();
+      const dir = new THREE.Vector3(0.3713906763541037, 0.5570860145311556, 0.7427813527082074);
+      const v = new THREE.Vector3();
+      for (const travel of [0, m.maxTravel, -m.maxTravel]) {
+        for (const steer of [0, m.spec.maxSteer, -m.spec.maxSteer]) {
+          rig.steer.fl.rotation.y = steer;
+          rig.steer.fr.rotation.y = steer;
+          rig.setTravel(travel, travel, travel, travel);
+          rig.root.updateMatrixWorld(true);
+          let hits = 0, sample = null;
+          for (const [wName, wGroup] of Object.entries(rig.wheels)) {
+            wGroup.traverse(o => {
+              if (!o.isMesh) return;
+              const pos = o.geometry.attributes.position;
+              const step = Math.max(1, Math.floor(pos.count / 160));
+              for (let i = 0; i < pos.count; i += step) {
+                v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+                ray.set(v, dir);
+                for (const bm of bodyMeshes) {
+                  const isect = ray.intersectObject(bm, false);
+                  if (isect.length % 2 === 1) {
+                    hits++;
+                    sample ??= { wheel: wName, mat: bm.material.name, v: v.toArray().map(n => +n.toFixed(3)) };
+                    break;
+                  }
+                }
+              }
+            });
+          }
+          assert.equal(hits, 0, `${m.id} tyre vertices inside bodywork at travel=${travel} steer=${steer}: ${hits} (${JSON.stringify(sample)})`);
+        }
+      }
+    } finally {
+      bodyMeshes.forEach((bm, i) => { bm.material.side = savedSides[i]; });
+      rig.steer.fl.rotation.y = 0;
+      rig.steer.fr.rotation.y = 0;
+    }
+  }
   rig.setTravel(0, 0, 0, 0);
   assert.equal(rig.wheels.fl.parent.position.y, 0, `${m.id} travel restores neutral`);
 

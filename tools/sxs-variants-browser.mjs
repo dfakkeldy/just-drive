@@ -49,6 +49,29 @@ try {
   check(JSON.stringify(beforeRow.kinds) === JSON.stringify(['car', 'sxs', 'bike', 'drone']) && !beforeRow.sub,
     'title card shows Side by side in the top row and hides model sub-row when car is active', beforeRow);
 
+  // Settings panel ride picker must wrap without overflowing when Car is active (desktop and narrow phone).
+  await p.read(`document.getElementById('titleStart')?.click(); document.getElementById('gear')?.click();`);
+  await sleep(200);
+  const settingsDesktop = await p.read(`(() => {
+    const panel = document.getElementById('settings'), pr = panel.getBoundingClientRect();
+    const btns = [...document.querySelectorAll('#settingsVehicleChoice button')].map(b => b.getBoundingClientRect());
+    return { overflow: panel.scrollWidth - panel.clientWidth, maxRight: Math.max(...btns.map(r => r.right)) - pr.right, count: btns.length };
+  })()`);
+  check(settingsDesktop.count === 4 && settingsDesktop.overflow <= 1 && settingsDesktop.maxRight <= 1,
+    'desktop Settings ride picker wraps inside panel when Car is active', settingsDesktop);
+  await p.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await sleep(150);
+  const settingsPhone = await p.read(`(() => {
+    const panel = document.getElementById('settings'), pr = panel.getBoundingClientRect();
+    const btns = [...document.querySelectorAll('#settingsVehicleChoice button')].map(b => b.getBoundingClientRect());
+    return { overflow: panel.scrollWidth - panel.clientWidth, maxRight: Math.max(...btns.map(r => r.right)) - pr.right, count: btns.length };
+  })()`);
+  check(settingsPhone.count === 4 && settingsPhone.overflow <= 1 && settingsPhone.maxRight <= 1,
+    'phone Settings ride picker wraps inside panel when Car is active', settingsPhone);
+  await p.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+  await p.navigate(`${origin}/?mode=explore&title=1&q=low&radio=0&mp=0`);
+  await waitReady(`!!document.getElementById('vehicleChoice')`, 'explore title after settings width check');
+
   await p.read(`setTimeout(() => document.querySelector('#vehicleChoice [data-vehicle="sxs"]').click(), 0)`);
   await waitReady(`mmm.vehicleId === 'sxs' && !!document.querySelector('#vehicleChoice [data-sxs-models]')`, 'sxs selected');
   const sxsUi = await p.read(`(() => {
