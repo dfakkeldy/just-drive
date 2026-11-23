@@ -22,7 +22,7 @@ async function load(query = '') {
   const found = await read(`JSON.parse(localStorage.getItem('mmm.endings')??'[]').length`);
   if(found)assert.equal(await read(`document.getElementById('waysOut').textContent`),`Ways out found: ${found}`,'fresh title reads saved endings');
   await read(`document.getElementById('titleStart').click();document.activeElement?.blur()`); await key('KeyF', 'f', 70);
-  await read(`window.requestAnimationFrame=fn=>{window.nextFrame=fn;return 0}`); await sleep(100);
+  await read(`(()=>{const raf=requestAnimationFrame.bind(window);window.requestAnimationFrame=fn=>{if(fn.name!=='frame')return raf(fn);window.nextFrame=fn;return 0}})()`); await sleep(100);
   await read(`(async()=>{
     const {SLIP_RAMP:r}=await import('/src/yard-site.ts');
     const {JUMP_LOAD:L}=await import('/src/jump-rules.ts');

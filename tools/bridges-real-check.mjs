@@ -4,7 +4,8 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import {fixture,rig,line,dispose,areas,root} from './bridges-fixture.mjs';
 const cases=JSON.parse(readFileSync(root+'tools/fixtures/bridge-launches.json'));
-const source=readFileSync(root+'web/src/vehicle.ts','utf8');
+const motionFile='web/src/ground-motion.ts';
+const source=readFileSync(root+motionFile,'utf8');
 const protrusions=[];
 async function drive(f,c){
  let start,path,direction=c.direction??c.dir;
@@ -22,7 +23,7 @@ async function drive(f,c){
    if(path){const hit=f.roads.nearest(v.x,v.z,50,r=>r.id===c.id),h=hit?hit.heading+(direction<0?Math.PI:0):v.heading,err=Math.atan2(Math.sin(h-v.heading),Math.cos(h-v.heading));steer=Math.max(-.5,Math.min(.5,err*2));}
    v.update(1/120,{throttle:path?Math.max(-1,Math.min(1,(20-v.speed)*.3)):0,steer,handbrake:false});
    if(recovered)break;maxVy=Math.max(maxVy,v.vy);
-   assert.ok(v.vy<=Math.sqrt(2*9.81*3)+1e-8,`${c.area}/${c.type}/${c.id}: real correction speed ${v.vy}`);
+   assert.ok(v.vy<=Math.sqrt(2*9.81*3)+1e-8,`${c.area}/${c.type}/${c.id}: real takeoff speed ${v.vy}`);
    if(!v.airborne)support=v.y;else peak=Math.max(peak,v.y-support);
  } }finally{Math.random=random;}
  assert.ok(peak<=3.02,`${c.area}/${c.type}/${c.id}: real launch ${peak}m after data rebasing`);
@@ -76,10 +77,10 @@ if(!process.argv.includes('--mutation-only')){
 if(process.env.OUT)writeFileSync(process.env.OUT+'/protrusions.json',JSON.stringify(protrusions,null,2)+'\n');
 console.log('Terrain protrusion probes:',protrusions.length);
 if(process.argv.includes('--mutations')){
- const anchor='THREE.MathUtils.clamp(groundVel, -30, MAX_GROUND_RISE_SPEED)';assert.equal(source.split(anchor).length,2);
- const c=cases.find(c=>c.area==='judique'&&c.type==='culvert'&&c.index===21&&c.dir===1);assert.ok(c);
- await assert.rejects(()=>verify('judique',{'web/src/vehicle.ts':source.replace(anchor,'THREE.MathUtils.clamp(groundVel, -30, 30)')},c),/real correction speed/,'the real Judique Highway19 culvert21 launch must kill the removed cap');
- console.log('KILLED cap removed on real Judique Highway19 culvert 21');
+ const anchor='Math.min(launchGrade * speed, MAX_LAUNCH_SPEED)';assert.equal(source.split(anchor).length,2);
+ const c=cases.find(c=>c.area==='porthood'&&c.type==='culvert'&&c.id===711);assert.ok(c);
+ await assert.rejects(()=>verify('porthood',{[motionFile]:source.replace(anchor,'launchGrade * speed')},c),/real (takeoff speed|launch)/,'the real Port Hood crest must reject an unlimited takeoff');
+ console.log('KILLED maximum takeoff speed removed at Port Hood road 711');
  const f=await fixture('mabou',1),culverts=JSON.parse(readFileSync(root+'data/baked/terrain/streams.json')).culverts,mabou=cases.find(c=>c.area==='mabou'&&c.type==='culvert'&&c.id===60);
  assert.throws(()=>checkCulvertPin(f,{...mabou,index:mabou.index-1},culverts),/matches its physical pipe and road/,'old culvert array index must fail');dispose(f);console.log('KILLED stale Mabou culvert index after land copy');
 

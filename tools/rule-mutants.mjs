@@ -62,6 +62,16 @@ const suites = {
       ['settling slide', 'Math.abs(s.sideways) >= 3', 'Math.abs(s.sideways) >= 30'],
     ],
   },
+  'ground-motion': {
+    file: 'ground-motion.ts',
+    check: 'ground-motion-check.mjs',
+    mutants: [
+      ['flat road launches', 'if ((tangent * dt) - (next - height) <= gravityDrop + .0001) return null;', 'if (height === 0 && next === 0 && back === 0) return 0;'],
+      ['no takeoff', 'return Math.min(launchGrade * speed, MAX_LAUNCH_SPEED);', 'return null;'],
+      ['fixed launch speed', 'return Math.min(launchGrade * speed, MAX_LAUNCH_SPEED);', 'return Math.min(launchGrade * 25, MAX_LAUNCH_SPEED);'],
+      ['no drop threshold', 'peak - support > LANDING_DROP', 'peak - support > 0'],
+    ],
+  },
   mine: {
     check: 'mine-check.mjs',
     mutants: [
@@ -83,10 +93,10 @@ const suites = {
   },
 };
 const name = process.argv[2], suite = suites[name];
-assert.ok(suite, 'usage: node tools/rule-mutants.mjs damage|jump|mine|shift|yard-dog|yard-props|lot-props [--base]');
+assert.ok(suite, 'usage: node tools/rule-mutants.mjs <suite> [--base]');
 assert.ok(process.argv.slice(3).every(arg => arg === '--base'), 'unknown argument');
 const root = resolve(import.meta.dirname, '..');
-const cases = suite.mutants.map(([name, from, to]) => ({ name, edits: [{ file: `web/src/${process.argv[2]}-rules.ts`, from, to }] }));
+const cases = suite.mutants.map(([name, from, to]) => ({ name, edits: [{ file: `web/src/${suite.file ?? `${process.argv[2]}-rules.ts`}`, from, to }] }));
 // Validate all anchors before running anything, including in --base mode.
 for (const test of cases) mutationSources(root, test);
 const scratch = mkdtempSync(join(tmpdir(), 'mmm-rule-mutants-'));

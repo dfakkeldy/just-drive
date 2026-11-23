@@ -70,7 +70,7 @@ async function contracts(replacements={}){
  assert.ok(maxRise<.3,`real Vehicle crosses joined bridge without launch: ${maxRise}`);
  assert.ok(v.z< -45,'real Vehicle completes the bridge crossing');
  // A genuine airborne velocity is not a ground correction and must retain gravity alone.
- v.y=40;v.vy=12;v.update(1/120,{throttle:0,steer:0,handbrake:false});
+ v.y=40;v.vy=12;v.airborne=true;v.update(1/120,{throttle:0,steer:0,handbrake:false});
  assert.ok(Math.abs(v.vy-(12-9.81/120))<1e-9,'airborne velocity is not globally capped');
  const curved=new mod.Roads({roads:[road(3,0,40),{id:4,name:'Bending approach',kind:1,halfWidth:3.6,bridge:false,pts:[[-16,-12],[-8,-4],[0,0]]}]},[0,0],{...terrain,heightAt:()=>10,surfaceAt:()=>({ground:10,level:8,kind:9})});
  assert.notEqual(curved.deckHeight(-7.16,3.58),null,'apron follows the bending bank road');
