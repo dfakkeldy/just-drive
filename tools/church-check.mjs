@@ -105,7 +105,7 @@ for(let i=1;i<CHURCH_LANE.pts.length;i++)for(let k=0;k<=4;k++){const [a,b]=[CHUR
 // The monument, the wayside cross and the big boulder block the car.
 for(const [x,z] of [[CHURCH_GROUNDS.monument.x,CHURCH_GROUNDS.monument.z],[CHURCH_GROUNDS.wayside.x,CHURCH_GROUNDS.wayside.z],[-40.43,-34.7]]){const w=site.world(x,z),car={x:w.x,z:w.z,heading:0,vx:0,vz:0,speed:0};pushOut(car,site.solids);assert.ok(Math.hypot(car.x-w.x,car.z-w.z)>.3,'yard solid blocks car');}
 // Canvas drawing is procedural. A minimal canvas lets this CPU test inspect all merged geometry.
-globalThis.document={createElement(){return {width:0,height:0,getContext(){return {fillRect(){},strokeRect(){}};}};}};
+globalThis.document={createElement(){return {width:0,height:0,getContext(){return new Proxy({},{get:()=>()=>{},set:()=>true});}};}};
 const group=buildChurchModel();assert.equal(group.children.length,3);
 let triangles=0;for(const mesh of group.children){const g=mesh.geometry;triangles+=g.attributes.position.count/3;assert.equal(g.index,null);assert.equal(g.attributes.color.count,g.attributes.position.count);assert.equal(mesh.material.type,'MeshLambertMaterial');assert.equal(mesh.material.transparent,false);assert.ok(mesh.castShadow&&mesh.receiveShadow);for(const attr of Object.values(g.attributes))assert.ok([...attr.array].every(Number.isFinite));}
 // No terrain reads when far away, at most two readiness attempts per second when near.
@@ -198,7 +198,13 @@ const afterBuild=reads;for(let i=0;i<100;i++)church.update(near,3000+i*16);asser
  }
  near(top(c.x,c.z),c.cross,.01,'cupola cross tip');near(top(t.x1-.05,-t.zn+.05),c.base,.01,'tower cap');
  near(top((n.x0+n.x1)/2,(n.zs-n.zn)/2),n.ridge+.19,.01,'ridge cap');
- console.log('PASS church parts: ramp falls from the tower door; landing, monument, wayside cross, cupola cross, tower cap and ridge at their measured heights');
+ {
+  const tw=CHURCH_FEATURES.openings.find(o=>o.face==='tower_w'&&o.kind==='rect');
+  const p=site.world(t.x1+.5,tw.u), dir=new THREE.Vector3(-1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),site.yaw);
+  const hit=new THREE.Raycaster(new THREE.Vector3(p.x,church.group.position.y+(tw.y0+tw.y1)/2*CHURCH_SCALE,p.z),dir,0,4*CHURCH_SCALE).intersectObject(church.group,true)[0];
+  assert.ok(!hit||hit.distance>.75*CHURCH_SCALE,`tower transom opening is clear of opaque glass (hit at ${hit?.distance.toFixed(3)} m)`);
+ }
+ console.log('PASS church parts: ramp falls from the tower door; landing, monument, wayside cross, cupola cross, tower cap, open transom and ridge at their measured heights');
 }
 // A steep z slope crosses the rotated skirts' long ends. Check the built bottom ring against the land under each vertex.
 for (const rise of [-2,2]) {
