@@ -38,7 +38,7 @@ export class Ruts {
     if (v.spec?.locomotion === 'horse') return;
     const travel = Math.hypot(v.x - this.oldX, v.z - this.oldZ);
     this.oldX = v.x; this.oldZ = v.z;
-    const s = this.terrain.surfaceAt(v.x, v.z);
+    const s = this.terrain.surfaceAt(v.x, v.z,v.y);
     let house: House | undefined, best = 35 * 35;
     if (s && s.level >= 6 && !v.airborne && s.canopy < 1.6 && s.roadDist > s.halfWidth + .6 &&
       Math.hypot(v.vx, v.vz) > 1.4 && travel < 5) {
@@ -59,11 +59,11 @@ export class Ruts {
     const rx = Math.cos(v.heading), rz = Math.sin(v.heading);
     for (let side = -1; side <= 1; side += 2) {
       const x = v.x + rx * .785 * side, z = v.z + rz * .785 * side;
-      const y = this.terrain.heightAt(x, z); if (y === null) continue;
+      const y = this.terrain.heightAt(x, z,v.y); if (y === null) continue;
       const fx = Math.sin(v.heading) * length / 2, fz = -Math.cos(v.heading) * length / 2;
-      const front = this.terrain.heightAt(x + fx, z + fz) ?? y, back = this.terrain.heightAt(x - fx, z - fz) ?? y;
-      const left = this.terrain.heightAt(x - rx * .12, z - rz * .12) ?? y;
-      const right = this.terrain.heightAt(x + rx * .12, z + rz * .12) ?? y;
+      const front = this.terrain.heightAt(x + fx, z + fz,v.y) ?? y, back = this.terrain.heightAt(x - fx, z - fz,v.y) ?? y;
+      const left = this.terrain.heightAt(x - rx * .12, z - rz * .12,v.y) ?? y;
+      const right = this.terrain.heightAt(x + rx * .12, z + rz * .12,v.y) ?? y;
       this.dummy.position.set(x, y + .045, z);
       this.dummy.rotation.set(Math.atan2(front - back, length), -v.heading, Math.atan2(right - left, .24), 'YXZ');
       this.dummy.scale.set(1, 1, length); this.dummy.updateMatrix();

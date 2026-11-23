@@ -11,9 +11,16 @@ for(const [area,poses] of Object.entries(places))for(const [i,pose] of poses.ent
  const url=`http://127.0.0.1:${port}/?area=${area}&mode=explore&at=${pose.join(',')}&paved=${on?1:0}&hud=0&radio=0&shadows=1&exag=1&sun=original`;
  const page=await open(url);
  try{
+  // The dev server serves each module as its own resource, and a page loads more than the default 250-entry resource
+  // timing buffer holds, so a late paved fetch can drop out of it (with #156's modules it does). Reload with a larger
+  // buffer, under a marker parameter the game ignores, so the settle wait cannot read the previous page.
+  await page.send('Page.addScriptToEvaluateOnNewDocument',{source:'performance.setResourceTimingBufferSize(100000)'});
+  await page.navigate(url+'&timingBuffer=1');
   assert.equal(await page.read(`document.getElementById('gameError')?.hidden`),true);
+  assert.ok(await page.read(`performance.getEntriesByType('resource').length`)<100000,'resource timing buffer holds every request');
   const requests=await page.read(`performance.getEntriesByType('resource').map(r=>r.name).filter(n=>n.includes('/paved/'))`);
   assert.equal(requests.length>0,on,'default must make no paved request');
+  assert.equal(await page.read(`!!window.mmm?.terrain?.paved`),on,'the paved layer exists only when asked for');
   const file=`${out}/${area}-${i+1}-${on?'on':'off'}.png`;
   const result=await page.send('Page.captureScreenshot',{format:'png'});writeFileSync(file,Buffer.from(result.result.data,'base64'));
   shots.push({area,place:i+1,on,pose,url,file,pavedRequests:requests.length});

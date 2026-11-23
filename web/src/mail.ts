@@ -198,7 +198,7 @@ export class Mail {
     }
     const candidates = this.props!.mailCandidates(previewBounds(start, v.heading));
     const origin = { kind, originX: v.x, originZ: v.z, rejected: false };
-    const plan = planMail(start, kind, v.heading, target, (x, z) => this.terrain.heightAt(x, z),
+    const plan = planMail(start, kind, v.heading, target, (x, z, y) => this.terrain.heightAt(x, z,y),
       (a, b, landed) => this.props!.mailHit(a.x, a.y, a.z, b.x, b.y, b.z, landed, candidates, this.contact),
       index => ['ready', 'preExisting'].includes(this.reception(origin, index)), index);
     this.cue = plan.hit; this.cueIndex = plan.hit ? index : -1;
@@ -217,8 +217,8 @@ export class Mail {
 
   private rest(p: Piece, ground: number): void {
     const e = .25;
-    const gx = (this.terrain.heightAt(p.x - e, p.z) ?? ground) - (this.terrain.heightAt(p.x + e, p.z) ?? ground);
-    const gz = (this.terrain.heightAt(p.x, p.z - e) ?? ground) - (this.terrain.heightAt(p.x, p.z + e) ?? ground);
+    const gx = (this.terrain.heightAt(p.x - e, p.z,p.y) ?? ground) - (this.terrain.heightAt(p.x + e, p.z,p.y) ?? ground);
+    const gz = (this.terrain.heightAt(p.x, p.z - e,p.y) ?? ground) - (this.terrain.heightAt(p.x, p.z + e,p.y) ?? ground);
     this.normal.set(gx, e * 2, gz).normalize();
     p.resting.setFromUnitVectors(this.up, this.normal);
     this.yaw.setFromAxisAngle(this.up, p.rotation.y);
@@ -228,7 +228,7 @@ export class Mail {
   }
 
   private miss(p: Piece): void {
-    const s = this.terrain.surfaceAt(p.x, p.z);
+    const s = this.terrain.surfaceAt(p.x, p.z,p.y);
     let lawn = false;
     if (!s || s.roadDist > s.halfWidth + .3) for (const house of this.houses) {
       if ((p.x - house.x) ** 2 + (p.z - house.z) ** 2 <= 40 ** 2) { lawn = true; break; }
@@ -302,7 +302,7 @@ export class Mail {
       if (p.state === 'unused') continue;
       if (p.state === 'litter') {
         if (settle) {
-          const ground = this.terrain.heightAt(p.x, p.z);
+          const ground = this.terrain.heightAt(p.x, p.z,p.y);
           if (ground !== null) { this.rest(p, ground); this.writePiece(i, p); }
         }
         continue;
@@ -316,12 +316,12 @@ export class Mail {
       for (let k = 0; k < steps; k++) {
         const ax = p.x, ay = p.y, az = p.z;
         p.age += step;
-        const contact = fixed ? advanceMail(p, p.kind, step, (x, z) => this.terrain.heightAt(x, z),
+        const contact = fixed ? advanceMail(p, p.kind, step, (x, z, y) => this.terrain.heightAt(x, z,y),
           (a, b, landed) => this.props?.mailHit(a.x, a.y, a.z, b.x, b.y, b.z, landed, undefined, this.contact) ?? -1) : null;
         Object.assign(p, contact ? contact.flight : stepMail(p, p.kind, step));
         p.rotation.x += p.spin * step; p.rotation.y += step * 1.8;
         p.rotation.z = p.kind === 1 ? Math.sin(p.age * 19) * .9 : p.rotation.z + step * 2;
-        const ground = contact ? contact.ground : this.terrain.heightAt(p.x, p.z);
+        const ground = contact ? contact.ground : this.terrain.heightAt(p.x, p.z,p.y);
         const landed = contact ? contact.landed : ground !== null && p.y - SIZES[p.kind][1] / 2 <= ground;
         const hit = contact ? contact.hit : this.props?.mailHit(ax, ay, az, p.x, p.y, p.z, landed, undefined, this.contact) ?? -1;
         if (this.receive(p, hit)) {

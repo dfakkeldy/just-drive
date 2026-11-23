@@ -53,18 +53,27 @@ try{
       if(t.pending)throw Error('terrain did not settle');
       const draw=()=>{r.info.reset();water?.update(c);r.render(scene,c);water?.settle();water?.afterRender(c);return{calls:r.info.render.calls,triangles:r.info.render.triangles,programs:r.info.programs.length}};
       const counts=draw(),kit=m.wharves,gl=r.getContext();
-      let visiblePixels=0;
-      if(kit?.placements.length){
-       const shown=new Uint8Array(${width*height*4}),hidden=new Uint8Array(shown.length);
-       gl.readPixels(0,0,${width},${height},gl.RGBA,gl.UNSIGNED_BYTE,shown);
-       kit.group.visible=false;draw();gl.readPixels(0,0,${width},${height},gl.RGBA,gl.UNSIGNED_BYTE,hidden);
-       for(let i=0;i<shown.length;i+=4)if(Math.max(Math.abs(shown[i]-hidden[i]),Math.abs(shown[i+1]-hidden[i+1]),Math.abs(shown[i+2]-hidden[i+2]))>8)visiblePixels++;
+      let visiblePixels=0,wharfCost={calls:0,triangles:0,programs:0};
+      if(kit){
+       const shown=kit.placements.length?new Uint8Array(${width*height*4}):null;
+       if(shown)gl.readPixels(0,0,${width},${height},gl.RGBA,gl.UNSIGNED_BYTE,shown);
+       // Measure the kit against the same frame, with its meshes hidden and its program references released.
+       const materials=new Set([...kit.batches.values()].flatMap(mesh=>mesh.material));
+       kit.group.visible=false;
+       for(const material of materials)material.dispose();
+       const hidden=draw();
+       wharfCost={calls:counts.calls-hidden.calls,triangles:counts.triangles-hidden.triangles,programs:counts.programs-hidden.programs};
+       if(shown){
+        const pixels=new Uint8Array(shown.length);
+        gl.readPixels(0,0,${width},${height},gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+        for(let i=0;i<shown.length;i+=4)if(Math.max(Math.abs(shown[i]-pixels[i]),Math.abs(shown[i+1]-pixels[i+1]),Math.abs(shown[i+2]-pixels[i+2]))>8)visiblePixels++;
+       }
        kit.group.visible=true;draw();
       }
       // One forced re-plan of every wharf near the camera: the cost a tile load or LOD switch under them pays.
       let wharfPlanMs=0;if(kit){const start=performance.now();for(const st of kit.state)st.stamp='';kit.update(c.position);wharfPlanMs=performance.now()-start;}
       const batches=kit?[...kit.batches.values()].map(mesh=>({name:mesh.name,instances:mesh.count,instanced:mesh.isInstancedMesh})):[];
-      return{...counts,wharfUpdateMaxMs:Math.max(...kitTimes),wharfPlanMs,batches,parts:kit?.placements.filter(p=>p.source===${JSON.stringify(s.id)}).length??0,visiblePixels,gpu:gl.getParameter(gl.RENDERER)};
+      return{...counts,wharfCost,hasKit:!!kit,wharfUpdateMaxMs:Math.max(...kitTimes),wharfPlanMs,batches,parts:kit?.placements.filter(p=>p.source===${JSON.stringify(s.id)}).length??0,visiblePixels,gpu:gl.getParameter(gl.RENDERER)};
      })()`);
      assert.ok(result&&Number.isFinite(result.calls),'actual WebGL counts');
      if(i===0)costs.push({area,mode:phone?'phone':'desktop',label,...result});
@@ -93,14 +102,19 @@ try{
    }
   }
  }
- // Matched cost: no change where nothing is dressed; elsewhere at most one added program and a bounded number of
- // instanced calls (seven batches, drawn in the main and shadow passes) and triangles.
+ // Report the whole-frame comparison. Gate the kit's own cost so terrain or bridge changes cannot enter its budget.
  for(const mode of ['desktop','phone'])for(const area of ['mabou','judique','porthood','pointtupper','cansocauseway','westbay']){
   const [m,b]=['main','branch'].map(label=>costs.find(c=>c.area===area&&c.mode===mode&&c.label===label));
   const dressed=wharves.some(s=>s.area===area),d={calls:b.calls-m.calls,triangles:b.triangles-m.triangles,programs:b.programs-m.programs};
-  console.log('COST',area,mode,JSON.stringify(d),'planMs',b.wharfPlanMs?.toFixed(2));
-  if(!dressed)assert.deepEqual(d,{calls:0,triangles:0,programs:0},area+' '+mode+' has no wharves and must cost nothing');
-  else{assert.ok(d.calls>=0&&d.calls<=14,area+' '+mode+' calls +'+d.calls);assert.ok(d.triangles>=0&&d.triangles<=20000,area+' '+mode+' triangles +'+d.triangles);assert.ok(d.programs<=1,area+' '+mode+' programs +'+d.programs);}
+  console.log('COST',area,mode,'frame',JSON.stringify(d),'wharves',JSON.stringify(b.wharfCost),'planMs',b.wharfPlanMs?.toFixed(2));
+  assert.equal(b.hasKit,dressed,area+' '+mode+' only creates the wharf kit in a dressed area');
+  if(!dressed)assert.deepEqual(b.wharfCost,{calls:0,triangles:0,programs:0},area+' '+mode+' has no wharf cost');
+  else{
+   const {calls,triangles,programs}=b.wharfCost;
+   assert.ok(calls>=0&&calls<=14,area+' '+mode+' wharf calls '+calls);
+   assert.ok(triangles>=0&&triangles<=20000,area+' '+mode+' wharf triangles '+triangles);
+   assert.ok(programs>=0&&programs<=m.wharfCost.programs+1,area+' '+mode+' wharf programs '+programs+' (main '+m.wharfCost.programs+')');
+  }
  }
- console.log('PASS '+(costsOnly?'all-pass costs only: ':'gallery: ')+'matched main/branch costs for six areas and all dressed wharf pictures, desktop and phone');
+ console.log('PASS '+(costsOnly?'all-pass costs only: ':'gallery: ')+'isolated wharf costs in six areas and all dressed wharf pictures, desktop and phone');
 }finally{await main.close();}

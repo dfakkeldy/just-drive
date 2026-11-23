@@ -111,13 +111,13 @@ export class Relief {
     return covered >= 4;
   }
 
-  private finish(v: { x: number; z: number }): void {
+  private finish(v: { x: number; z: number;y?:number }): void {
     let house = -1, best = Infinity;
     for (let i = 0; i < this.houses.length; i++) {
       const d = (this.houses[i].x - v.x) ** 2 + (this.houses[i].z - v.z) ** 2;
       if (d < best) { best = d; house = i; }
     }
-    const here = this.terrain.surfaceAt(v.x, v.z);
+    const here = this.terrain.surfaceAt(v.x, v.z,v.y);
     const trail = !!here && here.kind === 5 && here.roadDist <= here.halfWidth + 3;
     const woods = this.inWoods(v.x, v.z);
     const seen = Math.sqrt(best) < (woods ? SEEN_WOODS : SEEN_OPEN);
@@ -131,7 +131,7 @@ export class Relief {
   }
 
   /** `dt` is play time and `clockDt` is time on the game clock, both in seconds. `enabled` is false in menus, fly mode and interiors. */
-  update(dt: number, clockDt: number, v: { x: number; z: number; speed: number }, enabled: boolean): void {
+  update(dt: number, clockDt: number, v: { x: number; z: number; speed: number;y?:number }, enabled: boolean): void {
     this.chip.hidden = this.bare || !enabled;
     if (this.cardFor > 0 && !this.busy) { this.cardFor -= dt; if (this.cardFor <= 0) this.card.hidden = true; }
     if (!enabled) { this.wanted = false; return; }

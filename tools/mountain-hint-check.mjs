@@ -518,4 +518,23 @@ if (!existsSync(roadsPath) || !existsSync(manifestPath)) {
   ok(!approach.outsideChurchClearance(cs), 'baked: CHURCH_START is inside church clearance');
 }
 
+// 9. A switch keeps the ride's own deck (#6 reference heights): on a deck the new ride stands on that deck; under it,
+//    on the road below. Land is at 42 m and a deck at 50 m spans x = 0..100.
+{
+  const terrain = makeFlatTerrain(42, () => true, 0);
+  const roads = makeStraightRoads();
+  roads.deckHeight = (x, z) => x >= 0 && x <= 100 && Math.abs(z) < 4 ? 50 : null;
+  for (const [where, reference, expected] of [['on the deck', 50, 50], ['under the deck', 42, 42]]) {
+    const current = new Vehicle(makeRig(), terrain, roads, -0.2, CAR_SPEC);
+    current.bounds = [-200, -200, 600, 200];
+    ok(current.place(50, 0, Math.PI / 2, reference), `deck swap: car places ${where}`);
+    ok(Math.abs(current.y - expected) < 0.15, `deck swap: car stands ${where} (y=${current.y.toFixed(2)})`);
+    const seen = [];
+    const swapped = safeSwapRide(current, () => new Vehicle(makeRig(), terrain, roads, -0.2, SXS_SPEC), pose => { seen.push(pose.y); return true; });
+    ok(swapped.ok, `deck swap: car -> sxs ${where} succeeds`);
+    ok(Math.abs(swapped.vehicle.y - expected) < 0.15, `deck swap: sxs stands ${where} (y=${swapped.vehicle.y.toFixed(2)}, expected ${expected})`);
+    ok(seen.length >= 1 && Math.abs(seen[0] - current.y) < 1e-9, `deck swap: the room check gets the ride's height ${where}`);
+  }
+}
+
 console.log(`PASS mountain-hint: ${checks} checks`);
