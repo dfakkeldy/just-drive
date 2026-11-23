@@ -13,7 +13,7 @@ const [out,first]=process.argv.slice(2),origin=new URL(first).origin,reports=[];
 const family=process.env.FLEET_FAMILY??'all',contactDetail=['contacts-low','review3'].includes(family)?'&q=low&touch=1':'';
 const p=await open(`${origin}/?mode=explore&vehicle=truck&trailer=1&at=620400,5099300,48&exag=1&hud=1&radio=0&mp=0&scene=0&res=1${family==='title'?'&title=1':''}${contactDetail}`);
 async function setup(){await p.read(`(async()=>{
- window.requestAnimationFrame=fn=>{window.nextFrame=fn;return 0};
+ window.requestAnimationFrame=fn=>{if(fn.name==='frame')window.nextFrame=fn;else setTimeout(()=>fn(performance.now()),0);return 0};
  const THREE=await import('/node_modules/three/build/three.module.js');
  const {rigCost,TRAILER_SPEC}=await import('/src/trailer.ts'); const {bodyGap}=await import('/src/parked.ts');
  window.ft={...mmm,THREE,rigCost,bodyGap,scene:mmm.fleet.scene,f:mmm.fleet,t:mmm.towing};
