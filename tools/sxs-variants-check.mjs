@@ -194,17 +194,33 @@ for (const m of MODELS) {
       rig.steer.fr.rotation.y = 0;
     }
 
-    // Enclosed cab side-window coverage: no open triangular wedge beside the raked A-pillar on either side.
+    // Enclosed cab side-window coverage: zero slits along the raked A-pillar or top sash on either side.
     rig.root.updateMatrixWorld(true);
     const doorRay = new THREE.Raycaster();
     const glazeMeshes = bodyMeshes.filter(bm => bm.material.name === 'Cab glazing' || bm.material.name === 'Satin cab trim');
-    const wedgeZ = m.id === 'sxs-utility' ? [-.65, -.55, -.42] : m.id === 'sxs-crew' ? [-1.00, -.90, -.78] : [-.94, -.84, -.72];
+    const winBounds = m.id === 'sxs-utility'
+      ? { wsBot: -.76, wsTop: -.48, rear: .40, yBot: 1.20, yTop: 1.85 }
+      : m.id === 'sxs-crew'
+      ? { wsBot: -1.12, wsTop: -.84, rear: -.16, yBot: 1.22, yTop: 1.89 }
+      : { wsBot: -1.06, wsTop: -.76, rear: -.08, yBot: 1.21, yTop: 1.87 };
     for (const side of [-1, 1]) {
       const originX = side * 1.4, dirX = -side;
-      for (const z of wedgeZ) {
-        doorRay.set(new THREE.Vector3(originX, 1.28, z), new THREE.Vector3(dirX, 0, 0));
-        const hit = doorRay.intersectObjects(glazeMeshes, false).find(h => h.distance < .78);
-        assert.ok(hit, `${m.id} side=${side} front-door window has open wedge at y=1.28 z=${z}`);
+      for (let yi = 0; yi <= 10; yi++) {
+        const y = winBounds.yBot + (winBounds.yTop - winBounds.yBot) * (yi / 10);
+        const t = (y - winBounds.yBot) / (winBounds.yTop - winBounds.yBot);
+        const zFront = winBounds.wsBot + (winBounds.wsTop - winBounds.wsBot) * t;
+        for (const z of [zFront + .005, zFront + .015, zFront + .04, (zFront + winBounds.rear) / 2, winBounds.rear]) {
+          doorRay.set(new THREE.Vector3(originX, y, z), new THREE.Vector3(dirX, 0, 0));
+          const hit = doorRay.intersectObjects(glazeMeshes, false).find(h => h.distance < .78);
+          assert.ok(hit, `${m.id} side=${side} front-door window has open slit at y=${y.toFixed(3)} z=${z.toFixed(3)}`);
+        }
+      }
+      if (m.id === 'sxs-cabin') {
+        for (const [y, z] of [[1.842, -.744], [1.85, -.4]]) {
+          doorRay.set(new THREE.Vector3(originX, y, z), new THREE.Vector3(dirX, 0, 0));
+          const hit = doorRay.intersectObjects(glazeMeshes, false).find(h => h.distance < .78);
+          assert.ok(hit, `sxs-cabin side=${side} upper seam slit at y=${y} z=${z}`);
+        }
       }
     }
   }

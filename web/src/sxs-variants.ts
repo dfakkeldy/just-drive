@@ -375,11 +375,14 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
       box([winX, winBotY, cz], [.045, .045, len - .03], cab);
       box([s * (roofW + .01), winTopY + .02, glassZ], [.045, .045, glassLen + .08], cab);
       if (di === 0) {
-        // Trapezoidal front-door glass pane following the raked A-pillar down to the beltline (watertight outward solid).
+        // Trapezoidal front-door glass pane seated cleanly inside the raked A-pillar and sash rails (watertight outward solid).
         const t = .006;
-        const xB = W * .94, xT = roofW;
-        const zBF = wsBotZ + .02, zTF = wsTopZ + .02, zR = rearGlassZ;
-        const yB = winBotY + .015, yT = winTopY - .015;
+        const yB = winBotY, yT = winTopY + .015;
+        const pillarT = (y: number) => THREE.MathUtils.clamp((y - (beltY + .02)) / (roofY - .04 - (beltY + .02)), 0, 1);
+        const tB = pillarT(yB), tT = pillarT(yT);
+        const xB = THREE.MathUtils.lerp(W * .94, roofW, tB), xT = THREE.MathUtils.lerp(W * .94, roofW, tT);
+        const zBF = THREE.MathUtils.lerp(wsBotZ, wsTopZ, tB), zTF = THREE.MathUtils.lerp(wsBotZ, wsTopZ, tT);
+        const zR = z1 - .02;
         // 8 corners: 0..3 outer face, 4..7 inner face (BL, BR, TR, TL in z-y order).
         const pts: P[] = [
           [s * (xB + t), yB, zBF], [s * (xB + t), yB, zR], [s * (xT + t), yT, zR], [s * (xT + t), yT, zTF],
