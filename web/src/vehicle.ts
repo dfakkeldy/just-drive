@@ -601,7 +601,10 @@ export class Vehicle {
             this.#waitFallback = null;
             this.placeInfer = false;
             this.respawn();
-            if (this.#waterStopped && fallback && this.tryDryPlace(fallback.x, fallback.z, fallback.heading, fallback.y)) return;
+            if (this.#waterStopped && fallback) {
+              if (this.tryDryPlace(fallback.x, fallback.z, fallback.heading, fallback.y)) return;
+              if (this.terrain.heightAt(fallback.x, fallback.z) === null && this.place(fallback.x, fallback.z, fallback.heading, fallback.y)) return;
+            }
             if (this.#waterStopped) {
               // Stand at the ground the retry asked for: the old body height could take a deck overhead.
               const gNow = land !== null ? this.groundAt(this.x, this.z, reference ?? land) : null;

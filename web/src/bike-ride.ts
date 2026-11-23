@@ -359,12 +359,14 @@ export class BikeRide implements Ride {
             this.#waitFallback = null;
             this.placeInfer = false;
             this.respawn();
-            if (this.#waterStopped && fallback && this.terrain.surfaceAt(fallback.x, fallback.z, fallback.y)
-              && this.isDryPose(fallback.x, fallback.z, this.poseGround(fallback.x, fallback.z, fallback.y))) {
-              const wasRecovering = this.#recovering;
-              this.#recovering = true;
-              try { if (this.place(fallback.x, fallback.z, fallback.heading, fallback.y)) return; }
-              finally { this.#recovering = wasRecovering; }
+            if (this.#waterStopped && fallback) {
+              if (this.terrain.surfaceAt(fallback.x, fallback.z, fallback.y)
+                && this.isDryPose(fallback.x, fallback.z, this.poseGround(fallback.x, fallback.z, fallback.y))) {
+                const wasRecovering = this.#recovering;
+                this.#recovering = true;
+                try { if (this.place(fallback.x, fallback.z, fallback.heading, fallback.y)) return; }
+                finally { this.#recovering = wasRecovering; }
+              } else if (this.terrain.heightAt(fallback.x, fallback.z) === null && this.place(fallback.x, fallback.z, fallback.heading, fallback.y)) return;
             }
             if (this.#waterStopped) {
               // Stand at the ground the retry asked for: the old body height could take a deck overhead.

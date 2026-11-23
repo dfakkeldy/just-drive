@@ -2292,7 +2292,7 @@ function jumpToPlace(x: number, z: number, heading: number): void {
   if (fleet) {
     const before = fleet.deckWaitToken;
     if (fleet.restart(x, z, heading, 'place-jump', undefined, () => finishJump(true))) finishJump(true);
-    else if (fleet.deckWaitToken !== before) { camReady = false; if (!droneVehicle) mode = 'drive'; }
+    else if (fleet.deckWaitToken !== before) { camReady = false; if (!droneVehicle && !drone.active) mode = 'drive'; }
     return;
   }
   const placed = vehicle.restart(x, z, heading);
@@ -2841,11 +2841,17 @@ function frame(now: number) {
     if (import.meta.env.DEV) frameLap('chase');
   } else {
     if (mode === 'drive' && ride.kind === 'drone') launchDrone();
-    fly(dt);
-    if (import.meta.env.DEV) frameClock = performance.now();
-    if (ride.kind !== 'drone') animals?.update(dt, vehicle, camera);
-    if (import.meta.env.DEV) frameLap('animals');
-    camera.rotation.set(pitch, yaw, 0);
+    if (fleet?.waitingForDeck && fleet.camera(camera, dt, view)) {
+      if (import.meta.env.DEV) frameClock = performance.now();
+      if (ride.kind !== 'drone') animals?.update(dt, vehicle, camera);
+      if (import.meta.env.DEV) frameLap('animals');
+    } else {
+      fly(dt);
+      if (import.meta.env.DEV) frameClock = performance.now();
+      if (ride.kind !== 'drone') animals?.update(dt, vehicle, camera);
+      if (import.meta.env.DEV) frameLap('animals');
+      camera.rotation.set(pitch, yaw, 0);
+    }
   }
   if (endings.busy) { drawEnding(0); requestAnimationFrame(frame); return; }
   airportDrag?.draw(vehicle, gamepad.device);

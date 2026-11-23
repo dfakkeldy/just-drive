@@ -948,6 +948,22 @@ function runDeckWaitTests(api, quiet = false) {
       }
       assert.ok(Math.abs(rud.x - 10) < .1 && Math.abs(rud.y - 2) < .2, `${kind}: deck arriving over unloaded terrain still honors 8 s deadline and restores prior dry pose (x=${rud.x.toFixed(1)}, y=${rud.y.toFixed(2)})`);
       assert.ok(kind === 'bike' ? rud.ready === true : rud.stuck === false, `${kind}: drivable after deck-over-unloaded-terrain timeout`);
+
+      // If the starting dry tile unloaded while waiting at a distant unbuilt span, timeout returns to the saved starting
+      // coordinates so the camera reloads that tile, and the ride becomes drivable as soon as the starting tile reloads.
+      let startTileLoaded = true;
+      const distantWorld = makeTerrain((x) => (x < 40
+        ? (startTileLoaded ? { ground: 2, canopy: 0, roadDist: 99, halfWidth: 4, kind: 0, level: 5, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false } : null)
+        : { ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 5, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+      const rd = mkRide(kind, distantWorld, wetRoad); rd.bounds = [-200, -200, 400, 200];
+      assert.equal(rd.place(10, 0, Math.PI / 2), true);
+      assert.equal(rd.restart(100, 0, Math.PI / 2), true);
+      startTileLoaded = false;
+      for (let i = 0; i < 60 * 9; i++) parkedFrame(rd);
+      assert.ok(Math.abs(rd.x - 10) < .1, `${kind}: timeout returns to saved starting pose even while starting tile is unloaded (x=${rd.x.toFixed(1)})`);
+      startTileLoaded = true;
+      for (let i = 0; i < 60; i++) rd.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+      assert.ok(rd.x > 11 && Math.abs(rd.y - 2) < .2, `${kind}: drivable once unloaded starting tile reloads after timeout (x=${rd.x.toFixed(1)}, y=${rd.y.toFixed(2)})`);
     }
     // Road vertex fallback keeps walking past a guard-rejected first dry vertex to the next accepted dry vertex.
     const guardWorld = makeTerrain((x) => ({ ground: x <= 323 ? 2 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 5, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
@@ -1720,16 +1736,30 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     [
       'car-no-prior-dry-fallback',
       'web/src/vehicle.ts',
-      '            if (this.#waterStopped && fallback && this.tryDryPlace(fallback.x, fallback.z, fallback.heading, fallback.y)) return;',
-      '            // prior dry fallback removed',
+      '              if (this.tryDryPlace(fallback.x, fallback.z, fallback.heading, fallback.y)) return;',
+      '              // prior dry fallback removed',
       /car: failed live restart from off-road dry pose returns to prior dry pose/,
+    ],
+    [
+      'car-unloaded-fallback-strands',
+      'web/src/vehicle.ts',
+      '              if (this.terrain.heightAt(fallback.x, fallback.z) === null && this.place(fallback.x, fallback.z, fallback.heading, fallback.y)) return;',
+      '              // unloaded fallback removed',
+      /car: timeout returns to saved starting pose even while starting tile is unloaded/,
     ],
     [
       'bike-no-prior-dry-fallback',
       'web/src/bike-ride.ts',
-      '            if (this.#waterStopped && fallback && this.terrain.surfaceAt(fallback.x, fallback.z, fallback.y)',
-      '            if (false && this.#waterStopped && fallback && this.terrain.surfaceAt(fallback.x, fallback.z, fallback.y)',
+      '              if (this.terrain.surfaceAt(fallback.x, fallback.z, fallback.y)',
+      '              if (false && this.terrain.surfaceAt(fallback.x, fallback.z, fallback.y)',
       /bike: failed live restart from off-road dry pose returns to prior dry pose/,
+    ],
+    [
+      'bike-unloaded-fallback-strands',
+      'web/src/bike-ride.ts',
+      '              } else if (this.terrain.heightAt(fallback.x, fallback.z) === null && this.place(fallback.x, fallback.z, fallback.heading, fallback.y)) return;',
+      '              }',
+      /bike: timeout returns to saved starting pose even while starting tile is unloaded/,
     ],
     [
       'car-refused-restart-clears-wait',
@@ -1830,6 +1860,8 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
   assert.ok(mainSrc.includes('reset: () => { if (!interiors.busy && (!fleet?.busy || fleet.waitingForDeck)) resetToRoad(); },'), 'main.ts gamepad Reset cancels live Fleet deck wait');
   assert.ok(mainSrc.includes('place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s); if (placed) {'), 'main.ts startHere advances to the next dry candidate instead of short-circuiting on a queued Fleet wait');
   assert.ok(mainSrc.includes("if (fleet.restart(x, z, heading, 'place-jump', undefined, () => finishJump(true))) finishJump(true);"), 'main.ts jumpToPlace defers resets and speed zeroing until Fleet placement commits');
+  assert.ok(mainSrc.includes("else if (fleet.deckWaitToken !== before) { camReady = false; if (!droneVehicle && !drone.active) mode = 'drive'; }"), 'main.ts jumpToPlace keeps an active roof-launched drone flight until Fleet placement commits');
+  assert.ok(mainSrc.includes('if (fleet?.waitingForDeck && fleet.camera(camera, dt, view)) {'), 'main.ts fly branch frames a waiting Fleet bridge span without stowing an active drone');
   assert.ok(mainSrc.includes('else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) { if (vehicle.waitingForDeck) driveVehicle(dt, { ...input, throttle: 0, handbrake: true }); else vehicle.retryPlace(); }'), 'main.ts missing-surface hold does not bypass update() while waiting for deck');
   assert.ok(mainSrc.includes('if (!vehicle.waitingForDeck && (refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15)'), 'main.ts animal/demo hold does not freeze deck-wait timer');
 
