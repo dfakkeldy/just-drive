@@ -501,6 +501,9 @@ export class Finish {
     this.renderer.render(this.flat, this.flatCamera);
   }
 
+  /** The world depth texture from the latest render, for post-finish sky overlays that depth-test against the land. */
+  get depthTexture(): THREE.DepthTexture { return this.sceneTarget.depthTexture!; }
+
   /**
    * Run `draw` on the world picture and its depth, after `render`. The water check (water.ts `afterRender`) counts
    * the water that the land hides; with the pass on, the canvas holds only the flat finished picture and no depth.
