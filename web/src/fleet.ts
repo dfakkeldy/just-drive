@@ -1168,10 +1168,12 @@ export class Fleet {
               left -= available; seg += forward ? 1 : -1; fraction = forward ? 0 : 1;
             }
           }
-          if (accepts && !accepts({x,z,heading:yaw})) { failure = 'Requested start pose is blocked'; continue; }
+          // Fleet's own ground height (a deck where there is one) goes with the pose to the caller's guard (the trailer
+          // check judges the pose at its height), as it does to the trailer check below and to place().
           const height = this.ground(x, z);
           if (height === null) { failure = 'Destination land is still loading'; continue; }
           if (height <= this.seaLevel + .08) { failure = 'Water at the destination'; continue; }
+          if (accepts && !accepts({x,z,heading:yaw,y:height})) { failure = 'Requested start pose is blocked'; continue; }
           const invalid = this.validTeleport({ x, z, y: height, heading: yaw, spec: actor.entry.spec }, actor, this.bodiesExcept(actor));
           if (invalid) { failure = invalid; continue; }
           if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw, y: this.ground(x, z) ?? undefined })) { failure = 'The trailer destination is blocked'; continue; }

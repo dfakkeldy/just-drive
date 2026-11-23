@@ -888,15 +888,22 @@ function parkedFrame(r) {
 }
 {
   // A Fleet start (truck with its trailer) on a built deck over water, as main allows: the trailer check is judged at
-  // fleet's own ground height (the deck), not at the seabed under it.
+  // fleet's own ground height (the deck, 8 m up, out of reach of the rig staged on the land), not at the seabed.
   const sea = makeTerrain((x) => ({ ground: x < 0 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
-  const deckRoads = makeRoads(-200, 200, (x, z) => (x >= 20 && x <= 200 && Math.abs(z) <= 8 ? 2 : null));
+  const deckRoads = makeRoads(-200, 640, (x, z) => (x >= 20 && x <= 640 && Math.abs(z) <= 8 ? 8 : null));
   const truck = new Vehicle(createTruck(false, true), sea, deckRoads, SEA, TRUCK_SPEC); truck.assist = 0;
   assert.equal(truck.place(-60, 0, Math.PI / 2), true);
   const tow = new Towing(truck, sea, deckRoads, false, false, {}, true, true);
   const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
   const fleet = new Fleet(truck, tow, sea, deckRoads, scene, true, () => {}, SEA);
-  assert.equal(fleet.startVisit(110, 0, Math.PI / 2), true, 'Fleet starts the truck and trailer on the built deck over water');
-  assert.ok(Math.abs(truck.x - 110) < 30 && Math.abs(truck.y - 2) < .2, `the rig stands on the deck (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+  assert.equal(fleet.startVisit(330, 0, Math.PI / 2), true, 'Fleet starts the truck and trailer on the built deck over water');
+  assert.ok(Math.abs(truck.x - 330) < 30 && Math.abs(truck.y - 8) < .2, `the rig stands on the deck (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+  // The same start through the location-start path: main.ts wires the start's accepts callback to the truck's placement
+  // guard (the trailer check), so the guard must see the deck height too. The deck runs more than the guard's 120 m
+  // search from dry land, as at the Canso Canal crossing.
+  assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+  const guard = truck.placementGuard;
+  assert.equal(fleet.startVisit(340, 0, Math.PI / 2, pose => guard?.(pose) !== false), true, 'Start where I am: Fleet starts the rig on the built deck through the trailer guard');
+  assert.ok(Math.abs(truck.y - 8) < .2, `and it stands on the deck (y=${truck.y.toFixed(2)})`);
   console.log('PASS a Fleet start with the trailer on a built deck over water stands on the deck, as on main');
 }
