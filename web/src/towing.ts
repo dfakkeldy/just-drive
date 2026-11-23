@@ -501,6 +501,7 @@ export class Towing {
     if (this.world.parked) { pushOutBodies(p, this.world.parked()); if (p.x !== px || p.z !== pz || p.vx !== pvx || p.vz !== pvz) { otherHit = true; px = p.x; pz = p.z; pvx = p.vx; pvz = p.vz; } }
     if (this.world.bus) { pushOut(p, this.world.bus.placementSolids, true); if (p.x !== px || p.z !== pz || p.vx !== pvx || p.vz !== pvz) { otherHit = true; px = p.x; pz = p.z; pvx = p.vx; pvz = p.vz; } }
     const factor = dt > 0 ? this.world.props?.hitCar(p.x, p.z, p.heading, p.vx, p.vz, oldX - p.vx * dt, oldZ - p.vz * dt, this.footprint) ?? 1 : 1;
+    if (factor !== 1) otherHit = true;
     const b = v.bounds;
     if (b) {
       const ex = Math.abs(fx) * S.halfLength + Math.abs(Math.cos(this.heading)) * S.halfWidth;

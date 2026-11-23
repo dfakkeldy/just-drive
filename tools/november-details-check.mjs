@@ -569,28 +569,28 @@ for (const {a, b, side} of added) {
         nearTow.step(1 / 120);
         assert.ok(nearTow.impacts > 0, 'near-bridge non-bridge contact registers an impact');
         assert.equal(nearTruck.speed, 0, 'near-bridge non-bridge contact still stops the rig as on main');
-        // Mixed pony-truss + cancelling yard/solid corrections must NOT receive the pony-truss slide.
+        // Mixed pony-truss + cancelling yard/solid corrections (zero solid onSolidImpact: into > 0) must NOT receive the pony-truss slide.
         const mixTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
         const mixContacts = new AreaContacts(), mixSolo = new AreaContacts();
         registerRailContacts(mixContacts, mixSolo, rails, body => body === mixTruck, TRUCK_SPEC);
-        let yardNudge = 0, yardFired = false, afterBridgeX = 0, preBridgeX = 0, solidCancelCheck = NaN;
+        let yardNudge = 0, yardFired = false, yardDeltaX = 0, yardDeltaZ = 0, bridgeDx = 0, bridgeDz = 0;
         const mixWall = { x: 1e6, z: 1e6, half: 30, halfWidth: 0.3, heading: 0 };
         const mixYard = {
           resolveTowBody: b => {
             if (!yardNudge || yardFired) return;
             yardFired = true;
-            afterBridgeX = b.x;
+            const bx0 = b.x, bz0 = b.z;
+            bridgeDx = bx0 - preMixTrailerX; bridgeDz = bz0 - preMixTrailerZ;
             const env = b.spec.envelope, sinB = Math.sin(b.heading), cosB = Math.cos(b.heading);
-            let maxX = 0;
+            let minX = Infinity;
             for (let ci = 0; ci < env.circles.length; ci++) {
-              maxX = Math.max(maxX, sinB * env.circles[ci] + cosB * (env.circleSides?.[ci] ?? 0) + env.radius);
+              minX = Math.min(minX, sinB * env.circles[ci] + cosB * (env.circleSides?.[ci] ?? 0) - env.radius);
             }
-            // Place wall flush on +x of post-bridge pose so +0.05 yard nudge is cancelled back to 0 by pushOut(solids).
-            mixWall.x = afterBridgeX + maxX + mixWall.halfWidth; mixWall.z = b.z;
-            b.x += yardNudge;
-            const verify = { x: b.x, z: b.z, heading: b.heading, vx: b.vx, vz: b.vz, speed: b.speed, spec: b.spec };
-            pushOut(verify, [mixWall], true);
-            solidCancelCheck = verify.x - afterBridgeX;
+            // Place wall flush on -x of post-bridge pose (moving in +x so pushOut normal is +x, into > 0, zero onSolidImpact):
+            // yard shifts -0.05 on X, then pushOut(solids) pushes +0.05 back to exact (bx0, bz0).
+            mixWall.x = bx0 + minX - mixWall.halfWidth; mixWall.z = bz0;
+            b.x -= yardNudge;
+            yardDeltaX = b.x - bx0; yardDeltaZ = b.z - bz0;
           },
           resolveSolids: () => {},
           allowsBody: () => true,
@@ -599,15 +599,57 @@ for (const {a, b, side} of added) {
         mixTruck.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
         assert.equal(mixTow.place(), true, 'mixed cancelling contact rig places on Bridge 45');
         mixTruck.x = ax + ux * (span * 0.5) - uz * 0.55; mixTruck.z = az + uz * (span * 0.5) + ux * 0.55;
-        mixTow.x = mixTruck.x - ux * 5.2; mixTow.z = mixTruck.z - uz * 5.2; mixTow.heading = heading - 0.05;
+        const mhMix = mixTow.hitch(); mixTow.hx = mhMix.x; mixTow.hz = mhMix.z; mixTow.hitchY = mhMix.y;
+        mixTow.heading = heading - 0.05;
+        mixTow.solveCoupler(); mixTow.attitude(false, 1 / 120);
         mixTruck.vx = ux * 8 - uz * 0.4; mixTruck.vz = uz * 8 + ux * 0.4; mixTruck.speed = 8;
-        preBridgeX = mixTow.bodies()[1].x;
-        yardNudge = 0.05;
+        assert.ok(mixTruck.vx > 1, 'mixed cancelling rig moves in +x so -x wall emits zero onSolidImpact');
+        const preMixTruckX = mixTruck.x, preMixTruckZ = mixTruck.z;
+        const preMixTrailerX = mixTow.bodies()[1].x, preMixTrailerZ = mixTow.bodies()[1].z;
+        yardNudge = 0.0625;
         mixTow.step(1 / 120);
         assert.equal(yardFired, true, 'mixed cancelling test ran yard correction');
-        assert.ok(Math.abs(afterBridgeX - preBridgeX) > 1e-4, 'mixed cancelling test hit pony-truss rail');
-        assert.ok(Math.abs(solidCancelCheck) < 1e-5, `yard (+0.05) and solid (-0.05) cancel to zero net X displacement (got ${solidCancelCheck})`);
+        assert.equal(yardDeltaX, -0.0625, 'yard moved live trailer by -0.0625 m on X');
+        assert.equal(yardDeltaZ, 0, 'yard moved live trailer by 0 m on Z');
+        assert.ok(Math.hypot(bridgeDx, bridgeDz) > 1e-4, 'mixed cancelling test hit pony-truss rail');
+        assert.ok(Math.abs((mixTruck.x - preMixTruckX) - bridgeDx) < 1e-6, `live rig net X equals bridge-only displacement (exact yard+solid cancellation)`);
+        assert.ok(Math.abs((mixTruck.z - preMixTruckZ) - bridgeDz) < 1e-6, `live rig net Z equals bridge-only displacement (exact yard+solid cancellation)`);
         assert.equal(mixTruck.speed, 0, 'mixed pony-truss + cancelling yard/solid corrections still stop the rig as on main');
+        // Mixed pony-truss + callback-only AreaContacts site (smaller impact, zero position/velocity change) still stops the rig.
+        {
+          const cbTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+          const cbContacts = new AreaContacts(), cbSolo = new AreaContacts();
+          let cbActive = false;
+          registerRailContacts(cbContacts, cbSolo, rails, body => body === cbTruck, TRUCK_SPEC);
+          cbContacts.add({ resolve: b => { if (cbActive) b.onSolidImpact?.(0.05); }, allows: () => true });
+          const cbTow = new Towing(cbTruck, realTerrain, net, true, false, { contacts: cbContacts }, true, true);
+          cbTruck.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          assert.equal(cbTow.place(), true, 'callback-only AreaContacts site rig places on Bridge 45');
+          cbTruck.x = ax + ux * (span * 0.5) - uz * 0.55; cbTruck.z = az + uz * (span * 0.5) + ux * 0.55;
+          const mhCb = cbTow.hitch(); cbTow.hx = mhCb.x; cbTow.hz = mhCb.z; cbTow.hitchY = mhCb.y;
+          cbTow.heading = heading - 0.05; cbTow.solveCoupler(); cbTow.attitude(false, 1 / 120);
+          cbTruck.vx = ux * 8 - uz * 0.4; cbTruck.vz = uz * 8 + ux * 0.4; cbTruck.speed = 8;
+          cbActive = true;
+          cbTow.step(1 / 120);
+          assert.equal(cbTruck.speed, 0, 'mixed pony-truss + callback-only AreaContacts site impact still stops the rig');
+        }
+        // Mixed pony-truss + prop knockdown (props.hitCar factor < 1) still stops the rig as on main.
+        {
+          const propTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+          const propContacts = new AreaContacts(), propSolo = new AreaContacts();
+          registerRailContacts(propContacts, propSolo, rails, body => body === propTruck, TRUCK_SPEC);
+          let propFactor = 1;
+          const propTow = new Towing(propTruck, realTerrain, net, true, false, { contacts: propContacts, props: { hitCar: () => propFactor } }, true, true);
+          propTruck.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          assert.equal(propTow.place(), true, 'prop knockdown mixed rig places on Bridge 45');
+          propTruck.x = ax + ux * (span * 0.5) - uz * 0.55; propTruck.z = az + uz * (span * 0.5) + ux * 0.55;
+          const mhProp = propTow.hitch(); propTow.hx = mhProp.x; propTow.hz = mhProp.z; propTow.hitchY = mhProp.y;
+          propTow.heading = heading - 0.05; propTow.solveCoupler(); propTow.attitude(false, 1 / 120);
+          propTruck.vx = ux * 8 - uz * 0.4; propTruck.vz = uz * 8 + ux * 0.4; propTruck.speed = 8;
+          propFactor = 0.91;
+          propTow.step(1 / 120);
+          assert.equal(propTruck.speed, 0, 'mixed pony-truss + prop knockdown (0.91 factor) still stops the rig as on main');
+        }
         // Mixed pony-truss + 1 mm-margin ordinary road-rail hit (zero displacement, onSolidImpact > 0) still stops the rig.
         {
           const marginNet = new Roads({ roads: tagged }, mabouManifest.village, realTerrain);
