@@ -286,9 +286,9 @@ export function buildPonyTrussBridge(
     [a[0] + n0x * zLo, y0, a[1] + n0z * zLo],
   ], rgb);
   deckStrip(-clearHalf, clearHalf, DECK_ASPHALT);
-  if (outerHalf > PONY_TRUSS.outerHalf + 1e-4) {
-    deckStrip(-outerHalf, -PONY_TRUSS.outerHalf, ABUTMENT);
-    deckStrip(PONY_TRUSS.outerHalf, outerHalf, ABUTMENT);
+  if (outerHalf > clearHalf + 1e-4) {
+    deckStrip(-outerHalf, -clearHalf, ABUTMENT);
+    deckStrip(clearHalf, outerHalf, ABUTMENT);
   }
   // Deck slab sides and underside (steel deck fascia across the full visible deck width, 2.5 cm below top to avoid z-fighting).
   m.at(mx, deckMidY, mz, yaw, 0, slope);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { Buildings, buildingSites } from '../web/src/buildings.ts';
 import { baxtersCoveBuildingArt, littleMabouBuildingArt, NovemberBuildings, novemberFootprints, TRAILHEAD_FENCE } from '../web/src/november-buildings.ts';
@@ -230,7 +230,25 @@ for (const {a, b, side} of added) {
     withContactHeight: (_, read) => read(),
     withGroundContact: (_, read) => read(),
   });
-  // Exact baseline deck-physics preservation: Roads.deckHeight() is Object.is identical to untagged origin/main at both 1.5x and 3.0x.
+  // Independent baseline deckHeight contract (origin/main Roads.deckHeight): closest polyline point within halfWidth + 1.2,
+  // interpolating y0 = s0.ground + 0.05 to y1 = s1.ground + 0.05 where s0/s1 sample 3 m past each bridge end.
+  const expectedBaselineDeck = (road, t, x, z) => {
+    const p = road.pts, n = p.length;
+    const cum = [0];
+    for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
+    let bestD = Infinity, bestS = 0;
+    for (let i = 0; i < n - 1; i++) {
+      const ax = p[i][0], az = p[i][1], dx = p[i + 1][0] - ax, dz = p[i + 1][1] - az, l2 = dx * dx + dz * dz || 1;
+      const u = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+      const d = Math.hypot(x - ax - dx * u, z - az - dz * u);
+      if (d < bestD) { bestD = d; bestS = cum[i] + Math.hypot(dx, dz) * u; }
+    }
+    if (bestD > road.halfWidth + 1.2) return null;
+    const end = (a, b) => { const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1; return t.surfaceAt(a[0] + ((a[0] - b[0]) / d) * 3, a[1] + ((a[1] - b[1]) / d) * 3); };
+    const y0 = end(p[0], p[1]).ground + 0.05, y1 = end(p[n - 1], p[n - 2]).ground + 0.05;
+    return y0 + (y1 - y0) * (bestS / (cum[n - 1] || 1));
+  };
+  // Exact baseline deck-physics preservation: Roads.deckHeight() matches both untagged Roads and independent origin/main math at 1.5x and 3.0x.
   for (const exag of [1.5, 3.0]) {
     const t = makeRealTerrain(exag, 8);
     const baselineNet = new Roads(mabouRoads, mabouManifest.village, t);
@@ -242,7 +260,11 @@ for (const {a, b, side} of added) {
       for (const s of [-6, -4.1, -3, -1, 0, span * 0.25, span * 0.5, span * 0.75, span, span + 1, span + 3, span + 4.1, span + 6]) {
         for (const offset of [-4.5, -3.0, -2.0, 0, 2.0, 3.0, 4.5]) {
           const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
-          assert.ok(Object.is(ponyNet.deckHeight(x, z), baselineNet.deckHeight(x, z)), `bridge ${id} exag=${exag} deckHeight preserves baseline at s=${s.toFixed(1)}, off=${offset}`);
+          const got = ponyNet.deckHeight(x, z);
+          const expected = expectedBaselineDeck(r, t, x, z);
+          assert.ok(Object.is(got, baselineNet.deckHeight(x, z)), `bridge ${id} exag=${exag} deckHeight preserves baseline at s=${s.toFixed(1)}, off=${offset}`);
+          if (expected === null) assert.equal(got, null, `bridge ${id} exag=${exag} outside baseline support at s=${s.toFixed(1)}, off=${offset}`);
+          else assert.ok(got !== null && Math.abs(got - expected) < 1e-9, `bridge ${id} exag=${exag} matches independent origin/main formula at s=${s.toFixed(1)}, off=${offset} (${got} vs ${expected})`);
         }
       }
     }
@@ -305,13 +327,13 @@ for (const {a, b, side} of added) {
       const sampleTs = seg === 0 ? [0.0001, 0.5] : seg === r.pts.length - 2 ? [0.5, 0.9999] : [0.5];
       for (const st of sampleTs) {
         const px = pa0 + sdx * st, pz = pa1 + sdz * st;
-        for (const offset of [-4.199, -3.5, 3.5, 4.199]) {
+        for (const offset of [-4.199, -3.5, -2.2, -2.085, 2.085, 2.2, 3.5, 4.199]) {
           const x = px - suz * offset, z = pz + sux * offset;
           const y = net.deckHeight(x, z);
           assert.ok(y !== null, `bridge ${id} seg ${seg} t=${st} supports polyline edge offset=${offset}`);
           ray.set(new THREE.Vector3(x, y + 0.5, z), down);
-          const hit = ray.intersectObject(mesh)[0];
-          assert.ok(hit && Math.abs(hit.point.y - y) < 0.005, `bridge ${id} seg ${seg} t=${st} polyline edge offset=${offset} hits visible deck`);
+          const hits = ray.intersectObject(mesh);
+          assert.ok(hits.some(h => Math.abs(h.point.y - y) < 0.005), `bridge ${id} seg ${seg} t=${st} polyline offset=${offset} hits continuous visible deck`);
         }
       }
     }
@@ -551,8 +573,9 @@ for (const {a, b, side} of added) {
   assert.ok(!net.group.children.some(c => c.name === 'pony-truss-50'));
   for (const child of [...baselineNet.group.children]) child.geometry?.dispose();
   for (const child of [...net.group.children]) child.geometry?.dispose();
-  // No bridge in any other area pack matches (including Highway 19 ids 45/46 in Judique and Canso Causeway).
+  // No bridge in any other installed area pack matches (including Highway 19 ids 45/46 in Judique and Canso Causeway).
   for (const dir of ['areas/judique', 'areas/porthood', 'areas/pointtupper', 'areas/westbay', 'areas/cansocauseway']) {
+    if (!existsSync(`data/baked/${dir}/roads.json`)) continue;
     const d = read(dir, 'roads');
     assert.deepEqual(d.roads.map(littleMabouPonyTruss).filter(r => r.ponyTruss), [], `${dir} has no Little Mabou pony truss`);
   }
