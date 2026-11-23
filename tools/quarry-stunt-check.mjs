@@ -135,8 +135,8 @@ for (const [id, startU] of Object.entries(runupStarts)) {
   const result = driveRunup(truck);
   console.log('PICKUP RUN-UP', id, JSON.stringify(result));
   assert.ok(result.kph >= min && result.kph <= max, `${id}: ${result.kph} km/h, posted ${min}–${max}`);
+  assert.ok(result.airborne, id+' launches at its posted speed');
   if (id === 'slip-small') {
-    assert.ok(result.airborne, 'small kicker launches at its posted speed');
     const previous = new Vehicle(truck.car, terrain, roads, -.2, {
       ...TRUCK_SPEC, engineAcceleration:4.2, enginePower:122, tractionShare:.78, aeroDrag:.00115,
     });
