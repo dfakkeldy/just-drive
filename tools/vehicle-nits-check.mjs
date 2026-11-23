@@ -395,8 +395,8 @@ try {
       const variants = [
         ['extra draw', source.replace(pair[0], `        this.random();\n${pair[0]}`), /draw-count/],
         ['draw order swapped', source.replace(pair[0], pair[2] + pair[1]), /numeric state digest/],
-        ['pavement-only extra draw', replace(source, 'const mu = surf.mu * skip, t = input.throttle;', 'if (surf === SURFACES.paved) this.random();\n      const mu = surf.mu * skip, t = input.throttle;'), /mixed.*draw-count/],
-        ['grass-only extra draw', replace(source, 'const mu = surf.mu * skip, t = input.throttle;', 'if (surf === SURFACES.grass) this.random();\n      const mu = surf.mu * skip, t = input.throttle;'), /mixed.*draw-count/],
+        ['pavement-only extra draw', replace(source, 'const hoofGrip = horse ? .9 : mu;', 'if (surf === SURFACES.paved) this.random();\n      const hoofGrip = horse ? .9 : mu;'), /mixed.*draw-count/],
+        ['grass-only extra draw', replace(source, 'const hoofGrip = horse ? .9 : mu;', 'if (surf === SURFACES.grass) this.random();\n      const hoofGrip = horse ? .9 : mu;'), /mixed.*draw-count/],
         ['reverse sync extra draw', replace(source, 'private sync(dt: number) {', 'private sync(dt: number) {\n    if (this.speed < 0) this.random();'), /mixed.*draw-count/],
         ['tow-load step extra draw', replace(source, 'private step(dt: number, input: Input) {', 'private step(dt: number, input: Input) {\n    if (this.towLoad) this.random();'), /truck\/mixed.*draw-count/],
         ['no washboard draws below 5 m/s', source.replace(pair[0], `        if (Math.abs(vf) >= 5) {\n${pair[0]}        }\n`), /mixed.*draw-count/],

@@ -34,7 +34,7 @@ const mutations=[
  ['grass limit','grass speed and acceleration','bike-ride.ts','top: 122.13 / 3.6','top: 60 / 3.6'],
  ['grass power','grass speed and acceleration','bike-ride.ts','accel: 5.2','accel: 3.0'],
  ['lean sign','lean has correct sign and steady magnitude','bike-ride.ts','? -Math.atan(speed * input.steer * maxYaw / G)', '? Math.atan(speed * input.steer * maxYaw / G)'],
- ['lean magnitude','lean has correct sign and steady magnitude','bike-ride.ts','surf.grip * G / Math.max(speed, 2)','surf.grip * G * .1 / Math.max(speed, 2)'],
+ ['lean magnitude','lean has correct sign and steady magnitude','bike-ride.ts','surf.grip * snowGrip * G / Math.max(speed, 2)','surf.grip * snowGrip * G * .1 / Math.max(speed, 2)'],
  ['rest upright','upright and stationary at rest','bike-ride.ts','speed * input.steer * maxYaw / G) : 0;', 'speed * input.steer * maxYaw / G) : .2;'],
  ['wheel contact pitch','two wheel contacts follow a real slope','bike-ride.ts','this.pitch = Math.atan2(this.frontHeight - this.rearHeight, this.spec.wheelbase);','this.pitch = 0;'],
  ['wheelie lift','wheelie comes up balances and loops out','bike-ride.ts','(t - .42) * 2.8','(t - .42) * 0'],
