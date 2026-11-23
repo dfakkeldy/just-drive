@@ -548,6 +548,40 @@ for (const {a, b, side} of added) {
     }
     for (const child of [...streamNet.group.children]) child.geometry?.dispose();
   }
+  // Exact finite rotated bottom-chord underside test at 3.0x: measure the lowest rendered steel vertex at Bridge 45's low portal
+  // and verify paired clear/contact probes right below and right above it (catches flat or untrimmed lower cutoffs).
+  {
+    const t3 = makeRealTerrain(3.0, 8);
+    const net3 = new Roads({ roads: tagged }, mabouManifest.village, t3);
+    const r45 = net3.roads.find(x => x.id === 45);
+    const [ax, az] = r45.pts[0], [bx, bz] = r45.pts[r45.pts.length - 1];
+    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
+    const y0 = net3.deckHeight(ax, az), y1 = net3.deckHeight(bx, bz);
+    assert.ok(y0 !== null && y1 !== null && y1 > y0, 'bridge 45 rises from start to end at 3x');
+    const mesh3 = net3.group.children.find(c => c.name === 'pony-truss-45');
+    const pos3 = mesh3.geometry.getAttribute('position'), col3 = mesh3.geometry.getAttribute('color');
+    let minSteelY = Infinity;
+    for (let i = 0; i < pos3.count; i++) {
+      if (col3.getX(i) < 0.30) continue;
+      const px = pos3.getX(i), py = pos3.getY(i), pz = pos3.getZ(i);
+      const along = (px - ax) * ux + (pz - az) * uz;
+      const across = Math.abs(-(px - ax) * uz + (pz - az) * ux);
+      if (along >= -0.05 && along <= 1.0 && across >= PONY_TRUSS.clearHalf - 0.01 && across <= PONY_TRUSS.outerHalf + 0.01) {
+        minSteelY = Math.min(minSteelY, py);
+      }
+    }
+    assert.ok(Number.isFinite(minSteelY) && minSteelY > y0, `bridge 45 3x trimmed rotated bottom chord starts slightly above y0 (${(minSteelY - y0).toFixed(6)} m)`);
+    const probeX = ax + ux * 0.2 - uz * 1.6, probeZ = az + uz * 0.2 + ux * 1.6;
+    const clearLow = { x: probeX, z: probeZ, y: minSteelY - CAR_SPEC.height - 0.0005, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    const sx = clearLow.x, sz = clearLow.z;
+    net3.guardrails.blockBridge(clearLow, 1 / 120);
+    assert.equal(clearLow.x, sx, 'bridge 45 3x low-portal probe 0.5 mm below trimmed rotated bottom chord is not pushed');
+    assert.equal(clearLow.z, sz, 'bridge 45 3x low-portal probe 0.5 mm below trimmed rotated bottom chord is not pushed');
+    const hitLow = { x: probeX, z: probeZ, y: minSteelY - CAR_SPEC.height + 0.001, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(hitLow, 1 / 120);
+    assert.ok(Math.hypot(hitLow.x - sx, hitLow.z - sz) > 0.01, 'bridge 45 3x low-portal probe 1 mm above trimmed rotated bottom chord collides');
+    for (const child of [...net3.group.children]) child.geometry?.dispose();
+  }
   // Unloaded banks: repeated collision calls during the same terrain revision do not keep re-sampling bank endpoints,
   // and advancing to a loaded revision retries once, builds the deck, and blocks an overlapping vehicle.
   {

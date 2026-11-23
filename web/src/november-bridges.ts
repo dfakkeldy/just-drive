@@ -133,10 +133,19 @@ export function ponyTrussVerticalClip(
   const railBottom = PONY_TRUSS.railHeight - 0.11;
   const railTop = PONY_TRUSS.railHeight + 0.11;
   const deckSlope = (y1 - y0) / span;
-  // Exact underside of the slope-rotated bottom chord box: yBase - (chord / 2) / cos(slope).
-  const chordBottom = yBase * (1 - Math.hypot(1, deckSlope));
+  // Exact finite rotated bottom-chord box (matching buildPonyTrussBridge sideLen and slope rotation).
+  const dy = y1 - y0, deckLen = Math.hypot(span, dy);
+  const cosS = span / deckLen, sinS = dy / deckLen;
+  const sideLen = deckLen - chord * Math.abs(sinS) - 0.004;
+  const hx = sideLen * 0.5, hy = yBase;
+  const sMid = span * 0.5, yMid = (y0 + y1) * 0.5 + yBase;
+  const c0s = sMid - hx * cosS + hy * sinS, c0y = yMid - hx * sinS - hy * cosS;
+  const c1s = sMid + hx * cosS + hy * sinS, c1y = yMid + hx * sinS - hy * cosS;
+  const c2s = sMid + hx * cosS - hy * sinS, c2y = yMid + hx * sinS + hy * cosS;
+  const c3s = sMid - hx * cosS - hy * sinS, c3y = yMid - hx * sinS + hy * cosS;
+  const minChordY = Math.min(c0y, c1y);
   const carTop = carY + carHeight;
-  if (carTop < Math.min(y0, y1) + chordBottom) return false;
+  if (carTop < minChordY) return false;
   if (carY > Math.max(y0, y1) + h + topPad) return false;
 
   // 1. Inner steel guard rail interval: [deckY(s) + railBottom, deckY(s) + railTop] overlaps [carY, carTop].
@@ -154,13 +163,25 @@ export function ponyTrussVerticalClip(
   railRight = Math.max(0, Math.min(span, railRight));
   if (railRight <= railLeft + 1e-4) { railLeft = 0; railRight = 0; }
 
-  // 2. Truss structure interval (slope-rotated bottom chord, inclined end posts, interior web, top chord).
-  let trussLeft = 0, trussRight = span;
+  // 2. Truss structure interval (clipped to finite rotated bottom chord below carTop, inclined end posts, and top chord).
+  let trussLeft = Math.min(c0s, c3s), trussRight = Math.max(c1s, c2s);
+  // Clip the 4-edge rotated bottom-chord polygon against y <= carTop when carTop cuts across the bottom chord.
+  if (carTop < Math.max(c2y, c3y)) {
+    let lowS = Infinity, highS = -Infinity;
+    const edge = (as: number, ay: number, bs: number, by: number) => {
+      if (ay <= carTop) { lowS = Math.min(lowS, as); highS = Math.max(highS, as); }
+      if ((ay <= carTop) !== (by <= carTop)) {
+        const s = as + (bs - as) * ((carTop - ay) / (by - ay));
+        lowS = Math.min(lowS, s); highS = Math.max(highS, s);
+      }
+    };
+    edge(c0s, c0y, c1s, c1y); edge(c1s, c1y, c2s, c2y); edge(c2s, c2y, c3s, c3y); edge(c3s, c3y, c0s, c0y);
+    trussLeft = Math.max(trussLeft, lowS);
+    trussRight = Math.min(trussRight, highS);
+  }
   if (deckSlope > 1e-7) {
-    trussRight = Math.min(trussRight, (carTop - (y0 + chordBottom)) / deckSlope);
     trussLeft = Math.max(trussLeft, (carY - (y0 + h + topPad)) / deckSlope);
   } else if (deckSlope < -1e-7) {
-    trussLeft = Math.max(trussLeft, (carTop - (y0 + chordBottom)) / deckSlope);
     trussRight = Math.min(trussRight, (carY - (y0 + h + topPad)) / deckSlope);
   }
   if (carY > y0 + chord) {
