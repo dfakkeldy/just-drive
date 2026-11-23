@@ -159,9 +159,12 @@ for (const url of urls) {
                   const [px, pz] = out(f), land = t.heightAt(px, pz);
                   if (land === null) continue;
                   const prevX = v.x, prevZ = v.z, placed = v.place(px, pz, heading);
-                  const cover = t.coverAt?.(px, pz) ?? 0;
-                  if (placed) { chosen = { x: px, z: pz, land, cover }; break; }
-                  const stayedPut = v.x === prevX && v.z === prevZ, wet = isWet(px, pz, land);
+                  const cover = t.coverAt?.(px, pz) ?? 0, wet = isWet(px, pz, land);
+                  if (placed) {
+                    if (wet) return { side, placed, wet, wetRefused: false, land, cover, stopped: false };
+                    chosen = { x: px, z: pz, land, cover }; break;
+                  }
+                  const stayedPut = v.x === prevX && v.z === prevZ;
                   if (!stayedPut || !wet) return { side, placed, stayedPut, wet, land, cover, stopped: false };
                   if (f === 0.5) midWet = { land, cover };
                 }
