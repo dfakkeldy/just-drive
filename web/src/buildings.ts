@@ -287,7 +287,9 @@ export class Buildings {
       const endWall = (side: number) => style?.bareEnd?.side === side ? rgb(style.bareEnd.wall) : wall;
       const roofPalette = b.kind === 'barn' ? [ROOFS[3], ROOFS[4], ROOFS[5]] : ROOFS;
       const roof = style ? rgb(style.roof) : roofPalette[Math.floor(hash(identity + 0.5) * roofPalette.length)];
-      const foot = -3;   // walls run below the ground line, so a slope never shows a gap
+      // Walls and foundation run below the ground line so a slope never shows a gap.
+      // Large mapped blocks span wide slopes and scale vertically with terrain exaggeration.
+      const foot = b.shape === 'block' ? -5 * Math.max(1, exag) : -3;
       const shape = style?.roofShape ?? (b.buildingId !== undefined && b.roof !== 'flat' ? 'gable' : b.roof);
       const flat = shape === 'flat';
       const shed = shape === 'shed';

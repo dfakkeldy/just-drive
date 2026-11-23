@@ -7,6 +7,7 @@
 // It reads every area that has buildings.json. MMM_BAKED names another data/baked folder (a rehearsal).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { inflateSync } from 'node:zlib';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { AREAS } from '../web/src/area.ts';
 import { Buildings, buildingSites, clearBoxes, roofSites } from '../web/src/buildings.ts';
@@ -116,6 +117,68 @@ function faults(area, manifest, list, roads, landmarks, mail) {
 }
 
 const dispose = (model) => { model.mesh.geometry.dispose(); model.mesh.material.dispose(); };
+const minY = (b, village, exag) => {
+  const model = new Buildings([b], village, exag, 0);
+  const pos = model.mesh.geometry.getAttribute('position').array;
+  let low = Infinity;
+  for (let i = 1; i < pos.length; i += 3) if (pos[i] < low) low = pos[i];
+  dispose(model);
+  return low;
+};
+function decodePng(file) {
+  const png = fs.readFileSync(file);
+  let off = 8, width = 0, height = 0, channels = 0;
+  const chunks = [];
+  while (off < png.length) {
+    const n = png.readUInt32BE(off), type = png.toString('ascii', off + 4, off + 8), chunk = png.subarray(off + 8, off + 8 + n);
+    if (type === 'IHDR') { width = chunk.readUInt32BE(0); height = chunk.readUInt32BE(4); assert.equal(chunk[8], 8); channels = chunk[9] === 2 ? 3 : chunk[9] === 6 ? 4 : 0; assert.ok(channels); }
+    if (type === 'IDAT') chunks.push(chunk);
+    off += n + 12;
+  }
+  const raw = inflateSync(Buffer.concat(chunks)), stride = width * channels, out = new Uint8Array(stride * height);
+  const paeth = (a, b, c) => { const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c); return pa <= pb && pa <= pc ? a : pb <= pc ? b : c; };
+  for (let y = 0; y < height; y++) {
+    const f = raw[y * (stride + 1)];
+    assert.ok(f <= 4);
+    for (let x = 0; x < stride; x++) {
+      const k = y * stride + x, a = x >= channels ? out[k - channels] : 0, b = y ? out[k - stride] : 0, c = y && x >= channels ? out[k - stride - channels] : 0;
+      out[k] = (raw[y * (stride + 1) + x + 1] + [0, a, b, (a + b) >> 1, paeth(a, b, c)][f]) & 255;
+    }
+  }
+  return { width, height, channels, data: out };
+}
+function terrainSampler(dir, manifest) {
+  const [ox, oy] = manifest.origin, { size, height: { scale, offset } } = manifest, cache = new Map();
+  const readTile = (lvl, tx, ty) => {
+    const key = `${lvl}/${tx}_${ty}`;
+    if (!cache.has(key)) {
+      const file = `${dir}/${lvl}/${tx}_${ty}.png`;
+      cache.set(key, fs.existsSync(file) ? decodePng(file) : null);
+    }
+    return cache.get(key);
+  };
+  return (e, n, lvl) => {
+    const tsize = size / (1 << lvl), tx = Math.floor((e - ox) / tsize), ty = Math.floor((oy - n) / tsize);
+    const tile = readTile(lvl, tx, ty);
+    if (!tile) return null;
+    const u = (e - (ox + tx * tsize)) / tsize * 256, v = ((oy - ty * tsize) - n) / tsize * 256;
+    const i0 = Math.max(0, Math.min(255, Math.floor(u))), j0 = Math.max(0, Math.min(255, Math.floor(v)));
+    const at = (i, j) => { const k = (j * tile.width + i) * tile.channels; return (tile.data[k] * 256 + tile.data[k + 1]) * scale + offset; };
+    return Math.min(at(i0, j0), at(i0 + 1, j0), at(i0, j0 + 1), at(i0 + 1, j0 + 1));
+  };
+}
+function perimeterPoints(b) {
+  const pts = [], L = b.length / 2, W = b.width / 2;
+  if (b.shape === 'tank') {
+    for (let k = 0; k < 32; k++) { const t = k * Math.PI * 2 / 32; pts.push([b.x + L * Math.cos(t), b.y + L * Math.sin(t)]); }
+    return pts;
+  }
+  const a = b.axisDeg * Math.PI / 180, ux = Math.sin(a), uy = Math.cos(a), vx = Math.cos(a), vy = -Math.sin(a);
+  const nu = Math.max(4, Math.ceil(b.length)), nv = Math.max(4, Math.ceil(b.width));
+  for (let i = 0; i <= nu; i++) { const u = -L + b.length * i / nu; for (const s of [-W, W]) pts.push([b.x + ux * u + vx * s, b.y + uy * u + vy * s]); }
+  for (let j = 0; j <= nv; j++) { const v = -W + b.width * j / nv; for (const s of [-L, L]) pts.push([b.x + ux * s + vx * v, b.y + uy * s + vy * v]); }
+  return pts;
+}
 const cast = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
 /** Rays straight down over the whole item: each one must find a roof at the stated height or above. */
 function roofed(b, village, step) {
@@ -170,6 +233,11 @@ const round = (id, e, n, diameter, eave, ridge, roof) => block(id, e, n, diamete
   }
   assert.ok(Math.abs(covered - 12000) < 400 && cleared < 1.9 * covered, `the hall clears ${cleared} m2 for ${covered} m2 of roof`);
   roofed(block(3, V[0], V[1], 60, 30, 110, 6, 11, 'gable'), V, .8);
+  for (const exag of [1, 1.5, 2.5]) {
+    assert.ok(Math.abs(minY(hall, V, exag) - (hall.ground * exag - 5 * exag)) < 1e-4, `block foundation scales at exag=${exag}`);
+    const plain = { ...block(99, V[0], V[1], 12, 8, 0, 5, 7, 'gable'), kind: 'house', shape: undefined };
+    assert.ok(Math.abs(minY(plain, V, exag) - (plain.ground * exag - 3)) < 1e-4, `ordinary building keeps 3 m foot at exag=${exag}`);
+  }
   // A baked colour (step 30) repaints a block but gives it no door and window grid: a block is one part of a large mapped
   // hall (plants, malls, arenas), and the house-scale window grid is only for a large building without a shape (#1288).
   // The paint is shingle on purpose: a metal roof adds seams, which is not what this pins.
@@ -243,12 +311,13 @@ const round = (id, e, n, diameter, eave, ridge, roof) => block(id, e, n, diamete
   assert.ok(!sites(area, manifest, [house], roads, [], null).zones.some((z) => z.name === 'yard dog driveway'), 'no driveway zone without mailbox data');
 }
 
-let areas = 0, large = 0, zones = 0, rays = 0;
+let areas = 0, large = 0, zones = 0, rays = 0, grounded = 0;
 const report = [];
 for (const area of AREAS) {
   const dir = `${baked}/${area.base}`, read = (name) => JSON.parse(fs.readFileSync(`${dir}/${name}`, 'utf8'));
   if (!fs.existsSync(`${dir}/buildings.json`) || !fs.existsSync(`${dir}/manifest.json`)) continue;
   const manifest = read('manifest.json'), list = read('buildings.json').buildings, roads = read('roads.json').roads;
+  const sampleGround = manifest.origin && manifest.height ? terrainSampler(dir, manifest) : null;
   const landmarks = fs.existsSync(`${dir}/landmarks.json`) ? read('landmarks.json') : [];
   // The mail points as main.ts hands them to the yard dog's driveway: every mailbox and community box.
   const mail = manifest.props && fs.existsSync(`${dir}/${manifest.props.file}`) ? (({ mailboxes, communityBoxes }) => [...mailboxes, ...communityBoxes]
@@ -286,6 +355,20 @@ for (const area of AREAS) {
     assert.ok(b.shape !== 'tank' || (b.footprint.length === 32 && b.footprint.every(([e, n]) => Math.abs(Math.hypot(e - b.x, n - b.y) - b.length / 2) < .03)),
       `${area.id} ${b.id}: a tank's footprint is 32 points on its circle`);
     rays += roofed(b, v, 2.5).rays;
+    if (sampleGround) {
+      let lowest = Infinity;
+      for (const [e, n] of perimeterPoints(b)) for (const lvl of [8, 7]) {
+        const h = sampleGround(e, n, lvl);
+        if (h !== null && h < lowest) lowest = h;
+      }
+      if (Number.isFinite(lowest)) {
+        for (const exag of [1.5, 2.5]) {
+          const footY = minY(b, v, exag), groundY = lowest * exag;
+          assert.ok(footY <= groundY - 0.5, `${area.id} ${b.id} (${b.shape}) floats at exag=${exag}: foot ${footY.toFixed(2)} > ground ${groundY.toFixed(2)}`);
+        }
+        grounded++;
+      }
+    }
   }
   assert.equal(roofSites(list).length, buildingSites(list).length + list.filter((b) => b.shape && b.buildingId !== undefined && b.buildingId !== b.id).length);
   assert.ok(list.filter((b) => b.shape).every((b) => roofSites(list).includes(b)), `${area.id}: every block and tank is cleared in the 1884 scene`);
@@ -293,4 +376,4 @@ for (const area of AREAS) {
   report.push(`${area.id} ${result.large} in ${result.zones} zones`);
 }
 assert.ok(areas > 0, 'at least one baked area');
-console.log(`PASS: no block or tank in a hand-built site (${report.join('; ')}); planted ones are found in every zone; ${rays} roof rays find a closed roof.`);
+console.log(`PASS: no block or tank in a hand-built site (${report.join('; ')}); planted ones are found in every zone; ${rays} roof rays find a closed roof; ${grounded} shapes grounded at 1.5x and 2.5x.`);
