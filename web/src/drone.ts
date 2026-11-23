@@ -17,11 +17,16 @@ const LIFT = 3;
 /** Hover height over the road when starting or resetting in standalone drone mode, metres. */
 const HOVER = 4;
 
+/** Active terrain bound by createTerrainReady(terrain) so Drone.update() can sample destination ground after moving. */
+let activeTerrain: Pick<Terrain, 'surfaceAt' | 'seaLevel'> | null = null;
+
 /**
  * Checks whether the finest tile that exists in `terrain.manifest` at (x, z) is loaded and (for level 8) currently
- * selected in `terrain.drawnFine`. Read-only: never marks tiles as used. Returns true off the map where nothing loads.
+ * selected in `terrain.drawnFine`. Read-only: never marks tiles as used. Returns false off the map where no land tiles
+ * exist, so the standalone drone stops before leaving loaded terrain into unmapped far land.
  */
 export function createTerrainReady(terrain: Terrain): (x: number, z: number) => boolean {
+  activeTerrain = typeof terrain.surfaceAt === 'function' ? terrain : null;
   const m = terrain.manifest, exists = new Set<string>();
   let maxLevel = 0;
   for (const [level, names] of Object.entries(m.levels)) {
@@ -39,7 +44,7 @@ export function createTerrainReady(terrain: Terrain): (x: number, z: number) => 
       if (terrain.levelAt(x, z) < level) return false;
       return level === 8 ? terrain.drawnFine.has(coord) : true;
     }
-    return true;
+    return false;
   };
 }
 
@@ -158,6 +163,17 @@ export class Drone {
   private readonly tilt = { pitch: 0, rate: 0 };
   private readonly lifted: DroneCommand = { forward: 0, right: 0, up: 0, turn: 0 };
   private readonly pad = { x: 0, y: 0, z: 0 };
+  private readonly postUnder: DroneGround = { ground: null, floor: null };
+  private readonly sampleLiveUnder = (x: number, z: number): DroneGround => {
+    const t = activeTerrain;
+    const s = t?.surfaceAt?.(x, z) ?? null;
+    if (!s) { this.postUnder.ground = null; this.postUnder.floor = null; return this.postUnder; }
+    const sea = typeof t?.seaLevel === 'number' ? t.seaLevel : -0.2;
+    const g = Math.max(s.ground, sea);
+    this.postUnder.ground = g;
+    this.postUnder.floor = g + s.canopy + DRONE.clearance;
+    return this.postUnder;
+  };
   private lift = 0;
   private spin = 0;
   height: number | null = null;
@@ -230,7 +246,7 @@ export class Drone {
    * flight has set it down. `look` turns the drone with the mouse or a finger (radians this frame). `speedCap` slows
    * standalone flight near land that is still loading.
    */
-  update(dt: number, cmd: DroneCommand, under: DroneGround, roof: { x: number; y: number; z: number } | null, look: number, speedCap = this.maxSpeed): boolean {
+  update(dt: number, cmd: DroneCommand, under: DroneGround, roof: { x: number; y: number; z: number } | null, look: number, speedCap = this.maxSpeed, sampleUnder?: (x: number, z: number) => DroneGround): boolean {
     this.hintTime += dt;
     const opacity = this.hintTime >= 29.6 ? '0' : '1';
     if (this.help && this.help.style.opacity !== opacity) this.help.style.opacity = opacity;
@@ -245,16 +261,19 @@ export class Drone {
     else this.lift = -Infinity;   // the first touch of a stick ends the automatic climb
     const top = Math.min(this.maxSpeed, speedCap);
     this.loading = this.free && speedCap < this.maxSpeed - 0.1;
+    const sampler = sampleUnder ?? (activeTerrain?.surfaceAt ? this.sampleLiveUnder : undefined);
     let left = Infinity;
     if (this.free || !roof) {
-      stepDrone(s, cmd, dt, top, under, null);
+      stepDrone(s, cmd, dt, top, under, null, undefined, sampler);
       this.distance = 0;
     } else {
       this.pad.x = roof.x; this.pad.y = roof.y + DRONE_FOOT; this.pad.z = roof.z;
-      left = stepDrone(s, cmd, dt, top, under, roof, this.returning ? this.pad : undefined);
+      left = stepDrone(s, cmd, dt, top, under, roof, this.returning ? this.pad : undefined, sampler);
       this.distance = Math.hypot(s.x - roof.x, s.z - roof.z);
     }
-    this.height = under.ground === null ? null : s.y - DRONE_FOOT - under.ground;
+    const postGround = sampler ? sampler(s.x, s.z).ground : under.ground;
+    const refGround = postGround ?? under.ground;
+    this.height = refGround === null ? null : s.y - DRONE_FOOT - refGround;
     // The model: tilted into its motion as a real drone leans, rotors spinning.
     this.spin += dt * 70;
     for (let i = 0; i < this.rotors.length; i++) this.rotors[i].rotation.y = (i % 2 ? 1 : -1) * this.spin;
@@ -283,7 +302,10 @@ export class Drone {
     const s = this.state, cp = Math.cos(this.pitch);
     const dx = -Math.sin(s.yaw) * cp, dy = Math.sin(this.pitch), dz = -Math.cos(s.yaw) * cp;
     camera.position.set(s.x - dx * BACK, s.y - dy * BACK + UP, s.z - dz * BACK);
-    if (ground !== null) camera.position.y = Math.max(camera.position.y, ground + 0.6);
+    const camSurf = activeTerrain?.surfaceAt?.(camera.position.x, camera.position.z) ?? null;
+    const camGround = camSurf ? Math.max(camSurf.ground, typeof activeTerrain?.seaLevel === 'number' ? activeTerrain.seaLevel : -0.2) : null;
+    const floor = ground !== null && camGround !== null ? Math.max(ground, camGround) : (camGround ?? ground);
+    if (floor !== null) camera.position.y = Math.max(camera.position.y, floor + 0.6);
   }
 
   /** The phone keeps each metric on a short line beside Pause. */

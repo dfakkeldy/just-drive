@@ -1,5 +1,6 @@
 // The player's Atlantic clock, the address values and the weather moods (web/src/weather.ts). No browser.
 import assert from 'node:assert/strict';
+import { Object3D } from '../web/node_modules/three/build/three.module.js';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 const load = async entry => {
   const result = await build({ entryPoints: [entry], bundle: true, write: false, format: 'esm', platform: 'node' });
@@ -101,6 +102,30 @@ assert.equal(winterRoadGrip(undefined, true), 1);
 assert.equal(winterRoadGrip({ value: 1 }, false), 1);
 assert.ok(winterRoadGrip({ value: 1 }, true) < winterRoadGrip({ value: 1 }, true, true));
 assert.ok(winterRoadGrip({ value: 1 }, true, true) < 1);
+// Drive the bike through its public update path so the solver must receive the touch flag.
+const { BikeRide, BIKE_STEP } = await load('web/src/bike-ride.ts');
+function brakeBike(winter, touch) {
+  const surface = { kind: 2, ground: 10, canopy: 0, roadDist: 0, halfWidth: 4 };
+  const terrain = {
+    heightAt: () => surface.ground,
+    surfaceAt: () => surface,
+    withContactHeight: (_bike, read) => read(),
+    uniforms: { winterCover: { value: Number(winter) } },
+  };
+  const roads = { deckHeight: () => null, nearest: () => null };
+  const bike = new BikeRide({ root: new Object3D(), pose() {} }, terrain, roads, -0.2);
+  assert.equal(bike.place(0, 0, 0), true);
+  bike.vz = -13;
+  bike.speed = 13;
+  for (let i = 0; i < 24; i++) bike.update(BIKE_STEP, { throttle: -1, steer: 0, handbrake: false, touch });
+  assert.equal(bike.surfaceName, 'pavement');
+  return bike.speed;
+}
+const clearBikeSpeed = brakeBike(false, false);
+const snowKeyboardSpeed = brakeBike(true, false);
+const snowTouchSpeed = brakeBike(true, true);
+assert.ok(clearBikeSpeed < snowTouchSpeed && snowTouchSpeed < snowKeyboardSpeed,
+  'the bike brakes less on snow and retains more braking grip with touch');
 // A failed light study (a bad date) must not replace a player's own clock: main.ts gives the player's moment then.
 const main = (await import('node:fs')).readFileSync('web/src/main.ts', 'utf8');
 assert.match(main, /const when = \(weather\.chosen && !lightStudy\.active \? undefined : lightStudy\.when\) \?\? weatherMoment\(weather\);/);
