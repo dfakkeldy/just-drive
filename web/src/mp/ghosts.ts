@@ -6,9 +6,10 @@ import { rideGeometry, rideIndex, rideAxles } from './ride-model';
 import { nearbyOpacity, easeOpacity, footprintsOverlap, type Footprint } from './nearby';
 
 export interface GhostOptions {
-  /** Ground height at a world point, including bridge decks; null while land loads. */
-  ground: (x: number, z: number) => number | null;
+  /** Ground height at a world point, using its prior pose height for a deck; null while land loads. */
+  ground: (x: number, z: number, referenceY?:number) => number | null;
   /** Phone mode uses a smaller default cap. */
+  height?:(surveyedY:number)=>number;
   low: boolean;
   /** Nearest cars win. Default 6 on a phone, else 16. */
   cap?: number;
@@ -88,7 +89,12 @@ const FADE = `
     if (noise >= vFade) discard;
   }
 `;
-interface Slot { id: number; name: string; pitch: number; roll: number; opacity: number; used: boolean }
+class Slot {
+  id=-1;name='';pitch=0;roll=0;opacity=1;used=false;
+  constructor(private readonly heights:Float64Array,private readonly at:number){}
+  /** Pose inspection uses the same packed height as the draw path. */
+  get y():number{return this.heights[this.at];}
+}
 
 export class Ghosts {
   readonly group = new THREE.Group();
@@ -107,6 +113,9 @@ export class Ghosts {
   private readonly atlas: THREE.CanvasTexture;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly slots: Slot[];
+  private readonly heights: Float64Array;
+  private readonly centres: Float64Array;
+  private readonly references: Float64Array;
   private readonly chosen: (PeerView | null)[];
   private readonly scores: Float64Array;
   private readonly labelBounds: Float64Array;
@@ -130,7 +139,9 @@ export class Ghosts {
     this.low = options.low;
     this.group.name = 'Other players';
     this.pose.rotation.order = 'YXZ';
-    this.slots = Array.from({ length: this.cap }, () => ({ id: -1, name: '', pitch: 0, roll: 0, opacity: 1, used: false }));
+    this.heights=new Float64Array(this.cap);this.heights.fill(NaN);
+    this.centres=new Float64Array(this.cap);this.references=new Float64Array(this.cap);
+    this.slots = Array.from({ length: this.cap }, (_,i) => new Slot(this.heights,i));
     this.chosen = new Array(this.cap).fill(null);
     this.scores = new Float64Array(this.cap);
     this.labelBounds = new Float64Array(this.cap * 4);
@@ -187,14 +198,18 @@ export class Ghosts {
   // Insertion into a fixed buffer avoids sorting or making a new array.
   private choose(peer: PeerView): void {
     if (!(peer.alpha > 0)) return;
-    const centre = this.ground(peer.x, peer.z); if (centre === null) return;
+    // Keep cached heights numeric: an undefined/number merge boxes each height in V8.
+    let referenceY=NaN;
+    if(peer.y!==undefined){referenceY=this.options.height?this.options.height(peer.y):peer.y;}
+    else for(let i=0;i<this.cap;i++)if(this.slots[i].id===peer.id){referenceY=this.heights[i];break;}
+    const centre = this.groundAt(peer.x,peer.z,referenceY); if (centre === null) return;
     const dx = peer.x - this.cameraPosition.x, dz = peer.z - this.cameraPosition.z;
     const dy = centre + peer.air - this.cameraPosition.y;
     let score = dx * dx + dy * dy + dz * dz;
     for (let i = 0; i < this.cap; i++) if (this.slots[i].id === peer.id) { score *= .90; break; }
     for (let i = 0; i < this.cap; i++) if (score < this.scores[i]) {
-      for (let j = this.cap - 1; j > i; j--) { this.scores[j] = this.scores[j - 1]; this.chosen[j] = this.chosen[j - 1]; }
-      this.scores[i] = score; this.chosen[i] = peer; break;
+      for (let j = this.cap - 1; j > i; j--) { this.scores[j] = this.scores[j - 1]; this.chosen[j] = this.chosen[j - 1];this.centres[j]=this.centres[j-1];this.references[j]=this.references[j-1]; }
+      this.scores[i] = score; this.chosen[i] = peer;this.centres[i]=centre;this.references[i]=Number.isFinite(referenceY)?referenceY:centre; break;
     }
   }
 
@@ -228,7 +243,7 @@ export class Ghosts {
       const slot = this.slots[at]; slot.used = true; slot.id = peer.id;
       const target = local ? nearbyOpacity(Math.hypot(peer.x-local.x,peer.z-local.z), footprintsOverlap(local,peer,peer.ride,localRide)) : 1;
       slot.opacity = easeOpacity(fresh ? 1 : slot.opacity, target, dt);
-      this.drawCar(peer, slot, fresh, at, camera);
+      this.drawCar(peer, slot, fresh, at, camera,i);
     }
     for (let i = 0; i < this.cap; i++) if (!this.slots[i].used) this.slots[i].id = -1;
     this.cars.count = this.drawn; this.labels.count = this.labelCount;
@@ -239,17 +254,23 @@ export class Ghosts {
     this.tints.needsUpdate = this.fades.needsUpdate = this.brakes.needsUpdate = this.rows.needsUpdate = this.labelFades.needsUpdate = true;
   }
 
-  private drawCar(peer: PeerView, slot: Slot, fresh: boolean, at: number, camera: THREE.Camera): void {
-    const centre = this.ground(peer.x, peer.z); if (centre === null) return;
+  private groundAt(x:number,z:number,referenceY:number):number|null {
+    return Number.isFinite(referenceY)?this.ground(x,z,referenceY):this.ground(x,z);
+  }
+
+  private drawCar(peer: PeerView, slot: Slot, fresh: boolean, at: number, camera: THREE.Camera,rank:number): void {
+    // Selection and drawing run synchronously. Reuse its accepted centre and reference.
+    const centre=this.centres[rank];
+    const referenceY=this.references[rank];
     const axles = rideAxles(peer.ride), wb = axles?.wheelbase ?? WB, track = axles?.track ?? TRACK;
     const fx = Math.sin(peer.heading), fz = -Math.cos(peer.heading), rx = Math.cos(peer.heading), rz = Math.sin(peer.heading);
-    const fl = this.ground(peer.x + fx * wb / 2 - rx * track / 2, peer.z + fz * wb / 2 - rz * track / 2) ?? centre;
-    const fr = this.ground(peer.x + fx * wb / 2 + rx * track / 2, peer.z + fz * wb / 2 + rz * track / 2) ?? centre;
-    const rl = this.ground(peer.x - fx * wb / 2 - rx * track / 2, peer.z - fz * wb / 2 - rz * track / 2) ?? centre;
-    const rr = this.ground(peer.x - fx * wb / 2 + rx * track / 2, peer.z - fz * wb / 2 + rz * track / 2) ?? centre;
+    const fl = this.ground(peer.x + fx * wb / 2 - rx * track / 2, peer.z + fz * wb / 2 - rz * track / 2,referenceY) ?? centre;
+    const fr = this.ground(peer.x + fx * wb / 2 + rx * track / 2, peer.z + fz * wb / 2 + rz * track / 2,referenceY) ?? centre;
+    const rl = this.ground(peer.x - fx * wb / 2 - rx * track / 2, peer.z - fz * wb / 2 - rz * track / 2,referenceY) ?? centre;
+    const rr = this.ground(peer.x - fx * wb / 2 + rx * track / 2, peer.z - fz * wb / 2 + rz * track / 2,referenceY) ?? centre;
     const pitch = Math.atan2((fl + fr - rl - rr) / 2, wb), roll = track > 0 ? Math.atan2((fr + rr - fl - rl) / 2, track) : 0;
     slot.pitch += (pitch - slot.pitch) * (fresh ? 1 : this.blend); slot.roll += (roll - slot.roll) * (fresh ? 1 : this.blend);
-    const y = (fl + fr + rl + rr) / 4 + peer.air;
+    const y = (fl + fr + rl + rr) / 4 + peer.air;this.heights[at]=y;
     this.pose.position.set(peer.x, y, peer.z); this.pose.rotation.set(slot.pitch, -peer.heading, slot.roll + (peer.ride?.kind === 'bike' ? THREE.MathUtils.clamp(-peer.steer * peer.speed * .08,-.55,.55) : 0));
     this.pose.updateMatrix(); this.cars.setMatrixAt(this.drawn, this.pose.matrix);
     const model = rideIndex(peer.ride);

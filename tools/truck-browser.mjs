@@ -68,10 +68,11 @@ try{
   check(!noRamp.every(c=>c.inYard&&Math.abs(c.gap)<.04),'mutation rejected: the ramp is not drawn under the tyres',noRamp);
   const sunkTyre=await p.read(`(()=>{const w=tt.v.car.wheels.rl;w.position.y-=.12;const gaps=tt.contacts();w.position.y+=.12;w.updateMatrixWorld(true);return gaps;})()`);
   check(!sunkTyre.every(c=>c.inYard&&Math.abs(c.gap)<.04),'mutation rejected: a tyre moved inside its hub',sunkTyre);
-  const underside=await p.read(`(()=>{const {v,terrain,r,site}=tt;tt.place(r.u-8,r.v);v.y=Math.min(...v.groundContacts.map(p=>site.deckHeight(p.x,p.z)))-.30;v.pitch=v.roll=0;terrain.withGroundContact(v,()=>v.captureGround());return v.groundContacts.map(p=>({height:p.height,land:terrain.landHeightAt(p.x,p.z)}));})()`);
+  const underside=await p.read(`(()=>{const {v,terrain,r,site}=tt;tt.place(r.u-8,r.v);const decks=v.groundContacts.map(p=>site.deckHeight(p.x,p.z));if(decks.some(y=>y===null))throw Error('underside witness needs a real deck at every wheel');v.y=Math.min(...decks)-.30;v.pitch=v.roll=0;terrain.withGroundContact(v,()=>v.captureGround());return v.groundContacts.map(p=>({height:p.height,land:terrain.landHeightAt(p.x,p.z)}));})()`);
   check(underside.every(p=>p.height===p.land),`Hill ${exag}: deck above body by 25 cm is ignored`,underside);
-  const unsafe=await p.read(`(()=>{const {v,terrain}=tt;const guard=terrain.withGroundContact;terrain.withGroundContact=(_v,read)=>read();try{terrain.withGroundContact(v,()=>v.captureGround());return v.groundContacts.map(p=>({height:p.height,land:terrain.landHeightAt(p.x,p.z)}));}finally{terrain.withGroundContact=guard;}})()`);
-  check(!unsafe.every(p=>p.height===p.land),'mutation rejected: underside guard disabled',unsafe);
+  // Contacts now pass their own height explicitly; removing an ambient scope cannot bypass that gate.
+  const unsafe=await p.read(`(()=>{const {v,terrain}=tt;const guard=terrain.heightAt;terrain.heightAt=(x,z)=>guard.call(terrain,x,z,v.y+10);try{terrain.withGroundContact(v,()=>v.captureGround());return v.groundContacts.map(p=>({height:p.height,land:terrain.landHeightAt(p.x,p.z)}));}finally{terrain.heightAt=guard;}})()`);
+  check(!unsafe.every(p=>p.height===p.land),'mutation rejected: incorrect underside reference height',unsafe);
   const drive=await p.read('tt.ramp()');check(drive.deck>0&&drive.maxRampLift>1.5&&drive.launchAlong>12&&drive.air>0&&drive.landed&&drive.maxRampLift<2.15&&drive.launchVy<6&&drive.maxRoll<.35,`Hill ${exag}: climbs, leaves and lands after slip ramp`,drive);
   const bad=await p.read(`(()=>{const spec=tt.v.spec;tt.v.spec={...spec,contactPlane:0};try{return tt.ramp();}finally{tt.v.spec=spec;}})()`);
   check(!(bad.deck>0&&bad.maxRampLift>1.5&&bad.launchAlong>12&&bad.air>0&&bad.landed&&bad.maxRampLift<2.15&&bad.launchVy<6&&bad.maxRoll<.35),'mutation rejected: old centre-height deck contacts',bad);

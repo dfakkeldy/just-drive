@@ -14,6 +14,7 @@ export function railAccess(roads: Roads, ground: Ground, village?: readonly [num
     bucket.push(p); cells.set(k, bucket);
   }
   return (road, p) => {
+    if(roads.bridgeArea?.(p.x,p.z,RAIL.shoulder+.8))return true;
     const cx = Math.floor(p.x / 64), cz = Math.floor(p.z / 64);
     for (let j = cz - 1; j <= cz + 1; j++) for (let i = cx - 1; i <= cx + 1; i++)
       for (const prop of cells.get(key(i, j)) ?? NO_PROPS)

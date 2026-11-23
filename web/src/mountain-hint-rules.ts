@@ -207,10 +207,12 @@ export interface SwappableRide {
   speed: number;
   airborne: boolean;
   sunk: number;
-  place(x: number, z: number, heading: number): boolean;
+  /** The ride's height. It is the reference for a deck: the new ride stands on the deck the old one stood on, not the land under it. */
+  y?: number;
+  place(x: number, z: number, heading: number, referenceY?: number): boolean;
 }
 
-export interface SwapPose { x: number; z: number; heading: number }
+export interface SwapPose { x: number; z: number; heading: number; y?: number }
 
 export type SwapResult<T extends SwappableRide> =
   | { ok: true; vehicle: T; pose: SwapPose }
@@ -229,7 +231,7 @@ export function safeSwapRide<T extends SwappableRide>(
 ): SwapResult<T> {
   if (current.airborne || current.sunk > 0) return { ok: false, reason: 'Stop on solid ground to switch' };
   if (![current.x, current.z, current.heading].every(Number.isFinite)) return { ok: false, reason: 'Could not switch right now' };
-  const pose: SwapPose = { x: current.x, z: current.z, heading: current.heading };
+  const pose: SwapPose = { x: current.x, z: current.z, heading: current.heading, y: current.y };
   if (canPlace) {
     let check: boolean | string = false;
     try { check = canPlace(pose); } catch { check = false; }
@@ -251,10 +253,10 @@ export function safeSwapRide<T extends SwappableRide>(
   try {
     const next = buildTarget();
     if (!next) { restore(); return { ok: false, reason: 'Could not switch right now' }; }
-    if (!next.place(pose.x, pose.z, pose.heading)) { restore(); return { ok: false, reason: 'No clear room to switch here' }; }
+    if (!next.place(pose.x, pose.z, pose.heading, pose.y)) { restore(); return { ok: false, reason: 'No clear room to switch here' }; }
     if (canPlace && Math.hypot(next.x - pose.x, next.z - pose.z) > 1e-4) {
       let placedCheck: boolean | string = false;
-      try { placedCheck = canPlace({ x: next.x, z: next.z, heading: next.heading }); } catch { placedCheck = false; }
+      try { placedCheck = canPlace({ x: next.x, z: next.z, heading: next.heading, y: next.y }); } catch { placedCheck = false; }
       if (placedCheck !== true) {
         restore();
         return { ok: false, reason: typeof placedCheck === 'string' && placedCheck ? placedCheck : 'No clear room to switch here' };

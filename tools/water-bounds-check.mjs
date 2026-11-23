@@ -771,3 +771,139 @@ console.log('PASS Towing void checks, Fleet water stop without auto-teleport, ex
   assert.equal(loadSpeedCap(DRONE.maxSpeed, distInward), DRONE.maxSpeed, 'standalone drone flies freely back inward');
 }
 console.log('PASS drone flies over water, never passes under land, cliffs or void, and stops at terrain root edge');
+{
+  // A height-free placement (placeAt: a visit start, a restart, a ?at= link) on a bridge span whose deck is not built
+  // yet is refused for the water under it, as main refuses any wet placement (#130). Once the deck is built, the same
+  // placeAt stands the ride on it (just-drive#6).
+  const seabed = makeTerrain(() => ({ ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+  const spanned = makeRoads(-200, 110);
+  spanned.bridgeRuns = () => [{ roads: new Set([1]), pts: [[-50, 0], [50, 0]] }];
+  for (const kind of ['car', 'bike']) {
+    let deck = null; spanned.deckHeight = (x, z) => (deck !== null && Math.abs(x) <= 50 && Math.abs(z) <= 4 ? deck : null);
+    const r = makeRide(kind, seabed, spanned); r.bounds = [-200, -200, 400, 200];
+    assert.equal(r.placeAt(0, 0, Math.PI / 2), false, `${kind}: placeAt on the water under an unbuilt span is refused, as on main`);
+    deck = 2;
+    assert.equal(r.placeAt(0, 0, Math.PI / 2), true, `${kind}: placeAt on the built deck`);
+    assert.ok(Math.abs(r.y - 2) < .1, `${kind}: stands on the deck (y=${r.y})`);
+  }
+  console.log('PASS a placeAt on an unbuilt span over water is refused as on main; on the built deck it stands on it');
+}
+{
+  // A ride that sinks under a high deck that belongs to another road respawns on the land behind, never on the deck
+  // overhead and never in the water (each candidate is judged at its own height).
+  const shore = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+  const under = makeRoads(-200, 200, (x, z) => (x >= 66 && x <= 140 && Math.abs(z) <= 6 ? 8 : null));
+  for (const kind of ['car', 'bike']) {
+    const r = makeRide(kind, shore, under); r.bounds = [-200, -200, 400, 200];
+    assert.equal(r.place(0, 0, Math.PI / 2), true, `${kind}: starts on the land`);
+    let sank = false, back = false, maxY = -Infinity;
+    for (let i = 0; i < 1200 && !back; i++) {
+      r.update(1 / 60, { throttle: sank ? 0 : 1, steer: 0, handbrake: sank });
+      if (r.sunk > 0) sank = true;
+      if (sank && r.x < 60 && r.sunk === 0) back = true;
+      if (sank) maxY = Math.max(maxY, r.y);
+    }
+    assert.ok(sank, `${kind}: drives into the water under the deck and sinks`);
+    assert.ok(back, `${kind}: respawns on the land behind (x=${r.x.toFixed(1)})`);
+    assert.ok(Math.abs(r.y - 1) < .3 && maxY < 4, `${kind}: never stands on the deck overhead (y=${r.y.toFixed(2)}, max ${maxY.toFixed(2)})`);
+  }
+  console.log('PASS a ride that sinks under a deck respawns on the land behind, never on the deck overhead');
+}
+{
+  // A recovery never stands a ride on water: a placement guard that moves a dry road point onto the water under a span
+  // (no height given) is refused, and the ride stays put.
+  const shore = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+  const roads = makeRoads(-200, 200); roads.bridgeRuns = () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }];
+  for (const kind of ['car', 'bike']) {
+    const r = makeRide(kind, shore, roads); r.bounds = [-200, -200, 400, 200];
+    assert.equal(r.place(20, 0, Math.PI / 2), true);
+    r.placementGuard = (pose) => { if (pose.x < 60) pose.x = 100; return true; };
+    r.respawn();
+    assert.ok(r.x < 60, `${kind}: a recovery moved onto the water under a span by its guard is refused (x=${r.x})`);
+  }
+  console.log('PASS a recovery never stands a ride on the water under a span');
+}
+// The parked wait as main.ts runs it while the game waits for the first pedal: save the pose, step, then hold it.
+function parkedFrame(r) {
+  const { x, z, heading, y } = r;
+  r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
+  if (r.parkedPlace(x, z, heading, y)) r.speed = 0;
+}
+{
+  // A restart onto land that is still loading, on a bridge span whose deck is not built: when the land arrives, the
+  // wet placement is refused and the ordinary dry recovery takes the ride to a dry road point (as on main).
+  let loaded = false;
+  const shore = makeTerrain((x) => (x >= 60 && !loaded ? null : { ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+  const road = { id: 1, name: 'Span Road', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts: [[-200, 0], [200, 0]] };
+  const roads = { roads: [road], deckHeight: () => null, bridgeRuns: () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }],
+    // The span reach (8 m) finds the road under the point; a wider search finds a dry point on the land.
+    nearest: (x, z, maxDist, filter) => filter && !filter(road) ? null : maxDist <= 8 ? { road, seg: 0, t: 0, dist: Math.abs(z), x, z: 0, heading: Math.PI / 2 } : { road, seg: 0, t: 0, dist: Math.abs(x - 20), x: 20, z: 0, heading: Math.PI / 2 } };
+  for (const kind of ['car', 'bike']) {
+    loaded = false;
+    const r = makeRide(kind, shore, roads); r.bounds = [-200, -200, 400, 200];
+    assert.equal(r.place(20, 0, Math.PI / 2), true);
+    r.restart(100, 0, Math.PI / 2);
+    for (let i = 0; i < 30; i++) parkedFrame(r);
+    assert.ok(Math.abs(r.x - 100) < 1e-9, `${kind}: waits for the land at the restart point`);
+    loaded = true;
+    for (let i = 0; i < 30; i++) parkedFrame(r);
+    assert.ok(Math.abs(r.x - 20) < 1 && Math.abs(r.y - 1) < .3, `${kind}: the wet start is refused and the dry recovery takes it to the land (x=${r.x.toFixed(1)}, y=${r.y.toFixed(2)})`);
+  }
+  console.log('PASS a restart on an unbuilt span over water ends as on main: refused, then a dry recovery');
+}
+{
+  // The parked hold after a step that began while the ride waited for its land: nowhere dry, so the ride stops in the
+  // water at the retry's height, and the hold must not use the old body height (9 m), which would take an unrelated
+  // deck 8 m up.
+  let loaded = false;
+  const sea = makeTerrain(() => (loaded ? { ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false } : null));
+  const over = makeRoads(-200, 200, (x, z) => (Math.abs(x - 100) <= 30 && Math.abs(z) <= 6 ? 8 : null));
+  for (const kind of ['car', 'bike']) {
+    loaded = false;
+    const r = makeRide(kind, sea, over); r.bounds = [-200, -200, 400, 200];
+    Object.assign(r, { x: 100, z: 0, y: 9 });
+    r.restart(100, 0, Math.PI / 2);
+    loaded = true;
+    let maxY = -Infinity;
+    for (let i = 0; i < 120; i++) { parkedFrame(r); maxY = Math.max(maxY, r.y); }
+    assert.ok(maxY < 4, `${kind}: the parked hold never stands the ride on the deck overhead (max y=${maxY.toFixed(2)})`);
+  }
+  console.log('PASS the parked hold after a waiting step never uses the old body height');
+}
+{
+  // The hold is skipped only right after a step that began waiting: any later placement outside that step (a restart, a
+  // jump) ends it, and the parked hold works again.
+  let loaded = false;
+  const land = makeTerrain((x) => (x >= 60 && !loaded ? null : { ground: 1, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+  const roads = makeRoads(-200, 200);
+  for (const kind of ['car', 'bike']) {
+    loaded = false;
+    const r = makeRide(kind, land, roads); r.bounds = [-200, -200, 400, 200];
+    r.place(100, 0, Math.PI / 2); r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
+    assert.equal(r.parkedPlace(100, 0, Math.PI / 2, 1), false, `${kind}: no hold right after a step that began waiting`);
+    assert.equal(r.place(20, 0, Math.PI / 2), true);
+    assert.equal(r.parkedPlace(21, 0, Math.PI / 2, 1), true, `${kind}: an explicit placement ends the skip; the hold works again`);
+  }
+  console.log('PASS the parked-hold skip lasts only until the next placement outside the waiting step');
+}
+{
+  // A Fleet start (truck with its trailer) on a built deck over water, as main allows: the trailer check is judged at
+  // fleet's own ground height (the deck, 8 m up, out of reach of the rig staged on the land), not at the seabed.
+  const sea = makeTerrain((x) => ({ ground: x < 0 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+  const deckRoads = makeRoads(-200, 640, (x, z) => (x >= 20 && x <= 640 && Math.abs(z) <= 8 ? 8 : null));
+  const truck = new Vehicle(createTruck(false, true), sea, deckRoads, SEA, TRUCK_SPEC); truck.assist = 0;
+  assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+  const tow = new Towing(truck, sea, deckRoads, false, false, {}, true, true);
+  const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
+  const fleet = new Fleet(truck, tow, sea, deckRoads, scene, true, () => {}, SEA);
+  assert.equal(fleet.startVisit(330, 0, Math.PI / 2), true, 'Fleet starts the truck and trailer on the built deck over water');
+  assert.ok(Math.abs(truck.x - 330) < 30 && Math.abs(truck.y - 8) < .2, `the rig stands on the deck (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+  // The same start through the location-start path: main.ts wires the start's accepts callback to the truck's placement
+  // guard (the trailer check), so the guard must see the deck height too. The deck runs more than the guard's 120 m
+  // search from dry land, as at the Canso Canal crossing.
+  assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+  const guard = truck.placementGuard;
+  assert.equal(fleet.startVisit(340, 0, Math.PI / 2, pose => guard?.(pose) !== false), true, 'Start where I am: Fleet starts the rig on the built deck through the trailer guard');
+  assert.ok(Math.abs(truck.y - 8) < .2, `and it stands on the deck (y=${truck.y.toFixed(2)})`);
+  console.log('PASS a Fleet start with the trailer on a built deck over water stands on the deck, as on main');
+}

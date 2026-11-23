@@ -381,8 +381,9 @@ export class StuntPark implements Site {
     }
     return true;
   }
-  placementAllowed(pose:{x:number;z:number;heading:number},spec:VehicleSpec):boolean {
-    const y=this.terrain.heightAt(pose.x,pose.z);return y!==null&&this.allowsBody({...pose,y,spec});
+  /** The probe stands at the placement's own reference height, so a pose on a ramp deck is not tested at the land under it. */
+  placementAllowed(pose:{x:number;z:number;heading:number;y?:number},spec:VehicleSpec):boolean {
+    const y=this.terrain.heightAt(pose.x,pose.z,pose.y);return y!==null&&this.allowsBody({...pose,y,spec});
   }
   resolveSolids(ride:StuntRide):void {
     if(!inside(this.box,ride.x,ride.z,ride.spec.envelope.reach))return;

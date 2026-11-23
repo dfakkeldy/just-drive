@@ -37,7 +37,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
   const update = name => ({ update: trace(name), pending: 0 });
   function vec() { return { x: 3, y: 4, z: 5, set: trace('shadowFocus'), copy: trace('sky') }; }
   const position = vec(), camera = { position, updateMatrixWorld: trace('camera.matrix'), rotation: { set: trace('camera.rotation') } };
-  const vehicle = { x: 3, y: 4, z: 5, heading: .7, vx: 0, vz: 0, vy: 0, speed: 0, place: trace('vehicle.place') };
+  const vehicle = { x: 3, y: 4, z: 5, heading: .7, vx: 0, vz: 0, vy: 0, speed: 0, place: trace('vehicle.place'), parkedPlace: trace('vehicle.parkedPlace'), retryPlace: trace('vehicle.retryPlace') };
   const context = {
     window: {}, performance: { now: () => 1000 + calls.length }, THREE: { Vector3: vec, MathUtils: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) } },
     started: true, last: 1000, fps: 60, quiet: 25, camReady: true, mode: 'drive', vehicle, camera,

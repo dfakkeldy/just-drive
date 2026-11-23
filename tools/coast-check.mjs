@@ -37,7 +37,7 @@ console.log('PASS coast zones, bench/highland/away guards, sea/beach/cliff veget
 // `use` marks a tile as used for the tile cache (terrain.ts); this stand-in has no cache, so it is a no-op.
 // The drawn tile is found by its key, so the stand-in has a map grid with one level-8 tile at the origin.
 const hide=new THREE.Vector4(1,0,0,0);
-const fake=Object.assign(Object.create(Terrain.prototype),{use(){},find:()=>null,maxLevel:8,manifest:{village:[0,0],origin:[0,0],size:256*2**8},tiles:new Map([['8/0_0',{
+const fake=Object.assign(Object.create(Terrain.prototype),{roadCuts:{height:()=>null},use(){},find:()=>null,maxLevel:8,manifest:{village:[0,0],origin:[0,0],size:256*2**8},tiles:new Map([['8/0_0',{
   level:8,x0:0,z0:0,size:256,mesh:{visible:true,material:{uniforms:{hideQuad:{value:hide}}},
     geometry:{getAttribute:()=>({getComponent:(_i,component)=>{assert.equal(component,1);return 10;}})}},
 }]])});

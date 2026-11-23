@@ -19,7 +19,11 @@ export function checkCountDelta(delta,low,groups,context={}){
  assert.ok(delta.textures<=0,'no new textures');assert.ok(delta.geometries<=2,'at most two merged sidewalk geometries');
  const sidewalkDraws=Object.entries(groups).filter(([name])=>name.toLowerCase().includes('sidewalk')).reduce((n,[,v])=>n+v,0);
  assert.ok(delta.calls<=sidewalkDraws,'positive calls must be explained by submitted sidewalk meshes');
- assert.ok(delta.calls<=(low?2:4),'bounded sidewalk draws across render passes');assert.ok(delta.triangles<=(low?4816:12000),'approved per-view triangle delta');
+ assert.ok(delta.calls<=(low?2:4),'bounded sidewalk draws across render passes');
+ // A walk can widen one deck. The named deck mesh adds 960 triangles in a render pass, plus its desktop shadow.
+ const bridgeDeckTriangles=context.bridgeDeckTriangles??0;
+ assert.ok(bridgeDeckTriangles===0||bridgeDeckTriangles===960||(!low&&bridgeDeckTriangles===1920),'approved widened deck triangles');
+ assert.ok(delta.triangles-bridgeDeckTriangles<=(low?4816:12000),'approved per-view triangle delta');
 }
 
 export function checkUnchangedCounts(delta,mainKeys,currentKeys){

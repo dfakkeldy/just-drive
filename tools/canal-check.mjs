@@ -349,3 +349,25 @@ function routeCheck(source) {
 console.log('PASS baked water corridor maximum ground',routeCheck(routeSource));
 const perpendicular = routeSource.replace('0.7193398003386512', '0.325').replace('-0.6946583704589973', '-0.946');
 assert.throws(() => routeCheck(perpendicular));console.log('KILLED bridge-perpendicular route');
+// #156: modern decks are one merged mesh. showCanalDeck leaves the canal span's deck out of it at once (drawing only);
+// its approaches stay drawn over their road cuts. An unchanged state does not re-merge, since the canal sets it every frame.
+{
+  const built = buildSync({ stdin: { contents: "export { ModernBridges } from './modern-bridges'; export * as THREE from 'three';", resolveDir: new URL('../web/src/', import.meta.url).pathname, loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node' });
+  const { ModernBridges, THREE } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].text).toString('base64'));
+  // Vertex i carries x = span id * 1000 + i, so the merged mesh shows which vertices were kept.
+  const geometry = (id, n) => { const g = new THREE.BufferGeometry(); for (const a of ['position', 'normal', 'color']) g.setAttribute(a, new THREE.BufferAttribute(Float32Array.from({ length: n * 3 }, (_, k) => k % 3 ? 0 : Math.abs(id) * 1000 + k / 3), 3)); return g; };
+  const span = (id, n, approach, members = [id]) => ({ road: { id }, members: new Set(members), x0: 1e9, z0: 1e9, x1: 1e9, z1: 1e9, geometry: geometry(id, n), approachRanges: Int32Array.from(approach) });
+  const decks = Object.assign(Object.create(ModernBridges.prototype), { spans: [span(35, 12, [0, 3, 6, 9]), span(-7, 9, [0, 3], [36, 37])], hidden: new Set(), dirty: true, mesh: null,
+    material: new THREE.MeshBasicMaterial(), group: new THREE.Group(), audit: { merges: 0 }, terrain: {}, ensure() { throw Error('no span builds in this fixture'); } });
+  const xs = () => [...decks.mesh.geometry.getAttribute('position').array].filter((_, k) => k % 3 === 0);
+  const range = (id, a, b) => Array.from({ length: b - a }, (_, i) => id * 1000 + a + i);
+  decks.update(new THREE.Vector3());
+  assert.deepEqual(xs(), [...range(35, 0, 12), ...range(7, 0, 9)], 'both spans drawn');
+  decks.setHidden(35, true);
+  assert.deepEqual(xs(), [...range(35, 0, 3), ...range(35, 6, 9), ...range(7, 0, 9)], 'at once, the canal deck leaves the mesh and its approaches stay');
+  const merges = decks.audit.merges; decks.setHidden(35, true); decks.update(new THREE.Vector3());
+  assert.equal(decks.audit.merges, merges, 'an unchanged state does not re-merge');
+  decks.setHidden(37, true); assert.deepEqual(xs(), [...range(35, 0, 3), ...range(35, 6, 9), ...range(7, 0, 3)], 'a member id hides its span deck');
+  decks.setHidden(35, false); decks.setHidden(37, false); assert.deepEqual(xs(), [...range(35, 0, 12), ...range(7, 0, 9)], 'shown again');
+  console.log('PASS modern decks: the canal deck hides at once and its approaches stay drawn, without a re-merge per frame');
+}
