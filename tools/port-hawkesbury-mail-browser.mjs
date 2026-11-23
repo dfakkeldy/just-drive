@@ -53,8 +53,8 @@ for (const url of urls) {
     }
 
     const level = isLow ? 'low' : 'desktop';
-    // Hold car still while verifying.
-    await page.read(`(() => { mmm.vehicle.update = () => {}; return true; })()`);
+    // Hold car still while auditing settled state; save real update so normal vehicle contacts can run below.
+    await page.read(`(() => { window.__origVehicleUpdate = mmm.vehicle.update.bind(mmm.vehicle); mmm.vehicle.update = () => {}; return true; })()`);
 
     // Wait for the Post Office building to build once fine terrain is ready near Pitt Street.
     let built = false;
@@ -148,22 +148,12 @@ for (const url of urls) {
       const frameCalls = median(shownRows.map(x => x.calls));
       const hiddenCalls = median(hiddenRows.map(x => x.calls));
       const frameTriangles = median(shownRows.map(x => x.triangles));
-      const v = mmm.vehicle, saved = { x: v.x, z: v.z, heading: v.heading, vx: v.vx, vz: v.vz, speed: v.speed };
-      let blocked = 0;
-      try {
-        for (const s of po.solids) {
-          Object.assign(v, { x: s.x, z: s.z, vx: 0, vz: 0, speed: 0 });
-          po.resolveSolids(v);
-          if (Math.hypot(v.x - s.x, v.z - s.z) > 0.05) blocked++;
-        }
-      } finally { Object.assign(v, saved); }
       return {
         built: po.built,
         triangles: po.triangles,
         meshes: drawn.length,
         drawn,
         solids: po.solids.length,
-        blocked,
         frameCalls,
         hiddenCalls,
         deltaCalls: frameCalls - hiddenCalls,
@@ -177,7 +167,7 @@ for (const url of urls) {
     assert.ok(poState.frameCalls > 50 && poState.frameCalls <= ceil.frameCalls, `${level}: whole-frame calls beside Post Office ${poState.frameCalls} in (50, ${ceil.frameCalls}]`);
     assert.ok(poState.deltaCalls <= ceil.deltaCalls, `${level}: Post Office paired draw-call delta ${poState.deltaCalls} <= ${ceil.deltaCalls}`);
     assert.ok(poState.drawn.some(d => d.name === 'ph-post-office-sign' && d.map), `${level}: generic POST OFFICE sign mesh drawn`);
-    assert.equal(poState.blocked, poState.solids, `${level}: every Post Office solid blocks the vehicle`);
+    assert.ok(poState.solids >= 8, `${level}: Post Office exposes strip-cut solids (${poState.solids})`);
 
     // 3. Capture street-level verification pictures of the Post Office from Pitt Street and the SW lot.
     for (const p of POSES) {
@@ -192,6 +182,72 @@ for (const url of urls) {
       await sleep(1200);
       await saveShot(page, `${name}-${p.tag}.png`);
     }
+
+    // 4. Exercise normal vehicle contacts (driveVehicle -> vehicle.update -> fleetContacts/soloContacts) on main block,
+    //    NE entrance vestibule, rear loading dock outer edge, and SW lobby landing/rail.
+    const contacts = await page.read(`(() => {
+      const V = mmm.terrain.manifest.village, v = mmm.vehicle;
+      const saved = { x: v.x, z: v.z, heading: v.heading, vx: v.vx, vz: v.vz, speed: v.speed };
+      const az = 47 * Math.PI / 180, s = Math.sin(az), c = Math.cos(az);
+      const localToWorld = (lx, lz) => ({ x: 627806.27 + lx * s + lz * c - V[0], z: V[1] - (5052413.92 + lx * c - lz * s) });
+      const probes = [
+        ['main-block', 0, 0, az],
+        ['entrance-vestibule', 12.4, 6.4, az],
+        ['loading-dock', 2.25, -13.4, az + Math.PI / 2],
+        ['sw-landing', -6.5, 10.4, az],
+      ];
+      const out = {};
+      mmm.vehicle.update = window.__origVehicleUpdate;
+      try {
+        for (const [label, lx, lz, h] of probes) {
+          const p = localToWorld(lx, lz);
+          Object.assign(v, { x: p.x, z: p.z, heading: h, vx: 0, vz: 0, speed: 0 });
+          mmm.driveVehicle(1 / 60, { throttle: 0, brake: 1, steer: 0, handbrake: true });
+          out[label] = Math.hypot(v.x - p.x, v.z - p.z);
+        }
+      } finally {
+        Object.assign(v, saved);
+        mmm.vehicle.update = () => {};
+      }
+      return out;
+    })()`);
+    console.log(name, 'normalContacts', JSON.stringify(contacts));
+    for (const [label, push] of Object.entries(contacts)) {
+      assert.ok(push > 0.05, `${level}: normal vehicle contact pushes out at ${label} (${push.toFixed(3)} m)`);
+    }
+
+    // 5. Live drone descent regression over the NE entrance vestibule roof: holding descend must stop above the roof.
+    await page.send('Page.bringToFront');
+    const keyEvent = async (type, code, key) => page.send('Input.dispatchKeyEvent', { type, code, key });
+    await keyEvent('keyDown', 'KeyF', 'f');
+    await keyEvent('keyUp', 'KeyF', 'f');
+    let droneActive = false;
+    for (let i = 0; i < 40 && !droneActive; i++) {
+      await sleep(100);
+      droneActive = await page.read('Boolean(mmm.drone && mmm.drone.active)');
+    }
+    assert.ok(droneActive, `${level}: KeyF launches the camera drone`);
+    const roofMeta = await page.read(`(() => {
+      const V = mmm.terrain.manifest.village, az = 47 * Math.PI / 180, s = Math.sin(az), c = Math.cos(az);
+      const lx = 12.4, lz = 6.4;
+      const x = 627806.27 + lx * s + lz * c - V[0], z = V[1] - (5052413.92 + lx * c - lz * s);
+      const roofTop = mmm.postOffice.roofAt(x, z);
+      const ground = mmm.terrain.surfaceAt(x, z)?.ground ?? mmm.terrain.heightAt(x, z);
+      Object.assign(mmm.drone.state, { x, z, y: roofTop + 3.0, vx: 0, vy: 0, vz: 0 });
+      return { roofTop, ground };
+    })()`);
+    assert.ok(roofMeta.roofTop > roofMeta.ground + 3.5, `${level}: entrance roofAt (${roofMeta.roofTop.toFixed(2)}) sits above ground (${roofMeta.ground.toFixed(2)})`);
+    await keyEvent('keyDown', 'ShiftLeft', 'Shift');
+    await sleep(1800);
+    const afterDescend = await page.read(`({ y: mmm.drone.state.y, vy: mmm.drone.state.vy })`);
+    await keyEvent('keyUp', 'ShiftLeft', 'Shift');
+    await keyEvent('keyDown', 'KeyF', 'f');
+    await keyEvent('keyUp', 'KeyF', 'f');
+    console.log(name, 'droneEntrance', JSON.stringify({ ...roofMeta, ...afterDescend }));
+    assert.ok(
+      afterDescend.y >= roofMeta.roofTop + 1.5,
+      `${level}: drone must stay above NE entrance roof (${afterDescend.y.toFixed(2)} >= ${(roofMeta.roofTop + 1.5).toFixed(2)}, roof ${roofMeta.roofTop.toFixed(2)})`,
+    );
 
     assert.deepEqual(page.errors, []);
   } finally {

@@ -38,7 +38,8 @@ class Area:
     # A house inside the radius gets no mailbox, and step 29 stops if any box stands inside.
     no_box_sites: tuple = ()
     # Repo-relative JSON files holding EPSG:2961 polygon rings (`ring` key) where no roadside mailbox may stand
-    # (for example, a town with post-office pickup only). Houses inside get no box, and step 29 stops if any box stands inside.
+    # (for example, a town with post-office pickup only). Any placed box whose position falls inside is dropped,
+    # and step 29 stops if any box stands inside.
     no_mailbox_polygons: tuple = ()
     # Named kind-4 road pieces that step 29 gives no pole run, when a drive showed no power line along them:
     # ((east, north) on the piece's line, its expected name). Other pieces with the same name keep the usual rule.

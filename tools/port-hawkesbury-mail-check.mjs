@@ -2,7 +2,7 @@
 // Run via: node tools/run-node-check.mjs tools/port-hawkesbury-mail-check.mjs [--mutations]
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
@@ -17,6 +17,8 @@ import {
   poToMap,
   postOfficeClear,
   postOfficeReplaceBuildings,
+  postOfficeReplacedIds,
+  postOfficeRoofAt,
   postOfficeSolids,
 } from '../web/src/port-hawkesbury-mail.ts';
 import { PortHawkesburyPostOffice } from '../web/src/ph-post-office.ts';
@@ -85,8 +87,28 @@ for (const rel of ['web/src/port-hawkesbury-mail.ts', 'web/src/ph-post-office.ts
   assert.doesNotMatch(src, /\b\d{1,5}\s+[A-Z][a-z]+\s+(?:St|Street|Rd|Road|Ln|Lane|Ave|Avenue)\b/, `${rel} must not contain civic street addresses`);
 }
 
-// 3. Synthetic legacy + clean props filtering, shared-frame normalization, non-pointtupper pass-through, and Props cells.
+// 3. Synthetic legacy + clean props filtering, building replacement & renumbering, shared-frame normalization, and Props cells.
 {
+  const poMain = { id: 149, x: PH_POST_OFFICE.replaces[0][0], y: PH_POST_OFFICE.replaces[0][1] };
+  const poWingA = { id: 3081, buildingId: 149, x: PH_POST_OFFICE.replaces[1][0], y: PH_POST_OFFICE.replaces[1][1], site: poMain };
+  const poWingB = { id: 3082, buildingId: 149, x: PH_POST_OFFICE.frame.e + 12, y: PH_POST_OFFICE.frame.n + 14, site: poMain };
+  const neighbour = { id: 500, x: PH_POST_OFFICE.frame.e + 120, y: PH_POST_OFFICE.frame.n + 120 };
+  const synthBuildings = [poMain, poWingA, poWingB, neighbour];
+
+  // Unconditional building replacement check (runs even without data/ in clean-clone CI).
+  assert.deepEqual(postOfficeReplaceBuildings(synthBuildings).map(b => b.id), [500], 'replaces Post Office + wings, keeps neighbour');
+  assert.deepEqual([...postOfficeReplacedIds(synthBuildings)].sort((a, b) => a - b), [149, 3081, 3082]);
+
+  // Renumbered rebake fixture: Post Office gets new IDs (9149/93081/93082) and an unrelated building 600 m away gets old ID 149.
+  const reMain = { id: 9149, x: poMain.x, y: poMain.y };
+  const reWingA = { id: 93081, buildingId: 9149, x: poWingA.x, y: poWingA.y, site: reMain };
+  const reWingB = { id: 93082, buildingId: 9149, x: poWingB.x, y: poWingB.y, site: reMain };
+  const unrelated149 = { id: 149, x: PH_POST_OFFICE.frame.e + 450, y: PH_POST_OFFICE.frame.n + 420 };
+  const reBuildings = [reMain, reWingA, reWingB, unrelated149];
+  assert.deepEqual(postOfficeReplaceBuildings(reBuildings).map(b => b.id), [149], 'renumbered Post Office removed, unrelated 149 kept');
+  const reIds = postOfficeReplacedIds(reBuildings);
+  assert.deepEqual([...reIds].sort((a, b) => a - b), [9149, 93081, 93082]);
+
   const outsideA = { x: 628950, y: 5049600, heading: 90, style: 0, tilt: 0, group: 10, parcelBox: false };
   const insidePartner = { x: 627850, y: 5052450, heading: 90, style: 0, tilt: 0, group: 10, parcelBox: false };
   const insideSolo = { x: 628100, y: 5052650, heading: 180, style: 2, tilt: 0, group: null, parcelBox: true };
@@ -100,14 +122,18 @@ for (const rel of ['web/src/port-hawkesbury-mail.ts', 'web/src/ph-post-office.ts
       { x: 629050, y: 5049550, heading: 0, modules: 2 },
     ],
     poles: [{ x: 627820, y: 5052400, heading: 47, road: 181, n: 0, transformer: false, light: true }],
-    serviceDrops: [{ building: 149, road: 181, n: 0, x: 627800, y: 5052400, height: 3.0, ground: 16.7, groundX: 627800, groundY: 5052400 }],
+    serviceDrops: [
+      { building: 149, road: 181, n: 0, x: 627800, y: 5052400, height: 3.0, ground: 16.7, groundX: 627800, groundY: 5052400 },
+      { building: 500, road: 181, n: 1, x: 627920, y: 5052520, height: 3.5, ground: 18.0, groundX: 627920, groundY: 5052520 },
+    ],
   };
 
   // Non-pointtupper areas stay untouched.
   assert.equal(filterPointTupperProps(synthetic, 'mabou'), synthetic, 'filterPointTupperProps must not touch non-pointtupper areas');
 
   // Legacy Point Tupper fixture (with inside-town boxes) strips every mailbox and cabinet inside town limits.
-  const filtered = filterPointTupperProps(synthetic, 'pointtupper', true);
+  const origIds = postOfficeReplacedIds(synthBuildings);
+  const filtered = filterPointTupperProps(synthetic, 'pointtupper', origIds);
   assert.equal(filtered.mailboxes.length, 3, 'both inside-town mailboxes removed, 3 outside kept');
   assert.equal(filtered.mailboxes.filter(m => inPortHawkesbury(m.x, m.y)).length, 0);
   assert.equal(filtered.mailboxes[0].group, null, 'straddling shared frame reduced to 1 box becomes a single post');
@@ -115,12 +141,30 @@ for (const rel of ['web/src/port-hawkesbury-mail.ts', 'web/src/ph-post-office.ts
   assert.equal(filtered.mailboxes[2].group, 20);
   assert.equal(filtered.communityBoxes.length, 1, 'inside-town community box removed, outside kept');
   assert.equal(filtered.poles.length, 1, 'poles inside town remain intact');
-  assert.equal(filtered.serviceDrops[0].height, PH_POST_OFFICE.serviceDrop.height, 'building 149 drop re-aimed');
+  assert.equal(filtered.serviceDrops[0].height, PH_POST_OFFICE.serviceDrop.height, 'Post Office drop re-aimed');
   assert.equal(filtered.serviceDrops[0].ground, null);
+  assert.equal(filtered.serviceDrops[1].x, 627920, 'neighbour drop untouched');
+
+  // Renumbered utility drops: Post Office (9149) re-aimed, unrelated building given old ID 149 stays untouched.
+  const reProps = {
+    ...synthetic,
+    serviceDrops: [
+      { building: 9149, road: 181, n: 0, x: 627800, y: 5052400, height: 3.0, ground: 16.7, groundX: 627800, groundY: 5052400 },
+      { building: 149, road: 200, n: 0, x: 628256, y: 5052833, height: 3.4, ground: 21.0, groundX: 628256, groundY: 5052833 },
+    ],
+  };
+  const reFiltered = filterPointTupperProps(reProps, 'pointtupper', reIds);
+  const movedDrop = reFiltered.serviceDrops.find(d => d.building === 9149);
+  const otherDrop = reFiltered.serviceDrops.find(d => d.building === 149);
+  const [mdx, mdz] = poToLocal(movedDrop.x, movedDrop.y);
+  assert.ok(Math.abs(mdx - PH_POST_OFFICE.serviceDrop.x) < 0.01 && Math.abs(mdz - PH_POST_OFFICE.serviceDrop.z) < 0.01, 'renumbered Post Office wire re-aimed');
+  assert.equal(movedDrop.height, PH_POST_OFFICE.serviceDrop.height);
+  assert.equal(movedDrop.ground, null);
+  assert.deepEqual(otherDrop, reProps.serviceDrops[1], 'unrelated building with old ID 149 keeps its wire untouched');
 
   // Clean fresh-bake fixture (already 0 inside-town boxes) passes through cleanly.
   const cleanBake = { ...synthetic, mailboxes: [outsideA, outsidePairA, outsidePairB].map(m => ({ ...m, group: m.group === 10 ? null : m.group })), communityBoxes: [] };
-  const cleanFiltered = filterPointTupperProps(cleanBake, 'pointtupper', true);
+  const cleanFiltered = filterPointTupperProps(cleanBake, 'pointtupper', origIds);
   assert.equal(cleanFiltered.mailboxes.length, 3);
   assert.equal(cleanFiltered.communityBoxes.length, 0);
 
@@ -173,6 +217,21 @@ for (const rel of ['web/src/port-hawkesbury-mail.ts', 'web/src/ph-post-office.ts
   assert.equal(po.built, false, 'Post Office stays unbuilt at pointtupper-start (476 m away)');
   assert.equal(po.group.children.length, 0);
   assert.equal(po.triangles, 0);
+
+  // Hand-built roof heights for the camera drone floor: main block, NE entrance vestibule, rear wing, and off-roof.
+  const baseY = 16.7 + 0.15;
+  for (const [label, lx, lz, expected] of [
+    ['main block roof', 0, 0, baseY + 6.68],
+    ['NE entrance vestibule roof', 12.4, 6.4, baseY + 5.18],
+    ['NE entrance canopy', 12.1, 10.0, baseY + 3.09],
+    ['rear NW wing roof', 9.0, -16.0, baseY + 6.18],
+    ['off-building Pitt Street', 0, 20.0, -Infinity],
+  ]) {
+    const [e, n] = poToMap(lx, lz);
+    const wx = e - VILLAGE[0], wz = VILLAGE[1] - n;
+    assert.equal(postOfficeRoofAt(wx, wz, VILLAGE, baseY), expected, `postOfficeRoofAt ${label}`);
+    assert.equal(po.roofAt(wx, wz), expected, `PortHawkesburyPostOffice.roofAt ${label}`);
+  }
 }
 
 // 5. Real baked Point Tupper land checks (supports BOTH legacy baked land and clean fresh bakes; skipped if data/ is absent).
@@ -187,7 +246,8 @@ if (HAS_DATA) {
   const rawOutside = rawProps.mailboxes.filter(m => !inPortHawkesbury(m.x, m.y));
   assert.ok(rawOutside.length >= 600, `expected outside boxes to preserve, got ${rawOutside.length}`);
 
-  const filtered = filterPointTupperProps(rawProps, 'pointtupper', true);
+  const replacedIds = postOfficeReplacedIds(rawBuildings);
+  const filtered = filterPointTupperProps(rawProps, 'pointtupper', replacedIds);
   assert.equal(filtered.mailboxes.length, rawOutside.length, 'every outside mailbox preserved, every inside mailbox removed');
   assert.equal(filtered.mailboxes.filter(m => inPortHawkesbury(m.x, m.y)).length, 0, 'ZERO mailboxes inside Town of Port Hawkesbury');
   assert.equal(filtered.poles.length, rawProps.poles.length, 'all poles preserved');
@@ -204,13 +264,13 @@ if (HAS_DATA) {
   const renumbered = rawBuildings.map(b => ({ ...b, id: b.id + 9000, ...(b.buildingId === undefined ? {} : { buildingId: b.buildingId + 9000 }) }));
   assert.deepEqual(postOfficeReplaceBuildings(renumbered).map(b => [b.x, b.y]), kept.map(b => [b.x, b.y]));
 
-  // Service drop for building 149 lands on the Post Office SE front wall below the 6.5 m cornice.
-  const drop149 = filtered.serviceDrops.find(d => d.building === 149);
-  assert.ok(drop149, 'service drop for building 149 exists');
-  const [dlx, dlz] = poToLocal(drop149.x, drop149.y);
+  // Service drop for the replaced Post Office building lands on the SE front wall below the 6.5 m cornice.
+  const poDrop = filtered.serviceDrops.find(d => replacedIds.has(d.building));
+  assert.ok(poDrop, 'service drop for replaced Post Office building exists');
+  const [dlx, dlz] = poToLocal(poDrop.x, poDrop.y);
   const [mx0, mx1, , mz1] = PH_POST_OFFICE.rects[0];
-  assert.ok(dlx >= mx0 - 0.1 && dlx <= mx1 + 0.1 && Math.abs(dlz - mz1) < 0.15, `drop 149 on SE wall (${dlx.toFixed(2)}, ${dlz.toFixed(2)})`);
-  assert.ok(drop149.height > 3.0 && drop149.height < 6.0 && drop149.ground === null);
+  assert.ok(dlx >= mx0 - 0.1 && dlx <= mx1 + 0.1 && Math.abs(dlz - mz1) < 0.15, `Post Office drop on SE wall (${dlx.toFixed(2)}, ${dlz.toFixed(2)})`);
+  assert.ok(poDrop.height > 3.0 && poDrop.height < 6.0 && poDrop.ground === null);
 
   // Every solid corner and pad edge clears every road carriageway and kept building.
   const nearRoads = rawRoads.roads.filter(r => r.pts.some(([e, n]) => Math.hypot(e - PH_POST_OFFICE.frame.e, n - PH_POST_OFFICE.frame.n) < 120));
@@ -306,6 +366,8 @@ execFileSync('python3', ['-c', pipelineCheckScript('pipeline/29_bake_props.py')]
   const mainSrc = readFileSync(MAIN_TS, 'utf8');
   assert.match(mainSrc, /filterPointTupperProps\(/, 'main.ts filters Point Tupper props');
   assert.match(mainSrc, /postOfficeReplaceBuildings\(/, 'main.ts replaces the surveyed Post Office building');
+  assert.match(mainSrc, /postOfficeReplacedIds\(/, 'main.ts resolves replaced Post Office building IDs by position');
+  assert.match(mainSrc, /postOffice\.roofAt\(/, 'main.ts feeds hand-built Post Office roofs to the drone floor');
   assert.match(mainSrc, /postOfficeClear\(/, 'main.ts clears trees and lot props under the Post Office');
   assert.match(mainSrc, /import\('\.\/ph-post-office'\)/, 'main.ts lazily loads the Post Office chunk');
 }
@@ -336,19 +398,25 @@ if (process.argv.includes('--mutations')) {
     {
       name: 'skip-building-replacement',
       file: 'web/src/port-hawkesbury-mail.ts',
-      from: 'return list.filter(b => !onSpot(b) && !groups.has(b.buildingId ?? b.id));',
+      from: 'return list.filter(b => !replaced.has(b.id) && !replaced.has(b.buildingId ?? b.id));',
       to: 'return list;',
     },
     {
       name: 'skip-service-drop-reaim',
       file: 'web/src/port-hawkesbury-mail.ts',
-      from: 'return drops.map(d => d.building === target.building',
-      to: 'return drops.map(d => false && d.building === target.building',
+      from: 'return drops.map(d => buildingIds.has(d.building)',
+      to: 'return drops.map(d => false && buildingIds.has(d.building)',
+    },
+    {
+      name: 'skip-drone-roof',
+      file: 'web/src/port-hawkesbury-mail.ts',
+      from: 'if (lx > r[0] - 1 && lx < r[1] + 1 && lz > r[2] - 1 && lz < r[3] + 1) top = h;',
+      to: 'if (false && lx > r[0] - 1) top = h;',
     },
     {
       name: 'skip-main-wiring',
       file: 'web/src/main.ts',
-      from: 'const data = filterPointTupperProps(mabouAimed, AREA.id, !!postOfficeChunk);',
+      from: 'const data = filterPointTupperProps(mabouAimed, AREA.id, postOfficeReplaced);',
       to: 'const data = mabouAimed;',
       expectError: /main\.ts filters Point Tupper props/,
     },
@@ -368,7 +436,7 @@ if (process.argv.includes('--mutations')) {
     });
 
     for (const m of mutants) {
-      const targetAbs = resolve(ROOT, m.file);
+      const targetAbs = realpathSync(resolve(ROOT, m.file));
       const original = readFileSync(targetAbs, 'utf8');
       assert.ok(original.includes(m.from), `mutant ${m.name} anchor missing in ${m.file}`);
       const mutated = original.replace(m.from, m.to);
@@ -395,7 +463,7 @@ if (process.argv.includes('--mutations')) {
               setup(b) {
                 b.onResolve({ filter: /esbuild\/lib\/main\.js$/ }, a => ({ path: resolve(a.resolveDir, a.path), external: true }));
                 b.onLoad({ filter: /.*/ }, a => {
-                  if (resolve(a.path) === targetAbs) return { contents: mutated, loader: a.path.endsWith('.ts') ? 'ts' : 'js' };
+                  if (existsSync(a.path) && realpathSync(a.path) === targetAbs) return { contents: mutated, loader: a.path.endsWith('.ts') ? 'ts' : 'js' };
                   return null;
                 });
               },

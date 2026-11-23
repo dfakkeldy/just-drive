@@ -159,7 +159,7 @@ import { roughRoads, setPuddleField } from './rough-roads';
 import { Puddles, splashLevel } from './puddles';
 import { JudiqueVillageSite, VILLAGE_PLACES } from './judique-village-site';
 import { PortHawkesburySite, aimDrops } from './port-hawkesbury-site';
-import { filterPointTupperProps, postOfficeClear, postOfficeReplaceBuildings } from './port-hawkesbury-mail';
+import { filterPointTupperProps, postOfficeClear, postOfficeReplaceBuildings, postOfficeReplacedIds } from './port-hawkesbury-mail';
 import { MabouMainSite, MAIN_ITEMS, aimDrops as aimMabouDrops } from './mabou-main-site';
 import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
@@ -436,6 +436,7 @@ const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take
   const placed = villageSite ? villageSite.buildings(kept) : kept;
   const ph = hawkesburySite ? hawkesburySite.buildings(placed) : placed;
   return postOfficeChunk ? postOfficeReplaceBuildings(ph) : ph; }) : null;
+const postOfficeReplaced = postOfficeChunk ? postOfficeReplacedIds(mappedBuildings) : new Set<number>();
 const bakedBuildingStyles = stylesRead
   ? await stylesRead.take().then(readBuildingStyles)
     .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
@@ -677,7 +678,7 @@ const props = await (async () => {
     const withPrince = princeSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: princeSite.aimDrops(placed.serviceDrops) } : placed;
     const mabouAimed = mabouSite && Array.isArray(withPrince.serviceDrops) ? { ...withPrince, serviceDrops: aimMabouDrops(withPrince.serviceDrops) } : withPrince;
     // Inside the Town of Port Hawkesbury's legal limits, roadside mailboxes and posts are removed.
-    const data = filterPointTupperProps(mabouAimed, AREA.id, !!postOfficeChunk);
+    const data = filterPointTupperProps(mabouAimed, AREA.id, postOfficeReplaced);
     return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined, splitRoadLines(roadData)); }
   catch (e) { console.warn('props', e); return null; }
 })();
@@ -1041,7 +1042,7 @@ const boxRoofAt = roofHeights(ERA.modern && buildingList ? drawnWithout(mabouSit
 const extraRoofAt = ERA.modern ? (() => {
   const kept = new Set(drawnBuildings ?? []);
   const extra: Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[] =
-    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox);
+    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox && !postOfficeReplaced.has(b.id));
   if (princeSite) extra.push(...princeSite.roofBoxes());
   for (const lm of landmarkList) {
     const a = lm.axisDeg * Math.PI / 180, alongX = Math.sin(a), alongZ = -Math.cos(a), acrossX = Math.cos(a), acrossZ = Math.sin(a);
@@ -1058,7 +1059,7 @@ const extraRoofAt = ERA.modern ? (() => {
   }
   return extra.length ? roofHeights(extra, manifest.village, EXAG, SEA_LEVEL) : null;
 })() : null;
-const roofAt = (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain ? mabouMain.roofAt(x, z) : -Infinity, extraRoofAt ? extraRoofAt(x, z) : -Infinity);
+const roofAt = (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain ? mabouMain.roofAt(x, z) : -Infinity, postOffice ? postOffice.roofAt(x, z) : -Infinity, extraRoofAt ? extraRoofAt(x, z) : -Infinity);
 if (import.meta.env.DEV) expose({ drone });
 
 function applyShot(s: Shot) {

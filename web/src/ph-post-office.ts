@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addFlag } from './flags';
 import { pushOut, type Pushable, type Solid } from './parked';
-import { PH_POST_OFFICE, poToMap, postOfficeClear, postOfficeSolids } from './port-hawkesbury-mail';
+import { PH_POST_OFFICE, poToMap, postOfficeClear, postOfficeRoofAt, postOfficeSolids } from './port-hawkesbury-mail';
 import { Face, Kit as SiteKit, canvas, grey } from './site-kit';
 import type { Terrain } from './terrain';
 
@@ -286,6 +286,7 @@ export class PortHawkesburyPostOffice {
   readonly centre: { x: number; z: number };
   built = false;
   triangles = 0;
+  private baseY: number | null = null;
   private nextCheck = 0;
   private readonly probes: { x: number; z: number }[];
   private readonly disposables: { dispose(): void }[] = [];
@@ -304,6 +305,19 @@ export class PortHawkesburyPostOffice {
     ];
   }
 
+  /** Roof height of the hand-built Post Office at world (x, z) for the camera drone's floor. */
+  roofAt(x: number, z: number): number {
+    const dx = x - this.centre.x, dz = z - this.centre.z;
+    if (dx * dx + dz * dz > 1600) return -Infinity;
+    let base = this.baseY;
+    if (base === null) {
+      const g = this.terrain.constructionHeightAt(this.centre.x, this.centre.z) ?? this.terrain.heightAt(this.centre.x, this.centre.z);
+      if (g === null) return -Infinity;
+      base = g + 0.15;
+    }
+    return postOfficeRoofAt(x, z, this.village, base);
+  }
+
   resolveSolids(car: Pushable): void {
     if (Math.hypot(car.x - this.centre.x, car.z - this.centre.z) < 60) pushOut(car, this.solids);
   }
@@ -320,6 +334,7 @@ export class PortHawkesburyPostOffice {
     const kit: Kit = new SiteKit(this.low, this.village, groundAt);
     const decals = new ApronDecals(this.village, groundAt, this.low ? 3 : 2);
     const { signMatrix } = buildPostOfficeModel(kit, decals, this.village);
+    this.baseY = kit.base;
 
     const textures = this.low ? null : makeTextures();
     if (textures) this.disposables.push(textures.brick, textures.glass);

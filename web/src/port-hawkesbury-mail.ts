@@ -76,6 +76,15 @@ export const PH_POST_OFFICE = Object.freeze({
     Object.freeze([2.25, 4.05, -16.2, -10.6] as const),
     Object.freeze([-10.8, -2.2, 8.43, 10.43] as const),
   ]),
+  /** Local roof & canopy footprints [x0, x1, z0, z1, topHeightAboveBase] for the drone flight floor. */
+  roofs: Object.freeze([
+    Object.freeze([-10.98, 10.97, -8.43, 8.43, 6.68] as const),
+    Object.freeze([10.57, 13.8, 4.0, 8.8, 5.18] as const),
+    Object.freeze([10.27, 14.0, 8.75, 10.15, 3.09] as const),
+    Object.freeze([4.05, 14.08, -25.32, -8.43, 6.18] as const),
+    Object.freeze([1.85, 4.05, -16.4, -10.4, 4.28] as const),
+    Object.freeze([14.08, 20.29, -15.8, -6.91, 5.66] as const),
+  ]),
   /** Concrete customer entrance walkway and SW paved parking / loading driveway (local [x0, x1, z0, z1]). */
   pads: Object.freeze([
     Object.freeze([10.2, 14.2, 8.8, 20.4] as const),
@@ -86,9 +95,30 @@ export const PH_POST_OFFICE = Object.freeze({
   flagpole: Object.freeze([-10.2, 13.0] as P2),
   letterBox: Object.freeze([13.25, 9.45] as P2),
   signText: 'POST OFFICE',
-  /** Service drop attachment on the SE front brick wall, below the flat-roof cornice (for baked building 149). */
-  serviceDrop: Object.freeze({ building: 149, x: -8.75, z: 8.43, height: 5.2 }),
+  /** Service drop attachment on the SE front brick wall, below the flat-roof cornice. */
+  serviceDrop: Object.freeze({ x: -8.75, z: 8.43, height: 5.2 }),
 });
+
+const PO_AZ_RAD = (PH_POST_OFFICE.frame.az * Math.PI) / 180;
+const PO_SIN = Math.sin(PO_AZ_RAD);
+const PO_COS = Math.cos(PO_AZ_RAD);
+
+/** World roof height of the hand-built Post Office at (x, z) for the drone floor (1 m margin, matching roofHeights). */
+export function postOfficeRoofAt(x: number, z: number, village: readonly [number, number], baseY: number): number {
+  const cx = PH_POST_OFFICE.frame.e - village[0], cz = village[1] - PH_POST_OFFICE.frame.n;
+  const de = x - cx, dn = cz - z;
+  if (de * de + dn * dn > 1600) return -Infinity;
+  const lx = de * PO_SIN + dn * PO_COS;
+  const lz = de * PO_COS - dn * PO_SIN;
+  let top = -Infinity;
+  for (let i = 0; i < PH_POST_OFFICE.roofs.length; i++) {
+    const r = PH_POST_OFFICE.roofs[i];
+    const h = baseY + r[4];
+    if (h <= top) continue;
+    if (lx > r[0] - 1 && lx < r[1] + 1 && lz > r[2] - 1 && lz < r[3] + 1) top = h;
+  }
+  return top;
+}
 
 /** World-space tree/prop clearing boxes for the Port Hawkesbury Post Office building and entrance walkway. */
 export function postOfficeClear(village: readonly [number, number]): [number, number, number, number][] {
@@ -119,21 +149,35 @@ export function postOfficeSolids(village: readonly [number, number]): Solid[] {
   return raw.flatMap(strips);
 }
 
-/** Remove the surveyed building (and all of its wings) replaced by the hand-built Port Hawkesbury Post Office. */
-export function postOfficeReplaceBuildings(list: Building[]): Building[] {
+/** Resolve the building and wing IDs replaced by the hand-built Port Hawkesbury Post Office by position. */
+export function postOfficeReplacedIds(list: readonly Building[]): Set<number> {
   const onSpot = (b: Building) => {
     const c = b.site ?? b;
     return PH_POST_OFFICE.replaces.some(([e, n]) => (c.x - e) ** 2 + (c.y - n) ** 2 <= 6 ** 2);
   };
   const groups = new Set(list.filter(onSpot).map(b => b.buildingId ?? b.id));
-  return list.filter(b => !onSpot(b) && !groups.has(b.buildingId ?? b.id));
+  const ids = new Set<number>(groups);
+  for (const b of list) {
+    if (onSpot(b) || groups.has(b.buildingId ?? b.id)) ids.add(b.id);
+  }
+  return ids;
 }
 
-/** Re-aim the replaced post office building's service drop onto the hand-built SE brick front wall. */
-export function aimPostOfficeDrops<T extends { building: number; x: number; y: number; height: number; ground: number | null; groundX: number; groundY: number }>(drops: T[]): T[] {
+/** Remove the surveyed building (and all of its wings) replaced by the hand-built Port Hawkesbury Post Office. */
+export function postOfficeReplaceBuildings(list: Building[]): Building[] {
+  const replaced = postOfficeReplacedIds(list);
+  return list.filter(b => !replaced.has(b.id) && !replaced.has(b.buildingId ?? b.id));
+}
+
+/** Re-aim the replaced post office building's service drop(s) onto the hand-built SE brick front wall. */
+export function aimPostOfficeDrops<T extends { building: number; x: number; y: number; height: number; ground: number | null; groundX: number; groundY: number }>(
+  drops: T[],
+  buildingIds: ReadonlySet<number>,
+): T[] {
+  if (!buildingIds.size) return drops;
   const target = PH_POST_OFFICE.serviceDrop;
   const [x, y] = poToMap(target.x, target.z);
-  return drops.map(d => d.building === target.building
+  return drops.map(d => buildingIds.has(d.building)
     ? { ...d, x, y, height: target.height, ground: null, groundX: x, groundY: y }
     : d);
 }
@@ -155,12 +199,12 @@ interface RawPropsFile {
  * - Normalizes any remaining shared mailbox frame reduced to one outside box back to a single post.
  * - Removes any community mailbox cabinet inside the town limits.
  * - Leaves all mailboxes outside town limits (Point Tupper, Port Hastings side, rural roads) untouched.
- * - Leaves all utility poles and service drops intact (re-aiming the post office building's drop when active).
+ * - Leaves all utility poles and service drops intact (re-aiming only the resolved post office building IDs).
  */
 export function filterPointTupperProps<T extends RawPropsFile>(
   data: T,
   areaId: string,
-  reaimPostOfficeDrop = true,
+  postOfficeDropIds?: ReadonlySet<number>,
 ): T {
   if (areaId !== 'pointtupper' || !data || typeof data !== 'object') return data;
   const rawBoxes = Array.isArray(data.mailboxes) ? data.mailboxes : [];
@@ -172,8 +216,8 @@ export function filterPointTupperProps<T extends RawPropsFile>(
   const communityBoxes = Array.isArray(data.communityBoxes)
     ? data.communityBoxes.filter(c => !inPortHawkesbury(c.x, c.y))
     : [];
-  const serviceDrops = reaimPostOfficeDrop && Array.isArray(data.serviceDrops)
-    ? aimPostOfficeDrops(data.serviceDrops)
+  const serviceDrops = postOfficeDropIds?.size && Array.isArray(data.serviceDrops)
+    ? aimPostOfficeDrops(data.serviceDrops, postOfficeDropIds)
     : data.serviceDrops;
   return { ...data, mailboxes, communityBoxes, ...(serviceDrops !== undefined ? { serviceDrops } : {}) };
 }
