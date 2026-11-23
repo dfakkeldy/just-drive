@@ -189,6 +189,8 @@ export class Vehicle {
   /** Only placeAt (fresh) or its retryPlace (continuing) may enter the unbuilt-span deck wait. */
   #freshDeckWait = false;
   #allowDeckWait = false;
+  /** Remember skipDeckWait across an unloaded placement's later retryPlace (so placeAtStart never waits when wet land loads late). */
+  #noDeckWait = false;
   /** True while waiting for an unbuilt modern bridge span's deck (holds main.ts from bypassing update()). */
   get waitingForDeck(): boolean { return this.#deckWaiting; }
   /** Set transiently by exact-pose candidate searches (placeAtStart) so an unbuilt span fails immediately and tries the next candidate. */
@@ -214,8 +216,9 @@ export class Vehicle {
   get retryHeight(): number | undefined { return this.stuck ? (this.inferring(this.x, this.z) ? this.deckReference(this.x, this.z) ?? this.placeReference : this.placeReference) : this.y; }
 
   place(x: number, z: number, heading: number, referenceY?:number): boolean {
-    const freshWait = this.#freshDeckWait, allowWait = this.#allowDeckWait;
-    this.#freshDeckWait = false; this.#allowDeckWait = false;
+    const isSelf = this instanceof Vehicle;
+    const freshWait = isSelf && this.#freshDeckWait, allowWait = isSelf && this.#allowDeckWait;
+    if (isSelf) { this.#freshDeckWait = false; this.#allowDeckWait = false; }
     if (!safePlacement(x, z, heading, this.bounds) || referenceY!==undefined&&!Number.isFinite(referenceY)) return false;
     // Live driving calls place() at the current spot when tiles disappear under the ride; recover instead of freezing off-map.
     // The recovery stays at the car's own height (this.y), so a deck overhead cannot take it.
@@ -246,7 +249,7 @@ export class Vehicle {
     // DECK_WAIT_SECONDS for its deck as for land that is still loading: stuck, no physics, no safe points. Direct
     // place(), explicit heights and recoveries never take this path.
     const dry = g === null || this.isDryPose(x, z, g);
-    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined
+    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(x, z) === null && placementOnSpan(this.roads, x, z);
     if (!dry && !waitDeck) return false;
@@ -257,6 +260,7 @@ export class Vehicle {
     this.flightPeak = null;
     if (this.spec.locomotion === 'horse') { this.speed = 0; this.car.resetPose?.(); }
     this.#deckWaiting = waitDeck;
+    this.#noDeckWait = freshWait ? this.skipDeckWait : allowWait ? this.#noDeckWait : false;
     if (freshWait || (g !== null && !waitDeck)) { this.#deckWait = 0; this.#waitFallback = null; }
     this.#waterStopped = false;
     if (g !== null && waitDeck) {
@@ -305,7 +309,7 @@ export class Vehicle {
 
   /** A new start (a new day): where the car went before no longer counts, so R cannot lead back to yesterday's road. */
   resetControlHistory(): void { this.touchRoad = null; this.junctionClear = 0; this.roadHeading = null; this.helpYaw = this.lightHelpYaw = 0; }
-  resetVisit(): void { this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.#deckWaiting = false; this.#deckWait = 0; this.#waitFallback = null; this.touchRoad = null; this.junctionClear = 0; this.helpYaw = this.lightHelpYaw = 0; this.sunk = 0; this.flightPeak = null; }
+  resetVisit(): void { this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.#deckWaiting = false; this.#deckWait = 0; this.#waitFallback = null; this.#noDeckWait = false; this.touchRoad = null; this.junctionClear = 0; this.helpYaw = this.lightHelpYaw = 0; this.sunk = 0; this.flightPeak = null; }
 
   restart(x: number, z: number, heading: number): boolean {
     const priorG = !this.stuck && !this.#awaitingLoad ? this.groundAt(this.x, this.z, this.y) : null;
@@ -313,13 +317,13 @@ export class Vehicle {
       ? { x: this.x, z: this.z, heading: this.heading, y: priorG } : null;
     const prevTrail = this.trail.slice(), prevGood = this.lastGood, prevSafe = this.#hasSafe;
     const prevStopped = this.#waterStopped, prevAwaiting = this.#awaitingLoad;
-    const prevWaiting = this.#deckWaiting, prevWait = this.#deckWait, prevFallback = this.#waitFallback;
-    this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.#deckWaiting = false; this.#deckWait = 0; this.#waitFallback = null;
+    const prevWaiting = this.#deckWaiting, prevWait = this.#deckWait, prevFallback = this.#waitFallback, prevNoWait = this.#noDeckWait;
+    this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.#deckWaiting = false; this.#deckWait = 0; this.#waitFallback = null; this.#noDeckWait = false;
     const placed = this.placeAt(x, z, heading);
     if (!placed) {
       this.trail.push(...prevTrail); this.lastGood = prevGood; this.#hasSafe = prevSafe;
       this.#waterStopped = prevStopped; this.#awaitingLoad = prevAwaiting;
-      this.#deckWaiting = prevWaiting; this.#deckWait = prevWait; this.#waitFallback = prevFallback;
+      this.#deckWaiting = prevWaiting; this.#deckWait = prevWait; this.#waitFallback = prevFallback; this.#noDeckWait = prevNoWait;
       return false;
     }
     if (this.stuck) this.#waitFallback = priorDry ?? prevFallback;
@@ -365,20 +369,20 @@ export class Vehicle {
   /** Save and restore ES private recovery state so fleet rollbacks never leak trial poses. */
   checkpointHidden(): { save(): void; restore(): void } {
     let sx = 0, sz = 0, sh = 0, bx = 0, bz = 0, bh = 0, has = false, stopped = false, awaiting = true;
-    let waiting = false, wait = 0, waited = false, fallback: VehiclePlacement | null = null;
+    let waiting = false, wait = 0, waited = false, fallback: VehiclePlacement | null = null, noWait = false;
     let sy: number | undefined, by: number | undefined;
     return {
       save: () => {
         sx = this.#safeNow.x; sz = this.#safeNow.z; sh = this.#safeNow.heading; sy = this.#safeNow.y;
         bx = this.#safeBack.x; bz = this.#safeBack.z; bh = this.#safeBack.heading; by = this.#safeBack.y;
         has = this.#hasSafe; stopped = this.#waterStopped; awaiting = this.#awaitingLoad;
-        waiting = this.#deckWaiting; wait = this.#deckWait; waited = this.#waitedThisStep; fallback = this.#waitFallback;
+        waiting = this.#deckWaiting; wait = this.#deckWait; waited = this.#waitedThisStep; fallback = this.#waitFallback; noWait = this.#noDeckWait;
       },
       restore: () => {
         this.#safeNow.x = sx; this.#safeNow.z = sz; this.#safeNow.heading = sh; this.#safeNow.y = sy;
         this.#safeBack.x = bx; this.#safeBack.z = bz; this.#safeBack.heading = bh; this.#safeBack.y = by;
         this.#hasSafe = has; this.#waterStopped = stopped; this.#awaitingLoad = awaiting;
-        this.#deckWaiting = waiting; this.#deckWait = wait; this.#waitedThisStep = waited; this.#waitFallback = fallback;
+        this.#deckWaiting = waiting; this.#deckWait = wait; this.#waitedThisStep = waited; this.#waitFallback = fallback; this.#noDeckWait = noWait;
       },
     };
   }

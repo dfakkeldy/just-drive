@@ -1335,8 +1335,12 @@ function runDeckWaitTests(api, quiet = false) {
     log('PASS Fleet unbuilt-span wait, camera framing, 8 s dry fallbacks, water-stop recovery and built-deck start');
   }
 
-  // 8j. Solo Start-where-I-am (placeAtStart) skips an unbuilt bridge span candidate so candidate search lands immediately on the next dry road.
+  // 8j. Solo Start-where-I-am (placeAtStart) skips an unbuilt bridge span candidate so candidate search lands immediately on the next dry road;
+  // when terrain loads late as wet after an unloaded placeAtStart, retryPlace recovers immediately without entering an 8 s wait;
+  // and calling prototype.place on a non-instance test double with unsafe coordinates returns false without throwing.
   {
+    assert.equal(api.Vehicle.prototype.place.call({ bounds: null }, NaN, 0, 0), false, 'Vehicle.prototype.place test double returns false without TypeError');
+    assert.equal(api.BikeRide.prototype.place.call({ bounds: null }, NaN, 0, 0), false, 'BikeRide.prototype.place test double returns false without TypeError');
     const mixedLand = makeTerrain((x) => ({ ground: x <= -10 ? 2 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: x >= -5, deck: false }));
     const spanRoads = makeRoads(-60, 60);
     spanRoads.bridgeRuns = () => [{ roads: new Set([1]), pts: [[-5, 0], [50, 0]], halfWidth: 4 }];
@@ -1352,8 +1356,21 @@ function runDeckWaitTests(api, quiet = false) {
       assert.equal(r.waitingForDeck, false, `${kind}: placeAtStart dry candidate is not waiting for a deck`);
       assert.equal(r.skipDeckWait, false, `${kind}: placeAtStart restores skipDeckWait after returning`);
       assert.ok(Math.abs(r.x - (-20)) < 1e-6 && Math.abs(r.y - 2) < .2, `${kind}: placeAtStart stands immediately on dry road (x=${r.x.toFixed(1)}, y=${r.y.toFixed(2)})`);
+
+      // Late-loading wet terrain after an unloaded placeAtStart recovers immediately (never enters 8 s wait).
+      let loaded = false;
+      const lateWet = makeTerrain((x) => (x < 60
+        ? { ground: 2, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }
+        : loaded ? { ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false } : null));
+      const lateRoads = mkSpanRoads({ y: null });
+      const rl = mkRide(kind, lateWet, lateRoads); rl.bounds = [-200, -200, 400, 200];
+      assert.equal(api.placeAtStart(rl, { x: 100, z: 0, heading: Math.PI / 2, distance: 0 }), true, `${kind}: unloaded placeAtStart accepts unloaded span`);
+      loaded = true;
+      for (let i = 0; i < 60; i++) parkedFrame(rl);
+      assert.equal(rl.waitingForDeck, false, `${kind}: unloaded placeAtStart never enters deck wait when wet terrain loads late`);
+      assert.ok(Math.abs(rl.x - 20) < 1 && Math.abs(rl.y - 2) < .2, `${kind}: unloaded placeAtStart recovers immediately to dry road at x=20 when wet terrain loads late (x=${rl.x.toFixed(1)}, y=${rl.y.toFixed(2)})`);
     }
-    log('PASS solo placeAtStart skips unbuilt bridge spans and selects the next dry candidate');
+    log('PASS solo placeAtStart skips unbuilt bridge spans, recovers on late-loaded wet tiles, and handles prototype test doubles');
   }
 }
 
@@ -1405,7 +1422,7 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     [
       'car-no-wait',
       'web/src/vehicle.ts',
-      `    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined
+      `    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(x, z) === null && placementOnSpan(this.roads, x, z);`,
       '    const waitDeck = false;',
@@ -1414,7 +1431,7 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     [
       'bike-no-wait',
       'web/src/bike-ride.ts',
-      `    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined
+      `    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(pose.x, pose.z) === null && placementOnSpan(this.roads, pose.x, pose.z);`,
       '    const waitDeck = false;',
@@ -1423,16 +1440,30 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     [
       'car-start-here-waits-on-unbuilt-span',
       'web/src/vehicle.ts',
-      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined',
-      '    const waitDeck = !dry && !this.#recovering && pose.y === undefined',
+      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined',
+      '    const waitDeck = !dry && !this.#recovering && !(allowWait && this.#noDeckWait) && pose.y === undefined',
       /car: placeAtStart skips unbuilt span candidate and selects dry road at x=-20/,
     ],
     [
       'bike-start-here-waits-on-unbuilt-span',
       'web/src/bike-ride.ts',
-      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined',
-      '    const waitDeck = !dry && !this.#recovering && pose.y === undefined',
+      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined',
+      '    const waitDeck = !dry && !this.#recovering && !(allowWait && this.#noDeckWait) && pose.y === undefined',
       /bike: placeAtStart skips unbuilt span candidate and selects dry road at x=-20/,
+    ],
+    [
+      'car-start-here-late-wet-waits',
+      'web/src/vehicle.ts',
+      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined',
+      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined',
+      /car: unloaded placeAtStart never enters deck wait when wet terrain loads late/,
+    ],
+    [
+      'bike-start-here-late-wet-waits',
+      'web/src/bike-ride.ts',
+      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined',
+      '    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && pose.y === undefined',
+      /bike: unloaded placeAtStart never enters deck wait when wet terrain loads late/,
     ],
     [
       'start-here-no-skip-flag',
@@ -1612,14 +1643,14 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     [
       'car-refused-restart-clears-wait',
       'web/src/vehicle.ts',
-      '      this.#deckWaiting = prevWaiting; this.#deckWait = prevWait; this.#waitFallback = prevFallback;',
+      '      this.#deckWaiting = prevWaiting; this.#deckWait = prevWait; this.#waitFallback = prevFallback; this.#noDeckWait = prevNoWait;',
       '      // refused restart leaves wait cleared',
       /car: failed live restart from off-road dry pose returns to prior dry pose/,
     ],
     [
       'bike-refused-restart-clears-wait',
       'web/src/bike-ride.ts',
-      '      this.#waterStopped = undo.waterStopped; this.#deckWaiting = undo.deckWaiting; this.#deckWait = undo.deckWait;\n      this.#waitFallback = undo.waitFallback; this.#awaitingLoad = undo.awaitingLoad;',
+      '      this.#waterStopped = undo.waterStopped; this.#deckWaiting = undo.deckWaiting; this.#deckWait = undo.deckWait;\n      this.#waitFallback = undo.waitFallback; this.#awaitingLoad = undo.awaitingLoad; this.#noDeckWait = undo.noDeckWait;',
       '      // refused restart leaves wait cleared',
       /bike: failed live restart from off-road dry pose returns to prior dry pose/,
     ],
