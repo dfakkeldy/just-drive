@@ -367,15 +367,49 @@ function buildSxsVariant(cfg: VariantLayout, options?: SxsBuildOptions): Rig {
       const winH = winTopY - winBotY;
       const winX = s * ((W * .94 + roofW) / 2);
       const winTilt = s * Math.atan2(W * .94 - roofW, roofY - beltY);
-      const frontGlassZ = di === 0 ? Math.max(z0 + .16, wsTopZ) : z0 + .05;
+      const frontGlassZ = di === 0 ? wsTopZ : z0 + .05;
       const rearGlassZ = z1 - .05;
       const glassLen = Math.max(.25, rearGlassZ - frontGlassZ);
       const glassZ = (frontGlassZ + rearGlassZ) / 2;
       // Top & bottom window sash rails.
       box([winX, winBotY, cz], [.045, .045, len - .03], cab);
       box([s * (roofW + .01), winTopY + .02, glassZ], [.045, .045, glassLen + .08], cab);
-      // Side glass pane (thin closed box so inspectSolids stays 100% outward-facing).
-      box([winX, winBotY + winH / 2, glassZ], [.012, winH - .03, glassLen], glass, body, 0, 0, winTilt);
+      if (di === 0) {
+        // Trapezoidal front-door glass pane following the raked A-pillar down to the beltline (watertight outward solid).
+        const t = .006;
+        const xB = W * .94, xT = roofW;
+        const zBF = wsBotZ + .02, zTF = wsTopZ + .02, zR = rearGlassZ;
+        const yB = winBotY + .015, yT = winTopY - .015;
+        // 8 corners: 0..3 outer face, 4..7 inner face (BL, BR, TR, TL in z-y order).
+        const pts: P[] = [
+          [s * (xB + t), yB, zBF], [s * (xB + t), yB, zR], [s * (xT + t), yT, zR], [s * (xT + t), yT, zTF],
+          [s * (xB - t), yB, zBF], [s * (xB - t), yB, zR], [s * (xT - t), yT, zR], [s * (xT - t), yT, zTF],
+        ];
+        const quads: [number, number, number, number][] = [
+          [0, 3, 2, 1], // outer (+s X)
+          [4, 5, 6, 7], // inner (-s X)
+          [0, 1, 5, 4], // bottom (-Y)
+          [3, 7, 6, 2], // top (+Y)
+          [0, 4, 7, 3], // front raked edge (-Z)
+          [1, 2, 6, 5], // rear edge (+Z)
+        ];
+        const pos: number[] = [];
+        const tri = (a: P, b: P, c: P) => {
+          if (s > 0) pos.push(...a, ...b, ...c);
+          else pos.push(...a, ...c, ...b);
+        };
+        for (const [a, b, c, d] of quads) {
+          tri(pts[a], pts[b], pts[c]);
+          tri(pts[a], pts[c], pts[d]);
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        g.computeVertexNormals();
+        add(g, glass);
+      } else {
+        // Side glass pane (thin closed box so inspectSolids stays 100% outward-facing).
+        box([winX, winBotY + winH / 2, glassZ], [.012, winH - .03, glassLen], glass, body, 0, 0, winTilt);
+      }
     }
   }
 

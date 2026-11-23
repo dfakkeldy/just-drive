@@ -52,22 +52,37 @@ try {
   // Settings panel ride picker must wrap without overflowing when Car is active (desktop and narrow phone).
   await p.read(`document.getElementById('titleStart')?.click(); document.getElementById('gear')?.click();`);
   await sleep(200);
-  const settingsDesktop = await p.read(`(() => {
+  const measureSettings = `(() => {
     const panel = document.getElementById('settings'), pr = panel.getBoundingClientRect();
     const btns = [...document.querySelectorAll('#settingsVehicleChoice button')].map(b => b.getBoundingClientRect());
-    return { overflow: panel.scrollWidth - panel.clientWidth, maxRight: Math.max(...btns.map(r => r.right)) - pr.right, count: btns.length };
-  })()`);
-  check(settingsDesktop.count === 4 && settingsDesktop.overflow <= 1 && settingsDesktop.maxRight <= 1,
-    'desktop Settings ride picker wraps inside panel when Car is active', settingsDesktop);
+    return {
+      open: panel.classList.contains('open'),
+      vehicleId: mmm.vehicleId,
+      carPressed: document.querySelector('#settingsVehicleChoice [data-vehicle="car"]')?.getAttribute('aria-pressed'),
+      panelWidth: pr.width,
+      minWidth: Math.min(...btns.map(r => r.width)),
+      minHeight: Math.min(...btns.map(r => r.height)),
+      overflow: panel.scrollWidth - panel.clientWidth,
+      maxRight: Math.max(...btns.map(r => r.right)) - pr.right,
+      count: btns.length,
+    };
+  })()`;
+  const settingsDesktop = await p.read(measureSettings);
+  check(
+    settingsDesktop.open && settingsDesktop.vehicleId === 'car' && settingsDesktop.carPressed === 'true'
+    && settingsDesktop.count === 4 && settingsDesktop.panelWidth > 200 && settingsDesktop.minWidth >= 60 && settingsDesktop.minHeight >= 40
+    && settingsDesktop.overflow <= 1 && settingsDesktop.maxRight <= 1,
+    'desktop Settings ride picker wraps inside open panel when Car is active', settingsDesktop,
+  );
   await p.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await sleep(150);
-  const settingsPhone = await p.read(`(() => {
-    const panel = document.getElementById('settings'), pr = panel.getBoundingClientRect();
-    const btns = [...document.querySelectorAll('#settingsVehicleChoice button')].map(b => b.getBoundingClientRect());
-    return { overflow: panel.scrollWidth - panel.clientWidth, maxRight: Math.max(...btns.map(r => r.right)) - pr.right, count: btns.length };
-  })()`);
-  check(settingsPhone.count === 4 && settingsPhone.overflow <= 1 && settingsPhone.maxRight <= 1,
-    'phone Settings ride picker wraps inside panel when Car is active', settingsPhone);
+  const settingsPhone = await p.read(measureSettings);
+  check(
+    settingsPhone.open && settingsPhone.vehicleId === 'car' && settingsPhone.carPressed === 'true'
+    && settingsPhone.count === 4 && settingsPhone.panelWidth > 200 && settingsPhone.minWidth >= 60 && settingsPhone.minHeight >= 40
+    && settingsPhone.overflow <= 1 && settingsPhone.maxRight <= 1,
+    'phone Settings ride picker wraps inside open panel when Car is active', settingsPhone,
+  );
   await p.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
   await p.navigate(`${origin}/?mode=explore&title=1&q=low&radio=0&mp=0`);
   await waitReady(`!!document.getElementById('vehicleChoice')`, 'explore title after settings width check');

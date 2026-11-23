@@ -193,6 +193,20 @@ for (const m of MODELS) {
       rig.steer.fl.rotation.y = 0;
       rig.steer.fr.rotation.y = 0;
     }
+
+    // Enclosed cab side-window coverage: no open triangular wedge beside the raked A-pillar on either side.
+    rig.root.updateMatrixWorld(true);
+    const doorRay = new THREE.Raycaster();
+    const glazeMeshes = bodyMeshes.filter(bm => bm.material.name === 'Cab glazing' || bm.material.name === 'Satin cab trim');
+    const wedgeZ = m.id === 'sxs-utility' ? [-.65, -.55, -.42] : m.id === 'sxs-crew' ? [-1.00, -.90, -.78] : [-.94, -.84, -.72];
+    for (const side of [-1, 1]) {
+      const originX = side * 1.4, dirX = -side;
+      for (const z of wedgeZ) {
+        doorRay.set(new THREE.Vector3(originX, 1.28, z), new THREE.Vector3(dirX, 0, 0));
+        const hit = doorRay.intersectObjects(glazeMeshes, false).find(h => h.distance < .78);
+        assert.ok(hit, `${m.id} side=${side} front-door window has open wedge at y=1.28 z=${z}`);
+      }
+    }
   }
   rig.setTravel(0, 0, 0, 0);
   assert.equal(rig.wheels.fl.parent.position.y, 0, `${m.id} travel restores neutral`);

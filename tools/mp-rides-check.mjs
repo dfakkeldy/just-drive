@@ -73,7 +73,7 @@ function judgedClient(api){
   }}});
   const state={...local,vx:2};client.setRide({kind:'truck',trailer:false});client.report(state,at);
   ws.onmessage({data:api.hello(seat,'mabou/compat',[])});client.report(state,at);
-  return {client,meter,received,closed,games,tick(time,trailer){at=time;client.setRide({kind:'truck',trailer});client.report(state,at);}};
+  return {client,meter,received,closed,games,tick(time,trailer,kind='truck'){at=time;client.setRide({kind,trailer});client.report(state,at);}};
 }
 {
   const old=judgedClient(legacyRoom);
@@ -86,6 +86,47 @@ function judgedClient(api){
   console.log('PASS new client against the frozen old judge: 2000 toggles, zero ride texts/strikes/disconnects');
 }
 {
+  // A server advertising rides:true WITHOUT sxsVariants (the previous live server) accepts only car/truck/sxs/bike.
+  const preVariantKinds = new Set(['car', 'truck', 'sxs', 'bike']);
+  const preVariantApi = {
+    Meter, takeSeat,
+    hello: (s, room, others) => JSON.stringify({ t: 'hello', v: 1, id: s.id, name: s.name, hue: s.hue, ride: s.ride, room, cap: 24, rides: true, chat: true, heartbeat: true, games: true, peers: others }),
+    judge: (s, meter, data, at, bounds) => {
+      if (typeof data === 'string') {
+        let parsed; try { parsed = JSON.parse(data); } catch { parsed = null; }
+        if (parsed?.t === 'ride' && !preVariantKinds.has(parsed.ride?.kind)) {
+          meter.strikes++;
+          return { drop: true, close: meter.strikes >= 4 ? 4003 : 0 };
+        }
+      }
+      return judge(s, meter, data, at, bounds);
+    },
+  };
+  let at = 0, ws; const meter = new Meter(), seat = takeSeat([]), received = [], closed = [];
+  const client = new Net({ urls: ['ws://pre-variants'], now: () => at, socket: () => ws = {
+    readyState: 1, binaryType: '', onopen: null, onclose: null, onerror: null, onmessage: null,
+    close() { this.readyState = 3; },
+    send(data) {
+      if (data === 'ping') { this.onmessage?.({ data: 'pong' }); return; }
+      if (data === '{"t":"game-sync"}') { meter.allow(at); return; }
+      received.push(data);
+      const v = preVariantApi.judge(seat, meter, data, at, 10000);
+      if (v.close) { closed.push(v.close); this.readyState = 3; this.onclose?.({ code: v.close }); }
+      if ('ride' in v) seat.ride = v.ride;
+    },
+  } });
+  client.setRide({ kind: 'sxs-utility', trailer: false }); client.report({ ...local, vx: 2 }, at);
+  ws.onmessage({ data: preVariantApi.hello(seat, 'mabou/prev', []) }); client.report({ ...local, vx: 2 }, at);
+  for (const [i, kind] of ['sxs-crew', 'sxs-cabin', 'sxs-utility'].entries()) {
+    at = (i + 1) * 1500; client.setRide({ kind, trailer: false }); client.report({ ...local, vx: 2 }, at);
+  }
+  const sentRides = received.filter(d => typeof d === 'string').map(d => JSON.parse(d).ride);
+  assert.deepEqual(closed, [], 'rides-only server never disconnects new SxS variants');
+  assert.equal(meter.strikes, 0, 'rides-only server records zero strikes for new SxS variants');
+  assert.deepEqual(sentRides, [{ kind: 'sxs', trailer: false }], 'new SxS variants announce as legacy sxs to a rides-only server');
+  client.stop();
+}
+{
   const current=judgedClient({Meter,takeSeat,hello,judge});
   for(let i=1;i<=2000;i++)current.tick(i*10,i%3===0);
   current.tick(22000,true);
@@ -93,6 +134,14 @@ function judgedClient(api){
   assert.deepEqual(current.closed,[],'new server never disconnects rapid toggles plus moving state');
   assert.equal(current.meter.strikes,0,'coalesced ride changes plus five-Hz states stay inside the real meter');
   assert.equal(current.games.length,1,'one game-sync per connection');
+  // Current server with sxsVariants:true accepts every new side-by-side kind directly.
+  assert.equal(JSON.parse(hello(takeSeat([]),'mabou/new',[])).sxsVariants,true,'new server advertises sxsVariants');
+  for(const [i,kind] of ['sxs-utility','sxs-crew','sxs-cabin'].entries()){
+    current.tick(24000+i*1500,false,kind);
+  }
+  const sxsEvents=current.received.filter(e=>typeof e.data==='string').map(e=>JSON.parse(e.data).ride.kind).slice(-3);
+  assert.deepEqual(sxsEvents,['sxs-utility','sxs-crew','sxs-cabin'],'sxsVariants server receives exact new side-by-side kinds');
+  assert.equal(current.meter.strikes,0,'zero strikes announcing new side-by-side variants to updated server');
   assert.ok(events.length>10&&events.length<=23,'ride changes are bounded and continue after a burst');
   for(let i=1;i<events.length;i++)assert.ok(events[i].at-events[i-1].at>=1000,'ride sends have at least one-second spacing');
   assert.deepEqual(events.at(-1).ride,{kind:'truck',trailer:true},'coalescing sends the final trailer state');
