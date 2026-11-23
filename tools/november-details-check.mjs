@@ -278,7 +278,7 @@ for (const {a, b, side} of added) {
       const along = (px - ax) * ux + (pz - az) * uz;
       const across = Math.abs(-(px - ax) * uz + (pz - az) * ux);
       const deckAt = y0 + (y1 - y0) * Math.max(0, Math.min(1, along / span));
-      assert.ok(along >= -1e-3 && along <= span + 1e-3, `bridge ${id} mesh vertex stays inside [0, span] (${along.toFixed(4)} vs ${span.toFixed(4)})`);
+      assert.ok(along >= -0.01 && along <= span + 0.01, `bridge ${id} mesh vertex stays inside end-normal bounds (${along.toFixed(4)} vs ${span.toFixed(4)})`);
       maxAboveDeck = Math.max(maxAboveDeck, py - deckAt);
       maxHalf = Math.max(maxHalf, across);
       if (py - deckAt > 0.05) maxTrussHalf = Math.max(maxTrussHalf, across);
@@ -301,14 +301,18 @@ for (const {a, b, side} of added) {
     for (let seg = 0; seg < r.pts.length - 1; seg++) {
       const [pa0, pa1] = r.pts[seg], [pb0, pb1] = r.pts[seg + 1];
       const sdx = pb0 - pa0, sdz = pb1 - pa1, slen = Math.hypot(sdx, sdz) || 1;
-      const sux = sdx / slen, suz = sdz / slen, smx = (pa0 + pb0) / 2, smz = (pa1 + pb1) / 2;
-      for (const offset of [-4.199, 4.199]) {
-        const x = smx - suz * offset, z = smz + sux * offset;
-        const y = net.deckHeight(x, z);
-        assert.ok(y !== null, `bridge ${id} seg ${seg} supports polyline edge offset=${offset}`);
-        ray.set(new THREE.Vector3(x, y + 0.5, z), down);
-        const hit = ray.intersectObject(mesh)[0];
-        assert.ok(hit && Math.abs(hit.point.y - y) < 0.005, `bridge ${id} seg ${seg} polyline edge offset=${offset} hits visible deck`);
+      const sux = sdx / slen, suz = sdz / slen;
+      const sampleTs = seg === 0 ? [0.0001, 0.5] : seg === r.pts.length - 2 ? [0.5, 0.9999] : [0.5];
+      for (const st of sampleTs) {
+        const px = pa0 + sdx * st, pz = pa1 + sdz * st;
+        for (const offset of [-4.199, -3.5, 3.5, 4.199]) {
+          const x = px - suz * offset, z = pz + sux * offset;
+          const y = net.deckHeight(x, z);
+          assert.ok(y !== null, `bridge ${id} seg ${seg} t=${st} supports polyline edge offset=${offset}`);
+          ray.set(new THREE.Vector3(x, y + 0.5, z), down);
+          const hit = ray.intersectObject(mesh)[0];
+          assert.ok(hit && Math.abs(hit.point.y - y) < 0.005, `bridge ${id} seg ${seg} t=${st} polyline edge offset=${offset} hits visible deck`);
+        }
       }
     }
     // Verify inner steel rails are tied to every interior upright post AND both inclined end posts (no floating rail).
@@ -360,15 +364,19 @@ for (const {a, b, side} of added) {
         assert.equal(reachedFar, true, `bridge ${id} dir=${dir} lat=${lat} car reaches far bank`);
       }
     }
-    // Off-height rail checks: probes below the span on terrain, with car top 10 cm below the deck on both slopes,
+    // Off-height rail checks: probes below the span on terrain, with car top 2 cm below deckY on both slopes,
+    // outside the inclined portals at 0.60 m above deck (clear of inner rail outer face 2.075 m and inclined truss),
     // 5 m above the deck, and 0.6 m before either inclined portal at 1.8 m above deck must not hit truss rail walls.
     const underGround = realTerrain.heightAt(mx, mz);
     const highEndS = y1 >= y0 ? span - 3.0 : 3.0;
     const highEndDeckY = y0 + (y1 - y0) * (highEndS / span);
+    const footprintDrop = (CAR_SPEC.envelope.reach + CAR_SPEC.envelope.radius) * Math.abs(y1 - y0) / span;
     for (const [label, px, pz, probeY] of [
       ['below span', mx - uz * 1.4, mz + ux * 1.4, Math.min(underGround, midY - CAR_SPEC.height - 0.5)],
-      ['top 10 cm below deck at midspan', mx - uz * 1.6, mz + ux * 1.6, midY - CAR_SPEC.height - 0.10],
-      ['top 10 cm below deck near higher end', ax + ux * highEndS - uz * 1.6, az + uz * highEndS + ux * 1.6, highEndDeckY - CAR_SPEC.height - 0.10],
+      ['top 1.5 cm below sloped deck footprint at midspan', mx - uz * 1.6, mz + ux * 1.6, midY - footprintDrop - CAR_SPEC.height - 0.015],
+      ['top 1.5 cm below sloped deck footprint near higher end', ax + ux * highEndS - uz * 1.6, az + uz * highEndS + ux * 1.6, highEndDeckY - footprintDrop - CAR_SPEC.height - 0.015],
+      ['outside start portal 0.60 m above deck', ax - ux * 1.5 - uz * 3.21, az - uz * 1.5 + ux * 3.21, y0 + 0.60],
+      ['outside end portal 0.60 m above deck', bx + ux * 1.5 - uz * 3.21, bz + uz * 1.5 + ux * 3.21, y1 + 0.60],
       ['above truss', mx - uz * 1.4, mz + ux * 1.4, midY + 5],
       ['above start inclined portal', ax - ux * 0.6 - uz * 1.6, az - uz * 0.6 + ux * 1.6, y0 + 1.8],
       ['above end inclined portal', bx + ux * 0.6 - uz * 1.6, bz + uz * 0.6 + ux * 1.6, y1 + 1.8],
@@ -385,15 +393,19 @@ for (const {a, b, side} of added) {
       assert.equal(probe.vx, svx, `bridge ${id} ${label} probe vx is not cancelled by truss rail`);
       assert.equal(probe.vz, svz, `bridge ${id} ${label} probe vz is not cancelled by truss rail`);
     }
-    // Same 1.8 m height inside the full-height mid-span DOES still hit the upper truss.
-    {
-      const midHigh = {
-        x: mx - uz * 1.6, z: mz + ux * 1.6, y: midY + 1.8, heading,
+    // Paired positive probes: car top just above the sloped deck footprint (touching bottom chord) on both slopes AND 1.8 m mid-span DO collide.
+    for (const [label, px, pz, probeY] of [
+      ['top 2.5 cm above sloped deck footprint at midspan', mx - uz * 1.6, mz + ux * 1.6, midY - footprintDrop - CAR_SPEC.height + 0.025],
+      ['top 2.5 cm above sloped deck footprint near higher end', ax + ux * highEndS - uz * 1.6, az + uz * highEndS + ux * 1.6, highEndDeckY - footprintDrop - CAR_SPEC.height + 0.025],
+      ['mid-span 1.8 m upper truss', mx - uz * 1.6, mz + ux * 1.6, midY + 1.8],
+    ]) {
+      const hitProbe = {
+        x: px, z: pz, y: probeY, heading,
         vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC,
       };
-      const sx = midHigh.x, sz = midHigh.z;
-      rails.blockBridge(midHigh, 1 / 120);
-      assert.ok(Math.hypot(midHigh.x - sx, midHigh.z - sz) > 0.1, `bridge ${id} mid-span 1.8 m probe still collides with upper truss`);
+      const sx = hitProbe.x, sz = hitProbe.z;
+      rails.blockBridge(hitProbe, 1 / 120);
+      assert.ok(Math.hypot(hitProbe.x - sx, hitProbe.z - sz) > 0.1, `bridge ${id} ${label} collides with visible steel`);
     }
     // Shared production registerRailContacts: test Towing.allowsPose, zero extra yaw on active vehicle, and live coupled trailer rail contact.
     for (const mode of ['solo', 'fleet']) {

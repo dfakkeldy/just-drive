@@ -291,11 +291,11 @@ export class Guardrails {
     }
     return pending ? 'pending' : 'clear';
   }
-  private pushTrimmedSpan(car: Pushable, b: PonyTrussSpan, sLeft: number, sRight: number, inner: number, dt: number): void {
+  private pushTrimmedSpan(car: Pushable, b: PonyTrussSpan, sLeft: number, sRight: number, inner: number, outer: number, dt: number): void {
     const midS = (sLeft + sRight) * 0.5, half = (sRight - sLeft) * 0.5;
     const mx = b.ax + b.ux * midS, mz = b.az + b.uz * midS;
-    const centre = (inner + PONY_TRUSS.outerHalf) * 0.5;
-    const halfWidth = (PONY_TRUSS.outerHalf - inner) * 0.5;
+    const centre = (inner + outer) * 0.5;
+    const halfWidth = (outer - inner) * 0.5;
     const left = this.trimmedBridgeSolids[0], right = this.trimmedBridgeSolids[1];
     left.x = mx + b.uz * centre; left.z = mz - b.ux * centre; left.half = half; left.halfWidth = halfWidth; left.heading = b.heading;
     right.x = mx - b.uz * centre; right.z = mz + b.ux * centre; right.half = half; right.halfWidth = halfWidth; right.heading = b.heading;
@@ -325,14 +325,12 @@ export class Guardrails {
         if (y0 === null || y1 === null) continue;
         if (!ponyTrussVerticalClip(b, y0, y1, car.y, carHeight, this.bridgeClip)) continue;
         const [railLeft, railRight, trussLeft, trussRight] = this.bridgeClip;
-        if (railLeft === 0 && railRight === b.span) {
+        if (railLeft === 0 && railRight === b.span && trussLeft === 0 && trussRight === b.span) {
           pushOut(car, b.solids, true, dt);
           continue;
         }
-        if (railRight > railLeft) this.pushTrimmedSpan(car, b, railLeft, railRight, PONY_TRUSS.railInner, dt);
-        if (trussRight > trussLeft && (trussLeft < railLeft - 1e-4 || trussRight > railRight + 1e-4)) {
-          this.pushTrimmedSpan(car, b, trussLeft, trussRight, PONY_TRUSS.clearHalf, dt);
-        }
+        if (railRight > railLeft) this.pushTrimmedSpan(car, b, railLeft, railRight, PONY_TRUSS.railInner, PONY_TRUSS.railInner + 0.07, dt);
+        if (trussRight > trussLeft) this.pushTrimmedSpan(car, b, trussLeft, trussRight, PONY_TRUSS.clearHalf, PONY_TRUSS.outerHalf, dt);
         continue;
       }
       pushOut(car, b.solids, true, dt);

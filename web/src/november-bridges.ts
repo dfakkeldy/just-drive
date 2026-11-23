@@ -272,27 +272,26 @@ export function buildPonyTrussBridge(
   const sinSlope = Math.abs(Math.sin(slope));
   // Trim tilted steel fascia inside [0, span] so no lower corner overhangs the span endpoints.
   const fasciaLen = deckLen - (deckThick + 0.05) * sinSlope * 2 - 0.01;
-  m.at(mx, deckMidY, mz, yaw, 0, slope);
-  // Top driving surface at exact local y = 0 (matches Roads.deckHeight() along [0, span]).
-  m.quad([
-    [-deckLen / 2, 0, clearHalf],
-    [deckLen / 2, 0, clearHalf],
-    [deckLen / 2, 0, -clearHalf],
-    [-deckLen / 2, 0, -clearHalf],
-  ], DECK_ASPHALT);
+  // Top driving surface aligned to local end-segment normals (matching Roads.deck() portal corners and exact y0 -> y1 plane).
+  const n0d = Math.hypot(pts[1][0] - a[0], pts[1][1] - a[1]) || 1;
+  const n0x = -(pts[1][1] - a[1]) / n0d, n0z = (pts[1][0] - a[0]) / n0d;
+  const prev = pts[pts.length - 2];
+  const n1d = Math.hypot(b[0] - prev[0], b[1] - prev[1]) || 1;
+  const n1x = -(b[1] - prev[1]) / n1d, n1z = (b[0] - prev[0]) / n1d;
+  m.at(0, 0, 0);
+  const deckStrip = (zLo: number, zHi: number, rgb: RGB) => m.quad([
+    [a[0] + n0x * zHi, y0, a[1] + n0z * zHi],
+    [b[0] + n1x * zHi, y1, b[1] + n1z * zHi],
+    [b[0] + n1x * zLo, y1, b[1] + n1z * zLo],
+    [a[0] + n0x * zLo, y0, a[1] + n0z * zLo],
+  ], rgb);
+  deckStrip(-clearHalf, clearHalf, DECK_ASPHALT);
   if (outerHalf > PONY_TRUSS.outerHalf + 1e-4) {
-    for (const side of [-1, 1]) {
-      const z0 = side > 0 ? PONY_TRUSS.outerHalf : -outerHalf;
-      const z1 = side > 0 ? outerHalf : -PONY_TRUSS.outerHalf;
-      m.quad([
-        [-deckLen / 2, 0, z1],
-        [deckLen / 2, 0, z1],
-        [deckLen / 2, 0, z0],
-        [-deckLen / 2, 0, z0],
-      ], ABUTMENT);
-    }
+    deckStrip(-outerHalf, -PONY_TRUSS.outerHalf, ABUTMENT);
+    deckStrip(PONY_TRUSS.outerHalf, outerHalf, ABUTMENT);
   }
   // Deck slab sides and underside (steel deck fascia across the full visible deck width, 2.5 cm below top to avoid z-fighting).
+  m.at(mx, deckMidY, mz, yaw, 0, slope);
   m.box(0, fasciaTop - deckThick / 2, 0, fasciaLen, deckThick, outerHalf * 2, STEEL_DARK, false);
 
   // Transverse floor beams beneath the fascia at every panel point (tilted with the slope and inset inside [0, span]).
