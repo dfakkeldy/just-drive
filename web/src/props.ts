@@ -13,16 +13,17 @@ type Style = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 interface Position { x: number; y: number; heading: number }
 interface Mailbox extends Position { style: Style; tilt: number; group: number | null; parcelBox: boolean }
 interface Community extends Position { modules: number }
+interface MailDrop extends Position { customers: number; radius: number; label?: string }
 interface Pole extends Position { road: number; n: number; transformer: boolean; light: boolean }
 interface ServiceDrop { building: number; road: number; n: number; x: number; y: number; height: number;
   ground: number | null; groundX: number; groundY: number }
-interface PropsData { mailboxes: Mailbox[]; communityBoxes: Community[]; poles: Pole[]; serviceDrops: ServiceDrop[] }
+interface PropsData { mailboxes: Mailbox[]; communityBoxes: Community[]; mailDrops: MailDrop[]; poles: Pole[]; serviceDrops: ServiceDrop[] }
 interface WorldPosition { x: number; z: number; heading: number }
 interface Part { key: string; matrix: THREE.Matrix4 }
 interface Slot { mesh: THREE.InstancedMesh; index: number; local: THREE.Matrix4; idle: THREE.Matrix4; dent: boolean }
 interface Motion { x: number; z: number; angle: number; down: boolean; damage: MailboxDamage; dx: number; dz: number; rock: number; contact: number; dirty: boolean }
 interface MailTarget extends WorldPosition { flagUp?: boolean; served: boolean; motion: Motion }
-interface SiteTarget extends WorldPosition { served: boolean; customers: number }
+interface SiteTarget extends WorldPosition { served: boolean; customers: number; kind: 'community' | 'postOffice'; reach: number; label?: string }
 interface Pending { position: WorldPosition; tilt: number; slots: Slot[]; level: number; y: number; motion: Motion | null; mailIndex: number }
 interface Wire { a: number; b?: number; drop?: ServiceDrop; levels: string; vertices: number[] }
 interface Cell { x: number; z: number; mail: number[]; sites: number[]; poles: number[]; wires: Wire[];
@@ -80,6 +81,12 @@ function parse(data: unknown): PropsData {
       if (!Number.isInteger(modules) || modules < 2 || modules > 4) throw new Error('Invalid community modules');
       return { ...position(r), modules };
     }),
+    mailDrops: d.mailDrops === undefined ? [] : list(d.mailDrops).map((r) => {
+      const customers = number(r.customers), radius = number(r.radius);
+      if (!Number.isInteger(customers) || customers < 1) throw new Error('Invalid mail drop customers');
+      if (radius <= 0) throw new Error('Invalid mail drop radius');
+      return { ...position(r), customers, radius, ...(typeof r.label === 'string' ? { label: r.label } : {}) };
+    }),
     poles: list(d.poles).map((r) => ({ ...position(r), road: number(r.road), n: number(r.n), transformer: boolean(r.transformer), light: boolean(r.light) })),
     serviceDrops: list(d.serviceDrops ?? []).map((r) => ({ building: number(r.building), road: number(r.road), n: number(r.n),
       x: number(r.x), y: number(r.y), height: number(r.height), ground: r.ground === null ? null : number(r.ground),
@@ -129,7 +136,11 @@ export class Props {
     return this.poles.map((p, i) => ({ ...p, light: this.data.poles[i].light, transformer: this.data.poles[i].transformer }));
   }
   get railObstacles(): readonly (WorldPosition & { radius: number })[] {
-    return [...this.mail.map(p => ({ ...p, radius: RAIL_PROP_RADII.mailbox })), ...this.sites.map((p, i) => ({ ...p, radius: this.data.communityBoxes[i].modules * RAIL_PROP_RADII.communityModule + RAIL_PROP_RADII.communityClear })), ...this.sourcePoles.map(p => ({ ...p, radius: RAIL_PROP_RADII.pole }))];
+    return [
+      ...this.mail.map(p => ({ ...p, radius: RAIL_PROP_RADII.mailbox })),
+      ...this.sites.slice(0, this.data.communityBoxes.length).map((p, i) => ({ ...p, radius: this.data.communityBoxes[i].modules * RAIL_PROP_RADII.communityModule + RAIL_PROP_RADII.communityClear })),
+      ...this.sourcePoles.map(p => ({ ...p, radius: RAIL_PROP_RADII.pole })),
+    ];
   }
 
   constructor(data: unknown, private readonly village: [number, number], private readonly terrain: Terrain, excludes?: (east: number, north: number) => boolean, poleMoves: readonly {index:number;from?:readonly number[];to:readonly number[]}[] = [], splitLines: ReadonlyMap<number, string> = new Map()) {
@@ -143,7 +154,7 @@ export class Props {
     const stale=poleMoves.filter(m=>!fits(m));if(stale.length)console.warn(`Sidewalk pole moves skipped: ${stale.length} no longer match their source pole`);
     const moved=new Map(poleMoves.filter(fits).map(p=>[p.index,p.to]));
     const shown=parsed.poles.map((p,i)=>{const q=moved.get(i);return q?{...p,x:q[0],y:q[1]}:p;}).filter((_,i)=>keep(parsed.poles[i]));
-    this.data = { mailboxes: parsed.mailboxes.filter(keep), communityBoxes: parsed.communityBoxes.filter(keep), poles: parsed.poles.filter(keep), serviceDrops: parsed.serviceDrops };
+    this.data = { mailboxes: parsed.mailboxes.filter(keep), communityBoxes: parsed.communityBoxes.filter(keep), mailDrops: parsed.mailDrops.filter(keep), poles: parsed.poles.filter(keep), serviceDrops: parsed.serviceDrops };
     const world = (p: Position): WorldPosition => ({ x: p.x - village[0], z: village[1] - p.y, heading: p.heading });
     const frames = new Map<number, Motion>();
     this.mail = this.data.mailboxes.map((m) => {
@@ -161,13 +172,16 @@ export class Props {
       this.mail.forEach((p, i) => { if (this.data.mailboxes[i].group === id) { x += p.x; z += p.z; n++; } });
       motion.x = x / n; motion.z = z / n;
     }
-    this.sites = this.data.communityBoxes.map((p) => ({ ...world(p), served: false, customers: p.modules * 15 }));
+    this.sites = [
+      ...this.data.communityBoxes.map((p) => ({ ...world(p), served: false, customers: p.modules * 15, kind: 'community' as const, reach: p.modules * .43 + 2 })),
+      ...this.data.mailDrops.map((p) => ({ ...world(p), served: false, customers: p.customers, kind: 'postOffice' as const, reach: p.radius, ...(p.label ? { label: p.label } : {}) })),
+    ];
     this.totalCustomers = this.mail.length + this.sites.reduce((sum, p) => sum + p.customers, 0);
     // These are cosmetic relocations. Rail collision openings keep the original source positions.
     this.sourcePoles = this.data.poles.map(world);
     this.poles = shown.map(world);
     this.mail.forEach((p, i) => this.cell(p).mail.push(i));
-    this.sites.forEach((p, i) => this.cell(p).sites.push(i));
+    this.sites.forEach((p, i) => { if (p.kind === 'community') this.cell(p).sites.push(i); });
     this.poles.forEach((p, i) => this.cell(p).poles.push(i));
     // A road split that kept the old road's pole numbers (the 18 Nov Harbour Road pavement limit) leaves one wired
     // line on two road pieces: join their runs so the span over the cut stays. Pieces whose poles were placed
@@ -224,13 +238,13 @@ export class Props {
       if (p.x >= bounds.x0 && p.x <= bounds.x1 && p.z >= bounds.z0 && p.z <= bounds.z1) mail.push(i);
     }
     for (let i = 0; i < this.sites.length; i++) {
-      const p = this.sites[i], reach = this.data.communityBoxes[i].modules * .43 + 2;
+      const p = this.sites[i], reach = p.reach;
       if (p.x + reach >= bounds.x0 && p.x - reach <= bounds.x1 && p.z + reach >= bounds.z0 && p.z - reach <= bounds.z1) sites.push(i);
     }
     return { mail, sites };
   }
 
-  /** Swept opening hit, or a community cabinet landing. Returns a stable target ID. */
+  /** Swept opening hit, or a community cabinet or post office drop landing. Returns a stable target ID. */
   mailHit(ax: number, ay: number, az: number, bx: number, by: number, bz: number, landed: boolean, candidates?: MailCandidates, contact?: MailContact): number {
     for (let slot = 0, count = candidates?.mail.length ?? this.mail.length; slot < count; slot++) {
       const i = candidates ? candidates.mail[slot] : slot;
@@ -253,7 +267,12 @@ export class Props {
     }
     if (landed) for (let slot = 0, count = candidates?.sites.length ?? this.sites.length; slot < count; slot++) {
       const i = candidates ? candidates.sites[slot] : slot;
-      const p = this.sites[i], h = rad(p.heading);
+      const p = this.sites[i];
+      if (p.kind === 'postOffice') {
+        if ((bx - p.x) ** 2 + (bz - p.z) ** 2 <= p.reach * p.reach) return this.mail.length + i;
+        continue;
+      }
+      const h = rad(p.heading);
       // Distance to the cabinet row, not only to the site's centre.
       const across = (bx - p.x) * -Math.cos(h) + (bz - p.z) * -Math.sin(h);
       const along = (bx - p.x) * Math.sin(h) - (bz - p.z) * Math.cos(h);

@@ -267,8 +267,10 @@ export class Mail {
     const complete = this.service?.deliver(index) ?? true;
     const served = complete ? this.props.serve(index, condition === 'preExisting') : 0;
     this.customers += served; this.delivered++;
-    this.say(served > 1 ? `Bulk delivery. ${served} customers. One throw.` : DELIVERED[this.delivered % DELIVERED.length]);
     const target = index < this.props.mail.length ? this.props.mail[index] : this.props.sites[index - this.props.mail.length];
+    const postOffice = 'kind' in target && target.kind === 'postOffice';
+    this.say(postOffice ? `${target.label ?? 'Post Office'} drop. ${served} town customers.`
+      : served > 1 ? `Bulk delivery. ${served} customers. One throw.` : DELIVERED[this.delivered % DELIVERED.length]);
     const ding = this.dings[this.flashCursor]; this.flashCursor = (this.flashCursor + 1) % this.dings.length;
     ding.x = target.x; ding.z = target.z; ding.y = (this.terrain.heightAt(target.x, target.z) ?? p.y) + 1.6;
     ding.life = .65; ding.size = served > 1 ? .75 : .32;

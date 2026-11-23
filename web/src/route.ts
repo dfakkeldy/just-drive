@@ -1,5 +1,6 @@
 import type { Props } from './props';
 import type { Road, RoadHit, Roads } from './roads';
+import { inPortHawkesbury } from './port-hawkesbury-mail';
 
 // Road names, not prop indices, define this carrier's territory and driving order.
 export const ROUTE_ROADS = [
@@ -165,4 +166,44 @@ export class Route {
   }
 
   forDay(day: number, forced = 0): Run { return this.runs[forced > 0 ? forced - 1 : (day - 1) % this.runs.length]; }
+}
+
+/**
+ * Mail route stops for the Point Tupper / Port Hawkesbury area:
+ * - No house or rural mailbox inside the Town of Port Hawkesbury's legal limits is ever a route stop.
+ * - The Town of Port Hawkesbury gets one mail stop: the Port Hawkesbury Post Office drop on Pitt Street.
+ * - Rural mailboxes outside the town limits (Point Tupper, Port Hastings side, rural roads) remain stops on their roads.
+ */
+export function buildPointTupperRoute(
+  roads: Roads,
+  props: Pick<Props, 'mail' | 'sites'> | null,
+  village: readonly [number, number],
+): Run {
+  const run: Run = { name: 'Point Tupper and Port Hawkesbury', short: 'POINT TUPPER / PORT HAWKESBURY', rural: [], sites: [], stops: [], start: null };
+  if (!props) return run;
+  const toMap = (p: { x: number; z: number }): [number, number] => [village[0] + p.x, village[1] - p.z];
+  props.mail.forEach((p, index) => {
+    const [e, n] = toMap(p);
+    if (inPortHawkesbury(e, n)) return;
+    const hit = roads.nearest(p.x, p.z, 256, isPublicRoad);
+    if (!hit) return;
+    if (Route.reachable && !(Route.reachable(p.x, p.z) && Route.reachable(hit.x, hit.z))) return;
+    run.rural.push(index);
+    run.stops.push({ index, section: 1, along: hit.seg + hit.t, hit });
+  });
+  props.sites.forEach((p, i) => {
+    const [e, n] = toMap(p);
+    // Inside the Town of Port Hawkesbury, only the post office drop is a stop.
+    if (inPortHawkesbury(e, n) && p.kind !== 'postOffice') return;
+    const hit = roads.nearest(p.x, p.z, 256, isPublicRoad);
+    if (!hit) return;
+    if (Route.reachable && !(Route.reachable(p.x, p.z) && Route.reachable(hit.x, hit.z))) return;
+    const index = props.mail.length + i;
+    run.sites.push(index);
+    run.stops.push({ index, section: p.kind === 'postOffice' ? 0 : 1, along: hit.seg + hit.t, hit });
+  });
+  run.stops.sort((a, b) => a.section - b.section || a.index - b.index);
+  const firstStop = run.stops[0];
+  if (firstStop) run.start = { x: firstStop.hit.x, z: firstStop.hit.z, heading: firstStop.hit.heading };
+  return run;
 }
