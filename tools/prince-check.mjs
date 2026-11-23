@@ -137,11 +137,11 @@ function decodePngRgb(buf) {
   }
   return { w, h, rgb: out };
 }
-function loadLevel(level) {
+function loadLevel(level, exag) {
   const tileSize = manifest.size / 2 ** level, ti = Math.floor((found.x - manifest.origin[0]) / tileSize), tj = Math.floor((manifest.origin[1] - found.y) / tileSize);
   const { w, rgb } = decodePngRgb(readFileSync(`${AREA}${level}/${ti}_${tj}.png`));
   const x0 = manifest.origin[0] + ti * tileSize - manifest.village[0], z0 = manifest.village[1] - (manifest.origin[1] - tj * tileSize);
-  const seg = 128, step = tileSize / seg, exag = 2.5, { scale, offset } = manifest.height, T = w - 1;
+  const seg = 128, step = tileSize / seg, { scale, offset } = manifest.height, T = w - 1;
   const pix = (px, py) => { const k = (py * w + px) * 3; return offset + (rgb[k] * 256 + rgb[k + 1]) * scale; };
   // Bilinear heightAt (matching terrain.ts:1132) with site.height applied.
   const heightAt = (x, z) => {
@@ -163,48 +163,56 @@ function loadLevel(level) {
   };
   return { heightAt, meshY, exag };
 }
-const L7 = loadLevel(7), L8 = loadLevel(8);
-for (const isLow of [false, true]) {
-  let drawn = 7, heightSource = L7;
-  const realTerrain = {
-    heightAt: (x, z) => heightSource.heightAt(x, z),
-    surfaceAt: () => ({ level: heightSource === L8 ? 8 : 7 }),
-    drawnLevelAt: () => drawn,
-  };
-  const h = new PrinceHouse(site, realTerrain, (m) => m * L7.exag, isLow);
-  const checkClearance = (label, drawnTile) => {
-    h.update(new THREE.Vector3(site.origin.x, site.level * L7.exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
-    const mesh = h.group.children[0].children[0], pos = mesh.geometry.getAttribute('position'), idx = mesh.geometry.getIndex();
-    let minDrive = Infinity, minWalk = Infinity, nDrive = 0, nWalk = 0;
-    const triCount = idx ? idx.count / 3 : pos.count / 3;
-    for (let t = 0; t < triCount; t++) {
-      const i0 = idx ? idx.getX(t * 3) : t * 3, i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1, i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
-      const ax = pos.getX(i0), ay = pos.getY(i0), az = pos.getZ(i0);
-      const bx = pos.getX(i1), by = pos.getY(i1), bz = pos.getZ(i1);
-      const cx = pos.getX(i2), cy = pos.getY(i2), cz = pos.getZ(i2);
-      const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
-      const len = Math.hypot((by - ay) * (cz - az) - (bz - az) * (cy - ay), ny, (bx - ax) * (cy - ay) - (by - ay) * (cx - ax));
-      if (len < 1e-6 || Math.abs(ny) / len < 0.85) continue;
-      const cu = (ax + bx + cx) / 3, cv = (az + bz + cz) / 3;
-      const isDrive = cu >= 2.2 && cu <= 8.1 && cv >= -18.9 && cv <= -5.3;
-      const isWalk = !isDrive && cv >= -17.65 && cv <= -16.25 && cu >= -9.05 && cu <= 17.45;
-      if (!isDrive && !isWalk) continue;
-      for (const [w0, w1, w2] of [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1 / 3, 1 / 3, 1 / 3], [0.5, 0.5, 0], [0, 0.5, 0.5], [0.5, 0, 0.5]]) {
-        const u = w0 * ax + w1 * bx + w2 * cx, y = w0 * ay + w1 * by + w2 * cy, v = w0 * az + w1 * bz + w2 * cz;
-        const ww = site.world(u, v), clear = y - drawnTile.meshY(ww.x, ww.z);
-        if (isDrive) { if (clear < minDrive) minDrive = clear; nDrive++; }
-        else { if (clear < minWalk) minWalk = clear; nWalk++; }
+for (const exag of [2.5, 3]) {
+  const L7 = loadLevel(7, exag), L8 = loadLevel(8, exag);
+  for (const isLow of [false, true]) {
+    let drawn = 7, heightSource = L7;
+    const realTerrain = {
+      heightAt: (x, z) => heightSource.heightAt(x, z),
+      surfaceAt: () => ({ level: heightSource === L8 ? 8 : 7 }),
+      drawnLevelAt: () => drawn,
+    };
+    const h = new PrinceHouse(site, realTerrain, (m) => m * exag, isLow);
+    const checkClearance = (label, drawnTile) => {
+      h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
+      const mesh = h.group.children[0].children[0], pos = mesh.geometry.getAttribute('position'), idx = mesh.geometry.getIndex();
+      let minDrive = Infinity, minWalk = Infinity, nDrive = 0, nWalk = 0;
+      const triCount = idx ? idx.count / 3 : pos.count / 3;
+      for (let t = 0; t < triCount; t++) {
+        const i0 = idx ? idx.getX(t * 3) : t * 3, i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1, i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+        const ax = pos.getX(i0), ay = pos.getY(i0), az = pos.getZ(i0);
+        const bx = pos.getX(i1), by = pos.getY(i1), bz = pos.getZ(i1);
+        const cx = pos.getX(i2), cy = pos.getY(i2), cz = pos.getZ(i2);
+        const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+        const len = Math.hypot((by - ay) * (cz - az) - (bz - az) * (cy - ay), ny, (bx - ax) * (cy - ay) - (by - ay) * (cx - ax));
+        if (len < 1e-6 || Math.abs(ny) / len < 0.85) continue;
+        const cu = (ax + bx + cx) / 3, cv = (az + bz + cz) / 3;
+        const isDrive = cu >= 2.2 && cu <= 8.1 && cv >= -18.9 && cv <= -5.3;
+        const isWalk = !isDrive && cv >= -17.65 && cv <= -16.25 && cu >= -9.05 && cu <= 17.45;
+        if (!isDrive && !isWalk) continue;
+        for (const [w0, w1, w2] of [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1 / 3, 1 / 3, 1 / 3], [0.5, 0.5, 0], [0, 0.5, 0.5], [0.5, 0, 0.5]]) {
+          const u = w0 * ax + w1 * bx + w2 * cx, y = w0 * ay + w1 * by + w2 * cy, v = w0 * az + w1 * bz + w2 * cz;
+          const ww = site.world(u, v), clear = y - drawnTile.meshY(ww.x, ww.z);
+          if (isDrive) { if (clear < minDrive) minDrive = clear; nDrive++; }
+          else { if (clear < minWalk) minWalk = clear; nWalk++; }
+        }
       }
-    }
-    assert.ok(nDrive > 50 && nWalk > 50, `${label} low=${isLow}: checked drive=${nDrive} walk=${nWalk}`);
-    assert.ok(minDrive > 0.01, `${label} low=${isLow}: driveway clears rendered terrain (${(minDrive * 100).toFixed(1)} cm)`);
-    assert.ok(minWalk > 0.01, `${label} low=${isLow}: sidewalk clears rendered terrain (${(minWalk * 100).toFixed(1)} cm)`);
-  };
-  // 7 -> 8 -> 7 (cached L8 height) -> 7 (L8 evicted)
-  drawn = 7; heightSource = L7; checkClearance('L7 initial', L7);
-  drawn = 8; heightSource = L8; checkClearance('L8 fine', L8);
-  drawn = 7; heightSource = L8; checkClearance('L7 drawn with L8 cached', L7);
-  drawn = 7; heightSource = L7; checkClearance('L7 after L8 eviction', L7);
+      assert.ok(nDrive > 50 && nWalk > 50, `${label} exag=${exag} low=${isLow}: checked drive=${nDrive} walk=${nWalk}`);
+      assert.ok(minDrive > 0.01, `${label} exag=${exag} low=${isLow}: driveway clears rendered terrain (${(minDrive * 100).toFixed(1)} cm)`);
+      assert.ok(minWalk > 0.01, `${label} exag=${exag} low=${isLow}: sidewalk clears rendered terrain (${(minWalk * 100).toFixed(1)} cm)`);
+    };
+    // 7 -> 8 -> 7 (cached L8 height) -> 7 (L8 evicted)
+    drawn = 7; heightSource = L7; checkClearance('L7 initial', L7);
+    drawn = 8; heightSource = L8; checkClearance('L8 fine', L8);
+    drawn = 7; heightSource = L8; checkClearance('L7 drawn with L8 cached', L7);
+    drawn = 7; heightSource = L7; checkClearance('L7 after L8 eviction', L7);
+  }
 }
+// Frame order: main.ts must update PrinceHouse in the landscape segment after terrain selection so the first L8 -> L7 frame rebuilds before render.
+const mainSrc = readFileSync('web/src/main.ts', 'utf8');
+const terrainIdx = mainSrc.indexOf("name: 'terrain', segment: 'landscape'");
+const princeIdx = mainSrc.indexOf("name: 'prince', segment: 'landscape'");
+assert.ok(terrainIdx >= 0 && princeIdx > terrainIdx, 'main.ts updates prince in landscape after terrain selection');
+assert.ok(mainSrc.includes("filter(([name]) => name !== 'prince')"), 'main.ts excludes prince from before-camera places loop');
 
-console.log(`PASS prince: desktop ${desktop.triangles} tris, LOW ${low.triangles} tris, drop on SE gable, roof floor, 7->8->7 driveway/sidewalk clearance, driveway and carport open, Prince Street clear`);
+console.log(`PASS prince: desktop ${desktop.triangles} tris, LOW ${low.triangles} tris, drop on SE gable, roof floor, 7->8->7 driveway/sidewalk clearance (2.5x & 3x), after-terrain frame order, driveway and carport open, Prince Street clear`);

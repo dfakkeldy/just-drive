@@ -469,12 +469,17 @@ export class PrinceHouse implements HandBuiltPlace {
     }
   }
 
+  /** Scale ground-hugging lifts above default 2.5x vertical exaggeration (up to 3x). */
+  private liftScale(): number {
+    return Math.max(1, (this.lift(this.site.level + 1) - this.lift(this.site.level)) / 2.5);
+  }
+
   /** Single joined tapered driveway surface from Prince Street to the carport, mottled grey and clear of terrain triangles. */
   private driveway(m: Mesher, rnd: () => number, coarse: boolean): void {
     m.at(0, 0, 0);
     // Level-7 terrain uses 4 m cells across the pad blend, so lift extra until all probes reach level 8 (2 m cells).
-    const v0 = -18.9, v1 = -5.3, nu = this.low ? 3 : 4, nv = this.low ? 10 : 16;
-    const liftM = coarse ? 0.28 : 0.15, skirt = coarse ? 0.48 : 0.36;
+    const v0 = -18.9, v1 = -5.3, nu = this.low ? 3 : 4, nv = this.low ? 10 : 16, scale = this.liftScale();
+    const liftM = (coarse ? 0.28 : 0.15) * scale, skirt = liftM + 0.2;
     const smooth = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
     const pt = (i: number, j: number, dy = liftM): number[] => {
       const v = v0 + ((v1 - v0) * j) / nv;
@@ -502,8 +507,8 @@ export class PrinceHouse implements HandBuiltPlace {
 
     // Concrete sidewalk slabs following the real street slope (broken cleanly across the driveway mouth).
     const slabRow = (u0: number, u1: number) => {
-      const step = 1.35, v0 = -17.6, v1 = -16.3;
-      const liftM = coarse ? 0.24 : 0.125, skirt = coarse ? 0.44 : 0.32;
+      const step = 1.35, v0 = -17.6, v1 = -16.3, scale = this.liftScale();
+      const liftM = (coarse ? 0.24 : 0.125) * scale, skirt = liftM + 0.2;
       for (let u = u0; u < u1 - 0.1; u += step) {
         const ue = Math.min(u + step - 0.04, u1);
         this.groundStrip(m, u, ue, v0, v1, liftM, shade(CONCRETE, 0.95 + rnd() * 0.09), this.low ? 1 : 2, this.low ? 1 : 2, skirt);
