@@ -152,6 +152,8 @@ import { chooseLotProps } from './lot-props-rules';
 import { PorchHouse } from './porch-house';
 import { DrLaneSite } from './drlane-site';
 import { DrLaneHouse } from './drlane-house';
+import { PrinceSite } from './prince-site';
+import { PrinceHouse } from './prince-house';
 import { PorchSite } from './porch-site';
 import { CHURCH_START, ChurchSite } from './church-site';
 import { roughRoads, setPuddleField } from './rough-roads';
@@ -452,7 +454,10 @@ const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 // One house on D.R.'s Lane (Judique) is built by hand with its yard. ?drlane=0 leaves the surveyed box.
 const drLaneBox = ERA.modern && AREA.drLane && params.get('drlane') !== '0' && buildingList ? DrLaneSite.find(buildingList) : null;
 const drLaneSite = drLaneBox ? new DrLaneSite(drLaneBox, manifest.village) : null;
-const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox) : buildingList;
+// A house on Prince Street, Port Hawkesbury, is built by hand with its yard. ?prince=0 leaves the surveyed box.
+const princeBox = ERA.modern && AREA.prince && params.get('prince') !== '0' && buildingList ? PrinceSite.find(buildingList) : null;
+const princeSite = princeBox ? new PrinceSite(princeBox, manifest.village) : null;
+const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox, princeBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
 // Baxters Cove harbour and the Highway 19 end of its road (Judique, 21 Nov dash cam): the drawing only.
 const coveArt = ERA.modern && AREA.id === 'judique' && drawnBuildings ? baxtersCoveBuildingArt(drawnBuildings) : null;
@@ -494,6 +499,7 @@ const placeRows = {
   maryville: placeRow(maryvilleSite, site => new maryvilleFeature!.MaryvilleStore(site, terrain, LOW)),
   drLane: placeRow(drLaneSite, site => new DrLaneHouse(site, terrain, lift, LOW)),
   depot: placeRow(depotSite, site => new depotFeature!.PortHoodDepot(site, terrain, LOW, SITE.brand === 'just')),
+  prince: placeRow(princeSite, site => new PrinceHouse(site, terrain, lift, LOW)),
 };
 // Each site clears its surveyed land.
 const placeSites = sitesOf(placeRows);
@@ -539,6 +545,7 @@ if (fishingSite) terrain.sites.push(fishingSite);
 if (homeSite) terrain.sites.push(homeSite);
 if (porchSite) terrain.sites.push(porchSite);
 if (drLaneSite) terrain.sites.push(drLaneSite);
+if (princeSite) terrain.sites.push(princeSite);
 if (churchSite) terrain.sites.push(churchSite);
 if (quarrySite) { terrain.sites.push(quarrySite); terrain.coast=quarrySite; }
 const cemeteries = ERA.modern ? await Cemeteries.load(manifest, name => cemeteriesRead?.take() ?? getJson(name), terrain, LOW, AREA.id) : null;
@@ -671,9 +678,10 @@ const props = await (async () => {
   if (!propsRead) return null;
   try {
     const read = await propsRead.take();
-    // The service drops of the boxes Port Hawkesbury and Mabou's main street replace end on their models, not in the air.
+    // The service drops of the boxes Port Hawkesbury, Prince Street and Mabou's main street replace end on their models, not in the air.
     const placed = hawkesburySite && Array.isArray(read.serviceDrops) ? { ...read, serviceDrops: aimDrops(read.serviceDrops) } : read;
-    const data = mabouSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: aimMabouDrops(placed.serviceDrops) } : placed;
+    const withPrince = princeSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: princeSite.aimDrops(placed.serviceDrops) } : placed;
+    const data = mabouSite && Array.isArray(withPrince.serviceDrops) ? { ...withPrince, serviceDrops: aimMabouDrops(withPrince.serviceDrops) } : withPrince;
     return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined, splitRoadLines(roadData)); }
   catch (e) { console.warn('props', e); return null; }
 })();
@@ -873,6 +881,7 @@ const siteContacts: [string, ContactSite | null][] = [
   ['maryville', placeContact(places.maryville)],
   ['drLane', placeContact(places.drLane)],
   ['depot', placeContact(places.depot)],
+  ['prince', placeContact(places.prince)],
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
 ];
@@ -1025,12 +1034,13 @@ const terrainReadyAt = createTerrainReady(terrain);
 scene.add(drone.group);
 // The drone's floor reads the roofs that are drawn: the surveyed boxes less those Mabou's main street replaces, and the
 // hand-built main street's own roofs, measured from its geometry once each place is built. 1884 draws other roofs.
-const boxRoofAt = roofHeights(ERA.modern && buildingList ? mabouSite ? mabouSite.drawn(buildingList) : buildingList : [], manifest.village, EXAG, SEA_LEVEL);
+const boxRoofAt = roofHeights(ERA.modern && buildingList ? drawnWithout(mabouSite ? mabouSite.drawn(buildingList) : buildingList, princeBox) : [], manifest.village, EXAG, SEA_LEVEL);
 // Also include landmarks (churches and spires) and surveyed boxes replaced by non-Mabou hand-built sites (yard, home, church, village, hawkesbury, porch).
 const extraRoofAt = ERA.modern ? (() => {
   const kept = new Set(drawnBuildings ?? []);
   const extra: Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[] =
-    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b));
+    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox);
+  if (princeSite) extra.push(...princeSite.roofBoxes());
   for (const lm of landmarkList) {
     const a = lm.axisDeg * Math.PI / 180, alongX = Math.sin(a), alongZ = -Math.cos(a), acrossX = Math.cos(a), acrossZ = Math.sin(a);
     let lo = Infinity, hi = -Infinity, wl = Infinity, wh = -Infinity;
@@ -2281,7 +2291,7 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   ...(ride.update ? [{ name: 'ride', segment: 'ride' as const, ending: false, update: (_dt: number, realDt: number) => ride.update!(realDt, !scenePaused() && mode === 'drive') }] : []),
   { name: 'yard', segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
   { name: 'yardDog', segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
-  ...Object.entries(places).map(([name, { place }]) => ({ name, segment: 'before-camera' as const, ending: false, update: (dt: number, _realDt: number, now: number) => place?.update(camera.position, now, vehicle, dt) })),
+  ...Object.entries(places).filter(([name]) => name !== 'prince').map(([name, { place }]) => ({ name, segment: 'before-camera' as const, ending: false, update: (dt: number, _realDt: number, now: number) => place?.update(camera.position, now, vehicle, dt) })),
   { name: 'stockpiles', segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
   { name: 'cemeteries', segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
   { name: 'terrain', segment: 'landscape', ending: true, update: () => terrain.update(camera, scenePaused()) },
@@ -2289,6 +2299,8 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   { name: 'novemberRoads', segment: 'landscape', ending: true, update: () => novemberRoads?.update(terrain, camera.position) },
   // After the terrain update, so the water lies on the tiles drawn this frame; endings and the replay keep it too.
   { name: 'puddles', segment: 'landscape', ending: true, update: () => puddles?.refit(camera.position) },
+  // After the terrain update, so the Prince Street driveway and sidewalk match the tile level drawn this frame.
+  { name: 'prince', segment: 'landscape', ending: false, update: (dt, _realDt, now) => places.prince.place?.update(camera.position, now, vehicle, dt) },
   ...(fleet ? [{ name: 'fleet', segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { name: 'coast', segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
   { name: 'lotProps', segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },

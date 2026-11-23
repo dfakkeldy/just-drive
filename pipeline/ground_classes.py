@@ -368,7 +368,7 @@ def bake(root, area_id, output):
     input_paths=[baked/'cover.png',baked/'manifest.json',baked/'roads.json',rail_path,qpath]
     input_paths += extra_inputs
     input_paths += sorted(CANOPY_USED)
-    input_paths += hand_sites.ground_source_files(root)+hand_sites.catalog_inputs(root)
+    input_paths += hand_sites.ground_source_files(root)+hand_sites.ground_catalog_inputs(root)
     input_paths += [REPO/'pipeline/ground_classes.py',REPO/'pipeline/hand_sites.py',REPO/'pipeline/ground_sources.json',canopy_pin_path]
     receipts=[input_receipt(path,root) for path in input_paths]
     promotion={'version':1,'area':area_id,'crs':'EPSG:2961','bounds':bounds,'promoted':False,

@@ -70,7 +70,7 @@ Prose and housekeeping print `NO CHECK NEEDED`. Other uncovered paths print
 Failed checks retain their output folder. One interrupt prints the partial
 table and exits 130. See [the inventory notes](tools/checks-README.md).
 
-GitHub CI (`.github/workflows/ci.yml`) runs `tools/check-all.sh --ci --full` on every PR
+GitHub CI (`.github/workflows/ci.yml`) runs `tools/check-all.sh --ci --full --jobs 4` on every PR
 and on `main`, in a clean Ubuntu clone with no `data/`. It does not replace the
 local runs: rows that need the land or the Mac SKIP there and still run here.
 A CI pass with skipped rows proves only the rows it ran.

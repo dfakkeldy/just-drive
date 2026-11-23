@@ -8,7 +8,7 @@ import { ceilingAt, churchStair, type ChurchRoom } from './church-room';
 type V3 = [number, number, number];
 export type Zone = 'nave' | 'vestry' | 'loft';
 type Skin = 'boards' | 'bead' | 'bare' | 'peel' | 'plain';
-type Sheet = 'window' | 'sash' | 'stations' | 'devotions' | 'altar7' | 'altar3' | 'lectern' | 'map';
+type Sheet = 'window' | 'porchWindow' | 'sash' | 'stations' | 'devotions' | 'altar7' | 'altar3' | 'lectern' | 'map';
 type Axis = 'x' | 'y' | 'z';
 type UVRect = [number, number, number, number];
 
@@ -105,24 +105,25 @@ function peelTexture(): HTMLCanvasElement {
   blotches(g, r, size, 40, a => `rgba(255,255,255,${a})`, 14, 9, .5);
   return c;
 }
-/** A round-headed window with many small panes, seen against daylight. Outside the arch is transparent. */
-function windowTexture(): HTMLCanvasElement {
-  const w = 128, h = 256, [c, g] = canvas(w, h), radius = w / 2 - 3, spring = radius + 3;
-  const outline = () => { g.beginPath(); g.moveTo(3, h - 2); g.lineTo(3, spring); g.arc(w / 2, spring, radius, Math.PI, 0); g.lineTo(w - 3, h - 2); g.closePath(); };
+/** A round-headed window matched to its real width-to-height aspect so the arch starts on the exterior spring line. */
+function archedWindowTexture(cols: number, rowsBelowSpring: number, meetingRow: number, archShare: number): HTMLCanvasElement {
+  const w = 128, h = 256, [c, g] = canvas(w, h), rx = w / 2 - 3, spring = Math.round(h * archShare), ry = spring - 3;
+  const outline = () => { g.beginPath(); g.moveTo(3, h - 2); g.lineTo(3, spring); g.ellipse(w / 2, spring, rx, ry, 0, Math.PI, 0); g.lineTo(w - 3, h - 2); g.closePath(); };
   outline(); g.save(); g.clip();
   const sky = g.createLinearGradient(0, 0, 0, h);
   sky.addColorStop(0, '#fbfdfc'); sky.addColorStop(.55, '#f1f6f1'); sky.addColorStop(1, '#cfdcc9');
   g.fillStyle = sky; g.fillRect(0, 0, w, h);
   g.strokeStyle = '#a3b3b6'; g.lineWidth = 4;
-  for (let i = 1; i < 4; i++) { g.beginPath(); g.moveTo(w * i / 4, i === 2 ? 0 : spring); g.lineTo(w * i / 4, h); g.stroke(); }
-  for (let i = 0; i < 6; i++) { const y = spring + (h - spring) * i / 6; g.lineWidth = i === 3 ? 7 : 4; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
-  g.lineWidth = 3;
-  g.beginPath(); g.arc(w / 2, spring, radius * .52, Math.PI, 0); g.stroke();
-  for (const a of [.25, .75]) { g.beginPath(); g.moveTo(w / 2 + Math.cos(Math.PI * (1 + a)) * radius * .52, spring + Math.sin(Math.PI * (1 + a)) * radius * .52); g.lineTo(w / 2 + Math.cos(Math.PI * (1 + a)) * radius, spring + Math.sin(Math.PI * (1 + a)) * radius); g.stroke(); }
+  for (let i = 1; i < cols; i++) { g.beginPath(); g.moveTo(w * i / cols, 0); g.lineTo(w * i / cols, h); g.stroke(); }
+  for (let i = 0; i < rowsBelowSpring; i++) { const y = spring + (h - spring) * i / rowsBelowSpring; g.lineWidth = i === meetingRow ? 7 : 4; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
   g.restore();
   g.strokeStyle = '#e9ece8'; g.lineWidth = 7; outline(); g.stroke();
   return c;
 }
+/** Nave 12-over-12 round-headed window (0.90 x 2.15 m, arch radius 0.45 m). */
+const windowTexture = () => archedWindowTexture(4, 5, 2, 0.45 / 2.15);
+/** Porch 3-column round-headed window (0.65 x 1.695 m, arch radius 0.325 m). */
+const porchWindowTexture = () => archedWindowTexture(3, 4, 2, 0.325 / 1.695);
 /** A six-over-six sash window. */
 function sashTexture(): HTMLCanvasElement {
   const w = 128, h = 208, [c, g] = canvas(w, h);
@@ -665,7 +666,7 @@ export class ChurchRoomArt {
     let texture = this.maps.get(name);
     if (!texture) {
       const draw: Record<Exclude<Skin, 'plain' | 'bead'> | Sheet, () => HTMLCanvasElement> = {
-        boards: boardsTexture, bare: bareTexture, peel: peelTexture, window: windowTexture, sash: sashTexture,
+        boards: boardsTexture, bare: bareTexture, peel: peelTexture, window: windowTexture, porchWindow: porchWindowTexture, sash: sashTexture,
         stations: stationsAtlasTexture, devotions: devotionsAtlasTexture,
         altar7: () => altarTexture(7), altar3: () => altarTexture(3), lectern: lecternTexture, map: mapTexture,
       };
@@ -846,7 +847,7 @@ export class ChurchRoomArt {
     const sd = porch.side;
     this.box('boards', PAINT.white, sd.x - sd.width / 2, 0, d0 + .01, sd.x + sd.width / 2, sd.height, d0 + .05, 'y', .8);
     const pw = porch.window;
-    this.sheet('window', [pw.x + pw.width / 2, pw.sill, d1 - .012], [-pw.width, 0, 0], [0, pw.spring - pw.sill + pw.width / 2, 0], false);
+    this.sheet('porchWindow', [pw.x + pw.width / 2, pw.sill, d1 - .012], [-pw.width, 0, 0], [0, pw.spring - pw.sill + pw.width / 2, 0], false);
     // Round-headed windows of many small panes, each with a white sill. The galleries pass in front of most of them.
     for (const w of room.shell.windows) {
       const z = w.side > 0 ? N.z1 : N.z0, inward = -w.side, tall = w.spring - w.sill + w.width / 2;
