@@ -926,6 +926,28 @@ function runDeckWaitTests(api, quiet = false) {
       }
       assert.ok(Math.abs(ru.x - 10) < .1 && Math.abs(ru.y - 2) < .2, `${kind}: mid-wait tile unload preserves deadline and restores prior dry pose (x=${ru.x.toFixed(1)}, y=${ru.y.toFixed(2)})`);
       assert.ok(kind === 'bike' ? ru.ready === true : ru.stuck === false, `${kind}: drivable after mid-wait unload timeout recovery`);
+
+      // Even if the bridge deck appears at 2 s while terrain beneath remains unloaded, the deadline still runs and restores the prior dry pose.
+      let deckOnUnload = null;
+      const unloadDeckRoads = makeRoads(70, 150, (x, z) => (deckOnUnload !== null && x >= 70 && x <= 150 && Math.abs(z) <= 4 ? deckOnUnload : null));
+      unloadDeckRoads.bridgeRuns = () => [{ roads: new Set([1]), pts: [[70, 0], [150, 0]], halfWidth: 4 }];
+      spanLoaded = true;
+      const rud = mkRide(kind, unloadWorld, unloadDeckRoads); rud.bounds = [-200, -200, 400, 200];
+      assert.equal(rud.place(10, 0, Math.PI / 2), true);
+      assert.equal(rud.restart(100, 0, Math.PI / 2), true);
+      for (let i = 0; i < 60; i++) parkedFrame(rud);
+      spanLoaded = false;
+      for (let i = 0; i < 60; i++) {
+        if (!rud.waitingForDeck && unloadWorld.surfaceAt(rud.x, rud.z)?.level === undefined) rud.retryPlace();
+        else parkedFrame(rud);
+      }
+      deckOnUnload = 8;
+      for (let i = 0; i < 60 * 10; i++) {
+        if (!rud.waitingForDeck && unloadWorld.surfaceAt(rud.x, rud.z)?.level === undefined) rud.retryPlace();
+        else parkedFrame(rud);
+      }
+      assert.ok(Math.abs(rud.x - 10) < .1 && Math.abs(rud.y - 2) < .2, `${kind}: deck arriving over unloaded terrain still honors 8 s deadline and restores prior dry pose (x=${rud.x.toFixed(1)}, y=${rud.y.toFixed(2)})`);
+      assert.ok(kind === 'bike' ? rud.ready === true : rud.stuck === false, `${kind}: drivable after deck-over-unloaded-terrain timeout`);
     }
     // Road vertex fallback keeps walking past a guard-rejected first dry vertex to the next accepted dry vertex.
     const guardWorld = makeTerrain((x) => ({ ground: x <= 323 ? 2 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 5, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
@@ -1642,8 +1664,8 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     [
       'bike-stale-waterStopped',
       'web/src/bike-ride.ts',
-      '    if (freshWait || (gAt !== null && !waitDeck)) { this.#deckWait = 0; this.#waitFallback = null; }\n    this.#waterStopped = false;',
-      '    if (freshWait || (gAt !== null && !waitDeck)) { this.#deckWait = 0; this.#waitFallback = null; }',
+      '    this.#waterStopped = false;\n    this.ready = !waitDeck && this.capture();',
+      '    this.ready = !waitDeck && this.capture();',
       /bike: stale #waterStopped never yanks timed-out recovery off the 8 m deck/,
     ],
     [
@@ -1778,6 +1800,20 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
       '    this.#deckWaiting = waitDeck || keepWait;',
       '    this.#deckWaiting = waitDeck;',
       /bike: mid-wait tile unload preserves deadline and restores prior dry pose/,
+    ],
+    [
+      'car-deck-over-unloaded-drops-wait',
+      'web/src/vehicle.ts',
+      '    const keepWait = g === null && this.#retrying && this.#deckWaiting && this.#deckWait < DECK_WAIT_SECONDS;',
+      '    const keepWait = g === null && allowWait && this.#deckWaiting && this.#deckWait < DECK_WAIT_SECONDS;',
+      /car: deck arriving over unloaded terrain still honors 8 s deadline/,
+    ],
+    [
+      'bike-deck-over-unloaded-drops-wait',
+      'web/src/bike-ride.ts',
+      '    const keepWait = !this.ready && this.#retrying && this.#deckWaiting && this.#deckWait < DECK_WAIT_SECONDS;',
+      '    const keepWait = !this.ready && allowWait && this.#deckWaiting && this.#deckWait < DECK_WAIT_SECONDS;',
+      /bike: deck arriving over unloaded terrain still honors 8 s deadline/,
     ],
     [
       'fleet-unspawned-restart-clobbers-first-spawn',

@@ -169,8 +169,8 @@ export class BikeRide implements Ride {
     }
     // As Vehicle.place: a height-free placement (placeAt, or its retry while waiting) on an unbuilt bridge span over
     // water waits up to DECK_WAIT_SECONDS for its deck (not ready: no physics, no safe point). Never for recovery.
-    const expired = isSelf && allowWait && this.#deckWaiting && this.#deckWait >= DECK_WAIT_SECONDS;
-    const dry = (gAt === null && !expired) || (gAt !== null && this.isDryPose(pose.x, pose.z, gAt));
+    const expired = isSelf && this.#retrying && this.#deckWaiting && this.#deckWait >= DECK_WAIT_SECONDS;
+    const dry = gAt === null ? !expired : this.isDryPose(pose.x, pose.z, gAt) && (!expired || this.bothWheelsSupported(pose.x, pose.z, pose.heading, gAt));
     const waitDeck = isSelf && !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(pose.x, pose.z) === null && placementOnSpan(this.roads, pose.x, pose.z);
@@ -183,12 +183,12 @@ export class BikeRide implements Ride {
     this.flightPeak = null;
     this.y = gAt ?? this.y;
     if (waitDeck && gAt !== null) this.prevGround = gAt;
-    const keepWait = gAt === null && allowWait && this.#deckWaiting && this.#deckWait < DECK_WAIT_SECONDS;
-    this.#deckWaiting = waitDeck || keepWait;
     this.#noDeckWait = freshWait ? this.skipDeckWait : allowWait ? this.#noDeckWait : false;
-    if (freshWait || (gAt !== null && !waitDeck)) { this.#deckWait = 0; this.#waitFallback = null; }
     this.#waterStopped = false;
     this.ready = !waitDeck && this.capture();
+    const keepWait = !this.ready && this.#retrying && this.#deckWaiting && this.#deckWait < DECK_WAIT_SECONDS;
+    this.#deckWaiting = waitDeck || keepWait;
+    if (freshWait || this.ready) { this.#deckWait = 0; this.#waitFallback = null; }
     if (this.ready) {
       this.#awaitingLoad = false;
       this.y = this.prevGround = Math.max((this.frontHeight + this.rearHeight) / 2, this.groundAt(this.x, this.z) ?? -Infinity);
