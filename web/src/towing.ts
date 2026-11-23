@@ -11,6 +11,7 @@ import type { RoadScene } from './road-scene';
 import type { Props } from './props';
 import type { WorldContacts } from './world-contacts';
 import { touchesPlayer } from './road-scene-rules';
+import { DEFAULT_SEA_LEVEL, WATER_COVER_CLASS, isDryGround, localGroundSlope, unknownGroundHeight } from './water-bounds';
 
 const clamp = THREE.MathUtils.clamp, wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const STEP = 1 / 120;
@@ -126,6 +127,10 @@ export class Towing {
     if (this.world.yard?.coupledBodies === this.bodyProvider) this.world.yard.coupledBodies = null;
     this.attached = false;
   }
+  /** The host hooks installed before this trailer attached, so an in-place swap never copies trailer guards. */
+  cleanHooks(): { placementGuard: Vehicle['placementGuard']; onPlaced: Vehicle['onPlaced'] } {
+    return { placementGuard: this.attached ? this.priorGuard : this.vehicle.placementGuard, onPlaced: this.attached ? this.priorPlaced : this.vehicle.onPlaced };
+  }
   get angle(): number { return wrap(this.vehicle.heading - this.heading); }
   private hitch(): THREE.Vector3 {
     const v = this.vehicle, h = v.spec.hitch!;
@@ -206,7 +211,7 @@ export class Towing {
     trial.buildPlacement();
     if (!trial.pairClear()) return false;
     // Placement adds water and full-body map margins to the SAME final-pose contact test used by each step.
-    const bodies = trial.bodies(), bounds = v.bounds;
+    const bodies = trial.bodies(), bounds = v.bounds, waitingRoad = land === null && this.roads.nearest(pose.x, pose.z, 30) !== null;
     for (const p of bodies) {
       const fx = Math.sin(p.heading), fz = -Math.cos(p.heading), spec = p.spec;
       if (this.world.scene?.rules.enabled) for (const solid of this.world.scene.placementSolids) if (touchesPlayer(solid, p, .35, spec)) return false;
@@ -215,10 +220,13 @@ export class Towing {
         const x = p.x + fx * a + Math.cos(p.heading) * w, z = p.z + fz * a + Math.sin(p.heading) * w;
         if (bounds && (x < bounds[0] || x > bounds[2] || z < bounds[1] || z > bounds[3])) return false;
         const g = this.ground(x, z);
-        if(g!==null){const deck=this.roads.deckHeight(x,z),surface=this.terrain.surfaceAt?.(x,z);
-          const onDeck=(deck!==null&&Math.abs(g-deck)<.02)||(surface?.deck===true&&Math.abs(surface.ground-g)<.02);
-          if(g<-.45||this.terrain.waterAt?.(x,z,g,onDeck))return false;
-        }
+        if(g===null){if(!waitingRoad)return false;continue;}
+        const deck=this.roads.deckHeight(x,z),surface=this.terrain.surfaceAt?.(x,z)??null;
+        const onDeck=(deck!==null&&Math.abs(g-deck)<.02)||(surface?.deck===true&&Math.abs(surface.ground-g)<.02);
+        const sea=typeof this.terrain.seaLevel==='number'?this.terrain.seaLevel:DEFAULT_SEA_LEVEL;
+        const coverClass=this.terrain.coverAt?.(x,z)??0;
+        const slope=coverClass===WATER_COVER_CLASS?localGroundSlope(x,z,(px,pz)=>this.ground(px,pz)):0;
+        if(!isDryGround({ground:g,surface,onDeck,seaLevel:sea,coverClass,slope})||this.terrain.waterAt?.(x,z,g,onDeck))return false;
       }
     }
     return true;
@@ -326,6 +334,7 @@ export class Towing {
   private attitude(placing: boolean, dt = STEP): void {
     if (!placing) this.correctGround();
     this.euler.set(this.pitch, -this.heading, this.roll, 'YXZ');
+    const sea = typeof this.terrain.seaLevel === 'number' ? this.terrain.seaLevel : DEFAULT_SEA_LEVEL;
     let total = 0, known = true;
     for (let i = 0; i < 4; i++) {
       const p = this.contacts[i];
@@ -334,18 +343,22 @@ export class Towing {
       this.local.set(x, 0, z).applyEuler(this.euler);
       p.x = this.x + this.local.x; p.z = this.z + this.local.z; p.plane = this.y + this.local.y;
       p.height = this.ground(p.x, p.z, placing ? undefined : p.plane);
-      if (p.height === null) known = false;
-      else p.ground = p.height;
+      if (p.height === null) {
+        known = false;
+        if (!placing && this.grounded) p.ground = unknownGroundHeight(sea);
+      } else p.ground = p.height;
       total += p.ground / 4;
     }
-    if (!known) {
-      // Unknown support is not a fall or a landing. Carry the last pose with the moving hitch.
+    if (!known && (placing || !this.grounded)) {
+      // Unknown support before first settling is not a fall or a landing. Carry the last pose with the moving hitch.
       this.supportMissing = true;
       this.y += this.hitch().y - this.hitchY; this.vy = this.vehicle.vy;
       this.solveCoupler(); return;
     }
-    for (let i = 0; i < 4; i++) { const p = this.groundSamples[i], contact = this.contacts[i]; p.x = contact.x; p.z = contact.z; p.plane = contact.plane; p.height = contact.height!; }
-    this.samplesReady = true;
+    if (known) {
+      for (let i = 0; i < 4; i++) { const p = this.groundSamples[i], contact = this.contacts[i]; p.x = contact.x; p.z = contact.z; p.plane = contact.plane; p.height = contact.height!; }
+      this.samplesReady = true;
+    }
     const groundVelocity = placing || !this.grounded || this.supportMissing || Math.hypot(this.vehicle.vx, this.vehicle.vz) < .1 ? 0 : clamp((total - this.previousGround) / dt, -30, 30);
     this.supportMissing = false; this.previousGround = total;
     const free = this.y + this.vy * dt - .5 * 9.81 * dt * dt;

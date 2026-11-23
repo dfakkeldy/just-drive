@@ -77,67 +77,127 @@ export function lotWants(id: number, seed: number = LOT_PROPS.seed): { kinds: Lo
 // ---- Plane geometry: a rectangle is a centre, a heading of its long axis and two half sizes. ----
 interface Rect { x: number; z: number; heading: number; half: number; halfWidth: number }
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-/** A point in a rectangle's own axes: along its long axis, then across. */
-function inRect(r: Rect, x: number, z: number): [number, number] {
-  const ax = Math.sin(r.heading), az = -Math.cos(r.heading), dx = x - r.x, dz = z - r.z;
-  return [dx * ax + dz * az, dx * -az + dz * ax];
-}
 export function rectCorners(r: Rect): [number, number][] {
   const ax = Math.sin(r.heading), az = -Math.cos(r.heading);
-  return [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([a, b]) => [r.x + ax * a * r.half - az * b * r.halfWidth, r.z + az * a * r.half + ax * b * r.halfWidth]);
+  const hx = ax * r.half, hz = az * r.half, wx = -az * r.halfWidth, wz = ax * r.halfWidth;
+  return [
+    [r.x + hx + wx, r.z + hz + wz],
+    [r.x + hx - wx, r.z + hz - wz],
+    [r.x - hx - wx, r.z - hz - wz],
+    [r.x - hx + wx, r.z - hz + wz],
+  ];
 }
 function pointSegment(px: number, pz: number, ax: number, az: number, bx: number, bz: number): number {
   const dx = bx - ax, dz = bz - az, t = clamp(((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz || 1), 0, 1);
-  return Math.hypot(px - ax - t * dx, pz - az - t * dz);
+  const ex = px - ax - t * dx, ez = pz - az - t * dz;
+  return Math.sqrt(ex * ex + ez * ez);
+}
+function clipSegmentToBox(a0: number, b0: number, a1: number, b1: number, half: number, halfWidth: number): boolean {
+  let t0 = 0, t1 = 1;
+  const da = a1 - a0, db = b1 - b0;
+  let p = -da, q = a0 + half;
+  if (p === 0) { if (q < 0) return false; } else { const t = q / p; if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; } }
+  p = da; q = half - a0;
+  if (p === 0) { if (q < 0) return false; } else { const t = q / p; if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; } }
+  p = -db; q = b0 + halfWidth;
+  if (p === 0) { if (q < 0) return false; } else { const t = q / p; if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; } }
+  p = db; q = halfWidth - b0;
+  if (p === 0) { if (q < 0) return false; } else { const t = q / p; if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; } }
+  return t0 <= t1;
+}
+function rectSegmentWithAxes(r: Rect, rAx: number, rAz: number,
+  c0x: number, c0z: number, c1x: number, c1z: number, c2x: number, c2z: number, c3x: number, c3z: number,
+  ax: number, az: number, bx: number, bz: number): number {
+  const d0x = ax - r.x, d0z = az - r.z, a0 = d0x * rAx + d0z * rAz, b0 = d0x * -rAz + d0z * rAx;
+  const d1x = bx - r.x, d1z = bz - r.z, a1 = d1x * rAx + d1z * rAz, b1 = d1x * -rAz + d1z * rAx;
+  if (clipSegmentToBox(a0, b0, a1, b1, r.half, r.halfWidth)) return 0;
+  const rx0 = Math.max(Math.abs(a0) - r.half, 0), rz0 = Math.max(Math.abs(b0) - r.halfWidth, 0);
+  const rx1 = Math.max(Math.abs(a1) - r.half, 0), rz1 = Math.max(Math.abs(b1) - r.halfWidth, 0);
+  let d = Math.min(Math.sqrt(rx0 * rx0 + rz0 * rz0), Math.sqrt(rx1 * rx1 + rz1 * rz1));
+  let cd = pointSegment(c0x, c0z, ax, az, bx, bz); if (cd < d) d = cd;
+  cd = pointSegment(c1x, c1z, ax, az, bx, bz); if (cd < d) d = cd;
+  cd = pointSegment(c2x, c2z, ax, az, bx, bz); if (cd < d) d = cd;
+  cd = pointSegment(c3x, c3z, ax, az, bx, bz); if (cd < d) d = cd;
+  return d;
 }
 /** Metres between a rectangle and a segment: 0 when they touch or cross. */
 export function rectSegment(r: Rect, ax: number, az: number, bx: number, bz: number): number {
-  const [a0, b0] = inRect(r, ax, az), [a1, b1] = inRect(r, bx, bz);
-  // Clip the segment to the box (Liang-Barsky): any part left inside means they meet.
-  let t0 = 0, t1 = 1;
-  const da = a1 - a0, db = b1 - b0;
-  const clip = (p: number, q: number) => { if (p === 0) return q >= 0; const t = q / p; if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; } return true; };
-  if (clip(-da, a0 + r.half) && clip(da, r.half - a0) && clip(-db, b0 + r.halfWidth) && clip(db, r.halfWidth - b0) && t0 <= t1) return 0;
-  const box = (a: number, b: number) => Math.hypot(Math.max(Math.abs(a) - r.half, 0), Math.max(Math.abs(b) - r.halfWidth, 0));
-  let d = Math.min(box(a0, b0), box(a1, b1));
-  for (const [cx, cz] of rectCorners(r)) d = Math.min(d, pointSegment(cx, cz, ax, az, bx, bz));
-  return d;
+  const rAx = Math.sin(r.heading), rAz = -Math.cos(r.heading);
+  const hx = rAx * r.half, hz = rAz * r.half, wx = -rAz * r.halfWidth, wz = rAx * r.halfWidth;
+  return rectSegmentWithAxes(r, rAx, rAz,
+    r.x + hx + wx, r.z + hz + wz, r.x + hx - wx, r.z + hz - wz,
+    r.x - hx - wx, r.z - hz - wz, r.x - hx + wx, r.z - hz + wz,
+    ax, az, bx, bz);
 }
 function insidePolygon(x: number, z: number, poly: readonly XZ[]): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    const pi = poly[i], pj = poly[j], xi = pi[0], zi = pi[1], xj = pj[0], zj = pj[1];
     if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
   }
   return inside;
 }
-/** Metres between a rectangle and a building's footprint: 0 when they overlap. */
-export function rectPolygon(r: Rect, poly: readonly XZ[]): number {
+function rectPolygonWithAxes(r: Rect, rAx: number, rAz: number,
+  c0x: number, c0z: number, c1x: number, c1z: number, c2x: number, c2z: number, c3x: number, c3z: number,
+  poly: readonly XZ[]): number {
   if (insidePolygon(r.x, r.z, poly)) return 0;
   let d = Infinity;
-  for (let i = 0; i < poly.length; i++) {
-    const [ax, az] = poly[i], [bx, bz] = poly[(i + 1) % poly.length];
-    d = Math.min(d, rectSegment(r, ax, az, bx, bz));
-    if (d === 0) return 0;
+  const len = poly.length;
+  for (let i = 0; i < len; i++) {
+    const a = poly[i], b = poly[i + 1 === len ? 0 : i + 1];
+    const sd = rectSegmentWithAxes(r, rAx, rAz, c0x, c0z, c1x, c1z, c2x, c2z, c3x, c3z, a[0], a[1], b[0], b[1]);
+    if (sd === 0) return 0;
+    if (sd < d) d = sd;
   }
   return d;
+}
+/** Metres between a rectangle and a building's footprint: 0 when they overlap. */
+export function rectPolygon(r: Rect, poly: readonly XZ[]): number {
+  const rAx = Math.sin(r.heading), rAz = -Math.cos(r.heading);
+  const hx = rAx * r.half, hz = rAz * r.half, wx = -rAz * r.halfWidth, wz = rAx * r.halfWidth;
+  return rectPolygonWithAxes(r, rAx, rAz,
+    r.x + hx + wx, r.z + hz + wz, r.x + hx - wx, r.z + hz - wz,
+    r.x - hx - wx, r.z - hz - wz, r.x - hx + wx, r.z - hz + wz, poly);
 }
 function pointPolygon(x: number, z: number, poly: readonly XZ[]): number {
   if (insidePolygon(x, z, poly)) return 0;
   let d = Infinity;
-  for (let i = 0; i < poly.length; i++) { const [ax, az] = poly[i], [bx, bz] = poly[(i + 1) % poly.length]; d = Math.min(d, pointSegment(x, z, ax, az, bx, bz)); }
+  const len = poly.length;
+  for (let i = 0; i < len; i++) {
+    const a = poly[i], b = poly[i + 1 === len ? 0 : i + 1];
+    const sd = pointSegment(x, z, a[0], a[1], b[0], b[1]);
+    if (sd < d) d = sd;
+  }
   return d;
 }
 const rectRect = (a: Rect, b: Rect): number => {
-  const c = rectCorners(a);
-  let d = Infinity;
-  for (let i = 0; i < 4; i++) d = Math.min(d, rectSegment(b, c[i][0], c[i][1], c[(i + 1) % 4][0], c[(i + 1) % 4][1]));
-  const within = (p: Rect, q: Rect) => { const [u, v] = inRect(q, p.x, p.z); return Math.abs(u) <= q.half && Math.abs(v) <= q.halfWidth; };
-  return within(a, b) || within(b, a) ? 0 : d;
+  const aAx = Math.sin(a.heading), aAz = -Math.cos(a.heading);
+  const bAx = Math.sin(b.heading), bAz = -Math.cos(b.heading);
+  const dABx = a.x - b.x, dABz = a.z - b.z;
+  if (Math.abs(dABx * bAx + dABz * bAz) <= b.half && Math.abs(dABx * -bAz + dABz * bAx) <= b.halfWidth) return 0;
+  const dBAx = -dABx, dBAz = -dABz;
+  if (Math.abs(dBAx * aAx + dBAz * aAz) <= a.half && Math.abs(dBAx * -aAz + dBAz * aAx) <= a.halfWidth) return 0;
+  const ahx = aAx * a.half, ahz = aAz * a.half, awx = -aAz * a.halfWidth, awz = aAx * a.halfWidth;
+  const a0x = a.x + ahx + awx, a0z = a.z + ahz + awz;
+  const a1x = a.x + ahx - awx, a1z = a.z + ahz - awz;
+  const a2x = a.x - ahx - awx, a2z = a.z - ahz - awz;
+  const a3x = a.x - ahx + awx, a3z = a.z - ahz + awz;
+  const bhx = bAx * b.half, bhz = bAz * b.half, bwx = -bAz * b.halfWidth, bwz = bAx * b.halfWidth;
+  const b0x = b.x + bhx + bwx, b0z = b.z + bhz + bwz;
+  const b1x = b.x + bhx - bwx, b1z = b.z + bhz - bwz;
+  const b2x = b.x - bhx - bwx, b2z = b.z - bhz - bwz;
+  const b3x = b.x - bhx + bwx, b3z = b.z - bhz + bwz;
+  let d = rectSegmentWithAxes(b, bAx, bAz, b0x, b0z, b1x, b1z, b2x, b2z, b3x, b3z, a0x, a0z, a1x, a1z);
+  let sd = rectSegmentWithAxes(b, bAx, bAz, b0x, b0z, b1x, b1z, b2x, b2z, b3x, b3z, a1x, a1z, a2x, a2z); if (sd < d) d = sd;
+  sd = rectSegmentWithAxes(b, bAx, bAz, b0x, b0z, b1x, b1z, b2x, b2z, b3x, b3z, a2x, a2z, a3x, a3z); if (sd < d) d = sd;
+  sd = rectSegmentWithAxes(b, bAx, bAz, b0x, b0z, b1x, b1z, b2x, b2z, b3x, b3z, a3x, a3z, a0x, a0z); if (sd < d) d = sd;
+  return d;
 };
 function rectBox(r: Rect): [number, number, number, number] {
-  const c = rectCorners(r);
-  return [Math.min(...c.map((p) => p[0])), Math.min(...c.map((p) => p[1])), Math.max(...c.map((p) => p[0])), Math.max(...c.map((p) => p[1]))];
+  const ax = Math.sin(r.heading), az = -Math.cos(r.heading);
+  const ex = Math.abs(ax) * r.half + Math.abs(az) * r.halfWidth;
+  const ez = Math.abs(az) * r.half + Math.abs(ax) * r.halfWidth;
+  return [r.x - ex, r.z - ez, r.x + ex, r.z + ez];
 }
 
 // ---- A coarse grid, so a house reads only the roads and buildings near it. ----
@@ -145,18 +205,55 @@ const CELL = 64;
 const cellKey = (i: number, j: number) => (i + 0x8000) * 0x10000 + (j + 0x8000);
 class Grid<T> {
   private cells = new Map<number, T[]>();
+  private seen = new Set<T>();
   add(item: T, box: readonly number[]): void {
-    for (let i = Math.floor(box[0] / CELL); i <= Math.floor(box[2] / CELL); i++) for (let j = Math.floor(box[1] / CELL); j <= Math.floor(box[3] / CELL); j++) {
+    const i0 = Math.floor(box[0] / CELL), i1 = Math.floor(box[2] / CELL);
+    const j0 = Math.floor(box[1] / CELL), j1 = Math.floor(box[3] / CELL);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
       const key = cellKey(i, j), list = this.cells.get(key);
-      if (list) list.push(item); else this.cells.set(key, [item]);
+      if (list) { if (list[list.length - 1] !== item) list.push(item); }
+      else this.cells.set(key, [item]);
     }
   }
   /** What is in the one cell under a point. */
   at(x: number, z: number): readonly T[] { return this.cells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL))) ?? []; }
-  near(box: readonly number[]): Set<T> {
-    const out = new Set<T>();
-    for (let i = Math.floor(box[0] / CELL); i <= Math.floor(box[2] / CELL); i++) for (let j = Math.floor(box[1] / CELL); j <= Math.floor(box[3] / CELL); j++) for (const t of this.cells.get(cellKey(i, j)) ?? []) out.add(t);
+  near(box: readonly number[]): T[] {
+    const i0 = Math.floor(box[0] / CELL), i1 = Math.floor(box[2] / CELL);
+    const j0 = Math.floor(box[1] / CELL), j1 = Math.floor(box[3] / CELL);
+    if (i0 === i1 && j0 === j1) return this.cells.get(cellKey(i0, j0)) ?? [];
+    const seen = this.seen; seen.clear();
+    const out: T[] = [];
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+      const list = this.cells.get(cellKey(i, j));
+      if (!list) continue;
+      for (let k = 0; k < list.length; k++) {
+        const t = list[k];
+        if (!seen.has(t)) { seen.add(t); out.push(t); }
+      }
+    }
     return out;
+  }
+  someNear(x0: number, z0: number, x1: number, z1: number, test: (t: T) => boolean): boolean {
+    const i0 = Math.floor(x0 / CELL), i1 = Math.floor(x1 / CELL);
+    const j0 = Math.floor(z0 / CELL), j1 = Math.floor(z1 / CELL);
+    if (i0 === i1 && j0 === j1) {
+      const list = this.cells.get(cellKey(i0, j0));
+      if (!list) return false;
+      for (let k = 0; k < list.length; k++) if (test(list[k])) return true;
+      return false;
+    }
+    const seen = this.seen; seen.clear();
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+      const list = this.cells.get(cellKey(i, j));
+      if (!list) continue;
+      for (let k = 0; k < list.length; k++) {
+        const t = list[k];
+        if (seen.has(t)) continue;
+        seen.add(t);
+        if (test(t)) return true;
+      }
+    }
+    return false;
   }
 }
 interface Segment { ax: number; az: number; bx: number; bz: number; halfWidth: number; isPublic: boolean }
@@ -242,8 +339,9 @@ export function chooseLotProps(input: LotInput): LotProp[] {
     const { kinds, rnd } = lotWants(house.id, seed);
     if (!kinds.length) continue;
     const span = Math.hypot(house.length, house.width) / 2 + reach + 4, area = [house.x - span, house.z - span, house.x + span, house.z + span];
-    const nearRoads = [...roads.near([area[0] - 60, area[1] - 60, area[2] + 60, area[3] + 60])];
-    const nearBuildings = [...buildings.near(area)], own = house.footprint;
+    const nearExcluded = input.excluded.filter((e) => overlaps(area, e));
+    const nearRoads = roads.near([area[0] - 60, area[1] - 60, area[2] + 60, area[3] + 60]);
+    const nearBuildings = buildings.near(area), own = house.footprint;
     // The direction to the nearest public road is the house's front.
     let toward = house.axis, best = Infinity;
     for (const s of nearRoads) if (s.isPublic) {
@@ -255,34 +353,53 @@ export function chooseLotProps(input: LotInput): LotProp[] {
     const fitRoads = nearRoads.filter((s) => Math.min(s.ax, s.bx) - s.halfWidth - 6 < area[2] && Math.max(s.ax, s.bx) + s.halfWidth + 6 > area[0] && Math.min(s.az, s.bz) - s.halfWidth - 6 < area[3] && Math.max(s.az, s.bz) + s.halfWidth + 6 > area[1]);
     const nearDrives = nearRoads.filter((s) => !s.isPublic && rectSegment({ x: house.x, z: house.z, heading: house.axis, half: house.length / 2, halfWidth: house.width / 2 }, s.ax, s.az, s.bx, s.bz) < reach);
     // Its own wings are walls to keep off, but never a neighbour whose lot it could be.
-    const wings = nearBuildings.filter((b) => b.id === house.id).map((b) => b.footprint), others = nearBuildings.filter((b) => b.id !== house.id).map((b) => b.footprint);
+    const wings: (readonly XZ[])[] = [], others: (readonly XZ[])[] = [];
+    for (const b of nearBuildings) (b.id === house.id ? wings : others).push(b.footprint);
     const fits = (r: Rect): boolean => {
-      const box = rectBox(r);
-      if (input.excluded.some((e) => overlaps(box, e))) return false;
+      const rAx = Math.sin(r.heading), rAz = -Math.cos(r.heading);
+      const hx = rAx * r.half, hz = rAz * r.half, wx = -rAz * r.halfWidth, wz = rAx * r.halfWidth;
+      const c0x = r.x + hx + wx, c0z = r.z + hz + wz;
+      const c1x = r.x + hx - wx, c1z = r.z + hz - wz;
+      const c2x = r.x - hx - wx, c2z = r.z - hz - wz;
+      const c3x = r.x - hx + wx, c3z = r.z - hz + wz;
+      const ex = Math.abs(rAx) * r.half + Math.abs(rAz) * r.halfWidth;
+      const ez = Math.abs(rAz) * r.half + Math.abs(rAx) * r.halfWidth;
+      const bx0 = r.x - ex, bz0 = r.z - ez, bx1 = r.x + ex, bz1 = r.z + ez;
+      if (nearExcluded.length) {
+        for (let i = 0; i < nearExcluded.length; i++) {
+          const e = nearExcluded[i];
+          if (bx0 <= e[2] && bx1 >= e[0] && bz0 <= e[3] && bz1 >= e[1]) return false;
+        }
+      }
       const round = Math.hypot(r.half, r.halfWidth);
       for (const s of fitRoads) {
         const clear = s.halfWidth + (s.isPublic ? LOT_PROPS.public : LOT_PROPS.drive);
         // The circle round the prop first: a segment past it by the clearance cannot be nearer the rectangle.
         if (pointSegment(r.x, r.z, s.ax, s.az, s.bx, s.bz) - round >= clear) continue;
-        if (rectSegment(r, s.ax, s.az, s.bx, s.bz) < clear) return false;
+        if (rectSegmentWithAxes(r, rAx, rAz, c0x, c0z, c1x, c1z, c2x, c2z, c3x, c3z, s.ax, s.az, s.bx, s.bz) < clear) return false;
       }
-      for (const m of mouthGrid.near([box[0] - LOT_PROPS.mouth, box[1] - LOT_PROPS.mouth, box[2] + LOT_PROPS.mouth, box[3] + LOT_PROPS.mouth])) {
-        const [a, b] = inRect(r, m[0], m[1]);
-        if (Math.hypot(Math.max(Math.abs(a) - r.half, 0), Math.max(Math.abs(b) - r.halfWidth, 0)) < LOT_PROPS.mouth) return false;
+      for (const m of mouthGrid.near([bx0 - LOT_PROPS.mouth, bz0 - LOT_PROPS.mouth, bx1 + LOT_PROPS.mouth, bz1 + LOT_PROPS.mouth])) {
+        const dx = m[0] - r.x, dz = m[1] - r.z, a = dx * rAx + dz * rAz, b = dx * -rAz + dz * rAx;
+        const ux = Math.max(Math.abs(a) - r.half, 0), uz = Math.max(Math.abs(b) - r.halfWidth, 0);
+        if (Math.sqrt(ux * ux + uz * uz) < LOT_PROPS.mouth) return false;
       }
-      for (const o of things.near([box[0] - 1, box[1] - 1, box[2] + 1, box[3] + 1])) {
-        const [a, b] = inRect(r, o[0], o[1]);
-        if (Math.hypot(Math.max(Math.abs(a) - r.half, 0), Math.max(Math.abs(b) - r.halfWidth, 0)) < LOT_PROPS.obstacle) return false;
-      }
-      if (rectPolygon(r, own) < LOT_PROPS.wall) return false;
-      for (const f of [...wings, ...others]) if (rectPolygon(r, f) < LOT_PROPS.wall) return false;
+      if (things.someNear(bx0 - 1, bz0 - 1, bx1 + 1, bz1 + 1, (o) => {
+        const dx = o[0] - r.x, dz = o[1] - r.z, a = dx * rAx + dz * rAz, b = dx * -rAz + dz * rAx;
+        const ux = Math.max(Math.abs(a) - r.half, 0), uz = Math.max(Math.abs(b) - r.halfWidth, 0);
+        return Math.sqrt(ux * ux + uz * uz) < LOT_PROPS.obstacle;
+      })) return false;
+      if (rectPolygonWithAxes(r, rAx, rAz, c0x, c0z, c1x, c1z, c2x, c2z, c3x, c3z, own) < LOT_PROPS.wall) return false;
+      for (let i = 0; i < wings.length; i++) if (rectPolygonWithAxes(r, rAx, rAz, c0x, c0z, c1x, c1z, c2x, c2z, c3x, c3z, wings[i]) < LOT_PROPS.wall) return false;
+      for (let i = 0; i < others.length; i++) if (rectPolygonWithAxes(r, rAx, rAz, c0x, c0z, c1x, c1z, c2x, c2z, c3x, c3z, others[i]) < LOT_PROPS.wall) return false;
       // On this house's lot: every corner and the centre nearer this house than any other building, and within reach.
-      for (const [x, z] of [...rectCorners(r), [r.x, r.z]]) {
+      const checkLot = (x: number, z: number): boolean => {
         const mine = pointPolygon(x, z, own);
         if (mine > reach) return false;
         for (const f of others) if (pointPolygon(x, z, f) <= mine) return false;
-      }
-      for (const p of placedGrid.near([box[0] - 2, box[1] - 2, box[2] + 2, box[3] + 2])) if (rectRect(r, p) < LOT_PROPS.apart) return false;
+        return true;
+      };
+      if (!checkLot(c0x, c0z) || !checkLot(c1x, c1z) || !checkLot(c2x, c2z) || !checkLot(c3x, c3z) || !checkLot(r.x, r.z)) return false;
+      if (placedGrid.someNear(bx0 - 2, bz0 - 2, bx1 + 2, bz1 + 2, (p) => rectRect(r, p) < LOT_PROPS.apart)) return false;
       return true;
     };
     for (const kind of kinds) {

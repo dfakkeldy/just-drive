@@ -5,6 +5,14 @@
     "terrain/props.json": "0cb0ff9260bba58f02e20c262f6cd690a29a3022d4f1dd3a032f50342fe72261",
     "areas/judique/props.json": "8bc8a27e1f503aa9f20878aa0449b4aff8484b8d95e15f0e4c14bd1ced72fcbb"
   },
+  "judiqueRoad98": {
+    "note": "PR #122 corrects the public poles on River Denys Road. Both mailbox arrays keep their original pins.",
+    "measuredFrom": "c2c4b7f91c69e62547e63f66bfa2bc38b93d2be5587028c54208fce66df0f964",
+    "publicPoles": {
+      "count": 1410,
+      "sha256": "4e97492bfe8705c5f7ce1e4fce090a16010c8f8c4632fcef5cb81c10de178e0d"
+    }
+  },
   "files": {
     "terrain/props.json": {
       "publicPoles": {

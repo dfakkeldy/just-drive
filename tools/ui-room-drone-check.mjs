@@ -2,9 +2,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
-const output = await build({ stdin: { contents: `export * from './mp/room-cards';export {Multiplayer} from './mp/index';export { SocialView } from './mp/social-view';export { RaceView } from './mp/race';export { GameView } from './mp/games';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, createDroneSticks, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';export { BigMap } from './big-map';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
+const output = await build({ stdin: { contents: `export * from './mp/room-cards';export {Multiplayer} from './mp/index';export { SocialView } from './mp/social-view';export { RaceView } from './mp/race';export { GameView } from './mp/games';export { PerspectiveCamera } from 'three';export { Ghosts, callSignHeight } from './mp/ghosts';export { Drone, createDroneSticks, DRONE_HELP, DRONE_FREE_HELP, DRONE_FREE_TOUCH_HELP, DRONE_TOUCH_HELP } from './drone';export { MiniMap } from './minimap';export { BigMap } from './big-map';`, resolveDir: new URL('../web/src/', import.meta.url).pathname }, bundle: true, write: false, platform: 'node', format: 'cjs', logLevel: 'silent' });
 const module = { exports: {} }; new Function('module','exports',output.outputFiles[0].text)(module,module.exports);
-const { Multiplayer, mountRoomCard, removeRoomCard, fitRoomCards, RoomCountdown, RaceView, GameView, Drone, createDroneSticks, DRONE_HELP, MiniMap, BigMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP } = module.exports;
+const { Multiplayer, mountRoomCard, removeRoomCard, fitRoomCards, RoomCountdown, RaceView, GameView, Drone, createDroneSticks, DRONE_HELP, MiniMap, BigMap, Ghosts, SocialView, PerspectiveCamera, callSignHeight, DRONE_TOUCH_HELP, DRONE_FREE_HELP, DRONE_FREE_TOUCH_HELP } = module.exports;
 const paint = [];
 const context = new Proxy({ measureText: text => ({width:text.length*6}) }, { get: (o,k) => o[k] ?? ((...args) => paint.push([k,...args])) });
 class Element {
@@ -365,18 +365,19 @@ for(const touchDevice of [false,true]){
 }
 const block=main.slice(main.indexOf('    if (miniMap) {',main.indexOf('  culvertMouths?.update')),main.indexOf('    // Paused frames return early'));
 const frame=new Function('ctx',`with(ctx){${block}}`);
-for(const active of [false,true]){
+for(const droneVehicle of [false,true])for(const active of [false,true]){
  const calls=[],vehicle={x:1,z:2,heading:.4},state={x:30,z:40,yaw:.8};
- frame({miniMap:{setFlight:v=>calls.push(['flight',v]),show:v=>calls.push(['show',v]),update:(...args)=>calls.push(['map',...args])},drone:{active,state},playing:!active,clockRuns:true,mapTimer:1,realDt:.05,refreshMap(){},boss:null,vehicle,mapStops:[],mapMarks:[],mapCars:[]});
- assert.deepEqual(calls.slice(0,2),[['flight',active],['show',true]]);assert.deepEqual(calls[2].slice(1,5),[.05,active?30:1,active?40:2,active?-.8:.4]);assert.equal(calls[2][8],active?vehicle:null);
+ frame({miniMap:{setFlight:v=>calls.push(['flight',v]),show:v=>calls.push(['show',v]),update:(...args)=>calls.push(['map',...args])},drone:{active,state},droneVehicle,playing:!active,clockRuns:true,mapTimer:1,realDt:.05,refreshMap(){},boss:null,vehicle,mapStops:[],mapMarks:[],mapCars:[]});
+ assert.deepEqual(calls.slice(0,2),[['flight',active],['show',true]]);assert.deepEqual(calls[2].slice(1,5),[.05,active?30:1,active?40:2,active?-.8:.4]);assert.equal(calls[2][8],active&&!droneVehicle?vehicle:null,'the parked car shows under a car-launched drone only');
 }
 const hintsSource=main.slice(main.indexOf('    const hints ='),main.indexOf("    document.querySelector<HTMLDetailsElement>('#pauseKeys')"));
 const pauseHints=new Function('ctx',`with(ctx){${hintsSource};return hints;}`);
-for(const touchDevice of [false,true])for(const active of [false,true])for(const device of ['keyboard','gamepad']){
+for(const droneVehicle of [false,true])for(const touchDevice of [false,true])for(const active of [false,true])for(const device of ['keyboard','gamepad']){
  const driving=[['Driving','Controls']],pad=[['Pad','Controls']];
- const hints=pauseHints({drone:{active},touchDevice,DRONE_HELP,DRONE_TOUCH_HELP,gamepad:{device},padKeys:()=>pad,ride:{kind:'car'},mailMode:true,radio:null,TOUCH:driving,DRIVING_TOUCH:driving,KEYS:driving,DRIVING_KEYS:driving});
- assert.deepEqual(hints,active?(touchDevice?DRONE_TOUCH_HELP:DRONE_HELP):device==='gamepad'?pad:driving);
- if(active&&touchDevice)assert.deepEqual(hints,[['Left stick','Climb and turn'],['Right stick','Fly'],['RETURN TO CAR','Fly back. LAND NOW lands at once.']]);
+ const hints=pauseHints({drone:{active},droneVehicle,touchDevice,DRONE_HELP,DRONE_TOUCH_HELP,DRONE_FREE_HELP,DRONE_FREE_TOUCH_HELP,gamepad:{device},padKeys:()=>pad,ride:{kind:'car'},mailMode:true,radio:null,TOUCH:driving,DRIVING_TOUCH:driving,KEYS:driving,DRIVING_KEYS:driving});
+ assert.deepEqual(hints,active?(droneVehicle?(touchDevice?DRONE_FREE_TOUCH_HELP:DRONE_FREE_HELP):touchDevice?DRONE_TOUCH_HELP:DRONE_HELP):device==='gamepad'?pad:driving);
+ if(active&&touchDevice&&!droneVehicle)assert.deepEqual(hints,[['Left stick','Climb and turn'],['Right stick','Fly'],['RETURN TO CAR','Fly back. LAND NOW lands at once.']]);
+ if(active&&droneVehicle)assert.ok(hints.some(([k])=>k==='R'||k==='ROAD')&&!hints.some(([,v])=>/land|car/i.test(v)),'the standalone drone pause keys put it on the road and name no car');
 }
 const a=readFileSync(new URL('../web/index.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];
 const b=readFileSync(new URL('../artifact/page.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];assert.equal(a,b,'page style blocks remain identical');

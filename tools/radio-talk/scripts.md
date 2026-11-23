@@ -5,7 +5,7 @@ Words approved by the Mabou main thread on 15 Nov 2026, with the changes it aske
 - **Station:** 94.9 THE PARTY LINE. It plays on both games and in an 1884 car, like every other station.
 - **Shows:** *Mail Madness* (call-in) and *Just Drive: the developer* (interview).
 - **Host of both:** Effie. She is fed up with the callers and defends the carrier.
-- **Every name is invented.** Callers have first names only. "The developer" is a fictional character. He has no name and a stock voice.
+- **Word rules:** Use invented first names and invented businesses. Name a real organisation only with its written permission (the owner's rule, 22 Nov 2026). Note that permission next to the segment here: who gave it, the date, and where it is kept privately. Never name real private people, civic numbers, the postal service name or a maker badge. Callers have first names only. "The developer" is a fictional character. He has no name and a stock voice.
 - **The carrier** is the player. He speaks only as "a concerned citizen": in the last call of round 1, and in the quiz of round 2.
 - Each segment is one track. The radio can play them in any order, so each one stands alone.
 - `[SFX: ...]` is a sound effect. `[CLIP: ...]` is a few seconds of a song that is already on the radio.

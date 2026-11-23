@@ -75,7 +75,19 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
         public = lambda data: {(q['x'], q['y']) for q in data['poles'] if p.public(net.roads[q['road']])}
         before = json.loads(((baseline or source) / relative / 'props.json').read_text()) if baseline or overlay else None
         if before is not None:
-            assert public(before) == public(props), area + ': public pole positions changed'
+            # The one exception: AREA.public_pole_corrections (README "The filmed exception"). Every other public road
+            # must keep its positions, compared directly. A corrected road must equal the baseline corrected, field by
+            # field; a pack from before step 29's power output is compared uncorrected.
+            fixed = {r['id'] for r, _ in (p.corrected_road(net, e) for e in p.AREA.public_pole_corrections)}
+            other = lambda poles: {(q['x'], q['y']) for q in poles if p.public(net.roads[q['road']]) and q['road'] not in fixed}
+            assert other(before['poles']) == other(props['poles']), area + ': public pole positions changed'
+            if 'serviceDrops' in props:
+                expect = p.correct_public_poles(net, [q for q in before['poles'] if p.public(net.roads[q['road']])],
+                                                 p.AREA.public_pole_corrections)
+            else:
+                expect = before['poles']
+            pick = lambda poles: sorted((json.dumps(q, sort_keys=True) for q in poles if q['road'] in fixed))
+            assert pick(expect) == pick(props['poles']), area + ': a corrected road differs from its corrected baseline'
             for key in ('mailboxes', 'communityBoxes'):
                 assert before[key] == props[key], area + ': ' + key + ' changed'
         row = dict(area=area, publicPoles=len(public(props)), poles=len(props['poles']), preservationCompared=before is not None)
@@ -89,6 +101,9 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
         expected = p.service_drops(net, props['poles'], buildings, area, styles)
         assert props['serviceDrops'] == expected, area + ': drops do not match current poles, buildings, roof styles or side/reach rules'
         assert not any(d['building'] == -1 for d in props['serviceDrops']), area + ': the church has no power'
+        installed_public = [q for q in props['poles'] if p.public(net.roads[q['road']])]
+        assert p.correct_public_poles(net, installed_public, p.AREA.public_pole_corrections) == installed_public, \
+            area + ': a pole stands where public_pole_corrections removes it or on the wrong side'
         unpowered = p.unpowered_roads(net, p.AREA.unpowered_tracks)
         bounds = {}
         for pole in props['poles']:
@@ -116,9 +131,16 @@ def check_properties(source, overlay=None, baseline=None, require_after=False):
             assert len(unpowered) == 1 and net.roads[next(iter(unpowered))]['name'] == 'River Denys Road', \
                 'Judique lists the kind-4 piece of River Denys Road to the church as unpowered'
             assert not any(q['road'] in unpowered for q in props['poles']), 'River Denys Road kind-4 piece has no poles'
+            # The same drive saw the public piece's line end at a bend about 2.78 km along (README "The filmed exception").
+            assert len(p.AREA.public_pole_corrections) == 1, 'Judique corrects River Denys Road only'
+            road98, _ = p.corrected_road(net, p.AREA.public_pole_corrections[0])
+            assert road98['name'] == 'River Denys Road' and road98['kind'] == 3
+            along = p.Network([road98])
+            filmed = sorted(along.nearest((q['x'], q['y']), 20)['s'] for q in props['poles'] if q['road'] == road98['id'])
+            assert filmed and 2790 <= filmed[-1] < 2840, 'River Denys Road public poles end at the last house with power'
             nearest = min(p.distance((q['x'], q['y']), CHURCH) for q in props['poles'])
             assert nearest > 500, 'no pole stands near the church'
-            row.update(riverDenysPoles=len(run), lastBuildingS=round(last, 3), lastPoleS=round(end, 3),
+            row.update(riverDenysRoadPublicPoles=len(filmed), riverDenysRoadLastPoleS=round(filmed[-1], 1), riverDenysPoles=len(run), lastBuildingS=round(last, 3), lastPoleS=round(end, 3),
                        riverDenysRoadTrackPoles=0, nearestPoleToChurchMetres=round(nearest, 1))
         rows.append(row)
     print(json.dumps(rows, indent=2))
@@ -142,11 +164,11 @@ def make(source, output):
         initial = {name: (p.OUT / name).read_bytes() for name in
                    ('roads.json', 'buildings.json', 'building-styles.json', 'props.json', 'manifest.json')}
         original = p.place_poles
-        def verified(roads, net, buildings, safe, village, public_poles=None):
+        def verified(roads, net, buildings, safe, village, public_poles=None, corrections=()):
             old = oracle.place_poles(roads, net, safe, village, p.SEED, p.public, p.shifted, p.heading, p.distance)
             regenerated = original(roads, net, buildings, safe, village)
             assert encoded(old) == encoded([q for q in regenerated if p.public(net.roads[q['road']])]), area + ': frozen public-pole bytes changed'
-            result = original(roads, net, buildings, safe, village, public_poles)
+            result = original(roads, net, buildings, safe, village, public_poles, corrections=corrections)
             report['proof'].append(dict(area=area, frozenPublicByteEqual=True, preservedPublicPoles=len(public_poles)))
             return result
         p.place_poles = verified

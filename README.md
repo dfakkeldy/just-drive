@@ -19,17 +19,17 @@ The game shows the land and music credits on its title card and About pages.
 
 | Material | Where it is | Its terms |
 | --- | --- | --- |
-| Elevation, trees and building shapes | Natural Resources Canada, High Resolution Digital Elevation Model. Fetched by `pipeline/`; not in git | Open Government Licence – Canada |
-| Roads, water, building locations and forest types | Province of Nova Scotia. Fetched by `pipeline/`; not in git | Open Government Licence – Nova Scotia; the provincial intensity layer is under the Nova Scotia Unrestricted Data Use License |
+| Elevation, trees, building shapes and Point Tupper industrial height samples | Natural Resources Canada, High Resolution Digital Elevation Model. Fetched by `pipeline/`; Point Tupper industrial samples in `web/src/pt-industry-data.ts` | Open Government Licence – Canada |
+| Roads, water, building locations, forest types, Town of Port Hawkesbury municipal boundary and Point Tupper industrial/marine coordinates | Province of Nova Scotia. Fetched by `pipeline/`; Point Tupper coordinates in `web/src/pt-industry-data.ts`; Town of Port Hawkesbury boundary in `web/src/port-hawkesbury-boundary.json` | Contains information licensed under the [Open Government Licence – Nova Scotia](https://support.novascotia.ca/services/open-data-portal-licence); the provincial intensity layer is under the Nova Scotia Unrestricted Data Use License |
 | Property-line map images | Loaded at run time from the province's map service by `web/src/property-lines.ts`; not in git | Restricted Map Services License – NSPRD, with the attribution shown in the game |
-| Some building outlines and road details | OpenStreetMap. Fetched by `pipeline/`; not in git | © OpenStreetMap contributors, Open Database Licence |
+| Some building outlines, road details, and Point Tupper marine pier outlines and switchyard transformer positions | OpenStreetMap. Fetched by `pipeline/`; Point Tupper coordinates in `web/src/pt-industry-data.ts` | © OpenStreetMap contributors, Open Database Licence |
 | 1884 places and residence counts | Transcribed by hand from Geological Survey of Canada sheets 14 and 16 (Hugh Fletcher, 1884) and the A.F. Church and Co. map of Inverness County (1884), into `web/src/eras/mabou-1884-trades.ts` and `web/src/eras/mabou-1884-density.ts` | Facts from the 1884 maps. The map scans come from the David Rumsey Map Collection, are not in git and keep that collection's terms |
 | The generated 1884 layout | `web/src/eras/mabou-1884-layout.ts` and `tools/era-density-layout.json`, made by `tools/era-density-generate.mjs` from those counts; the house positions are invented | MIT, with the code |
 | Judique 1884 places, road names and residence counts | Printed labels and road names transcribed from Geological Survey of Canada sheet 19 (Hugh Fletcher, 1884), using the reviewed georeference of that sheet; residence symbols counted on the A.F. Church and Co. map of Inverness County (1884). Into `web/src/eras/judique-1884-trades.ts`, `web/src/eras/judique-1884-density.ts` and `web/src/eras/history-road-names.ts`. Printed person names are left out | Facts from the 1884 maps. The scans come from the David Rumsey Map Collection (CC BY-NC-SA 3.0), are not in git, and no scan pixels are used |
 | The generated Judique 1884 layout | `web/src/eras/judique-1884-layout.ts` and `tools/era-density-judique-layout.json`, made by `tools/era-density-generate.mjs` from those counts; building and house positions are invented | MIT, with the code |
 | Notes on what the real place looks like | `pipeline/observed_styles.json`, written from the author's own drive video | Not licensed for reuse |
 | Radio music | `data/audio/`; not in git. Each song's credit is in `tools/radio_stations.json` | The `licence` field of that song's credit. The author's own songs are not licensed for reuse |
-| Screenshots of the game | `assets/about/` | Not licensed for reuse |
+| Screenshots of the game | `assets/about/`, `assets/pt-industry/` and other feature folders under `assets/` | Not licensed for reuse |
 | 3D models | `web/public/models/*.glb`, made by the scripts in `tools/blender/` (the scripts are code, under MIT) | Not licensed for reuse; the car and the dog are modelled on real ones |
 | The names "Mabou Mail Madness" and "Just Drive", and the game icon | `assets/icon.svg` and the app icons made from it | Not licensed for reuse |
 
@@ -70,7 +70,7 @@ Prose and housekeeping print `NO CHECK NEEDED`. Other uncovered paths print
 Failed checks retain their output folder. One interrupt prints the partial
 table and exits 130. See [the inventory notes](tools/checks-README.md).
 
-GitHub CI (`.github/workflows/ci.yml`) runs `tools/check-all.sh --ci --full` on every PR
+GitHub CI (`.github/workflows/ci.yml`) runs `tools/check-all.sh --ci --full --jobs 4` on every PR
 and on `main`, in a clean Ubuntu clone with no `data/`. It does not replace the
 local runs: rows that need the land or the Mac SKIP there and still run here.
 A CI pass with skipped rows proves only the rows it ran.

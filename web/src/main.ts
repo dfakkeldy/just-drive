@@ -33,7 +33,7 @@ import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofS
 import { Animals, CatTileUnread } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
 import { areaScreen } from './area-screen';
-import { GARAGE, readVehicle } from './garage';
+import { GARAGE, isDroneVehicle, readVehicle } from './garage';
 import { rideFeatures } from './ride-features';
 import { legacyVehicle, type RideInput } from './ride';
 import { Landmarks } from './landmarks';
@@ -89,6 +89,7 @@ import { DriftFeedback } from './drift-feedback';
 import { phoneHandbrake } from './drift-rules';
 import { Boss, bossEnabled } from './boss';
 import { RideAlong, rideAlongEnabled } from './ride-along';
+import { autoLoadingOnStart, depotEnabled, loadingEnabled, mergeSeenOffences, needsInterrogation, readBossLook, type InterrogationComplaint, type InterrogationReason } from './depot-rules';
 import { Occluders } from './boss-rules';
 import { AmbientTraffic } from './ambient-traffic';
 import { RoadAnimals } from './road-animals';
@@ -98,10 +99,11 @@ import { MiniMap, type MapMark, type MapStop } from './minimap';
 import { propertyLines } from './property-lines';
 import { PropertyGround } from './property-lines-ground';
 import { Relief } from './relief';
-import { CLOCK_FACTOR, clock } from './shift-rules';
+import { CLOCK_FACTOR, END_TIME, START_TIME, clock } from './shift-rules';
 import { Interiors } from './interiors';
 import { MineSite } from './mine-site';
 import { MineInterior } from './interior-mine';
+import { plantDoor } from './interior-plant';
 import { LawnDemo } from './shift-demo';
 import { Route } from './route';
 import { SEA_FRAG, SEA_VERT } from './shaders';
@@ -149,19 +151,23 @@ import { chooseLotProps } from './lot-props-rules';
 import { PorchHouse } from './porch-house';
 import { DrLaneSite } from './drlane-site';
 import { DrLaneHouse } from './drlane-house';
+import { PrinceSite } from './prince-site';
+import { PrinceHouse } from './prince-house';
 import { PorchSite } from './porch-site';
 import { CHURCH_START, ChurchSite } from './church-site';
 import { roughRoads, setPuddleField } from './rough-roads';
 import { Puddles, splashLevel } from './puddles';
+import { MountainHint, defaultSideBySideId, safeSwapRide } from './mountain-hint';
 import { JudiqueVillageSite, VILLAGE_PLACES } from './judique-village-site';
 import { PortHawkesburySite, aimDrops } from './port-hawkesbury-site';
+import { filterPointTupperProps, postOfficeClear, postOfficeReplaceBuildings, postOfficeReplacedIds } from './port-hawkesbury-mail';
 import { MabouMainSite, MAIN_ITEMS, aimDrops as aimMabouDrops } from './mabou-main-site';
 import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
 import {createTestPark,testParkPlaces} from './stunt-test-park';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
-import { Drone, createDroneButton, createDroneSticks, roofHeights, droneSpans, DRONE_HELP, DRONE_TOUCH_HELP } from './drone';
-import { DRONE } from './drone-rules';
+import { Drone, createDroneButton, createDroneRig, createDroneSticks, createTerrainReady, roofHeights, droneSpans, DRONE_HELP, DRONE_TOUCH_HELP, DRONE_FREE_HELP, DRONE_FREE_TOUCH_HELP } from './drone';
+import { DRONE, DRONE_LOAD, loadSpeedCap } from './drone-rules';
 
 // Mabou village, and the game's moment: the second week of October, late afternoon (Atlantic Daylight Time, UTC-3).
 const LAT = 46.0717, LON = -61.392;
@@ -188,10 +194,11 @@ if (DAILY) {
   for (const key of ['playerDate', 'playerTime', 'driveAt']) params.delete(key);
 }
 const gameMode = ERA.explore ? 'explore' : AREA.mail ? readMode(params, undefined, SITE) : 'explore', firedMode = gameMode === 'fired', mailMode = gameMode === 'mail' || firedMode;
+const droneVehicle = isDroneVehicle(params, !mailMode);
 if (!mailMode) prepareExplore();
 // A vehicle whose model is a file starts its download now, beside the land. The game waits for it once, just before
 // the vehicle is built (below); the entry's own time limit counts from that wait, not from here.
-readVehicle(params, !mailMode).preload?.(params, LOW);
+if (!droneVehicle) readVehicle(params, !mailMode).preload?.(params, LOW);
 // The player's date, time and weather mood (weather.ts). The light study, when it is on, keeps its own clock and light.
 const weather = weatherSettings(params);
 const lightStudy = readLightStudy(params, !mailMode);
@@ -258,15 +265,21 @@ const groundRead = ERA.modern && groundEntry?.version === 1 ? early(fetch(`${bas
 // than the manifest, and their top levels only set up constants, so they all download together instead of one by one.
 const quarryChunk = AREA.quarry ? early(import('./quarry-feature')) : null;
 const maryvilleChunk = ERA.modern && AREA.maryville && params.get('maryville') !== '0' ? early(import('./maryville-store')) : null;
+const depotChunk = depotEnabled(AREA.depot, ERA.modern, params) ? early(import('./depot')) : null;
+const depotInteriorParam = params.get('interior');
+const depotRoomChunk = ((depotChunk && SITE.brand !== 'just') || depotInteriorParam === 'depot-loading' || depotInteriorParam === 'depot-interrogation' || depotInteriorParam === 'boss-looks') ? early(import('./interior-depot')) : null;
 const airportChunk = ERA.modern && AREA.airport && params.get('airport') !== '0' ? early(import('./airport')) : null;
 const pavedChunk = pavedRead ? early(import('./paved')) : null;
 const grassChunk = LOW ? null : early(import('./grass'));
 const ptInfrastructureChunk = ERA.modern && AREA.ptInfrastructure && !LOW
   ? early(Promise.all([import('./pt-infrastructure'), import('./pt-infrastructure-source')])) : null;
+const ptIndustryChunk = ERA.modern && AREA.ptInfrastructure && params.get('ptIndustry') !== '0'
+  ? early(import('./pt-industry')) : null;
 const churchChunk = ERA.modern && AREA.church && params.get('church') !== '0' ? early(import('./church')) : null;
 const churchRoomChunk = churchChunk ? early(import('./interior-church')) : null;
 const villageChunk = ERA.modern && AREA.judiqueVillage && params.get('village') !== '0' ? early(import('./judique-village')) : null;
 const hawkesburyChunk = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' ? early(import('./port-hawkesbury')) : null;
+const postOfficeChunk = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' && params.get('postOffice') !== '0' ? early(import('./ph-post-office')) : null;
 const mabouMainChunk = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? early(import('./mabou-main')) : null;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -405,6 +418,9 @@ const hawkesburySite = ERA.modern && AREA.hawkesbury && params.get('hawkesbury')
 const maryvilleFeature = ERA.modern && AREA.maryville && params.get('maryville') !== '0'
   ? await maryvilleChunk!.take().catch(partFailed) : null;
 const maryvilleSite = maryvilleFeature ? new maryvilleFeature.MaryvilleStoreSite(manifest.village) : null;
+// The invented Port Hood Mail Depot on Highway 19. ?depot=0 leaves the surveyed land.
+const depotFeature = depotChunk ? await depotChunk!.take().catch(partFailed) : null;
+const depotSite = depotFeature ? new depotFeature.DepotSite(manifest.village) : null;
 let mappedBuildings: Building[] = [];
 let littleMabouArt: ReturnType<typeof littleMabouBuildingArt> | undefined;
 // Mabou's main street (the grocery, the post office building and its memorial lawn, the hall, the gas station, the junction
@@ -419,7 +435,9 @@ const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take
   const list = homeSite ? Home.buildings(base, homeSite, manifest.village) : yardSite ? Yard.buildings(base, yardSite, manifest.village) : base;
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
-  return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
+  const ph = hawkesburySite ? hawkesburySite.buildings(placed) : placed;
+  return postOfficeChunk ? postOfficeReplaceBuildings(ph) : ph; }) : null;
+const postOfficeReplaced = postOfficeChunk ? postOfficeReplacedIds(mappedBuildings) : new Set<number>();
 const bakedBuildingStyles = stylesRead
   ? await stylesRead.take().then(readBuildingStyles)
     .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
@@ -430,7 +448,10 @@ const porchSite = porchBox ? new PorchSite(porchBox, manifest.village) : null;
 // One house on D.R.'s Lane (Judique) is built by hand with its yard. ?drlane=0 leaves the surveyed box.
 const drLaneBox = ERA.modern && AREA.drLane && params.get('drlane') !== '0' && buildingList ? DrLaneSite.find(buildingList) : null;
 const drLaneSite = drLaneBox ? new DrLaneSite(drLaneBox, manifest.village) : null;
-const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox) : buildingList;
+// A house on Prince Street, Port Hawkesbury, is built by hand with its yard. ?prince=0 leaves the surveyed box.
+const princeBox = ERA.modern && AREA.prince && params.get('prince') !== '0' && buildingList ? PrinceSite.find(buildingList) : null;
+const princeSite = princeBox ? new PrinceSite(princeBox, manifest.village) : null;
+const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox, princeBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
 // Baxters Cove harbour and the Highway 19 end of its road (Judique, 21 Nov dash cam): the drawing only.
 const coveArt = ERA.modern && AREA.id === 'judique' && drawnBuildings ? baxtersCoveBuildingArt(drawnBuildings) : null;
@@ -471,10 +492,14 @@ const placeRows = {
   mabouMain: lazyPlaceRow(mabouSite, () => mabouMainChunk!.take().catch(partFailed), (site, part) => new part.MabouMain(site, terrain, LOW, roads.roads)),
   maryville: placeRow(maryvilleSite, site => new maryvilleFeature!.MaryvilleStore(site, terrain, LOW)),
   drLane: placeRow(drLaneSite, site => new DrLaneHouse(site, terrain, lift, LOW)),
+  depot: placeRow(depotSite, site => new depotFeature!.PortHoodDepot(site, terrain, LOW, SITE.brand === 'just')),
+  prince: placeRow(princeSite, site => new PrinceHouse(site, terrain, lift, LOW)),
 };
 // Each site clears its surveyed land.
 const placeSites = sitesOf(placeRows);
 for (const site of Object.values(placeSites)) if (site) clear.push(...site.clear);
+const postOfficeBoxes = postOfficeChunk ? postOfficeClear(manifest.village) : [];
+if (postOfficeBoxes.length) clear.push(...postOfficeBoxes);
 if (quarrySite) clear.push(...quarrySite.clear);
 // Modern Point Tupper only; airport=0 turns it off. Only then does the module (and its source extract) load (airportChunk).
 const airportModule = ERA.modern && AREA.airport && params.get('airport') !== '0' ? await airportChunk!.take().catch(partFailed) : null;
@@ -505,6 +530,7 @@ if (ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get
 }
 if (yardSite) terrain.sites.push(yardSite);
 if (maryvilleSite) terrain.sites.push(maryvilleSite);
+if (depotSite) terrain.sites.push(depotSite);
 const testPark = await createTestPark(terrain, yardSite, LOW, buildingList ?? []);
 const quarryStuntPark = quarryFeature && quarrySite && ERA.modern
   ? quarryFeature.createQuarryStuntPark(terrain, LOW) : null;
@@ -515,6 +541,7 @@ if (fishingSite) terrain.sites.push(fishingSite);
 if (homeSite) terrain.sites.push(homeSite);
 if (porchSite) terrain.sites.push(porchSite);
 if (drLaneSite) terrain.sites.push(drLaneSite);
+if (princeSite) terrain.sites.push(princeSite);
 if (churchSite) terrain.sites.push(churchSite);
 if (quarrySite) { terrain.sites.push(quarrySite); terrain.coast=quarrySite; }
 const cemeteries = ERA.modern ? await Cemeteries.load(manifest, name => cemeteriesRead?.take() ?? getJson(name), terrain, LOW, AREA.id) : null;
@@ -603,6 +630,17 @@ if (ERA.modern && AREA.ptInfrastructure && !LOW) {
   const loaded = await ptInfrastructureChunk!.take().catch(partFailed);
   scene.add(new loaded[0].PointInfrastructure(loaded[1].PT_FEATURES, manifest.village, EXAG, SEA_LEVEL, roads).group);
 }
+// Point Tupper industrial waterfront: power plant stack & boiler house parts, coal yard & conveyors, and marine terminal piers.
+if (ERA.modern && AREA.ptInfrastructure && params.get('ptIndustry') !== '0') {
+  const { PointTupperIndustry } = await ptIndustryChunk!.take().catch(partFailed);
+  const ptIndustry = new PointTupperIndustry(manifest.village, EXAG, SEA_LEVEL, LOW, nightLook !== null, !!stockpiles);
+  scene.add(ptIndustry.group);
+  const prevCanopyExcludes = terrain.canopyExcludes;
+  terrain.canopyExcludes = prevCanopyExcludes
+    ? (e, n) => prevCanopyExcludes(e, n) || ptIndustry.excludesCanopy(e, n)
+    : ptIndustry.excludesCanopy;
+  if (import.meta.env.DEV) expose({ ptIndustry }, false);
+}
 
 const history = historyLand ? await (async () => {
   await terrain.readCover();
@@ -636,9 +674,12 @@ const props = await (async () => {
   if (!propsRead) return null;
   try {
     const read = await propsRead.take();
-    // The service drops of the boxes Port Hawkesbury and Mabou's main street replace end on their models, not in the air.
+    // The service drops of the boxes Port Hawkesbury, Prince Street and Mabou's main street replace end on their models, not in the air.
     const placed = hawkesburySite && Array.isArray(read.serviceDrops) ? { ...read, serviceDrops: aimDrops(read.serviceDrops) } : read;
-    const data = mabouSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: aimMabouDrops(placed.serviceDrops) } : placed;
+    const withPrince = princeSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: princeSite.aimDrops(placed.serviceDrops) } : placed;
+    const mabouAimed = mabouSite && Array.isArray(withPrince.serviceDrops) ? { ...withPrince, serviceDrops: aimMabouDrops(withPrince.serviceDrops) } : withPrince;
+    // Inside the Town of Port Hawkesbury's legal limits, roadside mailboxes and posts are removed.
+    const data = filterPointTupperProps(mabouAimed, AREA.id, postOfficeReplaced);
     return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined, splitRoadLines(roadData)); }
   catch (e) { console.warn('props', e); return null; }
 })();
@@ -727,8 +768,8 @@ const lotPropList = ERA.modern && buildingList && params.get('lotprops') !== '0'
   // Drawn things a prop must not stand in: power poles, mailboxes and community boxes. Only ever a reason to stand
   // elsewhere, never a reason to choose a house.
   obstacles: props ? [...props.poleSites, ...props.mail, ...props.sites].map(p => [p.x, p.z] as [number, number]) : [],
-  // A hand-built place that is not a terrain site keeps props off through its clear boxes (village, hawkesbury, mabouMain).
-  excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []), ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
+  // A hand-built place that is not a terrain site keeps props off through its clear boxes (village, hawkesbury, mabouMain, postOffice).
+  excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []), ...postOfficeBoxes, ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
 }) : [];
 // No single tree stands in a parked car; the canopy is left as it is.
 // Kept apart: these only clear trees. Mail play's breakable yard props must not give way to them (they give way to those).
@@ -736,13 +777,15 @@ const lotTreeClear = new Set<number[]>();
 for (const p of lotPropList) { const r = Math.hypot(p.half, p.halfWidth) + 0.6, box: [number, number, number, number] = [p.x - r, p.z - r, p.x + r, p.z + r]; lotTreeClear.add(box); terrain.addTreeClear(box); }
 const lotProps = lotPropList.length ? new LotProps(lotPropList, terrain, LOW, SEA_LEVEL) : null;
 if (lotProps) scene.add(lotProps.group);
-let garageEntry = readVehicle(params, !mailMode), vehicleSpec = garageEntry.spec;
+// The standalone drone keeps the car entry underneath (a hidden, zero-mesh rig): a saved bike or horse ride cannot
+// drive an empty rig.
+let garageEntry = droneVehicle ? GARAGE.find(e => e.id === 'car') ?? GARAGE[0] : readVehicle(params, !mailMode), vehicleSpec = garageEntry.spec;
 // A vehicle whose model is a file (the mail car): its download began at the top of this file. A load that fails must
 // never stop the game: the entry builds its fallback, and a rejection is swallowed here.
-await garageEntry.ready?.(params, LOW).catch((error: unknown) => { console.warn('The vehicle model did not load.', error); });
-const horse = vehicleSpec.locomotion === 'horse';
-let car = fleetRig(garageEntry, mailMode, LOW, params, SITE.brand === 'just', ERA.modern);
-scene.add(car.root);
+if (!droneVehicle) await garageEntry.ready?.(params, LOW).catch((error: unknown) => { console.warn('The vehicle model did not load.', error); });
+const horse = !droneVehicle && vehicleSpec.locomotion === 'horse';
+let car = droneVehicle ? createDroneRig() : fleetRig(garageEntry, mailMode, LOW, params, SITE.brand === 'just', ERA.modern);
+if (!droneVehicle) scene.add(car.root);
 let vehicle = garageEntry.ride
   ? legacyVehicle(garageEntry.ride(car, terrain, roads, SEA_LEVEL, vehicleSpec))
   : new Vehicle(car, terrain, roads, SEA_LEVEL, vehicleSpec);
@@ -750,7 +793,7 @@ let vehicle = garageEntry.ride
 export function getDrivenVehicle(): Vehicle { return vehicle; }
 if (terrain.paved) terrain.paved.car = vehicle;
 if (!mailMode) vehicle.touchSpeedLimit = false;
-const ride = rideFeatures(vehicle, garageEntry, terrain, !mailMode, SITE.brand !== 'just', SITE.brand === 'just');
+const ride = rideFeatures(vehicle, garageEntry, terrain, !mailMode, SITE.brand !== 'just', SITE.brand === 'just', droneVehicle);
 // The playable area stops 120 m inside the box of fine map data. Past it the roads are not in the data.
 const EDGE = 120;
 const edge = manifest.mid ? new Edge(roads, terrain, [manifest.mid[0] - VE + EDGE, VN - manifest.mid[3] + EDGE, manifest.mid[2] - VE - EDGE, VN - manifest.mid[1] - EDGE], SITE.brand === 'just' ? false : AREA.route, vehicleSpec.envelope.nose, !ERA.modern) : null;
@@ -777,6 +820,11 @@ for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown
   (builtPlaces as Record<string, object | null>)[name] = row.site ? row.build(row.site, row.load && await row.load()) : null;
 }
 const { hawkesbury, mabouMain } = builtPlaces;
+const postOffice = postOfficeChunk ? new (await postOfficeChunk!.take().catch(partFailed)).PortHawkesburyPostOffice(manifest.village, terrain, LOW) : null;
+if (postOffice) {
+  scene.add(postOffice.group);
+  if (import.meta.env.DEV) expose({ postOffice }, false);
+}
 // One slot for each row. A slot keeps its name while its place is off, so the frame's update list keeps the same
 // entries. `dev` is what the dev tools see.
 const places = placeSlots(placeRows, builtPlaces);
@@ -790,7 +838,8 @@ if (quarry) quarry.attach(scene, waterReflections);
 // The small switch loads other players' cars only after consent.
 // A build made with VITE_MP=0 has the code compiled out (web/vite.artifact.config.ts sets the default, which is on).
 // Off in a history era: rooms are per area, not per era, so two eras would meet in one room.
-const MULTIPLAYER = (import.meta.env.DEV || import.meta.env.VITE_MP === '1') && ERA.modern;
+// No rooms for the standalone drone: the room code sends a car on the ground, and races would let it fly over the course.
+const MULTIPLAYER = (import.meta.env.DEV || import.meta.env.VITE_MP === '1') && !droneVehicle && ERA.modern;
 // Room games keep off the real places where nothing scores: church grounds, cemeteries and the school bus stop.
 let quietPlaces: { x: number; z: number; radius: number }[] | null = null;
 const roomQuiet = () => quietPlaces ??= [
@@ -831,9 +880,12 @@ const siteContacts: [string, ContactSite | null][] = [
   ['tall', tallKey ? { revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) } : null],
   ['village', placeContact(places.village)],
   ['hawkesbury', placeContact(places.hawkesbury)],
+  ['postOffice', postOffice && { resolve: body => postOffice.resolveSolids(body) }],
   ['mabouMain', placeContact(places.mabouMain)],
   ['maryville', placeContact(places.maryville)],
   ['drLane', placeContact(places.drLane)],
+  ['depot', placeContact(places.depot)],
+  ['prince', placeContact(places.prince)],
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
 ];
@@ -982,11 +1034,33 @@ const demo = devHooks.demo;   // seconds of self-driving, including production s
 let yaw = 0, pitch = 0, flySpeed = 40, pendingShot: Shot | null = null;
 let waitingToDrive = true;
 const drone = new Drone();
+const terrainReadyAt = createTerrainReady(terrain);
 scene.add(drone.group);
 // The drone's floor reads the roofs that are drawn: the surveyed boxes less those Mabou's main street replaces, and the
 // hand-built main street's own roofs, measured from its geometry once each place is built. 1884 draws other roofs.
-const boxRoofAt = roofHeights(ERA.modern && buildingList ? mabouSite ? mabouSite.drawn(buildingList) : buildingList : [], manifest.village, EXAG, SEA_LEVEL);
-const roofAt = mabouMain ? (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain.roofAt(x, z)) : boxRoofAt;
+const boxRoofAt = roofHeights(ERA.modern && buildingList ? drawnWithout(mabouSite ? mabouSite.drawn(buildingList) : buildingList, princeBox) : [], manifest.village, EXAG, SEA_LEVEL);
+// Also include landmarks (churches and spires) and surveyed boxes replaced by non-Mabou hand-built sites (yard, home, church, village, hawkesbury, porch).
+const extraRoofAt = ERA.modern ? (() => {
+  const kept = new Set(drawnBuildings ?? []);
+  const extra: Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[] =
+    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox && !postOfficeReplaced.has(b.id));
+  if (princeSite) extra.push(...princeSite.roofBoxes());
+  for (const lm of landmarkList) {
+    const a = lm.axisDeg * Math.PI / 180, alongX = Math.sin(a), alongZ = -Math.cos(a), acrossX = Math.cos(a), acrossZ = Math.sin(a);
+    let lo = Infinity, hi = -Infinity, wl = Infinity, wh = -Infinity;
+    for (const [e, n] of lm.footprint) {
+      const dx = e - lm.x, dz = lm.y - n, u = dx * alongX + dz * alongZ, v = dx * acrossX + dz * acrossZ;
+      lo = Math.min(lo, u); hi = Math.max(hi, u); wl = Math.min(wl, v); wh = Math.max(wh, v);
+    }
+    const midU = (lo + hi) / 2, midV = (wl + wh) / 2;
+    extra.push({ x: lm.x + alongX * midU + acrossX * midV, y: lm.y - (alongZ * midU + acrossZ * midV), ground: lm.ground,
+      axisDeg: lm.axisDeg, length: hi - lo, width: wh - wl, eave: lm.eave, ridge: lm.ridge });
+    if (lm.spire) extra.push({ x: lm.spire.x, y: lm.spire.y, ground: lm.ground,
+      axisDeg: lm.axisDeg, length: 7, width: 7, eave: lm.spire.height, ridge: lm.spire.height, shape: 'tank' });
+  }
+  return extra.length ? roofHeights(extra, manifest.village, EXAG, SEA_LEVEL) : null;
+})() : null;
+const roofAt = (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain ? mabouMain.roofAt(x, z) : -Infinity, postOffice ? postOffice.roofAt(x, z) : -Infinity, extraRoofAt ? extraRoofAt(x, z) : -Infinity);
 if (import.meta.env.DEV) expose({ drone });
 
 function applyShot(s: Shot) {
@@ -1003,13 +1077,14 @@ function applyShot(s: Shot) {
 
 // Today's run starts every try at its seeded place, not at the first stop of the route.
 const dailyPose = DAILY ? startKey(DAILY.start, roads.roads, vehicle.bounds) : null;
-function placeFirstStop(kind: 'start-over' | 'new-visit' = 'start-over'): void {
+function placeFirstStop(kind: 'start-over' | 'new-visit' = 'start-over'): boolean {
   const start = AREA.route ? shift.run.start : roadStart(roads.roads);
   const namedStart = AREA.id === 'westbay' && ERA.modern && params.get('poster') === 'sugar-camp-quarry' ? sugarCampStart(roads.roads, manifest.village, vehicle.bounds!) : undefined;
   const pose = namedStart ?? dailyPose ?? start ?? { x: 0, z: 0, heading: Math.PI / 4 };
   // The poster start always faces south, toward the quarry, on Start over too.
   const southward = namedStart ? (candidate: { heading: number }) => Math.cos(candidate.heading) < 0 : undefined;
-  if (fleet) { if (kind === 'new-visit') fleet.startVisit(pose.x, pose.z, pose.heading, southward); else fleet.restart(pose.x, pose.z, pose.heading, 'start-over', southward); } else vehicle.restart(pose.x, pose.z, pose.heading);
+  if (fleet) return kind === 'new-visit' ? fleet.startVisit(pose.x, pose.z, pose.heading, southward) : fleet.restart(pose.x, pose.z, pose.heading, 'start-over', southward);
+  return vehicle.restart(pose.x, pose.z, pose.heading);
 }
 // Boxes within 12 m of the wall, or past it, are left to the next carrier.
 if (edge) { const [bx0, bz0, bx1, bz1] = edge.bounds; Route.reachable = (x, z) => x > bx0 + 12 && x < bx1 - 12 && z > bz0 + 12 && z < bz1 - 12; }
@@ -1018,7 +1093,7 @@ const resets: Array<() => void> = [];
 const resetSlot = { interiors: 0, relief: 1, yardJob: 2, fishing: 3, roadScene: 4, schoolBus: 5, stuntPark: 6, roadAnimals: 7 };
 const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, properties, manifest.village, LOW, params, () => {
   multiplayer?.reset();
-  resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
+  resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; if (placeFirstStop()) mountainHint?.clearActive(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; devHooks.reset();
 }, AREA.route, firedMode, DAILY?.day ?? 0) : new FreeDrive(roads, manifest.village);
 if (shift instanceof Shift) shift.endsAtSix = !DAILY;
@@ -1103,7 +1178,7 @@ if (ERA.modern && garageEntry.id === 'truck' && ['1', 'empty'].includes(params.g
   if (!mailMode && roadScene) fleetContacts.add({ resolve: body => { if (roadScene.rules.enabled) pushOut(body, roadScene.placementSolids, true); } });
   // Without the fleet the trailer meets the same solid sites as the truck: soloContacts.
   const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts : soloContacts;
-  towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? hawkesbury.solids : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts }, true, LOW);
+  towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? [...hawkesbury.solids, ...postOffice?.solids ?? []] : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts }, true, LOW);
   if (towing.attached) scene.add(towing.trailer.root);
   trailerHelpSetting(towing, document.getElementById('settings'), document.getElementById('startOver'));
   if (import.meta.env.DEV) expose({ towing });
@@ -1122,15 +1197,25 @@ if (ERA.modern && garageEntry.id === 'truck' && ['1', 'empty'].includes(params.g
 }
 // The animals keep clear of a hitched trailer as well as the truck.
 if (roadAnimals && towing) roadAnimals.towed = towing;
-if (touchDevice && !bare && !horse && ride.drivingHelp) drivingHelpSetting(document.getElementById('settings'), document.getElementById('startOver'), strong => { vehicle.strongHelp = strong; if (fleet) for (const m of fleet.members) m.vehicle.strongHelp = strong; });
+if (touchDevice && !bare && !horse && !droneVehicle && ride.drivingHelp) drivingHelpSetting(document.getElementById('settings'), document.getElementById('startOver'), strong => { vehicle.strongHelp = strong; if (fleet) for (const m of fleet.members) m.vehicle.strongHelp = strong; });
 if (horse) shift.damage.reset();
 vehicle.damage = horse ? null : shift.damage; vehicle.desktopPull = !touchDevice && !LOW;
 if (import.meta.env.DEV) expose({ shift, roadScene, schoolBus, animals, sidewalks, aiDriver });
 if (import.meta.env.DEV && night) expose({ night });   // for tools/night-shots.mjs and the guard rail night pictures
 // Outside the mail game a door is only a place to look: no shift, no receipt. Mabou has no such door, so it stays quiet.
 const churchRoom = churchSite ? await churchRoomChunk!.take().catch(partFailed) : null;
-const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => shift.interiorResult(receipt), bare)
-  : churchRoom ? new Interiors(() => 0, () => '', () => {}, bare) : quietInteriors();
+const depotRoom = depotRoomChunk ? await depotRoomChunk!.take().catch(partFailed) : null;
+const bossLook = readBossLook(params);
+let depotRoomLoaded: typeof import('./interior-depot') | null = depotRoom;
+const ensureDepotRoom = async () => depotRoomLoaded ??= await import('./interior-depot');
+const DEPOT_DOORS = new Set(['depot', 'depot-loading', 'depot-interrogation', 'boss-looks']);
+let onDepotExit: ((doorId: string) => void) | null = null;
+const interiors = mailMode ? new Interiors(() => shift.career.day, () => clock(shift.elapsed), receipt => {
+  if (DEPOT_DOORS.has(receipt.door.id)) onDepotExit?.(receipt.door.id); else shift.interiorResult(receipt);
+}, bare)
+  : (churchRoom || depotRoom) ? new Interiors(() => 0, () => '', receipt => {
+    if (DEPOT_DOORS.has(receipt.door.id)) onDepotExit?.(receipt.door.id);
+  }, bare) : quietInteriors();
 if (testPark && !fleet) {
   // Adding the park must not change other sites' placement checks for an ordinary ride.
   const previousGuard = vehicle.placementGuard;
@@ -1141,14 +1226,114 @@ if (testPark && !fleet) {
     fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z) : actor.y ?? 0);
   }
 }
-resets[resetSlot.interiors] = () => interiors.reset();
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
 if (mineSite) scene.add(mineSite.group);
 if (mineSite?.roadPoint) interiors.register({ id: 'mine', name: 'Mabou Mines', position: mineSite.roadPoint, radius: 14,
   prompt: 'Parcel for the night shift. Signature required.', create: day => new MineInterior(day) });
 if (AREA.colliery && params.get('interior') === 'mine') interiors.enter('mine');
+// Only under the invented name: a 'named' yard would need the owners' own name on this door too.
+if (yardSite?.mode === 'invented') interiors.register(plantDoor(yardSite));
+if (yardSite?.mode === 'invented' && params.get('interior') === 'plant') interiors.enter('plant');
 if (churchSite && churchRoom) interiors.register(churchRoom.churchDoor(churchSite, mailMode));
 if (churchRoom && params.get('interior') === 'church') interiors.enter('church');
+let pendingInterrogation: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; advanceAfter: boolean } | null = null;
+let pendingOfficeJump = false;
+let depotOpening = false;
+let depotGen = 0;   // a reset while a depot room loads cancels that opening and its fallback
+resets[resetSlot.interiors] = () => { pendingOfficeJump = false; pendingInterrogation = null; depotGen++; depotOpening = false; interiors.reset(); };
+function registerDepotRooms(mod: typeof import('./interior-depot')): void {
+  if (!interiors.doors.has('depot-loading')) {
+    interiors.register({
+      id: 'depot-loading', name: 'Port Hood Mail Depot', position: { x: 0, z: 0 }, radius: 0,
+      prompt: '', leave: touchDevice ? 'SKIP' : 'SKIP · Esc', repeat: true,
+      create: day => new mod.DepotLoadingInterior({
+        day: Math.max(1, day || shift.career.day),
+        double: shift instanceof Shift ? shift.career.double : false,
+        stops: shift instanceof Shift ? shift.stops : 0,
+        look: bossLook,
+        touch: touchDevice,
+      }),
+    });
+  }
+  if (!interiors.doors.has('depot-interrogation')) {
+    interiors.register({
+      id: 'depot-interrogation', name: 'The Boss’s office', position: { x: 0, z: 0 }, radius: 0,
+      prompt: '', leave: touchDevice ? 'LEAVE' : 'LEAVE · Esc', repeat: true, afterShift: true,
+      create: day => new mod.DepotInterrogationInterior({
+        reason: pendingInterrogation?.reason ?? 'visit',
+        day: pendingInterrogation?.day ?? Math.max(1, day || shift.career.day),
+        complaints: pendingInterrogation?.complaints ?? [],
+        look: bossLook,
+        touch: touchDevice,
+      }),
+    });
+  }
+  if (!interiors.doors.has('boss-looks')) {
+    interiors.register({
+      id: 'boss-looks', name: 'The Boss · character options', position: { x: 0, z: 0 }, radius: 0,
+      prompt: '', leave: 'CLOSE · Esc', repeat: true, afterShift: true,
+      create: () => new mod.BossLooksInterior(),
+    });
+  }
+}
+async function openDepotLoading(): Promise<void> {
+  if (depotOpening || interiors.busy || !(interiors instanceof Interiors)) return;
+  depotOpening = true;
+  const gen = depotGen;
+  try {
+    const mod = await ensureDepotRoom();
+    if (gen !== depotGen || interiors.busy || (shift instanceof Shift && shift.ended)) return;
+    registerDepotRooms(mod);
+    interiors.enter('depot-loading');
+  } catch (e) {
+    console.warn('Depot loading bay unavailable', e);
+  } finally {
+    if (gen === depotGen) depotOpening = false;   // a reset already released the lock, maybe to a newer opening
+  }
+}
+async function openDepotInterrogation(info: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; advanceAfter: boolean }): Promise<void> {
+  if (depotOpening || interiors.busy || !(interiors instanceof Interiors)) return;
+  depotOpening = true;
+  const gen = depotGen;
+  pendingInterrogation = info;
+  const report = document.getElementById('shiftReport');
+  const hadReport = !!report && !report.hidden;
+  if (report) report.hidden = true;
+  let startDay = false;
+  try {
+    const mod = await ensureDepotRoom();
+    if (gen !== depotGen) return;   // the reset cleared this opening; a newer one may own pendingInterrogation
+    if (interiors.busy) {
+      if (report && hadReport) report.hidden = false;
+      pendingInterrogation = null;
+      return;
+    }
+    registerDepotRooms(mod);
+    interiors.enter('depot-interrogation');
+  } catch (e) {
+    console.warn('Depot interrogation room unavailable', e);
+    if (gen !== depotGen) return;
+    pendingInterrogation = null;
+    // From "Start day N": the day still turns over, so a room that cannot load never strands the report.
+    if (info.advanceAfter && shift instanceof Shift) startDay = true;
+    else if (report && hadReport) report.hidden = false;
+  } finally {
+    if (gen === depotGen) depotOpening = false;   // a reset already released the lock, maybe to a newer opening
+  }
+  if (startDay && shift instanceof Shift) {
+    shift.advanceToNextDay();
+    if (depotAutoLoad) void openDepotLoading();
+  }
+}
+if (depotRoom) {
+  registerDepotRooms(depotRoom);
+  if (depotSite && SITE.brand !== 'just') interiors.register(depotRoom.depotDoor(depotSite, bossLook, () => { pendingOfficeJump = true; interiors.leave(); }, touchDevice));
+  if (depotInteriorParam === 'depot-loading') interiors.enter('depot-loading');
+  else if (depotInteriorParam === 'depot-interrogation') {
+    pendingInterrogation = { reason: 'suspension', day: Math.max(1, shift.career.day), complaints: [], advanceAfter: false };
+    interiors.enter('depot-interrogation');
+  } else if (depotInteriorParam === 'boss-looks') interiors.enter('boss-looks');
+}
 // The mini map and the bladder gauge build their own parts of the page.
 const hikeBox = playableBox(manifest), hikes = mailMode || !ERA.modern ? [] : hikesFor(AREA.id, roads.roads, manifest.village, hikeBox);
 const footpaths = !mailMode && hikes.length ? new Footpaths(hikes, terrain) : null;
@@ -1170,7 +1355,7 @@ function refreshMap(): void {
     if (p) mapStops.push({ x: p.x, z: p.z, due: shift.remaining[i] > 0 });
   }
   // A place that already has its own mark does not get a second one for its door.
-  for (const door of interiors.doors.values()) if (!mapMarks.some(mark => mark.label === door.name)) mapMarks.push({ x: door.position.x, z: door.position.z, label: door.name, rank: 3, radius: door.radius });
+  for (const door of interiors.doors.values()) if (door.radius > 0 && !mapMarks.some(mark => mark.label === door.name)) mapMarks.push({ x: door.position.x, z: door.position.z, label: door.name, rank: 3, radius: door.radius });
 }
 const relief = mailMode ? new Relief(properties.filter((b) => b.kind === 'house').map((b) => ({ x: b.x - manifest.village[0], z: manifest.village[1] - b.y })),
   terrain, (o) => { if (o.seen) shift.seenAtRoadside(o.house, o.x, o.z); if (params.has('relief')) console.log(`[relief] ${JSON.stringify(o)} calls ${shift.complaints.all.length}`); }, bare) : quietRelief();
@@ -1232,6 +1417,67 @@ const puddles = rough ? new Puddles(rough.field, terrain, LOW) : null;
 if (puddles) scene.add(puddles.group);
 // Not enumerable: tools/ui-check.mjs pins the listed dev keys. tools/rough-road-check.mjs and the browser probes read them.
 if (import.meta.env.DEV) expose({ puddles, roughRoads: rough }, false);
+function switchToSideBySide(onSettled?: (ok: boolean, reason?: string) => void): { ok: boolean; pending?: boolean; reason?: string } {
+  const targetId = defaultSideBySideId(GARAGE);
+  const nextEntry = targetId ? GARAGE.find(e => e.id === targetId) : undefined;
+  if (!nextEntry || ride.kind === nextEntry.id) return { ok: false, reason: 'Already in the side-by-side' };
+  if (fleet) {
+    return fleet.switchToMember('sxs', onSettled);
+  }
+  const cleanHooks = towing ? towing.cleanHooks() : { placementGuard: vehicle.placementGuard, onPlaced: vehicle.onPlaced };
+  const buildRig = fleetRig;
+  let nextCar: ReturnType<typeof fleetRig> | null = null;
+  const swapped = safeSwapRide(vehicle, () => {
+    nextCar = buildRig(nextEntry, mailMode, LOW, params, SITE.brand === 'just', ERA.modern);
+    const next = nextEntry.ride
+      ? legacyVehicle(nextEntry.ride(nextCar, terrain, roads, SEA_LEVEL, nextEntry.spec))
+      : new Vehicle(nextCar, terrain, roads, SEA_LEVEL, nextEntry.spec);
+    next.bounds = vehicle.bounds;
+    next.touchSpeedLimit = vehicle.touchSpeedLimit;
+    next.desktopPull = vehicle.desktopPull;
+    next.strongHelp = vehicle.strongHelp;
+    next.damage = vehicle.damage;
+    next.placementGuard = cleanHooks.placementGuard;
+    next.canDrift = vehicle.canDrift;
+    next.onPlaced = cleanHooks.onPlaced;
+    return next;
+  }, pose => {
+    const ground = terrain.heightAt(pose.x, pose.z);
+    if (ground === null || terrain.waterAt(pose.x, pose.z)) return 'Wait until solid ground is ready to switch';
+    const deck = roads.deckHeight(pose.x, pose.z);
+    const y = deck === null ? ground : Math.max(ground, deck);
+    const body = { x: pose.x, z: pose.z, y, heading: pose.heading, spec: nextEntry.spec };
+    if (!fleetContacts.allows(body)) return 'No clear room to switch here';
+    const probe = { ...body, vx: 0, vz: 0, speed: 0, car: { root: { position: { x: pose.x, z: pose.z } } } };
+    if (mailMode && roadScene?.rules.enabled) pushOut(probe, roadScene.placementSolids, true);
+    if (aiDriverOn()) aiDriver?.resolve(probe as unknown as Vehicle);
+    boss?.driver.resolve(probe as unknown as Vehicle);
+    if (Math.hypot(probe.x - pose.x, probe.z - pose.z) > 1e-7) return 'No clear room to switch here';
+    return true;
+  });
+  if (!swapped.ok || !nextCar) return { ok: false, reason: swapped.ok ? 'Could not switch right now' : swapped.reason };
+  if (towing) {
+    towing.detach();
+    scene.remove(towing.trailer.root);
+    towing = null;
+    document.getElementById('trailerHelp')?.remove();
+  }
+  scene.remove(car.root);
+  scene.add((nextCar as typeof car).root);
+  garageEntry = nextEntry;
+  vehicleSpec = nextEntry.spec;
+  car = nextCar;
+  vehicle = swapped.vehicle;
+  beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined;
+  night?.setCar(car);
+  if (terrain.paved) terrain.paved.car = vehicle;
+  ride.select(vehicle, garageEntry);
+  drivenChanged?.();
+  jumpPlacement++;
+  return { ok: true };
+}
+const mountainHint = ERA.modern && AREA.church && !bare && !droneVehicle ? new MountainHint(roads, manifest.village, switchToSideBySide) : null;
+if (import.meta.env.DEV) expose({ mountainHint }, false);
 animals?.registerEvidence(shift.evidence);
 document.getElementById('cameraButton')!.addEventListener('click', () => { if (live()) photoRequested = true; });
 for (const id of ['cameraButton', 'endShift', 'shiftReport', 'settings']) {
@@ -1287,7 +1533,7 @@ addEventListener('keydown', (ev) => {
     if (!ev.repeat) { ev.preventDefault(); interiors.enter(); if (interiors.busy) { keys.clear(); touch.steer = touch.throttle = 0; } }
     return;
   }
-  if (mode === 'drive' && !interiors.busy && ev.code === 'Enter' && !ev.repeat && airportDrag?.begin()) { ev.preventDefault(); return; }
+  if (mode === 'drive' && !interiors.busy && ev.code === 'Enter' && !ev.repeat && (mountainHint?.accept() || airportDrag?.begin())) { ev.preventDefault(); return; }
   if (!mailMode && exploreKey(ev.code)) return;
   if (interiors.busy) {
     if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight', 'Space'].includes(ev.code)) { ev.preventDefault(); keys.add(ev.code); }
@@ -1331,9 +1577,9 @@ const pad = touchDevice && !bare ? createTouchControls({
   horn: honk,
 }) : null;
 const touch = pad?.state ?? { steer: 0, throttle: 0, handbrake: false, chordAt: 0 };
-// The drone on a phone: DRONE beside Pause launches it; two sticks and RETURN fly it.
-const droneSticks = touchDevice && !bare ? createDroneSticks(() => droneHome()) : null;
-if (pad) {
+// The drone on a phone: DRONE beside Pause launches it; two sticks and RETURN (or ROAD in standalone mode) fly it.
+const droneSticks = touchDevice && !bare ? createDroneSticks(() => droneHome(), droneVehicle) : null;
+if (pad && !droneVehicle) {
   const top = document.getElementById('phoneTop'), button = createDroneButton(() => { if (live() && !fleet?.busy && !interiors.busy && mode === 'drive') { yardJob?.judge.cancel(); launchDrone(); } });
   top?.insertBefore(button, document.getElementById('gear'));
 }
@@ -1352,7 +1598,7 @@ let pictureStatusTimer = 0;
 const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
 const gamepad = createGamepad({
   horn: honk,
-  mail: padAct(() => { if (mailMode) mailRequested = true; else airportDrag?.begin(); }),
+  mail: padAct(() => { if (mailMode) mailRequested = true; else if (!mountainHint?.accept()) airportDrag?.begin(); }),
   // B changes the view; inside a building (where every other driving button rests) it climbs out, as Esc does.
   view: () => { if (interiors.busy) interiors.leave(); else if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
   pause: () => { if (sunSeeker) closeSunSeeker(); else if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
@@ -1365,7 +1611,7 @@ const gamepad = createGamepad({
 }, touchDevice, () => mode === 'drive' && live());
 if (import.meta.env.DEV) expose({ gamepad });   // for tools/gamepad-browser.mjs
 ride.configure(!fleet);
-if (fleet) shift.startOver = () => { if (drone.active) landDrone(); airportDrag?.reset(); placeFirstStop(); waitingToDrive = true; camReady = false; };
+if (fleet) shift.startOver = () => { if (drone.active) landDrone(); airportDrag?.reset(); if (placeFirstStop()) mountainHint?.clearActive(); waitingToDrive = true; camReady = false; };
 if (fleet && !bare) {
   updateFleetHud = fleetHud(fleet, () => started && mode === 'drive' && !scenePaused() && !placesUI?.busy && !bigMap?.busy);
   const restart = document.createElement('button'); restart.id = 'fleetStartOver'; restart.textContent = 'Start over with the trailer';
@@ -1437,7 +1683,34 @@ addEventListener('resize', resize);
 const DRONE_KEYS = ['KeyQ', 'KeyE', 'KeyC', 'KeyR', 'KeyG', 'KeyM', 'KeyB', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 /** The landing spot: the middle of the vehicle's roof. */
 const droneRoof = () => ({ x: vehicle.x, y: vehicle.y + vehicleSpec.height, z: vehicle.z });
+let droneGrounded = false;
+const droneTrafficDummy = { x: 1e9, z: 1e9, speed: 0 } as Vehicle;
+function syncDroneVehicle(): void {
+  const s = drone.state;
+  vehicle.x = s.x; vehicle.y = droneUnder.ground ?? s.y; vehicle.z = s.z;
+  vehicle.heading = -s.yaw;
+  vehicle.vx = s.vx; vehicle.vy = s.vy; vehicle.vz = s.vz;
+  vehicle.speed = Math.hypot(s.vx, s.vz);
+}
+function placeDroneAt(x: number, z: number, heading: number): void {
+  const g = terrain.heightAt(x, z);
+  const ground = g !== null ? Math.max(g, SEA_LEVEL) : SEA_LEVEL;
+  droneGrounded = g !== null;
+  droneUnder.ground = g !== null ? ground : null;
+  droneUnder.floor = g !== null ? Math.max(ground, roofAt(x, z)) + DRONE.clearance : null;
+  if (!drone.active) {
+    drone.launch(x, ground, z, -heading, true);
+    camera.fov = 62; resize();
+  } else {
+    drone.place(x, ground, z, -heading);
+  }
+  drone.placeCamera(camera, droneUnder.ground);
+  yaw = drone.state.yaw; pitch = drone.pitch; droneTurn = 0;
+  mode = 'fly'; pendingShot = null; keys.clear();
+  syncDroneVehicle();
+}
 function launchDrone(): void {
+  if (droneVehicle) { placeDroneAt(vehicle.x, vehicle.z, vehicle.heading); return; }
   const roof = droneRoof();
   drone.launch(roof.x, roof.y, roof.z, -vehicle.heading);
   droneUnder.ground = vehicle.y; droneUnder.floor = vehicle.y + DRONE.clearance;
@@ -1448,6 +1721,7 @@ function launchDrone(): void {
 }
 /** Back to driving: the drone is put away on the roof (F, the end of the return flight, or leaving a fixed view). */
 function landDrone(): void {
+  if (droneVehicle) { if (!drone.active) launchDrone(); return; }
   for (const code of keys) heldAtLanding.add(code);
   drone.stow(); droneSticks?.show(false); keys.clear();
   mode = 'drive';
@@ -1455,14 +1729,41 @@ function landDrone(): void {
 // Picture tools that only need the car held still and a camera of their own get the old free camera (what F did
 // before the drone), so no drone hovers in their pictures or moves their camera.
 if (import.meta.env.DEV) expose({ freeCamera: () => { yardJob?.judge.cancel(); if (drone.active) { drone.stow(); droneSticks?.show(false); } mode = 'fly'; pendingShot = null; camera.fov = 51; resize(); } });
-/** R or RETURN: fly home; pressed again on the way, land at once. */
-function droneHome(): void { if (mode === 'fly' && drone.active && drone.callHome()) landDrone(); }
+/** R or RETURN: fly home; pressed again on the way, land at once. In standalone drone mode, hover over the nearest road. */
+function droneHome(): void {
+  if (mode !== 'fly' || !drone.active) return;
+  if (droneVehicle) {
+    const s = drone.state;
+    let hit = roads.nearest(s.x, s.z, 900) ?? roads.nearest(s.x, s.z, 4000) ?? roads.nearest(s.x, s.z, 8000);
+    if (!hit) {   // farther than 8 km from every road: the closest road point of all, then the road through it
+      let best = Infinity, bx = 0, bz = 0;
+      for (const r of roads.roads) for (const [x, z] of r.pts) { const d = (x - s.x) ** 2 + (z - s.z) ** 2; if (d < best) { best = d; bx = x; bz = z; } }
+      if (best < Infinity) hit = roads.nearest(bx, bz, 60);
+    }
+    if (hit) placeDroneAt(hit.x, hit.z, hit.heading);
+    else { const start = roadStart(roads.roads) ?? { x: 0, z: 0, heading: 0 }; placeDroneAt(start.x, start.z, start.heading); }
+    return;
+  }
+  if (drone.callHome()) landDrone();
+}
 const droneCommand = { forward: 0, right: 0, up: 0, turn: 0 }, droneRoofAt = { x: 0, y: 0, z: 0 };
 const droneUnder: { ground: number | null; floor: number | null } = { ground: null, floor: null };
 const droneKey = (code: string) => keys.has(code) ? 1 : 0;
 function flyDrone(dt: number) {
-  droneSticks?.show(!shift.ended, drone.returning);
+  droneSticks?.show(!shift.ended && started, drone.returning);
   if (pause.blocked) return;
+  const s = drone.state;
+  // Once the first ground tile arrives after start or a jump, snap the standalone drone to hover over the road.
+  if (droneVehicle && !droneGrounded) {
+    const g = terrain.heightAt(s.x, s.z);
+    if (g !== null) {
+      const ground = Math.max(g, SEA_LEVEL);
+      droneGrounded = true;
+      drone.place(s.x, ground, s.z, s.yaw);
+      droneUnder.ground = ground;
+      droneUnder.floor = Math.max(ground, roofAt(s.x, s.z)) + DRONE.clearance;
+    }
+  }
   const stick = droneSticks?.command;
   // Keyboard alone flies it: WASD move it level, ←/→ (or Q/E) turn it, ↑/↓ tilt the camera, Space/Shift (or C) climb
   // and descend. Not Ctrl: Ctrl with W, S or D is the browser's own (close tab, save, bookmark).
@@ -1475,15 +1776,46 @@ function flyDrone(dt: number) {
   const look = droneTurn; droneTurn = 0;
   drone.gimbal(dt, droneKey('ArrowUp') - droneKey('ArrowDown'), pitch);
   // Ground, trees and roofs under it. Where no land is loaded (or off the map) the last known ground still holds.
-  const s = drone.state, surface = terrain.surfaceAt(s.x, s.z);
+  const surface = terrain.surfaceAt(s.x, s.z);
+  const roof = roofAt(s.x, s.z);
   if (surface) {
     droneUnder.ground = Math.max(surface.ground, SEA_LEVEL);
-    droneUnder.floor = Math.max(droneUnder.ground + surface.canopy, roofAt(s.x, s.z)) + DRONE.clearance;
+    droneUnder.floor = Math.max(droneUnder.ground + surface.canopy, roof) + DRONE.clearance;
+  } else if (roof > -Infinity) {
+    droneUnder.floor = Math.max(droneUnder.floor ?? -Infinity, roof + DRONE.clearance);
+  }
+  // In standalone mode, slow down near land that is still loading so the drone never outruns the tiles under it.
+  let speedCap = drone.maxSpeed;
+  if (drone.free) {
+    let clear = terrainReadyAt(s.x, s.z) ? DRONE_LOAD.full : -1;
+    if (clear >= 0) {
+      const probe = (dx: number, dz: number): number => {
+        let ready = -1;
+        for (let i = 0; i < DRONE_LOAD.probes.length; i++) {
+          const d = DRONE_LOAD.probes[i];
+          if (!terrainReadyAt(s.x + dx * d, s.z + dz * d)) break;
+          ready = d;
+        }
+        return ready;
+      };
+      const sin = Math.sin(s.yaw), cos = Math.cos(s.yaw);
+      const cx = -sin * droneCommand.forward + cos * droneCommand.right;
+      const cz = -cos * droneCommand.forward - sin * droneCommand.right;
+      const cl = Math.hypot(cx, cz);
+      if (cl > 0.05) clear = Math.min(clear, probe(cx / cl, cz / cl));
+      const vl = Math.hypot(s.vx, s.vz);
+      if (vl > 0.5 && (cl <= 0.05 || s.vx * cx + s.vz * cz > 0)) clear = Math.min(clear, probe(s.vx / vl, s.vz / vl));
+    }
+    speedCap = loadSpeedCap(drone.maxSpeed, clear);
   }
   droneRoofAt.x = vehicle.x; droneRoofAt.y = vehicle.y + vehicleSpec.height; droneRoofAt.z = vehicle.z;
-  const landed = drone.update(dt, droneCommand, droneUnder, droneRoofAt, look);
+  const landed = drone.update(dt, droneCommand, droneUnder, drone.free ? null : droneRoofAt, look, speedCap);
   yaw = drone.state.yaw; pitch = drone.pitch;
   drone.placeCamera(camera, droneUnder.ground);
+  if (drone.free) {
+    syncDroneVehicle();
+    if (!scenePaused() && dt > 0) ambientTraffic?.step(dt, droneTrafficDummy);
+  }
   if (landed) landDrone();
 }
 
@@ -1655,7 +1987,7 @@ function syncPauseUI(): void {
     const raceLine = document.getElementById('pauseRace')!;
     raceLine.hidden = !multiplayer?.current?.net.race?.startAt || !race || /no active race/i.test(race);
     raceLine.textContent = raceLine.hidden ? '' : race!;
-    const hints = drone.active && !touchDevice ? DRONE_HELP : drone.active && touchDevice ? DRONE_TOUCH_HELP
+    const hints = drone.active ? (droneVehicle ? (touchDevice ? DRONE_FREE_TOUCH_HELP : DRONE_FREE_HELP) : touchDevice ? DRONE_TOUCH_HELP : DRONE_HELP)
       : gamepad.device === 'gamepad' ? padKeys(ride.kind, mailMode, !!radio)
       : ride.kind === 'horse' ? horseKeys(touchDevice, mailMode) : ride.kind === 'bike' ? bikeKeys(touchDevice)
       : touchDevice ? (mailMode ? TOUCH : DRIVING_TOUCH) : (mailMode ? KEYS : DRIVING_KEYS);
@@ -1828,13 +2160,73 @@ const fishing = fishingSite && endings instanceof Endings ? new Fishing(fishingS
 resets[resetSlot.fishing] = () => fishing?.reset();
 if (fishing) { scene.add(fishing.group); waterReflections?.include(fishing.group); }
 // Hidden from Object.keys(mmm): ui-check pins the public dev key set.
-if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap }, false);
+if (import.meta.env.DEV) expose({ fired, daily, boss, miniMap, depotScenes: { openLoading: openDepotLoading, openInterrogation: openDepotInterrogation } }, false);
 if (import.meta.env.DEV) expose({ lotProps }, false);   // for tools/lot-props-browser.mjs; not enumerable: ui-check pins the public key set
 if (import.meta.env.DEV) expose({ deckhand, yardDog, yardDogSite, yardJob, fishing, endings, shift, interiors, relief, animals, landmarks, mineSite, ...Object.fromEntries(Object.entries(places).map(([name, { dev }]) => [name, dev])), porchDog, porchSite });
 if (endings instanceof Endings) endings.extra = () => replay.available && !multiplayer?.choice.on ? replayButton('endingReplay') : null;
+const depotMailLoading = loadingEnabled(gameMode, ERA.modern, AREA.route, SITE.brand === 'just', bare, params);
+const plainVisit = !isTestVisit(params);
+const depotAutoLoad = autoLoadingOnStart(depotMailLoading, plainVisit, params);
+let lastReportHearing: { reason: InterrogationReason; complaints: readonly InterrogationComplaint[]; day: number; visited: boolean } | null = null;
+onDepotExit = doorId => {
+  if (doorId === 'depot' && pendingOfficeJump) {
+    pendingOfficeJump = false;
+    void openDepotInterrogation({ reason: 'visit', day: Math.max(1, shift.career.day), complaints: [], advanceAfter: false });
+    return;
+  }
+  if (doorId === 'depot-loading' && shift instanceof Shift && !shift.ended && shift.elapsed < END_TIME - START_TIME && shift.done === 0 && shift.complaints.all.length === 0) {
+    shift.elapsed = 0;
+  }
+  if (doorId === 'depot-interrogation') {
+    const info = pendingInterrogation;
+    pendingInterrogation = null;
+    if (lastReportHearing) lastReportHearing.visited = true;
+    if (info?.advanceAfter && shift instanceof Shift) {
+      shift.advanceToNextDay();
+      if (depotAutoLoad) void openDepotLoading();
+    } else if (shift.ended) {
+      const report = document.getElementById('shiftReport');
+      if (report) report.hidden = false;
+    }
+  }
+};
 {
   const report = document.getElementById('shiftReport'), footer = report?.querySelector('.reportFooter');
   if (report && footer && mailMode) {
+    const officeBtn = Object.assign(document.createElement('button'), {
+      id: 'bossOfficeButton', type: 'button', textContent: 'Report to the Boss’s office', hidden: true,
+    });
+    officeBtn.style.cssText = 'width:100%;min-height:48px;margin-bottom:8px;background:#26343e;color:#f5ebd6;border:1px solid #ffa526;border-radius:6px;font:700 14px var(--text);cursor:pointer';
+    officeBtn.addEventListener('click', () => {
+      if (!lastReportHearing) return;
+      void openDepotInterrogation({ reason: lastReportHearing.reason, complaints: lastReportHearing.complaints, day: lastReportHearing.day, advanceAfter: false });
+    });
+    footer.prepend(officeBtn);
+    if (shift instanceof Shift && !firedMode) {
+      shift.onReport = info => {
+        const due = !bare && ERA.modern && params.get('boss') !== '0' && params.get('depot') !== '0' && needsInterrogation(info.outcome, info.bossSeen);
+        lastReportHearing = due ? {
+          reason: info.outcome === 'suspension' ? 'suspension' : 'bossVerdict',
+          complaints: mergeSeenOffences(info.complaints, info.seenNotes),
+          day: info.day,
+          visited: false,
+        } : null;
+        officeBtn.hidden = !due;
+      };
+      shift.onNextDay = () => {
+        if (depotAutoLoad && lastReportHearing && !lastReportHearing.visited) {
+          lastReportHearing.visited = true;   // asked once: if the room cannot open now, the next click starts the day
+          void openDepotInterrogation({ reason: lastReportHearing.reason, complaints: lastReportHearing.complaints, day: lastReportHearing.day, advanceAfter: true });
+          return true;
+        }
+        if (depotAutoLoad) {
+          shift.advanceToNextDay();
+          void openDepotLoading();
+          return true;
+        }
+        return false;
+      };
+    }
     const watch = replayButton('reportReplay');
     footer.append(watch);
     const refresh = () => { watch.hidden = !replay.available || !!multiplayer?.choice.on; };
@@ -1845,20 +2237,26 @@ if (endings instanceof Endings) endings.extra = () => replay.available && !multi
 
 let fps = 60, quiet = 0, drove = 0, beaconT = 0;
 let shiftReady = false;
-const beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined;
+let beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined;
 // The title card holds the game still until the player starts. Test links (any placement or demo parameter)
 // skip it; ?title=1 shows it in a test.
-const plainVisit = !isTestVisit(params);
 let started = bare || (!plainVisit && !params.has('room') && params.get('title') !== '1');
 let hasStarted = started;
+let firstShiftStart = true;
 // Today's run shows its card, vehicle and weather on the title card.
 const titleDaily = DAILY && dailySquares ? { date: DAILY.date, squares: dailySquares, vehicle: GARAGE.find(g => g.id === DAILY.vehicle)?.name ?? 'Mail car',
   mood: MOODS.find(([m]) => m === DAILY.mood)?.[1] ?? 'Clear' } : undefined;
-const title = started ? null : createTitle(touchDevice, () => { hasStarted = true; started = true; pause.resetClock(); radio?.start(); }, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
+const title = started ? null : createTitle(touchDevice, () => {
+  hasStarted = true; started = true; pause.resetClock(); radio?.start();
+  if (firstShiftStart) {
+    firstShiftStart = false;
+    if (depotAutoLoad) void openDepotLoading();
+  }
+}, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
 if (__PUBLIC_APP__) watchGameVersion(SITE.brand === 'just', () => !hasStarted && document.getElementById('title')?.hidden === false && !document.getElementById('settings')?.classList.contains('open') && document.getElementById('titleLegal')?.hidden !== false && !document.activeElement?.matches('input,textarea,select'));
 // A ride-along day says so on the start card.
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
-startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { airportDrag?.reset(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
+startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s); if (placed) { airportDrag?.reset(); mountainHint?.clearActive(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
 const stuntPlaces = testPark ? testParkPlaces(testPark, manifest.village)
@@ -1869,11 +2267,15 @@ function resetToRoad(): void {
   if (fleet) fleet.respawn(); else vehicle.respawn();
 }
 function jumpToPlace(x: number, z: number, heading: number): void {
+  if (fleet && !fleet.restart(x, z, heading, 'place-jump')) return;
+  let placed = !!fleet;
   multiplayer?.reset();
-  if (fleet) fleet.restart(x, z, heading, 'place-jump'); else vehicle.restart(x, z, heading);
+  if (!fleet) placed = vehicle.restart(x, z, heading);
   vehicle.vx = vehicle.vz = vehicle.vy = vehicle.speed = 0;
+  if (placed) mountainHint?.clearActive();
   mail.reset();
-  waitingToDrive = true; camReady = false; mode = 'drive';
+  waitingToDrive = true; camReady = false;
+  if (droneVehicle) placeDroneAt(x, z, heading); else mode = 'drive';
   pendingShot = null; hookPlaced = false; jumpPlacement++;
 }
 const dragPlaces = dragModule ? [dragModule.airportDragPlace()] : [];
@@ -1885,13 +2287,13 @@ const placesUI = !mailMode && !bare && (placeList.length || (ERA.modern && !!tal
   jump: jumpToPlace,
 }, hikes) : null;
 const bigMap = !mailMode && !bare && ERA.modern ? new BigMap(terrain, roads, placeList.filter(p => !p.trip), hikes, hikeBox, {
-  canOpen: () => started && mode !== 'fly',   // in flight M is a drone key (DRONE_KEYS), not the map
+  canOpen: () => started && (mode !== 'fly' || droneVehicle),   // in car-launched flight M is a drone key; in standalone drone mode M opens the map
   pause: paused => { started = !paused; clearEndingInput(); },
   jump: jumpToPlace,
 }) : null;
 if (bigMap && placesUI) { bigMap.phoneTop = false; placesUI.mapButton(() => bigMap.open(null)); }
 if (import.meta.env.DEV) {
-  expose({ gameMode, get vehicleId() { return garageEntry.id; }, quarry, journey, places: placesUI, miniMap, cemeteries, stockpiles, bigMap, hikes, footpaths });
+  expose({ gameMode, get vehicleId() { return droneVehicle ? 'drone' : garageEntry.id; }, quarry, journey, places: placesUI, miniMap, cemeteries, stockpiles, bigMap, hikes, footpaths });
   // Internal diagnostics preserve the established enumerable dev API.
   expose({ ride, frame }, false);
 }
@@ -1906,7 +2308,7 @@ if (title) {
 // The title card's rows and the body's padMode follow the device used last (gamepad.ts).
 gamepad.onDevice(device => { title?.setDevice(device === 'gamepad'); document.body.classList.toggle('padMode', device === 'gamepad'); });
 if (!bare && params.get('radio') !== '0') {
-  if (ERA.radio && ride.kind !== 'horse') {
+  if (ERA.radio && ride.kind !== 'horse' && ride.kind !== 'drone') {
   const audioBase = `${import.meta.env.BASE_URL}audio`;
   void loadRadio(audioBase, siteRadio(SITE)).then(next => {
     radio = next; if (SITE.brand === 'just') { title?.setRadio(!!radio); ride.setRadio(!!radio); }
@@ -1928,12 +2330,13 @@ if (!bare && params.get('radio') !== '0') {
 }
 // Engine and tyre sounds (engine-sound.ts): synthesised, and started only by the first tap or key. A horse keeps its own
 // hoof sound (horse-sound.ts) under the same stored volume. ?engine=0 leaves the engine out.
-const engineSound = !bare && !horse && params.get('engine') !== '0' ? new EngineSound(LOW) : null;
+const engineSound = !droneVehicle && !bare && !horse && params.get('engine') !== '0' ? new EngineSound(LOW) : null;
 if (!bare) {
   ride.setHoofVolume(savedEngineVolume());
   if (engineSound || horse) engineVolumeSetting(horse ? 'Hoof sound' : 'Engine sound', savedEngineVolume(), v => { if (engineSound) engineSound.setVolume(v); else saveEngineVolume(v); ride.setHoofVolume(v); });
 }
 if (import.meta.env.DEV) expose({ engineSound });   // for tools/engine-sound-browser.mjs
+if (droneVehicle && mode === 'drive') launchDrone();
 
 
 // Modal input is stopped locally even when a room keeps simulating.
@@ -1957,7 +2360,8 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   ...(ride.update ? [{ name: 'ride', segment: 'ride' as const, ending: false, update: (_dt: number, realDt: number) => ride.update!(realDt, !scenePaused() && mode === 'drive') }] : []),
   { name: 'yard', segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
   { name: 'yardDog', segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
-  ...Object.entries(places).map(([name, { place }]) => ({ name, segment: 'before-camera' as const, ending: false, update: (dt: number, _realDt: number, now: number) => place?.update(camera.position, now, vehicle, dt) })),
+  ...Object.entries(places).filter(([name]) => name !== 'prince').map(([name, { place }]) => ({ name, segment: 'before-camera' as const, ending: false, update: (dt: number, _realDt: number, now: number) => place?.update(camera.position, now, vehicle, dt) })),
+  ...(postOffice ? [{ name: 'postOffice', segment: 'before-camera' as const, ending: false, update: (_dt: number, _realDt: number, now: number) => postOffice.update(camera.position, now) }] : []),
   { name: 'stockpiles', segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
   { name: 'cemeteries', segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
   { name: 'terrain', segment: 'landscape', ending: true, update: () => terrain.update(camera, scenePaused()) },
@@ -1965,6 +2369,8 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   { name: 'novemberRoads', segment: 'landscape', ending: true, update: () => novemberRoads?.update(terrain, camera.position) },
   // After the terrain update, so the water lies on the tiles drawn this frame; endings and the replay keep it too.
   { name: 'puddles', segment: 'landscape', ending: true, update: () => puddles?.refit(camera.position) },
+  // After the terrain update, so the Prince Street driveway and sidewalk match the tile level drawn this frame.
+  { name: 'prince', segment: 'landscape', ending: false, update: (dt, _realDt, now) => places.prince.place?.update(camera.position, now, vehicle, dt) },
   ...(fleet ? [{ name: 'fleet', segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { name: 'coast', segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
   { name: 'lotProps', segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
@@ -1991,7 +2397,7 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   { name: 'yardProps', segment: 'after-activities', ending: false, update: dt => yardProps?.update(camera, dt) },
   { name: 'harbourLights', segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
   { name: 'tall', segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
-  { name: 'grass', segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, vehicle.x, vehicle.z, vehicle.heading, vehicleSpec) },
+  { name: 'grass', segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, ride.kind === 'drone' ? 1e9 : vehicle.x, ride.kind === 'drone' ? 1e9 : vehicle.z, vehicle.heading, vehicleSpec) },
   { name: 'aiDriver', segment: 'mirror', ending: false, update: () => aiDriver?.update(camera, vehicle, aiDriverOn(), fleet?.driven.id ?? garageEntry.id) },
   { name: 'boss', segment: 'mirror', ending: false, update: dt => {
     if (!boss) return;
@@ -2320,9 +2726,9 @@ function frame(now: number) {
   // Damage also requires the mail game, outdoors, with no demo or daily-start parking.
   const damageActive = mailMode && playing && !interiors.busy && !demo && !waitingToDrive;
   // Until the first pedal after a start or a jump, phones read only the land in view and near the camera.
-  terrain.holdBackground = waitingToDrive;
+  terrain.holdBackground = waitingToDrive && ride.kind !== 'drone';
   // Places remain available after a shift; journey progress alone also excludes the places panel.
-  const placesEnabled = driving && started;
+  const placesEnabled = (driving || ride.kind === 'drone') && started;
   const journeyRuns = placesEnabled && !placesUI?.busy && !bigMap?.busy;
   // Mail controls omit started; the title owns input, and the places panel hides the pad separately.
   // A room keeps its frame while Settings or the pause screen is up: no mail is thrown, but the pad (and the
@@ -2367,7 +2773,8 @@ function frame(now: number) {
   if (interiors.busy) {
     radio?.update(false, true);
     pad?.show(!shift.ended && gamepad.device !== 'gamepad');
-    if (shift.updateIndoors(clockRuns ? clockDt : 0)) { quality.frame(0, false); interiors.closeForDay(); shift.end(); }
+    // Closing time only while the shift runs: a room opened from the report (the Boss's office) is not closed by it.
+    if (!shift.ended && shift.updateIndoors(clockRuns ? clockDt : 0)) { quality.frame(0, false); interiors.closeForDay(); shift.end(); }
     else {
       interiors.update(dt, driveInput(), vehicle, false);
       interiors.render(renderer, interiorDraw);
@@ -2384,7 +2791,7 @@ function frame(now: number) {
   interiors.update(realDt, driveInput(), vehicle, playing);
   if (airportDrag) airportDrag.sync(vehicle, garageEntry.id, jumpPlacement, driving, driving && !scenePaused() && !fleet?.busy);
   pad?.show(padVisible && gamepad.device !== 'gamepad');   // a controller in use hides the phone pad; a touch brings it back
-  if (mode === 'drive') {
+  if (mode === 'drive' && ride.kind !== 'drone') {
     const input = pause.blocked ? driveInput() : devHooks.inputEnabled ? devHooks.demoInput(drove, vehicle, roads, props, lawnDemo, mailMode, driveInput) : driveInput();
     const refusal = Math.abs(vehicle.speed) < 0.15 && input.throttle < 0 ? 0 : (animals?.influence(vehicle).brake ?? 0);
     if (refusal > 0) {
@@ -2411,17 +2818,19 @@ function frame(now: number) {
     chase(dt);
     if (import.meta.env.DEV) frameLap('chase');
   } else {
+    if (mode === 'drive' && ride.kind === 'drone') launchDrone();
     fly(dt);
     if (import.meta.env.DEV) frameClock = performance.now();
-    animals?.update(dt, vehicle, camera);
+    if (ride.kind !== 'drone') animals?.update(dt, vehicle, camera);
     if (import.meta.env.DEV) frameLap('animals');
     camera.rotation.set(pitch, yaw, 0);
   }
   if (endings.busy) { drawEnding(0); requestAnimationFrame(frame); return; }
   airportDrag?.draw(vehicle, gamepad.device);
+  mountainHint?.update(dt, vehicle, ride.kind, driving && !scenePaused() && !placesUI?.busy && !bigMap?.busy && !fleet?.busy, gamepad.device);
   const impactSpeed = Math.hypot(vehicle.vx, vehicle.vz);
   if (import.meta.env.DEV) frameClock = performance.now();
-  const impact = shift.ended ? 1 : mail.update(dt, vehicle,
+  const impact = shift.ended || ride.kind === 'drone' ? 1 : mail.update(dt, vehicle,
     mailControls && (mailRequested || keys.has('KeyM') || keys.has('KeyE') ||
       keys.has('Space') && document.activeElement === mailButton ||
       mailPointers.size > 0 || !!(demo && drove < demo && loaded && devHooks.throwMail)), camera);
@@ -2458,10 +2867,10 @@ function frame(now: number) {
       if (mapTimer <= 0) { mapTimer = 0.25; refreshMap(); }
       miniMap.boss = boss?.mapSpot ?? null;
       const focus = drone.active ? drone.state : vehicle;
-      miniMap.update(realDt, focus.x, focus.z, drone.active ? -drone.state.yaw : vehicle.heading, mapStops, mapMarks, mapCars, drone.active ? vehicle : null);
+      miniMap.update(realDt, focus.x, focus.z, drone.active ? -drone.state.yaw : vehicle.heading, mapStops, mapMarks, mapCars, drone.active && !droneVehicle ? vehicle : null);
     }
     // Paused frames return early, but a multiplayer room keeps running them: ground property lines still stop while Settings is open.
-    propertyLayer?.update?.(vehicle.x, vehicle.z, playing && !pause.blocked && !interiors.busy);
+    propertyLayer?.update?.(vehicle.x, vehicle.z, (playing || ride.kind === 'drone' && clockRuns) && !pause.blocked && !interiors.busy);
     radio?.update(playing, false);
     partyLine?.update();
   }

@@ -42,7 +42,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
     window: {}, performance: { now: () => 1000 + calls.length }, THREE: { Vector3: vec, MathUtils: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) } },
     started: true, last: 1000, fps: 60, quiet: 25, camReady: true, mode: 'drive', vehicle, camera,
     endings: { ...update('endings'), busy: ending }, interiors: { ...update('interiors'), render: trace('interiors.render'), busy: false },
-    airportDrag: null, wharves: null, novemberRoads: null, maryville: null,
+    airportDrag: null, mountainHint: null, wharves: null, novemberRoads: null, maryville: null, depot: null, postOffice: null,
     terrain: { ...update('terrain'), drawnFine: new Set(['tile']), surfaceAt: () => ({ level: 8 }), failed: 0 },
     quality: { frame: trace('quality') }, picture: null, lawnDemo: null, mailMode: true, tall: null, farTurbines: null, farVisibility:null, farLoading:false, farKey:null,tallKey:null,
     demo: 0, demoPhoto: false, drove: 0, reliefTest: 0, waitingToDrive: false, loaded: true, beaconT: 0,
@@ -90,7 +90,7 @@ export function spy(source, ending = false, dev = true, absent = false, override
   context.waterReflections.settle = trace('water.settle'); context.waterReflections.afterRender = trace('water.afterRender');
   if (absent) for (const name of ['tall', 'stuntPark', 'deckhand', 'yard', 'yardDog', 'home', 'porch', 'porchDog', 'church', 'village', 'hawkesbury', 'mabouMain', 'stockpiles', 'cemeteries', 'trees', 'coast', 'lotProps', 'airport', 'quarry', 'culvertMouths', 'landmarks', 'history', 'edge', 'mineSite', 'roadScene', 'sidewalks', 'schoolBus', 'ambientTraffic', 'roadAnimals', 'props', 'yardProps', 'grass', 'waterReflections', 'fishing', 'harbourLights']) context[name] = null;
   // The places rows: their sites are only stored, and each built place is the spy (or null) of the same name, read late so `absent` and the overrides apply.
-  Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null, drLaneSite: null,
+  Object.assign(context, placeHelpers(), { homeSite: {}, porchSite: {}, churchSite: {}, villageSite: {}, hawkesburySite: {}, mabouSite: {}, maryvilleSite: null, drLaneSite: null, depotSite: null, princeSite: null,
     builtPlaces: new Proxy({}, { get: (_target, name) => context[name] ?? null }) });
   if (typeof overrides === 'function') overrides(context, trace);
   else Object.assign(context, overrides);
@@ -135,9 +135,9 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
       : [call('driveVehicle', dt, input), call('animals', dt, '@vehicle', '@camera'), call('chase', dt)]),
     call('mail', dt, '@vehicle', false, '@camera'),
     world('yard', dt, '@vehicle', '@camera.position'), world('yardDog', dt, '@vehicle'), world('home', '@camera.position', '@vehicle'),
-    world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050, '@vehicle', dt), world('village', '@camera.position', 1050, '@vehicle', dt), world('hawkesbury', '@camera.position', 1050, '@vehicle', dt), world('mabouMain', '@camera.position', 1050, '@vehicle', dt), quiet('maryville'), quiet('drLane'), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
+    world('porch', '@camera.position', '@vehicle'), call('porchDog', dt, '@vehicle', 1.05), world('church', '@camera.position', 1050, '@vehicle', dt), world('village', '@camera.position', 1050, '@vehicle', dt), world('hawkesbury', '@camera.position', 1050, '@vehicle', dt), world('mabouMain', '@camera.position', 1050, '@vehicle', dt), quiet('maryville'), quiet('drLane'), quiet('depot'), world('stockpiles', '@camera.position'), world('cemeteries', '@camera.position', '@vehicle'),
     call('camera.matrix'), call('sky', '@camera.position'), call('shared.time', 1.05), call('beacon', dt ? 2.2 : .15),
-    world('terrain', '@camera', paused), ...wharfLines(spied), quiet('puddles'), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
+    world('terrain', '@camera', paused), ...wharfLines(spied), quiet('puddles'), quiet('prince'), world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'),
     world('trees', '@terrain.drawnFine', '@camera.position'), world('culvertMouths', '@camera.position'), world('landmarks', '@camera'),
     call('placesUI', '@vehicle', playing), call('journey', .05, playing), call('relief', dt, playing ? 6 : 0, '@vehicle', playing),
     call('miniMap.show', playing), call('refreshMap'), call('miniMap', .05, 3, 5, .7, '@mapStops', '@mapMarks', '@mapCars', null), call('radio', playing, false),

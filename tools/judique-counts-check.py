@@ -12,6 +12,9 @@ import collections
 import copy
 import json
 import os
+from pathlib import Path
+
+from land_receipt_pins import canonical_digest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LAND = os.path.join(ROOT, 'data', 'baked', 'areas', 'judique')
@@ -53,6 +56,12 @@ def faults(props, streams, manifest, roads):
 read = lambda name: json.load(open(os.path.join(LAND, name)))
 props, streams, manifest = read('props.json'), read('streams.json'), read('manifest.json')
 roads = {r['id']: r for r in read('roads.json')['roads']}
+# The road-98 install removed 124 public poles. Use its pin only when the complete public array matches.
+receipt = json.loads((Path(ROOT) / 'tools/road-scene-delta/step29-hashes.json').read_text())
+corrected = receipt['judiqueRoad98']['publicPoles']
+public = [q for q in props['poles'] if q['road'] in roads and roads[q['road']]['kind'] <= 3]
+if canonical_digest(public) == corrected:
+    PINS['public_poles'] = corrected['count']
 found = faults(props, streams, manifest, roads)
 assert not found, 'Judique counts: ' + '; '.join(found) + ' (a wanted change: set PINS in tools/judique-counts-check.py)'
 

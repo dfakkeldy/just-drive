@@ -44,30 +44,31 @@ fixture() {
     local source;source="$(cd "$ROOT/$link" && pwd -P)";ln -s "$source" "$tree/$link"
   done
 }
-if [[ -z "${SIDEWALK_BASE_ROOT:-}" || -z "${SIDEWALK_BEFORE_ROOT:-}" ]];then FIXTURES="$(mktemp -d "${TMPDIR:-/tmp}/mmm-sidewalk-baselines-XXXXXX")";fi
-if [[ -z "${SIDEWALK_BASE_ROOT:-}" ]];then OWN_BASE="$FIXTURES/base";fixture "$OWN_BASE" "${SIDEWALK_BASE_REF:-$(git -C "$ROOT" merge-base HEAD origin/main)}";SIDEWALK_BASE_ROOT="$OWN_BASE";fi
-if [[ "$SIDEWALK_RUNTIME_PHASE" != diagnostic && "$SIDEWALK_RUNTIME_PHASE" != settle && "$SIDEWALK_RUNTIME_PHASE" != frames && "$SIDEWALK_RUNTIME_PHASE" != cold && ( "$SIDEWALK_RUNTIME_PHASE" != proof || "${SIDEWALK_REVIEWED_BASELINE:-0}" == 1 ) && -z "${SIDEWALK_BEFORE_ROOT:-}" ]];then
-  OWN_BEFORE="$FIXTURES/before"
-  if [[ "${SIDEWALK_RUNTIME_PHASE:-all}" == proof ]];then
-    fixture "$OWN_BEFORE" 2cd5725
-    export SIDEWALK_MEASURE_REPLAY='reviewed implementation 2cd5725'
-  else
-    # Align every unrelated source file (including current main) and replay only
-    # the exact pre-eager-mask implementation. Its compiled geometry is identical.
-    fixture "$OWN_BEFORE" HEAD
-    git -C "$ROOT" show a32cfa3:web/src/sidewalks.ts > "$OWN_BEFORE/web/src/sidewalks.ts"
-    replay_blob="$(git -C "$ROOT" rev-parse a32cfa3:web/src/sidewalks.ts)"
-    [[ "$(git -C "$OWN_BEFORE" hash-object web/src/sidewalks.ts)" == "$replay_blob" ]]
-    export SIDEWALK_MEASURE_REPLAY="a32cfa3:web/src/sidewalks.ts blob=$replay_blob; all other code=$(git -C "$ROOT" rev-parse HEAD)"
+if [[ "$SIDEWALK_RUNTIME_PHASE" != settle ]];then
+  if [[ -z "${SIDEWALK_BASE_ROOT:-}" || -z "${SIDEWALK_BEFORE_ROOT:-}" ]];then FIXTURES="$(mktemp -d "${TMPDIR:-/tmp}/mmm-sidewalk-baselines-XXXXXX")";fi
+  if [[ -z "${SIDEWALK_BASE_ROOT:-}" ]];then OWN_BASE="$FIXTURES/base";fixture "$OWN_BASE" "${SIDEWALK_BASE_REF:-$(git -C "$ROOT" merge-base HEAD origin/main)}";SIDEWALK_BASE_ROOT="$OWN_BASE";fi
+  if [[ "$SIDEWALK_RUNTIME_PHASE" != diagnostic && "$SIDEWALK_RUNTIME_PHASE" != frames && "$SIDEWALK_RUNTIME_PHASE" != cold && ( "$SIDEWALK_RUNTIME_PHASE" != proof || "${SIDEWALK_REVIEWED_BASELINE:-0}" == 1 ) && -z "${SIDEWALK_BEFORE_ROOT:-}" ]];then
+    OWN_BEFORE="$FIXTURES/before"
+    if [[ "${SIDEWALK_RUNTIME_PHASE:-all}" == proof ]];then
+      fixture "$OWN_BEFORE" 2cd5725
+      export SIDEWALK_MEASURE_REPLAY='reviewed implementation 2cd5725'
+    else
+      # Align every unrelated source file (including current main) and replay only
+      # the exact pre-eager-mask implementation. Its compiled geometry is identical.
+      fixture "$OWN_BEFORE" HEAD
+      git -C "$ROOT" show a32cfa3:web/src/sidewalks.ts > "$OWN_BEFORE/web/src/sidewalks.ts"
+      replay_blob="$(git -C "$ROOT" rev-parse a32cfa3:web/src/sidewalks.ts)"
+      [[ "$(git -C "$OWN_BEFORE" hash-object web/src/sidewalks.ts)" == "$replay_blob" ]]
+      export SIDEWALK_MEASURE_REPLAY="a32cfa3:web/src/sidewalks.ts blob=$replay_blob; all other code=$(git -C "$ROOT" rev-parse HEAD)"
+    fi
+    SIDEWALK_BEFORE_ROOT="$OWN_BEFORE"
   fi
-  SIDEWALK_BEFORE_ROOT="$OWN_BEFORE"
-fi
-export SIDEWALK_MEASURE_BASE_REF="$(git -C "$SIDEWALK_BASE_ROOT" rev-parse HEAD)"
-export BASE_URL=http://127.0.0.1:5488 BEFORE_URL=http://127.0.0.1:5489
-if [[ "$SIDEWALK_RUNTIME_PHASE" == frames ]];then export BEFORE_URL="$BASE_URL";fi
-python3 "$ROOT/tools/check-ports.py" --probe 5488 5489
-start_owned base "$BROWSER_LOG_DIR/base.log" /bin/bash -c 'cd "$1/web" && exec ./node_modules/.bin/vite --host 127.0.0.1 --port 5488 --strictPort' _ "$SIDEWALK_BASE_ROOT"
-python3 - "$BASE_URL" <<'PY'
+  export SIDEWALK_MEASURE_BASE_REF="$(git -C "$SIDEWALK_BASE_ROOT" rev-parse HEAD)"
+  export BASE_URL=http://127.0.0.1:5488 BEFORE_URL=http://127.0.0.1:5489
+  if [[ "$SIDEWALK_RUNTIME_PHASE" == frames ]];then export BEFORE_URL="$BASE_URL";fi
+  python3 "$ROOT/tools/check-ports.py" --probe 5488 5489
+  start_owned base "$BROWSER_LOG_DIR/base.log" /bin/bash -c 'cd "$1/web" && exec ./node_modules/.bin/vite --host 127.0.0.1 --port 5488 --strictPort' _ "$SIDEWALK_BASE_ROOT"
+  python3 - "$BASE_URL" <<'PY'
 import sys,time,urllib.request
 for attempt in range(100):
     try:
@@ -77,7 +78,8 @@ for attempt in range(100):
     time.sleep(.1)
 else:raise SystemExit('baseline HTTP did not become ready')
 PY
-if [[ -n "${SIDEWALK_BEFORE_ROOT:-}" ]];then start_owned before "$BROWSER_LOG_DIR/before.log" /bin/bash -c 'cd "$1/web" && exec ./node_modules/.bin/vite --host 127.0.0.1 --port 5489 --strictPort' _ "$SIDEWALK_BEFORE_ROOT";fi
+  if [[ -n "${SIDEWALK_BEFORE_ROOT:-}" ]];then start_owned before "$BROWSER_LOG_DIR/before.log" /bin/bash -c 'cd "$1/web" && exec ./node_modules/.bin/vite --host 127.0.0.1 --port 5489 --strictPort' _ "$SIDEWALK_BEFORE_ROOT";fi
+fi
 if [[ "${SIDEWALK_RUNTIME_PHASE:-loads}" == diagnostic ]];then
   CDP_PORT="$CDP" run_check node "$ROOT/tools/sidewalks-diagnostic.mjs" "$OUT" "http://127.0.0.1:$WEB/"
 elif [[ "${SIDEWALK_RUNTIME_PHASE:-loads}" == settle ]];then

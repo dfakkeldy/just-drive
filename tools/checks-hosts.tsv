@@ -54,6 +54,8 @@ animals	portable	no	Linux GTX 980M PASS 234 s on df9507d; no same-commit Mac run
 terrain-browser	portable	no	Linux GTX 980M PASS 551 s on 7ef33bb; no same-commit Mac run
 mine-shots	portable	no	Linux GTX 980M PASS 144 s on 7ef33bb; no same-commit Mac run
 church-interior-shots	portable	no	apple-check-host M4 PASS 53.64 s on its first branch, 2026-11-17 UTC; not yet measured on Linux
+plant	portable	no	Node rules, scene budget and Shift integration, no land data needed; no measured run recorded yet
+plant-shots	unproven	no	Harbour Ridge steel plant browser views (desktop, win/loss Shift return, phone portrait and landscape)
 shift-shots	portable	no	Linux GTX 980M PASS 84 s on 7ef33bb; no same-commit Mac run
 era-browser	portable	no	Linux GTX 980M PASS 1208 s on 7ef33bb; no same-commit Mac run
 era-pass3-browser	portable	no	Linux GTX 980M PASS 766 s on 7ef33bb; no same-commit Mac run
@@ -133,7 +135,7 @@ paved-open-browser	unproven	no	WORK-only designated-polygon chase capture and ac
 blender-models	apple	no	needs the matching Blender 5.2 release (BLENDER override, application path or PATH); absence is SKIP/CANNOT RUN, never PASS; Mac PASS 10 s on 991bd1a; the project brief audit: apple-check-host M4 PASS 9.42 s on 68bc9eb, 2026-11-17 UTC; Blender 5.2.2 LTS; four committed model files rebuilt and byte-equal; needs-only branch change
 blender-models-mutations	apple	no	as blender-models; Mac PASS 16 s on 991bd1a; the project brief audit: apple-check-host M4 PASS 11.10 s on 68bc9eb, 2026-11-17 UTC; Blender 5.2.2 LTS; four files byte-equal and quantizer mutant caught; needs-only branch change
 guardrail-r3-browser	unproven	no	West Bay seam/opening and crash-bike witnesses; other hosts unmeasured
-sidewalks-runtime	apple	no	native paired settle (main/main control spread vs main/current), hardware Metal, no software GL; mmm-m4 Apple M4 / Edge 157 PASS on f7d25206, 18 Nov 2026 07:40 UTC, started at load1 < 20: all six town/quality cases within their own main/main spread (e.g. Mabou desktop +38 ms in -826..+996); an earlier try under load rising 19 -> 43 failed Mabou desktop by 28 ms (+686 vs spread max +658) and is not counted; 17 Nov PASS 1272 s on 925e2d49; MacBook M1 Pro PASS at ebb0f5c (historical)
+sidewalks-runtime	apple	no	native probe-free data-mmm-ready against written per-area STARTUP_BUDGET_MS ceilings (6 areas x LOW/HIGH, 5 measured runs + 1 warm-up each, working sidewalk layer verified on Mabou/Port Hood/Point Tupper), hardware Metal, no software GL; ceilings are set for the MacBook M1 Pro; MacBook M1 Pro / Edge 158 PASS 253 s on d0149d23, 22 Nov 2026 04:55 AST (all 12 cases passed with +390 to +1709 ms margin; medians LOW/HIGH: mabou 2296/5291, porthood 1751/3904, pointtupper 1925/4956, cansocauseway 1616/3495, judique 1960/4264, westbay 2355/5339 ms)
 sidewalks-live	apple	no	hardware GPU ground/grass/drive/era proof, no CPU timing gate; mmm-m4 (Apple M4, Edge 157, hardware Metal) PASS 704 s on 1a98a0cc and 227 s on 2114f060, 18/17 Nov 2026, canonical land overlay with the six companions; earlier M6 checkpoint PASS
 sidewalks-frames	apple	no	clocked sidewalk frame <= 2 ms, startup <= 20 ms, LOW startup <= +1 ms over the M1 Pro ebb0f5c reference; mmm-m4 Apple M4 / Edge 157 PASS on f7d25206, 18 Nov 2026 07:17 UTC, started at load1 < 15: worst measured frame 1.6 ms (Port Hood desktop), p95 0.6-0.7 ms, LOW startup median delta Mabou -0.9 ms, Port Hood +0.4 ms; the M4 is faster per core than the M1 Pro reference, so its pass is a weaker bound; a 17 Nov try under load rising past 40 failed on single-frame spikes and is not counted
 sidewalks-counts	apple	no	same-host paired render deltas, no absolute pins or CPU timing; mmm-m4 M4 / Edge 157 PASS 2897 s on bf4f8750, 18 Nov 2026: 22 views/modes x 5 pairs against the same tree at ?sidewalks=0, every pair equal to the delta table
@@ -276,6 +278,7 @@ map-labels	portable	no	pure Node (no browser, no land); rented Mac mini (apple-c
 map-labels-mutations	portable	no	pure Node (no browser, no land); rented Mac mini (apple-check-host) PASS
 map-labels-browser	unproven	no	rented Mac mini (apple-check-host) only so far; not yet run on the MacBook or on Linux
 drone-browser	unproven	no	apple-check-host PASS on the drone-mode branch (desktop keyboard-only flight, phone portrait and landscape); not yet run on the MacBook or on Linux
+drone-vehicle-browser	unproven	no	MacBook M1 Pro / Edge 158 PASS (Just Drive desktop & phone Drone choice, excluded from mail play, 120 m ceiling, distant roof floor, R/ROAD nearest road, 5 km full-speed flight & throttled flight keeping finest ground loaded); not yet run on Linux
 painter-browser	apple	no	apple-check-host M4 PASS on e860ece0 (204 s via check-all on the tree before its last hint fix; final tree via yard-shots), 2026-11-17 UTC; hardware Metal / Edge 157.0.4341.60; desktop and phone seat/chase; one draw and 384 triangles each; #1147 hint in the real HUD on desktop 1400x950 and phone 390x844 and 844x390, no control overlapped, none with scene=0, approach grade 3.9%; pictures inspected; earlier PASS on cf29cc4
 airport-browser	unproven	no	rented Mac mini (apple-check-host) run in PR #147; not yet run on the MacBook or on Linux
 fired-browser	apple	no	apple-check-host M4 Edge 157.0.4341.60 hardware Metal: PASS 199 s on b98cffb2 and 38 s on 1afdd553, 2026-11-18 UTC (desktop 1280x800, phone 390x844 LOW)
@@ -289,6 +292,9 @@ mabou-main	portable	no	no browser; apple-check-host PASS on the Mabou village de
 mabou-main-browser	unproven	no	apple-check-host Edge PASS on the Mabou village delta branch (desktop 17,742 triangles in 9 meshes, LOW 9,084 in 6); counts are deterministic; not yet run on the MacBook or on Linux
 replay-browser	unproven	no	apple-check-host M4 PASS 152 s on f2d2abf9 (with main's Mabou main street), 2026-11-18 UTC; earlier PASS 912 s on 3000a109 and 260 s on 55fc99f4; hardware Metal / Edge 157.0.4341.60; desktop car, phone car (LOW, touch) and bike: drawn ride within 16 mm of the driven path, 0.25x at the mark, ride and mark in frame, every rig node, lamp and the camera restored, MP4 clips with the caption; not yet run on the MacBook or on Linux
 pt-infrastructure-browser	unproven	no	Apple M6 Mac PASS 15 Nov (pre-merge, six batches); apple-check-host M4 Edge 157 PASS 852 s on 97133dd1, 18 Nov 2026 (three batches on desktop, none on phone LOW or in Judique); Linux unmeasured
+pt-industry	portable	no	Node check over baked Point Tupper land, roads and merged #112 power lines; no browser
+pt-industry-mutations	portable	no	Node mutation controls over baked Point Tupper land; no browser
+pt-industry-browser	unproven	no	Point Tupper industrial site desktop and phone, day and night, paired on/off render deltas; not yet measured on another host
 wharves	portable	no	real baked meshes; no browser
 wharves-mutations	portable	no	real baked meshes and broken planner variants; no browser
 wharves-browser	apple	no	apple-check-host (Apple M4, Edge 157) PASS 348 s on 73cba0a4 and 522 s on c5af1ffa (receipts in tools/evidence/wharves): real GPU pictures and matched main costs, one browser slot
@@ -326,3 +332,14 @@ airport-drag-browser	unproven	no	Hardware WebGL, Point Tupper land and live inpu
 version-notice	portable	no	pure Node: real offline-version.ts module and main.ts predicate with mutations
 version-browser	unproven	no	local public build and actual browser/worker; native hardware GPU
 drlane-browser	unproven	no	not yet measured on another host
+depot-rules	portable	no	Node only, no land required
+depot-rules-mutations	portable	no	Node mutation controls, source only
+depot-browser	unproven	no	Hardware WebGL, Port Hood and Mabou land; MacBook M1 Pro Metal / Edge 158 PASS on t3/boss-depot-scenes (3 Boss options, Port Hood exterior + door, loading bay, office jump, shift-start loading + skip, suspension interrogation room)
+depot-browser-phone	unproven	no	Hardware WebGL, Port Hood and Mabou land on phone LOW; MacBook M1 Pro Metal / Edge 158 PASS on t3/boss-depot-scenes (390x844 touch LOW: Port Hood exterior + door, loading bay, office jump, shift-start loading + skip, suspension interrogation room)
+prince	portable	no	Node check over baked Point Tupper land; no browser
+prince-browser	unproven	no	not yet measured on another host
+port-hawkesbury-mail	portable	no	Node only; runs with or without data/baked/areas/pointtupper
+port-hawkesbury-mail-mutations	portable	no	Node mutation controls; runs with or without data/baked/areas/pointtupper
+port-hawkesbury-mail-browser	unproven	no	Hardware WebGL, Point Tupper and Mabou land, desktop and phone LOW
+sxs-variants	portable	yes	Node check for all four side-by-side models, specs, outward solids, posed envelopes, display batches and ?car= links
+sxs-variants-browser	unproven	no	Hardware WebGL and Mabou land: all four side-by-side models in studio preview, title/settings picker, ?car= links and live driving

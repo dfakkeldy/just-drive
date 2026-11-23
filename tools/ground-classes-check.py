@@ -117,6 +117,12 @@ def site_list(exporter_text):
     assert listed==found,'ground site list differs from web/src/*-site.ts: missing '+str(sorted(found-listed))+', extra '+str(sorted(listed-found))
     import hand_sites
     assert set(hand_sites.GROUND_SITES)==found,'hand_sites.GROUND_SITES differs from web/src/*-site.ts'
+    if (repo/'data/baked/terrain/manifest.json').exists():
+        catalogs={p.resolve() for p in hand_sites.ground_catalog_inputs(repo)}
+        for area in ('judique','pointtupper'):
+            cat=repo/'data/baked/areas'/area/'buildings.json'
+            if cat.exists():
+                assert cat.resolve() in catalogs,f'ground_catalog_inputs missing {cat}'
 
 
 def mutants():

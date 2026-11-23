@@ -6,7 +6,7 @@ import type { Place } from './places';
 import { pushOut, type Pushable, type Solid } from './parked';
 import { HEDGE_THICK, cemeteryPlaces, distance, drawnSolids, edgeKind, fenceSegments, inside, stoneLayout, type Cemetery, type CemeteryFile, type Point } from './cemetery-rules';
 
-/** Anonymous shapes: no text and no textures. Kinds 0 to 2 are decorative; 3 to 7 are unit shapes scaled to a measured marker. */
+/** Anonymous shapes: no text and no textures. Kinds 0 to 2 are decorative; 3 to 8 are unit shapes scaled to a measured marker. */
 export function stoneGeometry(kind: number, low: boolean): THREE.BufferGeometry {
   const block = (w: number, h: number, t: number, y = 0) => new THREE.BoxGeometry(w, h, t).translate(0, y + h / 2, 0);
   const slab = (outline: [number, number][]) => {
@@ -22,11 +22,14 @@ export function stoneGeometry(kind: number, low: boolean): THREE.BufferGeometry 
   }
   if (kind === 4) return low ? block(1, 0.9, 1)                // shouldered tablet: square shoulders and a low peak
     : slab([[-0.5, 0], [0.5, 0], [0.5, 0.8], [0.36, 0.86], [0.22, 0.88], [0, 1], [-0.22, 0.88], [-0.36, 0.86], [-0.5, 0.8]]);
-  if (kind === 5 || kind === 6) {
+  if (kind === 5 || kind === 6 || kind === 8) {
     const parts = kind === 5
       ? [block(1, 0.28, 1), block(0.76, 0.58, 0.76, 0.28), block(0.84, 0.14, 0.84, 0.86)]          // pedestal: base, die and cap
-      : [block(1, 0.22, 1), block(0.7, 0.2, 0.7, 0.22), block(0.3, 0.58, 0.32, 0.42), block(0.86, 0.09, 0.32, 0.8), block(0.3, 0.2, 0.32, 0.8)];   // cross on a stepped base
-    const merged = mergeGeometries(low ? parts.slice(0, kind === 5 ? 2 : 4) : parts);
+      : kind === 6
+      ? [block(1, 0.22, 1), block(0.68, 0.32, 0.68, 0.22), block(0.18, 0.46, 0.18, 0.54), block(0.76, 0.085, 0.18, 0.77),
+        new THREE.TorusGeometry(1, 0.22, 6, 16).scale(0.24, 0.095, 0.14).translate(0, 0.812, 0)]   // ringed Celtic cross on a stepped die
+      : [block(0.56, 0.08, 1), block(0.18, 1, 0.36), block(1, 0.14, 0.36, 0.66), block(0.34, 0.26, 0.44, 0.6)];   // slender cast-iron cross/frame
+    const merged = mergeGeometries(low ? parts.slice(0, kind === 5 ? 2 : kind === 6 ? 4 : 3) : parts);
     if (!merged) throw new Error('stone parts must merge');
     return merged;
   }

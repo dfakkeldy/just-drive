@@ -21,7 +21,9 @@ try{
   await read('window.requestAnimationFrame=()=>0');await sleep(100);
   await read(`mmm.camera.position.set(${e}-mmm.terrain.manifest.village[0],${h},mmm.terrain.manifest.village[1]-${n});mmm.camera.updateMatrixWorld();`);
   const result=await read(`(()=>{const{scene:s,camera:c,renderer:r,farLand:f}=mmm,W=1280,H=720,m=f.land.material,original=m.fragmentShader,origin=mmm.terrain.manifest.village,b=${JSON.stringify(boxes[row.target])};const callbacks=[];s.traverse(o=>{if(o.isMesh){callbacks.push([o,o.onBeforeRender,o.onAfterRender]);o.onBeforeRender=o.onAfterRender=()=>{};}});
-   const draw=()=>{mmm.farVisibility?.update(c,performance.now()/1000);r.setRenderTarget(null);r.render(s,c);const g=r.getContext(),a=new Uint8Array(W*H*4);g.readPixels(0,0,W,H,g.RGBA,g.UNSIGNED_BYTE,a);return a;};
+   // Hold farVisibility's query meshes visible once before compare so 5 Hz retry timers cannot flip visibility between a and restored or unhide objects during bare.
+   for(const rec of mmm.farVisibility?.records??[])rec.mesh.visible=true;
+   const draw=()=>{r.setRenderTarget(null);r.render(s,c);const g=r.getContext(),a=new Uint8Array(W*H*4);g.readPixels(0,0,W,H,g.RGBA,g.UNSIGNED_BYTE,a);return a;};
    const removed=original.replace('void main() {','void main() { if(vWorld.x>='+(b[0]-origin[0]).toFixed(3)+' && vWorld.x<='+(b[2]-origin[0]).toFixed(3)+' && vWorld.z>='+(origin[1]-b[3]).toFixed(3)+' && vWorld.z<='+(origin[1]-b[1]).toFixed(3)+') discard;');
    const compare=()=>{draw();const a=draw(),image=r.domElement.toDataURL('image/png');m.fragmentShader=removed;m.needsUpdate=true;const hidden=draw();m.fragmentShader=original;m.needsUpdate=true;const restored=draw();let changed=0,unstable=0;for(let i=0;i<a.length;i+=4){if(a[i]!==hidden[i]||a[i+1]!==hidden[i+1]||a[i+2]!==hidden[i+2])changed++;if(a[i]!==restored[i]||a[i+1]!==restored[i+1]||a[i+2]!==restored[i+2])unstable++;}return{changed,unstable,image};};
    const full=compare();

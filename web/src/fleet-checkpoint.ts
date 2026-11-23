@@ -11,9 +11,12 @@ export function checkpoint(objects: object[], roots: THREE.Object3D[]): () => vo
     }
     if (object instanceof THREE.Object3D || object instanceof THREE.BufferGeometry || object instanceof THREE.Material) return;
     const record = object as Record<string, unknown>, values = Object.entries(record).filter(([key]) => !excluded.has(key));
+    const hidden = typeof (object as { checkpointHidden?: unknown }).checkpointHidden === 'function'
+      ? (object as { checkpointHidden(): { save(): void; restore(): void } }).checkpointHidden() : null;
+    hidden?.save();
     const length = Array.isArray(object) ? object.length : null;
     // Cached camera metadata can alias a deeply frozen shared spec. Retain that identity without writing it.
-    if (!Object.isFrozen(object)) restores.push(() => { for (const [key, value] of values) record[key] = value; if (length !== null) (object as unknown[]).length = length; });
+    if (!Object.isFrozen(object)) restores.push(() => { for (const [key, value] of values) record[key] = value; if (length !== null) (object as unknown[]).length = length; hidden?.restore(); });
     for (const [, value] of values) if (value && typeof value === 'object') {
       const proto = Object.getPrototypeOf(value);
       if (Array.isArray(value) || ArrayBuffer.isView(value) || proto === Object.prototype || value instanceof THREE.Vector2 || value instanceof THREE.Vector3 || value instanceof THREE.Quaternion || value instanceof THREE.Euler || value instanceof THREE.Matrix3 || value instanceof THREE.Matrix4) visit(value);
@@ -56,9 +59,12 @@ export function reusableCheckpoint(objects: object[], roots: THREE.Object3D[], s
       } else {
         const object = value as { [key: string]: unknown }, array = Array.isArray(value);
         const keys = array ? [] : Object.keys(object).filter(k => !excluded.has(k));
+        const hidden = typeof (value as { checkpointHidden?: unknown }).checkpointHidden === 'function'
+          ? (value as { checkpointHidden(): { save(): void; restore(): void } }).checkpointHidden() : null;
         const values: unknown[] = []; let length = 0;
         record = {
           save() {
+            hidden?.save();
             length = array ? (value as unknown[]).length : keys.length;
             while (array && keys.length < length) keys.push(String(keys.length));
             for (let i = 0; i < length; i++) {
@@ -70,6 +76,7 @@ export function reusableCheckpoint(objects: object[], roots: THREE.Object3D[], s
             if (Object.isFrozen(value)) return;
             if (array) (value as unknown[]).length = length;
             for (let i = 0; i < length; i++) object[keys[i]] = values[i];
+            hidden?.restore();
           },
         };
       }

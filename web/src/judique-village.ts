@@ -785,7 +785,6 @@ export class JudiqueVillage implements HandBuiltPlace {
   get done(): boolean { return this.pending.length === 0; }
   update(view: { x: number; z: number }, now: number): void {
     if (!this.pending.length || now < this.nextProbe) return;
-    this.nextProbe = now + 400;
     const reach = this.low ? 320 : 450;
     for (const item of [...this.pending]) {
       if (Math.hypot(view.x - item.x, view.z - item.z) > reach) continue;
@@ -797,8 +796,10 @@ export class JudiqueVillage implements HandBuiltPlace {
       this.group.add(group);
       this.pending.splice(this.pending.indexOf(item), 1);
       if (!this.pending.length) for (const keeper of this.keepers.splice(0)) { this.group.remove(keeper); keeper.geometry.dispose(); }
+      this.nextProbe = 0;
       return;   // one place per update, so no frame builds two
     }
+    this.nextProbe = now + 400;
   }
   resolveSolids(car: Pushable): void {
     if (Math.hypot(car.x - this.site.centre.x, car.z - this.site.centre.z) < this.site.reach) pushOut(car, this.site.solids);

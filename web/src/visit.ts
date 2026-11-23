@@ -6,9 +6,9 @@
 // Preview-only keys are listed too, so every URL control in web/src has a deliberate classification.
 const TEST_KEYS = new Set([
   'animal', 'at', 'break', 'brooks', 'cam', 'camground', 'cap', 'cat', 'church', 'coast', 'damage', 'day',
-  'aiDriver', 'aiDriverCheck', 'airport', 'boss', 'rideAlong', 'demo', 'dir', 'dirt', 'double', 'drlane', 'f', 'fishingCheck', 'trafficCheck', 'wildlife', 'grass', 'hawkesbury', 'home', 'hour', 'hud', 'interior',
-  'jumpCheck', 'knock', 'lawn', 'low', 'mabou', 'maryville', 'mpserver', 'n', 'name', 'pair', 'park', 'photo', 'porch', 'reflections',
-  'relief', 'report', 'res', 'road', 'run', 'scene', 'shadows', 'sidewalks', 'shot', 'still', 'stuffed', 'test',
+  'aiDriver', 'aiDriverCheck', 'airport', 'boss', 'bossLook', 'depot', 'rideAlong', 'demo', 'dir', 'dirt', 'double', 'drlane', 'f', 'fishingCheck', 'trafficCheck', 'wildlife', 'grass', 'hawkesbury', 'home', 'hour', 'hud', 'interior',
+  'jumpCheck', 'knock', 'lawn', 'low', 'mabou', 'maryville', 'mpserver', 'n', 'name', 'pair', 'park', 'photo', 'porch', 'postOffice', 'prince', 'reflections',
+  'relief', 'report', 'res', 'road', 'run', 'scene', 'shadows', 'sidewalks', 'ptIndustry', 'shot', 'still', 'stuffed', 'test',
   'quarry', 'throw', 'trees', 'village', 'x', 'yard', 'yardProps', 'lotprops',
   'canvasAA', 'clouds', 'finishSamples', 'finishSmooth', 'finishType', 'leaves',
 ]);

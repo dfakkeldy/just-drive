@@ -12,7 +12,14 @@ import { REFUSALS, boardPath, newDevice, rankText, readBoard, type BoardView, ty
 export const BOARD_KEY = 'mmm.board.v1';
 /** The addresses with a board server: the mail game's own. A dev build may name another (?boardserver=, a local test). */
 const HOSTS = ['mmm.fakkeldy.ca', 'localhost', '127.0.0.1'];
-export const VEHICLE_NAMES: Readonly<Record<string, string>> = Object.freeze({ car: 'Mail car', truck: 'Heavy pickup', sxs: 'Side by side' });
+export const VEHICLE_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  car: 'Mail car',
+  truck: 'Heavy pickup',
+  sxs: 'Side by side: sport',
+  'sxs-utility': 'Side by side: utility cab',
+  'sxs-crew': 'Side by side: crew cab',
+  'sxs-cabin': 'Side by side: full cabin',
+});
 const TIMEOUT_MS = 8000;
 const AWAY = 'The board is away just now. Your run and its card are fine. Try later.';
 const CLOSED = 'That run’s day has closed. An earlier try may have reached the board: look for your name.';

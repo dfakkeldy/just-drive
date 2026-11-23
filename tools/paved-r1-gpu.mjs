@@ -11,8 +11,8 @@ export async function pavedR1Gpu(){
  const renderer=new T.WebGLRenderer({antialias:false});renderer.setSize(1,1,false);
  const target=new T.WebGLRenderTarget(1,1),scene=new T.Scene(),camera=new T.Camera(),geo=new T.PlaneGeometry(2,2),pixel=new Uint8Array(4);
  const render=(chunk,height=0)=>{
-  const mat=new T.RawShaderMaterial({glslVersion:T.GLSL3,uniforms:{height:{value:height}},vertexShader:'precision highp float;in vec3 position;void main(){gl_Position=vec4(position,1.0);}',fragmentShader:`precision highp float;uniform float height;out vec4 color;float vnoise(vec2 p){return .5;}float fbm(vec2 p){return .5;}float pavedWeight(vec2 p){return 1.;}float pavedEdge(float v,vec2 p){return v;}float pavedStallPaint(vec2 p,float aa){return 0.;}vec2 pavedClasses(vec2 p){return vec2(1.,0.);}float pavedCarFade(vec2 p){return 1.;}vec3 treeColor(vec2 p,float r,float y,float d){return vec3(0.2);} ${lot}
- void main(){vec2 p=vec2(0.);vec3 albedo=vec3(.1),vWorld=vec3(0.);float cls=3.,canopy=height,hull=0.,fine=.5,red=0.,yel=0.,dist=0.;${chunk}color=vec4(albedo,1.);}`});
+  const mat=new T.RawShaderMaterial({glslVersion:T.GLSL3,uniforms:{height:{value:height}},vertexShader:'precision highp float;in vec3 position;void main(){gl_Position=vec4(position,1.0);}',fragmentShader:`precision highp float;uniform float height;out vec4 color;float vnoise(vec2 p){return .5;}float fbm(vec2 p){return .5;}float pavedWeight(vec2 p){return 1.;}float pavedEdge(float v,vec2 p){return v;}float pavedStallPaint(vec2 p,float aa){return 0.;}vec2 pavedClasses(vec2 p){return vec2(1.,0.);}float pavedCarFade(vec2 p){return 1.;}vec3 treeColor(vec2 p,vec2 w,float b,float d,vec2 f){return vec3(0.2);} ${lot}
+ void main(){vec2 p=vec2(0.);vec3 albedo=vec3(.1),vWorld=vec3(0.);float cls=3.,canopy=height,hull=0.,fine=.5,big=.5,dist=0.;vec2 landFootprint=vec2(0.);${chunk}color=vec4(albedo,1.);}`});
   const mesh=new T.Mesh(geo,mat);scene.add(mesh);renderer.setRenderTarget(target);renderer.render(scene,camera);renderer.readRenderTargetPixels(target,0,0,1,1,pixel);scene.remove(mesh);mat.dispose();return [...pixel].slice(0,3);
  };
  try{

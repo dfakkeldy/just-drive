@@ -141,7 +141,7 @@ canvas.save(out+'/'+name+'-stride.png')`,out,name,...files]);
   await read('horseQA.view(6,8,4.4)');await shot('field-farmstead');await contacts('field gallop');
   // All areas load the same unconditional garage entry. Selection/default semantics also have CPU cases.
   await page('title=1&hud=1&q=low');
-  assert.deepEqual(await read('[...document.querySelectorAll("#vehicleChoice button")].map(b=>b.dataset.vehicle)'),['horse','car','bike']);
+  assert.deepEqual(await read('[...document.querySelectorAll("#vehicleChoice button")].map(b=>b.dataset.vehicle)'),['horse','car','sxs','bike','drone']);
   assert.equal(await read('document.querySelector("#vehicleChoice [data-vehicle=horse]").getAttribute("aria-pressed")'),'true');
   assert.doesNotMatch(await read('document.querySelector("#title dl").textContent'),/radio|wiper|plate|repair|trailer/i);
   await shot('vehicle-choice');

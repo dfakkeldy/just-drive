@@ -3,6 +3,7 @@ import { readEra } from './era';
 import { readArea } from './area';
 import { readSite } from './site';
 import { createSxs, SXS_SPEC } from './sxs';
+import { createSxsCabin, createSxsCrew, createSxsUtility, SXS_CABIN_SPEC, SXS_CREW_SPEC, SXS_UTILITY_SPEC } from './sxs-variants';
 import { buildMailCar, preloadMailCar, readyMailCar } from './car-switch';
 import { createTruck, TRUCK_SPEC } from './truck';
 import { createBike, BIKE_SPEC, type Bike } from './bike';
@@ -26,7 +27,10 @@ export interface GarageEntry {
 // The garage order sets the default ride (the first) and the menu, so it differs from RIDE_KINDS on purpose.
 const ENTRIES = [
   { id: 'car', name: 'Mail car', spec: CAR_SPEC, build: buildMailCar, preload: preloadMailCar, ready: readyMailCar },
-  { id: 'sxs', name: 'Side by side', spec: SXS_SPEC, build: mailTrim => createSxs(mailTrim) },
+  { id: 'sxs', name: 'Side by side: sport', spec: SXS_SPEC, build: mailTrim => createSxs(mailTrim) },
+  { id: 'sxs-utility', name: 'Side by side: utility cab', spec: SXS_UTILITY_SPEC, build: mailTrim => createSxsUtility(mailTrim) },
+  { id: 'sxs-crew', name: 'Side by side: crew cab', spec: SXS_CREW_SPEC, build: mailTrim => createSxsCrew(mailTrim) },
+  { id: 'sxs-cabin', name: 'Side by side: full cabin', spec: SXS_CABIN_SPEC, build: mailTrim => createSxsCabin(mailTrim) },
   { id: 'truck', name: 'Heavy pickup', spec: TRUCK_SPEC, build: mailTrim => createTruck(mailTrim) },
   { id: 'horse', name: 'Horse', spec: HORSE_SPEC, build: createHorse },
   { id: 'bike', name: 'Dirt bike', spec: BIKE_SPEC, build: mailTrim => createBike(mailTrim),
@@ -38,12 +42,24 @@ type NoneMissing<Missing extends never> = Missing;
 export type GarageHasEveryRideKind = NoneMissing<Exclude<RideId, typeof ENTRIES[number]['id']>>;
 export const GARAGE: readonly GarageEntry[] = ENTRIES;
 export const VEHICLE_KEY = 'mmm.vehicle';
-/** Address bar wins in every mode. A saved garage id is read only for explore; ordinary mail keeps the car. */
+/** True when Just Drive (explore mode) chose the standalone camera drone. Never active in mail play. */
+export function isDroneVehicle(params: URLSearchParams, explore = false, storage: () => Pick<Storage, 'getItem'> = () => localStorage): boolean {
+  if (!explore) return false;
+  const rawCar = params.get('car');
+  const param = params.get('vehicle') ?? (rawCar === 'drone' || GARAGE.some(entry => entry.id === rawCar) ? rawCar : null);
+  if (param === 'drone') return true;
+  const period = periodRides(params);
+  if (GARAGE.some(entry => entry.id === param && (entry.id !== 'horse' || period))) return false;
+  try { return storage().getItem(VEHICLE_KEY) === 'drone'; } catch { return false; }
+}
+/** Address bar wins in every mode (`?vehicle=` or `?car=`). A saved garage id is read only for explore; ordinary mail keeps the car. */
 export function readVehicle(params: URLSearchParams, explore = false, storage: () => Pick<Storage, 'getItem'> = () => localStorage): GarageEntry {
   // The horse is the 1884 ride only: its hoof contact needs the era's camera-free tile selection (terrain.ts),
   // so an address or saved choice of 'horse' outside 1884 gives the car, as it did before the horse existed.
   const period = periodRides(params), allowed = (entry?: GarageEntry) => entry && (entry.id !== 'horse' || period) ? entry : undefined;
-  const query = allowed(GARAGE.find(entry => entry.id === params.get('vehicle'))); if (query) return query;
+  const rawCar = params.get('car');
+  const param = params.get('vehicle') ?? (GARAGE.some(entry => entry.id === rawCar) ? rawCar : null);
+  const query = allowed(GARAGE.find(entry => entry.id === param)); if (query) return query;
   if (explore) { try { const saved = storage().getItem(VEHICLE_KEY), entry = allowed(GARAGE.find(e => e.id === saved)); if (entry) return entry; } catch { /* private window */ } }
   return period ? GARAGE.find(e => e.id === 'horse')! : GARAGE[0];
 }

@@ -61,6 +61,10 @@ export const ENGINES: Readonly<Record<EngineKind, EngineProfile>> = {
     upshift: .74, flare: .62, ceiling: 750, upper: 0, rasp: 2.5, train: V8 },
   // A parallel twin on a belt (CVT): the engine speed follows the pedal, not the road.
   sxs: { idle: 1200, redline: 7200, pulses: 1, wave: 'sawtooth', level: .5, bright: 8, tyres: 1 },
+  // Utility, crew and full-cabin side by sides: lower-revving work/touring twins on a belt (CVT).
+  'sxs-utility': { idle: 1050, redline: 6400, pulses: 1, wave: 'sawtooth', level: .48, bright: 6.5, tyres: 1.05, ceiling: 4200 },
+  'sxs-crew': { idle: 1000, redline: 6100, pulses: 1, wave: 'sawtooth', level: .50, bright: 6.0, tyres: 1.1, ceiling: 3800 },
+  'sxs-cabin': { idle: 1050, redline: 6600, pulses: 1, wave: 'sawtooth', level: .44, bright: 6.2, tyres: 1.05, ceiling: 4000 },
   // A two-stroke single, five close gears: buzzy and high. Top gear reaches the redline at 45.3 m/s, so at the bike's top
   // speed (41.7 m/s on pavement) it turns at 92% of the redline, not on the limiter.
   bike: { idle: 1500, redline: 9800, pulses: 1, gears: [10.6, 18.1, 25.7, 34.8, 45.3], wave: 'square', level: .42, bright: 9, tyres: .7 },

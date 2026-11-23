@@ -13,7 +13,7 @@ console.warn = warn;
 assert.equal(warnings.length, 4);
 // The areas of each flag that is not Mabou's alone. The site flags keep the AREA.id tests main.ts made before them.
 const owners = { quarry: ['westbay'], home: ['judique'], church: ['judique'], judiqueVillage: ['judique'], drLane: ['judique'], november: ['mabou', 'porthood', 'judique'],
-  hawkesbury: ['pointtupper'], maryville: ['porthood'], airport: ['pointtupper'], ptInfrastructure: ['pointtupper'], canal: ['cansocauseway'] };
+  hawkesbury: ['pointtupper'], prince: ['pointtupper'], maryville: ['porthood'], depot: ['porthood'], airport: ['pointtupper'], ptInfrastructure: ['pointtupper'], canal: ['cansocauseway'] };
 for (const key of Object.keys(owners)) assert.equal(typeof mabou[key], 'boolean', `${key} is an area flag`);
 for (const a of AREAS) for (const key of Object.keys(a).filter(key => typeof a[key] === 'boolean')) {
   assert.equal(a[key], (owners[key] ?? ['mabou']).includes(a.id), `${a.id}.${key}`);

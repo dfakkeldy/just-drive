@@ -41,13 +41,13 @@
 
   "pointtupper-start/desktop-explore-truck":{"calls":1001,"triangles":4674260,"geometries":286,"textures":161,"programs":47,"readyTiles":355,"requests":658},
 
-  "pointtupper-start/phone-explore-truck":{"calls":203,"triangles":1123375,"geometries":120,"textures":57,"programs":17,"readyTiles":88,"requests":206},
+  "pointtupper-start/phone-explore-truck":{"calls":205,"triangles":1144195,"geometries":122,"textures":57,"programs":17,"readyTiles":88,"requests":206},
 
-  "quarry-air/desktop-explore-truck":{"calls":846,"triangles":4398223,"geometries":169,"textures":168,"programs":31,"readyTiles":344,"requests":603},
+  "quarry-air/desktop-explore-truck":{"calls":844,"triangles":4152803,"geometries":168,"textures":168,"programs":32,"readyTiles":344,"requests":603},
 
   "quarry-air/phone-explore-truck":{"calls":97,"triangles":927911,"geometries":54,"textures":51,"programs":14,"readyTiles":72,"requests":148},
 
-  "quarry-gate/desktop-explore-truck":{"calls":644,"triangles":4714156,"geometries":198,"textures":176,"programs":36,"readyTiles":342,"requests":616},
+  "quarry-gate/desktop-explore-truck":{"calls":645,"triangles":4487276,"geometries":197,"textures":176,"programs":37,"readyTiles":342,"requests":616},
 
   "quarry-gate/phone-explore-truck":{"calls":133,"triangles":1325613,"geometries":98,"textures":56,"programs":22,"readyTiles":194,"requests":337},
 
