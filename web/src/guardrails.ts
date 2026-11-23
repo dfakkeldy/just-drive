@@ -8,7 +8,7 @@ import { surveyedRailDamage, damageShape, DENT } from './guardrail-damage';
 import { railAccess } from './guardrail-access';
 import { planRailSteps, railPoint, roadLength, nearCoast, railPosts, railMetres, RAIL, type RailSpan } from './guardrail-rules';
 import { LOOK, RailMesher, railMaterial } from './guardrail-look';
-import { ponyTrussSolids } from './november-bridges';
+import { PONY_TRUSS, ponyTrussSpan, type PonyTrussSpan } from './november-bridges';
 import { pushOut, type Pushable, type Solid } from './parked';
 
 interface Chunk { road: Road; start: number; end: number; x: number; z: number; revision: number; mesh: THREE.Mesh | null; spans: RailSpan[]; solids: Solid[]; shape?: string; low?: boolean }
@@ -25,7 +25,7 @@ const WEIGHTS = (() => { let row = [1]; for (let n = 0; n < LOOK.smooth * 2; n++
 export class Guardrails {
   readonly group = new THREE.Group();
   private readonly chunks: Chunk[] = [];
-  private readonly bridgeSolids: Solid[] = [];
+  private readonly bridgeSpans: PonyTrussSpan[] = [];
   private readonly cells = new Map<number, Chunk[]>();
   private readonly materials: (THREE.MeshLambertMaterial | undefined)[] = [];
   readonly audit = { planned: 0, pending: 0, samples: 0, queries: 0 };
@@ -40,7 +40,7 @@ export class Guardrails {
     this.access = railAccess(this.roads, this.planning.ground, this.terrain.manifest?.village, true);
     if (terrain.cartRoads) return;
     for (const road of roads.roads) {
-      if (road.bridge) { if (road.ponyTruss) this.bridgeSolids.push(...ponyTrussSolids(road)); continue; }
+      if (road.bridge) { if (road.ponyTruss) { const span = ponyTrussSpan(road); if (span) this.bridgeSpans.push(span); } continue; }
       if (road.kind > 3 || railwayRoad(road)) continue;
       const len = roadLength(road);
       for (let index = 0; index * CHUNK < len; index++) {
@@ -285,11 +285,31 @@ export class Guardrails {
     }
     return pending ? 'pending' : 'clear';
   }
+  /** Check horizontal bounds and vertical overlap with the built truss before pushing against pony-truss rails. */
+  private pushBridge(car: Pushable, dt: number): void {
+    const reach = (car.spec?.envelope.reach ?? 3.5) + (car.spec?.envelope.radius ?? 1.4);
+    const carHeight = car.spec?.height ?? 1.8;
+    for (let i = 0; i < this.bridgeSpans.length; i++) {
+      const b = this.bridgeSpans[i];
+      const dx = car.x - b.ax, dz = car.z - b.az;
+      const along = dx * b.ux + dz * b.uz;
+      if (along < -reach || along > b.span + reach) continue;
+      const across = -dx * b.uz + dz * b.ux;
+      if (Math.abs(across) > PONY_TRUSS.outerHalf + reach) continue;
+      if (car.y !== undefined) {
+        const t = Math.max(0, Math.min(1, along / b.span));
+        const deckY = this.roads.bridgeElevation(b.roadId, t) ?? this.roads.deckHeight(car.x, car.z);
+        if (deckY === null) continue;
+        if (car.y + carHeight < deckY - 0.15 || car.y > deckY + b.height + PONY_TRUSS.chordSize / 2) continue;
+      }
+      pushOut(car, b.solids, true, dt);
+    }
+  }
   /** Push a body out of only the pony-truss bridge rails (used by soloContacts for solo trailers). */
   blockBridge(car: Pushable, dt = 1 / 120): void {
-    if (!this.bridgeSolids.length) return;
+    if (!this.bridgeSpans.length) return;
     const heading = car.heading;
-    pushOut(car, this.bridgeSolids, true, dt);
+    this.pushBridge(car, dt);
     const yaw = Math.atan2(Math.sin(car.heading - heading), Math.cos(car.heading - heading));
     const limitedYaw = Math.max(-Math.PI / 6 * dt, Math.min(Math.PI / 6 * dt, yaw));
     car.heading = heading + limitedYaw;
@@ -301,7 +321,7 @@ export class Guardrails {
     const x = Math.floor(car.x / CHUNK), z = Math.floor(car.z / CHUNK);
     for (let j = z - 1; j <= z + 1; j++) for (let i = x - 1; i <= x + 1; i++)
       for (const c of this.cells.get(cellKey(i, j)) ?? NO_CHUNKS) pushOut(car, c.solids, false, dt);
-    if (this.bridgeSolids.length) pushOut(car, this.bridgeSolids, true, dt);
+    if (this.bridgeSpans.length) this.pushBridge(car, dt);
     const yaw = Math.atan2(Math.sin(car.heading - heading), Math.cos(car.heading - heading));
     const limitedYaw = Math.max(-Math.PI / 6 * dt, Math.min(Math.PI / 6 * dt, yaw));
     car.heading = heading + limitedYaw;

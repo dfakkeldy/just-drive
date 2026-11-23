@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { Terrain } from './terrain';
 import { eraRoadHalf } from './era';
 import { timberBridge, periodBridgePlane, prepareTimberPlans, timberPlan, timberGroundPoints } from './eras/timber-bridge';
-import { buildPonyTrussBridge, inPonyTrussBounds, ponyTrussBankState, ponyTrussDeckHeight, type PonyTrussAprons } from './november-bridges';
+import { buildPonyTrussBridge } from './november-bridges';
 
 export interface Road {
   id: number;
@@ -22,9 +22,9 @@ export interface Road {
 export interface RoadHit { road: Road; dist: number; x: number; z: number; heading: number; seg: number; t: number }
 
 const CELL = 64;
-const bridgeRoad = (road: Road) => road.bridge && !road.ponyTruss;
+const bridgeRoad = (road: Road) => road.bridge;
 
-interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number; revision?: number; bankSig?: number; drawnSig?: number; aprons?: PonyTrussAprons }
+interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number }
 
 /** The road network: name lookup, a place to put the car back, and bridge decks (the LiDAR ground has no bridges). */
 const NO_SEGMENTS: [number, number][] = [];   // one shared empty bucket: a query over empty cells makes no arrays
@@ -46,7 +46,6 @@ export class Roads {
   private columns = 0;
   private maxHalfWidth = 0;
   private decks = new Map<number, Deck>();
-  private ponyTrussRoads: Road[] = [];
   private deckMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3c, side: THREE.DoubleSide });
   // Bridges on tracks and on the rail trail are timber, not asphalt.
   private timberMat = new THREE.MeshLambertMaterial({ color: 0xb8a482, side: THREE.DoubleSide });
@@ -58,19 +57,6 @@ export class Roads {
   private updateRevision=-1;private updateX=Infinity;private updateZ=Infinity;
   private periodMat: THREE.MeshLambertMaterial | null = null;
 
-  // Explicit, caller-independent loaded terrain sampler: never reads camera-selected drawn tiles so camera LOD never shifts wheel support.
-  private readonly readTerrainHeight = (x: number, z: number): number | null => {
-    const mesh = this.terrain.meshHeightAt?.(x, z, false) ?? null;
-    const surf = this.terrain.surfaceAt(x, z)?.ground ?? null;
-    if (mesh !== null && surf !== null) return Math.max(mesh, surf);
-    return mesh ?? surf ?? this.terrain.heightAt(x, z);
-  };
-  private readonly readDrawnHeight = (x: number, z: number): number | null =>
-    this.terrain.meshHeightAt?.(x, z, true) ?? this.readTerrainHeight(x, z);
-  private readonly readSurfaceLevel = (x: number, z: number): number => this.terrain.surfaceAt(x, z)?.level ?? 0;
-  private readonly readDrawnLevel = (x: number, z: number): number =>
-    typeof this.terrain.drawnLevelAt === 'function' ? (this.terrain.drawnLevelAt(x, z) ?? 0) : (this.terrain.surfaceAt(x, z)?.level ?? 0);
-
   private eraBridgeHit:RoadHit|null=null;private bridgeQuery=0;
 
   constructor(data: { roads: Road[] },
@@ -79,7 +65,6 @@ export class Roads {
       if (terrain.cartRoads && r.kind === 5) continue;
       const road: Road = { ...r, halfWidth: terrain.cartRoads ? eraRoadHalf(r.kind, r.halfWidth) : r.halfWidth, pts: r.pts.map(([e, n]) => [e - village[0], village[1] - n]) };
       this.roads.push(road);
-      if (road.ponyTruss) this.ponyTrussRoads.push(road);
       this.maxHalfWidth = Math.max(this.maxHalfWidth, road.halfWidth);
       for (const [x, z] of road.pts) {
         const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
@@ -194,19 +179,9 @@ export class Roads {
 
   /** Height of a bridge deck under a point, or null when the point is not on a bridge. */
   deckHeight(x: number, z: number): number | null {
-    // Reject off-deck pony-truss queries before any RoadHit allocation or terrain lookup.
-    if (!this.terrain.cartRoads && this.ponyTrussRoads.length) {
-      for (let i = 0; i < this.ponyTrussRoads.length; i++) {
-        const road = this.ponyTrussRoads[i];
-        if (!inPonyTrussBounds(road, x, z)) continue;
-        const deck = this.deck(road);
-        return deck && deck.aprons ? ponyTrussDeckHeight(road, deck.y0, deck.y1, x, z, deck.aprons) : null;
-      }
-    }
     // Empty bridge buckets skip all ordinary road segments and deck work.
     const hit = this.query(this.bridgeCells, x, z, 12, bridgeRoad);
-    if (!hit) return null;
-    if (!this.terrain.cartRoads && hit.dist > hit.road.halfWidth + 1.2) return null;
+    if (!hit || !this.terrain.cartRoads && hit.dist > hit.road.halfWidth + 1.2) return null;
     const deck = this.deck(hit.road);
     if (!deck) return null;
     const [ax, az] = hit.road.pts[hit.seg], [bx, bz] = hit.road.pts[hit.seg + 1];
@@ -224,6 +199,12 @@ export class Roads {
     if (deck) deck.mesh.visible = visible;
   }
 
+  /** Built deck elevation at fraction t along a bridge span, or null before the deck is built. */
+  bridgeElevation(id: number, t: number): number | null {
+    const deck = this.decks.get(id);
+    return deck ? deck.y0 + (deck.y1 - deck.y0) * Math.max(0, Math.min(1, t)) : null;
+  }
+
   /** Build decks for bridges near the camera, once the fine terrain at both ends has loaded. */
   update(cam: THREE.Vector3) {
     this.guardrails?.update(cam);
@@ -237,24 +218,16 @@ export class Roads {
       return;
     }
     for (const r of this.roads) {
-      if (!r.bridge) continue;
-      const have = this.decks.get(r.id);
-      if (!r.ponyTruss && (have?.level ?? 0) >= 8) continue;
+      if (!r.bridge || (this.decks.get(r.id)?.level ?? 0) >= 8) continue;
       const [x, z] = r.pts[0];
-      if (Math.hypot(x - cam.x, z - cam.z) < 1500) this.deck(r, !!r.ponyTruss);
+      if (Math.hypot(x - cam.x, z - cam.z) < 1500) this.deck(r);
     }
   }
 
-  private deck(road: Road, checkDrawn = false): Deck | null {
+  private deck(road: Road): Deck | null {
     if(this.terrain.cartRoads)return this.eraDeck(road);
-    const have = this.decks.get(road.id), rev = this.terrain.dataRevision;
-    // Wheel queries (checkDrawn=false) stay on the O(1) cache whenever terrain data revision is unchanged.
-    if (have && !checkDrawn && (have.level >= 8 || (rev !== undefined && have.revision === rev))) return have;
-    let drawn: { minLevel: number; sig: number } | null = null;
-    if (have && checkDrawn && road.ponyTruss) {
-      drawn = ponyTrussBankState(road, this.readDrawnLevel);
-      if ((drawn.minLevel === 0 || drawn.sig === have.drawnSig) && (have.level >= 8 || (rev !== undefined && have.revision === rev))) return have;
-    }
+    const have = this.decks.get(road.id);
+    if (have && have.level >= 8) return have;
     const p = road.pts, n = p.length;
     // The banks: a few metres past each end of the bridge, along its line.
     const end = (a: [number, number], b: [number, number]) => {
@@ -264,31 +237,19 @@ export class Roads {
     const s0 = end(p[0], p[1]), s1 = end(p[n - 1], p[n - 2]);
     // Level 6 (4 m) is the finest ground some bridges ever get; finer data, when it comes, rebuilds the deck.
     if (!s0 || !s1 || s0.level < 6 || s1.level < 6) return have ?? null;
-    const bank = road.ponyTruss ? ponyTrussBankState(road, this.readSurfaceLevel) : null;
-    if (road.ponyTruss && !drawn) drawn = ponyTrussBankState(road, this.readDrawnLevel);
-    const level = bank ? Math.min(s0.level, s1.level, bank.minLevel) : Math.min(s0.level, s1.level);
-    const drawnChanged = !!bank && drawn!.minLevel > 0 && drawn!.sig !== have?.drawnSig;
-    const bankChanged = bank ? (bank.sig !== have?.bankSig || level > (have?.level ?? 0)) : level > (have?.level ?? 0);
+    const level = Math.min(s0.level, s1.level);
     if (have) {
-      if (!bankChanged && !drawnChanged) { have.revision = rev; return have; }
+      if (level <= have.level) return have;
       this.group.remove(have.mesh);
       have.mesh.geometry.dispose();
     }
     const cum = [0];
     for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
-    const len = cum[n - 1] || 1;
-    let y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
+    const len = cum[n - 1] || 1, y0 = s0.ground + 0.05, y1 = s1.ground + 0.05;
     let mesh: THREE.Mesh;
-    let aprons: PonyTrussAprons | undefined;
     if (road.ponyTruss) {
-      // Reuse wheel-support apron grids on camera-only LOD switches so camera movement never alters wheel height or repeats support queries.
-      const reuseSupport = have && !bankChanged && have.aprons ? { aprons: have.aprons, y0: have.y0, y1: have.y1 } : undefined;
-      const drawnLags = drawn!.minLevel > 0 && drawn!.sig !== bank!.sig && typeof this.terrain.meshHeightAt === 'function';
-      const built = buildPonyTrussBridge(p, y0, y1, len, this.readTerrainHeight, drawnLags ? this.readDrawnHeight : this.readTerrainHeight, reuseSupport);
-      y0 = built.y0; y1 = built.y1;
-      aprons = built.aprons;
       this.periodMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      mesh = new THREE.Mesh(built.geometry, this.periodMat);
+      mesh = new THREE.Mesh(buildPonyTrussBridge(p, y0, y1, len), this.periodMat);
       mesh.name = 'pony-truss-' + road.id;
       mesh.castShadow = mesh.receiveShadow = true;
     } else {
@@ -317,7 +278,7 @@ export class Roads {
       mesh = new THREE.Mesh(geo, road.kind >= 4 ? this.timberMat : this.deckMat);
     }
     this.group.add(mesh);
-    const deck: Deck = { road, y0, y1, len, cum, mesh, level, revision: rev, bankSig: bank?.sig, drawnSig: drawn?.minLevel ? drawn.sig : have?.drawnSig, aprons };
+    const deck: Deck = { road, y0, y1, len, cum, mesh, level };
     this.decks.set(road.id, deck);
     return deck;
   }

@@ -4,20 +4,18 @@ import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { Buildings, buildingSites } from '../web/src/buildings.ts';
 import { baxtersCoveBuildingArt, littleMabouBuildingArt, NovemberBuildings, novemberFootprints, TRAILHEAD_FENCE } from '../web/src/november-buildings.ts';
 import { BAXTERS_COVE_LOT, littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
-import { littleMabouPonyTruss, mabouRoadOverrides, PONY_TRUSS, registerRailContacts } from '../web/src/november-bridges.ts';
+import { littleMabouPonyTruss, mabouRoadOverrides, PONY_TRUSS, ponyTrussHeight, registerRailContacts } from '../web/src/november-bridges.ts';
 import { AreaContacts } from '../web/src/world-contacts.ts';
 import { Vehicle } from '../web/src/vehicle.ts';
 import { Towing } from '../web/src/towing.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
 import { TRUCK_SPEC } from '../web/src/truck.ts';
-import { TRAILER_SPEC } from '../web/src/trailer.ts';
 import { WHARF_SOURCES } from '../web/src/wharf-source.ts';
 import { areaPlaces, nearestPlacement, placesFor } from '../web/src/places.ts';
 import { planRails, railPoint } from '../web/src/guardrail-rules.ts';
 import { railLand } from './guardrail-land.mjs';
-import { png } from './quarry-height-read.mjs';
 import { Roads } from '../web/src/roads.ts';
-import { drawnRoadBytes, paintSiteSurface, Terrain } from '../web/src/terrain.ts';
+import { drawnRoadBytes, paintSiteSurface } from '../web/src/terrain.ts';
 
 const read = (dir, file) => JSON.parse(readFileSync(`data/baked/${dir}/${file}.json`, 'utf8'));
 const byte = (sample, flags) => {
@@ -225,68 +223,41 @@ for (const {a, b, side} of added) {
   for (const other of mabouRoads.roads.filter(r => r.id !== 45 && r.id !== 46)) {
     assert.equal(littleMabouPonyTruss(other), other, `road ${other.id} stays unchanged`);
   }
-  // Real baked Mabou LiDAR heights via railLand() so bridge approaches and drops are tested on actual terrain.
-  const makeRealTerrain = (exag, level = 8, counters = null) => ({
+  const makeRealTerrain = (exag, level = 8) => ({
     level, manifest: mabouManifest, dataRevision: 1, exag, seaLevel: -0.2, low: false,
-    heightAt: (x, z) => { if (counters) counters.height++; const h = land.ground(x, z, true); return h === null ? null : h > -0.2 ? -0.2 + (h + 0.2) * exag : h; },
-    surfaceAt(x, z) { if (counters) counters.surface++; const s = land.sample(x, z, true); if (!s) return null; const g = s.height > -0.2 ? -0.2 + (s.height + 0.2) * exag : s.height; return { ground: g, level: Math.min(level, s.level), kind: 2, halfWidth: 3, roadDist: 0, canopy: s.canopy, washboard: false }; },
+    heightAt: (x, z) => { const h = land.ground(x, z, true); return h === null ? null : h > -0.2 ? -0.2 + (h + 0.2) * exag : h; },
+    surfaceAt(x, z) { const s = land.sample(x, z, true); if (!s) return null; const g = s.height > -0.2 ? -0.2 + (s.height + 0.2) * exag : s.height; return { ground: g, level: Math.min(level, s.level), kind: 2, halfWidth: 3, roadDist: 0, canopy: s.canopy, washboard: false }; },
     withContactHeight: (_, read) => read(),
     withGroundContact: (_, read) => read(),
   });
-  // Off-deck and cached level-7 on-deck queries must do zero terrain lookups and allocate zero RoadHits; revision bump refreshes.
-  {
-    const counts = { surface: 0, height: 0 };
-    const t7 = makeRealTerrain(1.5, 7, counts);
-    const missNet = new Roads({ roads: tagged }, mabouManifest.village, t7);
-    const origQuery = missNet.query.bind(missNet);
-    let queryHits = 0;
-    missNet.query = (...args) => { const hit = origQuery(...args); if (hit) queryHits++; return hit; };
+  // Exact baseline deck-physics preservation: Roads.deckHeight() is Object.is identical to untagged origin/main at both 1.5x and 3.0x.
+  for (const exag of [1.5, 3.0]) {
+    const t = makeRealTerrain(exag, 8);
+    const baselineNet = new Roads(mabouRoads, mabouManifest.village, t);
+    const ponyNet = new Roads({ roads: tagged }, mabouManifest.village, t);
     for (const id of [45, 46]) {
-      const r = missNet.roads.find(x => x.id === id);
+      const r = ponyNet.roads.find(x => x.id === id);
       const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
       const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
-      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
-      for (let i = 0; i < 100; i++) {
-        assert.equal(missNet.deckHeight(mx - uz * 10, mz + ux * 10), null, `bridge ${id} 10 m off-deck returns null`);
+      for (const s of [-6, -4.1, -3, -1, 0, span * 0.25, span * 0.5, span * 0.75, span, span + 1, span + 3, span + 4.1, span + 6]) {
+        for (const offset of [-4.5, -3.0, -2.0, 0, 2.0, 3.0, 4.5]) {
+          const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
+          assert.ok(Object.is(ponyNet.deckHeight(x, z), baselineNet.deckHeight(x, z)), `bridge ${id} exag=${exag} deckHeight preserves baseline at s=${s.toFixed(1)}, off=${offset}`);
+        }
       }
     }
-    assert.equal(queryHits, 0, `off-deck queries allocate zero RoadHit objects (got ${queryHits})`);
-    assert.equal(counts.surface, 0, `off-deck queries trigger zero surfaceAt calls (got ${counts.surface})`);
-    assert.equal(counts.height, 0, `off-deck queries trigger zero heightAt calls (got ${counts.height})`);
-    // Build level-7 deck once, then confirm 100 cached on-deck queries make zero terrain lookups or RoadHit queries.
-    const b46 = missNet.roads.find(x => x.id === 46);
-    const b46MidX = (b46.pts[0][0] + b46.pts[b46.pts.length - 1][0]) / 2;
-    const b46MidZ = (b46.pts[0][1] + b46.pts[b46.pts.length - 1][1]) / 2;
-    assert.ok(Number.isFinite(missNet.deckHeight(b46MidX, b46MidZ)), 'level-7 deck builds on first on-deck query');
-    const meshRev1 = missNet.group.children.find(c => c.name === 'pony-truss-46');
-    counts.surface = counts.height = queryHits = 0;
-    for (let i = 0; i < 100; i++) {
-      assert.ok(Number.isFinite(missNet.deckHeight(b46MidX, b46MidZ)), 'cached level-7 on-deck query stays finite');
-    }
-    assert.equal(queryHits, 0, `cached on-deck queries allocate zero RoadHit objects (got ${queryHits})`);
-    assert.equal(counts.surface, 0, `cached level-7 on-deck queries trigger zero surfaceAt calls (got ${counts.surface})`);
-    assert.equal(counts.height, 0, `cached level-7 on-deck queries trigger zero heightAt calls (got ${counts.height})`);
-    // When terrain streams finer level-8 tiles (dataRevision advances), deck re-samples and rebuilds once.
-    t7.level = 8;
-    const prevSurfaceAt = t7.surfaceAt;
-    t7.surfaceAt = (x, z) => { const s = prevSurfaceAt(x, z); return s ? { ...s, level: 8 } : null; };
-    t7.dataRevision = 2;
-    assert.ok(Number.isFinite(missNet.deckHeight(b46MidX, b46MidZ)), 'revision bump rebuilds level-8 deck');
-    const meshRev2 = missNet.group.children.find(c => c.name === 'pony-truss-46');
-    assert.notEqual(meshRev2, meshRev1, 'finer tile revision replaces level-7 deck mesh');
-    assert.ok(counts.surface >= 2, 'revision bump re-checks both bank endpoints');
-    for (const child of [...missNet.group.children]) child.geometry?.dispose();
+    for (const child of [...baselineNet.group.children]) child.geometry?.dispose();
+    for (const child of [...ponyNet.group.children]) child.geometry?.dispose();
   }
   const realTerrain = makeRealTerrain(1.5, 8);
+  const baselineNet = new Roads(mabouRoads, mabouManifest.village, realTerrain);
   const net = new Roads({ roads: tagged }, mabouManifest.village, realTerrain);
   const rails = net.guardrails;
   assert.ok(rails, 'modern Mabou roads construct guardrails with pony-truss rail solids');
-  // Exercise the shared production contact registration helper and verify main.ts calls it.
   assert.match(mainSource, /if \(roads\.guardrails\) registerRailContacts\(fleetContacts, soloContacts, roads\.guardrails,/, 'main.ts uses shared registerRailContacts');
   const rig = () => { const n = () => new THREE.Object3D(); return { root: n(), body: n(), steer: { fl: n(), fr: n() }, wheels: { fl: n(), fr: n(), rl: n(), rr: n() }, brakeLights: [] }; };
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
-  const ap = PONY_TRUSS.approach;
   for (const id of [45, 46]) {
     const r = net.roads.find(x => x.id === id);
     const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
@@ -299,26 +270,34 @@ for (const {a, b, side} of added) {
     mesh.updateMatrixWorld(true);
     const pos = mesh.geometry.getAttribute('position'), col = mesh.geometry.getAttribute('color');
     assert.ok(pos && col && pos.array.every(Number.isFinite), `bridge ${id} has finite vertex-coloured geometry`);
-    assert.ok(pos.count / 3 < 1400, `bridge ${id} stays within triangle budget (${pos.count / 3})`);
+    assert.ok(pos.count / 3 < 1000, `bridge ${id} stays within triangle budget (${pos.count / 3})`);
     let maxAboveDeck = -Infinity, maxHalf = 0;
     const y0 = net.deckHeight(ax, az), y1 = net.deckHeight(bx, bz);
     for (let i = 0; i < pos.count; i++) {
       const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
       const along = (px - ax) * ux + (pz - az) * uz;
       const deckAt = y0 + (y1 - y0) * Math.max(0, Math.min(1, along / span));
-      assert.ok(along >= -ap - 0.01 && along <= span + ap + 0.01, `bridge ${id} mesh vertex stays inside approach bounds (${along.toFixed(3)})`);
-      const cr = col.getX(i), cg = col.getY(i), cb = col.getZ(i);
-      const isSteel = cr > 0.15 && !(Math.abs(cr - 0.28) < 0.005 && Math.abs(cg - 0.27) < 0.005 && Math.abs(cb - 0.24) < 0.005);
-      if (isSteel) assert.ok(along >= -1e-4 && along <= span + 1e-4, `bridge ${id} steel vertex stays inside [0, span] (${along.toFixed(3)})`);
+      assert.ok(along >= -1e-4 && along <= span + 1e-4, `bridge ${id} mesh vertex stays inside [0, span] (${along.toFixed(3)})`);
       maxAboveDeck = Math.max(maxAboveDeck, py - deckAt);
       maxHalf = Math.max(maxHalf, Math.abs(-(px - ax) * uz + (pz - az) * ux));
     }
     assert.ok(maxAboveDeck >= 2.0 && maxAboveDeck <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${maxAboveDeck.toFixed(2)} m)`);
     assert.ok(maxHalf < r.halfWidth && maxHalf >= PONY_TRUSS.half, `bridge ${id} is narrow one-lane (${(maxHalf * 2).toFixed(2)} m wide)`);
+    // Rendered asphalt deck along [0, span] matches Roads.deckHeight().
+    for (const s of [0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05]) {
+      for (const offset of [-(PONY_TRUSS.clearHalf - 0.01), -1.0, 0, 1.0, PONY_TRUSS.clearHalf - 0.01]) {
+        const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
+        const y = net.deckHeight(x, z);
+        assert.ok(y !== null, `bridge ${id} supports asphalt at s=${s.toFixed(2)}, offset=${offset}`);
+        ray.set(new THREE.Vector3(x, y + 0.5, z), down);
+        const hit = ray.intersectObject(mesh)[0];
+        assert.ok(hit && Math.abs(hit.point.y - y) < 0.005, `bridge ${id} asphalt mesh matches deckHeight at s=${s.toFixed(2)}, offset=${offset} (diff=${hit ? Math.abs(hit.point.y - y).toFixed(5) : 'miss'})`);
+      }
+    }
     // Verify inner steel rails are tied to every interior upright post AND both inclined end posts (no floating rail).
     const panels = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2);
     const panelLen = span / panels;
-    const trussH = Math.min(2.4, Math.max(2.1, 1.85 + span * 0.015));
+    const trussH = ponyTrussHeight(span);
     const endRailS = panelLen * ((PONY_TRUSS.railHeight - PONY_TRUSS.chordSize / 2) / (trussH - PONY_TRUSS.chordSize / 2));
     const gapMid = (PONY_TRUSS.railInner + 0.07 + PONY_TRUSS.half - PONY_TRUSS.postSize / 2) / 2;
     const endGapMid = (PONY_TRUSS.railInner + 0.07 + PONY_TRUSS.half - PONY_TRUSS.endPostSize / 2) / 2;
@@ -338,96 +317,46 @@ for (const {a, b, side} of added) {
         assert.ok(hits.length > 0, `bridge ${id} side=${side} inclined end post at s=${s.toFixed(2)} has steel bracket tying inner rail`);
       }
     }
-    // Wheel support matches rendered asphalt triangle-for-triangle across the span and off-grid apron points.
-    for (const s of [-ap + 0.05, -2.625, -1.875, -1.125, -0.375, 0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05, span + 0.375, span + 1.125, span + 1.875, span + 2.625, span + ap - 0.05]) {
-      for (const offset of [0, -0.52, 0.52, -1.56, 1.56, -(PONY_TRUSS.clearHalf - 0.01), PONY_TRUSS.clearHalf - 0.01]) {
-        const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
-        const y = net.deckHeight(x, z);
-        assert.ok(y !== null, `bridge ${id} supports asphalt at s=${s.toFixed(3)}, offset=${offset}`);
-        ray.set(new THREE.Vector3(x, y + 0.5, z), down);
-        const hit = ray.intersectObject(mesh)[0];
-        assert.ok(hit && Math.abs(hit.point.y - y) < 1e-4, `bridge ${id} asphalt mesh matches deckHeight at s=${s.toFixed(3)}, offset=${offset} (diff=${hit ? Math.abs(hit.point.y - y).toFixed(6) : 'miss'})`);
-      }
-      for (const offset of [-(PONY_TRUSS.clearHalf + 0.05), PONY_TRUSS.clearHalf + 0.05, -2.75, 2.75]) {
-        const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
-        assert.equal(net.deckHeight(x, z), null, `bridge ${id} gives no wheel support at s=${s.toFixed(3)}, offset=${offset}`);
-      }
-    }
-    for (const s of [-ap - 0.05, -ap - 1.0, span + ap + 0.05, span + ap + 1.0]) {
-      for (const offset of [0, -PONY_TRUSS.half, PONY_TRUSS.half]) {
-        const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
-        assert.equal(net.deckHeight(x, z), null, `bridge ${id} gives no deck support past apron s=${s.toFixed(2)}`);
-        ray.set(new THREE.Vector3(x, 20, z), down);
-        assert.equal(ray.intersectObject(mesh).length, 0, `bridge ${id} has no mesh past apron s=${s.toFixed(2)} offset=${offset}`);
-      }
-    }
-    // Check apron-to-span seam continuity and bank clearance at both default 1.5x and steep 3.0x hill scales.
-    for (const exag of [1.5, 3.0]) {
-      const tScale = exag === 1.5 ? realTerrain : makeRealTerrain(exag, 8);
-      const nScale = exag === 1.5 ? net : new Roads({ roads: tagged }, mabouManifest.village, tScale);
-      const yProbe = nScale.deckHeight(mx, mz);
-      assert.ok(Number.isFinite(yProbe), `bridge ${id} exag=${exag} builds deck`);
-      const mScale = nScale.group.children.find(c => c.name === `pony-truss-${id}`);
-      mScale.updateMatrixWorld(true);
-      for (const joinS of [0, span]) {
-        const apronS = joinS === 0 ? -0.005 : span + 0.005;
-        const spanS = joinS === 0 ? 0.005 : span - 0.005;
-        for (const offset of [-(PONY_TRUSS.clearHalf - 0.01), -1.04, 0, 1.04, PONY_TRUSS.clearHalf - 0.01]) {
-          const xa = ax + ux * apronS - uz * offset, za = az + uz * apronS + ux * offset;
-          const xs = ax + ux * spanS - uz * offset, zs = az + uz * spanS + ux * offset;
-          const ya = nScale.deckHeight(xa, za), ys = nScale.deckHeight(xs, zs);
-          const groundS = tScale.heightAt(xs, zs);
-          ray.set(new THREE.Vector3(xa, ya + 0.5, za), down);
-          const hitA = ray.intersectObject(mScale)[0];
-          ray.set(new THREE.Vector3(xs, ys + 0.5, zs), down);
-          const hitS = ray.intersectObject(mScale)[0];
-          assert.ok(hitA && Math.abs(hitA.point.y - ya) < 1e-4, `bridge ${id} exag=${exag} apron join matches deckHeight`);
-          assert.ok(hitS && Math.abs(hitS.point.y - ys) < 1e-4, `bridge ${id} exag=${exag} span join matches deckHeight`);
-          assert.ok(Math.abs(hitA.point.y - hitS.point.y) < 0.005, `bridge ${id} exag=${exag} join at s=${joinS.toFixed(1)} off=${offset} has zero step (${Math.abs(hitA.point.y - hitS.point.y).toFixed(4)} m)`);
-          assert.ok(ys >= groundS, `bridge ${id} exag=${exag} span join at s=${joinS.toFixed(1)} off=${offset} clears bank (${(ys - groundS).toFixed(4)} m)`);
-        }
-      }
-      // Dense bank-clearance scan across both 3 m aprons so terrain never breaks through asphalt between grid vertices.
-      const clearSpan = PONY_TRUSS.clearHalf - 1e-4;
-      for (const end of [-1, 1]) {
-        for (let di = 0; di <= 20; di++) {
-          const dp = ((ap - 1e-4) * di) / 20, s = end < 0 ? -dp : span + dp;
-          for (let dj = 0; dj <= 16; dj++) {
-            const offset = -clearSpan + (2 * clearSpan * dj) / 16;
-            const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
-            const y = nScale.deckHeight(x, z), g = tScale.heightAt(x, z);
-            assert.ok(y !== null && g !== null && y >= g - 1e-4, `bridge ${id} exag=${exag} end=${end} dp=${dp.toFixed(2)} off=${offset.toFixed(2)} asphalt clears bank (diff=${y === null ? 'null' : (y - g).toFixed(4)} m)`);
-          }
-        }
-      }
-      // Also check the exact east-end Bridge 46 bank ridge spot (2.59 m past span, 1.35 m off centre).
-      if (id === 46) {
-        for (const offset of [-1.35, 1.35]) {
-          const x = ax + ux * (span + 2.59) - uz * offset, z = az + uz * (span + 2.59) + ux * offset;
-          const y = nScale.deckHeight(x, z), g = tScale.heightAt(x, z);
-          assert.ok(y !== null && g !== null && y >= g - 1e-4, `bridge 46 exag=${exag} east +2.59 m off=${offset} clears bank (${(y - g).toFixed(4)} m)`);
-        }
-      }
-      if (nScale !== net) for (const child of [...nScale.group.children]) child.geometry?.dispose();
-    }
-    // Drive a real car across each bridge on real baked terrain in BOTH directions and with lateral offset ±0.5 m.
+    // Drive a real car across each bridge on real baked terrain in BOTH directions with lateral offset ±0.5 m:
+    // clear passes reach the far bank and match untagged baseline deck physics step-for-step.
     for (const dir of [1, -1]) {
       for (const lat of [0, -0.5, 0.5]) {
         const car = new Vehicle(rig(), realTerrain, net, -0.2, CAR_SPEC);
-        const startS = dir > 0 ? -ap - 3 : span + ap + 3, endS = dir > 0 ? span + ap + 2 : -ap - 2;
+        const baseCar = new Vehicle(rig(), realTerrain, baselineNet, -0.2, CAR_SPEC);
+        const startS = dir > 0 ? -6 : span + 6, endS = dir > 0 ? span + 5 : -5;
         const hdg = dir > 0 ? heading : heading + Math.PI;
-        car.place(ax + ux * startS - uz * lat, az + uz * startS + ux * lat, hdg);
-        car.vx = ux * dir * 5; car.vz = uz * dir * 5; car.speed = 5;
-        let airborneSteps = 0, reachedFar = false;
+        for (const v of [car, baseCar]) {
+          v.place(ax + ux * startS - uz * lat, az + uz * startS + ux * lat, hdg);
+          v.vx = ux * dir * 5; v.vz = uz * dir * 5; v.speed = 5;
+        }
+        let reachedFar = false;
         for (let step = 0; step < 1200; step++) {
           car.update(1 / 120, { throttle: 0.25, steer: 0, handbrake: false, touch: false });
+          baseCar.update(1 / 120, { throttle: 0.25, steer: 0, handbrake: false, touch: false });
+          assert.equal(car.x, baseCar.x, `bridge ${id} dir=${dir} lat=${lat} step=${step} x matches baseline`);
+          assert.equal(car.y, baseCar.y, `bridge ${id} dir=${dir} lat=${lat} step=${step} y matches baseline`);
+          assert.equal(car.z, baseCar.z, `bridge ${id} dir=${dir} lat=${lat} step=${step} z matches baseline`);
+          assert.equal(car.airborne, baseCar.airborne, `bridge ${id} dir=${dir} lat=${lat} step=${step} airborne matches baseline`);
           const at = (car.x - ax) * ux + (car.z - az) * uz;
-          if (at >= -ap - 1 && at <= span + ap + 1 && car.airborne) airborneSteps++;
           if (dir > 0 ? at >= endS : at <= endS) { reachedFar = true; break; }
         }
         assert.equal(reachedFar, true, `bridge ${id} dir=${dir} lat=${lat} car reaches far bank`);
-        assert.equal(airborneSteps, 0, `bridge ${id} dir=${dir} lat=${lat} stays grounded across both approaches (${airborneSteps} airborne steps)`);
       }
+    }
+    // Off-height rail checks: probes below the span on terrain and 5 m above the deck must not hit truss rail walls.
+    const underGround = realTerrain.heightAt(mx, mz);
+    for (const [label, probeY] of [['below span', Math.min(underGround, midY - CAR_SPEC.height - 0.5)], ['above truss', midY + 5]]) {
+      const probe = {
+        x: mx - uz * 1.4, z: mz + ux * 1.4, y: probeY, heading,
+        vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC,
+      };
+      const sx = probe.x, sz = probe.z, svx = probe.vx, svz = probe.vz;
+      rails.block(probe, 1 / 120);
+      rails.blockBridge(probe, 1 / 120);
+      assert.equal(probe.x, sx, `bridge ${id} ${label} probe x is not pushed by truss rail`);
+      assert.equal(probe.z, sz, `bridge ${id} ${label} probe z is not pushed by truss rail`);
+      assert.equal(probe.vx, svx, `bridge ${id} ${label} probe vx is not cancelled by truss rail`);
+      assert.equal(probe.vz, svz, `bridge ${id} ${label} probe vz is not cancelled by truss rail`);
     }
     // Shared production registerRailContacts: test Towing.allowsPose, zero extra yaw on active vehicle, and live coupled trailer rail contact.
     for (const mode of ['solo', 'fleet']) {
@@ -437,12 +366,10 @@ for (const {a, b, side} of added) {
       const contacts = mode === 'solo' ? soloContacts : fleetContacts;
       const truck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
       active = truck;
-      // Place truck glancing the rail BEFORE attaching towing, so towing's placement guard doesn't rewrite the pose.
       const glanceYaw = heading + 0.12;
       truck.place(mx - uz * 0.78, mz + ux * 0.78, glanceYaw);
       truck.vx = Math.sin(glanceYaw) * 4; truck.vz = -Math.cos(glanceYaw) * 4; truck.speed = 4;
       truck.update(1 / 120, { throttle: 0, steer: 0, handbrake: false, touch: false });
-      // Simulate a coupled trailer pushing the active truck 3 cm into the rail, then resolve through production contacts.
       truck.x -= uz * 0.03; truck.z += ux * 0.03;
       const preX = truck.x, preZ = truck.z, preHeading = truck.heading;
       contacts.resolve(truck);
@@ -450,7 +377,6 @@ for (const {a, b, side} of added) {
       const extraYaw = Math.abs(Math.atan2(Math.sin(truck.heading - preHeading), Math.cos(truck.heading - preHeading)));
       assert.ok(resolvedMove > 0.01, `bridge ${id} ${mode} active vehicle gets position correction from bridge rail (${resolvedMove.toFixed(4)} m)`);
       assert.equal(extraYaw, 0, `bridge ${id} ${mode} active vehicle gets zero extra rail steering after Vehicle.step()`);
-      // Attach real Towing and verify placement guards + live trailer rail resolution.
       truck.place(mx, mz, heading);
       const towing = new Towing(truck, realTerrain, net, true, false, { contacts }, true, true);
       assert.equal(towing.allowsPose({ x: mx, z: mz, heading }), true, `bridge ${id} ${mode} Towing accepts centred truck+trailer`);
@@ -466,7 +392,6 @@ for (const {a, b, side} of added) {
       const startTruckAlong = (truck.x - ax) * ux + (truck.z - az) * uz;
       const startTrailerAlong = (towing.x - ax) * ux + (towing.z - az) * uz;
       assert.ok(startTrailerAlong > 2 && startTruckAlong < span - 1, `bridge ${id} ${mode} whole rig sits inside [0, span]`);
-      // Turn the trailer slightly outward with glancing velocity into the rail so hitch solve seats its side into the rail while the truck stays clear.
       const preTruckLat = -(truck.x - ax) * uz + (truck.z - az) * ux;
       towing.heading = heading - 0.05;
       truck.vx = (ux * Math.cos(0.08) - uz * Math.sin(0.08)) * 4;
@@ -481,7 +406,6 @@ for (const {a, b, side} of added) {
         const lat = Math.abs(-(body.x - ax) * uz + (body.z - az) * ux);
         assert.ok(lat + body.spec.envelope.radius <= PONY_TRUSS.railInner + 0.02, `bridge ${id} ${mode} contact step keeps body inside rail (${(lat + body.spec.envelope.radius).toFixed(3)})`);
       }
-      // Continue driving forward while steering gently away from the rail: both truck and trailer advance cleanly inside the rails.
       for (let step = 0; step < 90; step++) {
         truck.update(1 / 120, { throttle: 0.4, steer: -0.15, handbrake: false, touch: false });
         towing.step(1 / 120);
@@ -501,276 +425,14 @@ for (const {a, b, side} of added) {
   assert.ok(otherBridge && !otherBridge.ponyTruss, 'Mabou Harbour Road bridge stays generic');
   assert.ok(net.deckHeight(otherBridge.pts[0][0], otherBridge.pts[0][1]) !== null);
   assert.ok(!net.group.children.some(c => c.name === 'pony-truss-50'));
+  for (const child of [...baselineNet.group.children]) child.geometry?.dispose();
   for (const child of [...net.group.children]) child.geometry?.dispose();
-  // Real production Terrain test: caller-independence (outside vs inside withGroundContact), drawn-triangle apron clearance, and separate-bank streaming.
-  {
-    const prevFetch = globalThis.fetch, prevBitmap = globalThis.createImageBitmap, prevCanvas = globalThis.OffscreenCanvas;
-    const prevTexLoad = THREE.TextureLoader.prototype.load;
-    globalThis.fetch = async (url) => new Response(readFileSync(String(url)));
-    globalThis.createImageBitmap = async (blob) => ({ ...png(Buffer.from(await blob.arrayBuffer())), close() {} });
-    globalThis.OffscreenCanvas = class { getContext() { let image; return { clearRect() {}, drawImage(b) { image = b; }, getImageData() { return { data: image.pixels }; } }; } };
-    THREE.TextureLoader.prototype.load = () => new THREE.Texture();
-    const tileKeyAt = (e, n, level) => {
-      const size = mabouManifest.size / 2 ** level;
-      const i = Math.floor((e - mabouManifest.origin[0]) / size), j = Math.floor((mabouManifest.origin[1] - n) / size);
-      return mabouManifest.levels[level]?.includes(`${i}_${j}`) ? [level, i, j] : null;
-    };
-    const loadTile = async (terrain, key) => {
-      await terrain.loadNow(key[0], key[1], key[2]);
-      const tile = terrain.tile(key[0], key[1], key[2]);
-      tile.mesh.visible = true;
-      tile.mesh.material.uniforms.hideQuad.value.set(0, 0, 0, 0);
-    };
-    const bridgeTiles = (id, level) => {
-      const raw = mabouRoads.roads.find(r => r.id === id), seen = new Map();
-      for (const [e, n] of raw.pts) for (const de of [-8, 0, 8]) for (const dn of [-8, 0, 8]) {
-        const k = tileKeyAt(e + de, n + dn, level);
-        if (k) seen.set(k.join('/'), k);
-      }
-      return [...seen.values()];
-    };
-    try {
-      for (const exag of [1.5, 3.0]) {
-        const prodTerrain = new Terrain(mabouManifest, 'data/baked/terrain', {}, exag, -0.2);
-        for (const id of [45, 46]) {
-          for (const k of bridgeTiles(id, 6)) await loadTile(prodTerrain, k);
-          for (const k of bridgeTiles(id, 7)) await loadTile(prodTerrain, k);
-        }
-        // Hide level-6 parents where level-7 children exist so drawnBoundsTile picks level-7 drawn triangles cleanly.
-        for (const id of [45, 46]) for (const k of bridgeTiles(id, 6)) prodTerrain.tile(k[0], k[1], k[2]).mesh.visible = false;
-        const netOutside = new Roads({ roads: tagged }, mabouManifest.village, prodTerrain);
-        const netInside = new Roads({ roads: tagged }, mabouManifest.village, prodTerrain);
-        for (const id of [45, 46]) {
-          const r = netOutside.roads.find(x => x.id === id);
-          const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
-          const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
-          const mx = (ax + bx) / 2, mz = (az + bz) / 2;
-          const yOutMid = netOutside.deckHeight(mx, mz);
-          let yInMid = null;
-          prodTerrain.withGroundContact({ y: 100 }, () => { yInMid = netInside.deckHeight(mx, mz); }, true);
-          assert.equal(yInMid, yOutMid, `bridge ${id} exag=${exag} midspan deckHeight is caller-independent`);
-          const prodMesh = netOutside.group.children.find(c => c.name === `pony-truss-${id}`);
-          prodMesh.updateMatrixWorld(true);
-          const clearSpan = PONY_TRUSS.clearHalf - 1e-4;
-          for (const end of [-1, 1]) {
-            for (let di = 0; di <= 20; di++) {
-              const dp = ((ap - 1e-3) * di) / 20, s = end < 0 ? -dp : span + dp;
-              for (let dj = 0; dj <= 16; dj++) {
-                const offset = -clearSpan + (2 * clearSpan * dj) / 16;
-                const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
-                const yOut = netOutside.deckHeight(x, z), yIn = netInside.deckHeight(x, z);
-                assert.equal(yIn, yOut, `bridge ${id} exag=${exag} apron deckHeight is caller-independent at s=${s.toFixed(2)}, off=${offset.toFixed(2)}`);
-                const drawn = prodTerrain.meshHeightAt(x, z, true), h = prodTerrain.heightAt(x, z);
-                assert.ok(drawn !== null && h !== null && yOut >= Math.max(drawn, h) - 1e-4, `bridge ${id} exag=${exag} end=${end} dp=${dp.toFixed(2)} off=${offset.toFixed(2)} clears drawn triangles (${(yOut - Math.max(drawn, h)).toFixed(4)} m)`);
-              }
-            }
-            // Bound wheel-contact vs rendered-asphalt gap across the traveled lane (including Bridge 45 east 2.26 m).
-            for (const dp of [0.25, 1.15, 2.26, 4.5, ap - 0.05]) {
-              const s = end < 0 ? -dp : span + dp;
-              for (const offset of [-1.0, 0, 1.0]) {
-                const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
-                const y = netOutside.deckHeight(x, z);
-                ray.set(new THREE.Vector3(x, y + 1, z), down);
-                const hit = ray.intersectObject(prodMesh)[0];
-                assert.ok(hit && Math.abs(hit.point.y - y) < 1e-4, `bridge ${id} exag=${exag} end=${end} dp=${dp} off=${offset} asphalt matches wheel contact (${hit ? Math.abs(hit.point.y - y).toFixed(4) : 'miss'} m)`);
-              }
-            }
-            // Check both sides of the outer apron seam on both bridges and both scales (no wall across the lane).
-            const inS = end < 0 ? -(ap - 0.001) : span + (ap - 0.001);
-            const outS = end < 0 ? -(ap + 0.001) : span + (ap + 0.001);
-            const inX = ax + ux * inS, inZ = az + uz * inS, outX = ax + ux * outS, outZ = az + uz * outS;
-            ray.set(new THREE.Vector3(inX, 20, inZ), down);
-            const hitOuter = ray.intersectObject(prodMesh)[0];
-            const drawnOuter = prodTerrain.meshHeightAt(outX, outZ, true);
-            const maxStep = exag <= 1.5 ? 0.08 : 0.14;
-            assert.ok(hitOuter && drawnOuter !== null && Math.abs(hitOuter.point.y - drawnOuter) < maxStep, `bridge ${id} exag=${exag} end=${end} outer seam meets drawn road (${hitOuter?.point.y.toFixed(3)} vs ${drawnOuter?.toFixed(3)})`);
-          }
-        }
-        for (const child of [...netOutside.group.children]) child.geometry?.dispose();
-        for (const child of [...netInside.group.children]) child.geometry?.dispose();
-      }
-      // Separate-bank streaming on Bridge 46 at 3.0x: start with level-6 both banks, then stream ONLY the east bank's level-7 tile.
-      {
-        const streamTerrain = new Terrain(mabouManifest, 'data/baked/terrain', {}, 3.0, -0.2);
-        const l6 = bridgeTiles(46, 6);
-        for (const k of l6) await loadTile(streamTerrain, k);
-        const streamNet = new Roads({ roads: tagged }, mabouManifest.village, streamTerrain);
-        const b46 = streamNet.roads.find(x => x.id === 46);
-        const [ax, az] = b46.pts[0], [bx, bz] = b46.pts[b46.pts.length - 1];
-        const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
-        assert.ok(Number.isFinite(streamNet.deckHeight((ax + bx) / 2, (az + bz) / 2)), 'Bridge 46 builds at level 6');
-        const meshL6 = streamNet.group.children.find(c => c.name === 'pony-truss-46');
-        const raw46 = mabouRoads.roads.find(r => r.id === 46);
-        const eastPt = raw46.pts[raw46.pts.length - 1];
-        const eastL7 = tileKeyAt(eastPt[0] + 3, eastPt[1], 7);
-        assert.ok(eastL7, 'Bridge 46 east bank has a level-7 tile');
-        await loadTile(streamTerrain, eastL7);
-        for (const k of l6) {
-          const parent = streamTerrain.tile(k[0], k[1], k[2]);
-          const q = (eastL7[1] & 1) + ((eastL7[2] & 1) << 1);
-          if (Math.floor(eastL7[1] / 2) === k[1] && Math.floor(eastL7[2] / 2) === k[2]) parent.mesh.material.uniforms.hideQuad.value.setComponent(q, 1);
-        }
-        assert.ok(Number.isFinite(streamNet.deckHeight((ax + bx) / 2, (az + bz) / 2)), 'Bridge 46 refreshes when only east bank upgrades to level 7');
-        const meshL7East = streamNet.group.children.find(c => c.name === 'pony-truss-46');
-        assert.notEqual(meshL7East, meshL6, 'single-bank level-7 stream replaces stale level-6 bridge mesh');
-        for (const offset of [-2.05, 0, 2.05]) {
-          const x = ax + ux * (span + ap - 0.001) - uz * offset, z = az + uz * (span + ap - 0.001) + ux * offset;
-          const y = streamNet.deckHeight(x, z), drawn = streamTerrain.meshHeightAt(x, z, true);
-          assert.ok(y !== null && drawn !== null && y >= drawn - 1e-4, `streamed east apron clears level-7 drawn bank at +${(ap - 0.001).toFixed(3)} m, off=${offset} (${(y - drawn).toFixed(4)} m)`);
-        }
-        for (const child of [...streamNet.group.children]) child.geometry?.dispose();
-      }
-      // Production Terrain.update() selector transition on Bridge 46 at 1.5x: east level-7 cached with siblings pending (level-6 visible) -> siblings ready (level-7 visible).
-      {
-        const selTerrain = new Terrain(mabouManifest, 'data/baked/terrain', {}, 1.5, -0.2);
-        selTerrain.pump = () => {};
-        const raw46 = mabouRoads.roads.find(r => r.id === 46);
-        const eastPt = raw46.pts[raw46.pts.length - 1];
-        const eastL7 = tileKeyAt(eastPt[0] + ap, eastPt[1], 7);
-        assert.ok(eastL7, 'Bridge 46 east bank has level-7 tile');
-        // Load full ancestor chain 0..6 for both Bridge 46 banks plus the single east level-7 tile (without its 3 siblings).
-        const needed = new Map();
-        for (const pt of [raw46.pts[0], eastPt]) {
-          for (let l = 0; l <= 6; l++) {
-            const k = tileKeyAt(pt[0], pt[1], l);
-            if (k) needed.set(k.join('/'), k);
-            // Also include parent's 4 children up to level 6 so level 6 is selectable by visit().
-            if (l < 6 && k) for (let q = 0; q < 4; q++) {
-              const ci = k[1] * 2 + (q & 1), cj = k[2] * 2 + (q >> 1);
-              if (mabouManifest.levels[l + 1]?.includes(`${ci}_${cj}`)) needed.set(`${l + 1}/${ci}/${cj}`, [l + 1, ci, cj]);
-            }
-          }
-        }
-        for (const k of [...needed.values()].sort((a, b) => a[0] - b[0])) await selTerrain.loadNow(k[0], k[1], k[2]);
-        await selTerrain.loadNow(eastL7[0], eastL7[1], eastL7[2]);
-        const selNet = new Roads({ roads: tagged }, mabouManifest.village, selTerrain);
-        // Isolate Roads.deck() lookup counts from unrelated road-guardrail chunk planning.
-        selNet.guardrails.update = () => {};
-        const b46 = selNet.roads.find(x => x.id === 46);
-        const [ax, az] = b46.pts[0], [bx, bz] = b46.pts[b46.pts.length - 1];
-        const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
-        const cam = new THREE.PerspectiveCamera(58, 16 / 9, 0.5, 50000);
-        cam.position.set(bx + ux * 14, 8, bz + uz * 14);
-        cam.lookAt(bx, 2, bz);
-        cam.updateMatrixWorld(true);
-        selTerrain.update(cam);
-        selTerrain.queue.length = 0;
-        selNet.update(cam.position);
-        const edgeInX = ax + ux * (span + ap - 0.002), edgeInZ = az + uz * (span + ap - 0.002);
-        const edgeOutX = ax + ux * (span + ap + 0.002), edgeOutZ = az + uz * (span + ap + 0.002);
-        assert.equal(selTerrain.drawnLevelAt(edgeOutX, edgeOutZ), 6, 'missing siblings keep level 6 selected at Bridge 46 east');
-        const meshPending = selNet.group.children.find(c => c.name === 'pony-truss-46');
-        meshPending.updateMatrixWorld(true);
-        const landL6 = selTerrain.meshHeightAt(edgeOutX, edgeOutZ, true);
-        const supportOut = selTerrain.heightAt(edgeOutX, edgeOutZ);
-        const supportIn = selNet.deckHeight(edgeInX, edgeInZ);
-        ray.set(new THREE.Vector3(edgeInX, 20, edgeInZ), down);
-        const hitL6 = ray.intersectObject(meshPending)[0];
-        assert.ok(hitL6 && Math.abs(hitL6.point.y - landL6) < 0.03, `level-6 selected east apron meets level-6 road (${hitL6?.point.y.toFixed(3)} vs ${landL6?.toFixed(3)})`);
-        assert.ok(supportIn !== null && supportIn >= supportOut - 0.02, `level-6 selected east apron preserves wheel support (${supportIn?.toFixed(3)} vs ${supportOut?.toFixed(3)})`);
-        // Now load the remaining 3 level-7 siblings so production Terrain.update() transitions selection to level 7.
-        const pi = Math.floor(eastL7[1] / 2), pj = Math.floor(eastL7[2] / 2);
-        for (let q = 0; q < 4; q++) {
-          const ci = pi * 2 + (q & 1), cj = pj * 2 + (q >> 1);
-          if (mabouManifest.levels[7]?.includes(`${ci}_${cj}`)) await selTerrain.loadNow(7, ci, cj);
-        }
-        selTerrain.update(cam);
-        selTerrain.queue.length = 0;
-        assert.equal(selTerrain.drawnLevelAt(edgeOutX, edgeOutZ), 7, 'loaded siblings switch production selector to level 7');
-        const origSurf = selTerrain.surfaceAt.bind(selTerrain);
-        const origMesh = selTerrain.meshHeightAt.bind(selTerrain);
-        const origDrawnLvl = selTerrain.drawnLevelAt.bind(selTerrain);
-        let surfCalls = 0, meshCalls = 0, drawnLvlCalls = 0;
-        selTerrain.surfaceAt = (x, z) => { surfCalls++; return origSurf(x, z); };
-        selTerrain.meshHeightAt = (x, z, d) => { meshCalls++; return origMesh(x, z, d); };
-        selTerrain.drawnLevelAt = (x, z) => { drawnLvlCalls++; return origDrawnLvl(x, z); };
-        const supportInL7 = selNet.deckHeight(edgeInX, edgeInZ);
-        const meshReady = selNet.group.children.find(c => c.name === 'pony-truss-46');
-        assert.notEqual(meshReady, meshPending, 'selection transition 6->7 rebuilds Bridge 46 mesh');
-        assert.ok(surfCalls + meshCalls < 1200, `sibling LOD rebuild stays within combined lookup budget (surface=${surfCalls}, mesh=${meshCalls}, total=${surfCalls + meshCalls})`);
-        meshReady.updateMatrixWorld(true);
-        const landL7 = origMesh(edgeOutX, edgeOutZ, true);
-        ray.set(new THREE.Vector3(edgeInX, 20, edgeInZ), down);
-        const hitL7 = ray.intersectObject(meshReady)[0];
-        assert.ok(hitL7 && Math.abs(hitL7.point.y - supportInL7) < 1e-4, `level-7 settled east apron matches wheel contact (${hitL7?.point.y.toFixed(3)} vs ${supportInL7?.toFixed(3)})`);
-        assert.ok(hitL7 && Math.abs(hitL7.point.y - landL7) < 0.08, `level-7 settled east apron meets level-7 road (${hitL7?.point.y.toFixed(3)} vs ${landL7?.toFixed(3)})`);
-        assert.ok(supportInL7 !== null && supportInL7 >= supportOut - 0.02, `level-7 selected east apron preserves wheel support (${supportInL7?.toFixed(3)} vs ${supportOut?.toFixed(3)})`);
-        // Camera-only steady LOD selection (h=1750 selects level 6 while level 7 remains cached): wheel heights stay bit-identical and queries hit O(1) cache.
-        const fixedWheelY = selNet.deckHeight(ax + ux * (span + 0.35) - uz * 1.4, az + uz * (span + 0.35) + ux * 1.4);
-        let prevMesh = meshReady;
-        for (const [stepIdx, h] of [8, 1750, 1750, 8].entries()) {
-          cam.position.y = h; cam.lookAt(bx, 2, bz); cam.updateMatrixWorld(true);
-          selTerrain.update(cam); selTerrain.queue.length = 0;
-          surfCalls = meshCalls = drawnLvlCalls = 0;
-          selNet.update(cam.position);
-          const curMesh = selNet.group.children.find(c => c.name === 'pony-truss-46');
-          if (stepIdx === 2) {
-            assert.equal(curMesh, prevMesh, `steady camera at h=${h} keeps cached pony-truss mesh`);
-            assert.equal(surfCalls, 0, `steady camera at h=${h} makes zero surfaceAt calls in Roads.update (got ${surfCalls})`);
-          }
-          prevMesh = curMesh;
-          assert.ok(surfCalls + meshCalls < 1200, `camera LOD step ${stepIdx} (h=${h}) stays within combined lookup budget (surface=${surfCalls}, mesh=${meshCalls}, total=${surfCalls + meshCalls})`);
-          surfCalls = meshCalls = drawnLvlCalls = 0;
-          for (let i = 0; i < 1000; i++) assert.equal(selNet.deckHeight(ax + ux * (span + 0.35) - uz * 1.4, az + uz * (span + 0.35) + ux * 1.4), fixedWheelY, `camera LOD step ${stepIdx} keeps wheel support identical`);
-          assert.equal(surfCalls, 0, `1000 steady wheel queries at h=${h} make zero surfaceAt calls (got ${surfCalls})`);
-          assert.equal(drawnLvlCalls, 0, `1000 steady wheel queries at h=${h} make zero drawnLevelAt calls (got ${drawnLvlCalls})`);
-        }
-        // Stationary camera facing AWAY from Bridge 46: off-screen drawnLevelAt fallback must make zero surfaceAt calls.
-        cam.position.set(bx + ux * 20, 8, bz + uz * 20);
-        cam.lookAt(bx + ux * 200, 8, bz + uz * 200);
-        cam.updateMatrixWorld(true);
-        selTerrain.update(cam); selTerrain.queue.length = 0;
-        surfCalls = meshCalls = drawnLvlCalls = 0;
-        selNet.update(cam.position);
-        assert.equal(surfCalls, 0, `facing-away camera makes zero surfaceAt calls in Roads.update (got ${surfCalls})`);
-        assert.equal(meshCalls, 0, `facing-away camera triggers zero mesh rebuilds (got ${meshCalls})`);
-        for (const child of [...selNet.group.children]) child.geometry?.dispose();
-      }
-      // 1 cm scan on Bridge 45 east apron at 3.0x (both level 6 and level 7) plus camera LOD wheel-support invariance.
-      for (const lvl of [6, 7]) {
-        const t45 = new Terrain(mabouManifest, 'data/baked/terrain', {}, 3.0, -0.2);
-        t45.pump = () => {};
-        for (const k of bridgeTiles(45, 6)) { await loadTile(t45, k); t45.tile(k[0], k[1], k[2]).mesh.visible = (lvl === 6); }
-        if (lvl === 7) for (const k of bridgeTiles(45, 7)) await loadTile(t45, k);
-        const n45 = new Roads({ roads: tagged }, mabouManifest.village, t45);
-        const b45 = n45.roads.find(x => x.id === 45);
-        const [ax, az] = b45.pts[0], [bx, bz] = b45.pts[b45.pts.length - 1];
-        const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
-        assert.ok(Number.isFinite(n45.deckHeight((ax + bx) / 2, (az + bz) / 2)));
-        for (let di = 0; di <= Math.round(ap * 100); di++) {
-          const dp = ((ap - 0.001) * di) / Math.round(ap * 100), s = span + dp;
-          for (const offset of [-2.079, -1.767, -1.4, -1.35, -0.8, 0, 0.8, 1.35, 1.4, 1.767, 2.079]) {
-            const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
-            const y = n45.deckHeight(x, z), g = t45.heightAt(x, z), d = t45.meshHeightAt(x, z, true);
-            assert.ok(y !== null && g !== null && d !== null && y >= Math.max(g, d) - 1e-4, `bridge 45 3x lvl=${lvl} east dp=${dp.toFixed(3)} off=${offset} clears wheel support (${(y - Math.max(g, d)).toFixed(4)} m)`);
-          }
-        }
-        if (lvl === 7) {
-          // Verify camera LOD change (drawn level 7 -> 6 -> 7 with same tiles loaded) never shifts wheel support on Bridge 45 at 3x.
-          const probeX = ax + ux * (span + 0.35) - uz * 1.4, probeZ = az + uz * (span + 0.35) + ux * 1.4;
-          const yBefore = n45.deckHeight(probeX, probeZ);
-          for (const k of bridgeTiles(45, 7)) t45.tile(k[0], k[1], k[2]).mesh.visible = false;
-          for (const k of bridgeTiles(45, 6)) t45.tile(k[0], k[1], k[2]).mesh.visible = true;
-          n45.update(new THREE.Vector3(bx, 1750, bz));
-          assert.equal(n45.deckHeight(probeX, probeZ), yBefore, 'Bridge 45 3x wheel support stays identical when camera switches drawn level 7->6');
-          for (const k of bridgeTiles(45, 6)) t45.tile(k[0], k[1], k[2]).mesh.visible = false;
-          for (const k of bridgeTiles(45, 7)) t45.tile(k[0], k[1], k[2]).mesh.visible = true;
-          n45.update(new THREE.Vector3(bx, 8, bz));
-          assert.equal(n45.deckHeight(probeX, probeZ), yBefore, 'Bridge 45 3x wheel support stays identical when camera switches drawn level 6->7');
-        }
-        for (const child of [...n45.group.children]) child.geometry?.dispose();
-      }
-    } finally {
-      globalThis.fetch = prevFetch; globalThis.createImageBitmap = prevBitmap; globalThis.OffscreenCanvas = prevCanvas;
-      THREE.TextureLoader.prototype.load = prevTexLoad;
-    }
-  }
   // No bridge in any other area pack matches (including Highway 19 ids 45/46 in Judique and Canso Causeway).
   for (const dir of ['areas/judique', 'areas/porthood', 'areas/pointtupper', 'areas/westbay', 'areas/cansocauseway']) {
     const d = read(dir, 'roads');
     assert.deepEqual(d.roads.map(littleMabouPonyTruss).filter(r => r.ponyTruss), [], `${dir} has no Little Mabou pony truss`);
   }
-  console.log('PASS Little Mabou Road steel pony-truss bridges (ids 45 and 46; 7 m approaches, grounded real-terrain drive, solo+fleet Towing)');
+  console.log('PASS Little Mabou Road steel pony-truss bridges (ids 45 and 46; exact baseline deck physics, vertical rail bounds, solo+fleet Towing)');
 }
 console.log('PASS Little Mabou homes, shed and marsh rail; access and bridge exclusions');
 console.log('PASS two Highway 19 aprons both land packs, gravel driveway, hillside gravel, building batches and three view starts');

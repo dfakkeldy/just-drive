@@ -19,10 +19,8 @@ export const PONY_TRUSS_BRIDGES = [
 export const PONY_TRUSS = {
   /** Half-width to truss centreline: 4.4 m centre-to-centre, 4.16 m clear asphalt roadway. */
   half: 2.2,
-  /** Clear asphalt half-width between bottom chords (exact lateral deckHeight limit). */
+  /** Clear asphalt half-width between bottom chords. */
   clearHalf: 2.08,
-  /** Paved approach apron past each end of the steel span, long enough to meet the drawn road surface cleanly. */
-  approach: 7.0,
   /** Inner collision face of the steel inner guard rail along each truss side. */
   railInner: 2.005,
   /** Outer face of the bottom chord and deck fascia. */
@@ -37,10 +35,16 @@ export const PONY_TRUSS = {
   deckThickness: 0.26,
 } as const;
 
-/** Shared height grids for the start and end 3 m approach aprons so rendered triangles and wheel support match exactly. */
-export interface PonyTrussAprons {
-  readonly start: Float64Array;
-  readonly end: Float64Array;
+/** Span geometry and side-rail colliders for one pony-truss bridge, including truss height for vertical overlap checks. */
+export interface PonyTrussSpan {
+  readonly roadId: number;
+  readonly ax: number;
+  readonly az: number;
+  readonly ux: number;
+  readonly uz: number;
+  readonly span: number;
+  readonly height: number;
+  readonly solids: readonly Solid[];
 }
 
 // Linear RGB vertex colours, slightly warm-neutral so the game's blue sky fill renders true grey steel.
@@ -52,31 +56,10 @@ const ABUTMENT: RGB = [0.28, 0.27, 0.24];
 const DECK_ASPHALT: RGB = [0.085, 0.082, 0.078];
 
 const MATCH_TOLERANCE = 5;
-const APRON_ALONG_STEPS = 10;
-const APRON_ACROSS_STEPS = 6;
-const APRON_COLS = APRON_ACROSS_STEPS + 1;
 
-/** Smoothly blend the 3 m approach apron from the bridge deck edge into the local bank height across the lane width. */
-function apronSurfaceY(endY: number, distPastEnd: number, land: number | null): number {
-  const u = Math.max(0, Math.min(1, 1 - distPastEnd / PONY_TRUSS.approach));
-  const blend = u * u * (3 - 2 * u);
-  if (land === null) return endY;
-  return Math.max(land, land + (endY - land) * blend);
-}
-
-/** Evaluate the exact triangle plane built by Mesher.quad([A(0,1), B(1,1), C(1,0), D(0,0)]) inside an apron grid. */
-function sampleApronGrid(grid: Float64Array, uNorm: number, vNorm: number): number {
-  const fi = Math.max(0, Math.min(APRON_ALONG_STEPS, uNorm * APRON_ALONG_STEPS));
-  const fj = Math.max(0, Math.min(APRON_ACROSS_STEPS, vNorm * APRON_ACROSS_STEPS));
-  const i = Math.min(APRON_ALONG_STEPS - 1, Math.floor(fi));
-  const j = Math.min(APRON_ACROSS_STEPS - 1, Math.floor(fj));
-  const u = fi - i, v = fj - j;
-  const hD = grid[i * APRON_COLS + j];
-  const hA = grid[i * APRON_COLS + j + 1];
-  const hC = grid[(i + 1) * APRON_COLS + j];
-  const hB = grid[(i + 1) * APRON_COLS + j + 1];
-  if (u + v >= 1) return hB + (1 - u) * (hA - hB) + (1 - v) * (hC - hB);
-  return hD + u * (hC - hD) + v * (hA - hD);
+/** Pony-truss side height following yard-build.ts `bridgeLot` ~2.1 m proportions, rising gently on the 33 m span. */
+export function ponyTrussHeight(span: number): number {
+  return Math.min(2.4, Math.max(2.1, 1.85 + span * 0.015));
 }
 
 /** Tag the two Little Mabou Road pony-truss bridges in raw EPSG:2961 road data without editing the input. */
@@ -96,88 +79,32 @@ export function mabouRoadOverrides(roads: readonly Road[], modern: boolean, area
   return roads.map(littleMabouMarshRail).map(littleMabouPonyTruss);
 }
 
-/** Fast zero-allocation bounds test for a pony-truss span and its 3 m aprons, run before deck construction. */
-export function inPonyTrussBounds(road: Road, x: number, z: number): boolean {
-  const a = road.pts[0], b = road.pts[road.pts.length - 1];
-  const dx = b[0] - a[0], dz = b[1] - a[1], len2 = dx * dx + dz * dz;
-  if (!len2) return false;
-  const span = Math.sqrt(len2);
-  const along = ((x - a[0]) * dx + (z - a[1]) * dz) / span;
-  const ap = PONY_TRUSS.approach;
-  if (along < -ap || along > span + ap) return false;
-  const across = (-(x - a[0]) * dz + (z - a[1]) * dx) / span;
-  return Math.abs(across) <= PONY_TRUSS.clearHalf;
-}
-
-/** Packed tile-level signature across both span ends and apron corners so streaming either bank refreshes the deck. */
-export function ponyTrussBankState(
-  road: Road,
-  levelAt: (x: number, z: number) => number,
-): { minLevel: number; sig: number } {
-  const a = road.pts[0], b = road.pts[road.pts.length - 1];
-  const dx = b[0] - a[0], dz = b[1] - a[1], span = Math.hypot(dx, dz) || 1;
-  const ux = dx / span, uz = dz / span, ap = PONY_TRUSS.approach, cw = PONY_TRUSS.clearHalf;
-  let minLevel = 15, sig = 0;
-  const sample = (s: number, off: number) => {
-    const lvl = Math.max(0, Math.min(15, levelAt(a[0] + ux * s - uz * off, a[1] + uz * s + ux * off)));
-    if (lvl < minLevel) minLevel = lvl;
-    sig = sig * 16 + lvl;
-  };
-  sample(0, 0);
-  sample(span, 0);
-  sample(-ap, 0);
-  sample(span + ap, 0);
-  sample(-ap, -cw);
-  sample(-ap, cw);
-  sample(span + ap, -cw);
-  sample(span + ap, cw);
-  return { minLevel, sig };
-}
-
-/**
- * Exact wheel support on a pony-truss bridge and its 3 m approach aprons.
- * Evaluates the exact same triangle mesh surface built by buildPonyTrussBridge() (zero divergence, zero allocations).
- */
-export function ponyTrussDeckHeight(
-  road: Road,
-  y0: number,
-  y1: number,
-  x: number,
-  z: number,
-  aprons: PonyTrussAprons,
-): number | null {
-  const a = road.pts[0], b = road.pts[road.pts.length - 1];
-  const dx = b[0] - a[0], dz = b[1] - a[1], len2 = dx * dx + dz * dz;
-  if (!len2) return null;
-  const span = Math.sqrt(len2);
-  const along = ((x - a[0]) * dx + (z - a[1]) * dz) / span;
-  const ap = PONY_TRUSS.approach;
-  if (along < -ap || along > span + ap) return null;
-  const across = (-(x - a[0]) * dz + (z - a[1]) * dx) / span;
-  const clearHalf = PONY_TRUSS.clearHalf;
-  if (Math.abs(across) > clearHalf) return null;
-  if (along < 0) return sampleApronGrid(aprons.start, (along + ap) / ap, (across + clearHalf) / (2 * clearHalf));
-  if (along > span) return sampleApronGrid(aprons.end, (along - span) / ap, (across + clearHalf) / (2 * clearHalf));
-  return y0 + (y1 - y0) * (along / span);
-}
-
-/** Two solid side-rail walls for a world-space pony-truss bridge, aligned to the inner rail and outer chord faces. */
-export function ponyTrussSolids(road: Road): Solid[] {
-  if (!road.ponyTruss || road.pts.length < 2) return [];
+/** Build the span frame and two side-rail walls for a world-space pony-truss bridge, aligned to inner rail and outer chord faces. */
+export function ponyTrussSpan(road: Road): PonyTrussSpan | null {
+  if (!road.ponyTruss || road.pts.length < 2) return null;
   const a = road.pts[0], b = road.pts[road.pts.length - 1];
   const dx = b[0] - a[0], dz = b[1] - a[1], span = Math.hypot(dx, dz);
-  if (!span) return [];
+  if (!span) return null;
   const ux = dx / span, uz = dz / span, heading = Math.atan2(dx, -dz);
   const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
   const centre = (PONY_TRUSS.railInner + PONY_TRUSS.outerHalf) / 2;
   const halfWidth = (PONY_TRUSS.outerHalf - PONY_TRUSS.railInner) / 2;
-  return [-1, 1].map(side => ({
-    x: mx - uz * side * centre,
-    z: mz + ux * side * centre,
-    half: span / 2,
-    halfWidth,
-    heading,
-  }));
+  return {
+    roadId: road.id,
+    ax: a[0],
+    az: a[1],
+    ux,
+    uz,
+    span,
+    height: ponyTrussHeight(span),
+    solids: [-1, 1].map(side => ({
+      x: mx - uz * side * centre,
+      z: mz + ux * side * centre,
+      half: span / 2,
+      halfWidth,
+      heading,
+    })),
+  };
 }
 
 /**
@@ -210,96 +137,16 @@ export function registerRailContacts(
   });
 }
 
-/** Build one 8x8 apron height grid from a single cached 17x17 terrain sample pass (289 lookups per end, < 1 ms). */
-function buildApronGrid(
-  a: readonly [number, number],
-  ux: number,
-  uz: number,
-  span: number,
-  end: -1 | 1,
-  endY: number,
-  sampleY: (x: number, z: number) => number | null,
-  pinOuter: boolean,
-  padMin: number,
-  padTarget: number,
-): Float64Array {
-  const ap = PONY_TRUSS.approach, clearHalf = PONY_TRUSS.clearHalf;
-  const sub = 2;
-  const sampleRows = APRON_ALONG_STEPS * sub + 1;
-  const sampleCols = APRON_ACROSS_STEPS * sub + 1;
-  const samples = new Float64Array(sampleRows * sampleCols);
-  for (let r = 0; r < sampleRows; r++) {
-    const uNorm = r / (sampleRows - 1);
-    const s = end < 0 ? -ap * (1 - uNorm) : span + ap * uNorm;
-    for (let c = 0; c < sampleCols; c++) {
-      const vNorm = c / (sampleCols - 1);
-      const across = -clearHalf + 2 * clearHalf * vNorm;
-      const h = sampleY(a[0] + ux * s - uz * across, a[1] + uz * s + ux * across);
-      samples[r * sampleCols + c] = h === null ? Number.NaN : h;
-    }
-  }
-  const heights = new Float64Array((APRON_ALONG_STEPS + 1) * APRON_COLS);
-  const joinRow = end < 0 ? APRON_ALONG_STEPS : 0;
-  const outerRow = end < 0 ? 0 : APRON_ALONG_STEPS;
-  for (let i = 0; i <= APRON_ALONG_STEPS; i++) {
-    const t = i / APRON_ALONG_STEPS;
-    const s = end < 0 ? -ap * (1 - t) : span + ap * t;
-    const distPast = end < 0 ? -s : s - span;
-    for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
-      const raw = samples[(i * sub) * sampleCols + j * sub];
-      const h = Number.isNaN(raw) ? null : raw;
-      heights[i * APRON_COLS + j] = i === joinRow ? endY : pinOuter && i === outerRow && h !== null ? h : apronSurfaceY(endY, distPast, h);
-    }
-  }
-  // Lift non-pinned vertices wherever cached mid-cell terrain samples rise above an apron triangle (zero extra terrain lookups).
-  for (let pass = 0; pass < 2; pass++) {
-    for (let i = 0; i < APRON_ALONG_STEPS; i++) {
-      for (let j = 0; j < APRON_ACROSS_STEPS; j++) {
-        for (let si = 0; si <= sub; si++) {
-          const su = si / sub, uNorm = (i + su) / APRON_ALONG_STEPS;
-          for (let sj = 0; sj <= sub; sj++) {
-            const sv = sj / sub, vNorm = (j + sv) / APRON_ACROSS_STEPS;
-            const land = samples[(i * sub + si) * sampleCols + j * sub + sj];
-            if (Number.isNaN(land)) continue;
-            const onOuter = (end < 0 && i === 0 && si === 0) || (end > 0 && i === APRON_ALONG_STEPS - 1 && si === sub);
-            const pMin = onOuter ? 0.003 : padMin;
-            const pTarget = onOuter ? 0.006 : padTarget;
-            const triY = sampleApronGrid(heights, uNorm, vNorm);
-            if (land + pMin <= triY) continue;
-            const excess = land + pTarget - triY;
-            const verts: [number, number, number][] = su + sv >= 1
-              ? [[i + 1, j + 1, su + sv - 1], [i, j + 1, 1 - su], [i + 1, j, 1 - sv]]
-              : [[i, j, 1 - su - sv], [i + 1, j, su], [i, j + 1, sv]];
-            const lockOuter = pinOuter || !onOuter;
-            let freeWeight = 0;
-            for (const [vi, , w] of verts) if (vi !== joinRow && (!lockOuter || vi !== outerRow)) freeWeight += w;
-            if (freeWeight > 0.01) {
-              const lift = excess / freeWeight;
-              for (const [vi, vj, w] of verts) {
-                if (vi !== joinRow && (!lockOuter || vi !== outerRow) && w > 0) heights[vi * APRON_COLS + vj] += lift;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  return heights;
-}
-
 /**
- * Build one merged vertex-coloured geometry for a narrow one-lane grey steel pony-truss bridge and its 3 m approach aprons.
- * Returns the geometry, wheel-support apron height grids, and bank-cleared end elevations shared with ponyTrussDeckHeight().
+ * Build one merged vertex-coloured geometry for a narrow one-lane grey steel pony-truss bridge along [0, span]
+ * at the exact y0 -> y1 deck plane computed by Roads.deck().
  */
 export function buildPonyTrussBridge(
   pts: readonly [number, number][],
-  rawY0: number,
-  rawY1: number,
+  y0: number,
+  y1: number,
   len: number,
-  supportHeightAt: (x: number, z: number) => number | null,
-  drawnHeightAt: (x: number, z: number) => number | null = supportHeightAt,
-  reuseSupport?: { aprons: PonyTrussAprons; y0: number; y1: number },
-): { geometry: THREE.BufferGeometry; aprons: PonyTrussAprons; y0: number; y1: number } {
+): THREE.BufferGeometry {
   const m = new Mesher();
   const a = pts[0], b = pts[pts.length - 1];
   const dx = b[0] - a[0], dz = b[1] - a[1];
@@ -308,18 +155,6 @@ export function buildPonyTrussBridge(
   const yaw = Math.atan2(-uz, ux);
   const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
   const clearHalf = PONY_TRUSS.clearHalf;
-  // Lift either span end above the highest loaded bank point across its seam so apron and steel deck meet with zero step.
-  let y0 = reuseSupport ? reuseSupport.y0 : rawY0, y1 = reuseSupport ? reuseSupport.y1 : rawY1;
-  if (!reuseSupport) {
-    const seamSamples = APRON_ACROSS_STEPS * 2;
-    for (let j = 0; j <= seamSamples; j++) {
-      const across = -clearHalf + (2 * clearHalf * j) / seamSamples;
-      const h0 = supportHeightAt(a[0] - uz * across, a[1] + ux * across);
-      if (h0 !== null && h0 + 0.02 > y0) y0 = h0 + 0.02;
-      const h1 = supportHeightAt(b[0] - uz * across, b[1] + ux * across);
-      if (h1 !== null && h1 + 0.02 > y1) y1 = h1 + 0.02;
-    }
-  }
   const dy = y1 - y0, slope = Math.atan2(dy, span);
   const deckY = (s: number) => y0 + dy * (s / span);
 
@@ -327,8 +162,7 @@ export function buildPonyTrussBridge(
   const chord = PONY_TRUSS.chordSize;
   const panels = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2);
   const panel = span / panels;
-  // Pony truss height follows bridgeLot's ~2.1 m proportion, rising gently on the 33 m span.
-  const h = Math.min(2.4, Math.max(2.1, 1.85 + span * 0.015));
+  const h = ponyTrussHeight(span);
   const yBase = chord / 2;
 
   // One shared deck-aligned frame centred at the span midpoint; local +x runs from -span/2 to +span/2.
@@ -343,7 +177,7 @@ export function buildPonyTrussBridge(
   // Trim tilted steel fascia inside [0, span] so no lower corner overhangs the span endpoints.
   const fasciaLen = deckLen - (deckThick + 0.05) * sinSlope * 2 - 0.01;
   m.at(mx, deckMidY, mz, yaw, 0, slope);
-  // Top driving surface at exact local y = 0 (matches ponyTrussDeckHeight on [0, span]).
+  // Top driving surface at exact local y = 0 (matches Roads.deckHeight() along [0, span]).
   m.quad([
     [-deckLen / 2, 0, clearHalf],
     [deckLen / 2, 0, clearHalf],
@@ -352,50 +186,6 @@ export function buildPonyTrussBridge(
   ], DECK_ASPHALT);
   // Deck slab sides and underside (steel deck fascia under the trusses, 2.5 cm below asphalt to avoid z-fighting).
   m.box(0, fasciaTop - deckThick / 2, 0, fasciaLen, deckThick, half * 2 + chord, STEEL_DARK, false);
-
-  // Paved 7 m approach aprons: when settled, rendered asphalt and wheel support share one exact surface; during LOD streaming, visual outer edge meets the selected road.
-  const ap = PONY_TRUSS.approach;
-  const startGrid = reuseSupport ? reuseSupport.aprons.start : buildApronGrid(a, ux, uz, span, -1, y0, supportHeightAt, false, 0.036, 0.046);
-  const endGrid = reuseSupport ? reuseSupport.aprons.end : buildApronGrid(a, ux, uz, span, 1, y1, supportHeightAt, false, 0.036, 0.046);
-  const sameSurface = drawnHeightAt === supportHeightAt;
-  const startVis = sameSurface ? startGrid : buildApronGrid(a, ux, uz, span, -1, y0, drawnHeightAt, true, 0.005, 0.012);
-  const endVis = sameSurface ? endGrid : buildApronGrid(a, ux, uz, span, 1, y1, drawnHeightAt, true, 0.005, 0.012);
-  m.at(0, 0, 0);
-  for (const end of [-1, 1] as const) {
-    const visHeights = end < 0 ? startVis : endVis;
-    const grid: [number, number, number][][] = [];
-    for (let i = 0; i <= APRON_ALONG_STEPS; i++) {
-      const t = i / APRON_ALONG_STEPS;
-      const s = end < 0 ? -ap * (1 - t) : span + ap * t;
-      const row: [number, number, number][] = [];
-      for (let j = 0; j <= APRON_ACROSS_STEPS; j++) {
-        const across = -clearHalf + (2 * clearHalf * j) / APRON_ACROSS_STEPS;
-        row.push([a[0] + ux * s - uz * across, visHeights[i * APRON_COLS + j], a[1] + uz * s + ux * across]);
-      }
-      grid.push(row);
-    }
-    for (let i = 0; i < APRON_ALONG_STEPS; i++) {
-      for (let j = 0; j < APRON_ACROSS_STEPS; j++) {
-        // Counter-clockwise from above (+Y normal); diagonal A(0,1)->C(1,0) matches sampleApronGrid().
-        m.quad([grid[i][j + 1], grid[i + 1][j + 1], grid[i + 1][j], grid[i][j]], DECK_ASPHALT);
-      }
-      // Side skirts drop cleanly down into the bank beneath the outer apron edges.
-      for (const side of [0, APRON_ACROSS_STEPS]) {
-        const p0 = grid[i][side], p1 = grid[i + 1][side];
-        const b0 = [p0[0], p0[1] - 2.5, p0[2]], b1 = [p1[0], p1[1] - 2.5, p1[2]];
-        if (side === APRON_ACROSS_STEPS) m.quad([b0, b1, p1, p0], ABUTMENT);
-        else m.quad([b1, b0, p0, p1], ABUTMENT);
-      }
-    }
-    // End skirt seals the outer apron edge down into the embankment in dark asphalt so the seam blends smoothly into the road.
-    const outerRow = end < 0 ? 0 : APRON_ALONG_STEPS;
-    for (let j = 0; j < APRON_ACROSS_STEPS; j++) {
-      const p0 = grid[outerRow][j], p1 = grid[outerRow][j + 1];
-      const b0 = [p0[0], p0[1] - 2.5, p0[2]], b1 = [p1[0], p1[1] - 2.5, p1[2]];
-      if (end < 0) m.quad([b0, b1, p1, p0], DECK_ASPHALT);
-      else m.quad([b1, b0, p0, p1], DECK_ASPHALT);
-    }
-  }
 
   // Transverse floor beams beneath the fascia at every panel point (tilted with the slope and inset inside [0, span]).
   const beamW = half * 2 + chord;
@@ -477,5 +267,5 @@ export function buildPonyTrussBridge(
     }
   }
 
-  return { geometry: m.geometry(), aprons: { start: startGrid, end: endGrid }, y0, y1 };
+  return m.geometry();
 }
