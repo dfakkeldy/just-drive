@@ -14,6 +14,10 @@ import { CAR_SPEC } from './vehicle-spec';
 
 interface Chunk { road: Road; start: number; end: number; x: number; z: number; revision: number; mesh: THREE.Mesh | null; spans: RailSpan[]; solids: Solid[]; shape?: string; low?: boolean }
 const CHUNK = RAIL.chunk;
+// A span build changes the land up to MAX_APPROACH (96 m, modern-bridges.ts) past each deck end; the corridor that
+// bridgeArea tests already reaches APPROACH (16 m) past it. A chunk's road piece lies within CHUNK/2 of its midpoint
+// and its rails a few metres off the road, so a midpoint within this pad can hold rails planned on uncut land.
+const BRIDGE_REPLAN_PAD = CHUNK / 2 + (96 - 16) + 10;
 const NO_CHUNKS: readonly Chunk[] = [];
 // Signed 15-bit cells fit V8 small integers (each cell spans 121.6 metres).
 const cellKey = (x: number, z: number): number => (x + 16384) * 32768 + z + 16384;
@@ -29,6 +33,7 @@ export class Guardrails {
   private readonly bridgeSpans: PonyTrussSpan[] = [];
   private readonly bridgeDeckRev: number[] = [];
   private readonly bridgeBuiltLevel: number[] = [];
+  private readonly bridgeBuiltSerial: number[] = [];
   private readonly bridgeCachedLevel: number[] = [];
   private readonly bridgeCachedY0: number[] = [];
   private readonly bridgeCachedY1: number[] = [];
@@ -74,6 +79,9 @@ export class Guardrails {
   private readonly materials: (THREE.MeshLambertMaterial | undefined)[] = [];
   readonly audit = { planned: 0, pending: 0, samples: 0, queries: 0 };
   private work: { chunk: Chunk; revision: number; steps: Generator<void, RailSpan[], void> } | null = null;
+  // Roads.bridgeRevision counts deck builds and starts at 0. Before the first build there is no deck to clear around,
+  // so the first update runs no empty replan; the first real build changes the count and runs bridgeBuilt.
+  private lastBridge=0;
   private lastLow = false;
   private lastX = Infinity; private lastZ = Infinity; private revision = -1;
   private cowFailureRevision = -1;
@@ -84,7 +92,7 @@ export class Guardrails {
     this.access = railAccess(this.roads, this.planning.ground, this.terrain.manifest?.village, true);
     if (terrain.cartRoads) return;
     for (const road of roads.roads) {
-      if (road.bridge) { if (road.ponyTruss) { const span = ponyTrussSpan(road); if (span) { this.bridgeSpans.push(span); this.bridgeDeckRev.push(-1); this.bridgeBuiltLevel.push(0); this.bridgeCachedLevel.push(0); this.bridgeCachedY0.push(0); this.bridgeCachedY1.push(0); } } continue; }
+      if (road.bridge) { if (road.ponyTruss) { const span = ponyTrussSpan(road); if (span) { this.bridgeSpans.push(span); this.bridgeDeckRev.push(-1); this.bridgeBuiltLevel.push(0); this.bridgeBuiltSerial.push(0); this.bridgeCachedLevel.push(0); this.bridgeCachedY0.push(0); this.bridgeCachedY1.push(0); } } continue; }
       if (road.kind > 3 || railwayRoad(road)) continue;
       const len = roadLength(road);
       for (let index = 0; index * CHUNK < len; index++) {
@@ -106,8 +114,38 @@ export class Guardrails {
     for (const c of this.chunks) c.revision = -1;
     this.audit.pending = this.chunks.length;
   }
+  /** A bridge build replans only the chunks that touch a bridge. Folding the build count into the land revision made
+   *  every span build replan every chunk in range, so rails far from any bridge kept vanishing and coming back late.
+   *  Its own method, so the hot update() keeps main's shape: with this block inline, guardrail-allocation measured
+   *  about 240 B per idle update instead of 64 in 12 of 18 runs on apple-check-host (0 of 16 once moved out). */
+  private bridgeBuilt(bridge: number): void {
+    this.lastBridge=bridge;
+    // Deck and approach heights change the cached ground samples; force one full pass past the early return.
+    this.planning.clear();this.revision=NaN;
+    // Keep this loop free of captured callbacks: even a cold arrow here makes
+    // V8 retain an activation context on every hot update call.
+    // The batch in progress is dropped only when its own chunk replans: span builds repeat as the land loads finer
+    // anywhere within 1500 m, and dropping every batch kept restarting rails far from any bridge.
+    const working=this.work?.chunk;let dropWork=false;
+    for(const c of this.chunks){
+      let overlaps=false;
+      for(const s of c.spans)if(this.roads.bridgeArea?.(s.a.x,s.a.z,2)||this.roads.bridgeArea?.(s.b.x,s.b.z,2)){overlaps=true;break;}
+      if(!overlaps){
+        // Chunks with no rails, or rails that stop short of the corridor, may still sit on land the build cut. They
+        // replan but keep their mesh: the plan swaps it only when the shape key (which holds the ground heights)
+        // changes, so rails near a bridge do not blink on every span build.
+        if(this.roads.bridgeArea?.(c.x,c.z,BRIDGE_REPLAN_PAD)){c.revision=-1;if(c===working)dropWork=true;}
+        continue;
+      }
+      if(c.mesh){this.group.remove(c.mesh);c.mesh.geometry.dispose();c.mesh=null;}
+      c.solids.length=0;c.spans=[];c.shape=undefined;c.revision=-1;if(c===working)dropWork=true;
+    }
+    if(dropWork)this.work=null;
+  }
   update(camera: THREE.Vector3): void {
-    const rev = this.terrain.dataRevision;
+    const bridge=this.roads.bridgeRevision??0,rev=this.terrain.dataRevision;
+    if(bridge!==this.lastBridge)this.bridgeBuilt(bridge);
+
     this.audit.planned = this.audit.samples = this.audit.queries = 0;
     if (!this.audit.pending && rev === this.revision && this.lastLow === this.terrain.low && Math.hypot(camera.x - this.lastX, camera.z - this.lastZ) < 20) return;
     if (this.lastLow !== this.terrain.low) for (const c of this.chunks) c.revision = -1;
@@ -349,11 +387,13 @@ export class Guardrails {
   private readBridgeEnds(index: number, rev: number): boolean {
     const id = this.bridgeSpans[index].roadId;
     const builtLevel = this.roads.bridgeDeckLevel(id);
+    const builtSerial = this.roads.bridgeDeckSerial(id);
     const curLevel = this.bridgeCachedLevel[index];
-    if (builtLevel >= 8 && curLevel >= 8) return true;
-    if (this.bridgeDeckRev[index] !== rev || (builtLevel >= 6 && builtLevel !== this.bridgeBuiltLevel[index])) {
+    if (builtLevel >= 8 && curLevel >= 8 && builtSerial === this.bridgeBuiltSerial[index]) return true;
+    if (this.bridgeDeckRev[index] !== rev || (builtLevel >= 6 && (builtLevel !== this.bridgeBuiltLevel[index] || builtSerial !== this.bridgeBuiltSerial[index]))) {
       this.bridgeDeckRev[index] = rev;
       this.bridgeBuiltLevel[index] = builtLevel;
+      this.bridgeBuiltSerial[index] = builtSerial;
       const lvl = this.roads.bridgeBankElevations(id, this.bridgeEndsScratch);
       const y0 = lvl >= 6 ? this.bridgeEndsScratch[0] : 0;
       const y1 = lvl >= 6 ? this.bridgeEndsScratch[1] : 0;

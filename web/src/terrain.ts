@@ -1,3 +1,4 @@
+import {RoadCuts,CUT_ATLAS_PAGES,inMask,maskTouches,type RoadCutSource} from './road-cuts';
 import type { Paved } from './paved';
 import type { NightShading } from './night';
 import type {HistoryBridgeApproaches} from './eras/history-approaches';
@@ -52,6 +53,10 @@ export interface Surface {
   brook: number;        // metres from the edge of a brook's water: negative in the water; 99 when none is near
   /** True only when an accepted hand-built deck supplies the driving surface. */
   deck?: boolean;
+  /** That deck is a public road bridge or its approach: driving help stays on (a wharf or a slip ramp turns it off). */
+  roadDeck?: boolean;
+  /** The kind of the road that deck carries, for the touch speed limit (a concrete deck's own kind is a works surface). */
+  deckRoadKind?: number;
   water?: boolean;     // mapped inland water; its LiDAR return is the surface, not a measured bed
   waterLimit?: number; // drawn water/return height plus contact tolerance; airborne bodies above it stay dry
   mineral?: boolean;  // confirmed class 6 or authored quarry paint; never a road, grading or collision
@@ -109,6 +114,7 @@ class Tile {
   contactCanopy: Float32Array | null = null;
   road: Uint8ClampedArray | null = null;   // RGBA: distance, half width, kind, visual gravel coverage
   brook: Uint8Array | null = null;         // RGBA: vector to the centre line (x, z), half width, direction of flow (see streams.ts)
+  roadCutRevision=-1;
   quadSea = [false, false, false, false];
   box = new THREE.Box3();
   constructor(readonly level: number, readonly i: number, readonly j: number, readonly size: number,
@@ -148,9 +154,15 @@ export const ROUGH_BIT = 128;
  * A hand-built place that changes the ground under it: graded pads, and surfaces painted through the road field
  * (kind 8 yard gravel, 9 concrete, 10 packed sand), so the picture and the wheels agree. Add before the first tile loads.
  */
-export interface Site {
+export interface Site extends RoadCutSource {
+  /** False skips blank fields; painted overlays allocate only when two samples resolve their width. */
+  roadField?:boolean|'painted';
+  /** False when the site supplies contacts and deck paint only, without grading or painting terrain samples. */
+  samplesTerrain?: false;
   /** World box [x0, z0, x1, z1] outside which the site changes nothing. */
   box: [number, number, number, number];
+  /** Occupied footprints for new sites when the query box covers disconnected spans. */
+  sitingBoxes?: readonly (readonly [number, number, number, number])[];
   /** Restrict tile construction for a site with separated footprints inside its world box. */
   affectsTile?(x: number, z: number, size: number, level: number): boolean;
   /** Load survey data before building a tile that this site can grade. */
@@ -180,19 +192,30 @@ export interface Site {
   visualStyleLevels?:readonly number[];
   /** Exact visible cap of a filled structure. There is no route beneath this ground. */
   groundHeight?(x:number,z:number):number|null;
-  /** Driving metadata is applied only when this same deck passes the body-height gate. */
-  deckDriving?: {kind:number;halfWidth:number} | ((x:number,z:number) => {kind:number;halfWidth:number});
+  /** Driving metadata is applied only when this same deck supplies the contact surface. */
+  deckDriving?: {kind:number;halfWidth:number;washboard?:boolean;road?:boolean;roadKind?:number} | ((x:number,z:number) => {kind:number;halfWidth:number});
+  /** An exact route contact provider. It must select only a surface reachable from this caller height. */
+  deckContactHeight?(x:number,z:number,referenceY?:number):number|null;
+  /** Suppress road paint on bare earth beneath the structural span, while keeping the driving kind. */
+  deckMask?(x:number,z:number,kind:number):boolean;
+  /** Remove the averaged canopy hull over a deck corridor, without changing bare-earth contact. */
+  deckClear?(x:number,z:number,pad:number):boolean;
+  /** deckClear's answer at every point of a grid (xs and zs ascending; row b, column a at index b * xs.length + a), or
+   *  null when no point is cleared. It must match deckClear point for point; it only skips points no corridor reaches. */
+  deckClearGrid?(xs:Float64Array,zs:Float64Array,pad:number):Uint8Array|null;
   /** The site only repaints flags on roads that already exist. Its box is not a clearing, so lots, props and animals may use it. */
   roadPaint?: boolean;
   /** True water elevation for a mapped inland pool; null outside its polygon. */
   waterLevel?(x:number,z:number):number|null;
-  /** Optional exact deck on top of the land. The callback samples land only, without any decks. */
+  /** Optional exact deck on top of the land. The callback samples land only, without any decks. `ceiling` is the highest
+   *  surface the caller may step onto: its reference height + 0.25 (withDeck asks only with a reference). */
   deckHeight?(x: number, z: number, ground: (x: number, z: number) => number | null, ceiling?: number): number | null;
 }
 
-/** Site boxes that placement must avoid. Sites that only repaint existing roads are left out. */
-export function placeBoxes(sites: readonly Site[]): Site['box'][] {
-  return sites.filter(s => !s.roadPaint).map(s => s.box);
+/** Site boxes that placement must avoid. Sites that only repaint existing roads are left out. A site spread over many
+ *  places (the bridges: one query box over the whole area) gives its own footprints (sitingBoxes) instead of its box. */
+export function placeBoxes(sites: readonly Site[]): (readonly [number, number, number, number])[] {
+  return sites.filter(s => !s.roadPaint).flatMap(s => s.sitingBoxes ?? [s.box]);
 }
 
 /** Apply a runtime field sample. Kind 11 only paints; it cannot change a mapped road's driving samples. */
@@ -220,12 +243,18 @@ export function paintSiteSurface(road:Uint8ClampedArray,k:number,f:SiteSurface,z
 /** The road bytes a tile draws. A gravel driveway or pad is a track (kind 4) with the gravel bit (64); it is drawn exactly
  *  as a gravel road (kind 3), by the programs that already draw gravel roads, so it needs no shader variant of its own.
  *  Only the texture's copy changes: surfaceAt keeps reading the track and its gravel bit, and a tile without a gravel
- *  driveway keeps sharing its bytes. The bridge and washboard bits stay. */
-export function drawnRoadBytes(road: Uint8Array): Uint8Array {
-  let out = road;
-  for (let k = 2; k < road.length; k += 4) if ((road[k] & 207) === 68) {
-    if (out === road) out = road.slice();
-    out[k] = (road[k] & 48) | 3;
+ *  driveway or bridge paint mask keeps sharing its bytes. The road flags stay in the CPU data. */
+export function drawnRoadBytes(road: Uint8Array | Uint8ClampedArray, bridgePaint?: Uint8Array): Uint8Array {
+  const bytes = new Uint8Array(road.buffer, road.byteOffset, road.byteLength);
+  let out = bytes;
+  for (let k = 2; k < bytes.length; k += 4) {
+    const flags = bytes[k];
+    let drawn = flags;
+    if (bridgePaint?.[k >> 2]) drawn = flags & 240;
+    else if ((flags & 207) === 68) drawn = (flags & 48) | 3;
+    if (drawn === flags) continue;
+    if (out === bytes) out = bytes.slice();
+    out[k] = drawn;
   }
   return out;
 }
@@ -242,7 +271,9 @@ export class Terrain {
   bridgeApproaches:HistoryBridgeApproaches|null=null;
   dataRevision = 0;
   contactRevision = 0;
-  private eraSiteCount=-1;private eraDeckSites:Site[]=[];private eraContactSites:Site[]=[];
+  // Sites that can answer a deck or a contact query, refreshed when a site is added or removed. Hot queries walk only
+  // these (both eras): walking every site shape makes each property read megamorphic.
+  private eraSiteCount=-1;private eraLastSite:Site|undefined;private eraDeckSites:Site[]=[];private eraContactSites:Site[]=[];
   private contactSerial=0;private walkCoverageSerial=0;
   private contactEvents:Float64Array|null=null;
   private contactSelected:Tile[]=[];private contactPrevious:Tile[]=[];
@@ -253,8 +284,9 @@ export class Terrain {
     return null;
   }
   /** A tile's loaded geometry identifies the source. Entering/leaving the view does not. */
-  meshContactSource(x:number,z:number,land=false):number {
-    const t=(land?null:this.cartRoads&&this.selectedContactTile?this.selectedContactTile(x,z):this.drawnTile(x,z))??this.find(x,z);
+  /** touch=false leaves the tile's last use alone (a far bridge's source check must not keep the tile from eviction). */
+  meshContactSource(x:number,z:number,land=false,touch=true):number {
+    const t=(land?null:this.cartRoads&&this.selectedContactTile?this.selectedContactTile(x,z):this.drawnTile(x,z))??this.find(x,z,touch);
     return t?.mesh?(t.contactId||t.level*100000000+t.i*10000+t.j):-1;
   }
   meshContactAt(x:number,z:number,out:{height:number;source:number;drawn:boolean}):boolean {
@@ -321,6 +353,8 @@ export class Terrain {
   private readonly mirrorFocus = { value: new THREE.Vector2() };
   private readonly maskScene = new THREE.Scene();
   private noRoad: THREE.DataTexture;
+  private readonly roadCuts:RoadCuts;
+  private surveying=false;
   private coverReady: Promise<HTMLImageElement | null>;
   private coverPixels: ImageData | null = null;
   private coverRead: Promise<void> | null = null;
@@ -440,6 +474,7 @@ export class Terrain {
     // Full tile size, because the shader reads the road field sample by sample. All zero means no road anywhere.
     this.noRoad = new THREE.DataTexture(new Uint8Array(S * S * 4), S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.noRoad.needsUpdate = true;
+    this.roadCuts=new RoadCuts(this.sites,this.noRoad);
     // A tile with no brook says so in a uniform and never reads this one sample.
     this.noBrook = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.noBrook.needsUpdate = true;
@@ -625,7 +660,7 @@ export class Terrain {
       for (const t of this.backgroundLoading) if (t.background) background++;
       for (const d of this.builds) if (d.tile.background) background++;
     }
-    return this.queue.length + this.active + this.builds.length - background + (this.paved?.pending ?? 0);
+    return this.queue.length + this.active + this.builds.length - background + (this.paved?.pending ?? 0) + (!this.cartRoads ? this.roadCuts.pending : 0);
   }
   /** Wanted reads in retry back-off are not queued or active. Old, unwanted failures do not block settling. */
   get failed() { let n = 0; for (const t of this.tiles.values()) if (t.failed && t.wanted === this.frame) n++; return n; }
@@ -740,7 +775,8 @@ export class Terrain {
       && (s.affectsTile?.(t.x0, t.z0, t.size, t.level) ?? true));
     const gravelOverlay=sites.some(s=>s.visualGravel);
     const airportMarkings=sites.some(s=>s.airportMarkings);
-    const road = bakedRoad ?? (sites.length ? new Uint8ClampedArray(S * S * 4) : null);
+    const terrainSites = sites.filter(site => site.samplesTerrain !== false);
+    let road = bakedRoad ?? (sites.some(s=>s.roadField!==false&&s.roadField!=='painted') ? new Uint8ClampedArray(S * S * 4) : null);
     // Brooks get a field only on the two finest levels (samples 1 m and 2 m apart). Further off a brook is a pixel
     // wide, and the field's guarantee against seams needs close samples (see BROOK_SAMPLE in streams.ts).
     const brook = this.streams && t.size / T <= BROOK_SAMPLE ? brookField(this.streams, t.x0, t.z0, t.size, S) : null;
@@ -761,7 +797,7 @@ export class Terrain {
     for (let k = 0; k < S * S; k++) {
       if(road && gravelOverlay)road[k*4+3]=0;
       let raw = (px[k * 4] * 256 + px[k * 4 + 1]) * scale + offset;
-      for (const site of sites) {
+      for (const site of terrainSites) {
         const x = t.x0 + (k % S) * mpp, z = t.z0 + Math.floor(k / S) * mpp;
         if (x < site.box[0] || x > site.box[2] || z < site.box[1] || z > site.box[3]) continue;
         if (site.preserveRoads && road) {
@@ -771,6 +807,7 @@ export class Terrain {
         const beforeSite=raw;raw = site.height(x, z, raw,t.level);
         const afterHeight=raw>this.seaLevel?this.seaLevel+(raw-this.seaLevel)*this.exag:raw,beforeHeight=beforeSite>this.seaLevel?this.seaLevel+(beforeSite-this.seaLevel)*this.exag:beforeSite;if(Math.fround(afterHeight)!==Math.fround(beforeHeight))t.siteChanges?.get(site)?.fill(1,k,k+1);
         const f = site.surface(x, z,raw,t.level);
+        if(f&&!road&&site.roadField==='painted'&&mpp<=f.half)road=new Uint8ClampedArray(S*S*4);
         if(f && road)paintSiteSurface(road,k*4,f,zero,dScale,wScale);
       }
       if (brook && brook[k * 4 + 2] > 0) {
@@ -862,9 +899,10 @@ export class Terrain {
     tex.needsUpdate = true;
     let roadTex: THREE.DataTexture = this.noRoad;
     if (road) {
-      // Site paint is finished; CPU samples and the texture only read these same bytes from here.
-      roadTex = new THREE.DataTexture(new Uint8Array(road.buffer, road.byteOffset, road.byteLength), S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
-      if (!this.cartRoads) roadTex.image.data = drawnRoadBytes(roadTex.image.data as Uint8Array);
+      // Keep the CPU flags intact. The texture omits draped paint under decks.
+      let drawn = new Uint8Array(road.buffer, road.byteOffset, road.byteLength);
+      if (!this.cartRoads) drawn = drawnRoadBytes(drawn, this.deckPaint(t, sites, road, mpp));
+      roadTex = new THREE.DataTexture(drawn, S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
       roadTex.magFilter = roadTex.minFilter = THREE.NearestFilter;   // the shader blends the samples itself
       roadTex.needsUpdate = true;
     }
@@ -876,6 +914,7 @@ export class Terrain {
     }
 
     const seg = segFor(t.level), step = T / seg, n = seg + 3;
+    const deckClear = hull ? this.deckClearMask(t, sites, seg, step, mpp) : null;
     const pos = new Float32Array(n * n * 3);
     const coastAttr = coastal ? new Float32Array(n * n * 4) : null;
     const gattr = new Float32Array(n * n), crowns = this.low ? null : new Float32Array(n * n);
@@ -915,6 +954,9 @@ export class Terrain {
         }
         if(coastal?.quarry && coastField && coastField[k0*4+1]>.5)c=0;
         if (this.canopyExcludes?.(t.x0 + ga * mpp + this.manifest.village[0], this.manifest.village[1] - (t.z0 + gb * mpp))) c=0;
+        // A coarse forest hull can cross a narrow bridge even when its vertex misses the road field.
+        // Clear the vertices that feed that triangle, rather than using the hull as an abutment height.
+        if(c>0&&deckClear?.[k0])c=0;
         if(walkMask?.[k0])c=0;
         if (crowns) crowns[b * n + a] = hull ? 0 : c;
         if (!hull) c = 0;
@@ -948,7 +990,7 @@ export class Terrain {
         coastOrigin: { value: new THREE.Vector2(this.manifest.village[0]-618000,5109000-this.manifest.village[1]) },
         ...(coastal.quarry ? {quarryBox:{value:new THREE.Vector4(...coastal.box)}} : {}),
         coastExag: { value:this.exag }, coastOn: { value:1 }, ...(this.low ? {coastPixelScale:{value:0}} : {}), ...coastRecessUniforms(),
-      } : {}), tNormal: { value: tex }, tRoad: { value: roadTex }, tBrook: { value: brookTex }, brook: { value: brook ? 1 : 0 }, texel: { value: mpp }, hull: { value: hull ? 1 : 0 }, hideQuad: { value: new THREE.Vector4() } };
+      } : {}), tRoadCut:{value:null},roadCutRect:{value:new THREE.Vector4()},roadCutLayout:{value:new THREE.Vector4()},roadCuts:{value:0},tNormal: { value: tex }, tRoad: { value: roadTex }, tBrook: { value: brookTex }, brook: { value: brook ? 1 : 0 }, texel: { value: mpp }, hull: { value: hull ? 1 : 0 }, hideQuad: { value: new THREE.Vector4() } };
     const mat=!styleTex?new THREE.ShaderMaterial({vertexShader: TERRAIN_VERT,fragmentShader: this.cartRoads ? CART_TERRAIN_FRAG : TERRAIN_FRAG,defines: { ...(this.groundCover ? { GROUND_CLASSES: 1 } : {}), ...(coastal ? { COAST_SHORE: 1, ...(coastal.quarry ? { QUARRY: 1 } : {}) } : {}), ...(this.low ? { LOW: 1 } : { ...(this.shadows ? { SHADOWS: 1 } : {}), ...(lo <= this.seaLevel + 2 ? { SEA_WATER: 1 } : {}) }), ...(gravelOverlay ? { SITE_GRAVEL: 1 } : {}), ...(airportMarkings ? { AIRPORT: 1 } : {}), ...(roadPavement && !this.cartRoads ? { ROAD_PAVEMENT: 1 } : {}) },uniforms:tileUniforms}):new THREE.ShaderMaterial({vertexShader: TERRAIN_VERT,fragmentShader: STUNT_TERRAIN_FRAG,defines: {STUNT_PARK:1, ...(this.groundCover ? { GROUND_CLASSES: 1 } : {}), ...(coastal ? { COAST_SHORE: 1, ...(coastal.quarry ? { QUARRY: 1 } : {}) } : {}), ...(this.low ? { LOW: 1 } : { ...(this.shadows ? { SHADOWS: 1 } : {}), ...(lo <= this.seaLevel + 2 ? { SEA_WATER: 1 } : {}) }), ...(gravelOverlay ? { SITE_GRAVEL: 1 } : {}), ...(airportMarkings ? { AIRPORT: 1 } : {}) },uniforms:tileUniforms});
     const mesh = new THREE.Mesh(geo, mat);
     if(coastal && this.low)mesh.onBeforeRender=(renderer,_scene,camera,_geometry,material)=>updateCoastView(renderer,camera,material);
@@ -972,6 +1014,7 @@ export class Terrain {
     t.brook = brook;
     if (!t.ready) this.readyCount++;
     t.ready = true;
+    if(!this.cartRoads)this.roadCuts.update(t);
     this.dataRevision++;if(this.cartRoads){t.contactId=++this.contactSerial;this.contactTile(t);}else this.contactRevision++;
     // The request touched an unready tile; count its completion in this frame's wanted set.
     if (t.lastUsed === this.frame) this.use(t);
@@ -982,6 +1025,67 @@ export class Terrain {
     if (this.previewShadows) this.applyPreviewShadows(mat, this.previewShadows);
     this.propertyOverlay?.applyGround(mat);
     this.fleetGroundChanged?.(t.x0, t.z0, t.size);
+  }
+
+  /** Samples whose road paint lies under a structural deck (Site.deckMask), for drawnRoadBytes; the CPU flags keep it.
+   *  build() calls this after its sample loop, which has then finished every sample's road bytes. A sample passes a
+   *  site's mask only inside a populated cell, so a site with a mask visits only those samples. Each sample keeps the
+   *  same tests, in the same site order, as one scan over all samples. */
+  private deckPaint(t: Tile, sites: Site[], road: Uint8ClampedArray, mpp: number): Uint8Array | undefined {
+    let paint: Uint8Array | undefined;
+    for (const site of sites) {
+      if (!site.deckMask) continue;
+      const m = site.mask;
+      if (!m) {
+        for (let k = 0; k < S * S; k++) {
+          const kind = road[k * 4 + 2] & 15;
+          if (kind === 0 || paint?.[k]) continue;
+          if (site.deckMask(t.x0 + (k % S) * mpp, t.z0 + Math.floor(k / S) * mpp, kind)) (paint ??= new Uint8Array(S * S))[k] = 1;
+        }
+        continue;
+      }
+      if (!maskTouches(m, t.x0, t.z0, t.x0 + t.size, t.z0 + t.size)) continue;
+      // Mask columns near the tile, one spare each side. The sample's own column test below is inMask's test.
+      const i0 = Math.max(0, Math.floor((t.x0 - m.x0) / m.size) - 1), i1 = Math.min(m.w - 1, Math.floor((t.x0 + t.size - m.x0) / m.size) + 1);
+      for (let b = 0; b < S; b++) {
+        const z = t.z0 + b * mpp, j = Math.floor((z - m.z0) / m.size);
+        if (j < 0 || j >= m.h) continue;
+        for (let i = i0; i <= i1; i++) {
+          if (m.bits[j * m.w + i] !== 1) continue;
+          const cx = m.x0 + i * m.size;
+          const a0 = Math.max(0, Math.floor((cx - t.x0) / mpp) - 1), a1 = Math.min(T, Math.ceil((cx + m.size - t.x0) / mpp) + 1);
+          for (let a = a0; a <= a1; a++) {
+            const k = b * S + a, kind = road[k * 4 + 2] & 15;
+            if (kind === 0 || paint?.[k]) continue;
+            const x = t.x0 + a * mpp;
+            if (Math.floor((x - m.x0) / m.size) !== i) continue;
+            if (site.deckMask(x, z, kind)) (paint ??= new Uint8Array(S * S))[k] = 1;
+          }
+        }
+      }
+    }
+    return paint;
+  }
+
+  /** The hull vertices a deck corridor clears (Site.deckClear), indexed by sample like build()'s k0, or null when none.
+   *  Each distinct vertex position is asked once, as a grid, before build()'s vertex loop. */
+  private deckClearMask(t: Tile, sites: Site[], seg: number, step: number, mpp: number): Uint8Array | null {
+    const pad = mpp * step * 1.5;
+    let clear: Uint8Array | null = null, xs: Float64Array | null = null, zs: Float64Array | null = null;
+    for (const site of sites) {
+      if (!site.deckClear || site.mask && !maskTouches(site.mask, t.x0 - pad, t.z0 - pad, t.x0 + t.size + pad, t.z0 + t.size + pad)) continue;
+      if (!xs || !zs) {
+        // The positions build() gives the vertices: t.x0 + ga * mpp, with ga = 0, step, ..., seg * step.
+        xs = new Float64Array(seg + 1); zs = new Float64Array(seg + 1);
+        for (let i = 0; i <= seg; i++) { const g = i * step; xs[i] = t.x0 + g * mpp; zs[i] = t.z0 + g * mpp; }
+      }
+      const grid = site.deckClearGrid ? site.deckClearGrid(xs, zs, pad) : undefined;
+      if (grid === null) continue;
+      for (let b = 0; b <= seg; b++) for (let a = 0; a <= seg; a++) {
+        if (grid ? grid[b * (seg + 1) + a] : site.deckClear(xs[a], zs[b], pad)) (clear ??= new Uint8Array(S * S))[b * step * S + a * step] = 1;
+      }
+    }
+    return clear;
   }
 
   /** The level of the finest tile in memory at a world position (-1: none). Lighter than surfaceAt, and unlike find it
@@ -1013,6 +1117,8 @@ export class Terrain {
     const m = this.manifest, size = m.size / 2 ** this.maxLevel;
     return this.exists.has(`${this.maxLevel}/${Math.floor((x + m.village[0] - m.origin[0]) / size)}_${Math.floor((z - (m.village[1] - m.origin[1])) / size)}`);
   }
+
+  updateRoadCuts():void {if(!this.cartRoads)for(const t of this.tiles.values())if(t.ready)this.roadCuts.update(t);}
 
   /** Bare ground for sight lines, without roofs, canopy or raised decks. */
   bareHeightAt(x: number, z: number): number | null {
@@ -1073,40 +1179,46 @@ export class Terrain {
     };
   }
 
-  /** Ground height in metres at a world position, from the finest tile in memory. */
-  heightAt(x: number, z: number): number | null {
+  /** Unreferenced queries return land. A finite caller height can select a reachable deck. */
+  heightAt(x: number, z: number, referenceY?:number): number | null {
     const ground = this.landHeightAt(x, z);
     if (ground === null) return null;
-    return this.withDeck(x, z, ground);
+    return this.withDeck(x, z, ground,undefined,referenceY);
   }
 
   /** Construction caches use the finest cached land, independent of a vehicle contact scope. */
   constructionHeightAt(x: number, z: number): number | null {
-    const body=this.groundContact,drawn=this.drawnContact;
-    this.groundContact=null;this.drawnContact=false;
+    const body=this.groundContact,drawn=this.drawnContact,surveying=this.surveying;
+    this.groundContact=null;this.drawnContact=false;this.surveying=true;
     try { return this.heightAt(x,z); }
-    finally { this.groundContact=body;this.drawnContact=drawn; }
+    finally { this.groundContact=body;this.drawnContact=drawn;this.surveying=surveying; }
   }
 
   private refreshEraSites():void {
-    if(this.eraSiteCount===this.sites.length)return;this.eraSiteCount=this.sites.length;this.eraDeckSites.length=this.eraContactSites.length=0;
-    for(let i=0;i<this.sites.length;i++){const s=this.sites[i];if(s.deckHeight)this.eraDeckSites.push(s);if(s.contactMesh)this.eraContactSites.push(s);}
+    const last=this.sites[this.sites.length-1];
+    if(this.eraSiteCount===this.sites.length&&this.eraLastSite===last)return;this.eraSiteCount=this.sites.length;this.eraLastSite=last;this.eraDeckSites.length=this.eraContactSites.length=0;
+    for(let i=0;i<this.sites.length;i++){const s=this.sites[i];if(s.deckHeight||s.deckContactHeight||s.groundHeight)this.eraDeckSites.push(s);if(s.contactMesh)this.eraContactSites.push(s);}
   }
-  private withDeck(x: number, z: number, ground: number, surface?:Surface): number {
-    if(this.cartRoads)this.refreshEraSites();
-    for (const site of (this.cartRoads?this.eraDeckSites:this.sites)) {
+  private withDeck(x: number, z: number, ground: number, surface?:Surface,referenceY?:number): number {
+    if(this.surveying)return ground;
+    this.refreshEraSites();
+    for (const site of this.eraDeckSites) {
       if (x < site.box[0] || x > site.box[2] || z < site.box[1] || z > site.box[3]) continue;
+      if(site.mask&&!inMask(site.mask,x,z))continue;
       if(site.preserveRoads&&this.protectedRoadAt(x,z))continue;
+      // A filled structure's cap is ground for every reader: there is no route beneath it.
       const cap=site.groundHeight?.(x,z);
       if(cap!=null&&cap>ground)ground=cap;
-      const deck = site.deckHeight?.(x, z, this.landHeightAt, this.groundContact ? this.groundContact.y + 0.25 : Infinity);
-      // A front wheel may be one axle-half up the slope. A body underneath a deck cannot step onto its top.
-      if (deck != null && (!this.groundContact || deck <= this.groundContact.y + 0.25) && deck>=ground) {
+      if(referenceY===undefined&&!site.deckContactHeight)continue;
+      const deck = site.deckContactHeight?site.deckContactHeight(x,z,referenceY):site.deckHeight?.(x, z, this.landHeightAt,referenceY===undefined?Infinity:referenceY+.25);
+      // Apply exact route contact or the site's body-height and land gates.
+      const bodyY=referenceY;
+      if (deck != null && (site.deckContactHeight!==undefined || bodyY!==undefined&&Number.isFinite(bodyY)&&deck<=bodyY+.25) && (site.deckContactHeight!==undefined || deck>=ground)) {
         ground=deck;
         if (surface && site.deckDriving) {
-          const driving=typeof site.deckDriving==='function'?site.deckDriving(x,z):site.deckDriving;
+          const driving:{kind:number;halfWidth:number;washboard?:boolean;road?:boolean;roadKind?:number}=typeof site.deckDriving==='function'?site.deckDriving(x,z):site.deckDriving;
           surface.kind=driving.kind;surface.halfWidth=driving.halfWidth;surface.roadDist=0;
-          surface.deck=true;surface.canopy=0;surface.washboard=false;surface.bridge=false;
+          surface.deck=true;surface.canopy=0;surface.washboard=driving.washboard??false;surface.bridge=false;surface.roadDeck=driving.road===true;surface.deckRoadKind=driving.roadKind;
         }
       }
     }
@@ -1122,7 +1234,7 @@ export class Terrain {
     if (this.groundContact && this.wantsDrawnContact(x,z)) {
       const drawn=this.drawnTile(x,z);if(drawn)ground+=(this.triangleHeight(drawn,x,z)-ground)*this.wantsDrawnContact(x,z);
     }
-    return ground;
+    return this.surveying||this.cartRoads?ground:this.roadCuts.land(x,z,ground);
   };
 
   private bilinearHeight(t: Tile, x: number, z: number): number {
@@ -1145,10 +1257,10 @@ export class Terrain {
   }
 
   /** Copy only an eligible walk tile for its height worker; the live geometry is never transferred. */
-  walkTileData(level:number,i:number,j:number,bank=false):{level:number;i:number;j:number;x0:number;z0:number;size:number;positions:Float32Array;ground?:Float32Array}|null {
+  walkTileData(level:number,i:number,j:number):{level:number;i:number;j:number;x0:number;z0:number;size:number;positions:Float32Array}|null {
     const t=this.tiles.get(`${level}/${i}_${j}`);if(!t?.ready||!t.mesh)return null;
     const positions=(t.mesh.geometry.getAttribute('position').array as Float32Array).slice();
-    return {level,i,j,x0:t.x0,z0:t.z0,size:t.size,positions,...(bank&&t.ground?{ground:t.ground.slice()}:{})};
+    return {level,i,j,x0:t.x0,z0:t.z0,size:t.size,positions};
   }
 
   /** Exact triangle in one indexed terrain level. Construction reads never scan or keep far tiles alive. */
@@ -1171,7 +1283,8 @@ export class Terrain {
     else if(drawnOnly)t=this.drawnBoundsTile(x,z);
     if (!t?.mesh) return null;
     this.use(t);
-    return this.triangleHeight(t, x, z);
+    const height = this.triangleValue(t, x, z, t.mesh.geometry.getAttribute('position'), 1);
+    const cut=this.cartRoads?null:this.roadCuts.height(x,z);return cut!==null&&height>cut-.035?null:height;
   }
   /** The finest visible tile whose bounds hold the point and whose quarter is shown. Tiles are found by key, a few
    *  lookups per sample, not a walk over every loaded tile. The test is each tile's own bounds, not the floor() key,
@@ -1238,7 +1351,11 @@ export class Terrain {
     return null;
   }
   private triangleHeight(t:Tile,x:number,z:number):number {
-    return this.triangleValue(t,x,z,t.mesh!.geometry.getAttribute('position'),1);
+    const height=this.triangleValue(t,x,z,t.mesh!.geometry.getAttribute('position'),1);
+    const cut=this.cartRoads?null:this.roadCuts.height(x,z);
+    if(cut===null||height<=cut-.035)return height;
+    const fa0=((x-t.x0)/t.size)*T,fb0=((z-t.z0)/t.size)*T,ia=Math.min(Math.floor(fa0),T-1),ib=Math.min(Math.floor(fb0),T-1),ua=fa0-ia,ub=fb0-ib,g=t.ground!;
+    return (g[ib*S+ia]*(1-ua)+g[ib*S+ia+1]*ua)*(1-ub)+(g[(ib+1)*S+ia]*(1-ua)+g[(ib+1)*S+ia+1]*ua)*ub;
   }
 
   private triangleValue(t:Tile,x:number,z:number,attr:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,component:number):number {
@@ -1267,7 +1384,7 @@ export class Terrain {
     return site.quarryFloorAllowsMineral(x,z,h);
   }
 
-  surfaceAt(x: number, z: number): Surface | null {
+  surfaceAt(x: number, z: number, referenceY?:number): Surface | null {
     const t = this.find(x, z);
     if (!t) return null;
     const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
@@ -1301,7 +1418,8 @@ export class Terrain {
     }
     // Mail and every other ground reader see the same exact deck as the wheels.
     if (this.groundContact && this.wantsDrawnContact(x,z)){const drawn=this.drawnTile(x,z);if(drawn)out.ground+=(this.triangleHeight(drawn,x,z)-out.ground)*this.wantsDrawnContact(x,z);}
-    out.ground = this.withDeck(x, z, out.ground,out);
+    if(!this.surveying&&!this.cartRoads)out.ground=this.roadCuts.land(x,z,out.ground);
+    out.ground = this.withDeck(x, z, out.ground,out,referenceY);
     const waterLevel=out.deck?null:this.waterLevelAt(x,z,out.ground);
     if (waterLevel!==null) {out.water=true;out.waterLimit=Math.max(waterLevel,out.ground)+.25;}
     if(!this.cartRoads&&!out.deck&&!out.water){
@@ -1367,6 +1485,9 @@ export class Terrain {
 
   update(camera: THREE.PerspectiveCamera, startMode = false) {
     this.frame++;
+    // While the game waits for the driver, a finished cut job uploads all its pages in one frame (no one drives yet,
+    // and ready waits for it). While driving, one page per frame keeps each frame's upload small.
+    if(!this.cartRoads)this.roadCuts.step(2,this.holdBackground?CUT_ATLAS_PAGES:1);
     if(this.cartRoads){const previous=this.contactPrevious;this.contactPrevious=this.contactSelected;this.contactSelected=previous;this.contactSelected.length=0;}
     this.wantedCount = 0;
     this.drawn = 0;
@@ -1565,6 +1686,7 @@ export class Terrain {
       (mat.uniforms.tNormal.value as THREE.Texture).dispose();
       if (mat.uniforms.tRoad.value !== this.noRoad) (mat.uniforms.tRoad.value as THREE.Texture).dispose();
       if (mat.uniforms.tBrook.value !== this.noBrook) (mat.uniforms.tBrook.value as THREE.Texture).dispose();
+      this.roadCuts.release(t);
       (mat.uniforms.tSiteStyle?.value as THREE.Texture|undefined)?.dispose();
       mat.dispose();
       this.tiles.delete(`${t.level}/${t.i}_${t.j}`);this.dataRevision++;if(this.cartRoads)this.contactTile(t);else this.contactRevision++;

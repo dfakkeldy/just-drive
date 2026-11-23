@@ -31,7 +31,8 @@ export class SocialView {
     const id = ev.key === '0' ? GAME_PHRASES + 1 : Number(ev.key)-1;
     if (/^[0-9]$/.test(ev.key) && isPhraseId(id) && (id < GAME_PHRASES || this.net.gamesSupported)) { ev.preventDefault(); ev.stopImmediatePropagation(); this.net.chat(id); }
   };
-  constructor(private readonly net: Net, private readonly ground: (x:number,z:number) => number | null, touch = false) {
+  constructor(private readonly net: Net, private readonly ground: (x:number,z:number,referenceY?:number) => number | null, touch = false,
+    private readonly height: (y:number) => number = y => y) {
     this.root.id = 'mpSocial';
     this.root.open = !touch;
     mountRoomCard(this.root, touch);
@@ -92,11 +93,15 @@ export class SocialView {
       }
       const bubble = entry.node;
       bubble.hidden = true;
-      let p: PeerView | typeof me | undefined = c.id === this.net.me?.id ? me : undefined;
-      if (!p) for (const peer of peers) if (peer.id === c.id) { p = peer; break; }
-      if (!p) continue;
-      const y = 'y' in p ? p.y : (this.ground(p.x,p.z) ?? 0) + p.air;
-      this.point.set(p.x,y+4,p.z).applyMatrix4(camera.matrixWorldInverse);
+      // The local car is not in peers; a peer's PeerView may carry its own y, so tell them apart by id, not by 'y'.
+      let peer: PeerView | undefined;
+      if (c.id !== this.net.me?.id) {
+        for (const q of peers) if (q.id === c.id) { peer = q; break; }
+        if (!peer) continue;
+      }
+      // A peer's bubble floats over its ghost, which stands on the deck within reach of the peer's own height.
+      const y = peer ? (this.ground(peer.x,peer.z,peer.y === undefined ? undefined : this.height(peer.y)) ?? 0) + peer.air : me.y;
+      this.point.set(peer ? peer.x : me.x,y+4,peer ? peer.z : me.z).applyMatrix4(camera.matrixWorldInverse);
       if (this.point.z >= 0) continue;
       this.point.applyMatrix4(camera.projectionMatrix);
       if (Math.abs(this.point.x)>1 || Math.abs(this.point.y)>1 || this.point.z>1) continue;

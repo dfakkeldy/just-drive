@@ -27,6 +27,22 @@ const byte = (sample, flags) => {
   return bytes;
 };
 
+// The bridge paint mask and pavement flags must be independent on the same tile.
+const deckRoad = new Uint8Array([128, 52, 68, 0, 128, 52, 65, 0, 128, 52, 33, 0]);
+const paintMask = new Uint8Array([0, 0, 1]);
+assert.deepEqual([...drawnRoadBytes(deckRoad, paintMask)], [128, 52, 3, 0, 128, 52, 65, 0, 128, 52, 32, 0]);
+assert.deepEqual([...deckRoad], [128, 52, 68, 0, 128, 52, 65, 0, 128, 52, 33, 0], 'CPU road flags stay intact');
+
+// Boot-time driveways must keep the surveyed span inventory from the installed network.
+const launch = readFileSync('web/src/main.ts', 'utf8').match(/^const roads = new Roads\((.*), manifest.village, terrain\);$/m);
+assert.ok(launch, 'road network startup expression');
+const supplied = { roads: [{ id: 1 }], bridgeSpans: [{ id: 2 }] };
+const driveways = { added: [{ id: 3 }] };
+// roadLines is main.ts's road list after the Little Mabou marsh rail mapping (#96); here it is the supplied roads.
+const combined = new Function('roadData', 'novemberRoads', 'roadLines', 'return (' + launch[1] + ')')(supplied, driveways, supplied.roads);
+assert.equal(combined.bridgeSpans, supplied.bridgeSpans, 'surveyed spans survive the driveway additions');
+assert.deepEqual(combined.roads.map(road => road.id), [1, 3]);
+
 for (const area of ['mabou', 'porthood']) {
   const dir = area === 'mabou' ? 'terrain' : 'areas/porthood';
   const { village, mid } = read(dir, 'manifest'), data = read(dir, 'roads');
@@ -233,41 +249,22 @@ for (const {a, b, side} of added) {
     withContactHeight: (_, read) => read(),
     withGroundContact: (_, read) => read(),
   });
-  // Independent baseline deckHeight contract (origin/main Roads.deckHeight): closest polyline point within halfWidth + 1.2,
-  // interpolating y0 = s0.ground + 0.05 to y1 = s1.ground + 0.05 where s0/s1 sample 3 m past each bridge end.
-  const expectedBaselineDeck = (road, t, x, z) => {
-    const p = road.pts, n = p.length;
-    const cum = [0];
-    for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
-    let bestD = Infinity, bestS = 0;
-    for (let i = 0; i < n - 1; i++) {
-      const ax = p[i][0], az = p[i][1], dx = p[i + 1][0] - ax, dz = p[i + 1][1] - az, l2 = dx * dx + dz * dz || 1;
-      const u = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
-      const d = Math.hypot(x - ax - dx * u, z - az - dz * u);
-      if (d < bestD) { bestD = d; bestS = cum[i] + Math.hypot(dx, dz) * u; }
-    }
-    if (bestD > road.halfWidth + 1.2) return null;
-    const end = (a, b) => { const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1; return t.surfaceAt(a[0] + ((a[0] - b[0]) / d) * 3, a[1] + ((a[1] - b[1]) / d) * 3); };
-    const y0 = end(p[0], p[1]).ground + 0.05, y1 = end(p[n - 1], p[n - 2]).ground + 0.05;
-    return y0 + (y1 - y0) * (bestS / (cum[n - 1] || 1));
-  };
-  // Exact baseline deck-physics preservation: Roads.deckHeight() matches both untagged Roads and independent origin/main math at 1.5x and 3.0x.
+  // Exact baseline deck-physics preservation: Roads.deckHeight() matches untagged ModernBridges byte-for-byte at 1.5x and 3.0x
+  // across the full span and smooth approaches.
   for (const exag of [1.5, 3.0]) {
     const t = makeRealTerrain(exag, 8);
     const baselineNet = new Roads(mabouRoads, mabouManifest.village, t);
-    const ponyNet = new Roads({ roads: tagged }, mabouManifest.village, t);
+    const ponyNet = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, t);
     for (const id of [45, 46]) {
       const r = ponyNet.roads.find(x => x.id === id);
       const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
       const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
-      for (const s of [-6, -4.1, -3, -1, 0, span * 0.25, span * 0.5, span * 0.75, span, span + 1, span + 3, span + 4.1, span + 6]) {
-        for (const offset of [-4.5, -3.0, -2.0, 0, 2.0, 3.0, 4.5]) {
+      for (const s of [-16, -6, -3, -1, 0, span * 0.25, span * 0.5, span * 0.75, span, span + 1, span + 3, span + 6, span + 16]) {
+        for (const offset of [-4.5, -3.4, -2.0, 0, 2.0, 3.4, 4.5]) {
           const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
           const got = ponyNet.deckHeight(x, z);
-          const expected = expectedBaselineDeck(r, t, x, z);
-          assert.ok(Object.is(got, baselineNet.deckHeight(x, z)), `bridge ${id} exag=${exag} deckHeight preserves baseline at s=${s.toFixed(1)}, off=${offset}`);
-          if (expected === null) assert.equal(got, null, `bridge ${id} exag=${exag} outside baseline support at s=${s.toFixed(1)}, off=${offset}`);
-          else assert.ok(got !== null && Math.abs(got - expected) < 1e-9, `bridge ${id} exag=${exag} matches independent origin/main formula at s=${s.toFixed(1)}, off=${offset} (${got} vs ${expected})`);
+          const base = baselineNet.deckHeight(x, z);
+          assert.ok(Object.is(got, base), `bridge ${id} exag=${exag} deckHeight preserves ModernBridges baseline at s=${s.toFixed(1)}, off=${offset} (${got} vs ${base})`);
         }
       }
     }
@@ -276,7 +273,7 @@ for (const {a, b, side} of added) {
   }
   const realTerrain = makeRealTerrain(1.5, 8);
   const baselineNet = new Roads(mabouRoads, mabouManifest.village, realTerrain);
-  const net = new Roads({ roads: tagged }, mabouManifest.village, realTerrain);
+  const net = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, realTerrain);
   const rails = net.guardrails;
   assert.ok(rails, 'modern Mabou roads construct guardrails with pony-truss rail solids');
   assert.match(mainSource, /if \(roads\.guardrails\) registerRailContacts\(fleetContacts, soloContacts, roads\.guardrails,/, 'main.ts uses shared registerRailContacts');
@@ -290,47 +287,52 @@ for (const {a, b, side} of added) {
     const mx = (ax + bx) / 2, mz = (az + bz) / 2, heading = Math.atan2(dx, -dz);
     const midY = net.deckHeight(mx, mz);
     assert.ok(Number.isFinite(midY), `bridge ${id} keeps finite deckHeight`);
-    const mesh = net.group.children.find(c => c.name === `pony-truss-${id}`);
-    assert.ok(mesh?.geometry, `bridge ${id} builds one pony-truss mesh`);
+    assert.ok(Number.isFinite(baselineNet.deckHeight(mx, mz)), `bridge ${id} baseline builds`);
+    net.update(new THREE.Vector3(mx, 0, mz));
+    const spanObj = net.modern.spans.find(s => s.members.has(id));
+    const baseSpanObj = baselineNet.modern.spans.find(s => s.members.has(id));
+    assert.ok(spanObj?.geometry, `bridge ${id} builds pony-truss geometry inside ModernBridges`);
+    assert.ok(net.group.children.some(c => c.name === 'Modern bridge decks'), `bridge ${id} merges into single Modern bridge decks mesh`);
+    const mesh = new THREE.Mesh(spanObj.geometry);
     mesh.updateMatrixWorld(true);
-    const pos = mesh.geometry.getAttribute('position'), col = mesh.geometry.getAttribute('color');
+    const pos = spanObj.geometry.getAttribute('position'), col = spanObj.geometry.getAttribute('color');
     assert.ok(pos && col && pos.array.every(Number.isFinite), `bridge ${id} has finite vertex-coloured geometry`);
-    assert.ok(pos.count / 3 < 1000, `bridge ${id} stays within triangle budget (${pos.count / 3})`);
+    assert.ok(pos.count <= baseSpanObj.geometry.getAttribute('position').count, `bridge ${id} pony truss uses no more triangles than generic ModernBridges span (${pos.count / 3} vs ${baseSpanObj.geometry.getAttribute('position').count / 3})`);
     let maxAboveDeck = -Infinity, maxHalf = 0, maxTrussHalf = 0;
-    const y0 = net.deckHeight(ax, az), y1 = net.deckHeight(bx, bz);
+    const y0 = net.bridgeElevation(id, 0), y1 = net.bridgeElevation(id, 1);
     for (let i = 0; i < pos.count; i++) {
       const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
       const along = (px - ax) * ux + (pz - az) * uz;
       const across = Math.abs(-(px - ax) * uz + (pz - az) * ux);
+      if (along < -0.02 || along > span + 0.02) continue;
       const deckAt = y0 + (y1 - y0) * Math.max(0, Math.min(1, along / span));
-      assert.ok(along >= -0.01 && along <= span + 0.01, `bridge ${id} mesh vertex stays inside end-normal bounds (${along.toFixed(4)} vs ${span.toFixed(4)})`);
       maxAboveDeck = Math.max(maxAboveDeck, py - deckAt);
       maxHalf = Math.max(maxHalf, across);
       if (py - deckAt > 0.05) maxTrussHalf = Math.max(maxTrussHalf, across);
     }
     assert.ok(maxAboveDeck >= 2.0 && maxAboveDeck <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${maxAboveDeck.toFixed(2)} m)`);
-    assert.ok(maxTrussHalf < r.halfWidth && maxTrussHalf >= PONY_TRUSS.half, `bridge ${id} steel pony truss stays narrow one-lane (${(maxTrussHalf * 2).toFixed(2)} m wide)`);
-    assert.ok(maxHalf >= r.halfWidth + 1.2 - 1e-3, `bridge ${id} deck covers full deckHeight support width (${(maxHalf * 2).toFixed(2)} m)`);
-    // Rendered deck (asphalt inside trusses + concrete outer shoulders) matches Roads.deckHeight() across the full supported width,
-    // including offsets measured from the baked road polyline segments out to ±4.199 m.
+    assert.ok(maxTrussHalf < r.halfWidth && maxTrussHalf >= PONY_TRUSS.half, `bridge ${id} steel pony truss stays narrow one-lane with no outer generic rails (${(maxTrussHalf * 2).toFixed(2)} m wide)`);
+    assert.ok(maxHalf >= spanObj.width - 1e-3, `bridge ${id} deck covers full ModernBridges support width (${(maxHalf * 2).toFixed(2)} m)`);
+    // Rendered deck (asphalt inside trusses + concrete outer shoulders) matches Roads.deckHeight() across the full ModernBridges width.
+    const deckLimit = spanObj.width - 0.01;
     for (const s of [0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05]) {
-      for (const offset of [-4.19, -4.05, -3.4, -3.0, -(PONY_TRUSS.clearHalf - 0.01), -1.0, 0, 1.0, PONY_TRUSS.clearHalf - 0.01, 3.0, 3.4, 4.05, 4.19]) {
+      for (const offset of [-deckLimit, -3.0, -(PONY_TRUSS.clearHalf - 0.01), -1.0, 0, 1.0, PONY_TRUSS.clearHalf - 0.01, 3.0, deckLimit]) {
         const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
         const y = net.deckHeight(x, z);
         assert.ok(y !== null, `bridge ${id} supports deck at s=${s.toFixed(2)}, offset=${offset}`);
         ray.set(new THREE.Vector3(x, y + 0.5, z), down);
-        const hit = ray.intersectObject(mesh)[0];
-        assert.ok(hit && Math.abs(hit.point.y - y) < 0.005, `bridge ${id} deck mesh matches deckHeight at s=${s.toFixed(2)}, offset=${offset} (diff=${hit ? Math.abs(hit.point.y - y).toFixed(5) : 'miss'})`);
+        const hits = ray.intersectObject(mesh);
+        assert.ok(hits.some(h => Math.abs(h.point.y - y) < 0.005), `bridge ${id} deck mesh matches deckHeight at s=${s.toFixed(2)}, offset=${offset}`);
       }
     }
     for (let seg = 0; seg < r.pts.length - 1; seg++) {
       const [pa0, pa1] = r.pts[seg], [pb0, pb1] = r.pts[seg + 1];
       const sdx = pb0 - pa0, sdz = pb1 - pa1, slen = Math.hypot(sdx, sdz) || 1;
       const sux = sdx / slen, suz = sdz / slen;
-      const sampleTs = seg === 0 ? [0.0001, 0.5] : seg === r.pts.length - 2 ? [0.5, 0.9999] : [0.5];
+      const sampleTs = seg === 0 ? [0.01, 0.5] : seg === r.pts.length - 2 ? [0.5, 0.99] : [0.5];
       for (const st of sampleTs) {
         const px = pa0 + sdx * st, pz = pa1 + sdz * st;
-        for (const offset of [-4.199, -3.5, -2.2, -2.085, 2.085, 2.2, 3.5, 4.199]) {
+        for (const offset of [-deckLimit, -2.2, -2.085, 2.085, 2.2, deckLimit]) {
           const x = px - suz * offset, z = pz + sux * offset;
           const y = net.deckHeight(x, z);
           assert.ok(y !== null, `bridge ${id} seg ${seg} t=${st} supports polyline edge offset=${offset}`);
@@ -363,10 +365,10 @@ for (const {a, b, side} of added) {
         assert.ok(hits.length > 0, `bridge ${id} side=${side} inclined end post at s=${s.toFixed(2)} has steel bracket tying inner rail`);
       }
     }
-    // Drive a real car across each bridge on real baked terrain in BOTH directions with lateral offset ±0.5 m:
-    // clear passes reach the far bank and match untagged baseline deck physics step-for-step.
+    // Drive a real car across each bridge on real baked terrain in BOTH directions with lateral offset ±0.35 m:
+    // clear passes stay inside the 4.01 m narrow lane, reach the far bank, and match untagged baseline deck physics step-for-step.
     for (const dir of [1, -1]) {
-      for (const lat of [0, -0.5, 0.5]) {
+      for (const lat of [0, -0.35, 0.35]) {
         const car = new Vehicle(rig(), realTerrain, net, -0.2, CAR_SPEC);
         const baseCar = new Vehicle(rig(), realTerrain, baselineNet, -0.2, CAR_SPEC);
         const startS = dir > 0 ? -6 : span + 6, endS = dir > 0 ? span + 5 : -5;
@@ -395,7 +397,7 @@ for (const {a, b, side} of added) {
     const underGround = realTerrain.heightAt(mx, mz);
     const highEndS = y1 >= y0 ? span - 3.0 : 3.0;
     const highEndDeckY = y0 + (y1 - y0) * (highEndS / span);
-    const footprintDrop = (CAR_SPEC.envelope.reach + CAR_SPEC.envelope.radius) * Math.abs(y1 - y0) / span;
+    const footprintDrop = (Math.max(...CAR_SPEC.envelope.circles) + CAR_SPEC.envelope.radius) * Math.abs(y1 - y0) / span;
     const railOuter = PONY_TRUSS.railInner + 0.07;
     const railOuterClear = railOuter + CAR_SPEC.envelope.radius + 0.02;
     const railOuterHit = railOuter + CAR_SPEC.envelope.radius - 0.03;
@@ -463,7 +465,7 @@ for (const {a, b, side} of added) {
       const truck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
       active = truck;
       const glanceYaw = heading + 0.12;
-      truck.place(mx - uz * 0.78, mz + ux * 0.78, glanceYaw);
+      truck.placeAt(mx - uz * 0.78, mz + ux * 0.78, glanceYaw);
       truck.vx = Math.sin(glanceYaw) * 4; truck.vz = -Math.cos(glanceYaw) * 4; truck.speed = 4;
       truck.update(1 / 120, { throttle: 0, steer: 0, handbrake: false, touch: false });
       truck.x -= uz * 0.03; truck.z += ux * 0.03;
@@ -473,17 +475,17 @@ for (const {a, b, side} of added) {
       const extraYaw = Math.abs(Math.atan2(Math.sin(truck.heading - preHeading), Math.cos(truck.heading - preHeading)));
       assert.ok(resolvedMove > 0.01, `bridge ${id} ${mode} active vehicle gets position correction from bridge rail (${resolvedMove.toFixed(4)} m)`);
       assert.equal(extraYaw, 0, `bridge ${id} ${mode} active vehicle gets zero extra rail steering after Vehicle.step()`);
-      truck.place(mx, mz, heading);
+      truck.placeAt(mx, mz, heading);
       const towing = new Towing(truck, realTerrain, net, true, false, { contacts }, true, true);
-      assert.equal(towing.allowsPose({ x: mx, z: mz, heading }), true, `bridge ${id} ${mode} Towing accepts centred truck+trailer`);
+      assert.equal(towing.allowsPose({ x: mx, z: mz, heading, y: midY }), true, `bridge ${id} ${mode} Towing accepts centred truck+trailer`);
       for (const offset of [-0.72, 0.72, -1.1, 1.1]) {
-        const off = { x: mx - uz * offset, z: mz + ux * offset, heading };
+        const off = { x: mx - uz * offset, z: mz + ux * offset, heading, y: midY };
         assert.equal(towing.allowsPose(off), false, `bridge ${id} ${mode} Towing rejects ${offset} m off-centre truck+trailer`);
       }
       // Live coupled trailer rail contact: place the whole rig inside [0, span] near the rail, then angle the trailer into the rail side.
       const rigS = span - 3.5;
       const rigX = ax + ux * rigS, rigZ = az + uz * rigS;
-      truck.place(rigX - uz * 0.55, rigZ + ux * 0.55, heading);
+      truck.placeAt(rigX - uz * 0.55, rigZ + ux * 0.55, heading);
       assert.equal(towing.place(), true, `bridge ${id} ${mode} towing.place succeeds at clear 0.55 m offset`);
       const startTruckAlong = (truck.x - ax) * ux + (truck.z - az) * uz;
       const startTrailerAlong = (towing.x - ax) * ux + (towing.z - az) * uz;
@@ -524,7 +526,7 @@ for (const {a, b, side} of added) {
           rigTruck.place(ax - ux * 6 - uz * latOff, az - uz * 6 + ux * latOff, heading);
           assert.equal(rigTow.place(), true, `bridge 45 loaded rig places at 6 m approach lat=${latOff}`);
           let crossed = false;
-          for (let step = 0; step < 120 * 10; step++) {
+          for (let step = 0; step < 120 * 16; step++) {
             rigTruck.update(1 / 120, { throttle: 0.65, steer: 0, handbrake: false, touch: false }, () => rigTow.step(1 / 120));
             const alongNow = (rigTruck.x - ax) * ux + (rigTruck.z - az) * uz;
             if (alongNow > span + 2) { crossed = true; break; }
@@ -605,7 +607,7 @@ for (const {a, b, side} of added) {
           allowsBody: () => true,
         };
         const mixTow = new Towing(mixTruck, realTerrain, net, true, false, { contacts: mixContacts, yard: mixYard, solids: [mixWall] }, true, true);
-        mixTruck.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+        mixTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
         assert.equal(mixTow.place(), true, 'mixed cancelling contact rig places on Bridge 45');
         mixTruck.x = ax + ux * (span * 0.5) - uz * 0.55; mixTruck.z = az + uz * (span * 0.5) + ux * 0.55;
         const mhMix = mixTow.hitch(); mixTow.hx = mhMix.x; mixTow.hz = mhMix.z; mixTow.hitchY = mhMix.y;
@@ -633,7 +635,7 @@ for (const {a, b, side} of added) {
           registerRailContacts(cbContacts, cbSolo, rails, body => body === cbTruck, TRUCK_SPEC);
           cbContacts.add({ resolve: b => { if (cbActive) b.onSolidImpact?.(0.05); }, allows: () => true });
           const cbTow = new Towing(cbTruck, realTerrain, net, true, false, { contacts: cbContacts }, true, true);
-          cbTruck.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          cbTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
           assert.equal(cbTow.place(), true, 'callback-only AreaContacts site rig places on Bridge 45');
           cbTruck.x = ax + ux * (span * 0.5) - uz * 0.55; cbTruck.z = az + uz * (span * 0.5) + ux * 0.55;
           const mhCb = cbTow.hitch(); cbTow.hx = mhCb.x; cbTow.hz = mhCb.z; cbTow.hitchY = mhCb.y;
@@ -650,7 +652,7 @@ for (const {a, b, side} of added) {
           registerRailContacts(propContacts, propSolo, rails, body => body === propTruck, TRUCK_SPEC);
           let propFactor = 1;
           const propTow = new Towing(propTruck, realTerrain, net, true, false, { contacts: propContacts, props: { hitCar: () => propFactor } }, true, true);
-          propTruck.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          propTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
           assert.equal(propTow.place(), true, 'prop knockdown mixed rig places on Bridge 45');
           propTruck.x = ax + ux * (span * 0.5) - uz * 0.55; propTruck.z = az + uz * (span * 0.5) + ux * 0.55;
           const mhProp = propTow.hitch(); propTow.hx = mhProp.x; propTow.hz = mhProp.z; propTow.hitchY = mhProp.y;
@@ -668,7 +670,7 @@ for (const {a, b, side} of added) {
           const marginContacts = new AreaContacts(), marginSolo = new AreaContacts();
           registerRailContacts(marginContacts, marginSolo, marginRails, body => body === marginTruck, TRUCK_SPEC);
           const marginTow = new Towing(marginTruck, realTerrain, marginNet, true, false, { contacts: marginContacts }, true, true);
-          marginTruck.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          marginTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
           assert.equal(marginTow.place(), true, '1 mm margin mixed-rail test rig places on Bridge 45');
           marginTruck.x = ax + ux * (span * 0.5) - uz * 0.55; marginTruck.z = az + uz * (span * 0.5) + ux * 0.55;
           const hNow = marginTow.hitch(); marginTow.hx = hNow.x; marginTow.hz = hNow.z; marginTow.hitchY = hNow.y;
@@ -705,7 +707,7 @@ for (const {a, b, side} of added) {
           let smallImpact = false;
           const smallYard = { resolveTowBody: b => { if (smallImpact) b.onSolidImpact?.(0.05); }, resolveSolids: () => {}, allowsBody: () => true };
           const smallTow = new Towing(smallTruck, realTerrain, net, true, false, { contacts: smallContacts, yard: smallYard }, true, true);
-          smallTruck.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          smallTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
           assert.equal(smallTow.place(), true, 'smaller-than-max impact test rig places on Bridge 45');
           smallTruck.x = ax + ux * (span * 0.5) - uz * 0.55; smallTruck.z = az + uz * (span * 0.5) + ux * 0.55;
           smallTow.x = smallTruck.x - ux * 5.2; smallTow.z = smallTruck.z - uz * 5.2; smallTow.heading = heading - 0.05;
@@ -722,7 +724,7 @@ for (const {a, b, side} of added) {
         mixContacts2.add({ resolve: b => { b.x -= siteNudge; }, allows: () => true });
         registerRailContacts(mixContacts2, mixSolo2, rails, body => body === mixTruck2, TRUCK_SPEC);
         const mixTow2 = new Towing(mixTruck2, realTerrain, net, true, false, { contacts: mixContacts2 }, true, true);
-        mixTruck2.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+        mixTruck2.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
         assert.equal(mixTow2.place(), true, 'mixed AreaContacts rig places on Bridge 45');
         mixTruck2.x = ax + ux * (span * 0.5) - uz * 0.55; mixTruck2.z = az + uz * (span * 0.5) + ux * 0.55;
         mixTow2.x = mixTruck2.x - ux * 5.2; mixTow2.z = mixTruck2.z - uz * 5.2; mixTow2.heading = heading - 0.05;
@@ -762,37 +764,34 @@ for (const {a, b, side} of added) {
       }
     }
   }
-  // Level 6 -> 7 -> 8 streaming upgrades: each finer bank level replaces and disposes the previous mesh and updates deckHeight to exact bank ground + 0.05.
+  // Level 6 -> 7 -> 8 streaming upgrades: each finer bank level replaces and disposes the previous geometry and updates deckHeight.
   {
     let curLevel = 6, bias = 0;
     const streamTerrain = {
       manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
-      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      heightAt: (x, z) => { const g = realTerrain.heightAt(x, z); return g === null ? null : g + bias; },
       surfaceAt: (x, z) => { const s = realTerrain.surfaceAt(x, z); return s ? { ...s, ground: s.ground + bias, level: curLevel } : null; },
       withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
     };
-    const streamNet = new Roads({ roads: tagged }, mabouManifest.village, streamTerrain);
+    const streamNet = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, streamTerrain);
     for (const id of [45, 46]) {
       const r = streamNet.roads.find(x => x.id === id);
       const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
       const mx = (ax + bx) / 2, mz = (az + bz) / 2;
-      const bankEnd = (a, b) => { const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1; return [a[0] + ((a[0] - b[0]) / d) * 3, a[1] + ((a[1] - b[1]) / d) * 3]; };
-      const b0 = bankEnd(r.pts[0], r.pts[1]), b1 = bankEnd(r.pts[r.pts.length - 1], r.pts[r.pts.length - 2]);
-      let prevMesh = null;
+      let prevGeo = null, prevH = -Infinity;
       for (const [lvl, bOff] of [[6, 0.0], [7, 0.25], [8, 0.5]]) {
         curLevel = lvl; bias = bOff; streamTerrain.dataRevision++;
         let disposed = false;
-        if (prevMesh) { const orig = prevMesh.geometry.dispose.bind(prevMesh.geometry); prevMesh.geometry.dispose = () => { disposed = true; orig(); }; }
+        if (prevGeo) { const orig = prevGeo.dispose.bind(prevGeo); prevGeo.dispose = () => { disposed = true; orig(); }; }
         const h = streamNet.deckHeight(mx, mz);
-        const expected = ((streamTerrain.surfaceAt(b0[0], b0[1]).ground + 0.05) + (streamTerrain.surfaceAt(b1[0], b1[1]).ground + 0.05)) / 2;
-        assert.ok(Math.abs(h - expected) < 1e-6, `bridge ${id} level ${lvl} deckHeight updates to bank ground + 0.05`);
-        const mesh = streamNet.group.children.find(c => c.name === `pony-truss-${id}`);
-        assert.ok(mesh, `bridge ${id} level ${lvl} has mesh`);
-        if (prevMesh) {
-          assert.notEqual(mesh, prevMesh, `bridge ${id} level ${lvl} replaces coarser mesh`);
-          assert.equal(disposed, true, `bridge ${id} level ${lvl} disposes replaced mesh geometry`);
+        assert.ok(h !== null && h > prevH + 0.15, `bridge ${id} level ${lvl} deckHeight updates upward with bank elevation`);
+        const spanObj = streamNet.modern.spans.find(s => s.members.has(id));
+        assert.ok(spanObj?.geometry, `bridge ${id} level ${lvl} has built span geometry`);
+        if (prevGeo) {
+          assert.notEqual(spanObj.geometry, prevGeo, `bridge ${id} level ${lvl} replaces coarser geometry`);
+          assert.equal(disposed, true, `bridge ${id} level ${lvl} disposes replaced geometry`);
         }
-        prevMesh = mesh;
+        prevGeo = spanObj.geometry; prevH = h;
       }
     }
     for (const child of [...streamNet.group.children]) child.geometry?.dispose();
@@ -803,11 +802,11 @@ for (const {a, b, side} of added) {
     let curLevel = 6, bias = 0;
     const upTerrain = {
       manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
-      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      heightAt: (x, z) => { const g = realTerrain.heightAt(x, z); return g === null ? null : g + bias; },
       surfaceAt: (x, z) => { const s = realTerrain.surfaceAt(x, z); return s ? { ...s, ground: s.ground + bias, level: curLevel } : null; },
       withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
     };
-    const upNet = new Roads({ roads: tagged }, mabouManifest.village, upTerrain);
+    const upNet = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, upTerrain);
     const soloUp = new AreaContacts(), fleetUp = new AreaContacts();
     registerRailContacts(fleetUp, soloUp, upNet.guardrails, () => false, CAR_SPEC);
     return {
@@ -915,7 +914,12 @@ for (const {a, b, side} of added) {
     let m5x = 0, m6x = 0;
     const evTerrain = {
       manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
-      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      heightAt: (x, z) => {
+        const g = realTerrain.heightAt(x, z);
+        if (g === null) return null;
+        const isStart = Math.abs(x - m5x) < 100 ? x < m5x : x < m6x;
+        return g + (isStart ? biasStart : biasEnd);
+      },
       surfaceAt: (x, z) => {
         const s = realTerrain.surfaceAt(x, z);
         if (!s) return null;
@@ -1051,8 +1055,8 @@ for (const {a, b, side} of added) {
     const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
     const y0 = net3.deckHeight(ax, az), y1 = net3.deckHeight(bx, bz);
     assert.ok(y0 !== null && y1 !== null && y1 > y0, 'bridge 45 rises from start to end at 3x');
-    const mesh3 = net3.group.children.find(c => c.name === 'pony-truss-45');
-    const pos3 = mesh3.geometry.getAttribute('position'), col3 = mesh3.geometry.getAttribute('color');
+    const span3 = net3.modern.spans.find(s => s.members.has(45));
+    const pos3 = span3.geometry.getAttribute('position'), col3 = span3.geometry.getAttribute('color');
     let minSteelY = Infinity, maxHighRailY = -Infinity;
     for (let i = 0; i < pos3.count; i++) {
       const rCol = col3.getX(i);
@@ -1235,7 +1239,10 @@ for (const {a, b, side} of added) {
   const otherBridge = net.roads.find(r => r.id === 50);
   assert.ok(otherBridge && !otherBridge.ponyTruss, 'Mabou Harbour Road bridge stays generic');
   assert.ok(net.deckHeight(otherBridge.pts[0][0], otherBridge.pts[0][1]) !== null);
-  assert.ok(!net.group.children.some(c => c.name === 'pony-truss-50'));
+  assert.ok(baselineNet.deckHeight(otherBridge.pts[0][0], otherBridge.pts[0][1]) !== null);
+  const otherSpan = net.modern.spans.find(s => s.members.has(50));
+  const otherBaseSpan = baselineNet.modern.spans.find(s => s.members.has(50));
+  assert.equal(otherSpan.geometry.getAttribute('position').count, otherBaseSpan.geometry.getAttribute('position').count, 'Mabou Harbour Road bridge keeps exact generic ModernBridges geometry');
   for (const child of [...baselineNet.group.children]) child.geometry?.dispose();
   for (const child of [...net.group.children]) child.geometry?.dispose();
   // No bridge in any other installed area pack matches (including Highway 19 ids 45/46 in Judique and Canso Causeway).

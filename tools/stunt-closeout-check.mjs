@@ -142,4 +142,9 @@ for(const low of [false,true]){
   drawn=null;const unbuilt=new StuntPark({...terrain,sites:[]},[{piece,x:0,z:0,heading:Math.PI/2}],low);
   unbuilt.update(0,ride,new THREE.Vector3(2,10,2));assert.equal(unbuilt.pieces[0].ready,false,'unbuilt seats still require drawn LOD8');
 }
+// A re-place onto a ramp deck (respawn passes the trail crumb's height) is judged at that height, not at the land under
+// the deck: with the land height the lip solid of a slip kicker refused a crumb on its own deck.
+{const references=[];const guard=new StuntPark({...ground,sites:[],heightAt:(_x,_z,reference)=>{references.push(reference);return 0;}},[{piece:allStuntPieces()[0],x:0,z:0,heading:Math.PI/2}],false);
+ guard.placementAllowed({x:0,z:0,heading:0,y:1.71},CAR_SPEC);guard.placementAllowed({x:0,z:0,heading:0},CAR_SPEC);
+ assert.deepEqual(references,[1.71,undefined],'the park placement guard reads the ground at the pose reference height');}
 console.log('PASS stunt close-out',{solids,placements,lodSamples,contacts});

@@ -90,11 +90,11 @@ export function pavedGroundShader(source:string):string {
   canopy *= 1.0-hardPaved;
   canopy *= 1.0-max(lotGravel,lotRim);
   // ---- roads: painted`);
-  out=replace(out,'    albedo = mix(albedo, surface, onRoad);',`    // LOT_GRAVEL: an owner gravel lot covers a track or gravel lane that crosses it (before any asphalt over it).
+  out=replace(out,'    albedo = mix(albedo, surface, onRoad * roadPaint);',`    // LOT_GRAVEL: an owner gravel lot covers a track or gravel lane that crosses it (before any asphalt over it).
     if(lotGravel>0.0&&rkind>2.5&&rkind<4.5)surface=mix(surface,pavedLotGravel(p),min(lotGravel/max(1.0-hardPaved,0.001),1.0));
     // PAVED_APRON: only selected short gravel/driveway mouths; native paved lanes retain their paint.
     if(hardPaved>0.0&&rkind>2.5&&rkind<4.5)surface=mix(surface,pavedLotAsphalt(p),hardPaved);
-    albedo = mix(albedo, surface, onRoad);`);
+    albedo = mix(albedo, surface, onRoad * roadPaint);`);
   out=replace(out,'    albedo = mix(albedo, gravel, shoulder * 0.85',`    shoulder *= 1.0-hardPaved;
     albedo = mix(albedo, gravel, shoulder * 0.85`);
   // Small survey slopes are lit strongly at this low sun angle. Give the asphalt finish

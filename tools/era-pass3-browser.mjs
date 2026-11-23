@@ -89,7 +89,7 @@ try{
   const result=await read(`(()=>{
    const road=mmm.roads.roads.find(r=>r.id===${bridge.id}),pts=road.pts,cum=[0];for(let i=1;i<pts.length;i++)cum.push(cum.at(-1)+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));const len=cum.at(-1),v=mmm.vehicle;
    const at=s=>{let i=0;while(i<pts.length-2&&cum[i+1]<s)i++;const a=pts[i],b=pts[i+1],d=cum[i+1]-cum[i],t=(s-cum[i])/d;return {x:a[0]+(b[0]-a[0])*t,z:a[1]+(b[1]-a[1])*t,h:Math.atan2(b[0]-a[0],a[1]-b[1])};};
-   const start=at(0);v.restart(start.x,start.z,start.h);
+   const start=at(0),startDeck=mmm.roads.deckHeight(start.x,start.z);if(startDeck===null)throw Error('bridge traversal requires its current deck plane');v.restart(start.x,start.z,start.h);v.place(start.x,start.z,start.h,startDeck);
    v.assist=0;v.strongHelp=false;const initial={y:v.y,ground:mmm.terrain.heightAt(v.x,v.z),deck:mmm.roads.deckHeight(v.x,v.z),pitch:v.pitch,roll:v.roll};let progress=0,steps=0,maxGap=0,deckSamples=0,wrongSurface=0;
    for(;steps<120*(len/2+20)&&progress<len+5;steps++){
     let best=Infinity;for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],dx=b[0]-a[0],dz=b[1]-a[1],l=cum[i]-cum[i-1],t=Math.max(0,Math.min(i===pts.length-1?1+8/l:1,((v.x-a[0])*dx+(v.z-a[1])*dz)/(l*l))),x=a[0]+t*dx,z=a[1]+t*dz,d=Math.hypot(x-v.x,z-v.z);if(d<best){best=d;progress=cum[i-1]+t*l;}}
@@ -97,7 +97,7 @@ try{
     mmm.driveVehicle(1/120,{throttle:Math.abs(v.speed)<4?1:Math.abs(v.speed)>5?-.1:0,steer:Math.max(-1,Math.min(1,error*2)),handbrake:false,touch:false});
     const deck=mmm.roads.deckHeight(v.x,v.z);if(deck!==null){deckSamples++;if(!${JSON.stringify(LOOSE_BRIDGE_SURFACES)}.includes(v.surfaceName))wrongSurface++;maxGap=Math.max(maxGap,Math.abs(v.y-deck));}
    }
-   return {id:road.id,initial,contact:mmm.terrain.surfaceAt(v.x,v.z),length:len,progress,steps,x:v.x,z:v.z,surface:v.surfaceName,deckSamples,wrongSurface,maxGap,ground:mmm.terrain.heightAt(v.x,v.z),deck:mmm.roads.deckHeight(v.x,v.z),y:v.y,deckState:(()=>{const d=mmm.roads.decks.get(road.id);return {y0:d?.y0,y1:d?.y1,level:d?.level};})(),success:progress>=len+5};
+   return {id:road.id,initial,contact:mmm.terrain.surfaceAt(v.x,v.z),length:len,progress,steps,x:v.x,z:v.z,surface:v.surfaceName,deckSamples,wrongSurface,maxGap,ground:mmm.terrain.heightAt(v.x,v.z),deck:mmm.roads.deckHeight(v.x,v.z),y:v.y,deckState:(()=>{const d=mmm.roads.eraDecks.get(road.id);return {y0:d?.y0,y1:d?.y1,level:d?.level};})(),success:progress>=len+5};
   })()`);
   assert.equal(result.success,true,'cross bridge '+JSON.stringify(result));assert(result.deckSamples>0);assert.equal(result.wrongSurface,0);assert(result.maxGap<1.0,'deck contact '+JSON.stringify(result));records.bridges.push(result);writeFileSync(`${out}/bridge-progress.json`,JSON.stringify(records.bridges,null,2));console.log('BRIDGE',JSON.stringify(result));
  }

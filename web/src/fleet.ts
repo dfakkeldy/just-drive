@@ -94,7 +94,7 @@ export class Fleet {
     if ((this.bodiesChanged || membersChanged) && this.needsSettling) this.solidsChanged();
   }
   private readonly trailerSupport: FleetSupport;
-  private readonly nativePlace = new Map<Vehicle, (x: number, z: number, heading: number) => boolean>();
+  private readonly nativePlace = new Map<Vehicle, (x: number, z: number, heading: number, referenceY?: number) => boolean>();
   private teleportTrial = false;
   private readonly nativeRespawn = new Map<Vehicle, () => void>();
   teleportAttempts = 0;
@@ -140,13 +140,16 @@ export class Fleet {
   private readonly groundPoint = { y: 0 };
   private gx = 0; private gz = 0;
   private readonly readGround = () => {
-    const ground = this.terrain.heightAt(this.gx, this.gz), deck = this.roads.deckHeight(this.gx, this.gz);
+    // The reference is the 1e6 contact height: any site deck counts, as on main (no overpass rule here yet).
+    const ground = this.terrain.heightAt(this.gx, this.gz, this.groundPoint.y), deck = this.roads.deckHeight(this.gx, this.gz);
     return ground === null ? null : deck === null ? ground : Math.max(ground, deck);
   };
   readonly ground: Ground = (x, z) => {
     this.gx = x; this.gz = z; this.groundPoint.y = 1e6;
     return this.terrain.withGroundContact(this.groundPoint, this.readGround, true);
   };
+  /** A fleet placement stands where fleet ground does (the topmost deck, as on main), so it passes that height on. */
+  private reference(x: number, z: number): number | undefined { return this.ground(x, z) ?? undefined; }
   private readonly changed = (x: number, z: number, size: number) => {
     this.supportRevision++;
     if (this.visitPending && this.visitPending.x + 150 >= x && this.visitPending.x - 150 <= x + size && this.visitPending.z + 150 >= z && this.visitPending.z - 150 <= z + size) this.visitDirty = true;
@@ -194,7 +197,7 @@ export class Fleet {
     if (tow.world.yard) tow.world.yard.coupledBodies = this.worldBodiesProvider;
     for (const member of this.members) {
       const place = member.vehicle.place.bind(member.vehicle); this.nativePlace.set(member.vehicle, place);
-      member.vehicle.place = (x, z, heading) => { return this.teleportTrial ? place(x, z, heading) : this.placeMovement(member, x, z, heading); };
+      member.vehicle.place = (x, z, heading, referenceY) => { return this.teleportTrial ? place(x, z, heading, referenceY ?? this.reference(x, z)) : this.placeMovement(member, x, z, heading); };
       this.nativeRespawn.set(member.vehicle, member.vehicle.respawn.bind(member.vehicle));
       member.vehicle.respawn = () => {
         member.vehicle.stopInWater();
@@ -1163,7 +1166,7 @@ export class Fleet {
       const guard = v.placementGuard; let proposed = false;
       try {
         v.placementGuard = p => { proposed = m.id !== 'truck' || this.tow.allowsPose(p); return proposed; };
-        const placed = this.withRampContact(() => this.nativePlace.get(v)!(x, z, heading));
+        const placed = this.withRampContact(() => this.nativePlace.get(v)!(x, z, heading, this.reference(x, z)));
         if (!placed) proposed = false;
       }
       finally { v.placementGuard = guard; }
@@ -1234,17 +1237,19 @@ export class Fleet {
               left -= available; seg += forward ? 1 : -1; fraction = forward ? 0 : 1;
             }
           }
-          if (accepts && !accepts({x,z,heading:yaw})) { failure = 'Requested start pose is blocked'; continue; }
+          // Fleet's own ground height (a deck where there is one) goes with the pose to the caller's guard (the trailer
+          // check judges the pose at its height), as it does to the trailer check below and to place().
           const height = this.ground(x, z);
           if (height === null) { failure = 'Destination land is still loading'; continue; }
           if (height <= this.seaLevel + .08) { failure = 'Water at the destination'; continue; }
+          if (accepts && !accepts({x,z,heading:yaw,y:height})) { failure = 'Requested start pose is blocked'; continue; }
           const invalid = this.validTeleport({ x, z, y: height, heading: yaw, spec: actor.entry.spec }, actor, this.bodiesExcept(actor));
           if (invalid) { failure = invalid; continue; }
-          if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw })) { failure = 'The trailer destination is blocked'; continue; }
+          if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw, y: this.ground(x, z) ?? undefined })) { failure = 'The trailer destination is blocked'; continue; }
           // This loop owns the road/turn search; do not invoke a nested endpoint-searching guard.
           const guard = actor.vehicle.placementGuard;
           let placed = false;
-          try { actor.vehicle.placementGuard = () => true; placed = actor.vehicle.place(x, z, yaw); }
+          try { actor.vehicle.placementGuard = () => true; placed = actor.vehicle.place(x, z, yaw, height); }
           finally { actor.vehicle.placementGuard = guard; }
           if (!placed) { failure = 'Water at the destination'; continue; }
           if (Math.hypot(actor.vehicle.x - x, actor.vehicle.z - z) > 125) continue;

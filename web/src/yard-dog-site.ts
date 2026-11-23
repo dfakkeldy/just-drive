@@ -11,6 +11,7 @@ type Placement = {
 };
 
 export class YardDogSite implements Site {
+  readonly roadField='painted';
   readonly box: [number, number, number, number];
   readonly clear: number[][];
   readonly edge: number;

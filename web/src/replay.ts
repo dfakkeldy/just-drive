@@ -22,7 +22,8 @@ export interface Ridden {
 export interface ReplayHost {
   canvas: HTMLCanvasElement;
   camera: THREE.PerspectiveCamera;
-  ground(x: number, z: number): number | null;
+  /** The ground under a body at `referenceY` (#156: a deck counts only within reach of it; none given, the land). */
+  ground(x: number, z: number, referenceY?: number): number | null;
   /** The least height the replay camera may take: the ground, raised through tree canopy. */
   floor(x: number, z: number): number | null;
   wheelRadius(): number;
@@ -166,7 +167,7 @@ export class Replay {
     f.pitch = root.rotation.x; f.yaw = root.rotation.y; f.roll = root.rotation.z;
     f.bodyPitch = body.rotation.x; f.bodyRoll = body.rotation.z; f.bodyLift = body.position.y;
     f.steer = ride.steerAngle; f.speed = ride.speed; f.vx = ride.vx; f.vz = ride.vz; f.airborne = ride.airborne; f.crash = ride.crashTime ?? 0;
-    f.air = ride.airborne ? Math.max(0, ride.y - (this.host.ground(ride.x, ride.z) ?? ride.y)) : 0;
+    f.air = ride.airborne ? Math.max(0, ride.y - (this.host.ground(ride.x, ride.z, ride.y) ?? ride.y)) : 0;
     f.brake = intensity(rig.brakeLights[0]); f.beacon = intensity(rig.beacon);
     this.recorder.observe(f, ride.vy, dt, ride, quiet);
   }
@@ -300,7 +301,9 @@ export class Replay {
   }
 
   private readonly floor = (x: number, z: number): number | null => this.host.floor(x, z);
-  private readonly groundAt = (x: number, z: number): number | null => this.host.ground(x, z);
+  /** The played frame's body height: an animated rig reads the ground under itself, not a deck overhead. */
+  private groundY: number | undefined;
+  private readonly groundAt = (x: number, z: number): number | null => this.host.ground(x, z, this.groundY);
   private target(x: number, y: number, z: number): THREE.Vector3 { return this.scratch.set(x, y, z); }
   private readonly scratch = new THREE.Vector3();
 
@@ -350,7 +353,7 @@ export class Replay {
       if (rig.extraWheels) for (const w of rig.extraWheels) w.rotation.x = -this.spin;
       if (rig.setTravel) { const t = p.airborne ? -0.18 : 0; rig.setTravel(t, t, t, t); }
     }
-    rig.animate?.(dt, p.speed, this.groundAt);
+    this.groundY = p.y; rig.animate?.(dt, p.speed, this.groundAt);
     if (p.brake >= 0) for (const m of rig.brakeLights) setIntensity(m, p.brake);
     if (p.beacon >= 0) setIntensity(rig.beacon, p.beacon);
   }

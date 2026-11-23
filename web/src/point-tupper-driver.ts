@@ -7,6 +7,7 @@ import { drivableDisplay, isDisplayKind, type DisplayKind } from './fleet-models
 import { SceneRoad } from './road-scene-rules';
 import { bendOffset } from './ambient-traffic';
 import { bodyGap, pushOutBodies, type ContactBody } from './parked';
+import { deckCounts } from './bridge-contact';
 import { bearing, branchGain, turnRound, type Spot } from './boss-rules';
 import type { Road, Roads } from './roads';
 import type { Terrain } from './terrain';
@@ -189,7 +190,8 @@ export class PointTupperDriver {
         const v = this.vehicle;
         if (turnRound(v, goal)) {
           const { x, z, heading } = v, y = v.y, pose = { x, z, heading: heading + Math.PI, y, spec: v.spec };
-          if (this.contacts.allows(pose)) v.place(x, z, heading + Math.PI);
+          // At the body height, like every re-place: with none it would stand on land under a deck it waits on.
+          if (this.contacts.allows(pose)) v.place(x, z, heading + Math.PI, y);
           this.steerRoad = null;
         }
       }
@@ -203,7 +205,9 @@ export class PointTupperDriver {
       const pose = { x: 0, z: 0, heading: 0 };
       path.at(30 + n * 97 % Math.max(1, path.cumulative.at(-1)! - 80), 1.6, pose);
       const y = this.terrain.heightAt(pose.x, pose.z), distance = Math.hypot(pose.x - player.x, pose.z - player.z);
-      if (y === null || distance < near || distance > far) return;
+      // Never at a deck or under one: a place with no reference stands on land, which would drop a spawn on a span into
+      // the channel. The cursor moves on, so the next try is elsewhere on the path.
+      if (y === null || distance < near || distance > far || this.roads.deckHeight(pose.x, pose.z) !== null) return;
       // A driver with a goal starts on a road that does not point away from it.
       const goal = this.tune?.goal?.();
       if (goal && Math.cos(bearing(pose, goal) - pose.heading) < -.2) return;
@@ -223,7 +227,7 @@ export class PointTupperDriver {
   step(dt: number, player: Vehicle): void {
     if (!this.active) return;
     this.turnCheck -= dt;   // the hidden turn round (update) is tried every 2 s of play, at any frame rate
-    const v = this.vehicle, old = { x: v.x, z: v.z, heading: v.heading };
+    const v = this.vehicle, old = { x: v.x, z: v.z, heading: v.heading, y: v.y };
     const hit = this.roads.nearest(v.x, v.z, 12, this.eligible);
     // Only a genuine dead end ahead needs a stop. Connected pieces use demo steering.
     const end = !hit || [hit.road.pts[0], hit.road.pts.at(-1)!].some(([x,z]) => {
@@ -261,10 +265,11 @@ export class PointTupperDriver {
       const pose = { x: next.x+Math.cos(heading)*lane, z: next.z+Math.sin(heading)*lane, heading:v.heading };
       if (this.contacts.allows({...pose,y:v.y,spec:v.spec}) && !bodies.some(b=>bodyGap({...pose,y:v.y,spec:v.spec},b)<.1)) {
         const speed = Math.max(0,v.speed);
-        v.place(pose.x,pose.z,pose.heading);v.speed=speed;v.vx=Math.sin(v.heading)*speed;v.vz=-Math.cos(v.heading)*speed;
-      } else { v.place(old.x,old.z,old.heading);v.vx=v.vz=v.speed=0; }
+        // Re-place at the body's own height: a deck it drives on still counts, one overhead does not.
+        v.place(pose.x,pose.z,pose.heading,v.y);v.speed=speed;v.vx=Math.sin(v.heading)*speed;v.vz=-Math.cos(v.heading)*speed;
+      } else { v.place(old.x,old.z,old.heading,old.y);v.vx=v.vz=v.speed=0; }
     } else if (!next || next.dist + v.spec.halfWidth > next.road.halfWidth || bodyGap(v, player) < .1) {
-      v.place(old.x, old.z, old.heading); v.vx = v.vz = v.speed = 0;
+      v.place(old.x, old.z, old.heading, old.y); v.vx = v.vz = v.speed = 0;
     }
   }
   /** With a goal: at a road joining ahead, turn onto it when it heads nearer the goal. Null keeps to the road. */
@@ -299,8 +304,9 @@ export class PointTupperDriver {
     pushOutBodies(body, [this.vehicle]);
     if (body.x === x && body.z === z) return;
     // The existing resolver moves horizontally. Recheck the new ground before the rig draws.
-    const ground = this.terrain.heightAt(body.x, body.z);
+    // Only a deck within the body's reach lifts it, so a push under an overpass never puts the player on top of it.
+    const ground = this.terrain.heightAt(body.x, body.z, body.y), deck = this.roads.deckHeight(body.x, body.z);
     if (ground === null) { body.x = x; body.z = z; }
-    else body.y = Math.max(body.y, ground, this.roads.deckHeight(body.x, body.z) ?? ground);
+    else body.y = Math.max(body.y, ground, deckCounts(deck, body.y, this.terrain.cartRoads) ? deck : ground);
   }
 }

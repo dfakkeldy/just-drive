@@ -253,73 +253,39 @@ export function registerRailContacts(
 }
 
 /**
- * Build one merged vertex-coloured geometry for a narrow one-lane grey steel pony-truss bridge along [0, span]
- * at the exact y0 -> y1 deck plane computed by Roads.deck(), keeping the full deck shoulders visible out to `deckHalf`.
+ * Emit the grey steel pony-truss superstructure (transverse floor beams, bottom/top chords, inclined end posts,
+ * Warren diagonals, vertical posts, inner steel guard rails, and standoff brackets) into `m`.
+ * Shares exact geometry constants with `forEachPonyTrussSteelClip()`.
  */
-export function buildPonyTrussBridge(
+export function emitPonyTrussSuperstructure(
+  m: Mesher,
   pts: readonly [number, number][],
   y0: number,
   y1: number,
-  len: number,
-  deckHalf: number = PONY_TRUSS.outerHalf,
-): THREE.BufferGeometry {
-  const m = new Mesher();
+  deckHalf: number,
+  fasciaBottom = -0.45,
+): void {
   const a = pts[0], b = pts[pts.length - 1];
   const dx = b[0] - a[0], dz = b[1] - a[1];
-  const span = Math.hypot(dx, dz) || len || 1;
+  const span = Math.hypot(dx, dz) || 1;
   const ux = dx / span, uz = dz / span;
   const yaw = Math.atan2(-uz, ux);
   const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
-  const clearHalf = PONY_TRUSS.clearHalf;
   const dy = y1 - y0, slope = Math.atan2(dy, span);
   const deckY = (s: number) => y0 + dy * (s / span);
 
   const half = PONY_TRUSS.half;
   const chord = PONY_TRUSS.chordSize;
-  let chordSlack = 0;
-  for (let i = 1; i < pts.length - 1; i++) {
-    chordSlack = Math.max(chordSlack, Math.abs(-(pts[i][0] - a[0]) * uz + (pts[i][1] - a[1]) * ux));
-  }
-  const outerHalf = Math.max(PONY_TRUSS.outerHalf, deckHalf + (deckHalf > PONY_TRUSS.outerHalf ? chordSlack + 0.01 : 0));
+  const outerHalf = Math.max(PONY_TRUSS.outerHalf, deckHalf);
   const panels = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2);
   const panel = span / panels;
   const h = ponyTrussHeight(span);
   const yBase = chord / 2;
-
-  // One shared deck-aligned frame centred at the span midpoint; local +x runs from -span/2 to +span/2.
   const deckMidY = (y0 + y1) / 2;
   const deckLen = Math.hypot(span, dy);
-
-  // Asphalt roadway between the trusses plus concrete cantilevered outer deck shoulders matching Roads.deck() width.
-  const deckThick = PONY_TRUSS.deckThickness;
-  const fasciaTop = -0.025;
-  const fasciaBottom = fasciaTop - deckThick;
   const sinSlope = Math.abs(Math.sin(slope));
-  // Trim tilted steel fascia inside [0, span] so no lower corner overhangs the span endpoints.
-  const fasciaLen = deckLen - (deckThick + 0.05) * sinSlope * 2 - 0.01;
-  // Top driving surface aligned to local end-segment normals (matching Roads.deck() portal corners and exact y0 -> y1 plane).
-  const n0d = Math.hypot(pts[1][0] - a[0], pts[1][1] - a[1]) || 1;
-  const n0x = -(pts[1][1] - a[1]) / n0d, n0z = (pts[1][0] - a[0]) / n0d;
-  const prev = pts[pts.length - 2];
-  const n1d = Math.hypot(b[0] - prev[0], b[1] - prev[1]) || 1;
-  const n1x = -(b[1] - prev[1]) / n1d, n1z = (b[0] - prev[0]) / n1d;
-  m.at(0, 0, 0);
-  const deckStrip = (zLo: number, zHi: number, rgb: RGB) => m.quad([
-    [a[0] + n0x * zHi, y0, a[1] + n0z * zHi],
-    [b[0] + n1x * zHi, y1, b[1] + n1z * zHi],
-    [b[0] + n1x * zLo, y1, b[1] + n1z * zLo],
-    [a[0] + n0x * zLo, y0, a[1] + n0z * zLo],
-  ], rgb);
-  deckStrip(-clearHalf, clearHalf, DECK_ASPHALT);
-  if (outerHalf > clearHalf + 1e-4) {
-    deckStrip(-outerHalf, -clearHalf, ABUTMENT);
-    deckStrip(clearHalf, outerHalf, ABUTMENT);
-  }
-  // Deck slab sides and underside (steel deck fascia across the full visible deck width, 2.5 cm below top to avoid z-fighting).
-  m.at(mx, deckMidY, mz, yaw, 0, slope);
-  m.box(0, fasciaTop - deckThick / 2, 0, fasciaLen, deckThick, outerHalf * 2, STEEL_DARK, false);
 
-  // Transverse floor beams beneath the fascia at every panel point (tilted with the slope and inset inside [0, span]).
+  // Transverse floor beams beneath the slab at every panel point (tilted with the slope and inset inside [0, span]).
   const beamW = outerHalf * 2;
   const beamEndInset = 0.12 + (0.28 + Math.abs(fasciaBottom)) * sinSlope;
   for (let i = 0; i <= panels; i++) {
@@ -327,12 +293,6 @@ export function buildPonyTrussBridge(
     const bx = a[0] + ux * s, bz = a[1] + uz * s, by = deckY(s);
     m.at(bx, by, bz, yaw, 0, slope);
     m.box(0, fasciaBottom - 0.145, 0, 0.20, 0.28, beamW - 0.04, STEEL_DARK, false);
-  }
-  const abutmentDrop = 0.01 + 0.34 * Math.abs(dy / span);
-  for (const s of [0.34, span - 0.34]) {
-    const ax = a[0] + ux * s, az = a[1] + uz * s, ay = deckY(s);
-    m.at(ax, ay, az, yaw);
-    m.box(0, fasciaBottom - abutmentDrop - 0.58, 0, 0.64, 1.16, beamW + 0.08, ABUTMENT, true);
   }
 
   // Two grey steel pony-truss sides: bottom chord, top chord, inclined end posts, Warren diagonals, vertical posts, inner guard rail.
@@ -398,6 +358,69 @@ export function buildPonyTrussBridge(
       m.box(0, 0, 0, 0.14, 0.18, bracketWidth, STEEL_DARK, false);
     }
   }
+}
 
+/**
+ * Build one merged vertex-coloured geometry for a narrow one-lane grey steel pony-truss bridge along [0, span]
+ * at the exact y0 -> y1 deck plane, keeping the full deck shoulders visible out to `deckHalf`.
+ */
+export function buildPonyTrussBridge(
+  pts: readonly [number, number][],
+  y0: number,
+  y1: number,
+  len: number,
+  deckHalf: number = PONY_TRUSS.outerHalf,
+): THREE.BufferGeometry {
+  const m = new Mesher();
+  const a = pts[0], b = pts[pts.length - 1];
+  const dx = b[0] - a[0], dz = b[1] - a[1];
+  const span = Math.hypot(dx, dz) || len || 1;
+  const ux = dx / span, uz = dz / span;
+  const yaw = Math.atan2(-uz, ux);
+  const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+  const clearHalf = PONY_TRUSS.clearHalf;
+  const dy = y1 - y0, slope = Math.atan2(dy, span);
+  const deckY = (s: number) => y0 + dy * (s / span);
+
+  let chordSlack = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    chordSlack = Math.max(chordSlack, Math.abs(-(pts[i][0] - a[0]) * uz + (pts[i][1] - a[1]) * ux));
+  }
+  const outerHalf = Math.max(PONY_TRUSS.outerHalf, deckHalf + (deckHalf > PONY_TRUSS.outerHalf ? chordSlack + 0.01 : 0));
+
+  const deckMidY = (y0 + y1) / 2;
+  const deckLen = Math.hypot(span, dy);
+  const deckThick = PONY_TRUSS.deckThickness;
+  const fasciaTop = -0.025;
+  const fasciaBottom = fasciaTop - deckThick;
+  const sinSlope = Math.abs(Math.sin(slope));
+  const fasciaLen = deckLen - (deckThick + 0.05) * sinSlope * 2 - 0.01;
+  const n0d = Math.hypot(pts[1][0] - a[0], pts[1][1] - a[1]) || 1;
+  const n0x = -(pts[1][1] - a[1]) / n0d, n0z = (pts[1][0] - a[0]) / n0d;
+  const prev = pts[pts.length - 2];
+  const n1d = Math.hypot(b[0] - prev[0], b[1] - prev[1]) || 1;
+  const n1x = -(b[1] - prev[1]) / n1d, n1z = (b[0] - prev[0]) / n1d;
+  m.at(0, 0, 0);
+  const deckStrip = (zLo: number, zHi: number, rgb: RGB) => m.quad([
+    [a[0] + n0x * zHi, y0, a[1] + n0z * zHi],
+    [b[0] + n1x * zHi, y1, b[1] + n1z * zHi],
+    [b[0] + n1x * zLo, y1, b[1] + n1z * zLo],
+    [a[0] + n0x * zLo, y0, a[1] + n0z * zLo],
+  ], rgb);
+  deckStrip(-clearHalf, clearHalf, DECK_ASPHALT);
+  if (outerHalf > clearHalf + 1e-4) {
+    deckStrip(-outerHalf, -clearHalf, ABUTMENT);
+    deckStrip(clearHalf, outerHalf, ABUTMENT);
+  }
+  m.at(mx, deckMidY, mz, yaw, 0, slope);
+  m.box(0, fasciaTop - deckThick / 2, 0, fasciaLen, deckThick, outerHalf * 2, STEEL_DARK, false);
+  const beamW = outerHalf * 2;
+  const abutmentDrop = 0.01 + 0.34 * Math.abs(dy / span);
+  for (const s of [0.34, span - 0.34]) {
+    const ax = a[0] + ux * s, az = a[1] + uz * s, ay = deckY(s);
+    m.at(ax, ay, az, yaw);
+    m.box(0, fasciaBottom - abutmentDrop - 0.58, 0, 0.64, 1.16, beamW + 0.08, ABUTMENT, true);
+  }
+  emitPonyTrussSuperstructure(m, pts, y0, y1, outerHalf, fasciaBottom);
   return m.geometry();
 }

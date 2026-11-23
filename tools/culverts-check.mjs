@@ -7,21 +7,81 @@ import {build} from '../web/node_modules/esbuild/lib/main.js';
 const root=resolve(import.meta.dirname,'..'), scratch=mkdtempSync(join(tmpdir(),'mmm-culverts-'));
 async function load(mutant=false){
  const file=join(scratch,mutant?'mutant.mjs':'check.mjs');
- await build({stdin:{contents:`export {streamCrossings,StreamCulverts} from './web/src/stream-culverts.ts'; export {Streams} from './web/src/streams.ts'; export {ArchCulvert} from './web/src/culvert.ts'; export {Vector3,Box3} from './web/node_modules/three/build/three.module.js';`,resolveDir:root},bundle:true,platform:'node',format:'esm',outfile:file,plugins:mutant?[{name:'bridge-mutant',setup(b){b.onLoad({filter:/stream-culverts\.ts$/},({path})=>({contents:readFileSync(path,'utf8').replace('if (!road || road.bridge) continue;','if (!road) continue;').replace('if (bridges.some(', 'if (false && bridges.some('),loader:'ts'}));}}]:[]});
+ await build({stdin:{contents:`export {streamCrossings,StreamCulverts,withinRoad} from './web/src/stream-culverts.ts'; export {Streams} from './web/src/streams.ts'; export {ArchCulvert} from './web/src/culvert.ts'; export {Vector3,Box3,Group} from './web/node_modules/three/build/three.module.js'; export {ModernBridges} from './web/src/modern-bridges.ts';`,resolveDir:root},bundle:true,platform:'node',format:'esm',outfile:file,plugins:mutant?[{name:'bridge-mutant',setup(b){b.onLoad({filter:/stream-culverts\.ts$/},({path})=>({contents:readFileSync(path,'utf8').replace('if (!road || road.bridge) continue;','if (!road) continue;').replace('if (bridges.some(', 'if (false && bridges.some('),loader:'ts'}));}}]:[]});
  return import(file);
 }
 function roadDistance(x,z,road){
  let best=Infinity;for(let k=1;k<road.pts.length;k++){const a=road.pts[k-1],b=road.pts[k],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz||1)));best=Math.min(best,Math.hypot(x-a[0]-t*dx,z-a[1]-t*dz));}return best;
 }
-function bridgeOracle(c,roads,extra=0){
- for(const r of roads.filter(r=>r.bridge))for(let k=1;k<r.pts.length;k++){
+// Flagged bridge roads and the modern bridge spans (#156), which also cover crossings on unflagged map roads.
+function bridgeOracle(c,roads,extra=0,spans=[]){
+ for(const r of [...roads.filter(r=>r.bridge),...spans])for(let k=1;k<r.pts.length;k++){
   const [a,b]=[r.pts[k-1],r.pts[k]],dx=b[0]-a[0],dz=b[1]-a[1];
   const t=Math.min(1,Math.max(0,((c.x-a[0])*dx+(c.z-a[1])*dz)/(dx*dx+dz*dz||1)));
   assert.ok(Math.hypot(c.x-a[0]-t*dx,c.z-a[1]-t*dz)>r.halfWidth+3+extra,`culvert under bridge ${r.id}`);
  }
 }
 try {
- const {streamCrossings,Streams,StreamCulverts,ArchCulvert,Vector3,Box3}=await load();
+ const {streamCrossings,withinRoad,Streams,StreamCulverts,ArchCulvert,Vector3,Box3,Group,ModernBridges}=await load();
+ // The early-exit reach test must decide every crossing exactly as the full nearest-point scan did: random lines with
+ // one or no points, NaN and infinite points, NaN, infinite and negative widths, through the bridge, own-road and cover tests.
+ {const nearest=(x,z,road)=>{let best=Infinity,point={x,z};for(let k=1;k<road.pts.length;k++){const[ax,az]=road.pts[k-1],dx=road.pts[k][0]-ax,dz=road.pts[k][1]-az;
+   const t=Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz||1))),px=ax+t*dx,pz=az+t*dz,d=Math.hypot(x-px,z-pz);if(d<best){best=d;point={x:px,z:pz};}}return point;};
+  const distance=(x,z,road)=>{const p=nearest(x,z,road);return Math.hypot(p.x-x,p.z-z);};
+  // The scan this replaced, kept here as the oracle (stream-culverts.ts before the early exit).
+  const reference=(streams,roads,spans)=>{const bridges=[...roads.filter(r=>r.bridge),...spans],byId=new Map(roads.map(r=>[r.id,r]));
+   const boxes=roads.filter(r=>!r.bridge&&r.pts.length>1).map(r=>{let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;for(const[x,z]of r.pts){x0=Math.min(x0,x);z0=Math.min(z0,z);x1=Math.max(x1,x);z1=Math.max(z1,z);}const pad=r.halfWidth+.5;return{r,x0:x0-pad,z0:z0-pad,x1:x1+pad,z1:z1+pad};});
+   const out=[];for(const pipe of streams.pipes){const road=byId.get(pipe.road);if(!road||road.bridge)continue;const dx=pipe.endX-pipe.x,dz=pipe.endZ-pipe.z,x=(pipe.x+pipe.endX)/2,z=(pipe.z+pipe.endZ)/2,length=Math.hypot(dx,dz),scale=Math.min(1,pipe.dia/4.1);
+    if(bridges.some(b=>distance(x,z,b)<=b.halfWidth+Math.hypot(length/2+.3,6.1*scale)+3))continue;let own=false;
+    for(let d=0;d<=Math.ceil(length)&&!own;d++){const t=Math.min(1,d/length);own=distance(pipe.x+dx*t,pipe.z+dz*t,road)<=road.halfWidth+.5;}if(!own)continue;
+    const side=.5*4.822*scale,nx=-dz/length,nz=dx/length,near=boxes.filter(b=>Math.max(pipe.x,pipe.endX)+side>=b.x0&&Math.min(pipe.x,pipe.endX)-side<=b.x1&&Math.max(pipe.z,pipe.endZ)+side>=b.z0&&Math.min(pipe.z,pipe.endZ)-side<=b.z1).map(b=>b.r),cover=[];
+    for(let d=0;d<=Math.ceil(length);d++){const t=Math.min(1,d/length);for(const o of[0,-side,side]){const px=pipe.x+dx*t+nx*o,pz=pipe.z+dz*t+nz*o;if(near.some(r=>distance(px,pz,r)<=r.halfWidth+.5))cover.push({x:px,z:pz});}}
+    out.push({x,z,heading:Math.atan2(dx,-dz),scale,length,road:road.id,cover});}return out;};
+  let seed=7,crossings=0,onRandom=0,covered=0;// Math.imul keeps the full 2^31 period: the old float product lost its low bits and cycled after about 10,000 draws.
+  const rnd=()=>(seed=(Math.imul(seed,1103515245)+12345)&0x7fffffff)/2147483648;
+  for(let round=0;round<600;round++){
+   const lines=[];for(let i=0;i<12;i++){const n=Math.floor(rnd()*5),pts=[];let x=rnd()*400-200,z=rnd()*400-200;for(let k=0;k<n;k++){pts.push([x,z]);x+=rnd()*60-30;z+=rnd()*60-30;}
+    if(rnd()<.05&&pts.length)pts[0]=[NaN,pts[0][1]];if(round%3===0&&pts.length&&rnd()<.1)pts[pts.length-1]=[rnd()<.5?Infinity:-Infinity,pts[pts.length-1][1]];
+    lines.push({pts,halfWidth:rnd()<.03?NaN:round%5===0&&rnd()<.1?(rnd()<.5?Infinity:-5):rnd()*8});}
+   // Every random line is also a road, so lines with one or no points, NaN or infinite points and odd widths reach the
+   // own-road and cover tests. Bridge spans come from at most three lines with finite points, so the bridge test does not
+   // remove every pipe (a line with fewer than two points is at distance 0 from everything). Every other round adds a span
+   // with a NaN or infinite end before its finite segments, which the old scan still measured, and one round in twenty
+   // adds a span with one or no points, which removes every pipe.
+   const finite=l=>l.pts.length>=2&&l.pts.every(([x,z])=>Number.isFinite(x)&&Number.isFinite(z));
+   const spans=lines.filter(finite).slice(0,3),straight={id:1,kind:2,halfWidth:3,pts:[[-300,0],[300,0]],bridge:false};
+   const partial=lines.filter(finite)[3];
+   if(round%2===1&&partial)spans.push({...partial,pts:[[[NaN,Infinity,-Infinity][round%3],partial.pts[0][1]],...partial.pts]});
+   if(round%20===7)spans.push({pts:round%40===7?[]:[[rnd()*400-200,rnd()*400-200]],halfWidth:rnd()*8});
+   const crooked=lines.map((l,i)=>({id:10+i,kind:2,halfWidth:l.halfWidth,pts:l.pts,bridge:false})),pipes=[];
+   for(let i=0;i<40;i++){
+    if(i%2===0){const x=rnd()<.02?Infinity:rnd()*500-250,len=rnd()*30+1;pipes.push({road:1,x,z:-len/2,endX:x,endZ:len/2,dia:rnd()*5});continue;}
+    // Half the pipes cross a random road near one of its points.
+    const road=crooked[Math.floor(rnd()*crooked.length)],p0=road.pts.find(([x,z])=>Number.isFinite(x)&&Number.isFinite(z))??[rnd()*400-200,rnd()*400-200];
+    const len=rnd()*20+1,a=rnd()*Math.PI,cx=p0[0]+rnd()*6-3,cz=p0[1]+rnd()*6-3;
+    pipes.push({road:road.id,x:cx-Math.cos(a)*len/2,z:cz-Math.sin(a)*len/2,endX:cx+Math.cos(a)*len/2,endZ:cz+Math.sin(a)*len/2,dia:rnd()*5});
+   }
+   const roads=[straight,...crooked],got=streamCrossings({pipes},roads,spans);
+   assert.deepEqual(got,reference({pipes},roads,spans),'early-exit reach test matches the nearest-point scan, round '+round);
+   crossings+=got.length;onRandom+=got.filter(c=>c.road!==1).length;covered+=got.reduce((n,c)=>n+c.cover.length,0);
+  }
+  // The reach test itself, also at NaN and infinite query points and reaches, which the planner never asks about: every
+  // pairing from a fixed table of edge cases, then random cases.
+  let asked=0;
+  {const odd=[NaN,Infinity,-Infinity,0,5,1e5],reaches=[NaN,Infinity,-Infinity,-1,0,-0,3,1e9];
+   const shapes=[[],[[0,0]],[[0,0],[1,0]],[[0,0],[0,0]],[[NaN,0],[1,0],[2,0]],[[Infinity,0],[1,0]],[[0,0],[1,0],[-Infinity,5]],
+    [[NaN,NaN],[NaN,NaN]],[[1000,1000],[1001,1000]],[[0,-1e5],[0,1e5]]];
+   for(const qx of odd)for(const qz of odd)for(const reach of reaches)for(const pts of shapes){
+    assert.equal(withinRoad(qx,qz,{pts},reach),distance(qx,qz,{pts})<=reach,'reach test at '+[qx,qz,reach]+' on '+JSON.stringify(pts));asked++;}}
+  for(let round=0;round<4000;round++){
+   const n=Math.floor(rnd()*5),pts=[];let x=rnd()*400-200,z=rnd()*400-200;for(let k=0;k<n;k++){pts.push([x,z]);x+=rnd()*60-30;z+=rnd()*60-30;}
+   if(rnd()<.1&&pts.length)pts[Math.floor(rnd()*pts.length)][0]=[NaN,Infinity,-Infinity][Math.floor(rnd()*3)];
+   const odd=[NaN,Infinity,-Infinity],qx=rnd()<.05?odd[Math.floor(rnd()*3)]:rnd()*400-200,qz=rnd()<.05?odd[Math.floor(rnd()*3)]:rnd()*400-200;
+   const reach=rnd()<.05?odd[Math.floor(rnd()*3)]:rnd()<.05?-rnd()*5:rnd()*40;
+   assert.equal(withinRoad(qx,qz,{pts},reach),distance(qx,qz,{pts})<=reach,'reach test at '+[qx,qz,reach]+' on '+JSON.stringify(pts));asked++;
+  }
+  assert.ok(crossings>3000&&onRandom>1000&&covered>30000,'the oracle compares real crossings: '+crossings+' crossings, '+onRandom+' on random roads, '+covered+' cover samples');
+  console.log('PASS early-exit culvert reach test equals the nearest-point scan on',crossings,'random crossings,',onRandom,'on random roads,',covered,'cover samples');}
  const road={id:1,halfWidth:3,bridge:false,kind:2,name:null,pts:[[-20,0],[20,0]]};
  const data={streams:[{id:1,name:'',half:.5,pts:[[0,-20],[0,0],[0,20]]}],culverts:[{stream:1,road:1,a:[0,-6],b:[0,6],dia:1,mapped:true}]};
  const streams=new Streams(data,[0,0]);
@@ -134,21 +194,25 @@ try {
   const alongside={...road,id:3,halfWidth:.1,pts:[[2.6,-20],[2.6,20]]};
   const c=streamCrossings(wide,[road,alongside])[0];assert.ok(c.cover.some(p=>p.x>2&&Math.abs(p.z)>4),'samples under a road beside the arch');}
  visual.update({x:1000,z:1000});assert.equal(visual.group.children.length,0,'distant resources removed');
- const rows=[];
+ const rows=[],underSpans=[];
  for(const folder of ['terrain',...readdirSync(join(root,'data/baked/areas')).map(x=>'areas/'+x)]){
   const dir=join(root,'data/baked',folder),json=name=>JSON.parse(readFileSync(join(dir,name+'.json'),'utf8'));
   const village=json('manifest').village, s=new Streams(json('streams'),village);
   const roads=json('roads').roads.map(r=>({...r,pts:r.pts.map(([e,n])=>[e-village[0],village[1]-n])}));
-  const crossings=streamCrossings(s,roads);
+  // The same spans the game builds from this roads file (Roads hands ModernBridges the village-frame roads).
+  const spans=new ModernBridges(roads,{manifest:json('manifest')},new Group(),json('roads').bridgeSpans).runs;
+  const crossings=streamCrossings(s,roads,spans),flaggedOnly=streamCrossings(s,roads);
   const raw=json('streams').culverts;
   assert.equal(s.pipes.length,raw.length,'all shipped mouth pairs parsed');
   for(const c of crossings){const pipe=raw.find(p=>Math.hypot((p.a[0]+p.b[0])/2-village[0]-c.x,village[1]-(p.a[1]+p.b[1])/2-c.z)<.01);assert.ok(pipe,'arch at real pipe midpoint');assert.ok(Math.abs(c.length-Math.hypot(pipe.a[0]-pipe.b[0],pipe.a[1]-pipe.b[1]))<.01);assert.ok(Math.abs(Math.sin(c.heading-Math.atan2(pipe.b[0]-pipe.a[0],pipe.b[1]-pipe.a[1])))<1e-6);}
   // Every pair either has one arch, overlaps a bridge, or no longer reaches the current road.
-  for(const pipe of s.pipes){const x=(pipe.x+pipe.endX)/2,z=(pipe.z+pipe.endZ)/2; if(!crossings.some(c=>c.x===x&&c.z===z)){const road=roads.find(r=>r.id===pipe.road),len=Math.hypot(pipe.endX-pipe.x,pipe.endZ-pipe.z); const reachesRoad=road&&Array.from({length:Math.ceil(len)+1},(_,i)=>Math.min(1,i/len)).some(t=>roadDistance(pipe.x+(pipe.endX-pipe.x)*t,pipe.z+(pipe.endZ-pipe.z)*t,road)<=road.halfWidth+.5); if(!reachesRoad)continue; assert.throws(()=>bridgeOracle({x,z},roads,Math.hypot(Math.hypot(pipe.x-pipe.endX,pipe.z-pipe.endZ)/2+.3,6.1*Math.min(1,pipe.dia/4.1))),/culvert under bridge/,'omitted pair must overlap a bridge');}}
-  for(const c of crossings){assert.ok(c.cover.length,'road cover samples at each real pipe');bridgeOracle(c,roads);assert.ok(roads.some(r=>r.id===c.road&&!r.bridge));}
+  for(const pipe of s.pipes){const x=(pipe.x+pipe.endX)/2,z=(pipe.z+pipe.endZ)/2; if(!crossings.some(c=>c.x===x&&c.z===z)){const road=roads.find(r=>r.id===pipe.road),len=Math.hypot(pipe.endX-pipe.x,pipe.endZ-pipe.z); const reachesRoad=road&&Array.from({length:Math.ceil(len)+1},(_,i)=>Math.min(1,i/len)).some(t=>roadDistance(pipe.x+(pipe.endX-pipe.x)*t,pipe.z+(pipe.endZ-pipe.z)*t,road)<=road.halfWidth+.5); if(!reachesRoad)continue; assert.throws(()=>bridgeOracle({x,z},roads,Math.hypot(Math.hypot(pipe.x-pipe.endX,pipe.z-pipe.endZ)/2+.3,6.1*Math.min(1,pipe.dia/4.1)),spans),/culvert under bridge/,'omitted pair must overlap a bridge');}}
+  for(const c of crossings){assert.ok(c.cover.length,'road cover samples at each real pipe');bridgeOracle(c,roads,0,spans);assert.ok(roads.some(r=>r.id===c.road&&!r.bridge));}
   rows.push({area:folder,crossings:crossings.length,first:crossings[0]});
+  underSpans.push({area:folder,count:flaggedOnly.length-crossings.length});
  }
  assert.ok(rows[0].crossings>0 && rows.some(r=>r.area==='areas/judique'&&r.crossings>0));
+ console.log('left out under modern spans',JSON.stringify(underSpans),'now',JSON.stringify(rows.map(r=>({area:r.area,count:r.crossings}))));
  const evidence=JSON.parse(readFileSync(join(root,'assets/culverts/checks.json'),'utf8'));
  assert.deepEqual(evidence.placements,rows.map(r=>({area:r.area,count:r.crossings})),'saved evidence counts match shipped data');
  for(const area of ['mabou','judique'])for(const [view,w,h] of [['desktop',1280,720],['phone',390,844],['upstream-desktop',1280,720]]){
@@ -161,6 +225,11 @@ try {
   const mutant=await load(true);
   assert.throws(()=>{for(const c of mutant.streamCrossings(streams,[{...road,bridge:true}]))bridgeOracle(c,[{...road,bridge:true}]);},/culvert under bridge/,'mutant must be killed by overlap oracle');
   console.log('PASS bridge exclusion source mutant killed');
+  // Without the spans, an arch stands under a modern deck on an unflagged road.
+  const span={pts:[[-20,0],[20,0]],halfWidth:3.45};
+  assert.equal(streamCrossings(streams,[road],[span]).length,0,'a modern span over the crossing leaves no arch');
+  assert.throws(()=>{for(const c of streamCrossings(streams,[road]))bridgeOracle(c,[road],0,[span]);},/culvert under bridge/,'span-blind planner must be killed by the oracle');
+  console.log('PASS modern span exclusion: a span-blind planner is killed');
  }
  console.log('PASS real crossings, bridge exclusion, seating, disposal');
 } finally {rmSync(scratch,{recursive:true,force:true});}

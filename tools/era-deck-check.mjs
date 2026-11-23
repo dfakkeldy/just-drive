@@ -28,6 +28,8 @@ for(const hill of [1,1.5,2.5]){
   }
   const pathCum=[0];for(let i=1;i<path.length;i++)pathCum.push(pathCum[i-1]+Math.hypot(path[i][0]-path[i-1][0],path[i][1]-path[i-1][1]));
   const at=(s,side=0)=>{let i=0;s+=before;while(i<path.length-2&&pathCum[i+1]<s)i++;const a=path[i],b=path[i+1],d=pathCum[i+1]-pathCum[i],t=(s-pathCum[i])/d,h=Math.atan2(b[0]-a[0],a[1]-b[1]);return{x:a[0]+(b[0]-a[0])*t+Math.cos(h)*side,z:a[1]+(b[1]-a[1])*t+Math.sin(h)*side,h};};
+  // A route start can lie on the next joined bridge record, rather than on a bank.
+  const ownedHeight=(x,z)=>{const hit=roads.nearest(x,z,12,r=>r.bridge&&used.has(r.id));return hit&&hit.dist<=hit.road.halfWidth+.8?roads.deckHeight(x,z)??undefined:terrain.bridgeApproaches.apronHeight(x,z)??undefined;};
   const start=at(-12),end=at(len+12);await preload(terrain,[...path,[start.x,start.z],[end.x,end.z]],120);roads.update(new THREE.Vector3(pts[0][0],20,pts[0][1]));
   for(const v of [car,...([28,34].includes(road.id)?extra:[])])for(const s of [-3,0,.5,len-.5,len,len+3])for(const side of [0,road.halfWidth+.8]){
    const p=at(s,side);v.restart(p.x,p.z,p.h);terrain.withGroundContact(v,()=>v.update(1/120,{throttle:0,steer:0,handbrake:true}));resets++;maxResetUp=Math.max(maxResetUp,v.vy);
@@ -41,7 +43,7 @@ for(const hill of [1,1.5,2.5]){
   }
   // A normal 29 km/h approach uses production placement and untouched contact/body heights. Reset-at-rest cases above are separate.
   for(const direction of [1,-1]){
-   const p=at(direction===1?-(before?8:3):len+8);car.restart(p.x,p.z,p.h+(direction<0?Math.PI:0));car.vx=Math.sin(car.heading)*8;car.vz=-Math.cos(car.heading)*8;car.speed=8;let progress=direction===1?-(before?8:3):len+8,completed=false,gap=0;
+   const p=at(direction===1?-(before?8:3):len+8);car.restart(p.x,p.z,p.h+(direction<0?Math.PI:0));const owned=ownedHeight(p.x,p.z);if(owned!==undefined)car.place(p.x,p.z,car.heading,owned);car.vx=Math.sin(car.heading)*8;car.vz=-Math.cos(car.heading)*8;car.speed=8;let progress=direction===1?-(before?8:3):len+8,completed=false,gap=0;
    for(let step=0;step<120*(len+50);step++){
     let best=Infinity;
     for(let i=1;i<path.length;i++){
@@ -50,12 +52,12 @@ for(const hill of [1,1.5,2.5]){
     }
     const goal=at(progress+direction*5),heading=Math.atan2(goal.x-car.x,car.z-goal.z),err=Math.atan2(Math.sin(heading-car.heading),Math.cos(heading-car.heading));
     terrain.withGroundContact(car,()=>car.update(1/120,{throttle:Math.abs(car.speed)<8?1:Math.abs(car.speed)>9?-.15:0,steer:Math.max(-1,Math.min(1,err*2)),handbrake:false}));
-    if(process.env.ERA_DECK_TRACE&&direction===-1&&step%20===0)console.log('STEP',JSON.stringify({step,progress,x:car.x,z:car.z,y:car.y,vy:car.vy,land:terrain.heightAt(car.x,car.z),deck:roads.deckHeight(car.x,car.z),speed:car.speed}));const deck=roads.deckHeight(car.x,car.z);if(deck!==null&&progress>2&&progress<len-2){if(process.env.ERA_DECK_TRACE&&car.y-deck>gap+.01)console.log('TRACE',JSON.stringify({direction,step,progress,x:car.x,z:car.z,y:car.y,deck,land:terrain.heightAt(car.x,car.z),vy:car.vy,air:car.airborne}));gap=Math.max(gap,car.y-deck);assertLooseBridge(car.surfaceName);}
+    if(process.env.ERA_DECK_TRACE&&direction===-1&&step%20===0)console.log('STEP',JSON.stringify({step,progress,x:car.x,z:car.z,y:car.y,vy:car.vy,land:terrain.heightAt(car.x,car.z),deck:roads.deckHeight(car.x,car.z),speed:car.speed}));const deck=roads.deckHeight(car.x,car.z);if(deck!==null&&progress>2&&progress<len-2){if(process.env.ERA_DECK_TRACE&&car.y-deck>gap+.01)console.log('TRACE',JSON.stringify({direction,step,progress,x:car.x,z:car.z,y:car.y,deck,land:terrain.heightAt(car.x,car.z),vy:car.vy,air:car.airborne}));gap=Math.max(gap,Math.abs(car.y-deck));assertLooseBridge(car.surfaceName);}
     if(direction===1&&progress>=len+3||direction===-1&&progress<=-3){completed=true;break;}
    }
    maxGap=Math.max(maxGap,gap);assert(completed,`approach crossing ${road.id} hill ${hill} direction ${direction}: ${JSON.stringify({progress,x:car.x,z:car.z,speed:car.speed,heading:car.heading,surface:car.surfaceName,ground:terrain.heightAt(car.x,car.z)})}`);assert(gap<1.2,`approach flight ${road.id} hill ${hill}: ${gap}`);crossings++;
   }
-  await horseDeckCases({terrain,roads,road,hill,at,path,pathCum,before,len});
+  await horseDeckCases({terrain,roads,road,hill,at,path,pathCum,before,len,ownedHeight});
   maxBridgeCandidates=Math.max(maxBridgeCandidates,roads.audit?.heightCandidatesMax??0);
   for(const t of terrain.tiles.values()){if(t.mesh){terrain.group.remove(t.mesh);t.mesh.geometry.dispose();t.mesh.material.dispose();}if(t.mask){t.mask.geometry=null;t.mask.material.dispose();}}
   terrain.tiles.clear();terrain.dataRevision++;terrain.contactRevision++;

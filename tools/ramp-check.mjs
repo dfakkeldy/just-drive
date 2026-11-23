@@ -37,11 +37,11 @@ try {
       rampTest.contact=run=>terrain.withGroundContact?terrain.withGroundContact(car,run):run();
       rampTest.frame=(dt,input)=>{if(mmm.driveVehicle)mmm.driveVehicle(dt,input);else car.update(dt,input);yard.update(dt,car,camera.position);};
       rampTest.step=(throttle=0,steer=0)=>rampTest.frame(1/120,{throttle,steer,handbrake:false});
-      rampTest.sample=()=>{const p=site.local(car.x,car.z);return {along:r.u-p.u,v:p.v,y:car.y,vy:car.vy,air:car.airborne,speed:car.speed,h:terrain.heightAt(car.x,car.z)};};
+      rampTest.sample=()=>{const p=site.local(car.x,car.z);return {along:r.u-p.u,v:p.v,y:car.y,vy:car.vy,air:car.airborne,speed:car.speed,h:terrain.heightAt(car.x,car.z,car.y)};};
       rampTest.view=(u,v,height,tu,tv,th=1)=>{const p=site.world(u,v),t=site.world(tu,tv);camera.position.set(p.x,terrain.heightAt(p.x,p.z)+height,p.z);camera.lookAt(t.x,terrain.heightAt(t.x,t.z)+th,t.z);camera.updateMatrixWorld();mmm.renderer.render(yard.group.parent,camera);};
     })()`);
-    const heights=await read(`(()=>{const {r,site,terrain}=rampTest;return [0,1.2,5,9,13,17.19,18].map(a=>{const p=site.world(r.u-a,r.v);return {a,h:terrain.heightAt(p.x,p.z),surface:terrain.surfaceAt(p.x,p.z).ground,deck:site.deckHeight(p.x,p.z,(x,z)=>terrain.landHeightAt(x,z))}})})()`);
-    for(const h of heights)assert.ok(Math.abs(h.h-h.surface)<1e-8,`${mode}: terrain and surface agree`);
+    const heights=await read(`(()=>{const {r,site,terrain}=rampTest;return [0,1.2,5,9,13,17.19,18].map(a=>{const p=site.world(r.u-a,r.v),land=terrain.landHeightAt(p.x,p.z),deck=site.deckHeight(p.x,p.z),reference=deck??land;return {a,h:terrain.heightAt(p.x,p.z,reference),surface:terrain.surfaceAt(p.x,p.z,reference).ground,deck,land,unreferenced:terrain.heightAt(p.x,p.z)}})})()`);
+    for(const h of heights){assert.ok(Math.abs(h.h-h.surface)<1e-8,`${mode}: terrain and surface agree`);assert.equal(h.unreferenced,h.land,`${mode}: unreferenced query is land`);}
     if(mode==='closed'){
       assert.ok(heights.every(h=>h.deck===null),'closed: no deck');
       const unchanged=await read(`(()=>{const {site,terrain,r}=rampTest;return Array.from({length:70},(_,i)=>{const p=site.world(r.u-i*.3,r.v);return terrain.heightAt(p.x,p.z)===terrain.landHeightAt(p.x,p.z)}).every(Boolean)})()`);
@@ -65,7 +65,8 @@ try {
       fresh.probes=[{x:1e8,z:1e8}]; // One unavailable probe, while the ramp tile itself is loaded.
       const index=terrain.sites.indexOf(site);terrain.sites[index]=freshSite;
       try{fresh.update(0,car,camera.position);const p=site.world(-80,-21),h=terrain.landHeightAt(p.x,p.z);check(!fresh.built&&!fresh.group.visible&&terrain.heightAt(p.x,p.z)===h&&terrain.surfaceAt(p.x,p.z).ground===h,'not built yet',{lift:terrain.heightAt(p.x,p.z)-h});}finally{terrain.sites[index]=site;}
-      const p=site.world(-80,-21),deck=terrain.heightAt(p.x,p.z);
+      const p=site.world(-80,-21),deck=site.deckHeight(p.x,p.z);
+      check(terrain.heightAt(p.x,p.z,deck)===deck,'referenced deck contact',{});
       check(site.deckHeight(p.x,p.z,()=>land(r.u,r.v)+2)===deck,'stored model base',{deck,changed:site.deckHeight(p.x,p.z,()=>land(r.u,r.v)+2)});
       // Ignore collision on purpose: below-deck wheel samples must still see land, never the deck above them.
       const below=[];
@@ -123,7 +124,7 @@ try {
     const fast=await drive(14), deck=fast.filter(s=>s.along>3&&s.along<14);
     assert.ok(deck.length>10,`${mode}: climbs from clear run-up`);
     const base=heights[0].h;
-    const highClearance=await read(`(()=>{const {r,site,terrain}=rampTest,p=site.world(r.u-r.lead-r.length+.001,r.v);return terrain.heightAt(p.x,p.z)-terrain.landHeightAt(p.x,p.z)})()`);
+    const highClearance=await read(`(()=>{const {r,site,terrain}=rampTest,p=site.world(r.u-r.lead-r.length+.001,r.v),deck=site.deckHeight(p.x,p.z);return terrain.heightAt(p.x,p.z,deck)-terrain.landHeightAt(p.x,p.z)})()`);
     assert.ok(highClearance>=1.2&&highClearance<=1.6,`${mode}: high end is 1.2 to 1.6 m above the yard: ${highClearance}`);
     const plainYard=await read(`(()=>{const {r,site,terrain}=rampTest;return [3,9,15].every(a=>{const p=site.world(r.u-a,r.v),s=terrain.surfaceAt(p.x,p.z);return s.kind===10&&s.roadDist<s.halfWidth})})()`);
     assert.ok(plainYard,`${mode}: deck remains yard ground for lawn damage and complaints`);

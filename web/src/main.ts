@@ -169,6 +169,7 @@ import {createTestPark,testParkPlaces} from './stunt-test-park';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
 import { Drone, createDroneButton, createDroneRig, createDroneSticks, createTerrainReady, roofHeights, droneSpans, DRONE_HELP, DRONE_TOUCH_HELP, DRONE_FREE_HELP, DRONE_FREE_TOUCH_HELP } from './drone';
 import { DRONE, DRONE_LOAD, loadSpeedCap } from './drone-rules';
+import { deckCounts } from './bridge-contact';
 
 // Mabou village, and the game's moment: the second week of October, late afternoon (Atlantic Daylight Time, UTC-3).
 const LAT = 46.0717, LON = -61.392;
@@ -612,9 +613,11 @@ if (waterReflections) {
 }
 
 const roadLines = mabouRoadOverrides(roadData.roads, ERA.modern, AREA.id);
-const roads = new Roads({ roads: novemberRoads?.added.length ? [...roadLines, ...novemberRoads.added] : roadLines }, manifest.village, terrain);
+const roads = new Roads({ ...roadData, roads: novemberRoads?.added.length ? [...roadLines, ...novemberRoads.added] : roadLines }, manifest.village, terrain);
 const culvertMouths = ERA.modern && terrain.streams
-  ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW, () => terrain.dataRevision)
+  ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW,
+    // A modern bridge build moves the ground through its road cuts without a dataRevision change (both only grow).
+    () => terrain.dataRevision + roads.bridgeRevision, roads.bridgeRuns())
   : null;
 if (culvertMouths) scene.add(culvertMouths.group);
 scene.add(roads.group);
@@ -668,7 +671,9 @@ const sidewalks = (() => {
   return null;
 })();
 if (sidewalks) { terrain.sidewalks=sidewalks; scene.add(sidewalks.group); if (mabouSite) mabouSite.sidewalkLayer = true; }
-// If the height worker fails later, the walks hide: give the bridges and Mabou's street their own look back for what is built after.
+// If the height worker fails later, the walks hide: give Mabou's street its own look back for what is built after. The
+// bridge walks are dropped too, but no modern deck narrows again: ModernBridges.reserveWalks only widens a deck, so a deck
+// widened for a walk stays wide (its parapet then stands past the hidden walk).
 if (sidewalks) sidewalks.onDisabled = () => { for (const id of sidewalks.bridgeReservations.keys()) roads.bridgeWalks.delete(id); if (mabouSite) mabouSite.sidewalkLayer = false; };
 // Roadside props are scenery: when their file is missing or broken, the game still starts.
 const props = await (async () => {
@@ -857,7 +862,7 @@ const roomQuiet = () => quietPlaces ??= [
 const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads, quiet: roomQuiet, get vehicle() { return vehicle; }, low: LOW, bare, params, area: AREA.id, touch: touchDevice, label: SITE.brand === 'just' ? (_name, id) => `Driver ${id}` : undefined,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as import('./mp/wire').RideKind, trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
-  ground: (x, z) => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; } }) : null;
+  heightScale:EXAG,seaLevel:SEA_LEVEL,ground: (x, z, referenceY) => terrain.heightAt(x,z,referenceY) }) : null;
 const canal = canalModule ? new (await canalModule.take().catch(partFailed)).Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
 if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
@@ -1218,7 +1223,8 @@ if (testPark && !fleet) {
     && (!testPark.contains(pose.x, pose.z, vehicle.spec.envelope.reach) || testPark.placementAllowed(pose, vehicle.spec));
 } else if (stuntPark) {
   for (const actor of fleet ? fleet.members.map(m => m.vehicle) : [vehicle]) {
-    fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z) : actor.y ?? 0);
+    // A placement over joined terrain must use the deck within reach of its own height.
+    fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z, pose.y) : actor.y ?? 0);
   }
 }
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
@@ -1363,7 +1369,7 @@ let partyLine: PartyLine | null = null;
 // Test links: ?relief=0.9 sets the gauge (and shows it in a demo drive); ?break=1 steps out as soon as the car has stopped.
 const reliefTest = Number(params.get('relief'));
 if (reliefTest > 0) relief.level = Math.min(1, reliefTest);
-const placeVisit = (x: number, z: number, heading: number) => fleet ? fleet.startVisit(x, z, heading) || fleet.visitQueued : vehicle.place(x, z, heading);
+const placeVisit = (x: number, z: number, heading: number) => fleet ? fleet.startVisit(x, z, heading) || fleet.visitQueued : vehicle.placeAt(x, z, heading);
 const urlPlacement = fleet ? { bounds: vehicle.bounds, place: placeVisit } : vehicle;
 const startPlacement = fleet ? {
   get x() { return vehicle.x; }, get z() { return vehicle.z; }, get heading() { return vehicle.heading; },
@@ -1440,7 +1446,8 @@ function switchToSideBySide(onSettled?: (ok: boolean, reason?: string) => void):
     const ground = terrain.heightAt(pose.x, pose.z);
     if (ground === null || terrain.waterAt(pose.x, pose.z)) return 'Wait until solid ground is ready to switch';
     const deck = roads.deckHeight(pose.x, pose.z);
-    const y = deck === null ? ground : Math.max(ground, deck);
+    // The ride's own height picks the deck (#6): under an overpass the room is checked on the road, not on the deck above.
+    const y = pose.y === undefined ? (deck === null ? ground : Math.max(ground, deck)) : deckCounts(deck, pose.y, terrain.cartRoads) ? Math.max(ground, deck) : ground;
     const body = { x: pose.x, z: pose.z, y, heading: pose.heading, spec: nextEntry.spec };
     if (!fleetContacts.allows(body)) return 'No clear room to switch here';
     const probe = { ...body, vx: 0, vz: 0, speed: 0, car: { root: { position: { x: pose.x, z: pose.z } } } };
@@ -1488,7 +1495,7 @@ if (mailMode && params.has('stuffed') && props) {
     if (road) {
       let heading = road.heading;
       if ((p.x - road.x) * Math.cos(heading) + (p.z - road.z) * Math.sin(heading) < 0) heading += Math.PI;
-      vehicle.place(road.x - Math.sin(heading) * 3, road.z + Math.cos(heading) * 3, heading);
+      vehicle.placeAt(road.x - Math.sin(heading) * 3, road.z + Math.cos(heading) * 3, heading);
     }
   }
 }
@@ -1867,9 +1874,9 @@ function chase(dt: number) {
   const side = towCamera?.side ?? 0;
   const tx = vehicle.x - Math.sin(camHeading) * back + Math.cos(camHeading) * side, tz = vehicle.z + Math.cos(camHeading) * back + Math.sin(camHeading) * side;
   let ty = vehicle.y + vehicleSpec.chase.height + (towCamera?.height ?? 0);
-  const g = terrain.surfaceAt(tx, tz);
+  const g = terrain.surfaceAt(tx, tz,vehicle.y);
   if (g) ty = towCamera?.followGround && !vehicle.airborne
-    ? Math.max(g.ground, roads.deckHeight(tx, tz) ?? -Infinity) + vehicleSpec.chase.height + towCamera.height
+    ? g.ground + vehicleSpec.chase.height + towCamera.height
     : Math.max(ty, g.ground + g.canopy * 0.5 + 1.3);
   const k = camReady ? Math.min(1, 7 * dt) : 1;
   camPos.lerp(camAim.set(tx, ty, tz), k);
@@ -1894,7 +1901,8 @@ function chase(dt: number) {
 }
 
 // Instant replay (replay.ts): records the driven ride in every mode; the replay itself runs inside the paused frame.
-const replayGround = (x: number, z: number): number | null => { const g = terrain.heightAt(x, z), deck = roads.deckHeight(x, z); return g === null ? null : deck !== null ? Math.max(deck, g) : g; };
+// A deck counts only within reach of the body's own height (#156), so a replay under an overpass reads the lower road.
+const replayGround = (x: number, z: number, referenceY?: number): number | null => { const g = terrain.heightAt(x, z, referenceY), deck = roads.deckHeight(x, z); return g === null ? null : deckCounts(deck, referenceY, terrain.cartRoads) ? Math.max(deck, g) : g; };
 let replayResume = false, replayOpener: HTMLElement | null = null;
 const replay = new Replay({
   canvas, camera, ground: replayGround, wheelRadius: () => vehicleSpec.wheelRadius,
@@ -2797,13 +2805,13 @@ function frame(now: number) {
     if (import.meta.env.DEV) frameClock = performance.now();
     // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.
     if (fleet) { const active = !fleet.busy; driveVehicle(dt, input); if (active && loaded && !animals?.waitingForTerrain) drove += dt; }
-    else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.place(vehicle.x, vehicle.z, vehicle.heading);
+    else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.retryPlace();
     else {
-      if ((refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.place(vehicle.x, vehicle.z, vehicle.heading); vehicle.speed = 0; }
+      if ((refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.retryPlace(); vehicle.speed = 0; }
       else if (waitingToDrive) {
-        const { x, z, heading } = vehicle;
+        const { x, z, heading, y } = vehicle;
         driveVehicle(dt, { ...input, throttle: 0, handbrake: true });
-        if (vehicle.place(x, z, heading)) vehicle.speed = 0;
+        if (vehicle.parkedPlace(x, z, heading, y)) vehicle.speed = 0;
       } else driveVehicle(dt, relief.busy ? { throttle: 0, steer: 0, handbrake: true } : input);
       if ((loaded || lawnDemo?.driving) && !animals?.waitingForTerrain) drove += dt;
     }

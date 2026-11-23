@@ -1,3 +1,4 @@
+import {deckWithinReach} from './bridge-contact';
 import { AreaContacts } from './world-contacts';
 import * as THREE from 'three';
 import { Coast, type RockBlock } from './coast';
@@ -107,9 +108,9 @@ export class Quarry {
     return this.provider??={revision:()=>this.revision,resolve:body=>this.resolveSolids(body),allows:body=>this.allowPlacement(body,body.spec)};
   }
   allowPlacement(pose:VehiclePlacement,spec:VehicleSpec):boolean{
-    const land=this.terrain.heightAt(pose.x,pose.z),deck=this.roads.deckHeight(pose.x,pose.z);
-    const support=deck===null?land:land===null?deck:Math.max(land,deck);
-    const surface=this.terrain.surfaceAt?.(pose.x,pose.z);
+    const deck=this.roads.deckHeight(pose.x,pose.z),land=this.terrain.heightAt(pose.x,pose.z,pose.y);
+    const support=deckWithinReach(deck,pose.y)?land===null?deck:Math.max(land,deck):land;
+    const surface=this.terrain.surfaceAt?.(pose.x,pose.z,pose.y);
     const onDeck=(deck!==null&&support===deck)||(surface?.deck===true&&support!==null&&Math.abs(surface.ground-support)<.02);
     if(this.terrain.waterAt(pose.x,pose.z,support??undefined,onDeck))return false;
     for(const s of this.solids)if(touchesPlayer(s,pose,.15,spec))return false;

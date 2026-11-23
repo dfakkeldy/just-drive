@@ -12,7 +12,7 @@ import { historyArea } from '../../web/src/eras/history-areas';
 //
 // Verify locally with tools/check-mp.sh. The Mabou main thread owns Worker deployment.
 import { DurableObject } from 'cloudflare:workers';
-import { CLOSE, HEARTBEAT, PEER_TIMEOUT_MS, PING, PONG, VERSION } from '../../web/src/mp/wire';
+import { CLOSE, HEARTBEAT, PEER_TIMEOUT_MS, PING, PONG, encodeSnapshot, VERSION } from '../../web/src/mp/wire';
 import { Meter, STRIKES_OUT, hello, judge, lastKnown, takeSeat, text, type Seat } from './room';
 import { Board, boardDoor, type BoardEnv } from './board';
 
@@ -101,12 +101,13 @@ export default {
     const name = `${m[2]}/${m[3]}`;
     // The room learns its own name and size from the door: an object cannot read the name it was found by.
     const headers = new Headers(request.headers);
+    headers.set('x-heights',url.searchParams.get('heights')==='1'?'1':'0');
     headers.set('x-room', name); headers.set('x-bounds', String(bounds));
     return env.ROOMS.get(env.ROOMS.idFromName(name)).fetch(new Request(request, { headers }));
   },
 } satisfies ExportedHandler<Env>;
 
-interface Attachment extends Seat { bounds: number; browserId: string | null; sessionKey: string | null; lastReal: number }
+interface Attachment extends Seat { bounds: number; heights?: boolean; browserId: string | null; sessionKey: string | null; lastReal: number }
 
 export class Room extends DurableObject<Env> {
   // Rate meters live in memory only. A room that slept has forgotten them; a flood keeps it awake, so that is safe.
@@ -166,6 +167,13 @@ export class Room extends DurableObject<Env> {
     }
   }
 
+  /** A car's report goes to each other seat in the shape that seat negotiated: with or without its height. */
+  private reportToOthers(from: WebSocket, id: number, body: Uint8Array): void {
+    for (const other of this.seats(from)) {
+      try { other.ws.send(encodeSnapshot([{ id, body }], other.seat.heights)); } catch { /* that socket is closing; its own close event follows */ }
+    }
+  }
+
   private async scheduleAlarm(): Promise<void> {
     const peers = this.seats();
     const game = this.game.deadline();
@@ -211,7 +219,7 @@ export class Room extends DurableObject<Env> {
       return new Response(null, { status: 101, webSocket: client });
     }
     seat.name = readHandle(params.get('handle')) ?? seat.name;
-    const mine: Attachment = { ...seat, bounds: Number(request.headers.get('x-bounds')) || 0, browserId, sessionKey, lastReal: Date.now() };
+    const mine: Attachment = { ...seat, heights: request.headers.get('x-heights') === '1', bounds: Number(request.headers.get('x-bounds')) || 0, browserId, sessionKey, lastReal: Date.now() };
     server.serializeAttachment(mine);
     await this.scheduleAlarm();
     if (!others.length) {
@@ -221,7 +229,7 @@ export class Room extends DurableObject<Env> {
     this.raceChanged();
     server.send(this.race.message(Date.now()));
     server.send(hello(seat, request.headers.get('x-room') ?? '', others.map((o) => o.seat)));
-    const known = lastKnown(others.map((o) => o.seat));
+    const known = lastKnown(others.map((o) => o.seat),mine.heights);
     if (known) server.send(known);
     this.toOthers(server, text({ t: 'join', id: seat.id, name: seat.name, hue: seat.hue, ride: seat.ride }));
     return new Response(null, { status: 101, webSocket: client });
@@ -287,7 +295,8 @@ export class Room extends DurableObject<Env> {
       if (seat.games && this.game.position(seat.id, verdict.body, Date.now())) this.gameChanged();
     }
     ws.serializeAttachment(seat);
-    this.toOthers(ws, verdict.relay);
+    if ('body' in verdict) this.reportToOthers(ws, seat.id, verdict.body);
+    else this.toOthers(ws, verdict.relay);
   }
 
   private gone(ws: WebSocket): void {
