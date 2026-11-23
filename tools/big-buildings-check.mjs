@@ -150,7 +150,8 @@ function decodePng(file) {
 function terrainSampler(areaId, dir, manifest) {
   const [ox, oy] = manifest.origin, { size, height: { scale, offset }, levels = {} } = manifest, cache = new Map();
   const levelSets = new Map(Object.entries(levels).map(([lvl, keys]) => [Number(lvl), new Set(keys)]));
-  const availLevels = [...levelSets.keys()].sort((a, b) => b - a);
+  const checkLevels = [8, 7, 6, 5, 4, 3].filter((lvl) => levelSets.has(lvl));
+  assert.ok(checkLevels.includes(3), `${areaId}: manifest missing level 3 parent terrain tiles`);
   const readTile = (lvl, tx, ty, bId) => {
     const tileKey = `${tx}_${ty}`;
     if (!levelSets.get(lvl)?.has(tileKey)) return null;
@@ -163,28 +164,24 @@ function terrainSampler(areaId, dir, manifest) {
     return cache.get(key);
   };
   return (e, n, bId) => {
-    let lowest = Infinity;
-    for (const lvl of [8, 7]) {
+    let lowest = Infinity, hits = 0;
+    for (const lvl of checkLevels) {
       const tsize = size / (1 << lvl), tx = Math.floor((e - ox) / tsize), ty = Math.floor((oy - n) / tsize);
       const tile = readTile(lvl, tx, ty, bId);
       if (!tile) continue;
-      const u = (e - (ox + tx * tsize)) / tsize * 256, v = ((oy - ty * tsize) - n) / tsize * 256;
-      const i0 = Math.max(0, Math.min(255, Math.floor(u))), j0 = Math.max(0, Math.min(255, Math.floor(v)));
+      const seg = lvl >= 7 ? 128 : 64, step = 256 / seg;
+      const u = (e - (ox + tx * tsize)) / tsize * seg, v = ((oy - ty * tsize) - n) / tsize * seg;
+      const i0 = Math.max(0, Math.min(seg - 1, Math.floor(u))), j0 = Math.max(0, Math.min(seg - 1, Math.floor(v)));
+      const fu = u - i0, fv = v - j0;
       const at = (i, j) => { const k = (j * tile.width + i) * tile.channels; return (tile.data[k] * 256 + tile.data[k + 1]) * scale + offset; };
-      lowest = Math.min(lowest, at(i0, j0), at(i0 + 1, j0), at(i0, j0 + 1), at(i0 + 1, j0 + 1));
+      const h00 = at(i0 * step, j0 * step), h10 = at((i0 + 1) * step, j0 * step);
+      const h01 = at(i0 * step, (j0 + 1) * step), h11 = at((i0 + 1) * step, (j0 + 1) * step);
+      const d1 = fu + fv <= 1 ? h00 + (h10 - h00) * fu + (h01 - h00) * fv : h11 + (h01 - h11) * (1 - fu) + (h10 - h11) * (1 - fv);
+      const d2 = fu >= fv ? h00 + (h10 - h00) * fu + (h11 - h10) * fv : h00 + (h11 - h01) * fu + (h01 - h00) * fv;
+      lowest = Math.min(lowest, d1, d2);
+      hits++;
     }
-    if (Number.isFinite(lowest)) return lowest;
-    for (const lvl of availLevels) {
-      if (lvl === 8 || lvl === 7) continue;
-      const tsize = size / (1 << lvl), tx = Math.floor((e - ox) / tsize), ty = Math.floor((oy - n) / tsize);
-      const tile = readTile(lvl, tx, ty, bId);
-      if (!tile) continue;
-      const u = (e - (ox + tx * tsize)) / tsize * 256, v = ((oy - ty * tsize) - n) / tsize * 256;
-      const i0 = Math.max(0, Math.min(255, Math.floor(u))), j0 = Math.max(0, Math.min(255, Math.floor(v)));
-      const at = (i, j) => { const k = (j * tile.width + i) * tile.channels; return (tile.data[k] * 256 + tile.data[k + 1]) * scale + offset; };
-      return Math.min(at(i0, j0), at(i0 + 1, j0), at(i0, j0 + 1), at(i0 + 1, j0 + 1));
-    }
-    return null;
+    return hits ? lowest : null;
   };
 }
 function perimeterPoints(b) {
@@ -216,6 +213,52 @@ function roofed(b, village, step) {
   const clear = model.clear.map((box) => [...box]);
   dispose(model);
   return { rays, highest, clear };
+}
+/** Assembled multi-block roof check at default 1.5x exaggeration: downward rays across every facing joint must hit a roof. */
+function assembledJoints(group, village, styles, label) {
+  const exag = 1.5, model = new Buildings(group, village, exag, 0, styles);
+  const root = group[0], a = root.axisDeg * Math.PI / 180;
+  const ux = Math.sin(a), uy = Math.cos(a), vx = Math.cos(a), vy = -Math.sin(a);
+  const boxes = [];
+  for (const b of group) {
+    const da = Math.abs(((b.axisDeg - root.axisDeg) % 90 + 90) % 90);
+    if (Math.min(da, 90 - da) > 1.0) continue;
+    const us = b.footprint.map(([e, n]) => (e - root.x) * ux + (n - root.y) * uy);
+    const vs = b.footprint.map(([e, n]) => (e - root.x) * vx + (n - root.y) * vy);
+    boxes.push({ b, u0: Math.min(...us), u1: Math.max(...us), v0: Math.min(...vs), v1: Math.max(...vs) });
+  }
+  let rays = 0;
+  const topY = Math.max(...group.map((b) => b.ground * exag + b.ridge)) + 20;
+  try {
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const A = boxes[i], B = boxes[j], floorY = Math.min(A.b.ground, B.b.ground) * exag + Math.min(A.b.eave, B.b.eave) - 0.5;
+      const ovU0 = Math.max(A.u0, B.u0), ovU1 = Math.min(A.u1, B.u1), gapV = Math.max(A.v0 - B.v1, B.v0 - A.v1);
+      if (ovU1 - ovU0 > 2 && gapV >= -0.05 && gapV < 1.5) {
+        const midV = A.v0 >= B.v1 - 0.05 ? (B.v1 + A.v0) / 2 : (A.v1 + B.v0) / 2;
+        const probes = gapV > 0.05 ? [midV] : [midV - 0.03, midV + 0.03];
+        for (let u = ovU0 + 0.5; u <= ovU1 - 0.5; u += 1.0) for (const pv of probes) {
+          const e = root.x + ux * u + vx * pv, n = root.y + uy * u + vy * pv;
+          cast.set(new THREE.Vector3(e - village[0], topY, village[1] - n), down);
+          const hits = cast.intersectObject(model.mesh);
+          assert.ok(hits.length && hits[0].point.y >= floorY, `${label}: open roof seam (${gapV.toFixed(2)} m) between blocks ${A.b.id} and ${B.b.id}`);
+          rays++;
+        }
+      }
+      const ovV0 = Math.max(A.v0, B.v0), ovV1 = Math.min(A.v1, B.v1), gapU = Math.max(A.u0 - B.u1, B.u0 - A.u1);
+      if (ovV1 - ovV0 > 2 && gapU >= -0.05 && gapU < 1.5) {
+        const midU = A.u0 >= B.u1 - 0.05 ? (B.u1 + A.u0) / 2 : (A.u1 + B.u0) / 2;
+        const probes = gapU > 0.05 ? [midU] : [midU - 0.03, midU + 0.03];
+        for (let v = ovV0 + 0.5; v <= ovV1 - 0.5; v += 1.0) for (const pu of probes) {
+          const e = root.x + ux * pu + vx * v, n = root.y + uy * pu + vy * v;
+          cast.set(new THREE.Vector3(e - village[0], topY, village[1] - n), down);
+          const hits = cast.intersectObject(model.mesh);
+          assert.ok(hits.length && hits[0].point.y >= floorY, `${label}: open roof seam (${gapU.toFixed(2)} m) between blocks ${A.b.id} and ${B.b.id}`);
+          rays++;
+        }
+      }
+    }
+  } finally { dispose(model); }
+  return rays;
 }
 
 // Made-up shapes first: this part needs no baked land.
@@ -254,9 +297,17 @@ const round = (id, e, n, diameter, eave, ridge, roof) => block(id, e, n, diamete
   assert.ok(Math.abs(covered - 12000) < 400 && cleared < 1.9 * covered, `the hall clears ${cleared} m2 for ${covered} m2 of roof`);
   roofed(block(3, V[0], V[1], 60, 30, 110, 6, 11, 'gable'), V, .8);
   for (const exag of [1, 1.5, 2.5]) {
-    assert.ok(Math.abs(minY(hall, V, exag) - (hall.ground * exag - 5 * exag)) < 1e-4, `block foundation scales at exag=${exag}`);
+    assert.ok(Math.abs(minY(hall, V, exag) - (hall.ground * exag - 7 * exag)) < 1e-4, `block foundation scales at exag=${exag}`);
+    assert.ok(Math.abs(minY(tank, V, exag) - (tank.ground * exag - 7 * exag)) < 1e-4, `tank shell scales at exag=${exag}`);
     const plain = { ...block(99, V[0], V[1], 12, 8, 0, 5, 7, 'gable'), kind: 'house', shape: undefined };
     assert.ok(Math.abs(minY(plain, V, exag) - (plain.ground * exag - 3)) < 1e-4, `ordinary building keeps 3 m foot at exag=${exag}`);
+  }
+  {
+    const main = block(10, V[0], V[1], 40, 20, 0, 8, 8.2, 'flat', { buildingId: 10 });
+    const flush = block(11, V[0] + 15, V[1], 20, 10, 0, 6, 6.2, 'flat', { buildingId: 10 });
+    assert.ok(assembledJoints([main, flush], V, {}, 'synthetic flush') > 15, 'touching blocks pass assembled roof joint check');
+    const gapped = block(12, V[0] + 15.98, V[1], 20, 10, 0, 6, 6.2, 'flat', { buildingId: 10 });
+    assert.throws(() => assembledJoints([main, gapped], V, {}, 'synthetic seam'), /open roof seam/, '0.98 m seam between blocks is caught');
   }
   // A baked colour (step 30) repaints a block but gives it no door and window grid: a block is one part of a large mapped
   // hall (plants, malls, arenas), and the house-scale window grid is only for a large building without a shape (#1288).
@@ -337,6 +388,7 @@ for (const area of AREAS) {
   const dir = `${baked}/${area.base}`, read = (name) => JSON.parse(fs.readFileSync(`${dir}/${name}`, 'utf8'));
   if (!fs.existsSync(`${dir}/buildings.json`) || !fs.existsSync(`${dir}/manifest.json`)) continue;
   const manifest = read('manifest.json'), list = read('buildings.json').buildings, roads = read('roads.json').roads;
+  const styles = manifest.buildingStyles && fs.existsSync(`${dir}/${manifest.buildingStyles.file}`) ? read(manifest.buildingStyles.file).styles : {};
   const sampleGround = manifest.origin && manifest.height ? terrainSampler(area.id, dir, manifest) : null;
   const landmarks = fs.existsSync(`${dir}/landmarks.json`) ? read('landmarks.json') : [];
   // The mail points as main.ts hands them to the yard dog's driveway: every mailbox and community box.
@@ -388,10 +440,21 @@ for (const area of AREAS) {
     }
     grounded++;
   }
+  const blockGroups = new Map();
+  for (const b of list.filter((x) => x.shape === 'block')) {
+    const rootId = b.buildingId ?? b.id;
+    if (!blockGroups.has(rootId)) blockGroups.set(rootId, []);
+    blockGroups.get(rootId).push(b);
+  }
+  for (const [rootId, grp] of blockGroups) {
+    if (grp.length < 2) continue;
+    grp.sort((x, y) => (x.id === rootId ? -1 : y.id === rootId ? 1 : x.id - y.id));
+    rays += assembledJoints(grp, v, styles, `${area.id} ${rootId}`);
+  }
   assert.equal(roofSites(list).length, buildingSites(list).length + list.filter((b) => b.shape && b.buildingId !== undefined && b.buildingId !== b.id).length);
   assert.ok(list.filter((b) => b.shape).every((b) => roofSites(list).includes(b)), `${area.id}: every block and tank is cleared in the 1884 scene`);
   areas++; large += result.large; zones += result.zones;
   report.push(`${area.id} ${result.large} in ${result.zones} zones`);
 }
 assert.ok(areas > 0, 'at least one baked area');
-console.log(`PASS: no block or tank in a hand-built site (${report.join('; ')}); planted ones are found in every zone; ${rays} roof rays find a closed roof; ${grounded} shapes grounded at 1.5x and 2.5x.`);
+console.log(`PASS: no block or tank in a hand-built site (${report.join('; ')}); planted ones are found in every zone; ${rays} roof/joint rays find a closed roof; ${grounded} shapes grounded across levels 3..8 at 1.5x and 2.5x.`);

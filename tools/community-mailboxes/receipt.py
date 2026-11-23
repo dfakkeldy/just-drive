@@ -139,28 +139,31 @@ def fixture():
                 raise AssertionError(f'Accepted invalid state: {label}')
 
 
-        # A later delta (for example, Port Hood large-building service drops) may update a pinned props file.
-        p_later = compact({'mailboxes': [], 'communityBoxes': [], 'serviceDrops': [1]})
-        later = [{'files': [{'file': 'areas/porthood/props.json', 'before': sha(p_before), 'sha256': sha(p_later)}]}]
-        lay(m_before, p_later, man_before)
-        assert state(root, report, later) == 'before'
-        lay(m_before, b'{"other":1}\n', man_before)
-        try:
-            state(root, report, later)
-        except AssertionError:
-            pass
-        else:
-            raise AssertionError('Accepted unknown bytes with later delta')
+        # A later delta (Port Hood large-building service drops installed after #126) may update a pinned props file.
+        p_later = compact({'mailboxes': [], 'communityBoxes': [site], 'serviceDrops': [1]})
+        later = [{'files': [{'file': 'areas/porthood/props.json', 'before': sha(p_after), 'sha256': sha(p_later)}]}]
+        lay(m_after, p_later, man_after)
+        assert state(root, report, later) == 'after'
+        for label, args in [
+            ('pre-#126 Mabou with post-Delta-1 Port Hood', (m_before, p_later, man_before)),
+            ('unknown bytes with later delta', (m_after, b'{"other":1}\n', man_after)),
+        ]:
+            lay(*args)
+            try:
+                state(root, report, later)
+            except AssertionError:
+                pass
+            else:
+                raise AssertionError(f'Accepted invalid state: {label}')
 
 
-# Port Hood large buildings (Delta 1, grok-bots#1341) add 3 service drops to areas/porthood/props.json
-# without changing mailboxes or communityBoxes. Keep verify() strict on the pre-Delta-1 bytes so the
-# pre-Delta-1 community-mailboxes delta cannot overwrite those service drops.
+# Port Hood large buildings (Delta 1, grok-bots#1341 / #1372) install after #126 community mailboxes
+# and add 3 service drops to post-#126 areas/porthood/props.json while keeping the community mailbox site.
 DELTA1_PORTHOOD_PROPS = {
     'files': [{
         'file': 'areas/porthood/props.json',
-        'before': '19d6193cee0ace6c930ee05ca714b320b457997431e5451595fdfc15153ad94e',
-        'sha256': 'fd8cbaf51c8b533147f5dbaa9f44983aa1ec2737f1827b0eba83ea78e49669c0',
+        'before': 'cf75c913805e98a07fa08f99ef6d9137ed790b33d204a3b14966c616e5a987c9',
+        'sha256': '86477f28acf008d6bae97cf286c74177bec2a7fee81d9121ab0d14215748180a',
     }],
 }
 
