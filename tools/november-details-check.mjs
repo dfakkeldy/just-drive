@@ -627,8 +627,35 @@ for (const {a, b, side} of added) {
     assert.notEqual(f.soloUp.revision, revBeforeSolo, 'soloContacts.revision advances on level-8 upgrade');
     f.dispose();
   }
+  // Pure read-only allowsBridge check: querying allowsBridge on a fresh Roads instance builds zero meshes and keeps bridgeDeckVersion at 0.
+  {
+    const freshNet = new Roads({ roads: tagged }, mabouManifest.village, realTerrain);
+    const childrenBefore = freshNet.group.children.length;
+    const verBefore = freshNet.bridgeDeckVersion;
+    const r45 = freshNet.roads.find(x => x.id === 45);
+    const [ax, az] = r45.pts[0], [bx, bz] = r45.pts[r45.pts.length - 1];
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, hdg = Math.atan2(bx - ax, -(bz - az));
+    assert.equal(freshNet.guardrails.allowsBridge({ x: mx, z: mz, y: 3.6, heading: hdg, spec: CAR_SPEC }), true, 'fresh allowsBridge accepts centred pose');
+    assert.equal(freshNet.group.children.length, childrenBefore, 'allowsBridge does not build or add scene meshes');
+    assert.equal(freshNet.bridgeDeckVersion, verBefore, 'allowsBridge does not advance bridgeDeckVersion');
+    for (const child of [...freshNet.group.children]) child.geometry?.dispose();
+  }
+  // Independent circle-vs-rail overlap calculator (does not call allowsBridge or pushOut).
+  const independentInnerRailOverlap = (pose, ax, az, ux, uz, span) => {
+    const env = pose.spec.envelope, sinH = Math.sin(pose.heading), cosH = Math.cos(pose.heading);
+    let maxPen = 0;
+    for (let i = 0; i < env.circles.length; i++) {
+      const off = env.circles[i], side = env.circleSides?.[i] ?? 0;
+      const cx = pose.x + sinH * off + cosH * side - ax, cz = pose.z - cosH * off + sinH * side - az;
+      const s = cx * ux + cz * uz, across = Math.abs(-cx * uz + cz * ux);
+      const ds = s < 0.005 ? 0.005 - s : s > span - 0.005 ? s - (span - 0.005) : 0;
+      const da = across < PONY_TRUSS.railInner ? PONY_TRUSS.railInner - across : across > PONY_TRUSS.outerHalf ? across - PONY_TRUSS.outerHalf : 0;
+      maxPen = Math.max(maxPen, env.radius - Math.hypot(ds, da));
+    }
+    return maxPen;
+  };
   // High-speed angled portal hits and 75-step full-steer wedge prevention on both bridges:
-  // after every step, the resolved pose clears both rails (0 overlap, allows === true).
+  // after every step, independent circle-vs-rail overlap is <= 0 AND allowsBridge is true.
   for (const id of [45, 46]) {
     const r = net.roads.find(x => x.id === id);
     const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
@@ -645,16 +672,19 @@ for (const {a, b, side} of added) {
     for (let step = 0; step < 75; step++) {
       car.update(1 / 120, { throttle: 0.5, steer: -1, handbrake: false, touch: false });
       soloAng.resolve(car);
+      const pen = independentInnerRailOverlap({ x: car.x, z: car.z, heading: car.heading, spec: CAR_SPEC }, ax, az, ux, uz, span);
+      assert.ok(pen <= 1e-4, `bridge ${id} 38-deg 32 m/s step ${step} has zero independent rail overlap (${pen.toFixed(5)} m)`);
       assert.equal(soloAng.allows({ x: car.x, z: car.z, y: car.y, heading: car.heading, spec: CAR_SPEC }), true, `bridge ${id} 38-deg 32 m/s step ${step} resolves clear of both rails`);
-      assert.equal(rails.allowsBridge({ x: car.x, z: car.z, y: car.y, heading: car.heading, spec: CAR_SPEC }), true, `bridge ${id} 38-deg step ${step} has zero remaining rail overlap`);
     }
-    // Case B: Direct opposing-rail pinch (no prior clear pose, angled 62 deg at midspan wider than the 4.01 m corridor):
-    // allowsBridge rejects the wedged pose, and blockBridge aligns + clears both rails to zero overlap.
-    const mx = (ax + bx) / 2, mz = (az + bz) / 2, midY = net.deckHeight(mx, mz);
-    const wedged = { x: mx, z: mz, y: midY, heading: hdg + (62 * Math.PI) / 180, vx: ux * 8, vz: uz * 8, speed: 0, spec: CAR_SPEC };
-    assert.equal(rails.allowsBridge(wedged), false, `bridge ${id} rejects 62-deg wedged midspan pose`);
+    // Case B: Sol's exact 9.2 m, 0.6 m off-centre, 65-deg opposing-rail wedge where left/right pushes cancel in a single pass.
+    const wS = Math.min(9.2, span * 0.53), wY = net.deckHeight(ax + ux * wS, az + uz * wS);
+    const wedged = { x: ax + ux * wS - uz * 0.6, z: az + uz * wS + ux * 0.6, y: wY, heading: hdg + (65 * Math.PI) / 180, vx: ux * 8, vz: uz * 8, speed: 0, spec: CAR_SPEC };
+    assert.ok(independentInnerRailOverlap(wedged, ax, az, ux, uz, span) > 0.05, `bridge ${id} 65-deg test pose starts deeply wedged`);
+    assert.equal(rails.allowsBridge(wedged), false, `bridge ${id} allowsBridge rejects 65-deg wedged pose`);
     rails.blockBridge(wedged, 1 / 120);
-    assert.equal(rails.allowsBridge(wedged), true, `bridge ${id} blockBridge un-wedges 62-deg midspan pose to zero overlap`);
+    const penAfter = independentInnerRailOverlap(wedged, ax, az, ux, uz, span);
+    assert.ok(penAfter <= 1e-4, `bridge ${id} blockBridge resolves 65-deg wedged pose to zero independent overlap (${penAfter.toFixed(5)} m)`);
+    assert.equal(rails.allowsBridge(wedged), true, `bridge ${id} allowsBridge accepts resolved pose`);
   }
   // Exact finite rotated bottom-chord underside and high-portal inner-rail tests at 3.0x: measure the rendered steel directly
   // and verify paired clear/contact probes right below/above it (catches flat or untrimmed cutoffs).

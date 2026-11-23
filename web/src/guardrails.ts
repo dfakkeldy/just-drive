@@ -10,6 +10,7 @@ import { planRailSteps, railPoint, roadLength, nearCoast, railPosts, railMetres,
 import { LOOK, RailMesher, railMaterial } from './guardrail-look';
 import { forEachPonyTrussSteelClip, PONY_TRUSS, ponyTrussSpan, type PonyTrussSpan } from './november-bridges';
 import { pushOut, type Pushable, type Solid } from './parked';
+import { CAR_SPEC } from './vehicle-spec';
 
 interface Chunk { road: Road; start: number; end: number; x: number; z: number; revision: number; mesh: THREE.Mesh | null; spans: RailSpan[]; solids: Solid[]; shape?: string; low?: boolean }
 const CHUNK = RAIL.chunk;
@@ -27,21 +28,42 @@ export class Guardrails {
   private readonly chunks: Chunk[] = [];
   private readonly bridgeSpans: PonyTrussSpan[] = [];
   private readonly bridgeDeckRev: number[] = [];
+  private readonly bridgeCachedLevel: number[] = [];
+  private readonly bridgeCachedY0: number[] = [];
+  private readonly bridgeCachedY1: number[] = [];
+  private readonly bridgeEndsScratch: [number, number] = [0, 0];
+  private bridgeContactVersion = 0;
   private readonly bridgeClearPoses = new WeakMap<object, { x: number; z: number; heading: number }>();
   private activeBridgeCar: Pushable | null = null;
   private activeBridgeSpan: PonyTrussSpan | null = null;
   private activeBridgeDt = 0;
-  private activeBridgeMoved = 0;
-  private readonly bridgeProbe: Pushable = { x: 0, z: 0, y: 0, heading: 0, vx: 0, vz: 0, speed: 0 };
+  private checkPoseX = 0;
+  private checkPoseZ = 0;
+  private checkPoseSinH = 0;
+  private checkPoseCosH = 1;
+  private checkPoseSpec: Pushable['spec'] = undefined;
+  private checkPoseOverlaps = false;
   private readonly trimmedBridgeSolids: [Solid, Solid] = [
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
   ];
   private readonly pushBridgeMember = (sLeft: number, sRight: number, inner: number, outer: number): void => {
-    const car = this.activeBridgeCar!;
-    const px = car.x, pz = car.z;
-    this.pushTrimmedSpan(car, this.activeBridgeSpan!, sLeft, sRight, inner, outer, this.activeBridgeDt);
-    this.activeBridgeMoved += Math.hypot(car.x - px, car.z - pz);
+    this.pushTrimmedSpan(this.activeBridgeCar!, this.activeBridgeSpan!, sLeft, sRight, inner, outer, this.activeBridgeDt);
+  };
+  private readonly testBridgeMemberOverlap = (sLeft: number, sRight: number, inner: number, outer: number): void => {
+    if (this.checkPoseOverlaps) return;
+    const b = this.activeBridgeSpan!;
+    const env = (this.checkPoseSpec ?? CAR_SPEC).envelope, r = Math.max(0, env.radius - 1e-6), r2 = r * r;
+    for (let i = 0; i < env.circles.length; i++) {
+      const off = env.circles[i], side = env.circleSides?.[i];
+      const cx = this.checkPoseX + this.checkPoseSinH * off + (side ? this.checkPoseCosH * side : 0) - b.ax;
+      const cz = this.checkPoseZ - this.checkPoseCosH * off + (side ? this.checkPoseSinH * side : 0) - b.az;
+      const s = cx * b.ux + cz * b.uz;
+      const across = Math.abs(-cx * b.uz + cz * b.ux);
+      const ds = s < sLeft ? sLeft - s : s > sRight ? s - sRight : 0;
+      const da = across < inner ? inner - across : across > outer ? across - outer : 0;
+      if (ds * ds + da * da < r2) { this.checkPoseOverlaps = true; return; }
+    }
   };
   private readonly cells = new Map<number, Chunk[]>();
   private readonly materials: (THREE.MeshLambertMaterial | undefined)[] = [];
@@ -57,7 +79,7 @@ export class Guardrails {
     this.access = railAccess(this.roads, this.planning.ground, this.terrain.manifest?.village, true);
     if (terrain.cartRoads) return;
     for (const road of roads.roads) {
-      if (road.bridge) { if (road.ponyTruss) { const span = ponyTrussSpan(road); if (span) { this.bridgeSpans.push(span); this.bridgeDeckRev.push(-1); } } continue; }
+      if (road.bridge) { if (road.ponyTruss) { const span = ponyTrussSpan(road); if (span) { this.bridgeSpans.push(span); this.bridgeDeckRev.push(-1); this.bridgeCachedLevel.push(0); this.bridgeCachedY0.push(0); this.bridgeCachedY1.push(0); } } continue; }
       if (road.kind > 3 || railwayRoad(road)) continue;
       const len = roadLength(road);
       for (let index = 0; index * CHUNK < len; index++) {
@@ -312,21 +334,28 @@ export class Guardrails {
     right.x = mx - b.uz * centre; right.z = mz + b.ux * centre; right.half = half; right.halfWidth = halfWidth; right.heading = b.heading;
     pushOut(car, this.trimmedBridgeSolids, true, dt);
   }
-  private refreshBridgeDeck(index: number, rev: number): void {
-    const b = this.bridgeSpans[index];
-    if (this.roads.bridgeDeckLevel(b.roadId) < 8 && this.bridgeDeckRev[index] !== rev) {
+  /** Read-only bank elevation cache per bridge; upgrades at most once per dataRevision without mutating scene meshes. */
+  private readBridgeEnds(index: number, rev: number): boolean {
+    const curLevel = this.bridgeCachedLevel[index];
+    if (curLevel < 8 && this.bridgeDeckRev[index] !== rev) {
       this.bridgeDeckRev[index] = rev;
-      this.roads.deckHeight(b.ax + b.ux * (b.span * 0.5), b.az + b.uz * (b.span * 0.5));
+      const lvl = this.roads.bridgeBankElevations(this.bridgeSpans[index].roadId, this.bridgeEndsScratch);
+      if (lvl > curLevel) {
+        this.bridgeCachedLevel[index] = lvl;
+        this.bridgeCachedY0[index] = this.bridgeEndsScratch[0];
+        this.bridgeCachedY1[index] = this.bridgeEndsScratch[1];
+        this.bridgeContactVersion++;
+      }
     }
+    return this.bridgeCachedLevel[index] >= 6;
   }
-  /** Revision token for pony-truss bridge deck contact state; advances only when a pony-truss deck is built or upgraded. */
+  /** Revision token for pony-truss bridge deck contact state; read-only and advances only when bank elevations actually upgrade. */
   get bridgeRevision(): number {
     const rev = this.terrain.dataRevision ?? 0;
-    for (let i = 0; i < this.bridgeSpans.length; i++) this.refreshBridgeDeck(i, rev);
-    return this.roads.bridgeDeckVersion;
+    for (let i = 0; i < this.bridgeSpans.length; i++) this.readBridgeEnds(i, rev);
+    return this.bridgeContactVersion;
   }
-  private runBridgePass(car: Pushable, b: PonyTrussSpan, y0: number | null, y1: number | null, carHeight: number, dt: number): number {
-    this.activeBridgeMoved = 0;
+  private runBridgePass(car: Pushable, b: PonyTrussSpan, y0: number | null, y1: number | null, carHeight: number, dt: number): void {
     if (y0 !== null && y1 !== null && car.y !== undefined) {
       this.activeBridgeCar = car;
       this.activeBridgeSpan = b;
@@ -334,19 +363,28 @@ export class Guardrails {
       forEachPonyTrussSteelClip(b, y0, y1, car.y, carHeight, this.pushBridgeMember);
       this.activeBridgeCar = null;
       this.activeBridgeSpan = null;
-      return this.activeBridgeMoved;
+      return;
     }
-    const px = car.x, pz = car.z;
     pushOut(car, b.solids, true, dt);
-    return Math.hypot(car.x - px, car.z - pz);
   }
+  /** Exact, read-only per-circle clearance check against every clipped steel member on both sides (immune to opposing-push cancellation). */
   private bridgePoseClear(x: number, z: number, y: number | undefined, heading: number, spec: Pushable['spec'], b: PonyTrussSpan, y0: number | null, y1: number | null): boolean {
-    const p = this.bridgeProbe;
-    p.x = x; p.z = z; p.y = y; p.heading = heading; p.spec = spec;
-    p.vx = p.vz = p.speed = 0;
-    return this.runBridgePass(p, b, y0, y1, spec?.height ?? 1.8, 0) < 1e-7;
+    this.activeBridgeSpan = b;
+    this.checkPoseX = x;
+    this.checkPoseZ = z;
+    this.checkPoseSinH = Math.sin(heading);
+    this.checkPoseCosH = Math.cos(heading);
+    this.checkPoseSpec = spec;
+    this.checkPoseOverlaps = false;
+    if (y0 !== null && y1 !== null && y !== undefined) {
+      forEachPonyTrussSteelClip(b, y0, y1, y, spec?.height ?? 1.8, this.testBridgeMemberOverlap);
+    } else {
+      this.testBridgeMemberOverlap(0, b.span, PONY_TRUSS.railInner, PONY_TRUSS.outerHalf);
+    }
+    this.activeBridgeSpan = null;
+    return !this.checkPoseOverlaps;
   }
-  /** Pure, side-effect-free check that a body clears every pony-truss bridge steel member. */
+  /** Pure, side-effect-free check that a body clears every pony-truss bridge steel member without building or mutating scene meshes. */
   allowsBridge(body: { x: number; z: number; y?: number; heading: number; spec?: Pushable['spec'] }): boolean {
     if (!this.bridgeSpans.length) return true;
     const reach = (body.spec?.envelope.reach ?? 3.5) + (body.spec?.envelope.radius ?? 1.4);
@@ -360,10 +398,9 @@ export class Guardrails {
       if (Math.abs(across) > PONY_TRUSS.outerHalf + reach) continue;
       let y0: number | null = null, y1: number | null = null;
       if (body.y !== undefined) {
-        this.refreshBridgeDeck(i, rev);
-        y0 = this.roads.bridgeElevation(b.roadId, 0);
-        y1 = this.roads.bridgeElevation(b.roadId, 1);
-        if (y0 === null || y1 === null) continue;
+        if (!this.readBridgeEnds(i, rev)) continue;
+        y0 = this.bridgeCachedY0[i];
+        y1 = this.bridgeCachedY1[i];
       }
       if (!this.bridgePoseClear(body.x, body.z, body.y, body.heading, body.spec, b, y0, y1)) return false;
     }
@@ -384,14 +421,14 @@ export class Guardrails {
       if (Math.abs(across) > PONY_TRUSS.outerHalf + reach) continue;
       let y0: number | null = null, y1: number | null = null;
       if (car.y !== undefined) {
-        this.refreshBridgeDeck(i, rev);
-        y0 = this.roads.bridgeElevation(b.roadId, 0);
-        y1 = this.roads.bridgeElevation(b.roadId, 1);
-        if (y0 === null || y1 === null) continue;
+        if (!this.readBridgeEnds(i, rev)) continue;
+        y0 = this.bridgeCachedY0[i];
+        y1 = this.bridgeCachedY1[i];
       }
       touched = true;
       for (let pass = 0; pass < 16; pass++) {
-        if (this.runBridgePass(car, b, y0, y1, carHeight, pass === 0 ? dt : 0) < 1e-6) break;
+        this.runBridgePass(car, b, y0, y1, carHeight, pass === 0 ? dt : 0);
+        if (this.bridgePoseClear(car.x, car.z, car.y, car.heading, car.spec, b, y0, y1)) break;
       }
     }
     return touched;
@@ -409,14 +446,15 @@ export class Guardrails {
       if (Math.abs(across) > PONY_TRUSS.outerHalf + reach) continue;
       let y0: number | null = null, y1: number | null = null;
       if (car.y !== undefined) {
-        y0 = this.roads.bridgeElevation(b.roadId, 0);
-        y1 = this.roads.bridgeElevation(b.roadId, 1);
-        if (y0 === null || y1 === null) continue;
+        if (this.bridgeCachedLevel[i] < 6) continue;
+        y0 = this.bridgeCachedY0[i];
+        y1 = this.bridgeCachedY1[i];
       }
-      // Re-relax translation after clampRailYaw; break immediately when truly clear (sum of per-member pushes < 1e-6).
-      let clear = false;
-      for (let pass = 0; pass < 16; pass++) {
-        if (this.runBridgePass(car, b, y0, y1, carHeight, 0) < 1e-6) { clear = true; break; }
+      // Verify true per-circle clearance after clampRailYaw; relax translation up to 16 passes if needed.
+      let clear = this.bridgePoseClear(car.x, car.z, car.y, car.heading, car.spec, b, y0, y1);
+      for (let pass = 0; pass < 16 && !clear; pass++) {
+        this.runBridgePass(car, b, y0, y1, carHeight, 0);
+        clear = this.bridgePoseClear(car.x, car.z, car.y, car.heading, car.spec, b, y0, y1);
       }
       if (!clear) {
         // Opposing rails stalled translation (body angled wider than the one-lane corridor).
@@ -435,8 +473,9 @@ export class Guardrails {
           const delta = Math.atan2(Math.sin(target - baseHeading), Math.cos(target - baseHeading));
           for (let k = 1; k <= 12 && !clear; k++) {
             car.heading = baseHeading + delta * (k / 12);
-            for (let pass = 0; pass < 8; pass++) {
-              if (this.runBridgePass(car, b, y0, y1, carHeight, 0) < 1e-6) { clear = true; break; }
+            for (let pass = 0; pass < 8 && !clear; pass++) {
+              this.runBridgePass(car, b, y0, y1, carHeight, 0);
+              clear = this.bridgePoseClear(car.x, car.z, car.y, car.heading, car.spec, b, y0, y1);
             }
           }
         }

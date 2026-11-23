@@ -216,6 +216,29 @@ export class Roads {
     return this.ponyDeckVersion;
   }
 
+  /** Read-only bridge bank elevations [y0, y1] and terrain detail level without building or mutating scene meshes. */
+  bridgeBankElevations(id: number, out: [number, number]): number {
+    const have = this.decks.get(id);
+    if (have && have.level >= 8) { out[0] = have.y0; out[1] = have.y1; return have.level; }
+    const road = have?.road ?? this.roads.find(r => r.id === id);
+    if (!road || road.pts.length < 2) return 0;
+    const p = road.pts, n = p.length;
+    const end = (a: [number, number], b: [number, number]) => {
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1;
+      return this.terrain.surfaceAt(a[0] + ((a[0] - b[0]) / d) * 3, a[1] + ((a[1] - b[1]) / d) * 3);
+    };
+    const s0 = end(p[0], p[1]), s1 = end(p[n - 1], p[n - 2]);
+    if (!s0 || !s1 || s0.level < 6 || s1.level < 6) {
+      if (have) { out[0] = have.y0; out[1] = have.y1; return have.level; }
+      return 0;
+    }
+    const level = Math.min(s0.level, s1.level);
+    if (have && level <= have.level) { out[0] = have.y0; out[1] = have.y1; return have.level; }
+    out[0] = s0.ground + 0.05;
+    out[1] = s1.ground + 0.05;
+    return level;
+  }
+
   /** Build decks for bridges near the camera, once the fine terrain at both ends has loaded. */
   update(cam: THREE.Vector3) {
     this.guardrails?.update(cam);
