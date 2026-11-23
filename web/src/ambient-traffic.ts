@@ -37,6 +37,11 @@ const DRIFT = .15, DRIFT_MAX = 60;
 // Cars further than NEAR and out of the camera read no ground, so they keep no far land tile in memory.
 const NEAR = 150;
 const NO_JUNCTIONS: Junction[] = [];
+const NO_DECKS: readonly number[] = [];
+// A car stands on a bridge deck only on its own chain's bridges (its bridge pieces, and the modern spans that carry one
+// of its pieces, which include decks recovered where the map has no bridge piece), widened by DECK_PAD metres at each
+// end (a deck can run past its mapped piece). Anywhere else it stands on the land, never on a deck overhead (an overpass).
+const DECK_PAD = 20;
 // The map gives no travel direction, and these pieces are one-way carriageways or ramps: two-way cars would drive the wrong way.
 const ONE_WAY = /\b(NB|SB|EB|WB)\b|Ramp|Rotary/;
 // One body colour per pool slot (blue, red, silver, black), from the parked-car palette. LOW uses the first two.
@@ -75,6 +80,28 @@ export function highwayChains(roads: readonly Road[]): { pts: Pt[]; pieces: Set<
     chains.push({ pts, pieces: chain, halfWidth: Math.max(...[...chain].map(p => p.halfWidth)) });
   }
   return chains;
+}
+
+/**
+ * Along-path ranges [start, end, ...] of a chain's bridge pieces. The chain shares its pieces' point arrays; an appended
+ * piece's first point gave way to the previous piece's end (within JOIN metres), so that neighbour bounds the range.
+ */
+export function deckRanges(pts: readonly Pt[], cumulative: readonly number[], pieces: ReadonlySet<Road>): number[] {
+  const index = new Map<Pt, number>(), out: number[] = [];
+  pts.forEach((p, i) => index.set(p, i));
+  const near = (a: Pt | undefined, b: Pt) => !!a && Math.hypot(a[0] - b[0], a[1] - b[1]) < JOIN;
+  for (const r of pieces) {
+    if (!r.bridge) continue;
+    let lo = Infinity, hi = -Infinity;
+    for (const p of r.pts) { const i = index.get(p); if (i !== undefined) { lo = Math.min(lo, i); hi = Math.max(hi, i); } }
+    if (lo > hi) continue;
+    for (const end of [r.pts[0], r.pts[r.pts.length - 1]]) {
+      if (index.has(end)) continue;
+      if (near(pts[lo - 1], end)) lo--; else if (near(pts[hi + 1], end)) hi++;
+    }
+    out.push(cumulative[lo] - DECK_PAD, cumulative[hi] + DECK_PAD);
+  }
+  return out;
 }
 
 /** Where other roads end on a chain's middle (side roads join a highway between its piece ends), sorted along it. */
@@ -123,6 +150,10 @@ export class AmbientTraffic {
   readonly paths: SceneRoad[] = [];
   readonly cars: Car[] = [];
   private readonly junctions = new Map<SceneRoad, Junction[]>();
+  /** Each path's own bridge ranges (see deckRanges), in its own along-road metres. */
+  private readonly decks = new Map<SceneRoad, readonly number[]>();
+  /** Construction only: each forward path's road ids. */
+  private readonly pieceIds = new Map<SceneRoad, Set<number>>();
   /** Each path's opposite carriageway: the same chain driven the other way. */
   private readonly partner = new Map<SceneRoad, SceneRoad>();
   private readonly frustum = new THREE.Frustum();
@@ -153,8 +184,25 @@ export class AmbientTraffic {
       this.partner.set(forward, reverse); this.partner.set(reverse, forward);
       this.junctions.set(forward, ahead);
       this.junctions.set(reverse, ahead.map(j => ({ ...j, along: length - j.along })).reverse());
+      const decks = deckRanges(chain.pts, forward.cumulative, chain.pieces);
+      if (decks.length) this.decks.set(forward, decks);
+      this.pieceIds.set(forward, new Set([...chain.pieces].map(r => r.id)));
     }
     if (!this.paths.length) return;
+    // Spans carrying a chain's road ids add their own ranges, projected onto the forward path.
+    const runs = roads.bridgeRuns?.() ?? [];
+    for (let i = 0; i < this.paths.length; i += 2) {
+      const forward = this.paths[i], reverse = this.paths[i + 1], length = forward.cumulative[forward.cumulative.length - 1];
+      const decks = [...(this.decks.get(forward) ?? NO_DECKS)], ids = this.pieceIds.get(forward)!;
+      for (const run of runs) {
+        let carried = false; for (const id of run.roads) if (ids.has(id)) { carried = true; break; }
+        if (!carried) continue;
+        const a = forward.alongAt(run.pts[0][0], run.pts[0][1]), b = forward.alongAt(run.pts[run.pts.length - 1][0], run.pts[run.pts.length - 1][1]);
+        decks.push(Math.min(a, b) - DECK_PAD, Math.max(a, b) + DECK_PAD);
+      }
+      if (decks.length) { this.decks.set(forward, decks); this.decks.set(reverse, decks.map(s => length - s).reverse()); }
+    }
+    this.pieceIds.clear();
     const material = new THREE.MeshLambertMaterial({ vertexColors: true });
     for (let i = 0; i < (low ? 2 : 4); i++) {
       const m = new Mesher(), body = new THREE.Color(BODIES[i]);
@@ -193,7 +241,7 @@ export class AmbientTraffic {
       // Spawn 100–600 m away and out of the camera. Distance first: a far try reads no ground, so it touches no far tile.
       const far = Math.hypot(pose.x - player.x, pose.z - player.z);
       if (far > 600 || far <= 100 || this.crowded(pose.x, pose.z) || this.facesPass(path, along) || this.keepOut?.(pose.x, pose.z)) continue;
-      const y = this.ground(pose.x, pose.z);
+      const y = this.ground(pose.x, pose.z, this.onDeck(path, along));
       if (y === null || this.inView(pose.x, y, pose.z)) continue;
       c.path = path; c.along = along; c.speed = 0; c.active = true; c.side = LANE; c.held = 0; c.passing = false; c.waited = 0; c.passAt = -1;
       c.y = y; c.placedAt = along;
@@ -246,14 +294,23 @@ export class AmbientTraffic {
     }
     return false;
   }
-  private ground(x: number, z: number): number | null {
-    const y = this.terrain.heightAt(x, z), deck = this.roads.deckHeight(x, z);
-    return y === null ? null : Math.max(y, deck ?? y);
+  private onDeck(path: SceneRoad, along: number): boolean {
+    const r = this.decks.get(path) ?? NO_DECKS;
+    for (let i = 0; i < r.length; i += 2) if (along >= r[i] && along <= r[i + 1]) return true;
+    return false;
+  }
+  /** Land (with bridge approaches) without a reference height; the topmost deck only on the car's own bridge. */
+  private ground(x: number, z: number, deck: boolean): number | null {
+    const y = this.terrain.heightAt(x, z);
+    if (y === null || !deck) return y;
+    const top = this.roads.deckHeight(x, z);
+    return top === null ? y : Math.max(y, top);
   }
   /** Stand a car on the ground, nose up or down with the slope like a parked car. */
   place(c: Car): void {
     const { x, z, heading } = c.solid, fx = Math.sin(heading) * 1.4, fz = -Math.cos(heading) * 1.4;
-    const y = this.ground(x, z), nose = this.ground(x + fx, z + fz), tail = this.ground(x - fx, z - fz);
+    const deck = this.onDeck(c.path, c.along);
+    const y = this.ground(x, z, deck), nose = this.ground(x + fx, z + fz, deck), tail = this.ground(x - fx, z - fz, deck);
     c.mesh.visible = y !== null;
     if (y === null) return;
     c.y = y; c.placedAt = c.along;
@@ -333,7 +390,7 @@ export class AmbientTraffic {
       c.side += Math.max(-SIDE_RATE * dt, Math.min(SIDE_RATE * dt, side - c.side));
       const next = this.next; c.path.at(c.along + c.speed * dt, c.side, next);
       // Near the player, do not drive onto land that has not loaded. Far away, read no ground (no far tile kept).
-      if (Math.hypot(next.x - player.x, next.z - player.z) < NEAR && this.ground(next.x, next.z) === null) continue;
+      if (Math.hypot(next.x - player.x, next.z - player.z) < NEAR && this.terrain.heightAt(next.x, next.z) === null) continue;
       c.along += c.speed * dt; c.solid.x = next.x; c.solid.z = next.z; c.solid.heading = next.heading;
     }
   }

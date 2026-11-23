@@ -4,7 +4,7 @@ import {Vehicle} from '../web/src/vehicle.ts';
 import {HORSE_SPEC} from '../web/src/horse.ts';
 import {gaitAt} from '../web/src/horse-motion.ts';
 const node=()=>new THREE.Group();
-export async function horseDeckCases({terrain,roads,road,hill,at,path,pathCum,before,len}){
+export async function horseDeckCases({terrain,roads,road,hill,at,path,pathCum,before,len,ownedHeight}){
  const v=new Vehicle({root:node(),body:node(),driverEye:node(),brakeLights:[],steer:{fl:node(),fr:node()},wheels:{fl:node(),fr:node(),rl:node(),rr:node()}},terrain,roads,-.2,HORSE_SPEC);v.assist=0;
  let resets=0,crossings=0;
  for(const s of [-8,-3,0,.5,len-.5,len,len+3,len+8])for(const side of [-road.halfWidth-2,-road.halfWidth-.8,0,road.halfWidth+.8,road.halfWidth+2]){
@@ -14,7 +14,7 @@ export async function horseDeckCases({terrain,roads,road,hill,at,path,pathCum,be
   const p=at(s,side);v.bounds=[p.x-40,p.z-40,p.x+700,p.z+700];v.trail=[{x:p.x,z:p.z,heading:p.h}];v.x=p.x-45;v.z=p.z-45;v.respawn();terrain.withGroundContact(v,()=>v.update(1/120,{throttle:0,steer:0,handbrake:true}));assert(Math.abs(v.vy)<.65,'horse edge respawn '+road.id+' '+hill);v.bounds=null;
  }
  for(const cruise of [1.7,3.8,6.5,9])for(const direction of [1,-1])for(const run of ['inbound','deck']){
-  const begin=run==='deck'?(direction===1?0:len):(direction===1?-(before?8:3):len+8),p=at(begin);v.restart(p.x,p.z,p.h+(direction<0?Math.PI:0));v.vx=Math.sin(v.heading)*cruise;v.vz=-Math.cos(v.heading)*cruise;v.speed=cruise;
+  const begin=run==='deck'?(direction===1?0:len):(direction===1?-(before?8:3):len+8),p=at(begin);v.restart(p.x,p.z,p.h+(direction<0?Math.PI:0));const owned=ownedHeight(p.x,p.z);if(owned!==undefined)v.place(p.x,p.z,v.heading,owned);v.vx=Math.sin(v.heading)*cruise;v.vz=-Math.cos(v.heading)*cruise;v.speed=cruise;
   let progress=begin,done=false,coreSamples=0,gaitSamples=0;const expected=cruise<2.5?'walk':cruise<5?'trot':cruise<8?'canter':'gallop';
   for(let step=0;step<120*(len+80);step++){
    let best=Infinity;
@@ -24,7 +24,7 @@ export async function horseDeckCases({terrain,roads,road,hill,at,path,pathCum,be
    if(progress>2&&progress<len-2){assert.equal(v.airborne,false,'horse grounded across deck');if(gaitAt(v.speed)===expected)gaitSamples++;coreSamples++;}
    if(direction===1&&progress>=len+3||direction===-1&&progress<=-3){done=true;break;}
   }
-  assert(done,`inbound horse crossing completed ${road.id} hill ${hill} direction ${direction} cruise ${cruise} progress ${progress} pose ${JSON.stringify({x:v.x,z:v.z,y:v.y,speed:v.speed,surface:v.surfaceName,deck:roads.deckHeight(v.x,v.z),ground:terrain.heightAt(v.x,v.z),heading:v.heading,aprons:terrain.bridgeApproaches.aprons.map(a=>({ready:a.ready,height:a.height(v.x,v.z),box:a.site.box,known:a.refs.filter(p=>p.known).length,total:a.refs.length}))})}`);assert(coreSamples>0);if(run==='deck')assert(gaitSamples>0,`requested gait ${expected} exercised on deck ${road.id} hill ${hill} direction ${direction}`);crossings++;
+  assert(done,`inbound horse crossing completed ${road.id} hill ${hill} direction ${direction} run ${run} cruise ${cruise} progress ${progress} pose ${JSON.stringify({x:v.x,z:v.z,y:v.y,speed:v.speed,surface:v.surfaceName,deck:roads.deckHeight(v.x,v.z),ground:terrain.heightAt(v.x,v.z),heading:v.heading,aprons:terrain.bridgeApproaches.aprons.map(a=>({ready:a.ready,height:a.height(v.x,v.z),box:a.site.box,known:a.refs.filter(p=>p.known).length,total:a.refs.length}))})}`);assert(coreSamples>0);if(run==='deck')assert(gaitSamples>0,`requested gait ${expected} exercised on deck ${road.id} hill ${hill} direction ${direction}`);crossings++;
  }
  console.log('PASS HORSE_INBOUND_AND_DECK',JSON.stringify({road:road.id,hill,resets,crossings}));
 }

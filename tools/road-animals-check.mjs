@@ -336,7 +336,7 @@ camera.set(west.route.stop.x, 100, west.route.stop.z); drain(cliffRoads.guardrai
 car.x = west.route.stop.x - 100; car.z = 0; cliffHerd.update(.01, car);
 assert.equal(west.safe, false, 'its home side is flat, but it could not escape across the road: not used');
 // The runtime asks the terrain where the finest land exists (Terrain.hasFinest): east of x = 0 only here.
-const tiled = { ...terrain, manifest: {}, hasFinest: x => x > 0 };
+const tiled = { ...terrain, manifest: { village: [0, 0], area: { id: 'fixture' } }, hasFinest: x => x > 0 };
 const tiledHerd = new RoadAnimals(network, tiled, { ...shift, roadside: [], evidence: new Evidence() }, []);
 tiledHerd.update(0, car);
 assert.ok(tiledHerd.residents.length > 0 && tiledHerd.residents.every(r => r.route.stop.x > 0 && r.route.far.x > 0 && r.route.home.x > 0), 'routes only on the finest baked tiles');
@@ -354,7 +354,7 @@ assert.ok(tiledHerd.residents.length > 0 && tiledHerd.residents.every(r => r.rou
 }
 {
   // Marsh at sea level: the route is blocked once, not re-tested every frame.
-  const marsh = { ...terrain, surfaceAt: () => ({ ground: -1, level: 8, canopy: 0 }), heightAt: () => -1, manifest: {}, hasFinest: () => true };
+  const marsh = { ...terrain, surfaceAt: () => ({ ground: -1, level: 8, canopy: 0 }), heightAt: () => -1, manifest: { village: [0, 0], area: { id: 'fixture' } }, hasFinest: () => true };
   const marshRoads = new Roads({ roads: [road] }, [0, 0], marsh), marshHerd = new RoadAnimals(marshRoads, marsh, { ...shift, roadside: [], evidence: new Evidence() }, []);
   marshHerd.update(0, car); const m0 = marshHerd.residents[0];
   camera.set(m0.route.stop.x, 100, m0.route.stop.z); drain(marshRoads.guardrails);

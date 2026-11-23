@@ -12,7 +12,7 @@ try {
   ['front knee direction','horse.ts','bend = i < 2 ? -1 : 1','bend = i < 2 ? 1 : -1','knee/hock bends on anatomical side'],
   ['footfall timing','horse.ts','rig.onFootfall?.(i)','rig.onFootfall?.((i + 1) % 4)','audio starts on visual contact'],
   ['trot posting','horse.ts','(1 - Math.cos(phase * Math.PI * 2)) * .09','(1 - Math.cos(phase * Math.PI * 4)) * .09','rider posts once per trot stride'],
-  ['coarse deck support','vehicle.ts',"if (this.spec.locomotion === 'horse' && deck !== null) return deck;",'','timber deck remains authoritative under coarse land'],
+  ['coarse deck support','vehicle.ts',"if (this.spec.locomotion === 'horse' && this.reach(deck,referenceY)) return deck;",'','timber deck remains authoritative under coarse land'],
   ['gait selection','horse-motion.ts','v < 2.5','v < 20','gait selection at'],
   ['leg cycle','horse-motion.ts','stride * (p / g.stance - .5)','0','legs really move'],
   ['grass cap','horse-motion.ts',"surface === 'grass' ? 10","surface === 'grass' ? 16",'grass surface limit'],

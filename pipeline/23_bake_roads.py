@@ -355,13 +355,17 @@ def main():
         from dashcam_corrections import correct_roads, correct_nov18_roads, finish_observed_roads, attach_guardrails
         roads = correct_roads(roads, AREA.id, guardrails=False)
         roads = correct_nov18_roads(roads, AREA.id)
-        marks = {}
+        # Bridge spans name road ids, so they are recovered on the final split inventory.
+        from bridge_spans import source_bridges, recover_bridge_spans, inferred_bridge_spans, bridge_keep_boxes
+        bridge_spans = recover_bridge_spans(roads, source_bridges(
+            json.load(open(f'{RAW}/vectors/osm.json'))['elements'], transform().TransformPoint)) + inferred_bridge_spans(AREA.id)
+        marks = {'bridgeSpans': bridge_spans}
         # >>> road-ground trial (off unless asked for): move each line onto the road bed that the LiDAR shows.
         if os.environ.get('MMM_ROAD_BED') == '1':
             import road_ground
             before = {road['id']: road['pts'] for road in roads}
             moved = road_ground.move_to_bed(roads, road_ground.DemSampler(str(AREA.elevation('dtm'))), box=manifest['mid'],
-                                            keep=AREA.keep_roads)
+                                            keep=(*AREA.keep_roads, *bridge_keep_boxes(bridge_spans)))
             json.dump(moved, open(f'{terrain.OVERVIEW}/roads-bed-report.json', 'w'), indent=1)
             print(f"Road bed: {moved['roadsMoved']} roads moved over {moved['metresMoved']:,} m; junctions whole "
                   f"({moved['junctions']['nodes']:,} nodes, ends apart by at most {moved['junctions']['endsApart']} m); "
@@ -373,6 +377,7 @@ def main():
             roads = finish_observed_roads(roads, AREA.id)
         roads = attach_guardrails(roads, AREA.id)
         json.dump(dict(crs='EPSG:2961', roads=roads, **marks), f, separators=(',',':'))
+
     stats = {}
     for k in range(1,6):
         rs = [r for r in roads if r['kind']==k]
