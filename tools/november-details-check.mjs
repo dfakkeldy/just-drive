@@ -548,9 +548,9 @@ for (const {a, b, side} of added) {
     }
     for (const child of [...streamNet.group.children]) child.geometry?.dispose();
   }
-  // Contact-first level 6 -> 8 terrain upgrade: rail contacts refresh stale level-6 deck elevations and bump AreaContacts.revision
-  // WITHOUT any prior deckHeight() call.
-  for (const id of [45, 46]) {
+  // Contact-first level 6 -> 8 terrain upgrade: each direct contact entry point (solo.allows, fleet.allows, blockBridge)
+  // refreshes a stale level-6 deck on its own fresh fixture BEFORE any revision read or deckHeight() call.
+  const makeUpgradeFixture = () => {
     let curLevel = 6, bias = 0;
     const upTerrain = {
       manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
@@ -561,31 +561,54 @@ for (const {a, b, side} of added) {
     const upNet = new Roads({ roads: tagged }, mabouManifest.village, upTerrain);
     const soloUp = new AreaContacts(), fleetUp = new AreaContacts();
     registerRailContacts(fleetUp, soloUp, upNet.guardrails, () => false, CAR_SPEC);
-    const r = upNet.roads.find(x => x.id === id);
-    const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
-    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
-    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
-    // Seed level-6 deck first.
-    const y6 = upNet.deckHeight(mx, mz);
-    assert.ok(y6 !== null, `bridge ${id} seeds level-6 deck`);
-    const revBeforeFleet = fleetUp.revision, revBeforeSolo = soloUp.revision;
-    // Unrelated terrain tile load (dataRevision increments while bridge banks stay at level 6) must NOT invalidate contacts.
-    upTerrain.dataRevision++;
-    assert.equal(fleetUp.revision, revBeforeFleet, `bridge ${id} unrelated terrain revision keeps fleetContacts.revision steady`);
-    assert.equal(soloUp.revision, revBeforeSolo, `bridge ${id} unrelated terrain revision keeps soloContacts.revision steady`);
-    // Upgrade terrain to level 8 (+1.5 m higher) WITHOUT calling deckHeight() first.
-    curLevel = 8; bias = 1.5; upTerrain.dataRevision++;
-    assert.notEqual(fleetUp.revision, revBeforeFleet, `bridge ${id} fleetContacts.revision advances on level-8 terrain revision`);
-    assert.notEqual(soloUp.revision, revBeforeSolo, `bridge ${id} soloContacts.revision advances on level-8 terrain revision`);
-    // A pose whose top sits 0.5 m below the upgraded level-8 deck (overlapping the old level-6 deck!) must be allowed & unpushed.
-    const pose = { x: mx - uz * 1.6, z: mz + ux * 1.6, y: y6 + 1.5 - CAR_SPEC.height - 0.5, heading: hdg, spec: CAR_SPEC };
-    assert.equal(soloUp.allows(pose), true, `bridge ${id} soloContacts refreshes stale level-6 deck before checking`);
-    assert.equal(fleetUp.allows(pose), true, `bridge ${id} fleetContacts refreshes stale level-6 deck before checking`);
-    const probe = { ...pose, vx: -uz * 4, vz: ux * 4, speed: 0 };
-    upNet.guardrails.blockBridge(probe, 1 / 120);
-    assert.equal(probe.x, pose.x, `bridge ${id} blockBridge uses refreshed level-8 deck`);
-    assert.equal(probe.z, pose.z, `bridge ${id} blockBridge uses refreshed level-8 deck`);
-    for (const child of [...upNet.group.children]) child.geometry?.dispose();
+    return {
+      upTerrain, upNet, soloUp, fleetUp,
+      upgrade(extraBias = 1.5) { curLevel = 8; bias = extraBias; upTerrain.dataRevision++; },
+      dispose() { for (const child of [...upNet.group.children]) child.geometry?.dispose(); },
+    };
+  };
+  for (const id of [45, 46]) {
+    for (const entry of ['solo', 'fleet', 'blockBridge']) {
+      const f = makeUpgradeFixture();
+      const r = f.upNet.roads.find(x => x.id === id);
+      const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+      const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      const y6 = f.upNet.deckHeight(mx, mz);
+      assert.ok(y6 !== null, `bridge ${id} ${entry} seeds level-6 deck`);
+      f.upgrade(1.5);
+      // Do NOT read revision or call deckHeight() before invoking the direct contact entry point.
+      const pose = { x: mx - uz * 1.6, z: mz + ux * 1.6, y: y6 + 1.5 - CAR_SPEC.height - 0.5, heading: hdg, spec: CAR_SPEC };
+      if (entry === 'solo') assert.equal(f.soloUp.allows(pose), true, `bridge ${id} direct soloContacts.allows refreshes stale level-6 deck`);
+      else if (entry === 'fleet') assert.equal(f.fleetUp.allows(pose), true, `bridge ${id} direct fleetContacts.allows refreshes stale level-6 deck`);
+      else {
+        const probe = { ...pose, vx: -uz * 4, vz: ux * 4, speed: 0 };
+        f.upNet.guardrails.blockBridge(probe, 1 / 120);
+        assert.equal(probe.x, pose.x, `bridge ${id} direct blockBridge refreshes stale level-6 deck`);
+        assert.equal(probe.z, pose.z, `bridge ${id} direct blockBridge refreshes stale level-6 deck`);
+      }
+      f.dispose();
+    }
+  }
+  // Revision tracking: unrelated terrain revisions keep contact revisions steady, and opposing planner-count / bridge-version
+  // deltas (48 -> 46 while bridgeDeckVersion rises 2 -> 4) NEVER cancel out in fleetContacts.revision.
+  {
+    const f = makeUpgradeFixture();
+    for (const id of [45, 46]) {
+      const r = f.upNet.roads.find(x => x.id === id);
+      const mx = (r.pts[0][0] + r.pts[r.pts.length - 1][0]) / 2, mz = (r.pts[0][1] + r.pts[r.pts.length - 1][1]) / 2;
+      assert.ok(f.upNet.deckHeight(mx, mz) !== null, `bridge ${id} seeded at level 6`);
+    }
+    f.upNet.guardrails.audit.samples = 48;
+    const revBeforeFleet = f.fleetUp.revision, revBeforeSolo = f.soloUp.revision;
+    f.upTerrain.dataRevision++;
+    assert.equal(f.fleetUp.revision, revBeforeFleet, 'unrelated terrain revision keeps fleetContacts.revision steady');
+    assert.equal(f.soloUp.revision, revBeforeSolo, 'unrelated terrain revision keeps soloContacts.revision steady');
+    f.upNet.guardrails.audit.samples = 46;
+    f.upgrade(1.0);
+    assert.notEqual(f.fleetUp.revision, revBeforeFleet, 'fleetContacts.revision advances even when planner counts fall by the exact deck-version increase');
+    assert.notEqual(f.soloUp.revision, revBeforeSolo, 'soloContacts.revision advances on level-8 upgrade');
+    f.dispose();
   }
   // Exact finite rotated bottom-chord underside and high-portal inner-rail tests at 3.0x: measure the rendered steel directly
   // and verify paired clear/contact probes right below/above it (catches flat or untrimmed cutoffs).
@@ -698,6 +721,36 @@ for (const {a, b, side} of added) {
       const d = Math.hypot(p.x - sx0, p.z - sz0);
       if (expectHit) assert.ok(d > 0.01, `bridge 45 ${label} collides (${d.toFixed(4)} m)`);
       else assert.equal(d, 0, `bridge 45 ${label} clears (${d.toFixed(4)} m)`);
+    }
+    // Isolated interior Warren diagonal, interior vertical post, interior standoff bracket, end-post standoff bracket,
+    // and open truss-window gap probes (paired hit + clearance at exact rendered member edges).
+    const smallSpec = { ...CAR_SPEC, height: 0.06, envelope: { ...CAR_SPEC.envelope, circles: [0], radius: 0.08, reach: 0.2 } };
+    const tinySpec = { ...CAR_SPEC, height: 0.04, envelope: { ...CAR_SPEC.envelope, circles: [0], radius: 0.005, reach: 0.05 } };
+    const deck45At = s => y0 + (y1 - y0) * (s / span);
+    const yBase45 = PONY_TRUSS.chordSize * 0.5;
+    const diagMidS = panel45 * 1.5, diagMidY = deck45At(diagMidS) + (yBase45 + h45) * 0.5;
+    const diagOutClear = PONY_TRUSS.half + PONY_TRUSS.diagSize * 0.5 + smallSpec.envelope.radius + 0.02;
+    const diagOutHit = PONY_TRUSS.half + PONY_TRUSS.diagSize * 0.5 + smallSpec.envelope.radius - 0.04;
+    const postOutClear = PONY_TRUSS.half + PONY_TRUSS.postSize * 0.5 + smallSpec.envelope.radius + 0.02;
+    const postOutHit = PONY_TRUSS.half + PONY_TRUSS.postSize * 0.5 + smallSpec.envelope.radius - 0.04;
+    for (const [label, sPos, across, py, spec, expectHit] of [
+      ['interior diagonal clear (2 cm outside 0.16 m face)', diagMidS, diagOutClear, diagMidY, smallSpec, false],
+      ['interior diagonal contact', diagMidS, diagOutHit, diagMidY, smallSpec, true],
+      ['open truss window gap between post 1 and diagonal 1', panel45 * 1.25, diagOutHit, deck45At(panel45 * 1.25) + yBase45 + 0.35, smallSpec, false],
+      ['interior vertical post clear (2 cm outside 0.16 m face)', panel45, postOutClear, deck45At(panel45) + (yBase45 + h45) * 0.5, smallSpec, false],
+      ['interior vertical post contact', panel45, postOutHit, deck45At(panel45) + (yBase45 + h45) * 0.5, smallSpec, true],
+      ['interior standoff bracket contact (isolated between rail and post)', panel45, 2.0825, deck45At(panel45) + PONY_TRUSS.railHeight, tinySpec, true],
+      ['gap beside interior standoff bracket', panel45 + 0.25, 2.0825, deck45At(panel45 + 0.25) + PONY_TRUSS.railHeight, tinySpec, false],
+      ['start end-post standoff bracket contact', panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45)), 2.0825, deck45At(panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45))) + PONY_TRUSS.railHeight, tinySpec, true],
+      ['finish end-post standoff bracket contact', span - panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45)), 2.0825, deck45At(span - panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45))) + PONY_TRUSS.railHeight, tinySpec, true],
+      ['gap beside start end-post standoff bracket', panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45)) + 0.25, 2.0825, deck45At(panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45)) + 0.25) + PONY_TRUSS.railHeight, tinySpec, false],
+    ]) {
+      const p = { x: ax + ux * sPos - uz * across, z: az + uz * sPos + ux * across, y: py, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec };
+      const sx0 = p.x, sz0 = p.z;
+      net3.guardrails.blockBridge(p, 1 / 120);
+      const d = Math.hypot(p.x - sx0, p.z - sz0);
+      if (expectHit) assert.ok(d > 0.002, `bridge 45 ${label} collides (${d.toFixed(5)} m)`);
+      else assert.equal(d, 0, `bridge 45 ${label} clears (${d.toFixed(5)} m)`);
     }
     // Gap between clipped members on Bridge 46 at 3x: at high top-chord elevation on a sloped span,
     // a car in the clear gap between the clipped top chord and the lower end does NOT hit invisible merged steel.

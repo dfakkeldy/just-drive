@@ -235,9 +235,14 @@ export function registerRailContacts(
     return Math.hypot(probe.x - body.x, probe.z - body.z) < 1e-7;
   };
   fleetContacts.add({
-    revision: () => rails.audit.planned + rails.audit.samples + rails.bridgeRevision,
+    revision: () => rails.audit.planned + rails.audit.samples,
     resolve: body => { if (!isDriven(body)) rails.block(body); else rails.blockBridge(body, 0); },
     allows: allows(p => rails.block(p)),
+  });
+  fleetContacts.add({
+    revision: () => rails.bridgeRevision,
+    resolve: () => {},
+    allows: () => true,
   });
   soloContacts.add({
     revision: () => rails.bridgeRevision,
