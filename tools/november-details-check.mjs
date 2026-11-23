@@ -654,6 +654,70 @@ for (const {a, b, side} of added) {
     const hitHiChord = { x: hiChordX, z: hiChordZ, y: maxHighChordY - 0.01, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
     net3.guardrails.blockBridge(hitHiChord, 1 / 120);
     assert.ok(Math.hypot(hitHiChord.x - hiChordX, hitHiChord.z - hiChordZ) > 0.005, 'bridge 45 3x high-portal probe 1 cm below trimmed rotated bottom chord collides');
+    // Isolated member probes on Bridge 45 at 3x: top chord, start inclined end post, finish inclined end post (each paired clear + contact).
+    const panels45 = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2), panel45 = span / panels45;
+    const h45 = ponyTrussHeight(span), midY45 = (y0 + y1) / 2;
+    const endOutClear = PONY_TRUSS.half + PONY_TRUSS.endPostSize / 2 + CAR_SPEC.envelope.radius + 0.02;
+    const endOutHit = PONY_TRUSS.half + PONY_TRUSS.endPostSize / 2 + CAR_SPEC.envelope.radius - 0.04;
+    const topInClear = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius - 0.02;
+    const topInHit = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius + 0.04;
+    // Top chord alone (carY sits at midY45 + h45 + 0.05, above all posts/diagonals/rails, touching only the top chord top half).
+    for (const [label, across, expectHit] of [
+      ['top chord clear', topInClear, false],
+      ['top chord contact', topInHit, true],
+    ]) {
+      const p = { x: (ax + bx) / 2 - uz * across, z: (az + bz) / 2 + ux * across, y: midY45 + h45 + 0.05, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+      const sx0 = p.x, sz0 = p.z;
+      net3.guardrails.blockBridge(p, 1 / 120);
+      const d = Math.hypot(p.x - sx0, p.z - sz0);
+      if (expectHit) assert.ok(d > 0.01, `bridge 45 ${label} collides (${d.toFixed(4)} m)`);
+      else assert.equal(d, 0, `bridge 45 ${label} clears (${d.toFixed(4)} m)`);
+    }
+    // Start inclined end post alone (s = panel45 * 0.5, carY above inner rail + bottom chord, well outside top chord).
+    const startPostS = panel45 * 0.5, startPostY = y0 + (y1 - y0) * (startPostS / span) + 1.1;
+    for (const [label, sOff, across, expectHit] of [
+      ['start inclined end post clear (outside 0.22 m face)', startPostS - 1.35, endOutClear, false],
+      ['start inclined end post contact', startPostS - 1.35, endOutHit, true],
+    ]) {
+      const p = { x: ax + ux * sOff - uz * across, z: az + uz * sOff + ux * across, y: startPostY, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+      const sx0 = p.x, sz0 = p.z;
+      net3.guardrails.blockBridge(p, 1 / 120);
+      const d = Math.hypot(p.x - sx0, p.z - sz0);
+      if (expectHit) assert.ok(d > 0.01, `bridge 45 ${label} collides (${d.toFixed(4)} m)`);
+      else assert.equal(d, 0, `bridge 45 ${label} clears (${d.toFixed(4)} m)`);
+    }
+    // Finish inclined end post alone (s = span - panel45 * 0.5, carY above inner rail + bottom chord, well outside top chord).
+    const endPostS = span - panel45 * 0.5, endPostY = y0 + (y1 - y0) * (endPostS / span) + 1.1;
+    for (const [label, sOff, across, expectHit] of [
+      ['finish inclined end post clear (outside 0.22 m face)', endPostS + 1.35, endOutClear, false],
+      ['finish inclined end post contact', endPostS + 1.35, endOutHit, true],
+    ]) {
+      const p = { x: ax + ux * sOff - uz * across, z: az + uz * sOff + ux * across, y: endPostY, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+      const sx0 = p.x, sz0 = p.z;
+      net3.guardrails.blockBridge(p, 1 / 120);
+      const d = Math.hypot(p.x - sx0, p.z - sz0);
+      if (expectHit) assert.ok(d > 0.01, `bridge 45 ${label} collides (${d.toFixed(4)} m)`);
+      else assert.equal(d, 0, `bridge 45 ${label} clears (${d.toFixed(4)} m)`);
+    }
+    // Gap between clipped members on Bridge 46 at 3x: at high top-chord elevation on a sloped span,
+    // a car in the clear gap between the clipped top chord and the lower end does NOT hit invisible merged steel.
+    {
+      const r46 = net3.roads.find(x => x.id === 46);
+      const [a6x, a6z] = r46.pts[0], [b6x, b6z] = r46.pts[r46.pts.length - 1];
+      const d6x = b6x - a6x, d6z = b6z - a6z, span46 = Math.hypot(d6x, d6z), u6x = d6x / span46, u6z = d6z / span46, hdg46 = Math.atan2(d6x, -d6z);
+      const y60 = net3.deckHeight(a6x, a6z), y61 = net3.deckHeight(b6x, b6z);
+      const h46 = ponyTrussHeight(span46);
+      const gapS = 24.16, gapDeckY = y60 + (y61 - y60) * (gapS / span46);
+      const gapY = gapDeckY + h46 + PONY_TRUSS.chordSize * 0.5 + 0.04;
+      const gapAcross = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius + 0.04;
+      const gapProbe = { x: a6x + u6x * gapS - u6z * gapAcross, z: a6z + u6z * gapS + u6x * gapAcross, y: gapY, heading: hdg46, vx: -u6z * 4, vz: u6x * 4, speed: 0, spec: CAR_SPEC };
+      const gx0 = gapProbe.x, gz0 = gapProbe.z, gvx0 = gapProbe.vx, gvz0 = gapProbe.vz;
+      net3.guardrails.blockBridge(gapProbe, 1 / 120);
+      assert.equal(gapProbe.x, gx0, 'bridge 46 3x probe in gap above sloped top chord is not pushed');
+      assert.equal(gapProbe.z, gz0, 'bridge 46 3x probe in gap above sloped top chord is not pushed');
+      assert.equal(gapProbe.vx, gvx0, 'bridge 46 3x probe in gap keeps exact vx');
+      assert.equal(gapProbe.vz, gvz0, 'bridge 46 3x probe in gap keeps exact vz');
+    }
     for (const child of [...net3.group.children]) child.geometry?.dispose();
   }
   // Unloaded banks: repeated collision calls during the same terrain revision do not keep re-sampling bank endpoints,

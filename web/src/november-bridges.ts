@@ -143,81 +143,76 @@ function clipRotatedBox(
 }
 
 /**
- * Compute separate longitudinal steel collision intervals for the inner guard rail ([railLeft, railRight]) and the
- * upper truss structure ([trussLeft, trussRight]) against a vehicle vertical slice [carY, carY + carHeight].
- * Writes [railLeft, railRight, trussLeft, trussRight] into `out` and returns true when either overlaps vertically.
+ * Emit each rendered steel member's exact longitudinal interval [sLeft, sRight] and lateral bounds [inner, outer]
+ * that intersect the vehicle vertical slice [carY, carY + carHeight]. Uses the exact box geometry of buildPonyTrussBridge
+ * with zero allocations and never merges disjoint members across empty gaps.
  */
-export function ponyTrussVerticalClip(
+export function forEachPonyTrussSteelClip(
   b: PonyTrussSpan,
   y0: number,
   y1: number,
   carY: number,
   carHeight: number,
-  out: [number, number, number, number],
-): boolean {
+  visit: (sLeft: number, sRight: number, inner: number, outer: number) => void,
+): void {
   const span = b.span, panel = b.panel, h = b.height;
-  const chord = PONY_TRUSS.chordSize;
-  const yBase = chord / 2;
+  const panels = Math.max(4, Math.round(span / panel));
+  const half = PONY_TRUSS.half, chord = PONY_TRUSS.chordSize, yBase = chord * 0.5;
   const dy = y1 - y0, deckLen = Math.hypot(span, dy);
   const cosS = span / deckLen, sinS = dy / deckLen;
   const sideLen = deckLen - chord * Math.abs(sinS) - 0.004;
   const hx = sideLen * 0.5, sMid = span * 0.5, deckMidY = (y0 + y1) * 0.5;
   const carTop = carY + carHeight;
-
-  // 1. Exact finite rotated inner steel guard rail box (sideLen x 0.22 at deckMidY + railHeight).
-  let railLeft = 0, railRight = 0;
-  if (clipRotatedBox(sMid, deckMidY + PONY_TRUSS.railHeight, hx, 0.11, cosS, sinS, carY, carTop, BOX_SPAN)) {
-    railLeft = Math.max(0, Math.min(span, BOX_SPAN[0]));
-    railRight = Math.max(0, Math.min(span, BOX_SPAN[1]));
-    if (railRight <= railLeft + 1e-4) { railLeft = 0; railRight = 0; }
-  }
-
-  // 2. Exact union of the 4 finite outer-frame truss boxes clipped to [carY, carTop]:
-  //    bottom chord, top chord, start inclined end post, finish inclined end post.
-  //    Every interior vertical post and Warren diagonal lies inside their convex hull.
-  let trussMin = Infinity, trussMax = -Infinity;
-  const includeBox = (cs: number, cy: number, bhx: number, bhy: number, bc: number, bs: number) => {
+  const deckAt = (s: number) => y0 + dy * (s / span);
+  const emitBox = (cs: number, cy: number, bhx: number, bhy: number, bc: number, bs: number, inner: number, outer: number) => {
     if (clipRotatedBox(cs, cy, bhx, bhy, bc, bs, carY, carTop, BOX_SPAN)) {
-      if (BOX_SPAN[0] < trussMin) trussMin = BOX_SPAN[0];
-      if (BOX_SPAN[1] > trussMax) trussMax = BOX_SPAN[1];
+      const lo = Math.max(0, Math.min(span, BOX_SPAN[0]));
+      const hi = Math.max(0, Math.min(span, BOX_SPAN[1]));
+      if (hi > lo + 1e-5) visit(lo, hi, inner, outer);
     }
   };
-  // Bottom chord.
-  includeBox(sMid, deckMidY + yBase, hx, yBase, cosS, sinS);
-  // Top chord.
+
+  // 1. Inner steel guard rail.
+  emitBox(sMid, deckMidY + PONY_TRUSS.railHeight, hx, 0.11, cosS, sinS, PONY_TRUSS.railInner, PONY_TRUSS.railInner + 0.07);
+  // 2. Bottom chord.
+  emitBox(sMid, deckMidY + yBase, hx, yBase, cosS, sinS, half - yBase, half + yBase);
+  // 3. Top chord.
   const topSpan = span - 2 * panel;
   const topLen = Math.hypot(topSpan, dy * (topSpan / span)) + chord * 0.7;
-  includeBox(sMid, deckMidY + h, topLen * 0.5, yBase, cosS, sinS);
-  // Start and finish inclined end posts (matching buildPonyTrussBridge exact insets and angles).
-  const endHalf = PONY_TRUSS.endPostSize * 0.5;
-  const deckAt = (s: number) => y0 + dy * (s / span);
-  {
-    const rawAng = Math.atan2(deckAt(panel) + h - (deckAt(0) + yBase), panel);
-    const s0 = endHalf * Math.abs(Math.sin(rawAng)) + 0.02, s1 = panel;
-    const ya = deckAt(s0) + yBase, yb = deckAt(s1) + h;
+  emitBox(sMid, deckMidY + h, topLen * 0.5, yBase, cosS, sinS, half - yBase, half + yBase);
+  // 4. Inclined end posts and interior Warren diagonals.
+  for (let i = 0; i < panels; i++) {
+    const endStart = i === 0, endFinish = i === panels - 1, endPost = endStart || endFinish;
+    const size = endPost ? PONY_TRUSS.endPostSize : PONY_TRUSS.diagSize;
+    const halfSize = size * 0.5, up = i % 2 === 0;
+    const rawS0 = i * panel, rawS1 = (i + 1) * panel;
+    const rawYa = deckAt(rawS0) + (up ? yBase : h), rawYb = deckAt(rawS1) + (up ? h : yBase);
+    const rawAng = Math.atan2(rawYb - rawYa, panel);
+    const endInset = endPost ? halfSize * Math.abs(Math.sin(rawAng)) + 0.02 : 0;
+    const s0 = endStart ? rawS0 + endInset : rawS0;
+    const s1 = endFinish ? rawS1 - endInset : rawS1;
+    const ya = deckAt(s0) + (up ? yBase : h), yb = deckAt(s1) + (up ? h : yBase);
     const dLen = Math.hypot(s1 - s0, yb - ya);
-    includeBox((s0 + s1) * 0.5, (ya + yb) * 0.5, dLen * 0.5, endHalf, (s1 - s0) / dLen, (yb - ya) / dLen);
+    emitBox((s0 + s1) * 0.5, (ya + yb) * 0.5, dLen * 0.5, halfSize, (s1 - s0) / dLen, (yb - ya) / dLen, half - halfSize, half + halfSize);
   }
-  {
-    const rawAng = Math.atan2(deckAt(span) + yBase - (deckAt(span - panel) + h), panel);
-    const s0 = span - panel, s1 = span - (endHalf * Math.abs(Math.sin(rawAng)) + 0.02);
-    const ya = deckAt(s0) + h, yb = deckAt(s1) + yBase;
-    const dLen = Math.hypot(s1 - s0, yb - ya);
-    includeBox((s0 + s1) * 0.5, (ya + yb) * 0.5, dLen * 0.5, endHalf, (s1 - s0) / dLen, (yb - ya) / dLen);
+  // 5. Interior plumb vertical posts and standoff brackets.
+  const postHalf = PONY_TRUSS.postSize * 0.5;
+  const railOuter = PONY_TRUSS.railInner + 0.07;
+  const postInner = half - postHalf;
+  const bracketWidth = postInner - railOuter + 0.025;
+  const bracketCentre = railOuter + (postInner - railOuter) * 0.5 + 0.0075;
+  const brIn = bracketCentre - bracketWidth * 0.5, brOut = bracketCentre + bracketWidth * 0.5;
+  for (let i = 1; i < panels; i++) {
+    const s = i * panel, y = deckAt(s);
+    if (carTop >= y + yBase && carY <= y + h) visit(s - postHalf, s + postHalf, half - postHalf, half + postHalf);
+    if (carTop >= y + PONY_TRUSS.railHeight - 0.09 && carY <= y + PONY_TRUSS.railHeight + 0.09) visit(s - 0.06, s + 0.06, brIn, brOut);
   }
-  let trussLeft = 0, trussRight = 0;
-  if (trussMax > trussMin + 1e-4) {
-    trussLeft = Math.max(0, Math.min(span, trussMin));
-    trussRight = Math.max(0, Math.min(span, trussMax));
-    if (trussRight <= trussLeft + 1e-4) { trussLeft = 0; trussRight = 0; }
+  // 6. End-post standoff brackets.
+  const endRailS = panel * ((PONY_TRUSS.railHeight - yBase) / (h - yBase));
+  for (let k = 0; k < 2; k++) {
+    const s = k === 0 ? endRailS : span - endRailS, y = deckAt(s);
+    if (carTop >= y + PONY_TRUSS.railHeight - 0.09 && carY <= y + PONY_TRUSS.railHeight + 0.09) visit(s - 0.07, s + 0.07, brIn, brOut);
   }
-
-  if (railRight <= railLeft && trussRight <= trussLeft) return false;
-  out[0] = railLeft;
-  out[1] = railRight;
-  out[2] = trussLeft;
-  out[3] = trussRight;
-  return true;
 }
 
 /**

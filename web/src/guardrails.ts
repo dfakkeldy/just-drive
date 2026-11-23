@@ -8,7 +8,7 @@ import { surveyedRailDamage, damageShape, DENT } from './guardrail-damage';
 import { railAccess } from './guardrail-access';
 import { planRailSteps, railPoint, roadLength, nearCoast, railPosts, railMetres, RAIL, type RailSpan } from './guardrail-rules';
 import { LOOK, RailMesher, railMaterial } from './guardrail-look';
-import { PONY_TRUSS, ponyTrussSpan, ponyTrussVerticalClip, type PonyTrussSpan } from './november-bridges';
+import { forEachPonyTrussSteelClip, PONY_TRUSS, ponyTrussSpan, type PonyTrussSpan } from './november-bridges';
 import { pushOut, type Pushable, type Solid } from './parked';
 
 interface Chunk { road: Road; start: number; end: number; x: number; z: number; revision: number; mesh: THREE.Mesh | null; spans: RailSpan[]; solids: Solid[]; shape?: string; low?: boolean }
@@ -27,11 +27,16 @@ export class Guardrails {
   private readonly chunks: Chunk[] = [];
   private readonly bridgeSpans: PonyTrussSpan[] = [];
   private readonly bridgeDeckRev: number[] = [];
-  private readonly bridgeClip: [number, number, number, number] = [0, 0, 0, 0];
+  private activeBridgeCar: Pushable | null = null;
+  private activeBridgeSpan: PonyTrussSpan | null = null;
+  private activeBridgeDt = 0;
   private readonly trimmedBridgeSolids: [Solid, Solid] = [
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
   ];
+  private readonly pushBridgeMember = (sLeft: number, sRight: number, inner: number, outer: number): void => {
+    this.pushTrimmedSpan(this.activeBridgeCar!, this.activeBridgeSpan!, sLeft, sRight, inner, outer, this.activeBridgeDt);
+  };
   private readonly cells = new Map<number, Chunk[]>();
   private readonly materials: (THREE.MeshLambertMaterial | undefined)[] = [];
   readonly audit = { planned: 0, pending: 0, samples: 0, queries: 0 };
@@ -331,14 +336,12 @@ export class Guardrails {
         const y0 = this.roads.bridgeElevation(b.roadId, 0);
         const y1 = this.roads.bridgeElevation(b.roadId, 1);
         if (y0 === null || y1 === null) continue;
-        if (!ponyTrussVerticalClip(b, y0, y1, car.y, carHeight, this.bridgeClip)) continue;
-        const [railLeft, railRight, trussLeft, trussRight] = this.bridgeClip;
-        if (railLeft === 0 && railRight === b.span && trussLeft === 0 && trussRight === b.span) {
-          pushOut(car, b.solids, true, dt);
-          continue;
-        }
-        if (railRight > railLeft) this.pushTrimmedSpan(car, b, railLeft, railRight, PONY_TRUSS.railInner, PONY_TRUSS.railInner + 0.07, dt);
-        if (trussRight > trussLeft) this.pushTrimmedSpan(car, b, trussLeft, trussRight, PONY_TRUSS.clearHalf, PONY_TRUSS.outerHalf, dt);
+        this.activeBridgeCar = car;
+        this.activeBridgeSpan = b;
+        this.activeBridgeDt = dt;
+        forEachPonyTrussSteelClip(b, y0, y1, car.y, carHeight, this.pushBridgeMember);
+        this.activeBridgeCar = null;
+        this.activeBridgeSpan = null;
         continue;
       }
       pushOut(car, b.solids, true, dt);
