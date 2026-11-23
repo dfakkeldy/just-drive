@@ -51,7 +51,7 @@ export function timberGroundPoints(road:Road,cum:number[],len:number,startExtra:
  * The x/z path stays at today's span. The era may grade its abutments to keep exaggerated banks drivable.
  */
 interface Plane {y0:number;y1:number;level:number}
-export interface Plan {path:[number,number][];chainKey:string;ax:number;az:number;bx:number;bz:number;before:number;own:number;total:number;samples:WeakMap<Terrain,{revision:number;value:Plane|null}>}
+export interface Plan {path:[number,number][];chainKey:string;ax:number;az:number;bx:number;bz:number;before:number;own:number;total:number;samples:WeakMap<Terrain,{revision:number;approaches:Terrain['bridgeApproaches'];value:Plane|null}>}
 const plans=new WeakMap<readonly Road[],Map<number,Plan>>();
 export function prepareTimberPlans(roads:readonly Road[]):void {
   if(plans.has(roads))return;const map=new Map<number,Plan>();plans.set(roads,map);
@@ -79,15 +79,26 @@ function makePlan(road:Road,roads:readonly Road[]):Plan {
 }
 export function timberPlan(road:Road,roads:readonly Road[]):Plan {prepareTimberPlans(roads);return plans.get(roads)!.get(road.id)!;}
 
-/** Connectivity is built once. Only new land data can resample the two external banks. */
+/** Connectivity is built once. Only new land data or an installed approach set resamples the banks. */
 export function periodBridgePlane(road:Road,roads:readonly Road[],terrain:Terrain):Plane|null {
   prepareTimberPlans(roads);const p=plans.get(roads)!.get(road.id)!;let cache=p.samples.get(terrain);
-  const revision=terrain.dataRevision??0;
-  if(cache&&cache.revision===revision)return cache.value;
-  if(!cache){cache={revision,value:null};p.samples.set(terrain,cache);}cache.revision=revision;
+  const revision=terrain.dataRevision??0,approaches=terrain.bridgeApproaches??null;
+  if(cache&&cache.revision===revision&&cache.approaches===approaches)return cache.value;
+  if(!cache){cache={revision,approaches,value:null};p.samples.set(terrain,cache);}
+  if(cache.approaches!==approaches)cache.value=null;
+  cache.revision=revision;cache.approaches=approaches;
+  if(approaches){
+    // HistoryBridgeApproaches already read level-6 bank ground at boot, so the plane is ready before fine tiles load.
+    const plane=approaches.planeFor(road);
+    if(!plane){cache.value=null;return null;}
+    const la=terrain.levelAt?terrain.levelAt(p.ax,p.az):(terrain.surfaceAt(p.ax,p.az)?.level??-1);
+    const lb=terrain.levelAt?terrain.levelAt(p.bx,p.bz):(terrain.surfaceAt(p.bx,p.bz)?.level??-1);
+    plane.level=la>=0&&lb>=0?Math.min(la,lb):0;
+    cache.value=plane;
+    return plane;
+  }
   const a=terrain.surfaceAt(p.ax,p.az),b=terrain.surfaceAt(p.bx,p.bz);
   if(!a||!b||a.level<6||b.level<6){cache.value=null;return null;}
-  if(terrain.bridgeApproaches){cache.value=terrain.bridgeApproaches.planeFor(road);if(cache.value)cache.value.level=Math.min(a.level,b.level);return cache.value;}
   const y0=a.ground+.05,y1=b.ground+.05;
   cache.value??={y0:0,y1:0,level:0};cache.value.y0=y0+(y1-y0)*p.before/p.total;cache.value.y1=y0+(y1-y0)*(p.before+p.own)/p.total;cache.value.level=Math.min(a.level,b.level);
   return cache.value;

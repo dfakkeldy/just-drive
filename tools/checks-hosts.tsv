@@ -358,3 +358,4 @@ port-hawkesbury-mail-mutations	portable	no	Node mutation controls; runs with or 
 port-hawkesbury-mail-browser	unproven	no	Hardware WebGL, Point Tupper and Mabou land, desktop and phone LOW
 sxs-variants	portable	yes	Node check for all four side-by-side models, specs, outward solids, posed envelopes, display batches and ?car= links
 sxs-variants-browser	unproven	no	Hardware WebGL and Mabou land: all four side-by-side models in studio preview, title/settings picker, ?car= links and live driving
+era-bridge-planes	portable	no	Node check over real baked Mabou and Judique 1884 roads and land; no browser
