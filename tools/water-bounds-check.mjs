@@ -2,7 +2,11 @@
 // across every land ride (car, side by side, pickup, horse, dirt bike), truck+trailer/fleet, and drone.
 // Run: node tools/run-node-check.mjs tools/water-bounds-check.mjs
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
+import { build } from '../web/node_modules/esbuild/lib/main.js';
 import {
   DEFAULT_SEA_LEVEL,
   SEA_SURFACE_MARGIN,
@@ -14,7 +18,7 @@ import {
   safeClampMargin,
   unknownGroundHeight,
 } from '../web/src/water-bounds.ts';
-import { Vehicle } from '../web/src/vehicle.ts';
+import { DECK_WAIT_SECONDS, Vehicle } from '../web/src/vehicle.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
 import { SXS_SPEC } from '../web/src/sxs.ts';
 import { TRUCK_SPEC, createTruck } from '../web/src/truck.ts';
@@ -771,139 +775,656 @@ console.log('PASS Towing void checks, Fleet water stop without auto-teleport, ex
   assert.equal(loadSpeedCap(DRONE.maxSpeed, distInward), DRONE.maxSpeed, 'standalone drone flies freely back inward');
 }
 console.log('PASS drone flies over water, never passes under land, cliffs or void, and stops at terrain root edge');
-{
-  // A height-free placement (placeAt: a visit start, a restart, a ?at= link) on a bridge span whose deck is not built
-  // yet is refused for the water under it, as main refuses any wet placement (#130). Once the deck is built, the same
-  // placeAt stands the ride on it (just-drive#6).
-  const seabed = makeTerrain(() => ({ ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
-  const spanned = makeRoads(-200, 110);
-  spanned.bridgeRuns = () => [{ roads: new Set([1]), pts: [[-50, 0], [50, 0]] }];
-  for (const kind of ['car', 'bike']) {
-    let deck = null; spanned.deckHeight = (x, z) => (deck !== null && Math.abs(x) <= 50 && Math.abs(z) <= 4 ? deck : null);
-    const r = makeRide(kind, seabed, spanned); r.bounds = [-200, -200, 400, 200];
-    assert.equal(r.placeAt(0, 0, Math.PI / 2), false, `${kind}: placeAt on the water under an unbuilt span is refused, as on main`);
-    deck = 2;
-    assert.equal(r.placeAt(0, 0, Math.PI / 2), true, `${kind}: placeAt on the built deck`);
-    assert.ok(Math.abs(r.y - 2) < .1, `${kind}: stands on the deck (y=${r.y})`);
-  }
-  console.log('PASS a placeAt on an unbuilt span over water is refused as on main; on the built deck it stands on it');
-}
-{
-  // A ride that sinks under a high deck that belongs to another road respawns on the land behind, never on the deck
-  // overhead and never in the water (each candidate is judged at its own height).
-  const shore = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
-  const under = makeRoads(-200, 200, (x, z) => (x >= 66 && x <= 140 && Math.abs(z) <= 6 ? 8 : null));
-  for (const kind of ['car', 'bike']) {
-    const r = makeRide(kind, shore, under); r.bounds = [-200, -200, 400, 200];
-    assert.equal(r.place(0, 0, Math.PI / 2), true, `${kind}: starts on the land`);
-    let sank = false, back = false, maxY = -Infinity;
-    for (let i = 0; i < 1200 && !back; i++) {
-      r.update(1 / 60, { throttle: sank ? 0 : 1, steer: 0, handbrake: sank });
-      if (r.sunk > 0) sank = true;
-      if (sank && r.x < 60 && r.sunk === 0) back = true;
-      if (sank) maxY = Math.max(maxY, r.y);
-    }
-    assert.ok(sank, `${kind}: drives into the water under the deck and sinks`);
-    assert.ok(back, `${kind}: respawns on the land behind (x=${r.x.toFixed(1)})`);
-    assert.ok(Math.abs(r.y - 1) < .3 && maxY < 4, `${kind}: never stands on the deck overhead (y=${r.y.toFixed(2)}, max ${maxY.toFixed(2)})`);
-  }
-  console.log('PASS a ride that sinks under a deck respawns on the land behind, never on the deck overhead');
-}
-{
-  // A recovery never stands a ride on water: a placement guard that moves a dry road point onto the water under a span
-  // (no height given) is refused, and the ride stays put.
-  const shore = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
-  const roads = makeRoads(-200, 200); roads.bridgeRuns = () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }];
-  for (const kind of ['car', 'bike']) {
-    const r = makeRide(kind, shore, roads); r.bounds = [-200, -200, 400, 200];
-    assert.equal(r.place(20, 0, Math.PI / 2), true);
-    r.placementGuard = (pose) => { if (pose.x < 60) pose.x = 100; return true; };
-    r.respawn();
-    assert.ok(r.x < 60, `${kind}: a recovery moved onto the water under a span by its guard is refused (x=${r.x})`);
-  }
-  console.log('PASS a recovery never stands a ride on the water under a span');
-}
 // The parked wait as main.ts runs it while the game waits for the first pedal: save the pose, step, then hold it.
 function parkedFrame(r) {
   const { x, z, heading, y } = r;
   r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
   if (r.parkedPlace(x, z, heading, y)) r.speed = 0;
 }
-{
-  // A restart onto land that is still loading, on a bridge span whose deck is not built: when the land arrives, the
-  // wet placement is refused and the ordinary dry recovery takes the ride to a dry road point (as on main).
-  let loaded = false;
-  const shore = makeTerrain((x) => (x >= 60 && !loaded ? null : { ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
-  const road = { id: 1, name: 'Span Road', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts: [[-200, 0], [200, 0]] };
-  const roads = { roads: [road], deckHeight: () => null, bridgeRuns: () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }],
-    // The span reach (8 m) finds the road under the point; a wider search finds a dry point on the land.
-    nearest: (x, z, maxDist, filter) => filter && !filter(road) ? null : maxDist <= 8 ? { road, seg: 0, t: 0, dist: Math.abs(z), x, z: 0, heading: Math.PI / 2 } : { road, seg: 0, t: 0, dist: Math.abs(x - 20), x: 20, z: 0, heading: Math.PI / 2 } };
-  for (const kind of ['car', 'bike']) {
-    loaded = false;
-    const r = makeRide(kind, shore, roads); r.bounds = [-200, -200, 400, 200];
-    assert.equal(r.place(20, 0, Math.PI / 2), true);
-    r.restart(100, 0, Math.PI / 2);
-    for (let i = 0; i < 30; i++) parkedFrame(r);
-    assert.ok(Math.abs(r.x - 100) < 1e-9, `${kind}: waits for the land at the restart point`);
-    loaded = true;
-    for (let i = 0; i < 30; i++) parkedFrame(r);
-    assert.ok(Math.abs(r.x - 20) < 1 && Math.abs(r.y - 1) < .3, `${kind}: the wet start is refused and the dry recovery takes it to the land (x=${r.x.toFixed(1)}, y=${r.y.toFixed(2)})`);
+
+function runDeckWaitTests(api, quiet = false) {
+  const log = (...args) => { if (!quiet) console.log(...args); };
+  const mkRide = (kind, terrain, roads) => {
+    if (kind === 'bike') return new api.BikeRide(makeRig(), terrain, roads, SEA, api.BIKE_SPEC);
+    const v = new api.Vehicle(makeRig(), terrain, roads, SEA, api.CAR_SPEC);
+    v.assist = 0;
+    return v;
+  };
+  const mkTruck = (terrain, roads) => {
+    const t = new api.Vehicle(api.createTruck(false, true), terrain, roads, SEA, api.TRUCK_SPEC);
+    t.assist = 0;
+    return t;
+  };
+  const mkSpanRoads = (deckRef) => {
+    const road = { id: 1, name: 'Span Road', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts: [[-200, 0], [200, 0]] };
+    return {
+      roads: [road],
+      deckHeight: (x, z) => (deckRef.y !== null && x >= 70 && x <= 130 && Math.abs(z) <= 6 ? deckRef.y : null),
+      bridgeRuns: () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }],
+      // The span reach (8 m) finds the road under the point; a wider search finds a dry point on the land.
+      nearest: (x, z, maxDist, filter) => (filter && !filter(road) ? null : maxDist <= 8
+        ? { road, seg: 0, t: 0, dist: Math.abs(z), x, z: 0, heading: Math.PI / 2 }
+        : { road, seg: 0, t: 0, dist: Math.abs(x - 20), x: 20, z: 0, heading: Math.PI / 2 }),
+    };
+  };
+
+  // 8a. placeAt on an unbuilt carrying span over water waits without sinking, then stands on the built deck.
+  // Direct place(), explicit-height place(), and off-span placeAt() in water are still refused.
+  {
+    const seabed = makeTerrain(() => ({ ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+    const spanned = makeRoads(-200, 110), elsewhere = makeRoads(-200, 110);
+    spanned.bridgeRuns = () => [{ roads: new Set([1]), pts: [[-50, 0], [50, 0]] }];
+    elsewhere.bridgeRuns = () => [{ roads: new Set([1]), pts: [[150, 0], [250, 0]] }];
+    for (const kind of ['car', 'bike']) {
+      let deck = null;
+      spanned.deckHeight = (x, z) => (deck !== null && Math.abs(x) <= 50 && Math.abs(z) <= 4 ? deck : null);
+      const r = mkRide(kind, seabed, spanned); r.bounds = [-200, -200, 400, 200];
+      assert.equal(r.place(0, 0, Math.PI / 2), false, `${kind}: direct place() in water under an unbuilt span is refused`);
+      assert.equal(r.place(0, 0, Math.PI / 2, -3), false, `${kind}: explicit-height place() in water under an unbuilt span is refused`);
+      const off = mkRide(kind, seabed, elsewhere); off.bounds = [-200, -200, 400, 200];
+      assert.equal(off.placeAt(0, 0, Math.PI / 2), false, `${kind}: placeAt in water off any span is refused`);
+
+      assert.equal(r.placeAt(0, 0, Math.PI / 2), true, `${kind}: placeAt on an unbuilt span over water waits for its deck`);
+      for (let i = 0; i < 180; i++) parkedFrame(r);
+      assert.equal(r.sunk, 0, `${kind}: waiting ride does not sink`);
+      assert.ok(Math.abs(r.x) < 1e-9 && Math.abs(r.z) < 1e-9, `${kind}: waiting ride stays at the span (x=${r.x})`);
+      assert.ok(kind === 'bike' ? r.ready === false : r.stuck === true, `${kind}: waiting ride holds physics off`);
+
+      // Deck builds (2 m up): next parkedFrame stands the ride on the deck and parkedPlace does not pull it down.
+      deck = 2;
+      for (let i = 0; i < 3; i++) parkedFrame(r);
+      assert.ok(Math.abs(r.y - 2) < .1, `${kind}: stands on the built deck (y=${r.y})`);
+      assert.ok(kind === 'bike' ? r.ready === true : r.stuck === false, `${kind}: drivable once the deck builds`);
+      const xBefore = r.x;
+      for (let i = 0; i < 60; i++) r.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+      assert.ok(r.x > xBefore + 1 && Math.abs(r.y - 2) < .15, `${kind}: drives forward on the built deck (dx=${(r.x - xBefore).toFixed(2)}, y=${r.y.toFixed(2)})`);
+    }
+    log('PASS placeAt on an unbuilt span over water waits without sinking and stands on the built deck');
   }
-  console.log('PASS a restart on an unbuilt span over water ends as on main: refused, then a dry recovery');
-}
-{
-  // The parked hold after a step that began while the ride waited for its land: nowhere dry, so the ride stops in the
-  // water at the retry's height, and the hold must not use the old body height (9 m), which would take an unrelated
-  // deck 8 m up.
-  let loaded = false;
-  const sea = makeTerrain(() => (loaded ? { ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false } : null));
-  const over = makeRoads(-200, 200, (x, z) => (Math.abs(x - 100) <= 30 && Math.abs(z) <= 6 ? 8 : null));
-  for (const kind of ['car', 'bike']) {
-    loaded = false;
-    const r = makeRide(kind, sea, over); r.bounds = [-200, -200, 400, 200];
-    Object.assign(r, { x: 100, z: 0, y: 9 });
-    r.restart(100, 0, Math.PI / 2);
-    loaded = true;
-    let maxY = -Infinity;
-    for (let i = 0; i < 120; i++) { parkedFrame(r); maxY = Math.max(maxY, r.y); }
-    assert.ok(maxY < 4, `${kind}: the parked hold never stands the ride on the deck overhead (max y=${maxY.toFixed(2)})`);
+
+  // 8b. Cold-load restart onto unloaded span -> coarse wet land arrives -> stays waiting -> deck builds.
+  {
+    let loaded = false;
+    const deckRef = { y: null };
+    const shore = makeTerrain((x) => (x >= 60 && !loaded ? null : { ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: x < 60 ? 8 : 4, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+    const roads = mkSpanRoads(deckRef);
+    for (const kind of ['car', 'bike']) {
+      loaded = false; deckRef.y = null;
+      const r = mkRide(kind, shore, roads); r.bounds = [-200, -200, 400, 200];
+      assert.equal(r.place(20, 0, Math.PI / 2), true);
+      assert.equal(r.restart(100, 0, Math.PI / 2), true);
+      for (let i = 0; i < 30; i++) parkedFrame(r);
+      assert.ok(Math.abs(r.x - 100) < 1e-9, `${kind}: waits while span land is unloaded`);
+      loaded = true;
+      for (let i = 0; i < 180; i++) parkedFrame(r);
+      assert.ok(Math.abs(r.x - 100) < 1e-9 && r.sunk === 0, `${kind}: keeps waiting after coarse wet land arrives (x=${r.x}, sunk=${r.sunk})`);
+      deckRef.y = 2;
+      for (let i = 0; i < 3; i++) parkedFrame(r);
+      assert.ok(Math.abs(r.x - 100) < 1e-9 && Math.abs(r.y - 2) < .1, `${kind}: cold-load restart stands on the deck once built (x=${r.x}, y=${r.y})`);
+    }
+    log('PASS cold-load restart on an unbuilt span waits across coarse wet land and stands on the built deck');
   }
-  console.log('PASS the parked hold after a waiting step never uses the old body height');
-}
-{
-  // The hold is skipped only right after a step that began waiting: any later placement outside that step (a restart, a
-  // jump) ends it, and the parked hold works again.
-  let loaded = false;
-  const land = makeTerrain((x) => (x >= 60 && !loaded ? null : { ground: 1, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
-  const roads = makeRoads(-200, 200);
-  for (const kind of ['car', 'bike']) {
-    loaded = false;
-    const r = makeRide(kind, land, roads); r.bounds = [-200, -200, 400, 200];
-    r.place(100, 0, Math.PI / 2); r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
-    assert.equal(r.parkedPlace(100, 0, Math.PI / 2, 1), false, `${kind}: no hold right after a step that began waiting`);
-    assert.equal(r.place(20, 0, Math.PI / 2), true);
-    assert.equal(r.parkedPlace(21, 0, Math.PI / 2, 1), true, `${kind}: an explicit placement ends the skip; the hold works again`);
+
+  // 8c. Deck that never builds (bank stays below level 6): wait ends after DECK_WAIT_SECONDS with dry recovery,
+  // parkedPlace does not undo the recovery, and a refused off-span placeAt mid-wait does not reset the clock.
+  {
+    let loaded = false;
+    const deckRef = { y: null };
+    const shore = makeTerrain((x) => (x >= 60 && !loaded ? null : { ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: x < 60 ? 8 : 5, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+    const roads = mkSpanRoads(deckRef);
+    for (const kind of ['car', 'bike']) {
+      loaded = false; deckRef.y = null;
+      const r = mkRide(kind, shore, roads); r.bounds = [-200, -200, 400, 200];
+      assert.equal(r.place(20, 0, Math.PI / 2), true);
+      assert.equal(r.restart(100, 0, Math.PI / 2), true);
+      loaded = true;
+      for (let i = 0; i < 60 * 7; i++) parkedFrame(r);
+      assert.ok(Math.abs(r.x - 100) < 1e-9 && r.sunk === 0, `${kind}: still waiting at 7 s (x=${r.x})`);
+      // A refused placeAt in open water off the span must not reset the 8 s wait clock.
+      assert.equal(r.placeAt(180, 0, Math.PI / 2), false, `${kind}: off-span wet placeAt mid-wait is refused`);
+      for (let i = 0; i < 60 * 2; i++) parkedFrame(r);
+      assert.ok(Math.abs(r.x - 20) < 1 && Math.abs(r.y - 1) < .3, `${kind}: deck that never builds recovers to dry land after ${api.DECK_WAIT_SECONDS} s (x=${r.x.toFixed(1)}, y=${r.y.toFixed(2)})`);
+      assert.ok(kind === 'bike' ? r.ready === true : r.stuck === false, `${kind}: drivable after dry recovery`);
+      const xAfter = r.x;
+      for (let i = 0; i < 60; i++) r.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+      assert.ok(r.x > xAfter + 1, `${kind}: drives away from dry fallback (dx=${(r.x - xAfter).toFixed(2)})`);
+    }
+    log('PASS a deck that never builds ends the wait at 8 s with dry recovery that parkedPlace keeps');
   }
-  console.log('PASS the parked-hold skip lasts only until the next placement outside the waiting step');
+
+  // 8d. A ride that sinks under a high deck belonging to another road respawns on the land behind, never on the deck overhead.
+  {
+    const shore = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+    const under = makeRoads(-200, 200, (x, z) => (x >= 66 && x <= 140 && Math.abs(z) <= 6 ? 8 : null));
+    for (const kind of ['car', 'bike']) {
+      const r = mkRide(kind, shore, under); r.bounds = [-200, -200, 400, 200];
+      assert.equal(r.place(0, 0, Math.PI / 2), true, `${kind}: starts on the land`);
+      let sank = false, back = false, maxY = -Infinity;
+      for (let i = 0; i < 1200 && !back; i++) {
+        r.update(1 / 60, { throttle: sank ? 0 : 1, steer: 0, handbrake: sank });
+        if (r.sunk > 0) sank = true;
+        if (sank && r.x < 60 && r.sunk === 0) back = true;
+        if (sank) maxY = Math.max(maxY, r.y);
+      }
+      assert.ok(sank, `${kind}: drives into the water under the deck and sinks`);
+      assert.ok(back, `${kind}: respawns on the land behind (x=${r.x.toFixed(1)})`);
+      assert.ok(Math.abs(r.y - 1) < .3 && maxY < 4, `${kind}: never stands on the deck overhead (y=${r.y.toFixed(2)}, max ${maxY.toFixed(2)})`);
+    }
+    log('PASS a ride that sinks under a deck respawns on the land behind, never on the deck overhead');
+  }
+
+  // 8e. Recovery never stands a ride on water under an unbuilt span (placementGuard shifting a dry road point onto the span).
+  {
+    const shore = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+    const roads = makeRoads(-200, 200); roads.bridgeRuns = () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }];
+    for (const kind of ['car', 'bike']) {
+      const r = mkRide(kind, shore, roads); r.bounds = [-200, -200, 400, 200];
+      assert.equal(r.place(20, 0, Math.PI / 2), true);
+      r.placementGuard = (pose) => { if (pose.x < 60) pose.x = 100; return true; };
+      r.respawn();
+      assert.ok(r.x < 60, `${kind}: a recovery moved onto the water under an unbuilt span by its guard is refused (x=${r.x})`);
+    }
+    log('PASS a recovery never stands a ride on the water under an unbuilt span');
+  }
+
+  // 8f. Failed retry with nowhere dry (off-span AND after unbuilt-span timeout) stands at retry height (-3),
+  // never at old body height (9 m) or on an unrelated deck overhead (8 m), and stays #waterStopped with zero creep.
+  {
+    let loaded = false;
+    const sea = makeTerrain(() => (loaded ? { ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false } : null));
+    const over = makeRoads(-200, 200, (x, z) => (Math.abs(x - 100) <= 30 && Math.abs(z) <= 6 ? 8 : null));
+    for (const kind of ['car', 'bike']) {
+      loaded = false;
+      const r = mkRide(kind, sea, over); r.bounds = [-200, -200, 400, 200];
+      Object.assign(r, { x: 100, z: 0, y: 9 });
+      r.restart(100, 0, Math.PI / 2);
+      loaded = true;
+      let maxY = -Infinity;
+      for (let i = 0; i < 120; i++) { parkedFrame(r); maxY = Math.max(maxY, r.y); }
+      assert.ok(maxY < 4, `${kind}: the parked hold after a failed retry never stands on the deck overhead (max y=${maxY.toFixed(2)})`);
+    }
+    // Same with an unbuilt-span timeout where nowhere dry exists: stops in water at -3 with zero creep, never takes a later deck overhead.
+    let lateDeck = null;
+    const allSea = makeTerrain(() => ({ ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 5, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+    const spanOnly = makeRoads(-200, 200, (x, z) => (lateDeck !== null && Math.abs(x - 100) <= 30 && Math.abs(z) <= 6 ? lateDeck : null));
+    spanOnly.bridgeRuns = () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }];
+    for (const kind of ['car', 'bike']) {
+      lateDeck = null;
+      const r = mkRide(kind, allSea, spanOnly); r.bounds = [-200, -200, 400, 200];
+      Object.assign(r, { x: 100, z: 0, y: 9 });
+      assert.equal(r.restart(100, 0, Math.PI / 2), true);
+      for (let i = 0; i < 60 * 9; i++) parkedFrame(r);
+      assert.ok(r.y < 0, `${kind}: timed-out wait with nowhere dry stops at seabed height (y=${r.y.toFixed(2)})`);
+      const xStop = r.x, zStop = r.z;
+      lateDeck = 8;
+      for (let i = 0; i < 60; i++) {
+        r.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+        assert.ok(r.y < 0, `${kind}: #waterStopped ride never jumps to a deck that builds after timeout (y=${r.y.toFixed(2)})`);
+      }
+      assert.ok(Math.hypot(r.x - xStop, r.z - zStop) < 1e-6, `${kind}: #waterStopped after timeout holds zero seabed creep`);
+    }
+    log('PASS failed retries with nowhere dry stand at retry height and stay water-stopped with zero creep');
+  }
+
+  // 8g. #waterStopped and active sinking before the wait: starting on an unbuilt span clears both, waits without
+  // sinking even under full throttle, and drives cleanly once the deck builds.
+  {
+    let flooded = false, deck = null;
+    const world = makeTerrain((x) => ({ ground: flooded || x >= 50 ? -3 : 3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: x >= 50, deck: false }));
+    const roads = makeRoads(-100, 200, (x, z) => (deck !== null && x >= 70 && x <= 130 && Math.abs(z) <= 6 ? deck : null));
+    roads.bridgeRuns = () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }];
+    for (const kind of ['car', 'bike']) {
+      flooded = false; deck = null;
+      const r = mkRide(kind, world, roads); r.bounds = [-200, -200, 400, 200];
+      assert.equal(r.place(0, 0, Math.PI / 2), true);
+      // Flood everything so the ride sinks and enters #waterStopped.
+      flooded = true;
+      for (let i = 0; i < 180; i++) r.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+      const xStop = r.x;
+      for (let i = 0; i < 30; i++) r.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+      assert.ok(Math.hypot(r.x - xStop, r.z) < 1e-6, `${kind}: confirmed #waterStopped before span start`);
+
+      // Now placeAt (not restart!) on the unbuilt span: must clear #waterStopped and sunk, wait without sinking under full throttle.
+      assert.equal(r.placeAt(100, 0, Math.PI / 2), true, `${kind}: placeAt from #waterStopped enters span wait`);
+      assert.equal(r.sunk, 0, `${kind}: sunk reset on span wait`);
+      for (let i = 0; i < 180; i++) r.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+      assert.equal(r.sunk, 0, `${kind}: waiting ride does not sink under held throttle`);
+      assert.ok(Math.abs(r.x - 100) < 1e-9, `${kind}: waiting ride does not move under held throttle`);
+
+      // Deck builds (2 m): ride stands on deck and drives forward (proving #waterStopped is cleared).
+      deck = 2;
+      r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
+      assert.ok(Math.abs(r.y - 2) < .1, `${kind}: stands on built deck after #waterStopped wait (y=${r.y})`);
+      for (let i = 0; i < 60; i++) r.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+      assert.ok(r.x > 101 && Math.abs(r.y - 2) < .15, `${kind}: drives cleanly on deck after #waterStopped wait (x=${r.x.toFixed(2)})`);
+    }
+    // Also: a #waterStopped ride that enters an unbuilt-span wait which later times out onto a built dry deck
+    // must NOT carry stale #waterStopped into the retry fallback (which would yank it off the deck to land=-3).
+    for (const kind of ['car', 'bike']) {
+      let flooded2 = false;
+      const seaWithDeck = makeTerrain((x) => ({ ground: flooded2 || x >= 10 ? -3 : 3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: x >= 70, deck: false }));
+      const road = { id: 1, name: 'Bridge Road', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts: [[-100, 0], [200, 0]] };
+      const rds = {
+        roads: [road],
+        deckHeight: (x, z) => (x >= 15 && x <= 45 && Math.abs(z) <= 6 ? 8 : null),
+        bridgeRuns: () => [{ roads: new Set([1]), pts: [[15, 0], [45, 0]] }, { roads: new Set([1]), pts: [[70, 0], [130, 0]] }],
+        nearest: (x, z, maxDist, filter) => (filter && !filter(road) ? null : maxDist <= 8
+          ? { road, seg: 0, t: 0, dist: Math.abs(z), x, z: 0, heading: Math.PI / 2 }
+          : { road, seg: 0, t: 0, dist: Math.abs(x - 30), x: 30, z: 0, heading: Math.PI / 2 }),
+      };
+      const r = mkRide(kind, seaWithDeck, rds); r.bounds = [-200, -200, 400, 200];
+      assert.equal(r.place(0, 0, Math.PI / 2), true);
+      // Drive into water at x=-50 with no dry fallback yet? Flood x < 10 and block x = 30 temporarily to enter #waterStopped.
+      let blockDeck = true;
+      r.placementGuard = (pose) => !(blockDeck && pose.x >= 15 && pose.x <= 45);
+      flooded2 = true;
+      for (let i = 0; i < 180; i++) r.update(1 / 60, { throttle: 1, steer: 0, handbrake: false });
+      blockDeck = false;
+      // Now #waterStopped is true; placeAt on unbuilt span at x=100 (deck never builds), timeout recovers to built deck at x=30, y=8.
+      assert.equal(r.placeAt(100, 0, Math.PI / 2), true, `${kind}: placeAt from #waterStopped on unbuilt span`);
+      for (let i = 0; i < 60 * 9; i++) parkedFrame(r);
+      assert.ok(Math.abs(r.x - 30) < 1 && Math.abs(r.y - 8) < .2, `${kind}: stale #waterStopped never yanks timed-out recovery off the 8 m deck (x=${r.x.toFixed(1)}, y=${r.y.toFixed(2)})`);
+    }
+    log('PASS #waterStopped and sinking clear cleanly into the span wait and drive once the deck builds');
+  }
+
+  // 8h. The parked-hold skip lasts only until the next placement outside the waiting step.
+  {
+    let loaded = false;
+    const land = makeTerrain((x) => (x >= 60 && !loaded ? null : { ground: 1, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+    const roads = makeRoads(-200, 200);
+    for (const kind of ['car', 'bike']) {
+      loaded = false;
+      const r = mkRide(kind, land, roads); r.bounds = [-200, -200, 400, 200];
+      r.place(100, 0, Math.PI / 2); r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
+      assert.equal(r.parkedPlace(100, 0, Math.PI / 2, 1), false, `${kind}: no hold right after a step that began waiting`);
+      assert.equal(r.place(20, 0, Math.PI / 2), true);
+      assert.equal(r.parkedPlace(21, 0, Math.PI / 2, 1), true, `${kind}: an explicit placement ends the skip; the hold works again`);
+    }
+    log('PASS the parked-hold skip lasts only until the next placement outside the waiting step');
+  }
+
+  // 8i. Fleet on an unbuilt bridge span over water: cold start, live jump, camera framing, deck that never builds
+  // (shore within 120 m, cold-boot long bridge > 120 m from dry road, and all-water rollback), and #waterStopped recovery.
+  {
+    let deck = null;
+    const sea = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: x >= 70, deck: false }));
+    const spanRoads = makeRoads(-260, 640, (x, z) => (deck !== null && x >= 70 && x <= 640 && Math.abs(z) <= 8 ? deck : null));
+    spanRoads.bridgeRuns = () => [{ roads: new Set([1]), pts: [[70, 0], [640, 0]] }];
+
+    // Cold boot (deferVisit = true) at x = 100 (within 120 m of dry shore at x < 60): must wait for deck, NOT slide to shore!
+    {
+      deck = null;
+      const truck = mkTruck(sea, spanRoads);
+      assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+      const tow = new api.Towing(truck, sea, spanRoads, false, false, {}, true, true);
+      const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
+      const fleet = new api.Fleet(truck, tow, sea, spanRoads, scene, true, () => {}, SEA, undefined, true);
+      assert.equal(fleet.startVisit(100, 0, Math.PI / 2), false, 'Fleet cold start on unbuilt span queues wait');
+      assert.equal(fleet.visitQueued, true, 'Fleet cold start reports visitQueued while waiting for bridge deck');
+      assert.equal(fleet.busy, true, 'Fleet cold start is busy while waiting for bridge deck');
+      const attempts0 = fleet.teleportAttempts;
+      for (let i = 0; i < 180; i++) {
+        fleet.drive(1 / 60, { throttle: 1, steer: 0, handbrake: false }, () => fleet.resolve());
+        fleet.refresh(1 / 60);
+      }
+      assert.equal(fleet.visitQueued, true, 'Fleet stays waiting for bridge deck at 3 s (does not slide to shore)');
+      assert.equal(fleet.teleportAttempts, attempts0, 'Fleet makes zero teleports while waiting for bridge deck');
+      assert.equal(truck.sunk, 0, 'Fleet truck does not sink while waiting for bridge deck');
+      deck = 8;
+      fleet.refresh(1 / 60);
+      assert.equal(fleet.visitQueued, false, 'Fleet finishes queued visit once bridge deck builds');
+      assert.equal(fleet.busy, false, 'Fleet is playable once bridge deck builds');
+      assert.ok(Math.abs(truck.x - 100) < 30 && Math.abs(truck.y - 8) < .2, `Fleet cold start stands on built deck (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+    }
+
+    // Live Fleet (spawned = true) place-jump to unbuilt span: frames camera over bridge, stands on built deck, refuses off-span water.
+    {
+      deck = null;
+      const truck = mkTruck(sea, spanRoads);
+      assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+      const tow = new api.Towing(truck, sea, spanRoads, false, false, {}, true, true);
+      const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
+      const fleet = new api.Fleet(truck, tow, sea, spanRoads, scene, true, () => {}, SEA);
+      // Off-span water is refused immediately (no deck wait).
+      assert.equal(fleet.restart(720, 0, Math.PI / 2, 'place-jump'), false);
+      assert.equal(fleet.visitQueued, false, 'Fleet off-span wet place-jump is refused immediately without queueing');
+
+      // On-span unbuilt bridge jump waits and aims camera over the waiting span so tiles/deck build.
+      assert.equal(fleet.restart(330, 0, Math.PI / 2, 'place-jump'), false);
+      assert.equal(fleet.visitQueued, true, 'Fleet live place-jump onto unbuilt span waits for deck');
+      const cam = new THREE.PerspectiveCamera(58, 1.5, 0.3, 4000);
+      assert.equal(fleet.camera(cam, 1 / 60), true, 'Fleet camera frames the waiting bridge span while spawned');
+      assert.ok(Math.abs(cam.position.x - 330) < 30, `Fleet camera moved near waiting span (cam.x=${cam.position.x.toFixed(1)})`);
+      deck = 8;
+      fleet.refresh(1 / 60);
+      assert.equal(fleet.visitQueued, false, 'Fleet live jump completes once deck builds');
+      assert.ok(Math.abs(truck.x - 330) < 30 && Math.abs(truck.y - 8) < .2, `Fleet live jump stands on built deck (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+    }
+
+    // Fleet deck that never builds:
+    // (1) Cold boot on long bridge (> 120 m from shore) falls back to wide dry road after 8 s.
+    {
+      deck = null;
+      const truck = mkTruck(sea, spanRoads);
+      assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+      const tow = new api.Towing(truck, sea, spanRoads, false, false, {}, true, true);
+      const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
+      const fleet = new api.Fleet(truck, tow, sea, spanRoads, scene, true, () => {}, SEA, undefined, true);
+      fleet.startVisit(330, 0, Math.PI / 2);
+      for (let i = 0; i < 60 * 7; i++) fleet.refresh(1 / 60);
+      assert.equal(fleet.visitQueued, true, 'Fleet cold start on long unbuilt span still waits at 7 s');
+      for (let i = 0; i < 60 * 2; i++) fleet.refresh(1 / 60);
+      assert.equal(fleet.visitQueued, false, 'Fleet cold start on long unbuilt span ends wait after 8 s');
+      assert.ok(truck.x < 60 && Math.abs(truck.y - 1) < .2, `Fleet cold start recovers onto dry road after 8 s (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+    }
+
+    // (2) Live jump to unbuilt span whose deck never builds: falls back to dry shore within 120 m, OR preserves old dry pose when all water.
+    {
+      deck = null;
+      const truck = mkTruck(sea, spanRoads);
+      assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+      const tow = new api.Towing(truck, sea, spanRoads, false, false, {}, true, true);
+      const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
+      const fleet = new api.Fleet(truck, tow, sea, spanRoads, scene, true, () => {}, SEA);
+      fleet.restart(100, 0, Math.PI / 2, 'place-jump');
+      for (let i = 0; i < 60 * 7; i++) fleet.refresh(1 / 60);
+      assert.equal(fleet.visitQueued, true, 'Fleet live jump still waits at 7 s');
+      for (let i = 0; i < 60 * 2; i++) fleet.refresh(1 / 60);
+      assert.equal(fleet.visitQueued, false, 'Fleet live jump ends wait after 8 s');
+      assert.ok(truck.x <= 60 && Math.abs(truck.y - 1) < .2, `Fleet live jump recovers to dry shore after 8 s (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+
+      // Jump to x = 330 (> 120 m from shore) where deck never builds: atomic rollback keeps previous dry pose playable.
+      const prevX = truck.x, prevY = truck.y;
+      fleet.restart(330, 0, Math.PI / 2, 'place-jump');
+      assert.equal(fleet.visitQueued, true);
+      for (let i = 0; i < 60 * 9; i++) fleet.refresh(1 / 60);
+      assert.equal(fleet.visitQueued, false, 'Fleet live jump with no dry shore clears wait after 8 s');
+      assert.equal(fleet.busy, false, 'Fleet remains playable after timed-out jump');
+      assert.ok(Math.abs(truck.x - prevX) < 1e-6 && Math.abs(truck.y - prevY) < 1e-6, 'Fleet timed-out jump with nowhere dry preserves exact prior dry pose');
+    }
+
+    // (3) Fleet #waterStopped interaction + R cancels pending wait.
+    {
+      deck = null;
+      const truck = mkTruck(sea, spanRoads);
+      assert.equal(truck.place(20, 0, Math.PI / 2), true);
+      const tow = new api.Towing(truck, sea, spanRoads, false, false, {}, true, true);
+      const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
+      const fleet = new api.Fleet(truck, tow, sea, spanRoads, scene, true, () => {}, SEA);
+      // Drive into water until stopped.
+      for (let i = 0; i < 600; i++) fleet.drive(1 / 60, { throttle: 1, steer: 0, handbrake: false }, () => fleet.resolve());
+      const xStopped = truck.x;
+      for (let i = 0; i < 60; i++) fleet.drive(1 / 60, { throttle: 1, steer: 0, handbrake: false }, () => fleet.resolve());
+      assert.ok(Math.abs(truck.x - xStopped) < 1e-6, 'Fleet truck confirmed water-stopped before span jump');
+
+      // Jump onto unbuilt span: waits without creeping, then stands on built deck and drives forward cleanly.
+      fleet.restart(330, 0, Math.PI / 2, 'place-jump');
+      assert.equal(fleet.visitQueued, true);
+      for (let i = 0; i < 120; i++) {
+        fleet.drive(1 / 60, { throttle: 1, steer: 0, handbrake: false }, () => fleet.resolve());
+        fleet.refresh(1 / 60);
+      }
+      assert.ok(Math.abs(truck.x - xStopped) < 1e-6, 'Fleet water-stopped truck stays still during span wait');
+      deck = 8;
+      fleet.refresh(1 / 60);
+      assert.equal(fleet.visitQueued, false);
+      assert.ok(Math.abs(truck.x - 330) < 30 && Math.abs(truck.y - 8) < .2, `Fleet recovers from water-stop onto built deck (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+      const xDeck = truck.x;
+      for (let i = 0; i < 60; i++) fleet.drive(1 / 60, { throttle: 1, steer: 0, handbrake: false }, () => fleet.resolve());
+      assert.ok(truck.x > xDeck + 1, `Fleet drives forward on built deck after water-stop (dx=${(truck.x - xDeck).toFixed(2)})`);
+
+      // Explicit R cancels an active live deck wait and recovers cleanly.
+      deck = null;
+      assert.equal(fleet.restart(20, 0, Math.PI / 2, 'place-jump'), true);
+      fleet.restart(330, 0, Math.PI / 2, 'place-jump');
+      assert.equal(fleet.visitQueued, true);
+      fleet.respawn();
+      assert.equal(fleet.visitQueued, false, 'explicit R cancels pending Fleet deck wait');
+    }
+
+    // (4) Built deck startVisit and Start-where-I-am guard (existing regression).
+    {
+      deck = 8;
+      const truck = mkTruck(sea, spanRoads);
+      assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+      const tow = new api.Towing(truck, sea, spanRoads, false, false, {}, true, true);
+      const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
+      const fleet = new api.Fleet(truck, tow, sea, spanRoads, scene, true, () => {}, SEA);
+      assert.equal(fleet.startVisit(330, 0, Math.PI / 2), true, 'Fleet starts the truck and trailer on the built deck over water');
+      assert.ok(Math.abs(truck.x - 330) < 30 && Math.abs(truck.y - 8) < .2, `the rig stands on the deck (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+      assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+      const guard = truck.placementGuard;
+      assert.equal(fleet.startVisit(340, 0, Math.PI / 2, pose => guard?.(pose) !== false), true, 'Start where I am: Fleet starts the rig on the built deck through the trailer guard');
+      assert.ok(Math.abs(truck.y - 8) < .2, `and it stands on the deck (y=${truck.y.toFixed(2)})`);
+    }
+    log('PASS Fleet unbuilt-span wait, camera framing, 8 s dry fallbacks, water-stop recovery and built-deck start');
+  }
 }
+
+runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE_SPEC, TRUCK_SPEC, DECK_WAIT_SECONDS });
+
+// Mutation checks for every unbuilt-span state across car, bike and Fleet (runs in ~2.5 s).
 {
-  // A Fleet start (truck with its trailer) on a built deck over water, as main allows: the trailer check is judged at
-  // fleet's own ground height (the deck, 8 m up, out of reach of the rig staged on the land), not at the seabed.
-  const sea = makeTerrain((x) => ({ ground: x < 0 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
-  const deckRoads = makeRoads(-200, 640, (x, z) => (x >= 20 && x <= 640 && Math.abs(z) <= 8 ? 8 : null));
-  const truck = new Vehicle(createTruck(false, true), sea, deckRoads, SEA, TRUCK_SPEC); truck.assist = 0;
-  assert.equal(truck.place(-60, 0, Math.PI / 2), true);
-  const tow = new Towing(truck, sea, deckRoads, false, false, {}, true, true);
-  const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
-  const fleet = new Fleet(truck, tow, sea, deckRoads, scene, true, () => {}, SEA);
-  assert.equal(fleet.startVisit(330, 0, Math.PI / 2), true, 'Fleet starts the truck and trailer on the built deck over water');
-  assert.ok(Math.abs(truck.x - 330) < 30 && Math.abs(truck.y - 8) < .2, `the rig stands on the deck (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
-  // The same start through the location-start path: main.ts wires the start's accepts callback to the truck's placement
-  // guard (the trailer check), so the guard must see the deck height too. The deck runs more than the guard's 120 m
-  // search from dry land, as at the Canso Canal crossing.
-  assert.equal(truck.place(-60, 0, Math.PI / 2), true);
-  const guard = truck.placementGuard;
-  assert.equal(fleet.startVisit(340, 0, Math.PI / 2, pose => guard?.(pose) !== false), true, 'Start where I am: Fleet starts the rig on the built deck through the trailer guard');
-  assert.ok(Math.abs(truck.y - 8) < .2, `and it stands on the deck (y=${truck.y.toFixed(2)})`);
-  console.log('PASS a Fleet start with the trailer on a built deck over water stands on the deck, as on main');
+  const root = process.env.MMM_ROOT ?? process.cwd();
+  const threeHref = pathToFileURL(resolve(root, 'web/node_modules/three/build/three.module.js')).href;
+  const loadApi = async (replacements = {}) => {
+    const out = await build({
+      stdin: {
+        contents: [
+          "export { Vehicle, DECK_WAIT_SECONDS } from './web/src/vehicle.ts';",
+          "export { BikeRide } from './web/src/bike-ride.ts';",
+          "export { Fleet } from './web/src/fleet.ts';",
+          "export { Towing } from './web/src/towing.ts';",
+          "export { createTruck, TRUCK_SPEC } from './web/src/truck.ts';",
+          "export { CAR_SPEC } from './web/src/vehicle-spec.ts';",
+          "export { BIKE_SPEC } from './web/src/bike.ts';",
+        ].join('\n'),
+        resolveDir: root,
+        loader: 'ts',
+      },
+      bundle: true,
+      write: false,
+      format: 'esm',
+      platform: 'node',
+      logLevel: 'silent',
+      plugins: [{
+        name: 'water-bounds-mutants',
+        setup(b) {
+          b.onResolve({ filter: /^three$/ }, () => ({ path: threeHref, external: true }));
+          for (const [rel, code] of Object.entries(replacements)) {
+            const abs = resolve(root, rel);
+            b.onLoad({ filter: new RegExp(abs.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$') }, () => ({ contents: code, loader: 'ts' }));
+          }
+        },
+      }],
+    });
+    return import('data:text/javascript;base64,' + Buffer.from(out.outputFiles[0].text).toString('base64'));
+  };
+
+  // Unmodified control must pass through the same in-memory esbuild loader.
+  runDeckWaitTests(await loadApi(), true);
+
+  const mutants = [
+    [
+      'car-no-wait',
+      'web/src/vehicle.ts',
+      `    const waitDeck = !dry && !this.#recovering && pose.y === undefined
+      && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
+      && this.roads.deckHeight(x, z) === null && placementOnSpan(this.roads, x, z);`,
+      '    const waitDeck = false;',
+      /car: placeAt on an unbuilt span over water waits for its deck/,
+    ],
+    [
+      'bike-no-wait',
+      'web/src/bike-ride.ts',
+      `    const waitDeck = !dry && !this.#recovering && pose.y === undefined
+      && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
+      && this.roads.deckHeight(pose.x, pose.z) === null && placementOnSpan(this.roads, pose.x, pose.z);`,
+      '    const waitDeck = false;',
+      /bike: placeAt on an unbuilt span over water waits for its deck/,
+    ],
+    [
+      'car-no-wait-bound',
+      'web/src/vehicle.ts',
+      '      && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))',
+      '      && (freshWait || allowWait)',
+      /car: deck that never builds recovers to dry land/,
+    ],
+    [
+      'bike-no-wait-bound',
+      'web/src/bike-ride.ts',
+      '      && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))',
+      '      && (freshWait || allowWait)',
+      /bike: deck that never builds recovers to dry land/,
+    ],
+    [
+      'car-no-wait-clock',
+      'web/src/vehicle.ts',
+      '        if (this.#deckWaiting && Number.isFinite(dt) && dt > 0) this.#deckWait += Math.min(dt, 0.1);',
+      '        // clock removed',
+      /car: deck that never builds recovers to dry land/,
+    ],
+    [
+      'bike-no-wait-clock',
+      'web/src/bike-ride.ts',
+      '        if (this.#deckWaiting && Number.isFinite(dt) && dt > 0) this.#deckWait += Math.min(dt, 0.1);',
+      '        // clock removed',
+      /bike: deck that never builds recovers to dry land/,
+    ],
+    [
+      'car-direct-place-waits',
+      'web/src/vehicle.ts',
+      '      && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))',
+      '      && this.#deckWait < DECK_WAIT_SECONDS',
+      /car: direct place\(\) in water under an unbuilt span is refused/,
+    ],
+    [
+      'bike-direct-place-waits',
+      'web/src/bike-ride.ts',
+      '      && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))',
+      '      && this.#deckWait < DECK_WAIT_SECONDS',
+      /bike: direct place\(\) in water under an unbuilt span is refused/,
+    ],
+    [
+      'car-no-stuck-on-wait',
+      'web/src/vehicle.ts',
+      '      this.y = this.prevGround = g; this.stuck = true; this.#awaitingLoad = true;',
+      '      this.y = this.prevGround = g; this.stuck = false; this.#awaitingLoad = true;',
+      /car: waiting ride (does not sink|holds physics off|stays at the span)/,
+    ],
+    [
+      'bike-ready-on-wait',
+      'web/src/bike-ride.ts',
+      '    this.ready = !waitDeck && this.capture();',
+      '    this.ready = this.capture();',
+      /bike: waiting ride (does not sink|holds physics off|stays at the span)/,
+    ],
+    [
+      'car-no-parked-hold-gate',
+      'web/src/vehicle.ts',
+      '    if (this.#waitedThisStep) return false;',
+      '    // gate removed',
+      /car: (keeps waiting after coarse wet land arrives|stands on the built deck|deck that never builds recovers to dry land|the parked hold after a failed retry never stands on the deck overhead)/,
+    ],
+    [
+      'bike-no-parked-hold-gate',
+      'web/src/bike-ride.ts',
+      '    if (this.#waitedThisStep) return false;',
+      '    // gate removed',
+      /bike: (keeps waiting after coarse wet land arrives|stands on the built deck|deck that never builds recovers to dry land|the parked hold after a failed retry never stands on the deck overhead)/,
+    ],
+    [
+      'car-failed-retry-old-raise',
+      'web/src/vehicle.ts',
+      '              if (gNow !== null) this.y = gNow;',
+      '              if (gNow !== null && this.y < gNow) this.y = gNow;',
+      /car: the parked hold after a failed retry never stands on the deck overhead/,
+    ],
+    [
+      'bike-failed-retry-old-raise',
+      'web/src/bike-ride.ts',
+      '              if (gNow !== null) this.y = gNow;',
+      '              if (gNow !== null && this.y < gNow) this.y = gNow;',
+      /bike: the parked hold after a failed retry never stands on the deck overhead/,
+    ],
+    [
+      'car-refused-placeAt-resets-wait',
+      'web/src/vehicle.ts',
+      '    this.#freshDeckWait = true;',
+      '    this.#freshDeckWait = true; this.#deckWait = 0;',
+      /car: deck that never builds recovers to dry land/,
+    ],
+    [
+      'bike-refused-placeAt-resets-wait',
+      'web/src/bike-ride.ts',
+      '    this.#freshDeckWait = true;',
+      '    this.#freshDeckWait = true; this.#deckWait = 0;',
+      /bike: deck that never builds recovers to dry land/,
+    ],
+    [
+      'car-stale-waterStopped',
+      'web/src/vehicle.ts',
+      '    if (freshWait || (g !== null && !waitDeck)) this.#deckWait = 0;\n    this.#waterStopped = false;',
+      '    if (freshWait || (g !== null && !waitDeck)) this.#deckWait = 0;',
+      /car: stale #waterStopped never yanks timed-out recovery off the 8 m deck/,
+    ],
+    [
+      'bike-stale-waterStopped',
+      'web/src/bike-ride.ts',
+      '    if (freshWait || (gAt !== null && !waitDeck)) this.#deckWait = 0;\n    this.#waterStopped = false;',
+      '    if (freshWait || (gAt !== null && !waitDeck)) this.#deckWait = 0;',
+      /bike: stale #waterStopped never yanks timed-out recovery off the 8 m deck/,
+    ],
+    [
+      'fleet-no-span-wait-visit',
+      'web/src/fleet.ts',
+      '    if (this.allowSpanWait && this.waitingOnSpan(pose)) {',
+      '    if (false && this.allowSpanWait && this.waitingOnSpan(pose)) {',
+      /Fleet cold start on unbuilt span queues wait/,
+    ],
+    [
+      'fleet-no-span-wait-restart',
+      'web/src/fleet.ts',
+      '    if (this.allowSpanWait && this.waitingOnSpan({ x, z, heading })) {',
+      '    if (false && this.allowSpanWait && this.waitingOnSpan({ x, z, heading })) {',
+      /Fleet live place-jump onto unbuilt span waits for deck/,
+    ],
+    [
+      'fleet-no-wait-bound',
+      'web/src/fleet.ts',
+      '        if (this.roads.deckHeight(p.x, p.z) !== null || this.deckWait >= DECK_WAIT_SECONDS) {',
+      '        if (this.roads.deckHeight(p.x, p.z) !== null) {',
+      /Fleet cold start on long unbuilt span ends wait after 8 s/,
+    ],
+    [
+      'fleet-no-cold-wide-fallback',
+      'web/src/fleet.ts',
+      '      if (!this.spawned && !this.allowSpanWait) {',
+      '      if (false && !this.spawned && !this.allowSpanWait) {',
+      /Fleet cold start on long unbuilt span ends wait after 8 s/,
+    ],
+    [
+      'fleet-camera-ignores-live-wait',
+      'web/src/fleet.ts',
+      '    if (this.visitPending && (!this.spawned || this.deckWaiting)) {',
+      '    if (this.visitPending && !this.spawned) {',
+      /Fleet camera frames the waiting bridge span while spawned/,
+    ],
+  ];
+
+  const sourceCache = new Map();
+  for (const [name, file, from, to, expectMsg] of mutants) {
+    const src = sourceCache.get(file) ?? readFileSync(resolve(root, file), 'utf8');
+    sourceCache.set(file, src);
+    assert.equal(src.split(from).length, 2, `${name}: expected unique anchor in ${file}`);
+    const mutatedApi = await loadApi({ [file]: src.replace(from, to) });
+    assert.throws(
+      () => runDeckWaitTests(mutatedApi, true),
+      err => err instanceof assert.AssertionError && expectMsg.test(err.message),
+      `mutant ${name} did not fail on expected assertion`,
+    );
+    console.log(`KILLED ${name}`);
+  }
+  console.log(`PASS water-bounds-mutations: ${mutants.length} mutants killed`);
 }

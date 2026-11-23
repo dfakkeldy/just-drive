@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GARAGE, type GarageEntry } from './garage';
-import { Vehicle, type Input, type VehiclePlacement } from './vehicle';
+import { DECK_WAIT_SECONDS, Vehicle, nearestDryOnRoad, placementOnSpan, type Input, type VehiclePlacement } from './vehicle';
 import { legacyVehicle } from './ride';
 import type { Terrain, Site } from './terrain';
 import type { Roads } from './roads';
@@ -100,6 +100,10 @@ export class Fleet {
   teleportAttempts = 0;
   private visitPending: VehiclePlacement | null = null;
   private visitAccepts: ((pose: VehiclePlacement) => boolean) | undefined;
+  private visitKind: 'new-visit' | 'start-over' | 'place-jump' = 'new-visit';
+  private deckWaiting = false;
+  private deckWait = 0;
+  private allowSpanWait = true;
   /** A cold-start request remains queued until its checked placement can finish. */
   get visitQueued(): boolean { return this.visitPending !== null; }
   private visitDirty = false;
@@ -531,7 +535,24 @@ export class Fleet {
     this.refreshBodyChanges();
     const revision = this.contacts?.revision ?? 0;
     if (revision !== this.contactRevision) { this.contactRevision = revision; this.solidsChanged(); }
-    if (this.visitPending) { if (this.visitDirty) this.initializeVisit(this.visitPending, this.visitAccepts); if (this.visitPending) return; }
+    if (this.visitPending) {
+      if (this.deckWaiting) {
+        if (Number.isFinite(dt) && dt > 0) this.deckWait += Math.min(dt, 0.1);
+        const p = this.visitPending, accepts = this.visitAccepts, kind = this.visitKind;
+        if (this.roads.deckHeight(p.x, p.z) !== null || this.deckWait >= DECK_WAIT_SECONDS) {
+          this.visitPending = null; this.visitAccepts = undefined; this.visitDirty = false;
+          this.deckWaiting = false; this.deckWait = 0;
+          this.allowSpanWait = false;
+          try {
+            if (kind === 'new-visit') this.initializeVisit(p, accepts);
+            else this.restart(p.x, p.z, p.heading, kind, accepts);
+          } finally { this.allowSpanWait = true; }
+        }
+      } else if (this.visitDirty) {
+        this.initializeVisit(this.visitPending, this.visitAccepts);
+      }
+      if (this.visitPending) return;
+    }
     if (this.plan?.abortReason && this.scriptGroundDirty) {
       this.scriptGroundDirty = false;
       try { this.abort(this.plan.abortReason); } catch (err) { this.abortOnError(err); }
@@ -1274,6 +1295,7 @@ export class Fleet {
       if (all) {
         cancelledPlan = this.plan;
         this.visitPending = null; this.visitAccepts = undefined; this.visitDirty = false;
+        this.deckWaiting = false; this.deckWait = 0;
         this.plan = null; this.switching = 0; this.switchTo = null; this.folding = this.lowering = false; this.acc = 0;
         this.driven = this.members[0]; this.driven.state = 'DRIVEN'; this.handbrake = true; this.previousThrottle = 0; this.reversing = false; this.tow.resetControls();
         this.select(this.driven); this.rampDirty = this.gatesDirty = true; this.zoneReady = false;
@@ -1284,24 +1306,73 @@ export class Fleet {
     (cancelledPlan as Plan | null)?.onSettled?.(false);
     return true;
   }
+  /** True when a requested Fleet start lies on an unbuilt modern bridge span over unloaded or wet ground. */
+  private waitingOnSpan(pose: VehiclePlacement): boolean {
+    const b = this.truck.bounds, reach = this.members[0].entry.spec.envelope.reach;
+    if (b && (pose.x - reach < b[0] || pose.x + reach > b[2] || pose.z - reach < b[1] || pose.z + reach > b[3])) return false;
+    if (this.roads.deckHeight(pose.x, pose.z) !== null || !placementOnSpan(this.roads, pose.x, pose.z)) return false;
+    const h = this.ground(pose.x, pose.z);
+    if (h === null || h <= this.seaLevel + .08) return true;
+    const surface = this.terrain.surfaceAt(pose.x, pose.z);
+    const coverClass = this.terrain.coverAt?.(pose.x, pose.z) ?? 0;
+    const slope = coverClass === WATER_COVER_CLASS ? localGroundSlope(pose.x, pose.z, this.ground) : 0;
+    return !isDryGround({ ground: h, surface, onDeck: surface?.deck === true, seaLevel: this.seaLevel, coverClass, slope });
+  }
   startVisit(x: number, z: number, heading: number, accepts?: (pose: VehiclePlacement) => boolean): boolean { if ([x,z,heading].every(Number.isFinite)) return this.initializeVisit({ x, z, heading }, accepts); this.message = 'Invalid starting position'; return false; }
   private initializeVisit(pose: VehiclePlacement, accepts?: (pose: VehiclePlacement) => boolean): boolean {
     this.visitPending = null; this.visitAccepts = undefined; this.visitDirty = false;
-    if (!this.teleport('new-visit', pose, accepts)) { if (!this.spawned) { this.visitPending = { ...pose }; this.visitAccepts = accepts; } return false; }
+    this.deckWaiting = false; this.deckWait = 0;
+    if (this.allowSpanWait && this.waitingOnSpan(pose)) {
+      this.visitPending = { ...pose }; this.visitAccepts = accepts; this.visitKind = 'new-visit';
+      this.deckWaiting = true; this.message = 'Waiting for bridge deck'; return false;
+    }
+    if (!this.teleport('new-visit', pose, accepts)) {
+      if (!this.spawned && !this.allowSpanWait) {
+        const hit = this.roads.nearest(pose.x, pose.z, 8000, r => r.kind <= 3 && !r.bridge)
+          ?? this.roads.nearest(pose.x, pose.z, 8000, r => r.kind <= 5 && !r.bridge);
+        const dry = hit ? nearestDryOnRoad(hit, (px, pz) => {
+          const h = this.ground(px, pz);
+          if (h === null || h <= this.seaLevel + .08) return false;
+          const surface = this.terrain.surfaceAt(px, pz);
+          const onDeck = this.roads.deckHeight(px, pz) !== null || surface?.deck === true;
+          const coverClass = this.terrain.coverAt?.(px, pz) ?? 0;
+          const slope = coverClass === WATER_COVER_CLASS ? localGroundSlope(px, pz, this.ground) : 0;
+          return isDryGround({ ground: h, surface, onDeck, seaLevel: this.seaLevel, coverClass, slope });
+        }) : null;
+        if (dry && this.teleport('new-visit', dry)) {
+          this.message = 'Handbrake on'; return true;
+        }
+      }
+      if (!this.spawned) { this.visitPending = { ...pose }; this.visitAccepts = accepts; this.visitKind = 'new-visit'; }
+      return false;
+    }
     this.message = 'Handbrake on'; return true;
   }
   /** Start-over and place jumps discard the old visit only after the complete new assembly is valid. */
   restart(x: number, z: number, heading: number, kind: 'start-over' | 'place-jump' = 'start-over', accepts?: (pose: VehiclePlacement) => boolean): boolean {
+    if (![x, z, heading].every(Number.isFinite)) { this.message = 'Invalid destination'; return false; }
+    if (this.allowSpanWait && this.waitingOnSpan({ x, z, heading })) {
+      this.visitPending = { x, z, heading }; this.visitAccepts = accepts; this.visitKind = kind;
+      this.visitDirty = false; this.deckWaiting = true; this.deckWait = 0;
+      this.message = 'Waiting for bridge deck'; return false;
+    }
     const recovered = this.members.filter(m => m.id !== 'truck' && m.state !== 'STRAPPED' && (m.vehicle.y <= this.seaLevel || m.vehicle.atEdge || !this.inside(m.vehicle)));
     if (!this.teleport(kind, { x, z, heading }, accepts)) return false;
     this.message = recovered.length ? 'Recovered to trailer: ' + recovered.map(m => m.entry.name).join(', ') : 'All vehicles back on the trailer';
     return true;
   }
   private inside(v: VehiclePlacement): boolean { const b = this.truck.bounds; return !b || v.x >= b[0] && v.x <= b[2] && v.z >= b[1] && v.z <= b[3]; }
-  respawn(): void { if (this.busy) { this.message = 'Finish loading or use Start over to recover the whole rig'; return; } if (this.teleport('road-reset')) this.message = `Back on the road: ${this.driven.entry.name}`; }
+  respawn(): void {
+    if (this.deckWaiting && this.spawned) {
+      this.visitPending = null; this.visitAccepts = undefined; this.visitDirty = false;
+      this.deckWaiting = false; this.deckWait = 0;
+    }
+    if (this.busy) { this.message = 'Finish loading or use Start over to recover the whole rig'; return; }
+    if (this.teleport('road-reset')) this.message = `Back on the road: ${this.driven.entry.name}`;
+  }
   /** A one-second move between rigs, or a wide view of a loading sequence. No input reaches physics during it. */
   camera(camera: THREE.PerspectiveCamera, dt: number, view: 'chase' | 'seat' = 'chase'): boolean {
-    if (this.visitPending && !this.spawned) { const p = this.visitPending, h = this.ground(p.x,p.z); camera.position.set(p.x+10,(h??Math.max(5,this.truck.y))+8,p.z+12); camera.lookAt(p.x,(h??0)+1,p.z); return true; }
+    if (this.visitPending && (!this.spawned || this.deckWaiting)) { const p = this.visitPending, h = this.ground(p.x,p.z); camera.position.set(p.x+10,(h??Math.max(5,this.truck.y))+8,p.z+12); camera.lookAt(p.x,(h??0)+1,p.z); return true; }
     if (this.switching && this.switchTo) {
       if (!this.switchCameraReady) {
         this.switchCameraReady = true; this.switchEyeFrom.copy(camera.position); this.switchRotationFrom.copy(camera.quaternion); this.switchFovFrom = camera.fov;

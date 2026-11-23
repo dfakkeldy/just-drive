@@ -2268,7 +2268,7 @@ const title = started ? null : createTitle(touchDevice, () => {
 if (__PUBLIC_APP__) watchGameVersion(SITE.brand === 'just', () => !hasStarted && document.getElementById('title')?.hidden === false && !document.getElementById('settings')?.classList.contains('open') && document.getElementById('titleLegal')?.hidden !== false && !document.activeElement?.matches('input,textarea,select'));
 // A ride-along day says so on the start card.
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
-startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s); if (placed) { airportDrag?.reset(); mountainHint?.clearActive(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
+startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s) || !!fleet?.visitQueued; if (placed) { airportDrag?.reset(); mountainHint?.clearActive(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
 const stuntPlaces = testPark ? testParkPlaces(testPark, manifest.village)
@@ -2279,7 +2279,7 @@ function resetToRoad(): void {
   if (fleet) fleet.respawn(); else vehicle.respawn();
 }
 function jumpToPlace(x: number, z: number, heading: number): void {
-  if (fleet && !fleet.restart(x, z, heading, 'place-jump')) return;
+  if (fleet && !fleet.restart(x, z, heading, 'place-jump') && !fleet.visitQueued) return;
   let placed = !!fleet;
   multiplayer?.reset();
   if (!fleet) placed = vehicle.restart(x, z, heading);
