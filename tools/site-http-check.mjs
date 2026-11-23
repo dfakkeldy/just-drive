@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {AREAS} from '../web/src/area.ts';
 const [base,site,out]=process.argv.slice(2),table=[];
 const sha=b=>createHash('sha256').update(b).digest('hex');
-const request=(host,path,extra={})=>new Promise((resolve,reject)=>{http.get(base+path,{headers:{Host:host,...extra}},response=>{const chunks=[];response.on('data',b=>chunks.push(b));response.on('end',()=>resolve({status:response.statusCode,headers:response.headers,body:Buffer.concat(chunks)}));}).on('error',reject);});
+const request=(host,path,extra={},method='GET')=>new Promise((resolve,reject)=>{http.request(base+path,{method,headers:{Host:host,...extra}},response=>{const chunks=[];response.on('data',b=>chunks.push(b));response.on('end',()=>resolve({status:response.statusCode,headers:response.headers,body:Buffer.concat(chunks)}));}).on('error',reject).end();});
 const paths=['/sugar-camp-quarry','/','/mabou','/mabou/','/mabou-1884','/mabou-1884/','/mabou-1885','/mabou-1884/x','/judique-1884','/judique-1884/','/judique','/nowhere','/?area=judique','/?utm_source=x','/app.js','/sw.js','/version.json','/version-just.json','/mp/v1/mabou/world','/about','/about/','/help','/help/'];
 for(const host of ['mmm.fakkeldy.ca','justdrive.fakkeldy.ca','localhost'])for(const path of [...paths,...(host==='justdrive.fakkeldy.ca'?AREAS.map(a=>'/'+a.id):[])]){
  const asked=path+(host==='localhost'?(path.includes('?')?'&':'?')+'site=just':'');const r=await request(host,asked),just=host!=='mmm.fakkeldy.ca',u=new URL(path,'https://example.test');
@@ -45,6 +45,21 @@ for(const host of ['mmm.fakkeldy.ca','justdrive.fakkeldy.ca','localhost']){
  const bare=await request(host,'/listen');assert.ok([301,307,308].includes(bare.status)&&new URL(bare.headers.location,'http://'+host).pathname==='/listen/',host+'/listen goes to /listen/ ('+bare.status+' '+bare.headers.location+')');
  const picture=await request(host,'/listen/icon-512.png');assert.equal(picture.status,200,host+' lock-screen picture');assert.equal(sha(picture.body),sha(readFileSync(site+'/offline/icons/icon-512.png')));
  table.push({host,path:'/listen/',status:page.status,bytes:page.body.length,sha256:sha(page.body),title:page.body.toString().match(/<title>([^<]+)<\/title>/)?.[1]??'',cache:page.headers['cache-control']??'',location:''});
+}
+// Short link for River Denys Mountain church (deploy/_redirects): served by static assets with no Worker run.
+for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(const path of ['/rdmc','/rdmc/'])for(const method of ['GET','HEAD']){
+ const r=await request(host,path,{},method);assert.equal(r.status,302,`${method} ${host}${path}`);
+ const dest=new URL(r.headers.location,'https://'+host);
+ assert.equal(dest.hostname,'justdrive.fakkeldy.ca',`${method} ${host}${path} host`);
+ assert.equal(dest.pathname+dest.search,'/judique?driveAt=630770.2,5080667.56,84',`${method} ${host}${path} target`);
+ assert.equal(r.headers['cache-control'],undefined,`${method} ${host}${path} served by static assets, not Worker no-store`);
+ if(host!=='justdrive.fakkeldy.ca')assert.equal(r.headers.location,'https://justdrive.fakkeldy.ca/judique?driveAt=630770.2,5080667.56,84',`${method} ${host}${path} cross-host location`);
+ if(method==='GET')table.push({host,path,status:r.status,bytes:r.body.length,sha256:sha(r.body),title:'',cache:r.headers['cache-control']??'',location:r.headers.location??''});
+}
+{
+ const r=await request('justdrive.fakkeldy.ca','/judique?driveAt=630770.2,5080667.56,84');
+ assert.equal(r.status,200,'justdrive church redirect target');
+ assert.match(r.body.toString(),/<title>Just Drive: Judique<\/title>/);
 }
 // A repeat visit sends the page's ETag back. A known place may answer 304; a place that does not exist
 // must answer 404 WITH the page that lists the places, never an empty 404.
