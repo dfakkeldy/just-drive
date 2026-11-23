@@ -951,7 +951,7 @@
     {
      "file": "areas/porthood/paved/index.json",
      "bytes": 1431,
-     "sha256": "62d028a3c6e9ccd6bf3f22e7b5ad8cb08af41013e67432ed1cf153d8575d88fd"
+     "sha256": "4102c4481a872d796e3bed0bb3bd9623ba2c284e5b66df0bc890411b7ab28ce9"
     }
    ],
    "inputs": [
@@ -1340,7 +1340,7 @@
     {
      "file": "areas/westbay/paved/index.json",
      "bytes": 1459,
-     "sha256": "4256332c6de735765c26249762ec4819d31ff77ce74dd936fa4398e7f04e8253"
+     "sha256": "c1b269f850d84d24b650e0ed4922ba7cad98580258137e409181ce5ec4907ad1"
     }
    ],
    "inputs": [

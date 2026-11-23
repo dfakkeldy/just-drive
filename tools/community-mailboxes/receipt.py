@@ -139,11 +139,37 @@ def fixture():
                 raise AssertionError(f'Accepted invalid state: {label}')
 
 
+        # A later delta (for example, Port Hood large-building service drops) may update a pinned props file.
+        p_later = compact({'mailboxes': [], 'communityBoxes': [], 'serviceDrops': [1]})
+        later = [{'files': [{'file': 'areas/porthood/props.json', 'before': sha(p_before), 'sha256': sha(p_later)}]}]
+        lay(m_before, p_later, man_before)
+        assert state(root, report, later) == 'before'
+        lay(m_before, b'{"other":1}\n', man_before)
+        try:
+            state(root, report, later)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError('Accepted unknown bytes with later delta')
+
+
+# Port Hood large buildings (Delta 1, grok-bots#1341) add 3 service drops to areas/porthood/props.json
+# without changing mailboxes or communityBoxes. Keep verify() strict on the pre-Delta-1 bytes so the
+# pre-Delta-1 community-mailboxes delta cannot overwrite those service drops.
+DELTA1_PORTHOOD_PROPS = {
+    'files': [{
+        'file': 'areas/porthood/props.json',
+        'before': '19d6193cee0ace6c930ee05ca714b320b457997431e5451595fdfc15153ad94e',
+        'sha256': 'fd8cbaf51c8b533147f5dbaa9f44983aa1ec2737f1827b0eba83ea78e49669c0',
+    }],
+}
+
+
 def land(baked):
     fixture()
     report = json.loads(RECEIPT.read_text())
     wharf = HERE.parent / 'mabou-wharf' / 'roads.json'
-    later = [json.loads(wharf.read_text())] if wharf.exists() else []
+    later = ([json.loads(wharf.read_text())] if wharf.exists() else []) + [DELTA1_PORTHOOD_PROPS]
     mode = state(baked, report, later)
     print(f'PASS community mailboxes land is {mode} ({len(report["files"])} props files and terrain manifest props key); fixture refuses every partial install and unknown bytes')
 
