@@ -185,14 +185,14 @@ if(process.argv.includes('--mutations')){
   const text=source(path);assert.equal(text.split(a).length,2,'mutant anchor: '+label);
   await assert.rejects(()=>all({[path]:text.replace(a,b)},true),{name:'AssertionError'},'survived: '+label);console.log('KILLED',label);killed++;
  }
- // The pack guard, the cell and determinism live in tools/far-pack.mjs: mutate a copy beside it.
+ // The pack guard, the cell and determinism live in tools/far-pack.mjs: mutate a copy in scratch.
  for(const [label,a,b] of [
   ['coarse level written into data/baked',"if(!dir.startsWith(work))throw","if(false)throw"],
   ['coarse cell 960',"cell:1920,block:1920","cell:960,block:1920"],
   ['coast interpolated from the sea corner',"const [e,n]=at(lo);return [e,n,0];","const t=dry[2]/(dry[2]-wet[2]);const [e,n]=at(t);return [e,n,0];"],
  ]){
   const text=source('tools/far-pack.mjs');assert.equal(text.split(a).length,2,'mutant anchor: '+label);
-  const copy=root+'tools/.far-pack-mutant.mjs';writeFileSync(copy,text.replace(a,b));
+  const copyDir=realpathSync(mkdtempSync(join(tmpdir(),'far-pack-mutant-'))),copy=join(copyDir,'far-pack-mutant.mjs');writeFileSync(copy,text.replace(a,b));
   try{const m=await import(copy+'?'+killed);
    assert.throws(()=>{
     const meta={root:[-3840,-3840,3840,3840],anchor:[0,0],origin:[0,0],radius:20000},height=(e,n)=>{const r=Math.hypot(e,n);return r<12000?Math.max(-.5,200-r/50):-.5;};
@@ -205,7 +205,7 @@ if(process.argv.includes('--mutations')){
      let refused=false;try{m.addCoarseLevel(data+'/baked/terrain',data);}catch(e){refused=/only into a task folder/.test(e.message);}
      assert.ok(refused,'refuses data/baked');}finally{rmSync(dir,{recursive:true});}
    },{name:'AssertionError'});
-  }finally{rmSync(copy);}
+  }finally{rmSync(copyDir,{recursive:true,force:true});}
   console.log('KILLED',label);killed++;
  }
  console.log(`PASS mutations: ${killed} killed`);

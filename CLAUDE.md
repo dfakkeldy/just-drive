@@ -37,7 +37,7 @@ that is not live yet, follow "Checks on a land that is not live yet" in
   machine), then the touched feature's browser rows with `--only <rows>`.
   `--list` shows what will run.
 - A check's exit code is its verdict. Do not count PASS lines.
-- CI (`.github/workflows/ci.yml`) runs `tools/check-all.sh --ci --full` in a
+- CI (`.github/workflows/ci.yml`) runs `tools/check-all.sh --ci --full --jobs 4` in a
   clean Ubuntu clone with no `data/`. Rows that need the land or a Mac SKIP
   there, so a green CI does not prove those rows.
 - `tools/checks-hosts.tsv` says which rows need a Mac. `tools/remote-check.sh`

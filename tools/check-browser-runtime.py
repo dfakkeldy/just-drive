@@ -30,6 +30,33 @@ CLONE=['cp','-c'] if sys.platform=='darwin' else ['cp','--reflink=auto']
 BASE={k:v for k,v in os.environ.items() if k not in ['WEB_PORT','CDP_PORT','SOFTWARE_GL','MMM_CHECK_SUPERVISOR','MMM_CHECK_PORTS_LOCKED','CHROMIUM_BIN','MMM_BROWSER_SLOTS','MMM_BROWSER_WAIT','MMM_BROWSER_OVERFLOW']}
 parser=argparse.ArgumentParser(); parser.add_argument('--ownership',action='store_true'); parser.add_argument('--slots',action='store_true'); parser.add_argument('--minute',action='store_true'); parser.add_argument('--listeners',action='store_true'); parser.add_argument('--kill-everything',action='store_true')
 args=parser.parse_args(); trees=[]; jobs=[]
+# Run finally cleanup on SIGTERM/SIGINT (stopping detached stand-in jobs and removing temp worktrees).
+_defer = 0
+_pending_sig = None
+def _begin_stop(sig):
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    raise SystemExit(128 + sig)
+def _on_stop(sig, _frame):
+    global _pending_sig
+    if _defer:
+        if _pending_sig is None: _pending_sig = sig
+        return
+    _begin_stop(sig)
+class _defer_stop:
+    def __enter__(self):
+        global _defer
+        self.main = threading.current_thread() is threading.main_thread()
+        if self.main: _defer += 1
+    def __exit__(self, *exc):
+        global _defer, _pending_sig
+        if not self.main: return
+        _defer -= 1
+        if _defer == 0 and _pending_sig is not None and exc[0] is None:
+            sig, _pending_sig = _pending_sig, None
+            _begin_stop(sig)
+signal.signal(signal.SIGTERM, _on_stop)
+signal.signal(signal.SIGINT, _on_stop)
 
 
 def until(condition, seconds=12):
@@ -73,9 +100,11 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
         if barrier:barrier.wait()
         command=['/bin/bash',str(root/'tools'/script),*(['--phone'] if script=='check-budget.sh' else ['600','400'])]
         if ignore_signal:command=['/bin/bash','-c',f'trap "" {ignore_signal}; exec "$@"','ignored-entry',*command]
-        with log.open('w') as stream:
-            process=subprocess.Popen(command,cwd=root,env=environment,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
-        job={'process':process,'state':state,'log':log,'name':name};jobs.append(job);return job
+        with _defer_stop():
+            with log.open('w') as stream:
+                process=subprocess.Popen(command,cwd=root,env=environment,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
+            job={'process':process,'state':state,'log':log,'name':name};jobs.append(job)
+        return job
     def ready(job):return load(job['state'])
     def finish(job, code=0):
         result=job['process'].wait(timeout=15)
@@ -133,9 +162,11 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
         pair=free_pair();marker=tmp/('race-server-'+str(pair[0]))
         job=start('foreign-race-'+str(pair[0]),root=root,ports=pair,env={'MMM_PROOF_DELAY_SERVER':str(marker),'EXPECT_CHECKOUT':'checkout-alpha'})
         until(lambda:marker.exists())
-        foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'server',str(pair[0]),str(ROOT)],env=BASE,stdout=subprocess.DEVNULL,start_new_session=True)
-        saved=bp.identity(foreign.pid)
+        foreign=saved=None
         try:
+            with _defer_stop():
+                foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'server',str(pair[0]),str(ROOT)],env=BASE,stdout=subprocess.DEVNULL,start_new_session=True)
+                saved=bp.identity(foreign.pid)
             def browser_up():
                 try:
                     with urllib.request.urlopen(f'http://127.0.0.1:{pair[1]}/json/version',timeout=.5):return True
@@ -147,7 +178,10 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             assert bool(ready(job))==mutant,job['log'].read_text()
             stop(job);assert bp.alive(saved) is True
             print('PASS foreign-after-probe: '+('always-owned mutant detected' if mutant else 'foreign readiness rejected; listener survives cleanup'),flush=True)
-        finally:bp.signal_pid(saved,signal.SIGTERM);foreign.wait(timeout=3)
+        finally:
+            if saved: bp.signal_pid(saved,signal.SIGTERM)
+            elif foreign and foreign.poll() is None: foreign.terminate()
+            if foreign: foreign.wait(timeout=3)
 
     try:
         if args.kill_everything:
@@ -170,8 +204,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             if args.listeners:raise SystemExit(0)
             race_ports=free_pair()
             barrier=threading.Barrier(2)
-            with concurrent.futures.ThreadPoolExecutor(2) as pool:
-                launched=list(pool.map(lambda n:start('race-'+str(n),ports=race_ports,hold=1500,barrier=barrier),range(2)))
+            with _defer_stop():
+                with concurrent.futures.ThreadPoolExecutor(2) as pool:
+                    launched=list(pool.map(lambda n:start('race-'+str(n),ports=race_ports,hold=1500,barrier=barrier),range(2)))
             results=[j['process'].wait(timeout=15) for j in launched]
             assert sorted(results)==[0,2],[(r,j['log'].read_text()) for r,j in zip(results,launched)]
             assert any('PROBE browser survived to end' in j['log'].read_text() for j in launched)
@@ -188,7 +223,8 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
                     suffix+=1
                 used_ports.update(pair)
                 label=tree.name
-                subprocess.run(['git','worktree','add','--detach',str(tree),'HEAD'],cwd=ROOT,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);trees.append(tree)
+                trees.append(tree)
+                subprocess.run(['git','worktree','add','--detach',str(tree),'HEAD'],cwd=ROOT,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
                 for source in (ROOT/'tools').rglob('*'):
                     if source.is_file() and not source.is_symlink() and '__pycache__' not in source.parts:
                         dest=tree/source.relative_to(ROOT);dest.parent.mkdir(exist_ok=True,parents=True)
@@ -199,8 +235,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
                 (tree/'web/node_modules').symlink_to((ROOT/'web/node_modules').resolve())
                 fixture=tree/'tools/check-ports-probe.html';fixture.write_text(fixture.read_text().replace('checkout-alpha',label));roots.append(tree)
             barrier=threading.Barrier(2)
-            with concurrent.futures.ThreadPoolExecutor(2) as pool:
-                launched=list(pool.map(lambda tree:start(tree.name,ports=None,root=tree,script='props-shots.sh',hold=500,env={'EXPECT_CHECKOUT':tree.name},barrier=barrier),roots))
+            with _defer_stop():
+                with concurrent.futures.ThreadPoolExecutor(2) as pool:
+                    launched=list(pool.map(lambda tree:start(tree.name,ports=None,root=tree,script='props-shots.sh',hold=500,env={'EXPECT_CHECKOUT':tree.name},barrier=barrier),roots))
             default_ports=[]
             for job,tree in zip(launched,roots):
                 finish(job);text=job['log'].read_text();assert f'own checkout={tree.name}' in text,text
@@ -218,9 +255,11 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
 
             profile=tmp/'foreign';profile.mkdir()
             foreign_port=free_port()
-            foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'--remote-debugging-port='+str(foreign_port),'--user-data-dir='+str(profile)],stdout=subprocess.DEVNULL,start_new_session=True)
-            saved=bp.identity(foreign.pid)
+            foreign=saved=None
             try:
+                with _defer_stop():
+                    foreign=subprocess.Popen([str(ROOT/'tools/check-browser-standin.py'),'--remote-debugging-port='+str(foreign_port),'--user-data-dir='+str(profile)],stdout=subprocess.DEVNULL,start_new_session=True)
+                    saved=bp.identity(foreign.pid)
                 def version():
                     try:
                         with urllib.request.urlopen(f'http://127.0.0.1:{foreign_port}/json/version',timeout=.5) as reply:return reply.read()
@@ -229,7 +268,10 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
                 job=start('foreign-refusal',ports=(free_port(),foreign_port));finish(job,2)
                 assert version()==before and bp.alive(saved) is True
                 print('PASS foreign browser stand-in: refused exit 2; endpoint unchanged, PID alive',flush=True)
-            finally:bp.signal_pid(saved,signal.SIGTERM);foreign.wait(timeout=3)
+            finally:
+                if saved: bp.signal_pid(saved,signal.SIGTERM)
+                elif foreign and foreign.poll() is None: foreign.terminate()
+                if foreign: foreign.wait(timeout=3)
 
             for mode in ['TERM','INT','KILL','GROUP-KILL','KEEPER-KILL','INT-IGNORED','TERM-IGNORED']:
                 job=start('kill-'+mode,slot=1,ignore_signal=mode.split('-')[0] if mode.endswith('-IGNORED') else None);until(lambda:ready(job))
@@ -254,10 +296,23 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             script=tmp/'stdio.sh'
             script.write_text('set -euo pipefail\nROOT='+shlex.quote(str(ROOT))+'\nsource "$ROOT/tools/browser.sh"\nbrowser_ports "$@"\nstart_check 600 400\nrun_check node --input-type=module <<\'JS\'\nconsole.log("PASS heredoc stdin preserved");\nconsole.error("PASS stderr preserved");\nJS\nrun_check node "$ROOT/tools/check-cdp.mjs" --late\n')
             environment={**BASE,'WEB_PORT':str(free_port()),'CDP_PORT':str(free_port()),'MMM_CHECK_STANDIN':'1','CHROMIUM_BIN':str(ROOT/'tools/check-browser-standin.py'),'MMM_BROWSER_SLOTS':'0'}
-            result=subprocess.run(['/bin/bash',str(script)],env=environment,capture_output=True,text=True,timeout=20,start_new_session=True)
-            assert result.returncode==1,(result.returncode,result.stdout,result.stderr)
-            assert 'PASS heredoc stdin preserved' in result.stdout and 'PASS the page settled' in result.stdout
-            assert 'PASS stderr preserved' in result.stderr and 'check-cdp.mjs: page error: late fixture page error' in result.stderr
+            stdio_proc=None
+            try:
+                with _defer_stop():
+                    stdio_proc=subprocess.Popen(['/bin/bash',str(script)],env=environment,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+                out_stdio,err_stdio=stdio_proc.communicate(timeout=20)
+            finally:
+                if stdio_proc and stdio_proc.poll() is None:
+                    try: os.killpg(stdio_proc.pid, signal.SIGTERM)
+                    except (ProcessLookupError, PermissionError): pass
+                    try: stdio_proc.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        try: os.killpg(stdio_proc.pid, signal.SIGKILL)
+                        except (ProcessLookupError, PermissionError): pass
+                        stdio_proc.wait()
+            assert stdio_proc.returncode==1,(stdio_proc.returncode,out_stdio,err_stdio)
+            assert 'PASS heredoc stdin preserved' in out_stdio and 'PASS the page settled' in out_stdio
+            assert 'PASS stderr preserved' in err_stdio and 'check-cdp.mjs: page error: late fixture page error' in err_stdio
             print('PASS supervised heredoc stdin/stderr preserved; late page error prints check/reason and exits 1',flush=True)
 
             stream_script=tmp/'stream.sh'
@@ -266,7 +321,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             stream_script.write_text('set -euo pipefail\nROOT='+shlex.quote(str(ROOT))+'\nsource "$ROOT/tools/browser.sh"\nbrowser_ports "$@"\nstart_check 600 400\npython3 - "$BROWSER_SLOT_LEASE" "$MMM_PROOF_STATE" <<\'PY_STATE\'\nimport json,pathlib,sys\np=pathlib.Path(sys.argv[2]);v=json.loads((pathlib.Path(sys.argv[1])/"ready.json").read_text());p.write_text(json.dumps(v))\nPY_STATE\nrun_check python3 '+shlex.quote(str(worker))+'\n')
             pair=free_pair();state=tmp/'stream-state.json'
             env={**BASE,'WEB_PORT':str(pair[0]),'CDP_PORT':str(pair[1]),'MMM_CHECK_STANDIN':'1','CHROMIUM_BIN':str(ROOT/'tools/check-browser-standin.py'),'MMM_BROWSER_SLOTS':'0','MMM_PROOF_STATE':str(state),'OUT':str(tmp)}
-            stream=subprocess.Popen(['/bin/bash',str(stream_script)],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+            with _defer_stop():
+                stream=subprocess.Popen(['/bin/bash',str(stream_script)],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+                jobs.append({'process':stream,'state':state,'log':tmp/'stream.log','name':'stream'})
             captured=[];errors=[]
             def collect(pipe,dest):
                 for line in pipe:dest.append((time.monotonic(),line))
@@ -283,8 +340,11 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             assert any('at 3' in line for _,line in captured) and any('err .6' in line for _,line in errors)
             print(f'PASS streaming: .6s line visible at {visible:.2f}s; pre-TERM stdout/stderr retained after TERM at 4s',flush=True)
 
-            child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True);saved=bp.identity(child.pid)
+            child=saved=None
             try:
+                with _defer_stop():
+                    child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True)
+                    saved=bp.identity(child.pid)
                 reused={**saved,'start':[0,0] if isinstance(saved['start'],list) else '-1'}
                 assert bp.alive(reused) is False and not bp.signal_pid(reused,signal.SIGKILL) and bp.alive(saved) is True
                 spec=importlib.util.spec_from_file_location('slot_test',ROOT/'tools/browser-slots.py');slots=importlib.util.module_from_spec(spec);spec.loader.exec_module(slots)
@@ -305,7 +365,10 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
                 finally:bp.info=old
                 assert bp.alive(saved) is True
                 print('PASS PID reuse: stale lease reclaimed; reused PID never signalled; unknown identity stays alive and cannot release its lease',flush=True)
-            finally:bp.signal_pid(saved,signal.SIGTERM);child.wait(timeout=3)
+            finally:
+                if saved: bp.signal_pid(saved,signal.SIGTERM)
+                elif child and child.poll() is None: child.terminate()
+                if child: child.wait(timeout=3)
 
             kill_everything('automatic');kill_everything('manual')
 
@@ -351,5 +414,23 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
         print('PASS all requested stand-in proofs',flush=True)
     finally:
         for job in jobs:
-            if job['process'].poll() is None:stop(job)
-        for tree in trees:subprocess.run(['git','worktree','remove','--force',str(tree)],cwd=ROOT,check=True,stdout=subprocess.DEVNULL)
+            if job['process'].poll() is None: stop(job)
+        if trees:
+            common = Path(subprocess.check_output(['git', 'rev-parse', '--git-common-dir'], cwd=ROOT, text=True).strip())
+            if not common.is_absolute(): common = (ROOT / common).resolve()
+            wt_admin = common / 'worktrees'
+            for tree in trees:
+                removed = subprocess.run(['git', 'worktree', 'remove', '--force', '--force', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if removed.returncode != 0:
+                    subprocess.run(['git', 'worktree', 'unlock', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    removed = subprocess.run(['git', 'worktree', 'remove', '--force', '--force', str(tree)], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if removed.returncode != 0:
+                    shutil.rmtree(tree, ignore_errors=True)
+                    if wt_admin.is_dir():
+                        tree_real = os.path.realpath(tree)
+                        for entry in wt_admin.iterdir():
+                            try: raw_target = (entry / 'gitdir').read_text().strip()
+                            except OSError: continue
+                            target = os.path.realpath(entry / raw_target)
+                            if target == tree_real or target.startswith(tree_real + os.sep):
+                                shutil.rmtree(entry, ignore_errors=True)
