@@ -249,7 +249,7 @@ export class Roads {
     let mesh: THREE.Mesh;
     if (road.ponyTruss) {
       this.periodMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      mesh = new THREE.Mesh(buildPonyTrussBridge(p, y0, y1, len), this.periodMat);
+      mesh = new THREE.Mesh(buildPonyTrussBridge(p, y0, y1, len, road.halfWidth + 0.9), this.periodMat);
       mesh.name = 'pony-truss-' + road.id;
       mesh.castShadow = mesh.receiveShadow = true;
     } else {

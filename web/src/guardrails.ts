@@ -8,7 +8,7 @@ import { surveyedRailDamage, damageShape, DENT } from './guardrail-damage';
 import { railAccess } from './guardrail-access';
 import { planRailSteps, railPoint, roadLength, nearCoast, railPosts, railMetres, RAIL, type RailSpan } from './guardrail-rules';
 import { LOOK, RailMesher, railMaterial } from './guardrail-look';
-import { PONY_TRUSS, ponyTrussSpan, type PonyTrussSpan } from './november-bridges';
+import { PONY_TRUSS, ponyTrussSpan, ponyTrussVerticalClip, type PonyTrussSpan } from './november-bridges';
 import { pushOut, type Pushable, type Solid } from './parked';
 
 interface Chunk { road: Road; start: number; end: number; x: number; z: number; revision: number; mesh: THREE.Mesh | null; spans: RailSpan[]; solids: Solid[]; shape?: string; low?: boolean }
@@ -26,6 +26,11 @@ export class Guardrails {
   readonly group = new THREE.Group();
   private readonly chunks: Chunk[] = [];
   private readonly bridgeSpans: PonyTrussSpan[] = [];
+  private readonly bridgeClip: [number, number, number] = [0, 0, 0];
+  private readonly trimmedBridgeSolids: [Solid, Solid] = [
+    { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
+    { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
+  ];
   private readonly cells = new Map<number, Chunk[]>();
   private readonly materials: (THREE.MeshLambertMaterial | undefined)[] = [];
   readonly audit = { planned: 0, pending: 0, samples: 0, queries: 0 };
@@ -285,7 +290,7 @@ export class Guardrails {
     }
     return pending ? 'pending' : 'clear';
   }
-  /** Check horizontal bounds and vertical overlap with the built truss before pushing against pony-truss rails. */
+  /** Check horizontal bounds and exact inclined-truss vertical overlap before pushing against pony-truss rails. */
   private pushBridge(car: Pushable, dt: number): void {
     const reach = (car.spec?.envelope.reach ?? 3.5) + (car.spec?.envelope.radius ?? 1.4);
     const carHeight = car.spec?.height ?? 1.8;
@@ -297,10 +302,28 @@ export class Guardrails {
       const across = -dx * b.uz + dz * b.ux;
       if (Math.abs(across) > PONY_TRUSS.outerHalf + reach) continue;
       if (car.y !== undefined) {
-        const t = Math.max(0, Math.min(1, along / b.span));
-        const deckY = this.roads.bridgeElevation(b.roadId, t) ?? this.roads.deckHeight(car.x, car.z);
-        if (deckY === null) continue;
-        if (car.y + carHeight < deckY - 0.15 || car.y > deckY + b.height + PONY_TRUSS.chordSize / 2) continue;
+        let y0 = this.roads.bridgeElevation(b.roadId, 0);
+        let y1 = this.roads.bridgeElevation(b.roadId, 1);
+        if (y0 === null || y1 === null) {
+          this.roads.deckHeight(b.ax + b.ux * (b.span * 0.5), b.az + b.uz * (b.span * 0.5));
+          y0 = this.roads.bridgeElevation(b.roadId, 0);
+          y1 = this.roads.bridgeElevation(b.roadId, 1);
+        }
+        if (y0 === null || y1 === null) continue;
+        if (!ponyTrussVerticalClip(b, y0, y1, car.y, carHeight, this.bridgeClip)) continue;
+        const [sLeft, sRight, railActive] = this.bridgeClip;
+        if (sLeft > 0 || sRight < b.span || !railActive) {
+          const midS = (sLeft + sRight) * 0.5, half = (sRight - sLeft) * 0.5;
+          const mx = b.ax + b.ux * midS, mz = b.az + b.uz * midS;
+          const inner = railActive ? PONY_TRUSS.railInner : PONY_TRUSS.clearHalf;
+          const centre = (inner + PONY_TRUSS.outerHalf) * 0.5;
+          const halfWidth = (PONY_TRUSS.outerHalf - inner) * 0.5;
+          const left = this.trimmedBridgeSolids[0], right = this.trimmedBridgeSolids[1];
+          left.x = mx + b.uz * centre; left.z = mz - b.ux * centre; left.half = half; left.halfWidth = halfWidth; left.heading = b.heading;
+          right.x = mx - b.uz * centre; right.z = mz + b.ux * centre; right.half = half; right.halfWidth = halfWidth; right.heading = b.heading;
+          pushOut(car, this.trimmedBridgeSolids, true, dt);
+          continue;
+        }
       }
       pushOut(car, b.solids, true, dt);
     }

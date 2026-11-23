@@ -35,7 +35,7 @@ export const PONY_TRUSS = {
   deckThickness: 0.26,
 } as const;
 
-/** Span geometry and side-rail colliders for one pony-truss bridge, including truss height for vertical overlap checks. */
+/** Span geometry and side-rail colliders for one pony-truss bridge, including panel/truss dimensions for vertical clipping. */
 export interface PonyTrussSpan {
   readonly roadId: number;
   readonly ax: number;
@@ -43,7 +43,9 @@ export interface PonyTrussSpan {
   readonly ux: number;
   readonly uz: number;
   readonly span: number;
+  readonly panel: number;
   readonly height: number;
+  readonly heading: number;
   readonly solids: readonly Solid[];
 }
 
@@ -87,6 +89,7 @@ export function ponyTrussSpan(road: Road): PonyTrussSpan | null {
   if (!span) return null;
   const ux = dx / span, uz = dz / span, heading = Math.atan2(dx, -dz);
   const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+  const panels = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2);
   const centre = (PONY_TRUSS.railInner + PONY_TRUSS.outerHalf) / 2;
   const halfWidth = (PONY_TRUSS.outerHalf - PONY_TRUSS.railInner) / 2;
   return {
@@ -96,7 +99,9 @@ export function ponyTrussSpan(road: Road): PonyTrussSpan | null {
     ux,
     uz,
     span,
+    panel: span / panels,
     height: ponyTrussHeight(span),
+    heading,
     solids: [-1, 1].map(side => ({
       x: mx - uz * side * centre,
       z: mz + ux * side * centre,
@@ -105,6 +110,74 @@ export function ponyTrussSpan(road: Road): PonyTrussSpan | null {
       heading,
     })),
   };
+}
+
+/**
+ * Compute the longitudinal steel collision interval [sLeft, sRight] for a vehicle vertical slice [carY, carY + carHeight]
+ * against the bridge's inner guard rail, inclined end posts, and horizontal top chord.
+ * Writes [sLeft, sRight, railActive ? 1 : 0] into `out` and returns true when steel overlaps vertically.
+ */
+export function ponyTrussVerticalClip(
+  b: PonyTrussSpan,
+  y0: number,
+  y1: number,
+  carY: number,
+  carHeight: number,
+  out: [number, number, number],
+): boolean {
+  const span = b.span, panel = b.panel, h = b.height;
+  const yBase = PONY_TRUSS.chordSize / 2;
+  const topPad = PONY_TRUSS.chordSize / 2;
+  const topOverhang = PONY_TRUSS.chordSize * 0.35;
+  const railTop = PONY_TRUSS.railHeight + 0.11;
+  const deckSlope = (y1 - y0) / span;
+  const carTop = carY + carHeight;
+  if (carTop < Math.min(y0, y1) - 0.15) return false;
+  if (carY > Math.max(y0, y1) + h + topPad) return false;
+
+  let sLeft = 0, sRight = span;
+  if (deckSlope > 1e-7) {
+    sRight = Math.min(sRight, (carTop - (y0 - 0.15)) / deckSlope);
+    sLeft = Math.max(sLeft, (carY - (y0 + h + topPad)) / deckSlope);
+  } else if (deckSlope < -1e-7) {
+    sLeft = Math.max(sLeft, (carTop - (y0 - 0.15)) / deckSlope);
+    sRight = Math.min(sRight, (carY - (y0 + h + topPad)) / deckSlope);
+  }
+
+  // Follow the inclined end posts when the vehicle bottom clears the inner steel guard rail.
+  if (carY > y0 + railTop) {
+    const rawAng = Math.atan2(deckSlope * panel + h - yBase, panel);
+    const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
+    const run = panel - endInset;
+    const ang = Math.atan2(deckSlope * run + h - yBase, run);
+    const endVertHalf = (PONY_TRUSS.endPostSize / 2) / Math.cos(ang);
+    const startSlope = deckSlope + (h - yBase) / run;
+    let sIncl = endInset + (carY - (y0 + deckSlope * endInset + yBase + endVertHalf)) / startSlope;
+    if (carY >= y0 + deckSlope * (panel - topOverhang) + h - topPad) sIncl = Math.min(sIncl, panel - topOverhang);
+    if (deckSlope > 1e-7) sIncl = Math.min(sIncl, (carY - (y0 + railTop)) / deckSlope);
+    sLeft = Math.max(sLeft, sIncl);
+  }
+  if (carY > y1 + railTop) {
+    const rawAng = Math.atan2(-deckSlope * panel + h - yBase, panel);
+    const endInset = (PONY_TRUSS.endPostSize / 2) * Math.abs(Math.sin(rawAng)) + 0.02;
+    const run = panel - endInset;
+    const ang = Math.atan2(-deckSlope * run + h - yBase, run);
+    const endVertHalf = (PONY_TRUSS.endPostSize / 2) / Math.cos(ang);
+    const endSlope = -deckSlope + (h - yBase) / run;
+    let uIncl = endInset + (carY - (y1 - deckSlope * endInset + yBase + endVertHalf)) / endSlope;
+    if (carY >= y1 - deckSlope * (panel - topOverhang) + h - topPad) uIncl = Math.min(uIncl, panel - topOverhang);
+    if (deckSlope < -1e-7) uIncl = Math.min(uIncl, (carY - (y1 + railTop)) / -deckSlope);
+    sRight = Math.min(sRight, span - uIncl);
+  }
+
+  sLeft = Math.max(0, Math.min(span, sLeft));
+  sRight = Math.max(0, Math.min(span, sRight));
+  if (sRight <= sLeft + 1e-4) return false;
+  const railActive = carY <= Math.max(y0 + deckSlope * sLeft, y0 + deckSlope * sRight) + railTop;
+  out[0] = sLeft;
+  out[1] = sRight;
+  out[2] = railActive ? 1 : 0;
+  return true;
 }
 
 /**
@@ -139,13 +212,14 @@ export function registerRailContacts(
 
 /**
  * Build one merged vertex-coloured geometry for a narrow one-lane grey steel pony-truss bridge along [0, span]
- * at the exact y0 -> y1 deck plane computed by Roads.deck().
+ * at the exact y0 -> y1 deck plane computed by Roads.deck(), keeping the full deck shoulders visible out to `deckHalf`.
  */
 export function buildPonyTrussBridge(
   pts: readonly [number, number][],
   y0: number,
   y1: number,
   len: number,
+  deckHalf: number = PONY_TRUSS.outerHalf,
 ): THREE.BufferGeometry {
   const m = new Mesher();
   const a = pts[0], b = pts[pts.length - 1];
@@ -160,6 +234,7 @@ export function buildPonyTrussBridge(
 
   const half = PONY_TRUSS.half;
   const chord = PONY_TRUSS.chordSize;
+  const outerHalf = Math.max(PONY_TRUSS.outerHalf, deckHalf);
   const panels = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2);
   const panel = span / panels;
   const h = ponyTrussHeight(span);
@@ -169,7 +244,7 @@ export function buildPonyTrussBridge(
   const deckMidY = (y0 + y1) / 2;
   const deckLen = Math.hypot(span, dy);
 
-  // Asphalt deck top and steel deck slab between the two trusses.
+  // Asphalt roadway between the trusses plus concrete cantilevered outer deck shoulders matching Roads.deck() width.
   const deckThick = PONY_TRUSS.deckThickness;
   const fasciaTop = -0.025;
   const fasciaBottom = fasciaTop - deckThick;
@@ -184,11 +259,23 @@ export function buildPonyTrussBridge(
     [deckLen / 2, 0, -clearHalf],
     [-deckLen / 2, 0, -clearHalf],
   ], DECK_ASPHALT);
-  // Deck slab sides and underside (steel deck fascia under the trusses, 2.5 cm below asphalt to avoid z-fighting).
-  m.box(0, fasciaTop - deckThick / 2, 0, fasciaLen, deckThick, half * 2 + chord, STEEL_DARK, false);
+  if (outerHalf > PONY_TRUSS.outerHalf + 1e-4) {
+    for (const side of [-1, 1]) {
+      const z0 = side > 0 ? PONY_TRUSS.outerHalf : -outerHalf;
+      const z1 = side > 0 ? outerHalf : -PONY_TRUSS.outerHalf;
+      m.quad([
+        [-deckLen / 2, 0, z1],
+        [deckLen / 2, 0, z1],
+        [deckLen / 2, 0, z0],
+        [-deckLen / 2, 0, z0],
+      ], ABUTMENT);
+    }
+  }
+  // Deck slab sides and underside (steel deck fascia across the full visible deck width, 2.5 cm below top to avoid z-fighting).
+  m.box(0, fasciaTop - deckThick / 2, 0, fasciaLen, deckThick, outerHalf * 2, STEEL_DARK, false);
 
   // Transverse floor beams beneath the fascia at every panel point (tilted with the slope and inset inside [0, span]).
-  const beamW = half * 2 + chord;
+  const beamW = outerHalf * 2;
   const beamEndInset = 0.12 + (0.28 + Math.abs(fasciaBottom)) * sinSlope;
   for (let i = 0; i <= panels; i++) {
     const s = i === 0 ? beamEndInset : i === panels ? span - beamEndInset : i * panel;

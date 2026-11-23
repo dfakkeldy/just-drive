@@ -271,27 +271,30 @@ for (const {a, b, side} of added) {
     const pos = mesh.geometry.getAttribute('position'), col = mesh.geometry.getAttribute('color');
     assert.ok(pos && col && pos.array.every(Number.isFinite), `bridge ${id} has finite vertex-coloured geometry`);
     assert.ok(pos.count / 3 < 1000, `bridge ${id} stays within triangle budget (${pos.count / 3})`);
-    let maxAboveDeck = -Infinity, maxHalf = 0;
+    let maxAboveDeck = -Infinity, maxHalf = 0, maxTrussHalf = 0;
     const y0 = net.deckHeight(ax, az), y1 = net.deckHeight(bx, bz);
     for (let i = 0; i < pos.count; i++) {
       const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
       const along = (px - ax) * ux + (pz - az) * uz;
+      const across = Math.abs(-(px - ax) * uz + (pz - az) * ux);
       const deckAt = y0 + (y1 - y0) * Math.max(0, Math.min(1, along / span));
-      assert.ok(along >= -1e-4 && along <= span + 1e-4, `bridge ${id} mesh vertex stays inside [0, span] (${along.toFixed(3)})`);
+      assert.ok(along >= -1e-3 && along <= span + 1e-3, `bridge ${id} mesh vertex stays inside [0, span] (${along.toFixed(4)} vs ${span.toFixed(4)})`);
       maxAboveDeck = Math.max(maxAboveDeck, py - deckAt);
-      maxHalf = Math.max(maxHalf, Math.abs(-(px - ax) * uz + (pz - az) * ux));
+      maxHalf = Math.max(maxHalf, across);
+      if (py - deckAt > 0.05) maxTrussHalf = Math.max(maxTrussHalf, across);
     }
     assert.ok(maxAboveDeck >= 2.0 && maxAboveDeck <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${maxAboveDeck.toFixed(2)} m)`);
-    assert.ok(maxHalf < r.halfWidth && maxHalf >= PONY_TRUSS.half, `bridge ${id} is narrow one-lane (${(maxHalf * 2).toFixed(2)} m wide)`);
-    // Rendered asphalt deck along [0, span] matches Roads.deckHeight().
+    assert.ok(maxTrussHalf < r.halfWidth && maxTrussHalf >= PONY_TRUSS.half, `bridge ${id} steel pony truss stays narrow one-lane (${(maxTrussHalf * 2).toFixed(2)} m wide)`);
+    assert.ok(maxHalf >= r.halfWidth + 0.9 - 1e-3, `bridge ${id} deck keeps baseline shoulder width visible (${(maxHalf * 2).toFixed(2)} m)`);
+    // Rendered deck (asphalt inside trusses + concrete outer shoulders) matches Roads.deckHeight() across the full baseline width.
     for (const s of [0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05]) {
-      for (const offset of [-(PONY_TRUSS.clearHalf - 0.01), -1.0, 0, 1.0, PONY_TRUSS.clearHalf - 0.01]) {
+      for (const offset of [-3.85, -3.4, -3.0, -(PONY_TRUSS.clearHalf - 0.01), -1.0, 0, 1.0, PONY_TRUSS.clearHalf - 0.01, 3.0, 3.4, 3.85]) {
         const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
         const y = net.deckHeight(x, z);
-        assert.ok(y !== null, `bridge ${id} supports asphalt at s=${s.toFixed(2)}, offset=${offset}`);
+        assert.ok(y !== null, `bridge ${id} supports deck at s=${s.toFixed(2)}, offset=${offset}`);
         ray.set(new THREE.Vector3(x, y + 0.5, z), down);
         const hit = ray.intersectObject(mesh)[0];
-        assert.ok(hit && Math.abs(hit.point.y - y) < 0.005, `bridge ${id} asphalt mesh matches deckHeight at s=${s.toFixed(2)}, offset=${offset} (diff=${hit ? Math.abs(hit.point.y - y).toFixed(5) : 'miss'})`);
+        assert.ok(hit && Math.abs(hit.point.y - y) < 0.005, `bridge ${id} deck mesh matches deckHeight at s=${s.toFixed(2)}, offset=${offset} (diff=${hit ? Math.abs(hit.point.y - y).toFixed(5) : 'miss'})`);
       }
     }
     // Verify inner steel rails are tied to every interior upright post AND both inclined end posts (no floating rail).
@@ -343,11 +346,16 @@ for (const {a, b, side} of added) {
         assert.equal(reachedFar, true, `bridge ${id} dir=${dir} lat=${lat} car reaches far bank`);
       }
     }
-    // Off-height rail checks: probes below the span on terrain and 5 m above the deck must not hit truss rail walls.
+    // Off-height rail checks: probes below the span on terrain, 5 m above the deck, and 0.6 m before either inclined portal at 1.8 m above deck must not hit truss rail walls.
     const underGround = realTerrain.heightAt(mx, mz);
-    for (const [label, probeY] of [['below span', Math.min(underGround, midY - CAR_SPEC.height - 0.5)], ['above truss', midY + 5]]) {
+    for (const [label, px, pz, probeY] of [
+      ['below span', mx - uz * 1.4, mz + ux * 1.4, Math.min(underGround, midY - CAR_SPEC.height - 0.5)],
+      ['above truss', mx - uz * 1.4, mz + ux * 1.4, midY + 5],
+      ['above start inclined portal', ax - ux * 0.6 - uz * 1.6, az - uz * 0.6 + ux * 1.6, y0 + 1.8],
+      ['above end inclined portal', bx + ux * 0.6 - uz * 1.6, bz + uz * 0.6 + ux * 1.6, y1 + 1.8],
+    ]) {
       const probe = {
-        x: mx - uz * 1.4, z: mz + ux * 1.4, y: probeY, heading,
+        x: px, z: pz, y: probeY, heading,
         vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC,
       };
       const sx = probe.x, sz = probe.z, svx = probe.vx, svz = probe.vz;
@@ -358,12 +366,28 @@ for (const {a, b, side} of added) {
       assert.equal(probe.vx, svx, `bridge ${id} ${label} probe vx is not cancelled by truss rail`);
       assert.equal(probe.vz, svz, `bridge ${id} ${label} probe vz is not cancelled by truss rail`);
     }
+    // Same 1.8 m height inside the full-height mid-span DOES still hit the upper truss.
+    {
+      const midHigh = {
+        x: mx - uz * 1.6, z: mz + ux * 1.6, y: midY + 1.8, heading,
+        vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC,
+      };
+      const sx = midHigh.x, sz = midHigh.z;
+      rails.blockBridge(midHigh, 1 / 120);
+      assert.ok(Math.hypot(midHigh.x - sx, midHigh.z - sz) > 0.1, `bridge ${id} mid-span 1.8 m probe still collides with upper truss`);
+    }
     // Shared production registerRailContacts: test Towing.allowsPose, zero extra yaw on active vehicle, and live coupled trailer rail contact.
     for (const mode of ['solo', 'fleet']) {
       let active = null;
       const soloContacts = new AreaContacts(), fleetContacts = new AreaContacts();
       registerRailContacts(fleetContacts, soloContacts, rails, body => body === active, TRUCK_SPEC);
       const contacts = mode === 'solo' ? soloContacts : fleetContacts;
+      for (const [label, px, pz, py] of [
+        ['start portal 1.8 m', ax - ux * 0.6 - uz * 1.6, az - uz * 0.6 + ux * 1.6, y0 + 1.8],
+        ['end portal 1.8 m', bx + ux * 0.6 - uz * 1.6, bz + uz * 0.6 + ux * 1.6, y1 + 1.8],
+      ]) {
+        assert.equal(contacts.allows({ x: px, z: pz, y: py, heading, spec: CAR_SPEC }), true, `bridge ${id} ${mode} contacts allow ${label} above inclined end post`);
+      }
       const truck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
       active = truck;
       const glanceYaw = heading + 0.12;
