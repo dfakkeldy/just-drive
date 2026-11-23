@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { CAR_SPEC, type Rig, type VehicleSpec } from './vehicle-spec';
 import { type Damage, steeringPull } from './damage-rules';
 import { ROUGH_DEPTH, potholeDensity, potholeDepth, washboard } from './defects';
+import { winterRoadGrip } from './weather-surfaces';
 import { puddleDip } from './rough-roads';
 import type { Road, RoadHit, Roads } from './roads';
 import { horseSpeedLimit } from './horse-motion';
@@ -626,6 +627,7 @@ export class Vehicle {
     const surf = this.terrain.cartRoads && onRoad ? (s.washboard ? SURFACES.washboard : s.kind === 4 ? SURFACES.track : SURFACES.gravel) : siteDeck && s.kind===9 ? SURFACES.concrete : onRoad ? (s.kind <= 2 || s.kind === 9 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.rough ? SURFACES.rough : s.kind === 12 ? SURFACES.grass : s.kind === 3 || s.kind >= 8 || s.gravel ? SURFACES.gravel : s.kind === 5 ? SURFACES.trail : SURFACES.track)
       : s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
     this.surfaceName = surf.name;
+    const snowGrip = winterRoadGrip(this.terrain.uniforms?.winterCover, onRoad && !onDeck, input.touch);
 
     let vf = this.vx * fx + this.vz * fz, vl = this.vx * rx + this.vz * rz;
     const headingBefore = this.heading;
@@ -684,12 +686,12 @@ export class Vehicle {
     // A drift has its own step (driftStep); every other step is the ordinary grip model below, unchanged.
     let slid = false;
     if (this.airborne) { this.drift.airborne(this.x, this.z); this.drift.watch(input, dt); }   // the flick's clocks run in the air too
-    else if (this.driftStep(dt, input, surf, slopeF, deepest, vf, vl, touchLimit, wet)) { slid = true; vf = this.slideSpeed.forward; vl = this.slideSpeed.right; }
+    else if (this.driftStep(dt, input, surf, slopeF, deepest, vf, vl, touchLimit, wet, snowGrip)) { slid = true; vf = this.slideSpeed.forward; vl = this.slideSpeed.right; }
     if (!this.airborne && !slid) {
       // On washboard the tyres skip from ridge to ridge: the faster the car, the less they hold.
       const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
       const horse = this.spec.locomotion === 'horse';
-      const mu = surf.mu * skip, t = input.throttle;
+      const mu = surf.mu * skip * snowGrip, t = input.throttle;
       const hoofGrip = horse ? .9 : mu;
       let a = 0;
       if (t > 0 && vf > -0.5) a += t * Math.min(this.spec.engineAcceleration, this.spec.enginePower / (Math.abs(vf) + 1), hoofGrip * G * this.spec.tractionShare);       // power, then traction
@@ -859,7 +861,7 @@ export class Vehicle {
    * The body keeps one speed along its path; the rules turn the path and set the slide angle between path and heading.
    * No driving help acts here: the light and the strong help would pull the nose back to the road and fight the slide.
    */
-  private driftStep(dt: number, input: Input, surf: (typeof SURFACES)[keyof typeof SURFACES], slopeF: number, deepest: number, vf: number, vl: number, touchLimit: number, wet = 0): boolean {
+  private driftStep(dt: number, input: Input, surf: (typeof SURFACES)[keyof typeof SURFACES], slopeF: number, deepest: number, vf: number, vl: number, touchLimit: number, wet = 0, snowGrip = 1): boolean {
     const spec = this.spec.drift, d = this.drift;
     if (!spec || !this.canDrift || this.spec.locomotion === 'horse') return false;
     d.watch(input, dt);
@@ -867,7 +869,7 @@ export class Vehicle {
     const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
     const g = this.driftGround;
     let v = Math.hypot(vf, vl);
-    g.speed = vf > 0 ? v : 0; g.surface = surf.name; g.mu = surf.mu * skip; g.towed = !!this.towLoad;
+    g.speed = vf > 0 ? v : 0; g.surface = surf.name; g.mu = surf.mu * skip * snowGrip; g.towed = !!this.towLoad;
     if (!d.active) {
       const side = d.begins(spec, input, g);
       if (!side) return false;

@@ -136,12 +136,13 @@ function compare(d, s, factory, gated) {
 }
 
 // Pin main creation order and LOW/quarry/URL gates, including the optional cemetery and stockpile exclusion. A grass
-// chunk that does not load shows the Retry screen (partFailed); the gate and the arguments are the same. The chunk starts
-// downloading early in the boot under the same LOW gate (boot-tasks.ts early()), and this line takes it.
-assert.match(main, /\nconst grassChunk = LOW \? null : early\(import\('\.\/grass'\)\);/);
+// chunk that does not load shows the Retry screen. Boot skips both the download and the grass draw on LOW or with
+// winter cover. A normal desktop start still begins the download early.
+assert.match(main, /\nconst grassEnabled = !LOW && !winter;/);
+assert.match(main, /\nconst grassChunk = grassEnabled \? early\(import\('\.\/grass'\)\) : null;/);
 assert.match(main, /\.\.\.\(LOW \? \{ split: AREA\.quarry \? 1 : 1\.15, low: true, lazyRange: 600 \} : \{\}\), shadows: !LOW && params\.get\('shadows'\) !== '0' && !nightLook \}\);/);
 assert.match(main, /const sunShadows = terrain\.shadows \? new SunShadows\(renderer, scene, sunLight, sunDir, params\.get\('shadows'\) === '1'\) : null;/);
-assert.match(main, /const grass = LOW \? null : new \(await grassChunk!\.take\(\)\.catch\(partFailed\)\)\.Grass\(terrain, params\.get\('grass'\)(?:, (?:cemeteries\?\.excludes|grassExcludes))?\);/);
+assert.match(main, /const grass = grassEnabled \? new \(await grassChunk!\.take\(\)\.catch\(partFailed\)\)\.Grass\(terrain, params\.get\('grass'\), grassExcludes\) : null;/);
 assert.match(main, /const waterReflections = LOW \? null : new WaterReflections\(/);
 const order = [...main.matchAll(/const (sunShadows|grass|waterReflections) = /g)].map(match => match[1]);
 assert.deepEqual(order, ['sunShadows', 'grass', 'waterReflections']);
@@ -170,7 +171,7 @@ for (const panel of ['anchor', 'no-anchor']) {
   }
   assert.deepEqual(results[1], results[0], 'combined constructor order: ' + panel);
 }
-console.log('PASS two combined-panel insertion orders; main constructor order and gates unchanged');
+console.log('PASS two combined-panel insertion orders; LOW and winter grass gates');
 
 // The still view can use the same shadow map without offering a new choice in Settings.
 const preview = environment({ stored: '0', panel: 'anchor' }, false);

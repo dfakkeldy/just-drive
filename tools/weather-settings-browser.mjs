@@ -17,7 +17,7 @@ const measure = () => {
   if (!section) return { faults: ['no weather section'] };
   const controls = [...section.querySelectorAll('summary,input,select,button')];
   const phone = document.body.classList.contains('tcOn');
-  const drawn = section.open ? controls : controls.slice(0, 1);   // closed: only the summary is drawn
+  const drawn = section.open ? controls.filter(e => !e.closest('[hidden]')) : controls.slice(0, 1);   // closed: only the summary is drawn
   for (const control of drawn) {
     control.scrollIntoView({ block: 'center' });
     const r = control.getBoundingClientRect(), name = control.getAttribute('aria-label') ?? control.textContent;
@@ -43,7 +43,10 @@ const measure = () => {
   if (!reaches(document.getElementById('exag'))) faults.push('key probe is blind');
   section.querySelector('summary').scrollIntoView({ block: 'start' });
   return { faults, drawn: drawn.length, open: section.open, phone, date: section.querySelector('[type=date]').value, time: section.querySelector('[type=time]').value,
-    mood: section.querySelector('select').value, moods: [...section.querySelectorAll('option')].map(o => o.textContent), sections: boxes.map(b => b[0]) };
+    mood: section.querySelector('[aria-label="Weather"]').value,
+    moods: [...section.querySelectorAll('[aria-label="Weather"] option')].map(o => o.textContent),
+    season: section.querySelector('[aria-label="Season"]').value,
+    rain: section.querySelector('[aria-label="Rain intensity"]').value, sections: boxes.map(b => b[0]) };
 };
 
 for (const [name, width, height, touch] of [['desktop', 1400, 950, false], ['desktop-short', 1280, 720, false], ['phone', 393, 852, true], ['phone-wide', 844, 390, true]]) {
@@ -73,15 +76,18 @@ for (const [name, width, height, touch] of [['desktop', 1400, 950, false], ['des
     const closed = await read(`(${measure})()`);
     assert.deepEqual(closed.faults, [], `${name} closed: ${closed.faults.join('; ')}`);
     assert.deepEqual([closed.open, closed.drawn, closed.date, closed.time, closed.mood], [false, 1, '2026-10-10', '16:45', 'clear'], `${name} default values`);
-    assert.deepEqual(closed.moods, ['Clear', 'Overcast', 'Fog / haze']);
+    assert.deepEqual(closed.moods, ['Clear', 'Overcast', 'Fog / haze', 'Rain', 'Snow']);
+    assert.equal(closed.season, 'date');
+    assert.ok(await read('!mmm.precipitationMesh && !mmm.terrain.uniforms.winterCover'), 'ordinary start keeps weather effects off');
     await shot('closed');
 
-    await c.send('Page.navigate', { url: `${base}/?${query}&playerDate=2026-12-21&playerTime=12:00&weather=overcast` });
+    await c.send('Page.navigate', { url: `${base}/?${query}&playerDate=2026-12-21&playerTime=12:00&weather=overcast&season=off` });
     await settle('chosen page');
     await read(`document.getElementById('gear').click()`);
     const shown = await read(`(${measure})()`);
     assert.deepEqual(shown.faults, [], `${name} open: ${shown.faults.join('; ')}`);
-    assert.deepEqual([shown.open, shown.drawn, shown.date, shown.time, shown.mood], [true, 5, '2026-12-21', '12:00', 'overcast'], `${name} chosen values`);
+    assert.deepEqual([shown.open, shown.drawn, shown.date, shown.time, shown.mood], [true, 6, '2026-12-21', '12:00', 'overcast'], `${name} chosen values`);
+    assert.equal(shown.season, 'off');
     await shot('open');
 
     // An empty date is refused by the form: no reload.
@@ -91,7 +97,7 @@ for (const [name, width, height, touch] of [['desktop', 1400, 950, false], ['des
     await sleep(800);
     assert.deepEqual([await read('location.href'), await read('window.mmmWeatherStay === true')], [before, true], `${name}: an empty date must not reload`);
     // Apply: the page loads again on the three player keys, with no tool or light-study clock beside them.
-    await read(`(()=>{const s=document.getElementById('weatherSet');s.querySelector('[type=date]').value='2026-06-21';s.querySelector('[type=time]').value='18:30';s.querySelector('select').value='fog';s.querySelector('form').requestSubmit();})()`);
+    await read(`(()=>{const s=document.getElementById('weatherSet');s.querySelector('[type=date]').value='2026-06-21';s.querySelector('[type=time]').value='18:30';s.querySelector('[aria-label=Weather]').value='fog';s.querySelector('[aria-label=Season]').value='date';s.querySelector('form').requestSubmit();})()`);
     await settle('applied page', `location.search.includes('weather=fog')`);
     const after = new URL(await read('location.href')).searchParams;
     assert.deepEqual([after.get('playerDate'), after.get('playerTime'), after.get('weather')], ['2026-06-21', '18:30', 'fog'], `${name} applied address`);
@@ -100,7 +106,36 @@ for (const [name, width, height, touch] of [['desktop', 1400, 950, false], ['des
     await read(`document.getElementById('gear').click()`);
     const applied = await read(`(${measure})()`);
     assert.deepEqual(applied.faults, [], `${name} applied: ${applied.faults.join('; ')}`);
-    assert.deepEqual([applied.open, applied.drawn, applied.date, applied.time, applied.mood], [true, 5, '2026-06-21', '18:30', 'fog'], `${name} applied values`);
+    assert.deepEqual([applied.open, applied.drawn, applied.date, applied.time, applied.mood], [true, 6, '2026-06-21', '18:30', 'fog'], `${name} applied values`);
+    if (touch) {
+      await read(`(()=>{const w=document.querySelector('[aria-label=Weather]');w.value='rain';w.dispatchEvent(new Event('change'));})()`);
+      const raining = await read(`(${measure})()`);
+      assert.deepEqual(raining.faults, [], name + ' rain control');
+      assert.deepEqual([raining.drawn, raining.mood, raining.rain], [7, 'rain', 'steady']);
+      await read(`(()=>{document.querySelector('[aria-label="Rain intensity"]').value='downpour';document.querySelector('[aria-label=Season]').value='winter';document.querySelector('#weatherSet form').requestSubmit();})()`);
+      await settle('downpour and winter', `location.search.includes('rain=downpour')`);
+      assert.deepEqual(await read('[mmm.terrain.uniforms.rainWet.value,mmm.terrain.uniforms.winterCover.value,!!mmm.precipitationMesh]'), [1, 1, true]);
+    }
+    if (name === 'desktop') {
+      await c.send('Page.navigate', { url: `${base}/?${query}&era=1884&weather=rain&rain=downpour&season=winter` });
+      await settle('1884 with modern weather keys', "location.search.includes('era=1884')");
+      assert.deepEqual(await read(`(()=>{
+        const section = document.getElementById('weatherSet');
+        const mood = section.querySelector('[aria-label=Weather]');
+        return [section.open, mood.value, [...mood.options].map(o => o.value),
+          section.querySelector('[aria-label=Season]').closest('label').hidden];
+      })()`), [false, 'clear', ['clear', 'overcast', 'fog'], true], 'hidden weather choices leave the 1884 section closed');
+      await read(`(()=>{
+        const section = document.getElementById('weatherSet');
+        section.open = true;
+        section.querySelector('form').requestSubmit();
+      })()`);
+      await settle('1884 Apply', "location.search.includes('weather=clear')");
+      const legacy = new URL(await read('location.href')).searchParams;
+      assert.equal(legacy.get('era'), '1884');
+      assert.equal(legacy.has('season'), false, '1884 Apply removes the hidden season');
+      assert.equal(legacy.has('rain'), false, '1884 Apply removes the hidden rain intensity');
+    }
     console.log(`${name} ${width}x${height}: ${shown.sections.length} other panel parts clear; values, reach, ${shown.phone ? '56 px targets, ' : ''}key isolation, refused empty date and Apply round trip PASS`);
   } finally { c.close(); await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`); }
 }

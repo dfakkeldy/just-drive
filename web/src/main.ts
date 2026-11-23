@@ -8,7 +8,8 @@ import { PointTupperDriver, driverEnabled, driverLive } from './point-tupper-dri
 import { KEYS, TOUCH, DRIVING_KEYS, DRIVING_TOUCH, padKeys } from './controls';
 import { PauseGate } from './pause';
 import { TrafficSignals } from './traffic-signals';
-import { CLEAR_HAZE, MOODS, moodLook, weatherMoment, weatherSettings, weatherUI } from './weather';
+import { precipitation } from './precipitation';
+import { CLEAR_HAZE, MOODS, moodLook, rainAmount, weatherMoment, weatherSettings, weatherUI, winterCover } from './weather';
 import { placeUrlPose } from './placement-pose';
 import { bootTripParams, tripId } from './quarry-trip';
 import {historyRoadName} from './eras/history-road-names';
@@ -210,7 +211,6 @@ const stored = lightStudy.active ? null : (() => { try { return localStorage.get
 const EXAG = studyScale(params, lightStudy.active, () => stored);
 // A study that failed (a bad date) carries the game's own moment; a player's own clock wins over that.
 const when = (weather.chosen && !lightStudy.active ? undefined : lightStudy.when) ?? weatherMoment(weather);
-
 // Fixed views for match shots: east and north in EPSG:2961, eye height above ground (or an absolute height),
 // heading from north, pitch, vertical field of view.
 interface Shot { name: string; e: number; n: number; eye?: number; abs?: number; heading: number; pitch: number; fov: number }
@@ -272,7 +272,12 @@ const depotInteriorParam = params.get('interior');
 const depotRoomChunk = ((depotChunk && SITE.brand !== 'just') || depotInteriorParam === 'depot-loading' || depotInteriorParam === 'depot-interrogation' || depotInteriorParam === 'boss-looks') ? early(import('./interior-depot')) : null;
 const airportChunk = ERA.modern && AREA.airport && params.get('airport') !== '0' ? early(import('./airport')) : null;
 const pavedChunk = pavedRead ? early(import('./paved')) : null;
-const grassChunk = LOW ? null : early(import('./grass'));
+const weatherActive = ERA.modern && !lightStudy.active && !DAILY;
+const winter = weatherActive && winterCover(weather);
+const falling = weatherActive && (weather.mood === 'rain' || weather.mood === 'snow') ? weather.mood : null;
+const wetness = falling === 'rain' ? rainAmount(weather.rain) : 0;
+const grassEnabled = !LOW && !winter;
+const grassChunk = grassEnabled ? early(import('./grass')) : null;
 const ptInfrastructureChunk = ERA.modern && AREA.ptInfrastructure && !LOW
   ? early(Promise.all([import('./pt-infrastructure'), import('./pt-infrastructure-source')])) : null;
 const ptIndustryChunk = ERA.modern && AREA.ptInfrastructure && params.get('ptIndustry') !== '0'
@@ -338,9 +343,10 @@ const low = THREE.MathUtils.clamp(sun.el / 35, 0, 1);
 const nightLook = nightPalette(sun.el, chosenClock);
 const { sunColor, skyColor, fogColor } = solarColors(low, nightLook);
 // Drive around: Apply keeps the player's place, as the light study does. A mail shift starts its day again.
-if (!bare && !lightStudy.active) weatherUI(weather, mailMode ? undefined : () => ({ e: vehicle.x + manifest.village[0], n: manifest.village[1] - vehicle.z, heading: THREE.MathUtils.radToDeg(vehicle.heading) }));
+if (!bare && !lightStudy.active) weatherUI(weather, mailMode ? undefined : () => ({ e: vehicle.x + manifest.village[0], n: manifest.village[1] - vehicle.z, heading: THREE.MathUtils.radToDeg(vehicle.heading) }), weatherActive);
 // A weather mood changes numbers the light already has. Clear gives null: nothing below runs and the frame is as before.
-const mood = lightStudy.active ? null : moodLook(weather.mood);
+const mood = lightStudy.active || (!weatherActive && (weather.mood === 'rain' || weather.mood === 'snow'))
+  ? null : moodLook(weather.mood, weather.rain);
 if (mood) {
   // Thick haze takes the low sun's colour and dims with it; without this, far hills stand pale against a dusk sky.
   const dusk = mood.dusk * (1 - low) * (1 - (nightLook?.level ?? 0));
@@ -364,6 +370,11 @@ const shared: Record<string, THREE.IUniform> = {
   farExag: { value: EXAG }, farCurveOn: { value: 0 },
   tallViewport: { value: new THREE.Vector2(1920,1080) },
 };
+if (winter) shared.winterCover = { value: 1 };
+if (wetness) shared.rainWet = { value: wetness };
+const precipitationMesh = falling ? precipitation(falling, wetness, LOW, shared.time, shared.skyColor) : null;
+if (precipitationMesh) scene.add(precipitationMesh);
+if (import.meta.env.DEV) expose({ precipitationMesh }, false);
 if (nightShading) Object.assign(shared, nightShading.uniforms);   // before the terrain: every land material spreads them
 
 const sky = new Sky();
@@ -467,7 +478,7 @@ const novemberBuildings = ERA.modern && AREA.november
   ? new NovemberBuildings(AREA.id, properties, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
 const finalBuildings = novemberBuildings && AREA.hillside ? sceneryBuildings?.filter(b => !isHillsideBuilding(b)) : sceneryBuildings;
 const buildings = ERA.modern && finalBuildings ? new Buildings(mabouSite ? mabouSite.drawn(finalBuildings) : finalBuildings,
-  manifest.village, EXAG, SEA_LEVEL, buildingStyles, novemberBuildings?.drawing) : null;
+  manifest.village, EXAG, SEA_LEVEL, buildingStyles, novemberBuildings?.drawing, shared.winterCover) : null;
 if (buildings) clear.push(...buildings.clear);
 if (novemberBuildings) clear.push(...novemberBuildings.clear);
 if (yardSite) clear.push(...yardSite.clear);
@@ -593,7 +604,7 @@ const sunShadows = terrain.shadows ? new SunShadows(renderer, scene, sunLight, s
 if (sunShadows) Object.assign(terrain.uniforms, sunShadows.uniforms);   // every land tile made from here on reads the map
 // Phones do not load the grass module or read the cover image back to the CPU.
 const grassExcludes = stockpiles ? (east: number, north: number) => stockpiles.excludes(east, north) || !!cemeteries?.excludes(east, north) : cemeteries?.excludes;
-const grass = LOW ? null : new (await grassChunk!.take().catch(partFailed)).Grass(terrain, params.get('grass'), grassExcludes);
+const grass = grassEnabled ? new (await grassChunk!.take().catch(partFailed)).Grass(terrain, params.get('grass'), grassExcludes) : null;
 if (grass) scene.add(grass.group);
 // Mapped public wharves (today, in the areas that have them); like airport, the dev key exists only there.
 const wharves = ERA.id === 'today' && hasWharves(AREA.id) ? new PublicWharves(AREA.id, terrain, manifest.village, SEA_LEVEL, (buildings ? buildingList ?? [] : []).map(b => b.footprint)) : null;
@@ -2632,6 +2643,7 @@ function drawSunSeeker(view: SunSeeker, now: number): void {
   const showCar = car.root.visible, showDrone = drone.group.visible;
   car.root.visible = false;
   drone.group.visible = false;
+  if (precipitationMesh) precipitationMesh.visible = false;
   try {
     updateWorld('ending-mirror', 0);
     farVisibility?.update(camera, now / 1000);
@@ -2639,6 +2651,7 @@ function drawSunSeeker(view: SunSeeker, now: number): void {
   } finally {
     farVisibility?.settle(); waterReflections?.settle();
     car.root.visible = showCar; drone.group.visible = showDrone;
+    if (precipitationMesh) precipitationMesh.visible = true;
   }
   afterWorld();
   view.drawOverlay(renderer);

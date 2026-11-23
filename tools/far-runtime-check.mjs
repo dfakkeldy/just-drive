@@ -142,12 +142,14 @@ function renderCleanup(text){
  for(const [body,draw] of blocks) for(const pictureRequested of draw.includes('drawPicture()')?[false,true]:[false]){
   let far=0,sea=0;
   const fail=()=>{throw Error('render failed');};
-  // The Sun Seeker path also updates the mirror and far queries and restores the car and drone it hid.
+  // The Sun Seeker path also updates the mirror and far queries and restores the scene objects it hid.
   const state={drawWorld:fail,drawPicture:fail,pictureRequested,canSavePicture:()=>true,updateWorld(){},camera:{},now:0,
-   car:{root:{}},drone:{group:{}},showCar:true,showDrone:false,
+   car:{root:{}},drone:{group:{}},showCar:true,showDrone:false,precipitationMesh:{visible:false},
    farVisibility:{update(){},settle(){far++;}},waterReflections:{settle(){sea++;}}};
   assert.throws(()=>new Function('state',`with(state){${body}}`)(state),/render failed/);
   assert.deepEqual({far,sea},{far:1,sea:1},'each render path releases far and water queries on failure');
+  if(body.includes('car.root.visible = showCar'))assert.equal(state.precipitationMesh.visible,true,'Sun Seeker restores precipitation on failure');
  }
 }
 renderCleanup(main);if(process.argv.includes('--mutations')){assert.throws(()=>renderCleanup(main.replaceAll('farVisibility?.settle();','')),{name:'AssertionError'});console.log('KILLED missing far-query finally wiring');}
+if(process.argv.includes('--mutations')){assert.throws(()=>renderCleanup(main.replace('if (precipitationMesh) precipitationMesh.visible = true;','')),{name:'AssertionError'});console.log('KILLED missing precipitation restore');}
