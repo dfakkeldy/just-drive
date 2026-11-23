@@ -160,6 +160,7 @@ import { roughRoads, setPuddleField } from './rough-roads';
 import { Puddles, splashLevel } from './puddles';
 import { JudiqueVillageSite, VILLAGE_PLACES } from './judique-village-site';
 import { PortHawkesburySite, aimDrops } from './port-hawkesbury-site';
+import { filterPointTupperProps, postOfficeClear, postOfficeReplaceBuildings, postOfficeReplacedIds } from './port-hawkesbury-mail';
 import { MabouMainSite, MAIN_ITEMS, aimDrops as aimMabouDrops } from './mabou-main-site';
 import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
@@ -282,6 +283,7 @@ const churchChunk = ERA.modern && AREA.church && params.get('church') !== '0' ? 
 const churchRoomChunk = churchChunk ? early(import('./interior-church')) : null;
 const villageChunk = ERA.modern && AREA.judiqueVillage && params.get('village') !== '0' ? early(import('./judique-village')) : null;
 const hawkesburyChunk = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' ? early(import('./port-hawkesbury')) : null;
+const postOfficeChunk = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' && params.get('postOffice') !== '0' ? early(import('./ph-post-office')) : null;
 const mabouMainChunk = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? early(import('./mabou-main')) : null;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -443,7 +445,9 @@ const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take
   const list = homeSite ? Home.buildings(base, homeSite, manifest.village) : yardSite ? Yard.buildings(base, yardSite, manifest.village) : base;
   const kept = churchSite ? churchSite.buildings(list) : list;
   const placed = villageSite ? villageSite.buildings(kept) : kept;
-  return hawkesburySite ? hawkesburySite.buildings(placed) : placed; }) : null;
+  const ph = hawkesburySite ? hawkesburySite.buildings(placed) : placed;
+  return postOfficeChunk ? postOfficeReplaceBuildings(ph) : ph; }) : null;
+const postOfficeReplaced = postOfficeChunk ? postOfficeReplacedIds(mappedBuildings) : new Set<number>();
 const bakedBuildingStyles = stylesRead
   ? await stylesRead.take().then(readBuildingStyles)
     .catch((e: unknown) => { console.warn('building styles', e); return undefined; })
@@ -504,6 +508,8 @@ const placeRows = {
 // Each site clears its surveyed land.
 const placeSites = sitesOf(placeRows);
 for (const site of Object.values(placeSites)) if (site) clear.push(...site.clear);
+const postOfficeBoxes = postOfficeChunk ? postOfficeClear(manifest.village) : [];
+if (postOfficeBoxes.length) clear.push(...postOfficeBoxes);
 if (quarrySite) clear.push(...quarrySite.clear);
 // Modern Point Tupper only; airport=0 turns it off. Only then does the module (and its source extract) load (airportChunk).
 const airportModule = ERA.modern && AREA.airport && params.get('airport') !== '0' ? await airportChunk!.take().catch(partFailed) : null;
@@ -681,7 +687,9 @@ const props = await (async () => {
     // The service drops of the boxes Port Hawkesbury, Prince Street and Mabou's main street replace end on their models, not in the air.
     const placed = hawkesburySite && Array.isArray(read.serviceDrops) ? { ...read, serviceDrops: aimDrops(read.serviceDrops) } : read;
     const withPrince = princeSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: princeSite.aimDrops(placed.serviceDrops) } : placed;
-    const data = mabouSite && Array.isArray(withPrince.serviceDrops) ? { ...withPrince, serviceDrops: aimMabouDrops(withPrince.serviceDrops) } : withPrince;
+    const mabouAimed = mabouSite && Array.isArray(withPrince.serviceDrops) ? { ...withPrince, serviceDrops: aimMabouDrops(withPrince.serviceDrops) } : withPrince;
+    // Inside the Town of Port Hawkesbury's legal limits, roadside mailboxes and posts are removed.
+    const data = filterPointTupperProps(mabouAimed, AREA.id, postOfficeReplaced);
     return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined, splitRoadLines(roadData)); }
   catch (e) { console.warn('props', e); return null; }
 })();
@@ -770,8 +778,8 @@ const lotPropList = ERA.modern && buildingList && params.get('lotprops') !== '0'
   // Drawn things a prop must not stand in: power poles, mailboxes and community boxes. Only ever a reason to stand
   // elsewhere, never a reason to choose a house.
   obstacles: props ? [...props.poleSites, ...props.mail, ...props.sites].map(p => [p.x, p.z] as [number, number]) : [],
-  // A hand-built place that is not a terrain site keeps props off through its clear boxes (village, hawkesbury, mabouMain).
-  excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []), ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
+  // A hand-built place that is not a terrain site keeps props off through its clear boxes (village, hawkesbury, mabouMain, postOffice).
+  excluded: [...placeBoxes(terrain.sites), ...(coast ? [coast.site.box] : []), ...postOfficeBoxes, ...Object.values(placeSites).filter((s): s is NonNullable<typeof s> => !!s && !(terrain.sites as readonly object[]).includes(s)).flatMap(s => s.clear)],
 }) : [];
 // No single tree stands in a parked car; the canopy is left as it is.
 // Kept apart: these only clear trees. Mail play's breakable yard props must not give way to them (they give way to those).
@@ -822,6 +830,11 @@ for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown
   (builtPlaces as Record<string, object | null>)[name] = row.site ? row.build(row.site, row.load && await row.load()) : null;
 }
 const { hawkesbury, mabouMain } = builtPlaces;
+const postOffice = postOfficeChunk ? new (await postOfficeChunk!.take().catch(partFailed)).PortHawkesburyPostOffice(manifest.village, terrain, LOW) : null;
+if (postOffice) {
+  scene.add(postOffice.group);
+  if (import.meta.env.DEV) expose({ postOffice }, false);
+}
 // One slot for each row. A slot keeps its name while its place is off, so the frame's update list keeps the same
 // entries. `dev` is what the dev tools see.
 const places = placeSlots(placeRows, builtPlaces);
@@ -877,6 +890,7 @@ const siteContacts: [string, ContactSite | null][] = [
   ['tall', tallKey ? { revision: () => tall?.solids.length ?? 0, resolve: body => tall?.resolveSolids(body) } : null],
   ['village', placeContact(places.village)],
   ['hawkesbury', placeContact(places.hawkesbury)],
+  ['postOffice', postOffice && { resolve: body => postOffice.resolveSolids(body) }],
   ['mabouMain', placeContact(places.mabouMain)],
   ['maryville', placeContact(places.maryville)],
   ['drLane', placeContact(places.drLane)],
@@ -1039,7 +1053,7 @@ const boxRoofAt = roofHeights(ERA.modern && buildingList ? drawnWithout(mabouSit
 const extraRoofAt = ERA.modern ? (() => {
   const kept = new Set(drawnBuildings ?? []);
   const extra: Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[] =
-    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox);
+    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox && !postOfficeReplaced.has(b.id));
   if (princeSite) extra.push(...princeSite.roofBoxes());
   for (const lm of landmarkList) {
     const a = lm.axisDeg * Math.PI / 180, alongX = Math.sin(a), alongZ = -Math.cos(a), acrossX = Math.cos(a), acrossZ = Math.sin(a);
@@ -1056,7 +1070,7 @@ const extraRoofAt = ERA.modern ? (() => {
   }
   return extra.length ? roofHeights(extra, manifest.village, EXAG, SEA_LEVEL) : null;
 })() : null;
-const roofAt = (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain ? mabouMain.roofAt(x, z) : -Infinity, extraRoofAt ? extraRoofAt(x, z) : -Infinity);
+const roofAt = (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain ? mabouMain.roofAt(x, z) : -Infinity, postOffice ? postOffice.roofAt(x, z) : -Infinity, extraRoofAt ? extraRoofAt(x, z) : -Infinity);
 if (import.meta.env.DEV) expose({ drone });
 
 function applyShot(s: Shot) {
@@ -1173,7 +1187,7 @@ if (ERA.modern && garageEntry.id === 'truck' && ['1', 'empty'].includes(params.g
   if (!mailMode && roadScene) fleetContacts.add({ resolve: body => { if (roadScene.rules.enabled) pushOut(body, roadScene.placementSolids, true); } });
   // Without the fleet the trailer meets the same solid sites as the truck: soloContacts.
   const contacts = quarry || fleetEnabled(garageEntry, params, !mailMode, ERA.modern) ? fleetContacts : soloContacts;
-  towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? hawkesbury.solids : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts }, true, LOW);
+  towing = new Towing(vehicle, terrain, roads, params.get('trailer') !== 'empty', touchDevice, { yard, scene: roadScene, bus: schoolBus, props, solids: hawkesbury ? [...hawkesbury.solids, ...postOffice?.solids ?? []] : churchSite || villageSite || mabouSite ? [...churchSite?.solids ?? [], ...villageSite?.solids ?? [], ...mabouSite?.solids ?? []] : undefined, contacts }, true, LOW);
   if (towing.attached) scene.add(towing.trailer.root);
   trailerHelpSetting(towing, document.getElementById('settings'), document.getElementById('startOver'));
   if (import.meta.env.DEV) expose({ towing });
@@ -2292,6 +2306,7 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   { name: 'yard', segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
   { name: 'yardDog', segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
   ...Object.entries(places).filter(([name]) => name !== 'prince').map(([name, { place }]) => ({ name, segment: 'before-camera' as const, ending: false, update: (dt: number, _realDt: number, now: number) => place?.update(camera.position, now, vehicle, dt) })),
+  ...(postOffice ? [{ name: 'postOffice', segment: 'before-camera' as const, ending: false, update: (_dt: number, _realDt: number, now: number) => postOffice.update(camera.position, now) }] : []),
   { name: 'stockpiles', segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
   { name: 'cemeteries', segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
   { name: 'terrain', segment: 'landscape', ending: true, update: () => terrain.update(camera, scenePaused()) },

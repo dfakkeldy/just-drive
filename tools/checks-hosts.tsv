@@ -339,3 +339,6 @@ depot-browser	unproven	no	Hardware WebGL, Port Hood and Mabou land; MacBook M1 P
 depot-browser-phone	unproven	no	Hardware WebGL, Port Hood and Mabou land on phone LOW; MacBook M1 Pro Metal / Edge 158 PASS on t3/boss-depot-scenes (390x844 touch LOW: Port Hood exterior + door, loading bay, office jump, shift-start loading + skip, suspension interrogation room)
 prince	portable	no	Node check over baked Point Tupper land; no browser
 prince-browser	unproven	no	not yet measured on another host
+port-hawkesbury-mail	portable	no	Node only; runs with or without data/baked/areas/pointtupper
+port-hawkesbury-mail-mutations	portable	no	Node mutation controls; runs with or without data/baked/areas/pointtupper
+port-hawkesbury-mail-browser	unproven	no	Hardware WebGL, Point Tupper and Mabou land, desktop and phone LOW

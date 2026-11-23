@@ -116,9 +116,40 @@ def props_view(roads, driveways):
     return seen
 
 
-def boxes_in_sites(boxes, no_box):
-    """The boxes that stand inside a no-box site (AREA.no_box_sites): there must be none."""
-    return [m for m in boxes if any(distance((m['x'], m['y']), (x, y)) < radius for x, y, radius in no_box)]
+def load_no_box_polygons(paths):
+    """Load EPSG:2961 exclusion rings from repo-relative JSON files."""
+    rings = []
+    for rel in paths:
+        doc = json.loads((ROOT / rel).read_text())
+        ring = [tuple(p) for p in doc['ring']]
+        xs = [p[0] for p in ring]
+        ys = [p[1] for p in ring]
+        rings.append((min(xs), min(ys), max(xs), max(ys), ring))
+    return rings
+
+
+def in_no_box_polygon(p, polys):
+    x, y = p
+    for x0, y0, x1, y1, ring in polys:
+        if x < x0 or x > x1 or y < y0 or y > y1:
+            continue
+        inside = False
+        j = len(ring) - 1
+        for i in range(len(ring)):
+            xi, yi = ring[i]
+            xj, yj = ring[j]
+            if ((yi > y) != (yj > y)) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+                inside = not inside
+            j = i
+        if inside:
+            return True
+    return False
+
+
+def boxes_in_sites(boxes, no_box, no_box_polys=()):
+    """The boxes that stand inside a no-box site (AREA.no_box_sites) or no-mailbox polygon: there must be none."""
+    return [m for m in boxes if any(distance((m['x'], m['y']), (x, y)) < radius for x, y, radius in no_box)
+            or in_no_box_polygon((m['x'], m['y']), no_box_polys)]
 
 
 def carry(before, now, s):
@@ -200,7 +231,7 @@ def frame(net, r, start, cluster, side, safe):
     return None, None
 
 
-def place_mailboxes(net, ref, sites, cabinets, cabinets_before, safe, village, exclusion, no_box=()):
+def place_mailboxes(net, ref, sites, cabinets, cabinets_before, safe, village, exclusion, no_box=(), no_box_polys=()):
     """One mailbox candidate per original property, and frames for neighbours: the list for props.json, and one
     report row per box (building, road, 'kept' or 'again').
 
@@ -290,6 +321,18 @@ def place_mailboxes(net, ref, sites, cabinets, cabinets_before, safe, village, e
                     report.append(dict(building=m['id'], road=road, how=how))
             for m in cluster:
                 entries.remove(m)
+    if no_box_polys:
+        kept_boxes, kept_report = [], []
+        for box, row in zip(mailboxes, report):
+            if in_no_box_polygon((box['x'], box['y']), no_box_polys):
+                continue
+            kept_boxes.append(box)
+            kept_report.append(row)
+        group_counts = collections.Counter(b['group'] for b in kept_boxes if b['group'] is not None)
+        for box in kept_boxes:
+            if box['group'] is not None and group_counts[box['group']] < 2:
+                box['group'] = None
+        return kept_boxes, kept_report
     return mailboxes, report
 
 
@@ -784,16 +827,20 @@ def main(output=None, report_dir=None, power_only=False):
 
     # One mailbox candidate per original property; wing geometry only excludes props.
     sites = [b.get('site', b) for b in buildings if b.get('buildingId', b['id']) == b['id']]
+    no_box_polys = load_no_box_polygons(AREA.no_mailbox_polygons)
     if power_only:
         previous = json.loads((OUT / 'props.json').read_text())
         mailboxes, community = previous['mailboxes'], previous['communityBoxes']
         mail_report = []
     else:
         mailboxes, mail_report = place_mailboxes(net, ref, sites, community, community if ref is net else cabinets(ref), safe,
-                                            VILLAGE, AREA.mailbox_exclusion_radius, AREA.no_box_sites)
-    inside = boxes_in_sites(mailboxes + community, AREA.no_box_sites)
+                                            VILLAGE, AREA.mailbox_exclusion_radius, AREA.no_box_sites, no_box_polys)
+    if not power_only:
+        inside = boxes_in_sites(mailboxes + community, AREA.no_box_sites, no_box_polys)
+    else:
+        inside = boxes_in_sites(mailboxes + community, AREA.no_box_sites)
     if inside:
-        raise RuntimeError(f'{len(inside)} box(es) stand inside a no-box site (AREA.no_box_sites): '
+        raise RuntimeError(f'{len(inside)} box(es) stand inside a no-box site (AREA.no_box_sites / no_mailbox_polygons): '
                            f'{[(m["x"], m["y"]) for m in inside]}')
 
     # A power-only delta keeps the installed public poles even if another stage has since changed its inputs.
