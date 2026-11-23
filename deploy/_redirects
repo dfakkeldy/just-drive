@@ -1,0 +1,4 @@
+# Short links served by Cloudflare Workers static assets with no script run.
+# /rdmc opens St. Margaret of Scotland church on River Denys Mountain (Judique), matching CHURCH_START in web/src/church-site.ts.
+/rdmc https://justdrive.fakkeldy.ca/judique?driveAt=630770.2,5080667.56,84 302
+/rdmc/ https://justdrive.fakkeldy.ca/judique?driveAt=630770.2,5080667.56,84 302

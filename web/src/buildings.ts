@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { snowRoof } from './weather-surfaces';
 
 export interface Building {
   /** A split group shares one identity; only its largest wing carries the original site. */
@@ -190,12 +191,15 @@ export class Buildings {
   readonly clear: number[][] = [];
 
   constructor(list: Building[], village: [number, number], exag: number, seaLevel: number, paint: BuildingPaint | FacadeStudy = {},
-    details?: { pos: readonly number[]; col: readonly number[] }) {
+    details?: { pos: readonly number[]; col: readonly number[] }, winter?: THREE.IUniform) {
     const { styles = {}, study, low, sunDir } = isFacadeStudy(paint) ? paint : { styles: paint, study: undefined, low: false, sunDir: undefined };
     const pos: number[] = [], col: number[] = [];
+    const snowHeight: number[] | null = winter ? [] : null;
+    let snowBase = 0;
     const triN = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number,
       colourA: RGB, shade = 1, colourB = colourA, colourC = colourA) => {
       pos.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+      snowHeight?.push(ay - snowBase, by - snowBase, cy - snowBase);
       col.push(
         colourA[0] * shade, colourA[1] * shade, colourA[2] * shade,
         colourB[0] * shade, colourB[1] * shade, colourB[2] * shade,
@@ -234,6 +238,7 @@ export class Buildings {
         if (end > first) facadeRanges.push({ x: Math.floor(cx / facadeCellSize), z: Math.floor(cz / facadeCellSize), first, end });
       } : undefined;
       const base = seaLevel + (b.ground - seaLevel) * exag;
+      snowBase = base;
       const a = THREE.MathUtils.degToRad(b.axisDeg);
       const ux = Math.sin(a), uz = -Math.cos(a), vx = Math.cos(a), vz = Math.sin(a);   // along the ridge, across it
       const L = b.length / 2, W = b.width / 2;
@@ -719,6 +724,13 @@ export class Buildings {
       geo.setAttribute('normal', new THREE.BufferAttribute(packed, 3, true));
     }
     this.mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    if (winter && snowHeight) {
+      // The appended mixed detail batch has no building-relative heights. Leave it unpainted.
+      const heights = new Float32Array(pos.length / 3);
+      heights.set(snowHeight);
+      geo.setAttribute('snowHeight', new THREE.BufferAttribute(heights, 1));
+      snowRoof(this.mesh.material as THREE.MeshLambertMaterial, winter);
+    }
     if (closedWallRanges && sunDir) {
       // The world-space mesh and the directional sun stay fixed for this load. Each marked flat face
       // gets one depth decision. The shadow camera follows the driver along this same sun direction.

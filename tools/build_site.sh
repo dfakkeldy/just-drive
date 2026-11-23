@@ -84,6 +84,8 @@ HEAD
 } > "$SITE/index.html"
 cp "$ROOT/deploy/_headers" "$SITE/_headers"
 if [ "${#AREAS[@]}" -gt 0 ]; then printf '/areas/*\n  Cache-Control: no-cache\n' >> "$SITE/_headers"; fi
+cp "$ROOT/deploy/_redirects" "$SITE/_redirects"
+[ -s "$SITE/_redirects" ] || { echo 'redirects: file missing' >&2; exit 1; }
 python3 "$ROOT/tools/pwa-icons.py" "$SITE/offline/icons"
 node "$ROOT/tools/build-pwa.mjs" "$SITE"
 # The About and Help pages of each brand (served at /about and /help on each host by the Worker).

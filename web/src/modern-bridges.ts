@@ -6,6 +6,7 @@ import type {CellMask} from './road-cuts';
 import {BRIDGE_CROSSINGS} from './bridge-crossings';
 import {prepareTimberPlans, timberPlan} from './eras/timber-bridge';
 import {Mesher, type RGB} from './yard-kit';
+import {emitPonyTrussSuperstructure, PONY_TRUSS} from './november-bridges';
 
 const APPROACH = 16, MAX_APPROACH = 96, CELL = 64, TRI_CELL = 2;
 const EMPTY: readonly number[] = [];
@@ -86,6 +87,7 @@ export class ModernBridges {
   /** Cumulative lengths of each road an approach follows, made once per road. */
   private readonly roadCum=new Map<Road,number[]>();
   private dirty=false;
+  ponyDeckVersion=0;
   readonly audit={builds:0,merges:0,heightTrianglesMax:0};
   private runList:{pts:readonly (readonly [number,number])[];roads:ReadonlySet<number>;halfWidth:number}[]|null=null;
   /** Each span's centre line and the road ids it carries (its members and source road), for traffic that follows a road. */
@@ -400,7 +402,7 @@ export class ModernBridges {
         r.triangles=null;grid=this.build(r);
       }
       const geometry=this.emit(r,grid);
-      this.prepareCorridor(r);r.geometry?.dispose();r.geometry=geometry;r.serial=++this.audit.builds;this.dirty=true;
+      this.prepareCorridor(r);r.geometry?.dispose();r.geometry=geometry;r.serial=++this.audit.builds;if(r.road.ponyTruss)this.ponyDeckVersion++;this.dirty=true;
     }finally{this.sampling=false;}
   }
 
@@ -464,6 +466,45 @@ export class ModernBridges {
   }
   private cutTriangles(x0:number,z0:number,x1:number,z1:number):readonly Float32Array[] {
     return this.spans.filter(r=>r.triangles&&r.skinBox[0]<=x1&&r.skinBox[2]>=x0&&r.skinBox[1]<=z1&&r.skinBox[3]>=z0).map(r=>r.triangles!);
+  }
+  /** Built deck elevation at fraction t along a bridge span, or null before the deck is built. */
+  bridgeElevation(id:number,t:number):number|null {
+    const r=this.spans.find(s=>s.members.has(id));
+    if(!r||!r.geometry||!r.triangles)return null;
+    return r.y0+(r.y1-r.y0)*Math.max(0,Math.min(1,t));
+  }
+  /** Built terrain detail level of a bridge deck, or 0 before the deck is built. */
+  bridgeDeckLevel(id:number):number {
+    const r=this.spans.find(s=>s.members.has(id));
+    return r&&r.geometry?Math.max(0,r.level):0;
+  }
+  /** Build serial of a bridge deck, or 0 before the deck is built. */
+  bridgeDeckSerial(id:number):number {
+    const r=this.spans.find(s=>s.members.has(id));
+    return r&&r.geometry?r.serial:0;
+  }
+  /** Read-only bridge bank elevations [y0, y1] and terrain detail level without building or mutating scene meshes. */
+  bridgeBankElevations(id:number,out:[number,number]):number {
+    const r=this.spans.find(s=>s.members.has(id));
+    if(!r)return 0;
+    const built=!!(r.geometry&&r.triangles&&r.level>=6);
+    const rev=this.terrain.dataRevision??0;
+    if(built&&(r.level>=8||r.revision===rev)){
+      out[0]=r.y0;out[1]=r.y1;
+      return r.level;
+    }
+    const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
+    if(!s0||!s1||Math.min(s0.level,s1.level)<6){
+      if(built){out[0]=r.y0;out[1]=r.y1;return r.level;}
+      return 0;
+    }
+    const level=Math.min(s0.level,s1.level);
+    const bank=(s:number)=>{const p=this.at(r,s);return this.land(p.x,p.z)??this.terrain.seaLevel;};
+    let y0=Math.max(bank(0),bank(-3),bank(-6),bank(-8))+.04,y1=Math.max(bank(r.length),bank(r.length+3),bank(r.length+6),bank(r.length+8))+.04;
+    let clearance=0;for(let s=.5;s<r.length;s+=.5){const p=this.at(r,s);clearance=Math.max(clearance,(this.land(p.x,p.z)??-Infinity)+.03-(y0+(y1-y0)*s/r.length));}
+    clearance=Math.min(.4,clearance);y0+=clearance;y1+=clearance;
+    out[0]=y0;out[1]=y1;
+    return level;
   }
   /** Hide or show the deck of the spans that carry road `id`: its surface, underside, rails and supports. The
    *  approaches stay drawn, since the road cuts under them stay. Drawing only: contact, cuts and paint stay. A no-op
@@ -631,7 +672,8 @@ export class ModernBridges {
       const a=(i*(columns+1)+j)*3,b=a+3,c=a+(columns+1)*3,d=c+3;
       const s=(along(i)+along(i+1))/2,part=s<0?0:s>r.length?2:1,deck=part===1;
       const kind=(s<0?r.start?.road.kind:r.end?.road.kind)??r.road.kind;
-      const color:RGB=deck?(r.timber?[.31+(i%3)*.012,.225+(i%3)*.008,.14]:[.205,.215,.21]):kind<=2?[.16,.16,.17]:kind===3?[.25,.225,.19]:kind===5?[.34,.32,.28]:[.17,.13,.09];
+      const uMid=-r.width+2*r.width*(j+.5)/columns;
+      const color:RGB=deck?(r.road.ponyTruss?(Math.abs(uMid)<=PONY_TRUSS.clearHalf?[.16,.165,.17]:[.42,.41,.39]):r.timber?[.31+(i%3)*.012,.225+(i%3)*.008,.14]:[.205,.215,.21]):kind<=2?[.16,.16,.17]:kind===3?[.25,.225,.19]:kind===5?[.34,.32,.28]:[.17,.13,.09];
       triangle(a,c,b,color,part);triangle(b,c,d,color,part);
     }
     r.triangleDeck=deckFlags;r.triangles=top;r.cells.clear();r.skinBox.set([Infinity,Infinity,-Infinity,-Infinity]);
@@ -672,7 +714,9 @@ export class ModernBridges {
         if(j===0||j===columns-1){const u=j===0?a:d,v=j===0?c:b;m.quad([[grid[u],grid[u+1],grid[u+2]],[grid[v],grid[v+1],grid[v+2]],[grid[v],grid[v+1]-.45,grid[v+2]],[grid[u],grid[u+1]-.45,grid[u+2]]],fascia);}
       }
     }
-    for(let s=0;s<r.length;s+=3){const run=Math.min(3,r.length-s),p=this.at(r,s+run/2),a=this.at(r,s),b=this.at(r,s+run),y=this.top(r,s+run/2,p.x,p.z),grade=(this.top(r,s+run,b.x,b.z)-this.top(r,s,a.x,a.z))/run,pitch=-Math.atan(grade),stretch=Math.hypot(1,grade);m.at(p.x,y,p.z,p.yaw,pitch);
+    if(r.road.ponyTruss){
+      emitPonyTrussSuperstructure(m,r.pts,r.y0,r.y1,r.width,-.45);
+    }else for(let s=0;s<r.length;s+=3){const run=Math.min(3,r.length-s),p=this.at(r,s+run/2),a=this.at(r,s),b=this.at(r,s+run),y=this.top(r,s+run/2,p.x,p.z),grade=(this.top(r,s+run,b.x,b.z)-this.top(r,s,a.x,a.z))/run,pitch=-Math.atan(grade),stretch=Math.hypot(1,grade);m.at(p.x,y,p.z,p.yaw,pitch);
       for(const side of[-1,1]){
         const edge=this.top(r,s+run/2,p.x+p.nx*side*r.width,p.z+p.nz*side*r.width)-y;
         m.box(side*(r.width-.12),edge+.11,0,.25,.22,run*stretch+.03,r.timber?wood:concrete);

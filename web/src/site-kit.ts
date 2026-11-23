@@ -34,7 +34,7 @@ export class Kit<T extends string = string> {
   private frame = new THREE.Matrix4();
   base = 0;
   private place: Frame = { e: 0, n: 0, az: 0 };
-  constructor(readonly low: boolean, private village: readonly [number, number], private groundAt: (x: number, z: number) => number) {}
+  constructor(readonly low: boolean, private village: readonly [number, number], private groundAt: (x: number, z: number) => number, private roofHeights = false) {}
 
   /** Work in a place's frame, its floor `lift` metres above the ground at its anchor. */
   at(p: Frame, lift: number): void {
@@ -62,6 +62,11 @@ export class Kit<T extends string = string> {
     const c = new THREE.Color(color), n = g.attributes.position.count, col = new Float32Array(n * 3);
     for (let i = 0; i < n * 3; i += 3) { col[i] = c.r; col[i + 1] = c.g; col[i + 2] = c.b; }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    if (this.roofHeights) {
+      const height = new Float32Array(n), pos = g.getAttribute('position');
+      for (let i = 0; i < n; i++) height[i] = pos.getY(i) - this.base;
+      g.setAttribute('snowHeight', new THREE.BufferAttribute(height, 1));
+    }
     const list = this.parts.get(tex) ?? []; list.push(g); this.parts.set(tex, list);
   }
   matrix(x: number, y: number, z: number, o: Opts<T> = {}): THREE.Matrix4 {

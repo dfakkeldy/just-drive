@@ -379,7 +379,7 @@ export function pushOutBodies(car: Pushable & ContactBody, bodies: readonly Cont
 }
 
 /** What the car needs to be pushed about: its place, its heading and its ground velocity. */
-export interface Pushable { x: number; z: number; heading: number; vx: number; vz: number; speed: number; spec?: VehicleSpec; onSolidImpact?(speed: number): void }
+export interface Pushable { x: number; z: number; y?: number; heading: number; vx: number; vz: number; speed: number; spec?: VehicleSpec; onSolidImpact?(speed: number): void }
 
 /**
  * Keep the player's car out of solid rectangles. The car is three circles along its length; each is pushed out of

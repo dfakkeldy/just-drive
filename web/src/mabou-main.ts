@@ -11,6 +11,7 @@
  * and only the siding and shingle patterns.
  */
 import * as THREE from 'three';
+import { snowRoof } from './weather-surfaces';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addFlag } from './flags';
 import type { Terrain } from './terrain';
@@ -770,8 +771,8 @@ function materials(): Map<Tex | null, THREE.MeshLambertMaterial> {
   return shared = mats;
 }
 /** Build one unit: its geometry per surface pattern (not yet merged across units). */
-export function buildUnit(unit: Unit, site: MabouMainSite, groundAt: (x: number, z: number) => number, low: boolean, roads: MapRoad[]): Map<Tex | null, THREE.BufferGeometry> {
-  const kit = new SiteKit<Tex>(low, site.village, groundAt);
+export function buildUnit(unit: Unit, site: MabouMainSite, groundAt: (x: number, z: number) => number, low: boolean, roads: MapRoad[], winter = false): Map<Tex | null, THREE.BufferGeometry> {
+  const kit = new SiteKit<Tex>(low, site.village, groundAt, winter);
   if (unit === 'streetWest' || unit === 'streetEast') street(kit, unit, roads, !site.sidewalkLayer);
   else BUILDERS[unit](kit);
   if (low) for (const tex of TEXES) if (!LOW_TEXES.includes(tex) && kit.parts.has(tex)) {
@@ -788,11 +789,11 @@ export function buildUnit(unit: Unit, site: MabouMainSite, groundAt: (x: number,
   }
   return out;
 }
-function meshes(name: string, geos: Map<Tex | null, THREE.BufferGeometry>, shadows: boolean): THREE.Group {
+function meshes(name: string, geos: Map<Tex | null, THREE.BufferGeometry>, shadows: boolean, mats: Map<Tex | null, THREE.MeshLambertMaterial>): THREE.Group {
   const group = new THREE.Group(); group.name = name;
   for (const [tex, geometry] of geos) {
     geometry.computeBoundingSphere();
-    const mesh = new THREE.Mesh(geometry, materials().get(tex)!);
+    const mesh = new THREE.Mesh(geometry, mats.get(tex)!);
     mesh.name = `${name}-${tex ?? 'paint'}`;
     mesh.castShadow = mesh.receiveShadow = shadows;
     group.add(mesh);
@@ -869,10 +870,19 @@ export class MabouMain implements HandBuiltPlace {
   private centres = new Map<Unit, { x: number; z: number }>();
   private keepers: THREE.Mesh[] = [];
   private roads: MapRoad[];
+  private readonly mats: Map<Tex | null, THREE.MeshLambertMaterial>;
+  private readonly winter: boolean;
   /** The roof over each footprint rectangle of every built place, measured from its drawn geometry (see roofTops). */
   private roofs: Roof[] = [];
   constructor(readonly site: MabouMainSite, private terrain: Terrain, private low: boolean, roads: Road[]) {
     this.group.name = 'mabou-main';
+    const cover = terrain.uniforms?.winterCover;
+    this.winter = !!cover;
+    this.mats = cover ? new Map([...materials()].map(([tex, original]) => {
+      const material = original.clone();
+      snowRoof(material, cover);
+      return [tex, material];
+    })) : materials();
     const [VE, VN] = site.village;
     this.roads = roads.map(r => ({ name: r.name, halfWidth: r.halfWidth, pts: r.pts.map(([x, z]): [number, number] => [x + VE, VN - z]) }));
     sideRoads(this.roads);   // found once at load, not in the frame that builds the sidewalk
@@ -891,10 +901,11 @@ export class MabouMain implements HandBuiltPlace {
     // The materials and their patterns exist from the start, and one empty mesh each is drawn once the camera is within
     // 900 m of the street (see update), so three.js builds their shaders and uploads the patterns before the first
     // place is built, not in the frame that builds it. Each keeper goes once a real mesh with its material is in the scene.
-    for (const [tex, material] of materials()) {
+    for (const [tex, material] of this.mats) {
       if (low && !LOW_TEXES.includes(tex)) continue;
       const g = new THREE.BufferGeometry();
       for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3], ...(tex ? [['uv', 2]] : [])] as [string, number][]) g.setAttribute(name, new THREE.Float32BufferAttribute([], size));
+      if (cover) g.setAttribute('snowHeight', new THREE.Float32BufferAttribute([], 1));
       const keeper = new THREE.Mesh(g, material);
       keeper.name = `mabou-main-keeper-${tex ?? 'paint'}`; keeper.frustumCulled = false; keeper.castShadow = keeper.receiveShadow = true;
       this.group.add(keeper); this.keepers.push(keeper);
@@ -927,8 +938,13 @@ export class MabouMain implements HandBuiltPlace {
       if (Math.hypot(view.x - item.x, view.z - item.z) > reach || !this.ready(item)) continue;
       const fallback = this.terrain.constructionHeightAt(item.x, item.z);
       if (fallback === null) continue;
-      const geos = buildUnit(item.unit, this.site, (x, z) => this.terrain.constructionHeightAt(x, z) ?? fallback, this.low, this.roads);
-      for (const g of geos.values()) this.triangles += g.attributes.position.count / 3;
+      const geos = buildUnit(item.unit, this.site, (x, z) => this.terrain.constructionHeightAt(x, z) ?? fallback, this.low, this.roads, this.winter && item.unit !== 'streetWest' && item.unit !== 'streetEast');
+      for (const g of geos.values()) {
+        this.triangles += g.attributes.position.count / 3;
+        if (this.winter && !g.hasAttribute('snowHeight')) {
+          g.setAttribute('snowHeight', new THREE.BufferAttribute(new Float32Array(g.getAttribute('position').count), 1));
+        }
+      }
       this.pending.splice(this.pending.indexOf(item), 1);
       if (item.unit !== 'streetWest' && item.unit !== 'streetEast') this.roofs.push(...roofTops(MAIN_PLACES[item.unit], geos, this.site.village));
       this.place(item.unit, geos);
@@ -959,9 +975,9 @@ export class MabouMain implements HandBuiltPlace {
         for (const l of list) l.dispose();
       }
       b.units.clear(); b.merged = true;
-      b.group.add(meshes(`mabou-main-${c}`, merged, shadows));
+      b.group.add(meshes(`mabou-main-${c}`, merged, shadows, this.mats));
     } else {
-      b.group.add(meshes(`mabou-main-${unit}`, geos, shadows));
+      b.group.add(meshes(`mabou-main-${unit}`, geos, shadows, this.mats));
     }
     // A keeper goes once a real mesh uses its material.
     const used = new Set<THREE.Material>();

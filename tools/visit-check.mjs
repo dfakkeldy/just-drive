@@ -13,6 +13,7 @@ async function load(source) {
 const source = existsSync(path) ? readFileSync(path,'utf8') : `export function isTestVisit(params) { return !(${readFileSync('web/src/main.ts','utf8').match(/const plainVisit = (.*);/)[1]}); }`;
 const policy = await load(source);
 players.push('astra');  // Optional 3D studies keep the player's ordinary title card.
+players.push('rain', 'season');
 function verify(p) {
   const failures=[]; const equal=(...args)=>{try{assert.equal(...args);}catch(e){failures.push(e.message);}};
   for (const key of [...players, 'fbclid','utm_source','utm_medium','utm_campaign','gclid','igshid','mc_cid','ref','unknown']) {

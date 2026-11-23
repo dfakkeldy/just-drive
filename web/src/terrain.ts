@@ -7,6 +7,7 @@ import { CART_TERRAIN_FRAG, CART_WATER_MASK_FRAG } from './eras/cart-shaders';
 import * as THREE from 'three';
 import {STUNT_TERRAIN_FRAG} from './stunt-ground-style';
 import { eraRoadField } from './era';
+import { weatherTerrainFragment } from './weather-surfaces';
 import { MIRROR_TERRAIN_VERT, TERRAIN_FRAG, TERRAIN_VERT, WATER_MASK_FRAG } from './shaders';
 import { readFile } from './store';
 import { updateCoastView } from './coast-view';
@@ -340,6 +341,12 @@ export class Terrain {
     return this.groundContact ? this.withGroundContact(body, read, this.drawnContact) : read();
   }
   readonly uniforms: Record<string, THREE.IUniform>;
+
+  private applyWeather(material: THREE.ShaderMaterial): void {
+    if (!this.cartRoads && (this.uniforms.winterCover || this.uniforms.rainWet)) {
+      material.fragmentShader = weatherTerrainFragment(material.fragmentShader, !!this.uniforms.winterCover, !!this.uniforms.rainWet);
+    }
+  }
   private tiles = new Map<string, Tile>();
   private walkTiles: (Tile|undefined)[] = [];
   private exists = new Set<string>();
@@ -1019,6 +1026,7 @@ export class Terrain {
     // The request touched an unready tile; count its completion in this frame's wanted set.
     if (t.lastUsed === this.frame) this.use(t);
     this.group.add(mesh);
+    this.applyWeather(mat);
     this.paved?.applyGround(mat);
     this.sidewalks?.tileReady?.(t.level,t.i,t.j);
     this.night?.applyGround(mat);
@@ -1644,6 +1652,7 @@ export class Terrain {
           const MIRROR_COAST=original.defines.COAST_SHORE;
           const mirrorUniforms={ ...original.uniforms, sourceHull: original.uniforms.hull, mirrorFocus: this.mirrorFocus };
           const material=!original.defines.STUNT_PARK?new THREE.ShaderMaterial({vertexShader: MIRROR_TERRAIN_VERT,fragmentShader: this.cartRoads ? CART_TERRAIN_FRAG : TERRAIN_FRAG,defines: { MIRROR: 1, ...(original.defines.GROUND_CLASSES ? { GROUND_CLASSES: 1 } : {}), ...(MIRROR_COAST ? { COAST_SHORE: 1, ...(original.defines.QUARRY ? { QUARRY: 1 } : {}) } : {}), ...(original.defines.SITE_GRAVEL ? { SITE_GRAVEL: 1 } : {}), ...(original.defines.AIRPORT ? { AIRPORT: 1 } : {}), ...(original.defines.ROAD_PAVEMENT ? { ROAD_PAVEMENT: 1 } : {}) },uniforms:mirrorUniforms}):new THREE.ShaderMaterial({vertexShader: MIRROR_TERRAIN_VERT,fragmentShader: STUNT_TERRAIN_FRAG,defines: {STUNT_PARK:1, MIRROR: 1, ...(original.defines.GROUND_CLASSES ? { GROUND_CLASSES: 1 } : {}), ...(MIRROR_COAST ? { COAST_SHORE: 1, ...(original.defines.QUARRY ? { QUARRY: 1 } : {}) } : {}), ...(original.defines.SITE_GRAVEL ? { SITE_GRAVEL: 1 } : {}), ...(original.defines.AIRPORT ? { AIRPORT: 1 } : {}) },uniforms:mirrorUniforms});
+          this.applyWeather(material);
           this.paved?.applyGround(material);
           this.night?.applyGround(material);
           t.mirror = { geometry, material };
