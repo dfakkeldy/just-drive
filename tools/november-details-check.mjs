@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { Buildings, buildingSites } from '../web/src/buildings.ts';
 import { baxtersCoveBuildingArt, littleMabouBuildingArt, NovemberBuildings, novemberFootprints, TRAILHEAD_FENCE } from '../web/src/november-buildings.ts';
 import { BAXTERS_COVE_LOT, littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
+import { littleMabouPonyTruss, mabouRoadOverrides, PONY_TRUSS, ponyTrussHeight, registerRailContacts } from '../web/src/november-bridges.ts';
+import { AreaContacts } from '../web/src/world-contacts.ts';
+import { pushOut } from '../web/src/parked.ts';
+import { touchesPlayer } from '../web/src/road-scene-rules.ts';
+import { Vehicle } from '../web/src/vehicle.ts';
+import { Towing } from '../web/src/towing.ts';
+import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
+import { SXS_CABIN_SPEC, SXS_CREW_SPEC, SXS_UTILITY_SPEC } from '../web/src/sxs-variants.ts';
+import { TRUCK_SPEC } from '../web/src/truck.ts';
 import { WHARF_SOURCES } from '../web/src/wharf-source.ts';
 import { areaPlaces, nearestPlacement, placesFor } from '../web/src/places.ts';
-import { planRails, railPoint } from '../web/src/guardrail-rules.ts';
+import { planRails, RAIL, railPoint } from '../web/src/guardrail-rules.ts';
 import { railLand } from './guardrail-land.mjs';
 import { Roads } from '../web/src/roads.ts';
 import { drawnRoadBytes, paintSiteSurface } from '../web/src/terrain.ts';
@@ -207,6 +217,1066 @@ for (const {a, b, side} of added) {
     }
   }
   console.log('PASS Baxters Cove harbour lot, shed art, gambrel shed, trailhead lane, kiosk, shelter and fence');
+}
+// Little Mabou Road grey steel pony-truss bridges (Mabou pack, ids 45 and 46).
+{
+  const mabouManifest = read('terrain', 'manifest'), mabouRoads = read('terrain', 'roads');
+  // Verify the production modern-Mabou gate in mabouRoadOverrides and main.ts.
+  const mainSource = readFileSync('web/src/main.ts', 'utf8');
+  assert.match(mainSource, /const roadLines = mabouRoadOverrides\(roadData\.roads, ERA\.modern, AREA\.id\);/, 'main.ts uses mabouRoadOverrides production gate');
+  const tagged = mabouRoadOverrides(mabouRoads.roads, true, 'mabou');
+  assert.ok(tagged.find(r => r.id === 44)?.guardrailRuns?.some(run => run.side === 1), 'modern Mabou override retains Little Mabou marsh south-shoulder rail');
+  assert.notEqual(tagged.find(r => r.id === 44)?.guardrailRuns, mabouRoads.roads.find(r => r.id === 44)?.guardrailRuns, 'modern Mabou override applies marsh rail onto road 44');
+  assert.deepEqual(mabouRoadOverrides(mabouRoads.roads, false, 'mabou').filter(r => r.ponyTruss), [], '1884 Mabou gets no pony-truss override');
+  assert.equal(mabouRoadOverrides(mabouRoads.roads, false, 'mabou').find(r => r.id === 44)?.guardrailRuns, mabouRoads.roads.find(r => r.id === 44)?.guardrailRuns, '1884 Mabou gets no marsh rail override');
+  assert.deepEqual(mabouRoadOverrides(mabouRoads.roads, true, 'judique').filter(r => r.ponyTruss), [], 'non-Mabou area gets no pony-truss override');
+  assert.equal(mabouRoadOverrides(mabouRoads.roads, true, 'judique').find(r => r.id === 44)?.guardrailRuns, mabouRoads.roads.find(r => r.id === 44)?.guardrailRuns, 'non-Mabou area gets no marsh rail override');
+  const matched = tagged.filter(r => r.ponyTruss);
+  assert.deepEqual(matched.map(r => r.id).sort((a, b) => a - b), [45, 46], 'only Little Mabou Road bridges 45 and 46 match');
+  for (const r of matched) {
+    const raw = mabouRoads.roads.find(x => x.id === r.id);
+    assert.notEqual(r, raw, `bridge ${r.id} tagged without mutating source`);
+    assert.equal(littleMabouPonyTruss(r), r, `bridge ${r.id} tag is idempotent`);
+    assert.ok(littleMabouPonyTruss({ ...raw, pts: [...raw.pts].reverse() }).ponyTruss, `reversed span ${r.id} still matches`);
+  }
+  for (const other of mabouRoads.roads.filter(r => r.id !== 45 && r.id !== 46)) {
+    assert.equal(littleMabouPonyTruss(other), other, `road ${other.id} stays unchanged`);
+  }
+  const makeRealTerrain = (exag, level = 8) => ({
+    level, manifest: mabouManifest, dataRevision: 1, exag, seaLevel: -0.2, low: false,
+    heightAt: (x, z) => { const h = land.ground(x, z, true); return h === null ? null : h > -0.2 ? -0.2 + (h + 0.2) * exag : h; },
+    surfaceAt(x, z) { const s = land.sample(x, z, true); if (!s) return null; const g = s.height > -0.2 ? -0.2 + (s.height + 0.2) * exag : s.height; return { ground: g, level: Math.min(level, s.level), kind: 2, halfWidth: 3, roadDist: 0, canopy: s.canopy, washboard: false }; },
+    withContactHeight: (_, read) => read(),
+    withGroundContact: (_, read) => read(),
+  });
+  // Exact baseline deck-physics preservation: Roads.deckHeight() matches untagged ModernBridges byte-for-byte at 1.5x and 3.0x
+  // across the full span and smooth approaches.
+  for (const exag of [1.5, 3.0]) {
+    const t = makeRealTerrain(exag, 8);
+    const baselineNet = new Roads(mabouRoads, mabouManifest.village, t);
+    const ponyNet = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, t);
+    for (const id of [45, 46]) {
+      const r = ponyNet.roads.find(x => x.id === id);
+      const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+      const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+      for (const s of [-16, -6, -3, -1, 0, span * 0.25, span * 0.5, span * 0.75, span, span + 1, span + 3, span + 6, span + 16]) {
+        for (const offset of [-4.5, -3.4, -2.0, 0, 2.0, 3.4, 4.5]) {
+          const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
+          const got = ponyNet.deckHeight(x, z);
+          const base = baselineNet.deckHeight(x, z);
+          assert.ok(Object.is(got, base), `bridge ${id} exag=${exag} deckHeight preserves ModernBridges baseline at s=${s.toFixed(1)}, off=${offset} (${got} vs ${base})`);
+        }
+      }
+    }
+    for (const child of [...baselineNet.group.children]) child.geometry?.dispose();
+    for (const child of [...ponyNet.group.children]) child.geometry?.dispose();
+  }
+  const realTerrain = makeRealTerrain(1.5, 8);
+  const baselineNet = new Roads(mabouRoads, mabouManifest.village, realTerrain);
+  const net = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, realTerrain);
+  const rails = net.guardrails;
+  assert.ok(rails, 'modern Mabou roads construct guardrails with pony-truss rail solids');
+  assert.match(mainSource, /if \(roads\.guardrails\) registerRailContacts\(fleetContacts, soloContacts, roads\.guardrails,/, 'main.ts uses shared registerRailContacts');
+  const rig = () => { const n = () => new THREE.Object3D(); return { root: n(), body: n(), steer: { fl: n(), fr: n() }, wheels: { fl: n(), fr: n(), rl: n(), rr: n() }, brakeLights: [] }; };
+  const ray = new THREE.Raycaster();
+  const down = new THREE.Vector3(0, -1, 0);
+  for (const id of [45, 46]) {
+    const r = net.roads.find(x => x.id === id);
+    const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, heading = Math.atan2(dx, -dz);
+    const midY = net.deckHeight(mx, mz);
+    assert.ok(Number.isFinite(midY), `bridge ${id} keeps finite deckHeight`);
+    assert.ok(Number.isFinite(baselineNet.deckHeight(mx, mz)), `bridge ${id} baseline builds`);
+    net.update(new THREE.Vector3(mx, 0, mz));
+    const spanObj = net.modern.spans.find(s => s.members.has(id));
+    const baseSpanObj = baselineNet.modern.spans.find(s => s.members.has(id));
+    assert.ok(spanObj?.geometry, `bridge ${id} builds pony-truss geometry inside ModernBridges`);
+    assert.ok(net.group.children.some(c => c.name === 'Modern bridge decks'), `bridge ${id} merges into single Modern bridge decks mesh`);
+    const mesh = new THREE.Mesh(spanObj.geometry);
+    mesh.updateMatrixWorld(true);
+    const pos = spanObj.geometry.getAttribute('position'), col = spanObj.geometry.getAttribute('color');
+    assert.ok(pos && col && pos.array.every(Number.isFinite), `bridge ${id} has finite vertex-coloured geometry`);
+    assert.ok(pos.count <= baseSpanObj.geometry.getAttribute('position').count, `bridge ${id} pony truss uses no more triangles than generic ModernBridges span (${pos.count / 3} vs ${baseSpanObj.geometry.getAttribute('position').count / 3})`);
+    let maxAboveDeck = -Infinity, maxHalf = 0, maxTrussHalf = 0;
+    const y0 = net.bridgeElevation(id, 0), y1 = net.bridgeElevation(id, 1);
+    for (let i = 0; i < pos.count; i++) {
+      const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
+      const along = (px - ax) * ux + (pz - az) * uz;
+      const across = Math.abs(-(px - ax) * uz + (pz - az) * ux);
+      if (along < -0.02 || along > span + 0.02) continue;
+      const deckAt = y0 + (y1 - y0) * Math.max(0, Math.min(1, along / span));
+      maxAboveDeck = Math.max(maxAboveDeck, py - deckAt);
+      maxHalf = Math.max(maxHalf, across);
+      if (py - deckAt > 0.05) maxTrussHalf = Math.max(maxTrussHalf, across);
+    }
+    assert.ok(maxAboveDeck >= 2.0 && maxAboveDeck <= 2.6, `bridge ${id} truss height matches pony-truss proportions (${maxAboveDeck.toFixed(2)} m)`);
+    assert.ok(maxTrussHalf < r.halfWidth && maxTrussHalf >= PONY_TRUSS.half, `bridge ${id} steel pony truss stays narrow one-lane with no outer generic rails (${(maxTrussHalf * 2).toFixed(2)} m wide)`);
+    assert.ok(maxHalf >= spanObj.width - 1e-3, `bridge ${id} deck covers full ModernBridges support width (${(maxHalf * 2).toFixed(2)} m)`);
+    // Rendered deck (asphalt inside trusses + concrete outer shoulders) matches Roads.deckHeight() across the full ModernBridges width.
+    const deckLimit = spanObj.width - 0.01;
+    for (const s of [0.05, span * 0.25, span * 0.5, span * 0.75, span - 0.05]) {
+      for (const offset of [-deckLimit, -3.0, -(PONY_TRUSS.clearHalf - 0.01), -1.0, 0, 1.0, PONY_TRUSS.clearHalf - 0.01, 3.0, deckLimit]) {
+        const x = ax + ux * s - uz * offset, z = az + uz * s + ux * offset;
+        const y = net.deckHeight(x, z);
+        assert.ok(y !== null, `bridge ${id} supports deck at s=${s.toFixed(2)}, offset=${offset}`);
+        ray.set(new THREE.Vector3(x, y + 0.5, z), down);
+        const hits = ray.intersectObject(mesh);
+        assert.ok(hits.some(h => Math.abs(h.point.y - y) < 0.005), `bridge ${id} deck mesh matches deckHeight at s=${s.toFixed(2)}, offset=${offset}`);
+      }
+    }
+    for (let seg = 0; seg < r.pts.length - 1; seg++) {
+      const [pa0, pa1] = r.pts[seg], [pb0, pb1] = r.pts[seg + 1];
+      const sdx = pb0 - pa0, sdz = pb1 - pa1, slen = Math.hypot(sdx, sdz) || 1;
+      const sux = sdx / slen, suz = sdz / slen;
+      const sampleTs = seg === 0 ? [0.01, 0.5] : seg === r.pts.length - 2 ? [0.5, 0.99] : [0.5];
+      for (const st of sampleTs) {
+        const px = pa0 + sdx * st, pz = pa1 + sdz * st;
+        for (const offset of [-deckLimit, -2.2, -2.085, 2.085, 2.2, deckLimit]) {
+          const x = px - suz * offset, z = pz + sux * offset;
+          const y = net.deckHeight(x, z);
+          assert.ok(y !== null, `bridge ${id} seg ${seg} t=${st} supports polyline edge offset=${offset}`);
+          ray.set(new THREE.Vector3(x, y + 0.5, z), down);
+          const hits = ray.intersectObject(mesh);
+          assert.ok(hits.some(h => Math.abs(h.point.y - y) < 0.005), `bridge ${id} seg ${seg} t=${st} polyline offset=${offset} hits continuous visible deck`);
+        }
+      }
+    }
+    // Verify inner steel rails are tied to every interior upright post AND both inclined end posts (no floating rail).
+    const panels = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2);
+    const panelLen = span / panels;
+    const trussH = ponyTrussHeight(span);
+    const endRailS = panelLen * ((PONY_TRUSS.railHeight - PONY_TRUSS.chordSize / 2) / (trussH - PONY_TRUSS.chordSize / 2));
+    const gapMid = (PONY_TRUSS.railInner + 0.07 + PONY_TRUSS.half - PONY_TRUSS.postSize / 2) / 2;
+    const endGapMid = (PONY_TRUSS.railInner + 0.07 + PONY_TRUSS.half - PONY_TRUSS.endPostSize / 2) / 2;
+    for (const side of [-1, 1]) {
+      for (let i = 1; i < panels; i++) {
+        const s = i * panelLen, yRail = y0 + (y1 - y0) * (s / span) + PONY_TRUSS.railHeight;
+        const bx = ax + ux * s - uz * side * gapMid, bz = az + uz * s + ux * side * gapMid;
+        ray.set(new THREE.Vector3(bx, yRail + 0.25, bz), down);
+        const hits = ray.intersectObject(mesh).filter(h => h.point.y >= yRail - 0.12 && h.point.y <= yRail + 0.12);
+        assert.ok(hits.length > 0, `bridge ${id} side=${side} post ${i} has steel bracket tying inner rail to upright`);
+      }
+      for (const s of [endRailS, span - endRailS]) {
+        const yRail = y0 + (y1 - y0) * (s / span) + PONY_TRUSS.railHeight;
+        const bx = ax + ux * s - uz * side * endGapMid, bz = az + uz * s + ux * side * endGapMid;
+        ray.set(new THREE.Vector3(bx, yRail + 0.25, bz), down);
+        const hits = ray.intersectObject(mesh).filter(h => h.point.y >= yRail - 0.12 && h.point.y <= yRail + 0.12);
+        assert.ok(hits.length > 0, `bridge ${id} side=${side} inclined end post at s=${s.toFixed(2)} has steel bracket tying inner rail`);
+      }
+    }
+    // Drive a real car across each bridge on real baked terrain in BOTH directions with lateral offset ±0.35 m:
+    // clear passes stay inside the 4.01 m narrow lane, reach the far bank, and match untagged baseline deck physics step-for-step.
+    for (const dir of [1, -1]) {
+      for (const lat of [0, -0.35, 0.35]) {
+        const car = new Vehicle(rig(), realTerrain, net, -0.2, CAR_SPEC);
+        const baseCar = new Vehicle(rig(), realTerrain, baselineNet, -0.2, CAR_SPEC);
+        const startS = dir > 0 ? -6 : span + 6, endS = dir > 0 ? span + 5 : -5;
+        const hdg = dir > 0 ? heading : heading + Math.PI;
+        for (const v of [car, baseCar]) {
+          v.place(ax + ux * startS - uz * lat, az + uz * startS + ux * lat, hdg);
+          v.vx = ux * dir * 5; v.vz = uz * dir * 5; v.speed = 5;
+        }
+        let reachedFar = false;
+        for (let step = 0; step < 1200; step++) {
+          car.update(1 / 120, { throttle: 0.25, steer: 0, handbrake: false, touch: false });
+          baseCar.update(1 / 120, { throttle: 0.25, steer: 0, handbrake: false, touch: false });
+          assert.equal(car.x, baseCar.x, `bridge ${id} dir=${dir} lat=${lat} step=${step} x matches baseline`);
+          assert.equal(car.y, baseCar.y, `bridge ${id} dir=${dir} lat=${lat} step=${step} y matches baseline`);
+          assert.equal(car.z, baseCar.z, `bridge ${id} dir=${dir} lat=${lat} step=${step} z matches baseline`);
+          assert.equal(car.airborne, baseCar.airborne, `bridge ${id} dir=${dir} lat=${lat} step=${step} airborne matches baseline`);
+          const at = (car.x - ax) * ux + (car.z - az) * uz;
+          if (dir > 0 ? at >= endS : at <= endS) { reachedFar = true; break; }
+        }
+        assert.equal(reachedFar, true, `bridge ${id} dir=${dir} lat=${lat} car reaches far bank`);
+      }
+    }
+    // Off-height rail checks: probes below the span on terrain, with car top 2 cm below deckY on both slopes,
+    // outside the inclined portals at 0.60 m above deck (clear of inner rail outer face 2.075 m and inclined truss),
+    // 5 m above the deck, and 0.6 m before either inclined portal at 1.8 m above deck must not hit truss rail walls.
+    const underGround = realTerrain.heightAt(mx, mz);
+    const highEndS = y1 >= y0 ? span - 3.0 : 3.0;
+    const highEndDeckY = y0 + (y1 - y0) * (highEndS / span);
+    const footprintDrop = (Math.max(...CAR_SPEC.envelope.circles) + CAR_SPEC.envelope.radius) * Math.abs(y1 - y0) / span;
+    const railOuter = PONY_TRUSS.railInner + 0.07;
+    const railOuterClear = railOuter + CAR_SPEC.envelope.radius + 0.02;
+    const railOuterHit = railOuter + CAR_SPEC.envelope.radius - 0.03;
+    const trussInnerClear = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius - 0.02;
+    const trussInnerHit = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius + 0.04;
+    for (const [label, px, pz, probeY] of [
+      ['below span', mx - uz * 1.4, mz + ux * 1.4, Math.min(underGround, midY - CAR_SPEC.height - 0.5)],
+      ['top 1.5 cm below sloped deck footprint at midspan', mx - uz * 1.6, mz + ux * 1.6, midY - footprintDrop - CAR_SPEC.height - 0.015],
+      ['top 1.5 cm below sloped deck footprint near higher end', ax + ux * highEndS - uz * 1.6, az + uz * highEndS + ux * 1.6, highEndDeckY - footprintDrop - CAR_SPEC.height - 0.015],
+      ['outside start rail outer face (2 cm clear) at 0.60 m', ax - ux * 1.5 - uz * railOuterClear, az - uz * 1.5 + ux * railOuterClear, y0 + 0.60],
+      ['outside end rail outer face (2 cm clear) at 0.60 m', bx + ux * 1.5 - uz * railOuterClear, bz + uz * 1.5 + ux * railOuterClear, y1 + 0.60],
+      ['inside mid-span upper truss (2 cm clear) at 1.8 m', mx - uz * trussInnerClear, mz + ux * trussInnerClear, midY + 1.8],
+      ['above truss', mx - uz * 1.4, mz + ux * 1.4, midY + 5],
+      ['above start inclined portal', ax - ux * 0.6 - uz * 1.6, az - uz * 0.6 + ux * 1.6, y0 + 1.8],
+      ['above end inclined portal', bx + ux * 0.6 - uz * 1.6, bz + uz * 0.6 + ux * 1.6, y1 + 1.8],
+    ]) {
+      const probe = {
+        x: px, z: pz, y: probeY, heading,
+        vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC,
+      };
+      const sx = probe.x, sz = probe.z, svx = probe.vx, svz = probe.vz;
+      rails.block(probe, 1 / 120);
+      rails.blockBridge(probe, 1 / 120);
+      assert.equal(probe.x, sx, `bridge ${id} ${label} probe x is not pushed by truss rail`);
+      assert.equal(probe.z, sz, `bridge ${id} ${label} probe z is not pushed by truss rail`);
+      assert.equal(probe.vx, svx, `bridge ${id} ${label} probe vx is not cancelled by truss rail`);
+      assert.equal(probe.vz, svz, `bridge ${id} ${label} probe vz is not cancelled by truss rail`);
+    }
+    // Paired positive probes on the colliding side of every vertical and lateral boundary.
+    for (const [label, px, pz, probeY, minPush] of [
+      ['top 2.5 cm above sloped deck footprint at midspan', mx - uz * 1.6, mz + ux * 1.6, midY - footprintDrop - CAR_SPEC.height + 0.025, 0.1],
+      ['top 2.5 cm above sloped deck footprint near higher end', ax + ux * highEndS - uz * 1.6, az + uz * highEndS + ux * 1.6, highEndDeckY - footprintDrop - CAR_SPEC.height + 0.025, 0.1],
+      ['start rail outer face (3 cm overlap) at 0.60 m', ax - ux * 1.5 - uz * railOuterHit, az - uz * 1.5 + ux * railOuterHit, y0 + 0.60, 0.01],
+      ['end rail outer face (3 cm overlap) at 0.60 m', bx + ux * 1.5 - uz * railOuterHit, bz + uz * 1.5 + ux * railOuterHit, y1 + 0.60, 0.01],
+      ['mid-span upper truss inner face (4 cm overlap) at 1.8 m', mx - uz * trussInnerHit, mz + ux * trussInnerHit, midY + 1.8, 0.02],
+    ]) {
+      const hitProbe = {
+        x: px, z: pz, y: probeY, heading,
+        vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC,
+      };
+      const sx = hitProbe.x, sz = hitProbe.z;
+      rails.blockBridge(hitProbe, 1 / 120);
+      const moved = Math.hypot(hitProbe.x - sx, hitProbe.z - sz);
+      assert.ok(moved > minPush, `bridge ${id} ${label} collides with visible steel (${moved.toFixed(4)} m)`);
+    }
+    // Shared production registerRailContacts: test Towing.allowsPose, zero extra yaw on active vehicle, and live coupled trailer rail contact.
+    for (const mode of ['solo', 'fleet']) {
+      let active = null;
+      const soloContacts = new AreaContacts(), fleetContacts = new AreaContacts();
+      registerRailContacts(fleetContacts, soloContacts, rails, body => body === active, TRUCK_SPEC);
+      const contacts = mode === 'solo' ? soloContacts : fleetContacts;
+      const lowIsStart = y0 <= y1;
+      const slopeS = lowIsStart ? 3.5 : span - 3.5;
+      const slopeDeckY = y0 + (y1 - y0) * (slopeS / span);
+      // At slopeDeckY + 0.78 (above inner rail at the lower end, still below inner rail at the higher end),
+      // a car clear of the 2.08 m truss face (across = 2.08 - radius - 0.02) must NOT be pushed by the high end's inner rail.
+      const slopeAcross = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius - 0.02;
+      for (const [label, px, pz, py] of [
+        ['start portal 1.8 m', ax - ux * 0.6 - uz * 1.6, az - uz * 0.6 + ux * 1.6, y0 + 1.8],
+        ['end portal 1.8 m', bx + ux * 0.6 - uz * 1.6, bz + uz * 0.6 + ux * 1.6, y1 + 1.8],
+        ['low-end slope clear of upper truss', ax + ux * slopeS - uz * slopeAcross, az + uz * slopeS + ux * slopeAcross, slopeDeckY + 0.78],
+      ]) {
+        assert.equal(contacts.allows({ x: px, z: pz, y: py, heading, spec: CAR_SPEC }), true, `bridge ${id} ${mode} contacts allow ${label}`);
+      }
+      const truck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+      active = truck;
+      const glanceYaw = heading + 0.12;
+      truck.placeAt(mx - uz * 0.78, mz + ux * 0.78, glanceYaw);
+      truck.vx = Math.sin(glanceYaw) * 4; truck.vz = -Math.cos(glanceYaw) * 4; truck.speed = 4;
+      truck.update(1 / 120, { throttle: 0, steer: 0, handbrake: false, touch: false });
+      truck.x -= uz * 0.03; truck.z += ux * 0.03;
+      const preX = truck.x, preZ = truck.z, preHeading = truck.heading;
+      contacts.resolve(truck);
+      const resolvedMove = Math.hypot(truck.x - preX, truck.z - preZ);
+      const extraYaw = Math.abs(Math.atan2(Math.sin(truck.heading - preHeading), Math.cos(truck.heading - preHeading)));
+      assert.ok(resolvedMove > 0.01, `bridge ${id} ${mode} active vehicle gets position correction from bridge rail (${resolvedMove.toFixed(4)} m)`);
+      assert.equal(extraYaw, 0, `bridge ${id} ${mode} active vehicle gets zero extra rail steering after Vehicle.step()`);
+      truck.placeAt(mx, mz, heading);
+      const towing = new Towing(truck, realTerrain, net, true, false, { contacts }, true, true);
+      assert.equal(towing.allowsPose({ x: mx, z: mz, heading, y: midY }), true, `bridge ${id} ${mode} Towing accepts centred truck+trailer`);
+      for (const offset of [-0.72, 0.72, -1.1, 1.1]) {
+        const off = { x: mx - uz * offset, z: mz + ux * offset, heading, y: midY };
+        assert.equal(towing.allowsPose(off), false, `bridge ${id} ${mode} Towing rejects ${offset} m off-centre truck+trailer`);
+      }
+      // Live coupled trailer rail contact: place the whole rig inside [0, span] near the rail, then angle the trailer into the rail side.
+      const rigS = span - 3.5;
+      const rigX = ax + ux * rigS, rigZ = az + uz * rigS;
+      truck.placeAt(rigX - uz * 0.55, rigZ + ux * 0.55, heading);
+      assert.equal(towing.place(), true, `bridge ${id} ${mode} towing.place succeeds at clear 0.55 m offset`);
+      const startTruckAlong = (truck.x - ax) * ux + (truck.z - az) * uz;
+      const startTrailerAlong = (towing.x - ax) * ux + (towing.z - az) * uz;
+      assert.ok(startTrailerAlong > 2 && startTruckAlong < span - 1, `bridge ${id} ${mode} whole rig sits inside [0, span]`);
+      const preTruckLat = -(truck.x - ax) * uz + (truck.z - az) * ux;
+      towing.heading = heading - 0.05;
+      truck.vx = (ux * Math.cos(0.08) - uz * Math.sin(0.08)) * 4;
+      truck.vz = (uz * Math.cos(0.08) + ux * Math.sin(0.08)) * 4;
+      truck.speed = 4;
+      const preImpactCount = towing.impacts;
+      towing.step(1 / 120);
+      const postTruckLat = -(truck.x - ax) * uz + (truck.z - az) * ux;
+      assert.ok(towing.impacts > preImpactCount, `bridge ${id} ${mode} live trailer rail contact registers an impact`);
+      assert.ok(postTruckLat < preTruckLat - 0.05, `bridge ${id} ${mode} live trailer rail contact pushes the coupled rig inward (${(preTruckLat - postTruckLat).toFixed(3)} m)`);
+      for (const body of towing.bodies()) {
+        const lat = Math.abs(-(body.x - ax) * uz + (body.z - az) * ux);
+        assert.ok(lat + body.spec.envelope.radius <= PONY_TRUSS.railInner + 0.02, `bridge ${id} ${mode} contact step keeps body inside rail (${(lat + body.spec.envelope.radius).toFixed(3)})`);
+      }
+      for (let step = 0; step < 90; step++) {
+        truck.update(1 / 120, { throttle: 0.4, steer: -0.15, handbrake: false, touch: false });
+        towing.step(1 / 120);
+        for (const body of towing.bodies()) {
+          const lat = Math.abs(-(body.x - ax) * uz + (body.z - az) * ux);
+          assert.ok(lat + body.spec.envelope.radius <= PONY_TRUSS.railInner + 0.02, `bridge ${id} ${mode} follow-up step ${step} keeps body inside rail`);
+        }
+      }
+      const endTruckAlong = (truck.x - ax) * ux + (truck.z - az) * uz;
+      const endTrailerAlong = (towing.x - ax) * ux + (towing.z - az) * uz;
+      assert.ok(endTruckAlong > startTruckAlong + 0.3, `bridge ${id} ${mode} truck continues forward after rail contact (${(endTruckAlong - startTruckAlong).toFixed(3)} m)`);
+      assert.ok(endTrailerAlong > startTrailerAlong + 0.3, `bridge ${id} ${mode} trailer continues forward after rail contact (${(endTrailerAlong - startTrailerAlong).toFixed(3)} m)`);
+      // Full loaded-rig crossing from 6 m before Bridge 45 at both -0.55 m and +0.55 m offsets (65% throttle, 0 steer):
+      // shallow rail scrapes preserve tangential forward speed and cross cleanly instead of stalling.
+      if (id === 45 && mode === 'solo') {
+        for (const latOff of [-0.55, 0.55]) {
+          const rigTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+          active = rigTruck;
+          const rigTow = new Towing(rigTruck, realTerrain, net, true, false, { contacts }, true, true);
+          rigTruck.place(ax - ux * 6 - uz * latOff, az - uz * 6 + ux * latOff, heading);
+          assert.equal(rigTow.place(), true, `bridge 45 loaded rig places at 6 m approach lat=${latOff}`);
+          let crossed = false;
+          for (let step = 0; step < 120 * 16; step++) {
+            rigTruck.update(1 / 120, { throttle: 0.65, steer: 0, handbrake: false, touch: false }, () => rigTow.step(1 / 120));
+            const alongNow = (rigTruck.x - ax) * ux + (rigTruck.z - az) * uz;
+            if (alongNow > span + 2) { crossed = true; break; }
+          }
+          const finalAlong = (rigTruck.x - ax) * ux + (rigTruck.z - az) * uz;
+          assert.equal(crossed, true, `bridge 45 loaded rig crosses cleanly from lat=${latOff} without stalling (reached ${finalAlong.toFixed(2)} m)`);
+        }
+        active = truck;
+      }
+      // Ordinary non-bridge solids (and non-bridge contact providers even right beside a pony-truss bridge)
+      // keep origin/main dead-stop behavior on shallow trailer hits.
+      if (id === 45 && mode === 'solo') {
+        const solidTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+        const wall = { x: 1e6, z: 1e6, half: 30, halfWidth: 0.3, heading };
+        const solidTow = new Towing(solidTruck, realTerrain, net, true, false, { solids: [wall] }, true, true);
+        solidTruck.place(ax - ux * 40, az - uz * 40, heading);
+        assert.equal(solidTow.place(), true, 'ordinary solid test places cleanly on Little Mabou Road');
+        const tr = solidTow.bodies()[1];
+        const bodyHalf = tr.spec.envelope.radius + Math.max(0, ...(tr.spec.envelope.circleSides ?? []));
+        // Place the wall 2 cm overlapping the trailer's right edge, with shallow 8 m/s forward + 0.5 m/s into-wall graze velocity.
+        const off = bodyHalf + wall.halfWidth - 0.02;
+        wall.x = tr.x - uz * off; wall.z = tr.z + ux * off; wall.heading = tr.heading;
+        solidTruck.vx = ux * 8 - uz * 0.5; solidTruck.vz = uz * 8 + ux * 0.5; solidTruck.speed = 8;
+        solidTruck.x += solidTruck.vx / 120; solidTruck.z += solidTruck.vz / 120;
+        solidTow.step(1 / 120);
+        assert.ok(solidTow.impacts > 0, 'ordinary solid shallow trailer overlap registers an impact');
+        assert.equal(solidTruck.speed, 0, 'ordinary solid shallow trailer overlap still stops the rig as on main');
+        // Same shallow graze against a non-bridge contact provider right beside Bridge 45 still stops the rig dead.
+        const nearTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+        const nearWall = { x: 1e6, z: 1e6, half: 10, halfWidth: 0.3, heading };
+        const nearContacts = new AreaContacts();
+        nearContacts.add({ resolve: body => pushOut(body, [nearWall], true), allows: body => !touchesPlayer(nearWall, body, -1e-7, body.spec) });
+        const nearSolo = new AreaContacts();
+        registerRailContacts(nearContacts, nearSolo, rails, body => body === nearTruck, TRUCK_SPEC);
+        const nearTow = new Towing(nearTruck, realTerrain, net, true, false, { contacts: nearContacts }, true, true);
+        nearTruck.place(ax - ux * 2, az - uz * 2, heading);
+        assert.equal(nearTow.place(), true, 'near-bridge non-bridge contact test places cleanly');
+        const ntr = nearTow.bodies()[1];
+        nearWall.x = ntr.x - uz * off; nearWall.z = ntr.z + ux * off; nearWall.heading = ntr.heading;
+        nearTruck.vx = ux * 8 - uz * 0.5; nearTruck.vz = uz * 8 + ux * 0.5; nearTruck.speed = 8;
+        nearTruck.x += nearTruck.vx / 120; nearTruck.z += nearTruck.vz / 120;
+        nearTow.step(1 / 120);
+        assert.ok(nearTow.impacts > 0, 'near-bridge non-bridge contact registers an impact');
+        assert.equal(nearTruck.speed, 0, 'near-bridge non-bridge contact still stops the rig as on main');
+        // Mixed pony-truss + cancelling yard/solid corrections (zero solid onSolidImpact: into > 0) must NOT receive the pony-truss slide.
+        const mixTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+        const mixContacts = new AreaContacts(), mixSolo = new AreaContacts();
+        let yardNudge = 0, yardFired = false, yardDeltaX = 0, yardDeltaZ = 0, bridgeDx = 0, bridgeDz = 0, exactWallX = NaN, exactWallZ = NaN, afterBridgeX0 = 0, afterBridgeZ0 = 0, liveOldX = 0, liveOldZ = 0, oldCaptured = false;
+        mixContacts.add({ resolve: b => { if (yardNudge && !oldCaptured) { oldCaptured = true; liveOldX = b.x; liveOldZ = b.z; } }, allows: () => true });
+        registerRailContacts(mixContacts, mixSolo, rails, body => body === mixTruck, TRUCK_SPEC);
+        const mixWall = { x: 1e6, z: 1e6, half: 30, halfWidth: 0.3, heading: 0 };
+        const mixYard = {
+          resolveTowBody: b => {
+            if (!yardNudge || yardFired) return;
+            yardFired = true;
+            const bx0 = b.x, bz0 = b.z;
+            afterBridgeX0 = bx0; afterBridgeZ0 = bz0;
+            bridgeDx = bx0 - liveOldX; bridgeDz = bz0 - liveOldZ;
+            const env = b.spec.envelope, sinB = Math.sin(b.heading), cosB = Math.cos(b.heading);
+            let minX = Infinity;
+            for (let ci = 0; ci < env.circles.length; ci++) {
+              minX = Math.min(minX, sinB * env.circles[ci] + cosB * (env.circleSides?.[ci] ?? 0) - env.radius);
+            }
+            // Place wall flush on -x of post-bridge pose (moving in +x so pushOut normal is +x, into > 0, zero onSolidImpact):
+            // yard shifts -0.0625 on X, then pushOut(solids) pushes +0.0625 back to bit-exact (bx0, bz0).
+            mixWall.x = bx0 + minX - mixWall.halfWidth; mixWall.z = bz0;
+            b.x -= yardNudge;
+            yardDeltaX = b.x - bx0; yardDeltaZ = b.z - bz0;
+            for (let iter = 0; iter < 4; iter++) {
+              const probe = { x: b.x, z: b.z, heading: b.heading, vx: b.vx, vz: b.vz, speed: b.speed, spec: b.spec };
+              pushOut(probe, [mixWall], true);
+              exactWallX = probe.x; exactWallZ = probe.z;
+              if (probe.x === bx0 && probe.z === bz0) break;
+              mixWall.x += bx0 - probe.x;
+            }
+          },
+          resolveSolids: () => {},
+          allowsBody: () => true,
+        };
+        const mixTow = new Towing(mixTruck, realTerrain, net, true, false, { contacts: mixContacts, yard: mixYard, solids: [mixWall] }, true, true);
+        mixTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+        assert.equal(mixTow.place(), true, 'mixed cancelling contact rig places on Bridge 45');
+        mixTruck.x = ax + ux * (span * 0.5) - uz * 0.55; mixTruck.z = az + uz * (span * 0.5) + ux * 0.55;
+        const mhMix = mixTow.hitch(); mixTow.hx = mhMix.x; mixTow.hz = mhMix.z; mixTow.hitchY = mhMix.y;
+        mixTow.heading = heading - 0.05;
+        mixTow.solveCoupler(); mixTow.attitude(false, 1 / 120);
+        mixTruck.vx = ux * 8 - uz * 0.4; mixTruck.vz = uz * 8 + ux * 0.4; mixTruck.speed = 8;
+        assert.ok(mixTruck.vx > 1, 'mixed cancelling rig moves in +x so -x wall emits zero onSolidImpact');
+        const preMixTruckX = mixTruck.x, preMixTruckZ = mixTruck.z;
+        yardNudge = 0.0625;
+        mixTow.step(1 / 120);
+        assert.equal(yardFired, true, 'mixed cancelling test ran yard correction');
+        assert.equal(yardDeltaX, -0.0625, 'yard moved live trailer by -0.0625 m on X');
+        assert.equal(yardDeltaZ, 0, 'yard moved live trailer by 0 m on Z');
+        assert.equal(exactWallX, afterBridgeX0, 'solid push cancels yard X move to bit-exact post-bridge X');
+        assert.equal(exactWallZ, afterBridgeZ0, 'solid push keeps bit-exact post-bridge Z');
+        assert.ok(Math.hypot(bridgeDx, bridgeDz) > 1e-4, 'mixed cancelling test hit pony-truss rail');
+        assert.equal(mixTruck.x, preMixTruckX + bridgeDx, 'live rig net X equals exact bridge-only displacement');
+        assert.equal(mixTruck.z, preMixTruckZ + bridgeDz, 'live rig net Z equals exact bridge-only displacement');
+        assert.equal(mixTruck.speed, 0, 'mixed pony-truss + cancelling yard/solid corrections still stop the rig as on main');
+        // Mixed pony-truss + callback-only AreaContacts site (smaller impact, zero position/velocity change) still stops the rig.
+        {
+          const cbTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+          const cbContacts = new AreaContacts(), cbSolo = new AreaContacts();
+          let cbActive = false;
+          registerRailContacts(cbContacts, cbSolo, rails, body => body === cbTruck, TRUCK_SPEC);
+          cbContacts.add({ resolve: b => { if (cbActive) b.onSolidImpact?.(0.05); }, allows: () => true });
+          const cbTow = new Towing(cbTruck, realTerrain, net, true, false, { contacts: cbContacts }, true, true);
+          cbTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          assert.equal(cbTow.place(), true, 'callback-only AreaContacts site rig places on Bridge 45');
+          cbTruck.x = ax + ux * (span * 0.5) - uz * 0.55; cbTruck.z = az + uz * (span * 0.5) + ux * 0.55;
+          const mhCb = cbTow.hitch(); cbTow.hx = mhCb.x; cbTow.hz = mhCb.z; cbTow.hitchY = mhCb.y;
+          cbTow.heading = heading - 0.05; cbTow.solveCoupler(); cbTow.attitude(false, 1 / 120);
+          cbTruck.vx = ux * 8 - uz * 0.4; cbTruck.vz = uz * 8 + ux * 0.4; cbTruck.speed = 8;
+          cbActive = true;
+          cbTow.step(1 / 120);
+          assert.equal(cbTruck.speed, 0, 'mixed pony-truss + callback-only AreaContacts site impact still stops the rig');
+        }
+        // Mixed pony-truss + prop knockdown (props.hitCar factor < 1) still stops the rig as on main.
+        {
+          const propTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+          const propContacts = new AreaContacts(), propSolo = new AreaContacts();
+          registerRailContacts(propContacts, propSolo, rails, body => body === propTruck, TRUCK_SPEC);
+          let propFactor = 1;
+          const propTow = new Towing(propTruck, realTerrain, net, true, false, { contacts: propContacts, props: { hitCar: () => propFactor } }, true, true);
+          propTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          assert.equal(propTow.place(), true, 'prop knockdown mixed rig places on Bridge 45');
+          propTruck.x = ax + ux * (span * 0.5) - uz * 0.55; propTruck.z = az + uz * (span * 0.5) + ux * 0.55;
+          const mhProp = propTow.hitch(); propTow.hx = mhProp.x; propTow.hz = mhProp.z; propTow.hitchY = mhProp.y;
+          propTow.heading = heading - 0.05; propTow.solveCoupler(); propTow.attitude(false, 1 / 120);
+          propTruck.vx = ux * 8 - uz * 0.4; propTruck.vz = uz * 8 + ux * 0.4; propTruck.speed = 8;
+          propFactor = 0.91;
+          propTow.step(1 / 120);
+          assert.equal(propTruck.speed, 0, 'mixed pony-truss + prop knockdown (0.91 factor) still stops the rig as on main');
+        }
+        // Mixed pony-truss + 1 mm-margin ordinary road-rail hit (zero displacement, onSolidImpact > 0) still stops the rig.
+        {
+          const marginNet = new Roads({ roads: tagged }, mabouManifest.village, realTerrain);
+          const marginRails = marginNet.guardrails;
+          const marginTruck = new Vehicle(rig(), realTerrain, marginNet, -0.2, TRUCK_SPEC);
+          const marginContacts = new AreaContacts(), marginSolo = new AreaContacts();
+          registerRailContacts(marginContacts, marginSolo, marginRails, body => body === marginTruck, TRUCK_SPEC);
+          const marginTow = new Towing(marginTruck, realTerrain, marginNet, true, false, { contacts: marginContacts }, true, true);
+          marginTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          assert.equal(marginTow.place(), true, '1 mm margin mixed-rail test rig places on Bridge 45');
+          marginTruck.x = ax + ux * (span * 0.5) - uz * 0.55; marginTruck.z = az + uz * (span * 0.5) + ux * 0.55;
+          const hNow = marginTow.hitch(); marginTow.hx = hNow.x; marginTow.hz = hNow.z; marginTow.hitchY = hNow.y;
+          marginTow.heading = heading - 0.05;
+          marginTow.solveCoupler(); marginTow.attitude(false, 1 / 120);
+          marginTruck.vx = ux * 8 - uz * 0.4; marginTruck.vz = uz * 8 + ux * 0.4; marginTruck.speed = 8;
+          const mtr0 = marginTow.bodies()[1];
+          // Place a synthetic road-rail solid exactly 0.5 mm outside the trailer's rear circle on the right side
+          // (inside pushOut's 1 mm rail margin: 0 displacement, nonzero impact, well clear of the truck).
+          const env0 = mtr0.spec.envelope, fSin = Math.sin(mtr0.heading), fCos = Math.cos(mtr0.heading);
+          const rearOff = Math.min(...env0.circles);
+          const rcx = mtr0.x + fSin * rearOff, rcz = mtr0.z - fCos * rearOff;
+          const marginSolid = { x: rcx - uz * (env0.radius + 0.1 + 0.0005), z: rcz + ux * (env0.radius + 0.1 + 0.0005), half: 0.2, halfWidth: 0.1, heading };
+          // Verify this solid triggers impact with ZERO displacement under pushOut(body, [marginSolid], false, 0).
+          const checkMargin = { x: mtr0.x, z: mtr0.z, heading: mtr0.heading, vx: marginTruck.vx, vz: marginTruck.vz, speed: 8, spec: mtr0.spec };
+          const marginHit = pushOut(checkMargin, [marginSolid], false, 0);
+          assert.ok(marginHit > 0.2, `1 mm-margin synthetic road rail produces nonzero impact (${marginHit.toFixed(3)} m/s)`);
+          assert.equal(checkMargin.x, mtr0.x, '1 mm-margin road rail produces zero X displacement');
+          assert.equal(checkMargin.z, mtr0.z, '1 mm-margin road rail produces zero Z displacement');
+          const cellX = Math.floor(mtr0.x / RAIL.chunk), cellZ = Math.floor(mtr0.z / RAIL.chunk);
+          const cellKeyNum = (cellX + 16384) * 32768 + cellZ + 16384;
+          const cellList = marginRails.cells.get(cellKeyNum) ?? [];
+          cellList.push({ solids: [marginSolid] });
+          marginRails.cells.set(cellKeyNum, cellList);
+          marginTow.step(1 / 120);
+          assert.equal(marginTruck.speed, 0, 'mixed pony-truss + 1 mm-margin zero-displacement road-rail hit still stops the rig');
+          for (const child of [...marginNet.group.children]) child.geometry?.dispose();
+        }
+        // Mixed pony-truss + smaller-than-max later onSolidImpact (zero displacement) still stops the rig.
+        {
+          const smallTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+          const smallContacts = new AreaContacts(), smallSolo = new AreaContacts();
+          registerRailContacts(smallContacts, smallSolo, rails, body => body === smallTruck, TRUCK_SPEC);
+          let smallImpact = false;
+          const smallYard = { resolveTowBody: b => { if (smallImpact) b.onSolidImpact?.(0.05); }, resolveSolids: () => {}, allowsBody: () => true };
+          const smallTow = new Towing(smallTruck, realTerrain, net, true, false, { contacts: smallContacts, yard: smallYard }, true, true);
+          smallTruck.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+          assert.equal(smallTow.place(), true, 'smaller-than-max impact test rig places on Bridge 45');
+          smallTruck.x = ax + ux * (span * 0.5) - uz * 0.55; smallTruck.z = az + uz * (span * 0.5) + ux * 0.55;
+          smallTow.x = smallTruck.x - ux * 5.2; smallTow.z = smallTruck.z - uz * 5.2; smallTow.heading = heading - 0.05;
+          smallTruck.vx = ux * 8 - uz * 0.4; smallTruck.vz = uz * 8 + ux * 0.4; smallTruck.speed = 8;
+          smallImpact = true;
+          smallTow.step(1 / 120);
+          assert.equal(smallTruck.speed, 0, 'mixed pony-truss + smaller-than-max later onSolidImpact still stops the rig');
+        }
+        // Mixed pony-truss + cancelling extra AreaContacts providers must also stop the rig.
+        const mixTruck2 = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+        const mixContacts2 = new AreaContacts(), mixSolo2 = new AreaContacts();
+        let siteNudge = 0;
+        mixContacts2.add({ resolve: b => { b.x += siteNudge; }, allows: () => true });
+        mixContacts2.add({ resolve: b => { b.x -= siteNudge; }, allows: () => true });
+        registerRailContacts(mixContacts2, mixSolo2, rails, body => body === mixTruck2, TRUCK_SPEC);
+        const mixTow2 = new Towing(mixTruck2, realTerrain, net, true, false, { contacts: mixContacts2 }, true, true);
+        mixTruck2.placeAt(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+        assert.equal(mixTow2.place(), true, 'mixed AreaContacts rig places on Bridge 45');
+        mixTruck2.x = ax + ux * (span * 0.5) - uz * 0.55; mixTruck2.z = az + uz * (span * 0.5) + ux * 0.55;
+        mixTow2.x = mixTruck2.x - ux * 5.2; mixTow2.z = mixTruck2.z - uz * 5.2; mixTow2.heading = heading - 0.05;
+        mixTruck2.vx = ux * 8 - uz * 0.4; mixTruck2.vz = uz * 8 + ux * 0.4; mixTruck2.speed = 8;
+        siteNudge = 0.05;
+        mixTow2.step(1 / 120);
+        assert.equal(mixTruck2.speed, 0, 'mixed pony-truss + cancelling AreaContacts providers still stop the rig as on main');
+        // Bounds-only corner clamp with exact orthogonal velocity (vx*dx + vz*dz === 0 while vx*(dx/n) + vz*(dz/n) < 0)
+        // preserves velocity and registers zero impact, matching origin/main.
+        {
+          const flatTerrain = {
+            manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+            heightAt: () => 5,
+            surfaceAt: () => ({ ground: 5, level: 8, roadDist: 0, halfWidth: 4, kind: 2, washboard: false }),
+            withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+          };
+          const flatRoads = new Roads({ roads: [] }, mabouManifest.village, flatTerrain);
+          const bndTruck = new Vehicle(rig(), flatTerrain, flatRoads, -0.2, TRUCK_SPEC);
+          const bndTow = new Towing(bndTruck, flatTerrain, flatRoads, true, false, {}, true, true);
+          bndTruck.place(0, 0, 0);
+          assert.equal(bndTow.place(), true, 'flat bounds corner test rig places cleanly');
+          const btr = bndTow.bodies()[1];
+          const bEx = btr.spec.halfWidth, bEz = btr.spec.halfLength;
+          // Clamp only the trailer corner by exact dx = +0.0625, dz = -0.3125 (truck stays well inside bounds).
+          const bMinX = btr.x - bEx + 0.0625, bMaxZ = btr.z + bEz - 0.3125;
+          bndTruck.bounds = [bMinX, btr.z - 200, btr.x + 200, bMaxZ];
+          const cdx = (bMinX + bEx) - btr.x, cdz = (bMaxZ - bEz) - btr.z, cn = Math.hypot(cdx, cdz);
+          const bvx = -5, bvz = -1;
+          assert.equal(bvx * cdx + bvz * cdz, 0, 'orthogonal corner velocity has exact zero dot product');
+          assert.ok(bvx * (cdx / cn) + bvz * (cdz / cn) < 0, 'pre-divided normal would round negative on this corner');
+          bndTruck.vx = bvx; bndTruck.vz = bvz; bndTruck.speed = Math.hypot(bvx, bvz);
+          bndTow.step(1 / 120);
+          assert.equal(bndTow.impacts, 0, 'bounds corner clamp with exact zero dot product registers zero impact');
+          assert.equal(bndTruck.vx, bvx, 'bounds corner clamp preserves exact vx as on main');
+          assert.equal(bndTruck.vz, bvz, 'bounds corner clamp preserves exact vz as on main');
+        }
+      }
+    }
+  }
+  // Level 6 -> 7 -> 8 streaming upgrades: each finer bank level replaces and disposes the previous geometry and updates deckHeight.
+  {
+    let curLevel = 6, bias = 0;
+    const streamTerrain = {
+      manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => { const g = realTerrain.heightAt(x, z); return g === null ? null : g + bias; },
+      surfaceAt: (x, z) => { const s = realTerrain.surfaceAt(x, z); return s ? { ...s, ground: s.ground + bias, level: curLevel } : null; },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const streamNet = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, streamTerrain);
+    for (const id of [45, 46]) {
+      const r = streamNet.roads.find(x => x.id === id);
+      const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      let prevGeo = null, prevH = -Infinity;
+      for (const [lvl, bOff] of [[6, 0.0], [7, 0.25], [8, 0.5]]) {
+        curLevel = lvl; bias = bOff; streamTerrain.dataRevision++;
+        let disposed = false;
+        if (prevGeo) { const orig = prevGeo.dispose.bind(prevGeo); prevGeo.dispose = () => { disposed = true; orig(); }; }
+        const h = streamNet.deckHeight(mx, mz);
+        assert.ok(h !== null && h > prevH + 0.15, `bridge ${id} level ${lvl} deckHeight updates upward with bank elevation`);
+        const spanObj = streamNet.modern.spans.find(s => s.members.has(id));
+        assert.ok(spanObj?.geometry, `bridge ${id} level ${lvl} has built span geometry`);
+        if (prevGeo) {
+          assert.notEqual(spanObj.geometry, prevGeo, `bridge ${id} level ${lvl} replaces coarser geometry`);
+          assert.equal(disposed, true, `bridge ${id} level ${lvl} disposes replaced geometry`);
+        }
+        prevGeo = spanObj.geometry; prevH = h;
+      }
+    }
+    for (const child of [...streamNet.group.children]) child.geometry?.dispose();
+  }
+  // Contact-first level 6 -> 8 terrain upgrade: each direct contact entry point (solo.allows, fleet.allows, blockBridge)
+  // refreshes a stale level-6 deck on its own fresh fixture BEFORE any revision read or deckHeight() call.
+  const makeUpgradeFixture = () => {
+    let curLevel = 6, bias = 0;
+    const upTerrain = {
+      manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => { const g = realTerrain.heightAt(x, z); return g === null ? null : g + bias; },
+      surfaceAt: (x, z) => { const s = realTerrain.surfaceAt(x, z); return s ? { ...s, ground: s.ground + bias, level: curLevel } : null; },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const upNet = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, upTerrain);
+    const soloUp = new AreaContacts(), fleetUp = new AreaContacts();
+    registerRailContacts(fleetUp, soloUp, upNet.guardrails, () => false, CAR_SPEC);
+    return {
+      upTerrain, upNet, soloUp, fleetUp,
+      upgrade(extraBias = 1.5) { curLevel = 8; bias = extraBias; upTerrain.dataRevision++; },
+      dispose() { for (const child of [...upNet.group.children]) child.geometry?.dispose(); },
+    };
+  };
+  for (const id of [45, 46]) {
+    for (const entry of ['solo', 'fleet', 'blockBridge']) {
+      const f = makeUpgradeFixture();
+      const r = f.upNet.roads.find(x => x.id === id);
+      const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+      const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      const y6 = f.upNet.deckHeight(mx, mz);
+      assert.ok(y6 !== null, `bridge ${id} ${entry} seeds level-6 deck`);
+      f.upgrade(1.5);
+      // Do NOT read revision or call deckHeight() before invoking the direct contact entry point.
+      const pose = { x: mx - uz * 1.6, z: mz + ux * 1.6, y: y6 + 1.5 - CAR_SPEC.height - 0.5, heading: hdg, spec: CAR_SPEC };
+      if (entry === 'solo') assert.equal(f.soloUp.allows(pose), true, `bridge ${id} direct soloContacts.allows refreshes stale level-6 deck`);
+      else if (entry === 'fleet') assert.equal(f.fleetUp.allows(pose), true, `bridge ${id} direct fleetContacts.allows refreshes stale level-6 deck`);
+      else {
+        const probe = { ...pose, vx: -uz * 4, vz: ux * 4, speed: 0 };
+        f.upNet.guardrails.blockBridge(probe, 1 / 120);
+        assert.equal(probe.x, pose.x, `bridge ${id} direct blockBridge refreshes stale level-6 deck`);
+        assert.equal(probe.z, pose.z, `bridge ${id} direct blockBridge refreshes stale level-6 deck`);
+      }
+      f.dispose();
+    }
+  }
+  // Revision tracking: unrelated terrain revisions keep contact revisions steady; a deck-only upgrade with fixed planner counts
+  // advances fleetContacts.revision; and opposing planner-count / bridge-version deltas NEVER cancel out.
+  {
+    const f = makeUpgradeFixture();
+    const r45 = f.upNet.roads.find(x => x.id === 45), r46 = f.upNet.roads.find(x => x.id === 46);
+    const m45x = (r45.pts[0][0] + r45.pts[r45.pts.length - 1][0]) / 2, m45z = (r45.pts[0][1] + r45.pts[r45.pts.length - 1][1]) / 2;
+    const m46x = (r46.pts[0][0] + r46.pts[r46.pts.length - 1][0]) / 2, m46z = (r46.pts[0][1] + r46.pts[r46.pts.length - 1][1]) / 2;
+    assert.ok(f.upNet.deckHeight(m45x, m45z) !== null, 'bridge 45 seeded at level 6');
+    assert.ok(f.upNet.deckHeight(m46x, m46z) !== null, 'bridge 46 seeded at level 6');
+    f.upNet.guardrails.audit.samples = 48;
+    const rev0Fleet = f.fleetUp.revision, rev0Solo = f.soloUp.revision;
+    f.upTerrain.dataRevision++;
+    assert.equal(f.fleetUp.revision, rev0Fleet, 'unrelated terrain revision keeps fleetContacts.revision steady');
+    assert.equal(f.soloUp.revision, rev0Solo, 'unrelated terrain revision keeps soloContacts.revision steady');
+    // 1. Deck-only upgrade with planner counts held fixed at 48 (fails if independent bridge provider is removed).
+    f.upgrade(1.0);
+    const rev1Fleet = f.fleetUp.revision, rev1Solo = f.soloUp.revision;
+    assert.notEqual(rev1Fleet, rev0Fleet, 'deck-only upgrade with fixed planner counts advances fleetContacts.revision');
+    assert.notEqual(rev1Solo, rev0Solo, 'deck-only upgrade advances soloContacts.revision');
+    f.dispose();
+  }
+  {
+    const f = makeUpgradeFixture();
+    for (const id of [45, 46]) {
+      const r = f.upNet.roads.find(x => x.id === id);
+      const mx = (r.pts[0][0] + r.pts[r.pts.length - 1][0]) / 2, mz = (r.pts[0][1] + r.pts[r.pts.length - 1][1]) / 2;
+      assert.ok(f.upNet.deckHeight(mx, mz) !== null, `bridge ${id} seeded at level 6`);
+    }
+    f.upNet.guardrails.audit.samples = 48;
+    const revBeforeFleet = f.fleetUp.revision, revBeforeSolo = f.soloUp.revision;
+    // 2. Simultaneous opposing change (samples 48 -> 46 while both decks upgrade +2): independent providers never cancel.
+    f.upNet.guardrails.audit.samples = 46;
+    f.upgrade(1.0);
+    assert.notEqual(f.fleetUp.revision, revBeforeFleet, 'fleetContacts.revision advances even when planner counts fall by the exact deck-version increase');
+    assert.notEqual(f.soloUp.revision, revBeforeSolo, 'soloContacts.revision advances on level-8 upgrade');
+    f.dispose();
+  }
+  // Pure read-only allowsBridge check + fixed-revision before/after deck-build clearance parity on Bridge 46:
+  // preflight bank endpoints and built mesh/collision endpoints match identically with zero shift when the deck builds.
+  {
+    const freshNet = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, realTerrain);
+    const childrenBefore = freshNet.group.children.length;
+    const verBefore = freshNet.bridgeDeckVersion;
+    const r45 = freshNet.roads.find(x => x.id === 45);
+    const [ax, az] = r45.pts[0], [bx, bz] = r45.pts[r45.pts.length - 1];
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, hdg = Math.atan2(bx - ax, -(bz - az));
+    assert.equal(freshNet.guardrails.allowsBridge({ x: mx, z: mz, y: 3.6, heading: hdg, spec: CAR_SPEC }), true, 'fresh allowsBridge accepts centred pose');
+    assert.equal(freshNet.group.children.length, childrenBefore, 'allowsBridge does not build or add scene meshes');
+    assert.equal(freshNet.bridgeDeckVersion, verBefore, 'allowsBridge does not advance bridgeDeckVersion');
+    const r46 = freshNet.roads.find(x => x.id === 46);
+    const [a6x, a6z] = r46.pts[0], [b6x, b6z] = r46.pts[r46.pts.length - 1];
+    const d6x = b6x - a6x, d6z = b6z - a6z, span46 = Math.hypot(d6x, d6z), u6x = d6x / span46, u6z = d6z / span46, hdg46 = Math.atan2(d6x, -d6z);
+    const endsBefore = [0, 0];
+    assert.ok(freshNet.bridgeBankElevations(46, endsBefore) >= 6, 'bridge 46 read-only bank elevations available before build');
+    const px46 = a6x + u6x * 0.5 - u6z * 1.6, pz46 = a6z + u6z * 0.5 + u6x * 1.6;
+    const yAtStart46 = endsBefore[0] + (endsBefore[1] - endsBefore[0]) * (0.5 / span46);
+    const hitPose46 = { x: px46, z: pz46, y: yAtStart46 - CAR_SPEC.height + 0.005, heading: hdg46, spec: CAR_SPEC };
+    const clearPose46 = { x: px46, z: pz46, y: yAtStart46 - CAR_SPEC.height - 0.015, heading: hdg46, spec: CAR_SPEC };
+    assert.equal(freshNet.guardrails.allowsBridge(hitPose46), false, 'bridge 46 pre-build rejects pose 5 mm into bottom chord');
+    assert.equal(freshNet.guardrails.allowsBridge(clearPose46), true, 'bridge 46 pre-build accepts pose 15 mm below bottom chord');
+    const revBefore46 = freshNet.guardrails.bridgeRevision;
+    assert.ok(freshNet.deckHeight((a6x + b6x) / 2, (a6z + b6z) / 2) !== null, 'bridge 46 builds deck at fixed terrain revision');
+    const endsAfter = [0, 0];
+    assert.ok(freshNet.bridgeBankElevations(46, endsAfter) >= 6, 'bridge 46 bank elevations available after build');
+    assert.equal(endsAfter[0], endsBefore[0], 'bridge 46 y0 is bit-identical before and after deck build');
+    assert.equal(endsAfter[1], endsBefore[1], 'bridge 46 y1 is bit-identical before and after deck build');
+    assert.equal(freshNet.bridgeElevation(46, 0), endsBefore[0], 'bridge 46 built elevation y0 matches preflight');
+    assert.equal(freshNet.bridgeElevation(46, 1), endsBefore[1], 'bridge 46 built elevation y1 matches preflight');
+    assert.equal(freshNet.guardrails.bridgeRevision, revBefore46, 'building bridge 46 at a fixed terrain revision does not shift rail clearance revision');
+    assert.equal(freshNet.guardrails.allowsBridge(hitPose46), false, 'bridge 46 post-build still rejects the exact same pose 5 mm into bottom chord');
+    assert.equal(freshNet.guardrails.allowsBridge(clearPose46), true, 'bridge 46 post-build still accepts the exact same pose 15 mm below bottom chord');
+    for (const child of [...freshNet.group.children]) child.geometry?.dispose();
+  }
+  // Built level-6 deck + cached level-8 contact sample: 120 allowsBridge preflights in one revision do not keep re-sampling banks.
+  {
+    let curLevel = 6, surfaceCalls = 0;
+    const preTerrain = {
+      manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      surfaceAt: (x, z) => { surfaceCalls++; const s = realTerrain.surfaceAt(x, z); return s ? { ...s, level: curLevel } : null; },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const preNet = new Roads({ roads: tagged }, mabouManifest.village, preTerrain);
+    const r45 = preNet.roads.find(x => x.id === 45);
+    const [ax, az] = r45.pts[0], [bx, bz] = r45.pts[r45.pts.length - 1];
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, hdg = Math.atan2(bx - ax, -(bz - az));
+    assert.ok(preNet.deckHeight(mx, mz) !== null, 'seed built deck at level 6');
+    curLevel = 8; preTerrain.dataRevision = 2; surfaceCalls = 0;
+    for (let i = 0; i < 120; i++) preNet.guardrails.allowsBridge({ x: mx, z: mz, y: 3.6, heading: hdg, spec: CAR_SPEC });
+    assert.ok(surfaceCalls <= 2, `read-only preflights with built level-6 deck sample banks at most once per revision (got ${surfaceCalls})`);
+    for (const child of [...preNet.group.children]) child.geometry?.dispose();
+  }
+  // Streaming eviction (7 -> 6 before deck build) and single-bank upgrade (6,6 -> 8,6 before deck build):
+  // contacts stay in sync with the exact elevations Roads.deck() will build, and bridgeRevision advances in both orders.
+  {
+    let lvlStart = 7, lvlEnd = 7, biasStart = 1.5, biasEnd = 1.5;
+    let m5x = 0, m6x = 0;
+    const evTerrain = {
+      manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => {
+        const g = realTerrain.heightAt(x, z);
+        if (g === null) return null;
+        const isStart = Math.abs(x - m5x) < 100 ? x < m5x : x < m6x;
+        return g + (isStart ? biasStart : biasEnd);
+      },
+      surfaceAt: (x, z) => {
+        const s = realTerrain.surfaceAt(x, z);
+        if (!s) return null;
+        const isStart = Math.abs(x - m5x) < 100 ? x < m5x : x < m6x;
+        return { ...s, ground: s.ground + (isStart ? biasStart : biasEnd), level: isStart ? lvlStart : lvlEnd };
+      },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const evNet = new Roads({ roads: tagged }, mabouManifest.village, evTerrain);
+    const r45 = evNet.roads.find(x => x.id === 45), r46 = evNet.roads.find(x => x.id === 46);
+    const [a5x, a5z] = r45.pts[0], [b5x, b5z] = r45.pts[r45.pts.length - 1];
+    m5x = (a5x + b5x) / 2; const m5z = (a5z + b5z) / 2, h5 = Math.atan2(b5x - a5x, -(b5z - a5z));
+    const [a6x, a6z] = r46.pts[0], [b6x, b6z] = r46.pts[r46.pts.length - 1];
+    m6x = (a6x + b6x) / 2; const m6z = (a6z + b6z) / 2, h6 = Math.atan2(b6x - a6x, -(b6z - a6z));
+    const u5x = (b5x - a5x) / Math.hypot(b5x - a5x, b5z - a5z), u5z = (b5z - a5z) / Math.hypot(b5x - a5x, b5z - a5z);
+    // Order 1: Cache level 7 (+1.5 m) before deck build, then evict fine tile back to level 6 (+0.0 m) before deck build.
+    const rev1 = evNet.guardrails.bridgeRevision;
+    lvlStart = 6; lvlEnd = 6; biasStart = 0; biasEnd = 0; evTerrain.dataRevision++;
+    const rev2 = evNet.guardrails.bridgeRevision;
+    assert.notEqual(rev2, rev1, 'fine-tile eviction before deck construction advances bridgeRevision');
+    const y45Built = evNet.deckHeight(m5x, m5z);
+    // A pose sitting at the evicted level-6 deck height (overlapping the real level-6 steel!) must be rejected.
+    assert.equal(evNet.guardrails.allowsBridge({ x: m5x - u5z * 1.6, z: m5z + u5x * 1.6, y: y45Built, heading: h5, spec: CAR_SPEC }), false, 'evicted level-6 deck rejects overlapping pose');
+    // Order 2: On bridge 46 (unbuilt), upgrade ONLY the start bank (6,6 -> 8,6; minLevel stays 6 while start elevation rises +1.5 m).
+    const u6x = (b6x - a6x) / Math.hypot(b6x - a6x, b6z - a6z), u6z = (b6z - a6z) / Math.hypot(b6x - a6x, b6z - a6z);
+    lvlStart = 8; biasStart = 1.5; evTerrain.dataRevision++;
+    const rev3 = evNet.guardrails.bridgeRevision;
+    assert.notEqual(rev3, rev2, 'single-bank upgrade before deck construction advances bridgeRevision');
+    const y46Built = evNet.deckHeight(m6x, m6z);
+    assert.equal(evNet.guardrails.allowsBridge({ x: m6x - u6z * 1.6, z: m6z + u6x * 1.6, y: y46Built - CAR_SPEC.height - 0.15, heading: h6, spec: CAR_SPEC }), true, 'single-bank upgrade accepts pose clear below raised deck');
+    for (const child of [...evNet.group.children]) child.geometry?.dispose();
+  }
+  // Independent circle-vs-rail overlap calculator (does not call allowsBridge or pushOut).
+  const independentInnerRailOverlap = (pose, ax, az, ux, uz, span) => {
+    const env = pose.spec.envelope, sinH = Math.sin(pose.heading), cosH = Math.cos(pose.heading);
+    let maxPen = 0;
+    for (let i = 0; i < env.circles.length; i++) {
+      const off = env.circles[i], side = env.circleSides?.[i] ?? 0;
+      const cx = pose.x + sinH * off + cosH * side - ax, cz = pose.z - cosH * off + sinH * side - az;
+      const s = cx * ux + cz * uz, across = Math.abs(-cx * uz + cz * ux);
+      const ds = s < 0.005 ? 0.005 - s : s > span - 0.005 ? s - (span - 0.005) : 0;
+      const da = across < PONY_TRUSS.railInner ? PONY_TRUSS.railInner - across : across > PONY_TRUSS.outerHalf ? across - PONY_TRUSS.outerHalf : 0;
+      maxPen = Math.max(maxPen, env.radius - Math.hypot(ds, da));
+    }
+    return maxPen;
+  };
+  // High-speed angled portal hits and 75-step full-steer wedge prevention on both bridges:
+  // after every step, independent circle-vs-rail overlap is <= 0 AND allowsBridge is true.
+  for (const id of [45, 46]) {
+    const r = net.roads.find(x => x.id === id);
+    const [ax, az] = r.pts[0], [bx, bz] = r.pts[r.pts.length - 1];
+    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
+    const soloAng = new AreaContacts(), fleetAng = new AreaContacts();
+    const car = new Vehicle(rig(), realTerrain, net, -0.2, CAR_SPEC);
+    registerRailContacts(fleetAng, soloAng, rails, body => body === car, CAR_SPEC);
+    // Case A: Sol's 38-deg, 32 m/s, 75-step half-throttle full-left-steer opposing-rail wedge scenario.
+    const angle38 = hdg + (38 * Math.PI) / 180;
+    const f38x = Math.sin(angle38), f38z = -Math.cos(angle38);
+    car.place(ax - ux * 1.0 + uz * 0.30, az - uz * 1.0 - ux * 0.30, angle38);
+    assert.equal(soloAng.allows({ x: car.x, z: car.z, y: car.y, heading: car.heading, spec: CAR_SPEC }), true, `bridge ${id} 38-deg start pose is clear`);
+    car.vx = f38x * 32; car.vz = f38z * 32; car.speed = 32;
+    for (let step = 0; step < 75; step++) {
+      car.update(1 / 120, { throttle: 0.5, steer: -1, handbrake: false, touch: false });
+      soloAng.resolve(car);
+      const pen = independentInnerRailOverlap({ x: car.x, z: car.z, heading: car.heading, spec: CAR_SPEC }, ax, az, ux, uz, span);
+      assert.ok(pen <= 1e-4, `bridge ${id} 38-deg 32 m/s step ${step} has zero independent rail overlap (${pen.toFixed(5)} m)`);
+      assert.equal(soloAng.allows({ x: car.x, z: car.z, y: car.y, heading: car.heading, spec: CAR_SPEC }), true, `bridge ${id} 38-deg 32 m/s step ${step} resolves clear of both rails`);
+    }
+    // Case B: Sol's exact 9.2 m, 0.6 m off-centre, 65-deg opposing-rail wedge where left/right pushes cancel in a single pass.
+    const wS = Math.min(9.2, span * 0.53), wY = net.deckHeight(ax + ux * wS, az + uz * wS);
+    const wedged = { x: ax + ux * wS - uz * 0.6, z: az + uz * wS + ux * 0.6, y: wY, heading: hdg + (65 * Math.PI) / 180, vx: ux * 8, vz: uz * 8, speed: 0, spec: CAR_SPEC };
+    assert.ok(independentInnerRailOverlap(wedged, ax, az, ux, uz, span) > 0.05, `bridge ${id} 65-deg test pose starts deeply wedged`);
+    assert.equal(rails.allowsBridge(wedged), false, `bridge ${id} allowsBridge rejects 65-deg wedged pose`);
+    rails.blockBridge(wedged, 1 / 120);
+    const penAfter = independentInnerRailOverlap(wedged, ax, az, ux, uz, span);
+    assert.ok(penAfter <= 1e-4, `bridge ${id} blockBridge resolves 65-deg wedged pose to zero independent overlap (${penAfter.toFixed(5)} m)`);
+    assert.equal(rails.allowsBridge(wedged), true, `bridge ${id} allowsBridge accepts resolved pose`);
+    // Position-only pass (dt = 0) with a seeded clear pose 1e-8 rad away must NOT change heading even by 1e-8 rad.
+    const wedgedZeroDt = { x: ax + ux * wS - uz * 0.6, z: az + uz * wS + ux * 0.6, y: wY, heading: hdg + (65 * Math.PI) / 180, vx: ux * 8, vz: uz * 8, speed: 0, spec: CAR_SPEC };
+    const startHdg0 = wedgedZeroDt.heading;
+    rails.blockBridge(wedgedZeroDt, 0);
+    assert.ok(Object.is(wedgedZeroDt.heading, startHdg0), `bridge ${id} dt=0 position-only bridge correction preserves exact heading`);
+    assert.ok(independentInnerRailOverlap(wedgedZeroDt, ax, az, ux, uz, span) <= 1e-4, `bridge ${id} dt=0 position-only bridge correction clears overlap`);
+    assert.equal(rails.allowsBridge(wedgedZeroDt), true, `bridge ${id} dt=0 resolved pose clears allowsBridge`);
+    // Seed a real saved clear pose outside the portal at 65 deg, then wedge into opposing rails within 2 m at dt = 0
+    // with heading shifted by 1e-8 rad: proves the saved-pose restore runs AND keeps exact shifted heading.
+    const yPortal = net.deckHeight(ax, az);
+    const seedAngle = hdg + Math.PI / 2;
+    const seededDt0 = { x: ax - ux * 0.60, z: az - uz * 0.60, y: yPortal, heading: seedAngle, vx: 0, vz: 0, speed: 0, spec: CAR_SPEC };
+    assert.equal(rails.allowsBridge(seededDt0), false, `bridge ${id} saved-pose seed touches portal tip`);
+    rails.blockBridge(seededDt0, 1 / 120);
+    const savedX = seededDt0.x, savedZ = seededDt0.z;
+    assert.equal(rails.allowsBridge(seededDt0), true, `bridge ${id} saved-pose seed resolves clear`);
+    const shiftedHdg = seededDt0.heading + 1e-8;
+    seededDt0.heading = shiftedHdg;
+    seededDt0.x = savedX + ux * 1.4; seededDt0.z = savedZ + uz * 1.4;
+    assert.equal(rails.allowsBridge(seededDt0), false, `bridge ${id} dt=0 shifted pose starts wedged between rails`);
+    rails.blockBridge(seededDt0, 0);
+    assert.equal(seededDt0.x, savedX, `bridge ${id} dt=0 wedged pose restores saved clear X`);
+    assert.equal(seededDt0.z, savedZ, `bridge ${id} dt=0 wedged pose restores saved clear Z`);
+    assert.ok(Object.is(seededDt0.heading, shiftedHdg), `bridge ${id} dt=0 saved-pose restore preserves exact heading without 1e-8 drift`);
+    assert.equal(rails.allowsBridge(seededDt0), true, `bridge ${id} dt=0 restored pose clears allowsBridge`);
+    // Exact -0 heading preservation on dt = 0 rail correction.
+    const negZeroDt0 = { x: ax + ux * wS - uz * 1.6, z: az + uz * wS + ux * 1.6, y: wY, heading: -0, vx: 0, vz: 0, speed: 0, spec: CAR_SPEC };
+    rails.blockBridge(negZeroDt0, 0);
+    assert.ok(Object.is(negZeroDt0.heading, -0), `bridge ${id} dt=0 rail correction preserves -0 heading`);
+    assert.equal(rails.allowsBridge(negZeroDt0), true, `bridge ${id} dt=0 -0 heading resolves clear`);
+    // Case C: Multi-circle side-by-side variants straddling the start portal rail at 170/175 deg must clear on the first blockBridge call.
+    const yStart = net.deckHeight(ax, az);
+    for (const [label, spec, sOff, deg] of [
+      ['sxs-utility', SXS_UTILITY_SPEC, -0.9, 170],
+      ['sxs-crew', SXS_CREW_SPEC, -1.45, 170],
+      ['sxs-cabin', SXS_CABIN_SPEC, -1.45, 175],
+    ]) {
+      const p = {
+        x: ax + ux * sOff + uz * 1.5, z: az + uz * sOff - ux * 1.5,
+        y: yStart, heading: hdg + (deg * Math.PI) / 180,
+        vx: ux * 10, vz: uz * 10, speed: 10, spec,
+      };
+      rails.blockBridge(p, 1 / 120);
+      const sxsPen = independentInnerRailOverlap(p, ax, az, ux, uz, span);
+      assert.ok(sxsPen <= 1e-4, `bridge ${id} ${label} portal straddle resolves to zero independent overlap (${sxsPen.toFixed(5)} m)`);
+      assert.equal(rails.allowsBridge(p), true, `bridge ${id} ${label} portal straddle clears allowsBridge on first call`);
+    }
+  }
+  // Exact finite rotated bottom-chord underside and high-portal inner-rail tests at 3.0x: measure the rendered steel directly
+  // and verify paired clear/contact probes right below/above it (catches flat or untrimmed cutoffs).
+  {
+    const t3 = makeRealTerrain(3.0, 8);
+    const net3 = new Roads({ roads: tagged }, mabouManifest.village, t3);
+    const r45 = net3.roads.find(x => x.id === 45);
+    const [ax, az] = r45.pts[0], [bx, bz] = r45.pts[r45.pts.length - 1];
+    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
+    assert.ok(net3.deckHeight(ax, az) !== null && net3.deckHeight(bx, bz) !== null, 'bridge 45 builds at 3x');
+    const y0 = net3.bridgeElevation(45, 0), y1 = net3.bridgeElevation(45, 1);
+    assert.ok(y0 !== null && y1 !== null && y1 > y0, 'bridge 45 rises from start to end at 3x');
+    const span3 = net3.modern.spans.find(s => s.members.has(45));
+    const pos3 = span3.geometry.getAttribute('position'), col3 = span3.geometry.getAttribute('color');
+    let minSteelY = Infinity, maxHighRailY = -Infinity;
+    for (let i = 0; i < pos3.count; i++) {
+      const rCol = col3.getX(i);
+      const px = pos3.getX(i), py = pos3.getY(i), pz = pos3.getZ(i);
+      const along = (px - ax) * ux + (pz - az) * uz;
+      const across = Math.abs(-(px - ax) * uz + (pz - az) * ux);
+      if (rCol >= 0.30 && rCol <= 0.35 && along >= -0.05 && along <= 1.0 && across >= PONY_TRUSS.clearHalf - 0.01 && across <= PONY_TRUSS.outerHalf + 0.01) {
+        minSteelY = Math.min(minSteelY, py);
+      }
+      if (rCol >= 0.36 && along >= span - 1.0 && along <= span + 0.05 && across >= PONY_TRUSS.railInner - 0.01 && across <= PONY_TRUSS.railInner + 0.08) {
+        maxHighRailY = Math.max(maxHighRailY, py);
+      }
+    }
+    assert.ok(Number.isFinite(minSteelY) && minSteelY > y0, `bridge 45 3x trimmed rotated bottom chord starts slightly above y0 (${(minSteelY - y0).toFixed(6)} m)`);
+    assert.ok(Number.isFinite(maxHighRailY) && maxHighRailY < y1 + PONY_TRUSS.railHeight + 0.11, `bridge 45 3x trimmed rotated high inner rail tops slightly below unclipped band`);
+    const probeX = ax + ux * 0.2 - uz * 1.6, probeZ = az + uz * 0.2 + ux * 1.6;
+    const clearLow = { x: probeX, z: probeZ, y: minSteelY - CAR_SPEC.height - 0.0005, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    const sx = clearLow.x, sz = clearLow.z;
+    net3.guardrails.blockBridge(clearLow, 1 / 120);
+    assert.equal(clearLow.x, sx, 'bridge 45 3x low-portal probe 0.5 mm below trimmed rotated bottom chord is not pushed');
+    assert.equal(clearLow.z, sz, 'bridge 45 3x low-portal probe 0.5 mm below trimmed rotated bottom chord is not pushed');
+    const hitLow = { x: probeX, z: probeZ, y: minSteelY - CAR_SPEC.height + 0.001, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(hitLow, 1 / 120);
+    assert.ok(Math.hypot(hitLow.x - sx, hitLow.z - sz) > 0.01, 'bridge 45 3x low-portal probe 1 mm above trimmed rotated bottom chord collides');
+    // Paired high-portal inner-rail probes: 1 mm above trimmed rotated inner rail (clear of inclined end post) vs 3 mm below it.
+    const hiX = bx + ux * 1.5 - uz * (PONY_TRUSS.railInner - CAR_SPEC.envelope.radius + 0.04);
+    const hiZ = bz + uz * 1.5 + ux * (PONY_TRUSS.railInner - CAR_SPEC.envelope.radius + 0.04);
+    const clearHi = { x: hiX, z: hiZ, y: maxHighRailY + 0.001, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(clearHi, 1 / 120);
+    assert.equal(clearHi.x, hiX, 'bridge 45 3x high-portal probe 1 mm above trimmed rotated inner rail is not pushed');
+    assert.equal(clearHi.z, hiZ, 'bridge 45 3x high-portal probe 1 mm above trimmed rotated inner rail is not pushed');
+    const hitHi = { x: hiX, z: hiZ, y: maxHighRailY - 0.003, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(hitHi, 1 / 120);
+    assert.ok(Math.hypot(hitHi.x - hiX, hitHi.z - hiZ) > 0.005, 'bridge 45 3x high-portal probe 3 mm below trimmed rotated inner rail collides');
+    // High-portal bottom-chord top clearance at 3x (carY just above the trimmed rotated bottom chord top, clearing inclined end post).
+    let maxHighChordY = -Infinity;
+    for (let i = 0; i < pos3.count; i++) {
+      const rCol = col3.getX(i);
+      if (rCol < 0.30 || rCol > 0.35) continue;
+      const px = pos3.getX(i), py = pos3.getY(i), pz = pos3.getZ(i);
+      const along = (px - ax) * ux + (pz - az) * uz;
+      const across = Math.abs(-(px - ax) * uz + (pz - az) * ux);
+      if (along >= span - 0.05 && along <= span + 0.05 && across >= PONY_TRUSS.clearHalf - 0.01 && across <= PONY_TRUSS.outerHalf + 0.01) {
+        maxHighChordY = Math.max(maxHighChordY, py);
+      }
+    }
+    const hiChordX = bx + ux * 1.58 - uz * (PONY_TRUSS.outerHalf + CAR_SPEC.envelope.radius - 0.04);
+    const hiChordZ = bz + uz * 1.58 + ux * (PONY_TRUSS.outerHalf + CAR_SPEC.envelope.radius - 0.04);
+    const clearHiChord = { x: hiChordX, z: hiChordZ, y: maxHighChordY + 0.001, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(clearHiChord, 1 / 120);
+    assert.equal(clearHiChord.x, hiChordX, 'bridge 45 3x high-portal probe 1 mm above trimmed rotated bottom chord is not pushed');
+    assert.equal(clearHiChord.z, hiChordZ, 'bridge 45 3x high-portal probe 1 mm above trimmed rotated bottom chord is not pushed');
+    const hitHiChord = { x: hiChordX, z: hiChordZ, y: maxHighChordY - 0.01, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    net3.guardrails.blockBridge(hitHiChord, 1 / 120);
+    assert.ok(Math.hypot(hitHiChord.x - hiChordX, hitHiChord.z - hiChordZ) > 0.005, 'bridge 45 3x high-portal probe 1 cm below trimmed rotated bottom chord collides');
+    // Isolated member probes on Bridge 45 at 3x: top chord, start inclined end post, finish inclined end post (each paired clear + contact).
+    const panels45 = Math.max(4, Math.round(span / PONY_TRUSS.targetPanel / 2) * 2), panel45 = span / panels45;
+    const h45 = ponyTrussHeight(span), midY45 = (y0 + y1) / 2;
+    const endOutClear = PONY_TRUSS.half + PONY_TRUSS.endPostSize / 2 + CAR_SPEC.envelope.radius + 0.02;
+    const endOutHit = PONY_TRUSS.half + PONY_TRUSS.endPostSize / 2 + CAR_SPEC.envelope.radius - 0.04;
+    const topInClear = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius - 0.02;
+    const topInHit = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius + 0.04;
+    // Top chord alone (carY sits at midY45 + h45 + 0.05, above all posts/diagonals/rails, touching only the top chord top half).
+    for (const [label, across, expectHit] of [
+      ['top chord clear', topInClear, false],
+      ['top chord contact', topInHit, true],
+    ]) {
+      const p = { x: (ax + bx) / 2 - uz * across, z: (az + bz) / 2 + ux * across, y: midY45 + h45 + 0.05, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+      const sx0 = p.x, sz0 = p.z;
+      net3.guardrails.blockBridge(p, 1 / 120);
+      const d = Math.hypot(p.x - sx0, p.z - sz0);
+      if (expectHit) assert.ok(d > 0.01, `bridge 45 ${label} collides (${d.toFixed(4)} m)`);
+      else assert.equal(d, 0, `bridge 45 ${label} clears (${d.toFixed(4)} m)`);
+    }
+    // Start inclined end post alone (s = panel45 * 0.5, carY above inner rail + bottom chord, well outside top chord).
+    const startPostS = panel45 * 0.5, startPostY = y0 + (y1 - y0) * (startPostS / span) + 1.1;
+    for (const [label, sOff, across, expectHit] of [
+      ['start inclined end post clear (outside 0.22 m face)', startPostS - 1.35, endOutClear, false],
+      ['start inclined end post contact', startPostS - 1.35, endOutHit, true],
+    ]) {
+      const p = { x: ax + ux * sOff - uz * across, z: az + uz * sOff + ux * across, y: startPostY, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+      const sx0 = p.x, sz0 = p.z;
+      net3.guardrails.blockBridge(p, 1 / 120);
+      const d = Math.hypot(p.x - sx0, p.z - sz0);
+      if (expectHit) assert.ok(d > 0.01, `bridge 45 ${label} collides (${d.toFixed(4)} m)`);
+      else assert.equal(d, 0, `bridge 45 ${label} clears (${d.toFixed(4)} m)`);
+    }
+    // Finish inclined end post alone (s = span - panel45 * 0.5, carY above inner rail + bottom chord, well outside top chord).
+    const endPostS = span - panel45 * 0.5, endPostY = y0 + (y1 - y0) * (endPostS / span) + 1.1;
+    for (const [label, sOff, across, expectHit] of [
+      ['finish inclined end post clear (outside 0.22 m face)', endPostS + 1.35, endOutClear, false],
+      ['finish inclined end post contact', endPostS + 1.35, endOutHit, true],
+    ]) {
+      const p = { x: ax + ux * sOff - uz * across, z: az + uz * sOff + ux * across, y: endPostY, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+      const sx0 = p.x, sz0 = p.z;
+      net3.guardrails.blockBridge(p, 1 / 120);
+      const d = Math.hypot(p.x - sx0, p.z - sz0);
+      if (expectHit) assert.ok(d > 0.01, `bridge 45 ${label} collides (${d.toFixed(4)} m)`);
+      else assert.equal(d, 0, `bridge 45 ${label} clears (${d.toFixed(4)} m)`);
+    }
+    // Isolated interior Warren diagonal, interior vertical post, interior standoff bracket, end-post standoff bracket,
+    // and open truss-window gap probes (paired hit + clearance at exact rendered member edges).
+    const smallSpec = { ...CAR_SPEC, height: 0.06, envelope: { ...CAR_SPEC.envelope, circles: [0], radius: 0.08, reach: 0.2 } };
+    const tinySpec = { ...CAR_SPEC, height: 0.04, envelope: { ...CAR_SPEC.envelope, circles: [0], radius: 0.005, reach: 0.05 } };
+    const deck45At = s => y0 + (y1 - y0) * (s / span);
+    const yBase45 = PONY_TRUSS.chordSize * 0.5;
+    const diagMidS = panel45 * 1.5, diagMidY = deck45At(diagMidS) + (yBase45 + h45) * 0.5;
+    const diagOutClear = PONY_TRUSS.half + PONY_TRUSS.diagSize * 0.5 + smallSpec.envelope.radius + 0.02;
+    const diagOutHit = PONY_TRUSS.half + PONY_TRUSS.diagSize * 0.5 + smallSpec.envelope.radius - 0.04;
+    const postOutClear = PONY_TRUSS.half + PONY_TRUSS.postSize * 0.5 + smallSpec.envelope.radius + 0.02;
+    const postOutHit = PONY_TRUSS.half + PONY_TRUSS.postSize * 0.5 + smallSpec.envelope.radius - 0.04;
+    for (const [label, sPos, across, py, spec, expectHit] of [
+      ['interior diagonal clear (2 cm outside 0.16 m face)', diagMidS, diagOutClear, diagMidY, smallSpec, false],
+      ['interior diagonal contact', diagMidS, diagOutHit, diagMidY, smallSpec, true],
+      ['open truss window gap between post 1 and diagonal 1', panel45 * 1.25, diagOutHit, deck45At(panel45 * 1.25) + yBase45 + 0.35, smallSpec, false],
+      ['interior vertical post clear (2 cm outside 0.16 m face)', panel45, postOutClear, deck45At(panel45) + (yBase45 + h45) * 0.5, smallSpec, false],
+      ['interior vertical post contact', panel45, postOutHit, deck45At(panel45) + (yBase45 + h45) * 0.5, smallSpec, true],
+      ['interior standoff bracket contact (isolated between rail and post)', panel45, 2.0825, deck45At(panel45) + PONY_TRUSS.railHeight, tinySpec, true],
+      ['gap beside interior standoff bracket', panel45 + 0.25, 2.0825, deck45At(panel45 + 0.25) + PONY_TRUSS.railHeight, tinySpec, false],
+      ['start end-post standoff bracket contact', panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45)), 2.0825, deck45At(panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45))) + PONY_TRUSS.railHeight, tinySpec, true],
+      ['finish end-post standoff bracket contact', span - panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45)), 2.0825, deck45At(span - panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45))) + PONY_TRUSS.railHeight, tinySpec, true],
+      ['gap beside start end-post standoff bracket', panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45)) + 0.25, 2.0825, deck45At(panel45 * ((PONY_TRUSS.railHeight - yBase45) / (h45 - yBase45)) + 0.25) + PONY_TRUSS.railHeight, tinySpec, false],
+    ]) {
+      const p = { x: ax + ux * sPos - uz * across, z: az + uz * sPos + ux * across, y: py, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec };
+      const sx0 = p.x, sz0 = p.z;
+      net3.guardrails.blockBridge(p, 1 / 120);
+      const d = Math.hypot(p.x - sx0, p.z - sz0);
+      if (expectHit) assert.ok(d > 0.002, `bridge 45 ${label} collides (${d.toFixed(5)} m)`);
+      else assert.equal(d, 0, `bridge 45 ${label} clears (${d.toFixed(5)} m)`);
+    }
+    // Gap between clipped members on Bridge 46 at 3x: at high top-chord elevation on a sloped span,
+    // a car in the clear gap between the clipped top chord and the lower end does NOT hit invisible merged steel.
+    {
+      const r46 = net3.roads.find(x => x.id === 46);
+      const [a6x, a6z] = r46.pts[0], [b6x, b6z] = r46.pts[r46.pts.length - 1];
+      const d6x = b6x - a6x, d6z = b6z - a6z, span46 = Math.hypot(d6x, d6z), u6x = d6x / span46, u6z = d6z / span46, hdg46 = Math.atan2(d6x, -d6z);
+      assert.ok(net3.deckHeight(a6x, a6z) !== null && net3.deckHeight(b6x, b6z) !== null, 'bridge 46 builds at 3x');
+      const y60 = net3.bridgeElevation(46, 0), y61 = net3.bridgeElevation(46, 1);
+      const h46 = ponyTrussHeight(span46);
+      const gapS = 24.16, gapDeckY = y60 + (y61 - y60) * (gapS / span46);
+      const gapY = gapDeckY + h46 + PONY_TRUSS.chordSize * 0.5 + 0.04;
+      const gapAcross = PONY_TRUSS.clearHalf - CAR_SPEC.envelope.radius + 0.04;
+      const gapProbe = { x: a6x + u6x * gapS - u6z * gapAcross, z: a6z + u6z * gapS + u6x * gapAcross, y: gapY, heading: hdg46, vx: -u6z * 4, vz: u6x * 4, speed: 0, spec: CAR_SPEC };
+      const gx0 = gapProbe.x, gz0 = gapProbe.z, gvx0 = gapProbe.vx, gvz0 = gapProbe.vz;
+      net3.guardrails.blockBridge(gapProbe, 1 / 120);
+      assert.equal(gapProbe.x, gx0, 'bridge 46 3x probe in gap above sloped top chord is not pushed');
+      assert.equal(gapProbe.z, gz0, 'bridge 46 3x probe in gap above sloped top chord is not pushed');
+      assert.equal(gapProbe.vx, gvx0, 'bridge 46 3x probe in gap keeps exact vx');
+      assert.equal(gapProbe.vz, gvz0, 'bridge 46 3x probe in gap keeps exact vz');
+    }
+    for (const child of [...net3.group.children]) child.geometry?.dispose();
+  }
+  // Unloaded banks: repeated collision calls during the same terrain revision do not keep re-sampling bank endpoints,
+  // and advancing to a loaded revision retries once, builds the deck, and blocks an overlapping vehicle.
+  {
+    let surfaceCalls = 0;
+    const coarseTerrain = {
+      level: 5, manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      surfaceAt: (x, z) => { surfaceCalls++; const s = realTerrain.surfaceAt(x, z); return s ? { ...s, level: coarseTerrain.level } : null; },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const coarseNet = new Roads({ roads: tagged }, mabouManifest.village, coarseTerrain);
+    const r45 = coarseNet.roads.find(x => x.id === 45);
+    const [ax, az] = r45.pts[0], [bx, bz] = r45.pts[r45.pts.length - 1];
+    const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span;
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, hdg = Math.atan2(dx, -dz);
+    const probe = { x: mx - uz * 1.6, z: mz + ux * 1.6, y: 3.55, heading: hdg, vx: -uz * 4, vz: ux * 4, speed: 0, spec: CAR_SPEC };
+    const startX = probe.x, startZ = probe.z;
+    for (let i = 0; i < 120; i++) coarseNet.guardrails.block(probe, 1 / 120);
+    assert.ok(surfaceCalls <= 2, `unloaded bridge banks sample at most once per revision (got ${surfaceCalls})`);
+    assert.equal(probe.x, startX, 'unloaded bank does not push before deck exists');
+    assert.equal(probe.z, startZ, 'unloaded bank does not push before deck exists');
+    coarseTerrain.level = 8;
+    coarseTerrain.dataRevision = 2;
+    coarseNet.guardrails.block(probe, 1 / 120);
+    assert.ok(Math.hypot(probe.x - startX, probe.z - startZ) > 0.1, 'loaded revision retries deck lookup and blocks overlapping vehicle');
+    for (const child of [...coarseNet.group.children]) child.geometry?.dispose();
+  }
+  // Other Mabou bridges keep the generic modern deck.
+  const otherBridge = net.roads.find(r => r.id === 50);
+  assert.ok(otherBridge && !otherBridge.ponyTruss, 'Mabou Harbour Road bridge stays generic');
+  assert.ok(net.deckHeight(otherBridge.pts[0][0], otherBridge.pts[0][1]) !== null);
+  assert.ok(baselineNet.deckHeight(otherBridge.pts[0][0], otherBridge.pts[0][1]) !== null);
+  const otherSpan = net.modern.spans.find(s => s.members.has(50));
+  const otherBaseSpan = baselineNet.modern.spans.find(s => s.members.has(50));
+  assert.equal(otherSpan.geometry.getAttribute('position').count, otherBaseSpan.geometry.getAttribute('position').count, 'Mabou Harbour Road bridge keeps exact generic ModernBridges geometry');
+  for (const child of [...baselineNet.group.children]) child.geometry?.dispose();
+  for (const child of [...net.group.children]) child.geometry?.dispose();
+  // No bridge in any other installed area pack matches (including Highway 19 ids 45/46 in Judique and Canso Causeway).
+  for (const dir of ['areas/judique', 'areas/porthood', 'areas/pointtupper', 'areas/westbay', 'areas/cansocauseway']) {
+    if (!existsSync(`data/baked/${dir}/roads.json`)) continue;
+    const d = read(dir, 'roads');
+    assert.deepEqual(d.roads.map(littleMabouPonyTruss).filter(r => r.ponyTruss), [], `${dir} has no Little Mabou pony truss`);
+  }
+  console.log('PASS Little Mabou Road steel pony-truss bridges (ids 45 and 46; exact baseline deck physics, vertical rail bounds, solo+fleet Towing)');
 }
 console.log('PASS Little Mabou homes, shed and marsh rail; access and bridge exclusions');
 console.log('PASS two Highway 19 aprons both land packs, gravel driveway, hillside gravel, building batches and three view starts');

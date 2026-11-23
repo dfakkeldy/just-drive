@@ -1,11 +1,14 @@
 // The player's Atlantic clock, the address values and the weather moods (web/src/weather.ts). No browser.
 import assert from 'node:assert/strict';
+import { Object3D } from '../web/node_modules/three/build/three.module.js';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 const load = async entry => {
   const result = await build({ entryPoints: [entry], bundle: true, write: false, format: 'esm', platform: 'node' });
   return import('data:text/javascript;base64,' + Buffer.from(result.outputFiles[0].text).toString('base64'));
 };
-const { atlanticMoment, weatherSettings, weatherMoment, weatherClock, weatherAddress, moodLook, MOODS, CLEAR_HAZE } = await load('web/src/weather.ts');
+const { atlanticMoment, weatherSettings, weatherMoment, weatherClock, weatherAddress, moodLook, MOODS, CLEAR_HAZE, winterCover, rainAmount } = await load('web/src/weather.ts');
+const { winterRoadGrip, weatherTerrainFragment } = await load('web/src/weather-surfaces.ts');
+const { TERRAIN_FRAG } = await load('web/src/shaders.ts');
 const { isTestVisit } = await load('web/src/visit.ts');
 const read = query => weatherSettings(new URLSearchParams(query));
 const iso = query => weatherMoment(read(query)).toISOString();
@@ -26,7 +29,7 @@ for (const [date, hour, utc] of [
 for (const hour of [0, 4, 6.12345, 12, 12.5, 14, 15, 16.5, 16.75, 17.5, 18.2, 18.47375, 22, 23.99999, 1 / 3, Math.PI])
   assert.equal(+atlanticMoment('2026-10-10', hour), +new Date(Date.UTC(2026, 9, 10, 3, 0, 0) + hour * 3600e3), `legacy instant at hour ${hour}`);
 assert.equal(iso(''), '2026-10-10T19:45:00.000Z', 'no values: the game\'s own 16:45 on 10 October');
-assert.deepEqual(read(''), { date: '2026-10-10', time: '', hour: 16.75, chosen: false, mood: 'clear' });
+assert.deepEqual(read(''), { date: '2026-10-10', time: '', hour: 16.75, chosen: false, mood: 'clear', season: 'date', rain: 'steady' });
 assert.equal(read('hour=22').chosen, false, 'a tool hour alone is not a player clock');
 
 // Address values: every bad value falls back; nothing throws.
@@ -51,13 +54,13 @@ assert.equal(iso('playerDate=2026-06-21&playerTime=12:00'), '2026-06-21T15:00:00
 assert.equal(iso('playerDate=2026-03-08&playerTime=02:30'), '2026-03-08T06:30:00.000Z');
 assert.equal(iso('playerDate=2026-12-21&hour=12'), '2026-12-21T16:00:00.000Z', 'a tool hour on a player date is Atlantic time too');
 
-// Moods: only the three names; clear is no change at all.
-assert.deepEqual(MOODS.map(([mood]) => mood), ['clear', 'overcast', 'fog']);
+// The five moods and the neutral clear path.
+assert.deepEqual(MOODS.map(([mood]) => mood), ['clear', 'overcast', 'fog', 'rain', 'snow']);
 for (const [mood] of MOODS) assert.equal(read(`weather=${mood}`).mood, mood);
-for (const bad of ['', 'Fog', 'rain', 'snow', 'clear ', 'overcast,fog', '__proto__']) assert.equal(read(`weather=${bad}`).mood, 'clear', `bad mood ${bad}`);
+for (const bad of ['', 'Fog', 'Rain', 'blizzard', 'clear ', 'overcast,fog', '__proto__']) assert.equal(read(`weather=${bad}`).mood, 'clear', `bad mood ${bad}`);
 assert.equal(moodLook('clear'), null, 'clear changes no number');
 assert.equal(CLEAR_HAZE, 0.000032, 'the clear haze is the game\'s old literal');
-for (const mood of ['overcast', 'fog']) {
+for (const mood of ['overcast', 'fog', 'rain', 'snow']) {
   const look = moodLook(mood);
   assert.deepEqual(Object.keys(look).sort(), ['dusk', 'flat', 'glow', 'haze', 'mie', 'rayleigh', 'stars', 'sun', 'turbidity'], `${mood}: numbers only`);
   for (const [key, value] of Object.entries(look)) assert.ok(Number.isFinite(value) && value >= 0, `${mood}.${key}`);
@@ -71,11 +74,64 @@ const applied = weatherAddress('https://example.test/play/?mode=explore&hour=22&
 assert.equal(applied.href, 'https://example.test/play/?mode=explore&q=low&playerDate=2026-12-21&playerTime=17%3A30&weather=fog#top');
 assert.equal(isTestVisit(applied.searchParams), false, 'an applied address is a player visit');
 assert.equal(isTestVisit(new URLSearchParams('hour=12')), true, 'hour stays a tool key');
-assert.deepEqual(read(applied.search), { date: '2026-12-21', time: '17:30', hour: 17.5, chosen: true, mood: 'fog' });
+assert.deepEqual(read(applied.search), { date: '2026-12-21', time: '17:30', hour: 17.5, chosen: true, mood: 'fog', season: 'date', rain: 'steady' });
 // Drive around keeps the player's place; a pose that is not finite is left out.
 const placed = weatherAddress('https://example.test/?mode=explore&driveAt=1,2,3', '2026-12-21', '17:30', 'clear', { e: 624321.125, n: 5103210.5, heading: 217.25 });
 assert.equal(placed.searchParams.get('driveAt'), '624321.125,5103210.5,217.25'); assert.equal(isTestVisit(placed.searchParams), false);
 assert.equal(weatherAddress('https://example.test/?mode=explore', '2026-12-21', '17:30', 'clear', { e: NaN, n: 1, heading: 0 }).searchParams.has('driveAt'), false);
+// Only a chosen date, Snow or the Winter switch enables cover. The Autumn switch wins.
+for (const [query, winter] of [
+  ['', false], ['playerDate=2026-11-30', false], ['playerDate=2026-12-01', true],
+  ['playerDate=2027-01-01', true], ['playerDate=2028-02-29', true],
+  ['playerDate=2027-03-31', true], ['playerDate=2027-04-01', false],
+  ['date=2026-12-21', false], ['playerDate=2026-02-31', false], ['weather=snow', true],
+  ['season=winter', true], ['season=off&weather=snow&playerDate=2026-12-21', false],
+]) assert.equal(winterCover(read(query)), winter, query);
+for (const date of ['', '2026-00-21']) assert.equal(winterCover({ ...read(''), date }), false, 'a missing or zero month does not start winter');
+assert.equal(read('season=bad&rain=bad').season, 'date');
+assert.equal(read('season=bad&rain=bad').rain, 'steady');
+assert.ok(rainAmount('drizzle') < rainAmount('steady') && rainAmount('steady') < rainAmount('downpour'));
+assert.ok(moodLook('rain', 'drizzle').sun > moodLook('rain', 'downpour').sun);
+const rainLink = weatherAddress(applied.href, '2026-06-21', '18:30', 'rain', undefined, 'off', 'downpour');
+assert.deepEqual([read(rainLink.search).season, read(rainLink.search).rain, isTestVisit(rainLink.searchParams)], ['off', 'downpour', false]);
+assert.equal(weatherAddress(rainLink.href, '2026-06-21', '18:30', 'clear').searchParams.has('rain'), false);
+assert.equal(weatherAddress(rainLink.href, '2026-06-21', '18:30', 'clear').searchParams.has('season'), false);
+assert.equal(weatherTerrainFragment(TERRAIN_FRAG, false, false), TERRAIN_FRAG, 'clear keeps exact terrain source');
+assert.match(weatherTerrainFragment(TERRAIN_FRAG, true, true), /uniform float winterCover;/);
+assert.match(weatherTerrainFragment(TERRAIN_FRAG, true, true), /uniform float rainWet;/);
+assert.equal(winterRoadGrip(undefined, true), 1);
+assert.equal(winterRoadGrip({ value: 1 }, false), 1);
+assert.ok(winterRoadGrip({ value: 1 }, true) < winterRoadGrip({ value: 1 }, true, true));
+assert.ok(winterRoadGrip({ value: 1 }, true, true) < 1);
+// Drive the bike through its public update path so the solver must receive the touch flag.
+const { BikeRide, BIKE_STEP } = await load('web/src/bike-ride.ts');
+function brakeBike(winter, touch, deck = null, bridge = false) {
+  const surface = { kind: 2, ground: 10, canopy: 0, roadDist: 0, halfWidth: 4, bridge };
+  const terrain = {
+    heightAt: () => surface.ground,
+    surfaceAt: () => surface,
+    withContactHeight: (_bike, read) => read(),
+    uniforms: { winterCover: { value: Number(winter) } },
+  };
+  const roads = { deckHeight: () => deck, nearest: () => null };
+  const bike = new BikeRide({ root: new Object3D(), pose() {} }, terrain, roads, -0.2);
+  assert.equal(bike.place(0, 0, 0), true);
+  assert.equal(bike.y, surface.ground);
+  bike.vz = -13;
+  bike.speed = 13;
+  for (let i = 0; i < 24; i++) bike.update(BIKE_STEP, { throttle: -1, steer: 0, handbrake: false, touch });
+  assert.equal(bike.surfaceName, 'pavement');
+  return bike.speed;
+}
+const clearBikeSpeed = brakeBike(false, false);
+const snowKeyboardSpeed = brakeBike(true, false);
+const snowTouchSpeed = brakeBike(true, true);
+assert.ok(clearBikeSpeed < snowTouchSpeed && snowTouchSpeed < snowKeyboardSpeed,
+  'the bike brakes less on snow and retains more braking grip with touch');
+assert.equal(brakeBike(true, false, 10), brakeBike(false, false, 10),
+  'a supporting road deck keeps ordinary bike traction in winter');
+assert.equal(brakeBike(true, false, 20, true), snowKeyboardSpeed,
+  'the road below a raster-marked overhead deck keeps winter grip');
 // A failed light study (a bad date) must not replace a player's own clock: main.ts gives the player's moment then.
 const main = (await import('node:fs')).readFileSync('web/src/main.ts', 'utf8');
 assert.match(main, /const when = \(weather\.chosen && !lightStudy\.active \? undefined : lightStudy\.when\) \?\? weatherMoment\(weather\);/);

@@ -13,6 +13,7 @@ export interface Road {
   tags?: { railway?: string | boolean };
   kind: number;          // 1 highway, 2 paved, 3 gravel, 4 track, 5 rail trail
   guardrailRuns?: { start: number; end: number; side: number; posts: 'metal' }[];
+  ponyTruss?: boolean;
   halfWidth: number;
   bridge: boolean;
   washboard?: boolean;
@@ -223,6 +224,31 @@ export class Roads {
    *  the span that carries this road leaves it; its approaches stay drawn over their road cuts. Drawing only. */
   showCanalDeck(id: number, visible: boolean) {
     this.modern?.setHidden(id, !visible);
+  }
+
+  /** Built deck elevation at fraction t along a bridge span, or null before the deck is built. */
+  bridgeElevation(id: number, t: number): number | null {
+    return this.modern?.bridgeElevation(id, t) ?? null;
+  }
+
+  /** Built terrain detail level of a bridge deck, or 0 before the deck is built. */
+  bridgeDeckLevel(id: number): number {
+    return this.modern?.bridgeDeckLevel(id) ?? 0;
+  }
+
+  /** Build serial of a bridge deck, or 0 before the deck is built. */
+  bridgeDeckSerial(id: number): number {
+    return this.modern?.bridgeDeckSerial(id) ?? 0;
+  }
+
+  /** Version counter incremented only when a pony-truss bridge deck is built or upgraded. */
+  get bridgeDeckVersion(): number {
+    return this.modern?.ponyDeckVersion ?? 0;
+  }
+
+  /** Read-only bridge bank elevations [y0, y1] and terrain detail level without building or mutating scene meshes. */
+  bridgeBankElevations(id: number, out: [number, number]): number {
+    return this.modern?.bridgeBankElevations(id, out) ?? 0;
   }
 
   /** Build decks for bridges near the camera, once the fine terrain at both ends has loaded. */
