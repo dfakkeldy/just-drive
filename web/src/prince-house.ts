@@ -81,7 +81,7 @@ export class PrinceHouse implements HandBuiltPlace {
   update(view: THREE.Vector3, _now: number, car: { x: number; z: number }): void {
     const o = this.site.origin, far = Math.min(Math.hypot(view.x - o.x, view.z - o.z), Math.hypot(car.x - o.x, car.z - o.z));
     this.near = far < 900;
-    if (this.near) {
+    if (this.near || (this.built && far < 1600)) {
       const fine = this.ready();
       const coarse = fine !== null && fine < this.probes.length;
       if (fine !== null && (!this.built || coarse !== (this.fine < this.probes.length))) {

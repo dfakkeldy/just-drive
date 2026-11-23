@@ -173,8 +173,8 @@ for (const exag of [2.5, 3]) {
       drawnLevelAt: () => drawn,
     };
     const h = new PrinceHouse(site, realTerrain, (m) => m * exag, isLow);
-    const checkClearance = (label, drawnTile) => {
-      h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
+    const checkClearance = (label, drawnTile, dist = 0) => {
+      h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z + dist), 0, { x: site.origin.x, z: site.origin.z + dist });
       const mesh = h.group.children[0].children[0], pos = mesh.geometry.getAttribute('position'), idx = mesh.geometry.getIndex();
       let minDrive = Infinity, minWalk = Infinity, nDrive = 0, nWalk = 0;
       const triCount = idx ? idx.count / 3 : pos.count / 3;
@@ -201,11 +201,11 @@ for (const exag of [2.5, 3]) {
       assert.ok(minDrive > 0.01, `${label} exag=${exag} low=${isLow}: driveway clears rendered terrain (${(minDrive * 100).toFixed(1)} cm)`);
       assert.ok(minWalk > 0.01, `${label} exag=${exag} low=${isLow}: sidewalk clears rendered terrain (${(minWalk * 100).toFixed(1)} cm)`);
     };
-    // 7 -> 8 -> 7 (cached L8 height) -> 7 (L8 evicted)
-    drawn = 7; heightSource = L7; checkClearance('L7 initial', L7);
-    drawn = 8; heightSource = L8; checkClearance('L8 fine', L8);
-    drawn = 7; heightSource = L8; checkClearance('L7 drawn with L8 cached', L7);
-    drawn = 7; heightSource = L7; checkClearance('L7 after L8 eviction', L7);
+    // 7 -> 8 -> 7 (cached L8 height, outbound while still visible at 1180 m) -> 7 (L8 evicted)
+    drawn = 7; heightSource = L7; checkClearance('L7 initial', L7, 0);
+    drawn = 8; heightSource = L8; checkClearance('L8 fine', L8, 0);
+    drawn = 7; heightSource = L8; checkClearance('L7 drawn with L8 cached at 1180 m', L7, 1180);
+    drawn = 7; heightSource = L7; checkClearance('L7 after L8 eviction', L7, 0);
   }
 }
 // Frame order: main.ts must update PrinceHouse in the landscape segment after terrain selection so the first L8 -> L7 frame rebuilds before render.
