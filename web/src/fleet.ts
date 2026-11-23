@@ -1367,7 +1367,7 @@ export class Fleet {
   /** Start-over and place jumps discard the old visit only after the complete new assembly is valid. */
   restart(x: number, z: number, heading: number, kind: 'start-over' | 'place-jump' = 'start-over', accepts?: (pose: VehiclePlacement) => boolean, onCommit?: () => void): boolean {
     if (![x, z, heading].every(Number.isFinite)) { this.message = 'Invalid destination'; return false; }
-    if (this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {
+    if (this.spawned && this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {
       this.visitPending = { x, z, heading }; this.visitAccepts = accepts; this.visitCommit = onCommit; this.visitKind = kind;
       this.visitDirty = false; this.deckWaiting = true; this.deckWait = 0; this.spanWaitExhausted = false; this.deckWaitCount++;
       this.message = 'Waiting for bridge deck'; return false;

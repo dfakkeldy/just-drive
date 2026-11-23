@@ -1177,6 +1177,28 @@ function runDeckWaitTests(api, quiet = false) {
       assert.equal(fleetDry.visitQueued, false, 'Fleet spawns on next frame once dry terrain loads under unloaded span');
       assert.equal(fleetDry.busy, false, 'Fleet is playable immediately after dry terrain loads');
       assert.ok(Math.abs(truckDry.x - 100) < 30 && Math.abs(truckDry.y - 2) < .2, `Fleet stands on loaded dry land (x=${truckDry.x.toFixed(1)}, y=${truckDry.y.toFixed(2)})`);
+
+      // Place jump to an unbuilt span while the first spawn is still queued must preserve the queued first spawn.
+      deck = null;
+      let startLoaded = false;
+      const firstSpawnLand = makeTerrain((x) => (x < 60
+        ? (startLoaded ? { ground: 2, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false } : null)
+        : { ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+      const truckFirst = mkTruck(firstSpawnLand, spanRoads);
+      startLoaded = true;
+      assert.equal(truckFirst.place(-60, 0, Math.PI / 2), true);
+      const towFirst = new api.Towing(truckFirst, firstSpawnLand, spanRoads, false, false, {}, true, true);
+      startLoaded = false;
+      const sceneFirst = new THREE.Scene(); sceneFirst.add(truckFirst.car.root, towFirst.trailer.root);
+      const fleetFirst = new api.Fleet(truckFirst, towFirst, firstSpawnLand, spanRoads, sceneFirst, true, () => {}, SEA, undefined, true);
+      assert.equal(fleetFirst.startVisit(-20, 0, Math.PI / 2), false, 'first spawn queues while unloaded');
+      assert.equal(fleetFirst.restart(330, 0, Math.PI / 2, 'place-jump'), false, 'place-jump to unbuilt span while unspawned is refused without replacing first spawn');
+      assert.equal(fleetFirst.waitingForDeck, false, 'unspawned place-jump does not replace pending first spawn with deck wait');
+      startLoaded = true;
+      firstSpawnLand.fleetGroundChanged?.(-100, -50, 200);
+      fleetFirst.refresh(1 / 60);
+      assert.equal(fleetFirst.visitQueued, false, 'original first spawn commits once its dry terrain loads');
+      assert.ok(Math.abs(truckFirst.x - (-20)) < 30 && Math.abs(truckFirst.y - 2) < .2, `Fleet stands at original first spawn (x=${truckFirst.x.toFixed(1)}, y=${truckFirst.y.toFixed(2)})`);
     }
 
     // Live Fleet (spawned = true) place-jump to unbuilt span: frames camera over bridge, defers onCommit until commit,
@@ -1721,9 +1743,16 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     [
       'fleet-no-span-wait-restart',
       'web/src/fleet.ts',
-      '    if (this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {',
-      '    if (false && this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {',
+      '    if (this.spawned && this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {',
+      '    if (false && this.spawned && this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {',
       /Fleet live place-jump onto unbuilt span waits for deck/,
+    ],
+    [
+      'fleet-unspawned-restart-clobbers-first-spawn',
+      'web/src/fleet.ts',
+      '    if (this.spawned && this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {',
+      '    if (this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {',
+      /unspawned place-jump does not replace pending first spawn with deck wait/,
     ],
   ];
 
