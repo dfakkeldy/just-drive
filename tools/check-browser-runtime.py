@@ -204,8 +204,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
             if args.listeners:raise SystemExit(0)
             race_ports=free_pair()
             barrier=threading.Barrier(2)
-            with concurrent.futures.ThreadPoolExecutor(2) as pool:
-                launched=list(pool.map(lambda n:start('race-'+str(n),ports=race_ports,hold=1500,barrier=barrier),range(2)))
+            with _defer_stop():
+                with concurrent.futures.ThreadPoolExecutor(2) as pool:
+                    launched=list(pool.map(lambda n:start('race-'+str(n),ports=race_ports,hold=1500,barrier=barrier),range(2)))
             results=[j['process'].wait(timeout=15) for j in launched]
             assert sorted(results)==[0,2],[(r,j['log'].read_text()) for r,j in zip(results,launched)]
             assert any('PROBE browser survived to end' in j['log'].read_text() for j in launched)
@@ -234,8 +235,9 @@ with tempfile.TemporaryDirectory(prefix='mmm-g4-runtime-') as directory:
                 (tree/'web/node_modules').symlink_to((ROOT/'web/node_modules').resolve())
                 fixture=tree/'tools/check-ports-probe.html';fixture.write_text(fixture.read_text().replace('checkout-alpha',label));roots.append(tree)
             barrier=threading.Barrier(2)
-            with concurrent.futures.ThreadPoolExecutor(2) as pool:
-                launched=list(pool.map(lambda tree:start(tree.name,ports=None,root=tree,script='props-shots.sh',hold=500,env={'EXPECT_CHECKOUT':tree.name},barrier=barrier),roots))
+            with _defer_stop():
+                with concurrent.futures.ThreadPoolExecutor(2) as pool:
+                    launched=list(pool.map(lambda tree:start(tree.name,ports=None,root=tree,script='props-shots.sh',hold=500,env={'EXPECT_CHECKOUT':tree.name},barrier=barrier),roots))
             default_ports=[]
             for job,tree in zip(launched,roots):
                 finish(job);text=job['log'].read_text();assert f'own checkout={tree.name}' in text,text
