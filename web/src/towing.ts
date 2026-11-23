@@ -488,32 +488,36 @@ export class Towing {
     const rails = this.roads.guardrails;
     rails?.clearBridgeHit();
     this.world.contacts?.resolve(p);
-    const contactX = p.x, contactZ = p.z;
-    const bridgeOnly = rails?.bridgeHitMatches(p, contactX - oldX, contactZ - oldZ) === true;
+    const contactImpact = this.impactSpeed;
+    const movedSites = this.world.contacts && 'lastMovedSites' in this.world.contacts ? (this.world.contacts as { lastMovedSites: number }).lastMovedSites : 1;
+    const bridgeOnly = movedSites === 1 && rails?.bridgeHitMatches(p, p.x - oldX, p.z - oldZ) === true;
+    let otherMoved = false, px = p.x, pz = p.z;
     this.world.yard?.resolveTowBody(p);
-    if (this.world.solids) pushOut(p, this.world.solids, true);
-    const scene = this.world.scene; if (scene?.rules.enabled) pushOut(p, scene.placementSolids, true);
-    if (this.world.parked) pushOutBodies(p, this.world.parked());
-    if (this.world.bus) pushOut(p, this.world.bus.placementSolids, true);
+    if (p.x !== px || p.z !== pz) { otherMoved = true; px = p.x; pz = p.z; }
+    if (this.world.solids) { pushOut(p, this.world.solids, true); if (p.x !== px || p.z !== pz) { otherMoved = true; px = p.x; pz = p.z; } }
+    const scene = this.world.scene;
+    if (scene?.rules.enabled) { pushOut(p, scene.placementSolids, true); if (p.x !== px || p.z !== pz) { otherMoved = true; px = p.x; pz = p.z; } }
+    if (this.world.parked) { pushOutBodies(p, this.world.parked()); if (p.x !== px || p.z !== pz) { otherMoved = true; px = p.x; pz = p.z; } }
+    if (this.world.bus) { pushOut(p, this.world.bus.placementSolids, true); if (p.x !== px || p.z !== pz) { otherMoved = true; px = p.x; pz = p.z; } }
     const factor = dt > 0 ? this.world.props?.hitCar(p.x, p.z, p.heading, p.vx, p.vz, oldX - p.vx * dt, oldZ - p.vz * dt, this.footprint) ?? 1 : 1;
     const b = v.bounds;
     if (b) {
       const ex = Math.abs(fx) * S.halfLength + Math.abs(Math.cos(this.heading)) * S.halfWidth;
       const ez = Math.abs(fz) * S.halfLength + Math.abs(Math.sin(this.heading)) * S.halfWidth;
       p.x = clamp(p.x, b[0] + ex, b[2] - ex); p.z = clamp(p.z, b[1] + ez, b[3] - ez);
+      if (p.x !== px || p.z !== pz) otherMoved = true;
     }
     const dx = p.x - oldX, dz = p.z - oldZ;
-    const normal = Math.hypot(dx, dz);
-    const ponyGraze = bridgeOnly && Math.hypot(p.x - contactX, p.z - contactZ) <= 1e-7;
-    if (normal > 1e-7) {
+    const ponyGraze = bridgeOnly && !otherMoved && this.impactSpeed === contactImpact;
+    if (Math.hypot(dx, dz) > 1e-7) {
       // Move the coupled pair out together, then kill the velocity into the contact through the hitch.
       v.x += dx; v.z += dz; this.x += dx; this.z += dz;
-      const nx = dx / normal, nz = dz / normal, into = v.vx * nx + v.vz * nz;
+      const normal = Math.hypot(dx, dz), into = (v.vx * dx + v.vz * dz) / normal;
       if (into < 0) {
         this.impactSpeed = Math.max(this.impactSpeed, -into);
-        // Preserve tangential slide only on shallow pony-truss rail grazes; ordinary solids stop as before.
+        // Preserve tangential slide only on shallow pony-truss rail grazes; ordinary contacts stop as before.
         if (ponyGraze && -into <= Math.hypot(v.vx, v.vz) * 0.65) {
-          v.vx -= nx * into; v.vz -= nz * into;
+          v.vx -= (dx / normal) * into; v.vz -= (dz / normal) * into;
           v.speed = v.vx * Math.sin(v.heading) - v.vz * Math.cos(v.heading);
         } else { v.vx = v.vz = v.speed = 0; }
       } else if (this.impactSpeed > impactBefore && !ponyGraze) { v.vx = v.vz = v.speed = 0; }

@@ -37,7 +37,16 @@ export class AreaContacts implements WorldContacts {
     const guard: NonNullable<Vehicle['placementGuard']> = pose => allows(pose) && (!previous || previous(pose)) && allows(pose);
     vehicle.placementGuard = guard; this.guards.set(vehicle, guard);
   }
-  resolve(body: Body): void { for (const { site } of this.sites) site.resolve(body); }
+  lastMovedSites = 0;
+  resolve(body: Body): void {
+    let moved = 0;
+    for (const { site } of this.sites) {
+      const bx = body.x, bz = body.z;
+      site.resolve(body);
+      if (body.x !== bx || body.z !== bz) moved++;
+    }
+    this.lastMovedSites = moved;
+  }
   allows(body: ContactBody): boolean {
     for (const { site } of this.sites) {
       if (site.allows) { if (!site.allows(body)) return false; }

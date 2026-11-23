@@ -47,6 +47,7 @@ export class Guardrails {
   private lastBridgeCar: Pushable | null = null;
   private lastBridgeDx = 0;
   private lastBridgeDz = 0;
+  private lastRoadMoved = false;
   private readonly trimmedBridgeSolids: [Solid, Solid] = [
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
@@ -339,10 +340,10 @@ export class Guardrails {
     pushOut(car, this.trimmedBridgeSolids, true, dt);
   }
   /** Reset last pony-truss bridge displacement before a contact pass. */
-  clearBridgeHit(): void { this.lastBridgeCar = null; this.lastBridgeDx = 0; this.lastBridgeDz = 0; }
+  clearBridgeHit(): void { this.lastBridgeCar = null; this.lastBridgeDx = 0; this.lastBridgeDz = 0; this.lastRoadMoved = false; }
   /** True only when pony-truss bridge steel accounts for the entire contact displacement on `car`. */
   bridgeHitMatches(car: Pushable, dx: number, dz: number): boolean {
-    return this.lastBridgeCar === car && Math.hypot(dx - this.lastBridgeDx, dz - this.lastBridgeDz) <= 1e-7;
+    return !this.lastRoadMoved && this.lastBridgeCar === car && Math.hypot(dx - this.lastBridgeDx, dz - this.lastBridgeDz) <= 1e-7;
   }
   /** Read-only bank elevation cache per bridge; stays in sync with built decks and bank changes at most once per dataRevision. */
   private readBridgeEnds(index: number, rev: number): boolean {
@@ -541,7 +542,7 @@ export class Guardrails {
   private clampRailYaw(car: Pushable, heading: number, dt: number): void {
     const yaw = Math.atan2(Math.sin(car.heading - heading), Math.cos(car.heading - heading));
     const limitedYaw = Math.max(-Math.PI / 6 * dt, Math.min(Math.PI / 6 * dt, yaw));
-    car.heading = heading + limitedYaw;
+    car.heading = limitedYaw === 0 ? heading : heading + limitedYaw;
     // pushOut already projects speed; an aggregate seam clamp changes that frame again.
     if (yaw !== limitedYaw) car.speed = car.vx * Math.sin(car.heading) - car.vz * Math.cos(car.heading);
   }
@@ -552,6 +553,7 @@ export class Guardrails {
     const touched = this.pushBridge(car, dt);
     this.clampRailYaw(car, heading, dt);
     if (touched) this.settleBridgeClearance(car, dt > 0);
+    if (dt === 0) car.heading = heading;
     if (touched && (car.x !== bx || car.z !== bz)) {
       if (this.lastBridgeCar === car) { this.lastBridgeDx += car.x - bx; this.lastBridgeDz += car.z - bz; }
       else { this.lastBridgeCar = car; this.lastBridgeDx = car.x - bx; this.lastBridgeDz = car.z - bz; }
@@ -560,13 +562,20 @@ export class Guardrails {
   /** Physics stays active outside LOW's drawing radius. The existing three-circle body envelope prevents step-through. */
   block(car: Pushable, dt = 1 / 120): void {
     const heading = car.heading;
+    let roadMoved = false;
     const x = Math.floor(car.x / CHUNK), z = Math.floor(car.z / CHUNK);
     for (let j = z - 1; j <= z + 1; j++) for (let i = x - 1; i <= x + 1; i++)
-      for (const c of this.cells.get(cellKey(i, j)) ?? NO_CHUNKS) pushOut(car, c.solids, false, dt);
+      for (const c of this.cells.get(cellKey(i, j)) ?? NO_CHUNKS) {
+        const cx = car.x, cz = car.z;
+        pushOut(car, c.solids, false, dt);
+        if (car.x !== cx || car.z !== cz) roadMoved = true;
+      }
     const bx = car.x, bz = car.z;
     const touched = this.bridgeSpans.length ? this.pushBridge(car, dt) : false;
     this.clampRailYaw(car, heading, dt);
     if (touched) this.settleBridgeClearance(car, dt > 0);
+    if (dt === 0) car.heading = heading;
+    if (roadMoved) this.lastRoadMoved = true;
     if (touched && (car.x !== bx || car.z !== bz)) {
       if (this.lastBridgeCar === car) { this.lastBridgeDx += car.x - bx; this.lastBridgeDz += car.z - bz; }
       else { this.lastBridgeCar = car; this.lastBridgeDx = car.x - bx; this.lastBridgeDz = car.z - bz; }

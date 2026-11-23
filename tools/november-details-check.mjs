@@ -569,6 +569,79 @@ for (const {a, b, side} of added) {
         nearTow.step(1 / 120);
         assert.ok(nearTow.impacts > 0, 'near-bridge non-bridge contact registers an impact');
         assert.equal(nearTruck.speed, 0, 'near-bridge non-bridge contact still stops the rig as on main');
+        // Mixed pony-truss + cancelling yard/solid corrections must NOT receive the pony-truss slide.
+        const mixTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+        const mixContacts = new AreaContacts(), mixSolo = new AreaContacts();
+        registerRailContacts(mixContacts, mixSolo, rails, body => body === mixTruck, TRUCK_SPEC);
+        let yardNudge = 0;
+        const mixYard = { resolveTowBody: b => { b.x += yardNudge; }, resolveSolids: () => {}, allowsBody: () => true };
+        const mixWall = { x: 1e6, z: 1e6, half: 30, halfWidth: 0.3, heading: 0 };
+        const mixTow = new Towing(mixTruck, realTerrain, net, true, false, { contacts: mixContacts, yard: mixYard, solids: [mixWall] }, true, true);
+        mixTruck.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+        assert.equal(mixTow.place(), true, 'mixed cancelling contact rig places on Bridge 45');
+        // Shift trailer slightly into the Bridge 45 rail, then add cancelling +0.05 yard nudge and -0.05 solid push.
+        mixTruck.x = ax + ux * (span * 0.5) - uz * 0.55; mixTruck.z = az + uz * (span * 0.5) + ux * 0.55;
+        mixTow.x = mixTruck.x - ux * 5.2; mixTow.z = mixTruck.z - uz * 5.2; mixTow.heading = heading - 0.05;
+        const mtr = mixTow.bodies()[1];
+        mixTruck.vx = ux * 8 - uz * 0.4; mixTruck.vz = uz * 8 + ux * 0.4; mixTruck.speed = 8;
+        // Measure post-bridge x so mixWall sits flush on +x and cancels the +0.05 yard nudge back to exact contactX.
+        const probeMix = { x: mtr.x, z: mtr.z, y: mtr.y, heading: mtr.heading, vx: mixTruck.vx, vz: mixTruck.vz, speed: 8, spec: mtr.spec, car: { root: { position: { x: mtr.x, z: mtr.z } } } };
+        mixContacts.resolve(probeMix);
+        assert.ok(Math.hypot(probeMix.x - mtr.x, probeMix.z - mtr.z) > 1e-4, 'mixed contact test hits pony-truss rail');
+        const envMix = mtr.spec.envelope, sinM = Math.sin(mtr.heading), cosM = Math.cos(mtr.heading);
+        let maxXExtent = 0;
+        for (let ci = 0; ci < envMix.circles.length; ci++) {
+          maxXExtent = Math.max(maxXExtent, sinM * envMix.circles[ci] + cosM * (envMix.circleSides?.[ci] ?? 0) + envMix.radius);
+        }
+        mixWall.x = probeMix.x + maxXExtent + mixWall.halfWidth; mixWall.z = probeMix.z;
+        yardNudge = 0.05;
+        mixTow.step(1 / 120);
+        assert.equal(mixTruck.speed, 0, 'mixed pony-truss + cancelling yard/solid corrections still stop the rig as on main');
+        // Mixed pony-truss + cancelling extra AreaContacts providers must also stop the rig.
+        const mixTruck2 = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+        const mixContacts2 = new AreaContacts(), mixSolo2 = new AreaContacts();
+        let siteNudge = 0;
+        mixContacts2.add({ resolve: b => { b.x += siteNudge; }, allows: () => true });
+        mixContacts2.add({ resolve: b => { b.x -= siteNudge; }, allows: () => true });
+        registerRailContacts(mixContacts2, mixSolo2, rails, body => body === mixTruck2, TRUCK_SPEC);
+        const mixTow2 = new Towing(mixTruck2, realTerrain, net, true, false, { contacts: mixContacts2 }, true, true);
+        mixTruck2.place(ax + ux * (span * 0.5), az + uz * (span * 0.5), heading);
+        assert.equal(mixTow2.place(), true, 'mixed AreaContacts rig places on Bridge 45');
+        mixTruck2.x = ax + ux * (span * 0.5) - uz * 0.55; mixTruck2.z = az + uz * (span * 0.5) + ux * 0.55;
+        mixTow2.x = mixTruck2.x - ux * 5.2; mixTow2.z = mixTruck2.z - uz * 5.2; mixTow2.heading = heading - 0.05;
+        mixTruck2.vx = ux * 8 - uz * 0.4; mixTruck2.vz = uz * 8 + ux * 0.4; mixTruck2.speed = 8;
+        siteNudge = 0.05;
+        mixTow2.step(1 / 120);
+        assert.equal(mixTruck2.speed, 0, 'mixed pony-truss + cancelling AreaContacts providers still stop the rig as on main');
+        // Bounds-only corner clamp with exact orthogonal velocity (vx*dx + vz*dz === 0 while vx*(dx/n) + vz*(dz/n) < 0)
+        // preserves velocity and registers zero impact, matching origin/main.
+        {
+          const flatTerrain = {
+            manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+            heightAt: () => 5,
+            surfaceAt: () => ({ ground: 5, level: 8, roadDist: 0, halfWidth: 4, kind: 2, washboard: false }),
+            withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+          };
+          const flatRoads = new Roads({ roads: [] }, mabouManifest.village, flatTerrain);
+          const bndTruck = new Vehicle(rig(), flatTerrain, flatRoads, -0.2, TRUCK_SPEC);
+          const bndTow = new Towing(bndTruck, flatTerrain, flatRoads, true, false, {}, true, true);
+          bndTruck.place(0, 0, 0);
+          assert.equal(bndTow.place(), true, 'flat bounds corner test rig places cleanly');
+          const btr = bndTow.bodies()[1];
+          const bEx = btr.spec.halfWidth, bEz = btr.spec.halfLength;
+          // Clamp only the trailer corner by exact dx = +0.0625, dz = -0.3125 (truck stays well inside bounds).
+          const bMinX = btr.x - bEx + 0.0625, bMaxZ = btr.z + bEz - 0.3125;
+          bndTruck.bounds = [bMinX, btr.z - 200, btr.x + 200, bMaxZ];
+          const cdx = (bMinX + bEx) - btr.x, cdz = (bMaxZ - bEz) - btr.z, cn = Math.hypot(cdx, cdz);
+          const bvx = -5, bvz = -1;
+          assert.equal(bvx * cdx + bvz * cdz, 0, 'orthogonal corner velocity has exact zero dot product');
+          assert.ok(bvx * (cdx / cn) + bvz * (cdz / cn) < 0, 'pre-divided normal would round negative on this corner');
+          bndTruck.vx = bvx; bndTruck.vz = bvz; bndTruck.speed = Math.hypot(bvx, bvz);
+          bndTow.step(1 / 120);
+          assert.equal(bndTow.impacts, 0, 'bounds corner clamp with exact zero dot product registers zero impact');
+          assert.equal(bndTruck.vx, bvx, 'bounds corner clamp preserves exact vx as on main');
+          assert.equal(bndTruck.vz, bvz, 'bounds corner clamp preserves exact vz as on main');
+        }
       }
     }
   }
@@ -810,14 +883,29 @@ for (const {a, b, side} of added) {
     assert.ok(Object.is(wedgedZeroDt.heading, startHdg0), `bridge ${id} dt=0 position-only bridge correction preserves exact heading`);
     assert.ok(independentInnerRailOverlap(wedgedZeroDt, ax, az, ux, uz, span) <= 1e-4, `bridge ${id} dt=0 position-only bridge correction clears overlap`);
     assert.equal(rails.allowsBridge(wedgedZeroDt), true, `bridge ${id} dt=0 resolved pose clears allowsBridge`);
-    // Seed a clear pose at hdg, then disturb heading by 1e-8 rad and wedge into rail with dt = 0: heading stays exact.
-    const seededDt0 = { x: ax + ux * wS, z: az + uz * wS, y: wY, heading: hdg, vx: 0, vz: 0, speed: 0, spec: CAR_SPEC };
+    // Seed a real saved clear pose outside the portal at 65 deg, then wedge into opposing rails within 2 m at dt = 0
+    // with heading shifted by 1e-8 rad: proves the saved-pose restore runs AND keeps exact shifted heading.
+    const yPortal = net.deckHeight(ax, az);
+    const seedAngle = hdg + Math.PI / 2;
+    const seededDt0 = { x: ax - ux * 0.60, z: az - uz * 0.60, y: yPortal, heading: seedAngle, vx: 0, vz: 0, speed: 0, spec: CAR_SPEC };
+    assert.equal(rails.allowsBridge(seededDt0), false, `bridge ${id} saved-pose seed touches portal tip`);
     rails.blockBridge(seededDt0, 1 / 120);
-    const shiftedHdg = hdg + 1e-8;
+    const savedX = seededDt0.x, savedZ = seededDt0.z;
+    assert.equal(rails.allowsBridge(seededDt0), true, `bridge ${id} saved-pose seed resolves clear`);
+    const shiftedHdg = seededDt0.heading + 1e-8;
     seededDt0.heading = shiftedHdg;
-    seededDt0.x = ax + ux * wS - uz * 0.6; seededDt0.z = az + uz * wS + ux * 0.6;
+    seededDt0.x = savedX + ux * 1.4; seededDt0.z = savedZ + uz * 1.4;
+    assert.equal(rails.allowsBridge(seededDt0), false, `bridge ${id} dt=0 shifted pose starts wedged between rails`);
     rails.blockBridge(seededDt0, 0);
+    assert.equal(seededDt0.x, savedX, `bridge ${id} dt=0 wedged pose restores saved clear X`);
+    assert.equal(seededDt0.z, savedZ, `bridge ${id} dt=0 wedged pose restores saved clear Z`);
     assert.ok(Object.is(seededDt0.heading, shiftedHdg), `bridge ${id} dt=0 saved-pose restore preserves exact heading without 1e-8 drift`);
+    assert.equal(rails.allowsBridge(seededDt0), true, `bridge ${id} dt=0 restored pose clears allowsBridge`);
+    // Exact -0 heading preservation on dt = 0 rail correction.
+    const negZeroDt0 = { x: ax + ux * wS - uz * 1.6, z: az + uz * wS + ux * 1.6, y: wY, heading: -0, vx: 0, vz: 0, speed: 0, spec: CAR_SPEC };
+    rails.blockBridge(negZeroDt0, 0);
+    assert.ok(Object.is(negZeroDt0.heading, -0), `bridge ${id} dt=0 rail correction preserves -0 heading`);
+    assert.equal(rails.allowsBridge(negZeroDt0), true, `bridge ${id} dt=0 -0 heading resolves clear`);
     // Case C: Multi-circle side-by-side variants straddling the start portal rail at 170/175 deg must clear on the first blockBridge call.
     const yStart = net.deckHeight(ax, az);
     for (const [label, spec, sOff, deg] of [
