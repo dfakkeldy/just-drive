@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { BIKE_SPEC, type Bike } from './bike';
 import type { VehicleSpec } from './vehicle-spec';
 import type { Ride, RideInput, JumpRecord } from './ride';
-import { DECK_WAIT_SECONDS, placementDeckReference, placementOnSpan, type VehiclePlacement } from './vehicle';
+import { placementDeckReference, type VehiclePlacement } from './vehicle';
 import type { Terrain, Surface } from './terrain';
 import type { Roads } from './roads';
 import type { Damage } from './damage-rules';
@@ -68,8 +68,8 @@ export class BikeRide implements Ride {
   private launchX = 0; private launchZ = 0; private airPitch = 0;
   private crashHeading = 0; private stand = 0;
   #waterStopped = false; #awaitingLoad = true; #recovering = false; #recovered = false;
-  /** Waiting on an unbuilt span's deck (see place), and for how long. */
-  #deckWaiting = false; #deckWait = 0;
+  /** The bike was waiting for its land when this update began: the parked hold then has no standing height to keep. */
+  #waitedThisStep = false;
 
   constructor(readonly car: Bike, private terrain: Pick<Terrain, 'heightAt' | 'surfaceAt' | 'withContactHeight'> & { readonly cartRoads?: boolean; coverAt?: (x: number, z: number) => number }, readonly roads: Pick<Roads, 'nearest' | 'deckHeight'> & Partial<Pick<Roads, 'guardrails'>>, private seaLevel: number, readonly spec: VehicleSpec = BIKE_SPEC) {}
 
@@ -135,19 +135,14 @@ export class BikeRide implements Ride {
     if (this instanceof BikeRide && this.#recovering) {
       if (gAt === null || !this.terrain.surfaceAt(pose.x, pose.z, gAt) || !this.bothWheelsSupported(pose.x, pose.z, pose.heading, gAt)) return false;
     }
-    // As Vehicle.place: a height-free placement on a span whose deck is not built yet is not refused for the water; it
-    // waits for its deck (not ready: no physics, no safe point) and retryPlace asks again. Never for a recovery.
-    const dry = gAt === null || this.isDryPose(pose.x, pose.z, gAt);
-    const waitDeck = !dry && !this.#recovering && pose.y === undefined && this.#deckWait < DECK_WAIT_SECONDS && placementOnSpan(this.roads, pose.x, pose.z);
-    if (!dry && !waitDeck) return false;
-    this.#deckWaiting = waitDeck; if (!waitDeck) this.#deckWait = 0;
+    if (gAt !== null && !this.isDryPose(pose.x, pose.z, gAt)) return false;
     this.x = pose.x; this.z = pose.z; this.heading = pose.heading;this.placeReference=pose.y;this.placeInfer=false;
     this.vx = this.vz = this.vy = this.speed = this.pitchRate = this.wheelie = this.wheelieRate = this.whip = 0;
     this.pitch = this.roll = this.steerAngle = this.compression = this.crashTime = this.sunk = 0;
     if (!this.stepping) this.acc = 0;
     this.airborne = false;
     this.y = gAt ?? this.y;
-    this.ready = !waitDeck && this.capture();
+    this.ready = this.capture();
     if (this.ready) {
       this.#awaitingLoad = false; this.#waterStopped = false;
       this.y = this.prevGround = Math.max((this.frontHeight + this.rearHeight) / 2, this.groundAt(this.x, this.z) ?? -Infinity);
@@ -244,12 +239,13 @@ export class BikeRide implements Ride {
   private inferring(x: number, z: number): boolean { return this.placeInfer && Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5; }
   /** See Vehicle.placeAt: a height-free placement stands on the deck it lies on, else on land. */
   placeAt(x: number, z: number, heading: number): boolean {
-    this.#deckWait = 0;
     const placed = this.place(x, z, heading, placementDeckReference(this.roads, x, z));
     if (placed && this.placeReference === undefined) { this.placeInfer = true; this.inferX = this.x; this.inferZ = this.z; }
     return placed;
   }
   parkedPlace(x: number, z: number, heading: number, y: number): boolean {
+    // As Vehicle.parkedPlace: a bike still waiting for its land at the start of the step has no standing height.
+    if (this.#waitedThisStep) return false;
     const infer = this.inferring(x, z), deck = infer ? placementDeckReference(this.roads, x, z) : undefined;
     const placed = this.place(x, z, heading, deck ?? y);
     this.placeInfer = infer && deck === undefined;
@@ -263,11 +259,11 @@ export class BikeRide implements Ride {
   }
   update(dt: number, input: RideInput, afterStep?: () => void): void {
     if (!Number.isFinite(dt) || dt < 0) return;
+    this.#waitedThisStep = !this.ready;
     const safeInput = { throttle: Number.isFinite(input.throttle) ? clamp(input.throttle, -1, 1) : 0, steer: Number.isFinite(input.steer) ? clamp(input.steer, -1, 1) : 0, handbrake: !!input.handbrake, pull: !!input.pull };
     if (!this.ready) {
       // The retry's own height, not the old body height (which could take a deck overhead).
       const reference = this.retryHeight;
-      if (this.#deckWaiting) this.#deckWait += dt;
       if (!this.retryPlace()) {
         const land = this.terrain.heightAt(this.x, this.z);
         if (land !== null) {
