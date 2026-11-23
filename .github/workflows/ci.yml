@@ -24,7 +24,7 @@ jobs:
   checks:
     name: Clean-clone checks
     runs-on: ubuntu-24.04
-    # A full run takes 10-12 minutes; a hang should not bill 45.
+    # Parallel CPU rows (--jobs 4) keep a full run well under 15 minutes; a hang should not bill 45.
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -54,6 +54,6 @@ jobs:
       - name: Install Wrangler
         run: npm install --global --no-audit --no-fund wrangler@4.162.0
 
-      # --full adds the four stand-in start-up proofs (browser-runtime and friends): no land, no Mac, about 4 minutes.
+      # --full adds the four stand-in start-up proofs (browser-runtime and friends); --jobs 4 runs independent CPU rows in parallel.
       - name: Checks
-        run: tools/check-all.sh --ci --full
+        run: tools/check-all.sh --ci --full --jobs 4

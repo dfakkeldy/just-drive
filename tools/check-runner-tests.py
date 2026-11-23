@@ -262,4 +262,71 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
         path=fixture/'tools'/orphan;path.touch();result=run('--list');assert result.returncode==1 and ('UNREGISTERED check: '+orphan) in result.stderr;path.unlink()
     (fixture/'tools/orphan-check.mjs').touch()
     result=run('--list');assert result.returncode==1 and 'UNREGISTERED check: orphan-check.mjs' in result.stderr
+    (fixture/'tools/orphan-check.mjs').unlink()
+
+    # --jobs: parallel CPU rows run faster, isolate scratch/evidence per row, keep mutual-exclusion groups
+    # and browser rows serial, preserve canonical table order, and clean up every process group on INT/TERM.
+    expect(['--jobs','0'],2)
+    table([('a',0,'node','*',''),('b',0,'node','*',''),('c',0,'node','*',''),('d',0,'node','*','')])
+    for name in ('a','b','c','d'): change_row(name,'sleep 0.35')
+    t0=time.monotonic();result=run('--jobs','4');dt=time.monotonic()-t0
+    assert result.returncode==0 and dt<1.1,(result.returncode,dt,result.stdout,result.stderr)
+    table_names=[l.split(' | ')[0] for l in result.stdout.splitlines() if ' | PASS | ' in l]
+    assert table_names==['tsc','a','b','c','d'],table_names
+    result_lines=[l[len('RESULT '):] for l in result.stderr.splitlines() if l.startswith('RESULT ')]
+    assert len(result_lines)==5 and {l.split(' | ')[0] for l in result_lines}=={'tsc','a','b','c','d'},result_lines
+    # Isolated per-row scratch ($OUT/$TMPDIR/$MMM_CHECK_OUT) and merged evidence/<row>/ on pass.
+    table([('iso1',0,'node','*',''),('iso2',0,'node','*','')])
+    for name in ('iso1','iso2'):
+        change_row(name,
+            'echo '+name+' > "$OUT/shared.txt" && echo '+name+' > "$TMPDIR/tmp.txt" && '
+            'mkdir -p "$MMM_CHECK_OUT/evidence/'+name+'" && echo '+name+' > "$MMM_CHECK_OUT/evidence/'+name+'/out.txt" && '
+            'sleep 0.15 && test "$(cat "$OUT/shared.txt")" = '+name+' && test "$(cat "$TMPDIR/tmp.txt")" = '+name)
+    result=run('--jobs','2');assert result.returncode==0,(result.stdout,result.stderr)
+    kept_dir=Path(result.stdout.split('Evidence kept at ')[1].strip())
+    assert sorted(p.name for p in kept_dir.iterdir())==['evidence']
+    assert (kept_dir/'evidence/iso1/out.txt').read_text().strip()=='iso1'
+    assert (kept_dir/'evidence/iso2/out.txt').read_text().strip()=='iso2'
+    # Mutual-exclusion groups (wrangler, git-worktree) and browser rows never overlap.
+    overlap_log=fixture/'overlap.log';overlap_log.unlink(missing_ok=True)
+    table([('mp',0,'node','*',''),('mp-mutations',0,'node-mutations','*',''),
+           ('browser-runtime',0,'node','*',''),('browser-ownership',0,'node','*',''),
+           ('br1',0,'browser','*',''),('br2',0,'browser','*','')])
+    py_rec=(
+        'import os,sys,time; from pathlib import Path; '
+        'n=sys.argv[1]; f=Path(sys.argv[2]); '
+        't0=time.monotonic(); time.sleep(0.2); t1=time.monotonic(); '
+        'f.open("a").write(f"{n} {t0:.6f} {t1:.6f}\\n")'
+    )
+    for name in ('mp','mp-mutations','browser-runtime','browser-ownership','br1','br2'):
+        change_row(name,f'{shlex.quote(sys.executable)} -c {shlex.quote(py_rec)} {name} {shlex.quote(str(overlap_log))}')
+    result=run('--full','--browser','--jobs','4');assert result.returncode==0,(result.stdout,result.stderr)
+    spans={parts[0]:(float(parts[1]),float(parts[2])) for parts in (l.split() for l in overlap_log.read_text().splitlines())}
+    def disjoint(x,y): return spans[x][1]<=spans[y][0] or spans[y][1]<=spans[x][0]
+    assert disjoint('mp','mp-mutations'),spans
+    assert disjoint('browser-runtime','browser-ownership'),spans
+    assert disjoint('br1','br2'),spans
+    # Browser rows start only after all CPU rows finish.
+    assert max(spans[k][1] for k in ('mp','mp-mutations','browser-runtime','browser-ownership')) <= min(spans['br1'][0],spans['br2'][0]),spans
+    # Interrupting a parallel run terminates every active process group and exits 130.
+    table([('p1',0,'node','*',''),('p2',0,'node','*',''),('p3',0,'node','*','')])
+    r1=fixture/'p1.ready';r2=fixture/'p2.ready';pid1=fixture/'p1.pid';pid2=fixture/'p2.pid';m3=fixture/'p3.ran'
+    for p in (r1,r2,pid1,pid2,m3): p.unlink(missing_ok=True)
+    w_src='import os,signal,sys,time; from pathlib import Path; signal.signal(signal.SIGTERM,signal.SIG_IGN); Path(sys.argv[1]).write_text(str(os.getpid())); Path(sys.argv[2]).write_text("1"); time.sleep(30)\n'
+    w_py=fixture/'par_worker.py';w_py.write_text(w_src)
+    change_row('p1',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_py))} {shlex.quote(str(pid1))} {shlex.quote(str(r1))} & wait')
+    change_row('p2',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_py))} {shlex.quote(str(pid2))} {shlex.quote(str(r2))} & wait')
+    change_row('p3',f'touch {shlex.quote(str(m3))}')
+    par_code=('import importlib.util,sys,os;from pathlib import Path;'
+              's=importlib.util.spec_from_file_location("checks",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);'
+              'm.ROOT=Path(sys.argv[2]);os.chdir(m.ROOT);sys.argv=[sys.argv[1],"--jobs","2"];sys.exit(m.main())')
+    p=subprocess.Popen([sys.executable,'-c',par_code,str(ROOT/'tools/check-all.py'),str(fixture)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env={**os.environ,'PATH':str(fixture/'bin')+os.pathsep+os.environ['PATH'],'MMM_CHECK_SCRATCH':str(scratch[0])})
+    for _ in range(150):
+        if r1.exists() and r2.exists(): break
+        time.sleep(.02)
+    assert r1.exists() and r2.exists()
+    p.send_signal(signal.SIGTERM);out,err=p.communicate(timeout=8)
+    assert p.returncode==130 and not m3.exists(),(p.returncode,out,err)
+    assert not alive(int(pid1.read_text())) and not alive(int(pid2.read_text())),'parallel SIGTERM left descendant alive'
+    print('PASS --jobs: parallel speedup, per-row isolation/evidence, group & browser serialization, SIGTERM cleanup')
 print('PASS runner: one tsc, default/quick/browser/only/coverage selection, unknown names, inventory drift, exit precedence and missing data')
