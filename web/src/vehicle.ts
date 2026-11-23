@@ -249,7 +249,7 @@ export class Vehicle {
     // DECK_WAIT_SECONDS for its deck as for land that is still loading: stuck, no physics, no safe points. Direct
     // place(), explicit heights and recoveries never take this path.
     const dry = g === null || this.isDryPose(x, z, g);
-    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined
+    const waitDeck = isSelf && !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(x, z) === null && placementOnSpan(this.roads, x, z);
     if (!dry && !waitDeck) return false;

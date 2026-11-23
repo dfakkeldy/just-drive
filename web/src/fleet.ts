@@ -546,11 +546,11 @@ export class Fleet {
       if (this.deckWaiting) {
         if (Number.isFinite(dt) && dt > 0) this.deckWait += Math.min(dt, 0.1);
         const p = this.visitPending, accepts = this.visitAccepts, kind = this.visitKind, onCommit = this.visitCommit;
-        const built = this.roads.deckHeight(p.x, p.z) !== null;
-        if (built || this.deckWait >= DECK_WAIT_SECONDS) {
+        const ready = this.roads.deckHeight(p.x, p.z) !== null || !this.waitingOnSpan(p);
+        if (ready || this.deckWait >= DECK_WAIT_SECONDS) {
           this.visitPending = null; this.visitAccepts = undefined; this.visitCommit = undefined; this.visitDirty = false;
           this.deckWaiting = false; this.deckWait = 0;
-          if (!built) this.spanWaitExhausted = true;
+          if (!ready) this.spanWaitExhausted = true;
           this.allowSpanWait = false;
           let placed = false;
           try {
@@ -1343,7 +1343,7 @@ export class Fleet {
       this.deckWaiting = true; this.deckWaitCount++; this.message = 'Waiting for bridge deck'; return false;
     }
     if (!this.teleport('new-visit', pose, accepts)) {
-      if (!this.spawned && !this.allowSpanWait) {
+      if (!this.spawned && this.spanWaitExhausted) {
         const hit = this.roads.nearest(pose.x, pose.z, 8000, r => r.kind <= 3 && !r.bridge)
           ?? this.roads.nearest(pose.x, pose.z, 8000, r => r.kind <= 5 && !r.bridge);
         if (hit && nearestDryOnRoad(hit, (px, pz, heading) => {

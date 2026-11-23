@@ -170,7 +170,7 @@ export class BikeRide implements Ride {
     // As Vehicle.place: a height-free placement (placeAt, or its retry while waiting) on an unbuilt bridge span over
     // water waits up to DECK_WAIT_SECONDS for its deck (not ready: no physics, no safe point). Never for recovery.
     const dry = gAt === null || this.isDryPose(pose.x, pose.z, gAt);
-    const waitDeck = !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined
+    const waitDeck = isSelf && !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(pose.x, pose.z) === null && placementOnSpan(this.roads, pose.x, pose.z);
     if (!dry && !waitDeck) return false;
