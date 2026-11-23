@@ -16,12 +16,15 @@ const profiles = {
   flat: () => 0,
   rising: x => x * .2,
   seam: x => x >= 0 ? .41 : 0,
+  raisedSeam: x => x >= 0 ? .1 : 0,
+  loweredSeam: x => x < 0 ? .12 : 0,
   lip: x => x >= 0 && x < .4 ? .9 : 0,
   crest: x => Math.min(x * .2, 0),
   steep: x => Math.min(x * .32, 0),
   lowDrop: x => x < 0 ? .9 : 0,
   highDrop: x => x < 0 ? 1.8 : 0,
   downhillDrop: x => -.051 * x + (x < 0 ? 2.4 : 0),
+  largeCrest: x => Math.min(x * .5, 0),
 };
 
 function drive(name, spec, height, speed, { refine = false, push = false } = {}) {
@@ -50,11 +53,12 @@ function drive(name, spec, height, speed, { refine = false, push = false } = {})
   v.damageActive = true;
   v.damage = { hit: (kind, speed) => hits.push({ kind, speed }), drive() {} };
 
-  let moved = false, takeoff = null, landing = null;
-  for (let i = 0; i < 500; i++) {
+  let moved = false, takeoff = null, landing = null, trailerAir = false, trailerRise = 0;
+  for (let i = 0; i < 750; i++) {
     if (refine && i === 20) offset = 3;
     v.update(dt, coast, () => {
       tow?.step(dt);
+      if (tow) { trailerAir ||= tow.airborne; trailerRise = Math.max(trailerRise, tow.vy); }
       if (push && !moved && v.x > 0) { v.z += 1.5; moved = true; }
     });
     if (v.airborne && !takeoff) {
@@ -70,7 +74,7 @@ function drive(name, spec, height, speed, { refine = false, push = false } = {})
     if (takeoff && !v.airborne) { landing = v.x; break; }
   }
   if (tow) assert.ok(tow.attached);
-  return { takeoff, distance: landing === null ? null : landing - takeoff.x, hits };
+  return { takeoff, distance: landing === null ? null : landing - takeoff.x, hits, trailerAir, trailerRise };
 }
 
 const fleet = [
@@ -79,8 +83,10 @@ const fleet = [
   ['pickup', TRUCK_SPEC], ['pickup + trailer', TRUCK_SPEC],
 ];
 for (const [name, spec] of fleet) {
-  for (const profile of ['flat', 'rising', 'seam', 'lip']) {
-    assert.equal(drive(name, spec, profiles[profile], 25).takeoff, null, `${name}: ${profile} must stay grounded`);
+  for (const profile of ['flat', 'rising', 'seam', 'raisedSeam', 'loweredSeam', 'lip']) {
+    const run = drive(name, spec, profiles[profile], 25);
+    assert.equal(run.takeoff, null, `${name}: ${profile} must stay grounded`);
+    assert.ok(!run.trailerAir && run.trailerRise === 0, `${profile}: trailer stays down with no upward impulse`);
   }
   assert.equal(drive(name, spec, profiles.flat, 25, { refine: true }).takeoff, null, `${name}: a tile rebase stays grounded`);
   assert.equal(drive(name, spec, (_x, z) => z > .75 ? 1.4 : 0, 25, { push: true }).takeoff, null, `${name}: side push stays grounded`);
@@ -97,5 +103,9 @@ for (const [name, spec] of fleet) {
   assert.deepEqual(drive(name, spec, profiles.lowDrop, 20).hits, [], `${name}: small drop costs no landing damage`);
   assert.equal(drive(name, spec, profiles.highDrop, 20).hits.filter(hit => hit.kind === 'landing').length, 1, `${name}: large drop reports one landing`);
   assert.ok(drive(name, spec, profiles.downhillDrop, 20).distance > 3, `${name}: a real downhill ledge releases the ride`);
+  const slowDrop = drive(name, spec, profiles.highDrop, 2.8);
+  assert.ok(slowDrop.takeoff && slowDrop.distance > .3 && slowDrop.takeoff.vy <= 0, `${name}: rolling off a ledge starts a fall`);
   console.log('PASS', name, 'ranges in metres', [slow.distance, fast.distance, steep.distance].map(m => m.toFixed(2)));
 }
+const largeCrest = drive('car', CAR_SPEC, profiles.largeCrest, 32);
+assert.ok(largeCrest.takeoff && largeCrest.takeoff.vy <= Math.sqrt(2 * 9.81 * 3), 'large crest keeps the takeoff limit');

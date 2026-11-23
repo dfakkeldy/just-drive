@@ -66,9 +66,10 @@ const suites = {
     file: 'ground-motion.ts',
     check: 'ground-motion-check.mjs',
     mutants: [
-      ['flat road launches', 'if ((tangent * dt) - (next - height) <= gravityDrop + .0001) return null;', 'if (height === 0 && next === 0 && back === 0) return 0;'],
-      ['no takeoff', 'return Math.min(launchGrade * speed, MAX_LAUNCH_SPEED);', 'return null;'],
-      ['fixed launch speed', 'return Math.min(launchGrade * speed, MAX_LAUNCH_SPEED);', 'return Math.min(launchGrade * 25, MAX_LAUNCH_SPEED);'],
+      ['flat road launches', 'const drop = height - next;', 'const drop = height - next; if (height === 0 && next === 0) return 0;'],
+      ['no takeoff', '\n  return velocity;', '\n  return null;'],
+      ['fixed launch speed', 'Math.min(launchGrade * speed, MAX_LAUNCH_SPEED)', 'Math.min(launchGrade * 25, MAX_LAUNCH_SPEED)'],
+      ['no takeoff limit', 'Math.min(launchGrade * speed, MAX_LAUNCH_SPEED)', 'launchGrade * speed'],
       ['no drop threshold', 'peak - support > LANDING_DROP', 'peak - support > 0'],
     ],
   },

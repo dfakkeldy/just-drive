@@ -1,5 +1,5 @@
 import {deckCounts} from './bridge-contact';
-import {crestVelocity, GRAVITY as G, hardLanding} from './ground-motion';
+import {crestVelocity, GRAVITY as G, hardLanding, LEDGE_DROP} from './ground-motion';
 import { safePlacement } from './placement-pose';
 import { wideDemo } from './vehicle-demo';
 import * as THREE from 'three';
@@ -239,6 +239,7 @@ export class Vehicle {
     this.captureGround();
     if (this.groundContacts.some(p => p.height === null)) return false;
     this.prevGround = this.groundContacts.reduce((sum, p) => sum + p.height!, 0) / this.groundContacts.length;
+    this.flightPeak = this.airborne ? this.y : null;
     this.acc = 0; this.stuck = false; if (spin !== undefined) this.spin = spin;
     if (travel) for (let i = 0; i < this.suspension.length; i++) this.suspension[i] = travel[i] ?? 0;
     return true;
@@ -246,7 +247,7 @@ export class Vehicle {
 
   /** A new start (a new day): where the car went before no longer counts, so R cannot lead back to yesterday's road. */
   resetControlHistory(): void { this.touchRoad = null; this.junctionClear = 0; this.roadHeading = null; this.helpYaw = this.lightHelpYaw = 0; }
-  resetVisit(): void { this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.touchRoad = null; this.junctionClear = 0; this.helpYaw = this.lightHelpYaw = 0; this.sunk = 0; }
+  resetVisit(): void { this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.touchRoad = null; this.junctionClear = 0; this.helpYaw = this.lightHelpYaw = 0; this.sunk = 0; this.flightPeak = null; }
 
   restart(x: number, z: number, heading: number): boolean {
     this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true;
@@ -283,6 +284,7 @@ export class Vehicle {
   /** Hold a sunk ride at rest in water until an explicit reset returns it to dry land. */
   stopInWater(): void {
     this.vx = this.vz = this.vy = this.speed = 0;
+    this.flightPeak = null;
     this.#waterStopped = true;
   }
 
@@ -634,16 +636,19 @@ export class Vehicle {
     let launch: number | null = null;
     let centre: number | null = null;
     const ramp = helpOff || onRoad && !onDeck && s.kind >= 8 && s.kind <= 10;
-    if (!this.airborne && missing === 0 && Math.abs(vf) > 3 && this.spec.locomotion !== 'horse') {
+    const acrossLedge = Math.max(fl, fr, rl, rr) - Math.min(fl, fr, rl, rr) >= LEDGE_DROP;
+    const travelSpeed = Math.hypot(this.vx, this.vz);
+    if (!this.airborne && missing === 0 && travelSpeed > .05 && (travelSpeed > 3 || acrossLedge) && this.spec.locomotion !== 'horse') {
       // On a built ramp, the leading axle loses support before the body reaches the lip.
       centre = this.groundAt(this.x, this.z);
       if (ramp) {
-        const reach = hl / Math.hypot(this.vx, this.vz);
+        const reach = hl / travelSpeed;
         const x = this.x + reach * this.vx, z = this.z + reach * this.vz;
-        const referenceY = Math.max(this.y, s.ground) + Math.max(0, Math.sign(vf) * Math.sin(this.pitch) * hl);
-        launch = crestVelocity(this.launchGround, x, z, this.vx, this.vz, dt, this.groundAt(x, z, referenceY), referenceY, true);
+        const grade = Math.sin(this.pitch) * vf / travelSpeed + Math.sin(this.roll) * vl / travelSpeed;
+        const referenceY = Math.max(this.y, s.ground) + Math.max(0, grade * hl);
+        launch = crestVelocity(this.launchGround, x, z, this.vx, this.vz, dt, this.groundAt(x, z, referenceY), referenceY, true, grade);
       }
-      if (!helpOff) launch ??= crestVelocity(this.launchGround, this.x, this.z, this.vx, this.vz, dt, centre, this.y);
+      launch ??= crestVelocity(this.launchGround, this.x, this.z, this.vx, this.vz, dt, centre, this.y);
     }
     if (launch !== null) {
       this.y = Math.max(this.y, ground, centre ?? ground);
@@ -792,9 +797,12 @@ export class Vehicle {
     // The edge of the map is a wall the car cannot pass: beyond it there is no road data to drive on.
     this.clampBounds();
     // A wide axle can straddle a bank while the chassis is still on its upper surface.
-    if (missing > 0 || !this.airborne && ground < s.ground - .3) {
+    if (missing > 0) {
       const postG = this.groundAt(this.x, this.z);
       if (postG !== null && this.y < postG) { this.y = postG; if (this.vy < 0) this.vy = 0; }
+    } else if (!this.airborne && this.spec.locomotion !== 'horse' && ground < s.ground - .4) {
+      const postG = this.groundAt(this.x, this.z);
+      if (postG !== null) this.y = Math.max(this.y, postG - .4);
     }
     if (this.spec.locomotion !== 'horse' && this.damageActive && this.damage) {
       let depth = 0;

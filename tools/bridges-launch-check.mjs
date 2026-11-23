@@ -7,6 +7,7 @@ const before=process.argv.includes('--before');
 async function run(replacements={}){
  const mod=await fixture('mabou',1,replacements),rows=[];
  for(const [name,height,collision,frame] of[
+  ['0.10m step',(_x,z)=>z<0?.10:0,false,1/120],
   ['0.41m step',(_x,z)=>z<0?.41:0,false,1/120],
   ['0.41m step, long frame',(_x,z)=>z<0?.41:0,false,.5],
   ['culvert lip',(_x,z)=>z<0&&z>-.4?.9:0,false,1/120],
@@ -45,8 +46,8 @@ async function run(replacements={}){
 }
 const rows=await run();console.log(JSON.stringify(rows,null,2));
 if(process.argv.includes('--mutations')){
- const file='web/src/ground-motion.ts',s=readFileSync(root+file,'utf8'),anchor='if (Math.abs(grade - earlierGrade) > .22) return null;';
+ const file='web/src/ground-motion.ts',s=readFileSync(root+file,'utf8'),anchor='Math.min(grade, earlierGrade)';
  assert.equal(s.split(anchor).length,2,'one approach support check');
- await assert.rejects(()=>run({[file]:s.replace(anchor,'')}),/step: only the real crest can launch/,'the raised seam rejects a mismatched approach');
+ await assert.rejects(()=>run({[file]:s.replace(anchor,'grade')}),/step: only the real crest can launch/,'the raised seam rejects a mismatched approach');
  console.log('KILLED approach continuity removed');
 }
