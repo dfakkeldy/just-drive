@@ -908,6 +908,24 @@ function runDeckWaitTests(api, quiet = false) {
       for (let i = 0; i < 60 * 2; i++) parkedFrame(r);
       assert.ok(Math.abs(r.x - 10) < .1 && Math.abs(r.y - 2) < .2, `${kind}: failed live restart from off-road dry pose returns to prior dry pose at 8 s even after refused second restart (x=${r.x.toFixed(1)}, y=${r.y.toFixed(2)})`);
       assert.ok(kind === 'bike' ? r.ready === true : r.stuck === false, `${kind}: drivable after returning to prior dry pose`);
+
+      // If destination terrain unloads mid-wait (main.ts missing-surface branch!), waitingForDeck must stay true so the 8 s timer expires and restores the prior dry pose.
+      let spanLoaded = true;
+      const unloadWorld = makeTerrain((x) => (x < 40
+        ? { ground: 2, canopy: 0, roadDist: 99, halfWidth: 4, kind: 0, level: 5, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }
+        : spanLoaded ? { ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 5, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false } : null));
+      const ru = mkRide(kind, unloadWorld, wetRoad); ru.bounds = [-200, -200, 400, 200];
+      assert.equal(ru.place(10, 0, Math.PI / 2), true);
+      assert.equal(ru.restart(100, 0, Math.PI / 2), true);
+      assert.equal(ru.waitingForDeck, true);
+      for (let i = 0; i < 60; i++) parkedFrame(ru);
+      spanLoaded = false;
+      for (let i = 0; i < 60 * 9; i++) {
+        if (!ru.waitingForDeck && unloadWorld.surfaceAt(ru.x, ru.z)?.level === undefined) ru.retryPlace();
+        else parkedFrame(ru);
+      }
+      assert.ok(Math.abs(ru.x - 10) < .1 && Math.abs(ru.y - 2) < .2, `${kind}: mid-wait tile unload preserves deadline and restores prior dry pose (x=${ru.x.toFixed(1)}, y=${ru.y.toFixed(2)})`);
+      assert.ok(kind === 'bike' ? ru.ready === true : ru.stuck === false, `${kind}: drivable after mid-wait unload timeout recovery`);
     }
     // Road vertex fallback keeps walking past a guard-rejected first dry vertex to the next accepted dry vertex.
     const guardWorld = makeTerrain((x) => ({ ground: x <= 323 ? 2 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 5, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
@@ -1746,6 +1764,20 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
       '    if (this.spawned && this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {',
       '    if (false && this.spawned && this.allowSpanWait && !accepts && this.waitingOnSpan({ x, z, heading })) {',
       /Fleet live place-jump onto unbuilt span waits for deck/,
+    ],
+    [
+      'car-unload-clears-deck-wait',
+      'web/src/vehicle.ts',
+      '    this.#deckWaiting = waitDeck || keepWait;',
+      '    this.#deckWaiting = waitDeck;',
+      /car: mid-wait tile unload preserves deadline and restores prior dry pose/,
+    ],
+    [
+      'bike-unload-clears-deck-wait',
+      'web/src/bike-ride.ts',
+      '    this.#deckWaiting = waitDeck || keepWait;',
+      '    this.#deckWaiting = waitDeck;',
+      /bike: mid-wait tile unload preserves deadline and restores prior dry pose/,
     ],
     [
       'fleet-unspawned-restart-clobbers-first-spawn',

@@ -248,7 +248,8 @@ export class Vehicle {
     // A height-free placement (placeAt, or its retry while waiting) on an unbuilt bridge span over water waits up to
     // DECK_WAIT_SECONDS for its deck as for land that is still loading: stuck, no physics, no safe points. Direct
     // place(), explicit heights and recoveries never take this path.
-    const dry = g === null || this.isDryPose(x, z, g);
+    const expired = isSelf && allowWait && this.#deckWaiting && this.#deckWait >= DECK_WAIT_SECONDS;
+    const dry = (g === null && !expired) || (g !== null && this.isDryPose(x, z, g));
     const waitDeck = isSelf && !dry && !this.#recovering && !this.skipDeckWait && !(allowWait && this.#noDeckWait) && pose.y === undefined
       && (freshWait || (allowWait && this.#deckWait < DECK_WAIT_SECONDS))
       && this.roads.deckHeight(x, z) === null && placementOnSpan(this.roads, x, z);
@@ -259,7 +260,8 @@ export class Vehicle {
     this.vx = this.vz = this.vy = 0; this.sunk = 0; this.airborne = false;
     this.flightPeak = null;
     if (this.spec.locomotion === 'horse') { this.speed = 0; this.car.resetPose?.(); }
-    this.#deckWaiting = waitDeck;
+    const keepWait = g === null && allowWait && this.#deckWaiting && this.#deckWait < DECK_WAIT_SECONDS;
+    this.#deckWaiting = waitDeck || keepWait;
     this.#noDeckWait = freshWait ? this.skipDeckWait : allowWait ? this.#noDeckWait : false;
     if (freshWait || (g !== null && !waitDeck)) { this.#deckWait = 0; this.#waitFallback = null; }
     this.#waterStopped = false;
@@ -593,7 +595,7 @@ export class Vehicle {
         if (this.#deckWaiting && Number.isFinite(dt) && dt > 0) this.#deckWait += Math.min(dt, 0.1);
         if (!this.retryPlace()) {
           const land = this.terrain.heightAt(this.x, this.z);
-          if (land !== null) {
+          if (land !== null || this.#deckWaiting) {
             const fallback = this.#waitFallback;
             this.stuck = false;
             this.#deckWaiting = false;
@@ -603,7 +605,7 @@ export class Vehicle {
             if (this.#waterStopped && fallback && this.tryDryPlace(fallback.x, fallback.z, fallback.heading, fallback.y)) return;
             if (this.#waterStopped) {
               // Stand at the ground the retry asked for: the old body height could take a deck overhead.
-              const gNow = this.groundAt(this.x, this.z, reference ?? land);
+              const gNow = land !== null ? this.groundAt(this.x, this.z, reference ?? land) : null;
               if (gNow !== null) this.y = gNow;
               this.prevGround = this.y; this.airborne = false; this.#awaitingLoad = false;
               this.captureGround(); this.sync(0);
