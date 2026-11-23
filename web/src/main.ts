@@ -819,7 +819,7 @@ for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown
   (builtPlaces as Record<string, object | null>)[name] = row.site ? row.build(row.site, row.load && await row.load()) : null;
 }
 const { hawkesbury, mabouMain } = builtPlaces;
-const postOffice = postOfficeChunk ? new (await postOfficeChunk.take().catch(partFailed)).PortHawkesburyPostOffice(manifest.village, terrain, LOW) : null;
+const postOffice = postOfficeChunk ? new (await postOfficeChunk!.take().catch(partFailed)).PortHawkesburyPostOffice(manifest.village, terrain, LOW) : null;
 if (postOffice) {
   scene.add(postOffice.group);
   if (import.meta.env.DEV) expose({ postOffice }, false);
