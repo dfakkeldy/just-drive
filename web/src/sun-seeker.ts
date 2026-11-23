@@ -6,20 +6,14 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { ephemeris, halifaxTime, localDate, localTime, localZone, validStudyDate, validTime, type SunEvent } from './light-study';
 import { directionFromAngles, sunAngles } from './sun';
-import { apparentUpperLimb, HILL_RANGE, hillElevation, hillSunEvents, sampleHillLine, sunArc, trueEyeHeight, type GroundRay, type HillLine } from './sun-seeker-rules';
+import { apparentUpperLimb, HILL_RANGE, hillElevation, hillSunEvents, sampleHillLine, SUN_PATH_INK, SUN_PATH_SEASONS, SUN_PATH_SELECTED, sunArc, sunPathNameSpots, trueEyeHeight, type GroundRay, type HillLine } from './sun-seeker-rules';
 import './sun-seeker.css';
 
 const RADIUS = 180;
-const SELECTED = '#ffd477';
+const SELECTED = SUN_PATH_SELECTED;
 const HILLS = '#f3f5f6';
-const INK = '#25313f';
-const SEASONS = [
-  { date: '12-21', name: 'Winter solstice', color: '#a2dbff', labelAt: .38 },
-  { date: '03-20', name: 'Equinox', color: '#aaf4d1', labelAt: .50 },
-  { date: '06-21', name: 'Summer solstice', color: '#ffb5ce', labelAt: .53 },
-];
-/** Other places along a path for its name, tried in turn when the first is off screen or covered. */
-const NAME_SPOTS = [0, -.12, .12, -.24, .24, -.36, .36];
+const INK = SUN_PATH_INK;
+const SEASONS = SUN_PATH_SEASONS;
 const anglesAt = (az: number, el: number) => directionFromAngles(az, el).multiplyScalar(RADIUS);
 const eventTime = (event?: SunEvent) => event ? localTime(new Date(Math.round(+event.when / 60_000) * 60_000)) : '—';
 
@@ -463,8 +457,7 @@ export class SunSeeker {
 
   /** Name a path just above it, first at its usual point, then nearer each end, then below it. */
   private nameSpots(arc: readonly SunEvent[], at: number): { az: number; el: number }[] {
-    const points = NAME_SPOTS.map(offset => arc[Math.round(THREE.MathUtils.clamp(at + offset, .04, .96) * (arc.length - 1))]);
-    return [1.6, -1.8].flatMap(lift => points.map(({ az, el }) => ({ az, el: el + lift })));
+    return sunPathNameSpots(arc, at);
   }
 
   private line(group: THREE.Group, points: number[], color: string, width: number, order: number): void {

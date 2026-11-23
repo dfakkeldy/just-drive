@@ -6,6 +6,21 @@ const MINUTE = 60_000;
 const RAD = Math.PI / 180;
 const BEARING_STEP = 1;
 export const HILL_RANGE = 6000;
+export const SUN_PATH_SELECTED = '#ffd477';
+export const SUN_PATH_INK = '#25313f';
+export interface SeasonPath {
+  readonly date: string;
+  readonly name: string;
+  readonly color: string;
+  readonly labelAt: number;
+}
+export const SUN_PATH_SEASONS: readonly SeasonPath[] = [
+  { date: '12-21', name: 'Winter solstice', color: '#a2dbff', labelAt: .38 },
+  { date: '03-20', name: 'Equinox', color: '#aaf4d1', labelAt: .50 },
+  { date: '06-21', name: 'Summer solstice', color: '#ffb5ce', labelAt: .53 },
+];
+/** Other places along a path for its name, tried in turn when the first is off screen or covered. */
+export const SUN_PATH_NAME_SPOTS = [0, -.12, .12, -.24, .24, -.36, .36] as const;
 export type HillLine = readonly (number | null)[];
 
 export interface Observer { x: number; y: number; z: number }
@@ -62,6 +77,41 @@ export function sunArc(date: string, lat: number, lon: number, first?: Date, las
   for (let t = start; t < end; t += 4 * MINUTE) arc.push(event(t));
   arc.push(event(end));
   return arc;
+}
+
+export interface SunPathDates {
+  today: string;
+  seasons: readonly (SeasonPath & { fullDate: string })[];
+}
+
+export function sunPathDates(date: string): SunPathDates {
+  const year = date.slice(0, 4);
+  return {
+    today: date,
+    seasons: SUN_PATH_SEASONS.map(season => ({ ...season, fullDate: `${year}-${season.date}` })),
+  };
+}
+
+export interface SunPathArcs {
+  today: SunEvent[];
+  seasons: readonly (SeasonPath & { fullDate: string; arc: SunEvent[] })[];
+}
+
+export function sunPathArcs(date: string, lat: number, lon: number): SunPathArcs {
+  const { today, seasons } = sunPathDates(date);
+  return {
+    today: sunArc(today, lat, lon),
+    seasons: seasons.map(season => ({ ...season, arc: sunArc(season.fullDate, lat, lon) })),
+  };
+}
+
+/** Candidate label spots along a path: first at its usual point, then nearer each end, above then below. */
+export function sunPathNameSpots(arc: readonly SunEvent[], at: number, lifts: readonly number[] = [1.6, -1.8]): { az: number; el: number }[] {
+  const points = SUN_PATH_NAME_SPOTS.map(offset => {
+    const share = Math.max(.04, Math.min(.96, at + offset));
+    return arc[Math.round(share * (arc.length - 1))];
+  });
+  return lifts.flatMap(lift => points.map(({ az, el }) => ({ az, el: el + lift })));
 }
 
 /** First appearance and last disappearance. A ridge can hide the sun again between those times. */

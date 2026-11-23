@@ -1,5 +1,5 @@
 import { bikeKeys, horseKeys } from './vehicle-choice';
-import { installSettings } from './settings';
+import { installSettings, toggle } from './settings';
 import { Sidewalks } from './sidewalks';
 import { loadSidewalkData } from './sidewalks-cache';
 import { StreamCulverts } from './stream-culverts';
@@ -118,6 +118,8 @@ import { Edge } from './edge';
 import { directionFromAngles, sunAngles } from './sun';
 import { readLightStudy, studyScale, studyLightingElevation, lightStudyUI, readDrivePosition } from './light-study';
 import type { SunSeeker, SunViewLight } from './sun-seeker';
+import { gameSunPathDate, readSunPaths, skySunPathsVisible, SUN_PATHS_KEY, SUN_PATHS_LABEL, SUN_PATHS_STORAGE } from './sun-paths-rules';
+import type { SkySunPaths } from './sun-paths';
 import { chooseYardLights, nightPalette } from './night-rules';
 import { Night, NightShading, nightSkyMaterial } from './night';
 import { HarbourLights } from './harbour-lights';
@@ -1595,6 +1597,10 @@ if (pad && !droneVehicle) {
   top?.insertBefore(button, document.getElementById('gear'));
 }
 let sunSeeker: SunSeeker | null = null;
+let sunPathsOn = readSunPaths(params, () => localStorage.getItem(SUN_PATHS_STORAGE));
+let sunPathsChunk = sunPathsOn ? early(import('./sun-paths')) : null;
+let sunPathsMod: typeof import('./sun-paths') | null = null;
+let skySunPaths: SkySunPaths | null = null;
 const pictureButton = pad && !mailMode ? Object.assign(document.createElement('button'), {
   id: 'savePictureButton', type: 'button', textContent: 'Save picture', hidden: true,
 }) : null;
@@ -1688,6 +1694,7 @@ function resize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   sunSeeker?.lookSize();
+  skySunPaths?.setSize(w, h);
 }
 addEventListener('resize', resize);
 
@@ -2491,9 +2498,11 @@ function afterWorld(): void {
   if (!waterReflections) return;
   if (finish?.on) finish.onWorld(() => waterReflections.afterRender(camera)); else waterReflections.afterRender(camera);
 }
+let drawSkySunPaths: (() => void) | null = null;
 function drawWorld(): void {
   drawProbe?.before?.();
   if (finish?.on) finish.render(scene, camera); else renderer.render(scene, camera);
+  if (drawSkySunPaths) drawSkySunPaths();
   drawProbe?.after?.();
 }
 async function drawPicture(): Promise<void> {
@@ -2962,6 +2971,39 @@ function frame(now: number) {
   requestAnimationFrame(frame);
   } catch (error) { page.fail(error); }
 }
+async function syncSunPaths(on: boolean): Promise<void> {
+  sunPathsOn = on;
+  if (!on) {
+    drawSkySunPaths = null;
+    skySunPaths?.dispose();
+    skySunPaths = null;
+    return;
+  }
+  if (skySunPaths) return;
+  try {
+    if (!sunPathsMod) {
+      const chunk = sunPathsChunk;
+      sunPathsChunk = null;
+      sunPathsMod = chunk ? await chunk.take() : await import('./sun-paths');
+    }
+    if (!sunPathsOn || skySunPaths) return;
+    skySunPaths = new sunPathsMod.SkySunPaths(gameSunPathDate(lightStudy, weather), lat, lon, sun, innerWidth, innerHeight, !!finish);
+    drawSkySunPaths = () => skySunPaths?.render(renderer, camera, finish?.on ? finish.depthTexture : null, skySunPathsVisible({
+      sunSeeker: !!sunSeeker,
+      bigMap: !!bigMap?.busy,
+      replay: replay.active,
+      pauseScreen: pause.screen,
+      interiors: interiors.busy,
+    }));
+  } catch (error) {
+    console.warn('Sky sun paths could not load.', error);
+  }
+}
+if (!bare) {
+  const sunPathsBox = toggle(SUN_PATHS_KEY, SUN_PATHS_LABEL, sunPathsOn, on => { void syncSunPaths(on); });
+  if (sunPathsBox) sunPathsBox.id = 'sunPaths';
+}
+if (import.meta.env.DEV) expose({ get skySunPaths() { return skySunPaths; } }, false);
 // Settings > Advanced: on phone detail, once the far views pack is installed (desktop always draws it).
 if (!bare && LOW && farPack) farPhoneSetting(advancedSection(document.getElementById('settings'), document.getElementById('startOver'), touchDevice), farPhone.choice, farPhone.fromUrl, touchDevice);
 const graphics = document.getElementById('graphics');
@@ -2970,4 +3012,5 @@ resize();
 document.getElementById('boot')?.remove();
 // Finalize all initial material hooks before their first compile. Activation only flips a uniform.
 if(farKey)curveSceneMaterials(scene,shared);
+if (sunPathsOn) await syncSunPaths(true);
 requestAnimationFrame(frame);
