@@ -116,6 +116,26 @@ for (const [name, width, height, touch] of [['desktop', 1400, 950, false], ['des
       await settle('downpour and winter', `location.search.includes('rain=downpour')`);
       assert.deepEqual(await read('[mmm.terrain.uniforms.rainWet.value,mmm.terrain.uniforms.winterCover.value,!!mmm.precipitationMesh]'), [1, 1, true]);
     }
+    if (name === 'desktop') {
+      await c.send('Page.navigate', { url: `${base}/?${query}&era=1884&weather=rain&rain=downpour&season=winter` });
+      await settle('1884 with modern weather keys', "location.search.includes('era=1884')");
+      assert.deepEqual(await read(`(()=>{
+        const section = document.getElementById('weatherSet');
+        const mood = section.querySelector('[aria-label=Weather]');
+        return [section.open, mood.value, [...mood.options].map(o => o.value),
+          section.querySelector('[aria-label=Season]').closest('label').hidden];
+      })()`), [false, 'clear', ['clear', 'overcast', 'fog'], true], 'hidden weather choices leave the 1884 section closed');
+      await read(`(()=>{
+        const section = document.getElementById('weatherSet');
+        section.open = true;
+        section.querySelector('form').requestSubmit();
+      })()`);
+      await settle('1884 Apply', "location.search.includes('weather=clear')");
+      const legacy = new URL(await read('location.href')).searchParams;
+      assert.equal(legacy.get('era'), '1884');
+      assert.equal(legacy.has('season'), false, '1884 Apply removes the hidden season');
+      assert.equal(legacy.has('rain'), false, '1884 Apply removes the hidden rain intensity');
+    }
     console.log(`${name} ${width}x${height}: ${shown.sections.length} other panel parts clear; values, reach, ${shown.phone ? '56 px targets, ' : ''}key isolation, refused empty date and Apply round trip PASS`);
   } finally { c.close(); await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`); }
 }

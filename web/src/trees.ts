@@ -359,7 +359,8 @@ export class Trees {
   count = 0;
 
   constructor(tiles: string[], private base: string, private terrain: Terrain, private detail = true, private excludes?: (east: number, north: number) => boolean) {
-    const shape = terrain.uniforms?.winterCover ? winterTreeGeometry : treeGeometry;
+    const winter = !!terrain.uniforms?.winterCover;
+    const shape = winter ? winterTreeGeometry : treeGeometry;
     this.shapes = Array.from({ length: 20 }, (_, i) => shape(Math.floor(i / 4), i % 4, i % 4 === 3, false));
     this.nearShapes = terrain.low || !detail ? [] : Array.from({ length: 20 }, (_, i) => shape(Math.floor(i / 4), i % 4, i % 4 === 3, true));
     for (const t of tiles) this.have.add(t);
@@ -377,12 +378,12 @@ export class Trees {
     this.farDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
     this.nearDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
     this.prepare(this.farMaterial, false);
-    this.prepare(this.nearMaterial, true);
+    this.prepare(this.nearMaterial, true, false, winter);
     this.prepare(this.farDepth, false, true);
     this.prepare(this.nearDepth, true, true);
   }
 
-  private prepare(material: THREE.Material, near: boolean, depth = false) {
+  private prepare(material: THREE.Material, near: boolean, depth = false, winter = false) {
     // The near and far shapes fade into each other through the picture's edge samples. A picture with one sample for
     // each pixel (finish-choice.ts) has none: there a fine screen pattern drops the pixels, and the edge smoothing softens it.
     const oneSample = treeLook.oneSample;
@@ -476,7 +477,7 @@ export class Trees {
             float shade = mix(0.90 + 0.20 * tuft, 0.78 + 0.48 * smoothstep(0.20, 0.80, tuft), step(1.5, vLeaf));
             diffuseColor.rgb *= mix(1.0, shade + 0.12 * (fine - 0.5), min(vLeaf, 1.0));
             // Pale bark keeps its dark horizontal flecks, independent of the autumn tint.
-            if (vLeaf < 0.5 && vColor.r > 0.4) {
+            if (vLeaf < 0.5 && vColor.r > 0.4${winter ? ' && vColor.r > vColor.b' : ''}) {
               float mark = smoothstep(0.82, 0.95, sin(vCrown.y * 8.5 + sin(vCrown.x * 21.0)));
               diffuseColor.rgb *= 1.0 - 0.48 * mark;
             }
@@ -492,7 +493,7 @@ export class Trees {
         }
       }
     };
-    material.customProgramCacheKey = () => `tree-layers-3-${near}-${depth}`;
+    material.customProgramCacheKey = () => `tree-layers-3-${near}-${depth}${winter ? '-winter' : ''}`;
   }
 
   // Repack only tiles at the eye, and only after moving. Distant trees keep one cheap draw.

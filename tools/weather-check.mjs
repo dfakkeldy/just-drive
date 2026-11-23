@@ -87,6 +87,7 @@ for (const [query, winter] of [
   ['date=2026-12-21', false], ['playerDate=2026-02-31', false], ['weather=snow', true],
   ['season=winter', true], ['season=off&weather=snow&playerDate=2026-12-21', false],
 ]) assert.equal(winterCover(read(query)), winter, query);
+for (const date of ['', '2026-00-21']) assert.equal(winterCover({ ...read(''), date }), false, 'a missing or zero month does not start winter');
 assert.equal(read('season=bad&rain=bad').season, 'date');
 assert.equal(read('season=bad&rain=bad').rain, 'steady');
 assert.ok(rainAmount('drizzle') < rainAmount('steady') && rainAmount('steady') < rainAmount('downpour'));
@@ -104,7 +105,7 @@ assert.ok(winterRoadGrip({ value: 1 }, true) < winterRoadGrip({ value: 1 }, true
 assert.ok(winterRoadGrip({ value: 1 }, true, true) < 1);
 // Drive the bike through its public update path so the solver must receive the touch flag.
 const { BikeRide, BIKE_STEP } = await load('web/src/bike-ride.ts');
-function brakeBike(winter, touch) {
+function brakeBike(winter, touch, deck = null) {
   const surface = { kind: 2, ground: 10, canopy: 0, roadDist: 0, halfWidth: 4 };
   const terrain = {
     heightAt: () => surface.ground,
@@ -112,7 +113,7 @@ function brakeBike(winter, touch) {
     withContactHeight: (_bike, read) => read(),
     uniforms: { winterCover: { value: Number(winter) } },
   };
-  const roads = { deckHeight: () => null, nearest: () => null };
+  const roads = { deckHeight: () => deck, nearest: () => null };
   const bike = new BikeRide({ root: new Object3D(), pose() {} }, terrain, roads, -0.2);
   assert.equal(bike.place(0, 0, 0), true);
   bike.vz = -13;
@@ -126,6 +127,8 @@ const snowKeyboardSpeed = brakeBike(true, false);
 const snowTouchSpeed = brakeBike(true, true);
 assert.ok(clearBikeSpeed < snowTouchSpeed && snowTouchSpeed < snowKeyboardSpeed,
   'the bike brakes less on snow and retains more braking grip with touch');
+assert.equal(brakeBike(true, false, 10), brakeBike(false, false, 10),
+  'a supporting road deck keeps ordinary bike traction in winter');
 // A failed light study (a bad date) must not replace a player's own clock: main.ts gives the player's moment then.
 const main = (await import('node:fs')).readFileSync('web/src/main.ts', 'utf8');
 assert.match(main, /const when = \(weather\.chosen && !lightStudy\.active \? undefined : lightStudy\.when\) \?\? weatherMoment\(weather\);/);

@@ -51,7 +51,7 @@ export function weatherSettings(params: URLSearchParams): Weather {
 }
 export function winterCover({ date, mood, season }: Weather): boolean {
   const month = +date.slice(5, 7);
-  return season === 'winter' || (season === 'date' && (mood === 'snow' || month === 12 || month <= 3));
+  return season === 'winter' || (season === 'date' && (mood === 'snow' || month === 12 || (month >= 1 && month <= 3)));
 }
 export const rainAmount = (rain: Rain): number => rain === 'drizzle' ? 0.35 : rain === 'downpour' ? 1 : 0.65;
 /** The clock shown in the settings: the player's own time, or the tool hour to the nearest minute. */
@@ -153,9 +153,10 @@ export function weatherUI(weather: Weather, getPosition?: () => StudyPosition, e
     if (!validStudyDate(day.value) || !validTime(time.value.slice(0, 5))) return;
     let pose: StudyPosition | undefined;
     try { pose = getPosition?.(); } catch { /* the car is not made yet (still loading): apply without a place */ }
-    location.assign(weatherAddress(location.href, day.value, time.value.slice(0, 5), select.value, pose, season.value as Season, rain.value as Rain));
+    location.assign(weatherAddress(location.href, day.value, time.value.slice(0, 5), select.value, pose,
+      effects ? season.value as Season : 'date', rain.value as Rain));
   });
-  control.open = weather.mood !== 'clear' || weather.date !== DEFAULT_DATE || !!weather.time || weather.season !== 'date';
+  control.open = select.value !== 'clear' || weather.date !== DEFAULT_DATE || !!weather.time || (effects && weather.season !== 'date');
   // Light study is installed first. Keep the clock block above it.
   panel.insertBefore(control, panel.querySelector('#lightStudy') ?? panel.querySelector('label[for="exag"]'));
 }
