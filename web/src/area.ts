@@ -39,6 +39,8 @@ export interface Area {
   readonly drLane: boolean;
   /** Port Hawkesbury's stores, dealers and gas bars (port-hawkesbury.ts). */
   readonly hawkesbury: boolean;
+  /** A house on Prince Street, Port Hawkesbury, and its yard (prince-house.ts). */
+  readonly prince: boolean;
   /** The tractor dealership at Maryville Station Road (Port Hood). */
   readonly maryville: boolean;
   /** The invented Port Hood Mail Depot on Highway 19 (Port Hood). */
@@ -53,7 +55,7 @@ export interface Area {
 const features = (enabled: boolean) => ({ worksYard: enabled, colliery: enabled, animals: enabled, roadScene: enabled, fishing: enabled, coast: enabled,
   landmarks: enabled, fixedShots: enabled, gulfTint: enabled, fixedSun: enabled, route: enabled, mailTitle: enabled });
 const mabouSites = (enabled: boolean) => ({ mabouMain: enabled, porch: enabled, yardDog: enabled, schoolBus: enabled, hillside: enabled });
-const pointTupperSites = (enabled: boolean) => ({ hawkesbury: enabled, airport: enabled, ptInfrastructure: enabled });
+const pointTupperSites = (enabled: boolean) => ({ hawkesbury: enabled, prince: enabled, airport: enabled, ptInfrastructure: enabled });
 const area = (id: string, name: string): Area => Object.freeze({ id, name, base: id === 'mabou' ? 'terrain' : `areas/${id}`,
   mail: id === 'mabou', ...features(id === 'mabou'), home: id === 'judique', church: id === 'judique', quarry: id === 'westbay',
   ...mabouSites(id === 'mabou'), november: id === 'mabou' || id === 'porthood' || id === 'judique', judiqueVillage: id === 'judique', drLane: id === 'judique', maryville: id === 'porthood', depot: id === 'porthood',

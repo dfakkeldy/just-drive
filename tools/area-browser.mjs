@@ -75,7 +75,7 @@ for (const url of urls) {
           const m = mmm, v = m.vehicle, road = m.roads.nearest(v.x,v.z,1000,r=>r.kind>=1&&r.kind<=3);
           return {area:m.area.id, gameMode:m.gameMode, day:m.shift.career.day, elapsed:m.shift.elapsed,
             mailControlVisible:!!document.getElementById('mailButton')&&getComputedStyle(document.getElementById('mailButton')).display!=='none', absent:['yard','yardJob','animals','landmarks','mineSite'].every(k=>m[k]===null),
-            sites:m.terrain.sites.length, otherSites:m.terrain.sites.filter(s=>s!==m.home?.site&&s!==m.church?.site&&s!==m.drLane?.site&&s!==m.quarry?.site&&s!==m.airport?.site&&!m.novemberRoads?.sites.includes(s)).length, novemberSites:m.novemberRoads?.sites.length??0, quarrySite:!!m.quarry&&m.terrain.sites.includes(m.quarry.site), homeSite:!!m.home&&m.terrain.sites.includes(m.home.site), churchSite:!!m.church&&m.terrain.sites.includes(m.church.site), drLaneSite:!!m.drLane&&m.terrain.sites.includes(m.drLane.site), ground:m.terrain.heightAt(v.x,v.z), pending:m.terrain.pending, stops:m.shift.stops, run:m.shift.run.name, x:v.x,z:v.z, heading:v.heading,
+            sites:m.terrain.sites.length, otherSites:m.terrain.sites.filter(s=>s!==m.home?.site&&s!==m.church?.site&&s!==m.drLane?.site&&s!==m.prince?.site&&s!==m.maryville?.site&&s!==m.depot?.site&&s!==m.quarry?.site&&s!==m.airport?.site&&!m.novemberRoads?.sites.includes(s)&&!m.roughRoads?.sites.includes(s)).length, novemberSites:m.novemberRoads?.sites.length??0, roughSites:m.roughRoads?.sites.length??0, quarrySite:!!m.quarry&&m.terrain.sites.includes(m.quarry.site), homeSite:!!m.home&&m.terrain.sites.includes(m.home.site), churchSite:!!m.church&&m.terrain.sites.includes(m.church.site), drLaneSite:!!m.drLane&&m.terrain.sites.includes(m.drLane.site), princeSite:!!m.prince&&m.terrain.sites.includes(m.prince.site), ground:m.terrain.heightAt(v.x,v.z), pending:m.terrain.pending, stops:m.shift.stops, run:m.shift.run.name, x:v.x,z:v.z, heading:v.heading,
             roadDistance:road?.dist, bounds:v.bounds, edge:!!m.edge, draws:m.renderer.info.render.calls, triangles:m.renderer.info.render.triangles,
             hud:document.getElementById('hud').textContent, shiftHud:document.getElementById('shiftHud').textContent};
         })()`);
@@ -86,9 +86,10 @@ for (const url of urls) {
         assert.equal(result.otherSites, 0, 'no mail-route site outside Mabou');
         // Judique also owns the two Baxters Cove Road surfaces (the harbour lot and the trailhead lane).
         if (result.area==='judique') assert.equal(result.novemberSites, 2, 'the Baxters Cove lot and trailhead lane');
-        const ownSites = ({pointtupper:query.get('airport')==='0'?0:1,judique:3,westbay:query.get('quarry')==='0'?0:1})[result.area]??0;
-        assert.equal(result.sites, ownSites + result.novemberSites, JSON.stringify({sites:result.sites,home:result.homeSite,church:result.churchSite,drLane:result.drLaneSite,quarry:result.quarrySite}));
+        const ownSites = ({pointtupper:(query.get('airport')==='0'?0:1)+(query.get('prince')==='0'?0:1),judique:3,porthood:(query.get('maryville')==='0'?0:1)+(query.get('depot')==='0'?0:1),westbay:query.get('quarry')==='0'?0:1})[result.area]??0;
+        assert.equal(result.sites, ownSites + result.novemberSites + result.roughSites, JSON.stringify({sites:result.sites,home:result.homeSite,church:result.churchSite,drLane:result.drLaneSite,prince:result.princeSite,quarry:result.quarrySite,roughSites:result.roughSites}));
         if(result.area==='judique')assert.ok(result.homeSite&&result.churchSite&&result.drLaneSite,'Judique loads its home, church and D.R.\'s Lane sites');
+        if(result.area==='pointtupper'&&query.get('prince')!=='0')assert.ok(result.princeSite,'Point Tupper loads the Prince Street house site');
         if(result.area==='westbay'&&ownSites)assert.ok(result.quarrySite,'West Bay loads its own quarry site');
         assert.ok(Number.isFinite(result.ground) && result.ground >= 0, 'land under the spawn');
         assert.equal(result.pending, 0, 'land downloads settled');
