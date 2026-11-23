@@ -7,7 +7,7 @@ import {pathToFileURL} from 'node:url';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import {inside,boundaryDistance,gateLane,stoneLayout,fenceSegments,fenceSolids,cemeteryPlaces,distance,nearestPoint,inRegions} from '../web/src/cemetery-rules.ts';
 import {Cemeteries,stoneGeometry} from '../web/src/cemeteries.ts';
-import {MEASURED_STONES,TONES} from '../web/src/cemetery-graves.ts';
+import {MEASURED_SHAPES,MEASURED_STONES,TONES} from '../web/src/cemetery-graves.ts';
 import {Props} from '../web/src/props.ts';
 import {pushOut} from '../web/src/parked.ts';
 const read=p=>JSON.parse(readFileSync(p,'utf8'));
@@ -80,6 +80,11 @@ function stonesCheck(c,stones,cap,near=[]){
 // Markers in the baked gate lane or within 2 m of the baked wall are reported, not failed.
 function measuredCheck(c,stones,near,area){
  const rows=MEASURED_STONES[c.id],walls=fenceSegments(c);assert.equal(stones.length,rows.length,'every measured row is shown');
+ if(c.id==='cemetery-e26f6ceae9b8'){
+  assert.equal(stones.length,67,'church cemetery keeps all 67 surveyed blank markers');
+  assert.equal(stones.filter(s=>s.kind===8).length,4,'church cemetery has four cast-iron crosses');
+  assert.equal(stones.filter(s=>s.kind===6).length,3,'church cemetery has three stone Celtic cross monuments');
+ }
  let lane=0,close=0;
  stones.forEach((s,i)=>{
   // The drawn face looks toward the table's bearing (or its back does): rotate the shape's -z the way the renderer does.
@@ -89,7 +94,7 @@ function measuredCheck(c,stones,near,area){
  });
  for(const s of stones){
   assert.ok(inside(s.point,c.ring),'measured marker inside the mapped ring');
-  assert.ok(s.size.every(n=>n>0.1&&n<3),'measured size in metres');assert.ok([3,4,5,6,7].includes(s.kind),'measured shape');assert.ok(TONES[s.tone],'measured tone');
+  assert.ok(s.size.every(n=>n>0.1&&n<3),'measured size in metres');assert.ok(MEASURED_SHAPES.includes(s.kind),'measured shape');assert.ok(TONES[s.tone],'measured tone');
   const co=Math.cos(s.turn),si=Math.sin(s.turn),corners=[-.5,.5].flatMap(u=>[-.5,.5].map(v=>[s.point[0]+u*s.size[0]*co-v*s.size[2]*si,s.point[1]+u*s.size[0]*si+v*s.size[2]*co]));
   for(const p of corners){
    assert.ok(inRegions(p,c.interior),'whole measured marker inside the mapped ground');
@@ -133,7 +138,15 @@ const scenery=new Cemeteries([square],[0,0],terrain,false,'mabou');scenery.updat
 const coarse=new Cemeteries([square],[0,0],{...terrain,manifest:{...terrain.manifest,levels:{6:['0_0']}}},true,'mabou');level=6;coarse.update({x:20,z:-20});assert.ok(coarse.group.children[0].children[0].instanceMatrix.array.some(n=>n>15));assert.equal(coarse.group.children[0].children.length,3);
 const props=new Props({crs:'EPSG:2961',mailboxes:[],communityBoxes:[],poles:[{x:20,y:20,heading:0,road:1,n:0,transformer:false,light:false}]},[0,0],terrain,scenery.excludes);assert.equal(props.poles.length,0);
 assert.ok(stoneGeometry(1,true).attributes.position.count<stoneGeometry(1,false).attributes.position.count);
-for(const k of [3,4,5,6,7]){const hi=stoneGeometry(k,false),lo=stoneGeometry(k,true);assert.ok(lo.attributes.position.count<=hi.attributes.position.count,'low stone is no heavier');hi.computeBoundingBox();const b=hi.boundingBox;assert.ok(Math.abs(b.min.y)<1e-6&&Math.abs(b.max.y-1)<1e-6&&Math.abs(b.max.x-.5)<1e-6&&Math.abs(b.max.z-.5)<1e-6,'measured shape is a unit shape');}
+for(const k of MEASURED_SHAPES){const hi=stoneGeometry(k,false),lo=stoneGeometry(k,true);assert.ok(lo.attributes.position.count<=hi.attributes.position.count,'low stone is no heavier');hi.computeBoundingBox();const b=hi.boundingBox;assert.ok(Math.abs(b.min.y)<1e-6&&Math.abs(b.max.y-1)<1e-6&&Math.abs(b.max.x-.5)<1e-6&&Math.abs(b.max.z-.5)<1e-6,'measured shape is a unit shape');}
+{
+ const cross=new THREE.Mesh(stoneGeometry(6,false),new THREE.MeshBasicMaterial({side:THREE.DoubleSide}));
+ const ray=new THREE.Raycaster();
+ for(const sx of [-1,1])for(const sy of [-1,1]){
+  ray.set(new THREE.Vector3(sx*.17,.812+sy*.067,1),new THREE.Vector3(0,0,-1));
+  assert.ok(ray.intersectObject(cross).length>0,`Celtic cross ring present in quadrant (${sx},${sy})`);
+ }
+}
 assert.equal(Object.keys(MEASURED_STONES).length>0,true);
 if(process.argv.includes('--mutations')){
  const bad=(name,fn)=>{assert.throws(fn,undefined,name+' must fail');console.log(`PASS cemeteries negative: ${name} rejected`);};

@@ -134,8 +134,14 @@ const walkTo = (visit, id) => { for (let i = 0; i < 60 * 300 && visit.stop.id !=
   visit.leave(); assert.equal(visit.result.delivered, true, 'leaving twice changes nothing');
   assert.equal(walkTo(new ChurchVisit(rail, true), 'out').result.delivered, true, 'the whole walk in the mail game leaves one letter');
 }
-// The words describe what is seen. They name no person and state no date.
-for (const s of rail.stops) { assert.doesNotMatch(s.text, /\d{3,}/, 'no years in the words'); assert.doesNotMatch(s.text, /\b(St\.|Saint|Father|Rev|Mac[A-Z]|Mc[A-Z])/, 'no names in the words'); }
+// The words describe what is seen plus three verified public history dates (1841, 1919, 1967). They name no person.
+const publicYears = new Set(['1841', '1919', '1967']);
+const seenYears = new Set();
+for (const s of rail.stops) {
+  for (const [year] of s.text.matchAll(/\d{3,}/g)) { assert.ok(publicYears.has(year), `unexpected number in words: ${year}`); seenYears.add(year); }
+  assert.doesNotMatch(s.text, /\b(St\.|Saint|Father|Rev|Mac[A-Z]|Mc[A-Z])/, 'no names in the words');
+}
+assert.deepEqual(seenYears, publicYears, 'walk captions note 1841, 1919 and 1967');
 
 // 5. The built scene. A stand-in canvas lets the hand-drawn textures run without a browser.
 const pen = new Proxy({}, { get: (_, key) => key === 'createLinearGradient' || key === 'createRadialGradient' ? () => ({ addColorStop() {} }) : () => {}, set: () => true });
