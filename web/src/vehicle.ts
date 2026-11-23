@@ -51,6 +51,8 @@ const SURFACES = {
  */
 /** How far from a bridge span's centre line a respawn road point still counts as on that span (half a wide deck). */
 const DECK_REACH = 8;
+/** Seconds a height-free placement on an unbuilt span waits for its deck; then the ordinary dry recovery runs. */
+export const DECK_WAIT_SECONDS = 8;
 
 // A road that is not a bridge piece can still be a deck: a span recovered from the map carries a highway that is not
 // flagged as a bridge. Only where the hit lies on such a span (within DECK_REACH of its centre line) does the
@@ -153,6 +155,8 @@ export class Vehicle {
   #awaitingLoad = true;
   #recovering = false;
   #recovered = false;
+  /** Waiting on an unbuilt span's deck (see place), and for how long. */
+  #deckWaiting = false; #deckWait = 0;
   /** m/s while Strong touch help holds the throttle near its cap; zero otherwise. */
   get activeTouchSpeedLimit(): number { return this.#heldTouchSpeedLimit; }
   helpYaw = 0; // additional Strong yaw, radians/second, for fixed-step checks
@@ -204,16 +208,17 @@ export class Vehicle {
     // refused for the water under the span: it waits for its deck as for land that is still loading (stuck: no physics,
     // no safe points; retryPlace asks for the deck each frame). A recovery never takes this way: it needs dry ground.
     const dry = g === null || this.isDryPose(x, z, g);
-    const waitDeck = !dry && !this.#recovering && pose.y === undefined && placementOnSpan(this.roads, x, z);
+    const waitDeck = !dry && !this.#recovering && pose.y === undefined && this.#deckWait < DECK_WAIT_SECONDS && placementOnSpan(this.roads, x, z);
     if (!dry && !waitDeck) return false;
     this.#heldTouchSpeedLimit = 0;
     this.drift.reset();
     this.x = x; this.z = z; this.heading = heading; this.placeReference = pose.y; this.placeInfer = false;
     this.vx = this.vz = this.vy = 0; this.sunk = 0; this.airborne = false;
     if (this.spec.locomotion === 'horse') { this.speed = 0; this.car.resetPose?.(); }
+    this.#deckWaiting = waitDeck;
     if (g !== null && waitDeck) { this.y = this.prevGround = g; this.stuck = true; this.#awaitingLoad = true; }
     else if (g !== null) {
-      this.y = this.prevGround = g; this.stuck = false;
+      this.y = this.prevGround = g; this.stuck = false; this.#deckWait = 0;
       this.#awaitingLoad = false; this.#waterStopped = false;
       this.#safeNow.x = this.#safeBack.x = x;
       this.#safeNow.z = this.#safeBack.z = z;
@@ -264,6 +269,7 @@ export class Vehicle {
   /** A placement that gives no height (a ?at= link, a visit start, a mailbox start, a restart). The car takes a deck
    *  only where the point lies on a span that carries its nearest road, the respawn rule; elsewhere it stands on land. */
   placeAt(x: number, z: number, heading: number): boolean {
+    this.#deckWait = 0;
     const placed = this.place(x, z, heading, this.deckReference(x, z));
     if (placed && this.placeReference === undefined) { this.placeInfer = true; this.inferX = this.x; this.inferZ = this.z; }
     return placed;
@@ -496,14 +502,16 @@ export class Vehicle {
     if (this.stuck) {
       // The retry's own height, not the old body height (which could take a deck overhead).
       const reference = this.retryHeight;
+      if (this.#deckWaiting) this.#deckWait += dt;
       if (!this.retryPlace()) {
         const land = this.terrain.heightAt(this.x, this.z);
         if (land !== null) {
           this.stuck = false;
           this.respawn();
           if (this.#waterStopped) {
+            // Stand at the ground the retry asked for: the old body height could take a deck overhead.
             const gNow = this.groundAt(this.x, this.z, reference ?? land);
-            if (gNow !== null && this.y < gNow) this.y = gNow;
+            if (gNow !== null) this.y = gNow;
             this.prevGround = this.y; this.airborne = false; this.#awaitingLoad = false;
             this.captureGround(); this.sync(0);
           }

@@ -795,6 +795,7 @@ console.log('PASS drone flies over water, never passes under land, cliffs or voi
     // The deck builds (2 m up): the next update stands the ride on it.
     deck = 2; for (let i = 0; i < 3; i++) w.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
     assert.ok(Math.abs(w.y - 2) < .1, `${kind}: the ride takes its deck once built (y=${w.y})`);
+    assert.ok(kind === 'bike' ? w.ready === true : w.stuck === false, `${kind}: and drives again (not still waiting)`);
     spanned.deckHeight = () => null;
   }
   console.log('PASS a height-free placement on an unbuilt span waits for its deck without sinking; other wet placements are refused');
@@ -833,4 +834,41 @@ console.log('PASS drone flies over water, never passes under land, cliffs or voi
     assert.ok(r.x < 60, `${kind}: a recovery moved onto the water under a span by its guard is refused (x=${r.x})`);
   }
   console.log('PASS a recovery never stands a ride on the water under an unbuilt span');
+}
+{
+  // A deck that never builds (a bank that stays coarse): the wait ends after DECK_WAIT_SECONDS and the ordinary dry
+  // recovery takes the ride to a dry road point; it is never stranded waiting.
+  const shore = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+  const road = { id: 1, name: 'Span Road', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts: [[-200, 0], [200, 0]] };
+  const roads = { roads: [road], deckHeight: () => null, bridgeRuns: () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }],
+    // The span reach (8 m) finds the road under the point; a wider search finds a dry point on the land.
+    nearest: (x, z, maxDist, filter) => filter && !filter(road) ? null : maxDist <= 8 ? { road, seg: 0, t: 0, dist: Math.abs(z), x, z: 0, heading: Math.PI / 2 } : { road, seg: 0, t: 0, dist: Math.abs(x - 20), x: 20, z: 0, heading: Math.PI / 2 } };
+  for (const kind of ['car', 'bike']) {
+    const r = makeRide(kind, shore, roads); r.bounds = [-200, -200, 400, 200];
+    assert.equal(r.placeAt(100, 0, Math.PI / 2), true, `${kind}: waits on the span`);
+    for (let i = 0; i < 60 * 7; i++) r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
+    assert.ok(Math.abs(r.x - 100) < 1e-9, `${kind}: still waiting at 7 s`);
+    for (let i = 0; i < 60 * 2; i++) r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
+    assert.ok(Math.abs(r.x - 20) < 1 && Math.abs(r.y - 1) < .3, `${kind}: after 8 s the dry recovery takes it to the land (x=${r.x.toFixed(1)}, y=${r.y.toFixed(2)})`);
+    assert.ok(kind === 'bike' ? r.ready === true : r.stuck === false, `${kind}: and it drives again`);
+  }
+  console.log('PASS a deck that never builds ends the wait after 8 s with a dry recovery');
+}
+{
+  // A failed retry with nowhere dry: the ride stops in the water at the height the retry asked for, never at its old
+  // body height (9 m), which would take an unrelated deck 8 m up.
+  let loaded = false;
+  const sea = makeTerrain(() => (loaded ? { ground: -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false } : null));
+  const over = makeRoads(-200, 200, (x, z) => (Math.abs(x - 100) <= 30 && Math.abs(z) <= 6 ? 8 : null));
+  for (const kind of ['car', 'bike']) {
+    loaded = false;
+    const r = makeRide(kind, sea, over); r.bounds = [-200, -200, 400, 200];
+    Object.assign(r, { x: 100, z: 0, y: 9 });
+    r.restart(100, 0, Math.PI / 2);
+    loaded = true;
+    let maxY = -Infinity;
+    for (let i = 0; i < 120; i++) { r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true }); maxY = Math.max(maxY, r.y); }
+    assert.ok(maxY < 4, `${kind}: a failed retry never stands on the deck overhead (max y=${maxY.toFixed(2)})`);
+  }
+  console.log('PASS a failed retry with nowhere dry stays at the retry height, never on a deck overhead');
 }
