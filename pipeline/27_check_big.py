@@ -563,7 +563,7 @@ assert b.guard_big(Path(tempfile.gettempdir()) / 'mmm-no-such-land/buildings.jso
 # A single notched edge cell beside a wing must not leave a 1-cell interior roof seam between touching blocks.
 notched = np.zeros((45, 70), dtype=bool)
 notched[20:40, 5:60] = True
-notched[8:20, 30:62] = True
+notched[8:20, 30:64] = True
 notched[19, 60] = False  # one missing cell near the far corner used to keep the wing 1 row off the main hall
 closed_blocks = big.cover([notched], cells=[1.], min_area=60)
 assert len(closed_blocks) == 2, closed_blocks

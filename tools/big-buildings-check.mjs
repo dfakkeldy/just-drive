@@ -150,8 +150,11 @@ function decodePng(file) {
 function terrainSampler(areaId, dir, manifest) {
   const [ox, oy] = manifest.origin, { size, height: { scale, offset }, levels = {} } = manifest, cache = new Map();
   const levelSets = new Map(Object.entries(levels).map(([lvl, keys]) => [Number(lvl), new Set(keys)]));
-  const checkLevels = [8, 7, 6, 5, 4, 3].filter((lvl) => levelSets.has(lvl));
-  assert.ok(checkLevels.includes(3), `${areaId}: manifest missing level 3 parent terrain tiles`);
+  const parentLevels = [6, 5, 4, 3];
+  for (const lvl of parentLevels) {
+    assert.ok(levelSets.get(lvl)?.size > 0, `${areaId}: manifest missing parent level ${lvl} terrain tiles`);
+  }
+  const checkLevels = [8, 7, ...parentLevels];
   const readTile = (lvl, tx, ty, bId) => {
     const tileKey = `${tx}_${ty}`;
     if (!levelSets.get(lvl)?.has(tileKey)) return null;
@@ -164,11 +167,14 @@ function terrainSampler(areaId, dir, manifest) {
     return cache.get(key);
   };
   return (e, n, bId) => {
-    let lowest = Infinity, hits = 0;
+    let lowest = Infinity;
     for (const lvl of checkLevels) {
       const tsize = size / (1 << lvl), tx = Math.floor((e - ox) / tsize), ty = Math.floor((oy - n) / tsize);
       const tile = readTile(lvl, tx, ty, bId);
-      if (!tile) continue;
+      if (!tile) {
+        assert.ok(lvl > 6, `${areaId} ${bId}: missing parent level ${lvl} tile ${lvl}/${tx}_${ty} at (${e.toFixed(1)}, ${n.toFixed(1)})`);
+        continue;
+      }
       const seg = lvl >= 7 ? 128 : 64, step = 256 / seg;
       const u = (e - (ox + tx * tsize)) / tsize * seg, v = ((oy - ty * tsize) - n) / tsize * seg;
       const i0 = Math.max(0, Math.min(seg - 1, Math.floor(u))), j0 = Math.max(0, Math.min(seg - 1, Math.floor(v)));
@@ -179,9 +185,8 @@ function terrainSampler(areaId, dir, manifest) {
       const d1 = fu + fv <= 1 ? h00 + (h10 - h00) * fu + (h01 - h00) * fv : h11 + (h01 - h11) * (1 - fu) + (h10 - h11) * (1 - fv);
       const d2 = fu >= fv ? h00 + (h10 - h00) * fu + (h11 - h10) * fv : h00 + (h11 - h01) * fu + (h01 - h00) * fv;
       lowest = Math.min(lowest, d1, d2);
-      hits++;
     }
-    return hits ? lowest : null;
+    return Number.isFinite(lowest) ? lowest : null;
   };
 }
 function perimeterPoints(b) {
