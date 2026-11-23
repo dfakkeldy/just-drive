@@ -267,7 +267,7 @@ export class Ghosts {
   private drawLabel(peer: PeerView, slot: Slot, fresh: boolean, at: number, camera: THREE.Camera): void {
     const y = this.pose.position.y;
     const e = this.pose.matrix.elements;
-    const roof = Math.max(peer.ride?.kind === 'truck' ? 2.5 : peer.ride?.kind === 'bike' || peer.ride?.kind === 'sxs' ? 2.1 : 1.8, e[5] * .85 + Math.abs(e[1]) * 1.1 + Math.abs(e[5]) * .85 + Math.abs(e[9]) * 2.3);
+    const roof = Math.max(peer.ride?.kind === 'truck' ? 2.5 : peer.ride?.kind === 'bike' || peer.ride?.kind === 'sxs' || peer.ride?.kind === 'sxs-utility' || peer.ride?.kind === 'sxs-crew' || peer.ride?.kind === 'sxs-cabin' ? 2.1 : 1.8, e[5] * .85 + Math.abs(e[1]) * 1.1 + Math.abs(e[5]) * .85 + Math.abs(e[9]) * 2.3);
     this.labelPosition.set(peer.x, y + roof + .25, peer.z);
     const distance = this.labelPosition.distanceTo(this.cameraPosition);
     if (distance > 150) return;

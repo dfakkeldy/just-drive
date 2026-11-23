@@ -23,7 +23,7 @@ const m = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputF
 canvasStub();globalThis.innerWidth = 1280;modelFiles();await m.prepareCar();   // the mail car is a model file: load it before its ghost is measured
 const {THREE,Net,Ghosts,readRide,parseServerText,judge,Meter,takeSeat,hello,encodeState,encodeSnapshot,checkState,rideIndex,nearbyOpacity,footprintsOverlap,easeOpacity} = m;
 const car={kind:'car',trailer:false},truck={kind:'truck',trailer:true};
-for(const kind of ['car','truck','sxs','bike']) assert.deepEqual(readRide({kind,trailer:false,secret:'discard'}),{kind,trailer:false});
+for(const kind of ['car','truck','sxs','sxs-utility','sxs-crew','sxs-cabin','bike']) assert.deepEqual(readRide({kind,trailer:false,secret:'discard'}),{kind,trailer:false});
 for(const value of [null,{},'bike',{kind:'boat',trailer:false},{kind:'horse',trailer:false},{kind:'car',trailer:'yes'},{kind:'bike'}])assert.equal(readRide(value),undefined);
 assert.deepEqual(readRide({kind:'bike',trailer:true}),{kind:'bike',trailer:false});
 const join=ride=>JSON.stringify({t:'join',id:2,name:'Driver 2',hue:2,...(ride?{ride}:{})});
@@ -128,15 +128,15 @@ const baked=JSON.parse(readFileSync(root+'web/src/mp/ride-models.json','utf8'));
 assert.equal(baked.source,fingerprint(),'snapshots match production builders and reducer; regenerate explicitly if shapes change');
 const camera=new THREE.PerspectiveCamera(55,1,.1,500);camera.position.set(0,12,30);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
 const peer=(id,ride)=>({id,name:'Driver '+id,hue:id%8,ride,x:(id%4)*3,z:-Math.floor(id/4)*4,heading:0,speed:8,steer:.3,air:0,flags:0,alpha:1});
-const rides=[undefined,{kind:'horse',trailer:false},car,{kind:'bike',trailer:false},truck,{kind:'sxs',trailer:false},{kind:'truck',trailer:false}];
+const rides=[undefined,{kind:'horse',trailer:false},car,{kind:'bike',trailer:false},truck,{kind:'sxs',trailer:false},{kind:'sxs-utility',trailer:false},{kind:'sxs-crew',trailer:false},{kind:'sxs-cabin',trailer:false},{kind:'truck',trailer:false}];
 for(const low of [false,true])for(const n of [1,4,low?6:16,24]){
   const cap=n===24?24:undefined,g=new Ghosts({low,cap,ground:()=>0}),peers=Array.from({length:n},(_,i)=>peer(i+1,rides[i%rides.length]));g.update(1/60,peers,camera);
   const [body,labels]=g.group.children,drawn=Math.min(n,cap??(low?6:16));
   assert.equal(g.drawn,drawn);assert.equal(body.count,drawn);assert.ok(body.geometry.attributes.position.count/3<=700);
   assert.equal(g.group.children.filter(o=>o.count>0).length,2,'shared body and label draws for mixed vehicles');
   assert.ok((body.geometry.attributes.position.count/3*drawn+labels.count*2)<=drawn*702);
-  assert.equal(body.geometry.morphAttributes.position.length,5);
-  const morph=new THREE.Mesh(body.geometry);for(let i=0;i<drawn;i++){body.getMorphAt(i,morph);assert.deepEqual(morph.morphTargetInfluences,rides.map(()=>0).slice(0,5).map((_,j)=>j===rideIndex(peers[i].ride)?1:0),'GPU selects announced ride');}
+  assert.equal(body.geometry.morphAttributes.position.length,8);
+  const morph=new THREE.Mesh(body.geometry);for(let i=0;i<drawn;i++){body.getMorphAt(i,morph);assert.deepEqual(morph.morphTargetInfluences,Array.from({length:8},(_,j)=>j===rideIndex(peers[i].ride)?1:0),'GPU selects announced ride');}
   console.log(`${low?'phone':'desktop'} n=${n} cap=${cap??(low?6:16)} drawn=${drawn} calls=2 triangles=${drawn*696+labels.count*2}`);
   const positions=body.geometry.morphAttributes.position;
   for(let k=0;k<positions.length;k++){

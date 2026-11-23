@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createCar } from './car';
 import { createTruck } from './truck';
 import { createSxs } from './sxs';
+import { createSxsCabin, createSxsCrew, createSxsUtility } from './sxs-variants';
 
 const params = new URLSearchParams(location.search);
 const scene = new THREE.Scene();
@@ -38,8 +39,18 @@ if (ctx) {
 }
 const shadow = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 3.9), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false }));
 shadow.rotation.x = -Math.PI / 2; shadow.position.y = .002; scene.add(shadow);
-const car = createSxs(); scene.add(car.root);
+const modelParam = params.get('model') ?? 'sxs';
+const car = modelParam === 'sxs-utility' ? createSxsUtility()
+  : modelParam === 'sxs-crew' ? createSxsCrew()
+  : modelParam === 'sxs-cabin' ? createSxsCabin()
+  : createSxs();
+scene.add(car.root);
 if (params.get('pair') === '1') { const other = createCar(), truck = createTruck(); other.root.position.x = -2.8; truck.root.position.x = 3.4; scene.add(other.root, truck.root); }
+if (params.get('lineup') === '1') {
+  const u = createSxsUtility(), cr = createSxsCrew(), ca = createSxsCabin();
+  car.root.position.x = -3.9; u.root.position.x = -1.3; cr.root.position.x = 1.3; ca.root.position.x = 3.9;
+  scene.add(u.root, cr.root, ca.root);
+}
 const view = params.get('view') ?? 'front';
 document.body.dataset.view = view;
 switch (view) {
