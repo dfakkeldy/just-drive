@@ -1174,7 +1174,7 @@ export class Fleet {
           if (height <= this.seaLevel + .08) { failure = 'Water at the destination'; continue; }
           const invalid = this.validTeleport({ x, z, y: height, heading: yaw, spec: actor.entry.spec }, actor, this.bodiesExcept(actor));
           if (invalid) { failure = invalid; continue; }
-          if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw })) { failure = 'The trailer destination is blocked'; continue; }
+          if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw, y: this.ground(x, z) ?? undefined })) { failure = 'The trailer destination is blocked'; continue; }
           // This loop owns the road/turn search; do not invoke a nested endpoint-searching guard.
           const guard = actor.vehicle.placementGuard;
           let placed = false;

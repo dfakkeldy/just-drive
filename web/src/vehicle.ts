@@ -147,6 +147,8 @@ export class Vehicle {
   #recovered = false;
   /** The car was waiting for its land when this update began: the parked hold then has no standing height to keep. */
   #waitedThisStep = false;
+  /** Inside update's own retry while waiting: a placement there keeps #waitedThisStep; any other one clears it. */
+  #retrying = false;
   /** m/s while Strong touch help holds the throttle near its cap; zero otherwise. */
   get activeTouchSpeedLimit(): number { return this.#heldTouchSpeedLimit; }
   helpYaw = 0; // additional Strong yaw, radians/second, for fixed-step checks
@@ -227,6 +229,7 @@ export class Vehicle {
     this.sync(0);
     this.onPlaced?.();
     if (this.#recovering) this.#recovered = true;
+    if (!this.#retrying) this.#waitedThisStep = false;
     return true;
   }
 
@@ -486,22 +489,25 @@ export class Vehicle {
     if (!input.touch || !this.strongHelp || !this.touchSpeedLimit || input.throttle <= 0 || this.airborne || this.stuck) this.#heldTouchSpeedLimit = 0;
     this.#waitedThisStep = this.stuck;
     if (this.stuck) {
-      // The retry's own height, not the old body height (which could take a deck overhead).
-      const reference = this.retryHeight;
-      if (!this.retryPlace()) {
-        const land = this.terrain.heightAt(this.x, this.z);
-        if (land !== null) {
-          this.stuck = false;
-          this.respawn();
-          if (this.#waterStopped) {
-            // Stand at the ground the retry asked for: the old body height could take a deck overhead.
-            const gNow = this.groundAt(this.x, this.z, reference ?? land);
-            if (gNow !== null) this.y = gNow;
-            this.prevGround = this.y; this.airborne = false; this.#awaitingLoad = false;
-            this.captureGround(); this.sync(0);
+      this.#retrying = true;
+      try {
+        // The retry's own height, not the old body height (which could take a deck overhead).
+        const reference = this.retryHeight;
+        if (!this.retryPlace()) {
+          const land = this.terrain.heightAt(this.x, this.z);
+          if (land !== null) {
+            this.stuck = false;
+            this.respawn();
+            if (this.#waterStopped) {
+              // Stand at the ground the retry asked for: the old body height could take a deck overhead.
+              const gNow = this.groundAt(this.x, this.z, reference ?? land);
+              if (gNow !== null) this.y = gNow;
+              this.prevGround = this.y; this.airborne = false; this.#awaitingLoad = false;
+              this.captureGround(); this.sync(0);
+            }
           }
         }
-      }
+      } finally { this.#retrying = false; }
       return;
     }
     // Whole fixed steps only: a tiny leftover step makes the vertical speed estimate blow up.

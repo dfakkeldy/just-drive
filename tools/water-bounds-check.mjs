@@ -870,3 +870,33 @@ function parkedFrame(r) {
   }
   console.log('PASS the parked hold after a waiting step never uses the old body height');
 }
+{
+  // The hold is skipped only right after a step that began waiting: any later placement outside that step (a restart, a
+  // jump) ends it, and the parked hold works again.
+  let loaded = false;
+  const land = makeTerrain((x) => (x >= 60 && !loaded ? null : { ground: 1, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+  const roads = makeRoads(-200, 200);
+  for (const kind of ['car', 'bike']) {
+    loaded = false;
+    const r = makeRide(kind, land, roads); r.bounds = [-200, -200, 400, 200];
+    r.place(100, 0, Math.PI / 2); r.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
+    assert.equal(r.parkedPlace(100, 0, Math.PI / 2, 1), false, `${kind}: no hold right after a step that began waiting`);
+    assert.equal(r.place(20, 0, Math.PI / 2), true);
+    assert.equal(r.parkedPlace(21, 0, Math.PI / 2, 1), true, `${kind}: an explicit placement ends the skip; the hold works again`);
+  }
+  console.log('PASS the parked-hold skip lasts only until the next placement outside the waiting step');
+}
+{
+  // A Fleet start (truck with its trailer) on a built deck over water, as main allows: the trailer check is judged at
+  // fleet's own ground height (the deck), not at the seabed under it.
+  const sea = makeTerrain((x) => ({ ground: x < 0 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+  const deckRoads = makeRoads(-200, 200, (x, z) => (x >= 20 && x <= 200 && Math.abs(z) <= 8 ? 2 : null));
+  const truck = new Vehicle(createTruck(false, true), sea, deckRoads, SEA, TRUCK_SPEC); truck.assist = 0;
+  assert.equal(truck.place(-60, 0, Math.PI / 2), true);
+  const tow = new Towing(truck, sea, deckRoads, false, false, {}, true, true);
+  const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
+  const fleet = new Fleet(truck, tow, sea, deckRoads, scene, true, () => {}, SEA);
+  assert.equal(fleet.startVisit(110, 0, Math.PI / 2), true, 'Fleet starts the truck and trailer on the built deck over water');
+  assert.ok(Math.abs(truck.x - 110) < 30 && Math.abs(truck.y - 2) < .2, `the rig stands on the deck (x=${truck.x.toFixed(1)}, y=${truck.y.toFixed(2)})`);
+  console.log('PASS a Fleet start with the trailer on a built deck over water stands on the deck, as on main');
+}

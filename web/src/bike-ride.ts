@@ -70,6 +70,8 @@ export class BikeRide implements Ride {
   #waterStopped = false; #awaitingLoad = true; #recovering = false; #recovered = false;
   /** The bike was waiting for its land when this update began: the parked hold then has no standing height to keep. */
   #waitedThisStep = false;
+  /** Inside update's own retry while waiting: a placement there keeps #waitedThisStep; any other one clears it. */
+  #retrying = false;
 
   constructor(readonly car: Bike, private terrain: Pick<Terrain, 'heightAt' | 'surfaceAt' | 'withContactHeight'> & { readonly cartRoads?: boolean; coverAt?: (x: number, z: number) => number }, readonly roads: Pick<Roads, 'nearest' | 'deckHeight'> & Partial<Pick<Roads, 'guardrails'>>, private seaLevel: number, readonly spec: VehicleSpec = BIKE_SPEC) {}
 
@@ -152,6 +154,7 @@ export class BikeRide implements Ride {
     } else this.#awaitingLoad = true;
     this.sync(0);
     if (this.#recovering) this.#recovered = true;
+    if (!this.#retrying) this.#waitedThisStep = false;
     return true;
   }
   /** Restore support history only; selection never searches for or installs a new pose. */
@@ -262,27 +265,30 @@ export class BikeRide implements Ride {
     this.#waitedThisStep = !this.ready;
     const safeInput = { throttle: Number.isFinite(input.throttle) ? clamp(input.throttle, -1, 1) : 0, steer: Number.isFinite(input.steer) ? clamp(input.steer, -1, 1) : 0, handbrake: !!input.handbrake, pull: !!input.pull };
     if (!this.ready) {
-      // The retry's own height, not the old body height (which could take a deck overhead).
-      const reference = this.retryHeight;
-      if (!this.retryPlace()) {
-        const land = this.terrain.heightAt(this.x, this.z);
-        if (land !== null) {
-          this.respawn();
-          if (this.#waterStopped) {
-            // Stand at the ground the retry asked for: the old body height could take a deck overhead.
-            const gNow = this.groundAt(this.x, this.z, reference ?? land);
-            if (gNow !== null) this.y = gNow;
-            this.prevGround = this.y; this.airborne = false; this.#awaitingLoad = false;
-            this.ready = this.capture();
-            if (this.ready) {
-              this.y = this.prevGround = Math.max(this.y, (this.frontHeight + this.rearHeight) / 2, gNow ?? -Infinity);
-              this.pitch = Math.atan2(this.frontHeight - this.rearHeight, this.spec.wheelbase);
-              this.sampledY = this.y;
+      this.#retrying = true;
+      try {
+        // The retry's own height, not the old body height (which could take a deck overhead).
+        const reference = this.retryHeight;
+        if (!this.retryPlace()) {
+          const land = this.terrain.heightAt(this.x, this.z);
+          if (land !== null) {
+            this.respawn();
+            if (this.#waterStopped) {
+              // Stand at the ground the retry asked for: the old body height could take a deck overhead.
+              const gNow = this.groundAt(this.x, this.z, reference ?? land);
+              if (gNow !== null) this.y = gNow;
+              this.prevGround = this.y; this.airborne = false; this.#awaitingLoad = false;
+              this.ready = this.capture();
+              if (this.ready) {
+                this.y = this.prevGround = Math.max(this.y, (this.frontHeight + this.rearHeight) / 2, gNow ?? -Infinity);
+                this.pitch = Math.atan2(this.frontHeight - this.rearHeight, this.spec.wheelbase);
+                this.sampledY = this.y;
+              }
+              this.sync(0);
             }
-            this.sync(0);
           }
         }
-      }
+      } finally { this.#retrying = false; }
       return;
     }
     this.acc = Math.min(.1, this.acc + dt);
