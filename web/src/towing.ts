@@ -1,4 +1,5 @@
 import {deckCounts} from './bridge-contact';
+import {crestVelocity, GRAVITY as G, LEDGE_DROP} from './ground-motion';
 import * as THREE from 'three';
 import { TRAILER_SPEC as S, createTrailer, type Trailer } from './trailer';
 import type { Input, Vehicle, VehiclePlacement } from './vehicle';
@@ -75,6 +76,7 @@ export class Towing {
     const deck = this.roads.deckHeight(this.groundX, this.groundZ),g = this.terrain.heightAt(this.groundX, this.groundZ,this.groundPoint.y);
     return g === null ? null : deckCounts(deck,this.groundPoint.y,this.terrain.cartRoads) ? Math.max(g,deck) : g;
   };
+  private readonly launchGround = (x: number, z: number, y: number) => this.ground(x, z, y);
   private readonly refined = new Float64Array(4);
   private readonly assistedInput: Input = { throttle: 0, steer: 0, handbrake: false };
   private readonly collectImpact = (speed: number) => { this.impactEvents++; this.impactSpeed = Math.max(this.impactSpeed, speed); };
@@ -362,13 +364,26 @@ export class Towing {
       for (let i = 0; i < 4; i++) { const p = this.groundSamples[i], contact = this.contacts[i]; p.x = contact.x; p.z = contact.z; p.plane = contact.plane; p.height = contact.height!; }
       this.samplesReady = true;
     }
-    const groundVelocity = placing || !this.grounded || this.supportMissing || Math.hypot(this.vehicle.vx, this.vehicle.vz) < .1 ? 0 : clamp((total - this.previousGround) / dt, -30, 30);
+    const { vx, vz } = this.vehicle;
+    let launch: number | null = null;
+    if (!placing && this.grounded && known && !this.supportMissing && !this.airborne
+      && vx * vx + vz * vz > .05 ** 2
+      && (Math.abs(total - this.previousGround) > .015 || this.y - total >= LEDGE_DROP / 2)) {
+      const centre = this.ground(this.x, this.z);
+      launch = crestVelocity(this.launchGround, this.x, this.z, vx, vz, dt, centre, this.y);
+      if (launch !== null) {
+        this.y = Math.max(this.y, total, centre ?? total);
+        this.vy = launch;
+      }
+    }
     this.supportMissing = false; this.previousGround = total;
-    const free = this.y + this.vy * dt - .5 * 9.81 * dt * dt;
-    if (!placing && this.grounded && free > total + .05) { this.y = free; this.vy -= 9.81 * dt; this.airborne = true; }
+    const free = this.y + this.vy * dt - .5 * G * dt * dt;
+    if (launch !== null || !placing && this.grounded && this.airborne && free > total + (this.vy > 0 ? 0 : .05)) {
+      this.y = free; this.vy -= G * dt; this.airborne = true;
+    }
     else {
       if (this.airborne && this.vy < -3) { this.vehicle.vx *= .96; this.vehicle.vz *= .96; this.vehicle.speed *= .96; }
-      this.y = total; this.vy = groundVelocity; this.airborne = false;
+      this.y = total; this.vy = 0; this.airborne = false;
     }
     this.fitPlane();
     this.grounded = true;
