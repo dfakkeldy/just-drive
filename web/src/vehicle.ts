@@ -309,10 +309,19 @@ export class Vehicle {
     const priorG = !this.stuck && !this.#awaitingLoad ? this.groundAt(this.x, this.z, this.y) : null;
     const priorDry: VehiclePlacement | null = priorG !== null && this.isDryPose(this.x, this.z, priorG) && !!this.terrain.surfaceAt(this.x, this.z, priorG) && this.allWheelsSupported(this.x, this.z, this.heading, priorG)
       ? { x: this.x, z: this.z, heading: this.heading, y: priorG } : null;
+    const prevTrail = this.trail.slice(), prevGood = this.lastGood, prevSafe = this.#hasSafe;
+    const prevStopped = this.#waterStopped, prevAwaiting = this.#awaitingLoad;
+    const prevWaiting = this.#deckWaiting, prevWait = this.#deckWait, prevFallback = this.#waitFallback;
     this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.#deckWaiting = false; this.#deckWait = 0; this.#waitFallback = null;
     const placed = this.placeAt(x, z, heading);
-    if (placed && this.stuck && priorDry) this.#waitFallback = priorDry;
-    return placed;
+    if (!placed) {
+      this.trail.push(...prevTrail); this.lastGood = prevGood; this.#hasSafe = prevSafe;
+      this.#waterStopped = prevStopped; this.#awaitingLoad = prevAwaiting;
+      this.#deckWaiting = prevWaiting; this.#deckWait = prevWait; this.#waitFallback = prevFallback;
+      return false;
+    }
+    if (this.stuck) this.#waitFallback = priorDry ?? prevFallback;
+    return true;
   }
 
   /** A placement that gives no height (a ?at= link, a visit start, a mailbox start, a restart). The car takes a deck
