@@ -2279,8 +2279,10 @@ function resetToRoad(): void {
   multiplayer?.reset();
   if (fleet) fleet.respawn(); else vehicle.respawn();
 }
+let savedFlyCamera: { pos: THREE.Vector3; yaw: number; pitch: number } | null = null;
 function jumpToPlace(x: number, z: number, heading: number): void {
   const finishJump = (placed: boolean) => {
+    savedFlyCamera = null;
     multiplayer?.reset();
     vehicle.vx = vehicle.vz = vehicle.vy = vehicle.speed = 0;
     if (placed) mountainHint?.clearActive();
@@ -2292,7 +2294,7 @@ function jumpToPlace(x: number, z: number, heading: number): void {
   if (fleet) {
     const before = fleet.deckWaitToken;
     if (fleet.restart(x, z, heading, 'place-jump', undefined, () => finishJump(true))) finishJump(true);
-    else if (fleet.deckWaitToken !== before) { camReady = false; if (!droneVehicle && !drone.active) mode = 'drive'; }
+    else if (fleet.deckWaitToken !== before) camReady = false;
     return;
   }
   const placed = vehicle.restart(x, z, heading);
@@ -2837,15 +2839,22 @@ function frame(now: number) {
     if (import.meta.env.DEV) frameLap('drive');
     animals?.update(dt, vehicle, camera);
     if (import.meta.env.DEV) frameLap('animals');
+    savedFlyCamera = null;
     chase(dt);
     if (import.meta.env.DEV) frameLap('chase');
   } else {
     if (mode === 'drive' && ride.kind === 'drone') launchDrone();
-    if (fleet?.waitingForDeck && fleet.camera(camera, dt, view)) {
+    if (fleet?.waitingForDeck) {
+      if (!savedFlyCamera) savedFlyCamera = { pos: camera.position.clone(), yaw, pitch };
+      fleet.camera(camera, dt, view);
       if (import.meta.env.DEV) frameClock = performance.now();
       if (ride.kind !== 'drone') animals?.update(dt, vehicle, camera);
       if (import.meta.env.DEV) frameLap('animals');
     } else {
+      if (savedFlyCamera) {
+        camera.position.copy(savedFlyCamera.pos); yaw = savedFlyCamera.yaw; pitch = savedFlyCamera.pitch;
+        savedFlyCamera = null;
+      }
       fly(dt);
       if (import.meta.env.DEV) frameClock = performance.now();
       if (ride.kind !== 'drone') animals?.update(dt, vehicle, camera);

@@ -1860,8 +1860,63 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
   assert.ok(mainSrc.includes('reset: () => { if (!interiors.busy && (!fleet?.busy || fleet.waitingForDeck)) resetToRoad(); },'), 'main.ts gamepad Reset cancels live Fleet deck wait');
   assert.ok(mainSrc.includes('place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s); if (placed) {'), 'main.ts startHere advances to the next dry candidate instead of short-circuiting on a queued Fleet wait');
   assert.ok(mainSrc.includes("if (fleet.restart(x, z, heading, 'place-jump', undefined, () => finishJump(true))) finishJump(true);"), 'main.ts jumpToPlace defers resets and speed zeroing until Fleet placement commits');
-  assert.ok(mainSrc.includes("else if (fleet.deckWaitToken !== before) { camReady = false; if (!droneVehicle && !drone.active) mode = 'drive'; }"), 'main.ts jumpToPlace keeps an active roof-launched drone flight until Fleet placement commits');
-  assert.ok(mainSrc.includes('if (fleet?.waitingForDeck && fleet.camera(camera, dt, view)) {'), 'main.ts fly branch frames a waiting Fleet bridge span without stowing an active drone');
+  assert.ok(mainSrc.includes('else if (fleet.deckWaitToken !== before) camReady = false;'), 'main.ts jumpToPlace keeps fly/drone/shot mode until Fleet placement commits');
+  assert.ok(mainSrc.includes('if (!savedFlyCamera) savedFlyCamera = { pos: camera.position.clone(), yaw, pitch };'), 'main.ts fly branch saves free/fixed camera pose before framing a waiting Fleet bridge span');
+  assert.ok(mainSrc.includes('camera.position.copy(savedFlyCamera.pos); yaw = savedFlyCamera.yaw; pitch = savedFlyCamera.pitch;'), 'main.ts fly branch restores free/fixed camera pose if a waiting Fleet jump times out or cancels');
+  // Execute the real main.ts jumpToPlace + fly-wait camera restore logic in memory against a real Fleet fixture.
+  {
+    const fnMatch = mainSrc.match(/let savedFlyCamera:[\s\S]*?function jumpToPlace[\s\S]*?\n\}/);
+    const flyMatch = mainSrc.match(/    if \(fleet\?\.waitingForDeck\) \{[\s\S]*?\n    \}\n  \}/);
+    assert.ok(fnMatch && flyMatch, 'main.ts jumpToPlace and fly-wait camera restore blocks found');
+    const js = (await build({
+      stdin: {
+        contents: `
+          import * as THREE from 'three';
+          export function makeHarness(fleet, camera) {
+            let mode = 'fly', camReady = true, waitingToDrive = false, pendingShot = null, hookPlaced = false, jumpPlacement = 0;
+            let yaw = 0.7, pitch = -0.25, view = 'chase';
+            const droneVehicle = false, ride = { kind: 'truck' }, animals = null, multiplayer = null, mountainHint = null;
+            const vehicle = fleet.truck, mail = { reset() {} }, placeDroneAt = () => {};
+            const fly = () => {}, frameLap = () => {};
+            let frameClock = 0;
+            ${fnMatch[0]}
+            function flyStep(dt) {
+              ${flyMatch[0].replace(/\n  \}$/, '')}
+            }
+            return { jumpToPlace, flyStep, state: () => ({ mode, yaw, pitch, pos: camera.position.clone(), rot: camera.rotation.clone(), camReady, jumpPlacement }) };
+          }
+        `,
+        resolveDir: root,
+        loader: 'ts',
+      },
+      bundle: true, write: false, format: 'esm', platform: 'node', logLevel: 'silent',
+      define: { 'import.meta.env.DEV': 'false' },
+      plugins: [{ name: 't', setup(b) { b.onResolve({ filter: /^three$/ }, () => ({ path: threeHref, external: true })); } }],
+    })).outputFiles[0].text;
+    const { makeHarness } = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
+    const seaOnly = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: x >= 70, deck: false }));
+    const spanRds = makeRoads(-260, 640);
+    spanRds.bridgeRuns = () => [{ roads: new Set([1]), pts: [[70, 0], [640, 0]], halfWidth: 4 }];
+    const trk = new Vehicle(createTruck(false, true), seaOnly, spanRds, SEA, TRUCK_SPEC);
+    trk.assist = 0;
+    assert.equal(trk.place(-60, 0, Math.PI / 2), true);
+    const tw = new Towing(trk, seaOnly, spanRds, false, false, {}, true, true);
+    const sc = new THREE.Scene(); sc.add(trk.car.root, tw.trailer.root);
+    const fl = new Fleet(trk, tw, seaOnly, spanRds, sc, true, () => {}, SEA);
+    const cam = new THREE.PerspectiveCamera(58, 1.5, 0.3, 4000);
+    cam.position.set(-45, 22, 18); cam.rotation.set(-0.25, 0.7, 0);
+    const h = makeHarness(fl, cam);
+    h.jumpToPlace(330, 0, Math.PI / 2);
+    assert.equal(h.state().mode, 'fly', 'queued Fleet jump from free/fixed view preserves fly mode');
+    h.flyStep(1 / 60);
+    assert.ok(Math.abs(cam.position.x - 330) < 30, 'fly-mode Fleet wait moves camera to frame waiting span');
+    for (let i = 0; i < 60 * 9; i++) { fl.refresh(1 / 60); h.flyStep(1 / 60); }
+    const st = h.state();
+    assert.equal(st.mode, 'fly', 'timed-out Fleet jump preserves fly mode');
+    assert.equal(st.jumpPlacement, 0, 'timed-out Fleet jump never runs finishJump');
+    assert.ok(st.pos.distanceTo(new THREE.Vector3(-45, 22, 18)) < 1e-6, `timed-out Fleet jump restores exact free/fixed camera position (${st.pos.toArray()})`);
+    assert.ok(Math.abs(st.yaw - 0.7) < 1e-6 && Math.abs(st.pitch - (-0.25)) < 1e-6, 'timed-out Fleet jump restores exact camera yaw and pitch');
+  }
   assert.ok(mainSrc.includes('else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) { if (vehicle.waitingForDeck) driveVehicle(dt, { ...input, throttle: 0, handbrake: true }); else vehicle.retryPlace(); }'), 'main.ts missing-surface hold does not bypass update() while waiting for deck');
   assert.ok(mainSrc.includes('if (!vehicle.waitingForDeck && (refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15)'), 'main.ts animal/demo hold does not freeze deck-wait timer');
 
