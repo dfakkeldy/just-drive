@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run registered checks serially, retaining each check's exit verdict."""
+"""Run registered checks (serially by default, or CPU rows in parallel with --jobs), retaining each check's exit verdict."""
 import argparse
 import csv
 import fnmatch
@@ -13,6 +13,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +47,20 @@ IGNORE = {
 SLOW_STARTUP_PROOFS = {'browser-runtime', 'browser-listeners', 'browser-ownership', 'browser-kill-everything'}
 STARTUP_PROOFS = {'browser-runtime', 'browser-listeners', 'browser-ownership',
                   'browser-kill-everything', 'browser-identity', 'cdp', 'runner-contract', 'gpu-proof'}
+# CPU rows that touch shared host resources outside TMPDIR/OUT cannot overlap each other:
+# - wrangler: local Wrangler dev servers share default ports (5262/5263) or real-time timing checks.
+# - git-worktree: git worktree add/remove on ROOT (checkout-alpha/beta, source-main).
+SERIAL_GROUPS = {
+    'mp': 'wrangler',
+    'mp-mutations': 'wrangler',
+    'site-http': 'wrangler',
+    'board-worker': 'wrangler',
+    'browser-runtime': 'git-worktree',
+    'browser-ownership': 'git-worktree',
+    'browser-listeners': 'git-worktree',
+    'browser-kill-everything': 'git-worktree',
+    'sidewalks-app-size': 'git-worktree',
+}
 
 
 @lru_cache(maxsize=None)
@@ -153,7 +168,9 @@ def main():
     parser.add_argument('--for', dest='paths', nargs='+', default=[], metavar='PATH')
     parser.add_argument('--changed', action='store_true', help='select from git diff --name-only origin/main... plus working edits')
     parser.add_argument('--ci', action='store_true', help='clean clone without data/: rows marked mac-only or apple in checks-hosts.tsv, and rows whose missing needs lie inside data/, SKIP without failing the run; any other missing need still exits 2')
+    parser.add_argument('-j', '--jobs', type=int, default=1, help='parallel workers for independent CPU rows (default 1; browser rows always run serially)')
     args = parser.parse_args()
+    if args.jobs < 1: parser.error('--jobs must be at least 1')
     with (ROOT / 'tools/checks.tsv').open() as f:
         checks = list(csv.DictReader(f, delimiter='\t'))
     names = [c['name'] for c in checks]
@@ -246,6 +263,11 @@ def main():
         print('check | result | exit code | seconds | first failing line')
         print('TOTAL 0.00s; exit '+str(2 if uncovered else 0)+'; 0 SKIP')
         return 2 if uncovered else 0
+    ordered = [compiler] + sorted(
+        [c for c in chosen if c['name'] != 'tsc'],
+        key=lambda c: ('node', 'node-mutations', 'browser').index(c['mode']),
+    )
+    order_index = {c['name']: i for i, c in enumerate(ordered)}
     started = time.monotonic()
     rows = []
     # --ci: rows that skip only because this host is not the Mac or has no data/ do not fail the run.
@@ -257,6 +279,8 @@ def main():
     tmp = tempfile.mkdtemp(prefix='checks-', dir=scratch_parent if scratch_parent.is_dir() else None)
     # Progress goes to stderr as each row ends, so a run killed outright still leaves its verdicts and logs.
     print('Evidence folder ' + tmp, file=sys.stderr, flush=True)
+    io_lock = threading.Lock()
+    active_lock = threading.Lock()
     def finish(row):
         rows.append(row)
         print('RESULT ' + row_line(row), file=sys.stderr, flush=True)
@@ -264,59 +288,105 @@ def main():
         env = {**os.environ, 'TMPDIR': tmp, 'MMM_CHECK_OUT': tmp, 'OUT': tmp,
                'MMM_COAST_OUT': tmp + '/coast'}
         interrupted = []
-        active = [None]
-        def signal_group(sig):
-            if active[0] is not None:
-                try: os.killpg(active[0], sig)
-                except (ProcessLookupError, PermissionError): pass
+        active_pids = set()
+        signalled_pids = set()
+        def signal_group(pid, sig):
+            try: os.killpg(pid, sig)
+            except (ProcessLookupError, PermissionError): pass
         def stop(sig, _frame):
+            send = signal.SIGKILL if interrupted else sig
+            pids = ()
+            for _ in range(5):
+                try: pids = tuple(active_pids); break
+                except RuntimeError: pass
+            for pid in pids:
+                signalled_pids.add(pid)
+                signal_group(pid, send)
             interrupted.append(sig)
-            signal_group(signal.SIGKILL if len(interrupted) > 1 else sig)
         old = {s: signal.signal(s, stop) for s in (signal.SIGINT, signal.SIGTERM)}
-        def terminate(p):
-            signal_group(signal.SIGTERM)
-            # Kill descendants too, even when the group leader exits before its child.
-            try: p.wait(timeout=2)
+        def group_alive(pid):
+            try: os.killpg(pid, 0); return True
+            except (ProcessLookupError, PermissionError): return False
+        def terminate(p, grace=2):
+            if p.pid not in signalled_pids:
+                signalled_pids.add(p.pid)
+                signal_group(p.pid, signal.SIGTERM)
+            deadline = time.monotonic() + grace
+            # Kill descendants too, even when the group leader (e.g. bash) exits before its child finishes cleanup.
+            try: p.wait(timeout=grace)
             except subprocess.TimeoutExpired: pass
-            signal_group(signal.SIGKILL)
+            while p.poll() is not None and group_alive(p.pid) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            signal_group(p.pid, signal.SIGKILL)
             p.wait()
-        def run(name, command, needs='', limit=600):
-            if interrupted: return
-            env.pop('MMM_SOFTWARE_OK', None)
-            if hosts.get(name, {}).get('software') == 'ok': env['MMM_SOFTWARE_OK'] = '1'
-
+        def skip_reason(name, needs):
             host_class = hosts.get(name, {}).get('where')
             if args.ci and host_class in {'mac-only', 'apple'}:
-                print(f'Checking {name}: SKIP ({host_class})', file=sys.stderr, flush=True)
-                tolerated.add(name)
-                finish((name, 'SKIP', 2, 0., host_class + ' in tools/checks-hosts.tsv'))
-                return
+                return host_class + ' in tools/checks-hosts.tsv', f'({host_class})', True
             absent = [p for p in needs.split() if p != '-' and not (ROOT / p).exists()]
-            # A tracked link into data/ (web/public/areas) dangles in a clean clone, so judge where the path leads.
-            if args.ci and absent and all(Path(os.path.realpath(ROOT / p)).is_relative_to(data_root) for p in absent):
-                tolerated.add(name)
             if absent:
-                print(f'Checking {name}: SKIP (missing {", ".join(absent)})', file=sys.stderr, flush=True)
-                finish((name, 'SKIP', 2, 0., 'missing ' + ', '.join(absent)))
+                # A tracked link into data/ (web/public/areas) dangles in a clean clone, so judge where the path leads.
+                is_ci_data = args.ci and all(Path(os.path.realpath(ROOT / p)).is_relative_to(data_root) for p in absent)
+                return 'missing ' + ', '.join(absent), f'(missing {", ".join(absent)})', is_ci_data
+            return None
+        def run(name, command, needs='', limit=600, isolate=False):
+            if interrupted: return
+            skipped = skip_reason(name, needs)
+            if skipped is not None:
+                reason, note, ok = skipped
+                with io_lock:
+                    if ok: tolerated.add(name)
+                    print(f'Checking {name}: SKIP {note}', file=sys.stderr, flush=True)
+                    finish((name, 'SKIP', 2, 0., reason))
                 return
-            print('Checking ' + name, file=sys.stderr, flush=True)
+            row_env = dict(env)
+            row_env.pop('MMM_SOFTWARE_OK', None)
+            if hosts.get(name, {}).get('software') == 'ok': row_env['MMM_SOFTWARE_OK'] = '1'
+            row_tmp = None
+            if isolate:
+                row_tmp = Path(tmp) / 'work' / name
+                row_tmp.mkdir(parents=True, exist_ok=True)
+                row_env.update(TMPDIR=str(row_tmp), MMM_CHECK_OUT=str(row_tmp), OUT=str(row_tmp),
+                               MMM_COAST_OUT=str(row_tmp / 'coast'))
+            with io_lock:
+                if interrupted: return
+                print('Checking ' + name, file=sys.stderr, flush=True)
             begin = time.monotonic()
             with open(Path(tmp) / (name + '.log'), 'w+') as log:
-                p = subprocess.Popen(['bash', '-c', command], env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-                active[0] = p.pid
+                p = subprocess.Popen(['bash', '-c', command], env=row_env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                with active_lock: active_pids.add(p.pid)
                 timed_out = False
                 deadline = begin + limit
-                while True:
-                    if interrupted:
-                        terminate(p); code = 130; break
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        timed_out = True; terminate(p); code = 1; break
-                    try: code = p.wait(timeout=min(.1, remaining)); break
-                    except subprocess.TimeoutExpired: pass
-                if interrupted: terminate(p); code = 130
-                active[0] = None
+                try:
+                    while True:
+                        if interrupted:
+                            terminate(p, grace=5); code = 130; break
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            timed_out = True; terminate(p, grace=2); code = 1; break
+                        try: code = p.wait(timeout=min(.1, remaining)); break
+                        except subprocess.TimeoutExpired: pass
+                    if interrupted and not timed_out and code != 130:
+                        terminate(p, grace=5); code = 130
+                finally:
+                    with active_lock:
+                        active_pids.discard(p.pid)
+                        signalled_pids.discard(p.pid)
                 log.seek(0); output = log.read()
+            if row_tmp is not None:
+                row_evidence = row_tmp / 'evidence'
+                if row_evidence.is_dir():
+                    items = list(row_evidence.iterdir())
+                    if items:
+                        with io_lock:
+                            dest_root = Path(tmp) / 'evidence'
+                            dest_root.mkdir(exist_ok=True)
+                            for item in items:
+                                dest = dest_root / item.name
+                                if dest.exists():
+                                    if dest.is_dir() and not dest.is_symlink(): shutil.rmtree(dest)
+                                    else: dest.unlink()
+                                shutil.move(str(item), str(dest))
             if code < 0: code = 128 - code
             state = 'PASS' if code == 0 else 'CANNOT RUN' if code == 2 and name != 'tsc' else 'FAIL'
             plain = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', output)
@@ -326,14 +396,87 @@ def main():
             if timed_out: first = f'timed out after {limit:g} s'
             elif interrupted: first = 'interrupted by ' + signal.Signals(interrupted[0]).name
             elif not code: first = ''
-            finish((name, state, code, time.monotonic() - begin, first))
+            with io_lock:
+                finish((name, state, code, time.monotonic() - begin, first))
+        def run_parallel(checks_to_run, workers):
+            pending = []
+            for check in checks_to_run:
+                if interrupted: break
+                if skip_reason(check['name'], check['needs']) is not None:
+                    run(check['name'], check['command'], check['needs'], float(check.get('timeout') or 600))
+                else:
+                    pending.append(check)
+            if not pending or interrupted: return
+            def est(c):
+                raw = c.get('last_seconds')
+                if raw not in (None, '', '-'):
+                    try: return float(raw)
+                    except ValueError: pass
+                return 30.0 if c['mode'] == 'node-mutations' else 10.0
+            weights = {c['name']: est(c) for c in pending}
+            group_remaining = {}
+            for c in pending:
+                g = SERIAL_GROUPS.get(c['name'])
+                if g: group_remaining[g] = group_remaining.get(g, 0.0) + weights[c['name']]
+            cond = threading.Condition()
+            active_groups = set()
+            worker_errors = []
+            def worker():
+                while True:
+                    with cond:
+                        while True:
+                            if interrupted or worker_errors: return
+                            candidates = [c for c in pending if SERIAL_GROUPS.get(c['name']) not in active_groups]
+                            if candidates:
+                                check = max(
+                                    candidates,
+                                    key=lambda c: (
+                                        group_remaining.get(SERIAL_GROUPS.get(c['name']), weights[c['name']]),
+                                        weights[c['name']],
+                                        -order_index[c['name']],
+                                    ),
+                                )
+                                pending.remove(check)
+                                group = SERIAL_GROUPS.get(check['name'])
+                                if group:
+                                    active_groups.add(group)
+                                    group_remaining[group] = max(0.0, group_remaining[group] - weights[check['name']])
+                                break
+                            if not pending: return
+                            cond.wait(timeout=0.1)
+                    try:
+                        run(check['name'], check['command'], check['needs'],
+                            float(check.get('timeout') or 600), isolate=True)
+                    except BaseException as exc:
+                        with cond: worker_errors.append(exc)
+                    finally:
+                        with cond:
+                            if group: active_groups.discard(group)
+                            cond.notify_all()
+            threads = [threading.Thread(target=worker, daemon=True) for _ in range(min(workers, len(pending)))]
+            for t in threads: t.start()
+            while any(t.is_alive() for t in threads):
+                if interrupted:
+                    with cond: cond.notify_all()
+                for t in threads: t.join(timeout=0.05)
+            if worker_errors: raise worker_errors[0]
         run(compiler['name'], compiler['command'], compiler['needs'], float(compiler.get('timeout') or 600))
         env['MMM_SKIP_TYPECHECK'] = '1'
-        for check in sorted([c for c in chosen if c['name'] != 'tsc'], key=lambda c: ('node', 'node-mutations', 'browser').index(c['mode'])):
+        rest = ordered[1:]
+        cpu_checks = [c for c in rest if c['mode'] != 'browser']
+        browser_checks = [c for c in rest if c['mode'] == 'browser']
+        if args.jobs > 1 and len(cpu_checks) > 1:
+            run_parallel(cpu_checks, args.jobs)
+        else:
+            for check in cpu_checks:
+                if interrupted: break
+                run(check['name'], check['command'], check['needs'], float(check.get('timeout') or 600))
+        for check in browser_checks:
             if interrupted: break
-            run(check['name'], check['command'], check['needs'], float(check.get('timeout') or (1800 if check['mode'] == 'browser' else 600)))
+            run(check['name'], check['command'], check['needs'], float(check.get('timeout') or 1800))
     finally:
         for sig, handler in old.items(): signal.signal(sig, handler)
+    rows.sort(key=lambda r: order_index.get(r[0], len(order_index)))
     print('check | result | exit code | seconds | first failing line')
     for row in rows: print(row_line(row))
     elapsed = time.monotonic() - started

@@ -13,7 +13,7 @@ const COL = {
   wall: 0xf7f7f3, trim: 0xffffff, roof: 0x343d40, cap: 0x1f2526, dome: 0x1b2022,
   glass: 0x34444c, steps: 0x9a968c,
   stone: 0x8e8079, rock: 0x8f9396, sign: 0xffffff, door: 0xf7f7f4,
-  granite: 0x5e4440, cross: 0x353230, plinth: 0x9c4a3c, corpus: 0xa29c8e, cloth: 0xb6b0a2, boulder: 0x8d9398,
+  granite: 0x988683, plaque: 0x6b3235, cross: 0x353230, plinth: 0x9c4a3c, corpus: 0xa29c8e, cloth: 0xb6b0a2, boulder: 0x8d9398,
 };
 // Shingle courses as a repeating texture; COURSE tiles per metre keep the courses at their old size.
 const COURSE = 1 / 0.66;
@@ -33,14 +33,21 @@ function shingleTexture() {
   return t;
 }
 
+/** Plain front gable sign painted in code with the church's public name and founding year. No photo pixels. */
 function signTexture() {
   const c = document.createElement("canvas"); c.width = 512; c.height = 220;
   const g = c.getContext("2d");
   if (!g) throw new Error("Church texture needs a canvas context");
-  g.fillStyle = "#fbfbf8"; g.fillRect(0, 0, 512, 220);
-  g.strokeStyle = "#22282b"; g.lineWidth = 14; g.strokeRect(10, 10, 492, 200);
-  g.fillStyle = "#2a3134";                 // lettering shown as bars: the real text isn't legible in the footage
-  for (const [y, w] of [[62, 360], [104, 300], [146, 220]]) g.fillRect(256 - w / 2, y, w, 18);
+  g.fillStyle = "#f4f2ec"; g.fillRect(0, 0, 512, 220);
+  g.strokeStyle = "#7a2224"; g.lineWidth = 14; g.strokeRect(10, 10, 492, 200);
+  g.fillStyle = "#7a2224";
+  for (const [cx, cy, dx, dy] of [[17, 17, 20, 20], [495, 17, -20, 20], [17, 203, 20, -20], [495, 203, -20, -20]]) {
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + dx, cy); g.lineTo(cx, cy + dy); g.closePath(); g.fill();
+  }
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.font = "700 46px sans-serif"; g.fillText("ST. MARGARET", 256, 66);
+  g.font = "700 46px sans-serif"; g.fillText("OF SCOTLAND", 256, 118);
+  g.font = "700 32px sans-serif"; g.fillText("TIGHE DHIA  1841", 256, 168);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
@@ -66,6 +73,7 @@ export function buildChurchParts(ground: (x: number, z: number) => number = () =
     sign: new THREE.MeshLambertMaterial({ map: signTexture() }),
     door: new THREE.MeshLambertMaterial({ color: COL.door }),
     granite: new THREE.MeshLambertMaterial({ color: COL.granite }),
+    plaque: new THREE.MeshLambertMaterial({ color: COL.plaque }),
     cross: new THREE.MeshLambertMaterial({ color: COL.cross }),
     plinth: new THREE.MeshLambertMaterial({ color: COL.plinth }),
     corpus: new THREE.MeshLambertMaterial({ color: COL.corpus }),
@@ -158,16 +166,39 @@ export function buildChurchParts(ground: (x: number, z: number) => number = () =
       box(o.w + 0.16, 0.08, 0.06, mat.trim, 0, o.y1 + 0.04, 0.04, { parent: local });
       continue;
     }
-    // glass
-    const glassGeo = new THREE.ShapeGeometry(archShape(o), 16);
-    add(glassGeo, dark ? mat.darkGlass : mat.glass, 0, 0, dark ? 0.02 : 0, { parent: local, cast: false });
+    // glass (omit on tower_w so the high belfry transom stays a real recessed opening into the tower shaft)
+    if (o.face !== 'tower_w') {
+      const glassGeo = new THREE.ShapeGeometry(archShape(o), 16);
+      add(glassGeo, dark ? mat.darkGlass : mat.glass, 0, 0, dark ? 0.02 : 0, { parent: local, cast: false });
+    }
     // frame: sides, sill, head, and muntins
-    const fw = 0.06, top = o.kind === "arch" ? o.y1 + r : o.y1;
-    box(fw, o.y1 - o.y0, 0.08, mat.trim, -r, (o.y0 + o.y1) / 2, 0.04, { parent: local });   // side posts up to the spring line
-    box(fw, o.y1 - o.y0, 0.08, mat.trim, r, (o.y0 + o.y1) / 2, 0.04, { parent: local });
+    const fw = 0.06, span = o.y1 - o.y0;
+    box(fw, span, 0.08, mat.trim, -r, (o.y0 + o.y1) / 2, 0.04, { parent: local });   // side posts up to the spring line
+    box(fw, span, 0.08, mat.trim, r, (o.y0 + o.y1) / 2, 0.04, { parent: local });
     box(o.w + 0.16, 0.07, 0.12, mat.trim, 0, o.y0 - 0.02, 0.05, { parent: local });
-    box(0.035, top - o.y0 - 0.07, 0.04, mat.trim, 0, (o.y0 + top) / 2, 0.03, { parent: local });
-    for (let k = 1; k < 4; k++) box(o.w, 0.035, 0.04, mat.trim, 0, o.y0 + (o.y1 - o.y0) * k / 4, 0.03, { parent: local });
+    if (o.face === 'nave_n' || o.face === 'nave_s') {
+      // 12-over-12 arched sash: 3 vertical muntins up into the arch, 3 pane rows below the meeting rail and 2 rect + 1 arched row above.
+      for (const frac of [-0.25, 0, 0.25]) {
+        const x = o.w * frac, archTop = o.y1 + Math.sqrt(Math.max(0, r * r - x * x));
+        box(0.024, archTop - o.y0, 0.032, mat.trim, x, (o.y0 + archTop) / 2, 0.03, { parent: local });
+      }
+      for (let k = 1; k <= 5; k++) {
+        box(o.w, k === 3 ? 0.048 : 0.024, k === 3 ? 0.042 : 0.032, mat.trim, 0, o.y0 + span * k / 5, 0.03, { parent: local });
+      }
+    } else if (o.face === 'tower_s') {
+      // Narrower 3-column arched porch window.
+      for (const frac of [-1 / 6, 1 / 6]) {
+        const x = o.w * frac, archTop = o.y1 + Math.sqrt(Math.max(0, r * r - x * x));
+        box(0.024, archTop - o.y0, 0.032, mat.trim, x, (o.y0 + archTop) / 2, 0.03, { parent: local });
+      }
+      for (let k = 1; k <= 4; k++) {
+        box(o.w, k === 2 ? 0.045 : 0.024, 0.032, mat.trim, 0, o.y0 + span * k / 4, 0.03, { parent: local });
+      }
+    } else if (o.face !== 'tower_w') {
+      // 6-over-6 rectangular sash windows (west gable clerestory and vestry).
+      for (const frac of [-1 / 6, 1 / 6]) box(0.024, span, 0.032, mat.trim, o.w * frac, cy, 0.03, { parent: local });
+      for (let k = 1; k < 4; k++) box(o.w, k === 2 ? 0.045 : 0.024, 0.032, mat.trim, 0, o.y0 + span * k / 4, 0.03, { parent: local });
+    }
     if (o.kind === "arch") {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.035, 6, 20, Math.PI), mat.trim);
       ring.position.set(0, o.y1, 0.04); local.add(ring);
@@ -221,20 +252,20 @@ export function buildChurchParts(ground: (x: number, z: number) => number = () =
   box(tw + 0.33, 0.26, tz + 0.33, mat.cap, tx0 + tw / 2, c.base - 0.13, tzc);   // cap top meets the drum at c.base
   box(tw + 0.2, 0.15, tz + 0.2, mat.trim, tx0 + tw / 2, t.top - 0.36, tzc);
 
-  // Cupola: white octagonal drum with dark openings between its posts, black onion dome, finial and cross.
+  // Cupola: solid white-shingled octagonal drum (no louvres or open bell), octagonal collar, black onion dome, finial and cross.
   const drumH = c.top - c.base;
-  const drum = add(new THREE.CylinderGeometry(c.r, c.r * 1.04, drumH, 8), mat.trim, c.x, c.base + drumH / 2, c.z);
-  drum.rotation.y = Math.PI / 8;
-  for (let i = 0; i < 8; i++) {
-    const a = i * Math.PI / 4, rr = c.r * 1.03 * Math.cos(Math.PI / 8) + 0.02;   // face centres (corners are at odd multiples of pi/8)
-    const l = box(c.r * 0.55, drumH * 0.6, 0.03, mat.cap, c.x + rr * Math.cos(a), c.base + drumH / 2, c.z + rr * Math.sin(a));
-    l.rotation.y = -a + Math.PI / 2;
+  const drumGeo = new THREE.CylinderGeometry(c.r, c.r * 1.04, drumH, 8);
+  {
+    const uv = drumGeo.attributes.uv, circ = 2 * Math.PI * c.r;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * circ * COURSE, uv.getY(i) * drumH * COURSE);
   }
+  const drum = add(drumGeo, mat.wall, c.x, c.base + drumH / 2, c.z);
+  drum.rotation.y = Math.PI / 8;
   const domeBase = c.top, k = (c.dome - c.top) / 2.4;
   const prof = [[c.r * 1.08, 0], [c.r * 1.18, 0.35], [c.r * 1.12, 0.9], [c.r * 0.8, 1.55], [c.r * 0.35, 2.05], [c.r * 0.1, 2.35], [0, 2.4]]
     .map(([x, y]) => new THREE.Vector2(x, y * k));
   add(new THREE.LatheGeometry(prof, 32), mat.dome, c.x, domeBase, c.z);
-  box(c.r * 2.3, 0.1, c.r * 2.3, mat.trim, c.x, domeBase, c.z);
+  add(new THREE.CylinderGeometry(c.r * 1.12, c.r * 1.12, 0.08, 8), mat.trim, c.x, domeBase, c.z, { ry: Math.PI / 8 });
   add(new THREE.SphereGeometry(0.07, 12, 8), mat.trim, c.x, c.dome + 0.03, c.z);
   const crossH = c.cross - c.dome;
   box(0.06, crossH, 0.06, mat.trim, c.x, c.dome + crossH / 2, c.z);
@@ -301,15 +332,30 @@ export function buildChurchParts(ground: (x: number, z: number) => number = () =
   groundedBox(ld.u - ld.width / 2, ld.u + ld.width / 2, v.z1, v.z1 + ld.depth, ld.rise, mat.steps);
   railing(ld.u - ld.width / 2, v.z1 + ld.depth - 0.04, ld.rise, ld.u + ld.width / 2 - 0.4, v.z1 + ld.depth - 0.04, ld.rise);
 
-  // The granite monument in front: a plinth, a die, a shaft and a low cap. No plaque text.
+  // The River Denys marble monument in front: a plinth, a die with a blank Bordeaux-marble plaque facing the road (+x),
+  // and a flat-topped rectangular shaft, vertex-coloured with subtle rose-grey veining (no extra draw call or plaque text).
   const gm = CHURCH_GROUNDS.monument;
   {
-    const g = ground(gm.x, gm.z), base = 0.22, die = 0.55, cap = 0.12, shaft = gm.h - base - die - cap;
-    const low = lowest(gm.x - gm.w / 2, gm.x + gm.w / 2, gm.z - gm.w / 2, gm.z + gm.w / 2);
-    box(gm.w, g + base - low, gm.w, mat.granite, gm.x, (g + base + low) / 2, gm.z);
-    box(gm.w * 0.73, die, gm.w * 0.73, mat.granite, gm.x, g + base + die / 2, gm.z);
-    box(gm.w * 0.47, shaft, gm.w * 0.47, mat.granite, gm.x, g + base + die + shaft / 2, gm.z);
-    add(new THREE.ConeGeometry(gm.w * 0.34, cap, 4), mat.granite, gm.x, g + gm.h - cap / 2, gm.z, { ry: Math.PI / 4 });
+    const marbleBox = (sx: number, sy: number, sz: number, m: THREE.MeshLambertMaterial, baseHex: number, veinHex: number, darkHex: number, x: number, y: number, z: number, segs: [number, number, number]) => {
+      const geo = new THREE.BoxGeometry(sx, sy, sz, segs[0], segs[1], segs[2]);
+      const pos = geo.attributes.position, col = new Float32Array(pos.count * 3);
+      const base = new THREE.Color(baseHex), vein = new THREE.Color(veinHex), dark = new THREE.Color(darkHex), c = new THREE.Color();
+      for (let i = 0; i < pos.count; i++) {
+        const px = pos.getX(i) + x, py = pos.getY(i) + y, pz = pos.getZ(i) + z;
+        const mottle = 0.5 + 0.5 * Math.sin(px * 9.5 + py * 4.2 - pz * 7.8) * Math.cos(py * 6.4 + pz * 8.3);
+        const streak = Math.pow(Math.abs(Math.sin((px * 6.2 + py * 7.8 + pz * 5.4) + 0.9 * Math.sin(py * 11 - pz * 8))), 7);
+        c.copy(base).lerp(dark, (1 - mottle) * 0.45).lerp(vein, streak * 0.65);
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      return add(geo, m, x, y, z);
+    };
+    const g = ground(gm.x, gm.z), base = 0.30, die = 0.68, shaft = gm.h - base - die;
+    const dieW = gm.w * 0.72, low = lowest(gm.x - gm.w / 2, gm.x + gm.w / 2, gm.z - gm.w / 2, gm.z + gm.w / 2);
+    marbleBox(gm.w, g + base - low, gm.w, mat.granite, 0xac9895, 0xd4c6c3, 0x796564, gm.x, (g + base + low) / 2, gm.z, [4, 3, 4]);
+    marbleBox(dieW, die, dieW, mat.granite, 0xac9895, 0xd4c6c3, 0x796564, gm.x, g + base + die / 2, gm.z, [4, 5, 4]);
+    marbleBox(0.03, die * 0.78, dieW * 0.76, mat.plaque, 0x78363a, 0xa87577, 0x522124, gm.x + dieW / 2 + 0.015, g + base + die / 2, gm.z, [1, 5, 4]);
+    marbleBox(gm.w * 0.44, shaft, gm.w * 0.44, mat.granite, 0xb09c98, 0xd8cac7, 0x7c6766, gm.x, g + base + die + shaft / 2, gm.z, [3, 6, 3]);
   }
   // The tall wayside crucifix on the lane: a tapered red concrete plinth, steel gussets, dark steel cross,
   // and a weathered metal figure of Christ on the front (+Z) face, turned toward the church and approaching lane.
@@ -446,9 +492,11 @@ function mergeChurch(source: THREE.Group): THREE.Group {
         }
       }
     }
-    const colour = new Float32Array(geometry.attributes.position.count * 3);
-    for (let i = 0; i < colour.length; i += 3) { colour[i] = material.color.r; colour[i + 1] = material.color.g; colour[i + 2] = material.color.b; }
-    geometry.setAttribute('color', new THREE.BufferAttribute(colour, 3));
+    if (!geometry.attributes.color) {
+      const colour = new Float32Array(geometry.attributes.position.count * 3);
+      for (let i = 0; i < colour.length; i += 3) { colour[i] = material.color.r; colour[i + 1] = material.color.g; colour[i + 2] = material.color.b; }
+      geometry.setAttribute('color', new THREE.BufferAttribute(colour, 3));
+    }
     const key = material.map;
     const bucket = buckets.get(key) ?? []; bucket.push(geometry); buckets.set(key, bucket);
   });

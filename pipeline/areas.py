@@ -37,6 +37,10 @@ class Area:
     # Hand-built house sites, as (east, north, radius in metres): no roadside box for the hand-built house site.
     # A house inside the radius gets no mailbox, and step 29 stops if any box stands inside.
     no_box_sites: tuple = ()
+    # Repo-relative JSON files holding EPSG:2961 polygon rings (`ring` key) where no roadside mailbox may stand
+    # (for example, a town with post-office pickup only). Any placed box whose position falls inside is dropped,
+    # and step 29 stops if any box stands inside.
+    no_mailbox_polygons: tuple = ()
     # Named kind-4 road pieces that step 29 gives no pole run, when a drive showed no power line along them:
     # ((east, north) on the piece's line, its expected name). Other pieces with the same name keep the usual rule.
     # Public roads keep their frozen poles (tools/power-network/README.md), apart from public_pole_corrections; only
@@ -271,6 +275,8 @@ POINTTUPPER = Area(
     id='pointtupper', name='Point Tupper and Port Hawkesbury', origin=(591500, 5103332), mid_tiles=(14, 22, 20, 28),
     anchor=(627529, 5051762), fetch_box=(-61.468104, 45.54932, -61.291694, 45.673129),
     highways=(4, 19, 104, 105, 344), anchor_highway=4, exclude_utility_trees=True,
+    # Town of Port Hawkesbury legal municipal limits: no roadside mailboxes; residents pick up mail at the post office.
+    no_mailbox_polygons=('web/src/port-hawkesbury-boundary.json',),
     # The large stores, plaza, civic centre, schools, college and tanks of Port Hawkesbury and Point Tupper
     # (the project brief). On together with that land delta (tools/point-tupper-delta/), which the main thread installs.
     big_buildings=True,

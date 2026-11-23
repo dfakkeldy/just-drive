@@ -9,6 +9,9 @@ costly stand-in proofs described below. Publish builds keep their own type check
 `--quick` leaves out the separate mutation rows. The mutation suites inside the wrapper rows `coast`, `fishing-rules` and `visit` still run. A mutations row marked `includes-base` runs its plain cases first, so the plain row is not run a second time. `--only <row>` always runs the named rows, also a start-up proof and a mutations row; a name that is not a row gives exit 2.
 
 - `--browser` includes serial browser rows through existing starters.
+- `-j N` / `--jobs N` runs up to `N` independent CPU rows in parallel (default `1`).
+  Each worker gets its own scratch folder; shared-port (`wrangler`) and `git worktree`
+  rows never overlap within their group, and browser rows always run serially.
 - `--list` prints last measured seconds and an estimated total, with a count of
   unmeasured rows. Bare `--list` shows the default CPU selection; a path coverage
   listing also shows browser rows. `--full --browser --list` shows everything.
@@ -32,8 +35,9 @@ A starter change also prints `browser start-up changed: run --browser`.
 
 ## Clean-clone CI (`--ci`)
 
-`.github/workflows/ci.yml` runs `tools/check-all.sh --ci --full` on Ubuntu with no
-`data/` (`--full` adds the four stand-in start-up proofs, which need neither).
+`.github/workflows/ci.yml` runs `tools/check-all.sh --ci --full --jobs 4` on Ubuntu with no
+`data/` (`--full` adds the four stand-in start-up proofs, which need neither, and
+`--jobs 4` runs independent CPU rows in parallel on the 4-vCPU runner).
 It runs on pushes to `main` and on every PR push, drafts included: the
 repository is public, so hosted minutes are free. `gh pr ready` starts no second
 run; the run on the PR's latest push is the one `land_pr.py` waits for.

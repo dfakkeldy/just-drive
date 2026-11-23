@@ -272,4 +272,112 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
         path=fixture/'tools'/orphan;path.touch();result=run('--list');assert result.returncode==1 and ('UNREGISTERED check: '+orphan) in result.stderr;path.unlink()
     (fixture/'tools/orphan-check.mjs').touch()
     result=run('--list');assert result.returncode==1 and 'UNREGISTERED check: orphan-check.mjs' in result.stderr
+    (fixture/'tools/orphan-check.mjs').unlink()
+
+    # --jobs: parallel CPU rows overlap (proven via rendezvous barrier, not wall-clock timing), isolate scratch/evidence
+    # per row, keep mutual-exclusion groups and browser rows serial, preserve canonical table order, handle parallel
+    # timeouts, and clean up every process group (including detached children via SIGTERM handler) on INT/TERM.
+    expect(['--jobs','0'],2)
+    barrier_dir=fixture/'barrier';barrier_dir.mkdir(exist_ok=True)
+    bar_py=fixture/'par_barrier.py'
+    bar_py.write_text(
+        'import sys,time\nfrom pathlib import Path\n'
+        'd=Path(sys.argv[1]); n=sys.argv[2]; (d/n).write_text("1")\n'
+        'end=time.monotonic()+5\n'
+        'while time.monotonic()<end:\n'
+        '  if all((d/k).exists() for k in ("a","b","c","d")): sys.exit(0)\n'
+        '  time.sleep(0.02)\n'
+        'sys.exit(1)\n'
+    )
+    table([('a',0,'node','*',''),('b',0,'node','*',''),('c',0,'node','*',''),('d',0,'node','*','')])
+    for name in ('a','b','c','d'):
+        change_row(name,f'{shlex.quote(sys.executable)} {shlex.quote(str(bar_py))} {shlex.quote(str(barrier_dir))} {name}')
+    result=run('--jobs','4')
+    assert result.returncode==0,(result.returncode,result.stdout,result.stderr)
+    table_names=[l.split(' | ')[0] for l in result.stdout.splitlines() if ' | PASS | ' in l]
+    assert table_names==['tsc','a','b','c','d'],table_names
+    result_lines=[l[len('RESULT '):] for l in result.stderr.splitlines() if l.startswith('RESULT ')]
+    assert len(result_lines)==5 and {l.split(' | ')[0] for l in result_lines}=={'tsc','a','b','c','d'},result_lines
+    # Parallel timeout beside a healthy sibling row: timed-out row fails cleanly while sibling passes.
+    table([('sleeper',0,'node','*',''),('healthy',0,'node','*','')])
+    change_row('sleeper','sleep 20','0.25')
+    change_row('healthy','sleep 0.1')
+    expect(['--jobs','2'],1,('sleeper | FAIL | 1','timed out after 0.25 s','healthy | PASS'))
+    # Isolated per-row scratch ($OUT/$TMPDIR/$MMM_CHECK_OUT) and merged evidence/<row>/ on pass.
+    table([('iso1',0,'node','*',''),('iso2',0,'node','*','')])
+    for name in ('iso1','iso2'):
+        change_row(name,
+            'echo '+name+' > "$OUT/shared.txt" && echo '+name+' > "$TMPDIR/tmp.txt" && '
+            'mkdir -p "$MMM_CHECK_OUT/evidence/'+name+'" && echo '+name+' > "$MMM_CHECK_OUT/evidence/'+name+'/out.txt" && '
+            'sleep 0.15 && test "$(cat "$OUT/shared.txt")" = '+name+' && test "$(cat "$TMPDIR/tmp.txt")" = '+name)
+    result=run('--jobs','2');assert result.returncode==0,(result.stdout,result.stderr)
+    kept_dir=Path(result.stdout.split('Evidence kept at ')[1].strip())
+    assert sorted(p.name for p in kept_dir.iterdir())==['evidence']
+    assert (kept_dir/'evidence/iso1/out.txt').read_text().strip()=='iso1'
+    assert (kept_dir/'evidence/iso2/out.txt').read_text().strip()=='iso2'
+    # Mutual-exclusion groups (wrangler, git-worktree) and browser rows never overlap.
+    overlap_log=fixture/'overlap.log';overlap_log.unlink(missing_ok=True)
+    table([('mp',0,'node','*',''),('mp-mutations',0,'node-mutations','*',''),
+           ('browser-runtime',0,'node','*',''),('browser-ownership',0,'node','*',''),
+           ('br1',0,'browser','*',''),('br2',0,'browser','*','')])
+    py_rec=(
+        'import os,sys,time; from pathlib import Path; '
+        'n=sys.argv[1]; f=Path(sys.argv[2]); '
+        't0=time.monotonic(); time.sleep(0.2); t1=time.monotonic(); '
+        'f.open("a").write(f"{n} {t0:.6f} {t1:.6f}\\n")'
+    )
+    for name in ('mp','mp-mutations','browser-runtime','browser-ownership','br1','br2'):
+        change_row(name,f'{shlex.quote(sys.executable)} -c {shlex.quote(py_rec)} {name} {shlex.quote(str(overlap_log))}')
+    result=run('--full','--browser','--jobs','4');assert result.returncode==0,(result.stdout,result.stderr)
+    spans={parts[0]:(float(parts[1]),float(parts[2])) for parts in (l.split() for l in overlap_log.read_text().splitlines())}
+    def disjoint(x,y): return spans[x][1]<=spans[y][0] or spans[y][1]<=spans[x][0]
+    assert disjoint('mp','mp-mutations'),spans
+    assert disjoint('browser-runtime','browser-ownership'),spans
+    assert disjoint('br1','br2'),spans
+    # Browser rows start only after all CPU rows finish.
+    assert max(spans[k][1] for k in ('mp','mp-mutations','browser-runtime','browser-ownership')) <= min(spans['br1'][0],spans['br2'][0]),spans
+    # Interrupting a parallel run (SIGINT and SIGTERM) terminates every active process group and lets a
+    # SIGTERM-handling parent stop its detached-session child before exit; never starts queued rows.
+    par_code=('import importlib.util,sys,os;from pathlib import Path;'
+              's=importlib.util.spec_from_file_location("checks",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);'
+              'm.ROOT=Path(sys.argv[2]);os.chdir(m.ROOT);sys.argv=[sys.argv[1],"--jobs","2"];sys.exit(m.main())')
+    w_stubborn=fixture/'par_stubborn.py'
+    w_stubborn.write_text('import os,signal,sys,time\nfrom pathlib import Path\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\nPath(sys.argv[1]).write_text(str(os.getpid()))\nPath(sys.argv[2]).write_text("1")\ntime.sleep(30)\n')
+    w_detached=fixture/'par_detached.py'
+    # Sleep 2.5s inside finally without masking SIGTERM on SIGINT: proves (a) SIGINT is not followed by a
+    # second SIGTERM that would abort finally, and (b) graceful cleanup taking >2s finishes before SIGKILL.
+    w_detached.write_text(
+        'import signal,subprocess,sys,time\nfrom pathlib import Path\n'
+        'child=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"],start_new_session=True)\n'
+        'def on_term(_s,_f):\n signal.signal(signal.SIGTERM,signal.SIG_IGN)\n raise SystemExit(143)\n'
+        'signal.signal(signal.SIGTERM,on_term)\n'
+        'try:\n Path(sys.argv[1]).write_text(str(child.pid))\n Path(sys.argv[2]).write_text("1")\n time.sleep(30)\n'
+        'finally:\n time.sleep(2.5)\n child.terminate()\n try: child.wait(timeout=1)\n except subprocess.TimeoutExpired: child.kill(); child.wait()\n'
+    )
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        table([('p1',0,'node','*',''),('p2',0,'node','*',''),('p3',0,'node','*','')])
+        r1=fixture/'p1.ready';r2=fixture/'p2.ready';pid1=fixture/'p1.pid';pid2=fixture/'p2.pid';m3=fixture/'p3.ran'
+        for fpath in (r1,r2,pid1,pid2,m3): fpath.unlink(missing_ok=True)
+        change_row('p1',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_stubborn))} {shlex.quote(str(pid1))} {shlex.quote(str(r1))} & wait')
+        # Compound shell command so bash cannot exec Python directly: verifies the grace wait keeps the
+        # process group alive until Python finishes its 2.5s cleanup even if bash exits first on SIGTERM.
+        change_row('p2',f'{shlex.quote(sys.executable)} {shlex.quote(str(w_detached))} {shlex.quote(str(pid2))} {shlex.quote(str(r2))} && true')
+        change_row('p3',f'touch {shlex.quote(str(m3))}')
+        p=subprocess.Popen([sys.executable,'-c',par_code,str(ROOT/'tools/check-all.py'),str(fixture)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env={**os.environ,'PATH':str(fixture/'bin')+os.pathsep+os.environ['PATH'],'MMM_CHECK_SCRATCH':str(scratch[0])})
+        try:
+            for _ in range(150):
+                if r1.exists() and r2.exists(): break
+                time.sleep(.02)
+            assert r1.exists() and r2.exists(),sig
+            p.send_signal(sig);out,err=p.communicate(timeout=10)
+            assert p.returncode==130 and not m3.exists(),(sig,p.returncode,out,err)
+            assert not alive(int(pid1.read_text())),f'parallel {sig} left stubborn descendant alive'
+            assert not alive(int(pid2.read_text())),f'parallel {sig} left detached-session child alive'
+        finally:
+            if p.poll() is None: p.kill(); p.wait()
+            for pf in (pid1,pid2):
+                if pf.exists():
+                    try: os.kill(int(pf.read_text()),signal.SIGKILL)
+                    except (ValueError,ProcessLookupError,PermissionError): pass
+    print('PASS --jobs: parallel rendezvous, timeout, per-row isolation/evidence, group & browser serialization, INT/TERM cleanup')
 print('PASS runner: one tsc, default/quick/browser/only/coverage selection, unknown names, inventory drift, exit precedence and missing data')
