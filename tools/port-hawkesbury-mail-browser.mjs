@@ -14,7 +14,10 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { open, sleep } from './cdp.mjs';
 
 const boundary = JSON.parse(readFileSync(new URL('../web/src/port-hawkesbury-boundary.json', import.meta.url), 'utf8'));
-const CEILING = { desktop: { triangles: 8000, meshes: 6, frameCalls: 500 }, low: { triangles: 6000, meshes: 4, frameCalls: 300 } };
+const CEILING = {
+  desktop: { triangles: 8000, meshes: 6, frameCalls: 850, deltaCalls: 12 },
+  low: { triangles: 6000, meshes: 4, frameCalls: 227, deltaCalls: 6 },
+};
 // Three road poses facing the Port Hawkesbury Post Office from Pitt Street and the SW lot entrance.
 const POSES = [
   { tag: 'front', at: [627834, 5052408], look: 315 },
@@ -168,15 +171,49 @@ for (const url of urls) {
     assert.ok(delivery.customers >= 900, `${level}: town customers credited (${delivery.customers})`);
     assert.match(delivery.status, /Port Hawkesbury Post Office drop/, `${level}: status announces Post Office drop`);
 
-    // 3. Verify Post Office meshes, sign, triangles, render frame calls, and collision solids (including loading dock).
-    const poState = await page.read(`(() => {
-      const po = mmm.postOffice;
+    // 3. Verify Post Office meshes, sign, triangles, whole-frame render calls (with paired hidden delta), and collision solids.
+    const poState = await page.read(`(async () => {
+      const po = mmm.postOffice, r = mmm.renderer;
       const drawn = [];
       po.group.traverse(o => {
         if (o.isMesh && o.visible) {
           drawn.push({ name: o.name, map: !!o.material.map, triangles: (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3 });
         }
       });
+      // Measure whole-frame calls across all render passes (mirror, shadows, main, finish) by disabling autoReset for 3 frames.
+      const measureFrames = async (visible) => {
+        po.group.visible = visible;
+        const prevAuto = r.info.autoReset;
+        const origRender = r.render.bind(r);
+        let frameCalls = 0, frameTris = 0;
+        const rows = [];
+        r.info.autoReset = false;
+        r.render = (...args) => {
+          r.info.reset();
+          const res = origRender(...args);
+          frameCalls += r.info.render.calls;
+          frameTris += r.info.render.triangles;
+          return res;
+        };
+        try {
+          for (let f = 0; f < 4; f++) {
+            frameCalls = 0; frameTris = 0;
+            await new Promise(res => requestAnimationFrame(res));
+            if (f > 0 && frameCalls > 0) rows.push({ calls: frameCalls, triangles: frameTris });
+          }
+        } finally {
+          r.render = origRender;
+          r.info.autoReset = prevAuto;
+        }
+        return rows;
+      };
+      const shownRows = await measureFrames(true);
+      const hiddenRows = await measureFrames(false);
+      po.group.visible = true;
+      const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)] ?? 0; };
+      const frameCalls = median(shownRows.map(x => x.calls));
+      const hiddenCalls = median(hiddenRows.map(x => x.calls));
+      const frameTriangles = median(shownRows.map(x => x.triangles));
       const v = mmm.vehicle, saved = { x: v.x, z: v.z, heading: v.heading, vx: v.vx, vz: v.vz, speed: v.speed };
       let blocked = 0;
       try {
@@ -193,15 +230,18 @@ for (const url of urls) {
         drawn,
         solids: po.solids.length,
         blocked,
-        frameCalls: mmm.renderer.info.render.calls,
-        frameTriangles: mmm.renderer.info.render.triangles,
+        frameCalls,
+        hiddenCalls,
+        deltaCalls: frameCalls - hiddenCalls,
+        frameTriangles,
       };
     })()`);
     console.log(name, 'poState', JSON.stringify(poState));
     const ceil = CEILING[level];
     assert.ok(poState.triangles > 100 && poState.triangles <= ceil.triangles, `${level}: triangles ${poState.triangles} <= ${ceil.triangles}`);
     assert.ok(poState.meshes >= 2 && poState.meshes <= ceil.meshes, `${level}: meshes ${poState.meshes} <= ${ceil.meshes}`);
-    assert.ok(poState.frameCalls <= ceil.frameCalls, `${level}: frame calls beside Post Office ${poState.frameCalls} <= ${ceil.frameCalls}`);
+    assert.ok(poState.frameCalls > 50 && poState.frameCalls <= ceil.frameCalls, `${level}: whole-frame calls beside Post Office ${poState.frameCalls} in (50, ${ceil.frameCalls}]`);
+    assert.ok(poState.deltaCalls <= ceil.deltaCalls, `${level}: Post Office paired draw-call delta ${poState.deltaCalls} <= ${ceil.deltaCalls}`);
     assert.ok(poState.drawn.some(d => d.name === 'ph-post-office-sign' && d.map), `${level}: generic POST OFFICE sign mesh drawn`);
     assert.equal(poState.blocked, poState.solids, `${level}: every Post Office solid blocks the vehicle`);
 

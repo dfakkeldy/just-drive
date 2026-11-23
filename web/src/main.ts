@@ -2191,7 +2191,7 @@ const title = started ? null : createTitle(touchDevice, () => {
     firstShiftStart = false;
     if (depotAutoLoad) void openDepotLoading();
   }
-}, gameMode, SITE.brand === 'just' || !AREA.mailTitle ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
+}, gameMode, SITE.brand === 'just' || (!AREA.mailTitle && !pointTupperMail) ? AREA.name : undefined, ride.choice, SITE.brand === 'just', SITE.brand !== 'just', ERA, !!terrain.paved, titleDaily);   // runs each time the card closes
 if (__PUBLIC_APP__) watchGameVersion(SITE.brand === 'just', () => !hasStarted && document.getElementById('title')?.hidden === false && !document.getElementById('settings')?.classList.contains('open') && document.getElementById('titleLegal')?.hidden !== false && !document.activeElement?.matches('input,textarea,select'));
 // A ride-along day says so on the start card.
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
