@@ -1,13 +1,10 @@
-// HUD=1 RUN=port-hawkesbury-mail-browser.mjs VIEWS="mabou|x=1 desktop|area=pointtupper&mode=mail&title=1 low|area=pointtupper&mode=mail&q=low&touch=1&title=1" tools/yard-shots.sh 1600 900
+// RUN=port-hawkesbury-mail-browser.mjs VIEWS="mabou|x=1 desktop|area=pointtupper&at=627834,5052408,315 low|area=pointtupper&q=low&touch=1&at=627834,5052408,315" tools/yard-shots.sh 1600 900
 // Proves in the live browser (desktop 1600x900 and LOW phone 390x844) that:
 // - No roadside mailbox or post stands inside the Town of Port Hawkesbury's legal limits.
 // - Mailboxes outside the town limits (Point Tupper, Port Hastings side, rural roads) stay intact.
-// - In mail mode (?area=pointtupper&mode=mail), the route has zero town-house stops and includes the Port Hawkesbury
-//   Post Office on Pitt Street as the town's one mail drop.
-// - Driving beside the Post Office on Pitt Street and using the normal mail control (KeyM) delivers all 3 pieces onto
-//   the open front apron, increments shift.done and mail.customers by all town houses, and announces the Post Office drop.
-// - The Port Hawkesbury Post Office model builds with its generic "POST OFFICE" sign, replaces surveyed building 149
-//   and its wings, blocks the real car with all solids (including the rear loading dock platform), and fits render bounds.
+// - The Port Hawkesbury Post Office building stands on Pitt Street with its generic "POST OFFICE" sign, replaces
+//   surveyed building 149 and its wings, blocks the real car with all solids (including the rear loading dock
+//   platform), and fits whole-frame and paired draw-call bounds (scenery only, no mail mechanics).
 // - Mabou never loads ph-post-office.ts and keeps all its mailboxes.
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -56,42 +53,10 @@ for (const url of urls) {
     }
 
     const level = isLow ? 'low' : 'desktop';
-    // Verify the visible title card before clicking Start the shift (real player flow).
-    const titleCard = await page.read(`(() => ({
-      visible: !document.getElementById('title')?.hidden,
-      heading: document.querySelector('#titleCard h1')?.textContent ?? '',
-      lede: document.getElementById('titleLede')?.textContent ?? '',
-      start: document.getElementById('titleStart')?.textContent ?? '',
-      controls: document.getElementById('titleControls')?.textContent ?? '',
-      hasFired: !!document.getElementById('modeFired'),
-      hasDaily: !!document.getElementById('modeDaily'),
-    }))()`);
-    console.log(name, 'titleCard', JSON.stringify(titleCard));
-    assert.equal(titleCard.visible, true, `${level}: title card visible before start`);
-    assert.match(titleCard.heading, /Point Tupper and Port Hawkesbury/, `${level}: title card names Point Tupper and Port Hawkesbury`);
-    assert.doesNotMatch(titleCard.lede, /\bMabou\b/, `${level}: title card lede does not claim Mabou`);
-    assert.equal(titleCard.start, 'Start the shift', `${level}: title card shows Start the shift`);
-    assert.match(titleCard.controls, isLow ? /MAIL.*Throw mail/i : /M or E.*Throw mail/i, `${level}: title card lists mail throw control`);
-    assert.equal(titleCard.hasFired, false, `${level}: unavailable Get Fired mode hidden on Point Tupper card`);
-    assert.equal(titleCard.hasDaily, false, `${level}: unavailable Today's run hidden on Point Tupper card`);
-    await page.read(`(() => { document.getElementById('titleStart').click(); return true; })()`);
-    await sleep(300);
-    // Reopen the title card from Settings to verify the resume button says "Back to the shift", then resume.
-    const reopenStart = await page.read(`(() => {
-      const btn = [...document.querySelectorAll('#settings button')].find(b => /Controls, credits and data/i.test(b.textContent ?? ''));
-      if (!btn) return 'MISSING_BUTTON';
-      btn.click();
-      const label = document.getElementById('titleStart')?.textContent ?? '';
-      document.getElementById('titleStart')?.click();
-      return label;
-    })()`);
-    assert.equal(reopenStart, 'Back to the shift', `${level}: reopened mail title card says Back to the shift`);
-    await sleep(200);
-
     // Hold car still while verifying.
     await page.read(`(() => { mmm.vehicle.update = () => {}; return true; })()`);
 
-    // Wait for the Post Office to build once fine terrain is ready near Pitt Street.
+    // Wait for the Post Office building to build once fine terrain is ready near Pitt Street.
     let built = false;
     for (let i = 0; i < 180 && !built; i++) {
       await sleep(300);
@@ -105,7 +70,7 @@ for (const url of urls) {
     }
     await sleep(800);
 
-    // 1. Verify zero mailboxes inside Town of Port Hawkesbury legal boundary, outside preserved, and 1 Post Office stop in Shift route.
+    // 1. Verify zero mailboxes or community cabinets inside Town of Port Hawkesbury legal boundary, and outside preserved.
     const mailAudit = await page.read(`((ring, bounds) => {
       const [e0, n0, e1, n1] = bounds;
       const inside = (e, n) => {
@@ -118,92 +83,30 @@ for (const url of urls) {
         return hit;
       };
       const V = mmm.terrain.manifest.village;
-      let mailInside = 0, mailOutside = 0;
+      let mailInside = 0, mailOutside = 0, sitesInside = 0;
       for (const m of mmm.props.mail) {
         if (inside(V[0] + m.x, V[1] - m.z)) mailInside++;
         else mailOutside++;
       }
-      const sites = mmm.props.sites.map(s => ({
-        kind: s.kind,
-        customers: s.customers,
-        label: s.label ?? null,
-        inside: inside(V[0] + s.x, V[1] - s.z),
-      }));
-      const poSite = mmm.props.sites.find(s => s.kind === 'postOffice');
-      const cellName = poSite ? 'Props cell ' + Math.floor(poSite.x / 256) + ',' + Math.floor(poSite.z / 256) : '';
+      for (const s of mmm.props.sites) {
+        if (inside(V[0] + s.x, V[1] - s.z)) sitesInside++;
+      }
+      const poX = 627806.27 - V[0], poZ = V[1] - 5052413.92;
+      const cellName = 'Props cell ' + Math.floor(poX / 256) + ',' + Math.floor(poZ / 256);
       const cellMeshes = [];
       mmm.props.group.traverse(o => {
         if (o.isInstancedMesh && o.parent?.name === cellName) cellMeshes.push(o.name);
       });
-      const routeRuralInside = mmm.shift.run.rural.filter(i => {
-        const p = mmm.props.mail[i];
-        return inside(V[0] + p.x, V[1] - p.z);
-      }).length;
-      const mailButton = document.getElementById('mailButton');
-      return {
-        mailInside,
-        mailOutside,
-        sites,
-        totalCustomers: mmm.props.totalCustomers,
-        cellMeshes,
-        shiftStops: mmm.shift.stops,
-        routeSites: mmm.shift.run.sites.length,
-        routeRural: mmm.shift.run.rural.length,
-        routeRuralInside,
-        mailControlPresent: !!mailButton && !mailButton.hidden,
-      };
+      return { mailInside, mailOutside, sitesInside, cellMeshes };
     })(${JSON.stringify(boundary.ring)}, ${JSON.stringify(boundary.bounds)})`);
     console.log(name, 'mailAudit', JSON.stringify(mailAudit));
     assert.equal(mailAudit.mailInside, 0, `${level}: ZERO roadside mailboxes inside Town of Port Hawkesbury`);
     assert.ok(mailAudit.mailOutside >= 600, `${level}: outside-town mailboxes preserved (${mailAudit.mailOutside})`);
-    const townSites = mailAudit.sites.filter(s => s.inside);
-    assert.equal(townSites.length, 1, `${level}: Town of Port Hawkesbury has exactly 1 mail drop`);
-    assert.equal(townSites[0].kind, 'postOffice');
-    assert.equal(townSites[0].label, 'Port Hawkesbury Post Office');
-    assert.ok(townSites[0].customers >= 900, `town drop serves town houses (${townSites[0].customers})`);
-    assert.ok(!mailAudit.cellMeshes.includes('cabinet'), `${level}: no community mailbox cabinet drawn at Post Office`);
-    assert.equal(mailAudit.routeRuralInside, 0, `${level}: zero town houses on the mail route`);
-    assert.equal(mailAudit.routeSites, 1, `${level}: one town Post Office stop on the route`);
-    assert.ok(mailAudit.shiftStops >= 100, `${level}: Shift route active with stops (${mailAudit.shiftStops})`);
-    assert.equal(mailAudit.mailControlPresent, true, `${level}: mail delivery control visible in mail mode`);
+    assert.equal(mailAudit.sitesInside, 0, `${level}: zero community boxes or mail drops inside Town of Port Hawkesbury`);
+    assert.ok(!mailAudit.cellMeshes.includes('cabinet'), `${level}: no community mailbox cabinet drawn in town`);
+    assert.ok(!mailAudit.cellMeshes.includes('post') && !mailAudit.cellMeshes.includes('wood'), `${level}: no mailbox posts drawn in town`);
 
-    // 2. Deliver to the Port Hawkesbury Post Office straight from the default ?area=pointtupper&mode=mail spawn using normal KeyM presses.
-    const startCheck = await page.read(`(() => {
-      const v = mmm.vehicle, po = mmm.props.sites.find(s => s.kind === 'postOffice');
-      const rightDot = (po.x - v.x) * Math.cos(v.heading) + (po.z - v.z) * Math.sin(v.heading);
-      return { x: v.x, z: v.z, headingDeg: v.heading * 180 / Math.PI, rightDot, dist: Math.hypot(po.x - v.x, po.z - v.z) };
-    })()`);
-    console.log(name, 'defaultStart', JSON.stringify(startCheck));
-    assert.ok(startCheck.rightDot > 2, `${level}: default mail start puts Post Office apron on right side (${JSON.stringify(startCheck)})`);
-    assert.ok(startCheck.dist < 15, `${level}: default mail start spawns right beside the Post Office (${startCheck.dist.toFixed(1)} m)`);
-    // Throw 3 pieces via normal KeyM presses without repositioning the car (a site stop requires 3 pieces to complete).
-    for (let t = 0; t < 4; t++) {
-      await page.read(`(() => { dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM', key: 'm' })); return true; })()`);
-      await sleep(160);
-      await page.read(`(() => { dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyM', key: 'm' })); return true; })()`);
-      await sleep(500);
-      const done = await page.read('mmm.shift.done');
-      if (done >= 1) break;
-    }
-    // Wait for the last thrown piece to land on the apron.
-    for (let i = 0; i < 20; i++) {
-      if (await page.read('mmm.shift.done >= 1')) break;
-      await sleep(200);
-    }
-    const delivery = await page.read(`(() => ({
-      done: mmm.shift.done,
-      delivered: mmm.mail.delivered,
-      customers: mmm.mail.customers,
-      status: mmm.mail.status,
-      poServed: mmm.props.sites.find(s => s.kind === 'postOffice')?.served ?? false,
-    }))()`);
-    console.log(name, 'delivery', JSON.stringify(delivery));
-    assert.equal(delivery.poServed, true, `${level}: Post Office drop served via normal mail throw`);
-    assert.equal(delivery.done, 1, `${level}: Shift completed the Post Office stop`);
-    assert.ok(delivery.customers >= 900, `${level}: town customers credited (${delivery.customers})`);
-    assert.match(delivery.status, /Port Hawkesbury Post Office drop/, `${level}: status announces Post Office drop`);
-
-    // 3. Verify Post Office meshes, sign, triangles, whole-frame render calls (with paired hidden delta), and collision solids.
+    // 2. Verify Post Office meshes, sign, triangles, whole-frame render calls (with paired hidden delta), and collision solids.
     const poState = await page.read(`(async () => {
       const po = mmm.postOffice, r = mmm.renderer;
       const drawn = [];
@@ -212,7 +115,6 @@ for (const url of urls) {
           drawn.push({ name: o.name, map: !!o.material.map, triangles: (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3 });
         }
       });
-      // Measure whole-frame calls across all render passes (mirror, shadows, main, finish) by disabling autoReset for 3 frames.
       const measureFrames = async (visible) => {
         po.group.visible = visible;
         const prevAuto = r.info.autoReset;
@@ -277,7 +179,7 @@ for (const url of urls) {
     assert.ok(poState.drawn.some(d => d.name === 'ph-post-office-sign' && d.map), `${level}: generic POST OFFICE sign mesh drawn`);
     assert.equal(poState.blocked, poState.solids, `${level}: every Post Office solid blocks the vehicle`);
 
-    // 4. Capture street-level verification pictures of the Post Office from Pitt Street and the SW lot.
+    // 3. Capture street-level verification pictures of the Post Office from Pitt Street and the SW lot.
     for (const p of POSES) {
       await page.read(`(() => {
         const V = mmm.terrain.manifest.village;

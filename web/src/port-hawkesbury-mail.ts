@@ -1,9 +1,9 @@
 /**
- * Town of Port Hawkesbury mail rules and Post Office site geometry. Pure: no three.js, no DOM.
+ * Town of Port Hawkesbury no-mailbox boundary and Post Office building site geometry. Pure: no three.js, no DOM.
  *
- * Inside the Town of Port Hawkesbury's legal limits, residents pick up mail at the post office on Pitt Street:
- * no roadside mailboxes, mailbox posts, or house mail stops stand inside the town boundary. Outside the town limits
- * (Point Tupper, Port Hastings side, rural roads), rural mailboxes stay as they are.
+ * Inside the Town of Port Hawkesbury's legal limits, no roadside mailboxes or mailbox posts stand in the scenery.
+ * Outside the town limits (Point Tupper, Port Hastings side, rural roads), rural mailboxes stay as they are.
+ * Point Tupper / Port Hawkesbury is Just Drive (no mail route or mail mechanics).
  *
  * Boundary source: Province of Nova Scotia, Service Nova Scotia, BND_Municipal_Village_Boundaries_UT83 MapServer
  * Layer 2 (Municipality, OBJECTID 21, FullName "Town of Port Hawkesbury", CGNDB_KEY CBELL, EPSG:2961),
@@ -53,9 +53,9 @@ export function poToLocal(e: number, n: number): [number, number] {
 }
 
 /**
- * Port Hawkesbury Post Office on Pitt Street (replacing baked building 149 and its wings 3081 and 3082).
+ * Port Hawkesbury Post Office building on Pitt Street (replacing baked building 149 and its wings 3081 and 3082).
  * Built by eye from public aerial imagery, public street-level photography and the provincial 1 m LiDAR DSM/DTM.
- * Generic "POST OFFICE" sign only; no Canada Post logo and no civic number.
+ * Scenery only (no mail mechanics). Generic "POST OFFICE" sign; no Canada Post logo and no civic number.
  */
 export const PH_POST_OFFICE = Object.freeze({
   frame: Object.freeze({ e: 627806.27, n: 5052413.92, az: 47 }) as PostOfficeFrame,
@@ -88,15 +88,7 @@ export const PH_POST_OFFICE = Object.freeze({
   signText: 'POST OFFICE',
   /** Service drop attachment on the SE front brick wall, below the flat-roof cornice (for baked building 149). */
   serviceDrop: Object.freeze({ building: 149, x: -8.75, z: 8.43, height: 5.2 }),
-  /** Town mail drop point: open front entrance walkway apron (clear of vestibule z <= 8.8), facing Pitt Street (SE, 137 deg). */
-  dropLocal: Object.freeze({ x: 12.2, z: 14.5, heading: 137, radius: 4.5, label: 'Port Hawkesbury Post Office' }),
 });
-
-/** Map coordinates (EPSG:2961) of the Port Hawkesbury Post Office mail drop. */
-export function postOfficeDropMap(): { x: number; y: number; heading: number; radius: number; label: string } {
-  const [x, y] = poToMap(PH_POST_OFFICE.dropLocal.x, PH_POST_OFFICE.dropLocal.z);
-  return { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, heading: PH_POST_OFFICE.dropLocal.heading, radius: PH_POST_OFFICE.dropLocal.radius, label: PH_POST_OFFICE.dropLocal.label };
-}
 
 /** World-space tree/prop clearing boxes for the Port Hawkesbury Post Office building and entrance walkway. */
 export function postOfficeClear(village: readonly [number, number]): [number, number, number, number][] {
@@ -146,21 +138,12 @@ export function aimPostOfficeDrops<T extends { building: number; x: number; y: n
     : d);
 }
 
-/** Count surveyed houses inside the Town of Port Hawkesbury's legal limits. */
-export function countPortHawkesburyHouses(buildings: readonly Pick<Building, 'x' | 'y' | 'kind'>[]): number {
-  let count = 0;
-  for (const b of buildings) if (b.kind === 'house' && inPortHawkesbury(b.x, b.y)) count++;
-  return count;
-}
-
 interface RawMailbox { x: number; y: number; heading: number; style: number; tilt: number; group: number | null; parcelBox: boolean }
 interface RawCommunity { x: number; y: number; heading: number; modules: number }
-interface RawMailDrop { x: number; y: number; heading: number; customers: number; radius: number; label?: string }
 interface RawPropsFile {
   crs?: unknown;
   mailboxes?: RawMailbox[];
   communityBoxes?: RawCommunity[];
-  mailDrops?: RawMailDrop[];
   poles?: unknown[];
   serviceDrops?: { building: number; x: number; y: number; height: number; ground: number | null; groundX: number; groundY: number }[];
   [key: string]: unknown;
@@ -173,18 +156,15 @@ interface RawPropsFile {
  * - Removes any community mailbox cabinet inside the town limits.
  * - Leaves all mailboxes outside town limits (Point Tupper, Port Hastings side, rural roads) untouched.
  * - Leaves all utility poles and service drops intact (re-aiming the post office building's drop when active).
- * - Adds the Port Hawkesbury Post Office as the town's one mail drop.
  */
 export function filterPointTupperProps<T extends RawPropsFile>(
   data: T,
   areaId: string,
-  townHouses?: number,
   reaimPostOfficeDrop = true,
 ): T {
   if (areaId !== 'pointtupper' || !data || typeof data !== 'object') return data;
   const rawBoxes = Array.isArray(data.mailboxes) ? data.mailboxes : [];
   const keptBoxes = rawBoxes.filter(m => !inPortHawkesbury(m.x, m.y));
-  const removedCount = rawBoxes.length - keptBoxes.length;
   // If a shared wooden frame straddled the town line and only one box stays outside, draw it on a single post.
   const groupCounts = new Map<number, number>();
   for (const m of keptBoxes) if (m.group !== null) groupCounts.set(m.group, (groupCounts.get(m.group) ?? 0) + 1);
@@ -192,12 +172,8 @@ export function filterPointTupperProps<T extends RawPropsFile>(
   const communityBoxes = Array.isArray(data.communityBoxes)
     ? data.communityBoxes.filter(c => !inPortHawkesbury(c.x, c.y))
     : [];
-  const customers = Math.max(1, townHouses && townHouses > 0 ? townHouses : removedCount);
-  const drop = postOfficeDropMap();
-  const existingDrops = Array.isArray(data.mailDrops) ? data.mailDrops.filter(d => !inPortHawkesbury(d.x, d.y)) : [];
-  const mailDrops: RawMailDrop[] = [...existingDrops, { ...drop, customers }];
   const serviceDrops = reaimPostOfficeDrop && Array.isArray(data.serviceDrops)
     ? aimPostOfficeDrops(data.serviceDrops)
     : data.serviceDrops;
-  return { ...data, mailboxes, communityBoxes, mailDrops, ...(serviceDrops !== undefined ? { serviceDrops } : {}) };
+  return { ...data, mailboxes, communityBoxes, ...(serviceDrops !== undefined ? { serviceDrops } : {}) };
 }

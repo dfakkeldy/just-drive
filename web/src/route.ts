@@ -1,6 +1,5 @@
 import type { Props } from './props';
 import type { Road, RoadHit, Roads } from './roads';
-import { inPortHawkesbury } from './port-hawkesbury-mail';
 
 // Road names, not prop indices, define this carrier's territory and driving order.
 export const ROUTE_ROADS = [
@@ -102,19 +101,7 @@ export class Route {
   /** Set before the route is built: a box the car cannot reach (outside the map's wall) is not on the route. */
   static reachable: ((x: number, z: number) => boolean) | null = null;
 
-  constructor(roads: Roads, props: Pick<Props, 'mail' | 'sites'> | null, enabled = true, customRun?: Run) {
-    if (customRun) {
-      this.runs = [customRun];
-      for (const stop of customRun.stops) this.members.set(stop.index, stop);
-      this.rural.push(...customRun.rural);
-      if (props) {
-        const frames = new Map<object, number>();
-        for (const p of props.mail) frames.set(p.motion, (frames.get(p.motion) ?? 0) + 1);
-        this.downCandidates.push(...this.rural.filter((i) => frames.get(props.mail[i].motion) === 1));
-      }
-      this.late = customRun.rural[0] ?? -1;
-      return;
-    }
+  constructor(roads: Roads, props: Pick<Props, 'mail' | 'sites'> | null, enabled = true) {
     this.runs = enabled ? RUNS.map((r) => ({ ...r, rural: [], sites: [], stops: [], start: null }))
       : [{ name: 'Local roads', short: 'LOCAL ROADS', rural: [], sites: [], stops: [], start: null }];
     if (!enabled) { this.late = -1; return; }
@@ -178,66 +165,4 @@ export class Route {
   }
 
   forDay(day: number, forced = 0): Run { return this.runs[forced > 0 ? forced - 1 : (day - 1) % this.runs.length]; }
-}
-
-/**
- * Mail route stops for the Point Tupper / Port Hawkesbury area:
- * - No house or rural mailbox inside the Town of Port Hawkesbury's legal limits is ever a route stop.
- * - Any roadside box standing just outside the town line whose household lies inside Port Hawkesbury stays in the
- *   scenery but receives its mail at the Post Office drop instead of as a rural stop.
- * - The Town of Port Hawkesbury gets one mail stop: the Port Hawkesbury Post Office drop on Pitt Street.
- * - Rural mailboxes outside the town limits (Point Tupper, Port Hastings side, rural roads) remain stops on their roads.
- */
-export function buildPointTupperRoute(
-  roads: Roads,
-  props: Pick<Props, 'mail' | 'sites'> | null,
-  village: readonly [number, number],
-  buildings?: readonly { x: number; y: number; kind: string }[],
-): Run {
-  const run: Run = { name: 'Point Tupper and Port Hawkesbury', short: 'POINT TUPPER / PORT HAWKESBURY', rural: [], sites: [], stops: [], start: null };
-  if (!props) return run;
-  const toMap = (p: { x: number; z: number }): [number, number] => [village[0] + p.x, village[1] - p.z];
-  const houses = buildings ? buildings.filter((b) => b.kind === 'house') : [];
-  const belongsToTownHouse = (e: number, n: number): boolean => {
-    if (!houses.length) return false;
-    let bestD2 = 250 * 250, bestInside = false;
-    for (let i = 0; i < houses.length; i++) {
-      const h = houses[i], d2 = (h.x - e) ** 2 + (h.y - n) ** 2;
-      if (d2 < bestD2) { bestD2 = d2; bestInside = inPortHawkesbury(h.x, h.y); }
-    }
-    return bestInside;
-  };
-  props.mail.forEach((p, index) => {
-    const [e, n] = toMap(p);
-    if (inPortHawkesbury(e, n)) return;
-    if (belongsToTownHouse(e, n)) return;
-    const hit = roads.nearest(p.x, p.z, 256, isPublicRoad);
-    if (!hit) return;
-    if (Route.reachable && !(Route.reachable(p.x, p.z) && Route.reachable(hit.x, hit.z))) return;
-    run.rural.push(index);
-    run.stops.push({ index, section: 1, along: hit.seg + hit.t, hit });
-  });
-  props.sites.forEach((p, i) => {
-    const [e, n] = toMap(p);
-    // Inside the Town of Port Hawkesbury, only the post office drop is a stop.
-    if (inPortHawkesbury(e, n) && p.kind !== 'postOffice') return;
-    const hit = roads.nearest(p.x, p.z, 256, isPublicRoad);
-    if (!hit) return;
-    if (Route.reachable && !(Route.reachable(p.x, p.z) && Route.reachable(hit.x, hit.z))) return;
-    const index = props.mail.length + i;
-    run.sites.push(index);
-    run.stops.push({ index, section: p.kind === 'postOffice' ? 0 : 1, along: hit.seg + hit.t, hit });
-  });
-  run.stops.sort((a, b) => a.section - b.section || a.index - b.index);
-  const firstStop = run.stops[0];
-  if (firstStop) {
-    const target = firstStop.index < props.mail.length ? props.mail[firstStop.index] : props.sites[firstStop.index - props.mail.length];
-    let heading = firstStop.hit.heading;
-    // Mail throws launch from the right-hand passenger window: orient the start so the first stop lies on the right.
-    const rightDot = (target.x - firstStop.hit.x) * Math.cos(heading) + (target.z - firstStop.hit.z) * Math.sin(heading);
-    if (rightDot < 0) heading = (heading + Math.PI) % (2 * Math.PI);
-    const lane = Math.max(0, Math.min(1.5, firstStop.hit.road.halfWidth - 1.2));
-    run.start = { x: firstStop.hit.x + Math.cos(heading) * lane, z: firstStop.hit.z + Math.sin(heading) * lane, heading };
-  }
-  return run;
 }

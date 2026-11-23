@@ -132,11 +132,10 @@ export interface Title { open(): void; setRadio(available: boolean): void; /** C
  * Shows the title card. `onStart` runs each time the player closes it with the button: at the start, and again after
  * reading it mid-shift (a real tap, so sound may begin there later). The caller pauses the game while it is open.
  */
-export function createTitle(touch: boolean, onStart: () => void, mode: GameMode = 'mail', areaName?: string, ride?: VehicleChoice, just = false, radio = true, era: Era = TODAY, paved = false, daily?: TitleDaily, areaMail = false): Title {
-  // Four cards: the Mabou mail game; an area with its own mail route (areaName, areaMail); an area without mail yet; and driving mode.
+export function createTitle(touch: boolean, onStart: () => void, mode: GameMode = 'mail', areaName?: string, ride?: VehicleChoice, just = false, radio = true, era: Era = TODAY, paved = false, daily?: TitleDaily): Title {
+  // Three cards: the mail game; an area that has no mail game yet (areaName, mail mode); and the driving mode of any area.
   const historical = era.id !== 'today';
-  const explore = mode === 'explore', fired = mode === 'fired', areaMailRoute = !explore && !just && !historical && !!areaName && areaMail;
-  const name = era.title ?? (just ? `Just Drive: ${areaName ?? 'Mabou'}` : explore ? (areaName ? `Driving ${areaName}` : EXPLORE_TITLE) : areaMailRoute ? `${areaName} Mail` : areaName ? `Drive around ${areaName}` : 'Mabou Mail Madness');
+  const explore = mode === 'explore', fired = mode === 'fired', name = era.title ?? (just ? `Just Drive: ${areaName ?? 'Mabou'}` : explore ? (areaName ? `Driving ${areaName}` : EXPLORE_TITLE) : areaName ? `Drive around ${areaName}` : 'Mabou Mail Madness');
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS + PHONE_CSS + (just && !historical ? JUST_CSS : '') }));
   const root = document.createElement('div');
   root.id = 'title';
@@ -146,12 +145,11 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   const drivingKeys = DRIVING_KEYS, drivingTouch = DRIVING_TOUCH;
   const areaRows = (touch ? TOUCH : KEYS).filter(([key]) => touch ? !['MAIL', 'CAMERA', 'BLADDER', '\u2699'].includes(key) : !['M or E', 'P', 'B', 'Enter'].includes(key)).map(([k, v]): [string, string] => [k, k === 'H' ? 'Horn.' : v]);
   let radioAvailable = radio, padRows = false;
-  const mailControls = !explore && (!areaName || areaMailRoute);
   const rows = (available: boolean) => {
     radioAvailable = available;
-    if (padRows && ride?.kind !== 'drone') return padKeys(ride?.kind, mailControls, available).map(([k, v]) => `<dt><b>${k}</b></dt><dd>${v}</dd>`).join('');
-  let keys = explore ? (ride?.kind === 'drone' ? droneKeys(touch) : ride?.kind === 'bike' ? bikeKeys(touch) : touch ? drivingTouch : drivingKeys) : mailControls ? (touch ? TOUCH : KEYS) : areaRows;
-  if (ride?.kind === 'horse') { keys = horseKeys(touch, mailControls); available = false; }
+    if (padRows && ride?.kind !== 'drone') return padKeys(ride?.kind, !explore && !areaName, available).map(([k, v]) => `<dt><b>${k}</b></dt><dd>${v}</dd>`).join('');
+  let keys = explore ? (ride?.kind === 'drone' ? droneKeys(touch) : ride?.kind === 'bike' ? bikeKeys(touch) : touch ? drivingTouch : drivingKeys) : areaName ? areaRows : touch ? TOUCH : KEYS;
+  if (ride?.kind === 'horse') { keys = horseKeys(touch, !explore && !areaName); available = false; }
   if (ride?.kind === 'drone') available = false;
   if(historical&&ride?.kind !== 'horse'&&ride?.kind !== 'drone'&&touch&&!keys.some(([key])=>key.includes('HORN')))keys=keys.concat([['HORN','Honk.']]);
     return keys.filter(([k]) => available || !['T', 'RADIO'].includes(k)).map(([k, v]) => {
@@ -190,15 +188,15 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
   const dailyText = daily ? `One Get Fired run a day, the same for everybody: the start, the ${daily.vehicle.toLowerCase()} and the ${daily.mood.toLowerCase()} weather. Five minutes on the clock. Fill the complaint bingo card: a line pays ${LINE_BONUS}, the full card ${CARD_BONUS}. Your first finished try is today’s card; later tries are practice.` : '';
   root.innerHTML = `<div id="titleCard">
 
-    <p class="tag">${historical ? 'A fictional journey · Cape Breton' : explore ? 'The land at your own pace' : areaMailRoute ? 'Mail route · real land and roads' : areaName ? 'Real land and roads' : daily ? `Today’s run · ${shortDate(daily.date)} · the same for everybody` : fired ? 'Get Fired · a job you cannot lose' : 'A route you cannot win'}</p>
-    <h1>${explore ? name : areaMailRoute ? `${areaName} <span>Mail</span>` : areaName ? `Drive around <span>${areaName}</span>` : 'Mabou <span>Mail</span> Madness'}</h1>
-    <p id="titleLede">${historical ? "A work of fiction, based on an 1884 survey sheet. Places are approximate. It shows no person's land." : explore ? `Drive around the real land near ${place}, Cape Breton, and find its places.` : daily ? dailyText : fired ? 'Same route, same clock. Today every complaint counts for you. Climb the discipline ladder to Fired before 18:00. The union grieves every step.' : areaMailRoute ? `Deliver the mail around ${areaName}, Cape Breton. Town mail goes to the post office on Pitt Street; rural boxes stand outside the town line.` : areaName ? `Explore the real land and roads around ${areaName}, Cape Breton.` : 'Deliver the day’s run around Mabou, Cape Breton. Stay off the lawns. Somebody will phone the post office anyway.'}</p>
+    <p class="tag">${historical ? 'A fictional journey · Cape Breton' : explore ? 'The land at your own pace' : areaName ? 'Real land and roads' : daily ? `Today’s run · ${shortDate(daily.date)} · the same for everybody` : fired ? 'Get Fired · a job you cannot lose' : 'A route you cannot win'}</p>
+    <h1>${explore ? name : areaName ? `Drive around <span>${areaName}</span>` : 'Mabou <span>Mail</span> Madness'}</h1>
+    <p id="titleLede">${historical ? "A work of fiction, based on an 1884 survey sheet. Places are approximate. It shows no person's land." : explore ? `Drive around the real land near ${place}, Cape Breton, and find its places.` : daily ? dailyText : fired ? 'Same route, same clock. Today every complaint counts for you. Climb the discipline ladder to Fired before 18:00. The union grieves every step.' : areaName ? `Explore the real land and roads around ${areaName}, Cape Breton.` : 'Deliver the day’s run around Mabou, Cape Breton. Stay off the lawns. Somebody will phone the post office anyway.'}</p>
     ${mailCard ? `<div id="modeChoice" role="group" aria-label="How to play" aria-describedby="titleLede"><button id="modeMail" aria-pressed="${!explore && !fired}">Deliver the mail</button><button id="modeExplore" aria-pressed="${explore}">Just drive</button><button id="modeFired" aria-pressed="${fired && !daily}">Get fired</button></div><div id="dailyChoice"><button id="modeDaily" aria-pressed="${!!daily}">Today’s run: five minutes, complaint bingo</button></div>` : ''}
     ${daily ? `<div id="titleBingo" role="list" aria-label="Today’s complaint bingo card">${daily.squares.map(s => `<span role="listitem">${s.label.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</span>`).join('')}</div>
     ` : ''}<p id="waysOut" hidden></p>
     <div id="titleControls">${controls()}</div>
 
-    <button id="titleStart">${ride?.kind === 'drone' ? 'Start flying' : ride?.kind === 'horse' ? 'Start riding' : areaMailRoute ? 'Start the shift' : explore || areaName ? 'Start driving' : daily ? 'Start today’s run' : 'Start the shift'}</button>
+    <button id="titleStart">${ride?.kind === 'drone' ? 'Start flying' : ride?.kind === 'horse' ? 'Start riding' : explore || areaName ? 'Start driving' : daily ? 'Start today’s run' : 'Start the shift'}</button>
     ${door ? `<a id="titleEra" href="${door.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}">${historical ? 'Back to today →' : eraDoorText(eraWords!.name)}</a>
     ` : ''}${otherLine}
     ${explore ? '<p id="exploreCaution">A toy for getting a feel for the place. It is not a map for navigation or for safety. Roads and trails can differ on the day.</p>' : ''}
@@ -251,7 +249,7 @@ export function createTitle(touch: boolean, onStart: () => void, mode: GameMode 
     open() {
       if (explore) root.querySelector('#titleControls')!.innerHTML = controls();
       refreshWays();
-      start.textContent = ride?.kind === 'drone' ? (started ? 'Back to flying' : 'Start flying') : ride?.kind === 'horse' ? (started ? 'Back to riding' : 'Start riding') : areaMailRoute ? (started ? 'Back to the shift' : 'Start the shift') : explore || areaName ? (started ? 'Back to driving' : 'Start driving') : daily ? (started ? 'Back to today’s run' : 'Start today’s run') : started ? 'Back to the shift' : 'Start the shift';
+      start.textContent = ride?.kind === 'drone' ? (started ? 'Back to flying' : 'Start flying') : ride?.kind === 'horse' ? (started ? 'Back to riding' : 'Start riding') : explore || areaName ? (started ? 'Back to driving' : 'Start driving') : daily ? (started ? 'Back to today’s run' : 'Start today’s run') : started ? 'Back to the shift' : 'Start the shift';
       legal.hidden = false;
       credits.setAttribute('aria-expanded', 'true');
       root.hidden = false;
