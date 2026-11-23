@@ -127,6 +127,10 @@ export class Towing {
     if (this.world.yard?.coupledBodies === this.bodyProvider) this.world.yard.coupledBodies = null;
     this.attached = false;
   }
+  /** The host hooks installed before this trailer attached, so an in-place swap never copies trailer guards. */
+  cleanHooks(): { placementGuard: Vehicle['placementGuard']; onPlaced: Vehicle['onPlaced'] } {
+    return { placementGuard: this.attached ? this.priorGuard : this.vehicle.placementGuard, onPlaced: this.attached ? this.priorPlaced : this.vehicle.onPlaced };
+  }
   get angle(): number { return wrap(this.vehicle.heading - this.heading); }
   private hitch(): THREE.Vector3 {
     const v = this.vehicle, h = v.spec.hitch!;
