@@ -1,5 +1,6 @@
 import { readSite } from './site';
 import { GARAGE, VEHICLE_KEY, periodRides } from './garage';
+import { isSxsKind } from './ride-kinds';
 import type { Ride } from './ride';
 const POSE = 'mmm.vehicle.pose';
 const area = () => { const q = new URLSearchParams(location.search); const site = readSite(location.hostname, location.pathname, q); return site.brand === 'just' ? site.area : q.get('area') ?? 'mabou'; };
@@ -10,8 +11,10 @@ export function vehicleChoice(kind: string, vehicle: Ride): VehicleChoice {
     let saved = false;
     try { localStorage.setItem(VEHICLE_KEY, next); saved = localStorage.getItem(VEHICLE_KEY) === next; } catch { /* query fallback */ }
     try { sessionStorage.setItem(POSE, JSON.stringify({ x: vehicle.x, z: vehicle.z, heading: vehicle.heading, when: Date.now(), area: area() })); } catch { /* no session storage */ }
-    const q = new URLSearchParams(location.search),hadTrip=q.has('trip');q.delete('trip');
-    if (q.has('vehicle') || !saved || hadTrip) { q.set('vehicle', next); location.search = q.toString(); } else location.reload();
+    const q = new URLSearchParams(location.search), hadTrip = q.has('trip');
+    const carParam = q.get('car'), hadCarVehicle = carParam === 'drone' || GARAGE.some(entry => entry.id === carParam);
+    q.delete('trip'); if (hadCarVehicle) q.delete('car');
+    if (q.has('vehicle') || !saved || hadTrip || hadCarVehicle) { q.set('vehicle', next); location.search = q.toString(); } else location.reload();
   } };
 }
 export function restoreVehiclePose(vehicle: Ride): boolean {
@@ -24,15 +27,47 @@ export function restoreVehiclePose(vehicle: Ride): boolean {
     vehicle.place(p.x, p.z, p.heading); return true;
   } catch { return false; }
 }
+const SXS_CHOICES = [
+  ['sxs', 'Sport'],
+  ['sxs-utility', 'Utility cab'],
+  ['sxs-crew', 'Crew cab'],
+  ['sxs-cabin', 'Full cabin'],
+] as const;
 export function vehicleButtons(choice: VehicleChoice, id = 'vehicleChoice'): HTMLElement {
   const group = document.createElement('div'); group.id = id; group.setAttribute('role', 'group'); group.setAttribute('aria-label', 'Ride');
-  // Today's picker offers car, dirt bike and drone; the 1884 era puts the horse in front.
+  // Today's picker offers car, side by side, dirt bike and drone; the 1884 era puts the horse in front.
+  // Selecting Side by side reveals the four generic side-by-side models directly beneath.
   const period = periodRides(new URLSearchParams(location.search));
-  group.style.cssText = `display:flex;${period ? 'flex-wrap:wrap;' : ''}gap:6px;margin:0 0 16px`;
-  for (const [kind, name] of [...(period ? [['horse', 'Horse']] as const : []), ['car', 'Car'], ['bike', 'Dirt bike'], ['drone', 'Drone']] as const) {
-    const b = document.createElement('button'); b.type = 'button'; b.dataset.vehicle = kind; b.textContent = name; b.setAttribute('aria-pressed', String(kind === choice.kind));
-    b.style.cssText = `flex:1;min-height:44px;border:1px solid ${kind === choice.kind ? '#a7d9bc' : '#6b7780'};border-radius:6px;background:${kind === choice.kind ? '#31463a' : 'transparent'};color:inherit;font:700 13px system-ui;cursor:pointer;padding:8px`;
-    b.addEventListener('click', () => choice.choose(kind)); group.appendChild(b);
+  const sxsActive = isSxsKind(choice.kind);
+  group.style.cssText = sxsActive ? 'display:flex;flex-direction:column;gap:6px;margin:0 0 16px' : 'display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px';
+  const row = sxsActive ? document.createElement('div') : group;
+  if (sxsActive) row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+  const makeBtn = (label: string, pressed: boolean, onClick: () => void) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-pressed', String(pressed));
+    b.style.cssText = `flex:1;min-width:72px;min-height:44px;border:1px solid ${pressed ? '#a7d9bc' : '#6b7780'};border-radius:6px;background:${pressed ? '#31463a' : 'transparent'};color:inherit;font:700 13px system-ui;cursor:pointer;padding:8px 6px`;
+    b.addEventListener('click', onClick);
+    return b;
+  };
+  for (const [kind, name] of [...(period ? [['horse', 'Horse']] as const : []), ['car', 'Car'], ['sxs', 'Side by side'], ['bike', 'Dirt bike'], ['drone', 'Drone']] as const) {
+    const isSxsBtn = kind === 'sxs';
+    const pressed = isSxsBtn ? sxsActive : kind === choice.kind;
+    const b = makeBtn(name, pressed, () => { if (!isSxsBtn || !sxsActive) choice.choose(kind); });
+    if (isSxsBtn && sxsActive) b.dataset.vehicleGroup = 'sxs';
+    else b.dataset.vehicle = kind;
+    row.appendChild(b);
+  }
+  if (sxsActive) {
+    group.appendChild(row);
+    const sub = document.createElement('div');
+    sub.setAttribute('role', 'group'); sub.setAttribute('aria-label', 'Side by side model');
+    sub.dataset.sxsModels = '1';
+    sub.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+    for (const [kind, name] of SXS_CHOICES) {
+      const b = makeBtn(name, kind === choice.kind, () => choice.choose(kind));
+      b.dataset.vehicle = kind;
+      sub.appendChild(b);
+    }
+    group.appendChild(sub);
   }
   return group;
 }

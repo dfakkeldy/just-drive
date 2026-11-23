@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import models from './ride-models.json';
 import type { Ride } from './wire';
 
-export const RIDE_MODELS = ['car', 'truck', 'trailer', 'sxs', 'bike'] as const;
+export const RIDE_MODELS = ['car', 'truck', 'trailer', 'sxs', 'bike', 'sxs-utility', 'sxs-crew', 'sxs-cabin'] as const;
 export function rideIndex(ride?: Ride): number {
   return ride ? RIDE_MODELS.indexOf(ride.kind === 'truck' && ride.trailer ? 'trailer' : ride.kind) : -1;
 }

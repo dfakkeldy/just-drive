@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createTruck } from './truck';
 import { createSxs } from './sxs';
+import { createSxsCabin, createSxsCrew, createSxsUtility } from './sxs-variants';
 import { createBike } from './bike';
 import type { GarageEntry } from './garage';
 import type { Rig } from './vehicle-spec';
@@ -58,23 +59,32 @@ function displayBatch(source: Rig, rider = false): Rig {
   return result;
 }
 
-export function fleetDisplay(id: 'truck' | 'sxs' | 'bike'): Rig {
+function buildDisplaySource(id: DisplayKind): Rig {
+  const opts = { low: true, removableRider: true, display: true };
+  if (id === 'truck') return createTruck(false, true);
+  if (id === 'sxs-utility') return createSxsUtility(false, opts);
+  if (id === 'sxs-crew') return createSxsCrew(false, opts);
+  if (id === 'sxs-cabin') return createSxsCabin(false, opts);
+  return createSxs(false, opts);
+}
+
+export function fleetDisplay(id: DisplayKind): Rig {
   if (id === 'bike') { const rig = createBike(false, true, true); rig.setRiderVisible?.(false); rig.bikeMesh.frustumCulled = true; return rig; }
-  return displayBatch(id === 'truck' ? createTruck(false, true) : createSxs(false, { low: true, removableRider: true, display: true }));
+  return displayBatch(buildDisplaySource(id));
 }
 
 /** The kinds with a parked display model: the only ones drivableDisplay builds, and the Point Tupper AI's LOW pool. */
-export const DISPLAY_KINDS = ['truck', 'sxs', 'bike'] as const;
+export const DISPLAY_KINDS = ['truck', 'sxs', 'sxs-utility', 'sxs-crew', 'sxs-cabin', 'bike'] as const;
 export type DisplayKind = (typeof DISPLAY_KINDS)[number];
 export const isDisplayKind = (id: string): id is DisplayKind => (DISPLAY_KINDS as readonly string[]).includes(id);
 /** The Point Tupper AI's LOW rig: the parked display model with its rider, which a Vehicle can drive. The parked
  * batches hang every wheel from a pivot at the body origin (Fleet copies whole wheel transforms into them and never
  * steers), so a steering angle there would swing the front wheels round the body: here the front pivots move to their
- * wheels, the same world pose, and steer about the wheel. Pickup 7 draws, side by side 5, dirt bike 2 (bike and rider). */
+ * wheels, the same world pose, and steer about the wheel. Pickup 7 draws, side by sides 5, dirt bike 2 (bike and rider). */
 export function drivableDisplay(id: DisplayKind): Rig {
   if (!isDisplayKind(id)) throw new Error(`No display model for ${id}`);
   if (id === 'bike') return createBike(false, true, true);
-  const rig = displayBatch(id === 'truck' ? createTruck(false, true) : createSxs(false, { low: true, removableRider: true, display: true }), true);
+  const rig = displayBatch(buildDisplaySource(id), true);
   for (const wheel of [rig.wheels.fl, rig.wheels.fr]) { const pivot = wheel.parent!; pivot.position.add(wheel.position); wheel.position.set(0, 0, 0); }
   return rig;
 }

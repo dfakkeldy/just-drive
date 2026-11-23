@@ -240,14 +240,14 @@ with tempfile.TemporaryDirectory(prefix='mmm-runner-test-') as folder:
     assert {'phone','roads-key','sxs','trailer','truck'} <= selected('tools/phone-ground.mjs')
     assert {'explore-browser-mutations','bike-browser-mutations','trailer-review-browser'} <= selected('tools/mutation-session.mjs')
     assert {'store','store-mutations'} <= selected('tools/pack_terrain.py')
-    for helper,count in [('truck-cdp.mjs',19),('shift-fixture.mjs',8)]:
+    for helper,count in [('truck-cdp.mjs',20),('shift-fixture.mjs',8)]:
         importers={str(p.relative_to(ROOT)) for p in (ROOT/'tools').glob('*.mjs') if "./"+helper in p.read_text()}
         assert len(importers)==count,(helper,importers)
         covered=set().union(*(deps[name] for name in selected('tools/'+helper)))
         for importer in importers: assert 'tools/'+helper in scan.command('node '+importer),importer
         executable=importers-{str(Path('tools')/name) for name in module.IGNORE}
         assert executable <= covered,(helper,executable-covered)
-    print('PASS five helper dependency selections, including 19 truck-cdp and 8 shift-fixture importers')
+    print('PASS five helper dependency selections, including 20 truck-cdp and 8 shift-fixture importers')
 
     # A real tiny Git fixture proves --changed includes untracked input files.
     table([('untracked',0,'node','new-input.bin','')])

@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import type { HudState } from './hud-text';
 import type { Input } from './vehicle';
 import type { GarageEntry } from './garage';
+import { isSxsKind } from './ride-kinds';
 import {HorseRampHint} from './horse-ramp-hint';
 import type {Yard} from './yard';
 import { HorseSound } from './horse-sound';
@@ -47,6 +48,10 @@ export function rideFeatures(vehicle: Ride, entry: GarageEntry, terrain: Terrain
       document.body.classList.toggle('bikeMode', !!bike);
       for (const button of document.querySelectorAll<HTMLButtonElement>('#vehicleChoice [data-vehicle], #settingsVehicleChoice [data-vehicle]')) {
         const on = button.dataset.vehicle === kind; button.setAttribute('aria-pressed', String(on));
+        button.style.background = on ? '#31463a' : 'transparent'; button.style.borderColor = on ? '#a7d9bc' : '#6b7780';
+      }
+      for (const button of document.querySelectorAll<HTMLButtonElement>('#vehicleChoice [data-vehicle-group="sxs"], #settingsVehicleChoice [data-vehicle-group="sxs"]')) {
+        const on = isSxsKind(kind); button.setAttribute('aria-pressed', String(on));
         button.style.background = on ? '#31463a' : 'transparent'; button.style.borderColor = on ? '#a7d9bc' : '#6b7780';
       }
       const help = document.getElementById('drivingHelp'); if (help) help.hidden = !!bike;

@@ -341,3 +341,5 @@ prince-browser	unproven	no	not yet measured on another host
 port-hawkesbury-mail	portable	no	Node only; runs with or without data/baked/areas/pointtupper
 port-hawkesbury-mail-mutations	portable	no	Node mutation controls; runs with or without data/baked/areas/pointtupper
 port-hawkesbury-mail-browser	unproven	no	Hardware WebGL, Point Tupper and Mabou land, desktop and phone LOW
+sxs-variants	portable	yes	Node check for all four side-by-side models, specs, outward solids, posed envelopes, display batches and ?car= links
+sxs-variants-browser	unproven	no	Hardware WebGL and Mabou land: all four side-by-side models in studio preview, title/settings picker, ?car= links and live driving
