@@ -77,9 +77,14 @@ export class BikeRide implements Ride {
   /** Waiting on an unbuilt modern bridge span's deck (see place), and for how long. */
   #deckWaiting = false;
   #deckWait = 0;
+  /** Dry pose held before a restart entered an unbuilt-span wait, used if timeout finds no dry road. */
+  #waitFallback: VehiclePlacement | null = null;
+  #restartFallback: VehiclePlacement | null = null;
   /** Only placeAt (fresh) or its retryPlace (continuing) may enter the unbuilt-span deck wait. */
   #freshDeckWait = false;
   #allowDeckWait = false;
+  /** True while waiting for an unbuilt modern bridge span's deck (holds main.ts from bypassing update()). */
+  get waitingForDeck(): boolean { return this.#deckWaiting; }
 
   constructor(readonly car: Bike,
     private terrain: Pick<Terrain, 'heightAt' | 'surfaceAt' | 'withContactHeight'> & Partial<Pick<Terrain, 'cartRoads' | 'coverAt' | 'uniforms'>>,
@@ -119,10 +124,10 @@ export class BikeRide implements Ride {
   }
   /** Save and restore ES private recovery state so fleet rollbacks never leak trial poses. */
   checkpointHidden(): { save(): void; restore(): void } {
-    let stopped = false, awaiting = true, waiting = false, wait = 0, waited = false;
+    let stopped = false, awaiting = true, waiting = false, wait = 0, waited = false, fallback: VehiclePlacement | null = null;
     return {
-      save: () => { stopped = this.#waterStopped; awaiting = this.#awaitingLoad; waiting = this.#deckWaiting; wait = this.#deckWait; waited = this.#waitedThisStep; },
-      restore: () => { this.#waterStopped = stopped; this.#awaitingLoad = awaiting; this.#deckWaiting = waiting; this.#deckWait = wait; this.#waitedThisStep = waited; },
+      save: () => { stopped = this.#waterStopped; awaiting = this.#awaitingLoad; waiting = this.#deckWaiting; wait = this.#deckWait; waited = this.#waitedThisStep; fallback = this.#waitFallback; },
+      restore: () => { this.#waterStopped = stopped; this.#awaitingLoad = awaiting; this.#deckWaiting = waiting; this.#deckWait = wait; this.#waitedThisStep = waited; this.#waitFallback = fallback; },
     };
   }
   place(x: number, z: number, heading: number, referenceY?:number): boolean {
@@ -168,7 +173,7 @@ export class BikeRide implements Ride {
     this.y = gAt ?? this.y;
     if (waitDeck && gAt !== null) this.prevGround = gAt;
     this.#deckWaiting = waitDeck;
-    if (freshWait || (gAt !== null && !waitDeck)) this.#deckWait = 0;
+    if (freshWait || (gAt !== null && !waitDeck)) { this.#deckWait = 0; this.#waitFallback = null; }
     this.#waterStopped = false;
     this.ready = !waitDeck && this.capture();
     if (this.ready) {
@@ -192,8 +197,12 @@ export class BikeRide implements Ride {
     return true;
   }
   resetControlHistory(): void { this.helpYaw = this.lightHelpYaw = 0; this.lastJump = null; }
-  resetVisit(): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.jump = { airTime: 0, peakHeight: 0, distance: 0, pitchRotations: 0, clean: false }; this.crashTime = this.sunk = 0; this.flightPeak = null; this.#waterStopped = false; this.#awaitingLoad = true; this.#deckWaiting = false; this.#deckWait = 0; }
-  restart(x: number, z: number, heading: number): boolean { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.#waterStopped = false; this.#deckWaiting = false; this.#deckWait = 0; this.#awaitingLoad = true; return this.placeAt(x, z, heading); }
+  resetVisit(): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.jump = { airTime: 0, peakHeight: 0, distance: 0, pitchRotations: 0, clean: false }; this.crashTime = this.sunk = 0; this.flightPeak = null; this.#waterStopped = false; this.#awaitingLoad = true; this.#deckWaiting = false; this.#deckWait = 0; this.#waitFallback = null; }
+  restart(x: number, z: number, heading: number): boolean {
+    const priorG = this.ready ? this.groundAt(this.x, this.z, this.y) : null;
+    this.#restartFallback = priorG !== null && this.isDryPose(this.x, this.z, priorG) && !!this.terrain.surfaceAt(this.x, this.z, priorG) && this.bothWheelsSupported(this.x, this.z, this.heading, priorG)
+      ? { x: this.x, z: this.z, heading: this.heading, y: priorG } : null;
+    this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.#waterStopped = false; this.#deckWaiting = false; this.#deckWait = 0; this.#waitFallback = null; this.#awaitingLoad = true; return this.placeAt(x, z, heading); }
   respawn(): void {
     let distance = 0;
     while (this.roadTrail.length > 1 && distance < 35) { const a = this.roadTrail.pop()!, b = this.roadTrail[this.roadTrail.length - 1]; distance += Math.hypot(a.x - b.x, a.z - b.z); }
@@ -218,26 +227,24 @@ export class BikeRide implements Ride {
       this.roadTrail.pop();
     }
     const withDeck = (hit: RoadHit | null): VehiclePlacement | null => hit ? { x: hit.x, z: hit.z, heading: hit.heading, y: spanDeckReference(this.roads, hit) } : null;
-    const near = withDeck(this.roads.nearest(this.x, this.z, 1600, r => r.kind <= 5 && !r.bridge));
-    for (const candidate of [near, this.lastSafe]) {
+    const nearHit = this.roads.nearest(this.x, this.z, 1600, r => r.kind <= 5 && !r.bridge);
+    // Try land-level road and the previous dry pose before lifting onto a carrying deck overhead.
+    for (const candidate of [nearHit, this.lastSafe, withDeck(nearHit)]) {
       if (placeCandidate(candidate)) return;
     }
     if (b) {
       const cxMargin = safeClampMargin(b[0], b[2], 60), czMargin = safeClampMargin(b[1], b[3], 60);
       const cx = clamp(this.x, b[0] + cxMargin, b[2] - cxMargin), cz = clamp(this.z, b[1] + czMargin, b[3] - czMargin);
       for (const radius of [2000, 8000]) {
-        const point = withDeck(this.roads.nearest(cx, cz, radius, r => r.kind <= 3 && !r.bridge));
-        if (placeCandidate(point)) return;
+        const hit = this.roads.nearest(cx, cz, radius, r => r.kind <= 3 && !r.bridge);
+        if (placeCandidate(hit) || placeCandidate(withDeck(hit))) return;
       }
     }
     const wideHit = this.roads.nearest(this.x, this.z, 8000, r => r.kind <= 3 && !r.bridge)
       ?? this.roads.nearest(this.x, this.z, 8000, r => r.kind <= 5 && !r.bridge);
     const wide = withDeck(wideHit);
-    if (placeCandidate(wide)) return;
-    if (wideHit && !usable(wide)) {
-      const dryVertex = nearestDryOnRoad(wideHit, (px, pz, heading) => usable({ x: px, z: pz, heading }));
-      if (placeCandidate(dryVertex)) return;
-    }
+    if (placeCandidate(wideHit) || placeCandidate(wide)) return;
+    if (wideHit && !usable(wide) && nearestDryOnRoad(wideHit, (px, pz, heading) => placeCandidate({ x: px, z: pz, heading }))) return;
     this.stopInWater();
   }
   onSolidImpact(speed: number): void { if (this.damageActive) this.damage?.hit('impact', speed); if (speed > 7 && !this.crashTime) this.crash(); }
@@ -279,8 +286,10 @@ export class BikeRide implements Ride {
   private inferring(x: number, z: number): boolean { return this.placeInfer && Math.abs(x - this.inferX) < .5 && Math.abs(z - this.inferZ) < .5; }
   /** See Vehicle.placeAt: a height-free placement stands on the deck it lies on, else on land. */
   placeAt(x: number, z: number, heading: number): boolean {
+    const fallback = this.#restartFallback; this.#restartFallback = null;
     this.#freshDeckWait = true;
     const placed = this.place(x, z, heading, placementDeckReference(this.roads, x, z));
+    if (placed && !this.ready && fallback) this.#waitFallback = fallback;
     if (placed && this.placeReference === undefined) { this.placeInfer = true; this.inferX = this.x; this.inferZ = this.z; }
     return placed;
   }
@@ -318,9 +327,18 @@ export class BikeRide implements Ride {
         if (!this.retryPlace()) {
           const land = this.terrain.heightAt(this.x, this.z);
           if (land !== null) {
+            const fallback = this.#waitFallback;
             this.#deckWaiting = false;
+            this.#waitFallback = null;
             this.placeInfer = false;
             this.respawn();
+            if (this.#waterStopped && fallback && this.terrain.surfaceAt(fallback.x, fallback.z, fallback.y)
+              && this.isDryPose(fallback.x, fallback.z, this.poseGround(fallback.x, fallback.z, fallback.y))) {
+              const wasRecovering = this.#recovering;
+              this.#recovering = true;
+              try { if (this.place(fallback.x, fallback.z, fallback.heading, fallback.y)) return; }
+              finally { this.#recovering = wasRecovering; }
+            }
             if (this.#waterStopped) {
               // Stand at the ground the retry asked for: the old body height could take a deck overhead.
               const gNow = this.groundAt(this.x, this.z, reference ?? land);

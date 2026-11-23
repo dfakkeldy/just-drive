@@ -100,12 +100,19 @@ export class Fleet {
   teleportAttempts = 0;
   private visitPending: VehiclePlacement | null = null;
   private visitAccepts: ((pose: VehiclePlacement) => boolean) | undefined;
+  private visitCommit: (() => void) | undefined;
   private visitKind: 'new-visit' | 'start-over' | 'place-jump' = 'new-visit';
   private deckWaiting = false;
   private deckWait = 0;
+  private spanWaitExhausted = false;
   private allowSpanWait = true;
+  private deckWaitCount = 0;
   /** A cold-start request remains queued until its checked placement can finish. */
   get visitQueued(): boolean { return this.visitPending !== null; }
+  /** True while waiting on an unbuilt modern bridge span's deck (may be cancelled with R when spawned). */
+  get waitingForDeck(): boolean { return this.deckWaiting && this.visitPending !== null; }
+  /** Monotonic counter incremented only when a start/restart newly enters an unbuilt-span deck wait. */
+  get deckWaitToken(): number { return this.deckWaitCount; }
   private visitDirty = false;
   private spawned = false;
   private readonly physicsFrames = new Map<Vehicle, () => () => void>();
@@ -538,18 +545,24 @@ export class Fleet {
     if (this.visitPending) {
       if (this.deckWaiting) {
         if (Number.isFinite(dt) && dt > 0) this.deckWait += Math.min(dt, 0.1);
-        const p = this.visitPending, accepts = this.visitAccepts, kind = this.visitKind;
-        if (this.roads.deckHeight(p.x, p.z) !== null || this.deckWait >= DECK_WAIT_SECONDS) {
-          this.visitPending = null; this.visitAccepts = undefined; this.visitDirty = false;
+        const p = this.visitPending, accepts = this.visitAccepts, kind = this.visitKind, onCommit = this.visitCommit;
+        const built = this.roads.deckHeight(p.x, p.z) !== null;
+        if (built || this.deckWait >= DECK_WAIT_SECONDS) {
+          this.visitPending = null; this.visitAccepts = undefined; this.visitCommit = undefined; this.visitDirty = false;
           this.deckWaiting = false; this.deckWait = 0;
+          if (!built) this.spanWaitExhausted = true;
           this.allowSpanWait = false;
+          let placed = false;
           try {
-            if (kind === 'new-visit') this.initializeVisit(p, accepts);
-            else this.restart(p.x, p.z, p.heading, kind, accepts);
+            placed = kind === 'new-visit' ? this.initializeVisit(p, accepts) : this.restart(p.x, p.z, p.heading, kind, accepts);
           } finally { this.allowSpanWait = true; }
+          if (placed) onCommit?.();
         }
       } else if (this.visitDirty) {
-        this.initializeVisit(this.visitPending, this.visitAccepts);
+        const allow = !this.spanWaitExhausted;
+        this.allowSpanWait = allow;
+        try { this.initializeVisit(this.visitPending, this.visitAccepts); }
+        finally { this.allowSpanWait = true; }
       }
       if (this.visitPending) return;
     }
@@ -1294,8 +1307,8 @@ export class Fleet {
       chosen.rollback(); this.surfaceDirty = true; this.actualSurface = null; for (const m of movers) { m.needsSettling=false; m.dirty=false; m.vehicle.airborne = m.vehicle.atEdge = false; } if (actor.id === 'truck') this.gatesNeedSettling=false; this.spawned = true; this.tow.trailer.root.visible = true;
       if (all) {
         cancelledPlan = this.plan;
-        this.visitPending = null; this.visitAccepts = undefined; this.visitDirty = false;
-        this.deckWaiting = false; this.deckWait = 0;
+        this.visitPending = null; this.visitAccepts = undefined; this.visitCommit = undefined; this.visitDirty = false;
+        this.deckWaiting = false; this.deckWait = 0; this.spanWaitExhausted = false;
         this.plan = null; this.switching = 0; this.switchTo = null; this.folding = this.lowering = false; this.acc = 0;
         this.driven = this.members[0]; this.driven.state = 'DRIVEN'; this.handbrake = true; this.previousThrottle = 0; this.reversing = false; this.tow.resetControls();
         this.select(this.driven); this.rampDirty = this.gatesDirty = true; this.zoneReady = false;
@@ -1318,28 +1331,31 @@ export class Fleet {
     const slope = coverClass === WATER_COVER_CLASS ? localGroundSlope(pose.x, pose.z, this.ground) : 0;
     return !isDryGround({ ground: h, surface, onDeck: surface?.deck === true, seaLevel: this.seaLevel, coverClass, slope });
   }
-  startVisit(x: number, z: number, heading: number, accepts?: (pose: VehiclePlacement) => boolean): boolean { if ([x,z,heading].every(Number.isFinite)) return this.initializeVisit({ x, z, heading }, accepts); this.message = 'Invalid starting position'; return false; }
+  startVisit(x: number, z: number, heading: number, accepts?: (pose: VehiclePlacement) => boolean): boolean {
+    if ([x,z,heading].every(Number.isFinite)) { this.spanWaitExhausted = false; return this.initializeVisit({ x, z, heading }, accepts); }
+    this.message = 'Invalid starting position'; return false;
+  }
   private initializeVisit(pose: VehiclePlacement, accepts?: (pose: VehiclePlacement) => boolean): boolean {
-    this.visitPending = null; this.visitAccepts = undefined; this.visitDirty = false;
+    this.visitPending = null; this.visitAccepts = undefined; this.visitCommit = undefined; this.visitDirty = false;
     this.deckWaiting = false; this.deckWait = 0;
     if (this.allowSpanWait && this.waitingOnSpan(pose)) {
       this.visitPending = { ...pose }; this.visitAccepts = accepts; this.visitKind = 'new-visit';
-      this.deckWaiting = true; this.message = 'Waiting for bridge deck'; return false;
+      this.deckWaiting = true; this.deckWaitCount++; this.message = 'Waiting for bridge deck'; return false;
     }
     if (!this.teleport('new-visit', pose, accepts)) {
       if (!this.spawned && !this.allowSpanWait) {
         const hit = this.roads.nearest(pose.x, pose.z, 8000, r => r.kind <= 3 && !r.bridge)
           ?? this.roads.nearest(pose.x, pose.z, 8000, r => r.kind <= 5 && !r.bridge);
-        const dry = hit ? nearestDryOnRoad(hit, (px, pz) => {
+        if (hit && nearestDryOnRoad(hit, (px, pz, heading) => {
           const h = this.ground(px, pz);
           if (h === null || h <= this.seaLevel + .08) return false;
           const surface = this.terrain.surfaceAt(px, pz);
           const onDeck = this.roads.deckHeight(px, pz) !== null || surface?.deck === true;
           const coverClass = this.terrain.coverAt?.(px, pz) ?? 0;
           const slope = coverClass === WATER_COVER_CLASS ? localGroundSlope(px, pz, this.ground) : 0;
-          return isDryGround({ ground: h, surface, onDeck, seaLevel: this.seaLevel, coverClass, slope });
-        }) : null;
-        if (dry && this.teleport('new-visit', dry)) {
+          return isDryGround({ ground: h, surface, onDeck, seaLevel: this.seaLevel, coverClass, slope })
+            && this.teleport('new-visit', { x: px, z: pz, heading }, accepts);
+        })) {
           this.message = 'Handbrake on'; return true;
         }
       }
@@ -1349,11 +1365,11 @@ export class Fleet {
     this.message = 'Handbrake on'; return true;
   }
   /** Start-over and place jumps discard the old visit only after the complete new assembly is valid. */
-  restart(x: number, z: number, heading: number, kind: 'start-over' | 'place-jump' = 'start-over', accepts?: (pose: VehiclePlacement) => boolean): boolean {
+  restart(x: number, z: number, heading: number, kind: 'start-over' | 'place-jump' = 'start-over', accepts?: (pose: VehiclePlacement) => boolean, onCommit?: () => void): boolean {
     if (![x, z, heading].every(Number.isFinite)) { this.message = 'Invalid destination'; return false; }
     if (this.allowSpanWait && this.waitingOnSpan({ x, z, heading })) {
-      this.visitPending = { x, z, heading }; this.visitAccepts = accepts; this.visitKind = kind;
-      this.visitDirty = false; this.deckWaiting = true; this.deckWait = 0;
+      this.visitPending = { x, z, heading }; this.visitAccepts = accepts; this.visitCommit = onCommit; this.visitKind = kind;
+      this.visitDirty = false; this.deckWaiting = true; this.deckWait = 0; this.spanWaitExhausted = false; this.deckWaitCount++;
       this.message = 'Waiting for bridge deck'; return false;
     }
     const recovered = this.members.filter(m => m.id !== 'truck' && m.state !== 'STRAPPED' && (m.vehicle.y <= this.seaLevel || m.vehicle.atEdge || !this.inside(m.vehicle)));
@@ -1364,8 +1380,8 @@ export class Fleet {
   private inside(v: VehiclePlacement): boolean { const b = this.truck.bounds; return !b || v.x >= b[0] && v.x <= b[2] && v.z >= b[1] && v.z <= b[3]; }
   respawn(): void {
     if (this.deckWaiting && this.spawned) {
-      this.visitPending = null; this.visitAccepts = undefined; this.visitDirty = false;
-      this.deckWaiting = false; this.deckWait = 0;
+      this.visitPending = null; this.visitAccepts = undefined; this.visitCommit = undefined; this.visitDirty = false;
+      this.deckWaiting = false; this.deckWait = 0; this.spanWaitExhausted = false;
     }
     if (this.busy) { this.message = 'Finish loading or use Start over to recover the whole rig'; return; }
     if (this.teleport('road-reset')) this.message = `Back on the road: ${this.driven.entry.name}`;
