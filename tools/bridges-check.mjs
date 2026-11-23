@@ -29,6 +29,28 @@ async function contracts(replacements={}){
   console.log('PASS built-deck reads never build; update() keeps the spans they follow current, with the burst hold');}
  const middle=roads.deckHeight(0,-20);
  assert.ok(middle>9.9,`joined span must use external abutments, not channel: ${middle}`);
+ {// A deck built near the camera before its first read: that successful read follows it, and only it (another span in
+  // the same 64 m cell is not under the point). Far away, new bank land lifts the deck and a walk widens it, and the far
+  // source checks leave the tiles' last use alone (touch=false) while a span within DRAW still marks its tiles.
+  let bump=0;const touches=[],ft={...terrain,dataRevision:1,heightAt:(x,z)=>height(x,z)+(z>0||z< -40?bump:0),
+   surfaceAt:(x,z)=>({...terrain.surfaceAt(x,z),ground:ft.heightAt(x,z)}),meshContactSource:(x,z,land,touch)=>{touches.push(touch);return ft.dataRevision;}};
+  const near=new mod.Roads({roads:[road(1,0,20),road(2,20,40),{...road(3,0,40),pts:[[40,0],[40,40]]}]},[0,0],ft),N=near.modern;
+  near.update(new THREE.Vector3(0,20,-20));
+  const own=N.spans.find(r=>r.road.id===1),other=N.spans.find(r=>r.road.id===3);
+  assert.ok(own.geometry&&other.geometry&&!own.followed&&!other.followed,'both decks built near the camera, before any read');
+  assert.ok(touches.length&&touches.every(t=>t!==false),'a span within DRAW still marks its tiles as used');
+  const before=near.builtDeckHeight(0,-20);assert.ok(before!==null,'the first read hits the built deck');
+  assert.ok(own.followed,'the first successful read follows its deck');assert.ok(!other.followed,'a span in the same cell but not under the read is not followed');
+  assert.equal(near.builtDeckHeight(5.5,-20),null,'no deck 5.5 m from the centre line before the walk');
+  const away=new THREE.Vector3(5000,20,5000),b0=N.audit.builds;touches.length=0;
+  bump=1;ft.dataRevision++;near.update(away);
+  assert.equal(N.audit.builds,b0+1,'only the followed deck rebuilds 5 km away');
+  assert.ok(Math.abs(near.builtDeckHeight(0,-20)-(before+1))<.01,'new bank land 1 m higher lifts the far followed deck 1 m');
+  assert.ok(touches.length&&touches.every(t=>t===false),'a far followed span does not mark its tiles as used');
+  near.bridgeWalks.set(1,{side:1,width:2});near.update(away);
+  assert.ok(Math.abs(own.width-5.9)<1e-9,'a 2 m walk widens the deck to 3.6 + 2 + 0.3 m');
+  assert.ok(near.builtDeckHeight(5.5,-20)!==null,'the far followed deck is rebuilt at its new width');
+  console.log('PASS a successful read follows only its deck; far bank land and a walk widening reach it without touching tiles');}
  const support=[];
  for(let s=-24;s<=64;s+=.1){const d=roads.deckHeight(0,-s);support.push(d??height(0,-s));}
  for(let i=1;i<support.length;i++)assert.ok(Math.abs(support[i]-support[i-1])<.04,'smooth approaches without support steps or dips');
@@ -203,7 +225,7 @@ if(process.argv.includes('--mutations')){
  console.log('KILLED deck height taken from channel terrain');
  for(const [name,from,to,error] of[
   ['at() segment tie rule','if(s>cum[mid+1])lo=mid+1','if(s>=cum[mid+1])lo=mid+1',/at\(\) segment rule/],
-  ['far spans in the box build eagerly','&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);',')this.ensure(r);',/deck line is within 1500 m/],
+  ['far spans in the box build eagerly','&&nearLine(r.pts,cam.x,cam.z,DRAW);',';',/deck line is within 1500 m/],
   ['update() builds a built deck again during a burst','if(hold&&r.geometry&&!r.forceBuild)continue;','',/keeps (a built deck|it) while the land bursts/],
   ['update() holds a missing deck during a burst','if(hold&&r.geometry&&','if(hold&&',/no deck builds at once/],
   ['update() still holds after the burst','if(this.terrain.burst!==true||','if(',/builds the deck again/],
@@ -222,8 +244,12 @@ if(process.argv.includes('--mutations')){
   ['a forced build waits for the burst','&&!r.forceBuild)continue;',')continue;',/forced build/],
   ['a deck query waits for the burst','if(build)this.ensure(r);','if(build&&!this.terrain.burst)this.ensure(r);',/query still builds/],
   ['a built-deck read builds','this.query(x,z,false,false,undefined,false,0,false);if(this.sampling','this.query(x,z,false,false,undefined,false,0,true);if(this.sampling',/unbuilt span is null|builds nothing/],
-  ['update() ignores followed spans','if(r.followed||cam.x>','if(cam.x>',/5 km away/],
-  ['a followed span refreshes only until its first build','if(r.followed||cam.x>','if(r.followed&&!r.geometry||cam.x>',/after its first build/],
+  ['update() ignores followed spans','if(near||r.followed)this.ensure','if(near)this.ensure',/5 km away/],
+  ['a followed span refreshes only until its first build','if(near||r.followed)this.ensure','if(near||r.followed&&!r.geometry)this.ensure',/after its first build/],
+  ['a far followed span marks its tiles','this.ensure(r,near);','this.ensure(r);',/does not mark its tiles/],
+  ['a span within DRAW leaves its tiles unmarked','this.ensure(r,near);','this.ensure(r,false);',/within DRAW still marks/],
+  ['a hit follows every span in its cell','(h===null?!r.geometry:this.ownHeight(r,x,z)!==null)','(true)',/not under the read is not followed/],
+  ['a hit follows no span','(h===null?!r.geometry:this.ownHeight(r,x,z)!==null)','(h===null&&!r.geometry)',/first successful read follows/],
   ['a followed span skips the burst hold','const r=this.spans[i];if(hold&&','const r=this.spans[i];if(r.followed){this.ensure(r);continue;}if(hold&&',/keeps it while the land bursts, like any other/],
  ]){
   assert.equal(s.split(from).length,2,'one mutation anchor: '+name);

@@ -359,10 +359,12 @@ export class ModernBridges {
     return land+(Math.max(land,bank)-land)*blend;
   }
 
-  private ensure(r:Span):void {
+  /** touch=false (a followed span beyond DRAW): the source check does not mark its bank tiles as used, so a far
+   *  bridge does not keep old land tiles from eviction. A rebuild still reads the land it needs. */
+  private ensure(r:Span,touch=true):void {
     const revision=this.terrain.dataRevision??0;if(r.revision===revision)return;r.revision=revision;
     let changed=r.forceBuild||!r.geometry,known=true;
-    for(let i=0;i<r.probes.length;i+=3){const source=this.terrain.meshContactSource?.(r.probes[i],r.probes[i+1],true)??revision;
+    for(let i=0;i<r.probes.length;i+=3){const source=this.terrain.meshContactSource?.(r.probes[i],r.probes[i+1],true,touch)??revision;
       if(source!==r.probes[i+2])changed=true;r.probes[i+2]=source;if(source<0)known=false;
     }
     if(!changed||!known)return;
@@ -409,10 +411,13 @@ export class ModernBridges {
    * again then. A query that builds would solve a deck inside their frame budget and skip the start-burst hold. */
   builtDeckHeightAt(x:number,z:number):number|null {
     const h=this.query(x,z,false,false,undefined,false,0,false);if(this.sampling||this.terrain.cartRoads)return h;
-    // Mark the spans of this cell as followed: update() keeps them built and current at any camera distance (a far
-    // crossing seen through a narrow view still gets its deck and walk, and later finer bank land or a walk widening
-    // reaches it). The build happens there, outside the caller's frame budget.
-    const list=this.cells.get(key(x,z,CELL));if(list)for(let i=0;i<list.length;i++)this.spans[list[i]].followed=true;
+    // Mark the spans this read depends on as followed: update() keeps them built and current at any camera distance (a
+    // far crossing seen through a narrow view still gets its deck and walk, and later finer bank land or a walk widening
+    // reaches it). The build happens there, outside the caller's frame budget. On a hit, only the spans under the point
+    // (another span in the same cell is not this read's deck); on a miss, the unbuilt spans of the cell, since one of
+    // them may be the deck. A span stays followed, so the extra triangle test runs once per span.
+    const list=this.cells.get(key(x,z,CELL));
+    if(list)for(let i=0;i<list.length;i++){const r=this.spans[list[i]];if(!r.followed&&(h===null?!r.geometry:this.ownHeight(r,x,z)!==null))r.followed=true;}
     return h;
   }
   private contactHeightAt(x:number,z:number,referenceY?:number):number|null {return this.query(x,z,false,true,referenceY,true,0,referenceY!==undefined);}
@@ -483,7 +488,8 @@ export class ModernBridges {
     // not count: the parked camera rises with the car as the land arrives (64 m at Point Tupper). A step of more than
     // HOLD_JUMP (a placement or a place jump, Terrain's burst rule) starts a new hold where the camera lands.
     const hold=this.holding(cam);
-    for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(hold&&r.geometry&&!r.forceBuild)continue;if(r.followed||cam.x>r.x0-DRAW&&cam.x<r.x1+DRAW&&cam.z>r.z0-DRAW&&cam.z<r.z1+DRAW&&nearLine(r.pts,cam.x,cam.z,DRAW))this.ensure(r);}
+    for(let i=0;i<this.spans.length;i++){const r=this.spans[i];if(hold&&r.geometry&&!r.forceBuild)continue;
+      const near=cam.x>r.x0-DRAW&&cam.x<r.x1+DRAW&&cam.z>r.z0-DRAW&&cam.z<r.z1+DRAW&&nearLine(r.pts,cam.x,cam.z,DRAW);if(near||r.followed)this.ensure(r,near);}
     if(this.dirty)this.merge();
   }
   // Hold state, made on the first hold (a fixture may build this class without its field initialisers).

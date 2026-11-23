@@ -284,8 +284,9 @@ export class Terrain {
     return null;
   }
   /** A tile's loaded geometry identifies the source. Entering/leaving the view does not. */
-  meshContactSource(x:number,z:number,land=false):number {
-    const t=(land?null:this.cartRoads&&this.selectedContactTile?this.selectedContactTile(x,z):this.drawnTile(x,z))??this.find(x,z);
+  /** touch=false leaves the tile's last use alone (a far bridge's source check must not keep the tile from eviction). */
+  meshContactSource(x:number,z:number,land=false,touch=true):number {
+    const t=(land?null:this.cartRoads&&this.selectedContactTile?this.selectedContactTile(x,z):this.drawnTile(x,z))??this.find(x,z,touch);
     return t?.mesh?(t.contactId||t.level*100000000+t.i*10000+t.j):-1;
   }
   meshContactAt(x:number,z:number,out:{height:number;source:number;drawn:boolean}):boolean {
