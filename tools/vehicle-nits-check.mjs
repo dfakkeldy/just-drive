@@ -11,8 +11,8 @@ import { relative, resolve } from 'node:path';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const GOLDEN_COMMIT = 'f75a9f62807ffa0f0b991fcbcc330476619556a1';
-// Review note: Added three new generic side-by-side garage entries (sxs-utility, sxs-crew, sxs-cabin); existing car, sxs, truck and bike goldens are unchanged.
+const GOLDEN_COMMIT = 'd8b87e1c4dbe6ceb5bae3f3cb43301acc1a716ac';
+// Review note: Added three new generic side-by-side garage entries (sxs-utility, sxs-crew, sxs-cabin) with setTravel enabled; existing car, sxs, truck and bike goldens are unchanged.
 const RECORD_PROCEDURE = 'A deliberate change to driving: run node tools/vehicle-nits-check.mjs --record on the new code, paste the goldens with the commit SHA and one line that says what changed and why; a reviewer must see that line.';
 const N = 5000, MIXED_N = 4500, dt = 1 / 120;
 // Paste the --record output here. SHA-256 consumes little-endian Float64 values,
@@ -63,14 +63,14 @@ const GOLDEN = {
   "sxs-utility": {
     "spec": "c1c1c4a675065a3122426d22b7121c87d2fe34f1d475dd2f926ca93c83ac6c6d",
     "washboard": {
-      "state": "09b35dc5313d77462becb87a4aaa441164e469cad2eaceeae58ce90ca7b8217d",
+      "state": "ad1039f1dcf4692b41ab3389f38bdb5ef734b77418d6f531e5666fb73312dcf0",
       "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
       "histogram": {
         "5": 5000
       }
     },
     "mixed": {
-      "state": "6f5870c9e1b55a21aa7f4184dde67b0e93a719f1b78948a80ca2edf42842f093",
+      "state": "8e6844bfa07ed7b11a10ee86b1b7999ae64bd0082d041fd6e94aa0306eebfa39",
       "draws": "ccff9d2729ad44829e2beca4bb92099de0c6f968a8067ce10dcc813fff1731b0",
       "histogram": {
         "3": 3351,
@@ -84,14 +84,14 @@ const GOLDEN = {
   "sxs-crew": {
     "spec": "ce318719d6328e7f47811b647b0a83e824b325239fa2007346974539b85cf873",
     "washboard": {
-      "state": "f503dba80d851bcf3fae07f1f7f5f34b835deadd6f64b571b01bff353175f2fd",
+      "state": "24e4a4172a03c0c40286b9ea6b7ac188924cc8aadb445353ba4eeb0bb7eb9765",
       "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
       "histogram": {
         "5": 5000
       }
     },
     "mixed": {
-      "state": "2bbe165ecf6ccf748c1ec4b83be810853dbaa6222786cb1e5abce69ca60932b9",
+      "state": "036e7a83558844719339f7dcf41fe835f8cf6db214ee0e9c8369a4d00d07d5b0",
       "draws": "ee870530fe8fe17f074a44ab36af882def2e18a287a8c0b76695c152b385723b",
       "histogram": {
         "3": 3394,
@@ -105,14 +105,14 @@ const GOLDEN = {
   "sxs-cabin": {
     "spec": "7942e6687bcf14f32d812d50990a14e5bb2719b4323a089c8329ad49cbcb783e",
     "washboard": {
-      "state": "3103b86b91abecf04702019a94cf68cc33da6012a1756d6b8b0cf8b7b37862a4",
+      "state": "f49d13a15b6bc3683d0b2a6e04696a82516f0a6912252c20975e807e5716c3a6",
       "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
       "histogram": {
         "5": 5000
       }
     },
     "mixed": {
-      "state": "4720984de03aef34c0420e5aa822275acc26215a4c329f16638ba70bac03ad34",
+      "state": "8bf7a67aece6b76a78f33048630a860c3f2f3813018b8b53b1fdd553c41a8ed7",
       "draws": "0f14491c9ab3c0e4279b5733a01155ac51a103d4f174d55788dc77c0fe80b58e",
       "histogram": {
         "3": 3358,
