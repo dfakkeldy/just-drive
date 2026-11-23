@@ -785,6 +785,52 @@ console.log('PASS drone flies over water, never passes under land, cliffs or voi
     assert.equal(r.place(0, 0, Math.PI / 2, -3), false, `${kind}: a placement with a height in the water under the span is refused`);
     const off = makeRide(kind, seabed, elsewhere); off.bounds = [-200, -200, 400, 200];
     assert.equal(off.placeAt(0, 0, Math.PI / 2), false, `${kind}: placeAt in water off any span is refused`);
+    // It waits: three seconds of updates neither sink it nor move it (no respawn to the approach).
+    const w = makeRide(kind, seabed, spanned); w.bounds = [-200, -200, 400, 200];
+    let deck = null; spanned.deckHeight = (x, z) => (deck !== null && Math.abs(x) <= 50 && Math.abs(z) <= 4 ? deck : null);
+    assert.equal(w.placeAt(0, 0, Math.PI / 2), true);
+    for (let i = 0; i < 180; i++) w.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
+    assert.equal(w.sunk, 0, `${kind}: a ride waiting for its deck does not sink`);
+    assert.ok(Math.abs(w.x) < 1e-9 && Math.abs(w.z) < 1e-9, `${kind}: a ride waiting for its deck is not respawned (x=${w.x})`);
+    // The deck builds (2 m up): the next update stands the ride on it.
+    deck = 2; for (let i = 0; i < 3; i++) w.update(1 / 60, { throttle: 0, steer: 0, handbrake: true });
+    assert.ok(Math.abs(w.y - 2) < .1, `${kind}: the ride takes its deck once built (y=${w.y})`);
+    spanned.deckHeight = () => null;
   }
-  console.log('PASS a height-free placement on an unbuilt span waits for its deck; other wet placements are refused');
+  console.log('PASS a height-free placement on an unbuilt span waits for its deck without sinking; other wet placements are refused');
+}
+{
+  // Drive off the land into water under a high deck that belongs to another road: the ride sinks and respawns on the
+  // land behind it, never on the deck overhead and never in the water (each candidate is judged at its own height).
+  const shore = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false }));
+  const under = makeRoads(-200, 200, (x, z) => (x >= 66 && x <= 140 && Math.abs(z) <= 6 ? 8 : null));
+  for (const kind of ['car', 'bike']) {
+    const r = makeRide(kind, shore, under); r.bounds = [-200, -200, 400, 200];
+    assert.equal(r.place(0, 0, Math.PI / 2), true, `${kind}: starts on the land`);
+    let sank = false, back = false, maxY = -Infinity;
+    for (let i = 0; i < 1200 && !back; i++) {
+      r.update(1 / 60, { throttle: sank ? 0 : 1, steer: 0, handbrake: sank });
+      if (r.sunk > 0) sank = true;
+      if (sank && r.x < 60 && r.sunk === 0) back = true;
+      if (sank) maxY = Math.max(maxY, r.y);
+    }
+    assert.ok(sank, `${kind}: drives into the water under the deck and sinks`);
+    assert.ok(back, `${kind}: respawns on the land behind (x=${r.x.toFixed(1)})`);
+    assert.ok(Math.abs(r.y - 1) < .3 && maxY < 4, `${kind}: never stands on the deck overhead (y=${r.y.toFixed(2)}, max ${maxY.toFixed(2)})`);
+  }
+  console.log('PASS a ride that sinks under a deck respawns on the land behind, never on the deck overhead');
+}
+{
+  // A recovery never takes the unbuilt-span way: a placement guard that moves a dry road point onto the water under a
+  // span (no height given) is refused, and the ride stays put instead of standing in the water.
+  const shore = makeTerrain((x) => ({ ground: x < 60 ? 1 : -3, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: true, deck: false }));
+  const roads = makeRoads(-200, 200); roads.bridgeRuns = () => [{ roads: new Set([1]), pts: [[70, 0], [130, 0]] }];
+  for (const kind of ['car', 'bike']) {
+    const r = makeRide(kind, shore, roads); r.bounds = [-200, -200, 400, 200];
+    assert.equal(r.place(20, 0, Math.PI / 2), true);
+    r.placementGuard = (pose) => { if (pose.x < 60) pose.x = 100; return true; };
+    r.respawn();
+    assert.ok(r.x < 60, `${kind}: a recovery moved onto the water under a span by its guard is refused (x=${r.x})`);
+  }
+  console.log('PASS a recovery never stands a ride on the water under an unbuilt span');
 }

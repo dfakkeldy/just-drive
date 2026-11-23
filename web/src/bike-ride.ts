@@ -133,15 +133,18 @@ export class BikeRide implements Ride {
     if (this instanceof BikeRide && this.#recovering) {
       if (gAt === null || !this.terrain.surfaceAt(pose.x, pose.z, gAt) || !this.bothWheelsSupported(pose.x, pose.z, pose.heading, gAt)) return false;
     }
-    // As Vehicle.place: a height-free placement on a span whose deck is not built yet is not refused for the water.
-    if (gAt !== null && !this.isDryPose(pose.x, pose.z, gAt) && !(pose.y === undefined && placementOnSpan(this.roads, pose.x, pose.z))) return false;
+    // As Vehicle.place: a height-free placement on a span whose deck is not built yet is not refused for the water; it
+    // waits for its deck (not ready: no physics, no safe point) and retryPlace asks again. Never for a recovery.
+    const dry = gAt === null || this.isDryPose(pose.x, pose.z, gAt);
+    const waitDeck = !dry && !this.#recovering && pose.y === undefined && placementOnSpan(this.roads, pose.x, pose.z);
+    if (!dry && !waitDeck) return false;
     this.x = pose.x; this.z = pose.z; this.heading = pose.heading;this.placeReference=pose.y;this.placeInfer=false;
     this.vx = this.vz = this.vy = this.speed = this.pitchRate = this.wheelie = this.wheelieRate = this.whip = 0;
     this.pitch = this.roll = this.steerAngle = this.compression = this.crashTime = this.sunk = 0;
     if (!this.stepping) this.acc = 0;
     this.airborne = false;
     this.y = gAt ?? this.y;
-    this.ready = this.capture();
+    this.ready = !waitDeck && this.capture();
     if (this.ready) {
       this.#awaitingLoad = false; this.#waterStopped = false;
       this.y = this.prevGround = Math.max((this.frontHeight + this.rearHeight) / 2, this.groundAt(this.x, this.z) ?? -Infinity);
@@ -258,12 +261,14 @@ export class BikeRide implements Ride {
     if (!Number.isFinite(dt) || dt < 0) return;
     const safeInput = { throttle: Number.isFinite(input.throttle) ? clamp(input.throttle, -1, 1) : 0, steer: Number.isFinite(input.steer) ? clamp(input.steer, -1, 1) : 0, handbrake: !!input.handbrake, pull: !!input.pull };
     if (!this.ready) {
+      // The retry's own height, not the old body height (which could take a deck overhead).
+      const reference = this.retryHeight;
       if (!this.retryPlace()) {
-        const loadedG = this.groundAt(this.x, this.z);
-        if (loadedG !== null) {
+        const land = this.terrain.heightAt(this.x, this.z);
+        if (land !== null) {
           this.respawn();
           if (this.#waterStopped) {
-            const gNow = this.groundAt(this.x, this.z);
+            const gNow = this.groundAt(this.x, this.z, reference ?? land);
             if (gNow !== null && this.y < gNow) this.y = gNow;
             this.prevGround = this.y; this.airborne = false; this.#awaitingLoad = false;
             this.ready = this.capture();

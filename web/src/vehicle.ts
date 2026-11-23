@@ -200,15 +200,19 @@ export class Vehicle {
     // The pose's own reference picks the deck or the land under it, never the old pose's height.
     const land=this.terrain.heightAt(x,z),g=land===null?null:this.groundAt(x,z,pose.y??land);
     if (this instanceof Vehicle && this.#recovering && (g === null || !this.terrain.surfaceAt(x, z, g) || !this.allWheelsSupported(x, z, heading, g))) return false;
-    // A height-free placement on a bridge span whose deck is not built yet (coarse land under the banks) stands on the
-    // land and keeps asking for its deck (placeAt, retryPlace): the water under the span does not refuse it.
-    if (g !== null && !this.isDryPose(x, z, g) && !(pose.y === undefined && placementOnSpan(this.roads, x, z))) return false;
+    // A height-free placement (placeAt) on a bridge span whose deck is not built yet (coarse land under the banks) is not
+    // refused for the water under the span: it waits for its deck as for land that is still loading (stuck: no physics,
+    // no safe points; retryPlace asks for the deck each frame). A recovery never takes this way: it needs dry ground.
+    const dry = g === null || this.isDryPose(x, z, g);
+    const waitDeck = !dry && !this.#recovering && pose.y === undefined && placementOnSpan(this.roads, x, z);
+    if (!dry && !waitDeck) return false;
     this.#heldTouchSpeedLimit = 0;
     this.drift.reset();
     this.x = x; this.z = z; this.heading = heading; this.placeReference = pose.y; this.placeInfer = false;
     this.vx = this.vz = this.vy = 0; this.sunk = 0; this.airborne = false;
     if (this.spec.locomotion === 'horse') { this.speed = 0; this.car.resetPose?.(); }
-    if (g !== null) {
+    if (g !== null && waitDeck) { this.y = this.prevGround = g; this.stuck = true; this.#awaitingLoad = true; }
+    else if (g !== null) {
       this.y = this.prevGround = g; this.stuck = false;
       this.#awaitingLoad = false; this.#waterStopped = false;
       this.#safeNow.x = this.#safeBack.x = x;
@@ -490,13 +494,15 @@ export class Vehicle {
   update(dt: number, input: Input, afterStep?: () => void) {
     if (!input.touch || !this.strongHelp || !this.touchSpeedLimit || input.throttle <= 0 || this.airborne || this.stuck) this.#heldTouchSpeedLimit = 0;
     if (this.stuck) {
+      // The retry's own height, not the old body height (which could take a deck overhead).
+      const reference = this.retryHeight;
       if (!this.retryPlace()) {
-        const loadedG = this.groundAt(this.x, this.z);
-        if (loadedG !== null) {
+        const land = this.terrain.heightAt(this.x, this.z);
+        if (land !== null) {
           this.stuck = false;
           this.respawn();
           if (this.#waterStopped) {
-            const gNow = this.groundAt(this.x, this.z);
+            const gNow = this.groundAt(this.x, this.z, reference ?? land);
             if (gNow !== null && this.y < gNow) this.y = gNow;
             this.prevGround = this.y; this.airborne = false; this.#awaitingLoad = false;
             this.captureGround(); this.sync(0);
