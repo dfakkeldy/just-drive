@@ -31,7 +31,7 @@ export function takeSeat(taken: Seat[], random: () => number = Math.random): Sea
 
 export const text = (m: ServerText) => JSON.stringify(m);
 export const hello = (seat: Seat, room: string, others: Seat[]): string => text({
-  t: 'hello', v: 1, id: seat.id, name: seat.name, hue: seat.hue, ride: seat.ride, room, cap: ROOM_CAP, rides: true, heights: true, chat: true, heartbeat: true, games: true,
+  t: 'hello', v: 1, id: seat.id, name: seat.name, hue: seat.hue, ride: seat.ride, room, cap: ROOM_CAP, rides: true, heights: true, sxsVariants: true, chat: true, heartbeat: true, games: true,
   peers: others.map(({ id, name, hue, ride }) => ({ id, name, hue, ride })),
 });
 /** Where everybody was last heard: a newcomer sees parked cars at once. */

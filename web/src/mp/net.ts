@@ -1,6 +1,7 @@
 import { isPhraseId, CHAT_COOLDOWN, GAME_PHRASES, type PhraseId } from './social';
 import { decodeGame, type Field, type GameFrame, type GameName } from './game-wire';
 import { readRace, type RaceState } from './race-wire';
+import { isSxsKind } from '../ride-kinds';
 // The game's end of the multiplayer connection: it reports this car, and turns what it hears of the other cars
 // into smooth motion. No DOM and no three.js here, so tools/mp-check.mjs can run many of these in node.
 //
@@ -181,6 +182,7 @@ export class Net {
   private ride?: Ride;
   private sentRide?: Ride;
   private rideSupported = false;
+  private sxsVariantsSupported = false;
   private lastRideSend = -Infinity;
   /** Keep only the latest desired ride. An advertised server gets at most one update per second. */
   setRide(value: Ride): void {
@@ -217,7 +219,7 @@ export class Net {
 
   private drop(): void {
     const ws = this.ws;
-    this.ws = null; this.rideSupported = false; this.heightSupported = false; this.chatSupported = false; this.heartbeatSupported = false; this.gamesSupported = false; this.game = null; this.race = null; this.names.clear(); this.chats.length = 0; this.bubbles.clear(); this.lastChat = -Infinity; this.lastSync = -Infinity;
+    this.ws = null; this.rideSupported = false; this.heightSupported = false; this.sxsVariantsSupported = false; this.chatSupported = false; this.heartbeatSupported = false; this.gamesSupported = false; this.game = null; this.race = null; this.names.clear(); this.chats.length = 0; this.bubbles.clear(); this.lastChat = -Infinity; this.lastSync = -Infinity;
     if (ws) { ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null; try { ws.close(); } catch { /* already gone */ } }
   }
 
@@ -276,7 +278,7 @@ export class Net {
       if (m.t === 'hello') {
         this.me = { id: m.id, name: m.name, hue: m.hue }; this.room = m.room;
         this.status = 'on'; this.fails = 0;
-        this.heightSupported = m.heights === true; this.rideSupported = m.rides === true; this.chatSupported = m.chat === true; this.heartbeatSupported = m.heartbeat === true; this.sentRide = undefined; this.lastRideSend = -Infinity;
+        this.heightSupported = m.heights === true; this.rideSupported = m.rides === true; this.sxsVariantsSupported = m.sxsVariants === true; this.chatSupported = m.chat === true; this.heartbeatSupported = m.heartbeat === true; this.sentRide = undefined; this.lastRideSend = -Infinity;
         // A room that runs games sends their state only to a game that asks once: an older game never hears a game frame.
         this.gamesSupported = m.games === true; this.game = null;
         if (this.gamesSupported && this.ws?.readyState === 1) this.ws.send('{"t":"game-sync"}');
@@ -312,10 +314,12 @@ export class Net {
     if (now - this.lastPing > PING_MS) { this.lastPing = now; this.ws.send(PING); }
     if (this.status !== 'on') return;
     if (this.race && (this.lastSync === -Infinity || this.race.startAt > 0 && this.serverNow() - this.race.startAt < 600000 && this.race.racers.some(r=>!r.out && r.time===null) && now - this.lastSync > 5000)) { this.lastSync = this.syncSent = now; this.ws.send(JSON.stringify({t:'race-sync',echo:now})); }
-    if (this.rideSupported && this.ride && now - this.lastRideSend >= RIDE_SEND_MS
-      && (this.ride.kind !== this.sentRide?.kind || this.ride.trailer !== this.sentRide?.trailer)) {
-      this.ws.send(JSON.stringify({ t: 'ride', ride: this.ride }));
-      this.sentRide = this.ride; this.lastRideSend = now;
+    if (this.rideSupported && this.ride && now - this.lastRideSend >= RIDE_SEND_MS) {
+      const announced = !this.sxsVariantsSupported && isSxsKind(this.ride.kind) ? { kind: 'sxs' as const, trailer: false } : this.ride;
+      if (announced.kind !== this.sentRide?.kind || announced.trailer !== this.sentRide?.trailer) {
+        this.ws.send(JSON.stringify({ t: 'ride', ride: announced }));
+        this.sentRide = announced; this.lastRideSend = now;
+      }
     }
 
     if (this.prev && Math.hypot(s.x - this.prev.x, s.z - this.prev.z) > 15) this.pending |= FLAG.teleport;   // R, or a new day

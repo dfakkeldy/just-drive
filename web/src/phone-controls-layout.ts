@@ -152,7 +152,25 @@ export function installPhoneControls(root: HTMLElement): void {
     const hint = document.getElementById('stopHint');
     const hintParent = menu && view.width > view.height ? panel : hintHome;
     if (hint && hintParent && hint.parentElement !== hintParent) hintParent.appendChild(hint);
-    placePhoneControls(on ? phoneControls(view) : null, id => document.getElementById(id));
+    const boxes = on ? phoneControls(view) : null;
+    placePhoneControls(boxes, id => document.getElementById(id));
+    if (boxes && view.width > view.height) {
+      const leftEdge = view.left + 8, rightEdge = view.width - view.right - 8;
+      let laneLeft = 0, laneRight = 0;
+      for (const id of ['tcSteer', 'tcBrake', 'tcPull'] as const) {
+        const r = boxes[id];
+        if (r && r.left <= leftEdge + 1) laneLeft = Math.max(laneLeft, Math.ceil(r.left + r.width - leftEdge) + 8);
+      }
+      for (const id of ['tcGo', 'droneButton', 'savePictureButton'] as const) {
+        const r = boxes[id];
+        if (r) laneRight = Math.max(laneRight, Math.ceil(rightEdge - r.left) + 8);
+      }
+      root.style.setProperty?.('--phone-lane-left', `${laneLeft}px`);
+      root.style.setProperty?.('--phone-lane-right', `${laneRight}px`);
+    } else {
+      root.style.removeProperty('--phone-lane-left');
+      root.style.removeProperty('--phone-lane-right');
+    }
   };
   // Body mode changes include pause/resume and the bike controls arriving after the grid.
   const modes = new MutationObserver(() => {

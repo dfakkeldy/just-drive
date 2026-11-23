@@ -157,6 +157,7 @@ import { PorchSite } from './porch-site';
 import { CHURCH_START, ChurchSite } from './church-site';
 import { roughRoads, setPuddleField } from './rough-roads';
 import { Puddles, splashLevel } from './puddles';
+import { MountainHint, defaultSideBySideId, safeSwapRide } from './mountain-hint';
 import { JudiqueVillageSite, VILLAGE_PLACES } from './judique-village-site';
 import { PortHawkesburySite, aimDrops } from './port-hawkesbury-site';
 import { filterPointTupperProps, postOfficeClear, postOfficeReplaceBuildings, postOfficeReplacedIds } from './port-hawkesbury-mail';
@@ -1081,13 +1082,14 @@ function applyShot(s: Shot) {
 
 // Today's run starts every try at its seeded place, not at the first stop of the route.
 const dailyPose = DAILY ? startKey(DAILY.start, roads.roads, vehicle.bounds) : null;
-function placeFirstStop(kind: 'start-over' | 'new-visit' = 'start-over'): void {
+function placeFirstStop(kind: 'start-over' | 'new-visit' = 'start-over'): boolean {
   const start = AREA.route ? shift.run.start : roadStart(roads.roads);
   const namedStart = AREA.id === 'westbay' && ERA.modern && params.get('poster') === 'sugar-camp-quarry' ? sugarCampStart(roads.roads, manifest.village, vehicle.bounds!) : undefined;
   const pose = namedStart ?? dailyPose ?? start ?? { x: 0, z: 0, heading: Math.PI / 4 };
   // The poster start always faces south, toward the quarry, on Start over too.
   const southward = namedStart ? (candidate: { heading: number }) => Math.cos(candidate.heading) < 0 : undefined;
-  if (fleet) { if (kind === 'new-visit') fleet.startVisit(pose.x, pose.z, pose.heading, southward); else fleet.restart(pose.x, pose.z, pose.heading, 'start-over', southward); } else vehicle.restart(pose.x, pose.z, pose.heading);
+  if (fleet) return kind === 'new-visit' ? fleet.startVisit(pose.x, pose.z, pose.heading, southward) : fleet.restart(pose.x, pose.z, pose.heading, 'start-over', southward);
+  return vehicle.restart(pose.x, pose.z, pose.heading);
 }
 // Boxes within 12 m of the wall, or past it, are left to the next carrier.
 if (edge) { const [bx0, bz0, bx1, bz1] = edge.bounds; Route.reachable = (x, z) => x > bx0 + 12 && x < bx1 - 12 && z > bz0 + 12 && z < bz1 - 12; }
@@ -1096,7 +1098,7 @@ const resets: Array<() => void> = [];
 const resetSlot = { interiors: 0, relief: 1, yardJob: 2, fishing: 3, roadScene: 4, schoolBus: 5, stuntPark: 6, roadAnimals: 7 };
 const shift = mail instanceof Mail ? new Shift(props, mail, roads, terrain, properties, manifest.village, LOW, params, () => {
   multiplayer?.reset();
-  resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; placeFirstStop(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
+  resets.forEach(reset => reset()); hookPlaced = false; jumpPlacement++; if (placeFirstStop()) mountainHint?.clearActive(); waitingToDrive = true; keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   touch.steer = touch.throttle = 0; camReady = false; mode = 'drive'; drove = demo; devHooks.reset();
 }, AREA.route, firedMode, DAILY?.day ?? 0) : new FreeDrive(roads, manifest.village);
 if (shift instanceof Shift) shift.endsAtSix = !DAILY;
@@ -1421,6 +1423,68 @@ const puddles = rough ? new Puddles(rough.field, terrain, LOW) : null;
 if (puddles) scene.add(puddles.group);
 // Not enumerable: tools/ui-check.mjs pins the listed dev keys. tools/rough-road-check.mjs and the browser probes read them.
 if (import.meta.env.DEV) expose({ puddles, roughRoads: rough }, false);
+function switchToSideBySide(onSettled?: (ok: boolean, reason?: string) => void): { ok: boolean; pending?: boolean; reason?: string } {
+  const targetId = defaultSideBySideId(GARAGE);
+  const nextEntry = targetId ? GARAGE.find(e => e.id === targetId) : undefined;
+  if (!nextEntry || ride.kind === nextEntry.id) return { ok: false, reason: 'Already in the side-by-side' };
+  if (fleet) {
+    return fleet.switchToMember('sxs', onSettled);
+  }
+  const cleanHooks = towing ? towing.cleanHooks() : { placementGuard: vehicle.placementGuard, onPlaced: vehicle.onPlaced };
+  const buildRig = fleetRig;
+  let nextCar: ReturnType<typeof fleetRig> | null = null;
+  const swapped = safeSwapRide(vehicle, () => {
+    nextCar = buildRig(nextEntry, mailMode, LOW, params, SITE.brand === 'just', ERA.modern);
+    const next = nextEntry.ride
+      ? legacyVehicle(nextEntry.ride(nextCar, terrain, roads, SEA_LEVEL, nextEntry.spec))
+      : new Vehicle(nextCar, terrain, roads, SEA_LEVEL, nextEntry.spec);
+    next.bounds = vehicle.bounds;
+    next.touchSpeedLimit = vehicle.touchSpeedLimit;
+    next.desktopPull = vehicle.desktopPull;
+    next.strongHelp = vehicle.strongHelp;
+    next.damage = vehicle.damage;
+    next.placementGuard = cleanHooks.placementGuard;
+    next.canDrift = vehicle.canDrift;
+    next.onPlaced = cleanHooks.onPlaced;
+    return next;
+  }, pose => {
+    const ground = terrain.heightAt(pose.x, pose.z);
+    if (ground === null || terrain.waterAt(pose.x, pose.z)) return 'Wait until solid ground is ready to switch';
+    const deck = roads.deckHeight(pose.x, pose.z);
+    // The ride's own height picks the deck (#6): under an overpass the room is checked on the road, not on the deck above.
+    const y = pose.y === undefined ? (deck === null ? ground : Math.max(ground, deck)) : deckCounts(deck, pose.y, terrain.cartRoads) ? Math.max(ground, deck) : ground;
+    const body = { x: pose.x, z: pose.z, y, heading: pose.heading, spec: nextEntry.spec };
+    if (!fleetContacts.allows(body)) return 'No clear room to switch here';
+    const probe = { ...body, vx: 0, vz: 0, speed: 0, car: { root: { position: { x: pose.x, z: pose.z } } } };
+    if (mailMode && roadScene?.rules.enabled) pushOut(probe, roadScene.placementSolids, true);
+    if (aiDriverOn()) aiDriver?.resolve(probe as unknown as Vehicle);
+    boss?.driver.resolve(probe as unknown as Vehicle);
+    if (Math.hypot(probe.x - pose.x, probe.z - pose.z) > 1e-7) return 'No clear room to switch here';
+    return true;
+  });
+  if (!swapped.ok || !nextCar) return { ok: false, reason: swapped.ok ? 'Could not switch right now' : swapped.reason };
+  if (towing) {
+    towing.detach();
+    scene.remove(towing.trailer.root);
+    towing = null;
+    document.getElementById('trailerHelp')?.remove();
+  }
+  scene.remove(car.root);
+  scene.add((nextCar as typeof car).root);
+  garageEntry = nextEntry;
+  vehicleSpec = nextEntry.spec;
+  car = nextCar;
+  vehicle = swapped.vehicle;
+  beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined;
+  night?.setCar(car);
+  if (terrain.paved) terrain.paved.car = vehicle;
+  ride.select(vehicle, garageEntry);
+  drivenChanged?.();
+  jumpPlacement++;
+  return { ok: true };
+}
+const mountainHint = ERA.modern && AREA.church && !bare && !droneVehicle ? new MountainHint(roads, manifest.village, switchToSideBySide) : null;
+if (import.meta.env.DEV) expose({ mountainHint }, false);
 animals?.registerEvidence(shift.evidence);
 document.getElementById('cameraButton')!.addEventListener('click', () => { if (live()) photoRequested = true; });
 for (const id of ['cameraButton', 'endShift', 'shiftReport', 'settings']) {
@@ -1476,7 +1540,7 @@ addEventListener('keydown', (ev) => {
     if (!ev.repeat) { ev.preventDefault(); interiors.enter(); if (interiors.busy) { keys.clear(); touch.steer = touch.throttle = 0; } }
     return;
   }
-  if (mode === 'drive' && !interiors.busy && ev.code === 'Enter' && !ev.repeat && airportDrag?.begin()) { ev.preventDefault(); return; }
+  if (mode === 'drive' && !interiors.busy && ev.code === 'Enter' && !ev.repeat && (mountainHint?.accept() || airportDrag?.begin())) { ev.preventDefault(); return; }
   if (!mailMode && exploreKey(ev.code)) return;
   if (interiors.busy) {
     if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight', 'Space'].includes(ev.code)) { ev.preventDefault(); keys.add(ev.code); }
@@ -1541,7 +1605,7 @@ let pictureStatusTimer = 0;
 const padAct = (action: () => void) => () => { if (!fleet?.busy && !interiors.busy) action(); };
 const gamepad = createGamepad({
   horn: honk,
-  mail: padAct(() => { if (mailMode) mailRequested = true; else airportDrag?.begin(); }),
+  mail: padAct(() => { if (mailMode) mailRequested = true; else if (!mountainHint?.accept()) airportDrag?.begin(); }),
   // B changes the view; inside a building (where every other driving button rests) it climbs out, as Esc does.
   view: () => { if (interiors.busy) interiors.leave(); else if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
   pause: () => { if (sunSeeker) closeSunSeeker(); else if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
@@ -1554,7 +1618,7 @@ const gamepad = createGamepad({
 }, touchDevice, () => mode === 'drive' && live());
 if (import.meta.env.DEV) expose({ gamepad });   // for tools/gamepad-browser.mjs
 ride.configure(!fleet);
-if (fleet) shift.startOver = () => { if (drone.active) landDrone(); airportDrag?.reset(); placeFirstStop(); waitingToDrive = true; camReady = false; };
+if (fleet) shift.startOver = () => { if (drone.active) landDrone(); airportDrag?.reset(); if (placeFirstStop()) mountainHint?.clearActive(); waitingToDrive = true; camReady = false; };
 if (fleet && !bare) {
   updateFleetHud = fleetHud(fleet, () => started && mode === 'drive' && !scenePaused() && !placesUI?.busy && !bigMap?.busy);
   const restart = document.createElement('button'); restart.id = 'fleetStartOver'; restart.textContent = 'Start over with the trailer';
@@ -2181,7 +2245,7 @@ onDepotExit = doorId => {
 
 let fps = 60, quiet = 0, drove = 0, beaconT = 0;
 let shiftReady = false;
-const beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined;
+let beaconMat = car.beacon?.material as THREE.MeshStandardMaterial | undefined;
 // The title card holds the game still until the player starts. Test links (any placement or demo parameter)
 // skip it; ?title=1 shows it in a test.
 let started = bare || (!plainVisit && !params.has('room') && params.get('title') !== '1');
@@ -2200,7 +2264,7 @@ const title = started ? null : createTitle(touchDevice, () => {
 if (__PUBLIC_APP__) watchGameVersion(SITE.brand === 'just', () => !hasStarted && document.getElementById('title')?.hidden === false && !document.getElementById('settings')?.classList.contains('open') && document.getElementById('titleLegal')?.hidden !== false && !document.activeElement?.matches('input,textarea,select'));
 // A ride-along day says so on the start card.
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
-startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(startPlacement, s); if (placed) { airportDrag?.reset(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
+startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s); if (placed) { airportDrag?.reset(); mountainHint?.clearActive(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
 // The area's own places stand first in the list; the burial grounds come after them.
 const stuntPlaces = testPark ? testParkPlaces(testPark, manifest.village)
@@ -2211,9 +2275,12 @@ function resetToRoad(): void {
   if (fleet) fleet.respawn(); else vehicle.respawn();
 }
 function jumpToPlace(x: number, z: number, heading: number): void {
+  if (fleet && !fleet.restart(x, z, heading, 'place-jump')) return;
+  let placed = !!fleet;
   multiplayer?.reset();
-  if (fleet) fleet.restart(x, z, heading, 'place-jump'); else vehicle.restart(x, z, heading);
+  if (!fleet) placed = vehicle.restart(x, z, heading);
   vehicle.vx = vehicle.vz = vehicle.vy = vehicle.speed = 0;
+  if (placed) mountainHint?.clearActive();
   mail.reset();
   waitingToDrive = true; camReady = false;
   if (droneVehicle) placeDroneAt(x, z, heading); else mode = 'drive';
@@ -2768,6 +2835,7 @@ function frame(now: number) {
   }
   if (endings.busy) { drawEnding(0); requestAnimationFrame(frame); return; }
   airportDrag?.draw(vehicle, gamepad.device);
+  mountainHint?.update(dt, vehicle, ride.kind, driving && !scenePaused() && !placesUI?.busy && !bigMap?.busy && !fleet?.busy, gamepad.device);
   const impactSpeed = Math.hypot(vehicle.vx, vehicle.vz);
   if (import.meta.env.DEV) frameClock = performance.now();
   const impact = shift.ended || ride.kind === 'drone' ? 1 : mail.update(dt, vehicle,

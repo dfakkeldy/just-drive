@@ -1,8 +1,8 @@
 import type { Ride } from './wire';
 export interface Footprint { x: number; z: number; heading: number; spec?: { halfLength: number; halfWidth: number } }
 /** Conservative footprint includes the attached trailer. No per-frame pose fields are needed. */
-function length(ride?: Ride): number { return ride?.trailer ? 8.5 : ride?.kind === 'truck' ? 3.5 : ride?.kind === 'bike' ? 1.3 : ride?.kind === 'sxs' ? 1.8 : 2.3; }
-function width(ride?: Ride): number { return ride?.kind === 'truck' ? 1.35 : ride?.kind === 'bike' ? .55 : ride?.kind === 'sxs' ? .95 : 1; }
+function length(ride?: Ride): number { return ride?.trailer ? 8.5 : ride?.kind === 'truck' ? 3.5 : ride?.kind === 'bike' ? 1.3 : ride?.kind === 'sxs-crew' || ride?.kind === 'sxs-cabin' ? 2.05 : ride?.kind === 'sxs' || ride?.kind === 'sxs-utility' ? 1.8 : 2.3; }
+function width(ride?: Ride): number { return ride?.kind === 'truck' ? 1.35 : ride?.kind === 'bike' ? .55 : ride?.kind === 'sxs' || ride?.kind === 'sxs-utility' || ride?.kind === 'sxs-crew' || ride?.kind === 'sxs-cabin' ? .95 : 1; }
 /** SAT on the two vehicle axes, including the rearward trailer footprint. */
 export function footprintsOverlap(a: Footprint, b: Footprint, ride?: Ride, localRide?: Ride): boolean {
   const al = localRide?.trailer ? length(localRide) : a.spec?.halfLength ?? 2.3, aw = a.spec?.halfWidth ?? width(localRide);
