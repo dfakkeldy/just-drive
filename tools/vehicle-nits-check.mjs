@@ -11,8 +11,8 @@ import { relative, resolve } from 'node:path';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const GOLDEN_COMMIT = '697947cd013436dca6680ccabd12fbc604ec716f';
-// Review note: The owner asked for faster Sugar Camp vehicles on 20 Nov 2026. This records the bike, side-by-side and pickup tune.
+const GOLDEN_COMMIT = 'f75a9f62807ffa0f0b991fcbcc330476619556a1';
+// Review note: Added three new generic side-by-side garage entries (sxs-utility, sxs-crew, sxs-cabin); existing car, sxs, truck and bike goldens are unchanged.
 const RECORD_PROCEDURE = 'A deliberate change to driving: run node tools/vehicle-nits-check.mjs --record on the new code, paste the goldens with the commit SHA and one line that says what changed and why; a reviewer must see that line.';
 const N = 5000, MIXED_N = 4500, dt = 1 / 120;
 // Paste the --record output here. SHA-256 consumes little-endian Float64 values,
@@ -57,6 +57,69 @@ const GOLDEN = {
         "5": 488,
         "7": 287,
         "11": 217
+      }
+    }
+  },
+  "sxs-utility": {
+    "spec": "c1c1c4a675065a3122426d22b7121c87d2fe34f1d475dd2f926ca93c83ac6c6d",
+    "washboard": {
+      "state": "09b35dc5313d77462becb87a4aaa441164e469cad2eaceeae58ce90ca7b8217d",
+      "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
+      "histogram": {
+        "5": 5000
+      }
+    },
+    "mixed": {
+      "state": "6f5870c9e1b55a21aa7f4184dde67b0e93a719f1b78948a80ca2edf42842f093",
+      "draws": "ccff9d2729ad44829e2beca4bb92099de0c6f968a8067ce10dcc813fff1731b0",
+      "histogram": {
+        "3": 3351,
+        "5": 560,
+        "7": 336,
+        "9": 1,
+        "11": 252
+      }
+    }
+  },
+  "sxs-crew": {
+    "spec": "ce318719d6328e7f47811b647b0a83e824b325239fa2007346974539b85cf873",
+    "washboard": {
+      "state": "f503dba80d851bcf3fae07f1f7f5f34b835deadd6f64b571b01bff353175f2fd",
+      "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
+      "histogram": {
+        "5": 5000
+      }
+    },
+    "mixed": {
+      "state": "2bbe165ecf6ccf748c1ec4b83be810853dbaa6222786cb1e5abce69ca60932b9",
+      "draws": "ee870530fe8fe17f074a44ab36af882def2e18a287a8c0b76695c152b385723b",
+      "histogram": {
+        "3": 3394,
+        "5": 534,
+        "7": 325,
+        "9": 3,
+        "11": 244
+      }
+    }
+  },
+  "sxs-cabin": {
+    "spec": "7942e6687bcf14f32d812d50990a14e5bb2719b4323a089c8329ad49cbcb783e",
+    "washboard": {
+      "state": "3103b86b91abecf04702019a94cf68cc33da6012a1756d6b8b0cf8b7b37862a4",
+      "draws": "df80ec233e159477bf8ebdf89a5a9531a2c07c98e3609fa455d1f2a25339f84a",
+      "histogram": {
+        "5": 5000
+      }
+    },
+    "mixed": {
+      "state": "4720984de03aef34c0420e5aa822275acc26215a4c329f16638ba70bac03ad34",
+      "draws": "0f14491c9ab3c0e4279b5733a01155ac51a103d4f174d55788dc77c0fe80b58e",
+      "histogram": {
+        "3": 3358,
+        "5": 556,
+        "7": 335,
+        "9": 2,
+        "11": 249
       }
     }
   },
