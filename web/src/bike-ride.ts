@@ -436,7 +436,7 @@ export class BikeRide implements Ride {
       const t = input.throttle, speed = Math.abs(forward);
       const winter = this.terrain.uniforms?.winterCover;
       const snowGrip = winterRoadGrip(winter,
-        !!winter?.value && s.kind > 0 && s.roadDist <= s.halfWidth + 0.4 && !s.deck && !s.bridge
+        !!winter?.value && s.kind > 0 && s.roadDist <= s.halfWidth + 0.4 && !s.deck
         && !deckCounts(this.roads.deckHeight(this.x, this.z), this.y, this.terrain.cartRoads), input.touch);
       let acceleration = t >= 0 ? t * surf.accel * Math.max(0, 1 - (speed / surf.top) ** 2) : forward > .1 ? t * 10 * snowGrip : forward > -5 ? t * 3 : 0;
       if (input.handbrake) { acceleration -= Math.sign(forward) * Math.min(5, speed / dt); sideways += input.steer * speed * dt * 1.4; }
