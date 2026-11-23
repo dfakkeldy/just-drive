@@ -37,7 +37,38 @@ export class AreaContacts implements WorldContacts {
     const guard: NonNullable<Vehicle['placementGuard']> = pose => allows(pose) && (!previous || previous(pose)) && allows(pose);
     vehicle.placementGuard = guard; this.guards.set(vehicle, guard);
   }
-  resolve(body: Body): void { for (const { site } of this.sites) site.resolve(body); }
+  private siteImpact = false;
+  private wrappedBody: Body | null = null;
+  private wrappedImpact: ((speed: number) => void) | undefined = undefined;
+  private readonly trackImpact = (speed: number) => { this.siteImpact = true; this.wrappedImpact?.call(this.wrappedBody, speed); };
+  lastActiveSites = 0;
+  resolve(body: Body): void {
+    let active = 0;
+    const prevImpact = body.onSolidImpact;
+    const hadOwn = prevImpact !== undefined && Object.prototype.hasOwnProperty.call(body, 'onSolidImpact');
+    const prevBody = this.wrappedBody, prevWrapped = this.wrappedImpact;
+    if (prevImpact) {
+      this.wrappedBody = body;
+      this.wrappedImpact = prevImpact;
+      body.onSolidImpact = this.trackImpact;
+    }
+    try {
+      for (const { site } of this.sites) {
+        const bx = body.x, bz = body.z, bvx = body.vx, bvz = body.vz;
+        this.siteImpact = false;
+        site.resolve(body);
+        if (this.siteImpact || body.x !== bx || body.z !== bz || body.vx !== bvx || body.vz !== bvz) active++;
+      }
+    } finally {
+      if (prevImpact) {
+        if (hadOwn) body.onSolidImpact = prevImpact;
+        else delete body.onSolidImpact;
+        this.wrappedBody = prevBody;
+        this.wrappedImpact = prevWrapped;
+      }
+    }
+    this.lastActiveSites = active;
+  }
   allows(body: ContactBody): boolean {
     for (const { site } of this.sites) {
       if (site.allows) { if (!site.allows(body)) return false; }
