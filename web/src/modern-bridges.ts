@@ -471,8 +471,7 @@ export class ModernBridges {
   bridgeElevation(id:number,t:number):number|null {
     const r=this.spans.find(s=>s.members.has(id));
     if(!r||!r.geometry||!r.triangles)return null;
-    const h0=this.ownHeight(r,r.pts[0][0],r.pts[0][1])??r.y0,h1=this.ownHeight(r,r.pts[r.pts.length-1][0],r.pts[r.pts.length-1][1])??r.y1;
-    return h0+(h1-h0)*Math.max(0,Math.min(1,t));
+    return r.y0+(r.y1-r.y0)*Math.max(0,Math.min(1,t));
   }
   /** Built terrain detail level of a bridge deck, or 0 before the deck is built. */
   bridgeDeckLevel(id:number):number {
@@ -491,17 +490,12 @@ export class ModernBridges {
     const built=!!(r.geometry&&r.triangles&&r.level>=6);
     const rev=this.terrain.dataRevision??0;
     if(built&&(r.level>=8||r.revision===rev)){
-      out[0]=this.ownHeight(r,r.pts[0][0],r.pts[0][1])??r.y0;
-      out[1]=this.ownHeight(r,r.pts[r.pts.length-1][0],r.pts[r.pts.length-1][1])??r.y1;
+      out[0]=r.y0;out[1]=r.y1;
       return r.level;
     }
     const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
     if(!s0||!s1||Math.min(s0.level,s1.level)<6){
-      if(built){
-        out[0]=this.ownHeight(r,r.pts[0][0],r.pts[0][1])??r.y0;
-        out[1]=this.ownHeight(r,r.pts[r.pts.length-1][0],r.pts[r.pts.length-1][1])??r.y1;
-        return r.level;
-      }
+      if(built){out[0]=r.y0;out[1]=r.y1;return r.level;}
       return 0;
     }
     const level=Math.min(s0.level,s1.level);
@@ -509,11 +503,6 @@ export class ModernBridges {
     let y0=Math.max(bank(0),bank(-3),bank(-6),bank(-8))+.04,y1=Math.max(bank(r.length),bank(r.length+3),bank(r.length+6),bank(r.length+8))+.04;
     let clearance=0;for(let s=.5;s<r.length;s+=.5){const p=this.at(r,s);clearance=Math.max(clearance,(this.land(p.x,p.z)??-Infinity)+.03-(y0+(y1-y0)*s/r.length));}
     clearance=Math.min(.4,clearance);y0+=clearance;y1+=clearance;
-    if(built&&level===r.level&&Math.abs(y0-r.y0)<=1e-9&&Math.abs(y1-r.y1)<=1e-9){
-      out[0]=this.ownHeight(r,r.pts[0][0],r.pts[0][1])??r.y0;
-      out[1]=this.ownHeight(r,r.pts[r.pts.length-1][0],r.pts[r.pts.length-1][1])??r.y1;
-      return r.level;
-    }
     out[0]=y0;out[1]=y1;
     return level;
   }
@@ -726,8 +715,7 @@ export class ModernBridges {
       }
     }
     if(r.road.ponyTruss){
-      const h0=this.ownHeight(r,r.pts[0][0],r.pts[0][1])??r.y0,h1=this.ownHeight(r,r.pts[r.pts.length-1][0],r.pts[r.pts.length-1][1])??r.y1;
-      emitPonyTrussSuperstructure(m,r.pts,h0,h1,r.width,-.45);
+      emitPonyTrussSuperstructure(m,r.pts,r.y0,r.y1,r.width,-.45);
     }else for(let s=0;s<r.length;s+=3){const run=Math.min(3,r.length-s),p=this.at(r,s+run/2),a=this.at(r,s),b=this.at(r,s+run),y=this.top(r,s+run/2,p.x,p.z),grade=(this.top(r,s+run,b.x,b.z)-this.top(r,s,a.x,a.z))/run,pitch=-Math.atan(grade),stretch=Math.hypot(1,grade);m.at(p.x,y,p.z,p.yaw,pitch);
       for(const side of[-1,1]){
         const edge=this.top(r,s+run/2,p.x+p.nx*side*r.width,p.z+p.nz*side*r.width)-y;

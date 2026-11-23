@@ -875,9 +875,10 @@ for (const {a, b, side} of added) {
     assert.notEqual(f.soloUp.revision, revBeforeSolo, 'soloContacts.revision advances on level-8 upgrade');
     f.dispose();
   }
-  // Pure read-only allowsBridge check: querying allowsBridge on a fresh Roads instance builds zero meshes and keeps bridgeDeckVersion at 0.
+  // Pure read-only allowsBridge check + fixed-revision before/after deck-build clearance parity on Bridge 46:
+  // preflight bank endpoints and built mesh/collision endpoints match identically with zero shift when the deck builds.
   {
-    const freshNet = new Roads({ roads: tagged }, mabouManifest.village, realTerrain);
+    const freshNet = new Roads({ ...mabouRoads, roads: tagged }, mabouManifest.village, realTerrain);
     const childrenBefore = freshNet.group.children.length;
     const verBefore = freshNet.bridgeDeckVersion;
     const r45 = freshNet.roads.find(x => x.id === 45);
@@ -886,6 +887,28 @@ for (const {a, b, side} of added) {
     assert.equal(freshNet.guardrails.allowsBridge({ x: mx, z: mz, y: 3.6, heading: hdg, spec: CAR_SPEC }), true, 'fresh allowsBridge accepts centred pose');
     assert.equal(freshNet.group.children.length, childrenBefore, 'allowsBridge does not build or add scene meshes');
     assert.equal(freshNet.bridgeDeckVersion, verBefore, 'allowsBridge does not advance bridgeDeckVersion');
+    const r46 = freshNet.roads.find(x => x.id === 46);
+    const [a6x, a6z] = r46.pts[0], [b6x, b6z] = r46.pts[r46.pts.length - 1];
+    const d6x = b6x - a6x, d6z = b6z - a6z, span46 = Math.hypot(d6x, d6z), u6x = d6x / span46, u6z = d6z / span46, hdg46 = Math.atan2(d6x, -d6z);
+    const endsBefore = [0, 0];
+    assert.ok(freshNet.bridgeBankElevations(46, endsBefore) >= 6, 'bridge 46 read-only bank elevations available before build');
+    const px46 = a6x + u6x * 0.5 - u6z * 1.6, pz46 = a6z + u6z * 0.5 + u6x * 1.6;
+    const yAtStart46 = endsBefore[0] + (endsBefore[1] - endsBefore[0]) * (0.5 / span46);
+    const hitPose46 = { x: px46, z: pz46, y: yAtStart46 - CAR_SPEC.height + 0.005, heading: hdg46, spec: CAR_SPEC };
+    const clearPose46 = { x: px46, z: pz46, y: yAtStart46 - CAR_SPEC.height - 0.015, heading: hdg46, spec: CAR_SPEC };
+    assert.equal(freshNet.guardrails.allowsBridge(hitPose46), false, 'bridge 46 pre-build rejects pose 5 mm into bottom chord');
+    assert.equal(freshNet.guardrails.allowsBridge(clearPose46), true, 'bridge 46 pre-build accepts pose 15 mm below bottom chord');
+    const revBefore46 = freshNet.guardrails.bridgeRevision;
+    assert.ok(freshNet.deckHeight((a6x + b6x) / 2, (a6z + b6z) / 2) !== null, 'bridge 46 builds deck at fixed terrain revision');
+    const endsAfter = [0, 0];
+    assert.ok(freshNet.bridgeBankElevations(46, endsAfter) >= 6, 'bridge 46 bank elevations available after build');
+    assert.equal(endsAfter[0], endsBefore[0], 'bridge 46 y0 is bit-identical before and after deck build');
+    assert.equal(endsAfter[1], endsBefore[1], 'bridge 46 y1 is bit-identical before and after deck build');
+    assert.equal(freshNet.bridgeElevation(46, 0), endsBefore[0], 'bridge 46 built elevation y0 matches preflight');
+    assert.equal(freshNet.bridgeElevation(46, 1), endsBefore[1], 'bridge 46 built elevation y1 matches preflight');
+    assert.equal(freshNet.guardrails.bridgeRevision, revBefore46, 'building bridge 46 at a fixed terrain revision does not shift rail clearance revision');
+    assert.equal(freshNet.guardrails.allowsBridge(hitPose46), false, 'bridge 46 post-build still rejects the exact same pose 5 mm into bottom chord');
+    assert.equal(freshNet.guardrails.allowsBridge(clearPose46), true, 'bridge 46 post-build still accepts the exact same pose 15 mm below bottom chord');
     for (const child of [...freshNet.group.children]) child.geometry?.dispose();
   }
   // Built level-6 deck + cached level-8 contact sample: 120 allowsBridge preflights in one revision do not keep re-sampling banks.
@@ -1053,7 +1076,8 @@ for (const {a, b, side} of added) {
     const r45 = net3.roads.find(x => x.id === 45);
     const [ax, az] = r45.pts[0], [bx, bz] = r45.pts[r45.pts.length - 1];
     const dx = bx - ax, dz = bz - az, span = Math.hypot(dx, dz), ux = dx / span, uz = dz / span, hdg = Math.atan2(dx, -dz);
-    const y0 = net3.deckHeight(ax, az), y1 = net3.deckHeight(bx, bz);
+    assert.ok(net3.deckHeight(ax, az) !== null && net3.deckHeight(bx, bz) !== null, 'bridge 45 builds at 3x');
+    const y0 = net3.bridgeElevation(45, 0), y1 = net3.bridgeElevation(45, 1);
     assert.ok(y0 !== null && y1 !== null && y1 > y0, 'bridge 45 rises from start to end at 3x');
     const span3 = net3.modern.spans.find(s => s.members.has(45));
     const pos3 = span3.geometry.getAttribute('position'), col3 = span3.geometry.getAttribute('color');
@@ -1193,7 +1217,8 @@ for (const {a, b, side} of added) {
       const r46 = net3.roads.find(x => x.id === 46);
       const [a6x, a6z] = r46.pts[0], [b6x, b6z] = r46.pts[r46.pts.length - 1];
       const d6x = b6x - a6x, d6z = b6z - a6z, span46 = Math.hypot(d6x, d6z), u6x = d6x / span46, u6z = d6z / span46, hdg46 = Math.atan2(d6x, -d6z);
-      const y60 = net3.deckHeight(a6x, a6z), y61 = net3.deckHeight(b6x, b6z);
+      assert.ok(net3.deckHeight(a6x, a6z) !== null && net3.deckHeight(b6x, b6z) !== null, 'bridge 46 builds at 3x');
+      const y60 = net3.bridgeElevation(46, 0), y61 = net3.bridgeElevation(46, 1);
       const h46 = ponyTrussHeight(span46);
       const gapS = 24.16, gapDeckY = y60 + (y61 - y60) * (gapS / span46);
       const gapY = gapDeckY + h46 + PONY_TRUSS.chordSize * 0.5 + 0.04;
