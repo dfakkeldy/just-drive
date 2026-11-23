@@ -566,9 +566,9 @@ export class Guardrails {
     const x = Math.floor(car.x / CHUNK), z = Math.floor(car.z / CHUNK);
     for (let j = z - 1; j <= z + 1; j++) for (let i = x - 1; i <= x + 1; i++)
       for (const c of this.cells.get(cellKey(i, j)) ?? NO_CHUNKS) {
-        const cx = car.x, cz = car.z;
-        pushOut(car, c.solids, false, dt);
-        if (car.x !== cx || car.z !== cz) roadMoved = true;
+        const cx = car.x, cz = car.z, cvx = car.vx, cvz = car.vz;
+        const hit = pushOut(car, c.solids, false, dt);
+        if (hit > 0 || car.x !== cx || car.z !== cz || car.vx !== cvx || car.vz !== cvz) roadMoved = true;
       }
     const bx = car.x, bz = car.z;
     const touched = this.bridgeSpans.length ? this.pushBridge(car, dt) : false;
