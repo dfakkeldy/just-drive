@@ -212,9 +212,8 @@ export class BikeRide implements Ride {
   resetControlHistory(): void { this.helpYaw = this.lightHelpYaw = 0; this.lastJump = null; }
   resetVisit(): void { this.lastSafe = null; this.roadTrail.length = 0; this.lastJump = null; this.jump = { airTime: 0, peakHeight: 0, distance: 0, pitchRotations: 0, clean: false }; this.crashTime = this.sunk = 0; this.flightPeak = null; this.#waterStopped = false; this.#awaitingLoad = true; this.#deckWaiting = false; this.#deckWait = 0; this.#waitFallback = null; this.#noDeckWait = false; this.#restartUndo = null; }
   restart(x: number, z: number, heading: number): boolean {
-    const priorG = this.ready ? this.groundAt(this.x, this.z, this.y) : null;
-    const priorDry: VehiclePlacement | null = priorG !== null && this.isDryPose(this.x, this.z, priorG) && !!this.terrain.surfaceAt(this.x, this.z, priorG) && this.bothWheelsSupported(this.x, this.z, this.heading, priorG)
-      ? { x: this.x, z: this.z, heading: this.heading, y: priorG } : null;
+    const priorDry: VehiclePlacement | null = this.ready && !this.#waterStopped && this.sunk === 0
+      ? { x: this.x, z: this.z, heading: this.heading, y: this.y } : null;
     this.#restartUndo = {
       lastSafe: this.lastSafe, roadTrail: this.roadTrail.slice(), lastJump: this.lastJump,
       waterStopped: this.#waterStopped, deckWaiting: this.#deckWaiting, deckWait: this.#deckWait,

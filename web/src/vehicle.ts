@@ -314,9 +314,8 @@ export class Vehicle {
   resetVisit(): void { this.trail.length = 0; this.lastGood = null; this.#hasSafe = false; this.#waterStopped = false; this.#awaitingLoad = true; this.#deckWaiting = false; this.#deckWait = 0; this.#waitFallback = null; this.#noDeckWait = false; this.touchRoad = null; this.junctionClear = 0; this.helpYaw = this.lightHelpYaw = 0; this.sunk = 0; this.flightPeak = null; }
 
   restart(x: number, z: number, heading: number): boolean {
-    const priorG = !this.stuck && !this.#awaitingLoad ? this.groundAt(this.x, this.z, this.y) : null;
-    const priorDry: VehiclePlacement | null = priorG !== null && this.isDryPose(this.x, this.z, priorG) && !!this.terrain.surfaceAt(this.x, this.z, priorG) && this.allWheelsSupported(this.x, this.z, this.heading, priorG)
-      ? { x: this.x, z: this.z, heading: this.heading, y: priorG } : null;
+    const priorDry: VehiclePlacement | null = !this.stuck && !this.#awaitingLoad && !this.#waterStopped && this.sunk === 0
+      ? { x: this.x, z: this.z, heading: this.heading, y: this.y } : null;
     const prevTrail = this.trail.slice(), prevGood = this.lastGood, prevSafe = this.#hasSafe;
     const prevStopped = this.#waterStopped, prevAwaiting = this.#awaitingLoad;
     const prevWaiting = this.#deckWaiting, prevWait = this.#deckWait, prevFallback = this.#waitFallback, prevNoWait = this.#noDeckWait;
