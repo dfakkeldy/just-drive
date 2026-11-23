@@ -28,6 +28,7 @@ export class Guardrails {
   private readonly chunks: Chunk[] = [];
   private readonly bridgeSpans: PonyTrussSpan[] = [];
   private readonly bridgeDeckRev: number[] = [];
+  private readonly bridgeBuiltLevel: number[] = [];
   private readonly bridgeCachedLevel: number[] = [];
   private readonly bridgeCachedY0: number[] = [];
   private readonly bridgeCachedY1: number[] = [];
@@ -43,6 +44,9 @@ export class Guardrails {
   private checkPoseCosH = 1;
   private checkPoseSpec: Pushable['spec'] = undefined;
   private checkPoseOverlaps = false;
+  private lastBridgeCar: Pushable | null = null;
+  private lastBridgeDx = 0;
+  private lastBridgeDz = 0;
   private readonly trimmedBridgeSolids: [Solid, Solid] = [
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
     { x: 0, z: 0, half: 0, halfWidth: 0, heading: 0 },
@@ -79,7 +83,7 @@ export class Guardrails {
     this.access = railAccess(this.roads, this.planning.ground, this.terrain.manifest?.village, true);
     if (terrain.cartRoads) return;
     for (const road of roads.roads) {
-      if (road.bridge) { if (road.ponyTruss) { const span = ponyTrussSpan(road); if (span) { this.bridgeSpans.push(span); this.bridgeDeckRev.push(-1); this.bridgeCachedLevel.push(0); this.bridgeCachedY0.push(0); this.bridgeCachedY1.push(0); } } continue; }
+      if (road.bridge) { if (road.ponyTruss) { const span = ponyTrussSpan(road); if (span) { this.bridgeSpans.push(span); this.bridgeDeckRev.push(-1); this.bridgeBuiltLevel.push(0); this.bridgeCachedLevel.push(0); this.bridgeCachedY0.push(0); this.bridgeCachedY1.push(0); } } continue; }
       if (road.kind > 3 || railwayRoad(road)) continue;
       const len = roadLength(road);
       for (let index = 0; index * CHUNK < len; index++) {
@@ -334,14 +338,21 @@ export class Guardrails {
     right.x = mx - b.uz * centre; right.z = mz + b.ux * centre; right.half = half; right.halfWidth = halfWidth; right.heading = b.heading;
     pushOut(car, this.trimmedBridgeSolids, true, dt);
   }
+  /** Reset last pony-truss bridge displacement before a contact pass. */
+  clearBridgeHit(): void { this.lastBridgeCar = null; this.lastBridgeDx = 0; this.lastBridgeDz = 0; }
+  /** True only when pony-truss bridge steel accounts for the entire contact displacement on `car`. */
+  bridgeHitMatches(car: Pushable, dx: number, dz: number): boolean {
+    return this.lastBridgeCar === car && Math.hypot(dx - this.lastBridgeDx, dz - this.lastBridgeDz) <= 1e-7;
+  }
   /** Read-only bank elevation cache per bridge; stays in sync with built decks and bank changes at most once per dataRevision. */
   private readBridgeEnds(index: number, rev: number): boolean {
     const id = this.bridgeSpans[index].roadId;
     const builtLevel = this.roads.bridgeDeckLevel(id);
     const curLevel = this.bridgeCachedLevel[index];
     if (builtLevel >= 8 && curLevel >= 8) return true;
-    if (this.bridgeDeckRev[index] !== rev || (builtLevel >= 6 && builtLevel !== curLevel)) {
+    if (this.bridgeDeckRev[index] !== rev || (builtLevel >= 6 && builtLevel !== this.bridgeBuiltLevel[index])) {
       this.bridgeDeckRev[index] = rev;
+      this.bridgeBuiltLevel[index] = builtLevel;
       const lvl = this.roads.bridgeBankElevations(id, this.bridgeEndsScratch);
       const y0 = lvl >= 6 ? this.bridgeEndsScratch[0] : 0;
       const y1 = lvl >= 6 ? this.bridgeEndsScratch[1] : 0;
@@ -464,10 +475,11 @@ export class Guardrails {
       if (!clear) {
         // Opposing rails stalled translation (body angled wider than the one-lane corridor or straddling a rail).
         const prev = this.bridgeClearPoses.get(car);
-        const sameHeading = !prev || Math.abs(Math.atan2(Math.sin(prev.heading - car.heading), Math.cos(prev.heading - car.heading))) < 1e-7;
-        if (prev && (allowTurn || sameHeading) && Math.hypot(prev.x - car.x, prev.z - car.z) < 2.0 &&
-            this.bridgePoseClear(prev.x, prev.z, car.y, prev.heading, car.spec, b, y0, y1)) {
-          car.x = prev.x; car.z = prev.z; car.heading = prev.heading;
+        const restoreHeading = allowTurn && prev ? prev.heading : car.heading;
+        if (prev && Math.hypot(prev.x - car.x, prev.z - car.z) < 2.0 &&
+            this.bridgePoseClear(prev.x, prev.z, car.y, restoreHeading, car.spec, b, y0, y1)) {
+          car.x = prev.x; car.z = prev.z;
+          if (allowTurn) car.heading = prev.heading;
           const alongV = car.vx * b.ux + car.vz * b.uz;
           car.vx = b.ux * alongV * 0.85; car.vz = b.uz * alongV * 0.85;
           clear = true;
@@ -536,10 +548,14 @@ export class Guardrails {
   /** Push a body out of only the pony-truss bridge rails (used by soloContacts for solo trailers). */
   blockBridge(car: Pushable, dt = 1 / 120): void {
     if (!this.bridgeSpans.length) return;
-    const heading = car.heading;
+    const heading = car.heading, bx = car.x, bz = car.z;
     const touched = this.pushBridge(car, dt);
     this.clampRailYaw(car, heading, dt);
     if (touched) this.settleBridgeClearance(car, dt > 0);
+    if (touched && (car.x !== bx || car.z !== bz)) {
+      if (this.lastBridgeCar === car) { this.lastBridgeDx += car.x - bx; this.lastBridgeDz += car.z - bz; }
+      else { this.lastBridgeCar = car; this.lastBridgeDx = car.x - bx; this.lastBridgeDz = car.z - bz; }
+    }
   }
   /** Physics stays active outside LOW's drawing radius. The existing three-circle body envelope prevents step-through. */
   block(car: Pushable, dt = 1 / 120): void {
@@ -547,8 +563,13 @@ export class Guardrails {
     const x = Math.floor(car.x / CHUNK), z = Math.floor(car.z / CHUNK);
     for (let j = z - 1; j <= z + 1; j++) for (let i = x - 1; i <= x + 1; i++)
       for (const c of this.cells.get(cellKey(i, j)) ?? NO_CHUNKS) pushOut(car, c.solids, false, dt);
+    const bx = car.x, bz = car.z;
     const touched = this.bridgeSpans.length ? this.pushBridge(car, dt) : false;
     this.clampRailYaw(car, heading, dt);
     if (touched) this.settleBridgeClearance(car, dt > 0);
+    if (touched && (car.x !== bx || car.z !== bz)) {
+      if (this.lastBridgeCar === car) { this.lastBridgeDx += car.x - bx; this.lastBridgeDz += car.z - bz; }
+      else { this.lastBridgeCar = car; this.lastBridgeDx = car.x - bx; this.lastBridgeDz = car.z - bz; }
+    }
   }
 }

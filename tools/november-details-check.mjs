@@ -6,6 +6,8 @@ import { baxtersCoveBuildingArt, littleMabouBuildingArt, NovemberBuildings, nove
 import { BAXTERS_COVE_LOT, littleMabouMarshRail, NovemberRoadDetails } from '../web/src/november-road-details.ts';
 import { littleMabouPonyTruss, mabouRoadOverrides, PONY_TRUSS, ponyTrussHeight, registerRailContacts } from '../web/src/november-bridges.ts';
 import { AreaContacts } from '../web/src/world-contacts.ts';
+import { pushOut } from '../web/src/parked.ts';
+import { touchesPlayer } from '../web/src/road-scene-rules.ts';
 import { Vehicle } from '../web/src/vehicle.ts';
 import { Towing } from '../web/src/towing.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
@@ -532,6 +534,42 @@ for (const {a, b, side} of added) {
         }
         active = truck;
       }
+      // Ordinary non-bridge solids (and non-bridge contact providers even right beside a pony-truss bridge)
+      // keep origin/main dead-stop behavior on shallow trailer hits.
+      if (id === 45 && mode === 'solo') {
+        const solidTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+        const wall = { x: 1e6, z: 1e6, half: 30, halfWidth: 0.3, heading };
+        const solidTow = new Towing(solidTruck, realTerrain, net, true, false, { solids: [wall] }, true, true);
+        solidTruck.place(ax - ux * 40, az - uz * 40, heading);
+        assert.equal(solidTow.place(), true, 'ordinary solid test places cleanly on Little Mabou Road');
+        const tr = solidTow.bodies()[1];
+        const bodyHalf = tr.spec.envelope.radius + Math.max(0, ...(tr.spec.envelope.circleSides ?? []));
+        // Place the wall 2 cm overlapping the trailer's right edge, with shallow 8 m/s forward + 0.5 m/s into-wall graze velocity.
+        const off = bodyHalf + wall.halfWidth - 0.02;
+        wall.x = tr.x - uz * off; wall.z = tr.z + ux * off; wall.heading = tr.heading;
+        solidTruck.vx = ux * 8 - uz * 0.5; solidTruck.vz = uz * 8 + ux * 0.5; solidTruck.speed = 8;
+        solidTruck.x += solidTruck.vx / 120; solidTruck.z += solidTruck.vz / 120;
+        solidTow.step(1 / 120);
+        assert.ok(solidTow.impacts > 0, 'ordinary solid shallow trailer overlap registers an impact');
+        assert.equal(solidTruck.speed, 0, 'ordinary solid shallow trailer overlap still stops the rig as on main');
+        // Same shallow graze against a non-bridge contact provider right beside Bridge 45 still stops the rig dead.
+        const nearTruck = new Vehicle(rig(), realTerrain, net, -0.2, TRUCK_SPEC);
+        const nearWall = { x: 1e6, z: 1e6, half: 10, halfWidth: 0.3, heading };
+        const nearContacts = new AreaContacts();
+        nearContacts.add({ resolve: body => pushOut(body, [nearWall], true), allows: body => !touchesPlayer(nearWall, body, -1e-7, body.spec) });
+        const nearSolo = new AreaContacts();
+        registerRailContacts(nearContacts, nearSolo, rails, body => body === nearTruck, TRUCK_SPEC);
+        const nearTow = new Towing(nearTruck, realTerrain, net, true, false, { contacts: nearContacts }, true, true);
+        nearTruck.place(ax - ux * 2, az - uz * 2, heading);
+        assert.equal(nearTow.place(), true, 'near-bridge non-bridge contact test places cleanly');
+        const ntr = nearTow.bodies()[1];
+        nearWall.x = ntr.x - uz * off; nearWall.z = ntr.z + ux * off; nearWall.heading = ntr.heading;
+        nearTruck.vx = ux * 8 - uz * 0.5; nearTruck.vz = uz * 8 + ux * 0.5; nearTruck.speed = 8;
+        nearTruck.x += nearTruck.vx / 120; nearTruck.z += nearTruck.vz / 120;
+        nearTow.step(1 / 120);
+        assert.ok(nearTow.impacts > 0, 'near-bridge non-bridge contact registers an impact');
+        assert.equal(nearTruck.speed, 0, 'near-bridge non-bridge contact still stops the rig as on main');
+      }
     }
   }
   // Level 6 -> 7 -> 8 streaming upgrades: each finer bank level replaces and disposes the previous mesh and updates deckHeight to exact bank ground + 0.05.
@@ -661,6 +699,25 @@ for (const {a, b, side} of added) {
     assert.equal(freshNet.bridgeDeckVersion, verBefore, 'allowsBridge does not advance bridgeDeckVersion');
     for (const child of [...freshNet.group.children]) child.geometry?.dispose();
   }
+  // Built level-6 deck + cached level-8 contact sample: 120 allowsBridge preflights in one revision do not keep re-sampling banks.
+  {
+    let curLevel = 6, surfaceCalls = 0;
+    const preTerrain = {
+      manifest: mabouManifest, dataRevision: 1, exag: 1.5, seaLevel: -0.2, low: false,
+      heightAt: (x, z) => realTerrain.heightAt(x, z),
+      surfaceAt: (x, z) => { surfaceCalls++; const s = realTerrain.surfaceAt(x, z); return s ? { ...s, level: curLevel } : null; },
+      withContactHeight: (_, read) => read(), withGroundContact: (_, read) => read(),
+    };
+    const preNet = new Roads({ roads: tagged }, mabouManifest.village, preTerrain);
+    const r45 = preNet.roads.find(x => x.id === 45);
+    const [ax, az] = r45.pts[0], [bx, bz] = r45.pts[r45.pts.length - 1];
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, hdg = Math.atan2(bx - ax, -(bz - az));
+    assert.ok(preNet.deckHeight(mx, mz) !== null, 'seed built deck at level 6');
+    curLevel = 8; preTerrain.dataRevision = 2; surfaceCalls = 0;
+    for (let i = 0; i < 120; i++) preNet.guardrails.allowsBridge({ x: mx, z: mz, y: 3.6, heading: hdg, spec: CAR_SPEC });
+    assert.ok(surfaceCalls <= 2, `read-only preflights with built level-6 deck sample banks at most once per revision (got ${surfaceCalls})`);
+    for (const child of [...preNet.group.children]) child.geometry?.dispose();
+  }
   // Streaming eviction (7 -> 6 before deck build) and single-bank upgrade (6,6 -> 8,6 before deck build):
   // contacts stay in sync with the exact elevations Roads.deck() will build, and bridgeRevision advances in both orders.
   {
@@ -746,13 +803,21 @@ for (const {a, b, side} of added) {
     const penAfter = independentInnerRailOverlap(wedged, ax, az, ux, uz, span);
     assert.ok(penAfter <= 1e-4, `bridge ${id} blockBridge resolves 65-deg wedged pose to zero independent overlap (${penAfter.toFixed(5)} m)`);
     assert.equal(rails.allowsBridge(wedged), true, `bridge ${id} allowsBridge accepts resolved pose`);
-    // Position-only pass (dt = 0, used for active driven vehicle) must clear the 65-deg wedge with ZERO heading change.
+    // Position-only pass (dt = 0) with a seeded clear pose 1e-8 rad away must NOT change heading even by 1e-8 rad.
     const wedgedZeroDt = { x: ax + ux * wS - uz * 0.6, z: az + uz * wS + ux * 0.6, y: wY, heading: hdg + (65 * Math.PI) / 180, vx: ux * 8, vz: uz * 8, speed: 0, spec: CAR_SPEC };
     const startHdg0 = wedgedZeroDt.heading;
     rails.blockBridge(wedgedZeroDt, 0);
-    assert.equal(wedgedZeroDt.heading, startHdg0, `bridge ${id} dt=0 position-only bridge correction preserves exact heading`);
+    assert.ok(Object.is(wedgedZeroDt.heading, startHdg0), `bridge ${id} dt=0 position-only bridge correction preserves exact heading`);
     assert.ok(independentInnerRailOverlap(wedgedZeroDt, ax, az, ux, uz, span) <= 1e-4, `bridge ${id} dt=0 position-only bridge correction clears overlap`);
     assert.equal(rails.allowsBridge(wedgedZeroDt), true, `bridge ${id} dt=0 resolved pose clears allowsBridge`);
+    // Seed a clear pose at hdg, then disturb heading by 1e-8 rad and wedge into rail with dt = 0: heading stays exact.
+    const seededDt0 = { x: ax + ux * wS, z: az + uz * wS, y: wY, heading: hdg, vx: 0, vz: 0, speed: 0, spec: CAR_SPEC };
+    rails.blockBridge(seededDt0, 1 / 120);
+    const shiftedHdg = hdg + 1e-8;
+    seededDt0.heading = shiftedHdg;
+    seededDt0.x = ax + ux * wS - uz * 0.6; seededDt0.z = az + uz * wS + ux * 0.6;
+    rails.blockBridge(seededDt0, 0);
+    assert.ok(Object.is(seededDt0.heading, shiftedHdg), `bridge ${id} dt=0 saved-pose restore preserves exact heading without 1e-8 drift`);
     // Case C: Multi-circle side-by-side variants straddling the start portal rail at 170/175 deg must clear on the first blockBridge call.
     const yStart = net.deckHeight(ax, az);
     for (const [label, spec, sOff, deg] of [

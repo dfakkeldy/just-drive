@@ -485,7 +485,11 @@ export class Towing {
     p.x = this.x - fx * S.bodyOffset; p.z = this.z - fz * S.bodyOffset; p.y = this.y;
     p.heading = this.heading; p.vx = v.vx; p.vz = v.vz; p.speed = v.speed;
     const oldX = p.x, oldZ = p.z, impactBefore = this.impactSpeed;
+    const rails = this.roads.guardrails;
+    rails?.clearBridgeHit();
     this.world.contacts?.resolve(p);
+    const contactX = p.x, contactZ = p.z;
+    const bridgeOnly = rails?.bridgeHitMatches(p, contactX - oldX, contactZ - oldZ) === true;
     this.world.yard?.resolveTowBody(p);
     if (this.world.solids) pushOut(p, this.world.solids, true);
     const scene = this.world.scene; if (scene?.rules.enabled) pushOut(p, scene.placementSolids, true);
@@ -500,20 +504,19 @@ export class Towing {
     }
     const dx = p.x - oldX, dz = p.z - oldZ;
     const normal = Math.hypot(dx, dz);
+    const ponyGraze = bridgeOnly && Math.hypot(p.x - contactX, p.z - contactZ) <= 1e-7;
     if (normal > 1e-7) {
-      // Move the coupled pair out together, then remove the velocity into the contact through the hitch.
+      // Move the coupled pair out together, then kill the velocity into the contact through the hitch.
       v.x += dx; v.z += dz; this.x += dx; this.z += dz;
       const nx = dx / normal, nz = dz / normal, into = v.vx * nx + v.vz * nz;
       if (into < 0) {
         this.impactSpeed = Math.max(this.impactSpeed, -into);
-        // Preserve tangential slide on a shallow rail graze; stop completely on a direct hit.
-        const speed = Math.hypot(v.vx, v.vz);
-        if (-into > speed * 0.65) { v.vx = v.vz = v.speed = 0; }
-        else {
+        // Preserve tangential slide only on shallow pony-truss rail grazes; ordinary solids stop as before.
+        if (ponyGraze && -into <= Math.hypot(v.vx, v.vz) * 0.65) {
           v.vx -= nx * into; v.vz -= nz * into;
           v.speed = v.vx * Math.sin(v.heading) - v.vz * Math.cos(v.heading);
-        }
-      } else if (this.impactSpeed > impactBefore) { v.vx = p.vx; v.vz = p.vz; v.speed = p.speed; }
+        } else { v.vx = v.vz = v.speed = 0; }
+      } else if (this.impactSpeed > impactBefore && !ponyGraze) { v.vx = v.vz = v.speed = 0; }
     } else {
       v.vx = p.vx; v.vz = p.vz; v.speed = p.speed;
       if (this.impactSpeed > impactBefore) v.vx = v.vz = v.speed = 0;
