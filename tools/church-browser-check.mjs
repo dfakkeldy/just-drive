@@ -33,13 +33,23 @@ for(const url of urls){
     return {wired:true,placementRefused:true,steps:1200,impacts,clear:t.pairClear()};
    }finally{v.onSolidImpact=notify;v.place(saved.x,saved.z,saved.heading);}})()`) : null;
    console.log(name,JSON.stringify({...state,realVehicleContacts:contacts,towing}));
+   assert.equal(await page.read(`document.querySelectorAll('a[href*="formsite"]').length`),0,'no church donation link while away from the church');
   } else {
    assert.equal(await page.read('mmm.church'),null);
    assert.equal(await page.read(`performance.getEntriesByType('resource').filter(e=>/\\/src\\/church\\.ts/.test(e.name)).length`),0,'Mabou never loads the church builder');
+   assert.equal(await page.read(`document.querySelectorAll('a[href*="formsite"]').length`),0,'Mabou has no church donation link');
    console.log('PASS Mabou has no church instance, builder load, model or textures');
   }
   const file=`${out}/${name}.png`;await page.shot(file);
   const png=readFileSync(file);assert.equal(png.readUInt32BE(16),1600);assert.equal(png.readUInt32BE(20),900);
+  // Real pause screen away from the church must not expose the donation link.
+  for(const type of ['keyDown','keyUp'])await page.send('Input.dispatchKeyEvent',{type,code:'KeyP',key:'p'});
+  await sleep(150);
+  assert.equal(await page.read(`!document.getElementById('pauseScreen').hidden`),true,`${name}: pause screen opens`);
+  assert.equal(await page.read(`document.querySelectorAll('a[href*="formsite"]').length`),0,`${name}: real pause screen away from church has no donation link`);
+  for(const type of ['keyDown','keyUp'])await page.send('Input.dispatchKeyEvent',{type,code:'KeyP',key:'p'});
+  await sleep(150);
+  assert.equal(await page.read(`document.getElementById('pauseScreen').hidden`),true,`${name}: pause screen closes`);
   assert.deepEqual(page.errors,[]);
  } finally {await page.close();}
 }
