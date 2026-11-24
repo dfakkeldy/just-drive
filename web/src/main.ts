@@ -39,6 +39,7 @@ import { GARAGE, isDroneVehicle, readVehicle } from './garage';
 import { rideFeatures } from './ride-features';
 import { legacyVehicle, type RideInput } from './ride';
 import { Landmarks } from './landmarks';
+import { WaterTowers } from './water-towers';
 import { Roads } from './roads';
 import { detailSetting } from './detail';
 import { offlinePlay } from './offline-play';
@@ -616,6 +617,15 @@ const landmarks = AREA.landmarks ? new Landmarks(landmarkList, manifest.village,
 if (landmarks) scene.add(landmarks.group);
 const harbourLights = ERA.modern ? new HarbourLights(AREA.id, manifest.village, EXAG, nightLook !== null, SEA_LEVEL) : null;
 if (harbourLights) scene.add(harbourLights.group);
+const waterTowers = ERA.modern ? WaterTowers.forArea(AREA.id, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
+if (waterTowers) {
+  scene.add(waterTowers.group);
+  const prevCanopyExcludes = terrain.canopyExcludes;
+  terrain.canopyExcludes = prevCanopyExcludes
+    ? (e, n) => prevCanopyExcludes(e, n) || waterTowers.excludesCanopy(e, n)
+    : waterTowers.excludesCanopy;
+  if (import.meta.env.DEV) expose({ waterTowers }, false);
+}
 const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea, SEA_LEVEL,
   new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
   terrain, trees?.group ?? null, params.get('reflections'));
@@ -907,6 +917,7 @@ const siteContacts: [string, ContactSite | null][] = [
   ['prince', placeContact(places.prince)],
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
+  ['waterTowers', waterTowers && { resolve: body => waterTowers.resolveSolids(body) }],
 ];
 // A place without a row would compile and boot, and the car would drive through it. Stop at boot instead.
 for (const name of Object.keys(places)) if (!siteContacts.some(([row]) => row === name)) throw new Error(`hand-built place '${name}' has no contact row`);
