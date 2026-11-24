@@ -250,8 +250,6 @@ await initStore(base);
 // to start its read now waits for it there (boot-tasks.ts), so the build order and the failures stay as they were.
 const landmarksRead = AREA.landmarks ? early(getJson('landmarks.json')) : null;
 const buildingsRead = manifest.buildings ? early(getJson(manifest.buildings.file)) : null;
-const foundationsRead = ERA.modern && buildingsRead ? early(fetch(`${base}/building-foundations.json`)
-  .then(response => response.ok ? response.json() : null).catch(() => null)) : null;
 const stylesRead = ERA.modern && manifest.buildingStyles ? early(getJson(manifest.buildingStyles.file)) : null;
 const pavedRead = ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1') ? early(readFile(base, 'paved/index.json')) : null;
 const cemeteryEntry = (manifest as Manifest & { cemeteries?: { file: string } }).cemeteries;
@@ -447,8 +445,14 @@ let littleMabouArt: ReturnType<typeof littleMabouBuildingArt> | undefined;
 // group, the pub, the bank branch, lamp posts, sidewalk, string lights): built by hand from the dash cam brief. The boxes
 // it replaces leave the drawing only; they stay properties. ?mabou=0 leaves the surveyed boxes.
 const mabouSite = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
-const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then(async (data: { buildings: Building[] }) => {
-  const foundations = await foundationsRead?.take();
+// Bundle the baked corrections with the app so this does not add a land request.
+const foundationPacks = import.meta.glob<Record<number, unknown>>(
+  ['../../data/baked/terrain/building-foundations.json', '../../data/baked/areas/*/building-foundations.json'],
+  { eager: true, import: 'default' },
+);
+const foundationFolder = AREA.id === 'mabou' ? 'terrain' : `areas/${AREA.id}`;
+const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then((data: { buildings: Building[] }) => {
+  const foundations = ERA.modern ? foundationPacks[`../../data/baked/${foundationFolder}/building-foundations.json`] : undefined;
   for (const b of data.buildings) {
     const row = foundations?.[b.id];
     if (!Array.isArray(row) || row.length !== 8) continue;
@@ -1084,7 +1088,8 @@ const boxRoofAt = roofHeights(ERA.modern && buildingList ? drawnWithout(mabouSit
 const extraRoofAt = ERA.modern ? (() => {
   const kept = new Set(drawnBuildings ?? []);
   const extra: Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[] =
-    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox && !postOfficeReplaced.has(b.id));
+    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox && !postOfficeReplaced.has(b.id))
+      .map(b => ({ ...b, floorGround: undefined }));
   if (princeSite) extra.push(...princeSite.roofBoxes());
   for (const lm of landmarkList) {
     const a = lm.axisDeg * Math.PI / 180, alongX = Math.sin(a), alongZ = -Math.cos(a), acrossX = Math.cos(a), acrossZ = Math.sin(a);

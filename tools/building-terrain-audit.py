@@ -51,17 +51,40 @@ def terrain_sampler(root):
             return h + (height(0, 1) - h) * (1 - u) + (height(1, 0) - h) * (1 - v)
         raise ValueError(f'No baked tile covers {x}, {y}')
 
-    return sample
+    spacing = manifest['size'] / (2**levels[0][0] * 128)
+    return sample, (west, north, spacing)
 
 
-def audit(baked, output=None):
+def mesh_extents(points, sample, lattice):
+    """The extrema of a clipped triangle lie at its corners."""
+    west, north, spacing = lattice
+    polygon = [((x - west) / spacing, (north - y) / spacing) for x, y in points]
+    edges = list(zip(polygon, polygon[1:] + polygon[:1]))
+    xs, ys = zip(*polygon)
+    candidates = set(polygon)
+    for (ax, ay), (bx, by) in edges:
+        # Every possible live-tile mesh grid line and diagonal lies on this lattice.
+        for start, end in ((ax, bx), (ay, by), (ax + ay, bx + by)):
+            for line in range(math.floor(min(start, end)) + 1, math.ceil(max(start, end))):
+                t = (line - start) / (end - start)
+                candidates.add((ax + t * (bx - ax), ay + t * (by - ay)))
+    for y in range(math.ceil(min(ys)), math.ceil(max(ys))):
+        crossings = sorted(ax + (y - ay) * (bx - ax) / (by - ay)
+                           for (ax, ay), (bx, by) in edges if (ay > y) != (by > y))
+        for left, right in zip(crossings[::2], crossings[1::2]):
+            candidates.update((x, y) for x in range(math.ceil(left), math.floor(right) + 1))
+    heights = [sample(west + x * spacing, north - y * spacing) for x, y in candidates]
+    return min(heights), max(heights)
+
+
+def audit(baked, output=None, verify=False):
     failures = []
     counts = Counter()
     for root in [baked / 'terrain', *sorted((baked / 'areas').iterdir())]:
         if not (root / 'buildings.json').is_file():
             continue
         area = 'mabou' if root.name == 'terrain' else root.name
-        sample = terrain_sampler(root)
+        sample, lattice = terrain_sampler(root)
         companion = root / 'building-foundations.json'
         installed = json.loads(companion.read_text()) if companion.is_file() else {}
         corrections = {}
@@ -72,21 +95,23 @@ def audit(baked, output=None):
             return building['id'] if building.get('shape') else building.get('buildingId', building['id'])
 
         corners = {b['id']: [sample(x, y) for x, y in b['footprint']] for b in buildings}
-        raised = {}
+        raised = set()
+        highs = defaultdict(lambda: -math.inf)
         lows = defaultdict(lambda: math.inf)
         for building in buildings:
-            heights = corners[building['id']]
+            low, high = mesh_extents(building['footprint'], sample, lattice)
             key = group(building)
-            lows[key] = min(lows[key], *heights)
-            if max(heights) > building['ground'] + 0.5:
-                raised[key] = max(raised.get(key, -math.inf), max(heights))
+            lows[key] = min(lows[key], low)
+            highs[key] = max(highs[key], high, building['ground'])
+            if high > building['ground'] + 0.15:
+                raised.add(key)
         for building in buildings:
             heights = corners[building['id']]
             key = group(building)
             identity = [building[field] for field in ('x', 'y', 'ground', 'axisDeg', 'length', 'width')]
             if key in raised:
                 corrections[str(building['id'])] = [
-                    *identity, math.ceil(raised[key] * 100) / 100, math.floor(lows[key] * 100) / 100,
+                    *identity, math.ceil(highs[key] * 100) / 100, math.floor(lows[key] * 100) / 100,
                 ]
             correction = (corrections if output else installed).get(str(building['id']))
             floor = correction[6] if correction and correction[:6] == identity else building['ground']
@@ -95,6 +120,8 @@ def audit(baked, output=None):
                 failures.append(dict(area=area, id=building['id'], ground=building['ground'],
                                      heights=heights, excess=excess))
                 counts[area] += 1
+        if verify and installed != corrections:
+            raise ValueError(f'{area}: foundation data is missing or differs from the current mesh')
         if output:
             dest = output / root.relative_to(baked) / companion.name
             if dest.resolve() == companion.resolve():
@@ -112,8 +139,9 @@ if __name__ == '__main__':
     parser.add_argument('baked', type=Path)
     parser.add_argument('--report', type=Path, help='Write the full list as JSON')
     parser.add_argument('--output', type=Path, help='Write building foundation companions to a separate land directory')
+    parser.add_argument('--verify', action='store_true', help='Require installed companions to match the current mesh')
     args = parser.parse_args()
-    failures = audit(args.baked, args.output)
+    failures = audit(args.baked, args.output, args.verify)
     print(f'Total: {len(failures)}')
     for row in failures[:20]:
         print(f"{row['area']} {row['id']}: +{row['excess']:.2f} m")

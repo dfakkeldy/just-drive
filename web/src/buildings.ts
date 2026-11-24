@@ -555,9 +555,10 @@ export class Buildings {
           const v0 = front === 1 ? depth : -depth - reach, v1 = front === 1 ? depth + reach : -depth;
           const u0 = tallFront ? -span : Math.max(-span, doorU - half);
           const u1 = tallFront ? span : Math.min(span, doorU + half);
-          frontBox(u0, u1, v0, v1, tallFront ? deckHeight - 0.22 : -0.3, deckHeight, steps ? foundation : rgb('#857c68'));
+          const porchFoot = b.foundationGround === undefined ? -0.3 : foundationDepth(0.3);
+          frontBox(u0, u1, v0, v1, tallFront ? deckHeight - 0.22 : porchFoot, deckHeight, steps ? foundation : rgb('#857c68'));
           frontBox(doorU - 0.65, doorU + 0.65, front * (depth + reach + 0.35) - 0.18, front * (depth + reach + 0.35) + 0.18, -0.2, 0.1, foundation);
-          if (entrance === 'wrap-around') frontBox(-span - 1.8, -span, -depth, depth + (front === 1 ? reach : 0), -0.3, 0.23, rgb('#857c68'));
+          if (entrance === 'wrap-around') frontBox(-span - 1.8, -span, -depth, depth + (front === 1 ? reach : 0), porchFoot, 0.23, rgb('#857c68'));
           if (entrance === 'deck') {
             const v = front * (depth + reach - 0.12);
             const posts = tallFront ? [u0 + 0.12, -span / 3, span / 3, u1 - 0.12] : [u0 + 0.12, u1 - 0.12];
@@ -671,13 +672,14 @@ export class Buildings {
         const radius = diameter / 2, cap = height - 2;
         const concrete = rgb('#c3c5bf'), red = rgb('#a04438'), white = rgb('#e2e1d8');
         const segments = 16;
+        const siloFoot = base + foundationDepth(1);
         const topX = sX(u, v), topZ = sZ(u, v), topY = base + height;
         for (let i = 0; i < segments; i++) {
           const a0 = i * Math.PI * 2 / segments, a1 = (i + 1) * Math.PI * 2 / segments;
           const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
           const x0 = sX(u + c0 * radius, v + s0 * radius), z0 = sZ(u + c0 * radius, v + s0 * radius);
           const x1 = sX(u + c1 * radius, v + s1 * radius), z1 = sZ(u + c1 * radius, v + s1 * radius);
-          quadN(x0, base - 1, z0, x1, base - 1, z1, x1, base + cap, z1, x0, base + cap, z0, concrete, 0.83 + 0.17 * c0);
+          quadN(x0, siloFoot, z0, x1, siloFoot, z1, x1, base + cap, z1, x0, base + cap, z0, concrete, 0.83 + 0.17 * c0);
           const colour = i % 2 === 0 ? red : white;
           // Three latitude bands form a rounded striped dome, 14 m total height.
           for (let j = 0; j < 3; j++) {
