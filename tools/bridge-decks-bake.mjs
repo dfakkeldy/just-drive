@@ -170,7 +170,8 @@ export async function bakeArea(mod, sourceRoot, area) {
   const roads = new mod.Roads(fullRoadData, manifest.village, terrain, null);
   const M = roads.modern;
   assert.ok(M, `${area}: ModernBridges created`);
-  await mod.preload(terrain, M.spans.flatMap(r => r.pts), 120, 8);
+  const maxLevel = Math.max(8, ...Object.keys(manifest.levels ?? {}).map(Number));
+  await mod.preload(terrain, M.spans.flatMap(r => r.pts), 120, maxLevel);
 
   const proto = Object.getPrototypeOf(M);
   const origEmit = proto.emit;
