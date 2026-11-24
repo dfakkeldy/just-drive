@@ -70,8 +70,11 @@ stockpiles, and the 1884 era never loads them.
 
 Stage 21 writes a new manifest, so a full rebake drops the key and leaves the file: the row fails with "mixed". Add
 the key again (delete the file, then run install steps 2–5). The bake stages do not run stage 33. If a rebake
-changes roads, buildings or heights near the piles, the row's remake fails with "the bake made other bytes": look at
-the new pack (the `stockpiles-pictures` row), then commit it with a new `hashes.json`.
+changes roads, buildings or heights near the piles, the row's remake fails with "the bake made other bytes" (the
+checker deletes its scratch folder on exit): re-run `pipeline/33_bake_stockpiles.py` into a retained folder, stage
+that candidate pack and manifest key in an isolated land, run `stockpiles-pictures` and confirm its `DATA` line
+matches the candidate's SHA-256 before accepting the pictures, then commit the new pack with a new `hashes.json` and
+install it.
 
 ## Check rows
 
