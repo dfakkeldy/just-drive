@@ -4,31 +4,31 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   "mabou": {
     "file": "bridge-decks.bin",
     "bytes": 176416,
-    "sha256": "37349f217b197311c15cc33d0b4dbdb16799a1a98938999193b06340c26c8d27"
+    "sha256": "22180f93a3d7f7bf7dc669b3c7217d79b8075a58f850e2f4f68355c7e18f5c35"
   },
   "judique": {
     "file": "bridge-decks.bin",
     "bytes": 124952,
-    "sha256": "062a029fff3c34fd0e658aa616dbbc6eca33204bd077f655710b35335ef009fd"
+    "sha256": "4e77404a8316d9e716770096ecb12ef0bcef9099b5e444fec96e8602af1c0a2f"
   },
   "porthood": {
     "file": "bridge-decks.bin",
     "bytes": 73480,
-    "sha256": "a200d4644d422772e08b68fa9ce2277e9a8246b697a94a661f60a56ea287cd1d"
+    "sha256": "62ab7f7a30603ef47dc567a9ee163332db048f7cec1b57296b0b2abe49fae755"
   },
   "westbay": {
     "file": "bridge-decks.bin",
     "bytes": 275432,
-    "sha256": "620f5a1a6a48962fd0f37e847e023bc0bfef229268a2313ac349f3e2b438e36b"
+    "sha256": "635017ad3d9425f838f77ba5e766557241a33aaca931dcb1cc92e379eb53a819"
   },
   "pointtupper": {
     "file": "bridge-decks.bin",
     "bytes": 126000,
-    "sha256": "0425d7954ad4e3f57fb2fe3b1df2fee8a88c22c3fa79a56896b370555032acaa"
+    "sha256": "a84ae9ed8a5b36d06a8a753f87308b20bed085eee90f64d4ac6e8df44e2ddbc0"
   },
   "cansocauseway": {
     "file": "bridge-decks.bin",
     "bytes": 84280,
-    "sha256": "07a153ed3a5b25fbbf8ddf2fba49ce1d450757c1e098f77951765ce61c8d25de"
+    "sha256": "3251ef61bbf245532a8922ed0bed1bd83933b4e0f2e74bd5001802339690202b"
   }
 };

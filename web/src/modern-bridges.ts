@@ -601,6 +601,13 @@ export class ModernBridges {
         h.num(y===null?0:1);h.num(y??0);
         return true;
       };
+      // When approach length grew past APPROACH (16 m), also sample the pre-extension bank/outer stations at APPROACH
+      // because ensure() reads them before toeLength() updates startLength/endLength (matters when an approach has offsetX/Z).
+      if(startLength!==APPROACH||endLength!==APPROACH){
+        r.startLength=APPROACH;r.endLength=APPROACH;
+        for(const s of[0,-3,-6,-8,-APPROACH,len,len+3,len+6,len+8,len+APPROACH]){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}
+        r.startLength=startLength;r.endLength=endLength;
+      }
       // Match build(r)'s exact Float32 grid (x, z) coordinates so interior CHECKS sample the identical points.
       const gxz=new Float32Array((rows+1)*(columns+1)*2);
       for(let i=0,v=0;i<=rows;i++){
@@ -702,7 +709,7 @@ export class ModernBridges {
     if(m&&(m.village[0]!==decks.village[0]||m.village[1]!==decks.village[1]))return false;
     const entry=decks.find(r.chainKey,r.width,!!r.road.ponyTruss,r.geomHash);
     if(!entry||this.rejectedBaked.has(entry)){r.baked=null;r.bakedVerified=false;return false;}
-    if(!touch&&!probeChecked&&!this.probesChanged(r,false))return true;
+    if(!touch&&!probeChecked&&!r.forceBuild&&!this.probesChanged(r,false))return true;
     const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
     if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
     const liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.smoothStart,entry.smoothEnd,entry.y0,entry.y1,entry.level);

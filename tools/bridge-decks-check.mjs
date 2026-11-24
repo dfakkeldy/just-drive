@@ -524,6 +524,69 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   assert.ok(Math.abs(swRoads.modern.spans[0].width - 5.9) < 1e-9, 'late fallback after sidewalk widening preserves active 5.90 m width');
   bump = 0;
 
+  // Distant followed span (5 km away, touch=false) with an active sidewalk widening (forceBuild=true) must bypass the
+  // unchanged-tile probe gate and hydrate the widened 5.90 m variant immediately.
+  level = 6; bump = 0;
+  const farSwTerrain = makeTerrain(streamsA, [0, 0]);
+  const farSwRoads = new mod.Roads({roads: roadList}, [0, 0], farSwTerrain, bothWidthBaked);
+  farSwRoads.update(cam);
+  farSwRoads.modern.spans[0].followed = true;
+  farSwRoads.bridgeWalks.set(1, {side: 1, width: 2.0});
+  farSwTerrain.dataRevision++;
+  farSwRoads.update(new THREE.Vector3(5000, 20, 0));
+  assert.ok(Math.abs(farSwRoads.modern.spans[0].width - 5.9) < 1e-9, 'distant followed span widens to 5.90 m');
+  assert.equal(farSwRoads.modern.spans[0].forceBuild, false, 'distant followed widened span completes hydration without getting stuck in forceBuild');
+  assert.equal(farSwRoads.modern.spans[0].baked?.finalWidth, 3.6 + 2.0 + 0.3, 'distant followed widened span hydrates baked 5.90 m entry');
+  assert.equal(farSwRoads.modern.audit.builds, 2, 'distant followed widened span builds its widened variant');
+
+  // Offset approach road whose startLength extends past 16 m: initial bank(-8) in ensure() samples at startLength=16
+  // (x=0.8) while final 37 m geometry samples x=0.19205. A +1 m spike at (0.8, 8) MUST invalidate landHash.
+  let offsetSpike = false;
+  const offRoadsList = [
+    {id: 1, name: 'Offset bridge', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]},
+    {id: 2, name: 'Offset bridge', kind: 1, halfWidth: 3.6, bridge: false, pts: [[1.6, 0], [1.6, -120]]},
+  ];
+  const offHeight = (x, z) => {
+    const base = z > 0 ? 10 + Math.min(2, Math.max(0, z - 9)) : z < -40 ? 10 : Math.max(0, 10 - Math.min(-z, 40 + z) * 2);
+    return base + (offsetSpike && Math.abs(x - 0.8) < 0.09 && Math.abs(z - 8) < 0.2 ? 1 : 0);
+  };
+  const makeOffTerrain = () => ({
+    cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
+    manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}},
+    heightAt: offHeight,
+    meshContactSource: () => 1,
+    surfaceAt: (x, z) => ({ground: offHeight(x, z), level: 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+  });
+  const offRefRoads = new mod.Roads({roads: offRoadsList}, [0, 0], makeOffTerrain(), null);
+  const offRefM = offRefRoads.modern;
+  let offGrid = null, offLand = [];
+  offRefM.emit = function(r, grid) {
+    offGrid = new Float32Array(grid); offLand = [];
+    this.land = (x, z) => { const h = origLand.call(this, x, z); offLand.push(h === null ? Number.NaN : h); return h; };
+    try { return origEmit.call(this, r, grid); } finally { this.land = origLand; }
+  };
+  const offSpan = offRefM.spans[0];
+  offRefM.ensure(offSpan);
+  assert.ok(offSpan.startLength > 16, `offset approach extends beyond 16 m (got ${offSpan.startLength})`);
+  const offGridY = new Float32Array(offGrid.length / 3);
+  for (let i = 0; i < offGridY.length; i++) offGridY[i] = offGrid[i * 3 + 1];
+  const offBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [{
+    chainKey: offSpan.chainKey, geomHash: offSpan.geomHash,
+    landHash: offRefM.spanLandHash(offSpan, offSpan.startLength, offSpan.endLength, offSpan.width, offSpan.narrowRail, offSpan.smoothStart, offSpan.smoothEnd, offSpan.y0, offSpan.y1, offSpan.level),
+    requestWidth: offSpan.width, finalWidth: offSpan.width, narrowRail: offSpan.narrowRail, level: offSpan.level,
+    smoothStart: offSpan.smoothStart, smoothEnd: offSpan.smoothEnd, ponyTruss: false,
+    startLength: offSpan.startLength, endLength: offSpan.endLength, y0: offSpan.y0, y1: offSpan.y1, outer0: offSpan.outer0, outer1: offSpan.outer1,
+    rows: Math.ceil(offSpan.length) + offSpan.startLength + offSpan.endLength, columns: Math.ceil(2 * offSpan.width / .75),
+    gridY: offGridY, emitLand: new Float64Array(offLand),
+  }]), 'mabou');
+  offsetSpike = true;
+  const offLiveRoads = new mod.Roads({roads: offRoadsList}, [0, 0], makeOffTerrain(), offBaked);
+  offLiveRoads.update(cam);
+  assert.equal(offLiveRoads.modern.audit.bakedBuilds, 0, 'pre-extension offset bank spike rejects stale extended bake');
+  assert.ok(Math.abs(offLiveRoads.modern.spans[0].y0 - 11.04) < 1e-6, 'pre-extension offset bank spike solves live at 11.04 m');
+  offsetSpike = false;
+  level = 7;
+
   // Adding a perpendicular bridge across the approach changes global isSpan and must invalidate geomHash.
   const perpRoadsList = [
     ...roadList,
@@ -861,6 +924,8 @@ if (process.argv.includes('--mutations')) {
     ['centreline bank probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let s=-startLength-1;s<=0;s++){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}', '', /odd-column -3 m bank spike rejects/],
     ['per-column toe-slope probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let j=0;j<=columns;j++){const u=-width+2*width*j/columns;if(!sample(p.x+p.nx*u,p.z+p.nz*u))return null;}', 'for(const side of[-1,0,1])if(!sample(p.x+p.nx*side*width,p.z+p.nz*side*width))return null;', /interior toe-slope column change rejects/],
     ['fallback toeLength candidates omitted from landHash', bridgesFile, bridgesSrc, 'if(grade>=.243||(smooth&&!isSmooth)){', 'if(false){', /eased crossfall at 50 m rejects/],
+    ['pre-extension offset bank probes omitted from landHash', bridgesFile, bridgesSrc, 'if(startLength!==APPROACH||endLength!==APPROACH){', 'if(false){', /pre-extension offset bank spike rejects/],
+    ['distant followed forced build blocked by probe gate', bridgesFile, bridgesSrc, 'if(!touch&&!probeChecked&&!r.forceBuild&&!this.probesChanged(r,false))return true;', 'if(!touch&&!probeChecked&&!this.probesChanged(r,false))return true;', /distant followed widened span/],
     ['widened sidewalk fallback drops active width', bridgesFile, bridgesSrc, 'const sameEntry=r.baked===entry;', 'const sameEntry=!!r.baked;', /preserves active 5\.90 m width/],
     ['distant washboard refresh double-checks probes', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,true))return;', 'if(this.tryHydrateBaked(r,touch,false))return;', /distant followed washboard/],
     ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
