@@ -15,6 +15,34 @@ export interface Building {
   shape?: 'block' | 'tank';
 }
 
+/** Apply the companion only to the exact survey file used to bake it. */
+export async function applyBuildingFoundations(buildings: Building[], source: string, companion: unknown): Promise<void> {
+  if (!companion || typeof companion !== 'object' || !globalThis.crypto?.subtle) return;
+  const { source: expected, rows } = companion as { source?: unknown; rows?: unknown };
+  if (typeof expected !== 'string' || typeof rows !== 'string') return;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
+  const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  if (hash !== expected) return;
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(rows), character => character.charCodeAt(0));
+  } catch {
+    return;
+  }
+  if (bytes.length % 8 !== 0) return;
+  const view = new DataView(bytes.buffer);
+  const byId = new Map(buildings.map(building => [building.id, building]));
+  let id = 0;
+  // Little-endian rows store the ID delta, floor rise and foundation depth in centimetres.
+  for (let offset = 0; offset < bytes.length; offset += 8) {
+    id += view.getUint32(offset, true);
+    const building = byId.get(id);
+    if (!building) continue;
+    building.floorGround = building.ground + view.getUint16(offset + 4, true) / 100;
+    building.foundationGround = building.floorGround - view.getUint16(offset + 6, true) / 100;
+  }
+}
+
 /** One property per mapped building, at its unchanged pre-split position. */
 export const buildingSites = (list: Building[]): Building[] => list
   .filter((b) => b.buildingId === undefined || b.buildingId === b.id)

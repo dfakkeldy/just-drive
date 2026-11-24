@@ -7,10 +7,11 @@
 // It reads every area that has buildings.json. MMM_BAKED names another data/baked folder (a rehearsal).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { inflateSync } from 'node:zlib';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { AREAS } from '../web/src/area.ts';
-import { Buildings, buildingSites, clearBoxes, roofSites } from '../web/src/buildings.ts';
+import { Buildings, applyBuildingFoundations, buildingSites, clearBoxes, roofSites } from '../web/src/buildings.ts';
 import { ChurchSite } from '../web/src/church-site.ts';
 import { JudiqueVillageSite } from '../web/src/judique-village-site.ts';
 import { PortHawkesburySite } from '../web/src/port-hawkesbury-site.ts';
@@ -291,7 +292,18 @@ const round = (id, e, n, diameter, eave, ridge, roof) => block(id, e, n, diamete
   // A long turned hall. One box round it would clear four times its own area of forest.
   const hall = block(2, V[0] - 300, V[1] + 500, 300, 40, 37, 7, 7.5, 'flat');
   const drawnHall = roofed(hall, V, 1.3), boxes = drawnHall.clear;
-  const raisedHall = { ...hall, shape: undefined, floorGround: 15, foundationGround: 7 };
+  const raisedHall = { ...hall, shape: undefined };
+  const survey = JSON.stringify({ buildings: [raisedHall] });
+  const rows = Buffer.alloc(8);
+  rows.writeUInt32LE(raisedHall.id, 0);
+  rows.writeUInt16LE(300, 4);
+  rows.writeUInt16LE(800, 6);
+  const companion = { source: createHash('sha256').update(survey).digest('hex'), rows: rows.toString('base64') };
+  await applyBuildingFoundations([raisedHall], survey + ' ', companion);
+  assert.equal(raisedHall.floorGround, undefined, 'stale survey ignores baked foundations');
+  await applyBuildingFoundations([raisedHall], survey, companion);
+  assert.equal(raisedHall.floorGround, 15, 'load the baked uphill floor');
+  assert.equal(raisedHall.foundationGround, 7, 'load the baked downhill foundation');
   assert.ok(Math.abs(minY(raisedHall, V, 1.5) - 10.4) < 1e-4, 'foundation extends below the low corner');
   const raisedModel = new Buildings([raisedHall], V, 1, 0);
   cast.set(new THREE.Vector3(-300, 40, -500), down);

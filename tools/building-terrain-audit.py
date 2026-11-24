@@ -5,11 +5,14 @@ This measures the terrain triangles before runtime site grading and road cuts.
 Run with Pillow installed and pass the baked land directory.
 """
 import argparse
+import base64
+import hashlib
 from collections import Counter, defaultdict
 from functools import lru_cache
 import json
 import math
 from pathlib import Path
+import struct
 
 from PIL import Image
 
@@ -88,7 +91,15 @@ def audit(baked, output=None, verify=False):
         companion = root / 'building-foundations.json'
         installed = json.loads(companion.read_text()) if companion.is_file() else {}
         corrections = {}
-        buildings = json.loads((root / 'buildings.json').read_text())['buildings']
+        source_bytes = (root / 'buildings.json').read_bytes()
+        source_hash = hashlib.sha256(source_bytes).hexdigest()
+        buildings = json.loads(source_bytes)['buildings']
+        installed_floors = {}
+        if installed.get('source') == source_hash:
+            building_id = 0
+            for delta, raise_cm, depth_cm in struct.iter_unpack('<IHH', base64.b64decode(installed['rows'], validate=True)):
+                building_id += delta
+                installed_floors[building_id] = raise_cm
         # Wings of a single ordinary building must retain one shared floor.
         # Blocks and tanks represent separately measured structures.
         def group(building):
@@ -108,19 +119,24 @@ def audit(baked, output=None, verify=False):
         for building in buildings:
             heights = corners[building['id']]
             key = group(building)
-            identity = [building[field] for field in ('x', 'y', 'ground', 'axisDeg', 'length', 'width')]
             if key in raised:
-                corrections[str(building['id'])] = [
-                    *identity, math.ceil(highs[key] * 100) / 100, math.floor(lows[key] * 100) / 100,
-                ]
-            correction = (corrections if output else installed).get(str(building['id']))
-            floor = correction[6] if correction and correction[:6] == identity else building['ground']
+                floor_cm = math.ceil(highs[key] * 100)
+                low_cm = math.floor(lows[key] * 100)
+                corrections[building['id']] = (floor_cm - round(building['ground'] * 100), floor_cm - low_cm)
+            raise_cm = corrections.get(building['id'], (0, 0))[0] if output else installed_floors.get(building['id'], 0)
+            floor = building['ground'] + raise_cm / 100
             excess = max(heights) - floor
             if excess > 0.5:
                 failures.append(dict(area=area, id=building['id'], ground=building['ground'],
                                      heights=heights, excess=excess))
                 counts[area] += 1
-        if verify and installed != corrections:
+        rows = bytearray()
+        prev_id = 0
+        for building_id, (raise_cm, depth_cm) in sorted(corrections.items()):
+            rows.extend(struct.pack('<IHH', building_id - prev_id, raise_cm, depth_cm))
+            prev_id = building_id
+        companion_data = dict(source=source_hash, rows=base64.b64encode(rows).decode('ascii'))
+        if verify and installed != companion_data:
             raise ValueError(f'{area}: foundation data is missing or differs from the current mesh')
         if output:
             dest = output / root.relative_to(baked) / companion.name
@@ -128,7 +144,7 @@ def audit(baked, output=None, verify=False):
                 raise ValueError('Output must be separate from the installed land')
             dest.parent.mkdir(parents=True, exist_ok=True)
             temporary = dest.with_suffix('.tmp')
-            temporary.write_text(json.dumps(corrections, separators=(',', ':')) + '\n')
+            temporary.write_text(json.dumps(companion_data, separators=(',', ':')) + '\n')
             temporary.replace(dest)
         print(f'{area}: {counts[area]} of {len(buildings)}', flush=True)
     return sorted(failures, key=lambda row: -row['excess'])
