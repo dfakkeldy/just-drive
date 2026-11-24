@@ -5,6 +5,8 @@ export interface Building {
   /** A split group shares one identity; only its largest wing carries the original site. */
   buildingId?: number; site?: Building;
   id: number; x: number; y: number; ground: number; footprint: [number, number][];
+  /** Raised floor and lowest surveyed mesh corner for a building on a slope. */
+  floorGround?: number; foundationGround?: number;
   axisDeg: number; length: number; width: number; eave: number; ridge: number;
   roof: 'gable' | 'flat' | 'shed'; kind: 'house' | 'barn' | 'shed' | 'large'; confidence: number;
   /** A large building measured as blocks (pipeline/big_buildings.py): each block has its own height. A tank is round:
@@ -237,7 +239,10 @@ export class Buildings {
       const nearPaint = facadeRanges && Math.max(b.length, b.width) <= facadeCellSize ? (first: number, end = pos.length / 3) => {
         if (end > first) facadeRanges.push({ x: Math.floor(cx / facadeCellSize), z: Math.floor(cz / facadeCellSize), first, end });
       } : undefined;
-      const base = seaLevel + (b.ground - seaLevel) * exag;
+      const floorGround = b.floorGround ?? b.ground;
+      const base = seaLevel + (floorGround - seaLevel) * exag;
+      const foundationDepth = (depth: number) => Math.min(-depth,
+        ((b.foundationGround ?? floorGround) - floorGround) * exag - 0.1);
       snowBase = base;
       const a = THREE.MathUtils.degToRad(b.axisDeg);
       const ux = Math.sin(a), uz = -Math.cos(a), vx = Math.cos(a), vz = Math.sin(a);   // along the ridge, across it
@@ -267,7 +272,7 @@ export class Buildings {
         // A storage tank: a steel shell up to the measured rim, and a low cone up to the measured top.
         const radius = b.length / 2, shell = TANKS[Math.floor(hash(b.id) * TANKS.length)];
         const cap: RGB = [shell[0] * 0.86, shell[1] * 0.86, shell[2] * 0.86], topY = base + b.ridge;
-        const tankFoot = -7 * Math.max(1, exag);
+        const tankFoot = foundationDepth(7 * Math.max(1, exag));
         const segments = 32;
         for (let i = 0; i < segments; i++) {
           const t0 = i * Math.PI * 2 / segments, t1 = (i + 1) * Math.PI * 2 / segments;
@@ -295,7 +300,7 @@ export class Buildings {
       const roof = style ? rgb(style.roof) : roofPalette[Math.floor(hash(identity + 0.5) * roofPalette.length)];
       // Walls and foundation run below the ground line so a slope never shows a gap.
       // Large mapped blocks span wide slopes and coarse parent terrain meshes, so scale depth with exaggeration.
-      const foot = b.shape === 'block' ? -7 * Math.max(1, exag) : -3;
+      const foot = foundationDepth(b.shape === 'block' ? 7 * Math.max(1, exag) : 3);
       const shape = style?.roofShape ?? (b.buildingId !== undefined && b.roof !== 'flat' ? 'gable' : b.roof);
       const flat = shape === 'flat';
       const shed = shape === 'shed';
