@@ -141,6 +141,11 @@ export class Roads {
     return this.query(this.cells, x, z, reach, filter);
   }
 
+  /** Name the road under the vehicle, with a metre of tolerance at the edge. */
+  nameAt(x: number, z: number): string | null {
+    return this.query(this.cells, x, z, this.maxHalfWidth + 1, undefined, 1)?.road.name ?? null;
+  }
+
   /** Cold placement query: visit every nearby segment once, including tracks, trails and driveways.
    * Reach is measured from road edges, so wide roads in adjacent cells are included. */
   forEachNearbySegment(x: number, z: number, reach: number, visit: (road: Road, segment: number) => void, exclude?: Road): void {
@@ -154,7 +159,7 @@ export class Roads {
         }
   }
 
-  private query(cells: Map<number, [number, number][]>, x: number, z: number, reach: number, filter?: (r: Road) => boolean): RoadHit | null {
+  private query(cells: Map<number, [number, number][]>, x: number, z: number, reach: number, filter?: (r: Road) => boolean, edgeTolerance?: number): RoadHit | null {
     let best: RoadHit | null = null;
     const era=this.terrain.cartRoads&&cells===this.bridgeCells;
     let candidates=0,bestSquared=144,bestRI=Infinity;
@@ -184,7 +189,7 @@ export class Roads {
           if(!(squared<144&&squared<=(road.halfWidth+1.2)**2)||best&&(squared>bestSquared||squared===bestSquared&&(ri>bestRI||ri===bestRI&&s>=best.seg)))continue;
           bestSquared=squared;bestRI=ri;best=this.eraBridgeHit!;
           best.road=road;best.dist=Math.sqrt(squared);best.x=px;best.z=pz;best.heading=Math.atan2(dx,-dz);best.seg=s;best.t=t;
-        }else if (d <= reach && (!best || d < best.dist)) best = { road, dist: d, x: px, z: pz, heading: Math.atan2(dx, -dz), seg: s, t };
+        }else if (d <= (edgeTolerance === undefined ? reach : road.halfWidth + edgeTolerance) && (!best || d < best.dist)) best = { road, dist: d, x: px, z: pz, heading: Math.atan2(dx, -dz), seg: s, t };
       }
     }
     if(era)this.audit.heightCandidatesMax=Math.max(this.audit.heightCandidatesMax,candidates);

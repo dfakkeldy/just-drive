@@ -99,3 +99,17 @@ the Mabou mode. Mabou Mines Road stays washboard.
 Map the closed ends, with lamp boards and barriers, on Granville St near
 E627233 N5053179 and Reeves St near E627443 N5053518 (EPSG:2961). These are
 follow-up work, not changed by this surface delta.
+
+## Stage width and centre paint for issue 1406
+
+Run `python3 tools/industrial-surface/patch.py --width SOURCE_POINTTUPPER NEW_OUTPUT_DIRECTORY`
+on the installed surface-corrected land. It stages a 3.6 m half width and
+the existing double-yellow flag. The 7.2 m travel width comes from the two
+3.6 m lanes in [Bear Head LNG assessment table 6.38](https://www.novascotia.ca/nse/ea/bearHeadLNGTerminal/Section_6_Pg_33-110.pdf).
+The width represents the travel lanes. The report also describes paved
+shoulders on part of the route. Provincial road segments confirm the lane
+count. Cached OSM way 181364590 lists two lanes and has no width tag.
+
+Use these settings before the Point Tupper ground-shaping step in delta 2.
+The staged hash receipt describes the width and paint changes on current
+ground. Recompute the receipt and dependent pins for the combined bake.
