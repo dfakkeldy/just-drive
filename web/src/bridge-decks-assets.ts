@@ -19,7 +19,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   "westbay": {
     "file": "bridge-decks.bin",
     "bytes": 275432,
-    "sha256": "b23ce9bf8b1123594420d385b59e28343260efbc0b920b9b0b8eef954588d79c"
+    "sha256": "620f5a1a6a48962fd0f37e847e023bc0bfef229268a2313ac349f3e2b438e36b"
   },
   "pointtupper": {
     "file": "bridge-decks.bin",

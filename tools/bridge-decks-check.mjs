@@ -250,7 +250,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   };
   const refSpan = refM.spans[0];
   refM.ensure(refSpan);
-  const refLandHash = refM.spanLandHash(refSpan, refSpan.startLength, refSpan.endLength, refSpan.width, refSpan.narrowRail, refSpan.level);
+  const refLandHash = refM.spanLandHash(refSpan, refSpan.startLength, refSpan.endLength, refSpan.width, refSpan.narrowRail, refSpan.smoothStart, refSpan.smoothEnd, refSpan.y0, refSpan.y1, refSpan.level);
   assert.ok(refLandHash !== null, 'synthetic reference landHash computed');
   const gridY = new Float32Array(capGrid.length / 3);
   for (let i = 0; i < gridY.length; i++) gridY[i] = capGrid[i * 3 + 1];
@@ -384,8 +384,8 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   toeSlopeRoads.update(cam);
   assert.equal(toeSlopeRoads.modern.audit.bakedBuilds, 0, 'interior toe-slope column change rejects stale baked deck');
 
-  // Washboard bridge staged level-6 -> level-7 arrival: when final roadAlongAxis arrives, approach attribute refreshes
-  // bit-for-bit without running the grade solver.
+  // Washboard bridge staged level-6 -> level-7 arrival (both near AND distant 5 km followed span with touch=false):
+  // when final roadAlongAxis arrives, approach attribute refreshes bit-for-bit without running the grade solver.
   const washRoadsList = [{id: 3, name: 'Mines Rd', kind: 3, halfWidth: 3.6, washboard: true, bridge: true, pts: [[0, 0], [0, 40]]}];
   let washAxis = [0.2, -0.9797958971132712];
   const makeWashTerrain = lv => ({
@@ -411,30 +411,118 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   for (let i = 0; i < wGridY.length; i++) wGridY[i] = wGrid[i * 3 + 1];
   const wBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [{
     chainKey: wRefSpan.chainKey, geomHash: wRefSpan.geomHash,
-    landHash: wRefM.spanLandHash(wRefSpan, wRefSpan.startLength, wRefSpan.endLength, wRefSpan.width, wRefSpan.narrowRail, wRefSpan.level),
+    landHash: wRefM.spanLandHash(wRefSpan, wRefSpan.startLength, wRefSpan.endLength, wRefSpan.width, wRefSpan.narrowRail, wRefSpan.smoothStart, wRefSpan.smoothEnd, wRefSpan.y0, wRefSpan.y1, wRefSpan.level),
     requestWidth: wRefSpan.width, finalWidth: wRefSpan.width, narrowRail: wRefSpan.narrowRail, level: wRefSpan.level,
     smoothStart: wRefSpan.smoothStart, smoothEnd: wRefSpan.smoothEnd, ponyTruss: false,
     startLength: wRefSpan.startLength, endLength: wRefSpan.endLength, y0: wRefSpan.y0, y1: wRefSpan.y1, outer0: wRefSpan.outer0, outer1: wRefSpan.outer1,
     rows: Math.ceil(wRefSpan.length) + wRefSpan.startLength + wRefSpan.endLength, columns: Math.ceil(2 * wRefSpan.width / .75),
     gridY: wGridY, emitLand: new Float64Array(wLand),
   }]), 'mabou');
-  let wStageLevel = 6;
-  washAxis = [0, -1];
-  const wRunTerrain = {
-    ...makeWashTerrain(6),
-    meshContactSource: () => wStageLevel,
-    surfaceAt: (x, z) => ({ground: height(x, z), level: wStageLevel, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 3, bridge: true, washboard: true}),
+  for (const distant of [false, true]) {
+    let wStageLevel = 6;
+    washAxis = [0, -1];
+    const wRunTerrain = {
+      ...makeWashTerrain(6),
+      meshContactSource: () => wStageLevel,
+      surfaceAt: (x, z) => ({ground: height(x, z), level: wStageLevel, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 3, bridge: true, washboard: true}),
+    };
+    const wRunRoads = new mod.Roads({roads: washRoadsList}, [0, 0], wRunTerrain, wBaked);
+    let wSolves = 0;
+    wRunRoads.modern.build = function(...args) { wSolves++; return proto.build.apply(this, args); };
+    wRunRoads.update(cam);
+    assert.equal(wRunRoads.modern.audit.bakedBuilds, 1, 'washboard bridge hydrates at level 6');
+    if (distant) wRunRoads.modern.spans[0].followed = true;
+    wStageLevel = 7; washAxis = [0.2, -0.9797958971132712]; wRunTerrain.dataRevision++;
+    wRunRoads.update(distant ? new THREE.Vector3(5000, 20, 0) : cam);
+    assert.equal(wSolves, 0, 'washboard road-axis refresh never runs grade solver');
+    assert.equal(wRunRoads.modern.spans[0].bakedVerified, true, `${distant ? 'distant followed ' : ''}washboard bridge verified after road-axis refresh`);
+    assert.ok(spanBits(wRunRoads.modern.spans[0]).equals(spanBits(wRefSpan)), `${distant ? 'distant followed ' : ''}washboard approach attribute matches final-land reference bit-for-bit after staged arrival`);
+  }
+
+  // Fallback toeLength() out to 96 m: when steep crossfall forces toeLength to return best=16, easing crossfall around
+  // 50 m changes the live solver's approach to 41..50 m and MUST invalidate landHash (never mark stale 16 m verified).
+  let ease50 = false;
+  const steepCrossHeight = (x, z) => {
+    if (z <= 0 && z >= -40) return Math.max(0, 10 - Math.min(-z, 40 + z) * 2);
+    // Crossfall 0.244 is above toeLength's 0.243 cut-off (so toeLength scans 16..96 and returns best=16) yet below
+    // build()'s 0.246 solver limit (so extendStart stays false and baked startLength stays 16).
+    const slope = ease50 && z >= 41 && z <= 55 ? 0.05 : 0.244;
+    return 10 + x * slope;
   };
-  const wRunRoads = new mod.Roads({roads: washRoadsList}, [0, 0], wRunTerrain, wBaked);
-  let wSolves = 0;
-  wRunRoads.modern.build = function(...args) { wSolves++; return proto.build.apply(this, args); };
-  wRunRoads.update(cam);
-  assert.equal(wRunRoads.modern.audit.bakedBuilds, 1, 'washboard bridge hydrates at level 6');
-  wStageLevel = 7; washAxis = [0.2, -0.9797958971132712]; wRunTerrain.dataRevision++;
-  wRunRoads.update(cam);
-  assert.equal(wSolves, 0, 'washboard road-axis refresh never runs grade solver');
-  assert.equal(wRunRoads.modern.spans[0].bakedVerified, true, 'washboard bridge verified after road-axis refresh');
-  assert.ok(spanBits(wRunRoads.modern.spans[0]).equals(spanBits(wRefSpan)), 'washboard approach attribute matches final-land reference bit-for-bit after staged arrival');
+  const makeSteepTerrain = lv => ({
+    cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
+    manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}},
+    heightAt: steepCrossHeight,
+    meshContactSource: () => lv,
+    surfaceAt: (x, z) => ({ground: steepCrossHeight(x, z), level: lv, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+  });
+  const stRefRoads = new mod.Roads({roads: roadList}, [0, 0], makeSteepTerrain(7), null);
+  const stRefM = stRefRoads.modern;
+  let stGrid = null, stLand = [];
+  stRefM.emit = function(r, grid) {
+    stGrid = new Float32Array(grid); stLand = [];
+    this.land = (x, z) => { const h = origLand.call(this, x, z); stLand.push(h === null ? Number.NaN : h); return h; };
+    try { return origEmit.call(this, r, grid); } finally { this.land = origLand; }
+  };
+  const stSpan = stRefM.spans[0];
+  stRefM.ensure(stSpan);
+  assert.equal(stSpan.startLength, 16, 'steep 0.244 crossfall falls back to best startLength=16');
+  const stGridY = new Float32Array(stGrid.length / 3);
+  for (let i = 0; i < stGridY.length; i++) stGridY[i] = stGrid[i * 3 + 1];
+  const stBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [{
+    chainKey: stSpan.chainKey, geomHash: stSpan.geomHash,
+    landHash: stRefM.spanLandHash(stSpan, stSpan.startLength, stSpan.endLength, stSpan.width, stSpan.narrowRail, stSpan.smoothStart, stSpan.smoothEnd, stSpan.y0, stSpan.y1, stSpan.level),
+    requestWidth: stSpan.width, finalWidth: stSpan.width, narrowRail: stSpan.narrowRail, level: stSpan.level,
+    smoothStart: stSpan.smoothStart, smoothEnd: stSpan.smoothEnd, ponyTruss: false,
+    startLength: stSpan.startLength, endLength: stSpan.endLength, y0: stSpan.y0, y1: stSpan.y1, outer0: stSpan.outer0, outer1: stSpan.outer1,
+    rows: Math.ceil(stSpan.length) + stSpan.startLength + stSpan.endLength, columns: Math.ceil(2 * stSpan.width / .75),
+    gridY: stGridY, emitLand: new Float64Array(stLand),
+  }]), 'mabou');
+  ease50 = true;
+  const stLiveRoads = new mod.Roads({roads: roadList}, [0, 0], makeSteepTerrain(7), stBaked);
+  stLiveRoads.update(cam);
+  assert.equal(stLiveRoads.modern.audit.bakedBuilds, 0, 'eased crossfall at 50 m rejects stale fallback toeLength bake');
+  assert.ok(stLiveRoads.modern.spans[0].startLength >= 40, `live solver extends approach to eased 40..50 m zone (got ${stLiveRoads.modern.spans[0].startLength})`);
+  ease50 = false;
+
+  // Late fallback after sidewalk widening: hydrate base 4.05 m at level 6, widen to 5.90 m via bridgeWalks (hydrating
+  // baked 5.90 m variant), then reveal +2 m terrain mismatch at level 7 -> fallback MUST preserve active 5.90 m width!
+  const wideRefRoads = new mod.Roads({roads: roadList}, [0, 0], makeTerrain(streamsA, [0, 0]), null);
+  const wideRefM = wideRefRoads.modern;
+  wideRefM.emit = function(r, grid) {
+    capGrid = new Float32Array(grid); capLand = [];
+    this.land = (x, z) => { const h = origLand.call(this, x, z); capLand.push(h === null ? Number.NaN : h); return h; };
+    try { return origEmit.call(this, r, grid); } finally { this.land = origLand; }
+  };
+  wideRefRoads.bridgeWalks.set(1, {side: 1, width: 2.0});
+  wideRefRoads.update(cam);
+  const wideSpan = wideRefM.spans[0];
+  assert.ok(Math.abs(wideSpan.width - 5.9) < 1e-9, `widened sidewalk span width is 5.9 m (got ${wideSpan.width})`);
+  const wideGridY = new Float32Array(capGrid.length / 3);
+  for (let i = 0; i < wideGridY.length; i++) wideGridY[i] = capGrid[i * 3 + 1];
+  const wideRec = {
+    chainKey: wideSpan.chainKey, geomHash: wideSpan.geomHash,
+    landHash: wideRefM.spanLandHash(wideSpan, wideSpan.startLength, wideSpan.endLength, wideSpan.width, wideSpan.narrowRail, wideSpan.smoothStart, wideSpan.smoothEnd, wideSpan.y0, wideSpan.y1, wideSpan.level),
+    requestWidth: wideSpan.width, finalWidth: wideSpan.width, narrowRail: wideSpan.narrowRail, level: wideSpan.level,
+    smoothStart: wideSpan.smoothStart, smoothEnd: wideSpan.smoothEnd, ponyTruss: false,
+    startLength: wideSpan.startLength, endLength: wideSpan.endLength, y0: wideSpan.y0, y1: wideSpan.y1, outer0: wideSpan.outer0, outer1: wideSpan.outer1,
+    rows: Math.ceil(wideSpan.length) + wideSpan.startLength + wideSpan.endLength, columns: Math.ceil(2 * wideSpan.width / .75),
+    gridY: wideGridY, emitLand: new Float64Array(capLand),
+  };
+  const bothWidthBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [record, wideRec]), 'mabou');
+  level = 6; bump = 0;
+  const swTerrain = makeTerrain(streamsA, [0, 0]);
+  const swRoads = new mod.Roads({roads: roadList}, [0, 0], swTerrain, bothWidthBaked);
+  swRoads.update(cam);
+  assert.equal(swRoads.modern.spans[0].width, 4.05, 'level-6 base width hydrates at 4.05 m');
+  swRoads.bridgeWalks.set(1, {side: 1, width: 2.0});
+  swRoads.update(cam);
+  assert.ok(Math.abs(swRoads.modern.spans[0].width - 5.9) < 1e-9, 'widened sidewalk hydrates baked 5.90 m variant');
+  level = 7; bump = 2; swTerrain.dataRevision++;
+  swRoads.update(cam);
+  assert.equal(swRoads.modern.spans[0].baked, null, 'widened variant rejects on level-7 terrain mismatch');
+  assert.ok(Math.abs(swRoads.modern.spans[0].width - 5.9) < 1e-9, 'late fallback after sidewalk widening preserves active 5.90 m width');
+  bump = 0;
 
   // Adding a perpendicular bridge across the approach changes global isSpan and must invalidate geomHash.
   const perpRoadsList = [
@@ -468,7 +556,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   const mSpan = mRefM.spans[0];
   mRefM.ensure(mSpan);
   assert.equal(mSpan.level, 7, 'mixed-level bank min level is 7 while z>=0 tile is level 9');
-  const mLandHash = mRefM.spanLandHash(mSpan, mSpan.startLength, mSpan.endLength, mSpan.width, mSpan.narrowRail, mSpan.level);
+  const mLandHash = mRefM.spanLandHash(mSpan, mSpan.startLength, mSpan.endLength, mSpan.width, mSpan.narrowRail, mSpan.smoothStart, mSpan.smoothEnd, mSpan.y0, mSpan.y1, mSpan.level);
   assert.ok(mLandHash !== null, 'mixed-level bake landHash computed');
   const mGridY = new Float32Array(mGrid.length / 3);
   for (let i = 0; i < mGridY.length; i++) mGridY[i] = mGrid[i * 3 + 1];
@@ -524,7 +612,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
         for (let i = 0; i < gy.length; i++) gy[i] = capGrid[i * 3 + 1];
         parRecords.set(s, {
           chainKey: s.chainKey, geomHash: s.geomHash,
-          landHash: parM.spanLandHash(s, s.startLength, s.endLength, s.width, s.narrowRail, s.level),
+          landHash: parM.spanLandHash(s, s.startLength, s.endLength, s.width, s.narrowRail, s.smoothStart, s.smoothEnd, s.y0, s.y1, s.level),
           requestWidth: parInit.get(s), finalWidth: s.width, narrowRail: s.narrowRail, level: s.level,
           smoothStart: s.smoothStart, smoothEnd: s.smoothEnd, ponyTruss: false,
           startLength: s.startLength, endLength: s.endLength, y0: s.y0, y1: s.y1, outer0: s.outer0, outer1: s.outer1,
@@ -772,11 +860,14 @@ if (process.argv.includes('--mutations')) {
     ['interior CHECKS omitted from landHash', bridgesFile, bridgesSrc, 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i1;i++)for(let j=0;j<columns;j++){', 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i0;i++)for(let j=0;j<columns;j++){', /interior triangle ridge rejects/],
     ['centreline bank probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let s=-startLength-1;s<=0;s++){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}', '', /odd-column -3 m bank spike rejects/],
     ['per-column toe-slope probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let j=0;j<=columns;j++){const u=-width+2*width*j/columns;if(!sample(p.x+p.nx*u,p.z+p.nz*u))return null;}', 'for(const side of[-1,0,1])if(!sample(p.x+p.nx*side*width,p.z+p.nz*side*width))return null;', /interior toe-slope column change rejects/],
+    ['fallback toeLength candidates omitted from landHash', bridgesFile, bridgesSrc, 'if(grade>=.243||(smooth&&!isSmooth)){', 'if(false){', /eased crossfall at 50 m rejects/],
+    ['widened sidewalk fallback drops active width', bridgesFile, bridgesSrc, 'const sameEntry=r.baked===entry;', 'const sameEntry=!!r.baked;', /preserves active 5\.90 m width/],
+    ['distant washboard refresh double-checks probes', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,true))return;', 'if(this.tryHydrateBaked(r,touch,false))return;', /distant followed washboard/],
     ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
     ['distant followed span touches tiles', bridgesFile, bridgesSrc, 'if(!touch&&!this.probesChanged(r,false))return;', '', /zero touching surfaceAt calls/],
     ['probeTargetLevel capped at 8', bridgesFile, bridgesSrc, 'const top=Math.max(this.manifestMaxLevel,fallbackLevel);', 'const top=Math.max(8,fallbackLevel);', /withheld level-9 tile/],
     ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;return false;}', '', /raised terrain before first build rejects/],
-    ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===r.baked.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}\n        if(this.tryHydrateBaked(r,touch))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
+    ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===r.baked.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}\n        if(this.tryHydrateBaked(r,touch,true))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
     ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds/],
     ['verified baked fast-path removed', bridgesFile, bridgesSrc, 'if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;', '', /skips land probes/],
     ['bridgeBankElevations ignores baked flag', bridgesFile, bridgesSrc, 'if(built&&(r.baked||r.level>=8||r.revision===rev)){', 'if(built&&(r.level>=8||r.revision===rev)){', /bridgeBankElevations keeps baked (level|y0)/],

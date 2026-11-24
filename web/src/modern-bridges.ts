@@ -586,9 +586,9 @@ export class ModernBridges {
   }
 
   /** Fingerprint live ground heights across every solver/emitter terrain input (full grid vertices, solver triangle
-   *  interior CHECKS lattice & centroids inside isSpan, 0.5 m clearance line, toe slopes, piers and parallel crossing
-   *  banks) once every probe reaches its finest manifest tile level. Returns null while any finer tile is pending. */
-  private spanLandHash(r:Span,startLength:number,endLength:number,finalWidth:number,narrowRail:boolean,fallbackLevel:number):bigint|null {
+   *  interior CHECKS lattice & centroids, 0.5 m clearance line, toe slopes, fallback toeLength candidates out to
+   *  MAX_APPROACH, piers and parallel crossing banks) once every probe reaches its finest manifest tile level. */
+  private spanLandHash(r:Span,startLength:number,endLength:number,finalWidth:number,narrowRail:boolean,smoothStart:boolean,smoothEnd:boolean,y0:number,y1:number,fallbackLevel:number):bigint|null {
     const prevS=r.startLength,prevE=r.endLength,prevW=r.width,prevNR=r.narrowRail,prevSampling=this.sampling,prevBakedLand=this.bakedLand;
     r.startLength=startLength;r.endLength=endLength;r.width=finalWidth;r.narrowRail=narrowRail;this.sampling=true;this.bakedLand=null;
     try{
@@ -644,6 +644,25 @@ export class ModernBridges {
         const p=this.at(r,s),width=this.widthAt(r,s);
         for(let j=0;j<=columns;j++){const u=-width+2*width*j/columns;if(!sample(p.x+p.nx*u,p.z+p.nz*u))return null;}
       }
+      // If toeLength() fell through to its best-grade fallback instead of terminating at startLength/endLength,
+      // cover every candidate station out to MAX_APPROACH that could change toe selection.
+      const smooth=r.road.kind<=3&&len>=20&&Math.abs(y1-y0)/len<.06;
+      for(const [end,sLen,isSmooth]of[[false,startLength,smoothStart],[true,endLength,smoothEnd]]as const){
+        const p=this.at(r,end?len+sLen:-sLen),width=this.widthAt(r,end?len+sLen:-sLen);
+        let grade=0,previous:number|null=null;
+        for(let j=0;j<=columns;j++){
+          const u=-width+2*width*j/columns,h0=this.land(p.x+p.nx*u,p.z+p.nz*u);
+          if(h0===null){grade=Infinity;break;}
+          if(Math.abs(u)<=width-.25){if(previous!==null)grade=Math.max(grade,Math.abs(h0-previous)/(2*width/columns));previous=h0;}else previous=null;
+        }
+        if(grade>=.243||(smooth&&!isSmooth)){
+          for(let L=sLen+1;L<=MAX_APPROACH;L++){
+            const q=this.at(r,end?len+L:-L),w=this.widthAt(r,end?len+L:-L);
+            for(let j=0;j<=columns;j++){const u=-w+2*w*j/columns;if(!sample(q.x+q.nx*u,q.z+q.nz*u))return null;}
+            if(smooth)for(const ds of[-1,0,1]){const c=this.at(r,end?len+L+ds:-L+ds);if(!sample(c.x,c.z))return null;}
+          }
+        }
+      }
       const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);
       for(const q of partners){
         for(const s of[0,-3,-6,-8,q.length,q.length+3,q.length+6,q.length+8]){
@@ -675,7 +694,7 @@ export class ModernBridges {
 
   /** Hydrate one span from its baked final-land deck without running the grade solver. Returns true when handled
    *  (hydrated, or waiting for level-6 bank tiles); returns false to fall back to the runtime solver. */
-  private tryHydrateBaked(r:Span,touch=true):boolean {
+  private tryHydrateBaked(r:Span,touch=true,probeChecked=false):boolean {
     const decks=this.bakedDecks;
     if(!decks)return false;
     if(!!this.terrain.streams!==decks.hasStreams||this.terrainStreamsHash()!==decks.streamsHash)return false;
@@ -683,10 +702,10 @@ export class ModernBridges {
     if(m&&(m.village[0]!==decks.village[0]||m.village[1]!==decks.village[1]))return false;
     const entry=decks.find(r.chainKey,r.width,!!r.road.ponyTruss,r.geomHash);
     if(!entry||this.rejectedBaked.has(entry)){r.baked=null;r.bakedVerified=false;return false;}
-    if(!touch&&!this.probesChanged(r,false))return true;
+    if(!touch&&!probeChecked&&!this.probesChanged(r,false))return true;
     const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
     if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
-    const liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.level);
+    const liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.smoothStart,entry.smoothEnd,entry.y0,entry.y1,entry.level);
     if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;return false;}
     const coreRows=Math.ceil(r.length),rows=coreRows+entry.startLength+entry.endLength,columns=Math.ceil(2*entry.finalWidth/.75);
     if(rows!==entry.rows||columns!==entry.columns||entry.gridY.length!==(rows+1)*(columns+1)){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;r.forceBuild=true;return false;}
@@ -704,9 +723,9 @@ export class ModernBridges {
       }
       geometry=this.emit(r,grid);
       if(this.bakedLandAt!==entry.emitLand.length)throw new RangeError('Baked bridge land count mismatch');
-      const wasBaked=!!r.baked;
+      const sameEntry=r.baked===entry;
       this.prepareCorridor(r);r.geometry?.dispose();r.geometry=geometry;r.baked=entry;
-      if(!wasBaked){r.bakedPrevWidth=prev.width;r.bakedPrevNarrowRail=prev.narrowRail;}
+      if(!sameEntry){r.bakedPrevWidth=prev.width;r.bakedPrevNarrowRail=prev.narrowRail;}
       r.bakedWashHash=this.washAxisHash(r);
       r.bakedVerified=liveHash===entry.landHash;
       if(!r.bakedVerified)this.probesChanged(r,false);
@@ -733,11 +752,11 @@ export class ModernBridges {
     const revision=this.terrain.dataRevision??0;if(r.revision===revision)return;r.revision=revision;
     if(r.baked&&!r.forceBuild&&r.baked.finalWidth===r.width){
       if(!touch&&!this.probesChanged(r,false))return;
-      const liveHash=this.spanLandHash(r,r.baked.startLength,r.baked.endLength,r.baked.finalWidth,r.baked.narrowRail,r.baked.level);
+      const liveHash=this.spanLandHash(r,r.baked.startLength,r.baked.endLength,r.baked.finalWidth,r.baked.narrowRail,r.baked.smoothStart,r.baked.smoothEnd,r.baked.y0,r.baked.y1,r.baked.level);
       if(liveHash===null)return;
       if(liveHash===r.baked.landHash){
         if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}
-        if(this.tryHydrateBaked(r,touch))return;
+        if(this.tryHydrateBaked(r,touch,true))return;
       }
       const oldW=r.width;
       r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;
