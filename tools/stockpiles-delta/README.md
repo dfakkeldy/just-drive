@@ -60,11 +60,11 @@ The data is not in git, so the install is a step on each host that has `data/bak
 MacBook's land with each remote check). The site build links whole area folders, so the published site gets the
 file with the next publish; Point Tupper has no offline pack. No other area, manifest key or file changes.
 
-To take it out: delete `data/baked/areas/pointtupper/stockpiles.json`, then check the SHA-256 of
-`data/baked/areas/pointtupper/manifest.json` against the `after` hash in `install.json`. If it matches, restore the
-kept `before` manifest. If it differs (a later install edited another key), inspect the drift and remove only the
-`"stockpiles"` key so later edits are not overwritten. Old manifests load no stockpiles, and the 1884 era never loads
-them.
+To take it out: before changing either file, compare the SHA-256 of `data/baked/areas/pointtupper/manifest.json`
+against the `manifest.json` entry's `sha256` in `install.json`. If it matches, restore the kept `before` manifest. If
+it differs (a later install edited another key), inspect the drift and remove only the `"stockpiles"` key so later
+edits are not overwritten. Then delete `data/baked/areas/pointtupper/stockpiles.json`. Old manifests load no
+stockpiles, and the 1884 era never loads them.
 
 ## After a Point Tupper rebake
 
