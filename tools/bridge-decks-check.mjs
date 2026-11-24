@@ -540,22 +540,24 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   assert.equal(farSwRoads.modern.audit.builds, 2, 'distant followed widened span builds its widened variant');
 
   // Offset approach road whose startLength extends past 16 m: initial bank(-8) in ensure() samples at startLength=16
-  // (x=0.8) while final 37 m geometry samples x=0.19205. A +1 m spike at (0.8, 8) MUST invalidate landHash.
-  let offsetSpike = false;
+  // (x=0.8) and attempt-0 toeLength() scans L=16..37 at blend=0 (x=1.6), while final 37 m geometry shifts both.
+  let offsetSpike = false, offsetDip24 = false, offsetFlat = false, offsetLevel = 7;
   const offRoadsList = [
     {id: 1, name: 'Offset bridge', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]},
     {id: 2, name: 'Offset bridge', kind: 1, halfWidth: 3.6, bridge: false, pts: [[1.6, 0], [1.6, -120]]},
   ];
   const offHeight = (x, z) => {
-    const base = z > 0 ? 10 + Math.min(2, Math.max(0, z - 9)) : z < -40 ? 10 : Math.max(0, 10 - Math.min(-z, 40 + z) * 2);
-    return base + (offsetSpike && Math.abs(x - 0.8) < 0.09 && Math.abs(z - 8) < 0.2 ? 1 : 0);
+    const base = z > 0 ? (offsetFlat ? 10 : 10 + Math.min(2, Math.max(0, z - 9))) : z < -40 ? 10 : Math.max(0, 10 - Math.min(-z, 40 + z) * 2);
+    const spike = offsetSpike && Math.abs(x - 0.8) < 0.09 && Math.abs(z - 8) < 0.2 ? 1 : 0;
+    const dip24 = offsetDip24 && Math.abs(x - 1.6) < 0.08 && Math.abs(z - 24) < 0.2 ? -2 : 0;
+    return base + spike + dip24;
   };
   const makeOffTerrain = () => ({
     cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
     manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}},
     heightAt: offHeight,
-    meshContactSource: () => 1,
-    surfaceAt: (x, z) => ({ground: offHeight(x, z), level: 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+    meshContactSource: () => offsetLevel,
+    surfaceAt: (x, z) => ({ground: offHeight(x, z), level: offsetLevel, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
   });
   const offRefRoads = new mod.Roads({roads: offRoadsList}, [0, 0], makeOffTerrain(), null);
   const offRefM = offRefRoads.modern;
@@ -585,6 +587,28 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   assert.equal(offLiveRoads.modern.audit.bakedBuilds, 0, 'pre-extension offset bank spike rejects stale extended bake');
   assert.ok(Math.abs(offLiveRoads.modern.spans[0].y0 - 11.04) < 1e-6, 'pre-extension offset bank spike solves live at 11.04 m');
   offsetSpike = false;
+
+  // Offset candidate dip at (1.6, 24) in toeLength's pre-extension coordinate frame must reject stale 37 m bake.
+  offsetDip24 = true;
+  const offDipRoads = new mod.Roads({roads: offRoadsList}, [0, 0], makeOffTerrain(), offBaked);
+  offDipRoads.update(cam);
+  assert.equal(offDipRoads.modern.audit.bakedBuilds, 0, 'pre-extension offset toeLength candidate dip rejects stale 37 m bake');
+  assert.equal(offDipRoads.modern.spans[0].startLength, 24, 'pre-extension offset candidate dip picks live 24 m approach');
+  offsetDip24 = false;
+
+  // Provisional level-6 hydration followed by level-7 rejection must restore pre-hydration approach lengths (16 m)
+  // so the fallback solver matches a staged no-bake run (y0=11.04, startLength=25, not stale 37 m frame).
+  offsetLevel = 6; offsetFlat = true; offsetSpike = false;
+  const offStagedT = makeOffTerrain();
+  const offStagedRoads = new mod.Roads({roads: offRoadsList}, [0, 0], offStagedT, offBaked);
+  offStagedRoads.update(cam);
+  assert.equal(offStagedRoads.modern.spans[0].startLength, offSpan.startLength, 'level-6 hydrates 37 m approach');
+  offsetLevel = 7; offsetFlat = false; offsetSpike = true; offStagedT.dataRevision++;
+  offStagedRoads.update(cam);
+  assert.equal(offStagedRoads.modern.spans[0].baked, null, 'staged level-7 spike rejects provisional offset bake');
+  assert.ok(Math.abs(offStagedRoads.modern.spans[0].y0 - 11.04) < 1e-6, 'staged offset rejection restores 16 m frame and solves y0=11.04 m');
+  assert.equal(offStagedRoads.modern.spans[0].startLength, 25, 'staged offset rejection solves matching 25 m approach');
+  offsetSpike = false; offsetFlat = false; offsetLevel = 7;
   level = 7;
 
   // Adding a perpendicular bridge across the approach changes global isSpan and must invalidate geomHash.
@@ -925,8 +949,10 @@ if (process.argv.includes('--mutations')) {
     ['per-column toe-slope probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let j=0;j<=columns;j++){const u=-width+2*width*j/columns;if(!sample(p.x+p.nx*u,p.z+p.nz*u))return null;}', 'for(const side of[-1,0,1])if(!sample(p.x+p.nx*side*width,p.z+p.nz*side*width))return null;', /interior toe-slope column change rejects/],
     ['fallback toeLength candidates omitted from landHash', bridgesFile, bridgesSrc, 'if(grade>=.243||(smooth&&!isSmooth)){', 'if(false){', /eased crossfall at 50 m rejects/],
     ['pre-extension offset bank probes omitted from landHash', bridgesFile, bridgesSrc, 'if(startLength!==APPROACH||endLength!==APPROACH){', 'if(false){', /pre-extension offset bank spike rejects/],
+    ['pre-extension offset candidate probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let L=APPROACH;L<=sLen;L++){', 'for(let L=APPROACH;L<APPROACH;L++){', /pre-extension offset toeLength candidate dip rejects/],
+    ['late rejection keeps baked approach lengths', bridgesFile, bridgesSrc, 'r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;', '', /staged offset rejection restores/],
     ['distant followed forced build blocked by probe gate', bridgesFile, bridgesSrc, 'if(!touch&&!probeChecked&&!r.forceBuild&&!this.probesChanged(r,false))return true;', 'if(!touch&&!probeChecked&&!this.probesChanged(r,false))return true;', /distant followed widened span/],
-    ['widened sidewalk fallback drops active width', bridgesFile, bridgesSrc, 'const sameEntry=r.baked===entry;', 'const sameEntry=!!r.baked;', /preserves active 5\.90 m width/],
+    ['widened sidewalk fallback drops active width', bridgesFile, bridgesSrc, 'const hadBaked=!!r.baked,sameEntry=r.baked===entry;', 'const hadBaked=!!r.baked,sameEntry=!!r.baked;', /preserves active 5\.90 m width/],
     ['distant washboard refresh double-checks probes', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,true))return;', 'if(this.tryHydrateBaked(r,touch,false))return;', /distant followed washboard/],
     ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
     ['distant followed span touches tiles', bridgesFile, bridgesSrc, 'if(!touch&&!this.probesChanged(r,false))return;', '', /zero touching surfaceAt calls/],

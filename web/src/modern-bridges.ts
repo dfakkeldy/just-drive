@@ -207,7 +207,7 @@ const nearLine = (pts:readonly (readonly [number,number])[],x:number,z:number,re
 interface BridgeRoad extends Road {inferred?:boolean;sources?:readonly string[];road?:number;sourceRoad?:number}
 interface Approach {road:Road;cum:number[];distance:number;direction:number;offsetX:number;offsetZ:number}
 interface Span {
-  road:BridgeRoad;chainKey:string;geomHash:bigint;hasNearbySpans:boolean;baked:BakedBridgeSpan|null;bakedVerified:boolean;bakedPrevWidth:number;bakedPrevNarrowRail:boolean;bakedWashHash:bigint;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
+  road:BridgeRoad;chainKey:string;geomHash:bigint;hasNearbySpans:boolean;baked:BakedBridgeSpan|null;bakedVerified:boolean;bakedPrevWidth:number;bakedPrevNarrowRail:boolean;bakedPrevStartLength:number;bakedPrevEndLength:number;bakedWashHash:bigint;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
   x0:number;z0:number;x1:number;z1:number; y0:number;y1:number;outer0:number;outer1:number;level:number;revision:number;serial:number;
   skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;followed:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
   /** Half width of each carried road, for a sidewalk reserved on the deck (Roads.bridgeWalks). */
@@ -291,7 +291,7 @@ export class ModernBridges {
       const timber=road.kind>=4||road.name==='Railroad'||carried.some(r=>r.inferred);
       const segments=new Float64Array((pts.length-1)*10);
       for(let j=1;j<pts.length;j++){const a=pts[j-1],b=pts[j],dx=b[0]-a[0],dz=b[1]-a[1];segments.set([a[0],a[1],dx,dz,dx*dx+dz*dz||1,Math.min(a[0],b[0]),Math.max(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[1],b[1]),.01+2e-7*(Math.abs(dx)+Math.abs(dz))],(j-1)*10);}
-      const r:Span={road,chainKey:plan.chainKey,geomHash:0n,hasNearbySpans:false,baked:null,bakedVerified:false,bakedPrevWidth:width,bakedPrevNarrowRail:false,bakedWashHash:0n,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
+      const r:Span={road,chainKey:plan.chainKey,geomHash:0n,hasNearbySpans:false,baked:null,bakedVerified:false,bakedPrevWidth:width,bakedPrevNarrowRail:false,bakedPrevStartLength:16,bakedPrevEndLength:16,bakedWashHash:0n,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
       const probes:number[]=[];
@@ -601,11 +601,21 @@ export class ModernBridges {
         h.num(y===null?0:1);h.num(y??0);
         return true;
       };
-      // When approach length grew past APPROACH (16 m), also sample the pre-extension bank/outer stations at APPROACH
-      // because ensure() reads them before toeLength() updates startLength/endLength (matters when an approach has offsetX/Z).
+      // When approach length grew past APPROACH (16 m), sample pre-extension bank/outer stations AND any offset-approach
+      // toeLength() candidates (16..startLength/endLength) in the APPROACH coordinate frame used before extension.
       if(startLength!==APPROACH||endLength!==APPROACH){
         r.startLength=APPROACH;r.endLength=APPROACH;
         for(const s of[0,-3,-6,-8,-APPROACH,len,len+3,len+6,len+8,len+APPROACH]){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}
+        for(const [end,sLen]of[[false,startLength],[true,endLength]]as const){
+          if(sLen===APPROACH)continue;
+          const ap=end?r.end:r.start;
+          if(!ap||ap.offsetX===0&&ap.offsetZ===0)continue;
+          for(let L=APPROACH;L<=sLen;L++){
+            const q=this.at(r,end?len+L:-L),w=this.widthAt(r,end?len+L:-L);
+            for(let j=0;j<=columns;j++){const u=-w+2*w*j/columns;if(!sample(q.x+q.nx*u,q.z+q.nz*u))return null;}
+            for(const ds of[-1,0,1]){const c=this.at(r,end?len+L+ds:-L+ds);if(!sample(c.x,c.z))return null;}
+          }
+        }
         r.startLength=startLength;r.endLength=endLength;
       }
       // Match build(r)'s exact Float32 grid (x, z) coordinates so interior CHECKS sample the identical points.
@@ -730,8 +740,9 @@ export class ModernBridges {
       }
       geometry=this.emit(r,grid);
       if(this.bakedLandAt!==entry.emitLand.length)throw new RangeError('Baked bridge land count mismatch');
-      const sameEntry=r.baked===entry;
+      const hadBaked=!!r.baked,sameEntry=r.baked===entry;
       this.prepareCorridor(r);r.geometry?.dispose();r.geometry=geometry;r.baked=entry;
+      if(!hadBaked){r.bakedPrevStartLength=prev.startLength;r.bakedPrevEndLength=prev.endLength;}
       if(!sameEntry){r.bakedPrevWidth=prev.width;r.bakedPrevNarrowRail=prev.narrowRail;}
       r.bakedWashHash=this.washAxisHash(r);
       r.bakedVerified=liveHash===entry.landHash;
@@ -767,6 +778,7 @@ export class ModernBridges {
       }
       const oldW=r.width;
       r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;
+      r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;
       if(r.width!==oldW)this.runList=null;
       this.rejectedBaked.add(r.baked);r.baked=null;r.bakedVerified=false;r.forceBuild=true;
     }
