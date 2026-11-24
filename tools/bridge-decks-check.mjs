@@ -608,7 +608,61 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   assert.equal(offStagedRoads.modern.spans[0].baked, null, 'staged level-7 spike rejects provisional offset bake');
   assert.ok(Math.abs(offStagedRoads.modern.spans[0].y0 - 11.04) < 1e-6, 'staged offset rejection restores 16 m frame and solves y0=11.04 m');
   assert.equal(offStagedRoads.modern.spans[0].startLength, 25, 'staged offset rejection solves matching 25 m approach');
+
+  // Unbaked sidewalk widening on the SAME update as level-7 arrival: tryHydrateBaked's missing-entry fallback must
+  // still restore pre-hydration approach lengths (16 m) while preserving the new 5.90 m width.
+  offsetLevel = 6; offsetFlat = true; offsetSpike = false;
+  const offWideT = makeOffTerrain();
+  const offWideRoads = new mod.Roads({roads: offRoadsList}, [0, 0], offWideT, offBaked);
+  offWideRoads.update(cam);
+  assert.equal(offWideRoads.modern.spans[0].startLength, offSpan.startLength, 'level-6 hydrates 37 m before widening');
+  offsetLevel = 7; offsetFlat = false; offsetSpike = true; offWideT.dataRevision++;
+  offWideRoads.bridgeWalks.set(1, {side: 1, width: 2.0});
+  offWideRoads.update(cam);
+  assert.equal(offWideRoads.modern.spans[0].baked, null, 'unbaked widened fallback drops provisional bake');
+  assert.ok(Math.abs(offWideRoads.modern.spans[0].width - 5.9) < 1e-9, 'unbaked widened fallback preserves 5.90 m width');
+  assert.ok(Math.abs(offWideRoads.modern.spans[0].y0 - 11.04) < 1e-6, 'unbaked widened fallback restores 16 m approach and solves y0=11.04 m');
+  assert.equal(offWideRoads.modern.spans[0].startLength, 25, 'unbaked widened fallback solves matching 25 m approach');
   offsetSpike = false; offsetFlat = false; offsetLevel = 7;
+
+  // Final partial girder segment midpoint (e.g. 39.8 m on a 40.6 m span): a localized dip there toggles underside
+  // beams in emit() and MUST invalidate landHash.
+  let girderDip = false;
+  const gRoad = [{id: 1, name: 'Partial girder', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40.6]]}];
+  const gHeight = (x, z) => (z > 0 || z < -40.6 ? 10 : Math.max(0, 10 - Math.min(-z, 40.6 + z) * 2)) - (girderDip && Math.abs(x) < 0.01 && Math.abs(z + 39.8) < 0.01 ? 2 : 0);
+  const makeGTerrain = () => ({
+    cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
+    manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}},
+    heightAt: gHeight,
+    meshContactSource: () => 1,
+    surfaceAt: (x, z) => ({ground: gHeight(x, z), level: 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+  });
+  const gRefRoads = new mod.Roads({roads: gRoad}, [0, 0], makeGTerrain(), null);
+  const gRefM = gRefRoads.modern;
+  let gGrid = null, gLand = [];
+  gRefM.emit = function(r, grid) {
+    gGrid = new Float32Array(grid); gLand = [];
+    this.land = (x, z) => { const h = origLand.call(this, x, z); gLand.push(h === null ? Number.NaN : h); return h; };
+    try { return origEmit.call(this, r, grid); } finally { this.land = origLand; }
+  };
+  const gSpan = gRefM.spans[0];
+  gRefM.ensure(gSpan);
+  const gGridY = new Float32Array(gGrid.length / 3);
+  for (let i = 0; i < gGridY.length; i++) gGridY[i] = gGrid[i * 3 + 1];
+  const gBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [{
+    chainKey: gSpan.chainKey, geomHash: gSpan.geomHash,
+    landHash: gRefM.spanLandHash(gSpan, gSpan.startLength, gSpan.endLength, gSpan.width, gSpan.narrowRail, gSpan.smoothStart, gSpan.smoothEnd, gSpan.y0, gSpan.y1, gSpan.level),
+    requestWidth: gSpan.width, finalWidth: gSpan.width, narrowRail: gSpan.narrowRail, level: gSpan.level,
+    smoothStart: gSpan.smoothStart, smoothEnd: gSpan.smoothEnd, ponyTruss: false,
+    startLength: gSpan.startLength, endLength: gSpan.endLength, y0: gSpan.y0, y1: gSpan.y1, outer0: gSpan.outer0, outer1: gSpan.outer1,
+    rows: Math.ceil(gSpan.length) + gSpan.startLength + gSpan.endLength, columns: Math.ceil(2 * gSpan.width / .75),
+    gridY: gGridY, emitLand: new Float64Array(gLand),
+  }]), 'mabou');
+  girderDip = true;
+  const gLiveRoads = new mod.Roads({roads: gRoad}, [0, 0], makeGTerrain(), gBaked);
+  gLiveRoads.update(cam);
+  assert.equal(gLiveRoads.modern.audit.bakedBuilds, 0, 'final partial girder midpoint dip rejects stale bake');
+  girderDip = false;
   level = 7;
 
   // Adding a perpendicular bridge across the approach changes global isSpan and must invalidate geomHash.
@@ -950,14 +1004,16 @@ if (process.argv.includes('--mutations')) {
     ['fallback toeLength candidates omitted from landHash', bridgesFile, bridgesSrc, 'if(grade>=.243||(smooth&&!isSmooth)){', 'if(false){', /eased crossfall at 50 m rejects/],
     ['pre-extension offset bank probes omitted from landHash', bridgesFile, bridgesSrc, 'if(startLength!==APPROACH||endLength!==APPROACH){', 'if(false){', /pre-extension offset bank spike rejects/],
     ['pre-extension offset candidate probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let L=APPROACH;L<=sLen;L++){', 'for(let L=APPROACH;L<APPROACH;L++){', /pre-extension offset toeLength candidate dip rejects/],
-    ['late rejection keeps baked approach lengths', bridgesFile, bridgesSrc, 'r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;', '', /staged offset rejection restores/],
+    ['partial girder midpoint omitted from landHash', bridgesFile, bridgesSrc, 'if(!r.road.ponyTruss)for(let s=0;s<len;s+=3){const p=this.at(r,s+Math.min(3,len-s)/2);if(!sample(p.x,p.z))return null;}', '', /final partial girder midpoint dip rejects/],
+    ['late rejection keeps baked approach lengths', bridgesFile, bridgesSrc, 'if(r.baked){r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;r.baked=null;}', 'r.baked=null;', /staged offset rejection restores|unbaked widened fallback restores/],
+    ['missing widened entry skips dropBaked', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){this.dropBaked(r);return false;}', 'if(!entry||this.rejectedBaked.has(entry)){r.baked=null;r.bakedVerified=false;return false;}', /unbaked widened fallback restores/],
     ['distant followed forced build blocked by probe gate', bridgesFile, bridgesSrc, 'if(!touch&&!probeChecked&&!r.forceBuild&&!this.probesChanged(r,false))return true;', 'if(!touch&&!probeChecked&&!this.probesChanged(r,false))return true;', /distant followed widened span/],
     ['widened sidewalk fallback drops active width', bridgesFile, bridgesSrc, 'const hadBaked=!!r.baked,sameEntry=r.baked===entry;', 'const hadBaked=!!r.baked,sameEntry=!!r.baked;', /preserves active 5\.90 m width/],
     ['distant washboard refresh double-checks probes', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,true))return;', 'if(this.tryHydrateBaked(r,touch,false))return;', /distant followed washboard/],
     ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
     ['distant followed span touches tiles', bridgesFile, bridgesSrc, 'if(!touch&&!this.probesChanged(r,false))return;', '', /zero touching surfaceAt calls/],
     ['probeTargetLevel capped at 8', bridgesFile, bridgesSrc, 'const top=Math.max(this.manifestMaxLevel,fallbackLevel);', 'const top=Math.max(8,fallbackLevel);', /withheld level-9 tile/],
-    ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;return false;}', '', /raised terrain before first build rejects/],
+    ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);this.dropBaked(r);return false;}', '', /raised terrain before first build rejects/],
     ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===r.baked.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}\n        if(this.tryHydrateBaked(r,touch,true))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
     ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds/],
     ['verified baked fast-path removed', bridgesFile, bridgesSrc, 'if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;', '', /skips land probes/],

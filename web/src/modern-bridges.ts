@@ -655,6 +655,7 @@ export class ModernBridges {
       for(let s=-startLength-1;s<=0;s++){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}
       for(let s=0;s<=endLength+1;s++){const p=this.at(r,len+s);if(!sample(p.x,p.z))return null;}
       for(let s=.5;s<len;s+=.5){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}
+      if(!r.road.ponyTruss)for(let s=0;s<len;s+=3){const p=this.at(r,s+Math.min(3,len-s)/2);if(!sample(p.x,p.z))return null;}
       if(len>35)for(const s of[len*.12,len*.88]){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}
       // Sample every per-column toe-slope point read by curveData (both sides of each approach toe).
       for(const s of[-startLength-1,-startLength+1,len+endLength-1,len+endLength+1]){
@@ -709,6 +710,12 @@ export class ModernBridges {
     return h.done();
   }
 
+  /** Clear a provisionally hydrated baked entry and restore its pre-hydration approach lengths (preserving any new width). */
+  private dropBaked(r:Span):void {
+    if(r.baked){r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;r.baked=null;}
+    r.bakedVerified=false;
+  }
+
   /** Hydrate one span from its baked final-land deck without running the grade solver. Returns true when handled
    *  (hydrated, or waiting for level-6 bank tiles); returns false to fall back to the runtime solver. */
   private tryHydrateBaked(r:Span,touch=true,probeChecked=false):boolean {
@@ -718,14 +725,14 @@ export class ModernBridges {
     const m=this.terrain.manifest;
     if(m&&(m.village[0]!==decks.village[0]||m.village[1]!==decks.village[1]))return false;
     const entry=decks.find(r.chainKey,r.width,!!r.road.ponyTruss,r.geomHash);
-    if(!entry||this.rejectedBaked.has(entry)){r.baked=null;r.bakedVerified=false;return false;}
+    if(!entry||this.rejectedBaked.has(entry)){this.dropBaked(r);return false;}
     if(!touch&&!probeChecked&&!r.forceBuild&&!this.probesChanged(r,false))return true;
     const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
     if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
     const liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.smoothStart,entry.smoothEnd,entry.y0,entry.y1,entry.level);
-    if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;return false;}
+    if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);this.dropBaked(r);return false;}
     const coreRows=Math.ceil(r.length),rows=coreRows+entry.startLength+entry.endLength,columns=Math.ceil(2*entry.finalWidth/.75);
-    if(rows!==entry.rows||columns!==entry.columns||entry.gridY.length!==(rows+1)*(columns+1)){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;r.forceBuild=true;return false;}
+    if(rows!==entry.rows||columns!==entry.columns||entry.gridY.length!==(rows+1)*(columns+1)){this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;return false;}
     const prev={width:r.width,narrowRail:r.narrowRail,y0:r.y0,y1:r.y1,outer0:r.outer0,outer1:r.outer1,level:r.level,startLength:r.startLength,endLength:r.endLength,smoothStart:r.smoothStart,smoothEnd:r.smoothEnd,forceBuild:r.forceBuild,extendStart:r.extendStart,extendEnd:r.extendEnd,triangles:r.triangles,triangleDeck:r.triangleDeck,cells:new Map(r.cells),approachRanges:r.approachRanges,skinBox:new Float64Array(r.skinBox)};
     let geometry:THREE.BufferGeometry|null=null;
     this.sampling=true;this.bakedLand=entry.emitLand;this.bakedLandAt=0;
@@ -758,7 +765,7 @@ export class ModernBridges {
       r.level=prev.level;r.startLength=prev.startLength;r.endLength=prev.endLength;r.smoothStart=prev.smoothStart;r.smoothEnd=prev.smoothEnd;
       r.forceBuild=prev.forceBuild;r.extendStart=prev.extendStart;r.extendEnd=prev.extendEnd;r.triangles=prev.triangles;r.triangleDeck=prev.triangleDeck;
       r.cells=prev.cells;r.approachRanges=prev.approachRanges;r.skinBox=prev.skinBox;
-      this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;r.forceBuild=true;
+      this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;
       return false;
     }finally{this.bakedLand=null;this.bakedLandAt=0;this.sampling=false;}
   }
@@ -778,9 +785,8 @@ export class ModernBridges {
       }
       const oldW=r.width;
       r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;
-      r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;
       if(r.width!==oldW)this.runList=null;
-      this.rejectedBaked.add(r.baked);r.baked=null;r.bakedVerified=false;r.forceBuild=true;
+      this.rejectedBaked.add(r.baked);this.dropBaked(r);r.forceBuild=true;
     }
     if(this.tryHydrateBaked(r,touch))return;
     let changed=r.forceBuild||!r.geometry,known=true;
