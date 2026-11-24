@@ -729,7 +729,7 @@ export class ModernBridges {
 
   private hasUnsettledParallelNeighbor(r:Span,revision:number):boolean {
     const unsettled=(s:Span)=>!s.geometry||s.revision!==revision||(s.baked!==null&&!s.bakedVerified);
-    return r.parallelBanks.some(q=>!r.parallel.includes(q)&&q.width===q.baseWidth&&unsettled(q)&&q.parallel.every(unsettled));
+    return r.parallelBanks.some(q=>!r.parallel.includes(q)&&q.width===q.baseWidth&&(unsettled(q)||q.parallel.some(unsettled)));
   }
 
   /** Apply the parallel rail/highway narrowing decision to `r` and its partners so an out-of-range partner still gets

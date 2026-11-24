@@ -724,6 +724,39 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
       assert.equal(lhRun.modern.spans[0].bakedVerified, true, 'crossing verifies valid bake after live highway narrows rail');
       assert.ok(spanBits(lhRun.modern.spans[0]).equals(spanBits(triEdgeLive.modern.spans[0])), 'crossing matches live bit-for-bit after live highway narrows rail');
     }
+    // Split-tile query order: only the out-of-range rail's bank tile advances from level 6 to 7, and a highway
+    // deckHeightAt query runs first (recording the new revision on highway because highway's own probes did not
+    // change). Crossing must NOT permanently reject its valid bake while the out-of-range rail can still narrow.
+    {
+      const liveHwyRoads = [
+        ...triRoads,
+        {id: 13, name: 'Hwy 19', kind: 1, halfWidth: 3.6, bridge: false, pts: [[20, -10], [80, -10]]},
+      ];
+      let railBankLv = 6; raiseHwy = true;
+      const qOrderT = {
+        ...makeTriTerrain(7),
+        meshContactSource: (x, z) => (Math.abs(z - 15) < 0.5 && Math.abs(x) >= 19 ? railBankLv : 7),
+        surfaceAt: (x, z) => ({ground: triH(x, z), level: Math.abs(z - 15) < 0.5 && Math.abs(x) >= 19 ? railBankLv : 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+      };
+      const qOrderRun = new mod.Roads({roads: liveHwyRoads}, [0, 0], qOrderT, triBaked);
+      qOrderRun.update(camNorthEdge);
+      assert.equal(qOrderRun.modern.spans[1].baked, null, 'query-order highway builds live at level 6');
+      assert.ok(Math.abs(qOrderRun.modern.spans[2].width - 3.05) < 1e-9, 'query-order rail starts at 3.05 m');
+      railBankLv = 7; raiseHwy = false; qOrderT.dataRevision++;
+      // Query highway first so highway records the new revision without rebuilding (its own probes stayed at 7).
+      qOrderRun.modern.deckHeightForRoad(0, 10, 11);
+      assert.equal(qOrderRun.modern.spans[1].revision, qOrderT.dataRevision, 'highway deckHeightForRoad records new revision');
+      qOrderRun.update(camNorthEdge);
+      // Now move camera into rail range: rail narrows to 1.25 m and crossing must reuse and verify its valid bake.
+      qOrderRun.update(cam);
+      assert.equal(qOrderRun.modern.spans[2].width, 1.25, 'query-order rail narrows to 1.25 m in range');
+      let qoPostSolves = 0;
+      qOrderRun.modern.build = function(r, ...rest) { if (r.chainKey === '10') qoPostSolves++; return proto.build.call(this, r, ...rest); };
+      qOrderRun.update(cam);
+      assert.equal(qoPostSolves, 0, 'split-tile query-order crossing reuses valid bake once rail narrows in range');
+      assert.equal(qOrderRun.modern.spans[0].bakedVerified, true, 'split-tile query-order crossing verifies settled bake');
+      assert.ok(spanBits(qOrderRun.modern.spans[0]).equals(triTwoCamBits), 'split-tile query-order crossing matches live bit-for-bit');
+    }
     // Out-of-range parallel pair at (0, 20, -1520): only crossing is in DRAW. After crossing defers its bake and
     // builds live, unrelated dataRevision bumps with unchanged tile sources and partner widths must make ZERO
     // surfaceAt() calls until a local tile changes or a partner narrows.
@@ -1385,8 +1418,7 @@ if (process.argv.includes('--mutations')) {
     ['rail narrowing skips invalidating crossing neighbors', bridgesFile, bridgesSrc, 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.runList=null;this.invalidateNeighbors(t,fromBaked);}', 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.runList=null;}', /crossing-first bake (verifies|matches live)|edge camera crossing|stale 3\.05 m/],
     ['baked hydration skips narrowing out-of-range parallel rail', bridgesFile, bridgesSrc, 'if(r.bakedVerified&&r.parallel.length)this.applyParallelNarrowing(r,true);', '', /edge camera hydration narrows out-of-range rail/],
     ['unsettled parallel neighbor permanently rejects valid crossing bake', bridgesFile, bridgesSrc, 'if(!this.hasUnsettledParallelNeighbor(r,this.terrain.dataRevision??0))this.rejectedBaked.add(entry);this.dropBaked(r);return false;', 'this.rejectedBaked.add(entry);this.dropBaked(r);return false;', /crossing-first direct start hydrates valid bake|edge camera crossing verifies settled bake/],
-    ['provisional parallel partner treated as settled', bridgesFile, bridgesSrc, 'const unsettled=(s:Span)=>!s.geometry||s.revision!==revision||(s.baked!==null&&!s.bakedVerified);', 'const unsettled=(s:Span)=>!s.geometry||s.revision!==revision;', /split-tile crossing (reuses|verifies)|staged edge crossing (reuses|verifies)/],
-    ['stale-revision live parallel partner treated as settled', bridgesFile, bridgesSrc, '!s.geometry||s.revision!==revision||(s.baked!==null&&!s.bakedVerified)', '!s.geometry||(s.baked!==null&&!s.bakedVerified)', /crossing (reuses|verifies) valid bake after live highway narrows rail/],
+    ['settled highway causes crossing to reject while out-of-range rail is unsettled', bridgesFile, bridgesSrc, 'unsettled(q)||q.parallel.some(unsettled)', 'unsettled(q)&&q.parallel.every(unsettled)', /split-tile query-order crossing (reuses|verifies)/],
     ['out-of-range deferred crossing repeats spanLandHash', bridgesFile, bridgesSrc, 'if(!verifiedEntry&&!r.baked&&!r.forceBuild&&(!touch||r.geometry)&&!this.probesChanged(r,touch,false))return true;', 'if(!verifiedEntry&&!touch&&!r.baked&&!r.forceBuild&&!this.probesChanged(r,false))return true;', /out-of-range deferred crossing skips spanLandHash/],
     ['staged crossing skips settling nearby provisional rail width', bridgesFile, bridgesSrc, 'for(const q of r.parallelBanks)if(q.baked&&!q.bakedVerified&&q.width!==q.bakedPrevWidth)this.ensure(q,touch);', '', /staged crossing settles rail width first|staged edge crossing (reuses|verifies)/],
     ['late parallel rejection keeps narrowed width', bridgesFile, bridgesSrc, 'r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;', '', /late parallel rejection restores|staged level-7 restores rail width/],
