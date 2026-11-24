@@ -43,8 +43,8 @@ The install is two things in `data/baked/areas/pointtupper`, and they go in toge
 
 Steps on the MacBook:
 
-1. `python3 tools/stockpiles-delta-check.py` must pass and print `land state: before` (check-all shows only a
-   failing line, so run the script itself to read the state).
+1. On the pre-merge code (`EXPECT = None`), `python3 tools/stockpiles-delta-check.py` must pass and print
+   `land state: before` (check-all shows only a failing line, so run the script itself to read the state).
 2. `python3 tools/stockpiles-delta/install.py data/baked/areas/pointtupper NEW_FOLDER`. NEW_FOLDER must not exist
    and must be outside baked and site data. It refuses a land that already has the key or the file. It writes `stockpiles.json`, `manifest.json` (the manifest as it is now plus
    the one key, every other byte kept) and `install.json` (hashes; `before` is the manifest it was made from).
@@ -60,15 +60,21 @@ The data is not in git, so the install is a step on each host that has `data/bak
 MacBook's land with each remote check). The site build links whole area folders, so the published site gets the
 file with the next publish; Point Tupper has no offline pack. No other area, manifest key or file changes.
 
-To take it out: remove the key from the manifest and delete the file (or put the kept manifest back). Old manifests
-load no stockpiles, and the 1884 era never loads them.
+To take it out: before changing either file, compare the SHA-256 of `data/baked/areas/pointtupper/manifest.json`
+against the `manifest.json` entry's `sha256` in `install.json`. If it matches, restore the kept `before` manifest. If
+it differs (a later install edited another key), inspect the drift and remove only the `"stockpiles"` key so later
+edits are not overwritten. Then delete `data/baked/areas/pointtupper/stockpiles.json`. Old manifests load no
+stockpiles, and the 1884 era never loads them.
 
 ## After a Point Tupper rebake
 
 Stage 21 writes a new manifest, so a full rebake drops the key and leaves the file: the row fails with "mixed". Add
-the key again (delete the file, then run the install steps). The bake stages do not run stage 33. If a rebake
-changes roads, buildings or heights near the piles, the row's remake fails with "the bake made other bytes": look at
-the new pack (the `stockpiles-pictures` row), then commit it with a new `hashes.json`.
+the key again (delete the file, then run install steps 2–5). The bake stages do not run stage 33. If a rebake
+changes roads, buildings or heights near the piles, the row's remake fails with "the bake made other bytes" (the
+checker deletes its scratch folder on exit): re-run `pipeline/33_bake_stockpiles.py` into a retained folder, stage
+that candidate pack and manifest key in an isolated land, run `stockpiles-pictures` and confirm its `DATA` line
+matches the candidate's SHA-256 before accepting the pictures, then commit the new pack with a new `hashes.json` and
+install it.
 
 ## Check rows
 
