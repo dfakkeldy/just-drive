@@ -69,7 +69,7 @@ stockpiles, and the 1884 era never loads them.
 ## After a Point Tupper rebake
 
 Stage 21 writes a new manifest, so a full rebake drops the key and leaves the file: the row fails with "mixed". Add
-the key again (delete the file, then run the install steps). The bake stages do not run stage 33. If a rebake
+the key again (delete the file, then run install steps 2–5). The bake stages do not run stage 33. If a rebake
 changes roads, buildings or heights near the piles, the row's remake fails with "the bake made other bytes": look at
 the new pack (the `stockpiles-pictures` row), then commit it with a new `hashes.json`.
 
