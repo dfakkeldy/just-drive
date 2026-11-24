@@ -1980,6 +1980,7 @@ if (!mailMode) pauseScreen.querySelector('#pauseSettings')!.after(sunButton);
 document.body.append(pauseScreen);
 (document.getElementById('phoneTop') ?? document.body).append(pauseButton);
 const settingsPanel = document.getElementById('settings')!;
+let settingsOpen = settingsPanel.classList.contains('open');
 scrollMore(settingsPanel, () => settingsPanel.classList.contains('open'), 'settingsMore', document.body);
 const settingsRoomPauseNote = touchDevice ? null : Object.assign(document.createElement('p'), { className: 'roomPauseNote', hidden: true, textContent: 'A room keeps going when you pause.' });
 if (settingsRoomPauseNote) settingsPanel.querySelector('#settingsHeader')!.after(settingsRoomPauseNote);
@@ -1990,7 +1991,8 @@ function syncPauseUI(): void {
   const room = !!multiplayer?.choice.on;
   pauseScreen.querySelector<HTMLElement>('.roomPauseNote')!.hidden = !room;
   if (settingsRoomPauseNote) settingsRoomPauseNote.hidden = !room;
-  settingsPanel.classList.toggle('open', pause.blocked && !pause.screen && !document.hidden);
+  settingsOpen = pause.blocked && !pause.screen && !document.hidden;
+  settingsPanel.classList.toggle('open', settingsOpen);
   pauseScreen.hidden = !pause.screen || document.hidden || replay.active || !!sunSeeker;
   document.getElementById('pauseEndShift')!.hidden = !mailMode || document.getElementById('endShift')!.hidden || interiors.busy || bare;
   if (!pauseScreen.hidden) {
@@ -2040,7 +2042,8 @@ addEventListener('keydown', ev => {
     ev.preventDefault(); ev.stopImmediatePropagation();
     if (!ev.repeat) {
       const settingsClosed = ev.code === 'Escape' && settingsPanel.classList.contains('open');
-      pause.toggle(); syncPauseUI();
+      if (settingsClosed && !pause.blocked) { settingsOpen = false; settingsPanel.classList.remove('open'); }
+      else { pause.toggle(); syncPauseUI(); }
       if (settingsClosed) document.getElementById('gear')!.focus();
     }
   } else if (ev.code === 'Tab' && !pauseScreen.hidden) {
@@ -2053,8 +2056,11 @@ addEventListener('keydown', ev => {
 pauseButton.addEventListener('click', () => { if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } });
 // Several controls close the Settings panel directly (END SHIFT, Enlarge map, Start over); some notices open it.
 // The panel's real state decides the Settings pause, so a closed panel never leaves the game frozen unseen.
+// Watch only changes to the `open` class, so scrollMore's `moreRoom` toggle does not pause a boot recovery notice.
 new MutationObserver(() => {
   const open = settingsPanel.classList.contains('open');
+  if (open === settingsOpen) return;
+  settingsOpen = open;
   if (open !== (pause.blocked && !pause.screen && !document.hidden)) { pause.setSettings(open); syncPauseUI(); }
 }).observe(settingsPanel, { attributes: true, attributeFilter: ['class'] });
 document.getElementById('resumeGame')!.addEventListener('click', () => { pause.resume(); syncPauseUI(); });
