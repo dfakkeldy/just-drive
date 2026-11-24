@@ -9,6 +9,11 @@
       "file": "data/baked/terrain/manifest.json",
       "before": "a6f8efa39a11120d1fc28ec200c48bdd2e462c534b83dfce430ec137078d3fb9",
       "sha256": "4958b71805e689a43202f37e63860dccc933f7128ab4447e9cb70348d4ddb64f"
+    },
+    {
+      "file": "data/baked/areas/pointtupper/manifest.json",
+      "before": "127712c4abb7a954ab11a1a72f777fcdf199d7c076c8ff3d195c55fabec4b76b",
+      "sha256": "2612328181097d9038fb12bf3454ae116b64c7126f179b9e72485e2f49b11aa5"
     }
   ]
 }

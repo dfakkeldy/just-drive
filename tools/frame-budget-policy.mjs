@@ -29,6 +29,10 @@ export const scenes = [
   // from Port Hawkesbury with 2 instanced batches: phone +2 calls (203 -> 205, 22 below PHONE_CAP), +20,820 triangles
   // (1,123,375 -> 1,144,195), +2 geometries (120 -> 122), +0 textures (57), +0 programs (17); desktop +2 calls,
   // +31,192 triangles, +0 programs, staying well inside its existing pin (five identical runs on M1 Pro / Edge 158).
+  // Point Tupper stockpiles pack (tools/stockpiles-delta/stockpiles.json, 66 kB, coal pile and log yard): installing
+  // the pack into data/baked/areas/pointtupper adds +1 asset request (stockpiles.json) to both pointtupper-start rows;
+  // both piles sit >1.3 km away and stay culled at the start, so calls, triangles, geometries, textures and programs
+  // stay unchanged (24 Nov 2026).
   {id:'pointtupper-start',area:'pointtupper',exploreOnly:true,chase:true},
 ];
 // Breakable yard and field props (mail play and Get Fired; yard-props.ts: three instanced meshes, one shared Lambert material)

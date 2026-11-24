@@ -8,9 +8,8 @@ stockpiles.json, and the manifest key "stockpiles": {"file": "stockpiles.json", 
 - Land state: before (no key and no file) or after (the exact key, and the file hashes as the committed pack). A key
   without the file, a file without the key, other bytes or another key value is a mix and fails. The manifest is a
   shared file, so the state reads the key, never a hash of the whole manifest.
-- EXPECT below is None (either state passes) until the install; the install PR sets it to 'after'. From then on an
-  all-before land fails: a host with a land copied before the install, or a Point Tupper rebake (stage 21 writes a
-  new manifest without the key).
+- EXPECT below is 'after' (installed into live data/baked/areas/pointtupper). An all-before land fails: a host with
+  a land copied before the install, or a Point Tupper rebake (stage 21 writes a new manifest without the key).
 - Remake: where GDAL and data/raw exist, pipeline/33_bake_stockpiles.py bakes the pack again in a scratch folder
   and its bytes must equal the committed pack. Elsewhere it prints NOT REMADE.
 - A host without a Point Tupper land (a clean clone) prints NO LAND and checks the committed pack only.
@@ -33,8 +32,8 @@ RAW_INPUTS = ('vectors/BASE_NSTDB_10k_Designated_Areas_WM84__01_designated_area_
               'vectors/BASE_NSTDB_10k_Buildings_WM84__04_building_polygons.geojson',
               'elevation/land-dtm-1m-epsg3979.vrt', 'elevation/land-dsm-1m-epsg3979.vrt')
 KEY = dict(file='stockpiles.json', count=2)
-# Which state the baked land must hold: None until the install, then 'after' (set by the install PR).
-EXPECT = None
+# Which state the baked land must hold: 'after' (installed in data/baked/areas/pointtupper).
+EXPECT = 'after'
 
 
 def sha(data):
