@@ -18,7 +18,7 @@ import {
   safeClampMargin,
   unknownGroundHeight,
 } from '../web/src/water-bounds.ts';
-import { DECK_WAIT_SECONDS, Vehicle } from '../web/src/vehicle.ts';
+import { DECK_WAIT_SECONDS, Vehicle, levelMatchedRoad } from '../web/src/vehicle.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
 import { SXS_SPEC } from '../web/src/sxs.ts';
 import { TRUCK_SPEC, createTruck } from '../web/src/truck.ts';
@@ -26,7 +26,9 @@ import { HORSE_SPEC } from '../web/src/horse.ts';
 import { BikeRide } from '../web/src/bike-ride.ts';
 import { BIKE_SPEC } from '../web/src/bike.ts';
 import { Towing } from '../web/src/towing.ts';
+import { TRAILER_SPEC } from '../web/src/trailer.ts';
 import { Fleet } from '../web/src/fleet.ts';
+import { AreaContacts } from '../web/src/world-contacts.ts';
 import { placeAtStart } from '../web/src/start-here.ts';
 import { checkpoint, reusableCheckpoint } from '../web/src/fleet-checkpoint.ts';
 import { DRONE, DRONE_LOAD, loadSpeedCap, stepDrone } from '../web/src/drone-rules.ts';
@@ -783,7 +785,7 @@ function parkedFrame(r) {
   if (r.parkedPlace(x, z, heading, y)) r.speed = 0;
 }
 
-function runDeckWaitTests(api, quiet = false) {
+function runDeckWaitTests(api, quiet = false, suite = 'all') {
   const log = (...args) => { if (!quiet) console.log(...args); };
   const mkRide = (kind, terrain, roads) => {
     if (kind === 'bike') return new api.BikeRide(makeRig(), terrain, roads, SEA, api.BIKE_SPEC);
@@ -809,6 +811,7 @@ function runDeckWaitTests(api, quiet = false) {
     };
   };
 
+  if (suite !== 'overpass') {
   // 8a. placeAt on an unbuilt carrying span over water waits without sinking, then stands on the built deck.
   // Direct place(), explicit-height place(), off-span placeAt(), and points outside run.halfWidth are still refused.
   {
@@ -1472,9 +1475,707 @@ function runDeckWaitTests(api, quiet = false) {
     }
     log('PASS solo placeAtStart skips unbuilt bridge spans, recovers on late-loaded wet tiles, and handles prototype test doubles');
   }
+  }
+
+  // 8k. Fleet R recovery under and on an overpass keeps native respawn's chosen height across truck+trailer, SxS and bike.
+  if (suite !== 'deck-wait') {
+    const mkOverpassRoads = ({ upperOffset = 0, risingDeck = false } = {}) => {
+      // Lower road runs north-south along x = 0 (z in [-200, 200]); upper overpass runs east-west along z = upperOffset (x in [-200, 200]).
+      const lowerPts = [], upperPts = [];
+      for (let d = -200; d <= 200; d += 20) {
+        lowerPts.push([0, d]);
+        upperPts.push([d, upperOffset]);
+      }
+      const lower = { id: 1, name: 'Lower Highway', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts: lowerPts };
+      const upper = { id: 2, name: 'Overpass Highway', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts: upperPts };
+      const deckHeight = (x, z) => {
+        if (Math.abs(x) > 90 || Math.abs(z - upperOffset) > 6) return null;
+        return risingDeck ? 8 + Math.max(0, x) * 0.06 : 8;
+      };
+      const nearestOn = (road, x, z) => {
+        if (road === lower) {
+          const cz = Math.max(-200, Math.min(200, z));
+          const seg = Math.min(lowerPts.length - 2, Math.max(0, Math.floor((cz + 200) / 20)));
+          const t = (cz - lowerPts[seg][1]) / 20;
+          return { road, seg, t, dist: Math.hypot(x, z - cz), x: 0, z: cz, heading: 0 };
+        }
+        const cx = Math.max(-200, Math.min(200, x));
+        const seg = Math.min(upperPts.length - 2, Math.max(0, Math.floor((cx + 200) / 20)));
+        const t = (cx - upperPts[seg][0]) / 20;
+        return { road, seg, t, dist: Math.hypot(x - cx, z - upperOffset), x: cx, z: upperOffset, heading: Math.PI / 2 };
+      };
+      return {
+        roads: [lower, upper],
+        deckHeight,
+        bridgeRuns: () => [{ roads: new Set([2]), pts: [[-90, upperOffset], [90, upperOffset]], halfWidth: 6 }],
+        nearest(x, z, maxDist, filter) {
+          let best = null;
+          for (const road of [lower, upper]) {
+            if (filter && !filter(road)) continue;
+            const hit = nearestOn(road, x, z);
+            if (hit.dist <= maxDist && (!best || hit.dist < best.dist)) best = hit;
+          }
+          return best;
+        },
+      };
+    };
+
+    const mkOverpassTerrain = (landFn, roads) => ({
+      seaLevel: SEA,
+      cartRoads: false,
+      withContactHeight(_body, read) { return read(); },
+      withGroundContact(_body, read) { return read(); },
+      heightAt(x, z, referenceY) {
+        const land = landFn(x, z);
+        if (!land) return null;
+        const deck = roads.deckHeight(x, z);
+        return deck !== null && referenceY !== undefined && Number.isFinite(referenceY) && deck <= referenceY + 0.5
+          ? Math.max(land.ground, deck)
+          : land.ground;
+      },
+      meshHeightAt(x, z) {
+        const land = landFn(x, z);
+        return land ? land.ground : null;
+      },
+      surfaceAt(x, z, referenceY) {
+        const land = landFn(x, z);
+        if (!land) return null;
+        const deck = roads.deckHeight(x, z);
+        if (deck !== null && referenceY !== undefined && Number.isFinite(referenceY) && deck <= referenceY + 0.5) {
+          return { ...land, ground: Math.max(land.ground, deck), roadDist: 0, halfWidth: 4, kind: 2, deck: true, roadDeck: true, water: false };
+        }
+        return land;
+      },
+      coverAt() { return 0; },
+      waterAt(x, z, drawnGround, onDeck = false) {
+        if (onDeck) return false;
+        const land = landFn(x, z);
+        if (!land) return true;
+        const g = drawnGround ?? land.ground;
+        return isSeaHeight(g, SEA) || !!land.water;
+      },
+    });
+
+    const dryRoadLand = (x, z) => ({
+      ground: 2, canopy: 0, roadDist: Math.abs(x), halfWidth: 4, kind: Math.abs(x) <= 4 ? 2 : 0,
+      level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false,
+    });
+
+    const mkFleetOverpass = ({ roads, terrain, loaded = true, contacts, startX = 0, startZ = 40, startHeading = 0, startY = 2 }) => {
+      const truck = mkTruck(terrain, roads);
+      truck.bounds = [-180, -180, 180, 180];
+      assert.equal(truck.place(startX, startZ, startHeading, startY), true, 'truck places at overpass fixture start');
+      const tow = new api.Towing(truck, terrain, roads, loaded, false, { contacts }, true, true);
+      const scene = new THREE.Scene(); scene.add(truck.car.root, tow.trailer.root);
+      const fleet = new api.Fleet(truck, tow, terrain, roads, scene, true, () => {}, SEA, contacts);
+      return { truck, tow, fleet };
+    };
+
+    // 8k-1. Truck (+ loaded trailer), SxS and bike under an overpass keep lower-road height (y=2),
+    // both with trail history and with no trail (native respawn road fallback where spanDeckReference is undefined).
+    {
+      const roads = mkOverpassRoads();
+      const terrain = mkOverpassTerrain(dryRoadLand, roads);
+      const { truck, tow, fleet } = mkFleetOverpass({ roads, terrain, loaded: true, startX: 0, startZ: 25, startHeading: 0, startY: 2 });
+      // Drive north on the lower road right under the y=8 overpass at z=0.
+      assert.equal(fleet.nativePlace.get(truck)(0, 0, 0, 2), true);
+      truck.trail.push({ x: 0, z: 0, heading: 0, y: 2 });
+      fleet.respawn();
+      assert.ok(Math.abs(truck.y - 2) < 0.15, `Fleet R keeps truck under overpass with trail (y=${truck.y.toFixed(2)})`);
+      assert.ok(Math.abs(tow.y - 2) < 0.25, `Fleet R keeps trailer under overpass with trail (y=${tow.y.toFixed(2)})`);
+
+      // No trail / no safe pose: native Vehicle.respawn falls back to nearest lower road with referenceY = undefined.
+      truck.resetVisit();
+      assert.equal(fleet.nativePlace.get(truck)(0, 0, 0, 2), true);
+      truck.resetVisit();
+      fleet.respawn();
+      assert.ok(Math.abs(truck.y - 2) < 0.15, `Fleet R keeps truck under overpass without trail (y=${truck.y.toFixed(2)})`);
+      assert.ok(Math.abs(tow.y - 2) < 0.25, `Fleet R keeps trailer under overpass without trail (y=${tow.y.toFixed(2)})`);
+
+      // Unloaded SxS and bike under the overpass: park truck away from z=0, place each member under z=0 and press R.
+      assert.equal(fleet.nativePlace.get(truck)(0, 60, 0, 2), true);
+      tow.update();
+      for (const id of ['sxs', 'bike']) {
+        const m = fleet.members.find(x => x.id === id);
+        fleet.scene.add(m.rig.root);
+        m.state = 'DRIVEN';
+        fleet.members[0].state = 'PARKED';
+        fleet.driven = m;
+        // With trail/safe pose under the overpass:
+        assert.equal(fleet.nativePlace.get(m.vehicle)(0, 0, 0, 2), true, `${id} places under overpass`);
+        fleet.respawn();
+        assert.ok(Math.abs(m.vehicle.y - 2) < 0.15, `Fleet R keeps ${id} under overpass with safe pose (y=${m.vehicle.y.toFixed(2)})`);
+        // Without trail/safe pose (native respawn picks closer lower road at x=0, z=0.2 with referenceY = undefined):
+        m.vehicle.resetVisit();
+        m.vehicle.x = 0; m.vehicle.z = 0.2; m.vehicle.y = 2; m.vehicle.heading = 0;
+        fleet.respawn();
+        assert.ok(Math.abs(m.vehicle.y - 2) < 0.15, `Fleet R keeps ${id} under overpass without trail (y=${m.vehicle.y.toFixed(2)})`);
+        m.state = 'PARKED';
+        fleet.nativePlace.get(m.vehicle)(0, id === 'sxs' ? 90 : 110, 0, 2);
+      }
+      fleet.members[0].state = 'DRIVEN';
+      fleet.driven = fleet.members[0];
+    }
+
+    // 8k-2. Truck (+ trailer), SxS and bike ON the overpass deck (y=8) stay on the deck when pressing R (never drop to y=2).
+    {
+      const roads = mkOverpassRoads();
+      const terrain = mkOverpassTerrain(dryRoadLand, roads);
+      const { truck, tow, fleet } = mkFleetOverpass({ roads, terrain, loaded: true, startX: -30, startZ: 0, startHeading: Math.PI / 2, startY: 8 });
+      assert.equal(fleet.nativePlace.get(truck)(0, 0, Math.PI / 2, 8), true);
+      truck.trail.push({ x: 0, z: 0, heading: Math.PI / 2, y: 8 });
+      fleet.respawn();
+      assert.ok(Math.abs(truck.y - 8) < 0.15, `Fleet R keeps truck on overpass deck with trail (y=${truck.y.toFixed(2)})`);
+      assert.ok(Math.abs(tow.y - 8) < 0.25, `Fleet R keeps trailer on overpass deck with trail (y=${tow.y.toFixed(2)})`);
+
+      // No trail on the carrying span at (10, 0): native Vehicle.respawn chooses spanDeckReference (y=8) and Fleet keeps it.
+      truck.resetVisit();
+      assert.equal(fleet.nativePlace.get(truck)(10, 0, Math.PI / 2, 8), true);
+      truck.resetVisit();
+      fleet.respawn();
+      assert.ok(Math.abs(truck.y - 8) < 0.15, `Fleet R keeps truck on overpass deck without trail (y=${truck.y.toFixed(2)})`);
+      assert.ok(Math.abs(tow.y - 8) < 0.25, `Fleet R keeps trailer on overpass deck without trail (y=${tow.y.toFixed(2)})`);
+
+      assert.equal(fleet.nativePlace.get(truck)(-50, 0, Math.PI / 2, 8), true);
+      tow.update();
+      for (const id of ['sxs', 'bike']) {
+        const m = fleet.members.find(x => x.id === id);
+        fleet.scene.add(m.rig.root);
+        m.state = 'DRIVEN';
+        fleet.members[0].state = 'PARKED';
+        fleet.driven = m;
+        assert.equal(fleet.nativePlace.get(m.vehicle)(0, 0, Math.PI / 2, 8), true);
+        m.vehicle[id === 'bike' ? 'roadTrail' : 'trail'].push({ x: 0, z: 0, heading: Math.PI / 2, y: 8 });
+        fleet.respawn();
+        assert.ok(Math.abs(m.vehicle.y - 8) < 0.15, `Fleet R keeps ${id} on overpass deck (y=${m.vehicle.y.toFixed(2)})`);
+        m.state = 'PARKED';
+        fleet.nativePlace.get(m.vehicle)(id === 'sxs' ? 50 : 70, 0, Math.PI / 2, 8);
+      }
+    }
+
+    // 8k-3. Overhead guardrail/contact at deck height (y >= 6) does not block lower-road Fleet R recovery (y = 2),
+    // even when the vehicle started at deck height before native respawn chose the lower road.
+    {
+      const roads = mkOverpassRoads();
+      const terrain = mkOverpassTerrain(dryRoadLand, roads);
+      const contacts = new api.AreaContacts();
+      contacts.add({
+        resolve() {},
+        allows(body) { return !(Math.abs(body.x) < 12 && Math.abs(body.z) < 12 && body.y >= 6); },
+      });
+      const { truck, tow, fleet } = mkFleetOverpass({ roads, terrain, loaded: true, contacts, startX: 0, startZ: 40, startHeading: 0, startY: 2 });
+      // Truck with lower-road safe pose at (0, 0, y=2) while overhead deck at y=8 is blocked by a deck-level contact.
+      assert.equal(fleet.nativePlace.get(truck)(0, 0, 0, 2), true);
+      truck.y = 8; // stale height above deck before nativeRespawn picks lower road
+      truck.resetVisit();
+      fleet.respawn();
+      assert.ok(Math.abs(truck.x) < 1 && Math.abs(truck.z) < 1, `Fleet R under overpass stays at (0,0) despite deck-level contact (x=${truck.x.toFixed(2)}, z=${truck.z.toFixed(2)})`);
+      assert.ok(Math.abs(truck.y - 2) < 0.15, `Fleet R ignores deck-level contact when recovering truck under overpass (y=${truck.y.toFixed(2)})`);
+      assert.ok(Math.abs(tow.y - 2) < 0.25, `Fleet R trailer clears under deck-level contact (y=${tow.y.toFixed(2)})`);
+
+      // Also test placementGuard + AreaContacts when a later stuntPark-style callback is bound (main.ts:1240),
+      // and bike starts at stale y=8 before nativeRespawn chooses lower road (referenceY=undefined).
+      assert.equal(fleet.nativePlace.get(truck)(0, 50, 0, 2), true);
+      tow.update();
+      const bike = fleet.members.find(x => x.id === 'bike');
+      for (const m of fleet.members) {
+        contacts.bindVehicle(m.vehicle, pose => (pose.x > 500 ? terrain.heightAt(pose.x, pose.z, pose.y) : undefined));
+      }
+      fleet.scene.add(bike.rig.root);
+      bike.state = 'DRIVEN';
+      fleet.members[0].state = 'PARKED';
+      fleet.driven = bike;
+      bike.vehicle.resetVisit();
+      bike.vehicle.x = 0; bike.vehicle.z = 0; bike.vehicle.y = 8; bike.vehicle.heading = 0;
+      fleet.respawn();
+      assert.ok(Math.abs(bike.vehicle.x) < 1 && Math.abs(bike.vehicle.z) < 1 && Math.abs(bike.vehicle.y - 2) < 0.15,
+        `bike R from stale y=8 onto lower road clears deck-level AreaContacts after stuntPark rebind (x=${bike.vehicle.x.toFixed(2)}, z=${bike.vehicle.z.toFixed(2)}, y=${bike.vehicle.y.toFixed(2)})`);
+    }
+
+    // 8k-4. Blocked distance=0 under an overpass follows the lower road (not a closer perpendicular upper road),
+    // including real truck+trailer native respawn with only the trailer blocked;
+    // and blocked distance=0..16 on a rising overpass deck (even across an unloaded terrain gap) stays on the deck.
+    {
+      // Upper road at z=0 is closer to (1.5, 0) than lower road at x=0 (dist 0 vs 1.5), and (1.5, 0, y=2) is blocked at lower level.
+      const roads = mkOverpassRoads({ upperOffset: 0 });
+      const terrain = mkOverpassTerrain(dryRoadLand, roads);
+      const contacts = new api.AreaContacts();
+      contacts.add({
+        resolve() {},
+        allows(body) { return !(Math.hypot(body.x - 1.5, body.z) < 3 && body.y < 5); },
+      });
+      const { fleet } = mkFleetOverpass({ roads, terrain, loaded: true, contacts, startX: 0, startZ: 60, startHeading: 0, startY: 2 });
+      const sxs = fleet.members.find(x => x.id === 'sxs');
+      fleet.scene.add(sxs.rig.root);
+      sxs.state = 'DRIVEN';
+      fleet.members[0].state = 'PARKED';
+      fleet.driven = sxs;
+      fleet.nativeRespawn.set(sxs.vehicle, () => {
+        sxs.vehicle.x = 1.5; sxs.vehicle.z = 0; sxs.vehicle.y = 2; sxs.vehicle.heading = 0;
+      });
+      fleet.respawn();
+      assert.ok(Math.abs(sxs.vehicle.x) < 0.5 && Math.abs(sxs.vehicle.z) >= 2,
+        `blocked lower-road R walks along lower north-south road, not closer east-west upper deck (x=${sxs.vehicle.x.toFixed(2)}, z=${sxs.vehicle.z.toFixed(2)})`);
+      assert.ok(Math.abs(sxs.vehicle.y - 2) < 0.15, `blocked lower-road R stays at lower height (y=${sxs.vehicle.y.toFixed(2)})`);
+
+      // Real truck+trailer (unmocked nativeRespawn) at (1.5, 0, heading=0, y=2) with ONLY the trailer behind at z~7 blocked:
+      // Towing.allowPlacement must follow the lower north-south road instead of turning 90 deg onto the closer upper road.
+      const trailerContacts = new api.AreaContacts();
+      trailerContacts.add({
+        resolve() {},
+        allows(body) { return !(Math.hypot(body.x - 1.5, body.z - 7) < 2.5 && body.y < 5); },
+      });
+      const { truck: bTruck, tow: bTow, fleet: bFleet } = mkFleetOverpass({ roads, terrain, loaded: true, contacts: trailerContacts, startX: 0, startZ: 60, startHeading: 0, startY: 2 });
+      assert.equal(bFleet.nativePlace.get(bTruck)(0, -30, 0, 2), true);
+      bTruck.trail.push({ x: 1.5, z: 0, heading: 0, y: 2 });
+      bFleet.respawn();
+      assert.ok(Math.abs(bTruck.x) < 0.5 && Math.abs(Math.sin(bTruck.heading)) < 0.1,
+        `blocked-trailer R follows lower north-south road instead of turning onto upper road (x=${bTruck.x.toFixed(2)}, z=${bTruck.z.toFixed(2)}, heading=${bTruck.heading.toFixed(2)})`);
+      assert.ok(Math.abs(bTruck.y - 2) < 0.15 && Math.abs(bTow.y - 2) < 0.25,
+        `blocked-trailer R keeps truck and trailer at lower height (truck=${bTruck.y.toFixed(2)}, tow=${bTow.y.toFixed(2)})`);
+
+      // Rising 6% overpass deck with an unloaded terrain gap x in (1, 11): y = 8 + 0.06 * x (at x=12, deck is 8.72 > 8 + 0.5).
+      // Both Fleet.teleport (sxs) and Towing.allowPlacement (truck+trailer) must stay on the rising deck, never dropping to 2 m land.
+      const risingRoads = mkOverpassRoads({ upperOffset: 0, risingDeck: true });
+      const risingGapLand = (x, z) => (x > 1 && x < 11 && Math.abs(z) < 10 ? null : dryRoadLand(x, z));
+      const risingTerrain = mkOverpassTerrain(risingGapLand, risingRoads);
+      const risingContacts = new api.AreaContacts();
+      risingContacts.add({
+        resolve() {},
+        allows(body) { return !(body.x > -4 && body.x < 12 && Math.abs(body.z) < 4); },
+      });
+      const { fleet: rFleet } = mkFleetOverpass({ roads: risingRoads, terrain: risingTerrain, loaded: true, contacts: risingContacts, startX: 0, startZ: 60, startHeading: 0, startY: 2 });
+      const rSxs = rFleet.members.find(x => x.id === 'sxs');
+      rFleet.scene.add(rSxs.rig.root);
+      rSxs.state = 'DRIVEN';
+      rFleet.members[0].state = 'PARKED';
+      rFleet.driven = rSxs;
+      rFleet.nativeRespawn.set(rSxs.vehicle, () => {
+        rSxs.vehicle.x = 0; rSxs.vehicle.z = 0; rSxs.vehicle.y = 8; rSxs.vehicle.heading = Math.PI / 2;
+      });
+      rFleet.respawn();
+      const expectedDeck = risingRoads.deckHeight(rSxs.vehicle.x, rSxs.vehicle.z);
+      assert.ok(rSxs.vehicle.x >= 12 && expectedDeck !== null && expectedDeck > 8.7 && Math.abs(rSxs.vehicle.y - expectedDeck) < 0.15,
+        `blocked rising-deck R across unloaded gap stays on deck y=${expectedDeck?.toFixed(2)} instead of dropping to land (x=${rSxs.vehicle.x.toFixed(2)}, y=${rSxs.vehicle.y.toFixed(2)})`);
+
+      // Real truck+trailer on the same rising 6% deck with unloaded gap x in (1, 11):
+      // Block x in (-12, 12) so Towing.allowPlacement must search forward across the unloaded gap onto the rising deck (y >= 8.72).
+      const risingTruckContacts = new api.AreaContacts();
+      risingTruckContacts.add({
+        resolve() {},
+        allows(body) { return !(body.x > -12 && body.x < 12 && Math.abs(body.z) < 4); },
+      });
+      const { truck: rTruck, tow: rTow, fleet: rtFleet } = mkFleetOverpass({ roads: risingRoads, terrain: risingTerrain, loaded: true, contacts: risingTruckContacts, startX: 0, startZ: 60, startHeading: 0, startY: 2 });
+      const towPose = { x: 0, z: 0, heading: Math.PI / 2, y: 8 };
+      assert.equal(rTow.allowPlacement(towPose), true, 'Towing.allowPlacement finds clear rising-deck pose across unloaded gap');
+      const expectedTowDeck = risingRoads.deckHeight(towPose.x, towPose.z);
+      assert.ok(towPose.x >= 12 && expectedTowDeck !== null && expectedTowDeck > 8.7 && Math.abs((towPose.y ?? 0) - expectedTowDeck) < 0.15,
+        `Towing.allowPlacement across unloaded gap stays on rising deck y=${expectedTowDeck?.toFixed(2)} instead of dropping to land (x=${towPose.x.toFixed(2)}, y=${towPose.y})`);
+      // Also verify Fleet R with real truck+trailer facing downhill on the 6% deck keeps the uphill trailer on the deck (not hanging down).
+      assert.equal(rtFleet.nativePlace.get(rTruck)(25, 0, -Math.PI / 2, risingRoads.deckHeight(25, 0)), true);
+      rTruck.trail.push({ x: 25, z: 0, heading: -Math.PI / 2, y: risingRoads.deckHeight(25, 0) });
+      rtFleet.respawn();
+      const downhillTrailerDeck = risingRoads.deckHeight(rTow.x, rTow.z);
+      assert.ok(downhillTrailerDeck !== null && Math.abs(rTow.y - downhillTrailerDeck) < 0.35,
+        `downhill rising-deck R keeps uphill trailer on deck y=${downhillTrailerDeck?.toFixed(2)} (tow=${rTow.y.toFixed(2)})`);
+    }
+
+    // 8k-5. Water beneath an overpass (y=-1 under y=8 deck) is rejected by validTeleport, not treated as dry via overhead deck.
+    {
+      const roads = mkOverpassRoads();
+      const riverUnderBridge = (x, z) => ({
+        ground: Math.abs(z) <= 8 ? -1 : 2,
+        canopy: 0,
+        roadDist: Math.abs(x),
+        halfWidth: 4,
+        kind: Math.abs(x) <= 4 ? 2 : 0,
+        level: 8,
+        washboard: false, gravel: false, rough: false,
+        water: Math.abs(z) <= 8,
+        bridge: false, deck: false,
+      });
+      const terrain = mkOverpassTerrain(riverUnderBridge, roads);
+      const { fleet } = mkFleetOverpass({ roads, terrain, loaded: true, startX: 0, startZ: 60, startHeading: 0, startY: 2 });
+      const sxs = fleet.members.find(x => x.id === 'sxs');
+      fleet.scene.add(sxs.rig.root);
+      sxs.state = 'DRIVEN';
+      fleet.members[0].state = 'PARKED';
+      fleet.driven = sxs;
+      // Native respawn leaves sxs in water beneath the bridge deck at (0, 0, y=-1): validTeleport must reject water under deck and walk to dry bank z <= -10.
+      fleet.nativeRespawn.set(sxs.vehicle, () => {
+        sxs.vehicle.x = 0; sxs.vehicle.z = 0; sxs.vehicle.y = -1; sxs.vehicle.heading = 0;
+      });
+      fleet.respawn();
+      assert.ok(Math.abs(sxs.vehicle.z) > 8 && Math.abs(sxs.vehicle.y - 2) < 0.15,
+        `water beneath overpass is rejected by Fleet R and recovers to dry bank (z=${sxs.vehicle.z.toFixed(2)}, y=${sxs.vehicle.y.toFixed(2)})`);
+      // Also directly verify validTeleport rejects both sea water (y=-1) and inland lake water (y=2, above seaLevel) below the y=8 overhead deck.
+      const reason = fleet.validTeleport({ x: 0, z: 0, y: -1, heading: 0, spec: sxs.entry.spec }, sxs, []);
+      assert.match(reason, /Water/, `validTeleport rejects water beneath overhead deck (got: ${reason})`);
+      const lakeUnderBridge = (x, z) => ({
+        ground: 2, canopy: 0, roadDist: Math.abs(x), halfWidth: 4, kind: Math.abs(x) <= 4 ? 2 : 0,
+        level: 8, washboard: false, gravel: false, rough: false, water: Math.abs(z) <= 8, bridge: false, deck: false,
+      });
+      const lakeTerrain = mkOverpassTerrain(lakeUnderBridge, roads);
+      const { fleet: lakeFleet } = mkFleetOverpass({ roads, terrain: lakeTerrain, loaded: true, startX: 0, startZ: 60, startHeading: 0, startY: 2 });
+      const lakeSxs = lakeFleet.members.find(x => x.id === 'sxs');
+      const lakeReason = lakeFleet.validTeleport({ x: 0, z: 0, y: 2, heading: 0, spec: lakeSxs.entry.spec }, lakeSxs, []);
+      assert.match(lakeReason, /Water/, `validTeleport rejects inland water above seaLevel beneath overhead deck (got: ${lakeReason})`);
+    }
+
+    // 8k-6. Stacked crossing decks (8 m lower deck crossed by 15 m upper deck, both with and without roadDeckHeight)
+    // and steep 15% downhill deck with truck+trailer + hanging-trailer rejection.
+    {
+      for (const withRoadDeckHeight of [true, false]) {
+        const lowerPts = [], upperPts = [];
+        for (let d = -200; d <= 200; d += 20) { lowerPts.push([0, d]); upperPts.push([d, 0]); }
+        const lower = { id: 1, name: 'Lower Deck', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts: lowerPts };
+        const upper = { id: 2, name: 'Upper Deck', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts: upperPts };
+        // With roadDeckHeight: lower deck rises 8 -> 8.6 m across an unloaded gap under a 15 m crossing deck.
+        // Without roadDeckHeight: flat 8 m lower deck re-emerges after a 30 m unloaded gap under a 15 m crossing deck.
+        const lowerDeckAt = (x, z) => (Math.abs(x) <= 6 && Math.abs(z) <= 80 ? (withRoadDeckHeight ? 8 + Math.max(0, -z) * 0.1 : 8) : null);
+        const upperDeckAt = (x, z) => (Math.abs(x) <= 80 && z <= 6 && z >= (withRoadDeckHeight ? -8 : -36) ? 15 : null);
+        const isGap = (x, z) => Math.abs(x) <= 6 && (withRoadDeckHeight ? (z <= -1 && z >= -5) : (z <= -2 && z >= -30));
+        const stackedRoads = {
+          roads: [lower, upper],
+          deckHeight(x, z) {
+            const a = lowerDeckAt(x, z), b = upperDeckAt(x, z);
+            if (a === null) return b;
+            if (b === null) return a;
+            return Math.max(a, b);
+          },
+          ...(withRoadDeckHeight ? {
+            roadDeckHeight(x, z, id) { return id === 1 ? lowerDeckAt(x, z) : id === 2 ? upperDeckAt(x, z) : null; },
+          } : {}),
+          bridgeRuns: () => [
+            { roads: new Set([1]), pts: [[0, -80], [0, 80]], halfWidth: 6 },
+            { roads: new Set([2]), pts: [[-80, 0], [80, 0]], halfWidth: 6 },
+          ],
+          nearest(x, z, maxDist, filter) {
+            const cands = [
+              { road: lower, seg: Math.min(lowerPts.length - 2, Math.max(0, Math.floor((z + 200) / 20))), t: 0, dist: Math.abs(x), x: 0, z, heading: Math.PI },
+              { road: upper, seg: Math.min(upperPts.length - 2, Math.max(0, Math.floor((x + 200) / 20))), t: 0, dist: Math.abs(z), x, z: 0, heading: Math.PI / 2 },
+            ];
+            let best = null;
+            for (const c of cands) {
+              if (filter && !filter(c.road)) continue;
+              const pts = c.road.pts;
+              const a = pts[c.seg], b = pts[c.seg + 1];
+              c.t = c.road === lower ? (z - a[1]) / (b[1] - a[1]) : (x - a[0]) / (b[0] - a[0]);
+              if (c.dist <= maxDist && (!best || c.dist < best.dist)) best = c;
+            }
+            return best;
+          },
+        };
+        const stackedTerrain = {
+          seaLevel: SEA,
+          cartRoads: false,
+          withContactHeight(_b, read) { return read(); },
+          withGroundContact(_b, read) { return read(); },
+          heightAt(x, z, referenceY) {
+            if (isGap(x, z)) return null;
+            let best = 2;
+            for (const d of [lowerDeckAt(x, z), upperDeckAt(x, z)]) {
+              if (d !== null && referenceY !== undefined && Number.isFinite(referenceY) && d <= referenceY + 0.5 && d > best) best = d;
+            }
+            return best;
+          },
+          meshHeightAt() { return 2; },
+          surfaceAt(x, z, referenceY) {
+            if (isGap(x, z)) return null;
+            let deck = null;
+            for (const d of [lowerDeckAt(x, z), upperDeckAt(x, z)]) {
+              if (d !== null && referenceY !== undefined && Number.isFinite(referenceY) && d <= referenceY + 0.5 && (deck === null || d > deck)) deck = d;
+            }
+            if (deck !== null) return { ground: deck, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: true, roadDeck: true };
+            return { ground: 2, canopy: 0, roadDist: 99, halfWidth: 0, kind: 0, level: 8, washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false };
+          },
+          coverAt() { return 0; },
+          waterAt() { return false; },
+        };
+        const contacts = new api.AreaContacts();
+        // Block the lower 8 m deck at z = 0..1 so Fleet R must search forward past the unloaded gap under the 15 m crossing deck.
+        contacts.add({ resolve() {}, allows(b) { return !(Math.abs(b.x) < 3 && Math.abs(b.z) < 1.5 && b.y < 12); } });
+        const { fleet } = mkFleetOverpass({ roads: stackedRoads, terrain: stackedTerrain, loaded: true, contacts, startX: 0, startZ: 60, startHeading: 0, startY: 8 });
+        const sxs = fleet.members.find(x => x.id === 'sxs');
+        fleet.scene.add(sxs.rig.root);
+        sxs.state = 'DRIVEN';
+        fleet.members[0].state = 'PARKED';
+        fleet.driven = sxs;
+        fleet.nativeRespawn.set(sxs.vehicle, () => {
+          sxs.vehicle.x = 0; sxs.vehicle.z = 0; sxs.vehicle.y = 8; sxs.vehicle.heading = 0;
+        });
+        fleet.respawn();
+        const expectLower = lowerDeckAt(sxs.vehicle.x, sxs.vehicle.z);
+        assert.ok(Math.abs(sxs.vehicle.x) < 0.5 && (!withRoadDeckHeight || sxs.vehicle.z <= -5) && expectLower !== null && Math.abs(sxs.vehicle.y - expectLower) < 0.15,
+          `stacked crossing (${withRoadDeckHeight ? 'with' : 'without'} roadDeckHeight): Fleet R keeps sxs on lower deck y=${expectLower?.toFixed(2)} instead of jumping to 15 m or dropping to land (x=${sxs.vehicle.x.toFixed(2)}, z=${sxs.vehicle.z.toFixed(2)}, y=${sxs.vehicle.y.toFixed(2)})`);
+        // Upper deck at (0.2, 0.4, y=15) is closer to lower road (x=0) than upper road (z=0): blocked at x=0..1, must walk east along upper road at y=15.
+        if (withRoadDeckHeight) {
+          const upperContacts = new api.AreaContacts();
+          upperContacts.add({ resolve() {}, allows(b) { return !(Math.abs(b.x) < 1.5 && Math.abs(b.z) < 3 && b.y > 12); } });
+          const { fleet: uf } = mkFleetOverpass({ roads: stackedRoads, terrain: stackedTerrain, loaded: true, contacts: upperContacts, startX: 60, startZ: 0, startHeading: Math.PI / 2, startY: 15 });
+          const usxs = uf.members.find(x => x.id === 'sxs');
+          uf.scene.add(usxs.rig.root);
+          usxs.state = 'DRIVEN'; uf.members[0].state = 'PARKED'; uf.driven = usxs;
+          uf.nativeRespawn.set(usxs.vehicle, () => {
+            usxs.vehicle.x = 0.2; usxs.vehicle.z = 0.4; usxs.vehicle.y = 15; usxs.vehicle.heading = Math.PI / 2;
+          });
+          uf.respawn();
+          assert.ok(Math.abs(usxs.vehicle.z) < 0.5 && Math.abs(usxs.vehicle.x) >= 1.5 && Math.abs(usxs.vehicle.y - 15) < 0.15,
+            `stacked crossing upper deck: Fleet R walks along upper east-west deck instead of lower north-south deck (x=${usxs.vehicle.x.toFixed(2)}, z=${usxs.vehicle.z.toFixed(2)}, y=${usxs.vehicle.y.toFixed(2)})`);
+        }
+      }
+
+      // Steep 15% downhill bridge deck over water: start away at x=65 (pitch=0) so rollback cannot satisfy the test.
+      // Recover to x=25, y=15.00 facing west (-PI/2): uphill bumper is at y=15.51 (> 15+0.5) and trailer at x~33.9 on y~16.34.
+      for (const withRoadDeckHeight of [true, false]) {
+        const pts = [];
+        for (let x = -100; x <= 100; x += 20) pts.push([x, 0]);
+        const spanRoad = { id: 2, name: 'Steep Span', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts };
+        const steepDeckAt = (x, z) => (Math.abs(x) <= 90 && Math.abs(z) <= 6 ? 15 + (x - 25) * 0.15 : null);
+        const steepRoads = {
+          roads: [spanRoad],
+          deckHeight: steepDeckAt,
+          ...(withRoadDeckHeight ? { roadDeckHeight: (x, z, id) => (id === 2 ? steepDeckAt(x, z) : null) } : {}),
+          bridgeRuns: () => [{ roads: new Set([2]), pts: [[-90, 0], [90, 0]], halfWidth: 6 }],
+          nearest(x, z, maxDist, filter) {
+            if (filter && !filter(spanRoad)) return null;
+            const cx = Math.max(-100, Math.min(100, x));
+            const dist = Math.hypot(x - cx, z);
+            if (dist > maxDist) return null;
+            const seg = Math.min(pts.length - 2, Math.max(0, Math.floor((cx + 100) / 20)));
+            return { road: spanRoad, seg, t: (cx - pts[seg][0]) / 20, dist, x: cx, z: 0, heading: Math.PI / 2 };
+          },
+        };
+        const waterUnderSpan = (x, z) => ({
+          ground: -2, canopy: 0, roadDist: Math.abs(z), halfWidth: 4, kind: 2, level: 8,
+          washboard: false, gravel: false, rough: false, water: true, bridge: false, deck: false,
+        });
+        const steepTerrain = mkOverpassTerrain(waterUnderSpan, steepRoads);
+        const { truck, tow, fleet } = mkFleetOverpass({ roads: steepRoads, terrain: steepTerrain, loaded: true, startX: 65, startZ: 0, startHeading: -Math.PI / 2, startY: steepDeckAt(65, 0) });
+        truck.pitch = 0;
+        truck.trail = [{ x: 25, z: 0, heading: -Math.PI / 2, y: 15 }];
+        fleet.respawn();
+        const trailerDeck = steepDeckAt(tow.x, tow.z);
+        assert.ok(Math.abs(truck.x - 25) < 0.5 && Math.sin(truck.heading) < -0.9 && tow.x > truck.x && Math.abs(truck.y - 15) < 0.25 && trailerDeck !== null && Math.abs(tow.y - trailerDeck) < 0.35 && !tow.airborne,
+          `15% downhill deck over water (${withRoadDeckHeight ? 'with' : 'without'} roadDeckHeight): commits truck downhill at x=25 and keeps uphill trailer on deck y=${trailerDeck?.toFixed(2)} (x=${truck.x.toFixed(2)}, h=${truck.heading.toFixed(2)}, towX=${tow.x.toFixed(2)}, truck=${truck.y.toFixed(2)}, tow=${tow.y.toFixed(2)}, air=${tow.airborne}, msg=${fleet.message})`);
+        const truckHitch = new THREE.Vector3(0, truck.spec.hitch.height, truck.spec.hitch.back)
+          .applyEuler(new THREE.Euler(truck.pitch, -truck.heading, truck.roll, 'YXZ'))
+          .add(new THREE.Vector3(truck.x, truck.y, truck.z));
+        const trailerCoupler = new THREE.Vector3(0, TRAILER_SPEC.couplerHeight, -TRAILER_SPEC.drawbar)
+          .applyEuler(new THREE.Euler(tow.pitch, -tow.heading, tow.roll, 'YXZ'))
+          .add(new THREE.Vector3(tow.x, tow.y, tow.z));
+        assert.ok(truckHitch.distanceTo(trailerCoupler) < 0.02,
+          `15% downhill deck over water: trailer coupler meets live truck hitch immediately after R (gap=${truckHitch.distanceTo(trailerCoupler).toFixed(4)}m)`);
+
+        // Parked pickup+trailer facing uphill (+PI/2) at x=25, y=15 on a 15% grade over 2 m land (trailer blocks downhill x=12..25):
+        // SxS native recovery at (25, 0, +PI/2, y=15) must shift uphill via placementGuard to x >= 30 (deck >= 15.75) and stay on deck, never dropping to 2 m land.
+        const landSteepTerrain = mkOverpassTerrain(dryRoadLand, steepRoads);
+        const { truck: pTruck, fleet: pFleet } = mkFleetOverpass({ roads: steepRoads, terrain: landSteepTerrain, loaded: true, startX: 25, startZ: 0, startHeading: Math.PI / 2, startY: 15 });
+        const pSxs = pFleet.members.find(x => x.id === 'sxs');
+        pFleet.scene.add(pSxs.rig.root);
+        pSxs.state = 'DRIVEN'; pFleet.members[0].state = 'PARKED'; pFleet.driven = pSxs;
+        assert.equal(pFleet.nativePlace.get(pSxs.vehicle)(55, 0, Math.PI / 2, steepDeckAt(55, 0)), true);
+        pSxs.vehicle.trail = [{ x: 25, z: 0, heading: Math.PI / 2, y: 15 }];
+        pFleet.respawn();
+        const sxsDeck = steepDeckAt(pSxs.vehicle.x, pSxs.vehicle.z);
+        assert.ok(pTruck.x === 25 && pSxs.vehicle.x >= 29 && sxsDeck !== null && Math.abs(pSxs.vehicle.y - sxsDeck) < 0.25,
+          `15% grade parked pickup pushes SxS uphill along rising deck instead of dropping to land (x=${pSxs.vehicle.x.toFixed(2)}, y=${pSxs.vehicle.y.toFixed(2)}, deck=${sxsDeck?.toFixed(2)})`);
+      }
+
+      // Diagonal & perpendicular SxS saved on an 8 m deck blocked by parked pickup:
+      // placementGuard must search along the carrying east-west deck road instead of walking off the side onto y=2 land.
+      {
+        const roads = mkOverpassRoads({ upperOffset: 0 });
+        roads.roadDeckHeight = (x, z, id) => (id === 2 ? roads.deckHeight(x, z) : null);
+        const terrain = mkOverpassTerrain(dryRoadLand, roads);
+        const { truck: dTruck, fleet: dFleet } = mkFleetOverpass({ roads, terrain, loaded: true, startX: 25, startZ: 4, startHeading: Math.PI / 2, startY: 8 });
+        const dSxs = dFleet.members.find(x => x.id === 'sxs');
+        dFleet.scene.add(dSxs.rig.root);
+        dSxs.state = 'DRIVEN'; dFleet.members[0].state = 'PARKED'; dFleet.driven = dSxs;
+        assert.equal(dFleet.nativePlace.get(dSxs.vehicle)(55, 0, Math.PI / 2, 8), true);
+        dSxs.vehicle.trail = [{ x: 25, z: 4, heading: Math.PI / 2 + 0.65, y: 8 }];
+        dFleet.respawn();
+        assert.ok(Math.abs(dTruck.x - 25) < 0.1 && Math.abs(dSxs.vehicle.x - 25) < 12 && Math.abs(dSxs.vehicle.y - 8) < 0.25 && Math.abs(dSxs.vehicle.z) < 5,
+          `diagonal SxS blocked by parked pickup on deck follows carrying deck road at y=8 instead of falling off side to land (x=${dSxs.vehicle.x.toFixed(2)}, z=${dSxs.vehicle.z.toFixed(2)}, y=${dSxs.vehicle.y.toFixed(2)})`);
+        // Perpendicular SxS at (25, 0, heading=0) blocked by pickup at (25, 0): both heading directions lead off the deck sides, so road-following is required.
+        assert.equal(dFleet.nativePlace.get(dTruck)(25, 0, Math.PI / 2, 8), true);
+        assert.equal(dFleet.nativePlace.get(dSxs.vehicle)(55, 0, Math.PI / 2, 8), true);
+        dSxs.vehicle.trail = [{ x: 25, z: 0, heading: 0, y: 8 }];
+        dFleet.respawn();
+        assert.ok(Math.abs(dSxs.vehicle.x - 25) < 12 && Math.abs(dSxs.vehicle.y - 8) < 0.25 && Math.abs(dSxs.vehicle.z) < 2,
+          `diagonal SxS blocked by parked pickup on deck follows carrying deck road at y=8 (perpendicular: x=${dSxs.vehicle.x.toFixed(2)}, z=${dSxs.vehicle.z.toFixed(2)}, y=${dSxs.vehicle.y.toFixed(2)})`);
+        // No-road narrow 5 m deck (|z| <= 2.5) blocked by pickup at (25, 0): confirmed steep drop off the deck edge must stop searching that direction instead of accepting y=2 land farther out.
+        const noRoadDeck = {
+          roads: [],
+          deckHeight: (x, z) => (Math.abs(x) <= 80 && Math.abs(z) <= 2.5 ? 8 : null),
+          bridgeRuns: () => [],
+          nearest: () => null,
+        };
+        const noRoadTerrain = mkOverpassTerrain(dryRoadLand, noRoadDeck);
+        const { fleet: nrFleet } = mkFleetOverpass({ roads: noRoadDeck, terrain: noRoadTerrain, loaded: true, startX: 25, startZ: 0, startHeading: Math.PI / 2, startY: 8 });
+        const nrSxs = nrFleet.members.find(x => x.id === 'sxs');
+        nrFleet.scene.add(nrSxs.rig.root);
+        nrSxs.state = 'DRIVEN'; nrFleet.members[0].state = 'PARKED'; nrFleet.driven = nrSxs;
+        assert.equal(nrFleet.nativePlace.get(nrSxs.vehicle)(55, 0, Math.PI / 2, 8), true);
+        nrSxs.vehicle.trail = [{ x: 25, z: 0, heading: 0, y: 8 }];
+        nrFleet.respawn();
+        assert.ok(Math.abs(nrSxs.vehicle.y - 8) < 0.25,
+          `no-road blocked deck stops searching past confirmed steep drop instead of accepting y=2 land (x=${nrSxs.vehicle.x.toFixed(2)}, z=${nrSxs.vehicle.z.toFixed(2)}, y=${nrSxs.vehicle.y.toFixed(2)})`);
+
+        // Fleet.teleport outer search on the same 5 m no-road deck: native respawn restores SxS at (25, 0, y=8) with one corner over water (z < -1.5, x in [24, 26]);
+        // Fleet.teleport must stop searching past the steep drop off the deck edge instead of accepting (25, -6, y=2).
+        const cornerWetLand = (x, z) => ({
+          ground: Math.abs(x - 25) < 2 && z < -1.2 && z > -4 ? -1 : 2,
+          canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8,
+          washboard: false, gravel: false, rough: false,
+          water: Math.abs(x - 25) < 2 && z < -1.2 && z > -4,
+          bridge: false, deck: false,
+        });
+        const cornerWetDeck = {
+          roads: [],
+          deckHeight: (x, z) => (Math.abs(x) <= 80 && Math.abs(z) <= 2.5 && !(Math.abs(x - 25) < 2 && z < -1.2) ? 8 : null),
+          bridgeRuns: () => [],
+          nearest: () => null,
+        };
+        const cornerWetTerrain = mkOverpassTerrain(cornerWetLand, cornerWetDeck);
+        const { fleet: cwFleet } = mkFleetOverpass({ roads: cornerWetDeck, terrain: cornerWetTerrain, loaded: true, startX: 55, startZ: 0, startHeading: Math.PI / 2, startY: 8 });
+        const cwSxs = cwFleet.members.find(x => x.id === 'sxs');
+        cwFleet.scene.add(cwSxs.rig.root);
+        cwSxs.state = 'DRIVEN'; cwFleet.members[0].state = 'PARKED'; cwFleet.driven = cwSxs;
+        assert.equal(cwFleet.nativePlace.get(cwSxs.vehicle)(35, 0, Math.PI / 2, 8), true);
+        cwFleet.nativeRespawn.set(cwSxs.vehicle, () => {
+          cwSxs.vehicle.x = 25; cwSxs.vehicle.z = 0; cwSxs.vehicle.y = 8; cwSxs.vehicle.heading = 0;
+        });
+        cwFleet.respawn();
+        assert.ok(Math.abs(cwSxs.vehicle.y - 8) < 0.25,
+          `Fleet.teleport outer search stops on steep drop off deck edge instead of accepting y=2 land (x=${cwSxs.vehicle.x.toFixed(2)}, z=${cwSxs.vehicle.z.toFixed(2)}, y=${cwSxs.vehicle.y.toFixed(2)})`);
+
+        // Towing.allowPlacement on the same 5 m no-road deck with pickup facing across the deck (heading=0):
+        // allowsPose rejects (25, 0, heading=0, y=8) because trailer overhangs the deck edge; allowPlacement must stop at the steep drop instead of moving both vehicles to y=2 land.
+        const { truck: twTruck, tow: twTow, fleet: twFleet } = mkFleetOverpass({ roads: noRoadDeck, terrain: noRoadTerrain, loaded: true, startX: 55, startZ: 0, startHeading: Math.PI / 2, startY: 8 });
+        const crossPose = { x: 25, z: 0, heading: 0, y: 8 };
+        assert.equal(twTow.allowPlacement(crossPose), false,
+          `Towing.allowPlacement stops at steep drop off narrow deck instead of moving rig to y=2 land (x=${crossPose.x.toFixed(2)}, z=${crossPose.z.toFixed(2)}, y=${crossPose.y})`);
+        twTruck.trail = [{ x: 25, z: 0, heading: 0, y: 8 }];
+        twFleet.respawn();
+        assert.ok(Math.abs(twTruck.y - 8) < 0.25 && Math.abs(twTow.y - 8) < 0.35,
+          `Fleet R with pickup facing across narrow deck never drops rig to y=2 land (truck=${twTruck.y.toFixed(2)}, tow=${twTow.y.toFixed(2)})`);
+
+        // Same-road 5 m deck drop (8 m -> 3 m at x > 5) with roadDeckHeight enabled: Towing.allowPlacement must reject the 5 m drop on ownDeck too.
+        {
+          const pts = [];
+          for (let x = -100; x <= 100; x += 20) pts.push([x, 0]);
+          const stepRoad = { id: 2, name: 'Step Deck', kind: 2, halfWidth: 4, gravel: false, washboard: false, bridge: false, pts };
+          const stepDeckAt = (x, z) => (Math.abs(x) <= 90 && Math.abs(z) <= 6 ? (x <= 5 ? 8 : 3) : null);
+          const stepRoads = {
+            roads: [stepRoad],
+            deckHeight: stepDeckAt,
+            roadDeckHeight: (x, z, id) => (id === 2 ? stepDeckAt(x, z) : null),
+            bridgeRuns: () => [{ roads: new Set([2]), pts: [[-90, 0], [90, 0]], halfWidth: 6 }],
+            nearest(x, z, maxDist, filter) {
+              if (filter && !filter(stepRoad)) return null;
+              const cx = Math.max(-100, Math.min(100, x));
+              const dist = Math.hypot(x - cx, z);
+              if (dist > maxDist) return null;
+              const seg = Math.min(pts.length - 2, Math.max(0, Math.floor((cx + 100) / 20)));
+              return { road: stepRoad, seg, t: (cx - pts[seg][0]) / 20, dist, x: cx, z: 0, heading: Math.PI / 2 };
+            },
+          };
+          const stepTerrain = mkOverpassTerrain(dryRoadLand, stepRoads);
+          const stepContacts = new api.AreaContacts();
+          // Block x <= 5 (both east and west on the 8 m deck) so only x >= 20 at y=3 would be clear if the 5 m drop were allowed.
+          stepContacts.add({ resolve() {}, allows(b) { return b.x > 10; } });
+          const stepTruck = mkTruck(stepTerrain, stepRoads);
+          assert.equal(stepTruck.place(-30, 0, Math.PI / 2, 8), true);
+          const stepTow = new api.Towing(stepTruck, stepTerrain, stepRoads, false, false, { contacts: stepContacts }, false, true);
+          const dropPose = { x: 0, z: 0, heading: Math.PI / 2, y: 8 };
+          assert.equal(stepTow.allowPlacement(dropPose), false,
+            `Towing.allowPlacement rejects 5 m same-road deck drop on ownDeck (x=${dropPose.x.toFixed(2)}, y=${dropPose.y})`);
+        }
+
+        // Perpendicular truck on an east-west deck at x=0, heading=0 with east side blocked (x > -10):
+        // Towing.allowPlacement must reverse onto the west side (x <= -20) instead of searching east twice.
+        {
+          const perpRoads = mkOverpassRoads({ upperOffset: 0 });
+          perpRoads.roadDeckHeight = (x, z, id) => (id === 2 ? perpRoads.deckHeight(x, z) : null);
+          const perpTerrain = mkOverpassTerrain(dryRoadLand, perpRoads);
+          const perpContacts = new api.AreaContacts();
+          perpContacts.add({ resolve() {}, allows(b) { return b.x < -12; } });
+          const perpTruck = mkTruck(perpTerrain, perpRoads);
+          assert.equal(perpTruck.place(-30, 0, -Math.PI / 2, 8), true);
+          const perpTow = new api.Towing(perpTruck, perpTerrain, perpRoads, false, false, { contacts: perpContacts }, false, true);
+          const perpPose = { x: 0, z: 0, heading: 0, y: 8 };
+          assert.equal(perpTow.allowPlacement(perpPose), true,
+            'Towing.allowPlacement searches opposite direction on perpendicular deck pose instead of searching east twice');
+          assert.ok(perpPose.x < -12 && Math.abs((perpPose.y ?? 0) - 8) < 0.25,
+            `perpendicular Towing.allowPlacement finds clear westbound deck pose (x=${perpPose.x.toFixed(2)}, y=${perpPose.y})`);
+        }
+      }
+
+      // Pass-through fleet.ground wrapper must still receive the active recovery referenceY (no overhead lift to y=8).
+      {
+        const roads = mkOverpassRoads();
+        const terrain = mkOverpassTerrain(dryRoadLand, roads);
+        const { truck, tow, fleet } = mkFleetOverpass({ roads, terrain, loaded: true, startX: 0, startZ: 40, startHeading: 0, startY: 2 });
+        const origGround = fleet.ground;
+        fleet.ground = (x, z) => origGround(x, z);
+        truck.trail = [{ x: 0, z: 0, heading: 0, y: 2 }];
+        fleet.respawn();
+        assert.ok(Math.abs(truck.z) < 0.5 && Math.abs(truck.y - 2) < 0.15 && Math.abs(tow.y - 2) < 0.25,
+          `pass-through fleet.ground wrapper preserves lower-road height y=2 instead of lifting to y=8 (z=${truck.z.toFixed(2)}, truck=${truck.y.toFixed(2)}, tow=${tow.y.toFixed(2)})`);
+      }
+
+      // No-trail Fleet R under an overpass WITH roadDeckHeight enabled when the trailer blocks the lower-road candidate:
+      // Towing.allowPlacement receives pose.y === undefined (requesting land), so it must follow the lower north-south road, not turn 90° onto the overhead road.
+      {
+        const roads = mkOverpassRoads({ upperOffset: 0 });
+        roads.roadDeckHeight = (x, z, id) => (id === 2 ? roads.deckHeight(x, z) : null);
+        assert.equal(api.levelMatchedRoad(roads, 0, 0.4, 25, undefined, false, 0, false)?.road.id, 1,
+          'no-trail blocked-trailer with roadDeckHeight: levelMatchedRoad(referenceY=undefined) picks lower road instead of overhead deck');
+        const terrain = mkOverpassTerrain(dryRoadLand, roads);
+        const contacts = new api.AreaContacts();
+        let blockTrailer = false;
+        // Enable trailer blocker only after setup placement so R actually hits the blocked lower-road trailer candidate.
+        contacts.add({ resolve() {}, allows(b) { return !(blockTrailer && Math.abs(b.x) < 3 && b.z > 5 && b.z < 13 && b.y < 5); } });
+        const { truck, tow, fleet } = mkFleetOverpass({ roads, terrain, loaded: true, contacts, startX: 0, startZ: 60, startHeading: 0, startY: 2 });
+        assert.equal(fleet.nativePlace.get(truck)(0, 0.4, 0, 2), true, 'truck places under overpass on lower road');
+        assert.ok(Math.abs(truck.x) < 0.05 && Math.abs(truck.z - 0.4) < 0.05 && Math.abs(truck.heading) < 0.05,
+          `setup keeps truck at (0, 0.4, heading=0) before enabling trailer blocker (x=${truck.x.toFixed(2)}, z=${truck.z.toFixed(2)}, h=${truck.heading.toFixed(2)})`);
+        blockTrailer = true;
+        truck.trail = [];
+        fleet.respawn();
+        assert.ok(Math.abs(truck.x) < 0.6 && Math.abs(Math.cos(truck.heading)) > 0.9 && Math.abs(truck.y - 2) < 0.15 && Math.abs(tow.y - 2) < 0.25 && (Math.abs(truck.z - 0.4) > 0.5 || Math.abs(truck.heading) > 2.5),
+          `no-trail blocked-trailer with roadDeckHeight follows lower north-south road at y=2 instead of turning onto overhead road (x=${truck.x.toFixed(2)}, z=${truck.z.toFixed(2)}, heading=${truck.heading.toFixed(2)}, truck=${truck.y.toFixed(2)}, tow=${tow.y.toFixed(2)})`);
+      }
+
+      // Hanging trailer over a 10 m cliff AND missing trailer wheel support (one wheel returns null on a loaded destination): Towing.allowsPose refuses both.
+      const cliffRoads = makeRoads(-100, 100);
+      const cliffTerrain = makeTerrain((x) => ({
+        ground: x >= 0 ? 15 : 2, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8,
+        washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false,
+      }));
+      const cliffTruck = mkTruck(cliffTerrain, cliffRoads);
+      assert.equal(cliffTruck.place(25, 0, Math.PI / 2, 15), true);
+      const cliffTow = new api.Towing(cliffTruck, cliffTerrain, cliffRoads, false, false, {}, true, true);
+      assert.equal(cliffTow.allowsPose({ x: 2, z: 0, heading: Math.PI / 2, y: 15 }), false,
+        'Towing.allowsPose refuses pose where trailer hangs airborne off a cliff');
+
+      // Hole sits strictly under the rear trailer axle wheels (x ~ -6.49, z = +-1.14), clear of all 6 trailer body corners (x in {-9.08, -4.63, -0.18}, z = +-1.275).
+      const holeTerrain = makeTerrain((x, z) => (Math.abs(x + 6.5) < 0.45 && Math.abs(z) < 1.2 ? null : {
+        ground: 10, canopy: 0, roadDist: 0, halfWidth: 4, kind: 2, level: 8,
+        washboard: false, gravel: false, rough: false, water: false, bridge: false, deck: false,
+      }));
+      const holeTruck = mkTruck(holeTerrain, cliffRoads);
+      assert.equal(holeTruck.place(25, 0, Math.PI / 2, 10), true);
+      const holeTow = new api.Towing(holeTruck, holeTerrain, cliffRoads, false, false, {}, true, true);
+      assert.equal(holeTow.allowsPose({ x: 3, z: 0, heading: Math.PI / 2, y: 10 }), false,
+        'Towing.allowsPose refuses loaded pose when a trailer wheel lacks ground support');
+    }
+    log('PASS Fleet R recovery preserves native respawn height under and on overpasses, clears deck-level contacts, follows matching road/rising deck, and rejects water beneath a deck');
+  }
 }
 
-runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE_SPEC, TRUCK_SPEC, DECK_WAIT_SECONDS, placeAtStart });
+runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, AreaContacts, createTruck, CAR_SPEC, BIKE_SPEC, TRUCK_SPEC, DECK_WAIT_SECONDS, placeAtStart, levelMatchedRoad });
 
 // Mutation checks for every unbuilt-span state across car, bike and Fleet (runs in ~2.5 s).
 {
@@ -1484,10 +2185,11 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
     const out = await build({
       stdin: {
         contents: [
-          "export { Vehicle, DECK_WAIT_SECONDS } from './web/src/vehicle.ts';",
+          "export { Vehicle, DECK_WAIT_SECONDS, levelMatchedRoad } from './web/src/vehicle.ts';",
           "export { BikeRide } from './web/src/bike-ride.ts';",
           "export { Fleet } from './web/src/fleet.ts';",
           "export { Towing } from './web/src/towing.ts';",
+          "export { AreaContacts } from './web/src/world-contacts.ts';",
           "export { createTruck, TRUCK_SPEC } from './web/src/truck.ts';",
           "export { CAR_SPEC } from './web/src/vehicle-spec.ts';",
           "export { BIKE_SPEC } from './web/src/bike.ts';",
@@ -1853,9 +2555,214 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
       /unspawned place-jump does not replace pending first spawn with deck wait/,
     ],
   ];
+  const overpassMutants = [
+    [
+      'fleet-r-native-place-lifts-overhead',
+      'web/src/fleet.ts',
+      '      member.vehicle.place = (x, z, heading, referenceY) => { return this.teleportTrial ? place(x, z, heading, referenceY) : this.placeMovement(member, x, z, heading); };',
+      '      member.vehicle.place = (x, z, heading, referenceY) => { return this.teleportTrial ? place(x, z, heading, referenceY ?? this.reference(x, z)) : this.placeMovement(member, x, z, heading); };',
+      /Fleet R keeps (truck|sxs|bike) under overpass without trail/,
+    ],
+    [
+      'fleet-r-teleport-topmost-ground',
+      'web/src/fleet.ts',
+      '            const height = this.groundAt(x, z, ownDeck ?? refY);',
+      '            const height = this.ground(x, z);',
+      /Fleet R keeps truck under overpass with trail/,
+    ],
+    [
+      'fleet-r-valid-teleport-topmost-deck',
+      'web/src/fleet.ts',
+      '      const h = this.groundAt(x, z, cornerY);',
+      '      const h = this.ground(x, z);',
+      /validTeleport rejects water beneath overhead deck|water beneath overpass is rejected/,
+    ],
+    [
+      'fleet-r-valid-teleport-overhead-onDeck',
+      'web/src/fleet.ts',
+      '      const onDeck = (deck !== null && Math.abs(h - deck) < .02) || (surface?.deck === true && Math.abs(surface.ground - h) < .02);',
+      '      const onDeck = deck !== null || surface?.deck === true;',
+      /validTeleport rejects inland water above seaLevel beneath overhead deck/,
+    ],
+    [
+      'fleet-r-tow-allows-topmost',
+      'web/src/fleet.ts',
+      "            if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw, y: height })) { failure = 'The trailer destination is blocked'; continue; }",
+      "            if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw, y: this.ground(x, z) ?? undefined })) { failure = 'The trailer destination is blocked'; continue; }",
+      /Fleet R under overpass stays at \(0,0\) despite deck-level contact|Fleet R ignores deck-level contact/,
+    ],
+    [
+      'fleet-r-placement-guard-topmost',
+      'web/src/fleet.ts',
+      '          const y = this.groundAt(pose.x, pose.z, ownDeck ?? curRef);',
+      '          const y = this.ground(pose.x, pose.z);',
+      /Fleet R keeps truck under overpass with trail|Fleet R under overpass stays at \(0,0\) despite deck-level contact|bike R from stale y=8 onto lower road clears deck-level AreaContacts/,
+    ],
+    [
+      'fleet-placement-guard-drops-off-rising-deck',
+      'web/src/fleet.ts',
+      '          pose.y = y ?? original.y;',
+      '          // leave pose.y at original.y',
+      /15% grade parked pickup pushes SxS uphill along rising deck/,
+    ],
+    [
+      'fleet-placement-guard-walks-off-deck-side',
+      'web/src/fleet.ts',
+      '          else if (onDeck && road) {',
+      '          else if (false && onDeck && road) {',
+      /diagonal SxS blocked by parked pickup on deck follows carrying deck road/,
+    ],
+    [
+      'fleet-placement-guard-continues-past-steep-drop',
+      'web/src/fleet.ts',
+      '          if (onDeck && y !== null && curRef !== undefined && curRef - y > .35 * gapDist + DECK_CONTACT_BAND) { sideDropped[si] = true; continue; }',
+      '          if (onDeck && y !== null && curRef !== undefined && curRef - y > .35 * gapDist + DECK_CONTACT_BAND) continue;',
+      /no-road blocked deck stops searching past confirmed steep drop/,
+    ],
+    [
+      'fleet-teleport-continues-past-steep-drop',
+      'web/src/fleet.ts',
+      "            if (!all && onDeckBase && refY !== undefined && refY - height > .35 * gapDist + DECK_CONTACT_BAND) { failure = 'No clear loaded road position'; break; }",
+      '            // allow steep drop off deck edge',
+      /Fleet\.teleport outer search stops on steep drop off deck edge/,
+    ],
+    [
+      'towing-allow-placement-continues-past-steep-drop',
+      'web/src/towing.ts',
+      '      if (onDeckBase && g !== null && refY !== undefined && refY - g > .35 * gapDist + DECK_CONTACT_BAND) break;',
+      '      // allow steep drop off deck edge',
+      /Towing\.allowPlacement stops at steep drop off narrow deck|Towing\.allowPlacement rejects 5 m same-road deck drop|Fleet R with pickup facing across narrow deck never drops rig/,
+    ],
+    [
+      'towing-allow-placement-perpendicular-same-side',
+      'web/src/towing.ts',
+      '          const pts = road.road.pts, forward = turn === 0 ? baseForward : !baseForward;',
+      '          const pts = road.road.pts, forward = Math.cos(road.heading - start.heading) >= 0;',
+      /Towing\.allowPlacement searches opposite direction on perpendicular deck pose/,
+    ],
+    [
+      'fleet-ground-wrapper-lifts-overhead',
+      'web/src/fleet.ts',
+      `  private groundAt(x: number, z: number, referenceY?: number): number | null {
+    const prev = this.activeGroundRef;
+    this.activeGroundRef = referenceY;
+    try { return this.ground(x, z); }
+    finally { this.activeGroundRef = prev; }
+  }`,
+      `  private groundAt(x: number, z: number, referenceY?: number): number | null {
+    return this.ground !== this.defaultGround ? this.ground(x, z) : this.readGroundAt(x, z, referenceY);
+  }`,
+      /pass-through fleet\.ground wrapper preserves lower-road height/,
+    ],
+    [
+      'fleet-r-contacts-bind-ignores-pose-y',
+      'web/src/fleet.ts',
+      '      this.contacts?.bindVehicle?.(member.vehicle, pose => this.groundAt(pose.x, pose.z, pose.y) ?? member.vehicle.y ?? 0);',
+      '      this.contacts?.bindVehicle?.(member.vehicle);',
+      /Fleet R under overpass stays at \(0,0\) despite deck-level contact|bike R from stale y=8 onto lower road clears deck-level AreaContacts/,
+    ],
+    [
+      'contacts-bind-clobbers-prior-height',
+      'web/src/world-contacts.ts',
+      '        this.placementHeights.set(vehicle, prev ? pose => { const y = placementHeight(pose); return y !== undefined ? y : prev(pose); } : placementHeight);',
+      '        this.placementHeights.set(vehicle, placementHeight);',
+      /bike R from stale y=8 onto lower road clears deck-level AreaContacts after stuntPark rebind/,
+    ],
+    [
+      'fleet-r-road-search-wrong-deck',
+      'web/src/fleet.ts',
+      '        const road = levelMatchedRoad(this.roads, base.x, base.z, 40, baseY, this.terrain.cartRoads, base.heading, onDeckBase);',
+      '        const road = this.roads.nearest(base.x, base.z, 40);',
+      /blocked lower-road R walks along lower north-south road/,
+    ],
+    [
+      'towing-allow-placement-wrong-deck-road',
+      'web/src/towing.ts',
+      '    const road = levelMatchedRoad(this.roads, pose.x, pose.z, 25, baseY, this.terrain.cartRoads, pose.heading, onDeckBase);',
+      '    const road = this.roads.nearest(pose.x, pose.z, 25);',
+      /blocked-trailer R follows lower north-south road instead of turning onto upper road/,
+    ],
+    [
+      'fleet-r-rising-deck-gap-drops-to-land',
+      'web/src/fleet.ts',
+      `            const ownDeck = !all && onDeckBase && road && !hasOwnDeck
+              ? carriedDeckHeight(this.roads, x, z, road.road, refY, .25 * gapDist + DECK_CONTACT_BAND)
+              : undefined;`,
+      '            const ownDeck = undefined;',
+      /blocked rising-deck R across unloaded gap stays on deck/,
+    ],
+    [
+      'fleet-r-stacked-crossing-jumps-upper-deck',
+      'web/src/vehicle.ts',
+      '  if (roads.roadDeckHeight) return roads.roadDeckHeight(x, z, road.id) ?? undefined;',
+      '  // ignore per-road span deckHeight',
+      /stacked crossing \(with roadDeckHeight\): Fleet R keeps sxs on lower deck/,
+    ],
+    [
+      'fleet-r-stacked-crossing-upper-picks-lower-road',
+      'web/src/vehicle.ts',
+      '      return d !== null && (topmost ? Math.abs(d - deckHere) < .02 : deckCounts(d, referenceY, cartRoads) && d >= referenceY! - 1);',
+      '      return d !== null && deckCounts(d, referenceY, cartRoads);',
+      /stacked crossing upper deck: Fleet R walks along upper east-west deck/,
+    ],
+    [
+      'fleet-r-stacked-crossing-synthetic-jumps-upper-deck',
+      'web/src/fleet.ts',
+      '            const hasOwnDeck = !this.roads.roadDeckHeight && refY !== undefined && this.terrain.surfaceAt(x, z, refY)?.deck === true;',
+      '            const hasOwnDeck = false;',
+      /stacked crossing \(without roadDeckHeight\): Fleet R keeps sxs on lower deck/,
+    ],
+    [
+      'towing-allow-placement-rising-deck-gap',
+      'web/src/towing.ts',
+      `      const ownDeck = onDeckBase && road && !hasOwnDeck
+        ? carriedDeckHeight(this.roads, trial.x, trial.z, road.road, refY, .25 * gapDist + DECK_CONTACT_BAND)
+        : undefined;`,
+      '      const ownDeck = undefined;',
+      /Towing\.allowPlacement across unloaded gap stays on rising deck/,
+    ],
+    [
+      'towing-downhill-deck-trailer-drops',
+      'web/src/towing.ts',
+      '    const trailerRef = this.sharedSpanDeck(v.x, v.z, v.y, v.heading, this.x, this.z) ?? v.y;',
+      '    const trailerRef = v.y;',
+      /downhill rising-deck R keeps uphill trailer on deck|15% downhill deck/,
+    ],
+    [
+      'towing-valid-pair-accepts-hanging-trailer',
+      'web/src/towing.ts',
+      '    if (trial.airborne) return false;',
+      '    // allow airborne trailer',
+      /Towing\.allowsPose refuses pose where trailer hangs airborne off a cliff|Towing\.allowPlacement stops at steep drop off narrow deck/,
+    ],
+    [
+      'fleet-r-valid-teleport-flat-pitch',
+      'web/src/fleet.ts',
+      '    const pitchSlope = hF !== null && hB !== null && Math.abs(hF - refY) <= .6 && Math.abs(hB - refY) <= .6 ? (hF - hB) / (2 * step) : Math.sin(body.pitch ?? 0);',
+      '    const pitchSlope = Math.sin(body.pitch ?? 0);',
+      /15% downhill deck over water/,
+    ],
+    [
+      'level-matched-road-undefined-topmost',
+      'web/src/vehicle.ts',
+      `    const topmost = referenceY !== undefined && (!Number.isFinite(referenceY) || referenceY >= 1e5);
+    const onOwn = onDeckHint === false ? null : roads.nearest(x, z, reach, r => {`,
+      `    const topmost = referenceY === undefined || !Number.isFinite(referenceY) || referenceY >= 1e5;
+    const onOwn = roads.nearest(x, z, reach, r => {`,
+      /no-trail blocked-trailer with roadDeckHeight: levelMatchedRoad\(referenceY=undefined\) picks lower road/,
+    ],
+    [
+      'towing-valid-pair-accepts-missing-wheel-support',
+      'web/src/towing.ts',
+      '    if (!waitingRoad && (trial.supportMissing || trial.contacts?.some(p => p.height === null))) return false;',
+      '    if (!trial.supportMissing && trial.contacts?.some(p => p.height === null)) return false;',
+      /Towing\.allowsPose refuses loaded pose when a trailer wheel lacks ground support/,
+    ],
+  ];
 
   // Also check main.ts wiring for Sol round-1/2 edge cases (keyboard R, gamepad Reset, Start where I am, jumpToPlace, frame-loop holds).
   const mainSrc = readFileSync(resolve(root, 'web/src/main.ts'), 'utf8');
+  assert.ok(mainSrc.includes('fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z, pose.y) : undefined);'), 'main.ts stuntPark bindVehicle defers outside the park to prior height callbacks');
   assert.ok(mainSrc.includes("if (ev.code === 'KeyR' && !ev.repeat && fleet?.waitingForDeck && !interiors.busy && !(mode === 'fly' && drone.active)) { resetToRoad(); return; }"), 'main.ts keyboard R cancels live Fleet deck wait');
   assert.ok(mainSrc.includes('reset: () => { if (!interiors.busy && (!fleet?.busy || fleet.waitingForDeck)) resetToRoad(); },'), 'main.ts gamepad Reset cancels live Fleet deck wait');
   assert.ok(mainSrc.includes('place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s); if (placed) {'), 'main.ts startHere advances to the next dry candidate instead of short-circuiting on a queued Fleet wait');
@@ -1921,17 +2828,21 @@ runDeckWaitTests({ Vehicle, BikeRide, Fleet, Towing, createTruck, CAR_SPEC, BIKE
   assert.ok(mainSrc.includes('if (!vehicle.waitingForDeck && (refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15)'), 'main.ts animal/demo hold does not freeze deck-wait timer');
 
   const sourceCache = new Map();
-  for (const [name, file, from, to, expectMsg] of mutants) {
+  const allMutants = [
+    ...mutants.map(m => [...m, 'deck-wait']),
+    ...overpassMutants.map(m => [...m, 'overpass']),
+  ];
+  for (const [name, file, from, to, expectMsg, suite] of allMutants) {
     const src = sourceCache.get(file) ?? readFileSync(resolve(root, file), 'utf8');
     sourceCache.set(file, src);
     assert.equal(src.split(from).length, 2, `${name}: expected unique anchor in ${file}`);
     const mutatedApi = await loadApi({ [file]: src.replace(from, to) });
     assert.throws(
-      () => runDeckWaitTests(mutatedApi, true),
+      () => runDeckWaitTests(mutatedApi, true, suite),
       err => err instanceof assert.AssertionError && expectMsg.test(err.message),
       `mutant ${name} did not fail on expected assertion`,
     );
     console.log(`KILLED ${name}`);
   }
-  console.log(`PASS water-bounds-mutations: ${mutants.length} mutants killed`);
+  console.log(`PASS water-bounds-mutations: ${allMutants.length} mutants killed`);
 }

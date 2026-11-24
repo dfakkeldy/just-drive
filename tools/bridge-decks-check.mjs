@@ -628,6 +628,28 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     triStaleRun.update(cam);
     assert.equal(triStaleRun.modern.spans[0].baked, null, 'stale 3.05 m crossing bake rejected after rail narrows to 1.25 m');
     assert.ok(spanBits(triStaleRun.modern.spans[0]).equals(triTwoCamBits), 'stale 3.05 m crossing bake falls back to live 1.25 m match');
+    // Camera (0, 20, -1488): crossing and highway are in DRAW, rail is just outside DRAW. Hydrating the highway must
+    // narrow its out-of-range parallel rail partner to 1.25 m so the crossing verifies at the settled 1.25 m height.
+    const camNorthEdge = new THREE.Vector3(0, 20, -1488);
+    const triEdgeLive = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), null);
+    for (let i = 0; i < 3; i++) triEdgeLive.update(camNorthEdge);
+    assert.equal(triEdgeLive.modern.spans[2].width, 1.25, 'edge camera live run narrows out-of-range rail to 1.25 m');
+    const triEdgeBaked = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), triBaked);
+    for (let i = 0; i < 3; i++) triEdgeBaked.update(camNorthEdge);
+    assert.equal(triEdgeBaked.modern.spans[2].width, 1.25, 'edge camera hydration narrows out-of-range rail to 1.25 m');
+    assert.equal(triEdgeBaked.modern.spans[0].bakedVerified, true, 'edge camera crossing verifies settled bake');
+    assert.ok(spanBits(triEdgeBaked.modern.spans[0]).equals(spanBits(triEdgeLive.modern.spans[0])), 'edge camera crossing matches live bit-for-bit');
+    // Starting directly at the crossing (0, 20, -20) visits the crossing before either partner settles: must NOT
+    // permanently reject its valid bake, so update 2 hydrates the crossing without running the solver again.
+    const triDirectBaked = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), triBaked);
+    let directCrossSolves = 0;
+    triDirectBaked.modern.build = function(r, ...rest) { if (r.chainKey === '10') directCrossSolves++; return proto.build.call(this, r, ...rest); };
+    triDirectBaked.update(cam);
+    const solvesAfterFirst = directCrossSolves;
+    triDirectBaked.update(cam);
+    assert.equal(directCrossSolves, solvesAfterFirst, 'crossing-first direct start hydrates valid bake on update 2 with zero extra solves');
+    assert.equal(triDirectBaked.modern.spans[0].bakedVerified, true, 'crossing-first direct start verifies crossing bake once rail settles');
+    assert.ok(spanBits(triDirectBaked.modern.spans[0]).equals(triTwoCamBits), 'crossing-first direct start matches live bit-for-bit');
     // Reference live solve with raised highway banks (rail stays 3.05 m).
     raiseHwy = true;
     const triRef = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), null);
@@ -1269,7 +1291,9 @@ if (process.argv.includes('--mutations')) {
     ['parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'for(const q of r.parallelBanks){', 'for(const q of [] as Span[]){', /grade-separated parallel highway rejects|raised parallel highway bank invalidates crossing|stale 3\.05 m crossing bake rejected/],
     ['nearby parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'for(const o of[...nearby])if(o.parallel.length){\n      parBankSet.add(o);\n      for(const q of o.parallel)if(q!==r){nearby.add(q);parBankSet.add(q);}\n    }', '', /raised parallel highway bank invalidates crossing|stale 3\.05 m crossing bake rejected/],
     ['nearby rail width omitted from landHash', bridgesFile, bridgesSrc, 'if(!r.parallel.includes(q))h.num(q.width);', '', /stale 3\.05 m crossing bake rejected/],
-    ['rail narrowing skips invalidating crossing neighbors', bridgesFile, bridgesSrc, 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.invalidateNeighbors(t);}', 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;}', /crossing-first bake (verifies|matches live)|stale 3\.05 m/],
+    ['rail narrowing skips invalidating crossing neighbors', bridgesFile, bridgesSrc, 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.runList=null;this.invalidateNeighbors(t,fromBaked);}', 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.runList=null;}', /crossing-first bake (verifies|matches live)|edge camera crossing|stale 3\.05 m/],
+    ['baked hydration skips narrowing out-of-range parallel rail', bridgesFile, bridgesSrc, 'if(r.bakedVerified&&r.parallel.length)this.applyParallelNarrowing(r,true);', '', /edge camera hydration narrows out-of-range rail/],
+    ['unsettled parallel neighbor permanently rejects valid crossing bake', bridgesFile, bridgesSrc, 'if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);return false;', 'this.rejectedBaked.add(entry);this.dropBaked(r);return false;', /crossing-first direct start hydrates valid bake|edge camera crossing verifies settled bake/],
     ['staged crossing skips settling nearby provisional rail width', bridgesFile, bridgesSrc, 'for(const q of r.parallelBanks)if(q.baked&&!q.bakedVerified&&q.width!==q.bakedPrevWidth)this.ensure(q,touch);', '', /staged crossing settles rail width first/],
     ['late parallel rejection keeps narrowed width', bridgesFile, bridgesSrc, 'r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;', '', /late parallel rejection restores|staged level-7 restores rail width/],
     ['interior CHECKS omitted from landHash', bridgesFile, bridgesSrc, 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i1;i++)for(let j=0;j<columns;j++){', 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i0;i++)for(let j=0;j<columns;j++){', /interior triangle ridge rejects/],
@@ -1285,12 +1309,12 @@ if (process.argv.includes('--mutations')) {
     ['widened sidewalk fallback drops active width', bridgesFile, bridgesSrc, 'const hadBaked=!!r.baked,sameEntry=r.baked===entry;', 'const hadBaked=!!r.baked,sameEntry=!!r.baked;', /preserves active 5\.90 m width/],
     ['widened crossing skips neighbor geomHash update', bridgesFile, bridgesSrc, 'if(widened)for(const r of this.spans){', 'if(false)for(const r of this.spans){', /widening crossing.*invalidates neighbor/],
     ['washboard refresh rehashes land twice', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,entry))return;', 'if(this.tryHydrateBaked(r,touch))return;', /hashes land only once/],
-    ['failed washboard refresh passes null to WeakSet', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;', 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      this.rejectedBaked.add(r.baked!);this.dropBaked(r);r.forceBuild=true;', /Invalid value used in weak set|failed washboard refresh/],
+    ['failed washboard refresh passes null to WeakSet', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;', 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(r.baked!);this.dropBaked(r);r.forceBuild=true;', /Invalid value used in weak set|failed washboard refresh/],
     ['nearby and distant pending tile repeats spanLandHash', bridgesFile, bridgesSrc, 'if(this.terrain.meshContactSource(r.bakedPendingX,r.bakedPendingZ,true,false)===r.bakedPendingSource)return;', '', /unrelated revisions skip spanLandHash|zero touching surfaceAt calls/],
-    ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
+    ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;if(r.parallel.length)this.applyParallelNarrowing(r,true);return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
     ['probeTargetLevel capped at 8', bridgesFile, bridgesSrc, 'const top=Math.max(this.manifestMaxLevel,fallbackLevel);', 'const top=Math.max(8,fallbackLevel);', /withheld level-9 tile/],
-    ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);this.dropBaked(r);return false;}', '', /raised terrain before first build rejects/],
-    ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===entry.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;return;}\n        if(this.tryHydrateBaked(r,touch,entry))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
+    ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);return false;}', '', /raised terrain before first build rejects/],
+    ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===entry.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;if(r.parallel.length)this.applyParallelNarrowing(r,true);return;}\n        if(this.tryHydrateBaked(r,touch,entry))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
     ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds|failed washboard refresh/],
     ['verified baked fast-path removed', bridgesFile, bridgesSrc, 'if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;', '', /skips land probes/],
     ['bridgeBankElevations ignores baked flag', bridgesFile, bridgesSrc, 'if(built&&(r.baked||r.level>=8||r.revision===rev)){', 'if(built&&(r.level>=8||r.revision===rev)){', /bridgeBankElevations keeps baked (level|y0)/],

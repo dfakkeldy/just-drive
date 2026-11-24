@@ -1,8 +1,8 @@
-import {deckCounts} from './bridge-contact';
+import { DECK_CONTACT_BAND, deckCounts } from './bridge-contact';
 import {crestVelocity, GRAVITY as G, LEDGE_DROP} from './ground-motion';
 import * as THREE from 'three';
 import { TRAILER_SPEC as S, createTrailer, type Trailer } from './trailer';
-import type { Input, Vehicle, VehiclePlacement } from './vehicle';
+import { carriedDeckHeight, levelMatchedRoad, type Input, type Vehicle, type VehiclePlacement } from './vehicle';
 import type { Terrain } from './terrain';
 import type { Roads } from './roads';
 import { CAR_SPEC, type VehicleSpec } from './vehicle-spec';
@@ -145,11 +145,22 @@ export class Towing {
     this.groundX = x; this.groundZ = z; this.groundPoint.y = y;
     return this.terrain.withGroundContact(this.groundPoint, this.readGround, true);
   }
+  /** Height of the same bridge span carrying `v` at `(tx, tz)`, or undefined when not on a shared span. */
+  private sharedSpanDeck(vx: number, vz: number, vy: number, heading: number, tx: number, tz: number): number | undefined {
+    const onDeckHint = this.terrain.surfaceAt?.(vx, vz, vy)?.deck === true || deckCounts(this.roads.deckHeight(vx, vz), vy, this.terrain.cartRoads);
+    if (!onDeckHint) return undefined;
+    const road = levelMatchedRoad(this.roads, vx, vz, 12, vy, this.terrain.cartRoads, heading, onDeckHint);
+    if (!road) return undefined;
+    const vDeck = carriedDeckHeight(this.roads, vx, vz, road.road, vy, DECK_CONTACT_BAND);
+    if (vDeck === undefined || !deckCounts(vDeck, vy, this.terrain.cartRoads)) return undefined;
+    return carriedDeckHeight(this.roads, tx, tz, road.road, vDeck, 2.5);
+  }
   /** Compute without installing a scene object or changing the driving vehicle. Used only by placement search. */
   private buildPlacement(): void {
     const v = this.vehicle, h = this.hitch(); this.heading = v.heading;
     this.x = h.x - Math.sin(this.heading) * S.drawbar; this.z = h.z + Math.cos(this.heading) * S.drawbar;
-    this.y = this.ground(this.x, this.z,v.y) ?? v.y; this.vy = 0; this.pitch = v.pitch; this.roll = v.roll;
+    const trailerRef = this.sharedSpanDeck(v.x, v.z, v.y, v.heading, this.x, this.z) ?? v.y;
+    this.y = this.ground(this.x, this.z, trailerRef) ?? v.y; this.vy = 0; this.pitch = v.pitch; this.roll = v.roll;
     this.sway = this.swayRate = this.yawRate = this.filteredThumb = this.reverseTime = 0; this.reverseHeading = null;
     this.airborne = false; this.grounded = false; this.jackContact = false; this.hx = h.x; this.hz = h.z; this.hitchY = h.y;
     this.previous.x = v.x; this.previous.z = v.z; this.previous.y = v.y; this.previous.heading = v.heading;
@@ -173,13 +184,21 @@ export class Towing {
   /** Test the entire pair, never shorten the tongue. Search forward on the same road if blocked. */
   allowPlacement(pose: VehiclePlacement): boolean {
     const original = { ...pose };
+    const baseLand = pose.y === undefined ? this.terrain.heightAt(pose.x, pose.z) : null;
+    const baseY = pose.y ?? (baseLand ?? undefined);
+    const deckHere = baseY === undefined || baseY < 1e5 ? this.roads.deckHeight(pose.x, pose.z) : null;
+    const onDeckBase = pose.y !== undefined && deckHere !== null && (this.terrain.surfaceAt?.(pose.x, pose.z, baseY)?.deck === true || deckCounts(deckHere, baseY, this.terrain.cartRoads));
+    const sea = typeof this.terrain.seaLevel === 'number' ? this.terrain.seaLevel : DEFAULT_SEA_LEVEL;
+    const road = levelMatchedRoad(this.roads, pose.x, pose.z, 25, baseY, this.terrain.cartRoads, pose.heading, onDeckBase);
+    const baseForward = road ? Math.cos(road.heading - pose.heading) >= 0 : true;
     for (const turn of [0, Math.PI]) {
-    const start = { ...pose, heading: pose.heading + turn }, road = this.roads.nearest(start.x, start.z, 25);
+    const start = { ...pose, heading: pose.heading + turn };
+    let refY = baseY, lastLoadedDist = 0;
     for (let distance = 0; distance <= 120; distance += .5) {
       const trial = { ...start };
       if (distance > 0) {
         if (road) {
-          const pts = road.road.pts, forward = Math.cos(road.heading - start.heading) >= 0;
+          const pts = road.road.pts, forward = turn === 0 ? baseForward : !baseForward;
           let seg = road.seg, fraction = road.t, remaining = distance;
           while (remaining > 0) {
             const a = pts[seg], b = pts[seg + 1], length = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -193,6 +212,15 @@ export class Towing {
           }
         } else { trial.x += Math.sin(start.heading) * distance; trial.z -= Math.cos(start.heading) * distance; }
       }
+      const gapDist = Math.max(.5, distance - lastLoadedDist);
+      const hasOwnDeck = !this.roads.roadDeckHeight && refY !== undefined && this.terrain.surfaceAt?.(trial.x, trial.z, refY)?.deck === true;
+      const ownDeck = onDeckBase && road && !hasOwnDeck
+        ? carriedDeckHeight(this.roads, trial.x, trial.z, road.road, refY, .25 * gapDist + DECK_CONTACT_BAND)
+        : undefined;
+      const sampleRef = ownDeck ?? refY;
+      const g = sampleRef !== undefined ? this.ground(trial.x, trial.z, sampleRef) : null;
+      if (onDeckBase && g !== null && refY !== undefined && refY - g > .35 * gapDist + DECK_CONTACT_BAND) break;
+      if (g !== null) { trial.y = g; if (g > sea + .08) { refY = g; lastLoadedDist = distance; } }
       if (this.priorGuard) {
         const guarded = { ...trial };
         if (!this.priorGuard(guarded) || Math.hypot(guarded.x - trial.x, guarded.z - trial.z) > 1e-6 || Math.abs(wrap(guarded.heading - trial.heading)) > 1e-6) continue;
@@ -212,25 +240,38 @@ export class Towing {
     const deck = this.roads.deckHeight(pose.x, pose.z),land = this.terrain.heightAt(pose.x, pose.z,pose.y);
     body.x = pose.x; body.z = pose.z; body.heading = pose.heading; body.y = land === null ? v.y : deckCounts(deck,pose.y??land,this.terrain.cartRoads) ? Math.max(land,deck) : land;
     body.pitch = v.pitch; body.roll = v.roll; body.vx = body.vz = body.vy = body.speed = 0;
+    const waitingRoad = land === null && this.roads.nearest(pose.x, pose.z, 30) !== null;
     trial.buildPlacement();
+    if (trial.airborne) return false;
+    if (!waitingRoad && (trial.supportMissing || trial.contacts?.some(p => p.height === null))) return false;
+    if (trial.grounded) {
+      const spanDeck = this.sharedSpanDeck(body.x, body.z, body.y, body.heading, trial.x, trial.z);
+      if (spanDeck !== undefined && Math.abs(trial.y - spanDeck) > .6) return false;
+    }
     if (!trial.pairClear()) return false;
     // Placement adds water and full-body map margins to the SAME final-pose contact test used by each step.
-    const bodies = trial.bodies(), bounds = v.bounds, waitingRoad = land === null && this.roads.nearest(pose.x, pose.z, 30) !== null;
+    const bodies = trial.bodies(), bounds = v.bounds;
     for (const p of bodies) {
       const fx = Math.sin(p.heading), fz = -Math.cos(p.heading), spec = p.spec;
+      const pitch = p === bodies[1] ? trial.pitch : body.pitch;
+      const step = Math.min(spec.halfLength, 1.5);
+      const hF = land === null ? null : this.ground(p.x + fx * step, p.z + fz * step, p.y);
+      const hB = land === null ? null : this.ground(p.x - fx * step, p.z - fz * step, p.y);
+      const pitchSlope = hF !== null && hB !== null && Math.abs(hF - p.y) <= .6 && Math.abs(hB - p.y) <= .6 ? (hF - hB) / (2 * step) : Math.sin(pitch);
       if (this.world.scene?.rules.enabled) for (const solid of this.world.scene.placementSolids) if (touchesPlayer(solid, p, .35, spec)) return false;
       if (this.world.bus) for (const solid of this.world.bus.placementSolids) if (touchesPlayer(solid, p, .35, spec)) return false;
       for (const a of [-spec.halfLength, 0, spec.halfLength]) for (const w of [-spec.halfWidth, spec.halfWidth]) {
         const x = p.x + fx * a + Math.cos(p.heading) * w, z = p.z + fz * a + Math.sin(p.heading) * w;
         if (bounds && (x < bounds[0] || x > bounds[2] || z < bounds[1] || z > bounds[3])) return false;
-        const g = this.ground(x, z,p.y);
+        const cornerY = p.y + pitchSlope * a;
+        const g = this.ground(x, z, cornerY);
         if(g===null){if(!waitingRoad)return false;continue;}
         // The pose's own height picks the deck or the land under it (#6); #130's dry-ground rule then judges it.
-        const deck=this.roads.deckHeight(x,z),surface=this.terrain.surfaceAt?.(x,z,p.y)??null;
+        const deck=this.roads.deckHeight(x,z),surface=this.terrain.surfaceAt?.(x,z,cornerY)??null;
         const onDeck=(deck!==null&&Math.abs(g-deck)<.02)||(surface?.deck===true&&Math.abs(surface.ground-g)<.02);
         const sea=typeof this.terrain.seaLevel==='number'?this.terrain.seaLevel:DEFAULT_SEA_LEVEL;
         const coverClass=this.terrain.coverAt?.(x,z)??0;
-        const slope=coverClass===WATER_COVER_CLASS?localGroundSlope(x,z,(px,pz)=>this.ground(px,pz,p.y)):0;
+        const slope=coverClass===WATER_COVER_CLASS?localGroundSlope(x,z,(px,pz)=>this.ground(px,pz,cornerY)):0;
         if(!isDryGround({ground:g,surface,onDeck,seaLevel:sea,coverClass,slope})||this.terrain.waterAt?.(x,z,g,onDeck))return false;
       }
     }

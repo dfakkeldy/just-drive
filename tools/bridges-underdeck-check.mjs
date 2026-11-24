@@ -42,6 +42,26 @@ async function readers(c,replacements={}){
   b.place(hit.x,hit.z,hit.heading,deck);assert.ok(Math.abs(b.y-deck)<.2,`${kind} explicit owned deck placement stays on its wheel support: ${b.y-deck}`);const ownedY=b.y;
   b[kind==='bike'?'roadTrail':'trail']=[{x:hit.x,z:hit.z,heading:hit.heading,y:ownedY}];b.respawn();assert.ok(Math.abs(b.y-ownedY)<.01,`${kind} safe pose preserves the owned deck`);
  }
+ if(c.trailer){
+  const truck=ride(f,'trailer');truck.assist=0;assert.equal(truck.place(hit.x,hit.z,hit.heading,ground),true,`${c.name}: fleet truck places below deck`);
+  const tow=new f.Towing(truck,f.terrain,f.roads,true,false,{},true,true);assert.ok(tow.attached,`${c.name}: fleet trailer attaches below deck`);
+  const scene=new THREE.Scene();scene.add(truck.car.root,tow.trailer.root);
+  const fleet=new f.Fleet(truck,tow,f.terrain,f.roads,scene,true,()=>{},-1000);
+  const upper=f.roads.modern.spans.find(r=>r.road.id===c.span),upperHit=upper&&f.roads.nearest(hit.x,hit.z,12,r=>upper.members.has(r.id)||r.id===upper.road.sourceRoad);
+  if(upperHit){
+   // Start below the deck so a rollback cannot satisfy the overhead-deck assertion, then recover back below from the deck.
+   assert.equal(fleet.nativePlace.get(truck)(hit.x,hit.z,hit.heading,ground),true,`${c.name}: fleet truck placed under deck`);
+   truck.trail=[{x:hit.x,z:hit.z,heading:upperHit.heading,y:deck}];fleet.respawn();
+   assert.ok(Math.hypot(truck.x-hit.x,truck.z-hit.z)<2&&Math.abs(truck.y-deck)<.25&&Math.abs(tow.y-deck)<.6,`${c.name}: fleet R commits truck and trailer onto overhead deck (truck=${truck.y.toFixed(2)}, tow=${tow.y.toFixed(2)}, deck=${deck.toFixed(2)})`);
+   truck.trail=[{x:hit.x,z:hit.z,heading:hit.heading,y:ground}];fleet.respawn();
+   assert.ok(Math.hypot(truck.x-hit.x,truck.z-hit.z)<2&&Math.abs(truck.y-ground)<.25&&Math.abs(tow.y-ground)<.45,`${c.name}: fleet R commits truck and trailer below deck from overhead start (truck=${truck.y.toFixed(2)}, tow=${tow.y.toFixed(2)}, ground=${ground.toFixed(2)}, deck=${deck.toFixed(2)})`);
+  }else{
+   const startX=hit.x+Math.sin(hit.heading)*12,startZ=hit.z-Math.cos(hit.heading)*12,startG=f.terrain.heightAt(startX,startZ)??ground;
+   assert.equal(fleet.nativePlace.get(truck)(startX,startZ,hit.heading,startG),true,`${c.name}: fleet truck placed away from underpass`);
+   truck.trail=[{x:hit.x,z:hit.z,heading:hit.heading,y:ground}];fleet.respawn();
+   assert.ok(Math.hypot(truck.x-hit.x,truck.z-hit.z)<2&&Math.abs(truck.y-ground)<.25&&Math.abs(tow.y-ground)<.45,`${c.name}: fleet R commits truck and trailer below deck (truck=${truck.y.toFixed(2)}, tow=${tow.y.toFixed(2)}, ground=${ground.toFixed(2)}, deck=${deck.toFixed(2)})`);
+  }
+ }
  // Place the chase target so the camera's ground sample is exactly at the crossing.
  v.place(hit.x+Math.sin(hit.heading)*v.spec.chase.back,hit.z-Math.cos(hit.heading)*v.spec.chase.back,hit.heading,ground);const chase=cam.makeChase(v,f.terrain,f.roads);chase.chase(1);assert.ok(chase.camera.position.y<v.y+v.spec.chase.height+.5,'production chase camera is not lifted by an overhead deck');
  const bike=ride(f,'bike');bike.place(hit.x,hit.z,hit.heading,ground);bike.car.root.updateMatrixWorld(true);const camera=new THREE.PerspectiveCamera(),bc=new f.BikeCamera(bike,f.terrain);bc.update(camera,1,'seat',true);assert.ok(camera.position.y<deck-.5,'production bike seat stays below deck');bc.update(camera,1,'chase',true);assert.ok(camera.position.y<bike.y+bike.spec.chase.height+.5,'production bike chase uses rider height');

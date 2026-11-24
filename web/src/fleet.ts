@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { DECK_CONTACT_BAND, deckCounts } from './bridge-contact';
 import { GARAGE, type GarageEntry } from './garage';
-import { DECK_WAIT_SECONDS, Vehicle, nearestDryOnRoad, placementOnSpan, type Input, type VehiclePlacement } from './vehicle';
+import { DECK_WAIT_SECONDS, Vehicle, carriedDeckHeight, levelMatchedRoad, nearestDryOnRoad, placementOnSpan, type Input, type VehiclePlacement } from './vehicle';
 import { legacyVehicle } from './ride';
 import type { Terrain, Site } from './terrain';
 import type { Roads } from './roads';
@@ -150,15 +151,27 @@ export class Fleet {
   private readonly parkedProvider = () => this.parked;
   private readonly groundPoint = { y: 0 };
   private gx = 0; private gz = 0;
+  private gRef: number | undefined = 1e6;
   private readonly readGround = () => {
-    // The reference is the 1e6 contact height: any site deck counts, as on main (no overpass rule here yet).
-    const ground = this.terrain.heightAt(this.gx, this.gz, this.groundPoint.y), deck = this.roads.deckHeight(this.gx, this.gz);
-    return ground === null ? null : deck === null ? ground : Math.max(ground, deck);
+    const ref = this.gRef;
+    const ground = this.terrain.heightAt(this.gx, this.gz, ref), deck = this.roads.deckHeight(this.gx, this.gz);
+    return ground === null ? null : deckCounts(deck, ref, this.terrain.cartRoads) ? Math.max(ground, deck) : ground;
   };
-  readonly ground: Ground = (x, z) => {
-    this.gx = x; this.gz = z; this.groundPoint.y = 1e6;
+  private readGroundAt(x: number, z: number, referenceY?: number): number | null {
+    this.gx = x; this.gz = z; this.gRef = referenceY;
+    this.groundPoint.y = referenceY ?? -1e6;
     return this.terrain.withGroundContact(this.groundPoint, this.readGround, true);
-  };
+  }
+  private activeGroundRef: number | undefined = 1e6;
+  private readonly defaultGround: Ground = (x, z) => this.readGroundAt(x, z, this.activeGroundRef);
+  readonly ground: Ground = this.defaultGround;
+  /** Sample drawn ground at (x, z) using referenceY's deck-reach rule (1e6 = topmost deck; undefined = land). */
+  private groundAt(x: number, z: number, referenceY?: number): number | null {
+    const prev = this.activeGroundRef;
+    this.activeGroundRef = referenceY;
+    try { return this.ground(x, z); }
+    finally { this.activeGroundRef = prev; }
+  }
   /** A fleet placement stands where fleet ground does (the topmost deck, as on main), so it passes that height on. */
   private reference(x: number, z: number): number | undefined { return this.ground(x, z) ?? undefined; }
   private readonly changed = (x: number, z: number, size: number) => {
@@ -208,7 +221,7 @@ export class Fleet {
     if (tow.world.yard) tow.world.yard.coupledBodies = this.worldBodiesProvider;
     for (const member of this.members) {
       const place = member.vehicle.place.bind(member.vehicle); this.nativePlace.set(member.vehicle, place);
-      member.vehicle.place = (x, z, heading, referenceY) => { return this.teleportTrial ? place(x, z, heading, referenceY ?? this.reference(x, z)) : this.placeMovement(member, x, z, heading); };
+      member.vehicle.place = (x, z, heading, referenceY) => { return this.teleportTrial ? place(x, z, heading, referenceY) : this.placeMovement(member, x, z, heading); };
       this.nativeRespawn.set(member.vehicle, member.vehicle.respawn.bind(member.vehicle));
       member.vehicle.respawn = () => {
         member.vehicle.stopInWater();
@@ -218,16 +231,49 @@ export class Fleet {
       member.vehicle.placementGuard = pose => {
         if (prior && !prior(pose)) return false;
         const original = { ...pose };
-        for (let distance = 0; distance <= 100; distance += 2) for (const side of [1, -1]) {
-          pose.x = original.x + Math.sin(original.heading) * distance * side;
-          pose.z = original.z - Math.cos(original.heading) * distance * side;
+        const deckHere = original.y === undefined || original.y < 1e5 ? this.roads.deckHeight(original.x, original.z) : null;
+        const onDeck = original.y !== undefined && deckHere !== null && (this.terrain.surfaceAt(original.x, original.z, original.y)?.deck === true || deckCounts(deckHere, original.y, this.terrain.cartRoads));
+        const road = onDeck ? levelMatchedRoad(this.roads, original.x, original.z, 25, original.y, this.terrain.cartRoads, original.heading, true) : null;
+        const sideRef: [number | undefined, number | undefined] = [original.y, original.y];
+        const sideDist: [number, number] = [0, 0];
+        const sideDropped: [boolean, boolean] = [false, false];
+        const baseForward = road ? Math.cos(road.heading - original.heading) >= 0 : true;
+        for (let distance = 0; distance <= 100; distance += 2) for (let si = 0; si < 2; si++) {
+          if (sideDropped[si]) continue;
+          const side = si ? -1 : 1;
+          pose.heading = original.heading;
+          if (distance === 0) { pose.x = original.x; pose.z = original.z; }
+          else if (onDeck && road) {
+            const forward = side > 0 ? baseForward : !baseForward;
+            let seg = road.seg, fraction = road.t, left = distance;
+            while (left > 0) {
+              const a = road.road.pts[seg], b = road.road.pts[seg + 1], length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+              const available = length * (forward ? 1 - fraction : fraction);
+              if (left <= available || (forward ? seg === road.road.pts.length - 2 : seg === 0)) {
+                fraction = THREE.MathUtils.clamp(fraction + (forward ? 1 : -1) * left / (length || 1), 0, 1);
+                pose.x = THREE.MathUtils.lerp(a[0], b[0], fraction); pose.z = THREE.MathUtils.lerp(a[1], b[1], fraction);
+                pose.heading = Math.atan2(b[0] - a[0], a[1] - b[1]) + (forward ? 0 : Math.PI); break;
+              }
+              left -= available; seg += forward ? 1 : -1; fraction = forward ? 0 : 1;
+            }
+          } else {
+            pose.x = original.x + Math.sin(original.heading) * distance * side;
+            pose.z = original.z - Math.cos(original.heading) * distance * side;
+          }
+          const curRef = distance === 0 ? original.y : sideRef[si];
+          const gapDist = Math.max(2, distance - sideDist[si]);
+          const hasOwnDeck = !this.roads.roadDeckHeight && curRef !== undefined && this.terrain.surfaceAt(pose.x, pose.z, curRef)?.deck === true;
+          const ownDeck = onDeck && road && !hasOwnDeck ? carriedDeckHeight(this.roads, pose.x, pose.z, road.road, curRef, .25 * gapDist + DECK_CONTACT_BAND) : undefined;
+          const y = this.groundAt(pose.x, pose.z, ownDeck ?? curRef);
+          if (onDeck && y !== null && curRef !== undefined && curRef - y > .35 * gapDist + DECK_CONTACT_BAND) { sideDropped[si] = true; continue; }
+          if (y !== null) { sideRef[si] = y; sideDist[si] = distance; }
+          pose.y = y ?? original.y;
           if (member.id === 'truck' && prior && !prior(pose)) continue;
-          const y = this.ground(pose.x, pose.z);
           if (this.clear({ ...pose, y: y ?? member.vehicle.y, spec: member.entry.spec }, member, this.bodiesExcept(member))) return true;
         }
         Object.assign(pose, original); this.message = 'No clear road position near the parked vehicles'; return false;
       };
-      this.contacts?.bindVehicle?.(member.vehicle);
+      this.contacts?.bindVehicle?.(member.vehicle, pose => this.groundAt(pose.x, pose.z, pose.y) ?? member.vehicle.y ?? 0);
     }
     terrain.fleetGroundChanged = this.changed;
     const paint = new THREE.MeshBasicMaterial({ color: 0xf4be79, side: THREE.DoubleSide, depthWrite: false });
@@ -1214,7 +1260,7 @@ export class Fleet {
     if (reason) this.message = reason;
     return !reason;
   }
-  private validTeleport(body: ContactBody, member: FleetMember, others: readonly ContactBody[], attached = false): string {
+  private validTeleport(body: ContactBody & { pitch?: number }, member: FleetMember, others: readonly ContactBody[], attached = false): string {
     const bounds = this.truck.bounds, reach = body.spec.envelope.reach;
     if (bounds && (body.x-reach<bounds[0] || body.x+reach>bounds[2] || body.z-reach<bounds[1] || body.z+reach>bounds[3])) return 'Destination is outside the map';
     if (!this.clear(body, member, others)) return 'A solid or another vehicle blocks the destination';
@@ -1225,15 +1271,22 @@ export class Fleet {
         if (boxTouchesBody(box.setFromObject(gate).expandByScalar(.025), body)) return 'A ramp blocks the destination';
       }
     }
+    const refY = body.y - (attached ? S.deckHeight : 0);
     const fx = Math.sin(body.heading), fz = -Math.cos(body.heading), rx = Math.cos(body.heading), rz = Math.sin(body.heading);
+    const step = Math.min(body.spec.halfLength, 1.5);
+    const hF = this.groundAt(body.x + fx * step, body.z + fz * step, refY);
+    const hB = this.groundAt(body.x - fx * step, body.z - fz * step, refY);
+    const pitchSlope = hF !== null && hB !== null && Math.abs(hF - refY) <= .6 && Math.abs(hB - refY) <= .6 ? (hF - hB) / (2 * step) : Math.sin(body.pitch ?? 0);
     for (const along of [-body.spec.halfLength, 0, body.spec.halfLength]) for (const side of [-body.spec.halfWidth, 0, body.spec.halfWidth]) {
-      const x = body.x + fx * along + rx * side, z = body.z + fz * along + rz * side, h = this.ground(x, z);
+      const x = body.x + fx * along + rx * side, z = body.z + fz * along + rz * side, cornerY = refY + pitchSlope * along;
+      const h = this.groundAt(x, z, cornerY);
       if (h === null) return 'Destination land is still loading';
       if (h <= this.seaLevel + .08) return 'Water at the destination';
-      const surface = this.terrain.surfaceAt(x, z);
-      const onDeck = this.roads.deckHeight(x, z) !== null || surface?.deck === true;
+      const surface = this.terrain.surfaceAt(x, z, cornerY);
+      const deck = this.roads.deckHeight(x, z);
+      const onDeck = (deck !== null && Math.abs(h - deck) < .02) || (surface?.deck === true && Math.abs(surface.ground - h) < .02);
       const coverClass = this.terrain.coverAt?.(x, z) ?? 0;
-      const slope = coverClass === WATER_COVER_CLASS ? localGroundSlope(x, z, this.ground) : 0;
+      const slope = coverClass === WATER_COVER_CLASS ? localGroundSlope(x, z, (px, pz) => this.groundAt(px, pz, cornerY)) : 0;
       if (!isDryGround({ ground: h, surface, onDeck, seaLevel: this.seaLevel, coverClass, slope })) return 'Water at the destination';
     }
     return '';
@@ -1246,7 +1299,7 @@ export class Fleet {
     const movers = all || actor.id === 'truck' ? this.members.filter(m => all || m.id === 'truck' || m.state === 'STRAPPED') : [actor];
     const roots = [this.tow.trailer.root, ...this.members.flatMap(m => [m.rig.root, m.light.root])];
     const before = this.saved(), oldDriver = this.driven;
-    let accepted: Snapshot | null = null, targets: { body: ContactBody; member: FleetMember; others: ContactBody[]; attached: boolean }[] = [], failure = 'No clear loaded road position';
+    let accepted: Snapshot | null = null, targets: { body: ContactBody & { pitch?: number }; member: FleetMember; others: ContactBody[]; attached: boolean }[] = [], failure = 'No clear loaded road position';
     this.teleportTrial = true;
     try { fleetMove({ roots, objects: [this.tow, ...this.members.map(m => m.vehicle)], query: () => {
       try {
@@ -1254,49 +1307,62 @@ export class Fleet {
           for (const m of this.members) { m.vehicle.resetVisit(); m.vehicle.vx=m.vehicle.vz=m.vehicle.vy=m.vehicle.speed=m.vehicle.steerAngle=0; if (m.id !== 'truck') this.strapRaw(m); }
           this.refreshBodies(); this.gates = 0; this.writeGates();
         } else { if (actor.id === 'truck') { this.gates = 0; this.writeGates(); } this.nativeRespawn.get(actor.vehicle)!(); }
-        const base = destination ?? { x: actor.vehicle.x, z: actor.vehicle.z, heading: actor.vehicle.heading };
-        const road = this.roads.nearest(base.x, base.z, 40);
-        for (const turn of [0, Math.PI]) for (let distance = 0; distance <= 120; distance += 2) {
-          const heading = base.heading + turn;
-          let x = base.x + Math.sin(heading) * distance, z = base.z - Math.cos(heading) * distance, yaw = heading;
-          if (road && distance) {
-            const forward = Math.cos(road.heading - heading) >= 0; let seg = road.seg, fraction = road.t, left = distance;
-            while (left > 0) {
-              const a = road.road.pts[seg], b = road.road.pts[seg + 1], length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-              const available = length * (forward ? 1 - fraction : fraction);
-              if (left <= available || (forward ? seg === road.road.pts.length - 2 : seg === 0)) {
-                fraction = THREE.MathUtils.clamp(fraction + (forward ? 1 : -1) * left / (length || 1), 0, 1);
-                x = THREE.MathUtils.lerp(a[0], b[0], fraction); z = THREE.MathUtils.lerp(a[1], b[1], fraction); yaw = Math.atan2(b[0] - a[0], a[1] - b[1]) + (forward ? 0 : Math.PI); break;
+        const base = destination ?? { x: actor.vehicle.x, z: actor.vehicle.z, heading: actor.vehicle.heading, y: actor.vehicle.y };
+        const baseY = destination ? destination.y ?? 1e6 : (Number.isFinite(actor.vehicle.y) ? actor.vehicle.y : undefined);
+        const deckHere = baseY === undefined || baseY < 1e5 ? this.roads.deckHeight(base.x, base.z) : null;
+        const onDeckBase = deckHere !== null && (this.terrain.surfaceAt(base.x, base.z, baseY)?.deck === true || deckCounts(deckHere, baseY, this.terrain.cartRoads));
+        const road = levelMatchedRoad(this.roads, base.x, base.z, 40, baseY, this.terrain.cartRoads, base.heading, onDeckBase);
+        const baseForward = road ? Math.cos(road.heading - base.heading) >= 0 : true;
+        for (const turn of [0, Math.PI]) {
+          let refY = baseY, lastLoadedDist = 0;
+          for (let distance = 0; distance <= 120; distance += 2) {
+            const heading = base.heading + turn;
+            let x = base.x + Math.sin(heading) * distance, z = base.z - Math.cos(heading) * distance, yaw = heading;
+            if (road && distance) {
+              const forward = turn === 0 ? baseForward : !baseForward; let seg = road.seg, fraction = road.t, left = distance;
+              while (left > 0) {
+                const a = road.road.pts[seg], b = road.road.pts[seg + 1], length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                const available = length * (forward ? 1 - fraction : fraction);
+                if (left <= available || (forward ? seg === road.road.pts.length - 2 : seg === 0)) {
+                  fraction = THREE.MathUtils.clamp(fraction + (forward ? 1 : -1) * left / (length || 1), 0, 1);
+                  x = THREE.MathUtils.lerp(a[0], b[0], fraction); z = THREE.MathUtils.lerp(a[1], b[1], fraction); yaw = Math.atan2(b[0] - a[0], a[1] - b[1]) + (forward ? 0 : Math.PI); break;
+                }
+                left -= available; seg += forward ? 1 : -1; fraction = forward ? 0 : 1;
               }
-              left -= available; seg += forward ? 1 : -1; fraction = forward ? 0 : 1;
             }
+            // Keep native respawn's chosen deck/land height for road-reset; height-free starts still take the topmost deck.
+            const gapDist = Math.max(2, distance - lastLoadedDist);
+            const hasOwnDeck = !this.roads.roadDeckHeight && refY !== undefined && this.terrain.surfaceAt(x, z, refY)?.deck === true;
+            const ownDeck = !all && onDeckBase && road && !hasOwnDeck
+              ? carriedDeckHeight(this.roads, x, z, road.road, refY, .25 * gapDist + DECK_CONTACT_BAND)
+              : undefined;
+            const height = this.groundAt(x, z, ownDeck ?? refY);
+            if (height === null) { failure = 'Destination land is still loading'; continue; }
+            if (!all && onDeckBase && refY !== undefined && refY - height > .35 * gapDist + DECK_CONTACT_BAND) { failure = 'No clear loaded road position'; break; }
+            if (height <= this.seaLevel + .08) { failure = 'Water at the destination'; continue; }
+            if (!all) { refY = height; lastLoadedDist = distance; }
+            if (accepts && !accepts({x,z,heading:yaw,y:height})) { failure = 'Requested start pose is blocked'; continue; }
+            const invalid = this.validTeleport({ x, z, y: height, heading: yaw, spec: actor.entry.spec }, actor, this.bodiesExcept(actor));
+            if (invalid) { failure = invalid; continue; }
+            if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw, y: height })) { failure = 'The trailer destination is blocked'; continue; }
+            // This loop owns the road/turn search; do not invoke a nested endpoint-searching guard.
+            const guard = actor.vehicle.placementGuard;
+            let placed = false;
+            try { actor.vehicle.placementGuard = () => true; placed = actor.vehicle.place(x, z, yaw, height); }
+            finally { actor.vehicle.placementGuard = guard; }
+            if (!placed) { failure = 'Water at the destination'; continue; }
+            if (Math.hypot(actor.vehicle.x - x, actor.vehicle.z - z) > 125) continue;
+            actor.vehicle.vx=actor.vehicle.vz=actor.vehicle.vy=actor.vehicle.speed=0;
+            if (actor.id === 'truck') this.tow.update();
+            const stationary = this.members.filter(m => !movers.includes(m) && m.state !== 'STRAPPED').map(m => this.memberPose(m));
+            const moving = movers.map(m => ({ member: m, body: this.memberPose(m), attached: m.state === 'STRAPPED' }));
+            targets = moving.map(({ member, body, attached }) => ({ member, body, attached, others: [...stationary, ...moving.filter(v => v.member !== member).map(v => v.body),
+              ...(actor.id !== 'truck' ? [{ ...this.trailerPose() }] : [])] }));
+            if (actor.id === 'truck') targets.push({ member: actor, body: { ...this.trailerPose(), pitch: this.tow.pitch }, others: stationary, attached: false });
+            if (accepts && !accepts(actor.vehicle)) { failure = 'Requested start pose was not retained'; continue; }
+            failure = targets.map(t => this.validTeleport(t.body, t.member, t.others, t.attached)).find(Boolean) ?? '';
+            if (!failure) { accepted = this.saved(); return; }
           }
-          // Fleet's own ground height (a deck where there is one) goes with the pose to the caller's guard (the trailer
-          // check judges the pose at its height), as it does to the trailer check below and to place().
-          const height = this.ground(x, z);
-          if (height === null) { failure = 'Destination land is still loading'; continue; }
-          if (height <= this.seaLevel + .08) { failure = 'Water at the destination'; continue; }
-          if (accepts && !accepts({x,z,heading:yaw,y:height})) { failure = 'Requested start pose is blocked'; continue; }
-          const invalid = this.validTeleport({ x, z, y: height, heading: yaw, spec: actor.entry.spec }, actor, this.bodiesExcept(actor));
-          if (invalid) { failure = invalid; continue; }
-          if (actor.id === 'truck' && !this.tow.allowsPose({ x, z, heading: yaw, y: this.ground(x, z) ?? undefined })) { failure = 'The trailer destination is blocked'; continue; }
-          // This loop owns the road/turn search; do not invoke a nested endpoint-searching guard.
-          const guard = actor.vehicle.placementGuard;
-          let placed = false;
-          try { actor.vehicle.placementGuard = () => true; placed = actor.vehicle.place(x, z, yaw, height); }
-          finally { actor.vehicle.placementGuard = guard; }
-          if (!placed) { failure = 'Water at the destination'; continue; }
-          if (Math.hypot(actor.vehicle.x - x, actor.vehicle.z - z) > 125) continue;
-          actor.vehicle.vx=actor.vehicle.vz=actor.vehicle.vy=actor.vehicle.speed=0;
-          if (actor.id === 'truck') this.tow.update();
-          const stationary = this.members.filter(m => !movers.includes(m) && m.state !== 'STRAPPED').map(m => this.memberPose(m));
-          const moving = movers.map(m => ({ member: m, body: this.memberPose(m), attached: m.state === 'STRAPPED' }));
-          targets = moving.map(({ member, body, attached }) => ({ member, body, attached, others: [...stationary, ...moving.filter(v => v.member !== member).map(v => v.body),
-            ...(actor.id !== 'truck' ? [{ ...this.trailerPose() }] : [])] }));
-          if (actor.id === 'truck') targets.push({ member: actor, body: { ...this.trailerPose() }, others: stationary, attached: false });
-          if (accepts && !accepts(actor.vehicle)) { failure = 'Requested start pose was not retained'; continue; }
-          failure = targets.map(t => this.validTeleport(t.body, t.member, t.others, t.attached)).find(Boolean) ?? '';
-          if (!failure) { accepted = this.saved(); return; }
         }
       } finally { before.rollback(); }
     } }); } finally { this.teleportTrial = false; }

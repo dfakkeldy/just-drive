@@ -216,6 +216,12 @@ export class Roads {
     const u=Math.max(0,Math.min(1,(s<0?s+3:deck.len+3-s)/3)),blend=u*u*(3-2*u);
     return Math.max(land,land+(plane-land)*blend);
   }
+  /** Height of a bridge deck carrying `roadId` at (x, z), or null if no deck carries it there. */
+  roadDeckHeight(x: number, z: number, roadId: number): number | null {
+    if (this.modern) return this.modern.deckHeightForRoad(x, z, roadId);
+    const hit = this.query(this.bridgeCells, x, z, 12, r => r.bridge && r.id === roadId);
+    return hit ? this.deckHeight(x, z) : null;
+  }
 
   /** Modern bridge spans: centre line, carried road ids and deck half width. Empty in the era modes. */
   bridgeRuns():readonly {pts:readonly (readonly [number,number])[];roads:ReadonlySet<number>;halfWidth:number}[]{return this.modern?.runs??[];}

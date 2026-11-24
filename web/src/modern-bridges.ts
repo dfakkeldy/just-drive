@@ -720,11 +720,35 @@ export class ModernBridges {
     return h.done();
   }
 
-  private invalidateNeighbors(r:Span,onlyBuilt=false):void {
+  private invalidateNeighbors(r:Span,skipParallel=false):void {
     for(let z=Math.floor(r.z0/CELL);z<=Math.floor(r.z1/CELL);z++)for(let x=Math.floor(r.x0/CELL);x<=Math.floor(r.x1/CELL);x++){
       const list=this.cells.get(key(x*CELL,z*CELL,CELL));
-      if(list)for(const idx of list){const o=this.spans[idx];if(o!==r&&(!onlyBuilt||(!r.parallel.includes(o)&&(!o.baked||o.bakedVerified)))){o.forceBuild=true;o.revision=-1;}}
+      if(list)for(const idx of list){const o=this.spans[idx];if(o!==r&&(!skipParallel||!r.parallel.includes(o))){o.forceBuild=true;o.revision=-1;}}
     }
+  }
+
+  private hasUnsettledParallelNeighbor(r:Span):boolean {
+    return r.parallelBanks.some(q=>!r.parallel.includes(q)&&!q.geometry&&q.width===q.baseWidth&&q.parallel.every(p=>!p.geometry));
+  }
+
+  /** Apply the parallel rail/highway narrowing decision to `r` and its partners so an out-of-range partner still gets
+   *  its settled width when only one side of the pair builds or verifies. */
+  private applyParallelNarrowing(r:Span,fromBaked=false):void {
+    if(!r.parallel.length)return;
+    const prevSampling=this.sampling,prevBakedLand=this.bakedLand;
+    this.sampling=true;this.bakedLand=null;
+    try{
+      const rb=(s:number)=>{const p=this.at(r,s);return this.land(p.x,p.z)??this.terrain.seaLevel;};
+      const ry0=fromBaked?Math.max(rb(0),rb(-3),rb(-6),rb(-8))+.04:r.y0;
+      const ry1=fromBaked?Math.max(rb(r.length),rb(r.length+3),rb(r.length+6),rb(r.length+8))+.04:r.y1;
+      for(const q of r.parallel){
+        const bank=(s:number)=>{const p=this.at(q,s);return this.land(p.x,p.z)??-Infinity;},a=Math.max(bank(0),bank(-3),bank(-6),bank(-8))+.04,b=Math.max(bank(q.length),bank(q.length+3),bank(q.length+6),bank(q.length+8))+.04;
+        if(!Number.isFinite(a)||!Number.isFinite(b)||Math.abs((a+b)/2-(ry0+ry1)/2)>.75)continue;
+        for(const t of[r,q]){const rail=t.road.name==='Railroad',width=rail?1.25:t.road.halfWidth;
+          if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.runList=null;this.invalidateNeighbors(t,fromBaked);}
+        }
+      }
+    }finally{this.sampling=prevSampling;this.bakedLand=prevBakedLand;}
   }
 
   /** Clear a provisionally hydrated baked entry and restore its pre-hydration state (preserving any new widened width). */
@@ -757,7 +781,7 @@ export class ModernBridges {
       const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
       if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
       liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.smoothStart,entry.smoothEnd,entry.y0,entry.y1,entry.level);
-      if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);this.dropBaked(r);return false;}
+      if(liveHash!==null&&liveHash!==entry.landHash){if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);return false;}
     }
     const coreRows=Math.ceil(r.length),rows=coreRows+entry.startLength+entry.endLength,columns=Math.ceil(2*entry.finalWidth/.75);
     if(rows!==entry.rows||columns!==entry.columns||entry.gridY.length!==(rows+1)*(columns+1)){this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;return false;}
@@ -783,6 +807,7 @@ export class ModernBridges {
       r.bakedVerified=liveHash===entry.landHash;
       r.serial=++this.audit.builds;this.audit.bakedBuilds++;
       if(r.width!==prev.width){this.runList=null;this.invalidateNeighbors(r,true);}
+      if(r.bakedVerified&&r.parallel.length)this.applyParallelNarrowing(r,true);
       if(r.road.ponyTruss)this.ponyDeckVersion++;
       this.dirty=true;
       return true;
@@ -811,10 +836,10 @@ export class ModernBridges {
       const liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.smoothStart,entry.smoothEnd,entry.y0,entry.y1,entry.level);
       if(liveHash===null)return;
       if(liveHash===entry.landHash){
-        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;return;}
+        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;if(r.parallel.length)this.applyParallelNarrowing(r,true);return;}
         if(this.tryHydrateBaked(r,touch,entry))return;
       }
-      this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;
+      if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;
     }
     if(this.tryHydrateBaked(r,touch))return;
     let changed=r.forceBuild||!r.geometry,known=true;
@@ -833,13 +858,7 @@ export class ModernBridges {
       // In particular, do not extrapolate the uphill road across the bank edge.
       const bank=(s:number)=>{const p=this.at(r,s);return this.land(p.x,p.z)??this.terrain.seaLevel;};
       r.y0=Math.max(bank(0),bank(-3),bank(-6),bank(-8))+.04;r.y1=Math.max(bank(r.length),bank(r.length+3),bank(r.length+6),bank(r.length+8))+.04;
-      for(const q of r.parallel){
-        const bank=(s:number)=>{const p=this.at(q,s);return this.land(p.x,p.z)??-Infinity;},a=Math.max(bank(0),bank(-3),bank(-6),bank(-8))+.04,b=Math.max(bank(q.length),bank(q.length+3),bank(q.length+6),bank(q.length+8))+.04;
-        if(!Number.isFinite(a)||!Number.isFinite(b)||Math.abs((a+b)/2-(r.y0+r.y1)/2)>.75)continue;
-        for(const t of[r,q]){const rail=t.road.name==='Railroad',width=rail?1.25:t.road.halfWidth;
-          if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.invalidateNeighbors(t);}
-        }
-      }
+      this.applyParallelNarrowing(r);
       // A few DTM spans retain a small road hump. Clear it with one level lift, not a local ramp.
       // The ends remain within the 45 cm slab thickness of the surveyed bank.
       let clearance=0;for(let s=.5;s<r.length;s+=.5){const p=this.at(r,s);clearance=Math.max(clearance,(this.land(p.x,p.z)??-Infinity)+.03-(r.y0+(r.y1-r.y0)*s/r.length));}
@@ -862,6 +881,19 @@ export class ModernBridges {
 
   /** No temporary vectors, hits, arrays or keys are created on a cached wheel query. */
   deckHeightAt(x:number,z:number,minimum=false,metadata=false):number|null {return this.query(x,z,minimum,metadata);}
+  /** Height of a deck belonging to `roadId` at (x, z), without picking a higher crossing span. */
+  deckHeightForRoad(x:number,z:number,roadId:number):number|null {
+    if(this.sampling||this.terrain.cartRoads)return null;
+    const list=this.cells.get(key(x,z,CELL));if(!list)return null;
+    let best:number|null=null;
+    for(let i=0;i<list.length;i++){
+      const r=this.spans[list[i]];
+      if(!r.members.has(roadId)&&r.road.id!==roadId&&r.road.sourceRoad!==roadId)continue;
+      this.ensure(r);const h=this.ownHeight(r,x,z);
+      if(h!==null&&(best===null||h>best))best=h;
+    }
+    return best;
+  }
   /** The deck height from a deck that is already built; never builds or rebuilds a span. For layers that follow the
    * deck (the sidewalks): Roads builds each deck within DRAW of the camera and bumps bridgeRevision, and they read it
    * again then. A query that builds would solve a deck inside their frame budget and skip the start-burst hold. */

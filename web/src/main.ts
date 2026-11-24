@@ -40,6 +40,7 @@ import { GARAGE, isDroneVehicle, readVehicle } from './garage';
 import { rideFeatures } from './ride-features';
 import { legacyVehicle, type RideInput } from './ride';
 import { Landmarks } from './landmarks';
+import { WaterTowers } from './water-towers';
 import { Roads } from './roads';
 import { detailSetting } from './detail';
 import { offlinePlay } from './offline-play';
@@ -588,9 +589,19 @@ if (novemberRoads) {
 const rough = ERA.modern ? roughRoads(roadData.roads, AREA.id, manifest.village,
   [{ x: CHURCH_START.e - manifest.village[0], z: manifest.village[1] - CHURCH_START.n, r: 40 }]) : null;
 if (rough) { terrain.sites.push(...rough.sites); setPuddleField(rough.field); }
-const treeExcludes = novemberRoads
-  ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
-  : stockpiles?.excludes;
+const waterTowers = ERA.modern && params.get('waterTowers') !== '0'
+  ? WaterTowers.forArea(AREA.id, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
+if (waterTowers) {
+  scene.add(waterTowers.group);
+  const prevCanopyExcludes = terrain.canopyExcludes;
+  terrain.canopyExcludes = prevCanopyExcludes
+    ? (e, n) => prevCanopyExcludes(e, n) || waterTowers.excludesCanopy(e, n)
+    : waterTowers.excludesCanopy;
+  if (import.meta.env.DEV) expose({ waterTowers }, false);
+}
+const treeExcludes = (novemberRoads || stockpiles || waterTowers)
+  ? (e: number, n: number) => !!novemberRoads?.excludesTree(e, n) || !!stockpiles?.excludes(e, n) || !!waterTowers?.excludesCanopy(e, n)
+  : undefined;
 const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far', treeExcludes) : null;
 if (trees) scene.add(trees.group);
 scene.add(terrain.group);
@@ -879,7 +890,7 @@ const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as import('./mp/wire').RideKind, trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
   heightScale:EXAG,seaLevel:SEA_LEVEL,ground: (x, z, referenceY) => terrain.heightAt(x,z,referenceY) }) : null;
-const canal = canalModule ? new (await canalModule.take().catch(partFailed)).Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
+const canal = canalModule ? new (await canalModule.take().catch(partFailed)).Canal(roads, terrain, manifest.village, SEA_LEVEL, LOW) : null;
 if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
 // Each solid site's contact row is written once, here. The registry (fleet sweeps, fleet driving and the quarry) adds
@@ -910,6 +921,7 @@ const siteContacts: [string, ContactSite | null][] = [
   ['prince', placeContact(places.prince)],
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
+  ['waterTowers', waterTowers && { resolve: body => waterTowers.resolveSolids(body) }],
 ];
 // A place without a row would compile and boot, and the car would drive through it. Stop at boot instead.
 for (const name of Object.keys(places)) if (!siteContacts.some(([row]) => row === name)) throw new Error(`hand-built place '${name}' has no contact row`);
@@ -1239,8 +1251,8 @@ if (testPark && !fleet) {
     && (!testPark.contains(pose.x, pose.z, vehicle.spec.envelope.reach) || testPark.placementAllowed(pose, vehicle.spec));
 } else if (stuntPark) {
   for (const actor of fleet ? fleet.members.map(m => m.vehicle) : [vehicle]) {
-    // A placement over joined terrain must use the deck within reach of its own height.
-    fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z, pose.y) : actor.y ?? 0);
+    // A placement over joined terrain must use the deck within reach of its own height; outside the park defer to prior bindings.
+    fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z, pose.y) : undefined);
   }
 }
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
