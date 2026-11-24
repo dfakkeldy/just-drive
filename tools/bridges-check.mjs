@@ -141,6 +141,172 @@ async function contracts(replacements={}){
  const bareLand={...terrain,dataRevision:1,burst:true},bare=new mod.Roads({roads:[road(9,0,20)]},[0,0],bareLand);
  bare.update(camera);bareLand.dataRevision++;bare.update(camera);
  assert.equal(bare.modern.audit.builds,2,'a terrain without holdBackground never holds');
+ // Unpaved bridge approaches (rail trail, gravel, washboard, track) carry per-vertex approach attributes and shade
+ // with terrain noise and lighting; decks, rails and paved approaches stay untouched (approach.x === 0).
+ {
+  const uniforms={
+   sunDir:{value:new THREE.Vector3(0.4,0.7,0.5).normalize()},sunColor:{value:new THREE.Color(4,3.6,3.3)},
+   skyColor:{value:new THREE.Color(0.3,0.44,0.72)},fogColor:{value:new THREE.Color(0.62,0.66,0.72)},
+   fogDensity:{value:0.00018},seaLevel:{value:-0.2},winterCover:{value:0},rainWet:{value:0},
+  };
+  const flat={...terrain,heightAt:()=>10,surfaceAt:()=>({ground:10,level:8,canopy:0,roadDist:0,halfWidth:2.6,kind:3,bridge:true,washboard:false}),uniforms};
+  const cases=[
+   {id:101,kind:1,hw:3.6,wash:false,code:0,x:0},
+   {id:102,kind:3,hw:2.6,wash:false,code:3,x:100},
+   {id:103,kind:3,hw:2.6,wash:true,code:6,x:200},
+   {id:104,kind:4,hw:1.5,wash:false,code:4,x:300},
+   {id:105,kind:5,hw:1.6,wash:false,code:5,x:400},
+  ];
+  const net=new mod.Roads({roads:cases.map(c=>({id:c.id,name:'Approach '+c.id,kind:c.kind,halfWidth:c.hw,bridge:true,washboard:c.wash,pts:[[c.x,0],[c.x,20]]}))},[0,0],flat);
+  for(const c of cases)net.update(new THREE.Vector3(c.x,20,-10));
+  const M=net.modern;
+  const shader={uniforms:{},vertexShader:THREE.ShaderLib.lambert.vertexShader,fragmentShader:THREE.ShaderLib.lambert.fragmentShader};
+  M.material.onBeforeCompile(shader,{});
+  assert.ok(M.material.customProgramCacheKey().includes('approach'),'approach shader sets a distinct program cache key');
+  assert.equal(shader.uniforms.uBridgeSkyColor,uniforms.skyColor,'approach shader binds terrain skyColor uniform directly');
+  assert.equal(shader.uniforms.uBridgeSunColor,uniforms.sunColor,'approach shader binds terrain sunColor uniform directly');
+  assert.match(shader.vertexShader,/attribute vec4 approach;/,'vertex shader declares approach attribute');
+  assert.match(shader.fragmentShader,/bridgeNoise\(bp \* 3\.1\)[\s\S]*bDust[\s\S]*bGravel[\s\S]*uBridgeSkyColor/,'fragment shader paints gravel/dust with terrain lighting');
+  assert.match(shader.fragmentShader,/vec3 bDirBefore = reflectedLight\.directDiffuse;[\s\S]*vec3 bDirDiffuse = reflectedLight\.directDiffuse - bDirBefore;/,'directional light separated from local lights before PI scaling');
+  assert.match(shader.fragmentShader,/outgoingLight = bDirect \+ bIndirect \+ totalEmissiveRadiance;[\s\S]*outgoingLight = mix\(outgoingLight, bHaze,/,'computed terrain lighting and haze applied to outgoingLight');
+  // Evaluate the patched bDirect formula on shadowed headlights, sunlit day, and mixed dusk to ensure only
+  // directional sun light is scaled by PI while spot/point lights keep 1x contribution.
+  const bDirectExpr=shader.fragmentShader.match(/vec3 bDirect = ([^;]+);/)?.[1];
+  assert.ok(bDirectExpr,'fragment shader computes bDirect');
+  const evalDirect=new Function('reflectedLight','bDirDiffuse','PI','return '+bDirectExpr);
+  assert.ok(Math.abs(evalDirect({directDiffuse:0.5},0,Math.PI)-0.5)<1e-9,'sun-shadowed headlights keep 1x contribution (not scaled by PI)');
+  assert.ok(Math.abs(evalDirect({directDiffuse:1.0},1.0,Math.PI)-Math.PI)<1e-9,'sunlit directional light scales by PI to match terrain');
+  assert.ok(Math.abs(evalDirect({directDiffuse:0.7},0.2,Math.PI)-(0.5+0.2*Math.PI))<1e-9,'mixed headlights + directional sun scales only the sun by PI');
+  // Every literal smoothstep(a, b, x) in our added shader text must have ascending edges (valid GLSL ES 3.00).
+  for(const [,lo,hi] of shader.fragmentShader.matchAll(/smoothstep\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,/g)){
+   assert.ok(Number(lo)<Number(hi),`smoothstep edges must ascend: smoothstep(${lo}, ${hi}, ...)`);
+  }
+  for(const c of cases){
+   const sp=M.spans.find(r=>r.road.id===c.id),attr=sp.geometry.getAttribute('approach');
+   assert.ok(attr&&attr.itemSize===4,'span geometry carries vec4 approach attribute');
+   const surfaceVerts=sp.triangleDeck.length*3;
+   let minU=Infinity,maxU=-Infinity,approachVerts=0;
+   for(let v=0;v<attr.count;v++){
+    const code=attr.getX(v),u=attr.getY(v),half=attr.getZ(v);
+    if(v>=surfaceVerts){assert.equal(code,0,`non-surface vertex ${v} on span ${c.id} keeps plain shading`);continue;}
+    const part=sp.triangleDeck[Math.floor(v/3)];
+    if(part===1||c.code===0){assert.equal(code,0,`deck or paved vertex ${v} on span ${c.id} keeps plain shading`);}
+    else{
+     approachVerts++;
+     assert.equal(code,c.code,`approach vertex ${v} on span ${c.id} carries code ${c.code}`);
+     assert.ok(Math.abs(half-c.hw)<1e-6,`approach vertex carries joining halfWidth ${c.hw}`);
+     minU=Math.min(minU,u);maxU=Math.max(maxU,u);
+    }
+   }
+   if(c.code>0){assert.ok(approachVerts>0&&minU<-c.hw+0.01&&maxU>c.hw-0.01,`unpaved span ${c.id} spans signed lateral offsets across centreline`);}
+  }
+  // Merged mesh carries approach attribute and preserves exact vertex alignment across setHidden(true/false).
+  const mergedBefore=Float32Array.from(M.mesh.geometry.getAttribute('approach').array);
+  const hiddenSpan=M.spans.find(r=>r.road.id===105);
+  M.setHidden(105,true);
+  const hiddenApproach=M.mesh.geometry.getAttribute('approach').array;
+  const expectedChunks=[];
+  for(const sp of M.spans){
+   const a=sp.geometry.getAttribute('approach').array;
+   if(sp!==hiddenSpan)expectedChunks.push(a);
+   else for(let i=0;i<sp.approachRanges.length;i+=2)expectedChunks.push(a.subarray(sp.approachRanges[i]*4,sp.approachRanges[i+1]*4));
+  }
+  const expectedHidden=new Float32Array(expectedChunks.reduce((n,a)=>n+a.length,0));
+  let offset=0;for(const ch of expectedChunks){expectedHidden.set(ch,offset);offset+=ch.length;}
+  assert.deepEqual(hiddenApproach,expectedHidden,'hidden merged mesh keeps exact per-vertex approach tuples in order');
+  M.setHidden(105,false);
+  assert.deepEqual(M.mesh.geometry.getAttribute('approach').array,mergedBefore,'restored mesh matches original approach attribute');
+  // Real baked Mabou Mines Road (span 57) washboard phase: check true barycentric interpolation across actual
+  // triangles at exact offsets along both toes against an independent TERRAIN_FRAG road-field oracle (never calling
+  // terrain.roadAlongAxis as the oracle). Planar cells must match to <1e-3 at interpolated points between vertices,
+  // and twisted bilinear cells must not distort the approach's smooth linear phase across the road.
+  const mines=mod.roads.modern.spans.find(r=>r.road.id===57);
+  assert.ok(mines,'Mabou Mines Road span 57 exists');
+  await mod.preload(mod.terrain,mines.pts.map(p=>[p[0],p[1]]),80,8);
+  mod.roads.modern.ensure(mines);
+  const mPos=mines.geometry.getAttribute('position'),mApp=mines.geometry.getAttribute('approach');
+  const ridge=phase=>1-0.3*(1-(0.5-0.5*Math.cos(phase*10.134)));
+  const independentTerrainCell=(x,z)=>{
+   const t=mod.terrain.find(x,z,false);assert.ok(t?.road,'baked tile has road field');
+   const mpp=t.size/256,fa=(x-t.x0)/mpp,fb=(z-t.z0)/mpp,a=Math.min(255,Math.floor(fa)),b=Math.min(255,Math.floor(fb));
+   const wx=fa-a,wz=fb-b,zero=mod.terrain.zero,r=t.road;
+   const sd=(ix,iz)=>(r[(iz*257+ix)*4]-zero)*0.1;
+   const sa=sd(a,b),sb=sd(a+1,b),sc=sd(a,b+1),sd1=sd(a+1,b+1);
+   const gx=((sb-sa)*(1-wz)+(sd1-sc)*wz)/mpp,gz=((sc-sa)*(1-wx)+(sd1-sb)*wx)/mpp;
+   const ax=-gz+1e-5,az=gx+1e-5,an=Math.hypot(ax,az);
+   return {ridge:ridge((x*ax+z*az)/an),planar:Math.abs(sa-sb-sc+sd1)<=1e-4,ax:ax/an,az:az/an};
+  };
+  const interpWashboardW=(x,z)=>{
+   for(let i=0;i<mines.triangleDeck.length;i++){
+    const v0=i*3,v1=v0+1,v2=v0+2;
+    if(mApp.getX(v0)!==6)continue;
+    const x0=mPos.getX(v0),z0=mPos.getZ(v0),x1=mPos.getX(v1),z1=mPos.getZ(v1),x2=mPos.getX(v2),z2=mPos.getZ(v2);
+    const det=(z1-z2)*(x0-x2)+(x2-x1)*(z0-z2);
+    if(Math.abs(det)<1e-9)continue;
+    const l0=((z1-z2)*(x-x2)+(x2-x1)*(z-z2))/det,l1=((z2-z0)*(x-x2)+(x0-x2)*(z-z2))/det,l2=1-l0-l1;
+    if(l0>=-1e-4&&l1>=-1e-4&&l2>=-1e-4)return l0*mApp.getW(v0)+l1*mApp.getW(v1)+l2*mApp.getW(v2);
+   }
+   return null;
+  };
+  for(const [label,sToe,inward] of[['start',-mines.startLength,1e-3],['end',mines.length+mines.endLength,-1e-3]]){
+   const toe=mod.roads.modern.at(mines,sToe),center=independentTerrainCell(toe.x,toe.z);
+   assert.ok(center.planar,`span 57 ${label} toe centreline sits on a planar road-field cell`);
+   let exactMatches=0,offCenterExact=0,prevW=null;
+   for(const uOff of[-2.0,-1.75,-1.56,-1.25,-1.0,-0.75,-0.5,-0.25,0,0.25,0.5,0.75,1.0,1.25,1.56,1.75,2.0]){
+    const px=toe.x+toe.nx*uOff+toe.nz*inward,pz=toe.z+toe.nz*uOff-toe.nx*inward;
+    const w=interpWashboardW(px,pz);
+    assert.ok(w!==null,`found washboard surface triangle at span 57 ${label} toe u=${uOff}`);
+    if(prevW!==null)assert.ok(Math.abs(w-prevW)<0.08,`span 57 ${label} toe phase stays smooth across u=${uOff} (delta ${Math.abs(w-prevW).toFixed(4)})`);
+    prevW=w;
+    const got=ridge(w),cell=independentTerrainCell(px,pz);
+    const sameAxis=cell.planar&&Math.abs(Math.abs(cell.ax*center.ax+cell.az*center.az)-1)<1e-6;
+    if(sameAxis){
+     assert.ok(Math.abs(got-cell.ridge)<1e-3,`span 57 ${label} u=${uOff} interpolated washboard ridge matches independent road field (${got.toFixed(4)} vs ${cell.ridge.toFixed(4)})`);
+     exactMatches++;
+     if(Math.abs(uOff)>=1.5)offCenterExact++;
+    }
+   }
+   assert.ok(exactMatches>=6&&offCenterExact>=1,`span 57 ${label} toe verified interpolated washboard at centreline and off-centre wheel path (${exactMatches} exact, ${offCenterExact} off-centre)`);
+  }
+  // Twisted bilinear cells (sa-sb-sc+sd!=0) must be rejected by roadAlongAxis, and toeFrame must search outward
+  // to recover the adjacent planar road-field axis when a washboard toe centreline lands on a twisted cell.
+  {
+   const toe=mod.roads.modern.at(mines,-mines.startLength),tx=toe.nz,tz=-toe.nx;
+   const twX=toe.x+toe.nx*-1.56,twZ=toe.z+toe.nz*-1.56;
+   assert.equal(independentTerrainCell(twX,twZ).planar,false,'span 57 start toe u=-1.56 sits on a twisted road-field cell');
+   assert.equal(mod.terrain.roadAlongAxis(twX,twZ,tx,tz),null,'roadAlongAxis rejects twisted bilinear road-field cell');
+   const [vx,vy]=mod.terrain.manifest.village;
+   const toEN=(x,z)=>[x+vx,vy-z];
+   const shiftedNet=new mod.Roads({roads:[{
+    id:57001,name:'Twisted Toe',kind:3,halfWidth:mines.road.halfWidth,washboard:true,bridge:true,
+    pts:[toEN(twX+tx*16,twZ+tz*16),toEN(twX+tx*28,twZ+tz*28)],
+   }]},mod.terrain.manifest.village,mod.terrain);
+   const shifted=shiftedNet.modern,sp=shifted.spans[0];
+   assert.ok(sp,'synthetic twisted-centreline washboard span exists');
+   sp.startLength=16;sp.endLength=8;
+   shifted.ensure(sp);
+   const sPos=sp.geometry.getAttribute('position'),sApp=sp.geometry.getAttribute('approach');
+   const interpShifted=(x,z)=>{
+    for(let i=0;i<sp.triangleDeck.length;i++){
+     const v0=i*3,v1=v0+1,v2=v0+2;
+     if(sApp.getX(v0)!==6)continue;
+     const x0=sPos.getX(v0),z0=sPos.getZ(v0),x1=sPos.getX(v1),z1=sPos.getZ(v1),x2=sPos.getX(v2),z2=sPos.getZ(v2);
+     const det=(z1-z2)*(x0-x2)+(x2-x1)*(z0-z2);
+     if(Math.abs(det)<1e-9)continue;
+     const l0=((z1-z2)*(x-x2)+(x2-x1)*(z-z2))/det,l1=((z2-z0)*(x-x2)+(x0-x2)*(z-z2))/det,l2=1-l0-l1;
+     if(l0>=-1e-4&&l1>=-1e-4&&l2>=-1e-4)return l0*sApp.getW(v0)+l1*sApp.getW(v1)+l2*sApp.getW(v2);
+    }
+    return null;
+   };
+   const sToePt=shifted.at(sp,-sp.startLength);
+   // At u=+0.5 m from the shifted twisted centreline (original u=-1.06 m), cell (50,83) is planar and recovered by outward search.
+   const px=sToePt.x+sToePt.nx*0.5+sToePt.nz*1e-3,pz=sToePt.z+sToePt.nz*0.5-sToePt.nx*1e-3;
+   const cell=independentTerrainCell(px,pz),w=interpShifted(px,pz);
+   assert.ok(cell.planar&&w!==null,'shifted washboard toe recovers adjacent planar cell at u=+0.5');
+   assert.ok(Math.abs(ridge(w)-cell.ridge)<1e-3,`outward planar search matches adjacent planar road field (${ridge(w).toFixed(4)} vs ${cell.ridge.toFixed(4)})`);
+  }
+  console.log('PASS unpaved approaches carry terrain-matched gravel/dust/washboard shading; decks and paved approaches stay untouched');
+ }
  return{middle,maxRise,draws:roads.group.children.length,atInputs,eager:eager.length,farInBox:box.length-near.length,burstBuilds:deck.audit.builds};
 }
 // The grade solver's shortcuts (a repeat visit skipped, the shared lattice memo, squared length tests, the isSpan
@@ -251,10 +417,30 @@ if(process.argv.includes('--mutations')){
   ['a hit follows every span in its cell','(h===null?!r.geometry:this.ownHeight(r,x,z)!==null)','(true)',/not under the read is not followed/],
   ['a hit follows no span','(h===null?!r.geometry:this.ownHeight(r,x,z)!==null)','(h===null&&!r.geometry)',/first successful read follows/],
   ['a followed span skips the burst hold','const r=this.spans[i];if(hold&&','const r=this.spans[i];if(r.followed){this.ensure(r);continue;}if(hold&&',/keeps it while the land bursts, like any other/],
+  ['unpaved approach shader disabled','applyApproachShader(this.material,(terrain as {uniforms?:Record<string,THREE.IUniform>}).uniforms);','',/approach shader/],
+  ['unpaved approach code zeroed','const code=deck||kind<=2?0:kind===3?(washboard?6:3):kind===5?5:4;','const code=0;',/carries code/],
+  ['paved approaches shaded as gravel','const code=deck||kind<=2?0:kind===3?(washboard?6:3):kind===5?5:4;','const code=deck?0:kind===3?(washboard?6:3):kind===5?5:4;',/deck or paved vertex/],
+  ['unpaved lighting discarded','outgoingLight = bDirect + bIndirect + totalEmissiveRadiance;','// discarded',/computed terrain lighting/],
+  ['all direct lights scaled by PI','vec3 bDirect = (reflectedLight.directDiffuse - bDirDiffuse) + bDirDiffuse * PI;','vec3 bDirect = reflectedLight.directDiffuse * PI;',/sun-shadowed headlights keep 1x/],
+  ['washboard toe phase zeroed','const startFrame=toeFrame(-r.startLength),endFrame=toeFrame(r.length+r.endLength);','const startFrame=null,endFrame=null;',/interpolated washboard/],
+  ['washboard drops cross-road toe tilt','w=(sv-sToe)+frame.base+uv*frame.cross*blend;','w=(sv-sToe)+frame.base;',/interpolated washboard/],
+  ['washboard toeFrame skips outward planar search','for(let d=0;d<=hw&&!axis;d+=0.5){','for(let d=0;d<=0&&!axis;d+=0.5){',/outward planar search matches adjacent planar road field/],
+  ['hidden approach attribute slice dropped','if(a)data.set((a.array as Float32Array).subarray(r.approachRanges[i]*4,r.approachRanges[i+1]*4),at);','',/exact per-vertex approach tuples/],
  ]){
   assert.equal(s.split(from).length,2,'one mutation anchor: '+name);
   await assert.rejects(()=>contracts({[file]:s.replace(from,to)}),error,name+' must fail');
   console.log('KILLED '+name);
+ }
+ {
+  const tFile='web/src/terrain.ts',ts=readFileSync(root+tFile,'utf8');
+  for(const [name,from,to,error] of[
+   ['terrain roadAlongAxis returns null','return [ux, uz];','return null;',/interpolated washboard/],
+   ['terrain roadAlongAxis skips twist rejection','if (Math.abs(sa - sb - sc + sd) > 1e-4) return null;','',/rejects twisted bilinear road-field cell/],
+  ]){
+   assert.equal(ts.split(from).length,2,'one terrain washboard axis anchor: '+name);
+   await assert.rejects(()=>contracts({[tFile]:ts.replace(from,to)}),error,name+' must fail');
+   console.log('KILLED '+name);
+  }
  }
  for(const [name,from,to,error] of[
   ['solver skips a visit when only one corner moved','changed[n1]<last&&changed[n2]<last','changed[n1]<last',/bit for bit/],
