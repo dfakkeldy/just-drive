@@ -88,3 +88,112 @@ assert.match(pauseMarkup, /id="resumeGame">Resume · Esc/);
 assert.match(main, /pauseButton.hidden = !started \|\| bare/);
 assert.match(main, /querySelectorAll<HTMLElement>\('button:not\(\[disabled\]\):not\(\[hidden\]\), a\[href\], summary'\)/);
 console.log('PASS pause card: closed Keys, Resume key, no HUD dump, start gate and disclosure in the Tab trap');
+
+{
+ // Run the live #settings pause wiring (syncPauseUI, capture Escape, MutationObserver) from implementation-independent anchors.
+ const blockStart = main.indexOf("const settingsPanel = document.getElementById('settings')!;");
+ const blockEndToken = "}).observe(settingsPanel, { attributes: true, attributeFilter: ['class'] });";
+ const blockEnd = main.indexOf(blockEndToken, blockStart);
+ assert.ok(blockStart >= 0 && blockEnd > blockStart, 'settings pause wiring block found');
+ const blockCode = transformSync(main.slice(blockStart, blockEnd + blockEndToken.length), { loader: 'ts' }).code;
+ const flush = () => new Promise(resolve => setImmediate(resolve));
+ const mount = (initialClasses) => {
+  const classes = new Set(initialClasses);
+  const pause = new PauseGate();
+  let callback, keyHandler, queued = false, focused = 'settingsClose';
+  const schedule = () => { if (!queued && callback) { queued = true; queueMicrotask(() => { queued = false; callback(); }); } };
+  const settingsPanel = {
+   querySelector: () => ({ after() {} }),
+   classList: {
+    contains: k => classes.has(k),
+    add(k) { if (!classes.has(k)) { classes.add(k); schedule(); } },
+    remove(k) { if (classes.has(k)) { classes.delete(k); schedule(); } },
+    toggle(k, force) { const want = force === undefined ? !classes.has(k) : Boolean(force); if (want) this.add(k); else this.remove(k); return want; },
+   },
+  };
+  const node = () => ({ hidden: false, disabled: false, textContent: '', open: false, focus() {}, replaceChildren() {}, after() {} });
+  const nodes = {
+   settings: settingsPanel,
+   gear: { ...node(), focus: () => { focused = 'gear'; } },
+   resumeGame: { ...node(), focus: () => { focused = 'resumeGame'; } },
+   pauseEndShift: node(), endShift: node(), pauseReplay: node(), pauseTitle: node(), pauseState: node(), pauseRadio: node(), pauseRace: node(),
+  };
+  const pauseScreen = { hidden: true, querySelector: () => node(), querySelectorAll: () => [] };
+  const pauseButton = { addEventListener() {} };
+  const sunButton = node();
+  class Element { closest() { return null; } }
+  const doc = {
+   hidden: false, body: {}, activeElement: null,
+   getElementById: id => nodes[id] ?? node(),
+   querySelector: sel => sel === '#pauseKeys' || sel === '#pauseKeys dl' ? node() : null,
+   createElement: () => node(),
+  };
+  const context = {
+   pause, pauseScreen, pauseButton, sunButton, document: doc,
+   touchDevice: true, mailMode: true, bare: false, DAILY: false, firedMode: false, mode: 'drive',
+   keys: new Set(), pointers: new Set(), mailPointers: new Set(),
+   mailRequested: false, photoRequested: false, pictureRequested: false,
+   touch: { steer: 0, throttle: 0 }, flyTouch: 0,
+   multiplayer: null, replay: { active: false, available: false }, sunSeeker: null,
+   interiors: { busy: false }, radio: null, vehicle: { roadName: 'Mabou Harbour Road' },
+   ride: { kind: 'car' }, drone: { active: false }, droneVehicle: false, gamepad: { device: 'keyboard' },
+   TOUCH: [], DRIVING_TOUCH: [], KEYS: [], DRIVING_KEYS: [], DRONE_TOUCH_HELP: [], DRONE_HELP: [], DRONE_FREE_TOUCH_HELP: [], DRONE_FREE_HELP: [],
+   padKeys: () => [], horseKeys: () => [], bikeKeys: () => [],
+   scrollMore() {}, syncRoadScenePause() {}, openReplay: () => false, pauseAllowed: () => true,
+   HTMLInputElement: Element, HTMLElement: Element,
+   addEventListener: (name, fn) => { if (name === 'keydown') keyHandler = fn; },
+   MutationObserver: class { constructor(fn) { callback = fn; } observe(target, options) { assert.equal(target, settingsPanel); assert.deepEqual(options, { attributes: true, attributeFilter: ['class'] }); } },
+  };
+  const api = new Function('context', `with(context){${blockCode}; return { syncPauseUI };}`)(context);
+  return {
+   pause, settingsPanel, pauseScreen, doc,
+   focus: () => focused,
+   gear: () => { pause.setSettings(!settingsPanel.classList.contains('open')); api.syncPauseUI(); },
+   escape: () => {
+    let prevented = false, stopped = false;
+    keyHandler({ code: 'Escape', target: new Element(), repeat: false, preventDefault: () => { prevented = true; }, stopImmediatePropagation: () => { stopped = true; } });
+    return { prevented, stopped };
+   },
+  };
+ };
+
+ // 1. Phone Full-detail crash recovery opens #settings at boot before the observer attaches.
+ const boot = mount(['open']);
+ boot.settingsPanel.classList.add('moreRoom'); await flush();
+ assert.equal(boot.pause.blocked, false, 'moreRoom on an already-open boot notice does not pause');
+ assert.equal(boot.settingsPanel.classList.contains('open'), true, 'boot notice stays open after moreRoom');
+ boot.settingsPanel.classList.remove('moreRoom'); await flush();
+ assert.equal(boot.pause.blocked, false, 'removing moreRoom does not pause');
+ // Escape dismisses the unpaused boot notice instead of opening the Pause screen.
+ const esc = boot.escape(); await flush();
+ assert.ok(esc.prevented && esc.stopped, 'Escape owns boot notice dismissal');
+ assert.equal(boot.settingsPanel.classList.contains('open'), false, 'Escape closes boot notice');
+ assert.equal(boot.pause.blocked, false, 'Escape on boot notice keeps game running');
+ assert.equal(boot.pause.screen, false, 'Escape on boot notice does not open Pause screen');
+ assert.equal(boot.pauseScreen.hidden, true, 'Pause screen stays hidden');
+ assert.equal(boot.focus(), 'gear', 'Escape returns focus to gear');
+ // Reopening after dismissal pauses, and direct close unpauses.
+ boot.settingsPanel.classList.add('open'); await flush();
+ assert.equal(boot.pause.blocked, true, 'reopening #settings after dismissing boot notice pauses');
+ boot.settingsPanel.classList.remove('open'); await flush();
+ assert.equal(boot.pause.blocked, false, 'direct panel close unpauses');
+
+ // 2. Same-task open via #gear followed by direct close must not leave the game frozen unseen.
+ const batched = mount([]);
+ batched.gear();
+ batched.settingsPanel.classList.remove('open');
+ await flush();
+ assert.equal(batched.settingsPanel.classList.contains('open'), false);
+ assert.equal(batched.pause.blocked, false, 'same-task gear open + direct close does not leave game frozen');
+ assert.equal(batched.pauseScreen.hidden, true);
+
+ // 3. Normal boot: panel starts closed, slow-picture nudge opens it and pauses, direct close unpauses.
+ const normal = mount([]);
+ normal.settingsPanel.classList.add('moreRoom'); await flush();
+ assert.equal(normal.pause.blocked, false);
+ normal.settingsPanel.classList.add('open'); await flush();
+ assert.equal(normal.pause.blocked, true, 'nudge opening #settings pauses');
+ normal.settingsPanel.classList.remove('open'); await flush();
+ assert.equal(normal.pause.blocked, false, 'direct close after nudge unpauses');
+ console.log('PASS settings observer: boot recovery ignores moreRoom, Escape dismisses without pausing, batched open+close unpauses, and nudge still pauses');
+}
