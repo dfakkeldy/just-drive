@@ -232,7 +232,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams,
     manifest: {village, area: {id: 'mabou', name: 'Mabou'}, ...manifestExtra},
     heightAt: height,
-    meshContactSource: () => 1,
+    meshContactSource: () => level,
     surfaceAt: (x, z) => ({ground: height(x, z), level, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
   });
   const roadList = [{id: 1, name: 'Fixture bridge', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]}];
@@ -439,7 +439,56 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     assert.ok(spanBits(wRunRoads.modern.spans[0]).equals(spanBits(wRefSpan)), `${distant ? 'distant followed ' : ''}washboard approach attribute matches final-land reference bit-for-bit after staged arrival`);
   }
 
-  // Fallback toeLength() out to 96 m: when steep crossfall forces toeLength to return best=16, easing crossfall around
+  // Failed washboard refresh (injected emit() error on level-7 road-axis refresh) must NOT throw WeakSet.add(null)
+  // and must fall back cleanly to the live runtime solver.
+  {
+    let wFailLv = 6;
+    washAxis = [0, -1];
+    const wFailT = {
+      ...makeWashTerrain(6),
+      meshContactSource: () => wFailLv,
+      surfaceAt: (x, z) => ({ground: height(x, z), level: wFailLv, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 3, bridge: true, washboard: true}),
+    };
+    const wFailRoads = new mod.Roads({roads: washRoadsList}, [0, 0], wFailT, wBaked);
+    let wFailSolves = 0, injectOnce = false;
+    wFailRoads.modern.build = function(...args) { wFailSolves++; return proto.build.apply(this, args); };
+    wFailRoads.modern.emit = function(r, grid) {
+      if (injectOnce) { injectOnce = false; throw new Error('injected washboard refresh failure'); }
+      return origEmit.call(this, r, grid);
+    };
+    wFailRoads.update(cam);
+    assert.equal(wFailRoads.modern.audit.bakedBuilds, 1, 'washboard bridge hydrates before injected failure');
+    wFailLv = 7; washAxis = [0.2, -0.9797958971132712]; wFailT.dataRevision++; injectOnce = true;
+    wFailRoads.update(cam);
+    assert.equal(wFailSolves, 1, 'failed washboard refresh falls back cleanly to live solver');
+    assert.equal(wFailRoads.modern.spans[0].baked, null, 'failed washboard refresh clears baked entry');
+  }
+
+  // Unrelated terrain revisions while one fine tile is still missing at the end of a nearby bridge must NOT repeat
+  // expensive spanLandHash surfaceAt scans; retry only once that pending tile's meshContactSource changes.
+  {
+    let endReady = false;
+    const endMissT = {
+      cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
+      manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}},
+      heightAt: height,
+      meshContactSource: (x, z) => (z < -45 && !endReady ? 6 : 7),
+      surfaceAt: (x, z) => ({ground: height(x, z), level: z < -45 && !endReady ? 6 : 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+    };
+    const endMissRoads = new mod.Roads({roads: roadList}, [0, 0], endMissT, syntheticBaked);
+    endMissRoads.update(cam);
+    assert.equal(endMissRoads.modern.audit.bakedBuilds, 1, 'bridge with one missing end tile hydrates provisionally');
+    assert.equal(endMissRoads.modern.spans[0].bakedVerified, false, 'missing end tile leaves span pending');
+    let nearbyPendingCalls = 0;
+    const origEndSurface = endMissT.surfaceAt;
+    endMissT.surfaceAt = (x, z) => { nearbyPendingCalls++; return origEndSurface(x, z); };
+    for (let i = 0; i < 3; i++) { endMissT.dataRevision++; endMissRoads.update(cam); }
+    endMissT.surfaceAt = origEndSurface;
+    assert.equal(nearbyPendingCalls, 0, 'unrelated revisions skip spanLandHash while pending tile source is unchanged');
+    endReady = true; endMissT.dataRevision++;
+    endMissRoads.update(cam);
+    assert.equal(endMissRoads.modern.spans[0].bakedVerified, true, 'arriving pending end tile verifies and locks span');
+  }
   // 50 m changes the live solver's approach to 41..50 m and MUST invalidate landHash (never mark stale 16 m verified).
   let ease50 = false;
   const steepCrossHeight = (x, z) => {
@@ -529,8 +578,8 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   level = 6; bump = 0;
   const farSwTerrain = makeTerrain(streamsA, [0, 0]);
   const farSwRoads = new mod.Roads({roads: roadList}, [0, 0], farSwTerrain, bothWidthBaked);
-  farSwRoads.update(cam);
   farSwRoads.modern.spans[0].followed = true;
+  farSwRoads.update(new THREE.Vector3(5000, 20, 0));
   farSwRoads.bridgeWalks.set(1, {side: 1, width: 2.0});
   farSwTerrain.dataRevision++;
   farSwRoads.update(new THREE.Vector3(5000, 20, 0));
@@ -780,6 +829,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   const sepTerrain = {
     ...makeTerrain(streamsA, [0, 0]),
     heightAt: (x, z) => height(x, z) + (x < 2 ? sepShift : 0),
+    meshContactSource: () => sepLevel,
     surfaceAt: (x, z) => ({ground: height(x, z) + (x < 2 ? sepShift : 0), level: sepLevel, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
   };
   const sepRoads = new mod.Roads({roads: parRoads}, [0, 0], sepTerrain, parBaked);
@@ -1007,15 +1057,15 @@ if (process.argv.includes('--mutations')) {
     ['partial girder midpoint omitted from landHash', bridgesFile, bridgesSrc, 'if(!r.road.ponyTruss)for(let s=0;s<len;s+=3){const p=this.at(r,s+Math.min(3,len-s)/2);if(!sample(p.x,p.z))return null;}', '', /final partial girder midpoint dip rejects/],
     ['late rejection keeps baked approach lengths', bridgesFile, bridgesSrc, 'if(r.baked){r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;r.baked=null;}', 'r.baked=null;', /staged offset rejection restores|unbaked widened fallback restores/],
     ['missing widened entry skips dropBaked', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){this.dropBaked(r);return false;}', 'if(!entry||this.rejectedBaked.has(entry)){r.baked=null;r.bakedVerified=false;return false;}', /unbaked widened fallback restores/],
-    ['distant followed forced build blocked by probe gate', bridgesFile, bridgesSrc, 'if(!touch&&!probeChecked&&!r.forceBuild&&!this.probesChanged(r,false))return true;', 'if(!touch&&!probeChecked&&!this.probesChanged(r,false))return true;', /distant followed widened span/],
+    ['distant followed forced build blocked by probe gate', bridgesFile, bridgesSrc, 'if(!touch&&!r.baked&&!r.forceBuild&&!this.probesChanged(r,false))return true;', 'if(!touch&&!this.probesChanged(r,false))return true;', /distant followed widened span/],
     ['widened sidewalk fallback drops active width', bridgesFile, bridgesSrc, 'const hadBaked=!!r.baked,sameEntry=r.baked===entry;', 'const hadBaked=!!r.baked,sameEntry=!!r.baked;', /preserves active 5\.90 m width/],
-    ['distant washboard refresh double-checks probes', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,true))return;', 'if(this.tryHydrateBaked(r,touch,false))return;', /distant followed washboard/],
-    ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
-    ['distant followed span touches tiles', bridgesFile, bridgesSrc, 'if(!touch&&!this.probesChanged(r,false))return;', '', /zero touching surfaceAt calls/],
+    ['failed washboard refresh passes null to WeakSet', bridgesFile, bridgesSrc, 'if(r.width!==oldW)this.runList=null;\n      this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;', 'if(r.width!==oldW)this.runList=null;\n      this.rejectedBaked.add(r.baked!);this.dropBaked(r);r.forceBuild=true;', /Invalid value used in weak set|failed washboard refresh/],
+    ['nearby and distant pending tile repeats spanLandHash', bridgesFile, bridgesSrc, 'if(this.terrain.meshContactSource(r.bakedPendingX,r.bakedPendingZ,true,false)===r.bakedPendingSource)return;', '', /unrelated revisions skip spanLandHash|zero touching surfaceAt calls/],
+    ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
     ['probeTargetLevel capped at 8', bridgesFile, bridgesSrc, 'const top=Math.max(this.manifestMaxLevel,fallbackLevel);', 'const top=Math.max(8,fallbackLevel);', /withheld level-9 tile/],
     ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);this.dropBaked(r);return false;}', '', /raised terrain before first build rejects/],
-    ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===r.baked.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;return;}\n        if(this.tryHydrateBaked(r,touch,true))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
-    ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds/],
+    ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===entry.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;return;}\n        if(this.tryHydrateBaked(r,touch))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
+    ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds|failed washboard refresh/],
     ['verified baked fast-path removed', bridgesFile, bridgesSrc, 'if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;', '', /skips land probes/],
     ['bridgeBankElevations ignores baked flag', bridgesFile, bridgesSrc, 'if(built&&(r.baked||r.level>=8||r.revision===rev)){', 'if(built&&(r.level>=8||r.revision===rev)){', /bridgeBankElevations keeps baked (level|y0)/],
     ['gridY read corrupted', bridgesFile, bridgesSrc, 'grid[k+1]=entry.gridY[v];', 'grid[k+1]=entry.gridY[v]+0.01;', /bit-for-bit/],
