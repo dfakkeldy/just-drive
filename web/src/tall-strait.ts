@@ -1,5 +1,5 @@
 import { inBox, pointSegment, type LightClass, type Mast, type PowerLine, type TallFile, type TowerKind } from './tall-rules';
-import { MISCLASSIFIED_POWER_MASTS, RESTORED_LINES, STRAIT_LINES, STRAIT_MASTS } from './tall-strait-data';
+import { MISCLASSIFIED_POWER_MASTS, MISCLASSIFIED_WATER_TOWERS, RESTORED_LINES, STRAIT_LINES, STRAIT_MASTS } from './tall-strait-data';
 
 const STRAIT_BOUNDS: readonly [number, number, number, number] = [616076, 5045988, 654988, 5078756];
 const KINDS: readonly TowerKind[] = ['standard', 'double', 'crossing'];
@@ -101,6 +101,7 @@ export function mergeStraitTall(data: TallFile): TallFile {
 
   const keptMasts = data.towers.filter(m => {
     if (MISCLASSIFIED_POWER_MASTS.some(([e, n]) => Math.hypot(m.e - e, m.n - n) <= 20)) return false;
+    if (MISCLASSIFIED_WATER_TOWERS.some(([e, n]) => Math.hypot(m.e - e, m.n - n) <= 20)) return false;
     if (extraMasts.some(s => Math.hypot(m.e - s.e, m.n - s.n) <= 35)) return false;
     return true;
   });

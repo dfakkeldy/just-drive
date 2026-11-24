@@ -35,6 +35,14 @@ export type CompactMast = readonly [number, number, number, number, 1 | 2 | 3, s
 /** NSTDB UTTO60 points that are actually transmission towers (L7005 n4100578085; L8004 n4100578086, n4100578084, n1965821168). */
 export const MISCLASSIFIED_POWER_MASTS: readonly (readonly [number, number])[] = [[620697.61,5056148.44],[620875.71,5056289.64],[621754.11,5056765.24],[623034.11,5057460.24]];
 
+/** NSTDB UTTO60 points that are municipal water towers (Pitt St, demolished Tamarac, Mulgrave N & S), not communication masts. */
+export const MISCLASSIFIED_WATER_TOWERS: readonly (readonly [number, number])[] = [
+  [628035.91, 5052687.54],
+  [629725.71, 5053075.14],
+  [624284.91, 5052673.34],
+  [624089.01, 5052185.64],
+];
+
 export const STRAIT_MASTS: readonly CompactMast[] = [
   [650642.7,5075643.19,202.57,55.0,2,"osm:n2332459266"],
   [650695.79,5075645.18,200.15,55.0,2,"osm:n2332459268"],
