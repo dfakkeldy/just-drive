@@ -29,7 +29,7 @@ async function bundle(replacements = {}, withGround = false) {
         export {ModernBridges} from './web/src/modern-bridges.ts';
         export {mabouRoadOverrides} from './web/src/november-bridges.ts';
         export {NovemberRoadDetails} from './web/src/november-road-details.ts';
-        export {encodeBridgeDecks, decodeBridgeDecks, loadBridgeDecks, BAKED_BRIDGE_EXAG, BAKED_BRIDGE_SEA_LEVEL} from './web/src/bridge-decks.ts';
+        export {encodeBridgeDecks, decodeBridgeDecks, loadBridgeDecks, hashStreams, BAKED_BRIDGE_EXAG, BAKED_BRIDGE_SEA_LEVEL} from './web/src/bridge-decks.ts';
         export {BRIDGE_DECK_ASSETS} from './web/src/bridge-decks-assets.ts';
         export {initStore} from './web/src/store.ts';
         export {readWalkPlan, restoreSelectedWalk} from './web/src/sidewalks-cache.ts';
@@ -81,15 +81,21 @@ function spanBits(r) {
 function testWorkRootGuard() {
   const tmp = mkdtempSync(join(tmpdir(), 'mmm-bridge-guard-'));
   try {
-    const work = join(tmp, 'work'), outside = join(tmp, 'outside');
+    const work = join(tmp, 'work'), outside = join(tmp, 'outside'), altSource = join(tmp, 'alt-checkout');
     mkdirSync(join(work, 'data/baked/areas'), {recursive: true});
     mkdirSync(outside, {recursive: true});
-    assertWorkRoot(work);
-    assertSafeOutput(work, join(work, 'data/baked/terrain/bridge-decks.bin'));
+    mkdirSync(join(altSource, 'data/baked'), {recursive: true});
+    mkdirSync(join(altSource, 'web/src'), {recursive: true});
+    assertWorkRoot(work, altSource);
+    assertSafeOutput(work, join(work, 'data/baked/terrain/bridge-decks.bin'), altSource);
     // A symlinked subdirectory inside workRoot must be rejected before any write.
     symlinkSync(outside, join(work, 'data/baked/areas/pointtupper'));
-    assert.throws(() => assertSafeOutput(work, join(work, 'data/baked/areas/pointtupper/bridge-decks.bin')), /symlink/);
+    assert.throws(() => assertSafeOutput(work, join(work, 'data/baked/areas/pointtupper/bridge-decks.bin'), altSource), /symlink/);
     assert.throws(() => assertWorkRoot(root), /isolated/);
+    // Passing an alternate --source-root as --work-root (or writing into its baked/web trees) must be refused.
+    assert.throws(() => assertWorkRoot(altSource, altSource), /isolated/);
+    assert.throws(() => assertWorkRoot(join(altSource, 'data/baked'), altSource), /protected|primary or selected/);
+    assert.throws(() => assertSafeOutput(altSource, join(altSource, 'data/baked/terrain/bridge-decks.bin'), altSource), /protected/);
   } finally {
     rmSync(tmp, {recursive: true, force: true});
   }
@@ -97,9 +103,11 @@ function testWorkRootGuard() {
 
 async function testCodecAndLoader(replacements = {}) {
   const mod = await bundle(replacements);
+  const sampleStreamsHash = mod.hashStreams({segments: new Float32Array([0, 0, 10, 0, 1.5])});
   const sample = [{
     chainKey: '1,2',
     geomHash: 0x123456789abcdef0n,
+    landHash: 0x0fedcba987654321n,
     requestWidth: 4.05,
     finalWidth: 3.6,
     narrowRail: true,
@@ -118,7 +126,7 @@ async function testCodecAndLoader(replacements = {}) {
     gridY: new Float32Array([1, 2, 3, 4, 5, 6]),
     emitLand: new Float64Array([9.1, Number.NaN, 10.2]),
   }];
-  const encoded = mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, [624000, 5103000], sample);
+  const encoded = mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, sampleStreamsHash, [624000, 5103000], sample);
   // Test both misaligned Uint8Array AND misaligned Node Buffer (whose .slice() preserves byteOffset!).
   const shiftedU8 = new Uint8Array(encoded.length + 3);
   shiftedU8.set(encoded, 3);
@@ -130,10 +138,12 @@ async function testCodecAndLoader(replacements = {}) {
     assert.equal(decoded.exag, 1.5);
     assert.equal(decoded.seaLevel, -0.2);
     assert.equal(decoded.hasStreams, true);
+    assert.equal(decoded.streamsHash, sampleStreamsHash);
     assert.deepEqual(decoded.village, [624000, 5103000]);
     assert.equal(decoded.spans.length, 1);
     const s = decoded.find('1,2', 4.05, true, 0x123456789abcdef0n);
     assert.ok(s, 'find matches requestWidth and geomHash');
+    assert.equal(s.landHash, 0x0fedcba987654321n);
     assert.equal(decoded.find('1,2', 3.6, true, 0x123456789abcdef0n), s, 'find matches finalWidth');
     assert.equal(decoded.find('1,2', 4.05, false, 0x123456789abcdef0n), null, 'find distinguishes ponyTruss');
     assert.equal(decoded.find('1,2', 4.05, true, 0x1n), null, 'find rejects different geomHash');
@@ -149,21 +159,26 @@ async function testCodecAndLoader(replacements = {}) {
   assert.throws(() => mod.decodeBridgeDecks(encoded.subarray(0, encoded.length - 4), 'mabou'), /Truncated/);
   assert.throws(() => mod.decodeBridgeDecks(Buffer.concat([encoded, Buffer.alloc(4)]), 'mabou'), /Trailing/);
 
-  // Loader guards: non-default exag/seaLevel makes zero requests; missing/short/hash faults warn once with exact cause.
+  // Loader guards: non-default exag/seaLevel makes zero requests; missing/short/hash/stalled faults warn once with exact cause.
   const origFetch = globalThis.fetch, origWarn = console.warn;
   const requests = [], warnings = [];
   console.warn = (...args) => warnings.push(args.join(' '));
   try {
     let mode = 'good';
-    const synthetic = mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, [624000, 5103000], sample);
+    let aborted = false;
+    const synthetic = mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, sampleStreamsHash, [624000, 5103000], sample);
     const fakeAssets = `export interface BridgeDeckAsset {readonly file:string;readonly bytes:number;readonly sha256:string}
 export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined>> = {mabou:{file:'bridge-decks.bin',bytes:${synthetic.length},sha256:'${sha(synthetic)}'}};`;
     const loaderMod = await bundle({...replacements, 'web/src/bridge-decks-assets.ts': fakeAssets});
-    globalThis.fetch = async url => {
+    globalThis.fetch = async (url, init) => {
       requests.push(String(url));
       if (mode === 'missing') return new Response('missing', {status: 404});
       if (mode === 'short') return new Response(synthetic.subarray(0, synthetic.length - 1));
       if (mode === 'hash') { const b = synthetic.slice(); b[b.length - 1] ^= 1; return new Response(b); }
+      if (mode === 'stalled') {
+        init?.signal?.addEventListener('abort', () => { aborted = true; });
+        return {ok: true, status: 200, blob: () => new Promise(() => {})};
+      }
       return new Response(synthetic);
     };
     assert.equal(await loaderMod.loadBridgeDecks('mabou', 'terrain', 1.0, -0.2), null, 'exag=1.0 skips baked file');
@@ -176,15 +191,25 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     assert.deepEqual(requests, ['terrain/bridge-decks.bin']);
     assert.equal(warnings.length, 0);
 
-    const expectedMsg = {missing: /404/, short: /length mismatch/, hash: /hash mismatch/};
-    for (const fault of ['missing', 'short', 'hash']) {
-      mode = fault;
+    const expectedMsg = {missing: /404/, short: /length mismatch/, hash: /hash mismatch/, stalled: /timed out/};
+    for (const fault of ['missing', 'short', 'hash', 'stalled']) {
+      mode = fault; aborted = false;
       const freshMod = await bundle({...replacements, 'web/src/bridge-decks-assets.ts': fakeAssets});
       requests.length = 0; warnings.length = 0;
-      assert.equal(await freshMod.loadBridgeDecks('mabou', 'terrain', 1.5, -0.2), null, `fault ${fault} returns null`);
+      const t0 = performance.now();
+      const got = await Promise.race([
+        freshMod.loadBridgeDecks('mabou', 'terrain', 1.5, -0.2, 40),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('stalled load hung past guard')), 300)),
+      ]);
+      const elapsed = performance.now() - t0;
+      assert.equal(got, null, `fault ${fault} returns null`);
       assert.equal(warnings.length, 1, `fault ${fault} warns once`);
       assert.match(warnings[0], expectedMsg[fault], `fault ${fault} reports exact cause`);
-      assert.equal(await freshMod.loadBridgeDecks('mabou', 'terrain', 1.5, -0.2), null, `repeat fault ${fault} returns null`);
+      if (fault === 'stalled') {
+        assert.ok(elapsed < 280, `stalled load resolved in ${elapsed.toFixed(1)} ms`);
+        assert.equal(aborted, true, 'stalled load aborts underlying fetch');
+      }
+      assert.equal(await freshMod.loadBridgeDecks('mabou', 'terrain', 1.5, -0.2, 40), null, `repeat fault ${fault} returns null`);
       assert.equal(warnings.length, 1, `repeat fault ${fault} does not spam warnings`);
     }
   } finally {
@@ -192,9 +217,11 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     console.warn = origWarn;
   }
 
-  // Synthetic ModernBridges hydration, geomHash binding, streams binding, rejected-record stability, and fallback.
+  // Synthetic ModernBridges hydration, geomHash/landHash/streamsHash binding, rejected-record stability, and fallback.
   let level = 5, bump = 0;
   const height = (x, z) => (z > 0 || z < -40 ? 10 + bump + x * .005 : Math.max(0, 10 - Math.min(-z, 40 + z) * 2));
+  const streamsA = {segments: new Float32Array([0, -20, 15, -20, 1.5])};
+  const streamsB = {segments: new Float32Array([0, -20, 15, -19.5, 1.5])};
   const makeTerrain = (streams = null, village = [0, 0]) => ({
     cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams,
     manifest: {village, area: {id: 'mabou', name: 'Mabou'}},
@@ -203,8 +230,8 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     surfaceAt: (x, z) => ({ground: height(x, z), level, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
   });
   const roadList = [{id: 1, name: 'Fixture bridge', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]}];
-  level = 7;
-  const refTerrain = makeTerrain({dummy: true}, [0, 0]);
+  level = 7; bump = 0;
+  const refTerrain = makeTerrain(streamsA, [0, 0]);
   const refRoads = new mod.Roads({roads: roadList}, [0, 0], refTerrain, null);
   const refM = refRoads.modern;
   const proto = Object.getPrototypeOf(refM);
@@ -217,12 +244,15 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   };
   const refSpan = refM.spans[0];
   refM.ensure(refSpan);
+  const refLandHash = refM.spanLandHash(refSpan, refSpan.startLength, refSpan.endLength, refSpan.width, refSpan.level);
+  assert.ok(refLandHash !== null, 'synthetic reference landHash computed');
   const gridY = new Float32Array(capGrid.length / 3);
   for (let i = 0; i < gridY.length; i++) gridY[i] = capGrid[i * 3 + 1];
   const coreRows = Math.ceil(refSpan.length);
   const record = {
     chainKey: refSpan.chainKey,
     geomHash: refSpan.geomHash,
+    landHash: refLandHash,
     requestWidth: refSpan.width,
     finalWidth: refSpan.width,
     narrowRail: refSpan.narrowRail,
@@ -241,10 +271,10 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     gridY,
     emitLand: new Float64Array(capLand),
   };
-  const syntheticBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, [0, 0], [record]), 'mabou');
+  const syntheticBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [record]), 'mabou');
 
-  level = 5;
-  const t1 = makeTerrain({dummy: true}, [0, 0]);
+  level = 5; bump = 2;
+  const t1 = makeTerrain(streamsA, [0, 0]);
   const bakedRoads = new mod.Roads({roads: roadList}, [0, 0], t1, syntheticBaked);
   const bakedM = bakedRoads.modern;
   let solverCalls = 0;
@@ -252,33 +282,71 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   const cam = new THREE.Vector3(0, 20, -20);
   bakedRoads.update(cam);
   assert.equal(bakedM.audit.builds, 0, 'level 5 waits for level-6 bank tiles');
+  // At coarse level 6 (noisy coarse elevation), hydrate baked deck immediately and keep baked bank elevations.
   level = 6; t1.dataRevision++;
   bakedRoads.update(cam);
   assert.equal(bakedM.audit.builds, 1, 'level 6 hydrates baked deck once');
   assert.equal(bakedM.audit.bakedBuilds, 1, 'hydrated via baked path');
   assert.equal(solverCalls, 0, 'runtime grade solver never ran');
   assert.ok(spanBits(bakedM.spans[0]).equals(spanBits(refSpan)), 'synthetic baked deck is bit-for-bit identical to runtime solver');
-
-  // Later tile refinement (level 7 -> 8) must NOT rebuild a baked deck, and bridgeBankElevations must keep baked y0/y1.
-  bump = 2; level = 7; t1.dataRevision++;
-  bakedRoads.update(cam);
-  assert.equal(bakedM.audit.builds, 1, 'baked span does not rebuild on dataRevision bump');
-  assert.equal(solverCalls, 0, 'solver still never ran');
+  t1.dataRevision++;
   const banks = [0, 0];
   assert.equal(bakedRoads.bridgeBankElevations(1, banks), 7, 'bridgeBankElevations keeps baked level 7');
-  assert.equal(banks[0], refSpan.y0, 'bridgeBankElevations keeps baked y0 without re-sampling');
-  assert.equal(banks[1], refSpan.y1, 'bridgeBankElevations keeps baked y1 without re-sampling');
+  assert.equal(banks[0], refSpan.y0, 'bridgeBankElevations keeps baked y0 without re-sampling coarse terrain');
+  assert.equal(banks[1], refSpan.y1, 'bridgeBankElevations keeps baked y1 without re-sampling coarse terrain');
+
+  // When final level-7 tiles arrive with matching ground (bump = 0), verify and lock baked deck with ZERO rebuilds.
+  bump = 0; level = 7; t1.dataRevision++;
+  bakedRoads.update(cam);
+  assert.equal(bakedM.audit.builds, 1, 'matching final terrain verifies baked span with no rebuild');
+  assert.equal(bakedM.spans[0].bakedVerified, true, 'baked span locked after matching final terrain');
+  assert.equal(solverCalls, 0, 'solver still never ran');
+  let probeCalls = 0;
+  const origSurfaceAt = t1.surfaceAt;
+  t1.surfaceAt = (x, z) => { probeCalls++; return origSurfaceAt(x, z); };
+  t1.dataRevision++;
+  bakedRoads.update(cam);
+  t1.surfaceAt = origSurfaceAt;
+  assert.equal(bakedM.audit.builds, 1, 'verified baked span does not rebuild on dataRevision bump');
+  assert.equal(probeCalls, 0, 'verified baked span skips land probes on later revision bumps');
 
   // Unbaked width widening via bridgeWalks falls back cleanly to runtime solver.
-  bump = 0;
   bakedRoads.bridgeWalks.set(1, {side: 1, width: 2});
   bakedRoads.update(cam);
   assert.equal(bakedM.audit.builds, 2, 'unbaked walk width falls back to runtime build');
   assert.equal(solverCalls, 1, 'fallback invokes runtime solver');
 
+  // Terrain rebake (+2 m land bump) BEFORE first build at final level must reject stale baked deck and solve at 12.04 m.
+  level = 7; bump = 2;
+  const raisedTerrain = makeTerrain(streamsA, [0, 0]);
+  const raisedRoads = new mod.Roads({roads: roadList}, [0, 0], raisedTerrain, syntheticBaked);
+  raisedRoads.update(cam);
+  assert.equal(raisedRoads.modern.audit.bakedBuilds, 0, 'raised terrain before first build rejects stale baked deck');
+  assert.equal(raisedRoads.modern.audit.builds, 1, 'raised terrain falls back to live solver');
+  assert.ok(Math.abs(raisedRoads.modern.spans[0].y0 - 12.04) < 1e-6, 'raised terrain uses live 12.04 m bank height');
+
+  // Terrain rebake (+2 m land bump) discovered when fine tiles arrive AFTER level-6 hydration must reject and rebuild at 12.04 m.
+  level = 6; bump = 0;
+  const lateTerrain = makeTerrain(streamsA, [0, 0]);
+  const lateRoads = new mod.Roads({roads: roadList}, [0, 0], lateTerrain, syntheticBaked);
+  lateRoads.update(cam);
+  assert.equal(lateRoads.modern.audit.bakedBuilds, 1, 'coarse level 6 hydrates initially');
+  level = 7; bump = 2; lateTerrain.dataRevision++;
+  lateRoads.update(cam);
+  assert.equal(lateRoads.modern.audit.builds, 2, 'late terrain mismatch rebuilds via live solver');
+  assert.ok(Math.abs(lateRoads.modern.spans[0].y0 - 12.04) < 1e-6, 'late terrain mismatch updates bank to live 12.04 m');
+
+  // Stream content edit (same hasStreams=true, moved brook segment) must reject stale baked deck via streamsHash.
+  level = 7; bump = 0;
+  const editStreamTerrain = makeTerrain(streamsB, [0, 0]);
+  const editStreamRoads = new mod.Roads({roads: roadList}, [0, 0], editStreamTerrain, syntheticBaked);
+  editStreamRoads.update(cam);
+  assert.equal(editStreamRoads.modern.audit.bakedBuilds, 0, 'edited streams reject stale baked deck via streamsHash');
+  assert.equal(editStreamRoads.modern.audit.builds, 1, 'edited streams fall back to runtime solver');
+
   // Moved span (same id/width/length, shifted X) must reject baked entry via geomHash and solve at new bank height.
   level = 7; bump = 0;
-  const movedTerrain = makeTerrain({dummy: true}, [0, 0]);
+  const movedTerrain = makeTerrain(streamsA, [0, 0]);
   const movedRoad = [{id: 1, name: 'Fixture bridge', kind: 1, halfWidth: 3.6, bridge: true, pts: [[100, 0], [100, 40]]}];
   const movedRoads = new mod.Roads({roads: movedRoad}, [0, 0], movedTerrain, syntheticBaked);
   movedRoads.update(new THREE.Vector3(100, 20, -20));
@@ -294,8 +362,8 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   assert.equal(noStreamRoads.modern.audit.builds, 1, 'disabled streams fall back to runtime solver');
 
   // A rejected baked record (shortened emitLand) must NOT force repeated solves on later revision bumps with constant terrain.
-  const shortBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, [0, 0], [{...record, emitLand: new Float64Array(capLand.slice(0, 1))}]), 'mabou');
-  const tBad = makeTerrain({dummy: true}, [0, 0]);
+  const shortBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [{...record, emitLand: new Float64Array(capLand.slice(0, 1))}]), 'mabou');
+  const tBad = makeTerrain(streamsA, [0, 0]);
   const badRoads = new mod.Roads({roads: roadList}, [0, 0], tBad, shortBaked);
   badRoads.update(cam);
   assert.equal(badRoads.modern.audit.bakedBuilds, 0, 'short emitLand rejected');
@@ -364,6 +432,7 @@ async function testAllAreasRealLand(replacements = {}) {
     assert.equal(Mbaked.audit.bakedBuilds, Mbaked.spans.length, `${area}: all ${Mbaked.spans.length} spans hydrated from baked file`);
     assert.equal(Mbaked.audit.builds, Mbaked.spans.length, `${area}: exactly one build per span`);
     for (let i = 0; i < Mbaked.spans.length; i++) {
+      assert.equal(Mbaked.spans[i].bakedVerified, true, `${area} span ${Mbaked.spans[i].road.id}: final-level landHash verified`);
       assert.ok(spanBits(Mbaked.spans[i]).equals(spanBits(Mref.spans[i])), `${area} span ${Mbaked.spans[i].road.id}: baked matches runtime final land bit-for-bit`);
     }
 
@@ -371,7 +440,7 @@ async function testAllAreasRealLand(replacements = {}) {
     for (const r of Mbaked.spans) Mbaked.ensure(r);
     assert.equal(Mbaked.audit.builds, Mbaked.spans.length, `${area}: no rebuilds after dataRevision bump`);
 
-    // Require Mabou sidewalk-widened road 28 to be present and verified bit-for-bit with zero solver calls.
+    // Require Mabou sidewalk-widened road 28 to be present, strictly widened, and hydrated bit-for-bit with zero solver calls.
     let widenedChecked = 0;
     const walkFile = resolve(base, 'sidewalks-desktop.json');
     if (area === 'mabou') assert.ok(existsSync(walkFile), 'mabou: sidewalks-desktop.json is required to verify widened road 28');
@@ -386,7 +455,10 @@ async function testAllAreasRealLand(replacements = {}) {
         refRoads.bridgeWalks.set(p.a.road.id, {side: 1, width: p.run.width + p.run.buffer});
         bakedRoads.bridgeWalks.set(p.a.road.id, {side: 1, width: p.run.width + p.run.buffer});
       }
+      if (area === 'mabou') assert.ok(bakedRoads.bridgeWalks.has(28), 'mabou: road 28 must be in bridgeWalks');
       if (refRoads.bridgeWalks.size) {
+        const beforeWidths = new Map(Mbaked.spans.map(s => [s, s.width]));
+        const beforeBakedBuilds = Mbaked.audit.bakedBuilds;
         Mref.update(new THREE.Vector3(0, 20, 0));
         Mbaked.update(new THREE.Vector3(0, 20, 0));
         for (const [id] of refRoads.bridgeWalks) {
@@ -396,7 +468,15 @@ async function testAllAreasRealLand(replacements = {}) {
           Mref.ensure(rA); Mbaked.ensure(rB);
           assert.equal(solverCalls, 0, `${area}: walked bridge ${id} hydrates without solver`);
           assert.ok(spanBits(rB).equals(spanBits(rA)), `${area}: walked bridge ${id} matches bit-for-bit`);
-          widenedChecked++;
+          if (rB.width > beforeWidths.get(rB)) {
+            assert.equal(rB.bakedVerified, true, `${area}: widened bridge ${id} landHash verified`);
+            widenedChecked++;
+          } else if (area === 'mabou' && id === 28) {
+            assert.fail(`mabou road 28 width did not increase: ${beforeWidths.get(rB)} -> ${rB.width}`);
+          }
+        }
+        if (widenedChecked > 0) {
+          assert.equal(Mbaked.audit.bakedBuilds, beforeBakedBuilds + widenedChecked, `${area}: widened spans hydrated via baked path`);
         }
       }
     }
@@ -427,12 +507,16 @@ if (process.argv.includes('--mutations')) {
     ['exag guard removed', decksFile, decksSrc, 'if (exag !== BAKED_BRIDGE_EXAG || seaLevel !== BAKED_BRIDGE_SEA_LEVEL) return null;', '', /exag=1\.0 skips baked file|zero fetches/],
     ['hash check removed', decksFile, decksSrc, "if (hash !== asset.sha256) throw new Error('Bridge deck asset hash mismatch');", '', /fault hash returns null/],
     ['length check removed', decksFile, decksSrc, "if (blob.size !== asset.bytes) throw new Error('Bridge deck asset length mismatch');", '', /reports exact cause|length mismatch/],
+    ['timeout guard removed', decksFile, decksSrc, 'return await Promise.race([load, timeout]);', 'timeout.catch(() => {}); return await load;', /stalled load hung/],
     ['misaligned Buffer slice bug restored', decksFile, decksSrc, 'Uint8Array.from(input)', 'input.slice()', /multiple of|RangeError/],
-    ['streams guard removed', bridgesFile, bridgesSrc, 'if(!!this.terrain.streams!==decks.hasStreams)return false;', '', /disabled streams reject/],
+    ['streams guard removed', bridgesFile, bridgesSrc, 'if(!!this.terrain.streams!==decks.hasStreams||this.terrainStreamsHash()!==decks.streamsHash)return false;', '', /edited streams reject|disabled streams reject/],
+    ['streamsHash check removed', bridgesFile, bridgesSrc, '||this.terrainStreamsHash()!==decks.streamsHash', '', /edited streams reject/],
     ['geomHash check removed', decksFile, decksSrc, 's.geomHash === geomHash && ', '', /moved span rejects|rejects different geomHash/],
+    ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;return false;}', '', /raised terrain before first build rejects/],
+    ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===r.baked.landHash){r.bakedVerified=true;return;}', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
     ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds/],
-    ['baked span rebuilds on revision bump', bridgesFile, bridgesSrc, 'if(r.baked&&!r.forceBuild&&r.baked.finalWidth===r.width)return;', '', /does not rebuild on dataRevision bump/],
-    ['bridgeBankElevations ignores baked flag', bridgesFile, bridgesSrc, 'if(built&&(r.baked||r.level>=8||r.revision===rev)){', 'if(built&&(r.level>=8||r.revision===rev)){', /bridgeBankElevations keeps baked y0/],
+    ['verified baked fast-path removed', bridgesFile, bridgesSrc, 'if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;', '', /skips land probes/],
+    ['bridgeBankElevations ignores baked flag', bridgesFile, bridgesSrc, 'if(built&&(r.baked||r.level>=8||r.revision===rev)){', 'if(built&&(r.level>=8||r.revision===rev)){', /bridgeBankElevations keeps baked (level|y0)/],
     ['gridY read corrupted', bridgesFile, bridgesSrc, 'grid[k+1]=entry.gridY[v];', 'grid[k+1]=entry.gridY[v]+0.01;', /bit-for-bit/],
   ]) {
     assert.equal(src.split(from).length, 2, `one mutation anchor: ${name}`);
