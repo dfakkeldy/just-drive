@@ -73,8 +73,8 @@ def mutants(recorded_sha):
     }
     assert state(None, None, recorded_sha) == 'before' and state(dict(KEY), recorded_sha, recorded_sha) == 'after', 'clean states not recognised'
     for label, (key, pack_sha) in cases.items():
-        assert verdict(state(key, pack_sha, recorded_sha), None), f'mutant not caught: {label}'
-    assert verdict('before', 'after') and not verdict('after', 'after'), 'EXPECT not applied'
+        assert verdict(state(key, pack_sha, recorded_sha), EXPECT), f'mutant not caught: {label}'
+    assert EXPECT == 'after' and verdict('before', EXPECT) and not verdict('after', EXPECT), 'EXPECT not applied'
     assert not verdict('before', None) and not verdict('after', None), 'clean states rejected'
     return len(cases) + 1
 
@@ -118,6 +118,8 @@ def main():
         why = verdict(now, EXPECT)
         assert not why, why
         print(f'land state: {now} (EXPECT = {EXPECT!r})')
+    elif LAND.exists():
+        raise AssertionError('Point Tupper land folder exists without manifest.json (orphaned or incomplete land)')
     else:
         print('NO LAND: no baked Point Tupper land on this host; the land state was not checked')
     remake(pack)
