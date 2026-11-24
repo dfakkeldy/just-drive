@@ -5,7 +5,7 @@ import { transformSync } from '../web/node_modules/esbuild/lib/main.js';
 const source = readFileSync('web/src/canal-timer.ts', 'utf8');
 function check(source) {
   const code = transformSync(source.replaceAll('export ', ''), { loader: 'ts' }).code;
-  const { canalState: state, stopAtGate: stop } = new Function(code + ';return {canalState,stopAtGate}')();
+  const { canalState: state, canalSwing: swing, stopAtGate: stop } = new Function(code + ';return {canalState,canalSwing,stopAtGate}')();
   assert.equal(state(0).closed, false);
   assert.equal(state(12).closed, true);
   assert.equal(state(8.99).stopping, false);
@@ -18,10 +18,21 @@ function check(source) {
   assert.equal(state(72).queue, 0);
   assert.equal(state(30).queue, 3);
   assert.deepEqual([0, 1, 2, 3].map(i => state(i * 100 + 30).vessel), [0, 1, 2, 3]);
+  assert.equal(swing(0), 0, 'closed during open road');
+  assert.equal(swing(19.99), 0, 'locked closed before transit starts');
+  assert.equal(swing(20), 0, 'starts opening smoothly at transit start');
+  assert.ok(swing(23) > 0.45 && swing(23) < 0.55, 'midway open at 23 s');
+  assert.equal(swing(26), 1, 'fully open by 26 s');
+  assert.equal(swing(42), 1, 'fully open during boat passage');
+  assert.equal(swing(50), 1, 'stays fully open until 50 s');
+  assert.ok(swing(53) > 0.45 && swing(53) < 0.55, 'midway closed at 53 s');
+  assert.equal(swing(56), 0, 'locked closed by 56 s');
+  assert.equal(swing(75), 0, 'closed after transit');
   for (let t = 0; t < 400; t += .125) {
-    const s = state(t);
+    const s = state(t), sw = swing(t);
     if (s.passing) assert.ok(s.closed && s.queue === 3, 'boats have a closed barrier and waiting cars');
-    assert.ok(s.progress >= 0 && s.progress <= 1);
+    if (sw > 0) assert.ok(s.passing && s.closed, 'bridge swings only while barrier is closed and transit active');
+    assert.ok(s.progress >= 0 && s.progress <= 1 && sw >= 0 && sw <= 1);
   }
   for (const side of [-1, 1]) {
     assert.equal(stop(side * (60 - 1e-10), side * 59.9, side, 60), side * 60, 'reprojection roundoff cannot leak');
@@ -146,15 +157,46 @@ async function productionCheck(source) {
   assert.deepEqual(two.starts, [120], 'first vessel turned back, the next one passes: ' + JSON.stringify(two));
   };
   const road = { id: 1, pts: [[-45, 0], [45, 0]] };
+  const railRoad = { id: 80, name: 'Railroad', kind: 3, bridge: false, halfWidth: 2.6, pts: [[-45, 5.5], [45, 5.5]] };
   let visible, ground = 8;
-  const canal = new Canal({ nearest: () => ({ road }), deckHeight: () => 4, showCanalDeck: (_id, v) => { visible = v; } }, { heightAt: () => ground }, [0, 0], -.2);
-  let draws = 0, triangles = 0;
+  const hiddenIds = new Map();
+  const canal = new Canal({
+    nearest: (_x, _z, _r, pred) => pred(railRoad) ? { road: railRoad } : { road },
+    deckHeight: () => 4,
+    showCanalDeck: (id, v) => { visible = v; hiddenIds.set(id, v); },
+    bridgeRuns: () => [
+      { pts: [[-5, -20], [-5, 20]], roads: new Set([-100099, 99]), halfWidth: 1.5 }, // nearby non-rail perpendicular
+      { pts: [[-45, 5.5], [45, 5.5]], roads: new Set([-100098, 99]), halfWidth: 1.5 }, // nearby non-railroad parallel
+      { pts: [[-45, 5.5], [45, 5.5]], roads: new Set([-100095, 80]), halfWidth: 1.25 }, // exact parallel Railroad canal span
+      { pts: [[1800, 5.5], [1850, 5.5]], roads: new Set([-100094, 80]), halfWidth: 1.25 }, // distant road-80 span
+    ],
+  }, { heightAt: () => ground }, [0, 0], -.2, false);
+  const canalLow = new Canal({ nearest: (_x, _z, _r, pred) => pred(railRoad) ? null : { road }, deckHeight: () => 4, showCanalDeck: () => {} }, { heightAt: () => ground }, [0, 0], -.2, true);
+  let trafficDraws = 0, trafficTriangles = 0, bridgeDraws = 0, bridgeTriangles = 0, lowBridgeDraws = 0, lowBridgeTriangles = 0;
+  const isBridgeNode = (node, root) => { for (let p = node; p; p = p.parent) if (p === root) return true; return false; };
   canal.group.traverse(node => {
     if (!node.isMesh) return;
-    draws++; triangles += (node.geometry.index?.count ?? node.geometry.attributes.position.count) / 3 * (node.isInstancedMesh ? 6 : 1);
+    const tris = (node.geometry.index?.count ?? node.geometry.attributes.position.count) / 3 * (node.isInstancedMesh ? 6 : 1);
     assert.equal(node.material.map, null, 'no image textures');
+    if (isBridgeNode(node, canal.bridge.group)) { bridgeDraws++; bridgeTriangles += tris; }
+    else { trafficDraws++; trafficTriangles += tris; }
   });
-  assert.ok(draws <= 9 && triangles < 2000, 'bounded traffic geometry');
+  canalLow.bridge.group.traverse(node => {
+    if (!node.isMesh) return;
+    lowBridgeDraws++;
+    lowBridgeTriangles += (node.geometry.index?.count ?? node.geometry.attributes.position.count) / 3;
+    assert.equal(node.material.map, null, 'LOW bridge has no image textures');
+  });
+  assert.ok(trafficDraws <= 9 && trafficTriangles < 2000, 'bounded traffic geometry');
+  assert.ok(bridgeDraws === 2 && bridgeTriangles > 1500 && bridgeTriangles <= 6000, `bounded desktop swing bridge geometry: draws=${bridgeDraws} tris=${bridgeTriangles}`);
+  assert.ok(lowBridgeDraws === 2 && lowBridgeTriangles > 800 && lowBridgeTriangles < bridgeTriangles * 0.75, `bounded LOW swing bridge geometry: draws=${lowBridgeDraws} tris=${lowBridgeTriangles} vs desktop ${bridgeTriangles}`);
+  assert.equal(hiddenIds.get(1), false, 'generic highway deck hidden once swing bridge is placed');
+  assert.equal(hiddenIds.get(-100095), false, 'parallel canal railroad deck hidden');
+  assert.equal(hiddenIds.has(-100099), false, 'nearby non-rail perpendicular span stays visible');
+  assert.equal(hiddenIds.has(-100098), false, 'nearby non-railroad parallel span stays visible');
+  assert.equal(hiddenIds.has(-100094), false, 'distant railroad span on road 80 stays visible');
+  assert.equal(canal.bridge.group.visible, true, 'swing bridge visible when deck height is known');
+  assert.equal(canal.bridge.swing, 0, 'swing bridge starts closed');
   const car = { x: 0, z: 0, vx: 0, vz: 0, speed: 0 };
   canal.seconds = 11.99; canal.update(.05, car); assert.equal(canal.seconds, 11.99, 'occupied span postpones closure');
   car.x = 120; canal.update(.05, car); assert.ok(canal.seconds > 12);
@@ -223,8 +265,10 @@ async function productionCheck(source) {
   assert.equal(canal.queueCount, 5);
   traffic.active = false; canal.update(0, car); assert.equal(canal.queueCount, 6); canal.traffic = [];
   canal.seconds = 30; canal.update(.05, car, false);
-  assert.ok(canal.seconds === 0 && visible && canal.drivers.length === 0 && canal.queues.count === 0, 'a multiplayer room keeps the road open');
+  assert.ok(canal.seconds === 0 && canal.bridge.swing === 0 && canal.drivers.length === 0 && canal.queues.count === 0, 'a multiplayer room keeps the road open and bridge closed');
   canal.seconds = 30; canal.update(0, car); assert.equal(visible, false);
+  assert.equal(canal.bridge.swing, 1, 'swing bridge fully open at 30 s');
+  assert.ok(Math.abs(canal.bridge.spanMesh.rotation.y - (canal.bridge.baseYaw + canal.bridge.openDeltaYaw)) < 1e-9, 'span mesh rotated to open yaw');
   assert.equal(canal.queues.count, 6);
   assert.equal(canal.arms[0].position.y, 9.2, 'barrier follows approach ground rather than centre deck');
   for (const side of [-1, 1]) {
@@ -278,7 +322,69 @@ async function productionCheck(source) {
   }
   ground = null; canal.update(0, car); assert.equal(canal.queueCount, 0);
   car.x = -70; canal.resolve(car, -110, 1.9); assert.equal(car.x, -70, 'no invisible queue blocker');
-  canal.seconds = 75; canal.update(0, car); assert.equal(visible, true);
+  canal.seconds = 75; canal.update(0, car); assert.equal(canal.bridge.swing, 0, 'swing bridge closed again at 75 s');
+  assert.ok(Math.abs(canal.bridge.spanMesh.rotation.y - canal.bridge.baseYaw) < 1e-9, 'span mesh back at closed yaw');
+  // Deck-unready fallback & ready -> unready -> ready transition, plus bridgeRevision elevation caching.
+  let deckReady = 4, rev = 1, elevCalls = 0;
+  const fallbackState = new Map();
+  const stateful = new Canal({
+    nearest: (_x, _z, _r, pred) => pred(railRoad) ? { road: railRoad } : { road },
+    get bridgeRevision() { return rev; },
+    bridgeElevation: (id) => { elevCalls++; return deckReady === null ? null : id === -100095 ? deckReady - 0.2 : deckReady; },
+    deckHeight: () => deckReady,
+    showCanalDeck: (id, v) => { fallbackState.set(id, v); },
+    bridgeRuns: () => [{ pts: [[-45, 5.5], [45, 5.5]], roads: new Set([-100095, 80]), halfWidth: 1.25 }],
+  }, { heightAt: () => 4 }, [0, 0], -.2);
+  assert.equal(stateful.bridge.group.visible, true, 'ready bridge visible');
+  assert.equal(fallbackState.get(1), false); assert.equal(fallbackState.get(-100095), false);
+  const callsAfterBoot = elevCalls;
+  stateful.seconds = 5; stateful.update(0, car); stateful.seconds = 10; stateful.update(0, car);
+  assert.equal(elevCalls, callsAfterBoot, 'steady-state frames cache bridgeElevation by bridgeRevision');
+  // Ready -> unready transition must restore BOTH highway and parallel railroad generic decks.
+  deckReady = null; rev++;
+  stateful.seconds = 0; stateful.update(0, car);
+  assert.equal(stateful.bridge.group.visible, false, 'unready transition hides custom bridge');
+  assert.equal(fallbackState.get(1), true, 'unready transition restores highway fallback deck');
+  assert.equal(fallbackState.get(-100095), true, 'unready transition restores parallel railroad fallback deck');
+  stateful.seconds = 30; stateful.update(0, car);
+  assert.equal(fallbackState.get(1), false, 'unready fallback still hides highway deck during transit');
+  assert.equal(fallbackState.get(-100095), false, 'unready fallback still hides railroad deck during transit');
+  deckReady = 4; rev++;
+  stateful.seconds = 0; stateful.update(0, car);
+  assert.equal(stateful.bridge.group.visible, true, 'bridge recovers when deck becomes ready again');
+  // Without a Railroad road near the canal, an unrelated parallel span must never be hidden.
+  const noRailHidden = new Map();
+  new Canal({
+    nearest: (_x, _z, _r, pred) => pred(railRoad) ? null : { road },
+    deckHeight: () => 4,
+    showCanalDeck: (id, v) => { noRailHidden.set(id, v); },
+    bridgeRuns: () => [{ pts: [[-45, 5.5], [45, 5.5]], roads: new Set([-100097, 99]), halfWidth: 1.5 }],
+  }, { heightAt: () => 4 }, [0, 0], -.2);
+  assert.equal(noRailHidden.has(-100097), false, 'unrelated parallel span stays visible when no Railroad road matches');
+  // Reversed railroad run (east -> west pts order) with unequal endpoint elevations preserves west/east height mapping.
+  const revCanal = new Canal({
+    nearest: (_x, _z, _r, pred) => pred(railRoad) ? { road: railRoad } : { road },
+    bridgeRevision: 1,
+    bridgeElevation: (id, t) => id === 1 ? (t === 0 ? 5.2 : 5.3) : (t === 0 ? 5.05 : 4.75),
+    deckHeight: () => 5.25,
+    showCanalDeck: () => {},
+    bridgeRuns: () => [{ pts: [[45, 5.2], [-45, 5.7]], roads: new Set([-100095, 80]), halfWidth: 1.25 }],
+  }, { heightAt: () => 4 }, [0, 0], -.2);
+  revCanal.bridge.spanMesh.updateMatrixWorld(true);
+  const revPos = revCanal.bridge.spanMesh.geometry.getAttribute('position');
+  const { Vector3: TVec3 } = await import('../web/node_modules/three/build/three.module.js');
+  let revWest = -Infinity, revEast = -Infinity;
+  const rp = new TVec3();
+  for (let i = 0; i < revPos.count; i++) {
+    const lx = revPos.getX(i), lz = revPos.getZ(i);
+    if (Math.abs(lz - 3.6) > 1.3) continue;
+    rp.set(lx, revPos.getY(i), lz).applyMatrix4(revCanal.bridge.spanMesh.matrixWorld);
+    if (rp.y > 5.8) continue;
+    if (lx < -44) revWest = Math.max(revWest, rp.y);
+    if (lx > 44) revEast = Math.max(revEast, rp.y);
+  }
+  assert.ok(Math.abs((revWest - 0.14) - 4.75) < 0.015 && Math.abs((revEast - 0.14) - 5.05) < 0.015,
+    `reversed rail run maps t=1 to west (4.75) and t=0 to east (5.05): got ${(revWest - 0.14).toFixed(3)}, ${(revEast - 0.14).toFixed(3)}`);
   car.x = 0; canal.resolve(car, 100, 0); assert.equal(car.x, 0, 'open road releases player');
   const time = canal.seconds; canal.update(0, car); assert.equal(canal.seconds, time, 'paused dt freezes timer');
   const arm = canal.arms[0], { Vector3 } = await import('../web/node_modules/three/build/three.module.js');
@@ -370,4 +476,186 @@ assert.throws(() => routeCheck(perpendicular));console.log('KILLED bridge-perpen
   decks.setHidden(37, true); assert.deepEqual(xs(), [...range(35, 0, 3), ...range(35, 6, 9), ...range(7, 0, 3)], 'a member id hides its span deck');
   decks.setHidden(35, false); decks.setHidden(37, false); assert.deepEqual(xs(), [...range(35, 0, 12), ...range(7, 0, 9)], 'shown again');
   console.log('PASS modern decks: the canal deck hides at once and its approaches stay drawn, without a re-merge per frame');
+}
+
+// Swing bridge real-site geometry: 2D separating-axis clearance between the 22 m x 6 m cargo hull and the rotating
+// 91.46 m x 12.8 m truss at every 0.25 s across the whole transit, plus abutment slope match and negative controls.
+{
+  const swingSource = readFileSync('web/src/swing-bridge.ts', 'utf8');
+  const manifest = JSON.parse(readFileSync('data/baked/areas/cansocauseway/manifest.json', 'utf8'));
+  const roadsJson = JSON.parse(readFileSync('data/baked/areas/cansocauseway/roads.json', 'utf8'));
+  const spanRoad = (roadsJson.roads || roadsJson).find(r => r.id === 35);
+  assert.ok(spanRoad, 'real Canso Highway 104 span 35 exists');
+  const [ve, vn] = manifest.village;
+  const pts = spanRoad.pts.map(([e, n]) => [e - ve, vn - n]);
+  const a = pts[0], b = pts[pts.length - 1];
+  const centre = { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2 };
+  const spanLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const along = { x: (b[0] - a[0]) / spanLen, y: (b[1] - a[1]) / spanLen };
+
+  async function swingCheck(source) {
+    const built = buildSync({
+      stdin: { contents: source + "\nexport { canalSwing } from './canal-timer'; export { canalBoatPose } from './canal-route'; export * as THREE from 'three';", resolveDir: new URL('../web/src/', import.meta.url).pathname, loader: 'ts' },
+      bundle: true, write: false, format: 'esm', platform: 'node',
+    });
+    const { SwingBridge, SWING_BRIDGE, canalSwing, canalBoatPose, THREE } = await import('data:text/javascript;base64,' + Buffer.from(built.outputFiles[0].text).toString('base64'));
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const hi = new SwingBridge(new THREE.Vector2(centre.x, centre.y), new THREE.Vector2(along.x, along.y), spanLen / 2, mat, false);
+    const lo = new SwingBridge(new THREE.Vector2(centre.x, centre.y), new THREE.Vector2(along.x, along.y), spanLen / 2, mat, true);
+    assert.equal(hi.stats.draws, 2, 'desktop swing bridge is 2 draws');
+    assert.equal(lo.stats.draws, 2, 'LOW swing bridge is 2 draws');
+    assert.ok(lo.stats.triangles < hi.stats.triangles * 0.75, `LOW reduces triangles (${lo.stats.triangles} vs ${hi.stats.triangles})`);
+    assert.ok(Math.abs(hi.openDeltaYaw * 180 / Math.PI + 62.95) < 1.0, `real Canso swing turns ~-63 deg toward canal (${(hi.openDeltaYaw * 180 / Math.PI).toFixed(2)})`);
+    // Abutment elevation match when closed.
+    hi.setPose(7.882, 7.961, 0);
+    hi.spanMesh.updateMatrixWorld(true);
+    const westEnd = new THREE.Vector3(-spanLen / 2, 0, 0).applyMatrix4(hi.spanMesh.matrixWorld);
+    const eastEnd = new THREE.Vector3(spanLen / 2, 0, 0).applyMatrix4(hi.spanMesh.matrixWorld);
+    assert.ok(Math.abs(westEnd.y - 7.882) < 0.002 && Math.abs(eastEnd.y - 7.961) < 0.002, `closed span matches abutment heights (${westEnd.y.toFixed(4)}, ${eastEnd.y.toFixed(4)})`);
+    // Substructure stays strictly below deck throughout the swinging span interior (no stray portal legs at x = 0).
+    const basePos = hi.baseMesh.geometry.getAttribute('position');
+    let westPortalVerts = 0, eastPortalVerts = 0;
+    for (let i = 0; i < basePos.count; i++) {
+      const bx = basePos.getX(i), by = basePos.getY(i), bz = basePos.getZ(i);
+      if (Math.abs(bx) < spanLen / 2 - 0.5) assert.ok(by <= -0.2, `substructure stays below deck inside span: (${bx.toFixed(2)}, ${by.toFixed(2)}, ${bz.toFixed(2)})`);
+      if (bx < -spanLen / 2 - 5 && by > 5.5) westPortalVerts++;
+      if (bx > spanLen / 2 + 5 && by > 5.5) eastPortalVerts++;
+    }
+    assert.ok(westPortalVerts >= 24 && eastPortalVerts >= 24, `both highway signal portals present at approaches (${westPortalVerts}, ${eastPortalVerts})`);
+
+    // Swept clearance between rotating spanMesh and fixed baseMesh across the full swing [0, 1] at exag 1.0, 1.5, 2.5.
+    for (const [y0, y1, r0, r1] of [[5.201, 5.254, 5.067, 5.078], [7.882, 7.961, 7.686, 7.702], [13.24, 13.38, 12.92, 12.95]]) {
+      hi.setPose(y0, y1, 0, r0, r1);
+      const spanPos = hi.spanMesh.geometry.getAttribute('position');
+      const curBasePos = hi.baseMesh.geometry.getAttribute('position');
+      let maxR = 0, minSpanY = Infinity;
+      for (let i = 0; i < spanPos.count; i++) {
+        const sx = spanPos.getX(i), sy = spanPos.getY(i), sz = spanPos.getZ(i);
+        const r = Math.hypot(sx, sz); if (r > maxR) maxR = r;
+        if (sy < minSpanY) minSpanY = sy;
+      }
+      const slopeDrop = Math.abs(y1 - y0) * 0.5;
+      const lowestSpanY = minSpanY - slopeDrop;
+      // Exact minimum XZ distance from pivot (0, 0) to every fixed baseMesh triangle that reaches above lowestSpanY.
+      const segDist = (ax, az, bx, bz) => {
+        const dx = bx - ax, dz = bz - az, n = dx * dx + dz * dz;
+        const t = n > 0 ? Math.max(0, Math.min(1, -(ax * dx + az * dz) / n)) : 0;
+        return Math.hypot(ax + dx * t, az + dz * t);
+      };
+      const triDistToOrigin = (ax, az, bx, bz, cx, cz) => {
+        const c1 = (bx - ax) * (-az) - (bz - az) * (-ax);
+        const c2 = (cx - bx) * (-bz) - (cz - bz) * (-bx);
+        const c3 = (ax - cx) * (-cz) - (az - cz) * (-cx);
+        if ((c1 >= 0 && c2 >= 0 && c3 >= 0) || (c1 <= 0 && c2 <= 0 && c3 <= 0)) return 0;
+        return Math.min(segDist(ax, az, bx, bz), segDist(bx, bz, cx, cz), segDist(cx, cz, ax, az));
+      };
+      for (let i = 0; i < curBasePos.count; i += 3) {
+        const ay = curBasePos.getY(i), by = curBasePos.getY(i + 1), cy = curBasePos.getY(i + 2);
+        if (Math.max(ay, by, cy) <= lowestSpanY - 0.01) continue;
+        const ax = curBasePos.getX(i), az = curBasePos.getZ(i);
+        const bx = curBasePos.getX(i + 1), bz = curBasePos.getZ(i + 1);
+        const cx = curBasePos.getX(i + 2), cz = curBasePos.getZ(i + 2);
+        const d = triDistToOrigin(ax, az, bx, bz, cx, cz);
+        assert.ok(d > maxR + 0.05, `fixed base triangle clears swept rotating span: dist=${d.toFixed(3)} vs maxR=${maxR.toFixed(3)}, maxY=${Math.max(ay, by, cy).toFixed(3)} vs lowestSpanY=${lowestSpanY.toFixed(3)}`);
+      }
+    }
+
+    // 2D SAT clearance between swinging truss OBB and 22 m x 6 m cargo ship OBB at every 0.25 s during transit [20, 56].
+    const obbCorners = (cx, cz, ux, uz, hl, hw) => [
+      [cx + ux * hl - uz * hw, cz + uz * hl + ux * hw],
+      [cx + ux * hl + uz * hw, cz + uz * hl - ux * hw],
+      [cx - ux * hl + uz * hw, cz - uz * hl - ux * hw],
+      [cx - ux * hl - uz * hw, cz - uz * hl + ux * hw],
+    ];
+    const satClearance = (cA, cB, axes) => {
+      let maxGap = -Infinity;
+      for (const [ax, az] of axes) {
+        let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+        for (const [x, z] of cA) { const p = x * ax + z * az; if (p < a0) a0 = p; if (p > a1) a1 = p; }
+        for (const [x, z] of cB) { const p = x * ax + z * az; if (p < b0) b0 = p; if (p > b1) b1 = p; }
+        const gap = Math.max(a0 - b1, b0 - a1);
+        if (gap > maxGap) maxGap = gap;
+      }
+      return maxGap;
+    };
+    let minGap = Infinity;
+    const bridgeHalfW = SWING_BRIDGE.trussWidth / 2 + SWING_BRIDGE.chordWidth / 2;
+    for (let t = 20; t <= 56; t += 0.25) {
+      const sw = canalSwing(t);
+      hi.setPose(7.882, 7.961, sw);
+      const yaw = hi.spanMesh.rotation.y;
+      const bux = Math.cos(yaw), buz = -Math.sin(yaw);
+      const pose = canalBoatPose(Math.max(0, Math.min(1, (t - 20) / 36)), manifest.village);
+      // Boat local +z forward rotated by heading: (sin(h), cos(h)).
+      const fux = Math.sin(pose.heading), fuz = Math.cos(pose.heading);
+      const bridgeCorners = obbCorners(hi.pivot.x, hi.pivot.y, bux, buz, spanLen / 2, bridgeHalfW);
+      const boatCorners = obbCorners(pose.x, pose.z, fux, fuz, 11, 3);
+      const gap = satClearance(bridgeCorners, boatCorners, [[bux, buz], [-buz, bux], [fux, fuz], [-fuz, fux]]);
+      if (gap < minGap) minGap = gap;
+    }
+    assert.ok(minGap > 8.0, `cargo hull stays >8 m clear of swinging truss at all transit times (minGap=${minGap.toFixed(2)} m)`);
+    return { desktop: hi.stats, low: lo.stats, openDeg: +(hi.openDeltaYaw * 180 / Math.PI).toFixed(2), minGap: +minGap.toFixed(2) };
+  }
+  const swingInfo = await swingCheck(swingSource);
+  for (const [name, from, to, pattern] of [
+    ['swing rotation removed', 'this.spanMesh.rotation.y = this.baseYaw + this.openDeltaYaw * s;', 'this.spanMesh.rotation.y = this.baseYaw;', undefined],
+    ['wrong swing direction (into canal)', 'this.baseYaw + this.openDeltaYaw * s', 'this.baseYaw - this.openDeltaYaw * s', undefined],
+    ['LOW geometry reduction removed', 'const spanGeo = buildSpanGeometry(halfLength, low, this.railProfile);', 'const spanGeo = buildSpanGeometry(halfLength, false, this.railProfile);', undefined],
+    ['abutment backwall inside swing sweep', 'const backFront = halfLength + D.swingClearance;', 'const backFront = halfLength + 0.25;', /fixed base triangle clears swept rotating span/],
+    ['fixed triangle covering pivot inside swept span', 'm.at(0, 0, 0);\n  m.cyl(0, (drumTop + drumBottom) * 0.5', 'm.at(0, 0, 0);\n  m.tri(-160, -0.5, -140, 160, -0.5, -140, 60, -0.5, 180, CONCRETE);\n  m.cyl(0, (drumTop + drumBottom) * 0.5', /fixed base triangle clears swept rotating span/],
+  ]) {
+    assert.ok(swingSource.includes(from), `swing mutant anchor present: ${name}`);
+    await assert.rejects(() => swingCheck(swingSource.replace(from, to)), pattern, name + ' must fail');
+    console.log('KILLED', name);
+  }
+  console.log('PASS Canso swing bridge model, LOW budget, abutment match, swept clearance and cargo clearance', JSON.stringify(swingInfo));
+
+  // Real baked Canso land integration across Hill scales 1.0, 1.5 and 2.5: highway and parallel railroad joins stay flush.
+  const { fixture, dispose } = await import('./bridges-fixture.mjs');
+  const { Canal: ProdCanal } = await import('data:text/javascript;base64,' + Buffer.from(
+    buildSync({ stdin: { contents: readFileSync('web/src/canal.ts', 'utf8'), resolveDir: new URL('../web/src/', import.meta.url).pathname, loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node' }).outputFiles[0].text
+  ).toString('base64'));
+  const { Vector3 } = await import('../web/node_modules/three/build/three.module.js');
+  for (const exag of [1.0, 1.5, 2.5]) {
+    const f = await fixture('cansocauseway', exag);
+    try {
+      const m = f.roads.modern;
+      const hwy = m.spans.find(s => s.road.id === 35);
+      const rail = m.spans.find(s => s.road.sourceRoad === 80 && Math.hypot((s.x0 + s.x1) / 2 - (hwy.x0 + hwy.x1) / 2, (s.z0 + s.z1) / 2 - (hwy.z0 + hwy.z1) / 2) < 30);
+      await f.load([...hwy.pts, [hwy.x0, hwy.z0], [hwy.x1, hwy.z1], ...rail.pts]);
+      f.roads.update(new Vector3((hwy.x0 + hwy.x1) / 2, 10, (hwy.z0 + hwy.z1) / 2));
+      const c = new ProdCanal(f.roads, f.terrain, f.terrain.manifest.village, -0.2, false);
+      assert.equal(c.bridge.group.visible, true, `exag ${exag}: bridge visible on real Canso land`);
+      assert.equal(m.hidden.has(35), true, `exag ${exag}: span 35 hidden`);
+      assert.equal(m.hidden.has(rail.road.id), true, `exag ${exag}: canal rail span ${rail.road.id} hidden`);
+      assert.equal(m.hidden.size, 2, `exag ${exag}: only highway 35 and canal rail span hidden`);
+      c.bridge.spanMesh.updateMatrixWorld(true);
+      c.bridge.baseMesh.updateMatrixWorld(true);
+      // Sample moving steel rail top (exact +0.14 m above railbed) near west and east ends, and static east rail apron.
+      const spanPos = c.bridge.spanMesh.geometry.getAttribute('position');
+      let westRailTop = -Infinity, eastRailTop = -Infinity;
+      const p = new Vector3();
+      for (let i = 0; i < spanPos.count; i++) {
+        const lx = spanPos.getX(i), lz = spanPos.getZ(i);
+        if (Math.abs(lz - 3.6) > 1.2) continue;
+        p.set(lx, spanPos.getY(i), lz).applyMatrix4(c.bridge.spanMesh.matrixWorld);
+        if (p.y > hwy.y1 + 0.5) continue;
+        if (lx < -c.halfLength + 1) westRailTop = Math.max(westRailTop, p.y);
+        if (lx > c.halfLength - 1) eastRailTop = Math.max(eastRailTop, p.y);
+      }
+      assert.ok(Math.abs((westRailTop - 0.14) - rail.y0) < 0.015, `exag ${exag}: west rail join flush (${(westRailTop - 0.14).toFixed(4)} vs ${rail.y0.toFixed(4)})`);
+      assert.ok(Math.abs((eastRailTop - 0.14) - rail.y1) < 0.015, `exag ${exag}: east moving rail join flush (${(eastRailTop - 0.14).toFixed(4)} vs ${rail.y1.toFixed(4)})`);
+      const bPos = c.bridge.baseMesh.geometry.getAttribute('position');
+      let apronRailTop = -Infinity;
+      for (let i = 0; i < bPos.count; i++) {
+        const lx = bPos.getX(i), lz = bPos.getZ(i);
+        if (lx > c.halfLength + 1 && lx < c.halfLength + 5.5 && Math.abs(lz - 3.4) < 1.2) {
+          p.set(lx, bPos.getY(i), lz).applyMatrix4(c.bridge.baseMesh.matrixWorld);
+          if (p.y < hwy.y1 + 0.5) apronRailTop = Math.max(apronRailTop, p.y);
+        }
+      }
+      assert.ok(Math.abs((apronRailTop - 0.14) - rail.y1) < 0.015, `exag ${exag}: static east rail apron flush (${(apronRailTop - 0.14).toFixed(4)} vs ${rail.y1.toFixed(4)})`);
+    } finally { dispose(f); }
+  }
+  console.log('PASS real Canso baked rail and highway joins across Hill scales 1.0, 1.5, 2.5');
 }
