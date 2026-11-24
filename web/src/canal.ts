@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { canalBoatPose } from './canal-route';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { CANAL_CYCLE, CANAL_STOPPING, CANAL_TRANSIT, CANAL_WARNING, canalState, stopAtGate, type CanalState } from './canal-timer';
+import { CANAL_CYCLE, CANAL_STOPPING, CANAL_TRANSIT, CANAL_WARNING, canalState, canalSwing, stopAtGate, type CanalState } from './canal-timer';
+import { SwingBridge, type RailJoinSpec } from './swing-bridge';
 import type { Roads } from './roads';
 import type { Terrain } from './terrain';
 
@@ -32,9 +33,10 @@ interface Traffic { readonly active: boolean; readonly solid: { readonly x: numb
 /** A stopped stand-in that ambient traffic keeps its distance from (AmbientTraffic.others). */
 interface Driver { x: number; z: number; heading: number; readonly speed: 0; readonly spec: { readonly halfLength: number }; readonly queue: true }
 
-/** Canal traffic only. The surveyed span is retained; a swing model awaits drawings. */
+/** Canso Canal swing bridge, barriers, waiting queues and passing vessels. */
 export class Canal {
   readonly group = new THREE.Group();
+  readonly bridge: SwingBridge;
   seconds = 0;
   readonly centre: THREE.Vector2;
   readonly along: THREE.Vector2;
@@ -49,6 +51,13 @@ export class Canal {
   private tempPoint = new THREE.Vector2();
   private tempProjection = { along: 0, across: 0 };
   private span;
+  private railSpanId: number | null = null;
+  private railReversed = false;
+  private cachedRevision = -1;
+  private cachedY0: number | null = null;
+  private cachedY1: number | null = null;
+  private cachedRailY0: number | null = null;
+  private cachedRailY1: number | null = null;
   /** main.ts passes the ambient highway pool: a car on the span holds the transit and a queue slot leaves room for one. */
   traffic: readonly Traffic[] = [];
   /** Stand-ins for ambient traffic: a stop line at each gate from 3 s before it closes (a car stops 12 m short of one)
@@ -63,7 +72,7 @@ export class Canal {
   private readonly boatPose = { x: 0, z: 0, heading: 0 };
   private held = 0;
 
-  constructor(private roads: Roads, private terrain: Terrain, private village: [number, number], private sea: number) {
+  constructor(private roads: Roads, private terrain: Terrain, private village: [number, number], private sea: number, low = false) {
     const hit = roads.nearest(623670.57 - village[0], village[1] - 5056096.30, 20, r => r.bridge && r.name === 'Highway 104');
     if (!hit) throw Error('Canal span missing');
     this.span = hit.road;
@@ -71,7 +80,40 @@ export class Canal {
     this.centre = new THREE.Vector2((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
     this.along = new THREE.Vector2(b[0] - a[0], b[1] - a[1]).normalize();
     this.halfLength = Math.hypot(b[0] - a[0], b[1] - a[1]) / 2;
+    let railJoin: RailJoinSpec | undefined;
+    if (roads.bridgeRuns) {
+      const railHit = roads.nearest(this.centre.x, this.centre.y, 20, r => r.name === 'Railroad');
+      if (railHit) {
+        const railRoadId = railHit.road.id;
+        let bestDist = Infinity;
+        for (const run of roads.bridgeRuns()) {
+          if (run.roads.has(this.span.id) || !run.roads.has(railRoadId) || run.pts.length < 2) continue;
+          const p0 = run.pts[0], p1 = run.pts[run.pts.length - 1];
+          const rdx = p1[0] - p0[0], rdz = p1[1] - p0[1], rLen = Math.hypot(rdx, rdz);
+          if (rLen < 20) continue;
+          const align = Math.abs((rdx * this.along.x + rdz * this.along.y) / rLen);
+          if (align < 0.95) continue;
+          const dist = Math.hypot((p0[0] + p1[0]) * 0.5 - this.centre.x, (p0[1] + p1[1]) * 0.5 - this.centre.y);
+          if (dist >= 12 || dist >= bestDist) continue;
+          let spanId: number | null = null;
+          for (const id of run.roads) if (id < 0) { spanId = id; break; }
+          if (spanId === null) continue;
+          bestDist = dist;
+          this.railSpanId = spanId;
+          const q0 = this.project(p0[0], p0[1]), q1 = this.project(p1[0], p1[1]);
+          this.railReversed = q0.along > q1.along;
+          const west = this.railReversed ? q1 : q0, east = this.railReversed ? q0 : q1;
+          railJoin = {
+            westAcross: west.across,
+            eastAcross: east.across,
+            eastTail: Math.max(0, east.along - this.halfLength),
+          };
+        }
+      }
+    }
     const paint = new THREE.MeshLambertMaterial({ vertexColors: true });
+    this.bridge = new SwingBridge(this.centre, this.along, this.halfLength, paint, low, railJoin);
+    this.group.add(this.bridge.group);
     const colour = (g: THREE.BufferGeometry, hex: number) => {
       const c = new THREE.Color(hex), values = new Float32Array(g.attributes.position.count * 3);
       for (let j = 0; j < values.length; j += 3) { values[j] = c.r; values[j + 1] = c.g; values[j + 2] = c.b; }
@@ -208,8 +250,35 @@ export class Canal {
     if (dt) this.advance(dt, car, live); else if (!live) this.seconds = 0;
     const p = this.project(car.x, car.z, this.tempProjection);
     const s = canalState(this.seconds, this.state);
-    this.deck = this.roads.deckHeight(this.centre.x, this.centre.y) ?? this.deck;
-    this.roads.showCanalDeck(this.span.id, !s.passing);
+    const rev = this.roads.bridgeRevision;
+    const refresh = typeof rev !== 'number' || rev !== this.cachedRevision || this.cachedY0 === null || (this.railSpanId !== null && this.cachedRailY0 === null);
+    if (refresh) {
+      const y0 = this.roads.bridgeElevation?.(this.span.id, 0) ?? null;
+      const y1 = this.roads.bridgeElevation?.(this.span.id, 1) ?? null;
+      if (y0 !== null && y1 !== null) {
+        this.cachedY0 = y0; this.cachedY1 = y1;
+      } else {
+        const d = this.roads.deckHeight(this.centre.x, this.centre.y);
+        this.cachedY0 = d; this.cachedY1 = d;
+      }
+      if (this.railSpanId !== null) {
+        const e0 = this.roads.bridgeElevation?.(this.railSpanId, 0) ?? null;
+        const e1 = this.roads.bridgeElevation?.(this.railSpanId, 1) ?? null;
+        this.cachedRailY0 = this.railReversed ? e1 : e0;
+        this.cachedRailY1 = this.railReversed ? e0 : e1;
+      }
+      if (typeof rev === 'number') this.cachedRevision = rev;
+    }
+    if (this.cachedY0 !== null && this.cachedY1 !== null) {
+      this.deck = (this.cachedY0 + this.cachedY1) * 0.5;
+      this.bridge.setPose(this.cachedY0, this.cachedY1, canalSwing(this.seconds), this.cachedRailY0, this.cachedRailY1);
+      this.roads.showCanalDeck(this.span.id, false);
+      if (this.railSpanId !== null) this.roads.showCanalDeck(this.railSpanId, false);
+    } else {
+      this.bridge.group.visible = false;
+      this.roads.showCanalDeck(this.span.id, !s.passing);
+      if (this.railSpanId !== null) this.roads.showCanalDeck(this.railSpanId, !s.passing);
+    }
     const pose = canalBoatPose(s.progress, this.village, this.boatPose);
     for (let i = 0; i < this.boats.length; i++) {
       const boat = this.boats[i]; boat.visible = s.passing && s.vessel === i;

@@ -876,7 +876,7 @@ const multiplayer = MULTIPLAYER ? multiplayerSwitch({ scene, roads: roads.roads,
   ride: () => ({ kind: (horse ? 'car' : garageEntry.id) as import('./mp/wire').RideKind, trailer: towing?.attached ?? false }),
   settings: document.getElementById('settings'), before: document.getElementById('startOver'),
   heightScale:EXAG,seaLevel:SEA_LEVEL,ground: (x, z, referenceY) => terrain.heightAt(x,z,referenceY) }) : null;
-const canal = canalModule ? new (await canalModule.take().catch(partFailed)).Canal(roads, terrain, manifest.village, SEA_LEVEL) : null;
+const canal = canalModule ? new (await canalModule.take().catch(partFailed)).Canal(roads, terrain, manifest.village, SEA_LEVEL, LOW) : null;
 if (canal) scene.add(canal.group);
 let canalBeforeX = 0, canalBeforeZ = 0;
 // Each solid site's contact row is written once, here. The registry (fleet sweeps, fleet driving and the quarry) adds

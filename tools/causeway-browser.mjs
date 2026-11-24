@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { open, sleep } from './truck-cdp.mjs';
 import { cdp, cdpFetch } from './cdp.mjs';
+import { PHONE_CAP } from './frame-budget-policy.mjs';
 // A page that keeps driving never settles (a demo counts as busy until its budget is spent): open it bare and wait
 // for the canal and the land under the car instead.
 async function openLive(url) {
@@ -101,8 +102,26 @@ for (const url of urls) {
         assert.equal(await live.read('mmm.canal.seconds'), frames.fly, 'fly mode holds the canal clock');
         await fly(); await sleep(1500); frames.driving = await live.read('mmm.canal.seconds');
         assert.ok(frames.driving > frames.fly + .5, 'driving runs the canal clock again: ' + JSON.stringify(frames));
+        // Live mid-swing rotation plus pause/resume while swinging.
+        await live.read(`(() => {const c=mmm.canal;c.seconds=20.5;c.update(0,mmm.vehicle,true);})()`);
+        const swingStart = await live.read(`(() => ({s:mmm.canal.bridge.swing,y:mmm.canal.bridge.spanMesh.rotation.y}))()`);
+        await sleep(1600);
+        const swingMid = await live.read(`(() => ({s:mmm.canal.bridge.swing,y:mmm.canal.bridge.spanMesh.rotation.y}))()`);
+        assert.ok(swingMid.s > swingStart.s + 0.1 && swingMid.s < 0.99 && Math.abs(swingMid.y - swingStart.y) > 0.1, 'live frames rotate the swing bridge: ' + JSON.stringify({swingStart, swingMid}));
+        for (const type of ['keyDown', 'keyUp']) await live.send('Input.dispatchKeyEvent', { type, key: 'p', code: 'KeyP', windowsVirtualKeyCode: 80 });
+        await sleep(300);
+        const swingPaused = await live.read(`(() => ({s:mmm.canal.bridge.swing,y:mmm.canal.bridge.spanMesh.rotation.y}))()`);
+        await sleep(1200);
+        const swingHeld = await live.read(`(() => ({s:mmm.canal.bridge.swing,y:mmm.canal.bridge.spanMesh.rotation.y}))()`);
+        assert.equal(swingHeld.s, swingPaused.s, 'pause freezes mid-swing angle');
+        assert.equal(swingHeld.y, swingPaused.y, 'pause freezes mid-swing mesh yaw');
+        for (const type of ['keyDown', 'keyUp']) await live.send('Input.dispatchKeyEvent', { type, key: 'p', code: 'KeyP', windowsVirtualKeyCode: 80 });
+        await sleep(1400);
+        const swingResumed = await live.read(`(() => ({s:mmm.canal.bridge.swing,y:mmm.canal.bridge.spanMesh.rotation.y}))()`);
+        assert.ok(swingResumed.s > swingHeld.s + 0.05, 'resume continues swinging bridge: ' + JSON.stringify({swingHeld, swingResumed}));
+        frames.swing = { swingStart, swingMid, swingPaused, swingResumed };
         assert.deepEqual(live.errors, []);
-        console.log('PASS game frames run the canal', JSON.stringify(frames));
+        console.log('PASS game frames run the canal and swing bridge', JSON.stringify(frames));
         framesResult = frames;
       } finally { await live.close(); }
       // Opening the second tab hid this one, and a hidden tab pauses the scene: bring it back before driving here.
@@ -141,6 +160,10 @@ for (const url of urls) {
         if(!(waited.seconds>20&&waited.down.every(Boolean)&&waited.boats===1&&Math.abs(waited.along+c.halfLength+out)<1))
           throw Error('a player waiting outside the arm held the barrier '+JSON.stringify(waited));
         c.seconds=42;c.update(0,v);
+        const bridgeClosedYaw=c.bridge.baseYaw, bridgeOpenYaw=c.bridge.spanMesh.rotation.y;
+        const bridgeOpenDelta=Math.abs(bridgeOpenYaw-bridgeClosedYaw);
+        if(!c.bridge.group.visible||c.bridge.swing!==1||bridgeOpenDelta<0.9)
+          throw Error('swing bridge did not rotate open at t=42 '+JSON.stringify({visible:c.bridge.group.visible,swing:c.bridge.swing,bridgeOpenDelta}));
         // Hold the inspected transit pose for photographs only.
         c.update=c.advance=()=>{};
         const centre=c.centre,deck=c.deck;
@@ -151,18 +174,60 @@ for (const url of urls) {
           camera.fov=48;camera.updateProjectionMatrix();
           camera.lookAt(centre.x,deck,centre.y);camera.updateMatrixWorld();
         };
-        return {stopped,released,halfLength:c.halfLength,queue,boats,waited};
+        return {stopped,released,halfLength:c.halfLength,queue,boats,waited,bridge:{draws:c.bridge.stats.draws,triangles:c.bridge.stats.triangles,low:c.bridge.low,swing:c.bridge.swing,openDeg:+(bridgeOpenDelta*180/Math.PI).toFixed(1)}};
       })()`);
       assert.equal(traffic.queue,6);assert.equal(traffic.boats,1);
       assert.ok(traffic.released>traffic.halfLength+25,'barrier releases the real car');
       await page.read('mmm.freeCamera()');   // the old F camera: the car held still, no drone in the picture
       await sleep(4000);
-      for(const [name,width,height,mobile] of [['desktop',1280,720,false],['phone',390,844,true]]) {
-        await page.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile});
-        await sleep(2500);await page.shot(`${out}/canal-${name}.png`);
-      }
-      writeFileSync(`${out}/canal-traffic.json`,JSON.stringify({...traffic,frames:framesResult},null,2));
-      console.log('PASS canal barrier, queue and release',JSON.stringify(traffic));
+      await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
+      await sleep(2500);await page.shot(`${out}/canal-desktop.png`);
+      // Dedicated fresh q=low&touch=1 phone session so LOW swing bridge geometry and phone budgets are actually verified.
+      const phoneUrl = new URL(url);
+      phoneUrl.searchParams.set('q', 'low'); phoneUrl.searchParams.set('touch', '1');
+      const phone = await open(phoneUrl.toString());
+      let phoneCounts;
+      try {
+        await phone.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+        await phone.read(`(() => {const m=mmm,c=m.canal,p=c.point(-c.halfLength-55,1.9);m.vehicle.place(p.x,p.y,Math.atan2(c.along.x,-c.along.y));c.seconds=42;c.update(0,m.vehicle,true);c.update=c.advance=()=>{};})()`);
+        for (let i = 0; i < 240; i++) { await sleep(250); if (await phone.read('mmm.terrain.pending===0&&mmm.canal.bridge.group.visible')) break; }
+        await phone.read(`(() => {
+          const m=mmm,c=m.canal,centre=c.centre,deck=c.deck;
+          m.freeCamera();
+          m.scene.onBeforeRender=(_r,_s,camera)=>{
+            camera.position.set(centre.x-130*1.15,deck+85*1.15,centre.y+130*1.15);
+            camera.fov=48;camera.updateProjectionMatrix();
+            camera.lookAt(centre.x,deck,centre.y);camera.updateMatrixWorld();
+          };
+        })()`);
+        await sleep(2500);
+        phoneCounts = await phone.read(`(async () => {
+          const r=mmm.renderer,b=mmm.canal.bridge,prev=r.info.autoReset;
+          let calls=0,triangles=0,submittedCalls=0,submittedTriangles=0;
+          const meshes=[b.baseMesh,b.spanMesh],saved=meshes.map(o=>[o.onBeforeRender,o.onAfterRender]);
+          for(let i=0;i<meshes.length;i++){const o=meshes[i],[ob,oa]=saved[i];let c0=0,t0=0;
+            o.onBeforeRender=function(...a){ob?.apply(this,a);c0=r.info.render.calls;t0=r.info.render.triangles;};
+            o.onAfterRender=function(...a){submittedCalls+=r.info.render.calls-c0;submittedTriangles+=r.info.render.triangles-t0;oa?.apply(this,a);};
+          }
+          await new Promise(done=>requestAnimationFrame(()=>{r.info.autoReset=false;r.info.reset();submittedCalls=0;submittedTriangles=0;requestAnimationFrame(()=>{
+            calls=r.info.render.calls;triangles=r.info.render.triangles;r.info.autoReset=prev;
+            for(let i=0;i<meshes.length;i++){meshes[i].onBeforeRender=saved[i][0];meshes[i].onAfterRender=saved[i][1];}
+            done();
+          });}));
+          return {low:mmm.low,bridgeLow:b.low,bridgeDraws:b.stats.draws,bridgeTriangles:b.stats.triangles,submittedCalls,submittedTriangles,swing:b.swing,calls,triangles};
+        })()`);
+        assert.equal(phoneCounts.low, true, 'phone session runs LOW detail');
+        assert.equal(phoneCounts.bridgeLow, true, 'swing bridge uses LOW geometry on phone');
+        assert.ok(phoneCounts.calls > 0 && phoneCounts.triangles > 0, 'phone frame actually rendered: ' + JSON.stringify(phoneCounts));
+        assert.equal(phoneCounts.submittedCalls, 2, 'LOW swing bridge submits both draws in rendered frame: ' + JSON.stringify(phoneCounts));
+        assert.equal(phoneCounts.submittedTriangles, phoneCounts.bridgeTriangles, 'LOW swing bridge submits its exact triangle count: ' + JSON.stringify(phoneCounts));
+        assert.ok(phoneCounts.bridgeTriangles < 2000 && phoneCounts.swing === 1, 'LOW swing bridge open and bounded: ' + JSON.stringify(phoneCounts));
+        assert.ok(phoneCounts.calls <= PHONE_CAP.calls && phoneCounts.triangles <= PHONE_CAP.triangles, 'Canso phone frame within PHONE_CAP: ' + JSON.stringify(phoneCounts));
+        assert.deepEqual(phone.errors, [], 'phone LOW session has no errors');
+        await phone.shot(`${out}/canal-phone.png`);
+      } finally { await phone.close(); }
+      writeFileSync(`${out}/canal-traffic.json`,JSON.stringify({...traffic,frames:framesResult,phone:phoneCounts},null,2));
+      console.log('PASS canal barrier, queue, swing bridge, LOW phone and release',JSON.stringify({...traffic,phone:phoneCounts}));
     }
     writeFileSync(`${out}/causeway-drive.json`,JSON.stringify({setup,deck,...result,errors:page.errors},null,2));
     console.log('PASS real causeway drive',JSON.stringify(result));
