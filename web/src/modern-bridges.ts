@@ -560,12 +560,12 @@ export class ModernBridges {
     return this.cachedStreamsHash;
   }
 
-  private probesChanged(r:Span,touch:boolean):boolean {
+  private probesChanged(r:Span,touch:boolean,commit=true):boolean {
     if(!this.terrain.meshContactSource)return true;
     let changed=false;
     for(let i=0;i<r.probes.length;i+=3){
       const source=this.terrain.meshContactSource(r.probes[i],r.probes[i+1],true,touch);
-      if(source!==r.probes[i+2]){changed=true;r.probes[i+2]=source;}
+      if(source!==r.probes[i+2]){changed=true;if(commit)r.probes[i+2]=source;}
     }
     return changed;
   }
@@ -723,12 +723,12 @@ export class ModernBridges {
   private invalidateNeighbors(r:Span,skipParallel=false):void {
     for(let z=Math.floor(r.z0/CELL);z<=Math.floor(r.z1/CELL);z++)for(let x=Math.floor(r.x0/CELL);x<=Math.floor(r.x1/CELL);x++){
       const list=this.cells.get(key(x*CELL,z*CELL,CELL));
-      if(list)for(const idx of list){const o=this.spans[idx];if(o!==r&&(!skipParallel||!r.parallel.includes(o))){o.forceBuild=true;o.revision=-1;}}
+      if(list)for(const idx of list){const o=this.spans[idx];if(o!==r&&(!skipParallel||(!r.parallel.includes(o)&&(!o.baked||o.bakedVerified)))){o.forceBuild=true;o.revision=-1;}}
     }
   }
 
   private hasUnsettledParallelNeighbor(r:Span):boolean {
-    return r.parallelBanks.some(q=>!r.parallel.includes(q)&&!q.geometry&&q.width===q.baseWidth&&q.parallel.every(p=>!p.geometry));
+    return r.parallelBanks.some(q=>!r.parallel.includes(q)&&!q.geometry&&q.width===q.baseWidth&&q.parallel.every(p=>!p.geometry||(p.baked!==null&&!p.bakedVerified)));
   }
 
   /** Apply the parallel rail/highway narrowing decision to `r` and its partners so an out-of-range partner still gets
@@ -774,12 +774,12 @@ export class ModernBridges {
     if(m&&(m.village[0]!==decks.village[0]||m.village[1]!==decks.village[1]))return false;
     const entry=verifiedEntry??decks.find(r.chainKey,r.width,!!r.road.ponyTruss,r.geomHash);
     if(!entry||this.rejectedBaked.has(entry)){this.dropBaked(r);return false;}
-    if(!verifiedEntry&&!touch&&!r.baked&&!r.forceBuild&&!this.probesChanged(r,false))return true;
+    if(!verifiedEntry&&!r.baked&&!r.forceBuild&&(!touch||r.geometry)&&!this.probesChanged(r,touch,false))return true;
     let liveHash:bigint|null;
     if(verifiedEntry)liveHash=entry.landHash;
     else{
       const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
-      if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
+      if(!s0||!s1||Math.min(s0.level,s1.level)<6){this.probesChanged(r,touch,true);return true;}
       liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.smoothStart,entry.smoothEnd,entry.y0,entry.y1,entry.level);
       if(liveHash!==null&&liveHash!==entry.landHash){if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);return false;}
     }
@@ -827,6 +827,8 @@ export class ModernBridges {
   private ensure(r:Span,touch=true):void {
     if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;
     const revision=this.terrain.dataRevision??0;if(r.revision===revision)return;r.revision=revision;
+    for(const q of r.parallelBanks)if(q.baked&&!q.bakedVerified&&q.width!==q.bakedPrevWidth)this.ensure(q,touch);
+    r.revision=revision;
     if(r.baked&&!r.forceBuild&&r.baked.finalWidth===r.width){
       if(Number.isFinite(r.bakedPendingX)&&this.terrain.meshContactSource){
         if(this.terrain.meshContactSource(r.bakedPendingX,r.bakedPendingZ,true,false)===r.bakedPendingSource)return;
@@ -847,8 +849,6 @@ export class ModernBridges {
       if(source!==r.probes[i+2])changed=true;r.probes[i+2]=source;if(source<0)known=false;
     }
     if(!changed||!known)return;
-    for(const q of r.parallelBanks)if(q.baked&&!q.bakedVerified&&q.width!==q.bakedPrevWidth)this.ensure(q,touch);
-    r.revision=revision;
     this.sampling=true;
     try{
       const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
