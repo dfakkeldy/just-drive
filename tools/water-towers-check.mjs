@@ -97,23 +97,47 @@ function checkDataAndLand(specs, helpers) {
         `${t.id} (${area}): baked ground mismatch data=${t.g} baked=${bakedG}`);
 
       // Verify actual generated foundation geometry sits below fine baked terrain around the full perimeter at exag = 1, 1.5 and 3.
+      // Classify tank plinth rim vertices and valve-house slab corner vertices independently so neither can mask the other.
       const r = t.diameter / 2;
       const rimR = r + (t.diameter >= 9 ? 0.38 : 0.22);
       for (const exag of [1.0, 1.5, 3.0]) {
         const built = helpers.buildWaterTowers([t], land.village, exag, SEA, false);
         const pos = built.geometry.getAttribute('position');
         const cx = t.e - VE, cz = VN - t.n;
+        let vhx = 0, vhz = 0, vhc = 1, vhs = 0, vhHalfW = 0, vhHalfD = 0;
+        if (t.valveHouse) {
+          const vh = t.valveHouse;
+          const a = vh.azDeg * Math.PI / 180;
+          const yaw = -vh.yawDeg * Math.PI / 180;
+          vhx = cx + Math.sin(a) * vh.dist;
+          vhz = cz - Math.cos(a) * vh.dist;
+          vhc = Math.cos(yaw);
+          vhs = Math.sin(yaw);
+          vhHalfW = (vh.width + 0.35) / 2;
+          vhHalfD = (vh.depth + 0.35) / 2;
+        }
         let tankMinY = Infinity, slabMinY = Infinity;
         for (let i = 0; i < pos.count; i++) {
           const vx = pos.getX(i), vy = pos.getY(i), vz = pos.getZ(i);
-          if (Math.hypot(vx - cx, vz - cz) <= rimR + 0.25) {
+          let isVhSlabCorner = false;
+          let inVhBox = false;
+          if (t.valveHouse) {
+            const dx = vx - vhx, dz = vz - vhz;
+            const lx = dx * vhc - dz * vhs;
+            const lz = dx * vhs + dz * vhc;
+            if (Math.abs(lx) <= vhHalfW + 0.05 && Math.abs(lz) <= vhHalfD + 0.05) inVhBox = true;
+            if (Math.abs(Math.abs(lx) - vhHalfW) <= 0.02 && Math.abs(Math.abs(lz) - vhHalfD) <= 0.02) {
+              isVhSlabCorner = true;
+            }
+          }
+          if (isVhSlabCorner) {
+            if (vy < slabMinY) slabMinY = vy;
+          } else if (!inVhBox && Math.abs(Math.hypot(vx - cx, vz - cz) - rimR) <= 0.02) {
             if (vy < tankMinY) tankMinY = vy;
-          } else if (vy < slabMinY) {
-            slabMinY = vy;
           }
         }
         built.geometry.dispose();
-        assert.ok(Number.isFinite(tankMinY), `${t.id}: missing tank foundation vertices`);
+        assert.ok(Number.isFinite(tankMinY), `${t.id}: missing tank plinth rim vertices`);
         for (let k = 0; k < 16; k++) {
           const ang = (k / 16) * Math.PI * 2;
           const eg = land.ground(t.e + Math.cos(ang) * rimR - VE, VN - (t.n + Math.sin(ang) * rimR), true);
@@ -123,7 +147,7 @@ function checkDataAndLand(specs, helpers) {
             `${t.id} (${area}) plinth gap at exag=${exag}: bot=${tankMinY.toFixed(2)} > rimGround=${edgeY.toFixed(2)}`);
         }
         if (t.valveHouse) {
-          assert.ok(Number.isFinite(slabMinY), `${t.id}: missing valveHouse slab vertices`);
+          assert.ok(Number.isFinite(slabMinY), `${t.id}: missing valveHouse slab corner vertices`);
           const vh = t.valveHouse;
           const a = vh.azDeg * Math.PI / 180;
           const ve = t.e + Math.sin(a) * vh.dist;
@@ -223,12 +247,12 @@ function checkGeometryAndCollisions(helpers) {
         assert.ok(Number.isFinite(col.array[i]) && col.array[i] >= 0 && col.array[i] <= 1.001, `${area}: invalid colour`);
       }
 
-      const expectedSolids = specs.length + specs.filter(s => s.valveHouse).length;
-      assert.equal(wt.solids.length, expectedSolids, `${area}: solid count`);
-      const first = wt.solids[0];
-      const car = { x: first.x + first.half * 0.4, z: first.z, heading: 0, vx: -10, vz: 0, speed: 10 };
+      assert.equal(wt.circles.length, specs.length, `${area}: circular tank solid count`);
+      assert.equal(wt.solids.length, specs.filter(s => s.valveHouse).length, `${area}: valve house solid count`);
+      const first = wt.circles[0];
+      const car = { x: first.x + first.radius * 0.4, z: first.z, heading: 0, vx: -10, vz: 0, speed: 10 };
       wt.resolveSolids(car);
-      assert.ok(Math.hypot(car.x - first.x, car.z - first.z) >= first.half, `${area}: resolveSolids pushes vehicle out`);
+      assert.ok(Math.hypot(car.x - first.x, car.z - first.z) >= first.radius, `${area}: resolveSolids pushes vehicle out`);
 
       wt.dispose();
     }
@@ -241,18 +265,32 @@ function checkGeometryAndCollisions(helpers) {
     console.log(`PASS ${area}: ${specs.length} structures, desktop=${desktopTris} tris, low=${lowTris} tris`);
   }
 
-  // Directional collision probe on Pitt St valve house: verify rendered width (4.5 m) and depth (3.4 m) axes match pushOut.
+  // Circular collision probe on Mulgrave South reservoir (diameter 15.5 m, collider radius 7.90 m):
+  // diagonal exterior at 10.61 m (7.5, 7.5) must stay completely clear; diagonal hit at 8.0 m must push out radially.
   const pitt = WATER_TOWERS.find(t => t.id === 'ph-pitt-street');
+  const mulgraveSouth = WATER_TOWERS.find(t => t.id === 'mulgrave-south');
   const ptVillage = manifests.pointtupper.village;
   const ptWT = helpers.WaterTowers.forArea('pointtupper', ptVillage, 1.5, SEA, false);
+  const msIdx = helpers.waterTowersForArea('pointtupper').findIndex(t => t.id === mulgraveSouth.id);
+  const msCircle = ptWT.circles[msIdx];
+  const probeSpec = { envelope: { radius: 0.4, reach: 0.4, circles: [0] } };
+  const diagMiss = { x: msCircle.x + 7.5, z: msCircle.z + 7.5, heading: 0, vx: 0, vz: 0, speed: 0 };
+  ptWT.resolveSolids(diagMiss);
+  assert.ok(Math.hypot(diagMiss.x - (msCircle.x + 7.5), diagMiss.z - (msCircle.z + 7.5)) < 1e-6,
+    'Mulgrave South diagonal exterior clear (circular collider, not square)');
+  const diagHit = { x: msCircle.x + 5.66, z: msCircle.z + 5.66, heading: 0, vx: -5, vz: -5, speed: 5, spec: probeSpec };
+  ptWT.resolveSolids(diagHit);
+  assert.ok(Math.hypot(diagHit.x - msCircle.x, diagHit.z - msCircle.z) >= msCircle.radius + 0.39,
+    'Mulgrave South diagonal wall pushes car out');
+
+  // Directional collision probe on Pitt St valve house: verify rendered width (4.5 m) and depth (3.4 m) axes match pushOut.
   const vh = pitt.valveHouse;
-  const vhSolid = ptWT.solids[1];
+  const vhSolid = ptWT.solids[0];
   const yaw = -vh.yawDeg * Math.PI / 180;
   // addBox local +X (width = 4.5 m, halfWidthBox = 2.25 m) -> (cos(yaw), -sin(yaw))
   // addBox local +Z (depth = 3.4 m, halfDepthBox = 1.70 m) -> (sin(yaw), cos(yaw))
   const wx = Math.cos(yaw), wz = -Math.sin(yaw);
   const dx = Math.sin(yaw), dz = Math.cos(yaw);
-  const probeSpec = { envelope: { radius: 0.4, reach: 0.4, circles: [0] } };
   // Along width axis (rendered half=2.25, solid half=2.40): at 2.60 m (inside 2.40+0.40=2.80) MUST push out; at 3.00 m MUST NOT push.
   const hitW = { x: vhSolid.x + wx * 2.60, z: vhSolid.z + wz * 2.60, heading: 0, vx: -wx * 5, vz: -wz * 5, speed: 5, spec: probeSpec };
   ptWT.resolveSolids(hitW);
@@ -367,19 +405,21 @@ if (process.argv.includes('--mutations')) {
   const wtMutations = [
     ['ground stretch omitted', 'return base > sea ? sea + (base - sea) * exag : base;', 'return base;', /dry ground stretches by exag/],
     ['plinth floats above ground', 'b.addCylinder(cx, baseY - skirt, cz, rad + plinthPad', 'b.addCylinder(cx, baseY + 0.5, cz, rad + plinthPad', /plinth gap at exag=1|Port Hastings plinth seats skirt below ground/],
+    ['Pitt Street plinth floats while valve-house slab stays seated', 'b.addCylinder(cx, baseY - skirt, cz, rad + plinthPad', 'b.addCylinder(cx, t.id === "ph-pitt-street" ? baseY + 0.5 : baseY - skirt, cz, rad + plinthPad', /ph-pitt-street \(pointtupper\) plinth gap at exag=1/],
     ['fixed 0.7 m skirt fails at exag=3', 'return Math.max(0.75, 0.75 * exag);', 'return 0.7;', /plinth gap at exag=3/],
     ['valve house slab-only gap at exag=3', 'const slabH = skirt + 0.2;', 'const slabH = 0.55;', /valveHouse gap at exag=3/],
     ['canopy exclude disabled', 'if (de * de + dn * dn <= r * r) return true;', 'if (false) return true;', /canopy excluded at ph-pitt-street/],
     ['valve house canopy exclude disabled', 'if (vde * vde + vdn * vdn <= vr * vr) return true;', 'if (false) return true;', /canopy excluded at Pitt St valve house/],
+    ['round tank square collider hits diagonal exterior', 'const d = Math.hypot(dx, dz);', 'const d = Math.max(Math.abs(dx), Math.abs(dz));', /Mulgrave South diagonal exterior clear/],
     ['valve house collision axes swapped', 'heading: wide ? Math.PI / 2 - yaw : Math.PI - yaw,', 'heading: yaw,', /valve house (width|depth)/],
     ['valve house corner broadphase clipped', 'pushOut(body, this.solids, true);', 'pushOut(body, this.solids);', /valve house rotated corner pushes car out/],
-    ['solids disabled', 'pushOut(body, this.solids, true);', 'void body;', /resolveSolids pushes vehicle out/],
+    ['tank circle solids disabled', 'pushOutCircles(body, this.circles);', 'void body;', /resolveSolids pushes vehicle out/],
     ['LOW uses desktop segment count', 'const segs = low', 'const segs = false', /LOW phone geometry.*simpler than desktop|LOW triangle ceiling exceeded/],
     ['empty area builds empty mesh', 'if (!specs.length) return null;', 'if (false) return null;', /mabou returns null/],
     ['wrong material side breaks shader sharing', 'side: THREE.DoubleSide', 'side: THREE.FrontSide', /DoubleSide matches buildings material program/],
   ];
   for (const [label, a, b, expectedErr] of wtMutations) {
-    if ((label === 'fixed 0.7 m skirt fails at exag=3' || label === 'valve house slab-only gap at exag=3') && !hasLand) continue;
+    if ((label === 'fixed 0.7 m skirt fails at exag=3' || label === 'valve house slab-only gap at exag=3' || label === 'Pitt Street plinth floats while valve-house slab stays seated') && !hasLand) continue;
     const m = compileModule('web/src/water-towers.ts', a, b);
     assert.throws(() => {
       checkDataAndLand(WATER_TOWERS, m);

@@ -1,6 +1,43 @@
 import * as THREE from 'three';
 import { pushOut, type Pushable, type Solid } from './parked';
+import { CAR_SPEC } from './vehicle-spec';
 import { WATER_TOWERS, type WaterTowerSpec } from './water-towers-data';
+
+/** A solid vertical cylinder on the ground, in world metres: centre and outer radius. */
+export interface CircleSolid { x: number; z: number; radius: number }
+
+function pushOutCircles(car: Pushable, circles: readonly CircleSolid[]): number {
+  const env = (car.spec ?? CAR_SPEC).envelope, carR = env.radius;
+  let hardest = 0, far = 0;
+  for (let i = 0; i < env.circles.length; i++) far = Math.max(far, Math.hypot(env.circles[i], env.circleSides?.[i] ?? 0));
+  const sf = Math.sin(car.heading), cf = Math.cos(car.heading);
+  for (const c of circles) {
+    const reach = c.radius + far + carR;
+    if (Math.abs(c.x - car.x) > reach || Math.abs(c.z - car.z) > reach) continue;
+    const minD = c.radius + carR;
+    for (let i = 0; i < env.circles.length; i++) {
+      const off = env.circles[i], side = env.circleSides?.[i] ?? 0;
+      const dx = car.x + sf * off + cf * side - c.x;
+      const dz = car.z - cf * off + sf * side - c.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= minD) continue;
+      const nx = d > 1e-4 ? dx / d : 1, nz = d > 1e-4 ? dz / d : 0;
+      const push = minD - d;
+      car.x += nx * push; car.z += nz * push;
+      const into = car.vx * nx + car.vz * nz;
+      if (into < 0) {
+        hardest = Math.max(hardest, -into);
+        car.vx -= nx * into; car.vz -= nz * into;
+        car.vx *= 0.97; car.vz *= 0.97;
+      }
+    }
+  }
+  if (hardest > 0) {
+    car.speed = car.vx * sf - car.vz * cf;
+    car.onSolidImpact?.(hardest);
+  }
+  return hardest;
+}
 
 const CONCRETE_COLOR = 0x9c9b92;
 const CONCRETE_DARK = 0x7a7a73;
@@ -417,8 +454,9 @@ export function buildWaterTowers(
   exag: number,
   sea: number,
   low: boolean,
-): { geometry: THREE.BufferGeometry; solids: Solid[]; lights: number } {
+): { geometry: THREE.BufferGeometry; circles: CircleSolid[]; solids: Solid[]; lights: number } {
   const builder = createMeshBuilder();
+  const circles: CircleSolid[] = [];
   const solids: Solid[] = [];
   const [VE, VN] = village;
   let lights = 0;
@@ -429,8 +467,7 @@ export function buildWaterTowers(
     const cz = VN - t.n;
     const baseY = waterTowerGround(t.g, exag, sea);
     appendStructure(builder, t, cx, baseY, cz, skirt, low);
-    const half = t.diameter / 2 + 0.15;
-    solids.push({ x: cx, z: cz, half, halfWidth: half, heading: 0 });
+    circles.push({ x: cx, z: cz, radius: t.diameter / 2 + 0.15 });
     if (t.valveHouse) {
       const vh = t.valveHouse;
       const a = vh.azDeg * Math.PI / 180;
@@ -449,7 +486,7 @@ export function buildWaterTowers(
     if (t.nightLight) lights++;
   }
 
-  return { geometry: builder.build(), solids, lights };
+  return { geometry: builder.build(), circles, solids, lights };
 }
 
 /**
@@ -459,6 +496,7 @@ export function buildWaterTowers(
  */
 export class WaterTowers {
   readonly group = new THREE.Group();
+  readonly circles: CircleSolid[];
   readonly solids: Solid[];
   readonly specs: readonly WaterTowerSpec[];
   readonly area: string;
@@ -476,7 +514,8 @@ export class WaterTowers {
     this.area = area;
     this.specs = specs;
     this.group.name = 'water towers';
-    const { geometry, solids } = buildWaterTowers(specs, village, exag, sea, low);
+    const { geometry, circles, solids } = buildWaterTowers(specs, village, exag, sea, low);
+    this.circles = circles;
     this.solids = solids;
     this.excludesCanopy = (e: number, n: number) => waterTowerCanopyExcludes(e, n, area);
     const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
@@ -498,6 +537,7 @@ export class WaterTowers {
   }
 
   resolveSolids(body: Pushable): void {
+    pushOutCircles(body, this.circles);
     // Pass coupled=true so pushOut's broadphase reach covers rotated rectangular valve-house corners.
     pushOut(body, this.solids, true);
   }

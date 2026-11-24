@@ -122,7 +122,7 @@ for (const url of urls) {
         [[628035.91,5052687.54],[629725.71,5053075.14],[624284.91,5052673.34],[624089.01,5052185.64]]
           .some(([e,n]) => Math.hypot(s.x - (e - m.terrain.manifest.village[0]), s.z - (m.terrain.manifest.village[1] - n)) < 20)
       ).length : 0;
-      return { area: m.area.id, meshes, uniqueGeometries, texSlots, sharesBuildingsProgram, hasBldgProg: !!bldgProg, solids: m.waterTowers?.solids.length ?? 0, bogusMasts };
+      return { area: m.area.id, meshes, uniqueGeometries, texSlots, hasWtProg: !!wtProg, hasBldgProg: !!bldgProg, sharesBuildingsProgram, solids: (m.waterTowers?.circles.length ?? 0) + (m.waterTowers?.solids.length ?? 0), bogusMasts };
     })()`);
 
     if (expectZero) {
@@ -136,7 +136,9 @@ for (const url of urls) {
     assert.equal(info.meshes, 1, `${name}: expected single merged water towers mesh`);
     assert.equal(info.uniqueGeometries, 1, `${name}: expected exactly 1 unique BufferGeometry`);
     assert.equal(info.texSlots, 0, `${name}: expected 0 textures on water towers material`);
-    if (info.hasBldgProg && TARGETS[name]) {
+    if (TARGETS[name]) {
+      assert.equal(info.hasWtProg, true, `${name}: expected compiled WebGLProgram on water towers material`);
+      assert.equal(info.hasBldgProg, true, `${name}: expected compiled WebGLProgram on buildings material`);
       assert.equal(info.sharesBuildingsProgram, true, `${name}: water towers must share the compiled buildings MeshLambertMaterial WebGLProgram`);
     }
     assert.equal(info.bogusMasts, 0, `${name}: bogus water-tower masts must be absent from tall`);
