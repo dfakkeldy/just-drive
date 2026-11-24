@@ -6,6 +6,7 @@ export interface RoadStart { x: number; z: number; heading: number; distance: nu
 interface StartVehicle {
   x: number; z: number; heading: number;
   placementGuard: ((pose: { x: number; z: number; heading: number }) => boolean) | null;
+  skipDeckWait?: boolean;
   restart(x: number, z: number, heading: number): void;
 }
 const sameStartPose = (a: { x: number; z: number; heading: number }, b: RoadStart) =>
@@ -14,11 +15,12 @@ const sameStartPose = (a: { x: number; z: number; heading: number }, b: RoadStar
  * cannot move this candidate elsewhere. Read both the real guard and final pose;
  * a void/no-op restart must never be mistaken for a successful placement. */
 export function placeAtStart(vehicle: StartVehicle, start: RoadStart): boolean {
-  const guard = vehicle.placementGuard;
+  const guard = vehicle.placementGuard, prevSkip = vehicle.skipDeckWait;
   let accepted = false;
   vehicle.placementGuard = pose => { accepted = (!guard || guard.call(vehicle, pose)) && sameStartPose(pose, start); return accepted; };
+  if ('skipDeckWait' in vehicle) vehicle.skipDeckWait = true;
   try { vehicle.restart(start.x, start.z, start.heading); }
-  finally { vehicle.placementGuard = guard; }
+  finally { vehicle.placementGuard = guard; if ('skipDeckWait' in vehicle) vehicle.skipDeckWait = prevSkip; }
   return accepted && sameStartPose(vehicle, start);
 }
 type PublicRoad = { kind: number; pts: readonly (readonly [number, number])[] };

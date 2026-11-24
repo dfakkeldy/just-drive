@@ -1527,6 +1527,7 @@ const ownedByControl = (ev: KeyboardEvent) => (ev.code === 'Enter' || ev.code ==
 addEventListener('click', (ev) => { if (ev.detail > 0 && ev.target instanceof HTMLElement) ev.target.closest('button')?.blur(); });
 addEventListener('keydown', (ev) => {
   if (!live() || typing(ev)) return;   // a modal or text field owns input
+  if (ev.code === 'KeyR' && !ev.repeat && fleet?.waitingForDeck && !interiors.busy && !(mode === 'fly' && drone.active)) { resetToRoad(); return; }
   if (fleet?.busy || fleet && ev.repeat && !keys.has(ev.code)) return;
   if (ownedByControl(ev)) return;
   if (!mailMode && ev.code === 'KeyO' && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
@@ -1619,7 +1620,7 @@ const gamepad = createGamepad({
   // B changes the view; inside a building (where every other driving button rests) it climbs out, as Esc does.
   view: () => { if (interiors.busy) interiors.leave(); else if (!fleet?.busy) view = view === 'chase' ? 'seat' : 'chase'; },
   pause: () => { if (sunSeeker) closeSunSeeker(); else if (pauseAllowed()) { pause.toggle(); syncPauseUI(); } },
-  reset: padAct(resetToRoad),
+  reset: () => { if (!interiors.busy && (!fleet?.busy || fleet.waitingForDeck)) resetToRoad(); },
   radio: padAct(() => radio?.next()),
   photo: padAct(() => { if (mailMode) photoRequested = true; }),
   relief: padAct(() => relief.request()),
@@ -2285,17 +2286,26 @@ function resetToRoad(): void {
   multiplayer?.reset();
   if (fleet) fleet.respawn(); else vehicle.respawn();
 }
+let savedFlyCamera: { pos: THREE.Vector3; yaw: number; pitch: number } | null = null;
 function jumpToPlace(x: number, z: number, heading: number): void {
-  if (fleet && !fleet.restart(x, z, heading, 'place-jump')) return;
-  let placed = !!fleet;
-  multiplayer?.reset();
-  if (!fleet) placed = vehicle.restart(x, z, heading);
-  vehicle.vx = vehicle.vz = vehicle.vy = vehicle.speed = 0;
-  if (placed) mountainHint?.clearActive();
-  mail.reset();
-  waitingToDrive = true; camReady = false;
-  if (droneVehicle) placeDroneAt(x, z, heading); else mode = 'drive';
-  pendingShot = null; hookPlaced = false; jumpPlacement++;
+  const finishJump = (placed: boolean) => {
+    savedFlyCamera = null;
+    multiplayer?.reset();
+    vehicle.vx = vehicle.vz = vehicle.vy = vehicle.speed = 0;
+    if (placed) mountainHint?.clearActive();
+    mail.reset();
+    waitingToDrive = true; camReady = false;
+    if (droneVehicle) placeDroneAt(x, z, heading); else mode = 'drive';
+    pendingShot = null; hookPlaced = false; jumpPlacement++;
+  };
+  if (fleet) {
+    const before = fleet.deckWaitToken;
+    if (fleet.restart(x, z, heading, 'place-jump', undefined, () => finishJump(true))) finishJump(true);
+    else if (fleet.deckWaitToken !== before) camReady = false;
+    return;
+  }
+  const placed = vehicle.restart(x, z, heading);
+  finishJump(placed);
 }
 const dragPlaces = dragModule ? [dragModule.airportDragPlace()] : [];
 const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...dragPlaces, ...(cemeteries?.places ?? []), ...stuntPlaces];
@@ -2825,9 +2835,9 @@ function frame(now: number) {
     if (import.meta.env.DEV) frameClock = performance.now();
     // Keep the daily start parked while coarse terrain is replaced and until the driver uses a pedal.
     if (fleet) { const active = !fleet.busy; driveVehicle(dt, input); if (active && loaded && !animals?.waitingForTerrain) drove += dt; }
-    else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) vehicle.retryPlace();
+    else if (terrain.surfaceAt(vehicle.x, vehicle.z)?.level === undefined) { if (vehicle.waitingForDeck) driveVehicle(dt, { ...input, throttle: 0, handbrake: true }); else vehicle.retryPlace(); }
     else {
-      if ((refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.retryPlace(); vehicle.speed = 0; }
+      if (!vehicle.waitingForDeck && (refusal > 0 || demo && drove >= demo) && Math.abs(vehicle.speed) < 0.15) { vehicle.retryPlace(); vehicle.speed = 0; }
       else if (waitingToDrive) {
         const { x, z, heading, y } = vehicle;
         driveVehicle(dt, { ...input, throttle: 0, handbrake: true });
@@ -2838,15 +2848,28 @@ function frame(now: number) {
     if (import.meta.env.DEV) frameLap('drive');
     animals?.update(dt, vehicle, camera);
     if (import.meta.env.DEV) frameLap('animals');
+    savedFlyCamera = null;
     chase(dt);
     if (import.meta.env.DEV) frameLap('chase');
   } else {
     if (mode === 'drive' && ride.kind === 'drone') launchDrone();
-    fly(dt);
-    if (import.meta.env.DEV) frameClock = performance.now();
-    if (ride.kind !== 'drone') animals?.update(dt, vehicle, camera);
-    if (import.meta.env.DEV) frameLap('animals');
-    camera.rotation.set(pitch, yaw, 0);
+    if (fleet?.waitingForDeck) {
+      if (!savedFlyCamera) savedFlyCamera = { pos: camera.position.clone(), yaw, pitch };
+      fleet.camera(camera, dt, view);
+      if (import.meta.env.DEV) frameClock = performance.now();
+      if (ride.kind !== 'drone') animals?.update(dt, vehicle, camera);
+      if (import.meta.env.DEV) frameLap('animals');
+    } else {
+      if (savedFlyCamera) {
+        camera.position.copy(savedFlyCamera.pos); yaw = savedFlyCamera.yaw; pitch = savedFlyCamera.pitch;
+        savedFlyCamera = null;
+      }
+      fly(dt);
+      if (import.meta.env.DEV) frameClock = performance.now();
+      if (ride.kind !== 'drone') animals?.update(dt, vehicle, camera);
+      if (import.meta.env.DEV) frameLap('animals');
+      camera.rotation.set(pitch, yaw, 0);
+    }
   }
   if (endings.busy) { drawEnding(0); requestAnimationFrame(frame); return; }
   airportDrag?.draw(vehicle, gamepad.device);
