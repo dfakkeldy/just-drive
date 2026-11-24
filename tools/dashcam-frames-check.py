@@ -153,17 +153,31 @@ try:
 except SystemExit as e:
     check('refuses an output folder in the repository outside data/', e.code == 2 and not (ROOT / 'tools' / 'tmp-out').exists())
 
-check('privacy guard sees through ..', d.inside(ROOT / 'data' / '..' / 'tools' / 'x', ROOT) and not d.inside(ROOT / 'data' / '..' / 'tools', ROOT / 'data'))
 with tempfile.TemporaryDirectory() as tmp:
     fake = Path(tmp) / 'repo'
     (fake / 'tools').mkdir(parents=True)
     check('privacy guard accepts data/ before it exists',
           d.inside(fake / 'data' / 'work', fake / 'data') and not d.inside(fake / 'tools' / 'x', fake / 'data'))
+    check('privacy guard sees through .. before data/ exists',
+          d.inside(fake / 'data' / '..' / 'tools' / 'x', fake) and not d.inside(fake / 'data' / '..' / 'tools', fake / 'data'))
     (Path(tmp) / 'link').symlink_to(fake / 'tools')
     check('privacy guard follows symbolic links', d.inside(Path(tmp) / 'link' / 'out', fake))
     (fake / 'data').mkdir()
+    check('privacy guard sees through ..',
+          d.inside(fake / 'data' / '..' / 'tools' / 'x', fake) and not d.inside(fake / 'data' / '..' / 'tools', fake / 'data'))
     (fake / 'data' / 'sub').symlink_to(fake / 'tools')
     check('a link from data/ into the repo is not data/', not d.inside(fake / 'data' / 'sub' / 'out', fake / 'data'))
+    wt = Path(tmp) / 'worktree'
+    (wt / 'tools').mkdir(parents=True)
+    (wt / 'data').symlink_to(fake / 'data')
+    (fake / 'data' / 'wt-sub').symlink_to(wt / 'tools')
+    check('worktree with linked data/ allows data/ and blocks repo paths',
+          d.inside(wt / 'data' / 'work', wt / 'data')
+          and not d.inside(wt / 'data' / 'work', wt)
+          and d.inside(wt / 'tools' / '..' / 'tools' / 'x', wt)
+          and not d.inside(wt / 'tools' / '..' / 'tools', wt / 'data')
+          and d.inside(wt / 'data' / 'wt-sub' / 'out', wt)
+          and not d.inside(wt / 'data' / 'wt-sub' / 'out', wt / 'data'))
 other_case = Path(str(ROOT).swapcase())
 check('privacy guard sees through letter case on a case-insensitive disk',
       not other_case.exists() or d.inside(other_case / 'tools', ROOT))
