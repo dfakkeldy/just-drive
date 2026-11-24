@@ -692,6 +692,7 @@ export class ModernBridges {
         }
       }
       for(const q of r.parallelBanks){
+        if(!r.parallel.includes(q))h.num(q.width);
         for(const s of[0,-3,-6,-8,q.length,q.length+3,q.length+6,q.length+8]){
           const p=this.at(q,s);
           if(!sample(p.x,p.z))return null;
@@ -719,19 +720,20 @@ export class ModernBridges {
     return h.done();
   }
 
+  private invalidateNeighbors(r:Span,onlyBuilt=false):void {
+    for(let z=Math.floor(r.z0/CELL);z<=Math.floor(r.z1/CELL);z++)for(let x=Math.floor(r.x0/CELL);x<=Math.floor(r.x1/CELL);x++){
+      const list=this.cells.get(key(x*CELL,z*CELL,CELL));
+      if(list)for(const idx of list){const o=this.spans[idx];if(o!==r&&(!onlyBuilt||(!r.parallel.includes(o)&&(!o.baked||o.bakedVerified)))){o.forceBuild=true;o.revision=-1;}}
+    }
+  }
+
   /** Clear a provisionally hydrated baked entry and restore its pre-hydration state (preserving any new widened width). */
   private dropBaked(r:Span):void {
     if(r.baked){
       if(r.width===r.baked.finalWidth){
         const oldW=r.width;
         r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;
-        if(r.width!==oldW){
-          this.runList=null;
-          for(let z=Math.floor(r.z0/CELL);z<=Math.floor(r.z1/CELL);z++)for(let x=Math.floor(r.x0/CELL);x<=Math.floor(r.x1/CELL);x++){
-            const list=this.cells.get(key(x*CELL,z*CELL,CELL));
-            if(list)for(const idx of list){const o=this.spans[idx];if(o!==r){o.forceBuild=true;o.revision=-1;}}
-          }
-        }
+        if(r.width!==oldW){this.runList=null;this.invalidateNeighbors(r);}
       }
       r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;r.baked=null;
     }
@@ -780,7 +782,7 @@ export class ModernBridges {
       r.bakedWashHash=this.washAxisHash(r);
       r.bakedVerified=liveHash===entry.landHash;
       r.serial=++this.audit.builds;this.audit.bakedBuilds++;
-      if(r.width!==prev.width)this.runList=null;
+      if(r.width!==prev.width){this.runList=null;this.invalidateNeighbors(r,true);}
       if(r.road.ponyTruss)this.ponyDeckVersion++;
       this.dirty=true;
       return true;
@@ -835,7 +837,7 @@ export class ModernBridges {
         const bank=(s:number)=>{const p=this.at(q,s);return this.land(p.x,p.z)??-Infinity;},a=Math.max(bank(0),bank(-3),bank(-6),bank(-8))+.04,b=Math.max(bank(q.length),bank(q.length+3),bank(q.length+6),bank(q.length+8))+.04;
         if(!Number.isFinite(a)||!Number.isFinite(b)||Math.abs((a+b)/2-(r.y0+r.y1)/2)>.75)continue;
         for(const t of[r,q]){const rail=t.road.name==='Railroad',width=rail?1.25:t.road.halfWidth;
-          if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;}
+          if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.invalidateNeighbors(t);}
         }
       }
       // A few DTM spans retain a small road hump. Clear it with one level lift, not a local ramp.

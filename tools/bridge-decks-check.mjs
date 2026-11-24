@@ -573,10 +573,61 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
         gridY: gy, emitLand: new Float64Array(l),
       });
     };
-    // Build highway+rail first so rail narrows to 1.25 m, then crossing span.
-    for (const idx of [1, 2, 0]) triCapture(triM.spans[idx]);
+    // Bake in production array order ([crossing, highway, rail]) + pending settle passes (matching bridge-decks-bake.mjs).
+    // Narrowing the rail must invalidate its crossing neighbor so Pass 2 re-bakes the crossing against 1.25 m rail width.
+    for (const r of triM.spans) triCapture(r);
+    for (let pass = 0; pass < 4; pass++) {
+      const pending = triM.spans.filter(r => r.forceBuild || r.revision === -1);
+      if (!pending.length) break;
+      for (const r of pending) triCapture(r);
+    }
     assert.equal(triM.spans[2].width, 1.25, 'baked parallel rail narrows to 1.25 m');
     const triBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [...triEntries.values()]), 'mabou');
+    // Two-camera sequence on unchanged level-7 terrain: start at (1510, 20, 15) so highway+rail build first (narrowing
+    // rail to 1.25 m), then move to crossing. Both crossing-first bake and stale 3.05 m bake must match live bit-for-bit.
+    const camEast = new THREE.Vector3(1510, 20, 15);
+    const triTwoCamLive = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), null);
+    triTwoCamLive.update(camEast);
+    triTwoCamLive.update(cam);
+    assert.equal(triTwoCamLive.modern.spans[2].width, 1.25, 'two-camera live run narrows rail to 1.25 m');
+    const triTwoCamBits = spanBits(triTwoCamLive.modern.spans[0]);
+    const triTwoCamBaked = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), triBaked);
+    triTwoCamBaked.update(camEast);
+    triTwoCamBaked.update(cam);
+    assert.equal(triTwoCamBaked.modern.spans[0].bakedVerified, true, 'crossing-first bake verifies in two-camera sequence');
+    assert.ok(spanBits(triTwoCamBaked.modern.spans[0]).equals(triTwoCamBits), 'crossing-first bake matches live bit-for-bit in two-camera sequence');
+    // Also verify a stale crossing bake produced against the pre-narrowing 3.05 m rail width is rejected (never verified)
+    // once the rail has narrowed to 1.25 m.
+    const staleBake = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), null);
+    const staleM = staleBake.modern;
+    let sg = null, sl = [];
+    staleM.emit = function(sp, grid) {
+      sg = new Float32Array(grid); sl = [];
+      this.land = (x, z) => { const h = origLand.call(this, x, z); sl.push(h === null ? Number.NaN : h); return h; };
+      try { return origEmit.call(this, sp, grid); } finally { this.land = origLand; }
+    };
+    const sc = staleM.spans[0];
+    staleM.ensure(sc);
+    const sgy = new Float32Array(sg.length / 3);
+    for (let i = 0; i < sgy.length; i++) sgy[i] = sg[i * 3 + 1];
+    const staleCrossBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [
+      {
+        chainKey: sc.chainKey, geomHash: sc.geomHash,
+        landHash: staleM.spanLandHash(sc, sc.startLength, sc.endLength, sc.width, sc.narrowRail, sc.smoothStart, sc.smoothEnd, sc.y0, sc.y1, sc.level),
+        requestWidth: sc.baseWidth, finalWidth: sc.width, narrowRail: sc.narrowRail, level: sc.level,
+        smoothStart: sc.smoothStart, smoothEnd: sc.smoothEnd, ponyTruss: false,
+        startLength: sc.startLength, endLength: sc.endLength, y0: sc.y0, y1: sc.y1, outer0: sc.outer0, outer1: sc.outer1,
+        rows: Math.ceil(sc.length) + sc.startLength + sc.endLength, columns: Math.ceil(2 * sc.width / .75),
+        gridY: sgy, emitLand: new Float64Array(sl),
+      },
+      triEntries.get(triM.spans[1].chainKey),
+      triEntries.get(triM.spans[2].chainKey),
+    ]), 'mabou');
+    const triStaleRun = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), staleCrossBaked);
+    triStaleRun.update(camEast);
+    triStaleRun.update(cam);
+    assert.equal(triStaleRun.modern.spans[0].baked, null, 'stale 3.05 m crossing bake rejected after rail narrows to 1.25 m');
+    assert.ok(spanBits(triStaleRun.modern.spans[0]).equals(triTwoCamBits), 'stale 3.05 m crossing bake falls back to live 1.25 m match');
     // Reference live solve with raised highway banks (rail stays 3.05 m).
     raiseHwy = true;
     const triRef = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), null);
@@ -1215,8 +1266,10 @@ if (process.argv.includes('--mutations')) {
     ['streamsHash check removed', bridgesFile, bridgesSrc, '||this.terrainStreamsHash()!==decks.streamsHash', '', /edited streams reject/],
     ['geomHash check removed', decksFile, decksSrc, 's.geomHash === geomHash && ', '', /moved span rejects|rejects different geomHash/],
     ['nearby spans omitted from geomHash', bridgesFile, bridgesSrc, 'const others=[...nearby].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);', 'const others:Span[]=[];', /perpendicular crossing bridge invalidates|removed parallel highway rejects|widening crossing.*invalidates neighbor/],
-    ['parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'for(const q of r.parallelBanks){', 'for(const q of [] as Span[]){', /grade-separated parallel highway rejects|raised parallel highway bank invalidates crossing/],
-    ['nearby parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'for(const o of[...nearby])if(o.parallel.length){\n      parBankSet.add(o);\n      for(const q of o.parallel)if(q!==r){nearby.add(q);parBankSet.add(q);}\n    }', '', /raised parallel highway bank invalidates crossing/],
+    ['parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'for(const q of r.parallelBanks){', 'for(const q of [] as Span[]){', /grade-separated parallel highway rejects|raised parallel highway bank invalidates crossing|stale 3\.05 m crossing bake rejected/],
+    ['nearby parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'for(const o of[...nearby])if(o.parallel.length){\n      parBankSet.add(o);\n      for(const q of o.parallel)if(q!==r){nearby.add(q);parBankSet.add(q);}\n    }', '', /raised parallel highway bank invalidates crossing|stale 3\.05 m crossing bake rejected/],
+    ['nearby rail width omitted from landHash', bridgesFile, bridgesSrc, 'if(!r.parallel.includes(q))h.num(q.width);', '', /stale 3\.05 m crossing bake rejected/],
+    ['rail narrowing skips invalidating crossing neighbors', bridgesFile, bridgesSrc, 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.invalidateNeighbors(t);}', 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;}', /crossing-first bake (verifies|matches live)|stale 3\.05 m/],
     ['staged crossing skips settling nearby provisional rail width', bridgesFile, bridgesSrc, 'for(const q of r.parallelBanks)if(q.baked&&!q.bakedVerified&&q.width!==q.bakedPrevWidth)this.ensure(q,touch);', '', /staged crossing settles rail width first/],
     ['late parallel rejection keeps narrowed width', bridgesFile, bridgesSrc, 'r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;', '', /late parallel rejection restores|staged level-7 restores rail width/],
     ['interior CHECKS omitted from landHash', bridgesFile, bridgesSrc, 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i1;i++)for(let j=0;j<columns;j++){', 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i0;i++)for(let j=0;j<columns;j++){', /interior triangle ridge rejects/],
