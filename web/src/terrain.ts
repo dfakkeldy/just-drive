@@ -1437,6 +1437,32 @@ export class Terrain {
     return out;
   }
 
+  /** Planar washboard ridge axis `[ax, az]` from the terrain's road distance field (same gradient as TERRAIN_FRAG),
+   *  oriented along road tangent `(tx, tz)`. Rejects twisted bilinear cells (`sa - sb - sc + sd != 0`), where
+   *  `dot(worldXZ, along)` aliases inside a single texel. Read-only: leaves tile recency untouched. */
+  roadAlongAxis(x: number, z: number, tx: number, tz: number): [number, number] | null {
+    const t = this.find(x, z, false);
+    if (!t?.road) return null;
+    const mpp = t.size / T, dScale = this.manifest.roads?.encoding.distance ?? 0.1;
+    const fa = ((x - t.x0) / t.size) * T, fb = ((z - t.z0) / t.size) * T;
+    const a = Math.max(0, Math.min(T - 1, Math.floor(fa))), b = Math.max(0, Math.min(T - 1, Math.floor(fb)));
+    const r = t.road, k00 = (b * S + a) * 4, k10 = k00 + 4, k01 = k00 + S * 4, k11 = k01 + 4;
+    const code = (f: number) => ((f & 15) === 3 || (f & 15) === 4) && f >= 128 ? f - 128 : f;
+    const ca = code(r[k00 + 2]);
+    if (r[k00 + 2] === 0 || ca !== code(r[k10 + 2]) || ca !== code(r[k01 + 2]) || ca !== code(r[k11 + 2])
+      || r[k00 + 1] !== r[k10 + 1] || r[k00 + 1] !== r[k01 + 1] || r[k00 + 1] !== r[k11 + 1]) return null;
+    const sa = (r[k00] - this.zero) * dScale, sb = (r[k10] - this.zero) * dScale;
+    const sc = (r[k01] - this.zero) * dScale, sd = (r[k11] - this.zero) * dScale;
+    if (Math.max(Math.abs(sa - sb), Math.abs(sa - sc), Math.abs(sd - sb), Math.abs(sd - sc)) >= 1.6 * mpp + 0.2) return null;
+    if (Math.abs(sa - sb - sc + sd) > 1e-4) return null;
+    const gx = (sb - sa) / mpp, gz = (sc - sa) / mpp;
+    const ax = -gz + 1e-5, az = gx + 1e-5, an = Math.hypot(ax, az);
+    if (an < 1e-7) return null;
+    let ux = ax / an, uz = az / an;
+    if (ux * tx + uz * tz < 0) { ux = -ux; uz = -uz; }
+    return [ux, uz];
+  }
+
   /** Mapped lake returns need no invented bathymetry to reject a wet placement. */
   waterAt(x:number,z:number,drawnGround?:number,supportingDeck=false):boolean {
     const level=this.waterLevelAt(x,z,drawnGround);
