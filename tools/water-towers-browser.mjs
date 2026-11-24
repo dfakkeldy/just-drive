@@ -1,6 +1,6 @@
 // Fixed-camera browser check for municipal water towers, standpipes, reservoirs and small tanks:
-// desktop and phone LOW, day and night, paired shown/hidden render deltas (1 draw call, 0 new programs/textures),
-// raycast visibility of each standing landmark, removal of bogus tall-strait masts, and zero meshes in Mabou.
+// desktop and phone LOW, day and night, fresh-boot waterTowers=0 pair proving +0 programs / +0 textures / +1 geometry,
+// same-frame shown/hidden call and triangle deltas, raycast visibility, zero bogus masts, and zero meshes in Mabou.
 // Start only through tools/yard-shots.sh.
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -21,6 +21,9 @@ const TARGETS = {
   'paintst-day': [629715.1, 5052506.0, 5.2],
 };
 
+// Views that also run a fresh-boot ?waterTowers=0 tab to prove +0 WebGL programs and +0 GPU textures from cold start.
+const FRESH_BOOT_PAIRS = new Set(['pitt-day', 'pitt-phone', 'hastings-day', 'porthood-day']);
+
 async function waitSettled(c, url) {
   const deadline = Date.now() + 60000;
   while (Date.now() < deadline) {
@@ -28,14 +31,20 @@ async function waitSettled(c, url) {
     if (pending === 0) {
       return c.read(`new Promise((resolve) => {
         requestAnimationFrame(() => requestAnimationFrame(() => {
-          const r = mmm.renderer;
-          resolve({
+          const m = mmm, r = m.renderer;
+          const prevAuto = r.info.autoReset;
+          r.info.autoReset = false;
+          r.info.reset();
+          r.render(m.scene, m.camera);
+          const out = {
             calls: r.info.render.calls,
             triangles: r.info.render.triangles,
             geometries: r.info.memory.geometries,
             textures: r.info.memory.textures,
             programs: r.info.programs.length,
-          });
+          };
+          r.info.autoReset = prevAuto;
+          resolve(out);
         }));
       })`);
     }
@@ -88,15 +97,16 @@ for (const url of urls) {
   const name = q.get('name') ?? 'view';
   const phone = q.get('touch') === '1';
   const expectZero = q.get('expect') === '0';
+  let shown, info, vis, delta;
   const c = await open(url);
   try {
     if (phone) {
       await c.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
       await c.navigate(url);
     }
-    const shown = await waitSettled(c, url);
+    shown = await waitSettled(c, url);
     assert.equal(c.errors.length, 0, `${name}: page errors ${JSON.stringify(c.errors)}`);
-    const info = await c.read(`(() => {
+    info = await c.read(`(() => {
       const m = mmm, grp = m.scene.getObjectByName('water towers');
       const meshes = grp ? grp.children.length : 0;
       const bogusMasts = m.tall ? m.tall.solids.filter(s =>
@@ -116,10 +126,10 @@ for (const url of urls) {
 
     assert.equal(info.meshes, 1, `${name}: expected single merged water towers mesh`);
     assert.equal(info.bogusMasts, 0, `${name}: bogus water-tower masts must be absent from tall`);
-    const vis = await checkVisible(c, name);
+    vis = await checkVisible(c, name);
     await c.shot(`${out}/${name}.png`);
 
-    // Exact same-frame shown vs hidden render delta (no AI car or sky drift between frames).
+    // Exact same-frame shown vs hidden draw-call and triangle delta (no traffic/sky drift).
     const pairStats = await c.read(`(() => {
       const m = mmm, r = m.renderer, grp = m.scene.getObjectByName('water towers');
       const prevAuto = r.info.autoReset;
@@ -128,13 +138,7 @@ for (const url of urls) {
         if (grp) grp.visible = vis;
         r.info.reset();
         r.render(m.scene, m.camera);
-        return {
-          calls: r.info.render.calls,
-          triangles: r.info.render.triangles,
-          geometries: r.info.memory.geometries,
-          textures: r.info.memory.textures,
-          programs: r.info.programs.length,
-        };
+        return { calls: r.info.render.calls, triangles: r.info.render.triangles };
       };
       const on = measureOnce(true);
       const off = measureOnce(false);
@@ -142,32 +146,53 @@ for (const url of urls) {
       r.info.autoReset = prevAuto;
       return { on, off };
     })()`);
-    if (q.get('pair') === '1') {
-      await c.read(`(() => { const g = mmm.scene.getObjectByName('water towers'); if (g) g.visible = false; mmm.renderer.render(mmm.scene, mmm.camera); return true; })()`);
-      await c.shot(`${out}/${name}-hidden.png`);
-      await c.read(`(() => { const g = mmm.scene.getObjectByName('water towers'); if (g) g.visible = true; return true; })()`);
-    }
 
-    const delta = {
+    delta = {
       calls: pairStats.on.calls - pairStats.off.calls,
       triangles: pairStats.on.triangles - pairStats.off.triangles,
-      programs: pairStats.on.programs - pairStats.off.programs,
-      textures: pairStats.on.textures - pairStats.off.textures,
     };
     const maxCalls = phone ? 1 : 2; // Desktop shadow map adds 1 shadow-pass draw for the single merged mesh.
     assert.ok(delta.calls >= 0 && delta.calls <= maxCalls, `${name}: expected <=${maxCalls} draw call delta, got ${delta.calls}`);
-    assert.equal(delta.programs, 0, `${name}: expected 0 new shader programs, got ${delta.programs}`);
-    assert.equal(delta.textures, 0, `${name}: expected 0 new textures, got ${delta.textures}`);
     if (TARGETS[name]) {
       assert.ok(delta.calls >= 1 && delta.calls <= maxCalls, `${name}: expected 1..${maxCalls} draw calls when water tower is in view, got ${delta.calls}`);
       const triCap = phone ? 4000 : 23000;
       assert.ok(delta.triangles > 0 && delta.triangles <= triCap, `${name}: triangles delta ${delta.triangles} outside (0, ${triCap}]`);
     }
-    console.log(`PASS ${name}`, JSON.stringify({ ...info, vis, delta, shown }));
-    results.push({ name, ...info, vis, delta, shown });
   } finally {
     await c.close();
   }
+
+  // Fresh-boot ?waterTowers=0 pair in a separate cold WebGL renderer to prove +0 shader programs and +0 textures.
+  let coldPair = null;
+  if (FRESH_BOOT_PAIRS.has(name)) {
+    const offUrl = new URL(url);
+    offUrl.searchParams.set('waterTowers', '0');
+    const cOff = await open(offUrl.toString());
+    try {
+      if (phone) {
+        await cOff.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+        await cOff.navigate(offUrl.toString());
+      }
+      const off = await waitSettled(cOff, offUrl.toString());
+      assert.equal(cOff.errors.length, 0, `${name} waterTowers=0: page errors ${JSON.stringify(cOff.errors)}`);
+      const offMeshes = await cOff.read(`mmm.scene.getObjectByName('water towers')?.children.length ?? 0`);
+      assert.equal(offMeshes, 0, `${name} waterTowers=0: expected 0 water tower meshes`);
+      coldPair = {
+        programs: shown.programs - off.programs,
+        textures: shown.textures - off.textures,
+        geometries: shown.geometries - off.geometries,
+        off,
+      };
+      assert.ok(coldPair.programs <= 0, `${name}: fresh-boot added WebGL shader programs (${off.programs} -> ${shown.programs})`);
+      assert.ok(coldPair.textures <= 0, `${name}: fresh-boot added GPU textures (${off.textures} -> ${shown.textures})`);
+      assert.ok(coldPair.geometries <= 1, `${name}: fresh-boot added >1 geometry (${off.geometries} -> ${shown.geometries})`);
+    } finally {
+      await cOff.close();
+    }
+  }
+
+  console.log(`PASS ${name}`, JSON.stringify({ ...info, vis, delta, ...(coldPair ? { coldDelta: { programs: coldPair.programs, textures: coldPair.textures, geometries: coldPair.geometries } } : {}), shown }));
+  results.push({ name, ...info, vis, delta, coldPair, shown });
 }
 
 writeFileSync(`${out}/receipt.json`, JSON.stringify(results, null, 2));

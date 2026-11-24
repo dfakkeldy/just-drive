@@ -587,9 +587,19 @@ if (novemberRoads) {
 const rough = ERA.modern ? roughRoads(roadData.roads, AREA.id, manifest.village,
   [{ x: CHURCH_START.e - manifest.village[0], z: manifest.village[1] - CHURCH_START.n, r: 40 }]) : null;
 if (rough) { terrain.sites.push(...rough.sites); setPuddleField(rough.field); }
-const treeExcludes = novemberRoads
-  ? (e: number, n: number) => novemberRoads.excludesTree(e, n) || !!stockpiles?.excludes(e, n)
-  : stockpiles?.excludes;
+const waterTowers = ERA.modern && params.get('waterTowers') !== '0'
+  ? WaterTowers.forArea(AREA.id, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
+if (waterTowers) {
+  scene.add(waterTowers.group);
+  const prevCanopyExcludes = terrain.canopyExcludes;
+  terrain.canopyExcludes = prevCanopyExcludes
+    ? (e, n) => prevCanopyExcludes(e, n) || waterTowers.excludesCanopy(e, n)
+    : waterTowers.excludesCanopy;
+  if (import.meta.env.DEV) expose({ waterTowers }, false);
+}
+const treeExcludes = (novemberRoads || stockpiles || waterTowers)
+  ? (e: number, n: number) => !!novemberRoads?.excludesTree(e, n) || !!stockpiles?.excludes(e, n) || !!waterTowers?.excludesCanopy(e, n)
+  : undefined;
 const trees = manifest.trees ? new Trees(manifest.trees.tiles, base, terrain, params.get('trees') !== 'far', treeExcludes) : null;
 if (trees) scene.add(trees.group);
 scene.add(terrain.group);
@@ -617,15 +627,6 @@ const landmarks = AREA.landmarks ? new Landmarks(landmarkList, manifest.village,
 if (landmarks) scene.add(landmarks.group);
 const harbourLights = ERA.modern ? new HarbourLights(AREA.id, manifest.village, EXAG, nightLook !== null, SEA_LEVEL) : null;
 if (harbourLights) scene.add(harbourLights.group);
-const waterTowers = ERA.modern ? WaterTowers.forArea(AREA.id, manifest.village, EXAG, SEA_LEVEL, LOW) : null;
-if (waterTowers) {
-  scene.add(waterTowers.group);
-  const prevCanopyExcludes = terrain.canopyExcludes;
-  terrain.canopyExcludes = prevCanopyExcludes
-    ? (e, n) => prevCanopyExcludes(e, n) || waterTowers.excludesCanopy(e, n)
-    : waterTowers.excludesCanopy;
-  if (import.meta.env.DEV) expose({ waterTowers }, false);
-}
 const waterReflections = LOW ? null : new WaterReflections(renderer, scene, sea, SEA_LEVEL,
   new Set([terrain.group, ...(landmarks ? [landmarks.group] : []), ...(buildings ? [buildings.mesh] : []), ...(trees ? [trees.group] : [])]),
   terrain, trees?.group ?? null, params.get('reflections'));

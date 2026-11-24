@@ -26,16 +26,16 @@ export function waterTowerCanopyExcludes(east: number, north: number, area?: str
     if (area && !(t.areas as readonly string[]).includes(area)) continue;
     const r = t.diameter / 2 + 2.0;
     const de = east - t.e;
-    if (de > r || de < -r) continue;
     const dn = north - t.n;
-    if (dn > r || dn < -r) continue;
     if (de * de + dn * dn <= r * r) return true;
     if (t.valveHouse) {
       const a = t.valveHouse.azDeg * Math.PI / 180;
       const ve = t.e + Math.sin(a) * t.valveHouse.dist;
       const vn = t.n + Math.cos(a) * t.valveHouse.dist;
       const vr = Math.hypot(t.valveHouse.width, t.valveHouse.depth) / 2 + 1.5;
-      if ((east - ve) * (east - ve) + (north - vn) * (north - vn) <= vr * vr) return true;
+      const vde = east - ve;
+      const vdn = north - vn;
+      if (vde * vde + vdn * vdn <= vr * vr) return true;
     }
   }
   return false;
@@ -200,8 +200,13 @@ function createMeshBuilder(): MeshBuilder {
   };
 }
 
+/** Foundation skirt depth below centre ground scales with exag so sloping hill pads never show a gap up to exag=3. */
+export function foundationSkirt(exag: number): number {
+  return Math.max(0.75, 0.75 * exag);
+}
+
 /** Add one water tower, standpipe, reservoir, elevated tank or small vertical tank to the merged mesh builder. */
-function appendStructure(b: MeshBuilder, t: WaterTowerSpec, cx: number, baseY: number, cz: number, low: boolean): void {
+function appendStructure(b: MeshBuilder, t: WaterTowerSpec, cx: number, baseY: number, cz: number, skirt: number, low: boolean): void {
   const rad = t.diameter / 2;
   const roofHex = t.roofColor ?? t.color;
   const trimHex = t.trimColor ?? 0x8a9198;
@@ -218,9 +223,9 @@ function appendStructure(b: MeshBuilder, t: WaterTowerSpec, cx: number, baseY: n
     const legRad = Math.max(0.22, rad * 0.048);
 
     // Central steel riser pipe from below ground into tank belly.
-    b.addCylinder(cx, baseY - 0.7, cz, Math.max(0.55, rad * 0.17), Math.max(0.55, rad * 0.17), legH + 1.0, low ? 8 : 12, t.color, false, false);
+    b.addCylinder(cx, baseY - skirt, cz, Math.max(0.55, rad * 0.17), Math.max(0.55, rad * 0.17), legH + skirt + 0.3, low ? 8 : 12, t.color, false, false);
     // Concrete pad around riser.
-    b.addCylinder(cx, baseY - 0.7, cz, Math.max(0.9, rad * 0.24), Math.max(0.85, rad * 0.22), 1.1, low ? 8 : 10, CONCRETE_COLOR, true, false);
+    b.addCylinder(cx, baseY - skirt, cz, Math.max(0.9, rad * 0.24), Math.max(0.85, rad * 0.22), skirt + 0.4, low ? 8 : 10, CONCRETE_COLOR, true, false);
 
     // Angled outer steel legs, concrete footings and horizontal/diagonal cross-bracing tiers.
     const tiers = low ? 1 : 2;
@@ -230,7 +235,7 @@ function appendStructure(b: MeshBuilder, t: WaterTowerSpec, cx: number, baseY: n
       const bx = cx + Math.cos(a) * botR, bz = cz + Math.sin(a) * botR;
       const tx = cx + Math.cos(a) * topR, tz = cz + Math.sin(a) * topR;
       legs.push([bx, bz, tx, tz]);
-      b.addCylinder(bx, baseY - 0.7, bz, legRad * 2.2, legRad * 1.8, 1.2, 6, CONCRETE_COLOR, true, false);
+      b.addCylinder(bx, baseY - skirt, bz, legRad * 2.2, legRad * 1.8, skirt + 0.5, 6, CONCRETE_COLOR, true, false);
       b.addStrut(bx, baseY + 0.3, bz, tx, baseY + legH + 0.5, tz, legRad, trimHex);
     }
     for (let tier = 1; tier <= tiers; tier++) {
@@ -267,10 +272,10 @@ function appendStructure(b: MeshBuilder, t: WaterTowerSpec, cx: number, baseY: n
     return;
   }
 
-  // Ground-seated concrete ring foundation plinth (extends 0.7 m below baked ground so slopes never expose a gap).
+  // Ground-seated concrete ring foundation plinth (skirt scales with exag so slopes never expose a gap).
   const plinthH = t.kind === 'bin' ? 0.3 : 0.55;
   const plinthPad = t.diameter >= 9 ? 0.38 : 0.22;
-  b.addCylinder(cx, baseY - 0.7, cz, rad + plinthPad, rad + plinthPad * 0.85, 0.7 + plinthH, segs, CONCRETE_COLOR, true, false);
+  b.addCylinder(cx, baseY - skirt, cz, rad + plinthPad, rad + plinthPad * 0.85, skirt + plinthH, segs, CONCRETE_COLOR, true, false);
 
   // Main cylindrical steel or concrete shell.
   const shellBot = baseY + plinthH;
@@ -386,8 +391,9 @@ function appendStructure(b: MeshBuilder, t: WaterTowerSpec, cx: number, baseY: n
     const vx = cx + Math.sin(a) * vh.dist;
     const vz = cz - Math.cos(a) * vh.dist;
     const yaw = -vh.yawDeg * Math.PI / 180;
-    // Concrete foundation slab.
-    b.addBox(vx, baseY - 0.25, vz, vh.width + 0.35, 0.9, vh.depth + 0.35, yaw, CONCRETE_COLOR);
+    // Concrete foundation slab (extends down by skirt so slopes never expose a gap).
+    const slabH = skirt + 0.2;
+    b.addBox(vx, baseY + 0.2 - slabH / 2, vz, vh.width + 0.35, slabH, vh.depth + 0.35, yaw, CONCRETE_COLOR);
     // Painted steel walls matching the standpipe.
     b.addBox(vx, baseY + 0.2 + vh.height / 2, vz, vh.width, vh.height, vh.depth, yaw, t.color);
     // White roof fascia & flat roof cap.
@@ -417,21 +423,27 @@ export function buildWaterTowers(
   const [VE, VN] = village;
   let lights = 0;
 
+  const skirt = foundationSkirt(exag);
   for (const t of specs) {
     const cx = t.e - VE;
     const cz = VN - t.n;
     const baseY = waterTowerGround(t.g, exag, sea);
-    appendStructure(builder, t, cx, baseY, cz, low);
+    appendStructure(builder, t, cx, baseY, cz, skirt, low);
     const half = t.diameter / 2 + 0.15;
     solids.push({ x: cx, z: cz, half, halfWidth: half, heading: 0 });
     if (t.valveHouse) {
-      const a = t.valveHouse.azDeg * Math.PI / 180;
+      const vh = t.valveHouse;
+      const a = vh.azDeg * Math.PI / 180;
+      const yaw = -vh.yawDeg * Math.PI / 180;
+      // Match addBox axes in pushOut (which places `half` along (sin(heading), -cos(heading)) and uses `half` for broadphase).
+      // addBox local +X (width) is (cos(yaw), -sin(yaw)) -> heading = PI/2 - yaw; local +Z (depth) is (sin(yaw), cos(yaw)) -> heading = PI - yaw.
+      const wide = vh.width >= vh.depth;
       solids.push({
-        x: cx + Math.sin(a) * t.valveHouse.dist,
-        z: cz - Math.cos(a) * t.valveHouse.dist,
-        half: t.valveHouse.width / 2 + 0.15,
-        halfWidth: t.valveHouse.depth / 2 + 0.15,
-        heading: -t.valveHouse.yawDeg * Math.PI / 180,
+        x: cx + Math.sin(a) * vh.dist,
+        z: cz - Math.cos(a) * vh.dist,
+        half: (wide ? vh.width : vh.depth) / 2 + 0.15,
+        halfWidth: (wide ? vh.depth : vh.width) / 2 + 0.15,
+        heading: wide ? Math.PI / 2 - yaw : Math.PI - yaw,
       });
     }
     if (t.nightLight) lights++;
