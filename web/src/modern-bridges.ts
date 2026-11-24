@@ -146,7 +146,6 @@ export class ModernBridges {
       for(let j=1;j<pts.length;j++){const a=pts[j-1],b=pts[j],dx=b[0]-a[0],dz=b[1]-a[1];segments.set([a[0],a[1],dx,dz,dx*dx+dz*dz||1,Math.min(a[0],b[0]),Math.max(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[1],b[1]),.01+2e-7*(Math.abs(dx)+Math.abs(dz))],(j-1)*10);}
       const r:Span={road,chainKey:plan.chainKey,geomHash:0n,baked:null,bakedVerified:false,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
-      r.geomHash=this.spanGeomHash(r);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
       const probes:number[]=[];
       for(let s=-MAX_APPROACH;s<length+MAX_APPROACH+8;s+=8){const p=this.at(r,Math.min(s,length+MAX_APPROACH));for(const u of[-width,0,width]){
@@ -172,6 +171,7 @@ export class ModernBridges {
         }
       }if(parallel>=3&&parallel>=total*.5){a.parallel.push(b);b.parallel.push(a);}
     }
+    for(const r of this.spans)r.geomHash=this.spanGeomHash(r);
     if(this.spans.length){
       const mask=this.mask();
       terrain.sites?.push({mask,box:[Math.min(...this.spans.map(r=>r.x0)),Math.min(...this.spans.map(r=>r.z0)),Math.max(...this.spans.map(r=>r.x1)),Math.max(...this.spans.map(r=>r.z1))],
@@ -373,7 +373,7 @@ export class ModernBridges {
     return land+(Math.max(land,bank)-land)*blend;
   }
 
-  /** Fingerprint the span's centreline, carried road kinds/widths and attached approaches so a stale baked deck is never reused. */
+  /** Fingerprint the span's centreline, carried road kinds/widths, attached approaches and parallel crossings so a stale baked deck is never reused. */
   private spanGeomHash(r:Span):bigint {
     const h=new GeomHasher();
     h.num(r.road.kind);h.num(r.road.halfWidth);h.num(r.timber?1:0);h.num(r.pts.length);
@@ -384,6 +384,12 @@ export class ModernBridges {
       h.num(ap.road.kind);h.num(ap.road.halfWidth);h.num(ap.road.pts.length);
       for(const p of ap.road.pts){h.num(p[0]);h.num(p[1]);}
     }
+    const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);
+    h.num(partners.length);
+    for(const q of partners){
+      h.num(q.road.kind);h.num(q.road.halfWidth);h.num(q.road.name==='Railroad'?1:0);h.num(q.pts.length);
+      for(const p of q.pts){h.num(p[0]);h.num(p[1]);}
+    }
     return h.done();
   }
 
@@ -393,47 +399,59 @@ export class ModernBridges {
     return this.cachedStreamsHash;
   }
 
-  private probeTargetLevel(x:number,z:number,minLevel:number):number {
+  private probeTargetLevel(x:number,z:number,fallbackLevel:number):number {
     const m=this.terrain.manifest;
-    if(!m?.levels)return minLevel;
+    if(!m?.levels)return fallbackLevel;
     if(!this.manifestTiles){
       this.manifestTiles=new Map();
       for(const [k,list]of Object.entries(m.levels))this.manifestTiles.set(Number(k),new Set(list));
     }
-    for(let lv=minLevel;lv>=6;lv--){
+    const top=Math.max(8,fallbackLevel);
+    for(let lv=top;lv>=0;lv--){
       const set=this.manifestTiles.get(lv);if(!set)continue;
       const size=m.size/2**lv,i=Math.floor((x+m.village[0]-m.origin[0])/size),j=Math.floor((z-m.village[1]+m.origin[1])/size);
       if(set.has(`${i}_${j}`))return lv;
     }
-    return minLevel;
+    return fallbackLevel;
   }
 
-  /** Fingerprint live ground heights along a span's banks, approaches and channel once every probe reaches its finest
-   *  available tile level (up to minLevel). Returns null while any probe tile is still coarser than its target level. */
-  private spanLandHash(r:Span,startLength:number,endLength:number,finalWidth:number,minLevel:number):bigint|null {
-    const prevS=r.startLength,prevE=r.endLength,prevSampling=this.sampling,prevBakedLand=this.bakedLand;
-    r.startLength=startLength;r.endLength=endLength;this.sampling=true;this.bakedLand=null;
+  /** Fingerprint live ground heights across the full deck/approach grid, clearance line, toe slopes and parallel
+   *  crossing banks once every probe reaches its finest manifest tile level. Returns null while any finer tile is pending. */
+  private spanLandHash(r:Span,startLength:number,endLength:number,finalWidth:number,narrowRail:boolean,fallbackLevel:number):bigint|null {
+    const prevS=r.startLength,prevE=r.endLength,prevW=r.width,prevNR=r.narrowRail,prevSampling=this.sampling,prevBakedLand=this.bakedLand;
+    r.startLength=startLength;r.endLength=endLength;r.width=finalWidth;r.narrowRail=narrowRail;this.sampling=true;this.bakedLand=null;
     try{
-      const h=new GeomHasher(),len=r.length;
-      const stations=[0,-3,-6,-8,-APPROACH,-startLength,len*.25,len*.5,len*.75,len,len+3,len+6,len+8,len+APPROACH,len+endLength];
+      const h=new GeomHasher(),len=r.length,coreRows=Math.ceil(len),rows=coreRows+startLength+endLength,columns=Math.ceil(2*finalWidth/.75);
+      const along=(i:number)=>i<=startLength?i-startLength:i<=startLength+coreRows?len*(i-startLength)/coreRows:len+i-startLength-coreRows;
       const sample=(x:number,z:number):boolean=>{
         const surf=this.terrain.surfaceAt(x,z);
-        if(!surf||surf.level<this.probeTargetLevel(x,z,minLevel))return false;
+        if(!surf||surf.level<this.probeTargetLevel(x,z,fallbackLevel))return false;
         const y=this.land(x,z);
         h.num(y===null?0:1);h.num(y??0);
         return true;
       };
-      for(let i=0;i<stations.length;i++){
-        const p=this.at(r,stations[i]);
-        if(!sample(p.x,p.z))return null;
+      for(let i=0;i<=rows;i++){
+        const s=along(i),p=this.at(r,s),width=this.widthAt(r,s);
+        for(let j=0;j<=columns;j++){
+          const u=-width+2*width*j/columns;
+          if(!sample(p.x+p.nx*u,p.z+p.nz*u))return null;
+        }
       }
-      for(const s of[0,len]){
-        const p=this.at(r,s);
-        for(const side of[-1,1])if(!sample(p.x+p.nx*side*finalWidth,p.z+p.nz*side*finalWidth))return null;
+      for(let s=.5;s<len;s+=.5){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}
+      for(const s of[-startLength-1,len+endLength+1]){
+        const p=this.at(r,s),width=this.widthAt(r,s);
+        for(const side of[-1,0,1])if(!sample(p.x+p.nx*side*width,p.z+p.nz*side*width))return null;
+      }
+      const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);
+      for(const q of partners){
+        for(const s of[0,-3,-6,-8,q.length,q.length+3,q.length+6,q.length+8]){
+          const p=this.at(q,s);
+          if(!sample(p.x,p.z))return null;
+        }
       }
       return h.done();
     }finally{
-      r.startLength=prevS;r.endLength=prevE;this.sampling=prevSampling;this.bakedLand=prevBakedLand;
+      r.startLength=prevS;r.endLength=prevE;r.width=prevW;r.narrowRail=prevNR;this.sampling=prevSampling;this.bakedLand=prevBakedLand;
     }
   }
 
@@ -449,7 +467,7 @@ export class ModernBridges {
     if(!entry||this.rejectedBaked.has(entry)){r.baked=null;r.bakedVerified=false;return false;}
     const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
     if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
-    const liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.level);
+    const liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.level);
     if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;return false;}
     const coreRows=Math.ceil(r.length),rows=coreRows+entry.startLength+entry.endLength,columns=Math.ceil(2*entry.finalWidth/.75);
     if(rows!==entry.rows||columns!==entry.columns||entry.gridY.length!==(rows+1)*(columns+1)){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;r.forceBuild=true;return false;}
@@ -489,7 +507,7 @@ export class ModernBridges {
     if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;
     const revision=this.terrain.dataRevision??0;if(r.revision===revision)return;r.revision=revision;
     if(r.baked&&!r.forceBuild&&r.baked.finalWidth===r.width){
-      const liveHash=this.spanLandHash(r,r.baked.startLength,r.baked.endLength,r.baked.finalWidth,r.baked.level);
+      const liveHash=this.spanLandHash(r,r.baked.startLength,r.baked.endLength,r.baked.finalWidth,r.baked.narrowRail,r.baked.level);
       if(liveHash===null)return;
       if(liveHash===r.baked.landHash){r.bakedVerified=true;return;}
       this.rejectedBaked.add(r.baked);r.baked=null;r.bakedVerified=false;r.forceBuild=true;

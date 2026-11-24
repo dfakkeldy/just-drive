@@ -218,19 +218,24 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   }
 
   // Synthetic ModernBridges hydration, geomHash/landHash/streamsHash binding, rejected-record stability, and fallback.
-  let level = 5, bump = 0;
-  const height = (x, z) => (z > 0 || z < -40 ? 10 + bump + x * .005 : Math.max(0, 10 - Math.min(-z, 40 + z) * 2));
+  let level = 5, bump = 0, localBump = 0;
+  const height = (x, z) => {
+    const base = z > 0 || z < -40 ? 10 + bump + x * .005 : Math.max(0, 10 - Math.min(-z, 40 + z) * 2);
+    // Localized 2 m hump on the approach away from bank/quarter-span stations (tests full-grid landHash coverage).
+    const hump = localBump && Math.abs(z - 11) <= 1.5 && Math.abs(x - 1.5) <= 1.5 ? localBump : 0;
+    return base + hump;
+  };
   const streamsA = {segments: new Float32Array([0, -20, 15, -20, 1.5])};
   const streamsB = {segments: new Float32Array([0, -20, 15, -19.5, 1.5])};
-  const makeTerrain = (streams = null, village = [0, 0]) => ({
+  const makeTerrain = (streams = null, village = [0, 0], manifestExtra = {}) => ({
     cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams,
-    manifest: {village, area: {id: 'mabou', name: 'Mabou'}},
+    manifest: {village, area: {id: 'mabou', name: 'Mabou'}, ...manifestExtra},
     heightAt: height,
     meshContactSource: () => 1,
     surfaceAt: (x, z) => ({ground: height(x, z), level, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
   });
   const roadList = [{id: 1, name: 'Fixture bridge', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]}];
-  level = 7; bump = 0;
+  level = 7; bump = 0; localBump = 0;
   const refTerrain = makeTerrain(streamsA, [0, 0]);
   const refRoads = new mod.Roads({roads: roadList}, [0, 0], refTerrain, null);
   const refM = refRoads.modern;
@@ -244,7 +249,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   };
   const refSpan = refM.spans[0];
   refM.ensure(refSpan);
-  const refLandHash = refM.spanLandHash(refSpan, refSpan.startLength, refSpan.endLength, refSpan.width, refSpan.level);
+  const refLandHash = refM.spanLandHash(refSpan, refSpan.startLength, refSpan.endLength, refSpan.width, refSpan.narrowRail, refSpan.level);
   assert.ok(refLandHash !== null, 'synthetic reference landHash computed');
   const gridY = new Float32Array(capGrid.length / 3);
   for (let i = 0; i < gridY.length; i++) gridY[i] = capGrid[i * 3 + 1];
@@ -335,6 +340,120 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   lateRoads.update(cam);
   assert.equal(lateRoads.modern.audit.builds, 2, 'late terrain mismatch rebuilds via live solver');
   assert.ok(Math.abs(lateRoads.modern.spans[0].y0 - 12.04) < 1e-6, 'late terrain mismatch updates bank to live 12.04 m');
+
+  // Local 2 m terrain rise on the approach (between bank/toe stations) must reject stale baked deck and solve live.
+  level = 7; bump = 0; localBump = 2;
+  const humpTerrain = makeTerrain(streamsA, [0, 0]);
+  const humpRoads = new mod.Roads({roads: roadList}, [0, 0], humpTerrain, syntheticBaked);
+  humpRoads.update(cam);
+  assert.equal(humpRoads.modern.audit.bakedBuilds, 0, 'local approach hump rejects stale baked deck');
+  assert.equal(humpRoads.modern.audit.builds, 1, 'local approach hump falls back to live solver');
+  localBump = 0;
+
+  // Mixed-level manifest (bank tile max level 7, approach tile max level 8): withholding level 8 must NOT reject valid bake.
+  const mixedManifest = {origin: [0, 0], size: 256 * 256, levels: {'7': ['0_0', '0_-1'], '8': ['0_0']}};
+  let hasLevel8 = true;
+  const mixedHeight = (x, z) => (z > 0 || z < -40 ? 10 + (z >= 0 && hasLevel8 ? 0.5 : 0) : Math.max(0, 10 - Math.min(-z, 40 + z) * 2));
+  const makeMixedTerrain = () => ({
+    cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
+    manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}, ...mixedManifest},
+    heightAt: mixedHeight,
+    meshContactSource: () => 1,
+    surfaceAt: (x, z) => ({ground: mixedHeight(x, z), level: z >= 0 && hasLevel8 ? 8 : 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+  });
+  const mRefTerrain = makeMixedTerrain();
+  const mRefRoads = new mod.Roads({roads: roadList}, [0, 0], mRefTerrain, null);
+  const mRefM = mRefRoads.modern;
+  let mGrid = null, mLand = [];
+  mRefM.emit = function(r, grid) {
+    mGrid = new Float32Array(grid); mLand = [];
+    this.land = (x, z) => { const h = origLand.call(this, x, z); mLand.push(h === null ? Number.NaN : h); return h; };
+    try { return origEmit.call(this, r, grid); } finally { this.land = origLand; }
+  };
+  const mSpan = mRefM.spans[0];
+  mRefM.ensure(mSpan);
+  assert.equal(mSpan.level, 7, 'mixed-level bank min level is 7 while z>=0 tile is level 8');
+  const mLandHash = mRefM.spanLandHash(mSpan, mSpan.startLength, mSpan.endLength, mSpan.width, mSpan.narrowRail, mSpan.level);
+  assert.ok(mLandHash !== null, 'mixed-level bake landHash computed');
+  const mGridY = new Float32Array(mGrid.length / 3);
+  for (let i = 0; i < mGridY.length; i++) mGridY[i] = mGrid[i * 3 + 1];
+  const mBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [{
+    chainKey: mSpan.chainKey, geomHash: mSpan.geomHash, landHash: mLandHash,
+    requestWidth: mSpan.width, finalWidth: mSpan.width, narrowRail: mSpan.narrowRail, level: mSpan.level,
+    smoothStart: mSpan.smoothStart, smoothEnd: mSpan.smoothEnd, ponyTruss: false,
+    startLength: mSpan.startLength, endLength: mSpan.endLength, y0: mSpan.y0, y1: mSpan.y1, outer0: mSpan.outer0, outer1: mSpan.outer1,
+    rows: Math.ceil(mSpan.length) + mSpan.startLength + mSpan.endLength, columns: Math.ceil(2 * mSpan.width / .75),
+    gridY: mGridY, emitLand: new Float64Array(mLand),
+  }]), 'mabou');
+  hasLevel8 = false;
+  const mRunTerrain = makeMixedTerrain();
+  const mRunRoads = new mod.Roads({roads: roadList}, [0, 0], mRunTerrain, mBaked);
+  mRunRoads.update(cam);
+  assert.equal(mRunRoads.modern.audit.bakedBuilds, 1, 'withheld level-8 tile still hydrates valid bake');
+  assert.equal(mRunRoads.modern.spans[0].bakedVerified, false, 'withheld level-8 tile stays pending verification');
+  hasLevel8 = true; mRunTerrain.dataRevision++;
+  mRunRoads.update(cam);
+  assert.equal(mRunRoads.modern.audit.builds, 1, 'arriving level-8 tile verifies without rebuild');
+  assert.equal(mRunRoads.modern.spans[0].bakedVerified, true, 'arriving level-8 tile locks bakedVerified');
+
+  // Parallel crossing removal must change geomHash so a narrowed rail span does not hydrate a stale 1.25 m width.
+  level = 7; bump = 0; localBump = 0;
+  const parRoads = [
+    {id: 10, name: 'Highway 104', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]},
+    {id: 11, name: 'Railroad', kind: 5, halfWidth: 2.6, bridge: true, pts: [[4, 0], [4, 40]]},
+  ];
+  const parRefTerrain = makeTerrain(streamsA, [0, 0]);
+  const parRef = new mod.Roads({roads: parRoads}, [0, 0], parRefTerrain, null);
+  const parM = parRef.modern;
+  const parInit = new Map(parM.spans.map(s => [s, s.width]));
+  const parRecords = new Map();
+  parM.emit = function(r, grid) {
+    capGrid = new Float32Array(grid); capLand = [];
+    this.land = (x, z) => { const h = origLand.call(this, x, z); capLand.push(h === null ? Number.NaN : h); return h; };
+    try { return origEmit.call(this, r, grid); } finally { this.land = origLand; }
+  };
+  for (let pass = 0; pass < 3; pass++) {
+    for (const s of parM.spans) {
+      capGrid = null; capLand = [];
+      parM.ensure(s);
+      if (capGrid) {
+        const gy = new Float32Array(capGrid.length / 3);
+        for (let i = 0; i < gy.length; i++) gy[i] = capGrid[i * 3 + 1];
+        parRecords.set(s, {
+          chainKey: s.chainKey, geomHash: s.geomHash,
+          landHash: parM.spanLandHash(s, s.startLength, s.endLength, s.width, s.narrowRail, s.level),
+          requestWidth: parInit.get(s), finalWidth: s.width, narrowRail: s.narrowRail, level: s.level,
+          smoothStart: s.smoothStart, smoothEnd: s.smoothEnd, ponyTruss: false,
+          startLength: s.startLength, endLength: s.endLength, y0: s.y0, y1: s.y1, outer0: s.outer0, outer1: s.outer1,
+          rows: Math.ceil(s.length) + s.startLength + s.endLength, columns: Math.ceil(2 * s.width / .75),
+          gridY: gy, emitLand: new Float64Array(capLand),
+        });
+      }
+    }
+  }
+  const railBakedWidth = parM.spans.find(s => s.road.id === 11).width;
+  assert.equal(railBakedWidth, 1.25, 'parallel rail span narrows to 1.25 m when highway is present');
+  const parBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [...parRecords.values()]), 'mabou');
+  // Now remove the parallel highway span: even at level 6, the lone rail span must NOT hydrate the stale 1.25 m narrowed deck.
+  level = 6;
+  const loneRailTerrain = makeTerrain(streamsA, [0, 0]);
+  const loneRail = new mod.Roads({roads: [parRoads[1]]}, [0, 0], loneRailTerrain, parBaked);
+  loneRail.update(cam);
+  assert.equal(loneRail.modern.audit.bakedBuilds, 0, 'removed parallel highway rejects narrowed rail bake via geomHash');
+  assert.equal(loneRail.modern.spans[0].width, 2.6 + 0.45, 'lone rail span keeps full 3.05 m half-width');
+  level = 7;
+
+  // Parallel highway bank shifted +2 m (grade-separated, same geomHash) must reject narrowed rail bake via landHash.
+  const sepTerrain = {
+    ...makeTerrain(streamsA, [0, 0]),
+    heightAt: (x, z) => height(x, z) + (x < 2 ? 2 : 0),
+    surfaceAt: (x, z) => ({ground: height(x, z) + (x < 2 ? 2 : 0), level: 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+  };
+  const sepRoads = new mod.Roads({roads: parRoads}, [0, 0], sepTerrain, parBaked);
+  sepRoads.update(cam);
+  const sepRail = sepRoads.modern.spans.find(s => s.road.id === 11);
+  assert.equal(sepRail.baked, null, 'grade-separated parallel highway rejects narrowed rail bake via landHash');
+  assert.equal(sepRail.width, 2.6 + 0.45, 'grade-separated rail span keeps full 3.05 m half-width');
 
   // Stream content edit (same hasStreams=true, moved brook segment) must reject stale baked deck via streamsHash.
   level = 7; bump = 0;
@@ -482,6 +601,27 @@ async function testAllAreasRealLand(replacements = {}) {
     }
     if (area === 'mabou') assert.ok(widenedChecked > 0, 'mabou: widened Highway 19 bridge road 28 must be checked');
 
+    // Verify withholding level-8 tiles on real land (e.g. Mabou 46/96, West Bay -100077) does not falsely reject valid bakes.
+    if (area === 'mabou' || area === 'westbay') {
+      const {terrain: tStaged} = mod.makeGround(base);
+      const stagedRoads = new mod.Roads(fullRoadData, manifest.village, tStaged, baked);
+      const Mstaged = stagedRoads.modern;
+      let stagedSolves = 0;
+      Mstaged.build = function(...args) { stagedSolves++; return proto.build.apply(this, args); };
+      await mod.preload(tStaged, Mstaged.spans.flatMap(r => r.pts), 120, 7);
+      for (const r of Mstaged.spans) Mstaged.ensure(r);
+      assert.equal(stagedSolves, 0, `${area}: level-7 arrival never falsely rejects baked decks`);
+      assert.equal(Mstaged.audit.bakedBuilds, Mstaged.spans.length, `${area}: all spans hydrate at level 7`);
+      await mod.preload(tStaged, Mstaged.spans.flatMap(r => r.pts), 120, 8);
+      tStaged.dataRevision++;
+      for (const r of Mstaged.spans) Mstaged.ensure(r);
+      assert.equal(stagedSolves, 0, `${area}: level-8 arrival after level-7 never solves`);
+      assert.equal(Mstaged.audit.builds, Mstaged.spans.length, `${area}: level-8 arrival causes zero rebuilds`);
+      for (const r of Mstaged.spans) assert.equal(r.bakedVerified, true, `${area} span ${r.road.id}: verified after staged level-8 arrival`);
+      for (const t of tStaged.tiles.values()) { t.mesh?.geometry.dispose(); t.mesh?.material.dispose(); }
+      tStaged.tiles.clear(); tStaged.roadCuts.dispose();
+    }
+
     summary.push({area, spans: Mbaked.spans.length, widenedChecked, bytes: rawBytes.length, hydrateMs: Number(hydrateMs.toFixed(1))});
     for (const t of [...tRef.tiles.values(), ...tBaked.tiles.values()]) { t.mesh?.geometry.dispose(); t.mesh?.material.dispose(); }
     tRef.tiles.clear(); tBaked.tiles.clear();
@@ -512,6 +652,9 @@ if (process.argv.includes('--mutations')) {
     ['streams guard removed', bridgesFile, bridgesSrc, 'if(!!this.terrain.streams!==decks.hasStreams||this.terrainStreamsHash()!==decks.streamsHash)return false;', '', /edited streams reject|disabled streams reject/],
     ['streamsHash check removed', bridgesFile, bridgesSrc, '||this.terrainStreamsHash()!==decks.streamsHash', '', /edited streams reject/],
     ['geomHash check removed', decksFile, decksSrc, 's.geomHash === geomHash && ', '', /moved span rejects|rejects different geomHash/],
+    ['parallel crossings omitted from geomHash', bridgesFile, bridgesSrc, 'const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);\n    h.num(partners.length);', 'const partners:Span[]=[];\n    h.num(partners.length);', /removed parallel highway rejects/],
+    ['parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);\n      for(const q of partners){', 'const partners:Span[]=[];\n      for(const q of partners){', /grade-separated parallel highway rejects/],
+    ['probeTargetLevel capped at fallbackLevel', bridgesFile, bridgesSrc, 'const top=Math.max(8,fallbackLevel);', 'const top=fallbackLevel;', /withheld level-8 tile/],
     ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;return false;}', '', /raised terrain before first build rejects/],
     ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===r.baked.landHash){r.bakedVerified=true;return;}', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
     ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds/],

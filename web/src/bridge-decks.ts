@@ -1,5 +1,4 @@
 import {BRIDGE_DECK_ASSETS} from './bridge-decks-assets';
-import {readFile} from './store';
 
 /** The vertical exaggeration and sea level baked into bridge-decks.bin. Other settings solve in the browser. */
 export const BAKED_BRIDGE_EXAG = 1.5;
@@ -313,7 +312,10 @@ export async function loadBridgeDecks(
       }, timeoutMs);
     });
     const load = (async () => {
-      const blob = await readFile(base, asset.file, true, controller?.signal);
+      const url = `${base}/${asset.file}`;
+      const res = controller ? await fetch(url, { signal: controller.signal }) : await fetch(url);
+      if (!res.ok) throw new Error(`${res.status} ${url}`);
+      const blob = await res.blob();
       if (blob.size !== asset.bytes) throw new Error('Bridge deck asset length mismatch');
       const bytes = await blob.arrayBuffer();
       const digest = await crypto.subtle.digest('SHA-256', bytes);

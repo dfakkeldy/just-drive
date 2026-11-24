@@ -46,7 +46,7 @@ function pack(base: string, i: number): Promise<ArrayBuffer> {
 }
 
 /** The bytes of one baked file. Direct companions bypass the tile index; tile reads stay strict. */
-export async function readFile(base: string, path: string, direct = false, signal?: AbortSignal): Promise<Blob> {
+export async function readFile(base: string, path: string, direct = false): Promise<Blob> {
   const entry = direct ? undefined : index?.files[path];
   if (entry) {
     const [n, at, size] = entry;
@@ -57,7 +57,7 @@ export async function readFile(base: string, path: string, direct = false, signa
     return new Blob([new Uint8Array(buf, at, size)]);
   }
   if (index && !direct) throw new Error(`not in any pack: ${path}`);
-  const res = signal ? await fetch(`${base}/${path}`, { signal }) : await fetch(`${base}/${path}`);
+  const res = await fetch(`${base}/${path}`);
   if (!res.ok) throw new Error(`${res.status} ${path}`);
   return res.blob();
 }

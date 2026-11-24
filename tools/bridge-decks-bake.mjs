@@ -200,7 +200,7 @@ export async function bakeArea(mod, sourceRoot, area) {
     capturedGrid = null; capturedLand = null;
     M.ensure(r);
     if (capturedGrid) {
-      const landHash = M.spanLandHash(r, r.startLength, r.endLength, r.width, r.level);
+      const landHash = M.spanLandHash(r, r.startLength, r.endLength, r.width, r.narrowRail, r.level);
       assert.ok(landHash !== null, `${area} span ${r.road.id}: final-level land hash probes must all be loaded`);
       const count = capturedGrid.length / 3;
       const gridY = new Float32Array(count);
