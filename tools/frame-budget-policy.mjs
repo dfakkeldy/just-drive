@@ -45,6 +45,11 @@ export const scenes = [
 // The phone draw cap a whole phone frame must fit: the loosest phone pins once the LOW small-props range landed
 // (new-player-start 227 calls, works-yard/phone-mail 1,475,392 triangles), frozen so a later saving elsewhere does not
 // tighten it. tools/point-tupper-driver-budget.mjs holds the Point Tupper LOW start, AI and all, to it. Raise on purpose only.
+// Baked modern bridge decks (bridge-decks.bin, grok-bots#1319 + #1320) add +1 asset request per area at default exag 1.5
+// across all 34 rows in frame-budget.json and frame-budget-traffic.json, removing runtime bridge deck solving at start-up
+// and restoring Point Tupper's start-up ceiling from 3000/6400 ms back to 2600/6000 ms. In animal-home (all four modes),
+// a distant bridge within 1500 m now hydrates its final level-8 deck instead of a coarser level-6/7 build (+88 triangles,
+// zero change in calls/geometries/textures/programs; other scenes save 32 to 23,318 triangles or stay exact).
 export const PHONE_CAP = Object.freeze({ calls: 227, triangles: 1475392 });
 export const modes = [
   {id:'phone-mail',phone:true,explore:false},

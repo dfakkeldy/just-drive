@@ -36,12 +36,9 @@ export const DEFAULT_AREAS=['mabou','porthood','pointtupper','cansocauseway','ju
 export const STARTUP_BUDGET_MS=Object.freeze({
  mabou:Object.freeze({low:3300,high:7000}),
  porthood:Object.freeze({low:2200,high:4700}),
- // TEMPORARY (just-drive#6, 22 Nov 2026, chosen by the Mabou main thread): Point Tupper builds bridge span geometry at
- // start-up, mostly span -100084 (Industrial Park Road) and the road-cut refresh after it. The player waits about
- // 2.8 s at LOW against 1.9 s on main (HIGH about 5.9 s against 4.7 s) for decks with no launch lip, sidewalks on
- // the decks and road paint under overpasses. grok-bots#1320 (with #1319 folded in) bakes the spans, must bring
- // LOW back under 2,600 ms and HIGH under 6,000 ms, and then sets these back to low:2600, high:6000.
- pointtupper:Object.freeze({low:3000,high:6400}),
+ // Bridge span geometry is baked in data/baked/.../bridge-decks.bin (grok-bots#1319 + #1320), restoring the
+ // Point Tupper ceiling from the temporary #6 stopgap (3000/6400) back to 2600/6000.
+ pointtupper:Object.freeze({low:2600,high:6000}),
  cansocauseway:Object.freeze({low:2300,high:5000}),
  judique:Object.freeze({low:2350,high:5300}),
  westbay:Object.freeze({low:3500,high:7000}),

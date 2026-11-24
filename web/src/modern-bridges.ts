@@ -1,4 +1,5 @@
 import {deckWithinReach} from './bridge-contact';
+import {GeomHasher,type BakedBridgeDecks,type BakedBridgeSpan} from './bridge-decks';
 import * as THREE from 'three';
 import type {Road,RoadHit} from './roads';
 import type {Terrain} from './terrain';
@@ -61,7 +62,7 @@ const nearLine = (pts:readonly (readonly [number,number])[],x:number,z:number,re
 interface BridgeRoad extends Road {inferred?:boolean;sources?:readonly string[];road?:number;sourceRoad?:number}
 interface Approach {road:Road;cum:number[];distance:number;direction:number;offsetX:number;offsetZ:number}
 interface Span {
-  road:BridgeRoad;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
+  road:BridgeRoad;chainKey:string;geomHash:bigint;baked:BakedBridgeSpan|null;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
   x0:number;z0:number;x1:number;z1:number; y0:number;y1:number;outer0:number;outer1:number;level:number;revision:number;serial:number;
   skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;followed:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
   /** Half width of each carried road, for a sidewalk reserved on the deck (Roads.bridgeWalks). */
@@ -84,18 +85,21 @@ export class ModernBridges {
   private readonly hidden=new Set<number>();
   private readonly driving={kind:9,halfWidth:6,washboard:false,road:true,roadKind:1};
   private sampling=false;
+  private bakedLand:Float64Array|null=null;
+  private bakedLandAt=0;
+  private readonly rejectedBaked=new WeakSet<BakedBridgeSpan>();
   /** Cumulative lengths of each road an approach follows, made once per road. */
   private readonly roadCum=new Map<Road,number[]>();
   private dirty=false;
   ponyDeckVersion=0;
-  readonly audit={builds:0,merges:0,heightTrianglesMax:0};
+  readonly audit={builds:0,bakedBuilds:0,merges:0,heightTrianglesMax:0};
   private runList:{pts:readonly (readonly [number,number])[];roads:ReadonlySet<number>;halfWidth:number}[]|null=null;
   /** Each span's centre line and the road ids it carries (its members and source road), for traffic that follows a road. */
   get runs():readonly {pts:readonly (readonly [number,number])[];roads:ReadonlySet<number>;halfWidth:number}[] {
     return this.runList??=this.spans.map(r=>({pts:r.pts,roads:new Set(r.road.sourceRoad===undefined?r.members:[...r.members,r.road.sourceRoad]),halfWidth:r.width}));
   }
 
-  constructor(roads:readonly Road[],private terrain:Terrain,private group:THREE.Group,bakedSpans?:readonly BridgeRoad[],private nearest?:(x:number,z:number,reach:number,filter:(r:Road)=>boolean)=>RoadHit|null,private walks?:ReadonlyMap<number,{side:number;width:number}>){
+  constructor(roads:readonly Road[],private terrain:Terrain,private group:THREE.Group,bakedSpans?:readonly BridgeRoad[],private nearest?:(x:number,z:number,reach:number,filter:(r:Road)=>boolean)=>RoadHit|null,private walks?:ReadonlyMap<number,{side:number;width:number}>,private bakedDecks?:BakedBridgeDecks|null){
     const all:BridgeRoad[]=[...roads],m=terrain.manifest;
     if(m&&bakedSpans)for(const r of bakedSpans)all.push({...r,sourceRoad:r.road,pts:r.pts.map(([e,n]):[number,number]=>[e-m.village[0],m.village[1]-n])});
     const bakedSources=new Set(bakedSpans?.flatMap(r=>r.sources??[])??[]);
@@ -137,8 +141,9 @@ export class ModernBridges {
       const timber=road.kind>=4||road.name==='Railroad'||carried.some(r=>r.inferred);
       const segments=new Float64Array((pts.length-1)*10);
       for(let j=1;j<pts.length;j++){const a=pts[j-1],b=pts[j],dx=b[0]-a[0],dz=b[1]-a[1];segments.set([a[0],a[1],dx,dz,dx*dx+dz*dz||1,Math.min(a[0],b[0]),Math.max(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[1],b[1]),.01+2e-7*(Math.abs(dx)+Math.abs(dz))],(j-1)*10);}
-      const r:Span={road,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
+      const r:Span={road,chainKey:plan.chainKey,geomHash:0n,baked:null,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
+      r.geomHash=this.spanGeomHash(r);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
       const probes:number[]=[];
       for(let s=-MAX_APPROACH;s<length+MAX_APPROACH+8;s+=8){const p=this.at(r,Math.min(s,length+MAX_APPROACH));for(const u of[-width,0,width]){
@@ -305,6 +310,10 @@ export class ModernBridges {
     return{x:a[0]+(b[0]-a[0])*t,z:a[1]+(b[1]-a[1])*t,nx:-dz,nz:dx,yaw:Math.atan2(dx,dz)};
   }
   private land(x:number,z:number):number|null {
+    if(this.bakedLand){
+      if(this.bakedLandAt>=this.bakedLand.length)throw new RangeError('Baked bridge land table exhausted');
+      const v=this.bakedLand[this.bakedLandAt++];return v===v?v:null;
+    }
     // withDeck calls back here. During construction this one site is excluded, and contact scopes are cleared.
     return this.terrain.constructionHeightAt?this.terrain.constructionHeightAt(x,z):this.terrain.heightAt(x,z);
   }
@@ -361,10 +370,70 @@ export class ModernBridges {
     return land+(Math.max(land,bank)-land)*blend;
   }
 
+  /** Fingerprint the span's centreline, carried road kinds/widths and attached approaches so a stale baked deck is never reused. */
+  private spanGeomHash(r:Span):bigint {
+    const h=new GeomHasher();
+    h.num(r.road.kind);h.num(r.road.halfWidth);h.num(r.timber?1:0);h.num(r.pts.length);
+    for(const p of r.pts){h.num(p[0]);h.num(p[1]);}
+    for(const ap of[r.start,r.end]){
+      if(!ap){h.num(-1);continue;}
+      h.num(1);h.num(ap.distance);h.num(ap.direction);h.num(ap.offsetX);h.num(ap.offsetZ);
+      h.num(ap.road.kind);h.num(ap.road.halfWidth);h.num(ap.road.pts.length);
+      for(const p of ap.road.pts){h.num(p[0]);h.num(p[1]);}
+    }
+    return h.done();
+  }
+
+  /** Hydrate one span from its baked final-land deck without running the grade solver. Returns true when handled
+   *  (hydrated, or waiting for level-6 bank tiles); returns false to fall back to the runtime solver. */
+  private tryHydrateBaked(r:Span):boolean {
+    const decks=this.bakedDecks;
+    if(!decks)return false;
+    if(!!this.terrain.streams!==decks.hasStreams)return false;
+    const m=this.terrain.manifest;
+    if(m&&(m.village[0]!==decks.village[0]||m.village[1]!==decks.village[1]))return false;
+    const entry=decks.find(r.chainKey,r.width,!!r.road.ponyTruss,r.geomHash);
+    if(!entry||this.rejectedBaked.has(entry)){r.baked=null;return false;}
+    const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
+    if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
+    const coreRows=Math.ceil(r.length),rows=coreRows+entry.startLength+entry.endLength,columns=Math.ceil(2*entry.finalWidth/.75);
+    if(rows!==entry.rows||columns!==entry.columns||entry.gridY.length!==(rows+1)*(columns+1)){this.rejectedBaked.add(entry);r.baked=null;r.forceBuild=true;return false;}
+    const prev={width:r.width,narrowRail:r.narrowRail,y0:r.y0,y1:r.y1,outer0:r.outer0,outer1:r.outer1,level:r.level,startLength:r.startLength,endLength:r.endLength,smoothStart:r.smoothStart,smoothEnd:r.smoothEnd,forceBuild:r.forceBuild,extendStart:r.extendStart,extendEnd:r.extendEnd,triangles:r.triangles,triangleDeck:r.triangleDeck,cells:new Map(r.cells),approachRanges:r.approachRanges,skinBox:new Float64Array(r.skinBox)};
+    let geometry:THREE.BufferGeometry|null=null;
+    this.sampling=true;this.bakedLand=entry.emitLand;this.bakedLandAt=0;
+    try{
+      r.width=entry.finalWidth;r.narrowRail=entry.narrowRail;r.y0=entry.y0;r.y1=entry.y1;r.outer0=entry.outer0;r.outer1=entry.outer1;
+      r.level=entry.level;r.startLength=entry.startLength;r.endLength=entry.endLength;r.smoothStart=entry.smoothStart;r.smoothEnd=entry.smoothEnd;
+      r.forceBuild=false;r.extendStart=false;r.extendEnd=false;r.triangles=null;
+      const grid=new Float32Array((rows+1)*(columns+1)*3);
+      const along=(i:number)=>i<=r.startLength?i-r.startLength:i<=r.startLength+coreRows?r.length*(i-r.startLength)/coreRows:r.length+i-r.startLength-coreRows;
+      for(let i=0,v=0;i<=rows;i++){const s=along(i),p=this.at(r,s);
+        for(let j=0;j<=columns;j++,v++){const width=this.widthAt(r,s),u=-width+2*width*j/columns,k=v*3;grid[k]=p.x+p.nx*u;grid[k+1]=entry.gridY[v];grid[k+2]=p.z+p.nz*u;}
+      }
+      geometry=this.emit(r,grid);
+      if(this.bakedLandAt!==entry.emitLand.length)throw new RangeError('Baked bridge land count mismatch');
+      this.prepareCorridor(r);r.geometry?.dispose();r.geometry=geometry;r.baked=entry;r.serial=++this.audit.builds;this.audit.bakedBuilds++;
+      if(r.width!==prev.width)this.runList=null;
+      if(r.road.ponyTruss)this.ponyDeckVersion++;
+      this.dirty=true;
+      return true;
+    }catch{
+      geometry?.dispose();
+      r.width=prev.width;r.narrowRail=prev.narrowRail;r.y0=prev.y0;r.y1=prev.y1;r.outer0=prev.outer0;r.outer1=prev.outer1;
+      r.level=prev.level;r.startLength=prev.startLength;r.endLength=prev.endLength;r.smoothStart=prev.smoothStart;r.smoothEnd=prev.smoothEnd;
+      r.forceBuild=prev.forceBuild;r.extendStart=prev.extendStart;r.extendEnd=prev.extendEnd;r.triangles=prev.triangles;r.triangleDeck=prev.triangleDeck;
+      r.cells=prev.cells;r.approachRanges=prev.approachRanges;r.skinBox=prev.skinBox;
+      this.rejectedBaked.add(entry);r.baked=null;r.forceBuild=true;
+      return false;
+    }finally{this.bakedLand=null;this.bakedLandAt=0;this.sampling=false;}
+  }
+
   /** touch=false (a followed span beyond DRAW): the source check does not mark its bank tiles as used, so a far
    *  bridge does not keep old land tiles from eviction. A rebuild still reads the land it needs. */
   private ensure(r:Span,touch=true):void {
+    if(r.baked&&!r.forceBuild&&r.baked.finalWidth===r.width)return;
     const revision=this.terrain.dataRevision??0;if(r.revision===revision)return;r.revision=revision;
+    if(this.tryHydrateBaked(r))return;
     let changed=r.forceBuild||!r.geometry,known=true;
     for(let i=0;i<r.probes.length;i+=3){const source=this.terrain.meshContactSource?.(r.probes[i],r.probes[i+1],true,touch)??revision;
       if(source!==r.probes[i+2])changed=true;r.probes[i+2]=source;if(source<0)known=false;
@@ -489,7 +558,7 @@ export class ModernBridges {
     if(!r)return 0;
     const built=!!(r.geometry&&r.triangles&&r.level>=6);
     const rev=this.terrain.dataRevision??0;
-    if(built&&(r.level>=8||r.revision===rev)){
+    if(built&&(r.baked||r.level>=8||r.revision===rev)){
       out[0]=r.y0;out[1]=r.y1;
       return r.level;
     }
