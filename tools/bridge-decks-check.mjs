@@ -70,6 +70,7 @@ function spanBits(r) {
     r.geometry.getAttribute('position').array,
     r.geometry.getAttribute('normal').array,
     r.geometry.getAttribute('color').array,
+    ...(r.geometry.getAttribute('approach') ? [r.geometry.getAttribute('approach').array] : []),
     r.approachRanges,
     r.corridor,
     r.skinBox,
@@ -350,16 +351,36 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   assert.equal(humpRoads.modern.audit.builds, 1, 'local approach hump falls back to live solver');
   localBump = 0;
 
-  // Mixed-level manifest (bank tile max level 7, approach tile max level 8): withholding level 8 must NOT reject valid bake.
-  const mixedManifest = {origin: [0, 0], size: 256 * 256, levels: {'7': ['0_0', '0_-1'], '8': ['0_0']}};
-  let hasLevel8 = true;
-  const mixedHeight = (x, z) => (z > 0 || z < -40 ? 10 + (z >= 0 && hasLevel8 ? 0.5 : 0) : Math.max(0, 10 - Math.min(-z, 40 + z) * 2));
+  // Synthetic 2 m ridge inside a deck triangle between grid vertices (e.g. (1.1, -0.25)) must be caught by CHECKS landHash.
+  const ridgeTerrain = {
+    ...makeTerrain(streamsA, [0, 0]),
+    heightAt: (x, z) => height(x, z) + (Math.abs(x - 1.1) < 0.25 && Math.abs(z + 0.25) < 0.25 ? 2 : 0),
+    surfaceAt: (x, z) => ({ground: height(x, z) + (Math.abs(x - 1.1) < 0.25 && Math.abs(z + 0.25) < 0.25 ? 2 : 0), level: 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+  };
+  const ridgeRoads = new mod.Roads({roads: roadList}, [0, 0], ridgeTerrain, syntheticBaked);
+  ridgeRoads.update(cam);
+  assert.equal(ridgeRoads.modern.audit.bakedBuilds, 0, 'interior triangle ridge rejects stale baked deck');
+  assert.equal(ridgeRoads.modern.audit.builds, 1, 'interior triangle ridge solves live');
+
+  // Adding a perpendicular bridge across the approach changes global isSpan and must invalidate geomHash.
+  const perpRoadsList = [
+    ...roadList,
+    {id: 2, name: 'Cross bridge', kind: 1, halfWidth: 3.6, bridge: true, pts: [[-10, -10], [10, -10]]},
+  ];
+  const perpRoads = new mod.Roads({roads: perpRoadsList}, [0, 0], makeTerrain(streamsA, [0, 0]), syntheticBaked);
+  perpRoads.update(cam);
+  assert.equal(perpRoads.modern.audit.bakedBuilds, 0, 'perpendicular crossing bridge invalidates geomHash');
+
+  // Mixed-level manifest (bank tile max level 7, approach tile max level 9): withholding level 9 must NOT reject or falsely verify.
+  const mixedManifest = {origin: [0, 0], size: 256 * 256, levels: {'7': ['0_0', '0_-1'], '9': ['0_0']}};
+  let hasLevel9 = true;
+  const mixedHeight = (x, z) => (z > 0 || z < -40 ? 10 + (z >= 0 && hasLevel9 ? 0.5 : 0) : Math.max(0, 10 - Math.min(-z, 40 + z) * 2));
   const makeMixedTerrain = () => ({
     cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
     manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}, ...mixedManifest},
     heightAt: mixedHeight,
-    meshContactSource: () => 1,
-    surfaceAt: (x, z) => ({ground: mixedHeight(x, z), level: z >= 0 && hasLevel8 ? 8 : 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+    meshContactSource: () => (hasLevel9 ? 2 : 1),
+    surfaceAt: (x, z) => ({ground: mixedHeight(x, z), level: z >= 0 && hasLevel9 ? 9 : 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
   });
   const mRefTerrain = makeMixedTerrain();
   const mRefRoads = new mod.Roads({roads: roadList}, [0, 0], mRefTerrain, null);
@@ -372,7 +393,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   };
   const mSpan = mRefM.spans[0];
   mRefM.ensure(mSpan);
-  assert.equal(mSpan.level, 7, 'mixed-level bank min level is 7 while z>=0 tile is level 8');
+  assert.equal(mSpan.level, 7, 'mixed-level bank min level is 7 while z>=0 tile is level 9');
   const mLandHash = mRefM.spanLandHash(mSpan, mSpan.startLength, mSpan.endLength, mSpan.width, mSpan.narrowRail, mSpan.level);
   assert.ok(mLandHash !== null, 'mixed-level bake landHash computed');
   const mGridY = new Float32Array(mGrid.length / 3);
@@ -385,18 +406,26 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     rows: Math.ceil(mSpan.length) + mSpan.startLength + mSpan.endLength, columns: Math.ceil(2 * mSpan.width / .75),
     gridY: mGridY, emitLand: new Float64Array(mLand),
   }]), 'mabou');
-  hasLevel8 = false;
+  hasLevel9 = false;
   const mRunTerrain = makeMixedTerrain();
   const mRunRoads = new mod.Roads({roads: roadList}, [0, 0], mRunTerrain, mBaked);
   mRunRoads.update(cam);
-  assert.equal(mRunRoads.modern.audit.bakedBuilds, 1, 'withheld level-8 tile still hydrates valid bake');
-  assert.equal(mRunRoads.modern.spans[0].bakedVerified, false, 'withheld level-8 tile stays pending verification');
-  hasLevel8 = true; mRunTerrain.dataRevision++;
+  assert.equal(mRunRoads.modern.audit.bakedBuilds, 1, 'withheld level-9 tile still hydrates valid bake');
+  assert.equal(mRunRoads.modern.spans[0].bakedVerified, false, 'withheld level-9 tile stays pending verification');
+  // Distant followed span (5 km away, touch=false) must NOT call surfaceAt on unchanged tile revisions.
+  mRunRoads.modern.spans[0].followed = true;
+  let farTouches = 0;
+  const origMixedSurface = mRunTerrain.surfaceAt;
+  mRunTerrain.surfaceAt = (x, z) => { farTouches++; return origMixedSurface(x, z); };
+  for (let i = 0; i < 3; i++) { mRunTerrain.dataRevision++; mRunRoads.update(new THREE.Vector3(5000, 20, 0)); }
+  mRunTerrain.surfaceAt = origMixedSurface;
+  assert.equal(farTouches, 0, 'distant followed span makes zero touching surfaceAt calls while tile sources are unchanged');
+  hasLevel9 = true; mRunTerrain.dataRevision++;
   mRunRoads.update(cam);
-  assert.equal(mRunRoads.modern.audit.builds, 1, 'arriving level-8 tile verifies without rebuild');
-  assert.equal(mRunRoads.modern.spans[0].bakedVerified, true, 'arriving level-8 tile locks bakedVerified');
+  assert.equal(mRunRoads.modern.audit.builds, 1, 'arriving level-9 tile verifies without rebuild');
+  assert.equal(mRunRoads.modern.spans[0].bakedVerified, true, 'arriving level-9 tile locks bakedVerified');
 
-  // Parallel crossing removal must change geomHash so a narrowed rail span does not hydrate a stale 1.25 m width.
+  // Parallel crossing removal and late grade-separation must restore pre-hydration width and narrowRail.
   level = 7; bump = 0; localBump = 0;
   const parRoads = [
     {id: 10, name: 'Highway 104', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]},
@@ -441,19 +470,26 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   loneRail.update(cam);
   assert.equal(loneRail.modern.audit.bakedBuilds, 0, 'removed parallel highway rejects narrowed rail bake via geomHash');
   assert.equal(loneRail.modern.spans[0].width, 2.6 + 0.45, 'lone rail span keeps full 3.05 m half-width');
-  level = 7;
 
-  // Parallel highway bank shifted +2 m (grade-separated, same geomHash) must reject narrowed rail bake via landHash.
+  // Hydrate parallel rail at level 6 (width narrows to 1.25, narrowRail=true), then reveal grade-separated highway bank at level 7.
+  // Late rejection MUST restore pre-hydration width (3.05 m) and narrowRail (false) before running the live solver.
+  let sepLevel = 6, sepShift = 0;
   const sepTerrain = {
     ...makeTerrain(streamsA, [0, 0]),
-    heightAt: (x, z) => height(x, z) + (x < 2 ? 2 : 0),
-    surfaceAt: (x, z) => ({ground: height(x, z) + (x < 2 ? 2 : 0), level: 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+    heightAt: (x, z) => height(x, z) + (x < 2 ? sepShift : 0),
+    surfaceAt: (x, z) => ({ground: height(x, z) + (x < 2 ? sepShift : 0), level: sepLevel, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
   };
   const sepRoads = new mod.Roads({roads: parRoads}, [0, 0], sepTerrain, parBaked);
   sepRoads.update(cam);
   const sepRail = sepRoads.modern.spans.find(s => s.road.id === 11);
+  assert.equal(sepRail.width, 1.25, 'level-6 parallel rail hydrates narrowed 1.25 m initially');
+  assert.equal(sepRail.narrowRail, true, 'level-6 parallel rail sets narrowRail=true initially');
+  sepLevel = 7; sepShift = 2; sepTerrain.dataRevision++;
+  sepRoads.update(cam);
   assert.equal(sepRail.baked, null, 'grade-separated parallel highway rejects narrowed rail bake via landHash');
-  assert.equal(sepRail.width, 2.6 + 0.45, 'grade-separated rail span keeps full 3.05 m half-width');
+  assert.equal(sepRail.width, 2.6 + 0.45, 'late parallel rejection restores full 3.05 m half-width');
+  assert.equal(sepRail.narrowRail, false, 'late parallel rejection restores narrowRail=false');
+  level = 7;
 
   // Stream content edit (same hasStreams=true, moved brook segment) must reject stale baked deck via streamsHash.
   level = 7; bump = 0;
@@ -652,9 +688,12 @@ if (process.argv.includes('--mutations')) {
     ['streams guard removed', bridgesFile, bridgesSrc, 'if(!!this.terrain.streams!==decks.hasStreams||this.terrainStreamsHash()!==decks.streamsHash)return false;', '', /edited streams reject|disabled streams reject/],
     ['streamsHash check removed', bridgesFile, bridgesSrc, '||this.terrainStreamsHash()!==decks.streamsHash', '', /edited streams reject/],
     ['geomHash check removed', decksFile, decksSrc, 's.geomHash === geomHash && ', '', /moved span rejects|rejects different geomHash/],
-    ['parallel crossings omitted from geomHash', bridgesFile, bridgesSrc, 'const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);\n    h.num(partners.length);', 'const partners:Span[]=[];\n    h.num(partners.length);', /removed parallel highway rejects/],
+    ['nearby spans omitted from geomHash', bridgesFile, bridgesSrc, 'const others=[...nearby].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);', 'const others:Span[]=[];', /perpendicular crossing bridge invalidates|removed parallel highway rejects/],
     ['parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);\n      for(const q of partners){', 'const partners:Span[]=[];\n      for(const q of partners){', /grade-separated parallel highway rejects/],
-    ['probeTargetLevel capped at fallbackLevel', bridgesFile, bridgesSrc, 'const top=Math.max(8,fallbackLevel);', 'const top=fallbackLevel;', /withheld level-8 tile/],
+    ['late parallel rejection keeps narrowed width', bridgesFile, bridgesSrc, 'r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;', '', /late parallel rejection restores/],
+    ['interior CHECKS omitted from landHash', bridgesFile, bridgesSrc, 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i1;i++)for(let j=0;j<columns;j++){', 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i0;i++)for(let j=0;j<columns;j++){', /interior triangle ridge rejects/],
+    ['distant followed span touches tiles', bridgesFile, bridgesSrc, 'if(!touch&&!this.probesChanged(r,false))return;', '', /zero touching surfaceAt calls/],
+    ['probeTargetLevel capped at 8', bridgesFile, bridgesSrc, 'const top=Math.max(this.manifestMaxLevel,fallbackLevel);', 'const top=Math.max(8,fallbackLevel);', /withheld level-9 tile/],
     ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);r.baked=null;r.bakedVerified=false;return false;}', '', /raised terrain before first build rejects/],
     ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===r.baked.landHash){r.bakedVerified=true;return;}', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
     ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds/],

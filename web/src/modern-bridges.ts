@@ -9,6 +9,151 @@ import {prepareTimberPlans, timberPlan} from './eras/timber-bridge';
 import {Mesher, type RGB} from './yard-kit';
 import {emitPonyTrussSuperstructure, PONY_TRUSS} from './november-bridges';
 
+const APPROACH_LIGHT_ANCHOR = 'vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;';
+const APPROACH_LIGHTS_BEGIN = '#include <lights_fragment_begin>';
+const APPROACH_DIR_START = '#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )';
+const APPROACH_DIR_END = '#if ( NUM_RECT_AREA_LIGHTS > 0 ) && defined( RE_Direct_RectArea )';
+const APPROACH_VERT_PARS = /* glsl */ `
+attribute vec4 approach;
+varying vec4 vApproach;
+varying vec3 vBridgeWorld;
+varying vec3 vBridgeNormal;
+`;
+const APPROACH_VERT_BODY = /* glsl */ `
+#include <begin_vertex>
+vApproach = approach;
+vBridgeWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+vBridgeNormal = normalize(mat3(modelMatrix) * objectNormal);
+`;
+const APPROACH_FRAG_PARS = /* glsl */ `
+uniform vec3 uBridgeSunDir;
+uniform vec3 uBridgeSunColor;
+uniform vec3 uBridgeSkyColor;
+uniform vec3 uBridgeFogColor;
+uniform float uBridgeFogDensity;
+uniform float uBridgeSeaLevel;
+uniform float uBridgeWinterCover;
+uniform float uBridgeRainWet;
+varying vec4 vApproach;
+varying vec3 vBridgeWorld;
+varying vec3 vBridgeNormal;
+float bridgeHash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float bridgeNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(bridgeHash(i), bridgeHash(i + vec2(1.0, 0.0)), f.x),
+    mix(bridgeHash(i + vec2(0.0, 1.0)), bridgeHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+`;
+const APPROACH_FRAG_COLOR = /* glsl */ `
+#include <color_fragment>
+if (vApproach.x > 0.5) {
+  vec2 bp = vBridgeWorld.xz;
+  float bGrit = bridgeNoise(bp * 3.1), bSpeck = bridgeNoise(bp * 23.0);
+  vec3 bGravel = mix(vec3(0.200, 0.180, 0.150), vec3(0.300, 0.270, 0.230), bGrit) * (0.8 + 0.4 * bSpeck);
+  float bDist = abs(vApproach.y), bHalf = vApproach.z, bKind = vApproach.x;
+  vec3 bSurf = bGravel;
+  if (bKind > 4.5 && bKind < 5.5) {
+    // Rail trail (kind 5): fine crusher dust and worn tracks matching TERRAIN_FRAG.
+    vec3 bDust = mix(vec3(0.300, 0.280, 0.240), vec3(0.380, 0.360, 0.315), bGrit) * (0.92 + 0.16 * bSpeck);
+    float bWorn = 1.0 - smoothstep(0.15, 0.5, abs(bDist - bHalf * 0.45));
+    bSurf = mix(bDust, bDust * 0.88, bWorn);
+    float bEdge = bDist + (bridgeNoise(bp * 1.9) - 0.5) * 0.16;
+    bSurf = mix(bSurf, bGravel, smoothstep(bHalf - 0.25, bHalf + 0.08, bEdge));
+  } else if (bKind > 3.5 && bKind < 4.5) {
+    // Dirt track (kind 4): dirt ruts with a grassy centre matching TERRAIN_FRAG.
+    float bRut = 1.0 - smoothstep(0.2, 0.45, abs(bDist - 0.75));
+    vec3 bGrass = mix(vec3(0.130, 0.120, 0.045), vec3(0.210, 0.180, 0.065), bridgeNoise(bp * 0.06)) * (0.85 + 0.3 * bridgeNoise(bp * 0.9));
+    bSurf = mix(mix(bGrass, vec3(0.160, 0.170, 0.060), 0.5), vec3(0.170, 0.130, 0.090) * (0.85 + 0.3 * bSpeck), bRut);
+  } else {
+    // Gravel road (kind 3) and washboard gravel road (code 6): wheel tracks and optional 0.62 m ridges.
+    float bTrack = 1.0 - smoothstep(0.15, 0.55, abs(bDist - bHalf * 0.5));
+    bSurf = mix(bGravel, bGravel * 0.72, bTrack);
+    if (bKind > 5.5) {
+      float bCamDist = length(cameraPosition - vBridgeWorld);
+      float bCrest = 0.5 - 0.5 * cos(vApproach.w * 10.134);
+      bSurf *= 1.0 - 0.30 * (1.0 - bCrest) * (1.0 - smoothstep(25.0, 90.0, bCamDist));
+    }
+    bSurf = mix(bSurf, bGravel, smoothstep(bHalf - 0.12, bHalf + 0.18, bDist));
+  }
+  if (uBridgeWinterCover > 0.0) {
+    float bFine = bridgeNoise(bp * 0.9);
+    float bMid = 0.6 * bridgeNoise(bp * 0.03) + 0.34 * bridgeNoise(bp * 0.0609 + 11.0);
+    float bPloughed = smoothstep(bHalf - 0.58, bHalf + 0.78, bDist + 0.38 * (bFine - 0.5));
+    float bHeight = smoothstep(0.25, 2.2, vBridgeWorld.y - uBridgeSeaLevel);
+    float bCover = bHeight * bPloughed * mix(0.69, 1.0, smoothstep(0.25, 0.66, bMid));
+    vec3 bSnow = mix(vec3(0.50, 0.59, 0.69), vec3(0.85, 0.90, 0.95), bFine * 0.56 + bMid * 0.44);
+    bSurf = mix(bSurf, bSnow, bCover * uBridgeWinterCover);
+  }
+  diffuseColor.rgb = bSurf;
+}
+`;
+const APPROACH_FRAG_LIGHT = /* glsl */ `
+${APPROACH_LIGHT_ANCHOR}
+if (vApproach.x > 0.5) {
+  vec3 bNorm = normalize(vBridgeNormal) * (gl_FrontFacing ? 1.0 : -1.0);
+  // Scale only the shadowed directional sun by PI to match TERRAIN_FRAG; local spot/point lamps stay 1x.
+  vec3 bDirect = (reflectedLight.directDiffuse - bDirDiffuse) + bDirDiffuse * PI;
+  vec3 bIndirect = diffuseColor.rgb * (uBridgeSkyColor * (0.65 + 0.55 * max(bNorm.y, 0.0)) + uBridgeSunColor * vec3(0.060, 0.050, 0.035));
+  outgoingLight = bDirect + bIndirect + totalEmissiveRadiance;
+  if (uBridgeRainWet > 0.0) {
+    float bRoadWet = 1.0 - smoothstep(vApproach.z, vApproach.z + 0.8, abs(vApproach.y));
+    outgoingLight *= 1.0 - uBridgeRainWet * mix(0.23, 0.48, bRoadWet);
+    vec3 bView = normalize(cameraPosition - vBridgeWorld);
+    float bGrazing = 1.0 - clamp(dot(bNorm, bView), 0.0, 1.0);
+    outgoingLight += uBridgeSkyColor * uBridgeRainWet * max(bNorm.y, 0.0) * mix(0.025, 0.11, bRoadWet) * bGrazing * bGrazing;
+  }
+  vec3 bFogV = vBridgeWorld - cameraPosition;
+  float bFogDist = length(bFogV);
+  float bHmid = max(0.5 * (vBridgeWorld.y + cameraPosition.y), 0.0);
+  float bFogF = 1.0 - exp(-bFogDist * uBridgeFogDensity * exp(-bHmid / 900.0));
+  float bFogS = max(dot(bFogV / max(bFogDist, 1.0), uBridgeSunDir), 0.0);
+  vec3 bHaze = uBridgeFogColor + uBridgeSunColor * 0.12 * pow(bFogS, 5.0);
+  outgoingLight = mix(outgoingLight, bHaze, clamp(bFogF, 0.0, 1.0));
+}
+`;
+/** Shade unpaved bridge approaches (gravel roads, tracks, rail trails) with the terrain's own noise and lighting so they
+ *  join the road without reading as flat concrete. Decks, rails and paved approaches keep plain vertex colours. */
+function applyApproachShader(material:THREE.MeshLambertMaterial,uniforms?:Record<string,THREE.IUniform>):void {
+  const zero={value:0};
+  const sunDir=uniforms?.sunDir??{value:new THREE.Vector3(0.4,0.7,0.5).normalize()};
+  const sunColor=uniforms?.sunColor??{value:new THREE.Color(4,3.6,3.3)};
+  const skyColor=uniforms?.skyColor??{value:new THREE.Color(0.3,0.44,0.72)};
+  const fogColor=uniforms?.fogColor??{value:new THREE.Color(0.62,0.66,0.72)};
+  const fogDensity=uniforms?.fogDensity??zero;
+  const seaLevel=uniforms?.seaLevel??zero;
+  const winterCover=uniforms?.winterCover??zero;
+  const rainWet=uniforms?.rainWet??zero;
+  const lightsChunk=THREE.ShaderChunk.lights_fragment_begin;
+  const patchedLights=lightsChunk.includes(APPROACH_DIR_START)&&lightsChunk.includes(APPROACH_DIR_END)
+    ?lightsChunk
+      .replace(APPROACH_DIR_START,'vec3 bDirBefore = reflectedLight.directDiffuse;\n'+APPROACH_DIR_START)
+      .replace(APPROACH_DIR_END,'vec3 bDirDiffuse = reflectedLight.directDiffuse - bDirBefore;\n'+APPROACH_DIR_END)
+    :null;
+  material.onBeforeCompile=shader=>{
+    if(!patchedLights||!shader.fragmentShader.includes(APPROACH_LIGHTS_BEGIN)||!shader.fragmentShader.includes(APPROACH_LIGHT_ANCHOR)){
+      console.warn('[modern-bridges] the Lambert light sum has moved: unpaved approaches lose terrain lighting');
+    }
+    shader.uniforms.uBridgeSunDir=sunDir;
+    shader.uniforms.uBridgeSunColor=sunColor;
+    shader.uniforms.uBridgeSkyColor=skyColor;
+    shader.uniforms.uBridgeFogColor=fogColor;
+    shader.uniforms.uBridgeFogDensity=fogDensity;
+    shader.uniforms.uBridgeSeaLevel=seaLevel;
+    shader.uniforms.uBridgeWinterCover=winterCover;
+    shader.uniforms.uBridgeRainWet=rainWet;
+    shader.vertexShader=APPROACH_VERT_PARS+shader.vertexShader.replace('#include <begin_vertex>',APPROACH_VERT_BODY);
+    let frag=APPROACH_FRAG_PARS+shader.fragmentShader.replace('#include <color_fragment>',APPROACH_FRAG_COLOR);
+    if(patchedLights)frag=frag.replace(APPROACH_LIGHTS_BEGIN,patchedLights).replace(APPROACH_LIGHT_ANCHOR,APPROACH_FRAG_LIGHT);
+    shader.fragmentShader=frag;
+  };
+  material.customProgramCacheKey=()=>'mmm-modern-bridge-approach-v2';
+}
+
 const APPROACH = 16, MAX_APPROACH = 96, CELL = 64, TRI_CELL = 2;
 const EMPTY: readonly number[] = [];
 // Signed Cantor pairing avoids row-wrap aliases, including raw-UTM fixtures. Wheel queries allocate no strings.
@@ -62,7 +207,7 @@ const nearLine = (pts:readonly (readonly [number,number])[],x:number,z:number,re
 interface BridgeRoad extends Road {inferred?:boolean;sources?:readonly string[];road?:number;sourceRoad?:number}
 interface Approach {road:Road;cum:number[];distance:number;direction:number;offsetX:number;offsetZ:number}
 interface Span {
-  road:BridgeRoad;chainKey:string;geomHash:bigint;baked:BakedBridgeSpan|null;bakedVerified:boolean;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
+  road:BridgeRoad;chainKey:string;geomHash:bigint;hasNearbySpans:boolean;baked:BakedBridgeSpan|null;bakedVerified:boolean;bakedPrevWidth:number;bakedPrevNarrowRail:boolean;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
   x0:number;z0:number;x1:number;z1:number; y0:number;y1:number;outer0:number;outer1:number;level:number;revision:number;serial:number;
   skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;followed:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
   /** Half width of each carried road, for a sidewalk reserved on the deck (Roads.bridgeWalks). */
@@ -90,6 +235,7 @@ export class ModernBridges {
   private cachedStreams:unknown=undefined;
   private cachedStreamsHash=0n;
   private manifestTiles:Map<number,Set<string>>|null=null;
+  private manifestMaxLevel=0;
   private readonly rejectedBaked=new WeakSet<BakedBridgeSpan>();
   /** Cumulative lengths of each road an approach follows, made once per road. */
   private readonly roadCum=new Map<Road,number[]>();
@@ -103,6 +249,7 @@ export class ModernBridges {
   }
 
   constructor(roads:readonly Road[],private terrain:Terrain,private group:THREE.Group,bakedSpans?:readonly BridgeRoad[],private nearest?:(x:number,z:number,reach:number,filter:(r:Road)=>boolean)=>RoadHit|null,private walks?:ReadonlyMap<number,{side:number;width:number}>,private bakedDecks?:BakedBridgeDecks|null){
+    applyApproachShader(this.material,(terrain as {uniforms?:Record<string,THREE.IUniform>}).uniforms);
     const all:BridgeRoad[]=[...roads],m=terrain.manifest;
     if(m&&bakedSpans)for(const r of bakedSpans)all.push({...r,sourceRoad:r.road,pts:r.pts.map(([e,n]):[number,number]=>[e-m.village[0],m.village[1]-n])});
     const bakedSources=new Set(bakedSpans?.flatMap(r=>r.sources??[])??[]);
@@ -144,7 +291,7 @@ export class ModernBridges {
       const timber=road.kind>=4||road.name==='Railroad'||carried.some(r=>r.inferred);
       const segments=new Float64Array((pts.length-1)*10);
       for(let j=1;j<pts.length;j++){const a=pts[j-1],b=pts[j],dx=b[0]-a[0],dz=b[1]-a[1];segments.set([a[0],a[1],dx,dz,dx*dx+dz*dz||1,Math.min(a[0],b[0]),Math.max(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[1],b[1]),.01+2e-7*(Math.abs(dx)+Math.abs(dz))],(j-1)*10);}
-      const r:Span={road,chainKey:plan.chainKey,geomHash:0n,baked:null,bakedVerified:false,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
+      const r:Span={road,chainKey:plan.chainKey,geomHash:0n,hasNearbySpans:false,baked:null,bakedVerified:false,bakedPrevWidth:width,bakedPrevNarrowRail:false,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
       const probes:number[]=[];
@@ -373,7 +520,8 @@ export class ModernBridges {
     return land+(Math.max(land,bank)-land)*blend;
   }
 
-  /** Fingerprint the span's centreline, carried road kinds/widths, attached approaches and parallel crossings so a stale baked deck is never reused. */
+  /** Fingerprint the span's centreline, carried road kinds/widths, attached approaches, and every neighbouring span
+   *  sharing any 64 m cell (both parallel crossings and perpendicular/overlapping footprints) so a stale bake is never reused. */
   private spanGeomHash(r:Span):bigint {
     const h=new GeomHasher();
     h.num(r.road.kind);h.num(r.road.halfWidth);h.num(r.timber?1:0);h.num(r.pts.length);
@@ -384,11 +532,18 @@ export class ModernBridges {
       h.num(ap.road.kind);h.num(ap.road.halfWidth);h.num(ap.road.pts.length);
       for(const p of ap.road.pts){h.num(p[0]);h.num(p[1]);}
     }
-    const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);
-    h.num(partners.length);
-    for(const q of partners){
-      h.num(q.road.kind);h.num(q.road.halfWidth);h.num(q.road.name==='Railroad'?1:0);h.num(q.pts.length);
-      for(const p of q.pts){h.num(p[0]);h.num(p[1]);}
+    const nearby=new Set<Span>();
+    for(let z=Math.floor(r.z0/CELL);z<=Math.floor(r.z1/CELL);z++)for(let x=Math.floor(r.x0/CELL);x<=Math.floor(r.x1/CELL);x++){
+      const list=this.cells.get(key(x*CELL,z*CELL,CELL));
+      if(list)for(const idx of list){const o=this.spans[idx];if(o!==r)nearby.add(o);}
+    }
+    for(const q of r.parallel)nearby.add(q);
+    r.hasNearbySpans=nearby.size>0;
+    const others=[...nearby].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);
+    h.num(others.length);
+    for(const o of others){
+      h.num(o.road.kind);h.num(o.road.halfWidth);h.num(o.width);h.num(o.road.name==='Railroad'?1:0);h.num(r.parallel.includes(o)?1:0);h.num(o.pts.length);
+      for(const p of o.pts){h.num(p[0]);h.num(p[1]);}
     }
     return h.done();
   }
@@ -399,14 +554,29 @@ export class ModernBridges {
     return this.cachedStreamsHash;
   }
 
+  private probesChanged(r:Span,touch:boolean):boolean {
+    if(!this.terrain.meshContactSource)return true;
+    let changed=false;
+    for(let i=0;i<r.probes.length;i+=3){
+      const source=this.terrain.meshContactSource(r.probes[i],r.probes[i+1],true,touch);
+      if(source!==r.probes[i+2]){changed=true;r.probes[i+2]=source;}
+    }
+    return changed;
+  }
+
   private probeTargetLevel(x:number,z:number,fallbackLevel:number):number {
     const m=this.terrain.manifest;
     if(!m?.levels)return fallbackLevel;
     if(!this.manifestTiles){
       this.manifestTiles=new Map();
-      for(const [k,list]of Object.entries(m.levels))this.manifestTiles.set(Number(k),new Set(list));
+      let maxLv=0;
+      for(const [k,list]of Object.entries(m.levels)){
+        const lv=Number(k);
+        if(list.length){this.manifestTiles.set(lv,new Set(list));if(lv>maxLv)maxLv=lv;}
+      }
+      this.manifestMaxLevel=maxLv;
     }
-    const top=Math.max(8,fallbackLevel);
+    const top=Math.max(this.manifestMaxLevel,fallbackLevel);
     for(let lv=top;lv>=0;lv--){
       const set=this.manifestTiles.get(lv);if(!set)continue;
       const size=m.size/2**lv,i=Math.floor((x+m.village[0]-m.origin[0])/size),j=Math.floor((z-m.village[1]+m.origin[1])/size);
@@ -415,8 +585,9 @@ export class ModernBridges {
     return fallbackLevel;
   }
 
-  /** Fingerprint live ground heights across the full deck/approach grid, clearance line, toe slopes and parallel
-   *  crossing banks once every probe reaches its finest manifest tile level. Returns null while any finer tile is pending. */
+  /** Fingerprint live ground heights across every solver/emitter terrain input (full grid vertices, solver triangle
+   *  interior CHECKS lattice & centroids inside isSpan, 0.5 m clearance line, toe slopes, piers and parallel crossing
+   *  banks) once every probe reaches its finest manifest tile level. Returns null while any finer tile is pending. */
   private spanLandHash(r:Span,startLength:number,endLength:number,finalWidth:number,narrowRail:boolean,fallbackLevel:number):bigint|null {
     const prevS=r.startLength,prevE=r.endLength,prevW=r.width,prevNR=r.narrowRail,prevSampling=this.sampling,prevBakedLand=this.bakedLand;
     r.startLength=startLength;r.endLength=endLength;r.width=finalWidth;r.narrowRail=narrowRail;this.sampling=true;this.bakedLand=null;
@@ -430,14 +601,41 @@ export class ModernBridges {
         h.num(y===null?0:1);h.num(y??0);
         return true;
       };
-      for(let i=0;i<=rows;i++){
+      // Match build(r)'s exact Float32 grid (x, z) coordinates so interior CHECKS sample the identical points.
+      const gxz=new Float32Array((rows+1)*(columns+1)*2);
+      for(let i=0,v=0;i<=rows;i++){
         const s=along(i),p=this.at(r,s),width=this.widthAt(r,s);
-        for(let j=0;j<=columns;j++){
-          const u=-width+2*width*j/columns;
-          if(!sample(p.x+p.nx*u,p.z+p.nz*u))return null;
+        for(let j=0;j<=columns;j++,v++){
+          const u=-width+2*width*j/columns,x=p.x+p.nx*u,z=p.z+p.nz*u;
+          gxz[v*2]=x;gxz[v*2+1]=z;
+          if(!sample(x,z))return null;
+        }
+      }
+      // Hash every solver triangle-interior lift point (CHECKS centroids and 4x4 quarter-cell lattice) on the core deck
+      // and adjacent bank rows (or all rows when another span shares a 64 m cell), independent of neighbor hydration order.
+      const i0=r.hasNearbySpans?0:Math.max(0,startLength-1),i1=r.hasNearbySpans?rows:Math.min(rows,startLength+coreRows+1);
+      const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);
+      for(let i=i0;i<i1;i++)for(let j=0;j<columns;j++){
+        const a=(i*(columns+1)+j)*2,b=a+2,c=a+(columns+1)*2,d=c+2;
+        for(let half=0;half<2;half++){
+          const t0=half===0?a:b,t1=c,t2=half===0?b:d;
+          for(let q=0;q<CHECKS.length;q+=3){
+            const w0=CHECKS[q],w1=CHECKS[q+1],w2=CHECKS[q+2];
+            const x=gxz[t0]*w0+gxz[t1]*w1+gxz[t2]*w2,z=gxz[t0+1]*w0+gxz[t1+1]*w1+gxz[t2+1]*w2;
+            if(q===0){
+              if(!sample(x,z))return null;
+            }else{
+              const e=(q/3-1)*4+half*2,slot=((4*i+CHECK_CELLS[e])%5)*memoRow+4*j+CHECK_CELLS[e+1];
+              if(memoState[slot]===0||memoX[slot]!==x||memoZ[slot]!==z||x===0&&!Object.is(memoX[slot],x)||z===0&&!Object.is(memoZ[slot],z)){
+                memoState[slot]=1;memoX[slot]=x;memoZ[slot]=z;
+                if(!sample(x,z))return null;
+              }
+            }
+          }
         }
       }
       for(let s=.5;s<len;s+=.5){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}
+      if(len>35)for(const s of[len*.12,len*.88]){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}
       for(const s of[-startLength-1,len+endLength+1]){
         const p=this.at(r,s),width=this.widthAt(r,s);
         for(const side of[-1,0,1])if(!sample(p.x+p.nx*side*width,p.z+p.nz*side*width))return null;
@@ -457,7 +655,7 @@ export class ModernBridges {
 
   /** Hydrate one span from its baked final-land deck without running the grade solver. Returns true when handled
    *  (hydrated, or waiting for level-6 bank tiles); returns false to fall back to the runtime solver. */
-  private tryHydrateBaked(r:Span):boolean {
+  private tryHydrateBaked(r:Span,touch=true):boolean {
     const decks=this.bakedDecks;
     if(!decks)return false;
     if(!!this.terrain.streams!==decks.hasStreams||this.terrainStreamsHash()!==decks.streamsHash)return false;
@@ -465,6 +663,7 @@ export class ModernBridges {
     if(m&&(m.village[0]!==decks.village[0]||m.village[1]!==decks.village[1]))return false;
     const entry=decks.find(r.chainKey,r.width,!!r.road.ponyTruss,r.geomHash);
     if(!entry||this.rejectedBaked.has(entry)){r.baked=null;r.bakedVerified=false;return false;}
+    if(!touch&&!this.probesChanged(r,false))return true;
     const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
     if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
     const liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.level);
@@ -485,7 +684,9 @@ export class ModernBridges {
       }
       geometry=this.emit(r,grid);
       if(this.bakedLandAt!==entry.emitLand.length)throw new RangeError('Baked bridge land count mismatch');
-      this.prepareCorridor(r);r.geometry?.dispose();r.geometry=geometry;r.baked=entry;r.bakedVerified=liveHash===entry.landHash;r.serial=++this.audit.builds;this.audit.bakedBuilds++;
+      this.prepareCorridor(r);r.geometry?.dispose();r.geometry=geometry;r.baked=entry;r.bakedPrevWidth=prev.width;r.bakedPrevNarrowRail=prev.narrowRail;r.bakedVerified=liveHash===entry.landHash;
+      if(!r.bakedVerified)this.probesChanged(r,false);
+      r.serial=++this.audit.builds;this.audit.bakedBuilds++;
       if(r.width!==prev.width)this.runList=null;
       if(r.road.ponyTruss)this.ponyDeckVersion++;
       this.dirty=true;
@@ -507,12 +708,16 @@ export class ModernBridges {
     if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;
     const revision=this.terrain.dataRevision??0;if(r.revision===revision)return;r.revision=revision;
     if(r.baked&&!r.forceBuild&&r.baked.finalWidth===r.width){
+      if(!touch&&!this.probesChanged(r,false))return;
       const liveHash=this.spanLandHash(r,r.baked.startLength,r.baked.endLength,r.baked.finalWidth,r.baked.narrowRail,r.baked.level);
       if(liveHash===null)return;
       if(liveHash===r.baked.landHash){r.bakedVerified=true;return;}
+      const oldW=r.width;
+      r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;
+      if(r.width!==oldW)this.runList=null;
       this.rejectedBaked.add(r.baked);r.baked=null;r.bakedVerified=false;r.forceBuild=true;
     }
-    if(this.tryHydrateBaked(r))return;
+    if(this.tryHydrateBaked(r,touch))return;
     let changed=r.forceBuild||!r.geometry,known=true;
     for(let i=0;i<r.probes.length;i+=3){const source=this.terrain.meshContactSource?.(r.probes[i],r.probes[i+1],true,touch)??revision;
       if(source!==r.probes[i+2])changed=true;r.probes[i+2]=source;if(source<0)known=false;
@@ -712,6 +917,11 @@ export class ModernBridges {
       if(this.drawn(r)){data.set(a.array,at);at+=a.array.length;}
       else for(let i=0;i<r.approachRanges.length;i+=2){const part=(a.array as Float32Array).subarray(r.approachRanges[i]*3,r.approachRanges[i+1]*3);data.set(part,at);at+=part.length;}
     }geometry.setAttribute(name,new THREE.BufferAttribute(data,3));}
+    let hasApproach=false;for(const r of this.spans)if(r.geometry?.getAttribute('approach')){hasApproach=true;break;}
+    if(hasApproach){const data=new Float32Array(count*4);let at=0;for(const r of this.spans){const p=r.geometry?.getAttribute('position');if(!p)continue;const a=r.geometry?.getAttribute('approach');
+      if(this.drawn(r)){if(a)data.set(a.array,at);at+=p.count*4;}
+      else for(let i=0;i<r.approachRanges.length;i+=2){const len=(r.approachRanges[i+1]-r.approachRanges[i])*4;if(a)data.set((a.array as Float32Array).subarray(r.approachRanges[i]*4,r.approachRanges[i+1]*4),at);at+=len;}
+    }geometry.setAttribute('approach',new THREE.BufferAttribute(data,4));}
     geometry.computeBoundingSphere();
     if(!this.mesh){this.mesh=new THREE.Mesh(geometry,this.material);this.mesh.name='Modern bridge decks';this.mesh.receiveShadow=true;this.group.add(this.mesh);}
     else{this.mesh.geometry.dispose();this.mesh.geometry=geometry;}this.audit.merges++;this.terrain.updateRoadCuts?.();
@@ -809,20 +1019,55 @@ export class ModernBridges {
     const approachRanges:number[]=[];
     const approach=(emit:()=>void)=>{const from=m.pos.length/3;emit();const to=m.pos.length/3;if(to===from)return;
       if(approachRanges.length&&approachRanges[approachRanges.length-1]===from)approachRanges[approachRanges.length-1]=to;else approachRanges.push(from,to);};
-    const triangle=(a:number,b:number,c:number,color:RGB,part:number)=>{
+    const stride=columns+1,surface:number[]=[];
+    const hasWash=!!(r.road.washboard||r.start?.road.washboard||r.end?.road.washboard);
+    const WASH_PERIOD=(2*Math.PI)/10.134;
+    const toeFrame=(sToe:number):{base:number;cross:number}|null=>{
+      if(!hasWash)return null;
+      const toe=this.at(r,sToe),tx=toe.nz,tz=-toe.nx,hw=this.widthAt(r,sToe);
+      let axis:[number,number]|null=null;
+      for(let d=0;d<=hw&&!axis;d+=0.5){
+        for(const sgn of d===0?[0]:[-1,1]){
+          axis=this.terrain.roadAlongAxis?.(toe.x+toe.nx*d*sgn,toe.z+toe.nz*d*sgn,tx,tz)??null;
+          if(axis)break;
+        }
+      }
+      const ax=axis?axis[0]:tx,az=axis?axis[1]:tz;
+      const base=(((toe.x*ax+toe.z*az)%WASH_PERIOD)+WASH_PERIOD)%WASH_PERIOD;
+      return {base,cross:toe.nx*ax+toe.nz*az};
+    };
+    const startFrame=toeFrame(-r.startLength),endFrame=toeFrame(r.length+r.endLength);
+    const vertexApproach=(v:number,code:number,half:number,part:number)=>{
+      if(!code){surface.push(0,0,0,0);return;}
+      const vi=v/3,ri=Math.floor(vi/stride),cj=vi-ri*stride,sv=along(ri),wv=this.widthAt(r,sv),uv=-wv+2*wv*cj/columns;
+      let w=sv;
+      if(code===6){
+        const frame=part===0?startFrame:endFrame,sToe=part===0?-r.startLength:r.length+r.endLength;
+        if(frame){
+          const dToe=part===0?sv-sToe:sToe-sv,blend=Math.max(0,1-dToe/3);
+          w=(sv-sToe)+frame.base+uv*frame.cross*blend;
+        }
+      }
+      surface.push(code,uv,half,w);
+    };
+    const triangle=(a:number,b:number,c:number,color:RGB,part:number,code:number,half:number)=>{
       deckFlags[count/9]=part;
       if((grid[b+2]-grid[a+2])*(grid[c]-grid[a])-(grid[b]-grid[a])*(grid[c+2]-grid[a+2])<0){const swap=b;b=c;c=swap;}
       top[count]=grid[a];top[count+1]=grid[a+1];top[count+2]=grid[a+2];top[count+3]=grid[b];top[count+4]=grid[b+1];top[count+5]=grid[b+2];top[count+6]=grid[c];top[count+7]=grid[c+1];top[count+8]=grid[c+2];count+=9;
+      vertexApproach(a,code,half,part);vertexApproach(b,code,half,part);vertexApproach(c,code,half,part);
       const draw=()=>m.tri(grid[a],grid[a+1],grid[a+2],grid[b],grid[b+1],grid[b+2],grid[c],grid[c+1],grid[c+2],color);
       if(part===1)draw();else approach(draw);
     };
     for(let i=0;i<rows;i++)for(let j=0;j<columns;j++){
       const a=(i*(columns+1)+j)*3,b=a+3,c=a+(columns+1)*3,d=c+3;
       const s=(along(i)+along(i+1))/2,part=s<0?0:s>r.length?2:1,deck=part===1;
-      const kind=(s<0?r.start?.road.kind:r.end?.road.kind)??r.road.kind;
+      const road=(s<0?r.start?.road:r.end?.road)??r.road,kind=road.kind;
+      const washboard=!!(r.road.washboard||road.washboard);
+      const code=deck||kind<=2?0:kind===3?(washboard?6:3):kind===5?5:4;
+      const half=r.narrowRail?1.25:road.halfWidth;
       const uMid=-r.width+2*r.width*(j+.5)/columns;
       const color:RGB=deck?(r.road.ponyTruss?(Math.abs(uMid)<=PONY_TRUSS.clearHalf?[.16,.165,.17]:[.42,.41,.39]):r.timber?[.31+(i%3)*.012,.225+(i%3)*.008,.14]:[.205,.215,.21]):kind<=2?[.16,.16,.17]:kind===3?[.25,.225,.19]:kind===5?[.34,.32,.28]:[.17,.13,.09];
-      triangle(a,c,b,color,part);triangle(b,c,d,color,part);
+      triangle(a,c,b,color,part,code,half);triangle(b,c,d,color,part,code,half);
     }
     r.triangleDeck=deckFlags;r.triangles=top;r.cells.clear();r.skinBox.set([Infinity,Infinity,-Infinity,-Infinity]);
     for(let i=0;i<top.length;i+=9){
@@ -884,6 +1129,9 @@ export class ModernBridges {
     if(r.timber)for(let s=8;s<r.length-4;s+=8)support(s,false);
     else if(r.length>35){support(r.length*.12,false);support(r.length*.88,false);}
     r.approachRanges=new Int32Array(approachRanges);
-    return m.geometry();
+    const geometry=m.geometry(),approachAttr=new Float32Array((m.pos.length/3)*4);
+    approachAttr.set(surface);
+    geometry.setAttribute('approach',new THREE.BufferAttribute(approachAttr,4));
+    return geometry;
   }
 }
