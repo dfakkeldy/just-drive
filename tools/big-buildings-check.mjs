@@ -291,6 +291,13 @@ const round = (id, e, n, diameter, eave, ridge, roof) => block(id, e, n, diamete
   // A long turned hall. One box round it would clear four times its own area of forest.
   const hall = block(2, V[0] - 300, V[1] + 500, 300, 40, 37, 7, 7.5, 'flat');
   const drawnHall = roofed(hall, V, 1.3), boxes = drawnHall.clear;
+  const raisedHall = { ...hall, shape: undefined, floorGround: 15, foundationGround: 7 };
+  assert.ok(Math.abs(minY(raisedHall, V, 1.5) - 10.4) < 1e-4, 'foundation extends below the low corner');
+  const raisedModel = new Buildings([raisedHall], V, 1, 0);
+  cast.set(new THREE.Vector3(-300, 40, -500), down);
+  assert.equal(cast.intersectObject(raisedModel.mesh)[0].point.y, 22.5, 'roof follows the raised floor');
+  dispose(raisedModel);
+
   let covered = 0, cleared = 0;
   const a = 37 * Math.PI / 180;
   for (let x = -520; x <= -80; x += 2) for (let z = -720; z <= -280; z += 2) {

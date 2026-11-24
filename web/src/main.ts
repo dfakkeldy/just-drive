@@ -250,6 +250,8 @@ await initStore(base);
 // to start its read now waits for it there (boot-tasks.ts), so the build order and the failures stay as they were.
 const landmarksRead = AREA.landmarks ? early(getJson('landmarks.json')) : null;
 const buildingsRead = manifest.buildings ? early(getJson(manifest.buildings.file)) : null;
+const foundationsRead = ERA.modern && buildingsRead ? early(fetch(`${base}/building-foundations.json`)
+  .then(response => response.ok ? response.json() : null).catch(() => null)) : null;
 const stylesRead = ERA.modern && manifest.buildingStyles ? early(getJson(manifest.buildingStyles.file)) : null;
 const pavedRead = ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1') ? early(readFile(base, 'paved/index.json')) : null;
 const cemeteryEntry = (manifest as Manifest & { cemeteries?: { file: string } }).cemeteries;
@@ -445,7 +447,18 @@ let littleMabouArt: ReturnType<typeof littleMabouBuildingArt> | undefined;
 // group, the pub, the bank branch, lamp posts, sidewalk, string lights): built by hand from the dash cam brief. The boxes
 // it replaces leave the drawing only; they stay properties. ?mabou=0 leaves the surveyed boxes.
 const mabouSite = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
-const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then((data: { buildings: Building[] }) => {
+const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then(async (data: { buildings: Building[] }) => {
+  const foundations = await foundationsRead?.take();
+  for (const b of data.buildings) {
+    const row = foundations?.[b.id];
+    if (!Array.isArray(row) || row.length !== 8) continue;
+    const [x, y, ground, axis, length, width, floor, low] = row;
+    if (x !== b.x || y !== b.y || ground !== b.ground || axis !== b.axisDeg || length !== b.length || width !== b.width) continue;
+    if (typeof floor !== 'number' || typeof low !== 'number' || !Number.isFinite(floor) || !Number.isFinite(low) ||
+        floor < b.ground || low > floor) continue;
+    b.floorGround = floor;
+    b.foundationGround = low;
+  }
   mappedBuildings = data.buildings;
   // Little Mabou Road's two homes (Port Hood pack only); the area's other sites still run on the result.
   if (ERA.modern && AREA.id === 'porthood') littleMabouArt = littleMabouBuildingArt(data.buildings);

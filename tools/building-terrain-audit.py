@@ -62,6 +62,9 @@ def audit(baked, output=None):
             continue
         area = 'mabou' if root.name == 'terrain' else root.name
         sample = terrain_sampler(root)
+        companion = root / 'building-foundations.json'
+        installed = json.loads(companion.read_text()) if companion.is_file() else {}
+        corrections = {}
         buildings = json.loads((root / 'buildings.json').read_text())['buildings']
         # Wings of a single ordinary building must retain one shared floor.
         # Blocks and tanks represent separately measured structures.
@@ -80,25 +83,26 @@ def audit(baked, output=None):
         for building in buildings:
             heights = corners[building['id']]
             key = group(building)
-            if output:
-                building.pop('floorGround', None)
-                building.pop('foundationGround', None)
-                if key in raised:
-                    building['floorGround'] = math.ceil(raised[key] * 100) / 100
-                    building['foundationGround'] = math.floor(lows[key] * 100) / 100
-            excess = max(heights) - building.get('floorGround', building['ground'])
+            identity = [building[field] for field in ('x', 'y', 'ground', 'axisDeg', 'length', 'width')]
+            if key in raised:
+                corrections[str(building['id'])] = [
+                    *identity, math.ceil(raised[key] * 100) / 100, math.floor(lows[key] * 100) / 100,
+                ]
+            correction = (corrections if output else installed).get(str(building['id']))
+            floor = correction[6] if correction and correction[:6] == identity else building['ground']
+            excess = max(heights) - floor
             if excess > 0.5:
                 failures.append(dict(area=area, id=building['id'], ground=building['ground'],
                                      heights=heights, excess=excess))
                 counts[area] += 1
         if output:
-            dest = output / root.relative_to(baked) / 'buildings.json'
-            if dest.resolve() == (root / 'buildings.json').resolve():
+            dest = output / root.relative_to(baked) / companion.name
+            if dest.resolve() == companion.resolve():
                 raise ValueError('Output must be separate from the installed land')
             dest.parent.mkdir(parents=True, exist_ok=True)
-            data = json.loads((root / 'buildings.json').read_text())
-            data['buildings'] = buildings
-            dest.write_text(json.dumps(data, separators=(',', ':')) + '\n')
+            temporary = dest.with_suffix('.tmp')
+            temporary.write_text(json.dumps(corrections, separators=(',', ':')) + '\n')
+            temporary.replace(dest)
         print(f'{area}: {counts[area]} of {len(buildings)}', flush=True)
     return sorted(failures, key=lambda row: -row['excess'])
 
@@ -107,7 +111,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('baked', type=Path)
     parser.add_argument('--report', type=Path, help='Write the full list as JSON')
-    parser.add_argument('--output', type=Path, help='Write corrected building files to a separate land directory')
+    parser.add_argument('--output', type=Path, help='Write building foundation companions to a separate land directory')
     args = parser.parse_args()
     failures = audit(args.baked, args.output)
     print(f'Total: {len(failures)}')
