@@ -258,7 +258,8 @@ export async function bakeArea(mod, sourceRoot, area) {
       if (seenKey.has(k)) continue;
       seenKey.add(k);
       initWidths.set(r, need);
-      r.width = need; r.forceBuild = true; r.revision = -1;
+      r.width = need; r.baseWidth = need; r.forceBuild = true; r.revision = -1;
+      for (const s of M.spans) s.geomHash = M.spanGeomHash(s);
       runEnsure(r);
       entries.push(latestBySpan.get(r));
     }

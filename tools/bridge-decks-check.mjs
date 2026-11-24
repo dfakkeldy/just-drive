@@ -427,16 +427,78 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
       surfaceAt: (x, z) => ({ground: height(x, z), level: wStageLevel, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 3, bridge: true, washboard: true}),
     };
     const wRunRoads = new mod.Roads({roads: washRoadsList}, [0, 0], wRunTerrain, wBaked);
-    let wSolves = 0;
+    let wSolves = 0, wLandHashCalls = 0;
+    const origWLandHash = proto.spanLandHash;
     wRunRoads.modern.build = function(...args) { wSolves++; return proto.build.apply(this, args); };
     wRunRoads.update(cam);
     assert.equal(wRunRoads.modern.audit.bakedBuilds, 1, 'washboard bridge hydrates at level 6');
     if (distant) wRunRoads.modern.spans[0].followed = true;
+    wRunRoads.modern.spanLandHash = function(...args) { wLandHashCalls++; return origWLandHash.apply(this, args); };
     wStageLevel = 7; washAxis = [0.2, -0.9797958971132712]; wRunTerrain.dataRevision++;
     wRunRoads.update(distant ? new THREE.Vector3(5000, 20, 0) : cam);
     assert.equal(wSolves, 0, 'washboard road-axis refresh never runs grade solver');
+    assert.equal(wLandHashCalls, 1, `${distant ? 'distant followed ' : ''}washboard road-axis refresh hashes land only once`);
     assert.equal(wRunRoads.modern.spans[0].bakedVerified, true, `${distant ? 'distant followed ' : ''}washboard bridge verified after road-axis refresh`);
     assert.ok(spanBits(wRunRoads.modern.spans[0]).equals(spanBits(wRefSpan)), `${distant ? 'distant followed ' : ''}washboard approach attribute matches final-land reference bit-for-bit after staged arrival`);
+  }
+
+  // Widening a crossing span via sidewalk reservation must invalidate its neighbor's geomHash (both before the
+  // neighbor's first build and after the neighbor was already verified hydrated) so the neighbor solves against
+  // the widened crossing footprint instead of keeping a stale pre-widening deck.
+  {
+    const crossWidenRoads = [
+      {id: 1, name: 'Main St', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]},
+      {id: 2, name: 'Cross St', kind: 1, halfWidth: 3.6, bridge: true, pts: [[-20, -10], [20, -10]]},
+    ];
+    const cwHeight = (x, z) => height(x, z) + (Math.abs(x) < 4 && Math.abs(z - 15) < 1.2 ? 1.5 : 0);
+    const makeCwTerrain = () => ({
+      cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
+      manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}},
+      heightAt: cwHeight,
+      meshContactSource: () => 7,
+      surfaceAt: (x, z) => ({ground: cwHeight(x, z), level: 7, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+    });
+    const cwBakeRoads = new mod.Roads({roads: crossWidenRoads}, [0, 0], makeCwTerrain(), null);
+    const cwEntries = [];
+    for (const r of cwBakeRoads.modern.spans) {
+      let g = null, l = [];
+      cwBakeRoads.modern.emit = function(sp, grid) {
+        g = new Float32Array(grid); l = [];
+        this.land = (x, z) => { const h = origLand.call(this, x, z); l.push(h === null ? Number.NaN : h); return h; };
+        try { return origEmit.call(this, sp, grid); } finally { this.land = origLand; }
+      };
+      cwBakeRoads.modern.ensure(r);
+      const gy = new Float32Array(g.length / 3);
+      for (let i = 0; i < gy.length; i++) gy[i] = g[i * 3 + 1];
+      cwEntries.push({
+        chainKey: r.chainKey, geomHash: r.geomHash,
+        landHash: cwBakeRoads.modern.spanLandHash(r, r.startLength, r.endLength, r.width, r.narrowRail, r.smoothStart, r.smoothEnd, r.y0, r.y1, r.level),
+        requestWidth: r.width, finalWidth: r.width, narrowRail: r.narrowRail, level: r.level,
+        smoothStart: r.smoothStart, smoothEnd: r.smoothEnd, ponyTruss: false,
+        startLength: r.startLength, endLength: r.endLength, y0: r.y0, y1: r.y1, outer0: r.outer0, outer1: r.outer1,
+        rows: Math.ceil(r.length) + r.startLength + r.endLength, columns: Math.ceil(2 * r.width / .75),
+        gridY: gy, emitLand: new Float64Array(l),
+      });
+    }
+    const cwBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], cwEntries), 'mabou');
+    const cwRefRoads = new mod.Roads({roads: crossWidenRoads}, [0, 0], makeCwTerrain(), null);
+    cwRefRoads.bridgeWalks.set(2, {side: 1, width: 2.0});
+    cwRefRoads.update(cam);
+    const cwRefBits = spanBits(cwRefRoads.modern.spans[0]);
+    const cwRefH = cwRefRoads.modern.deckHeightAt(0, 15);
+    assert.ok(cwRefH > 11.0, `widened crossing lifts neighbor approach over 15 m mound (got ${cwRefH})`);
+    for (const hydrateFirst of [false, true]) {
+      const cwT = makeCwTerrain();
+      const cwRun = new mod.Roads({roads: crossWidenRoads}, [0, 0], cwT, cwBaked);
+      if (hydrateFirst) {
+        cwRun.update(cam);
+        assert.equal(cwRun.modern.spans[0].bakedVerified, true, 'neighbor hydrates before crossing widens');
+      }
+      cwRun.bridgeWalks.set(2, {side: 1, width: 2.0});
+      cwRun.update(cam);
+      assert.equal(cwRun.modern.spans[0].baked, null, `widening crossing ${hydrateFirst ? 'after hydration ' : ''}invalidates neighbor baked entry`);
+      assert.ok(spanBits(cwRun.modern.spans[0]).equals(cwRefBits), `neighbor matches live solver bit-for-bit after crossing widens (${hydrateFirst ? 'late' : 'before build'})`);
+    }
   }
 
   // Failed washboard refresh (injected emit() error on level-7 road-axis refresh) must NOT throw WeakSet.add(null)
@@ -1045,7 +1107,7 @@ if (process.argv.includes('--mutations')) {
     ['streams guard removed', bridgesFile, bridgesSrc, 'if(!!this.terrain.streams!==decks.hasStreams||this.terrainStreamsHash()!==decks.streamsHash)return false;', '', /edited streams reject|disabled streams reject/],
     ['streamsHash check removed', bridgesFile, bridgesSrc, '||this.terrainStreamsHash()!==decks.streamsHash', '', /edited streams reject/],
     ['geomHash check removed', decksFile, decksSrc, 's.geomHash === geomHash && ', '', /moved span rejects|rejects different geomHash/],
-    ['nearby spans omitted from geomHash', bridgesFile, bridgesSrc, 'const others=[...nearby].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);', 'const others:Span[]=[];', /perpendicular crossing bridge invalidates|removed parallel highway rejects/],
+    ['nearby spans omitted from geomHash', bridgesFile, bridgesSrc, 'const others=[...nearby].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);', 'const others:Span[]=[];', /perpendicular crossing bridge invalidates|removed parallel highway rejects|widening crossing.*invalidates neighbor/],
     ['parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);\n      for(const q of partners){', 'const partners:Span[]=[];\n      for(const q of partners){', /grade-separated parallel highway rejects/],
     ['late parallel rejection keeps narrowed width', bridgesFile, bridgesSrc, 'r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;', '', /late parallel rejection restores/],
     ['interior CHECKS omitted from landHash', bridgesFile, bridgesSrc, 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i1;i++)for(let j=0;j<columns;j++){', 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i0;i++)for(let j=0;j<columns;j++){', /interior triangle ridge rejects/],
@@ -1055,16 +1117,18 @@ if (process.argv.includes('--mutations')) {
     ['pre-extension offset bank probes omitted from landHash', bridgesFile, bridgesSrc, 'if(startLength!==APPROACH||endLength!==APPROACH){', 'if(false){', /pre-extension offset bank spike rejects/],
     ['pre-extension offset candidate probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let L=APPROACH;L<=sLen;L++){', 'for(let L=APPROACH;L<APPROACH;L++){', /pre-extension offset toeLength candidate dip rejects/],
     ['partial girder midpoint omitted from landHash', bridgesFile, bridgesSrc, 'if(!r.road.ponyTruss)for(let s=0;s<len;s+=3){const p=this.at(r,s+Math.min(3,len-s)/2);if(!sample(p.x,p.z))return null;}', '', /final partial girder midpoint dip rejects/],
-    ['late rejection keeps baked approach lengths', bridgesFile, bridgesSrc, 'if(r.baked){r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;r.baked=null;}', 'r.baked=null;', /staged offset rejection restores|unbaked widened fallback restores/],
+    ['late rejection keeps baked approach lengths', bridgesFile, bridgesSrc, 'r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;r.baked=null;', 'r.baked=null;', /staged offset rejection restores|unbaked widened fallback restores/],
     ['missing widened entry skips dropBaked', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){this.dropBaked(r);return false;}', 'if(!entry||this.rejectedBaked.has(entry)){r.baked=null;r.bakedVerified=false;return false;}', /unbaked widened fallback restores/],
-    ['distant followed forced build blocked by probe gate', bridgesFile, bridgesSrc, 'if(!touch&&!r.baked&&!r.forceBuild&&!this.probesChanged(r,false))return true;', 'if(!touch&&!this.probesChanged(r,false))return true;', /distant followed widened span/],
+    ['distant followed forced build blocked by probe gate', bridgesFile, bridgesSrc, 'if(!verifiedEntry&&!touch&&!r.baked&&!r.forceBuild&&!this.probesChanged(r,false))return true;', 'if(!verifiedEntry&&!touch&&!this.probesChanged(r,false))return true;', /distant followed widened span/],
     ['widened sidewalk fallback drops active width', bridgesFile, bridgesSrc, 'const hadBaked=!!r.baked,sameEntry=r.baked===entry;', 'const hadBaked=!!r.baked,sameEntry=!!r.baked;', /preserves active 5\.90 m width/],
-    ['failed washboard refresh passes null to WeakSet', bridgesFile, bridgesSrc, 'if(r.width!==oldW)this.runList=null;\n      this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;', 'if(r.width!==oldW)this.runList=null;\n      this.rejectedBaked.add(r.baked!);this.dropBaked(r);r.forceBuild=true;', /Invalid value used in weak set|failed washboard refresh/],
+    ['widened crossing skips neighbor geomHash update', bridgesFile, bridgesSrc, 'if(widened)for(const r of this.spans){', 'if(false)for(const r of this.spans){', /widening crossing.*invalidates neighbor/],
+    ['washboard refresh rehashes land twice', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,entry))return;', 'if(this.tryHydrateBaked(r,touch))return;', /hashes land only once/],
+    ['failed washboard refresh passes null to WeakSet', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;', 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      this.rejectedBaked.add(r.baked!);this.dropBaked(r);r.forceBuild=true;', /Invalid value used in weak set|failed washboard refresh/],
     ['nearby and distant pending tile repeats spanLandHash', bridgesFile, bridgesSrc, 'if(this.terrain.meshContactSource(r.bakedPendingX,r.bakedPendingZ,true,false)===r.bakedPendingSource)return;', '', /unrelated revisions skip spanLandHash|zero touching surfaceAt calls/],
     ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
     ['probeTargetLevel capped at 8', bridgesFile, bridgesSrc, 'const top=Math.max(this.manifestMaxLevel,fallbackLevel);', 'const top=Math.max(8,fallbackLevel);', /withheld level-9 tile/],
     ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);this.dropBaked(r);return false;}', '', /raised terrain before first build rejects/],
-    ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===entry.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;return;}\n        if(this.tryHydrateBaked(r,touch))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
+    ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===entry.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;return;}\n        if(this.tryHydrateBaked(r,touch,entry))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
     ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds|failed washboard refresh/],
     ['verified baked fast-path removed', bridgesFile, bridgesSrc, 'if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;', '', /skips land probes/],
     ['bridgeBankElevations ignores baked flag', bridgesFile, bridgesSrc, 'if(built&&(r.baked||r.level>=8||r.revision===rev)){', 'if(built&&(r.level>=8||r.revision===rev)){', /bridgeBankElevations keeps baked (level|y0)/],

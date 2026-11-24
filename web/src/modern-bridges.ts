@@ -207,7 +207,7 @@ const nearLine = (pts:readonly (readonly [number,number])[],x:number,z:number,re
 interface BridgeRoad extends Road {inferred?:boolean;sources?:readonly string[];road?:number;sourceRoad?:number}
 interface Approach {road:Road;cum:number[];distance:number;direction:number;offsetX:number;offsetZ:number}
 interface Span {
-  road:BridgeRoad;chainKey:string;geomHash:bigint;hasNearbySpans:boolean;baked:BakedBridgeSpan|null;bakedVerified:boolean;bakedPrevWidth:number;bakedPrevNarrowRail:boolean;bakedPrevStartLength:number;bakedPrevEndLength:number;bakedWashHash:bigint;bakedPendingX:number;bakedPendingZ:number;bakedPendingSource:number;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; timber:boolean;
+  road:BridgeRoad;chainKey:string;geomHash:bigint;hasNearbySpans:boolean;baked:BakedBridgeSpan|null;bakedVerified:boolean;bakedPrevWidth:number;bakedPrevNarrowRail:boolean;bakedPrevStartLength:number;bakedPrevEndLength:number;bakedWashHash:bigint;bakedPendingX:number;bakedPendingZ:number;bakedPendingSource:number;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; baseWidth:number; timber:boolean;
   x0:number;z0:number;x1:number;z1:number; y0:number;y1:number;outer0:number;outer1:number;level:number;revision:number;serial:number;
   skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;followed:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
   /** Half width of each carried road, for a sidewalk reserved on the deck (Roads.bridgeWalks). */
@@ -291,7 +291,7 @@ export class ModernBridges {
       const timber=road.kind>=4||road.name==='Railroad'||carried.some(r=>r.inferred);
       const segments=new Float64Array((pts.length-1)*10);
       for(let j=1;j<pts.length;j++){const a=pts[j-1],b=pts[j],dx=b[0]-a[0],dz=b[1]-a[1];segments.set([a[0],a[1],dx,dz,dx*dx+dz*dz||1,Math.min(a[0],b[0]),Math.max(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[1],b[1]),.01+2e-7*(Math.abs(dx)+Math.abs(dz))],(j-1)*10);}
-      const r:Span={road,chainKey:plan.chainKey,geomHash:0n,hasNearbySpans:false,baked:null,bakedVerified:false,bakedPrevWidth:width,bakedPrevNarrowRail:false,bakedPrevStartLength:16,bakedPrevEndLength:16,bakedWashHash:0n,bakedPendingX:NaN,bakedPendingZ:NaN,bakedPendingSource:-2,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
+      const r:Span={road,chainKey:plan.chainKey,geomHash:0n,hasNearbySpans:false,baked:null,bakedVerified:false,bakedPrevWidth:width,bakedPrevNarrowRail:false,bakedPrevStartLength:16,bakedPrevEndLength:16,bakedWashHash:0n,bakedPendingX:NaN,bakedPendingZ:NaN,bakedPendingSource:-2,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,baseWidth:width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
       const probes:number[]=[];
@@ -542,7 +542,7 @@ export class ModernBridges {
     const others=[...nearby].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);
     h.num(others.length);
     for(const o of others){
-      h.num(o.road.kind);h.num(o.road.halfWidth);h.num(o.width);h.num(o.road.name==='Railroad'?1:0);h.num(r.parallel.includes(o)?1:0);h.num(o.pts.length);
+      h.num(o.road.kind);h.num(o.road.halfWidth);h.num(o.baseWidth);h.num(o.road.name==='Railroad'?1:0);h.num(r.parallel.includes(o)?1:0);h.num(o.pts.length);
       for(const p of o.pts){h.num(p[0]);h.num(p[1]);}
     }
     return h.done();
@@ -714,27 +714,38 @@ export class ModernBridges {
     return h.done();
   }
 
-  /** Clear a provisionally hydrated baked entry and restore its pre-hydration approach lengths (preserving any new width). */
+  /** Clear a provisionally hydrated baked entry and restore its pre-hydration state (preserving any new widened width). */
   private dropBaked(r:Span):void {
-    if(r.baked){r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;r.baked=null;}
+    if(r.baked){
+      if(r.width===r.baked.finalWidth){
+        const oldW=r.width;
+        r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;
+        if(r.width!==oldW)this.runList=null;
+      }
+      r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;r.baked=null;
+    }
     r.bakedVerified=false;r.bakedPendingX=NaN;
   }
 
   /** Hydrate one span from its baked final-land deck without running the grade solver. Returns true when handled
    *  (hydrated, or waiting for level-6 bank tiles); returns false to fall back to the runtime solver. */
-  private tryHydrateBaked(r:Span,touch=true):boolean {
+  private tryHydrateBaked(r:Span,touch=true,verifiedEntry?:BakedBridgeSpan):boolean {
     const decks=this.bakedDecks;
     if(!decks)return false;
     if(!!this.terrain.streams!==decks.hasStreams||this.terrainStreamsHash()!==decks.streamsHash)return false;
     const m=this.terrain.manifest;
     if(m&&(m.village[0]!==decks.village[0]||m.village[1]!==decks.village[1]))return false;
-    const entry=decks.find(r.chainKey,r.width,!!r.road.ponyTruss,r.geomHash);
+    const entry=verifiedEntry??decks.find(r.chainKey,r.width,!!r.road.ponyTruss,r.geomHash);
     if(!entry||this.rejectedBaked.has(entry)){this.dropBaked(r);return false;}
-    if(!touch&&!r.baked&&!r.forceBuild&&!this.probesChanged(r,false))return true;
-    const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
-    if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
-    const liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.smoothStart,entry.smoothEnd,entry.y0,entry.y1,entry.level);
-    if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);this.dropBaked(r);return false;}
+    if(!verifiedEntry&&!touch&&!r.baked&&!r.forceBuild&&!this.probesChanged(r,false))return true;
+    let liveHash:bigint|null;
+    if(verifiedEntry)liveHash=entry.landHash;
+    else{
+      const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
+      if(!s0||!s1||Math.min(s0.level,s1.level)<6)return true;
+      liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.smoothStart,entry.smoothEnd,entry.y0,entry.y1,entry.level);
+      if(liveHash!==null&&liveHash!==entry.landHash){this.rejectedBaked.add(entry);this.dropBaked(r);return false;}
+    }
     const coreRows=Math.ceil(r.length),rows=coreRows+entry.startLength+entry.endLength,columns=Math.ceil(2*entry.finalWidth/.75);
     if(rows!==entry.rows||columns!==entry.columns||entry.gridY.length!==(rows+1)*(columns+1)){this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;return false;}
     const prev={width:r.width,narrowRail:r.narrowRail,y0:r.y0,y1:r.y1,outer0:r.outer0,outer1:r.outer1,level:r.level,startLength:r.startLength,endLength:r.endLength,smoothStart:r.smoothStart,smoothEnd:r.smoothEnd,forceBuild:r.forceBuild,extendStart:r.extendStart,extendEnd:r.extendEnd,triangles:r.triangles,triangleDeck:r.triangleDeck,cells:new Map(r.cells),approachRanges:r.approachRanges,skinBox:new Float64Array(r.skinBox)};
@@ -788,11 +799,8 @@ export class ModernBridges {
       if(liveHash===null)return;
       if(liveHash===entry.landHash){
         if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;return;}
-        if(this.tryHydrateBaked(r,touch))return;
+        if(this.tryHydrateBaked(r,touch,entry))return;
       }
-      const oldW=r.width;
-      r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;
-      if(r.width!==oldW)this.runList=null;
       this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;
     }
     if(this.tryHydrateBaked(r,touch))return;
@@ -981,9 +989,14 @@ export class ModernBridges {
    *  up later leaves a wide deck. Spans narrowed beside a railway keep their narrow width. */
   private reserveWalks():void {
     this.walkCount=this.walks!.size;
+    let widened=false;
     for(const r of this.spans){if(r.parallel.length)continue;let need=r.width;
       for(const [id,half]of r.halves){const walk=this.walks!.get(id);if(walk)need=Math.max(need,half+walk.width+.3);}
-      if(need>r.width){r.width=need;r.forceBuild=true;r.revision=-1;this.runList=null;}
+      if(need>r.width){r.width=need;r.baseWidth=need;r.forceBuild=true;r.revision=-1;this.runList=null;widened=true;}
+    }
+    if(widened)for(const r of this.spans){
+      const nextHash=this.spanGeomHash(r);
+      if(nextHash!==r.geomHash){r.geomHash=nextHash;r.forceBuild=true;r.revision=-1;}
     }
   }
   private merge():void {
