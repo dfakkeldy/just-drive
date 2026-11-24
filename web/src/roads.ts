@@ -1,4 +1,5 @@
 import {ModernBridges} from './modern-bridges';
+import type {BakedBridgeDecks} from './bridge-decks';
 import { Guardrails } from './guardrails';
 import {HistoryContacts} from './eras/history-contacts';
 import * as THREE from 'three';
@@ -76,7 +77,7 @@ export class Roads {
   private eraBridgeHit:RoadHit|null=null;private bridgeQuery=0;
 
   constructor(data: { roads: Road[]; bridgeSpans?: Road[] },
-    village: [number, number], private terrain: Terrain) {
+    village: [number, number], private terrain: Terrain, bakedDecks?: BakedBridgeDecks | null) {
     for (const r of data.roads) {
       if (terrain.cartRoads && r.kind === 5) continue;
       const road: Road = { ...r, halfWidth: terrain.cartRoads ? eraRoadHalf(r.kind, r.halfWidth) : r.halfWidth, pts: r.pts.map(([e, n]) => [e - village[0], village[1] - n]) };
@@ -124,7 +125,7 @@ export class Roads {
         for(const p of timberGroundPoints(road,cum,record.len,startExtra,endExtra))this.bridgeContacts.watch(p.x,p.z,record.notify,p.land);
       }
       const first=this.roads[0];if(first)this.eraBridgeHit={road:first,dist:0,x:0,z:0,heading:0,seg:0,t:0};
-    }else this.modern=new ModernBridges(this.roads,terrain,this.group,data.bridgeSpans,this.nearest.bind(this),this.bridgeWalks);
+    }else this.modern=new ModernBridges(this.roads,terrain,this.group,data.bridgeSpans,this.nearest.bind(this),this.bridgeWalks,bakedDecks);
   }
 
   // key = (cx - minCX) + columns * (cz - minCZ), in [0, columns * rows - 1].

@@ -2,6 +2,7 @@ import { bikeKeys, horseKeys } from './vehicle-choice';
 import { installSettings, toggle } from './settings';
 import { Sidewalks } from './sidewalks';
 import { loadSidewalkData } from './sidewalks-cache';
+import { loadBridgeDecks } from './bridge-decks';
 import { StreamCulverts } from './stream-culverts';
 import { sugarCampStart } from './sugar-camp-start';
 import { PointTupperDriver, driverEnabled, driverLive } from './point-tupper-driver';
@@ -233,6 +234,7 @@ const base = `${import.meta.env.BASE_URL}${AREA.base}`;
 const localJust = SITE.brand === 'just' && location.hostname === 'localhost';
 const offlinePageKey = __PUBLIC_APP__ && !localJust ? bindOfflineVersion(AREA.id) : '';
 const sidewalkDataReady = ERA.modern && params.get('sidewalks') !== '0' ? loadSidewalkData(AREA.id, base, LOW) : Promise.resolve(null);
+const bridgeDecksReady = ERA.modern && params.get('brooks') !== '0' ? loadBridgeDecks(AREA.id, base, EXAG, SEA_LEVEL) : Promise.resolve(null);
 // The 1884 scene and the Canso canal have their own chunks. Only their era or area downloads them. They need no manifest,
 // so the download starts here, before the manifest read.
 const historyModules = ERA.id === '1884' ? early(Promise.all([import('./eras/history-ground'), import('./eras/history-approaches'), import('./eras/history-scene')])) : null;
@@ -637,7 +639,8 @@ if (waterReflections) {
 }
 
 const roadLines = mabouRoadOverrides(roadData.roads, ERA.modern, AREA.id);
-const roads = new Roads({ ...roadData, roads: novemberRoads?.added.length ? [...roadLines, ...novemberRoads.added] : roadLines }, manifest.village, terrain);
+const bridgeDecks = (manifest.streams && !terrain.streams) ? null : await bridgeDecksReady;
+const roads = new Roads({ ...roadData, roads: novemberRoads?.added.length ? [...roadLines, ...novemberRoads.added] : roadLines }, manifest.village, terrain, bridgeDecks);
 const culvertMouths = ERA.modern && terrain.streams
   ? new StreamCulverts(terrain.streams, roads.roads, (x, z) => { const s = terrain.surfaceAt(x, z); return s && s.level >= 8 ? s.ground : null; }, LOW,
     // A modern bridge build moves the ground through its road cuts without a dataRevision change (both only grow).

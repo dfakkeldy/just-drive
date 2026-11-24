@@ -30,6 +30,6 @@ assert.equal(SIDEWALK_AREAS.has('mabou')&&SIDEWALK_AREAS.has('porthood')&&SIDEWA
 assert.equal(SIDEWALK_AREAS.has('westbay'),false);
 assert.ok(Object.keys(STARTUP_BUDGET_MS).length===DEFAULT_AREAS.length);
 // The ceilings, written here a second time so that raising one has to change this check too (and say what the player gets).
-assert.deepEqual(JSON.parse(JSON.stringify(STARTUP_BUDGET_MS)),{mabou:{low:3300,high:7000},porthood:{low:2200,high:4700},pointtupper:{low:3000,high:6400},cansocauseway:{low:2300,high:5000},judique:{low:2350,high:5300},westbay:{low:3500,high:7000}},'the start-up ceilings change only with this pin');
+assert.deepEqual(JSON.parse(JSON.stringify(STARTUP_BUDGET_MS)),{mabou:{low:3300,high:7000},porthood:{low:2200,high:4700},pointtupper:{low:2600,high:6000},cansocauseway:{low:2300,high:5000},judique:{low:2350,high:5300},westbay:{low:3500,high:7000}},'the start-up ceilings change only with this pin');
 assert.deepEqual([...SIDEWALK_AREAS].sort(),['mabou','pointtupper','porthood'],'the areas whose page must show the sidewalk layer');
 console.log('PASS probe-free readiness poll, fixed cadence, new-document guard, no injection/interception and plain start-up budget');
