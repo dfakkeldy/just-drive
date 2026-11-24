@@ -209,7 +209,7 @@ interface Approach {road:Road;cum:number[];distance:number;direction:number;offs
 interface Span {
   road:BridgeRoad;chainKey:string;geomHash:bigint;hasNearbySpans:boolean;baked:BakedBridgeSpan|null;bakedVerified:boolean;bakedPrevWidth:number;bakedPrevNarrowRail:boolean;bakedPrevStartLength:number;bakedPrevEndLength:number;bakedWashHash:bigint;bakedPendingX:number;bakedPendingZ:number;bakedPendingSource:number;kinds:readonly number[]; pts:[number,number][]; cum:number[]; length:number; width:number; baseWidth:number; timber:boolean;
   x0:number;z0:number;x1:number;z1:number; y0:number;y1:number;outer0:number;outer1:number;level:number;revision:number;serial:number;
-  skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];narrowRail:boolean;forceBuild:boolean;followed:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
+  skinBox:Float64Array;corridor:Float64Array;probes:Float64Array; triangles:Float32Array|null;triangleDeck:Uint8Array; cells:Map<number,number[]>; geometry:THREE.BufferGeometry|null;approachRanges:Int32Array;members:ReadonlySet<number>;parallel:Span[];parallelBanks:Span[];narrowRail:boolean;forceBuild:boolean;followed:boolean;startLength:number;endLength:number;smoothStart:boolean;smoothEnd:boolean;extendStart:boolean;extendEnd:boolean;
   /** Half width of each carried road, for a sidewalk reserved on the deck (Roads.bridgeWalks). */
   halves:readonly (readonly [number,number])[];
   /** isSpan's numbers for each segment of pts: a, b-a, its squared length (or 1), its box and that box's margin. */
@@ -291,7 +291,7 @@ export class ModernBridges {
       const timber=road.kind>=4||road.name==='Railroad'||carried.some(r=>r.inferred);
       const segments=new Float64Array((pts.length-1)*10);
       for(let j=1;j<pts.length;j++){const a=pts[j-1],b=pts[j],dx=b[0]-a[0],dz=b[1]-a[1];segments.set([a[0],a[1],dx,dz,dx*dx+dz*dz||1,Math.min(a[0],b[0]),Math.max(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[1],b[1]),.01+2e-7*(Math.abs(dx)+Math.abs(dz))],(j-1)*10);}
-      const r:Span={road,chainKey:plan.chainKey,geomHash:0n,hasNearbySpans:false,baked:null,bakedVerified:false,bakedPrevWidth:width,bakedPrevNarrowRail:false,bakedPrevStartLength:16,bakedPrevEndLength:16,bakedWashHash:0n,bakedPendingX:NaN,bakedPendingZ:NaN,bakedPendingSource:-2,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,baseWidth:width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
+      const r:Span={road,chainKey:plan.chainKey,geomHash:0n,hasNearbySpans:false,baked:null,bakedVerified:false,bakedPrevWidth:width,bakedPrevNarrowRail:false,bakedPrevStartLength:16,bakedPrevEndLength:16,bakedWashHash:0n,bakedPendingX:NaN,bakedPendingZ:NaN,bakedPendingSource:-2,members,segments,halves:carried.map(r=>[r.id,r.halfWidth] as const),parallel:[],parallelBanks:[],narrowRail:false,forceBuild:false,followed:false,startLength:16,endLength:16,smoothStart:false,smoothEnd:false,extendStart:false,extendEnd:false,kinds:[...new Set(carried.map(r=>r.kind))],pts,cum,length,width,baseWidth:width,timber,x0:Infinity,z0:Infinity,x1:-Infinity,z1:-Infinity,y0:0,y1:0,outer0:0,outer1:0,level:-1,revision:-1,serial:0,skinBox:new Float64Array([Infinity,Infinity,-Infinity,-Infinity]),corridor:new Float64Array(),probes:new Float64Array(),triangles:null,triangleDeck:new Uint8Array(),cells:new Map(),geometry:null,approachRanges:new Int32Array()};
       r.start=this.approach(r,false);r.end=this.approach(r,true);
       const corridor:number[]=[];for(let s=-APPROACH;s<length+APPROACH;s+=4){const a=this.at(r,s),b=this.at(r,Math.min(s+4,length+APPROACH));corridor.push(a.x,a.z,b.x,b.z);}r.corridor=new Float64Array(corridor);
       const probes:number[]=[];
@@ -538,7 +538,13 @@ export class ModernBridges {
       if(list)for(const idx of list){const o=this.spans[idx];if(o!==r)nearby.add(o);}
     }
     for(const q of r.parallel)nearby.add(q);
+    const parBankSet=new Set<Span>(r.parallel);
+    for(const o of[...nearby])if(o.parallel.length){
+      parBankSet.add(o);
+      for(const q of o.parallel)if(q!==r){nearby.add(q);parBankSet.add(q);}
+    }
     r.hasNearbySpans=nearby.size>0;
+    r.parallelBanks=[...parBankSet].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);
     const others=[...nearby].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);
     h.num(others.length);
     for(const o of others){
@@ -685,8 +691,7 @@ export class ModernBridges {
           }
         }
       }
-      const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);
-      for(const q of partners){
+      for(const q of r.parallelBanks){
         for(const s of[0,-3,-6,-8,q.length,q.length+3,q.length+6,q.length+8]){
           const p=this.at(q,s);
           if(!sample(p.x,p.z))return null;
@@ -720,7 +725,13 @@ export class ModernBridges {
       if(r.width===r.baked.finalWidth){
         const oldW=r.width;
         r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;
-        if(r.width!==oldW)this.runList=null;
+        if(r.width!==oldW){
+          this.runList=null;
+          for(let z=Math.floor(r.z0/CELL);z<=Math.floor(r.z1/CELL);z++)for(let x=Math.floor(r.x0/CELL);x<=Math.floor(r.x1/CELL);x++){
+            const list=this.cells.get(key(x*CELL,z*CELL,CELL));
+            if(list)for(const idx of list){const o=this.spans[idx];if(o!==r){o.forceBuild=true;o.revision=-1;}}
+          }
+        }
       }
       r.startLength=r.bakedPrevStartLength;r.endLength=r.bakedPrevEndLength;r.baked=null;
     }
@@ -809,6 +820,8 @@ export class ModernBridges {
       if(source!==r.probes[i+2])changed=true;r.probes[i+2]=source;if(source<0)known=false;
     }
     if(!changed||!known)return;
+    for(const q of r.parallelBanks)if(q.baked&&!q.bakedVerified&&q.width!==q.bakedPrevWidth)this.ensure(q,touch);
+    r.revision=revision;
     this.sampling=true;
     try{
       const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);

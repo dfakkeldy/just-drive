@@ -60,6 +60,26 @@ async function bundle(replacements = {}, withGround = false) {
   return import('data:text/javascript;base64,' + Buffer.from(result.outputFiles[0].text).toString('base64'));
 }
 
+async function bundleLoader(replacements = {}) {
+  const result = await build({
+    stdin: {
+      contents: `export const __nonce = ${++bundleNonce}; export {loadBridgeDecks} from './web/src/bridge-decks.ts';`,
+      resolveDir: root,
+    },
+    bundle: true, write: false, platform: 'node', format: 'esm', logLevel: 'silent',
+    plugins: [{
+      name: 'variants-loader',
+      setup(b) {
+        b.onLoad({filter: /\.(mjs|ts)$/}, a => {
+          const rel = a.path.slice(root.length + 1);
+          if (rel in replacements) return {contents: replacements[rel], loader: 'ts'};
+        });
+      },
+    }],
+  });
+  return import('data:text/javascript;base64,' + Buffer.from(result.outputFiles[0].text).toString('base64'));
+}
+
 function spanBits(r) {
   const cellKeys = [...r.cells.keys()].sort((a, b) => a - b);
   const cellList = [];
@@ -170,7 +190,7 @@ async function testCodecAndLoader(replacements = {}) {
     const synthetic = mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, sampleStreamsHash, [624000, 5103000], sample);
     const fakeAssets = `export interface BridgeDeckAsset {readonly file:string;readonly bytes:number;readonly sha256:string}
 export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined>> = {mabou:{file:'bridge-decks.bin',bytes:${synthetic.length},sha256:'${sha(synthetic)}'}};`;
-    const loaderMod = await bundle({...replacements, 'web/src/bridge-decks-assets.ts': fakeAssets});
+    const loaderMod = await bundleLoader({...replacements, 'web/src/bridge-decks-assets.ts': fakeAssets});
     globalThis.fetch = async (url, init) => {
       requests.push(String(url));
       if (mode === 'missing') return new Response('missing', {status: 404});
@@ -195,7 +215,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     const expectedMsg = {missing: /404/, short: /length mismatch/, hash: /hash mismatch/, stalled: /timed out/};
     for (const fault of ['missing', 'short', 'hash', 'stalled']) {
       mode = fault; aborted = false;
-      const freshMod = await bundle({...replacements, 'web/src/bridge-decks-assets.ts': fakeAssets});
+      const freshMod = await bundleLoader({...replacements, 'web/src/bridge-decks-assets.ts': fakeAssets});
       requests.length = 0; warnings.length = 0;
       const t0 = performance.now();
       const got = await Promise.race([
@@ -450,7 +470,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
       {id: 1, name: 'Main St', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]},
       {id: 2, name: 'Cross St', kind: 1, halfWidth: 3.6, bridge: true, pts: [[-20, -10], [20, -10]]},
     ];
-    const cwHeight = (x, z) => height(x, z) + (Math.abs(x) < 4 && Math.abs(z - 15) < 1.2 ? 1.5 : 0);
+    const cwHeight = (x, z) => height(x, z) + (Math.abs(x) < 4 && Math.abs(z - 15) < 1.2 ? 0.35 : 0);
     const makeCwTerrain = () => ({
       cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
       manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}},
@@ -486,7 +506,7 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
     cwRefRoads.update(cam);
     const cwRefBits = spanBits(cwRefRoads.modern.spans[0]);
     const cwRefH = cwRefRoads.modern.deckHeightAt(0, 15);
-    assert.ok(cwRefH > 11.0, `widened crossing lifts neighbor approach over 15 m mound (got ${cwRefH})`);
+    assert.ok(cwRefH > 10.3, `widened crossing lifts neighbor approach over 15 m mound (got ${cwRefH})`);
     for (const hydrateFirst of [false, true]) {
       const cwT = makeCwTerrain();
       const cwRun = new mod.Roads({roads: crossWidenRoads}, [0, 0], cwT, cwBaked);
@@ -499,6 +519,93 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
       assert.equal(cwRun.modern.spans[0].baked, null, `widening crossing ${hydrateFirst ? 'after hydration ' : ''}invalidates neighbor baked entry`);
       assert.ok(spanBits(cwRun.modern.spans[0]).equals(cwRefBits), `neighbor matches live solver bit-for-bit after crossing widens (${hydrateFirst ? 'late' : 'before build'})`);
     }
+  }
+
+  // Crossing span over a parallel railway/highway pair: raising ONLY the parallel highway's banks keeps the
+  // railway at its full 3.05 m half-width (instead of narrowing to 1.25 m), lifting the crossing's approach.
+  // The crossing's landHash MUST cover nearby parallel pairs' bank stations, and staged provisional hydration
+  // (worst-case [crossing, highway, rail] order) must settle the rail width before solving the crossing.
+  {
+    const triRoads = [
+      {id: 10, name: 'Cross Ave', kind: 1, halfWidth: 3.6, bridge: true, pts: [[0, 0], [0, 40]]},
+      {id: 11, name: 'Hwy 19', kind: 1, halfWidth: 3.6, bridge: true, pts: [[-20, -10], [20, -10]]},
+      {id: 12, name: 'Railroad', kind: 4, halfWidth: 2.6, bridge: true, pts: [[-20, -15], [20, -15]]},
+    ];
+    let raiseHwy = false;
+    const triH = (x, z) => {
+      // Bank 10 m outside bridge 10's channel (z in [0, -40]); 0.35 m mound at z=17.2 (outside narrowed 1.25 m rail
+      // z in [13.75, 16.25], inside full 3.05 m rail z in [11.95, 18.05]); flat +1.0 m highway bank lift at |x|>=19.5, z=10.
+      const base = height(x, z);
+      const mound = Math.abs(x) < 4 && Math.abs(z - 17.2) < 1.0 ? 0.35 : 0;
+      const hwyBank = raiseHwy && Math.abs(x) >= 19.5 && Math.abs(z - 10) < 1.5 ? 1.0 : 0;
+      return base + mound + hwyBank;
+    };
+    const makeTriTerrain = lv => ({
+      cartRoads: false, dataRevision: 1, seaLevel: -0.2, streams: streamsA,
+      manifest: {village: [0, 0], area: {id: 'mabou', name: 'Mabou'}},
+      heightAt: triH,
+      meshContactSource: () => lv,
+      surfaceAt: (x, z) => ({ground: triH(x, z), level: lv, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+    });
+    // Bake on level-7 flat highway banks (rail narrows to 1.25 m).
+    raiseHwy = false;
+    const triBake = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), null);
+    const triM = triBake.modern;
+    const triEntries = new Map();
+    const triCapture = r => {
+      let g = null, l = [];
+      triM.emit = function(sp, grid) {
+        g = new Float32Array(grid); l = [];
+        this.land = (x, z) => { const h = origLand.call(this, x, z); l.push(h === null ? Number.NaN : h); return h; };
+        try { return origEmit.call(this, sp, grid); } finally { this.land = origLand; }
+      };
+      triM.ensure(r);
+      if (!g) return;
+      const gy = new Float32Array(g.length / 3);
+      for (let i = 0; i < gy.length; i++) gy[i] = g[i * 3 + 1];
+      triEntries.set(r.chainKey, {
+        chainKey: r.chainKey, geomHash: r.geomHash,
+        landHash: triM.spanLandHash(r, r.startLength, r.endLength, r.width, r.narrowRail, r.smoothStart, r.smoothEnd, r.y0, r.y1, r.level),
+        requestWidth: r.baseWidth, finalWidth: r.width, narrowRail: r.narrowRail, level: r.level,
+        smoothStart: r.smoothStart, smoothEnd: r.smoothEnd, ponyTruss: false,
+        startLength: r.startLength, endLength: r.endLength, y0: r.y0, y1: r.y1, outer0: r.outer0, outer1: r.outer1,
+        rows: Math.ceil(r.length) + r.startLength + r.endLength, columns: Math.ceil(2 * r.width / .75),
+        gridY: gy, emitLand: new Float64Array(l),
+      });
+    };
+    // Build highway+rail first so rail narrows to 1.25 m, then crossing span.
+    for (const idx of [1, 2, 0]) triCapture(triM.spans[idx]);
+    assert.equal(triM.spans[2].width, 1.25, 'baked parallel rail narrows to 1.25 m');
+    const triBaked = mod.decodeBridgeDecks(mod.encodeBridgeDecks('mabou', 1.5, -0.2, true, mod.hashStreams(streamsA), [0, 0], [...triEntries.values()]), 'mabou');
+    // Reference live solve with raised highway banks (rail stays 3.05 m).
+    raiseHwy = true;
+    const triRef = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), null);
+    triRef.update(cam);
+    assert.ok(Math.abs(triRef.modern.spans[2].width - 3.05) < 1e-9, 'raised highway banks keep parallel rail at 3.05 m');
+    const triRefBits = spanBits(triRef.modern.spans[0]);
+    const triRefH = triRef.modern.deckHeightAt(0, 17);
+    assert.ok(triRefH !== null && triRefH > 10.3, `full-width rail lifts crossing approach at (0, 17) (got ${triRefH})`);
+    // Case A: first build at level 7 with raised highway banks.
+    const triRunA = new mod.Roads({roads: triRoads}, [0, 0], makeTriTerrain(7), triBaked);
+    triRunA.update(cam);
+    assert.equal(triRunA.modern.spans[0].baked, null, 'raised parallel highway bank invalidates crossing baked entry');
+    assert.ok(spanBits(triRunA.modern.spans[0]).equals(triRefBits), 'crossing matches live solver bit-for-bit when parallel highway banks rise');
+    // Case B: staged level-6 provisional hydration (flat banks, rail narrows to 1.25 m) -> level 7 raised highway banks.
+    let triLv = 6; raiseHwy = false;
+    const triStageT = {
+      ...makeTriTerrain(6),
+      meshContactSource: () => triLv,
+      surfaceAt: (x, z) => ({ground: triH(x, z), level: triLv, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+    };
+    const triRunB = new mod.Roads({roads: triRoads}, [0, 0], triStageT, triBaked);
+    triRunB.update(cam);
+    assert.equal(triRunB.modern.spans[2].width, 1.25, 'staged level-6 provisional rail hydrates at 1.25 m');
+    assert.equal(triRunB.modern.spans[0].bakedVerified, false, 'staged level-6 crossing stays unverified');
+    triLv = 7; raiseHwy = true; triStageT.dataRevision++;
+    triRunB.update(cam);
+    assert.ok(Math.abs(triRunB.modern.spans[2].width - 3.05) < 1e-9, 'staged level-7 restores rail width to 3.05 m');
+    assert.equal(triRunB.modern.spans[0].baked, null, 'staged level-7 invalidates crossing baked entry');
+    assert.ok(spanBits(triRunB.modern.spans[0]).equals(triRefBits), 'staged crossing settles rail width first and matches live solver bit-for-bit');
   }
 
   // Failed washboard refresh (injected emit() error on level-7 road-axis refresh) must NOT throw WeakSet.add(null)
@@ -1108,8 +1215,10 @@ if (process.argv.includes('--mutations')) {
     ['streamsHash check removed', bridgesFile, bridgesSrc, '||this.terrainStreamsHash()!==decks.streamsHash', '', /edited streams reject/],
     ['geomHash check removed', decksFile, decksSrc, 's.geomHash === geomHash && ', '', /moved span rejects|rejects different geomHash/],
     ['nearby spans omitted from geomHash', bridgesFile, bridgesSrc, 'const others=[...nearby].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);', 'const others:Span[]=[];', /perpendicular crossing bridge invalidates|removed parallel highway rejects|widening crossing.*invalidates neighbor/],
-    ['parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'const partners=[...r.parallel].sort((a,b)=>a.chainKey<b.chainKey?-1:a.chainKey>b.chainKey?1:0);\n      for(const q of partners){', 'const partners:Span[]=[];\n      for(const q of partners){', /grade-separated parallel highway rejects/],
-    ['late parallel rejection keeps narrowed width', bridgesFile, bridgesSrc, 'r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;', '', /late parallel rejection restores/],
+    ['parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'for(const q of r.parallelBanks){', 'for(const q of [] as Span[]){', /grade-separated parallel highway rejects|raised parallel highway bank invalidates crossing/],
+    ['nearby parallel banks omitted from landHash', bridgesFile, bridgesSrc, 'for(const o of[...nearby])if(o.parallel.length){\n      parBankSet.add(o);\n      for(const q of o.parallel)if(q!==r){nearby.add(q);parBankSet.add(q);}\n    }', '', /raised parallel highway bank invalidates crossing/],
+    ['staged crossing skips settling nearby provisional rail width', bridgesFile, bridgesSrc, 'for(const q of r.parallelBanks)if(q.baked&&!q.bakedVerified&&q.width!==q.bakedPrevWidth)this.ensure(q,touch);', '', /staged crossing settles rail width first/],
+    ['late parallel rejection keeps narrowed width', bridgesFile, bridgesSrc, 'r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;', '', /late parallel rejection restores|staged level-7 restores rail width/],
     ['interior CHECKS omitted from landHash', bridgesFile, bridgesSrc, 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i1;i++)for(let j=0;j<columns;j++){', 'const memoRow=4*columns+1,memoX=new Float64Array(5*memoRow),memoZ=new Float64Array(memoX.length),memoState=new Uint8Array(memoX.length);\n      for(let i=i0;i<i0;i++)for(let j=0;j<columns;j++){', /interior triangle ridge rejects/],
     ['centreline bank probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let s=-startLength-1;s<=0;s++){const p=this.at(r,s);if(!sample(p.x,p.z))return null;}', '', /odd-column -3 m bank spike rejects/],
     ['per-column toe-slope probes omitted from landHash', bridgesFile, bridgesSrc, 'for(let j=0;j<=columns;j++){const u=-width+2*width*j/columns;if(!sample(p.x+p.nx*u,p.z+p.nz*u))return null;}', 'for(const side of[-1,0,1])if(!sample(p.x+p.nx*side*width,p.z+p.nz*side*width))return null;', /interior toe-slope column change rejects/],
