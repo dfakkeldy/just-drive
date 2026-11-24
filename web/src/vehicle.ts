@@ -75,6 +75,49 @@ function onCarryingSpan(roads: { bridgeRuns?: Roads['bridgeRuns'] }, hit: Pick<R
 export function spanDeckReference(roads: Pick<Roads, 'deckHeight'> & { bridgeRuns?: Roads['bridgeRuns'] }, hit: Pick<RoadHit, 'x' | 'z' | 'road'>): number | undefined {
   return onCarryingSpan(roads, hit) ? roads.deckHeight(hit.x, hit.z) ?? undefined : undefined;
 }
+/** Height of a deck carried by `road` at (x, z), reading that span's own deck when available. */
+export function carriedDeckHeight(
+  roads: Pick<Roads, 'deckHeight'> & { bridgeRuns?: Roads['bridgeRuns']; roadDeckHeight?: Roads['roadDeckHeight'] },
+  x: number, z: number, road: Road, referenceY?: number, maxRise?: number,
+): number | undefined {
+  if (roads.roadDeckHeight) return roads.roadDeckHeight(x, z, road.id) ?? undefined;
+  const deck = road.bridge ? roads.deckHeight(x, z) ?? undefined : spanDeckReference(roads, { x, z, road });
+  if (deck === undefined) return undefined;
+  if (referenceY !== undefined && Number.isFinite(referenceY) && maxRise !== undefined && Math.abs(deck - referenceY) > maxRise) return undefined;
+  return deck;
+}
+/** Nearest road at (x, z) on the same level as referenceY when a bridge deck is overhead or underfoot. */
+export function levelMatchedRoad(
+  roads: Pick<Roads, 'nearest' | 'deckHeight'> & { bridgeRuns?: Roads['bridgeRuns']; roadDeckHeight?: Roads['roadDeckHeight'] },
+  x: number, z: number, reach: number, referenceY: number | undefined, cartRoads: boolean | undefined, heading?: number, onDeckHint?: boolean,
+): RoadHit | null {
+  const deckHere = referenceY === undefined || referenceY < 1e5 ? roads.deckHeight(x, z) : null;
+  if (deckHere === null) return roads.nearest(x, z, reach);
+  if (roads.roadDeckHeight) {
+    const topmost = referenceY !== undefined && (!Number.isFinite(referenceY) || referenceY >= 1e5);
+    const onOwn = onDeckHint === false ? null : roads.nearest(x, z, reach, r => {
+      const d = roads.roadDeckHeight!(x, z, r.id);
+      return d !== null && (topmost ? Math.abs(d - deckHere) < .02 : deckCounts(d, referenceY, cartRoads) && d >= referenceY! - 1);
+    });
+    if (onOwn) return onOwn;
+    return roads.nearest(x, z, reach, r => roads.roadDeckHeight!(x, z, r.id) === null) ?? roads.nearest(x, z, reach);
+  }
+  const onDeck = onDeckHint ?? deckCounts(deckHere, referenceY, cartRoads);
+  const byLevel = (r: Road) => (carriedDeckHeight(roads, x, z, r) !== undefined) === onDeck;
+  if (heading !== undefined && onDeck) {
+    const seen = new Set<number>();
+    let best: RoadHit | null = null, bestAlign = -1;
+    for (let i = 0; i < 4; i++) {
+      const hit = roads.nearest(x, z, reach, r => byLevel(r) && !seen.has(r.id));
+      if (!hit) break;
+      seen.add(hit.road.id);
+      const align = Math.abs(Math.cos(hit.heading - heading));
+      if (align > bestAlign) { bestAlign = align; best = hit; }
+    }
+    if (best) return best;
+  }
+  return roads.nearest(x, z, reach, byLevel) ?? roads.nearest(x, z, reach);
+}
 /** True when (x, z) itself lies within the width of a modern bridge span carrying its nearest road. */
 export function placementOnSpan(roads: Pick<Roads, 'nearest'> & { bridgeRuns?: Roads['bridgeRuns'] }, x: number, z: number): boolean {
   const hit = roads.nearest(x, z, DECK_REACH);

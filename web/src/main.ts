@@ -1236,8 +1236,8 @@ if (testPark && !fleet) {
     && (!testPark.contains(pose.x, pose.z, vehicle.spec.envelope.reach) || testPark.placementAllowed(pose, vehicle.spec));
 } else if (stuntPark) {
   for (const actor of fleet ? fleet.members.map(m => m.vehicle) : [vehicle]) {
-    // A placement over joined terrain must use the deck within reach of its own height.
-    fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z, pose.y) : actor.y ?? 0);
+    // A placement over joined terrain must use the deck within reach of its own height; outside the park defer to prior bindings.
+    fleetContacts.bindVehicle(actor, pose => stuntPark.contains(pose.x, pose.z, actor.spec.envelope.reach) ? terrain.heightAt(pose.x, pose.z, pose.y) : undefined);
   }
 }
 const mineSite = AREA.colliery ? new MineSite(roads, terrain, vehicle.bounds, manifest.village, SITE.brand === 'just') : null;
