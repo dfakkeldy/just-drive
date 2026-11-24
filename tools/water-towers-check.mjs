@@ -32,6 +32,17 @@ const EXPECTED_IDS = [
   'paint-e-1', 'paint-e-2', 'paint-e-3',
   'mulgrave-dock-1', 'mulgrave-dock-2', 'mulgrave-dock-3', 'mulgrave-dock-4', 'mulgrave-dock-5', 'mulgrave-dock-6',
 ];
+const EXPECTED_PLACEMENTS = [
+  'ph-pitt-street:pointtupper', 'port-hastings:pointtupper', 'port-hastings:cansocauseway',
+  'mulgrave-north:pointtupper', 'mulgrave-south:pointtupper', 'port-hood-water:porthood',
+  'port-hood-bin:porthood', 'pt-oil-1893:pointtupper', 'pt-oil-1897:pointtupper', 'pt-power-1906:pointtupper',
+  'ph-wallboard-silo-1:pointtupper', 'ph-wallboard-silo-2:pointtupper',
+  'paint-w-1:pointtupper', 'paint-w-2:pointtupper', 'paint-w-3:pointtupper', 'paint-w-4:pointtupper',
+  'paint-w-5:pointtupper', 'paint-w-6:pointtupper', 'paint-w-7:pointtupper', 'paint-w-8:pointtupper',
+  'paint-e-1:pointtupper', 'paint-e-2:pointtupper', 'paint-e-3:pointtupper',
+  'mulgrave-dock-1:pointtupper', 'mulgrave-dock-2:pointtupper', 'mulgrave-dock-3:pointtupper',
+  'mulgrave-dock-4:pointtupper', 'mulgrave-dock-5:pointtupper', 'mulgrave-dock-6:pointtupper',
+];
 const hasLand = AREAS.every(a => existsSync(`${root}data/baked/areas/${a}/manifest.json`));
 
 const lands = hasLand ? Object.fromEntries(AREAS.map(a => [a, railLand(`areas/${a}`)])) : null;
@@ -59,8 +70,9 @@ function inPoly(e, n, poly) {
 
 function checkDataAndLand(specs, helpers) {
   assert.deepEqual(specs.map(t => t.id), EXPECTED_IDS, 'pinned 28 unique structure IDs');
-  const totalPlacements = specs.reduce((s, t) => s + t.areas.length, 0);
-  assert.equal(totalPlacements, 29, 'pinned 29 area placements across pointtupper (26), cansocauseway (1), porthood (2)');
+  const placements = specs.flatMap(t => t.areas.map(a => `${t.id}:${a}`));
+  assert.equal(new Set(placements).size, placements.length, 'no duplicate (id, area) placements');
+  assert.deepEqual(placements, EXPECTED_PLACEMENTS, 'pinned 29 (id, area) placements across pointtupper (26), cansocauseway (1), porthood (2)');
 
   for (const t of specs) {
     assert.ok(t.diameter > 1 && t.diameter <= 20, `${t.id}: diameter out of range (${t.diameter})`);
@@ -84,20 +96,34 @@ function checkDataAndLand(specs, helpers) {
       assert.ok(bakedG !== null && Math.abs(bakedG - t.g) < 0.15,
         `${t.id} (${area}): baked ground mismatch data=${t.g} baked=${bakedG}`);
 
-      // Verify foundation skirt seats below fine baked terrain around the full perimeter at exag = 1, 1.5 and 3.
+      // Verify actual generated foundation geometry sits below fine baked terrain around the full perimeter at exag = 1, 1.5 and 3.
       const r = t.diameter / 2;
       const rimR = r + (t.diameter >= 9 ? 0.38 : 0.22);
       for (const exag of [1.0, 1.5, 3.0]) {
-        const plinthBotY = helpers.waterTowerGround(t.g, exag, SEA) - helpers.foundationSkirt(exag);
+        const built = helpers.buildWaterTowers([t], land.village, exag, SEA, false);
+        const pos = built.geometry.getAttribute('position');
+        const cx = t.e - VE, cz = VN - t.n;
+        let tankMinY = Infinity, slabMinY = Infinity;
+        for (let i = 0; i < pos.count; i++) {
+          const vx = pos.getX(i), vy = pos.getY(i), vz = pos.getZ(i);
+          if (Math.hypot(vx - cx, vz - cz) <= rimR + 0.25) {
+            if (vy < tankMinY) tankMinY = vy;
+          } else if (vy < slabMinY) {
+            slabMinY = vy;
+          }
+        }
+        built.geometry.dispose();
+        assert.ok(Number.isFinite(tankMinY), `${t.id}: missing tank foundation vertices`);
         for (let k = 0; k < 16; k++) {
           const ang = (k / 16) * Math.PI * 2;
           const eg = land.ground(t.e + Math.cos(ang) * rimR - VE, VN - (t.n + Math.sin(ang) * rimR), true);
           assert.ok(eg !== null, `${t.id}: missing rim ground sample`);
           const edgeY = helpers.waterTowerGround(eg, exag, SEA);
-          assert.ok(plinthBotY <= edgeY - 0.05,
-            `${t.id} (${area}) plinth gap at exag=${exag}: bot=${plinthBotY.toFixed(2)} > rimGround=${edgeY.toFixed(2)}`);
+          assert.ok(tankMinY <= edgeY - 0.05,
+            `${t.id} (${area}) plinth gap at exag=${exag}: bot=${tankMinY.toFixed(2)} > rimGround=${edgeY.toFixed(2)}`);
         }
         if (t.valveHouse) {
+          assert.ok(Number.isFinite(slabMinY), `${t.id}: missing valveHouse slab vertices`);
           const vh = t.valveHouse;
           const a = vh.azDeg * Math.PI / 180;
           const ve = t.e + Math.sin(a) * vh.dist;
@@ -110,8 +136,8 @@ function checkDataAndLand(specs, helpers) {
             const cn = vn + lx * sn - lz * c;
             const cg = land.ground(ce - VE, VN - cn, true);
             const cornerY = helpers.waterTowerGround(cg, exag, SEA);
-            assert.ok(plinthBotY <= cornerY - 0.05,
-              `${t.id} valveHouse gap at exag=${exag}: bot=${plinthBotY.toFixed(2)} > cornerGround=${cornerY.toFixed(2)}`);
+            assert.ok(slabMinY <= cornerY - 0.05,
+              `${t.id} valveHouse gap at exag=${exag}: bot=${slabMinY.toFixed(2)} > cornerGround=${cornerY.toFixed(2)}`);
           }
         }
       }
@@ -241,6 +267,13 @@ function checkGeometryAndCollisions(helpers) {
   const hitD = { x: vhSolid.x + dx * 2.05, z: vhSolid.z + dz * 2.05, heading: 0, vx: -dx * 5, vz: -dz * 5, speed: 5, spec: probeSpec };
   ptWT.resolveSolids(hitD);
   assert.ok(Math.hypot(hitD.x - vhSolid.x, hitD.z - vhSolid.z) > 2.20, 'valve house depth wall pushes car out');
+  // Rotated corner probe (+wx, -dx corner where |Δx| exceeds half + reach): must still be pushed out (needs coupled=true).
+  const cornerX = vhSolid.x + wx * (vh.width / 2) - dx * (vh.depth / 2);
+  const cornerZ = vhSolid.z + wz * (vh.width / 2) - dz * (vh.depth / 2);
+  const smallSpec = { envelope: { radius: 0.4, reach: 0.25, circles: [0] } };
+  const cornerProbe = { x: cornerX, z: cornerZ, heading: 0, vx: 0, vz: 0, speed: 0, spec: smallSpec };
+  ptWT.resolveSolids(cornerProbe);
+  assert.ok(Math.hypot(cornerProbe.x - cornerX, cornerProbe.z - cornerZ) > 0.35, 'valve house rotated corner pushes car out');
   ptWT.dispose();
 
   // Verify exact top & bottom world Y of Pitt St and Port Hastings standpipes at exag 1.0, 1.5 and 3.0.
@@ -333,18 +366,20 @@ if (process.argv.includes('--mutations')) {
 
   const wtMutations = [
     ['ground stretch omitted', 'return base > sea ? sea + (base - sea) * exag : base;', 'return base;', /dry ground stretches by exag/],
-    ['plinth floats above ground', 'b.addCylinder(cx, baseY - skirt, cz, rad + plinthPad', 'b.addCylinder(cx, baseY + 0.5, cz, rad + plinthPad', /Port Hastings plinth seats skirt below ground/],
-    ['fixed 0.7 m skirt fails at exag=3', 'return Math.max(0.75, 0.75 * exag);', 'return 0.7;', hasLand ? /plinth gap at exag=3/ : /./],
+    ['plinth floats above ground', 'b.addCylinder(cx, baseY - skirt, cz, rad + plinthPad', 'b.addCylinder(cx, baseY + 0.5, cz, rad + plinthPad', /plinth gap at exag=1|Port Hastings plinth seats skirt below ground/],
+    ['fixed 0.7 m skirt fails at exag=3', 'return Math.max(0.75, 0.75 * exag);', 'return 0.7;', /plinth gap at exag=3/],
+    ['valve house slab-only gap at exag=3', 'const slabH = skirt + 0.2;', 'const slabH = 0.55;', /valveHouse gap at exag=3/],
     ['canopy exclude disabled', 'if (de * de + dn * dn <= r * r) return true;', 'if (false) return true;', /canopy excluded at ph-pitt-street/],
     ['valve house canopy exclude disabled', 'if (vde * vde + vdn * vdn <= vr * vr) return true;', 'if (false) return true;', /canopy excluded at Pitt St valve house/],
     ['valve house collision axes swapped', 'heading: wide ? Math.PI / 2 - yaw : Math.PI - yaw,', 'heading: yaw,', /valve house (width|depth)/],
-    ['solids disabled', 'pushOut(body, this.solids);', 'void body;', /resolveSolids pushes vehicle out/],
+    ['valve house corner broadphase clipped', 'pushOut(body, this.solids, true);', 'pushOut(body, this.solids);', /valve house rotated corner pushes car out/],
+    ['solids disabled', 'pushOut(body, this.solids, true);', 'void body;', /resolveSolids pushes vehicle out/],
     ['LOW uses desktop segment count', 'const segs = low', 'const segs = false', /LOW phone geometry.*simpler than desktop|LOW triangle ceiling exceeded/],
     ['empty area builds empty mesh', 'if (!specs.length) return null;', 'if (false) return null;', /mabou returns null/],
     ['wrong material side breaks shader sharing', 'side: THREE.DoubleSide', 'side: THREE.FrontSide', /DoubleSide matches buildings material program/],
   ];
   for (const [label, a, b, expectedErr] of wtMutations) {
-    if (label === 'fixed 0.7 m skirt fails at exag=3' && !hasLand) continue;
+    if ((label === 'fixed 0.7 m skirt fails at exag=3' || label === 'valve house slab-only gap at exag=3') && !hasLand) continue;
     const m = compileModule('web/src/water-towers.ts', a, b);
     assert.throws(() => {
       checkDataAndLand(WATER_TOWERS, m);

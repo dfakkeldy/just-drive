@@ -21,8 +21,10 @@ const TARGETS = {
   'paintst-day': [629715.1, 5052506.0, 5.2],
 };
 
-// Views that also run a fresh-boot ?waterTowers=0 tab to prove +0 WebGL programs and +0 GPU textures from cold start.
-const FRESH_BOOT_PAIRS = new Set(['pitt-day', 'pitt-phone', 'hastings-day', 'porthood-day']);
+// Deterministic LOW view that runs a fresh-boot ?waterTowers=0 tab (no async desktop farLand/traffic drift)
+// to prove exact 0 programs / 0 textures / +1 geometry from a cold WebGL renderer.
+// Desktop views additionally prove literal === WebGLProgram sharing with buildings.mesh and 0 texture slots.
+const FRESH_BOOT_PAIRS = new Set(['pitt-phone']);
 
 async function waitSettled(c, url) {
   const deadline = Date.now() + 60000;
@@ -109,11 +111,18 @@ for (const url of urls) {
     info = await c.read(`(() => {
       const m = mmm, grp = m.scene.getObjectByName('water towers');
       const meshes = grp ? grp.children.length : 0;
+      const uniqueGeometries = grp ? new Set(grp.children.map(o => o.geometry?.uuid).filter(Boolean)).size : 0;
+      const wtMesh = grp?.children[0];
+      const wtMat = wtMesh?.material;
+      const texSlots = wtMat ? ['map','alphaMap','aoMap','bumpMap','emissiveMap','envMap','lightMap','normalMap','specularMap'].filter(k => !!wtMat[k]).length : 0;
+      const wtProg = wtMat ? m.renderer.properties.get(wtMat)?.currentProgram ?? null : null;
+      const bldgProg = m.buildings?.mesh?.material ? m.renderer.properties.get(m.buildings.mesh.material)?.currentProgram ?? null : null;
+      const sharesBuildingsProgram = !!(wtProg && bldgProg && wtProg === bldgProg);
       const bogusMasts = m.tall ? m.tall.solids.filter(s =>
         [[628035.91,5052687.54],[629725.71,5053075.14],[624284.91,5052673.34],[624089.01,5052185.64]]
           .some(([e,n]) => Math.hypot(s.x - (e - m.terrain.manifest.village[0]), s.z - (m.terrain.manifest.village[1] - n)) < 20)
       ).length : 0;
-      return { area: m.area.id, meshes, solids: m.waterTowers?.solids.length ?? 0, bogusMasts };
+      return { area: m.area.id, meshes, uniqueGeometries, texSlots, sharesBuildingsProgram, hasBldgProg: !!bldgProg, solids: m.waterTowers?.solids.length ?? 0, bogusMasts };
     })()`);
 
     if (expectZero) {
@@ -125,6 +134,11 @@ for (const url of urls) {
     }
 
     assert.equal(info.meshes, 1, `${name}: expected single merged water towers mesh`);
+    assert.equal(info.uniqueGeometries, 1, `${name}: expected exactly 1 unique BufferGeometry`);
+    assert.equal(info.texSlots, 0, `${name}: expected 0 textures on water towers material`);
+    if (info.hasBldgProg && TARGETS[name]) {
+      assert.equal(info.sharesBuildingsProgram, true, `${name}: water towers must share the compiled buildings MeshLambertMaterial WebGLProgram`);
+    }
     assert.equal(info.bogusMasts, 0, `${name}: bogus water-tower masts must be absent from tall`);
     vis = await checkVisible(c, name);
     await c.shot(`${out}/${name}.png`);
@@ -183,9 +197,9 @@ for (const url of urls) {
         geometries: shown.geometries - off.geometries,
         off,
       };
-      assert.ok(coldPair.programs <= 0, `${name}: fresh-boot added WebGL shader programs (${off.programs} -> ${shown.programs})`);
-      assert.ok(coldPair.textures <= 0, `${name}: fresh-boot added GPU textures (${off.textures} -> ${shown.textures})`);
-      assert.ok(coldPair.geometries <= 1, `${name}: fresh-boot added >1 geometry (${off.geometries} -> ${shown.geometries})`);
+      assert.equal(coldPair.programs, 0, `${name}: expected exact 0 WebGL shader program delta (${off.programs} -> ${shown.programs})`);
+      assert.equal(coldPair.textures, 0, `${name}: expected exact 0 GPU texture delta (${off.textures} -> ${shown.textures})`);
+      assert.equal(coldPair.geometries, 1, `${name}: expected exact +1 GPU geometry delta (${off.geometries} -> ${shown.geometries})`);
     } finally {
       await cOff.close();
     }

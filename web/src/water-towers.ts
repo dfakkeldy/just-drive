@@ -498,7 +498,8 @@ export class WaterTowers {
   }
 
   resolveSolids(body: Pushable): void {
-    pushOut(body, this.solids);
+    // Pass coupled=true so pushOut's broadphase reach covers rotated rectangular valve-house corners.
+    pushOut(body, this.solids, true);
   }
 
   dispose(): void {
