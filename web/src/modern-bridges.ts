@@ -727,8 +727,9 @@ export class ModernBridges {
     }
   }
 
-  private hasUnsettledParallelNeighbor(r:Span):boolean {
-    return r.parallelBanks.some(q=>!r.parallel.includes(q)&&!q.geometry&&q.width===q.baseWidth&&q.parallel.every(p=>!p.geometry||(p.baked!==null&&!p.bakedVerified)));
+  private hasUnsettledParallelNeighbor(r:Span,revision:number):boolean {
+    const unsettled=(s:Span)=>!s.geometry||s.revision!==revision||(s.baked!==null&&!s.bakedVerified);
+    return r.parallelBanks.some(q=>!r.parallel.includes(q)&&q.width===q.baseWidth&&unsettled(q)&&q.parallel.every(unsettled));
   }
 
   /** Apply the parallel rail/highway narrowing decision to `r` and its partners so an out-of-range partner still gets
@@ -781,7 +782,7 @@ export class ModernBridges {
       const a=this.at(r,-3),b=this.at(r,r.length+3),s0=this.terrain.surfaceAt(a.x,a.z),s1=this.terrain.surfaceAt(b.x,b.z);
       if(!s0||!s1||Math.min(s0.level,s1.level)<6){this.probesChanged(r,touch,true);return true;}
       liveHash=this.spanLandHash(r,entry.startLength,entry.endLength,entry.finalWidth,entry.narrowRail,entry.smoothStart,entry.smoothEnd,entry.y0,entry.y1,entry.level);
-      if(liveHash!==null&&liveHash!==entry.landHash){if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);return false;}
+      if(liveHash!==null&&liveHash!==entry.landHash){if(!this.hasUnsettledParallelNeighbor(r,this.terrain.dataRevision??0))this.rejectedBaked.add(entry);this.dropBaked(r);return false;}
     }
     const coreRows=Math.ceil(r.length),rows=coreRows+entry.startLength+entry.endLength,columns=Math.ceil(2*entry.finalWidth/.75);
     if(rows!==entry.rows||columns!==entry.columns||entry.gridY.length!==(rows+1)*(columns+1)){this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;return false;}
@@ -841,7 +842,7 @@ export class ModernBridges {
         if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;if(r.parallel.length)this.applyParallelNarrowing(r,true);return;}
         if(this.tryHydrateBaked(r,touch,entry))return;
       }
-      if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;
+      if(!this.hasUnsettledParallelNeighbor(r,revision))this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;
     }
     if(this.tryHydrateBaked(r,touch))return;
     let changed=r.forceBuild||!r.geometry,known=true;

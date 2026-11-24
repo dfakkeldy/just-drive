@@ -696,6 +696,34 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
       assert.equal(splitSolves, 0, 'split-tile crossing reuses valid bake once provisional highway verifies');
       assert.equal(splitRun.modern.spans[0].bakedVerified, true, 'split-tile crossing verifies settled bake');
     }
+    // Live-built highway at level 6 (raised coarse banks leave out-of-range rail at 3.05 m), then level 7 flattens
+    // highway banks so highway narrows rail to 1.25 m: crossing running before highway on the level-7 revision must
+    // see highway's stale revision as unsettled and NOT permanently reject its valid bake.
+    {
+      const liveHwyRoads = [
+        ...triRoads,
+        {id: 13, name: 'Hwy 19', kind: 1, halfWidth: 3.6, bridge: false, pts: [[20, -10], [80, -10]]},
+      ];
+      let lv = 6; raiseHwy = true;
+      const lhT = {
+        ...makeTriTerrain(6),
+        meshContactSource: () => lv,
+        surfaceAt: (x, z) => ({ground: triH(x, z), level: lv, canopy: 0, roadDist: 0, halfWidth: 3.6, kind: 1, bridge: true, washboard: false}),
+      };
+      const lhRun = new mod.Roads({roads: liveHwyRoads}, [0, 0], lhT, triBaked);
+      lhRun.update(camNorthEdge);
+      assert.equal(lhRun.modern.spans[1].baked, null, 'highway with extra continuation builds live at level 6');
+      assert.ok(Math.abs(lhRun.modern.spans[2].width - 3.05) < 1e-9, 'raised level-6 highway banks leave rail at 3.05 m');
+      lv = 7; raiseHwy = false; lhT.dataRevision++;
+      lhRun.update(camNorthEdge);
+      assert.equal(lhRun.modern.spans[2].width, 1.25, 'level-7 live highway narrows out-of-range rail to 1.25 m');
+      let lhPostSolves = 0;
+      lhRun.modern.build = function(r, ...rest) { if (r.chainKey === '10') lhPostSolves++; return proto.build.call(this, r, ...rest); };
+      lhRun.update(camNorthEdge);
+      assert.equal(lhPostSolves, 0, 'crossing reuses valid bake after live highway narrows rail on level 7');
+      assert.equal(lhRun.modern.spans[0].bakedVerified, true, 'crossing verifies valid bake after live highway narrows rail');
+      assert.ok(spanBits(lhRun.modern.spans[0]).equals(spanBits(triEdgeLive.modern.spans[0])), 'crossing matches live bit-for-bit after live highway narrows rail');
+    }
     // Out-of-range parallel pair at (0, 20, -1520): only crossing is in DRAW. After crossing defers its bake and
     // builds live, unrelated dataRevision bumps with unchanged tile sources and partner widths must make ZERO
     // surfaceAt() calls until a local tile changes or a partner narrows.
@@ -1356,8 +1384,9 @@ if (process.argv.includes('--mutations')) {
     ['nearby rail width omitted from landHash', bridgesFile, bridgesSrc, 'if(!r.parallel.includes(q))h.num(q.width);', '', /stale 3\.05 m crossing bake rejected/],
     ['rail narrowing skips invalidating crossing neighbors', bridgesFile, bridgesSrc, 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.runList=null;this.invalidateNeighbors(t,fromBaked);}', 'if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.runList=null;}', /crossing-first bake (verifies|matches live)|edge camera crossing|stale 3\.05 m/],
     ['baked hydration skips narrowing out-of-range parallel rail', bridgesFile, bridgesSrc, 'if(r.bakedVerified&&r.parallel.length)this.applyParallelNarrowing(r,true);', '', /edge camera hydration narrows out-of-range rail/],
-    ['unsettled parallel neighbor permanently rejects valid crossing bake', bridgesFile, bridgesSrc, 'if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);return false;', 'this.rejectedBaked.add(entry);this.dropBaked(r);return false;', /crossing-first direct start hydrates valid bake|edge camera crossing verifies settled bake/],
-    ['provisional parallel partner treated as settled', bridgesFile, bridgesSrc, 'q.parallel.every(p=>!p.geometry||(p.baked!==null&&!p.bakedVerified))', 'q.parallel.every(p=>!p.geometry)', /split-tile crossing (reuses|verifies)|staged edge crossing (reuses|verifies)/],
+    ['unsettled parallel neighbor permanently rejects valid crossing bake', bridgesFile, bridgesSrc, 'if(!this.hasUnsettledParallelNeighbor(r,this.terrain.dataRevision??0))this.rejectedBaked.add(entry);this.dropBaked(r);return false;', 'this.rejectedBaked.add(entry);this.dropBaked(r);return false;', /crossing-first direct start hydrates valid bake|edge camera crossing verifies settled bake/],
+    ['provisional parallel partner treated as settled', bridgesFile, bridgesSrc, 'const unsettled=(s:Span)=>!s.geometry||s.revision!==revision||(s.baked!==null&&!s.bakedVerified);', 'const unsettled=(s:Span)=>!s.geometry||s.revision!==revision;', /split-tile crossing (reuses|verifies)|staged edge crossing (reuses|verifies)/],
+    ['stale-revision live parallel partner treated as settled', bridgesFile, bridgesSrc, '!s.geometry||s.revision!==revision||(s.baked!==null&&!s.bakedVerified)', '!s.geometry||(s.baked!==null&&!s.bakedVerified)', /crossing (reuses|verifies) valid bake after live highway narrows rail/],
     ['out-of-range deferred crossing repeats spanLandHash', bridgesFile, bridgesSrc, 'if(!verifiedEntry&&!r.baked&&!r.forceBuild&&(!touch||r.geometry)&&!this.probesChanged(r,touch,false))return true;', 'if(!verifiedEntry&&!touch&&!r.baked&&!r.forceBuild&&!this.probesChanged(r,false))return true;', /out-of-range deferred crossing skips spanLandHash/],
     ['staged crossing skips settling nearby provisional rail width', bridgesFile, bridgesSrc, 'for(const q of r.parallelBanks)if(q.baked&&!q.bakedVerified&&q.width!==q.bakedPrevWidth)this.ensure(q,touch);', '', /staged crossing settles rail width first|staged edge crossing (reuses|verifies)/],
     ['late parallel rejection keeps narrowed width', bridgesFile, bridgesSrc, 'r.width=r.bakedPrevWidth;r.narrowRail=r.bakedPrevNarrowRail;', '', /late parallel rejection restores|staged level-7 restores rail width/],
@@ -1374,11 +1403,11 @@ if (process.argv.includes('--mutations')) {
     ['widened sidewalk fallback drops active width', bridgesFile, bridgesSrc, 'const hadBaked=!!r.baked,sameEntry=r.baked===entry;', 'const hadBaked=!!r.baked,sameEntry=!!r.baked;', /preserves active 5\.90 m width/],
     ['widened crossing skips neighbor geomHash update', bridgesFile, bridgesSrc, 'if(widened)for(const r of this.spans){', 'if(false)for(const r of this.spans){', /widening crossing.*invalidates neighbor/],
     ['washboard refresh rehashes land twice', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,entry))return;', 'if(this.tryHydrateBaked(r,touch))return;', /hashes land only once/],
-    ['failed washboard refresh passes null to WeakSet', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;', 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(r.baked!);this.dropBaked(r);r.forceBuild=true;', /Invalid value used in weak set|failed washboard refresh/],
+    ['failed washboard refresh passes null to WeakSet', bridgesFile, bridgesSrc, 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      if(!this.hasUnsettledParallelNeighbor(r,revision))this.rejectedBaked.add(entry);this.dropBaked(r);r.forceBuild=true;', 'if(this.tryHydrateBaked(r,touch,entry))return;\n      }\n      if(!this.hasUnsettledParallelNeighbor(r,revision))this.rejectedBaked.add(r.baked!);this.dropBaked(r);r.forceBuild=true;', /Invalid value used in weak set|failed washboard refresh/],
     ['nearby and distant pending tile repeats spanLandHash', bridgesFile, bridgesSrc, 'if(this.terrain.meshContactSource(r.bakedPendingX,r.bakedPendingZ,true,false)===r.bakedPendingSource)return;', '', /unrelated revisions skip spanLandHash|zero touching surfaceAt calls/],
     ['washboard road axis refresh omitted', bridgesFile, bridgesSrc, 'if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;if(r.parallel.length)this.applyParallelNarrowing(r,true);return;}', 'r.bakedVerified=true;return;', /washboard approach attribute matches/],
     ['probeTargetLevel capped at 8', bridgesFile, bridgesSrc, 'const top=Math.max(this.manifestMaxLevel,fallbackLevel);', 'const top=Math.max(8,fallbackLevel);', /withheld level-9 tile/],
-    ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){if(!this.hasUnsettledParallelNeighbor(r))this.rejectedBaked.add(entry);this.dropBaked(r);return false;}', '', /raised terrain before first build rejects/],
+    ['first-build landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash!==null&&liveHash!==entry.landHash){if(!this.hasUnsettledParallelNeighbor(r,this.terrain.dataRevision??0))this.rejectedBaked.add(entry);this.dropBaked(r);return false;}', '', /raised terrain before first build rejects/],
     ['late landHash check removed', bridgesFile, bridgesSrc, 'if(liveHash===entry.landHash){\n        if(this.washAxisHash(r)===r.bakedWashHash){r.bakedVerified=true;r.bakedPendingX=NaN;if(r.parallel.length)this.applyParallelNarrowing(r,true);return;}\n        if(this.tryHydrateBaked(r,touch,entry))return;\n      }', 'r.bakedVerified=true;return;', /late terrain mismatch rebuilds/],
     ['rejectedBaked tracking removed', bridgesFile, bridgesSrc, 'if(!entry||this.rejectedBaked.has(entry)){', 'if(!entry){', /does not force rebuilds|failed washboard refresh/],
     ['verified baked fast-path removed', bridgesFile, bridgesSrc, 'if(r.baked&&r.bakedVerified&&!r.forceBuild&&r.baked.finalWidth===r.width)return;', '', /skips land probes/],
