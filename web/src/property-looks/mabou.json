@@ -4618,7 +4618,6 @@
       "chimney": false,
       "dormer": false,
       "shutters": false,
-      "kind": "barn",
       "wall": "#a33b32",
       "roof": "#3a3d40",
       "trim": "#f4f2ec",
@@ -4673,10 +4672,7 @@
       "wall": "#3f342e",
       "roof": "#2e3134",
       "trim": "#6b5e54",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.2,
-      "ridge": 7.4
+      "roofMaterial": "shingle"
     },
     "153": {
       "group": "highway-252-and-glendyer",
@@ -4771,7 +4767,6 @@
       "chimney": false,
       "dormer": false,
       "shutters": false,
-      "kind": "barn",
       "wall": "#a33b32",
       "roof": "#3a3d40",
       "trim": "#f4f2ec",
