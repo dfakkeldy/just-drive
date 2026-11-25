@@ -61,8 +61,8 @@ for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(co
  const r=await request(host,path,{},method);assert.equal(r.status,302,`${method} ${host}${path}`);
  const dest=new URL(r.headers.location,'https://'+host);
  assert.equal(dest.hostname,'mmm.fakkeldy.ca',`${method} ${host}${path} host`);
- assert.equal(dest.pathname+dest.search,'/?start=blackstone-road:0.43',`${method} ${host}${path} target`);
- if(host!=='mmm.fakkeldy.ca'&&host!=='localhost')assert.equal(r.headers.location,'https://mmm.fakkeldy.ca/?start=blackstone-road:0.43',`${method} ${host}${path} cross-host location`);
+ assert.equal(dest.pathname+dest.search,'/?mode=mail&start=blackstone-road:0.43',`${method} ${host}${path} target`);
+ if(host!=='mmm.fakkeldy.ca'&&host!=='localhost')assert.equal(r.headers.location,'https://mmm.fakkeldy.ca/?mode=mail&start=blackstone-road:0.43',`${method} ${host}${path} cross-host location`);
  assert.equal(r.headers['cache-control'],undefined,`${method} ${host}${path} served by static assets, not Worker no-store`);
  if(method==='GET')table.push({host,path,status:r.status,bytes:r.body.length,sha256:sha(r.body),title:'',cache:r.headers['cache-control']??'',location:r.headers.location??''});
 }

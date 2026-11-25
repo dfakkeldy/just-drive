@@ -124,6 +124,7 @@ light-study-browser	unproven	no	Mac M1 Pro Metal PASS; safe-area, position reloa
 light-study-public-browser	unproven	no	public default-brand study flow; hardware Mac execution only, other hosts unmeasured
 porch-dog-browser	unproven	no	not yet measured on another host
 start-key-browser	unproven	no	not yet measured on another host
+start-key-blackstone-browser	unproven	no	not yet measured on another host
 start-key-browser-mutations	unproven	no	not yet measured on another host
 far-views-browser	mac-only	no	Native Apple Metal game pictures; other hosts unmeasured
 far-choice-browser	mac-only	no	Native Apple Metal game through the far views overlay, as far-views-browser; other hosts unmeasured

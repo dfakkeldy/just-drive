@@ -6,15 +6,19 @@
 //          on the screen with no land in front of it. A change of ride on the title card reloads the page: the car
 //          keeps the place. An unknown road gives the title card and the normal start.
 //   mail   The mail site: the same place before and after Start. An unknown road gives the day's start.
+//   blackstone  The /blackstone short link (deploy/_redirects): mode=mail beats a saved Explore choice, the title card
+//          shows, and after Start the car stands within 5 m of the pose startKey gives for share 0.43 of Blackstone Road.
+//          Not part of "all": it has its own row (start-key-blackstone-browser).
 //   era    Mabou 1884 has the same roads, so the same place, with the title card.
 // No page may throw. Every address holds player keys only (site, mode, era, q, mp, vehicle, start): one test key
 // would skip the title card and prove nothing. The script holds no map position: it reads the road and the porch
 // from the page, and its own arithmetic (not web/src/start-key.ts) says where the end of the road is.
 // Usage (dev server and Chromium come from the shots script; about three minutes):
 //   RUN=start-key-browser.mjs VIEWS="start|q=low" tools/yard-shots.sh 1280 720
-// START_KEY_FAMILY=just|mail|era runs one part. START_KEY_EXPECT_MUTATION is set by tools/start-key-browser-mutations.mjs.
+// START_KEY_FAMILY=just|mail|era|blackstone runs one part. START_KEY_EXPECT_MUTATION is set by tools/start-key-browser-mutations.mjs.
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
+import { build } from '../web/node_modules/esbuild/lib/main.js';
 import { cdp, cdpFetch, exitCheck, sleep } from './cdp.mjs';
 
 const [outDir, first] = process.argv.slice(2);
@@ -198,6 +202,45 @@ async function mail() {
   } finally { await page.close().catch(() => {}); }
 }
 
+// The pose web/src/start-key.ts gives for a start value, from the roads and bounds the page itself holds.
+async function poseFor(page, value) {
+  const { outputFiles } = await build({ stdin: { contents: "export { startKey } from './start-key';", resolveDir: new URL('../web/src', import.meta.url).pathname, loader: 'ts' }, bundle: true, write: false, format: 'esm', platform: 'node' });
+  const { startKey } = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
+  const world = await page.read(`JSON.stringify({ roads: window.mmm.roads.roads.map((r) => ({ name: r.name, kind: r.kind, bridge: r.bridge, pts: r.pts })), bounds: window.mmm.vehicle.bounds })`);
+  const { roads, bounds } = JSON.parse(world);
+  return startKey(value, roads, bounds);
+}
+
+async function blackstone() {
+  const page = await open(1280, 720);
+  try {
+    // A visitor who saved Explore or Get Fired still gets the mail game from the link.
+    await page.go(`${MAIL}&mode=explore&q=low`, false);
+    await page.read(`localStorage.setItem('mmm.mode', 'explore')`);
+    const link = `${MAIL}&mode=mail&start=blackstone-road:0.43&q=low`;
+    await page.go(link);
+    const before = await facts(page);
+    check(before.mode === 'mail', 'Blackstone link: the mail game opens although Explore was saved');
+    check(before.card && before.start && before.credits, 'Blackstone link: the title card shows, with Start and the credits');
+    const want = await poseFor(page, 'blackstone-road:0.43'), other = await poseFor(page, 'blackstone-road:0.40');
+    check(!!want && !!other, 'Blackstone link: start-key gives a pose for shares 0.43 and 0.40');
+    check(Math.hypot(want.x - other.x, want.z - other.z) > 1, 'Blackstone link: shares 0.43 and 0.40 are different places');
+    const at = (f, p) => Math.hypot(f.x - p.x, f.z - p.z);
+    check(at(before, want) < 5, `Blackstone link: the car stands at the 0.43 pose before Start (${fixed(at(before, want))} m)`);
+    check(at(before, other) > 5, 'Blackstone link: and not at the 0.40 pose');
+    await page.read(`document.getElementById('titleStart').click()`);
+    await page.until(`document.getElementById('title')?.hidden !== false`, 'Start closes the card');
+    await sleep(3000);
+    const after = await facts(page);
+    check(!after.card && after.mode === 'mail', 'Blackstone link: after Start the card is closed and the game is still the mail game');
+    check(at(after, want) < 5, `Blackstone link: after Start the car is within 5 m of the pose (${fixed(at(after, want))} m)`);
+    check(after.road === 'Blackstone Road', `Blackstone link: the car is on "${after.road}"`);
+    check(page.errors.length === 0, 'Blackstone link: no page threw');
+    await page.read(`localStorage.clear()`);
+    said.push(`Blackstone link: mail mode over a saved Explore, title card, car ${fixed(at(after, want))} m from the 0.43 pose after Start`);
+  } finally { await page.close().catch(() => {}); }
+}
+
 async function era() {
   const page = await open(1280, 720);
   try {
@@ -218,6 +261,7 @@ try {
   if (family === 'all' || family === 'just') await just();
   if (family === 'all' || family === 'mail') await mail();
   if (family === 'all' || family === 'era') await era();
+  if (family === 'blackstone') await blackstone();
   console.log('PASS the start key in the page\n  ' + said.join('\n  '));
 } catch (error) {
   console.error('FAIL the start key in the page: ' + error.message + (said.length ? '\n  ' + said.join('\n  ') : ''));
