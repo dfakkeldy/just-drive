@@ -57,6 +57,33 @@ const GRAVEL = 8, GRASS = 12;   // road-field kinds: 8 is weathered yard gravel/
 const EDGE = 1.6;
 const smooth = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
+/** Mapped Blackstone Road and Smithville Road centrelines in house (u, v) metres (halfWidth = 2.6 m each). */
+const BLACKSTONE_CL: readonly P[] = [
+  [-39.89, -25.28], [43.79, -18.08], [47.7, -17.94], [51.54, -18.12], [55.2, -18.81], [58.68, -20.15],
+];
+const SMITHVILLE_CL: readonly P[] = [[56.19, -16.93], [60.26, 26.87]];
+
+function polylineDist(pts: readonly P[], u: number, v: number): number {
+  let best = Infinity;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((u - ax) * dx + (v - ay) * dy) / l2)) : 0;
+    const d = Math.hypot(u - (ax + dx * t), v - (ay + dy * t));
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/** Minimum distance in metres from either public road centreline (Blackstone Road or Smithville Road). */
+const roadCenterDist = (u: number, v: number): number => Math.min(polylineDist(BLACKSTONE_CL, u, v), polylineDist(SMITHVILLE_CL, u, v));
+
+/**
+ * Margin from road centreline that protects every texel contributing to a 4-texel bilinear surfaceAt() query on the
+ * 2.6 m carriageway (2.6 + mpp * sqrt(2) + quantization cushion): 4.5 m at L8 (1 m/texel), 6.0 m at L7 (2 m/texel).
+ */
+const roadPaintMargin = (level?: number): number => (level !== undefined && level <= 7 ? 6.0 : 4.5);
+
 /** Surveyed mailbox near this house (before relocation to the west driveway entrance). */
 const MAILBOX_SEARCH_M = 35;
 /** Real roadside mailbox spot at the west side of the west driveway mouth: dark green plastic pedestal, facing Blackstone Road. */
@@ -71,8 +98,8 @@ export class BlackstoneSite implements Site {
   readonly yaw: number;
   /** The level of the pad, in true metres above the sea. */
   readonly level: number;
-  /** Paint and grade only on L7 and L8 (texel <= 2 m) so coarse L5/L6 tiles keep Blackstone Road untouched. */
-  readonly maxTexel = 2;
+  /** Paint and grade only on L8 (1 m/texel, where single trees replace the canopy hull) so L5-L7 keep roads and canopy untouched. */
+  readonly maxTexel = 1;
   private ox: number; private oz: number; private sin: number; private cos: number;
   private bx: number; private by: number; private axisDeg: number;
 
@@ -176,9 +203,18 @@ export class BlackstoneSite implements Site {
     return this.level + (surveyed - this.level) * (d >= 0 ? 0 : smooth(0, PAD_MARGIN, -d));
   }
 
-  surface(x: number, z: number): { dist: number; half: number; kind: number } | null {
+  clearCanopy(x: number, z: number, level?: number): boolean {
+    const { u, v } = this.local(x, z);
+    if (u < -24.5 || u > 56.0 || v < -23.0 || v > 13.5) return false;
+    // Stay clear of the 6 m canopy-averaging window around Blackstone Road and Smithville Road on L7.
+    if (roadCenterDist(u, v) < (level !== undefined && level <= 7 ? 15.0 : 4.5)) return false;
+    return depth(LAWN, u, v) > -0.5 || depth(DRIVE_FRONT, u, v) > -0.5 || depth(DRIVE_WEST, u, v) > -0.5 || depth(DRIVE_EAST, u, v) > -0.5;
+  }
+
+  surface(x: number, z: number, _ground?: number, level?: number): { dist: number; half: number; kind: number } | null {
     const { u, v } = this.local(x, z);
     if (u < -24.5 || u > 56.0 || v < -23.0 || v > 13.5) return null;
+    if (roadCenterDist(u, v) < roadPaintMargin(level)) return null;
     // Gravel driveways win over lawn and keep their own edge depth so the shader feathers their border smoothly.
     const dDrive = Math.max(depth(DRIVE_FRONT, u, v), depth(DRIVE_WEST, u, v), depth(DRIVE_EAST, u, v));
     if (dDrive > -0.6) return { dist: Math.max(6.5, 10 - dDrive), half: 10, kind: GRAVEL };

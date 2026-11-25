@@ -530,9 +530,9 @@ const placeRows = {
   prince: placeRow(princeSite, site => new PrinceHouse(site, terrain, lift, LOW)),
   blackstone: placeRow(blackstoneSite, site => new BlackstoneHouse(site, terrain, lift, LOW)),
 };
-// Each site clears its surveyed land.
+// Each site clears its surveyed land (Blackstone uses tree-only clear boxes plus LOD-gated clearCanopy so coarse tiles stay untouched).
 const placeSites = sitesOf(placeRows);
-for (const site of Object.values(placeSites)) if (site) clear.push(...site.clear);
+for (const site of Object.values(placeSites)) if (site && site !== blackstoneSite) clear.push(...site.clear);
 const postOfficeBoxes = postOfficeChunk ? postOfficeClear(manifest.village) : [];
 if (postOfficeBoxes.length) clear.push(...postOfficeBoxes);
 if (quarrySite) clear.push(...quarrySite.clear);
@@ -543,6 +543,7 @@ const airportSite = airportModule ? new airportModule.AirportSite(manifest.villa
 // read later, in the background (terrain.ts lazyRange). Desktop: sun shadows, unless ?shadows=0 or a night (it has no sun).
 const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear, { ground: groundRead, night: nightShading, cartRoads: ERA.cartRoads,
   ...(LOW ? { split: AREA.quarry ? 1 : 1.15, low: true, lazyRange: 600 } : {}), shadows: !LOW && params.get('shadows') !== '0' && !nightLook });
+if (blackstoneSite) for (const box of blackstoneSite.clear) terrain.addTreeClear(box as [number, number, number, number]);
 // Complete the approved CPU class mask before any terrain canopy or individual tree is built.
 // Modern land only: the 1884 era keeps today's cover handling, like other modern features.
 if (ERA.modern) await terrain.readGroundCover().catch(() => areaScreen('The land could not load. Retry this area.', true));

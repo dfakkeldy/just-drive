@@ -63,7 +63,7 @@ export class BlackstoneHouse implements HandBuiltPlace {
   readonly group = new THREE.Group();
   private local = new THREE.Group();   // house axes: x is u, z is v
   private solids: Solid[] = [];
-  private built = false; private fine = -1; private near = false;
+  private built = false; private fine = -1; private near = false; private drawnOk = false;
   private material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   private probes: { x: number; z: number }[];
   triangles = 0;
@@ -101,13 +101,16 @@ export class BlackstoneHouse implements HandBuiltPlace {
     this.near = far < 900;
     if (this.near || (this.built && far < 1600)) {
       const fine = this.ready();
+      this.drawnOk = fine !== null;
       if (fine !== null && (!this.built || fine !== this.fine)) {
         this.build();
         this.built = true;
         this.fine = fine;
       }
+    } else {
+      this.drawnOk = false;
     }
-    this.group.visible = this.built && far < 1600;
+    this.group.visible = this.built && this.drawnOk && far < 1600;
   }
 
   /** House, porches/decks, sheds, barn, hoop shelters, lumber pile, parcel chest and west maple trunks stop the car. */

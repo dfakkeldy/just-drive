@@ -13,7 +13,10 @@ import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { roofHeights } from '../web/src/drone.ts';
+import { SXS_SPEC } from '../web/src/sxs.ts';
 import { paintSiteSurface } from '../web/src/terrain.ts';
+import { TRUCK_SPEC } from '../web/src/truck.ts';
+import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
 import {
   BlackstoneHouse, EAST_BARN, HOOP_EAST, HOOP_WEST, MAIN, NW_WING, PARCEL_BOX, PORCH, SE_DECK, WEST_SHED,
 } from '../web/src/blackstone-house.ts';
@@ -154,12 +157,25 @@ for (const roadName of ['Blackstone Road', 'Smithville Road']) {
 }
 assert.ok(roadSamples.length > 100, `sampled ${roadSamples.length} carriageway centre/edge points`);
 
-// Every Blackstone Road and Smithville Road centre and carriageway-edge point stays clear of all solids at road heading.
+// Every Blackstone Road and Smithville Road centre and carriageway-edge point stays clear of all solids AND the
+// relocated mailbox (Props.hitCar sweep envelope) for car, pickup truck and SXS in both travel directions.
+const [mbMapX, mbMapY] = site.map(MAILBOX_UV[0], MAILBOX_UV[1]);
+const mbWorldX = mbMapX - manifest.village[0], mbWorldZ = manifest.village[1] - mbMapY;
 for (const pt of roadSamples) {
-  const car = { x: pt.x, z: pt.z, vx: 0, vz: 0, speed: 0, heading: pt.heading };
-  desktop.resolveSolids(car);
-  assert.equal(Math.hypot(car.x - pt.x, car.z - pt.z), 0,
-    `no solid reaches ${pt.roadName} (side=${pt.side.toFixed(1)} m) at (${pt.x.toFixed(1)}, ${pt.z.toFixed(1)})`);
+  for (const dir of [0, Math.PI]) {
+    const hdg = pt.heading + dir;
+    const car = { x: pt.x, z: pt.z, vx: 0, vz: 0, speed: 0, heading: hdg };
+    desktop.resolveSolids(car);
+    assert.equal(Math.hypot(car.x - pt.x, car.z - pt.z), 0,
+      `no solid reaches ${pt.roadName} (side=${pt.side.toFixed(1)} m) at (${pt.x.toFixed(1)}, ${pt.z.toFixed(1)})`);
+    const rx = Math.cos(hdg), rz = Math.sin(hdg);
+    const px = mbWorldX - pt.x, pz = mbWorldZ - pt.z;
+    for (const [label, spec] of [['car', CAR_SPEC], ['truck', TRUCK_SPEC], ['sxs', SXS_SPEC]]) {
+      const hit = Math.abs(px * rx + pz * rz) <= spec.envelope.sweepHalfWidth
+        && Math.abs(px * rz - pz * rx) <= spec.envelope.sweepHalfLength;
+      assert.ok(!hit, `${label} hits relocated mailbox from ${pt.roadName} (side=${pt.side.toFixed(1)} m)`);
+    }
+  }
 }
 
 // 4. Baked-land verification across L5, L6, L7, L8:
@@ -231,45 +247,101 @@ function loadLevel(level, exag, applySite = true) {
   return { heightAt, meshY, exag, tileFor, tileSize, mpp, active };
 }
 
-// Verify zero road height or road-field paint changes along Blackstone Road and Smithville Road across L5, L6, L7, L8.
+// Verify zero production mesh height (ground + averaged canopy hull) or 4-texel bilinear surfaceAt() road changes
+// along Blackstone Road and Smithville Road across L5, L6, L7, L8.
 const dScale = manifest.roads.encoding.distance, wScale = manifest.roads.encoding.halfWidth, zero = 128;
+const cs = manifest.canopy.scale, hasTrees = new Set(manifest.trees?.tiles ?? []);
+const smoothstep = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
 for (const level of [5, 6, 7, 8]) {
-  const withSite = loadLevel(level, 2.5, true), base = loadLevel(level, 2.5, false);
-  for (const pt of roadSamples) {
-    const dy = Math.abs(withSite.meshY(pt.x, pt.z) - base.meshY(pt.x, pt.z));
-    assert.ok(dy < 1e-6, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) mesh height unchanged (dy=${dy.toFixed(4)} m)`);
-  }
-  // Check road-field pixels for every overlapping tile at this level.
-  if (withSite.active) {
-    const roadCache = new Map();
-    for (const pt of roadSamples) {
-      const t = withSite.tileFor(pt.x, pt.z), key = `${t.ti}_${t.tj}`;
-      if (!roadCache.has(key)) {
-        const png = decodePng(readFileSync(`${AREA}${level}/${key}.r.png`));
-        const raw = new Uint8ClampedArray(png.w * png.h * 4);
-        for (let i = 0; i < png.w * png.h; i++) {
-          raw[i * 4] = png.data[i * png.bpp];
-          raw[i * 4 + 1] = png.data[i * png.bpp + 1];
-          raw[i * 4 + 2] = png.data[i * png.bpp + 2];
-          raw[i * 4 + 3] = png.bpp === 4 ? png.data[i * 4 + 3] : 255;
-        }
-        const painted = new Uint8ClampedArray(raw);
-        for (let py = 0; py < png.h; py++) for (let px = 0; px < png.w; px++) {
-          const x = t.x0 + px * withSite.mpp, z = t.z0 + py * withSite.mpp;
-          if (x < site.box[0] || x > site.box[2] || z < site.box[1] || z > site.box[3]) continue;
-          const f = site.surface(x, z);
-          if (f) paintSiteSurface(painted, (py * png.w + px) * 4, f, zero, dScale, wScale);
-        }
-        roadCache.set(key, { w: png.w, T: png.w - 1, raw, painted });
+  const tileSize = manifest.size / 2 ** level, seg = 128, step = 256 / seg, mpp = tileSize / 256;
+  const active = mpp <= site.maxTexel, win = Math.max(2, Math.round(6 / Math.max(mpp, 1))), stride = Math.max(1, Math.round(win / 2));
+  const { scale, offset } = manifest.height;
+  const tileCache = new Map();
+  const buildTile = (ti, tj) => {
+    const key = `${ti}_${tj}`;
+    if (tileCache.has(key)) return tileCache.get(key);
+    const png = decodePng(readFileSync(`${AREA}${level}/${key}.png`));
+    const rpng = decodePng(readFileSync(`${AREA}${level}/${key}.r.png`));
+    const S = png.w, T = S - 1, x0 = manifest.origin[0] + ti * tileSize - manifest.village[0], z0 = manifest.village[1] - (manifest.origin[1] - tj * tileSize);
+    const hull = !(level === 8 && hasTrees.has(key));
+    const buildSide = (withSite) => {
+      const road = new Uint8ClampedArray(S * S * 4), ground = new Float32Array(S * S), canopy = new Float32Array(S * S);
+      for (let i = 0; i < S * S; i++) {
+        road[i * 4] = rpng.data[i * rpng.bpp];
+        road[i * 4 + 1] = rpng.data[i * rpng.bpp + 1];
+        road[i * 4 + 2] = rpng.data[i * rpng.bpp + 2];
+        road[i * 4 + 3] = rpng.bpp === 4 ? rpng.data[i * 4 + 3] : 255;
       }
-      const rc = roadCache.get(key);
-      const px = Math.max(0, Math.min(rc.T, Math.round(((pt.x - t.x0) / withSite.tileSize) * rc.T)));
-      const py = Math.max(0, Math.min(rc.T, Math.round(((pt.z - t.z0) / withSite.tileSize) * rc.T)));
-      const k = (py * rc.w + px) * 4;
-      assert.equal(rc.painted[k + 2], rc.raw[k + 2], `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) road kind unchanged`);
-      assert.equal(rc.painted[k], rc.raw[k], `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) road dist unchanged`);
-      assert.equal(rc.painted[k + 1], rc.raw[k + 1], `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) road halfWidth unchanged`);
-    }
+      for (let py = 0; py < S; py++) for (let px = 0; px < S; px++) {
+        const k = py * S + px, x = x0 + px * mpp, z = z0 + py * mpp;
+        let raw = offset + (png.data[k * 3] * 256 + png.data[k * 3 + 1]) * scale;
+        if (withSite && active && x >= site.box[0] && x <= site.box[2] && z >= site.box[1] && z <= site.box[3]) {
+          raw = site.height(x, z, raw);
+          const f = site.surface(x, z, raw, level);
+          if (f) paintSiteSurface(road, k * 4, f, zero, dScale, wScale);
+        }
+        ground[k] = raw * 2.5;
+        let c = png.data[k * 3 + 2] * cs;
+        if (road[k * 4 + 2] > 0) {
+          const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;
+          c *= smoothstep(hw + 0.8, hw + 4.5, d);
+        }
+        if (withSite && active && x >= site.box[0] && x <= site.box[2] && z >= site.box[1] && z <= site.box[3] && site.clearCanopy(x, z, level)) c = 0;
+        canopy[k] = c;
+      }
+      const gridY = (a, b) => {
+        const ga = a * step, gb = b * step, k0 = gb * S + ga;
+        let c = 0;
+        if (hull) {
+          let cnt = 0;
+          for (let vv = -win; vv <= win; vv += stride) {
+            const bb = gb + vv; if (bb < 0 || bb > T) continue;
+            for (let uu = -win; uu <= win; uu += stride) {
+              const aa = ga + uu; if (aa >= 0 && aa <= T) { c += canopy[bb * S + aa]; cnt++; }
+            }
+          }
+          c /= cnt;
+          if (road[k0 * 4 + 2] > 0) {
+            const hw = road[k0 * 4 + 1] * wScale;
+            c *= smoothstep(hw + 0.8, hw + 6, Math.abs(road[k0 * 4] - zero) * dScale);
+          }
+        }
+        return ground[k0] + c;
+      };
+      const meshY = (x, z) => {
+        const fa = ((x - x0) / tileSize) * seg, fb = ((z - z0) / tileSize) * seg;
+        const a = Math.max(0, Math.min(Math.floor(fa), seg - 1)), b = Math.max(0, Math.min(Math.floor(fb), seg - 1));
+        const fu = fa - a, fv = fb - b;
+        const h00 = gridY(a, b), h10 = gridY(a + 1, b), h01 = gridY(a, b + 1), h11 = gridY(a + 1, b + 1);
+        return fu + fv <= 1 ? h00 + fu * (h10 - h00) + fv * (h01 - h00) : h11 + (1 - fu) * (h01 - h11) + (1 - fv) * (h10 - h11);
+      };
+      const roadSample = (x, z) => {
+        const fa = ((x - x0) / tileSize) * T, fb = ((z - z0) / tileSize) * T;
+        const a = Math.max(0, Math.min(Math.floor(fa), T - 1)), b = Math.max(0, Math.min(Math.floor(fb), T - 1));
+        const u = fa - a, v = fb - b, k = (Math.min(Math.round(fb), T) * S + Math.min(Math.round(fa), T)) * 4, k00 = (b * S + a) * 4;
+        const whole = road[k00 + 2] > 0 && road[k00 + 6] > 0 && road[k00 + S * 4 + 2] > 0 && road[k00 + S * 4 + 6] > 0;
+        const distByte = whole
+          ? (road[k00] * (1 - u) + road[k00 + 4] * u) * (1 - v) + (road[k00 + S * 4] * (1 - u) + road[k00 + S * 4 + 4] * u) * v
+          : road[k];
+        return { kind: road[k + 2] & 15, halfWidth: road[k + 1] * wScale, roadDist: Math.abs(distByte - zero) * dScale };
+      };
+      return { meshY, roadSample };
+    };
+    const res = { base: buildSide(false), site: buildSide(true) };
+    tileCache.set(key, res);
+    return res;
+  };
+  for (const pt of roadSamples) {
+    const ti = Math.floor((pt.x + manifest.village[0] - manifest.origin[0]) / tileSize);
+    const tj = Math.floor((manifest.origin[1] - (manifest.village[1] - pt.z)) / tileSize);
+    const { base, site: withSite } = buildTile(ti, tj);
+    const dy = Math.abs(withSite.meshY(pt.x, pt.z) - base.meshY(pt.x, pt.z));
+    assert.ok(dy < 1e-6, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production mesh height unchanged (dy=${dy.toFixed(4)} m)`);
+    const rb = base.roadSample(pt.x, pt.z), rs = withSite.roadSample(pt.x, pt.z);
+    assert.equal(rs.kind, rb.kind, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt kind unchanged`);
+    assert.equal(rs.halfWidth, rb.halfWidth, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt halfWidth unchanged`);
+    assert.ok(Math.abs(rs.roadDist - rb.roadDist) < 1e-6,
+      `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt roadDist unchanged (${rb.roadDist.toFixed(3)} -> ${rs.roadDist.toFixed(3)})`);
   }
 }
 
@@ -340,14 +412,19 @@ for (const exag of [2.5, 3]) {
     drawn = 8; heightSource = L8; checkGrounded('L8 fine', L8, 0);
     drawn = 7; heightSource = L8; checkGrounded('L7 drawn with L8 cached at 1180 m', L7, 1180);
     drawn = 7; heightSource = L7; checkGrounded('L7 after L8 eviction', L7, 0);
+    // When visible terrain drops below L7 (e.g. LOW at 1590 m on L6), the house hides instead of keeping stale L7 grounding.
+    drawn = 6; heightSource = L7;
+    h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z + 1590), 0, { x: site.origin.x, z: site.origin.z + 1590 });
+    assert.equal(h.group.visible, false, `exag=${exag} low=${isLow}: hides cleanly when drawn terrain drops below L7`);
   }
 }
 
-// Frame order: main.ts must update BlackstoneHouse in the landscape segment after terrain selection.
+// Frame order & tree-only clear boxes: main.ts must update BlackstoneHouse in landscape after terrain and add clear boxes via addTreeClear.
 const mainSrc = readFileSync('web/src/main.ts', 'utf8');
 const terrainIdx = mainSrc.indexOf("name: 'terrain', segment: 'landscape'");
 const bsIdx = mainSrc.indexOf("name: 'blackstone', segment: 'landscape'");
 assert.ok(terrainIdx >= 0 && bsIdx > terrainIdx, 'main.ts updates blackstone in landscape after terrain selection');
 assert.ok(mainSrc.includes("name !== 'blackstone'"), 'main.ts excludes blackstone from before-camera places loop');
+assert.ok(mainSrc.includes('blackstoneSite.clear) terrain.addTreeClear'), 'main.ts registers blackstone clear boxes as tree-only so coarse terrain stays untouched');
 
-console.log(`PASS blackstone: desktop ${desktop.triangles} tris, LOW ${low.triangles} tris, L5-L8 roads untouched, both road edges & rear SE deck colliders, 7->8->7 drawn-triangle grounding & roof floor (2.5x & 3x), zero surfaceAt readiness allocs`);
+console.log(`PASS blackstone: desktop ${desktop.triangles} tris, LOW ${low.triangles} tris, L5-L8 production hull & bilinear road surfaceAt untouched, road-edge solids & mailbox sweep clear (car/truck/sxs), rear SE deck collider, 7->8->7->6 grounding & roof floor (2.5x & 3x)`);
