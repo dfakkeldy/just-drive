@@ -47,6 +47,8 @@ export interface Area {
   readonly maryville: boolean;
   /** The invented Port Hood Mail Depot on Highway 19 (Port Hood). */
   readonly depot: boolean;
+  /** The Port Hood service station and gas bar at High Road and Dunmore Road (Port Hood). */
+  readonly portHoodGas: boolean;
   /** The airfield (airport.ts). */
   readonly airport: boolean;
   /** Point Tupper's dams, conveyors, pipelines and piers (pt-infrastructure.ts). */
@@ -60,7 +62,7 @@ const mabouSites = (enabled: boolean) => ({ mabouMain: enabled, porch: enabled, 
 const pointTupperSites = (enabled: boolean) => ({ hawkesbury: enabled, prince: enabled, airport: enabled, ptInfrastructure: enabled });
 const area = (id: string, name: string): Area => Object.freeze({ id, name, base: id === 'mabou' ? 'terrain' : `areas/${id}`,
   mail: id === 'mabou', ...features(id === 'mabou'), home: id === 'judique', church: id === 'judique', quarry: id === 'westbay',
-  ...mabouSites(id === 'mabou'), november: id === 'mabou' || id === 'porthood' || id === 'judique', judiqueVillage: id === 'judique', drLane: id === 'judique', maryville: id === 'porthood', depot: id === 'porthood',
+  ...mabouSites(id === 'mabou'), november: id === 'mabou' || id === 'porthood' || id === 'judique', judiqueVillage: id === 'judique', drLane: id === 'judique', maryville: id === 'porthood', depot: id === 'porthood', portHoodGas: id === 'porthood',
   ...pointTupperSites(id === 'pointtupper'), canal: id === 'cansocauseway' });
 export const AREAS: readonly Area[] = Object.freeze([
   area('mabou', 'Mabou'), area('judique', 'Judique'), area('porthood', 'Port Hood'),

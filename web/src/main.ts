@@ -162,6 +162,7 @@ import { PrinceSite } from './prince-site';
 import { PrinceHouse } from './prince-house';
 import { BlackstoneSite } from './blackstone-site';
 import { BlackstoneHouse } from './blackstone-house';
+import { PortHoodGasSite } from './porthood-gas-site';
 import { PorchSite } from './porch-site';
 import { CHURCH_START, ChurchSite } from './church-site';
 import { roughRoads, setPuddleField } from './rough-roads';
@@ -486,7 +487,11 @@ const princeSite = princeBox ? new PrinceSite(princeBox, manifest.village) : nul
 // A house on Blackstone Road (Mabou) is built by hand with its outbuildings and yard. ?blackstone=0 leaves the surveyed box.
 const blackstoneBox = ERA.modern && AREA.blackstone && params.get('blackstone') !== '0' && buildingList ? BlackstoneSite.find(buildingList) : null;
 const blackstoneSite = blackstoneBox ? new BlackstoneSite(blackstoneBox, manifest.village) : null;
-const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox, princeBox, blackstoneBox) : buildingList;
+// The Port Hood service station and gas bar at High Road and Dunmore Road. ?porthoodgas=0 leaves the surveyed box.
+const portHoodGasBox = ERA.modern && AREA.portHoodGas && params.get('porthoodgas') !== '0' && buildingList ? PortHoodGasSite.find(buildingList) : null;
+const portHoodGasSite = portHoodGasBox ? new PortHoodGasSite(portHoodGasBox, manifest.village) : null;
+const portHoodGasChunk = portHoodGasBox ? early(import('./porthood-gas')) : null;
+const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox, princeBox, blackstoneBox, portHoodGasBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
 // Baxters Cove harbour and the Highway 19 end of its road (Judique, 21 Nov dash cam): the drawing only.
 const coveArt = ERA.modern && AREA.id === 'judique' && drawnBuildings ? baxtersCoveBuildingArt(drawnBuildings) : null;
@@ -534,12 +539,14 @@ const placeRows = {
   depot: placeRow(depotSite, site => new depotFeature!.PortHoodDepot(site, terrain, LOW, SITE.brand === 'just')),
   prince: placeRow(princeSite, site => new PrinceHouse(site, terrain, lift, LOW)),
   blackstone: placeRow(blackstoneSite, site => new BlackstoneHouse(site, terrain, lift, LOW)),
+  portHoodGas: lazyPlaceRow(portHoodGasSite, () => portHoodGasChunk!.take().catch(partFailed), (site, part) => new part.PortHoodGas(site, terrain, lift, LOW)),
 };
-// Each site clears its surveyed land (Blackstone keeps building 1454's original canopy-clear box so L5-L7 match the
-// unreplaced baseline, and registers its wider yard clear boxes as tree-only plus L8 clearCanopy).
+// Each site clears its surveyed land (Blackstone and Port Hood gas keep their original canopy-clear boxes so L5-L7 match
+// the unreplaced baseline, and register their wider yard/lot clear boxes as tree-only plus L8 clearCanopy).
 const placeSites = sitesOf(placeRows);
-for (const site of Object.values(placeSites)) if (site && site !== blackstoneSite) clear.push(...site.clear);
+for (const site of Object.values(placeSites)) if (site && site !== blackstoneSite && site !== portHoodGasSite) clear.push(...site.clear);
 if (blackstoneSite && blackstoneBox) clear.push(...clearBoxes(blackstoneBox, manifest.village, 2.5));
+if (portHoodGasSite && portHoodGasBox) clear.push(...clearBoxes(portHoodGasBox, manifest.village, 2.5));
 const postOfficeBoxes = postOfficeChunk ? postOfficeClear(manifest.village) : [];
 if (postOfficeBoxes.length) clear.push(...postOfficeBoxes);
 if (quarrySite) clear.push(...quarrySite.clear);
@@ -551,6 +558,7 @@ const airportSite = airportModule ? new airportModule.AirportSite(manifest.villa
 const terrain = new Terrain(manifest, base, shared, EXAG, SEA_LEVEL, clear, { ground: groundRead, night: nightShading, cartRoads: ERA.cartRoads,
   ...(LOW ? { split: AREA.quarry ? 1 : 1.15, low: true, lazyRange: 600 } : {}), shadows: !LOW && params.get('shadows') !== '0' && !nightLook });
 if (blackstoneSite) for (const box of blackstoneSite.clear) terrain.addTreeClear(box as [number, number, number, number]);
+if (portHoodGasSite) for (const box of portHoodGasSite.clear) terrain.addTreeClear(box as [number, number, number, number]);
 // Complete the approved CPU class mask before any terrain canopy or individual tree is built.
 // Modern land only: the 1884 era keeps today's cover handling, like other modern features.
 if (ERA.modern) await terrain.readGroundCover().catch(() => areaScreen('The land could not load. Retry this area.', true));
@@ -586,6 +594,7 @@ if (porchSite) terrain.sites.push(porchSite);
 if (drLaneSite) terrain.sites.push(drLaneSite);
 if (princeSite) terrain.sites.push(princeSite);
 if (blackstoneSite) terrain.sites.push(blackstoneSite);
+if (portHoodGasSite) terrain.sites.push(portHoodGasSite);
 if (churchSite) terrain.sites.push(churchSite);
 if (quarrySite) { terrain.sites.push(quarrySite); terrain.coast=quarrySite; }
 const cemeteries = ERA.modern ? await Cemeteries.load(manifest, name => cemeteriesRead?.take() ?? getJson(name), terrain, LOW, AREA.id) : null;
@@ -879,7 +888,7 @@ const builtPlaces = {} as BuiltPlaces<typeof placeRows>;
 for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown, object, unknown>][]) {
   (builtPlaces as Record<string, object | null>)[name] = row.site ? row.build(row.site, row.load && await row.load()) : null;
 }
-const { hawkesbury, mabouMain } = builtPlaces;
+const { hawkesbury, mabouMain, portHoodGas } = builtPlaces;
 const postOffice = postOfficeChunk ? new (await postOfficeChunk!.take().catch(partFailed)).PortHawkesburyPostOffice(manifest.village, terrain, LOW) : null;
 if (postOffice) {
   scene.add(postOffice.group);
@@ -947,6 +956,7 @@ const siteContacts: [string, ContactSite | null][] = [
   ['depot', placeContact(places.depot)],
   ['prince', placeContact(places.prince)],
   ['blackstone', placeContact(places.blackstone)],
+  ['portHoodGas', placeContact(places.portHoodGas)],
   ['novemberBuildings', novemberBuildings && { resolve: body => novemberBuildings.resolveSolids(body) }],
   ['cemeteries', cemeteries && { resolve: body => cemeteries.resolveSolids(body) }],
   ['waterTowers', waterTowers && { resolve: body => waterTowers.resolveSolids(body) }],
@@ -1094,15 +1104,16 @@ const terrainReadyAt = createTerrainReady(terrain);
 scene.add(drone.group);
 // The drone's floor reads the roofs that are drawn: the surveyed boxes less those Mabou's main street replaces, and the
 // hand-built main street's own roofs, measured from its geometry once each place is built. 1884 draws other roofs.
-const boxRoofAt = roofHeights(ERA.modern && buildingList ? drawnWithout(mabouSite ? mabouSite.drawn(buildingList) : buildingList, princeBox, blackstoneBox) : [], manifest.village, EXAG, SEA_LEVEL);
+const boxRoofAt = roofHeights(ERA.modern && buildingList ? drawnWithout(mabouSite ? mabouSite.drawn(buildingList) : buildingList, princeBox, blackstoneBox, portHoodGasBox) : [], manifest.village, EXAG, SEA_LEVEL);
 // Also include landmarks (churches and spires) and surveyed boxes replaced by non-Mabou hand-built sites (yard, home, church, village, hawkesbury, porch).
 const extraRoofAt = ERA.modern ? (() => {
   const kept = new Set(drawnBuildings ?? []);
   const extra: Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[] =
-    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox && b !== blackstoneBox && !postOfficeReplaced.has(b.id))
+    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox && b !== blackstoneBox && b !== portHoodGasBox && !postOfficeReplaced.has(b.id))
       .map(b => ({ ...b, floorGround: undefined }));
   if (princeSite) extra.push(...princeSite.roofBoxes());
   if (blackstoneSite) extra.push(...blackstoneSite.roofBoxes());
+  if (portHoodGasSite) extra.push(...portHoodGasSite.roofBoxes());
   if (propertyLooks?.roofBoxes.length) extra.push(...propertyLooks.roofBoxes);
   for (const lm of landmarkList) {
     const a = lm.axisDeg * Math.PI / 180, alongX = Math.sin(a), alongZ = -Math.cos(a), acrossX = Math.cos(a), acrossZ = Math.sin(a);
@@ -1119,7 +1130,7 @@ const extraRoofAt = ERA.modern ? (() => {
   }
   return extra.length ? roofHeights(extra, manifest.village, EXAG, SEA_LEVEL) : null;
 })() : null;
-const roofAt = (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain ? mabouMain.roofAt(x, z) : -Infinity, postOffice ? postOffice.roofAt(x, z) : -Infinity, extraRoofAt ? extraRoofAt(x, z) : -Infinity);
+const roofAt = (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain ? mabouMain.roofAt(x, z) : -Infinity, postOffice ? postOffice.roofAt(x, z) : -Infinity, portHoodGas ? portHoodGas.roofAt(x, z) : -Infinity, extraRoofAt ? extraRoofAt(x, z) : -Infinity);
 if (import.meta.env.DEV) expose({ drone });
 
 function applyShot(s: Shot) {
@@ -2441,7 +2452,7 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   ...(ride.update ? [{ name: 'ride', segment: 'ride' as const, ending: false, update: (_dt: number, realDt: number) => ride.update!(realDt, !scenePaused() && mode === 'drive') }] : []),
   { name: 'yard', segment: 'before-camera', ending: false, update: dt => yard?.update(dt, vehicle, camera.position) },
   { name: 'yardDog', segment: 'before-camera', ending: false, update: dt => yardDog?.update(dt, vehicle) },
-  ...Object.entries(places).filter(([name]) => name !== 'prince' && name !== 'blackstone').map(([name, { place }]) => ({ name, segment: 'before-camera' as const, ending: false, update: (dt: number, _realDt: number, now: number) => place?.update(camera.position, now, vehicle, dt) })),
+  ...Object.entries(places).filter(([name]) => name !== 'prince' && name !== 'blackstone' && name !== 'portHoodGas').map(([name, { place }]) => ({ name, segment: 'before-camera' as const, ending: false, update: (dt: number, _realDt: number, now: number) => place?.update(camera.position, now, vehicle, dt) })),
   ...(postOffice ? [{ name: 'postOffice', segment: 'before-camera' as const, ending: false, update: (_dt: number, _realDt: number, now: number) => postOffice.update(camera.position, now) }] : []),
   { name: 'stockpiles', segment: 'before-camera', ending: false, update: () => stockpiles?.update(camera.position) },
   { name: 'cemeteries', segment: 'before-camera', ending: false, update: () => cemeteries?.update(camera.position, vehicle) },
@@ -2450,9 +2461,10 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   { name: 'novemberRoads', segment: 'landscape', ending: true, update: () => novemberRoads?.update(terrain, camera.position) },
   // After the terrain update, so the water lies on the tiles drawn this frame; endings and the replay keep it too.
   { name: 'puddles', segment: 'landscape', ending: true, update: () => puddles?.refit(camera.position) },
-  // After the terrain update, so the Prince Street and Blackstone Road driveways match the tile level drawn this frame.
+  // After the terrain update, so the Prince Street, Blackstone Road and Port Hood gas sites match the tile level drawn this frame.
   { name: 'prince', segment: 'landscape', ending: false, update: (dt, _realDt, now) => places.prince.place?.update(camera.position, now, vehicle, dt) },
   { name: 'blackstone', segment: 'landscape', ending: true, update: (dt, _realDt, now) => places.blackstone.place?.update(camera.position, now, vehicle, dt) },
+  { name: 'portHoodGas', segment: 'landscape', ending: true, update: (dt, _realDt, now) => places.portHoodGas.place?.update(camera.position, now, vehicle, dt) },
   ...(fleet ? [{ name: 'fleet', segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { name: 'coast', segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
   { name: 'lotProps', segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
