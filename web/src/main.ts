@@ -2311,7 +2311,7 @@ if (__PUBLIC_APP__) watchGameVersion(SITE.brand === 'just', () => !hasStarted &&
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s); if (placed) { airportDrag?.reset(); mountainHint?.clearActive(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
-// Cemeteries stay drawn on the map and quiet for scoring, not in the Places list.
+// Cemeteries stay drawn in the 3D scene and quiet for scoring, not in the Places list.
 const stuntPlaces = testPark ? testParkPlaces(testPark, manifest.village)
   : quarryStuntPark ? quarryFeature?.quarryCoursePlaces() ?? [] : [];
 function resetToRoad(): void {

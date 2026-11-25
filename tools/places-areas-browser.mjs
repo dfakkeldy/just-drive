@@ -55,9 +55,11 @@ async function checkList(page, area, farViews) {
     assert.ok(await page.read('mmm.tall?.turbineCount > 0'), `${area}: the advertised turbine pack loads`);
   }
   const list = await page.read(`({ area:mmm.area.id, shown:mmm.places.places.map(p=>p.id),
-    buttons:[...document.querySelectorAll('#placesList button')].map(b=>b.dataset.place), marks:mmm.places.marks.length })`);
+    buttons:[...document.querySelectorAll('#placesList button')].map(b=>b.dataset.place), marks:mmm.places.marks.length,
+    cemeterySites:mmm.cemeteries?.sites?.length??0, cemeteryInScene:!!mmm.cemeteries && mmm.cemeteries.group.parent===mmm.scene })`);
   const expected = [...(area === 'judique' ? ['home', 'church'] : []), ...researched.map(p => p.id), ...(area === 'pointtupper' ? ['airport-drag'] : []), ...turbines.map(p => p.id)];
   assert.ok(cemeteries.length > 0 && cemeteries.every(id => id.startsWith('cemetery-')), `${area}: the cemetery pack still loads its sites`);
+  assert.ok(list.cemeterySites > 0 && list.cemeteryInScene, `${area}: baked cemeteries stay drawn in the 3D scene`);
   assert.ok(list.shown.every(id => !cemeteries.includes(id) && !id.startsWith('cemetery-')), `${area}: cemeteries stay out of the places list`);
   assert.equal(list.area, area);
   assert.deepEqual(list.shown, expected, `${area}: researched places, then any places from the loaded scenery, without cemeteries`);
