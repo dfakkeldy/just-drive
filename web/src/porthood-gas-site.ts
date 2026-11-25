@@ -109,13 +109,13 @@ export const GAS_PARKED_SPOTS: readonly GasParkedSpot[] = [
   // At the outer fuel pump lane (2 vehicles fuelling beside the two dispensers; entire inner south fuel lane stays open).
   { u: -8.4, v: -16.1, du: 1, dv: 0.02, type: 2 },
   { u: -2.2, v: -16.1, du: 1, dv: -0.02, type: 1 },
-  // Northwest High Road frontage row (6 vehicles lined up facing High Road / the lot, leaving a 6 m High Road west entrance).
-  { u: -33.0, v: -19.0, du: 0.04, dv: 1, type: 2 },
-  { u: -30.0, v: -19.0, du: -0.03, dv: -1, type: 1 },
-  { u: -27.0, v: -19.0, du: 0.02, dv: 1, type: 0 },
-  { u: -24.0, v: -19.0, du: -0.04, dv: 1, type: 2 },
-  { u: -21.0, v: -19.0, du: 0.03, dv: -1, type: 1 },
-  { u: -18.0, v: -19.0, du: -0.02, dv: 1, type: 0 },
+  // Northwest High Road frontage row (6 vehicles set back from High Road so combined max shift+turn stays clear).
+  { u: -33.0, v: -18.3, du: 0.04, dv: 1, type: 2 },
+  { u: -30.0, v: -18.3, du: -0.03, dv: -1, type: 1 },
+  { u: -27.0, v: -18.3, du: 0.02, dv: 1, type: 0 },
+  { u: -24.0, v: -18.3, du: -0.04, dv: 1, type: 2 },
+  { u: -21.0, v: -18.3, du: 0.03, dv: -1, type: 1 },
+  { u: -18.0, v: -18.3, du: -0.02, dv: 1, type: 0 },
   // West lot edge row (3 vehicles along the west lawn edge, clear of the Dunmore Road drive-in lane).
   { u: -34.2, v: -12.5, du: 1, dv: -0.08, type: 1 },
   { u: -33.5, v: -9.0, du: 1, dv: -0.05, type: 0 },
@@ -129,13 +129,13 @@ export const GAS_PARKED_SPOTS: readonly GasParkedSpot[] = [
   { u: -23.0, v: 4.5, du: 0.04, dv: -1, type: 0 },
   { u: -19.5, v: 4.5, du: -0.03, dv: -1, type: 1 },
   // East High Road frontage row (3 vehicles east of the High Road exit lane).
-  { u: 9.2, v: -19.0, du: -0.03, dv: 1, type: 0 },
-  { u: 12.6, v: -19.0, du: 0.04, dv: -1, type: 1 },
-  { u: 16.0, v: -19.0, du: -0.02, dv: 1, type: 2 },
+  { u: 9.2, v: -18.8, du: -0.03, dv: 1, type: 0 },
+  { u: 12.6, v: -18.8, du: 0.04, dv: -1, type: 1 },
+  { u: 16.0, v: -18.8, du: -0.02, dv: 1, type: 2 },
   // East lot packed in front of the dark storage shed and east service bay (4 vehicles).
-  { u: 13.2, v: -14.8, du: -1, dv: 0.04, type: 0 },
-  { u: 13.2, v: -11.6, du: -1, dv: -0.03, type: 2 },
-  { u: 12.6, v: -8.4, du: -1, dv: 0.02, type: 1 },
+  { u: 13.2, v: -14.4, du: -1, dv: 0.04, type: 0 },
+  { u: 13.2, v: -11.3, du: -1, dv: -0.03, type: 2 },
+  { u: 12.6, v: -8.2, du: -1, dv: 0.02, type: 1 },
   { u: 8.2, v: -8.8, du: 0.03, dv: 1, type: 0 },
   // Rear gravel service apron behind the station (4 vehicles).
   { u: -2.5, v: 9.4, du: 0.02, dv: -1, type: 2 },

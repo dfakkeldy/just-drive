@@ -204,6 +204,7 @@ export class PortHoodGas implements HandBuiltPlace {
   readonly group = new THREE.Group();
   private local = new THREE.Group();   // site axes: x is u, z is v
   private solids: Solid[] = [];
+  private roofs: Array<{ u0: number; u1: number; v0: number; v1: number; top: number }> = [];
   private built = false; private near = false; private drawnOk = false; private groundSig = NaN;
   private material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   private signMaterial: THREE.MeshLambertMaterial;
@@ -321,6 +322,38 @@ export class PortHoodGas implements HandBuiltPlace {
     this.group.visible = this.built && this.drawnOk && far < 1600;
   }
 
+  /** Drone roof floor height at world (x, z), measured from the exact same ground samples used to build each structure. */
+  roofAt(x: number, z: number): number {
+    const b = this.site.box;
+    if (x < b[0] || x > b[2] || z < b[1] || z > b[3]) return -Infinity;
+    const { u, v } = this.site.local(x, z);
+    const list = this.roofs.length ? this.roofs : this.liveRoofs();
+    let best = -Infinity;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (u >= r.u0 && u <= r.u1 && v >= r.v0 && v <= r.v1 && r.top > best) best = r.top;
+    }
+    return best;
+  }
+
+  private liveRoofs(): Array<{ u0: number; u1: number; v0: number; v1: number; top: number }> {
+    const y = this.lift(this.site.level);
+    const gyFuel = this.g((PUMP_ISLAND.u0 + PUMP_ISLAND.u1) / 2, (PUMP_ISLAND.v0 + PUMP_ISLAND.v1) / 2);
+    const gyPylon = this.g(PYLON.u, PYLON.v);
+    const gyShed = this.g((EAST_SHED.u0 + EAST_SHED.u1) / 2, (EAST_SHED.v0 + EAST_SHED.v1) / 2);
+    const gyCont = this.g((CONTAINER.u0 + CONTAINER.u1) / 2, (CONTAINER.v0 + CONTAINER.v1) / 2);
+    const gyTrail = this.g((TRAILER.u0 + TRAILER.u1) / 2, (TRAILER.v0 + TRAILER.v1) / 2);
+    return [
+      { u0: MAIN.u0 - 0.18, u1: MAIN.u1 + 0.18, v0: MAIN.v0 - 0.22, v1: MAIN.v1 + 0.22, top: y + MAIN.parapet + 0.14 },
+      { u0: EAST_WING.u0, u1: EAST_WING.u1 + 0.24, v0: EAST_WING.v0 - 0.16, v1: EAST_WING.v1 + 0.16, top: y + EAST_WING.highTop + 0.13 },
+      { u0: PUMP_ISLAND.u0, u1: PUMP_ISLAND.u1, v0: PUMP_ISLAND.v0 - 0.3, v1: PUMP_ISLAND.v1 + 0.3, top: gyFuel + PUMP_ISLAND.curb + PUMP_ISLAND.colH + 0.08 },
+      { u0: PYLON.u - 1.2, u1: PYLON.u + 1.2, v0: PYLON.v - 1.2, v1: PYLON.v + 1.2, top: gyPylon + PYLON.boxTop + 0.09 },
+      { u0: EAST_SHED.u0 - 0.18, u1: EAST_SHED.u1 + 0.18, v0: EAST_SHED.v0 - 0.20, v1: EAST_SHED.v1 + 0.20, top: gyShed + EAST_SHED.ridge + 0.13 },
+      { u0: CONTAINER.u0 - 0.06, u1: CONTAINER.u1 + 0.06, v0: CONTAINER.v0 - 0.06, v1: CONTAINER.v1 + 0.06, top: gyCont + CONTAINER.height + 0.08 },
+      { u0: TRAILER.u0 - 0.04, u1: TRAILER.u1 + 0.04, v0: TRAILER.v0 - 0.04, v1: TRAILER.v1 + 0.04, top: gyTrail + TRAILER.height + 0.07 },
+    ];
+  }
+
   /** Station building, east wing, fuel island, pylon, shed, container, trailer, tire stacks and all 28 parked cars stop the player. */
   resolveSolids(car: Pushable): void {
     const b = this.site.box;
@@ -364,6 +397,7 @@ export class PortHoodGas implements HandBuiltPlace {
     this.eastShed(m);
     this.shippingContainer(m);
     this.cargoTrailer(m);
+    this.roofs = this.liveRoofs();
 
     const mesh = new THREE.Mesh(m.geometry(), this.material);
     mesh.castShadow = mesh.receiveShadow = !this.low;

@@ -162,7 +162,7 @@ assert.ok(pushAt(20, -13) > 1.5, 'east storage shed pushes car out');
 assert.ok(pushAt(24.3, -14) > 1.0, 'shipping container pushes car out');
 assert.ok(pushAt(14.8, -4.3) > 0.8, 'cargo trailer pushes car out');
 assert.ok(pushAt(-2.2, -16.1) > 0.5, 'fuelling SUV at outer pump pushes car out');
-assert.ok(pushAt(-24.0, -19.0) > 0.5, 'parked pickup in NW row pushes car out');
+assert.ok(pushAt(-24.0, -18.3) > 0.5, 'parked pickup in NW row pushes car out');
 
 // Continuous swept drive-through routes (sampled every 0.5 m with actual tangent heading):
 // Route A: Dunmore Road -> Dunmore entrance -> west apron -> inner south fuel lane (both pumps) -> High Road exit -> High Road.
@@ -230,12 +230,18 @@ for (const pt of roadSamples) {
   }
 }
 
-// Worst-case accepted survey boundary shifts/turns must also leave High Road & Dunmore Road solids and L8 fields untouched.
+// Worst-case accepted survey boundary shifts, turns AND combined shift+turn corners must leave High Road & Dunmore Road solids untouched.
 for (const [label, delta] of [
   ['+0.49 m north', { y: found.y + 0.49 }],
   ['-0.49 m west', { x: found.x - 0.49 }],
   ['+0.49 deg turn', { axisDeg: found.axisDeg + 0.49 }],
   ['-0.49 deg turn', { axisDeg: found.axisDeg - 0.49 }],
+  ['+0.49 m north + 0.49 deg turn', { y: found.y + 0.49, axisDeg: found.axisDeg + 0.49 }],
+  ['+0.49 m north - 0.49 deg turn', { y: found.y + 0.49, axisDeg: found.axisDeg - 0.49 }],
+  ['-0.49 m west + 0.49 deg turn', { x: found.x - 0.49, axisDeg: found.axisDeg + 0.49 }],
+  ['-0.49 m west - 0.49 deg turn', { x: found.x - 0.49, axisDeg: found.axisDeg - 0.49 }],
+  ['diagonal NW + 0.49 deg turn', { x: found.x - 0.34, y: found.y + 0.34, axisDeg: found.axisDeg + 0.49 }],
+  ['diagonal NW - 0.49 deg turn', { x: found.x - 0.34, y: found.y + 0.34, axisDeg: found.axisDeg - 0.49 }],
 ]) {
   const shiftedBox = PortHoodGasSite.find([{ ...found, ...delta }]);
   assert.ok(shiftedBox, `boundary case ${label} is accepted by find()`);
@@ -485,11 +491,32 @@ for (const exag of [2.5, 3]) {
         const bounds = meshYBoundsIn(st, u0, u1, v0, v1);
         const cw = site.world((u0 + u1) / 2, (v0 + v1) / 2);
         const roofH = ownRoofAt(cw.x, cw.z);
+        const liveRoofH = st.roofAt(cw.x, cw.z);
         assert.ok(Number.isFinite(roofH) && roofH >= bounds.maxY,
-          `exag=${exag}: drone roof floor at ${sName} (${roofH.toFixed(3)}) covers built mesh peak (${bounds.maxY.toFixed(3)})`);
+          `exag=${exag}: static roofBoxes floor at ${sName} (${roofH.toFixed(3)}) covers built mesh peak (${bounds.maxY.toFixed(3)})`);
+        assert.ok(Number.isFinite(liveRoofH) && liveRoofH >= bounds.maxY,
+          `exag=${exag}: live PortHoodGas.roofAt at ${sName} (${liveRoofH.toFixed(3)}) covers built mesh peak (${bounds.maxY.toFixed(3)})`);
       }
       const openW = site.world(-25, -12);
-      assert.equal(ownRoofAt(openW.x, openW.z), -Infinity, `exag=${exag}: open lot has no phantom roof floor`);
+      assert.equal(ownRoofAt(openW.x, openW.z), -Infinity, `exag=${exag}: open lot has no phantom static roof floor`);
+      assert.equal(st.roofAt(openW.x, openW.z), -Infinity, `exag=${exag}: open lot has no phantom live roof floor`);
+
+      // Even if a future survey lowers building.ground by 0.25 m or 0.75 m while baked terrain stays unchanged,
+      // live PortHoodGas.roofAt still uses the exact built ground samples and covers every structure peak.
+      for (const groundDrop of [0.25, 0.75]) {
+        const lowBox = PortHoodGasSite.find([{ ...found, ground: found.ground - groundDrop }]);
+        assert.ok(lowBox, `survey ground drop -${groundDrop} m is accepted`);
+        const lowSite = new PortHoodGasSite(lowBox, manifest.village);
+        const lowSt = new PortHoodGas(lowSite, realTerrain, (m) => m * exag, false);
+        lowSt.update(new THREE.Vector3(lowSite.origin.x, lowSite.level * exag, lowSite.origin.z), 0, { x: lowSite.origin.x, z: lowSite.origin.z });
+        for (const [sName, u0, u1, v0, v1] of structureChecks) {
+          const bounds = meshYBoundsIn(lowSt, u0, u1, v0, v1);
+          const cw = lowSite.world((u0 + u1) / 2, (v0 + v1) / 2);
+          const liveRoofH = lowSt.roofAt(cw.x, cw.z);
+          assert.ok(Number.isFinite(liveRoofH) && liveRoofH >= bounds.maxY,
+            `exag=${exag} groundDrop=-${groundDrop}: live PortHoodGas.roofAt at ${sName} (${liveRoofH.toFixed(3)}) covers built peak (${bounds.maxY.toFixed(3)})`);
+        }
+      }
 
       // Downhill corner grounding: every grounded structure's lowest vertex must extend below the lowest terrain corner.
       for (const [sName, u0, u1, v0, v1] of [
@@ -541,5 +568,6 @@ assert.ok(terrainIdx >= 0 && gasIdx > terrainIdx, 'main.ts updates portHoodGas i
 assert.ok(mainSrc.includes("name !== 'portHoodGas'"), 'main.ts excludes portHoodGas from before-camera places loop');
 assert.ok(mainSrc.includes('portHoodGasSite.clear) terrain.addTreeClear'), 'main.ts registers portHoodGas clear boxes as tree-only');
 assert.ok(mainSrc.includes("early(import('./porthood-gas'))"), 'main.ts lazy-loads porthood-gas only for Port Hood');
+assert.ok(mainSrc.includes('portHoodGas ? portHoodGas.roofAt(x, z) : -Infinity'), 'main.ts wires live portHoodGas.roofAt into drone roofAt');
 
 console.log(`PASS porthood-gas: desktop ${desktop.triangles} station / ${desktop.totalTriangles} total tris, LOW ${low.triangles} station / ${low.totalTriangles} total tris, 28 instanced parked cars (3 meshes), production Terrain L5-L8 High Road & Dunmore Road bit-for-bit untouched (including boundary shift), swept drive-through routes open, all 7 roof boxes & downhill corners verified, drawn-mesh grounding & disposal verified`);

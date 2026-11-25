@@ -888,7 +888,7 @@ const builtPlaces = {} as BuiltPlaces<typeof placeRows>;
 for (const [name, row] of Object.entries(placeRows) as [string, PlaceRow<unknown, object, unknown>][]) {
   (builtPlaces as Record<string, object | null>)[name] = row.site ? row.build(row.site, row.load && await row.load()) : null;
 }
-const { hawkesbury, mabouMain } = builtPlaces;
+const { hawkesbury, mabouMain, portHoodGas } = builtPlaces;
 const postOffice = postOfficeChunk ? new (await postOfficeChunk!.take().catch(partFailed)).PortHawkesburyPostOffice(manifest.village, terrain, LOW) : null;
 if (postOffice) {
   scene.add(postOffice.group);
@@ -1130,7 +1130,7 @@ const extraRoofAt = ERA.modern ? (() => {
   }
   return extra.length ? roofHeights(extra, manifest.village, EXAG, SEA_LEVEL) : null;
 })() : null;
-const roofAt = (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain ? mabouMain.roofAt(x, z) : -Infinity, postOffice ? postOffice.roofAt(x, z) : -Infinity, extraRoofAt ? extraRoofAt(x, z) : -Infinity);
+const roofAt = (x: number, z: number) => Math.max(boxRoofAt(x, z), mabouMain ? mabouMain.roofAt(x, z) : -Infinity, postOffice ? postOffice.roofAt(x, z) : -Infinity, portHoodGas ? portHoodGas.roofAt(x, z) : -Infinity, extraRoofAt ? extraRoofAt(x, z) : -Infinity);
 if (import.meta.env.DEV) expose({ drone });
 
 function applyShot(s: Shot) {
