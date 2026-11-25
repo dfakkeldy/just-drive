@@ -641,6 +641,6 @@ export class BikeRide implements Ride {
     root.rotation.set(this.pitch + attitude, -this.heading + this.whip, this.roll, 'YXZ');
     this.car.pose({ steer: this.steerAngle, spin: this.spin, front: this.frontTravel, rear: this.rearTravel, stand: this.stand,
       foot: !this.airborne && Math.abs(this.speed) < 1 ? 1 : 0, dive: this.frontTravel, crash: this.crashTime, ground: this.y, pitch: this.pitch, roll: this.roll });
-    if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z) ?? null;
+    if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z, this.y) ?? null;
   }
 }

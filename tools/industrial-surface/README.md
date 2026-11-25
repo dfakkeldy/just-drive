@@ -116,8 +116,14 @@ Provincial road segments (`BASE_NSTDB_10k_Roads_WM84__05_bridges.geojson`) confi
 chained directly onto `industrial-hashes.json`. `web/src/bridge-crossings.json`
 also updates road 107's overpass over Railroad 216 (`osm/way/169338040`, span
 `-100084`) from `kind: 4, halfWidth: 1.5` to `kind: 2, halfWidth: 3.6` so it
-renders as a concrete/asphalt highway overpass instead of a 3 m timber bridge,
-with Point Tupper's `bridge-decks.bin` rebaked to match (`web/src/bridge-decks-assets.ts`).
+renders as a concrete/asphalt highway overpass with continuous double-yellow
+centre lines across its deck and approaches, instead of a 3 m timber bridge.
+Point Tupper's `bridge-decks.bin` is rebaked to match
+(`web/src/bridge-decks-assets.ts`, 44th file of the Point Tupper install:
+before `5f07980cf217405aa2191f75d81a0fb0eb6eb48b999e9c8c1303526c419faa3c`,
+126,000 bytes; after
+`0bf94594f7f348555e65973da062823db1de9eda518590ad46fe61ec024f83fb`,
+128,624 bytes).
 
 Re-baking all 117 Point Tupper paved lot tiles and both stockpiles on the
 widened `roads.json` produces byte-for-byte identical `.r8` tiles and
@@ -137,12 +143,17 @@ Tupper line is an active freight railway serving Point Tupper industries (the
 section east of Point Tupper toward Sydney has been dormant since 2015, not
 converted to a rail trail). The Ceilidh Coastal Trail (`kind=5`) is 5.5 km
 northwest near Port Hastings. In the game, Point Tupper's railway keeps its
-`Railroad` road name and `gravel` (ballast) surface on the HUD, never `rail trail`.
+`Railroad` road name and `gravel` (ballast) surface on the HUD (including on
+timber railway bridges), never `rail trail`.
 
 ### Order with #1341 delta 2
 
-This delta installs road 107's 7.2 m width, double-yellow centre paint and
-overpass update on the current Point Tupper ground, ahead of `#1341` delta 2.
-When `#1341` delta 2 shapes the Point Tupper road and railway ground (embankments
-and steep rail notches), it should keep road 107 at `kind=2`, `halfWidth=3.6`,
+This finisher task (`grok-bots#1410`) installs road 107's 7.2 m width,
+double-yellow centre paint and overpass update (44 files: the 43 files of
+`width-hashes.json` plus `bridge-decks.bin`, with rollback backup) on the
+current Point Tupper ground ahead of `#1341` delta 2, superseding the builder's
+earlier combined-bake proposal on `#1036` comment `7147815846` because `#1341`
+delta 2 is not yet underway. When `#1341` delta 2 shapes Point Tupper's road
+and railway ground (embankments, steep rail notches and road-side utility
+poles), it should keep road 107 at `kind=2`, `halfWidth=3.6`,
 `pavement='double-yellow'` and refresh the Point Tupper land receipts once.

@@ -18,6 +18,7 @@ export interface Road {
   halfWidth: number;
   bridge: boolean;
   washboard?: boolean;
+  pavement?: 'double-yellow' | 'worn' | 'gravel';
   pts: [number, number][];   // world x, z (converted on load)
 }
 
@@ -142,9 +143,16 @@ export class Roads {
     return this.query(this.cells, x, z, reach, filter);
   }
 
-  /** Name the road under the vehicle, with a metre of tolerance at the edge. */
-  nameAt(x: number, z: number): string | null {
-    return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1)?.road.name ?? null;
+  /** Name the road under the vehicle, with a metre of tolerance at the edge.
+   * When `y` is given near a grade-separated modern bridge, the deck elevation decides upper vs lower road. */
+  nameAt(x: number, z: number, y?: number): string | null {
+    let skipOverhead = false;
+    if (y !== undefined && this.modern) {
+      const deck = this.modern.deckRoadAt(x, z, y);
+      if (deck.name !== null) return deck.name;
+      skipOverhead = deck.hasOverhead;
+    }
+    return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead)?.road.name ?? null;
   }
 
   /** Cold placement query: visit every nearby segment once, including tracks, trails and driveways.
@@ -160,7 +168,7 @@ export class Roads {
         }
   }
 
-  private query(cells: Map<number, [number, number][]>, x: number, z: number, reach: number, filter?: (r: Road) => boolean, edgeTolerance?: number): RoadHit | null {
+  private query(cells: Map<number, [number, number][]>, x: number, z: number, reach: number, filter?: (r: Road) => boolean, edgeTolerance?: number, skipOverhead = false): RoadHit | null {
     let best: RoadHit | null = null;
     const era=this.terrain.cartRoads&&cells===this.bridgeCells;
     let candidates=0,bestSquared=144,bestRI=Infinity,bestOutside=Infinity;
@@ -171,6 +179,7 @@ export class Roads {
       for (const [ri, s] of cells.get(this.cellKey(cx, cz)) ?? NO_SEGMENTS) {
         const road = this.roads[ri];
         if (filter && !filter(road)) continue;
+        if (skipOverhead && this.modern?.isOverheadRoad(road.id)) continue;
         // A segment may occupy several neighbouring cells; sample it once in an era query.
         const record=era?this.bridgeRecords.get(road.id):undefined;
         if(record){if(record.seen[s]===this.bridgeQuery)continue;record.seen[s]=this.bridgeQuery;candidates++;}

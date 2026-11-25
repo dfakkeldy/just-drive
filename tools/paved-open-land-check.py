@@ -192,6 +192,21 @@ def fixture():
         try: patch.install(tmp/'delta', baked, receipt=receipt)
         except ValueError as e: assert 'Live file differs' in str(e)
         else: raise AssertionError('install replaced a different live file')
+        # Industrial Park Road width delta: stale_inputs accepts both a direct match (receipt baked on widened roads)
+        # and the mapped before-hash (receipt baked before the width delta), while rejecting an unknown hash.
+        ind = json.loads(patch.INDUSTRIAL_WIDTH.read_text())
+        ind_roads = next(f for f in ind['files'] if f['file'] == 'roads.json')
+        pt_dir = baked/'areas/pointtupper'; pt_dir.mkdir(parents=True, exist_ok=True)
+        # Write a payload whose hash is neither before nor after -> rejected.
+        (pt_dir/'roads.json').write_bytes(b'{"roads":[]}\n')
+        assert patch.stale_inputs(dict(areas=[dict(inputs=[dict(file='areas/pointtupper/roads.json', sha256=ind_roads['before'])])]), baked) == ['areas/pointtupper/roads.json']
+        # Direct match on after-hash receipt passes without forcing remap to before-hash.
+        after_bytes = b'{"roads":[{"id":107}]}\n'
+        (pt_dir/'roads.json').write_bytes(after_bytes)
+        assert patch.stale_inputs(dict(areas=[dict(inputs=[dict(file='areas/pointtupper/roads.json', sha256=sha(after_bytes))])]), baked) == []
+        # Mapped before-hash passes when live hash equals ind_roads['sha256'].
+        assert patch._industrial_width_stands_for('areas/pointtupper/roads.json', ind_roads['sha256']) == ind_roads['before']
+        assert patch._industrial_width_stands_for('areas/pointtupper/roads.json', '0'*64) == '0'*64
         for allowed in [('before', None), ('after', None), ('after', 'after')]: expectation(*allowed)
         for invalid in [('before', 'after'), ('after', 'before')]:
             try: expectation(*invalid)

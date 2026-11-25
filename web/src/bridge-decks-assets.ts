@@ -23,8 +23,8 @@ export const BRIDGE_DECK_ASSETS:Readonly<Record<string,BridgeDeckAsset|undefined
   },
   "pointtupper": {
     "file": "bridge-decks.bin",
-    "bytes": 128616,
-    "sha256": "328b3f996136f907aad17aa579b4407edf49cdf0ab3150694468b81bd9eb8115"
+    "bytes": 128624,
+    "sha256": "0bf94594f7f348555e65973da062823db1de9eda518590ad46fe61ec024f83fb"
   },
   "cansocauseway": {
     "file": "bridge-decks.bin",

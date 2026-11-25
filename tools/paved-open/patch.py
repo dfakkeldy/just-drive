@@ -81,8 +81,9 @@ def stale_inputs(report, baked):
             path = Path(baked)/entry['file']
             if not path.is_file(): stale.append(entry['file']); continue
             data = path.read_bytes()
-            value = lattice(data) if entry.get('lattice') else _industrial_width_stands_for(entry['file'], sha(data))
-            if value != entry['sha256']: stale.append(entry['file'])
+            digest = lattice(data) if entry.get('lattice') else sha(data)
+            if digest != entry['sha256'] and (entry.get('lattice') or _industrial_width_stands_for(entry['file'], digest) != entry['sha256']):
+                stale.append(entry['file'])
     return sorted(set(stale))
 
 

@@ -11,6 +11,7 @@ import { build } from '../web/node_modules/esbuild/lib/main.js';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => readFileSync(resolve(root, file), 'utf8');
 const roadsSource = read('web/src/roads.ts');
+const modernBridgesSource = read('web/src/modern-bridges.ts');
 const vehicleSource = read('web/src/vehicle.ts');
 const bikeSource = read('web/src/bike-ride.ts');
 
@@ -114,6 +115,93 @@ function runSynthetic(mod) {
   bike.place(12.0, -20, 0);
   bike.update(1 / 60, { throttle: 0, steer: 0, brake: true, touch: false });
   assert.equal(bike.roadName, 'Railroad', 'BikeRide on Railroad names Railroad');
+
+  // 8. Grade-separated overpass over Railroad + active railway timber bridge + kind-2 double-yellow deck stripes.
+  const valleyHeight = (_x, z) => (Math.abs(z) < 12 ? 10 : 16);
+  let overpassNet = null;
+  const overpassTerrain = {
+    level: 8,
+    dataRevision: 1,
+    seaLevel: -100,
+    heightAt: valleyHeight,
+    landHeightAt: valleyHeight,
+    surfaceAt(x, z, refY) {
+      const ground = valleyHeight(x, z);
+      const deck = overpassNet?.modern?.deckHeightAt?.(x, z) ?? null;
+      const onDeck = deck !== null && (refY === undefined ? false : refY >= deck - 1.2);
+      return {
+        ground: onDeck ? deck : ground,
+        level: 8,
+        kind: onDeck ? 9 : 3,
+        halfWidth: onDeck ? 3.6 : 2.6,
+        roadDist: 0,
+        canopy: 0,
+        washboard: false,
+        bridge: onDeck,
+        brook: 99,
+      };
+    },
+    withContactHeight: (_, readFn) => readFn(),
+  };
+  const overpassData = {
+    roads: [
+      { id: 107, name: 'Industrial Park Road', kind: 2, halfWidth: 3.6, pavement: 'double-yellow', bridge: false, pts: [[0, -50], [0, -12]] },
+      { id: 108, name: 'Industrial Park Road', kind: 2, halfWidth: 3.6, pavement: 'double-yellow', bridge: false, pts: [[0, 12], [0, 50]] },
+      { id: -100084, name: 'Industrial Park Road', kind: 2, halfWidth: 3.6, pavement: 'double-yellow', bridge: true, pts: [[0, -12], [0, 12]] },
+      { id: 216, name: 'Railroad', kind: 3, halfWidth: 2.6, bridge: false, pts: [[-40, 0], [40, 0]] },
+      { id: 207, name: 'Railroad', kind: 3, halfWidth: 2.6, bridge: true, pts: [[30, -12], [30, 12]] },
+    ],
+  };
+  overpassNet = new mod.Roads(overpassData, [0, 0], overpassTerrain);
+  const deckY = overpassNet.deckHeight(0, 0);
+  const railTimberY = overpassNet.deckHeight(30, 0);
+  assert.ok(deckY !== null && deckY > 15, `synthetic overpass deck built above cut (${deckY})`);
+  assert.ok(railTimberY !== null && railTimberY > 15, `synthetic railway timber bridge built (${railTimberY})`);
+  // At (0, 0) where road 107 crosses over Railroad 216, elevation decides upper vs lower road.
+  assert.equal(overpassNet.nameAt(0, 0, deckY), 'Industrial Park Road', 'on overpass deck names Industrial Park Road');
+  assert.equal(overpassNet.nameAt(0, 0, 10), 'Railroad', 'under overpass on Railroad 216 names Railroad');
+  // Vehicle and BikeRide must pass this.y into Roads.nameAt so under-overpass driving names Railroad.
+  const underCar = new mod.Vehicle(rig(mod.THREE), overpassTerrain, overpassNet, -0.2);
+  underCar.place(0, 0, Math.PI / 2);
+  underCar.y = 10;
+  underCar.update(1 / 60, { throttle: 0, steer: 0, handbrake: true, touch: false });
+  assert.equal(underCar.roadName, 'Railroad', 'Vehicle under overpass names Railroad');
+  underCar.place(0, 0, 0);
+  underCar.y = deckY;
+  underCar.update(1 / 60, { throttle: 0, steer: 0, handbrake: true, touch: false });
+  assert.equal(underCar.roadName, 'Industrial Park Road', 'Vehicle on overpass deck names Industrial Park Road');
+
+  const underBike = new mod.BikeRide(bikeRig(mod.THREE), overpassTerrain, overpassNet, -0.2);
+  underBike.place(0, 0, Math.PI / 2);
+  underBike.y = 10;
+  underBike.update(1 / 60, { throttle: 0, steer: 0, brake: true, touch: false });
+  assert.equal(underBike.roadName, 'Railroad', 'BikeRide under overpass names Railroad');
+  underBike.place(0, 0, 0);
+  underBike.y = deckY;
+  underBike.update(1 / 60, { throttle: 0, steer: 0, brake: true, touch: false });
+  assert.equal(underBike.roadName, 'Industrial Park Road', 'BikeRide on overpass deck names Industrial Park Road');
+
+  // Active railway timber bridge must keep kind 3 (gravel), never 5 (rail trail).
+  const railSpan = overpassNet.modern.spans.find(s => s.road.id === 207);
+  assert.ok(railSpan && railSpan.timber, 'synthetic Railroad 207 bridge is timber');
+  overpassNet.modern.applyDriving(railSpan, 1);
+  assert.equal(overpassNet.modern.driving.kind, 3, 'timber railway bridge deck stays gravel (kind 3), never rail trail (kind 5)');
+
+  // Kind-2 double-yellow overpass must carry yellow centre stripes on both its approaches and its deck.
+  const overpassSpan = overpassNet.modern.spans.find(s => s.road.id === -100084);
+  const pos = overpassSpan?.geometry?.attributes?.position;
+  const col = overpassSpan?.geometry?.attributes?.color;
+  let deckYellowVerts = 0, approachYellowVerts = 0;
+  if (pos && col) {
+    for (let i = 0; i < col.count; i++) {
+      if (col.getX(i) > 0.5 && col.getY(i) > 0.35 && col.getZ(i) < 0.08) {
+        if (Math.abs(pos.getZ(i)) < 11) deckYellowVerts++;
+        else if (Math.abs(pos.getZ(i)) > 13) approachYellowVerts++;
+      }
+    }
+  }
+  assert.ok(deckYellowVerts >= 24, `kind-2 double-yellow overpass deck includes yellow centre stripes (${deckYellowVerts} verts)`);
+  assert.ok(approachYellowVerts >= 24, `kind-2 double-yellow overpass approaches include yellow centre stripes (${approachYellowVerts} verts)`);
 }
 
 function runBakedPointTupper(mod) {
@@ -142,28 +230,46 @@ function runBakedPointTupper(mod) {
 const current = await loadBundle();
 runSynthetic(current);
 runBakedPointTupper(current);
-console.log('PASS road-name-hud synthetic rules (surface + 1 m, unnamed filter, surface-over-margin, Vehicle + BikeRide)');
+console.log('PASS road-name-hud synthetic rules (surface + 1 m, grade-separated overpass, railway timber deck, double-yellow deck stripes, Vehicle + BikeRide)');
 
 if (process.argv.includes('--mutations')) {
   const mutants = [
     ['old-14m-reach', 'web/src/roads.ts', roadsSource,
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1)?.road.name ?? null;',
+      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead)?.road.name ?? null;',
       'return this.query(this.cells, x, z, 14)?.road.name ?? null;'],
     ['no-edge-tolerance', 'web/src/roads.ts', roadsSource,
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1)?.road.name ?? null;',
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 0)?.road.name ?? null;'],
+      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead)?.road.name ?? null;',
+      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 0, skipOverhead)?.road.name ?? null;'],
     ['no-unnamed-filter', 'web/src/roads.ts', roadsSource,
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1)?.road.name ?? null;',
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, undefined, 1)?.road.name ?? null;'],
+      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead)?.road.name ?? null;',
+      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, undefined, 1, skipOverhead)?.road.name ?? null;'],
     ['no-surface-priority', 'web/src/roads.ts', roadsSource,
       'if (outside <= edgeTolerance && (!best || outside < bestOutside || (outside === bestOutside && d < best.dist))) {',
       'if (outside <= edgeTolerance && (!best || d < best.dist)) {'],
+    ['no-overpass-elevation', 'web/src/roads.ts', roadsSource,
+      'if (y !== undefined && this.modern) {',
+      'if (false && y !== undefined && this.modern) {'],
     ['vehicle-old-nearest', 'web/src/vehicle.ts', vehicleSource,
-      'if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z) ?? null;',
+      'if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z, this.y) ?? null;',
       'if (dt > 0) this.roadName = this.roads.nearest(this.x, this.z, 14)?.road.name ?? null;'],
+    ['vehicle-no-y', 'web/src/vehicle.ts', vehicleSource,
+      'if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z, this.y) ?? null;',
+      'if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z) ?? null;'],
     ['bike-old-nearest', 'web/src/bike-ride.ts', bikeSource,
-      'if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z) ?? null;',
+      'if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z, this.y) ?? null;',
       'if (dt > 0) this.roadName = this.roads.nearest(this.x, this.z, 14)?.road.name ?? null;'],
+    ['bike-no-y', 'web/src/bike-ride.ts', bikeSource,
+      'if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z, this.y) ?? null;',
+      'if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z) ?? null;'],
+    ['rail-timber-as-trail', 'web/src/modern-bridges.ts', modernBridgesSource,
+      "this.driving.kind=wash?road.kind:deck?(r.timber?(r.road.name==='Railroad'?road.kind:5):9):road.kind;",
+      'this.driving.kind=wash?road.kind:deck?(r.timber?5:9):road.kind;'],
+    ['no-kind2-deck-yellow', 'web/src/modern-bridges.ts', modernBridgesSource,
+      "const deckYellow=(r.start?.road.kind??r.road.kind)===1||r.road.pavement==='double-yellow'||r.start?.road.pavement==='double-yellow'||r.end?.road.pavement==='double-yellow';",
+      'const deckYellow=(r.start?.road.kind??r.road.kind)===1;'],
+    ['no-kind2-approach-yellow', 'web/src/modern-bridges.ts', modernBridgesSource,
+      "const doubleYellow=road.kind===1||(road.kind===2&&road.pavement==='double-yellow');",
+      'const doubleYellow=road.kind===1;'],
   ];
   for (const [name, file, src, from, to] of mutants) {
     assert.equal(src.split(from).length, 2, `${name}: unique anchor in ${file}`);

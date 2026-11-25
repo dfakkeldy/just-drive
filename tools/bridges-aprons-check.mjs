@@ -96,7 +96,7 @@ if(process.argv.includes('--mutations')){
  await assert.rejects(()=>verify({[terrainFile]:terrain.replace(canopy,'')},'mabou'),/canopy does not cover/,'coarse canopy clearance removed must fail');console.log('KILLED coarse canopy clearance removed');
  const reachBox='const a0=first(xs,ax+Math.min(0,dx)-reach-slack),a1=first(xs,ax+Math.max(0,dx)+reach+slack)-1;';assert.equal(source.split(reachBox).length,2);
  await assert.rejects(()=>verify({[file]:source.replace(reachBox,'const a0=first(xs,ax+Math.min(0,dx)-reach/2-slack),a1=first(xs,ax+Math.max(0,dx)+reach/2+slack)-1;')},'mabou'),/hull clearing grid matches the per-point corridor test/,'grid that visits half the reach box must fail');console.log('KILLED hull clearing grid visits half the reach box');
- const kind='this.driving.kind=wash?road.kind:deck?(r.timber?5:9):road.kind;';assert.equal(source.split(kind).length,2);
- await assert.rejects(()=>verify({[file]:source.replace(kind,'this.driving.kind=wash?road.kind:deck?(r.timber?5:9):9;')},'mabou'),/every apron keeps its own mapped road kind/,'non-washboard aprons concrete must fail');console.log('KILLED non-washboard aprons concrete');
+ const kind="this.driving.kind=wash?road.kind:deck?(r.timber?(r.road.name==='Railroad'?road.kind:5):9):road.kind;";assert.equal(source.split(kind).length,2);
+ await assert.rejects(()=>verify({[file]:source.replace(kind,"this.driving.kind=wash?road.kind:deck?(r.timber?(r.road.name==='Railroad'?road.kind:5):9):9;")},'mabou'),/every apron keeps its own mapped road kind/,'non-washboard aprons concrete must fail');console.log('KILLED non-washboard aprons concrete');
 
 }
