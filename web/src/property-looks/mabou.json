@@ -4393,13 +4393,10 @@
         628338.9,
         5106419.0
       ],
-      "kind": "house",
       "wall": "#d5d8db",
       "roof": "#8e9493",
       "trim": "#e8e6e0",
       "roofMaterial": "metal",
-      "door": "#2a4d86",
-      "storeys": 1,
       "chimney": false,
       "dormer": false,
       "shutters": false
@@ -4428,12 +4425,10 @@
         627765.5,
         5097283.4
       ],
-      "kind": "house",
       "wall": "#f3f2ec",
       "roof": "#3e4246",
       "trim": "#f7f6f1",
       "roofMaterial": "shingle",
-      "storeys": 1,
       "chimney": false,
       "dormer": false,
       "shutters": false
@@ -4489,12 +4484,10 @@
         631082.5,
         5109752.5
       ],
-      "kind": "house",
       "wall": "#f4f2ec",
       "roof": "#3c6e48",
       "trim": "#f7f5ef",
       "roofMaterial": "metal",
-      "storeys": 2,
       "eave": 5.0,
       "ridge": 7.5,
       "chimney": false,
