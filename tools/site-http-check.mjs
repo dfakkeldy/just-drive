@@ -109,6 +109,24 @@ for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(co
  assert.equal(r.status,200,'justdrive church redirect target');
  assert.match(r.body.toString(),/<title>Just Drive: Judique<\/title>/);
 }
+// Short link for Port Hood gas station (deploy/_redirects): served by static assets with no Worker run.
+const PORTHOOD_GAS_TARGET='https://justdrive.fakkeldy.ca/porthood?driveAt=614458.74,5096480.17,118';
+for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(const path of ['/porthoodgas','/porthoodgas/'])for(const method of ['GET','HEAD']){
+ const r=await request(host,path,{},method);assert.equal(r.status,302,`${method} ${host}${path}`);
+ const resolved=new URL(r.headers.location,'http://'+host+path);
+ if(resolved.protocol==='http:'&&resolved.hostname===host)resolved.protocol='https:';
+ assert.equal(resolved.href,PORTHOOD_GAS_TARGET,`${method} ${host}${path} location resolves to ${PORTHOOD_GAS_TARGET}`);
+ assert.equal(r.headers['cache-control'],undefined,`${method} ${host}${path} served by static assets, not Worker no-store`);
+ if(host!=='justdrive.fakkeldy.ca')assert.equal(r.headers.location,PORTHOOD_GAS_TARGET,`${method} ${host}${path} cross-host location`);
+ if(method==='GET'){
+  const followed=await followResolved(resolved);
+  assert.equal(followed.response.status,200,`${host}${path} followed status`);
+  assert.equal(sha(followed.response.body),sha(readFileSync(site+'/just/porthood/index.html')),`${host}${path} followed is the built Port Hood page`);
+  assert.match(followed.response.body.toString(),/<title>Just Drive: Port Hood<\/title>/,`${host}${path} followed title`);
+  assert.equal('https://'+followed.sent.host+followed.sent.path,PORTHOOD_GAS_TARGET,`${host}${path} outgoing request is the target`);
+  table.push({host,path,status:r.status,bytes:r.body.length,sha256:sha(r.body),title:'',cache:r.headers['cache-control']??'',location:r.headers.location??''});
+ }
+}
 // A repeat visit sends the page's ETag back. A known place may answer 304; a place that does not exist
 // must answer 404 WITH the page that lists the places, never an empty 404.
 for(const [path,want] of [['/nowhere',404],['/mabou',304],['/mabou-1884',304],['/judique-1884',304],['/mabou-1885',404],['/',304]]){

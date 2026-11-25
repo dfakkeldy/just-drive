@@ -19,6 +19,9 @@ process.on('uncaughtException', e => { console.error(e.name + ': ' + e.message);
 const JUST_ORIGIN = 'https://justdrive.fakkeldy.ca';
 const RDMC_PATHS = ['/rdmc', '/rdmc/'];
 const EXPECTED_PATH = '/judique';
+const PORTHOOD_GAS_PATHS = ['/porthoodgas', '/porthoodgas/'];
+const PORTHOOD_PATH = '/porthood';
+const PORTHOOD_HIGH_ROAD_NEAR = 1;  // metres: the start pose must sit on baked High Road
 const MAIL_ORIGIN = 'https://mmm.fakkeldy.ca';
 const BLACKSTONE_PATHS = ['/blackstone', '/blackstone/'];
 const BLACKSTONE_URL = `${MAIL_ORIGIN}/?mode=mail&start=blackstone-road:0.43`;
@@ -42,30 +45,38 @@ export function parseRedirectsFile(text) {
   return rules;
 }
 
-export function verifyRdmcRedirects(text, churchStart, readDrivePosition, isTestVisit, readSite) {
+function verifyJustDriveAtRedirects(text, paths, expectedPath, areaId, startPose, poseName, readDrivePosition, isTestVisit, readSite) {
   const rules = parseRedirectsFile(text);
-  const expectedE = churchStart.e;
-  const expectedN = churchStart.n;
-  const expectedHeadingDeg = Math.round(churchStart.heading * 180 / Math.PI);
-  const exactHeadingDeg = churchStart.heading * 180 / Math.PI;
-  assert.ok(Math.abs(expectedHeadingDeg - exactHeadingDeg) <= 0.5, 'rounded CHURCH_START heading within 0.5 deg');
+  const expectedE = startPose.e;
+  const expectedN = startPose.n;
+  const expectedHeadingDeg = Math.round(startPose.heading * 180 / Math.PI);
+  const exactHeadingDeg = startPose.heading * 180 / Math.PI;
+  assert.ok(Math.abs(expectedHeadingDeg - exactHeadingDeg) <= 0.5, `rounded ${poseName} heading within 0.5 deg`);
 
   const expectedQuery = `?driveAt=${expectedE},${expectedN},${expectedHeadingDeg}`;
-  const expectedUrl = `${JUST_ORIGIN}${EXPECTED_PATH}${expectedQuery}`;
-  for (const sourcePath of RDMC_PATHS) {
+  const expectedUrl = `${JUST_ORIGIN}${expectedPath}${expectedQuery}`;
+  for (const sourcePath of paths) {
     const rule = rules.find(r => r.from === sourcePath);
     assert.ok(rule, `missing redirect rule for ${sourcePath}`);
     assert.equal(rule.status, 302, `${sourcePath} must use a 302 redirect`);
-    assert.equal(rule.to, expectedUrl, `${sourcePath} target must match CHURCH_START (${expectedUrl})`);
+    assert.equal(rule.to, expectedUrl, `${sourcePath} target must match ${poseName} (${expectedUrl})`);
     const target = new URL(rule.to, JUST_ORIGIN);
     assert.equal(target.origin, JUST_ORIGIN);
-    assert.equal(target.pathname, EXPECTED_PATH);
+    assert.equal(target.pathname, expectedPath);
     const pose = readDrivePosition(target.searchParams);
     assert.deepEqual(pose, [expectedE, expectedN, expectedHeadingDeg], `${sourcePath} driveAt parses cleanly`);
     assert.equal(isTestVisit(target.searchParams), false, `${sourcePath} target keeps the normal title card`);
-    assert.deepEqual(readSite('justdrive.fakkeldy.ca', target.pathname, target.searchParams), { brand: 'just', area: 'judique' });
+    assert.deepEqual(readSite('justdrive.fakkeldy.ca', target.pathname, target.searchParams), { brand: 'just', area: areaId });
   }
   return { expectedUrl, rules };
+}
+
+export function verifyRdmcRedirects(text, churchStart, readDrivePosition, isTestVisit, readSite) {
+  return verifyJustDriveAtRedirects(text, RDMC_PATHS, EXPECTED_PATH, 'judique', churchStart, 'CHURCH_START', readDrivePosition, isTestVisit, readSite);
+}
+
+export function verifyPortHoodGasRedirects(text, portHoodGasStart, readDrivePosition, isTestVisit, readSite) {
+  return verifyJustDriveAtRedirects(text, PORTHOOD_GAS_PATHS, PORTHOOD_PATH, 'porthood', portHoodGasStart, 'PORT_HOOD_GAS_START', readDrivePosition, isTestVisit, readSite);
 }
 
 /** The game mode the link opens with, even when the browser saved Explore or Get Fired. */
@@ -115,11 +126,13 @@ export function runsWorkerFirst(patterns, path) {
   return patterns.some(pattern => pattern.endsWith('*') ? path.startsWith(pattern.slice(0, -1)) : path === pattern);
 }
 
-export function verifyBuiltSite(siteDir, expectedRedirectsText, churchStart, readDrivePosition, isTestVisit, readSite, read = readFileSync) {
+export function verifyBuiltSite(siteDir, expectedRedirectsText, churchStart, portHoodGasStart, readDrivePosition, isTestVisit, readSite, read = readFileSync) {
   const redirectsPath = resolve(siteDir, '_redirects');
   const builtRedirects = read(redirectsPath, 'utf8');
   assert.equal(builtRedirects, expectedRedirectsText, 'built _redirects must equal deploy/_redirects');
   const parsed = verifyRdmcRedirects(builtRedirects, churchStart, readDrivePosition, isTestVisit, readSite);
+  const portHoodGas = verifyPortHoodGasRedirects(builtRedirects, portHoodGasStart, readDrivePosition, isTestVisit, readSite);
+
   const judiquePagePath = resolve(siteDir, 'just/judique/index.html');
   const judiqueHtml = read(judiquePagePath, 'utf8');
   assert.match(judiqueHtml, /<title>Just Drive: Judique<\/title>/, 'built Judique target page has the Judique title');
@@ -134,13 +147,35 @@ export function verifyBuiltSite(siteDir, expectedRedirectsText, churchStart, rea
     : null;
   const target = new URL(parsed.expectedUrl);
   assert.ok(readDrivePosition(target.searchParams, manifest.village, bounds), 'built Judique manifest bounds accept the /rdmc driveAt pose');
-  return { ...parsed, builtRedirects, judiqueHtml, manifest };
+
+  const porthoodPagePath = resolve(siteDir, 'just/porthood/index.html');
+  const porthoodHtml = read(porthoodPagePath, 'utf8');
+  assert.match(porthoodHtml, /<title>Just Drive: Port Hood<\/title>/, 'built Port Hood target page has the Port Hood title');
+  assert.match(porthoodHtml, /property="og:url" content="https:\/\/justdrive\.fakkeldy\.ca\/porthood"/, 'built Port Hood target page has the Port Hood URL');
+  const porthoodManifestPath = resolve(siteDir, 'areas/porthood/manifest.json');
+  const porthoodManifest = JSON.parse(read(porthoodManifestPath, 'utf8'));
+  assert.equal(porthoodManifest.area?.id, 'porthood', 'built site carries the Port Hood land manifest');
+  assert.ok(Array.isArray(porthoodManifest.village) && porthoodManifest.village.length === 2, 'built Port Hood manifest has village origin');
+  const [phEast, phNorth] = porthoodManifest.village;
+  const phBounds = Array.isArray(porthoodManifest.mid) && porthoodManifest.mid.length === 4
+    ? [porthoodManifest.mid[0] - phEast + 120, phNorth - porthoodManifest.mid[3] + 120, porthoodManifest.mid[2] - phEast - 120, phNorth - porthoodManifest.mid[1] - 120]
+    : null;
+  const porthoodTarget = new URL(portHoodGas.expectedUrl);
+  assert.ok(readDrivePosition(porthoodTarget.searchParams, porthoodManifest.village, phBounds), 'built Port Hood manifest bounds accept the /porthoodgas driveAt pose');
+  const porthoodRoads = JSON.parse(read(resolve(siteDir, 'areas/porthood/roads.json'), 'utf8')).roads;
+  const highRoads = porthoodRoads.filter(r => r.name === portHoodGasStart.road);
+  assert.ok(highRoads.length > 0, `built Port Hood roads include ${portHoodGasStart.road}`);
+  const px = portHoodGasStart.e - phEast, pz = phNorth - portHoodGasStart.n;
+  const nearHighRoad = Math.min(...highRoads.map(r => distanceToLine(px, pz, r.pts.map(([e, n]) => [e - phEast, phNorth - n]))));
+  assert.ok(nearHighRoad <= PORTHOOD_HIGH_ROAD_NEAR, `/porthoodgas start pose lies within ${PORTHOOD_HIGH_ROAD_NEAR} m of ${portHoodGasStart.road} (${nearHighRoad.toFixed(2)} m)`);
+
+  return { ...parsed, portHoodGas, builtRedirects, judiqueHtml, porthoodHtml, manifest, porthoodManifest };
 }
 
 async function loadModules() {
   const { outputFiles } = await build({
     stdin: {
-      contents: "export { CHURCH_START } from './church-site'; export { readDrivePosition } from './light-study'; export { isTestVisit } from './visit'; export { readSite } from './site'; export { startKey } from './start-key'; export { readMode } from './mode';",
+      contents: "export { CHURCH_START } from './church-site'; export { PORT_HOOD_GAS_START } from './porthood-gas-site'; export { readDrivePosition } from './light-study'; export { isTestVisit } from './visit'; export { readSite } from './site'; export { startKey } from './start-key'; export { readMode } from './mode';",
       resolveDir: process.cwd() + '/web/src',
       loader: 'ts',
     },
@@ -167,12 +202,15 @@ if (isMain) {
     process.exit(2);
   }
 
-  const { CHURCH_START, readDrivePosition, isTestVisit, readSite, startKey, readMode } = await loadModules();
+  const { CHURCH_START, PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite, startKey, readMode } = await loadModules();
   const judique = AREAS.find(a => a.id === 'judique');
   assert.ok(judique?.church, 'Judique area is registered with the church enabled');
+  const porthood = AREAS.find(a => a.id === 'porthood');
+  assert.ok(porthood?.portHoodGas, 'Port Hood area is registered with the gas station enabled');
 
   const sourceRedirects = readFileSync('deploy/_redirects', 'utf8');
   const { expectedUrl, rules } = verifyRdmcRedirects(sourceRedirects, CHURCH_START, readDrivePosition, isTestVisit, readSite);
+  const portHoodGas = verifyPortHoodGasRedirects(sourceRedirects, PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite);
 
   // Roads for the /blackstone start key. Built mode reads the built site's terrain files the way the game does
   // (web/src/roads.ts: x = east - village[0], z = village[1] - north; main.ts: the box of fine data less 120 m).
@@ -190,10 +228,12 @@ if (isMain) {
   const blackstone = verifyBlackstoneRedirects(sourceRedirects, startKey, isTestVisit, readSite, roads, bounds, readMode);
 
   let builtJudiqueHtml = '<title>Just Drive: Judique</title>';
+  let builtPortHoodHtml = '<title>Just Drive: Port Hood</title>';
   let swSource;
   if (siteDir) {
-    const built = verifyBuiltSite(siteDir, sourceRedirects, CHURCH_START, readDrivePosition, isTestVisit, readSite);
+    const built = verifyBuiltSite(siteDir, sourceRedirects, CHURCH_START, PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite);
     builtJudiqueHtml = built.judiqueHtml;
+    builtPortHoodHtml = built.porthoodHtml;
     const builtSwPath = resolve(siteDir, 'sw.js');
     assert.ok(existsSync(builtSwPath), 'built site contains sw.js');
     swSource = readFileSync(builtSwPath, 'utf8');
@@ -205,14 +245,18 @@ if (isMain) {
   const buildScript = readFileSync('tools/build_site.sh', 'utf8');
   assert.match(buildScript, /cp\s+"\$ROOT\/deploy\/_redirects"\s+"\$SITE\/_redirects"/, 'build_site.sh copies deploy/_redirects into $SITE/_redirects');
 
-  // deploy/wrangler.jsonc must not route /rdmc or /rdmc/ to the Worker ahead of static assets.
+  // deploy/wrangler.jsonc must not route short links to the Worker ahead of static assets.
   const wrangler = readFileSync('deploy/wrangler.jsonc', 'utf8');
   const runWorkerFirst = JSON.parse(wrangler.match(/"run_worker_first":\s*(\[[^\]]*\])/)[1]);
-  for (const sourcePath of [...RDMC_PATHS, ...BLACKSTONE_PATHS]) {
+  for (const sourcePath of [...RDMC_PATHS, ...BLACKSTONE_PATHS, ...PORTHOOD_GAS_PATHS]) {
     assert.equal(runsWorkerFirst(runWorkerFirst, sourcePath), false, `${sourcePath} must not match run_worker_first (${JSON.stringify(runWorkerFirst)})`);
   }
   for (const sourcePath of BLACKSTONE_PATHS) {
     assert.equal(runsWorkerFirst([...runWorkerFirst, '/blackstone*'], sourcePath), true, `negative control: a pattern for ${sourcePath} sends it to the Worker`);
+    assert.equal(runsWorkerFirst([...runWorkerFirst, sourcePath], sourcePath), true, `negative control: an exact pattern for ${sourcePath} sends it to the Worker`);
+  }
+  for (const sourcePath of PORTHOOD_GAS_PATHS) {
+    assert.equal(runsWorkerFirst([...runWorkerFirst, '/porthoodgas*'], sourcePath), true, `negative control: a pattern for ${sourcePath} sends it to the Worker`);
     assert.equal(runsWorkerFirst([...runWorkerFirst, sourcePath], sourcePath), true, `negative control: an exact pattern for ${sourcePath} sends it to the Worker`);
   }
 
@@ -237,41 +281,47 @@ if (isMain) {
     return origFetch(input, opts);
   };
   justHarness.routes.set(EXPECTED_PATH, new Response(builtJudiqueHtml, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }));
+  justHarness.routes.set(PORTHOOD_PATH, new Response(builtPortHoodHtml, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }));
 
-  for (const [origin, h] of [[JUST_ORIGIN, justHarness], ['https://mmm.fakkeldy.ca', mailHarness]]) {
-    for (const sourcePath of RDMC_PATHS) {
-      // Offline too: sw.js must never hijack /rdmc or /rdmc/.
-      h.network(false);
-      let offlineIntercepted = false;
-      h.listeners.fetch({
-        request: { url: origin + sourcePath, method: 'GET', mode: 'navigate', headers: new Headers() },
-        respondWith() { offlineIntercepted = true; },
-        waitUntil() {},
-      });
-      assert.equal(offlineIntercepted, false, `${origin}${sourcePath} (offline) must bypass sw.js`);
+  for (const [label, paths, targetUrl, titlePattern] of [
+    ['rdmc', RDMC_PATHS, expectedUrl, /<title>Just Drive: Judique<\/title>/],
+    ['porthoodgas', PORTHOOD_GAS_PATHS, portHoodGas.expectedUrl, /<title>Just Drive: Port Hood<\/title>/],
+  ]) {
+    for (const [origin, h] of [[JUST_ORIGIN, justHarness], ['https://mmm.fakkeldy.ca', mailHarness]]) {
+      for (const sourcePath of paths) {
+        // Offline too: sw.js must never hijack a static short link.
+        h.network(false);
+        let offlineIntercepted = false;
+        h.listeners.fetch({
+          request: { url: origin + sourcePath, method: 'GET', mode: 'navigate', headers: new Headers() },
+          respondWith() { offlineIntercepted = true; },
+          waitUntil() {},
+        });
+        assert.equal(offlineIntercepted, false, `${origin}${sourcePath} (offline) must bypass sw.js`);
 
-      // Online chain: sw.js passes /rdmc to network -> static-asset 302 -> browser navigates to Location on justdrive.
-      h.network(true);
-      let onlineIntercepted = false;
-      h.listeners.fetch({
-        request: { url: origin + sourcePath, method: 'GET', mode: 'navigate', headers: new Headers() },
-        respondWith() { onlineIntercepted = true; },
-        waitUntil() {},
-      });
-      assert.equal(onlineIntercepted, false, `${origin}${sourcePath} (online) must bypass sw.js`);
+        // Online chain: sw.js passes the short link to network -> static-asset 302 -> browser navigates to Location on justdrive.
+        h.network(true);
+        let onlineIntercepted = false;
+        h.listeners.fetch({
+          request: { url: origin + sourcePath, method: 'GET', mode: 'navigate', headers: new Headers() },
+          respondWith() { onlineIntercepted = true; },
+          waitUntil() {},
+        });
+        assert.equal(onlineIntercepted, false, `${origin}${sourcePath} (online) must bypass sw.js`);
 
-      const matched = rules.find(r => r.from === sourcePath);
-      const destination = new URL(matched.to, origin + sourcePath);
-      const locationHeader = destination.origin === origin ? `${destination.pathname}${destination.search}` : destination.href;
-      const followed = new URL(locationHeader, origin + sourcePath);
-      assert.equal(followed.href, expectedUrl, `${origin}${sourcePath} followed Location resolves to ${expectedUrl}`);
+        const matched = rules.find(r => r.from === sourcePath);
+        const destination = new URL(matched.to, origin + sourcePath);
+        const locationHeader = destination.origin === origin ? `${destination.pathname}${destination.search}` : destination.href;
+        const followed = new URL(locationHeader, origin + sourcePath);
+        assert.equal(followed.href, targetUrl, `${origin}${sourcePath} followed Location resolves to ${targetUrl}`);
 
-      fetchedUrls.length = 0;
-      justHarness.network(true);
-      const targetNav = await justHarness.nav(`rdmc-${origin}-${sourcePath}`, (followed.pathname + followed.search).slice(1));
-      assert.equal(targetNav.response.status, 200, `followed navigation from ${origin}${sourcePath} succeeds`);
-      assert.match(targetNav.body, /<title>Just Drive: Judique<\/title>/);
-      assert.deepEqual(fetchedUrls, [expectedUrl], `sw.js preserves full driveAt query on network fetch (${origin}${sourcePath})`);
+        fetchedUrls.length = 0;
+        justHarness.network(true);
+        const targetNav = await justHarness.nav(`${label}-${origin}-${sourcePath}`, (followed.pathname + followed.search).slice(1));
+        assert.equal(targetNav.response.status, 200, `followed navigation from ${origin}${sourcePath} succeeds`);
+        assert.match(targetNav.body, titlePattern);
+        assert.deepEqual(fetchedUrls, [targetUrl], `sw.js preserves full driveAt query on network fetch (${origin}${sourcePath})`);
+      }
     }
   }
 
@@ -309,18 +359,26 @@ if (isMain) {
   await followBlackstone(blackstone.expectedUrl, 'blackstone-follow');
   await assert.rejects(() => followBlackstone(`${MAIL_ORIGIN}/`, 'blackstone-dropped'), /start key survives|full query/, 'negative control: a Location that drops the query fails');
 
-  // Offline navigation to the Judique destination must return the honest 503 connection page.
+  // Offline navigation to the Judique and Port Hood destinations must return the honest 503 connection page.
   justHarness.network(false);
   const offlineNav = await justHarness.nav('rdmc-offline', (new URL(expectedUrl).pathname + new URL(expectedUrl).search).slice(1));
   assert.equal(offlineNav.response.status, 503, 'offline navigation to Judique target shows honest 503 connection page');
   assert.match(offlineNav.body, /Just Drive: Judique/);
+  const offlinePortHoodNav = await justHarness.nav('porthoodgas-offline', (new URL(portHoodGas.expectedUrl).pathname + new URL(portHoodGas.expectedUrl).search).slice(1));
+  assert.equal(offlinePortHoodNav.response.status, 503, 'offline navigation to Port Hood target shows honest 503 connection page');
+  assert.match(offlinePortHoodNav.body, /Just Drive: Port Hood/);
 
-  // Self-check negative controls: missing line, wrong status, CHURCH_START drift, and missing built Judique page must fail.
+  // Self-check negative controls: missing line, wrong status, start pose drift, and missing built target pages must fail.
   assert.throws(() => verifyRdmcRedirects(sourceRedirects.replace(/^\/rdmc .*$/m, ''), CHURCH_START, readDrivePosition, isTestVisit, readSite), /missing redirect rule for \/rdmc/);
   assert.throws(() => verifyRdmcRedirects(sourceRedirects.replace(/^\/rdmc\/ .*$/m, ''), CHURCH_START, readDrivePosition, isTestVisit, readSite), /missing redirect rule for \/rdmc\//);
   assert.throws(() => verifyRdmcRedirects(sourceRedirects.replace(' 302', ' 301'), CHURCH_START, readDrivePosition, isTestVisit, readSite), /must use a 302 redirect/);
   assert.throws(() => verifyRdmcRedirects(sourceRedirects, { ...CHURCH_START, e: CHURCH_START.e + 1 }, readDrivePosition, isTestVisit, readSite), /target must match CHURCH_START/);
   assert.throws(() => verifyRdmcRedirects(sourceRedirects, { ...CHURCH_START, heading: CHURCH_START.heading + 0.1 }, readDrivePosition, isTestVisit, readSite), /target must match CHURCH_START/);
+  assert.throws(() => verifyPortHoodGasRedirects(sourceRedirects.replace(/^\/porthoodgas .*$/m, ''), PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite), /missing redirect rule for \/porthoodgas/);
+  assert.throws(() => verifyPortHoodGasRedirects(sourceRedirects.replace(/^\/porthoodgas\/ .*$/m, ''), PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite), /missing redirect rule for \/porthoodgas\//);
+  assert.throws(() => verifyPortHoodGasRedirects(sourceRedirects.replace(/^(\/porthoodgas .*) 302$/m, '$1 301'), PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite), /must use a 302 redirect/);
+  assert.throws(() => verifyPortHoodGasRedirects(sourceRedirects, { ...PORT_HOOD_GAS_START, e: PORT_HOOD_GAS_START.e + 1 }, readDrivePosition, isTestVisit, readSite), /target must match PORT_HOOD_GAS_START/);
+  assert.throws(() => verifyPortHoodGasRedirects(sourceRedirects, { ...PORT_HOOD_GAS_START, heading: PORT_HOOD_GAS_START.heading + 0.1 }, readDrivePosition, isTestVisit, readSite), /target must match PORT_HOOD_GAS_START/);
   const blackstoneCheck = (text, bounds2 = bounds, roads2 = roads) => verifyBlackstoneRedirects(text, startKey, isTestVisit, readSite, roads2, bounds2, readMode);
   assert.throws(() => blackstoneCheck(sourceRedirects.replace(/^\/blackstone .*$/m, '')), /missing redirect rule for \/blackstone/);
   assert.throws(() => blackstoneCheck(sourceRedirects.replace(/^\/blackstone\/ .*$/m, '')), /missing redirect rule for \/blackstone\//);
@@ -351,15 +409,32 @@ if (isMain) {
   assert.throws(() => blackstoneCheck(sourceRedirects, bounds, roads.map(r => ({ ...r, name: r.name === 'Blackstone Road' ? 'Other Road' : r.name }))), /gives a pose/);
   assert.throws(() => blackstoneCheck(sourceRedirects, [1e6, 1e6, 2e6, 2e6]), /gives a pose/);
   if (siteDir) {
-    assert.throws(() => verifyBuiltSite(siteDir, sourceRedirects, CHURCH_START, readDrivePosition, isTestVisit, readSite, (p, enc) => {
+    assert.throws(() => verifyBuiltSite(siteDir, sourceRedirects, CHURCH_START, PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite, (p, enc) => {
       if (p.endsWith('just/judique/index.html')) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
       return readFileSync(p, enc);
     }), /ENOENT/);
-    assert.throws(() => verifyBuiltSite(siteDir, sourceRedirects, CHURCH_START, readDrivePosition, isTestVisit, readSite, (p, enc) => {
+    assert.throws(() => verifyBuiltSite(siteDir, sourceRedirects, CHURCH_START, PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite, (p, enc) => {
       if (p.endsWith('areas/judique/manifest.json')) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
       return readFileSync(p, enc);
     }), /ENOENT/);
+    assert.throws(() => verifyBuiltSite(siteDir, sourceRedirects, CHURCH_START, PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite, (p, enc) => {
+      if (p.endsWith('just/porthood/index.html')) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      return readFileSync(p, enc);
+    }), /ENOENT/);
+    assert.throws(() => verifyBuiltSite(siteDir, sourceRedirects, CHURCH_START, PORT_HOOD_GAS_START, readDrivePosition, isTestVisit, readSite, (p, enc) => {
+      if (p.endsWith('areas/porthood/manifest.json')) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      return readFileSync(p, enc);
+    }), /ENOENT/);
+    const offRoadPose = { ...PORT_HOOD_GAS_START, n: PORT_HOOD_GAS_START.n + 50 };
+    const offRoadRedirects = sourceRedirects.replaceAll(
+      `driveAt=${PORT_HOOD_GAS_START.e},${PORT_HOOD_GAS_START.n},118`,
+      `driveAt=${offRoadPose.e},${offRoadPose.n},118`,
+    );
+    assert.throws(() => verifyBuiltSite(siteDir, offRoadRedirects, CHURCH_START, offRoadPose, readDrivePosition, isTestVisit, readSite, (p, enc) => {
+      if (p.endsWith('_redirects')) return offRoadRedirects;
+      return readFileSync(p, enc);
+    }), /lies within 1 m of High Road/);
   }
 
-  console.log(`PASS ${siteDir ? 'built site' : 'source'} /blackstone and /blackstone/ 302 -> ${BLACKSTONE_URL} (mail mode, pose pinned, sw.js followed); /rdmc and /rdmc/ 302 -> ${expectedUrl}; CHURCH_START aligned; ${siteDir ? 'built Judique page, manifest and sw.js' : 'build_site.sh copy'}; Worker bypass; sw.js redirect chain preserves driveAt; negative controls rejected`);
+  console.log(`PASS ${siteDir ? 'built site' : 'source'} /blackstone and /blackstone/ 302 -> ${BLACKSTONE_URL} (mail mode, pose pinned, sw.js followed); /rdmc and /rdmc/ 302 -> ${expectedUrl}; /porthoodgas and /porthoodgas/ 302 -> ${portHoodGas.expectedUrl}; CHURCH_START and PORT_HOOD_GAS_START aligned; ${siteDir ? 'built Judique and Port Hood pages, manifests, High Road placement and sw.js' : 'build_site.sh copy'}; Worker bypass; sw.js redirect chain preserves driveAt; negative controls rejected`);
 }
