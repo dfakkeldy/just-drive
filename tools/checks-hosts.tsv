@@ -124,6 +124,7 @@ light-study-browser	unproven	no	Mac M1 Pro Metal PASS; safe-area, position reloa
 light-study-public-browser	unproven	no	public default-brand study flow; hardware Mac execution only, other hosts unmeasured
 porch-dog-browser	unproven	no	not yet measured on another host
 start-key-browser	unproven	no	not yet measured on another host
+start-key-blackstone-browser	unproven	no	not yet measured on another host
 start-key-browser-mutations	unproven	no	not yet measured on another host
 far-views-browser	mac-only	no	Native Apple Metal game pictures; other hosts unmeasured
 far-choice-browser	mac-only	no	Native Apple Metal game through the far views overlay, as far-views-browser; other hosts unmeasured
@@ -354,6 +355,8 @@ depot-browser	unproven	no	Hardware WebGL, Port Hood and Mabou land; MacBook M1 P
 depot-browser-phone	unproven	no	Hardware WebGL, Port Hood and Mabou land on phone LOW; MacBook M1 Pro Metal / Edge 158 PASS on t3/boss-depot-scenes (390x844 touch LOW: Port Hood exterior + door, loading bay, office jump, shift-start loading + skip, suspension interrogation room)
 prince	portable	no	Node check over baked Point Tupper land; no browser
 prince-browser	unproven	no	not yet measured on another host
+blackstone	portable	no	Node check over baked Mabou land; no browser
+blackstone-browser	unproven	no	not yet measured on another host
 port-hawkesbury-mail	portable	no	Node only; runs with or without data/baked/areas/pointtupper
 port-hawkesbury-mail-mutations	portable	no	Node mutation controls; runs with or without data/baked/areas/pointtupper
 port-hawkesbury-mail-browser	unproven	no	Hardware WebGL, Point Tupper and Mabou land, desktop and phone LOW

@@ -28,6 +28,7 @@ import { mineRoadEnd } from '../web/src/mine-site.ts';
 import { PorchSite } from '../web/src/porch-site.ts';
 import { DrLaneSite } from '../web/src/drlane-site.ts';
 import { PrinceSite } from '../web/src/prince-site.ts';
+import { BlackstoneSite } from '../web/src/blackstone-site.ts';
 import { QuarrySite } from '../web/src/quarry-site.ts';
 import { YardDogSite, YARD_DOG } from '../web/src/yard-dog-site.ts';
 import { YardSite } from '../web/src/yard-site.ts';
@@ -57,6 +58,7 @@ function sites(area, manifest, list, roads, landmarks, mail) {
   if (area.fishing) { const site = new FishingSite(v); add('wharf', [site.box, ...site.clear]); }
   if (area.coast) add('coast', [[COAST_BOX[0] - v[0], v[1] - COAST_BOX[3], COAST_BOX[2] - v[0], v[1] - COAST_BOX[1]]]);
   if (area.id === 'mabou') { const box = PorchSite.find(list); if (box) { const site = new PorchSite(box, v); whole.push(site.box); add('porch', site.clear); } }
+  if (area.blackstone) { const box = BlackstoneSite.find(list); if (box) { const site = new BlackstoneSite(box, v); whole.push(site.box); add('house on Blackstone Road', site.clear); } }
   if (area.id === 'mabou') { const site = new MabouMainSite(v); add('Mabou main street', site.clear); filters.push(['Mabou main street', (l) => site.drawn(l)]); }
   if (area.colliery && manifest.mid) {
     // main.ts: the drive bounds lie EDGE inside the fine map; mine-site.ts keeps two squares clear at the road's end.
@@ -88,7 +90,7 @@ assert.ok(source('mine-site.ts').includes('offset = p.halfWidth + 18') && source
 // Every site file that the game has is one that this check knows. A new hand-built site must be added above.
 // airport-site.ts only paints the baked ground and pushes no clear box: it removes no building, so it has no zone.
 {
-  const known = ['airport-site.ts', 'church-site.ts', 'coast-site.ts', 'depot-site.ts', 'drlane-site.ts', 'fishing-site.ts', 'home-site.ts', 'judique-village-site.ts', 'mabou-main-site.ts', 'maryville-store-site.ts', 'mine-site.ts', 'porch-site.ts', 'port-hawkesbury-site.ts', 'prince-site.ts', 'quarry-site.ts', 'yard-dog-site.ts', 'yard-site.ts'];
+  const known = ['airport-site.ts', 'blackstone-site.ts', 'church-site.ts', 'coast-site.ts', 'depot-site.ts', 'drlane-site.ts', 'fishing-site.ts', 'home-site.ts', 'judique-village-site.ts', 'mabou-main-site.ts', 'maryville-store-site.ts', 'mine-site.ts', 'porch-site.ts', 'port-hawkesbury-site.ts', 'prince-site.ts', 'quarry-site.ts', 'yard-dog-site.ts', 'yard-site.ts'];
   const found = fs.readdirSync(`${root}/web/src`).filter((name) => /-site\.ts$/.test(name)).sort();
   assert.deepEqual(found, known, 'a hand-built site was added or removed: teach tools/big-buildings-check.mjs its zones');
 }

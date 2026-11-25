@@ -15,8 +15,8 @@ try {
     assert.equal(source.split('gap(p)<300').length,3,'privacy mutation anchors');
     const path=join(scratch,'mutant.ts');writeFileSync(path,source.replaceAll('gap(p)<300','gap(p)<0'));alias={'yard-dog-mutant':path};
   }
-  buildSync({alias,stdin:{contents:"export * from 'yard-dog-mutant'; export * from './web/src/yard-dog-rules'; export {YardDog} from './web/src/yard-dog'; export {Vector3,Box3} from './web/node_modules/three/build/three.module.js'; export { YardSite } from './web/src/yard-site'; export { PorchSite } from './web/src/porch-site'; export { HomeSite } from './web/src/home-site'; export { ChurchSite } from './web/src/church-site'; export { FishingSite } from './web/src/fishing-site'; export { CoastSite } from './web/src/coast-site'; export { ROUTE_ROADS } from './web/src/route';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',outfile:join(scratch,'check.mjs')});
-  const { YardDogSite, YardDogRules, YARD_DOG, YardSite, PorchSite, HomeSite, ChurchSite, FishingSite, CoastSite, ROUTE_ROADS, YardDog, Vector3, Box3 } = await import(join(scratch,'check.mjs'));
+  buildSync({alias,stdin:{contents:"export * from 'yard-dog-mutant'; export * from './web/src/yard-dog-rules'; export {YardDog} from './web/src/yard-dog'; export {Vector3,Box3} from './web/node_modules/three/build/three.module.js'; export { YardSite } from './web/src/yard-site'; export { PorchSite } from './web/src/porch-site'; export { BlackstoneSite } from './web/src/blackstone-site'; export { HomeSite } from './web/src/home-site'; export { ChurchSite } from './web/src/church-site'; export { FishingSite } from './web/src/fishing-site'; export { CoastSite } from './web/src/coast-site'; export { ROUTE_ROADS } from './web/src/route';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',outfile:join(scratch,'check.mjs')});
+  const { YardDogSite, YardDogRules, YARD_DOG, YardSite, PorchSite, BlackstoneSite, HomeSite, ChurchSite, FishingSite, CoastSite, ROUTE_ROADS, YardDog, Vector3, Box3 } = await import(join(scratch,'check.mjs'));
   const json = name => JSON.parse(readFileSync(`data/baked/terrain/${name}.json`));
   const village = json('manifest').village;
   const roads = json('roads').roads.map(r => ({...r,pts:r.pts.map(([e,n])=>[e-village[0],village[1]-n])}));
@@ -25,6 +25,7 @@ try {
   const houses = buildings.filter(b=>b.kind==='house').map(b=>({x:b.x-village[0],z:village[1]-b.y}));
   const handSites=[new YardSite(village,'invented'),new HomeSite(village),new ChurchSite(village),new FishingSite(village),new CoastSite(village)];
   const porch=PorchSite.find(buildings);if(porch)handSites.push(new PorchSite(porch,village));
+  const blackstone=BlackstoneSite.find(buildings);if(blackstone)handSites.push(new BlackstoneSite(blackstone,village));
   const landmarks=existsSync('data/baked/terrain/landmarks.json')?json('landmarks'):[];
   const excluded=handSites.map(s=>s.box);
   for(const lm of landmarks){const ps=lm.footprint.map(([x,y])=>[x-village[0],village[1]-y]);excluded.push([Math.min(...ps.map(p=>p[0]))-4,Math.min(...ps.map(p=>p[1]))-4,Math.max(...ps.map(p=>p[0]))+4,Math.max(...ps.map(p=>p[1]))+4]);}
