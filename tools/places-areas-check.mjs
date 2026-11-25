@@ -26,6 +26,7 @@ import { mineRoadEnd } from '../web/src/mine-site.ts';
 import { PorchSite } from '../web/src/porch-site.ts';
 import { DrLaneSite } from '../web/src/drlane-site.ts';
 import { PrinceSite } from '../web/src/prince-site.ts';
+import { BlackstoneSite } from '../web/src/blackstone-site.ts';
 import { PH_ITEMS, PortHawkesburySite } from '../web/src/port-hawkesbury-site.ts';
 import { QuarrySite } from '../web/src/quarry-site.ts';
 import { YardSite } from '../web/src/yard-site.ts';
@@ -42,7 +43,7 @@ const MIN_SITE = 150, MIN_PLACE = 150, EDGE = 120, START_EDGE = 12;
 
 // Every site file the game has is one that this check knows. A new hand-built site must be added below.
 {
-  const known = ['airport-site.ts', 'church-site.ts', 'coast-site.ts', 'depot-site.ts', 'drlane-site.ts', 'fishing-site.ts', 'home-site.ts', 'judique-village-site.ts', 'mabou-main-site.ts', 'maryville-store-site.ts', 'mine-site.ts', 'porch-site.ts',
+  const known = ['airport-site.ts', 'blackstone-site.ts', 'church-site.ts', 'coast-site.ts', 'depot-site.ts', 'drlane-site.ts', 'fishing-site.ts', 'home-site.ts', 'judique-village-site.ts', 'mabou-main-site.ts', 'maryville-store-site.ts', 'mine-site.ts', 'porch-site.ts',
     'port-hawkesbury-site.ts', 'prince-site.ts', 'quarry-site.ts', 'yard-dog-site.ts', 'yard-site.ts'];
   assert.deepEqual(readdirSync(`${root}/web/src`).filter(n => /-site\.ts$/.test(n)).sort(), known, 'a hand-built site was added or removed: teach tools/places-areas-check.mjs its position');
 }
@@ -79,6 +80,8 @@ function handBuiltSites() {
   sites.push({ name: 'coast', box: [...COAST_BOX] });
   const porch = PorchSite.find(read(`${baked}/terrain/buildings.json`).buildings);
   if (porch) { const site = new PorchSite(porch, mv); fromGame('porch', mv, [site.box, ...site.clear]); }
+  const blackstone = BlackstoneSite.find(read(`${baked}/terrain/buildings.json`).buildings);
+  if (blackstone) { const site = new BlackstoneSite(blackstone, mv); fromGame('house on Blackstone Road', mv, [site.box, ...site.clear]); }
   const drLane = DrLaneSite.find(read(`${baked}/areas/judique/buildings.json`).buildings);
   if (drLane) { const site = new DrLaneSite(drLane, judique); fromGame('house on D.R.\'s Lane', judique, [site.box, ...site.clear]); }
   const prince = PrinceSite.find(read(`${baked}/areas/pointtupper/buildings.json`).buildings);

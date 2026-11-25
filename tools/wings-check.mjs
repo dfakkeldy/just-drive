@@ -36,11 +36,12 @@ assert.ok(sites.every((b) => b.buildingId === undefined || b.buildingId === b.id
     /^const porchBox = .*\? PorchSite\.find\(buildingList\) : null;$/,
     /^const drLaneBox = .*\? DrLaneSite\.find\(buildingList\) : null;$/,
     /^const princeBox = .*\? PrinceSite\.find\(buildingList\) : null;$/,
+    /^const blackstoneBox = .*\? BlackstoneSite\.find\(buildingList\) : null;$/,
     // The camera drone keeps over every drawn roof: each wing and block has its own height, and none of them is counted.
-    // The boxes Mabou's main street and the Prince Street house replace are left out; their own roofs come from mabouMain.roofAt and princeSite.roofBoxes.
-    /^const boxRoofAt = roofHeights\(ERA\.modern && buildingList \? drawnWithout\(mabouSite \? mabouSite\.drawn\(buildingList\) : buildingList, princeBox\) : \[\], manifest\.village, EXAG, SEA_LEVEL\);/,
-    // The drawing: less the porch house, the house on D.R.'s Lane, the Prince Street house and the places Mabou's main street models (all stay properties).
-    /^const drawnBuildings = buildingList \? drawnWithout\(buildingList, porchBox, drLaneBox, princeBox\) : buildingList;$/,
+    // The boxes Mabou's main street, Prince Street and Blackstone Road houses replace are left out; their own roofs come from mabouMain.roofAt, princeSite.roofBoxes and blackstoneSite.roofBoxes.
+    /^const boxRoofAt = roofHeights\(ERA\.modern && buildingList \? drawnWithout\(mabouSite \? mabouSite\.drawn\(buildingList\) : buildingList, princeBox, blackstoneBox\) : \[\], manifest\.village, EXAG, SEA_LEVEL\);/,
+    // The drawing: less the porch house, the house on D.R.'s Lane, the Prince Street house, the Blackstone Road house and the places Mabou's main street models (all stay properties).
+    /^const drawnBuildings = buildingList \? drawnWithout\(buildingList, porchBox, drLaneBox, princeBox, blackstoneBox\) : buildingList;$/,
     // The public wharves keep clear of every surveyed footprint, wings included (footprints only, nothing is counted).
     /^const wharves = .*\(buildings \? buildingList \?\? \[\] : \[\]\)\.map\(b => b\.footprint\)\) : null;$/,
     // The yard dog's invented driveway only asks if the list exists. Its houses come from `properties` (next assert).
