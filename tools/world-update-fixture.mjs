@@ -152,7 +152,7 @@ export function expectedDrive({ started = true, hidden = false, fly = false, abs
 export function expectedEnding({ absent = false, spied = false } = {}) {
   return [
     call('quality', .05, true), call('roadScene.pause', true), call('endings', .05), call('pad.show', false), call('radio', false, true),
-    call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), ...wharfLines(spied), world('trees', '@terrain.drawnFine', '@camera.position'), quiet('puddles'),
+    call('camera.matrix'), call('sky', '@camera.position'), world('terrain', '@camera', true), ...wharfLines(spied), world('trees', '@terrain.drawnFine', '@camera.position'), quiet('puddles'), quiet('blackstone'),
     world('coast', '@camera.position'), world('lotProps', '@camera', '@vehicle'), world('airport', '@camera.position'), world('quarry', '@camera.position', '@vehicle'), world('landmarks', '@camera'), world('roads', '@camera.position'),
     canalLine(spied), world('props', '@camera', 0), world('sidewalks'), world('fishing', 0, '@camera.position'), call('clipping', !absent), world('mirror', '@camera'),
     call('render', '@scene', '@camera'), call('water.settle'), call('water.afterRender', '@camera'), call('raf', '@function'),

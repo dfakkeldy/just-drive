@@ -63,7 +63,7 @@ export class BlackstoneHouse implements HandBuiltPlace {
   readonly group = new THREE.Group();
   private local = new THREE.Group();   // house axes: x is u, z is v
   private solids: Solid[] = [];
-  private built = false; private near = false; private drawnOk = false;
+  private built = false; private near = false; private drawnOk = false; private groundSig = NaN;
   private material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   private probes: { x: number; z: number }[];
   triangles = 0;
@@ -76,10 +76,11 @@ export class BlackstoneHouse implements HandBuiltPlace {
     this.group.add(this.local);
     this.group.visible = false;
     this.probes = ([[0, 0], [PARCEL_BOX.u, PARCEL_BOX.v], [25, -4], [43, 3], [-16, -9]] as [number, number][]).map(([u, v]) => site.world(u, v));
+    this.initSolids();
   }
 
-  /** True while the house is near and its model is still to come: a picture should wait. */
-  get waiting(): boolean { return this.near && !this.built; }
+  /** True while the house is near, unbuilt, and L8 terrain is still loading or ready to build (never hangs on L7-only LOW). */
+  get waiting(): boolean { return this.near && !this.built && ((this.terrain.pending ?? 0) > 0 || this.ready()); }
 
   private g = (u: number, v: number): number => {
     const w = this.site.world(u, v);
@@ -95,13 +96,28 @@ export class BlackstoneHouse implements HandBuiltPlace {
     return true;
   }
 
+  private probeGroundSig(): number {
+    let sig = 0;
+    const fb = this.lift(this.site.level);
+    for (let i = 0; i < this.probes.length; i++) {
+      const p = this.probes[i];
+      const h = this.terrain.meshHeightAt?.(p.x, p.z, true) ?? this.terrain.heightAt(p.x, p.z) ?? fb;
+      sig += h * (i + 1);
+    }
+    return sig;
+  }
+
   update(view: THREE.Vector3, _now: number, car: { x: number; z: number }): void {
     const o = this.site.origin, far = Math.min(Math.hypot(view.x - o.x, view.z - o.z), Math.hypot(car.x - o.x, car.z - o.z));
     this.near = far < 900;
     const ok = (this.near || (this.built && far < 1600)) && this.ready();
-    if (ok && (!this.built || !this.drawnOk)) {
-      this.build();
-      this.built = true;
+    if (ok) {
+      const sig = this.probeGroundSig();
+      if (!this.built || sig !== this.groundSig) {
+        this.build();
+        this.built = true;
+        this.groundSig = sig;
+      }
     }
     this.drawnOk = ok;
     this.group.visible = this.built && this.drawnOk && far < 1600;
@@ -109,7 +125,6 @@ export class BlackstoneHouse implements HandBuiltPlace {
 
   /** House, porches/decks, sheds, barn, hoop shelters, lumber pile, parcel chest and west maple trunks stop the car. */
   resolveSolids(car: Pushable): void {
-    if (!this.built) return;
     const b = this.site.box;
     if (car.x < b[0] || car.x > b[2] || car.z < b[1] || car.z > b[3]) return;
     pushOut(car, this.solids);
@@ -123,9 +138,25 @@ export class BlackstoneHouse implements HandBuiltPlace {
       : { x: w.x, z: w.z, half: hv, halfWidth: hu, heading: this.site.heading(0, 1) });
   }
 
+  /** Horizontal collision solids are fixed in site coordinates and active consistently before and after L8 loads. */
+  private initSolids(): void {
+    this.solid(NW_WING.u0, MAIN.u1, -MAIN.half, MAIN.half);
+    this.solid(PORCH.u0, PORCH.u1, PORCH.stairV0, -MAIN.half);
+    this.solid(SE_DECK.u0, SE_DECK.u1, SE_DECK.stairV0, SE_DECK.v1);
+    this.solid(WEST_SHED.u0, WEST_SHED.u1, WEST_SHED.v0, WEST_SHED.v1);
+    this.solid(EAST_BARN.u0, EAST_BARN.u1, EAST_BARN.v0, EAST_BARN.v1);
+    this.solid(HOOP_WEST.u0, HOOP_WEST.u1, HOOP_WEST.v0, HOOP_WEST.v1);
+    this.solid(HOOP_EAST.u0, HOOP_EAST.u1, HOOP_EAST.v0, HOOP_EAST.v1);
+    this.solid(18.0, 24.5, 4.4, 6.6);                                          // lumber stack
+    this.solid(-15.0, -12.0, 5.2, 7.8);                                        // west backyard playset
+    this.solid(PARCEL_BOX.u - 0.5, PARCEL_BOX.u + 0.5, PARCEL_BOX.v - 0.4, PARCEL_BOX.v + 0.4);
+    for (const [u, v, r] of [[-14.8, -13.2, 0.24], [-18.8, -12.4, 0.21], [-13.6, -5.8, 0.18], [-21.6, -9.2, 0.23]]) {
+      this.solid(u - r - 0.12, u + r + 0.12, v - r - 0.12, v + r + 0.12);
+    }
+  }
+
   private build(): void {
     for (const child of [...this.local.children]) { this.local.remove(child); (child as THREE.Mesh).geometry?.dispose(); }
-    this.solids = [];
     const m = new Mesher(), y = this.lift(this.site.level), rnd = seeded(1454);
     this.mainHouse(m, y);
     this.vestibuleAndPorch(m, y);
@@ -139,18 +170,6 @@ export class BlackstoneHouse implements HandBuiltPlace {
     mesh.castShadow = mesh.receiveShadow = !this.low;
     this.local.add(mesh);
     this.triangles = m.triangles;
-
-    // Collision solids: house body, vestibule/porch/stairs, SE deck/stairs, outbuildings, lumber, parcel box.
-    this.solid(NW_WING.u0, MAIN.u1, -MAIN.half, MAIN.half);
-    this.solid(PORCH.u0, PORCH.u1, PORCH.stairV0, -MAIN.half);
-    this.solid(SE_DECK.u0, SE_DECK.u1, SE_DECK.stairV0, SE_DECK.v1);
-    this.solid(WEST_SHED.u0, WEST_SHED.u1, WEST_SHED.v0, WEST_SHED.v1);
-    this.solid(EAST_BARN.u0, EAST_BARN.u1, EAST_BARN.v0, EAST_BARN.v1);
-    this.solid(HOOP_WEST.u0, HOOP_WEST.u1, HOOP_WEST.v0, HOOP_WEST.v1);
-    this.solid(HOOP_EAST.u0, HOOP_EAST.u1, HOOP_EAST.v0, HOOP_EAST.v1);
-    this.solid(18.0, 24.5, 4.4, 6.6);                                          // lumber stack
-    this.solid(-15.0, -12.0, 5.2, 7.8);                                        // west backyard playset
-    this.solid(PARCEL_BOX.u - 0.5, PARCEL_BOX.u + 0.5, PARCEL_BOX.v - 0.4, PARCEL_BOX.v + 0.4);
   }
 
   /** A two-slope gable roof along local z, with white rake ends and white eave fascia boards. */
@@ -527,7 +546,6 @@ export class BlackstoneHouse implements HandBuiltPlace {
       const k = i % 3 === 0 ? TREE_RUSSET : i % 2 === 0 ? TREE_GOLD : TREE_OLIVE;
       this.crownLobe(m, u + Math.sin(a) * reach, gy, v + Math.cos(a) * reach, ch, cr, cr * 0.78, shade(k, 0.9 + rnd() * 0.18), rnd() * 6.3);
     }
-    this.solid(u - r - 0.12, u + r + 0.12, v - r - 0.12, v + r + 0.12);
   }
 
   /** Rounded multi-lobe autumn shrub. */

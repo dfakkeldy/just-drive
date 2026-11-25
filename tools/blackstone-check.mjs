@@ -15,7 +15,7 @@ import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { roofHeights } from '../web/src/drone.ts';
 import { Props } from '../web/src/props.ts';
 import { SXS_SPEC } from '../web/src/sxs.ts';
-import { paintSiteSurface } from '../web/src/terrain.ts';
+import { Terrain } from '../web/src/terrain.ts';
 import { TRUCK_SPEC } from '../web/src/truck.ts';
 import { CAR_SPEC } from '../web/src/vehicle-spec.ts';
 import {
@@ -262,123 +262,95 @@ function loadLevel(level, exag, applySite = true) {
   return { heightAt, meshY, exag, tileFor, tileSize, mpp, active };
 }
 
-// Verify zero production mesh height (ground + averaged canopy hull) or 4-texel bilinear surfaceAt() road changes
-// along Blackstone Road and Smithville Road across L5, L6, L7, L8.
-const dScale = manifest.roads.encoding.distance, wScale = manifest.roads.encoding.halfWidth, zero = 128;
-const cs = manifest.canopy.scale, hasTrees = new Set(manifest.trees?.tiles ?? []);
-const smoothstep = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+// Verify zero production Terrain meshHeightAt() or surfaceAt() road changes along Blackstone Road and Smithville Road
+// across L5, L6, L7, L8 using two real production Terrain instances (base vs site + addTreeClear).
+THREE.TextureLoader.prototype.load = () => new THREE.Texture();
+globalThis.fetch = async (path) => new Response(readFileSync(String(path)));
+globalThis.createImageBitmap = async (blob) => {
+  const p = decodePng(Buffer.from(await blob.arrayBuffer()));
+  const pixels = new Uint8ClampedArray(p.w * p.h * 4);
+  for (let i = 0; i < p.w * p.h; i++) {
+    pixels[i * 4] = p.data[i * p.bpp];
+    pixels[i * 4 + 1] = p.data[i * p.bpp + 1];
+    pixels[i * 4 + 2] = p.data[i * p.bpp + 2];
+    pixels[i * 4 + 3] = p.bpp === 4 ? p.data[i * 4 + 3] : 255;
+  }
+  return { pixels, width: p.w, height: p.h, close() {} };
+};
+globalThis.OffscreenCanvas = class {
+  getContext() {
+    let bmp;
+    return { clearRect() {}, drawImage(b) { bmp = b; }, getImageData() { return { data: bmp.pixels }; } };
+  }
+};
+const shared = {
+  sunDir: { value: new THREE.Vector3(0.5, 0.7, 0.5) },
+  sunCol: { value: new THREE.Color(1, 1, 1) },
+  skyCol: { value: new THREE.Color(0.5, 0.7, 1) },
+  fogCol: { value: new THREE.Color(0.7, 0.8, 0.9) },
+  fogNear: { value: 200 },
+  fogFar: { value: 12000 },
+  time: { value: 0 },
+};
 for (const level of [5, 6, 7, 8]) {
-  const tileSize = manifest.size / 2 ** level, seg = level <= 6 ? 64 : 128, step = 256 / seg, mpp = tileSize / 256;
-  const active = mpp <= site.maxTexel, win = Math.max(2, Math.round(6 / Math.max(mpp, 1))), stride = Math.max(1, Math.round(win / 2));
-  const { scale, offset } = manifest.height;
-  const tileCache = new Map();
-  const buildTile = (ti, tj) => {
-    const key = `${ti}_${tj}`;
-    if (tileCache.has(key)) return tileCache.get(key);
-    const png = decodePng(readFileSync(`${AREA}${level}/${key}.png`));
-    const rpng = decodePng(readFileSync(`${AREA}${level}/${key}.r.png`));
-    const S = png.w, T = S - 1, x0 = manifest.origin[0] + ti * tileSize - manifest.village[0], z0 = manifest.village[1] - (manifest.origin[1] - tj * tileSize);
-    const hull = !(level === 8 && hasTrees.has(key));
-    const buildSide = (withSite) => {
-      const road = new Uint8ClampedArray(S * S * 4), ground = new Float32Array(S * S), canopy = new Float32Array(S * S);
-      for (let i = 0; i < S * S; i++) {
-        road[i * 4] = rpng.data[i * rpng.bpp];
-        road[i * 4 + 1] = rpng.data[i * rpng.bpp + 1];
-        road[i * 4 + 2] = rpng.data[i * rpng.bpp + 2];
-        road[i * 4 + 3] = rpng.bpp === 4 ? rpng.data[i * 4 + 3] : 255;
-      }
-      for (let py = 0; py < S; py++) for (let px = 0; px < S; px++) {
-        const k = py * S + px, x = x0 + px * mpp, z = z0 + py * mpp;
-        let raw = offset + (png.data[k * 3] * 256 + png.data[k * 3 + 1]) * scale;
-        if (withSite && active && x >= site.box[0] && x <= site.box[2] && z >= site.box[1] && z <= site.box[3]) {
-          raw = site.height(x, z, raw);
-          const f = site.surface(x, z, raw, level);
-          if (f) paintSiteSurface(road, k * 4, f, zero, dScale, wScale);
-        }
-        ground[k] = raw * 2.5;
-        let c = png.data[k * 3 + 2] * cs;
-        if (road[k * 4 + 2] > 0) {
-          const d = Math.abs(road[k * 4] - zero) * dScale, hw = road[k * 4 + 1] * wScale;
-          c *= smoothstep(hw + 0.8, hw + 4.5, d);
-        }
-        if (withSite && active && x >= site.box[0] && x <= site.box[2] && z >= site.box[1] && z <= site.box[3] && site.clearCanopy(x, z, level)) c = 0;
-        canopy[k] = c;
-      }
-      const gridY = (a, b) => {
-        const ga = a * step, gb = b * step, k0 = gb * S + ga;
-        let c = 0;
-        if (hull) {
-          let cnt = 0;
-          for (let vv = -win; vv <= win; vv += stride) {
-            const bb = gb + vv; if (bb < 0 || bb > T) continue;
-            for (let uu = -win; uu <= win; uu += stride) {
-              const aa = ga + uu; if (aa >= 0 && aa <= T) { c += canopy[bb * S + aa]; cnt++; }
-            }
-          }
-          c /= cnt;
-          if (road[k0 * 4 + 2] > 0) {
-            const hw = road[k0 * 4 + 1] * wScale;
-            c *= smoothstep(hw + 0.8, hw + 6, Math.abs(road[k0 * 4] - zero) * dScale);
-          }
-        }
-        return ground[k0] + c;
-      };
-      const meshY = (x, z) => {
-        const fa = ((x - x0) / tileSize) * seg, fb = ((z - z0) / tileSize) * seg;
-        const a = Math.max(0, Math.min(Math.floor(fa), seg - 1)), b = Math.max(0, Math.min(Math.floor(fb), seg - 1));
-        const fu = fa - a, fv = fb - b;
-        const h00 = gridY(a, b), h10 = gridY(a + 1, b), h01 = gridY(a, b + 1), h11 = gridY(a + 1, b + 1);
-        return fu + fv <= 1 ? h00 + fu * (h10 - h00) + fv * (h01 - h00) : h11 + (1 - fu) * (h01 - h11) + (1 - fv) * (h10 - h11);
-      };
-      const roadSample = (x, z) => {
-        const fa = ((x - x0) / tileSize) * T, fb = ((z - z0) / tileSize) * T;
-        const a = Math.max(0, Math.min(Math.floor(fa), T - 1)), b = Math.max(0, Math.min(Math.floor(fb), T - 1));
-        const u = fa - a, v = fb - b, k = (Math.min(Math.round(fb), T) * S + Math.min(Math.round(fa), T)) * 4, k00 = (b * S + a) * 4;
-        const whole = road[k00 + 2] > 0 && road[k00 + 6] > 0 && road[k00 + S * 4 + 2] > 0 && road[k00 + S * 4 + 6] > 0;
-        const distByte = whole
-          ? (road[k00] * (1 - u) + road[k00 + 4] * u) * (1 - v) + (road[k00 + S * 4] * (1 - u) + road[k00 + S * 4 + 4] * u) * v
-          : road[k];
-        return { kind: road[k + 2] & 15, halfWidth: road[k + 1] * wScale, roadDist: Math.abs(distByte - zero) * dScale };
-      };
-      return { meshY, roadSample };
-    };
-    const res = { base: buildSide(false), site: buildSide(true) };
-    tileCache.set(key, res);
-    return res;
-  };
+  const baseTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, []);
+  const siteTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, []);
+  siteTerrain.sites.push(site);
+  for (const box of site.clear) siteTerrain.addTreeClear(box);
+  const tileSize = manifest.size / 2 ** level;
+  const needed = new Set();
   for (const pt of roadSamples) {
     const ti = Math.floor((pt.x + manifest.village[0] - manifest.origin[0]) / tileSize);
     const tj = Math.floor((manifest.origin[1] - (manifest.village[1] - pt.z)) / tileSize);
-    const { base, site: withSite } = buildTile(ti, tj);
-    assert.equal(withSite.meshY(pt.x, pt.z), base.meshY(pt.x, pt.z),
-      `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production mesh height bit-for-bit unchanged`);
-    const rb = base.roadSample(pt.x, pt.z), rs = withSite.roadSample(pt.x, pt.z);
-    assert.equal(rs.kind, rb.kind, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt kind unchanged`);
-    assert.equal(rs.halfWidth, rb.halfWidth, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt halfWidth unchanged`);
-    assert.equal(rs.roadDist, rb.roadDist,
-      `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt roadDist bit-for-bit unchanged`);
+    needed.add(`${ti}_${tj}`);
+  }
+  for (const key of needed) {
+    const [ti, tj] = key.split('_').map(Number);
+    await baseTerrain.loadNow(level, ti, tj);
+    await siteTerrain.loadNow(level, ti, tj);
+  }
+  for (const pt of roadSamples) {
+    assert.equal(siteTerrain.meshHeightAt(pt.x, pt.z), baseTerrain.meshHeightAt(pt.x, pt.z),
+      `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production Terrain.meshHeightAt bit-for-bit unchanged`);
+    const sb = baseTerrain.surfaceAt(pt.x, pt.z), ss = siteTerrain.surfaceAt(pt.x, pt.z);
+    assert.ok(sb && ss, `L${level} surfaceAt present`);
+    assert.equal(ss.kind, sb.kind, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production surfaceAt.kind unchanged`);
+    assert.equal(ss.halfWidth, sb.halfWidth, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production surfaceAt.halfWidth unchanged`);
+    assert.equal(ss.roadDist, sb.roadDist, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production surfaceAt.roadDist bit-for-bit unchanged`);
   }
 }
 
 for (const exag of [2.5, 3]) {
   const L8 = loadLevel(8, exag);
   for (const isLow of [false, true]) {
-    let drawn = 7, cached = 7;
+    let drawn = 7, cached = 7, pending = 0;
     const realTerrain = {
       heightAt: (x, z) => L8.heightAt(x, z),
       meshHeightAt: (x, z, drawnOnly) => (drawnOnly && drawn === 8 ? L8.meshY(x, z) : L8.heightAt(x, z)),
       drawnLevelAt: () => drawn,
       levelAt: () => cached,
+      get pending() { return pending; },
     };
     const h = new BlackstoneHouse(site, realTerrain, (m) => m * exag, isLow);
-    // Before L8 is drawn (L7, L6 or null), the house stays hidden so it never sits on ungraded coarse terrain or canopy hull.
-    h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
-    assert.equal(h.group.visible, false, `L7 exag=${exag} low=${isLow}: stays hidden until L8 is drawn`);
+    // Consistent collision solids before first L8 build (matches post-build hidden state and drone roof boxes).
+    const preW = site.world(-2, 0), preCar = { x: preW.x, z: preW.z, vx: 0, vz: 0, speed: 0, heading: 0 };
+    h.resolveSolids(preCar);
+    const prePush = Math.hypot(preCar.x - preW.x, preCar.z - preW.z);
+    assert.ok(prePush > 2.5, `exag=${exag} low=${isLow}: solids active before L8 build (${prePush.toFixed(2)} m)`);
+    // Cold LOW visit at 850 m with L7 drawn and pending=0 must NOT hang waiting=true.
+    h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z + 850), 0, { x: site.origin.x, z: site.origin.z + 850 });
+    assert.equal(h.group.visible, false, `L7 850 m exag=${exag} low=${isLow}: stays hidden until L8 is drawn`);
+    assert.equal(h.waiting, false, `L7 850 m exag=${exag} low=${isLow}: waiting=false when pending=0 and L8 not drawn`);
+    // While L8 is actively loading (pending > 0), waiting=true.
+    pending = 2;
+    assert.equal(h.waiting, true, `exag=${exag} low=${isLow}: waiting=true while near and terrain.pending > 0`);
+    pending = 0;
     // Once L8 is drawn, build and verify parcel box, detached outbuildings, front west window sill and drone roof floor.
     drawn = 8; cached = 8;
     h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
     assert.equal(h.group.visible, true, `L8 exag=${exag} low=${isLow}: visible once L8 is drawn`);
-    const mesh = h.group.children[0].children[0], pos = mesh.geometry.getAttribute('position');
+    assert.equal(h.waiting, false, `L8 exag=${exag} low=${isLow}: waiting=false once built`);
+    const mesh = h.group.children[0].children[0], firstGeo = mesh.geometry, pos = firstGeo.getAttribute('position');
     assert.ok(pos.count > 9000, `L8 exag=${exag} low=${isLow}: geometry built (${pos.count / 3} tris)`);
     const pbW = site.world(PARCEL_BOX.u, PARCEL_BOX.v), pbGround = L8.meshY(pbW.x, pbW.z);
     let pbLo = Infinity;
@@ -427,24 +399,29 @@ for (const exag of [2.5, 3]) {
       const openLawnW = site.world(24, -10);
       assert.equal(ownRoofAt(openLawnW.x, openLawnW.z), -Infinity, `exag=${exag}: open east lawn has no phantom roof floor`);
     }
-    // Dropping back to L7, L6, or null (even with L8 still cached) hides the house cleanly; returning to L8 shows it again.
+    // Dropping back to L7, L6, or null (even with L8 still cached) hides the house cleanly; returning to the SAME L8
+    // retains the existing mesh geometry without rebuilding, and hidden collision matches pre-build collision.
     for (const [label, lvl, dist] of [['L7 with L8 cached', 7, 1180], ['L6 at 1590 m', 6, 1590], ['null drawn with L8 cached', null, 100]]) {
       drawn = lvl; cached = 8;
       h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z + dist), 0, { x: site.origin.x, z: site.origin.z + dist });
       assert.equal(h.group.visible, false, `exag=${exag} low=${isLow}: hides on ${label}`);
     }
+    const hidCar = { x: preW.x, z: preW.z, vx: 0, vz: 0, speed: 0, heading: 0 };
+    h.resolveSolids(hidCar);
+    assert.equal(Math.hypot(hidCar.x - preW.x, hidCar.z - preW.z), prePush, `exag=${exag} low=${isLow}: hidden collision matches pre-build`);
     drawn = 8; cached = 8;
     h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
     assert.equal(h.group.visible, true, `exag=${exag} low=${isLow}: returns cleanly when L8 is drawn again`);
+    assert.equal(h.group.children[0].children[0].geometry, firstGeo, `exag=${exag} low=${isLow}: retains geometry across L8 -> null -> same L8`);
   }
 }
 
-// Frame order & tree-only clear boxes: main.ts must update BlackstoneHouse in landscape after terrain and add clear boxes via addTreeClear.
+// Frame order & tree-only clear boxes: main.ts must update BlackstoneHouse in landscape after terrain (including ending/replay frames).
 const mainSrc = readFileSync('web/src/main.ts', 'utf8');
 const terrainIdx = mainSrc.indexOf("name: 'terrain', segment: 'landscape'");
-const bsIdx = mainSrc.indexOf("name: 'blackstone', segment: 'landscape'");
-assert.ok(terrainIdx >= 0 && bsIdx > terrainIdx, 'main.ts updates blackstone in landscape after terrain selection');
+const bsIdx = mainSrc.indexOf("name: 'blackstone', segment: 'landscape', ending: true");
+assert.ok(terrainIdx >= 0 && bsIdx > terrainIdx, 'main.ts updates blackstone in landscape (ending: true) after terrain selection');
 assert.ok(mainSrc.includes("name !== 'blackstone'"), 'main.ts excludes blackstone from before-camera places loop');
 assert.ok(mainSrc.includes('blackstoneSite.clear) terrain.addTreeClear'), 'main.ts registers blackstone clear boxes as tree-only so coarse terrain stays untouched');
 
-console.log(`PASS blackstone: desktop ${desktop.triangles} tris, LOW ${low.triangles} tris, L5-L8 production hull & bilinear road surfaceAt untouched, road-edge solids & mailbox sweep clear (car/truck/sxs), rear SE deck collider, 7->8->7->6 grounding & roof floor (2.5x & 3x)`);
+console.log(`PASS blackstone: desktop ${desktop.triangles} tris, LOW ${low.triangles} tris, production Terrain L5-L8 meshHeightAt & surfaceAt bit-for-bit untouched, Props.hitCar & solids clear (car/truck/sxs), no L7 loading hang, geometry retained across visibility toggles, ending: true frame order`);

@@ -2444,7 +2444,7 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   { name: 'puddles', segment: 'landscape', ending: true, update: () => puddles?.refit(camera.position) },
   // After the terrain update, so the Prince Street and Blackstone Road driveways match the tile level drawn this frame.
   { name: 'prince', segment: 'landscape', ending: false, update: (dt, _realDt, now) => places.prince.place?.update(camera.position, now, vehicle, dt) },
-  { name: 'blackstone', segment: 'landscape', ending: false, update: (dt, _realDt, now) => places.blackstone.place?.update(camera.position, now, vehicle, dt) },
+  { name: 'blackstone', segment: 'landscape', ending: true, update: (dt, _realDt, now) => places.blackstone.place?.update(camera.position, now, vehicle, dt) },
   ...(fleet ? [{ name: 'fleet', segment: 'landscape' as const, ending: true, update: (dt: number) => { fleet!.refresh(dt); fleet!.draw(camera.position); updateFleetHud?.(); } }] : []),
   { name: 'coast', segment: 'landscape', ending: true, update: () => coast?.update(camera.position) },
   { name: 'lotProps', segment: 'landscape', ending: true, update: () => lotProps?.update(camera, vehicle) },
