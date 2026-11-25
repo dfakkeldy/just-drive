@@ -56,6 +56,24 @@ for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(co
  if(host!=='justdrive.fakkeldy.ca')assert.equal(r.headers.location,'https://justdrive.fakkeldy.ca/judique?driveAt=630770.2,5080667.56,84',`${method} ${host}${path} cross-host location`);
  if(method==='GET')table.push({host,path,status:r.status,bytes:r.body.length,sha256:sha(r.body),title:'',cache:r.headers['cache-control']??'',location:r.headers.location??''});
 }
+// The page a /blackstone Location reaches: status 200, the built mail index.html byte for byte, the mail title,
+// and a Location that still carries the mode and start keys (the server was asked for exactly that address).
+function assertMailPage(response,indexPath,dest,what){
+ assert.equal(response.status,200,what+' status');
+ assert.equal(sha(response.body),sha(readFileSync(indexPath)),what+' is the built mail page');
+ assert.match(response.body.toString(),/<title>Mabou Mail Madness<\/title>/,what+' mail title');
+ assert.equal(dest.searchParams.get('mode'),'mail',what+' keeps mode');
+ assert.equal(dest.searchParams.get('start'),'blackstone-road:0.43',what+' keeps start');
+}
+{
+ // Negative controls: a missing built index.html, a wrong page and a dropped query must each fail.
+ const dest=new URL('https://mmm.fakkeldy.ca/?mode=mail&start=blackstone-road:0.43'),ok=await request('mmm.fakkeldy.ca','/'+dest.search);
+ assertMailPage(ok,site+'/index.html',dest,'control');
+ assert.throws(()=>assertMailPage(ok,site+'/no-such-built-index.html',dest,'control'),/ENOENT/);
+ assert.throws(()=>assertMailPage({...ok,status:404},site+'/index.html',dest,'control'),/status/);
+ assert.throws(()=>assertMailPage({...ok,body:Buffer.from('<title>Just Drive</title>')},site+'/index.html',dest,'control'),/built mail page/);
+ assert.throws(()=>assertMailPage(ok,site+'/index.html',new URL('https://mmm.fakkeldy.ca/'),'control'),/keeps mode/);
+}
 // Short link to the mail game on Blackstone Road: the same 302 on every host, with no Worker run.
 for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(const path of ['/blackstone','/blackstone/'])for(const method of ['GET','HEAD']){
  const r=await request(host,path,{},method);assert.equal(r.status,302,`${method} ${host}${path}`);
@@ -64,7 +82,12 @@ for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(co
  assert.equal(dest.pathname+dest.search,'/?mode=mail&start=blackstone-road:0.43',`${method} ${host}${path} target`);
  if(host!=='mmm.fakkeldy.ca'&&host!=='localhost')assert.equal(r.headers.location,'https://mmm.fakkeldy.ca/?mode=mail&start=blackstone-road:0.43',`${method} ${host}${path} cross-host location`);
  assert.equal(r.headers['cache-control'],undefined,`${method} ${host}${path} served by static assets, not Worker no-store`);
- if(method==='GET')table.push({host,path,status:r.status,bytes:r.body.length,sha256:sha(r.body),title:'',cache:r.headers['cache-control']??'',location:r.headers.location??''});
+ if(method==='GET'){
+  // Follow the real Location from the same local server: the built mail page must come back with the query intact.
+  const followed=await request(dest.hostname,dest.pathname+dest.search);
+  assertMailPage(followed,site+'/index.html',dest,`${host}${path} followed`);
+  table.push({host,path,status:r.status,bytes:r.body.length,sha256:sha(r.body),title:'',cache:r.headers['cache-control']??'',location:r.headers.location??''});
+ }
 }
 {
  const r=await request('justdrive.fakkeldy.ca','/judique?driveAt=630770.2,5080667.56,84');

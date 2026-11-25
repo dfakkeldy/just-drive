@@ -12,6 +12,7 @@ import { AREAS } from '../web/src/area.ts';
 import { HISTORY_AREAS } from '../web/src/eras/history-areas.ts';
 import { harness } from './pwa-harness.mjs';
 import { justPage } from './site-pages.mjs';
+import { distanceToLine, independentPoint } from './blackstone-point.mjs';
 
 process.on('uncaughtException', e => { console.error(e.name + ': ' + e.message); process.exit(1); });
 
@@ -67,19 +68,6 @@ export function verifyRdmcRedirects(text, churchStart, readDrivePosition, isTest
   return { expectedUrl, rules };
 }
 
-/** Metres from a point to the nearest part of a road line (segments, not only vertices). */
-export function distanceToLine(px, pz, pts) {
-  let best = Infinity;
-  for (let i = 1; i < pts.length; i++) {
-    const [ax, az] = pts[i - 1], [bx, bz] = pts[i], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
-    const t = l2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / l2)) : 0;
-    best = Math.min(best, Math.hypot(px - ax - t * dx, pz - az - t * dz));
-  }
-  return best;
-}
-
-const lineLength = pts => pts.reduce((sum, p, i) => i ? sum + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0, 0);
-
 /** The game mode the link opens with, even when the browser saved Explore or Get Fired. */
 export function assertMailMode(url, readMode, readSite) {
   const target = new URL(url);
@@ -89,12 +77,11 @@ export function assertMailMode(url, readMode, readSite) {
   }
 }
 
-/** The pose pins the share: it is 0.43 of the longest Blackstone Road piece, and no other share gives it. */
-export function assertSharePinned(pose, otherPose, roads) {
-  const pieces = roads.filter(r => r.name === 'Blackstone Road' && r.kind >= 1 && r.kind <= 3 && !r.bridge && r.pts.length >= 2);
-  const total = Math.max(...pieces.map(r => lineLength(r.pts)));
-  assert.ok(Math.abs(pose.distance - total * (1 - 0.43)) < 1, `start pose is 0.43 of the road (${pose.distance.toFixed(1)} m left of ${total.toFixed(1)} m)`);
-  assert.ok(Math.hypot(pose.x - otherPose.x, pose.z - otherPose.z) > 1, 'share 0.40 gives another place than share 0.43');
+/** The start pose is where 0.43 of the road lies (within 1 m), and share 0.40 is another place. */
+export function assertSharePinned(pose, roads) {
+  const want = independentPoint(roads, 0.43), wrong = independentPoint(roads, 0.40);
+  assert.ok(Math.hypot(pose.x - want.x, pose.z - want.z) < 1, `start pose is 0.43 of the road (${Math.hypot(pose.x - want.x, pose.z - want.z).toFixed(1)} m from the independent point)`);
+  assert.ok(Math.hypot(want.x - wrong.x, want.z - wrong.z) > 1, 'share 0.40 is another place than share 0.43');
 }
 
 /**
@@ -118,9 +105,7 @@ export function verifyBlackstoneRedirects(text, startKey, isTestVisit, readSite,
     assert.ok(pose, `${sourcePath} start key gives a pose inside the land`);
     const near = Math.min(...roads.filter(r => r.name === 'Blackstone Road').map(r => distanceToLine(pose.x, pose.z, r.pts)));
     assert.ok(near <= BLACKSTONE_NEAR, `${sourcePath} start pose lies within ${BLACKSTONE_NEAR} m of Blackstone Road (${near.toFixed(1)} m)`);
-    const other = startKey('blackstone-road:0.40', roads, bounds);
-    assert.ok(other, 'share 0.40 gives a pose');
-    assertSharePinned(pose, other, roads);
+    assertSharePinned(pose, roads);
   }
   return { expectedUrl: BLACKSTONE_URL, rules };
 }
@@ -355,9 +340,12 @@ if (isMain) {
   assert.ok(startKey('blackstone-road:0.43', roads, bounds), 'share 0.43 is read by the start key');
   // The share is pinned: share 0.40 (a different place, even on a dense road) is not accepted as 0.43.
   const pose43 = startKey('blackstone-road:0.43', roads, bounds), pose40 = startKey('blackstone-road:0.40', roads, bounds);
-  assertSharePinned(pose43, pose40, roads);
-  assert.throws(() => assertSharePinned(pose40, pose43, roads), /is 0\.43 of the road/);
-  assert.throws(() => assertSharePinned(pose43, pose43, roads), /another place/);
+  assertSharePinned(pose43, roads);
+  assert.throws(() => assertSharePinned(pose40, roads), /is 0\.43 of the road/);
+  // The coordinates of share 0.46 with the distance of share 0.43 must not pass.
+  const pose46 = startKey('blackstone-road:0.46', roads, bounds);
+  assert.throws(() => assertSharePinned({ ...pose43, x: pose46.x, z: pose46.z }, roads), /is 0\.43 of the road/);
+  assert.throws(() => assertSharePinned({ ...pose43, x: pose43.z, z: pose43.x }, roads), /is 0\.43 of the road/);
   // Distance is measured to the line segments, not only the vertices.
   assert.equal(distanceToLine(5, 3, [[0, 0], [10, 0]]), 3);
   assert.throws(() => blackstoneCheck(sourceRedirects, bounds, roads.map(r => ({ ...r, name: r.name === 'Blackstone Road' ? 'Other Road' : r.name }))), /gives a pose/);
