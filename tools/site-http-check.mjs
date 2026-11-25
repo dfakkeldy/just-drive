@@ -56,36 +56,51 @@ for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(co
  if(host!=='justdrive.fakkeldy.ca')assert.equal(r.headers.location,'https://justdrive.fakkeldy.ca/judique?driveAt=630770.2,5080667.56,84',`${method} ${host}${path} cross-host location`);
  if(method==='GET')table.push({host,path,status:r.status,bytes:r.body.length,sha256:sha(r.body),title:'',cache:r.headers['cache-control']??'',location:r.headers.location??''});
 }
-// The page a /blackstone Location reaches: status 200, the built mail index.html byte for byte, the mail title,
-// and a Location that still carries the mode and start keys (the server was asked for exactly that address).
-function assertMailPage(response,indexPath,dest,what){
+// The page a /blackstone Location reaches. The rehearsal serves every host from one local server and picks the site by
+// the Host header, so the only mapping to the local origin is: connect to `base`, send Host = the resolved Location's host
+// (with its port). The outgoing request is recorded, and the full URL it stands for must be the expected target.
+const BLACKSTONE_TARGET='https://mmm.fakkeldy.ca/?mode=mail&start=blackstone-road:0.43';
+const sentRequests=[];
+async function followLocation(from,location){
+ // The rehearsal speaks plain http, so a Location on the request's own host comes back as http. That scheme is the one
+ // mapping allowed (http to https on the same host); a port or any other difference stays and fails the comparison.
+ const resolved=new URL(location,from);
+ if(resolved.protocol==='http:'&&resolved.hostname===new URL(from).hostname)resolved.protocol='https:';
+ assert.equal(resolved.href,BLACKSTONE_TARGET,`Location ${location} from ${from} resolves to the target (scheme, host, port, path and query)`);
+ return followResolved(resolved);
+}
+async function followResolved(resolved){
+ const sent={host:resolved.host,path:resolved.pathname+resolved.search};sentRequests.push(sent);
+ return {sent,response:await request(sent.host,sent.path)};
+}
+// Status 200, the built mail index.html byte for byte, the mail title, and an outgoing request whose full URL is the target.
+function assertMailPage({sent,response},indexPath,what){
  assert.equal(response.status,200,what+' status');
  assert.equal(sha(response.body),sha(readFileSync(indexPath)),what+' is the built mail page');
  assert.match(response.body.toString(),/<title>Mabou Mail Madness<\/title>/,what+' mail title');
- assert.equal(dest.searchParams.get('mode'),'mail',what+' keeps mode');
- assert.equal(dest.searchParams.get('start'),'blackstone-road:0.43',what+' keeps start');
+ assert.equal('https://'+sent.host+sent.path,BLACKSTONE_TARGET,what+' outgoing request is the target (host, port, path and query)');
 }
 {
- // Negative controls: a missing built index.html, a wrong page and a dropped query must each fail.
- const dest=new URL('https://mmm.fakkeldy.ca/?mode=mail&start=blackstone-road:0.43'),ok=await request('mmm.fakkeldy.ca','/'+dest.search);
- assertMailPage(ok,site+'/index.html',dest,'control');
- assert.throws(()=>assertMailPage(ok,site+'/no-such-built-index.html',dest,'control'),/ENOENT/);
- assert.throws(()=>assertMailPage({...ok,status:404},site+'/index.html',dest,'control'),/status/);
- assert.throws(()=>assertMailPage({...ok,body:Buffer.from('<title>Just Drive</title>')},site+'/index.html',dest,'control'),/built mail page/);
- assert.throws(()=>assertMailPage(ok,site+'/index.html',new URL('https://mmm.fakkeldy.ca/'),'control'),/keeps mode/);
+ // Negative controls: a missing built index.html, a wrong status, a wrong page, a wrong port and a dropped query must each fail.
+ const ok=await followResolved(new URL(BLACKSTONE_TARGET));
+ assertMailPage(ok,site+'/index.html','control');
+ assert.throws(()=>assertMailPage(ok,site+'/no-such-built-index.html','control'),/ENOENT/);
+ assert.throws(()=>assertMailPage({...ok,response:{...ok.response,status:404}},site+'/index.html','control'),/status/);
+ assert.throws(()=>assertMailPage({...ok,response:{...ok.response,body:Buffer.from('<title>Just Drive</title>')}},site+'/index.html','control'),/built mail page/);
+ assert.throws(()=>assertMailPage({...ok,sent:{...ok.sent,host:'mmm.fakkeldy.ca:8443'}},site+'/index.html','control'),/outgoing request/);
+ assert.throws(()=>assertMailPage({...ok,sent:{...ok.sent,path:'/'}},site+'/index.html','control'),/outgoing request/);
+ await assert.rejects(()=>followLocation('http://mmm.fakkeldy.ca/blackstone','http://mmm.fakkeldy.ca:8443/?mode=mail&start=blackstone-road:0.43'),/resolves to the target/);
+ await assert.rejects(()=>followLocation('http://mmm.fakkeldy.ca/blackstone','/'),/resolves to the target/);
 }
 // Short link to the mail game on Blackstone Road: the same 302 on every host, with no Worker run.
 for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(const path of ['/blackstone','/blackstone/'])for(const method of ['GET','HEAD']){
  const r=await request(host,path,{},method);assert.equal(r.status,302,`${method} ${host}${path}`);
- const dest=new URL(r.headers.location,'https://'+host);
- assert.equal(dest.hostname,'mmm.fakkeldy.ca',`${method} ${host}${path} host`);
- assert.equal(dest.pathname+dest.search,'/?mode=mail&start=blackstone-road:0.43',`${method} ${host}${path} target`);
  if(host!=='mmm.fakkeldy.ca'&&host!=='localhost')assert.equal(r.headers.location,'https://mmm.fakkeldy.ca/?mode=mail&start=blackstone-road:0.43',`${method} ${host}${path} cross-host location`);
  assert.equal(r.headers['cache-control'],undefined,`${method} ${host}${path} served by static assets, not Worker no-store`);
  if(method==='GET'){
   // Follow the real Location from the same local server: the built mail page must come back with the query intact.
-  const followed=await request(dest.hostname,dest.pathname+dest.search);
-  assertMailPage(followed,site+'/index.html',dest,`${host}${path} followed`);
+  const followed=await followLocation('http://'+host+path,r.headers.location);
+  assertMailPage(followed,site+'/index.html',`${host}${path} followed`);
   table.push({host,path,status:r.status,bytes:r.body.length,sha256:sha(r.body),title:'',cache:r.headers['cache-control']??'',location:r.headers.location??''});
  }
 }
