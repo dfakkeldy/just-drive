@@ -502,19 +502,36 @@ for (const exag of [2.5, 3]) {
       assert.equal(st.roofAt(openW.x, openW.z), -Infinity, `exag=${exag}: open lot has no phantom live roof floor`);
 
       // Even if a future survey lowers building.ground by 0.25 m or 0.75 m while baked terrain stays unchanged,
-      // live PortHoodGas.roofAt still uses the exact built ground samples and covers every structure peak.
-      for (const groundDrop of [0.25, 0.75]) {
+      // live PortHoodGas.roofAt still covers EVERY built mesh vertex (including ridge edges with 1 m margin) on desktop & LOW.
+      for (const groundDrop of [0, 0.25, 0.75]) {
         const lowBox = PortHoodGasSite.find([{ ...found, ground: found.ground - groundDrop }]);
         assert.ok(lowBox, `survey ground drop -${groundDrop} m is accepted`);
         const lowSite = new PortHoodGasSite(lowBox, manifest.village);
-        const lowSt = new PortHoodGas(lowSite, realTerrain, (m) => m * exag, false);
-        lowSt.update(new THREE.Vector3(lowSite.origin.x, lowSite.level * exag, lowSite.origin.z), 0, { x: lowSite.origin.x, z: lowSite.origin.z });
-        for (const [sName, u0, u1, v0, v1] of structureChecks) {
-          const bounds = meshYBoundsIn(lowSt, u0, u1, v0, v1);
-          const cw = lowSite.world((u0 + u1) / 2, (v0 + v1) / 2);
-          const liveRoofH = lowSt.roofAt(cw.x, cw.z);
-          assert.ok(Number.isFinite(liveRoofH) && liveRoofH >= bounds.maxY,
-            `exag=${exag} groundDrop=-${groundDrop}: live PortHoodGas.roofAt at ${sName} (${liveRoofH.toFixed(3)}) covers built peak (${bounds.maxY.toFixed(3)})`);
+        for (const dropLow of [false, true]) {
+          const lowSt = new PortHoodGas(lowSite, realTerrain, (m) => m * exag, dropLow);
+          lowSt.update(new THREE.Vector3(lowSite.origin.x, lowSite.level * exag, lowSite.origin.z), 0, { x: lowSite.origin.x, z: lowSite.origin.z });
+          for (const child of lowSt.group.children[0].children) {
+            const pos = child.geometry.getAttribute('position');
+            for (let i = 0; i < pos.count; i++) {
+              const u = pos.getX(i), y = pos.getY(i), v = pos.getZ(i);
+              const w = lowSite.world(u, v);
+              const liveRoofH = lowSt.roofAt(w.x, w.z);
+              assert.ok(Number.isFinite(liveRoofH) && liveRoofH >= y,
+                `exag=${exag} low=${dropLow} groundDrop=-${groundDrop}: live roofAt (${liveRoofH.toFixed(3)}) covers vertex (${u.toFixed(2)}, ${v.toFixed(2)}) y=${y.toFixed(3)}`);
+            }
+          }
+          // Explicit ridge-edge approach probe on the east shed (0.5 m past each gable overhang).
+          for (const [eu, ev] of [
+            [EAST_SHED.u0 - 0.18, (EAST_SHED.v0 + EAST_SHED.v1) / 2],
+            [EAST_SHED.u1 + 0.18, (EAST_SHED.v0 + EAST_SHED.v1) / 2],
+            [EAST_SHED.u0 - 0.68, (EAST_SHED.v0 + EAST_SHED.v1) / 2],
+            [EAST_SHED.u1 + 0.68, (EAST_SHED.v0 + EAST_SHED.v1) / 2],
+          ]) {
+            const ew = lowSite.world(eu, ev);
+            const shedPeak = meshYBoundsIn(lowSt, EAST_SHED.u0, EAST_SHED.u1, EAST_SHED.v0, EAST_SHED.v1).maxY;
+            assert.ok(lowSt.roofAt(ew.x, ew.z) >= shedPeak,
+              `exag=${exag} low=${dropLow} groundDrop=-${groundDrop}: shed ridge edge (${eu.toFixed(2)}, ${ev.toFixed(2)}) covered`);
+          }
         }
       }
 

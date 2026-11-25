@@ -325,13 +325,14 @@ export class PortHoodGas implements HandBuiltPlace {
   /** Drone roof floor height at world (x, z), measured from the exact same ground samples used to build each structure. */
   roofAt(x: number, z: number): number {
     const b = this.site.box;
-    if (x < b[0] || x > b[2] || z < b[1] || z > b[3]) return -Infinity;
+    if (x < b[0] - 2 || x > b[2] + 2 || z < b[1] - 2 || z > b[3] + 2) return -Infinity;
     const { u, v } = this.site.local(x, z);
     const list = this.roofs.length ? this.roofs : this.liveRoofs();
+    const margin = 1; // match drone.ts roofHeights 1 m footprint margin
     let best = -Infinity;
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
-      if (u >= r.u0 && u <= r.u1 && v >= r.v0 && v <= r.v1 && r.top > best) best = r.top;
+      if (u >= r.u0 - margin && u <= r.u1 + margin && v >= r.v0 - margin && v <= r.v1 + margin && r.top > best) best = r.top;
     }
     return best;
   }
