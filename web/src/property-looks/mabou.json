@@ -1,0 +1,1958 @@
+{
+  "version": 1,
+  "area": "mabou",
+  "groups": {
+    "mabou-village": {
+      "label": "Mabou village",
+      "roads": [
+        "Barra Lane",
+        "Birch Street",
+        "Highland Street",
+        "Highway 19",
+        "Justin Road",
+        "Mabou Harbour Road",
+        "Mabou Road",
+        "MacKillop Road",
+        "Maple Street"
+      ]
+    }
+  },
+  "overrides": {
+    "13": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623586.1,
+        5103921.2
+      ],
+      "wall": "#385745",
+      "roof": "#6d7275",
+      "trim": "#d8dad5",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "29": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624255.2,
+        5103237.2
+      ],
+      "wall": "#96342c",
+      "roof": "#45484b",
+      "trim": "#f0efe9",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "36": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623632.2,
+        5103885.4
+      ],
+      "wall": "#687b8a",
+      "roof": "#7d8286",
+      "trim": "#e4e6e4",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "39": {
+      "group": "mabou-village",
+      "road": "Mabou Road",
+      "at": [
+        619556.2,
+        5097478.6
+      ],
+      "wall": "#79b3ab",
+      "roof": "#8c9596",
+      "trim": "#e6eae8",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "64": {
+      "group": "mabou-village",
+      "road": "Birch Street",
+      "at": [
+        623794.6,
+        5103506.1
+      ],
+      "wall": "#d9d4c4",
+      "roof": "#9c4e38",
+      "trim": "#f0eee6",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "87": {
+      "group": "mabou-village",
+      "road": "Highland Street",
+      "at": [
+        624406.7,
+        5103276.0
+      ],
+      "wall": "#6c7074",
+      "roof": "#3e4144",
+      "trim": "#eaeae4",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.5,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "89": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624321.6,
+        5103258.1
+      ],
+      "wall": "#e9e9e3",
+      "roof": "#4b4e52",
+      "trim": "#f3f3ed",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "90": {
+      "group": "mabou-village",
+      "road": "Highland Street",
+      "at": [
+        624313.3,
+        5103228.2
+      ],
+      "wall": "#d4d6d3",
+      "roof": "#4c5053",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.6,
+      "ridge": 6.2,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "91": {
+      "group": "mabou-village",
+      "road": "Highland Street",
+      "at": [
+        624282.0,
+        5103218.8
+      ],
+      "wall": "#e6e6df",
+      "roof": "#4a4d50",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.8,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "92": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624262.8,
+        5103203.2
+      ],
+      "wall": "#7f8d81",
+      "roof": "#46494c",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "129": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623641.7,
+        5102729.3
+      ],
+      "wall": "#6c7b88",
+      "roof": "#5a5d61",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "135": {
+      "group": "mabou-village",
+      "road": "Barra Lane",
+      "at": [
+        624463.6,
+        5103453.3
+      ],
+      "wall": "#e6e5de",
+      "roof": "#3e4144",
+      "trim": "#f2f1eb",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "138": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        624131.5,
+        5103312.0
+      ],
+      "wall": "#776c64",
+      "roof": "#44474b",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.6,
+      "ridge": 6.84,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "139": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623723.1,
+        5102764.3
+      ],
+      "wall": "#9aa4ad",
+      "roof": "#56595d",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.6,
+      "ridge": 6.88,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "143": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623569.9,
+        5102783.5
+      ],
+      "wall": "#e6e6e0",
+      "roof": "#525558",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "148": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623955.7,
+        5103057.0
+      ],
+      "wall": "#9a9790",
+      "roof": "#494c4f",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "149": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623597.3,
+        5102784.8
+      ],
+      "wall": "#e7e7e2",
+      "roof": "#5a5d60",
+      "trim": "#f2f2ec",
+      "door": "#2b4054",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "151": {
+      "group": "mabou-village",
+      "road": "Maple Street",
+      "at": [
+        623729.0,
+        5103617.2
+      ],
+      "wall": "#eaebe6",
+      "roof": "#474a4e",
+      "trim": "#f4f4ee",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "152": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        624336.0,
+        5103357.3
+      ],
+      "wall": "#7f8c94",
+      "roof": "#484d52",
+      "trim": "#ecece6",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 4.4,
+      "ridge": 6.2,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "156": {
+      "group": "mabou-village",
+      "road": "Birch Street",
+      "at": [
+        623772.5,
+        5103476.4
+      ],
+      "wall": "#c2c0b8",
+      "roof": "#5b5e60",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "157": {
+      "group": "mabou-village",
+      "road": "Birch Street",
+      "at": [
+        623716.7,
+        5103509.2
+      ],
+      "wall": "#eaeae4",
+      "roof": "#45484c",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "161": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623854.2,
+        5102996.2
+      ],
+      "wall": "#d6d8d8",
+      "roof": "#5a5d60",
+      "trim": "#eeeeea",
+      "roofMaterial": "metal",
+      "roofShape": "flat",
+      "skirting": true,
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "162": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624776.3,
+        5103557.1
+      ],
+      "kind": "house",
+      "wall": "#d2d7da",
+      "roof": "#5a5e62",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "skirting": true,
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "163": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624255.7,
+        5103183.7
+      ],
+      "wall": "#9bb3a7",
+      "roof": "#505559",
+      "trim": "#e8ebe6",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "165": {
+      "group": "mabou-village",
+      "road": "Birch Street",
+      "at": [
+        623755.5,
+        5103543.6
+      ],
+      "wall": "#eaebe8",
+      "roof": "#52565a",
+      "trim": "#f4f4ee",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "attachedGarage": {
+        "end": false,
+        "side": 1,
+        "offset": 1.5,
+        "width": 2.6,
+        "doors": 1,
+        "door": "#e8e8e2"
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": true,
+      "satelliteDish": false
+    },
+    "167": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623843.8,
+        5103567.1
+      ],
+      "kind": "shed",
+      "wall": "#5e5b58",
+      "roof": "#424549",
+      "trim": "#d4d2cb",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "170": {
+      "group": "mabou-village",
+      "road": "Maple Street",
+      "at": [
+        623779.5,
+        5103601.3
+      ],
+      "kind": "shed",
+      "wall": "#b8b6ad",
+      "roof": "#4a4d50",
+      "trim": "#f0efe9",
+      "door": "#ecece6",
+      "roofMaterial": "shingle",
+      "rollUpDoor": true,
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "172": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623544.5,
+        5102756.2
+      ],
+      "kind": "barn",
+      "wall": "#777570",
+      "roof": "#494c4f",
+      "trim": "#d6d5ce",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "173": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624346.0,
+        5103341.5
+      ],
+      "wall": "#a7a8a1",
+      "roof": "#515457",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "174": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624366.9,
+        5103347.7
+      ],
+      "wall": "#8b99a3",
+      "roof": "#494d51",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "175": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623590.0,
+        5102711.4
+      ],
+      "wall": "#7c8b7f",
+      "roof": "#44484d",
+      "trim": "#f0efe9",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle",
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "dormer": true,
+      "dormers": 3,
+      "chimney": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "176": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624865.5,
+        5103496.5
+      ],
+      "wall": "#345864",
+      "roof": "#3c4044",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "180": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624420.4,
+        5103364.4
+      ],
+      "wall": "#ecece6",
+      "roof": "#45484c",
+      "trim": "#f4f4ee",
+      "roofMaterial": "shingle",
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "181": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623714.0,
+        5103750.0
+      ],
+      "kind": "house",
+      "wall": "#dcdbd2",
+      "roof": "#56595c",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "skirting": true,
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "shutters": true,
+      "chimney": false,
+      "dormer": false,
+      "satelliteDish": false
+    },
+    "182": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623662.2,
+        5102712.5
+      ],
+      "kind": "shed",
+      "wall": "#ddd7be",
+      "roof": "#55585c",
+      "trim": "#f0eee6",
+      "door": "#ecece6",
+      "roofMaterial": "shingle",
+      "rollUpDoor": true,
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "183": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624981.0,
+        5103645.0
+      ],
+      "wall": "#c7bea9",
+      "roof": "#525558",
+      "trim": "#f0eee6",
+      "roofMaterial": "shingle",
+      "roofShape": "flat",
+      "skirting": true,
+      "storeys": 1,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "185": {
+      "group": "mabou-village",
+      "road": "Barra Lane",
+      "at": [
+        624504.9,
+        5103417.8
+      ],
+      "wall": "#dadad2",
+      "roof": "#515457",
+      "trim": "#e8e8e0",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "190": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623982.2,
+        5103052.5
+      ],
+      "wall": "#8c7d6b",
+      "roof": "#4d4a46",
+      "trim": "#e8e5dc",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.8,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "191": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623523.8,
+        5104066.3
+      ],
+      "wall": "#ecece6",
+      "roof": "#3f4246",
+      "trim": "#f4f4ee",
+      "roofMaterial": "shingle",
+      "entrance": "small steps",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "dormer": true,
+      "dormers": 2,
+      "chimney": true,
+      "shutters": false,
+      "satelliteDish": false,
+      "roofShape": "gable"
+    },
+    "192": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624670.2,
+        5103521.6
+      ],
+      "wall": "#586066",
+      "roof": "#3a3d41",
+      "trim": "#eaeae4",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.24,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "193": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624396.0,
+        5103384.9
+      ],
+      "wall": "#4d4a49",
+      "roof": "#3b3e42",
+      "trim": "#eaeae4",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "196": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624806.4,
+        5103584.9
+      ],
+      "wall": "#8a9648",
+      "roof": "#3e4144",
+      "trim": "#8c352f",
+      "door": "#8c352f",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "200": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624637.0,
+        5103427.1
+      ],
+      "wall": "#e3e4df",
+      "roof": "#424549",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "202": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623800.8,
+        5103568.8
+      ],
+      "wall": "#5e5b58",
+      "roof": "#424549",
+      "trim": "#d4d2cb",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "204": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623501.0,
+        5104059.5
+      ],
+      "wall": "#eaeae4",
+      "roof": "#4b4e52",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "205": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623767.8,
+        5102963.4
+      ],
+      "wall": "#a4b2bc",
+      "roof": "#565a5e",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "206": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        625019.2,
+        5103636.5
+      ],
+      "kind": "house",
+      "wall": "#9aa097",
+      "roof": "#56595c",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "skirting": true,
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "208": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624277.0,
+        5103251.5
+      ],
+      "wall": "#ecece7",
+      "roof": "#45484b",
+      "trim": "#f5f5f0",
+      "door": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "209": {
+      "group": "mabou-village",
+      "road": "Highland Street",
+      "at": [
+        624436.0,
+        5103296.3
+      ],
+      "wall": "#768087",
+      "roof": "#434649",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "210": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624596.5,
+        5103409.5
+      ],
+      "wall": "#e6e6e0",
+      "roof": "#44474b",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "212": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624730.2,
+        5103479.2
+      ],
+      "wall": "#7a8c96",
+      "roof": "#42464a",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "213": {
+      "group": "mabou-village",
+      "road": "Birch Street",
+      "at": [
+        623687.3,
+        5103460.9
+      ],
+      "wall": "#e6e6e0",
+      "roof": "#393c40",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "216": {
+      "group": "mabou-village",
+      "road": "Birch Street",
+      "at": [
+        623742.6,
+        5103544.2
+      ],
+      "wall": "#e8e9e5",
+      "roof": "#3e4144",
+      "trim": "#f2f2ed",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.8,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "shutters": true,
+      "chimney": false,
+      "dormer": false,
+      "satelliteDish": false
+    },
+    "217": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623575.9,
+        5103904.5
+      ],
+      "wall": "#385745",
+      "roof": "#6d7275",
+      "trim": "#d8dad5",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "483": {
+      "group": "mabou-village",
+      "road": "MacKillop Road",
+      "at": [
+        623628.9,
+        5097988.4
+      ],
+      "kind": "house",
+      "wall": "#3c4c63",
+      "roof": "#494c50",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "skirting": true,
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "516": {
+      "group": "mabou-village",
+      "road": "MacKillop Road",
+      "at": [
+        623508.7,
+        5098074.2
+      ],
+      "wall": "#9aa4a6",
+      "roof": "#8c6954",
+      "trim": "#c8ccca",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "545": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624809.2,
+        5103621.4
+      ],
+      "wall": "#8c9091",
+      "roof": "#44474b",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "551": {
+      "group": "mabou-village",
+      "road": "Maple Street",
+      "at": [
+        623742.3,
+        5103640.7
+      ],
+      "kind": "house",
+      "wall": "#e6e6e0",
+      "roof": "#484b4e",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "644": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623778.5,
+        5102982.5
+      ],
+      "kind": "shed",
+      "wall": "#9aa7b0",
+      "roof": "#4e5256",
+      "trim": "#f0f0ea",
+      "door": "#ecece6",
+      "roofMaterial": "shingle",
+      "rollUpDoor": true,
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "965": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624408.6,
+        5103309.4
+      ],
+      "wall": "#85919b",
+      "roof": "#44484c",
+      "trim": "#eeeee8",
+      "roofMaterial": "shingle",
+      "roofShape": "hip",
+      "storeys": 1,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1028": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624484.2,
+        5103360.2
+      ],
+      "wall": "#e6e3d5",
+      "roof": "#45484c",
+      "trim": "#f3f2ec",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "dormer": true,
+      "dormers": 1,
+      "chimney": true,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1197": {
+      "group": "mabou-village",
+      "road": "Birch Street",
+      "at": [
+        623737.2,
+        5103495.0
+      ],
+      "wall": "#e4e6e4",
+      "roof": "#484b4e",
+      "trim": "#f2f2ed",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.5,
+      "ridge": 6.2,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "shutters": true,
+      "chimney": true,
+      "dormer": false,
+      "satelliteDish": false
+    },
+    "1411": {
+      "group": "mabou-village",
+      "road": "Justin Road",
+      "at": [
+        617177.2,
+        5096916.8
+      ],
+      "wall": "#e5e5df",
+      "roof": "#424549",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 7.59,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1413": {
+      "group": "mabou-village",
+      "road": "MacKillop Road",
+      "at": [
+        623537.8,
+        5098045.3
+      ],
+      "kind": "house",
+      "wall": "#3a3d40",
+      "roof": "#525659",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 7.65,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1414": {
+      "group": "mabou-village",
+      "road": "MacKillop Road",
+      "at": [
+        623483.1,
+        5098056.4
+      ],
+      "wall": "#8c887d",
+      "roof": "#5a5c5e",
+      "trim": "#d4d2c9",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1415": {
+      "group": "mabou-village",
+      "road": "Justin Road",
+      "at": [
+        617122.3,
+        5096945.6
+      ],
+      "wall": "#e6e6e0",
+      "roof": "#46494c",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.4,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1425": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623666.1,
+        5102904.7
+      ],
+      "wall": "#b8bcbe",
+      "roof": "#a6aaad",
+      "trim": "#dcded9",
+      "roofMaterial": "metal",
+      "roofShape": "gambrel",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1461": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623844.1,
+        5102982.4
+      ],
+      "wall": "#868379",
+      "roof": "#4d4f4f",
+      "trim": "#9a968c",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1579": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624349.7,
+        5103351.5
+      ],
+      "wall": "#e6e8e6",
+      "roof": "#52565a",
+      "trim": "#f2f2ed",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1602": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624391.0,
+        5103356.9
+      ],
+      "wall": "#6e7672",
+      "roof": "#3f4246",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1604": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624493.3,
+        5103373.9
+      ],
+      "wall": "#777978",
+      "roof": "#3e4145",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1621": {
+      "group": "mabou-village",
+      "road": "Barra Lane",
+      "at": [
+        624483.8,
+        5103420.3
+      ],
+      "wall": "#ecebe4",
+      "roof": "#434649",
+      "trim": "#f4f3ed",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.2,
+      "ridge": 7.2,
+      "entrance": "small steps",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1622": {
+      "group": "mabou-village",
+      "road": "Barra Lane",
+      "at": [
+        624455.9,
+        5103425.6
+      ],
+      "wall": "#ecebe4",
+      "roof": "#3b3e41",
+      "trim": "#f4f3ed",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.2,
+      "ridge": 7.4,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1640": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624578.9,
+        5103458.9
+      ],
+      "wall": "#e8e7de",
+      "roof": "#44474b",
+      "trim": "#f4f4ee",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1644": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624597.1,
+        5103467.8
+      ],
+      "wall": "#85969e",
+      "roof": "#464a4f",
+      "trim": "#f2f2ec",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "dormer": true,
+      "dormers": 1,
+      "chimney": true,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1645": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624564.8,
+        5103471.5
+      ],
+      "wall": "#e8e7de",
+      "roof": "#43464a",
+      "trim": "#f3f3ec",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.8,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1662": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624603.9,
+        5103481.0
+      ],
+      "kind": "shed",
+      "wall": "#6e7e87",
+      "roof": "#404448",
+      "trim": "#f0f0ea",
+      "door": "#ecece6",
+      "roofMaterial": "shingle",
+      "rollUpDoor": true,
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1665": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624574.2,
+        5103495.7
+      ],
+      "kind": "barn",
+      "wall": "#8c867c",
+      "roof": "#946152",
+      "trim": "#b8b3a8",
+      "roofMaterial": "metal",
+      "boardAndBatten": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1666": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624622.2,
+        5103493.3
+      ],
+      "wall": "#b8b7ae",
+      "roof": "#4c4f52",
+      "trim": "#deddd5",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.8,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1680": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623570.1,
+        5102755.6
+      ],
+      "wall": "#57534c",
+      "roof": "#474a4d",
+      "trim": "#e2e0d8",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.8,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1685": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623744.8,
+        5102793.6
+      ],
+      "kind": "house",
+      "wall": "#ecece6",
+      "roof": "#3a3d41",
+      "trim": "#f5f5f0",
+      "door": "#9c2c2b",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "dormer": true,
+      "dormers": 3,
+      "shutters": true,
+      "chimney": false,
+      "satelliteDish": false
+    },
+    "1688": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624929.7,
+        5103534.3
+      ],
+      "wall": "#585550",
+      "roof": "#3f4246",
+      "trim": "#e4e2da",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1689": {
+      "group": "mabou-village",
+      "road": "Birch Street",
+      "at": [
+        623685.2,
+        5103547.6
+      ],
+      "wall": "#d6d8da",
+      "roof": "#3c3f43",
+      "trim": "#f0f0ec",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1697": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623621.0,
+        5102801.0
+      ],
+      "kind": "house",
+      "wall": "#8c948c",
+      "roof": "#585b5e",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.6,
+      "ridge": 6.72,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1699": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623760.2,
+        5102823.2
+      ],
+      "kind": "house",
+      "wall": "#b83835",
+      "roof": "#44484c",
+      "trim": "#f2f1ec",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.5,
+      "ridge": 6.2,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1704": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        624993.8,
+        5103563.6
+      ],
+      "kind": "large",
+      "wall": "#376d84",
+      "roof": "#464a4f",
+      "trim": "#f2f2ec",
+      "door": "#9c2c2b",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1705": {
+      "group": "mabou-village",
+      "road": "Maple Street",
+      "at": [
+        623756.1,
+        5103575.4
+      ],
+      "kind": "house",
+      "wall": "#8c949c",
+      "roof": "#4a4d52",
+      "trim": "#f2f2ec",
+      "door": "#9c3230",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.4,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "attachedGarage": {
+        "end": false,
+        "side": -1,
+        "offset": 6.8,
+        "width": 4.8,
+        "doors": 1,
+        "door": "#f2f2ec"
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1707": {
+      "group": "mabou-village",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623819.6,
+        5103578.4
+      ],
+      "wall": "#6e635a",
+      "roof": "#424549",
+      "trim": "#e5e3db",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.43,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    }
+  }
+}

@@ -131,6 +131,7 @@ import { Endings } from './ending';
 import { YardJob } from './yard-job';
 import { FishingSite } from './fishing-site';
 import { wharfBuildingArt } from './mabou-wharf-buildings';
+import { applyPropertyLooks } from './property-looks';
 import { Fishing } from './fishing';
 import { Deckhand } from './deckhand';
 import { PublicWharves, hasWharves } from './wharves';
@@ -489,9 +490,13 @@ const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLan
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
 // Baxters Cove harbour and the Highway 19 end of its road (Judique, 21 Nov dash cam): the drawing only.
 const coveArt = ERA.modern && AREA.id === 'judique' && drawnBuildings ? baxtersCoveBuildingArt(drawnBuildings) : null;
-const buildingStyles = buildingAppearance(astra, LOW, sunDir, littleMabouArt || wharfArt || coveArt
-  ? { ...bakedBuildingStyles, ...littleMabouArt?.styles, ...wharfArt?.styles, ...coveArt?.styles } : bakedBuildingStyles);
-const sceneryBuildings = wharfArt?.buildings ?? coveArt?.buildings ?? drawnBuildings;
+const baseSceneryBuildings = wharfArt?.buildings ?? coveArt?.buildings ?? drawnBuildings;
+// Dash-cam observed building look overrides (?looks=0 disables for before/after comparison).
+const propertyLooks = ERA.modern && params.get('looks') !== '0' && baseSceneryBuildings
+  ? applyPropertyLooks(AREA.id, baseSceneryBuildings, bakedBuildingStyles) : null;
+const buildingStyles = buildingAppearance(astra, LOW, sunDir, propertyLooks || littleMabouArt || wharfArt || coveArt
+  ? { ...bakedBuildingStyles, ...propertyLooks?.styles, ...littleMabouArt?.styles, ...wharfArt?.styles, ...coveArt?.styles } : bakedBuildingStyles);
+const sceneryBuildings = propertyLooks?.buildings ?? baseSceneryBuildings;
 // A building drawn from wings is still one property, at its place from before the split. Everything that counts
 // houses, customers or complaints reads this list; only the drawing (and the roof animals) reads the wings.
 const properties = buildingSites(buildingList ?? []);
@@ -1098,6 +1103,7 @@ const extraRoofAt = ERA.modern ? (() => {
       .map(b => ({ ...b, floorGround: undefined }));
   if (princeSite) extra.push(...princeSite.roofBoxes());
   if (blackstoneSite) extra.push(...blackstoneSite.roofBoxes());
+  if (propertyLooks?.roofBoxes.length) extra.push(...propertyLooks.roofBoxes);
   for (const lm of landmarkList) {
     const a = lm.axisDeg * Math.PI / 180, alongX = Math.sin(a), alongZ = -Math.cos(a), acrossX = Math.cos(a), acrossZ = Math.sin(a);
     let lo = Infinity, hi = -Infinity, wl = Infinity, wh = -Infinity;
