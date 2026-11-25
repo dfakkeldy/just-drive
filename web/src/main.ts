@@ -306,7 +306,6 @@ const villageChunk = ERA.modern && AREA.judiqueVillage && params.get('village') 
 const hawkesburyChunk = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' ? early(import('./port-hawkesbury')) : null;
 const postOfficeChunk = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' && params.get('postOffice') !== '0' ? early(import('./ph-post-office')) : null;
 const mabouMainChunk = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? early(import('./mabou-main')) : null;
-const portHoodGasChunk = ERA.modern && AREA.portHoodGas && params.get('porthoodgas') !== '0' ? early(import('./porthood-gas')) : null;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -491,6 +490,7 @@ const blackstoneSite = blackstoneBox ? new BlackstoneSite(blackstoneBox, manifes
 // The Port Hood service station and gas bar at High Road and Dunmore Road. ?porthoodgas=0 leaves the surveyed box.
 const portHoodGasBox = ERA.modern && AREA.portHoodGas && params.get('porthoodgas') !== '0' && buildingList ? PortHoodGasSite.find(buildingList) : null;
 const portHoodGasSite = portHoodGasBox ? new PortHoodGasSite(portHoodGasBox, manifest.village) : null;
+const portHoodGasChunk = portHoodGasBox ? early(import('./porthood-gas')) : null;
 const drawnBuildings = buildingList ? drawnWithout(buildingList, porchBox, drLaneBox, princeBox, blackstoneBox, portHoodGasBox) : buildingList;
 const wharfArt = ERA.modern && AREA.fishing && drawnBuildings ? wharfBuildingArt(drawnBuildings) : null;
 // Baxters Cove harbour and the Highway 19 end of its road (Judique, 21 Nov dash cam): the drawing only.
