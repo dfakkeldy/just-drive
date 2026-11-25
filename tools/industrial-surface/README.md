@@ -54,14 +54,17 @@ A complete stage-23 rebake will not keep this one-off correction. After one:
 `python3 tools/industrial-surface-check.py` reads the baked Point Tupper land
 against `width-hashes.json` (chained onto the 16 Nov `industrial-hashes.json`
 surface delta). The delta must be all before or all after; a mix, or a file that
-is neither, fails. All before: `patch.py --width` makes the delta again in a
-scratch folder and its hashes must equal `width-hashes.json` (needs GDAL and
-raw road vectors in `data/raw`; without them it prints `NOT REMADE` and checks
-the state only). All after: road 107 is `kind 2`, `halfWidth 3.6`, and
-`pavement = "double-yellow"`. With `EXPECT = 'after'`, this row enforces the
-installed width+paint delta and catches any later Point Tupper rebake or stale
-host copy that drops it. Before installing on live land, verify against an APFS
-rehearsal clone.
+is neither, fails. With `EXPECT = 'after'`, the default checker enforces the
+installed width+paint delta (road 107 is `kind 2`, `halfWidth 3.6`, and
+`pavement = "double-yellow"`) and exits with an error on an all-before pack
+before calling `remake()` — that is the expected failure on pre-install land,
+and after install it catches any later Point Tupper rebake or stale host copy
+that drops the delta. To test before installing on live land, remake the delta
+with `python3 tools/industrial-surface/patch.py --width data/baked/areas/pointtupper <NEW_OUTPUT_DIRECTORY>`
+(which checks the generated hashes against `width-hashes.json`), lay it onto an
+APFS rehearsal clone (`tools/checks-README.md`), and run
+`python3 tools/industrial-surface-check.py` inside a rehearsal worktree pointing
+at that clone.
 
 ## What the delta does not change
 
