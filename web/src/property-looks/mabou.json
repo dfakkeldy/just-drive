@@ -4400,11 +4400,6 @@
       "roofMaterial": "metal",
       "door": "#2a4d86",
       "storeys": 1,
-      "entrance": "small steps",
-      "front": {
-        "end": false,
-        "side": -1
-      },
       "chimney": false,
       "dormer": false,
       "shutters": false
@@ -4421,11 +4416,6 @@
       "trim": "#f0eee6",
       "roofMaterial": "shingle",
       "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": 1
-      },
       "skirting": true,
       "chimney": true,
       "dormer": false,
@@ -4444,11 +4434,6 @@
       "trim": "#f7f6f1",
       "roofMaterial": "shingle",
       "storeys": 1,
-      "entrance": "small steps",
-      "front": {
-        "end": false,
-        "side": -1
-      },
       "chimney": false,
       "dormer": false,
       "shutters": false
@@ -4464,11 +4449,6 @@
       "roof": "#3a3d40",
       "trim": "#f4f1ea",
       "roofMaterial": "shingle",
-      "entrance": "small steps",
-      "front": {
-        "end": true,
-        "side": -1
-      },
       "chimney": false,
       "dormer": false,
       "shutters": false
@@ -4517,11 +4497,6 @@
       "storeys": 2,
       "eave": 5.0,
       "ridge": 7.5,
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": -1
-      },
       "chimney": false,
       "dormer": false,
       "shutters": false
