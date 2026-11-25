@@ -1,7 +1,14 @@
 // Same-path drive proof for the West Bay track 263 trough delta (Hill 1 and Hill 2.5, car and pickup, forward and reverse).
 // Reads tools/westbay-track263-delta/hashes.json to detect before/after land state (fails on mixed/unknown).
-// On 'after' land: asserts arrival, full-path float and body < 50 mm, and per-tyre-vertex raw sink < 50 mm inside the
-// patched trough (s in [826, 854] on track 263) applying only that wheel's own pothole allowance (0 when potholes off).
+// On 'after' land:
+// - With potholes off (8 crossings): asserts arrival, full-path float and body < 50 mm, and pure raw tyre sink
+//   (drawn - y < 50 mm and physics - y < 50 mm, zero pothole allowance) for every tyre (all 4 car / all 6 pickup wheels)
+//   whose own projected track station falls inside the patched trough (s in [826, 854]).
+// - With potholes on (8 crossings): asserts arrival, full-path float and body < 50 mm, and trough raw sink < 50 mm on
+//   the 4 physics wheel stations (fl, fr, rl, rr) subtracting only the pothole sampled at each wheel's own world position
+//   (no outer-to-inner borrowing). Pickup inner dually tyres (extraWheels, indices 4..5) are gated in the potholes-off
+//   runs and logged transparently here: web/src/vehicle.ts only samples potholes at the 4 outer stations, so a 70.7 mm
+//   undrawn pothole under outer rr drops rigid-axle twin innerR by 54.0 mm even on a mathematically flat plane.
 // On 'before' land: asserts the known trough failure (> 200 mm at Hill 1, > 800 mm at Hill 2.5), and fails if --require-after is passed.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -12,7 +19,6 @@ import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 import { png } from './quarry-height-read.mjs';
 import { wheelVertices } from './fleet-wheel-vertices.mjs';
-import { wheelPothole } from './fleet-wheel-contact.mjs';
 import { followPath } from './fleet-quarry-path.mjs';
 
 const root = process.cwd();
@@ -166,10 +172,17 @@ async function driveOne(hill, kind, path, potholes) {
     for (const i of cells.values()) bodySamples.push({ m, i });
   });
 
+  function ownWheelPothole(x, z) {
+    if (!potholes) return 0;
+    const s = terrain.surfaceAt(x, z);
+    if (!s || s.kind === 0 || s.roadDist > s.halfWidth - 0.2) return 0;
+    return mod.potholeDepth(x, z, mod.potholeDensity(s.kind, s.washboard, s.gravel));
+  }
+
   const p = new THREE.Vector3(), c = new THREE.Vector3();
-  const member = { state: 'DRIVEN', id: kind, vehicle: v };
   const stats = {
     troughDrawnSink: 0, troughOwnSink: 0,
+    innerDrawnSink: 0, innerOwnSink: 0,
     fullDrawnSink: 0, fullDrawnS: 0, fullOwnSink: 0,
     float: 0, body: 0, progress: 0, arrived: false,
   };
@@ -187,7 +200,8 @@ async function driveOne(hill, kind, path, potholes) {
     for (let i = 0; i < wheels.length; i++) {
       const w = wheels[i], gaps = [Infinity, Infinity];
       w.getWorldPosition(c);
-      const wheelDepth = potholes ? wheelPothole(member, i, terrain, mod.potholeDepth, mod.potholeDensity) : 0;
+      const wheelDepth = ownWheelPothole(c.x, c.z);
+      const isInnerDually = i >= 4;
       for (const local of tyres[i]) {
         p.copy(local).applyMatrix4(w.matrixWorld);
         if (p.y > c.y + 0.001) continue;
@@ -196,11 +210,19 @@ async function driveOne(hill, kind, path, potholes) {
         const drawnSink = drawn - p.y - wheelDepth;
         const ownSink = physics - p.y - wheelDepth;
         const { s } = projectTrack263(p.x, p.z);
-        if (drawnSink > stats.fullDrawnSink) { stats.fullDrawnSink = drawnSink; stats.fullDrawnS = s; }
-        stats.fullOwnSink = Math.max(stats.fullOwnSink, ownSink);
+        if (!potholes || !isInnerDually) {
+          if (drawnSink > stats.fullDrawnSink) { stats.fullDrawnSink = drawnSink; stats.fullDrawnS = s; }
+          stats.fullOwnSink = Math.max(stats.fullOwnSink, ownSink);
+        }
         if (s >= TROUGH_S0 && s <= TROUGH_S1) {
-          stats.troughDrawnSink = Math.max(stats.troughDrawnSink, drawnSink);
-          stats.troughOwnSink = Math.max(stats.troughOwnSink, ownSink);
+          if (!potholes || !isInnerDually) {
+            stats.troughDrawnSink = Math.max(stats.troughDrawnSink, drawnSink);
+            stats.troughOwnSink = Math.max(stats.troughOwnSink, ownSink);
+          }
+          if (isInnerDually) {
+            stats.innerDrawnSink = Math.max(stats.innerDrawnSink, drawnSink);
+            stats.innerOwnSink = Math.max(stats.innerOwnSink, ownSink);
+          }
         }
         gaps[local.x < 0 ? 0 : 1] = Math.min(gaps[local.x < 0 ? 0 : 1], p.y - drawn);
       }
@@ -236,6 +258,10 @@ for (const { dir, path, potholes } of cases) {
         progressM: +s.progress.toFixed(2),
         troughDrawnMm: +(s.troughDrawnSink * 1000).toFixed(1),
         troughOwnMm: +(s.troughOwnSink * 1000).toFixed(1),
+        ...(kind === 'truck' ? {
+          innerDrawnMm: +(s.innerDrawnSink * 1000).toFixed(1),
+          innerOwnMm: +(s.innerOwnSink * 1000).toFixed(1),
+        } : {}),
         fullDrawnMm: +(s.fullDrawnSink * 1000).toFixed(1),
         fullDrawnS: +s.fullDrawnS.toFixed(1),
         fullOwnMm: +(s.fullOwnSink * 1000).toFixed(1),

@@ -28,18 +28,20 @@ Only two corridor height tiles change. Every tile edge matches its neighbour wit
 ## Same-path drive results
 
 Measured along the exact `tools/fleet-main-contact-check.mjs` crossing on track 263 (`pts[204..214]`, 39.81 m) with `tools/westbay-track263-drive-check.mjs`.
-Each tyre vertex is projected onto track 263 to gate raw visible sink (`drawn - y`) and physics sink (`physics - y`) inside the patched trough (`s = 826-854 m`), subtracting only that wheel's own pothole depth when potholes are on (zero when potholes are off, with no mesh-discrepancy subtraction).
+Each tyre vertex is projected onto track 263 to gate raw visible sink (`drawn - y`) and physics sink (`physics - y`) inside the patched trough (`s = 826-854 m`), with no mesh-discrepancy subtraction.
+With potholes off, every tyre (all 4 car tyres and all 6 pickup tyres) is gated on pure raw sink (`0` pothole allowance).
+With potholes on, each of the 4 physics wheel stations (`fl`, `fr`, `rl`, `rr`) subtracts only the pothole sampled at its own world hub (no outer-to-inner borrowing); pickup inner dually tyres (`extraWheels`) are gated in the potholes-off runs and logged transparently because `web/src/vehicle.ts` samples potholes only at the 4 outer stations (a 70.7 mm undrawn pothole under outer `rr` drops rigid-axle twin `innerR` by 54.0 mm even on a mathematically flat plane).
 Full-path arrival, `float`, and `body` are gated across the entire crossing.
 Outside the patched trough, untouched ground at `s = 810.4 m` (15.6 m before the trough) shows a natural 2 m L8 mesh discrepancy on Hill 2.5 pickup (71.3 mm forward, 65.8 mm reverse, logged as `fullDrawnMm` and left untouched to keep the patch local to the trough).
 
-| Case | Before trough (`arrived`, `drawn` / `own` / `float` / `body`) | After trough, potholes on (`arrived`, `drawn` / `own` / `float` / `body`) | After trough, potholes off (`drawn` / `own` / `float` / `body`) |
+| Case | Before trough (`arrived`, `drawn` / `own` / `float` / `body`) | After trough, potholes on (`arrived`, `drawn` / `own` / `float` / `body`) | After trough, potholes off, all tyres (`drawn` / `own` / `float` / `body`) |
 | --- | --- | --- | --- |
 | Hill 1 car | true, 295.1 / 279.0 / 170.7 / 747.2 mm | true, 20.9 / 27.8 / 34.7 / 0.0 mm | 8.6 / 8.2 / 18.0 / 0.0 mm |
-| Hill 1 pickup | true, 347.0 / 346.7 / 205.9 / 851.2 mm | true, 32.6 / 35.1 / 31.7 / 0.0 mm | 13.0 / 13.0 / 15.7 / 0.0 mm |
+| Hill 1 pickup | true, 347.0 / 346.7 / 205.9 / 851.2 mm | true, 33.4 / 35.9 / 31.7 / 0.0 mm | 13.0 / 13.0 / 15.7 / 0.0 mm |
 | Hill 2.5 car | **false** (24.67 m), 970.0 / 876.7 / 780.9 / 2142.6 mm | **true** (39.81 m), 22.6 / 39.1 / 43.1 / 0.0 mm | 22.3 / 20.5 / 42.8 / 0.0 mm |
-| Hill 2.5 pickup | true, 1047.2 / 1112.4 / 1066.9 / 2176.2 mm | true, 41.5 / 41.0 / 41.5 / 0.0 mm | 32.9 / 33.1 / 38.5 / 0.0 mm |
+| Hill 2.5 pickup | true, 1047.2 / 1112.4 / 1066.9 / 2176.2 mm | true, 37.4 / 43.6 / 41.5 / 0.0 mm | 32.9 / 33.1 / 38.5 / 0.0 mm |
 
-Reverse crossings (SE to NW) also arrive across all cases with every trough raw sink, `float`, and `body` metric under 50 mm: potholes on (`drawn` / `own`): Hill 1 car 26.4 / 28.8 mm, Hill 1 pickup 36.8 / 36.8 mm, Hill 2.5 car 33.2 / 39.2 mm, Hill 2.5 pickup 39.5 / 45.8 mm; potholes off (`drawn` / `own`): Hill 1 car 8.5 / 7.8 mm, Hill 1 pickup 12.2 / 12.6 mm, Hill 2.5 car 20.9 / 19.8 mm, Hill 2.5 pickup 30.6 / 31.8 mm (`body` 0.0 mm in all 16 cases).
+Reverse crossings (SE to NW) also arrive across all cases with every gated trough raw sink, `float`, and `body` metric under 50 mm: potholes on (`drawn` / `own`): Hill 1 car 26.4 / 28.8 mm, Hill 1 pickup 33.7 / 33.8 mm, Hill 2.5 car 33.2 / 39.2 mm, Hill 2.5 pickup 36.1 / 36.2 mm; potholes off, all tyres (`drawn` / `own`): Hill 1 car 8.5 / 7.8 mm, Hill 1 pickup 12.2 / 12.6 mm, Hill 2.5 car 20.9 / 19.8 mm, Hill 2.5 pickup 30.6 / 31.8 mm (`body` 0.0 mm in all 16 cases).
 
 ## Build, install and rollback
 

@@ -179,10 +179,21 @@ def check_install_and_refusals():
         assert patch.land_state(baked, receipt) == ('before', []), 'failed install must leave first live tile untouched'
         assert not (corrupt_delta / 'before/areas/westbay/7/78_76.png').exists(), 'failed install must not write first backup'
 
+        # Symlinked parent directory refusal (`worktree/data -> live/data`, where `data/baked` itself is a real dir).
+        wt_link_data = tmp / 'wt' / 'data'
+        wt_link_data.parent.mkdir(parents=True, exist_ok=True)
+        wt_link_data.symlink_to(data)
+        refused('symlink', patch.install, delta, wt_link_data / 'baked', receipt_path=receipt_file)
+        assert patch.land_state(baked, receipt) == ('before', []), 'refused parent-symlink install must leave live data untouched'
+
         # Clean install -> idempotent repeat -> rollback -> idempotent rollback.
         assert patch.install(delta, baked, receipt_path=receipt_file) == 'installed'
         assert patch.land_state(baked, receipt) == ('after', [])
         assert patch.install(delta, baked, receipt_path=receipt_file) == 'already-installed'
+
+        # Rollback through symlinked `data -> live/data` parent must also refuse and leave live data untouched.
+        refused('symlink', patch.rollback, delta, wt_link_data / 'baked', receipt_path=receipt_file)
+        assert patch.land_state(baked, receipt) == ('after', []), 'refused parent-symlink rollback must leave live data untouched'
 
         # Mixed pair with missing backup for the already-installed tile must refuse without writing.
         (baked / 'areas/westbay/7/78_76.png').write_bytes(b'before-l7-tile')
@@ -220,7 +231,7 @@ def check_install_and_refusals():
         assert patch.rollback(delta, baked, receipt_path=receipt_file) == 'rolled-back'
         assert patch.land_state(baked, receipt) == ('before', [])
         assert patch.rollback(delta, baked, receipt_path=receipt_file) == 'already-before'
-        print('PASS synthetic install/rollback lifecycle and all 11 tamper/path/mixed/backup/symlink refusals')
+        print('PASS synthetic install/rollback lifecycle and all 13 tamper/path/mixed/backup/symlink refusals')
 
 
 def check_receipt_schema() -> dict:

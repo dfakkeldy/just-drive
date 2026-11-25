@@ -499,13 +499,29 @@ def land_state(baked: Path, receipt: dict) -> tuple[str, list[str]]:
     return 'mixed', details
 
 
+_DARWIN_SYSTEM_SYMLINKS = {Path('/tmp'), Path('/var'), Path('/etc')}
+
+
+def _is_system_symlink(path: Path) -> bool:
+    return sys.platform == 'darwin' and path in _DARWIN_SYSTEM_SYMLINKS
+
+
+def _assert_no_symlink_path(path: Path):
+    """Refuse if `path` or any ancestor directory (including parents above a land root) is a symlink."""
+    base = Path(os.path.abspath(os.getcwd())) if not path.is_absolute() else Path(path.anchor)
+    parts = list(base.parts[1:]) + [p for p in path.parts if p not in ('', path.anchor, '.')]
+    cur = Path(base.anchor)
+    for part in parts:
+        cur = cur / part
+        if cur.is_symlink() and not _is_system_symlink(cur):
+            raise ValueError(f'Refusing to traverse or replace symlink: {cur}')
+
+
 def verify_delta(delta: Path, receipt: dict) -> dict[str, bytes]:
     """Verify every staged file and hashes.json in `delta` matches `receipt`."""
-    if delta.is_symlink():
-        raise ValueError(f'Refusing symlink delta folder: {delta}')
+    _assert_no_symlink_path(delta)
     staged_receipt_path = delta / 'hashes.json'
-    if staged_receipt_path.is_symlink():
-        raise ValueError(f'Refusing symlink hashes.json: {staged_receipt_path}')
+    _assert_no_symlink_path(staged_receipt_path)
     if not staged_receipt_path.is_file():
         raise ValueError(f'Missing hashes.json in delta folder: {delta}')
     staged_receipt = json.loads(staged_receipt_path.read_text())
@@ -525,8 +541,7 @@ def verify_delta(delta: Path, receipt: dict) -> dict[str, bytes]:
 
 
 def _atomic_write(target: Path, data: bytes):
-    if target.is_symlink():
-        raise ValueError(f'Refusing to write through symlink: {target}')
+    _assert_no_symlink_path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(prefix=f'.{target.name}.tmp-', dir=str(target.parent))
     tmp = Path(tmp_name)
@@ -543,13 +558,7 @@ def _atomic_write(target: Path, data: bytes):
 
 
 def _assert_no_symlink_in_rel(root: Path, rel: str):
-    if root.is_symlink():
-        raise ValueError(f'Refusing symlink root: {root}')
-    cur = root
-    for part in Path(rel).parts:
-        cur = cur / part
-        if cur.is_symlink():
-            raise ValueError(f'Refusing to traverse or replace symlink: {cur}')
+    _assert_no_symlink_path(root / rel)
 
 
 def install(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
@@ -618,8 +627,7 @@ def install(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
 
 def rollback(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
     """Restore before-files from `<delta>/before/` into `baked`."""
-    if delta.is_symlink():
-        raise ValueError(f'Refusing symlink delta folder: {delta}')
+    _assert_no_symlink_path(delta)
     receipt = json.loads(receipt_path.read_text())
     backup_root = delta / 'before'
 
