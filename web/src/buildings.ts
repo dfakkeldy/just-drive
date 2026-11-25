@@ -5,12 +5,42 @@ export interface Building {
   /** A split group shares one identity; only its largest wing carries the original site. */
   buildingId?: number; site?: Building;
   id: number; x: number; y: number; ground: number; footprint: [number, number][];
+  /** Raised floor and lowest surveyed mesh corner for a building on a slope. */
+  floorGround?: number; foundationGround?: number;
   axisDeg: number; length: number; width: number; eave: number; ridge: number;
   roof: 'gable' | 'flat' | 'shed'; kind: 'house' | 'barn' | 'shed' | 'large'; confidence: number;
   /** A large building measured as blocks (pipeline/big_buildings.py): each block has its own height. A tank is round:
    *  `length` is its diameter, `eave` the top of its shell, `ridge` the top of its roof, and `footprint` is points
    *  on its circle (the box round them is the square round the tank). */
   shape?: 'block' | 'tank';
+}
+
+/** Apply the companion only to the exact survey file used to bake it. */
+export async function applyBuildingFoundations(buildings: Building[], source: string, companion: unknown): Promise<void> {
+  if (!companion || typeof companion !== 'object' || !globalThis.crypto?.subtle) return;
+  const { source: expected, rows } = companion as { source?: unknown; rows?: unknown };
+  if (typeof expected !== 'string' || typeof rows !== 'string') return;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
+  const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  if (hash !== expected) return;
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(rows), character => character.charCodeAt(0));
+  } catch {
+    return;
+  }
+  if (bytes.length % 8 !== 0) return;
+  const view = new DataView(bytes.buffer);
+  const byId = new Map(buildings.map(building => [building.id, building]));
+  let id = 0;
+  // Little-endian rows store the ID delta, floor rise and foundation depth in centimetres.
+  for (let offset = 0; offset < bytes.length; offset += 8) {
+    id += view.getUint32(offset, true);
+    const building = byId.get(id);
+    if (!building) continue;
+    building.floorGround = building.ground + view.getUint16(offset + 4, true) / 100;
+    building.foundationGround = building.floorGround - view.getUint16(offset + 6, true) / 100;
+  }
 }
 
 /** One property per mapped building, at its unchanged pre-split position. */
@@ -237,7 +267,10 @@ export class Buildings {
       const nearPaint = facadeRanges && Math.max(b.length, b.width) <= facadeCellSize ? (first: number, end = pos.length / 3) => {
         if (end > first) facadeRanges.push({ x: Math.floor(cx / facadeCellSize), z: Math.floor(cz / facadeCellSize), first, end });
       } : undefined;
-      const base = seaLevel + (b.ground - seaLevel) * exag;
+      const floorGround = b.floorGround ?? b.ground;
+      const base = seaLevel + (floorGround - seaLevel) * exag;
+      const foundationDepth = (depth: number) => Math.min(-depth,
+        ((b.foundationGround ?? floorGround) - floorGround) * exag - 0.1);
       snowBase = base;
       const a = THREE.MathUtils.degToRad(b.axisDeg);
       const ux = Math.sin(a), uz = -Math.cos(a), vx = Math.cos(a), vz = Math.sin(a);   // along the ridge, across it
@@ -267,7 +300,7 @@ export class Buildings {
         // A storage tank: a steel shell up to the measured rim, and a low cone up to the measured top.
         const radius = b.length / 2, shell = TANKS[Math.floor(hash(b.id) * TANKS.length)];
         const cap: RGB = [shell[0] * 0.86, shell[1] * 0.86, shell[2] * 0.86], topY = base + b.ridge;
-        const tankFoot = -7 * Math.max(1, exag);
+        const tankFoot = foundationDepth(7 * Math.max(1, exag));
         const segments = 32;
         for (let i = 0; i < segments; i++) {
           const t0 = i * Math.PI * 2 / segments, t1 = (i + 1) * Math.PI * 2 / segments;
@@ -295,7 +328,7 @@ export class Buildings {
       const roof = style ? rgb(style.roof) : roofPalette[Math.floor(hash(identity + 0.5) * roofPalette.length)];
       // Walls and foundation run below the ground line so a slope never shows a gap.
       // Large mapped blocks span wide slopes and coarse parent terrain meshes, so scale depth with exaggeration.
-      const foot = b.shape === 'block' ? -7 * Math.max(1, exag) : -3;
+      const foot = foundationDepth(b.shape === 'block' ? 7 * Math.max(1, exag) : 3);
       const shape = style?.roofShape ?? (b.buildingId !== undefined && b.roof !== 'flat' ? 'gable' : b.roof);
       const flat = shape === 'flat';
       const shed = shape === 'shed';
@@ -550,9 +583,10 @@ export class Buildings {
           const v0 = front === 1 ? depth : -depth - reach, v1 = front === 1 ? depth + reach : -depth;
           const u0 = tallFront ? -span : Math.max(-span, doorU - half);
           const u1 = tallFront ? span : Math.min(span, doorU + half);
-          frontBox(u0, u1, v0, v1, tallFront ? deckHeight - 0.22 : -0.3, deckHeight, steps ? foundation : rgb('#857c68'));
+          const porchFoot = b.foundationGround === undefined ? -0.3 : foundationDepth(0.3);
+          frontBox(u0, u1, v0, v1, tallFront ? deckHeight - 0.22 : porchFoot, deckHeight, steps ? foundation : rgb('#857c68'));
           frontBox(doorU - 0.65, doorU + 0.65, front * (depth + reach + 0.35) - 0.18, front * (depth + reach + 0.35) + 0.18, -0.2, 0.1, foundation);
-          if (entrance === 'wrap-around') frontBox(-span - 1.8, -span, -depth, depth + (front === 1 ? reach : 0), -0.3, 0.23, rgb('#857c68'));
+          if (entrance === 'wrap-around') frontBox(-span - 1.8, -span, -depth, depth + (front === 1 ? reach : 0), porchFoot, 0.23, rgb('#857c68'));
           if (entrance === 'deck') {
             const v = front * (depth + reach - 0.12);
             const posts = tallFront ? [u0 + 0.12, -span / 3, span / 3, u1 - 0.12] : [u0 + 0.12, u1 - 0.12];
@@ -666,13 +700,14 @@ export class Buildings {
         const radius = diameter / 2, cap = height - 2;
         const concrete = rgb('#c3c5bf'), red = rgb('#a04438'), white = rgb('#e2e1d8');
         const segments = 16;
+        const siloFoot = base + foundationDepth(1);
         const topX = sX(u, v), topZ = sZ(u, v), topY = base + height;
         for (let i = 0; i < segments; i++) {
           const a0 = i * Math.PI * 2 / segments, a1 = (i + 1) * Math.PI * 2 / segments;
           const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
           const x0 = sX(u + c0 * radius, v + s0 * radius), z0 = sZ(u + c0 * radius, v + s0 * radius);
           const x1 = sX(u + c1 * radius, v + s1 * radius), z1 = sZ(u + c1 * radius, v + s1 * radius);
-          quadN(x0, base - 1, z0, x1, base - 1, z1, x1, base + cap, z1, x0, base + cap, z0, concrete, 0.83 + 0.17 * c0);
+          quadN(x0, siloFoot, z0, x1, siloFoot, z1, x1, base + cap, z1, x0, base + cap, z0, concrete, 0.83 + 0.17 * c0);
           const colour = i % 2 === 0 ? red : white;
           // Three latitude bands form a rounded striped dome, 14 m total height.
           for (let j = 0; j < 3; j++) {

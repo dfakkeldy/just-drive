@@ -114,13 +114,13 @@ const NO_ROOFS: Roof[] = [];
  * The roof heights of the drawn buildings, for the drone's floor (the terrain's tree layer is removed under them). Each
  * building counts as its own turned rectangle, a metre larger all round; a tank as its circle. -Infinity off any roof.
  */
-export function roofHeights(list: readonly Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[], village: [number, number], exag: number, sea: number): (x: number, z: number) => number {
+export function roofHeights(list: readonly Pick<Building, 'x' | 'y' | 'ground' | 'floorGround' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[], village: [number, number], exag: number, sea: number): (x: number, z: number) => number {
   const CELL = 48, cells = new Map<number, Roof[]>();
   const key = (i: number, j: number) => i >= -4096 && i < 4096 && j >= -4096 && j < 4096 ? (i + 4096) * 8192 + (j + 4096) : -1;
   for (const b of list) {
     const a = b.axisDeg * Math.PI / 180;
     const roof: Roof = { x: b.x - village[0], z: village[1] - b.y, ux: Math.sin(a), uz: -Math.cos(a), half: b.length / 2 + 1, halfWidth: b.width / 2 + 1,
-      round: b.shape === 'tank', top: sea + (b.ground - sea) * exag + Math.max(b.ridge, b.eave) };
+      round: b.shape === 'tank', top: sea + ((b.floorGround ?? b.ground) - sea) * exag + Math.max(b.ridge, b.eave) };
     const r = Math.hypot(roof.half, roof.halfWidth);
     if (!Number.isFinite(roof.x + roof.z + r + roof.top + roof.ux)) continue;
     for (let i = Math.floor((roof.x - r) / CELL); i <= Math.floor((roof.x + r) / CELL); i++) for (let j = Math.floor((roof.z - r) / CELL); j <= Math.floor((roof.z + r) / CELL); j++) {
