@@ -32,7 +32,7 @@ async function canal(replacements={}){
 }
 for(const scale of process.env.BRIDGE_EXAG?[Number(process.env.BRIDGE_EXAG)]:[1,1.5]){const rows=[];for(const area of areas.filter(a=>!process.env.BRIDGE_AREA||a===process.env.BRIDGE_AREA))rows.push(await clearance(area,{},scale));if(process.env.OUT)writeFileSync(process.env.OUT+(scale===1?'/full-width-clearance.json':`/full-width-clearance-${scale}.json`),JSON.stringify(rows,null,2)+'\n');}await canal();
 if(process.argv.includes('--mutations')){
- const file='web/src/modern-bridges.ts',source=readFileSync(root+file,'utf8'),anchor='if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;}';assert.equal(source.split(anchor).length,2);
+ const file='web/src/modern-bridges.ts',source=readFileSync(root+file,'utf8'),anchor='if(t.width>width){t.width=width;t.narrowRail=rail;t.forceBuild=true;t.revision=-1;this.runList=null;this.invalidateNeighbors(t,fromBaked);}';assert.equal(source.split(anchor).length,2);
  await assert.rejects(()=>canal({[file]:source.replace(anchor,'')}),/track-sized deck|surfaces do not overlap|must not hop/,'old overlapping canal decks must fail');console.log('KILLED canal width ownership removed');
  const terrain='web/src/terrain.ts',text=readFileSync(root+terrain,'utf8'),cut='return cut!==null&&height>cut-.035?null:height;';assert.equal(text.split(cut).length,2);
  await assert.rejects(()=>clearance('judique',{[terrain]:text.replace(cut,'return height;')}),/drawn land through full-width skin/,'coarse land must not poke through');console.log('KILLED coarse terrain road-skin cut removed');
