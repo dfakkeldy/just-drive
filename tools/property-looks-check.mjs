@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { Buildings, buildingAppearance, buildingSites, readBuildingStyles } from '../web/src/buildings.ts';
-import { applyPropertyLooks, areaPropertyLooks } from '../web/src/property-looks.ts';
+import { applyPropertyLookPack, applyPropertyLooks, areaPropertyLooks } from '../web/src/property-looks.ts';
 import { MabouMainSite } from '../web/src/mabou-main-site.ts';
 import { PorchSite } from '../web/src/porch-site.ts';
 import { BlackstoneSite } from '../web/src/blackstone-site.ts';
@@ -123,6 +123,32 @@ const DEFAULT_STYLE = {
     }
   }
 
+  // Wrap-around porch must omit its return when a garage sits on the adjacent end wall (end=true, side=-1)
+  const wrapWithEndGarage = new Buildings([narrowGarageHouse], village, 1, 0, {
+    '1': { ...DEFAULT_STYLE, front: { end: false, side: 1 }, entrance: 'wrap-around', attachedGarage: { end: true, side: -1, offset: 0, width: 2.6, doors: 1 } },
+  });
+  const wgp = wrapWithEndGarage.mesh.geometry.getAttribute('position');
+  for (let i = 0; i < wgp.count; i++) {
+    // End wall side=-1 is at u = -L = -4.7 (z = +4.7); return box would extend to z = +6.5.
+    assert.ok(wgp.getZ(i) <= 4.7 + 0.55, `wrap-around return blocks adjacent end-wall garage at z=${wgp.getZ(i)}`);
+  }
+
+  // Tall stepped-shed deck with clipped span must keep every post clear of the front garage opening
+  const steppedDeckGarage = new Buildings([narrowGarageHouse], village, 1, 0, {
+    '1': {
+      ...DEFAULT_STYLE, steppedShed: true, windowWall: true, front: { end: false, side: 1 }, entrance: 'deck',
+      attachedGarage: { end: false, side: 1, offset: -1.5, width: 2.6, doors: 1 },
+    },
+  });
+  const sdgp = steppedDeckGarage.mesh.geometry.getAttribute('position');
+  // Garage opening sits at u in [-2.8, -0.2] (z in [0.2, 2.8]); clipped deck is on the +u side (z <= 0.06).
+  for (let i = 0; i < sdgp.count; i++) {
+    if (sdgp.getX(i) > 4.4 + 0.15) {
+      assert.ok(sdgp.getZ(i) <= 0.06 || sdgp.getZ(i) >= 2.94,
+        `stepped-shed deck post/rail enters front garage opening at z=${sdgp.getZ(i)}`);
+    }
+  }
+
   // Subsidiary wing must ignore dormers and attachedGarage
   const subWing = { ...baseHouse, id: 99, buildingId: 1 };
   const wingOff = new Buildings([subWing], village, 1, 0, { '1': DEFAULT_STYLE });
@@ -131,7 +157,7 @@ const DEFAULT_STYLE = {
   });
   assert.deepEqual(wingOn.mesh.geometry.getAttribute('position').array, wingOff.mesh.geometry.getAttribute('position').array);
 
-  // Position-anchored rebake protection: far move refused, closer anchor beats reused ID, ambiguous ties refused order-independently
+  // Position-anchored rebake protection: far move refused, closer anchor beats reused ID, ambiguous ties and contested claims refused order-independently
   const shifted = [{ ...baseHouse, id: 1622, x: 500000, y: 5000000 }];
   assert.equal(applyPropertyLooks('mabou', shifted, {}), null, 'override refuses to attach when building moved > 4 m');
   const movedId = [{ ...baseHouse, id: 99999, x: 624455.9, y: 5103425.6, eave: 2.7, ridge: 5.6 }];
@@ -152,8 +178,23 @@ const DEFAULT_STYLE = {
   ];
   assert.equal(applyPropertyLooks('mabou', tieA, {}), null, 'ambiguous equidistant candidates refused');
   assert.equal(applyPropertyLooks('mabou', [...tieA].reverse(), {}), null, 'ambiguous equidistant candidates refused regardless of order');
+  // Contested duplicate claim: two overrides claiming the same building must both be rejected regardless of order
+  const contestedBuilding = [{ ...baseHouse, id: 55555, x: 624455.9, y: 5103425.6 }];
+  const contestedPackA = {
+    version: 1, area: 'test', groups: { g: { label: 'G', roads: ['Highway 19'] } },
+    overrides: {
+      '1': { group: 'g', road: 'Highway 19', at: [624457.9, 5103425.6], wall: '#992222', ridge: 9.5 },
+      '2': { group: 'g', road: 'Highway 19', at: [624455.9, 5103425.6], wall: '#225599' },
+    },
+  };
+  const contestedPackB = {
+    ...contestedPackA,
+    overrides: { '2': contestedPackA.overrides['2'], '1': contestedPackA.overrides['1'] },
+  };
+  assert.equal(applyPropertyLookPack(contestedPackA, contestedBuilding, {}), null, 'contested building rejects all claims (farther listed first)');
+  assert.equal(applyPropertyLookPack(contestedPackB, contestedBuilding, {}), null, 'contested building rejects all claims (exact listed first)');
 
-  for (const m of [plain, withShed, shedShadow, d1, d2, d3, oneStorey, twoStorey, endOne, endTwo, withGarage, tightPlain, tightPorch, porchGarage, wingOff, wingOn]) {
+  for (const m of [plain, withShed, shedShadow, d1, d2, d3, oneStorey, twoStorey, endOne, endTwo, withGarage, tightPlain, tightPorch, porchGarage, wrapWithEndGarage, steppedDeckGarage, wingOff, wingOn]) {
     m.mesh.geometry.dispose();
     m.mesh.material.dispose();
   }
@@ -171,40 +212,56 @@ const ALLOWED_OVERRIDE_KEYS = new Set([
   'bareEnd', 'barnDoors', 'solarSide', 'steppedShed', 'windowWall', 'doorWindows',
   'roofShape', 'front', 'siloPosition', 'storeys', 'dormers', 'attachedGarage',
 ]);
+const ALLOWED_BARE_END_KEYS = new Set(['side', 'wall']);
 const ALLOWED_FRONT_KEYS = new Set(['end', 'side']);
 const ALLOWED_GARAGE_KEYS = new Set(['end', 'side', 'offset', 'width', 'doors', 'door']);
+const ALLOWED_SILO_POSITION_KEYS = new Set(['u', 'v', 'diameter', 'height']);
 const assertAllowedKeys = (obj, allowed, ctx) => {
+  assert.ok(obj && typeof obj === 'object' && !Array.isArray(obj), `${ctx} must be an object`);
   for (const key of Object.keys(obj)) assert.ok(allowed.has(key), `unexpected key "${key}" in ${ctx}`);
 };
-assertAllowedKeys(mabouPack, ALLOWED_PACK_KEYS, 'pack');
-for (const [gId, g] of Object.entries(mabouPack.groups)) {
-  assertAllowedKeys(g, ALLOWED_GROUP_KEYS, `group ${gId}`);
-  assert.ok(typeof g.label === 'string' && g.label.length > 0, `invalid label for group ${gId}`);
-  assert.ok(Array.isArray(g.roads) && g.roads.length > 0 && g.roads.every((r) => typeof r === 'string' && r.length > 0), `invalid roads for group ${gId}`);
-}
-const rawText = JSON.stringify(mabouPack);
-assert.doesNotMatch(rawText, /\b\d{1,5}\s+[A-Z][a-z]+\s+(Road|Rd|Street|St|Lane|Ln|Drive|Dr|Avenue|Ave|Highway|Hwy)\b/, 'no civic addresses in property-looks data');
 const VALID_KINDS = new Set(['house', 'barn', 'shed', 'large']);
-const mergedForCi = {};
-for (const [id, ov] of Object.entries(mabouPack.overrides)) {
-  assertAllowedKeys(ov, ALLOWED_OVERRIDE_KEYS, `override ${id}`);
-  if (ov.front !== undefined) assertAllowedKeys(ov.front, ALLOWED_FRONT_KEYS, `override ${id}.front`);
-  if (ov.attachedGarage !== undefined) assertAllowedKeys(ov.attachedGarage, ALLOWED_GARAGE_KEYS, `override ${id}.attachedGarage`);
-  assert.match(id, /^\d+$/, `numeric building id ${id}`);
-  assert.ok(ov.group in mabouPack.groups, `unknown group ${ov.group} for building ${id}`);
-  assert.ok(typeof ov.road === 'string' && ov.road.length > 0, `missing road for building ${id}`);
-  assert.ok(mabouPack.groups[ov.group].roads.includes(ov.road), `road ${ov.road} not listed in group ${ov.group} for building ${id}`);
-  assert.ok(Array.isArray(ov.at) && ov.at.length === 2 && ov.at.every((v) => typeof v === 'number' && Number.isFinite(v)), `invalid at coords for ${id}`);
-  if (ov.kind !== undefined) assert.ok(VALID_KINDS.has(ov.kind), `invalid kind ${ov.kind} for ${id}`);
-  if (ov.eave !== undefined) assert.ok(typeof ov.eave === 'number' && Number.isFinite(ov.eave) && ov.eave > 1 && ov.eave < 25, `invalid eave for ${id}`);
-  if (ov.ridge !== undefined) assert.ok(typeof ov.ridge === 'number' && Number.isFinite(ov.ridge) && ov.ridge > 1.5 && ov.ridge < 35, `invalid ridge for ${id}`);
-  if (ov.eave !== undefined && ov.ridge !== undefined) assert.ok(ov.ridge > ov.eave, `ridge must exceed eave for ${id}`);
-  if (ov.dormer) assert.ok(!ov.roofShape || ov.roofShape === 'gable' || ov.roofShape === 'gambrel', `dormer incompatible with roofShape=${ov.roofShape} for ${id}`);
-  const { group: _g, road: _r, at: _a, kind: _k, eave: _e, ridge: _ri, ...styleFields } = ov;
-  mergedForCi[id] = { ...DEFAULT_STYLE, ...styleFields };
+function validatePack(pack) {
+  assertAllowedKeys(pack, ALLOWED_PACK_KEYS, 'pack');
+  for (const [gId, g] of Object.entries(pack.groups)) {
+    assertAllowedKeys(g, ALLOWED_GROUP_KEYS, `group ${gId}`);
+    assert.ok(typeof g.label === 'string' && g.label.length > 0, `invalid label for group ${gId}`);
+    assert.ok(Array.isArray(g.roads) && g.roads.length > 0 && g.roads.every((r) => typeof r === 'string' && r.length > 0), `invalid roads for group ${gId}`);
+  }
+  const rawText = JSON.stringify(pack);
+  assert.doesNotMatch(rawText, /\b\d{1,5}\s+[A-Z][a-z]+\s+(Road|Rd|Street|St|Lane|Ln|Drive|Dr|Avenue|Ave|Highway|Hwy)\b/, 'no civic addresses in property-looks data');
+  const merged = {};
+  for (const [id, ov] of Object.entries(pack.overrides)) {
+    assertAllowedKeys(ov, ALLOWED_OVERRIDE_KEYS, `override ${id}`);
+    if (ov.bareEnd !== undefined) assertAllowedKeys(ov.bareEnd, ALLOWED_BARE_END_KEYS, `override ${id}.bareEnd`);
+    if (ov.front !== undefined) assertAllowedKeys(ov.front, ALLOWED_FRONT_KEYS, `override ${id}.front`);
+    if (ov.attachedGarage !== undefined) assertAllowedKeys(ov.attachedGarage, ALLOWED_GARAGE_KEYS, `override ${id}.attachedGarage`);
+    if (ov.siloPosition !== undefined) assertAllowedKeys(ov.siloPosition, ALLOWED_SILO_POSITION_KEYS, `override ${id}.siloPosition`);
+    assert.match(id, /^\d+$/, `numeric building id ${id}`);
+    assert.ok(ov.group in pack.groups, `unknown group ${ov.group} for building ${id}`);
+    assert.ok(typeof ov.road === 'string' && ov.road.length > 0, `missing road for building ${id}`);
+    assert.ok(pack.groups[ov.group].roads.includes(ov.road), `road ${ov.road} not listed in group ${ov.group} for building ${id}`);
+    assert.ok(Array.isArray(ov.at) && ov.at.length === 2 && ov.at.every((v) => typeof v === 'number' && Number.isFinite(v)), `invalid at coords for ${id}`);
+    if (ov.kind !== undefined) assert.ok(VALID_KINDS.has(ov.kind), `invalid kind ${ov.kind} for ${id}`);
+    if (ov.eave !== undefined) assert.ok(typeof ov.eave === 'number' && Number.isFinite(ov.eave) && ov.eave > 1 && ov.eave < 25, `invalid eave for ${id}`);
+    if (ov.ridge !== undefined) assert.ok(typeof ov.ridge === 'number' && Number.isFinite(ov.ridge) && ov.ridge > 1.5 && ov.ridge < 35, `invalid ridge for ${id}`);
+    if (ov.eave !== undefined && ov.ridge !== undefined) assert.ok(ov.ridge > ov.eave, `ridge must exceed eave for ${id}`);
+    if (ov.dormer) assert.ok(!ov.roofShape || ov.roofShape === 'gable' || ov.roofShape === 'gambrel', `dormer incompatible with roofShape=${ov.roofShape} for ${id}`);
+    const { group: _g, road: _r, at: _a, kind: _k, eave: _e, ridge: _ri, ...styleFields } = ov;
+    merged[id] = { ...DEFAULT_STYLE, ...styleFields };
+  }
+  readBuildingStyles({ version: 1, styles: merged });
 }
-// Validate every override's style fields even in clean-clone CI without data/
-readBuildingStyles({ version: 1, styles: mergedForCi });
+validatePack(mabouPack);
+// Verify nested allowlists reject extra fields on bareEnd and siloPosition
+assert.throws(() => validatePack({
+  version: 1, area: 'test', groups: { g: { label: 'G', roads: ['Highway 19'] } },
+  overrides: { '1': { group: 'g', road: 'Highway 19', at: [0, 0], bareEnd: { side: 1, wall: '#cccccc', extra: 'x' } } },
+}), /unexpected key "extra"/);
+assert.throws(() => validatePack({
+  version: 1, area: 'test', groups: { g: { label: 'G', roads: ['Highway 19'] } },
+  overrides: { '1': { group: 'g', road: 'Highway 19', at: [0, 0], silo: true, siloPosition: { u: 0, v: 0, diameter: 4, height: 8, extra: 'x' } } },
+}), /unexpected key "extra"/);
 
 // 3. Land-backed validation & triangle budget check when data/baked/terrain is present
 const terrainDir = 'data/baked/terrain';

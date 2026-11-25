@@ -66,6 +66,15 @@ export function applyPropertyLooks(
 ): { buildings: Building[]; styles: Record<string, BuildingStyle>; roofBoxes: PropertyLookRoofBox[] } | null {
   const pack = AREA_LOOKS[areaId];
   if (!pack) return null;
+  return applyPropertyLookPack(pack, list, baseStyles);
+}
+
+/** Apply an explicit property-looks pack; exported for unit tests. */
+export function applyPropertyLookPack(
+  pack: AreaPropertyLooks,
+  list: Building[],
+  baseStyles?: Record<string, BuildingStyle>,
+): { buildings: Building[]; styles: Record<string, BuildingStyle>; roofBoxes: PropertyLookRoofBox[] } | null {
   const entries = Object.entries(pack.overrides);
   if (!entries.length) return null;
 
@@ -79,9 +88,9 @@ export function applyPropertyLooks(
 
   // Match each override unambiguously and order-independently by its anchored survey position.
   // A unique candidate within MATCH_RADIUS_M wins, or the strictly closest candidate (at least 1 m
-  // closer than any runner-up) so a reused ID farther away never beats the building at the anchor.
-  const matched = new Map<string, PropertyLookOverride>();
-  const claimed = new Set<string>();
+  // closer than any runner-up). Claims are collected first and any contested building is skipped so
+  // override order can never let a farther claim beat a closer one.
+  const claimsByBuilding = new Map<string, PropertyLookOverride[]>();
   const primaryList = [...primaryById.entries()];
   for (const [, ov] of entries) {
     const [oe, on] = ov.at;
@@ -95,9 +104,13 @@ export function applyPropertyLooks(
     nearby.sort((a, b) => a.dist - b.dist || a.id.localeCompare(b.id));
     if (nearby.length > 1 && nearby[1].dist - nearby[0].dist <= 1) continue;
     const winner = nearby[0].id;
-    if (claimed.has(winner)) continue;
-    claimed.add(winner);
-    matched.set(winner, ov);
+    const claims = claimsByBuilding.get(winner);
+    if (claims) claims.push(ov);
+    else claimsByBuilding.set(winner, [ov]);
+  }
+  const matched = new Map<string, PropertyLookOverride>();
+  for (const [winner, claims] of claimsByBuilding) {
+    if (claims.length === 1) matched.set(winner, claims[0]);
   }
   if (!matched.size) return null;
 

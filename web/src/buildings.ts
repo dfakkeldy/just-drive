@@ -668,10 +668,17 @@ export class Buildings {
           const stepHalf = Math.min(0.65, (u1 - u0) / 2);
           const stepLo = Math.max(u0, Math.min(u1 - stepHalf * 2, doorU - stepHalf));
           frontBox(stepLo, stepLo + stepHalf * 2, front * (depth + reach + 0.35) - 0.18, front * (depth + reach + 0.35) + 0.18, -0.2, 0.1, foundation);
-          if (entrance === 'wrap-around') frontBox(-span - 1.8, -span, -depth, depth + (front === 1 ? reach : 0), porchFoot, 0.23, rgb('#857c68'));
+          const garageOnReturnWall = hasGarage && garage.end === !frontEnd && garage.side === -1;
+          const returnDetached = hasGarage && garage.end === frontEnd && garage.side === front && doorU > garageCenter;
+          if (entrance === 'wrap-around' && !garageOnReturnWall && !returnDetached) {
+            frontBox(-span - 1.8, -span, -depth, depth + (front === 1 ? reach : 0), porchFoot, 0.23, rgb('#857c68'));
+          }
           if (entrance === 'deck') {
             const v = front * (depth + reach - 0.12);
-            const posts = tallFront ? [u0 + 0.12, -span / 3, span / 3, u1 - 0.12] : [u0 + 0.12, u1 - 0.12];
+            const spanW = u1 - u0;
+            const posts = tallFront && spanW >= 1.2
+              ? [u0 + 0.12, u0 + spanW / 3, u0 + (spanW * 2) / 3, u1 - 0.12]
+              : [u0 + 0.12, u1 - 0.12];
             const top = deckHeight + 0.87;
             for (const u of posts) frontBox(u - 0.06, u + 0.06, v - 0.06, v + 0.06, tallFront ? foot : deckHeight, top, trim);
             frontBox(u0 + 0.12, u1 - 0.12, v - 0.045, v + 0.045, top - 0.08, top, trim);
