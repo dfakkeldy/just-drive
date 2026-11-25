@@ -8,7 +8,7 @@ const [root,area,scope]=process.argv.slice(2);
 // The paved layer reserves the first eight. The ground-class bake ('ground' scope) reserves every
 // web/src/*-site.ts module; tools/ground-classes-check.py holds this list to the folder.
 const PAVED_SITES=['yard','home','church','porch','fishing','coast','quarry','mine'];
-const GROUND_SITES=[...PAVED_SITES,'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store','drlane','depot','prince','blackstone'];
+const GROUND_SITES=[...PAVED_SITES,'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store','drlane','depot','prince','blackstone','porthood-gas'];
 const ground=scope==='ground';
 const imports=(ground?GROUND_SITES:PAVED_SITES).map(s=>`export * as ${s.replace(/-(\w)/g,(_,c)=>c.toUpperCase())} from './web/src/${s}-site';`).join('\n');
 const result=await build({stdin:{contents:imports,resolveDir:repo,loader:'ts'},bundle:true,write:false,platform:'node',format:'esm',metafile:true,logLevel:'silent',plugins:[{name:'external-three',setup(b){b.onResolve({filter:/^three$/},()=>({path:pathToFileURL(repo+'/web/node_modules/three/build/three.module.js').href,external:true}));}}]});
@@ -48,6 +48,8 @@ const judiqueList=resolve(root,'data/baked/areas/judique/buildings.json');
 if(ground&&existsSync(judiqueList)){inputs.push(judiqueList);const jb=api.drlane.DrLaneSite.find(JSON.parse(readFileSync(judiqueList,'utf8')).buildings);if(jb)add('drlane',new api.drlane.DrLaneSite(jb,v).box);}
 const tupperList=resolve(root,'data/baked/areas/pointtupper/buildings.json');
 if(ground&&existsSync(tupperList)){inputs.push(tupperList);const pb=api.prince.PrinceSite.find(JSON.parse(readFileSync(tupperList,'utf8')).buildings);if(pb)add('prince',new api.prince.PrinceSite(pb,v).box);}
+const porthoodList=resolve(root,'data/baked/areas/porthood/buildings.json');
+if(ground&&existsSync(porthoodList)){inputs.push(porthoodList);const gb=api.porthoodGas.PortHoodGasSite.find(JSON.parse(readFileSync(porthoodList,'utf8')).buildings);if(gb)add('porthood-gas',new api.porthoodGas.PortHoodGasSite(gb,v).box);}
 const roads=JSON.parse(readFileSync(main+'/roads.json','utf8')).roads.map(r=>({...r,pts:r.pts.map(([e,n])=>[e-mm.village[0],mm.village[1]-n])}));
 const [l,bottom,r,t]=mm.mid, mv=mm.village;
 // The yard dog's driveway snaps to Southwest Ridge Road. Reserve it whenever that placement holds:

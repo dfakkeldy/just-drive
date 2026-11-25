@@ -357,6 +357,8 @@ prince	portable	no	Node check over baked Point Tupper land; no browser
 prince-browser	unproven	no	not yet measured on another host
 blackstone	portable	no	Node check over baked Mabou land; no browser
 blackstone-browser	unproven	no	not yet measured on another host
+porthood-gas	portable	no	Node check over baked Port Hood land; no browser
+porthood-gas-browser	unproven	no	not yet measured on another host
 port-hawkesbury-mail	portable	no	Node only; runs with or without data/baked/areas/pointtupper
 port-hawkesbury-mail-mutations	portable	no	Node mutation controls; runs with or without data/baked/areas/pointtupper
 port-hawkesbury-mail-browser	unproven	no	Hardware WebGL, Point Tupper and Mabou land, desktop and phone LOW
