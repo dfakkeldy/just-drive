@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "area": "westbay",
+  "roadId": 263,
+  "parameters": {
+    "s0": 828.0,
+    "s1": 852.0,
+    "endTaper": 2.0,
+    "slopeSpan": 4.0,
+    "halfBed": 3.0,
+    "outer": 6.0
+  },
+  "shapeStats": {
+    "z0": 59.7417,
+    "z1": 58.9063,
+    "m0": -0.044598,
+    "m1": 0.016247,
+    "minDeltaM": -0.9512,
+    "maxDeltaM": 2.0118
+  },
+  "files": [
+    {
+      "file": "areas/westbay/7/78_76.png",
+      "before": "46cb50bff5c94a307f7ec8d78fae703d7e46489dd57e845b003c6b1c72db7035",
+      "sha256": "fb7ac5a9ce73a11ef17d5ffd97ccb76b6ed7ee59fc140c0106e51ac11ff7d93c",
+      "bytes": 77338,
+      "changedPixels": 72,
+      "maxEdgeDiff": 0
+    },
+    {
+      "file": "areas/westbay/8/156_152.png",
+      "before": "f8ac66e57859b0e5065ba59aae0f5ab5c2498551526d9430a4f6bccbb629b478",
+      "sha256": "7d13d20d14ef1f893a461efddf5c9253d5d6bbccd829349458631ba04ca27ff8",
+      "bytes": 69936,
+      "changedPixels": 286,
+      "maxEdgeDiff": 0
+    }
+  ]
+}
