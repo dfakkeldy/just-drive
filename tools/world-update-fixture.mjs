@@ -261,6 +261,20 @@ export function verify(source, { drive = expectedDrive, ending = expectedEnding 
     const line=source.split('\n').find(l=>l.includes("name: 'trafficSignals'"));
     assert.throws(()=>checkSignals(source.replace(line,'')),/traffic signals follow roads/,'missing signal update must fail');
   }
+  if(source.includes("name: 'portHoodGas'")){
+    const checkGas = code => {
+      for (const ending of [false, true]) {
+        const result=spy(code,ending,true,false,(context,trace)=>{ context.portHoodGasSite={}; context.portHoodGas={update:trace('portHoodGas')}; });
+        const at=result.calls.indexOf('terrain'), gas=result.calls.indexOf('portHoodGas');
+        assert.ok(at>=0&&gas>at,`portHoodGas follows terrain in ${ending?'ending':'drive'} frame: `+JSON.stringify(result.calls));
+        assert.equal(result.calls.filter(c=>c==='portHoodGas').length,1,`portHoodGas runs once per ${ending?'ending':'drive'} frame`);
+        assert.deepEqual(result.args.portHoodGas[0],[result.context.camera.position,ending?0:1050,result.context.vehicle,ending?0:.05],'portHoodGas receives camera, now, vehicle and dt');
+      }
+    };
+    checkGas(source);
+    const line=source.split('\n').find(l=>l.includes("name: 'portHoodGas'"));
+    assert.throws(()=>checkGas(source.replace(line,'')),/portHoodGas follows terrain/,'missing portHoodGas update must fail');
+  }
   return { drive: drive().filter(x => !x.quiet).map(x => x.name), ending: ending().filter(x => !x.quiet).map(x => x.name), iteratorsPerFrame: 0, iteratorStepsPerFrame: 0 };
 }
 // The places rows at boot and in the frame (grok-bots#1308 C52). verify() does not run the boot's build loop: its

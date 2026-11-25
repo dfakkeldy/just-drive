@@ -211,7 +211,12 @@ export class PortHoodGas implements HandBuiltPlace {
   private parked: ParkedVehicles;
   private parkedList: Parked[];
   private probes: { x: number; z: number }[];
+  /** Triangles in the hand-built station + sign meshes (excluding instanced parked vehicles). */
   triangles = 0;
+  /** Triangles across all 28 instanced parked vehicles (3 InstancedMeshes * instance count). */
+  parkedTriangles = 0;
+  /** Full feature triangle count (station + signs + all 28 instanced parked vehicles). */
+  get totalTriangles(): number { return this.triangles + this.parkedTriangles; }
 
   /** `lift` turns a true height above the sea into the game's stretched height. */
   constructor(readonly site: PortHoodGasSite, private terrain: Terrain, private lift: (metres: number) => number, private low: boolean) {
@@ -248,9 +253,17 @@ export class PortHoodGas implements HandBuiltPlace {
       this.material,
     );
     this.parked.group.name = 'porthood-gas-parked';
+    let parkedTris = 0;
     for (const child of this.parked.group.children) {
       child.castShadow = child.receiveShadow = !this.low;
+      const inst = child as THREE.InstancedMesh;
+      if (inst.isInstancedMesh) {
+        const geo = inst.geometry;
+        const trisPer = geo.index ? geo.index.count / 3 : (geo.getAttribute('position')?.count ?? 0) / 3;
+        parkedTris += trisPer * inst.count;
+      }
     }
+    this.parkedTriangles = parkedTris;
     this.group.add(this.parked.group);
 
     this.probes = ([
@@ -575,11 +588,13 @@ export class PortHoodGas implements HandBuiltPlace {
     const P = PUMP_ISLAND;
     const cu = (P.u0 + P.u1) / 2, cv = (P.v0 + P.v1) / 2;
     const gy = this.g(cu, cv);
+    const minCorner = Math.min(this.g(P.u0, P.v0), this.g(P.u1, P.v0), this.g(P.u0, P.v1), this.g(P.u1, P.v1));
+    const curbUnder = Math.min(-0.55, minCorner - gy - 0.30);
     const len = P.u1 - P.u0, wid = P.v1 - P.v0;
 
     m.at(0, gy, 0);
-    // Raised concrete curb island extending slightly below ground so slopes never gap.
-    m.box(cu, (P.curb - 0.35) / 2, cv, len, P.curb + 0.35, wid, CONCRETE);
+    // Raised concrete curb island extending below the lowest downhill corner so slopes never gap at 3x exaggeration.
+    m.box(cu, (P.curb + curbUnder) / 2, cv, len, P.curb - curbUnder, wid, CONCRETE);
     m.box(cu, P.curb + 0.01, cv, len - 0.12, 0.02, wid - 0.12, shade(CONCRETE, 1.05));
 
     // Two tall galvanized steel columns rising from the island, each topped with twin rectangular downward LED floodlights.
@@ -640,9 +655,12 @@ export class PortHoodGas implements HandBuiltPlace {
   private pylonSign(m: Mesher, s: Mesher): void {
     const P = PYLON;
     const gy = this.g(P.u, P.v);
+    const minCorner = Math.min(this.g(P.u - 0.5, P.v - 0.5), this.g(P.u + 0.5, P.v - 0.5), this.g(P.u - 0.5, P.v + 0.5), this.g(P.u + 0.5, P.v + 0.5));
+    const pedUnder = Math.min(-0.40, minCorner - gy - 0.30);
+    const pedTop = 0.70;
     m.at(P.u, gy, P.v, P.yaw);
-    // Tapered light-grey concrete pedestal base.
-    m.cyl(0, 0.30, 0, 0.46, 0.80, CONCRETE, 'y', 4, 0.30);
+    // Tapered light-grey concrete pedestal base extending below downhill slope.
+    m.cyl(0, (pedTop + pedUnder) / 2, 0, 0.46, pedTop - pedUnder, CONCRETE, 'y', 4, 0.30);
     // Galvanized steel sign pole.
     m.cyl(0, P.poleH / 2, 0, 0.14, P.poleH, STEEL, 'y', this.low ? 6 : 10, 0.12);
     // Rectangular double-sided illuminated price sign cabinet at top of pole.
@@ -686,11 +704,16 @@ export class PortHoodGas implements HandBuiltPlace {
   private shippingContainer(m: Mesher): void {
     const C = CONTAINER, cu = (C.u0 + C.u1) / 2, cv = (C.v0 + C.v1) / 2;
     const gy = this.g(cu, cv), len = C.u1 - C.u0, dep = C.v1 - C.v0;
+    const minCorner = Math.min(this.g(C.u0, C.v0), this.g(C.u1, C.v0), this.g(C.u0, C.v1), this.g(C.u1, C.v1));
+    const under = Math.min(-0.45, minCorner - gy - 0.35);
     m.at(cu, gy, cv);
-    m.box(0, C.height / 2 - 0.15, 0, len, C.height + 0.3, dep, CONTAINER_RUST);
+    // Container body seated down to the lowest downhill slope so no corner floats at 3x exaggeration.
+    m.box(0, (C.height + under) / 2, 0, len, C.height - under, dep, CONTAINER_RUST);
     m.box(0, C.height + 0.03, 0, len + 0.06, 0.08, dep + 0.06, shade(CONTAINER_RUST, 0.84));
+    // Corner posts and dark concrete blocking extending below the lowest corner.
     for (const [su, sv] of [[-len / 2, -dep / 2], [len / 2, -dep / 2], [-len / 2, dep / 2], [len / 2, dep / 2]]) {
-      m.box(su, C.height / 2, sv, 0.12, C.height, 0.12, shade(CONTAINER_RUST, 0.78));
+      m.box(su, (C.height + under) / 2, sv, 0.12, C.height - under, 0.12, shade(CONTAINER_RUST, 0.78));
+      m.box(su * 0.92, (0.04 + under) / 2, sv * 0.92, 0.34, 0.04 - under, 0.34, FOUNDATION);
     }
     if (!this.low) {
       for (const side of [-1, 1]) {

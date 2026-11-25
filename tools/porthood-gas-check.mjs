@@ -1,12 +1,15 @@
 // Node check for the Port Hood service station and gas bar (web/src/porthood-gas-site.ts, web/src/porthood-gas.ts):
-//   1. PortHoodGasSite.find matches building 522 in Port Hood and refuses a moved (even 10 m), resized or turned box;
+//   1. PortHoodGasSite.find matches building 522 in Port Hood, refuses a >=0.5 m shift, resize or >=0.5 deg turn,
+//      and every accepted boundary shift/turn still leaves High Road and Dunmore Road solids and L8 fields untouched;
 //   2. pad, paved asphalt lot, concrete fuel apron, rear gravel yard, mown corner lawns, tree-clear strips and maxTexel
 //      road-field tiles agree with baked Port Hood land and leave High Road and Dunmore Road bit-for-bit untouched across L5-L8;
-//   3. PortHoodGas builds finite geometry on desktop and LOW (LOW simpler), uses zero-allocation readiness, keeps all 25
-//      instanced parked cars non-overlapping and off the roads, stops a car at every structure and parked vehicle, and
-//      keeps High Road, Dunmore Road and the drive-through fuel lane open for car, pickup truck and SXS;
-//   4. grounding uses drawn triangles across 7 -> 8 -> 7 (L8 cached) -> 7 (evicted) at 2.5x and 3x exaggeration, retains
-//      geometry across visibility toggles, and drone roof boxes match built roof peaks.
+//   3. PortHoodGas builds finite geometry on desktop and LOW (LOW simpler, explicit station + full 28-car triangle caps),
+//      uses zero-allocation readiness, keeps all 28 instanced parked cars non-overlapping and off the roads, stops a car
+//      at every structure and parked vehicle, and sweeps the continuous Dunmore->pump->High Road and High Road->pump->High Road
+//      drive-through routes cleanly for car, pickup truck and SXS;
+//   4. grounding uses drawn triangles (not heightAt) for both station geometry and parked-car instances across 7 -> 8 -> 7
+//      at 2.5x and 3x exaggeration, zero downhill corner gaps exist at 3x, old geometries dispose on ground change and stay
+//      retained across visibility toggles, and drone roof boxes cover the built mesh peak of every structure including the pylon.
 // node tools/run-node-check.mjs tools/porthood-gas-check.mjs
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -31,12 +34,13 @@ const manifest = JSON.parse(readFileSync(`${AREA}manifest.json`, 'utf8'));
 const buildings = JSON.parse(readFileSync(`${AREA}buildings.json`, 'utf8')).buildings;
 const roads = JSON.parse(readFileSync(`${AREA}roads.json`, 'utf8')).roads;
 
-// 1. Site lookup against the baked Port Hood catalog.
+// 1. Site lookup against the baked Port Hood catalog (tight <0.5 m / <0.5 deg guard).
 const found = PortHoodGasSite.find(buildings);
 assert.ok(found && found.id === PORT_HOOD_GAS_BUILDING, 'PortHoodGasSite.find finds building 522 in Port Hood');
-assert.equal(PortHoodGasSite.find([{ ...found, length: found.length + 2 }]), null, 'a resized box is ignored');
-assert.equal(PortHoodGasSite.find([{ ...found, axisDeg: found.axisDeg + 15 }]), null, 'a turned box is ignored');
-assert.equal(PortHoodGasSite.find([{ ...found, x: found.x + 10 }]), null, 'a 10 m shifted box is ignored');
+assert.equal(PortHoodGasSite.find([{ ...found, length: found.length + 0.6 }]), null, 'a resized box is ignored');
+assert.equal(PortHoodGasSite.find([{ ...found, axisDeg: found.axisDeg + 0.6 }]), null, 'a 0.6 deg turned box is ignored');
+assert.equal(PortHoodGasSite.find([{ ...found, x: found.x + 0.6 }]), null, 'a 0.6 m shifted box is ignored');
+assert.equal(PortHoodGasSite.find([{ ...found, y: found.y + 0.6 }]), null, 'a 0.6 m north-shifted box is ignored');
 assert.equal(PortHoodGasSite.find([{ ...found, kind: 'house' }]), null, 'wrong kind is ignored');
 
 const site = new PortHoodGasSite(found, manifest.village);
@@ -120,23 +124,31 @@ const build = (low) => {
 };
 const desktop = build(false), low = build(true);
 assert.equal(surfaceAtCalls, 0, 'readiness check never allocates via surfaceAt');
-assert.ok(desktop.triangles >= 1500 && desktop.triangles <= 12000, `desktop triangles ${desktop.triangles} in range`);
-assert.ok(low.triangles < desktop.triangles * 0.85, `LOW (${low.triangles}) is simpler than desktop (${desktop.triangles})`);
+assert.ok(desktop.triangles >= 1500 && desktop.triangles <= 5000, `desktop station triangles ${desktop.triangles} in range`);
+assert.ok(low.triangles >= 1000 && low.triangles <= 2500, `LOW station triangles ${low.triangles} in range`);
+assert.ok(low.triangles < desktop.triangles * 0.85, `LOW station (${low.triangles}) is simpler than desktop (${desktop.triangles})`);
+assert.ok(desktop.parkedTriangles > 0 && desktop.totalTriangles <= 12000, `desktop total triangles (station + 28 cars) ${desktop.totalTriangles} <= 12000`);
+assert.ok(low.totalTriangles <= 9000 && low.totalTriangles < desktop.totalTriangles, `LOW total triangles ${low.totalTriangles} <= 9000 and < desktop (${desktop.totalTriangles})`);
 
 for (const st of [desktop, low]) {
-  let instancedCount = 0, instancedMeshes = 0;
+  let instancedCount = 0, instancedMeshes = 0, visibleMeshes = 0, fullTris = 0;
   st.group.traverse((o) => {
-    if (o.isInstancedMesh) { instancedMeshes++; instancedCount += o.count; }
     if (o.isMesh) {
+      visibleMeshes++;
       const pos = o.geometry.getAttribute('position').array;
       for (let i = 0; i < pos.length; i++) assert.ok(Number.isFinite(pos[i]), 'finite geometry');
+      const perMesh = o.geometry.index ? o.geometry.index.count / 3 : o.geometry.getAttribute('position').count / 3;
+      if (o.isInstancedMesh) { instancedMeshes++; instancedCount += o.count; fullTris += perMesh * o.count; }
+      else fullTris += perMesh;
     }
   });
+  assert.equal(visibleMeshes, 5, 'feature draws exactly 5 meshes (station + signs + 3 instanced vehicle meshes)');
   assert.equal(instancedMeshes, 3, 'parked cars share 3 instanced meshes (car, SUV, pickup)');
   assert.equal(instancedCount, 28, 'all 28 parked cars instanced');
+  assert.equal(fullTris, st.totalTriangles, 'totalTriangles matches traversed station + instanced vehicle triangles');
 }
 
-// Solids check: structures and parked cars stop a car; drive-through fuel lane and lot entrances stay open.
+// Solids check: structures and parked cars stop a car; continuous drive-through routes stay open for car, pickup & SXS.
 const pushAt = (u, v, heading = 0, spec = CAR_SPEC) => {
   const w = site.world(u, v), car = { x: w.x, z: w.z, vx: 0, vz: 0, speed: 0, heading, spec };
   desktop.resolveSolids(car);
@@ -149,19 +161,33 @@ assert.ok(pushAt(PYLON.u, PYLON.v) > 0.3, 'pylon price sign pushes car out');
 assert.ok(pushAt(20, -13) > 1.5, 'east storage shed pushes car out');
 assert.ok(pushAt(24.3, -14) > 1.0, 'shipping container pushes car out');
 assert.ok(pushAt(14.8, -4.3) > 0.8, 'cargo trailer pushes car out');
-assert.ok(pushAt(-2.5, -16.1) > 0.5, 'fuelling SUV at outer pump pushes car out');
-assert.ok(pushAt(-23.1, -19.5) > 0.5, 'parked pickup in NW row pushes car out');
-// Drive-through route: Dunmore Road entrance -> west apron -> inner east pump -> High Road exit stays open!
-for (const [label, u, v, du, dv] of [
-  ['Dunmore entrance', -34, 4, 1, -0.5],
-  ['west apron', -22, -4, 1, -0.6],
-  ['pump approach', -14, -9.5, 1, 0],
-  ['open inner east pump', -1.5, -9.5, 1, 0],
-  ['High Road exit lane', 4.0, -17.5, 0, -1],
-  ['High Road west entrance', -12.0, -21.0, 0, 1],
-]) {
-  for (const [vName, spec] of [['car', CAR_SPEC], ['truck', TRUCK_SPEC], ['sxs', SXS_SPEC]]) {
-    assert.equal(pushAt(u, v, site.heading(du, dv), spec), 0, `${label} is open for ${vName}`);
+assert.ok(pushAt(-2.2, -16.1) > 0.5, 'fuelling SUV at outer pump pushes car out');
+assert.ok(pushAt(-24.0, -19.0) > 0.5, 'parked pickup in NW row pushes car out');
+
+// Continuous swept drive-through routes (sampled every 0.5 m with actual tangent heading):
+// Route A: Dunmore Road -> Dunmore entrance -> west apron -> inner south fuel lane (both pumps) -> High Road exit -> High Road.
+// Route B: High Road -> High Road west entrance (6 m wide at u=-14) -> inner south fuel lane -> High Road exit -> High Road.
+const driveRoutes = [
+  ['Dunmore-to-High-Road fuel drive-through', [
+    [-44.0, 9.0], [-36.0, 4.0], [-28.0, -1.0], [-20.0, -6.0], [-14.0, -9.2], [-6.1, -9.2], [-3.9, -9.2], [2.5, -9.5], [4.2, -16.5], [4.2, -27.2],
+  ]],
+  ['High-Road west-entry-to-pump-to-exit', [
+    [-14.0, -27.2], [-14.0, -19.0], [-14.0, -13.0], [-14.0, -9.2], [-6.1, -9.2], [-3.9, -9.2], [2.5, -9.5], [4.2, -16.5], [4.2, -27.2],
+  ]],
+];
+for (const [routeName, pts] of driveRoutes) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [u0, v0] = pts[i], [u1, v1] = pts[i + 1];
+    const segLen = Math.hypot(u1 - u0, v1 - v0);
+    const steps = Math.max(1, Math.ceil(segLen / 0.5));
+    const hdg = site.heading(u1 - u0, v1 - v0);
+    for (let k = 0; k <= steps; k++) {
+      const f = k / steps, u = u0 + (u1 - u0) * f, v = v0 + (v1 - v0) * f;
+      for (const [vName, spec] of [['car', CAR_SPEC], ['truck', TRUCK_SPEC], ['sxs', SXS_SPEC]]) {
+        assert.equal(pushAt(u, v, hdg, spec), 0,
+          `${routeName} blocked for ${vName} at (${u.toFixed(1)}, ${v.toFixed(1)})`);
+      }
+    }
   }
 }
 
@@ -200,6 +226,29 @@ for (const pt of roadSamples) {
       desktop.resolveSolids(car);
       assert.equal(Math.hypot(car.x - pt.x, car.z - pt.z), 0,
         `${label} hits solid on ${pt.roadName} (side=${pt.side.toFixed(1)} m) at (${pt.x.toFixed(1)}, ${pt.z.toFixed(1)})`);
+    }
+  }
+}
+
+// Worst-case accepted survey boundary shifts/turns must also leave High Road & Dunmore Road solids and L8 fields untouched.
+for (const [label, delta] of [
+  ['+0.49 m north', { y: found.y + 0.49 }],
+  ['-0.49 m west', { x: found.x - 0.49 }],
+  ['+0.49 deg turn', { axisDeg: found.axisDeg + 0.49 }],
+  ['-0.49 deg turn', { axisDeg: found.axisDeg - 0.49 }],
+]) {
+  const shiftedBox = PortHoodGasSite.find([{ ...found, ...delta }]);
+  assert.ok(shiftedBox, `boundary case ${label} is accepted by find()`);
+  const shiftedSite = new PortHoodGasSite(shiftedBox, manifest.village);
+  const shiftedSt = new PortHoodGas(shiftedSite, flatTerrain, (m) => m, false);
+  for (const pt of roadSamples) {
+    for (const hdg of [pt.heading, pt.heading + Math.PI]) {
+      for (const [vName, spec] of [['car', CAR_SPEC], ['truck', TRUCK_SPEC], ['sxs', SXS_SPEC]]) {
+        const car = { x: pt.x, z: pt.z, vx: 0, vz: 0, speed: 0, heading: hdg, spec };
+        shiftedSt.resolveSolids(car);
+        assert.equal(Math.hypot(car.x - pt.x, car.z - pt.z), 0,
+          `boundary ${label}: ${vName} hits solid on ${pt.roadName} at (${pt.x.toFixed(1)}, ${pt.z.toFixed(1)})`);
+      }
     }
   }
 }
@@ -330,15 +379,49 @@ for (const level of [5, 6, 7, 8]) {
     assert.equal(ss.halfWidth, sb.halfWidth, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production surfaceAt.halfWidth unchanged`);
     assert.equal(ss.roadDist, sb.roadDist, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production surfaceAt.roadDist bit-for-bit unchanged`);
   }
+  // Also prove boundary-accepted L8 shift (-0.49 m west, +0.49 m north) leaves L8 High Road & Dunmore Road bit-for-bit untouched.
+  if (level === 8) {
+    const edgeBox = PortHoodGasSite.find([{ ...found, x: found.x - 0.34, y: found.y + 0.34, axisDeg: found.axisDeg + 0.45 }]);
+    assert.ok(edgeBox, 'diagonal boundary shift accepted');
+    const edgeSite = new PortHoodGasSite(edgeBox, manifest.village);
+    const edgeTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, [...surveyedClear]);
+    edgeTerrain.sites.push(edgeSite);
+    for (const box of edgeSite.clear) edgeTerrain.addTreeClear(box);
+    for (const key of needed) { const [ti, tj] = key.split('_').map(Number); await edgeTerrain.loadNow(8, ti, tj); }
+    for (const pt of roadSamples) {
+      assert.equal(edgeTerrain.meshHeightAt(pt.x, pt.z), baseTerrain.meshHeightAt(pt.x, pt.z),
+        `boundary L8 ${pt.roadName} meshHeightAt unchanged`);
+      const sb = baseTerrain.surfaceAt(pt.x, pt.z), se = edgeTerrain.surfaceAt(pt.x, pt.z);
+      assert.equal(se.kind, sb.kind, `boundary L8 ${pt.roadName} surfaceAt.kind unchanged`);
+      assert.equal(se.roadDist, sb.roadDist, `boundary L8 ${pt.roadName} surfaceAt.roadDist unchanged`);
+    }
+  }
+}
+
+// Helper to measure actual built mesh Y range inside a site (u, v) footprint box.
+function meshYBoundsIn(st, u0, u1, v0, v1) {
+  let minY = Infinity, maxY = -Infinity;
+  for (const child of st.group.children[0].children) {
+    const pos = child.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      const u = pos.getX(i), y = pos.getY(i), v = pos.getZ(i);
+      if (u >= u0 - 0.3 && u <= u1 + 0.3 && v >= v0 - 0.3 && v <= v1 + 0.3) {
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  return { minY, maxY };
 }
 
 for (const exag of [2.5, 3]) {
   const L8 = loadLevel(8, exag);
   for (const isLow of [false, true]) {
-    let drawn = 7, cached = 7, pending = 0;
+    let drawn = 7, cached = 7, pending = 0, meshBias = 0;
+    // Deliberate +0.75 m offset on heightAt so any fallback from drawn meshHeightAt(..., true) to heightAt fails immediately.
     const realTerrain = {
-      heightAt: (x, z) => L8.heightAt(x, z),
-      meshHeightAt: (x, z, drawnOnly) => (drawnOnly && drawn === 8 ? L8.meshY(x, z) : L8.heightAt(x, z)),
+      heightAt: (x, z) => L8.heightAt(x, z) + 0.75,
+      meshHeightAt: (x, z, drawnOnly) => (drawnOnly && drawn === 8 ? L8.meshY(x, z) + meshBias : L8.heightAt(x, z) + 0.75),
       drawnLevelAt: () => drawn,
       levelAt: () => cached,
       get pending() { return pending; },
@@ -360,14 +443,72 @@ for (const exag of [2.5, 3]) {
     st.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
     assert.equal(st.group.visible, true, `L8 exag=${exag} low=${isLow}: visible once L8 is drawn`);
     assert.equal(st.waiting, false, `L8 exag=${exag} low=${isLow}: waiting=false once built`);
+
     const firstGeo = st.group.children[0].children[0].geometry;
+    const firstSignGeo = st.group.children[0].children[1].geometry;
+
+    // Verify drawn-mesh grounding (not heightAt!) for outbuilding vertices AND all 28 instanced parked-car matrices.
+    const pylonW = site.world(PYLON.u, PYLON.v);
+    const pylonBounds = meshYBoundsIn(st, PYLON.u - 1.2, PYLON.u + 1.2, PYLON.v - 1.2, PYLON.v + 1.2);
+    const expectedPylonTop = L8.meshY(pylonW.x, pylonW.z) + PYLON.boxTop + 0.08;
+    assert.ok(Math.abs(pylonBounds.maxY - expectedPylonTop) < 0.05,
+      `exag=${exag} low=${isLow}: pylon top (${pylonBounds.maxY.toFixed(3)}) tracks drawn meshY (${expectedPylonTop.toFixed(3)}), not heightAt`);
+
+    const mat = new THREE.Matrix4(), pos3 = new THREE.Vector3();
+    let checkedCars = 0;
+    for (const child of st.group.children[1].children) {
+      if (!child.isInstancedMesh) continue;
+      for (let i = 0; i < child.count; i++) {
+        child.getMatrixAt(i, mat);
+        pos3.setFromMatrixPosition(mat);
+        const wantY = L8.meshY(pos3.x, pos3.z);
+        assert.ok(Math.abs(pos3.y - wantY) < 0.02,
+          `exag=${exag} low=${isLow}: parked car ${checkedCars} sits on drawn meshY (${pos3.y.toFixed(3)} vs ${wantY.toFixed(3)})`);
+        checkedCars++;
+      }
+    }
+    assert.equal(checkedCars, 28, 'all 28 parked-car instance matrices verified on drawn terrain');
+
+    // Verify EVERY structure's drone roof box covers its actual built mesh peak, AND zero downhill corners float.
     if (!isLow) {
       const ownRoofAt = roofHeights(site.roofBoxes(), manifest.village, exag, 0);
-      const mainW = site.world(0, 0);
-      assert.ok(ownRoofAt(mainW.x, mainW.z) >= site.level * exag + MAIN.parapet - 0.1, `exag=${exag}: drone roof floor covers main parapet`);
+      const structureChecks = [
+        ['mainStation', MAIN.u0, MAIN.u1, MAIN.v0, MAIN.v1],
+        ['eastWing', EAST_WING.u0, EAST_WING.u1, EAST_WING.v0, EAST_WING.v1],
+        ['fuelIsland', PUMP_ISLAND.u0, PUMP_ISLAND.u1, PUMP_ISLAND.v0, PUMP_ISLAND.v1],
+        ['pylon', PYLON.u - 1.1, PYLON.u + 1.1, PYLON.v - 1.1, PYLON.v + 1.1],
+        ['eastShed', EAST_SHED.u0, EAST_SHED.u1, EAST_SHED.v0, EAST_SHED.v1],
+        ['container', CONTAINER.u0, CONTAINER.u1, CONTAINER.v0, CONTAINER.v1],
+        ['trailer', TRAILER.u0, TRAILER.u1, TRAILER.v0, TRAILER.v1],
+      ];
+      for (const [sName, u0, u1, v0, v1] of structureChecks) {
+        const bounds = meshYBoundsIn(st, u0, u1, v0, v1);
+        const cw = site.world((u0 + u1) / 2, (v0 + v1) / 2);
+        const roofH = ownRoofAt(cw.x, cw.z);
+        assert.ok(Number.isFinite(roofH) && roofH >= bounds.maxY,
+          `exag=${exag}: drone roof floor at ${sName} (${roofH.toFixed(3)}) covers built mesh peak (${bounds.maxY.toFixed(3)})`);
+      }
       const openW = site.world(-25, -12);
       assert.equal(ownRoofAt(openW.x, openW.z), -Infinity, `exag=${exag}: open lot has no phantom roof floor`);
+
+      // Downhill corner grounding: every grounded structure's lowest vertex must extend below the lowest terrain corner.
+      for (const [sName, u0, u1, v0, v1] of [
+        ['fuelIsland', PUMP_ISLAND.u0, PUMP_ISLAND.u1, PUMP_ISLAND.v0, PUMP_ISLAND.v1],
+        ['pylon', PYLON.u - 0.5, PYLON.u + 0.5, PYLON.v - 0.5, PYLON.v + 0.5],
+        ['eastShed', EAST_SHED.u0, EAST_SHED.u1, EAST_SHED.v0, EAST_SHED.v1],
+        ['container', CONTAINER.u0, CONTAINER.u1, CONTAINER.v0, CONTAINER.v1],
+      ]) {
+        const bounds = meshYBoundsIn(st, u0, u1, v0, v1);
+        let lowestGround = Infinity;
+        for (const [cu, cv] of [[u0, v0], [u1, v0], [u0, v1], [u1, v1]]) {
+          const w = site.world(cu, cv);
+          lowestGround = Math.min(lowestGround, L8.meshY(w.x, w.z));
+        }
+        assert.ok(bounds.minY <= lowestGround - 0.05,
+          `exag=${exag}: ${sName} bottom (${bounds.minY.toFixed(3)}) sits below lowest downhill corner (${lowestGround.toFixed(3)})`);
+      }
     }
+
     // Dropping back to L7/L6/null hides cleanly and returning to same L8 retains geometry.
     for (const [label, lvl, dist] of [['L7 with L8 cached', 7, 1180], ['L6 at 1590 m', 6, 1590], ['null drawn', null, 100]]) {
       drawn = lvl; cached = 8;
@@ -378,14 +519,27 @@ for (const exag of [2.5, 3]) {
     st.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
     assert.equal(st.group.visible, true, `exag=${exag} low=${isLow}: returns cleanly when L8 is drawn again`);
     assert.equal(st.group.children[0].children[0].geometry, firstGeo, `exag=${exag} low=${isLow}: retains geometry across visibility toggles`);
+
+    // Ground change must rebuild and dispose both previous station and sign geometries.
+    let disposedMain = false, disposedSign = false;
+    const origMainDispose = firstGeo.dispose.bind(firstGeo);
+    const origSignDispose = firstSignGeo.dispose.bind(firstSignGeo);
+    firstGeo.dispose = () => { disposedMain = true; origMainDispose(); };
+    firstSignGeo.dispose = () => { disposedSign = true; origSignDispose(); };
+    meshBias = 0.25;
+    st.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
+    assert.equal(disposedMain, true, `exag=${exag} low=${isLow}: old station geometry disposed on ground change`);
+    assert.equal(disposedSign, true, `exag=${exag} low=${isLow}: old sign geometry disposed on ground change`);
+    assert.notEqual(st.group.children[0].children[0].geometry, firstGeo, `exag=${exag} low=${isLow}: new station geometry built on ground change`);
   }
 }
 
-// Frame order & tree-only clear boxes: main.ts must update portHoodGas in landscape (ending: true) after terrain.
+// Frame order, lazy chunk & tree-only clear boxes: main.ts must lazy-load portHoodGas and update it in landscape (ending: true) after terrain.
 const terrainIdx = mainSrc.indexOf("name: 'terrain', segment: 'landscape'");
 const gasIdx = mainSrc.indexOf("name: 'portHoodGas', segment: 'landscape', ending: true");
 assert.ok(terrainIdx >= 0 && gasIdx > terrainIdx, 'main.ts updates portHoodGas in landscape (ending: true) after terrain');
 assert.ok(mainSrc.includes("name !== 'portHoodGas'"), 'main.ts excludes portHoodGas from before-camera places loop');
 assert.ok(mainSrc.includes('portHoodGasSite.clear) terrain.addTreeClear'), 'main.ts registers portHoodGas clear boxes as tree-only');
+assert.ok(mainSrc.includes("early(import('./porthood-gas'))"), 'main.ts lazy-loads porthood-gas only for Port Hood');
 
-console.log(`PASS porthood-gas: desktop ${desktop.triangles} tris, LOW ${low.triangles} tris, 28 instanced parked cars (3 meshes), production Terrain L5-L8 High Road & Dunmore Road bit-for-bit untouched, solids & open fuel lane verified, geometry retained across visibility toggles`);
+console.log(`PASS porthood-gas: desktop ${desktop.triangles} station / ${desktop.totalTriangles} total tris, LOW ${low.triangles} station / ${low.totalTriangles} total tris, 28 instanced parked cars (3 meshes), production Terrain L5-L8 High Road & Dunmore Road bit-for-bit untouched (including boundary shift), swept drive-through routes open, all 7 roof boxes & downhill corners verified, drawn-mesh grounding & disposal verified`);

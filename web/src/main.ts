@@ -163,7 +163,6 @@ import { PrinceHouse } from './prince-house';
 import { BlackstoneSite } from './blackstone-site';
 import { BlackstoneHouse } from './blackstone-house';
 import { PortHoodGasSite } from './porthood-gas-site';
-import { PortHoodGas } from './porthood-gas';
 import { PorchSite } from './porch-site';
 import { CHURCH_START, ChurchSite } from './church-site';
 import { roughRoads, setPuddleField } from './rough-roads';
@@ -307,6 +306,7 @@ const villageChunk = ERA.modern && AREA.judiqueVillage && params.get('village') 
 const hawkesburyChunk = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' ? early(import('./port-hawkesbury')) : null;
 const postOfficeChunk = ERA.modern && AREA.hawkesbury && params.get('hawkesbury') !== '0' && params.get('postOffice') !== '0' ? early(import('./ph-post-office')) : null;
 const mabouMainChunk = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? early(import('./mabou-main')) : null;
+const portHoodGasChunk = ERA.modern && AREA.portHoodGas && params.get('porthoodgas') !== '0' ? early(import('./porthood-gas')) : null;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const hud = document.getElementById('hud')!;
@@ -539,7 +539,7 @@ const placeRows = {
   depot: placeRow(depotSite, site => new depotFeature!.PortHoodDepot(site, terrain, LOW, SITE.brand === 'just')),
   prince: placeRow(princeSite, site => new PrinceHouse(site, terrain, lift, LOW)),
   blackstone: placeRow(blackstoneSite, site => new BlackstoneHouse(site, terrain, lift, LOW)),
-  portHoodGas: placeRow(portHoodGasSite, site => new PortHoodGas(site, terrain, lift, LOW)),
+  portHoodGas: lazyPlaceRow(portHoodGasSite, () => portHoodGasChunk!.take().catch(partFailed), (site, part) => new part.PortHoodGas(site, terrain, lift, LOW)),
 };
 // Each site clears its surveyed land (Blackstone and Port Hood gas keep their original canopy-clear boxes so L5-L7 match
 // the unreplaced baseline, and register their wider yard/lot clear boxes as tree-only plus L8 clearCanopy).

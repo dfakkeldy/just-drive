@@ -23,7 +23,7 @@ type P = [number, number];
 export const PORT_HOOD_GAS_BUILDING = 522;
 const LENGTH = 19.23, WIDTH = 12.54, AXIS = 83;
 const SITE_REF: P = [614501.66, 5096458.7];
-const SITE_REACH = 5;
+const SITE_REACH = 0.5, SIZE_TOL = 0.5, AXIS_TOL = 0.5;
 
 /** Level ground under the main service station building and east wing; outside it blends back to the lot's slope. */
 const PAD: P[] = [[-8.2, -6.2], [10.8, -6.2], [10.8, 5.2], [-8.2, 5.2]];
@@ -66,32 +66,28 @@ const smooth = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Mapped High Road and Dunmore Road centrelines in site (u, v) metres (halfWidth = 3.0 m each). */
-const HIGH_ROAD_CL: readonly P[] = [
-  [-87.96, -25.17], [-71.97, -25.65], [-55.98, -26.1], [-39.98, -26.54],
-  [-23.99, -26.96], [-7.99, -27.19], [8.01, -27.19], [24.0, -27.36],
-  [40.01, -27.71], [56.0, -28.07],
+/** Mapped High Road and Dunmore Road centrelines in fixed EPSG:2961 map metres (halfWidth = 3.0 m each). */
+const HIGH_ROAD_MAP: readonly P[] = [
+  [614411.29, 5096472.96], [614427.10, 5096475.39], [614442.92, 5096477.78], [614458.74, 5096480.17],
+  [614474.56, 5096482.54], [614490.42, 5096484.71], [614506.30, 5096486.66], [614522.15, 5096488.78],
+  [614537.99, 5096491.08], [614553.82, 5096493.39],
 ];
-const DUNMORE_ROAD_CL: readonly P[] = [
-  [-68.11, -25.73], [-59.0, -12.58], [-49.88, 0.56], [-40.81, 13.72],
-  [-31.83, 26.97], [-23.03, 40.31], [-15.16, 54.21],
+const DUNMORE_ROAD_MAP: readonly P[] = [
+  [614430.92, 5096475.94], [614441.57, 5096464.00], [614452.22, 5096452.07], [614462.83, 5096440.11],
+  [614473.35, 5096428.05], [614483.71, 5096415.88], [614493.22, 5096403.05],
 ];
 
-function polylineDist(pts: readonly P[], u: number, v: number): number {
+function polylineDist(pts: readonly P[], x: number, z: number): number {
   let best = Infinity;
   for (let i = 0; i < pts.length - 1; i++) {
-    const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
-    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
-    const t = l2 > 0 ? Math.max(0, Math.min(1, ((u - ax) * dx + (v - ay) * dy) / l2)) : 0;
-    const d = Math.hypot(u - (ax + dx * t), v - (ay + dy * t));
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+    const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0;
+    const d = Math.hypot(x - (ax + dx * t), z - (az + dz * t));
     if (d < best) best = d;
   }
   return best;
 }
-
-/** Minimum distance in metres from either public road centreline (High Road or Dunmore Road). */
-const roadCenterDist = (u: number, v: number): number =>
-  Math.min(polylineDist(HIGH_ROAD_CL, u, v), polylineDist(DUNMORE_ROAD_CL, u, v));
 
 /**
  * Margin from road centreline that protects every texel contributing to a 4-texel bilinear surfaceAt() query on the
@@ -110,17 +106,16 @@ export interface GasParkedSpot {
 }
 
 export const GAS_PARKED_SPOTS: readonly GasParkedSpot[] = [
-  // At the fuel pump island (3 cars fuelling; inner east pump slot stays open so the player can pull up to fuel).
-  { u: -9.5, v: -16.1, du: 1, dv: 0.02, type: 2 },
-  { u: -2.5, v: -16.1, du: 1, dv: -0.02, type: 1 },
-  { u: -7.8, v: -9.5, du: 1, dv: 0.01, type: 0 },
-  // Northwest High Road frontage row (6 vehicles lined up facing High Road / the lot).
-  { u: -33.0, v: -19.5, du: 0.04, dv: 1, type: 2 },
-  { u: -29.7, v: -19.5, du: -0.03, dv: -1, type: 1 },
-  { u: -26.4, v: -19.5, du: 0.02, dv: 1, type: 0 },
-  { u: -23.1, v: -19.5, du: -0.04, dv: 1, type: 2 },
-  { u: -19.8, v: -19.5, du: 0.03, dv: -1, type: 1 },
-  { u: -16.5, v: -19.5, du: -0.02, dv: 1, type: 0 },
+  // At the outer fuel pump lane (2 vehicles fuelling beside the two dispensers; entire inner south fuel lane stays open).
+  { u: -8.4, v: -16.1, du: 1, dv: 0.02, type: 2 },
+  { u: -2.2, v: -16.1, du: 1, dv: -0.02, type: 1 },
+  // Northwest High Road frontage row (6 vehicles lined up facing High Road / the lot, leaving a 6 m High Road west entrance).
+  { u: -33.0, v: -19.0, du: 0.04, dv: 1, type: 2 },
+  { u: -30.0, v: -19.0, du: -0.03, dv: -1, type: 1 },
+  { u: -27.0, v: -19.0, du: 0.02, dv: 1, type: 0 },
+  { u: -24.0, v: -19.0, du: -0.04, dv: 1, type: 2 },
+  { u: -21.0, v: -19.0, du: 0.03, dv: -1, type: 1 },
+  { u: -18.0, v: -19.0, du: -0.02, dv: 1, type: 0 },
   // West lot edge row (3 vehicles along the west lawn edge, clear of the Dunmore Road drive-in lane).
   { u: -34.2, v: -12.5, du: 1, dv: -0.08, type: 1 },
   { u: -33.5, v: -9.0, du: 1, dv: -0.05, type: 0 },
@@ -129,13 +124,14 @@ export const GAS_PARKED_SPOTS: readonly GasParkedSpot[] = [
   { u: -11.8, v: -3.2, du: 1, dv: 0.03, type: 1 },
   { u: -11.8, v: 0.2, du: 1, dv: 0.02, type: 0 },
   { u: -11.8, v: 3.6, du: 1, dv: -0.03, type: 2 },
-  // West lot mid-row along the southwest lawn edge (2 vehicles facing the lot, leaving Dunmore entrance wide open).
+  // West lot mid-row along the southwest lawn edge (3 vehicles facing the lot, leaving Dunmore entrance wide open).
+  { u: -26.5, v: 4.5, du: 0.02, dv: -1, type: 0 },
   { u: -23.0, v: 4.5, du: 0.04, dv: -1, type: 0 },
   { u: -19.5, v: 4.5, du: -0.03, dv: -1, type: 1 },
   // East High Road frontage row (3 vehicles east of the High Road exit lane).
-  { u: 9.2, v: -19.5, du: -0.03, dv: 1, type: 0 },
-  { u: 12.6, v: -19.5, du: 0.04, dv: -1, type: 1 },
-  { u: 16.0, v: -19.5, du: -0.02, dv: 1, type: 2 },
+  { u: 9.2, v: -19.0, du: -0.03, dv: 1, type: 0 },
+  { u: 12.6, v: -19.0, du: 0.04, dv: -1, type: 1 },
+  { u: 16.0, v: -19.0, du: -0.02, dv: 1, type: 2 },
   // East lot packed in front of the dark storage shed and east service bay (4 vehicles).
   { u: 13.2, v: -14.8, du: -1, dv: 0.04, type: 0 },
   { u: 13.2, v: -11.6, du: -1, dv: -0.03, type: 2 },
@@ -164,13 +160,14 @@ export class PortHoodGasSite implements Site {
   readonly origin: { readonly x: number; readonly z: number };
   private ox: number; private oz: number; private sin: number; private cos: number;
   private bx: number; private by: number; private axisDeg: number;
+  private highRoadWorld: P[]; private dunmoreRoadWorld: P[];
 
   /** The surveyed box of this gas station, or null when the survey no longer has it where and as it was. */
   static find(list: readonly Building[]): Building | null {
     const b = list.find((b) => b.id === PORT_HOOD_GAS_BUILDING);
     return b && b.kind === 'shed'
       && Math.hypot(b.x - SITE_REF[0], b.y - SITE_REF[1]) < SITE_REACH
-      && Math.abs(b.length - LENGTH) < 1 && Math.abs(b.width - WIDTH) < 1 && Math.abs(b.axisDeg - AXIS) < 5
+      && Math.abs(b.length - LENGTH) < SIZE_TOL && Math.abs(b.width - WIDTH) < SIZE_TOL && Math.abs(b.axisDeg - AXIS) < AXIS_TOL
       ? b : null;
   }
 
@@ -182,6 +179,8 @@ export class PortHoodGasSite implements Site {
     this.ox = building.x - village[0]; this.oz = village[1] - building.y;
     this.origin = Object.freeze({ x: this.ox, z: this.oz });
     this.level = building.ground;
+    this.highRoadWorld = HIGH_ROAD_MAP.map(([e, n]) => [e - village[0], village[1] - n]);
+    this.dunmoreRoadWorld = DUNMORE_ROAD_MAP.map(([e, n]) => [e - village[0], village[1] - n]);
     const corners = [
       this.world(-54.5, -25.5), this.world(28.5, -25.5),
       this.world(28.5, 28.0), this.world(-54.5, 28.0),
@@ -201,6 +200,10 @@ export class PortHoodGasSite implements Site {
         if (!open && start !== null) { this.clear.push([start - step, z, x, z + strip]); start = null; }
       }
     }
+  }
+
+  private roadCenterDist(x: number, z: number): number {
+    return Math.min(polylineDist(this.highRoadWorld, x, z), polylineDist(this.dunmoreRoadWorld, x, z));
   }
 
   private isOpenLot(u: number, v: number): boolean {
@@ -229,19 +232,20 @@ export class PortHoodGasSite implements Site {
     return Math.atan2(du * this.sin + dv * this.cos, du * this.cos - dv * this.sin);
   }
 
-  /** Roof boxes for the drone flight floor: main station, east wing, fuel island overhead, east shed, container, trailer. */
+  /** Roof boxes for the drone flight floor: main station, east wing, fuel island, price pylon, east shed, container, trailer. */
   roofBoxes(): Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge'>[] {
     const box = (u0: number, u1: number, v0: number, v1: number, eave: number, ridge: number, ground = this.level) => {
       const [x, y] = this.map((u0 + u1) / 2, (v0 + v1) / 2);
       return { x, y, ground, axisDeg: this.axisDeg, length: u1 - u0, width: v1 - v0, eave, ridge };
     };
     return [
-      box(-7.5, 6.5, -5.5, 4.5, 4.65, 4.88),                  // main service station building
-      box(6.5, 10.2, -4.4, 3.2, 2.55, 3.15),                  // lower east service wing
-      box(-8.8, -1.2, -13.9, -12.1, 4.65, 4.82, this.level),  // fuel island overhead sign beam & light heads
-      box(17.5, 22.0, -15.2, -11.2, 2.45, 3.65, this.level + 0.35), // east dark storage shed
-      box(23.0, 25.6, -17.0, -10.8, 2.6, 2.6, this.level + 0.45),   // east shipping container
-      box(12.6, 17.0, -5.4, -3.2, 2.35, 2.35, this.level + 0.05),   // enclosed cargo trailer
+      box(-7.68, 6.68, -5.72, 4.72, 4.80, 5.05),                       // main service station parapet & roof cap
+      box(6.5, 10.44, -4.56, 3.36, 2.60, 3.30),                        // lower east service wing
+      box(-8.8, -1.2, -14.0, -12.0, 4.85, 4.95, this.level),           // fuel island overhead light arms & sign beam
+      box(-15.2, -12.8, 17.8, 20.2, 6.95, 6.95, this.level - 0.92),    // freestanding price pylon sign cabinet
+      box(17.32, 22.18, -15.4, -11.0, 2.60, 3.80, this.level + 0.52),  // east dark storage shed (g = 29.035 m)
+      box(22.94, 25.66, -17.06, -10.74, 2.70, 2.70, this.level + 0.56),// east shipping container (g = 29.076 m)
+      box(12.56, 17.04, -5.44, -3.16, 2.45, 2.45, this.level),         // enclosed cargo trailer
     ];
   }
 
@@ -255,7 +259,7 @@ export class PortHoodGasSite implements Site {
   clearCanopy(x: number, z: number, level?: number): boolean {
     const { u, v } = this.local(x, z);
     if (u < -54.5 || u > 28.5 || v < -25.5 || v > 28.0) return false;
-    if (roadCenterDist(u, v) < (level !== undefined && level <= 7 ? 13.5 : 5.0)) return false;
+    if (this.roadCenterDist(x, z) < (level !== undefined && level <= 7 ? 13.5 : 5.0)) return false;
     return this.isOpenLot(u, v);
   }
 
@@ -264,7 +268,7 @@ export class PortHoodGasSite implements Site {
     if (level !== undefined && level <= 7) return null;
     const { u, v } = this.local(x, z);
     if (u < -54.5 || u > 28.5 || v < -25.5 || v > 28.0) return null;
-    if (roadCenterDist(u, v) < roadPaintMargin(level)) return null;
+    if (this.roadCenterDist(x, z) < roadPaintMargin(level)) return null;
     const dConc = depth(APRON_CONCRETE, u, v);
     if (dConc > -0.3) return { dist: Math.max(6.5, 10 - dConc), half: 10, kind: CONCRETE };
     const dLot = depth(LOT_ASPHALT, u, v);
