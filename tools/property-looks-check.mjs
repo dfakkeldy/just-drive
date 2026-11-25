@@ -136,7 +136,7 @@ const DEFAULT_STYLE = {
   // Tall stepped-shed deck with clipped span must keep every post clear of the front garage opening
   const steppedDeckGarage = new Buildings([narrowGarageHouse], village, 1, 0, {
     '1': {
-      ...DEFAULT_STYLE, steppedShed: true, windowWall: true, front: { end: false, side: 1 }, entrance: 'deck',
+      ...DEFAULT_STYLE, roofShape: 'shed', steppedShed: true, windowWall: true, front: { end: false, side: 1 }, entrance: 'deck',
       attachedGarage: { end: false, side: 1, offset: -1.5, width: 2.6, doors: 1 },
     },
   });
@@ -189,7 +189,7 @@ const DEFAULT_STYLE = {
   };
   const contestedPackB = {
     ...contestedPackA,
-    overrides: { '2': contestedPackA.overrides['2'], '1': contestedPackA.overrides['1'] },
+    overrides: { '1': contestedPackA.overrides['2'], '2': contestedPackA.overrides['1'] },
   };
   assert.equal(applyPropertyLookPack(contestedPackA, contestedBuilding, {}), null, 'contested building rejects all claims (farther listed first)');
   assert.equal(applyPropertyLookPack(contestedPackB, contestedBuilding, {}), null, 'contested building rejects all claims (exact listed first)');
