@@ -25,6 +25,7 @@ export interface RoadHit { road: Road; dist: number; x: number; z: number; headi
 
 const CELL = 64;
 const bridgeRoad = (road: Road) => road.bridge;
+const namedRoad = (road: Road) => Boolean(road.name);
 
 interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number; startApproach: Float64Array | null; endApproach: Float64Array | null }
 
@@ -143,7 +144,7 @@ export class Roads {
 
   /** Name the road under the vehicle, with a metre of tolerance at the edge. */
   nameAt(x: number, z: number): string | null {
-    return this.query(this.cells, x, z, this.maxHalfWidth + 1, undefined, 1)?.road.name ?? null;
+    return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1)?.road.name ?? null;
   }
 
   /** Cold placement query: visit every nearby segment once, including tracks, trails and driveways.
@@ -162,7 +163,7 @@ export class Roads {
   private query(cells: Map<number, [number, number][]>, x: number, z: number, reach: number, filter?: (r: Road) => boolean, edgeTolerance?: number): RoadHit | null {
     let best: RoadHit | null = null;
     const era=this.terrain.cartRoads&&cells===this.bridgeCells;
-    let candidates=0,bestSquared=144,bestRI=Infinity;
+    let candidates=0,bestSquared=144,bestRI=Infinity,bestOutside=Infinity;
     if(era)this.bridgeQuery++;
     const span = Math.ceil(reach / CELL);
     const cx0 = Math.floor(x / CELL), cz0 = Math.floor(z / CELL);
@@ -189,7 +190,13 @@ export class Roads {
           if(!(squared<144&&squared<=(road.halfWidth+1.2)**2)||best&&(squared>bestSquared||squared===bestSquared&&(ri>bestRI||ri===bestRI&&s>=best.seg)))continue;
           bestSquared=squared;bestRI=ri;best=this.eraBridgeHit!;
           best.road=road;best.dist=Math.sqrt(squared);best.x=px;best.z=pz;best.heading=Math.atan2(dx,-dz);best.seg=s;best.t=t;
-        }else if (d <= (edgeTolerance === undefined ? reach : road.halfWidth + edgeTolerance) && (!best || d < best.dist)) best = { road, dist: d, x: px, z: pz, heading: Math.atan2(dx, -dz), seg: s, t };
+        }else if (edgeTolerance !== undefined) {
+          const outside = Math.max(0, d - road.halfWidth);
+          if (outside <= edgeTolerance && (!best || outside < bestOutside || (outside === bestOutside && d < best.dist))) {
+            bestOutside = outside;
+            best = { road, dist: d, x: px, z: pz, heading: Math.atan2(dx, -dz), seg: s, t };
+          }
+        }else if (d <= reach && (!best || d < best.dist)) best = { road, dist: d, x: px, z: pz, heading: Math.atan2(dx, -dz), seg: s, t };
       }
     }
     if(era)this.audit.heightCandidatesMax=Math.max(this.audit.heightCandidatesMax,candidates);

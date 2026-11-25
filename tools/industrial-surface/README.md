@@ -100,16 +100,49 @@ Map the closed ends, with lamp boards and barriers, on Granville St near
 E627233 N5053179 and Reeves St near E627443 N5053518 (EPSG:2961). These are
 follow-up work, not changed by this surface delta.
 
-## Stage width and centre paint for issue 1406
+## Width and centre paint for issue 1406
 
 Run `python3 tools/industrial-surface/patch.py --width SOURCE_POINTTUPPER NEW_OUTPUT_DIRECTORY`
-on the installed surface-corrected land. It stages a 3.6 m half width and
-the existing double-yellow flag. The 7.2 m travel width comes from the two
-3.6 m lanes in [Bear Head LNG assessment table 6.38](https://www.novascotia.ca/nse/ea/bearHeadLNGTerminal/Section_6_Pg_33-110.pdf).
-The width represents the travel lanes. The report also describes paved
-shoulders on part of the route. Provincial road segments confirm the lane
-count. Cached OSM way 181364590 lists two lanes and has no width tag.
+on the installed 16 Nov surface-corrected land. It widens road 107 from 1.5 m to
+3.6 m half width (7.2 m travel width) and sets `pavement: "double-yellow"`.
+The 7.2 m travel width comes from the two 3.6 m lanes in
+[Bear Head LNG assessment table 6.38](https://www.novascotia.ca/nse/ea/bearHeadLNGTerminal/Section_6_Pg_33-110.pdf).
+Provincial road segments (`BASE_NSTDB_10k_Roads_WM84__05_bridges.geojson`) confirm
+`ROAD - Local - 2 Lanes - Paved`. Cached OSM way 181364590 lists two lanes and
+`surface=paved` with no width tag.
 
-Use these settings before the Point Tupper ground-shaping step in delta 2.
-The staged hash receipt describes the width and paint changes on current
-ground. Recompute the receipt and dependent pins for the combined bake.
+`width-hashes.json` records all 43 files written by `patch.py --width`
+(`roads.json`, `cemeteries.json`, and 41 road-field PNGs at levels 5 to 8),
+chained directly onto `industrial-hashes.json`. `web/src/bridge-crossings.json`
+also updates road 107's overpass over Railroad 216 (`osm/way/169338040`, span
+`-100084`) from `kind: 4, halfWidth: 1.5` to `kind: 2, halfWidth: 3.6` so it
+renders as a concrete/asphalt highway overpass instead of a 3 m timber bridge,
+with Point Tupper's `bridge-decks.bin` rebaked to match (`web/src/bridge-decks-assets.ts`).
+
+Re-baking all 117 Point Tupper paved lot tiles and both stockpiles on the
+widened `roads.json` produces byte-for-byte identical `.r8` tiles and
+`stockpiles.json`; Port Hawkesbury's sidewalk runs lie away from road 107.
+`tools/paved-open/patch.py` and `tools/sidewalks_bake.py` chain
+`width-hashes.json` so those land checks stay green without rewriting unchanged
+packs.
+
+### Active railway status near road 107
+
+Provincial NSTDB (`__06_railways.geojson`, `__05_bridges.geojson`) classifies
+the Point Tupper rail segments crossing and paralleling Industrial Park Road as
+`Active Rail Road` (`ROADCLASS=RR`, `STREET='Railroad'`). Cached OSM maps them
+as `railway=rail`, Cape Breton & Central Nova Scotia Railway (CBNS) Sydney
+Subdivision (`gauge=1435`). Public operating records confirm the Truro–Point
+Tupper line is an active freight railway serving Point Tupper industries (the
+section east of Point Tupper toward Sydney has been dormant since 2015, not
+converted to a rail trail). The Ceilidh Coastal Trail (`kind=5`) is 5.5 km
+northwest near Port Hastings. In the game, Point Tupper's railway keeps its
+`Railroad` road name and `gravel` (ballast) surface on the HUD, never `rail trail`.
+
+### Order with #1341 delta 2
+
+This delta installs road 107's 7.2 m width, double-yellow centre paint and
+overpass update on the current Point Tupper ground, ahead of `#1341` delta 2.
+When `#1341` delta 2 shapes the Point Tupper road and railway ground (embankments
+and steep rail notches), it should keep road 107 at `kind=2`, `halfWidth=3.6`,
+`pavement='double-yellow'` and refresh the Point Tupper land receipts once.

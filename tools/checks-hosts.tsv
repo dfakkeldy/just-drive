@@ -365,3 +365,6 @@ era-bridge-planes	portable	no	Node check over real baked Mabou and Judique 1884 
 water-towers	portable	yes	Node check for water towers, standpipes, reservoirs and small tanks; baked-land assertions run when data/baked is present and skip cleanly on clean-clone CI
 water-towers-mutations	portable	yes	Node mutation controls for water towers, solids, canopy exclusions, LOD and tall-strait deduplication; runs with or without data/baked
 water-towers-browser	unproven	no	Hardware WebGL across Point Tupper, Canso Causeway, Port Hood and Mabou: desktop and phone LOW, day and night, paired render deltas and raycast visibility
+road-name-hud	portable	yes	Node check for Roads.nameAt (surface plus 1 m) and Vehicle/BikeRide wiring; Point Tupper baked-land cases skip cleanly on clean-clone CI
+road-name-hud-mutations	portable	yes	Node mutation controls for Roads.nameAt, Vehicle and BikeRide wiring; no land required
+industrial-park-road-browser	unproven	no	Hardware WebGL on Point Tupper land: road 107 width, double-yellow centre paint, concrete overpass -100084, Railroad HUD label and off-road brush clearing at both crossing spots

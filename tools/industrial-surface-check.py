@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""The surface delta of the project brief (Industrial Park Road, road 107 at Point Tupper) on the baked land.
+"""The surface and width delta for Industrial Park Road (road 107 at Point Tupper) on the baked land.
 
-The delta lists every file it changes with the SHA-256 before and after (tools/industrial-surface/industrial-hashes.json).
-The baked land must hold it either all before or all after. A mix, or a file that is neither, fails: that is a
-half-done install, or a later Point Tupper rebake whose bytes differ. A rebake from unchanged inputs writes the
-recorded "before" bytes again, so the state alone cannot tell "not installed yet" from "installed, then rebaked
-away": EXPECT below says which state is right. It is None (either) until the install; the install PR sets it to
-'after', and from then on an all-before land fails.
+The width delta (tools/industrial-surface/width-hashes.json) chains directly onto the 16 Nov surface delta
+(tools/industrial-surface/industrial-hashes.json). It widens road 107 from 1.5 m to 3.6 m half width (two 3.6 m
+lanes) and sets pavement='double-yellow'.
+The baked land must hold the delta either all before or all after. A mix, or a file that is neither, fails: that is a
+half-done install, or a later Point Tupper rebake whose bytes differ. EXPECT below says which state is right.
 Road 634 at Mabou was withdrawn on 16 Nov 2026 and is not checked here.
-- All before: patch.py makes the delta again in a scratch folder, and its hashes must equal the committed list.
+- All before: patch.py --width makes the delta again in a scratch folder, and its hashes must equal the committed list.
   This needs GDAL and the raw road vectors (data/raw); without them it prints NOT REMADE and checks the state only.
-- All after: every file hashes as the committed delta, and road 107 has kind 2 (paved) and half width 1.5 m.
+- All after: every file hashes as the committed delta, and road 107 has kind 2 (paved), half width 3.6 m and
+  pavement='double-yellow'.
 Mutants: one file changed, one file reverted after an install, a missing file, roads.json alone, and an all-before
 land while EXPECT is 'after' must fail.
 """
@@ -23,12 +23,14 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-# Which state the baked land must hold. The delta was installed on the MacBook on 16 Nov 2026, so it is 'after':
+# Which state the baked land must hold. The width+paint delta is installed on the MacBook, so it is 'after':
 # an all-before land now fails (a rebake dropped the correction, or a host holds a land copied before the install).
 EXPECT = 'after'
 DELTAS = (
-    dict(name='pointtupper road 107', land=ROOT/'data/baked/areas/pointtupper',
-         report=ROOT/'tools/industrial-surface/industrial-hashes.json', flags=['--industrial'],
+    dict(name='pointtupper road 107 width', land=ROOT/'data/baked/areas/pointtupper',
+         report=ROOT/'tools/industrial-surface/width-hashes.json',
+         prior=ROOT/'tools/industrial-surface/industrial-hashes.json',
+         flags=['--width'],
          # patch.py imports the pipeline, which reads the raw road vectors; rented hosts get only data/baked.
          vectors=ROOT/'data/raw/areas/pointtupper/vectors/BASE_NSTDB_10k_Roads_WM84__05_bridges.geojson'),
 )
@@ -65,13 +67,19 @@ def verdict(now, expect):
     return None
 
 
-def sound(report):
+def sound(report, prior=None):
     files = report['files']
     assert files and files[0]['file'] == 'roads.json', 'the list must start with roads.json'
     assert len({f['file'] for f in files}) == len(files), 'a file is listed twice'
     assert all(f['before'] != f['sha256'] for f in files), 'a listed file does not change'
-    assert report['kindBefore'] == 4 and report['kindAfter'] == 2, 'the delta must turn a track (4) into a paved road (2)'
-    assert report['pixels'] == sum(f.get('pixels', 0) for f in files), 'the pixel total does not add up'
+    assert report['kindBefore'] == 2 and report['kindAfter'] == 2, 'the width delta runs on surface-corrected kind 2 road 107'
+    assert report.get('halfWidthBefore') == 1.5 and report.get('halfWidthAfter') == 3.6, 'the width delta widens road 107 from 1.5 m to 3.6 m'
+    assert report['pixels'] > 0, 'the width delta must touch paved road samples'
+    if prior is not None:
+        prior_after = {f['file']: f['sha256'] for f in prior['files']}
+        for f in files:
+            if f['file'] in prior_after:
+                assert f['before'] == prior_after[f['file']], f'{f["file"]}: width delta before-hash must chain from industrial-hashes.json'
 
 
 def mutants(report):
@@ -120,14 +128,16 @@ def remake(delta, report):
 def installed(delta, report):
     roads = {r['id']: r for r in json.loads((delta['land']/'roads.json').read_bytes())['roads']}
     road = roads[report['road']]
-    assert road['kind'] == 2 and road['halfWidth'] == 1.5, f'{delta["name"]}: installed road is kind {road["kind"]}, half width {road["halfWidth"]}'
+    assert road['kind'] == 2 and road['halfWidth'] == 3.6 and road.get('pavement') == 'double-yellow', (
+        f'{delta["name"]}: installed road is kind {road["kind"]}, half width {road["halfWidth"]}, pavement {road.get("pavement")!r}')
 
 
 def main():
     caught = 0
     for delta in DELTAS:
         report = json.loads(delta['report'].read_text())
-        sound(report)
+        prior = json.loads(delta['prior'].read_text()) if delta.get('prior') else None
+        sound(report, prior)
         caught += mutants(report)
         now = state({f['file']: sha(delta['land']/f['file']) for f in report['files']}, report['files'])
         problem = verdict(now, EXPECT)
