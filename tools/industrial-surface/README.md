@@ -51,16 +51,17 @@ A complete stage-23 rebake will not keep this one-off correction. After one:
 
 ## Check row `industrial-surface`
 
-`python3 tools/industrial-surface-check.py` reads the baked Point Tupper land. The
-delta must be all before or all after; a mix, or a file that is neither, fails.
-All before: patch.py makes the delta again in a scratch folder and its hashes
-must equal industrial-hashes.json. That needs GDAL and the raw road vectors in
-data/raw, which rented hosts do not get; there the row prints NOT REMADE and
-checks the state only. All after: road 107 is kind 2.
-Run it before and after an install, while `EXPECT` is still `None`; both runs
-must pass. With `EXPECT = 'after'` (set after the install) it is also the tripwire for a later Point
-Tupper rebake that drops the correction; until then it cannot tell "not yet
-installed" from "rebaked away".
+`python3 tools/industrial-surface-check.py` reads the baked Point Tupper land
+against `width-hashes.json` (chained onto the 16 Nov `industrial-hashes.json`
+surface delta). The delta must be all before or all after; a mix, or a file that
+is neither, fails. All before: `patch.py --width` makes the delta again in a
+scratch folder and its hashes must equal `width-hashes.json` (needs GDAL and
+raw road vectors in `data/raw`; without them it prints `NOT REMADE` and checks
+the state only). All after: road 107 is `kind 2`, `halfWidth 3.6`, and
+`pavement = "double-yellow"`. With `EXPECT = 'after'`, this row enforces the
+installed width+paint delta and catches any later Point Tupper rebake or stale
+host copy that drops it. Before installing on live land, verify against an APFS
+rehearsal clone.
 
 ## What the delta does not change
 
@@ -155,8 +156,9 @@ ahead of `#1341` delta 2, superseding the builder's earlier combined-bake
 proposal on `#1036` comment `7147815846` because `#1341` delta 2 is not yet
 underway.
 
-To avoid leaving a mixed pack if interrupted mid-copy, install all 44 files via
-a single-directory APFS cutover on the same filesystem:
+To avoid leaving a mixed or missing pack if interrupted mid-copy, install all
+44 files via a single atomic APFS `renamex_np(..., RENAME_SWAP)` directory swap
+on the same filesystem:
 
 1. Verify all 44 live files in `data/baked/areas/pointtupper` match their
    recorded before-hashes (43 in `width-hashes.json` plus live
@@ -166,13 +168,16 @@ a single-directory APFS cutover on the same filesystem:
 3. Copy the 44 staged files into `pointtupper.stage-1406` and verify all 44
    after-hashes (and unchanged file count) inside the staging folder before
    touching live land.
-4. Cut over in one directory swap:
-   `mv data/baked/areas/pointtupper data/baked/areas/pointtupper.before-1406 && mv data/baked/areas/pointtupper.stage-1406 data/baked/areas/pointtupper`.
-   Then move `pointtupper.before-1406` to the retained rollback backup under
+4. Cut over in one atomic kernel syscall (`RENAME_SWAP = 2`):
+   `libc.renamex_np(b".../pointtupper", b".../pointtupper.stage-1406", 2)`.
+   Readers never see a missing `pointtupper` path, and if the syscall fails
+   nothing moves. After the swap, `pointtupper.stage-1406` holds the intact
+   pre-cutover tree; move it to the retained rollback backup under
    `data/work/bakes/backup-1406-pointtupper-20261124/pointtupper`.
-5. Rollback (if ever needed) is the inverse directory swap from that backup:
-   clone the backup back to `data/baked/areas/pointtupper.restore-1406`, verify
-   all 44 before-hashes, and swap `pointtupper` with `pointtupper.restore-1406`.
+5. Rollback (if ever needed) uses the same atomic syscall: clone the backup to
+   `data/baked/areas/pointtupper.restore-1406`, verify all 44 before-hashes,
+   run `renamex_np(b".../pointtupper", b".../pointtupper.restore-1406", 2)`,
+   and remove `pointtupper.restore-1406` once verified.
 
 When `#1341` delta 2 shapes Point Tupper's road and railway ground (embankments,
 steep rail notches and road-side utility poles), it should keep road 107 at

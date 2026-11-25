@@ -147,12 +147,24 @@ export class Roads {
    * When `y` is given near a grade-separated modern bridge, the deck elevation decides upper vs lower road. */
   nameAt(x: number, z: number, y?: number): string | null {
     let skipOverhead = false;
+    let deckName: string | null = null, deckOutside = Infinity;
     if (y !== undefined && this.modern) {
       const deck = this.modern.deckRoadAt(x, z, y);
-      if (deck.name !== null) return deck.name;
+      if (deck.name !== null) {
+        if (deck.outside === 0) return deck.name;
+        const ground = this.terrain.heightAt(x, z);
+        if (ground === null || Math.abs(y - ground) > 1) return deck.name;
+        deckName = deck.name;
+        deckOutside = deck.outside;
+      }
       skipOverhead = deck.hasOverhead;
     }
-    return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead)?.road.name ?? null;
+    const hit = this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead);
+    if (deckName !== null) {
+      const hitOutside = hit ? Math.max(0, hit.dist - hit.road.halfWidth) : Infinity;
+      return hit && hitOutside < deckOutside ? hit.road.name : deckName;
+    }
+    return hit?.road.name ?? null;
   }
 
   /** Cold placement query: visit every nearby segment once, including tracks, trails and driveways.

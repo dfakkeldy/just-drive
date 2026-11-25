@@ -229,7 +229,7 @@ export class ModernBridges {
   /** Road ids whose spans are left out of the drawn mesh (the canal swing span while a vessel passes). */
   private readonly hidden=new Set<number>();
   private readonly driving={kind:9,halfWidth:6,washboard:false,road:true,roadKind:1};
-  private readonly deckRoadResult:{name:string|null;hasOverhead:boolean}={name:null,hasOverhead:false};
+  private readonly deckRoadResult:{name:string|null;outside:number;hasOverhead:boolean}={name:null,outside:Infinity,hasOverhead:false};
   private readonly overheadSpans:(Span|undefined)[]=[undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined];
   private overheadCount=0;
   private sampling=false;
@@ -940,9 +940,9 @@ export class ModernBridges {
     const h=this.query(x,z,true,false,undefined,false,1,false);return h===null?null:h-.03;
   }
   /** Zero-allocation grade-separated road lookup using already-built deck triangles plus a 1 m edge margin. */
-  deckRoadAt(x:number,z:number,y:number):{name:string|null;hasOverhead:boolean} {
+  deckRoadAt(x:number,z:number,y:number):{name:string|null;outside:number;hasOverhead:boolean} {
     this.overheadCount=0;
-    this.deckRoadResult.name=null;this.deckRoadResult.hasOverhead=false;
+    this.deckRoadResult.name=null;this.deckRoadResult.outside=Infinity;this.deckRoadResult.hasOverhead=false;
     if(this.sampling||this.terrain.cartRoads)return this.deckRoadResult;
     const list=this.cells.get(key(x,z,CELL));if(!list)return this.deckRoadResult;
     let onName:string|null=null,onOutside=Infinity,onDist=Infinity;
@@ -971,6 +971,7 @@ export class ModernBridges {
       }
     }
     this.deckRoadResult.name=onName;
+    this.deckRoadResult.outside=onOutside;
     this.deckRoadResult.hasOverhead=this.overheadCount>0;
     return this.deckRoadResult;
   }

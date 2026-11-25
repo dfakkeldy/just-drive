@@ -215,6 +215,27 @@ function runSynthetic(mod) {
   }
   assert.ok(deckYellowVerts >= 24, `kind-2 double-yellow overpass deck includes yellow centre stripes (${deckYellowVerts} verts)`);
   assert.ok(approachYellowVerts >= 24, `kind-2 double-yellow overpass approaches include yellow centre stripes (${approachYellowVerts} verts)`);
+
+  // 9. Same-grade bridge edge margin must NOT override a crossing road directly under the vehicle.
+  const sameGradeTerrain = {
+    level: 8,
+    dataRevision: 1,
+    seaLevel: -100,
+    heightAt: () => 16,
+    landHeightAt: () => 16,
+    surfaceAt: () => ({ ground: 16, level: 8, kind: 2, halfWidth: 3.6, roadDist: 0, canopy: 0, washboard: false, bridge: false, brook: 99 }),
+    withContactHeight: (_, readFn) => readFn(),
+  };
+  const sameGradeNet = new mod.Roads({
+    roads: [
+      { id: 301, name: 'Bridge Road', kind: 2, halfWidth: 3.6, bridge: true, pts: [[0, -12], [0, 12]] },
+      { id: 302, name: 'Cross Street', kind: 2, halfWidth: 3.0, bridge: false, pts: [[-40, 0], [40, 0]] },
+    ],
+  }, [0, 0], sameGradeTerrain);
+  const sgDeckY = sameGradeNet.deckHeight(0, 0);
+  assert.ok(sgDeckY !== null, 'same-grade synthetic bridge deck built');
+  assert.equal(sameGradeNet.nameAt(0, 0, sgDeckY), 'Bridge Road', 'on same-grade bridge deck names Bridge Road');
+  assert.equal(sameGradeNet.nameAt(4.06, 0, 16), 'Cross Street', 'on same-grade Cross Street 0.46 m outside bridge edge names Cross Street');
 }
 
 function runBakedPointTupper(mod) {
@@ -248,20 +269,23 @@ console.log('PASS road-name-hud synthetic rules (surface + 1 m, grade-separated 
 if (process.argv.includes('--mutations')) {
   const mutants = [
     ['old-14m-reach', 'web/src/roads.ts', roadsSource,
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead)?.road.name ?? null;',
-      'return this.query(this.cells, x, z, 14)?.road.name ?? null;'],
+      'const hit = this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead);',
+      'const hit = this.query(this.cells, x, z, 14);'],
     ['no-edge-tolerance', 'web/src/roads.ts', roadsSource,
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead)?.road.name ?? null;',
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 0, skipOverhead)?.road.name ?? null;'],
+      'const hit = this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead);',
+      'const hit = this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 0, skipOverhead);'],
     ['no-unnamed-filter', 'web/src/roads.ts', roadsSource,
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead)?.road.name ?? null;',
-      'return this.query(this.cells, x, z, this.maxHalfWidth + 1, undefined, 1, skipOverhead)?.road.name ?? null;'],
+      'const hit = this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead);',
+      'const hit = this.query(this.cells, x, z, this.maxHalfWidth + 1, undefined, 1, skipOverhead);'],
     ['no-surface-priority', 'web/src/roads.ts', roadsSource,
       'if (outside <= edgeTolerance && (!best || outside < bestOutside || (outside === bestOutside && d < best.dist))) {',
       'if (outside <= edgeTolerance && (!best || d < best.dist)) {'],
     ['no-overpass-elevation', 'web/src/roads.ts', roadsSource,
       'if (y !== undefined && this.modern) {',
       'if (false && y !== undefined && this.modern) {'],
+    ['bridge-margin-beats-same-grade-road', 'web/src/roads.ts', roadsSource,
+      '        if (deck.outside === 0) return deck.name;\n        const ground = this.terrain.heightAt(x, z);',
+      '        return deck.name;\n        const ground = this.terrain.heightAt(x, z);'],
     ['vehicle-old-nearest', 'web/src/vehicle.ts', vehicleSource,
       'if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z, this.y) ?? null;',
       'if (dt > 0) this.roadName = this.roads.nearest(this.x, this.z, 14)?.road.name ?? null;'],

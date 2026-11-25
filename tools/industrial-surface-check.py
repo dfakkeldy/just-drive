@@ -23,8 +23,8 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-# Which state the baked land must hold. The width+paint delta is installed on the MacBook, so it is 'after':
-# an all-before land now fails (a rebake dropped the correction, or a host holds a land copied before the install).
+# Which state the baked land must hold. Set to 'after' so an all-before land fails once the width+paint
+# delta is installed on the MacBook (a rebake dropped the correction, or a host holds an older copy).
 EXPECT = 'after'
 DELTAS = (
     dict(name='pointtupper road 107 width', land=ROOT/'data/baked/areas/pointtupper',
