@@ -3732,8 +3732,7 @@
       },
       "chimney": true,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1585": {
       "group": "west-and-southwest-mabou",
@@ -3753,8 +3752,7 @@
       },
       "chimney": true,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1320": {
       "group": "west-and-southwest-mabou",
@@ -3774,8 +3772,7 @@
       },
       "chimney": true,
       "dormer": false,
-      "shutters": true,
-      "satelliteDish": false
+      "shutters": true
     },
     "1563": {
       "group": "west-and-southwest-mabou",
@@ -3788,16 +3785,11 @@
       "roof": "#5c6164",
       "trim": "#f4f1ea",
       "roofMaterial": "shingle",
-      "entrance": "deck",
-      "front": {
-        "end": false,
-        "side": 1
-      },
+      "entrance": "none",
       "skirting": true,
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "743": {
       "group": "west-and-southwest-mabou",
@@ -3817,8 +3809,7 @@
       },
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "532": {
       "group": "west-and-southwest-mabou",
@@ -3834,8 +3825,7 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1423": {
       "group": "west-and-southwest-mabou",
@@ -3851,8 +3841,7 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "740": {
       "group": "west-and-southwest-mabou",
@@ -3868,8 +3857,7 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": true
+      "shutters": false
     },
     "734": {
       "group": "west-and-southwest-mabou",
@@ -3892,7 +3880,7 @@
       "chimney": false,
       "dormer": false,
       "shutters": false,
-      "satelliteDish": false
+      "kind": "house"
     },
     "1550": {
       "group": "west-and-southwest-mabou",
@@ -3908,8 +3896,7 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1490": {
       "group": "west-and-southwest-mabou",
@@ -3925,8 +3912,7 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1667": {
       "group": "west-and-southwest-mabou",
@@ -3948,8 +3934,7 @@
       "barnDoors": 2,
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1670": {
       "group": "west-and-southwest-mabou",
@@ -3971,8 +3956,7 @@
       "barnDoors": 2,
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1155": {
       "group": "west-and-southwest-mabou",
@@ -3989,8 +3973,7 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1700": {
       "group": "west-and-southwest-mabou",
@@ -4006,8 +3989,7 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1191": {
       "group": "west-and-southwest-mabou",
@@ -4031,8 +4013,7 @@
       "dormers": 1,
       "chimney": true,
       "dormer": true,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1237": {
       "group": "west-and-southwest-mabou",
@@ -4054,8 +4035,7 @@
       "skirting": true,
       "chimney": false,
       "dormer": false,
-      "shutters": true,
-      "satelliteDish": false
+      "shutters": true
     },
     "1188": {
       "group": "west-and-southwest-mabou",
@@ -4078,7 +4058,7 @@
       "chimney": false,
       "dormer": false,
       "shutters": false,
-      "satelliteDish": false
+      "kind": "barn"
     },
     "1126": {
       "group": "west-and-southwest-mabou",
@@ -4108,8 +4088,7 @@
       },
       "chimney": false,
       "dormer": false,
-      "shutters": true,
-      "satelliteDish": false
+      "shutters": true
     },
     "1127": {
       "group": "west-and-southwest-mabou",
@@ -4133,8 +4112,7 @@
       },
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1072": {
       "group": "west-and-southwest-mabou",
@@ -4155,8 +4133,7 @@
       },
       "chimney": true,
       "dormer": false,
-      "shutters": true,
-      "satelliteDish": false
+      "shutters": true
     },
     "679": {
       "group": "west-and-southwest-mabou",
@@ -4177,8 +4154,7 @@
       },
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1334": {
       "group": "west-and-southwest-mabou",
@@ -4200,8 +4176,7 @@
       "barnDoors": 1,
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1566": {
       "group": "west-and-southwest-mabou",
@@ -4226,8 +4201,7 @@
       "skirting": true,
       "chimney": false,
       "dormer": true,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "900001": {
       "group": "west-and-southwest-mabou",
@@ -4250,8 +4224,7 @@
       },
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1279": {
       "group": "west-and-southwest-mabou",
@@ -4269,8 +4242,7 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1180": {
       "group": "west-and-southwest-mabou",
@@ -4290,8 +4262,7 @@
       },
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1321": {
       "group": "west-and-southwest-mabou",
@@ -4315,8 +4286,7 @@
       "dormers": 1,
       "chimney": true,
       "dormer": true,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     }
   }
 }
