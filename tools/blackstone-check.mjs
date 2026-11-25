@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
+import { clearBoxes } from '../web/src/buildings.ts';
 import { roofHeights } from '../web/src/drone.ts';
 import { Props } from '../web/src/props.ts';
 import { SXS_SPEC } from '../web/src/sxs.ts';
@@ -292,9 +293,15 @@ const shared = {
   fogFar: { value: 12000 },
   time: { value: 0 },
 };
+const surveyedClear = clearBoxes(found, manifest.village, 2.5);
+const mainSrc = readFileSync('web/src/main.ts', 'utf8');
+assert.ok(mainSrc.includes('clear.push(...clearBoxes(blackstoneBox, manifest.village, 2.5))'),
+  'main.ts preserves building 1454 clearBoxes in regular terrain.clear so L5-L7 match the unreplaced baseline');
 for (const level of [5, 6, 7, 8]) {
-  const baseTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, []);
-  const siteTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, []);
+  // Baseline production config: unreplaced surveyed building 1454 contributes its clearBoxes to terrain.clear.
+  const baseTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, [...surveyedClear]);
+  // Replacement production config: same preserved building clearBoxes + BlackstoneSite + tree-only yard clear boxes.
+  const siteTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, [...surveyedClear]);
   siteTerrain.sites.push(site);
   for (const box of site.clear) siteTerrain.addTreeClear(box);
   const tileSize = manifest.size / 2 ** level;
@@ -417,7 +424,6 @@ for (const exag of [2.5, 3]) {
 }
 
 // Frame order & tree-only clear boxes: main.ts must update BlackstoneHouse in landscape after terrain (including ending/replay frames).
-const mainSrc = readFileSync('web/src/main.ts', 'utf8');
 const terrainIdx = mainSrc.indexOf("name: 'terrain', segment: 'landscape'");
 const bsIdx = mainSrc.indexOf("name: 'blackstone', segment: 'landscape', ending: true");
 assert.ok(terrainIdx >= 0 && bsIdx > terrainIdx, 'main.ts updates blackstone in landscape (ending: true) after terrain selection');

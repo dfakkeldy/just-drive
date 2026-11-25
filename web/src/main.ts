@@ -32,7 +32,7 @@ import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { baxtersCoveBuildingArt, isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
 import { NovemberRoadDetails } from './november-road-details';
 import { mabouRoadOverrides, registerRailContacts } from './november-bridges';
-import { Buildings, applyBuildingFoundations, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
+import { Buildings, applyBuildingFoundations, buildingSites, buildingAppearance, clearBoxes, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals, CatTileUnread } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
 import { areaScreen } from './area-screen';
@@ -530,9 +530,11 @@ const placeRows = {
   prince: placeRow(princeSite, site => new PrinceHouse(site, terrain, lift, LOW)),
   blackstone: placeRow(blackstoneSite, site => new BlackstoneHouse(site, terrain, lift, LOW)),
 };
-// Each site clears its surveyed land (Blackstone uses tree-only clear boxes plus LOD-gated clearCanopy so coarse tiles stay untouched).
+// Each site clears its surveyed land (Blackstone keeps building 1454's original canopy-clear box so L5-L7 match the
+// unreplaced baseline, and registers its wider yard clear boxes as tree-only plus L8 clearCanopy).
 const placeSites = sitesOf(placeRows);
 for (const site of Object.values(placeSites)) if (site && site !== blackstoneSite) clear.push(...site.clear);
+if (blackstoneSite && blackstoneBox) clear.push(...clearBoxes(blackstoneBox, manifest.village, 2.5));
 const postOfficeBoxes = postOfficeChunk ? postOfficeClear(manifest.village) : [];
 if (postOfficeBoxes.length) clear.push(...postOfficeBoxes);
 if (quarrySite) clear.push(...quarrySite.clear);
