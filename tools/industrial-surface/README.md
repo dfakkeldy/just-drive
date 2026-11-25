@@ -61,10 +61,10 @@ before calling `remake()` — that is the expected failure on pre-install land,
 and after install it catches any later Point Tupper rebake or stale host copy
 that drops the delta. To test before installing on live land, remake the delta
 with `python3 tools/industrial-surface/patch.py --width data/baked/areas/pointtupper <NEW_OUTPUT_DIRECTORY>`
-(which checks the generated hashes against `width-hashes.json`), lay it onto an
-APFS rehearsal clone (`tools/checks-README.md`), and run
-`python3 tools/industrial-surface-check.py` inside a rehearsal worktree pointing
-at that clone.
+(which writes `hashes.json`), lay it onto an APFS rehearsal clone
+(`tools/checks-README.md`), and run `python3 tools/industrial-surface-check.py`
+inside a rehearsal worktree pointing at that clone (which compares every file
+against `width-hashes.json`).
 
 ## What the delta does not change
 
