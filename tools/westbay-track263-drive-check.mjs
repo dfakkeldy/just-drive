@@ -7,7 +7,7 @@
 // - With potholes on (8 crossings): asserts arrival, full-path float and body < 50 mm, and trough raw sink < 50 mm on
 //   the 4 physics wheel stations (fl, fr, rl, rr) subtracting only the pothole sampled at each wheel's own world position
 //   (no outer-to-inner borrowing). Pickup inner dually tyres (extraWheels, indices 4..5) are gated in the potholes-off
-//   runs and logged transparently here: web/src/vehicle.ts only samples potholes at the 4 outer stations, so a 70.7 mm
+//   runs and logged transparently here: web/src/vehicle.ts only samples potholes at the 4 outer stations, so an 85.6 mm
 //   undrawn pothole under outer rr drops rigid-axle twin innerR by 54.0 mm even on a mathematically flat plane.
 // On 'before' land: asserts the known trough failure (> 200 mm at Hill 1, > 800 mm at Hill 2.5), and fails if --require-after is passed.
 import assert from 'node:assert/strict';
@@ -288,5 +288,5 @@ if (landState === 'before') {
   assert.ok(!h25Car.arrived && h25Car.troughDrawnMm > 800, `expected stalled >800 mm before sink at Hill 2.5, got ${JSON.stringify(h25Car)}`);
   console.log('PASS westbay-track263-drive (before land negative control verified; trough > 200 mm / > 800 mm)');
 } else {
-  console.log('PASS westbay-track263-drive (after land: all 16 Hill 1 and Hill 2.5 crossings arrive with trough raw sink < 50 mm)');
+  console.log('PASS westbay-track263-drive (after land: all 16 Hill 1 and Hill 2.5 crossings arrive and pass the applicable trough sink limits)');
 }
