@@ -42,6 +42,16 @@
         "Southwest Ridge Road",
         "Upper Southwest Mabou Road"
       ]
+    },
+    "blackstone-and-mull-river": {
+      "label": "Blackstone and Mull River",
+      "roads": [
+        "Blackstone Road",
+        "Mull River Road",
+        "Northeast Mabou Road",
+        "Old Mull River Road",
+        "Smithville Road"
+      ]
     }
   },
   "overrides": {
@@ -4290,6 +4300,251 @@
       "dormers": 1,
       "chimney": true,
       "dormer": true,
+      "shutters": false
+    },
+    "16": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        631124.0,
+        5109772.8
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#3c6e48",
+      "trim": "#f7f5ef",
+      "roofMaterial": "metal",
+      "door": "#2a2c2e",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "46": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627258.7,
+        5104189.9
+      ],
+      "wall": "#a33b32",
+      "roof": "#8f342e",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "roofShape": "gambrel",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "57": {
+      "group": "blackstone-and-mull-river",
+      "road": "Mull River Road",
+      "at": [
+        628471.4,
+        5100468.3
+      ],
+      "wall": "#d4d2c8",
+      "roof": "#5c6164",
+      "trim": "#e4e2da",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "758": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627847.6,
+        5105375.0
+      ],
+      "kind": "house",
+      "wall": "#f3f2ec",
+      "roof": "#45494b",
+      "trim": "#f7f6f1",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "834": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628338.9,
+        5106419.0
+      ],
+      "kind": "house",
+      "wall": "#d5d8db",
+      "roof": "#8e9493",
+      "trim": "#e8e6e0",
+      "roofMaterial": "metal",
+      "door": "#2a4d86",
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "997": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630752.6,
+        5109534.9
+      ],
+      "wall": "#d4d08a",
+      "roof": "#585b5a",
+      "trim": "#f0eee6",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "skirting": true,
+      "chimney": true,
+      "dormer": false,
+      "shutters": false
+    },
+    "1354": {
+      "group": "blackstone-and-mull-river",
+      "road": "Mull River Road",
+      "at": [
+        627765.5,
+        5097283.4
+      ],
+      "kind": "house",
+      "wall": "#f3f2ec",
+      "roof": "#3e4246",
+      "trim": "#f7f6f1",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1456": {
+      "group": "blackstone-and-mull-river",
+      "road": "Mull River Road",
+      "at": [
+        628169.9,
+        5101879.6
+      ],
+      "kind": "house",
+      "wall": "#a33d36",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1652": {
+      "group": "blackstone-and-mull-river",
+      "road": "Northeast Mabou Road",
+      "at": [
+        623364.6,
+        5105062.4
+      ],
+      "wall": "#a33d36",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "small steps",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1673": {
+      "group": "blackstone-and-mull-river",
+      "road": "Northeast Mabou Road",
+      "at": [
+        623378.7,
+        5105083.4
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#6e7370",
+      "trim": "#a33b32",
+      "roofMaterial": "shingle",
+      "roofShape": "gambrel",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "attachedGarage": {
+        "end": false,
+        "side": 1,
+        "width": 3.2,
+        "doors": 1,
+        "door": "#a33b32"
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1692": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        631082.5,
+        5109752.5
+      ],
+      "kind": "house",
+      "wall": "#f4f2ec",
+      "roof": "#3c6e48",
+      "trim": "#f7f5ef",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.5,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
       "shutters": false
     }
   }
