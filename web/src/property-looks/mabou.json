@@ -64,6 +64,14 @@
         "Mountain Road",
         "Whycocomagh Port Hood Road"
       ]
+    },
+    "other-mabou-roads": {
+      "label": "Other Mabou roads",
+      "roads": [
+        "(unnamed)",
+        "Highland Street Extension",
+        "Murray Hill Road"
+      ]
     }
   },
   "overrides": {
@@ -5081,6 +5089,75 @@
       "roof": "#4a4e52",
       "trim": "#f4f1ea",
       "roofMaterial": "shingle"
+    },
+    "88": {
+      "group": "other-mabou-roads",
+      "road": "Highland Street Extension",
+      "at": [
+        624339.6,
+        5103265.7
+      ],
+      "wall": "#e0c878",
+      "roof": "#3a3d40",
+      "trim": "#f7f5ef",
+      "door": "#6a8ca6",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1551": {
+      "group": "other-mabou-roads",
+      "road": "Highland Street Extension",
+      "at": [
+        624371.8,
+        5103265.7
+      ],
+      "wall": "#a2a5a0",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "900010": {
+      "group": "other-mabou-roads",
+      "road": "(unnamed)",
+      "at": [
+        621108,
+        5100301
+      ],
+      "wall": "#85857a",
+      "roof": "#c5c7c2",
+      "trim": "#dedfd8",
+      "roofMaterial": "metal",
+      "roofShape": "gable",
+      "boardAndBatten": true,
+      "chimney": true,
+      "dormer": false,
+      "shutters": false
+    },
+    "900011": {
+      "group": "other-mabou-roads",
+      "road": "(unnamed)",
+      "at": [
+        621123,
+        5100307
+      ],
+      "wall": "#85857a",
+      "roof": "#c5c7c2",
+      "trim": "#dedfd8",
+      "roofMaterial": "metal",
+      "roofShape": "gable",
+      "boardAndBatten": true,
+      "solarSide": 1,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
     }
   }
 }
