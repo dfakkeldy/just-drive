@@ -32,7 +32,7 @@ import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { baxtersCoveBuildingArt, isHillsideBuilding, littleMabouBuildingArt, NovemberBuildings } from './november-buildings';
 import { NovemberRoadDetails } from './november-road-details';
 import { mabouRoadOverrides, registerRailContacts } from './november-bridges';
-import { Buildings, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
+import { Buildings, applyBuildingFoundations, buildingSites, buildingAppearance, readBuildingStyles, roofSites, type Building } from './buildings';
 import { Animals, CatTileUnread } from './animals';
 import { loadAreaManifest, roadStart, utm20ToLatLon } from './area';
 import { areaScreen } from './area-screen';
@@ -249,7 +249,16 @@ await initStore(base);
 // Every boot read below needs only the manifest, so all start now, under the same conditions as before. Each line that used
 // to start its read now waits for it there (boot-tasks.ts), so the build order and the failures stay as they were.
 const landmarksRead = AREA.landmarks ? early(getJson('landmarks.json')) : null;
-const buildingsRead = manifest.buildings ? early(getJson(manifest.buildings.file)) : null;
+const buildingsRead = manifest.buildings ? early(fetch(`${base}/${manifest.buildings.file}`).then(r => r.text())) : null;
+// Start the active area's corrections with the other land reads. A clean build has no matching files.
+const foundationPacks = import.meta.glob<unknown>(
+  ['../../data/baked/terrain/building-foundations.json', '../../data/baked/areas/*/building-foundations.json'],
+  { import: 'default' },
+);
+const loadFoundations = ERA.modern && buildingsRead
+  ? foundationPacks[`../../data/baked/${AREA.base}/building-foundations.json`]
+  : undefined;
+const foundationsRead = loadFoundations ? early(loadFoundations().catch(() => undefined)) : null;
 const stylesRead = ERA.modern && manifest.buildingStyles ? early(getJson(manifest.buildingStyles.file)) : null;
 const pavedRead = ERA.modern && params.get('paved') !== '0' && (!!manifest.paved || params.get('paved') === '1') ? early(readFile(base, 'paved/index.json')) : null;
 const cemeteryEntry = (manifest as Manifest & { cemeteries?: { file: string } }).cemeteries;
@@ -445,7 +454,9 @@ let littleMabouArt: ReturnType<typeof littleMabouBuildingArt> | undefined;
 // group, the pub, the bank branch, lamp posts, sidewalk, string lights): built by hand from the dash cam brief. The boxes
 // it replaces leave the drawing only; they stay properties. ?mabou=0 leaves the surveyed boxes.
 const mabouSite = ERA.modern && AREA.mabouMain && params.get('mabou') !== '0' ? new MabouMainSite(manifest.village) : null;
-const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then((data: { buildings: Building[] }) => {
+const buildingList: Building[] | null = buildingsRead ? await buildingsRead.take().then(async (source: string) => {
+  const data: { buildings: Building[] } = JSON.parse(source);
+  await applyBuildingFoundations(data.buildings, source, await foundationsRead?.take());
   mappedBuildings = data.buildings;
   // Little Mabou Road's two homes (Port Hood pack only); the area's other sites still run on the result.
   if (ERA.modern && AREA.id === 'porthood') littleMabouArt = littleMabouBuildingArt(data.buildings);
@@ -1071,7 +1082,8 @@ const boxRoofAt = roofHeights(ERA.modern && buildingList ? drawnWithout(mabouSit
 const extraRoofAt = ERA.modern ? (() => {
   const kept = new Set(drawnBuildings ?? []);
   const extra: Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>[] =
-    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox && !postOfficeReplaced.has(b.id));
+    (mabouSite ? mabouSite.drawn(mappedBuildings) : mappedBuildings).filter(b => !kept.has(b) && b !== princeBox && !postOfficeReplaced.has(b.id))
+      .map(b => ({ ...b, floorGround: undefined }));
   if (princeSite) extra.push(...princeSite.roofBoxes());
   for (const lm of landmarkList) {
     const a = lm.axisDeg * Math.PI / 180, alongX = Math.sin(a), alongZ = -Math.cos(a), acrossX = Math.cos(a), acrossZ = Math.sin(a);
@@ -2299,7 +2311,7 @@ if (__PUBLIC_APP__) watchGameVersion(SITE.brand === 'just', () => !hasStarted &&
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s); if (placed) { airportDrag?.reset(); mountainHint?.clearActive(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
-// The area's own places stand first in the list; the burial grounds come after them.
+// Cemeteries stay drawn in the 3D scene and quiet for scoring, not in the Places list.
 const stuntPlaces = testPark ? testParkPlaces(testPark, manifest.village)
   : quarryStuntPark ? quarryFeature?.quarryCoursePlaces() ?? [] : [];
 function resetToRoad(): void {
@@ -2329,7 +2341,7 @@ function jumpToPlace(x: number, z: number, heading: number): void {
   finishJump(placed);
 }
 const dragPlaces = dragModule ? [dragModule.airportDragPlace()] : [];
-const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...dragPlaces, ...(cemeteries?.places ?? []), ...stuntPlaces];
+const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...dragPlaces, ...stuntPlaces];
 const placesUI = !mailMode && !bare && (placeList.length || (ERA.modern && !!tallKey)) ? new PlacesUI(placeList, manifest.village, history?.placeRoads ?? roads, {
 
   canOpen: () => started,
