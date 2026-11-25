@@ -52,6 +52,18 @@
         "Old Mull River Road",
         "Smithville Road"
       ]
+    },
+    "highway-252-and-glendyer": {
+      "label": "Highway 252 and Glendyer",
+      "roads": [
+        "Beaton Road",
+        "Glenora Falls Road",
+        "Highway 252",
+        "Lake Ainslie Chapel Road",
+        "MacLeods Road",
+        "Mountain Road",
+        "Whycocomagh Port Hood Road"
+      ]
     }
   },
   "overrides": {
@@ -4493,6 +4505,587 @@
       "chimney": false,
       "dormer": false,
       "shutters": false
+    },
+    "673": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625618.4,
+        5101967.6
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#6e7d62",
+      "roof": "#8e9493",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "metalCladding": true
+    },
+    "1121": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625704.5,
+        5101362.5
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#d5d8d4",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "door": "#a33b32",
+      "roofMaterial": "shingle",
+      "roofShape": "gable"
+    },
+    "1273": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625642.0,
+        5101610.0
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#e7e0cc",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2
+    },
+    "1058": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625715.3,
+        5101273.8
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#c4b49a",
+      "roof": "#6b5344",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "1568": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625726.1,
+        5101088.9
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#8a9094",
+      "roof": "#5c6164",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "1567": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625738.9,
+        5101066.6
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#b08968",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "dormers": 2
+    },
+    "299": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625932.9,
+        5100894.0
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "kind": "barn",
+      "wall": "#a33b32",
+      "roof": "#3a3d40",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1048": {
+      "group": "highway-252-and-glendyer",
+      "road": "Glenora Falls Road",
+      "at": [
+        626657.6,
+        5107635.8
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a33b32",
+      "roof": "#8e9493",
+      "trim": "#f4f2ec",
+      "roofMaterial": "metal",
+      "eave": 4.5,
+      "ridge": 8.0
+    },
+    "133": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        625609.1,
+        5103634.4
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a08060",
+      "roof": "#3a3d40",
+      "trim": "#c4b49a",
+      "roofMaterial": "shingle",
+      "boardAndBatten": true
+    },
+    "178": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        625623.5,
+        5103589.3
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#3f342e",
+      "roof": "#2e3134",
+      "trim": "#6b5e54",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.2,
+      "ridge": 7.4
+    },
+    "153": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        625735.4,
+        5103494.2
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "542": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627141.2,
+        5103610.2
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#8e9493",
+      "trim": "#f4f1ea",
+      "door": "#a33b32",
+      "roofMaterial": "metal",
+      "roofShape": "gable"
+    },
+    "1428": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627159.0,
+        5103624.8
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a33b32",
+      "roof": "#6e7370",
+      "trim": "#f4f2ec",
+      "roofMaterial": "metal"
+    },
+    "1608": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627432.2,
+        5103401.5
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#6e7370",
+      "trim": "#a33b32",
+      "roofMaterial": "shingle"
+    },
+    "1576": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627659.5,
+        5103325.0
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3d6a96",
+      "trim": "#f4f2ec",
+      "roofMaterial": "metal"
+    },
+    "786": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627802.6,
+        5103139.9
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "kind": "barn",
+      "wall": "#a33b32",
+      "roof": "#3a3d40",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "814": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627816.0,
+        5103157.9
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a33b32",
+      "roof": "#4a4e52",
+      "trim": "#f4f2ec",
+      "roofMaterial": "metal",
+      "roofShape": "gambrel"
+    },
+    "1183": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        628309.8,
+        5102687.1
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "367": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        629315.7,
+        5100787.9
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#4a4e52",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal"
+    },
+    "365": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        629348.2,
+        5100761.7
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "245": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630319.1,
+        5100557.6
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#4e5964",
+      "roof": "#32363a",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle",
+      "dormers": 2
+    },
+    "250": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630369.3,
+        5100599.4
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "314": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630584.5,
+        5100619.4
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#8a9aa6",
+      "roof": "#3a3d40",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "318": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630670.0,
+        5100663.0
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": true,
+      "shutters": true,
+      "wall": "#f4f2ec",
+      "roof": "#5c6164",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "372": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630752.5,
+        5100813.2
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#c6a56a",
+      "roof": "#5a5e62",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "1591": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        631626.9,
+        5101186.5
+      ],
+      "entrance": "front porch",
+      "chimney": false,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#303639",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "69": {
+      "group": "highway-252-and-glendyer",
+      "road": "Lake Ainslie Chapel Road",
+      "at": [
+        631520.1,
+        5101179.6
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#8d877c",
+      "roof": "#405d49",
+      "trim": "#e2c04a",
+      "door": "#2c4d86",
+      "roofMaterial": "metal",
+      "storeys": 2
+    },
+    "1592": {
+      "group": "highway-252-and-glendyer",
+      "road": "Lake Ainslie Chapel Road",
+      "at": [
+        631520.8,
+        5101205.2
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#6d8494",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "door": "#2c4d86",
+      "roofMaterial": "shingle"
+    },
+    "1593": {
+      "group": "highway-252-and-glendyer",
+      "road": "Lake Ainslie Chapel Road",
+      "at": [
+        631557.9,
+        5101212.7
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#3f6b48",
+      "roof": "#a1483e",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "461": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        624671.7,
+        5099191.4
+      ],
+      "entrance": "front porch",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#3c3834",
+      "roof": "#3a3d40",
+      "trim": "#6b6560",
+      "roofMaterial": "shingle"
+    },
+    "459": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        624713.5,
+        5099182.5
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#3a3330",
+      "roof": "#4a4e52",
+      "trim": "#6b6560",
+      "roofMaterial": "shingle"
+    },
+    "441": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        624868.1,
+        5099156.0
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#9aa0a4",
+      "roof": "#3a3d40",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 2
+    },
+    "439": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        624935.3,
+        5099135.4
+      ],
+      "entrance": "small steps",
+      "chimney": false,
+      "dormer": false,
+      "shutters": true,
+      "wall": "#c4a882",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "386": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        625422.1,
+        5098793.2
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": true,
+      "wall": "#3a3330",
+      "roof": "#984136",
+      "trim": "#6b5e54",
+      "roofMaterial": "metal"
+    },
+    "1379": {
+      "group": "highway-252-and-glendyer",
+      "road": "Whycocomagh Port Hood Road",
+      "at": [
+        625941.9,
+        5095512.1
+      ],
+      "entrance": "small steps",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#e4d3a8",
+      "roof": "#4a4e52",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
     }
   }
 }
