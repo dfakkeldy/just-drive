@@ -34,7 +34,7 @@ assert.deepEqual([...drawnRoadBytes(deckRoad, paintMask)], [128, 52, 3, 0, 128, 
 assert.deepEqual([...deckRoad], [128, 52, 68, 0, 128, 52, 65, 0, 128, 52, 33, 0], 'CPU road flags stay intact');
 
 // Boot-time driveways must keep the surveyed span inventory from the installed network.
-const launch = readFileSync('web/src/main.ts', 'utf8').match(/^const roads = new Roads\((.*), manifest.village, terrain\);$/m);
+const launch = readFileSync('web/src/main.ts', 'utf8').match(/^const roads = new Roads\((.*), manifest\.village, terrain(?:, bridgeDecks)?\);$/m);
 assert.ok(launch, 'road network startup expression');
 const supplied = { roads: [{ id: 1 }], bridgeSpans: [{ id: 2 }] };
 const driveways = { added: [{ id: 3 }] };
