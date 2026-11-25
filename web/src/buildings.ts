@@ -91,9 +91,12 @@ export interface BuildingStyle {
   steppedShed?: boolean;
   windowWall?: boolean;
   doorWindows?: boolean;
-  roofShape?: 'flat' | 'gable' | 'hip' | 'gambrel';
+  roofShape?: 'flat' | 'gable' | 'hip' | 'gambrel' | 'shed';
   front?: { end: boolean; side: -1 | 1 };
   siloPosition?: { u: number; v: number; diameter: number; height: number };
+  storeys?: 1 | 2 | 3;
+  dormers?: 1 | 2 | 3;
+  attachedGarage?: { end: boolean; side: -1 | 1; offset?: number; width?: number; doors?: 1 | 2; door?: string };
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -111,8 +114,18 @@ const isStyle = (s: unknown): s is BuildingStyle => {
       (s.bareEnd.side !== -1 && s.bareEnd.side !== 1))) return false;
   if (s.barnDoors !== undefined && (typeof s.barnDoors !== 'number' || ![1, 2, 3, 4, 5].includes(s.barnDoors))) return false;
   if (s.solarSide !== undefined && s.solarSide !== -1 && s.solarSide !== 1) return false;
-  if (s.roofShape !== undefined && !['flat', 'gable', 'hip', 'gambrel'].includes(String(s.roofShape))) return false;
+  if (s.roofShape !== undefined && !['flat', 'gable', 'hip', 'gambrel', 'shed'].includes(String(s.roofShape))) return false;
   if (s.front !== undefined && (!isRecord(s.front) || typeof s.front.end !== 'boolean' || (s.front.side !== -1 && s.front.side !== 1))) return false;
+  if (s.storeys !== undefined && (typeof s.storeys !== 'number' || ![1, 2, 3].includes(s.storeys))) return false;
+  if (s.dormers !== undefined && (typeof s.dormers !== 'number' || ![1, 2, 3].includes(s.dormers))) return false;
+  if (s.attachedGarage !== undefined) {
+    const g = s.attachedGarage;
+    if (!isRecord(g) || typeof g.end !== 'boolean' || (g.side !== -1 && g.side !== 1)) return false;
+    if (g.offset !== undefined && (typeof g.offset !== 'number' || !Number.isFinite(g.offset))) return false;
+    if (g.width !== undefined && (typeof g.width !== 'number' || !Number.isFinite(g.width) || g.width <= 0)) return false;
+    if (g.doors !== undefined && g.doors !== 1 && g.doors !== 2) return false;
+    if (g.door !== undefined && !isPaint(g.door)) return false;
+  }
   if (s.siloPosition !== undefined) {
     const p = s.siloPosition;
     if (!isRecord(p) || !['u', 'v', 'diameter', 'height'].every((k) => typeof p[k] === 'number' && Number.isFinite(p[k]))) return false;
@@ -318,7 +331,8 @@ export class Buildings {
       // Wing joints use simple roofs. Property accessories are never multiplied,
       // and uncertain porches/dormers are omitted rather than put on an inner wall.
       const style = b.buildingId !== undefined && paint ? { ...paint,
-        entrance: 'none' as const, dormer: false, satelliteDish: false, solarSide: undefined, steppedShed: false, windowWall: false,
+        entrance: 'none' as const, dormer: false, dormers: undefined, satelliteDish: false, solarSide: undefined, steppedShed: false, windowWall: false,
+        attachedGarage: undefined,
         chimney: primary && paint.chimney, silo: primary && paint.silo,
         roofShape: paint.roofShape === 'flat' || b.roof === 'flat' ? 'flat' as const : 'gable' as const,
       } : paint;
@@ -401,7 +415,8 @@ export class Buildings {
           const seamStart = pos.length / 3;
           const seam: RGB = [Math.min(1, roof[0] * 1.17 + 0.012), Math.min(1, roof[1] * 1.17 + 0.012), Math.min(1, roof[2] * 1.17 + 0.012)];
           // Sparse standing seams read from the road without subpixel strips across every 0.5 m panel.
-          for (let u = u0 + 0.65; u < u1 - 0.1; u += 1.5) {
+          const seamStep = u1 - u0 > 20 ? 2.4 : 1.5;
+          for (let u = u0 + 0.65; u < u1 - 0.1; u += seamStep) {
             quadP(u, v0, h0 + 0.025, u + 0.035, v0, h0 + 0.025, u + 0.035, v1, h1 + 0.025, u, v1, h1 + 0.025, seam, shade);
           }
           nearPaint?.(seamStart);
@@ -501,19 +516,21 @@ export class Buildings {
       // Shallow clapboard courses, kept behind openings and corner trim.
       // Muted bands suggest weathered shingles without adding a texture or draw call.
       if (style?.boardAndBatten || style?.metalCladding) {
+        const claddingStart = pos.length / 3;
         for (const side of [-1, 1]) for (const end of [false, true]) {
           const span = end ? W : L;
           const base = end ? endWall(side) : wall;
           const raised: RGB = [base[0] * 1.15, base[1] * 1.14, base[2] * 1.12];
-          const spacing = style.metalCladding ? 0.65 : 0.42;
+          const spacing = style.metalCladding ? (Math.max(L, W) > 10 ? 1.4 : 0.65) : 0.42;
           for (let u = -span + 0.28; u < span - 0.14; u += spacing) {
             const high = end && style.metalCladding && shape === 'gable' ? e + (r - e) * (1 - Math.abs(u) / W) - 0.06 : e;
             panel(end, side, u, u + 0.046, 0.38, high, raised, 0.022);
           }
         }
+        nearPaint?.(claddingStart);
       } else if (!simpleSiding && (b.kind === 'house' || b.kind === 'barn')) {
         const course: RGB = [wall[0] * 0.95, wall[1] * 0.95, wall[2] * 0.95];
-        const sides = style && b.kind === 'house' ? [style.front?.side ?? 1] : [-1, 1];
+        const sides = style ? [style.front?.side ?? 1] : [-1, 1];
         for (let y = 0.65; y < e - 0.15; y += style ? 0.64 : b.kind === 'barn' ? 0.44 : 0.32) {
           // Spend siding detail on one long wall and one end wall. The other walls
           // keep their paint; this pays for porches and windows without more draw calls.
@@ -556,8 +573,41 @@ export class Buildings {
             panel(false, front, u, u + step - 0.11, 3.72, 3.8, trim, 0.065);
           }
         }
-        const storeys = Math.max(1, Math.min(3, Math.floor((e + 0.3) / 2.65)));
+        const storeys = style?.storeys
+          ? Math.max(1, Math.min(style.storeys, Math.floor(e / 1.8)))
+          : Math.max(1, Math.min(3, Math.floor((e + 0.3) / 2.65)));
         const floor = e / storeys, wh = Math.min(1.25, floor * 0.43);
+        const garage = style?.attachedGarage;
+        const garageSpan = garage ? (garage.end ? W : L) : 0;
+        const garageDoors = garage?.doors ?? 1;
+        const garageSingleW = garage ? Math.min(garage.width ?? (garageDoors === 2 ? 2.4 : 2.8), garageSpan * (garageDoors === 2 ? 0.38 : 0.65)) : 0;
+        const garageGap = garageDoors === 2 ? 0.32 : 0;
+        const garageTotalW = garage ? garageSingleW * garageDoors + garageGap : 0;
+        const garageCenter = garage ? Math.max(-garageSpan + garageTotalW / 2 + 0.25,
+          Math.min(garageSpan - garageTotalW / 2 - 0.25, garage.offset ?? (garageSpan > 3.5 ? garageSpan * 0.35 : 0))) : 0;
+        const garageH = garage ? Math.min(2.2, e - 0.35) : 0;
+        const hitsGarage = (end: boolean, side: number, u: number, row: number) =>
+          !!garage && garageH > 1.2 && row === 0 && garage.end === end && garage.side === side &&
+          Math.abs(u - garageCenter) < garageTotalW / 2 + 0.7;
+        if (garage && garageH > 1.2 && garageSingleW > 1.2) {
+          const gCol = garage.door ? rgb(garage.door) : rgb('#e5e3db');
+          const gSeam: RGB = [gCol[0] * 0.74, gCol[1] * 0.74, gCol[2] * 0.74];
+          const centres = garageDoors === 2
+            ? [garageCenter - (garageSingleW + garageGap) / 2, garageCenter + (garageSingleW + garageGap) / 2]
+            : [garageCenter];
+          for (const gu of centres) {
+            const half = garageSingleW / 2;
+            const trimStart = pos.length / 3;
+            panel(garage.end, garage.side, gu - half - 0.1, gu + half + 0.1, 0.08, 0.12 + garageH + 0.1, trim, 0.035);
+            nearPaint?.(trimStart);
+            panel(garage.end, garage.side, gu - half, gu + half, 0.12, 0.12 + garageH, gCol, 0.05);
+            const slatStart = pos.length / 3;
+            for (let sy = 0.56; sy < 0.12 + garageH - 0.2; sy += 0.44) {
+              panel(garage.end, garage.side, gu - half, gu + half, sy, sy + 0.024, gSeam, 0.06);
+            }
+            nearPaint?.(slatStart);
+          }
+        }
         const columns = Math.max(1, Math.min(9, Math.floor((b.length - 1.5) / 2.7)));
         for (const side of [-1, 1]) for (let row = 0; row < storeys; row++) {
           const y = row * floor + Math.max(0.65, (floor - wh) * 0.48);
@@ -565,19 +615,23 @@ export class Buildings {
             const u = -L + (c + 0.5) * b.length / columns;
             if (tallFront && side === front) continue;
             if (!frontEnd && side === front && row === 0 && Math.abs(u - doorU) < 1.2) continue;
+            if (hitsGarage(false, side, u, row)) continue;
             opening(false, side, u, y, Math.min(1.1, b.length / columns * 0.48), wh);
           }
         }
         for (const side of [-1, 1]) {
           if (W > 2) for (const v of [-W * 0.48, W * 0.48]) {
             if (frontEnd && side === front && Math.abs(v - doorU) < 1.2) continue;
-            opening(true, side, v, 0.85, Math.min(0.95, W * 0.35), Math.min(1.2, e * 0.38));
+            if (!hitsGarage(true, side, v, 0)) {
+              opening(true, side, v, 0.85, Math.min(0.95, W * 0.35), Math.min(1.2, e * 0.38));
+            }
           }
           if ((shape === 'gable' || shape === 'gambrel') && r - e > 1.5) opening(true, side, 0, e + 0.25, 0.6, Math.min(0.7, (r - e) * 0.3));
         }
         const entrance = b.buildingId !== undefined ? 'none' : style?.entrance ?? (hash(identity + 6) > 0.4 ? 'small steps' : 'none');
         if (dh > 1.1 && entrance !== 'none') {
           const steps = entrance === 'small steps';
+          const entranceStart = pos.length / 3;
           const half = steps ? 0.85 : Math.min(span - 0.4, entrance === 'wrap-around' ? span * 0.85 : 2.5);
           const reach = steps ? 0.85 : 2.2;
           const v0 = front === 1 ? depth : -depth - reach, v1 = front === 1 ? depth + reach : -depth;
@@ -610,18 +664,26 @@ export class Buildings {
             }
             quadF(u0 - 0.15, front * depth, top + 0.23, u1 + 0.15, front * depth, top + 0.23, u1 + 0.15, front * (depth + reach + 0.15), top, u0 - 0.15, front * (depth + reach + 0.15), top, roof);
           }
+          if (steps || entrance === 'deck') nearPaint?.(entranceStart);
         }
         if (style?.dormer && !flat && !shed && shape !== 'hip' && span > 3) {
+          const count = style.dormers ?? 1;
+          const centres = count === 3 && L > 4.5 ? [-L * 0.54, 0, L * 0.54]
+            : count === 2 && L > 3.2 ? [-L * 0.4, L * 0.4]
+            : [0];
           const v = front * W * 0.58, d = Math.min(1.2, W * 0.28);
           const y = r - (r - e) * 0.58, top = Math.min(r - 0.32, y + 1.25);
-          box(-0.9, 0.9, Math.min(v, v - front * d), Math.max(v, v - front * d), y - 0.15, top, wall);
-          panel(false, front, -0.65, 0.65, y + 0.12, top - 0.12, trim, Math.abs(v) - W + 0.035);
-          panel(false, front, -0.48, 0.48, y + 0.22, top - 0.21, glass, Math.abs(v) - W + 0.05);
           const peak = Math.min(r, top + 0.4);
-          triP(-1, v, top, 1, v, top, 0, v, peak, wall);
-          for (const side of [-1, 1]) quadP(side, v + front * 0.15, top, side, v - front * d, top, 0, v - front * d, peak, 0, v + front * 0.15, peak, roof);
+          for (const cu of centres) {
+            box(cu - 0.9, cu + 0.9, Math.min(v, v - front * d), Math.max(v, v - front * d), y - 0.15, top, wall);
+            panel(false, front, cu - 0.65, cu + 0.65, y + 0.12, top - 0.12, trim, Math.abs(v) - W + 0.035);
+            panel(false, front, cu - 0.48, cu + 0.48, y + 0.22, top - 0.21, glass, Math.abs(v) - W + 0.05);
+            triP(cu - 1, v, top, cu + 1, v, top, cu, v, peak, wall);
+            for (const side of [-1, 1]) quadP(cu + side, v + front * 0.15, top, cu + side, v - front * d, top, cu, v - front * d, peak, cu, v + front * 0.15, peak, roof);
+          }
         }
         if (style?.satelliteDish) {
+          const dishStart = pos.length / 3;
           const u = doorU + 1.4, v = front * (depth + 0.35), y = Math.min(e - 0.3, 2.5);
           frontBox(u - 0.035, u + 0.035, v - 0.04, v + 0.04, y - 0.5, y, foundation);
           const dish = rgb('#a3aaa9');
@@ -630,6 +692,7 @@ export class Buildings {
             triF(u, v - front * 0.12, y, u + Math.cos(a0) * 0.38, v, y + Math.sin(a0) * 0.32, u + Math.cos(a1) * 0.38, v, y + Math.sin(a1) * 0.32, dish);
           }
           triF(u, v, y - 0.28, u + 0.04, v, y - 0.28, u, v + front * 0.4, y - 0.08, foundation);
+          nearPaint?.(dishStart);
         }
         if (primary && (style?.chimney ?? (hash(identity + 4) > 0.45)) && L > 3 && W > 2) {
           const u = L * 0.45, v = W * 0.3;
