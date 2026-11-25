@@ -22,9 +22,9 @@
     {
       "file": "areas/westbay/7/78_76.png",
       "before": "46cb50bff5c94a307f7ec8d78fae703d7e46489dd57e845b003c6b1c72db7035",
-      "sha256": "1ae53ceaa3ef3d55b3a62b7b8414f9b113ec2fe69f78603867c4dcac6094f1a8",
-      "bytes": 77343,
-      "changedPixels": 80,
+      "sha256": "fb7ac5a9ce73a11ef17d5ffd97ccb76b6ed7ee59fc140c0106e51ac11ff7d93c",
+      "bytes": 77338,
+      "changedPixels": 72,
       "maxEdgeDiff": 0
     },
     {

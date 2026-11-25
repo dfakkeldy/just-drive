@@ -82,12 +82,37 @@ def check_shaping_math():
     bad_rgb = before_rgb.copy()
     bad_rgb[0, 0, 10] = 1
     refused('tile edge changed', patch._check_tile_edges_unchanged, before_rgb, bad_rgb, 'synthetic')
+
+    # Downsampled L7 bleed must be clamped to <= 6 m and [s0-2, s1+2], and verified by _check_tile_footprint.
+    # Shift the track by 0.5 m so L7 samples fall at 6.5 m with a 5.5 m neighbour (< 6 m), causing halve() to bleed past 6 m.
+    pts_odd = pts.copy()
+    pts_odd[:, 1] += 0.5
+    out_dtm_odd, out_dsm_odd, _ = patch.shape_trough(
+        dtm, dsm, halo, pts_odd,
+        patch_box=(631530.0, 5064380.0, 631590.0, 5064420.0),
+    )
+    hdtm_raw, hdsm_raw = patch.halve(dtm), patch.halve(dsm)
+    hdtm_blur, hdsm_blur = patch.halve(out_dtm_odd), patch.halve(out_dsm_odd)
+    l7_before_rgb = patch.encode(hdtm_raw, hdsm_raw)
+    l7_blur_rgb = patch.encode(hdtm_blur, hdsm_blur)
+    # Without clamping, halve()'s 3x3 blur spreads changes beyond the 6 m limit (to 7.0 m).
+    refused('beyond 6.0 m limit', patch._check_tile_footprint, l7_before_rgb, l7_blur_rgb, halo, 2.0, pts_odd, 'synthetic-l7-unclamped')
+    hdtm_clamped, hdsm_clamped = patch.clamp_level_footprint(hdtm_raw, hdsm_raw, hdtm_blur, hdsm_blur, halo, 2.0, pts_odd)
+    l7_clamped_rgb = patch.encode(hdtm_clamped, hdsm_clamped)
+    patch._check_tile_footprint(l7_before_rgb, l7_clamped_rgb, halo, 2.0, pts_odd, 'synthetic-l7-clamped')
+    # L8 encoded tile must also pass _check_tile_footprint.
+    patch._check_tile_footprint(patch.encode(dtm, dsm), patch.encode(out_dtm, out_dsm), halo, 1.0, pts, 'synthetic-l8')
+    # Footprint mutant: a single changed pixel beyond 6 m off the track must fail _check_tile_footprint.
+    bad_fp = l7_clamped_rgb.copy()
+    bad_fp[0, (row_centre - 8) // 2, col_835 // 2] ^= 1
+    refused('beyond 6.0 m limit', patch._check_tile_footprint, l7_before_rgb, bad_fp, halo, 2.0, pts_odd, 'synthetic-l7-mutant')
+
     # Nodata anchor mutant: NODATA at an anchor slope must fail closed.
     bad_dtm = dtm.copy()
     bad_dtm[row_centre, int(631548.0 - halo[0])] = patch.NODATA
     refused('nodata DTM', patch.shape_trough, bad_dtm, dsm, halo, pts,
             patch_box=(631530.0, 5064380.0, 631590.0, 5064420.0))
-    print(f'PASS synthetic shaping math (delta [{stats["minDeltaM"]}, {stats["maxDeltaM"]}] m; bed flat, outer gully intact, edge and nodata guards)')
+    print(f'PASS synthetic shaping math (delta [{stats["minDeltaM"]}, {stats["maxDeltaM"]}] m; bed flat, L8/L7 <= 6 m footprint, edge and nodata guards)')
 
 
 def check_install_and_refusals():
@@ -144,19 +169,35 @@ def check_install_and_refusals():
         assert not (delta / 'before').exists(), 'failed install must not write backups'
         (baked / 'areas/westbay/8/156_152.png').write_bytes(orig_l8)
 
+        # Corrupt second backup refusal BEFORE replacing the first live tile.
+        corrupt_delta = tmp / 'corrupt-bak-delta'
+        shutil.copytree(delta, corrupt_delta)
+        bad_bak = corrupt_delta / 'before/areas/westbay/8/156_152.png'
+        bad_bak.parent.mkdir(parents=True, exist_ok=True)
+        bad_bak.write_bytes(b'corrupt-backup')
+        refused('Existing backup has wrong hash', patch.install, corrupt_delta, baked, receipt_path=receipt_file)
+        assert patch.land_state(baked, receipt) == ('before', []), 'failed install must leave first live tile untouched'
+        assert not (corrupt_delta / 'before/areas/westbay/7/78_76.png').exists(), 'failed install must not write first backup'
+
         # Clean install -> idempotent repeat -> rollback -> idempotent rollback.
         assert patch.install(delta, baked, receipt_path=receipt_file) == 'installed'
         assert patch.land_state(baked, receipt) == ('after', [])
         assert patch.install(delta, baked, receipt_path=receipt_file) == 'already-installed'
 
-        # Partial/mixed state detection.
+        # Mixed pair with missing backup for the already-installed tile must refuse without writing.
         (baked / 'areas/westbay/7/78_76.png').write_bytes(b'before-l7-tile')
         assert patch.land_state(baked, receipt)[0] == 'mixed'
-        # Resuming an interrupted install finishes cleanly.
+        no_bak_delta = tmp / 'no-bak-delta'
+        shutil.copytree(delta, no_bak_delta)
+        shutil.rmtree(no_bak_delta / 'before')
+        refused('Missing backup for already-installed', patch.install, no_bak_delta, baked, receipt_path=receipt_file)
+        assert (baked / 'areas/westbay/7/78_76.png').read_bytes() == b'before-l7-tile'
+
+        # Resuming an interrupted install when all already-installed tiles have valid backups finishes cleanly.
         assert patch.install(delta, baked, receipt_path=receipt_file) == 'installed'
         assert patch.land_state(baked, receipt) == ('after', [])
 
-        # Symlink refusal on install/rollback.
+        # Symlink refusal on live target during rollback.
         sym_baked = tmp / 'sym-baked'
         shutil.copytree(baked, sym_baked)
         sym_tile = sym_baked / 'areas/westbay/8/156_152.png'
@@ -164,11 +205,22 @@ def check_install_and_refusals():
         sym_tile.symlink_to(delta / 'areas/westbay/8/156_152.png')
         refused('symlink', patch.rollback, delta, sym_baked, receipt_path=receipt_file)
 
+        # Symlink refusal on backup file during rollback.
+        sym_bak_delta = tmp / 'sym-bak-delta'
+        shutil.copytree(delta, sym_bak_delta)
+        sym_bak = sym_bak_delta / 'before/areas/westbay/8/156_152.png'
+        real_bak = tmp / 'real-before-l8.png'
+        real_bak.write_bytes(sym_bak.read_bytes())
+        sym_bak.unlink()
+        sym_bak.symlink_to(real_bak)
+        refused('symlink', patch.rollback, sym_bak_delta, baked, receipt_path=receipt_file)
+        assert patch.land_state(baked, receipt) == ('after', []), 'refused rollback must leave live tiles untouched'
+
         # Rollback restores exact before state.
         assert patch.rollback(delta, baked, receipt_path=receipt_file) == 'rolled-back'
         assert patch.land_state(baked, receipt) == ('before', [])
         assert patch.rollback(delta, baked, receipt_path=receipt_file) == 'already-before'
-        print('PASS synthetic install/rollback lifecycle and all 8 tamper/path/mixed/symlink refusals')
+        print('PASS synthetic install/rollback lifecycle and all 11 tamper/path/mixed/backup/symlink refusals')
 
 
 def check_receipt_schema() -> dict:

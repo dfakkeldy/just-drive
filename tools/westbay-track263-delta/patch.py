@@ -117,6 +117,41 @@ def find_track_263(roads_data: dict):
     return pts
 
 
+def _track_cum(pts):
+    import numpy as np
+    seg = np.diff(pts, axis=0)
+    seg_len = np.hypot(seg[:, 0], seg[:, 1])
+    return np.concatenate([[0.0], np.cumsum(seg_len)])
+
+
+def project_to_track(ee, nn, pts, *, lo_s: float | None = None, hi_s: float | None = None):
+    """Return (dist_m, arc_s_m) for arrays of EPSG:2961 coordinates projected onto polyline `pts`."""
+    import numpy as np
+    cum = _track_cum(pts)
+    ee_arr = np.asarray(ee, dtype=np.float64)
+    nn_arr = np.asarray(nn, dtype=np.float64)
+    best_d2 = np.full(ee_arr.shape, np.inf, dtype=np.float64)
+    best_s = np.zeros(ee_arr.shape, dtype=np.float64)
+    for k in range(len(pts) - 1):
+        if lo_s is not None and cum[k + 1] < lo_s:
+            continue
+        if hi_s is not None and cum[k] > hi_s:
+            continue
+        ax, ay = pts[k]
+        bx, by = pts[k + 1]
+        dx, dy = bx - ax, by - ay
+        l2 = dx * dx + dy * dy
+        if l2 <= 0.0:
+            continue
+        t = np.clip(((ee_arr - ax) * dx + (nn_arr - ay) * dy) / l2, 0.0, 1.0)
+        px, py = ax + t * dx, ay + t * dy
+        d2 = (ee_arr - px) ** 2 + (nn_arr - py) ** 2
+        mask = d2 < best_d2
+        best_d2[mask] = d2[mask]
+        best_s[mask] = cum[k] + t[mask] * math.sqrt(l2)
+    return np.sqrt(best_d2), best_s
+
+
 def shape_trough(dtm, dsm, halo: tuple[float, float, float, float], pts,
                  *, s0: float = S0, s1: float = S1, end_taper: float = END_TAPER,
                  slope_span: float = SLOPE_SPAN, half_bed: float = HALF_BED,
@@ -131,9 +166,7 @@ def shape_trough(dtm, dsm, halo: tuple[float, float, float, float], pts,
     dtm_out = dtm.astype(np.float32, copy=True)
     dsm_out = dsm.astype(np.float32, copy=True)
 
-    seg = np.diff(pts, axis=0)
-    seg_len = np.hypot(seg[:, 0], seg[:, 1])
-    cum = np.concatenate([[0.0], np.cumsum(seg_len)])
+    cum = _track_cum(pts)
     if s0 - slope_span < 0.0 or s1 + slope_span > cum[-1]:
         raise ValueError(f'Track {ROAD_ID} length {cum[-1]:.2f} m does not span [{s0 - slope_span}, {s1 + slope_span}]')
 
@@ -177,27 +210,7 @@ def shape_trough(dtm, dsm, halo: tuple[float, float, float, float], pts,
     ee = halo[0] + xx
     nn = halo[3] - yy
 
-    # Project onto segments whose bounding arc range overlaps the patch window.
-    lo_s, hi_s = s0 - end_taper - 20.0, s1 + end_taper + 20.0
-    best_d2 = np.full(ee.shape, np.inf, dtype=np.float64)
-    best_s = np.zeros(ee.shape, dtype=np.float64)
-    for k in range(len(pts) - 1):
-        if cum[k + 1] < lo_s or cum[k] > hi_s:
-            continue
-        ax, ay = pts[k]
-        bx, by = pts[k + 1]
-        dx, dy = bx - ax, by - ay
-        l2 = dx * dx + dy * dy
-        if l2 <= 0.0:
-            continue
-        t = np.clip(((ee - ax) * dx + (nn - ay) * dy) / l2, 0.0, 1.0)
-        px, py = ax + t * dx, ay + t * dy
-        d2 = (ee - px) ** 2 + (nn - py) ** 2
-        mask = d2 < best_d2
-        best_d2[mask] = d2[mask]
-        best_s[mask] = cum[k] + t[mask] * math.sqrt(l2)
-
-    dist = np.sqrt(best_d2)
+    dist, best_s = project_to_track(ee, nn, pts, lo_s=s0 - end_taper - 20.0, hi_s=s1 + end_taper + 20.0)
     w_along = (smoothstep(s0 - end_taper, s0 + end_taper, best_s)
                * (1.0 - smoothstep(s1 - end_taper, s1 + end_taper, best_s)))
     w_cross = 1.0 - smoothstep(half_bed, outer, dist)
@@ -212,7 +225,8 @@ def shape_trough(dtm, dsm, halo: tuple[float, float, float, float], pts,
     # Clear low scrub on the graded track bed; outside the bed keep any canopy that still stands above fill.
     canopy_orig = np.where(valid & (sub_dsm != NODATA), np.maximum(0.0, sub_dsm - sub_dtm), 0.0)
     new_canopy = np.where(w > 0.5, 0.0, np.where(delta > 0.0, np.maximum(0.0, canopy_orig - delta), canopy_orig))
-    new_sub_dsm = np.where(valid & (sub_dsm != NODATA), new_sub_dtm.astype(np.float64) + new_canopy, sub_dsm).astype(np.float32)
+    new_sub_dsm = np.where((w > 0.0) & valid & (sub_dsm != NODATA),
+                           new_sub_dtm.astype(np.float64) + new_canopy, sub_dsm).astype(np.float32)
 
     dtm_out[r_min:r_max + 1, c_min:c_max + 1] = new_sub_dtm
     dsm_out[r_min:r_max + 1, c_min:c_max + 1] = new_sub_dsm
@@ -221,6 +235,29 @@ def shape_trough(dtm, dsm, halo: tuple[float, float, float, float], pts,
         minDeltaM=round(float(delta.min()), 4), maxDeltaM=round(float(delta.max()), 4),
     )
     return dtm_out, dsm_out, stats
+
+
+def clamp_level_footprint(raw_dtm, raw_dsm, new_dtm, new_dsm,
+                          halo: tuple[float, float, float, float], step: float, pts,
+                          *, s0: float = S0, s1: float = S1, end_taper: float = END_TAPER,
+                          outer: float = OUTER):
+    """Revert any downsampled pixel outside the track footprint back to its unmodified value."""
+    import numpy as np
+    changed = (new_dtm != raw_dtm) | (new_dsm != raw_dsm)
+    rows, cols = np.nonzero(changed)
+    if len(rows) == 0:
+        return new_dtm.copy(), new_dsm.copy()
+    ee = halo[0] + cols * step
+    nn = halo[3] - rows * step
+    dist, best_s = project_to_track(ee, nn, pts)
+    outside = (dist > outer) | (best_s < s0 - end_taper) | (best_s > s1 + end_taper)
+    dtm_out = new_dtm.copy()
+    dsm_out = new_dsm.copy()
+    if np.any(outside):
+        orows, ocols = rows[outside], cols[outside]
+        dtm_out[orows, ocols] = raw_dtm[orows, ocols]
+        dsm_out[orows, ocols] = raw_dsm[orows, ocols]
+    return dtm_out, dsm_out
 
 
 def _git_primary_root(start: Path) -> Path | None:
@@ -264,6 +301,27 @@ def _check_tile_edges_unchanged(before_rgb, after_rgb, label: str):
     ]
     if max(diffs) != 0:
         raise ValueError(f'{label}: tile edge changed ({diffs}); shared edges must stay untouched')
+
+
+def _check_tile_footprint(before_rgb, after_rgb, tb: tuple[float, float, float, float],
+                          step: float, pts, label: str,
+                          *, s0: float = S0, s1: float = S1, end_taper: float = END_TAPER,
+                          outer: float = OUTER):
+    import numpy as np
+    changed = np.any(after_rgb != before_rgb, axis=0)
+    rows, cols = np.nonzero(changed)
+    if len(rows) == 0:
+        raise ValueError(f'{label}: tile has zero changed pixels')
+    ee = tb[0] + cols * step
+    nn = tb[3] - rows * step
+    dist, best_s = project_to_track(ee, nn, pts)
+    max_dist = float(dist.max())
+    min_s, max_s = float(best_s.min()), float(best_s.max())
+    if max_dist > outer + 1e-9:
+        raise ValueError(f'{label}: changed pixel beyond {outer:.1f} m limit (max {max_dist:.3f} m)')
+    if min_s < s0 - end_taper - 1e-9 or max_s > s1 + end_taper + 1e-9:
+        raise ValueError(f'{label}: changed pixel outside [{s0 - end_taper:.1f}, {s1 + end_taper:.1f}] m '
+                         f'(got [{min_s:.3f}, {max_s:.3f}] m)')
 
 
 def _warp_exact(path: str, bb: tuple[float, float, float, float]):
@@ -331,6 +389,7 @@ def build_tiles(raw: Path, manifest: dict, pts):
 
     dtm_new, dsm_new, stats = shape_trough(dtm_raw, dsm_raw, halo, pts)
     hdtm_new, hdsm_new = halve(dtm_new), halve(dsm_new)
+    hdtm_new, hdsm_new = clamp_level_footprint(hdtm_raw, hdsm_raw, hdtm_new, hdsm_new, halo, res(7), pts)
 
     built = []
     for level, i, j in TILES:
@@ -345,6 +404,7 @@ def build_tiles(raw: Path, manifest: dict, pts):
         after_rgb = encode(a1[row:row + TILE + 1, col:col + TILE + 1],
                            c1[row:row + TILE + 1, col:col + TILE + 1])
         _check_tile_edges_unchanged(repro_rgb, after_rgb, str(rel))
+        _check_tile_footprint(repro_rgb, after_rgb, tb, step, pts, str(rel))
         built.append((rel, repro_rgb, after_rgb))
     return built, stats
 
@@ -439,21 +499,29 @@ def land_state(baked: Path, receipt: dict) -> tuple[str, list[str]]:
     return 'mixed', details
 
 
-def verify_delta(delta: Path, receipt: dict):
+def verify_delta(delta: Path, receipt: dict) -> dict[str, bytes]:
     """Verify every staged file and hashes.json in `delta` matches `receipt`."""
+    if delta.is_symlink():
+        raise ValueError(f'Refusing symlink delta folder: {delta}')
     staged_receipt_path = delta / 'hashes.json'
+    if staged_receipt_path.is_symlink():
+        raise ValueError(f'Refusing symlink hashes.json: {staged_receipt_path}')
     if not staged_receipt_path.is_file():
         raise ValueError(f'Missing hashes.json in delta folder: {delta}')
     staged_receipt = json.loads(staged_receipt_path.read_text())
     if staged_receipt != receipt:
         raise ValueError('Delta hashes.json does not match committed receipt')
+    delta_bytes = {}
     for entry in receipt['files']:
+        _assert_no_symlink_in_rel(delta, entry['file'])
         p = delta / entry['file']
         if not p.is_file():
             raise ValueError(f'Missing delta file: {p}')
         raw = p.read_bytes()
         if sha(raw) != entry['sha256'] or len(raw) != entry['bytes']:
             raise ValueError(f'Tampered delta file {entry["file"]}: sha256 {sha(raw)} bytes {len(raw)}')
+        delta_bytes[entry['file']] = raw
+    return delta_bytes
 
 
 def _atomic_write(target: Path, data: bytes):
@@ -486,43 +554,60 @@ def _assert_no_symlink_in_rel(root: Path, rel: str):
 
 def install(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
     """Install a verified delta into `baked`, backing up before-files into `<delta>/before/`."""
-    if delta.is_symlink():
-        raise ValueError(f'Refusing symlink delta folder: {delta}')
     receipt = json.loads(receipt_path.read_text())
-    verify_delta(delta, receipt)
+    delta_bytes = verify_delta(delta, receipt)
+    backup_root = delta / 'before'
 
-    # Check every target before writing anything.
+    # Phase 1: validate every live file, symlink path, and existing backup before writing anything.
     live_states = {}
+    live_before_bytes = {}
+    backup_present = {}
     for entry in receipt['files']:
-        _assert_no_symlink_in_rel(baked, entry['file'])
-        _assert_no_symlink_in_rel(delta / 'before', entry['file'])
-        target = baked / entry['file']
+        rel = entry['file']
+        _assert_no_symlink_in_rel(baked, rel)
+        _assert_no_symlink_in_rel(backup_root, rel)
+        target = baked / rel
         if not target.is_file():
             raise ValueError(f'Missing live file: {target}')
-        digest = sha(target.read_bytes())
+        raw = target.read_bytes()
+        digest = sha(raw)
         if digest == entry['before']:
-            live_states[entry['file']] = 'before'
+            live_states[rel] = 'before'
+            live_before_bytes[rel] = raw
         elif digest == entry['sha256']:
-            live_states[entry['file']] = 'after'
+            live_states[rel] = 'after'
         else:
-            raise ValueError(f'Unknown live bytes in {entry["file"]}: {digest}')
+            raise ValueError(f'Unknown live bytes in {rel}: {digest}')
+
+        backup = backup_root / rel
+        if backup.exists():
+            if not backup.is_file() or sha(backup.read_bytes()) != entry['before']:
+                raise ValueError(f'Existing backup has wrong hash: {backup}')
+            backup_present[rel] = True
+        else:
+            backup_present[rel] = False
 
     if set(live_states.values()) == {'after'}:
         print(f'already installed ({len(receipt["files"])} files match after receipt) in {baked}')
         return 'already-installed'
 
-    backup_root = delta / 'before'
+    # Resuming a mixed pair requires a verified backup for every already-installed tile so rollback stays complete.
     for entry in receipt['files']:
-        target = baked / entry['file']
-        if live_states[entry['file']] == 'before':
-            backup = backup_root / entry['file']
-            before_bytes = target.read_bytes()
-            if backup.exists():
-                if sha(backup.read_bytes()) != entry['before']:
-                    raise ValueError(f'Existing backup has wrong hash: {backup}')
-            else:
-                _atomic_write(backup, before_bytes)
-            _atomic_write(target, (delta / entry['file']).read_bytes())
+        rel = entry['file']
+        if live_states[rel] == 'after' and not backup_present[rel]:
+            raise ValueError(f'Missing backup for already-installed file {rel}: {backup_root / rel}')
+
+    # Phase 2: write all missing backups before touching any live tile.
+    for entry in receipt['files']:
+        rel = entry['file']
+        if live_states[rel] == 'before' and not backup_present[rel]:
+            _atomic_write(backup_root / rel, live_before_bytes[rel])
+
+    # Phase 3: atomically replace every before live tile.
+    for entry in receipt['files']:
+        rel = entry['file']
+        if live_states[rel] == 'before':
+            _atomic_write(baked / rel, delta_bytes[rel])
 
     state, details = land_state(baked, receipt)
     if state != 'after':
@@ -533,31 +618,41 @@ def install(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
 
 def rollback(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
     """Restore before-files from `<delta>/before/` into `baked`."""
+    if delta.is_symlink():
+        raise ValueError(f'Refusing symlink delta folder: {delta}')
     receipt = json.loads(receipt_path.read_text())
     backup_root = delta / 'before'
 
     live_states = {}
+    backup_bytes = {}
     for entry in receipt['files']:
-        _assert_no_symlink_in_rel(baked, entry['file'])
-        target = baked / entry['file']
+        rel = entry['file']
+        _assert_no_symlink_in_rel(baked, rel)
+        _assert_no_symlink_in_rel(backup_root, rel)
+        target = baked / rel
         if not target.is_file():
             raise ValueError(f'Missing live file: {target}')
         digest = sha(target.read_bytes())
         if digest not in (entry['before'], entry['sha256']):
-            raise ValueError(f'Refusing rollback over unknown live bytes in {entry["file"]}: {digest}')
-        live_states[entry['file']] = 'before' if digest == entry['before'] else 'after'
-        backup = backup_root / entry['file']
-        if live_states[entry['file']] == 'after':
-            if not backup.is_file() or sha(backup.read_bytes()) != entry['before']:
-                raise ValueError(f'Missing or mismatched backup for {entry["file"]}: {backup}')
+            raise ValueError(f'Refusing rollback over unknown live bytes in {rel}: {digest}')
+        live_states[rel] = 'before' if digest == entry['before'] else 'after'
+        backup = backup_root / rel
+        if live_states[rel] == 'after':
+            if not backup.is_file():
+                raise ValueError(f'Missing or mismatched backup for {rel}: {backup}')
+            raw = backup.read_bytes()
+            if sha(raw) != entry['before']:
+                raise ValueError(f'Missing or mismatched backup for {rel}: {backup}')
+            backup_bytes[rel] = raw
 
     if set(live_states.values()) == {'before'}:
         print(f'already at before state in {baked}')
         return 'already-before'
 
     for entry in receipt['files']:
-        if live_states[entry['file']] == 'after':
-            _atomic_write(baked / entry['file'], (backup_root / entry['file']).read_bytes())
+        rel = entry['file']
+        if live_states[rel] == 'after':
+            _atomic_write(baked / rel, backup_bytes[rel])
 
     state, details = land_state(baked, receipt)
     if state != 'before':

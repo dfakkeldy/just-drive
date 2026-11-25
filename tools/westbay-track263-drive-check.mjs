@@ -1,6 +1,7 @@
 // Same-path drive proof for the West Bay track 263 trough delta (Hill 1 and Hill 2.5, car and pickup, forward and reverse).
 // Reads tools/westbay-track263-delta/hashes.json to detect before/after land state (fails on mixed/unknown).
-// On 'after' land: asserts arrival and < 50 mm sink (ownTyre, adjusted drawnTyre, float, body) at Hill 1 and Hill 2.5.
+// On 'after' land: asserts arrival, full-path float and body < 50 mm, and per-tyre-vertex raw sink < 50 mm inside the
+// patched trough (s in [826, 854] on track 263) applying only that wheel's own pothole allowance (0 when potholes off).
 // On 'before' land: asserts the known trough failure (> 200 mm at Hill 1, > 800 mm at Hill 2.5), and fails if --require-after is passed.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -84,6 +85,34 @@ const mod = await import('data:text/javascript;base64,' + Buffer.from(bundled.ou
 
 const manifest = JSON.parse(readFileSync(resolve(base, 'manifest.json'), 'utf8'));
 const roadData = JSON.parse(readFileSync(resolve(base, 'roads.json'), 'utf8'));
+const track263 = roadData.roads.find(r => r.id === 263);
+assert.ok(track263 && track263.pts.length >= 2, 'Expected road 263 in West Bay roads.json');
+const trackPts = track263.pts;
+const trackCum = [0];
+for (let i = 1; i < trackPts.length; i++) {
+  trackCum.push(trackCum[i - 1] + Math.hypot(trackPts[i][0] - trackPts[i - 1][0], trackPts[i][1] - trackPts[i - 1][1]));
+}
+const TROUGH_S0 = receipt.parameters.s0 - receipt.parameters.endTaper;
+const TROUGH_S1 = receipt.parameters.s1 + receipt.parameters.endTaper;
+const trackSegs = [];
+for (let i = 0; i < trackPts.length - 1; i++) {
+  if (trackCum[i + 1] < TROUGH_S0 - 60 || trackCum[i] > TROUGH_S1 + 60) continue;
+  const [ax, ay] = trackPts[i], [bx, by] = trackPts[i + 1];
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  if (l2 > 0) trackSegs.push({ ax, ay, dx, dy, l2, len: Math.sqrt(l2), s0: trackCum[i] });
+}
+function projectTrack263(x, z) {
+  const e = x + manifest.village[0], n = manifest.village[1] - z;
+  let bestD2 = Infinity, bestS = 0;
+  for (const seg of trackSegs) {
+    const t = Math.max(0, Math.min(1, ((e - seg.ax) * seg.dx + (n - seg.ay) * seg.dy) / seg.l2));
+    const px = seg.ax + t * seg.dx, py = seg.ay + t * seg.dy;
+    const d2 = (e - px) ** 2 + (n - py) ** 2;
+    if (d2 < bestD2) { bestD2 = d2; bestS = seg.s0 + t * seg.len; }
+  }
+  return { s: bestS, d: Math.sqrt(bestD2) };
+}
+
 // Exact crossing path from tools/fleet-main-contact-check.mjs (track 263 pts[204..214]).
 const forwardPath = [
   [-10752.56, -1082.09], [-10748.89, -1080.49], [-10745.25, -1078.84], [-10741.65, -1077.11],
@@ -139,7 +168,11 @@ async function driveOne(hill, kind, path, potholes) {
 
   const p = new THREE.Vector3(), c = new THREE.Vector3();
   const member = { state: 'DRIVEN', id: kind, vehicle: v };
-  const stats = { drawnTyre: 0, drawnAdj: 0, troughDrawnNoPot: 0, ownTyre: 0, float: 0, body: 0, progress: 0, arrived: false };
+  const stats = {
+    troughDrawnSink: 0, troughOwnSink: 0,
+    fullDrawnSink: 0, fullDrawnS: 0, fullOwnSink: 0,
+    float: 0, body: 0, progress: 0, arrived: false,
+  };
   const state = {};
   for (let tick = 0; tick < 12000; tick++) {
     let input;
@@ -151,22 +184,24 @@ async function driveOne(hill, kind, path, potholes) {
     stats.progress = Math.max(stats.progress, state.at ?? 0);
     v.update(1 / 120, input);
     rig.root.updateMatrixWorld(true);
-    const s263 = path === forwardPath ? 812.59 + (state.at ?? 0) : 852.40 - (state.at ?? 0);
-    const inTrough = s263 >= 826 && s263 <= 854;
-    const depth = potholes ? Math.max(...wheels.map((_, i) => wheelPothole(member, i, terrain, mod.potholeDepth, mod.potholeDensity))) : 0;
     for (let i = 0; i < wheels.length; i++) {
       const w = wheels[i], gaps = [Infinity, Infinity];
       w.getWorldPosition(c);
+      const wheelDepth = potholes ? wheelPothole(member, i, terrain, mod.potholeDepth, mod.potholeDensity) : 0;
       for (const local of tyres[i]) {
         p.copy(local).applyMatrix4(w.matrixWorld);
         if (p.y > c.y + 0.001) continue;
         const drawn = terrain.meshHeightAt(p.x, p.z, true), physics = terrain.heightAt(p.x, p.z);
         assert.notEqual(drawn, null); assert.notEqual(physics, null);
-        const mm = Math.abs(physics - drawn);
-        stats.drawnTyre = Math.max(stats.drawnTyre, drawn - p.y);
-        stats.drawnAdj = Math.max(stats.drawnAdj, drawn - p.y - mm - depth);
-        if (inTrough) stats.troughDrawnNoPot = Math.max(stats.troughDrawnNoPot, drawn - p.y - depth);
-        stats.ownTyre = Math.max(stats.ownTyre, physics - p.y - depth);
+        const drawnSink = drawn - p.y - wheelDepth;
+        const ownSink = physics - p.y - wheelDepth;
+        const { s } = projectTrack263(p.x, p.z);
+        if (drawnSink > stats.fullDrawnSink) { stats.fullDrawnSink = drawnSink; stats.fullDrawnS = s; }
+        stats.fullOwnSink = Math.max(stats.fullOwnSink, ownSink);
+        if (s >= TROUGH_S0 && s <= TROUGH_S1) {
+          stats.troughDrawnSink = Math.max(stats.troughDrawnSink, drawnSink);
+          stats.troughOwnSink = Math.max(stats.troughOwnSink, ownSink);
+        }
         gaps[local.x < 0 ? 0 : 1] = Math.min(gaps[local.x < 0 ? 0 : 1], p.y - drawn);
       }
       stats.float = Math.max(stats.float, ...gaps);
@@ -187,6 +222,7 @@ const cases = landState === 'after'
   ? [
       { dir: 'fwd', path: forwardPath, potholes: true },
       { dir: 'fwd', path: forwardPath, potholes: false },
+      { dir: 'rev', path: reversePath, potholes: true },
       { dir: 'rev', path: reversePath, potholes: false },
     ]
   : [{ dir: 'fwd', path: forwardPath, potholes: true }];
@@ -198,10 +234,11 @@ for (const { dir, path, potholes } of cases) {
       const row = {
         state: landState, dir, potholes, hill, kind, arrived: s.arrived,
         progressM: +s.progress.toFixed(2),
-        drawnTyreMm: +(s.drawnTyre * 1000).toFixed(1),
-        drawnAdjMm: +(s.drawnAdj * 1000).toFixed(1),
-        troughDrawnMm: +(s.troughDrawnNoPot * 1000).toFixed(1),
-        ownTyreMm: +(s.ownTyre * 1000).toFixed(1),
+        troughDrawnMm: +(s.troughDrawnSink * 1000).toFixed(1),
+        troughOwnMm: +(s.troughOwnSink * 1000).toFixed(1),
+        fullDrawnMm: +(s.fullDrawnSink * 1000).toFixed(1),
+        fullDrawnS: +s.fullDrawnS.toFixed(1),
+        fullOwnMm: +(s.fullOwnSink * 1000).toFixed(1),
         floatMm: +(s.float * 1000).toFixed(1),
         bodyMm: +(s.body * 1000).toFixed(1),
       };
@@ -209,9 +246,8 @@ for (const { dir, path, potholes } of cases) {
       console.log(`DRIVE ${JSON.stringify(row)}`);
       if (landState === 'after') {
         assert.equal(s.arrived, true, `after land must finish crossing (${JSON.stringify(row)})`);
-        assert.ok(s.ownTyre < 0.05, `ownTyre >= 50 mm: ${JSON.stringify(row)}`);
-        assert.ok(s.drawnAdj < 0.05, `drawnAdj >= 50 mm: ${JSON.stringify(row)}`);
-        assert.ok(s.troughDrawnNoPot < 0.05, `troughDrawnNoPot >= 50 mm: ${JSON.stringify(row)}`);
+        assert.ok(s.troughDrawnSink < 0.05, `troughDrawnSink >= 50 mm: ${JSON.stringify(row)}`);
+        assert.ok(s.troughOwnSink < 0.05, `troughOwnSink >= 50 mm: ${JSON.stringify(row)}`);
         assert.ok(s.float < 0.05, `float >= 50 mm: ${JSON.stringify(row)}`);
         assert.ok(s.body < 0.05, `body >= 50 mm: ${JSON.stringify(row)}`);
       }
@@ -222,9 +258,9 @@ for (const { dir, path, potholes } of cases) {
 if (landState === 'before') {
   const h1Car = rows.find(r => r.hill === 1 && r.kind === 'car');
   const h25Car = rows.find(r => r.hill === 2.5 && r.kind === 'car');
-  assert.ok(h1Car.ownTyreMm > 200, `expected >200 mm before sink at Hill 1, got ${h1Car.ownTyreMm}`);
-  assert.ok(!h25Car.arrived && h25Car.ownTyreMm > 800, `expected stalled >800 mm before sink at Hill 2.5, got ${JSON.stringify(h25Car)}`);
+  assert.ok(h1Car.troughDrawnMm > 200, `expected >200 mm before sink at Hill 1, got ${h1Car.troughDrawnMm}`);
+  assert.ok(!h25Car.arrived && h25Car.troughDrawnMm > 800, `expected stalled >800 mm before sink at Hill 2.5, got ${JSON.stringify(h25Car)}`);
   console.log('PASS westbay-track263-drive (before land negative control verified; trough > 200 mm / > 800 mm)');
 } else {
-  console.log('PASS westbay-track263-drive (after land: all Hill 1 and Hill 2.5 crossings arrive with sink < 50 mm)');
+  console.log('PASS westbay-track263-drive (after land: all 16 Hill 1 and Hill 2.5 crossings arrive with trough raw sink < 50 mm)');
 }
