@@ -8,7 +8,7 @@ const [root,area,scope]=process.argv.slice(2);
 // The paved layer reserves the first eight. The ground-class bake ('ground' scope) reserves every
 // web/src/*-site.ts module; tools/ground-classes-check.py holds this list to the folder.
 const PAVED_SITES=['yard','home','church','porch','fishing','coast','quarry','mine'];
-const GROUND_SITES=[...PAVED_SITES,'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store','drlane','depot','prince'];
+const GROUND_SITES=[...PAVED_SITES,'yard-dog','judique-village','port-hawkesbury','airport','mabou-main','maryville-store','drlane','depot','prince','blackstone'];
 const ground=scope==='ground';
 const imports=(ground?GROUND_SITES:PAVED_SITES).map(s=>`export * as ${s.replace(/-(\w)/g,(_,c)=>c.toUpperCase())} from './web/src/${s}-site';`).join('\n');
 const result=await build({stdin:{contents:imports,resolveDir:repo,loader:'ts'},bundle:true,write:false,platform:'node',format:'esm',metafile:true,logLevel:'silent',plugins:[{name:'external-three',setup(b){b.onResolve({filter:/^three$/},()=>({path:pathToFileURL(repo+'/web/node_modules/three/build/three.module.js').href,external:true}));}}]});
@@ -40,6 +40,7 @@ add('airport',new api.airport.AirportSite(v).box);
 const main=resolve(root,'data/baked/terrain'),mm=JSON.parse(readFileSync(main+'/manifest.json','utf8'));
 const list=JSON.parse(readFileSync(main+'/buildings.json','utf8')).buildings;
 const b=api.porch.PorchSite.find(list);if(b)add('porch',new api.porch.PorchSite(b,v).box);
+if(ground){const bb=api.blackstone.BlackstoneSite.find(list);if(bb)add('blackstone',new api.blackstone.BlackstoneSite(bb,v).box);}
 const inputs=[main+'/manifest.json',main+'/buildings.json',main+'/roads.json'];
 // The house on D.R.'s Lane uses the Judique source catalog in the same way.
 // A host without the Judique pack has no such house to keep.

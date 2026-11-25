@@ -213,6 +213,6 @@ const mainSrc = readFileSync('web/src/main.ts', 'utf8');
 const terrainIdx = mainSrc.indexOf("name: 'terrain', segment: 'landscape'");
 const princeIdx = mainSrc.indexOf("name: 'prince', segment: 'landscape'");
 assert.ok(terrainIdx >= 0 && princeIdx > terrainIdx, 'main.ts updates prince in landscape after terrain selection');
-assert.ok(mainSrc.includes("filter(([name]) => name !== 'prince')"), 'main.ts excludes prince from before-camera places loop');
+assert.ok(/Object\.entries\(places\)\.filter\(\(\[name\]\) => [^)]*name !== 'prince'/.test(mainSrc), 'main.ts excludes prince from before-camera places loop');
 
 console.log(`PASS prince: desktop ${desktop.triangles} tris, LOW ${low.triangles} tris, drop on SE gable, roof floor, 7->8->7 driveway/sidewalk clearance (2.5x & 3x), after-terrain frame order, driveway and carport open, Prince Street clear`);
