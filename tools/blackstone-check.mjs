@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { roofHeights } from '../web/src/drone.ts';
+import { Props } from '../web/src/props.ts';
 import { SXS_SPEC } from '../web/src/sxs.ts';
 import { paintSiteSurface } from '../web/src/terrain.ts';
 import { TRUCK_SPEC } from '../web/src/truck.ts';
@@ -85,7 +86,6 @@ let surfaceAtCalls = 0;
 const flatTerrain = {
   heightAt: () => site.level,
   meshHeightAt: () => site.level,
-  drawnLevelAt: () => null,
   levelAt: () => 8,
   surfaceAt: () => { surfaceAtCalls++; return { level: 8 }; },
 };
@@ -157,23 +157,38 @@ for (const roadName of ['Blackstone Road', 'Smithville Road']) {
 }
 assert.ok(roadSamples.length > 100, `sampled ${roadSamples.length} carriageway centre/edge points`);
 
-// Every Blackstone Road and Smithville Road centre and carriageway-edge point stays clear of all solids AND the
-// relocated mailbox (Props.hitCar sweep envelope) for car, pickup truck and SXS in both travel directions.
-const [mbMapX, mbMapY] = site.map(MAILBOX_UV[0], MAILBOX_UV[1]);
-const mbWorldX = mbMapX - manifest.village[0], mbWorldZ = manifest.village[1] - mbMapY;
-for (const pt of roadSamples) {
-  for (const dir of [0, Math.PI]) {
-    const hdg = pt.heading + dir;
-    const car = { x: pt.x, z: pt.z, vx: 0, vz: 0, speed: 0, heading: hdg };
-    desktop.resolveSolids(car);
-    assert.equal(Math.hypot(car.x - pt.x, car.z - pt.z), 0,
-      `no solid reaches ${pt.roadName} (side=${pt.side.toFixed(1)} m) at (${pt.x.toFixed(1)}, ${pt.z.toFixed(1)})`);
-    const rx = Math.cos(hdg), rz = Math.sin(hdg);
-    const px = mbWorldX - pt.x, pz = mbWorldZ - pt.z;
-    for (const [label, spec] of [['car', CAR_SPEC], ['truck', TRUCK_SPEC], ['sxs', SXS_SPEC]]) {
-      const hit = Math.abs(px * rx + pz * rz) <= spec.envelope.sweepHalfWidth
-        && Math.abs(px * rz - pz * rx) <= spec.envelope.sweepHalfLength;
-      assert.ok(!hit, `${label} hits relocated mailbox from ${pt.roadName} (side=${pt.side.toFixed(1)} m)`);
+// Every Blackstone Road and Smithville Road centre and carriageway-edge segment stays clear of all solids AND the
+// relocated mailbox (real Props.hitCar sweep) for car, pickup truck and SXS in both travel directions.
+const liveProps = new Props({ ...adjusted, mailboxes: [movedBox], poles: [], serviceDrops: [] }, manifest.village, flatTerrain);
+for (const roadName of ['Blackstone Road', 'Smithville Road']) {
+  for (const road of roads.filter((r) => r.name === roadName)) {
+    for (let k = 0; k < road.pts.length - 1; k++) {
+      const [e0, n0] = road.pts[k], [e1, n1] = road.pts[k + 1];
+      const x0 = e0 - manifest.village[0], z0 = manifest.village[1] - n0;
+      const x1 = e1 - manifest.village[0], z1 = manifest.village[1] - n1;
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      if (len < 1e-4 || Math.hypot((x0 + x1) / 2 - site.origin.x, (z0 + z1) / 2 - site.origin.z) > 120) continue;
+      const tx = (x1 - x0) / len, tz = (z1 - z0) / len, nx = -tz, nz = tx;
+      for (const side of [-road.halfWidth, 0, road.halfWidth]) {
+        const ax = x0 + nx * side, az = z0 + nz * side, bx = x1 + nx * side, bz = z1 + nz * side;
+        for (const [fx, fz, gx, gz, hdg, vx, vz] of [
+          [ax, az, bx, bz, Math.atan2(tx, -tz), tx * 15, tz * 15],
+          [bx, bz, ax, az, Math.atan2(-tx, tz), -tx * 15, -tz * 15],
+        ]) {
+          for (const [label, spec] of [['car', CAR_SPEC], ['truck', TRUCK_SPEC], ['sxs', SXS_SPEC]]) {
+            const factor = liveProps.hitCar(gx, gz, hdg, vx, vz, fx, fz, spec);
+            assert.equal(factor, 1, `${label} hits relocated mailbox sweeping ${roadName} (side=${side.toFixed(1)} m)`);
+            const steps = Math.max(1, Math.ceil(len));
+            for (let s = 0; s <= steps; s++) {
+              const f = s / steps, cx = fx + (gx - fx) * f, cz = fz + (gz - fz) * f;
+              const car = { x: cx, z: cz, vx: 0, vz: 0, speed: 0, heading: hdg, spec };
+              desktop.resolveSolids(car);
+              assert.equal(Math.hypot(car.x - cx, car.z - cz), 0,
+                `${label} hits solid on ${roadName} (side=${side.toFixed(1)} m) at (${cx.toFixed(1)}, ${cz.toFixed(1)})`);
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -253,7 +268,7 @@ const dScale = manifest.roads.encoding.distance, wScale = manifest.roads.encodin
 const cs = manifest.canopy.scale, hasTrees = new Set(manifest.trees?.tiles ?? []);
 const smoothstep = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
 for (const level of [5, 6, 7, 8]) {
-  const tileSize = manifest.size / 2 ** level, seg = 128, step = 256 / seg, mpp = tileSize / 256;
+  const tileSize = manifest.size / 2 ** level, seg = level <= 6 ? 64 : 128, step = 256 / seg, mpp = tileSize / 256;
   const active = mpp <= site.maxTexel, win = Math.max(2, Math.round(6 / Math.max(mpp, 1))), stride = Math.max(1, Math.round(win / 2));
   const { scale, offset } = manifest.height;
   const tileCache = new Map();
@@ -335,87 +350,92 @@ for (const level of [5, 6, 7, 8]) {
     const ti = Math.floor((pt.x + manifest.village[0] - manifest.origin[0]) / tileSize);
     const tj = Math.floor((manifest.origin[1] - (manifest.village[1] - pt.z)) / tileSize);
     const { base, site: withSite } = buildTile(ti, tj);
-    const dy = Math.abs(withSite.meshY(pt.x, pt.z) - base.meshY(pt.x, pt.z));
-    assert.ok(dy < 1e-6, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production mesh height unchanged (dy=${dy.toFixed(4)} m)`);
+    assert.equal(withSite.meshY(pt.x, pt.z), base.meshY(pt.x, pt.z),
+      `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production mesh height bit-for-bit unchanged`);
     const rb = base.roadSample(pt.x, pt.z), rs = withSite.roadSample(pt.x, pt.z);
     assert.equal(rs.kind, rb.kind, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt kind unchanged`);
     assert.equal(rs.halfWidth, rb.halfWidth, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt halfWidth unchanged`);
-    assert.ok(Math.abs(rs.roadDist - rb.roadDist) < 1e-6,
-      `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt roadDist unchanged (${rb.roadDist.toFixed(3)} -> ${rs.roadDist.toFixed(3)})`);
+    assert.equal(rs.roadDist, rb.roadDist,
+      `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) surfaceAt roadDist bit-for-bit unchanged`);
   }
 }
 
 for (const exag of [2.5, 3]) {
-  const L7 = loadLevel(7, exag), L8 = loadLevel(8, exag);
+  const L8 = loadLevel(8, exag);
   for (const isLow of [false, true]) {
-    let drawn = 7, heightSource = L7;
+    let drawn = 7, cached = 7;
     const realTerrain = {
-      heightAt: (x, z) => heightSource.heightAt(x, z),
-      meshHeightAt: (x, z, drawnOnly) => (drawnOnly ? (drawn === 8 ? L8 : L7) : heightSource).meshY(x, z),
+      heightAt: (x, z) => L8.heightAt(x, z),
+      meshHeightAt: (x, z, drawnOnly) => (drawnOnly && drawn === 8 ? L8.meshY(x, z) : L8.heightAt(x, z)),
       drawnLevelAt: () => drawn,
-      levelAt: () => (heightSource === L8 ? 8 : 7),
+      levelAt: () => cached,
     };
     const h = new BlackstoneHouse(site, realTerrain, (m) => m * exag, isLow);
-    const checkGrounded = (label, drawnTile, dist = 0) => {
-      h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z + dist), 0, { x: site.origin.x, z: site.origin.z + dist });
-      const mesh = h.group.children[0].children[0], pos = mesh.geometry.getAttribute('position');
-      assert.ok(pos.count > 9000, `${label} exag=${exag} low=${isLow}: geometry rebuilt (${pos.count / 3} tris)`);
-      // Parcel box base sits directly on the drawn triangle (catches stale cached L8 height or missed LOD rebuild).
-      const pbW = site.world(PARCEL_BOX.u, PARCEL_BOX.v), pbGround = drawnTile.meshY(pbW.x, pbW.z);
-      let pbLo = Infinity;
+    // Before L8 is drawn (L7, L6 or null), the house stays hidden so it never sits on ungraded coarse terrain or canopy hull.
+    h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
+    assert.equal(h.group.visible, false, `L7 exag=${exag} low=${isLow}: stays hidden until L8 is drawn`);
+    // Once L8 is drawn, build and verify parcel box, detached outbuildings, front west window sill and drone roof floor.
+    drawn = 8; cached = 8;
+    h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
+    assert.equal(h.group.visible, true, `L8 exag=${exag} low=${isLow}: visible once L8 is drawn`);
+    const mesh = h.group.children[0].children[0], pos = mesh.geometry.getAttribute('position');
+    assert.ok(pos.count > 9000, `L8 exag=${exag} low=${isLow}: geometry built (${pos.count / 3} tris)`);
+    const pbW = site.world(PARCEL_BOX.u, PARCEL_BOX.v), pbGround = L8.meshY(pbW.x, pbW.z);
+    let pbLo = Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      const u = pos.getX(i), y = pos.getY(i), v = pos.getZ(i);
+      if (Math.abs(u - PARCEL_BOX.u) <= 0.6 && Math.abs(v - PARCEL_BOX.v) <= 0.5 && y < pbLo) pbLo = y;
+    }
+    assert.ok(Math.abs(pbLo - pbGround) < 0.03,
+      `L8 parcel box exag=${exag} low=${isLow}: base matches drawn ground (${(pbLo - pbGround).toFixed(3)} m)`);
+    const fw = site.world(-3.5, -4.1);
+    assert.ok(L8.meshY(fw.x, fw.z) < site.level * exag + 1.1,
+      `L8 front west window sill clear of drawn mesh (${(L8.meshY(fw.x, fw.z) - site.level * exag).toFixed(2)} m)`);
+    for (const [tag, box] of [['west-shed', WEST_SHED], ['east-barn', EAST_BARN]]) {
+      const cu = (box.u0 + box.u1) / 2, cv = (box.v0 + box.v1) / 2, gw = site.world(cu, cv);
+      const groundY = L8.meshY(gw.x, gw.z);
+      let loY = Infinity, hiY = -Infinity;
       for (let i = 0; i < pos.count; i++) {
         const u = pos.getX(i), y = pos.getY(i), v = pos.getZ(i);
-        if (Math.abs(u - PARCEL_BOX.u) <= 0.6 && Math.abs(v - PARCEL_BOX.v) <= 0.5 && y < pbLo) pbLo = y;
+        if (u >= box.u0 - 0.5 && u <= box.u1 + 0.5 && v >= box.v0 - 0.5 && v <= box.v1 + 0.5) {
+          if (y < loY) loY = y;
+          if (y > hiY) hiY = y;
+        }
       }
-      assert.ok(Math.abs(pbLo - pbGround) < 0.03,
-        `${label} parcel box exag=${exag} low=${isLow}: base matches drawn ground (${(pbLo - pbGround).toFixed(3)} m)`);
-      // Detached outbuildings sit buried into the drawn ground with roofs above.
-      for (const [tag, box] of [['west-shed', WEST_SHED], ['east-barn', EAST_BARN]]) {
-        const cu = (box.u0 + box.u1) / 2, cv = (box.v0 + box.v1) / 2, gw = site.world(cu, cv);
-        const groundY = drawnTile.meshY(gw.x, gw.z);
-        let loY = Infinity, hiY = -Infinity;
+      assert.ok(loY < groundY - 0.2, `L8 ${tag} exag=${exag} low=${isLow}: foundation buried (${(loY - groundY).toFixed(2)} m)`);
+      assert.ok(hiY > groundY + box.eave, `L8 ${tag} exag=${exag} low=${isLow}: roof above ground (${(hiY - groundY).toFixed(2)} m)`);
+    }
+    if (!isLow) {
+      const ownRoofAt = roofHeights(site.roofBoxes(), manifest.village, exag, 0);
+      const structures = [
+        ['nw-wing', NW_WING.u0, NW_WING.u1, -NW_WING.half, NW_WING.half, site.level * exag + NW_WING.ridge + 0.5],
+        ['west-shed', WEST_SHED.u0, WEST_SHED.u1, WEST_SHED.v0, WEST_SHED.v1, L8.meshY(...Object.values(site.world(-18, -8.5))) + WEST_SHED.ridge + 0.5],
+        ['east-barn', EAST_BARN.u0, EAST_BARN.u1, EAST_BARN.v0, EAST_BARN.v1, L8.meshY(...Object.values(site.world(43.5, 4.0))) + EAST_BARN.ridge + 0.5],
+        ['hoop-west', HOOP_WEST.u0, HOOP_WEST.u1, HOOP_WEST.v0, HOOP_WEST.v1, L8.meshY(...Object.values(site.world(35.3, 5.2))) + HOOP_WEST.ridge + 0.5],
+        ['hoop-east', HOOP_EAST.u0, HOOP_EAST.u1, HOOP_EAST.v0, HOOP_EAST.v1, L8.meshY(...Object.values(site.world(49.5, 3.5))) + HOOP_EAST.ridge + 0.5],
+      ];
+      for (const [tag, u0, u1, v0, v1, ceiling] of structures) {
+        let builtPeak = -Infinity;
         for (let i = 0; i < pos.count; i++) {
           const u = pos.getX(i), y = pos.getY(i), v = pos.getZ(i);
-          if (u >= box.u0 - 0.5 && u <= box.u1 + 0.5 && v >= box.v0 - 0.5 && v <= box.v1 + 0.5) {
-            if (y < loY) loY = y;
-            if (y > hiY) hiY = y;
-          }
+          if (u >= u0 - 0.3 && u <= u1 + 0.3 && v >= v0 - 0.3 && v <= v1 + 0.3 && y <= ceiling && y > builtPeak) builtPeak = y;
         }
-        assert.ok(loY < groundY - 0.2, `${label} ${tag} exag=${exag} low=${isLow}: foundation buried (${(loY - groundY).toFixed(2)} m)`);
-        assert.ok(hiY > groundY + box.eave, `${label} ${tag} exag=${exag} low=${isLow}: roof above ground (${(hiY - groundY).toFixed(2)} m)`);
+        const w = site.world((u0 + u1) / 2, (v0 + v1) / 2), floorY = ownRoofAt(w.x, w.z);
+        assert.ok(floorY >= builtPeak - 0.15 && floorY <= builtPeak + 0.45,
+          `${tag} exag=${exag}: drone roof floor ${floorY.toFixed(2)} matches built peak ${builtPeak.toFixed(2)}`);
       }
-      // On L8 desktop, check drone roof floor matches actual built roof peaks for house and detached structures.
-      if (drawn === 8 && !isLow) {
-        const ownRoofAt = roofHeights(site.roofBoxes(), manifest.village, exag, 0);
-        const structures = [
-          ['nw-wing', NW_WING.u0, NW_WING.u1, -NW_WING.half, NW_WING.half, site.level * exag + NW_WING.ridge + 0.5],
-          ['west-shed', WEST_SHED.u0, WEST_SHED.u1, WEST_SHED.v0, WEST_SHED.v1, drawnTile.meshY(...Object.values(site.world(-18, -8.5))) + WEST_SHED.ridge + 0.5],
-          ['east-barn', EAST_BARN.u0, EAST_BARN.u1, EAST_BARN.v0, EAST_BARN.v1, drawnTile.meshY(...Object.values(site.world(43.5, 4.0))) + EAST_BARN.ridge + 0.5],
-          ['hoop-west', HOOP_WEST.u0, HOOP_WEST.u1, HOOP_WEST.v0, HOOP_WEST.v1, drawnTile.meshY(...Object.values(site.world(35.3, 5.2))) + HOOP_WEST.ridge + 0.5],
-          ['hoop-east', HOOP_EAST.u0, HOOP_EAST.u1, HOOP_EAST.v0, HOOP_EAST.v1, drawnTile.meshY(...Object.values(site.world(49.5, 3.5))) + HOOP_EAST.ridge + 0.5],
-        ];
-        for (const [tag, u0, u1, v0, v1, ceiling] of structures) {
-          let builtPeak = -Infinity;
-          for (let i = 0; i < pos.count; i++) {
-            const u = pos.getX(i), y = pos.getY(i), v = pos.getZ(i);
-            if (u >= u0 - 0.3 && u <= u1 + 0.3 && v >= v0 - 0.3 && v <= v1 + 0.3 && y <= ceiling && y > builtPeak) builtPeak = y;
-          }
-          const w = site.world((u0 + u1) / 2, (v0 + v1) / 2), floorY = ownRoofAt(w.x, w.z);
-          assert.ok(floorY >= builtPeak - 0.15 && floorY <= builtPeak + 0.45,
-            `${tag} exag=${exag}: drone roof floor ${floorY.toFixed(2)} matches built peak ${builtPeak.toFixed(2)}`);
-        }
-        const openLawnW = site.world(24, -10);
-        assert.equal(ownRoofAt(openLawnW.x, openLawnW.z), -Infinity, `exag=${exag}: open east lawn has no phantom roof floor`);
-      }
-    };
-    drawn = 7; heightSource = L7; checkGrounded('L7 initial', L7, 0);
-    drawn = 8; heightSource = L8; checkGrounded('L8 fine', L8, 0);
-    drawn = 7; heightSource = L8; checkGrounded('L7 drawn with L8 cached at 1180 m', L7, 1180);
-    drawn = 7; heightSource = L7; checkGrounded('L7 after L8 eviction', L7, 0);
-    // When visible terrain drops below L7 (e.g. LOW at 1590 m on L6), the house hides instead of keeping stale L7 grounding.
-    drawn = 6; heightSource = L7;
-    h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z + 1590), 0, { x: site.origin.x, z: site.origin.z + 1590 });
-    assert.equal(h.group.visible, false, `exag=${exag} low=${isLow}: hides cleanly when drawn terrain drops below L7`);
+      const openLawnW = site.world(24, -10);
+      assert.equal(ownRoofAt(openLawnW.x, openLawnW.z), -Infinity, `exag=${exag}: open east lawn has no phantom roof floor`);
+    }
+    // Dropping back to L7, L6, or null (even with L8 still cached) hides the house cleanly; returning to L8 shows it again.
+    for (const [label, lvl, dist] of [['L7 with L8 cached', 7, 1180], ['L6 at 1590 m', 6, 1590], ['null drawn with L8 cached', null, 100]]) {
+      drawn = lvl; cached = 8;
+      h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z + dist), 0, { x: site.origin.x, z: site.origin.z + dist });
+      assert.equal(h.group.visible, false, `exag=${exag} low=${isLow}: hides on ${label}`);
+    }
+    drawn = 8; cached = 8;
+    h.update(new THREE.Vector3(site.origin.x, site.level * exag, site.origin.z), 0, { x: site.origin.x, z: site.origin.z });
+    assert.equal(h.group.visible, true, `exag=${exag} low=${isLow}: returns cleanly when L8 is drawn again`);
   }
 }
 

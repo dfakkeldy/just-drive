@@ -98,7 +98,7 @@ export class BlackstoneSite implements Site {
   readonly yaw: number;
   /** The level of the pad, in true metres above the sea. */
   readonly level: number;
-  /** Paint and grade only on L8 (1 m/texel, where single trees replace the canopy hull) so L5-L7 keep roads and canopy untouched. */
+  /** Paint, grade and clear canopy only on L8 (1 m/texel, where single trees replace the canopy hull) so L5-L7 roads and hull stay bit-for-bit untouched. */
   readonly maxTexel = 1;
   private ox: number; private oz: number; private sin: number; private cos: number;
   private bx: number; private by: number; private axisDeg: number;
@@ -206,12 +206,14 @@ export class BlackstoneSite implements Site {
   clearCanopy(x: number, z: number, level?: number): boolean {
     const { u, v } = this.local(x, z);
     if (u < -24.5 || u > 56.0 || v < -23.0 || v > 13.5) return false;
-    // Stay clear of the 6 m canopy-averaging window around Blackstone Road and Smithville Road on L7.
-    if (roadCenterDist(u, v) < (level !== undefined && level <= 7 ? 15.0 : 4.5)) return false;
+    // On L7 keep clear of the 6 m canopy-averaging window around Blackstone Road and Smithville Road while clearing house, shed and barn.
+    if (roadCenterDist(u, v) < (level !== undefined && level <= 7 ? 13.0 : 4.5)) return false;
     return depth(LAWN, u, v) > -0.5 || depth(DRIVE_FRONT, u, v) > -0.5 || depth(DRIVE_WEST, u, v) > -0.5 || depth(DRIVE_EAST, u, v) > -0.5;
   }
 
   surface(x: number, z: number, _ground?: number, level?: number): { dist: number; half: number; kind: number } | null {
+    // Paint driveways and lawn only on L8 (1 m/texel, where single trees replace the canopy hull) so L7 road fields and canopy stay untouched.
+    if (level !== undefined && level <= 7) return null;
     const { u, v } = this.local(x, z);
     if (u < -24.5 || u > 56.0 || v < -23.0 || v > 13.5) return null;
     if (roadCenterDist(u, v) < roadPaintMargin(level)) return null;

@@ -63,7 +63,7 @@ export class BlackstoneHouse implements HandBuiltPlace {
   readonly group = new THREE.Group();
   private local = new THREE.Group();   // house axes: x is u, z is v
   private solids: Solid[] = [];
-  private built = false; private fine = -1; private near = false; private drawnOk = false;
+  private built = false; private near = false; private drawnOk = false;
   private material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   private probes: { x: number; z: number }[];
   triangles = 0;
@@ -86,30 +86,24 @@ export class BlackstoneHouse implements HandBuiltPlace {
     return this.terrain.meshHeightAt?.(w.x, w.z, true) ?? this.terrain.heightAt(w.x, w.z) ?? this.lift(this.site.level);
   };
 
-  private ready(): number | null {
-    let fine = 0;
+  /** Match BlackstoneSite (maxTexel = 1): draw only when L8 terrain is drawn under every probe so pad, hull and roads agree. */
+  private ready(): boolean {
     for (const p of this.probes) {
-      const level = this.terrain.drawnLevelAt?.(p.x, p.z) ?? this.terrain.levelAt?.(p.x, p.z) ?? -1;
-      if (level < 7) return null;
-      if (level >= 8) fine++;
+      const level = this.terrain.drawnLevelAt ? (this.terrain.drawnLevelAt(p.x, p.z) ?? -1) : (this.terrain.levelAt?.(p.x, p.z) ?? -1);
+      if (level < 8) return false;
     }
-    return fine;
+    return true;
   }
 
   update(view: THREE.Vector3, _now: number, car: { x: number; z: number }): void {
     const o = this.site.origin, far = Math.min(Math.hypot(view.x - o.x, view.z - o.z), Math.hypot(car.x - o.x, car.z - o.z));
     this.near = far < 900;
-    if (this.near || (this.built && far < 1600)) {
-      const fine = this.ready();
-      this.drawnOk = fine !== null;
-      if (fine !== null && (!this.built || fine !== this.fine)) {
-        this.build();
-        this.built = true;
-        this.fine = fine;
-      }
-    } else {
-      this.drawnOk = false;
+    const ok = (this.near || (this.built && far < 1600)) && this.ready();
+    if (ok && (!this.built || !this.drawnOk)) {
+      this.build();
+      this.built = true;
     }
+    this.drawnOk = ok;
     this.group.visible = this.built && this.drawnOk && far < 1600;
   }
 
