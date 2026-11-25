@@ -5100,13 +5100,10 @@
       "wall": "#e0c878",
       "roof": "#3a3d40",
       "trim": "#f7f5ef",
-      "door": "#6a8ca6",
       "roofMaterial": "shingle",
       "roofShape": "gable",
-      "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
+      "shutters": false
     },
     "1551": {
       "group": "other-mabou-roads",
@@ -5137,7 +5134,6 @@
       "roofMaterial": "metal",
       "roofShape": "gable",
       "boardAndBatten": true,
-      "chimney": true,
       "dormer": false,
       "shutters": false
     },
@@ -5154,7 +5150,6 @@
       "roofMaterial": "metal",
       "roofShape": "gable",
       "boardAndBatten": true,
-      "solarSide": 1,
       "chimney": false,
       "dormer": false,
       "shutters": false
