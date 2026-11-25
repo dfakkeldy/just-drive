@@ -15,6 +15,12 @@
         "MacKillop Road",
         "Maple Street"
       ]
+    },
+    "highway-19": {
+      "label": "Highway 19",
+      "roads": [
+        "Highway 19"
+      ]
     }
   },
   "overrides": {
@@ -1945,6 +1951,1077 @@
       "eave": 5.0,
       "ridge": 7.43,
       "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1348": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616096.6,
+        5096399.0
+      ],
+      "wall": "#cbb892",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.6,
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1372": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616304.0,
+        5096542.2
+      ],
+      "wall": "#a33d36",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.6,
+      "entrance": "front porch",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "394": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616401.1,
+        5096612.4
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3a3d40",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1381": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616803.4,
+        5096597.9
+      ],
+      "wall": "#cbb892",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.6,
+      "entrance": "front porch",
+      "dormers": 2,
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": true,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "378": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616787.9,
+        5096574.6
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "473": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616989.9,
+        5096846.0
+      ],
+      "wall": "#d4d2cc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.6,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "474": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        617218.7,
+        5096849.7
+      ],
+      "kind": "house",
+      "wall": "#5d7f9a",
+      "roof": "#d0d4d2",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.0,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "478": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        617035.7,
+        5096878.4
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "207": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        618247.1,
+        5097043.3
+      ],
+      "wall": "#3e4650",
+      "roof": "#6b4038",
+      "trim": "#f2f1eb",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1329": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        618207.2,
+        5097046.2
+      ],
+      "wall": "#4a5158",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1383": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        619615.6,
+        5097583.6
+      ],
+      "kind": "house",
+      "wall": "#8d9478",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 6.8,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1408": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        619867.3,
+        5097980.3
+      ],
+      "wall": "#a33d36",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "501": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        619879.7,
+        5098011.2
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#4a4e52",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 8.8,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1403": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        620391.8,
+        5099189.9
+      ],
+      "wall": "#e6dcc4",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#8d3530",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "244": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621548.1,
+        5100553.2
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.8,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "252": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621568.4,
+        5100600.9
+      ],
+      "wall": "#d4d2cc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "345": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621638.4,
+        5100711.4
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#c5c8c6",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "347": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621645.3,
+        5100734.1
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 8.0,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1347": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621706.2,
+        5100921.2
+      ],
+      "wall": "#6e8494",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "rollUpDoor": true,
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1344": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621761.8,
+        5100893.5
+      ],
+      "wall": "#e4d7a4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.6,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1346": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621786.1,
+        5100902.2
+      ],
+      "wall": "#a33d36",
+      "roof": "#5a5e62",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "950": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621885.7,
+        5101059.1
+      ],
+      "wall": "#d4c4a4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "dormers": 2,
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": true,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1618": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622033.3,
+        5101298.4
+      ],
+      "wall": "#9aada6",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 8.0,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1118": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622056.6,
+        5101332.7
+      ],
+      "wall": "#a8b0a4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 9.4,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "132": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623342.6,
+        5102606.5
+      ],
+      "wall": "#b4b8b6",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "rollUpDoor": true,
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "166": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623378.2,
+        5102640.2
+      ],
+      "wall": "#e4dcc4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "storeys": 1,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "195": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623428.7,
+        5102671.6
+      ],
+      "wall": "#a33d36",
+      "roof": "#8a9094",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "rollUpDoor": true,
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "120": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625579.3,
+        5103783.9
+      ],
+      "wall": "#e8e0c8",
+      "roof": "#4a4e52",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "rollUpDoor": true,
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "122": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625592.6,
+        5103792.5
+      ],
+      "kind": "house",
+      "wall": "#efe6c8",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "small steps",
+      "door": "#9c3230",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": true,
+      "satelliteDish": false
+    },
+    "109": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625623.8,
+        5103803.7
+      ],
+      "kind": "house",
+      "wall": "#8e9498",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "123": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625649.2,
+        5103822.9
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "108": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625675.5,
+        5103836.5
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.6,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "124": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625685.3,
+        5103872.4
+      ],
+      "kind": "house",
+      "wall": "#2c3540",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "100": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625770.1,
+        5104186.9
+      ],
+      "kind": "house",
+      "wall": "#a33d36",
+      "roof": "#8e9493",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "101": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625796.9,
+        5104025.3
+      ],
+      "wall": "#9aa0a4",
+      "roof": "#4a4e52",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "99": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625804.2,
+        5103998.8
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "116": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625842.3,
+        5104040.7
+      ],
+      "wall": "#a8aeb2",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "874": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625815.6,
+        5104064.7
+      ],
+      "kind": "house",
+      "wall": "#e6e4dc",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1668": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625904.9,
+        5104363.5
+      ],
+      "wall": "#8e9498",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1671": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625931.0,
+        5104402.0
+      ],
+      "kind": "house",
+      "wall": "#8a9096",
+      "roof": "#3e4246",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.2,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "94": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        627017.3,
+        5108020.0
+      ],
+      "wall": "#8a8680",
+      "roof": "#3e4246",
+      "trim": "#e4e2da",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "117": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        627028.1,
+        5108040.4
+      ],
+      "wall": "#8a8680",
+      "roof": "#3e4246",
+      "trim": "#e4e2da",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "113": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628374.7,
+        5109569.5
+      ],
+      "wall": "#e4d8c4",
+      "roof": "#3a3d40",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.8,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1589": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628445.9,
+        5109521.4
+      ],
+      "wall": "#d4cfc4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.4,
+      "entrance": "small steps",
+      "door": "#9c3230",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "111": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628476.7,
+        5109792.0
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.8,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1526": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628523.2,
+        5110040.8
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "125": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628559.9,
+        5110077.0
+      ],
+      "wall": "#8e9498",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "95": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628559.6,
+        5109799.4
+      ],
+      "wall": "#a33d36",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
       "front": {
         "end": false,
         "side": -1
