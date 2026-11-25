@@ -648,17 +648,26 @@ export class Buildings {
           if ((shape === 'gable' || shape === 'gambrel') && r - e > 1.5) opening(true, side, 0, e + 0.25, 0.6, Math.min(0.7, (r - e) * 0.3));
         }
         const entrance = b.buildingId !== undefined ? 'none' : style?.entrance ?? (hash(identity + 6) > 0.4 ? 'small steps' : 'none');
-        if (dh > 1.1 && entrance !== 'none') {
+        if (showDoor && entrance !== 'none') {
           const steps = entrance === 'small steps';
           const entranceStart = pos.length / 3;
           const half = steps ? 0.85 : Math.min(span - 0.4, entrance === 'wrap-around' ? span * 0.85 : 2.5);
           const reach = steps ? 0.85 : 2.2;
           const v0 = front === 1 ? depth : -depth - reach, v1 = front === 1 ? depth + reach : -depth;
-          const u0 = tallFront ? -span : Math.max(-span, doorU - half);
-          const u1 = tallFront ? span : Math.min(span, doorU + half);
+          let u0 = tallFront ? -span : Math.max(-span, doorU - half);
+          let u1 = tallFront ? span : Math.min(span, doorU + half);
+          if (hasGarage && garage.end === frontEnd && garage.side === front) {
+            const gLo = garageCenter - garageTotalW / 2 - 0.15;
+            const gHi = garageCenter + garageTotalW / 2 + 0.15;
+            if (doorU < garageCenter) u1 = Math.min(u1, gLo);
+            else u0 = Math.max(u0, gHi);
+          }
+          if (u1 - u0 >= 0.8) {
           const porchFoot = b.foundationGround === undefined ? -0.3 : foundationDepth(0.3);
           frontBox(u0, u1, v0, v1, tallFront ? deckHeight - 0.22 : porchFoot, deckHeight, steps ? foundation : rgb('#857c68'));
-          frontBox(doorU - 0.65, doorU + 0.65, front * (depth + reach + 0.35) - 0.18, front * (depth + reach + 0.35) + 0.18, -0.2, 0.1, foundation);
+          const stepHalf = Math.min(0.65, (u1 - u0) / 2);
+          const stepLo = Math.max(u0, Math.min(u1 - stepHalf * 2, doorU - stepHalf));
+          frontBox(stepLo, stepLo + stepHalf * 2, front * (depth + reach + 0.35) - 0.18, front * (depth + reach + 0.35) + 0.18, -0.2, 0.1, foundation);
           if (entrance === 'wrap-around') frontBox(-span - 1.8, -span, -depth, depth + (front === 1 ? reach : 0), porchFoot, 0.23, rgb('#857c68'));
           if (entrance === 'deck') {
             const v = front * (depth + reach - 0.12);
@@ -681,9 +690,11 @@ export class Buildings {
               const v = front * (depth + reach - 0.12);
               frontBox(u - 0.07, u + 0.07, v - 0.07, v + 0.07, 0.23, top, trim);
             }
-            quadF(u0 - 0.15, front * depth, top + 0.23, u1 + 0.15, front * depth, top + 0.23, u1 + 0.15, front * (depth + reach + 0.15), top, u0 - 0.15, front * (depth + reach + 0.15), top, roof);
+            const roofPad = hasGarage && garage.end === frontEnd && garage.side === front ? 0 : 0.15;
+            quadF(u0 - roofPad, front * depth, top + 0.23, u1 + roofPad, front * depth, top + 0.23, u1 + roofPad, front * (depth + reach + 0.15), top, u0 - roofPad, front * (depth + reach + 0.15), top, roof);
           }
           if (steps || entrance === 'deck') nearPaint?.(entranceStart);
+          }
         }
         if (style?.dormer && !flat && !shed && shape !== 'hip' && span > 3) {
           const count = style.dormers ?? 1;

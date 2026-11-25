@@ -77,28 +77,27 @@ export function applyPropertyLooks(
     if ((b.buildingId ?? b.id) === b.id) primaryById.set(id, b);
   }
 
-  // Match each override to its exact surveyed property (prefer ID if within MATCH_RADIUS_M, else nearest within MATCH_RADIUS_M).
+  // Match each override unambiguously and order-independently by its anchored survey position.
+  // A unique candidate within MATCH_RADIUS_M wins, or the strictly closest candidate (at least 1 m
+  // closer than any runner-up) so a reused ID farther away never beats the building at the anchor.
   const matched = new Map<string, PropertyLookOverride>();
-  for (const [id, ov] of entries) {
+  const claimed = new Set<string>();
+  const primaryList = [...primaryById.entries()];
+  for (const [, ov] of entries) {
     const [oe, on] = ov.at;
-    const direct = primaryById.get(id);
-    const directSite = direct?.site ?? direct;
-    if (direct && directSite && Math.hypot(directSite.x - oe, directSite.y - on) <= MATCH_RADIUS_M) {
-      matched.set(id, ov);
-      continue;
-    }
-    let bestId: string | null = null;
-    let bestDist = MATCH_RADIUS_M;
-    for (const [candId, cand] of primaryById) {
-      if (matched.has(candId)) continue;
+    const nearby: { id: string; dist: number }[] = [];
+    for (const [candId, cand] of primaryList) {
       const site = cand.site ?? cand;
-      const d = Math.hypot(site.x - oe, site.y - on);
-      if (d <= bestDist) {
-        bestDist = d;
-        bestId = candId;
-      }
+      const dist = Math.hypot(site.x - oe, site.y - on);
+      if (dist <= MATCH_RADIUS_M) nearby.push({ id: candId, dist });
     }
-    if (bestId !== null) matched.set(bestId, ov);
+    if (!nearby.length) continue;
+    nearby.sort((a, b) => a.dist - b.dist || a.id.localeCompare(b.id));
+    if (nearby.length > 1 && nearby[1].dist - nearby[0].dist <= 1) continue;
+    const winner = nearby[0].id;
+    if (claimed.has(winner)) continue;
+    claimed.add(winner);
+    matched.set(winner, ov);
   }
   if (!matched.size) return null;
 

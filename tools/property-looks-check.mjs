@@ -100,6 +100,29 @@ const DEFAULT_STYLE = {
     }
   }
 
+  // Porch must follow showDoor (no porch when 4 m wall drops door) and stay clear of garage on 9.4 m wall
+  const tightGarageHouse = { ...baseHouse, length: 4.0, width: 6.0 };
+  const tightPlain = new Buildings([tightGarageHouse], village, 1, 0, {
+    '1': { ...DEFAULT_STYLE, front: { end: false, side: 1 }, entrance: 'none', attachedGarage: { end: false, side: 1, offset: 0, width: 2.6, doors: 1 } },
+  });
+  const tightPorch = new Buildings([tightGarageHouse], village, 1, 0, {
+    '1': { ...DEFAULT_STYLE, front: { end: false, side: 1 }, entrance: 'front porch', attachedGarage: { end: false, side: 1, offset: 0, width: 2.6, doors: 1 } },
+  });
+  assert.deepEqual(tightPorch.mesh.geometry.getAttribute('position').array, tightPlain.mesh.geometry.getAttribute('position').array,
+    'omitted entry door must also omit its porch so the porch cannot span the garage');
+
+  const porchGarage = new Buildings([narrowGarageHouse], village, 1, 0, {
+    '1': { ...DEFAULT_STYLE, front: { end: false, side: 1 }, entrance: 'front porch', attachedGarage: { end: false, side: 1, offset: 1.5, width: 2.6, doors: 1 } },
+  });
+  // Verify no porch vertex (x > 4.4 + 0.15) enters the garage opening span (u in [0.2, 2.8], i.e. z in [-2.8, -0.2])
+  const pgp = porchGarage.mesh.geometry.getAttribute('position');
+  for (let i = 0; i < pgp.count; i++) {
+    const x = pgp.getX(i), z = pgp.getZ(i);
+    if (x > 4.4 + 0.15) {
+      assert.ok(z >= -0.06 || z <= -2.94, `porch vertex extends in front of garage opening at z=${z}`);
+    }
+  }
+
   // Subsidiary wing must ignore dormers and attachedGarage
   const subWing = { ...baseHouse, id: 99, buildingId: 1 };
   const wingOff = new Buildings([subWing], village, 1, 0, { '1': DEFAULT_STYLE });
@@ -108,15 +131,29 @@ const DEFAULT_STYLE = {
   });
   assert.deepEqual(wingOn.mesh.geometry.getAttribute('position').array, wingOff.mesh.geometry.getAttribute('position').array);
 
-  // Position-anchored rebake protection + drone roofBoxes
+  // Position-anchored rebake protection: far move refused, closer anchor beats reused ID, ambiguous ties refused order-independently
   const shifted = [{ ...baseHouse, id: 1622, x: 500000, y: 5000000 }];
   assert.equal(applyPropertyLooks('mabou', shifted, {}), null, 'override refuses to attach when building moved > 4 m');
   const movedId = [{ ...baseHouse, id: 99999, x: 624455.9, y: 5103425.6, eave: 2.7, ridge: 5.6 }];
   const byPos = applyPropertyLooks('mabou', movedId, {});
   assert.ok(byPos && byPos.styles['99999'] && byPos.roofBoxes.length === 1 && byPos.roofBoxes[0].ridge === 7.4,
     'position anchor follows a rebaked ID and emits raised drone roofBox');
+  // Reused ID 3 m away must lose to a new ID exactly at the anchor
+  const reusedVsExact = [
+    { ...baseHouse, id: 1622, x: 624458.9, y: 5103425.6 },
+    { ...baseHouse, id: 88888, x: 624455.9, y: 5103425.6 },
+  ];
+  const exactWin = applyPropertyLooks('mabou', reusedVsExact, {});
+  assert.ok(exactWin && exactWin.styles['88888'] && !exactWin.styles['1622'], 'exact anchor match beats a reused ID 3 m away');
+  // Equidistant candidates (both 2 m away) must be rejected as ambiguous in both input orders
+  const tieA = [
+    { ...baseHouse, id: 77771, x: 624453.9, y: 5103425.6 },
+    { ...baseHouse, id: 77772, x: 624457.9, y: 5103425.6 },
+  ];
+  assert.equal(applyPropertyLooks('mabou', tieA, {}), null, 'ambiguous equidistant candidates refused');
+  assert.equal(applyPropertyLooks('mabou', [...tieA].reverse(), {}), null, 'ambiguous equidistant candidates refused regardless of order');
 
-  for (const m of [plain, withShed, shedShadow, d1, d2, d3, oneStorey, twoStorey, endOne, endTwo, withGarage, wingOff, wingOn]) {
+  for (const m of [plain, withShed, shedShadow, d1, d2, d3, oneStorey, twoStorey, endOne, endTwo, withGarage, tightPlain, tightPorch, porchGarage, wingOff, wingOn]) {
     m.mesh.geometry.dispose();
     m.mesh.material.dispose();
   }
@@ -125,11 +162,34 @@ const DEFAULT_STYLE = {
 // 2. Clean-clone pack validation (runs in CI without data/)
 const mabouPack = areaPropertyLooks('mabou');
 assert.ok(mabouPack && mabouPack.version === 1 && mabouPack.area === 'mabou');
+const ALLOWED_PACK_KEYS = new Set(['version', 'area', 'groups', 'overrides']);
+const ALLOWED_GROUP_KEYS = new Set(['label', 'roads']);
+const ALLOWED_OVERRIDE_KEYS = new Set([
+  'group', 'road', 'at', 'kind', 'eave', 'ridge',
+  'wall', 'roof', 'trim', 'roofMaterial', 'entrance', 'chimney', 'dormer', 'shutters',
+  'satelliteDish', 'skirting', 'silo', 'door', 'rollUpDoor', 'boardAndBatten', 'metalCladding',
+  'bareEnd', 'barnDoors', 'solarSide', 'steppedShed', 'windowWall', 'doorWindows',
+  'roofShape', 'front', 'siloPosition', 'storeys', 'dormers', 'attachedGarage',
+]);
+const ALLOWED_FRONT_KEYS = new Set(['end', 'side']);
+const ALLOWED_GARAGE_KEYS = new Set(['end', 'side', 'offset', 'width', 'doors', 'door']);
+const assertAllowedKeys = (obj, allowed, ctx) => {
+  for (const key of Object.keys(obj)) assert.ok(allowed.has(key), `unexpected key "${key}" in ${ctx}`);
+};
+assertAllowedKeys(mabouPack, ALLOWED_PACK_KEYS, 'pack');
+for (const [gId, g] of Object.entries(mabouPack.groups)) {
+  assertAllowedKeys(g, ALLOWED_GROUP_KEYS, `group ${gId}`);
+  assert.ok(typeof g.label === 'string' && g.label.length > 0, `invalid label for group ${gId}`);
+  assert.ok(Array.isArray(g.roads) && g.roads.length > 0 && g.roads.every((r) => typeof r === 'string' && r.length > 0), `invalid roads for group ${gId}`);
+}
 const rawText = JSON.stringify(mabouPack);
 assert.doesNotMatch(rawText, /\b\d{1,5}\s+[A-Z][a-z]+\s+(Road|Rd|Street|St|Lane|Ln|Drive|Dr|Avenue|Ave|Highway|Hwy)\b/, 'no civic addresses in property-looks data');
 const VALID_KINDS = new Set(['house', 'barn', 'shed', 'large']);
 const mergedForCi = {};
 for (const [id, ov] of Object.entries(mabouPack.overrides)) {
+  assertAllowedKeys(ov, ALLOWED_OVERRIDE_KEYS, `override ${id}`);
+  if (ov.front !== undefined) assertAllowedKeys(ov.front, ALLOWED_FRONT_KEYS, `override ${id}.front`);
+  if (ov.attachedGarage !== undefined) assertAllowedKeys(ov.attachedGarage, ALLOWED_GARAGE_KEYS, `override ${id}.attachedGarage`);
   assert.match(id, /^\d+$/, `numeric building id ${id}`);
   assert.ok(ov.group in mabouPack.groups, `unknown group ${ov.group} for building ${id}`);
   assert.ok(typeof ov.road === 'string' && ov.road.length > 0, `missing road for building ${id}`);
@@ -187,7 +247,7 @@ if (fs.existsSync(`${terrainDir}/manifest.json`)) {
   }
 
   // Exact triangle budget check against the pre-property-looks main baseline (normal + wall-shadows desktop + 7 phone views)
-  const MAIN_NORMAL_TRIS = 192980;
+  const MAIN_NORMAL_TRIS = 192640;
   const MAIN_DESKTOP_TRIS = 192640;
   const MAIN_PHONE_TRIS = {
     'village-start': 56258,
