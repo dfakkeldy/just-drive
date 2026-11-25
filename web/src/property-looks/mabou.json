@@ -30,6 +30,18 @@
         "Mabou Mines Road",
         "Rankinville Road"
       ]
+    },
+    "west-and-southwest-mabou": {
+      "label": "West and southwest Mabou",
+      "roads": [
+        "Hunters Road",
+        "Little Mabou Road",
+        "MacDonald Glen Road",
+        "Murphys Hill Road",
+        "New Rocky Ridge Road",
+        "Southwest Ridge Road",
+        "Upper Southwest Mabou Road"
+      ]
     }
   },
   "overrides": {
@@ -3695,6 +3707,614 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "784": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        618623.4,
+        5103120.7
+      ],
+      "wall": "#243656",
+      "roof": "#323538",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.0,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1585": {
+      "group": "west-and-southwest-mabou",
+      "road": "MacDonald Glen Road",
+      "at": [
+        623431.2,
+        5105559.7
+      ],
+      "wall": "#b5a690",
+      "roof": "#6e7370",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1320": {
+      "group": "west-and-southwest-mabou",
+      "road": "MacDonald Glen Road",
+      "at": [
+        623455.5,
+        5105478.5
+      ],
+      "wall": "#d9d6ce",
+      "roof": "#3e4144",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": true,
+      "satelliteDish": false
+    },
+    "1563": {
+      "group": "west-and-southwest-mabou",
+      "road": "MacDonald Glen Road",
+      "at": [
+        623523.2,
+        5105518.1
+      ],
+      "wall": "#b5a690",
+      "roof": "#5c6164",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "skirting": true,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "743": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        618477.0,
+        5103092.5
+      ],
+      "wall": "#c8bba6",
+      "roof": "#3e4144",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "532": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        616488.1,
+        5102852.8
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#b0b4b2",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1423": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        616442.0,
+        5102860.7
+      ],
+      "wall": "#f2f0ea",
+      "roof": "#8e9493",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "740": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        618932.3,
+        5103076.8
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#c5c8c6",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": true
+    },
+    "734": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        618965.9,
+        5103057.6
+      ],
+      "wall": "#f7f5f0",
+      "roof": "#e4e2dc",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "roofShape": "flat",
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "skirting": true,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1550": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        620393.1,
+        5102385.5
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#a33d36",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1490": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        620633.1,
+        5102060.2
+      ],
+      "wall": "#a33d36",
+      "roof": "#8a8e90",
+      "trim": "#e8e4dc",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1667": {
+      "group": "west-and-southwest-mabou",
+      "road": "Murphys Hill Road",
+      "at": [
+        626817.8,
+        5104361.6
+      ],
+      "wall": "#c8c6be",
+      "roof": "#7d8184",
+      "trim": "#e8e6e0",
+      "door": "#f2f0ea",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "barnDoors": 2,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1670": {
+      "group": "west-and-southwest-mabou",
+      "road": "Murphys Hill Road",
+      "at": [
+        626839.8,
+        5104388.9
+      ],
+      "wall": "#b7b3a8",
+      "roof": "#7d8184",
+      "trim": "#e8e6e0",
+      "door": "#f2f0ea",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "barnDoors": 2,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1155": {
+      "group": "west-and-southwest-mabou",
+      "road": "Murphys Hill Road",
+      "at": [
+        626841.2,
+        5104345.2
+      ],
+      "wall": "#f2f0ea",
+      "roof": "#d0d3d2",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "roofShape": "flat",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1700": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623853.9,
+        5102827.9
+      ],
+      "wall": "#2a2e32",
+      "roof": "#3a3d40",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1191": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623943.4,
+        5102714.6
+      ],
+      "wall": "#d5d0c6",
+      "roof": "#323538",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.4,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "dormers": 1,
+      "chimney": true,
+      "dormer": true,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1237": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623936.4,
+        5102742.8
+      ],
+      "kind": "house",
+      "wall": "#f3efe4",
+      "roof": "#4a4e52",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "skirting": true,
+      "chimney": false,
+      "dormer": false,
+      "shutters": true,
+      "satelliteDish": false
+    },
+    "1188": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623952.2,
+        5102698.0
+      ],
+      "wall": "#b4332c",
+      "roof": "#8e9493",
+      "trim": "#f0efe9",
+      "door": "#f4f1ea",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "barnDoors": 2,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1126": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623949.1,
+        5102631.4
+      ],
+      "kind": "house",
+      "wall": "#f0ece2",
+      "roof": "#4a4e52",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "attachedGarage": {
+        "end": false,
+        "side": 1,
+        "offset": -5.0,
+        "width": 3.2,
+        "doors": 1,
+        "door": "#eceae4"
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": true,
+      "satelliteDish": false
+    },
+    "1127": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624014.6,
+        5102640.0
+      ],
+      "wall": "#3c4148",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "door": "#a33d36",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 6.6,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1072": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624014.2,
+        5102598.3
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4144",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": true,
+      "satelliteDish": false
+    },
+    "679": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623979.7,
+        5101991.4
+      ],
+      "wall": "#8a8e90",
+      "roof": "#3d6f9a",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "roofShape": "gable",
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1334": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623991.1,
+        5100820.8
+      ],
+      "wall": "#a33d36",
+      "roof": "#8e9493",
+      "trim": "#e6e2dc",
+      "door": "#c8c4bc",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "barnDoors": 1,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1566": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624031.0,
+        5101057.2
+      ],
+      "wall": "#f4f1ea",
+      "roof": "#323538",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.2,
+      "ridge": 8.1,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "dormers": 1,
+      "skirting": true,
+      "chimney": false,
+      "dormer": true,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "900001": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624065.0,
+        5100475.0
+      ],
+      "wall": "#e4d3b0",
+      "roof": "#323538",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 6.6,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1279": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624138.8,
+        5101644.1
+      ],
+      "wall": "#9ec0d4",
+      "roof": "#d8dce0",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "roofShape": "flat",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1180": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624160.5,
+        5101495.1
+      ],
+      "wall": "#2c4a3a",
+      "roof": "#6b5344",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1321": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624654.7,
+        5099401.7
+      ],
+      "wall": "#a33d36",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.6,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "dormers": 1,
+      "chimney": true,
+      "dormer": true,
       "shutters": false,
       "satelliteDish": false
     }
