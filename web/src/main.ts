@@ -728,10 +728,10 @@ const props = await (async () => {
     // The service drops of the boxes Port Hawkesbury, Prince Street and Mabou's main street replace end on their models, not in the air.
     const placed = hawkesburySite && Array.isArray(read.serviceDrops) ? { ...read, serviceDrops: aimDrops(read.serviceDrops) } : read;
     const withPrince = princeSite && Array.isArray(placed.serviceDrops) ? { ...placed, serviceDrops: princeSite.aimDrops(placed.serviceDrops) } : placed;
-    const mabouAimed = mabouSite && Array.isArray(withPrince.serviceDrops) ? { ...withPrince, serviceDrops: aimMabouDrops(withPrince.serviceDrops) } : withPrince;
-    const withBlackstone = blackstoneSite ? blackstoneSite.adjustProps(mabouAimed) : mabouAimed;
+    const withBlackstone = blackstoneSite ? blackstoneSite.adjustProps(withPrince) : withPrince;
+    const mabouAimed = mabouSite && Array.isArray(withBlackstone.serviceDrops) ? { ...withBlackstone, serviceDrops: aimMabouDrops(withBlackstone.serviceDrops) } : withBlackstone;
     // Inside the Town of Port Hawkesbury's legal limits, roadside mailboxes and posts are removed.
-    const data = filterPointTupperProps(withBlackstone, AREA.id, postOfficeReplaced);
+    const data = filterPointTupperProps(mabouAimed, AREA.id, postOfficeReplaced);
     return new Props(yardSite ? Yard.props(data, yardSite, manifest.village) : data, manifest.village, terrain, cemeteries?.excludes, sidewalks && !sidewalks.audit.disabled ? sidewalkData?.plans[LOW?1:0].poleMoves : undefined, splitRoadLines(roadData)); }
   catch (e) { console.warn('props', e); return null; }
 })();

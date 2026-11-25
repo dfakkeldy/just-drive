@@ -56,8 +56,8 @@ export const EAST_BARN = { u0: 39.2, u1: 47.8, v0: 0.9, v1: 7.1, eave: 2.75, knu
 /** Flanking arched fabric hoop storage shelters west and east of the east barn. */
 export const HOOP_WEST = { u0: 33.8, u1: 36.8, v0: 2.6, v1: 7.8, wall: 1.35, ridge: 2.5 };
 export const HOOP_EAST = { u0: 48.0, u1: 51.0, v0: 1.2, v1: 5.8, wall: 1.3, ridge: 2.4 };
-/** Red wooden parcel chest beside the relocated dark-green mailbox at the west driveway entrance. */
-export const PARCEL_BOX = { u: -12.3, v: -19.0 };
+/** Red wooden parcel chest beside the relocated dark-green mailbox at the west driveway entrance (clear of road edge). */
+export const PARCEL_BOX = { u: -12.5, v: -17.9 };
 
 export class BlackstoneHouse implements HandBuiltPlace {
   readonly group = new THREE.Group();
@@ -75,19 +75,22 @@ export class BlackstoneHouse implements HandBuiltPlace {
     this.local.rotation.y = site.yaw;
     this.group.add(this.local);
     this.group.visible = false;
-    this.probes = ([[0, 0], [0, -14], [25, -4], [43, 3], [-16, -9]] as [number, number][]).map(([u, v]) => site.world(u, v));
+    this.probes = ([[0, 0], [PARCEL_BOX.u, PARCEL_BOX.v], [25, -4], [43, 3], [-16, -9]] as [number, number][]).map(([u, v]) => site.world(u, v));
   }
 
   /** True while the house is near and its model is still to come: a picture should wait. */
   get waiting(): boolean { return this.near && !this.built; }
 
-  private g = (u: number, v: number): number => { const w = this.site.world(u, v); return this.terrain.heightAt(w.x, w.z) ?? this.lift(this.site.level); };
+  private g = (u: number, v: number): number => {
+    const w = this.site.world(u, v);
+    return this.terrain.meshHeightAt?.(w.x, w.z, true) ?? this.terrain.heightAt(w.x, w.z) ?? this.lift(this.site.level);
+  };
 
   private ready(): number | null {
     let fine = 0;
     for (const p of this.probes) {
-      const level = this.terrain.drawnLevelAt?.(p.x, p.z) ?? this.terrain.surfaceAt(p.x, p.z)?.level ?? null;
-      if (level === null || level < 7) return null;
+      const level = this.terrain.drawnLevelAt?.(p.x, p.z) ?? this.terrain.levelAt?.(p.x, p.z) ?? -1;
+      if (level < 7) return null;
       if (level >= 8) fine++;
     }
     return fine;
@@ -98,8 +101,7 @@ export class BlackstoneHouse implements HandBuiltPlace {
     this.near = far < 900;
     if (this.near || (this.built && far < 1600)) {
       const fine = this.ready();
-      const coarse = fine !== null && fine < this.probes.length;
-      if (fine !== null && (!this.built || coarse !== (this.fine < this.probes.length))) {
+      if (fine !== null && (!this.built || fine !== this.fine)) {
         this.build();
         this.built = true;
         this.fine = fine;
@@ -118,7 +120,10 @@ export class BlackstoneHouse implements HandBuiltPlace {
 
   private solid(u0: number, u1: number, v0: number, v1: number): void {
     const w = this.site.world((u0 + u1) / 2, (v0 + v1) / 2);
-    this.solids.push({ x: w.x, z: w.z, half: (u1 - u0) / 2, halfWidth: (v1 - v0) / 2, heading: this.site.heading(1, 0) });
+    const hu = (u1 - u0) / 2, hv = (v1 - v0) / 2;
+    this.solids.push(hu >= hv
+      ? { x: w.x, z: w.z, half: hu, halfWidth: hv, heading: this.site.heading(1, 0) }
+      : { x: w.x, z: w.z, half: hv, halfWidth: hu, heading: this.site.heading(0, 1) });
   }
 
   private build(): void {

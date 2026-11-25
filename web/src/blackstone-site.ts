@@ -17,11 +17,11 @@ import type { Site } from './terrain';
  */
 type P = [number, number];
 
-/** The game's number for the surveyed box, the size that box must still have, its axis, and a nearby Blackstone Road point. */
+/** The game's number for the surveyed box, its surveyed centre, size and axis. */
 export const BLACKSTONE_BUILDING = 1454;
 const LENGTH = 12.42, WIDTH = 8.7, AXIS = 112;
-const ROAD_REF: P = [630789, 5109876];
-const ROAD_REACH = 45;
+const SITE_REF: P = [630781.27, 5109855.68];
+const SITE_REACH = 5;
 
 /** Level ground under the house, front porch and south-east two-storey deck; outside it blends back to the lot's slope. */
 const PAD: P[] = [[-6.8, -8.8], [8.8, -8.8], [8.8, 5.2], [-6.8, 5.2]];
@@ -49,7 +49,7 @@ export const DRIVE_EAST: P[] = [
 
 /** Mown lawn across the house frontage, the west lawn under the deciduous trees, and the wide east front lawn island. */
 export const LAWN: P[] = [
-  [-22.5, -20.5], [52.0, -15.5], [53.5, 8.5], [12.0, 10.5],
+  [-22.5, -18.8], [50.0, -14.8], [53.5, 8.5], [12.0, 10.5],
   [-17.0, 10.5], [-22.5, 4.0],
 ];
 
@@ -60,7 +60,7 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.max(0, Math
 /** Surveyed mailbox near this house (before relocation to the west driveway entrance). */
 const MAILBOX_SEARCH_M = 35;
 /** Real roadside mailbox spot at the west side of the west driveway mouth: dark green plastic pedestal, facing Blackstone Road. */
-export const MAILBOX_UV: P = [-11.2, -19.1];
+export const MAILBOX_UV: P = [-11.3, -18.4];
 export const MAILBOX_HEADING_DEG = 26.9;
 
 export class BlackstoneSite implements Site {
@@ -71,8 +71,8 @@ export class BlackstoneSite implements Site {
   readonly yaw: number;
   /** The level of the pad, in true metres above the sea. */
   readonly level: number;
-  /** Paint only on tiles that already have a baked road field (levels 5-8 in Mabou; avoids adding a coarse tile texture). */
-  readonly maxTexel = 8;
+  /** Paint and grade only on L7 and L8 (texel <= 2 m) so coarse L5/L6 tiles keep Blackstone Road untouched. */
+  readonly maxTexel = 2;
   private ox: number; private oz: number; private sin: number; private cos: number;
   private bx: number; private by: number; private axisDeg: number;
 
@@ -80,7 +80,7 @@ export class BlackstoneSite implements Site {
   static find(list: readonly Building[]): Building | null {
     const b = list.find((b) => b.id === BLACKSTONE_BUILDING);
     return b && b.kind === 'house'
-      && Math.hypot(b.x - ROAD_REF[0], b.y - ROAD_REF[1]) < ROAD_REACH
+      && Math.hypot(b.x - SITE_REF[0], b.y - SITE_REF[1]) < SITE_REACH
       && Math.abs(b.length - LENGTH) < 1 && Math.abs(b.width - WIDTH) < 1 && Math.abs(b.axisDeg - AXIS) < 5
       ? b : null;
   }
@@ -162,10 +162,10 @@ export class BlackstoneSite implements Site {
       box(-1.4, 5.0, -4.1, 4.1, 3.1, 6.35),       // lower 1.5-storey main wing and shed dormer
       box(-0.2, 2.5, -6.0, -4.1, 2.95, 5.3),      // front projecting gable vestibule
       box(5.0, 7.8, -3.6, 3.4, 4.75, 4.75),       // two-storey SE wooden deck
-      box(-19.8, -16.2, -9.9, -7.1, 2.0, 3.3),    // small west blue gambrel shed
-      box(39.2, 47.8, 0.9, 7.1, 2.8, 5.8),        // large east two-storey blue gambrel barn
-      box(33.8, 36.8, 2.6, 7.8, 2.2, 2.65),       // west arched fabric hoop shelter
-      box(48.0, 51.0, 1.2, 5.8, 2.1, 2.55),       // east arched fabric hoop shelter
+      box(-19.8, -16.2, -9.9, -7.1, 2.0, 3.27, this.level + 0.21), // small west blue gambrel shed
+      box(39.2, 47.8, 0.9, 7.1, 2.75, 5.77, this.level - 0.98),    // large east two-storey blue gambrel barn
+      box(33.8, 36.8, 2.6, 7.8, 2.2, 2.55, this.level - 0.64),     // west arched fabric hoop shelter
+      box(48.0, 51.0, 1.2, 5.8, 2.1, 2.45, this.level - 1.1),      // east arched fabric hoop shelter
     ];
   }
 
