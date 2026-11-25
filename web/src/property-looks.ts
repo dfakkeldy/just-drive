@@ -2,14 +2,17 @@ import type { Building, BuildingStyle } from './buildings';
 import mabouLooks from './property-looks/mabou.json';
 
 /**
- * Per-building look overrides observed from dash-cam passes, keyed by surveyed building ID.
- * Public data only: road names and game building IDs, no civic numbers or personal names.
+ * Per-building look overrides observed from dash-cam passes, keyed by surveyed building ID
+ * and anchored by map position (EPSG:2961) so a rebake cannot attach an override to the wrong house.
+ * Public data only: road names, game building IDs and map coordinates; no civic numbers or personal names.
  */
 export interface PropertyLookOverride extends Partial<BuildingStyle> {
   /** Road group name (e.g. 'mabou-village'). */
   group: string;
   /** Public road name for coverage reporting. */
   road: string;
+  /** Surveyed property centre [east, north] in EPSG:2961 metres. */
+  at: [number, number];
   /** Optional envelope classification fix when LiDAR guessed the wrong kind. */
   kind?: Building['kind'];
   /** Optional eave height correction (metres above ground) when LiDAR misread storeys. */
@@ -25,8 +28,10 @@ export interface AreaPropertyLooks {
   overrides: Record<string, PropertyLookOverride>;
 }
 
+export type PropertyLookRoofBox = Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg' | 'length' | 'width' | 'eave' | 'ridge' | 'shape'>;
+
 const AREA_LOOKS: Partial<Record<string, AreaPropertyLooks>> = {
-  mabou: mabouLooks as AreaPropertyLooks,
+  mabou: mabouLooks as unknown as AreaPropertyLooks,
 };
 
 const DEFAULT_STYLE: BuildingStyle = {
@@ -43,29 +48,65 @@ const DEFAULT_STYLE: BuildingStyle = {
   silo: false,
 };
 
+const MATCH_RADIUS_M = 4;
+
 export function areaPropertyLooks(areaId: string): AreaPropertyLooks | null {
   return AREA_LOOKS[areaId] ?? null;
 }
 
 /**
  * Apply dash-cam look overrides to an area's drawn buildings and styles.
+ * Verifies each override against its anchored survey position so a rebake never paints the wrong building.
  * Never alters property IDs, footprints, positions, or un-overridden buildings.
  */
 export function applyPropertyLooks(
   areaId: string,
   list: Building[],
   baseStyles?: Record<string, BuildingStyle>,
-): { buildings: Building[]; styles: Record<string, BuildingStyle> } | null {
+): { buildings: Building[]; styles: Record<string, BuildingStyle>; roofBoxes: PropertyLookRoofBox[] } | null {
   const pack = AREA_LOOKS[areaId];
   if (!pack) return null;
-  const overrides = pack.overrides;
-  const keys = Object.keys(overrides);
-  if (!keys.length) return null;
+  const entries = Object.entries(pack.overrides);
+  if (!entries.length) return null;
+
+  // Index primary property records by identity ID so position verification works for both plain and winged buildings.
+  const primaryById = new Map<string, Building>();
+  for (const b of list) {
+    if (b.shape !== undefined) continue;
+    const id = String(b.buildingId ?? b.id);
+    if ((b.buildingId ?? b.id) === b.id) primaryById.set(id, b);
+  }
+
+  // Match each override to its exact surveyed property (prefer ID if within MATCH_RADIUS_M, else nearest within MATCH_RADIUS_M).
+  const matched = new Map<string, PropertyLookOverride>();
+  for (const [id, ov] of entries) {
+    const [oe, on] = ov.at;
+    const direct = primaryById.get(id);
+    const directSite = direct?.site ?? direct;
+    if (direct && directSite && Math.hypot(directSite.x - oe, directSite.y - on) <= MATCH_RADIUS_M) {
+      matched.set(id, ov);
+      continue;
+    }
+    let bestId: string | null = null;
+    let bestDist = MATCH_RADIUS_M;
+    for (const [candId, cand] of primaryById) {
+      if (matched.has(candId)) continue;
+      const site = cand.site ?? cand;
+      const d = Math.hypot(site.x - oe, site.y - on);
+      if (d <= bestDist) {
+        bestDist = d;
+        bestId = candId;
+      }
+    }
+    if (bestId !== null) matched.set(bestId, ov);
+  }
+  if (!matched.size) return null;
 
   let changedBuildings = false;
+  const roofBoxes: PropertyLookRoofBox[] = [];
   const buildings = list.map((b) => {
     const id = String(b.buildingId ?? b.id);
-    const ov = overrides[id];
+    const ov = matched.get(id);
     if (!ov) return b;
     const isPrimary = (b.buildingId ?? b.id) === b.id;
     const nextKind = ov.kind ?? b.kind;
@@ -75,16 +116,23 @@ export function applyPropertyLooks(
       : isPrimary && ov.eave !== undefined ? Math.max(b.ridge, nextEave + 0.6) : b.ridge;
     if (nextKind === b.kind && nextEave === b.eave && nextRidge === b.ridge) return b;
     changedBuildings = true;
-    return { ...b, kind: nextKind, eave: nextEave, ridge: nextRidge };
+    const updated = { ...b, kind: nextKind, eave: nextEave, ridge: nextRidge };
+    if (nextRidge > b.ridge) {
+      roofBoxes.push({
+        x: updated.x, y: updated.y, ground: updated.floorGround ?? updated.ground,
+        axisDeg: updated.axisDeg, length: updated.length, width: updated.width,
+        eave: updated.eave, ridge: updated.ridge, shape: updated.shape,
+      });
+    }
+    return updated;
   });
 
   const styles: Record<string, BuildingStyle> = {};
-  for (const id of keys) {
-    const ov = overrides[id];
+  for (const [id, ov] of matched) {
     const base = baseStyles?.[id] ?? DEFAULT_STYLE;
-    const { group: _g, road: _r, kind: _k, eave: _e, ridge: _ri, ...styleFields } = ov;
+    const { group: _g, road: _r, at: _a, kind: _k, eave: _e, ridge: _ri, ...styleFields } = ov;
     styles[id] = { ...base, ...styleFields };
   }
 
-  return { buildings: changedBuildings ? buildings : list, styles };
+  return { buildings: changedBuildings ? buildings : list, styles, roofBoxes };
 }

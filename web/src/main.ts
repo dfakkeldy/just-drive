@@ -1103,6 +1103,7 @@ const extraRoofAt = ERA.modern ? (() => {
       .map(b => ({ ...b, floorGround: undefined }));
   if (princeSite) extra.push(...princeSite.roofBoxes());
   if (blackstoneSite) extra.push(...blackstoneSite.roofBoxes());
+  if (propertyLooks?.roofBoxes.length) extra.push(...propertyLooks.roofBoxes);
   for (const lm of landmarkList) {
     const a = lm.axisDeg * Math.PI / 180, alongX = Math.sin(a), alongZ = -Math.cos(a), acrossX = Math.cos(a), acrossZ = Math.sin(a);
     let lo = Infinity, hi = -Infinity, wl = Infinity, wh = -Infinity;

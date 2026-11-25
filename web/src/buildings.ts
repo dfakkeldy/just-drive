@@ -105,7 +105,7 @@ const isStyle = (s: unknown): s is BuildingStyle => {
   if (!isRecord(s)) return false;
   if (![s.wall, s.roof, s.trim].every(isPaint)) return false;
   if (s.roofMaterial !== 'shingle' && s.roofMaterial !== 'metal') return false;
-  if (!['none', 'small steps', 'front porch', 'deck', 'wrap-around'].includes(String(s.entrance))) return false;
+  if (typeof s.entrance !== 'string' || !['none', 'small steps', 'front porch', 'deck', 'wrap-around'].includes(s.entrance)) return false;
   if (!['chimney', 'dormer', 'shutters', 'satelliteDish', 'skirting', 'silo'].every((k) => typeof s[k] === 'boolean')) return false;
   if (s.door !== undefined && !isPaint(s.door)) return false;
   if (![s.rollUpDoor, s.boardAndBatten, s.steppedShed, s.windowWall, s.doorWindows].every((value) => value === undefined || typeof value === 'boolean')) return false;
@@ -114,7 +114,7 @@ const isStyle = (s: unknown): s is BuildingStyle => {
       (s.bareEnd.side !== -1 && s.bareEnd.side !== 1))) return false;
   if (s.barnDoors !== undefined && (typeof s.barnDoors !== 'number' || ![1, 2, 3, 4, 5].includes(s.barnDoors))) return false;
   if (s.solarSide !== undefined && s.solarSide !== -1 && s.solarSide !== 1) return false;
-  if (s.roofShape !== undefined && !['flat', 'gable', 'hip', 'gambrel', 'shed'].includes(String(s.roofShape))) return false;
+  if (s.roofShape !== undefined && (typeof s.roofShape !== 'string' || !['flat', 'gable', 'hip', 'gambrel', 'shed'].includes(s.roofShape))) return false;
   if (s.front !== undefined && (!isRecord(s.front) || typeof s.front.end !== 'boolean' || (s.front.side !== -1 && s.front.side !== 1))) return false;
   if (s.storeys !== undefined && (typeof s.storeys !== 'number' || ![1, 2, 3].includes(s.storeys))) return false;
   if (s.dormers !== undefined && (typeof s.dormers !== 'number' || ![1, 2, 3].includes(s.dormers))) return false;
@@ -465,7 +465,10 @@ export class Buildings {
         const slope = (r - e) / (2 * W);
         roofFace(-L - over, L + over, -W - over, W, e - over * slope, r);
         panel(false, 1, -L, L, e, r, wall);
-        for (const side of [-1, 1]) triP(side * L, -W, e, side * L, W, e, side * L, W, r, wall);
+        const shedEndStart = pos.length / 3;
+        shellEndP(L, -W, e, L, W, e, L, W, r, endWall(1));
+        shellEndP(-L, W, e, -L, -W, e, -L, W, r, endWall(-1));
+        closedWallRanges?.push(shedEndStart, pos.length / 3);
       } else {
         const gableStart = pos.length / 3;
         shellEndP(L, -W, e, L, W, e, L, 0, r, endWall(1));
@@ -547,7 +550,31 @@ export class Buildings {
         const depth = frontEnd ? L : W;
         const tallFront = stepped && !!style?.windowWall && !frontEnd && front === 1;
         const deckHeight = tallFront ? 0.62 : 0.23;
-        const doorU = tallFront ? span * 0.57 : span > 4 ? -span * 0.25 : 0;
+        const garage = style?.attachedGarage;
+        const garageSpan = garage ? (garage.end ? W : L) : 0;
+        const garageDoors = garage?.doors ?? 1;
+        const garageSingleW = garage ? Math.min(garage.width ?? (garageDoors === 2 ? 2.4 : 2.8), garageSpan * (garageDoors === 2 ? 0.38 : 0.65)) : 0;
+        const garageGap = garageDoors === 2 ? 0.32 : 0;
+        const garageTotalW = garage ? garageSingleW * garageDoors + garageGap : 0;
+        const garageCenter = garage ? Math.max(-garageSpan + garageTotalW / 2 + 0.25,
+          Math.min(garageSpan - garageTotalW / 2 - 0.25, garage.offset ?? (garageSpan > 3.5 ? garageSpan * 0.35 : 0))) : 0;
+        const garageH = garage ? Math.min(2.2, e - 0.35) : 0;
+        const hasGarage = !!garage && garageH > 1.2 && garageSingleW > 1.2;
+        const dh = Math.min(2.05, e - 0.35), dw = Math.min(0.95, b.length * 0.22);
+        let doorU = tallFront ? span * 0.57 : span > 4 ? -span * 0.25 : 0;
+        let showDoor = dh > 1.1;
+        if (showDoor && hasGarage && garage.end === frontEnd && garage.side === front) {
+          const minGap = garageTotalW / 2 + dw / 2 + 0.4;
+          if (Math.abs(doorU - garageCenter) < minGap) {
+            const leftU = garageCenter - minGap;
+            const rightU = garageCenter + minGap;
+            const leftOk = leftU - dw / 2 >= -span + 0.25;
+            const rightOk = rightU + dw / 2 <= span - 0.25;
+            if (leftOk && (!rightOk || Math.abs(leftU - doorU) <= Math.abs(rightU - doorU))) doorU = leftU;
+            else if (rightOk) doorU = rightU;
+            else showDoor = false;
+          }
+        }
         const quadF = (au: number, av: number, ah: number, bu: number, bv: number, bh: number,
           cu: number, cv: number, ch: number, du: number, dv: number, dh: number, colour: RGB) =>
           frontEnd ? quadP(av, au, ah, bv, bu, bh, cv, cu, ch, dv, du, dh, colour)
@@ -560,8 +587,7 @@ export class Buildings {
           if (frontEnd) box(v0, v1, u0, u1, y0, y1, colour);
           else box(u0, u1, v0, v1, y0, y1, colour);
         };
-        const dh = Math.min(2.05, e - 0.35), dw = Math.min(0.95, b.length * 0.22);
-        if (dh > 1.1) opening(frontEnd, front, doorU, tallFront ? deckHeight : 0.22, dw, dh, true);
+        if (showDoor) opening(frontEnd, front, doorU, tallFront ? deckHeight : 0.22, dw, dh, true);
         if (tallFront) {
           const wood = rgb('#ad8c69');
           // Off the upper wall's own plane (0.025), under the glass (0.05): the two would z-fight.
@@ -577,19 +603,10 @@ export class Buildings {
           ? Math.max(1, Math.min(style.storeys, Math.floor(e / 1.8)))
           : Math.max(1, Math.min(3, Math.floor((e + 0.3) / 2.65)));
         const floor = e / storeys, wh = Math.min(1.25, floor * 0.43);
-        const garage = style?.attachedGarage;
-        const garageSpan = garage ? (garage.end ? W : L) : 0;
-        const garageDoors = garage?.doors ?? 1;
-        const garageSingleW = garage ? Math.min(garage.width ?? (garageDoors === 2 ? 2.4 : 2.8), garageSpan * (garageDoors === 2 ? 0.38 : 0.65)) : 0;
-        const garageGap = garageDoors === 2 ? 0.32 : 0;
-        const garageTotalW = garage ? garageSingleW * garageDoors + garageGap : 0;
-        const garageCenter = garage ? Math.max(-garageSpan + garageTotalW / 2 + 0.25,
-          Math.min(garageSpan - garageTotalW / 2 - 0.25, garage.offset ?? (garageSpan > 3.5 ? garageSpan * 0.35 : 0))) : 0;
-        const garageH = garage ? Math.min(2.2, e - 0.35) : 0;
         const hitsGarage = (end: boolean, side: number, u: number, row: number) =>
-          !!garage && garageH > 1.2 && row === 0 && garage.end === end && garage.side === side &&
+          hasGarage && row === 0 && garage.end === end && garage.side === side &&
           Math.abs(u - garageCenter) < garageTotalW / 2 + 0.7;
-        if (garage && garageH > 1.2 && garageSingleW > 1.2) {
+        if (hasGarage) {
           const gCol = garage.door ? rgb(garage.door) : rgb('#e5e3db');
           const gSeam: RGB = [gCol[0] * 0.74, gCol[1] * 0.74, gCol[2] * 0.74];
           const centres = garageDoors === 2
@@ -614,16 +631,18 @@ export class Buildings {
           for (let c = 0; c < columns; c++) {
             const u = -L + (c + 0.5) * b.length / columns;
             if (tallFront && side === front) continue;
-            if (!frontEnd && side === front && row === 0 && Math.abs(u - doorU) < 1.2) continue;
+            if (showDoor && !frontEnd && side === front && row === 0 && Math.abs(u - doorU) < 1.2) continue;
             if (hitsGarage(false, side, u, row)) continue;
             opening(false, side, u, y, Math.min(1.1, b.length / columns * 0.48), wh);
           }
         }
         for (const side of [-1, 1]) {
           if (W > 2) for (const v of [-W * 0.48, W * 0.48]) {
-            if (frontEnd && side === front && Math.abs(v - doorU) < 1.2) continue;
-            if (!hitsGarage(true, side, v, 0)) {
+            if (!hitsGarage(true, side, v, 0) && !(showDoor && frontEnd && side === front && Math.abs(v - doorU) < 1.2)) {
               opening(true, side, v, 0.85, Math.min(0.95, W * 0.35), Math.min(1.2, e * 0.38));
+            }
+            if (style?.storeys && storeys >= 2 && frontEnd && side === front && e >= 4.2) {
+              opening(true, side, v, floor + Math.max(0.65, (floor - wh) * 0.48), Math.min(0.95, W * 0.35), wh);
             }
           }
           if ((shape === 'gable' || shape === 'gambrel') && r - e > 1.5) opening(true, side, 0, e + 0.25, 0.6, Math.min(0.7, (r - e) * 0.3));
