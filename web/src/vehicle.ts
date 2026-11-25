@@ -1125,10 +1125,7 @@ export class Vehicle {
       c.setTravel(this.suspension[0], this.suspension[1], this.suspension[2], this.suspension[3]);
     }
     c.animate?.(dt, this.speed, this.hoofGround, this.terrain.contactRevision);
-    if (dt > 0) {
-      const hit = this.roads.nearest(this.x, this.z, 14);
-      this.roadName = hit ? hit.road.name : null;
-    }
+    if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z, this.y) ?? null;
   }
 }
 

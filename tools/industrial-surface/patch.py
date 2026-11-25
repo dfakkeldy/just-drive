@@ -14,8 +14,9 @@ p = argparse.ArgumentParser()
 p.add_argument('source', type=Path)
 p.add_argument('output', type=Path)
 p.add_argument('--industrial', action='store_true', help='Point Tupper road 107 (the only delta to install)')
+p.add_argument('--width', action='store_true', help='stage road 107 width and paint on surface-corrected land')
 a = p.parse_args()
-if not a.industrial:
+if not (a.industrial or a.width):
     # Road 634 at Mabou is withdrawn (16 Nov 2026): kind 2 makes a driveway a public road. See README.
     raise SystemExit('Road 634 is withdrawn and not installable; see tools/industrial-surface/README.md')
 os.environ['MMM_AREA'] = 'pointtupper'
@@ -37,7 +38,8 @@ expected_name = 'Industrial Park Road'
 start = [629754.71, 5047949.24]
 end = [628480.9, 5051737.82]
 road = next(r for r in network['roads'] if r['id'] == road_id)
-if not (road['kind'] == 4 and road['name'] == expected_name and road['halfWidth'] == 1.5):
+kind_before = 2 if a.width else 4
+if not (road['kind'] == kind_before and road['name'] == expected_name and road['halfWidth'] == 1.5):
     raise ValueError('Unexpected road classification')
 if road['pts'][0] != start:
     raise ValueError('Unexpected road start')
@@ -45,6 +47,9 @@ if road['pts'][-1] != end:
     raise ValueError('Unexpected road end')
 old = f.Field(network['roads'])
 road['kind'] = 2
+if a.width:
+    # Bear Head LNG environmental assessment, table 6.38: two 3.6 m travel lanes.
+    road.update(halfWidth=3.6, pavement='double-yellow')
 new = f.Field(network['roads'])
 manifest = json.loads((a.source / 'manifest.json').read_bytes())
 a.output.mkdir(parents=True)
@@ -79,16 +84,19 @@ for level in (5, 6, 7, 8):
         xs = bb[0]+np.arange(257)*f.b.res(level)
         ys = bb[3]-np.arange(257)*f.b.res(level)
         prior, after = old.raster(xs,ys), new.raster(xs,ys)
-        if not np.array_equal(prior[:2], after[:2]):
+        if not np.array_equal(prior[0], after[0]) or (not a.width and not np.array_equal(prior[1], after[1])):
             raise ValueError('Geometry or width changed')
-        mask = prior[2] != after[2]
+        mask = np.any(prior != after, axis=0)
         if not mask.any(): continue
         relative = f'{level}/{name}.r.png'
         source = a.source / relative
         actual = gdal.Open(str(source)).ReadAsArray()
         if not np.array_equal(actual[:,mask], prior[:,mask]):
             raise ValueError(f'Stale source field: {relative}')
-        actual[2,mask] = after[2,mask]
+        if a.width:
+            on_pavement = np.abs(actual[0].astype(int) - 128) * 2 <= actual[1]
+            pixels += int((mask & on_pavement).sum())
+        actual[:,mask] = after[:,mask]
         target = a.output / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         f.b.write_png(str(target), actual)
@@ -96,13 +104,16 @@ for level in (5, 6, 7, 8):
         original = gdal.Open(str(source)).ReadAsArray()
         if not np.array_equal(verified, actual):
             raise ValueError('Output did not round-trip')
-        if not np.array_equal(verified[:2], original[:2]):
+        if not np.array_equal(verified[0], original[0]) or (not a.width and not np.array_equal(verified[1], original[1])):
             raise ValueError('Output geometry or width changed')
         if not np.array_equal(verified[:,~mask], original[:,~mask]):
             raise ValueError('Output changed outside target road')
         changed.append(dict(file=relative,before=hashlib.sha256(source.read_bytes()).hexdigest(),
                             sha256=hashlib.sha256(target.read_bytes()).hexdigest(),pixels=int(mask.sum())))
-        pixels += int(mask.sum())
-report = dict(road=road_id,kindBefore=4,kindAfter=2,pixels=pixels,files=changed)
+        if not a.width:
+            pixels += int(mask.sum())
+report = dict(road=road_id,kindBefore=kind_before,kindAfter=2,pixels=pixels,files=changed)
+if a.width:
+    report.update(halfWidthBefore=1.5, halfWidthAfter=3.6, pixelsMeaning='paved samples before widening')
 (a.output/'hashes.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report,indent=2))

@@ -18,6 +18,7 @@ export interface Road {
   halfWidth: number;
   bridge: boolean;
   washboard?: boolean;
+  pavement?: 'double-yellow' | 'worn' | 'gravel';
   pts: [number, number][];   // world x, z (converted on load)
 }
 
@@ -25,6 +26,7 @@ export interface RoadHit { road: Road; dist: number; x: number; z: number; headi
 
 const CELL = 64;
 const bridgeRoad = (road: Road) => road.bridge;
+const namedRoad = (road: Road) => Boolean(road.name);
 
 interface Deck { road: Road; y0: number; y1: number; len: number; cum: number[]; mesh: THREE.Mesh; level: number; startApproach: Float64Array | null; endApproach: Float64Array | null }
 
@@ -141,6 +143,30 @@ export class Roads {
     return this.query(this.cells, x, z, reach, filter);
   }
 
+  /** Name the road under the vehicle, with a metre of tolerance at the edge.
+   * When `y` is given near a grade-separated modern bridge, the deck elevation decides upper vs lower road. */
+  nameAt(x: number, z: number, y?: number): string | null {
+    let skipOverhead = false;
+    let deckName: string | null = null, deckOutside = Infinity;
+    if (y !== undefined && this.modern) {
+      const deck = this.modern.deckRoadAt(x, z, y);
+      if (deck.name !== null) {
+        if (deck.outside === 0) return deck.name;
+        const ground = this.terrain.heightAt(x, z);
+        if (ground === null || Math.abs(y - ground) > 1) return deck.name;
+        deckName = deck.name;
+        deckOutside = deck.outside;
+      }
+      skipOverhead = deck.hasOverhead;
+    }
+    const hit = this.query(this.cells, x, z, this.maxHalfWidth + 1, namedRoad, 1, skipOverhead);
+    if (deckName !== null) {
+      const hitOutside = hit ? Math.max(0, hit.dist - hit.road.halfWidth) : Infinity;
+      return hit && hitOutside < deckOutside ? hit.road.name : deckName;
+    }
+    return hit?.road.name ?? null;
+  }
+
   /** Cold placement query: visit every nearby segment once, including tracks, trails and driveways.
    * Reach is measured from road edges, so wide roads in adjacent cells are included. */
   forEachNearbySegment(x: number, z: number, reach: number, visit: (road: Road, segment: number) => void, exclude?: Road): void {
@@ -154,10 +180,10 @@ export class Roads {
         }
   }
 
-  private query(cells: Map<number, [number, number][]>, x: number, z: number, reach: number, filter?: (r: Road) => boolean): RoadHit | null {
+  private query(cells: Map<number, [number, number][]>, x: number, z: number, reach: number, filter?: (r: Road) => boolean, edgeTolerance?: number, skipOverhead = false): RoadHit | null {
     let best: RoadHit | null = null;
     const era=this.terrain.cartRoads&&cells===this.bridgeCells;
-    let candidates=0,bestSquared=144,bestRI=Infinity;
+    let candidates=0,bestSquared=144,bestRI=Infinity,bestOutside=Infinity;
     if(era)this.bridgeQuery++;
     const span = Math.ceil(reach / CELL);
     const cx0 = Math.floor(x / CELL), cz0 = Math.floor(z / CELL);
@@ -165,6 +191,7 @@ export class Roads {
       for (const [ri, s] of cells.get(this.cellKey(cx, cz)) ?? NO_SEGMENTS) {
         const road = this.roads[ri];
         if (filter && !filter(road)) continue;
+        if (skipOverhead && this.modern?.isOverheadRoad(road.id)) continue;
         // A segment may occupy several neighbouring cells; sample it once in an era query.
         const record=era?this.bridgeRecords.get(road.id):undefined;
         if(record){if(record.seen[s]===this.bridgeQuery)continue;record.seen[s]=this.bridgeQuery;candidates++;}
@@ -184,6 +211,12 @@ export class Roads {
           if(!(squared<144&&squared<=(road.halfWidth+1.2)**2)||best&&(squared>bestSquared||squared===bestSquared&&(ri>bestRI||ri===bestRI&&s>=best.seg)))continue;
           bestSquared=squared;bestRI=ri;best=this.eraBridgeHit!;
           best.road=road;best.dist=Math.sqrt(squared);best.x=px;best.z=pz;best.heading=Math.atan2(dx,-dz);best.seg=s;best.t=t;
+        }else if (edgeTolerance !== undefined) {
+          const outside = Math.max(0, d - road.halfWidth);
+          if (outside <= edgeTolerance && (!best || outside < bestOutside || (outside === bestOutside && d < best.dist))) {
+            bestOutside = outside;
+            best = { road, dist: d, x: px, z: pz, heading: Math.atan2(dx, -dz), seg: s, t };
+          }
         }else if (d <= reach && (!best || d < best.dist)) best = { road, dist: d, x: px, z: pz, heading: Math.atan2(dx, -dz), seg: s, t };
       }
     }

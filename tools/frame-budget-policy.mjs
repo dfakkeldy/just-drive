@@ -33,6 +33,11 @@ export const scenes = [
   // the pack into data/baked/areas/pointtupper adds +1 asset request (stockpiles.json) to both pointtupper-start rows;
   // both piles sit >1.3 km away and stay culled at the start, so calls, triangles, geometries, textures and programs
   // stay unchanged (24 Nov 2026).
+  // Industrial Park Road width and double-yellow paint delta (grok-bots#1406, road 107 halfWidth 1.5 -> 3.6 m,
+  // pavement='double-yellow'): enables the existing ROAD_PAVEMENT terrain shader variant on road 107 tiles visible from
+  // pointtupper-start (L5 18_25, L6 36_50, 654 m away). Programs rise by +1 on phone (18 -> 19) and +2 on desktop
+  // (45 -> 47 base, 50 -> 52 with far land: main and mirror terrain shaders). Calls, triangles, geometries, textures,
+  // readyTiles and requests stay at or below their existing pins (24 Nov 2026).
   {id:'pointtupper-start',area:'pointtupper',exploreOnly:true,chase:true},
 ];
 // Breakable yard and field props (mail play and Get Fired; yard-props.ts: three instanced meshes, one shared Lambert material)

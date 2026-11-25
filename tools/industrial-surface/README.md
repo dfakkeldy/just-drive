@@ -51,16 +51,20 @@ A complete stage-23 rebake will not keep this one-off correction. After one:
 
 ## Check row `industrial-surface`
 
-`python3 tools/industrial-surface-check.py` reads the baked Point Tupper land. The
-delta must be all before or all after; a mix, or a file that is neither, fails.
-All before: patch.py makes the delta again in a scratch folder and its hashes
-must equal industrial-hashes.json. That needs GDAL and the raw road vectors in
-data/raw, which rented hosts do not get; there the row prints NOT REMADE and
-checks the state only. All after: road 107 is kind 2.
-Run it before and after an install, while `EXPECT` is still `None`; both runs
-must pass. With `EXPECT = 'after'` (set after the install) it is also the tripwire for a later Point
-Tupper rebake that drops the correction; until then it cannot tell "not yet
-installed" from "rebaked away".
+`python3 tools/industrial-surface-check.py` reads the baked Point Tupper land
+against `width-hashes.json` (chained onto the 16 Nov `industrial-hashes.json`
+surface delta). The delta must be all before or all after; a mix, or a file that
+is neither, fails. With `EXPECT = 'after'`, the default checker enforces the
+installed width+paint delta (road 107 is `kind 2`, `halfWidth 3.6`, and
+`pavement = "double-yellow"`) and exits with an error on an all-before pack
+before calling `remake()` — that is the expected failure on pre-install land,
+and after install it catches any later Point Tupper rebake or stale host copy
+that drops the delta. To test before installing on live land, remake the delta
+with `python3 tools/industrial-surface/patch.py --width data/baked/areas/pointtupper <NEW_OUTPUT_DIRECTORY>`
+(which writes `hashes.json`), lay it onto an APFS rehearsal clone
+(`tools/checks-README.md`), and run `python3 tools/industrial-surface-check.py`
+inside a rehearsal worktree pointing at that clone (which compares every file
+against `width-hashes.json`).
 
 ## What the delta does not change
 
@@ -99,3 +103,86 @@ the Mabou mode. Mabou Mines Road stays washboard.
 Map the closed ends, with lamp boards and barriers, on Granville St near
 E627233 N5053179 and Reeves St near E627443 N5053518 (EPSG:2961). These are
 follow-up work, not changed by this surface delta.
+
+## Width and centre paint for issue 1406
+
+Run `python3 tools/industrial-surface/patch.py --width SOURCE_POINTTUPPER NEW_OUTPUT_DIRECTORY`
+on the installed 16 Nov surface-corrected land. It widens road 107 from 1.5 m to
+3.6 m half width (7.2 m travel width) and sets `pavement: "double-yellow"`.
+The 7.2 m travel width comes from the two 3.6 m lanes in
+[Bear Head LNG assessment table 6.38](https://www.novascotia.ca/nse/ea/bearHeadLNGTerminal/Section_6_Pg_33-110.pdf).
+Provincial road segments (`BASE_NSTDB_10k_Roads_WM84__05_bridges.geojson`) confirm
+`ROAD - Local - 2 Lanes - Paved`. Cached OSM way 181364590 lists two lanes and
+`surface=paved` with no width tag.
+
+`width-hashes.json` records all 43 files written by `patch.py --width`
+(`roads.json`, `cemeteries.json`, and 41 road-field PNGs at levels 5 to 8),
+chained directly onto `industrial-hashes.json`. `web/src/bridge-crossings.json`
+also updates road 107's overpass over Railroad 216 (`osm/way/169338040`, span
+`-100084`) from `kind: 4, halfWidth: 1.5` to `kind: 2, halfWidth: 3.6` so it
+renders as a concrete/asphalt highway overpass with continuous double-yellow
+centre lines across its deck and approaches, instead of a 3 m timber bridge.
+Point Tupper's `bridge-decks.bin` is rebaked to match
+(`web/src/bridge-decks-assets.ts`, 44th file of the Point Tupper install:
+before `5f07980cf217405aa2191f75d81a0fb0eb6eb48b999e9c8c1303526c419faa3c`,
+126,000 bytes; after
+`0bf94594f7f348555e65973da062823db1de9eda518590ad46fe61ec024f83fb`,
+128,624 bytes).
+
+Re-baking all 117 Point Tupper paved lot tiles and both stockpiles on the
+widened `roads.json` produces byte-for-byte identical `.r8` tiles and
+`stockpiles.json`; Port Hawkesbury's sidewalk runs lie away from road 107.
+`tools/paved-open/patch.py` and `tools/sidewalks_bake.py` chain
+`width-hashes.json` so those land checks stay green without rewriting unchanged
+packs.
+
+### Active railway status near road 107
+
+Provincial NSTDB (`__06_railways.geojson`, `__05_bridges.geojson`) classifies
+the Point Tupper rail segments crossing and paralleling Industrial Park Road as
+`Active Rail Road` (`ROADCLASS=RR`, `STREET='Railroad'`). Cached OSM maps them
+as `railway=rail`, Cape Breton & Central Nova Scotia Railway (CBNS) Sydney
+Subdivision (`gauge=1435`). Public operating records confirm the Truro–Point
+Tupper line is an active freight railway serving Point Tupper industries (the
+section east of Point Tupper toward Sydney has been dormant since 2015, not
+converted to a rail trail). The Ceilidh Coastal Trail (`kind=5`) is 5.5 km
+northwest near Port Hastings. In the game, Point Tupper's railway keeps its
+`Railroad` road name and `gravel` (ballast) surface on the HUD (including on
+timber railway bridges), never `rail trail`.
+
+### Order with #1341 delta 2 and single-directory cutover
+
+This finisher task (`grok-bots#1410`) installs road 107's 7.2 m width,
+double-yellow centre paint and overpass update (44 files: the 43 files of
+`width-hashes.json` plus `bridge-decks.bin`) on the current Point Tupper ground
+ahead of `#1341` delta 2, superseding the builder's earlier combined-bake
+proposal on `#1036` comment `7147815846` because `#1341` delta 2 is not yet
+underway.
+
+To avoid leaving a mixed or missing pack if interrupted mid-copy, install all
+44 files via a single atomic APFS `renamex_np(..., RENAME_SWAP)` directory swap
+on the same filesystem:
+
+1. Verify all 44 live files in `data/baked/areas/pointtupper` match their
+   recorded before-hashes (43 in `width-hashes.json` plus live
+   `bridge-decks.bin`). Abort if any file differs.
+2. Clone live `data/baked/areas/pointtupper` with `cp -cR` into a sibling
+   staging folder `data/baked/areas/pointtupper.stage-1406`.
+3. Copy the 44 staged files into `pointtupper.stage-1406` and verify all 44
+   after-hashes (and unchanged file count) inside the staging folder before
+   touching live land.
+4. Cut over in one atomic kernel syscall (`RENAME_SWAP = 2`):
+   `libc.renamex_np(b".../pointtupper", b".../pointtupper.stage-1406", 2)`.
+   Readers never see a missing `pointtupper` path, and if the syscall fails
+   nothing moves. After the swap, `pointtupper.stage-1406` holds the intact
+   pre-cutover tree; move it to the retained rollback backup under
+   `data/work/bakes/backup-1406-pointtupper-20261124/pointtupper`.
+5. Rollback (if ever needed) uses the same atomic syscall: clone the backup to
+   `data/baked/areas/pointtupper.restore-1406`, verify all 44 before-hashes,
+   run `renamex_np(b".../pointtupper", b".../pointtupper.restore-1406", 2)`,
+   and remove `pointtupper.restore-1406` once verified.
+
+When `#1341` delta 2 shapes Point Tupper's road and railway ground (embankments,
+steep rail notches and road-side utility poles), it should keep road 107 at
+`kind=2`, `halfWidth=3.6`, `pavement='double-yellow'` and refresh the Point
+Tupper land receipts once.

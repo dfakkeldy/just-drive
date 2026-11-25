@@ -324,12 +324,18 @@ def bake():
 NOV18=ROOT/'tools/mabou-dashcam-18nov/hashes.json'
 NOV19=ROOT/'tools/mabou-wharf/roads.json'
 COMM1347=ROOT/'tools/community-mailboxes/hashes.json'
+WIDTH1406=ROOT/'tools/industrial-surface/width-hashes.json'
 CHECK_SOURCE=ROOT/'tools/sidewalks-check-source.json'
 
 def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None):
     if check_source is None and report is None and CHECK_SOURCE.exists():
         check_source = json.loads(CHECK_SOURCE.read_text())
     matches = lambda h: h == cached or (check_source is not None and previous_digest(check_source, file, h) == cached)
+    if report is None and file == 'data/baked/areas/pointtupper/roads.json' and WIDTH1406.exists():
+        # Road 107 lies outside Port Hawkesbury's sidewalk runs; widening it leaves all Point Tupper sidewalk bytes identical.
+        before_width = previous_digest(json.loads(WIDTH1406.read_text()), 'roads.json', digest)
+        if before_width is not None and matches(before_width):
+            return True
     reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, COMM1347, NOV18) if p.exists()]
     manifest = None
     for current in reports:

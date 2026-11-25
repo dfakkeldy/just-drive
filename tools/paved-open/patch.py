@@ -37,6 +37,9 @@ from land_receipt_pins import previous_digest
 from paved_provenance import validate  # role-scoped path patterns and the denied historical payload hashes
 RECEIPT = ROOT/'tools/paved-open/hashes.json'
 REFRESH = ROOT/'tools/paved-open/hashes-refresh.json'
+# Verified Point Tupper road 107 width delta: re-baking all 117 Point Tupper paved tiles on its roads.json
+# produces byte-for-byte identical .r8 tiles (only provenanceSha256 in index.json depends on the roads.json hash).
+INDUSTRIAL_WIDTH = ROOT/'tools/industrial-surface/width-hashes.json'
 AREAS = ('mabou', 'judique', 'porthood', 'westbay', 'pointtupper', 'cansocauseway')
 SOURCE = 'nstdb-designated-open-v1'
 FORBIDDEN = ('intensity', 'lidar', '.laz', '.las', '/data/work/threads/paved/', '/data/work/bakes/paved-layer', 'osm.json')
@@ -62,6 +65,14 @@ def lattice(manifest_bytes):
     return sha(json.dumps({k: doc.get(k) for k in LATTICE}, sort_keys=True).encode())
 
 
+def _industrial_width_stands_for(relative, digest):
+    """Map Point Tupper road 107 width delta's exact after-hash of roads.json back to its before-hash."""
+    if relative != 'areas/pointtupper/roads.json' or not INDUSTRIAL_WIDTH.is_file():
+        return digest
+    report = json.loads(INDUSTRIAL_WIDTH.read_text())
+    return previous_digest(report, 'roads.json', digest, default=digest)
+
+
 def stale_inputs(report, baked):
     """Baked inputs that changed since the bake: tiles cut against old roads, roofs or trees."""
     stale = []
@@ -70,8 +81,9 @@ def stale_inputs(report, baked):
             path = Path(baked)/entry['file']
             if not path.is_file(): stale.append(entry['file']); continue
             data = path.read_bytes()
-            value = lattice(data) if entry.get('lattice') else sha(data)
-            if value != entry['sha256']: stale.append(entry['file'])
+            digest = lattice(data) if entry.get('lattice') else sha(data)
+            if digest != entry['sha256'] and (entry.get('lattice') or _industrial_width_stands_for(entry['file'], digest) != entry['sha256']):
+                stale.append(entry['file'])
     return sorted(set(stale))
 
 

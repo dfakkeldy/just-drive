@@ -97,7 +97,7 @@ export class BikeRide implements Ride {
 
   constructor(readonly car: Bike,
     private terrain: Pick<Terrain, 'heightAt' | 'surfaceAt' | 'withContactHeight'> & Partial<Pick<Terrain, 'cartRoads' | 'coverAt' | 'uniforms'>>,
-    readonly roads: Pick<Roads, 'nearest' | 'deckHeight'> & Partial<Pick<Roads, 'guardrails' | 'roads' | 'bridgeRuns'>>,
+    readonly roads: Pick<Roads, 'nearest' | 'deckHeight'> & Partial<Pick<Roads, 'guardrails' | 'roads' | 'bridgeRuns' | 'nameAt'>>,
     private seaLevel: number, readonly spec: VehicleSpec = BIKE_SPEC) {}
 
   private groundAt(x: number, z: number,referenceY=this.y): number | null {
@@ -641,6 +641,6 @@ export class BikeRide implements Ride {
     root.rotation.set(this.pitch + attitude, -this.heading + this.whip, this.roll, 'YXZ');
     this.car.pose({ steer: this.steerAngle, spin: this.spin, front: this.frontTravel, rear: this.rearTravel, stand: this.stand,
       foot: !this.airborne && Math.abs(this.speed) < 1 ? 1 : 0, dive: this.frontTravel, crash: this.crashTime, ground: this.y, pitch: this.pitch, roll: this.roll });
-    if (dt > 0) this.roadName = this.roads.nearest(this.x, this.z, 14)?.road.name ?? null;
+    if (dt > 0) this.roadName = this.roads.nameAt?.(this.x, this.z, this.y) ?? null;
   }
 }

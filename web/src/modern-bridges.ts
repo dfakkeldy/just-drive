@@ -229,6 +229,9 @@ export class ModernBridges {
   /** Road ids whose spans are left out of the drawn mesh (the canal swing span while a vessel passes). */
   private readonly hidden=new Set<number>();
   private readonly driving={kind:9,halfWidth:6,washboard:false,road:true,roadKind:1};
+  private readonly deckRoadResult:{name:string|null;outside:number;hasOverhead:boolean}={name:null,outside:Infinity,hasOverhead:false};
+  private readonly overheadSpans:(Span|undefined)[]=[undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined];
+  private overheadCount=0;
   private sampling=false;
   private bakedLand:Float64Array|null=null;
   private bakedLandAt=0;
@@ -936,10 +939,53 @@ export class ModernBridges {
     if(this.isSpan(x,z,-1)||this.query(x,z,true,false,undefined,false,2,false)!==null)return null;
     const h=this.query(x,z,true,false,undefined,false,1,false);return h===null?null:h-.03;
   }
+  /** Zero-allocation grade-separated road lookup using already-built deck triangles plus a 1 m edge margin. */
+  deckRoadAt(x:number,z:number,y:number):{name:string|null;outside:number;hasOverhead:boolean} {
+    this.overheadCount=0;
+    this.deckRoadResult.name=null;this.deckRoadResult.outside=Infinity;this.deckRoadResult.hasOverhead=false;
+    if(this.sampling||this.terrain.cartRoads)return this.deckRoadResult;
+    const list=this.cells.get(key(x,z,CELL));if(!list)return this.deckRoadResult;
+    let onName:string|null=null,onOutside=Infinity,onDist=Infinity;
+    for(let i=0;i<list.length;i++){
+      const r=this.spans[list[i]];if(!r.triangles)continue;
+      let h=this.ownHeight(r,x,z),outside=0;
+      if(h===null){
+        const pts=r.pts,half=r.road.halfWidth,limit=Math.max(r.width,half)+1;
+        let bestD2=limit*limit,bestS=0,hit=false;
+        for(let j=1;j<pts.length;j++){
+          const ax=pts[j-1][0],az=pts[j-1][1],dx=pts[j][0]-ax,dz=pts[j][1]-az,len2=dx*dx+dz*dz;
+          const t=len2>0?Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/len2)):0;
+          const px=x-ax-dx*t,pz=z-az-dz*t,d2=px*px+pz*pz;
+          if(d2<=bestD2){bestD2=d2;bestS=r.cum[j-1]+t*(r.cum[j]-r.cum[j-1]);hit=true;}
+        }
+        if(!hit)continue;
+        outside=Math.max(0,Math.sqrt(bestD2)-half);
+        if(outside>1)continue;
+        h=r.y0+(r.y1-r.y0)*(r.length>0?Math.max(0,Math.min(1,bestS/r.length)):0);
+      }
+      if(deckWithinReach(h,y)){
+        const d=Math.abs(y-h),n=r.road.name||r.start?.road.name||r.end?.road.name||null;
+        if(n&&(outside<onOutside||(outside===onOutside&&d<onDist))){onOutside=outside;onDist=d;onName=n;}
+      }else{
+        this.overheadSpans[this.overheadCount++]=r;
+      }
+    }
+    this.deckRoadResult.name=onName;
+    this.deckRoadResult.outside=onOutside;
+    this.deckRoadResult.hasOverhead=this.overheadCount>0;
+    return this.deckRoadResult;
+  }
+  isOverheadRoad(roadId:number):boolean {
+    for(let i=0;i<this.overheadCount;i++){
+      const r=this.overheadSpans[i]!;
+      if(r.members.has(roadId)||r.road.id===roadId||r.road.sourceRoad===roadId||r.start?.road.id===roadId||r.end?.road.id===roadId)return true;
+    }
+    return false;
+  }
   private applyDriving(r:Span,part:number):void {
     const deck=part===1,road=(part===0?r.start?.road:part===2?r.end?.road:r.road)??r.road;
     const wash=!!(r.road.washboard||road.washboard);
-    this.driving.kind=wash?road.kind:deck?(r.timber?5:9):road.kind;
+    this.driving.kind=wash?road.kind:deck?(r.timber?(r.road.name==='Railroad'?road.kind:5):9):road.kind;
     this.driving.halfWidth=deck?r.width:r.narrowRail?1.25:road.halfWidth;this.driving.washboard=wash;this.driving.roadKind=road.kind;
   }
   private ownHeight(r:Span,x:number,z:number):number|null {
@@ -1218,10 +1264,12 @@ export class ModernBridges {
     approach(()=>{for(let i=0;i<rows;i++){
       const s0=along(i),s1=along(i+1);
       if(s0>=0&&s1<=r.length)continue;
-      const road=(s0<0?r.start?.road:r.end?.road)??r.road;if(road.kind!==1)continue;
+      const road=(s0<0?r.start?.road:r.end?.road)??r.road;
+      const doubleYellow=road.kind===1||(road.kind===2&&road.pavement==='double-yellow');
+      if(!doubleYellow)continue;
       const a=this.at(r,s0),b=this.at(r,s1),ya=this.top(r,s0,a.x,a.z)+.008,yb=this.top(r,s1,b.x,b.z)+.008;
       const stripe=(u:number,width:number,color:RGB)=>m.quad([[a.x+a.nx*(u-width/2),ya,a.z+a.nz*(u-width/2)],[b.x+b.nx*(u-width/2),yb,b.z+b.nz*(u-width/2)],[b.x+b.nx*(u+width/2),yb,b.z+b.nz*(u+width/2)],[a.x+a.nx*(u+width/2),ya,a.z+a.nz*(u+width/2)]],color);
-      for(const side of[-1,1]){stripe(side*.115,.12,[.55,.4,.04]);stripe(side*(road.halfWidth-.27),.12,[.55,.55,.52]);}
+      for(const side of[-1,1]){stripe(side*.115,.12,[.55,.4,.04]);if(road.kind===1)stripe(side*(road.halfWidth-.27),.12,[.55,.55,.52]);}
     }});
     // Approach fill closes the road edge down to the original soil; it is not a deck-coloured slab.
     approach(()=>{for(let i=0;i<rows;i++){
@@ -1257,7 +1305,8 @@ export class ModernBridges {
         if((this.land(p.x,p.z)??-Infinity)<y-.8)m.box(side*r.width*.72,-.8,0,.28,.5,run*stretch+.03,r.timber?wood:steel);
         m.at(p.x,y,p.z,p.yaw);m.box(side*(r.width+.08),edge+.45,0,.14,.9,.14,rail);m.at(p.x,y,p.z,p.yaw,pitch);
       }
-      if(!r.timber&&(r.start?.road.kind??r.road.kind)===1&&r.road.halfWidth>=2.8)for(const side of[-1,1])m.box(side*.115,.005,0,.12,.008,run*stretch+.01,[.55,.4,.04]);
+      const deckYellow=(r.start?.road.kind??r.road.kind)===1||r.road.pavement==='double-yellow'||r.start?.road.pavement==='double-yellow'||r.end?.road.pavement==='double-yellow';
+      if(!r.timber&&deckYellow&&r.road.halfWidth>=2.8)for(const side of[-1,1])m.box(side*.115,.005,0,.12,.008,run*stretch+.01,[.55,.4,.04]);
     }
     const support=(s:number,abutment:boolean)=>{const p=this.at(r,s),y=this.top(r,s,p.x,p.z),ground=this.land(p.x,p.z)??this.terrain.seaLevel-4,bottom=Math.min(y-.9,ground-.25),h=y-.45-bottom;
       m.at(p.x,bottom,p.z,p.yaw);
