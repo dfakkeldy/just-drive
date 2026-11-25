@@ -3786,6 +3786,10 @@
       "trim": "#f4f1ea",
       "roofMaterial": "shingle",
       "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
       "skirting": true,
       "chimney": false,
       "dormer": false,
