@@ -18,6 +18,10 @@ process.on('uncaughtException', e => { console.error(e.name + ': ' + e.message);
 const JUST_ORIGIN = 'https://justdrive.fakkeldy.ca';
 const RDMC_PATHS = ['/rdmc', '/rdmc/'];
 const EXPECTED_PATH = '/judique';
+const MAIL_ORIGIN = 'https://mmm.fakkeldy.ca';
+const BLACKSTONE_PATHS = ['/blackstone', '/blackstone/'];
+const BLACKSTONE_URL = `${MAIL_ORIGIN}/?start=blackstone-road:0.43`;
+const BLACKSTONE_NEAR = 30;   // metres: the start pose must sit this close to a point of the road
 
 export function parseRedirectsFile(text) {
   const rules = [];
@@ -63,6 +67,33 @@ export function verifyRdmcRedirects(text, churchStart, readDrivePosition, isTest
   return { expectedUrl, rules };
 }
 
+/**
+ * The /blackstone short link: a 302 to the mail game with a start key. roads are in local metres (x east, z south of
+ * the village), bounds are the playable box, both as the game builds them.
+ */
+export function verifyBlackstoneRedirects(text, startKey, isTestVisit, readSite, roads, bounds, nearBlackstone = true) {
+  const rules = parseRedirectsFile(text);
+  for (const sourcePath of BLACKSTONE_PATHS) {
+    const rule = rules.find(r => r.from === sourcePath);
+    assert.ok(rule, `missing redirect rule for ${sourcePath}`);
+    assert.equal(rule.status, 302, `${sourcePath} must use a 302 redirect`);
+    assert.equal(rule.to, BLACKSTONE_URL, `${sourcePath} target must be ${BLACKSTONE_URL}`);
+    const target = new URL(rule.to);
+    assert.equal(target.origin, MAIL_ORIGIN);
+    assert.equal(target.pathname, '/');
+    assert.deepEqual(readSite('mmm.fakkeldy.ca', target.pathname, target.searchParams), { brand: 'mail', area: null }, `${sourcePath} opens the mail game`);
+    assert.equal(isTestVisit(target.searchParams), false, `${sourcePath} target keeps the normal title card`);
+    const pose = startKey(target.searchParams.get('start'), roads, bounds);
+    assert.ok(pose, `${sourcePath} start key gives a pose inside the land`);
+    if (nearBlackstone) {
+      const blackstone = roads.filter(r => r.name === 'Blackstone Road');
+      const near = Math.min(...blackstone.flatMap(r => r.pts.map(([x, z]) => Math.hypot(x - pose.x, z - pose.z))));
+      assert.ok(near <= BLACKSTONE_NEAR, `${sourcePath} start pose lies within ${BLACKSTONE_NEAR} m of Blackstone Road (${near.toFixed(1)} m)`);
+    }
+  }
+  return { expectedUrl: BLACKSTONE_URL, rules };
+}
+
 export function verifyBuiltSite(siteDir, expectedRedirectsText, churchStart, readDrivePosition, isTestVisit, readSite, read = readFileSync) {
   const redirectsPath = resolve(siteDir, '_redirects');
   const builtRedirects = read(redirectsPath, 'utf8');
@@ -88,7 +119,7 @@ export function verifyBuiltSite(siteDir, expectedRedirectsText, churchStart, rea
 async function loadModules() {
   const { outputFiles } = await build({
     stdin: {
-      contents: "export { CHURCH_START } from './church-site'; export { readDrivePosition } from './light-study'; export { isTestVisit } from './visit'; export { readSite } from './site';",
+      contents: "export { CHURCH_START } from './church-site'; export { readDrivePosition } from './light-study'; export { isTestVisit } from './visit'; export { readSite } from './site'; export { startKey } from './start-key';",
       resolveDir: process.cwd() + '/web/src',
       loader: 'ts',
     },
@@ -115,12 +146,29 @@ if (isMain) {
     process.exit(2);
   }
 
-  const { CHURCH_START, readDrivePosition, isTestVisit, readSite } = await loadModules();
+  const { CHURCH_START, readDrivePosition, isTestVisit, readSite, startKey } = await loadModules();
   const judique = AREAS.find(a => a.id === 'judique');
   assert.ok(judique?.church, 'Judique area is registered with the church enabled');
 
   const sourceRedirects = readFileSync('deploy/_redirects', 'utf8');
   const { expectedUrl, rules } = verifyRdmcRedirects(sourceRedirects, CHURCH_START, readDrivePosition, isTestVisit, readSite);
+
+  // Roads for the /blackstone start key. Built mode reads the built site's terrain files the way the game does
+  // (web/src/roads.ts: x = east - village[0], z = village[1] - north; main.ts: the box of fine data less 120 m).
+  // Source mode has no land data, so a small synthetic road only proves the share parses.
+  let roads, bounds, nearBlackstone;
+  if (siteDir) {
+    const terrain = JSON.parse(readFileSync(resolve(siteDir, 'terrain/manifest.json'), 'utf8'));
+    const [east, north] = terrain.village, mid = terrain.mid;
+    roads = JSON.parse(readFileSync(resolve(siteDir, 'terrain/roads.json'), 'utf8')).roads.map(r => ({ ...r, pts: r.pts.map(([e, n]) => [e - east, north - n]) }));
+    bounds = [mid[0] - east + 120, north - mid[3] + 120, mid[2] - east - 120, north - mid[1] - 120];
+    nearBlackstone = true;
+  } else {
+    roads = [{ name: 'Blackstone Road', kind: 3, bridge: false, pts: [[0, 0], [100, 0], [200, 0], [300, 0]] }, { name: 'Main Road', kind: 2, bridge: false, pts: [[0, -100], [0, 100]] }];
+    bounds = [-1000, -1000, 1000, 1000];
+    nearBlackstone = true;
+  }
+  const blackstone = verifyBlackstoneRedirects(sourceRedirects, startKey, isTestVisit, readSite, roads, bounds, nearBlackstone);
 
   let builtJudiqueHtml = '<title>Just Drive: Judique</title>';
   let swSource;
@@ -205,6 +253,25 @@ if (isMain) {
     }
   }
 
+  // /blackstone: sw.js must pass both paths to the network, online and offline, on both hosts.
+  for (const [origin, h] of [[JUST_ORIGIN, justHarness], [MAIL_ORIGIN, mailHarness]]) {
+    for (const sourcePath of BLACKSTONE_PATHS) {
+      for (const online of [false, true]) {
+        h.network(online);
+        let intercepted = false;
+        h.listeners.fetch({
+          request: { url: origin + sourcePath, method: 'GET', mode: 'navigate', headers: new Headers() },
+          respondWith() { intercepted = true; },
+          waitUntil() {},
+        });
+        assert.equal(intercepted, false, `${origin}${sourcePath} (${online ? 'online' : 'offline'}) must bypass sw.js`);
+      }
+      const rule = blackstone.rules.find(r => r.from === sourcePath);
+      assert.equal(new URL(rule.to, origin + sourcePath).href, BLACKSTONE_URL, `${origin}${sourcePath} Location resolves to ${BLACKSTONE_URL}`);
+    }
+  }
+  justHarness.network(true);
+
   // Offline navigation to the Judique destination must return the honest 503 connection page.
   justHarness.network(false);
   const offlineNav = await justHarness.nav('rdmc-offline', (new URL(expectedUrl).pathname + new URL(expectedUrl).search).slice(1));
@@ -217,6 +284,16 @@ if (isMain) {
   assert.throws(() => verifyRdmcRedirects(sourceRedirects.replace(' 302', ' 301'), CHURCH_START, readDrivePosition, isTestVisit, readSite), /must use a 302 redirect/);
   assert.throws(() => verifyRdmcRedirects(sourceRedirects, { ...CHURCH_START, e: CHURCH_START.e + 1 }, readDrivePosition, isTestVisit, readSite), /target must match CHURCH_START/);
   assert.throws(() => verifyRdmcRedirects(sourceRedirects, { ...CHURCH_START, heading: CHURCH_START.heading + 0.1 }, readDrivePosition, isTestVisit, readSite), /target must match CHURCH_START/);
+  const blackstoneCheck = (text, bounds2 = bounds, roads2 = roads) => verifyBlackstoneRedirects(text, startKey, isTestVisit, readSite, roads2, bounds2, nearBlackstone);
+  assert.throws(() => blackstoneCheck(sourceRedirects.replace(/^\/blackstone .*$/m, '')), /missing redirect rule for \/blackstone/);
+  assert.throws(() => blackstoneCheck(sourceRedirects.replace(/^\/blackstone\/ .*$/m, '')), /missing redirect rule for \/blackstone\//);
+  assert.throws(() => blackstoneCheck(sourceRedirects.replace(/^(\/blackstone .*) 302$/m, '$1 301')), /must use a 302 redirect/);
+  assert.throws(() => blackstoneCheck(sourceRedirects.replaceAll('blackstone-road:0.43', 'blackstone-road:1.43')), /target must be/);
+  assert.throws(() => blackstoneCheck(sourceRedirects.replaceAll('blackstone-road:0.43', 'blackstone-road:0.43x')), /target must be/);
+  assert.throws(() => blackstoneCheck(sourceRedirects.replaceAll('blackstone-road:0.43', 'blackstone-road:abc')), /target must be/);
+  // A start key the game cannot read gives no pose: a road with another name, and a pose outside the bounds.
+  assert.throws(() => blackstoneCheck(sourceRedirects, bounds, roads.map(r => ({ ...r, name: r.name === 'Blackstone Road' ? 'Other Road' : r.name }))), /gives a pose/);
+  assert.throws(() => blackstoneCheck(sourceRedirects, [1e6, 1e6, 2e6, 2e6]), /gives a pose/);
   if (siteDir) {
     assert.throws(() => verifyBuiltSite(siteDir, sourceRedirects, CHURCH_START, readDrivePosition, isTestVisit, readSite, (p, enc) => {
       if (p.endsWith('just/judique/index.html')) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
@@ -228,5 +305,5 @@ if (isMain) {
     }), /ENOENT/);
   }
 
-  console.log(`PASS ${siteDir ? 'built site' : 'source'} /rdmc and /rdmc/ 302 -> ${expectedUrl}; CHURCH_START aligned; ${siteDir ? 'built Judique page, manifest and sw.js' : 'build_site.sh copy'}; Worker bypass; sw.js redirect chain preserves driveAt; negative controls rejected`);
+  console.log(`PASS ${siteDir ? 'built site' : 'source'} /blackstone and /blackstone/ 302 -> ${BLACKSTONE_URL}; /rdmc and /rdmc/ 302 -> ${expectedUrl}; CHURCH_START aligned; ${siteDir ? 'built Judique page, manifest and sw.js' : 'build_site.sh copy'}; Worker bypass; sw.js redirect chain preserves driveAt; negative controls rejected`);
 }
