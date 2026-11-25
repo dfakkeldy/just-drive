@@ -40,8 +40,13 @@ export function areaPlaces(area: string): Place[] {
     case 'pointtupper': return [
       // On Reeves Street, west of the hand-built stores and lots (port-hawkesbury-site.ts), 150 m clear of them.
       place('pointtupper', 'port-hawkesbury', 'Port Hawkesbury', 'village', 628086.7, 5052826.7, 'Port Hawkesbury is the town at the centre of this map.', ['areas/pointtupper/manifest.json#village', GEO + 'CBELL']),
+      place('pointtupper', 'point-tupper', 'Point Tupper', 'village', 627529.5, 5051763.5, 'A community and headland on the Strait of Canso, south of Ship Harbour and Port Hawkesbury.', [GEO + 'CBEBD', GEO + 'CBMMM', GEO + 'CBINX', GEO + 'CBRJU', OSM + 'node/1917913068']),
       place('pointtupper', 'granville-green', 'Granville Green', 'site', 627728, 5052338, 'A green with an outdoor stage on the town waterfront, beside a boardwalk.', [TOWN + 'festivals-events/granville-green/', TOWN + 'walk-port-hawkesbury/', OSM + 'way/581261046', OSM + 'way/580636400']),
       place('pointtupper', 'community-park', 'Port Hawkesbury Community Park', 'site', 628708.4, 5052921.3, 'A town park with a playground, a splash pad, a bicycle pump track and courts.', [TOWN + 'port-hawkesbury-community-park/', OSM + 'way/181364947'], 130),
+      { ...place('pointtupper', 'point-tupper-power-station', 'Point Tupper power station view', 'view', 629075.6, 5049570.1, 'Look west-southwest from Industrial Park Road over the power station and the Strait of Canso.', ['areas/pointtupper/roads.json#107', OSM + 'way/1296734919', GEO + 'CBDDZ', GEO + 'CBRJU']),
+        spawn: { e: 629075.6, n: 5049570.1, road: 'Industrial Park Road', heading: 245 * Math.PI / 180 } },
+      { ...place('pointtupper', 'point-tupper-marine-terminal', 'Point Tupper marine terminal view', 'view', 629574.6, 5048103.7, 'Look west-southwest from Industrial Park Road over the deep-water marine terminal and the Strait of Canso.', ['areas/pointtupper/roads.json#107', OSM + 'way/163215590', GEO + 'CBPGM', GEO + 'CBRJU']),
+        spawn: { e: 629574.6, n: 5048103.7, road: 'Industrial Park Road', heading: 254 * Math.PI / 180 } },
       place('pointtupper', 'mcnairs-cove', 'McNairs Cove', 'water', 625258.0, 5052511.4, 'A park beside McNairs Cove, in Mulgrave, on the mainland shore of the strait.', [GEO + 'CAYPT', GEO + 'CBAQK', OSM + 'way/1426459785']),
       place('pointtupper', 'pirate-harbour', 'Pirate Harbour', 'water', 626146.3, 5049443.0, 'A small harbour with a pier, south of Mulgrave on the mainland shore.', [GEO + 'CBDVH', GEO + 'CBDVG', OSM + 'way/880475520']),
     ];

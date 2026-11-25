@@ -108,12 +108,12 @@ assert.ok(sitesNear(630835.5, 5080641.6 + 140).includes('church'), 'the church i
 assert.ok(sitesNear(617107.2 + 140, 5081472.6).includes('Judique village buildings'), 'the Judique store is a site');
 assert.ok(sitesNear(STREET_LAMPS[0][0] - 140, STREET_LAMPS[0][1]).includes('Mabou main street lamps'), 'the Mabou main street is a site');
 assert.ok(sitesNear(628217.94, 5052158.02 - 140).includes('Port Hawkesbury buildings'), 'the Port Hawkesbury corner garage is a site');
-/** Each area's cemetery places: main.ts shows them after the area's own places (web/src/cemetery-rules.ts). */
+/** Each area's cemetery gates (web/src/cemetery-rules.ts). Cemeteries stay out of the Places list, and researched places keep clear of them. */
 const CEMETERIES = Object.fromEntries(['mabou', 'westbay', ...AREA_IDS].map(id => {
   const dir = id === 'mabou' ? `${baked}/terrain` : `${baked}/areas/${id}`, entry = read(`${dir}/manifest.json`).cemeteries;
   return [id, entry ? cemeteryPlaces(read(`${dir}/${entry.file}`).cemeteries, id) : []];
 }));
-assert.ok(AREA_IDS.every(id => CEMETERIES[id].length > 0), 'each of the four areas has its cemetery places');
+assert.ok(AREA_IDS.every(id => CEMETERIES[id].length > 0), 'each of the four areas has baked cemeteries');
 const OTHER = [...placesFor(read(`${baked}/terrain/manifest.json`).village), ...westBayPlaces(), ...homePlaces(), ...churchPlaces(), ...Object.values(CEMETERIES).flat()];
 const LAND = Object.fromEntries(AREA_IDS.map(id => {
   const manifest = read(`${baked}/areas/${id}/manifest.json`);
@@ -159,16 +159,17 @@ function check(lists) {
       const he = v[0] + hit.x, hn = v[1] - hit.z;
       assert.ok(inside(he, hn), `${where}: jump point inside the drive bounds`);
       for (const site of SITES) assert.ok(boxDistance(he, hn, site.box) >= MIN_SITE, `${where}: jump point near the ${site.name}`);
-      assert.equal(arrivalAt([...list, ...CEMETERIES[id]], v, hit.x, hit.z), p, `${where}: its own note shows at the jump point`);
+      assert.equal(arrivalAt(list, v, hit.x, hit.z), p, `${where}: its own note shows at the jump point`);
       report.push(`${where} ${hit.road.name ?? '(unnamed)'} ${hit.dist.toFixed(0)}m`);
     }
   }
   return report;
 }
 
-// main.ts: the list for each area. Only Judique has the two hand-built places.
+// main.ts: the list for each area. Only Judique has the two hand-built places; cemeteries stay out of the list.
 const main = readFileSync(`${root}/web/src/main.ts`, 'utf8');
-assert.ok(main.includes("...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...dragPlaces, ...(cemeteries?.places ?? [])"), 'main.ts shows researched places, then the airport if built, then cemeteries');
+assert.ok(main.includes("...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...dragPlaces, ...stuntPlaces];"), 'main.ts shows researched places, the airport and stunt places, without cemeteries');
+assert.ok(!/const placeList =[^\n]*cemeteries\?\.places/.test(main), 'main.ts leaves cemeteries out of placeList');
 const lists = () => Object.fromEntries(AREA_IDS.map(id => [id, [...(id === 'judique' ? [...homePlaces(), ...churchPlaces()] : []), ...areaPlaces(id)]]));
 assert.deepEqual(['mabou', 'westbay', 'fixture'].map(id => areaPlaces(id).length), [0, 0, 0], 'other areas keep their own lists');
 const report = check(lists());
@@ -201,7 +202,7 @@ if (process.argv.includes('--mutations')) {
       Object.assign(pick(all, 'cansocauseway', 'creignish'), { e: v[0] + at.x + 40, n: v[1] - at.z }); }, 'its own note shows at the jump point'],
     'a three-sentence note': [all => { pick(all, 'judique', 'creignish-lookoff').note += ' It is windy. Bring a coat.'; }, 'one or two plain sentences'],
     'a wrong area tag': [all => { pick(all, 'cansocauseway', 'creignish').area = 'judique'; }, 'area tag'],
-    'too few places in an area': [all => { all.pointtupper.splice(1, 2); }, '4 to 8 researched places'],
+    'too few places in an area': [all => { all.pointtupper.splice(1, 5); }, '4 to 8 researched places'],
   };
   let killed = 0;
   for (const [name, [mutate, rule]] of Object.entries(mutants)) {
