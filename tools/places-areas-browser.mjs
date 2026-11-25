@@ -56,10 +56,11 @@ async function checkList(page, area, farViews) {
   }
   const list = await page.read(`({ area:mmm.area.id, shown:mmm.places.places.map(p=>p.id),
     buttons:[...document.querySelectorAll('#placesList button')].map(b=>b.dataset.place), marks:mmm.places.marks.length })`);
-  const expected = [...(area === 'judique' ? ['home', 'church'] : []), ...researched.map(p => p.id), ...(area === 'pointtupper' ? ['airport-drag'] : []), ...cemeteries, ...turbines.map(p => p.id)];
-  assert.ok(cemeteries.length > 0 && cemeteries.every(id => id.startsWith('cemetery-')), `${area}: its cemetery places come from the cemetery pack`);
+  const expected = [...(area === 'judique' ? ['home', 'church'] : []), ...researched.map(p => p.id), ...(area === 'pointtupper' ? ['airport-drag'] : []), ...turbines.map(p => p.id)];
+  assert.ok(cemeteries.length > 0 && cemeteries.every(id => id.startsWith('cemetery-')), `${area}: the cemetery pack still loads its sites`);
+  assert.ok(list.shown.every(id => !cemeteries.includes(id) && !id.startsWith('cemetery-')), `${area}: cemeteries stay out of the places list`);
   assert.equal(list.area, area);
-  assert.deepEqual(list.shown, expected, `${area}: researched and cemetery places, then any places from the loaded scenery`);
+  assert.deepEqual(list.shown, expected, `${area}: researched places, then any places from the loaded scenery, without cemeteries`);
   assert.deepEqual(list.buttons, expected, `${area}: one button per place`);
   assert.equal(list.marks, expected.length, `${area}: one minimap mark per place`);
   return { researched, turbines, first: expected[0] };
@@ -140,6 +141,6 @@ for (const url of urls) {
   } finally { await phone.close(); }
 }
 writeFileSync(`${out}/places-areas-browser.json`, JSON.stringify(results, null, 2));
-if (urls.length === 4) assert.equal(results.filter(r => r.researched).length, 21, 'every researched place was tried');
+if (urls.length === 4) assert.equal(results.filter(r => r.researched).length, 24, 'every researched place was tried');
 console.log(`${process.exitCode ? 'FAIL' : 'PASS'} ${results.filter(r => r.pass).length}/${results.length} jumps; pictures in ${out}`);
 exitCheck();

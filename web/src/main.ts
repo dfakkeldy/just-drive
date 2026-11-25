@@ -2311,7 +2311,7 @@ if (__PUBLIC_APP__) watchGameVersion(SITE.brand === 'just', () => !hasStarted &&
 if (title && boss instanceof RideAlong) boss.announce(document.getElementById('titleCard'));
 startHere({ mode: gameMode, era: ERA.id, area: AREA.id, site: SITE, village: manifest.village, roads: roads.roads, buildings: buildings?.clear ?? [], bounds: vehicle.bounds, multiplayer, place: s => { const placed = placeAtStart(fleet ? startPlacement : vehicle, s); if (placed) { airportDrag?.reset(); mountainHint?.clearActive(); waitingToDrive = true; camReady = false; mode = 'drive'; } return placed; } });
 quarryFeature?.quarryCard();
-// The area's own places stand first in the list; the burial grounds come after them.
+// Cemeteries stay drawn on the map and quiet for scoring, not in the Places list.
 const stuntPlaces = testPark ? testParkPlaces(testPark, manifest.village)
   : quarryStuntPark ? quarryFeature?.quarryCoursePlaces() ?? [] : [];
 function resetToRoad(): void {
@@ -2341,7 +2341,7 @@ function jumpToPlace(x: number, z: number, heading: number): void {
   finishJump(placed);
 }
 const dragPlaces = dragModule ? [dragModule.airportDragPlace()] : [];
-const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...dragPlaces, ...(cemeteries?.places ?? []), ...stuntPlaces];
+const placeList = history?.places ?? [...(AREA.id === 'westbay' ? westBayPlaces() : AREA.id === 'mabou' ? placesFor(manifest.village) : [...(homeSite ? homePlaces() : []), ...(churchSite ? churchPlaces() : []), ...areaPlaces(AREA.id)]), ...dragPlaces, ...stuntPlaces];
 const placesUI = !mailMode && !bare && (placeList.length || (ERA.modern && !!tallKey)) ? new PlacesUI(placeList, manifest.village, history?.placeRoads ?? roads, {
 
   canOpen: () => started,
