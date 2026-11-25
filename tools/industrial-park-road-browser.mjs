@@ -258,6 +258,7 @@ try {
     hudFirstLine: (document.getElementById('hud')?.textContent ?? '').split('\\n')[0] ?? '',
   })`);
   assert.equal(onOverpassHud.roadName, 'Industrial Park Road', 'vehicle ON overpass deck names Industrial Park Road');
+  assert.equal(onOverpassHud.surfaceName, 'concrete', 'vehicle ON overpass deck reports concrete surface');
   assert.ok(onOverpassHud.hudFirstLine.includes('Industrial Park Road'), `on-overpass HUD names Industrial Park Road (${onOverpassHud.hudFirstLine})`);
   await placeAndSettle(page, 628422.09, 5051628.63, 258, 'ground');
   const underOverpassHud = await page.read(`({
@@ -266,6 +267,7 @@ try {
     hudFirstLine: (document.getElementById('hud')?.textContent ?? '').split('\\n')[0] ?? '',
   })`);
   assert.equal(underOverpassHud.roadName, 'Railroad', 'vehicle UNDER overpass deck on Railroad 216 names Railroad');
+  assert.equal(underOverpassHud.surfaceName, 'gravel', 'vehicle UNDER overpass deck on Railroad 216 reports gravel surface');
   assert.ok(underOverpassHud.hudFirstLine.includes('Railroad'), `under-overpass HUD names Railroad (${underOverpassHud.hudFirstLine})`);
   report.gradeSeparated = { ...report.gradeSeparated, onOverpassHud, underOverpassHud };
   console.log(`PASS live-grade-sep-hud: on="${onOverpassHud.hudFirstLine}" | under="${underOverpassHud.hudFirstLine}"`);

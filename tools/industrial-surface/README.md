@@ -146,14 +146,35 @@ northwest near Port Hastings. In the game, Point Tupper's railway keeps its
 `Railroad` road name and `gravel` (ballast) surface on the HUD (including on
 timber railway bridges), never `rail trail`.
 
-### Order with #1341 delta 2
+### Order with #1341 delta 2 and single-directory cutover
 
 This finisher task (`grok-bots#1410`) installs road 107's 7.2 m width,
 double-yellow centre paint and overpass update (44 files: the 43 files of
-`width-hashes.json` plus `bridge-decks.bin`, with rollback backup) on the
-current Point Tupper ground ahead of `#1341` delta 2, superseding the builder's
-earlier combined-bake proposal on `#1036` comment `7147815846` because `#1341`
-delta 2 is not yet underway. When `#1341` delta 2 shapes Point Tupper's road
-and railway ground (embankments, steep rail notches and road-side utility
-poles), it should keep road 107 at `kind=2`, `halfWidth=3.6`,
-`pavement='double-yellow'` and refresh the Point Tupper land receipts once.
+`width-hashes.json` plus `bridge-decks.bin`) on the current Point Tupper ground
+ahead of `#1341` delta 2, superseding the builder's earlier combined-bake
+proposal on `#1036` comment `7147815846` because `#1341` delta 2 is not yet
+underway.
+
+To avoid leaving a mixed pack if interrupted mid-copy, install all 44 files via
+a single-directory APFS cutover on the same filesystem:
+
+1. Verify all 44 live files in `data/baked/areas/pointtupper` match their
+   recorded before-hashes (43 in `width-hashes.json` plus live
+   `bridge-decks.bin`). Abort if any file differs.
+2. Clone live `data/baked/areas/pointtupper` with `cp -cR` into a sibling
+   staging folder `data/baked/areas/pointtupper.stage-1406`.
+3. Copy the 44 staged files into `pointtupper.stage-1406` and verify all 44
+   after-hashes (and unchanged file count) inside the staging folder before
+   touching live land.
+4. Cut over in one directory swap:
+   `mv data/baked/areas/pointtupper data/baked/areas/pointtupper.before-1406 && mv data/baked/areas/pointtupper.stage-1406 data/baked/areas/pointtupper`.
+   Then move `pointtupper.before-1406` to the retained rollback backup under
+   `data/work/bakes/backup-1406-pointtupper-20261124/pointtupper`.
+5. Rollback (if ever needed) is the inverse directory swap from that backup:
+   clone the backup back to `data/baked/areas/pointtupper.restore-1406`, verify
+   all 44 before-hashes, and swap `pointtupper` with `pointtupper.restore-1406`.
+
+When `#1341` delta 2 shapes Point Tupper's road and railway ground (embankments,
+steep rail notches and road-side utility poles), it should keep road 107 at
+`kind=2`, `halfWidth=3.6`, `pavement='double-yellow'` and refresh the Point
+Tupper land receipts once.

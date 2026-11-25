@@ -160,6 +160,19 @@ function runSynthetic(mod) {
   // At (0, 0) where road 107 crosses over Railroad 216, elevation decides upper vs lower road.
   assert.equal(overpassNet.nameAt(0, 0, deckY), 'Industrial Park Road', 'on overpass deck names Industrial Park Road');
   assert.equal(overpassNet.nameAt(0, 0, 10), 'Railroad', 'under overpass on Railroad 216 names Railroad');
+  // Within 1 m edge tolerance of the overpass (4.06 m = 0.46 m beyond 3.6 m travel edge):
+  // deck elevation must still name the upper road, and underpass elevation must name Railroad.
+  assert.equal(overpassNet.nameAt(4.06, 0, deckY), 'Industrial Park Road', 'within 1 m edge tolerance at overpass deck elevation names Industrial Park Road');
+  assert.equal(overpassNet.nameAt(4.06, 0, 10), 'Railroad', 'within 1 m edge tolerance under overpass names Railroad');
+  // 1.0 m below the deck must never fall into a threshold gap and misname the overhead road.
+  assert.equal(overpassNet.nameAt(0, 0, deckY - 1.0), 'Railroad', '1 m below overpass deck treats deck as overhead and names Railroad');
+  // Repeated underpass lookups must keep overheadSpans storage intact (no length=0 / push churn).
+  const initialSlots = overpassNet.modern.overheadSpans.length;
+  for (let i = 0; i < 8; i++) {
+    assert.equal(overpassNet.nameAt(0, 0, 10), 'Railroad', `repeated underpass lookup ${i}`);
+    assert.equal(overpassNet.modern.overheadSpans.length, initialSlots, 'overheadSpans backing length stays fixed');
+    assert.equal(overpassNet.modern.overheadCount, 1, 'overheadCount tracks active overhead spans');
+  }
   // Vehicle and BikeRide must pass this.y into Roads.nameAt so under-overpass driving names Railroad.
   const underCar = new mod.Vehicle(rig(mod.THREE), overpassTerrain, overpassNet, -0.2);
   underCar.place(0, 0, Math.PI / 2);
@@ -270,6 +283,12 @@ if (process.argv.includes('--mutations')) {
     ['no-kind2-approach-yellow', 'web/src/modern-bridges.ts', modernBridgesSource,
       "const doubleYellow=road.kind===1||(road.kind===2&&road.pavement==='double-yellow');",
       'const doubleYellow=road.kind===1;'],
+    ['no-bridge-edge-margin', 'web/src/modern-bridges.ts', modernBridgesSource,
+      '      if(h===null){\n        const pts=r.pts,half=r.road.halfWidth,limit=Math.max(r.width,half)+1;',
+      '      if(h===null)continue;\n      if(false){\n        const pts=r.pts,half=r.road.halfWidth,limit=Math.max(r.width,half)+1;'],
+    ['bridge-elevation-gap', 'web/src/modern-bridges.ts', modernBridgesSource,
+      '      }else{\n        this.overheadSpans[this.overheadCount++]=r;\n      }',
+      '      }else if(y<h-1.5){\n        this.overheadSpans[this.overheadCount++]=r;\n      }'],
   ];
   for (const [name, file, src, from, to] of mutants) {
     assert.equal(src.split(from).length, 2, `${name}: unique anchor in ${file}`);

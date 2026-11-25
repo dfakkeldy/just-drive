@@ -230,7 +230,8 @@ export class ModernBridges {
   private readonly hidden=new Set<number>();
   private readonly driving={kind:9,halfWidth:6,washboard:false,road:true,roadKind:1};
   private readonly deckRoadResult:{name:string|null;hasOverhead:boolean}={name:null,hasOverhead:false};
-  private readonly overheadSpans:Span[]=[];
+  private readonly overheadSpans:(Span|undefined)[]=[undefined,undefined,undefined,undefined,undefined,undefined,undefined,undefined];
+  private overheadCount=0;
   private sampling=false;
   private bakedLand:Float64Array|null=null;
   private bakedLandAt=0;
@@ -938,28 +939,44 @@ export class ModernBridges {
     if(this.isSpan(x,z,-1)||this.query(x,z,true,false,undefined,false,2,false)!==null)return null;
     const h=this.query(x,z,true,false,undefined,false,1,false);return h===null?null:h-.03;
   }
-  /** Zero-allocation grade-separated road lookup using already-built deck triangles. */
+  /** Zero-allocation grade-separated road lookup using already-built deck triangles plus a 1 m edge margin. */
   deckRoadAt(x:number,z:number,y:number):{name:string|null;hasOverhead:boolean} {
-    this.overheadSpans.length=0;
+    this.overheadCount=0;
     this.deckRoadResult.name=null;this.deckRoadResult.hasOverhead=false;
     if(this.sampling||this.terrain.cartRoads)return this.deckRoadResult;
     const list=this.cells.get(key(x,z,CELL));if(!list)return this.deckRoadResult;
-    let onName:string|null=null,onDist=Infinity;
+    let onName:string|null=null,onOutside=Infinity,onDist=Infinity;
     for(let i=0;i<list.length;i++){
       const r=this.spans[list[i]];if(!r.triangles)continue;
-      const h=this.ownHeight(r,x,z);if(h===null)continue;
-      if(deckWithinReach(h,y)&&y>=h-1.0){
+      let h=this.ownHeight(r,x,z),outside=0;
+      if(h===null){
+        const pts=r.pts,half=r.road.halfWidth,limit=Math.max(r.width,half)+1;
+        let bestD2=limit*limit,bestS=0,hit=false;
+        for(let j=1;j<pts.length;j++){
+          const ax=pts[j-1][0],az=pts[j-1][1],dx=pts[j][0]-ax,dz=pts[j][1]-az,len2=dx*dx+dz*dz;
+          const t=len2>0?Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/len2)):0;
+          const px=x-ax-dx*t,pz=z-az-dz*t,d2=px*px+pz*pz;
+          if(d2<=bestD2){bestD2=d2;bestS=r.cum[j-1]+t*(r.cum[j]-r.cum[j-1]);hit=true;}
+        }
+        if(!hit)continue;
+        outside=Math.max(0,Math.sqrt(bestD2)-half);
+        if(outside>1)continue;
+        h=r.y0+(r.y1-r.y0)*(r.length>0?Math.max(0,Math.min(1,bestS/r.length)):0);
+      }
+      if(deckWithinReach(h,y)){
         const d=Math.abs(y-h),n=r.road.name||r.start?.road.name||r.end?.road.name||null;
-        if(n&&d<onDist){onDist=d;onName=n;}
-      }else if(y<h-1.5)this.overheadSpans.push(r);
+        if(n&&(outside<onOutside||(outside===onOutside&&d<onDist))){onOutside=outside;onDist=d;onName=n;}
+      }else{
+        this.overheadSpans[this.overheadCount++]=r;
+      }
     }
     this.deckRoadResult.name=onName;
-    this.deckRoadResult.hasOverhead=this.overheadSpans.length>0;
+    this.deckRoadResult.hasOverhead=this.overheadCount>0;
     return this.deckRoadResult;
   }
   isOverheadRoad(roadId:number):boolean {
-    for(let i=0;i<this.overheadSpans.length;i++){
-      const r=this.overheadSpans[i];
+    for(let i=0;i<this.overheadCount;i++){
+      const r=this.overheadSpans[i]!;
       if(r.members.has(roadId)||r.road.id===roadId||r.road.sourceRoad===roadId||r.start?.road.id===roadId||r.end?.road.id===roadId)return true;
     }
     return false;
