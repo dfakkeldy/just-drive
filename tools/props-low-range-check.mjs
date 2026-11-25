@@ -37,4 +37,18 @@ for (const distance of [0, LOW_SMALL_RANGE - 20, LOW_SMALL_RANGE + 20, 800]) {
   assert.ok(cell, 'built within 600 m');
   assert.ok(cell.children.filter(m => !TALL.includes(m.name)).every(m => !m.visible), 'small parts hidden at once on a far build');
 }
+// Each mailbox style batches its body and inset door in one box-<style> InstancedMesh (no separate door-<style> draw).
+{
+  const terrain = { cartRoads: false, low: true, dataRevision: 1, exag: 1, seaLevel: 0, heightAt: () => 0, meshHeightAt: () => 0, surfaceAt: () => ({ ground: 0, level: 8, canopy: 0 }) };
+  const mailboxes = Array.from({ length: 8 }, (_, style) => ({ x: 100 + style * 2, y: -100, heading: 0, style, tilt: 0, group: null, parcelBox: false }));
+  const props = new Props({ crs: 'EPSG:2961', mailboxes, communityBoxes: [], poles: [] }, [0, 0], terrain);
+  const camera = new THREE.PerspectiveCamera(); camera.position.set(100, 2, 100); camera.updateMatrixWorld();
+  props.update(camera, 0);
+  const meshes = props.group.children.flatMap(c => c.children);
+  for (let style = 0; style < 8; style++) {
+    const box = meshes.find(m => m.name === `box-${style}`);
+    assert.ok(box && box.count === 2, `style ${style}: body and inset door share one box-${style} mesh (count 2)`);
+    assert.equal(meshes.find(m => m.name === `door-${style}`), undefined, `style ${style}: no separate door-${style} draw`);
+  }
+}
 console.log(`PASS props LOW range: small parts within ${LOW_SMALL_RANGE} m on LOW, poles, crossarms and wires to 900 m; HIGH unchanged`);

@@ -507,9 +507,9 @@ export class Props {
     this.part(parts, key, colors[m.style], 0, 1.05 + height / 2, 0, width, height, depth,
       m.style === 5 || m.style === 6 ? undefined : this.arch(key));
     // A separate inset door and latch make the road-facing end readable at close range.
-    const door = `door-${m.style}`;
-    this.part(parts, door, colors[m.style], 0, 1.05 + height / 2, depth / 2 + .006,
-      width * .87, height * .87, .013, m.style === 5 || m.style === 6 ? undefined : this.arch(door));
+    // The door shares the box template (same geometry and colour) so each style costs one draw call per cell.
+    this.part(parts, key, colors[m.style], 0, 1.05 + height / 2, depth / 2 + .006,
+      width * .87, height * .87, .013);
     this.part(parts, 'latch', 0xa7a393, 0, 1.05 + height * .63, depth / 2 + .018, .06, .022, .025);
     this.part(parts, 'flag', 0xa33326, width / 2 + .022, 1.05 + height * .75, .01, .018, .19, .025);
     this.part(parts, 'flag', 0xa33326, width / 2 + .022, 1.05 + height * .75 + .08, .05, .022, .045, .10);
