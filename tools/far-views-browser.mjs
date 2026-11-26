@@ -72,7 +72,7 @@ try{
           const p=nearTurbines[i];
           if(p.farm!=='c02'||p.status==='operating'||p.status===undefined)continue;
           c02Built++;
-          if(motion.getY(i)>0)c02Spinning++;
+          if(motion.getY(i)!==0)c02Spinning++;
           rotors.getMatrixAt(i,mat);m.setFromMatrixPosition(mat);m.y+=1.6;
           const ndc=m.clone().project(mmm.camera);
           if(ndc.z>=-1&&ndc.z<=1&&Math.abs(ndc.x)<.98&&Math.abs(ndc.y)<.98){
