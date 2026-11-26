@@ -32,7 +32,7 @@ function dataValid(d){
  }
  assert.equal(d.points.filter(p=>p.farm==='c01').length,16,'sixteen independently read pads (c01)');
  assert.equal(d.points.filter(p=>p.farm==='c02').length,24,'twenty-four independently read pads (c02 Guysborough)');
- assert.ok(d.points.filter(p=>p.farm==='c02').every(p=>p.status==='operating'),'Guysborough c02 operating');
+ assert.ok(d.points.filter(p=>p.farm==='c02').every(p=>p.status==='built'),'Guysborough c02 built not yet commissioned');
  assert.ok(d.points.filter(p=>p.farm==='c01').every(p=>p.status==='built'),'c01 built not yet commissioned');
 }
 function glslDrop(r,distance){
@@ -156,10 +156,11 @@ function farTurbineBehaviour(mod){
  assert.ok(rates.getW(3)>0,'legacy turbine without status spins');
  assert.match(beacons.material.vertexShader,/step\(0\.0001, turbine\.w\)/,'beacon flash gated on operating spin rate');
  assert.match(beacons.material.vertexShader,/\*\s*beaconPixelRatio/,'beacon scales with device pixel ratio');
- assert.match(beacons.material.fragmentShader,/smoothstep\(0\.42, 0\.16, r\)/,'beacon core + soft halo');
+ assert.match(beacons.material.fragmentShader,/1\.0 - smoothstep\(0\.16, 0\.42, r\)/,'beacon core + soft halo with valid ascending smoothstep edges');
  assert.match(beacons.material.fragmentShader,/mix\(red, applyFog\(red, vWorld, cameraPosition\), 0\.12\)/,'beacon retains aviation red through haze');
  assert.match(body.material.fragmentShader,/vec3\(0\.95, 0\.96, 0\.97\)/,'bright white far turbine albedo');
  night.update(1,1170,2532,3);assert.equal(night.pixelRatio.value,3,'DPR forwarded to far beacons');
+ night.update(1,640,360,0.5);assert.equal(night.pixelRatio.value,0.5,'sub-1 render ratio (?res=0.5) preserved on far beacons');
  for(const c of night.group.children){c.geometry.dispose();c.material.dispose();}
  const darkOnly=new FarTurbines(mixed.slice(1,3),[0,0],false,{},true);
  assert.equal(darkOnly.group.children.length,1,'only non-operating turbines at night create zero beacon draws');

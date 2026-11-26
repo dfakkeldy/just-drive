@@ -93,7 +93,7 @@ void main() {
  if (vBeaconSpec.y < 0.99 && fract(tallTime * vBeaconSpec.x + vBeaconPhase) > vBeaconSpec.y) discard;
  float r = length(vBeaconUv);
  if (r > 1.0) discard;
- float core = smoothstep(0.42, 0.16, r);
+ float core = 1.0 - smoothstep(0.16, 0.42, r);
  float halo = pow(max(0.0, 1.0 - r), 2.4) * 0.55;
  float alpha = clamp(core + halo, 0.0, 1.0);
  if (alpha < 0.02) discard;
@@ -212,7 +212,9 @@ export class TallLandmarks {
           specs[i * 2] = TURBINE_FLASH_RATE; specs[i * 2 + 1] = TURBINE_FLASH_DUTY;
           colours[i * 3] = RED_FLASH[0]; colours[i * 3 + 1] = RED_FLASH[1]; colours[i * 3 + 2] = RED_FLASH[2];
         }
-        return make(makeBeaconGeometry(phases, specs, colours), getBeaconMat(), litTurbines.length);
+        const mesh = make(makeBeaconGeometry(phases, specs, colours), getBeaconMat(), litTurbines.length);
+        mesh.name = 'tall-turbine-beacons';
+        return mesh;
       })() : null;
       // Local +z faces the incoming WSW wind. North is -world z.
       const yaw = Math.PI - WIND_HEADING;

@@ -11,7 +11,7 @@ This delta updates `tall.json` and the `tall` counts in `manifest.json` across a
    - Note: `c02-08` (`622595.0, 5047275.0`) remains omitted by `safe_turbines` because it is 3.41 m from unnamed mapped track 934; positions are never shifted.
 2. **Adds explicit public build `status` to every turbine.**
    - NRCan CWTD turbines: `status: "operating"`.
-   - `c02` (Guysborough County, 24 turbines): `status: "operating"` (in service Oct 2026).
+   - `c02` (Guysborough County, 24 turbines): `status: "built"` (construction complete Oct 2026; grid feed/commercial operation targeted before end of 2026, not yet publicly confirmed as of 25 Nov 2026).
    - `c01` (2026 build, 16 turbines): `status: "built"` (erected, not yet commissioned as of 25 Nov 2026).
    - Operating turbines spin and flash red in sync at night. Non-operating (`built` or `under-construction`) turbines stand still and stay dark.
 

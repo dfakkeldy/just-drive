@@ -67,7 +67,7 @@ void main() {
  if (vFlash < 0.5) discard;
  float r = length(vBeaconUv);
  if (r > 1.0) discard;
- float core = smoothstep(0.42, 0.16, r);
+ float core = 1.0 - smoothstep(0.16, 0.42, r);
  float halo = pow(max(0.0, 1.0 - r), 2.4) * 0.55;
  float alpha = clamp(core + halo, 0.0, 1.0);
  if (alpha < 0.02) discard;
@@ -156,7 +156,7 @@ export class FarTurbines {
     const p=this.list[i],d=this.dummy;d.position.set(p.e-this.origin[0],ground,this.origin[1]-p.n);d.rotation.set(0,Math.PI-WIND_HEADING,0);d.updateMatrix();mesh.setMatrixAt(i,d.matrix);mesh.instanceMatrix.needsUpdate=true;
   }
   update(seconds: number, width: number, height: number, pixelRatio = 1): void {
-    this.time.value=seconds;this.viewport.value.set(width,height);this.pixelRatio.value=Math.max(1,pixelRatio);
+    this.time.value=seconds;this.viewport.value.set(width,height);this.pixelRatio.value=pixelRatio>0?pixelRatio:1;
     // Twice a second, as TallLandmarks seats its near turbines: no per-frame CPU transform.
     if(!this.near||seconds<this.nextSeat)return;
     this.nextSeat=seconds+.5;

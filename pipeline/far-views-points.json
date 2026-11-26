@@ -426,7 +426,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-02",
@@ -449,7 +449,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-03",
@@ -472,7 +472,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-04",
@@ -495,7 +495,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-05",
@@ -518,7 +518,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-06",
@@ -541,7 +541,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-07",
@@ -564,7 +564,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-08",
@@ -587,7 +587,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-09",
@@ -610,7 +610,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-10",
@@ -633,7 +633,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-11",
@@ -656,7 +656,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-12",
@@ -679,7 +679,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-13",
@@ -702,7 +702,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-14",
@@ -725,7 +725,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-15",
@@ -748,7 +748,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-16",
@@ -771,7 +771,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-17",
@@ -794,7 +794,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-18",
@@ -817,7 +817,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-19",
@@ -840,7 +840,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-20",
@@ -863,7 +863,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-21",
@@ -886,7 +886,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-22",
@@ -909,7 +909,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-23",
@@ -938,7 +938,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     },
     {
       "id": "c02-24",
@@ -961,7 +961,7 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "operating"
+      "status": "built"
     }
   ],
   "dimensionsSources": {

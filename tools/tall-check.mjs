@@ -172,6 +172,7 @@ function drawing(){
   assert.equal(beacons[0].material.transparent,true,'soft halo beacon blends cleanly');
   assert.equal(beacons[0].material.depthWrite,false,'halo does not clobber depth');
   assert.equal(beacons[0].material.depthTest,true,'beacons stay depth tested');
+  assert.match(beacons[0].material.fragmentShader,/1\.0 - smoothstep\(0\.16, 0\.42, r\)/,'valid ascending smoothstep edges in near beacon shader');
   for(const mesh of mix.group.children){mesh.geometry?.dispose();mesh.material?.dispose();}
   const unlit=new mod.exports.TallLandmarks({...mixData,turbines:mixData.turbines.slice(1)},terrain,false,{},true);
   assert.equal(unlit.group.children.filter(c=>c.material?.defines?.BEACON).length,0,'zero beacons when all near turbines are non-operating');

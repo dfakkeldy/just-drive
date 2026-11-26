@@ -125,11 +125,17 @@ def check_install_and_refusals():
         receipt_file.write_bytes(patch.pretty_json(receipt))
         (delta / 'hashes.json').write_bytes(patch.pretty_json(receipt))
 
-        # Stage output guards.
+        # Stage output guards (including case-insensitive aliases like data/BAKED on macOS APFS).
         refused('already exists', patch.assert_safe_stage_output, delta, baked)
         refused('separate from source', patch.assert_safe_stage_output, baked / 'new-out', baked)
         refused('outside data/baked', patch.assert_safe_stage_output, data / 'baked/sub', tmp / 'other-src')
+        refused('outside data/baked', patch.assert_safe_stage_output, data / 'BAKED/new-stage', tmp / 'other-src')
+        refused('outside data/baked', patch.assert_safe_stage_output, data / 'BAKED/nested/new-stage', tmp / 'other-src')
+        # Case-alias against source directory itself (when running on a case-insensitive volume like macOS APFS).
+        if (data / 'BAKED').exists():
+            refused('separate from source', patch.assert_safe_stage_output, data / 'BAKED/new-stage', baked)
         refused('outside data/site', patch.assert_safe_stage_output, data / 'site/sub', tmp / 'other-src')
+        refused('outside data/site', patch.assert_safe_stage_output, data / 'SITE/new-stage', tmp / 'other-src')
         patch.assert_safe_stage_output(tmp / 'brand-new-stage', baked)
 
         assert patch.land_state(baked, receipt) == ('before', [])
@@ -178,7 +184,73 @@ def check_install_and_refusals():
         restored_m = json.loads((baked / 'terrain/manifest.json').read_text())
         assert restored_m['keepKey'] == {'v': 7} and restored_m['laterKey'] == 42
         assert patch.rollback(delta, baked, receipt_path=receipt_file) == 'already-before'
-        print('PASS synthetic install/rollback lifecycle, manifest key preservation, and all refusals')
+
+        # Interrupted install between tall.json and manifest.json: both retry install and rollback must recover cleanly.
+        real_write = patch._atomic_write
+        def fail_on_manifest(target: Path, payload: bytes):
+            if target.name == 'manifest.json' and target.parent.name == 'terrain':
+                raise OSError('injected failure between tall.json and manifest.json')
+            return real_write(target, payload)
+
+        # Case A: interrupted install -> retry install recovers to clean after.
+        shutil.rmtree(delta / 'before', ignore_errors=True)
+        patch._atomic_write = fail_on_manifest
+        try:
+            try:
+                patch.install(delta, baked, receipt_path=receipt_file)
+                raise AssertionError('expected injected install failure')
+            except OSError:
+                pass
+        finally:
+            patch._atomic_write = real_write
+        assert patch.land_state(baked, receipt)[0] == 'mixed'
+        assert patch.install(delta, baked, receipt_path=receipt_file) == 'installed'
+        assert patch.land_state(baked, receipt) == ('after', [])
+
+        # Case B: interrupted rollback -> retry rollback recovers to clean before.
+        patch._atomic_write = fail_on_manifest
+        try:
+            try:
+                patch.rollback(delta, baked, receipt_path=receipt_file)
+                raise AssertionError('expected injected rollback failure')
+            except OSError:
+                pass
+        finally:
+            patch._atomic_write = real_write
+        assert patch.land_state(baked, receipt)[0] == 'mixed'
+        assert patch.rollback(delta, baked, receipt_path=receipt_file) == 'rolled-back'
+        assert patch.land_state(baked, receipt) == ('before', [])
+
+        # Case C: interrupted install -> rollback recovers to clean before; interrupted rollback -> install recovers to clean after.
+        patch._atomic_write = fail_on_manifest
+        try:
+            try:
+                patch.install(delta, baked, receipt_path=receipt_file)
+                raise AssertionError('expected injected install failure')
+            except OSError:
+                pass
+        finally:
+            patch._atomic_write = real_write
+        assert patch.land_state(baked, receipt)[0] == 'mixed'
+        assert patch.rollback(delta, baked, receipt_path=receipt_file) == 'rolled-back'
+        assert patch.land_state(baked, receipt) == ('before', [])
+
+        assert patch.install(delta, baked, receipt_path=receipt_file) == 'installed'
+        patch._atomic_write = fail_on_manifest
+        try:
+            try:
+                patch.rollback(delta, baked, receipt_path=receipt_file)
+                raise AssertionError('expected injected rollback failure')
+            except OSError:
+                pass
+        finally:
+            patch._atomic_write = real_write
+        assert patch.land_state(baked, receipt)[0] == 'mixed'
+        assert patch.install(delta, baked, receipt_path=receipt_file) == 'installed'
+        assert patch.land_state(baked, receipt) == ('after', [])
+        assert patch.rollback(delta, baked, receipt_path=receipt_file) == 'rolled-back'
+        assert patch.land_state(baked, receipt) == ('before', [])
+        print('PASS synthetic install/rollback lifecycle, interrupted-write recovery, case-alias guard, and all refusals')
 
 
 def check_receipt_schema() -> dict:

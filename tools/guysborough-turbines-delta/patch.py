@@ -60,6 +60,20 @@ def _assert_no_symlink_path(path: Path):
             raise ValueError(f'Refusing to traverse or replace symlink: {cur}')
 
 
+def _existing_ancestors(path: Path) -> list[Path]:
+    """Return path (if it exists) and every existing ancestor directory."""
+    cur = Path(os.path.abspath(str(path)))
+    found = []
+    while True:
+        if cur.exists():
+            found.append(cur)
+        parent = cur.parent
+        if parent == cur:
+            break
+        cur = parent
+    return found
+
+
 def assert_safe_stage_output(output: Path, source: Path):
     if output.exists():
         raise ValueError(f'Stage output already exists; pass a new folder: {output}')
@@ -67,10 +81,20 @@ def assert_safe_stage_output(output: Path, source: Path):
     src_r = source.resolve()
     if out_r == src_r or out_r.is_relative_to(src_r) or src_r.is_relative_to(out_r):
         raise ValueError(f'Stage output must be separate from source land: {output}')
-    for forbidden in ('baked', 'site'):
+    # Compare real filesystem identity on existing ancestors (catches case-insensitive aliases like data/BAKED on macOS).
+    out_ancestors = _existing_ancestors(output)
+    for anc in out_ancestors:
+        if src_r.exists() and os.path.samefile(anc, src_r):
+            raise ValueError(f'Stage output must be separate from source land: {output}')
+    for forbidden_name in ('baked', 'site'):
+        live_dir = ROOT / 'data' / forbidden_name
+        if live_dir.exists():
+            for anc in out_ancestors:
+                if os.path.samefile(anc, live_dir):
+                    raise ValueError(f'Stage output must stay outside data/{forbidden_name}: {output}')
         for i, part in enumerate(out_r.parts):
-            if part == 'data' and i + 1 < len(out_r.parts) and out_r.parts[i + 1] == forbidden:
-                raise ValueError(f'Stage output must stay outside data/{forbidden}: {output}')
+            if part.lower() == 'data' and i + 1 < len(out_r.parts) and out_r.parts[i + 1].lower() == forbidden_name:
+                raise ValueError(f'Stage output must stay outside data/{forbidden_name}: {output}')
 
 
 def _atomic_write(target: Path, data: bytes):
@@ -332,6 +356,15 @@ def install(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
             live_manifests[pack] = manifest
         elif digest == entry['sha256'] and manifest.get('tall') == entry['afterManifestTall']:
             live_states[pack] = 'after'
+        elif digest == entry['sha256'] and manifest.get('tall') == entry['beforeManifestTall']:
+            # Interrupted between tall.json replace and manifest.json replace during an earlier install.
+            live_states[pack] = 'half-install'
+            live_manifests[pack] = manifest
+        elif digest == entry['before'] and manifest.get('tall') == entry['afterManifestTall']:
+            # Interrupted between tall.json replace and manifest.json replace during an earlier rollback.
+            live_states[pack] = 'half-rollback'
+            live_before_bytes[pack] = raw
+            live_manifests[pack] = manifest
         else:
             raise ValueError(f'Unknown live bytes in {pack}: tall={digest} manifest.tall={manifest.get("tall")}')
         if backup.exists():
@@ -347,20 +380,22 @@ def install(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
 
     for entry in receipt['files']:
         pack = entry['pack']
-        if live_states[pack] == 'after' and not backup_present[pack]:
+        if live_states[pack] in ('after', 'half-install') and not backup_present[pack]:
             raise ValueError(f'Missing backup for already-installed area {pack}: {backup_root / entry["file"]}')
 
     # Phase 2: write all missing backups before modifying any live file.
     for entry in receipt['files']:
         pack = entry['pack']
-        if live_states[pack] == 'before' and not backup_present[pack]:
+        if live_states[pack] in ('before', 'half-rollback') and not backup_present[pack]:
             _atomic_write(backup_root / entry['file'], live_before_bytes[pack])
 
     # Phase 3: atomically update tall.json and ONLY the tall key in manifest.json.
     for entry in receipt['files']:
         pack = entry['pack']
-        if live_states[pack] == 'before':
+        st = live_states[pack]
+        if st in ('before', 'half-rollback'):
             _atomic_write(baked / entry['file'], delta_bytes[entry['file']])
+        if st in ('before', 'half-install'):
             updated_manifest = dict(live_manifests[pack])
             updated_manifest['tall'] = entry['afterManifestTall']
             _atomic_write(baked / pack / 'manifest.json', compact_json(updated_manifest))
@@ -405,6 +440,19 @@ def rollback(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
                 raise ValueError(f'Missing or mismatched backup for {rel}: {backup}')
             backup_bytes[pack] = raw
             live_manifests[pack] = manifest
+        elif digest == entry['sha256'] and manifest.get('tall') == entry['beforeManifestTall']:
+            # Interrupted between tall.json replace and manifest.json replace during install: restore tall.json from backup.
+            live_states[pack] = 'half-install'
+            if not backup.is_file():
+                raise ValueError(f'Missing or mismatched backup for {rel}: {backup}')
+            raw = backup.read_bytes()
+            if sha(raw) != entry['before']:
+                raise ValueError(f'Missing or mismatched backup for {rel}: {backup}')
+            backup_bytes[pack] = raw
+        elif digest == entry['before'] and manifest.get('tall') == entry['afterManifestTall']:
+            # Interrupted between tall.json replace and manifest.json replace during rollback: restore manifest.json.
+            live_states[pack] = 'half-rollback'
+            live_manifests[pack] = manifest
         else:
             raise ValueError(f'Refusing rollback over unknown live bytes in {pack}: {digest}')
 
@@ -414,8 +462,10 @@ def rollback(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
 
     for entry in receipt['files']:
         pack = entry['pack']
-        if live_states[pack] == 'after':
+        st = live_states[pack]
+        if st in ('after', 'half-install'):
             _atomic_write(baked / entry['file'], backup_bytes[pack])
+        if st in ('after', 'half-rollback'):
             restored_manifest = dict(live_manifests[pack])
             restored_manifest['tall'] = entry['beforeManifestTall']
             _atomic_write(baked / pack / 'manifest.json', compact_json(restored_manifest))
