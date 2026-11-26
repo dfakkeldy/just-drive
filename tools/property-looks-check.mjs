@@ -408,17 +408,29 @@ if (fs.existsSync(`${pointTerrain}/manifest.json`) && fs.existsSync(`${pointTerr
     }
   }
   const pointAfterStyles = { ...pointBaked, ...pointApplied.styles };
-  const countMesh = (styles) => new Buildings(pointBuildings, pointManifest.village, 1.5, -0.2, styles);
-  const beforeNormal = countMesh(pointBaked);
-  const afterNormal = countMesh(pointAfterStyles);
+  const pointAfterBuildings = pointApplied.buildings;
+  const countMesh = (list, styles) => new Buildings(list, pointManifest.village, 1.5, -0.2, styles);
+  const beforeNormal = countMesh(pointBuildings, pointBaked);
+  const afterNormal = countMesh(pointAfterBuildings, pointAfterStyles);
   assert.ok(afterNormal.triangles <= beforeNormal.triangles,
     `Point Tupper normal triangles grew: ${afterNormal.triangles} > ${beforeNormal.triangles}`);
-  const beforeDesk = countMesh(buildingAppearance('wall-shadows', false, sunDir, pointBaked));
-  const afterDesk = countMesh(buildingAppearance('wall-shadows', false, sunDir, pointAfterStyles));
+  const beforeDesk = countMesh(pointBuildings, buildingAppearance('wall-shadows', false, sunDir, pointBaked));
+  const afterDesk = countMesh(pointAfterBuildings, buildingAppearance('wall-shadows', false, sunDir, pointAfterStyles));
   assert.ok(afterDesk.triangles <= beforeDesk.triangles,
     `Point Tupper desktop triangles grew: ${afterDesk.triangles} > ${beforeDesk.triangles}`);
-  const beforeLow = countMesh(buildingAppearance('wall-shadows', true, sunDir, pointBaked));
-  const afterLow = countMesh(buildingAppearance('wall-shadows', true, sunDir, pointAfterStyles));
+  const beforeLow = countMesh(pointBuildings, buildingAppearance('wall-shadows', true, sunDir, pointBaked));
+  const afterLow = countMesh(pointAfterBuildings, buildingAppearance('wall-shadows', true, sunDir, pointAfterStyles));
+  // A kind change rewrites the building the mesh is built from. Counting the original list would hide that growth.
+  const kindPack = {
+    ...pointPack,
+    overrides: { ...pointPack.overrides, '2197': { ...pointPack.overrides['2197'], kind: 'house' } },
+  };
+  const kindApplied = applyPropertyLookPack(kindPack, pointBuildings, pointBaked);
+  const kindMesh = countMesh(kindApplied.buildings, { ...pointBaked, ...kindApplied.styles });
+  assert.ok(kindMesh.triangles > beforeNormal.triangles,
+    `kind change on 2197 must be counted: ${kindMesh.triangles} vs ${beforeNormal.triangles}`);
+  kindMesh.mesh.geometry.dispose();
+  kindMesh.mesh.material.dispose();
   const pointCams = [
     ['granville-north', 627520, 5053050],
     ['granville-mid', 627980, 5052500],
