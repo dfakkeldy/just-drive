@@ -37,6 +37,12 @@
       "roads": [
         "Reeves Street"
       ]
+    },
+    "paint-street": {
+      "label": "Paint Street",
+      "roads": [
+        "Paint Street"
+      ]
     }
   },
   "overrides": {
@@ -957,6 +963,135 @@
       "roof": "#6e7478",
       "trim": "#f2f0ea",
       "door": "#787a76",
+      "roofMaterial": "shingle"
+    },
+    "392": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        629207.8,
+        5052394.6
+      ],
+      "wall": "#d4d8d6",
+      "roof": "#4e5458",
+      "trim": "#f2f4f2",
+      "door": "#a2a5a0",
+      "roofMaterial": "shingle"
+    },
+    "288": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        629240.2,
+        5052383.2
+      ],
+      "wall": "#b4c4ce",
+      "roof": "#3a4044",
+      "trim": "#f4f6f8",
+      "roofMaterial": "shingle"
+    },
+    "211": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        629251.8,
+        5052353.3
+      ],
+      "wall": "#1f4e96",
+      "roof": "#3e444a",
+      "trim": "#e4e8ea",
+      "door": "#dedfd8",
+      "roofMaterial": "shingle"
+    },
+    "28": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        629325.2,
+        5052310.5
+      ],
+      "wall": "#9a2e36",
+      "roof": "#2e3236",
+      "trim": "#f4f2ec",
+      "door": "#a2a5a0",
+      "roofMaterial": "shingle"
+    },
+    "425": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        629353.1,
+        5052305.4
+      ],
+      "wall": "#1a3d86",
+      "roof": "#c5c9ce",
+      "trim": "#e6e8ea",
+      "door": "#dedfd8",
+      "roofMaterial": "shingle"
+    },
+    "79": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        629743.8,
+        5052366.1
+      ],
+      "wall": "#5aa8bc",
+      "roof": "#3e4650",
+      "trim": "#f2f4f6",
+      "door": "#e5e5dd",
+      "roofMaterial": "shingle"
+    },
+    "56": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        629845.4,
+        5052474.3
+      ],
+      "wall": "#d8dce0",
+      "roof": "#7a96a2",
+      "trim": "#f4f6f8",
+      "door": "#a2a5a0",
+      "roofMaterial": "shingle"
+    },
+    "2482": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        629940.7,
+        5052562.1
+      ],
+      "wall": "#c9a86c",
+      "roof": "#4a4e52",
+      "trim": "#f4f2ec",
+      "door": "#dedfd8",
+      "roofMaterial": "shingle"
+    },
+    "2957": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        629968.3,
+        5052570.8
+      ],
+      "wall": "#c6ae74",
+      "roof": "#a89058",
+      "trim": "#e8e0d0",
+      "door": "#a2a5a0",
+      "roofMaterial": "shingle"
+    },
+    "78": {
+      "group": "paint-street",
+      "road": "Paint Street",
+      "at": [
+        630082.4,
+        5052759.0
+      ],
+      "wall": "#a68462",
+      "roof": "#3e4246",
+      "trim": "#d8d4cc",
+      "door": "#a2a5a0",
       "roofMaterial": "shingle"
     }
   }
