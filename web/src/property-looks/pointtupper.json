@@ -686,6 +686,7 @@
       "wall": "#cfc6b4",
       "roof": "#b0aaa2",
       "trim": "#e6e0d4",
+      "door": "#ababa5",
       "roofMaterial": "shingle"
     },
     "16": {
@@ -698,6 +699,7 @@
       "wall": "#d5d8dc",
       "roof": "#5a6064",
       "trim": "#f2f0ea",
+      "door": "#696d6d",
       "roofMaterial": "shingle"
     },
     "150": {
@@ -710,6 +712,7 @@
       "wall": "#f4f3ee",
       "roof": "#e8e6e0",
       "trim": "#f2f0ea",
+      "door": "#adada7",
       "roofMaterial": "shingle"
     },
     "157": {
@@ -722,6 +725,7 @@
       "wall": "#b4b8bc",
       "roof": "#9aa0a4",
       "trim": "#d8dce0",
+      "door": "#6f7371",
       "roofMaterial": "shingle"
     },
     "159": {
@@ -747,6 +751,7 @@
       "wall": "#d4d0c8",
       "roof": "#4a4e52",
       "trim": "#f2f0ea",
+      "door": "#adada7",
       "roofMaterial": "shingle"
     },
     "172": {
@@ -819,6 +824,7 @@
       "wall": "#e8e4d8",
       "roof": "#8a9094",
       "trim": "#3d7eb8",
+      "door": "#696d6d",
       "roofMaterial": "shingle"
     },
     "2418": {
@@ -831,6 +837,7 @@
       "wall": "#a8aea8",
       "roof": "#3a3e42",
       "trim": "#d4d6d4",
+      "door": "#ababa5",
       "roofMaterial": "shingle"
     },
     "2587": {
@@ -855,6 +862,7 @@
       "wall": "#f7f6f2",
       "roof": "#e4e2dc",
       "trim": "#f4f2ec",
+      "door": "#a6a6a1",
       "roofMaterial": "shingle"
     },
     "2891": {
