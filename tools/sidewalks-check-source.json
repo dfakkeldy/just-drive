@@ -3,7 +3,10 @@
     {
       "file": "tools/sidewalks_bake.py",
       "before": "6dec9aff7e6f3f90636948c7efa81a043b2d58f6073b9173d872d913404c5da4",
-      "sha256": "53f62e09c1d874b4e4a1d5b69d9e8225223c8fc794b79cbd99b7f5302bc98fa3"
+      "previous": [
+        "99b3991808e54ab793a3f97dab1e1d57a4b942be701f6f66beb36f5e05348397"
+      ],
+      "sha256": "82d3ce6be80331b420c706a2b2c9fc9bcd539e0b035aba8d76dbf6a9401a0842"
     },
     {
       "file": "data/baked/terrain/manifest.json",
