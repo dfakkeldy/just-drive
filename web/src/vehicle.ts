@@ -764,7 +764,7 @@ export class Vehicle {
       this.#waterStopped = false;
     }
     const surf = this.terrain.cartRoads && onRoad ? (s.washboard ? SURFACES.washboard : s.kind === 4 ? SURFACES.track : SURFACES.gravel) : siteDeck && s.kind===9 ? SURFACES.concrete : onRoad ? (s.kind <= 2 || s.kind === 9 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.rough ? SURFACES.rough : s.kind === 12 ? SURFACES.grass : s.kind === 3 || s.kind >= 8 || s.gravel ? SURFACES.gravel : s.kind === 5 ? SURFACES.trail : SURFACES.track)
-      : s.lotAsphalt ? SURFACES.paved : s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
+      : s.mineral ? SURFACES.gravel : s.lotAsphalt ? SURFACES.paved : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
     this.surfaceName = surf.name;
     const snowGrip = winterRoadGrip(this.terrain.uniforms?.winterCover, onRoad && !onDeck, input.touch);
 
