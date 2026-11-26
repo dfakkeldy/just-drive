@@ -356,110 +356,245 @@ const PROBE_EXPR = `(x, z) => {
   await p.close();
 }
 
-// ---- 3. Phone Just Drive: portrait (390x844) & landscape (844x390), sticks, ROAD, 2+ km flight ----
-for (const [w, h, name] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
+// ---- 3. Phone Just Drive: 360-430 px portrait & landscape, sticks, touchcancel/lost-pointer, no ROAD, no overlap, 2+ km flight ----
+for (const [w, h, name, fullFlight] of [[390, 844, 'portrait', true], [844, 390, 'landscape', false], [360, 740, 'portrait-360', false], [430, 932, 'portrait-430', false], [740, 360, 'landscape-360', false], [932, 430, 'landscape-430', false]]) {
   const p = await page(w, h, true);
   await p.open({ mode: 'explore', vehicle: 'drone', touch: '1', title: '1', q: 'low' }, false);
-  const titleCheck = await p.read(`({
-    kinds: [...document.querySelectorAll('#vehicleChoice button')].map(b => b.dataset.vehicle),
-    pressed: document.querySelector('#vehicleChoice [data-vehicle="drone"]')?.getAttribute('aria-pressed'),
-    startLabel: document.getElementById('titleStart')?.textContent,
-    scroll: document.getElementById('titleCard').scrollHeight - document.getElementById('titleCard').clientHeight,
-  })`);
-  check(JSON.stringify(titleCheck.kinds) === JSON.stringify(['car', 'sxs', 'bike', 'drone']) && titleCheck.pressed === 'true' && titleCheck.startLabel === 'Start flying',
-    `phone ${name}: title card shows Drone choice and Start flying`);
+  if (fullFlight || name === 'landscape') {
+    const titleCheck = await p.read(`({
+      kinds: [...document.querySelectorAll('#vehicleChoice button')].map(b => b.dataset.vehicle),
+      pressed: document.querySelector('#vehicleChoice [data-vehicle="drone"]')?.getAttribute('aria-pressed'),
+      startLabel: document.getElementById('titleStart')?.textContent,
+      scroll: document.getElementById('titleCard').scrollHeight - document.getElementById('titleCard').clientHeight,
+    })`);
+    check(JSON.stringify(titleCheck.kinds) === JSON.stringify(['car', 'sxs', 'bike', 'drone']) && titleCheck.pressed === 'true' && titleCheck.startLabel === 'Start flying',
+      `phone ${name}: title card shows Drone choice and Start flying`);
+  }
 
   await p.read(`document.getElementById('titleStart').click();document.activeElement?.blur()`);
   assert.ok(await p.until(`String(document.title).startsWith('settled')`, 300000), `phone ${name}: settled`);
   await sleep(600);
 
   const uiCheck = await p.read(`(() => {
-    const ids = ['droneLeft', 'droneRight', 'droneReturn', 'gear', 'pauseButton', 'placesButton', 'hud'];
-    const rects = ids.map(id => {
+    const visible = el => !!el && !el.hidden && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none' && !el.closest('[hidden]');
+    const required = ['droneLeft', 'droneRight', 'gear', 'pauseButton', 'placesButton', 'savePictureButton', 'hud', 'miniMap'];
+    const allNodes = new Map();
+    for (const id of [...required, 'droneReturn', 'bigMapButton', 'placeArrival']) {
       const el = document.getElementById(id);
-      if (!el || !el.getClientRects().length) return [id, null];
+      if (visible(el)) allNodes.set(id, el);
+    }
+    for (const btn of document.querySelectorAll('button')) {
+      if (visible(btn) && !btn.closest('#settings,#pauseScreen,#placesPanel,#bigMap,#title,#miniMap')) {
+        const key = btn.id || btn.textContent?.trim() || 'button';
+        if (!allNodes.has(key)) allNodes.set(key, btn);
+      }
+    }
+    for (const span of document.querySelectorAll('.droneStick span')) {
+      if (visible(span)) allNodes.set(span.parentElement.id + ':label', span);
+    }
+    const rects = [...allNodes.entries()].map(([id, el]) => {
       const r = el.getBoundingClientRect();
       return [id, { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }];
     });
     const faults = [];
+    for (const id of required) if (!allNodes.has(id)) faults.push(id + ' hidden');
     for (const [id, r] of rects) {
-      if (!r) { faults.push(id + ' hidden'); continue; }
       if (r.l < -0.5 || r.t < -0.5 || r.r > innerWidth + 0.5 || r.b > innerHeight + 0.5) faults.push(id + ' offscreen');
     }
     for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
       const [a, ra] = rects[i], [b, rb] = rects[j];
-      if (ra && rb && ra.l < rb.r - 1 && ra.r > rb.l + 1 && ra.t < rb.b - 1 && ra.b > rb.t + 1) faults.push(a + '/' + b);
+      if (ra.l < rb.r - 1 && ra.r > rb.l + 1 && ra.t < rb.b - 1 && ra.b > rb.t + 1) faults.push(a + '/' + b);
+    }
+    for (const id of ['gear', 'pauseButton', 'placesButton', 'savePictureButton']) {
+      const el = document.getElementById(id);
+      if (!visible(el)) continue;
+      const r = el.getBoundingClientRect();
+      const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (!(at === el || el.contains(at))) faults.push(id + ' covered');
     }
     return {
       faults,
-      returnText: document.getElementById('droneReturn')?.textContent,
+      hasReturn: visible(document.getElementById('droneReturn')),
+      hasArrival: visible(document.getElementById('placeArrival')),
+      hasBigMap: visible(document.getElementById('bigMapButton')),
       hasDroneBtn: !!document.getElementById('droneButton'),
       hasDrivingHelp: !!document.getElementById('drivingHelp'),
       tcOn: document.body.classList.contains('tcOn'),
       hud: document.getElementById('hud')?.textContent,
     };
   })()`);
-  check(uiCheck.faults.length === 0 && uiCheck.returnText === 'ROAD' && !uiCheck.hasDroneBtn && !uiCheck.hasDrivingHelp && !uiCheck.tcOn,
-    `phone ${name}: sticks, ROAD, PLACES, Pause, gear and HUD clear with no overlaps (${JSON.stringify(uiCheck.faults)}, button=${uiCheck.returnText})`);
+  check(uiCheck.faults.length === 0 && !uiCheck.hasReturn && !uiCheck.hasArrival && !uiCheck.hasBigMap && !uiCheck.hasDroneBtn && !uiCheck.hasDrivingHelp && !uiCheck.tcOn,
+    `phone ${name}: sticks, PLACES, Save picture, Pause, gear, map and HUD clear with no ROAD button, no arrival card and no overlaps (${JSON.stringify(uiCheck.faults)})`);
   check(/^DRONE · Height \d+ m\nSpeed \d+ m\/s/.test(uiCheck.hud) && !uiCheck.hud.includes('From the car'), `phone ${name}: standalone phone HUD has no car distance (${JSON.stringify(uiCheck.hud)})`);
 
-  // Touch right stick forward, verify flight, take portrait screenshot, tap ROAD to return to road.
-  const right = await p.centre('droneRight');
-  const before = await p.read(`({ x: mmm.drone.state.x, z: mmm.drone.state.z })`);
-  await p.touchAt('touchStart', [right]);
-  for (let t = 0; t < 2000; t += 100) { await p.touchAt('touchMove', [{ x: right.x, y: right.y - right.h * 0.4 }]); await sleep(100); }
-  await p.touchAt('touchEnd', []);
-  await sleep(400);
-  const moved = await p.read(`Math.hypot(mmm.drone.state.x - (${before.x}), mmm.drone.state.z - (${before.z}))`);
-  check(moved > 10, `phone ${name}: right stick flies forward (${moved.toFixed(1)} m)`);
+  if (fullFlight || name === 'landscape') {
+    // Stuck-stick regression: touchStart -> touchMove -> touchCancel on left stick must zero input and centre the knob.
+    const left = await p.centre('droneLeft');
+    await p.touchAt('touchStart', [left]);
+    await p.touchAt('touchMove', [{ x: left.x - left.w * 0.4, y: left.y - left.h * 0.4 }]);
+    await sleep(200);
+    const heldStick = await p.read(`({ held: document.getElementById('droneLeft').classList.contains('held'), transform: document.querySelector('#droneLeft b').style.transform })`);
+    check(heldStick.held && !!heldStick.transform, `phone ${name}: left stick deflects while held (${heldStick.transform})`);
+    await p.touchAt('touchCancel', []);
+    const immediateCancel = await p.read(`({ held: document.getElementById('droneLeft').classList.contains('held'), transform: document.querySelector('#droneLeft b').style.transform })`);
+    await sleep(1600);
+    const afterCancel = await p.read(`({ held: document.getElementById('droneLeft').classList.contains('held'), transform: document.querySelector('#droneLeft b').style.transform, vy: mmm.drone.state.vy, yawRate: mmm.drone.state.yawRate })`);
+    check(!immediateCancel.held && immediateCancel.transform === '' && !afterCancel.held && afterCancel.transform === '' && Math.abs(afterCancel.vy) < 0.15 && Math.abs(afterCancel.yawRate) < 0.05,
+      `phone ${name}: touchcancel resets left stick knob immediately and stops climb/turn (${JSON.stringify({ immediateCancel, afterCancel })})`);
 
-  if (name === 'portrait') {
-    const phoneShot = await p.shot('02-drone-vehicle-phone-portrait');
-    if (WORK_SHOTS) {
-      mkdirSync(resolve(root, 'data/work'), { recursive: true });
-      copyFileSync(phoneShot, resolve(root, 'data/work/drone-vehicle-phone.png'));
-    }
-    // Phone 2.5 km fast flight at full speed (60 m/s) to measure LOW-detail phone loading!
-    await p.read(`(() => { const g = mmm.terrain.heightAt(0, 2000) ?? 30; mmm.drone.place(0, g + 35, 2000, 0); mmm.drone.maxSpeed = 60; })()`);
-    await p.until(`String(document.title).startsWith('settled')`, 60000);
-    await sleep(400);
-    const pStart = await p.read(`({ x: mmm.drone.state.x, z: mmm.drone.state.z })`);
-    const pSamples = [];
-    const pt0 = Date.now();
+    // Lost-pointer case: pointerdown + pointermove then lostpointercapture (without pointerup/pointercancel) resets knob and input.
+    const lostPtr = await p.read(`(() => {
+      const el = document.getElementById('droneLeft'), knob = el.querySelector('b'), r = el.getBoundingClientRect();
+      el.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 91, pointerType: 'touch', clientX: r.left + 10, clientY: r.top + 10, bubbles: true, cancelable: true }));
+      el.dispatchEvent(new PointerEvent('pointermove', { pointerId: 91, pointerType: 'touch', clientX: r.left + 6, clientY: r.top + 6, bubbles: true, cancelable: true }));
+      const moved = knob.style.transform;
+      el.dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 91, pointerType: 'touch', bubbles: true }));
+      return { moved, afterTransform: knob.style.transform, held: el.classList.contains('held') };
+    })()`);
+    check(!!lostPtr.moved && lostPtr.afterTransform === '' && !lostPtr.held,
+      `phone ${name}: lostpointercapture resets left stick knob and held state (${JSON.stringify(lostPtr)})`);
+
+    // Touch right stick forward, verify flight, take portrait screenshot, use Settings -> Back to nearest road.
+    const right = await p.centre('droneRight');
+    const before = await p.read(`({ x: mmm.drone.state.x, z: mmm.drone.state.z })`);
     await p.touchAt('touchStart', [right]);
-    let pDist = 0;
-    while (pDist < 2550 && Date.now() - pt0 < 180000) {
-      await p.touchAt('touchMove', [{ x: right.x, y: right.y - right.h * 0.42 }]);
-      const sample = await p.read(`(${PROBE_EXPR})(mmm.drone.state.x, mmm.drone.state.z)`);
-      pDist = Math.hypot(sample.x - pStart.x, sample.z - pStart.z);
-      pSamples.push({ t: (Date.now() - pt0) / 1000, pDist, ...sample });
-      await sleep(120);
-    }
+    for (let t = 0; t < 2000; t += 100) { await p.touchAt('touchMove', [{ x: right.x, y: right.y - right.h * 0.4 }]); await sleep(100); }
     await p.touchAt('touchEnd', []);
-    const pElapsed = (Date.now() - pt0) / 1000;
-    const pBadSurface = pSamples.filter(s => !s.hasSurface).length;
-    const pBadLevel = pSamples.filter(s => s.finest >= 0 && s.level < s.finest).length;
-    const pBadDrawn = pSamples.filter(s => s.finest === 8 && !s.drawnFine).length;
-    const pSlowed = pSamples.filter(s => s.loading).length;
-    console.log('2.5KM_PHONE', JSON.stringify({
-      travelled: +pDist.toFixed(1), elapsed: +pElapsed.toFixed(1), avgSpeed: +(pDist / Math.max(pElapsed, 0.001)).toFixed(1),
-      peakSpeed: +Math.max(...pSamples.map(s => s.speed)).toFixed(1),
-      samples: pSamples.length, slowedCount: pSlowed, badSurface: pBadSurface, badLevel: pBadLevel, badDrawn: pBadDrawn,
-    }));
-    check(pDist >= 2500 && pBadSurface === 0 && pBadLevel === 0 && pBadDrawn === 0,
-      `phone portrait 2.5 km full-speed flight stayed loaded (dist=${pDist.toFixed(0)} m, badSurface=${pBadSurface}, badLevel=${pBadLevel}, badDrawn=${pBadDrawn})`);
-  }
+    await sleep(400);
+    const moved = await p.read(`Math.hypot(mmm.drone.state.x - (${before.x}), mmm.drone.state.z - (${before.z}))`);
+    check(moved > 10, `phone ${name}: right stick flies forward (${moved.toFixed(1)} m)`);
 
-  // Tap ROAD button -> puts drone back on nearest road.
-  await p.read(`(() => { const s = mmm.drone.state; const hit = mmm.roads.nearest(s.x, s.z, 500); if (hit) { s.x = hit.x + 80; s.z = hit.z + 80; } })()`);
-  const roadBtn = await p.centre('droneReturn');
-  await p.touchAt('touchStart', [roadBtn]); await p.touchAt('touchEnd', []);
-  await sleep(300);
-  const roadAfter = await p.read(`mmm.roads.nearest(mmm.drone.state.x, mmm.drone.state.z, 20)?.dist ?? 999`);
-  check(roadAfter < 0.5, `phone ${name}: ROAD button returns drone to nearest road (dist=${roadAfter.toFixed(2)} m)`);
+    if (fullFlight) {
+      const phoneShot = await p.shot('02-drone-vehicle-phone-portrait');
+      if (WORK_SHOTS) {
+        mkdirSync(resolve(root, 'data/work'), { recursive: true });
+        copyFileSync(phoneShot, resolve(root, 'data/work/drone-vehicle-phone.png'));
+      }
+      // Phone 2.5 km fast flight at full speed (60 m/s) to measure LOW-detail phone loading!
+      await p.read(`(() => { const g = mmm.terrain.heightAt(0, 2000) ?? 30; mmm.drone.place(0, g + 35, 2000, 0); mmm.drone.maxSpeed = 60; })()`);
+      await p.until(`String(document.title).startsWith('settled')`, 60000);
+      await sleep(400);
+      const pStart = await p.read(`({ x: mmm.drone.state.x, z: mmm.drone.state.z })`);
+      const pSamples = [];
+      const pt0 = Date.now();
+      await p.touchAt('touchStart', [right]);
+      let pDist = 0;
+      while (pDist < 2550 && Date.now() - pt0 < 180000) {
+        await p.touchAt('touchMove', [{ x: right.x, y: right.y - right.h * 0.42 }]);
+        const sample = await p.read(`(${PROBE_EXPR})(mmm.drone.state.x, mmm.drone.state.z)`);
+        pDist = Math.hypot(sample.x - pStart.x, sample.z - pStart.z);
+        pSamples.push({ t: (Date.now() - pt0) / 1000, pDist, ...sample });
+        await sleep(120);
+      }
+      await p.touchAt('touchEnd', []);
+      const pElapsed = (Date.now() - pt0) / 1000;
+      const pBadSurface = pSamples.filter(s => !s.hasSurface).length;
+      const pBadLevel = pSamples.filter(s => s.finest >= 0 && s.level < s.finest).length;
+      const pBadDrawn = pSamples.filter(s => s.finest === 8 && !s.drawnFine).length;
+      const pSlowed = pSamples.filter(s => s.loading).length;
+      console.log('2.5KM_PHONE', JSON.stringify({
+        travelled: +pDist.toFixed(1), elapsed: +pElapsed.toFixed(1), avgSpeed: +(pDist / Math.max(pElapsed, 0.001)).toFixed(1),
+        peakSpeed: +Math.max(...pSamples.map(s => s.speed)).toFixed(1),
+        samples: pSamples.length, slowedCount: pSlowed, badSurface: pBadSurface, badLevel: pBadLevel, badDrawn: pBadDrawn,
+      }));
+      check(pDist >= 2500 && pBadSurface === 0 && pBadLevel === 0 && pBadDrawn === 0,
+        `phone portrait 2.5 km full-speed flight stayed loaded (dist=${pDist.toFixed(0)} m, badSurface=${pBadSurface}, badLevel=${pBadLevel}, badDrawn=${pBadDrawn})`);
+    }
+
+    // Settings -> Back to nearest road via real touch (open gear, scroll button into view, verify hit-test, tap).
+    await p.read(`(() => { const s = mmm.drone.state; const hit = mmm.roads.nearest(s.x, s.z, 500); if (hit) { s.x = hit.x + 80; s.z = hit.z + 80; } })()`);
+    const gearBtn = await p.centre('gear');
+    await p.touchAt('touchStart', [gearBtn]); await p.touchAt('touchEnd', []);
+    assert.ok(await p.until(`document.getElementById('settings').classList.contains('open')`, 5000), `phone ${name}: touch opens Settings`);
+    await p.read(`document.getElementById('droneNearestRoad').scrollIntoView({ block: 'center' })`);
+    await sleep(100);
+    const roadTouch = await p.read(`(() => {
+      const btn = document.getElementById('droneNearestRoad'), r = btn.getBoundingClientRect();
+      const x = r.left + r.width / 2, y = r.top + r.height / 2, at = document.elementFromPoint(x, y);
+      return { x, y, hittable: at === btn || btn.contains(at) };
+    })()`);
+    check(roadTouch.hittable, `phone ${name}: Settings nearest-road button is reachable and tappable`);
+    await p.touchAt('touchStart', [{ x: roadTouch.x, y: roadTouch.y }]); await p.touchAt('touchEnd', []);
+    await sleep(300);
+    const roadState = await p.read(`({ open: document.getElementById('settings').classList.contains('open'), dist: mmm.roads.nearest(mmm.drone.state.x, mmm.drone.state.z, 20)?.dist ?? 999 })`);
+    check(!roadState.open && roadState.dist < 0.5, `phone ${name}: tapping Settings nearest-road closes Settings and returns drone to nearest road (${JSON.stringify(roadState)})`);
+
+    // Big Map stays reachable through PLACES on phones even with direct MAP button hidden.
+    const placesBtn = await p.centre('placesButton');
+    await p.touchAt('touchStart', [placesBtn]); await p.touchAt('touchEnd', []);
+    assert.ok(await p.until(`!!mmm.places?.busy`, 5000), `phone ${name}: touch opens PLACES`);
+    const placesMapBtn = await p.centre('placesMap');
+    await p.touchAt('touchStart', [placesMapBtn]); await p.touchAt('touchEnd', []);
+    assert.ok(await p.until(`!!mmm.bigMap?.busy`, 5000), `phone ${name}: PLACES opens Big Map`);
+    const mapCloseBtn = await p.centre('mapClose');
+    await p.touchAt('touchStart', [mapCloseBtn]); await p.touchAt('touchEnd', []);
+    assert.ok(await p.until(`!mmm.bigMap?.busy`, 5000), `phone ${name}: touch closes Big Map`);
+  }
 
   const errors = await p.read('window.qaErrors ?? []');
   check(errors.length === 0, `phone ${name}: zero page errors ` + JSON.stringify(errors));
+  await p.close();
+}
+
+// ---- 4. Port Hood phone standalone drone: active arrival card hidden under sticks + 420/421 short-landscape safe-area boundary ----
+{
+  const p = await page(390, 844, true);
+  await p.open({ area: 'porthood', mode: 'explore', vehicle: 'drone', touch: '1', title: '1', q: 'low' });
+  const phState = await p.read(`(() => {
+    const arr = document.getElementById('placeArrival');
+    return {
+      arrivalDomActive: !!arr && !arr.hidden && (arr.textContent ?? '').includes('Port Hood village'),
+      arrivalDisplay: arr ? getComputedStyle(arr).display : '',
+      arrivalRects: arr ? arr.getClientRects().length : 0,
+      hasReturn: !!document.getElementById('droneReturn'),
+    };
+  })()`);
+  check(phState.arrivalDomActive && phState.arrivalDisplay === 'none' && phState.arrivalRects === 0 && !phState.hasReturn,
+    `Port Hood phone portrait: active Port Hood village arrival card is hidden while sticks show, no ROAD button (${JSON.stringify(phState)})`);
+
+  // Check both sides of the 420/421 px short-landscape boundary, shorter height (250 px), side safe insets, and a fixed-viewport left->right safe-area swap.
+  let prevW = 390, prevH = 844;
+  for (const [sw, sh, left, right, bottom] of [[390, 250, 0, 0, 21], [390, 280, 0, 0, 21], [420, 280, 0, 0, 21], [421, 280, 0, 0, 21], [421, 280, 47, 47, 21], [421, 320, 47, 0, 0], [421, 320, 0, 47, 0]]) {
+    if (sw !== prevW || sh !== prevH) {
+      await p.send('Emulation.setDeviceMetricsOverride', { width: sw, height: sh, deviceScaleFactor: 1, mobile: true });
+      prevW = sw; prevH = sh;
+    }
+    const inset = await p.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, right, bottom, left } });
+    if (inset.error) await p.read(`Object.entries({'--test-safe-left':'${left}px','--test-safe-right':'${right}px','--test-safe-bottom':'${bottom}px'}).forEach(([k,v])=>document.documentElement.style.setProperty(k,v))`);
+    await sleep(200);
+    const shortCheck = await p.read(`(() => {
+      const visible = el => !!el && !el.hidden && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none' && !el.closest('[hidden]');
+      const nodes = new Map();
+      for (const id of ['hud', 'miniMap', 'gear', 'pauseButton', 'placesButton', 'savePictureButton', 'droneLeft', 'droneRight', 'droneReturn', 'bigMapButton', 'placeArrival']) {
+        const el = document.getElementById(id);
+        if (visible(el)) nodes.set(id, el);
+      }
+      for (const span of document.querySelectorAll('.droneStick span')) if (visible(span)) nodes.set(span.parentElement.id + ':label', span);
+      const rects = [...nodes.entries()].map(([id, el]) => {
+        const r = el.getBoundingClientRect();
+        return [id, { l: r.left, t: r.top, r: r.right, b: r.bottom }];
+      });
+      const faults = [];
+      for (const id of ['gear', 'pauseButton', 'placesButton', 'savePictureButton', 'droneLeft', 'droneRight']) if (!nodes.has(id)) faults.push(id + ' hidden');
+      for (const [id, r] of rects) {
+        if (r.l < ${left} - 0.5 || r.t < -0.5 || r.r > innerWidth - ${right} + 0.5 || r.b > innerHeight - ${bottom} + 0.5) faults.push(id + ' outside safe viewport');
+      }
+      for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+        const [a, ra] = rects[i], [b, rb] = rects[j];
+        if (ra.l < rb.r - 1 && ra.r > rb.l + 1 && ra.t < rb.b - 1 && ra.b > rb.t + 1) faults.push(a + '/' + b);
+      }
+      for (const id of ['gear', 'pauseButton', 'placesButton', 'savePictureButton']) {
+        const el = document.getElementById(id);
+        if (!visible(el)) continue;
+        const r = el.getBoundingClientRect(), at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (!(at === el || el.contains(at))) faults.push(id + ' covered');
+      }
+      return faults;
+    })()`);
+    check(shortCheck.length === 0, `Port Hood standalone ${sw}x${sh} safe(${left},${right},${bottom}): all buttons and sticks clear (${JSON.stringify(shortCheck)})`);
+  }
+  const errors = await p.read('window.qaErrors ?? []');
+  check(errors.length === 0, 'Port Hood standalone phone checks had zero page errors: ' + JSON.stringify(errors));
   await p.close();
 }
 
