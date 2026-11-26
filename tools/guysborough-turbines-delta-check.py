@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DELTA_DIR = ROOT / 'tools/guysborough-turbines-delta'
 RECEIPT = DELTA_DIR / 'hashes.json'
 # None accepts all-before or all-after until the main thread installs the delta and flips this to 'after'.
-EXPECT = 'after'
+EXPECT = None
 
 spec = importlib.util.spec_from_file_location('guysborough_turbines_patch', DELTA_DIR / 'patch.py')
 patch = importlib.util.module_from_spec(spec)
@@ -56,37 +56,43 @@ def check_build_logic():
         ],
         'towers': [],
         'lines': [],
+        'omitted': {'turbines': [{'id': 'c02-08', 'e': 622595.0, 'n': 5047275.0}]},
     }
     pts_by_id = {
-        'c01-01': {'id': 'c01-01', 'farm': 'c01', 'status': 'built'},
-        'c02-01': {'id': 'c02-01', 'farm': 'c02', 'status': 'operating'},
+        'c01-01': {'id': 'c01-01', 'farm': 'c01', 'status': 'operating', 'statusSource': 'observed operating, 26 Nov 2026'},
+        'c02-01': {'id': 'c02-01', 'farm': 'c02', 'status': 'operating', 'statusSource': 'observed operating, 26 Nov 2026'},
     }
-    extra = [{'id': 'c02-24', 'farm': 'c02', 'e': 622465.0, 'n': 5046105.0, 'hub': 118, 'diameter': 163,
-              'status': 'operating', 'source': 'Sentinel-2 L2A', 'date': '2026-10-26', 'dateKind': 'acquired',
+    extra = [{'id': 'c02-08', 'farm': 'c02', 'e': 622595.0, 'n': 5047275.0, 'hub': 118, 'diameter': 163,
+              'status': 'operating', 'statusSource': 'observed operating, 26 Nov 2026', 'source': 'Sentinel-2 L2A', 'date': '2026-10-26', 'dateKind': 'acquired',
               'confidence': 'medium', 'uncertainty': 30, 'dimensions': 'assumed-modern-era',
               'dimensionsSource': 'assumption-c02', 'tower': 'not-resolved'}]
 
     updated, tall_key = patch.build_area_tall(base_tall, manifest, pts_by_id, extra, FakeDem(), inside, dist_box, root_box)
-    assert len(updated['turbines']) == 3 and updated['turbines'][2]['id'] == 'c02-24'
+    assert len(updated['turbines']) == 3 and updated['turbines'][2]['id'] == 'c02-08'
     assert updated['turbines'][0]['status'] == 'operating'
     assert updated['turbines'][1]['status'] == 'operating'
+    assert updated['turbines'][1]['statusSource'] == 'observed operating, 26 Nov 2026'
     assert updated['turbines'][2]['status'] == 'operating'
+    assert updated['turbines'][2]['statusSource'] == 'observed operating, 26 Nov 2026'
     assert updated['turbines'][2]['ground'] == 175.43
-    assert updated['far'][0]['status'] == 'built'
+    assert updated['far'][0]['status'] == 'operating'
+    assert updated['far'][0]['statusSource'] == 'observed operating, 26 Nov 2026'
+    assert updated['omitted']['turbines'] == [], 'placed c02-08 must be removed from omitted.turbines'
     assert tall_key == {'file': 'tall.json', 'turbines': 3, 'far': 1, 'towers': 0, 'lines': 0}
 
-    # Far placement check when root is Mabou (north of c02-24).
+    # Far placement check when root is Mabou (north of c02-08).
     mabou_manifest = {'origin': [591500, 5136100], 'size': 65536}
     mabou_tall = {**base_tall, 'root': root_box(mabou_manifest), 'turbines': [], 'far': base_tall['turbines'] + base_tall['far']}
     m_up, m_key = patch.build_area_tall(mabou_tall, mabou_manifest, pts_by_id, extra, FakeDem(), inside, dist_box, root_box)
-    assert m_key['turbines'] == 0 and m_key['far'] == 4 and any(p['id'] == 'c02-24' for p in m_up['far'])
+    assert m_key['turbines'] == 0 and m_key['far'] == 4 and any(p['id'] == 'c02-08' for p in m_up['far'])
+    assert m_up['omitted']['turbines'] == []
 
     # Invalid status mutant refused.
     bad_pts = {**pts_by_id, 'c01-01': {'id': 'c01-01', 'farm': 'c01', 'status': 'planned'}}
     refused('Invalid status', patch.build_area_tall, base_tall, manifest, bad_pts, extra, FakeDem(), inside, dist_box, root_box)
     # Wrong tall version refused.
     refused('version 2', patch.build_area_tall, {**base_tall, 'version': 1}, manifest, pts_by_id, extra, FakeDem(), inside, dist_box, root_box)
-    print('PASS synthetic build logic: operating/built status tagging, near/far c02-24 placement, and invalid-status/version refusals')
+    print('PASS synthetic build logic: operating status tagging, near/far c02-08 placement, un-omission, and invalid-status/version refusals')
 
 
 def check_install_and_refusals():
@@ -269,8 +275,11 @@ def check_install_and_refusals():
 def check_receipt_schema() -> dict:
     assert RECEIPT.is_file(), f'Missing committed receipt: {RECEIPT}'
     receipt = json.loads(RECEIPT.read_text())
-    assert receipt.get('version') == 1 and receipt.get('issue') == 1430
-    assert receipt.get('addedPoints') == ['c02-24'], f'Unexpected addedPoints: {receipt.get("addedPoints")}'
+    assert receipt.get('version') == 2 and receipt.get('issue') == 1430
+    assert receipt.get('addedPoints') == ['c02-08'], f'Unexpected addedPoints: {receipt.get("addedPoints")}'
+    status_changed = receipt.get('statusChanged', [])
+    assert len(status_changed) == 39, f'Expected 39 previously placed c01/c02 turbines changed to operating, got {len(status_changed)}'
+    assert all(pid.startswith(('c01-', 'c02-')) for pid in status_changed) and 'c02-08' not in status_changed
     packs = [f['pack'] for f in receipt.get('files', [])]
     assert packs == [p for _, p in patch.PACKS], f'Unexpected packs: {packs}'
     for f in receipt['files']:
@@ -281,7 +290,7 @@ def check_receipt_schema() -> dict:
         bm, am = f['beforeManifestTall'], f['afterManifestTall']
         assert bm['towers'] == am['towers'] and bm['lines'] == am['lines']
         assert (am['turbines'] + am['far']) - (bm['turbines'] + bm['far']) == 1, f'Expected +1 turbine in {f["pack"]}'
-    print(f'PASS committed receipt schema ({len(packs)} areas, +1 turbine each)')
+    print(f'PASS committed receipt schema ({len(packs)} areas, +1 turbine c02-08, 39 status upgrades)')
     return receipt
 
 

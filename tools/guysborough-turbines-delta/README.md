@@ -4,16 +4,15 @@ This delta updates `tall.json` and the `tall` counts in `manifest.json` across a
 
 ## What changes in the land data
 
-1. **Adds `c02-24` (the 24th turbine of farm `c02` in Guysborough County).**
-   - Position from Copernicus Sentinel-2 L2A `S2B_20TPR_20261026_0_L2A` (26 Oct 2026, pixel `[1143, 452]`): E `622465.0`, N `5046105.0` (EPSG:2961, 12 m from the EA filing position).
-   - Clears the nearest road (`Savory Road`) by 10.71 m (above the 4.714 m base + 2 m clearance rule).
-   - `pointtupper`, `westbay` and `cansocauseway` gain +1 near turbine (`turbines: 39 -> 40`). `mabou`, `judique` and `porthood` gain +1 far turbine (`far: 162 -> 163`).
-   - Note: `c02-08` (`622595.0, 5047275.0`) remains omitted by `safe_turbines` because it is 3.41 m from unnamed mapped track 934; positions are never shifted.
-2. **Adds explicit public build `status` to every turbine.**
-   - NRCan CWTD turbines: `status: "operating"`.
-   - `c02` (Guysborough County, 24 turbines): `status: "built"` (construction complete Oct 2026; grid feed/commercial operation targeted before end of 2026, not yet publicly confirmed as of 25 Nov 2026).
-   - `c01` (2026 build, 16 turbines): `status: "built"` (erected, not yet commissioned as of 25 Nov 2026).
+1. **Updates `c01` and `c02` turbines to `status: "operating"` (with `statusSource: "observed operating, 26 Nov 2026"`).**
+   - `c01` (16 turbines): `status: "operating"` (`statusSource: "observed operating, 26 Nov 2026"`).
+   - `c02` (Guysborough County, all 24 turbines placed): `status: "operating"` (`statusSource: "observed operating, 26 Nov 2026"`).
+   - NRCan CWTD turbines keep `status: "operating"`.
    - Operating turbines spin and flash red in sync at night. Non-operating (`built` or `under-construction`) turbines stand still and stay dark.
+2. **Places `c02-08` at its measured position (`E 622595.0, N 5047275.0`, EPSG:2961).**
+   - `c02-08` was previously omitted by `safe_turbines` because it is 3.41 m from unnamed mapped track 934 (`kind: 4`, `halfWidth: 1.5 m`), which is the turbine's own pad access road (owner confirmed 26 Nov 2026).
+   - A narrow allow-list entry in `pipeline/34_bake_far_views.py` (`TURBINE_CLEARANCE_EXCEPTIONS`) and `tools/tall-check.mjs` exempts only `c02-08` at its exact coordinates in `pointtupper` against that unnamed track (`kind: 4`, `halfWidth <= 1.5 m`, pinned by exact endpoints, 71 vertices, and full ordered polyline SHA-256 `b1d2eaf87001...`, not positional road ID alone). The clearance rule stays unchanged for all other turbines, areas, coordinates, roads and buildings.
+   - `pointtupper`, `westbay` and `cansocauseway` gain +1 near turbine (`turbines: 40 -> 41`). `mabou`, `judique` and `porthood` gain +1 far turbine (`far: 163 -> 164`). `omitted.turbines` drops from 1 (`c02-08`) to 0.
 
 ## Build, install and rollback
 
@@ -37,4 +36,4 @@ node tools/tall-check.mjs
 python3 tools/guysborough-turbines-delta/patch.py rollback /path/to/new-stage data/baked
 ```
 
-`EXPECT` in `tools/guysborough-turbines-delta-check.py` is `None` (accepts all-before or all-after, never mixed) until the main thread installs the delta and flips it to `'after'`.
+`EXPECT` in `tools/guysborough-turbines-delta-check.py` is `None` (accepts all-before or all-after, never mixed) until the main thread installs the delta and flips it to `'after'`. Both `era-density` (`MANIFEST_UNREAD` in `tools/era-density-inputs.mjs`) and `sidewalks-cache` (`MANIFEST_UNREAD` in `tools/sidewalks_bake.py`) ignore `manifest.tall`, so no post-install fingerprint refresh PR is needed for them.

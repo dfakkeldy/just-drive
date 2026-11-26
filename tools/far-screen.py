@@ -11,7 +11,7 @@ for row in rows:
 out={}
 for row in rows:
  base=Path(row['base']);d=json.loads(Path(row['candidate']).read_text());live=json.loads((base/'tall.json').read_text());m=json.loads((base/'manifest.json').read_text())
- _,wind=b.safe_turbines(base,[p for p in points.values() if b.inside(p['e'],p['n'],b.root_box(m))]);_,_,structures=b.safe_structures(base,d)
+ _,wind=b.safe_turbines(base,[p for p in points.values() if b.inside(p['e'],p['n'],b.root_box(m))],area=row['area']);_,_,structures=b.safe_structures(base,d)
  lost=b.removals(live,d)
  out[row['area']]={'removed':lost,'removedCounts':{kind:sum(v.startswith(kind+':') for v in lost) for kind in ['wind','mast','line']},'windConflicts':wind,'structureConflicts':structures}
 print(json.dumps(out,separators=(',',':')))

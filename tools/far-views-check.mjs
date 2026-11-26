@@ -32,8 +32,8 @@ function dataValid(d){
  }
  assert.equal(d.points.filter(p=>p.farm==='c01').length,16,'sixteen independently read pads (c01)');
  assert.equal(d.points.filter(p=>p.farm==='c02').length,24,'twenty-four independently read pads (c02 Guysborough)');
- assert.ok(d.points.filter(p=>p.farm==='c02').every(p=>p.status==='built'),'Guysborough c02 built not yet commissioned');
- assert.ok(d.points.filter(p=>p.farm==='c01').every(p=>p.status==='built'),'c01 built not yet commissioned');
+ assert.ok(d.points.filter(p=>p.farm==='c02').every(p=>p.status==='operating'&&p.statusSource==='observed operating, 26 Nov 2026'),'Guysborough c02 observed operating, 26 Nov 2026');
+ assert.ok(d.points.filter(p=>p.farm==='c01').every(p=>p.status==='operating'&&p.statusSource==='observed operating, 26 Nov 2026'),'c01 observed operating, 26 Nov 2026');
 }
 function glslDrop(r,distance){
  const expression=r.CURVE_GLSL.match(/return ([^;]+);/)[1].replaceAll('dot(delta,delta)','distance*distance').replaceAll('max(','Math.max(');
@@ -143,8 +143,8 @@ function farTurbineBehaviour(mod){
  const {FarTurbines}=mod;
  const mixed=[
   {e:1000,n:1000,ground:50,hub:118,diameter:163,farm:'c02',status:'operating'},
-  {e:2000,n:1000,ground:60,hub:125,diameter:163,farm:'c01',status:'built'},
-  {e:3000,n:1000,ground:70,hub:125,diameter:163,farm:'c03',status:'under-construction'},
+  {e:2000,n:1000,ground:60,hub:125,diameter:163,farm:'s01',status:'built'},
+  {e:3000,n:1000,ground:70,hub:125,diameter:163,farm:'s02',status:'under-construction'},
   {e:4000,n:1000,ground:40,hub:80,diameter:82,farm:'n001'},
  ];
  const night=new FarTurbines(mixed,[0,0],false,{},true);
@@ -169,7 +169,7 @@ function farTurbineBehaviour(mod){
 if(['all','data'].includes(part)){
  dataValid(measurements);farTurbineBehaviour(buildModule('web/src/far-turbines.ts'));console.log('PASS sourced turbine measurements, operating gating, white albedo and DPR beacon halo');
  if(mutations){
-  for(const [label,change] of [['source',d=>d.points[0].source='EA'],['date',d=>d.points[0].date='unknown'],['confidence',d=>delete d.points[0].confidence],['status',d=>d.points[0].status='planned'],['pad centre',d=>d.points[0].e+=10]]){const d=structuredClone(measurements);change(d);reject(label,()=>dataValid(d));}
+  for(const [label,change] of [['source',d=>d.points[0].source='EA'],['date',d=>d.points[0].date='unknown'],['confidence',d=>delete d.points[0].confidence],['status',d=>d.points[0].status='planned'],['c01 built regression',d=>d.points.find(p=>p.farm==='c01').status='built'],['c02 built regression',d=>d.points.find(p=>p.farm==='c02').status='built'],['missing statusSource',d=>delete d.points[0].statusSource],['pad centre',d=>d.points[0].e+=10]]){const d=structuredClone(measurements);change(d);reject(label,()=>dataValid(d));}
   const ft=source('web/src/far-turbines.ts');
   for(const [label,a,b] of [
    ['built turbine spins','turbineOperating(p)?rotorRate(p.diameter):0','rotorRate(p.diameter)'],

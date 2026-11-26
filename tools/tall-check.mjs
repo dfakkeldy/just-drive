@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Node-first contracts for the tall bake and the exact shared animation/wire mathematics.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {mergeFarManifest} from './far-manifest.mjs';
 import { readFileSync, existsSync, mkdirSync, writeFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -95,6 +96,45 @@ function validate(d,manifest) {
 // version 2 (main.ts below), so the old file's conflicts are listed but cannot reach a player; every version 2 conflict fails.
 assert.ok(main.includes('if(data.version!==2||!sameRoot(data.root))return null;'),'the game must ignore a tall.json that is not version 2');
 assert.ok(main.includes('(t && Number.isInteger(t.far) ? t : undefined)'),'only the far pack manifest key (with a far count) fetches tall.json or opens Places');
+// Narrow, explicit clearance exceptions matching pipeline/34_bake_far_views.py:
+// track 934 is c02-08's own pad access road; pinned by area, coordinates, unnamed track kind,
+// halfWidth, endpoints, vertex count, and full ordered polyline SHA-256 (never positional road ID alone).
+const TURBINE_CLEARANCE_EXCEPTIONS={
+  'c02-08':{
+    area:'pointtupper',e:622595.0,n:5047275.0,roadKind:4,maxHalfWidth:1.5,
+    ptsSha256:'b1d2eaf87001d7ee4b03502357516166d364aa8c79a89188042a599feee68abd',
+    reason:"track 934 is the turbine's own pad access road; owner confirmed 26 Nov 2026",
+  },
+};
+function roadPtsSha256(pts){
+  return createHash('sha256').update(pts.map(([x,y])=>`${x.toFixed(2)},${y.toFixed(2)}`).join(';')).digest('hex');
+}
+function isExemptTurbineRoad(area,kind,p,r){
+  if(kind!=='turbine')return false;
+  const ex=TURBINE_CLEARANCE_EXCEPTIONS[p.id];
+  if(!ex||area!==ex.area||p.e!==ex.e||p.n!==ex.n)return false;
+  return r.kind===ex.roadKind&&!r.name&&r.halfWidth<=ex.maxHalfWidth
+    &&Array.isArray(r.pts)&&r.pts.length>1&&roadPtsSha256(r.pts)===ex.ptsSha256;
+}
+{
+  const ptRoads=read(root+'data/baked/areas/pointtupper/roads.json').roads;
+  const rOk=ptRoads.find(r=>Array.isArray(r.pts)&&r.pts.length>1&&roadPtsSha256(r.pts)===TURBINE_CLEARANCE_EXCEPTIONS['c02-08'].ptsSha256);
+  assert.ok(rOk,'pointtupper reviewed pad-access track present for clearance-exception checks');
+  const pOk={id:'c02-08',e:622595.0,n:5047275.0};
+  const movedInterior=structuredClone(rOk.pts);
+  movedInterior[Math.floor(movedInterior.length/2)]=[622595.0,5047275.0];
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',pOk,rOk),true,'c02-08 exempt on reviewed track in pointtupper');
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',pOk,{...rOk,pts:movedInterior}),false,'changed interior vertex crossing c02-08 base not exempt');
+  assert.equal(isExemptTurbineRoad('westbay','turbine',pOk,rOk),false,'other area not exempt');
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',{...pOk,id:'c02-09'},rOk),false,'other turbine not exempt');
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',{...pOk,e:622600.0},rOk),false,'easting-shifted c02-08 not exempt');
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',{...pOk,n:5047276.0},rOk),false,'northing-shifted c02-08 not exempt');
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',pOk,{...rOk,name:'Savory Road'}),false,'named road reusing id 934 not exempt');
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',pOk,{...rOk,kind:2}),false,'non-track road reusing id 934 not exempt');
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',pOk,{...rOk,pts:[[622500,5047279.9],[622650,5047279.9]]}),false,'different geometry reusing id 934 not exempt');
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',pOk,{...rOk,halfWidth:3.5}),false,'wide road reusing id 934 not exempt');
+  assert.equal(isExemptTurbineRoad('pointtupper','mast',pOk,rOk),false,'mast not exempt');
+}
 const counts=[],conflicts=[],undrawn=[];
 for(const area of ['mabou','judique','porthood','pointtupper','westbay','cansocauseway']){
   const sourceDir=root+'data/baked/'+tallPath(area),dir=tallBase(area);
@@ -102,7 +142,7 @@ for(const area of ['mabou','judique','porthood','pointtupper','westbay','cansoca
   const d=read(dir+'/tall.json'),m=tallManifest(area);validate(d,m);
   const roads=read(sourceDir+'/roads.json').roads,buildings=read(sourceDir+'/buildings.json').buildings;
   for(const [kind,list]of [['turbine',d.turbines],['mast',d.towers],['line',d.lines.flatMap(l=>l.towers)]])for(const p of list){
-    const road=roads.find(r=>r.pts.slice(1).some((b,i)=>rules.pointSegment(p.e,p.n,r.pts[i],b)<=r.halfWidth+2+(kind==='turbine'?p.hub*.023:0)));
+    const road=roads.find(r=>!isExemptTurbineRoad(area,kind,p,r)&&r.pts.slice(1).some((b,i)=>rules.pointSegment(p.e,p.n,r.pts[i],b)<=r.halfWidth+2+(kind==='turbine'?p.hub*.023:0)));
     const building=buildings.find(b=>rules.inFootprint(p.e,p.n,b.footprint)||(kind==='turbine'&&b.footprint.some((a,i)=>rules.pointSegment(p.e,p.n,a,b.footprint[(i+1)%b.footprint.length])<=p.hub*.023+2)));
     if(road||building)(d.version===2?conflicts:undrawn).push({area,kind,e:p.e,n:p.n,...(road?{road:road.id}:{}),...(building?{building:building.id}:{})});
   }
@@ -153,8 +193,8 @@ function drawing(){
     version:2,crs:'EPSG:2961',root:d.root,mid:d.mid,anchor:d.anchor,far:[],towers:[],lines:[],
     turbines:[
       {e:d.root[0]+1000,n:d.root[1]+1000,ground:50,hub:118,diameter:163,farm:'c02',status:'operating'},
-      {e:d.root[0]+2000,n:d.root[1]+1000,ground:60,hub:125,diameter:163,farm:'c01',status:'built'},
-      {e:d.root[0]+3000,n:d.root[1]+1000,ground:70,hub:125,diameter:163,farm:'c03',status:'under-construction'},
+      {e:d.root[0]+2000,n:d.root[1]+1000,ground:60,hub:125,diameter:163,farm:'s01',status:'built'},
+      {e:d.root[0]+3000,n:d.root[1]+1000,ground:70,hub:125,diameter:163,farm:'s02',status:'under-construction'},
     ],
   };
   const terrain={manifest:m,seaLevel:0,exag:1,heightAt:()=>null};

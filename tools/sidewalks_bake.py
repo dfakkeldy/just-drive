@@ -298,12 +298,24 @@ def compact(plan,roads,run_indices):
         pieces.append(row)
     return {**plan,'pieces':pieces}
 
+# Sidewalks read only manifest origin, size, village and levels; far-turbine installs update only manifest.tall.
+MANIFEST_UNREAD=('tall',)
+
+def manifest_digest(raw_bytes):
+    doc=json.loads(raw_bytes)
+    kept={k:v for k,v in doc.items() if k not in MANIFEST_UNREAD}
+    return hashlib.sha256(json.dumps(kept,separators=(',',':'),sort_keys=True,allow_nan=False).encode()).hexdigest()
+
 def fingerprints(sources=(),work_root=None):
     files=list(sources)+['web/src/terrain.ts','web/src/sidewalks-data.json','web/src/sidewalk-layout.ts','tools/sidewalks-inputs.mjs','tools/sidewalks_bake.py','tools/sidewalks-compile.mjs','tools/sidewalks-low-bake.mjs','web/src/sidewalks.ts','web/src/sidewalks-cache.ts','web/src/sidewalks-assets.ts','web/src/store.ts','web/src/sidewalks-worker.ts','web/src/sidewalks-heights.ts']
     files += [f'web/src/{s}-site.ts' for s in ['yard','home','church','porch','fishing','coast','quarry','mine']]
     for base in ['terrain','areas/porthood','areas/pointtupper']:
         files += [f'data/baked/{base}/{s}.json' for s in ['manifest','roads','props','buildings']]
-    return {p:hashlib.sha256(((work_root/p) if work_root and p=='web/src/sidewalks-assets.ts' and (work_root/p).exists() else ROOT/p).read_bytes()).hexdigest() for p in files}
+    out={}
+    for p in files:
+        raw=((work_root/p) if work_root and p=='web/src/sidewalks-assets.ts' and (work_root/p).exists() else ROOT/p).read_bytes()
+        out[p]=manifest_digest(raw) if p.endswith('/manifest.json') else hashlib.sha256(raw).hexdigest()
+    return out
 
 def bake():
     global ALL_RUNS
@@ -325,19 +337,77 @@ NOV18=ROOT/'tools/mabou-dashcam-18nov/hashes.json'
 NOV19=ROOT/'tools/mabou-wharf/roads.json'
 COMM1347=ROOT/'tools/community-mailboxes/hashes.json'
 WIDTH1406=ROOT/'tools/industrial-surface/width-hashes.json'
+FAR_VIEWS_DELTA=ROOT/'tools/far-views-delta.json'
+GUYSBOROUGH_DELTA=ROOT/'tools/guysborough-turbines-delta/hashes.json'
 CHECK_SOURCE=ROOT/'tools/sidewalks-check-source.json'
 
-def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None):
+def source_matches(check_source, file, digest, cached):
+    if not cached or check_source is None:
+        return False
+    if previous_digest(check_source, file, digest) == cached:
+        return True
+    for entry in check_source.get('files', ()):
+        if entry.get('file') == file and digest == entry.get('sha256') and cached in entry.get('previous', ()):
+            return True
+    return False
+
+def _restore_unread_manifest_keys(manifest, base_manifest):
+    out = dict(manifest)
+    for k in MANIFEST_UNREAD:
+        if k not in base_manifest:
+            continue
+        if k in out:
+            out[k] = base_manifest[k]
+        elif k == 'tall' and 'paved' in out:
+            rebuilt = {}
+            for mk, mv in out.items():
+                if mk == 'paved':
+                    rebuilt[k] = base_manifest[k]
+                rebuilt[mk] = mv
+            out = rebuilt
+        else:
+            out[k] = base_manifest[k]
+    return out
+
+def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None,far_delta=None,guysborough_delta=None):
+    if not cached:
+        return False
     if check_source is None and report is None and CHECK_SOURCE.exists():
         check_source = json.loads(CHECK_SOURCE.read_text())
-    matches = lambda h: h == cached or (check_source is not None and previous_digest(check_source, file, h) == cached)
+    if far_delta is None and report is None and FAR_VIEWS_DELTA.exists():
+        far_delta = json.loads(FAR_VIEWS_DELTA.read_text())
+    if guysborough_delta is None and report is None and GUYSBOROUGH_DELTA.exists():
+        guysborough_delta = json.loads(GUYSBOROUGH_DELTA.read_text())
+    matches = lambda h: h == cached or source_matches(check_source, file, h, cached)
     if report is None and file == 'data/baked/areas/pointtupper/roads.json' and WIDTH1406.exists():
         # Road 107 lies outside Port Hawkesbury's sidewalk runs; widening it leaves all Point Tupper sidewalk bytes identical.
         before_width = previous_digest(json.loads(WIDTH1406.read_text()), 'roads.json', digest)
         if before_width is not None and matches(before_width):
             return True
+    manifest_candidates = None
+    if file.startswith('data/baked/') and file.endswith('/manifest.json'):
+        raw = (root/file).read_bytes()
+        if matches(hashlib.sha256(raw).hexdigest()) or matches(manifest_digest(raw)):
+            return True
+        orig_manifest = json.loads(raw)
+        manifest_candidates = [orig_manifest]
+        pack = file.removeprefix('data/baked/').removesuffix('/manifest.json')
+        prior_manifests = []
+        if far_delta is not None:
+            base_manifest = far_delta.get('packs', {}).get(pack, {}).get('manifest', {})
+            if base_manifest:
+                prior_manifests.append(base_manifest)
+        if guysborough_delta is not None:
+            for entry in guysborough_delta.get('files', ()):
+                if entry.get('pack') == pack and 'beforeManifestTall' in entry:
+                    prior_manifests.append({'tall': entry['beforeManifestTall']})
+        for base_manifest in prior_manifests:
+            restored = _restore_unread_manifest_keys(orig_manifest, base_manifest)
+            restored_bytes = (json.dumps(restored,separators=(',',':'),allow_nan=False)+'\n').encode()
+            if matches(hashlib.sha256(restored_bytes).hexdigest()):
+                return True
+            manifest_candidates.append(restored)
     reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, COMM1347, NOV18) if p.exists()]
-    manifest = None
     for current in reports:
         before = previous_digest(current, file.removeprefix('data/baked/'), digest, cached=cached) if file.startswith('data/baked/') else None
         if before is not None:
@@ -347,24 +417,26 @@ def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None)
         for m in current.get('manifests', ()):
             if file != f"data/baked/{m['folder']}/manifest.json" or m['before'] == m['after']:
                 continue
-            if manifest is None:
-                manifest = json.loads((root/file).read_bytes())
-            matched = True
-            for k, v in m['after'].items():
-                if isinstance(v, dict) and set(v) == {'count'}:
-                    if not isinstance(manifest.get(k), dict) or manifest[k].get('count') != v['count']:
+            if manifest_candidates is None:
+                manifest_candidates = [json.loads((root/file).read_bytes())]
+            for manifest in manifest_candidates:
+                matched = True
+                for k, v in m['after'].items():
+                    if isinstance(v, dict) and set(v) == {'count'}:
+                        if not isinstance(manifest.get(k), dict) or manifest[k].get('count') != v['count']:
+                            matched = False; break
+                    elif manifest.get(k) != v:
                         matched = False; break
-                elif manifest.get(k) != v:
-                    matched = False; break
-            if not matched:
-                continue
-            for k, v in m['before'].items():
-                if isinstance(v, dict) and set(v) == {'count'}:
-                    manifest[k] = dict(manifest[k], count=v['count'])
-                else:
-                    manifest[k] = v
-            if matches(hashlib.sha256((json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()).hexdigest()):
-                return True
+                if not matched:
+                    continue
+                for k, v in m['before'].items():
+                    if isinstance(v, dict) and set(v) == {'count'}:
+                        manifest[k] = dict(manifest[k], count=v['count'])
+                    else:
+                        manifest[k] = v
+                rewound_bytes = (json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()
+                if matches(hashlib.sha256(rewound_bytes).hexdigest()) or matches(manifest_digest(rewound_bytes)):
+                    return True
     return False
 
 def nov18_cases():
@@ -391,7 +463,45 @@ def nov18_cases():
         (root/name).write_bytes(full_after);assert nov18_stands_for(name,sha(full_after),sha(full_before),root,prop_report),'manifest at full props key'
         (root/name).write_bytes(full_after);assert nov18_stands_for(name,sha(full_after),'e'*64,root,prop_report,{'files':[{'file':name,'before':'e'*64,'sha256':sha(full_before)}]}),'manifest chained through check_source'
         (root/name).write_bytes(compact({'props':{'file':'props.json','mailboxes':468},'other':'y'}));assert not nov18_stands_for(name,'',sha(full_before),root,prop_report),'another key changed beside props'
-    print('PASS 18 Nov receipt stands for its before land: receipt files and counts only; other keys, unknown bytes and other land refused')
+        # manifest.tall changes (value, nested key order, removal) pass on both canonical new plans and existing raw plans; any other key change fails.
+        tall_base={'file':'tall.json','turbines':2,'far':162,'towers':3,'lines':1}
+        tall_next={'file':'tall.json','turbines':2,'far':164,'towers':3,'lines':1}
+        tall_reordered={'lines':1,'towers':3,'far':162,'turbines':2,'file':'tall.json'}
+        far_delta={'packs':{'terrain':{'manifest':{'tall':tall_base}}}}
+        tall_before=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_base,'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_only=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_next,'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_reord=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_reordered,'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_removed=compact({'props':{'file':'props.json','mailboxes':469},'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_and_props=compact({'props':{'file':'props.json','mailboxes':468},'tall':tall_next,'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_and_other=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_next,'paved':{'file':'paved/index.json'},'other':'y'})
+        # Fresh canonical plans (manifest_digest omits tall and sorts keys):
+        canon_cached=manifest_digest(tall_before)
+        assert manifest_digest(tall_only)==canon_cached,'canonical digest ignores tall value changes'
+        assert manifest_digest(tall_reord)==canon_cached,'canonical digest ignores tall nested key order'
+        assert manifest_digest(tall_removed)==canon_cached,'canonical digest ignores tall removal'
+        assert manifest_digest(tall_and_other)!=canon_cached,'canonical digest rejects other key change'
+        (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,manifest_digest(tall_and_props),canon_cached,root,prop_report),'canonical plan rewinds receipt props'
+        # Existing raw-byte plans (fallback via far_delta and guysborough_delta):
+        tall_pre_install={'file':'tall.json','turbines':2,'far':163,'towers':3,'lines':1}
+        tall_live=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_pre_install,'paved':{'file':'paved/index.json'},'other':'x'})
+        guysborough_delta={'files':[{'pack':'terrain','beforeManifestTall':tall_pre_install}]}
+        (root/name).write_bytes(tall_only);assert nov18_stands_for(name,manifest_digest(tall_only),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan ignores tall value change'
+        (root/name).write_bytes(tall_only);assert nov18_stands_for(name,manifest_digest(tall_only),sha(tall_live),root,prop_report,far_delta=far_delta,guysborough_delta=guysborough_delta),'pre-install raw plan (163) passes on staged land (164)'
+        (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,manifest_digest(tall_and_props),sha(tall_live),root,prop_report,far_delta=far_delta,guysborough_delta=guysborough_delta),'pre-install raw plan (163) rewinds receipt props on staged land (164)'
+        (root/name).write_bytes(tall_and_other);assert not nov18_stands_for(name,manifest_digest(tall_and_other),sha(tall_live),root,prop_report,far_delta=far_delta,guysborough_delta=guysborough_delta),'pre-install raw plan refuses other key change on staged land'
+        (root/name).write_bytes(tall_reord);assert nov18_stands_for(name,manifest_digest(tall_reord),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan ignores tall nested key reorder'
+        (root/name).write_bytes(tall_removed);assert nov18_stands_for(name,manifest_digest(tall_removed),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan ignores tall removal'
+        (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,manifest_digest(tall_and_props),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan accepts tall + receipt props change'
+        (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,manifest_digest(tall_and_props),sha(tall_only),root,prop_report,far_delta=far_delta),'existing raw plan already at installed tall accepts receipt-only props change'
+        (root/name).write_bytes(tall_only);assert not nov18_stands_for(name,manifest_digest(tall_only),None,root,prop_report,{'files':[]},far_delta=far_delta),'missing cached manifest fingerprint must be refused'
+        (root/name).write_bytes(tall_and_other);assert not nov18_stands_for(name,manifest_digest(tall_and_other),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan refuses tall + other key change'
+        src={'files':[{'file':'tools/sidewalks_bake.py','before':'1'*64,'previous':['2'*64],'sha256':'3'*64}]}
+        assert source_matches(src,'tools/sidewalks_bake.py','3'*64,'1'*64),'source_matches accepts before'
+        assert source_matches(src,'tools/sidewalks_bake.py','3'*64,'2'*64),'source_matches accepts previous predecessor'
+        assert not source_matches(src,'tools/sidewalks_bake.py','3'*64,'4'*64),'source_matches refuses unknown hash'
+        assert not source_matches(src,'tools/sidewalks_bake.py','3'*64,None),'source_matches refuses None'
+        assert not source_matches(src,'tools/sidewalks_bake.py','4'*64,'2'*64),'source_matches refuses changed current digest'
+    print('PASS 18 Nov receipt stands for its before land: receipt files, manifest.tall and counts only; other keys, unknown bytes and other land refused')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--check',action='store_true');parser.add_argument('--check-cases',action='store_true');parser.add_argument('--work-root',type=Path);args=parser.parse_args()
@@ -426,7 +536,9 @@ if __name__=='__main__':
         check_source=json.loads(CHECK_SOURCE.read_text())
         for file,digest in current.items():
             prior=cached['inputs'].get(file)
-            if prior==digest or (prior and previous_digest(check_source,file,digest)==prior):
+            if not prior:
+                raise SystemExit(f'Missing sidewalk bake input fingerprint: {file}; run python3 tools/sidewalks_bake.py')
+            if prior==digest or source_matches(check_source,file,digest,prior):
                 continue
             if not nov18_stands_for(file,digest,prior):
                 raise SystemExit(f'Stale sidewalk bake: {file}; run python3 tools/sidewalks_bake.py')
