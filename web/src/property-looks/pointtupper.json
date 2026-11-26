@@ -25,6 +25,12 @@
       "roads": [
         "Prince Street"
       ]
+    },
+    "railroad": {
+      "label": "Railroad",
+      "roads": [
+        "Railroad"
+      ]
     }
   },
   "overrides": {
@@ -668,6 +674,207 @@
       "wall": "#b0b2ac",
       "roof": "#3a3e42",
       "trim": "#f2f0ea",
+      "roofMaterial": "shingle"
+    },
+    "14": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        628717.7,
+        5050359.8
+      ],
+      "wall": "#cfc6b4",
+      "roof": "#b0aaa2",
+      "trim": "#e6e0d4",
+      "door": "#ababa5",
+      "roofMaterial": "shingle"
+    },
+    "16": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627477.6,
+        5052620.3
+      ],
+      "wall": "#d5d8dc",
+      "roof": "#5a6064",
+      "trim": "#f2f0ea",
+      "door": "#696d6d",
+      "roofMaterial": "shingle"
+    },
+    "150": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        628998.5,
+        5049540.1
+      ],
+      "wall": "#f4f3ee",
+      "roof": "#e8e6e0",
+      "trim": "#f2f0ea",
+      "door": "#adada7",
+      "roofMaterial": "shingle"
+    },
+    "157": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627753.7,
+        5052234.6
+      ],
+      "wall": "#b4b8bc",
+      "roof": "#9aa0a4",
+      "trim": "#d8dce0",
+      "door": "#6f7371",
+      "roofMaterial": "shingle"
+    },
+    "159": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627100.3,
+        5051755.5
+      ],
+      "wall": "#c4a574",
+      "roof": "#e4e2dc",
+      "trim": "#d8c4a4",
+      "roofMaterial": "shingle",
+      "roofShape": "flat"
+    },
+    "160": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627317.7,
+        5051711.8
+      ],
+      "wall": "#d4d0c8",
+      "roof": "#4a4e52",
+      "trim": "#f2f0ea",
+      "door": "#adada7",
+      "roofMaterial": "shingle"
+    },
+    "172": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627735.4,
+        5052208.4
+      ],
+      "wall": "#d0c6b4",
+      "roof": "#8a9094",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "668": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627652.5,
+        5052408.0
+      ],
+      "wall": "#f4f3ee",
+      "roof": "#3e4448",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "686": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627592.4,
+        5052403.7
+      ],
+      "wall": "#c23b32",
+      "roof": "#6a7074",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "687": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627555.9,
+        5052451.7
+      ],
+      "wall": "#454a4e",
+      "roof": "#6e7378",
+      "trim": "#e2c04a",
+      "roofMaterial": "shingle"
+    },
+    "1967": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627688.7,
+        5052351.7
+      ],
+      "wall": "#f2f1ea",
+      "roof": "#6a7074",
+      "trim": "#f6f5f0",
+      "roofMaterial": "shingle"
+    },
+    "2170": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        628645.0,
+        5050404.0
+      ],
+      "wall": "#e8e4d8",
+      "roof": "#8a9094",
+      "trim": "#3d7eb8",
+      "door": "#696d6d",
+      "roofMaterial": "shingle"
+    },
+    "2418": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627377.1,
+        5052760.7
+      ],
+      "wall": "#a8aea8",
+      "roof": "#3a3e42",
+      "trim": "#d4d6d4",
+      "door": "#ababa5",
+      "roofMaterial": "shingle"
+    },
+    "2587": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        626148.7,
+        5054912.8
+      ],
+      "wall": "#e4e2dc",
+      "roof": "#c8ccd0",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "2640": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        626121.4,
+        5054937.5
+      ],
+      "wall": "#f7f6f2",
+      "roof": "#e4e2dc",
+      "trim": "#f4f2ec",
+      "door": "#a6a6a1",
+      "roofMaterial": "shingle"
+    },
+    "2891": {
+      "group": "railroad",
+      "road": "Railroad",
+      "at": [
+        627652.2,
+        5051685.1
+      ],
+      "wall": "#f4f3ee",
+      "roof": "#3a3e42",
+      "trim": "#f7f6f2",
       "roofMaterial": "shingle"
     }
   }
