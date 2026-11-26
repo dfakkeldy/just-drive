@@ -24,8 +24,8 @@ const root=process.env.MMM_ROOT??process.cwd(),sha=file=>createHash('sha256').up
 // The pins live here because this change is what could move Mabou; era-density-generated regenerates it.
 const MABOU_FROZEN={
  'web/src/eras/mabou-1884-layout.ts':'c679f1dc15adf756717d923ff04603d1d9c371b9d6bfc24d191e3b8dc4aa889d',
- // The road bake (#27), far-view install (#43) and road-bed receipt (#60) update the audit. The shipped layout is byte-identical.
- 'tools/era-density-layout.json':'6dbbcc88191590c3b4e17e64e95921c20373754e9e97c6eeea3282e3acf9b41f',
+ // The road bake (#27), far-view install (#43), road-bed receipt (#60) and Guysborough turbine install (#179) update the audit. The shipped layout is byte-identical.
+ 'tools/era-density-layout.json':'ef0755c489465ca77b1bf06c2cea82fd88f6e348268429645767a7848877b1c8',
  'web/src/eras/mabou-1884-density.ts':'d334407249308e3ac893c34f0217fdbdb2bd2bdc4dbff0347f7386a2443204c0',
  'web/src/eras/mabou-1884-trades.ts':'0b70423528df61a4976cd2b1b471db9f4b6cb170e2e87f091c93bc8dac99202a',
 };
