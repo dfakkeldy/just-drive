@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DELTA_DIR = ROOT / 'tools/guysborough-turbines-delta'
 RECEIPT = DELTA_DIR / 'hashes.json'
 # None accepts all-before or all-after until the main thread installs the delta and flips this to 'after'.
-EXPECT = None
+EXPECT = 'after'
 
 spec = importlib.util.spec_from_file_location('guysborough_turbines_patch', DELTA_DIR / 'patch.py')
 patch = importlib.util.module_from_spec(spec)
