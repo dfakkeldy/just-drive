@@ -63,8 +63,8 @@ export class PrinceHouse implements HandBuiltPlace {
     this.probes = ([[0, 0], [5, -12], [-6, -12], [4, 10], [13, -8]] as [number, number][]).map(([u, v]) => site.world(u, v));
   }
 
-  /** True while the house is near and its model is still to come: a picture should wait. */
-  get waiting(): boolean { return this.near && !this.built; }
+  /** True while the house is near, unbuilt, and terrain is still loading or ready to build (never hangs a distant ?cam=). */
+  get waiting(): boolean { return this.near && !this.built && ((this.terrain.pending ?? 0) > 0 || this.ready() !== null); }
 
   private g = (u: number, v: number): number => { const w = this.site.world(u, v); return this.terrain.heightAt(w.x, w.z) ?? this.lift(this.site.level); };
 

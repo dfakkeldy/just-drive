@@ -20,16 +20,20 @@ const bake=['all','budgets'].includes(part)?farPack(root):null;
 let killed=0;
 function reject(label,f){assert.throws(f,undefined,label);console.log('KILLED',label);killed++;}
 function dataValid(d){
- assert.equal(d.crs,'EPSG:2961');assert.ok(d.points.length>=39);assert.match(d.method,/positions from satellite images, towers assumed/);
+ assert.equal(d.crs,'EPSG:2961');assert.ok(d.points.length>=40);assert.match(d.method,/positions from satellite images, towers assumed/);
  const ids=new Set();
  for(const p of d.points){
   assert.ok(!ids.has(p.id));ids.add(p.id);assert.equal(p.source,'Sentinel-2 L2A');assert.equal(p.dateKind,'acquired');assert.match(p.date,/^202[56]-\d\d-\d\d$/);assert.equal(p.confidence,'medium');assert.equal(p.uncertainty,30);
+  assert.ok(['operating','built','under-construction'].includes(p.status),'valid build status: '+p.id);
   assert.match(p.evidence,/gravel pad.*access road/);assert.ok(p.hub>p.diameter/2+5);
   const scene=d.scenes[p.scene];assert.ok(scene);const b=p.window??scene.window;
   assert.equal(p.e,b[0]+(p.pixel[0]+.5)*scene.resolution,'Sentinel-derived easting');assert.equal(p.n,b[3]-(p.pixel[1]+.5)*scene.resolution,'Sentinel-derived northing');
   assert.match(scene.datetime,/^202[56]-/);assert.ok(Object.values(scene.assets).every(u=>u.startsWith('https://sentinel-cogs.s3.us-west-2.amazonaws.com/')));
  }
- assert.equal(d.points.filter(p=>p.farm==='c01').length,16,'sixteen independently read pads');
+ assert.equal(d.points.filter(p=>p.farm==='c01').length,16,'sixteen independently read pads (c01)');
+ assert.equal(d.points.filter(p=>p.farm==='c02').length,24,'twenty-four independently read pads (c02 Guysborough)');
+ assert.ok(d.points.filter(p=>p.farm==='c02').every(p=>p.status==='operating'),'Guysborough c02 operating');
+ assert.ok(d.points.filter(p=>p.farm==='c01').every(p=>p.status==='built'),'c01 built not yet commissioned');
 }
 function glslDrop(r,distance){
  const expression=r.CURVE_GLSL.match(/return ([^;]+);/)[1].replaceAll('dot(delta,delta)','distance*distance').replaceAll('max(','Math.max(');
@@ -103,8 +107,8 @@ async function budgets(){
   for(const low of [false,true]){
    const l=m.levels[low?'low':'desktop'],bytes=readFileSync(dir+'/'+l.file);validateBudget(m,bytes,low);
    const turbines=new FarTurbines(t.far,m.origin,low,{},true);assert.equal(turbines.group.children.length,2,'one far body draw plus one night light draw');
-   const body=turbines.group.children[0],beacons=turbines.group.children[1];assert.ok(body.isInstancedMesh&&beacons.isInstancedMesh);assert.equal(body.count,t.far.length);assert.equal(body.geometry.getAttribute('position').count/3,low?27:38);assert.equal(beacons.geometry.getAttribute('position').count/3,2);
-   assert.equal(body.material.depthTest,true);assert.equal(body.material.depthWrite,true);assert.match(body.material.vertexShader,/w.y -= farDrop/);assert.match(body.material.vertexShader,/cos\(angle\)/);assert.match(beacons.material.fragmentShader,/if \(vFlash < 0.5\) discard/);
+   const body=turbines.group.children[0],beacons=turbines.group.children[1];assert.ok(body.isInstancedMesh&&beacons.isInstancedMesh);assert.equal(body.count,t.far.length);assert.equal(body.geometry.getAttribute('position').count/3,low?27:28);assert.equal(beacons.geometry.getAttribute('position').count/3,2);
+   assert.equal(body.material.depthTest,true);assert.equal(body.material.depthWrite,true);assert.equal(beacons.material.transparent,true);assert.equal(beacons.material.depthTest,true);assert.equal(beacons.material.depthWrite,false);assert.match(body.material.vertexShader,/w.y -= farDrop/);assert.match(body.material.vertexShader,/cos\(angle\)/);assert.match(beacons.material.fragmentShader,/if \(vFlash < 0.5\) discard/);
    const phases=body.geometry.getAttribute('farmPhase');t.far.forEach((p,i)=>assert.ok(Math.abs(phases.getX(i)-farmPhase(p.farm))<1e-7,'farm-synchronised phase'));
    const oldFetch=globalThis.fetch;globalThis.fetch=async()=>({ok:true,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)});
    let land;try{land=await FarLand.load(m,'http://fixture',low?'low':'desktop',{});}finally{globalThis.fetch=oldFetch;}
@@ -116,7 +120,7 @@ async function budgets(){
     const visible=near.group.children.filter(c=>c.visible);local[dark?'night':'day']={draws:visible.length,triangles:visible.filter(c=>c.isMesh).reduce((n,c)=>n+(c.geometry.index?.count??c.geometry.attributes.position.count)/3*(c.isInstancedMesh?c.count:1),0),lineSegments:visible.filter(c=>c.isLineSegments).reduce((n,c)=>n+c.geometry.attributes.position.count/2,0),bufferBytes:near.group.children.reduce((n,c)=>n+bytesFor(c.geometry)+(c.instanceMatrix?.array.byteLength??0),0)};
     for(const c of near.group.children){c.geometry.dispose();c.material.dispose();}
    }
-   summary.push({area,detail:low?'LOW':'desktop',nearLandmarksAtVillage:local,landTriangles:l.triangles,landBytes:l.bytes,seaTriangles,seaBytes:bytesFor(land.seaGeometry),turbines:t.far.length,turbineTriangles:t.far.length*((low?27:38)+2),turbineBytes:turbines.group.children.reduce((s,c)=>s+bytesFor(c.geometry)+c.instanceMatrix.array.byteLength,0),draws:{land:1,seaIncludingNear:1,additionalSeaDraws:0,turbinesDay:1,turbinesNight:2}});
+   summary.push({area,detail:low?'LOW':'desktop',nearLandmarksAtVillage:local,landTriangles:l.triangles,landBytes:l.bytes,seaTriangles,seaBytes:bytesFor(land.seaGeometry),turbines:t.far.length,turbineTriangles:t.far.length*((low?27:28)+2),turbineBytes:turbines.group.children.reduce((s,c)=>s+bytesFor(c.geometry)+c.instanceMatrix.array.byteLength,0),draws:{land:1,seaIncludingNear:1,additionalSeaDraws:0,turbinesDay:1,turbinesNight:2}});
    land.seaGeometry.dispose();for(const g of [...land.group.children,...turbines.group.children]){g.geometry.dispose();g.material.dispose();}
   }
   // The phone's Coarse far views (Settings > Advanced): the third level, a coarser sea, and every turbine in one draw.
@@ -135,9 +139,44 @@ async function budgets(){
  }
  console.log(JSON.stringify(summary));return summary;
 }
+function farTurbineBehaviour(mod){
+ const {FarTurbines}=mod;
+ const mixed=[
+  {e:1000,n:1000,ground:50,hub:118,diameter:163,farm:'c02',status:'operating'},
+  {e:2000,n:1000,ground:60,hub:125,diameter:163,farm:'c01',status:'built'},
+  {e:3000,n:1000,ground:70,hub:125,diameter:163,farm:'c03',status:'under-construction'},
+  {e:4000,n:1000,ground:40,hub:80,diameter:82,farm:'n001'},
+ ];
+ const night=new FarTurbines(mixed,[0,0],false,{},true);
+ assert.equal(night.group.children.length,2,'mixed operating + non-operating builds body and beacon draws');
+ const [body,beacons]=night.group.children,rates=body.geometry.getAttribute('turbine');
+ assert.ok(rates.getW(0)>0,'operating turbine spins');
+ assert.equal(rates.getW(1),0,'built-not-commissioned turbine stands still');
+ assert.equal(rates.getW(2),0,'under-construction turbine stands still');
+ assert.ok(rates.getW(3)>0,'legacy turbine without status spins');
+ assert.match(beacons.material.vertexShader,/step\(0\.0001, turbine\.w\)/,'beacon flash gated on operating spin rate');
+ assert.match(beacons.material.vertexShader,/\*\s*beaconPixelRatio/,'beacon scales with device pixel ratio');
+ assert.match(beacons.material.fragmentShader,/smoothstep\(0\.42, 0\.16, r\)/,'beacon core + soft halo');
+ assert.match(beacons.material.fragmentShader,/mix\(red, applyFog\(red, vWorld, cameraPosition\), 0\.12\)/,'beacon retains aviation red through haze');
+ assert.match(body.material.fragmentShader,/vec3\(0\.95, 0\.96, 0\.97\)/,'bright white far turbine albedo');
+ night.update(1,1170,2532,3);assert.equal(night.pixelRatio.value,3,'DPR forwarded to far beacons');
+ for(const c of night.group.children){c.geometry.dispose();c.material.dispose();}
+ const darkOnly=new FarTurbines(mixed.slice(1,3),[0,0],false,{},true);
+ assert.equal(darkOnly.group.children.length,1,'only non-operating turbines at night create zero beacon draws');
+ for(const c of darkOnly.group.children){c.geometry.dispose();c.material.dispose();}
+}
 if(['all','data'].includes(part)){
- dataValid(measurements);console.log('PASS sourced turbine measurements');
- if(mutations)for(const [label,change] of [['source',d=>d.points[0].source='EA'],['date',d=>d.points[0].date='unknown'],['confidence',d=>delete d.points[0].confidence],['pad centre',d=>d.points[0].e+=10]]){const d=structuredClone(measurements);change(d);reject(label,()=>dataValid(d));}
+ dataValid(measurements);farTurbineBehaviour(buildModule('web/src/far-turbines.ts'));console.log('PASS sourced turbine measurements, operating gating, white albedo and DPR beacon halo');
+ if(mutations){
+  for(const [label,change] of [['source',d=>d.points[0].source='EA'],['date',d=>d.points[0].date='unknown'],['confidence',d=>delete d.points[0].confidence],['status',d=>d.points[0].status='planned'],['pad centre',d=>d.points[0].e+=10]]){const d=structuredClone(measurements);change(d);reject(label,()=>dataValid(d));}
+  const ft=source('web/src/far-turbines.ts');
+  for(const [label,a,b] of [
+   ['built turbine spins','turbineOperating(p)?rotorRate(p.diameter):0','rotorRate(p.diameter)'],
+   ['non-operating turbine flashes','step(0.0001, turbine.w) * ',''],
+   ['beacon DPR scaling dropped','float px = 8.0 * beaconPixelRatio;','float px = 1.0;'],
+   ['old grey albedo restored','vec3(0.95, 0.96, 0.97)','vec3(0.64, 0.68, 0.70)'],
+  ]){assert.equal(ft.split(a).length,2,'far-turbines mutant anchor: '+label);reject(label,()=>farTurbineBehaviour(buildModule('web/src/far-turbines.ts',ft.replace(a,b))));}
+ }
 }
 if(['all','curvature'].includes(part)){
  curves(rules);console.log('PASS curvature sink 10/30/60 km = 6.827814 / 61.450322 / 245.801287 m; exact zero <=3 km');

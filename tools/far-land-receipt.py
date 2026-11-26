@@ -22,6 +22,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LIST = json.loads((ROOT / 'tools/far-views-delta.json').read_text())
+GUYSBOROUGH_RECEIPT = ROOT / 'tools/guysborough-turbines-delta/hashes.json'
+GUYSBOROUGH = json.loads(GUYSBOROUGH_RECEIPT.read_text()) if GUYSBOROUGH_RECEIPT.is_file() else None
+
+
+def with_guysborough_delta(base=LIST, delta=GUYSBOROUGH):
+    if not delta:
+        return None
+    by_pack = {f['pack']: f for f in delta['files']}
+    packs = {}
+    for pack, entry in base['packs'].items():
+        g = by_pack.get(pack)
+        if not g:
+            return None
+        files = dict(entry['files'])
+        files['tall.json'] = {'sha256': g['sha256'], 'bytes': g['bytes']}
+        manifest = dict(entry['manifest'])
+        manifest['tall'] = g['afterManifestTall']
+        packs[pack] = {'files': files, 'manifest': manifest}
+    return {**base, 'packs': packs}
 
 
 def sha(path):
@@ -37,7 +56,7 @@ def check(ok, message):
         raise Refused(message)
 
 
-def land_state(baked, listing=LIST):
+def _land_state_for(baked, listing):
     baked = Path(baked)
     states = set()
     for pack, entry in listing['packs'].items():
@@ -62,6 +81,21 @@ def land_state(baked, listing=LIST):
         states.add('after')
     check(len(states) == 1, 'mixed land: some areas before, some after')
     return states.pop()
+
+
+def land_state(baked, listing=LIST, alts=None):
+    if alts is None:
+        alt = with_guysborough_delta(listing) if listing is LIST else None
+        alts = [alt] if alt else []
+    try:
+        return _land_state_for(baked, listing)
+    except Refused as first_error:
+        for alt in alts:
+            try:
+                return _land_state_for(baked, alt)
+            except Refused:
+                pass
+        raise first_error
 
 
 def plan(bake):
@@ -137,9 +171,32 @@ def mutations():
             (d / 'terrain/tall.json').write_text('{}')
             (d / 'terrain/manifest.json').write_text(json.dumps({'tall': {'file': 'tall.json', 'far': 2}}))
         refused('far count without pack', far_count_without_pack)
+
+        # Alternate Guysborough revision: all-alt accepted, mixed base+alt refused.
+        after_alt = tmp / 'after-alt'
+        shutil.copytree(after, after_alt)
+        alt_files = []
+        for pack in ['terrain', 'areas/a']:
+            text = json.dumps({'version': 2, 'pack': pack, 'status': 'operating'})
+            (after_alt / pack / 'tall.json').write_text(text)
+            m = json.loads((after_alt / pack / 'manifest.json').read_text())
+            m['tall']['far'] += 1
+            (after_alt / pack / 'manifest.json').write_text(json.dumps(m))
+            alt_files.append({'pack': pack, 'sha256': sha(after_alt / pack / 'tall.json'), 'bytes': len(text), 'afterManifestTall': m['tall']})
+        alt_listing = with_guysborough_delta(listing, {'files': alt_files})
+        assert land_state(after_alt, listing, [alt_listing]) == 'after'
+        mixed_alt = tmp / 'mixed-alt'
+        shutil.copytree(after, mixed_alt)
+        shutil.copyfile(after_alt / 'areas/a/tall.json', mixed_alt / 'areas/a/tall.json')
+        shutil.copyfile(after_alt / 'areas/a/manifest.json', mixed_alt / 'areas/a/manifest.json')
+        try:
+            land_state(mixed_alt, listing, [alt_listing])
+            raise SystemExit('SURVIVED mixed revisions')
+        except Refused:
+            print('KILLED mixed revisions')
     finally:
         shutil.rmtree(tmp)
-    print('PASS far land receipt mutations: before and after accepted; 7 mutants refused')
+    print('PASS far land receipt mutations: before, after and alt-after accepted; 8 mutants refused')
 
 
 def main():

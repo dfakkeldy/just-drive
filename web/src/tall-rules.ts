@@ -3,11 +3,19 @@ export const WIND_HEADING = 247.5 * Math.PI / 180;
 /** The near renderer never adds outside-root turbines; FarTurbines owns curved far instances. */
 export const FAR_TURBINES = false;
 export const TIP_SPEED = 70;
+export type TurbineStatus = 'operating' | 'built' | 'under-construction';
+/** Transport Canada Standard 621 CL-864 red flashing beacon: 30 fpm (20–40 allowed), 440 ms on-time (100 ms to 2/3 cycle allowed). */
+export const TURBINE_FLASH_RATE = 0.5;
+export const TURBINE_FLASH_DUTY = 0.22;
 export type LightClass = 'A0' | 'A1' | 'A2' | 'W';
 export type TowerKind = 'standard' | 'double' | 'crossing';
 export interface ObstructionLight { readonly frac: number; readonly kind: 'red-steady' | 'red-flash' | 'white-strobe' }
 export interface TallPoint { e: number; n: number; ground: number | null }
-export interface Turbine extends TallPoint { hub: number; diameter: number; farm?: string; source?: string; date?: string; confidence?: string }
+export interface Turbine extends TallPoint { hub: number; diameter: number; farm?: string; status?: TurbineStatus; source?: string; date?: string; confidence?: string }
+/** Operating turbines spin and flash red at night; built-not-commissioned or under-construction ones stand still and stay dark. */
+export function turbineOperating(p: Pick<Turbine, 'status'>): boolean {
+  return p.status === undefined || p.status === 'operating';
+}
 export interface Mast extends TallPoint { height: number; station?: number; reason?: string; light?: LightClass; kind?: TowerKind; source?: string }
 export interface PowerLine { pts: [number, number][]; towers: Mast[]; spans: { sag: number; ground: number[]; clearance: number[] }[]; circuits?: 1 | 2; ref?: string; source?: string }
 export interface TallFile {

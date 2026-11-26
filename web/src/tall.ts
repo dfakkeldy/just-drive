@@ -5,8 +5,8 @@ import { LAND_LIGHT } from './shaders';
 import { farmPhase } from './far-turbines';
 import { CURVE_GLSL } from './far-rules';
 import {
-  FAR_TURBINES, WIND_HEADING, mastLightClass, obstructionLights, rotorPhase, rotorRate,
-  towerWidthScale, wireWorldHeight, type Mast, type TallFile, type TallPoint,
+  FAR_TURBINES, TURBINE_FLASH_DUTY, TURBINE_FLASH_RATE, WIND_HEADING, mastLightClass, obstructionLights, rotorPhase, rotorRate,
+  towerWidthScale, turbineOperating, wireWorldHeight, type Mast, type TallFile, type TallPoint,
 } from './tall-rules';
 import { mergeStraitTall } from './tall-strait';
 
@@ -21,9 +21,11 @@ attribute float beaconPhase;
 attribute vec2 beaconSpec;
 attribute vec3 beaconColor;
 uniform vec2 tallViewport;
+uniform float tallPixelRatio;
 varying float vBeaconPhase;
 varying vec2 vBeaconSpec;
 varying vec3 vBeaconColor;
+varying vec2 vBeaconUv;
 #endif
 #ifdef LATTICE
 varying vec2 vLattice;
@@ -38,6 +40,8 @@ void main() {
  vBeaconPhase = beaconPhase;
  vBeaconSpec = beaconSpec;
  vBeaconColor = beaconColor;
+ vBeaconUv = position.xy * 2.0;
+ p = vec3(0.0);
  #endif
  #ifdef LATTICE
  vLattice=uv;
@@ -53,7 +57,10 @@ void main() {
  float drop = farDrop(world.xz - cameraPosition.xz) * farCurveOn;
  if (drop > 0.0) gl_Position -= projectionMatrix * viewMatrix * vec4(0.0,drop,0.0,0.0);
  #ifdef BEACON
- gl_Position.xy += position.xy * 2.0 * gl_Position.w / tallViewport;
+ float rad = length(vec3(instanceMatrix[0].xyz));
+ float worldPx = rad * projectionMatrix[1][1] * tallViewport.y / max(gl_Position.w, 0.1);
+ float px = max(worldPx * 2.5, 8.0 * tallPixelRatio);
+ gl_Position.xy += position.xy * (2.0 * px) * gl_Position.w / tallViewport;
  #endif
  #include <logdepthbuf_vertex>
 }`;
@@ -62,11 +69,14 @@ const FRAG = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 ${LAND_LIGHT}
 uniform vec3 tallColour;
+uniform vec2 tallLight;
+uniform float tallFog;
 #ifdef BEACON
 uniform float tallTime;
 varying float vBeaconPhase;
 varying vec2 vBeaconSpec;
 varying vec3 vBeaconColor;
+varying vec2 vBeaconUv;
 #endif
 varying vec3 vWorld;
 #ifdef LATTICE
@@ -81,12 +91,32 @@ void main() {
  #endif
  #ifdef BEACON
  if (vBeaconSpec.y < 0.99 && fract(tallTime * vBeaconSpec.x + vBeaconPhase) > vBeaconSpec.y) discard;
+ float r = length(vBeaconUv);
+ if (r > 1.0) discard;
+ float core = smoothstep(0.42, 0.16, r);
+ float halo = pow(max(0.0, 1.0 - r), 2.4) * 0.55;
+ float alpha = clamp(core + halo, 0.0, 1.0);
+ if (alpha < 0.02) discard;
  vec3 colour = vBeaconColor;
+ vec3 fogged = applyFog(colour,vWorld,cameraPosition);
+ vec3 lit = mix(colour, fogged, 0.12);
+ gl_FragColor = vec4(lit * (0.80 + 0.65 * core), alpha);
  #else
  vec3 colour = tallColour;
- colour *= skyColor * 0.65 + sunColor * 0.24;
+ if (tallFog < 0.99) {
+  vec3 fn = cross(dFdx(vWorld), dFdy(vWorld));
+  float fnLen = length(fn);
+  vec3 n = fnLen > 1e-6 ? fn / fnLen : vec3(0.0, 1.0, 0.0);
+  if (!gl_FrontFacing) n = -n;
+  float sunLit = max(dot(n, normalize(sunDir)), 0.0);
+  colour *= skyColor * tallLight.x + sunColor * (0.04 + tallLight.y * sunLit);
+ } else {
+  colour *= skyColor * tallLight.x + sunColor * tallLight.y;
+ }
+ vec3 fogged = applyFog(colour,vWorld,cameraPosition);
+ float fogMix = mix(tallFog, 1.0, smoothstep(0.00005, 0.00025, fogDensity));
+ gl_FragColor = vec4(mix(colour, fogged, fogMix), 1.0);
  #endif
- gl_FragColor=vec4(applyFog(colour,vWorld,cameraPosition),1.0);
  #include <tonemapping_fragment>
  #include <colorspace_fragment>
 }`;
@@ -122,8 +152,19 @@ export class TallLandmarks {
       this.low = low;
       return;
     }
-    const material = (colour: number, defines: Record<string, number> = {}) => new THREE.ShaderMaterial({
-      vertexShader: VERT, fragmentShader: FRAG, defines, uniforms: { ...shared, tallTime: this.time, tallColour: { value: new THREE.Color(colour) } }, side: THREE.DoubleSide,
+    const material = (colour: number | THREE.Color, defines: Record<string, number> = {}, light: readonly [number, number] = [0.65, 0.24], fog = 1) => new THREE.ShaderMaterial({
+      vertexShader: VERT, fragmentShader: FRAG, defines,
+      uniforms: {
+        ...shared,
+        tallPixelRatio: shared.tallPixelRatio ?? { value: 1 },
+        tallTime: this.time,
+        tallColour: { value: colour instanceof THREE.Color ? colour : new THREE.Color(colour) },
+        tallLight: { value: new THREE.Vector2(light[0], light[1]) },
+        tallFog: { value: fog },
+      },
+      side: THREE.DoubleSide,
+      transparent: !!defines.BEACON,
+      depthWrite: !defines.BEACON,
     });
     let beaconMat: THREE.ShaderMaterial | null = null;
     const getBeaconMat = () => (beaconMat ??= material(0xff1807, { BEACON: 1 }));
@@ -136,15 +177,16 @@ export class TallLandmarks {
       this.seating.push({ p, base, mesh, index, offset, height: NaN, scale, yaw });
     };
     const makeBeaconGeometry = (phases: Float32Array, specs: Float32Array, colours: Float32Array) => {
-      const g = new THREE.SphereGeometry(1, 4, 3);
+      const g = new THREE.PlaneGeometry(1, 1);
       g.setAttribute('beaconPhase', new THREE.InstancedBufferAttribute(phases, 1));
       g.setAttribute('beaconSpec', new THREE.InstancedBufferAttribute(specs, 2));
       g.setAttribute('beaconColor', new THREE.InstancedBufferAttribute(colours, 3));
       return g;
     };
     if (turbines.length) {
-      const white = material(0xc9cece);
-      const shafts = make(new THREE.CylinderGeometry(.012, .023, 1, low ? 5 : 8).translate(0, .5, 0), white, turbines.length);
+      // Bright painted white surfaces with 3D sun+sky shading (matches far-turbines.ts across the root edge).
+      const white = material(new THREE.Color().setRGB(0.95, 0.96, 0.97), {}, [0.42, 0.42], 0.62);
+      const shafts = make(new THREE.CylinderGeometry(.012, .023, 1, low ? 5 : 8, 1, true).translate(0, .5, 0), white, turbines.length);
       const nacelles = make(new THREE.BoxGeometry(1, 1, 1), white, turbines.length);
       // Three tapered blades in one template, real radius 1, in the local XY plane.
       const vertices: number[] = [];
@@ -155,23 +197,26 @@ export class TallLandmarks {
       }
       const blade = new THREE.BufferGeometry(); blade.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
       const motion = new Float32Array(turbines.length * 2);
-      turbines.forEach((p, i) => { motion[i * 2] = rotorPhase(p.e, p.n); motion[i * 2 + 1] = rotorRate(p.diameter); });
+      turbines.forEach((p, i) => { motion[i * 2] = rotorPhase(p.e, p.n); motion[i * 2 + 1] = turbineOperating(p) ? rotorRate(p.diameter) : 0; });
       blade.setAttribute('motion', new THREE.InstancedBufferAttribute(motion, 2));
-      const rotors = make(blade, material(0xd3d9d9, { ROTOR: 1 }), turbines.length);
+      const rotors = make(blade, material(new THREE.Color().setRGB(0.98, 0.99, 1.0), { ROTOR: 1 }, [0.42, 0.42], 0.62), turbines.length);
       rotors.name = 'tall-rotors';
       // Keep turbine beacons first in this.group so far-views-browser (tupper-night) finds them before tall-beacons.
-      const lights = dark ? (() => {
-        const phases = new Float32Array(turbines.map(p => farmPhase(p.farm ?? 'regional')));
-        const specs = new Float32Array(turbines.length * 2);
-        const colours = new Float32Array(turbines.length * 3);
-        for (let i = 0; i < turbines.length; i++) {
-          specs[i * 2] = 0.5; specs[i * 2 + 1] = 0.10;
+      // Only operating turbines show flashing red aviation lights at night; built/uncommissioned ones stay dark.
+      const litTurbines = dark ? turbines.filter(turbineOperating) : [];
+      const lights = litTurbines.length ? (() => {
+        const phases = new Float32Array(litTurbines.map(p => farmPhase(p.farm ?? 'regional')));
+        const specs = new Float32Array(litTurbines.length * 2);
+        const colours = new Float32Array(litTurbines.length * 3);
+        for (let i = 0; i < litTurbines.length; i++) {
+          specs[i * 2] = TURBINE_FLASH_RATE; specs[i * 2 + 1] = TURBINE_FLASH_DUTY;
           colours[i * 3] = RED_FLASH[0]; colours[i * 3 + 1] = RED_FLASH[1]; colours[i * 3 + 2] = RED_FLASH[2];
         }
-        return make(makeBeaconGeometry(phases, specs, colours), getBeaconMat(), turbines.length);
+        return make(makeBeaconGeometry(phases, specs, colours), getBeaconMat(), litTurbines.length);
       })() : null;
       // Local +z faces the incoming WSW wind. North is -world z.
       const yaw = Math.PI - WIND_HEADING;
+      let lightIndex = 0;
       turbines.forEach((p, i) => {
         const radius = p.hub * .023;
         this.solids.push({ x: p.e - village[0], z: village[1] - p.n, half: radius, halfWidth: radius, heading: 0 });
@@ -180,7 +225,7 @@ export class TallLandmarks {
         // Move the rotor 3 m upwind of the tower, in front of the nacelle.
         const rotorPoint = { ...p, e: p.e + Math.sin(WIND_HEADING) * 3, n: p.n + Math.cos(WIND_HEADING) * 3 };
         seat(rotors, i, rotorPoint, p.hub, [p.diameter / 2, p.diameter / 2, 1], yaw, p);
-        if (lights) seat(lights, i, p, p.hub + 1.6, [.65, .65, .65]);
+        if (lights && turbineOperating(p)) seat(lights, lightIndex++, p, p.hub + 1.6, [.65, .65, .65]);
       });
     }
 

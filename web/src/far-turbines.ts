@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { LAND_LIGHT } from './shaders';
 import { CURVE_GLSL, FAR_RADIUS } from './far-rules';
-import { WIND_HEADING, rotorPhase, rotorRate, type Turbine, type TallFile } from './tall-rules';
+import { TURBINE_FLASH_DUTY, TURBINE_FLASH_RATE, WIND_HEADING, rotorPhase, rotorRate, turbineOperating, type Turbine, type TallFile } from './tall-rules';
 
 export const FAR_TURBINE_VERT = /* glsl */ `
 #include <common>
@@ -15,6 +15,9 @@ uniform float farExag;
 uniform float seaLevel;
 varying vec3 vWorld;
 varying float vFlash;
+#ifdef BEACON
+varying vec2 vBeaconUv;
+#endif
 void main() {
  vec3 p = position;
  if (part < 0.5) { p.xy *= vec2(turbine.y, turbine.x); p.z *= turbine.y; }
@@ -30,15 +33,21 @@ void main() {
  w.y += max(0.0,base-seaLevel) * (farExag-1.0);
  #ifdef BEACON
  w.y += turbine.x + 1.6;
+ vBeaconUv = position.xy * 2.0;
  #endif
  float range = length(w.xz - cameraPosition.xz);
  w.y -= farDrop(w.xz - cameraPosition.xz);
  vWorld = w.xyz;
- vFlash = step(fract(tallTime * 0.5 + farmPhase), 0.10) * step(range, ${FAR_RADIUS.toFixed(1)});
+ vFlash = step(0.0001, turbine.w) * step(fract(tallTime * ${TURBINE_FLASH_RATE.toFixed(2)} + farmPhase), ${TURBINE_FLASH_DUTY.toFixed(2)}) * step(range, ${FAR_RADIUS.toFixed(1)});
  gl_Position = projectionMatrix * viewMatrix * w;
  #ifdef BEACON
- // Two screen-space triangles, constant one-device-pixel light at horizon distance.
- gl_Position.xy += position.xy * 2.0 * gl_Position.w / beaconViewport;
+ // Operating turbines flash red in sync; non-operating or off-phase beacons collapse out of clip space.
+ if (vFlash < 0.5) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); }
+ else {
+  // ~2.5 CSS px bright core + soft red halo to ~8 CSS px diameter, scaled by device pixel ratio.
+  float px = 8.0 * beaconPixelRatio;
+  gl_Position.xy += position.xy * (2.0 * px) * gl_Position.w / beaconViewport;
+ }
  #endif
  #include <logdepthbuf_vertex>
 }`;
@@ -48,16 +57,35 @@ const FRAG = /* glsl */ `
 ${LAND_LIGHT}
 varying vec3 vWorld;
 varying float vFlash;
+#ifdef BEACON
+varying vec2 vBeaconUv;
+#endif
 void main() {
  #include <logdepthbuf_fragment>
  if (distance(vWorld.xz,cameraPosition.xz) > ${FAR_RADIUS.toFixed(1)}) discard;
  #ifdef BEACON
  if (vFlash < 0.5) discard;
- // Preserve a small red emissive signal in haze, still terrain/sea depth tested.
- gl_FragColor = vec4(mix(vec3(1.8,0.008,0.002),applyFog(vec3(1.8,0.008,0.002),vWorld,cameraPosition),0.55),1.0);
+ float r = length(vBeaconUv);
+ if (r > 1.0) discard;
+ float core = smoothstep(0.42, 0.16, r);
+ float halo = pow(max(0.0, 1.0 - r), 2.4) * 0.55;
+ float alpha = clamp(core + halo, 0.0, 1.0);
+ if (alpha < 0.02) discard;
+ // Keep aviation red bright against night haze, still terrain/sea depth tested.
+ vec3 red = vec3(1.0, 0.009, 0.001);
+ vec3 lit = mix(red, applyFog(red, vWorld, cameraPosition), 0.12);
+ gl_FragColor = vec4(lit * (0.80 + 0.65 * core), alpha);
  #else
- vec3 colour = vec3(0.64,0.68,0.70) * (skyColor * 0.65 + sunColor * 0.24);
- gl_FragColor = vec4(applyFog(colour,vWorld,cameraPosition),1.0);
+ // Painted white with real 3D sun+sky shading: sunlit side reads bright white against hills, shaded side contrasts against bright horizon sky.
+ vec3 fn = cross(dFdx(vWorld), dFdy(vWorld));
+ float fnLen = length(fn);
+ vec3 n = fnLen > 1e-6 ? fn / fnLen : vec3(0.0, 1.0, 0.0);
+ if (!gl_FrontFacing) n = -n;
+ float sunLit = max(dot(n, normalize(sunDir)), 0.0);
+ vec3 colour = vec3(0.95, 0.96, 0.97) * (skyColor * 0.42 + sunColor * (0.04 + 0.42 * sunLit));
+ vec3 fogged = applyFog(colour, vWorld, cameraPosition);
+ float fogMix = mix(0.62, 1.0, smoothstep(0.00005, 0.00025, fogDensity));
+ gl_FragColor = vec4(mix(colour, fogged, fogMix), 1.0);
  #endif
  #include <tonemapping_fragment>
  #include <colorspace_fragment>
@@ -86,6 +114,7 @@ export class FarTurbines {
   readonly group = new THREE.Group();
   readonly time = { value: 0 };
   readonly viewport = { value: new THREE.Vector2(1920,1080) };
+  readonly pixelRatio = { value: 1 };
   readonly count: number;
   private readonly list: Turbine[];
   private readonly grounds: number[];
@@ -98,7 +127,7 @@ export class FarTurbines {
       for(let k=0;k<(index?.count??p.count);k++) { const i=index?index.getX(k):k; pos.push(p.getX(i),p.getY(i),p.getZ(i));parts.push(part); }
       g.dispose();
     };
-    append(new THREE.CylinderGeometry(.012,.023,1,low?3:5,1,coarse).translate(0,.5,0),0);
+    append(new THREE.CylinderGeometry(.012,.023,1,low?3:5,1,coarse||!low).translate(0,.5,0),0);
     append(new THREE.BoxGeometry(3,2.4,5),1);
     const blades: number[]=[];
     for(let i=0;i<3;i++) {
@@ -109,25 +138,25 @@ export class FarTurbines {
     append(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(blades,3)),2);
     const setup = (geometry: THREE.BufferGeometry, beacon: boolean) => {
       const sizes=new Float32Array(list.length*4),phases=new Float32Array(list.length);
-      list.forEach((p,i)=>{sizes.set([p.hub,p.diameter,rotorPhase(p.e,p.n),rotorRate(p.diameter)],i*4);phases[i]=farmPhase(p.farm??'regional');});
+      list.forEach((p,i)=>{sizes.set([p.hub,p.diameter,rotorPhase(p.e,p.n),turbineOperating(p)?rotorRate(p.diameter):0],i*4);phases[i]=farmPhase(p.farm??'regional');});
       geometry.setAttribute('turbine',new THREE.InstancedBufferAttribute(sizes,4));geometry.setAttribute('farmPhase',new THREE.InstancedBufferAttribute(phases,1));
-      const vert=beacon?FAR_TURBINE_VERT.replace('uniform float tallTime;','uniform float tallTime;\nuniform vec2 beaconViewport;').replace('vec3 p = position;','vec3 p = vec3(0.0);'):FAR_TURBINE_VERT;
-      const mat=new THREE.ShaderMaterial({vertexShader:vert,fragmentShader:FRAG,defines:beacon?{BEACON:1}:{},uniforms:{...shared,tallTime:this.time,beaconViewport:this.viewport},side:THREE.DoubleSide});
+      const vert=beacon?FAR_TURBINE_VERT.replace('uniform float tallTime;','uniform float tallTime;\nuniform vec2 beaconViewport;\nuniform float beaconPixelRatio;').replace('vec3 p = position;','vec3 p = vec3(0.0);'):FAR_TURBINE_VERT;
+      const mat=new THREE.ShaderMaterial({vertexShader:vert,fragmentShader:FRAG,defines:beacon?{BEACON:1}:{},uniforms:{...shared,tallTime:this.time,beaconViewport:this.viewport,beaconPixelRatio:this.pixelRatio},side:THREE.DoubleSide,transparent:beacon,depthWrite:!beacon});
       const mesh=new THREE.InstancedMesh(geometry,mat,list.length);
       list.forEach((p,i)=>this.place(mesh,i,p.ground!));
       mesh.frustumCulled=false;mesh.name=beacon?'far-turbine-beacons':'far-turbines';this.group.add(mesh);
     };
     if(list.length) {
       const body=new THREE.BufferGeometry();body.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));body.setAttribute('part',new THREE.Float32BufferAttribute(parts,1));setup(body,false);
-      if(dark) { const light=new THREE.PlaneGeometry(1,1).toNonIndexed();light.setAttribute('part',new THREE.Float32BufferAttribute(new Float32Array(6),1));setup(light,true); }
+      if(dark && list.some(turbineOperating)) { const light=new THREE.PlaneGeometry(1,1).toNonIndexed();light.setAttribute('part',new THREE.Float32BufferAttribute(new Float32Array(6),1));setup(light,true); }
     }
   }
   private readonly dummy = new THREE.Object3D();
   private place(mesh: THREE.InstancedMesh, i: number, ground: number): void {
     const p=this.list[i],d=this.dummy;d.position.set(p.e-this.origin[0],ground,this.origin[1]-p.n);d.rotation.set(0,Math.PI-WIND_HEADING,0);d.updateMatrix();mesh.setMatrixAt(i,d.matrix);mesh.instanceMatrix.needsUpdate=true;
   }
-  update(seconds: number, width: number, height: number): void {
-    this.time.value=seconds;this.viewport.value.set(width,height);
+  update(seconds: number, width: number, height: number, pixelRatio = 1): void {
+    this.time.value=seconds;this.viewport.value.set(width,height);this.pixelRatio.value=Math.max(1,pixelRatio);
     // Twice a second, as TallLandmarks seats its near turbines: no per-frame CPU transform.
     if(!this.near||seconds<this.nextSeat)return;
     this.nextSeat=seconds+.5;

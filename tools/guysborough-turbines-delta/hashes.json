@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "issue": 1430,
+  "addedPoints": [
+    "c02-24"
+  ],
+  "files": [
+    {
+      "area": "mabou",
+      "pack": "terrain",
+      "file": "terrain/tall.json",
+      "before": "2738aaea877e9b21e63b6cdfc2261343bda7df6ffd50074e75f4a0432c6be966",
+      "sha256": "93b59dff3b4deef13dbbe2c07618ea36ac7a01d618721c27b47fdbec9b59018d",
+      "bytes": 44853,
+      "beforeManifestTall": {
+        "file": "tall.json",
+        "turbines": 2,
+        "far": 162,
+        "towers": 3,
+        "lines": 1
+      },
+      "afterManifestTall": {
+        "file": "tall.json",
+        "turbines": 2,
+        "far": 163,
+        "towers": 3,
+        "lines": 1
+      }
+    },
+    {
+      "area": "judique",
+      "pack": "areas/judique",
+      "file": "areas/judique/tall.json",
+      "before": "f1f7eda2103afb05549cfee00675017e40b4b4bee541a72d877c1dde7ce99774",
+      "sha256": "b8a4788440a2511ad6c9c7935abfd240e9c5f27dadb87acb7b6ac2b5bf4104fa",
+      "bytes": 42707,
+      "beforeManifestTall": {
+        "file": "tall.json",
+        "turbines": 2,
+        "far": 162,
+        "towers": 3,
+        "lines": 0
+      },
+      "afterManifestTall": {
+        "file": "tall.json",
+        "turbines": 2,
+        "far": 163,
+        "towers": 3,
+        "lines": 0
+      }
+    },
+    {
+      "area": "porthood",
+      "pack": "areas/porthood",
+      "file": "areas/porthood/tall.json",
+      "before": "bc68a6a069f2f398b78e510bf20890dbe9aa4537d121f7f6ce9f5212292cefe6",
+      "sha256": "a43cf301e58b04a1b14c9b4b5b5a38e7e75055a280b7512728bb24e0d921b801",
+      "bytes": 42525,
+      "beforeManifestTall": {
+        "file": "tall.json",
+        "turbines": 2,
+        "far": 162,
+        "towers": 0,
+        "lines": 0
+      },
+      "afterManifestTall": {
+        "file": "tall.json",
+        "turbines": 2,
+        "far": 163,
+        "towers": 0,
+        "lines": 0
+      }
+    },
+    {
+      "area": "pointtupper",
+      "pack": "areas/pointtupper",
+      "file": "areas/pointtupper/tall.json",
+      "before": "d8ddc76ba6805aedf4deccf9c769b66dd63df99ce06d53b81f778e9c080a0ef6",
+      "sha256": "f716e75bec0a5e61f692200332f96e43eae06c54eefeedc259c9c57cea5719bd",
+      "bytes": 152820,
+      "beforeManifestTall": {
+        "file": "tall.json",
+        "turbines": 39,
+        "far": 128,
+        "towers": 15,
+        "lines": 32
+      },
+      "afterManifestTall": {
+        "file": "tall.json",
+        "turbines": 40,
+        "far": 128,
+        "towers": 15,
+        "lines": 32
+      }
+    },
+    {
+      "area": "westbay",
+      "pack": "areas/westbay",
+      "file": "areas/westbay/tall.json",
+      "before": "4c4fd7cffd822e5630c12d8d8bec44a97aa9f181b1f3439df4e01124edb9c97e",
+      "sha256": "a488c9ed00e5505f8467c7f3df38ffb0e4021ae4da06ffe67857a91912f06f8b",
+      "bytes": 101541,
+      "beforeManifestTall": {
+        "file": "tall.json",
+        "turbines": 39,
+        "far": 128,
+        "towers": 3,
+        "lines": 9
+      },
+      "afterManifestTall": {
+        "file": "tall.json",
+        "turbines": 40,
+        "far": 128,
+        "towers": 3,
+        "lines": 9
+      }
+    },
+    {
+      "area": "cansocauseway",
+      "pack": "areas/cansocauseway",
+      "file": "areas/cansocauseway/tall.json",
+      "before": "142a3a21f4d5c0efdf7c37fe26a124c9c47e27606baccfafc3922a9c18c2aeba",
+      "sha256": "d7166080c4913e79e0160e501aac881c17ee4f67738da5b945006cbcae308835",
+      "bytes": 85425,
+      "beforeManifestTall": {
+        "file": "tall.json",
+        "turbines": 39,
+        "far": 128,
+        "towers": 6,
+        "lines": 18
+      },
+      "afterManifestTall": {
+        "file": "tall.json",
+        "turbines": 40,
+        "far": 128,
+        "towers": 6,
+        "lines": 18
+      }
+    }
+  ]
+}
