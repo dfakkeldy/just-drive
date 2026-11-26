@@ -7,6 +7,12 @@
       "roads": [
         "Granville Street"
       ]
+    },
+    "highway-4": {
+      "label": "Highway 4",
+      "roads": [
+        "Highway 4"
+      ]
     }
   },
   "overrides": {
@@ -332,6 +338,138 @@
       "wall": "#e8e6de",
       "roof": "#5a5048",
       "trim": "#f4f2ea",
+      "roofMaterial": "shingle"
+    },
+    "68": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        625743.8,
+        5055260.5
+      ],
+      "wall": "#a33a34",
+      "roof": "#3a3e42",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "107": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        629157.6,
+        5052298.2
+      ],
+      "wall": "#8d5a42",
+      "roof": "#6a4030",
+      "trim": "#e6ddd2",
+      "roofMaterial": "shingle"
+    },
+    "114": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        625694.0,
+        5055301.8
+      ],
+      "wall": "#c8ccce",
+      "roof": "#3e4448",
+      "trim": "#f0eeea",
+      "roofMaterial": "shingle"
+    },
+    "302": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        625387.1,
+        5055488.3
+      ],
+      "wall": "#2c2a28",
+      "roof": "#6e7478",
+      "trim": "#f2f0ea",
+      "roofMaterial": "shingle"
+    },
+    "513": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        624666.0,
+        5055875.5
+      ],
+      "wall": "#8a8176",
+      "roof": "#3a3e42",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1643": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        625984.5,
+        5055184.6
+      ],
+      "wall": "#c45468",
+      "roof": "#8e9498",
+      "trim": "#f2f0ea",
+      "roofMaterial": "shingle"
+    },
+    "1648": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        625557.5,
+        5055392.3
+      ],
+      "wall": "#b43332",
+      "roof": "#4a4e52",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1651": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        625215.9,
+        5055583.9
+      ],
+      "wall": "#c4a574",
+      "roof": "#5a4638",
+      "trim": "#f0ebe3",
+      "roofMaterial": "shingle"
+    },
+    "1653": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        625162.9,
+        5055618.5
+      ],
+      "wall": "#f4f3ee",
+      "roof": "#3a3e42",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "1874": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        624640.7,
+        5055880.9
+      ],
+      "wall": "#f2f1ea",
+      "roof": "#5c6166",
+      "trim": "#f6f5f0",
+      "roofMaterial": "shingle"
+    },
+    "1875": {
+      "group": "highway-4",
+      "road": "Highway 4",
+      "at": [
+        624714.8,
+        5055848.7
+      ],
+      "wall": "#a8c0c8",
+      "roof": "#5a6064",
+      "trim": "#f6f5f0",
       "roofMaterial": "shingle"
     }
   }
