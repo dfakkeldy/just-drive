@@ -41,6 +41,12 @@ function maths(r) {
   assert.equal(r.obstructionLights('A2').length,4);assert.equal(r.obstructionLights('A2')[2].kind,'red-flash');
   assert.equal(r.obstructionLights('W').length,3);assert.ok(r.obstructionLights('W').every(l=>l.kind==='white-strobe'),'Auld Cove white strobes');
   assert.equal(r.towerWidthScale(32,'standard'),32);assert.equal(r.towerWidthScale(48,'double'),36);assert.equal(r.towerWidthScale(158,'crossing'),44);
+  assert.equal(r.turbineOperating({}),true,'legacy turbine defaults to operating');
+  assert.equal(r.turbineOperating({status:'operating'}),true,'operating turbine active');
+  assert.equal(r.turbineOperating({status:'built'}),false,'built-not-commissioned turbine still and dark');
+  assert.equal(r.turbineOperating({status:'under-construction'}),false,'under-construction turbine still and dark');
+  assert.ok(r.TURBINE_FLASH_RATE*60>=20&&r.TURBINE_FLASH_RATE*60<=40,'Standard 621 CL-864 flash rate 20-40 fpm');
+  assert.ok(r.TURBINE_FLASH_DUTY>=0.15&&r.TURBINE_FLASH_DUTY<0.25,'Standard 621 CL-864 flash duration >100 ms and clear off window');
 }
 maths(rules);
 const read = p=>JSON.parse(readFileSync(p,'utf8'));
@@ -142,6 +148,35 @@ function drawing(){
     t.resolveSolids(car);assert.ok(Math.hypot(car.x-base.x,car.z-base.z)>.5,'real base collision pushes car out');
     for(const mesh of t.group.children){if(mesh.geometry)mesh.geometry.dispose();if(mesh.material)mesh.material.dispose();}
   }
+  // Mixed operating and non-operating near turbines: only operating ones spin and get night beacons; bright white material and soft halo beacons.
+  const mixData={
+    version:2,crs:'EPSG:2961',root:d.root,mid:d.mid,anchor:d.anchor,far:[],towers:[],lines:[],
+    turbines:[
+      {e:d.root[0]+1000,n:d.root[1]+1000,ground:50,hub:118,diameter:163,farm:'c02',status:'operating'},
+      {e:d.root[0]+2000,n:d.root[1]+1000,ground:60,hub:125,diameter:163,farm:'c01',status:'built'},
+      {e:d.root[0]+3000,n:d.root[1]+1000,ground:70,hub:125,diameter:163,farm:'c03',status:'under-construction'},
+    ],
+  };
+  const terrain={manifest:m,seaLevel:0,exag:1,heightAt:()=>null};
+  const mix=new mod.exports.TallLandmarks(mixData,terrain,false,{},true);
+  const shafts=mix.group.children[0],rotors=mix.group.getObjectByName('tall-rotors'),beacons=mix.group.children.filter(c=>c.material?.defines?.BEACON);
+  assert.ok(shafts.material.uniforms.tallColour.value.r>=0.94,'bright white near turbine shafts');
+  assert.ok(shafts.material.uniforms.tallLight.value.y>=0.4,'strong sunlit response on near turbines');
+  assert.match(shafts.material.fragmentShader,/cross\(dFdx\(vWorld\), dFdy\(vWorld\)\)/,'3D directional shading on near turbines');
+  const motion=rotors.geometry.getAttribute('motion');
+  assert.ok(motion.getY(0)>0,'operating near turbine spins');
+  assert.equal(motion.getY(1),0,'built near turbine stands still');
+  assert.equal(motion.getY(2),0,'under-construction near turbine stands still');
+  assert.equal(beacons.length,1,'one turbine beacon batch for operating turbines');
+  assert.equal(beacons[0].count,1,'only the 1 operating turbine is lit at night');
+  assert.equal(beacons[0].material.transparent,true,'soft halo beacon blends cleanly');
+  assert.equal(beacons[0].material.depthWrite,false,'halo does not clobber depth');
+  assert.equal(beacons[0].material.depthTest,true,'beacons stay depth tested');
+  assert.match(beacons[0].material.fragmentShader,/1\.0 - smoothstep\(0\.16, 0\.42, r\)/,'valid ascending smoothstep edges in near beacon shader');
+  for(const mesh of mix.group.children){mesh.geometry?.dispose();mesh.material?.dispose();}
+  const unlit=new mod.exports.TallLandmarks({...mixData,turbines:mixData.turbines.slice(1)},terrain,false,{},true);
+  assert.equal(unlit.group.children.filter(c=>c.material?.defines?.BEACON).length,0,'zero beacons when all near turbines are non-operating');
+  for(const mesh of unlit.group.children){mesh.geometry?.dispose();mesh.material?.dispose();}
 }
 drawing();
 // Verify merged Strait of Canso crossings, restored omitted lines, road/building clearance and mast/crossing night lights.
@@ -273,6 +308,8 @@ if(process.argv.includes('--mutations')){
     ['mast A0 threshold broken','if (height <= 45) return \'A0\';','if (height <= 90) return \'A0\';'],
     ['white strobes replaced with red','{ frac: 1, kind: \'white-strobe\' }','{ frac: 1, kind: \'red-flash\' }'],
     ['crossing tower width uncapped','if (kind === \'crossing\') return 44;','if (kind === \'crossing\') return height;'],
+    ['built turbine marked operating',"return p.status === undefined || p.status === 'operating';",'return true;'],
+    ['flash duty too brief','export const TURBINE_FLASH_DUTY = 0.22;','export const TURBINE_FLASH_DUTY = 0.10;'],
   ];
   for(const [label,a,b]of mutations){assert.equal(source.split(a).length,2,label+' unique');assert.throws(()=>maths(compile(source.replace(a,b))),{name:'AssertionError'},label+' rejected');console.log('KILLED '+label);}
   assert.throws(()=>checkStrait(x=>x),{name:'AssertionError'},'Strait merge omitted rejected');console.log('KILLED Strait merge omitted');

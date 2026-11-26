@@ -375,3 +375,4 @@ road-name-hud-mutations	portable	yes	Node mutation controls for Roads.nameAt, Ve
 industrial-park-road-browser	unproven	no	Hardware WebGL on Point Tupper land: road 107 width, double-yellow centre paint, concrete overpass -100084, Railroad HUD label and off-road brush clearing at both crossing spots
 westbay-track263-delta	portable	yes	Python synthetic shaping/install/rollback/refusal fixture (runs in CI without data/); checks West Bay land state and byte-for-byte remake when data/ and GDAL exist
 westbay-track263-drive	portable	yes	Node real-land same-path drive check on West Bay track 263 at Hill 1 and Hill 2.5 (no browser)
+guysborough-turbines-delta	portable	yes	Python synthetic build/install/rollback/refusal fixture (runs in CI without data/); checks all six tall.json packs and byte-for-byte remake when data/ and GDAL exist

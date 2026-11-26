@@ -387,6 +387,7 @@ const shared: Record<string, THREE.IUniform> = {
   gulfTint: { value: AREA.gulfTint },
   farExag: { value: EXAG }, farCurveOn: { value: 0 },
   tallViewport: { value: new THREE.Vector2(1920,1080) },
+  tallPixelRatio: { value: 1 },
 };
 if (winter) shared.winterCover = { value: 1 };
 if (wetness) shared.rainWet = { value: wetness };
@@ -2497,7 +2498,7 @@ const worldUpdates: Array<{ name: string; segment: WorldSegment; ending: boolean
   { name: 'props', segment: 'after-activities', ending: true, endingAfter: 'canal', update: dt => props?.update(camera, dt) },
   { name: 'yardProps', segment: 'after-activities', ending: false, update: dt => yardProps?.update(camera, dt) },
   { name: 'harbourLights', segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => harbourLights?.update(now / 1000) },
-  { name: 'tall', segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height); if (tall) (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); } },
+  { name: 'tall', segment: 'after-activities', ending: false, update: (_dt, _realDt, now) => { const dpr = renderer.getPixelRatio(); tall?.update(camera, now / 1000); farTurbines?.update(now / 1000, renderer.domElement.width, renderer.domElement.height, dpr); if (tall) { (shared.tallViewport.value as THREE.Vector2).set(renderer.domElement.width, renderer.domElement.height); shared.tallPixelRatio.value = dpr; } } },
   { name: 'grass', segment: 'grass', ending: false, update: (_dt, realDt) => grass?.update(realDt, camera, ride.kind === 'drone' ? 1e9 : vehicle.x, ride.kind === 'drone' ? 1e9 : vehicle.z, vehicle.heading, vehicleSpec) },
   { name: 'aiDriver', segment: 'mirror', ending: false, update: () => aiDriver?.update(camera, vehicle, aiDriverOn(), fleet?.driven.id ?? garageEntry.id) },
   { name: 'boss', segment: 'mirror', ending: false, update: dt => {

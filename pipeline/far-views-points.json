@@ -57,7 +57,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-02",
@@ -79,7 +80,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-03",
@@ -101,7 +103,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-04",
@@ -123,7 +126,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-05",
@@ -145,7 +149,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-06",
@@ -167,7 +172,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-07",
@@ -189,7 +195,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-08",
@@ -211,7 +218,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-09",
@@ -233,7 +241,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-10",
@@ -255,7 +264,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-11",
@@ -277,7 +287,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-12",
@@ -299,7 +310,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-13",
@@ -321,7 +333,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-14",
@@ -343,7 +356,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-15",
@@ -365,7 +379,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c01-16",
@@ -387,7 +402,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c01"
+      "dimensionsSource": "assumption-c01",
+      "status": "built"
     },
     {
       "id": "c02-01",
@@ -409,7 +425,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-02",
@@ -431,7 +448,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-03",
@@ -453,7 +471,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-04",
@@ -475,7 +494,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-05",
@@ -497,7 +517,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-06",
@@ -519,7 +540,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-07",
@@ -541,7 +563,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-08",
@@ -563,7 +586,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-09",
@@ -585,7 +609,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-10",
@@ -607,7 +632,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-11",
@@ -629,7 +655,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-12",
@@ -651,7 +678,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-13",
@@ -673,7 +701,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-14",
@@ -695,7 +724,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-15",
@@ -717,7 +747,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-16",
@@ -739,7 +770,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-17",
@@ -761,7 +793,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-18",
@@ -783,7 +816,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-19",
@@ -805,7 +839,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-20",
@@ -827,7 +862,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-21",
@@ -849,7 +885,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-22",
@@ -871,7 +908,8 @@
       "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     },
     {
       "id": "c02-23",
@@ -899,7 +937,31 @@
       ],
       "dateKind": "acquired",
       "tower": "not-resolved",
-      "dimensionsSource": "assumption-c02"
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
+    },
+    {
+      "id": "c02-24",
+      "farm": "c02",
+      "e": 622465.0,
+      "n": 5046105.0,
+      "hub": 118,
+      "diameter": 163,
+      "dimensions": "assumed-modern-era",
+      "source": "Sentinel-2 L2A",
+      "date": "2026-10-26",
+      "confidence": "medium",
+      "uncertainty": 30,
+      "scene": "S2B_20TPR_20261026_0_L2A",
+      "pixel": [
+        1143,
+        452
+      ],
+      "evidence": "Sentinel gravel pad centre and access road; tower/shadow not individually resolved in the retained audit.",
+      "dateKind": "acquired",
+      "tower": "not-resolved",
+      "dimensionsSource": "assumption-c02",
+      "status": "built"
     }
   ],
   "dimensionsSources": {

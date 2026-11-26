@@ -225,7 +225,7 @@ def main():
     for f in official['features']:
         p=f['properties'];e,n,_=tr.TransformPoint(*f['geometry']['coordinates'][:2])
         hub=float(p.get('Hub_Height_m') or 100);diameter=float(p.get('Rotor_Diameter_m') or 100)
-        turbines.append(dict(id=f'nrcan-{f["id"]}',e=round(e,2),n=round(n,2),hub=hub,diameter=diameter,farm=groups[p['Project_Name']],source='NRCan',sourceUrl=source_url,date=retrieved,dateKind='retrieved',confidence='high',dimensions='NRCan' if p.get('Hub_Height_m') and p.get('Rotor_Diameter_m') else 'assumed-modern-era'))
+        turbines.append(dict(id=f'nrcan-{f["id"]}',e=round(e,2),n=round(n,2),hub=hub,diameter=diameter,farm=groups[p['Project_Name']],status='operating',source='NRCan',sourceUrl=source_url,date=retrieved,dateKind='retrieved',confidence='high',dimensions='NRCan' if p.get('Hub_Height_m') and p.get('Rotor_Diameter_m') else 'assumed-modern-era'))
     for p in measurements['points']:
         if any(math.hypot(p['e']-q['e'],p['n']-q['n'])<150 for q in turbines): raise ValueError('Sentinel point duplicates NRCan')
         turbines.append(p)
@@ -250,7 +250,7 @@ def main():
             if distance_box(p['e'],p['n'],root)>80000:continue
             if p['id'] in rejected:
                 omitted_wind.append(rejected[p['id']]);continue
-            q={k:p[k] for k in ('id','e','n','hub','diameter','farm','source','date','dateKind','confidence','uncertainty','dimensions','dimensionsSource','tower') if k in p}
+            q={k:p[k] for k in ('id','e','n','hub','diameter','farm','status','source','date','dateKind','confidence','uncertainty','dimensions','dimensionsSource','tower') if k in p}
             q['ground']=round(dem.at(p['e'],p['n']),2)
             (near if inside(q['e'],q['n'],root) else far).append(q)
         omitted['turbines']=omitted_wind
