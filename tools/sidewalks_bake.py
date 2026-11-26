@@ -359,6 +359,8 @@ def _restore_unread_manifest_keys(manifest, base_manifest):
     return out
 
 def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None,far_delta=None):
+    if not cached:
+        return False
     if check_source is None and report is None and CHECK_SOURCE.exists():
         check_source = json.loads(CHECK_SOURCE.read_text())
     if far_delta is None and report is None and FAR_VIEWS_DELTA.exists():
@@ -369,20 +371,22 @@ def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None,
         before_width = previous_digest(json.loads(WIDTH1406.read_text()), 'roads.json', digest)
         if before_width is not None and matches(before_width):
             return True
-    manifest = None
+    manifest_candidates = None
     if file.startswith('data/baked/') and file.endswith('/manifest.json'):
         raw = (root/file).read_bytes()
         if matches(hashlib.sha256(raw).hexdigest()) or matches(manifest_digest(raw)):
             return True
-        manifest = json.loads(raw)
+        orig_manifest = json.loads(raw)
+        manifest_candidates = [orig_manifest]
         if far_delta is not None:
             pack = file.removeprefix('data/baked/').removesuffix('/manifest.json')
             base_manifest = far_delta.get('packs', {}).get(pack, {}).get('manifest', {})
             if base_manifest:
-                manifest = _restore_unread_manifest_keys(manifest, base_manifest)
-                restored_bytes = (json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()
+                restored = _restore_unread_manifest_keys(orig_manifest, base_manifest)
+                restored_bytes = (json.dumps(restored,separators=(',',':'),allow_nan=False)+'\n').encode()
                 if matches(hashlib.sha256(restored_bytes).hexdigest()):
                     return True
+                manifest_candidates.append(restored)
     reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, COMM1347, NOV18) if p.exists()]
     for current in reports:
         before = previous_digest(current, file.removeprefix('data/baked/'), digest, cached=cached) if file.startswith('data/baked/') else None
@@ -393,25 +397,26 @@ def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None,
         for m in current.get('manifests', ()):
             if file != f"data/baked/{m['folder']}/manifest.json" or m['before'] == m['after']:
                 continue
-            if manifest is None:
-                manifest = json.loads((root/file).read_bytes())
-            matched = True
-            for k, v in m['after'].items():
-                if isinstance(v, dict) and set(v) == {'count'}:
-                    if not isinstance(manifest.get(k), dict) or manifest[k].get('count') != v['count']:
+            if manifest_candidates is None:
+                manifest_candidates = [json.loads((root/file).read_bytes())]
+            for manifest in manifest_candidates:
+                matched = True
+                for k, v in m['after'].items():
+                    if isinstance(v, dict) and set(v) == {'count'}:
+                        if not isinstance(manifest.get(k), dict) or manifest[k].get('count') != v['count']:
+                            matched = False; break
+                    elif manifest.get(k) != v:
                         matched = False; break
-                elif manifest.get(k) != v:
-                    matched = False; break
-            if not matched:
-                continue
-            for k, v in m['before'].items():
-                if isinstance(v, dict) and set(v) == {'count'}:
-                    manifest[k] = dict(manifest[k], count=v['count'])
-                else:
-                    manifest[k] = v
-            rewound_bytes = (json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()
-            if matches(hashlib.sha256(rewound_bytes).hexdigest()) or matches(manifest_digest(rewound_bytes)):
-                return True
+                if not matched:
+                    continue
+                for k, v in m['before'].items():
+                    if isinstance(v, dict) and set(v) == {'count'}:
+                        manifest[k] = dict(manifest[k], count=v['count'])
+                    else:
+                        manifest[k] = v
+                rewound_bytes = (json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()
+                if matches(hashlib.sha256(rewound_bytes).hexdigest()) or matches(manifest_digest(rewound_bytes)):
+                    return True
     return False
 
 def nov18_cases():
@@ -461,6 +466,8 @@ def nov18_cases():
         (root/name).write_bytes(tall_reord);assert nov18_stands_for(name,manifest_digest(tall_reord),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan ignores tall nested key reorder'
         (root/name).write_bytes(tall_removed);assert nov18_stands_for(name,manifest_digest(tall_removed),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan ignores tall removal'
         (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,manifest_digest(tall_and_props),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan accepts tall + receipt props change'
+        (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,manifest_digest(tall_and_props),sha(tall_only),root,prop_report,far_delta=far_delta),'existing raw plan already at installed tall accepts receipt-only props change'
+        (root/name).write_bytes(tall_only);assert not nov18_stands_for(name,manifest_digest(tall_only),None,root,prop_report,{'files':[]},far_delta=far_delta),'missing cached manifest fingerprint must be refused'
         (root/name).write_bytes(tall_and_other);assert not nov18_stands_for(name,manifest_digest(tall_and_other),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan refuses tall + other key change'
     print('PASS 18 Nov receipt stands for its before land: receipt files, manifest.tall and counts only; other keys, unknown bytes and other land refused')
 
@@ -497,7 +504,9 @@ if __name__=='__main__':
         check_source=json.loads(CHECK_SOURCE.read_text())
         for file,digest in current.items():
             prior=cached['inputs'].get(file)
-            if prior==digest or (prior and previous_digest(check_source,file,digest)==prior):
+            if not prior:
+                raise SystemExit(f'Missing sidewalk bake input fingerprint: {file}; run python3 tools/sidewalks_bake.py')
+            if prior==digest or previous_digest(check_source,file,digest)==prior:
                 continue
             if not nov18_stands_for(file,digest,prior):
                 raise SystemExit(f'Stale sidewalk bake: {file}; run python3 tools/sidewalks_bake.py')
