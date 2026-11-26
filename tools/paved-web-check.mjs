@@ -30,6 +30,9 @@ const changes={
  W5:['paved-shader.ts',"  return replace(out,'    albedo *=","  out=replace(out,'    albedo = mix(albedo, surface, onRoad * roadPaint);','    albedo = mix(albedo,vec3(.1),onRoad);');\n  return replace(out,'    albedo *=",'native lane paint'],
  W6:['paved-shader.ts',"  return replace(out,'    albedo *=","  out=replace(out,'    albedo = mix(albedo, surface, onRoad * roadPaint);','    albedo = mix(albedo,vec3(.1),pavedCarFade(p));');\n  return replace(out,'    albedo *=",'native lane paint'],
  M5:['paved.ts','this.index.origin[1]-this.vy+z','this.index.origin[1]-this.vy-z','tile name'],
+ INNSOUTH:['paved.ts','north < 5052420','north < 5052436','inn asphalt at 628575'],
+ INNREEVES:['paved.ts','north >= reevesNorth || ','','inn asphalt at 628630'],
+ INNSYDNEY:['paved.ts',' || east >= sydneyEast','','inn asphalt at 628640'],
  OPTIN:['main.ts','','','default-on gate'],
  NOOFF:['main.ts','','','default-on gate'],
  NODATA:['main.ts','','','default-on gate'],
@@ -204,6 +207,41 @@ try{
  layer.update(1621,1515);await flush();assert.equal(requests.length,before,'retry must back off');
  time=1001;layer.update(1621,1515);await flush();assert.equal(requests.length,before+1,'retry resumes in same tile');assert.equal(layer.pending,0);assert.equal(layer.entries.values().next().value.failed,false);
 }finally{globalThis.fetch=oldFetch;console.warn=oldWarn;layer.texture.dispose();}
+// Put asphalt on both sides of the scope boundary so a loose clip cannot pass.
+{
+ const village=[628151.016,5052750.5], tiles=new Map();
+ const samples=[
+  [628596,5052453,1,true], // rear lot
+  [628575,5052430,1,true], // south end of the rear lot
+  [628630,5052536,1,false], // across Reeves Street
+  [628640,5052444,1,false], // across Sydney Road
+  [628590,5052463,0,false],
+  [628592,5052463,2,false],
+ ];
+ for(const [east,north,value] of samples){
+  const col=Math.floor((east-index.origin[0])/2), row=Math.floor((index.origin[1]-north)/2);
+  const key=`${Math.floor(col/128)}_${Math.floor(row/128)}.r8`;
+  if(!tiles.has(key))tiles.set(key,new Uint8Array(16384));
+  tiles.get(key)[(row%128)*128+col%128]=value;
+ }
+ const innIndex={...index,tiles:[...tiles.keys()]};
+ const inn=new Paved(innIndex,'inn-check',village);
+ const other=new Paved({...innIndex,area:'porthood'},'inn-other',village);
+ const at=(layer,east,north)=>layer.maritimeInnAsphaltAt(east-village[0],village[1]-north);
+ globalThis.fetch=async url=>new Response(tiles.get(String(url).split('/').pop()));
+ try{
+  assert.equal(at(inn,628596,5052453),false,'unloaded inn tile');
+  for(const layer of [inn,other])layer.update(628596-village[0],village[1]-5052453);
+  await flush();
+  for(const [east,north,,expected] of samples)
+   assert.equal(at(inn,east,north),expected,`inn asphalt at ${east}, ${north}`);
+  assert.equal(at(other,628596,5052453),false,'other area');
+  inn.update(30000,30000);
+  assert.equal(at(inn,628596,5052453),false,'evicted inn tile');
+ }finally{
+  globalThis.fetch=oldFetch;inn.texture.dispose();other.texture.dispose();
+ }
+}
 // Keep failing through enough attempts to prove the cap, not just the first retry.
 let retryTime=0,retryReads=0;globalThis.fetch=async()=>{retryReads++;throw Error('controlled repeated failure');};console.warn=()=>{};
 const retryLayer=new Paved(index,'test',[628151.016,5052750.5],()=>retryTime);

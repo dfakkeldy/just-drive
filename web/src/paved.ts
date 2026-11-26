@@ -66,8 +66,12 @@ export class Paved {
   maritimeInnAsphaltAt(x: number, z: number): boolean {
     if (this.index.area !== 'pointtupper') return false;
     const east = x + this.vx, north = this.vy - z;
-    // Local window around the inn's front and rear lots. The mapped class defines the edges.
-    if (east < 628535 || east > 628647 || north < 5052436 || north > 5052540) return false;
+    // Bounds around the mapped inn lots, in EPSG:2961 metres. Clip at the
+    // surveyed Reeves Street and Sydney Road centrelines to exclude lots across them.
+    if (east < 628535 || east > 628672 || north < 5052420 || north > 5052565) return false;
+    const reevesNorth = 5052560 - (east - 628540.74) * 63.11 / 134.26;
+    const sydneyEast = 628605.42 + (north - 5052420) * 67.09 / 77.44;
+    if (north >= reevesNorth || east >= sydneyEast) return false;
     const col = Math.floor((east - this.index.origin[0]) / this.index.resolution);
     const row = Math.floor((this.index.origin[1] - north) / this.index.resolution);
     const tile = this.entries.get(`${Math.floor(col / SIDE)}_${Math.floor(row / SIDE)}.r8`);
