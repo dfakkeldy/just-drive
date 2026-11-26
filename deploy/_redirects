@@ -6,5 +6,5 @@
 /blackstone https://mmm.fakkeldy.ca/?mode=mail&start=blackstone-road:0.43 302
 /blackstone/ https://mmm.fakkeldy.ca/?mode=mail&start=blackstone-road:0.43 302
 # /porthoodgas opens Just Drive at the Port Hood gas station on High Road, matching PORT_HOOD_GAS_START in web/src/porthood-gas-site.ts.
-/porthoodgas https://justdrive.fakkeldy.ca/porthood?driveAt=614458.74,5096480.17,118 302
-/porthoodgas/ https://justdrive.fakkeldy.ca/porthood?driveAt=614458.74,5096480.17,118 302
+/porthoodgas https://justdrive.fakkeldy.ca/porthood?driveAt=614458.74,5096480.17,111 302
+/porthoodgas/ https://justdrive.fakkeldy.ca/porthood?driveAt=614458.74,5096480.17,111 302

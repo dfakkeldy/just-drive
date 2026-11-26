@@ -25,9 +25,9 @@ const LENGTH = 19.23, WIDTH = 12.54, AXIS = 83;
 const SITE_REF: P = [614501.66, 5096458.7];
 const SITE_REACH = 0.5, SIZE_TOL = 0.5, AXIS_TOL = 0.5;
 
-/** Baked High Road point 248 (48 m WNW of building 522), angled so the station, fuel canopy, price pylon and packed lot fill the view.
- * Heading is clockwise from north in radians (118 degrees). */
-export const PORT_HOOD_GAS_START = { e: 614458.74, n: 5096480.17, road: 'High Road', heading: (118 * Math.PI) / 180 };
+/** Baked High Road point 248 (48 m WNW of building 522), angled so both station signs, the fuel canopy, price pylon and packed lot stay clear of the HUD on phone and desktop.
+ * Heading is clockwise from north in radians (111 degrees). */
+export const PORT_HOOD_GAS_START = { e: 614458.74, n: 5096480.17, road: 'High Road', heading: (111 * Math.PI) / 180 };
 
 /** Level ground under the main service station building and east wing; outside it blends back to the lot's slope. */
 const PAD: P[] = [[-8.2, -6.2], [10.8, -6.2], [10.8, 5.2], [-8.2, 5.2]];

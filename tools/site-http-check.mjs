@@ -110,7 +110,7 @@ for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(co
  assert.match(r.body.toString(),/<title>Just Drive: Judique<\/title>/);
 }
 // Short link for Port Hood gas station (deploy/_redirects): served by static assets with no Worker run.
-const PORTHOOD_GAS_TARGET='https://justdrive.fakkeldy.ca/porthood?driveAt=614458.74,5096480.17,118';
+const PORTHOOD_GAS_TARGET='https://justdrive.fakkeldy.ca/porthood?driveAt=614458.74,5096480.17,111';
 for(const host of ['justdrive.fakkeldy.ca','mmm.fakkeldy.ca','localhost'])for(const path of ['/porthoodgas','/porthoodgas/'])for(const method of ['GET','HEAD']){
  const r=await request(host,path,{},method);assert.equal(r.status,302,`${method} ${host}${path}`);
  const resolved=new URL(r.headers.location,'http://'+host+path);
