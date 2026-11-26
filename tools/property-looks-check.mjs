@@ -7,6 +7,7 @@ import { MabouMainSite } from '../web/src/mabou-main-site.ts';
 import { PorchSite } from '../web/src/porch-site.ts';
 import { BlackstoneSite } from '../web/src/blackstone-site.ts';
 import { isHillsideBuilding } from '../web/src/november-buildings.ts';
+import { PH_PLACES } from '../web/src/port-hawkesbury-site.ts';
 
 const sunDir = new THREE.Vector3(37, 24, 42).normalize();
 const DEFAULT_STYLE = {
@@ -253,6 +254,9 @@ function validatePack(pack) {
   readBuildingStyles({ version: 1, styles: merged });
 }
 validatePack(mabouPack);
+const pointPack = areaPropertyLooks('pointtupper');
+assert.ok(pointPack && pointPack.version === 1 && pointPack.area === 'pointtupper');
+validatePack(pointPack);
 // Verify nested allowlists reject extra fields on bareEnd and siloPosition
 assert.throws(() => validatePack({
   version: 1, area: 'test', groups: { g: { label: 'G', roads: ['Highway 19'] } },
@@ -355,5 +359,84 @@ if (fs.existsSync(`${terrainDir}/manifest.json`)) {
     m.mesh.material.dispose();
   }
 } else {
-  console.log(`PASS property-looks (no land data): ${Object.keys(mabouPack.overrides).length} Mabou overrides validated`);
+  console.log(`PASS property-looks (no land data): ${Object.keys(mabouPack.overrides).length} Mabou overrides validated; ${Object.keys(pointPack.overrides).length} Point Tupper overrides validated`);
+}
+
+// 4. Point Tupper: Granville Street looks must match their anchors and must not add triangles.
+const pointTerrain = 'data/baked/areas/pointtupper';
+if (fs.existsSync(`${pointTerrain}/manifest.json`) && fs.existsSync(`${pointTerrain}/buildings.json`)) {
+  const readPt = (f) => JSON.parse(fs.readFileSync(`${pointTerrain}/${f}`, 'utf8'));
+  const pointManifest = readPt('manifest.json');
+  const pointBuildings = readPt('buildings.json').buildings;
+  const pointBaked = readBuildingStyles(readPt('building-styles.json'));
+  const pointRoads = readPt('roads.json').roads;
+  const pointRoadById = new Map(pointRoads.map((r) => [r.id, r.name || '(unnamed)']));
+  const pointSites = buildingSites(pointBuildings);
+  const pointSiteById = new Map(pointSites.map((b) => [String(b.id), b]));
+  const handSpots = Object.values(PH_PLACES).flatMap((place) => place.replaces);
+  const rises = new Map();
+  if (fs.existsSync(`${pointTerrain}/building-foundations.json`)) {
+    const packed = readPt('building-foundations.json');
+    const bytes = Buffer.from(packed.rows, 'base64');
+    let id = 0;
+    for (let offset = 0; offset + 8 <= bytes.length; offset += 8) {
+      id += bytes.readUInt32LE(offset);
+      rises.set(id, bytes.readUInt16LE(offset + 4) / 100);
+    }
+  }
+  const pointApplied = applyPropertyLooks('pointtupper', pointBuildings, pointBaked);
+  const pointCount = Object.keys(pointPack.overrides).length;
+  assert.ok(pointApplied && Object.keys(pointApplied.styles).length === pointCount, 'every Point Tupper override matched its anchored property');
+  readBuildingStyles({ version: 1, styles: pointApplied.styles });
+  for (const [id, ov] of Object.entries(pointPack.overrides)) {
+    const site = pointSiteById.get(id);
+    assert.ok(site, `building ${id} is not a Point Tupper property site`);
+    const dist = Math.hypot(site.x - ov.at[0], site.y - ov.at[1]);
+    assert.ok(dist <= 0.5, `building ${id} anchor off by ${dist.toFixed(2)} m`);
+    const actualRoad = pointRoadById.get(site.nearRoad) ?? '(unnamed)';
+    assert.equal(ov.road, actualRoad, `building ${id} road mismatch: ${ov.road} vs ${actualRoad}`);
+    assert.ok(!handSpots.some(([x, y]) => Math.hypot(site.x - x, site.y - y) < 8), `building ${id} is already hand-built`);
+    // A raised floor means a new entrance, a moved door, or a kind change would sit above the slope.
+    if ((rises.get(Number(id)) ?? 0) >= 0.5) {
+      assert.equal(ov.entrance, undefined, `building ${id} keeps its baked entrance on a slope`);
+      assert.equal(ov.front, undefined, `building ${id} keeps its baked door on a slope`);
+      assert.equal(ov.kind, undefined, `building ${id} keeps its baked kind on a slope`);
+    }
+    if (ov.dormer) {
+      const effShape = ov.roofShape ?? site.roof;
+      assert.ok(effShape === 'gable' || effShape === 'gambrel', `building ${id} requests dormer on ${effShape} roof`);
+    }
+  }
+  const pointAfterStyles = { ...pointBaked, ...pointApplied.styles };
+  const countMesh = (styles) => new Buildings(pointBuildings, pointManifest.village, 1.5, -0.2, styles);
+  const beforeNormal = countMesh(pointBaked);
+  const afterNormal = countMesh(pointAfterStyles);
+  assert.ok(afterNormal.triangles <= beforeNormal.triangles,
+    `Point Tupper normal triangles grew: ${afterNormal.triangles} > ${beforeNormal.triangles}`);
+  const beforeDesk = countMesh(buildingAppearance('wall-shadows', false, sunDir, pointBaked));
+  const afterDesk = countMesh(buildingAppearance('wall-shadows', false, sunDir, pointAfterStyles));
+  assert.ok(afterDesk.triangles <= beforeDesk.triangles,
+    `Point Tupper desktop triangles grew: ${afterDesk.triangles} > ${beforeDesk.triangles}`);
+  const beforeLow = countMesh(buildingAppearance('wall-shadows', true, sunDir, pointBaked));
+  const afterLow = countMesh(buildingAppearance('wall-shadows', true, sunDir, pointAfterStyles));
+  const pointCams = [
+    ['granville-north', 627520, 5053050],
+    ['granville-mid', 627980, 5052500],
+    ['granville-south', 628420, 5052050],
+  ];
+  const pointCam = new THREE.PerspectiveCamera();
+  for (const [name, east, north] of pointCams) {
+    pointCam.position.set(east - pointManifest.village[0], 10, pointManifest.village[1] - north);
+    pointCam.updateMatrixWorld();
+    beforeLow.mesh.onBeforeRender(null, null, pointCam);
+    const beforeTris = beforeLow.mesh.geometry.drawRange.count / 3;
+    afterLow.mesh.onBeforeRender(null, null, pointCam);
+    const afterTris = afterLow.mesh.geometry.drawRange.count / 3;
+    assert.ok(afterTris <= beforeTris, `Point Tupper phone ${name} grew: ${afterTris} > ${beforeTris}`);
+  }
+  console.log(`PASS property-looks pointtupper: ${pointCount} Granville Street overrides; normal ${afterNormal.triangles} <= ${beforeNormal.triangles}; desktop ${afterDesk.triangles} <= ${beforeDesk.triangles}; phone views did not grow`);
+  for (const mesh of [beforeNormal, afterNormal, beforeDesk, afterDesk, beforeLow, afterLow]) {
+    mesh.mesh.geometry.dispose();
+    mesh.mesh.material.dispose();
+  }
 }
