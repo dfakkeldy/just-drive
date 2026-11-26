@@ -631,6 +631,7 @@
       "wall": "#f4f3ee",
       "roof": "#3a3e42",
       "trim": "#f7f6f2",
+      "door": "#787a76",
       "roofMaterial": "shingle"
     },
     "1322": {
