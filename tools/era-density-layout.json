@@ -40,7 +40,7 @@
           "bytes": 835637
         },
         "manifest.json": {
-          "sha256": "9ba374d4d730a881048b18a5fbde4e2c66f52851883a156f8d0d259c5edb0ac3",
+          "sha256": "22632cc159f5c70726c154ba2664cf49a1c49ed31c5a33a1b507093319ed9df9",
           "bytes": 48441,
           "without": [
             "buildingStyles",
