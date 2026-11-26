@@ -31,6 +31,12 @@
       "roads": [
         "Railroad"
       ]
+    },
+    "reeves-street": {
+      "label": "Reeves Street",
+      "roads": [
+        "Reeves Street"
+      ]
     }
   },
   "overrides": {
@@ -875,6 +881,82 @@
       "wall": "#f4f3ee",
       "roof": "#3a3e42",
       "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "848": {
+      "group": "reeves-street",
+      "road": "Reeves Street",
+      "at": [
+        628016.3,
+        5052975.3
+      ],
+      "wall": "#5c554e",
+      "roof": "#3a3634",
+      "trim": "#8a847c",
+      "door": "#a6a6a1",
+      "roofMaterial": "shingle"
+    },
+    "1518": {
+      "group": "reeves-street",
+      "road": "Reeves Street",
+      "at": [
+        626910.7,
+        5053884.4
+      ],
+      "wall": "#7a5c50",
+      "roof": "#3a3e42",
+      "trim": "#e8e4dc",
+      "roofMaterial": "shingle"
+    },
+    "1520": {
+      "group": "reeves-street",
+      "road": "Reeves Street",
+      "at": [
+        626890.8,
+        5053930.1
+      ],
+      "wall": "#8a929c",
+      "roof": "#4a5054",
+      "trim": "#f0eeea",
+      "roofMaterial": "shingle"
+    },
+    "1530": {
+      "group": "reeves-street",
+      "road": "Reeves Street",
+      "at": [
+        626612.3,
+        5054300.6
+      ],
+      "wall": "#5e7088",
+      "roof": "#3e4a56",
+      "trim": "#e8eef2",
+      "door": "#787a76",
+      "roofMaterial": "shingle"
+    },
+    "1531": {
+      "group": "reeves-street",
+      "road": "Reeves Street",
+      "at": [
+        626552.2,
+        5054397.8
+      ],
+      "wall": "#e6e6e0",
+      "roof": "#7a8086",
+      "trim": "#f4f2ec",
+      "door": "#696d6d",
+      "roofMaterial": "shingle"
+    },
+    "1532": {
+      "group": "reeves-street",
+      "road": "Reeves Street",
+      "at": [
+        626542.8,
+        5054413.8
+      ],
+      "wall": "#e4e2dc",
+      "roof": "#6e7478",
+      "trim": "#f2f0ea",
+      "door": "#787a76",
       "roofMaterial": "shingle"
     }
   }
