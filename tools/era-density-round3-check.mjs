@@ -15,14 +15,15 @@ const fixtures={'manifest.json':Buffer.from(JSON.stringify({cover:{file:'cover.p
 const entries=Object.entries(fixtures).map(([file,b])=>({file,...densityFingerprint(file,b)})),terrain=entries.filter(e=>e.file.includes('/')),fp={files:Object.fromEntries(entries.filter(e=>!e.file.includes('/')).map(({file,...e})=>[file,e])),terrain:{files:terrain,count:terrain.length,sha256:digest(Buffer.from(terrain.map(e=>e.file+'\0'+e.sha256+'\n').join('')))}};
 for(const file of Object.keys(fixtures))assert.throws(()=>verifyDensityInputs(base,fp,f=>f===file?Buffer.from('changed'):fixtures[f]),e=>e.message.includes(file)&&e.message.includes(DENSITY_REGENERATE)&&e.message.includes(DENSITY_VALIDATE),'changed input must name the file and both recovery commands');
 assert.throws(()=>verifyDensityInputs(base,{files:{},terrain:{files:[],count:0}},()=>Buffer.from('')),/Missing input fingerprint|Empty/);
-// Step 29's manifest.props, the paved install's manifest.paved and step 30's manifest.buildingStyles may change; any other manifest key, or the old whole-file record, must not.
+// Step 29's manifest.props, the paved install's manifest.paved, step 30's manifest.buildingStyles and far-data's manifest.tall may change; any other manifest key, or the old whole-file record, must not.
 const withManifest=m=>f=>f==='manifest.json'?Buffer.from(JSON.stringify(m)):fixtures[f];
 verifyDensityInputs(base,fp,withManifest({props:{poles:2789,serviceDrops:282},cover:{file:'cover.png'}}));
 verifyDensityInputs(base,fp,withManifest({paved:{index:'paved/index.json',tiles:298},props:{poles:2789},cover:{file:'cover.png'}}));
 verifyDensityInputs(base,fp,withManifest({buildingStyles:{file:'building-styles.json',count:668},cover:{file:'cover.png'}}));
-assert.throws(()=>verifyDensityInputs(base,fp,withManifest({cover:{file:'cover.png'},village:[1,2]})),/Land input changed: manifest\.json/,'a changed manifest key other than props, paved or buildingStyles must fail');
+verifyDensityInputs(base,fp,withManifest({tall:{file:'tall.json',turbines:2,far:164,towers:3,lines:1},cover:{file:'cover.png'}}));
+assert.throws(()=>verifyDensityInputs(base,fp,withManifest({cover:{file:'cover.png'},village:[1,2]})),/Land input changed: manifest\.json/,'a changed manifest key other than props, paved, buildingStyles or tall must fail');
 assert.throws(()=>verifyDensityInputs(base,{...fp,files:{...fp.files,'manifest.json':{sha256:digest(fixtures['manifest.json']),bytes:fixtures['manifest.json'].length}}},f=>fixtures[f]),/Stale manifest\.json fingerprint/,'a whole-file manifest fingerprint must be regenerated');
-console.log('PASS manifest fingerprint leaves out only step 29 props, the paved key and step 30 building styles, in any key order');
+console.log('PASS manifest fingerprint leaves out only step 29 props, the paved key, step 30 building styles and tall, in any key order');
 const mismatch=mkdtempSync(join(tmpdir(),'density-input-mismatch-'));
 try{
  const manifest=JSON.parse(readFileSync(base+'/manifest.json'));for(const file of ['manifest.json',manifest.cover.file,'streams.json','buildings.json'])symlinkSync(base+'/'+file,mismatch+'/'+file);

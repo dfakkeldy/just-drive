@@ -325,19 +325,35 @@ NOV18=ROOT/'tools/mabou-dashcam-18nov/hashes.json'
 NOV19=ROOT/'tools/mabou-wharf/roads.json'
 COMM1347=ROOT/'tools/community-mailboxes/hashes.json'
 WIDTH1406=ROOT/'tools/industrial-surface/width-hashes.json'
+FAR_VIEWS_DELTA=ROOT/'tools/far-views-delta.json'
 CHECK_SOURCE=ROOT/'tools/sidewalks-check-source.json'
+# Sidewalks read only manifest origin, size, village and levels; far-turbine installs update only manifest.tall.
+MANIFEST_UNREAD=('tall',)
 
-def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None):
+def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None,far_delta=None):
     if check_source is None and report is None and CHECK_SOURCE.exists():
         check_source = json.loads(CHECK_SOURCE.read_text())
+    if far_delta is None and report is None and FAR_VIEWS_DELTA.exists():
+        far_delta = json.loads(FAR_VIEWS_DELTA.read_text())
     matches = lambda h: h == cached or (check_source is not None and previous_digest(check_source, file, h) == cached)
     if report is None and file == 'data/baked/areas/pointtupper/roads.json' and WIDTH1406.exists():
         # Road 107 lies outside Port Hawkesbury's sidewalk runs; widening it leaves all Point Tupper sidewalk bytes identical.
         before_width = previous_digest(json.loads(WIDTH1406.read_text()), 'roads.json', digest)
         if before_width is not None and matches(before_width):
             return True
-    reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, COMM1347, NOV18) if p.exists()]
     manifest = None
+    if file.startswith('data/baked/') and file.endswith('/manifest.json') and far_delta is not None:
+        pack = file.removeprefix('data/baked/').removesuffix('/manifest.json')
+        base_manifest = far_delta.get('packs', {}).get(pack, {}).get('manifest', {})
+        manifest = json.loads((root/file).read_bytes())
+        changed_unread = False
+        for k in MANIFEST_UNREAD:
+            if k in manifest and k in base_manifest and manifest[k] != base_manifest[k]:
+                manifest[k] = base_manifest[k]
+                changed_unread = True
+        if changed_unread and matches(hashlib.sha256((json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()).hexdigest()):
+            return True
+    reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, COMM1347, NOV18) if p.exists()]
     for current in reports:
         before = previous_digest(current, file.removeprefix('data/baked/'), digest, cached=cached) if file.startswith('data/baked/') else None
         if before is not None:
@@ -391,7 +407,18 @@ def nov18_cases():
         (root/name).write_bytes(full_after);assert nov18_stands_for(name,sha(full_after),sha(full_before),root,prop_report),'manifest at full props key'
         (root/name).write_bytes(full_after);assert nov18_stands_for(name,sha(full_after),'e'*64,root,prop_report,{'files':[{'file':name,'before':'e'*64,'sha256':sha(full_before)}]}),'manifest chained through check_source'
         (root/name).write_bytes(compact({'props':{'file':'props.json','mailboxes':468},'other':'y'}));assert not nov18_stands_for(name,'',sha(full_before),root,prop_report),'another key changed beside props'
-    print('PASS 18 Nov receipt stands for its before land: receipt files and counts only; other keys, unknown bytes and other land refused')
+        # manifest.tall changes alone or alongside a receipt-owned props change pass; any other key change fails.
+        tall_base={'file':'tall.json','turbines':2,'far':162,'towers':3,'lines':1}
+        tall_next={'file':'tall.json','turbines':2,'far':164,'towers':3,'lines':1}
+        far_delta={'packs':{'terrain':{'manifest':{'tall':tall_base}}}}
+        tall_before=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_base,'other':'x'})
+        tall_only=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_next,'other':'x'})
+        tall_and_props=compact({'props':{'file':'props.json','mailboxes':468},'tall':tall_next,'other':'x'})
+        tall_and_other=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_next,'other':'y'})
+        (root/name).write_bytes(tall_only);assert nov18_stands_for(name,sha(tall_only),sha(tall_before),root,prop_report,far_delta=far_delta),'manifest.tall change ignored'
+        (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,sha(tall_and_props),sha(tall_before),root,prop_report,far_delta=far_delta),'manifest.tall + receipt props change accepted'
+        (root/name).write_bytes(tall_and_other);assert not nov18_stands_for(name,sha(tall_and_other),sha(tall_before),root,prop_report,far_delta=far_delta),'manifest.tall + other key change refused'
+    print('PASS 18 Nov receipt stands for its before land: receipt files, manifest.tall and counts only; other keys, unknown bytes and other land refused')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--check',action='store_true');parser.add_argument('--check-cases',action='store_true');parser.add_argument('--work-root',type=Path);args=parser.parse_args()

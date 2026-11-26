@@ -40,12 +40,13 @@
           "bytes": 835637
         },
         "manifest.json": {
-          "sha256": "22632cc159f5c70726c154ba2664cf49a1c49ed31c5a33a1b507093319ed9df9",
-          "bytes": 48441,
+          "sha256": "f60f6d5912d82a1fbe9d3ddeede233cab738a8c44bcdd52cf58e0e3f7bece4e5",
+          "bytes": 48369,
           "without": [
             "buildingStyles",
             "paved",
-            "props"
+            "props",
+            "tall"
           ]
         },
         "roads.json": {

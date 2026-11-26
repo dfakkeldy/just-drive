@@ -36,4 +36,4 @@ node tools/tall-check.mjs
 python3 tools/guysborough-turbines-delta/patch.py rollback /path/to/new-stage data/baked
 ```
 
-`EXPECT` in `tools/guysborough-turbines-delta-check.py` is `None` (accepts all-before or all-after, never mixed) until the main thread installs the delta and flips it to `'after'`. Because `manifest.json` `tall` counts change (+1 turbine per area), refresh both 1884 land fingerprints in the post-install follow-up PR (`tools/check-era-density.sh --write` for Mabou, `DENSITY_AREA=judique tools/check-era-density.sh --write` for Judique, plus `tools/era-judique-check.mjs` if its pinned Judique manifest hash updates).
+`EXPECT` in `tools/guysborough-turbines-delta-check.py` is `None` (accepts all-before or all-after, never mixed) until the main thread installs the delta and flips it to `'after'`. Both `era-density` (`MANIFEST_UNREAD` in `tools/era-density-inputs.mjs`) and `sidewalks-cache` (`MANIFEST_UNREAD` in `tools/sidewalks_bake.py`) ignore `manifest.tall`, so no post-install fingerprint refresh PR is needed for them.

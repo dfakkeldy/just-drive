@@ -5,10 +5,11 @@ export const DENSITY_REGENERATE='tools/check-era-density.sh --write';
 export const DENSITY_VALIDATE='tools/check-era-density.sh --validate';
 // Step 29 alone writes manifest.props (prop and pole counts), and the initial paving delta paved install alone writes
 // manifest.paved (the modern-only paved-lot index; main.ts loads it only when ERA.modern). Step 30 alone writes
-// manifest.buildingStyles (paint and details; main.ts loads them only when ERA.modern). No 1884 input reads any of
-// them, so a prop, power, paved or building-colour install must not stale the layout. Every other manifest key stays
+// manifest.buildingStyles (paint and details; main.ts loads them only when ERA.modern). Far-data/turbine installs alone
+// update manifest.tall (main.ts loads tall.json only when ERA.modern). No 1884 input reads any of them, so a prop,
+// power, paved, building-colour or far-turbine install must not stale the layout. Every other manifest key stays
 // fingerprinted.
-export const MANIFEST_UNREAD=['buildingStyles','paved','props'];
+export const MANIFEST_UNREAD=['buildingStyles','paved','props','tall'];
 // Sorted keys at every depth, so key order is no input: the generator and verifier hash the same canonical text.
 const canonical=v=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}':JSON.stringify(v);
 export function densityFingerprint(file,bytes){
