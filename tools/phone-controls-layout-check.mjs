@@ -144,23 +144,26 @@ async function verify(text, styles=css) {
  assert.ok(phoneReadoutsInSettings({width:667,height:375,left:47,right:47,bottom:21,mail:true,pull:false}));
  assert.ok(!phoneReadoutsInSettings({width:844,height:390,left:0,right:0,bottom:0,mail:true,pull:false}));
  // Native safe-area CSS changes need no window resize or DOM-style mutation.
- const all=[],resizeHooks=[];
+ const all=[],resizeHooks=[],mutationHooks=[];
+ let customHintHeight=null;
  class Element {
   id='';children=[];parentElement=null;hidden=false;style={removeProperty(k){delete this[k];}};classes=new Set(['tcOn']);
-  classList={contains:k=>this.classes.has(k),toggle:(k,on)=>on?this.classes.add(k):this.classes.delete(k)};
+  classList={contains:k=>this.classes.has(k),add:k=>this.classes.add(k),remove:k=>this.classes.delete(k),toggle:(k,on)=>on?this.classes.add(k):this.classes.delete(k)};
   constructor(id=''){this.id=id;all.push(this);}
   appendChild(e){if(e.parentElement)e.parentElement.children=e.parentElement.children.filter(x=>x!==e);e.parentElement=this;this.children.push(e);return e;}
   insertBefore(e,b){this.appendChild(e);this.children.pop();this.children.splice(this.children.indexOf(b),0,e);}
-  getBoundingClientRect(){return {height:innerWidth>innerHeight?14:36};}
+  getBoundingClientRect(){return {height:this.id==='phoneHint'&&customHintHeight!==null?customHintHeight:innerWidth>innerHeight?14:36};}
  }
  let safe={top:0,bottom:0};
  const root=new Element('phoneHud'),middle=new Element('phoneMiddle'),readout=new Element('phoneReadouts'),settings=new Element('settings');
+ settings.classes.clear();
+ const pauseScreen=new Element('pauseScreen');pauseScreen.hidden=true;
  middle.appendChild(readout);settings.appendChild(new Element('startOver'));
  for(const id of ['phoneDrive','phoneHint','stopHint','tcSteer','tcBrake','tcGo','tcReset','tcView','tcHorn','cameraButton','mailButton'])new Element(id);
  globalThis.document={body:new Element('body'),documentElement:new Element('html'),createElement:()=>new Element(),getElementById:id=>all.find(e=>e.id===id)??null};
  globalThis.innerWidth=390;globalThis.innerHeight=844;globalThis.window={visualViewport:{addEventListener(){}}};globalThis.addEventListener=()=>{};
  globalThis.getComputedStyle=()=>({paddingLeft:((safe.left??0)+8)+'px',paddingRight:((safe.right??0)+8)+'px',paddingTop:(safe.top+6)+'px',paddingBottom:(safe.bottom+8)+'px'});
- globalThis.MutationObserver=class{observe(){}};
+ globalThis.MutationObserver=class{constructor(cb){this.cb=cb;}observe(target){mutationHooks.push({target,cb:this.cb});}};
  globalThis.ResizeObserver=class{constructor(cb){this.cb=cb;}observe(target){resizeHooks.push({target,cb:this.cb});}};
  installPhoneControls(root);
  safe={top:47,bottom:34};
@@ -178,6 +181,39 @@ async function verify(text, styles=css) {
  for(const hook of resizeHooks)if(hook.target===root)hook.cb([]);
  assert.equal(readout.parentElement,middle,'actual installer restores the same readouts');
  assert.equal(document.getElementById('stopHint').parentElement.id,'phoneHint','actual installer restores the hint');
+ // Explore at 320x460: opening Settings (or Pause then Settings) hides #placeArrival so #phoneHint collapses to 0.
+ // Readouts must stay in Settings while the modal is open, then return once closed without a hint.
+ const fireResize=target=>{for(const hook of resizeHooks)if(hook.target===target)hook.cb([]);};
+ const fireMutation=target=>{for(const hook of mutationHooks)if(hook.target===target)hook.cb([]);};
+ globalThis.innerWidth=320;globalThis.innerHeight=460;safe={top:0,bottom:0,left:0,right:0};
+ document.body.classList.add('exploreMode');
+ customHintHeight=72;
+ fireResize(document.getElementById('phoneHint'));
+ assert.equal(readout.parentElement.id,'phoneReadoutsPanel','320x460 explore with arrival hint moves readouts to settings');
+ settings.classList.add('open');
+ customHintHeight=0;
+ fireMutation(settings);fireResize(document.getElementById('phoneHint'));
+ assert.equal(readout.parentElement.id,'phoneReadoutsPanel','opening Settings keeps readouts inside Settings after hint collapses');
+ globalThis.innerHeight=470;
+ fireResize(root);
+ assert.equal(readout.parentElement.id,'phoneReadoutsPanel','resizing viewport while Settings is open keeps readouts inside Settings');
+ safe={top:4,bottom:2,left:0,right:0};
+ assert.equal(phoneReadoutsInSettings({width:320,height:470,left:0,right:0,bottom:2,top:10,hintHeight:0,statusHeight:56,mail:false,pull:false}),false,'collapsed-hint 320x470 with small insets would return readouts to the HUD without modal retention');
+ fireResize(root);
+ assert.equal(readout.parentElement.id,'phoneReadoutsPanel','changing safe areas while Settings is open keeps readouts inside Settings');
+ globalThis.innerHeight=460;safe={top:0,bottom:0,left:0,right:0};
+ settings.classList.remove('open');
+ customHintHeight=72;
+ fireMutation(settings);fireResize(root);fireResize(document.getElementById('phoneHint'));
+ pauseScreen.hidden=false;
+ customHintHeight=0;
+ fireMutation(pauseScreen);fireResize(document.getElementById('phoneHint'));
+ pauseScreen.hidden=true;settings.classList.add('open');
+ fireMutation(pauseScreen);fireMutation(settings);fireResize(document.getElementById('phoneHint'));
+ assert.equal(readout.parentElement.id,'phoneReadoutsPanel','opening Settings from Pause keeps readouts inside Settings');
+ settings.classList.remove('open');
+ fireMutation(settings);
+ assert.equal(readout.parentElement,middle,'closing Settings with no hint returns readouts to the HUD');
  return cases;
 }
 console.log('PASS '+await verify(source)+' production size/hint-grid layouts using browser geometry rules, native safe-area lifecycle, PULL and menu restoration');

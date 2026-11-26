@@ -139,14 +139,35 @@ export function installPhoneControls(root: HTMLElement): void {
     const before = document.getElementById('startOver');
     settings.insertBefore(panel, before?.parentElement === settings ? before : null);
   }
+  const modals = new Set<HTMLElement>();
+  let modes: MutationObserver | null = null;
+  const watchModal = (id: string, attr: string) => {
+    const el = document.getElementById(id);
+    if (el && modes && !modals.has(el)) { modals.add(el); modes.observe(el, { attributes: true, attributeFilter: [attr] }); }
+    return el;
+  };
+  const modalOpen = () => {
+    const s = watchModal('settings', 'class');
+    const p = watchModal('pauseScreen', 'hidden');
+    const m = watchModal('bigMap', 'hidden');
+    const pl = watchModal('placesPanel', 'hidden');
+    return !!s?.classList.contains('open') || !!p && !p.hidden || !!m && !m.hidden || !!pl && !pl.hidden;
+  };
+  const currentModeKey = (modal: boolean) => [document.body.classList.contains('tcOn'), document.body.classList.contains('homeScreen'),
+    document.body.classList.contains('exploreMode'), !!document.getElementById('tcPull'), modal].join(':');
   const layout = () => {
     const on = document.body.classList.contains('tcOn');
     const pull = !!document.getElementById('tcPull'), mail = !document.body.classList.contains('exploreMode');
     const style = getComputedStyle(root);
+    const modal = modalOpen();
+    modeKey = currentModeKey(modal);
     const view = { width: innerWidth, height: innerHeight, left: Math.max(0, (parseFloat(style.paddingLeft) || 8) - 8),
       right: Math.max(0, (parseFloat(style.paddingRight) || 8) - 8), bottom: Math.max(0, (parseFloat(style.paddingBottom) || 8) - 8), top: parseFloat(style.paddingTop) || 0, hintHeight: hintHome?.getBoundingClientRect().height ?? 0, statusHeight: document.getElementById('phoneTop')?.getBoundingClientRect().height ?? 56, mail, pull };
-    const next = JSON.stringify([on, view]); if (next === key) return; key = next;
-    const menu = on && !!panel && !!readouts && !!home && phoneReadoutsInSettings(view);
+    const next = JSON.stringify([on, modal, view]); if (next === key) return; key = next;
+    // Modals hide #placeArrival and #mountainRideHint with display:none, which collapses #phoneHint.
+    // Keep readouts already in Settings there while a modal is open, even across viewport or safe-area changes.
+    const wasMenu = !!panel && !!readouts && readouts.parentElement === panel;
+    const menu = on && !!panel && !!readouts && !!home && (phoneReadoutsInSettings(view) || modal && wasMenu);
     if (readouts && home && panel) movePhoneReadouts(menu, readouts, home, panel);
     document.body.classList.toggle('phoneReadoutsMenu', menu);
     const hint = document.getElementById('stopHint');
@@ -173,9 +194,8 @@ export function installPhoneControls(root: HTMLElement): void {
     }
   };
   // Body mode changes include pause/resume and the bike controls arriving after the grid.
-  const modes = new MutationObserver(() => {
-    const next = [document.body.classList.contains('tcOn'), document.body.classList.contains('homeScreen'),
-      document.body.classList.contains('exploreMode'), !!document.getElementById('tcPull')].join(':');
+  modes = new MutationObserver(() => {
+    const next = currentModeKey(modalOpen());
     if (next !== modeKey) { modeKey = next; layout(); }
   });
   modes.observe(document.body, { attributes: true, attributeFilter: ['class'] });
