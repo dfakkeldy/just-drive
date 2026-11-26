@@ -166,9 +166,16 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       await until(`!document.getElementById('phoneLine').textContent.includes('LIMIT')`);
       await read('restoreStatusRoad();delete window.restoreStatusRoad');
     }
+    if(width===320&&height===460) {
+      if(name!=='mail') await until(`!!document.getElementById('placeArrival') && !document.getElementById('placeArrival').hidden && document.getElementById('phoneHint').getBoundingClientRect().height>0`);
+      await read(`new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
+    }
     const menu=await read(`document.body.classList.contains('phoneReadoutsMenu')`);
+    if(width===320&&height===460) assert.equal(menu,true,'320x460 starts with readouts in settings');
     if(menu) {
       await read(`document.getElementById('gear').click()`);
+      // Let ResizeObserver and layout settle after opening Settings hides #placeArrival, so readouts cannot vanish on the next frame.
+      await read(`new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
       assert.deepEqual(await read(`['miniMapHead','radio',...(mmm.gameMode==='mail'?['relief']:[])].filter(id=>{const e=document.getElementById(id);if(!e||!e.closest('#settings'))return true;e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width<56||r.height<56||!(at===e||e.contains(at));})`),[],'narrow readouts remain reachable in settings');
       await read(`document.getElementById('miniMapHead').scrollIntoView({block:'center'});document.getElementById('miniMapHead').click()`);await shot('-readouts');
       await read(`document.getElementById('gear').click()`);
