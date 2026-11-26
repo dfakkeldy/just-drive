@@ -446,7 +446,7 @@ if (fs.existsSync(`${pointTerrain}/manifest.json`) && fs.existsSync(`${pointTerr
     const afterTris = afterLow.mesh.geometry.drawRange.count / 3;
     assert.ok(afterTris <= beforeTris, `Point Tupper phone ${name} grew: ${afterTris} > ${beforeTris}`);
   }
-  console.log(`PASS property-looks pointtupper: ${pointCount} Granville Street overrides; normal ${afterNormal.triangles} <= ${beforeNormal.triangles}; desktop ${afterDesk.triangles} <= ${beforeDesk.triangles}; phone views did not grow`);
+  console.log(`PASS property-looks pointtupper: ${pointCount} overrides; normal ${afterNormal.triangles} <= ${beforeNormal.triangles}; desktop ${afterDesk.triangles} <= ${beforeDesk.triangles}; phone views did not grow`);
   for (const mesh of [beforeNormal, afterNormal, beforeDesk, afterDesk, beforeLow, afterLow]) {
     mesh.mesh.geometry.dispose();
     mesh.mesh.material.dispose();
