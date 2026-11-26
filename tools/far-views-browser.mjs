@@ -41,8 +41,10 @@ try{
    }
    const shot=await c.send('Page.captureScreenshot',{format:'png'});writeFileSync(`${out}/${fileName}-${mode}-wide.png`,Buffer.from(shot.result.data,'base64'));writeFileSync(`${out}/${fileName}-${mode}.json`,JSON.stringify({url,info,logs:c.logs},null,2));
    if(name==='tupper-night'&&mode==='after'){
-    const lights=await read(`(()=>{
+    const lights=await read(`(async()=>{
       window.requestAnimationFrame=()=>0;
+      const tallData=await fetch('/areas/pointtupper/tall.json').then(r=>r.json());
+      const nearTurbines=tallData.turbines.filter(p=>p.ground!==null);
       const mesh=mmm.tall.group.getObjectByName('tall-turbine-beacons')??mmm.tall.group.children.find(m=>m.material?.defines?.BEACON&&m.count>0);
       if(!mesh)return null;
       const phases=mesh.geometry.getAttribute('beaconPhase');
@@ -50,13 +52,12 @@ try{
       const motion=rotors?.geometry.getAttribute('motion');
       const m=new (mmm.camera.position.constructor)();
       const mat=new (mmm.camera.matrixWorld.constructor)();
-      const litPts=[],darkPts=[];
+      const litPts=[],c02Pts=[],mastPts=[];
       for(let i=0;i<mesh.count;i++){
         mesh.getMatrixAt(i,mat);m.setFromMatrixPosition(mat);
         const ndc=m.clone().project(mmm.camera);
         if(ndc.z>=-1&&ndc.z<=1&&Math.abs(ndc.x)<.98&&Math.abs(ndc.y)<.98)litPts.push({x:ndc.x,y:ndc.y,phase:phases.getX(i)});
       }
-      const mastPts=[];
       for(const other of mmm.tall.group.children){
         if(!other.material?.defines?.BEACON||other===mesh)continue;
         for(let i=0;i<other.count;i++){
@@ -65,23 +66,35 @@ try{
           if(ndc.z>=-1&&ndc.z<=1&&Math.abs(ndc.x)<1&&Math.abs(ndc.y)<1)mastPts.push({x:ndc.x,y:ndc.y});
         }
       }
+      let c02Built=0,c02Spinning=0;
       if(rotors&&motion){
-        for(let i=0;i<rotors.count;i++){
-          if(motion.getY(i)>0)continue;
+        for(let i=0;i<Math.min(rotors.count,nearTurbines.length);i++){
+          const p=nearTurbines[i];
+          if(p.farm!=='c02'||p.status==='operating'||p.status===undefined)continue;
+          c02Built++;
+          if(motion.getY(i)>0)c02Spinning++;
           rotors.getMatrixAt(i,mat);m.setFromMatrixPosition(mat);m.y+=1.6;
           const ndc=m.clone().project(mmm.camera);
           if(ndc.z>=-1&&ndc.z<=1&&Math.abs(ndc.x)<.98&&Math.abs(ndc.y)<.98){
             const nearMast=mastPts.some(mp=>Math.hypot((mp.x-ndc.x)*mmm.renderer.domElement.width*.5,(mp.y-ndc.y)*mmm.renderer.domElement.height*.5)<20);
-            if(!nearMast)darkPts.push({x:ndc.x,y:ndc.y});
+            if(!nearMast)c02Pts.push({x:ndc.x,y:ndc.y,id:p.id});
           }
         }
       }
-      return {count:mesh.count,phase:litPts[0]?.phase??phases.getX(mesh.count-1),litPts,darkPts};
+      const hasStatus=nearTurbines.some(p=>p.status!==undefined);
+      return {count:mesh.count,phase:litPts[0]?.phase??phases.getX(mesh.count-1),litPts,c02Pts,c02Built,c02Spinning,hasStatus};
     })()`);
     assert.ok(lights&&lights.litPts.length>0,'visible operating night turbine beacons');await sleep(150);
     const phaseTime=(1-lights.phase)*2;
     const farmPhase=s=>{let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return (h>>>0)/4294967296;};
     const c02OnTime=(1-farmPhase('c02'))*2+.05;
+    const targetLit=lights.litPts.filter(p=>Math.abs(p.phase-lights.phase)<1e-6);
+    assert.ok(targetLit.length>=4,'expected at least 4 visible operating beacons in test group');
+    if(lights.hasStatus)assert.ok(lights.c02Built>=20,'status-tagged pack must include built c02 turbines');
+    if(lights.c02Built>0){
+     assert.equal(lights.c02Spinning,0,'built c02 turbines must have zero rotor speed');
+     assert.ok(lights.c02Pts.length>=10,'expected visible c02 built turbines clear of masts (got '+lights.c02Pts.length+')');
+    }
     const frames=[];
     for(const [label,time]of [['on',phaseTime+.05],['off',phaseTime+.5],['built-phase',c02OnTime]]){
      const probe=await read(`(()=>{
@@ -99,8 +112,8 @@ try{
        return n;
       };
       let red=0;for(let i=0;i<p.length;i+=4)if(isRed(i))red++;
-      const litPts=${JSON.stringify(lights.litPts.filter(p=>Math.abs(p.phase-lights.phase)<1e-6))};
-      const darkPts=${JSON.stringify(lights.darkPts)};
+      const litPts=${JSON.stringify(targetLit)};
+      const darkPts=${JSON.stringify(lights.c02Pts)};
       const litHits=litPts.filter(pt=>boxRed(pt,8)>0).length;
       const darkHits=darkPts.filter(pt=>boxRed(pt,6)>0).length;
       return {red,litChecked:litPts.length,litHits,darkChecked:darkPts.length,darkHits};
@@ -109,12 +122,12 @@ try{
      frames.push({label,time,...probe});
     }
     writeFileSync(out+'/aviation-lights.json',JSON.stringify(frames,null,2));
-    assert.ok(frames[0].litHits>0,'projected operating turbine beacons show red pixels on flash-ON');
+    assert.equal(frames[0].litHits,frames[0].litChecked,'every expected operating turbine beacon registers on flash-ON');
     assert.equal(frames[1].litHits,0,'projected operating turbine beacons are dark on flash-OFF');
-    if(frames[0].darkChecked>0){
-     assert.equal(frames[0].darkHits,0,'projected built-not-commissioned turbines stay dark on operating flash-ON');
-     assert.equal(frames[1].darkHits,0,'projected built-not-commissioned turbines stay dark on operating flash-OFF');
-     assert.equal(frames[2].darkHits,0,'projected built-not-commissioned turbines stay dark even at their own farm flash peak');
+    if(lights.c02Built>0){
+     assert.equal(frames[0].darkHits,0,'projected built c02 turbines stay dark on operating flash-ON');
+     assert.equal(frames[1].darkHits,0,'projected built c02 turbines stay dark on operating flash-OFF');
+     assert.equal(frames[2].darkHits,0,'projected built c02 turbines stay dark even at c02 flash peak');
     }
    }
    if(name==='tupper-south'&&mode==='after'){

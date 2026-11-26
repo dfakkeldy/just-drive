@@ -131,9 +131,16 @@ def check_install_and_refusals():
         refused('outside data/baked', patch.assert_safe_stage_output, data / 'baked/sub', tmp / 'other-src')
         refused('outside data/baked', patch.assert_safe_stage_output, data / 'BAKED/new-stage', tmp / 'other-src')
         refused('outside data/baked', patch.assert_safe_stage_output, data / 'BAKED/nested/new-stage', tmp / 'other-src')
-        # Case-alias against source directory itself (when running on a case-insensitive volume like macOS APFS).
+        # Case-alias against source directory itself (when running on a case-insensitive volume like macOS APFS),
+        # including symlink + .. + uppercase traversal.
         if (data / 'BAKED').exists():
             refused('separate from source', patch.assert_safe_stage_output, data / 'BAKED/new-stage', baked)
+            sub_dir = data / 'work/sub'
+            sub_dir.mkdir(parents=True, exist_ok=True)
+            sym_sub = tmp / 'sym-sub'
+            sym_sub.symlink_to(sub_dir)
+            refused('separate from source', patch.assert_safe_stage_output, sym_sub / '../../BAKED/new-stage', baked)
+            sym_sub.unlink()
         refused('outside data/site', patch.assert_safe_stage_output, data / 'site/sub', tmp / 'other-src')
         refused('outside data/site', patch.assert_safe_stage_output, data / 'SITE/new-stage', tmp / 'other-src')
         patch.assert_safe_stage_output(tmp / 'brand-new-stage', baked)
@@ -171,6 +178,12 @@ def check_install_and_refusals():
         assert patch.land_state(baked, receipt) == ('after', [])
         assert json.loads((baked / 'terrain/manifest.json').read_text())['keepKey'] == {'v': 7}
         assert patch.install(delta, baked, receipt_path=receipt_file) == 'already-installed'
+
+        # All-after repeat install with a missing rollback backup must refuse (not return already-installed).
+        saved_backup = (delta / 'before/terrain/tall.json').read_bytes()
+        (delta / 'before/terrain/tall.json').unlink()
+        refused('Missing backup', patch.install, delta, baked, receipt_path=receipt_file)
+        (delta / 'before/terrain/tall.json').write_bytes(saved_backup)
 
         # Rollback through symlinked parent refused.
         refused('symlink', patch.rollback, delta, wt_link / 'baked', receipt_path=receipt_file)

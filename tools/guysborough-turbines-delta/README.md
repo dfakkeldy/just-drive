@@ -24,7 +24,8 @@ Only the main thread installs into live `data/baked`.
 python3 tools/guysborough-turbines-delta/patch.py make data/baked data/raw /path/to/new-stage
 python3 tools/guysborough-turbines-delta/patch.py verify /path/to/new-stage data/baked
 
-# Main thread install (atomic replace; saves before tall.json files into <stage>/before/)
+# Main thread install (each file replacement is atomic via os.replace; saves before tall.json files into <stage>/before/.
+# An interruption mid-run across the six areas can leave the land mixed; re-running install or rollback with the original stage recovers it.)
 python3 tools/guysborough-turbines-delta/patch.py install /path/to/new-stage data/baked
 
 # Verify after install

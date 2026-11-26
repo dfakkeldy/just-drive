@@ -61,8 +61,8 @@ def _assert_no_symlink_path(path: Path):
 
 
 def _existing_ancestors(path: Path) -> list[Path]:
-    """Return path (if it exists) and every existing ancestor directory."""
-    cur = Path(os.path.abspath(str(path)))
+    """Return resolved path (if it exists) and every existing ancestor directory."""
+    cur = path.resolve()
     found = []
     while True:
         if cur.exists():
@@ -81,8 +81,8 @@ def assert_safe_stage_output(output: Path, source: Path):
     src_r = source.resolve()
     if out_r == src_r or out_r.is_relative_to(src_r) or src_r.is_relative_to(out_r):
         raise ValueError(f'Stage output must be separate from source land: {output}')
-    # Compare real filesystem identity on existing ancestors (catches case-insensitive aliases like data/BAKED on macOS).
-    out_ancestors = _existing_ancestors(output)
+    # Compare real filesystem identity on resolved existing ancestors (catches symlink + .. + case-insensitive aliases like data/BAKED on APFS).
+    out_ancestors = _existing_ancestors(out_r)
     for anc in out_ancestors:
         if src_r.exists() and os.path.samefile(anc, src_r):
             raise ValueError(f'Stage output must be separate from source land: {output}')
@@ -374,14 +374,14 @@ def install(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
         else:
             backup_present[pack] = False
 
-    if set(live_states.values()) == {'after'}:
-        print(f'already installed ({len(receipt["files"])} areas match after receipt) in {baked}')
-        return 'already-installed'
-
     for entry in receipt['files']:
         pack = entry['pack']
         if live_states[pack] in ('after', 'half-install') and not backup_present[pack]:
             raise ValueError(f'Missing backup for already-installed area {pack}: {backup_root / entry["file"]}')
+
+    if set(live_states.values()) == {'after'}:
+        print(f'already installed ({len(receipt["files"])} areas match after receipt) in {baked}')
+        return 'already-installed'
 
     # Phase 2: write all missing backups before modifying any live file.
     for entry in receipt['files']:
