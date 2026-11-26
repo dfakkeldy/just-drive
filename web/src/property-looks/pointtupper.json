@@ -43,6 +43,12 @@
       "roads": [
         "Paint Street"
       ]
+    },
+    "charles-maclean-road": {
+      "label": "Charles MacLean Road",
+      "roads": [
+        "Charles MacLean Road"
+      ]
     }
   },
   "overrides": {
@@ -1092,6 +1098,118 @@
       "roof": "#3e4246",
       "trim": "#d8d4cc",
       "door": "#a2a5a0",
+      "roofMaterial": "shingle"
+    },
+    "1646": {
+      "group": "charles-maclean-road",
+      "road": "Charles MacLean Road",
+      "at": [
+        625892.5,
+        5055276.0
+      ],
+      "wall": "#2c4060",
+      "roof": "#6e767c",
+      "trim": "#f2f2ec",
+      "door": "#e8e7e0",
+      "roofMaterial": "shingle"
+    },
+    "1645": {
+      "group": "charles-maclean-road",
+      "road": "Charles MacLean Road",
+      "at": [
+        625914.1,
+        5055265.6
+      ],
+      "wall": "#c43840",
+      "roof": "#3e4448",
+      "trim": "#f4f2ec",
+      "door": "#a2a5a0",
+      "roofMaterial": "shingle"
+    },
+    "116": {
+      "group": "charles-maclean-road",
+      "road": "Charles MacLean Road",
+      "at": [
+        625973.8,
+        5055210.8
+      ],
+      "wall": "#1f6cb0",
+      "roof": "#8a9298",
+      "trim": "#f4f6f8",
+      "door": "#8e9493",
+      "roofMaterial": "shingle"
+    },
+    "1640": {
+      "group": "charles-maclean-road",
+      "road": "Charles MacLean Road",
+      "at": [
+        626039.8,
+        5055127.2
+      ],
+      "wall": "#a8b6c4",
+      "roof": "#3e444a",
+      "trim": "#f6f5f0",
+      "roofMaterial": "shingle"
+    },
+    "1639": {
+      "group": "charles-maclean-road",
+      "road": "Charles MacLean Road",
+      "at": [
+        626059.1,
+        5055110.8
+      ],
+      "wall": "#e8e6e2",
+      "roof": "#454b50",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1600": {
+      "group": "charles-maclean-road",
+      "road": "Charles MacLean Road",
+      "at": [
+        626203.9,
+        5054969.3
+      ],
+      "wall": "#c6cac8",
+      "roof": "#3a4044",
+      "trim": "#f4f4f2",
+      "door": "#e8e7e0",
+      "roofMaterial": "shingle"
+    },
+    "1599": {
+      "group": "charles-maclean-road",
+      "road": "Charles MacLean Road",
+      "at": [
+        626266.4,
+        5054924.5
+      ],
+      "wall": "#2f7a74",
+      "roof": "#3a4044",
+      "trim": "#f2f4f2",
+      "roofMaterial": "shingle"
+    },
+    "1598": {
+      "group": "charles-maclean-road",
+      "road": "Charles MacLean Road",
+      "at": [
+        626293.0,
+        5054872.7
+      ],
+      "wall": "#2a3c56",
+      "roof": "#2e3438",
+      "trim": "#f0f2f4",
+      "roofMaterial": "shingle"
+    },
+    "1590": {
+      "group": "charles-maclean-road",
+      "road": "Charles MacLean Road",
+      "at": [
+        626411.7,
+        5054703.7
+      ],
+      "wall": "#a4c4d8",
+      "roof": "#4a5056",
+      "trim": "#f4f2ec",
       "roofMaterial": "shingle"
     }
   }
