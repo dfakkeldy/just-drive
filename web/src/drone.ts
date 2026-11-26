@@ -336,7 +336,7 @@ export const DRONE_FREE_HELP = [
   ['WASD', 'Move'], ['←/→ or Q/E', 'Turn'], ['↑/↓', 'Camera'],
   ['Space', 'Up'], ['Shift or C', 'Down'], ['Mouse wheel', 'Top speed'],
 ] as const;
-export const DRONE_FREE_TOUCH_HELP = [['Left stick', 'Climb and turn'], ['Right stick', 'Fly'], ['ROAD', 'Back on the nearest road.']] as const;
+export const DRONE_FREE_TOUCH_HELP = [['Left stick', 'Climb and turn'], ['Right stick', 'Fly'], ['PLACES / ⚙', 'Places and the big map / settings (nearest road).']] as const;
 function createDroneHelp(): HTMLElement {
   const help = Object.assign(document.createElement('aside'), { id: 'droneHints', hidden: true });
   help.append(Object.assign(document.createElement('h3'), { textContent: 'Drone keys' }), document.createElement('dl'));
@@ -367,33 +367,38 @@ body.droneOn #hud .dh{display:block;font:700 24px/26px var(--mono);font-variant-
 body.droneOn #hud :is(.dk,.dq){font:12px/16px var(--mono);color:var(--ink-dim)}
 body.droneOn #hud .dsep{display:none}
 body.droneOn #hud .dst{font:12px/16px var(--mono);color:#f2b766}
-body.droneOn.droneSticks #hud{left:max(10px,var(--test-safe-left,env(safe-area-inset-left,0px)));top:calc(10px + env(safe-area-inset-top,0px));width:var(--droneCol);max-width:none;box-sizing:border-box;white-space:pre-wrap;font-size:12px;line-height:16px;padding:8px;overflow-wrap:anywhere}
+body.droneOn.droneSticks #hud{left:max(10px,var(--drone-safe-left,0px));top:calc(10px + var(--drone-safe-top,0px));width:var(--droneCol);max-width:none;box-sizing:border-box;white-space:pre-wrap;font-size:12px;line-height:16px;padding:8px;overflow-wrap:anywhere}
 body.droneOn #hud .dst{display:block}
-body.droneOn.droneSticks #pauseButton{right:calc(76px + env(safe-area-inset-right,0px))}
+body.droneOn.droneSticks #gear{right:calc(10px + var(--drone-safe-right,0px));top:calc(10px + var(--drone-safe-top,0px))}
+body.droneOn.droneSticks #pauseButton{right:calc(76px + var(--drone-safe-right,0px));top:calc(10px + var(--drone-safe-top,0px));pointer-events:auto}
 @media(orientation:landscape) and (max-height:319px){body.droneOn.droneSticks #hud{padding:4px 6px;font-size:10px;line-height:13px}body.droneOn.droneSticks #hud .dh{font-size:16px;line-height:18px}body.droneOn.droneSticks #hud :is(.dk,.dq,.dst){font-size:10px;line-height:13px}}
-body.droneSticks{--drone-stick-size:min(132px,34vw,42vh)}
-.droneStick{position:fixed;z-index:6;bottom:calc(14px + var(--safe-bottom,env(safe-area-inset-bottom,0px)));
+body.droneSticks{--drone-safe-top:var(--test-safe-top,env(safe-area-inset-top,0px));--drone-safe-right:var(--test-safe-right,env(safe-area-inset-right,0px));--drone-safe-bottom:var(--test-safe-bottom,env(safe-area-inset-bottom,0px));--drone-safe-left:var(--test-safe-left,env(safe-area-inset-left,0px));--drone-stick-size:min(132px,34vw,42vh)}
+@media (min-width:421px){body.droneSticks{--drone-stick-size:max(56px,min(132px,34vw,42vh,calc((100vw - var(--drone-safe-left,0px) - var(--drone-safe-right,0px) - 172px) / 2)))}}
+@media(orientation:landscape) and (max-width:420px) and (max-height:319px){body.droneSticks{--drone-stick-size:max(56px,min(132px,34vw,42vh,calc(100vh - 170px - var(--drone-safe-top,0px) - var(--drone-safe-bottom,0px))))}}
+.droneStick{position:fixed;z-index:6;bottom:calc(14px + var(--drone-safe-bottom,0px));
   width:var(--drone-stick-size);height:var(--drone-stick-size);border-radius:50%;box-sizing:border-box;
-  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23eef2f6' fill-opacity='.4' d='M50 10l-4 6h8zM50 90l-4-6h8zM10 50l6-4v8zM90 50l-6-4v8z'/%3E%3C/svg%3E") center/100% 100% no-repeat,var(--panel,rgba(8,14,20,.6));border:2px solid rgba(238,242,246,.3);touch-action:none;user-select:none;-webkit-user-select:none}
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23eef2f6' fill-opacity='.4' d='M50 10l-4 6h8zM50 90l-4-6h8zM10 50l6-4v8zM90 50l-6-4v8z'/%3E%3C/svg%3E") center/100% 100% no-repeat,var(--panel,rgba(8,14,20,.6));border:2px solid rgba(238,242,246,.3);touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 .droneStick[hidden],#droneReturn[hidden]{display:none}
-#droneLeft{left:calc(14px + env(safe-area-inset-left,0px))}
-#droneRight{right:calc(14px + env(safe-area-inset-right,0px))}
+#droneLeft{left:calc(14px + var(--drone-safe-left,0px))}
+#droneRight{right:calc(14px + var(--drone-safe-right,0px))}
 .droneStick b{position:absolute;left:50%;top:50%;width:46%;height:46%;margin:-23% 0 0 -23%;border-radius:50%;
   background:rgba(238,242,246,.9);box-shadow:0 2px 8px rgba(0,0,0,.45);pointer-events:none}
 .droneStick.held b{background:var(--maple,#d0632e)}
 .droneStick span{position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);width:max-content;white-space:nowrap;padding:0;border:0;background:none;text-align:center;font:700 12px/14px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.02em;color:var(--ink,#eef2f6);text-shadow:0 0 2px #0b1620,0 0 3px #0b1620,0 1px 3px rgba(0,0,0,.7);pointer-events:none}
-#droneReturn{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));
+@media(orientation:landscape) and (max-width:460px) and (max-height:290px){#droneLeft span{left:0;transform:none}}
+#droneReturn{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(14px + var(--drone-safe-bottom,0px));
   min-width:112px;height:56px;padding:0 8px;border-radius:10px;border:1px solid rgba(238,242,246,.4);background:var(--panel-solid,#0b1219);
   color:var(--ink,#eef2f6);font:700 12px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em}
 #droneReturn:active{background:var(--maple,#d0632e)}
-@media (max-width:420px){#droneReturn{bottom:calc(14px + var(--drone-stick-size) + 24px + env(safe-area-inset-bottom,0px))}}
+@media (min-width:421px){#droneReturn{left:calc(50% + (var(--drone-safe-left,0px) - var(--drone-safe-right,0px)) / 2)}}
+@media (max-width:420px){#droneReturn{bottom:calc(14px + var(--drone-stick-size) + 24px + var(--drone-safe-bottom,0px))}}
 #droneButton{flex:none;width:56px;height:56px;border-radius:10px;border:1px solid rgba(238,242,246,.3);background:var(--panel,rgba(8,14,20,.72));
   color:var(--ink,#eef2f6);font:700 10.5px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;padding:0;pointer-events:auto}
 #droneButton:active{background:var(--maple,#d0632e)}
 body:not(.tcOn) #droneButton{display:none}
 /* While the drone flies there is no photo or stop to show; on a phone the sticks need the bottom corners. */
 body.droneOn :is(#cameraButton,#stopHint){display:none!important}
-body.droneOn.droneSticks :is(#mailScore,#credit){display:none!important}
+body.droneOn.droneSticks :is(#mailScore,#credit,#placeArrival){display:none!important}
 #phoneTop #droneButton{margin-left:auto}#phoneTop #droneButton~#gear{margin-left:0}
 /* Upright, the phone planner (phone-controls-layout.ts) places DRONE; the gear then keeps the row's right end. */
 #phoneTop #droneButton[style*="absolute"]~#gear{margin-left:auto}
@@ -406,7 +411,7 @@ export interface DroneSticks {
   release(): void;
 }
 
-/** The phone sticks and RETURN (or ROAD in standalone drone mode). `home` is its action. */
+/** The phone sticks and RETURN (omitted in standalone drone mode, where Settings and Places reach roads). `home` is its action. */
 let styled = false;
 const style = () => { if (!styled) { styled = true; document.head.appendChild(Object.assign(document.createElement('style'), { textContent: CSS })); } };
 
@@ -418,15 +423,24 @@ export function createDroneSticks(home: () => void, standalone = false): DroneSt
     if (document.body.classList.contains('droneOn')) document.body.style.setProperty('--droneHudH', `${hud.offsetHeight}px`);
   }).observe(hud);
   const command: DroneCommand = { forward: 0, right: 0, up: 0, turn: 0 };
+  const activeTouch = (list: TouchList | undefined, tid: number): Touch | null => {
+    if (!list) return null;
+    for (let i = 0; i < list.length; i++) if (list[i].identifier === tid) return list[i];
+    return null;
+  };
   const stick = (id: string, label: string, set: (x: number, y: number) => void) => {
     const el = Object.assign(document.createElement('div'), { id, className: 'droneStick', hidden: true });
     el.innerHTML = `<span>${label}</span><b></b>`;
     el.setAttribute('aria-hidden', 'true');
     const knob = el.querySelector('b')!;
-    let id_ = -1;
-    const move = (ev: PointerEvent) => {
+    let pointerId = -1;
+    let pointerTouch = false;
+    let captured = false;
+    let touchId = -1;
+    const moveAt = (clientX: number, clientY: number) => {
       const r = el.getBoundingClientRect(), reach = r.width * 0.36;
-      let x = (ev.clientX - (r.left + r.width / 2)) / reach, y = (ev.clientY - (r.top + r.height / 2)) / reach;
+      if (!(reach > 0)) return;
+      let x = (clientX - (r.left + r.width / 2)) / reach, y = (clientY - (r.top + r.height / 2)) / reach;
       const length = Math.hypot(x, y);
       if (length > 1) { x /= length; y /= length; }
       knob.style.transform = `translate(${x * reach}px,${y * reach}px)`;
@@ -434,38 +448,108 @@ export function createDroneSticks(home: () => void, standalone = false): DroneSt
       const dz = (v: number) => Math.abs(v) < 0.08 ? 0 : (v - Math.sign(v) * 0.08) / 0.92;
       set(dz(x), dz(-y));
     };
-    const end = () => { id_ = -1; el.classList.remove('held'); knob.style.transform = ''; set(0, 0); };
+    const end = () => {
+      const oldId = pointerId;
+      pointerId = -1;
+      pointerTouch = false;
+      captured = false;
+      touchId = -1;
+      if (oldId !== -1) {
+        try { if (el.hasPointerCapture?.(oldId)) el.releasePointerCapture(oldId); } catch { /* capture already lost */ }
+      }
+      el.classList.remove('held');
+      knob.style.transform = '';
+      set(0, 0);
+    };
     el.addEventListener('pointerdown', (ev) => {
-      if (id_ !== -1) return;
-      id_ = ev.pointerId; el.setPointerCapture(ev.pointerId); el.classList.add('held'); move(ev);
+      if (pointerId !== -1 || touchId !== -1) {
+        if (ev.pointerId === pointerId || touchId !== -1 || (!captured && !pointerTouch) || (captured && (typeof el.hasPointerCapture !== 'function' || el.hasPointerCapture(pointerId)))) return;
+        end();
+      }
+      pointerId = ev.pointerId;
+      pointerTouch = ev.pointerType === 'touch';
+      captured = false;
+      try {
+        if (typeof el.setPointerCapture === 'function') { el.setPointerCapture(ev.pointerId); captured = true; }
+      } catch { /* fall back to window pointermove and touchmove */ }
+      el.classList.add('held');
+      moveAt(ev.clientX, ev.clientY);
       ev.preventDefault(); ev.stopPropagation();
     });
-    el.addEventListener('pointermove', (ev) => { if (ev.pointerId === id_) { move(ev); ev.stopPropagation(); } });
-    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) el.addEventListener(type, (ev) => { if (ev.pointerId === id_) end(); });
+    const onPointerMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      if (ev.pointerType === 'mouse' && ev.isTrusted && ev.buttons === 0) { end(); return; }
+      moveAt(ev.clientX, ev.clientY);
+      ev.stopPropagation();
+    };
+    el.addEventListener('pointermove', onPointerMove);
+    addEventListener('pointermove', (ev) => { if (!captured && ev.pointerId === pointerId) onPointerMove(ev); }, { capture: true });
+    const onPointerEnd = (ev: PointerEvent) => { if (ev.pointerId === pointerId) end(); };
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) el.addEventListener(type, onPointerEnd);
+    for (const type of ['pointerup', 'pointercancel'] as const) addEventListener(type, onPointerEnd, { capture: true });
+    // On iOS Safari, pointerdown preventDefault does not stop touch callouts or stolen gestures, and a lost pointer
+    // release can leave a stick held. Track touch events as well so touchcancel or a lifted finger always resets.
+    el.addEventListener('touchstart', (ev) => {
+      ev.preventDefault();
+      if (pointerId !== -1 && !pointerTouch) return;
+      if (touchId !== -1 && !activeTouch(ev.touches, touchId)) end();
+      if (touchId === -1 && ev.changedTouches?.length) {
+        const t = ev.changedTouches[0];
+        touchId = t.identifier;
+        if (pointerId === -1 || !captured) { el.classList.add('held'); moveAt(t.clientX, t.clientY); }
+      }
+    }, { passive: false });
+    el.addEventListener('touchmove', (ev) => {
+      ev.preventDefault();
+      if (touchId === -1) return;
+      const t = activeTouch(ev.touches, touchId);
+      if (!t) { end(); return; }
+      if (pointerId === -1 || !captured) moveAt(t.clientX, t.clientY);
+    }, { passive: false });
+    const onElementTouchEnd = (ev: TouchEvent) => {
+      if (touchId !== -1) { if (!activeTouch(ev.touches, touchId)) end(); return; }
+      if ((ev.targetTouches?.length ?? 0) === 0 && pointerId !== -1 && pointerTouch) end();
+    };
+    for (const type of ['touchend', 'touchcancel'] as const) el.addEventListener(type, onElementTouchEnd, { passive: true });
+    const onWindowTouchEnd = (ev: TouchEvent) => {
+      if (touchId !== -1) { if (!activeTouch(ev.touches, touchId)) end(); return; }
+      if ((ev.touches?.length ?? 0) === 0 && pointerId !== -1 && pointerTouch) end();
+    };
+    for (const type of ['touchend', 'touchcancel'] as const) addEventListener(type, onWindowTouchEnd, { capture: true, passive: true });
+    addEventListener('touchstart', (ev: TouchEvent) => {
+      if (touchId !== -1 && !activeTouch(ev.touches, touchId)) end();
+    }, { capture: true, passive: true });
+    el.addEventListener('contextmenu', (ev) => { ev.preventDefault(); end(); });
     document.body.appendChild(el);
     return { el, end };
   };
-  const left = stick('droneLeft', '↕CLIMB · ↔TURN', (x, y) => { command.turn = -x; command.up = y; });
+  const left = stick('droneLeft', '↕CLIMB · ↔TURN', (x, y) => { command.turn = x ? -x : 0; command.up = y; });
   const right = stick('droneRight', 'FLY', (x, y) => { command.right = x; command.forward = y; });
-  const ret = Object.assign(document.createElement('button'), { id: 'droneReturn', textContent: standalone ? 'ROAD' : 'RETURN TO CAR', hidden: true });
-  ret.setAttribute('aria-label', standalone ? 'Put the drone back on the nearest road. R on a keyboard' : 'Fly the drone back to the vehicle. Tap again to land at once');
-  ret.addEventListener('pointerdown', (ev) => ev.stopPropagation());
-  ret.addEventListener('click', () => home());
-  document.body.appendChild(ret);
+  const ret = standalone ? null : Object.assign(document.createElement('button'), { id: 'droneReturn', textContent: 'RETURN TO CAR', hidden: true });
+  if (ret) {
+    ret.setAttribute('aria-label', 'Fly the drone back to the vehicle. Tap again to land at once');
+    ret.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+    ret.addEventListener('click', () => home());
+    document.body.appendChild(ret);
+  }
   const release = () => { left.end(); right.end(); };
   addEventListener('blur', release);
+  addEventListener('pagehide', release);
   document.addEventListener('visibilitychange', () => { if (document.hidden) release(); });
   let shown = false;
   return {
     command, release,
     show(visible: boolean, returning = false) {
-      const words = standalone ? 'ROAD' : returning ? 'LAND NOW' : 'RETURN TO CAR';
-      if (ret.textContent !== words) ret.textContent = words;
-      const label = standalone ? 'Put the drone back on the nearest road. R on a keyboard' : returning ? 'Land now' : 'Return to car';
-      if (ret.getAttribute('aria-label') !== label) ret.setAttribute('aria-label', label);
+      if (ret) {
+        const words = returning ? 'LAND NOW' : 'RETURN TO CAR';
+        if (ret.textContent !== words) ret.textContent = words;
+        const label = returning ? 'Land now' : 'Return to car';
+        if (ret.getAttribute('aria-label') !== label) ret.setAttribute('aria-label', label);
+      }
       if (visible === shown) return;
       shown = visible;
-      left.el.hidden = right.el.hidden = ret.hidden = !visible;
+      left.el.hidden = right.el.hidden = !visible;
+      if (ret) ret.hidden = !visible;
       if (!visible) release();
     },
   };

@@ -290,8 +290,8 @@ if(family==='all'||family==='phone'){
   await p.read(`(${watchPictures})()`);
   await hit('#savePictureButton'); await picture(p, 0, 'download', false);
   await hit('#droneButton');
-  check(await p.read(`mmm.drone.group.visible && (${visible})('savePictureButton')`),`${label} save button stays visible in drone view`);
-  const flightBoxes=await readBoxes(flightIds), flightFaults=faults(flightBoxes);
+  check(await p.read(`mmm.drone.group.visible && (${visible})('savePictureButton') && !(${visible})('placeArrival') && !(${visible})('bigMapButton')`),`${label} flight shows Save picture and hides arrival card and MAP`);
+  const flightBoxes=await readBoxes([...flightIds,'placesButton','bigMapButton','placeArrival']), flightFaults=faults(flightBoxes);
   if(flightFaults.length)console.log('Flight faults',flightFaults.join(','));
   check(flightIds.every(id=>flightBoxes.some(b=>b[0]===id))&&flightFaults.length===0,`${label} flight controls and stick captions fit without overlap`);
   if(bottom&&process.env.SHOTS==='1'){
@@ -308,13 +308,17 @@ if(family==='all'||family==='phone'){
    check(flightIds.every(id=>noticeBoxes.some(b=>b[0]===id))&&noticeBoxes.some(b=>b[0]==='miniMap')&&noticeBoxes.some(b=>b[0]==='savePictureStatus')&&noticeFaults.length===0,`${label} flight save notice (${text??'Picture saved'}) clears telemetry, map and flight controls`);
   }
   if(w===390&&h===844){
-   for(const [sw,sh,insets] of [[390,310,{top:0,right:0,bottom:0,left:0}],[320,310,{top:0,right:0,bottom:0,left:44}]]){
-    const resized=await p.send('Emulation.setDeviceMetricsOverride',{width:sw,height:sh,deviceScaleFactor:1,mobile:true});
-    assert.ok(!resized.error,JSON.stringify(resized.error));
+   let prevW=w, prevH=h;
+   for(const [sw,sh,insets] of [[390,310,{top:0,right:0,bottom:0,left:0}],[320,310,{top:0,right:0,bottom:0,left:44}],[421,280,{top:0,right:47,bottom:21,left:47}],[421,320,{top:0,right:0,bottom:0,left:47}],[421,320,{top:0,right:47,bottom:0,left:0}]]){
+    if(sw!==prevW||sh!==prevH){
+     const resized=await p.send('Emulation.setDeviceMetricsOverride',{width:sw,height:sh,deviceScaleFactor:1,mobile:true});
+     assert.ok(!resized.error,JSON.stringify(resized.error));
+     prevW=sw; prevH=sh;
+    }
     const insetRes=await p.send('Emulation.setSafeAreaInsetsOverride',{insets});
     assert.ok(!insetRes.error,JSON.stringify(insetRes.error));
     await sleep(200);
-    const tag=`phone ${sw}x${sh}${insets.left?` left=${insets.left}`:''}`;
+    const tag=`phone ${sw}x${sh}${insets.left?` left=${insets.left}`:''}${insets.right?` right=${insets.right}`:''}`;
     check(await p.read(`innerWidth===${sw}&&innerHeight===${sh}`),`${tag} flight viewport resized`);
     const shortFaults=boxes=>{
      const issues=[];

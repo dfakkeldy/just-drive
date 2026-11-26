@@ -33,8 +33,8 @@ body.tcOn #miniMap.enlarged #miniMapCanvas{max-height:none}
 #miniMap[hidden]{display:none}
 body.indoorOn #miniMap{display:none}
 /* Mirror #hud's 10px top plus the safe inset (web/index.html, and the touch-flight #hud rule in drone.ts); leave a 10px gap. */
-body.droneOn.droneSticks #miniMap:not(.enlarged){left:max(10px,var(--test-safe-left,env(safe-area-inset-left,0px)));top:calc(20px + env(safe-area-inset-top,0px) + var(--droneHudH,154px));pointer-events:auto}
-@media(orientation:landscape) and (max-height:450px){body.droneOn.droneSticks:not(.droneStack) #miniMap:not(.enlarged){top:calc(10px + env(safe-area-inset-top,0px));left:calc(max(10px, var(--test-safe-left, env(safe-area-inset-left, 0px))) + var(--droneCol) + 8px)}}
+body.droneOn.droneSticks #miniMap:not(.enlarged){left:max(10px,var(--drone-safe-left,var(--test-safe-left,env(safe-area-inset-left,0px))));top:calc(20px + var(--drone-safe-top,env(safe-area-inset-top,0px)) + var(--droneHudH,154px));pointer-events:auto}
+@media(orientation:landscape) and (max-height:450px){body.droneOn.droneSticks:not(.droneStack) #miniMap:not(.enlarged){top:calc(10px + var(--drone-safe-top,env(safe-area-inset-top,0px)));left:calc(max(10px, var(--drone-safe-left, var(--test-safe-left, env(safe-area-inset-left, 0px)))) + var(--droneCol) + 8px)}}
 `;
 
 const RANGES = [450, 1200, 3200];                 // metres from the car to the edge of the map
@@ -56,6 +56,9 @@ export class MiniMap {
   private tight = false;
   private largeFromTight = false;
   private hudObserver: ResizeObserver | null = null;
+  private safeObserver: ResizeObserver | null = null;
+  private safeFitFrame = 0;
+  private flightSafeProbes: [HTMLElement, HTMLElement] | null = null;
   private flightHome: Comment | null = null;
   private flightFolded = false;
   private home: Comment | null = null;
@@ -159,13 +162,39 @@ export class MiniMap {
     if (on) {
       this.flightFolded = this.folded; this.folded = false;
       this.flightHome = document.createComment('flight map home'); this.root.before(this.flightHome); document.body.append(this.root);
+      const makeProbe = (w: string, h: string) => {
+        const probe = Object.assign(document.createElement('span'), { ariaHidden: 'true' });
+        probe.dataset.safeProbe = `${w}-${h}`;
+        probe.style.cssText = `position:fixed;top:0;left:0;width:calc(1px + var(--drone-safe-${w},0px));height:calc(1px + var(--drone-safe-${h},0px));pointer-events:none;visibility:hidden`;
+        document.body.append(probe);
+        return probe;
+      };
+      const lt = makeProbe('left', 'top');
+      const rb = makeProbe('right', 'bottom');
+      this.flightSafeProbes = [lt, rb];
       const hud = document.getElementById('hud');
-      if (hud && typeof ResizeObserver === 'function') {
+      if (typeof ResizeObserver === 'function') {
         this.hudObserver = new ResizeObserver(() => { if (this.flight) this.fit(); });
-        this.hudObserver.observe(hud);
+        if (hud) this.hudObserver.observe(hud);
+        // Defer safe-area refits to the next frame so updating --droneCol (which resizes #hud at the same DOM depth)
+        // never triggers a ResizeObserver loop error.
+        this.safeObserver = new ResizeObserver(() => {
+          if (!this.flight) return;
+          if (typeof requestAnimationFrame === 'function') {
+            if (this.safeFitFrame) return;
+            this.safeFitFrame = requestAnimationFrame(() => { this.safeFitFrame = 0; if (this.flight) this.fit(); });
+          } else {
+            this.fit();
+          }
+        });
+        this.safeObserver.observe(lt);
+        this.safeObserver.observe(rb);
       }
     } else {
       this.hudObserver?.disconnect(); this.hudObserver = null;
+      this.safeObserver?.disconnect(); this.safeObserver = null;
+      if (this.safeFitFrame) { cancelAnimationFrame(this.safeFitFrame); this.safeFitFrame = 0; }
+      if (this.flightSafeProbes) { for (const p of this.flightSafeProbes) p.remove(); this.flightSafeProbes = null; }
       this.folded = this.flightFolded; this.flightHome?.replaceWith(this.root); this.flightHome = null;
     }
     this.fit();
@@ -195,17 +224,30 @@ export class MiniMap {
     const sticks = this.flight && document.body.classList.contains('droneSticks');
     let flightSize = 156, stacked = false, tight = false;
     if (sticks) {
-      const safeLeft = parseFloat(getComputedStyle(document.body).getPropertyValue('--test-safe-left')) || safe('left');
-      const safeTop = safe('top'), safeBottom = safe('bottom'), safeRight = safe('right');
+      const lt = this.flightSafeProbes?.[0].getBoundingClientRect();
+      const rb = this.flightSafeProbes?.[1].getBoundingClientRect();
+      const validProbe = (r: DOMRect | undefined): r is DOMRect =>
+        !!r && Math.abs(r.left) < 1 && Math.abs(r.top) < 1 && r.width >= 1 && r.height >= 1 && r.width < innerWidth / 2 && r.height < innerHeight / 2;
+      const hasProbes = validProbe(lt) && validProbe(rb);
+      const safeLeft = hasProbes ? Math.max(0, lt.width - 1) : (parseFloat(getComputedStyle(document.body).getPropertyValue('--test-safe-left')) || safe('left'));
+      const safeTop = hasProbes ? Math.max(0, lt.height - 1) : safe('top');
+      const safeRight = hasProbes ? Math.max(0, rb.width - 1) : safe('right');
+      const safeBottom = hasProbes ? Math.max(0, rb.height - 1) : safe('bottom');
       const leftEdge = Math.max(10, safeLeft);
-      let rightLimit = innerWidth - 10;
-      for (const id of ['bigMapButton', 'pauseButton', 'savePictureButton']) {
+      let rightLimit = innerWidth - 10 - safeRight;
+      for (const id of ['bigMapButton', 'pauseButton', 'placesButton', 'savePictureButton', 'gear']) {
         const e = document.getElementById(id), r = e && !e.hidden ? e.getBoundingClientRect() : null;
         if (r?.width) rightLimit = Math.min(rightLimit, r.left);
       }
-      const stick = Math.min(132, innerWidth * 0.34, innerHeight * 0.42);
+      const shortNarrowLandscape = innerWidth > innerHeight && innerWidth <= 420 && innerHeight <= 319;
+      const stick = shortNarrowLandscape
+        ? Math.max(56, Math.min(132, innerWidth * 0.34, innerHeight * 0.42, innerHeight - 170 - safeTop - safeBottom))
+        : innerWidth > 420
+          ? Math.max(56, Math.min(132, innerWidth * 0.34, innerHeight * 0.42, (innerWidth - safeLeft - safeRight - 172) / 2))
+          : Math.min(132, innerWidth * 0.34, innerHeight * 0.42);
       const stickLabelTop = innerHeight - 14 - safeBottom - stick - 18;
-      const returnLeft = (innerWidth - 112) / 2, returnRight = (innerWidth + 112) / 2;
+      const returnMid = innerWidth / 2 + (innerWidth > 420 ? (safeLeft - safeRight) / 2 : 0);
+      const returnLeft = returnMid - 56, returnRight = returnMid + 56;
       const returnTop = innerWidth <= 420 ? innerHeight - 14 - safeBottom - stick - 24 - 56 : innerHeight - 14 - safeBottom - 56;
       const leftStickL = Math.min(14 + safeLeft, 14 + safeLeft + stick / 2 - 54), leftStickR = Math.max(14 + safeLeft + stick, 14 + safeLeft + stick / 2 + 54);
       const rightStickL = Math.min(innerWidth - 14 - safeRight - stick, innerWidth - 14 - safeRight - stick / 2 - 54), rightStickR = Math.max(innerWidth - 14 - safeRight, innerWidth - 14 - safeRight - stick / 2 + 54);
@@ -289,7 +331,12 @@ export class MiniMap {
   /** The next update draws even inside the usual eighth of a second, e.g. when the cars on it change. */
   redrawNext(): void { this.since = 1; }
 
-  show(visible: boolean) { this.root.hidden = !visible; if (!visible && !this.idle) { this.underlay?.idle(); this.idle = true; } }
+  show(visible: boolean) {
+    const showing = visible && this.root.hidden;
+    this.root.hidden = !visible;
+    if (showing && this.flight) this.fit();
+    if (!visible && !this.idle) { this.underlay?.idle(); this.idle = true; }
+  }
 
   private painted(): boolean {
     if (!this.canvas.getClientRects().length) return false;

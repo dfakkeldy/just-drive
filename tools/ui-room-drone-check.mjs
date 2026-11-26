@@ -23,7 +23,7 @@ class Element {
   replaceChildren(...nodes){for(const n of [...this.children])n.remove();this.append(...nodes);}
   replaceWith(n){this.before(n);this.remove();}
   querySelector(selector){if(selector==='b' && this.innerHTML?.includes('<b>') && !this.children.some(n=>n.tagName==='b'))this.append(new Element('b'));for(const n of this.children){if(selector.split(',').some(s=>s.startsWith('#')?n.id===s.slice(1):n.tagName===s))return n;const found=n.querySelector(selector);if(found)return found;}return null;}
-  attributes={};setAttribute(k,v){this.attributes[k]=v;} getAttribute(k){return this.attributes[k];} addEventListener(k,v){this.listeners[k]=v;} getContext(){return context;}
+  attributes={};allListeners={};setAttribute(k,v){this.attributes[k]=v;} getAttribute(k){return this.attributes[k];} addEventListener(k,v){this.listeners[k]=v;(this.allListeners[k]??=[]).push(v);} dispatch(k,ev){for(const fn of this.allListeners[k]??[])fn(ev);} getContext(){return context;}
   getBoundingClientRect(){this.reads++;return this.rect;} getClientRects(){return this.hidden?[]:[this.rect];}
 }
 const windowListeners=new Map(),resizeObservers=[];
@@ -277,6 +277,35 @@ assert.equal(body.classList.contains('droneStack'),false);
   assert.ok(transitions>=1,'oscillation regression exercises a real HUD height change');
   assert.equal(settled,true,'360x420 width-dependent HUD resize settles without oscillation');
  }
+ // Swapping a 47 px safe-area inset from left to right at a fixed 421x320 viewport refits the minimap without a window resize.
+ {
+  const lt=body.children.find(n=>n.dataset.safeProbe==='left-top');
+  const rb=body.children.find(n=>n.dataset.safeProbe==='right-bottom');
+  assert.ok(lt&&rb,'flight mode mounts independent left-top and right-bottom safe-area probes');
+  const saveBtn=Object.assign(new Element(),{id:'savePictureButton',rect:{left:307,right:413,top:72,bottom:116,width:106,height:44}});
+  body.append(saveBtn);
+  hud.rect={left:47,right:169,top:10,bottom:90,width:122,height:80};
+  pause.rect={left:271,right:359,top:10,bottom:66,width:88,height:56};
+  lt.rect={left:0,top:0,right:48,bottom:1,width:48,height:1};
+  rb.rect={left:0,top:0,right:1,bottom:1,width:1,height:1};
+  innerWidth=421;innerHeight=320;resize();
+  const beforeCol=parseFloat(body.style['--droneCol']);
+  assert.equal(body.classList.contains('droneStack'),false,'421x320 left=47 keeps side-by-side map');
+  // Swap 47 px from left to right with no viewport resize.
+  lt.rect={left:0,top:0,right:1,bottom:1,width:1,height:1};
+  rb.rect={left:0,top:0,right:48,bottom:1,width:48,height:1};
+  hud.rect={left:10,right:132,top:10,bottom:90,width:122,height:80};
+  pause.rect={left:224,right:312,top:10,bottom:66,width:88,height:56};
+  saveBtn.rect={left:260,right:366,top:72,bottom:116,width:106,height:44};
+  notifyResize(lt);notifyResize(rb);
+  const afterCol=parseFloat(body.style['--droneCol']),afterFolded=root.classList.contains('folded'),afterStacked=body.classList.contains('droneStack');
+  const afterW=afterFolded?58:parseFloat(document.getElementById('miniMapCanvas').style.width)+2;
+  const afterR=(afterStacked?10:10+afterCol+8)+afterW;
+  assert.ok(afterR<=saveBtn.rect.left-8,`421x320 safe-area left->right swap refits map to clear Save picture (beforeCol=${beforeCol}, afterCol=${afterCol}, right=${afterR}, saveLeft=${saveBtn.rect.left})`);
+  lt.rect={left:1100,right:1430,top:300,bottom:820,width:330,height:520};
+  rb.rect={left:1100,right:1430,top:300,bottom:820,width:330,height:520};
+  saveBtn.remove();
+ }
  pause.remove();hud.remove();innerWidth=844;innerHeight=390;resize();
  assert.equal(body.classList.contains('droneStack'),false);
  assert.equal(root.classList.contains('folded'),false);
@@ -353,7 +382,109 @@ globalThis.performance=savedPerformance;
 const sticks=createDroneSticks(()=>{}),returnButton=document.getElementById('droneReturn');let labelWrites=0;
 const setLabel=returnButton.setAttribute.bind(returnButton);returnButton.setAttribute=(key,value)=>{if(key==='aria-label')labelWrites++;setLabel(key,value);};
 sticks.show(true);for(let i=0;i<20;i++)sticks.show(true);assert.equal(labelWrites,1,'stable flight label is written once');
-sticks.show(true,true);assert.equal(labelWrites,2);assert.equal(returnButton.getAttribute('aria-label'),'Land now');sticks.show(true,true);assert.equal(labelWrites,2);sticks.show(false);
+sticks.show(true,true);assert.equal(labelWrites,2);assert.equal(returnButton.getAttribute('aria-label'),'Land now');sticks.show(true,true);assert.equal(labelWrites,2);
+// Stick release checks: touchcancel, lostpointercapture, window pointercancel, dropped pointerup with touchend, and multi-touch.
+{
+ const leftEl=document.getElementById('droneLeft'), rightEl=document.getElementById('droneRight');
+ const leftKnob=leftEl.querySelector('b'), rightKnob=rightEl.querySelector('b');
+ leftEl.rect={left:14,top:698,right:146,bottom:830,width:132,height:132};
+ rightEl.rect={left:244,top:698,right:376,bottom:830,width:132,height:132};
+ const fireWin=(type,ev)=>{for(const fn of [...(windowListeners.get(type)??[])])fn(ev);};
+ const touchEv=(touches,changed,target=[])=>({touches,changedTouches:changed,targetTouches:target,preventDefault(){},stopPropagation(){}});
+ const ptrEv=(pointerId,clientX,clientY,extra={})=>({pointerId,clientX,clientY,pointerType:'touch',buttons:1,isTrusted:true,preventDefault(){},stopPropagation(){},...extra});
+ // 1. touchstart -> touchmove -> touchcancel resets both command and knob.
+ const t1={identifier:11,clientX:30,clientY:710};
+ leftEl.dispatch('touchstart',touchEv([t1],[t1],[t1]));
+ leftEl.dispatch('touchmove',touchEv([{identifier:11,clientX:20,clientY:700}],[{identifier:11,clientX:20,clientY:700}],[{identifier:11,clientX:20,clientY:700}]));
+ assert.ok(sticks.command.up>0.5&&sticks.command.turn>0.5&&leftKnob.style.transform&&leftEl.classList.contains('held'),'touch move deflects left stick and knob');
+ leftEl.dispatch('touchcancel',touchEv([],[t1],[]));
+ assert.deepEqual(sticks.command,{forward:0,right:0,up:0,turn:0},'touchcancel zeroes stick command');
+ assert.equal(leftKnob.style.transform,'','touchcancel centres knob');
+ assert.equal(leftEl.classList.contains('held'),false,'touchcancel clears held state');
+ // 2. Lost-pointer case (lostpointercapture with no pointerup/pointercancel).
+ leftEl.dispatch('pointerdown',ptrEv(21,30,710));
+ leftEl.dispatch('pointermove',ptrEv(21,20,700));
+ assert.ok(sticks.command.up>0.5&&leftKnob.style.transform,'pointer move deflects left stick');
+ leftEl.dispatch('lostpointercapture',ptrEv(21,20,700));
+ assert.deepEqual(sticks.command,{forward:0,right:0,up:0,turn:0},'lostpointercapture zeroes stick command');
+ assert.equal(leftKnob.style.transform,'','lostpointercapture centres knob');
+ // 3. Lost-pointer case (pointer capture dropped; pointercancel reaches window only).
+ leftEl.dispatch('pointerdown',ptrEv(22,30,710));
+ leftEl.dispatch('pointermove',ptrEv(22,20,700));
+ assert.ok(sticks.command.up>0.5&&leftKnob.style.transform,'pointer move before window pointercancel');
+ fireWin('pointercancel',ptrEv(22,20,700));
+ assert.deepEqual(sticks.command,{forward:0,right:0,up:0,turn:0},'window pointercancel zeroes stick command');
+ assert.equal(leftKnob.style.transform,'','window pointercancel centres knob');
+ // 4. Multi-touch: Safari drops pointerup on left stick while right stick stays held; touchend resets only left stick.
+ const tL={identifier:31,clientX:20,clientY:700}, tR={identifier:32,clientX:310,clientY:700};
+ leftEl.dispatch('pointerdown',ptrEv(31,20,700));
+ leftEl.dispatch('touchstart',touchEv([tL],[tL],[tL]));
+ rightEl.dispatch('pointerdown',ptrEv(32,310,700));
+ rightEl.dispatch('touchstart',touchEv([tL,tR],[tR],[tR]));
+ assert.ok(sticks.command.up>0.5&&sticks.command.forward>0.5,'both sticks active simultaneously');
+ fireWin('touchend',touchEv([tR],[tL],[]));
+ assert.equal(sticks.command.up,0,'lifted left touch zeroes climb');
+ assert.equal(sticks.command.turn,0,'lifted left touch zeroes turn');
+ assert.equal(leftKnob.style.transform,'','lifted left touch centres left knob');
+ assert.ok(sticks.command.forward>0.5&&rightKnob.style.transform,'held right stick stays active');
+ fireWin('touchend',touchEv([],[tR],[]));
+ assert.deepEqual(sticks.command,{forward:0,right:0,up:0,turn:0},'lifting last touch zeroes both sticks');
+ assert.equal(rightKnob.style.transform,'','lifting last touch centres right knob');
+ // 5. Second touch recovers stale pointer whose capture was already lost (when no touch is tracked).
+ leftEl.hasPointerCapture=()=>false;
+ leftEl.dispatch('pointerdown',ptrEv(41,20,700));
+ assert.ok(sticks.command.up>0.5,'first pointer active');
+ leftEl.dispatch('pointerdown',ptrEv(42,30,710));
+ leftEl.dispatch('pointerup',ptrEv(42,30,710));
+ assert.deepEqual(sticks.command,{forward:0,right:0,up:0,turn:0},'second touch recovers stale pointer and resets');
+ assert.equal(leftKnob.style.transform,'','second touch recovery centres knob');
+ // 6. Failed setPointerCapture falls back to touch tracking, drags outside the stick, and ignores a second finger lifting while the first stays down.
+ leftEl.setPointerCapture=()=>{throw Error('NotFoundError');};
+ const f1Start={identifier:51,clientX:80,clientY:764}, f1Out={identifier:51,clientX:-20,clientY:640}, f2={identifier:52,clientX:120,clientY:800};
+ leftEl.dispatch('pointerdown',ptrEv(51,80,764));
+ leftEl.dispatch('touchstart',touchEv([f1Start],[f1Start],[f1Start]));
+ leftEl.dispatch('touchmove',touchEv([f1Out],[f1Out],[f1Out]));
+ assert.ok(sticks.command.up>0.5&&sticks.command.turn>0.5&&leftKnob.style.transform,'touchmove tracks drag outside stick after failed setPointerCapture');
+ leftEl.dispatch('pointerdown',ptrEv(52,120,800));
+ leftEl.dispatch('touchstart',touchEv([f1Out,f2],[f2],[f1Out,f2]));
+ leftEl.dispatch('touchend',touchEv([f1Out],[f2],[f1Out]));
+ leftEl.dispatch('pointerup',ptrEv(52,120,800));
+ assert.ok(sticks.command.up>0.5&&sticks.command.turn>0.5&&leftEl.classList.contains('held'),'lifting second finger preserves first finger ownership');
+ leftEl.dispatch('touchend',touchEv([],[f1Out],[]));
+ assert.deepEqual(sticks.command,{forward:0,right:0,up:0,turn:0},'lifting first finger after failed capture resets command');
+ assert.equal(leftKnob.style.transform,'','lifting first finger after failed capture centres knob');
+ delete leftEl.setPointerCapture;
+ delete leftEl.hasPointerCapture;
+ // 7. Mixed input: ending an unrelated touch or touching the same stick must not release a stick held by a mouse or pen pointer (captured or failed capture).
+ for (const [pointerType, failCapture, baseId] of [['mouse', false, 61], ['mouse', true, 71], ['pen', true, 81]]) {
+  leftEl.setPointerCapture = failCapture ? () => { throw Error('NotFoundError'); } : () => {};
+  leftEl.hasPointerCapture = id => !failCapture && id === baseId;
+  leftEl.dispatch('pointerdown', ptrEv(baseId, 20, 700, { pointerType }));
+  assert.ok(sticks.command.up > 0.5 && leftEl.classList.contains('held'), `${pointerType} (failCapture=${failCapture}) deflects left stick`);
+  fireWin('touchend', touchEv([], [{ identifier: baseId + 1, clientX: 200, clientY: 200 }], []));
+  assert.ok(sticks.command.up > 0.5 && leftEl.classList.contains('held') && leftKnob.style.transform !== '', `unrelated touchend preserves held ${pointerType} stick (failCapture=${failCapture})`);
+  const sameStickTouch = { identifier: baseId + 2, clientX: 80, clientY: 764 };
+  leftEl.dispatch('pointerdown', ptrEv(baseId + 2, 80, 764, { pointerType: 'touch' }));
+  leftEl.dispatch('touchstart', touchEv([sameStickTouch], [sameStickTouch], [sameStickTouch]));
+  leftEl.dispatch('touchend', touchEv([], [sameStickTouch], []));
+  leftEl.dispatch('pointerup', ptrEv(baseId + 2, 80, 764, { pointerType: 'touch' }));
+  assert.ok(sticks.command.up > 0.5 && leftEl.classList.contains('held') && leftKnob.style.transform !== '', `touch on same stick does not steal or release held ${pointerType} stick (failCapture=${failCapture})`);
+  fireWin('pointerup', ptrEv(baseId, 20, 700, { pointerType }));
+  assert.deepEqual(sticks.command, { forward: 0, right: 0, up: 0, turn: 0 }, `${pointerType} pointerup resets command (failCapture=${failCapture})`);
+  assert.equal(leftKnob.style.transform, '', `${pointerType} pointerup centres knob (failCapture=${failCapture})`);
+ }
+ delete leftEl.setPointerCapture;
+ delete leftEl.hasPointerCapture;
+}
+sticks.show(false);
+returnButton.remove(); document.getElementById('droneLeft').remove(); document.getElementById('droneRight').remove();
+{
+ const freeSticks=createDroneSticks(()=>{},true);
+ freeSticks.show(true);
+ assert.equal(document.getElementById('droneReturn'),null,'standalone drone mode omits the floating ROAD button on phones');
+ freeSticks.show(false);
+ document.getElementById('droneLeft').remove(); document.getElementById('droneRight').remove();
+}
 const main=readFileSync(new URL('../web/src/main.ts',import.meta.url),'utf8');
 const noteSetup=main.slice(main.indexOf('const settingsRoomPauseNote ='),main.indexOf('function syncPauseUI():'));
 for(const touchDevice of [false,true]){
@@ -377,7 +508,7 @@ for(const droneVehicle of [false,true])for(const touchDevice of [false,true])for
  const hints=pauseHints({drone:{active},droneVehicle,touchDevice,DRONE_HELP,DRONE_TOUCH_HELP,DRONE_FREE_HELP,DRONE_FREE_TOUCH_HELP,gamepad:{device},padKeys:()=>pad,ride:{kind:'car'},mailMode:true,radio:null,TOUCH:driving,DRIVING_TOUCH:driving,KEYS:driving,DRIVING_KEYS:driving});
  assert.deepEqual(hints,active?(droneVehicle?(touchDevice?DRONE_FREE_TOUCH_HELP:DRONE_FREE_HELP):touchDevice?DRONE_TOUCH_HELP:DRONE_HELP):device==='gamepad'?pad:driving);
  if(active&&touchDevice&&!droneVehicle)assert.deepEqual(hints,[['Left stick','Climb and turn'],['Right stick','Fly'],['RETURN TO CAR','Fly back. LAND NOW lands at once.']]);
- if(active&&droneVehicle)assert.ok(hints.some(([k])=>k==='R'||k==='ROAD')&&!hints.some(([,v])=>/land|car/i.test(v)),'the standalone drone pause keys put it on the road and name no car');
+ if(active&&droneVehicle)assert.ok(hints.some(([k,v])=>k==='R'||/nearest road/i.test(v))&&!(touchDevice&&hints.some(([k])=>k==='ROAD'))&&!hints.some(([,v])=>/land|car/i.test(v)),'the standalone drone pause keys put it on the road (via R or Settings, no ROAD button on phones) and name no car');
 }
 const a=readFileSync(new URL('../web/index.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];
 const b=readFileSync(new URL('../artifact/page.html',import.meta.url),'utf8').match(/<style>([\s\S]*?)<\/style>/)[1];assert.equal(a,b,'page style blocks remain identical');

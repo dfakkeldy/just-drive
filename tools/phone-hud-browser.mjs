@@ -242,6 +242,33 @@ for(const [name,query] of [['mail','mode=mail'],['drive','mode=explore'],['just-
       await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await sleep(100);
       assert.equal(await read(`document.getElementById('tcPull').classList.contains('held')`),false,'PULL releases');
     }
+    if(name==='just-drive') {
+      await read(`document.getElementById('droneButton').click()`);
+      await until(`mmm.drone?.active && !document.getElementById('droneLeft').hidden`);
+      await sleep(150);
+      const droneBoxes=await read(`(()=>{
+        const visible=e=>e && e.getClientRects().length && !e.closest('[hidden]') && getComputedStyle(e).visibility!=='hidden' && getComputedStyle(e).display!=='none';
+        const items=[];
+        for(const id of ['hud','miniMap','gear','pauseButton','placesButton','bigMapButton','savePictureButton','droneReturn','droneLeft','droneRight','placeArrival']){
+          const e=document.getElementById(id);if(!visible(e))continue;const b=e.getBoundingClientRect();
+          items.push({id,left:b.left,top:b.top,right:b.right,bottom:b.bottom,width:b.width,height:b.height});
+        }
+        for(const s of document.querySelectorAll('.droneStick span')){
+          if(!visible(s))continue;const b=s.getBoundingClientRect();
+          items.push({id:s.parentElement.id+':label',left:b.left,top:b.top,right:b.right,bottom:b.bottom,width:b.width,height:b.height});
+        }
+        return items;
+      })()`);
+      for(const id of ['gear','pauseButton','savePictureButton','droneLeft','droneRight','droneReturn'])
+        assert.ok(droneBoxes.some(b=>b.id===id),'drone mode missing '+id);
+      assert.ok(!droneBoxes.some(b=>b.id==='placeArrival'),'drone mode hides placeArrival under sticks');
+      for(const b of droneBoxes) assert.ok(b.left>=safe.left-1&&b.top>=safe.top-1&&b.right<=width-safe.right+1&&b.bottom<=height-safe.bottom+1,`drone ${b.id} outside viewport`);
+      for(let i=0;i<droneBoxes.length;i++)for(let j=i+1;j<droneBoxes.length;j++)
+        assert.ok(!overlaps(droneBoxes[i],droneBoxes[j]),`drone ${droneBoxes[i].id} overlaps ${droneBoxes[j].id}`);
+      assert.deepEqual(await read(`['gear','pauseButton','savePictureButton','droneReturn'].filter(id=>{const e=document.getElementById(id),b=e.getBoundingClientRect(),at=document.elementFromPoint((b.left+b.right)/2,(b.top+b.bottom)/2);return !(at===e||e.contains(at));})`),[],'drone HUD button centres receive touches');
+      await read(`document.getElementById('droneReturn').click();document.getElementById('droneReturn').click()`);
+      await until(`!mmm.drone?.active && document.body.classList.contains('tcOn')`);
+    }
     assert.deepEqual(connection.errors,[],'no page exceptions');console.log(`PASS ${name} ${width}x${height}`);
   } catch(error) { failures.push(`${name} ${width}x${height}: ${error.message}`);console.error(failures.at(-1));await shot('-FAILED').catch(()=>{}); }
   finally { await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`);connection.close(); }

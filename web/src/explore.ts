@@ -84,13 +84,14 @@ export function prepareExplore(): void {
   document.body.classList.add('exploreMode');
   document.head.appendChild(Object.assign(document.createElement('style'), { textContent: `
     body.exploreMode :is(#shiftHud,#stopHint,#cameraButton,#endShift,#mailButton,#mailScore,#shiftReport,#photoTag,#photoFlash,#startOver){display:none!important}
-    #savePictureButton{position:fixed;z-index:6;top:calc(72px + env(safe-area-inset-top,0px));right:calc(8px + env(safe-area-inset-right,0px));
+    #savePictureButton{position:fixed;z-index:6;top:calc(72px + var(--drone-safe-top,env(safe-area-inset-top,0px)));right:calc(8px + var(--drone-safe-right,env(safe-area-inset-right,0px)));
       flex:none;width:56px;height:56px;border-radius:10px;border:1px solid var(--ink-dim);background:var(--panel-solid);
       color:var(--ink);font:700 11px/1.2 var(--mono);padding:0;pointer-events:auto}
     body.tcOn #savePictureButton{right:auto}
+    body.droneOn.droneSticks:where(:has(#placesButton:not([hidden]))) #savePictureButton{top:calc(76px + var(--drone-safe-top,env(safe-area-inset-top,0px)));right:calc(104px + var(--drone-safe-right,env(safe-area-inset-right,0px)))}
     /* Place Save picture beside the flight stick on short landscape screens, clear of its caption. */
     @media(orientation:landscape) and (min-width:421px) and (max-height:319px){
-      body.droneOn #savePictureButton{right:calc(22px + var(--drone-stick-size) + env(safe-area-inset-right,0px))}
+      body.droneOn #savePictureButton,body.droneOn.droneSticks #savePictureButton{top:calc(72px + var(--drone-safe-top,env(safe-area-inset-top,0px)));right:calc(22px + var(--drone-stick-size) + var(--drone-safe-right,env(safe-area-inset-right,0px)))}
     }
     #savePictureButton:active{background:var(--maple)}
     #savePictureButton[hidden],body:not(.tcOn,.droneOn) #savePictureButton{display:none}
@@ -131,7 +132,7 @@ export function watchPictureStatus(status: HTMLElement): void {
     if (!status.textContent || !document.body.classList.contains('droneOn') || !document.body.classList.contains('droneSticks')) return;
     const safe = probe.getBoundingClientRect();
     const blockers: [number, number, number, number][] = [];
-    for (const sel of ['#hud', '#miniMap', '#gear', '#pauseButton', '#savePictureButton', '#droneReturn']) {
+    for (const sel of ['#hud', '#miniMap', '#gear', '#pauseButton', '#placesButton', '#bigMapButton', '#savePictureButton', '#droneReturn']) {
       const r = box(sel); if (r) blockers.push([r.left - 1, r.top - 1, r.right + 1, r.bottom + 1]);
     }
     for (const sel of ['#droneLeft', '#droneLeft span', '#droneRight', '#droneRight span']) {

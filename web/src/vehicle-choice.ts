@@ -122,8 +122,7 @@ export function droneKeys(touch: boolean): [string, string][] {
     ['Left stick', 'Climb, descend and turn. Let go to hover.'],
     ['Right stick', 'Fly level.'],
     ['Drag', 'Turn and tilt the camera.'],
-    ['ROAD', 'Back on the nearest road.'],
-    ['PLACES / ⚙', 'Places and the big map / settings.'],
+    ['PLACES / ⚙', 'Places and the big map / settings (nearest road).'],
   ] : [
     PAUSE_KEY,
     ['W A S D', 'Fly level. Let go to hover.'],

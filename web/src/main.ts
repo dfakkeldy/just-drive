@@ -2045,6 +2045,7 @@ function syncPauseUI(): void {
   keys.clear(); pointers.clear(); mailPointers.clear(); mailRequested = photoRequested = false;
   pictureRequested = false;
   touch.steer = touch.throttle = flyTouch = 0;
+  droneSticks?.release();
   const room = !!multiplayer?.choice.on;
   pauseScreen.querySelector<HTMLElement>('.roomPauseNote')!.hidden = !room;
   if (settingsRoomPauseNote) settingsRoomPauseNote.hidden = !room;
@@ -2390,6 +2391,12 @@ if (import.meta.env.DEV) {
   expose({ ride, frame }, false);
 }
 
+if (droneVehicle && !bare) {
+  const nearestRoad = Object.assign(document.createElement('button'), { id: 'droneNearestRoad', type: 'button', textContent: 'Back to nearest road' });
+  nearestRoad.style.cssText = 'display:block;margin-top:12px;width:100%;min-height:44px;border-radius:6px;border:1px solid #6b7780;background:none;color:inherit;font:inherit;cursor:pointer';
+  nearestRoad.addEventListener('click', () => { settingsPanel.classList.remove('open'); pause.resume(); syncPauseUI(); droneHome(); });
+  settingsPanel.append(nearestRoad);
+}
 if (title) {
   const more = Object.assign(document.createElement('button'), { textContent: 'Controls, credits and data' });
   more.style.cssText = 'margin-top:12px;width:100%;min-height:40px;border-radius:6px;border:1px solid #6b7780;background:none;color:inherit;font:inherit;cursor:pointer';

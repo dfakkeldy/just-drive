@@ -100,7 +100,7 @@ console.log('PASS pause card: closed Keys, Resume key, no HUD dump, start gate a
  const mount = (initialClasses) => {
   const classes = new Set(initialClasses);
   const pause = new PauseGate();
-  let callback, keyHandler, queued = false, focused = 'settingsClose';
+  let callback, keyHandler, queued = false, focused = 'settingsClose', stickReleases = 0;
   const schedule = () => { if (!queued && callback) { queued = true; queueMicrotask(() => { queued = false; callback(); }); } };
   const settingsPanel = {
    querySelector: () => ({ after() {} }),
@@ -136,7 +136,7 @@ console.log('PASS pause card: closed Keys, Resume key, no HUD dump, start gate a
    touch: { steer: 0, throttle: 0 }, flyTouch: 0,
    multiplayer: null, replay: { active: false, available: false }, sunSeeker: null,
    interiors: { busy: false }, radio: null, vehicle: { roadName: 'Mabou Harbour Road' },
-   ride: { kind: 'car' }, drone: { active: false }, droneVehicle: false, gamepad: { device: 'keyboard' },
+   ride: { kind: 'car' }, drone: { active: false }, droneVehicle: false, droneSticks: { release() { stickReleases++; } }, gamepad: { device: 'keyboard' },
    TOUCH: [], DRIVING_TOUCH: [], KEYS: [], DRIVING_KEYS: [], DRONE_TOUCH_HELP: [], DRONE_HELP: [], DRONE_FREE_TOUCH_HELP: [], DRONE_FREE_HELP: [],
    padKeys: () => [], horseKeys: () => [], bikeKeys: () => [],
    scrollMore() {}, syncRoadScenePause() {}, openReplay: () => false, pauseAllowed: () => true,
@@ -148,6 +148,7 @@ console.log('PASS pause card: closed Keys, Resume key, no HUD dump, start gate a
   return {
    pause, settingsPanel, pauseScreen, doc,
    focus: () => focused,
+   stickReleases: () => stickReleases,
    gear: () => { pause.setSettings(!settingsPanel.classList.contains('open')); api.syncPauseUI(); },
    escape: () => {
     let prevented = false, stopped = false;
@@ -173,8 +174,10 @@ console.log('PASS pause card: closed Keys, Resume key, no HUD dump, start gate a
  assert.equal(boot.pauseScreen.hidden, true, 'Pause screen stays hidden');
  assert.equal(boot.focus(), 'gear', 'Escape returns focus to gear');
  // Reopening after dismissal pauses, and direct close unpauses.
+ const beforeOpen = boot.stickReleases();
  boot.settingsPanel.classList.add('open'); await flush();
  assert.equal(boot.pause.blocked, true, 'reopening #settings after dismissing boot notice pauses');
+ assert.ok(boot.stickReleases() > beforeOpen, 'opening Settings/pause releases held drone sticks');
  boot.settingsPanel.classList.remove('open'); await flush();
  assert.equal(boot.pause.blocked, false, 'direct panel close unpauses');
 
