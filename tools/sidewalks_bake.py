@@ -298,12 +298,24 @@ def compact(plan,roads,run_indices):
         pieces.append(row)
     return {**plan,'pieces':pieces}
 
+# Sidewalks read only manifest origin, size, village and levels; far-turbine installs update only manifest.tall.
+MANIFEST_UNREAD=('tall',)
+
+def manifest_digest(raw_bytes):
+    doc=json.loads(raw_bytes)
+    kept={k:v for k,v in doc.items() if k not in MANIFEST_UNREAD}
+    return hashlib.sha256(json.dumps(kept,separators=(',',':'),sort_keys=True,allow_nan=False).encode()).hexdigest()
+
 def fingerprints(sources=(),work_root=None):
     files=list(sources)+['web/src/terrain.ts','web/src/sidewalks-data.json','web/src/sidewalk-layout.ts','tools/sidewalks-inputs.mjs','tools/sidewalks_bake.py','tools/sidewalks-compile.mjs','tools/sidewalks-low-bake.mjs','web/src/sidewalks.ts','web/src/sidewalks-cache.ts','web/src/sidewalks-assets.ts','web/src/store.ts','web/src/sidewalks-worker.ts','web/src/sidewalks-heights.ts']
     files += [f'web/src/{s}-site.ts' for s in ['yard','home','church','porch','fishing','coast','quarry','mine']]
     for base in ['terrain','areas/porthood','areas/pointtupper']:
         files += [f'data/baked/{base}/{s}.json' for s in ['manifest','roads','props','buildings']]
-    return {p:hashlib.sha256(((work_root/p) if work_root and p=='web/src/sidewalks-assets.ts' and (work_root/p).exists() else ROOT/p).read_bytes()).hexdigest() for p in files}
+    out={}
+    for p in files:
+        raw=((work_root/p) if work_root and p=='web/src/sidewalks-assets.ts' and (work_root/p).exists() else ROOT/p).read_bytes()
+        out[p]=manifest_digest(raw) if p.endswith('/manifest.json') else hashlib.sha256(raw).hexdigest()
+    return out
 
 def bake():
     global ALL_RUNS
@@ -327,8 +339,24 @@ COMM1347=ROOT/'tools/community-mailboxes/hashes.json'
 WIDTH1406=ROOT/'tools/industrial-surface/width-hashes.json'
 FAR_VIEWS_DELTA=ROOT/'tools/far-views-delta.json'
 CHECK_SOURCE=ROOT/'tools/sidewalks-check-source.json'
-# Sidewalks read only manifest origin, size, village and levels; far-turbine installs update only manifest.tall.
-MANIFEST_UNREAD=('tall',)
+
+def _restore_unread_manifest_keys(manifest, base_manifest):
+    out = dict(manifest)
+    for k in MANIFEST_UNREAD:
+        if k not in base_manifest:
+            continue
+        if k in out:
+            out[k] = base_manifest[k]
+        elif k == 'tall' and 'paved' in out:
+            rebuilt = {}
+            for mk, mv in out.items():
+                if mk == 'paved':
+                    rebuilt[k] = base_manifest[k]
+                rebuilt[mk] = mv
+            out = rebuilt
+        else:
+            out[k] = base_manifest[k]
+    return out
 
 def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None,far_delta=None):
     if check_source is None and report is None and CHECK_SOURCE.exists():
@@ -342,17 +370,19 @@ def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None,
         if before_width is not None and matches(before_width):
             return True
     manifest = None
-    if file.startswith('data/baked/') and file.endswith('/manifest.json') and far_delta is not None:
-        pack = file.removeprefix('data/baked/').removesuffix('/manifest.json')
-        base_manifest = far_delta.get('packs', {}).get(pack, {}).get('manifest', {})
-        manifest = json.loads((root/file).read_bytes())
-        changed_unread = False
-        for k in MANIFEST_UNREAD:
-            if k in manifest and k in base_manifest and manifest[k] != base_manifest[k]:
-                manifest[k] = base_manifest[k]
-                changed_unread = True
-        if changed_unread and matches(hashlib.sha256((json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()).hexdigest()):
+    if file.startswith('data/baked/') and file.endswith('/manifest.json'):
+        raw = (root/file).read_bytes()
+        if matches(hashlib.sha256(raw).hexdigest()) or matches(manifest_digest(raw)):
             return True
+        manifest = json.loads(raw)
+        if far_delta is not None:
+            pack = file.removeprefix('data/baked/').removesuffix('/manifest.json')
+            base_manifest = far_delta.get('packs', {}).get(pack, {}).get('manifest', {})
+            if base_manifest:
+                manifest = _restore_unread_manifest_keys(manifest, base_manifest)
+                restored_bytes = (json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()
+                if matches(hashlib.sha256(restored_bytes).hexdigest()):
+                    return True
     reports = [report] if report else [json.loads(p.read_text()) for p in (NOV19, COMM1347, NOV18) if p.exists()]
     for current in reports:
         before = previous_digest(current, file.removeprefix('data/baked/'), digest, cached=cached) if file.startswith('data/baked/') else None
@@ -379,7 +409,8 @@ def nov18_stands_for(file,digest,cached,root=ROOT,report=None,check_source=None,
                     manifest[k] = dict(manifest[k], count=v['count'])
                 else:
                     manifest[k] = v
-            if matches(hashlib.sha256((json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()).hexdigest()):
+            rewound_bytes = (json.dumps(manifest,separators=(',',':'),allow_nan=False)+'\n').encode()
+            if matches(hashlib.sha256(rewound_bytes).hexdigest()) or matches(manifest_digest(rewound_bytes)):
                 return True
     return False
 
@@ -407,17 +438,30 @@ def nov18_cases():
         (root/name).write_bytes(full_after);assert nov18_stands_for(name,sha(full_after),sha(full_before),root,prop_report),'manifest at full props key'
         (root/name).write_bytes(full_after);assert nov18_stands_for(name,sha(full_after),'e'*64,root,prop_report,{'files':[{'file':name,'before':'e'*64,'sha256':sha(full_before)}]}),'manifest chained through check_source'
         (root/name).write_bytes(compact({'props':{'file':'props.json','mailboxes':468},'other':'y'}));assert not nov18_stands_for(name,'',sha(full_before),root,prop_report),'another key changed beside props'
-        # manifest.tall changes alone or alongside a receipt-owned props change pass; any other key change fails.
+        # manifest.tall changes (value, nested key order, removal) pass on both canonical new plans and existing raw plans; any other key change fails.
         tall_base={'file':'tall.json','turbines':2,'far':162,'towers':3,'lines':1}
         tall_next={'file':'tall.json','turbines':2,'far':164,'towers':3,'lines':1}
+        tall_reordered={'lines':1,'towers':3,'far':162,'turbines':2,'file':'tall.json'}
         far_delta={'packs':{'terrain':{'manifest':{'tall':tall_base}}}}
-        tall_before=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_base,'other':'x'})
-        tall_only=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_next,'other':'x'})
-        tall_and_props=compact({'props':{'file':'props.json','mailboxes':468},'tall':tall_next,'other':'x'})
-        tall_and_other=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_next,'other':'y'})
-        (root/name).write_bytes(tall_only);assert nov18_stands_for(name,sha(tall_only),sha(tall_before),root,prop_report,far_delta=far_delta),'manifest.tall change ignored'
-        (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,sha(tall_and_props),sha(tall_before),root,prop_report,far_delta=far_delta),'manifest.tall + receipt props change accepted'
-        (root/name).write_bytes(tall_and_other);assert not nov18_stands_for(name,sha(tall_and_other),sha(tall_before),root,prop_report,far_delta=far_delta),'manifest.tall + other key change refused'
+        tall_before=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_base,'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_only=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_next,'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_reord=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_reordered,'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_removed=compact({'props':{'file':'props.json','mailboxes':469},'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_and_props=compact({'props':{'file':'props.json','mailboxes':468},'tall':tall_next,'paved':{'file':'paved/index.json'},'other':'x'})
+        tall_and_other=compact({'props':{'file':'props.json','mailboxes':469},'tall':tall_next,'paved':{'file':'paved/index.json'},'other':'y'})
+        # Fresh canonical plans (manifest_digest omits tall and sorts keys):
+        canon_cached=manifest_digest(tall_before)
+        assert manifest_digest(tall_only)==canon_cached,'canonical digest ignores tall value changes'
+        assert manifest_digest(tall_reord)==canon_cached,'canonical digest ignores tall nested key order'
+        assert manifest_digest(tall_removed)==canon_cached,'canonical digest ignores tall removal'
+        assert manifest_digest(tall_and_other)!=canon_cached,'canonical digest rejects other key change'
+        (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,manifest_digest(tall_and_props),canon_cached,root,prop_report),'canonical plan rewinds receipt props'
+        # Existing raw-byte plans (fallback via far_delta):
+        (root/name).write_bytes(tall_only);assert nov18_stands_for(name,manifest_digest(tall_only),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan ignores tall value change'
+        (root/name).write_bytes(tall_reord);assert nov18_stands_for(name,manifest_digest(tall_reord),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan ignores tall nested key reorder'
+        (root/name).write_bytes(tall_removed);assert nov18_stands_for(name,manifest_digest(tall_removed),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan ignores tall removal'
+        (root/name).write_bytes(tall_and_props);assert nov18_stands_for(name,manifest_digest(tall_and_props),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan accepts tall + receipt props change'
+        (root/name).write_bytes(tall_and_other);assert not nov18_stands_for(name,manifest_digest(tall_and_other),sha(tall_before),root,prop_report,far_delta=far_delta),'existing raw plan refuses tall + other key change'
     print('PASS 18 Nov receipt stands for its before land: receipt files, manifest.tall and counts only; other keys, unknown bytes and other land refused')
 
 if __name__=='__main__':
