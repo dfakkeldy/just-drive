@@ -1,5 +1,6 @@
 import type { Building, BuildingStyle } from './buildings';
 import mabouLooks from './property-looks/mabou.json';
+import pointtupperLooks from './property-looks/pointtupper.json';
 
 /**
  * Per-building look overrides observed from dash-cam passes, keyed by surveyed building ID
@@ -32,6 +33,7 @@ export type PropertyLookRoofBox = Pick<Building, 'x' | 'y' | 'ground' | 'axisDeg
 
 const AREA_LOOKS: Partial<Record<string, AreaPropertyLooks>> = {
   mabou: mabouLooks as unknown as AreaPropertyLooks,
+  pointtupper: pointtupperLooks as unknown as AreaPropertyLooks,
 };
 
 const DEFAULT_STYLE: BuildingStyle = {

@@ -1,0 +1,338 @@
+{
+  "version": 1,
+  "area": "pointtupper",
+  "groups": {
+    "granville-street": {
+      "label": "Granville Street",
+      "roads": [
+        "Granville Street"
+      ]
+    }
+  },
+  "overrides": {
+    "664": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627633.8,
+        5052466.0
+      ],
+      "wall": "#c8ccca",
+      "roof": "#d4d8d6",
+      "trim": "#f4f4f2",
+      "roofMaterial": "shingle"
+    },
+    "665": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627647.7,
+        5052444.1
+      ],
+      "wall": "#f4f3ee",
+      "roof": "#8a9094",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "667": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627674.0,
+        5052407.3
+      ],
+      "wall": "#f2f1ea",
+      "roof": "#8e9494",
+      "trim": "#f6f5f0",
+      "roofMaterial": "shingle"
+    },
+    "669": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627684.3,
+        5052390.1
+      ],
+      "wall": "#f7f6f2",
+      "roof": "#3a3e42",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "676": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627733.6,
+        5052393.5
+      ],
+      "wall": "#f2f1ea",
+      "roof": "#6a4030",
+      "trim": "#f6f5f0",
+      "roofMaterial": "shingle"
+    },
+    "715": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627592.2,
+        5052535.4
+      ],
+      "wall": "#f0efe8",
+      "roof": "#5a5e62",
+      "trim": "#f6f5f0",
+      "roofMaterial": "shingle"
+    },
+    "718": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627551.2,
+        5052575.4
+      ],
+      "wall": "#3d7a68",
+      "roof": "#4a5054",
+      "trim": "#e8e6e0",
+      "roofMaterial": "shingle"
+    },
+    "751": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627325.0,
+        5052852.5
+      ],
+      "wall": "#3a322e",
+      "roof": "#7a4e3c",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "753": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627362.7,
+        5052824.0
+      ],
+      "wall": "#3a3634",
+      "roof": "#4a463f",
+      "trim": "#e6e2dc",
+      "roofMaterial": "shingle"
+    },
+    "756": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627371.3,
+        5052812.8
+      ],
+      "wall": "#6ec4d8",
+      "roof": "#6a7074",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "760": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627400.3,
+        5052784.0
+      ],
+      "wall": "#9aa0a4",
+      "roof": "#5a6064",
+      "trim": "#e8e6e2",
+      "roofMaterial": "shingle"
+    },
+    "1142": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628302.7,
+        5052069.4
+      ],
+      "wall": "#e4e6e4",
+      "roof": "#4a4e52",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "1144": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628347.3,
+        5052047.1
+      ],
+      "wall": "#e6c840",
+      "roof": "#7a8084",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "1145": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628361.6,
+        5052036.2
+      ],
+      "wall": "#243654",
+      "roof": "#c8ccc8",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1146": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628379.9,
+        5052025.0
+      ],
+      "wall": "#9a9c9a",
+      "roof": "#6a6e72",
+      "trim": "#f2f0ea",
+      "roofMaterial": "shingle"
+    },
+    "1148": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628398.3,
+        5052015.5
+      ],
+      "wall": "#c5d8e4",
+      "roof": "#6e7276",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1149": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628415.6,
+        5052010.2
+      ],
+      "wall": "#f4f3ee",
+      "roof": "#8a8e92",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "1150": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628462.8,
+        5051985.0
+      ],
+      "wall": "#f2f1ea",
+      "roof": "#5a4038",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1163": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628048.9,
+        5052125.3
+      ],
+      "wall": "#8d4a3c",
+      "roof": "#6a6e72",
+      "trim": "#f2f0ea",
+      "roofMaterial": "shingle"
+    },
+    "1164": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628002.9,
+        5052153.8
+      ],
+      "wall": "#4f8f9e",
+      "roof": "#5c6166",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1165": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627951.0,
+        5052177.0
+      ],
+      "wall": "#b7c2c6",
+      "roof": "#4a4e52",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1166": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627925.2,
+        5052198.7
+      ],
+      "wall": "#f3f2ec",
+      "roof": "#6a5848",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "1167": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627915.2,
+        5052210.2
+      ],
+      "wall": "#e4cc58",
+      "roof": "#8a9094",
+      "trim": "#f2f0ea",
+      "roofMaterial": "shingle"
+    },
+    "1169": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627864.8,
+        5052238.6
+      ],
+      "wall": "#c5c49a",
+      "roof": "#6b5844",
+      "trim": "#f4f2ea",
+      "roofMaterial": "shingle"
+    },
+    "1170": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627838.1,
+        5052252.3
+      ],
+      "wall": "#e2c44a",
+      "roof": "#d5d8d4",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "2197": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        628335.2,
+        5052038.4
+      ],
+      "wall": "#e4c44a",
+      "roof": "#c8ccc8",
+      "trim": "#f4f2ea",
+      "roofMaterial": "shingle"
+    },
+    "2968": {
+      "group": "granville-street",
+      "road": "Granville Street",
+      "at": [
+        627503.8,
+        5052678.8
+      ],
+      "wall": "#e8e6de",
+      "roof": "#5a5048",
+      "trim": "#f4f2ea",
+      "roofMaterial": "shingle"
+    }
+  }
+}
