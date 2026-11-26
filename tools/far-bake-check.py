@@ -77,7 +77,7 @@ def suite(module):
   # When real Point Tupper roads exist, verify the committed digest matches real track 934 and rejects an interior shift.
   real_roads_path=ROOT/'data/baked/areas/pointtupper/roads.json'
   if real_roads_path.is_file():
-   real_track=next(r for r in json.loads(real_roads_path.read_text())['roads'] if r['id']==934)
+   real_track=next(r for r in json.loads(real_roads_path.read_text())['roads'] if len(r.get('pts',[]))>1 and module.road_pts_sha256(r['pts'])==orig_sha)
    (pt_dir/'buildings.json').write_text(json.dumps({'buildings':[]}))
    (pt_dir/'roads.json').write_text(json.dumps({'roads':[real_track]}))
    kr_real,or_real=module.safe_turbines(pt_dir,[c02_08])

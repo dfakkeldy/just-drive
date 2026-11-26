@@ -118,8 +118,8 @@ function isExemptTurbineRoad(area,kind,p,r){
 }
 {
   const ptRoads=read(root+'data/baked/areas/pointtupper/roads.json').roads;
-  const rOk=ptRoads.find(r=>r.id===934);
-  assert.ok(rOk,'pointtupper track 934 present for clearance-exception checks');
+  const rOk=ptRoads.find(r=>Array.isArray(r.pts)&&r.pts.length>1&&roadPtsSha256(r.pts)===TURBINE_CLEARANCE_EXCEPTIONS['c02-08'].ptsSha256);
+  assert.ok(rOk,'pointtupper reviewed pad-access track present for clearance-exception checks');
   const pOk={id:'c02-08',e:622595.0,n:5047275.0};
   const movedInterior=structuredClone(rOk.pts);
   movedInterior[Math.floor(movedInterior.length/2)]=[622595.0,5047275.0];
