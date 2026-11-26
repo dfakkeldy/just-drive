@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Node-first contracts for the tall bake and the exact shared animation/wire mathematics.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {mergeFarManifest} from './far-manifest.mjs';
 import { readFileSync, existsSync, mkdirSync, writeFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -97,29 +98,33 @@ assert.ok(main.includes('if(data.version!==2||!sameRoot(data.root))return null;'
 assert.ok(main.includes('(t && Number.isInteger(t.far) ? t : undefined)'),'only the far pack manifest key (with a far count) fetches tall.json or opens Places');
 // Narrow, explicit clearance exceptions matching pipeline/34_bake_far_views.py:
 // track 934 is c02-08's own pad access road; pinned by area, coordinates, unnamed track kind,
-// halfWidth, and exact polyline endpoints + vertex count (never positional road ID alone).
+// halfWidth, endpoints, vertex count, and full ordered polyline SHA-256 (never positional road ID alone).
 const TURBINE_CLEARANCE_EXCEPTIONS={
   'c02-08':{
     area:'pointtupper',e:622595.0,n:5047275.0,roadKind:4,maxHalfWidth:1.5,
-    ptsStart:[622323.97,5047282.27],ptsEnd:[622604.68,5047279.83],ptsLen:71,
+    ptsSha256:'b1d2eaf87001d7ee4b03502357516166d364aa8c79a89188042a599feee68abd',
     reason:"track 934 is the turbine's own pad access road; owner confirmed 26 Nov 2026",
   },
 };
+function roadPtsSha256(pts){
+  return createHash('sha256').update(pts.map(([x,y])=>`${x.toFixed(2)},${y.toFixed(2)}`).join(';')).digest('hex');
+}
 function isExemptTurbineRoad(area,kind,p,r){
   if(kind!=='turbine')return false;
   const ex=TURBINE_CLEARANCE_EXCEPTIONS[p.id];
   if(!ex||area!==ex.area||p.e!==ex.e||p.n!==ex.n)return false;
-  const pts=r.pts;
   return r.kind===ex.roadKind&&!r.name&&r.halfWidth<=ex.maxHalfWidth
-    &&Array.isArray(pts)&&pts.length===ex.ptsLen
-    &&pts[0][0]===ex.ptsStart[0]&&pts[0][1]===ex.ptsStart[1]
-    &&pts[pts.length-1][0]===ex.ptsEnd[0]&&pts[pts.length-1][1]===ex.ptsEnd[1];
+    &&Array.isArray(r.pts)&&r.pts.length>1&&roadPtsSha256(r.pts)===ex.ptsSha256;
 }
 {
-  const pts=Array.from({length:71},(_,i)=>i===0?[622323.97,5047282.27]:i===70?[622604.68,5047279.83]:[622400,5047280]);
-  const rOk={id:934,name:null,kind:4,halfWidth:1.5,pts};
+  const ptRoads=read(root+'data/baked/areas/pointtupper/roads.json').roads;
+  const rOk=ptRoads.find(r=>r.id===934);
+  assert.ok(rOk,'pointtupper track 934 present for clearance-exception checks');
   const pOk={id:'c02-08',e:622595.0,n:5047275.0};
+  const movedInterior=structuredClone(rOk.pts);
+  movedInterior[Math.floor(movedInterior.length/2)]=[622595.0,5047275.0];
   assert.equal(isExemptTurbineRoad('pointtupper','turbine',pOk,rOk),true,'c02-08 exempt on reviewed track in pointtupper');
+  assert.equal(isExemptTurbineRoad('pointtupper','turbine',pOk,{...rOk,pts:movedInterior}),false,'changed interior vertex crossing c02-08 base not exempt');
   assert.equal(isExemptTurbineRoad('westbay','turbine',pOk,rOk),false,'other area not exempt');
   assert.equal(isExemptTurbineRoad('pointtupper','turbine',{...pOk,id:'c02-09'},rOk),false,'other turbine not exempt');
   assert.equal(isExemptTurbineRoad('pointtupper','turbine',{...pOk,e:622600.0},rOk),false,'easting-shifted c02-08 not exempt');

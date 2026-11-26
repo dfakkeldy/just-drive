@@ -11,7 +11,7 @@ This delta updates `tall.json` and the `tall` counts in `manifest.json` across a
    - Operating turbines spin and flash red in sync at night. Non-operating (`built` or `under-construction`) turbines stand still and stay dark.
 2. **Places `c02-08` at its measured position (`E 622595.0, N 5047275.0`, EPSG:2961).**
    - `c02-08` was previously omitted by `safe_turbines` because it is 3.41 m from unnamed mapped track 934 (`kind: 4`, `halfWidth: 1.5 m`), which is the turbine's own pad access road (owner confirmed 26 Nov 2026).
-   - A narrow allow-list entry in `pipeline/34_bake_far_views.py` (`TURBINE_CLEARANCE_EXCEPTIONS`) and `tools/tall-check.mjs` exempts only `c02-08` at its exact coordinates in `pointtupper` against that unnamed track (`kind: 4`, `halfWidth <= 1.5 m`, pinned by exact polyline endpoints `[622323.97, 5047282.27]`..`[622604.68, 5047279.83]` and 71 vertices, not positional road ID alone). The clearance rule stays unchanged for all other turbines, areas, coordinates, roads and buildings.
+   - A narrow allow-list entry in `pipeline/34_bake_far_views.py` (`TURBINE_CLEARANCE_EXCEPTIONS`) and `tools/tall-check.mjs` exempts only `c02-08` at its exact coordinates in `pointtupper` against that unnamed track (`kind: 4`, `halfWidth <= 1.5 m`, pinned by exact endpoints, 71 vertices, and full ordered polyline SHA-256 `b1d2eaf87001...`, not positional road ID alone). The clearance rule stays unchanged for all other turbines, areas, coordinates, roads and buildings.
    - `pointtupper`, `westbay` and `cansocauseway` gain +1 near turbine (`turbines: 40 -> 41`). `mabou`, `judique` and `porthood` gain +1 far turbine (`far: 163 -> 164`). `omitted.turbines` drops from 1 (`c02-08`) to 0.
 
 ## Build, install and rollback

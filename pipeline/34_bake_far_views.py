@@ -150,9 +150,9 @@ def safe_structures(base, legacy):
 
 # Narrow, explicit clearance exceptions: only the named turbine id at its exact measured
 # coordinates in the named area against the reviewed unnamed pad access track (pinned by
-# kind, unnamed status, width, and exact polyline endpoints + vertex count — never positional
-# road ID alone). Never weakens the clearance rule for any other turbine, coordinate, area,
-# road, or building.
+# kind, unnamed status, width, endpoints, vertex count, and full ordered polyline SHA-256 —
+# never positional road ID alone). Never weakens the clearance rule for any other turbine,
+# coordinate, area, road, or building.
 TURBINE_CLEARANCE_EXCEPTIONS = {
     'c02-08': {
         'area': 'pointtupper',
@@ -160,12 +160,14 @@ TURBINE_CLEARANCE_EXCEPTIONS = {
         'n': 5047275.0,
         'roadKind': 4,
         'maxHalfWidth': 1.5,
-        'ptsStart': (622323.97, 5047282.27),
-        'ptsEnd': (622604.68, 5047279.83),
-        'ptsLen': 71,
+        'ptsSha256': 'b1d2eaf87001d7ee4b03502357516166d364aa8c79a89188042a599feee68abd',
         'reason': "track 934 is the turbine's own pad access road; owner confirmed 26 Nov 2026",
     },
 }
+
+
+def road_pts_sha256(pts):
+    return hashlib.sha256(';'.join(f'{x:.2f},{y:.2f}' for x, y in pts).encode('ascii')).hexdigest()
 
 
 def is_exempt_turbine_conflict(point, conflict, area):
@@ -180,9 +182,7 @@ def is_exempt_turbine_conflict(point, conflict, area):
         and conflict.get('roadKind') == ex['roadKind']
         and not conflict.get('name')
         and conflict.get('halfWidth', float('inf')) <= ex['maxHalfWidth']
-        and conflict.get('ptsStart') == ex['ptsStart']
-        and conflict.get('ptsEnd') == ex['ptsEnd']
-        and conflict.get('ptsLen') == ex['ptsLen']
+        and conflict.get('ptsSha256') == ex['ptsSha256']
     )
 
 
@@ -196,7 +196,7 @@ def safe_turbines(base, points, area=None):
         dict(
             kind='road', id=r['id'], halfWidth=r['halfWidth'],
             roadKind=r.get('kind'), name=r.get('name'),
-            ptsStart=tuple(r['pts'][0]), ptsEnd=tuple(r['pts'][-1]), ptsLen=len(r['pts']),
+            ptsSha256=road_pts_sha256(r['pts']),
         )
         for r in roads if len(r['pts'])>1
     ]
