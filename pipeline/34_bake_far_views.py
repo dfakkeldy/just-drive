@@ -149,49 +149,69 @@ def safe_structures(base, legacy):
 
 
 # Narrow, explicit clearance exceptions: only the named turbine id at its exact measured
-# coordinates against the named unnamed pad access track. Never weakens the clearance rule
-# for any other turbine, coordinate, road, or building.
+# coordinates in the named area against the reviewed unnamed pad access track (pinned by
+# kind, unnamed status, width, and exact polyline endpoints + vertex count — never positional
+# road ID alone). Never weakens the clearance rule for any other turbine, coordinate, area,
+# road, or building.
 TURBINE_CLEARANCE_EXCEPTIONS = {
     'c02-08': {
+        'area': 'pointtupper',
         'e': 622595.0,
         'n': 5047275.0,
-        'roadIds': frozenset({934}),
+        'roadKind': 4,
         'maxHalfWidth': 1.5,
+        'ptsStart': (622323.97, 5047282.27),
+        'ptsEnd': (622604.68, 5047279.83),
+        'ptsLen': 71,
         'reason': "track 934 is the turbine's own pad access road; owner confirmed 26 Nov 2026",
     },
 }
 
 
-def is_exempt_turbine_conflict(point, conflict):
+def is_exempt_turbine_conflict(point, conflict, area):
     ex = TURBINE_CLEARANCE_EXCEPTIONS.get(point.get('id'))
     if not ex:
         return False
     return (
-        point.get('e') == ex['e']
+        area == ex['area']
+        and point.get('e') == ex['e']
         and point.get('n') == ex['n']
         and conflict.get('kind') == 'road'
-        and conflict.get('id') in ex['roadIds']
+        and conflict.get('roadKind') == ex['roadKind']
+        and not conflict.get('name')
         and conflict.get('halfWidth', float('inf')) <= ex['maxHalfWidth']
+        and conflict.get('ptsStart') == ex['ptsStart']
+        and conflict.get('ptsEnd') == ex['ptsEnd']
+        and conflict.get('ptsLen') == ex['ptsLen']
     )
 
 
-def safe_turbines(base, points):
+def safe_turbines(base, points, area=None):
     """Both sources use the same physical base + 2 m clearance, including tracks."""
+    area_id = area if area is not None else ('mabou' if base.name == 'terrain' else base.name)
     roads=json.loads((base/'roads.json').read_text())['roads']
     buildings=json.loads((base/'buildings.json').read_text())['buildings']
     shapes=[LineString(r['pts']).buffer(r['halfWidth']+2) for r in roads if len(r['pts'])>1]
-    labels=[dict(kind='road',id=r['id'],halfWidth=r['halfWidth']) for r in roads if len(r['pts'])>1]
+    labels=[
+        dict(
+            kind='road', id=r['id'], halfWidth=r['halfWidth'],
+            roadKind=r.get('kind'), name=r.get('name'),
+            ptsStart=tuple(r['pts'][0]), ptsEnd=tuple(r['pts'][-1]), ptsLen=len(r['pts']),
+        )
+        for r in roads if len(r['pts'])>1
+    ]
     shapes += [Polygon(b['footprint']).buffer(2) for b in buildings if len(b['footprint'])>2]
     labels += [dict(kind='building',id=b['id']) for b in buildings if len(b['footprint'])>2]
     tree=STRtree(shapes);kept=[];omitted=[]
     for p in points:
         radius=p['hub']*.023
         hits=tree.query(Point(p['e'],p['n']).buffer(radius),predicate='intersects')
-        conflicts=[labels[int(i)] for i in hits if not is_exempt_turbine_conflict(p, labels[int(i)])]
+        conflicts=[labels[int(i)] for i in hits if not is_exempt_turbine_conflict(p, labels[int(i)], area_id)]
         if conflicts:
+            compact=[{k:c[k] for k in ('kind','id','halfWidth') if k in c} for c in conflicts]
             omitted.append(dict(id=p['id'],e=p['e'],n=p['n'],source=p['source'],radius=radius,
                                 reason='Measured base fails 2 m clearance from mapped road/track or building; position not shifted',
-                                conflicts=conflicts))
+                                conflicts=compact))
         else:kept.append(p)
     return kept,omitted
 
@@ -263,7 +283,7 @@ def main():
     for area in areas.AREAS.values():
         rel=Path('terrain') if area.id=='mabou' else Path('areas')/area.id;base=data/'baked'/rel
         bounds=root_box(json.loads((base/'manifest.json').read_text()))
-        _,conflicts=safe_turbines(base,[p for p in turbines if inside(p['e'],p['n'],bounds)])
+        _,conflicts=safe_turbines(base,[p for p in turbines if inside(p['e'],p['n'],bounds)],area=area.id)
         for p in conflicts:rejected.setdefault(p['id'],{**p,'checkedArea':area.id})
     overview={};pending=[];review={};roots={};allowed=json.loads(args.allow_removals.read_text()) if args.allow_removals else {}
     for area in areas.AREAS.values():
@@ -278,7 +298,7 @@ def main():
             if distance_box(p['e'],p['n'],root)>80000:continue
             if p['id'] in rejected:
                 omitted_wind.append(rejected[p['id']]);continue
-            q={k:p[k] for k in ('id','e','n','hub','diameter','farm','status','source','date','dateKind','confidence','uncertainty','dimensions','dimensionsSource','tower') if k in p}
+            q={k:p[k] for k in ('id','e','n','hub','diameter','farm','status','statusSource','source','date','dateKind','confidence','uncertainty','dimensions','dimensionsSource','tower') if k in p}
             q['ground']=round(dem.at(p['e'],p['n']),2)
             (near if inside(q['e'],q['n'],root) else far).append(q)
         omitted['turbines']=omitted_wind

@@ -59,11 +59,11 @@ def check_build_logic():
         'omitted': {'turbines': [{'id': 'c02-08', 'e': 622595.0, 'n': 5047275.0}]},
     }
     pts_by_id = {
-        'c01-01': {'id': 'c01-01', 'farm': 'c01', 'status': 'operating'},
-        'c02-01': {'id': 'c02-01', 'farm': 'c02', 'status': 'operating'},
+        'c01-01': {'id': 'c01-01', 'farm': 'c01', 'status': 'operating', 'statusSource': 'observed operating, 26 Nov 2026'},
+        'c02-01': {'id': 'c02-01', 'farm': 'c02', 'status': 'operating', 'statusSource': 'observed operating, 26 Nov 2026'},
     }
     extra = [{'id': 'c02-08', 'farm': 'c02', 'e': 622595.0, 'n': 5047275.0, 'hub': 118, 'diameter': 163,
-              'status': 'operating', 'source': 'Sentinel-2 L2A', 'date': '2026-10-26', 'dateKind': 'acquired',
+              'status': 'operating', 'statusSource': 'observed operating, 26 Nov 2026', 'source': 'Sentinel-2 L2A', 'date': '2026-10-26', 'dateKind': 'acquired',
               'confidence': 'medium', 'uncertainty': 30, 'dimensions': 'assumed-modern-era',
               'dimensionsSource': 'assumption-c02', 'tower': 'not-resolved'}]
 
@@ -71,9 +71,12 @@ def check_build_logic():
     assert len(updated['turbines']) == 3 and updated['turbines'][2]['id'] == 'c02-08'
     assert updated['turbines'][0]['status'] == 'operating'
     assert updated['turbines'][1]['status'] == 'operating'
+    assert updated['turbines'][1]['statusSource'] == 'observed operating, 26 Nov 2026'
     assert updated['turbines'][2]['status'] == 'operating'
+    assert updated['turbines'][2]['statusSource'] == 'observed operating, 26 Nov 2026'
     assert updated['turbines'][2]['ground'] == 175.43
     assert updated['far'][0]['status'] == 'operating'
+    assert updated['far'][0]['statusSource'] == 'observed operating, 26 Nov 2026'
     assert updated['omitted']['turbines'] == [], 'placed c02-08 must be removed from omitted.turbines'
     assert tall_key == {'file': 'tall.json', 'turbines': 3, 'far': 1, 'towers': 0, 'lines': 0}
 

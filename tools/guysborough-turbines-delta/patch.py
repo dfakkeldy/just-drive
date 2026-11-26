@@ -151,10 +151,13 @@ def build_area_tall(base_tall: dict, manifest: dict, points_by_id: dict, extra_p
             q = dict(p)
             pid = q.get('id')
             if pid in points_by_id:
-                st = points_by_id[pid].get('status')
+                src_pt = points_by_id[pid]
+                st = src_pt.get('status')
                 if st not in VALID_STATUSES:
                     raise ValueError(f'Invalid status for {pid}: {st!r}')
                 q['status'] = st
+                if 'statusSource' in src_pt:
+                    q['statusSource'] = src_pt['statusSource']
             elif q.get('source') == 'NRCan':
                 q['status'] = 'operating'
             else:
@@ -173,7 +176,7 @@ def build_area_tall(base_tall: dict, manifest: dict, points_by_id: dict, extra_p
             continue
         q = {
             k: p[k]
-            for k in ('id', 'e', 'n', 'hub', 'diameter', 'farm', 'status', 'source', 'date',
+            for k in ('id', 'e', 'n', 'hub', 'diameter', 'farm', 'status', 'statusSource', 'source', 'date',
                       'dateKind', 'confidence', 'uncertainty', 'dimensions', 'dimensionsSource', 'tower')
             if k in p
         }
@@ -223,7 +226,7 @@ def make(source: Path, raw: Path, output: Path, *, verify: bool = True, receipt_
             bounds = root_box_fn(json.loads((area_dir / 'manifest.json').read_text()))
             in_area = [p for p in new_points if inside_fn(p['e'], p['n'], bounds)]
             if in_area:
-                _, conflicts = bake.safe_turbines(area_dir, in_area)
+                _, conflicts = bake.safe_turbines(area_dir, in_area, area=area_id)
                 for c in conflicts:
                     rejected.setdefault(c['id'], {**c, 'checkedArea': area_id})
         if rejected:

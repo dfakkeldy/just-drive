@@ -15,38 +15,52 @@ def suite(module):
    before=copy.deepcopy(points);kept,omitted=module.safe_turbines(p,points)
    assert [v['id'] for v in kept]==['clear-track'],'same base/clearance rule for roads, tracks and both sources'
    assert [v['id'] for v in omitted]==['close-track','close-building'];assert points==before,'positions never shifted'
-  # Narrow c02-08 exception: only c02-08 at (622595.0, 5047275.0) against track 934 (halfWidth <= 1.5), never other turbines, coordinates, roads or buildings.
-  (p/'roads.json').write_text(json.dumps({'roads':[
-   {'id':934,'kind':4,'halfWidth':1.5,'pts':[[622500.0,5047279.9],[622650.0,5047279.9]]},
-  ]}))
-  (p/'buildings.json').write_text(json.dumps({'buildings':[]}))
+  # Narrow c02-08 exception: only c02-08 at (622595.0, 5047275.0) in pointtupper against the
+  # exact reviewed unnamed track (kind 4, halfWidth <= 1.5, endpoints + 71 pts), never other
+  # areas, turbines, coordinates (easting or northing), named/rekindled/different-geometry roads
+  # reusing id 934, wide roads, or buildings.
+  pt_dir=p/'pointtupper';pt_dir.mkdir()
+  wb_dir=p/'westbay';wb_dir.mkdir()
+  track_pts=[[622323.97+i*(622604.68-622323.97)/70, 5047282.27+i*(5047279.83-5047282.27)/70] for i in range(71)]
+  track_pts[0]=[622323.97,5047282.27];track_pts[-1]=[622604.68,5047279.83]
+  good_track={'id':934,'name':None,'kind':4,'halfWidth':1.5,'pts':track_pts}
+  (pt_dir/'roads.json').write_text(json.dumps({'roads':[good_track]}))
+  (pt_dir/'buildings.json').write_text(json.dumps({'buildings':[]}))
+  (wb_dir/'roads.json').write_text(json.dumps({'roads':[good_track]}))
+  (wb_dir/'buildings.json').write_text(json.dumps({'buildings':[]}))
   c02_08=dict(id='c02-08',e=622595.0,n=5047275.0,hub=118,source='Sentinel-2 L2A')
   ex_pts=[
    c02_08,
    dict(id='c02-99',e=622595.0,n=5047275.0,hub=118,source='Sentinel-2 L2A'),
    dict(id='c02-08',e=622600.0,n=5047275.0,hub=118,source='Sentinel-2 L2A'),
+   dict(id='c02-08',e=622595.0,n=5047276.0,hub=118,source='Sentinel-2 L2A'),
   ]
-  kept,omitted=module.safe_turbines(p,ex_pts)
-  assert len(kept)==1 and kept[0]['id']=='c02-08' and kept[0]['e']==622595.0 and kept[0]['n']==5047275.0,'only exact c02-08 on track 934 is exempt'
-  assert len(omitted)==2,'other turbine on track 934 and moved c02-08 must still be omitted'
-  # Different road id at exact c02-08 coordinates is never exempt.
-  (p/'roads.json').write_text(json.dumps({'roads':[
-   {'id':935,'kind':4,'halfWidth':1.5,'pts':[[622500.0,5047279.9],[622650.0,5047279.9]]},
-  ]}))
-  kept_r,omitted_r=module.safe_turbines(p,[c02_08])
-  assert kept_r==[] and len(omitted_r)==1,'different road id at c02-08 coordinates is still omitted'
-  # Building (even with id 934) next to c02-08 is never exempt even when track 934 is also within clearance.
-  (p/'roads.json').write_text(json.dumps({'roads':[
-   {'id':934,'kind':4,'halfWidth':1.5,'pts':[[622500.0,5047279.9],[622650.0,5047279.9]]},
-  ]}))
-  (p/'buildings.json').write_text(json.dumps({'buildings':[{'id':934,'footprint':[[622596,5047272],[622602,5047272],[622602,5047278],[622596,5047278]]}]}))
-  kept_b,omitted_b=module.safe_turbines(p,[c02_08])
+  kept,omitted=module.safe_turbines(pt_dir,ex_pts)
+  assert len(kept)==1 and kept[0]['id']=='c02-08' and kept[0]['e']==622595.0 and kept[0]['n']==5047275.0,'only exact c02-08 on reviewed track in pointtupper is exempt'
+  assert len(omitted)==3,'other turbine, easting-shifted c02-08, and northing-shifted c02-08 must still be omitted'
+  # Wrong area with the exact same track geometry must still be omitted.
+  kept_a,omitted_a=module.safe_turbines(wb_dir,[c02_08])
+  assert kept_a==[] and len(omitted_a)==1,'other area reusing the same road is not exempt'
+  # Same-ID (934) replacement roads: named, different kind, different start/end/len geometry, or wider must all be omitted.
+  bad_start=[list(pt) for pt in track_pts];bad_start[0]=[622320.0,5047282.27]
+  bad_end=[list(pt) for pt in track_pts];bad_end[-1]=[622608.0,5047279.83]
+  bad_len=track_pts[:-1]+[track_pts[-1],track_pts[-1]]
+  for bad_label,bad_road in [
+   ('named road reusing id 934', {**good_track,'name':'Savory Road'}),
+   ('non-track kind reusing id 934', {**good_track,'kind':2}),
+   ('different start reusing id 934', {**good_track,'pts':bad_start}),
+   ('different end reusing id 934', {**good_track,'pts':bad_end}),
+   ('different vertex count reusing id 934', {**good_track,'pts':bad_len}),
+   ('wide road reusing id 934', {**good_track,'halfWidth':3.5}),
+  ]:
+   (pt_dir/'roads.json').write_text(json.dumps({'roads':[bad_road]}))
+   kr,orr=module.safe_turbines(pt_dir,[c02_08])
+   assert kr==[] and len(orr)==1,f'{bad_label} must not be exempt'
+  # Building (even with id 934) next to c02-08 is never exempt even when the reviewed track is also within clearance.
+  (pt_dir/'roads.json').write_text(json.dumps({'roads':[good_track]}))
+  (pt_dir/'buildings.json').write_text(json.dumps({'buildings':[{'id':934,'footprint':[[622596,5047272],[622602,5047272],[622602,5047278],[622596,5047278]]}]}))
+  kept_b,omitted_b=module.safe_turbines(pt_dir,[c02_08])
   assert kept_b==[] and len(omitted_b)==1,'building conflict on c02-08 is still omitted'
-  # Widened road 934 (> 1.5 m halfWidth) is never exempt.
-  (p/'buildings.json').write_text(json.dumps({'buildings':[]}))
-  (p/'roads.json').write_text(json.dumps({'roads':[{'id':934,'kind':2,'halfWidth':3.5,'pts':[[622500.0,5047279.9],[622650.0,5047279.9]]}]}))
-  kept_w,omitted_w=module.safe_turbines(p,[c02_08])
-  assert kept_w==[] and len(omitted_w)==1,'wide road 934 on c02-08 is not exempt'
  old={'turbines':[dict(e=1,n=2)],'far':[],'towers':[dict(e=3,n=4)],'lines':[{'pts':[[0,0],[1,1]]}]}
  for kind in ['turbines','towers','lines']:
   new=copy.deepcopy(old);new[kind]=[]
@@ -93,8 +107,14 @@ if '--mutations' in sys.argv:
   ('base radius omitted',"radius=p['hub']*.023",'radius=0'),
   ('removal guard disabled','if set(missing)-set(allowed):','if False:'),
   ('c02-08 exception widened to any turbine',"ex = TURBINE_CLEARANCE_EXCEPTIONS.get(point.get('id'))","ex = TURBINE_CLEARANCE_EXCEPTIONS['c02-08']"),
-  ('c02-08 exception widened to any road',"and conflict.get('id') in ex['roadIds']",'and True'),
-  ('c02-08 exception widened to any coordinate',"point.get('e') == ex['e']",'True'),
+  ('c02-08 exception widened to any area',"area == ex['area']",'True'),
+  ('c02-08 exception widened to any easting',"and point.get('e') == ex['e']",'and True'),
+  ('c02-08 exception widened to any northing',"and point.get('n') == ex['n']",'and True'),
+  ('c02-08 exception widened to named road',"and not conflict.get('name')",'and True'),
+  ('c02-08 exception widened to any road kind',"and conflict.get('roadKind') == ex['roadKind']",'and True'),
+  ('c02-08 exception widened to any track start',"and conflict.get('ptsStart') == ex['ptsStart']",'and True'),
+  ('c02-08 exception widened to any track end',"and conflict.get('ptsEnd') == ex['ptsEnd']",'and True'),
+  ('c02-08 exception widened to any track length',"and conflict.get('ptsLen') == ex['ptsLen']",'and True'),
   ('c02-08 exception widened to wide road',"and conflict.get('halfWidth', float('inf')) <= ex['maxHalfWidth']",'and True'),
  ]:
   assert source.count(old)==1, f'expected unique mutant anchor for {label}'
