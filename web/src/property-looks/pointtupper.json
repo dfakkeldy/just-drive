@@ -13,6 +13,12 @@
       "roads": [
         "Highway 4"
       ]
+    },
+    "highway-19": {
+      "label": "Highway 19",
+      "roads": [
+        "Highway 19"
+      ]
     }
   },
   "overrides": {
@@ -470,6 +476,107 @@
       "wall": "#a8c0c8",
       "roof": "#5a6064",
       "trim": "#f6f5f0",
+      "roofMaterial": "shingle"
+    },
+    "47": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        624343.5,
+        5056135.6
+      ],
+      "wall": "#f2f1ea",
+      "roof": "#a33a34",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "454": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623909.8,
+        5056296.2
+      ],
+      "wall": "#8a96a2",
+      "trim": "#f2f0ea"
+    },
+    "503": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623942.0,
+        5056328.5
+      ],
+      "wall": "#243c52",
+      "trim": "#f4f2ec"
+    },
+    "1867": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623889.1,
+        5056479.5
+      ],
+      "wall": "#2c4050",
+      "roof": "#3a3e42",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "2660": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623154.6,
+        5057694.3
+      ],
+      "roof": "#8e403c"
+    },
+    "2689": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623432.0,
+        5057273.0
+      ],
+      "wall": "#e4d6c4",
+      "roof": "#454a4e",
+      "trim": "#f6f4ee",
+      "roofMaterial": "shingle"
+    },
+    "2783": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622993.9,
+        5058011.7
+      ],
+      "wall": "#d5d8dc",
+      "roof": "#3a3e42",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "3020": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623132.6,
+        5057728.9
+      ],
+      "wall": "#7d8c9a",
+      "roof": "#7a8288",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "3038": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623001.0,
+        5057976.8
+      ],
+      "wall": "#c8ccd0",
+      "roof": "#3e4448",
+      "trim": "#f2f0ea",
       "roofMaterial": "shingle"
     }
   }
