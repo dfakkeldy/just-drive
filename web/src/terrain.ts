@@ -60,6 +60,7 @@ export interface Surface {
   deckRoadKind?: number;
   water?: boolean;     // mapped inland water; its LiDAR return is the surface, not a measured bed
   waterLimit?: number; // drawn water/return height plus contact tolerance; airborne bodies above it stay dry
+  lotAsphalt?: boolean; // off-road paved lot contact
   mineral?: boolean;  // confirmed class 6 or authored quarry paint; never a road, grading or collision
   level: number;        // detail level the answer came from
 }
@@ -1433,6 +1434,8 @@ export class Terrain {
     if(!this.cartRoads&&!out.deck&&!out.water){
       const quarry=this.coast?.quarry&&this.coast.contains(x,z);
       if(quarry ? this.quarryMineral(t,x,z,out,lerp) : this.groundClassAt(x,z)===6)out.mineral=true;
+      if (!out.mineral && (out.kind === 0 || out.roadDist > out.halfWidth + .4)
+        && this.paved?.maritimeInnAsphaltAt(x, z)) out.lotAsphalt = true;
     }
     return out;
   }

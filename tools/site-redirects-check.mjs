@@ -426,10 +426,12 @@ if (isMain) {
       return readFileSync(p, enc);
     }), /ENOENT/);
     const offRoadPose = { ...PORT_HOOD_GAS_START, n: PORT_HOOD_GAS_START.n + 50 };
+    const headingDeg = Math.round(PORT_HOOD_GAS_START.heading * 180 / Math.PI);
     const offRoadRedirects = sourceRedirects.replaceAll(
-      `driveAt=${PORT_HOOD_GAS_START.e},${PORT_HOOD_GAS_START.n},118`,
-      `driveAt=${offRoadPose.e},${offRoadPose.n},118`,
+      `driveAt=${PORT_HOOD_GAS_START.e},${PORT_HOOD_GAS_START.n},${headingDeg}`,
+      `driveAt=${offRoadPose.e},${offRoadPose.n},${headingDeg}`,
     );
+    assert.notEqual(offRoadRedirects, sourceRedirects, 'negative control must rewrite /porthoodgas driveAt');
     assert.throws(() => verifyBuiltSite(siteDir, offRoadRedirects, CHURCH_START, offRoadPose, readDrivePosition, isTestVisit, readSite, (p, enc) => {
       if (p.endsWith('_redirects')) return offRoadRedirects;
       return readFileSync(p, enc);
