@@ -15,6 +15,38 @@ def suite(module):
    before=copy.deepcopy(points);kept,omitted=module.safe_turbines(p,points)
    assert [v['id'] for v in kept]==['clear-track'],'same base/clearance rule for roads, tracks and both sources'
    assert [v['id'] for v in omitted]==['close-track','close-building'];assert points==before,'positions never shifted'
+  # Narrow c02-08 exception: only c02-08 at (622595.0, 5047275.0) against track 934 (halfWidth <= 1.5), never other turbines, coordinates, roads or buildings.
+  (p/'roads.json').write_text(json.dumps({'roads':[
+   {'id':934,'kind':4,'halfWidth':1.5,'pts':[[622500.0,5047279.9],[622650.0,5047279.9]]},
+  ]}))
+  (p/'buildings.json').write_text(json.dumps({'buildings':[]}))
+  c02_08=dict(id='c02-08',e=622595.0,n=5047275.0,hub=118,source='Sentinel-2 L2A')
+  ex_pts=[
+   c02_08,
+   dict(id='c02-99',e=622595.0,n=5047275.0,hub=118,source='Sentinel-2 L2A'),
+   dict(id='c02-08',e=622600.0,n=5047275.0,hub=118,source='Sentinel-2 L2A'),
+  ]
+  kept,omitted=module.safe_turbines(p,ex_pts)
+  assert len(kept)==1 and kept[0]['id']=='c02-08' and kept[0]['e']==622595.0 and kept[0]['n']==5047275.0,'only exact c02-08 on track 934 is exempt'
+  assert len(omitted)==2,'other turbine on track 934 and moved c02-08 must still be omitted'
+  # Different road id at exact c02-08 coordinates is never exempt.
+  (p/'roads.json').write_text(json.dumps({'roads':[
+   {'id':935,'kind':4,'halfWidth':1.5,'pts':[[622500.0,5047279.9],[622650.0,5047279.9]]},
+  ]}))
+  kept_r,omitted_r=module.safe_turbines(p,[c02_08])
+  assert kept_r==[] and len(omitted_r)==1,'different road id at c02-08 coordinates is still omitted'
+  # Building (even with id 934) next to c02-08 is never exempt even when track 934 is also within clearance.
+  (p/'roads.json').write_text(json.dumps({'roads':[
+   {'id':934,'kind':4,'halfWidth':1.5,'pts':[[622500.0,5047279.9],[622650.0,5047279.9]]},
+  ]}))
+  (p/'buildings.json').write_text(json.dumps({'buildings':[{'id':934,'footprint':[[622596,5047272],[622602,5047272],[622602,5047278],[622596,5047278]]}]}))
+  kept_b,omitted_b=module.safe_turbines(p,[c02_08])
+  assert kept_b==[] and len(omitted_b)==1,'building conflict on c02-08 is still omitted'
+  # Widened road 934 (> 1.5 m halfWidth) is never exempt.
+  (p/'buildings.json').write_text(json.dumps({'buildings':[]}))
+  (p/'roads.json').write_text(json.dumps({'roads':[{'id':934,'kind':2,'halfWidth':3.5,'pts':[[622500.0,5047279.9],[622650.0,5047279.9]]}]}))
+  kept_w,omitted_w=module.safe_turbines(p,[c02_08])
+  assert kept_w==[] and len(omitted_w)==1,'wide road 934 on c02-08 is not exempt'
  old={'turbines':[dict(e=1,n=2)],'far':[],'towers':[dict(e=3,n=4)],'lines':[{'pts':[[0,0],[1,1]]}]}
  for kind in ['turbines','towers','lines']:
   new=copy.deepcopy(old);new[kind]=[]
@@ -57,8 +89,16 @@ assert 'preserve_far_manifest(json.loads(previous.read_text()), manifest)' in (R
 assert 'run 33_bake_landmarks_tall.py' not in (ROOT/'tools/bake.sh').read_text(),'routine bake must not change optional landmark packs'
 legacy=(ROOT/'pipeline/33_bake_landmarks_tall.py').read_text();assert "atomic(AREA.output" not in legacy;assert "34_bake_far_views.py" in legacy
 if '--mutations' in sys.argv:
- for label,old,new in [('base radius omitted',"radius=p['hub']*.023",'radius=0'),('removal guard disabled','if set(missing)-set(allowed):','if False:')]:
-  assert source.count(old)==1;ns={'__name__':'guard_mutant'};exec(compile(source.replace(old,new),'<guard-mutant>','exec'),ns);module=type('GuardMutant',(),ns)
+ for label,old,new in [
+  ('base radius omitted',"radius=p['hub']*.023",'radius=0'),
+  ('removal guard disabled','if set(missing)-set(allowed):','if False:'),
+  ('c02-08 exception widened to any turbine',"ex = TURBINE_CLEARANCE_EXCEPTIONS.get(point.get('id'))","ex = TURBINE_CLEARANCE_EXCEPTIONS['c02-08']"),
+  ('c02-08 exception widened to any road',"and conflict.get('id') in ex['roadIds']",'and True'),
+  ('c02-08 exception widened to any coordinate',"point.get('e') == ex['e']",'True'),
+  ('c02-08 exception widened to wide road',"and conflict.get('halfWidth', float('inf')) <= ex['maxHalfWidth']",'and True'),
+ ]:
+  assert source.count(old)==1, f'expected unique mutant anchor for {label}'
+  ns={'__name__':'guard_mutant'};exec(compile(source.replace(old,new),'<guard-mutant>','exec'),ns);module=type('GuardMutant',(),ns)
   try:suite(module)
   except AssertionError:print('KILLED',label)
   else:raise AssertionError('mutant survived: '+label)

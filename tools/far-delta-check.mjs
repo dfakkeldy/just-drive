@@ -17,14 +17,19 @@ export const GUYSBOROUGH=existsSync(GUYSBOROUGH_RECEIPT)?JSON.parse(readFileSync
 const sha=path=>createHash('sha256').update(readFileSync(path)).digest('hex');
 const json=path=>JSON.parse(readFileSync(path,'utf8'));
 
-/** Build an alternate LIST with Guysborough turbines tall.json hashes and manifest.tall counts applied. */
-export function withGuysboroughDelta(base=LIST,delta=GUYSBOROUGH){
+/** Build an alternate LIST with Guysborough turbines tall.json hashes and manifest.tall counts applied ('before' or 'after'). */
+export function withGuysboroughDelta(base=LIST,delta=GUYSBOROUGH,side='after'){
  if(!delta)return null;
  const byPack=Object.fromEntries(delta.files.map(f=>[f.pack,f]));
  const packs={};
  for(const [pack,entry] of Object.entries(base.packs)){
   const g=byPack[pack];if(!g)return null;
-  packs[pack]={files:{...entry.files,'tall.json':{sha256:g.sha256,bytes:g.bytes}},manifest:{...entry.manifest,tall:g.afterManifestTall}};
+  if(side==='before'){
+   if(!g.before||!g.beforeManifestTall)return null;
+   packs[pack]={files:{...entry.files,'tall.json':{sha256:g.before,bytes:g.beforeBytes??g.bytes}},manifest:{...entry.manifest,tall:g.beforeManifestTall}};
+  }else{
+   packs[pack]={files:{...entry.files,'tall.json':{sha256:g.sha256,bytes:g.bytes}},manifest:{...entry.manifest,tall:g.afterManifestTall}};
+  }
  }
  return {...base,packs};
 }
@@ -57,7 +62,7 @@ function landStateFor(baked,list){
 }
 
 /** 'before' or 'after' for one baked folder; throws on any mixed or unknown state. */
-export function landState(baked,list=LIST,alts=list===LIST?[withGuysboroughDelta(list)].filter(Boolean):[]){
+export function landState(baked,list=LIST,alts=list===LIST?[withGuysboroughDelta(list,GUYSBOROUGH,'before'),withGuysboroughDelta(list,GUYSBOROUGH,'after')].filter(Boolean):[]){
  try{return landStateFor(baked,list);}
  catch(firstError){
   for(const alt of alts){try{return landStateFor(baked,alt);}catch{}}
@@ -111,19 +116,23 @@ function mutations(){
   fails('mixed-areas',d=>{unpack(d,second);writeFileSync(join(d,second,'tall.json'),JSON.stringify({version:1}));});
   fails('v2-tall-without-pack',d=>{for(const pack of packs)unpack(d,pack);});
   fails('far-count-without-pack',d=>{for(const pack of packs){unpack(d,pack);writeFileSync(join(d,pack,'tall.json'),JSON.stringify({version:1}));}});
-  // Alternate Guysborough revision: all-alt accepted, mixed base+alt rejected.
-  const afterAlt=join(tmp,'after-alt'),altFiles=[];cpSync(after,afterAlt,{recursive:true});
+  // Alternate Guysborough revisions (before and after): uniform alt accepted, mixed revisions rejected.
+  const beforeAlt=join(tmp,'before-alt'),afterAlt=join(tmp,'after-alt'),altFiles=[];
+  cpSync(after,beforeAlt,{recursive:true});cpSync(after,afterAlt,{recursive:true});
   for(const pack of packs){
-   const text=JSON.stringify({version:2,pack,status:'operating'}),p=write(afterAlt,pack,'tall.json',text);
-   const mp=join(afterAlt,pack,'manifest.json'),m=json(mp);m.tall={...m.tall,far:m.tall.far+1};writeFileSync(mp,JSON.stringify(m));
-   altFiles.push({pack,sha256:sha(p),bytes:text.length,afterManifestTall:m.tall});
+   const bText=JSON.stringify({version:2,pack,status:'built'}),bp=write(beforeAlt,pack,'tall.json',bText);
+   const bmp=join(beforeAlt,pack,'manifest.json'),bm=json(bmp);bm.tall={...bm.tall,far:bm.tall.far+1};writeFileSync(bmp,JSON.stringify(bm));
+   const aText=JSON.stringify({version:2,pack,status:'operating'}),ap=write(afterAlt,pack,'tall.json',aText);
+   const amp=join(afterAlt,pack,'manifest.json'),am=json(amp);am.tall={...am.tall,far:am.tall.far+2};writeFileSync(amp,JSON.stringify(am));
+   altFiles.push({pack,before:sha(bp),beforeBytes:bText.length,beforeManifestTall:bm.tall,sha256:sha(ap),bytes:aText.length,afterManifestTall:am.tall});
   }
-  const altList=withGuysboroughDelta(list,{files:altFiles});
-  assert.equal(landState(afterAlt,list,[altList]),'after');
-  const mixedAlt=join(tmp,'mixed-alt');cpSync(after,mixedAlt,{recursive:true});
+  const alts=[withGuysboroughDelta(list,{files:altFiles},'before'),withGuysboroughDelta(list,{files:altFiles},'after')];
+  assert.equal(landState(beforeAlt,list,alts),'after');
+  assert.equal(landState(afterAlt,list,alts),'after');
+  const mixedAlt=join(tmp,'mixed-alt');cpSync(beforeAlt,mixedAlt,{recursive:true});
   cpSync(join(afterAlt,second,'tall.json'),join(mixedAlt,second,'tall.json'));
   cpSync(join(afterAlt,second,'manifest.json'),join(mixedAlt,second,'manifest.json'));
-  assert.throws(()=>landState(mixedAlt,list,[altList]),undefined,'mutant accepted: mixed-alt-revisions');
+  assert.throws(()=>landState(mixedAlt,list,alts),undefined,'mutant accepted: mixed-alt-revisions');
   console.log('PASS before, after and alt-after accepted; 8 mutants rejected (changed file, missing file, missing key, changed count, mixed areas, v2 tall without pack, far count without pack, mixed revisions)');
  }finally{rmSync(tmp,{recursive:true,force:true});}
 }

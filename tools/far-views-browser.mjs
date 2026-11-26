@@ -45,6 +45,7 @@ try{
       window.requestAnimationFrame=()=>0;
       const tallData=await fetch('/areas/pointtupper/tall.json').then(r=>r.json());
       const nearTurbines=tallData.turbines.filter(p=>p.ground!==null);
+      const litTurbines=nearTurbines.filter(p=>p.status===undefined||p.status==='operating');
       const mesh=mmm.tall.group.getObjectByName('tall-turbine-beacons')??mmm.tall.group.children.find(m=>m.material?.defines?.BEACON&&m.count>0);
       if(!mesh)return null;
       const phases=mesh.geometry.getAttribute('beaconPhase');
@@ -52,12 +53,7 @@ try{
       const motion=rotors?.geometry.getAttribute('motion');
       const m=new (mmm.camera.position.constructor)();
       const mat=new (mmm.camera.matrixWorld.constructor)();
-      const litPts=[],c02Pts=[],mastPts=[];
-      for(let i=0;i<mesh.count;i++){
-        mesh.getMatrixAt(i,mat);m.setFromMatrixPosition(mat);
-        const ndc=m.clone().project(mmm.camera);
-        if(ndc.z>=-1&&ndc.z<=1&&Math.abs(ndc.x)<.98&&Math.abs(ndc.y)<.98)litPts.push({x:ndc.x,y:ndc.y,phase:phases.getX(i)});
-      }
+      const litPts=[],c02LitPts=[],mastPts=[];
       for(const other of mmm.tall.group.children){
         if(!other.material?.defines?.BEACON||other===mesh)continue;
         for(let i=0;i<other.count;i++){
@@ -66,37 +62,47 @@ try{
           if(ndc.z>=-1&&ndc.z<=1&&Math.abs(ndc.x)<1&&Math.abs(ndc.y)<1)mastPts.push({x:ndc.x,y:ndc.y});
         }
       }
-      let c02Built=0,c02Spinning=0;
+      for(let i=0;i<mesh.count;i++){
+        mesh.getMatrixAt(i,mat);m.setFromMatrixPosition(mat);
+        const ndc=m.clone().project(mmm.camera);
+        if(ndc.z>=-1&&ndc.z<=1&&Math.abs(ndc.x)<.98&&Math.abs(ndc.y)<.98){
+          const nearMast=mastPts.some(mp=>Math.hypot((mp.x-ndc.x)*mmm.renderer.domElement.width*.5,(mp.y-ndc.y)*mmm.renderer.domElement.height*.5)<20);
+          const pt={x:ndc.x,y:ndc.y,phase:phases.getX(i),farm:litTurbines[i]?.farm??null,id:litTurbines[i]?.id??null,nearMast};
+          litPts.push(pt);
+          if(pt.farm==='c02'&&!nearMast)c02LitPts.push(pt);
+        }
+      }
+      let c02Total=0,c02Operating=0,c02Spinning=0;
       if(rotors&&motion){
         for(let i=0;i<Math.min(rotors.count,nearTurbines.length);i++){
           const p=nearTurbines[i];
-          if(p.farm!=='c02'||p.status==='operating'||p.status===undefined)continue;
-          c02Built++;
-          if(motion.getY(i)!==0)c02Spinning++;
-          rotors.getMatrixAt(i,mat);m.setFromMatrixPosition(mat);m.y+=1.6;
-          const ndc=m.clone().project(mmm.camera);
-          if(ndc.z>=-1&&ndc.z<=1&&Math.abs(ndc.x)<.98&&Math.abs(ndc.y)<.98){
-            const nearMast=mastPts.some(mp=>Math.hypot((mp.x-ndc.x)*mmm.renderer.domElement.width*.5,(mp.y-ndc.y)*mmm.renderer.domElement.height*.5)<20);
-            if(!nearMast)c02Pts.push({x:ndc.x,y:ndc.y,id:p.id});
-          }
+          if(p.farm!=='c02')continue;
+          c02Total++;
+          if(p.status==='operating'||p.status===undefined)c02Operating++;
+          if(motion.getY(i)>0)c02Spinning++;
         }
       }
-      const hasStatus=nearTurbines.some(p=>p.status!==undefined);
-      return {count:mesh.count,phase:litPts[0]?.phase??phases.getX(mesh.count-1),litPts,c02Pts,c02Built,c02Spinning,hasStatus};
+      const otherGroup=litPts.find(p=>p.farm!=='c02'&&!p.nearMast);
+      return {count:mesh.count,otherPhase:otherGroup?.phase??null,litPts,c02LitPts,c02Total,c02Operating,c02Spinning};
     })()`);
     assert.ok(lights&&lights.litPts.length>0,'visible operating night turbine beacons');await sleep(150);
-    const phaseTime=(1-lights.phase)*2;
     const farmPhase=s=>{let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return (h>>>0)/4294967296;};
-    const c02OnTime=(1-farmPhase('c02'))*2+.05;
-    const targetLit=lights.litPts.filter(p=>Math.abs(p.phase-lights.phase)<1e-6);
-    assert.ok(targetLit.length>=4,'expected at least 4 visible operating beacons in test group');
-    if(lights.hasStatus)assert.ok(lights.c02Built>=20,'status-tagged pack must include built c02 turbines');
-    if(lights.c02Built>0){
-     assert.equal(lights.c02Spinning,0,'built c02 turbines must have zero rotor speed');
-     assert.ok(lights.c02Pts.length>=10,'expected visible c02 built turbines clear of masts (got '+lights.c02Pts.length+')');
+    const c02Phase=farmPhase('c02');
+    const c02OnTime=(1-c02Phase)*2+.05;
+    const c02OffTime=(1-c02Phase)*2+.8;
+    assert.equal(lights.c02Total,24,'expected all 24 placed c02 turbines in pointtupper (including c02-08)');
+    assert.equal(lights.c02Operating,24,'every placed c02 turbine must have status operating');
+    assert.equal(lights.c02Spinning,24,'every placed c02 turbine must have positive rotor speed');
+    assert.ok(lights.c02LitPts.length>=10,'expected >= 10 visible operating c02 beacons clear of masts (got '+lights.c02LitPts.length+')');
+    assert.ok(lights.c02LitPts.every(p=>Math.abs(p.phase-c02Phase)<1e-6),'all c02 beacons share one synchronised farm phase');
+    const otherLit=lights.otherPhase===null?[]:lights.litPts.filter(p=>p.farm!=='c02'&&!p.nearMast&&Math.abs(p.phase-lights.otherPhase)<1e-6);
+    const schedule=[['c02-on',c02OnTime],['c02-off',c02OffTime]];
+    if(otherLit.length>=4){
+     const otherBase=(1-lights.otherPhase)*2;
+     schedule.push(['other-on',otherBase+.05],['other-off',otherBase+.8]);
     }
     const frames=[];
-    for(const [label,time]of [['on',phaseTime+.05],['off',phaseTime+.5],['built-phase',c02OnTime]]){
+    for(const [label,time]of schedule){
      const probe=await read(`(()=>{
       mmm.tall.time.value=${time};mmm.farTurbines.time.value=${time};
       const r=mmm.renderer;r.setRenderTarget(null);r.render(mmm.scene,mmm.camera);
@@ -112,22 +118,21 @@ try{
        return n;
       };
       let red=0;for(let i=0;i<p.length;i+=4)if(isRed(i))red++;
-      const litPts=${JSON.stringify(targetLit)};
-      const darkPts=${JSON.stringify(lights.c02Pts)};
-      const litHits=litPts.filter(pt=>boxRed(pt,8)>0).length;
-      const darkHits=darkPts.filter(pt=>boxRed(pt,6)>0).length;
-      return {red,litChecked:litPts.length,litHits,darkChecked:darkPts.length,darkHits};
+      const c02Pts=${JSON.stringify(lights.c02LitPts)};
+      const otherPts=${JSON.stringify(otherLit)};
+      const c02Hits=c02Pts.filter(pt=>boxRed(pt,8)>0).length;
+      const otherHits=otherPts.filter(pt=>boxRed(pt,8)>0).length;
+      return {red,c02Checked:c02Pts.length,c02Hits,otherChecked:otherPts.length,otherHits};
      })()`);
-     if(label!=='built-phase'){const image=await c.send('Page.captureScreenshot',{format:'png'});writeFileSync(`${out}/tupper-night-beacons-${label}.png`,Buffer.from(image.result.data,'base64'));}
+     if(label==='c02-on'||label==='c02-off'){const image=await c.send('Page.captureScreenshot',{format:'png'});writeFileSync(`${out}/tupper-night-beacons-${label==='c02-on'?'on':'off'}.png`,Buffer.from(image.result.data,'base64'));}
      frames.push({label,time,...probe});
     }
     writeFileSync(out+'/aviation-lights.json',JSON.stringify(frames,null,2));
-    assert.equal(frames[0].litHits,frames[0].litChecked,'every expected operating turbine beacon registers on flash-ON');
-    assert.equal(frames[1].litHits,0,'projected operating turbine beacons are dark on flash-OFF');
-    if(lights.c02Built>0){
-     assert.equal(frames[0].darkHits,0,'projected built c02 turbines stay dark on operating flash-ON');
-     assert.equal(frames[1].darkHits,0,'projected built c02 turbines stay dark on operating flash-OFF');
-     assert.equal(frames[2].darkHits,0,'projected built c02 turbines stay dark even at c02 flash peak');
+    assert.equal(frames[0].c02Hits,frames[0].c02Checked,'every visible operating c02 turbine beacon registers red on flash-ON');
+    assert.equal(frames[1].c02Hits,0,'projected operating c02 turbine beacons are dark on flash-OFF');
+    if(otherLit.length>=4){
+     assert.equal(frames[2].otherHits,frames[2].otherChecked,'every expected non-c02 operating turbine beacon registers on flash-ON');
+     assert.equal(frames[3].otherHits,0,'projected non-c02 operating turbine beacons are dark on flash-OFF');
     }
    }
    if(name==='tupper-south'&&mode==='after'){

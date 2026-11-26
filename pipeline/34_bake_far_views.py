@@ -148,6 +148,33 @@ def safe_structures(base, legacy):
     return towers,lines,omitted
 
 
+# Narrow, explicit clearance exceptions: only the named turbine id at its exact measured
+# coordinates against the named unnamed pad access track. Never weakens the clearance rule
+# for any other turbine, coordinate, road, or building.
+TURBINE_CLEARANCE_EXCEPTIONS = {
+    'c02-08': {
+        'e': 622595.0,
+        'n': 5047275.0,
+        'roadIds': frozenset({934}),
+        'maxHalfWidth': 1.5,
+        'reason': "track 934 is the turbine's own pad access road; owner confirmed 26 Nov 2026",
+    },
+}
+
+
+def is_exempt_turbine_conflict(point, conflict):
+    ex = TURBINE_CLEARANCE_EXCEPTIONS.get(point.get('id'))
+    if not ex:
+        return False
+    return (
+        point.get('e') == ex['e']
+        and point.get('n') == ex['n']
+        and conflict.get('kind') == 'road'
+        and conflict.get('id') in ex['roadIds']
+        and conflict.get('halfWidth', float('inf')) <= ex['maxHalfWidth']
+    )
+
+
 def safe_turbines(base, points):
     """Both sources use the same physical base + 2 m clearance, including tracks."""
     roads=json.loads((base/'roads.json').read_text())['roads']
@@ -160,10 +187,11 @@ def safe_turbines(base, points):
     for p in points:
         radius=p['hub']*.023
         hits=tree.query(Point(p['e'],p['n']).buffer(radius),predicate='intersects')
-        if len(hits):
+        conflicts=[labels[int(i)] for i in hits if not is_exempt_turbine_conflict(p, labels[int(i)])]
+        if conflicts:
             omitted.append(dict(id=p['id'],e=p['e'],n=p['n'],source=p['source'],radius=radius,
                                 reason='Measured base fails 2 m clearance from mapped road/track or building; position not shifted',
-                                conflicts=[labels[int(i)] for i in hits]))
+                                conflicts=conflicts))
         else:kept.append(p)
     return kept,omitted
 

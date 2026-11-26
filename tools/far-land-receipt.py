@@ -26,7 +26,7 @@ GUYSBOROUGH_RECEIPT = ROOT / 'tools/guysborough-turbines-delta/hashes.json'
 GUYSBOROUGH = json.loads(GUYSBOROUGH_RECEIPT.read_text()) if GUYSBOROUGH_RECEIPT.is_file() else None
 
 
-def with_guysborough_delta(base=LIST, delta=GUYSBOROUGH):
+def with_guysborough_delta(base=LIST, delta=GUYSBOROUGH, side='after'):
     if not delta:
         return None
     by_pack = {f['pack']: f for f in delta['files']}
@@ -36,9 +36,15 @@ def with_guysborough_delta(base=LIST, delta=GUYSBOROUGH):
         if not g:
             return None
         files = dict(entry['files'])
-        files['tall.json'] = {'sha256': g['sha256'], 'bytes': g['bytes']}
         manifest = dict(entry['manifest'])
-        manifest['tall'] = g['afterManifestTall']
+        if side == 'before':
+            if 'before' not in g or 'beforeManifestTall' not in g:
+                return None
+            files['tall.json'] = {'sha256': g['before'], 'bytes': g.get('beforeBytes', g['bytes'])}
+            manifest['tall'] = g['beforeManifestTall']
+        else:
+            files['tall.json'] = {'sha256': g['sha256'], 'bytes': g['bytes']}
+            manifest['tall'] = g['afterManifestTall']
         packs[pack] = {'files': files, 'manifest': manifest}
     return {**base, 'packs': packs}
 
@@ -85,8 +91,7 @@ def _land_state_for(baked, listing):
 
 def land_state(baked, listing=LIST, alts=None):
     if alts is None:
-        alt = with_guysborough_delta(listing) if listing is LIST else None
-        alts = [alt] if alt else []
+        alts = [x for x in (with_guysborough_delta(listing, GUYSBOROUGH, 'before'), with_guysborough_delta(listing, GUYSBOROUGH, 'after')) if x] if listing is LIST else []
     try:
         return _land_state_for(baked, listing)
     except Refused as first_error:
@@ -172,25 +177,40 @@ def mutations():
             (d / 'terrain/manifest.json').write_text(json.dumps({'tall': {'file': 'tall.json', 'far': 2}}))
         refused('far count without pack', far_count_without_pack)
 
-        # Alternate Guysborough revision: all-alt accepted, mixed base+alt refused.
+        # Alternate Guysborough revisions (before and after): uniform alt accepted, mixed revisions refused.
+        before_alt = tmp / 'before-alt'
         after_alt = tmp / 'after-alt'
+        shutil.copytree(after, before_alt)
         shutil.copytree(after, after_alt)
         alt_files = []
         for pack in ['terrain', 'areas/a']:
-            text = json.dumps({'version': 2, 'pack': pack, 'status': 'operating'})
-            (after_alt / pack / 'tall.json').write_text(text)
-            m = json.loads((after_alt / pack / 'manifest.json').read_text())
-            m['tall']['far'] += 1
-            (after_alt / pack / 'manifest.json').write_text(json.dumps(m))
-            alt_files.append({'pack': pack, 'sha256': sha(after_alt / pack / 'tall.json'), 'bytes': len(text), 'afterManifestTall': m['tall']})
-        alt_listing = with_guysborough_delta(listing, {'files': alt_files})
-        assert land_state(after_alt, listing, [alt_listing]) == 'after'
+            b_text = json.dumps({'version': 2, 'pack': pack, 'status': 'built'})
+            (before_alt / pack / 'tall.json').write_text(b_text)
+            bm = json.loads((before_alt / pack / 'manifest.json').read_text())
+            bm['tall']['far'] += 1
+            (before_alt / pack / 'manifest.json').write_text(json.dumps(bm))
+            a_text = json.dumps({'version': 2, 'pack': pack, 'status': 'operating'})
+            (after_alt / pack / 'tall.json').write_text(a_text)
+            am = json.loads((after_alt / pack / 'manifest.json').read_text())
+            am['tall']['far'] += 2
+            (after_alt / pack / 'manifest.json').write_text(json.dumps(am))
+            alt_files.append({
+                'pack': pack,
+                'before': sha(before_alt / pack / 'tall.json'), 'beforeBytes': len(b_text), 'beforeManifestTall': bm['tall'],
+                'sha256': sha(after_alt / pack / 'tall.json'), 'bytes': len(a_text), 'afterManifestTall': am['tall'],
+            })
+        alt_listings = [
+            with_guysborough_delta(listing, {'files': alt_files}, 'before'),
+            with_guysborough_delta(listing, {'files': alt_files}, 'after'),
+        ]
+        assert land_state(before_alt, listing, alt_listings) == 'after'
+        assert land_state(after_alt, listing, alt_listings) == 'after'
         mixed_alt = tmp / 'mixed-alt'
-        shutil.copytree(after, mixed_alt)
+        shutil.copytree(before_alt, mixed_alt)
         shutil.copyfile(after_alt / 'areas/a/tall.json', mixed_alt / 'areas/a/tall.json')
         shutil.copyfile(after_alt / 'areas/a/manifest.json', mixed_alt / 'areas/a/manifest.json')
         try:
-            land_state(mixed_alt, listing, [alt_listing])
+            land_state(mixed_alt, listing, alt_listings)
             raise SystemExit('SURVIVED mixed revisions')
         except Refused:
             print('KILLED mixed revisions')

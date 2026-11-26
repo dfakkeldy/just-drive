@@ -58,7 +58,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-02",
@@ -81,7 +82,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-03",
@@ -104,7 +106,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-04",
@@ -127,7 +130,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-05",
@@ -150,7 +154,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-06",
@@ -173,7 +178,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-07",
@@ -196,7 +202,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-08",
@@ -219,7 +226,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-09",
@@ -242,7 +250,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-10",
@@ -265,7 +274,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-11",
@@ -288,7 +298,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-12",
@@ -311,7 +322,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-13",
@@ -334,7 +346,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-14",
@@ -357,7 +370,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-15",
@@ -380,7 +394,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c01-16",
@@ -403,7 +418,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c01",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-01",
@@ -426,7 +442,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-02",
@@ -449,7 +466,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-03",
@@ -472,7 +490,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-04",
@@ -495,7 +514,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-05",
@@ -518,7 +538,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-06",
@@ -541,7 +562,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-07",
@@ -564,7 +586,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-08",
@@ -587,7 +610,9 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026",
+      "clearanceException": "track 934 is the turbine's own pad access road; owner confirmed 26 Nov 2026"
     },
     {
       "id": "c02-09",
@@ -610,7 +635,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-10",
@@ -633,7 +659,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-11",
@@ -656,7 +683,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-12",
@@ -679,7 +707,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-13",
@@ -702,7 +731,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-14",
@@ -725,7 +755,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-15",
@@ -748,7 +779,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-16",
@@ -771,7 +803,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-17",
@@ -794,7 +827,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-18",
@@ -817,7 +851,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-19",
@@ -840,7 +875,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-20",
@@ -863,7 +899,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-21",
@@ -886,7 +923,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-22",
@@ -909,7 +947,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-23",
@@ -938,7 +977,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     },
     {
       "id": "c02-24",
@@ -961,7 +1001,8 @@
       "dateKind": "acquired",
       "tower": "not-resolved",
       "dimensionsSource": "assumption-c02",
-      "status": "built"
+      "status": "operating",
+      "statusSource": "observed operating, 26 Nov 2026"
     }
   ],
   "dimensionsSources": {

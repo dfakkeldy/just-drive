@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Build, verify, install or roll back the Guysborough County wind turbines far-data delta.
 
-Adds turbine c02-24 (Guysborough County, Sentinel-2 L2A
-2026-10-26 pad centre E 622465.0 / N 5046105.0, EPSG:2961) and writes explicit public
-build status ('operating' or 'built') onto every turbine in all six areas' tall.json packs.
-Updates only tall.json and the manifest.json tall counts; preserves all other manifest keys
-and all far-land*.bin meshes untouched. Never writes inside data/baked during make.
+Updates farms c01 (16 turbines) and c02 (all 24 turbines placed, adding c02-08 at its
+measured position E 622595.0 / N 5047275.0 under the narrow track-934 pad-access-road
+exception) to status 'operating' (observed operating, 26 Nov 2026) across all six areas'
+tall.json packs. Updates tall.json and the manifest.json tall counts; preserves all other
+manifest keys and all far-land*.bin meshes untouched. Never writes inside data/baked during make.
 """
 import argparse
 import hashlib
@@ -114,6 +114,20 @@ def _atomic_write(target: Path, data: bytes):
         raise
 
 
+def _root_box(manifest: dict) -> list:
+    x, y = manifest['origin']
+    s = manifest['size']
+    return [x, y - s, x + s, y]
+
+
+def _inside(e: float, n: float, b: list) -> bool:
+    return b[0] <= e <= b[2] and b[1] <= n <= b[3]
+
+
+def _distance_box(e: float, n: float, b: list) -> float:
+    return ((max(b[0] - e, 0, e - b[2])) ** 2 + (max(b[1] - n, 0, n - b[3])) ** 2) ** 0.5
+
+
 def _load_far_bake():
     sys.path.insert(0, str(ROOT / 'pipeline'))
     spec = importlib.util.spec_from_file_location('far_views_bake', ROOT / 'pipeline/34_bake_far_views.py')
@@ -171,6 +185,11 @@ def build_area_tall(base_tall: dict, manifest: dict, points_by_id: dict, extra_p
     updated = dict(base_tall)
     updated['turbines'] = near
     updated['far'] = far
+    if extra_points and isinstance(updated.get('omitted'), dict) and 'turbines' in updated['omitted']:
+        placed_now = {p['id'] for p in near + far}
+        omitted = dict(updated['omitted'])
+        omitted['turbines'] = [o for o in omitted['turbines'] if o.get('id') not in placed_now]
+        updated['omitted'] = omitted
     tall_key = {
         'file': 'tall.json',
         'turbines': len(near),
@@ -183,35 +202,40 @@ def build_area_tall(base_tall: dict, manifest: dict, points_by_id: dict, extra_p
 
 def make(source: Path, raw: Path, output: Path, *, verify: bool = True, receipt_path: Path = RECEIPT) -> dict:
     assert_safe_stage_output(output, source)
-    bake = _load_far_bake()
-    dem = bake.DEM(raw / 'far-views/regional-240m.tif')
     measurements = json.loads(POINTS_PATH.read_text())
     points_by_id = {p['id']: p for p in measurements['points']}
 
-    # Screen any new Sentinel-2 points against every area's roads and buildings with the exact producer rule.
-    base_ids = set()
+    # Screen any unplaced Sentinel-2 points (including previously omitted points now allowed)
+    # against every area's roads and buildings with the exact producer rule.
+    placed_ids = set()
     for _, rel in PACKS:
         t = json.loads((source / rel / 'tall.json').read_text())
-        base_ids.update(p['id'] for p in t['turbines'] + t['far'])
-        base_ids.update(p['id'] for p in t.get('omitted', {}).get('turbines', []))
-    new_points = [p for p in measurements['points'] if p['id'] not in base_ids]
-    if not new_points:
-        raise ValueError('No new points found relative to source land; is source already at after state?')
+        placed_ids.update(p['id'] for p in t['turbines'] + t['far'])
+    new_points = [p for p in measurements['points'] if p['id'] not in placed_ids]
 
-    rejected = {}
-    for area_id, rel in PACKS:
-        area_dir = source / rel
-        bounds = bake.root_box(json.loads((area_dir / 'manifest.json').read_text()))
-        in_area = [p for p in new_points if bake.inside(p['e'], p['n'], bounds)]
-        if in_area:
-            _, conflicts = bake.safe_turbines(area_dir, in_area)
-            for c in conflicts:
-                rejected.setdefault(c['id'], {**c, 'checkedArea': area_id})
-    if rejected:
-        raise ValueError(f'New turbine point(s) failed road/building clearance: {rejected}')
+    if new_points:
+        bake = _load_far_bake()
+        dem = bake.DEM(raw / 'far-views/regional-240m.tif')
+        inside_fn, dist_box_fn, root_box_fn = bake.inside, bake.distance_box, bake.root_box
+        rejected = {}
+        for area_id, rel in PACKS:
+            area_dir = source / rel
+            bounds = root_box_fn(json.loads((area_dir / 'manifest.json').read_text()))
+            in_area = [p for p in new_points if inside_fn(p['e'], p['n'], bounds)]
+            if in_area:
+                _, conflicts = bake.safe_turbines(area_dir, in_area)
+                for c in conflicts:
+                    rejected.setdefault(c['id'], {**c, 'checkedArea': area_id})
+        if rejected:
+            raise ValueError(f'New turbine point(s) failed road/building clearance: {rejected}')
+    else:
+        dem = None
+        inside_fn, dist_box_fn, root_box_fn = _inside, _distance_box, _root_box
 
-    output.mkdir(parents=True, exist_ok=False)
+    planned = []
     files = []
+    status_changed = set()
+    any_changed = False
     for area_id, rel in PACKS:
         area_dir = source / rel
         tall_path = area_dir / 'tall.json'
@@ -224,38 +248,52 @@ def make(source: Path, raw: Path, output: Path, *, verify: bool = True, receipt_
 
         updated_tall, after_tall_key = build_area_tall(
             before_tall, manifest, points_by_id, new_points,
-            dem, bake.inside, bake.distance_box, bake.root_box,
+            dem, inside_fn, dist_box_fn, root_box_fn,
         )
+        before_status = {p['id']: p.get('status') for p in before_tall['turbines'] + before_tall['far']}
+        for p in updated_tall['turbines'] + updated_tall['far']:
+            if p['id'] in before_status and before_status[p['id']] != p.get('status'):
+                status_changed.add(p['id'])
         after_bytes = compact_json(updated_tall)
-        out_dir = output / rel
-        out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / 'tall.json').write_bytes(after_bytes)
+        if after_bytes != before_bytes:
+            any_changed = True
         patch_obj = {'tall': after_tall_key, 'farLand': manifest['farLand']}
-        (out_dir / 'manifest-patch.json').write_bytes(compact_json(patch_obj))
+        planned.append((rel, after_bytes, compact_json(patch_obj)))
 
         files.append({
             'area': area_id,
             'pack': rel,
             'file': f'{rel}/tall.json',
             'before': sha(before_bytes),
+            'beforeBytes': len(before_bytes),
             'sha256': sha(after_bytes),
             'bytes': len(after_bytes),
             'beforeManifestTall': manifest['tall'],
             'afterManifestTall': after_tall_key,
         })
 
+    if not any_changed:
+        raise ValueError('No tall.json changes relative to source land; is source already at after state?')
+
     report = {
-        'version': 1,
+        'version': 2,
         'issue': 1430,
         'addedPoints': [p['id'] for p in new_points],
+        'statusChanged': sorted(status_changed),
         'files': files,
     }
-    (output / 'hashes.json').write_bytes(pretty_json(report))
-
     if verify:
         committed = json.loads(receipt_path.read_text())
         if report != committed:
             raise ValueError('STALE RECEIPT: generated delta differs from committed hashes.json; do not install')
+
+    output.mkdir(parents=True, exist_ok=False)
+    for rel, after_bytes, patch_bytes in planned:
+        out_dir = output / rel
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / 'tall.json').write_bytes(after_bytes)
+        (out_dir / 'manifest-patch.json').write_bytes(patch_bytes)
+    (output / 'hashes.json').write_bytes(pretty_json(report))
 
     total_bytes = sum(f['bytes'] for f in files)
     print(f'{len(files)} tall packs ({total_bytes:,} bytes) staged in {output}')
@@ -389,13 +427,13 @@ def install(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
         if live_states[pack] in ('before', 'half-rollback') and not backup_present[pack]:
             _atomic_write(backup_root / entry['file'], live_before_bytes[pack])
 
-    # Phase 3: atomically update tall.json and ONLY the tall key in manifest.json.
+    # Phase 3: atomically update tall.json, and update ONLY the tall key in manifest.json when counts changed.
     for entry in receipt['files']:
         pack = entry['pack']
         st = live_states[pack]
         if st in ('before', 'half-rollback'):
             _atomic_write(baked / entry['file'], delta_bytes[entry['file']])
-        if st in ('before', 'half-install'):
+        if st in ('before', 'half-install') and entry['afterManifestTall'] != entry['beforeManifestTall']:
             updated_manifest = dict(live_manifests[pack])
             updated_manifest['tall'] = entry['afterManifestTall']
             _atomic_write(baked / pack / 'manifest.json', compact_json(updated_manifest))
@@ -465,7 +503,7 @@ def rollback(delta: Path, baked: Path, *, receipt_path: Path = RECEIPT) -> str:
         st = live_states[pack]
         if st in ('after', 'half-install'):
             _atomic_write(baked / entry['file'], backup_bytes[pack])
-        if st in ('after', 'half-rollback'):
+        if st in ('after', 'half-rollback') and entry['afterManifestTall'] != entry['beforeManifestTall']:
             restored_manifest = dict(live_manifests[pack])
             restored_manifest['tall'] = entry['beforeManifestTall']
             _atomic_write(baked / pack / 'manifest.json', compact_json(restored_manifest))
