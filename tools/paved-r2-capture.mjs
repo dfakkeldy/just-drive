@@ -5,7 +5,9 @@ import {fileURLToPath} from 'node:url';
 import {open} from './cdp.mjs';
 import {execFileSync} from 'node:child_process';
 const repo=fileURLToPath(new URL('..',import.meta.url)),[out,port]=process.argv.slice(2);mkdirSync(out,{recursive:true});
-const base='mode=explore&hud=0&radio=0&shadows=1&exag=1&sun=original';
+// finish=0: the desktop finish pass (finish.ts) adds drifting cloud shadows, lens corner darkening and film grain
+// that shift box brightness by wall time and screen position instead of pavement colour.
+const base='mode=explore&hud=0&radio=0&shadows=1&exag=1&sun=original&finish=0';
 const poses=[['m3-chase','mabou','at=624141,5103347,270'],['m3-top','mabou','at=624141,5103347,270&cam=624141,5103347,45,0,-89,60&camground=1'],['pt-chase','pointtupper','at=625990,5055120,315'],['pt-top','pointtupper','at=625972,5055120,0&cam=625972,5055138,20,0,-89,50&camground=1']];
 const diagnostic=process.env.PAVED_DIAGNOSTIC==='1',results=[];
 for(const [name,area,q] of poses){
