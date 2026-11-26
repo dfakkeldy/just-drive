@@ -19,6 +19,12 @@
       "roads": [
         "Highway 19"
       ]
+    },
+    "prince-street": {
+      "label": "Prince Street",
+      "roads": [
+        "Prince Street"
+      ]
     }
   },
   "overrides": {
@@ -576,6 +582,90 @@
       ],
       "wall": "#c8ccd0",
       "roof": "#3e4448",
+      "trim": "#f2f0ea",
+      "roofMaterial": "shingle"
+    },
+    "813": {
+      "group": "prince-street",
+      "road": "Prince Street",
+      "at": [
+        627285.5,
+        5053178.5
+      ],
+      "wall": "#e4d48a",
+      "roof": "#3a3e42",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "1257": {
+      "group": "prince-street",
+      "road": "Prince Street",
+      "at": [
+        627423.1,
+        5053213.9
+      ],
+      "wall": "#eeeae2",
+      "roof": "#6a7074",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1309": {
+      "group": "prince-street",
+      "road": "Prince Street",
+      "at": [
+        627621.1,
+        5053012.2
+      ],
+      "wall": "#8fa8b0",
+      "roof": "#4a5054",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1316": {
+      "group": "prince-street",
+      "road": "Prince Street",
+      "at": [
+        627628.0,
+        5053107.1
+      ],
+      "wall": "#f4f3ee",
+      "roof": "#3a3e42",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "1322": {
+      "group": "prince-street",
+      "road": "Prince Street",
+      "at": [
+        627549.2,
+        5053189.9
+      ],
+      "wall": "#c5c8c4",
+      "roof": "#4e5458",
+      "trim": "#f6f5f0",
+      "roofMaterial": "shingle"
+    },
+    "1324": {
+      "group": "prince-street",
+      "road": "Prince Street",
+      "at": [
+        627545.4,
+        5053206.3
+      ],
+      "wall": "#dcdad4",
+      "roof": "#6e9e86",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1326": {
+      "group": "prince-street",
+      "road": "Prince Street",
+      "at": [
+        627535.8,
+        5053237.2
+      ],
+      "wall": "#b0b2ac",
+      "roof": "#3a3e42",
       "trim": "#f2f0ea",
       "roofMaterial": "shingle"
     }
