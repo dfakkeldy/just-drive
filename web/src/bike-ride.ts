@@ -400,7 +400,7 @@ export class BikeRide implements Ride {
     if (this.terrain.cartRoads && deckCounts(this.roads.deckHeight(this.x,this.z),this.y,this.terrain.cartRoads)) return s.kind===4?SURFACES.track:s.washboard?SURFACES.washboard:SURFACES.gravel;
     if (s.deck) return s.washboard?SURFACES.washboard:s.kind===9?SURFACES.concrete:s.kind<=2?SURFACES.paved:s.kind===5?SURFACES.trail:s.kind===4?SURFACES.track:SURFACES.gravel;
     if (!s.deck && deckCounts(this.roads.deckHeight(this.x, this.z),this.y,this.terrain.cartRoads)) return SURFACES.paved;
-    if (s.kind === 0 || s.roadDist > s.halfWidth + .4) return s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
+    if (s.kind === 0 || s.roadDist > s.halfWidth + .4) return s.lotAsphalt ? SURFACES.paved : s.mineral ? SURFACES.gravel : s.canopy > 1.6 ? SURFACES.brush : SURFACES.grass;
     return s.kind === 9 ? SURFACES.concrete : s.kind <= 2 || s.kind === 13 ? SURFACES.paved : s.washboard ? SURFACES.washboard : s.rough ? SURFACES.rough : s.kind === 5 ? SURFACES.trail : s.kind === 4 && (!s.gravel || this.terrain.cartRoads) ? SURFACES.track : SURFACES.gravel;
   }
   private beginJump(): void {
