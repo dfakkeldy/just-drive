@@ -205,12 +205,9 @@ export class Radio extends RadioPlayer {
     if (firstPlace && this.station >= 0 && !comesIn(signalAt(this.map, this.stations[this.station].dial, e, n))) {
       this.station = nextOnDial(this.stations.length, -1, this.first,
         (i) => comesIn(signalAt(this.map, this.stations[i].dial, e, n)));
-      if (this.on) {
-        this.audio.pause();
-        if (this.station < 0) this.sounding(false);
-        else if (!this.held) this.tuneLive();
-      }
-      this.label();
+      if (this.on) this.audio.pause();
+      if (this.station >= 0) this.tuneLive();
+      else { this.track = 0; this.sounding(false); this.label(); }
     }
     this.receive(firstPlace);
   }

@@ -232,21 +232,26 @@ function sound(api) {
 
 // The car radio alone asks the rules; the Just Listen page and the shared engine never do.
 const EXPLORE_LINE = "    if (gameMode === 'explore') radio?.useReception(null);\n";
+const RECEPTION_OFF_LINE = "if (params.get('reception') === '0') radio?.useReception(null);";
+const START_LINE = 'if (started) radio?.start();';
 const PLACE_LINE = 'radio?.setPlace(vehicle.x + manifest.village[0], manifest.village[1] - vehicle.z);';
 // `main`: the text of main.ts, so that the mutants below can hand in a broken one.
 function wiring(main = read('web/src/main.ts')) {
   for (const file of ['web/src/listen.ts', 'web/src/radio-player.ts']) assert.ok(!read(file).includes('radio-reception'), `${file} has no reception`);
   const radio = read('web/src/radio.ts');
   assert.equal(main.split(PLACE_LINE).length, 3, 'the game tells the radio where the car is on load and every frame');
-  assert.equal(main.split("if (params.get('reception') === '0') radio?.useReception(null);").length, 2, '?reception=0');
+  assert.equal(main.split(RECEPTION_OFF_LINE).length, 2, '?reception=0');
   // Only the mail shift has reception: just driving (explore mode) hears every station everywhere (the owner, 20 Nov 2026).
-  // The line must run after the radio is made, in loadRadio's own callback. Comment lines do not count.
+  // The lines must run in order inside loadRadio's own callback: radio = next -> useReception overrides -> setPlace -> expose -> start.
   const code = main.split('\n').filter(line => !line.trim().startsWith('//')).join('\n'), drop = EXPLORE_LINE.trim();
-  const callback = /loadRadio\(audioBase, siteRadio\(SITE\)\)\.then\(next => \{\n([\s\S]*?)\n\s*if \(import\.meta\.env\.DEV\) expose\(\{ radio \}\);/.exec(code)?.[1] ?? '';
-  assert.ok(callback.includes('radio = next;'), 'main.ts makes the radio in a loadRadio callback; if that has moved, read it here in the new way');
+  const callback = /loadRadio\(audioBase, siteRadio\(SITE\)\)\.then\(next => \{\n([\s\S]*?)\n\s*if \(fired && next\)/.exec(code)?.[1] ?? '';
+  const atMade = callback.indexOf('radio = next;'), atExplore = callback.indexOf(drop), atOff = callback.indexOf(RECEPTION_OFF_LINE);
+  const atPlace = callback.indexOf(PLACE_LINE), atExpose = callback.indexOf('expose({ radio })'), atStart = callback.indexOf(START_LINE);
+  assert.ok(atMade >= 0, 'main.ts makes the radio in a loadRadio callback; if that has moved, read it here in the new way');
   assert.equal(code.split(drop).length, 2, 'just driving takes the reception map away, once');
-  assert.ok(callback.indexOf(drop) > callback.indexOf('radio = next;'), 'and after the radio is made, in its own callback');
-  assert.ok(callback.indexOf(PLACE_LINE) > callback.indexOf(drop), 'initial car place is set after useReception and before expose/start');
+  assert.ok(atExplore > atMade && atOff > atMade, 'both reception overrides run after the radio is made');
+  assert.ok(atPlace > atExplore && atPlace > atOff, 'initial car place is set after both reception overrides');
+  assert.ok(atExpose > atPlace && atStart > atPlace, 'expose and start() run after initial car place is set');
   assert.equal(code.split('useReception(').length, 3, 'and nothing else in main.ts gives the radio a map');
   assert.ok(radio.includes("from './radio-reception'") && radio.includes('nextOnDial(') && radio.includes('private map: ReceptionMap | null = RECEPTION;'));
   assert.ok(radio.includes('this.audio.muted = this.music <= 0;'), 'a lost station is muted (a phone ignores the volume)');
@@ -262,7 +267,8 @@ async function startup(RadioClass = Radio) {
   const keys = ['document', 'window', 'Audio', 'AudioContext', 'fetch', 'URL', 'localStorage', 'matchMedia', 'performance'];
   const savedGlobals = Object.fromEntries(keys.map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
   const el = () => ({ id: '', title: '', textContent: '', hidden: false, style: {}, classList: { contains() { return false; }, toggle() {}, add() {}, remove() {} }, setAttribute() {}, append() {}, appendChild() {}, addEventListener() {}, insertBefore() {} });
-  const stations = catalogue.stations.map(s => ({ dial: s.dial, name: s.name, tracks: [{ file: s.tracks[0].source + '.mp3', title: s.tracks[0].title, seconds: 60 }] }));
+  const stations = catalogue.stations.map(s => ({ dial: s.dial, name: s.name, tracks: s.tracks.map(t => ({ file: t.source + '.mp3', title: t.title, seconds: 60 })) }));
+  const filesFor = dial => new Set(stations.find(s => s.dial === dial).tracks.map(t => '/audio/' + t.file));
   const trackFor = dial => stations.find(s => s.dial === dial).tracks[0].file;
   const tick = () => new Promise(r => setTimeout(r, 0));
   try {
@@ -312,7 +318,8 @@ async function startup(RadioClass = Radio) {
       assert.equal(radio.reception.music, 1); assert.equal(radio.reception.hiss, 0);
       assert.equal(radio.reception.static, 0); assert.equal(radio.reception.context, 'none');
       assert.equal(ctx, 0, 'fresh start at /blackstone creates no static AudioContext or dial burst');
-      assert.deepEqual(fetched, ['/audio/' + trackFor('103.5')], 'fresh start fetches only 103.5');
+      assert.equal(fetched.length, 1, 'fresh start fetches one track');
+      assert.ok(filesFor('103.5').has(fetched[0]), `fresh start fetches a 103.5 track (got ${fetched[0]})`);
       assert.equal(radio.audio.paused, false, '103.5 audio starts playing');
       assert.equal(radio.audio.muted, false, '103.5 audio is unmuted');
       assert.equal(radio.audible, true, '103.5 is audible from startup');
@@ -327,7 +334,8 @@ async function startup(RadioClass = Radio) {
       assert.equal(radio.tunedDial, '103.5', 'saved out-of-range station falls back to 103.5 at /blackstone');
       assert.equal(radio.reception.music, 1); assert.equal(radio.reception.hiss, 0); assert.equal(radio.reception.static, 0);
       assert.equal(ctx, 0, 'fallback creates no static AudioContext or dial burst');
-      assert.deepEqual(fetched, ['/audio/' + trackFor('103.5')], 'saved out-of-range station is never fetched when place is set first');
+      assert.equal(fetched.length, 1, 'fallback fetches one track');
+      assert.ok(filesFor('103.5').has(fetched[0]), `saved out-of-range station is never fetched when place is set first (got ${fetched[0]})`);
       assert.equal(radio.audible, true, 'fallback 103.5 plays cleanly');
       assert.equal(store.get('mmm.radio'), '92.5', 'saved station is not overwritten in localStorage');
     }
@@ -335,8 +343,9 @@ async function startup(RadioClass = Radio) {
       // Late-placement safety: even if start() runs before setPlace(), fallback pauses/disowns the old fetch and plays 103.5 with no static burst.
       staticCtxMade = 0;
       let releaseOld;
-      const deferred = new Map([[trackFor('92.5'), { promise: new Promise(r => { releaseOld = r; }) }]]);
-      const fetched = makeFetch(deferred);
+      const deferFiles = new Set(stations.find(s => s.dial === '92.5').tracks.map(t => t.file));
+      const holdPromise = new Promise(r => { releaseOld = r; });
+      const fetched = makeFetch(new Map([...deferFiles].map(f => [f, { promise: holdPromise }])));
       const store = new Map([['mmm.radio', '92.5']]);
       globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
       const radio = new RadioClass(stations, '/audio', start, 'mmm.radio');
@@ -348,14 +357,34 @@ async function startup(RadioClass = Radio) {
       assert.equal(radio.tunedDial, '103.5', 'late setPlace still falls back to 103.5');
       assert.equal(staticCtxMade, 0, 'late setPlace plays no static burst');
       assert.equal(radio.audible, true, 'late setPlace plays 103.5');
-      assert.equal(fetched.at(-1), '/audio/' + trackFor('103.5'), '103.5 track owns the player');
-      assert.equal(radio.songFile, trackFor('103.5'), 'stale 92.5 fetch cannot overwrite 103.5');
+      assert.ok(filesFor('103.5').has(fetched.at(-1)), `103.5 track owns the player (got ${fetched.at(-1)})`);
+      assert.ok(filesFor('103.5').has('/audio/' + radio.songFile), 'stale 92.5 fetch cannot overwrite 103.5');
+    }
+    {
+      // Held late-placement safety: starting while hidden on a long-playlist station (103.5, track 16) and then placing
+      // where fallback selects a shorter-playlist station (88.3 at Point Tupper, 6 tracks) must reset track and not throw.
+      staticCtxMade = 0;
+      const fetched = makeFetch();
+      const store = new Map();
+      globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+      globalThis.document.hidden = true;
+      try {
+        const radio = new RadioClass(stations, '/audio', start, 'mmm.radio');
+        radio.start();
+        radio.track = stations.find(s => s.dial === '103.5').tracks.length - 1;
+        assert.ok(radio.track >= stations.find(s => s.dial === '88.3').tracks.length, 'starting track index exceeds target station track count');
+        radio.setPlace(...village('pointtupper'));
+        assert.equal(radio.tunedDial, '88.3', 'Point Tupper falls back from 103.5 to 88.3');
+        assert.ok(radio.track >= 0 && radio.track < stations.find(s => s.dial === '88.3').tracks.length, 'track index is valid for the fallback station while held');
+        assert.deepEqual(fetched, [], 'held radio fetches nothing');
+        assert.equal(staticCtxMade, 0, 'held fallback plays no static burst');
+      } finally { globalThis.document.hidden = false; }
     }
     {
       const { radio, fetched, staticCtxMade: ctx } = await runCase('94.9');
       assert.equal(radio.tunedDial, '94.9', 'saved clear station wins at /blackstone');
       assert.equal(radio.reception.static, 0); assert.equal(ctx, 0);
-      assert.deepEqual(fetched, ['/audio/' + trackFor('94.9')]);
+      assert.equal(fetched.length, 1); assert.ok(filesFor('94.9').has(fetched[0]));
       assert.equal(radio.audible, true);
     }
     {
@@ -368,7 +397,7 @@ async function startup(RadioClass = Radio) {
       const { radio, fetched, staticCtxMade: ctx } = await runCase('92.5', true);
       assert.equal(radio.tunedDial, '92.5', 'explore mode keeps any saved station');
       assert.equal(radio.reception.signal, 1); assert.equal(ctx, 0);
-      assert.deepEqual(fetched, ['/audio/' + trackFor('92.5')]);
+      assert.equal(fetched.length, 1); assert.ok(filesFor('92.5').has(fetched[0]));
       assert.equal(radio.audible, true);
     }
   } finally {
@@ -428,6 +457,8 @@ if (process.argv.includes('--mutations')) {
     ['W3 the line runs before the radio is made', s => s.replace(EXPLORE_LINE, '').replace(made, EXPLORE_LINE + made)],
     ['W4 another line gives the radio a map again', s => s.replace(EXPLORE_LINE, `${EXPLORE_LINE}    radio?.useReception(RECEPTION);\n`)],
     ['W5 initial place is not set before radio start', s => s.replace(`    ${PLACE_LINE}\n`, '')],
+    ['W6 radio starts before initial place is set', s => s.replace(`    ${START_LINE}\n`, '').replace(`    ${PLACE_LINE}\n`, `    ${START_LINE}\n    ${PLACE_LINE}\n`)],
+    ['W7 initial place runs before ?reception=0 override', s => s.replace(`    ${PLACE_LINE}\n`, '').replace(`    ${RECEPTION_OFF_LINE}`, `    ${PLACE_LINE}\n    ${RECEPTION_OFF_LINE}`)],
   ];
   for (const [name, mutate] of wiringMutants) {
     assert.ok(mainSource.split(EXPLORE_LINE).length === 2 && mainSource.split(made).length === 2, `${name}: anchor`);
