@@ -85,6 +85,12 @@
       "roads": [
         "Highway 104"
       ]
+    },
+    "hiram-street": {
+      "label": "Hiram Street",
+      "roads": [
+        "Hiram Street"
+      ]
     }
   },
   "overrides": {
@@ -1551,6 +1557,44 @@
       "wall": "#e4d07a",
       "roof": "#5c4638",
       "trim": "#f6f4ee",
+      "roofMaterial": "shingle"
+    },
+    "1337": {
+      "group": "hiram-street",
+      "road": "Hiram Street",
+      "at": [
+        627730.4,
+        5053074.6
+      ],
+      "wall": "#f4f3ee",
+      "roof": "#4e5256",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "1341": {
+      "group": "hiram-street",
+      "road": "Hiram Street",
+      "at": [
+        627793.0,
+        5053066.2
+      ],
+      "wall": "#e2e4e1",
+      "roof": "#9aa09c",
+      "trim": "#f4f5f2",
+      "door": "#e8e7e0",
+      "roofMaterial": "shingle"
+    },
+    "1342": {
+      "group": "hiram-street",
+      "road": "Hiram Street",
+      "at": [
+        627757.0,
+        5053043.1
+      ],
+      "wall": "#f3f2ec",
+      "roof": "#c5c7c2",
+      "trim": "#f6f5f0",
+      "door": "#e5e5dd",
       "roofMaterial": "shingle"
     }
   }
