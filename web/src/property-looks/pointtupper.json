@@ -115,6 +115,12 @@
       "roads": [
         "MacSween Street"
       ]
+    },
+    "maclean-crt": {
+      "label": "Maclean Crt",
+      "roads": [
+        "Maclean Crt"
+      ]
     }
   },
   "overrides": {
@@ -1805,6 +1811,58 @@
       "wall": "#c8c6cc",
       "roof": "#b0b8be",
       "trim": "#eeeae4",
+      "roofMaterial": "shingle"
+    },
+    "67": {
+      "group": "maclean-crt",
+      "road": "Maclean Crt",
+      "at": [
+        630116.05,
+        5053021.85
+      ],
+      "wall": "#c8c5bc",
+      "roof": "#b8bab8",
+      "trim": "#4b777c",
+      "door": "#787a76",
+      "roofMaterial": "shingle"
+    },
+    "2450": {
+      "group": "maclean-crt",
+      "road": "Maclean Crt",
+      "at": [
+        630043.0,
+        5052946.0
+      ],
+      "wall": "#a16c55",
+      "roof": "#b8c0c6",
+      "trim": "#c4cbd0",
+      "door": "#6f7371",
+      "roofMaterial": "shingle"
+    },
+    "2451": {
+      "group": "maclean-crt",
+      "road": "Maclean Crt",
+      "at": [
+        630131.32,
+        5052943.48
+      ],
+      "wall": "#d8d9d4",
+      "roof": "#929ca2",
+      "trim": "#c4cacb",
+      "door": "#adada7",
+      "roofMaterial": "shingle"
+    },
+    "2922": {
+      "group": "maclean-crt",
+      "road": "Maclean Crt",
+      "at": [
+        630073.84,
+        5052903.05
+      ],
+      "wall": "#9d702f",
+      "roof": "#505358",
+      "trim": "#dedbd2",
+      "door": "#685948",
       "roofMaterial": "shingle"
     }
   }
