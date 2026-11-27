@@ -7,7 +7,9 @@
 //          keeps the place. An unknown road gives the title card and the normal start.
 //   mail   The mail site: the same place before and after Start. An unknown road gives the day's start.
 //   blackstone  The /blackstone short link (deploy/_redirects): mode=mail beats a saved Explore choice, the title card
-//          shows, and after Start the car stands within 2 m of the independent point startKey gives for share 0.43 of Blackstone Road.
+//          shows, and after Start and skipping the shift-start loading bay the car stands within 2 m of the independent point
+//          startKey gives for share 0.43 of Blackstone Road, 103.5 plays unmuted with zero static (also after fallback from
+//          a saved out-of-range station), and the default engine volume is 0.25.
 //          Not part of "all": it has its own row (start-key-blackstone-browser).
 //   era    Mabou 1884 has the same roads, so the same place, with the title card.
 // No page may throw. Every address holds player keys only (site, mode, era, q, mp, vehicle, start): one test key
@@ -234,19 +236,38 @@ async function blackstone() {
     check(at(before, other) > 5, 'Blackstone link: and not at the 0.40 pose');
     const sampleAudio = () => page.read(`(() => { const r = window.mmm.radio, e = window.mmm.engineSound, s = document.querySelector('#engineVolume input[type=range]');
       const pos = r.position();
-      return { dial: r.stations[r.station]?.dial ?? null, tuned: r.tunedDial, on: !!r.on, audible: !!r.audible, posDial: pos?.dial ?? null,
+      return { dial: r.stations[r.station]?.dial ?? null, tuned: r.tunedDial, on: !!r.on, audible: !!r.audible, held: !!r.held,
+        door: window.mmm.interiors?.doorId ?? null, posDial: pos?.dial ?? null,
         paused: r.audio.paused, muted: r.audio.muted, audioVol: r.audio.volume, hasStaticCtx: !!r.noise, saved: localStorage.getItem('mmm.radio'),
         ...r.reception, engineVol: e?.volume ?? null, slider: s?.value ?? null }; })()`);
-    // Click Start with a real input gesture, then watch the very first second for zero static (neither reception static
-    // nor dial burst) and confirm 103.5 music actually starts playing.
-    await page.click('#titleStart');
-    await page.until(`document.getElementById('title')?.hidden !== false`, 'Start closes the card');
-    const firstSecond = [];
-    for (let i = 0; i < 12; i++) {
-      firstSecond.push(await sampleAudio());
-      await sleep(100);
-    }
-    await page.until(`!!window.mmm.radio?.audible && window.mmm.radio.position()?.dial === '103.5'`, '103.5 music plays after Start');
+    // Click Start with a real input gesture. A plain mail shift opens the shift-start loading bay (which holds the
+    // car radio while indoors), so skip the bay as a player does, then watch the first second back in the car for
+    // zero static (neither reception static nor dial burst) and confirm 103.5 music actually starts playing.
+    const startAndLeaveDepot = async (label) => {
+      await page.click('#titleStart');
+      await page.until(`document.getElementById('title')?.hidden !== false`, `${label}: Start closes the card`);
+      const samples = [await sampleAudio()];
+      await page.until(`!!window.mmm.interiors?.busy && window.mmm.interiors?.doorId === 'depot-loading' && !document.getElementById('interiorHud')?.hidden && (document.querySelector('#interiorHud button')?.getBoundingClientRect().width ?? 0) > 0`,
+        `${label}: shift-start loading bay opens`);
+      samples.push(await sampleAudio());
+      await page.click('#interiorHud button');
+      await page.until(`!window.mmm.interiors?.busy`, `${label}: skipping the loading bay returns to the car`);
+      for (let i = 0; i < 12; i++) {
+        samples.push(await sampleAudio());
+        await sleep(100);
+      }
+      return samples;
+    };
+    const waitForMusic = async (label) => {
+      try {
+        await page.until(`!!window.mmm.radio?.audible && window.mmm.radio.position()?.dial === '103.5'`, label);
+      } catch (error) {
+        const state = await sampleAudio().catch(() => null);
+        throw Error(`${error.message}${state ? ` (${JSON.stringify(state)})` : ''}`);
+      }
+    };
+    const firstSecond = await startAndLeaveDepot('fresh');
+    await waitForMusic('103.5 music plays after Start');
     const freshAudio = await sampleAudio();
     firstSecond.push(freshAudio);
     const after = await facts(page);
@@ -265,14 +286,8 @@ async function blackstone() {
     // A returning visitor whose saved station does not reach Blackstone (e.g. from Just drive) falls back to 103.5 with no static, keeping their saved choice.
     await page.read(`localStorage.setItem('mmm.radio', '92.5')`);
     await page.go(link);
-    await page.click('#titleStart');
-    await page.until(`document.getElementById('title')?.hidden !== false`, 'saved-lost Start closes the card');
-    const fallbackSamples = [];
-    for (let i = 0; i < 10; i++) {
-      fallbackSamples.push(await sampleAudio());
-      await sleep(100);
-    }
-    await page.until(`!!window.mmm.radio?.audible && window.mmm.radio.position()?.dial === '103.5'`, 'fallback 103.5 plays after Start');
+    const fallbackSamples = await startAndLeaveDepot('saved-lost');
+    await waitForMusic('fallback 103.5 plays after Start');
     const fallbackAudio = await sampleAudio();
     fallbackSamples.push(fallbackAudio);
     for (const s of fallbackSamples) {
