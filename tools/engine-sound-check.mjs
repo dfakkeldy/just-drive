@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ENGINES, engineKind, engineState, engineWave, gearFor, tyreState, voicePulses, RADIO_DUCK, OUTPUT_TRIM, RASP, UPPER, SPLASH_GAIN, SPLASH_DUCK } from '../web/src/engine-sound-rules.ts';
 import { WASHBOARD_WAVE } from '../web/src/defects.ts';
-import { EngineSound } from '../web/src/engine-sound.ts';
+import { DEFAULT_ENGINE_VOLUME, EngineSound, saveEngineVolume, savedEngineVolume } from '../web/src/engine-sound.ts';
 
 const root = process.env.MMM_ROOT ?? process.cwd();
 const read = file => readFileSync(resolve(root, file), 'utf8');
@@ -224,6 +224,8 @@ ok(tyreState('washboard', 12, false).gain > tyreState('gravel', 12, false).gain 
 ok(tyreState('pavement', 12, false).frequency > tyreState('gravel', 12, false).frequency && tyreState('gravel', 12, false).frequency > tyreState('washboard', 12, false).frequency, 'hiss high, crunch mid, rattle low');
 ok(tyreState('pavement', 12, false).depth === 0 && tyreState('gravel', 12, false).depth > 0, 'asphalt is a steady hiss, gravel chatters');
 ok(RADIO_DUCK > 0 && RADIO_DUCK < 1, 'the radio ducks the driving sound, never mutes it');
+ok(DEFAULT_ENGINE_VOLUME === .25, `default engine volume is 0.25 (got ${DEFAULT_ENGINE_VOLUME})`);
+ok(DEFAULT_ENGINE_VOLUME * OUTPUT_TRIM * RADIO_DUCK < .1, 'at the default volume, engine sound sits clearly under the radio');
 
 // Wiring (source): no context before a tap, suspended when hidden and when not driving, silenced at an ending.
 {
@@ -276,8 +278,18 @@ ok(RADIO_DUCK > 0 && RADIO_DUCK < 1, 'the radio ducks the driving sound, never m
   globalThis.document = { hidden: false, addEventListener() {} };
   globalThis.window = { AudioContext: FakeContext };
   // Newer Node has its own localStorage that warns when read without a file.
-  Object.defineProperty(globalThis, 'localStorage', { value: { getItem: () => null, setItem() {} }, configurable: true });
+  const store = new Map();
+  Object.defineProperty(globalThis, 'localStorage', { value: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) }, configurable: true });
+  ok(savedEngineVolume() === DEFAULT_ENGINE_VOLUME, 'unset storage gives the default engine volume');
+  store.set('mmm.engine.vol', '0.7');
+  ok(savedEngineVolume() === .7, 'saved engine volume still wins');
+  ok(new EngineSound(false).volume === .7, 'EngineSound uses the saved volume');
+  saveEngineVolume(.4);
+  ok(store.get('mmm.engine.vol') === '0.4' && savedEngineVolume() === .4, 'saveEngineVolume persists the choice');
+  store.delete('mmm.engine.vol');
+  taps.length = 0;
   const es = new EngineSound(false);
+  ok(es.volume === DEFAULT_ENGINE_VOLUME, 'fresh EngineSound starts at the default volume');
   taps[0]();
   const g = es.graph, last = p => p.log.at(-1);
   ok(g && g.upper && g.upperGain, 'the fake context builds the full graph');

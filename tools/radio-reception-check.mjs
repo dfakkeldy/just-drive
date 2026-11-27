@@ -7,6 +7,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { build } from '../web/node_modules/esbuild/lib/main.js';
 import * as rules from '../web/src/radio-reception.ts';
+import { Radio } from '../web/src/radio.ts';
+import { startKey } from '../web/src/start-key.ts';
 
 const root = process.env.MMM_ROOT ?? process.cwd();
 const read = file => readFileSync(resolve(root, file), 'utf8');
@@ -14,12 +16,22 @@ const rulesSource = read('web/src/radio-reception.ts');
 
 const catalogue = JSON.parse(read('tools/radio_stations.json'));
 const dials = catalogue.stations.map(s => String(s.dial).trim().toLowerCase());
-// The starting station is the one marked `start`, or the first one when none is marked (tools/RADIO.md).
-const talk = String((catalogue.stations.find(s => s.start) ?? catalogue.stations[0]).dial).trim().toLowerCase();
+// The talk station (the public broadcaster that comes in everywhere) is the one whose tracks use the `talk` credit.
+const talk = String(catalogue.stations.find(s => s.tracks.some(t => t.credit === 'talk')).dial).trim().toLowerCase();
+// The starting station for new players in all modes (tools/RADIO.md).
+const start = String((catalogue.stations.find(s => s.start) ?? catalogue.stations[0]).dial).trim().toLowerCase();
 
 // Each area's village, in map metres, from its own baked land. Mabou's land is the first one and has its own folder.
 const village = id => JSON.parse(read(id === 'mabou' ? 'data/baked/terrain/manifest.json' : `data/baked/areas/${id}/manifest.json`)).village;
 const areas = ['mabou', ...readdirSync(resolve(root, 'data/baked/areas')).filter(id => !id.startsWith('.')).sort()];
+// The /blackstone start (deploy/_redirects: ?mode=mail&start=blackstone-road:0.43), in map metres.
+const blackstonePlace = (() => {
+  const [ve, vn] = village('mabou');
+  const roads = JSON.parse(read('data/baked/terrain/roads.json')).roads.map(r => ({ ...r, pts: r.pts.map(([e, n]) => [e - ve, vn - n]) }));
+  const pose = startKey('blackstone-road:0.43', roads, null);
+  assert.ok(pose, 'blackstone-road:0.43 resolves on baked Mabou roads');
+  return [pose.x + ve, vn - pose.z];
+})();
 // The places with Glencoe in their name that lie in the hollow, from the public place names (rounded to the metre).
 const GLENCOE = { 'Glencoe Mills': [629755, 5092476], Glencoe: [629673, 5089747], 'Upper Glencoe': [632627, 5090312] };
 
@@ -92,12 +104,24 @@ function table(api) {
     for (const key of ['e', 'n', 'clear', 'edge']) assert.ok(Number.isFinite(tx[key]), `${dial}.${key}`);
     assert.ok(tx.clear > 0 && tx.clear < tx.edge, `${dial}: clear inside edge`);
   }
-  // The talk station is the one that comes in everywhere, and so is the Just Drive starting station.
-  assert.ok(!Object.hasOwn(transmitters, talk), 'the starting station has no transmitter');
-  if (catalogue.just_start) assert.ok(!Object.hasOwn(transmitters, String(catalogue.just_start).trim().toLowerCase()), 'nor has the Just Drive start');
+  // The talk station is the one that comes in everywhere.
+  assert.ok(!Object.hasOwn(transmitters, talk), 'the talk station has no transmitter');
+  // 103.5 THE LONG WAY ROUND is the universal first station for new players in every mode.
+  assert.equal(start, '103.5', '103.5 is the starting station');
+  assert.equal(String(catalogue.just_start ?? '').trim().toLowerCase(), '103.5', '103.5 is the Just Drive starting station');
   for (const h of hollows) {
     for (const key of ['e', 'n', 'deep', 'rim']) assert.ok(Number.isFinite(h[key]), `hollow ${key}`);
     assert.ok(h.deep > 0 && h.deep < h.rim, 'hollow: deep inside rim');
+  }
+}
+
+// The starting station (103.5) must come in full clear (music 1, hiss 0) at Mabou and at the /blackstone start.
+function blackstone(api) {
+  for (const [name, place] of [['Mabou village', village('mabou')], ['/blackstone start', blackstonePlace]]) {
+    const sig = api.signalAt(api.RECEPTION, start, ...place);
+    assert.equal(sig, 1, `${start} is full signal at ${name} (got ${sig})`);
+    assert.equal(api.bandOf(sig), 'clear', `${start} is clear at ${name}`);
+    assert.deepEqual(api.mix(sig, 'clear'), { music: 1, hiss: 0 }, `${start} has full music and zero static at ${name}`);
   }
 }
 
@@ -227,9 +251,65 @@ function wiring(main = read('web/src/main.ts')) {
   assert.ok(radio.includes('protected override level(): number { return this.volume * this.wind * this.music; }'), 'a weak signal takes some of the music');
 }
 
-function all(api) { words(api); villages(api); canal(api); table(api); shape(api); dial(api); sound(api); }
+function all(api) { words(api); villages(api); canal(api); table(api); blackstone(api); shape(api); dial(api); sound(api); }
 
-all(rules); wiring();
+// Startup at /blackstone: fresh player gets 103.5 with zero static; a saved out-of-range station from Just drive falls
+// back for this visit without overwriting localStorage; a saved clear station or 'off' stays; explore mode keeps any
+// saved station; driving into a hollow after startup fades without changing the dial.
+function startup(RadioClass = Radio) {
+  const savedGlobals = Object.fromEntries(['document', 'Audio', 'localStorage', 'matchMedia', 'performance'].map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
+  const el = () => ({ id: '', title: '', textContent: '', hidden: false, style: {}, classList: { contains() { return false; }, toggle() {}, add() {}, remove() {} }, setAttribute() {}, append() {}, appendChild() {}, addEventListener() {}, insertBefore() {} });
+  const stations = catalogue.stations.map(s => ({ dial: s.dial, name: s.name, tracks: [{ file: s.tracks[0].source + '.mp3', title: s.tracks[0].title, seconds: 60 }] }));
+  try {
+    globalThis.Audio = class { preload = ''; volume = 1; muted = false; paused = true; src = ''; readyState = 0; currentTime = 0; addEventListener() {} play() { this.paused = false; return Promise.resolve(); } pause() { this.paused = true; } };
+    globalThis.document = { hidden: false, createElement: el, head: el(), body: el(), getElementById: () => null, addEventListener() {} };
+    globalThis.matchMedia = () => ({ matches: true });
+    globalThis.performance = { now: () => 0 };
+    const runCase = (savedDial, explore = false) => {
+      const store = new Map(savedDial === null ? [] : [['mmm.radio', savedDial]]);
+      globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+      const radio = new RadioClass(stations, '/audio', start, 'mmm.radio');
+      if (explore) radio.useReception(null);
+      radio.setPlace(...blackstonePlace);
+      return { radio, store };
+    };
+    {
+      const { radio } = runCase(null);
+      assert.equal(radio.tunedDial, '103.5', 'fresh player at /blackstone starts on 103.5');
+      assert.equal(radio.reception.signal, 1); assert.equal(radio.reception.band, 'clear');
+      assert.equal(radio.reception.music, 1); assert.equal(radio.reception.hiss, 0); assert.equal(radio.reception.static, 0);
+      // Driving into the Glencoe hollow after startup keeps 103.5 on the dial and lets it fade to NO SIGNAL.
+      radio.setPlace(...GLENCOE.Glencoe);
+      assert.equal(radio.reception.band, 'lost', 'driving into the hollow fades to lost without changing the dial');
+      assert.equal(radio.reception.music, 0); assert.equal(radio.reception.hiss, 1);
+      assert.equal(radio.tunedDial, null);
+    }
+    {
+      const { radio, store } = runCase('92.5');
+      assert.equal(radio.tunedDial, '103.5', 'saved out-of-range station falls back to 103.5 at /blackstone');
+      assert.equal(radio.reception.music, 1); assert.equal(radio.reception.hiss, 0); assert.equal(radio.reception.static, 0);
+      assert.equal(store.get('mmm.radio'), '92.5', 'saved station is not overwritten in localStorage');
+    }
+    {
+      const { radio } = runCase('94.9');
+      assert.equal(radio.tunedDial, '94.9', 'saved clear station wins at /blackstone');
+      assert.equal(radio.reception.static, 0);
+    }
+    {
+      const { radio } = runCase('off');
+      assert.equal(radio.tunedDial, null, 'saved off stays off');
+    }
+    {
+      const { radio } = runCase('92.5', true);
+      assert.equal(radio.tunedDial, '92.5', 'explore mode keeps any saved station');
+      assert.equal(radio.reception.signal, 1);
+    }
+  } finally {
+    for (const [k, d] of Object.entries(savedGlobals)) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; }
+  }
+}
+
+all(rules); wiring(); startup();
 console.log(`PASS radio reception: ${areas.length} villages, ${Object.keys(rules.RECEPTION.transmitters).length} transmitters, ${dials.length} stations`);
 for (const id of areas) console.log(`  ${id}: ${[talk, ...music(rules, village(id))].join(', ')}`);
 
@@ -248,7 +328,8 @@ if (process.argv.includes('--mutations')) {
     ['R7 the canal station reaches the next village', "'90.3': { ...CANAL, clear: 3000, edge: 5000 }", "'90.3': { ...CANAL, clear: 3000, edge: 9000 }", canal],
     ['R8 the canal station is not at the canal', "const CANAL = { e: 623671, n: 5056096 };", "const CANAL = { e: 624671, n: 5056096 };", canal],
     ['R9 the canal station is not whole on its own land', "'90.3': { ...CANAL, clear: 3000, edge: 5000 }", "'90.3': { ...CANAL, clear: 1000, edge: 5000 }", canal],
-  ['R10 the canal station has no weak ring before it is gone', "'90.3': { ...CANAL, clear: 3000, edge: 5000 }", "'90.3': { ...CANAL, clear: 3500, edge: 4500 }", canal],
+    ['R10 the canal station has no weak ring before it is gone', "'90.3': { ...CANAL, clear: 3000, edge: 5000 }", "'90.3': { ...CANAL, clear: 3500, edge: 4500 }", canal],
+    ['R11 103.5 has static at /blackstone', "'103.5': { ...WIDE, clear: 27000, edge: 35000 }", "'103.5': { ...WIDE, clear: 20000, edge: 35000 }", blackstone],
     ['S1 hollows are ignored', 'signal *= ramp(h.deep, h.rim, Math.hypot(e - h.e, n - h.n));', 'signal *= 1;', shape],
     ['S2 a station with no transmitter is lost', 'return 1;\n  const tx', 'return 0;\n  const tx', shape],
     ['S3 signal rises with distance', 'let signal = 1 - ramp(', 'let signal = ramp(', shape],

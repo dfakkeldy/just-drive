@@ -92,6 +92,7 @@ export class Radio extends RadioPlayer {
   private map: ReceptionMap | null = RECEPTION;
   private e = NaN;          // where the car is, in map metres; not known until the game says
   private n = NaN;
+  private initial = true;   // before the first known place or manual tune: a saved out-of-range station can fall back
   private signal = 1;       // how much of the station comes in here, from 0 to 1
   private band: Band = 'clear';
   private music = 1;        // the share of the music that is left, and of the static that covers it
@@ -188,13 +189,27 @@ export class Radio extends RadioPlayer {
 
   /** The dial's own burst of static is as loud from a weak station as from a clear one; then the new station is heard as it comes in here. */
   protected override turnTo(station: number): void {
+    this.initial = false;
     this.music = 1;
     super.turnTo(station);
     this.receive(true);
   }
 
   /** Where the car is, in map metres (east, north). The game says so every frame. */
-  setPlace(e: number, n: number): void { this.e = e; this.n = n; this.receive(); }
+  setPlace(e: number, n: number): void {
+    const firstPlace = this.initial && Number.isFinite(e) && Number.isFinite(n);
+    if (firstPlace) this.initial = false;
+    this.e = e; this.n = n;
+    // A saved station from Just drive (where every station comes in) may not reach where a mail shift starts.
+    // Tune to the first station that comes in here for this visit, without overwriting the saved choice or playing static.
+    if (firstPlace && this.station >= 0 && !comesIn(signalAt(this.map, this.stations[this.station].dial, e, n))) {
+      this.station = nextOnDial(this.stations.length, -1, this.first,
+        (i) => comesIn(signalAt(this.map, this.stations[i].dial, e, n)));
+      this.label();
+      if (this.on && !this.held) this.tuneLive();
+    }
+    this.receive(firstPlace);
+  }
 
   /** Another reception map, or none (every station comes in everywhere): just driving and ?reception=0 take none, and the checks give their own. */
   useReception(map: ReceptionMap | null): void { this.map = map; this.receive(true); }

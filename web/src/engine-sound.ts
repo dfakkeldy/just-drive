@@ -38,8 +38,8 @@ interface Graph {
   splash: GainNode; master: GainNode;
 }
 
-/** The volume a new player hears. At this setting the horse's hooves are as loud as they were before the slider. */
-export const DEFAULT_ENGINE_VOLUME = .7;
+/** The volume a new player hears, well under the radio music. At this setting the horse's hooves keep their own level. */
+export const DEFAULT_ENGINE_VOLUME = .25;
 
 /** Reads the saved volume (0 to 1). */
 export function savedEngineVolume(): number {

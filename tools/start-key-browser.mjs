@@ -206,9 +206,10 @@ async function mail() {
 async function blackstone() {
   const page = await open(1280, 720);
   try {
-    // A visitor who saved Explore or Get Fired still gets the mail game from the link.
+    // A visitor who saved Explore or Get Fired still gets the mail game from the link, and a fresh radio/engine visit
+    // gets station 103.5 with no static and the lower default engine volume.
     await page.go(`${MAIL}&mode=explore&q=low`, false);
-    await page.read(`localStorage.setItem('mmm.mode', 'explore')`);
+    await page.read(`localStorage.clear(); localStorage.setItem('mmm.mode', 'explore')`);
     // The query comes from the real redirect line in deploy/_redirects, not from a copy of it here.
     const rule = readFileSync(new URL('../deploy/_redirects', import.meta.url), 'utf8').split('\n').find((l) => l.startsWith('/blackstone '));
     check(!!rule && rule.endsWith(' 302'), 'Blackstone link: deploy/_redirects has the /blackstone 302 line');
@@ -228,14 +229,37 @@ async function blackstone() {
     check(at(before, other) > 5, 'Blackstone link: and not at the 0.40 pose');
     await page.read(`document.getElementById('titleStart').click()`);
     await page.until(`document.getElementById('title')?.hidden !== false`, 'Start closes the card');
+    await page.until(`Number.isFinite(window.mmm.radio?.reception?.e) && window.mmm.radio.on`, 'the radio starts at the Blackstone pose');
     await sleep(3000);
     const after = await facts(page);
     check(!after.card && after.mode === 'mail', 'Blackstone link: after Start the card is closed and the game is still the mail game');
     check(at(after, want) < 2, `Blackstone link: after Start the car is within 2 m of the independent point (${fixed(at(after, want))} m)`);
     check(after.road === 'Blackstone Road', `Blackstone link: the car is on "${after.road}"`);
+    const freshAudio = await page.read(`(() => { const r = window.mmm.radio, e = window.mmm.engineSound, s = document.querySelector('#engineVolume input[type=range]');
+      return { dial: r.stations[r.station]?.dial ?? null, tuned: r.tunedDial, ...r.reception, engineVol: e?.volume ?? null, slider: s?.value ?? null }; })()`);
+    check(freshAudio.dial === '103.5' && freshAudio.tuned === '103.5', `Blackstone link: fresh player starts on 103.5 (got ${freshAudio.dial})`);
+    check(freshAudio.band === 'clear' && freshAudio.signal === 1 && freshAudio.music === 1 && freshAudio.hiss === 0 && freshAudio.static === 0,
+      `Blackstone link: 103.5 has clear music and no static (${JSON.stringify(freshAudio)})`);
+    check(freshAudio.engineVol === 0.25 && freshAudio.slider === '0.25',
+      `Blackstone link: default engine volume is 0.25 (vol ${freshAudio.engineVol}, slider ${freshAudio.slider})`);
+    // A returning visitor whose saved station does not reach Blackstone (e.g. from Just drive) falls back to 103.5 with no static, keeping their saved choice.
+    await page.read(`localStorage.setItem('mmm.radio', '92.5')`);
+    await page.go(link);
+    await page.read(`document.getElementById('titleStart').click()`);
+    await page.until(`document.getElementById('title')?.hidden !== false && Number.isFinite(window.mmm.radio?.reception?.e) && window.mmm.radio.on`, 'saved-lost radio starts');
+    await sleep(1000);
+    const fallbackAudio = await page.read(`(() => { const r = window.mmm.radio; return { dial: r.stations[r.station]?.dial ?? null, saved: localStorage.getItem('mmm.radio'), ...r.reception }; })()`);
+    check(fallbackAudio.dial === '103.5' && fallbackAudio.music === 1 && fallbackAudio.static === 0 && fallbackAudio.saved === '92.5',
+      `Blackstone link: saved out-of-range station falls back to 103.5 with no static and keeps localStorage (${JSON.stringify(fallbackAudio)})`);
+    // A returning visitor whose saved station comes in here (94.9) and who saved an engine volume keeps both.
+    await page.read(`localStorage.setItem('mmm.radio', '94.9'); localStorage.setItem('mmm.engine.vol', '0.65')`);
+    await page.go(link);
+    const keptAudio = await page.read(`(() => { const r = window.mmm.radio, e = window.mmm.engineSound; return { dial: r.stations[r.station]?.dial ?? null, static: r.reception.static, engineVol: e?.volume ?? null }; })()`);
+    check(keptAudio.dial === '94.9' && keptAudio.static === 0 && keptAudio.engineVol === 0.65,
+      `Blackstone link: saved clear station and engine volume win (${JSON.stringify(keptAudio)})`);
     check(page.errors.length === 0, 'Blackstone link: no page threw');
     await page.read(`localStorage.clear()`);
-    said.push(`Blackstone link: mail mode over a saved Explore, title card, car ${fixed(at(after, want))} m from the 0.43 pose after Start`);
+    said.push(`Blackstone link: mail mode over a saved Explore, title card, car ${fixed(at(after, want))} m from the 0.43 pose after Start, 103.5 clear with static 0, engine default 0.25`);
   } finally { await page.close().catch(() => {}); }
 }
 

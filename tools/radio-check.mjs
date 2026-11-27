@@ -44,7 +44,7 @@ check(await read('window.mmm.radio.storageKey') === 'mmm.radio', 'mail saved-sta
 const startDial = (await send('Runtime.evaluate', { expression: `fetch('audio/radio.json').then((r) => r.json()).then((j) => j.start || '')`, awaitPromise: true, returnByValue: true })).result?.result?.value;
 check(!!first.chip && !first.chip.hidden && first.chip.box.width > 20, 'the radio readout is on screen');
 check(!!first.song, 'the dev server gives the test handle (window.mmm.radio)');
-check(typeof startDial === 'string' && (startDial === '' || !!first.chip?.text.includes(` ${startDial} `)), `a new player starts on the list's starting station (${startDial || 'none named'})`);
+check(typeof startDial === 'string' && (startDial === '' || !!first.chip?.text.startsWith(`${startDial} `) || !!first.chip?.text.includes(` ${startDial} `)), `a new player starts on the list's starting station (${startDial || 'none named'})`);
 await key('KeyT', 't');
 // Whole-file fetch/decode can outlast six seconds while other checks compile. Bound readiness, then prove time advances.
 for (const deadline=Date.now()+20000;Date.now()<deadline;) {
