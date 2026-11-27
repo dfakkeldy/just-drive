@@ -39,7 +39,9 @@ const memory = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.se
 Object.defineProperty(globalThis, 'localStorage', { get() { return memory; }, configurable: true });
 const career = store.get('mmm.shift.v1');
 
-const terrain = { heightAt() { return 0; }, surfaceAt() { return { ground: 0, canopy: 0, roadDist: 10, halfWidth: 3, kind: 2, level: 7 }; } };
+let surfaceAt = () => ({ ground: 0, canopy: 0, roadDist: 10, halfWidth: 3, kind: 2, level: 7 });
+let pavedLotClass = 0;
+const terrain = { heightAt() { return 0; }, surfaceAt(x, z) { return surfaceAt(x, z); }, paved: { lotClassAt() { return pavedLotClass; } } };
 const roads = new Roads({ roads: [{ id: 7, name: 'Birch Street', kind: 2, halfWidth: 3, bridge: false, pts: [[0, 0], [1000, 0]] }] }, [0, 0], terrain);
 const boxes = () => new Props({ crs: 'EPSG:2961', mailboxes: Array.from({ length: 20 }, (_, i) => ({ x: 100 + i * 10, y: 0, heading: 0, style: 0, tilt: 0, group: null, parcelBox: false })),
   communityBoxes: [{ x: 400, y: 0, heading: 0, modules: 2 }], poles: [] }, [0, 0], terrain);
@@ -110,6 +112,47 @@ assert.ok(shift.score.recent.find(e => e.kind === 'box:down').speed > 8, 'a grad
   const before = shift.score.reported;
   shift.complaints.add({ kind: 'boxDown', target: 3, at: shift.elapsed, x: 0, z: 0, road: -1, preExisting: true, customer: '', line: '' });
   assert.equal(shift.score.reported, before, 'a box that was down before the shift is not an offence');
+}
+// Real roads, gravel driveways and paved lots (including kind-12 overlaps) leave no ruts and file no lawnDamage or rut score events.
+{
+  const savedSample = surfaceAt, savedClass = pavedLotClass;
+  const reset = () => { shift.ruts.reset(); };
+  for (const [label, sample, cls = 0] of [
+    ['road', { ground: 0, canopy: 0, roadDist: 0, halfWidth: 3, kind: 2, level: 8 }],
+    ['gravel drive', { ground: 0, canopy: 0, roadDist: 8, halfWidth: 10, kind: 8, level: 8 }],
+    ['lotAsphalt', { ground: 0, canopy: 0, roadDist: 99, halfWidth: 0, kind: 0, lotAsphalt: true, level: 8 }],
+    ['kind-12 + lotAsphalt', { ground: 0, canopy: 0, roadDist: 6.5, halfWidth: 10, kind: 12, lotAsphalt: true, level: 8 }],
+    ['mapped paved lot', { ground: 0, canopy: 0, roadDist: 99, halfWidth: 0, kind: 0, level: 8 }, 1],
+    ['kind-12 + mapped asphalt lot', { ground: 0, canopy: 0, roadDist: 6.5, halfWidth: 10, kind: 12, level: 8 }, 1],
+    ['kind-12 + mapped gravel lot', { ground: 0, canopy: 0, roadDist: 6.5, halfWidth: 10, kind: 12, level: 8 }, 2],
+  ]) {
+    reset();
+    surfaceAt = () => sample; pavedLotClass = cls;
+    const beforeRoad = shift.score.reported, beforeCalls = shift.complaints.all.length;
+    for (let i = 0; i < 20; i++) tick(.05, vehicleAt(140 + i * .5, 40, 6));
+    assert.equal(shift.ruts.count, 0, `${label}: no tyre strips`);
+    assert.equal(shift.ruts.lawns, 0, `${label}: no lawn count`);
+    assert.equal(shift.complaints.all.length, beforeCalls, `${label}: no lawn complaint`);
+    assert.equal(shift.score.reported, beforeRoad, `${label}: no score event`);
+  }
+  // Mown-yard grass (kind 12) leaves tyre tracks, files lawnDamage and scores ruts just like other grass.
+  reset();
+  surfaceAt = () => ({ ground: 0, canopy: 0, roadDist: 6.5, halfWidth: 10, kind: 12, level: 8 }); pavedLotClass = 0;
+  const beforeMown = shift.score.reported;
+  for (let i = 0; i < 40; i++) tick(.05, vehicleAt(140 + i * .5, 40, 6));
+  const fullCount = shift.ruts.count;
+  const mownKinds = shift.score.recent.slice(beforeMown - shift.score.reported).map(e => e.kind);
+  assert.ok(fullCount >= 24 && shift.ruts.lawns === 1, 'kind-12 mown yard leaves ruts and counts the lawn');
+  assert.ok(mownKinds.includes('lawnDamage') && mownKinds.filter(k => k === 'rut').length >= 3, `kind-12 score events: ${mownKinds.join()}`);
+  // Straddling lawn (z >= 39.6) and gravel driveway (z < 39.6): only the lawn-side wheel draws strips.
+  reset();
+  surfaceAt = (_x, z) => z < 39.6
+    ? { ground: 0, canopy: 0, roadDist: 8, halfWidth: 10, kind: 8, level: 8 }
+    : { ground: 0, canopy: 0, roadDist: 6.5, halfWidth: 10, kind: 12, level: 8 };
+  for (let i = 0; i < 40; i++) tick(.05, vehicleAt(140 + i * .5, 40, 6));
+  assert.equal(shift.ruts.count, fullCount / 2, 'straddling lawn/gravel draws only the lawn-side tyre strips');
+  surfaceAt = savedSample; pavedLotClass = savedClass;
+  shift.ruts.reset();
 }
 // Lawn ruts across the house's lawn: a lawn complaint, then ruts.
 const before = shift.score.reported;

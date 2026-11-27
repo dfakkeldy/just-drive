@@ -27,6 +27,7 @@ export class Paved {
     material.vertexShader=pavedGrassShader(material.vertexShader);Object.assign(material.uniforms,this.uniforms);
   }
   private readonly pixels=new Uint8Array(PIXELS*PIXELS*2);
+  private readonly pendingTiles=new Uint8Array(ACROSS*ACROSS);
   private readonly stallA=Array.from({length:STALL_ROWS},()=>new THREE.Vector4());
   private readonly stallB=Array.from({length:STALL_ROWS},()=>new THREE.Vector4());
   private readonly stallCount={value:0};
@@ -77,6 +78,29 @@ export class Paved {
     const tile = this.entries.get(`${Math.floor(col / SIDE)}_${Math.floor(row / SIDE)}.r8`);
     return tile?.data?.[(row % SIDE) * SIDE + col % SIDE] === 1;
   }
+  /** Mapped lot class at world metres: -1 mapped tile not yet loaded, 0 empty, 1 hard paved (asphalt), 2 gravel lot. */
+  lotClassAt(x: number, z: number): number {
+    if (!Number.isNaN(this.left)) {
+      const px = Math.floor((x - this.rect.x) / this.index.resolution);
+      const py = Math.floor((z - this.rect.y) / this.index.resolution);
+      if (px >= 0 && px < PIXELS && py >= 0 && py < PIXELS) {
+        if (this.pendingTiles[(py >> 7) * ACROSS + (px >> 7)]) return -1;
+        const k = (py * PIXELS + px) * 2;
+        return this.pixels[k] ? 1 : this.pixels[k + 1] ? 2 : 0;
+      }
+    }
+    const i = Math.floor((x + this.vx - this.index.origin[0]) / SIZE);
+    const j = Math.floor((this.index.origin[1] - this.vy + z) / SIZE);
+    return this.names.has(`${i}_${j}.r8`) ? -1 : 0;
+  }
+  /** World-space origin and cell size (metres) of the lot grid, available before and after update(). */
+  lotGrid(): { ox: number; oz: number; step: number } {
+    return {
+      ox: Number.isNaN(this.left) ? this.index.origin[0] - this.vx : this.rect.x,
+      oz: Number.isNaN(this.left) ? this.vy - this.index.origin[1] : this.rect.y,
+      step: this.index.resolution,
+    };
+  }
   get pending():number { return this.waiting; }
   private countWaiting():void {
     this.waiting=0;for(const e of this.entries.values())if(!e.data&&!e.failed)this.waiting++;
@@ -91,6 +115,7 @@ export class Paved {
     this.left=left;this.top=top;
     this.rect.set(this.index.origin[0]+left*SIZE-this.vx,this.vy-this.index.origin[1]+top*SIZE,SIZE*ACROSS,SIZE*ACROSS);
     this.pixels.fill(0);
+    this.pendingTiles.fill(0);
     this.pickStalls(x,z);
     for(const [key,e] of this.entries)if(e.i<left||e.i>=left+ACROSS||e.j<top||e.j>=top+ACROSS)this.entries.delete(key);
     for(let j=top;j<top+ACROSS;j++)for(let i=left;i<left+ACROSS;i++){
@@ -99,6 +124,7 @@ export class Paved {
       let e=this.entries.get(name);
       if(!e){e={i,j,name,data:null,loading:false,failed:false,attempts:0,retryAt:0};this.entries.set(name,e);}
       if(e.data)this.copy(e);
+      else this.pendingTiles[(j-top)*ACROSS+(i-left)]=1;
     }
     this.texture.needsUpdate=true;this.countWaiting();this.pump();
   }
@@ -126,7 +152,9 @@ export class Paved {
       e.loading=true;this.active++;this.countWaiting();
       void readFile(this.base,`paved/${e.name}`).then(blob=>blob.arrayBuffer()).then(buffer=>{
         if(this.entries.get(e.name)!==e)return;
-        e.data=classTile(buffer);this.copy(e);this.texture.needsUpdate=true;
+        e.data=classTile(buffer);this.copy(e);
+        this.pendingTiles[(e.j-this.top)*ACROSS+(e.i-this.left)]=0;
+        this.texture.needsUpdate=true;
       }).catch(error=>{if(this.entries.get(e.name)!==e)return;e.failed=true;e.loading=false;e.attempts++;e.retryAt=this.now()+Math.min(30000,1000*2**(e.attempts-1));this.nextRetry=Math.min(this.nextRetry,e.retryAt);console.warn('Paved tile unavailable; will retry',e.name,error);}).finally(()=>{this.active--;this.countWaiting();this.pump();});
     }
   }

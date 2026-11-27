@@ -45,6 +45,7 @@ export interface Surface {
   ground: number;
   canopy: number;
   roadDist: number;     // metres to the nearest road centreline; 99 when no road is near
+  roadSigned?: number;  // signed metres to the nearest road centreline when encoded; absent when no road is near
   halfWidth: number;    // half of that road's driving surface
   kind: number;         // 0 none, 1 highway, 2 paved, 3 gravel, 4 track, 5 rail trail
   bridge: boolean;
@@ -1226,7 +1227,7 @@ export class Terrain {
         ground=deck;
         if (surface && site.deckDriving) {
           const driving:{kind:number;halfWidth:number;washboard?:boolean;road?:boolean;roadKind?:number}=typeof site.deckDriving==='function'?site.deckDriving(x,z):site.deckDriving;
-          surface.kind=driving.kind;surface.halfWidth=driving.halfWidth;surface.roadDist=0;
+          surface.kind=driving.kind;surface.halfWidth=driving.halfWidth;surface.roadDist=0;surface.roadSigned=0;
           surface.deck=true;surface.canopy=0;surface.washboard=driving.washboard??false;surface.bridge=false;surface.roadDeck=driving.road===true;surface.deckRoadKind=driving.roadKind;
         }
       }
@@ -1415,7 +1416,9 @@ export class Terrain {
         // Blend the distance only between samples that all have a road; the "no road" value is not a distance.
         const r = t.road, k00 = (b * S + a) * 4;
         const whole = r[k00 + 2] > 0 && r[k00 + 6] > 0 && r[k00 + S * 4 + 2] > 0 && r[k00 + S * 4 + 6] > 0;
-        out.roadDist = Math.abs((whole ? lerp(r, 4, 0) : r[k]) - this.zero) * enc.distance;
+        const signed = ((whole ? lerp(r, 4, 0) : r[k]) - this.zero) * enc.distance;
+        out.roadDist = Math.abs(signed);
+        out.roadSigned = signed;
         out.halfWidth = t.road[k + 1] * enc.halfWidth;
         out.kind = raw & 15;
         out.bridge = (raw & 16) !== 0;

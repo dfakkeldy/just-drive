@@ -15,6 +15,7 @@ import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { clearBoxes } from '../web/src/buildings.ts';
 import { roofHeights } from '../web/src/drone.ts';
 import { Props } from '../web/src/props.ts';
+import { Ruts, isLawnSurface } from '../web/src/ruts.ts';
 import { SXS_SPEC } from '../web/src/sxs.ts';
 import { Terrain } from '../web/src/terrain.ts';
 import { TRUCK_SPEC } from '../web/src/truck.ts';
@@ -316,6 +317,7 @@ for (const level of [5, 6, 7, 8]) {
     await baseTerrain.loadNow(level, ti, tj);
     await siteTerrain.loadNow(level, ti, tj);
   }
+  let sawPosSigned = false, sawNegSigned = false;
   for (const pt of roadSamples) {
     assert.equal(siteTerrain.meshHeightAt(pt.x, pt.z), baseTerrain.meshHeightAt(pt.x, pt.z),
       `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production Terrain.meshHeightAt bit-for-bit unchanged`);
@@ -324,6 +326,225 @@ for (const level of [5, 6, 7, 8]) {
     assert.equal(ss.kind, sb.kind, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production surfaceAt.kind unchanged`);
     assert.equal(ss.halfWidth, sb.halfWidth, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production surfaceAt.halfWidth unchanged`);
     assert.equal(ss.roadDist, sb.roadDist, `L${level} ${pt.roadName} (side=${pt.side.toFixed(1)} m) production surfaceAt.roadDist bit-for-bit unchanged`);
+    if (ss.kind > 0) {
+      assert.ok(Number.isFinite(ss.roadSigned), `L${level} ${pt.roadName} production surfaceAt.roadSigned present`);
+      assert.equal(ss.roadSigned, sb.roadSigned, `L${level} ${pt.roadName} production surfaceAt.roadSigned bit-for-bit unchanged`);
+      assert.ok(Math.abs(Math.abs(ss.roadSigned) - ss.roadDist) < 1e-9, `L${level} ${pt.roadName} |roadSigned| matches roadDist`);
+      if (ss.roadSigned > 0.2) sawPosSigned = true;
+      if (ss.roadSigned < -0.2) sawNegSigned = true;
+    }
+  }
+  assert.ok(sawPosSigned && sawNegSigned, `L${level} production Terrain.surfaceAt exposes both signs of roadSigned across road sides`);
+  if (level === 8) {
+    // Verify production Terrain.surfaceAt.roadSigned matches the raw baked road PNG sign (catches global sign reversal),
+    // and verify a deck override resets roadSigned to 0 alongside roadDist.
+    const zero = manifest.roads.encoding.signed ? manifest.roads.encoding.zero ?? 128 : 0;
+    const dScale = manifest.roads.encoding.distance;
+    let verifiedPos = false, verifiedNeg = false;
+    for (const key of needed) {
+      const [ti, tj] = key.split('_').map(Number);
+      const roadPng = decodePng(readFileSync(`${AREA}8/${ti}_${tj}.r.png`));
+      const x0 = manifest.origin[0] + ti * tileSize - manifest.village[0];
+      const z0 = manifest.village[1] - (manifest.origin[1] - tj * tileSize);
+      for (let b = 4; b < 252 && !(verifiedPos && verifiedNeg); b += 4) for (let a = 4; a < 252 && !(verifiedPos && verifiedNeg); a += 4) {
+        const k = (b * roadPng.w + a) * roadPng.bpp;
+        const rawR = roadPng.data[k], rawKind = roadPng.data[k + 2] & 15;
+        if (rawKind === 0 || Math.abs(rawR - zero) < 4) continue;
+        const cx = x0 + (a / 256) * tileSize, cz = z0 + (b / 256) * tileSize;
+        const surf = baseTerrain.surfaceAt(cx, cz);
+        assert.ok(surf && Number.isFinite(surf.roadSigned), 'L8 baked road sample has finite roadSigned');
+        const expected = (rawR - zero) * dScale;
+        assert.ok(Math.abs(surf.roadSigned - expected) < 1e-6, `L8 roadSigned (${surf.roadSigned}) matches baked byte sign (${expected})`);
+        if (expected > 0) verifiedPos = true;
+        if (expected < 0) verifiedNeg = true;
+      }
+    }
+    assert.ok(verifiedPos && verifiedNeg, 'L8 production roadSigned verified against raw baked PNG bytes on both sides of the road');
+    const deckPt = roadSamples.find((p) => { const s = baseTerrain.surfaceAt(p.x, p.z); return s && Math.abs(s.roadSigned ?? 0) > 1; });
+    assert.ok(deckPt, 'found off-centreline road sample for deck roadSigned reset check');
+    const deckTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, []);
+    const baseY = baseTerrain.heightAt(deckPt.x, deckPt.z);
+    deckTerrain.sites.push({
+      box: [deckPt.x - 4, deckPt.z - 4, deckPt.x + 4, deckPt.z + 4],
+      samplesTerrain: false,
+      height: (_x, _z, raw) => raw,
+      surface: () => null,
+      deckContactHeight: () => baseY + 1,
+      deckDriving: { kind: 9, halfWidth: 3 },
+    });
+    const dTi = Math.floor((deckPt.x + manifest.village[0] - manifest.origin[0]) / tileSize);
+    const dTj = Math.floor((manifest.origin[1] - (manifest.village[1] - deckPt.z)) / tileSize);
+    await deckTerrain.loadNow(8, dTi, dTj);
+    const deckSurf = deckTerrain.surfaceAt(deckPt.x, deckPt.z, baseY + 1);
+    assert.equal(deckSurf?.deck, true, 'production deck override sets deck=true');
+    assert.equal(deckSurf?.roadDist, 0, 'production deck override sets roadDist=0');
+    assert.equal(deckSurf?.roadSigned, 0, 'production deck override sets roadSigned=0');
+    // Real Ruts on the L8 Blackstone site: mown lawn (kind 12, including the far east island > 35 m from house 1454)
+    // takes tyre tracks and files lawn damage for building 1454; Blackstone Road (within 28 m of house 1454) and the
+    // gravel driveway stay track-free, and straddling the driveway/lawn edge puts strips only on the lawn wheel.
+    const driveLine = (pts) => {
+      const hits = [];
+      const ruts = new Ruts(siteTerrain, buildings, manifest.village, true, (id) => hits.push(id));
+      for (let i = 0; i < pts.length; i++) {
+        const cur = pts[i], next = pts[Math.min(i + 1, pts.length - 1)], prev = pts[Math.max(i - 1, 0)];
+        const dx = next.x - prev.x, dz = next.z - prev.z, len = Math.hypot(dx, dz) || 1;
+        const y = siteTerrain.heightAt(cur.x, cur.z) ?? site.level * 2.5;
+        ruts.update({ x: cur.x, z: cur.z, y, vx: (dx / len) * 5, vz: (dz / len) * 5, heading: Math.atan2(dx, -dz), airborne: false }, i + 1);
+      }
+      return { count: ruts.count, lawns: ruts.lawns, hits, mesh: ruts.mesh };
+    };
+    const lawnPts = Array.from({ length: 24 }, (_, i) => site.world(16 + i * 0.8, -11.5));
+    assert.equal(siteTerrain.surfaceAt(lawnPts[0].x, lawnPts[0].z)?.kind, 12, 'L8 Blackstone east front lawn is kind 12');
+    const lawnRes = driveLine(lawnPts);
+    assert.ok(lawnRes.count >= 20 && lawnRes.lawns === 1, `L8 Blackstone mown lawn leaves ruts (${lawnRes.count} strips, ${lawnRes.lawns} lawns)`);
+    assert.deepEqual(lawnRes.hits, [BLACKSTONE_BUILDING], 'L8 Blackstone mown lawn attributes damage to house 1454');
+    // Dry ground inside a wide waterLevel site bounding box (null, well below ground, or pointwise 5 cm below the
+    // 0.6*exag wet cutoff at each queried point) spends zero extra surfaceAt calls and stays bounded in waterLevel calls.
+    for (const [label, waterLevelFn] of [
+      ['null waterLevel', () => null],
+      ['below-ground waterLevel', () => site.level - 5],
+      ['pointwise near-threshold dry waterLevel', (x, z) => (siteTerrain.heightAt(x, z) - 0.6 * 2.5 - 0.05) / 2.5],
+    ]) {
+      let waterLevelCalls = 0, surfaceCalls = 0;
+      const dryWaterSite = {
+        box: [Math.min(...lawnPts.map((p) => p.x)) - 20, Math.min(...lawnPts.map((p) => p.z)) - 20,
+              Math.max(...lawnPts.map((p) => p.x)) + 20, Math.max(...lawnPts.map((p) => p.z)) + 20],
+        samplesTerrain: false,
+        height: (_x, _z, raw) => raw,
+        surface: () => null,
+        waterLevel: (...args) => { waterLevelCalls++; return waterLevelFn(...args); },
+      };
+      siteTerrain.sites.push(dryWaterSite);
+      const origSurfaceAt = siteTerrain.surfaceAt.bind(siteTerrain);
+      siteTerrain.surfaceAt = (...args) => { surfaceCalls++; return origSurfaceAt(...args); };
+      try {
+        const dryRes = driveLine(lawnPts);
+        assert.equal(dryRes.count, lawnRes.count, `wide dry water-site bbox (${label}) leaves strip count unchanged`);
+        assert.ok(surfaceCalls < 10000, `wide dry water-site bbox (${label}) keeps surfaceAt bounded (${surfaceCalls} < 10000)`);
+        assert.ok(waterLevelCalls < 20000, `wide dry water-site bbox (${label}) keeps waterLevel bounded (${waterLevelCalls} < 20000)`);
+      } finally {
+        siteTerrain.surfaceAt = origSurfaceAt;
+        siteTerrain.sites.pop();
+      }
+    }
+    const farIslandPts = Array.from({ length: 12 }, (_, i) => site.world(36 + i * 0.7, -11.5));
+    assert.equal(siteTerrain.surfaceAt(farIslandPts[0].x, farIslandPts[0].z)?.kind, 12, 'L8 far east lawn island is kind 12');
+    const farIslandRes = driveLine(farIslandPts);
+    assert.ok(farIslandRes.count >= 10 && farIslandRes.lawns === 1, `L8 far east lawn island (>35 m) leaves ruts (${farIslandRes.count} strips)`);
+    assert.deepEqual(farIslandRes.hits, [BLACKSTONE_BUILDING]);
+    // Mixed-surface edge crossing (u=14.3, v=-15.1..-12.3): centre on kind-12 lawn, one tyre on kind-8 gravel driveway.
+    const edgePts = Array.from({ length: 8 }, (_, i) => site.world(14.3, -15.1 + i * 0.4));
+    const edgeHdg = site.heading(0, 1), edgeRx = Math.cos(edgeHdg), edgeRz = Math.sin(edgeHdg);
+    let sawGravelWheel = false, sawLawnWheel = false;
+    for (const p of edgePts) {
+      assert.equal(siteTerrain.surfaceAt(p.x, p.z)?.kind, 12, 'mixed-edge car centre stays on kind-12 mown lawn');
+      for (const side of [-1, 1]) {
+        const wk = siteTerrain.surfaceAt(p.x + edgeRx * 0.785 * side, p.z + edgeRz * 0.785 * side)?.kind;
+        if (wk === 8) sawGravelWheel = true;
+        if (wk === 12) sawLawnWheel = true;
+      }
+    }
+    assert.ok(sawGravelWheel && sawLawnWheel, 'mixed-edge crossing puts one wheel on kind-8 gravel and one on kind-12 lawn');
+    const ox8 = manifest.origin[0] - manifest.village[0], oz8 = manifest.village[1] - manifest.origin[1];
+    const mpp8 = manifest.size / (2 ** 8 * 256);
+    // Exact convex polygon intersection between a rendered strip quad (XZ projection) and an axis-aligned L8 texel.
+    const quadHitsBox = (quad, x0, z0, x1, z1) => {
+      let poly = quad;
+      for (const fn of [
+        (p) => x0 - p[0], (p) => p[0] - x1, (p) => z0 - p[1], (p) => p[1] - z1,
+      ]) {
+        const next = [];
+        for (let i = 0; i < poly.length; i++) {
+          const a = poly[i], b = poly[(i + 1) % poly.length], da = fn(a), db = fn(b);
+          if (da <= 0) next.push(a);
+          if ((da <= 0) !== (db <= 0)) {
+            const t = da / (da - db);
+            next.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+          }
+        }
+        poly = next;
+        if (!poly.length) return false;
+      }
+      let area = 0;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        area += a[0] * b[1] - b[0] * a[1];
+      }
+      return Math.abs(area) * 0.5 > 1e-10;
+    };
+    const assertStripsOnLawn = (res, label) => {
+      const stripM4 = new THREE.Matrix4(), corner = new THREE.Vector3(), scale = new THREE.Vector3();
+      const lengths = [];
+      for (let i = 0; i < res.count; i++) {
+        res.mesh.getMatrixAt(i, stripM4);
+        scale.setFromMatrixScale(stripM4);
+        lengths.push(scale.z);
+        const quad = [[-0.12, -0.5], [0.12, -0.5], [0.12, 0.5], [-0.12, 0.5]].map(([lx, lz]) => {
+          corner.set(lx, 0, lz).applyMatrix4(stripM4);
+          return [corner.x, corner.z];
+        });
+        const minX = Math.min(...quad.map((p) => p[0])), maxX = Math.max(...quad.map((p) => p[0]));
+        const minZ = Math.min(...quad.map((p) => p[1])), maxZ = Math.max(...quad.map((p) => p[1]));
+        const kx0 = Math.floor((minX - ox8) / mpp8 + 0.5), kx1 = Math.floor((maxX - ox8) / mpp8 + 0.5);
+        const kz0 = Math.floor((minZ - oz8) / mpp8 + 0.5), kz1 = Math.floor((maxZ - oz8) / mpp8 + 0.5);
+        for (let kx = kx0; kx <= kx1; kx++) for (let kz = kz0; kz <= kz1; kz++) {
+          const cx = ox8 + kx * mpp8, cz = oz8 + kz * mpp8;
+          if (!quadHitsBox(quad, cx - mpp8 / 2, cz - mpp8 / 2, cx + mpp8 / 2, cz + mpp8 / 2)) continue;
+          const surf = siteTerrain.surfaceAt(cx, cz);
+          assert.ok(surf, `${label} strip ${i} texel (${kx},${kz}) has surface`);
+          assert.notEqual(surf.kind, 8, `${label} strip ${i} never intersects gravel texel (${kx},${kz})`);
+          assert.ok(surf.kind === 12 || surf.kind === 0 || surf.roadDist > surf.halfWidth,
+            `${label} strip ${i} never intersects road carriageway texel (${kx},${kz}) kind=${surf.kind} dist=${surf.roadDist}`);
+        }
+        for (let step = 0; step <= 40; step++) {
+          const lz = -0.5 + step * 0.025;
+          for (const lx of [-0.12, -0.06, 0, 0.06, 0.12]) {
+            corner.set(lx, 0, lz).applyMatrix4(stripM4);
+            const surf = siteTerrain.surfaceAt(corner.x, corner.z);
+            assert.ok(surf && isLawnSurface(surf, false), `${label} strip ${i} point (${lx},${lz}) lands on lawn (kind=${surf?.kind})`);
+          }
+        }
+      }
+      return lengths;
+    };
+    const edgeRes = driveLine(edgePts);
+    assert.ok(edgeRes.count > 0, `mixed-edge crossing draws lawn-side strips (${edgeRes.count})`);
+    assertStripsOnLawn(edgeRes, 'mixed-edge');
+    // Intermediate gravel protrusions, sub-millimetre corner grazes, pitched/rolled corner overlaps, and canopy edges: clipped cleanly.
+    for (const [tag, u0, v0, u1, v1] of [
+      ['protrusion', 15.15, -14.30, 15.15, -13.50],
+      ['corner-graze', 15.22, -14.29, 15.22, -13.49],
+      ['submm-corner', 14.15274690, -17.69250120, 13.84016200, -16.95609732],
+      ['pitch-roll-corner', 14.74949067, -15.56064423, 14.00820762, -15.25981297],
+      ['canopy-edge', -9.37598627, 12.32986155, -8.71133763, 11.88461759],
+    ]) {
+      const res = driveLine([site.world(u0, v0), site.world(u1, v1)]);
+      assert.ok(res.count > 0, `${tag} crossing draws strips (${res.count})`);
+      const lens = assertStripsOnLawn(res, tag);
+      assert.ok(lens.some((len) => len < 0.949), `${tag} strip is longitudinally clipped (${lens.map((l) => l.toFixed(4)).join(',')})`);
+    }
+    // 0.8 m step ending at (u=14.40, v=-12.75): requires a shortened strip on the gravel-side wheel rather than full 0.95 m.
+    const clippedRes = driveLine([site.world(14.40, -13.55), site.world(14.40, -12.75)]);
+    assert.ok(clippedRes.count >= 2, `clipped edge step draws both wheels (${clippedRes.count})`);
+    const clippedLengths = assertStripsOnLawn(clippedRes, 'clipped-end');
+    assert.ok(clippedLengths.some((len) => len < 0.5), `clipped edge step shortens strip at gravel boundary (${clippedLengths.map((l) => l.toFixed(3)).join(',')})`);
+    const drivePts = Array.from({ length: 16 }, (_, i) => site.world(-6 + i * 0.8, -13.0));
+    assert.equal(siteTerrain.surfaceAt(drivePts[8].x, drivePts[8].z)?.kind, 8, 'L8 Blackstone front driveway is kind 8 gravel');
+    const driveRes = driveLine(drivePts);
+    assert.equal(driveRes.count, 0, 'L8 Blackstone gravel driveway leaves no ruts');
+    assert.equal(driveRes.lawns, 0, 'L8 Blackstone gravel driveway triggers no lawn damage');
+    // Nearby Blackstone Road control: every point is within 28 m of house 1454 (inside the 35 m lawn radius).
+    const roadPts = roadSamples
+      .filter((pt) => pt.roadName === 'Blackstone Road' && pt.side === 0 && Math.hypot(pt.x - site.origin.x, pt.z - site.origin.z) <= 28)
+      .slice(0, 20);
+    assert.ok(roadPts.length >= 15, `nearby Blackstone Road samples within 28 m of house 1454 (${roadPts.length})`);
+    for (const pt of roadPts) {
+      const rs = siteTerrain.surfaceAt(pt.x, pt.z);
+      assert.ok(rs && rs.kind === 3 && rs.roadDist <= rs.halfWidth + 0.6, `nearby road point is gravel road (kind=${rs?.kind}, dist=${rs?.roadDist})`);
+    }
+    const roadRes = driveLine(roadPts);
+    assert.equal(roadRes.count, 0, 'L8 Blackstone Road within 28 m of house leaves no ruts');
+    assert.equal(roadRes.lawns, 0, 'L8 Blackstone Road within 28 m of house triggers no lawn damage');
   }
 }
 

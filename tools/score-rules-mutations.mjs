@@ -76,6 +76,10 @@ const mutants=[
  ['no Boss line',"const boss = this.boss?.line() ?? '';","const boss = '';",'fired'],
  ['no Boss summary','      ...this.boss ? [this.boss.summary()] : [],\n','','fired'],
  ['card too short','this.noteTime = seconds;','this.noteTime = 2;','fired'],
+ ['mown yard ignored','return s.kind === MOWN_LAWN || s.roadDist > s.halfWidth + roadMargin;','return s.roadDist > s.halfWidth + roadMargin;','ruts'],
+ ['paved lot gets ruts',' || s.lotAsphalt || pavedLot','','ruts'],
+ ['road gets ruts','s.roadDist > s.halfWidth + roadMargin','true','ruts'],
+ ['wheel ignores surface','const lawnPoint = (px: number, pz: number) => isTerrainLawn(this.terrain, this.terrain.surfaceAt(px, pz, v.y), px, pz);','const lawnPoint = () => true;','ruts'],
 ];
 try {
  for(const mutant of [null,...(process.argv.includes('--mutations')?mutants:[])]) {
